@@ -7,7 +7,7 @@ import sys
 import arnes as A
 from omnicad import api
 from omnicad.nucleo import geometria as geo
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QInputDialog

@@ -22,7 +22,7 @@ import logging
 import math
 
 import numpy as np
-from PySide6.QtCore import QEvent, QObject, QPointF, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QPointF, QRect, Qt, QTimer
 from PySide6.QtGui import QPolygonF
 from PySide6.QtWidgets import QLineEdit, QToolTip
 
@@ -53,6 +53,11 @@ LARGO_FLECHA, LARGO_PUNTA, RADIO_PUNTA = 70.0, 18.0, 6.5     # píxeles
 LARGO_TRIADA = 120.0
 RADIO_ANGULO = 60.0
 CAPA, CAPA_PREVIA = "manipuladores", "previa_comando"
+VISIBLE_MIN = 0.7                      # fracción mínima del largo de un eje que se ve en pantalla (el resto, inclinado)
+APUNTA_A_CAMARA = 0.35                # por debajo, la recta real casi no se mueve en pantalla: se arrastra siguiendo la flecha dibujada
+CONTORNO = (0.07, 0.07, 0.09)          # contorno oscuro bajo toda línea del asa: la separa del fondo y del modelo
+GROSOR_CONTORNO = 3.0
+MARGEN_CAJA_PX = 3.0                   # aire entre una caja de valor y cualquier asa
 
 
 # ---------------------------------------------------------------- geometría
@@ -87,6 +92,56 @@ def mm_por_px(visor, p):
         return 1.0 / visor.px_por_mm()
     except Exception:  # noqa: BLE001
         return 0.5
+
+
+def fraccion_visible(visor, d):
+    """Parte del largo de un eje de dirección `d` que se ve en pantalla (0 si apunta justo a la cámara)."""
+    R = getattr(visor, "R", None)
+    if R is None:
+        return 1.0
+    return math.hypot(float(d @ np.asarray(R[0], float)), float(d @ np.asarray(R[1], float)))
+
+
+def dir_visible(visor, d, base=None):
+    """Dirección con la que se DIBUJA un eje: la propia, o inclinada hacia un costado de la pantalla si apunta casi a la
+    cámara (así la flecha nunca se reduce a una mancha: siempre se ve al menos VISIBLE_MIN de su largo). Con `base`, la
+    inclinación en profundidad va hacia el lado donde la perspectiva la agranda."""
+    d = unitario(d)
+    p = fraccion_visible(visor, d)
+    if p >= VISIBLE_MIN:
+        return d
+    r0, r1, r2 = (np.asarray(visor.R[i], float) for i in range(3))
+    plano = r0 * float(d @ r0) + r1 * float(d @ r1)
+    plano = plano / p if p > 1e-6 else unitario(r0 + r1)
+    hondo = math.sqrt(1 - VISIBLE_MIN ** 2)
+    a, b = (plano * VISIBLE_MIN + r2 * hondo * s for s in (1.0, -1.0))
+    if base is None:
+        return b if float(d @ r2) >= 0 else a
+    p0 = np.asarray(base, float)
+    try:
+        sp, ok = visor.puntos_pantalla(np.array([p0, p0 + a, p0 + b]) )
+        if ok.all():
+            return a if np.linalg.norm(sp[1] - sp[0]) >= np.linalg.norm(sp[2] - sp[0]) else b
+    except Exception:  # noqa: BLE001 — sin cámara utilizable se usa el lado de siempre
+        pass
+    return b if float(d @ r2) >= 0 else a
+
+
+def _empezar_en_pantalla(g, pos, base, dibujada):
+    """Arrastre de un eje que apunta a la cámara: sigue al cursor a lo largo de la flecha dibujada (1 mm de valor por mm
+    de pantalla), porque la recta real casi no se mueve en pantalla."""
+    k = g.escala(base)
+    s, ok = g.pantalla([base, base + dibujada * k * 40])
+    e = s[1] - s[0]
+    n = float(np.linalg.norm(e))
+    if not ok.all() or n < 1e-9:
+        return None
+    return {"pantalla": True, "q0": np.array([pos.x(), pos.y()], float), "e": e / n, "mm": k}
+
+
+def _mover_en_pantalla(estado, pos):
+    """Milímetros que avanzó el cursor sobre la flecha dibujada desde que se la tomó."""
+    return float((np.array([pos.x(), pos.y()], float) - estado["q0"]) @ estado["e"]) * estado["mm"]
 
 
 def recta_rayo(o, r, p0, d):
@@ -226,12 +281,19 @@ class Flecha(Manipulador):
         self.factor, self.minimo, self.maximo, self.caja, self.color = factor, minimo, maximo, caja, color
         self.ident = f"flecha:{clave}"
 
+    inclinable = True                  # si apunta a la cámara se dibuja (y se arrastra) inclinada hacia un costado
+
     def _geom(self, g):
         v = g.valor(self.clave) * self.factor
         base = self.origen + self.direccion * v
         sentido = self.direccion * (-1.0 if v < 0 else 1.0)
+        if self.inclinable:
+            sentido = dir_visible(g.visor, sentido, base)
         k = g.escala(base)
         return base, sentido, k
+
+    def _de_frente(self, g):
+        return self.inclinable and fraccion_visible(g.visor, self.direccion) < APUNTA_A_CAMARA
 
     def puntos(self, g):
         base, sentido, k = self._geom(g)
@@ -253,23 +315,35 @@ class Flecha(Manipulador):
         return recta_rayo(o, r, origen, direccion)
 
     def empezar(self, g, pos, sub):
+        v0 = g.valor(self.clave)
+        if self._de_frente(g):
+            est = _empezar_en_pantalla(g, pos, self._geom(g)[0], self._geom(g)[1])
+            return None if est is None else {**est, "v0": v0, "signo": -1.0 if v0 < 0 else 1.0}
         o, r = g.rayo(pos)
         s0 = self._sobre_eje(o, r, self.origen, self.direccion)
         if s0 is None:
             return None
-        return {"s0": s0, "v0": g.valor(self.clave), "origen": self.origen, "dir": self.direccion}
+        return {"s0": s0, "v0": v0, "origen": self.origen, "dir": self.direccion}
 
     def mover(self, g, estado, pos):
+        if abs(self.factor) < 1e-12:
+            return {}
+        if estado.get("pantalla"):
+            s = estado["signo"] * _mover_en_pantalla(estado, pos)
+            v = estado["v0"] + s / self.factor
+            return {self.clave: self._acotar(v)}
         o, r = g.rayo(pos)
         s = self._sobre_eje(o, r, estado["origen"], estado["dir"])
-        if s is None or abs(self.factor) < 1e-12:
+        if s is None:
             return {}
-        v = estado["v0"] + (s - estado["s0"]) / self.factor
+        return {self.clave: self._acotar(estado["v0"] + (s - estado["s0"]) / self.factor)}
+
+    def _acotar(self, v):
         if self.minimo is not None:
             v = max(self.minimo, v)
         if self.maximo is not None:
             v = min(self.maximo, v)
-        return {self.clave: v}
+        return v
 
     def cajas(self, g, arrastre):
         if self.caja is True or (self.caja == "arrastre" and arrastre is not None):
@@ -280,6 +354,7 @@ class Flecha(Manipulador):
 class AsaRadial(Flecha):
     """Asa redonda sobre el borde de algo (el diámetro de un agujero): se arrastra como una flecha de distancia,
     pero se ve como el círculo con flechitas de Fusion y no como una flecha larga."""
+    inclinable = False
 
     def puntos(self, g):
         base, _sentido, _k = self._geom(g)
@@ -492,6 +567,7 @@ def _tocar_figura(g, centro, u, v, puntos, q):
 class FlechaCalcomania(Flecha):
     """Traslación axial con flecha plana gris, separada del cuadrado central."""
     ayuda = AYUDA_CALCOMANIA
+    inclinable = False
     _contorno = ((22, -31), (40, -31), (40, -38), (54, -28), (40, -18), (40, -25), (22, -25))
 
     def __init__(self, clave, centro, u, v):
@@ -681,9 +757,10 @@ class FlechaNormal(Manipulador):
 
     def dibujar(self, g, activo):
         k = g.escala(self.origen)
-        cuello = self.origen + self.direccion * (LARGO_FLECHA - LARGO_PUNTA) * k
+        d = dir_visible(g.visor, self.direccion, self.origen)
+        cuello = self.origen + d * (LARGO_FLECHA - LARGO_PUNTA) * k
         return [("lineas", np.array([self.origen, cuello]), AZUL, 3.0)] + _cono(
-            cuello, self.direccion, LARGO_PUNTA * k, RADIO_PUNTA * k, AZUL)
+            cuello, d, LARGO_PUNTA * k, RADIO_PUNTA * k, AZUL)
 
 
 class AsaCantidad(Manipulador):
@@ -997,10 +1074,14 @@ class Triada(Manipulador):
         L, c = LARGO_TRIADA * k, self.centro
         partes = []
         for i in () if self.solo_giros else range(3):
-            e = self.ejes[i]
+            if self.claves[i] is None:
+                continue
+            e = dir_visible(g.visor, self.ejes[i], c)
             partes.append((("eje", i), np.array([c + e * L * 0.2, c + e * L])))
         if self.giros:
             for i in range(3):
+                if self.giros[i] is None:
+                    continue
                 _, a, b = self._base(i)
                 partes.append((("giro", i), _arco(c, a, b, L * 0.7, math.radians(15), math.radians(75), 14)))
         if self.planos:
@@ -1021,7 +1102,7 @@ class Triada(Manipulador):
             if activo == sub:
                 color = _aclarar(color, 0.5)
             if tipo == "eje":
-                e = self.ejes[i]
+                e = dir_visible(g.visor, self.ejes[i], c)
                 cuello = c + e * (L - LARGO_PUNTA * k)
                 prims.append(("lineas", np.array([poli[0], cuello]), color, 3.0))
                 prims += _cono(cuello, e, LARGO_PUNTA * k, RADIO_PUNTA * k, color)
@@ -1077,8 +1158,12 @@ class Triada(Manipulador):
         c = self.centro.copy()
         tipo, i = sub
         if tipo == "eje":
+            v0 = g.valor(self.claves[i])
+            if fraccion_visible(g.visor, self.ejes[i]) < APUNTA_A_CAMARA:       # apunta a la cámara: se sigue la flecha dibujada
+                est = _empezar_en_pantalla(g, pos, c, dir_visible(g.visor, self.ejes[i], c))
+                return None if est is None else {**est, "sub": sub, "c": c, "v0": v0}
             s0 = recta_rayo(o, r, c, self.ejes[i])
-            return None if s0 is None else {"sub": sub, "c": c, "s0": s0, "v0": g.valor(self.claves[i])}
+            return None if s0 is None else {"sub": sub, "c": c, "s0": s0, "v0": v0}
         if tipo == "giro":
             _, a, b = self._base(i)
             p = plano_rayo(o, r, c, self.ejes[i])
@@ -1098,6 +1183,8 @@ class Triada(Manipulador):
         tipo, i = estado["sub"]
         c = estado["c"]
         if tipo == "eje":
+            if estado.get("pantalla"):
+                return {self.claves[i]: estado["v0"] + _mover_en_pantalla(estado, pos)}
             s = recta_rayo(o, r, c, self.ejes[i])
             return {} if s is None else {self.claves[i]: estado["v0"] + s - estado["s0"]}
         if tipo == "giro":
@@ -1124,11 +1211,48 @@ class Triada(Manipulador):
         tipo, i = arrastre
         k = g.escala(self.centro)
         if tipo == "eje":
-            return [(self.claves[i], self.centro + self.ejes[i] * LARGO_TRIADA * k)]
+            return [(self.claves[i], self.centro + dir_visible(g.visor, self.ejes[i], self.centro) * LARGO_TRIADA * k)]
         if tipo == "giro" and self.giros:
             _, a, b = self._base(i)
             return [(self.giros[i], self.centro + (a + b) * LARGO_TRIADA * k * 0.7 / math.sqrt(2))]
         return []
+
+
+# ---------------------------------------------------------------- contorno y huella
+def _contornos(prims):
+    """Contorno oscuro bajo cada línea de las asas (se dibuja antes que ellas): el asa se separa del fondo y del modelo."""
+    return [("lineas", p[1], CONTORNO, float(p[3]) + GROSOR_CONTORNO) for p in prims if p[0] == "lineas" and len(p[1]) > 1]
+
+
+def _huella(prims):
+    """Puntos del mundo (extremos y 3 intermedios de cada segmento) de las líneas de las asas."""
+    puntos = []
+    for p in prims:
+        if p[0] != "lineas" or len(p[1]) < 2:
+            continue
+        d = np.asarray(p[1], float).reshape(-1, 3)
+        d = d[:len(d) - len(d) % 2]
+        a, b = d[0::2], d[1::2]
+        puntos += [a + (b - a) * t for t in (0.0, 0.25, 0.5, 0.75, 1.0)]
+    return np.concatenate(puntos) if puntos else np.zeros((0, 3))
+
+
+def _candidatos_caja(ancho, alto):
+    """Desplazamientos (dx, dy) de la esquina de la caja respecto del punto al que pertenece, del más cercano al más lejano."""
+    salida = []
+    for d in (14, 30, 56, 90):
+        salida += [(d, -alto - 6), (d, -alto / 2), (d, 6), (-ancho - d, -alto - 6), (-ancho - d, -alto / 2),
+                   (-ancho - d, 6), (-ancho / 2, -alto - d), (-ancho / 2, d)]
+    return salida
+
+
+def _choques(rect, huella):
+    """Cuántos puntos de la huella de las asas caen dentro de `rect` (con un margen)."""
+    if not len(huella):
+        return 0
+    m = MARGEN_CAJA_PX
+    x, y = huella[:, 0], huella[:, 1]
+    return int(np.count_nonzero((x >= rect.left() - m) & (x <= rect.right() + m) & (y >= rect.top() - m) & (y <= rect.bottom() + m)))
 
 
 # ---------------------------------------------------------------- caja de valor
@@ -1184,6 +1308,7 @@ class GestorManipuladores(QObject):
         self._sincronizando = False
         self._cerrado = False
         self._firma = None
+        self._huella = np.zeros((0, 3))     # puntos del mundo sobre las líneas de las asas: ahí no se pone ninguna caja
         self._redibujo_pendiente = False
         self._decimales = 2
         self._cursor = None
@@ -1265,7 +1390,8 @@ class GestorManipuladores(QObject):
             except Exception:  # noqa: BLE001
                 log.debug("dibujo de manipulador", exc_info=True)
         self._firma = self._firma_camara()
-        self.visor.set_capa(CAPA, prims or None)
+        self._huella = _huella(prims)
+        self.visor.set_capa(CAPA, (_contornos(prims) + prims) or None)
         self.sincronizar_cajas()
 
     def mostrar_previa(self, prims):
@@ -1361,22 +1487,42 @@ class GestorManipuladores(QObject):
                     caja.setStyleSheet(QSS_CAJA)
         self._ubicar_cajas()
 
+    def rectangulos_cajas(self):
+        """{clave: QRect} de las cajas de valor visibles."""
+        return {c: k.geometry() for c, k in self.cajas.items() if not k.isHidden()}
+
+    def huella_pantalla(self):
+        """Puntos en pantalla (Nx2) sobre las líneas de todas las asas."""
+        if not len(self._huella):
+            return np.zeros((0, 2))
+        s, ok = self.pantalla(self._huella)
+        return s[ok]
+
     def _ubicar_cajas(self):
+        huella = self.huella_pantalla()
         ocupadas = []
+        w, h = self.visor.width(), self.visor.height()
         for caja in self.cajas.values():
             if caja.punto is None:
                 continue
             s, ok = self.pantalla([caja.punto])
-            x, y = float(s[0][0]) + 14, float(s[0][1]) - caja.sizeHint().height() - 6
-            w, h = self.visor.width(), self.visor.height()
             if not ok[0] or not (-40 <= s[0][0] <= w + 40 and -40 <= s[0][1] <= h + 40):
                 caja.hide()
                 continue
             caja.resize(caja.width(), caja.sizeHint().height())
-            caja.move(int(max(2, min(w - caja.width() - 2, x))), int(max(2, min(h - caja.height() - 2, y))))
-            while any(caja.geometry().intersects(o) for o in ocupadas):       # dos asas juntas: una caja no tapa a la otra
-                caja.move(caja.x(), caja.y() + caja.height() + 2)
-            ocupadas.append(caja.geometry())
+            ancho, alto = caja.width(), caja.height()
+            mejor = None
+            for dx, dy in _candidatos_caja(ancho, alto):
+                x = int(max(2, min(w - ancho - 2, s[0][0] + dx)))
+                y = int(max(2, min(h - alto - 2, s[0][1] + dy)))
+                rect = QRect(x, y, ancho, alto)
+                choques = _choques(rect, huella) + 1000 * sum(rect.intersects(o) for o in ocupadas)
+                if mejor is None or choques < mejor[0]:
+                    mejor = (choques, rect)
+                if choques == 0:
+                    break
+            caja.move(mejor[1].topLeft())
+            ocupadas.append(mejor[1])
             if not caja.isVisible():
                 caja.show()
             caja.raise_()

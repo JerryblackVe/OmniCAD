@@ -2,9 +2,11 @@
 """Fase C · asas de arrastre (manipuladores) de los comandos de Superficie y Sólido, con eventos de mouse simulados
 al visor (no mueve el cursor real). Por cada asa: arrastrar, ver que el valor del panel cambie lo esperado y que la vista
 previa siga andando; arrastrar hacia el otro lado y ver el tope."""
+import json
 import math
 import sys
 import types
+from collections import Counter
 
 import arnes as A
 import escena
@@ -12,7 +14,8 @@ import numpy as np
 from omnicad import api
 from omnicad.ui import manipuladores as mp
 from PySide6.QtCore import QEvent, QPointF, Qt
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtGui import QColor, QImage, QMouseEvent, QPainter
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 s, ids = escena.construir()
@@ -44,6 +47,177 @@ def arrastrar(panel, g, desde, hasta, pasos=6):
     panel._t_previa.stop()
     panel._calcular_previa()
     return True
+
+
+# ---------------------------------------------------------------- auditoría visual (H-60): cada asa en 4 vistas
+AUDITORIA, VECES = [], Counter()
+LARGO_NOMINAL = {"Flecha": mp.LARGO_FLECHA, "Triada": mp.LARGO_TRIADA * 0.8}      # px que mide un eje de frente a la cámara
+
+
+def camara(vis, atras):
+    """Cámara que mira hacia -atras (R: derecha, arriba, atrás)."""
+    atras = mp.unitario(atras)
+    ref = np.array([0.0, 0.0, 1.0]) if abs(atras[2]) < 0.95 else np.array([0.0, 1.0, 0.0])
+    der = mp.unitario(np.cross(ref, atras))
+    vis.R = np.array([der, np.cross(atras, der), atras])
+    vis.encuadrar()
+
+
+def direcciones(g):
+    """(eje principal de las flechas, eje del primer arco o None) de los manipuladores del comando."""
+    d0, d1 = None, None
+    for m in g.manips:
+        if isinstance(m, mp.Flecha) and not isinstance(m, (mp.AsaRadial, mp.FlechaCalcomania)) and d0 is None:
+            d0 = np.asarray(m.direccion, float)
+        elif isinstance(m, mp.Triada) and d0 is None:
+            d0 = m.ejes[2] if m.claves[2] is not None else m.ejes[0]
+        elif isinstance(m, mp.Angulo) and d1 is None:
+            d1 = np.asarray(m.eje, float)
+    return d0, d1
+
+
+def huella_script(g):
+    """Puntos de pantalla sobre las líneas de todas las asas (se calcula aquí para medir también el código viejo)."""
+    pts = []
+    for m in g.manips:
+        for pr in m.dibujar(g, None):
+            if pr[0] == "lineas" and len(pr[1]) > 1:
+                d = np.asarray(pr[1], float).reshape(-1, 3)
+                d = d[:len(d) - len(d) % 2]
+                a, b = d[0::2], d[1::2]
+                pts += [a + (b - a) * t for t in (0.0, 0.25, 0.5, 0.75, 1.0)]
+    if not pts:
+        return np.zeros((0, 2))
+    s_, ok = g.pantalla(np.concatenate(pts))
+    return s_[ok]
+
+
+def medir_vista(g):
+    """{largo_min: razón del largo visible de la flecha más corta, cajas_sobre_asa, cajas_solapadas}."""
+    razones = []
+    for m in g.manips:
+        if isinstance(m, mp.Flecha) and not isinstance(m, (mp.AsaRadial, mp.FlechaCalcomania)):
+            a, b = m.puntos(g)
+            sp, ok = g.pantalla([a, b])
+            razones.append(float(np.linalg.norm(sp[1] - sp[0])) / LARGO_NOMINAL["Flecha"])
+        elif isinstance(m, mp.Triada):
+            partes, _k = m._partes(g)
+            for sub, poli in partes:
+                if sub[0] == "eje":
+                    sp, ok = g.pantalla(poli)
+                    razones.append(float(np.linalg.norm(sp[-1] - sp[0])) / LARGO_NOMINAL["Triada"])
+    huella = huella_script(g)
+    rects = [c.geometry() for c in g.cajas.values() if c.isVisible()]
+    sobre = 0
+    for r in rects:
+        x, y = huella[:, 0], huella[:, 1]
+        if len(huella) and np.count_nonzero((x >= r.left() - 3) & (x <= r.right() + 3) & (y >= r.top() - 3) & (y <= r.bottom() + 3)):
+            sobre += 1
+    solapadas = sum(rects[i].intersects(rects[j]) for i in range(len(rects)) for j in range(i + 1, len(rects)))
+    return {"largo_min": round(min(razones), 2) if razones else None, "cajas": len(rects), "cajas_sobre_asa": sobre,
+            "cajas_solapadas": solapadas}
+
+
+def auditar_vistas(p, g, clave):
+    """4 vistas por comando: de frente al eje, de costado, isométrica y alineada al arco. Mide el largo visible de las flechas
+    y si una caja de valor tapa un asa u otra caja; deja una hoja con las 4 capturas recortadas en torno a las asas."""
+    VECES[clave] += 1
+    nombre = clave if VECES[clave] == 1 else f"{clave}_{VECES[clave]}"
+    vis = p.visor
+    d0, d1 = direcciones(g)
+    d0 = np.array([0.0, 0.0, 1.0]) if d0 is None else d0
+    lateral = mp.perpendiculares(d0)
+    vistas = {"frente al eje": lambda: camara(vis, d0), "de costado": lambda: camara(vis, lateral[0]),
+              "iso": lambda: (vis.vista("iso"), vis.encuadrar()),
+              "alineada al arco": lambda: camara(vis, d1 if d1 is not None else lateral[1])}
+    hoja, fila = [], {"comando": nombre, "vistas": {}}
+    for titulo, poner in vistas.items():
+        poner()
+        g.redibujar()
+        A.esperar(60)
+        medida = medir_vista(g)
+        fila["vistas"][titulo] = medida
+        img = vis.grab().toImage()
+        h = huella_script(g)
+        if len(h):
+            cx, cy = (h.min(axis=0) + h.max(axis=0)) / 2
+        else:
+            cx, cy = img.width() / 2, img.height() / 2
+        ancho, alto = 420, 330
+        x0 = int(max(0, min(img.width() - ancho, cx - ancho / 2)))
+        y0 = int(max(0, min(img.height() - alto, cy - alto / 2)))
+        corte = img.copy(x0, y0, min(ancho, img.width()), min(alto, img.height()))
+        pint = QPainter(corte)
+        pint.fillRect(0, 0, corte.width(), 18, QColor(0, 0, 0, 170))
+        pint.setPen(QColor(255, 255, 255))
+        pint.drawText(4, 13, f"{nombre} · {titulo} · largo {medida['largo_min']} · cajas {medida['cajas']}/{medida['cajas_sobre_asa']}/{medida['cajas_solapadas']}")
+        pint.end()
+        hoja.append(corte)
+    sal = QImage(sum(i.width() for i in hoja), max(i.height() for i in hoja), QImage.Format_RGB32)
+    sal.fill(QColor(40, 40, 40))
+    pint = QPainter(sal)
+    x = 0
+    for i in hoja:
+        pint.drawImage(x, 0, i)
+        x += i.width()
+    pint.end()
+    sal.save(str(A.CAPTURAS / f"asas_{nombre}.png"))
+    AUDITORIA.append(fila)
+    vis.vista("iso")
+    vis.encuadrar()
+    g.redibujar()
+
+
+def probar_triada_seccion(p, g, nombre):
+    """Tríada de Análisis de sección: eje de la normal → Distancia, arco → Ángulo, Esc en la caja y ventanas chicas."""
+    vis = p.visor
+    camara(vis, np.array([1.0, -1.0, 0.7]))
+    g.redibujar()
+    for sub, clave, texto in ((("eje", 2), "desfase", "eje → Distancia"), (("giro", 0), "angulo", "arco → Ángulo")):
+        t = next(x for x in g.manips if isinstance(x, mp.Triada))
+        poli = dict(t._partes(g)[0])[sub]
+        sp, _ok = g.pantalla(poli)
+        medio = sp[len(sp) // 2]
+        tang = sp[min(len(sp) - 1, len(sp) // 2 + 1)] - sp[max(0, len(sp) // 2 - 1)]
+        tang = tang / np.linalg.norm(tang)
+        antes = g.valor(clave)
+        ok = arrastrar(p, g, *[x for x in _a_mundo(vis, medio, tang)])
+        A.reg(nombre, f"tríada: arrastrar {texto}", ok and abs(g.valor(clave) - antes) > 0.5, f"{antes:g} → {g.valor(clave):g}")
+    # un valor tecleado en la caja al lado y Esc
+    sub_antes = g.valor("desfase")
+    g._arrastre = {"m": next(x for x in g.manips if isinstance(x, mp.Triada)), "sub": ("eje", 2), "estado": {}}
+    g.sincronizar_cajas()
+    caja = g.cajas.get("desfase")
+    A.reg(nombre, "tríada: la caja de valor aparece junto al eje", caja is not None and not caja.isHidden(), "")
+    if caja is not None:
+        caja.setFocus()
+        caja.selectAll()
+        QTest.keyClicks(caja, "7 mm")
+        QTest.keyClick(caja, Qt.Key_Return)
+        A.reg(nombre, "tríada: teclear 7 mm y Enter cambia Distancia", abs(g.valor("desfase") - 7) < 1e-6, f"{sub_antes:g} → {g.valor('desfase'):g}")
+    g._arrastre = None
+    g.sincronizar_cajas()
+    for ancho, alto in ((1024, 640), (800, 520)):
+        v.resize(ancho, alto)
+        A.esperar(200)
+        vis.encuadrar()
+        g._arrastre = {"m": next(x for x in g.manips if isinstance(x, mp.Triada)), "sub": ("eje", 2), "estado": {}}
+        g.redibujar()
+        medida = medir_vista(g)
+        g._arrastre = None
+        g.redibujar()
+        A.reg(nombre, f"tríada en ventana {ancho}x{alto}: caja sin tapar el asa", medida["cajas_sobre_asa"] == 0 and medida["cajas_solapadas"] == 0, str(medida))
+    v.resize(1900, 1000)
+    A.esperar(200)
+
+
+def _a_mundo(vis, medio, tang):
+    """(punto3d en el plano de la cámara bajo el píxel `medio`, ese punto corrido 40 px en `tang`)."""
+    o, r = vis.rayo(QPointF(*medio))
+    o2, r2 = vis.rayo(QPointF(*(medio + tang * 40)))
+    p0 = np.asarray(o, float) + np.asarray(r, float) * vis.distancia
+    p1 = np.asarray(o2, float) + np.asarray(r2, float) * vis.distancia
+    return p0, p1
 
 
 def fijar_trazo(p, vals, nombre):
@@ -107,6 +281,7 @@ def probar(clave, sel, vals, foto=None):
             g = p.manipuladores
         if foto:
             A.foto(v, foto)
+        auditar_vistas(p, g, clave)
         for m in list(g.manips):
             tn, cl = type(m).__name__, getattr(m, "clave", None)
             try:
@@ -177,6 +352,8 @@ def probar(clave, sel, vals, foto=None):
                     ok = arrastrar(p, g, m._asa(), objetivo)
                     A.reg(nombre, f"asa de lista «{cl}» salta a la opción siguiente", ok and sig is not None and str(p.valores.get(cl)) == sig,
                           f"{antes} → {p.valores.get(cl)} (esperado {sig}); previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
+                elif isinstance(m, mp.Triada) and clave == "seccion":
+                    probar_triada_seccion(p, g, nombre)
                 elif isinstance(m, mp.Posicion):
                     A.reg(nombre, f"asa de posición ({tn}) presente", True, "no se arrastra en esta prueba")
                 else:
@@ -488,6 +665,7 @@ try:
 except Exception as e:  # noqa: BLE001
     A.reg(f"{AR} · animación", "EXCEPCIÓN", False, f"{type(e).__name__}: {e}")
 
+(A.SALIDA / "auditoria_asas.json").write_text(json.dumps(AUDITORIA, ensure_ascii=False, indent=1), encoding="utf-8")
 A.guardar_registro("u3_asas")
 fallas = [r for r in A.REGISTRO if not r["ok"]]
 print(f"\n=== {len(A.REGISTRO)} comprobaciones, {len(fallas)} con ✗ ===")

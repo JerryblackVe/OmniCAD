@@ -1,6 +1,6 @@
 # Asas de la ventana: que se vean y se entiendan
 
-Especificación de H-60. El estado vive solo en `docs/seguimiento/`.
+Especificación de H-60 (cerrado el 2026-11-02; auditoría en `docs/auditorias/asas_2026-11-01.md`). El estado vive solo en `docs/seguimiento/`.
 
 ## Qué pasa
 

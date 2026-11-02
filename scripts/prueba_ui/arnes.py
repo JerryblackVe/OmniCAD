@@ -30,7 +30,7 @@ os.environ.setdefault("OMNICAD_SIN_ANIMACION", "1")      # las pruebas esperan c
 os.environ.setdefault("OMNICAD_ASISTENTE_DIR", tempfile.mkdtemp(prefix="omnicad_ui_chats_"))
 faulthandler.enable()          # un cierre brusco del programa deja el rastro nativo en el log
 RAIZ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(RAIZ / "clon"))
+sys.path.insert(0, os.environ.get("OMNICAD_CODIGO") or str(RAIZ / "clon"))      # OMNICAD_CODIGO: otra copia de clon/ (comparar antes y después)
 # Carpeta de evidencia (fuera de git): OMNICAD_PRUEBA_SALIDA o evidencias/ui_<hoy>.
 SALIDA = Path(os.environ.get("OMNICAD_PRUEBA_SALIDA") or RAIZ / "evidencias" / f"ui_{date.today().isoformat()}")
 CAPTURAS = SALIDA / "capturas"

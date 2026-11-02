@@ -101,8 +101,8 @@ def _asas_barrido(self, ctx, v):
 
 # ---------------------------------------------------------------- planos de corte
 def _asas_corte(clave_valor):
-    """Flecha de la distancia del plano de corte (Análisis de sección, Sección de malla y Corte de plano), sobre su
-    normal, y arco del ángulo: el plano gira alrededor de su eje u por su origen, después del desfase."""
+    """Tríada del plano de corte (Análisis de sección, Sección de malla y Corte de plano), como la de Mover: el eje de la
+    normal tira de la distancia y el arco alrededor del eje u del plano gira el ángulo (después del desfase)."""
     def asas(self, ctx, v):
         mp = _mp()
         e = mp.entidad(v["plano"][0], ctx.estado) if v.get("plano") else None
@@ -110,14 +110,14 @@ def _asas_corte(clave_valor):
             return []
         try:
             plano = ent.como_plano(e)
-            centro = ent.como_punto(e) if e.tipo == "cara" else plano.origen
+            centro = np.asarray(plano.origen, float)      # el análisis gira el plano alrededor de su origen (`Plano.girado`)
         except Exception:  # noqa: BLE001
             return []
-        salida = [mp.Flecha(clave_valor, centro, plano.normal)]
-        if "angulo" in v:
-            pivote = plano.origen + plano.normal * evaluar_o_cero(ctx, v.get(clave_valor))
-            salida.append(mp.Angulo("angulo", pivote, plano.u, plano.normal))
-        return salida
+        n, u = np.asarray(plano.normal, float), np.asarray(plano.u, float)
+        ejes = np.array([u, np.cross(n, u), n])
+        centro = centro + n * evaluar_o_cero(ctx, v.get(clave_valor))
+        return [mp.Triada(centro, claves=(None, None, clave_valor), giros=("angulo" if "angulo" in v else None, None, None),
+                          planos=False, esfera=False, ejes=ejes)]
     return asas
 
 

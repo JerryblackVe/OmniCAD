@@ -693,3 +693,148 @@ def test_angulo_de_la_revolucion(app_qt):
     panel._calcular_previa()
     assert g.volumen(_cuerpo(estados[-1]).forma) > 0
     panel.cancelar()
+
+
+# ---------------------------------------------------------------- H-60: asas bien definidas y sin nada encima
+def _camara(visor, atras):
+    """Cámara que mira hacia -atras (R: derecha, arriba, atrás) y encuadra."""
+    from omnicad.ui import manipuladores as mp
+    atras = mp.unitario(atras)
+    ref = np.array([0.0, 0.0, 1.0]) if abs(atras[2]) < 0.95 else np.array([0.0, 1.0, 0.0])
+    der = mp.unitario(np.cross(ref, atras))
+    visor.R = np.array([der, np.cross(atras, der), atras])
+    visor.encuadrar()
+
+
+def _vistas(visor, d):
+    """Las 4 vistas de la auditoría: de frente al eje `d`, de costado, iso y de costado por el otro lado."""
+    from omnicad.ui import manipuladores as mp
+    lado = mp.perpendiculares(d)
+    return {"frente": lambda: _camara(visor, d), "costado": lambda: _camara(visor, lado[0]),
+            "iso": lambda: (visor.vista("iso"), visor.encuadrar()), "otro lado": lambda: _camara(visor, lado[1])}
+
+
+def _huella_pantalla(gestor):
+    gestor.redibujar()
+    return gestor.huella_pantalla()
+
+
+def _sin_nada_encima(gestor):
+    """Las cajas visibles no se pisan entre sí ni tapan ningún trazo de las asas."""
+    from omnicad.ui import manipuladores as mp
+    rects = list(gestor.rectangulos_cajas().values())
+    assert not any(a.intersects(b) for i, a in enumerate(rects) for b in rects[i + 1:])
+    huella = gestor.huella_pantalla()
+    assert all(mp._choques(r, huella) == 0 for r in rects)
+    return len(rects)
+
+
+def test_la_flecha_que_apunta_a_la_camara_sigue_viendose_y_se_arrastra(app_qt):
+    from omnicad.ui import manipuladores as mp
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
+    gestor = panel.manipuladores
+    flecha = _manip(panel, "flecha:distancia")
+    _camara(visor, flecha.direccion)                            # la flecha apunta justo a los ojos
+    gestor.redibujar()
+    assert mp.fraccion_visible(visor, flecha.direccion) < 0.01
+    a, b = flecha.puntos(gestor)
+    s, ok = gestor.pantalla([a, b])
+    assert ok.all() and np.linalg.norm(s[1] - s[0]) >= 0.45 * mp.LARGO_FLECHA      # antes: una mancha de ~0 px
+    medio, d = _sobre_flecha(panel, "flecha:distancia")
+    antes = panel.ctx.evaluar(panel.valores["distancia"])
+    _arrastrar(visor, medio, medio + d * 60)
+    assert panel.ctx.evaluar(panel.valores["distancia"]) > antes + 0.5      # arrastrar la flecha dibujada sube el valor (a ~0,015 mm por píxel)
+    panel.cancelar()
+
+
+def test_seccion_usa_la_triada_y_ninguna_caja_tapa_nada_en_4_vistas(app_qt):
+    from omnicad.ui import manipuladores as mp
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    doc = _doc_caja()
+    plano = hit_desde_ref({"tipo": "plano", "id": "XZ"}, doc.estado_final)
+    panel, visor, _ = _panel(CATALOGO["seccion"](), doc, {"plano": [plano], "desfase": "3 mm", "angulo": "10 deg"})
+    gestor = panel.manipuladores
+    assert [m.ident for m in gestor.manips] == ["triada"]             # ya no una flecha y un arco sueltos
+    triada = gestor.manips[0]
+    assert triada.centro == pytest.approx(triada.ejes[2] * 3)
+    n_cajas = 0
+    for nombre, poner in _vistas(visor, triada.ejes[2]).items():
+        poner()
+        gestor.redibujar()
+        triada = gestor.manips[0]
+        partes = dict(triada._partes(gestor)[0])
+        assert set(partes) == {("eje", 2), ("giro", 0)}, nombre
+        s, ok = gestor.pantalla(partes[("eje", 2)])
+        assert np.linalg.norm(s[-1] - s[0]) >= 0.45 * mp.LARGO_TRIADA * 0.8, nombre       # el eje se reconoce en toda vista
+        for sub in (("eje", 2), ("giro", 0)):                 # con cada asa tomada, su caja de valor no tapa nada
+            if sub == ("giro", 0) and abs(float(triada.ejes[0] @ visor.R[2])) > 0.92:
+                continue                                       # el plano del arco se ve de canto: no se puede tomar
+            s, ok = gestor.pantalla(partes[sub])
+            gestor._arrastre = {"m": triada, "sub": sub, "estado": {}}
+            gestor.sincronizar_cajas()
+            n_cajas += _sin_nada_encima(gestor)
+            gestor._arrastre = None
+            gestor.sincronizar_cajas()
+    assert n_cajas >= 6
+    # arrastrar el eje de la normal mueve «Distancia» y arrastrar el arco gira «Ángulo»
+    _camara(visor, np.array([1.0, -1.0, 0.7]))
+    gestor.redibujar()
+    triada = gestor.manips[0]
+    partes = dict(triada._partes(gestor)[0])
+    s, _ = gestor.pantalla(partes[("eje", 2)])
+    d = (s[-1] - s[0]) / np.linalg.norm(s[-1] - s[0])
+    _arrastrar(visor, s.mean(axis=0), s.mean(axis=0) + d * 40)
+    assert panel.ctx.evaluar(panel.valores["desfase"]) != pytest.approx(3.0)
+    s, _ = gestor.pantalla(dict(gestor.manips[0]._partes(gestor)[0])[("giro", 0)])
+    t = s[len(s) // 2 + 1] - s[len(s) // 2 - 1]
+    _arrastrar(visor, s[len(s) // 2], s[len(s) // 2] + t / np.linalg.norm(t) * 40)
+    assert panel.ctx.evaluar(panel.valores["angulo"], "angulo") != pytest.approx(10.0)
+    panel.cancelar()
+
+
+def test_las_cajas_de_extruir_y_revolucion_no_tapan_sus_asas_en_4_vistas(app_qt):
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos.solido import Extruir, Revolucion
+    doc = _doc_rectangulo()
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "distancia": "10 mm", "conicidad": "5 deg"})
+    gestor = panel.manipuladores
+    total = 0
+    for nombre, poner in _vistas(visor, np.array([0.0, 0.0, 1.0])).items():
+        poner()
+        gestor.redibujar()
+        total += _sin_nada_encima(gestor)      # en alguna vista la punta queda fuera de pantalla y su caja se oculta
+    assert total >= 2
+    panel.cancelar()
+    doc = Documento()
+    b = Boceto()
+    b.agregar_rectangulo((5, 0), (10, 10))
+    doc.agregar(OpBoceto(doc.nuevo_id(), "Boceto1", plano="XZ", boceto=b))
+    eje = hit_desde_ref({"tipo": "eje", "id": "Z"}, doc.estado_final)
+    panel, visor, _ = _panel(Revolucion(), doc, {"perfiles": [_perfil(doc)], "eje": [eje], "angulo": "90 deg"})
+    for nombre, poner in _vistas(visor, np.array([0.0, 1.0, 0.0])).items():
+        poner()
+        panel.manipuladores.redibujar()
+        _sin_nada_encima(panel.manipuladores)
+    panel.cancelar()
+
+
+def test_la_triada_de_seccion_esta_en_el_pivote_real_de_giro(app_qt):
+    """Con una cara elegida, el centro de la tríada es el origen del plano (el pivote de `Plano.girado`), no el centroide."""
+    from omnicad.timeline import entidades as ent
+    from omnicad.ui.comandos import CATALOGO
+    doc = _doc_caja()
+    cara = _cara_de_arriba(doc)
+    panel, _visor, _ = _panel(CATALOGO["seccion"](), doc, {"plano": [cara], "desfase": "2 mm", "angulo": "0 deg"})
+    plano = ent.como_plano(_manip_de(panel))
+    triada = panel.manipuladores.manips[0]
+    assert triada.centro == pytest.approx(np.asarray(plano.origen) + np.asarray(plano.normal) * 2)
+    assert triada.ejes[0] == pytest.approx(plano.u)             # el arco gira alrededor de u, como `girado`
+    panel.cancelar()
+
+
+def _manip_de(panel):
+    from omnicad.ui import manipuladores as mp
+    return mp.entidad(panel.valores["plano"][0], panel.ctx.estado)

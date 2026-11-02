@@ -78,7 +78,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [brechas_animacion.md](brechas_animacion.md) | ANI-1–ANI-5: ANIMACIÓN contra capturas de Fusion, con prompt |
 | [brechas_extensiones.md](brechas_extensiones.md) | PLA-1–PLA-14 y EXT-1–EXT-4: plástico y extensiones contra capturas de Fusion, con prompt |
 | [brechas_parametros.md](brechas_parametros.md) | PAR-1–PAR-11: Parámetros contra Fusion |
-| [brechas_gizmos.md](brechas_gizmos.md) | H-60: asas que se vean y se entiendan |
+| [brechas_gizmos.md](brechas_gizmos.md) | H-60 (cerrado el 2026-11-02): asas que se vean y se entiendan |
 | [brechas_previa_aislada.md](brechas_previa_aislada.md) | B-155 y RS-X6: error oculto y demora de la vista previa aparte |
 | [brechas_inspeccionar.md](brechas_inspeccionar.md) | Especificación de INSPECCIONAR contra capturas de Fusion (resuelta, ver su auditoría) |
 | [brechas_construir.md](brechas_construir.md) | CON-1–CON-8: CONSTRUIR contra capturas de Fusion |
@@ -107,6 +107,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [auditorias/ui_paneles_2026-10-31.md](auditorias/ui_paneles_2026-10-31.md) | Paneles de herramienta: sistema común (cabecera por modo, jerarquía «Más opciones», selección legible, ancho fijo, mensajes tipados), matriz de los 148 comandos y 16 diálogos (antes/después, verificación) y límites; filas `UI-2` y `UI-6` del seguimiento (las demás `UI-n` ya se resolvieron) |
 | [auditorias/rust-pipeline-2026-10-31.md](auditorias/rust-pipeline-2026-10-31.md) | Pipeline de rendimiento: qué pasa a Rust y qué no, estado de los planes anteriores, mediciones de hoy (proyectos de 292 pasos, `.f3d`, mallas, rayos, boceto), fases, permisos y pruebas de aceptación (filas `RS-X*`) |
 | [auditorias/informe_tortura_2026-10-17.md](auditorias/informe_tortura_2026-10-17.md) | Prueba de tortura del reductor y bugs T-01 a T-18 |
+| [auditorias/asas_2026-11-01.md](auditorias/asas_2026-11-01.md) | Asas de 35 comandos en 4 vistas, antes y después: largo visible de las flechas y cajas de valor sobre las asas; Análisis de sección con la tríada |
 | [auditorias/construir_2026-11-01.md](auditorias/construir_2026-11-01.md) | Las 20 herramientas de CONSTRUIR en la ventana, antes y después, contra las capturas de Fusion |
 | [auditorias/prueba_nocturna_2026-10-31.md](auditorias/prueba_nocturna_2026-10-31.md) | Todo lo que falta probar sobre el código final y en qué orden correrlo de noche (se borra a medida que queda verde). Script: `scripts/cierre_completo.sh` |
 | [comparacion_motores.md](comparacion_motores.md) | OpenCascade contra OmniKernel. **Generado**: `scripts/comparar_motores.py` |

@@ -264,8 +264,11 @@ class Pestana(Comando):
                                                      v.get("posicion") or "interior", v.get("referencia") or "exterior")[1] + 0.01
             except Exception:  # noqa: BLE001
                 minimo = 0.01
+            # el arco va a media altura de la pestaña: su asa y la flecha están en la misma recta y no se pueden pisar
+            altura = evaluar_o_cero(ctx, v.get("altura"))
             return [mp.Flecha("altura", medio, afuera * np.cos(th) + arriba * np.sin(th), minimo=minimo),
-                    mp.Angulo("angulo", medio, np.cross(afuera, arriba), afuera, minimo=0.1, maximo=179.9)]
+                    mp.Angulo("angulo", medio, np.cross(afuera, arriba), afuera, max(altura / 2, 3.0), minimo=0.1,
+                              maximo=179.9)]
         if v.get("tipo") != "contorno":
             return []
         base = mp.base_perfiles(v.get("curvas"), ctx.estado)

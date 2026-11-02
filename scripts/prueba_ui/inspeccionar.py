@@ -830,8 +830,9 @@ def seccion():
     teclear(p, "desfase", "10 mm", Qt.Key_Tab)
     A.esperar(350)
     anotar(k, "corta la vista", bool(v.visor.cortes), v.visor.cortes and float(v.visor.cortes[0][1][2]))
-    cajas = [c.geometry() for c in p.manipuladores.cajas.values() if c.isVisible()]
-    anotar(k, "las cajas de Distancia y Ángulo no se pisan", len(cajas) == 2 and not cajas[0].intersects(cajas[1]), cajas)
+    g = p.manipuladores
+    anotar(k, "usa la tríada y sus cajas aparecen al tomar un asa, sin tapar nada",
+           [type(m).__name__ for m in g.manips] == ["Triada"] and not g.cajas, [type(m).__name__ for m in g.manips])
     foto("seccion", caja, hueca)
     QTest.keyClick(p, Qt.Key_Return)
     A.esperar(350)

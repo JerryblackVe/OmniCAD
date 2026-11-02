@@ -2,13 +2,12 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 16: Abierto 11 · Parcial 4 · Bloqueado 1.
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 15: Abierto 10 · Parcial 4 · Bloqueado 1.
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-155 | La previa de un cuerpo de 64 caras o más oculta el error real y muestra «código 0x1» | Abierto | Baja | El hijo termina con salida 1 y deja el motivo en `errores.txt`, pero `CalculoPendiente.sondear` no lo lee. Especificación y prompt en `docs/brechas_previa_aislada.md`. | nucleo/aislado.py:419 | 2026-11-01 |
 | B-153 | Teselar deja abiertas las caras muy finas que OpenCascade abandona a medio mallar | Abierto | Media | Rugged Box `obj_3`: unas 25 de 1088 caras quedan con menos triángulos que nodos (cara 708: 67 nodos y 2 triángulos). El nodo sin llenar ya no llega a la malla (B-151), pero la malla sale abierta y `compare_to_mesh` da `closed: false`. Falta rellenar esas caras con sus aristas o reintentar con otro parámetro. | nucleo/geometria.py `_nodos_de_la_cara`; tests/test_geometria.py::test_b151_un_nodo_sin_llenar_de_una_cara_a_medio_mallar_no_llega_a_los_triangulos | 2026-11-01 |
 | B-149 | Radio mínimo sin radio mínimo pinta de rojo las paredes enteras de un vaciado | Parcial | Baja | El panel y `min_radius` de la API ya pintan una banda junto al rincón. Un análisis guardado antes, y la API sin `min_radius`, siguen igual para que un documento viejo se vea igual: decidir si también cambian. | nucleo/analisis.py (`colores_radio_minimo`); tests/test_inspeccionar_fusion.py | 2026-11-01 |
 | B-146 | Derivar sigue grisado en SÓLIDO aunque el comando existe | Abierto | Baja | Conectar el botón a `insertar_derivacion`, como en INSERTAR, y actualizar P-25i. | ui/cinta.py:90 frente a ui/cinta.py:56 | 2026-11-01 |
@@ -54,10 +53,6 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
-
-### B-155 · La previa pesada oculta el error real
-
-Empalme de 32,329 mm sobre la arista de un agujero en una placa de 10 mm, con 64 caras o más: el panel dice «código 0x1». Esperado: el mensaje de la previa normal, «El empalme falló: el radio es demasiado grande…». Se reproduce con `evidencias/empalme_previa_2026-11-01/repro.py`. La causa está leída en `nucleo/aislado.py:419`.
 
 ### B-154 · Un paso viejo con un pedazo de letra partida, elegido a mano, ya no calcula
 
