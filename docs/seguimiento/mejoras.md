@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 147: Abierto 79 · Parcial 51 · Bloqueado 4 · Sin verificar 13 (recontado 2026-10-31; +T-19 a T-23 y AUD-6 medida: 2026-11-01; T-19, T-22 y T-23 resueltos y T-21 pasó a Parcial: 2026-11-01; RS-X1 resuelto y RS-X6 nuevo: 2026-11-01; TXT-9 pasó a Parcial y RS-X8 nuevo: 2026-11-01; TXT-9 resuelto: 2026-11-01; P-56 resuelto, RS-X6 reducido y H-61 nuevo: 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 140: Abierto 75 · Parcial 50 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
 
 ## Pendientes generales
 

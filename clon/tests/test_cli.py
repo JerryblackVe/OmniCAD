@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import omnicad
 from omnicad.cli import main
 from omnicad.cli import util
 
@@ -64,7 +65,7 @@ def test_cli_usage_tiene_pistas_en_el_catalogo():
 def test_version_por_subproceso():
     r = subproceso("--version")
     assert r.returncode == 0
-    assert r.stdout.decode("utf-8").strip() == "omnicad 0.1.4"
+    assert r.stdout.decode("utf-8").strip() == f"omnicad {omnicad.VERSION}"
 
 
 def test_version_y_ayuda_no_cargan_la_api():

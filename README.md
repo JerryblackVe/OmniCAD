@@ -21,17 +21,19 @@ Si te ayuda, una donación me ayuda a seguir.
 
 ## Qué tiene
 
-- **Diseño paramétrico:** parámetros con unidades y expresiones (`ancho / 2 + 3 mm`), timeline editable, deshacer y rehacer.
+- **Diseño paramétrico:** parámetros con unidades y expresiones (`ancho / 2 + 3 mm`, 35 familias de unidades, funciones y constantes), parámetros del modelo y de usuario, timeline editable, deshacer y rehacer.
 - **Bocetos 2D con restricciones:** líneas, arcos, círculos, polígonos, splines, cotas y un solver de restricciones.
 - **Texto y vectores:** texto de boceto con todas las fuentes instaladas (TrueType, OpenType, variables), espaciado, interlineado, alineación, caja, parámetros `{ancho}`, **texto sobre una curva** y un panel **Carácter** (kerning, inclinación, escala horizontal y vertical, línea base, mayúsculas / versalitas, subrayado y tachado que forman perfiles); el texto se edita con cursor, selección y portapapeles; insertar SVG por capas y colores, vectorizar una imagen, marco para mover, escalar, girar y espejar, unir / restar / intersecar perfiles, desfase y limpieza de geometría importada.
 - **Sólidos:** extrusión, revolución, barrido, solevación, primitivas, empalme, chaflán, vaciado, desmoldeo, agujeros,
   roscas, nervios, patrones, simetría, booleanas, dividir, escalar, mover y más.
 - **Superficies, chapa metálica y mallas:** parches, recortar, coser, engrosar; pestañas, pliegues y desplegado;
   reparar, remallar, reducir y suavizar mallas.
-- **Ensamblaje básico:** componentes, uniones, grupos rígidos y fijaciones (tornillería).
+- **Ensamblaje básico:** componentes y subensamblajes, uniones, grupos rígidos, arrastrar con Capturar y Revertir, y fijaciones (tornillería).
+- **Reconstruir sólido:** convierte un STL, OBJ o 3MF de extrusiones y revoluciones en una pieza con historial, sin IA, y compara la pieza con la malla en un mapa de desviación.
 - **Archivos:** proyecto `.omnicad` abierto (ZIP con receta JSON); exporta STL, OBJ, 3MF, PLY, STEP, IGES y BREP;
   importa STEP; bocetos desde DXF, SVG e imágenes vectorizadas; guarda bocetos como DXF y SVG.
-- **Inspección:** volumen, masa, área, caja envolvente, distancias, ángulos e interferencias.
+- **Inspección:** volumen, masa, área, caja envolvente, distancias, ángulos, interferencias, desmoldeo, accesibilidad, radio mínimo, cebra, curvatura, sección, huella de carbono (Sustainability Insights) y grupos de caras.
+- **Asistente IA dentro de la app:** un chat que diseña y modifica la pieza con las herramientas del programa, con API o con tu suscripción de Claude Code, Codex u OpenCode.
 - **Interfaz:** 5 temas (oscuro moderno, claro moderno, azul profesional, minimalista y clásico) y temas propios del
   usuario en un archivo JSON; caja de herramientas con la tecla S (buscar y fijar comandos).
 - **Kernel geométrico:** [OpenCascade](https://dev.opencascade.org/) (B-rep), el mismo tipo de núcleo que usan los CAD comerciales.
@@ -70,6 +72,21 @@ omnicad setup --cliente todos --aplicar  # lo hace (con copia .bak de cada archi
 
 Todo está en [docs/agentes/](docs/agentes/README.md): cómo conectar cada cliente, la CLI, el modo en vivo y la lista
 completa de herramientas.
+
+## Novedades de la 0.2.0
+
+- **Reconstruir sólido desde una malla, sin IA:** una malla de extrusiones, revoluciones, agujeros, empalmes y chaflanes pasa a ser una pieza con historial.
+- **Parámetros más fieles:** lector propio de expresiones (sin `eval`), 35 familias de unidades y renombrar un parámetro en todo el documento.
+- **CONSTRUIR e INSPECCIONAR completos:** planos, ejes y puntos con todos sus modos; 15 herramientas de inspección y huella de carbono de la pieza.
+- **Texto sobre una curva:** cada letra forma sus perfiles, con espaciado y altura por fuente, y se extruye sin agujeros de menos.
+- **Boceto más inteligente:** ayudas de dibujo con guías, Simetría, Desfase con signo, patrones y escala con vista previa viva.
+- **Más sólido, superficie y ensamblaje:** Editar cara por el contorno, patrones de sólido revisados, barrido con guías y subensamblajes.
+- **Más rápido:** un trabajador persistente edita con muchos pasos sin rehacer todo, y la vista previa de piezas pesadas responde en 0,05 a 0,22 s después de la primera.
+- **Booleanas honestas:** Unir, Cortar e Intersecar avisan cuando el resultado no cierra en vez de dar un volumen malo en silencio.
+- **Asas de arrastre más claras** y paneles de herramienta con un sistema común.
+- **Para agentes:** 386 herramientas MCP/CLI en 17 grupos (eran 349) y un registro de uso local, apagado de fábrica y sin envío a la red.
+
+Detalle completo en el [CHANGELOG](CHANGELOG.md).
 
 ## Descargar (sin programar)
 
@@ -141,8 +158,8 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - **Engranajes de todo tipo:** una galería con imágenes y explicación corta para crear engranajes cilíndricos, cónicos, sin fin, planetarios, especiales, cremalleras y mecanismos (Ginebra, trinquete, reductores), desde la interfaz, la CLI o un agente de IA.
 - **Idioma:** español e inglés en todo (interfaz, mensajes, herramientas y documentación); primer arranque guiado.
 - **Integración:** Blender en los dos sentidos; conectar más agentes de IA.
-- **Asistente IA dentro de la app:** un chat que explica, muestra y diseña con vos, con clave de API o con tu suscripción de Claude Code o Codex.
-- **Reconstruir sólido:** ya convierte un STL, OBJ o 3MF de extrusiones y revoluciones en una pieza con historial, sin IA (`reconstruct_from_mesh`). Falta el panel, el resultado paramétrico, la IA y las piezas que combinan varias direcciones.
+- **Asistente IA:** ya viene en la app. Falta la respuesta en streaming, probarlo con Ollama y medir lo que gasta por paso.
+- **Reconstruir sólido:** ya convierte un STL, OBJ o 3MF de extrusiones, revoluciones, agujeros, empalmes y chaflanes en una pieza con historial, sin IA (`reconstruct_from_mesh`). Falta el panel dentro de MALLA, el resultado paramétrico (bocetos acotados y parámetros con nombre), la IA, las superficies libres y las piezas que combinan direcciones (cortes oblicuos, esquinas con esferas, moleteados).
 - **Escanear con el celular:** filmar una pieza y recibirla en OmniCAD lista para reconstruir.
 - **Render:** materiales, colores e iluminación; ideas de KeyShot y V-Ray.
 - **Vectores y texto:** curvas Bézier con manijas de tangente y simplificar con curvas ajustadas.
@@ -154,9 +171,9 @@ El proyecto busca crecer de forma colaborativa. Empezá por [CONTRIBUTING.md](CO
 - **Espacio FORMA** (superficies de subdivisión T-splines): no existe todavía; es el pendiente más grande.
 - **Menús y navegador:** los menús contextuales y varias opciones de la cinta que faltan frente a Fusion 360.
 - **Abrir `.f3d`** de Fusion con su historial de operaciones y los diseños referenciados de un `.f3z`.
-- **Rendimiento:** pasar los cuellos de botella a Rust y C++ (mallas, solver de bocetos) y que la vista previa de piezas pesadas llegue más rápido (el proceso aparte hoy tarda ~1,5 s en arrancar).
+- **Rendimiento:** pasar los cuellos de botella a Rust y C++ (mallas, solver de bocetos) y acelerar las más pesadas. La vista previa de piezas pesadas ya usa un trabajador persistente: la primera tarda como antes y las siguientes 0,05 a 0,22 s en una placa de 76 caras; el Vaciado de una placa de 206 caras sigue en unos 4 s.
 - **Interfaz:** pulido visual y sistema de temas propios que el usuario pueda crear y compartir.
-- **Corrección de errores:** la lista de errores abiertos está en [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md).
+- **Corrección de errores:** ver «Errores conocidos» más abajo.
 
 Próximas funciones de boceto y modelado (lo que todavía falta frente a Fusion):
 
@@ -164,6 +181,36 @@ Próximas funciones de boceto y modelado (lo que todavía falta frente a Fusion)
 - Grupos en la línea de tiempo.
 
 Estado de cada punto, verificado contra el código: [docs/seguimiento/](docs/seguimiento/README.md).
+
+### Errores conocidos
+
+Hoy hay 13 errores abiertos (lista completa en [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md)). Los que pueden afectarte:
+
+- Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar.
+- Teselar o comparar con una malla deja abiertas unas pocas caras muy finas en piezas con más de mil caras.
+- Un cuerpo que pasa a otro componente puede seguir a la unión del componente anterior.
+- Volver a resolver un boceto con una tangente a un spline lo corre un poco cada vez.
+- Proyectar un cuerpo curvo visto de costado no da su silueta cerrada, solo sus aristas.
+- Un documento viejo con un pedazo de letra partida elegido a mano ya no calcula: hay que volver a elegir el texto en ese paso.
+- Exportar una animación a `.mp4` responde un error interno; usá GIF o PNG.
+- El botón Derivar sigue grisado en SÓLIDO aunque funciona desde INSERTAR.
+- Un análisis de Radio mínimo guardado antes pinta las paredes enteras de un vaciado.
+- Importar `.f3d`: faltan por ubicar algunos cuerpos de un diseño de prueba.
+- En Linux con Wayland nativo los menús emergentes se cierran solos (la app fuerza X11 y no molesta).
+- Muy rara vez, recalcular parámetros en un documento de 148 pasos tumbó el kernel; no se pudo reproducir.
+
+### Próximas mejoras
+
+Lo que ya existe y se puede hacer mejor (unas 140 filas en [docs/seguimiento/mejoras.md](docs/seguimiento/mejoras.md)):
+
+- **Rendimiento:** más Rust (mallas, solver de bocetos, dibujo del boceto, reducir y remallar).
+- **Interfaz:** revisar cada pantalla (estados vacíos, errores, textos) y la tipografía.
+- **Pruebas e instaladores:** CI en GitHub y macOS, y paquetes `.deb` o Flatpak.
+- **Valores de fábrica como Fusion:** por ejemplo, Extruir arranca en 10 mm y Fusion en 0 mm.
+- **Análisis:** región y país para la huella de carbono, y mapa de entorno con reflejo por cara.
+
+Funciones que todavía no existen: unas 225 filas en [docs/seguimiento/faltantes.md](docs/seguimiento/faltantes.md).
+
 
 ## Aviso
 

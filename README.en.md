@@ -24,16 +24,19 @@ If it is useful to you, a donation helps keep it going.
 
 ## Features
 
-- **Parametric design:** parameters with units and expressions (`ancho / 2 + 3 mm`), editable timeline, undo/redo.
+- **Parametric design:** parameters with units and expressions (`ancho / 2 + 3 mm`, 35 unit families, functions and constants), model and user parameters, editable timeline, undo/redo.
+- **Text on a curve:** sketch text with all installed fonts, spacing, a Character panel, and text that follows a curve and extrudes cleanly.
 - **Constrained 2D sketches:** lines, arcs, circles, polygons, splines, dimensions and a constraint solver.
 - **Solids:** extrude, revolve, sweep, loft, primitives, fillet, chamfer, shell, draft, holes, threads, ribs, patterns,
   mirror, booleans, split, scale, move and more.
 - **Surfaces, sheet metal and meshes:** patch, trim, stitch, thicken; flanges, bends and flat pattern; repair, remesh,
   reduce and smooth meshes.
-- **Basic assemblies:** components, joints, rigid groups and fasteners.
+- **Basic assemblies:** components and subassemblies, joints, rigid groups, dragging with Capture and Revert, and fasteners.
+- **Rebuild solid:** turns an STL, OBJ or 3MF made of extrusions and revolves into a part with history, without AI, and compares the part to the mesh in a deviation map.
 - **Files:** open `.omnicad` project format (ZIP with a JSON recipe); exports STL, OBJ, 3MF, PLY, STEP, IGES and BREP;
   imports STEP; sketches from DXF and SVG.
-- **Inspection:** volume, mass, area, bounding box, distances, angles and interference.
+- **Inspection:** volume, mass, area, bounding box, distances, angles, interference, draft, accessibility, minimum radius, zebra, curvature, section, carbon footprint (Sustainability Insights) and face groups.
+- **In-app AI assistant:** a chat that designs and edits the part with the program's own tools, using an API key or your Claude Code, Codex or OpenCode subscription.
 - **Interface:** 5 themes (modern dark, modern light, professional blue, minimalist and classic) plus user themes
   in a JSON file; toolbox on the S key (search and pin commands).
 - **Geometry kernel:** [OpenCascade](https://dev.opencascade.org/) (B-rep).
@@ -70,6 +73,21 @@ omnicad setup --cliente todos --aplicar  # does it (backing up each file as .bak
 
 Tool names and parameters are in English (`create_box`, `fillet`, `radius`); descriptions and messages are in Spanish
 for now. Docs: [docs/agentes/](docs/agentes/README.md).
+
+## What's new in 0.2.0
+
+- **Rebuild a solid from a mesh, without AI:** a mesh of extrusions, revolves, holes, fillets and chamfers becomes a part with history.
+- **More faithful parameters:** own expression reader (no `eval`), 35 unit families, and renaming a parameter across the whole document.
+- **Full CONSTRUCT and INSPECT:** planes, axes and points with all their modes; 15 inspection tools and a carbon footprint for the part.
+- **Text on a curve:** each letter forms its own profiles, with per-font spacing and height, and extrudes without missing holes.
+- **Smarter sketching:** drawing guides, Mirror, signed Offset, patterns and scale with live preview.
+- **More solid, surface and assembly tools:** Edit face by contour, reviewed solid patterns, sweep with guides and subassemblies.
+- **Faster:** a persistent worker edits with many steps without rebuilding everything, and the preview of heavy parts answers in 0.05 to 0.22 s after the first one.
+- **Honest booleans:** Join, Cut and Intersect warn when the result does not add up instead of silently returning a bad volume.
+- **Clearer drag handles** and tool panels built on a common system.
+- **For agents:** 386 MCP/CLI tools in 17 groups (up from 349) and a local usage log, off by default and never sent over the network.
+
+Full detail in the [CHANGELOG](CHANGELOG.md) (Spanish).
 
 ## Download (no coding needed)
 
@@ -134,8 +152,8 @@ Pick any item and open an [Issue](https://github.com/JerryblackVe/OmniCAD/issues
 - **Gears of every kind:** a gallery to create bevel, worm, planetary and special gears and mechanisms.
 - **Language:** Spanish and English everywhere; guided first launch.
 - **Integration:** two-way Blender integration; connecting more AI agents.
-- **In-app AI assistant:** a chat that explains, inspects and designs with you, using an API key or your Claude Code or Codex subscription.
-- **Rebuild solid:** an STL, OBJ or 3MF made of extrusions and revolves already becomes a part with history, without AI (`reconstruct_from_mesh`). Still missing: the panel, a parametric result, AI and parts that combine several directions.
+- **AI assistant:** already in the app. Still missing: streaming replies, testing with Ollama and measuring what it spends per step.
+- **Rebuild solid:** an STL, OBJ or 3MF made of extrusions, revolves, holes, fillets and chamfers already becomes a part with history, without AI (`reconstruct_from_mesh`). Still missing: the panel inside MESH, a parametric result (dimensioned sketches and named parameters), AI, free-form surfaces and parts that combine directions (oblique cuts, corners with spheres, knurling).
 - **Phone scanning:** film a part and bring it into OmniCAD, ready to rebuild.
 - **Plastic design:** snap fits, rests, two-sided bosses, part simplification and a fastener library.
 - **Rendering:** materials, lighting, ideas from KeyShot and V-Ray.
@@ -144,8 +162,37 @@ Pick any item and open an [Issue](https://github.com/JerryblackVe/OmniCAD/issues
 - **FORM workspace** (T-spline subdivision surfaces): not started yet.
 - **Fusion `.f3d` files** with their operation history.
 - **Assemblies:** activating a component, contact sets, more joint position modes and motion limits, a fuller motion study.
-- **Performance:** more hot paths in Rust and C++.
-- **Bug fixing:** open bugs are listed in [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md) (Spanish).
+- **Performance:** more hot paths in Rust and C++. Preview of heavy parts already runs in a persistent worker: the first one takes as long as before, the next ones 0.05 to 0.22 s on a 76-face plate; Shell on a 206-face plate still takes about 4 s.
+- **Bug fixing:** see Known issues below.
+
+### Known issues
+
+There are 13 open bugs today (full list in [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md), Spanish). Those that may affect you:
+
+- Cutting with a sphere almost tangent to a wall can remove too little without warning.
+- Tessellating or comparing with a mesh leaves a few very thin faces open on parts with over a thousand faces.
+- A body that moves to another component can keep following the joint of its previous component.
+- Re-solving a sketch with a tangent to a spline shifts it slightly each time.
+- Projecting a curved body seen from the side gives its edges, not a closed silhouette.
+- An old document with a piece of a split letter picked by hand no longer computes: pick the text again in that step.
+- Exporting an animation to `.mp4` returns an internal error; use GIF or PNG.
+- The Derive button is still greyed out in SOLID although it works from INSERT.
+- A Minimum radius analysis saved earlier paints whole walls of a shell.
+- `.f3d` import: some bodies of a test design are still unplaced.
+- On Linux with native Wayland, pop-up menus close by themselves (the app forces X11, so it does not get in the way).
+- Very rarely, recomputing parameters in a 148-step document brought the kernel down; it could not be reproduced.
+
+### Next improvements
+
+What already exists and can be better (about 140 rows in [docs/seguimiento/mejoras.md](docs/seguimiento/mejoras.md)):
+
+- **Performance:** more Rust (meshes, sketch solver, sketch drawing, reduce and remesh).
+- **Interface:** review every screen (empty states, errors, texts) and the typography.
+- **Testing and installers:** GitHub CI and macOS, and `.deb` or Flatpak packages.
+- **Fusion-like defaults:** for example, Extrude starts at 10 mm while Fusion starts at 0 mm.
+- **Analysis:** region and country for the carbon footprint, and environment maps that reflect per face.
+
+Functions that do not exist yet: about 225 rows in [docs/seguimiento/faltantes.md](docs/seguimiento/faltantes.md).
 
 ## Disclaimer
 

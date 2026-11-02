@@ -5,12 +5,66 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
 
 ## [No publicada]
 
+## [0.2.0] — 2026-11-02
+
 ### Agregado
+- **Reconstruir sólido desde una malla, sin IA** (`reconstruct_from_mesh`): convierte un STL, OBJ o 3MF de extrusiones,
+  revoluciones, agujeros, empalmes, chaflanes y patrones en una pieza con historial. Trae un banco de 30 piezas con
+  respuesta conocida, `compare_to_mesh` y un Mapa de desviación (INSPECCIONAR) para ver dónde la pieza difiere de la
+  malla.
+- **Parámetros** con lector propio de expresiones (sin `eval`), 35 familias de unidades, funciones y constantes como
+  Fusion, parámetros del modelo y de usuario, y diálogo nuevo; renombrar un parámetro actualiza pasos, cotas, textos y
+  configuraciones.
+- **CONSTRUIR** completo: planos, ejes y puntos con todos sus modos en un panel común, con el panel de información
+  compartido.
+- **INSPECCIONAR** con las 15 herramientas: Medir con filtro, precisión y unidades secundarias, Interferencia con tabla
+  y quitar volumen (`remove_interference`), Desmoldeo, Accesibilidad, Radio mínimo, Cebra, Curvatura, Sección, mapas de
+  entorno y centro de masa. Incluye **Sustainability Insights** (huella de carbono con materiales propios) y grupos de
+  caras.
+- **Texto sobre una curva** y su extrusión: cada letra y cada curva forman sus perfiles aparte, con espaciado y altura
+  por fuente como Fusion (`Text_height` queda como parámetro).
+- **Boceto**: ayudas de dibujo («sketch inteligente»: alineaciones, intersecciones, paralela y colineal, alternar y
+  bloquear), paneles de Simetría, Desfase con signo y vista previa viva, Escala, Mover/copiar y patrones circular y
+  rectangular; restricciones auditadas y tangente con arcos en 2D y 3D; «Atenuar el resto» en proyecciones perdidas.
+- **Sólido**: Editar cara por el contorno, solevación de superficie, Dividir cara, patrones de sólido revisados
+  (rectangular, circular, trayectoria, puntos y multitransformación; «Optimizado» patronea caras de verdad), clase de
+  rosca y Análisis de sección con color y rayado.
+- **Ensamblar**: arrastrar componentes con Capturar y Revertir, modos de origen «Entre dos caras» e «Intersección de dos
+  aristas», bola y vínculo, **subensamblajes** (componentes con padre y grupo rígido con hijos).
+- **Superficie**: barrido con guías, solevación con condiciones, primitivas, tabla de Coser y avisos de esquina sin
+  cortar.
+- **Interfaz**: paneles movibles y preajustes en la cabecera, paneles de herramienta con un sistema común, paneles de
+  Render y Carácter con barra en ventanas bajas, y asas de arrastre bien definidas (flecha inclinada hacia la cámara,
+  contorno oscuro, cajas de valor que no se pisan, tríada de la Sección).
+- **Rendimiento con Rust**: Zstandard para el `.f3d` y BVH de rayos; un **trabajador persistente** que edita con muchos
+  pasos sin rehacer todo el documento, y vista previa de piezas pesadas en ese mismo trabajador (primera previa como
+  antes; las siguientes en 0,05 a 0,22 s en una placa de 76 caras, contra 1,3 a 1,5 s).
+- MCP/CLI: 386 herramientas en 17 grupos (eran 349), con las de Reconstruir, comparar contra malla, quitar
+  interferencia, grupos de caras, Editar cara y huella de carbono.
 - **Registro de uso local**, apagado de fábrica y sin envío a la red: escribe un JSONL con tiempos de comandos y
   operaciones, errores, bloqueos de la interfaz, cuadros del visor y memoria; lo resume en un detector de problemas
   y permite seguirlo en vivo con `omnicad registro --seguir --json`. Se prende en Preferencias › General, con
   `--registro` o con `set_usage_logging`; el informe queda en la carpeta del registro y nunca escribe solo en
   `docs/seguimiento/`. No guarda chat, contenido de archivos, rutas fuera del proyecto ni texto libre.
+
+### Cambiado
+- Las booleanas (Unir, Cortar, Intersecar) comprueban cuánto comparten las piezas y avisan o fallan en vez de dar un
+  resultado malo en silencio; el volumen de formas libres finas (una lente de dos esferas) se integra con más precisión.
+- El texto nuevo mide su altura como la «A» de su fuente, como Fusion.
+- Un error de geometría llega entero al panel («No se pudo calcular la vista previa: …») y no se corta a 200 caracteres.
+- Cancelar una vista previa pesada ya no mata el proceso de cálculo: la respuesta se descarta y la siguiente espera su
+  turno.
+
+### Corregido
+- Cortes, roscas, patrones, normales y curvas medidos contra Fusion real (B-118, B-122, B-151, BOC-50, BOC-76, PAT-1 y
+  SUP-23, entre otros); un cuerpo que pasa a otro componente ya no se mueve dos veces con la unión (B-108).
+- Texto en curva: una letra tocada por otra curva sigue siendo letra y las cintas diminutas que sobran ya no se
+  extruyen (B-132 a B-137).
+- Volumen de una lente de dos esferas (B-129), booleanas que daban mal sin avisar (B-125, B-126, B-128, B-127) y
+  fallas menores de la prueba de tortura de la API.
+- Fugas de archivos y sockets cerradas en toda la suite (P-58); varios rojos de interfaz (panel que crecía al cambiar
+  de modo, B-113; clic sobre un eje de la tríada con una herramienta de dibujo, B-120; ícono del repujado, B-112).
+- Un boceto grande ya no congela la ventana al editarse (B-111).
 
 ## [0.1.4] — 2026-10-26
 
