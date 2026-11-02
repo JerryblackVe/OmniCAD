@@ -262,6 +262,7 @@ Se descartan, porque no le sirven a un agente:
 |---|---|
 | Estudio de movimiento: reproducir hacia atrás y adelante, paso a paso, modo (en un sentido, ida y vuelta, bucle) y velocidad (ASM-14) | Es tiempo real de la vista: un agente pide un valor y lee el resultado. Lo que sí le sirve (todas las uniones con su valor a la vez, y dónde queda cada componente) es `motion_study_pose`; recorrer una unión con choques es `motion_study`. |
 | «Animar» del diálogo Vínculo de movimiento (ASM-13) | Mueve solo el dibujo mientras el diálogo está abierto. Para ver el vínculo, `create_motion_link` y `motion_study_pose`. |
+| Casilla «Cálculo automático» y botón Aplicar del diálogo Parámetros (PAR-7) | Deciden cuándo se aplica lo que se teclea en la ventana. Una herramienta ya aplica al llamarla: `set_parameter` hace lo mismo, sin casilla. |
 
 ## Hallazgos de la auditoría
 

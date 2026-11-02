@@ -41,8 +41,10 @@ def test_crear_usar_y_borrar(s):
     assert api.llamar(s, "delete_parameter", {"name": "ancho"})["error_kind"] == "PARAMETER_IN_USE"
     ok(api.llamar(s, "set_parameter", {"name": "alto_placa", "expression": "8 mm"}))
     assert ok(api.llamar(s, "delete_parameter", {"name": "espesor"})) == {"name": "espesor", "deleted": True}
+    nombres = [p["name"] for p in ok(api.llamar(s, "get_parameters", {"user_only": True}))["parameters"]]
+    assert nombres == ["ancho", "alto_placa", "radio_agujero"]
     nombres = [p["name"] for p in ok(api.llamar(s, "get_parameters"))["parameters"]]
-    assert nombres == ["ancho", "alto_placa", "radio_agujero", "d1", "d2", "d3", "d4", "d5"]
+    assert nombres[3:8] == ["d1", "d2", "d3", "d4", "d5"]        # cotas y, después, los valores de los pasos
 
 
 def test_parametro_de_angulo():

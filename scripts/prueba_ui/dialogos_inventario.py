@@ -26,7 +26,7 @@ malla = [c for c in est.cuerpos.values() if c.tipo == "malla"]
 
 
 def fabricas():
-    from omnicad.ui import (administrar, animacion, aspectos_ui, dialogo_autorestringir, dialogos, dibujo, guardar_malla,
+    from omnicad.ui import (administrar, animacion, aspectos_ui, dialogo_autorestringir, dialogo_parametros, dialogos, dibujo, guardar_malla,
                             mas_comando, modo_boceto, panel_patron, panel_simetria, panel_transformar, render)
     yield "boceto · panel Patrón", "panel_patron.PanelPatron", lambda: panel_patron.PanelPatron(v.area)
     yield "boceto · panel Simetría", "panel_simetria.PanelSimetria", lambda: panel_simetria.PanelSimetria(v.area)
@@ -49,7 +49,7 @@ def fabricas():
     yield "administrar · Lista de materiales", "administrar.DialogoListaMateriales", \
         lambda: administrar.DialogoListaMateriales(s.doc, v)
     yield "administrar · Scripts", "administrar.DialogoScripts", lambda: administrar.DialogoScripts(v)
-    yield "diseño · Parámetros", "dialogos.DialogoParametros", lambda: dialogos.DialogoParametros(s.doc.parametros, v)
+    yield "diseño · Parámetros", "dialogo_parametros.DialogoParametros", lambda: dialogo_parametros.DialogoParametros(s.doc, v)
     yield "diseño · Rejilla", "dialogos.DialogoRejilla", lambda: dialogos.DialogoRejilla(None, v)
     yield "aspecto · Editor de materiales", "aspectos_ui.EditorMateriales", lambda: aspectos_ui.EditorMateriales({}, v)
     yield "ajustes · Atajo", "mas_comando.DialogoAtajo", lambda: mas_comando.DialogoAtajo("Extruir", "E", "E", lambda _t: None, v)

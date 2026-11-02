@@ -7,14 +7,14 @@ informe_analisis.md §5): los campos numéricos son EXPRESIONES con unidades que
 Para editar un paso existente se usa el estado del modelo ANTERIOR a ese paso, como hace Fusion
 al editar una feature del timeline.
 """
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox,
                                QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
 from ..io_archivos import proyecto
 from ..timeline.operaciones import OPERACIONES_CUERPO, OpPrimitiva
-from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, TEXTO, ErrorExpresion, TablaParametros, validar_nombre
+from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
 from . import formato, temas
 from .iconos import icono
 
@@ -178,171 +178,6 @@ class DialogoPrimitiva(_DialogoBase):
         if self.op:
             return OpPrimitiva(self.op.id, self.op.nombre, self.op.suprimida, **params)
         return OpPrimitiva(self.doc.nuevo_id(), **params)
-
-
-class DialogoParametros(QDialog):
-    """Tabla de parámetros de usuario (equivalente al diálogo "Change Parameters" de Fusion)."""
-    COLUMNAS = ["Nombre", "Expresión", "Tipo", "Valor", "Comentario"]
-    NOMBRES_TIPO = {LONGITUD: "Longitud (mm)", ANGULO: "Ángulo (°)", ESCALAR: "Sin unidad", TEXTO: "Texto"}
-
-    def __init__(self, tabla, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Parámetros")
-        self.setWindowIcon(icono("parametros"))
-        self.resize(760, 420)
-        self.tabla_qt = QTableWidget(0, len(self.COLUMNAS))
-        self.tabla_qt.setHorizontalHeaderLabels(self.COLUMNAS)
-        self.tabla_qt.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.error = QLabel()                 # antes de cargar filas: cada fila recalcula y escribe acá
-        temas.poner_rol(self.error, "error")
-        self.resultado = None
-        for p in tabla:
-            self._agregar_fila(p.nombre, p.expresion, p.tipo, p.comentario)
-        self.tabla_qt.itemChanged.connect(lambda *_: self._recalcular())
-        agregar, quitar = QPushButton("Agregar"), QPushButton("Quitar")
-        agregar.clicked.connect(lambda: self._agregar_fila(f"p{self.tabla_qt.rowCount() + 1}", "10 mm", LONGITUD, ""))
-        quitar.clicked.connect(lambda: self.tabla_qt.removeRow(self.tabla_qt.currentRow()))
-        botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        botones.accepted.connect(self._aceptar)
-        botones.rejected.connect(self.reject)
-        lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("Usá los nombres en cualquier cota o medida, p. ej. «ancho / 2» o «alto + 5 mm»."))
-        lay.addWidget(self.tabla_qt)
-        exportar = QPushButton(icono("parametros_exportar"), "Exportar parámetros…")
-        importar = QPushButton(icono("parametros_importar"), "Importar parámetros…")
-        exportar.clicked.connect(self._exportar)
-        importar.clicked.connect(self._importar)
-        fila = QHBoxLayout()
-        fila.addWidget(agregar)
-        fila.addWidget(quitar)
-        fila.addStretch()
-        fila.addWidget(importar)
-        fila.addWidget(exportar)
-        lay.addLayout(fila)
-        lay.addWidget(self.error)
-        lay.addWidget(botones)
-        self.resultado = None
-        self._recalcular()
-
-    # Formato CSV de Fusion (Import/Export Parameters [SLD-IMPORT-EXPORT-PARAMETERS]): Name, Unit,
-    # Expression, Value, Comments; la unidad dice el tipo (mm → longitud, deg → ángulo, vacío → sin unidad).
-    UNIDADES_CSV = {LONGITUD: "mm", ANGULO: "deg", ESCALAR: "", TEXTO: "text"}
-
-    def filas_csv(self):
-        self._recalcular()
-        if self.resultado is None:
-            raise ErrorExpresion(self.error.text() or "Hay parámetros inválidos.")
-        valores = self.resultado.valores()
-        return [[p.nombre, self.UNIDADES_CSV.get(p.tipo, ""), p.expresion, (valores[p.nombre] if p.tipo == TEXTO else f"{valores[p.nombre]:.6g}"), p.comentario]
-                for p in self.resultado]
-
-    def _exportar(self):
-        import csv
-        from PySide6.QtWidgets import QFileDialog
-        try:
-            filas = self.filas_csv()
-        except ErrorExpresion as e:
-            QMessageBox.warning(self, "Parámetros inválidos", str(e))
-            return
-        ruta, _ = QFileDialog.getSaveFileName(self, "Exportar parámetros", "parametros.csv", "CSV (*.csv)")
-        if ruta:
-            with open(ruta, "w", newline="", encoding="utf-8") as f:
-                w = csv.writer(f)
-                w.writerow(["Name", "Unit", "Expression", "Value", "Comments"])
-                w.writerows(filas)
-
-    def importar_csv(self, ruta):
-        """Agrega o reemplaza (por nombre) los parámetros del CSV. Devuelve cuántos importó."""
-        import csv
-        tipos = {"mm": LONGITUD, "cm": LONGITUD, "m": LONGITUD, "in": LONGITUD, "deg": ANGULO, "rad": ANGULO, "text": TEXTO, "": ESCALAR}
-        existentes = {self._texto(f, 0): f for f in range(self.tabla_qt.rowCount())}
-        n = 0
-        with open(ruta, newline="", encoding="utf-8-sig") as f:
-            for fila in csv.DictReader(f):
-                nombre = (fila.get("Name") or fila.get("Nombre") or "").strip()
-                expresion = (fila.get("Expression") or fila.get("Expresión") or "").strip()
-                if not nombre or not expresion:
-                    continue
-                tipo = tipos.get((fila.get("Unit") or fila.get("Unidad") or "").strip().lower(), LONGITUD)
-                comentario = (fila.get("Comments") or fila.get("Comentario") or "").strip()
-                if nombre in existentes:
-                    r = existentes[nombre]
-                    self.tabla_qt.item(r, 1).setText(expresion)
-                    self.tabla_qt.cellWidget(r, 2).setCurrentIndex(max(self.tabla_qt.cellWidget(r, 2).findData(tipo), 0))
-                    self.tabla_qt.item(r, 4).setText(comentario)
-                else:
-                    self._agregar_fila(nombre, expresion, tipo, comentario)
-                n += 1
-        self._recalcular()
-        return n
-
-    def _importar(self):
-        from PySide6.QtWidgets import QFileDialog
-        ruta, _ = QFileDialog.getOpenFileName(self, "Importar parámetros", "", "CSV (*.csv)")
-        if ruta:
-            try:
-                n = self.importar_csv(ruta)
-                self.error.setText(f"Se importaron {n} parámetro(s).") if not self.error.text() else None
-            except (OSError, ValueError) as e:
-                QMessageBox.warning(self, "No se pudo importar", str(e))
-
-    def _agregar_fila(self, nombre, expresion, tipo, comentario):
-        self.tabla_qt.blockSignals(True)
-        f = self.tabla_qt.rowCount()
-        self.tabla_qt.insertRow(f)
-        self.tabla_qt.setItem(f, 0, QTableWidgetItem(nombre))
-        self.tabla_qt.setItem(f, 1, QTableWidgetItem(expresion))
-        combo = _combo(self.NOMBRES_TIPO, tipo)
-        combo.currentIndexChanged.connect(lambda *_: self._recalcular())
-        self.tabla_qt.setCellWidget(f, 2, combo)
-        valor = QTableWidgetItem("")
-        valor.setFlags(valor.flags() & ~Qt.ItemIsEditable)
-        self.tabla_qt.setItem(f, 3, valor)
-        self.tabla_qt.setItem(f, 4, QTableWidgetItem(comentario))
-        self.tabla_qt.blockSignals(False)
-        self._recalcular()
-
-    def _texto(self, fila, columna, recortar=True):
-        item = self.tabla_qt.item(fila, columna)
-        if not item:
-            return ""
-        return item.text().strip() if recortar else item.text()
-
-    def _leer(self):
-        datos = []
-        for f in range(self.tabla_qt.rowCount()):
-            tipo = self.tabla_qt.cellWidget(f, 2).currentData()
-            datos.append({"nombre": self._texto(f, 0), "expresion": self._texto(f, 1, tipo != TEXTO),   # el texto no se recorta
-                          "tipo": tipo, "comentario": self._texto(f, 4)})
-        if len({d["nombre"] for d in datos}) != len(datos):
-            raise ErrorExpresion("Hay nombres repetidos.")
-        for d in datos:
-            validar_nombre(d["nombre"])
-        # Se valida todo junto (no fila por fila): un parámetro puede usar otro de más abajo.
-        return TablaParametros.desde_lista(datos)
-
-    def _recalcular(self):
-        self.tabla_qt.blockSignals(True)
-        try:
-            t = self._leer()
-            valores = t.valores()
-            for f in range(self.tabla_qt.rowCount()):
-                v = valores[self.tabla_qt.item(f, 0).text().strip()]
-                self.tabla_qt.item(f, 3).setText(v if isinstance(v, str) else f"{v:.4g}")
-            self.error.setText("")
-            self.resultado = t
-        except (ErrorExpresion, KeyError, AttributeError) as e:
-            self.error.setText(f"⚠ {e}")
-            self.resultado = None
-        finally:
-            self.tabla_qt.blockSignals(False)
-
-    def _aceptar(self):
-        self._recalcular()
-        if self.resultado is None:
-            QMessageBox.warning(self, "Parámetros inválidos", self.error.text())
-            return
-        self.accept()
 
 
 class DialogoRecuperados(QDialog):
