@@ -49,7 +49,12 @@ def detectar(geometria, plano, tolerancia=1e-4):
                 for cara, area, uv, fuentes in k.regiones(prims, plano.origen.tolist(), plano.normal.tolist(),
                                                           plano.u.tolist(), tolerancia)]
     perfiles.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
-    return perfiles
+    return [p for p in perfiles if p.area >= 1.0 or not comun._es_cinta(p.area, math.dist(*p.cara.caja()))]
+
+
+def cara_sin_area(cara):
+    area = comun.geo.area(cara)
+    return area < 1.0 and comun._es_cinta(area, math.dist(*cara.caja()))
 
 
 # Elegir el perfil por su firma es política de la app (sin geometría): la misma para los dos motores.

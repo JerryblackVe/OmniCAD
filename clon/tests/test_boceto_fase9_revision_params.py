@@ -22,20 +22,18 @@ def sesion_con_texto(texto="Hola"):
 
 
 def test_dialogo_parametros_edita_y_acepta_el_texto():
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
-    from omnicad.ui.dialogos import DialogoParametros
+    from omnicad.ui.dialogo_parametros import EXPRESION, NOMBRE, UNIDAD, VALOR, DialogoParametros
     QApplication.instance() or QApplication([])
     s = sesion_con_texto()
-    dlg = DialogoParametros(s.doc.parametros)
-    fila = next(f for f in range(dlg.tabla_qt.rowCount()) if dlg.tabla_qt.item(f, 0).text() == "Text")
-    assert dlg.resultado is not None
-    assert dlg.tabla_qt.item(fila, 3).text() == "Hola"
-    dlg.tabla_qt.item(fila, 1).setText(" Chau ")
+    dlg = DialogoParametros(s.doc)
+    fila = dlg.arbol.findItems("Text", Qt.MatchExactly | Qt.MatchRecursive, NOMBRE)[0]
+    assert fila.text(VALOR) == "Hola" and fila.text(UNIDAD) == "Text"
+    fila.setText(EXPRESION, " Chau ")
     dlg._aceptar()
-    assert dlg.resultado is not None
-    assert dlg.resultado.valores()["Text"] == " Chau "
-    assert dlg.filas_csv()[fila][1] == "text"
+    assert s.doc.parametros.valores()["Text"] == " Chau "
 
 
 def test_csv_ida_y_vuelta_del_texto(tmp_path):

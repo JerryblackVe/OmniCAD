@@ -90,33 +90,69 @@ class Perfil:
         return f"área {self.area:.2f} mm², centro ({self.centroide_uv[0]:.1f}; {self.centroide_uv[1]:.1f})"
 
 
-def letras_de_texto(perfiles, ids_texto):
-    """De los perfiles de un boceto, las LETRAS de los textos `ids_texto` (sin los huecos de la «o», la «a»…), como
-    al elegir un texto en Fusion: los perfiles con el borde hecho solo de esos textos que quedan dentro de un número
-    PAR de contornos exteriores de los demás (0 = una letra; 1 = el hueco de una letra; 2 = una isla en un hueco)."""
+def _punto_adentro(cara):
+    """Un punto seguro dentro de `cara`: el centro de su triángulo más grande."""
+    tris = np.asarray(geo.teselar(cara)[0], float).reshape(-1, 3, 3)
+    areas = np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
+    return tris[int(np.argmax(areas))].mean(axis=0)
+
+
+def _cajas(caras):
+    return np.array([geo.caja_envolvente(c) for c in caras], float).reshape(-1, 2, 3)
+
+
+def _caras_con(q, cajas, caras):
+    """Índices de las `caras` que contienen el punto `q`; `cajas` (de `_cajas`) descarta casi todas sin ir a OpenCascade."""
     from OCP.BRepClass import BRepClass_FaceClassifier
-    from OCP.BRepTools import BRepTools
     from OCP.TopAbs import TopAbs_IN
-    from OCP.gp import gp_Pnt
-    ids = set(ids_texto)
-    del_texto = [p for p in perfiles if p.firma and set(p.firma) <= ids]
-    llenas, cajas, puntos = [], [], []
-    for p in del_texto:
-        llenas.append(BRepBuilderAPI_MakeFace(BRepTools.OuterWire_s(p.cara), True).Face())
-        cajas.append(geo.caja_envolvente(p.cara))
-        tris = np.asarray(geo.teselar(p.cara)[0], float).reshape(-1, 3, 3)
-        areas = np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
-        puntos.append(tris[int(np.argmax(areas))].mean(axis=0))      # adentro seguro: el centro de un triángulo
-    salida = []
     tol = 1e-3       # la malla viene en float32: lejos del origen (un plano a z = 177) el punto se corre ~1e-5 mm
+    cerca = np.all((cajas[:, 0] - tol <= q) & (q <= cajas[:, 1] + tol), axis=1)
+    return [j for j in np.flatnonzero(cerca)
+            if BRepClass_FaceClassifier(caras[j], gp_Pnt(*map(float, q)), 1e-7).State() == TopAbs_IN]
+
+
+def _capas_de_texto(del_texto):
+    """(letras, huecos) de perfiles con el borde hecho solo de texto: los que quedan dentro de un número PAR de
+    contornos exteriores de los demás son letras (0 = una letra; 1 = el hueco de una letra; 2 = una isla en un hueco)."""
+    from OCP.BRepTools import BRepTools
+    llenas = [BRepBuilderAPI_MakeFace(BRepTools.OuterWire_s(p.cara), True).Face() for p in del_texto]
+    cajas = _cajas(llenas)
+    letras, huecos = [], []
     for i, p in enumerate(del_texto):
-        q = puntos[i]
-        profundidad = sum(1 for j, f in enumerate(llenas) if j != i and cajas[j] is not None
-                          and all(cajas[j][0][k] - tol <= q[k] <= cajas[j][1][k] + tol for k in range(3))
-                          and BRepClass_FaceClassifier(f, gp_Pnt(*map(float, q)), 1e-7).State() == TopAbs_IN)
-        if profundidad % 2 == 0:
-            salida.append(p)
-    return salida
+        profundidad = sum(1 for j in _caras_con(_punto_adentro(p.cara), cajas, llenas) if j != i)
+        (huecos if profundidad % 2 else letras).append(p)
+    return letras, huecos
+
+
+def partes_de_texto(perfiles, ids_texto):
+    """(letras, huecos) de los textos `ids_texto` entre los perfiles de un boceto, como al elegir un texto en Fusion.
+    Cada texto por su lado (`detectar_boceto`): una letra adentro de la «O» de otro texto no es un hueco."""
+    letras, huecos = [], []
+    for i in ids_texto:
+        de_texto = _capas_de_texto([p for p in perfiles if p.firma == {i}])
+        letras += de_texto[0]
+        huecos += de_texto[1]
+    return letras, huecos
+
+
+def sin_huecos(perfiles, boceto):
+    """Los `perfiles` de `boceto` menos los huecos de sus letras."""
+    textos = [c.id for c in boceto.curvas.values() if c.tipo == "texto"]
+    if not textos:
+        return list(perfiles)
+    huecos = {id(p) for p in partes_de_texto(perfiles, textos)[1]}
+    return [p for p in perfiles if id(p) not in huecos]
+
+
+def perfiles_de_boceto(br):
+    """Todos los perfiles del boceto resuelto `br` menos los huecos de sus letras: lo que toma Fusion al elegir un
+    boceto entero (Extrude reference, Profiles)."""
+    return sin_huecos(br.perfiles, br.boceto)
+
+
+def letras_de_texto(perfiles, ids_texto):
+    """Las LETRAS de `partes_de_texto` (sin los huecos de la «o», la «a»…)."""
+    return partes_de_texto(perfiles, ids_texto)[0]
 
 
 def _arista_elipse(plano, c, a, b, ang, t0=None, t1=None):
@@ -248,6 +284,21 @@ def detectar(geometria, plano, tolerancia=1e-4):
     if len(_CACHE_PERFILES) >= _CACHE_MAX:
         _CACHE_PERFILES.pop(next(iter(_CACHE_PERFILES)))
     _CACHE_PERFILES[clave] = tuple(perfiles)
+    return perfiles
+
+
+def detectar_boceto(boceto, plano, geometria=None):
+    """Perfiles de un boceto, en el orden de `detectar`. Como en Fusion, cada texto va aparte: no parte las curvas ni a
+    otro texto, así que sus letras se pisan con lo que tengan debajo (B-134). `geometria`: la de `Boceto.geometria()`
+    si no se da (el editor la pasa con el contenido real de los textos ligados).
+
+    shortcut: cada grupo usa una entrada del caché de `detectar`; con más textos que `_CACHE_MAX` se recalcula, y alcanza."""
+    textos = {c.id for c in boceto.curvas.values() if c.tipo == "texto"}
+    grupos = {}
+    for g in boceto.geometria() if geometria is None else geometria:
+        grupos.setdefault(g[1] if g[1] in textos else None, []).append(g)
+    perfiles = [p for grupo in grupos.values() for p in detectar(grupo, plano)]
+    perfiles.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
     return perfiles
 
 
@@ -414,6 +465,17 @@ def _datos_rust(geometria):
     return prims, arreglos
 
 
+def _arreglo_coherente(r):
+    """True si el arreglo planar `r` tiene sus regiones: en un grafo plano son aristas − vértices + componentes. Un
+    cruce casi tangente puede desordenar las curvas en un vértice, y Rust une caras sin avisar (B-137: el disco
+    desaparece cuando la base de una letra apoya sobre el círculo)."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    nv, piezas = len(r[0]), r[1]
+    grafo = coo_matrix((np.ones(len(piezas)), (piezas[:, 1], piezas[:, 2])), shape=(nv, nv))
+    return len(r[3]) == len(piezas) - nv + connected_components(grafo, directed=False)[0]
+
+
 def _detectar_rust(geometria, plano, tolerancia=1e-4):
     """Los perfiles por el arreglo planar en Rust (BOC-28), o None si el módulo no está o no puede resolver este
     boceto con certeza (tangentes en un cruce, curvas superpuestas, elipses…): entonces rige la referencia."""
@@ -428,6 +490,8 @@ def _detectar_rust(geometria, plano, tolerancia=1e-4):
         r = rs.arreglo_planar(*arreglos, float(tolerancia))
     except ValueError:
         return None
+    if not _arreglo_coherente(r):
+        return None
     cara = _fabrica_caras(plano, prims, r)
     areas, centros, puntero, indices, cajas = r[3].tolist(), r[4].tolist(), r[5].tolist(), r[6].tolist(), r[10].tolist()
     ids, firmas, salida = [p[1] for p in prims], {}, []
@@ -440,9 +504,31 @@ def _detectar_rust(geometria, plano, tolerancia=1e-4):
     return salida
 
 
+def _es_cinta(area, largo):
+    """True si un perfil de ese `area` y esa diagonal es una cinta de menos de 1 µm de ancho, mucho más larga que ancha:
+    el resto entre dos curvas casi apoyadas (la base de una letra sobre un círculo). Un cuadrado de 1 µm es chico, pero
+    es un perfil."""
+    return area < 1.0 and area < largo * min(1e-3, largo / 100)
+
+
+def cara_sin_area(cara):
+    """True si la cara de un perfil es una cinta sin área (`_es_cinta`): extruirla no da un sólido."""
+    area = geo.area(cara)
+    return area < 1.0 and _es_cinta(area, math.dist(*geo.caja_envolvente(cara)))
+
+
+def _sin_area(p):
+    if p.area >= 1.0:
+        return False
+    return _es_cinta(p.area, math.hypot(p.caja_uv[2] - p.caja_uv[0], p.caja_uv[3] - p.caja_uv[1]) if p.caja_uv
+                     else math.dist(*geo.caja_envolvente(p.cara)))
+
+
 def _detectar(geometria, plano, tolerancia=1e-4):
     perfiles = _detectar_rust(geometria, plano, tolerancia)
-    return perfiles if perfiles is not None else _detectar_occ(geometria, plano, tolerancia)
+    if perfiles is None:
+        perfiles = _detectar_occ(geometria, plano, tolerancia)
+    return [p for p in perfiles if not _sin_area(p)]
 
 
 def _detectar_occ(geometria, plano, tolerancia=1e-4):

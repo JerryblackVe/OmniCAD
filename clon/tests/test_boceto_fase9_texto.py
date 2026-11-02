@@ -168,12 +168,12 @@ def test_text_automatico_no_pisa_nombres_y_deshace_en_un_paso(sesion):
     llamar(sesion, "create_parameter", name="Text", expression="20 mm")
     primero = agregar(sesion)
     segundo = agregar(sesion, x=20)
-    assert sesion.doc.parametros.valores() == {"Text": 20, "Text_1": "I", "Text_2": "I"}
+    assert sesion.doc.parametros.valores() == {"Text": 20, "Text_1": "I", "Text_2": "I", "Text_height": 5, "Text_height_1": 5}
     assert op_boceto(sesion, None).boceto.curvas[primero].texto == "{Text_1}"
     assert op_boceto(sesion, None).boceto.curvas[segundo].texto == "{Text_2}"
     llamar(sesion, "undo")
     assert segundo not in resuelto(sesion).curvas
-    assert sesion.doc.parametros.valores() == {"Text": 20, "Text_1": "I"}
+    assert sesion.doc.parametros.valores() == {"Text": 20, "Text_1": "I", "Text_height": 5}
     llamar(sesion, "redo")
     assert len(resuelto(sesion).curvas) == 2
     assert sesion.doc.parametros.valores()["Text_2"] == "I"

@@ -16,10 +16,11 @@ from ..nucleo import fuentes
 from ..restricciones import ErrorBoceto
 from ..restricciones.boceto import MEDIDA_MINIMA, Texto, _validar_opciones_texto, validar_texto_boceto
 from ..timeline.operaciones import OpBoceto, _contenido_texto, texto_con_valores
-from ..timeline.parametros import ESCALAR, TEXTO, ErrorExpresion, TablaParametros
+from ..timeline.parametros import ESCALAR, ErrorExpresion, TablaParametros
 from .errores import error
 from .herramientas_boceto import (_dibujar, _exigir_finitos, _exigir_tamano, _paso, _valor_expr, boceto_activo,
-                                  boceto_resuelto, estado_solver, nombre_nuevo, op_boceto, plano_o_cara, valores_cotas)
+                                  boceto_resuelto, estado_solver, ligar_parametro_texto, nombre_nuevo, op_boceto,
+                                  plano_o_cara, valores_cotas)
 from .registro import Expr, herramienta
 
 _ALINEACION = {"left": "izq", "center": "centro", "right": "der"}
@@ -112,10 +113,12 @@ def _pivote_texto(b, tid, pivot):
     return pivot
 
 
-def _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path):
+def _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path, path_placement=None):
     """Opciones del texto en curva (solo las que llegaron). path_entity 0 = quitar el camino."""
     if path_side is not None and path_side not in ("left", "right"):
         raise error("INVALID_ARGUMENTS", "path_side es left o right.")
+    if path_placement is not None and path_placement not in ("above", "below"):
+        raise error("INVALID_ARGUMENTS", "path_placement es above o below.")
     if path_position is not None and not (math.isfinite(path_position) and 0.0 <= path_position <= 1.0):
         raise error("INVALID_ARGUMENTS", "path_position va de 0 a 1 (fracción del largo de la curva).")
     if path_offset is not None and not math.isfinite(path_offset):
@@ -125,6 +128,8 @@ def _opciones_camino(path_entity, path_side, path_position, path_offset, fit_pat
         op["camino"] = None if int(path_entity) == 0 else int(path_entity)
     if path_side is not None:
         op["camino_lado"] = "izq" if path_side == "left" else "der"
+    if path_placement is not None:
+        op["camino_colocacion"] = "arriba" if path_placement == "above" else "abajo"
     if path_position is not None:
         op["camino_pos"] = float(path_position)
     if path_offset is not None:
@@ -132,6 +137,14 @@ def _opciones_camino(path_entity, path_side, path_position, path_offset, fit_pat
     if fit_path is not None:
         op["camino_ajustar"] = bool(fit_path)
     return op
+
+
+def _mm_de_caracter(character_spacing, letter_spacing, fuente, altura, negrita, cursiva):
+    """Los mm de `character_spacing`, el % de Fusion (`fuentes.espaciado_cien`)."""
+    if letter_spacing:
+        raise error("INVALID_ARGUMENTS", "letter_spacing (mm) o character_spacing (%): uno de los dos.")
+    _exigir_finitos({"character_spacing": character_spacing})
+    return character_spacing * fuentes.espaciado_cien(fuente, altura, negrita, cursiva) / 100
 
 
 def _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v, kerning=None,
@@ -221,7 +234,7 @@ def _verificar_fuente(font, bold, italic):
 
 @herramienta("add_text", "vectores",
              "Escribe un texto en el boceto (un paso de deshacer). Sus letras forman perfiles que se pueden extruir "
-             "o cortar. (x, y) es el ancla: por defecto la esquina izquierda de la línea base. Varias líneas con "
+             "o cortar. Crea los parámetros automáticos Text y Text_height (como Fusion). (x, y) es el ancla: por defecto la esquina izquierda de la línea base. Varias líneas con "
              "'\\n'; con box_width > 0 las líneas se parten en palabras. Fuente: cualquier familia instalada "
              "(list_fonts) o la ruta a un .ttf/.otf. TEXTO EN CURVA: con path_entity (una línea, arco, círculo, "
              "elipse o spline del boceto) las letras siguen esa curva y (x, y, angle) no se usan; para un círculo, "
@@ -239,24 +252,27 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
              line_spacing: float = 1.0, align: Literal["left", "center", "right"] | None = None,
              anchor: Literal["baseline", "top", "middle", "bottom"] = "baseline", box_width: float = 0.0,
              flip_h: bool = False, flip_v: bool = False, path_entity: int | None = None,
-             path_side: Literal["left", "right"] = "left", path_position: float = 0.5, path_offset: float = 0.0,
+             path_side: Literal["left", "right"] = "left", path_placement: Literal["above", "below"] = "above",
+             path_position: float = 0.5, path_offset: float = 0.0,
              fit_path: bool = False, kerning: bool = True, skew: float = 0.0, scale_x: float = 100.0,
              scale_y: float = 100.0, baseline_shift: float = 0.0,
              case: Literal["none", "upper", "lower", "title", "small_caps"] = "none",
              underline: Literal["none", "single", "double"] = "none",
              strikethrough: Literal["none", "single", "double"] = "none", decoration_thickness: float = 0.0,
              no_wrap: bool = False, kerning_pairs: list[list[float]] | None = None, frame: bool = False,
-             frame_height: float = 0.0, sketch: str | None = None, pivot: list[float] | str | None = None):
+             frame_height: float = 0.0, sketch: str | None = None, pivot: list[float] | str | None = None,
+             character_spacing: float | None = None):
     """
     text: contenido del parámetro automático Text (Text_1… si ya existe); '\\n' separa líneas. Con {parámetro} o {expresión:formato} (p. ej. 'Ancho {ancho:.1f} mm') muestra el valor y se actualiza solo; {'Rev ' + rev} junta texto y valores.
     x: x del ancla (mm).
     y: y del ancla (mm).
-    height: tamaño de la fuente en mm (positivo), o una expresión con parámetros que queda ligada.
+    height: alto de la letra A en mm, como Fusion (positivo), o una expresión con parámetros: queda en el parámetro Text_height.
     angle: giro del texto en grados alrededor de pivot (antihorario; por defecto, el ancla).
     font: familia (Arial, Segoe UI…) o ruta a un archivo de fuente.
     bold: negrita (el peso más cercano a 700 de la familia).
     italic: cursiva.
     letter_spacing: mm extra entre letras (negativo junta).
+    character_spacing: lo mismo en %, como Character Spacing de Fusion: % del ancho medio de la fuente (en lugar de letter_spacing).
     line_spacing: factor del salto de línea de la fuente (1 = el de la fuente).
     align: alineación de cada línea dentro de la caja (left, center o right); en curva, qué parte del texto cae en path_position. Vacío = left (recto) o center (en curva).
     anchor: qué parte del bloque cae sobre (x, y): baseline (línea base de la primera), top, middle o bottom.
@@ -265,6 +281,7 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
     flip_v: espejo vertical del texto dentro de su bloque.
     path_entity: id de la curva (get_sketch) que sigue el texto; vacío = texto recto.
     path_side: left = letras a la izquierda del sentido de la curva; right = la recorre al revés (letras del otro lado, se siguen leyendo derechas).
+    path_placement: above = la línea base apoya en la curva; below = las letras cuelgan del otro lado, con la misma lectura (Placement de Fusion).
     path_position: fracción 0-1 del largo de la curva (en su sentido propio) donde cae el texto; un círculo empieza a la derecha y gira antihorario (0.25 = arriba).
     path_offset: mm entre la curva y la línea base (positivo = hacia el lado de las letras).
     fit_path: true reparte el texto en todo el largo de la curva.
@@ -290,13 +307,15 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
     if frame and path_entity:
         raise error("INVALID_ARGUMENTS", "frame no va con path_entity: el texto en curva no tiene marco.")
     altura, altura_expr = _altura(sesion, height)
+    if character_spacing is not None:
+        letter_spacing = _mm_de_caracter(character_spacing, letter_spacing, font, altura, bold, italic)
     if align is None:
         align = "center" if path_entity else "left"
     op = _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v, kerning, skew,
                          scale_x, scale_y, baseline_shift, case, underline, strikethrough, decoration_thickness,
                          no_wrap, kerning_pairs)
     if path_entity:
-        op |= _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path)
+        op |= _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path, path_placement)
         if underline != "none" or strikethrough != "none":
             sesion.avisar("El subrayado y el tachado no se dibujan en un texto en curva.")
     _avisos_texto(sesion, texto, font, bold, italic)
@@ -313,15 +332,7 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
                                   frame_height if frame_height > 0 else alto or altura)
         if pivot is not None:
             b.girar_texto(tid, angle, _pivote_texto(b, tid, pivot))
-        tabla = TablaParametros.desde_lista(sesion.doc.parametros.a_lista())
-        nombre, numero = "Text", 0
-        while nombre in tabla:
-            numero += 1
-            nombre = f"Text_{numero}"
-        tabla.agregar(nombre, texto, tipo=TEXTO)
-        sesion.doc.aplicar_parametros(tabla)
-        b.curvas[tid].parametro_texto = nombre
-        b.curvas[tid].texto = texto if "{" in texto else "{" + nombre + "}"
+        ligar_parametro_texto(sesion.doc, b.curvas[tid], texto)
     return _dibujar(sesion, sketch, crear)
 
 
@@ -335,7 +346,8 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
               line_spacing: float | None = None, align: Literal["left", "center", "right"] | None = None,
               anchor: Literal["baseline", "top", "middle", "bottom"] | None = None, box_width: float | None = None,
               flip_h: bool | None = None, flip_v: bool | None = None, path_entity: int | None = None,
-              path_side: Literal["left", "right"] | None = None, path_position: float | None = None,
+              path_side: Literal["left", "right"] | None = None,
+              path_placement: Literal["above", "below"] | None = None, path_position: float | None = None,
               path_offset: float | None = None, fit_path: bool | None = None, kerning: bool | None = None,
               skew: float | None = None, scale_x: float | None = None, scale_y: float | None = None,
               baseline_shift: float | None = None,
@@ -344,18 +356,21 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
               strikethrough: Literal["none", "single", "double"] | None = None,
               decoration_thickness: float | None = None, no_wrap: bool | None = None,
               kerning_pairs: list[list[float]] | None = None, pivot: list[float] | str | None = None,
-              sketch: str | None = None):
+              sketch: str | None = None, character_spacing: float | None = None,
+              height_basis: Literal["letter_a", "font_size"] | None = None):
     """
     entity: id de la curva de texto (get_sketch).
     text: texto nuevo ('\\n' separa líneas; {parámetro} muestra su valor); actualiza su parámetro Text si lo tiene.
     x: x nueva del ancla (mm).
     y: y nueva del ancla (mm).
-    height: tamaño nuevo de la fuente en mm, o una expresión con parámetros que queda ligada.
+    height: altura nueva en mm, o una expresión con parámetros que queda ligada.
+    height_basis: qué mide height: letter_a (el alto de la A, como Fusion y los textos nuevos) o font_size (el tamaño de la fuente, los textos anteriores). Cambiarlo agranda o achica las letras.
     angle: giro nuevo en grados (el texto y su marco giran alrededor de pivot).
     font: familia o ruta de la fuente nueva.
     bold: negrita.
     italic: cursiva.
     letter_spacing: mm extra entre letras.
+    character_spacing: lo mismo en %, como Character Spacing de Fusion: % del ancho medio de la fuente (en lugar de letter_spacing).
     line_spacing: factor del salto de línea.
     align: left, center o right.
     anchor: baseline, top, middle o bottom.
@@ -364,6 +379,7 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
     flip_v: espejo vertical.
     path_entity: id de la curva que sigue el texto; 0 = quitar la curva (texto recto otra vez).
     path_side: left o right (lado de la curva).
+    path_placement: above (apoyado en la curva) o below (colgando de ella, con la misma lectura).
     path_position: fracción 0-1 del largo de la curva.
     path_offset: mm entre la curva y la línea base.
     fit_path: repartir el texto en todo el largo.
@@ -387,7 +403,7 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
     op = _opciones_texto(letter_spacing, line_spacing, align, anchor, box_width, flip_h, flip_v, kerning, skew,
                          scale_x, scale_y, baseline_shift, case, underline, strikethrough, decoration_thickness,
                          no_wrap, kerning_pairs)
-    op |= _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path)
+    op |= _opciones_camino(path_entity, path_side, path_position, path_offset, fit_path, path_placement)
 
     def cambiar(b):
         t = _texto_de(b, entity)
@@ -399,6 +415,8 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
         _verificar_fuente(_f, _b, _i)
         _avisos_texto(sesion, nuevo_texto, _f, _b, _i)
         _validar_opciones_texto(op)
+        if character_spacing is not None:
+            op["espaciado"] = _mm_de_caracter(character_spacing, letter_spacing, _f, t.altura if altura is None else altura, _b, _i)
         if op.get("camino") is not None:
             b._validar_camino(op["camino"])
         if t.parametro_texto:
@@ -411,7 +429,10 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
             t.texto = nuevo_texto
         t.fuente, t.negrita, t.cursiva = _f, _b, _i
         if altura is not None:
-            t.altura, t.altura_expr = altura, altura_expr
+            t.altura = altura
+            t.altura_expr = altura_expr or (f"{altura:.12g} mm" if t.parametro_altura else None)
+        if height_basis is not None:
+            t.altura_a = height_basis == "letter_a"
         if angle is not None and (pivot is not None or t.marco):
             b.girar_texto(entity, float(angle), pivote)
         elif angle is not None:
@@ -443,7 +464,8 @@ def _mover(b, pid, x, y):
 
 @herramienta("explode_text", "vectores",
              "Desglosa un texto del boceto (Fusion: Explode Text): el texto pasa a ser líneas y splines fijas, que "
-             "se pueden editar curva por curva. Ya no se puede cambiar la fuente ni el contenido.", modifica=True)
+             "se pueden editar curva por curva. Ya no se puede cambiar la fuente ni el contenido. Sus parámetros Text y "
+             "Text_height se borran, salvo los que use otro.", modifica=True)
 def explode_text(sesion, entity: int, sketch: str | None = None):
     """
     entity: id de la curva de texto (get_sketch).

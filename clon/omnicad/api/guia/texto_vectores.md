@@ -6,7 +6,7 @@ Grupo `vectores`. Todo entra al boceto como curvas: lo que forma una región cer
 
 - `list_fonts(query="seg")` busca entre TODAS las fuentes instaladas (sistema, usuario, variables). `font` también
   acepta la ruta a un `.ttf` / `.otf`; `add_font_folder` suma una carpeta en la sesión.
-- `add_text(text, x, y, height, font, bold, italic, ...)`: `(x, y)` es el ancla. Opciones: **letter_spacing** (mm entre
+- `add_text(text, x, y, height, font, bold, italic, ...)`: `(x, y)` es el ancla. Opciones: **letter_spacing** o **character_spacing** (mm o % del ancho medio de la fuente, como Fusion, entre
   letras), **line_spacing** (factor), `align` (left/center/right dentro de la caja), `anchor` (qué parte del bloque cae
   sobre el ancla: baseline/top/middle/bottom), **box_width** (>0 parte las líneas en palabras), **flip_h** / **flip_v**.
   `\n` en el texto separa líneas.
@@ -17,15 +17,19 @@ Grupo `vectores`. Todo entra al boceto como curvas: lo que forma una región cer
   **decoration_thickness** en mm, 0 = el de la fuente) y **no_wrap** (box_width no parte las líneas). En un texto
   en curva valen kerning, skew, escalas y case; no se dibujan subrayado ni tachado.
 - `edit_text(entity, ...)` cambia lo que se pase; `explode_text(entity)` lo vuelve líneas y splines fijas.
-- `get_sketch` muestra el texto con todas sus opciones (`type: "text"`).
-- Parámetros dentro del texto: `{ancho}`, `{largo / 2}` o con formato `{ancho:.1f}`. Se recalculan solos al cambiar
+- `get_sketch` muestra el texto con todas sus opciones (`type: "text"`). Parámetros dentro del texto: `{ancho}`, `{largo / 2}` o con formato `{ancho:.1f}`. Se recalculan solos al cambiar
   el parámetro y el parámetro queda protegido contra borrado. `explode_text` congela el valor de ese momento.
-- Texto en curva: **path_entity** (id de una línea, arco, círculo, elipse o spline del boceto) hace que las
-  letras sigan la curva. **path_side** right recorre la curva al revés (letras del otro lado, derechas);
-  **path_position** 0-1 ubica el texto (en un círculo 0.25 = arriba); **path_offset** separa la base de la curva;
-  **fit_path** lo reparte en todo el largo. En un círculo: arriba por fuera = right + 0.25; abajo por dentro =
-  left + 0.75. Si se borra la curva, el texto vuelve a ser recto.
-- Limitación: no hay ligaduras ni formas contextuales (árabe, devanagari): cada carácter es un glifo.
+- Cada texto crea los parámetros **Text** (contenido) y **Text_height** (altura), como Fusion: `set_parameter` los cambia,
+  y `edit_text` con `height` cambia Text_height. Borrar o desglosar el texto los borra, salvo los que use otro.
+- `height` es el alto de la letra A, como en Fusion. Un texto de un archivo anterior sigue con su tamaño de fuente
+  (**height_basis** en `get_sketch`); `edit_text` con **height_basis**=letter_a lo pasa.
+- El texto no parte otras curvas ni a otro texto, como en Fusion: un círculo debajo de las letras conserva su área.
+  `profile="text"` toma las letras y `"largest"`, el disco.
+- Texto en curva: **path_entity** (id de una línea, arco, círculo, elipse o spline) hace que las letras sigan la curva.
+  **path_side** right la recorre al revés (letras del otro lado); **path_position** 0-1 ubica el texto (en un círculo
+  0.25 = arriba); **path_offset** separa la base; **fit_path** lo reparte en todo el largo. En un círculo: arriba por
+  fuera = right + 0.25; abajo por dentro = left + 0.75. Si se borra la curva, el texto vuelve a ser recto.
+- Sin ligaduras ni formas contextuales (árabe, devanagari): cada carácter es un glifo.
 
 ## Archivos 2D
 
@@ -38,7 +42,6 @@ Grupo `vectores`. Todo entra al boceto como curvas: lo que forma una región cer
   contorno (menos entidades, más suave), `tolerance` y `smoothing` en píxeles. El tamaño sale de `width` (mm) o `dpi`.
 - `export_sketch(path)` guarda el boceto como `.dxf` o `.svg` (mm reales) para láser, vinilo o CNC; con
   **include_construction** suma la construcción en un grupo/capa aparte.
-- Todas devuelven **entities_added**, `profiles` y `status`; con muchas curvas conviene `get_sketch` solo si hace falta.
 
 ## Editar vectores
 

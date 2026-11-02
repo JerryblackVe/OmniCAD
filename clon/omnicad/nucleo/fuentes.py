@@ -312,7 +312,7 @@ def _glifos_trazo():
 def _datos_de_trazos(cmap, hmtx, gs, notdef):
     return {"f": _OrdenTrazo(notdef), "upem": 1000.0, "cmap": cmap, "hmtx": hmtx, "gs": gs, "asc": 800.0,
             "desc": -200.0, "gap": 0.0, "kern": lambda _a, _b: 0, "sub_gro": 50.0, "sub_pos": -100.0,
-            "tac_gro": 50.0, "tac_pos": 350.0}
+            "tac_gro": 50.0, "tac_pos": 350.0, "ancho_medio": 500.0, "alto_a": 700.0}
 
 
 @lru_cache(maxsize=4)
@@ -431,6 +431,7 @@ def _abrir(ruta, indice, peso_variable):
 
 @lru_cache(maxsize=24)
 def _datos(ruta, indice, peso_variable):
+    from fontTools.pens.boundsPen import BoundsPen
     f = _abrir(ruta, indice, peso_variable)
     upem = float(f["head"].unitsPerEm)
     hhea = f["hhea"]
@@ -445,9 +446,15 @@ def _datos(ruta, indice, peso_variable):
     sub_pos = float(getattr(post, "underlinePosition", 0) or -0.1 * upem)       # centro de la barra, bajo la base
     tac_gro = float(getattr(os2, "yStrikeoutSize", 0) or sub_gro)
     tac_pos = float(getattr(os2, "yStrikeoutPosition", 0) or 0.28 * upem)
-    return {"f": f, "upem": upem, "cmap": f.getBestCmap() or {}, "hmtx": f["hmtx"], "gs": f.getGlyphSet(),
+    cmap, gs = f.getBestCmap() or {}, f.getGlyphSet()
+    caja_a = BoundsPen(gs)
+    if cmap.get(ord("A")) in gs:
+        gs[cmap[ord("A")]].draw(caja_a)
+    alto_a = caja_a.bounds[3] if caja_a.bounds and caja_a.bounds[3] > 0 else 0.7 * upem
+    return {"f": f, "upem": upem, "cmap": cmap, "hmtx": f["hmtx"], "gs": gs,
             "asc": asc, "desc": desc, "gap": gap, "kern": _tabla_kern(f),
-            "sub_gro": sub_gro, "sub_pos": sub_pos, "tac_gro": tac_gro, "tac_pos": tac_pos}
+            "sub_gro": sub_gro, "sub_pos": sub_pos, "tac_gro": tac_gro, "tac_pos": tac_pos,
+            "ancho_medio": float(getattr(os2, "xAvgCharWidth", 0) or upem / 2), "alto_a": float(alto_a)}
 
 
 def _tabla_kern(f):
@@ -555,7 +562,8 @@ def _lapiz(gs, dx, dy, sx, sy, sesgo, salida):
 _PREDETERMINADAS = {"espaciado": 0.0, "interlineado": 1.0, "alineacion": "izq", "ancla_v": "base", "ancho_caja": 0.0,
                     "voltear_h": False, "voltear_v": False, "kerning": True, "inclinacion": 0.0, "escala_h": 100.0,
                     "escala_v": 100.0, "desfase_base": 0.0, "capitalizacion": "ninguno", "subrayado": "ninguno",
-                    "tachado": "ninguno", "grosor_decoracion": 0.0, "sin_division": False, "ajustes_kerning": ()}
+                    "tachado": "ninguno", "grosor_decoracion": 0.0, "sin_division": False, "ajustes_kerning": (),
+                    "camino_colocacion": "arriba"}
 _DE_COMPOSICION = ("espaciado", "interlineado", "alineacion", "ancla_v", "ancho_caja", "kerning", "inclinacion",
                    "escala_h", "escala_v", "capitalizacion", "sin_division", "ajustes_kerning")
 
@@ -606,6 +614,31 @@ def _fuente_datos(fuente, negrita, cursiva):
             raise ErrorFuente(f"No se pudo leer la fuente SHX «{fuente}»: {e}") from e
     peso =(700 if negrita else 400) if "wght" in reg["ejes"] else 0
     return _datos(reg["ruta"], reg["indice"], peso)
+
+
+@lru_cache(maxsize=64)
+def _por_mm_de_altura(fuente, negrita, cursiva):
+    """(ancho medio, tamaño de fuente) por mm de altura, a la escala de Fusion. Un error no queda en el caché."""
+    d = _fuente_datos(fuente, negrita, cursiva)
+    return d["ancho_medio"] / d["alto_a"], d["upem"] / d["alto_a"]
+
+
+def tamano_fuente(fuente, altura, negrita=False, cursiva=False):
+    """Tamaño de fuente (mm) con el que la «A» mide `altura`: la altura de un texto de Fusion. Cada fuente, la suya."""
+    try:
+        return _por_mm_de_altura(fuente, negrita, cursiva)[1] * float(altura)
+    except ErrorFuente:                              # una fuente que no está en esta PC
+        return float(altura)
+
+
+def espaciado_cien(fuente, altura, negrita=False, cursiva=False):
+    """mm que suma por hueco el 100 % de Character Spacing de Fusion: el ancho medio de la fuente (`xAvgCharWidth` de
+    OS/2) a la escala de `tamano_fuente`. Medido en Fusion real con 10 mm: Arial 6,166; Times New Roman 5,919;
+    Courier New 10,504 (la «A» es la única letra que da los tres)."""
+    try:
+        return _por_mm_de_altura(fuente, negrita, cursiva)[0] * float(altura)
+    except ErrorFuente:                              # una fuente que no está en esta PC: un ancho medio cualquiera
+        return 0.6 * float(altura)
 
 
 def _capitalizar(texto, modo):
@@ -854,6 +887,11 @@ def glifos_de_linea(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=Fa
     return [(x, avance, prims) for x, avance, prims, _j in glifos], ancho
 
 
+def _alto_letras(glifos):
+    """Cuánto sube sobre la línea base la letra más alta."""
+    return max((q[1] for g in glifos for pr in g[2] for q in (pr[2:4] if pr[0] == "linea" else pr[2])), default=0.0)
+
+
 def _texto_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado, alineacion, posicion, lado,
                      desfase, ajustar, opciones):
     """Lo que comparten los contornos y el cursor de un texto en curva: (glifos, ancho, xs, avances, maqueta,
@@ -876,7 +914,10 @@ def _texto_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado,
     if largo < 1e-9:
         raise ErrorFuente("El camino del texto no tiene largo.")
     d = _fuente_datos(fuente, negrita, cursiva)
-    glifos, ancho, xs, avances, m = _glifos_linea(texto, d, altura, espaciado, _opciones(opciones))
+    o = _opciones(opciones)
+    glifos, ancho, xs, avances, m = _glifos_linea(texto, d, altura, espaciado, o)
+    if o["camino_colocacion"] == "abajo":          # Fusion: la misma lectura, con las letras colgando de la curva
+        desfase -= _alto_letras(glifos)
     validos = tramos > 1e-12
     d_ini = np.diff(pts, axis=0)[validos][0] / tramos[validos][0]
     d_fin = np.diff(pts, axis=0)[validos][-1] / tramos[validos][-1]
@@ -910,13 +951,20 @@ def _texto_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado,
     return glifos, ancho, xs, avances, m, inicio, extra, colocar
 
 
+def _volteado(q, medio, alto, o):
+    """(x, y) del punto `q` de una letra en curva respecto del centro de su base, con el volteo del texto ya aplicado."""
+    return (medio - q[0] if o["voltear_h"] else q[0] - medio, alto - q[1] if o["voltear_v"] else q[1])
+
+
 def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False, cursiva=False, *, espaciado=0.0,
                         alineacion="centro", posicion=0.5, lado="izq", desfase=0.0, ajustar=False, **opciones):
     """Texto sobre un camino (Fusion: Texto en trayectoria), con las letras rígidas y perpendiculares a la curva.
 
     camino: polilínea densa [(x, y)…] que sigue la curva (cerrada si el último punto es el primero). Las letras
     quedan del lado izquierdo del sentido de recorrido; lado "der" recorre al revés (las letras pasan al otro lado
-    y se siguen leyendo derechas). posicion: fracción 0-1 del largo, medida en el sentido ORIGINAL del camino,
+    y se siguen leyendo derechas). camino_colocacion: "arriba" apoya la línea base en la curva; "abajo" cuelga las
+    letras del otro lado, con la misma lectura (Fusion: Placement). voltear_h / voltear_v: espejo del texto antes de
+    doblarlo. posicion: fracción 0-1 del largo, medida en el sentido ORIGINAL del camino,
     donde va el ancla del texto; alineacion: qué parte del texto cae ahí (izq, centro, der). desfase: mm entre la
     curva y la línea base (positivo = hacia el lado de las letras). ajustar: reparte el texto en todo el largo
     (ignora posición y alineación). En un camino cerrado el texto da la vuelta; en uno abierto sigue recto más
@@ -927,13 +975,15 @@ def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False
         opciones)
     if not glifos:
         return []
-    salida = []
+    o, alto, salida = _opciones(opciones), _alto_letras(glifos), []
     for i, (x, avance, prims, _j) in enumerate(glifos):
+        if o["voltear_h"]:                         # el bloque recto espejado: la última letra queda primera
+            x, i = ancho - x - avance, len(glifos) - 1 - i
         bx, by, c, s = colocar(inicio + x + avance / 2 + i * extra)
         medio = avance / 2
 
         def T(q, bx=bx, by=by, c=c, s=s, medio=medio):
-            lx, ly = q[0] - medio, q[1]
+            lx, ly = _volteado(q, medio, alto, o)
             return (float(bx + c * lx - s * ly), float(by + s * lx + c * ly))
         for pr in prims:
             if pr[0] == "linea":
@@ -951,14 +1001,17 @@ def paradas_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False, 
         texto, camino, fuente, altura, negrita, cursiva, espaciado, alineacion, posicion, lado, desfase, ajustar,
         opciones)
     visibles = [g[3] for g in glifos]
+    o, alto, ultimo = _opciones(opciones), _alto_letras(glifos), max(len(glifos) - 1, 0)
     n, salida = len(xs), []
     for c in range(n + 1):
         x, av = (xs[c], avances[c]) if c < n else (ancho, 0.0)
-        antes = sum(1 for j in visibles if j < c)
-        bx, by, co, sn = colocar(inicio + x + av / 2 + min(antes, max(len(glifos) - 1, 0)) * extra)
+        antes = min(sum(1 for j in visibles if j < c), ultimo)
+        if o["voltear_h"]:                         # como en los contornos: la última letra queda primera
+            x, antes = ancho - x - av, ultimo - antes
+        bx, by, co, sn = colocar(inicio + x + av / 2 + antes * extra)
         punta = []
         for ly in (m["desc"], m["asc"]):
-            lx = -av / 2 + m["sesgo"] * ly
-            punta.append((float(bx + co * lx - sn * ly), float(by + sn * lx + co * ly)))
+            lx, y = _volteado((m["sesgo"] * ly, ly), av / 2, alto, o)
+            punta.append((float(bx + co * lx - sn * y), float(by + sn * lx + co * y)))
         salida.append(tuple(punta))
     return salida

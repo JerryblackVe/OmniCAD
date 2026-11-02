@@ -532,12 +532,12 @@ def test_texto_con_cuadro_del_ratón_y_cambios_en_vivo(app_qt):
     lz.clics.append((None, (10.0, 5.0)))
     lz._procesar_clics()
     assert lz.entrada is None and len(lz.clics) == 1         # espera la esquina opuesta
-    lz.clics.append((None, (70.0, 25.0)))
+    lz.clics.append((None, (110.0, 25.0)))
     lz._procesar_clics()
     assert lz.entrada is not None
     assert lz.entrada.campos[1].text() == "20"                # altura = alto del cuadro
     ancho_antes = max(x for poli in lz._previa_polis for x, _y in poli)
-    assert lz._previa_polis and ancho_antes <= 70.0 + 1e-6
+    assert lz._previa_polis and ancho_antes <= 110.0 + 1e-6
     lz.entrada.campos[0].setText("OJO")                       # cambio en vivo: otro texto, otros contornos
     assert lz._previa_polis
     lz.entrada.campos[1].setText("10")
@@ -546,7 +546,7 @@ def test_texto_con_cuadro_del_ratón_y_cambios_en_vivo(app_qt):
     assert not b.curvas                                       # nada se crea hasta aceptar
     lz.entrada.aceptado.emit(["OJO", "10", "0", "0", "1"])
     t = next(c for c in b.curvas.values() if c.tipo == "texto")
-    assert t.ancho_caja == pytest.approx(60.0) and t.ancla_v == "arriba" and t.texto == "OJO"
+    assert t.ancho_caja == pytest.approx(100.0) and t.ancla_v == "arriba" and t.texto == "OJO"
     assert t.punto is not None and lz._previa_polis == []
 
 
@@ -1373,13 +1373,16 @@ def test_panel_y_barra_comparten_tamano_interletraje_interlineado_y_kerning_del_
     b, lz = _lienzo_con_cuadro("HHH")
     panel = PanelCaracter()
     lz.texto_valores.connect(panel.mostrar_valores)
+    panel.cargar(lz.opciones)
     lz.refrescar_previa_texto()
     assert panel.interletraje.value() == 0.0 and panel.interlineado.value() == 1.0 and panel.par.isEnabled()
     # panel → barra del texto
     lz.aplicar_opcion_texto("espaciado", 1.5)
     lz.aplicar_opcion_texto("interlineado", 2.0)
-    assert lz.entrada.campos[3].text() == "1.5" and lz.entrada.campos[4].text() == "2"
-    assert panel.interletraje.value() == pytest.approx(1.5) and panel.interlineado.value() == pytest.approx(2.0)
+    porcentaje = 100 * 1.5 / fuentes.espaciado_cien("Arial", 20)                             # 1,5 mm con 20 mm de alto
+    assert float(lz.entrada.campos[3].text()) == pytest.approx(porcentaje, abs=1e-3) and lz.entrada.campos[4].text() == "2"
+    assert panel.interletraje.value() == pytest.approx(porcentaje, abs=0.01)                # el panel va en %
+    assert panel.interlineado.value() == pytest.approx(2.0)
     # barra → panel
     lz.entrada.campos[1].setText("12")
     assert panel.altura.value() == pytest.approx(12.0) and lz.opciones["altura_texto"] == 5.0   # cuadro dibujado: no pisa el tamaño base
@@ -1394,9 +1397,10 @@ def test_panel_y_barra_comparten_tamano_interletraje_interlineado_y_kerning_del_
     # escribir antes de la letra ajustada la corre junto con ella
     _tecla(lz, ord("X"), "X")
     assert lz.opciones["ajustes_kerning"][0][0] == 3
-    lz.entrada.aceptado.emit(["XHHH", "12", "0", "1.5", "2"])
+    lz.entrada.aceptado.emit(["XHHH", "12", "0", "12.5", "2"])
     t = next(c for c in b.curvas.values() if c.tipo == "texto")
-    assert t.espaciado == 1.5 and t.interlineado == 2.0 and t.altura == 12.0 and t.ajustes_kerning[0][0] == 3
+    assert t.espaciado == pytest.approx(0.125 * fuentes.espaciado_cien("Arial", 12))
+    assert t.interlineado == 2.0 and t.altura == 12.0 and t.ajustes_kerning[0][0] == 3
     assert lz.opciones["ajustes_kerning"] == []                    # el kerning a mano es de ese texto
 
 
@@ -1454,7 +1458,7 @@ def test_letras_de_texto_deja_afuera_los_huecos(s):
     letras = letras_de_texto(br.perfiles, [texto])
     assert len(letras) == 4                                          # H, o, l, a (sin los dos huecos)
     huecos = [p for p in br.perfiles if p not in letras]
-    assert all(h.area < min(p.area for p in letras if p.area > 30) for h in huecos)
+    assert all(h.area < min(p.area for p in letras if p.area > 60) for h in huecos)
 
 
 @hay_arial

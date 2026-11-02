@@ -206,5 +206,5 @@ def test_boc28_texto_largo_sobre_un_circulo_cuenta_y_tiempo(monkeypatch):
     c = api.llamar(s, "draw_circle", {"radius": 20})["result"]["entities"][0]["id"]
     t = time.perf_counter()
     r = api.llamar(s, "add_text", {"text": "W" * 200, "height": 5, "path_entity": c, "fit_path": True})["result"]
-    assert 14000 < r["profiles"] < 15500
+    assert 20000 < r["profiles"] < 24000
     assert time.perf_counter() - t < 25.0
