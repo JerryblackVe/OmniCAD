@@ -9,6 +9,7 @@ from PIL import Image
 
 from ..nucleo import construccion as cs
 from ..nucleo import fijaciones as fj
+from ..nucleo import referencias
 from ..nucleo.analisis import TABLA_MATERIALES
 from ..timeline import entidades as ent
 from ..timeline.operaciones import OpOperacionBase
@@ -37,6 +38,15 @@ def _referencia(sesion, valor, tipos, body=None, geometria=None):
     ahí (`sl.vertice_cercano`)."""
     if sl.es_punto3(valor):
         ref = sl.vertice_cercano(sesion, valor, body)[1]
+    elif isinstance(valor, dict) and set(valor) == {"body", "vertex"}:
+        if not isinstance(valor["body"], str):
+            raise error("INVALID_ARGUMENTS", "body debe ser el nombre o id de un cuerpo.")
+        c = sesion.cuerpo(valor["body"])
+        vertices = referencias.subformas(c.forma, "vertice")
+        i = valor["vertex"]
+        if isinstance(i, bool) or not isinstance(i, int) or not 1 <= i <= len(vertices):
+            raise error("INVALID_ARGUMENTS", "vertex debe ser un índice válido desde 1.")
+        ref = referencias.referencia(c.id, vertices[i - 1], c.forma)
     elif isinstance(valor, str) and (sl.es_id(valor) or sl._separar_prefijo(valor)[0] or sl.parece_selector(valor)):
         ref = sl.referencia(*sl.elegir_uno(sesion, valor, body=body))
     else:
@@ -48,11 +58,14 @@ def _referencia(sesion, valor, tipos, body=None, geometria=None):
     except ent.ErrorReferencia as e:                  # un texto que no nombra nada conocido
         raise error("INVALID_ARGUMENTS", f"Referencia inválida: {valor!r}. {e}",
                     "Usá un id o nombre de construcción, un selector, un id de find_faces / find_edges, "
-                    "un vértice [x, y, z] o {sketch, point | curve}.") from None
+                    "un vértice [x, y, z], {body, vertex} o {sketch, point | curve}.") from None
     if ref["tipo"] not in tipos:
         raise error("INVALID_ARGUMENTS", f"La referencia debe ser de tipo {', '.join(sorted(tipos))}.")
     try:
         entidad = ent.resolver(ref, sesion.doc.estado_final)
+    except ent.ErrorReferencia as e:
+        raise error("REFERENCE_LOST", str(e)) from e
+    try:
         if geometria == "plano":
             ent.como_plano(entidad)
         elif geometria == "eje":

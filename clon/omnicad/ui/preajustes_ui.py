@@ -87,6 +87,7 @@ class BotonPreajustes(QToolButton):
         self.setMenu(self.menu)
         self.menu.aboutToShow.connect(self._armar_menu)
         self.actual = None                          # nombre del preajuste elegido (None = valores de fábrica)
+        self.orden = "creacion"
         self.recargar()
 
     def event(self, e):
@@ -155,15 +156,17 @@ class BotonPreajustes(QToolButton):
     def _armar_menu(self):
         self.menu.clear()
         info = pre.listar(self.clave)
+        nombres = sorted(info["presets"], key=str.casefold) if self.orden == "nombre" else info["presets"]
         grupo = QActionGroup(self.menu)
         fabrica = FABRICA + (" · el predeterminado es el último usado" if info["default"] == pre.ULTIMO else "")
         opciones = [(fabrica, None)] + [(n + (" (predeterminado)" if info["default"] == n else ""), n)
-                                        for n in info["presets"]]
+                                        for n in nombres]
         for texto, nombre in opciones:
             a = grupo.addAction(self.menu.addAction(texto, lambda n=nombre: self._elegir(n)))
             a.setCheckable(True)
             a.setChecked(nombre == self.actual)
         self.menu.addSeparator()
+        self.menu.addAction("Restablecer", lambda: self._elegir(self.actual))
         con = self.actual is not None
         self.menu.addAction("Guardar los valores actuales como nuevo…", self.nuevo)
         self.menu.addAction("Guardar", lambda: self._guardar(self.actual)).setEnabled(con)
@@ -174,3 +177,12 @@ class BotonPreajustes(QToolButton):
         sub.addAction("Actual", lambda: self._predeterminado(self.actual)).setEnabled(con)
         sub.addAction("Último usado", lambda: self._predeterminado(pre.ULTIMO))
         sub.addAction("Valores de fábrica", lambda: self._predeterminado(pre.FABRICA))
+        sub = self.menu.addMenu("Ordenar por")
+        grupo_orden = QActionGroup(sub)
+        for texto, por in (("Última creación", "creacion"), ("Nombre", "nombre")):
+            a = grupo_orden.addAction(sub.addAction(texto, lambda p=por: self._ordenar(p)))
+            a.setCheckable(True)
+            a.setChecked(por == self.orden)
+
+    def _ordenar(self, por):
+        self.orden = por

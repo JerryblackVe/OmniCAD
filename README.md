@@ -184,7 +184,7 @@ Estado de cada punto, verificado contra el código: [docs/seguimiento/](docs/seg
 
 ### Errores conocidos
 
-Hoy hay 28 errores abiertos (lista completa en [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md)). Los que pueden afectarte:
+Hoy hay 32 errores abiertos (lista completa en [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md)). Los que pueden afectarte:
 
 - **Pueden cerrar la app:** la vista previa de Solevación, un empalme chico sobre un vaciado, el Labio sobre una esfera y abrir un STEP dañado.
 - Un empalme o chaflán más grande que la pared de un vaciado deja aletas sueltas y el paso sale bien: hacelo antes del vaciado.
@@ -195,8 +195,6 @@ Hoy hay 28 errores abiertos (lista completa en [docs/seguimiento/bugs.md](docs/s
 - Volver a resolver un boceto con una tangente a un spline lo corre un poco cada vez.
 - Proyectar un cuerpo curvo visto de costado no da su silueta cerrada, solo sus aristas.
 - Un documento viejo con un pedazo de letra partida elegido a mano ya no calcula: hay que volver a elegir el texto en ese paso.
-- Exportar una animación a `.mp4` responde un error interno; usá GIF o PNG.
-- El botón Derivar sigue grisado en SÓLIDO aunque funciona desde INSERTAR.
 - Un análisis de Radio mínimo guardado antes pinta las paredes enteras de un vaciado.
 - Importar `.f3d`: faltan por ubicar algunos cuerpos de un diseño de prueba.
 - En Linux con Wayland nativo los menús emergentes se cierran solos (la app fuerza X11 y no molesta).

@@ -142,6 +142,37 @@ def test_ultimo_usado_se_guarda_al_aceptar(monkeypatch):
     assert _panel(Nervio()).valores[clave] == "5 mm"
 
 
+def test_el_menu_restablece_los_valores_y_ordena_los_preajustes(monkeypatch):
+    from omnicad.ui.comandos.crear import Nervio
+    panel = _panel(Nervio())
+    boton = panel.boton_preajustes
+    clave = next(c.clave for c in panel.campos if c.clave == "espesor")
+    for nombre, valor in (("Zeta", "3 mm"), ("Alfa", "4 mm")):
+        panel.set_valor(clave, valor)
+        monkeypatch.setattr(QInputDialog, "getText", lambda *a, n=nombre, **_k: (n, True))
+        _accion(boton, "Guardar los valores actuales como nuevo").trigger()
+    boton.menu.aboutToShow.emit()
+    nombres = [a.text() for a in boton.menu.actions() if a.text() in ("Zeta", "Alfa")]
+    assert nombres == ["Zeta", "Alfa"]                          # por creación, como antes
+    sub = next(a.menu() for a in boton.menu.actions() if a.text() == "Ordenar por")
+    next(a for a in sub.actions() if a.text() == "Nombre").trigger()
+    boton.menu.aboutToShow.emit()
+    nombres = [a.text() for a in boton.menu.actions() if a.text() in ("Zeta", "Alfa")]
+    assert nombres == ["Alfa", "Zeta"]
+    panel.set_valor(clave, "9 mm")
+    _accion(boton, "Restablecer").trigger()
+    assert panel.valores[clave] == "4 mm"                       # vuelve a los valores del preajuste elegido
+
+
+def test_manage_command_presets_lista_ordenada_por_nombre():
+    s = api.Sesion()
+    for nombre in ("Zeta", "Alfa"):
+        llamar(s, "manage_command_presets", command="red", action="save", name=nombre, values={"espesor": "2 mm"})
+    assert llamar(s, "manage_command_presets", command="red", action="list")["presets"] == ["Zeta", "Alfa"]
+    assert llamar(s, "manage_command_presets", command="red", action="list",
+                  sort_by="name")["presets"] == ["Alfa", "Zeta"]
+
+
 def test_manage_command_presets_rechaza_un_comando_que_no_existe():
     s = api.Sesion()
     r = api.llamar(s, "manage_command_presets", {"command": "nervvio", "action": "list"})

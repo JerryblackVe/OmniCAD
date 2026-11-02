@@ -10,20 +10,22 @@ from .errores import error
 from .registro import herramienta
 
 
-def _estado(comando):
+def _estado(comando, sort_by="created"):
     info = pre.listar(comando)
-    return {"command": comando, "presets": info["presets"],
+    nombres = sorted(info["presets"], key=str.casefold) if sort_by == "name" else info["presets"]
+    return {"command": comando, "presets": nombres,
             "default": {pre.FABRICA: "factory", pre.ULTIMO: "last_used"}.get(info["default"], info["default"])}
 
 
 @herramienta("manage_command_presets", "documento", "Preajustes de los diálogos de comandos (Nervio, Red, Agujero…; Fusion: "
              "Create and use presets): valores guardados con un nombre para volver a usarlos. Se guardan solo en esta PC, "
              "no en el diseño. Cada preajuste es un dict {campo del diálogo: valor} con texto, números o casillas; lo que "
-             "se elige en la vista no se guarda. action=list muestra los nombres y el predeterminado; get devuelve los "
-             "valores de uno (para pasarlos a la herramienta del comando); save crea o actualiza; rename y delete; "
-             "set_default elige qué trae el diálogo al abrirse (factory, last_used o el nombre de un preajuste).")
+             "se elige en la vista no se guarda. action=list muestra los nombres (con sort_by) y el predeterminado; get "
+             "devuelve los valores de uno (para pasarlos a la herramienta del comando); save crea o actualiza; rename y "
+             "delete; set_default elige qué trae el diálogo al abrirse (factory, last_used o el nombre de un preajuste).")
 def manage_command_presets(sesion, command: str, action: Literal["list", "get", "save", "rename", "delete", "set_default"],
-                           name: str = "", values: dict | None = None, new_name: str = "", default: str = ""):
+                           name: str = "", values: dict | None = None, new_name: str = "", default: str = "",
+                           sort_by: Literal["created", "name"] = "created"):
     """
     command: clave del comando de la ventana (la de la cinta: "nervio", "red", "agujero", "saliente"…).
     action: list, get, save, rename, delete o set_default.
@@ -31,6 +33,7 @@ def manage_command_presets(sesion, command: str, action: Literal["list", "get", 
     values: con save, los valores del diálogo {campo: valor}; los que no son texto, número o casilla se descartan.
     new_name: con rename, el nombre nuevo.
     default: con set_default: factory, last_used o el nombre de un preajuste existente.
+    sort_by: con list, created (orden de creación) o name (alfabético).
     """
     command = command.strip()
     if not command:
@@ -55,4 +58,4 @@ def manage_command_presets(sesion, command: str, action: Literal["list", "get", 
             pre.definir_defecto(command, {"factory": pre.FABRICA, "last_used": pre.ULTIMO}.get(default, default))
     except geo.ErrorGeometria as e:
         raise error("ENTITY_NOT_FOUND" if "no tiene" in str(e) else "INVALID_ARGUMENTS", str(e)) from e
-    return _estado(command)
+    return _estado(command, sort_by)

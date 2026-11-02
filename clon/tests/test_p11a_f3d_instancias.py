@@ -6,7 +6,6 @@ La escena de dibujo que Fusion guarda en el archivo se arma acá mismo con el fo
 UTF-16 con largo, nodos con su cola `TransformAttribute` + `Instance`, caras con malla y la etiqueta `Body`): las
 pruebas no dependen de archivos de nadie."""
 import struct
-import time
 
 import numpy as np
 import pytest
@@ -16,6 +15,8 @@ from omnicad import api
 from omnicad.io_archivos import f3d_escena, f3d_nativo, proyecto
 from omnicad.io_archivos.abrir_externo import documento_desde_archivo
 from omnicad.nucleo import geometria as geo
+
+from _tiempo import mejor_tiempo
 
 _ESCENA = "OGS.BlobFolder/OGS/DefaultScene/"
 
@@ -290,28 +291,35 @@ def test_copias_anidadas_pasan_el_tope_y_el_archivo_abre_con_aviso(tmp_path):
     mundo = _anidado(40)                                          # 2^40 marcos sin el tope; ~100 KB
     with pytest.raises(ValueError, match="demasiadas copias"):
         f3d_escena.Escena(mundo, b"").marcos()
-    t0 = time.perf_counter()
-    partes, avisos = f3d_nativo.leer(_f3d(tmp_path, mundo, _Malla()))
-    assert time.perf_counter() - t0 < 5.0
+    def correr():
+        return f3d_nativo.leer(_f3d(tmp_path, mundo, _Malla()))
+
+    segundos, (partes, avisos) = mejor_tiempo(correr, 5.0)
+    assert segundos < 5.0
     assert len(partes) == 1 and _centro(partes[0][0]) == pytest.approx([5, 5, 5], abs=1e-3)
     assert any("No se pudo leer la posición" in a and "demasiadas copias" in a for a in avisos)
 
 
 def test_muchas_etiquetas_suelta_no_son_cuadraticas():
-    t0 = time.perf_counter()
-    with pytest.raises(ValueError, match="demasiados componentes"):
-        f3d_escena.Escena(_s("Instance") * (f3d_escena.NODOS_MAX + 1), b"")
-    mundo = _s("Instance") * f3d_escena.NODOS_MAX                    # sin ninguna matriz: antes cada una recorría todo
-    assert f3d_escena.Escena(mundo, b"").nodos == []
-    assert time.perf_counter() - t0 < 5.0
+    def correr():
+        with pytest.raises(ValueError, match="demasiados componentes"):
+            f3d_escena.Escena(_s("Instance") * (f3d_escena.NODOS_MAX + 1), b"")
+        mundo = _s("Instance") * f3d_escena.NODOS_MAX                # sin ninguna matriz: antes cada una recorría todo
+        assert f3d_escena.Escena(mundo, b"").nodos == []
+
+    segundos, _ = mejor_tiempo(correr, 5.0)
+    assert segundos < 5.0
 
 
 def test_nodos_sin_cabecera_no_recorren_todo_el_archivo():
     cola = b"".join(_matriz() + _id(i) + _s("Instance") for i in range(1, 2001))
-    t0 = time.perf_counter()
-    e = f3d_escena.Escena(cola + b"\x00" * 5_000_000, b"")           # sin SingleNodeWorld: antes ~25 s
+
+    def correr():
+        return f3d_escena.Escena(cola + b"\x00" * 5_000_000, b"")     # sin SingleNodeWorld: antes ~25 s
+
+    segundos, e = mejor_tiempo(correr, 5.0)
+    assert segundos < 5.0
     assert len(e.nodos) == 2000 and all(n["C"] is None for n in e.nodos)
-    assert time.perf_counter() - t0 < 5.0
 
 
 def test_caras_que_apuntan_a_la_misma_malla_no_se_decodifican_mil_veces():

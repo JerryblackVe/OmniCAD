@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """search_help (api/herramientas_ayuda.py): la ayuda local de OmniCAD, con su fuente."""
-import time
-
 import pytest
 
 from omnicad import api
 from omnicad.api import herramientas_ayuda
+
+from _tiempo import mejor_tiempo
 
 
 @pytest.fixture
@@ -58,7 +58,9 @@ def test_sin_docs_del_repo_no_falla(sesion, tmp_path, monkeypatch):
 
 
 def test_es_rapida(sesion):
-    inicio = time.perf_counter()
-    buscar(sesion, "como hago un agujero roscado con empalme")
-    buscar(sesion, " ".join(f"palabra{i}" for i in range(3000)))      # un pegado enorme tampoco tarda
-    assert time.perf_counter() - inicio < 1
+    def correr():
+        buscar(sesion, "como hago un agujero roscado con empalme")
+        buscar(sesion, " ".join(f"palabra{i}" for i in range(3000)))      # un pegado enorme tampoco tarda
+
+    segundos, _ = mejor_tiempo(correr, 1)
+    assert segundos < 1

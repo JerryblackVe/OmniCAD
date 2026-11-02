@@ -1,12 +1,13 @@
 """BOC-4 y BOC-5: AutoConstrain completo (tipos inferidos, opciones, proponer sin aplicar, Finish)."""
 import math
-from time import perf_counter
 
 import pytest
 
 from omnicad import api
 from test_p23_navegador import v as v, ventana as ventana  # noqa: F401  (fixtures de la ventana en vivo)
 from omnicad.restricciones import Boceto, auto_restringir, grados_de_libertad, resolver, sugerir_auto_restricciones
+
+from _tiempo import mejor_tiempo
 
 
 def _valores(b):
@@ -312,29 +313,33 @@ def test_boc5_generar_mas_agrega_alternativas_nuevas():
 
 # ---------------------------------------------------------------- rendimiento
 def test_boc4_rendimiento_boceto_de_250_entidades():
-    b = Boceto()
-    for i in range(50):
-        x, y = 40 * (i % 10), 40 * (i // 10)
-        b.agregar_rectangulo((x, y), (x + 20, y + 10))           # 4 líneas
-        b.agregar_circulo((x + 10, y + 5), 3)
-    assert len(b.curvas) == 250
-    inicio = perf_counter()
-    auto_restringir(b)
-    segundos = perf_counter() - inicio
+    def correr():
+        b = Boceto()
+        for i in range(50):
+            x, y = 40 * (i % 10), 40 * (i // 10)
+            b.agregar_rectangulo((x, y), (x + 20, y + 10))           # 4 líneas
+            b.agregar_circulo((x + 10, y + 5), 3)
+        assert len(b.curvas) == 250
+        auto_restringir(b)
+        return b
+
+    segundos, b = mejor_tiempo(correr, 10)
     print(f"BOC-4 250 entidades: {segundos:.2f} s", flush=True)
     assert segundos < 10
     assert grados_de_libertad(b, _valores(b)) == 0
 
 
 def test_boc4_rendimiento_440_lineas_inclinadas_aisladas():
-    b = Boceto()
-    c, s = math.cos(math.radians(33)), math.sin(math.radians(33))
-    for i in range(440):
-        x, y = 30 * (i % 20), 30 * (i // 20)
-        b.agregar_linea((x, y), (x + 10 * c, y + 10 * s))
-    inicio = perf_counter()
-    auto_restringir(b)
-    segundos = perf_counter() - inicio
+    def correr():
+        b = Boceto()
+        c, s = math.cos(math.radians(33)), math.sin(math.radians(33))
+        for i in range(440):
+            x, y = 30 * (i % 20), 30 * (i // 20)
+            b.agregar_linea((x, y), (x + 10 * c, y + 10 * s))
+        auto_restringir(b)
+        return b
+
+    segundos, b = mejor_tiempo(correr, 30)
     print(f"BOC-4 440 inclinadas: {segundos:.2f} s; {len(b.restricciones)} restr.", flush=True)
     assert segundos < 30
     assert "paralela" in _tipos(b)
@@ -561,12 +566,15 @@ def test_boc4_restriccion_que_la_geometria_no_cumple_no_suma_rango():
 
 
 def test_boc5_sugerir_sin_nada_que_variar_no_agota_la_paciencia():
-    b = Boceto()
-    for i in range(60):
-        b.agregar_restriccion("fijo", [b.agregar_punto(i, 0)])
-    inicio = perf_counter()
-    resultados = sugerir_auto_restricciones(b, resultados=5)
-    assert len(resultados) == 1 and resultados[0].sugerencias == [] and perf_counter() - inicio < 10
+    def correr():
+        b = Boceto()
+        for i in range(60):
+            b.agregar_restriccion("fijo", [b.agregar_punto(i, 0)])
+        return sugerir_auto_restricciones(b, resultados=5)
+
+    segundos, resultados = mejor_tiempo(correr, 10)
+    assert segundos < 10
+    assert len(resultados) == 1 and resultados[0].sugerencias == []
 
 
 # ---------------------------------------------------------------- BOC-5: vista previa en violeta sobre el lienzo

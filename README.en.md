@@ -167,7 +167,7 @@ Pick any item and open an [Issue](https://github.com/JerryblackVe/OmniCAD/issues
 
 ### Known issues
 
-There are 28 open bugs today (full list in [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md), Spanish). Those that may affect you:
+There are 32 open bugs today (full list in [docs/seguimiento/bugs.md](docs/seguimiento/bugs.md), Spanish). Those that may affect you:
 
 - **May close the app:** the Loft preview, a small fillet on a shelled part, Lip on a sphere, and opening a damaged STEP file.
 - A fillet or chamfer larger than the wall of a shell leaves loose fins and the step still reports success: apply it before the shell.
@@ -178,8 +178,6 @@ There are 28 open bugs today (full list in [docs/seguimiento/bugs.md](docs/segui
 - Re-solving a sketch with a tangent to a spline shifts it slightly each time.
 - Projecting a curved body seen from the side gives its edges, not a closed silhouette.
 - An old document with a piece of a split letter picked by hand no longer computes: pick the text again in that step.
-- Exporting an animation to `.mp4` returns an internal error; use GIF or PNG.
-- The Derive button is still greyed out in SOLID although it works from INSERT.
 - A Minimum radius analysis saved earlier paints whole walls of a shell.
 - `.f3d` import: some bodies of a test design are still unplaced.
 - On Linux with native Wayland, pop-up menus close by themselves (the app forces X11, so it does not get in the way).

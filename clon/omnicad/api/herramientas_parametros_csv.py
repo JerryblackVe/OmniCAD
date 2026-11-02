@@ -17,6 +17,18 @@ TOPE_CSV = 2_000_000
 TOPE_FILAS = 1000
 TOPE_CAMPO = 4096
 _COLUMNAS = ["Name", "Unit", "Expression", "Value", "Comments", "Favorite"]
+_INICIO_FORMULA = ("=", "+", "-", "@")
+
+
+def _comentario_exportado(texto):
+    """Antepone ' si Excel lo tomaría como fórmula; la expresión no se toca."""
+    return "'" + texto if texto.startswith(_INICIO_FORMULA) else texto
+
+
+def _comentario_importado(texto):
+    if texto.startswith("'") and texto[1:].startswith(_INICIO_FORMULA):
+        return texto[1:]
+    return texto
 
 
 @herramienta("export_parameters", "parametros", "Exporta los parámetros de usuario a CSV (Name, Unit, Expression, Value, "
@@ -39,8 +51,8 @@ def export_parameters(sesion, path: str, overwrite: bool = False, create_folders
     cotas = {c.nombre for o in sesion.doc.operaciones if isinstance(o, OpBoceto) for c in o.boceto.cotas.values()}
     propios = [p for p in sesion.doc.parametros if p.nombre not in cotas and p.op is None]    # los dN salen del modelo
     for p in propios:
-        escritor.writerow([p.nombre, p.texto_unidad, p.expresion, valor_visible(p, valores), p.comentario,
-                           "true" if p.favorito else "false"])
+        escritor.writerow([p.nombre, p.texto_unidad, p.expresion, valor_visible(p, valores),
+                           _comentario_exportado(p.comentario), "true" if p.favorito else "false"])
     nuevas = crear_carpeta(ruta.parent) if create_folders else []
     temporal = None
     try:
@@ -90,7 +102,7 @@ def leer_csv(path):
             nombre = (fila.get("Name") or fila.get("Nombre") or "").strip()
             expresion = (fila.get("Expression") or fila.get("Expresión") or "").strip()
             unidad = (fila.get("Unit") or fila.get("Unidad") or "").strip().lower()
-            comentario = (fila.get("Comments") or fila.get("Comentario") or "").strip()
+            comentario = _comentario_importado((fila.get("Comments") or fila.get("Comentario") or "").strip())
             validar_nombre(nombre)
             try:
                 tipo = tipo_de_unidad(unidad) if unidad else ESCALAR

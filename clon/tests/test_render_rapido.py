@@ -19,6 +19,8 @@ from omnicad.nucleo import render_cpu as rc
 from omnicad.nucleo import solidos_crear as sc
 from omnicad.timeline.operaciones import EstadoModelo
 
+from _tiempo import mejor_tiempo
+
 
 def _alabe():
     """Perfil elíptico: radio de curvatura mínimo b²/a = 0,2 mm."""
@@ -47,16 +49,10 @@ def _sesion(cantidad):
 def _mejor_tiempo(sesion, tope, repeticiones=3):
     """Menor tiempo de hasta `repeticiones` corridas (corta apenas una cumple el tope): la carga ajena de la PC suma
     tiempo a una corrida, nunca se lo resta; una regresión real las hace fallar a todas."""
-    mejor = None
-    for _ in range(repeticiones):
-        inicio = time.perf_counter()
+    def correr():
         resultado = hi.get_viewport_image(sesion, width=800, height=600)
-        segundos = time.perf_counter() - inicio
         assert resultado["image"].ancho == 800 and resultado["image"].alto == 600
-        mejor = segundos if mejor is None else min(mejor, segundos)
-        if mejor < tope:
-            break
-    return mejor
+    return mejor_tiempo(correr, tope, repeticiones)[0]
 
 
 def test_escena_de_80_alabes():

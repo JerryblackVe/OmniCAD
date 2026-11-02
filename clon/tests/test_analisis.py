@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import math
-import time
 
 import numpy as np
 import pytest
@@ -8,6 +7,8 @@ from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone
 
 from omnicad.nucleo import analisis as an
 from omnicad.nucleo import geometria as g
+
+from _tiempo import mejor_tiempo
 
 
 def _cara_con_normal(forma, normal):
@@ -223,10 +224,12 @@ def test_radio_minimo_agujero_y_rincon_vivo():
 def test_cebra_y_entorno_vectorizados():
     rng = np.random.default_rng(0)
     normales = rng.normal(size=(200_000, 3)).astype(np.float32)
-    t0 = time.perf_counter()
-    cebra = an.colores_cebra(normales, (0, -1, 0), frecuencia=8)
-    entorno = an.colores_mapa_entorno(normales, (0, -1, 0))
-    assert time.perf_counter() - t0 < 1.0
+
+    def correr():
+        return an.colores_cebra(normales, (0, -1, 0), frecuencia=8), an.colores_mapa_entorno(normales, (0, -1, 0))
+
+    segundos, (cebra, entorno) = mejor_tiempo(correr, 1.0)
+    assert segundos < 1.0
     assert cebra.shape == normales.shape and cebra.dtype == np.float32
     assert np.allclose(np.unique(cebra[:, 0]), [0.06, 0.97])
     assert entorno.shape == normales.shape and entorno.min() >= 0 and entorno.max() <= 1

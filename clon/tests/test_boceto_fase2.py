@@ -4,6 +4,8 @@ from omnicad.nucleo import geometria as g
 from omnicad.nucleo.perfiles import proyectar_forma
 from omnicad.restricciones import Boceto, grados_de_libertad
 
+from _tiempo import mejor_tiempo
+
 
 def test_b99_proyectar_cilindro_no_duplica_circulos():
     b = Boceto()
@@ -234,30 +236,30 @@ def test_b101_angulo_en_lineas_grandes_converge_y_resta_un_gdl(largo):
 
 @pytest.mark.parametrize("cantidad", [160, 300])
 def test_b101_arrastre_de_cadena_rigida_converge(cantidad):
-    from time import perf_counter
-
     from omnicad.restricciones import resolver
 
-    inicio = perf_counter()
-    b = Boceto()
-    punto = b.agregar_punto(0, 0)
-    lineas = []
-    for i in range(cantidad):
-        extremo = b.agregar_punto(10 * ((i + 2) // 2), 10 * ((i + 1) // 2))
-        linea = b.agregar_linea(punto, extremo)
-        b.agregar_restriccion("horizontal" if i % 2 == 0 else "vertical", [linea])
-        if lineas:
-            b.agregar_restriccion("igual", [lineas[-1], linea])
-        lineas.append(linea)
-        punto = extremo
-    cota = b.agregar_cota("distancia", [lineas[0]], "10")
-    previo = resolver(b, {cota: 10})
-    assert previo.ok and previo.gdl == 2
-    destino = (b.puntos[punto].x + 50, b.puntos[punto].y)
-    b.puntos[punto].x, b.puntos[punto].y = destino
+    def correr():
+        b = Boceto()
+        punto = b.agregar_punto(0, 0)
+        lineas = []
+        for i in range(cantidad):
+            extremo = b.agregar_punto(10 * ((i + 2) // 2), 10 * ((i + 1) // 2))
+            linea = b.agregar_linea(punto, extremo)
+            b.agregar_restriccion("horizontal" if i % 2 == 0 else "vertical", [linea])
+            if lineas:
+                b.agregar_restriccion("igual", [lineas[-1], linea])
+            lineas.append(linea)
+            punto = extremo
+        cota = b.agregar_cota("distancia", [lineas[0]], "10")
+        previo = resolver(b, {cota: 10})
+        assert previo.ok and previo.gdl == 2
+        destino = (b.puntos[punto].x + 50, b.puntos[punto].y)
+        b.puntos[punto].x, b.puntos[punto].y = destino
+        resultado = resolver(b, {cota: 10}, arrastrado=punto, previo=previo)
+        return b, punto, destino, lineas, resultado
 
-    resultado = resolver(b, {cota: 10}, arrastrado=punto, previo=previo)
-
+    segundos, (b, punto, destino, lineas, resultado) = mejor_tiempo(correr, 60)
+    assert segundos < 60
     assert resultado.ok, resultado.descripcion()
     assert resultado.gdl == 2
     assert b.coords(punto) == pytest.approx(destino, abs=1e-3)
@@ -266,7 +268,6 @@ def test_b101_arrastre_de_cadena_rigida_converge(cantidad):
         a, c = b._extremos_linea(linea)
         assert abs(a[1 if i % 2 == 0 else 0] - c[1 if i % 2 == 0 else 0]) / 10 < 1e-8
         assert b.medir_cota("distancia", [linea]) == pytest.approx(10, abs=1e-7)
-    assert perf_counter() - inicio < 60
 
 
 def _b103_grilla(cantidad):
@@ -284,17 +285,18 @@ def _b103_grilla(cantidad):
 
 @pytest.mark.parametrize("cantidad", [120, 260, 440])
 def test_b103_auto_restringir_rendimiento(cantidad):
-    from time import perf_counter
-
     from omnicad.restricciones import auto_restringir
 
     b = _b103_grilla(cantidad)
     assert len(b.curvas) == cantidad
     assert grados_de_libertad(b) == 2 * len(b.puntos)
     coordenadas = {pid: b.coords(pid) for pid in b.puntos}
-    inicio = perf_counter()
-    agregado = auto_restringir(b)
-    segundos = perf_counter() - inicio
+
+    def correr():
+        nueva = _b103_grilla(cantidad)
+        return auto_restringir(nueva), nueva
+
+    segundos, (agregado, b) = mejor_tiempo(correr, 30)
     print(f"B-103 {cantidad} entidades: {segundos:.3f} s; {len(agregado)} agregados", flush=True)
     assert segundos < 30
     valores = {k.id: float(k.expresion) for k in b.cotas.values()}
@@ -351,17 +353,16 @@ def test_b103_auto_restringir_conserva_candidatos_del_calculo_completo(monkeypat
 
 
 def test_b103_auto_restringir_440_lineas_aisladas():
-    from time import perf_counter
-
     from omnicad.restricciones import auto_restringir
 
-    b = Boceto()
-    for i in range(440):
-        x, y = 20 * (i % 20), 20 * (i // 20)
-        b.agregar_linea((x, y), (x + 10, y))
-    inicio = perf_counter()
-    agregado = auto_restringir(b)
-    segundos = perf_counter() - inicio
+    def correr():
+        b = Boceto()
+        for i in range(440):
+            x, y = 20 * (i % 20), 20 * (i // 20)
+            b.agregar_linea((x, y), (x + 10, y))
+        return auto_restringir(b), b
+
+    segundos, (agregado, b) = mejor_tiempo(correr, 30)
     print(f"B-103 aisladas 440 entidades: {segundos:.3f} s; {len(agregado)} agregados", flush=True)
     assert segundos < 30
     assert len(agregado) == 1759

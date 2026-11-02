@@ -1,7 +1,6 @@
 """Creación avanzada de sólidos y alineación/escala, sin depender de la interfaz."""
 from typing import Literal
 
-from ..nucleo import referencias
 from ..timeline import entidades as ent
 from ..timeline.ops_modificar import OpAlinear, OpEscala, OpMover
 from ..timeline.ops_solido import (OpBobina, OpLabio, OpNervio, OpPatronGeometrico, OpRed, OpRellenoContorno, OpReticulaVolumetrica,
@@ -10,16 +9,15 @@ from ..timeline.ops_superficie import OpEngrosar
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .herramientas_boceto import boceto_activo, nombre_nuevo, seleccionar_perfiles, texto_expr
+from .herramientas_construccion import _referencia
 from .herramientas_solido import (OPERACIONES, Cuerpos, Operacion, Perfiles, _agregar,
                                   _ids_cuerpos, _numero_positivo, _objetivos, _ref_perfil)
 from .registro import Expr, herramienta
 
 Referencia = str | dict
 Elementos = str | list[str]
-_GEOMETRIA = ('Plano XY/XZ/YZ, eje X/Y/Z, punto O, nombre/id de geometría de construcción, '
-             'selector de cara o arista (edges:), id de find_faces/find_edges, '
-             '{"sketch": nombre, "point": id}, {"sketch": nombre, "curve": id} '
-             'o {"body": nombre, "vertex": índice desde 1}.')
+_CUALQUIERA = {"plano", "cara", "eje", "arista", "punto", "vertice", "punto_boceto", "curva_boceto", "forzado",
+               "boceto", "perfil"}
 
 
 def _crear(sesion, clase, **params):
@@ -46,69 +44,11 @@ def _curvas(sesion, sketch, curves):
     return [{"tipo": "curva_boceto", "boceto": sop.id, "curva": cid} for cid in ids]
 
 
-def _referencia(sesion, spec, body=None, tipos=None):
-    """Traduce referencias públicas con claves inglesas y valida antes de crear el paso."""
-    ref = None
-    if isinstance(spec, dict):
-        claves = set(spec)
-        if claves in ({"sketch", "point"}, {"sketch", "curve"}):
-            if not isinstance(spec["sketch"], str):
-                raise error("INVALID_ARGUMENTS", "sketch debe ser el nombre o id de un boceto.")
-            sop, br = boceto_activo(sesion, spec["sketch"])
-            punto = "point" in spec
-            clave = "point" if punto else "curve"
-            indice = spec[clave]
-            datos = br.boceto.puntos if punto else br.boceto.curvas
-            if isinstance(indice, bool) or not isinstance(indice, int) or indice not in datos:
-                raise error("ENTITY_NOT_FOUND", f"No existe {clave}={indice!r} en «{sop.nombre}».")
-            ref = {"tipo": "punto_boceto" if punto else "curva_boceto", "boceto": sop.id,
-                   "punto" if punto else "curva": indice}
-        elif claves == {"body", "vertex"}:
-            if not isinstance(spec["body"], str):
-                raise error("INVALID_ARGUMENTS", "body debe ser el nombre o id de un cuerpo.")
-            c = sesion.cuerpo(spec["body"])
-            vertices = referencias.subformas(c.forma, "vertice")
-            i = spec["vertex"]
-            if isinstance(i, bool) or not isinstance(i, int) or not 1 <= i <= len(vertices):
-                raise error("INVALID_ARGUMENTS", "vertex debe ser un índice válido desde 1.")
-            ref = referencias.referencia(c.id, vertices[i - 1], c.forma)
-        else:
-            raise error("INVALID_ARGUMENTS", "Referencia no reconocida. " + _GEOMETRIA)
-    elif isinstance(spec, str):
-        texto = spec.strip()
-        origenes = {"XY": "plano", "XZ": "plano", "YZ": "plano", "X": "eje", "Y": "eje",
-                    "Z": "eje", "O": "punto"}
-        if texto.upper() in origenes:
-            ref = {"tipo": origenes[texto.upper()], "id": texto.upper()}
-        else:
-            estado = sesion.doc.estado_final
-            nombres = {o.id: o.nombre for o in sesion.doc.operaciones}        # un SCU deja ids que no son pasos (op4_xy)
-            for mapa, tipo in ((estado.planos, "plano"), (estado.ejes, "eje"), (estado.puntos, "punto")):
-                for id_ in mapa:
-                    if texto in (id_, nombres.get(id_)):
-                        ref = {"tipo": tipo, "id": id_}
-                        break
-                if ref:
-                    break
-            if ref is None:
-                c, e = sl.elegir_uno(sesion, texto, body=body)
-                ref = sl.referencia(c, e)
-    if ref is None:
-        raise error("INVALID_ARGUMENTS", "Falta una referencia geométrica. " + _GEOMETRIA)
-    if tipos is not None and ref["tipo"] not in tipos:
-        raise error("INVALID_ARGUMENTS", "La referencia no es del tipo requerido: " + ", ".join(tipos) + ".")
-    try:
-        ent.resolver(ref, sesion.doc.estado_final)
-    except ent.ErrorReferencia as exc:
-        raise error("REFERENCE_LOST", str(exc)) from exc
-    return ref
-
-
 def _caras_o_cuerpos(sesion, specs, body=None, planos=False):
     refs = []
     for spec in [specs] if isinstance(specs, str) else specs:
         if planos and spec.upper() in ("XY", "XZ", "YZ"):
-            refs.append(_referencia(sesion, spec))
+            refs.append(_referencia(sesion, spec, {"plano"}))
             continue
         try:
             cuerpo = sesion.cuerpo(spec)
@@ -163,11 +103,11 @@ def create_coil(sesion, diameter: Expr = 20, coil_type: Literal["revolutions_hei
     """
     _numero_positivo(diameter, "diameter")
     _numero_positivo(section_size, "section_size")
-    plano = _referencia(sesion, plane, body, ("plano", "cara"))
+    plano = _referencia(sesion, plane, {"plano", "cara"}, body)
     if plano["tipo"] == "cara":
         ent.como_plano(ent.resolver(plano, sesion.doc.estado_final))
     return _crear(sesion, OpBobina, plano=plano, centro_xyz=[float(x) for x in center_point] if center_point else None,
-                  centro=_referencia(sesion, center, body, ("punto", "punto_boceto", "vertice")) if center is not None else None,
+                  centro=_referencia(sesion, center, {"punto", "punto_boceto", "vertice"}, body) if center is not None else None,
                   diametro=texto_expr(diameter), tipo={"revolutions_height": "rev_altura", "revolutions_pitch": "rev_paso",
                                                       "height_pitch": "altura_paso", "spiral": "espiral"}[coil_type],
                   revoluciones=texto_expr(revolutions), altura=texto_expr(height), paso=texto_expr(pitch),
@@ -225,9 +165,8 @@ def _nervio(sesion, clase, sketch, curves, thickness, extension, depth, directio
         raise error("INVALID_ARGUMENTS", f"draft_angle tiene que estar entre -45 y 45 grados (recibió {draft_angle}).")
     extra = {}
     if pull_direction is not None:
-        from .herramientas_construccion import _referencia as _ref_construccion
-        extra["direccion_desmoldeo"] = _ref_construccion(sesion, pull_direction, {"plano", "cara", "eje", "arista"},
-                                                         None, "direccion")
+        extra["direccion_desmoldeo"] = _referencia(sesion, pull_direction, {"plano", "cara", "eje", "arista"},
+                                                   None, "direccion")
     return _crear(sesion, clase, curvas=_curvas(sesion, sketch, curves), espesor=texto_expr(thickness),
                   extension="profundidad" if extension == "depth" else "hasta_siguiente", profundidad=texto_expr(depth),
                   direccion={"symmetric": "simetrica", "side1": "lado1", "side2": "lado2"}[direction],
@@ -327,7 +266,7 @@ def create_boss(sesion, positions: list[Referencia], outer_diameter: Expr = 8, h
     _numero_positivo(outer_diameter, "outer_diameter")
     if height is not None:
         _numero_positivo(height, "height")
-    return _crear(sesion, OpSaliente, posiciones=[_referencia(sesion, p, tipos=("punto", "punto_boceto", "vertice")) for p in positions],
+    return _crear(sesion, OpSaliente, posiciones=[_referencia(sesion, p, {"punto", "punto_boceto", "vertice"}) for p in positions],
                   diametro_exterior=texto_expr(outer_diameter), diametro_agujero=texto_expr(hole_diameter),
                   altura="" if height is None else texto_expr(height), angulo_desmoldeo=texto_expr(draft_angle), invertir=reverse)
 
@@ -353,7 +292,9 @@ def create_lip_groove(sesion, edges: Elementos, lip_type: Literal["lip", "groove
     _numero_positivo(height, "height")
     return _crear(sesion, OpLabio, aristas=[sl.referencia(c, e) for c, e in elegidos],
                   tipo="labio" if lip_type == "lip" else "ranura", ancho=texto_expr(width), alto=texto_expr(height),
-                  holgura=texto_expr(clearance), direccion=_referencia(sesion, direction, body) if direction is not None else None,
+                  holgura=texto_expr(clearance),
+                  direccion=_referencia(sesion, direction, {"plano", "cara", "eje", "arista", "curva_boceto"}, body)
+                  if direction is not None else None,
                   invertir=reverse)
 
 
@@ -444,8 +385,10 @@ def create_volumetric_lattice(sesion, body: str | None = None,
                   tamano_z="" if cell_size_z is None else texto_expr(cell_size_z), solidez=texto_expr(solidity),
                   resolucion=resolution, barras=[list(map(float, b)) for b in custom_bars or []],
                   solidez_final="" if solidity_end is None else texto_expr(solidity_end),
-                  ruta=[_referencia(sesion, r) for r in gradient_path or []] if solidity_end is not None else [],
-                  zonas=[_referencia(sesion, r) for r in offset_zones or []], desfase=texto_expr(offset_distance),
+                  ruta=[_referencia(sesion, r, {"arista", "curva_boceto", "punto", "punto_boceto", "vertice"})
+                        for r in gradient_path or []] if solidity_end is not None else [],
+                  zonas=[_referencia(sesion, r, {"cara", "arista", "punto", "punto_boceto", "vertice", "cuerpo"})
+                         for r in offset_zones or []], desfase=texto_expr(offset_distance),
                   solidez_desfase=texto_expr(offset_solidity), mezcla=texto_expr(offset_blend),
                   mover_x=mover[0], mover_y=mover[1], mover_z=mover[2], girar_x=girar[0], girar_y=girar[1],
                   girar_z=girar[2])
@@ -553,8 +496,8 @@ def create_bounding_solid(sesion, bodies: Cuerpos, shape: Literal["box", "cylind
     if orientation in ("z_x", "z_y", "x_y"):
         if axis_a is None or axis_b is None:
             raise error("INVALID_ARGUMENTS", f"orientation={orientation} necesita axis_a y axis_b.")
-        tipos = ("eje", "arista", "curva_boceto")
-        extra = {"eje_a": _referencia(sesion, axis_a, body, tipos), "eje_b": _referencia(sesion, axis_b, body, tipos)}
+        tipos = {"eje", "arista", "curva_boceto"}
+        extra = {"eje_a": _referencia(sesion, axis_a, tipos, body), "eje_b": _referencia(sesion, axis_b, tipos, body)}
     elif orientation == "ucs":
         if ucs is None:
             raise error("INVALID_ARGUMENTS", "orientation=ucs necesita ucs (id o nombre del sistema de coordenadas).")
@@ -643,8 +586,9 @@ def align_bodies(sesion, bodies: Cuerpos, source: Referencia, destination: Refer
     """
     if not -360.0 <= angle <= 360.0:
         raise error("INVALID_ARGUMENTS", f"angle va de -360 a 360 grados (llegó {angle!r}).")
-    return _crear(sesion, OpAlinear, cuerpos=_cuerpos(sesion, _con_componentes(sesion, bodies)), origen=_referencia(sesion, source, source_body),
-                  destino=_referencia(sesion, destination, destination_body), voltear=flip, copiar=copy, angulo=angle)
+    return _crear(sesion, OpAlinear, cuerpos=_cuerpos(sesion, _con_componentes(sesion, bodies)),
+                  origen=_referencia(sesion, source, _CUALQUIERA, source_body),
+                  destino=_referencia(sesion, destination, _CUALQUIERA, destination_body), voltear=flip, copiar=copy, angulo=angle)
 
 
 @herramienta("move_faces", "solido", "Mueve o copia caras planas de un cuerpo (SÓLIDO › MODIFICAR › Mover/copiar › Caras): "
@@ -666,7 +610,6 @@ def move_faces(sesion, faces: Elementos, type: Literal["translate", "rotate"] = 
     copy: true deja el cuerpo como está y crea una superficie con cada cara movida.
     body: cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
     """
-    from .herramientas_construccion import _referencia as _ref_construccion
     from .herramientas_modificar import _refs
     refs, _ = _refs(sesion, faces, "cara", body)
     if type == "translate":
@@ -676,14 +619,14 @@ def move_faces(sesion, faces: Elementos, type: Literal["translate", "rotate"] = 
             raise error("INVALID_ARGUMENTS", "translate tiene que ser [dx, dy, dz] (3 valores).")
         nuevos = dict(tipo="traslacion")
         if direction is not None:
-            nuevos.update(direccion=_ref_construccion(sesion, direction, {"eje", "arista", "cara", "plano"}, body,
-                                                      "direccion"), distancia=texto_expr(distance))
+            nuevos.update(direccion=_referencia(sesion, direction, {"eje", "arista", "cara", "plano"}, body,
+                                                "direccion"), distancia=texto_expr(distance))
         else:
             nuevos.update(dx=texto_expr(translate[0]), dy=texto_expr(translate[1]), dz=texto_expr(translate[2]))
     else:
         if axis is None:
             raise error("INVALID_ARGUMENTS", "type=rotate necesita axis.")
-        nuevos = dict(tipo="rotacion", eje=_ref_construccion(sesion, axis, {"eje", "arista", "curva_boceto"}, body, "eje"),
+        nuevos = dict(tipo="rotacion", eje=_referencia(sesion, axis, {"eje", "arista", "curva_boceto"}, body, "eje"),
                       angulo=texto_expr(angle))
     return _crear(sesion, OpMover, caras=refs, cuerpos=[], copiar=bool(copy), **nuevos)
 
@@ -731,4 +674,4 @@ def scale_body(sesion, bodies: Cuerpos | None = None, factor: Expr = 1, scale_ty
         raise error("INVALID_ARGUMENTS", "scale_body escala sólidos y superficies; para una malla usá scale_mesh.")
     return _crear(sesion, OpEscala, cuerpos=ids, bocetos=bocetos, tipo="uniforme" if scale_type == "uniform" else "no_uniforme",
                   factor=texto_expr(factor), fx=texto_expr(factor_x), fy=texto_expr(factor_y), fz=texto_expr(factor_z),
-                  punto=_referencia(sesion, point, tipos=("punto", "punto_boceto", "vertice")) if point is not None else None)
+                  punto=_referencia(sesion, point, {"punto", "punto_boceto", "vertice"}) if point is not None else None)

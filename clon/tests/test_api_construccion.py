@@ -88,6 +88,14 @@ def test_vertice_real_y_dos_aristas_en_interseccion():
     assert geo.es_valida(forma)
 
 
+def test_punto_de_construccion_acepta_el_formato_body_vertex():
+    s = api.Sesion()
+    cid = llamar(s, "create_box", length=10, width=10, height=10, anchor="corner")["bodies_created"][0]["id"]
+    vertice = refs.subformas(s.cuerpo(cid).forma, "vertice")[0]
+    r = llamar(s, "create_construction_point", type="vertice", references=[{"body": cid, "vertex": 1}])
+    assert r["position"] == pytest.approx(refs.punto_de_vertice(vertice))
+
+
 def test_scu_origen_ejes_y_planos():
     s = api.Sesion()
     _, punto = boceto_linea(s)

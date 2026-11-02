@@ -745,6 +745,17 @@ def edit_feature(sesion, feature: str, params: dict):
                 values=_valores_json(nueva, _nombres_parametros(sesion.doc)))
 
 
+def _componente_sin_cuerpo(sesion, op):
+    """B-180: el primer componente posterior que usa un cuerpo de `op` y quedó con error al suprimirlo."""
+    doc = sesion.doc
+    i = doc.indice(op.id)
+    for o in doc.operaciones[i + 1:doc.marcador]:
+        if (o.TIPO == "componente" and doc.resultados[doc.indice(o.id)].estado == "error"
+                and any(str(c).split(".")[0] == op.id for c in o.p.get("cuerpos") or [])):
+            return o
+    return None
+
+
 @herramienta("suppress_feature", "documento", "Suprime o reactiva uno o varios pasos del timeline (suprimido = no se "
              "calcula). Con dos o más pasos, un solo paso de deshacer y lo que dependa de ellos queda con error, avisado, "
              "sin rechazar todo; con uno solo (texto o lista de uno) se rechaza si algo se rompe.", modifica=True)
@@ -770,6 +781,12 @@ def suppress_feature(sesion, feature: str | list[str], suppressed: bool = True):
         sesion.avisar(f"«{op.nombre}» ya estaba {'suprimido' if suppressed else 'activo'}: no cambió nada.")
     else:
         sesion.doc.suprimir(op.id, suppressed)
+        componente = _componente_sin_cuerpo(sesion, op) if suppressed else None
+        if componente is not None:
+            raise error("BODY_NOT_FOUND",
+                        f"Para suprimir «{op.nombre}» ({op.id}) hay que suprimir antes el componente "
+                        f"«{componente.nombre}» ({componente.id}), que usa el cuerpo que crea.",
+                        f"suppress_feature con feature=[\"{componente.id}\", \"{op.id}\"].")
     return dict(_paso_info(op), suppressed=suppressed)
 
 

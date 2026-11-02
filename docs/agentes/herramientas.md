@@ -499,7 +499,7 @@ Opera el boceto en la ventana: editar, seleccionar su plano, mirar de frente, en
 
 ### `manage_command_presets`
 
-Preajustes de los diálogos de comandos (Nervio, Red, Agujero…; Fusion: Create and use presets): valores guardados con un nombre para volver a usarlos. Se guardan solo en esta PC, no en el diseño. Cada preajuste es un dict {campo del diálogo: valor} con texto, números o casillas; lo que se elige en la vista no se guarda. action=list muestra los nombres y el predeterminado; get devuelve los valores de uno (para pasarlos a la herramienta del comando); save crea o actualiza; rename y delete; set_default elige qué trae el diálogo al abrirse (factory, last_used o el nombre de un preajuste).
+Preajustes de los diálogos de comandos (Nervio, Red, Agujero…; Fusion: Create and use presets): valores guardados con un nombre para volver a usarlos. Se guardan solo en esta PC, no en el diseño. Cada preajuste es un dict {campo del diálogo: valor} con texto, números o casillas; lo que se elige en la vista no se guarda. action=list muestra los nombres (con sort_by) y el predeterminado; get devuelve los valores de uno (para pasarlos a la herramienta del comando); save crea o actualiza; rename y delete; set_default elige qué trae el diálogo al abrirse (factory, last_used o el nombre de un preajuste).
 
 - Modifica el documento: no.
 - Parámetros:
@@ -509,6 +509,7 @@ Preajustes de los diálogos de comandos (Nervio, Red, Agujero…; Fusion: Create
   - `values` (objeto; opcional, por defecto `null`): con save, los valores del diálogo {campo: valor}; los que no son texto, número o casilla se descartan.
   - `new_name` (texto; opcional, por defecto `""`): con rename, el nombre nuevo.
   - `default` (texto; opcional, por defecto `""`): con set_default: factory, last_used o el nombre de un preajuste existente.
+  - `sort_by` ("created" | "name"; opcional, por defecto `"created"`): con list, created (orden de creación) o name (alfabético).
 - CLI: `omnicad call manage_command_presets --doc pieza.omnicad command=… action=…`
 
 ### `manage_selection_sets`
@@ -4256,7 +4257,8 @@ Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y
 Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: traslación y rotación respecto de donde se modelaron, caja envolvente), si hay algo arrastrado sin capturar (uncaptured_position; los componentes se informan sin ese arrastre), uniones (tipo, componentes, valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz.
 
 - Modifica el documento: no.
-- Parámetros: ninguno.
+- Parámetros:
+  - `summary` (true/false; opcional, por defecto `false`): true devuelve solo nombres, conteos y las uniones con sus valores, sin la lista de cuerpos.
 - CLI: `omnicad call get_assembly --doc pieza.omnicad`
 
 ### `create_component`

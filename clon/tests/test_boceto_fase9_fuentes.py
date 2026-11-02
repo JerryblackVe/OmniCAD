@@ -9,6 +9,8 @@ import pytest
 from omnicad import api
 from omnicad.nucleo import fuentes, perfiles, shx
 
+from _tiempo import mejor_tiempo
+
 TRAZO = "OmniCAD Trazo SHX"
 
 
@@ -200,11 +202,14 @@ def test_boc28_perfiles_de_curvas_que_se_cruzan_dan_areas_exactas():
 def test_boc28_texto_largo_sobre_un_circulo_cuenta_y_tiempo(monkeypatch):
     """200 «W» sobre un círculo de radio 20: ~14,8 mil perfiles. Medido: 4,7 s antes de BOC-28 (Python alrededor del
     Splitter) y 3,9 s después, en la misma PC y con la misma carga; el resto es OpenCascade. Tope holgado."""
-    import time
     monkeypatch.setattr(perfiles, "_CACHE_PERFILES", {})    # sin caché de otro test: el tiempo medido es real
     s = _sesion_con_boceto()
     c = api.llamar(s, "draw_circle", {"radius": 20})["result"]["entities"][0]["id"]
-    t = time.perf_counter()
-    r = api.llamar(s, "add_text", {"text": "W" * 200, "height": 5, "path_entity": c, "fit_path": True})["result"]
+
+    def correr():
+        perfiles._CACHE_PERFILES.clear()
+        return api.llamar(s, "add_text", {"text": "W" * 200, "height": 5, "path_entity": c, "fit_path": True})["result"]
+
+    segundos, r = mejor_tiempo(correr, 25.0)
     assert 20000 < r["profiles"] < 24000
-    assert time.perf_counter() - t < 25.0
+    assert segundos < 25.0

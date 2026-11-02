@@ -345,7 +345,10 @@ def _matrices(sesion):
              "(uncaptured_position; los componentes se informan sin ese arrastre), uniones (tipo, componentes, "
              "valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, "
              "grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz.")
-def get_assembly(sesion):
+def get_assembly(sesion, summary: bool = False):
+    """
+    summary: true devuelve solo nombres, conteos y las uniones con sus valores, sin la lista de cuerpos.
+    """
     doc = sesion.doc
     estado = doc.estado_final
     ops = doc.operaciones[:doc.marcador]
@@ -362,9 +365,21 @@ def get_assembly(sesion):
             origenes.append({"id": o.id, "name": o.nombre, "origin": None if plano is None else [_r(v) for v in plano.origen],
                              "z_axis": None if plano is None else [_r(v) for v in plano.normal]})
     raiz = [c for c in cuerpos_del_modelo(estado) if not c.componente]
+    uniones = [o for o in ops if isinstance(o, OpUnion)]
+    if summary:
+        return {"components": [{"id": k, "name": _nombre_comp(estado, k)} for k in estado.componentes],
+                "uncaptured_position": pendiente_de(doc) is not None,
+                "joints": [info_union(sesion, o) for o in uniones],
+                "joint_origins": [{"id": o.id, "name": o.nombre} for o in ops if isinstance(o, OpOrigenUnion)],
+                "rigid_groups": [{"id": g["id"], "name": g["name"]} for g in grupos],
+                "motion_links": [{"id": o.id, "name": o.nombre} for o in ops if isinstance(o, OpVinculoMovimiento)],
+                "root_bodies": [{"id": c.id, "name": sesion.nombre_cuerpo(c)} for c in raiz],
+                "counts": {"components": len(estado.componentes), "bodies": len(estado.cuerpos),
+                           "joints": len(estado.uniones)},
+                "units": {"length": "mm", "angle": "deg"}}
     return {"components": [info_componente(sesion, k) for k in estado.componentes],
             "uncaptured_position": pendiente_de(doc) is not None,
-            "joints": [info_union(sesion, o) for o in ops if isinstance(o, OpUnion)],
+            "joints": [info_union(sesion, o) for o in uniones],
             "joint_origins": origenes, "rigid_groups": grupos,
             "motion_links": [_info_vinculo(o) for o in ops if isinstance(o, OpVinculoMovimiento)],
             "root_bodies": [{"id": c.id, "name": sesion.nombre_cuerpo(c)} for c in raiz],

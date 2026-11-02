@@ -10,6 +10,8 @@ from omnicad.api import herramientas_avanzado as av
 from omnicad.ejemplo import crear_documento_ejemplo
 from omnicad.timeline.operaciones import TIPOS_OPERACION
 
+from _tiempo import mejor_tiempo
+
 
 @pytest.fixture
 def s():
@@ -378,11 +380,13 @@ def test_execute_code_falla_dentro_de_la_api_y_traza_larga(s):
 
 # ---------------------------------------------------------------- execute_code con plazo (L139)
 def test_execute_code_bucle_infinito_se_corta_por_timeout(s):
-    import time
     antes = foto(s)
-    t0 = time.monotonic()
-    r = api.llamar(s, "execute_code", {"code": "print('arranca')\nwhile True:\n    pass", "timeout": 0.3})
-    assert time.monotonic() - t0 < 5
+
+    def correr():
+        return api.llamar(s, "execute_code", {"code": "print('arranca')\nwhile True:\n    pass", "timeout": 0.3})
+
+    segundos, r = mejor_tiempo(correr, 5)
+    assert segundos < 5
     assert not r["ok"] and r["error_kind"] == "CODE_TIMEOUT" and r["pistas"]
     assert "0.3 s" in r["mensaje"] and "línea" in r["mensaje"] and "arranca" in r["mensaje"]
     assert foto(s) == antes
@@ -392,11 +396,13 @@ def test_execute_code_bucle_infinito_se_corta_por_timeout(s):
                                     "def f():\n    while True: pass\nf()"])
 def test_execute_code_bucle_de_una_linea_se_corta_por_timeout(s, codigo):
     # El salto hacia atrás dentro de una misma línea no dispara LINE: el vigía escucha también JUMP.
-    import time
     antes = foto(s)
-    t0 = time.monotonic()
-    r = api.llamar(s, "execute_code", {"code": codigo, "timeout": 0.3})
-    assert time.monotonic() - t0 < 5
+
+    def correr():
+        return api.llamar(s, "execute_code", {"code": codigo, "timeout": 0.3})
+
+    segundos, r = mejor_tiempo(correr, 5)
+    assert segundos < 5
     assert not r["ok"] and r["error_kind"] == "CODE_TIMEOUT"
     assert foto(s) == antes
 

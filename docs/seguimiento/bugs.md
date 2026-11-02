@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 33: Abierto 25 · Parcial 4 · Bloqueado 1 · Sin verificar 3 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 32: Abierto 26 · Parcial 4 · Bloqueado 1 · Sin verificar 1 (recontado 2026-11-02).
 
 ## Abiertos y parciales
 
@@ -11,9 +11,8 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-177 | El sentido de una unión con origen en arista circular se invierte si el padre gira | Abierto | Alta | Con el padre a más de unos 45° el mismo valor mueve al revés: −207,9 mm en vez de −56,9. Con origen en cara plana no pasa. | omnicad/api/herramientas_ensamble.py:725 | 2026-11-02 |
 | B-178 | Lo creado después de una unión no la sigue al accionarla | Abierto | Alta | Agujeros y fijaciones con puntos absolutos salen corridos y el recálculo da REFERENCE_LOST. Esquive: uniones al final del timeline. | omnicad/api/herramientas_ensamble.py:650 | 2026-11-02 |
 | B-179 | La suma de filas de la lista de materiales no da la masa total | Abierto | Media | Filas 77,41 kg contra total 79,54 kg, con todos los cuerpos en alguna fila. | omnicad/api/herramientas_material.py:200 | 2026-11-02 |
-| B-180 | Suprimir un tubo dentro de un componente da BODY_NOT_FOUND | Abierto | Media | Hay que suprimir antes el paso del componente. Falta que funcione o que el error lo diga. | omnicad/api/herramientas_documento.py:750 | 2026-11-02 |
-| B-181 | Un spline cerrado con control_points da PROFILE_NOT_CLOSED | Sin verificar | Media | Reportado al armar el brazo, sin volver a probar. | omnicad/api/herramientas_boceto.py:1950 | 2026-11-02 |
-| B-183 | section_view no aparece en render_image | Sin verificar | Media | Reportado al armar el brazo, sin volver a probar. | omnicad/api/herramientas_analisis.py:439 | 2026-11-02 |
+| B-181 | Un spline cerrado con control_points da PROFILE_NOT_CLOSED | Abierto | Media | Reproducido: `closed` se ignora en `control_points` (aviso al crearla), quedan 0 perfiles y `extrude` da PROFILE_NOT_CLOSED. El docstring de `draw_spline` dice que `closed` cierra solo la de ajuste. | omnicad/api/herramientas_boceto.py:1950 | 2026-11-02 |
+| B-183 | section_view no aparece en render_image | Abierto | Media | Reproducido: `section_view` da área 1600 mm² sobre una caja de 40³, pero `render_image` sale idéntico con la sección visible u oculta (0 de 76 800 píxeles distintos). | omnicad/api/herramientas_analisis.py:439 | 2026-11-02 |
 | B-172 | Pedir propiedades de un cuerpo recién solevado cerró la app | Abierto | Alta | Violación de acceso en TKernel dentro de `_por_malla`, una vez en vivo; no se repite abriendo el autoguardado. Falta aislar esa medición o validar el sólido antes. | omnicad/nucleo/geometria.py:1034 | 2026-11-02 |
 | B-173 | Solevación de 3 splines cerrados sale ok con el sólido plegado, y check_geometry da válido | Abierto | Alta | Da 40 % del volumen esperado y el orden de las secciones cambia el resultado sin avisar. `valid` y `all_valid` siguen en true con un problema de severidad error. | omnicad/api/herramientas_revision.py:74 | 2026-11-02 |
 | B-176 | export_sketch a SVG invertiría el sentido de los arcos | Sin verificar | Baja | No se reproduce con arcos simples: el flag del SVG es correcto por cuenta y por ida y vuelta. Falta probar el boceto original de la cartera, donde salieron cóncavos. | omnicad/io_archivos/svg.py:410 | 2026-11-02 |
@@ -99,15 +98,6 @@ de arriba manda sobre este texto.
 - **Obtenido:** cerca de 77,41 kg contra 79,54 kg.
 - **Prueba propuesta:** suma de filas igual al total.
 - **Evidencia:** `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\REPORTE_OMNICAD_brazo-robotico.md`.
-
-### B-180 · Suprimir un tubo dentro de un componente da BODY_NOT_FOUND
-
-- **Qué:** `suppress_feature` con `feature=["op251"]` y `suppressed=true` sobre el tubo de un `create_pipe` dentro de `11_CABLES_ANTEBRAZO` (op391).
-- **Esperado:** se suprime, o el error dice que hay que suprimir antes el componente.
-- **Obtenido:** BODY_NOT_FOUND y se deshace.
-- **Esquive:** `["op391", "op251"]` y reactivar al revés.
-- **Prueba propuesta:** suprimir el tubo funciona o da ese error.
-- **Evidencia:** `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\REPORTE_OMNICAD_brazo-robotico.md` y `herramientas\paso_12_correccion_cables.py`.
 
 ### B-172 · Pedir propiedades de un cuerpo recién solevado cerró la app
 

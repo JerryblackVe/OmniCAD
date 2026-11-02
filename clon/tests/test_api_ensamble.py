@@ -61,6 +61,26 @@ def test_componentes_union_rigida_y_get_assembly():
     assert llamar(s, "get_assembly")["root_bodies"] == [{"id": suelta, "name": "Cuerpo3"}]
 
 
+def test_get_assembly_resumen_sin_la_lista_de_cuerpos():
+    s, base, bloque = dos_cajas()
+    llamar(s, "create_joint", origin1="<Z", body1=bloque, origin2=">Z", body2="Base")
+    detalle = llamar(s, "get_assembly")
+    resumen = llamar(s, "get_assembly", summary=True)
+    assert resumen["counts"] == {"components": 2, "bodies": 2, "joints": 1}
+    assert resumen["components"] == [{"id": c["id"], "name": c["name"]} for c in detalle["components"]]
+    assert resumen["joints"] == detalle["joints"]
+    assert all("bodies" not in c and "translation" not in c for c in resumen["components"])
+
+
+def test_suprimir_un_paso_que_crea_el_cuerpo_de_un_componente_dice_cual_suprimir_antes():
+    s, base, bloque = dos_cajas()
+    antes = json.dumps(s.doc.a_dict(), sort_keys=True)
+    r = api.llamar(s, "suppress_feature", {"feature": "op1"})
+    assert not r["ok"] and r["error_kind"] == "BODY_NOT_FOUND", r
+    assert "Base" in r["mensaje"] and "op3" in r["mensaje"] and "antes" in r["mensaje"], r
+    assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
+
+
 def test_errores_de_componentes_y_uniones():
     s, base, bloque = dos_cajas()
     r = falla(s, "create_joint", "INVALID_ARGUMENTS", origin1=">Z", body1=base, origin2="<Z", body2=bloque)

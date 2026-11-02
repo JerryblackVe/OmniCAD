@@ -168,6 +168,20 @@ def test_exportar_e_importar_parametros_ida_y_vuelta(s, tmp_path):
     assert ok(nueva, "get_parameters")["parameters"] == []                # un solo paso de deshacer
 
 
+def test_exportar_neutraliza_el_comentario_que_empieza_con_signo(s, tmp_path):
+    comentario = '=HYPERLINK("https://ejemplo.com")'
+    ok(s, "create_parameter", name="enlace", expression="10 mm", comment=comentario)
+    ok(s, "create_parameter", name="negativo", expression="-5 mm")
+    ruta = tmp_path / "parametros.csv"
+    ok(s, "export_parameters", path=str(ruta))
+    texto = ruta.read_text(encoding="utf-8")
+    assert "'=HYPERLINK" in texto and "negativo,mm,-5 mm," in texto
+    otra = api.Sesion()
+    ok(otra, "import_parameters", path=str(ruta))
+    filas = {p["name"]: p for p in ok(otra, "get_parameters")["parameters"]}
+    assert filas["enlace"]["comment"] == comentario and filas["negativo"]["expression"] == "-5 mm"
+
+
 def test_importar_parametros_valida_y_no_cambia_nada(s, tmp_path):
     antes = ok(s, "get_parameters")["parameters"]
     casos = {"sin_cabecera.csv": "a,b\n1,2\n", "unidad.csv": "Name,Unit,Expression\nx,parsec,10\n",

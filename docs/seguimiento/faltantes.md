@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 159 · Parcial 48 · Bloqueado 30 · Sin verificar 4 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 160 · Parcial 48 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
 
 ## Pendientes generales
 
@@ -72,14 +72,14 @@ Abierto 54 · Parcial 3 · Bloqueado 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 2 · Parcial 1 · Sin verificar 1.
+Abierto 3 · Parcial 1 · Sin verificar 0.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-54 | La tarjeta de Proyectar no elige planos, ejes ni puntos de trabajo | Abierto | Baja | Fusion también proyecta geometría de trabajo y puntos de boceto; la tarjeta elige caras, aristas, vértices, cuerpos y curvas de otro boceto. `project_to_sketch` ya los acepta por `references`: falta sumarlos a `_filtros_proyeccion` y darles forma en la selección. | ui/editor_boceto.py (`_filtros_proyeccion`); api/herramientas_boceto.py (`_proyectar_seleccion`) | 2026-10-31 |
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: derivación y Duplicar con uniones hechos; falta el catálogo de piezas | Parcial | Media | Falta un catálogo local de piezas estándar más allá de las fijaciones (rodamientos, perfiles, pasadores…; sin servicios en línea): hay que decidir qué piezas y sus medidas. Duplicar con uniones copia un componente por vez, las copias son independientes (sin instancias asociativas) y no tiene los modos de destino «Entre dos caras» e «Intersección de dos aristas» ni «Borrar último duplicado». | ui/cinta.py:59 (Duplicar con uniones); api/herramientas_ensamble.py (duplicate_with_joints); ui/comandos/derivacion.py:16; api/herramientas_documento.py:322 (insert_derive); tests/test_derivacion.py; tests/test_duplicar_con_uniones.py; nucleo/fijaciones.py (solo fijaciones) | 2026-10-31 |
-| H-63 | create_pipe no toma curvas de un boceto 3D | Sin verificar | Media | Reportado al armar cables y mangueras, sin volver a probar: hoy solo tomaría curvas 2D. Falta tubo por `draw_spline_3d`. | omnicad/api/herramientas_solido_extra.py:181 | 2026-11-02 |
+| H-63 | create_pipe no toma curvas de un boceto 3D | Abierto | Media | Reproducido: `draw_spline_3d` crea la curva 4 y `create_pipe(path_sketch="Ruta", path_curves=[4])` da ENTITY_NOT_FOUND («El boceto «Ruta» no tiene la curva 4»). Falta tubo por `draw_spline_3d`. | omnicad/api/herramientas_solido_extra.py:181 | 2026-11-02 |
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
