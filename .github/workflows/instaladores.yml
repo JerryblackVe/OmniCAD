@@ -16,8 +16,13 @@ permissions:
 jobs:
   test:
     # Corre ruff y pytest (AGENTS.md › Cómo verificar) antes de armar o publicar nada.
+    # En 6 máquinas: en una sola, la memoria crece hasta matar al runner a la hora de tests (v0.2.0, dos veces).
     runs-on: windows-latest
-    timeout-minutes: 180    # la suite corre en un solo proceso: a 60 min se corto la v0.2.0 sin fallas
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [0, 1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -69,7 +74,8 @@ jobs:
         run: .venv/Scripts/python.exe -m ruff check .
         working-directory: clon    # el criterio vive en clon/pyproject.toml › [tool.ruff.lint]
       - name: Tests
-        run: .venv/Scripts/python.exe -m pytest tests -q
+        shell: bash
+        run: .venv/Scripts/python.exe -m pytest $(ls tests/test_*.py | sort | awk 'NR % 6 == ${{ matrix.parte }}') -q
         working-directory: clon    # AGENTS.md › Cómo verificar: todo se corre desde clon/
 
   windows:
