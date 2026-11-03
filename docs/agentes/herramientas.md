@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-386 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+387 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -18,7 +18,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 83 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
-| [malla](#grupo-malla) | 19 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
+| [malla](#grupo-malla) | 20 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 19 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 12 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 30 | Ver y medir el resultado. |
@@ -3972,6 +3972,7 @@ Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, v
 | [`repair_mesh`](#repair_mesh) | sí | Repara mallas (MALLA › PREPARAR › Reparar de Fusion). kind: close_holes (une vértices idénticos, orienta las normales y tapa los agujeros), merge_vertices (solo une los vértices casi coincidentes), stitch_and_remove (además cose, corrige triángulos degenerados, quita caras dobles y partes diminutas) o rebuild (lo anterior y un remallado uniforme). |
 | [`clean_mesh`](#clean_mesh) | sí | Limpia mallas paso por paso (Malla › Limpiar de Blender), en este orden y cada uno con su casilla: merge_by_distance (une los vértices a distance mm o menos), dissolve_degenerate (colapsa aristas de distance o menos y arregla triángulos sin área y caras dobles), delete_loose (vértices sin caras, triángulos aislados y, con min_shell_fraction, partes chicas), recalculate_normals (orientación consistente y hacia afuera) y fill_holes (tapa los agujeros de hasta max_hole_sides lados; 0 = todos). |
 | [`generate_face_groups`](#generate_face_groups) | sí | Agrupa las caras de mallas por ángulo (MALLA › PREPARAR › Generar grupos de caras de Fusion): las vecinas cuyas normales difieren menos de angle quedan en el mismo grupo. |
+| [`combine_face_groups`](#combine_face_groups) | sí | Combina en un solo grupo los grupos de caras elegidos de mallas (MALLA › PREPARAR › Combinar grupos de caras de Fusion). |
 | [`reduce_mesh`](#reduce_mesh) | sí | Baja la cantidad de triángulos de mallas (MALLA › MODIFICAR › Reducir de Fusion; colapso de aristas con error cuadrático). mode: proportion (fracción de los triángulos actuales), face_count (cantidad objetivo) o tolerance (desvío máximo en mm). |
 | [`remesh`](#remesh) | sí | Rehace los triángulos de mallas con un tamaño parejo (MALLA › MODIFICAR › Remallar de Fusion). density > 1 da más triángulos (el largo de arista objetivo es el largo medio / √density; si la malla original tiene triángulos mucho más chicos que el promedio, el total puede bajar igual). |
 | [`smooth_mesh`](#smooth_mesh) | sí | Suaviza mallas sin encogerlas (MALLA › MODIFICAR › Suavizar de Fusion; filtro de Taubin). |
@@ -4047,6 +4048,17 @@ Agrupa las caras de mallas por ángulo (MALLA › PREPARAR › Generar grupos de
   - `angle` (número o expresión; opcional, por defecto `30`): ángulo límite entre caras vecinas, en grados (número o expresión), entre 0 y 180.
   - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
 - CLI: `omnicad call generate_face_groups --doc pieza.omnicad bodies=…`
+
+### `combine_face_groups`
+
+Combina en un solo grupo los grupos de caras elegidos de mallas (MALLA › PREPARAR › Combinar grupos de caras de Fusion). Los grupos tienen que estar unidos por aristas compartidas; si no, el paso falla.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (texto o lista de texto; obligatorio): id o nombre de los cuerpos de malla.
+  - `groups` (lista de entero; obligatorio): números de grupo de caras a combinar (al menos dos, unidos por aristas); pasan al número más chico.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = automático.
+- CLI: `omnicad call combine_face_groups --doc pieza.omnicad bodies=… groups=…`
 
 ### `reduce_mesh`
 
@@ -5658,6 +5670,7 @@ Cambia solo las propiedades indicadas de la escena del render.
   - `exposure` (número; opcional, por defecto `null`): exposición en EV, acotada a -6..6.
   - `canvas_high_quality` (true/false; opcional, por defecto `null`): activa la alta calidad en el lienzo.
   - `canvas_supersampling` (entero; opcional, por defecto `null`): supermuestreo del lienzo, de 1 a 3.
+  - `preset` ("performance" | "basic" | "product" | "interior" | "jewelry" o null; opcional, por defecto `null`): preajuste de KeyShot (performance, basic, product, interior, jewelry); se aplica primero y los demás valores indicados lo pisan. get_render_scene dice cuál coincide con la escena, o custom.
 - CLI: `omnicad call set_render_scene --doc pieza.omnicad`
 
 ### `set_render_camera`

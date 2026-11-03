@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 235: Abierto 156 · Parcial 46 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 233: Abierto 153 · Parcial 47 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
 
 ## Pendientes generales
 
@@ -72,13 +72,12 @@ Abierto 53 · Parcial 3 · Bloqueado 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 3 · Parcial 1 · Sin verificar 0.
+Abierto 2 · Parcial 1 · Sin verificar 0.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: derivación y Duplicar con uniones hechos; falta el catálogo de piezas | Parcial | Media | Falta un catálogo local de piezas estándar más allá de las fijaciones (rodamientos, perfiles, pasadores…; sin servicios en línea): hay que decidir qué piezas y sus medidas. Duplicar con uniones copia un componente por vez, las copias son independientes (sin instancias asociativas) y no tiene los modos de destino «Entre dos caras» e «Intersección de dos aristas» ni «Borrar último duplicado». | ui/cinta.py:59 (Duplicar con uniones); api/herramientas_ensamble.py (duplicate_with_joints); ui/comandos/derivacion.py:16; api/herramientas_documento.py:322 (insert_derive); tests/test_derivacion.py; tests/test_duplicar_con_uniones.py; nucleo/fijaciones.py (solo fijaciones) | 2026-10-31 |
-| H-67 | Una curva de Boceto 3D no se puede elegir con el mouse en la vista | Abierto | Media | El visor elige solo curvas de bocetos 2D: Tubo y Barrer aceptan una curva 3D por API o al editar, pero en la ventana no se puede hacer clic sobre ella. Sumar las curvas 3D a `_curvas_boceto` del visor (tipo desde `geo3d`) y correr la prueba de humo, porque toca la elección de todos los comandos. | ui/visor3d.py:1531 | 2026-11-03 |
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
@@ -166,7 +165,7 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| MAL-1 | MALLA: Crear grupo de caras y Combinar grupos de caras | Abierto | Media | Dos botones grisados; existe `generate_face_groups`. | ui/cinta.py:173; ayuda `Combine face groups on a mesh body` | 2026-11-01 |
+| MAL-1 | MALLA: Crear grupo de caras y Combinar grupos de caras | Parcial | Media | Combinar grupos de caras anda (`combine_face_groups`, botón con clave). Falta Crear grupo de caras, todavía grisado. | ui/cinta.py:173; ayuda `Combine face groups on a mesh body` | 2026-11-03 |
 | MAL-2 | MALLA: Alinear, Extruir textura y Edición directa | Abierto | Alta | Tres botones grisados y sin comando. | ui/cinta.py:175 y 178; ayuda `Extrude texture on a mesh body` | 2026-11-01 |
 | MAL-3 | MALLA: Borrar y rellenar | Abierto | Media | Botón grisado; comprobar en la ayuda si aplica a malla o solo a T-Spline. | ui/cinta.py:177; ayuda `Erase and fill an area of a T-Spline body` | 2026-11-01 |
 | CHA-1 | CHAPA: Pestaña solevada y Cierre de esquina | Abierto | Alta | Dos botones grisados y sin comando. | ui/cinta.py:148 y 151; ayuda `Create lofted flange` | 2026-11-01 |
@@ -338,11 +337,10 @@ Abierto 6 · Parcial 2. Especificación: [brechas_grasshopper.md](../brechas_gra
 
 ## KeyShot
 
-Abierto 10 · Parcial 3 · Bloqueado 1. Especificación: [brechas_keyshot.md](../brechas_keyshot.md).
+Abierto 9 · Parcial 3 · Bloqueado 1. Especificación: [brechas_keyshot.md](../brechas_keyshot.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| KS1 | Preajustes de iluminación y calidad del render | Abierto | Media | Selector de 5 preajustes en Configuración de escena. | omnicad/ui/render.py:1558 (PRESETS solo de tamaño) | 2026-10-20 |
 | KS2 | Entornos HDRI (.hdr), giro, brillo y biblioteca propia | Abierto | Media | Leer .hdr, lista con miniaturas, giro y brillo; hoy son degradados. | omnicad/nucleo/render_cpu.py:175-179 (ENTORNOS = degradados); grep hdr sin lector | 2026-10-20 |
 | KS7 | Cámaras guardadas con apertura, enfoque y desenfoque (DOF) | Abierto | Media | Lista de cámaras con nombre del render, apertura, enfoque y desenfoque. | omnicad/ui/render.py:1404-1409 (solo perspectiva/ortográfica y focal); las vistas guardadas son del visor de DISEÑO (ui/ventana.py:2031) | 2026-10-20 |
 | KS9 | Cola de render y lotes en segundo plano | Abierto | Media | Pestaña Cola en la galería: orden, estado, cancelar, abrir carpeta. | omnicad/ui/render.py (galería sin cola; grep cola sin resultados) | 2026-10-20 |

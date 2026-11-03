@@ -343,3 +343,76 @@ def test_curvas3d_nucleo_arista_recta_y_spline():
     s = curvas3d.muestrear(curvas3d.arista_spline([(0, 0, 0), (5, 5, 5), (10, 0, 10)], {0: (1, 0, 0)}), 8)
     assert np.allclose(s[0], (0, 0, 0), atol=1e-5) and np.allclose(s[-1], (10, 0, 10), atol=1e-5)
     assert s[1][0] > s[0][0] and abs(s[1][1]) < abs(s[1][0])
+
+
+# ---------------------------------------------------------------- H-67: elegir una curva del Boceto 3D con el mouse
+@pytest.fixture(scope="module")
+def app_qt():
+    from PySide6.QtWidgets import QApplication
+    return QApplication.instance() or QApplication([])
+
+
+def _doc_con_curva_3d():
+    """Boceto con una línea 2D y una spline 3D fuera del plano del boceto."""
+    doc = Documento()
+    b = Boceto()
+    linea = b.agregar_linea((0, 0), (20, 0))
+    spline = b3.agregar_spline(b, [(0, 40, 5), (10, 40, 25), (20, 40, 5)])
+    doc.agregar(OpBoceto(doc.nuevo_id(), "Ruta", plano="XY", boceto=b))
+    return doc, linea, spline
+
+
+PUNTOS = np.array([(0, 0, 0), (20, 0, 0), (0, 40, 5), (10, 40, 25), (20, 40, 5)], float)
+
+
+def _visor(doc):
+    from omnicad.ui.visor3d import Visor3D
+    v = Visor3D()
+    v.resize(800, 600)
+    v.set_modelo(doc.estado_final)
+    v.vista("iso")
+    v.encuadrar(PUNTOS)
+    return v
+
+
+def test_h67_un_clic_elige_la_curva_3d_del_boceto(app_qt):
+    """H-67: la curva fuera del plano del boceto se elige con el mouse en la vista 3D."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    doc, _linea, spline = _doc_con_curva_3d()
+    v = _visor(doc)
+    v.set_filtro({"curva_boceto"})
+    elegidos = []
+    v.entidad_elegida.connect(elegidos.append)
+    QTest.mouseClick(v, Qt.LeftButton, Qt.NoModifier, v.proyectar((10, 40, 25)).toPoint())
+    assert elegidos and elegidos[-1]["ref"] == {"tipo": "curva_boceto", "boceto": "op1", "curva": spline}
+
+
+def test_h67_la_curva_2d_del_mismo_boceto_se_sigue_eligiendo(app_qt):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    doc, linea, _spline = _doc_con_curva_3d()
+    v = _visor(doc)
+    v.set_filtro({"curva_boceto"})
+    elegidos = []
+    v.entidad_elegida.connect(elegidos.append)
+    QTest.mouseClick(v, Qt.LeftButton, Qt.NoModifier, v.proyectar((10, 0, 0)).toPoint())
+    assert elegidos and elegidos[-1]["ref"] == {"tipo": "curva_boceto", "boceto": "op1", "curva": linea}
+
+
+def test_h67_tuberia_con_la_curva_3d_elegida_con_el_mouse(v):
+    """Como usuario: Tubería en la ventana, clic sobre la curva 3D y Aceptar: se crea el tubo."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from omnicad.ui.comandos.crear import Tuberia
+    doc, _linea, spline = _doc_con_curva_3d()
+    v.set_documento(doc)
+    v.visor.encuadrar(PUNTOS)
+    panel = v.ejecutar_comando(Tuberia())
+    assert panel is not None and panel.activa.clave == "ruta"
+    QTest.mouseClick(v.visor, Qt.LeftButton, Qt.NoModifier, v.visor.proyectar((10, 40, 25)).toPoint())
+    assert panel.valores["ruta"][0]["ref"] == {"tipo": "curva_boceto", "boceto": "op1", "curva": spline}
+    panel._calcular_previa()
+    panel.aceptar()
+    (cuerpo,) = v.doc.estado_final.cuerpos.values()
+    assert geo.es_valida(cuerpo.forma) and geo.volumen(cuerpo.forma) > 0

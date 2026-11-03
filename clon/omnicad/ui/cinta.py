@@ -177,7 +177,7 @@ MALLA = [
         _i("Crear boceto de sección de malla", "seccion_malla")]),
     ("PREPARAR", ["reparar_malla", "limpiar_malla", "grupos_caras"], [
         _i("Reparar", "reparar_malla"), _i("Limpiar", "limpiar_malla"), _i("Generar grupos de caras", "grupos_caras"),
-        _i("Combinar grupos de caras"), _i("Crear grupo de caras")]),
+        _i("Combinar grupos de caras", "combinar_grupos_caras"), _i("Crear grupo de caras")]),
     ("MODIFICAR", ["reducir_malla", "remallar", "cortar_plano", "combinar_mallas", "convertir_malla"], [
         _i("Edición directa"), _i("Remallar", "remallar"), _i("Reducir", "reducir_malla"),
         _i("Corte de plano", "cortar_plano"), _i("Vaciado", "vaciado_malla"), _i("Combinar", "combinar_mallas"),

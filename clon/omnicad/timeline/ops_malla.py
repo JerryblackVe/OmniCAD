@@ -189,6 +189,15 @@ class OpGruposCaras(_OpMallaSimple):
         return _ml().generar_grupos(m, angulo=ctx.evaluar(self.p["angulo"], "angulo"))
 
 
+class OpCombinarGruposCaras(_OpMallaSimple):
+    """PREPARAR › Combinar grupos de caras [MESH-COMBINE-FACE-GROUPS]."""
+    TIPO, ETIQUETA, ICONO = "combinar_grupos_caras", "Combinar grupos de caras", "◩"
+    PARAMS = {"cuerpos": [], "grupos": []}
+
+    def transformar(self, m, ctx):
+        return _ml().combinar_grupos(m, self.p["grupos"])
+
+
 class OpReducirMalla(_OpMallaSimple):
     """MODIFICAR › Reducir [MESH-REDUCE]."""
     TIPO, ETIQUETA, ICONO = "reducir_malla", "Reducir", "▽"
@@ -332,6 +341,7 @@ class OpConvertirMalla(_OpMalla):
                 del estado.cuerpos[c.id]
 
 
-registrar_operacion(OpInsertarMalla, OpTeselar, OpRepararMalla, OpLimpiarMalla, OpGruposCaras, OpReducirMalla,
+registrar_operacion(OpInsertarMalla, OpTeselar, OpRepararMalla, OpLimpiarMalla, OpGruposCaras, OpCombinarGruposCaras,
+                    OpReducirMalla,
                     OpRemallar, OpCortarPlanoMalla, OpVaciadoMalla, OpCombinarMallas, OpSuavizarMalla,
                     OpInvertirNormalMalla, OpSepararMalla, OpEscalarMalla, OpConvertirMalla)

@@ -264,9 +264,20 @@ class Documento:
             del self._deshacer[0]
         self._rehacer.clear()
 
-    def agrupar_deshacer(self, marca):
-        """Deja como un solo paso de deshacer lo hecho desde que la pila tenía `marca` entradas (diálogo Parámetros)."""
-        del self._deshacer[marca + 1:]
+    def agrupar_deshacer(self, marca, propias=()):
+        """Deja como un solo paso de deshacer cada tramo seguido de entradas propias hechas desde que la pila tenía
+        `marca` entradas (diálogo Parámetros; `propias` son sus instantáneas). Conserva la primera de cada tramo,
+        que guarda el estado de antes del tramo, y borra las demás: un comando hecho afuera mientras tanto corta el
+        tramo y conserva su propio paso (H-59)."""
+        # por identidad, no por texto: un apply que no cambia nada deja una instantánea igual a la de un comando de afuera
+        propias, borrar, en_tramo = {id(s) for s in propias}, [], False
+        for i in range(max(0, marca), len(self._deshacer)):
+            propia = id(self._deshacer[i]) in propias
+            if propia and en_tramo:
+                borrar.append(i)              # sigue el tramo: la entrada intermedia no hace falta
+            en_tramo = propia
+        for i in reversed(borrar):
+            del self._deshacer[i]
 
     def puede_deshacer(self):
         return bool(self._deshacer)

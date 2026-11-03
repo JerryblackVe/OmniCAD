@@ -214,6 +214,47 @@ def escena_normalizada(datos=None):
     return e
 
 
+# ---------------------------------------------------------------- preajustes de render (KS1, los de KeyShot)
+# KeyShot cambia también rebotes y cáusticas, que este motor no tiene: cada preajuste toca solo valores de la escena.
+PRESETS_RENDER = {
+    "performance": {
+        "entorno": "fotomaton", "brillo": 0.8, "rotacion": 0.0, "fondo": "entorno",
+        "suelo": False, "reflejos": False, "rugosidad_suelo": 0.2, "sombras": False, "oclusion": False, "exposicion": 0.0,
+    },
+    "basic": {
+        "entorno": "fotomaton", "brillo": 1.0, "rotacion": 0.0, "fondo": "entorno",
+        "suelo": True, "reflejos": False, "rugosidad_suelo": 0.2, "sombras": True, "oclusion": True, "exposicion": 0.0,
+    },
+    "product": {
+        "entorno": "infinito", "brillo": 1.2, "rotacion": 30.0, "fondo": "entorno",
+        "suelo": True, "reflejos": True, "rugosidad_suelo": 0.1, "sombras": True, "oclusion": True, "exposicion": 0.0,
+    },
+    "interior": {
+        "entorno": "habitacion_gris", "brillo": 1.1, "rotacion": 45.0, "fondo": "entorno",
+        "suelo": True, "reflejos": True, "rugosidad_suelo": 0.3, "sombras": True, "oclusion": True, "exposicion": 0.0,
+    },
+    "jewelry": {
+        "entorno": "fotomaton", "brillo": 1.4, "rotacion": 15.0, "fondo": "entorno",
+        "suelo": True, "reflejos": True, "rugosidad_suelo": 0.05, "sombras": True, "oclusion": True, "exposicion": 0.1,
+    },
+}
+
+PRESET_NOMBRES = {         # nombre y ayuda de una línea
+    "performance": ("Rendimiento", "Lo más rápido: sin suelo, sombras ni oclusión."),
+    "basic": ("Básico", "Suelo con sombras y oclusión, sin reflejos."),
+    "product": ("Producto", "Estudio claro con reflejos en el suelo: para fotos de catálogo."),
+    "interior": ("Interior", "Habitación gris con reflejos más difusos."),
+    "jewelry": ("Joyería", "Más brillo y suelo espejado para piezas chicas y pulidas."),
+}
+
+
+def preset_de(escena):
+    """Clave del preajuste cuyos valores tiene la escena, o "custom" si no coincide con ninguno."""
+    e = escena_normalizada(escena)
+    return next((clave for clave, valores in PRESETS_RENDER.items()
+                 if all(e[k] == v for k, v in valores.items())), "custom")
+
+
 def focal_a_fov(focal):
     """Campo de visión vertical (grados) de una distancia focal en mm (sensor de 24 mm de alto)."""
     return math.degrees(2 * math.atan(12.0 / max(float(focal), 1e-3)))

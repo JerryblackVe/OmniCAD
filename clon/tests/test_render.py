@@ -346,6 +346,22 @@ def test_lienzo_transformaciones_y_opacidad(qapp):
     assert math.isfinite(lz.fov)
 
 
+def test_selector_de_preajustes(qapp):
+    """KS1: elegir un preajuste en el combo aplica sus valores; tocar uno a mano lo pasa a Personalizado."""
+    from PySide6.QtCore import Qt
+    from omnicad.ui import render as ur
+    p = ur.PanelEscena()
+    assert p.preset.currentData() == "custom"
+    recibidas = []
+    p.escena_cambiada.connect(recibidas.append)
+    p.preset.setCurrentIndex(p.preset.findData("jewelry"))
+    assert recibidas[-1]["rugosidad_suelo"] == 0.05 and p.brillo.valor() == pytest.approx(1.4)
+    assert p.preset.currentData() == "jewelry"
+    p.suelo.setChecked(False)
+    assert recibidas[-1]["suelo"] is False and p.preset.currentData() == "custom"
+    assert all(p.preset.itemData(i, Qt.ToolTipRole) for i in range(1, p.preset.count()))
+
+
 def test_dialogos_y_paneles(qapp, monkeypatch, tmp_path):
     from PySide6.QtWidgets import QDialog
     from omnicad.ejemplo import crear_documento_ejemplo

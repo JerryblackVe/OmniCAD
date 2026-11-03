@@ -185,3 +185,60 @@ def test_union_de_primitiva_avisa_si_pierde_material(monkeypatch):
     r = doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="8",
                                 operacion="unir", objetivo="op1.c1"))
     assert r.estado == "aviso" and "perdió" in r.mensaje
+
+
+# ------------------------------------------------------------ agrupar_deshacer (H-59)
+def _doc_con_parametro_alto():
+    doc = Documento()
+    doc.parametros.agregar("alto", "10 mm")
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), "Base", forma="caja", ancho="40 mm", largo="40 mm", alto="alto"))
+    return doc
+
+
+def _cambiar_alto(doc, expresion):
+    tabla = TablaParametros.desde_lista(doc.parametros.a_lista())
+    tabla.modificar("alto", expresion)
+    doc.aplicar_parametros(tabla)
+
+
+def test_deshacer_del_dialogo_no_se_lleva_un_comando_de_afuera():
+    """H-59: con el diálogo Parámetros abierto, un comando hecho en la ventana caía en el mismo paso de
+    deshacer que los cambios del diálogo. Ahora cada tramo seguido de cambios propios va en su paso y
+    el comando de afuera conserva el suyo (protocolo del diálogo sin ventana: marca al abrir, instantánea
+    propia por cada apply, agrupar al cerrar)."""
+    doc = _doc_con_parametro_alto()
+    marca = len(doc._deshacer)                  # el diálogo la anota al abrir
+    propias = []                                # y la instantánea de cada apply propio
+    _cambiar_alto(doc, "20 mm")
+    propias.append(doc._deshacer[-1])
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), "Extra", forma="caja", ancho="5 mm", largo="5 mm", alto="5 mm",
+                            x="-30 mm"))        # comando hecho afuera con el diálogo abierto
+    _cambiar_alto(doc, "30 mm")
+    propias.append(doc._deshacer[-1])
+
+    doc.agrupar_deshacer(marca, propias)        # cierra el diálogo
+    doc.deshacer()                              # un Deshacer revierte solo lo último que pasó
+    assert doc.parametros.obtener("alto").expresion == "20 mm"
+    assert doc.operacion("op2").nombre == "Extra"       # el comando de afuera queda
+    doc.rehacer()
+    assert doc.parametros.obtener("alto").expresion == "30 mm"
+    doc.deshacer()                              # deshacer el rehacer vuelve al estado anterior
+    assert doc.parametros.obtener("alto").expresion == "20 mm" and doc.operacion("op2").nombre == "Extra"
+    doc.deshacer()                              # el siguiente Deshacer quita el comando de afuera
+    assert doc.parametros.obtener("alto").expresion == "20 mm" and len(doc.operaciones) == 1
+
+
+def test_lo_del_dialogo_sigue_siendo_un_solo_deshacer():
+    """Sin comandos de afuera, todo lo del diálogo se revierte con un solo Deshacer (como antes de H-59)."""
+    doc = _doc_con_parametro_alto()
+    marca = len(doc._deshacer)
+    propias = []
+    for expresion in ("20 mm", "30 mm", "40 mm"):
+        _cambiar_alto(doc, expresion)
+        propias.append(doc._deshacer[-1])
+
+    doc.agrupar_deshacer(marca, propias)
+    doc.deshacer()
+    assert doc.parametros.obtener("alto").expresion == "10 mm" and doc.puede_rehacer()
+    doc.rehacer()
+    assert doc.parametros.obtener("alto").expresion == "40 mm"

@@ -170,6 +170,7 @@ class DialogoParametros(QDialog):
         self.doc, self.tabla = doc, _copia(doc.parametros)
         self.editando = self._aplicando = self._pendiente = self._terminado = False
         self._marca_deshacer = len(doc._deshacer)
+        self._propias_deshacer = []          # instantánea que empujó cada apply propio (H-59: agrupar por tramos)
         self._orden = ("timeline", False)
         self._cerrados = set()        # grupos plegados por la persona: sobreviven a repoblar la tabla
         self._invalidas = {}          # (nombre, columna) → lo que se escribió y no vale: queda en rojo en su celda
@@ -415,6 +416,7 @@ class DialogoParametros(QDialog):
         finally:
             self._aplicando = False
         self._pendiente = False
+        self._propias_deshacer.append(self.doc._deshacer[-1])
         self.b_aplicar.setEnabled(False)
         self.tabla = _copia(self.doc.parametros)
         self.aplicado.emit()
@@ -501,6 +503,7 @@ class DialogoParametros(QDialog):
             return
         finally:
             self._aplicando = False
+        self._propias_deshacer.append(self.doc._deshacer[-1])
         self.tabla = _copia(self.doc.parametros)
         self.aplicado.emit()
         self._poblar()
@@ -521,6 +524,6 @@ class DialogoParametros(QDialog):
             self._reloj.stop()
             if self.automatico.isChecked() and self._pendiente and not self._invalidas:
                 self._aplicar()
-            self.doc.agrupar_deshacer(self._marca_deshacer)
+            self.doc.agrupar_deshacer(self._marca_deshacer, self._propias_deshacer)
             self.doc.desuscribir(self._doc_cambio)
         super().done(resultado)

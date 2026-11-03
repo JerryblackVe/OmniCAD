@@ -1529,14 +1529,22 @@ class Visor3D(QOpenGLWidget):
         return float(d[i]), a3 + u * s
 
     def _curvas_boceto(self, br):
-        """[(id de curva, polilínea 3D)] de un boceto resuelto (cacheado por objeto)."""
+        """[(id de curva, polilínea 3D, tipo)] de un boceto resuelto, 2D y 3D (cacheado por objeto)."""
         clave = ("curvas", id(br))
         if clave not in self._pick:
             salida = []
             for prim in br.boceto.geometria(incluir_construccion=True):
                 uv = muestrear_primitiva(prim)
                 if len(uv) >= 2:
-                    salida.append((prim[1], np.array([br.plano.a_3d(u, v) for u, v in uv], float)))
+                    salida.append((prim[1], np.array([br.plano.a_3d(u, v) for u, v in uv], float),
+                                   br.boceto.tipo_de(prim[1])))
+            from ..restricciones import boceto3d
+            for cid, c in boceto3d.datos(br.boceto)["curvas"].items():
+                try:
+                    polis = boceto3d.polilineas_de(br.boceto, cid, br.plano)
+                except boceto3d.ErrorBoceto:   # curva 3D que no se puede construir: no se elige
+                    continue
+                salida.extend((cid, np.asarray(poli, float), c["tipo"]) for poli in polis if len(poli) >= 2)
             self._pick[clave] = salida
         return self._pick[clave]
 
@@ -1662,13 +1670,12 @@ class Visor3D(QOpenGLWidget):
                     curvas = self._curvas_boceto(br)
                     clave_paq = ("paq_curvas", id(br))
                     if clave_paq not in self._pick:
-                        self._pick[clave_paq] = self._empaquetar([poli for _id, poli in curvas])
+                        self._pick[clave_paq] = self._empaquetar([poli for _id, poli, _t in curvas])
                     dists, quien = self._distancias_paquete(self._pick[clave_paq], q, mvp)
                     for j in np.argsort(dists):
                         if dists[j] >= mejor[0]:
                             break
-                        curva_id, poli = curvas[quien[j]]
-                        tipo_curva = br.boceto.tipo_de(curva_id)
+                        curva_id, poli, tipo_curva = curvas[quien[j]]
                         if "curva_boceto" not in filtros and tipo_curva != "linea":
                             continue
                         if tipo_curva == "texto" and "perfil" in filtros:   # con letras finas todo clic cae cerca de un borde
@@ -1678,7 +1685,7 @@ class Visor3D(QOpenGLWidget):
                             mejor = (dist, _hit("curva_boceto", {"tipo": "curva_boceto", "boceto": br.op_id,
                                                                  "curva": curva_id},
                                                 [("lineas", _segmentos([poli]), None, 3.5)], float((p - o) @ d), p,
-                                                es_linea=br.boceto.tipo_de(curva_id) == "linea"))
+                                                es_linea=tipo_curva == "linea"))
                             break
             if mejor[1] is not None:
                 return mejor[1]

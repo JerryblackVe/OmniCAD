@@ -77,6 +77,20 @@ def test_escena_guarda_conserva_y_deshace_en_un_paso(sesion):
     assert _llamar(sesion, "get_render_scene") == escena
 
 
+def test_preajustes_de_render(sesion):
+    """KS1: cada preajuste deja sus valores en la escena; tocar uno a mano pasa a custom."""
+    assert _llamar(sesion, "get_render_scene")["preset"] == "custom"
+    for clave, valores in rc.PRESETS_RENDER.items():
+        assert _llamar(sesion, "set_render_scene", preset=clave)["preset"] == clave
+        escena = sesion.doc.espacios["render"]["escena"]
+        assert {k: escena[k] for k in valores} == valores
+    r = _llamar(sesion, "set_render_scene", preset="product", brightness=2.5)
+    assert r["preset"] == "custom" and r["brightness"] == 2.5 and r["environment"] == "infinito"
+    assert _llamar(sesion, "set_render_scene", brightness=1.2)["preset"] == "product"
+    mal = api.llamar(sesion, "set_render_scene", {"preset": "studio"})
+    assert mal["error_kind"] == "INVALID_ARGUMENTS" and "jewelry" in " ".join([mal["mensaje"], *mal["pistas"]])
+
+
 def test_formato_de_la_ventana_y_camara(sesion):
     _llamar(sesion, "set_render_scene", camera_type="orthographic", focal_length=60)
     resultado = _llamar(sesion, "set_render_camera", direction=[2, -3, 1], distance=123)

@@ -12,7 +12,7 @@ V_CUBO = np.array([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0],
                    [0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 10, 10]], float)
 F_CUBO = np.array([[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
                    [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]])
-HERRAMIENTAS = {"get_mesh_info", "tessellate", "repair_mesh", "clean_mesh", "generate_face_groups", "reduce_mesh",
+HERRAMIENTAS = {"get_mesh_info", "tessellate", "repair_mesh", "clean_mesh", "generate_face_groups", "combine_face_groups", "reduce_mesh",
                 "remesh", "smooth_mesh", "shell_mesh", "plane_cut_mesh", "combine_meshes", "separate_mesh",
                 "reverse_mesh_normals", "scale_mesh", "convert_mesh",
                 "create_mesh_section_sketch", "fit_curves_to_mesh_section", "analyze_mesh_features",
@@ -144,6 +144,34 @@ def test_grupos_reducir_y_separar_por_grupos(s, tmp_path):
     fallo(s, "generate_face_groups", "INVALID_ARGUMENTS", bodies=m, angle=200)
 
 
+def test_combinar_grupos_de_caras(s, tmp_path):
+    """MAL-1: dos grupos vecinos del cubo pasan a uno; los triángulos no cambian."""
+    m = insertar(s, tmp_path, ml.Malla(V_CUBO, F_CUBO))
+    llamar(s, "generate_face_groups", bodies=m, angle=30)
+    grupos = sorted(set(int(g) for g in s.cuerpo(m).forma.grupos))
+    tris = llamar(s, "get_mesh_info", body=m)["bodies"][0]["triangles"]
+    vecinos = None
+    for a in grupos:                                                   # dos caras del cubo que comparten arista
+        for b in grupos:
+            if a < b and llamar_ok(s, m, [a, b]):
+                vecinos = (a, b)
+                break
+        if vecinos:
+            break
+    assert vecinos is not None
+    info = llamar(s, "get_mesh_info", body=m)["bodies"][0]
+    assert info["face_groups"] == 5 and info["triangles"] == tris
+    fallo(s, "combine_face_groups", "OPERATION_FAILED", bodies=m, groups=[vecinos[0]])
+    fallo(s, "combine_face_groups", "OPERATION_FAILED", bodies=m, groups=[vecinos[0], 999])
+    caja = llamar(s, "create_box", length=5, width=5, height=5)["bodies_created"][0]["id"]
+    assert not api.llamar(s, "combine_face_groups", {"bodies": caja, "groups": [0, 1]})["ok"]
+
+
+def llamar_ok(s, m, grupos):
+    """Combina si los grupos se tocan; si no, el paso falla sin dejar nada."""
+    return api.llamar(s, "combine_face_groups", {"bodies": m, "groups": grupos})["ok"]
+
+
 def test_reducir_y_remallar(s):
     cid = llamar(s, "create_sphere", radius=10)["bodies_created"][0]["id"]
     m = llamar(s, "tessellate", bodies=cid, keep_original=False, refinement="low")["bodies_created"][0]
@@ -259,3 +287,12 @@ def test_nombre_del_paso(s):
     r = llamar(s, "repair_mesh", bodies=m, name="Arreglo")
     assert r["feature"]["name"] == "Arreglo"
     fallo(s, "repair_mesh", "INVALID_ARGUMENTS", bodies=m, name="Arreglo")     # no se repite
+
+
+def test_comando_combinar_grupos_lee_los_numeros_del_campo():
+    """El diálogo pide los grupos como texto («1, 3») y al editar los vuelve a mostrar igual."""
+    from omnicad.ui.comando import ErrorComando
+    from omnicad.ui.comandos.malla import _parsear_grupos
+    assert _parsear_grupos("1, 3 4") == [1, 3, 4] and _parsear_grupos("") == []
+    with pytest.raises(ErrorComando):
+        _parsear_grupos("1, dos")

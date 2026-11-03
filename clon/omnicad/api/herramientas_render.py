@@ -56,6 +56,7 @@ def get_render_scene(sesion):
     resultado["canvas"] = {"high_quality": bool(datos["lienzo"]["alta_calidad"]),
                            "supersampling": int(datos["lienzo"]["supermuestreo"])}
     resultado["saved_camera"] = datos["camara"]
+    resultado["preset"] = rc.preset_de(escena)
     return resultado
 
 
@@ -67,7 +68,8 @@ def set_render_scene(sesion, environment: str | None = None, brightness: float |
                      shadows: bool | None = None, ambient_occlusion: bool | None = None,
                      camera_type: Literal["perspective", "orthographic"] | None = None,
                      focal_length: float | None = None, exposure: float | None = None,
-                     canvas_high_quality: bool | None = None, canvas_supersampling: int | None = None):
+                     canvas_high_quality: bool | None = None, canvas_supersampling: int | None = None,
+                     preset: Literal["performance", "basic", "product", "interior", "jewelry"] | None = None):
     """
     environment: id del entorno de list_render_environments.
     brightness: intensidad de las luces, acotada a 0..4.
@@ -84,10 +86,12 @@ def set_render_scene(sesion, environment: str | None = None, brightness: float |
     exposure: exposición en EV, acotada a -6..6.
     canvas_high_quality: activa la alta calidad en el lienzo.
     canvas_supersampling: supermuestreo del lienzo, de 1 a 3.
+    preset: preajuste de KeyShot (performance, basic, product, interior, jewelry); se aplica primero y los demás
+        valores indicados lo pisan. get_render_scene dice cuál coincide con la escena, o custom.
     """
     valores = locals()
     cambios = {clave: valores[ingles] for ingles, clave in _CLAVES.items() if valores[ingles] is not None}
-    if not cambios and canvas_high_quality is None and canvas_supersampling is None:
+    if not cambios and canvas_high_quality is None and canvas_supersampling is None and preset is None:
         raise error("INVALID_ARGUMENTS", "Indicá al menos una propiedad de la escena o del lienzo.")
     if environment is not None and environment not in rc.ENTORNOS:
         raise error("INVALID_ARGUMENTS", f"Entorno desconocido: {environment}.",
@@ -105,7 +109,7 @@ def set_render_scene(sesion, environment: str | None = None, brightness: float |
     if camera_type is not None:
         cambios["camara"] = "ortografica" if camera_type == "orthographic" else "perspectiva"
     datos = _datos(sesion)
-    escena = {**(datos.get("escena") or {}), **cambios}
+    escena = {**(datos.get("escena") or {}), **rc.PRESETS_RENDER.get(preset, {}), **cambios}
     normalizada = rc.escena_normalizada(escena)
     for ingles, clave in _CLAVES.items():
         if clave in cambios and cambios[clave] != normalizada[clave]:

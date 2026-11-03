@@ -16,7 +16,8 @@ from typing import Literal
 
 from ..nucleo import geometria as geo
 from ..nucleo import malla as ml
-from ..timeline.ops_malla import (OpCombinarMallas, OpConvertirMalla, OpCortarPlanoMalla, OpEscalarMalla,
+from ..timeline.ops_malla import (OpCombinarGruposCaras, OpCombinarMallas, OpConvertirMalla, OpCortarPlanoMalla,
+                                  OpEscalarMalla,
                                   OpGruposCaras, OpInvertirNormalMalla, OpLimpiarMalla, OpReducirMalla, OpRemallar,
                                   OpRepararMalla, OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
 from .errores import error
@@ -234,6 +235,20 @@ def generate_face_groups(sesion, bodies: Cuerpos, angle: Expr = 30, name: str | 
     ids = [c.id for c in _cuerpos(sesion, bodies)]
     return _agregar(sesion, _paso(sesion, OpGruposCaras, name, "Grupos de caras", cuerpos=ids,
                                   angulo=texto_expr(angle)))
+
+
+@herramienta("combine_face_groups", "malla", "Combina en un solo grupo los grupos de caras elegidos de mallas (MALLA › "
+             "PREPARAR › Combinar grupos de caras de Fusion). Los grupos tienen que estar unidos por aristas "
+             "compartidas; si no, el paso falla.", modifica=True)
+def combine_face_groups(sesion, bodies: Cuerpos, groups: list[int], name: str | None = None):
+    """
+    bodies: id o nombre de los cuerpos de malla.
+    groups: números de grupo de caras a combinar (al menos dos, unidos por aristas); pasan al número más chico.
+    name: nombre del paso en el timeline; vacío = automático.
+    """
+    ids = [c.id for c in _cuerpos(sesion, bodies)]
+    return _agregar(sesion, _paso(sesion, OpCombinarGruposCaras, name, "Combinar grupos de caras", cuerpos=ids,
+                                  grupos=list(groups)))
 
 
 # ---------------------------------------------------------------- modificar

@@ -46,7 +46,7 @@ HERRAMIENTAS = {
     "exportar_malla": "export_mesh", "exportar_stl": "export", "exportar_obj": "export",
     # --- cinta DISEÑO › MALLA
     "malla_teselar": "tessellate", "reparar_malla": "repair_mesh", "limpiar_malla": "clean_mesh",
-    "grupos_caras": "generate_face_groups", "reducir_malla": "reduce_mesh", "remallar": "remesh",
+    "grupos_caras": "generate_face_groups", "combinar_grupos_caras": "combine_face_groups", "reducir_malla": "reduce_mesh", "remallar": "remesh",
     "cortar_plano": "plane_cut_mesh", "combinar_mallas": "combine_meshes", "suavizar_malla": "smooth_mesh",
     "invertir_normal_malla": "reverse_mesh_normals", "separar_malla": "separate_mesh", "escalar_malla": "scale_mesh",
     "convertir_malla": "convert_mesh", "vaciado_malla": "shell_mesh", "seccion_malla": "create_mesh_section_sketch",

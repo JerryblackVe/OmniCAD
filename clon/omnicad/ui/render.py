@@ -1384,6 +1384,12 @@ class PanelEscena(PanelFlotante):
         f.setContentsMargins(4, 4, 4, 4)
         f.setLabelAlignment(Qt.AlignLeft)
         self.lb_entorno = QLabel()
+        self.preset = QComboBox()
+        self.preset.addItem("Personalizado", "custom")
+        for clave, (nombre, ayuda) in rc.PRESET_NOMBRES.items():
+            self.preset.addItem(nombre, clave)
+            self.preset.setItemData(self.preset.count() - 1, ayuda, Qt.ToolTipRole)
+        f.addRow("Preajuste", self.preset)
         f.addRow(_seccion("Entorno"))
         f.addRow("Estilo actual", self.lb_entorno)
         self.brillo = _Deslizador(0.0, 4.0, 2, " ×")
@@ -1446,6 +1452,7 @@ class PanelEscena(PanelFlotante):
         self.camara.currentIndexChanged.connect(lambda _i: self._cambiar("camara", self.camara.currentData()))
         self.focal.cambiado.connect(lambda v: self._cambiar("focal", v))
         self.exposicion.cambiado.connect(lambda v: self._cambiar("exposicion", v))
+        self.preset.currentIndexChanged.connect(self._cambiar_preset)
 
     def set_escena(self, escena):
         self._cargando = True
@@ -1471,6 +1478,7 @@ class PanelEscena(PanelFlotante):
         for i in range(self.lista_entornos.count()):
             it = self.lista_entornos.item(i)
             it.setSelected(it.data(Qt.UserRole) == e["entorno"])
+        self.preset.setCurrentIndex(self.preset.findData(rc.preset_de(e)))
         self._cargando = False
 
     def _cambiar(self, clave, valor):
@@ -1479,6 +1487,13 @@ class PanelEscena(PanelFlotante):
         e = dict(self._escena)
         e[clave] = valor
         self.set_escena(e)
+        self.escena_cambiada.emit(dict(self._escena))
+
+    def _cambiar_preset(self, _i):
+        """Elegir un preajuste aplica sus valores; «Personalizado» no cambia nada."""
+        if self._cargando or self.preset.currentData() == "custom":
+            return
+        self.set_escena({**self._escena, **rc.PRESETS_RENDER[self.preset.currentData()]})
         self.escena_cambiada.emit(dict(self._escena))
 
     def _elegir_color(self):
