@@ -6,15 +6,9 @@
   "proceso|create_lip_groove|cierre_c0000005@solidos_crear.py:236": "B-158",
   "proceso|fillet|cierre_c0000005@solidos_modificar.py:548": "B-159",
   "proceso|open_document|cierre_c0000005@intercambio.py:225": "B-160",
-  "geometria|chamfer|abierto": "B-162",
-  "numeros|extrude|volumen_no_positivo": "B-164",
-  "exportar|extrude|volumen_cambia": "B-164",
   "geometria|create_hole|no_manifold": "B-165",
-  "geometria|offset_faces|invalido": "B-166",
   "geometria|create_geometric_pattern|autointersecciones": "B-167",
   "geometria|create_pipe|autointersecciones": "B-168",
   "proceso|create_geometric_pattern|colgado": "B-167",
-  "proceso||cierre_c0000005@solidos_crear.py:1321": "B-170",
-  "geometria|offset_edges|autointersecciones": "B-171",
-  "geometria|offset_surface|autointersecciones": "B-171"
+  "proceso||cierre_c0000005@solidos_crear.py:1321": "B-170"
 }

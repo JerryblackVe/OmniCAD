@@ -3,8 +3,9 @@ from typing import Literal
 
 from ..timeline import entidades as ent
 from ..timeline.ops_modificar import OpAlinear, OpEscala, OpMover
-from ..timeline.ops_solido import (OpBobina, OpLabio, OpNervio, OpPatronGeometrico, OpRed, OpRellenoContorno, OpReticulaVolumetrica,
-                                   OpRepujado, OpSaliente, OpSolidoEnvolvente, OpTuberia, OpVolumenFluido)
+from ..timeline.ops_solido import (OpApoyo, OpBobina, OpLabio, OpNervio, OpPatronGeometrico, OpRed, OpRellenoContorno,
+                                   OpReticulaVolumetrica, OpRepujado, OpSaliente, OpSolidoEnvolvente, OpTuberia,
+                                   OpVolumenFluido)
 from ..timeline.ops_superficie import OpEngrosar
 from . import selectores as sl
 from .errores import ErrorAPI, error
@@ -299,6 +300,36 @@ def create_lip_groove(sesion, edges: Elementos, lip_type: Literal["lip", "groove
                   direccion=_referencia(sesion, direction, {"plano", "cara", "eje", "arista", "curva_boceto"}, body)
                   if direction is not None else None,
                   invertir=reverse)
+
+
+@herramienta("create_rest", "solido", "Crea un apoyo (PLÁSTICO › Apoyo): una pared desde un perfil de boceto que deja "
+             "un área plana en la cara del cuerpo.", modifica=True)
+def create_rest(sesion, sketch: str, body: str, profile: Perfiles = 0, offset: Expr = 0, thickness: Expr = 2,
+                side1: Expr = 2, side2: Expr = 0, draft_angle: Expr = 0, extent: Literal["all", "to_object"] = "all",
+                reverse: bool = False):
+    """
+    sketch: id o nombre del boceto de los perfiles cerrados del apoyo.
+    body: cuerpo (id o nombre) donde se hace el apoyo: el perfil tiene que quedar en su lugar, dentro de él.
+    profile: índice, lista de índices, "all" o "largest" (get_sketch los lista); el resto no se usa.
+    offset: desfase del perfil respecto del plano del boceto, en mm (números negativos valen).
+    thickness: grosor de la pared en mm; tiene que ser la suma de side1 y side2.
+    side1: distancia de la pared al lado 1 del perfil en mm (0 = sin lado 1).
+    side2: distancia de la pared al lado 2 del perfil en mm (0 = sin lado 2).
+    draft_angle: ángulo de desmoldeo en grados; la pared se angosta hacia la cara donde apoya.
+    extent: all (atraviesa el cuerpo) o to_object (termina en las caras del cuerpo).
+    reverse: true da vuelta el sentido del desmoldeo (Flip).
+    """
+    cid = sesion.cuerpo(body).id
+    sop, br = boceto_activo(sesion, sketch)
+    _numero_positivo(thickness, "thickness")
+    if not any(isinstance(v, str) for v in (thickness, side1, side2)) and abs(side1 + side2 - thickness) > 1e-9:
+        raise error("INVALID_ARGUMENTS", f"thickness ({thickness:g}) tiene que ser la suma de side1 y side2 "
+                                         f"({side1 + side2:g}): con otro valor el apoyo no tiene el grosor pedido "
+                                         "en los dos lados.")
+    return _crear(sesion, OpApoyo, perfiles=[_ref_perfil(sop, p) for p in seleccionar_perfiles(br, sop, profile)],
+                  cuerpo={"tipo": "cuerpo", "cuerpo": cid}, desfase=texto_expr(offset), grosor=texto_expr(thickness),
+                  lado1=texto_expr(side1), lado2=texto_expr(side2), angulo_desmoldeo=texto_expr(draft_angle),
+                  invertir=reverse, extension="todo" if extent == "all" else "objeto")
 
 
 @herramienta("create_boundary_fill", "solido", "Rellena celdas encerradas por cuerpos, caras y planos.", modifica=True)

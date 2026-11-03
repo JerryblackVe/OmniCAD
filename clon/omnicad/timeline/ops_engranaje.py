@@ -19,7 +19,7 @@ from ..nucleo import referencias as refs
 from . import entidades as ent
 from .operaciones import (OPERACIONES_CUERPO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo,
                           _resolver, aplicar_resultado, registrar_operacion)
-from .ops_ensamblar import OpComponente, OpUnion, OpVinculoMovimiento
+from .ops_ensamblar import OpComponente, OpUnion, OpVinculoMovimiento, pose_de_reasignar
 from .parametros import ANGULO, ESCALAR
 
 TIPOS = {"engranaje": "Engranaje (recto o helicoidal)", "cremallera": "Cremallera", "rueda_cadena": "Rueda de cadena"}
@@ -178,7 +178,7 @@ def agregar_ensamblaje(doc, op_id, un_paso=False):
     origenes = [refs.referencia(c.id, _cara_superior(c.forma, plano.normal), c.forma) for c in cuerpos]
     comps, uniones = [], []
     for c in cuerpos:
-        comp = OpComponente(doc.nuevo_id(), c.nombre, cuerpos=[c.id])
+        comp = OpComponente(doc.nuevo_id(), c.nombre, cuerpos=[c.id], pose=pose_de_reasignar(estado, [c.id]).tolist())
         doc.agregar(comp)
         comps.append(comp.id)
     for c, origen in zip(cuerpos, origenes, strict=True):

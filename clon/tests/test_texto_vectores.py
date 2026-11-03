@@ -286,6 +286,23 @@ def anillo(tmp_path):
     return ruta
 
 
+@pytest.fixture
+def estrella(tmp_path):
+    """Estrella de cinco puntas (200 px): el contorno tiene puntas filosas. Devuelve la ruta y las puntas."""
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (200, 200), "white")
+    d = ImageDraw.Draw(img)
+    puntas = []
+    for i in range(10):
+        ang = math.pi / 2 + i * math.pi / 5
+        r = 90 if i % 2 == 0 else 40.5
+        puntas.append((100 + r * math.cos(ang), 100 - r * math.sin(ang)))
+    d.polygon(puntas, fill="black")
+    ruta = tmp_path / "estrella.png"
+    img.save(ruta)
+    return ruta, puntas
+
+
 def test_vectorizar_imagen_da_contornos_con_agujero(anillo):
     from omnicad.io_archivos.vectorizar import ErrorVectorizar, vectorizar_imagen
     prims = vectorizar_imagen(anillo)
@@ -323,6 +340,63 @@ def test_trace_image_en_boceto(s, anillo, tmp_path):
     assert i["sketch"]["name"] == "Boceto3"
     falla(api.llamar(s, "trace_image", {"path": str(anillo), "threshold": 255}), "IMPORT_FAILED")
     falla(api.llamar(s, "trace_image", {"path": str(anillo), "dpi": 0}), "INVALID_ARGUMENTS")
+
+
+# ---------------------------------------------------------------- esquinas del contorno vectorizado
+def test_el_angulo_de_esquina_parte_el_contorno_en_tramos_abiertos(estrella):
+    """Con «Curvas suaves» y un ángulo, el contorno se parte en sus esquinas y las puntas quedan vivas."""
+    from omnicad.io_archivos.vectorizar import vectorizar_imagen
+    ruta, puntas = estrella
+    prims = vectorizar_imagen(ruta, curvas=True, angulo_esquina=45)
+    assert len(prims) >= 8                                       # varios tramos
+    assert all(p[0] == "curva" and p[2] is False for p in prims)  # todos abiertos
+    for p in prims:                                              # las puntas caen sobre las esquinas reales
+        for punta in (p[1][0], p[1][-1]):
+            assert min(math.dist(punta, (x, 200 - y)) for x, y in puntas) < 3
+    # sin ángulo: una sola spline cerrada, como antes
+    sin = vectorizar_imagen(ruta, curvas=True)
+    assert len(sin) == 1 and sin[0][0] == "curva" and sin[0][2] is True
+
+
+def test_el_circulo_no_tiene_esquinas(tmp_path):
+    """Un círculo no dobra en ningún vértice: con el ángulo activado sigue siendo una spline cerrada."""
+    from PIL import Image, ImageDraw
+    from omnicad.io_archivos.vectorizar import vectorizar_imagen
+    img = Image.new("RGB", (200, 200), "white")
+    ImageDraw.Draw(img).ellipse((10, 10, 190, 190), fill="black")
+    ruta = tmp_path / "circulo.png"
+    img.save(ruta)
+    prims = vectorizar_imagen(ruta, curvas=True, angulo_esquina=45)
+    assert len(prims) == 1 and prims[0][0] == "curva" and prims[0][2] is True
+
+
+def test_un_tramo_de_dos_puntos_sale_como_recta(s, tmp_path):
+    """Si entre dos esquinas no queda ningún punto, el tramo sale como una recta y el perfil sigue cerrado."""
+    from PIL import Image, ImageDraw
+    from omnicad.io_archivos.vectorizar import vectorizar_imagen
+    img = Image.new("RGB", (200, 200), "white")
+    ImageDraw.Draw(img).polygon([(100, 5), (104, 195), (96, 195)], fill="black")
+    ruta = tmp_path / "aguja.png"
+    img.save(ruta)
+    prims = vectorizar_imagen(ruta, curvas=True, angulo_esquina=20)
+    assert any(p[0] == "linea" for p in prims)              # hay tramos rectos
+    r = ok(api.llamar(s, "trace_image", {"path": str(ruta), "width": 90, "curves": True, "corner_angle": 20}))
+    assert r["profiles"] == 1                               # el perfil sigue cerrado
+
+
+def test_el_angulo_no_hace_nada_sin_curvas(estrella):
+    """Con polilínea el ángulo no hace nada: el contorno sigue igual."""
+    from omnicad.io_archivos.vectorizar import vectorizar_imagen
+    ruta, _ = estrella
+    assert vectorizar_imagen(ruta, angulo_esquina=45) == vectorizar_imagen(ruta)
+
+
+def test_trace_image_con_angulo_de_esquina_da_un_perfil_cerrado(s, estrella):
+    ruta, _ = estrella
+    r = ok(api.llamar(s, "trace_image", {"path": str(ruta), "width": 90, "curves": True, "corner_angle": 45}))
+    assert r["profiles"] == 1                                   # el perfil sigue cerrado
+    assert r["entities_added"] >= 8                             # el contorno se partió en varios tramos
+    falla(api.llamar(s, "trace_image", {"path": str(ruta), "corner_angle": 200}), "INVALID_ARGUMENTS")
 
 
 # ---------------------------------------------------------------- comandos de la interfaz
@@ -383,6 +457,21 @@ def test_clave_filtro_cambia_si_cambia_la_tolerancia(app_qt):
     cmd, ctx = _vectorizar_cmd_ctx(app_qt)
     base = {c.clave: c.defecto for c in cmd.campos(ctx)}
     assert cmd.clave_filtro(base) != cmd.clave_filtro({**base, "tolerancia": 2.0})
+
+
+def test_el_dialogo_tiene_el_campo_de_angulo_de_esquina(app_qt, estrella):
+    """El ángulo es una opción avanzada y solo aparece con «Curvas suaves» tildada."""
+    cmd, ctx = _vectorizar_cmd_ctx(app_qt)
+    campos = {c.clave: c for c in cmd.campos(ctx)}
+    assert "angulo_esquina" in campos and campos["angulo_esquina"].avanzado
+    assert campos["angulo_esquina"].defecto == 0              # 0 = sin detección
+    assert campos["angulo_esquina"].visible_si({"curvas": True})
+    assert not campos["angulo_esquina"].visible_si({"curvas": False})
+    base = {c.clave: c.defecto for c in cmd.campos(ctx)}
+    assert cmd.clave_filtro(base) != cmd.clave_filtro({**base, "angulo_esquina": 45})
+    ruta, _ = estrella
+    prims = cmd.leer(ruta, {**base, "curvas": True, "angulo_esquina": 45})
+    assert len(prims) >= 8 and all(p[2] is False for p in prims)   # el diálogo parte el contorno
 
 
 def test_ignorar_manchas_oculta_el_punto_de_ruido(tmp_path):

@@ -386,6 +386,19 @@ def _saliente(p):
     p.drawEllipse(QRectF(base.x() - 2.4, base.y() - 10 - 1.35, 4.8, 2.7))   # agujero del tornillo
 
 
+def _apoyo(p):
+    """El perfil (guiones) al costado de una pared que descansa en la cara de la placa."""
+    a, b, h, m = 16, 16, 10, 3.5                   # placa, alto y margen del perfil
+    q = _q(16, 15.5)
+    _caja_en(p, q, 0, 0, 0, a, b, h, GRISES, BORDE_GRIS)
+    _poli(p, [q(m, m, h), q(a - m, m, h), q(a - m, m, h + 3), q(m, m, h + 3)], AZUL_FRENTE)
+    _poli(p, [q(a - m, m, h), q(a - m, b - m, h), q(a - m, b - m, h + 3), q(a - m, m, h + 3)], AZUL_LADO)
+    _poli(p, _cuadro(q, m, m, a - m, b - m, h + 3), AZUL_ARRIBA)
+    _hueco(p, q, m + 1.6, m + 1.6, a - m - 1.6, b - m - 1.6, h + 3, 1.6, OSCUROS)
+    _guiones(p, AZUL_BORDE, 1.2)
+    p.drawPolygon(QPolygonF(_cuadro(q, m, m, a - m, b - m, h + 3)))
+
+
 def _encaje_presion(p):
     q = _q(12, 17.5)
     _caja_en(p, q, 0, 0, 0, 14, 8, 4, GRISES, BORDE_GRIS)
@@ -1983,6 +1996,15 @@ def _grupos_caras(p):
     _cara_malla(p, q(0, 0, h), q(a, 0, h), q(a, b, h), q(0, b, h), QColor("#8fd18f"), 2)
 
 
+def _combinar_grupos_caras(p):
+    """Dos grupos de caras (naranja y violeta) pasan a ser uno solo (verde)."""
+    arriba, abajo = _q(16, 2), _q(16, 17)
+    _cara_malla(p, *_cuadro(arriba, 0, 0, 6, 6, 0), QColor("#f2a65a"), 2)
+    _cara_malla(p, *_cuadro(arriba, 6, 0, 12, 6, 0), QColor("#a27fd6"), 2)
+    _flecha(p, 16, 11, 16, 17, GRIS_OSCURO, 1.8, 4.2)
+    _cara_malla(p, *_cuadro(abajo, 0, 0, 12, 6, 0), QColor("#8fd18f"), 3)
+
+
 def _reducir_malla(p):
     q1, q2 = _q(9, 4), _q(23, 14.5)
     _cara_malla(p, *_cuadro(q1, 0, 0, 9, 9, 0), MALLA[1], 4)
@@ -2467,6 +2489,43 @@ def _importar_iges(p):
     _flecha(p, 3.5, 11, 14, 11, AZUL_LADO, 2.4)
 
 
+def _eliminar_caras(p):
+    """Eliminar caras: caja con un chaflán claro (la cara que se va) y flecha naranja que la saca."""
+    a = b = 10.5
+    h = 8
+    d = 5
+    q = _q(*_centro(a, b, h))
+    _caja_en(p, q, 0, 0, 0, a, b, h, (AZUL_SEL, AZUL_FRENTE, AZUL_LADO))
+    _poli(p, [q(a - d, b, h), q(a, b, h - d), q(a, b, h)], QColor("#ffffff"), AZUL_BORDE)
+    centro = q(a - d / 2, b, h - d / 2)
+    punta = q(a + 6, b - 6, h + 6)
+    _flecha(p, centro.x(), centro.y(), punta.x(), punta.y(), NARANJA, 1.8, 3.5)
+
+
+def _reemplazar_primitivas(p):
+    """Reemplazar con primitivas: una caja y un cilindro chicos (grises) dentro de una caja transparente (la primitiva
+    que envuelve), con la flecha naranja que reemplaza."""
+    _guiones(p, AZUL_BORDE, 0.8)
+    p.setBrush(QColor(159, 207, 245, 60))
+    p.drawRoundedRect(QRectF(3, 4, 22, 22), 2, 2)
+    base = _q(15, 23)(0, 0, 0)
+    _caja(p, 7, 7, 7, base.x(), base.y(), 1.0, GRIS_COMP, BORDE_GRIS)
+    _cil(p, base.x(), base.y() - 13, base.y() - 6, 2.6, 1.1, GRIS_COMP[:2], BORDE_GRIS)
+    _flecha(p, 20, 5, 29, 2, NARANJA, 1.6, 3.4)
+
+
+def _eliminar_operaciones(p):
+    """Eliminar operaciones: caja azul a la que se le van un agujero y una esquina en fantasma, con flecha naranja."""
+    q = _q(*_centro(10.5, 10.5, 8))
+    _caja_en(p, q, 0, 0, 0, 13, 13, 8, (AZUL_SEL, AZUL_FRENTE, AZUL_LADO))
+    p.setPen(QPen(BORDE_FANTASMA, 1.0, Qt.PenStyle.DashLine))
+    p.setBrush(QBrush(FANTASMA[0]))
+    p.drawEllipse(q(6.5, 6.5, 8), 2.6, 1.6)                 # el agujero que se va
+    esquina = q(13, 13, 8)
+    _poli(p, [esquina, q(13, 9, 8), q(9, 13, 8)], FANTASMA[0], BORDE_FANTASMA)   # el empalme que se va
+    _flecha(p, esquina.x(), esquina.y(), esquina.x() + 7, esquina.y() - 7, NARANJA, 1.8, 3.5)
+
+
 def _borrar_caras(p):
     """Borrar caras: cubo azul sin tapa, contorno superior punteado y cruz roja arriba."""
     q = _q(9.5, 20)
@@ -2497,7 +2556,8 @@ def _calibracion_holguras(p):
 DIBUJOS_EXTRA = {
     # sólido / crear
     "barrido": _barrido, "solevacion": _solevacion, "nervio": _nervio, "red": _red, "labio": _labio,
-    "repujado": _repujado, "saliente": _saliente, "encaje_presion": _encaje_presion, "agujero": _agujero,
+    "repujado": _repujado, "saliente": _saliente, "encaje_presion": _encaje_presion, "apoyo": _apoyo,
+    "agujero": _agujero,
     "rosca": _rosca, "bobina": _bobina, "tuberia": _tuberia, "patron_rectangular_3d": _patron_rectangular_3d,
     "patron_circular_3d": _patron_circular_3d, "patron_ruta": _patron_ruta, "simetria_3d": _simetria_3d,
     "patron_puntos": _patron_puntos, "multitransformar": _multitransformar,
@@ -2515,7 +2575,8 @@ DIBUJOS_EXTRA = {
     "escala_3d": _escala_3d, "desfase_cara": _desfase_cara, "reemplazar_cara": _reemplazar_cara,
     "dividir_cara": _dividir_cara, "dividir_cuerpo": _dividir_cuerpo, "division_silueta": _division_silueta,
     "mover_copiar": _mover_copiar, "alinear": _alinear, "suprimir": _suprimir, "quitar": _quitar,
-    "quitar_empalmes": _quitar_empalmes,
+    "quitar_empalmes": _quitar_empalmes, "eliminar_operaciones": _eliminar_operaciones,
+    "eliminar_caras": _eliminar_caras,
     "material_fisico": _material_fisico, "aspecto": _aspecto, "administrar_materiales": _administrar_materiales,
     "lista_materiales": _lista_materiales,
     # variantes de comandos hermanos (ICO-4)
@@ -2564,6 +2625,8 @@ DIBUJOS_EXTRA = {
     # malla
     "malla_teselar": _malla_teselar, "reparar_malla": _reparar_malla, "limpiar_malla": _limpiar_malla,
     "grupos_caras": _grupos_caras,
+    "combinar_grupos_caras": _combinar_grupos_caras,
+    "reemplazar_primitivas": _reemplazar_primitivas,
     "reducir_malla": _reducir_malla, "remallar": _remallar, "cortar_plano": _cortar_plano,
     "vaciado_malla": _vaciado_malla, "combinar_mallas": _combinar_mallas, "suavizar_malla": _suavizar_malla,
     "separar_malla": _separar_malla, "escalar_malla": _escalar_malla, "convertir_malla": _convertir_malla,

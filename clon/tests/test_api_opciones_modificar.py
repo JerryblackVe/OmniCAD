@@ -158,6 +158,27 @@ def test_quitar_empalmes_de_varios_cuerpos():
     assert volumen(s2) == pytest.approx(V)
 
 
+# ---------------------------------------------------------------- PLA-9: eliminar operaciones
+def test_eliminar_operaciones_quita_agujero_y_empalmes_de_un_paso():
+    s = caja()
+    ok(s, "fillet", edges="edges:|Z", radius=2)
+    ok(s, "create_hole", diameter=4, face=">Z", points=[[9, 9]], through_all=True)
+    assert volumen(s) < 7995                                                      # el empalme y el agujero quitaron material
+    r = api.llamar(s, "remove_features", {"body": "Caja", "types": ["hole"], "max_size": 5})
+    assert r["ok"] and any("1 agujero" in a for a in r["avisos"]), r
+    sin_agujero = volumen(s)
+    assert 7900 < sin_agujero < 8000                                            # el agujero se fue, los empalmes siguen
+    r = api.llamar(s, "remove_features", {"body": "Caja", "types": ["fillet"], "max_size": 5})
+    assert r["ok"] and any("3 empalme" in a for a in r["avisos"]), r            # el de la esquina del agujero ya se había ido
+    assert volumen(s) == pytest.approx(V)                                       # la caja entera otra vez
+    ok(s, "undo")
+    assert volumen(s) == pytest.approx(sin_agujero)                             # un solo deshacer por el paso
+    falla(s, "remove_features", body="Caja", types=["rosca"], max_size=5)
+    falla(s, "remove_features", body=[], types=["hole"], max_size=5)
+    s2 = caja()
+    falla(s2, "remove_features", body="Caja", types=["hole"], max_size=5, esperado="OPERATION_FAILED")   # nada que quitar
+
+
 # ---------------------------------------------------------------- MCP-60: agujeros
 def test_agujero_en_un_vertice_con_angulo_de_punta_flip_y_varios_cuerpos():
     s = caja()

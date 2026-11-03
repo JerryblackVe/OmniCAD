@@ -92,7 +92,8 @@ class _Forma:
 
 def _afinar(tipo, p, a, b, c, V):
     """Gauss-Newton sobre la distancia real: eje (dos giros y dos corrimientos) y medidas. Hace falta cuando el eje
-    salió de normales de triángulos irregulares."""
+    salió de normales de triángulos irregulares. Con la derivada exacta en vez de diferencias finitas, que eran la
+    mitad del costo del ajuste."""
     from scipy.optimize import least_squares
     u, v = _base(a)
 
@@ -100,7 +101,40 @@ def _afinar(tipo, p, a, b, c, V):
         return _Forma(tipo, p + x[2] * u + x[3] * v, _unit(a + x[0] * u + x[1] * v), x[4], x[5])
 
     muestra = V if len(V) <= 800 else V[np.random.default_rng(_SEMILLA).choice(len(V), 800, replace=False)]
-    x = least_squares(lambda x: forma(x).distancia(muestra), [0.0, 0.0, 0.0, 0.0, b, c], max_nfev=30).x
+
+    def jacobiana(x):
+        f = forma(x)
+        w = a + x[0] * u + x[1] * v
+        da0 = (u - (f.a @ u) * f.a) / np.linalg.norm(w)      # d unit(w) / dx0
+        da1 = (v - (f.a @ v) * f.a) / np.linalg.norm(w)
+        q = muestra - f.p
+        z = q @ f.a
+        radial = q - z[:, None] * f.a
+        rho = np.maximum(np.linalg.norm(radial, axis=1), 1e-300)
+        er = radial / rho[:, None]
+        J = np.empty((len(muestra), 6))
+        if tipo == "cone":
+            H = math.hypot(1.0, f.c)
+            n = rho - f.b - f.c * z
+            d_da = (-z[:, None] * er - f.c * q) / H
+            d_dp = (-er + f.c * f.a) / H
+            J[:, 4] = -1.0 / H
+            J[:, 5] = -z / H - n * f.c / H ** 3
+        else:                                                # torus: el único otro tipo con que se llama _afinar
+            U = rho - f.b
+            H = np.hypot(U, z)
+            d_da = z[:, None] * (q - U[:, None] * er) / H[:, None]
+            d_dp = -(U[:, None] * er + z[:, None] * f.a) / H[:, None]
+            J[:, 4] = -U / H
+            J[:, 5] = -1.0
+        J[:, 0] = d_da @ da0
+        J[:, 1] = d_da @ da1
+        J[:, 2] = d_dp @ u
+        J[:, 3] = d_dp @ v
+        return J
+
+    x = least_squares(lambda x: forma(x).distancia(muestra), [0.0, 0.0, 0.0, 0.0, b, c],
+                      jac=jacobiana if tipo in ("cone", "torus") else "2-point", max_nfev=30).x
     return forma(x)
 
 
@@ -185,7 +219,11 @@ def ajustar_toro(V, C, N, A):
     if circulo is None:
         return None
     (R, zc), r = circulo
-    forma = _afinar("torus", p + a * zc, a, R, r, V)
+    forma = _Forma("torus", p + a * zc, a, R, r)
+    # igual que el cono: recién se afina cuando el ajuste algebraico ya está cerca; el Gauss-Newton es la parte cara y
+    # en un par que no es un toro se va 30 iteraciones sin llegar a ninguna parte
+    if forma.b > 0 and forma.c > 0 and float(np.abs(forma.distancia(V)).max()) <= 0.5:
+        forma = _afinar("torus", forma.p, forma.a, forma.b, forma.c, V)
     return forma if forma.b > 0 and forma.c > 0 else None
 
 

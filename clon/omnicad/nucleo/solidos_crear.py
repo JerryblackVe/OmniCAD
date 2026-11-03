@@ -472,8 +472,13 @@ def _bandas_cerradas(caras, espesor, ubicacion):
 
 
 def _herramienta_extrusion(caras, abiertas, n, base, lados, delgado):
-    """Une los prismas de cada lado (lista de (distancia con signo, conicidad))."""
+    """Une los prismas de cada lado (lista de (distancia con signo, conicidad)). Con inclinación se le pasa a toda la
+    extrusión el largo entero, para que los dos lados de un perfil cerrado compartan el mismo plano neutro."""
     solidos = []
+    inclinado = [(d, c) for d, c in lados if abs(c) > 1e-9]
+    if len(lados) > 1 and inclinado:
+        d, conicidad = max(inclinado, key=lambda x: abs(x[0]))
+        lados = [(min(v for v, _ in lados), 0.0), (max(v for v, _ in lados), conicidad)]
     for d, conicidad in lados:
         for cara in caras:
             solidos.append(_prisma(_trasladar(cara, n * base), n, d, conicidad))
@@ -616,9 +621,14 @@ def _recortar_hasta(herr, inicios, objeto, modo, plano_obj, origen):
             if len(geo.solidos(sp.Shape())) < 2:
                 raise geo.ErrorGeometria("La extrusión no llega a la cara objetivo (la cara no la corta entera).")
         return _unir(piezas)
-    if modo not in ("cara", "cuerpo", "a_traves"):
+    if modo not in ("cara", "cuerpo", "a_traves", "llega"):
         raise geo.ErrorGeometria(f"Modo de extensión desconocido: {modo}")
     piezas = _piezas_que_tocan(geo.booleano(herr, objeto, "cortar"), inicios)
+    if modo == "llega":
+        piezas = [geo.booleano(p, objeto, "intersecar") for p in piezas]
+        if all(geo.esta_vacia(p) for p in piezas):
+            raise geo.ErrorGeometria("El perfil queda dentro del cuerpo objetivo.")
+        return _unir(piezas)
     if modo == "a_traves":
         piezas.append(geo.booleano(herr, objeto, "intersecar"))
     if not piezas:
@@ -3687,8 +3697,9 @@ def _cilindro_en_eje(pts, z, margen, limites=None):
 
 
 def solido_envolvente(formas, *, tipo="caja", margen=0.0, eje="z", marco=None, espesor_tubo=None):
-    """Sólido envolvente (Bounding Solid) [SLD-CREATE-BOUNDING-SOLID]: "caja" (exacta), "cilindro" o "tubo"
-    (cilindro hueco: pared `espesor_tubo`, por defecto la décima parte del radio) que contienen a la forma.
+    """Sólido envolvente (Bounding Solid) [SLD-CREATE-BOUNDING-SOLID]: "caja" (exacta), "cilindro", "tubo"
+    (cilindro hueco: pared `espesor_tubo`, por defecto la décima parte del radio) o "esfera" (la mínima de la
+    caja envolvente: centro en su centro, radio hasta la esquina más lejana) que contienen a la forma.
     Orientación: sin `marco`, los ejes del modelo (el cilindro, alrededor de `eje`: "x", "y", "z" o vector);
     con `marco`, una matriz 3x3 (columnas X, Y, Z, ver `marco_ortonormal`; el cilindro va sobre su Z) o
     "automatica" (la menor: caja orientada del kernel; el cilindro, sobre el eje de la caja que lo achica más).
@@ -3697,10 +3708,13 @@ def solido_envolvente(formas, *, tipo="caja", margen=0.0, eje="z", marco=None, e
     bb = geo.caja_envolvente(comp)
     if bb is None:
         raise geo.ErrorGeometria("No hay geometría para envolver.")
-    if tipo not in ("caja", "cilindro", "tubo"):
+    if tipo not in ("caja", "cilindro", "tubo", "esfera"):
         raise geo.ErrorGeometria(f"Tipo de sólido envolvente desconocido: {tipo}")
     if isinstance(marco, str) and marco != "automatica":
         raise geo.ErrorGeometria(f"Orientación desconocida: {marco}")
+    if tipo == "esfera":                    # la mínima que envuelve la caja envolvente: centro en el centro, radio a la esquina
+        centro = (np.asarray(bb[0], float) + np.asarray(bb[1], float)) / 2
+        return geo.esfera(float(np.linalg.norm(np.asarray(bb[1], float) - centro)) + margen, tuple(centro))
     if tipo == "caja":
         if marco is None:
             (x0, y0, z0), (x1, y1, z1) = bb
@@ -3849,6 +3863,107 @@ def labio_ranura(cuerpo, aristas, direccion_tirado, *, tipo="labio", ancho, alto
     barrido = _barrido_alambre(seccion, w, None, "perpendicular", 0.0, 0.0, "escalar", True, 1.0)
     resultado = geo.booleano(cuerpo, barrido, "unir" if tipo == "labio" else "cortar")
     return _validar(_unificar(resultado), "Labio" if tipo == "labio" else "Ranura")
+
+
+def _trozos(forma, herramienta, tipo=TopAbs_SOLID):
+    """Trozos de `forma` que separan sus caras con `herramienta` (una cara o un cuerpo), por fragmentos: lo que
+    comparte una superficie queda en el mismo trozo, como en Fusion."""
+    if herramienta is None or herramienta is forma:
+        return [forma]
+    sp = BRepAlgoAPI_Splitter()
+    args, herramientas = List_TopoDS_Shape(), List_TopoDS_Shape()
+    args.Append(forma)
+    herramientas.Append(herramienta)
+    sp.SetArguments(args)
+    sp.SetTools(herramientas)
+    sp.Build()
+    if not sp.IsDone():
+        raise geo.ErrorGeometria("No se pudo cortar el apoyo con las caras del cuerpo.")
+    trozos = list(_explorar(sp.Shape(), tipo))
+    if any(t.IsSame(forma) for t in trozos):     # la cara no atraviesa de borde a borde: en dos pasos
+        resto = geo.booleano(forma, herramienta, "cortar")
+        trozos = list(_explorar(resto, tipo)) if not geo.esta_vacia(resto) else [forma]
+    return trozos
+
+
+def _fuera(forma, objeto):
+    """`forma` sin lo que quedó afuera del sólido o de los sólidos `objeto`."""
+    afuera = geo.booleano(forma, objeto, "cortar")
+    return _unir(_piezas_que_tocan(afuera, [forma], 1e-5)) if not geo.esta_vacia(afuera) else forma
+
+
+def apoyo(cuerpos, perfiles, *, direccion, invertir=False, desfase=0.0, grosor, lados=(), angulo_desmoldeo=0.0,
+          extension="todo"):
+    """Apoyo (Rest) de la pestaña Plástico [PLA-2]: desde perfiles cerrados de boceto da una pared de `grosor` en la
+    cara del cuerpo que quedó en su lugar, sobre cada perfil. `direccion` = normal del plano del boceto; el perfil se
+    desplaza `desfase` según ella (`invertir` = Flip). `lados`: distancias de cada pared al perfil, con signo
+    (+n hacia el cuerpo). El apoyo atraviesa los cuerpos; lo que queda afuera se va y lo que asoma en una cara se
+    recorta en ella (Trim): queda el área plana que llega a esa cara. `angulo_desmoldeo` = Draft Angle: la pared mira
+    el cuerpo de `direccion` y se angosta hacia él. `extension` "todo" (All: atraviesa los cuerpos) o "objeto" (To
+    Object: termina en las caras del cuerpo que se ve desde el perfil, del lado de `direccion`). Devuelve la
+    herramienta para unir a los cuerpos."""
+    d = _unit(direccion, "dirección del apoyo")
+    if grosor <= 0:
+        raise geo.ErrorGeometria("El grosor del apoyo debe ser positivo.")
+    if extension not in ("todo", "objeto"):
+        raise geo.ErrorGeometria(f"Extensión desconocida: {extension}")
+    if not lados:
+        raise geo.ErrorGeometria("El apoyo necesita al menos la distancia de los lados 1 o 2.")
+    if any(dist < 0 for _, dist in lados):
+        raise geo.ErrorGeometria("Las distancias de los lados del apoyo no pueden ser negativas.")
+    if any(signo == -1 for signo, _ in lados) and not any(signo == 1 for signo, _ in lados):
+        raise geo.ErrorGeometria("El apoyo necesita material del lado 1: el lado 2 es el del perfil.")
+    suma = sum(dist for _, dist in lados)
+    if not abs(suma - grosor) <= 1e-6 * max(grosor, 1.0):
+        raise geo.ErrorGeometria(f"El grosor del apoyo tiene que ser {suma:g} mm: "
+                                 "la suma de los lados 1 y 2.")
+    compuestos = cuerpos if isinstance(cuerpos, (list, tuple)) else [cuerpos]
+    solidos = [c if c.ShapeType() == TopAbs_SOLID else TopoDS.Solid(c)
+               for c in (list(_explorar(geo.compuesto(compuestos), TopAbs_SOLID)) if cuerpos else [])]
+    if not solidos:
+        raise geo.ErrorGeometria("El apoyo necesita un cuerpo.")
+    cuerpos_forma = _unir(solidos)
+    caras = [TopoDS.Face(f) for perfil in perfiles for f in _explorar(perfil, TopAbs_FACE)]
+    if not caras:
+        raise geo.ErrorGeometria("El apoyo necesita perfiles cerrados de boceto o caras.")
+    centro = np.mean([geo.centro_masa(f, superficie=True) for f in caras], axis=0)
+    inicios = [_trasladar(f, d * desfase) for f in caras] if desfase else caras
+    cerca = min(solidos, key=lambda s: min(BRepExtrema_DistShapeShape(i, s).Value() for i in inicios))
+    lo, hi = _caja_proyectada(cerca, centro, d)
+    if not lo <= desfase <= hi:
+        raise geo.ErrorGeometria("El perfil del apoyo tiene que quedar dentro del cuerpo (ni por encima ni por debajo).")
+    # La pared se angosta hacia la cara final (donde apoya el cuerpo): en `_prisma` la conicidad positiva ensancha
+    # desde el perfil, así que se pasa cambiada de signo. `invertir` es el espejo del abanico.
+    if invertir:
+        angulo_desmoldeo = -angulo_desmoldeo
+    angulo_desmoldeo = -angulo_desmoldeo
+    rango = min(signo * dist for signo, dist in lados), max(signo * dist for signo, dist in lados)
+    lo, hi = _caja_proyectada(cuerpos_forma, centro, d)
+    # El abanico del grosor va del lado 1 al lado 2 con el perfil como plano neutro; para atravesar el cuerpo sigue
+    # la misma pared (Todo, hasta la última cara) o se queda en él (Hasta objeto).
+    abajo, arriba = min(rango[0], lo), max(rango[1], hi)
+    herramienta = _herramienta_extrusion(inicios, [], d, 0.0, [(v, angulo_desmoldeo) for v in (abajo, arriba)
+                                                              if abs(v) > 1e-9 or v == abajo == arriba], None)
+    # Todo: atraviesa el cuerpo y el Trim la deja en la última cara de cada lado (semiespacio hasta ella).
+    herramienta = _recortar_semiespacio(herramienta, centro, d, hi)
+    herramienta = _recortar_semiespacio(herramienta, centro, -d, -lo)
+    if extension == "objeto":
+        # Hasta objeto: la pared termina donde el cuerpo la contiene (lo que hay del cuerpo desde el perfil).
+        herramienta = geo.booleano(herramienta, cuerpos_forma, "intersecar")
+        if geo.esta_vacia(herramienta):
+            raise geo.ErrorGeometria("El perfil queda dentro del cuerpo objetivo.")
+    if geo.esta_vacia(herramienta) or BRepExtrema_DistShapeShape(herramienta, cuerpos_forma).Value() > 1e-4:
+        raise geo.ErrorGeometria("El apoyo tiene que tocar el cuerpo: el perfil es un agujero dentro de la pared.")
+    return _validar(herramienta, "Apoyo")
+
+
+def _recortar_semiespacio(herr, origen, d, altura):
+    """`herr` sin lo que pasa de la altura `altura` según `d` (semiespacio del lado del origen)."""
+    d = np.asarray(d, float)
+    pl = geo.Plano.desde_marco(np.asarray(origen, float) + d * altura, d, (0.0, 0.0, 1.0) if abs(d[2]) < 0.9
+                               else (1.0, 0.0, 0.0))
+    semi = BRepPrimAPI_MakeHalfSpace(geo.cara_de_plano(pl, 1e3), _pnt(np.asarray(origen, float) - d * 1e-3)).Solid()
+    return _validar(geo.booleano(herr, semi, "intersecar"), "Apoyo")
 
 
 _motor.registrar(globals(), _iniciar_opencascade)

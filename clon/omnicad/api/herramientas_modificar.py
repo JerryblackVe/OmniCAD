@@ -21,9 +21,9 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from ..timeline.operaciones import OpPlano
-from ..timeline.ops_modificar import (OpChaflan, OpDesfaseAristas, OpDesfaseCara, OpDesmoldeo, OpEmpalme, OpQuitarEmpalmes,
-                                      OpVaciado)
-from ..timeline.ops_solido import OpAgujero, OpRosca
+from ..timeline.ops_modificar import (OpChaflan, OpDesfaseAristas, OpDesfaseCara, OpDesmoldeo, OpEliminarOperaciones,
+                                      OpEmpalme, OpQuitarEmpalmes, OpVaciado)
+from ..timeline.ops_solido import OpAgujero, OpRosca, OpSolidoEnvolvente
 from . import selectores as sl
 from .errores import ErrorAPI, error
 from .herramientas_boceto import boceto_activo, boceto_resuelto, nombre_nuevo, referencia_plano, texto_expr
@@ -337,6 +337,70 @@ def remove_fillets(sesion, body: str | list[str], max_radius: Expr):
     res = _agregar(sesion, op)
     res["fillets_removed"] = encontrados
     res["bodies_affected"] = cuerpos
+    return res
+
+
+_TIPOS_QUITAR = {"fillet": "empalme", "chamfer": "chaflan", "hole": "agujero"}
+_FORMAS_REEMPLAZO = {"box": "caja", "cylinder": "cilindro", "sphere": "esfera"}
+
+
+@herramienta("remove_features", "solido",
+             "Quita de una vez los empalmes, chaflanes y agujeros de un cuerpo con medida hasta max_size "
+             "(«Remove Features» de Fusion 360 › Simplify: defeaturing + unión de la topología que queda). Un agujero "
+             "se mide por su diámetro. Deja un paso editable en el timeline; si no hay nada con ese filtro, falla con "
+             "OPERATION_FAILED y el documento queda igual.", modifica=True)
+def remove_features(sesion, body: str | list[str], types: list[Literal["fillet", "chamfer", "hole"]],
+                    max_size: Expr, name: str | None = None):
+    """
+    body: id o nombre del cuerpo (o lista de cuerpos) al que sacarle las operaciones.
+    types: tipos a quitar: fillet (empalme), chamfer (chaflán) y/o hole (agujero).
+    max_size: medida máxima en mm (número o expresión): se quitan los empalmes y agujeros con radio/diámetro y los chaflanes con ancho hasta ese valor.
+    name: nombre del paso en el timeline; vacío = «Eliminar operaciones<n>».
+    """
+    _numero_positivo(max_size, "max_size")
+    pedidos = [body] if isinstance(body, str) else list(body)
+    if not pedidos:
+        raise error("INVALID_ARGUMENTS", "Elegí al menos un cuerpo en body.")
+    tipos = list(dict.fromkeys(types))
+    desconocidos = [t for t in tipos if t not in _TIPOS_QUITAR]
+    if desconocidos or not tipos:
+        raise error("INVALID_ARGUMENTS", "types solo acepta fillet, chamfer y hole"
+                    + (f" (no «{desconocidos[0]}»)" if desconocidos else "") + ".")
+    cuerpos = list(dict.fromkeys(sl.cuerpo_objetivo(sesion, b).id for b in pedidos))
+    doc = sesion.doc
+    tipos_op = [_TIPOS_QUITAR[t] for t in tipos]
+    op = OpEliminarOperaciones(doc.nuevo_id(), name or nombre_nuevo(doc, "Eliminar operaciones", OpEliminarOperaciones),
+                               cuerpos=cuerpos, tipos=tipos_op, tamano=texto_expr(max_size))
+    _agregar(sesion, op)                    # cuántas quitó de cada tipo llega en los avisos del paso
+    return {"feature": {"id": op.id, "name": op.nombre, "type": op.TIPO}, "bodies_affected": cuerpos}
+
+
+@herramienta("replace_with_primitive", "solido",
+             "Reemplaza uno o varios cuerpos por UNA forma simple que los envuelve: box, cylinder (con eje X, Y o Z) o "
+             "sphere (la mínima de la caja envolvente). «Replace with Primitives» de Fusion 360 › Simplify: deja UN paso "
+             "en el timeline que crea la primitiva y quita los cuerpos elegidos, editable por parámetros.", modifica=True)
+def replace_with_primitive(sesion, bodies: list[str], shape: Literal["box", "cylinder", "sphere"], name: str | None = None,
+                           axis: Literal["x", "y", "z"] = "z", margin: Expr = 0):
+    """
+    bodies: nombres/ids de los cuerpos a reemplazar.
+    shape: box (caja), cylinder (cilindro) o sphere (esfera).
+    name: nombre del paso en el timeline; vacío = «Reemplazar con primitivas<n>».
+    axis: eje del cilindro x, y o z.
+    margin: desfase de la primitiva respecto de los cuerpos en mm.
+    """
+    if shape not in _FORMAS_REEMPLAZO:
+        raise error("INVALID_ARGUMENTS", f"shape solo acepta {', '.join(_FORMAS_REEMPLAZO)} (no «{shape}»).")
+    if axis not in "xyz" or len(axis) != 1:
+        raise error("INVALID_ARGUMENTS", f"axis solo acepta x, y o z (no «{axis}»).")
+    if not bodies:
+        raise error("INVALID_ARGUMENTS", "Elegí al menos un cuerpo en bodies.")
+    cuerpos = list(dict.fromkeys(sl.cuerpo_objetivo(sesion, b).id for b in bodies))
+    doc = sesion.doc
+    op = OpSolidoEnvolvente(doc.nuevo_id(), name or nombre_nuevo(doc, "Reemplazar con primitivas", OpSolidoEnvolvente),
+                            cuerpos=cuerpos, tipo=_FORMAS_REEMPLAZO[shape], eje=axis, margen=texto_expr(margin),
+                            operacion="nuevo", reemplazar=True)
+    res = _agregar(sesion, op)
+    res["bodies_replaced"] = cuerpos
     return res
 
 

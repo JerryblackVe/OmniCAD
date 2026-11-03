@@ -1658,7 +1658,10 @@ def desfasar_superficie(forma, distancia, *, tipo="agudo"):
     if not off.IsDone():
         raise geo.ErrorGeometria("El desfase falló (¿la distancia supera el radio de curvatura?).")
     resultado = None if off.Shape().IsNull() else _simplificar(off.Shape())
-    if resultado is None or _desfase_imposible(forma, resultado, distancia):
+    from . import revision                  # local: revision carga medio núcleo
+    # B-171: un desfase enorme puede cruzarse consigo mismo sin que lo vea _desfase_imposible
+    if (resultado is None or _desfase_imposible(forma, resultado, distancia)
+            or revision._autointersecciones_seguras(resultado, 1, 5.0)[0]):
         raise geo.ErrorGeometria(f"El desfase falló: con {abs(distancia):g} mm la superficie se cruza consigo misma "
                                  "(la distancia es igual o mayor que su radio de curvatura de ese lado, o que la mitad "
                                  "del grosor del cuerpo). Probá una distancia menor.")

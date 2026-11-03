@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
-"""PLÁSTICO › Configuración: Asignar regla de plástico y Administrar reglas (la biblioteca vive en `nucleo/plastico.py`)."""
+"""PLÁSTICO: Asignar regla de plástico y Administrar reglas (la biblioteca vive en `nucleo/plastico.py`) y el Apoyo
+(Rest), que es una operación de sólido como el Saliente y el Labio."""
 from ...nucleo import geometria as geo
 from ...nucleo import plastico
-from ...timeline.ops_solido import OpPatronGeometrico, OpReglaPlastico
+from ...timeline.ops_solido import OpApoyo, OpPatronGeometrico, OpReglaPlastico
 from ...timeline.parametros import ESCALAR
 from ..comando import (ANGULO, Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
                        hits, refs)
 from . import registrar
 from .comunes import campo_objetivos, campo_operacion, objetivos
+from .crear import PERFIL
 
 
 def _reglas():
@@ -173,4 +175,36 @@ class ConsejosDiseno(Comando):
         return None
 
 
-registrar(AsignarReglaPlastico, AdministrarReglasPlastico, ConsejosDiseno, PatronGeometrico)
+class Apoyo(Comando):
+    CLAVE, TITULO, ICONO = "apoyo", "Apoyo", "apoyo"
+    AYUDA = ("Pared de apoyo (plástico) desde un perfil cerrado: deja un área plana en la cara del cuerpo. "
+             "El grosor es la suma de los lados 1 y 2.")
+    CLASE_OP = OpApoyo
+
+    def campos(self, ctx):
+        return [Seleccion("perfiles", "Perfiles", PERFIL, maximo=None),
+                Seleccion("cuerpo", "Cuerpo", {"cuerpo"}),
+                Expresion("desfase", "Desfase de posición", "0 mm",
+                          ayuda="Desde el plano del boceto; el signo es hacia el cuerpo."),
+                Expresion("grosor", "Grosor", "2 mm", ayuda="Tiene que ser la suma de los lados 1 y 2."),
+                Expresion("lado1", "Lado 1", "2 mm", ayuda="0 = sin pared de ese lado."),
+                Expresion("lado2", "Lado 2", "0 mm", ayuda="0 = sin pared de ese lado."),
+                Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", "0 deg", ANGULO),
+                Casilla("invertir", "Invertir"),
+                Opciones("extension", "Tipo de extensión", {"todo": "Todo", "objeto": "Hasta objeto"})]
+
+    def construir(self, v, ctx):
+        exigir(v, "perfiles", "Seleccioná los perfiles cerrados del apoyo.")
+        exigir(v, "cuerpo", "Elegí el cuerpo del apoyo.")
+        for k in ("desfase", "grosor", "lado1", "lado2"):
+            ctx.evaluar(v[k])
+        cuerpo = [h["ref"]["cuerpo"] for h in v["cuerpo"] if h["ref"].get("tipo") == "cuerpo"][0]
+        return self.crear_op(OpApoyo, v, ctx, perfiles=refs(v, "perfiles"), cuerpo={"tipo": "cuerpo", "cuerpo": cuerpo},
+                             **{k: v[k] for k in ("desfase", "grosor", "lado1", "lado2", "angulo_desmoldeo", "invertir",
+                                                  "extension")})
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, perfiles=hits(op.p["perfiles"], ctx.estado), cuerpo=hits([op.p["cuerpo"]], ctx.estado))
+
+
+registrar(AsignarReglaPlastico, AdministrarReglasPlastico, ConsejosDiseno, PatronGeometrico, Apoyo)

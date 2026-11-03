@@ -80,7 +80,7 @@ def _parsear_grupos(texto):
 
 
 class CombinarGruposCaras(Comando):
-    CLAVE, TITULO, ICONO = "combinar_grupos_caras", "Combinar grupos de caras", "grupos_caras"
+    CLAVE, TITULO, ICONO = "combinar_grupos_caras", "Combinar grupos de caras", "combinar_grupos_caras"
     AYUDA = "Combina en un solo grupo los grupos de caras elegidos de un cuerpo de malla."
     CLASE_OP = OpCombinarGruposCaras
     verificar = staticmethod(_mallas)

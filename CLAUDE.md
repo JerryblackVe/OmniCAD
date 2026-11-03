@@ -35,7 +35,7 @@
      `prompts.json` (pendientes de `docs/seguimiento/`, las últimas 25 entradas del Registro de `PROJECT_LOG.md` y
      los prompts guardados).
   2. Subir cada archivo con la herramienta `Artifact` (`url` de la página, `asset: true`, `file_path`; uno por llamada).
-  3. Con `ArtifactData` `update`, poner la `url` nueva (`/_blob/...`) y `updated` en `datasets/seguimiento`,
+  3. Con `ArtifactData` `update`, poner el `source` completo (`format`, `kind`, `name` y la `url` nueva `/_blob/...`) y `updated` = `{at, by}` en `datasets/seguimiento`,
      `datasets/resueltos` y `datasets/prompts`. Las tarjetas, las tablas y el gráfico se recalculan solos.
 - La página no se vuelve a escribir salvo que Gerardo pida un cambio de diseño (documento `files/index.html`).
 - Si se pierde el acceso al Artifact, se vuelve a crear desde la herramienta `Artifact` con el tipo Dashboard:

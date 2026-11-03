@@ -24,7 +24,7 @@ SECCIONES = {
     "MODIFICAR": ["pulsar_tirar", "empalme_3d", "chaflan_3d", "quitar_empalmes", "vaciado", "desmoldeo",
                   "escala_3d", "desfase_cara", "desfase_aristas", "apoyar",
                   "reemplazar_cara", "dividir_cara", "dividir_cuerpo", "division_silueta", "mover_copiar", "alinear",
-                  "suprimir", "quitar", "reticula_volumetrica", "material_fisico", "aspecto", "administrar_materiales", "lista_materiales"],
+                  "suprimir", "quitar", "eliminar_caras", "eliminar_operaciones", "reemplazar_primitivas", "reticula_volumetrica", "material_fisico", "aspecto", "administrar_materiales", "lista_materiales"],
     "CONSTRUIR": ["scu", "plano_angulo", "plano_tangente", "plano_medio", "plano_perpendicular", "plano_dos_aristas",
                   "plano_tres_puntos", "plano_ruta", "eje_cilindro", "eje_perpendicular", "eje_dos_planos",
                   "eje_dos_puntos", "eje_arista", "punto_vertice", "punto_dos_aristas", "punto_tres_planos",
@@ -32,7 +32,7 @@ SECCIONES = {
     "INSPECCIONAR": ["interferencia", "curvatura_peine", "cebra", "mapa_entorno", "mapa_desviacion", "angulo_desmoldeo",
                      "mapa_curvatura", "isocurva", "accesibilidad", "radio_minimo", "seccion", "centro_masa", "sustentabilidad",
                      "colores_componente", "revisar_geometria", "reparar_cuerpo", "buscar_similares"],
-    "PLÁSTICO": ["regla_plastico", "reglas_plastico", "consejos_diseno", "patron_geometrico"],
+    "PLÁSTICO": ["regla_plastico", "reglas_plastico", "consejos_diseno", "apoyo", "patron_geometrico"],
     "INSERTAR": ["calcomania", "insertar_svg", "insertar_dxf", "vectorizar_imagen", "insertar_malla", "insertar_componente", "fijacion"],
     "ENSAMBLAR": ["nuevo_componente", "union", "union_construida", "duplicar_con_uniones", "origen_union", "grupo_rigido",
                   "accionar_uniones", "vinculo_movimiento", "conjunto_contacto", "estudio_movimiento",
@@ -42,7 +42,7 @@ SECCIONES = {
     "SUPERFICIE": ["sup_extruir", "sup_revolucion", "sup_barrido", "sup_solevacion", "parche", "reglada",
                    "sup_desfase", "recortar_sup", "destrimar", "extender_sup", "coser", "descoser", "invertir_normal", "sup_empalme",
                    "sup_caja", "sup_cilindro", "sup_esfera", "sup_toroide", "sup_bobina", "sup_tuberia"],
-    "MALLA": ["malla_teselar", "reparar_malla", "limpiar_malla", "grupos_caras", "reducir_malla", "remallar", "cortar_plano",
+    "MALLA": ["malla_teselar", "reparar_malla", "limpiar_malla", "grupos_caras", "combinar_grupos_caras", "reducir_malla", "remallar", "cortar_plano",
               "vaciado_malla", "combinar_mallas", "suavizar_malla", "separar_malla", "escalar_malla",
               "convertir_malla", "borrar_rellenar", "alinear_malla", "exportar_malla", "seccion_malla", "invertir_normal_malla"],
     "CHAPA": ["reglas_chapa", "pestana", "pestana_contorno", "pestana_solevada", "dobladillo", "cierre_esquina",
@@ -94,7 +94,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 191
+    assert len(NOMBRES) == len(set(NOMBRES)) == 196
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

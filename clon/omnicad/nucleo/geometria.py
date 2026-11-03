@@ -35,16 +35,17 @@ def _iniciar_opencascade():
     global BRepBndLib, BRepBuilderAPI_Copy, BRepBuilderAPI_NurbsConvert, BRepBuilderAPI_Transform, BRepCheck_Analyzer
     global BRepClass3d_SolidClassifier, BRepExtrema_DistShapeShape, BRepGProp, BRepMesh_IncrementalMesh
     global BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
-    global BRepPrimAPI_MakeSphere, BRepPrimAPI_MakeTorus, BRepTools, BRep_Builder, BRep_Tool, Bnd_Box
+    global BRepPrimAPI_MakeSphere, BRepPrimAPI_MakeTorus, BRepTools, BRepTools_WireExplorer, BRep_Builder, BRep_Tool, Bnd_Box
     global GCPnts_TangentialDeflection, GProp_GProps, GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane
     global GeomAbs_Sphere, GeomAbs_SurfaceOfExtrusion, GeomAbs_SurfaceOfRevolution, GeomAbs_Torus
+    global Poly_Triangle, Poly_Triangulation, ShapeAnalysis_Surface
     global IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
     global IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher, ShapeUpgrade_UnifySameDomain, TopAbs_COMPOUND
     global TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID
     global TopAbs_VERTEX, TopAbs_WIRE, TopExp, TopExp_Explorer, TopLoc_Location, TopoDS, TopoDS_Compound
     global TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid, _ANALITICAS, gp_Ax1, gp_Ax2, gp_Dir
-    global gp_Pnt, gp_Trsf, gp_Vec
-    from OCP.BRepTools import BRepTools
+    global gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
+    from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
     from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
@@ -62,6 +63,8 @@ def _iniciar_opencascade():
     from OCP.GeomAbs import (GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_SurfaceOfExtrusion,
                              GeomAbs_SurfaceOfRevolution, GeomAbs_Torus)
     from OCP.GProp import GProp_GProps
+    from OCP.Poly import Poly_Triangle, Poly_Triangulation
+    from OCP.ShapeAnalysis import ShapeAnalysis_Surface
     from OCP.ShapeFix import ShapeFix_Shape
     from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
     from OCP.TopAbs import (TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_ON,
@@ -72,7 +75,7 @@ def _iniciar_opencascade():
     from OCP.TopLoc import TopLoc_Location
     from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid
     from OCP.BRep import BRep_Builder
-    from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
     _ANALITICAS = (GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus, GeomAbs_SurfaceOfExtrusion,
                    GeomAbs_SurfaceOfRevolution)
 
@@ -1256,15 +1259,145 @@ def teselar_por_cara(forma, deflexion=0.05, angular=0.3, rehacer=False):
 
 
 def _triangulaciones(forma, deflexion, angular, rehacer=False):
-    """Caras y triangulaciones OCC antes de convertirlas: permite reusar los arrays de las caras intactas."""
+    """Caras y triangulaciones OCC antes de convertirlas: permite reusar los arrays de las caras intactas.
+    B-153: las caras que OCC abandonó a medio mallar se reparan acá, así ningún consumidor (`teselar`, el visor, el
+    análisis) recibe una malla con agujeros."""
     if rehacer:
         BRepTools.Clean_s(forma)
     BRepMesh_IncrementalMesh(forma, deflexion, False, angular, True)
     for cara in caras(forma):
         loc = TopLoc_Location()
         tri = BRep_Tool.Triangulation_s(cara, loc)
-        if tri is not None:
-            yield cara, tri, loc
+        if tri is None:
+            continue
+        if _cara_incompleta(tri):
+            tri, loc = _reparar_cara(cara, tri, loc, deflexion, angular)
+        yield cara, tri, loc
+
+
+def _cara_incompleta(tri):
+    """B-153: True si OCC abandonó la cara a medio mallar. Una triangulación sana de un contorno con V nodos tiene al
+    menos V − 2 triángulos (Euler: T = 2·V − 2 − B con nodos interiores, o T = V − 2 sin ellos); menos, es que faltan
+    (Rugged Box `obj_3`: 67 nodos y 2 triángulos)."""
+    return tri.NbTriangles() < tri.NbNodes() - 2
+
+
+def _reparar_cara(cara, tri, loc, deflexion, angular):
+    """(a) Reintenta mallar SOLO la cara, a un solo hilo (el abandono suele venir del mallado en paralelo del cuerpo
+    entero) y con la triangulación parcial borrada, que si no OCC la cree buena y no la toque. Si la cara sigue
+    incompleta, (b) la rellena con su contorno (`_rellenar_cara`). Si nada alcanza, se restaura la parcial de antes
+    (B-151 ya aparta sus nodos sin llenar): la cara no puede quedarse sin triangulación."""
+    BRep_Builder().UpdateFace(cara, None)      # borra solo la triangulación de esta cara, sin tocar las aristas
+    BRepMesh_IncrementalMesh(cara, deflexion, False, angular, False)
+    nuevo = BRep_Tool.Triangulation_s(cara, loc)
+    if nuevo is not None and not _cara_incompleta(nuevo):
+        return nuevo, loc
+    rellena = _rellenar_cara(cara, tri, loc)
+    if rellena is not None:
+        BRep_Builder().UpdateFace(cara, rellena)
+        return rellena, loc
+    BRep_Builder().UpdateFace(cara, tri)
+    return tri, loc
+
+
+def _cruz2(a, b):
+    """Producto cruz de vectores 2D (los de numpy 2 ya no aceptan pares 2D en `np.cross`)."""
+    return a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]
+
+
+def _rellenar_cara(cara, tri, loc):
+    """B-153 (camino b): rellena una cara abandonada triangulando su contorno (los nodos de los polígonos de sus
+    aristas sobre la triangulación parcial, que son los mismos puntos que usan las caras vecinas: la malla queda
+    cerrada). Devuelve la `Poly_Triangulation` nueva, o None si no puede: contorno abierto o con nodos repetidos
+    (costura de un cilindro), más de un contorno (cara con agujeros) o UV no calculable."""
+    contornos = []
+    for alambre in _explorar(cara, TopAbs_WIRE):
+        contorno = []
+        ex = BRepTools_WireExplorer(TopoDS.Wire(alambre), cara)
+        while ex.More():
+            arista = ex.Current()
+            pol = BRep_Tool.PolygonOnTriangulation_s(arista, tri, loc)
+            if pol is None:
+                return None
+            ns = [pol.Nodes().Value(i) for i in range(pol.Nodes().Lower(), pol.Nodes().Upper() + 1)]
+            if arista.Orientation() == TopAbs_REVERSED:
+                ns.reverse()
+            if contorno and ns and ns[0] == contorno[-1]:
+                ns = ns[1:]
+            contorno.extend(ns)
+            ex.Next()
+        if len(contorno) > 2 and contorno[0] == contorno[-1]:
+            contorno.pop()
+        if len(contorno) < 3 or len(set(contorno)) != len(contorno):
+            return None
+        contornos.append(contorno)
+    if len(contornos) != 1:
+        return None
+    contorno = contornos[0]
+    if tri.HasUVNodes():
+        pts = np.array([[tri.UVNode(i).X(), tri.UVNode(i).Y()] for i in contorno], float)
+    else:
+        try:
+            proyecta = ShapeAnalysis_Surface(BRep_Tool.Surface_s(cara))
+            trsf = loc.Transformation()
+            pts = []
+            for i in contorno:
+                uv = proyecta.ValueOfUV(tri.Node(i).Transformed(trsf), 1e-6)
+                pts.append([uv.X(), uv.Y()])
+            pts = np.array(pts, float)
+        except Exception:  # noqa: BLE001 — superficie sin proyección: mejor rendirse que inventar una malla mala
+            return None
+    vueltas = _cruz2(pts, np.roll(pts, -1, axis=0)).sum()
+    if abs(float(vueltas)) == 0.0:
+        return None
+    if float(vueltas) < 0:    # antihorario en UV, como mallan las sanas
+        contorno.reverse()
+        pts = pts[::-1]
+    tris = _triangular_poligono(pts)
+    if not tris:
+        return None
+    nueva = Poly_Triangulation(len(contorno), len(tris), True)
+    uv = {nodo: gp_Pnt2d(float(p[0]), float(p[1])) for nodo, p in zip(contorno, pts, strict=True)}
+    for k, nodo in enumerate(contorno):
+        nueva.SetNode(k + 1, tri.Node(nodo))
+        nueva.SetUVNode(k + 1, uv[nodo])
+    for k, (a, b, c) in enumerate(tris):
+        nueva.SetTriangle(k + 1, Poly_Triangle(contorno[a], contorno[b], contorno[c]))
+    return nueva
+
+
+def _triangular_poligono(pts):
+    """Triangulación por orejas de un polígono simple (pts Nx2 en sentido antihorario): tríos de índices. Contornos
+    de caras abandonadas: decenas o cientos de nodos, un caso raro, así que el O(n²) no molesta."""
+    resto = list(range(len(pts)))
+    tris = []
+    while len(resto) > 3:
+        elegida = None
+        for k in range(len(resto)):
+            a, b, c = resto[k - 1], resto[k], resto[(k + 1) % len(resto)]
+            if float(_cruz2(pts[c] - pts[b], pts[a] - pts[b])) <= 0.0:
+                continue                       # no es un oído convexo
+            otros = np.array([pts[i] for i in resto if i not in (a, b, c)], float)
+            if len(otros) and bool(((_cruz2(pts[b] - pts[a], otros - pts[a]) > 0) &
+                                    (_cruz2(pts[c] - pts[b], otros - pts[b]) > 0) &
+                                    (_cruz2(pts[a] - pts[c], otros - pts[c]) > 0)).any()):
+                continue                       # un punto dentro del oído
+            elegida = k
+            break
+        if elegida is None:
+            # solo quedan vértices colineales o enredados: soltar el más parecido a colineal (sin triángulo) o rendirse
+            cruces = [abs(float(_cruz2(pts[resto[(k + 1) % len(resto)]] - pts[resto[k]],
+                                       pts[resto[k - 1]] - pts[resto[k]]))) for k in range(len(resto))]
+            escala = max(float(np.abs(pts - pts.mean(axis=0)).max()), 1e-9)
+            if min(cruces) > 1e-9 * escala * escala:
+                return []
+            resto.pop(int(np.argmin(cruces)))
+            continue
+        a, b, c = resto[elegida - 1], resto[elegida], resto[(elegida + 1) % len(resto)]
+        tris.append((a, b, c))
+        resto.pop(elegida)
+    tris.append((resto[0], resto[1], resto[2]))
+    return tris
 
 
 def _nodos_mundo(tri, loc):

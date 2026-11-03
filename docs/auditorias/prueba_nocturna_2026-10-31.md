@@ -358,6 +358,7 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 - Tanda 4 (`fa934e5`) y prueba en Cline (AUD-13, PLA-14) integradas con sus tests sueltos. Falta: suite completa, humo y una pieza de ventana para ANI-4.
 - Tanda 5 (H-66, PLA-6, F3, F18) integrada con sus tests sueltos. Falta en la ventana: la pieza `cinta_completa` de `todo.py` (cinta PLÁSTICO) y la vista previa de patrón en puntos y en ruta.
 - B-185 integrado con sus tests: falta mirar en la ventana real que la fila elegida se ve elegida y con el borde de origen.
+- Tareas del 2026-11-03 (MAL-1, H-67, KS1, H-59 en `b7db046`; PLA-9 después): tests sueltos verdes. Falta: suite completa y humo; en la ventana real, el botón Combinar grupos de caras, elegir una curva de Boceto 3D en el visor, el selector «Preajuste» de Configuración de escena, deshacer con el diálogo Parámetros abierto y un comando de afuera, y SÓLIDO › MODIFICAR › Simplificar › Eliminar caras (clic, elegir, Aceptar, doble clic en el timeline).
 
 ## 4. Cosas que ninguna prueba cubre todavía
 

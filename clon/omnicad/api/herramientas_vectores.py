@@ -613,12 +613,14 @@ def insert_dxf(sesion, path: str, plane: str | None = None, sketch: str | None =
              "Vectoriza una imagen (PNG, JPG, BMP, GIF, WEBP) y la inserta en un boceto como contornos cerrados "
              "(logos, siluetas, dibujos en blanco y negro). Mismo manejo de plane / sketch / transformación que "
              "insert_svg. Los agujeros salen como contornos aparte (forman perfiles anillo). Con curves=true cada "
-             "contorno es UNA spline suave; con false, una polilínea simplificada. El tamaño sale de width (mm) o, "
+             "contorno es UNA spline suave; con false, una polilínea simplificada. Con corner_angle > 0 el contorno "
+             "se parte en sus esquinas y las puntas del dibujo quedan vivas. El tamaño sale de width (mm) o, "
              "si falta, de dpi.", modifica=True)
 def trace_image(sesion, path: str, plane: str | None = None, sketch: str | None = None, width: float | None = None,
                 dpi: float = 96.0, threshold: float | None = None, invert: bool = False, smoothing: float = 1.0,
                 tolerance: float = 0.5, min_area: float = 4.0,
-                channel: Literal["auto", "luminance", "alpha"] = "auto", curves: bool = False, x: float = 0.0,
+                channel: Literal["auto", "luminance", "alpha"] = "auto", curves: bool = False,
+                corner_angle: float = 0.0, x: float = 0.0,
                 y: float = 0.0, angle: float = 0.0, flip_h: bool = False, flip_v: bool = False,
                 name: str | None = None, body: str | None = None):
     """
@@ -634,6 +636,9 @@ def trace_image(sesion, path: str, plane: str | None = None, sketch: str | None 
     min_area: los contornos de menos píxeles² se descartan como ruido.
     channel: auto (usa la transparencia si la hay), luminance o alpha.
     curves: true = una spline suave por contorno; false = polilínea.
+    corner_angle: ángulo de esquina en grados (0 a 180): los vértices que doblen más que esto son esquinas y el
+        contorno se parte ahí, así las puntas del dibujo quedan vivas (0 = sin detección: todo como antes).
+        Solo con curves=true.
     x: desplazamiento en X (mm).
     y: desplazamiento en Y (mm).
     angle: giro en grados alrededor del origen del boceto.
@@ -646,11 +651,13 @@ def trace_image(sesion, path: str, plane: str | None = None, sketch: str | None 
     ruta = _archivo(path, (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff"), "trace_image")
     if not (math.isfinite(dpi) and dpi > 0):
         raise error("INVALID_ARGUMENTS", "dpi tiene que ser positivo.")
+    if not (math.isfinite(corner_angle) and 0 <= corner_angle <= 180):
+        raise error("INVALID_ARGUMENTS", "corner_angle tiene que estar entre 0 y 180.")
     transf = _transformacion(25.4 / dpi, width, x, y, angle, flip_h, flip_v)
     canal = {"auto": "auto", "luminance": "luminosidad", "alpha": "alfa"}[channel]
     try:
         prims = vectorizar_imagen(ruta, umbral=threshold, invertir=invert, suavizado=smoothing, tolerancia=tolerance,
-                                  area_minima=min_area, canal=canal, curvas=curves)
+                                  area_minima=min_area, canal=canal, curvas=curves, angulo_esquina=corner_angle)
     except ErrorVectorizar as e:
         raise error("IMPORT_FAILED", str(e)) from e
     return _insertar(sesion, prims, plane, sketch, name, body, **transf)

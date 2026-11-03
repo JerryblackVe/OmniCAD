@@ -65,3 +65,34 @@ def test_desmoldeo_dialogo_linea_de_particion_y_relativo(doc):
     assert op.p["tipo"] == "linea_particion" and op.p["modo_angulo"] == "relativo" and op.p["herramienta_particion"]
     doc.agregar(op)
     assert doc.resultados[-1].estado == "ok", doc.resultados[-1].mensaje
+
+
+def test_apoyo_dialogo_construye_reabre_y_valida(doc):
+    """PLÁSTICO › Apoyo (comandos de plástico): sin perfiles el diálogo falla; construido y ejecutado sobre la
+    caja vaciada rellena el hueco con el prisma del perfil (20×20 de 4 mm de aire) y `desde_op` lo devuelve igual."""
+    from omnicad.timeline.operaciones import OpExtrusion
+    from omnicad.ui.comandos.plastico import Apoyo
+    s = api.Sesion(doc)
+    cid = next(iter(doc.estado_final.cuerpos))
+    assert api.llamar(s, "shell", {"body": cid, "faces": ">Z", "thickness": 2})["ok"]
+    r = api.llamar(s, "create_sketch", {"plane": "XY"})
+    assert r["ok"], r
+    boceto = r["result"]["sketch"]["id"]
+    for x1, y1, x2, y2 in [(10, 10, 30, 10), (30, 10, 30, 30), (30, 30, 10, 30), (10, 30, 10, 10)]:
+        r = api.llamar(s, "draw_line", {"sketch": boceto, "start_x": x1, "start_y": y1, "end_x": x2, "end_y": y2})
+        assert r["ok"], r
+    perfil = doc.estado_final.bocetos[boceto].perfiles[0]
+    hits = [hit_desde_ref({"tipo": "perfil", "boceto": boceto, **OpExtrusion.referencia_perfil(perfil)},
+                          doc.estado_final)]
+    cmd, ctx = Apoyo(), ContextoComando(doc)
+    v = _valores(cmd, ctx)
+    with pytest.raises(ErrorComando):
+        cmd.construir(v, ctx)                                                  # sin perfiles ni cuerpo
+    op = cmd.construir(dict(v, perfiles=hits, cuerpo=[hit_desde_ref({"tipo": "cuerpo", "cuerpo": cid},
+                                                                    doc.estado_final)]), ctx)
+    volumen_antes = geo.volumen(doc.estado_final.cuerpos[cid].forma)
+    doc.agregar(op)
+    assert doc.resultados[-1].estado == "ok", doc.resultados[-1].mensaje
+    assert geo.volumen(doc.estado_final.cuerpos[cid].forma) == pytest.approx(volumen_antes + 20 * 20 * 4, rel=1e-6)
+    vuelta = cmd.desde_op(op, ContextoComando(doc, op=op))
+    assert len(vuelta["perfiles"]) == 1 and cmd.construir(vuelta, ContextoComando(doc)).p == op.p

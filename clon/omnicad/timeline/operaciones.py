@@ -984,6 +984,7 @@ def _kernel_crear():
 
 class _OpConPerfiles(Operacion):
     """Base de extrusión y revolución: perfiles de un boceto (por firma) y/o caras planas (`caras`)."""
+    MENSAJE_CARAS = "Las caras elegidas no miran para el mismo lado: hacé la operación con una cara por paso."
 
     def dependencias(self):
         deps = super().dependencias()
@@ -1015,9 +1016,16 @@ class _OpConPerfiles(Operacion):
                     ctx.aviso(nota)
                 caras.append(perfil.cara)
             plano = br.plano
+        normal_cara = None
         for e in _resolver_todas(self.p.get("caras"), estado):
             if e.plano is None:
                 raise ErrorOperacion("Solo se pueden usar caras planas.")
+            if normal_cara is None:
+                normal_cara = e.plano.normal
+            elif float(normal_cara @ e.plano.normal) < 1 - 1e-6:
+                # Cada cara se extruye en la normal del perfil: si miran para lados distintos, el resultado es un
+                # cuerpo degenerado (B-164). En Fusion las caras de una extrusión tienen que ser coplanares.
+                raise ErrorOperacion(self.MENSAJE_CARAS)
             caras.append(e.forma)
             plano = plano or e.plano
         if not caras:
@@ -1052,6 +1060,7 @@ class OpExtrusion(_OpConPerfiles):
     (distancia, al objeto o todo), ángulo de conicidad y operación (nuevo cuerpo, unir, cortar, intersecar)
     sobre los cuerpos automáticos o los elegidos en «Objetos para cortar»."""
     TIPO, ETIQUETA, ICONO = "extrusion", "Extrusión", "⬆"
+    MENSAJE_CARAS = "Las caras elegidas no miran para el mismo lado: extruí cada cara por separado."
     PARAMS = {"boceto": "", "perfiles": [], "caras": [], "tipo": "solida", "inicio": "plano", "desfase_inicio": "0 mm",
               "inicio_objeto": None, "direccion": "un_lado", "medida": "mitad", "extension": "distancia",
               "distancia": "10 mm", "hasta": None, "extension2": "distancia", "distancia2": "10 mm", "hasta2": None,
@@ -1132,7 +1141,9 @@ class OpExtrusion(_OpConPerfiles):
             forma = _extrusion_basica(caras, n, d1, d2, direccion, medida, desfase)
         if not geo.esta_vacia(forma) and caras and all(cara_sin_area(c) for c in caras):
             raise ErrorOperacion("La extrusión no tiene volumen: el perfil elegido casi no tiene área.")
-        self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, p["operacion"], self._objetivo()))
+        afectados = aplicar_resultado(estado, ctx, self.id, forma, p["operacion"], self._objetivo())
+        self._registrar_usados(afectados)
+        _exigir_cuerpo_con_volumen(estado, afectados)
 
     @staticmethod
     def _forma_objeto(e):
@@ -1141,6 +1152,21 @@ class OpExtrusion(_OpConPerfiles):
         if e.plano is not None:
             return geo.cara_de_plano(e.plano)
         raise ErrorOperacion("El objeto elegido no sirve como límite de la extrusión.")
+
+
+def _exigir_cuerpo_con_volumen(estado, ids):
+    """Un cuerpo que sale con volumen 0 (o menos) o con una forma inválida es un fallo del paso, no un resultado:
+    extruir caras de distinta dirección dejaba un cuerpo de volumen 0 y el paso salía «ok» (B-164)."""
+    for cid in ids:
+        c = estado.cuerpos.get(cid)
+        if c is None or getattr(c, "tipo", "solido") != "solido":
+            continue
+        if not geo.es_valida(c.forma):
+            raise ErrorOperacion("La extrusión dejó un cuerpo con una forma inválida: revisá las caras elegidas "
+                                 "y la distancia.")
+        if geo.volumen_exacto(c.forma) <= 0:
+            raise ErrorOperacion("La extrusión dejó un cuerpo sin volumen (0 o menos): revisá las caras elegidas "
+                                 "y la distancia.")
 
 
 def _extrusion_basica(caras, n, d1, d2, direccion, medida, desfase):

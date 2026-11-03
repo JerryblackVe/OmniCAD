@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 32: Abierto 26 · Parcial 4 · Bloqueado 1 · Sin verificar 1 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 24: Abierto 19 · Parcial 4 · Bloqueado 1 · Sin verificar 0 (recontado 2026-11-02).
 
 ## Abiertos y parciales
 
@@ -12,28 +12,20 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-184 | Dividir un cuerpo importado de STEP deja una mitad con volumen negativo y el paso sale ok | Abierto | Alta | Cuerpo7 quedó en −46.885 mm³ y −33.256 mm², y Cuerpo3 en 65.205 mm³. `check_geometry` en vivo sobre ese documento trabó la ventana más de 5 min. Falta reproducirlo en proceso aparte. | omnicad/nucleo/solidos_modificar.py:1564 | 2026-11-02 |
 | B-177 | El sentido de una unión con origen en arista circular se invierte si el padre gira | Abierto | Alta | Con el padre a más de unos 45° el mismo valor mueve al revés: −207,9 mm en vez de −56,9. Con origen en cara plana no pasa. | omnicad/api/herramientas_ensamble.py:725 | 2026-11-02 |
 | B-178 | Lo creado después de una unión no la sigue al accionarla | Abierto | Alta | Agujeros y fijaciones con puntos absolutos salen corridos y el recálculo da REFERENCE_LOST. Esquive: uniones al final del timeline. | omnicad/api/herramientas_ensamble.py:650 | 2026-11-02 |
-| B-181 | Un spline cerrado con control_points da PROFILE_NOT_CLOSED | Abierto | Media | Reproducido: `closed` se ignora en `control_points` (aviso al crearla), quedan 0 perfiles y `extrude` da PROFILE_NOT_CLOSED. El docstring de `draw_spline` dice que `closed` cierra solo la de ajuste. | omnicad/api/herramientas_boceto.py:1950 | 2026-11-02 |
 | B-183 | section_view no aparece en render_image | Abierto | Media | Reproducido: `section_view` da área 1600 mm² sobre una caja de 40³, pero `render_image` sale idéntico con la sección visible u oculta (0 de 76 800 píxeles distintos). | omnicad/api/herramientas_analisis.py:439 | 2026-11-02 |
 | B-172 | Pedir propiedades de un cuerpo recién solevado cerró la app | Abierto | Alta | Violación de acceso en TKernel dentro de `_por_malla`, una vez en vivo; no se repite abriendo el autoguardado. Falta aislar esa medición o validar el sólido antes. | omnicad/nucleo/geometria.py:1034 | 2026-11-02 |
 | B-173 | Solevación de 3 splines cerrados sale ok con el sólido plegado, y check_geometry da válido | Abierto | Alta | Da 40 % del volumen esperado y el orden de las secciones cambia el resultado sin avisar. `valid` y `all_valid` siguen en true con un problema de severidad error. | omnicad/api/herramientas_revision.py:74 | 2026-11-02 |
-| B-176 | export_sketch a SVG invertiría el sentido de los arcos | Sin verificar | Baja | No se reproduce con arcos simples: el flag del SVG es correcto por cuenta y por ida y vuelta. Falta probar el boceto original de la cartera, donde salieron cóncavos. | omnicad/io_archivos/svg.py:410 | 2026-11-02 |
 | B-170 | La vista previa de Solevación cierra la app | Abierto | Alta | Con perfiles elegidos, `BRepOffsetAPI_MakePipeShell` da una violación de acceso dentro de la previa, en `solevar`: se cae la ventana entera. La previa tiene que correr aislada o validar antes. | nucleo/solidos_crear.py:1321 | 2026-11-02 |
-| B-171 | Un desfase grande da autointersecciones y sale ok | Abierto | Media | `offset_edges` de 15 mm y `offset_surface` de 400 mm dejan el cuerpo nuevo con autointersecciones. Falta ver qué hace Fusion y si corresponde un aviso. | api/herramientas_solido.py | 2026-11-02 |
 | B-168 | Un tubo por aristas con esquinas da autointersecciones y sale ok | Abierto | Media | `create_pipe` sobre tres aristas de un cuerpo que forman esquinas: 1 autointersección en el cuerpo nuevo. Falta ver cómo resuelve Fusion las esquinas y si corresponde un aviso. | api/herramientas_solido_extra.py | 2026-11-02 |
 | B-159 | Un empalme chico sobre un vaciado cierra la app | Abierto | Alta | Caja 60 × 50 × 40, vaciado de 1 mm quitando la base y empalme de 1 mm en E10: `BRepFilletAPI_MakeFillet.Build` da una violación de acceso y se cae todo el programa. Hay que ver por qué no lo frena el `try`: un cierre nativo no es una excepción de Python; correrlo aislado o validar antes. | nucleo/solidos_modificar.py:548 | 2026-11-02 |
 | B-158 | Labio sobre una esfera cierra la app | Abierto | Media | `create_lip_groove` sobre la arista de costura de una esfera mide un alambre sin largo y da una violación de acceso. Falta rechazar esa arista con un error claro. | nucleo/solidos_crear.py:236 | 2026-11-02 |
 | B-160 | Un STEP con bytes alterados cierra la app | Abierto | Alta | `STEPCAFControl_Reader.ReadFile` da una violación de acceso con el archivo de `tests/corpus_caza/`. Abrir STEP de otros tiene que correr en el proceso aislado (`nucleo/aislado.py`), o la app cae con un archivo ajeno. | nucleo/intercambio.py:225 | 2026-11-02 |
-| B-162 | Un chaflán mayor que el radio deja el sólido abierto y el paso sale ok | Abierto | Media | Cilindro de radio 10 y chaflán de 15 en su arista: cuerpo sólido y no estanco, sin error. Falta rechazarlo o cerrar la forma, comparando con Fusion. | nucleo/solidos_modificar.py | 2026-11-02 |
-| B-164 | Extruir varias caras a la vez deja un cuerpo roto | Abierto | Media | Con caras de distinta orientación el cuerpo nuevo sale con volumen 0 o con autointersecciones, y el STEP exportado pierde ese cuerpo. Falta rechazarlo o extruir cada cara aparte. | timeline/operaciones.py | 2026-11-02 |
 | B-165 | Un agujero tangente a dos paredes deja aristas no manifold y sale ok | Abierto | Media | Agujero de 60 mm en una cara de 60 mm de ancho: pasa justo por las dos paredes. Falta decidir si da error o aviso, comparando con Fusion. | nucleo/solidos_crear.py | 2026-11-02 |
-| B-166 | Desfasar caras de una superficie la deja inválida y sale ok | Abierto | Media | `offset_surface` y después `offset_faces` de 40 mm sobre la cara nueva: `check_geometry` da inválido. El paso tendría que fallar o avisar. | nucleo/solidos_modificar.py | 2026-11-02 |
 | B-167 | El patrón geométrico sobre chapa da autointersecciones y sale ok | Abierto | Media | Dos caras de una pestaña con los valores por defecto: 2 autointersecciones. Falta ver si las copias se pisan y si tiene que unirlas o avisar. Con una distancia de 2 mm sobre una cara grande tarda más de 40 s y no se puede cortar. | api/herramientas_solido_extra.py | 2026-11-02 |
 | B-157 | Un empalme o chaflán más grande que la pared de un vaciado deja aletas y el paso sale ok | Abierto | Alta | El corte exterior atraviesa la pared y las caras de la cavidad quedan sueltas por fuera. El cuerpo da válido y estanco, pero con 16 autointersecciones: falta detectarlo y decidir qué hace cada caso comparando con Fusion. | omnicad/nucleo/solidos_modificar.py:496 | 2026-11-02 |
-| B-153 | Teselar deja abiertas las caras muy finas que OpenCascade abandona a medio mallar | Abierto | Media | Rugged Box `obj_3`: unas 25 de 1088 caras quedan con menos triángulos que nodos (cara 708: 67 nodos y 2 triángulos). El nodo sin llenar ya no llega a la malla (B-151), pero la malla sale abierta y `compare_to_mesh` da `closed: false`. Falta rellenar esas caras con sus aristas o reintentar con otro parámetro. | nucleo/geometria.py `_nodos_de_la_cara`; tests/test_geometria.py::test_b151_un_nodo_sin_llenar_de_una_cara_a_medio_mallar_no_llega_a_los_triangulos | 2026-11-01 |
 | B-149 | Radio mínimo sin radio mínimo pinta de rojo las paredes enteras de un vaciado | Parcial | Baja | El panel y `min_radius` de la API ya pintan una banda junto al rincón. Un análisis guardado antes, y la API sin `min_radius`, siguen igual para que un documento viejo se vea igual: decidir si también cambian. | nucleo/analisis.py (`colores_radio_minimo`); tests/test_inspeccionar_fusion.py | 2026-11-01 |
 | B-144 | Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar | Abierto | Media | Hueca de pared 3 (caja 60×40×20 menos 54×34 desde z = 3) y esfera r 4 en (18,537165, 20,0001, 10,0001): cortar quita 103,79 mm³ de 122,5 (antes de B-125 quitaba 0) y el común da 121,97. Las muestras de `_comun_desmentido` solo ven diferencias de 1/4 de la pieza chica. | clon/tests/test_booleanas_tortura.py::test_b125_esfera_casi_tangente_no_se_queda_sin_cortar | 2026-11-01 |
 | B-154 | Un paso viejo con un pedazo de letra partida, elegido a mano, ya no calcula | Abierto | Media | Volver a elegir el texto en ese paso. Ese pedazo dejó de existir con B-134 y la referencia no guarda con qué distinguir la letra de su hueco. | clon/omnicad/nucleo/perfiles.py › `buscar_por_firma_tolerante` | 2026-11-01 |
-| B-123 | Un cuerpo que pasa a otro componente sigue a la unión del componente anterior | Abierto | Media | Si TODOS los cuerpos de un componente nuevo vienen del mismo componente movido por una unión, el nuevo hereda ese movimiento (`_matriz_de_cuerpos`): no salta de lugar, pero al accionar después esa unión el cuerpo se sigue moviendo, aunque ya no pertenece a ese componente y el aviso de ASM-7 diga que sus uniones ya no mueven nada. En Fusion el cuerpo queda donde estaba al reasignarlo. Hace falta guardar en la receta la pose del momento de reasignar. Ya pasaba antes de B-108. | omnicad/timeline/ops_ensamblar.py (`_matriz_de_cuerpos`); tests/test_posicion_asm.py::test_b108_todos_del_mismo_componente_el_nuevo_hereda_su_movimiento_y_no_gira_dos_veces | 2026-11-01 |
 | B-121 | Volver a resolver un boceto con una tangente general (spline) corre la geometría un poco cada vez | Abierto | Media | En `_tangencia` el contacto arranca de una muestra de 96 puntos, no del contacto exacto: el solver no parte de la solución y reparte el error entre la curva y el parámetro. Medido 2026-10-31 con arco de radio 10 y spline ya tangentes: 10,0000 → 10,0091 → 10,0175 → 10,0254 → 10,0326 por pasada. Arreglarlo cambia lo que dan las recetas guardadas con esas tangentes: decidir antes de tocar el solver (idea: afinar los dos parámetros con la geometría quieta y usarlos solo si el residuo ya es cero) | `tests/test_restricciones_matematica.py::test_tangente_con_el_comando_no_cambia_el_radio_del_arco`; `omnicad/restricciones/solver.py` (`_tangencia`) | 2026-10-31 |
 | B-119 | Proyectar un cuerpo curvo visto de costado no da su silueta | Abierto | Alta | Fusion promete perfiles cerrados con el filtro Cuerpos («closed profiles»), pero `proyectar_forma` proyecta solo aristas: un cilindro R14 sobre XZ da 3 líneas abiertas (falta el lado opuesto a la costura) y 0 perfiles; una esfera da una línea o un arco. Hace falta sumar la silueta (HLR de `nucleo/dibujo.py`), con cuidado: un vínculo a un cuerpo la recalcularía en cada paso del timeline, y sobre roscas tarda más de 90 s. Mirado de frente anda bien (cilindro sobre XY: 1 círculo, 1 perfil). | omnicad/nucleo/perfiles.py (`proyectar_forma`); tests/test_proyectar_tarjeta.py::test_cambiar_de_filtro_saca_lo_incompatible_y_lo_dice | 2026-10-31 |
 | P-12c | Fuente de novedades de Fusion (la ayuda es un shell JS sin titulares) | Parcial | Baja | Autodesk le responde 403 a los scripts: ahora se lee la última copia de archive.org del blog «What's New» (hoy del 2026-05-16, 5 meses atrás) y el informe lo avisa; falta una fuente al día que no bloquee (feed o API) o seguir revisando a mano. | scripts/novedades.py (`bajar`, `COPIAS`); tests/test_novedades.py::test_fusion_apunta_al_blog_y_cae_a_archive_org_si_autodesk_bloquea | 2026-10-20 |
@@ -139,15 +131,6 @@ de arriba manda sobre este texto.
 - **Entorno:** Windows, versión 0.2.0, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
 
-### B-171 · Un desfase grande da autointersecciones y sale ok
-
-- **Qué:** Las recetas `b171_desfase_aristas` y `b171_desfase_superficie`.
-- **Esperado:** Un cuerpo sin autointersecciones, o un aviso.
-- **Obtenido:** Paso ok, con 1 y con 6 autointersecciones.
-- **Cómo reproducir:** `clon/tests/corpus_caza/b171_*.json`.
-- **Entorno:** Windows, versión 0.2.0, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
 ### B-168 · Un tubo por aristas con esquinas da autointersecciones y sale ok
 
 - **Qué:** cuerpo con caras extruidas y `create_pipe(edges=["Cuerpo2/E9", "Cuerpo2/E4", "Cuerpo2/E8"])`.
@@ -184,38 +167,11 @@ de arriba manda sobre este texto.
 - **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
 
-### B-162 · Un chaflán mayor que el radio deja el sólido abierto y el paso sale ok
-
-- **Qué:** `create_cylinder(radius=10, height=30)`, `chamfer(edges=["Cuerpo1/E1"], distance=15)`.
-- **Esperado:** Un error, o una forma cerrada.
-- **Obtenido:** Paso ok y `check_geometry` no estanco.
-- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
-- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
-### B-164 · Extruir varias caras a la vez deja un cuerpo roto
-
-- **Qué:** Caja hueca, `extrude(faces=["Cuerpo1/F2"])` y `extrude(faces=["Cuerpo1/F2", "Cuerpo1/F3"])`.
-- **Esperado:** Un cuerpo válido por cara, o un error.
-- **Obtenido:** Cuerpo4 con volumen 0; en otra pieza, 4 autointersecciones.
-- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
-- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
 ### B-165 · Un agujero tangente a dos paredes deja aristas no manifold y sale ok
 
 - **Qué:** `create_box(80, 60, 40)`, `create_hole(diameter=60, face="Cuerpo1/F5", depth=60)`.
 - **Esperado:** Sin aristas compartidas por más de dos caras, o un aviso.
 - **Obtenido:** Paso ok y una arista no manifold.
-- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
-- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
-### B-166 · Desfasar caras de una superficie la deja inválida y sale ok
-
-- **Qué:** Caja, vaciado de 2 mm, `offset_surface(faces=["Cuerpo1/F7"])`, `offset_faces(faces=["Cuerpo2/F1"], distance=40)`.
-- **Esperado:** Una superficie válida o un error.
-- **Obtenido:** Paso ok y `check_geometry` inválido.
 - **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
 - **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.

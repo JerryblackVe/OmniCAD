@@ -63,14 +63,25 @@ def test_b89_conica_con_extremos_iguales(s):
     sin_cambio(s, "draw_conic", "INVALID_GEOMETRY", start_x=0, start_y=0, end_x=0, end_y=0, vertex_x=5, vertex_y=5)
 
 
-def test_b89_spline_de_control_cerrada_avisa_que_se_ignora(s):
-    r = ok(s, "draw_spline", points=[[0, 0], [1, 1], [2, 0], [3, 1]], spline_type="control_points", closed=True)
-    assert any("closed" in a for a in r["avisos"]), r["avisos"]
+def test_b89_spline_de_control_sin_closed_sigue_andando(s):
+    """Una spline de puntos de control sin closed sigue creándose sin avisos."""
     r = ok(s, "draw_spline", points=[[0, 0], [1, 1], [2, 0], [3, 1]], spline_type="control_points")
     assert r["avisos"] == []
-    r = ok(s, "sketch_from_spec", entities=[{"type": "spline", "points": [[0, 0], [1, 1], [2, 0], [3, 1]],
-                                             "spline_type": "control_points", "closed": True}])
-    assert any("closed" in a for a in r["avisos"]), r["avisos"]
+
+
+# ---------------------------------------------------------------- B-181
+def test_b181_spline_de_control_closed_true_da_invalid_arguments(s):
+    """closed=true en control_points da INVALID_ARGUMENTS (Fusion no lo permite: SKT-CREATE-SPLINES)."""
+    r = sin_cambio(s, "draw_spline", "INVALID_ARGUMENTS",
+                   points=[[0, 0], [1, 1], [2, 0], [3, 1]], spline_type="control_points", closed=True)
+    assert "fit_points" in r["mensaje"] or "ajuste" in r["mensaje"]
+
+
+def test_b181_sketch_from_spec_control_closed_da_invalid_arguments(s):
+    """sketch_from_spec: spline de control con closed=true da INVALID_ARGUMENTS."""
+    sin_cambio(s, "sketch_from_spec", "INVALID_ARGUMENTS",
+               entities=[{"type": "spline", "points": [[0, 0], [1, 1], [2, 0], [3, 1]],
+                           "spline_type": "control_points", "closed": True}])
 
 
 # ---------------------------------------------------------------- B-90

@@ -6,7 +6,8 @@ from ...timeline.ops_ensamblar import (CLAVES_MOVIMIENTO, MODOS_POSICION, MOVIMI
                                        OpCapturarPosicion, OpComponente, OpGrupoRigido, OpOrigenUnion,
                                        OpPosicionInicial, OpRevertirPosicion, OpUnion, OpVinculoMovimiento,
                                        _clave_movimiento, componente_por_ref, direccion_eje, eje_local, ejes_bola,
-                                       exigir_numero, marco_desde, principal_de, ruta_componente, siguiente_accion)
+                                       exigir_numero, marco_desde, pose_de_reasignar, principal_de, ruta_componente,
+                                       siguiente_accion)
 from ...timeline.parametros import ANGULO
 from ..comando import (Casilla, Comando, ErrorComando, Expresion, ListaSeleccion, Opciones, OpcionesVivas, Personalizado,
                        Seleccion, exigir, hit_desde_ref, hits_cuerpos as _hits_cuerpos, ref1, refs)
@@ -154,9 +155,14 @@ class NuevoComponente(Comando):
 
     def construir(self, v, ctx):
         exigir(v, "cuerpos", "Seleccioná los cuerpos del componente.")
-        return self.crear_op(OpComponente, v, ctx, cuerpos=[h["ref"]["cuerpo"] for h in v["cuerpos"]],
+        cuerpos = [h["ref"]["cuerpo"] for h in v["cuerpos"]]
+        # B-123: la pose se congela contra el estado en que se eligieron los cuerpos. Al editar, el de antes del
+        # paso; un paso nuevo vale el actual (el estado del panel puede haber quedado viejo si cambió el documento).
+        estado = ctx.estado if ctx.op is not None else ctx.doc.estado_final
+        return self.crear_op(OpComponente, v, ctx, cuerpos=cuerpos,
                              fijo=v["fijo"], padre=v.get("padre") or "",
-                             version_pose=_version(ctx, OpComponente, "version_pose"))
+                             version_pose=_version(ctx, OpComponente, "version_pose"),
+                             pose=pose_de_reasignar(estado, cuerpos).tolist())
 
     def desde_op(self, op, ctx):
         try:

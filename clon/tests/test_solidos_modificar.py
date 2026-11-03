@@ -4,6 +4,7 @@ import math
 import numpy as np
 import pytest
 
+from omnicad import api
 from omnicad.nucleo import geometria as g
 from omnicad.nucleo import solidos_modificar as sm
 
@@ -118,6 +119,21 @@ def test_chaflan_tipos():
                          "cara": tapa(b)}])
     chequear(ra, 1000 - 0.5 * 1 * math.tan(math.radians(60)) * 10)
     assert g.area(tapa(ra)) == pytest.approx(10 * 9)
+
+
+def test_chaflan_demasiado_grande_abre_el_solido():
+    """B-162: un chaflán de 15 en el borde de un cilindro de radio 10 lo dejaba abierto y salía ok."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    cil = g.cilindro(10, 30)
+    # el círculo de arriba: su punto medio está a z = 30 (la costura vertical tiene el suyo a z = 15)
+    e = next(a for a in sm._aristas(cil)
+             if abs(BRepAdaptor_Curve(a).Value((BRepAdaptor_Curve(a).FirstParameter()
+                                                + BRepAdaptor_Curve(a).LastParameter()) / 2).Z() - 30) < 1e-6)
+    with pytest.raises(g.ErrorGeometria, match="abrió el sólido"):
+        sm.chaflan(cil, [{"aristas": [e], "tipo": "distancia_igual", "distancia": 15}])
+    r = sm.chaflan(cil, [{"aristas": [e], "tipo": "distancia_igual", "distancia": 2}])
+    assert g.es_valida(r)
+    assert g.volumen(r) == pytest.approx(9307.49, rel=1e-4)      # π·100·30 menos el anillo del chaflán
 
 
 # ---------------------------------------------------------------- vaciado
@@ -243,6 +259,29 @@ def test_desfasar_caras_alternativa_por_extrusion(monkeypatch):
     chequear(r, 1500)
     assert len(g.caras(r)) == 6
     chequear(sm.desfasar_caras(b, [tapa(b), cara_en(b, (5, 0, 5))], -1), 9 * 9 * 10)
+
+
+def test_desfase_cara_de_superficie_no_queda_invalido_silenciosamente():
+    """B-166: un «Desfase de cara» sobre una superficie que la deja inválida no puede salir «ok» ocultándolo:
+    o el kernel lo repara y deja el cuerpo válido, o lo rechaza con un error claro. Nunca devuelve ok con
+    geometría inválida. Reproduce los pasos de tests/corpus_caza/b166_desfase_superficie.json por la API."""
+    s = api.Sesion()
+    pasos = [
+        {"tool": "create_box", "args": {"length": 60, "width": 50, "height": 40}},
+        {"tool": "shell", "args": {"body": "Cuerpo1", "thickness": 2, "faces": ">X"}},
+        {"tool": "offset_surface", "args": {"faces": ["Cuerpo1/F7"]}},
+        {"tool": "offset_faces", "args": {"faces": ["Cuerpo2/F1"], "distance": 40.0}},
+    ]
+    for p in pasos[:3]:        # caja, vaciado y superficie intermedia salen bien
+        r = api.llamar(s, p["tool"], p["args"])
+        assert r["ok"], (p["tool"], r)
+    # El desfase de 40 mm sobre la superficie nueva solía salir «ok» con el cuerpo inválido.
+    r = api.llamar(s, pasos[3]["tool"], pasos[3]["args"])
+    rg = api.llamar(s, "check_geometry", {"self_intersection": True})
+    assert rg["ok"], rg
+    invalidos = [c.get("name") for c in (rg.get("result") or {}).get("bodies") or []
+                 if not c.get("valid", True)]
+    assert not invalidos, f"quedó(s) inválido(s) tras el desfase de cara: {invalidos} (último paso: {r})"
 
 
 def test_reemplazar_cara_por_el_plano_donde_ya_esta_lo_dice():

@@ -9,7 +9,10 @@ trazado externas: Pillow, numpy, scipy y contourpy.
 
 Salida: primitivas como las de `svg.leer_svg` — ('polilinea', [(x, y)…], True) en píxeles, Y hacia arriba —
 o, con `curvas=True`, ('curva', [(x, y)…], True): una spline de ajuste cerrada por contorno (más suave y con
-muchas menos entidades; los contornos de menos de MIN_PUNTOS_CURVA vértices quedan polilíneas). El paso a milímetros lo hace `boceto_archivos.boceto_desde_primitivas`.
+muchas menos entidades; los contornos de menos de MIN_PUNTOS_CURVA vértices quedan polilíneas). Con
+`angulo_esquina > 0` el contorno se parte en sus esquinas: ('curva', [(x, y)…], False) por tramo, o
+('linea', a, b) si el tramo tiene solo dos puntos. El paso a milímetros lo hace
+`boceto_archivos.boceto_desde_primitivas`.
 """
 from pathlib import Path
 
@@ -90,15 +93,46 @@ def _area(pts):
     return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
 
 
+def _dobles(pts):
+    """Ángulo (en grados) que el contorno dobla en cada vértice: 0 si sigue derecho."""
+    d1 = pts - np.roll(pts, 1, axis=0)          # del vértice anterior a este
+    d2 = np.roll(pts, -1, axis=0) - pts          # de este al siguiente
+    l1 = np.hypot(d1[:, 0], d1[:, 1])
+    l2 = np.hypot(d2[:, 0], d2[:, 1])
+    cos = np.zeros(len(pts))
+    ok = (l1 > 1e-12) & (l2 > 1e-12)
+    cos[ok] = (d1[ok] * d2[ok]).sum(axis=1) / (l1[ok] * l2[ok])
+    return np.degrees(np.arccos(np.clip(cos, -1.0, 1.0)))
+
+
+def _tramos_por_esquinas(pts, angulo):
+    """El contorno partido en sus esquinas: los tramos abiertos que van de esquina a esquina (vacío si no
+    hay esquinas)."""
+    esquinas = [i for i, d in enumerate(_dobles(pts)) if d > angulo]
+    if len(esquinas) < 2:
+        return []
+    salida = []
+    for k, i in enumerate(esquinas):
+        j = esquinas[(k + 1) % len(esquinas)]
+        salida.append(pts[i:j + 1] if i < j else np.vstack([pts[i:], pts[:j + 1]]))
+    return salida
+
+
 def vectorizar_imagen(ruta, *, umbral=None, invertir=False, suavizado=1.0, tolerancia=0.5, area_minima=4.0,
-                      canal="auto", maximo_lado=2000, curvas=False):
+                      canal="auto", maximo_lado=2000, curvas=False, angulo_esquina=0.0):
     """Contornos de la imagen como primitivas en píxeles (Y hacia arriba, origen en la esquina inferior
     izquierda de la imagen).
 
     umbral: 0-255 sobre la tinta; None = Otsu. invertir: la tinta es lo claro. suavizado: sigma del filtro en
     píxeles (0 = sin filtro). tolerancia: desvío máximo de la simplificación, en píxeles. area_minima: los
     contornos de menos píxeles² se descartan (ruido). canal: "luminosidad", "alfa" o "auto" (alfa si la
-    imagen tiene transparencia real). maximo_lado: si la imagen es más grande se reduce para trazarla."""
+    imagen tiene transparencia real). maximo_lado: si la imagen es más grande se reduce para trazarla.
+    angulo_esquina: en grados, el doble a partir del cual un vértice es una esquina. 0 = sin detección (todo
+    como antes). Con curvas=True, el contorno se parte en sus esquinas: entre esquina y esquina sale un tramo
+    abierto (una spline, o una recta si el tramo tiene dos puntos) y los tramos comparten sus puntas, así que
+    el perfil sigue cerrado. Solo afecta a los contornos que salen como spline (los de más de MIN_PUNTOS_CURVA
+    vértices): los que quedan polilínea no cambian. Un contorno con una sola esquina no se parte (quedaría
+    abierto)."""
     from PIL import Image
     p = Path(ruta)
     if not p.is_file():
@@ -107,6 +141,8 @@ def vectorizar_imagen(ruta, *, umbral=None, invertir=False, suavizado=1.0, toler
         raise ErrorVectorizar(f"canal es uno de {', '.join(CANALES)}.")
     if not tolerancia >= 0 or not suavizado >= 0 or not area_minima >= 0:
         raise ErrorVectorizar("tolerancia, suavizado y area_minima no pueden ser negativos.")
+    if not angulo_esquina >= 0:
+        raise ErrorVectorizar("El ángulo de esquina no puede ser negativo.")
     try:
         with Image.open(p) as original:
             original.load()
@@ -161,8 +197,17 @@ def vectorizar_imagen(ruta, *, umbral=None, invertir=False, suavizado=1.0, toler
         # Un spline de ajuste cerrado por pocos vértices se pasa de largo en las esquinas (un rectángulo de la tinta
         # invertida, pegado al borde de la imagen, salía 53 × 45 en vez de 45 × 30: T-10 de la prueba de tortura): ese
         # contorno es casi un polígono y, simplificado a `tolerancia`, el polígono ya es igual de fiel.
-        salida.append(("curva" if curvas and len(pts) >= MIN_PUNTOS_CURVA else "polilinea",
-                       [tuple(q) for q in pts], True))
+        spline = curvas and len(pts) >= MIN_PUNTOS_CURVA
+        tramos = _tramos_por_esquinas(pts, angulo_esquina) if spline and angulo_esquina > 0 else []
+        if not tramos:
+            salida.append(("curva" if spline else "polilinea", [tuple(q) for q in pts], True))
+            continue
+        # Con esquinas: el contorno se parte en tramos abiertos que comparten sus puntas (el perfil sigue cerrado).
+        for tramo in tramos:
+            if len(tramo) == 2:
+                salida.append(("linea", tuple(tramo[0]), tuple(tramo[1])))
+            else:
+                salida.append(("curva", [tuple(q) for q in tramo], False))
     if not salida:
         raise ErrorVectorizar("No se encontró nada para vectorizar con ese umbral: probá con otro umbral, "
                               "invertir o canal.")

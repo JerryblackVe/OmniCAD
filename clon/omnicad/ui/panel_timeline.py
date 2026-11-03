@@ -31,7 +31,7 @@ PALETA_COMPONENTES = [QColor(*c) for c in aspectos_doc.PALETA_COMPONENTES]
 # Pasos que ningún comando de la cinta crea: su ícono. Todos los demás usan el del comando que los crea (`comando_para`).
 ICONO_TIPO = {"boceto": "boceto", "importar_step": "importar", "importar_iges": "importar_iges",
               "operacion_base": "operacion_base", "insertar_malla": "insertar_malla",
-              "insertar_diseno": "insertar_diseno", "grafo": "grafo", "borrar_caras": "borrar_caras",
+              "insertar_diseno": "insertar_diseno", "grafo": "grafo",
               "calibracion_holguras": "calibracion_holguras", "copiar_componente": "duplicar_con_uniones"}
 
 

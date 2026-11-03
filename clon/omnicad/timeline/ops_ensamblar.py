@@ -18,8 +18,8 @@ import numpy as np
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
 from . import entidades as ent
-from .operaciones import (ANGULO, ErrorOperacion, Operacion, _deps_objetivo, _migrador, _resolver, _version_de,
-                          registrar_operacion)
+from .operaciones import (ANGULO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo, _migrador,
+                          _resolver, _version_de, registrar_operacion)
 
 TIPOS_UNION = {"rigida": "Rígida", "revolucion": "Revolución", "deslizante": "Deslizante", "cilindrica": "Cilíndrica",
                "pasador_ranura": "Pasador-ranura", "planar": "Planar", "bola": "Bola"}
@@ -445,14 +445,35 @@ def _matriz_de(estado, comp):
     return np.asarray(estado.componentes.get(comp, {}).get("matriz", np.identity(4).tolist()), float)
 
 
-def _matriz_de_cuerpos(estado, cuerpos, nombre, ctx):
-    """La matriz con la que arranca un componente que recibe `cuerpos`. Cada cuerpo llega con el movimiento de su
-    componente anterior ya aplicado a la forma: si todos traen el mismo, el nuevo lo hereda y nadie se mueve. Si traen
-    distintos, ninguna matriz los representa juntos y cada uno vuelve a donde se modeló: su posición relativa deja de
-    depender de las uniones de los componentes de donde salieron (B-108)."""
+def pose_de_reasignar(estado, cuerpos):
+    """La pose con la que arranca un componente que recibe `cuerpos` en ESTE momento (B-123): la de su
+    componente anterior si todos traen la misma, o la identidad si vienen movidos por uniones distintas.
+    El paso la guarda (`OpComponente.p["pose"]`) para que la reasignación no se corra cuando después se
+    acciona una unión de aquel componente."""
     elegidos = list({c.id: c for c in map(estado.cuerpo, cuerpos)}.values())
     matrices = [_matriz_de(estado, c.componente) for c in elegidos]
     comun = matrices[0] if matrices else np.identity(4)
+    return comun if all(np.allclose(m, comun, atol=1e-9) for m in matrices) else np.identity(4)
+
+
+def _matriz_de_cuerpos(estado, cuerpos, nombre, ctx, pose=None):
+    """La matriz con la que arranca un componente que recibe `cuerpos`. Cada cuerpo llega con el movimiento de su
+    componente anterior ya aplicado a la forma: si todos traen el mismo, el nuevo lo hereda y nadie se mueve. Si traen
+    distintos, ninguna matriz los representa juntos y cada uno vuelve a donde se modeló: su posición relativa deja de
+    depender de las uniones de los componentes de donde salieron (B-108). Con `pose` (guardada en la receta al
+    reasignar, B-123) el resultado es siempre esa pose: los cuerpos se llevan a ella, así accionar después las
+    uniones de sus componentes anteriores no los mueve."""
+    elegidos = list({c.id: c for c in map(estado.cuerpo, cuerpos)}.values())
+    matrices = [_matriz_de(estado, c.componente) for c in elegidos]
+    comun = matrices[0] if matrices else np.identity(4)
+    if pose is not None:
+        if not all(np.allclose(m, comun, atol=1e-9) for m in matrices):
+            ctx.aviso(f"Los cuerpos de «{nombre}» venían movidos por uniones distintas: quedan en la pose guardada "
+                      "al reasignarlos.")
+        for c, m in zip(elegidos, matrices, strict=True):
+            if not np.allclose(m, pose, atol=1e-9):
+                _mover_cuerpo(c, pose @ np.linalg.inv(m))
+        return pose
     if all(np.allclose(m, comun, atol=1e-9) for m in matrices):
         return comun
     for c, m in zip(elegidos, matrices, strict=True):
@@ -467,9 +488,11 @@ class OpComponente(Operacion):
     («Desde cuerpos»). `fijo` es «Fijar» (Ground): una unión no puede moverlo. `padre` («Parent», ASM-9): el componente
     del que cuelga (id, nombre o uno de sus cuerpos; "" = la raíz); mover el padre lo mueve. `version_pose` (2 en los
     nuevos; 1 en las recetas viejas, ver `_migrador`): con 2 el componente tiene en cuenta el movimiento que traen sus
-    cuerpos (`_matriz_de_cuerpos`); con 1 arranca siempre en la identidad."""
+    cuerpos (`_matriz_de_cuerpos`); con 1 arranca siempre en la identidad. `pose` (B-123, solo con version_pose 2): la
+    pose congelada del momento en que se reasignaron los cuerpos (`pose_de_reasignar`); sin ella (recetas viejas) la
+    pose heredada se recalcula con la actual de sus componentes anteriores, como siempre."""
     TIPO, ETIQUETA, ICONO = "componente", "Componente", "▣"
-    PARAMS = {"cuerpos": [], "fijo": False, "version_pose": 2, "padre": ""}
+    PARAMS = {"cuerpos": [], "fijo": False, "version_pose": 2, "padre": "", "pose": None}
     migrar_receta = _migrador("version_pose")
 
     def dependencias(self):
@@ -484,7 +507,16 @@ class OpComponente(Operacion):
                                      f"Componentes: {', '.join(c.get('nombre') or k for k, c in estado.componentes.items()) or 'ninguno'}.")
         matriz = np.identity(4)
         if _version_de(self.p, "version_pose") >= 2:
-            matriz = _matriz_de_cuerpos(estado, self.p["cuerpos"], self.nombre, ctx)
+            pose = None
+            if self.p.get("pose") is not None:
+                try:
+                    pose = np.asarray(self.p["pose"], float)
+                    if pose.shape != (4, 4):
+                        raise ValueError
+                except (TypeError, ValueError):
+                    raise ParametroMalFormado(self.p["pose"], "se esperaba la matriz 4x4 de la pose congelada del "
+                                              "momento de reasignar los cuerpos.") from None
+            matriz = _matriz_de_cuerpos(estado, self.p["cuerpos"], self.nombre, ctx, pose)
         estado.componentes[self.id] = {"nombre": self.nombre, "padre": padre, "fijo": bool(self.p["fijo"]),
                                        "matriz": matriz.tolist(), "base": matriz.tolist()}
         viejos = {estado.cuerpo(cid).componente for cid in self.p["cuerpos"]} - {"", self.id}

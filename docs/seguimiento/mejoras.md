@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 131: Abierto 67 · Parcial 49 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 130: Abierto 66 · Parcial 49 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
 
 ## Pendientes generales
 
@@ -44,15 +44,14 @@ Abierto 14 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 7 · Parcial 1 · Sin verificar 0.
+Abierto 6 · Parcial 1 · Sin verificar 0.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| H-57 | Medir formas tarda en mallas reales con cientos de planos chicos | Abierto | Media | Con 311.000 triángulos de una pieza simple tarda 5 s, pero en 15.000 triángulos con 130 formas tarda 10 s por medición: `_juntar` prueba un toro por cada par de vecinas (7.379 ajustes con derivadas numéricas, 77 s de 245 s). Dar la derivada exacta o filtrar los pares antes; también candidato a Rust. Dos de los 51 STL reales tardan más de 5 minutos: `Vite` 551 s y `Rugged Box` pasa de 600 s, porque un solo intento ya supera el plazo de 180 s que se revisa entre intentos. | nucleo/formas_malla.py:93 `_afinar`; perfil en evidencias/reconstruir_2026-11-01/ | 2026-11-01 |
 | H-56 | Mapa de entorno: una cara plana refleja un solo color | Abierto | Media | El reflejo se calcula con una sola dirección de vista: hace falta una por píxel para que el entorno se vea en una cara plana. | nucleo/analisis.py (`colores_mapa_entorno`) | 2026-11-01 |
 | H-55 | Sustainability Insights: la región y el país no cambian el cálculo | Abierto | Media | Sumar la energía de fabricación por región con un factor de red eléctrica con fuente. Hoy el resultado lo avisa. | nucleo/sustentabilidad.py | 2026-11-01 |
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
-| H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | Falta barrido automático de tipos sin caso válido; solo hay tests sueltos por tipo. | tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py; tests/test_chapa.py (unir plegando); tests/test_fijaciones.py; humo 168 pasos según el log (no corrido acá) | 2026-10-20 |
+| H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | El barrido automático cubre 37 de 111 tipos (crear, guardar y abrir, deshacer). Faltan casos para los otros 74, que `PENDIENTES` lista con una razón; varias son genéricas y hay que precisarlas. | tests/test_barrido_tipos.py; tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py | 2026-11-03 |
 | H-64 | render_image rechaza 3840 × 2160 en standard y final | Abierto | Baja | Reproducido: standard (33,2 Mpx con el 2×) y final (74,6 Mpx con el 3×) responden INVALID_ARGUMENTS por el tope de 25 Mpx; el docstring documenta ese tope. | omnicad/api/herramientas_render.py:179 | 2026-11-02 |
 | H-65 | insert_fastener no perfora el cuerpo de abajo | Abierto | Media | Reproducido: agujero Ø6,6 en el cuerpo de arriba y tornillo M6 de 20 mm; el volumen del cuerpo de abajo queda en 16 000 mm³ (no lo perfora). El docstring dice que inserta la fijación sobre agujeros o puntos, no que haga el agujero. | omnicad/api/herramientas_construccion.py:244 | 2026-11-02 |
 

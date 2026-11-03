@@ -1384,7 +1384,7 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
     points: lista de puntos [x, y] en mm sobre el plano del boceto.
     spline_type: "fit_points" (pasa por los puntos) o "control_points" (los puntos son los polos).
     degree: grado de la spline de puntos de control (3 o 5); se ignora en la de ajuste.
-    closed: true para cerrar la spline de ajuste (forma un perfil).
+    closed: true para cerrar la spline de ajuste (forma un perfil); no compatible con control_points (Fusion no lo permite: lanza INVALID_ARGUMENTS).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para una spline de construcción (no forma perfiles).
     centerline: true para geometría central (forma perfiles); incompatible con construction=true.
@@ -1401,15 +1401,12 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
             construccion=construction, central=centerline)
         _exigir_sin_conflicto(sesion, op, previo.solver.ok, "La spline tangente")
         return informe
-    _avisar_cerrada_ignorada(sesion, spline_type, closed)
+    if closed and spline_type == "control_points":
+        raise error("INVALID_ARGUMENTS", "Una spline de puntos de control no se puede cerrar (Fusion tampoco lo "
+                    "permite). Para un perfil cerrado usá fit_points con closed=true, o uní los extremos con "
+                    "una línea o arco.")
     return _dibujar(sesion, sketch, lambda b: _spline(b, points, spline_type, degree, closed, construction),
                     construccion=construction, central=centerline)
-
-
-def _avisar_cerrada_ignorada(sesion, spline_type, closed):
-    if closed and spline_type == "control_points":
-        sesion.avisar("closed se ignora en una spline de puntos de control (queda abierta): solo la de ajuste "
-                      "(fit_points) se cierra.")
 
 
 @herramienta("add_constraint", "boceto",
@@ -1973,11 +1970,16 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
             if central and _booleano(e, i, "construction"):
                 raise _spec_error(i, e.get("type"), "construction y centerline no pueden ser true a la vez.")
             anteriores = set(b.curvas) if central else ()
+            if (e.get("type") == "spline"
+                    and e.get("spline_type") == "control_points"
+                    and _booleano(e, i, "closed")):
+                raise error("INVALID_ARGUMENTS",
+                            f"Entidad {i}: una spline de puntos de control no se puede cerrar (Fusion tampoco lo "
+                            "permite). Para un perfil cerrado usá fit_points con closed=true, o uní los extremos "
+                            "con una línea o arco.")
             partes = _construir_entidad(b, i, e, alias, sesion)
             if central:
                 _marcar_centrales(b, anteriores)
-            if e.get("type") == "spline":
-                _avisar_cerrada_ignorada(sesion, e.get("spline_type"), e.get("closed"))
             manejador = str(e.get("id", f"e{i}"))
             if any(k == manejador or k.startswith(manejador + ".") for k in alias):
                 raise error("INVALID_SPEC", f"Entidad {i}: el id '{manejador}' está repetido.")

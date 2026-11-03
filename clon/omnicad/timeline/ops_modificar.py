@@ -736,6 +736,30 @@ class OpQuitarEmpalmes(Operacion):
                       + ", ".join(f"{radio:g} mm ×{n}" for radio, n in radios))
 
 
+class OpEliminarOperaciones(Operacion):
+    """«Eliminar operaciones» (PLA-9, Remove Features de Fusion › Simplify): quita de cada cuerpo los
+    empalmes, chaflanes y agujeros de los tipos pedidos con medida hasta `tamano` (defeaturing) y une la
+    topología que queda."""
+    TIPO, ETIQUETA, ICONO = "eliminar_operaciones", "Eliminar operaciones", "⊘"
+    PARAMS = {"cuerpos": [], "tipos": ["empalme", "chaflan", "agujero"], "tamano": "5 mm"}
+    EXPRESIONES = ("tamano",)
+
+    def dependencias(self):
+        return _deps_objetivo(self.p["cuerpos"]) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        from ..nucleo import simplificar
+        p = self.p
+        tamano = ctx.evaluar(p["tamano"])
+        for cid in p["cuerpos"]:
+            c = estado.cuerpo(cid)
+            o_marco = c.forma
+            c.forma, cuantas = simplificar.quitar_operaciones(o_marco, tamano, p["tipos"])
+            if o_marco.IsSame(c.forma):
+                raise ErrorOperacion(f"{c.nombre}: no se quitaron operaciones: las caras vecinas no cierran el hueco.")
+            ctx.aviso(f"{c.nombre}: se quitaron " + ", ".join(f"{n} {tipo}" for tipo, n in cuantas.items() if n))
+
+
 class OpBorrarCaras(Operacion):
     """Borrar caras (Suprimir de Fusion sobre caras [SLD-DELETE]): quita caras y cierra el hueco
     extendiendo las vecinas (defeaturing)."""
@@ -753,4 +777,4 @@ class OpBorrarCaras(Operacion):
 
 registrar_operacion(OpMover, OpQuitar, OpEmpalme, OpChaflan, OpVaciado, OpDesmoldeo, OpEscala, OpDesfaseCara,
                     OpDesfaseAristas, OpReemplazarCara, OpEditarCara, OpDividirCara, OpDividirCuerpo, OpDivisionSilueta, OpAlinear, OpBorrarCaras,
-                    OpApoyar, OpQuitarEmpalmes)
+                    OpApoyar, OpQuitarEmpalmes, OpEliminarOperaciones)

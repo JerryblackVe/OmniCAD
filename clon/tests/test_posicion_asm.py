@@ -117,6 +117,27 @@ def test_b108_version_mal_formada_nombra_el_campo():
     assert any(r.estado == "error" and "version_pose" in r.mensaje for r in doc.resultados)
 
 
+# ---------------------------------------------------------------- B-123: la pose del momento de reasignar
+def test_b123_reasignar_congela_la_pose_y_la_union_del_componente_anterior_ya_no_lo_mueve(tmp_path):
+    s = api.Sesion()
+    llamar(s, "create_cylinder", name="Base", radius=25, height=4)
+    a = _id(llamar(s, "create_box", name="A", length=10, width=10, height=10, x=100))
+    b = _id(llamar(s, "create_box", name="B", length=10, width=10, height=10, x=100, y=40))
+    llamar(s, "create_component", name="Padre", bodies=["Base", a, b])
+    llamar(s, "create_as_built_joint", name="Giro", origin="%CYLINDER", body="Base", joint_type="revolute")
+    llamar(s, "drive_joint", joint="Giro", rotation=30)
+    caja_a, centro_b = caja(s, a), centro(s, b)
+    llamar(s, "create_component", name="Hijo", bodies=[a])
+    assert caja(s, a) == pytest.approx(caja_a, abs=1e-3)          # reasignar no lo mueve
+    llamar(s, "drive_joint", joint="Giro", rotation=90)
+    assert caja(s, a) == pytest.approx(caja_a, abs=1e-3)          # accionar la unión de Padre ya no lo mueve
+    assert centro(s, b) != pytest.approx(centro_b, abs=1e-3)      # el cuerpo que siguió en Padre sí giró
+    ruta = tmp_path / "b123.omnicad"
+    llamar(s, "save_document", path=str(ruta))
+    llamar(s, "open_document", path=str(ruta))
+    assert caja(s, a) == pytest.approx(caja_a, abs=1e-3)
+
+
 # ------------------------------------------------------------------ ASM-15: arrastrar sin capturar
 def _libre():
     s = api.Sesion()

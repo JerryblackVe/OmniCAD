@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import math
 
+import numpy as np
 import pytest
 
 from omnicad.nucleo import geometria as g
@@ -174,6 +175,75 @@ def test_b151_un_nodo_sin_llenar_de_una_cara_a_medio_mallar_no_llega_a_los_trian
     from omnicad.nucleo.analisis import _props_nodos
     idx = g._indices_cara(cara, tri, loc)                              # las normales usan los mismos triángulos
     assert idx.shape == (t, 3) and len(_props_nodos(cara, tri, idx, triangulos, False)[0]) == n + 2
+
+
+def _lados_de_malla(v):
+    """Contador de aristas de triángulo (puntos redondeados a 0,1 µm): en una malla cerrada cada una aparece dos veces."""
+    from collections import Counter
+    tris = v.reshape(-1, 3, 3)
+    c = Counter()
+    for tri in tris:
+        for a, b in ((0, 1), (1, 2), (2, 0)):
+            pa = tuple(round(float(x), 4) for x in tri[a])
+            pb = tuple(round(float(x), 4) for x in tri[b])
+            c[tuple(sorted((pa, pb)))] += 1
+    return c
+
+
+def test_b153_cara_abandonada_a_medio_mallar_se_repara_y_la_malla_sale_cerrada():
+    from OCP.BRep import BRep_Builder, BRep_Tool
+    from OCP.Poly import Poly_Triangulation
+    from OCP.TopLoc import TopLoc_Location
+    cil = g.cilindro(5, 10)
+    lateral = max(g.caras(cil), key=g.area)                 # la cara curva: la que tiene nodos de sobra
+    g.teselar(lateral, deflexion=0.1)
+    loc = TopLoc_Location()
+    buena = BRep_Tool.Triangulation_s(lateral, loc)
+    n = buena.NbNodes()
+    assert n > 8
+    rota = Poly_Triangulation(n, 2, False)                  # como deja OCC la cara fina: todos los nodos, 2 triángulos
+    for i in range(1, n + 1):
+        rota.SetNode(i, buena.Node(i))
+    rota.SetTriangle(1, buena.Triangle(1))
+    rota.SetTriangle(2, buena.Triangle(2))
+    BRep_Builder().UpdateFace(lateral, rota)                # instalar la triangulación abandonada en la cara
+    v, _ = g.teselar(cil)
+    assert all(c == 2 for c in _lados_de_malla(v).values())            # la malla del cuerpo sale cerrada
+    reparada = sum(float(np.linalg.norm(np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), axis=1).sum()) / 2
+                   for _c, t in g.teselar_por_cara(lateral))
+    assert reparada == pytest.approx(g.area(lateral), rel=0.01)        # la cara queda cubierta
+    sana = g.cilindro(5, 10)
+    assert g.teselar(sana)[0].shape == v.shape                          # un cuerpo sano no cambia
+    assert all(c == 2 for c in _lados_de_malla(g.teselar(g.caja(1, 2, 3))[0]).values())
+
+
+def test_b153_relleno_directo_de_una_cara_abandonada_sin_uv():
+    """Camino (b) por si el reintento del mallado no alcanza: el contorno se rellena aunque la triangulación rota no
+    tenga nodos UV (se proyectan sobre la superficie) y sin depender del reintento (a)."""
+    from OCP.BRep import BRep_Builder, BRep_Tool
+    from OCP.Poly import Poly_Triangulation
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopLoc import TopLoc_Location
+    cara = g.caras(g.caja(10, 10, 10))[0]
+    g.teselar(cara, deflexion=0.5)
+    loc = TopLoc_Location()
+    buena = BRep_Tool.Triangulation_s(cara, loc)
+    rota = Poly_Triangulation(4, 1, False)          # incompleta a propósito: 1 < 4 − 2
+    for i in range(1, 5):
+        rota.SetNode(i, buena.Node(i))
+    rota.SetTriangle(1, buena.Triangle(1))
+    b = BRep_Builder()
+    for e in g._explorar(cara, TopAbs_EDGE):        # los polígonos de arista apuntan a los mismos nodos en `rota`
+        arista = g.TopoDS.Edge(e)
+        pol = BRep_Tool.PolygonOnTriangulation_s(arista, buena, loc)
+        if pol is not None:
+            b.UpdateEdge(arista, pol, rota, loc)
+    rellena = g._rellenar_cara(cara, rota, loc)
+    assert rellena is not None and rellena.HasUVNodes()
+    b.UpdateFace(cara, rellena)
+    tris = g.teselar_por_cara(cara)[0][1]
+    area = float(np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1).sum()) / 2
+    assert area == pytest.approx(g.area(cara), rel=0.01)
 
 
 def test_plano_girado_sobre_su_eje_u():

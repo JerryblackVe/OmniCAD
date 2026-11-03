@@ -3,11 +3,11 @@
 from ...nucleo.analisis import TABLA_MATERIALES as MATERIALES
 from ...timeline.operaciones import OPERACIONES_COMBINAR, OpCombinar
 from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, OpBorrarCaras, OpChaflan, OpDesfaseAristas,
-                                       OpDesfaseCara,
+                                       OpDesfaseCara, OpEliminarOperaciones,
                                        OpQuitar, OpQuitarEmpalmes,
                                        OpDesmoldeo, OpDivisionSilueta, OpDividirCara, OpDividirCuerpo, OpEmpalme,
                                        OpEscala, OpMover, OpReemplazarCara, OpVaciado)
-from ...timeline.ops_solido import OpReticulaVolumetrica
+from ...timeline.ops_solido import OpReticulaVolumetrica, OpSolidoEnvolvente
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
                        hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
@@ -975,6 +975,23 @@ class Suprimir(Comando):
             (ventana._agregar if ventana else doc.agregar)(op)
 
 
+class EliminarCaras(Comando):
+    CLAVE, TITULO, ICONO = "eliminar_caras", "Eliminar caras", "eliminar_caras"
+    AYUDA = "Quita las caras elegidas y cierra el hueco prolongando las vecinas (simplifica el modelo)."
+    CLASE_OP = OpBorrarCaras
+    verificar = staticmethod(_con_cuerpos)
+
+    def campos(self, ctx):
+        return [Seleccion("caras", "Caras", {"cara"}, maximo=None)]
+
+    def construir(self, v, ctx):
+        exigir(v, "caras", "Seleccioná las caras a eliminar.")
+        return self.crear_op(OpBorrarCaras, v, ctx, caras=refs(v, "caras"))
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, caras=hits(op.p["caras"], ctx.estado))
+
+
 def _siguiente(ctx, base):
     usados = {o.nombre for o in ctx.doc.operaciones}
     n = 1
@@ -1044,6 +1061,101 @@ class QuitarEmpalmes(Comando):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
 
 
+class EliminarOperaciones(Comando):
+    """PLA-9 (Remove Features de Fusion › Simplify): quita de una vez empalmes, chaflanes y agujeros chicos con
+    filtro por tamaño; las caras que se van a quitar se resaltan en la vista."""
+    CLAVE, TITULO, ICONO = "eliminar_operaciones", "Eliminar operaciones", "eliminar_operaciones"
+    AYUDA = ("Saca los empalmes, chaflanes y agujeros de medida hasta Tamaño de los cuerpos elegidos y une la "
+             "topología que queda. Un agujero se mide por su diámetro.")
+    CLASE_OP = OpEliminarOperaciones
+    verificar = staticmethod(_con_cuerpos)
+    MODIFICADORES = {}
+
+    def campos(self, ctx):
+        return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None),
+                Casilla("empalme", "Empalmes", True),
+                Casilla("chaflan", "Chaflanes", True),
+                Casilla("agujero", "Agujeros", True),
+                Expresion("tamano", "Tamaño máximo", "5 mm")]
+
+    @staticmethod
+    def _tipos(v):
+        return [t for t in ("empalme", "chaflan", "agujero") if v.get(t)]
+
+    def previa_vista(self, ctx, v, op):
+        """Las caras que el tamaño actual detecta se resaltan en la vista."""
+        from ...nucleo import geometria as geo
+        from ...nucleo.simplificar import detectar
+        prims = []
+        tipos = self._tipos(v)
+        try:
+            tamano = ctx.evaluar(v["tamano"])
+            if not tipos:
+                return None
+            for h in v["cuerpos"]:
+                try:
+                    forma = ctx.estado.cuerpos[h["ref"]["cuerpo"]].forma
+                except KeyError:
+                    continue
+                for grupos in detectar(forma, tamano, tipos).values():
+                    for grupo in grupos:
+                        for cara in grupo:
+                            tris, _norm = geo.teselar(cara)
+                            prims.append(("tris", tris, None, 0.6))
+        except Exception:                       # noqa: BLE001 — expresión a medias o nada que detectar: sin resaltado
+            return None
+        return prims or None
+
+    def construir(self, v, ctx):
+        exigir(v, "cuerpos", "Seleccioná los cuerpos a simplificar.")
+        tipos = self._tipos(v)
+        if not tipos:
+            raise ErrorComando("Elegí al menos un tipo de operación (empalmes, chaflanes o agujeros).")
+        return self.crear_op(OpEliminarOperaciones, v, ctx, cuerpos=_cuerpos(v), tipos=tipos)
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), **dict.fromkeys(op.p["tipos"], True))
+
+
+class ReemplazarPrimitivas(Comando):
+    """«Reemplazar con primitivas» de Fusion › Simplificar: una caja, un cilindro o una esfera que envuelve los
+    cuerpos elegidos, en lugar de ellos (una primitiva por componente)."""
+    CLAVE, TITULO, ICONO = "reemplazar_primitivas", "Reemplazar con primitivas", "reemplazar_primitivas"
+    VARIANTE = ("reemplazar", True)         # doble clic en el timeline: edita con este diálogo, no con el de Sólido delimitador
+    AYUDA = ("Cambia los cuerpos elegidos por una forma simple que los envuelve: una caja, un cilindro en X, Y o Z, "
+             "o una esfera (la mínima). Queda un solo paso editable.")
+    CLASE_OP = OpSolidoEnvolvente
+    verificar = staticmethod(_con_cuerpos)
+
+    def campos(self, ctx):
+        return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None),
+                Opciones("tipo", "Forma", {"caja": "Caja", "cilindro": "Cilindro", "esfera": "Esfera"}),
+                Opciones("eje", "Eje del cilindro", {"z": "Z", "x": "X", "y": "Y"},
+                         visible_si=lambda v: v.get("tipo") == "cilindro"),
+                Expresion("margen", "Desfase", "0 mm")]
+
+    def previa_vista(self, ctx, v, op):
+        """La primitiva translúcida encima de los cuerpos: lo que quedaría al aceptar."""
+        from ...nucleo import geometria as geo
+        from ...nucleo import solidos_crear as sc
+        try:
+            formas = [ctx.estado.cuerpos[c].forma for c in _cuerpos(v)]
+            if not formas:
+                return None
+            forma = sc.solido_envolvente(formas, tipo=v["tipo"], eje=v["eje"], margen=ctx.evaluar(v["margen"]))
+        except Exception:                       # noqa: BLE001 — expresión a medias: sin primitiva
+            return None
+        return [("tris", geo.teselar(forma)[0], None, 0.35)]
+
+    def construir(self, v, ctx):
+        exigir(v, "cuerpos", "Seleccioná los cuerpos a reemplazar.")
+        return self.crear_op(OpSolidoEnvolvente, v, ctx, cuerpos=_cuerpos(v), tipo=v["tipo"], eje=v["eje"],
+                             margen=v["margen"], operacion="nuevo", reemplazar=True)
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
+
+
 registrar(ReticulaVolumetrica, CaraDesfase, PulsarTirar, Desfase, Empalme, Chaflan, Vaciado, Desmoldeo, Escala, Combinar, ReemplazarCara,
           DividirCara, DividirCuerpo, DivisionSilueta, MoverCopiar, Alinear, ApoyarEnPlano, Suprimir, Quitar, Aspecto,
-          MaterialFisico, QuitarEmpalmes)
+          MaterialFisico, QuitarEmpalmes, EliminarOperaciones, EliminarCaras, ReemplazarPrimitivas)

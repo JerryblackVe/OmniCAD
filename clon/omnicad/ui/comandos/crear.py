@@ -1633,7 +1633,7 @@ class SolidoEnvolvente(Comando):
     def campos(self, ctx):
         dos_ejes = lambda v: v.get("orientacion") in ("z_x", "z_y", "x_y")  # noqa: E731
         return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None),
-                Opciones("tipo", "Forma", {"caja": "Caja", "cilindro": "Cilindro", "tubo": "Tubo"}),
+                Opciones("tipo", "Forma", {"caja": "Caja", "cilindro": "Cilindro", "tubo": "Tubo", "esfera": "Esfera"}),
                 Opciones("eje", "Eje del cilindro", {"z": "Z", "x": "X", "y": "Y"},
                          visible_si=lambda v: v.get("tipo") != "caja" and v.get("orientacion", "modelo") == "modelo"),
                 Expresion("espesor_tubo", "Pared del tubo", "", visible_si=lambda v: v.get("tipo") == "tubo"),

@@ -166,6 +166,50 @@ def test_suprimir_borra_el_paso_creador_o_quita():
     assert doc.operaciones[-1].TIPO == "quitar" and not doc.estado_final.cuerpos
 
 
+def test_eliminar_caras_borra_la_cara_de_un_empalme():
+    from omnicad.nucleo import referencias as _refs
+    from omnicad.ui.comando import ContextoComando, ErrorComando, hit_desde_ref
+    from omnicad.ui.comandos import comando_para
+    from omnicad.ui.comandos.modificar import EliminarCaras, Empalme
+    doc = _doc_caja()
+    _ejecutar(doc, Empalme, aristas=[_hit_sub(doc, "arista", (20, 10, 20))], radio="3 mm")
+    forma, caras_antes = _cuerpo(doc).forma, _refs.subformas(_cuerpo(doc).forma, "cara")
+    cara = next(s for s in caras_antes if abs(g.area(s) - math.pi * 3 * 20 / 2) < 1e-6)   # la cara del empalme (medio cilindro)
+    op = _ejecutar(doc, EliminarCaras, caras=[hit_desde_ref(_refs.referencia("op1.c1", cara, forma), doc.estado_final)])
+    assert op.TIPO == "borrar_caras" and doc.operaciones[-1] is op
+    assert len(_refs.subformas(_cuerpo(doc).forma, "cara")) == len(caras_antes) - 1
+    assert g.volumen(_cuerpo(doc).forma) == pytest.approx(8000)                 # el empalme se curó: vuelve la caja entera
+    assert comando_para(op) is EliminarCaras                   # el doble clic en el timeline abre este comando
+    caras = EliminarCaras().desde_op(op, ContextoComando(doc, op=op))["caras"]
+    assert [h["ref"] for h in caras] == op.p["caras"]           # reabierto, las mismas caras
+    doc2 = _doc_caja()
+    with pytest.raises(ErrorComando, match="Seleccioná las caras"):
+        _ejecutar(doc2, EliminarCaras, caras=[])
+    assert len(doc2.operaciones) == 1
+
+
+def test_eliminar_operaciones_quita_el_empalme_y_se_reabre():
+    from omnicad.ui.comando import ContextoComando, ErrorComando
+    from omnicad.ui.comandos import comando_para
+    from omnicad.ui.comandos.modificar import EliminarOperaciones, Empalme
+    doc = _doc_caja()
+    _ejecutar(doc, Empalme, aristas=[_hit_sub(doc, "arista", (20, 10, 20))], radio="2 mm")
+    assert g.volumen(_cuerpo(doc).forma) == pytest.approx(8000 - (4 - math.pi) * 20)
+    op = _ejecutar(doc, EliminarOperaciones, cuerpos=[_hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})], tamano="3 mm",
+              empalme=True, chaflan=False, agujero=False)
+    assert op.TIPO == "eliminar_operaciones" and doc.operaciones[-1] is op
+    assert g.volumen(_cuerpo(doc).forma) == pytest.approx(8000)
+    assert comando_para(op) is EliminarOperaciones                # el doble clic en el timeline abre este comando
+    v = EliminarOperaciones().desde_op(op, ContextoComando(doc, op=op))
+    assert [h["ref"]["cuerpo"] for h in v["cuerpos"]] == ["op1.c1"]
+    assert [t in op.p["tipos"] for t in ("empalme", "chaflan", "agujero")] == [True, False, False]
+    doc2 = _doc_caja()
+    with pytest.raises(ErrorComando, match="al menos un tipo"):
+        _ejecutar(doc2, EliminarOperaciones, cuerpos=[_hit(doc2, {"tipo": "cuerpo", "cuerpo": "op1.c1"})],
+                  empalme=False, chaflan=False, agujero=False)
+    assert len(doc2.operaciones) == 1
+
+
 def test_combinar_y_aspecto_material():
     from omnicad.ui.comandos.modificar import Aspecto, Combinar, MaterialFisico
     doc = _doc_caja()

@@ -45,6 +45,15 @@ def test_esfera_y_toro():
     assert np.array(f["shapes"][0]["center"]) == pytest.approx([1, 2, 3], abs=1e-3)
 
 
+def test_el_porton_del_toro_no_descarta_un_toro_real():
+    """El toro se afina recién cuando el ajuste algebraico ya está cerca (igual que el cono); un toro de verdad
+    entra en esa ventana y queda reconocido con sus radios."""
+    f = fm.analizar(_m(geo.toroide(12, 4)))
+    assert _resumen(f) == {"torus": 1}
+    assert f["shapes"][0]["major_radius"] == pytest.approx(12, abs=1e-3)
+    assert f["shapes"][0]["minor_radius"] == pytest.approx(4, abs=1e-3)
+
+
 def test_agujero_ciego_pasante_y_patron():
     base = geo.caja(90, 70, 10, (-45, -35, 0))
     for x in (-30, -10, 10, 30):
@@ -90,6 +99,37 @@ def test_ruido_de_escaneo_con_tolerancia_recupera_el_radio():
     f = fm.analizar(ml.Malla(m.vertices + rng.normal(0, 0.01, m.vertices.shape), m.caras), tolerancia=0.05)
     assert _resumen(f) == {"plane": 2, "cylinder": 1} and f["quality"]["origin"] == "scan"
     assert next(x for x in f["shapes"] if x["type"] == "cylinder")["radius"] == pytest.approx(20, abs=0.02)
+
+
+def _afinar_numerica(tipo, p0, a0, b, c, P):
+    """La ruta vieja de _afinar: el mismo ajuste con la derivada numérica de scipy."""
+    from scipy.optimize import least_squares
+    u, v = fm._base(a0)
+
+    def forma(x):
+        return fm._Forma(tipo, p0 + x[2] * u + x[3] * v, fm._unit(a0 + x[0] * u + x[1] * v), x[4], x[5])
+
+    x = least_squares(lambda x: forma(x).distancia(P), [0.0, 0.0, 0.0, 0.0, b, c], max_nfev=30).x
+    return forma(x)
+
+
+def test_afinar_con_derivada_exacta_coincide_con_la_numerica():
+    """El ajuste fino de _afinar con la jacobiana exacta cae en la misma forma que con diferencias finitas."""
+    rng = np.random.default_rng(7)
+    casos = [("torus", (20.0, 5.0)), ("cone", (10.0, 0.3))]
+    for tipo, (b, c) in casos:
+        if tipo == "torus":
+            th, ph = rng.uniform(0, 2 * np.pi, (2, 400))
+            P = np.c_[(b + c * np.cos(ph)) * np.cos(th), (b + c * np.cos(ph)) * np.sin(th), c * np.sin(ph)]
+        else:
+            th, z = rng.uniform(0, 2 * np.pi, 400), rng.uniform(0, 30, 400)
+            r = b + c * z
+            P = np.c_[r * np.cos(th), r * np.sin(th), z]
+        P += rng.normal(0, 0.01, P.shape)
+        p0, a0 = np.array([0.3, -0.2, 0.1]), fm._unit(np.array([0.05, -0.04, 1.0]))
+        exacta = fm._afinar(tipo, p0, a0, b, c, P)
+        numerica = _afinar_numerica(tipo, p0, a0, b, c, P)
+        assert np.abs(exacta.distancia(P) - numerica.distancia(P)).max() < 0.1
 
 
 def test_superficie_libre_queda_sin_clasificar_y_no_inventa_formas():

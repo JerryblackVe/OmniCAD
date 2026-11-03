@@ -149,12 +149,16 @@ class VectorizarImagen(_InsertarArchivo2D):
                 Entero("area_minima", "Ignorar manchas (px²)", 4, 0, avanzado=True),
                 Deslizador("tolerancia", "Tolerancia (px)", 0.5, 0, 10, 2, avanzado=True),
                 Opciones("canal", "Canal", _CANALES, defecto="auto", avanzado=True),
+                Deslizador("angulo_esquina", "Ángulo de esquina (°)", 0, 0, 180, 1, avanzado=True,
+                           visible_si=lambda v: bool(v.get("curvas")),
+                           ayuda="Las puntas del dibujo que doblen más que este ángulo quedan vivas (0 = sin "
+                                 "detección). El doble se mide en el contorno ya simplificado (Tolerancia)."),
                 Casilla("voltear_h", "Volteo horizontal", avanzado=True),
                 Casilla("voltear_v", "Volteo vertical", avanzado=True)]
 
     def clave_filtro(self, v):
         return (v.get("umbral"), bool(v.get("invertir")), v.get("suavizado"), bool(v.get("curvas")),
-                v.get("area_minima"), v.get("tolerancia"), v.get("canal"))
+                v.get("area_minima"), v.get("tolerancia"), v.get("canal"), v.get("angulo_esquina"))
 
     def leer(self, ruta, v=None):
         from ...io_archivos.vectorizar import vectorizar_imagen
@@ -163,7 +167,8 @@ class VectorizarImagen(_InsertarArchivo2D):
                                  tolerancia=float(v.get("tolerancia", 0.5)),
                                  area_minima=float(v.get("area_minima", 4)),
                                  suavizado=float(v.get("suavizado", 1)), canal=v.get("canal", "auto"),
-                                 curvas=bool(v.get("curvas")))
+                                 curvas=bool(v.get("curvas")),
+                                 angulo_esquina=float(v.get("angulo_esquina", 0)))
 
     def transformacion(self, v, ctx):
         return {"ancho": ctx.evaluar(v["ancho"]), "desplazamiento": (ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"])),

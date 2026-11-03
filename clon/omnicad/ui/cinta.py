@@ -116,7 +116,8 @@ SOLIDO = [
         _i("Dividir cuerpo", "dividir_cuerpo"), _i("División de silueta", "division_silueta"),
         _i("Entramado volumétrico", "reticula_volumetrica"), SEP,
         _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Apoyar en el plano", "apoyar"), _i("Suprimir", "suprimir"), _i("Quitar", "quitar"),
-        SEP, _sub("Simplificar", []), SEP,
+        SEP, _sub("Simplificar", [_i("Eliminar caras", "eliminar_caras"), _i("Eliminar operaciones", "eliminar_operaciones"),
+                                  _i("Reemplazar con primitivas", "reemplazar_primitivas")]), SEP,
         _i("Material físico", "material_fisico"), _i("Aspecto", "aspecto"), _i("Administrar materiales", ico="administrar_materiales"), SEP,
         _i("Cambiar parámetros", "parametros"), _i("Calcular todo", "calcular"), SEP,
         _i("Lista de materiales", "lista_materiales")]),
@@ -163,9 +164,9 @@ PLASTICO = [
     ("CONFIGURACIÓN", ["asignar_regla_plastico"], [
         _i("Asignar regla de plástico", "asignar_regla_plastico"),
         _i("Administrar reglas de plástico", "reglas_plastico")]),
-    ("CREAR", ["boceto", "saliente", "labio", "nervio", "red", "patron_geometrico"], _COMIENZO_CREAR + [
+    ("CREAR", ["boceto", "saliente", "labio", "apoyo", "nervio", "red", "patron_geometrico"], _COMIENZO_CREAR + [
         _i("Saliente de fijación", "saliente"), _i("Grampa de fijación", ico="encaje_presion"),
-        _i("Labio", "labio"), _i("Apoyo"), _i("Patrón geométrico", "patron_geometrico"), SEP] + _FIN_CREAR),
+        _i("Labio", "labio"), _i("Apoyo", "apoyo"), _i("Patrón geométrico", "patron_geometrico"), SEP] + _FIN_CREAR),
     ("MODIFICAR", ["vaciado", "desmoldeo", "empalme_3d"], [
         _i("Vaciado", "vaciado"), _i("Desmoldeo", "desmoldeo"), _i("Empalme", "empalme_3d"),
         _i("Chaflán", "chaflan_3d")]),

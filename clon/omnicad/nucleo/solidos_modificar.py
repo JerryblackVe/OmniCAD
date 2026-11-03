@@ -717,6 +717,24 @@ def _mezclar(original, chaflanado, alcance, distancia):
                              "una distancia menor.")
 
 
+def _pista_chaflan(arista_caras, elegidas):
+    """Estima un límite de distancia razonable: mitad de la arista vecina más corta."""
+    longitudes = []
+    for e in elegidas:
+        vertices = _unicos(e, TopAbs_VERTEX)
+        for cara in _padres(arista_caras, e):
+            for vecina in _aristas(cara):
+                if not vecina.IsSame(e) and any(_contiene(vertices, v) for v in _unicos(vecina, TopAbs_VERTEX)):
+                    longitud = geo.longitud(vecina)
+                    if longitud > TOL:
+                        longitudes.append(longitud)
+    if not longitudes:
+        return ""
+    # shortcut: estimación local, usar búsqueda geométrica si se necesita un límite exacto.
+    return (f" Probá una distancia menor que {min(longitudes) / 2:g} mm "
+            "(mitad de la arista vecina más corta; no garantiza que el chaflán sea realizable).")
+
+
 def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
     """Chaflán (Chamfer) por conjuntos de selección.
 
@@ -733,6 +751,7 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
     if not grupos:
         raise geo.ErrorGeometria("Elegí al menos una arista para el chaflán.")
     arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+    estanco_antes = geo._aristas_defectuosas(forma)[0] == 0
     mc = BRepFilletAPI_MakeChamfer(forma)
     elegidas = []
     for grupo in grupos:
@@ -778,22 +797,13 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
     except Exception:  # noqa: BLE001 — StdFail_NotDone
         pass
     if not mc.IsDone():
-        longitudes = []
-        for e in elegidas:
-            vertices = _unicos(e, TopAbs_VERTEX)
-            for cara in _padres(arista_caras, e):
-                for vecina in _aristas(cara):
-                    if not vecina.IsSame(e) and any(_contiene(vertices, v) for v in _unicos(vecina, TopAbs_VERTEX)):
-                        longitud = geo.longitud(vecina)
-                        if longitud > TOL:
-                            longitudes.append(longitud)
-        pista = ""
-        if longitudes:
-            # shortcut: estimación local, usar búsqueda geométrica si se necesita un límite exacto.
-            pista = (f" Probá una distancia menor que {min(longitudes) / 2:g} mm "
-                     "(mitad de la arista vecina más corta; no garantiza que el chaflán sea realizable).")
-        raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas." + pista)
+        raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas."
+                                 + _pista_chaflan(arista_caras, elegidas))
     resultado = _validar(mc.Shape(), "Chaflán")
+    # B-162: un chaflán que abre un sólido estanco es un error, no un «ok».
+    if estanco_antes and geo._aristas_defectuosas(resultado)[0] > 0:
+        raise geo.ErrorGeometria("El chaflán abrió el sólido: la distancia es demasiado grande para las caras vecinas."
+                                 + _pista_chaflan(arista_caras, elegidas))
     if esquina != "chaflan":
         alcance = 1.5 * max(float(g.get(k, 0) or 0) for g in grupos for k in ("distancia", "distancia2"))
         if esquina == "inglete":
@@ -1376,12 +1386,12 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
             raise geo.ErrorGeometria(f"Desfase de caras: con {abs(dist):g} mm la cara se da vuelta: la distancia es igual "
                                      "o mayor que su radio de curvatura (un cilindro no se achica, ni un agujero se "
                                      "cierra, más que su radio). Probá una distancia menor.")
-        return resultado
+        return _validar(resultado, "Desfase de caras")
     planos = [_plano_de_cara(c) for c in todas]
     if any(p is None for p in planos):
         raise geo.ErrorGeometria("El desfase de caras falló en el kernel.")
-    return _reemplazar(forma, [(c, p.desplazado(dist)) for c, p in zip(todas, planos, strict=True)],
-                       operacion="Desfase de caras")
+    return _validar(_reemplazar(forma, [(c, p.desplazado(dist)) for c, p in zip(todas, planos, strict=True)],
+                                operacion="Desfase de caras"), "Desfase de caras")
 
 
 def _largo_extension(cara, destino, d, diag):

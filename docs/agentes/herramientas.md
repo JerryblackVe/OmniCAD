@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-387 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+390 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -16,7 +16,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 67 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 17 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
-| [solido](#grupo-solido) | 83 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
+| [solido](#grupo-solido) | 86 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 20 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 19 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
@@ -923,7 +923,7 @@ Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado
   - `points` (lista de lista de número; obligatorio): lista de puntos [x, y] en mm sobre el plano del boceto.
   - `spline_type` ("fit_points" | "control_points"; opcional, por defecto `"fit_points"`): "fit_points" (pasa por los puntos) o "control_points" (los puntos son los polos).
   - `degree` (entero; opcional, por defecto `3`): grado de la spline de puntos de control (3 o 5); se ignora en la de ajuste.
-  - `closed` (true/false; opcional, por defecto `false`): true para cerrar la spline de ajuste (forma un perfil).
+  - `closed` (true/false; opcional, por defecto `false`): true para cerrar la spline de ajuste (forma un perfil); no compatible con control_points (Fusion no lo permite: lanza INVALID_ARGUMENTS).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para una spline de construcción (no forma perfiles).
   - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
@@ -1984,7 +1984,7 @@ Inserta la geometría 2D de un archivo DXF en un boceto (Fusion: Insertar > Inse
 
 ### `trace_image`
 
-Vectoriza una imagen (PNG, JPG, BMP, GIF, WEBP) y la inserta en un boceto como contornos cerrados (logos, siluetas, dibujos en blanco y negro). Mismo manejo de plane / sketch / transformación que insert_svg. Los agujeros salen como contornos aparte (forman perfiles anillo). Con curves=true cada contorno es UNA spline suave; con false, una polilínea simplificada. El tamaño sale de width (mm) o, si falta, de dpi.
+Vectoriza una imagen (PNG, JPG, BMP, GIF, WEBP) y la inserta en un boceto como contornos cerrados (logos, siluetas, dibujos en blanco y negro). Mismo manejo de plane / sketch / transformación que insert_svg. Los agujeros salen como contornos aparte (forman perfiles anillo). Con curves=true cada contorno es UNA spline suave; con false, una polilínea simplificada. Con corner_angle > 0 el contorno se parte en sus esquinas y las puntas del dibujo quedan vivas. El tamaño sale de width (mm) o, si falta, de dpi.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2000,6 +2000,7 @@ Vectoriza una imagen (PNG, JPG, BMP, GIF, WEBP) y la inserta en un boceto como c
   - `min_area` (número; opcional, por defecto `4.0`): los contornos de menos píxeles² se descartan como ruido.
   - `channel` ("auto" | "luminance" | "alpha"; opcional, por defecto `"auto"`): auto (usa la transparencia si la hay), luminance o alpha.
   - `curves` (true/false; opcional, por defecto `false`): true = una spline suave por contorno; false = polilínea.
+  - `corner_angle` (número; opcional, por defecto `0.0`): ángulo de esquina en grados (0 a 180): los vértices que doblen más que esto son esquinas y el contorno se parte ahí, así las puntas del dibujo quedan vivas (0 = sin detección: todo como antes). Solo con curves=true.
   - `x` (número; opcional, por defecto `0.0`): desplazamiento en X (mm).
   - `y` (número; opcional, por defecto `0.0`): desplazamiento en Y (mm).
   - `angle` (número; opcional, por defecto `0.0`): giro en grados alrededor del origen del boceto.
@@ -2146,6 +2147,8 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`chamfer`](#chamfer) | sí | Achaflana aristas: distancia igual en las dos caras (por defecto), dos distancias (type=two_distances, distance2) o distancia y ángulo (type=distance_angle, angle); flip pasa la primera distancia a la otra cara. |
 | [`shell`](#shell) | sí | Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quitan (quedan abiertas). |
 | [`remove_fillets`](#remove_fillets) | sí | Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max_radius («Remove Fillets» de Plasticity: defeaturing + unión de la topología que queda). |
+| [`remove_features`](#remove_features) | sí | Quita de una vez los empalmes, chaflanes y agujeros de un cuerpo con medida hasta max_size («Remove Features» de Fusion 360 › Simplify: defeaturing + unión de la topología que queda). |
+| [`replace_with_primitive`](#replace_with_primitive) | sí | Reemplaza uno o varios cuerpos por UNA forma simple que los envuelve: box, cylinder (con eje X, Y o Z) o sphere (la mínima de la caja envolvente). «Replace with Primitives» de Fusion 360 › Simplify: deja UN paso en el timeline que crea la primitiva y quita los cuerpos elegidos, editable por parámetros. |
 | [`offset_faces`](#offset_faces) | sí | Mueve caras de un cuerpo a lo largo de su normal (la mitad «cara» del comando Desfase; «Cara de desfase» de Fusion): distance > 0 agrega material, < 0 lo quita. |
 | [`offset_edges`](#offset_edges) | sí | Desfase de aristas o de curvas de un boceto («Offset Edge» y «Offset Face Loop» de Plasticity): crea un boceto NUEVO con curvas a `distance` de las elegidas, sin tocar ni cortar el cuerpo. |
 | [`create_hole`](#create_hole) | sí | Hace agujeros redondos hacia adentro del material: simples, abocardados (counterbore) o avellanados (countersink), ciegos (depth), pasantes (through_all) o hasta una cara, plano o cuerpo (to). |
@@ -2174,6 +2177,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_emboss`](#create_emboss) | sí | Repuja o graba perfiles en una o varias caras, con envoltura opcional. |
 | [`create_boss`](#create_boss) | sí | Crea columnas para tornillo en puntos de boceto o vértices. |
 | [`create_lip_groove`](#create_lip_groove) | sí | Crea un labio o una ranura a lo largo del borde de una pared. |
+| [`create_rest`](#create_rest) | sí | Crea un apoyo (PLÁSTICO › Apoyo): una pared desde un perfil de boceto que deja un área plana en la cara del cuerpo. |
 | [`create_boundary_fill`](#create_boundary_fill) | sí | Rellena celdas encerradas por cuerpos, caras y planos. |
 | [`create_volumetric_lattice`](#create_volumetric_lattice) | sí | Llena un sólido o una malla cerrada con una estructura interna por celdas (SÓLIDO › MODIFICAR › Retícula volumétrica). cell_shape: cross (tres barras por celda), x_cell (las cuatro diagonales), x_cell_25d (las diagonales en XY como paredes extruidas en Z) y custom (barras a medida, custom_bars) quedan como sólido; gyroid, schwarz_p y schwarz_d (superficies mínimas) quedan como cuerpo de malla (resolution muestras por celda; el borde del cuerpo sale interpolado). solidity es el porcentaje de material; con solidity_end y gradient_path varía a lo largo de la ruta. offset_distance/offset_blend arman la zona de desfase (otra solidez cerca de caras, aristas o puntos). cell_offset y cell_rotation mueven y giran las celdas. |
 | [`create_geometric_pattern`](#create_geometric_pattern) | sí | Reparte esferas, cilindros, cajas u objetos a medida sobre caras planas con un gradiente de tamaño (PLÁSTICO › CREAR › Patrón geométrico). |
@@ -2700,6 +2704,31 @@ Quita de una vez todos los redondeos (empalmes) de un cuerpo con radio hasta max
   - `max_radius` (número o expresión; obligatorio): radio máximo en mm (número o expresión): se quitan los redondeos con radio hasta ese valor.
 - CLI: `omnicad call remove_fillets --doc pieza.omnicad body=… max_radius=…`
 
+### `remove_features`
+
+Quita de una vez los empalmes, chaflanes y agujeros de un cuerpo con medida hasta max_size («Remove Features» de Fusion 360 › Simplify: defeaturing + unión de la topología que queda). Un agujero se mide por su diámetro. Deja un paso editable en el timeline; si no hay nada con ese filtro, falla con OPERATION_FAILED y el documento queda igual.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `body` (texto o lista de texto; obligatorio): id o nombre del cuerpo (o lista de cuerpos) al que sacarle las operaciones.
+  - `types` (lista de "fillet" | "chamfer" | "hole"; obligatorio): tipos a quitar: fillet (empalme), chamfer (chaflán) y/o hole (agujero).
+  - `max_size` (número o expresión; obligatorio): medida máxima en mm (número o expresión): se quitan los empalmes y agujeros con radio/diámetro y los chaflanes con ancho hasta ese valor.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = «Eliminar operaciones<n>».
+- CLI: `omnicad call remove_features --doc pieza.omnicad body=… types=… max_size=…`
+
+### `replace_with_primitive`
+
+Reemplaza uno o varios cuerpos por UNA forma simple que los envuelve: box, cylinder (con eje X, Y o Z) o sphere (la mínima de la caja envolvente). «Replace with Primitives» de Fusion 360 › Simplify: deja UN paso en el timeline que crea la primitiva y quita los cuerpos elegidos, editable por parámetros.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `bodies` (lista de texto; obligatorio): nombres/ids de los cuerpos a reemplazar.
+  - `shape` ("box" | "cylinder" | "sphere"; obligatorio): box (caja), cylinder (cilindro) o sphere (esfera).
+  - `name` (texto; opcional, por defecto `null`): nombre del paso en el timeline; vacío = «Reemplazar con primitivas<n>».
+  - `axis` ("x" | "y" | "z"; opcional, por defecto `"z"`): eje del cilindro x, y o z.
+  - `margin` (número o expresión; opcional, por defecto `0`): desfase de la primitiva respecto de los cuerpos en mm.
+- CLI: `omnicad call replace_with_primitive --doc pieza.omnicad bodies=… shape=…`
+
 ### `offset_faces`
 
 Mueve caras de un cuerpo a lo largo de su normal (la mitad «cara» del comando Desfase; «Cara de desfase» de Fusion): distance > 0 agrega material, < 0 lo quita. Con tangent=true la cadena de caras tangentes se mueve junta. Se elige con un selector estilo CadQuery (p. ej. '>Z'; get_guide topic=selectores), con ids de find_faces (p. ej. 'Cuerpo1/F6', válidos hasta el próximo cambio del documento) o con una lista de ambos. Guarda referencias persistentes: sobrevive a un cambio de parámetros del modelo. Si el desfase no se puede calcular, falla con OPERATION_FAILED y el documento queda igual.
@@ -3180,6 +3209,24 @@ Crea un labio o una ranura a lo largo del borde de una pared.
   - `reverse` (true/false; opcional, por defecto `false`): true invierte la dirección de tirado.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores.
 - CLI: `omnicad call create_lip_groove --doc pieza.omnicad edges=…`
+
+### `create_rest`
+
+Crea un apoyo (PLÁSTICO › Apoyo): una pared desde un perfil de boceto que deja un área plana en la cara del cuerpo.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `sketch` (texto; obligatorio): id o nombre del boceto de los perfiles cerrados del apoyo.
+  - `body` (texto; obligatorio): cuerpo (id o nombre) donde se hace el apoyo: el perfil tiene que quedar en su lugar, dentro de él.
+  - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): índice, lista de índices, "all" o "largest" (get_sketch los lista); el resto no se usa.
+  - `offset` (número o expresión; opcional, por defecto `0`): desfase del perfil respecto del plano del boceto, en mm (números negativos valen).
+  - `thickness` (número o expresión; opcional, por defecto `2`): grosor de la pared en mm; tiene que ser la suma de side1 y side2.
+  - `side1` (número o expresión; opcional, por defecto `2`): distancia de la pared al lado 1 del perfil en mm (0 = sin lado 1).
+  - `side2` (número o expresión; opcional, por defecto `0`): distancia de la pared al lado 2 del perfil en mm (0 = sin lado 2).
+  - `draft_angle` (número o expresión; opcional, por defecto `0`): ángulo de desmoldeo en grados; la pared se angosta hacia la cara donde apoya.
+  - `extent` ("all" | "to_object"; opcional, por defecto `"all"`): all (atraviesa el cuerpo) o to_object (termina en las caras del cuerpo).
+  - `reverse` (true/false; opcional, por defecto `false`): true da vuelta el sentido del desmoldeo (Flip).
+- CLI: `omnicad call create_rest --doc pieza.omnicad sketch=… body=…`
 
 ### `create_boundary_fill`
 

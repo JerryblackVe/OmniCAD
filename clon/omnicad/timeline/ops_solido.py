@@ -1363,13 +1363,16 @@ class OpSolidoEnvolvente(_OpCrear):
     (un sistema de coordenadas de usuario en `scu`). `componente` deja el sólido en un componente nuevo (como
     Fusion) y `grupo_rigido` lo liga a los componentes de los cuerpos envueltos. `origen` (Origin Mode) es dónde queda
     el origen del componente: "modelo" (el del documento), "centro" del sólido o su "esquina" mínima; la geometría no
-    cambia y el origen acompaña al componente cuando se mueve (get_assembly › origin)."""
+    cambia y el origen acompaña al componente cuando se mueve (get_assembly › origin).
+
+    Con `reemplazar`, el paso hace lo que «Reemplazar con primitivas» de Fusion › Simplificar: crea la primitiva
+    y quita los cuerpos envueltos (uno de cada componente envuelto), todo en un solo paso."""
     TIPO, ETIQUETA, ICONO = "solido_envolvente", "Sólido envolvente", "⬚"
     PARAMS = {"cuerpos": [], "tipo": "caja", "margen": "0 mm", "eje": "z", "operacion": "nuevo", "objetivos": [],
               "orientacion": "modelo", "eje_a": None, "eje_b": None, "scu": None, "espesor_tubo": "",
-              "componente": False, "grupo_rigido": False, "origen": "modelo"}
+              "componente": False, "grupo_rigido": False, "origen": "modelo", "reemplazar": False}
     EXPRESIONES = ("margen", "espesor_tubo")        # espesor_tubo "" = la décima parte del radio
-    OPCIONES = {"tipo": ("caja", "cilindro", "tubo"), "operacion": OPERACIONES_CUERPO,
+    OPCIONES = {"tipo": ("caja", "cilindro", "tubo", "esfera"), "operacion": OPERACIONES_CUERPO,
                 "orientacion": ("modelo", "automatica", "z_x", "z_y", "x_y", "scu"),    # eje: "x", "y", "z" o un vector
                 "origen": ("modelo", "centro", "esquina")}
     REFS = ("eje_a", "eje_b")
@@ -1399,9 +1402,32 @@ class OpSolidoEnvolvente(_OpCrear):
         n1, n2 = o.split("_")
         return sc.marco_ortonormal(**{n1: a, n2: b})
 
+    def _reemplazar(self, estado, ctx):
+        """Como Fusion: una primitiva por componente envuelto, en ese componente; los cuerpos sin componente quedan
+        todos en una sola. Después se van los cuerpos originales."""
+        grupos = {}
+        for cid in self.p["cuerpos"]:
+            grupos.setdefault(estado.cuerpo(cid).componente or "", []).append(estado.cuerpo(cid).forma)
+        espesor = self.p["espesor_tubo"]
+        for comp, formas in grupos.items():
+            forma = _sc().solido_envolvente(formas, tipo=self.p["tipo"], margen=ctx.evaluar(self.p["margen"]),
+                                            eje=self.p["eje"], marco=self._marco(estado),
+                                            espesor_tubo=ctx.evaluar(espesor) if str(espesor).strip() else None)
+            creados = aplicar_resultado(estado, ctx, self.id, forma, "nuevo", "")
+            self._registrar_usados(creados)
+            for cid in creados:
+                estado.cuerpo(cid).componente = comp
+        for cid in self.p["cuerpos"]:              # como OpQuitar: el id real, no la referencia guardada
+            del estado.cuerpos[estado.cuerpo(cid).id]
+
     def ejecutar(self, estado, ctx):
         if not self.p["cuerpos"]:
             raise ErrorOperacion("Elegí los cuerpos.")
+        if self.p.get("reemplazar") and self.p["operacion"] == "nuevo" and self.p["tipo"] == "tubo":
+            raise ErrorOperacion("«Reemplazar con primitivas» solo hace caja, cilindro o esfera (no tubo).")
+        if self.p.get("reemplazar") and self.p["operacion"] == "nuevo":
+            self._reemplazar(estado, ctx)
+            return
         formas = [estado.cuerpo(c).forma for c in self.p["cuerpos"]]
         espesor = self.p["espesor_tubo"]
         forma = _sc().solido_envolvente(formas, tipo=self.p["tipo"], margen=ctx.evaluar(self.p["margen"]),
@@ -1573,6 +1599,40 @@ class OpLabio(_OpCrear):
         self._registrar_usados([cuerpo.id])
 
 
+class OpApoyo(_OpCrear):
+    """Apoyo (Rest) de PLÁSTICO [PLA-2]: desde perfiles cerrados de boceto, una pared de `grosor` que deja un área
+    plana en la cara del cuerpo. `lado1`/`lado2` (distancia a cada lado del perfil, 0 = sin ese lado), desmoldeo y
+    extensión "todo" o "objeto" (hasta las caras del cuerpo elegido). El grosor tiene que ser la suma de los lados."""
+    TIPO, ETIQUETA, ICONO = "apoyo", "Apoyo", "apoyo"
+    PARAMS = {"perfiles": [], "cuerpo": None, "desfase": "0 mm", "grosor": "2 mm", "lado1": "2 mm", "lado2": "0 mm",
+              "angulo_desmoldeo": "0 deg", "invertir": False, "extension": "todo"}
+    EXPRESIONES = ("desfase", "grosor", "lado1", "lado2", "angulo_desmoldeo")
+    OPCIONES = {"extension": ("todo", "objeto")}
+    REFS = ("perfiles", "cuerpo")
+
+    def ejecutar(self, estado, ctx):
+        perfiles = []
+        planos = []
+        for e in _resolver_todas(self.p["perfiles"], estado, ("perfil", "cara")):
+            if e.plano is None:
+                raise ErrorOperacion("El apoyo necesita perfiles cerrados de boceto o caras planas.")
+            perfiles.append(e.forma)
+            planos.append(e.plano)
+        if len({tuple(np.round(p.normal, 6)) for p in planos if p is not None}) > 1:
+            raise ErrorOperacion("Los perfiles del apoyo tienen que estar en planos paralelos.")
+        if not self.p.get("cuerpo"):
+            raise ErrorOperacion("Elegí el cuerpo del apoyo.")
+        cuerpo = estado.cuerpo(_resolver(self.p["cuerpo"], estado, ("cuerpo",)).cuerpo)
+        L = lambda k: ctx.evaluar(self.p[k])  # noqa: E731
+        herramienta = _sc().apoyo([cuerpo.forma], perfiles, direccion=planos[0].normal, invertir=self.p["invertir"],
+                                  desfase=L("desfase"), grosor=L("grosor"),
+                                  lados=[(1, L("lado1")), (-1, L("lado2"))] if L("lado2") > 0 else [(1, L("lado1"))],
+                                  angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO),
+                                  extension=self.p["extension"])
+        self._aplicar(estado, ctx, herramienta, "unir")
+
+
 registrar_operacion(OpBarrido, OpSolevacion, OpNervio, OpRed, OpRepujado, OpAgujero, OpRosca, OpBobina, OpTuberia,
-                    OpPatron, OpSimetria, OpRellenoContorno, OpSolidoEnvolvente, OpVolumenFluido, OpReglaPlastico, OpSaliente, OpLabio)
+                    OpPatron, OpSimetria, OpRellenoContorno, OpSolidoEnvolvente, OpVolumenFluido, OpReglaPlastico, OpSaliente, OpLabio,
+                    OpApoyo)
 registrar_operacion(OpMultitransformar, OpPatronGeometrico, OpReticulaVolumetrica)
