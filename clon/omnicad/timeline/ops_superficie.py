@@ -413,6 +413,9 @@ class OpExtenderSup(_OpSuperficie):
                                      alineacion=self.p["alineacion"])
 
 
+AVISO_NADA_COSIDO = "No se cosió nada: ninguna arista entra en la tolerancia. Probá con una tolerancia mayor."
+
+
 class OpCoser(_OpSuperficie):
     """SUPERFICIE › Coser [SFC-STITCH]: une superficies; si quedan cerradas, el resultado es un sólido."""
     TIPO, ETIQUETA, ICONO = "coser", "Coser", "⧓"
@@ -428,6 +431,8 @@ class OpCoser(_OpSuperficie):
         principal.forma, principal.tipo = r["forma"], "solido" if r["es_solido"] else "superficie"
         for c in cuerpos[1:]:
             del estado.cuerpos[c.id]
+        if not r["aristas_cosidas"] and not r["es_solido"]:
+            ctx.aviso(AVISO_NADA_COSIDO)
         if not r["es_solido"]:
             n = r["aristas_libres"]
             donde = ", ".join(str(q) for q in r["libres_en"][:3]) + ("…" if n > 3 else "")

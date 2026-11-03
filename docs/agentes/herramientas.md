@@ -3080,7 +3080,7 @@ Crea una tubería maciza o hueca sobre curvas de boceto o aristas.
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `path_sketch` (texto; opcional, por defecto `null`): nombre/id del boceto de ruta; se combina con aristas si se dan ambas fuentes.
-  - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas; vacío = todas las no constructivas; requiere path_sketch.
+  - `path_curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas (también las del Boceto 3D); sin pasarlo = todas las no constructivas; una lista vacía es un error; requiere path_sketch.
   - `edges` (texto o lista de texto o null; opcional, por defecto `null`): selector o ids de find_edges, o lista, como ruta adicional.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de aristas.
   - `chain` (true/false; opcional, por defecto `true`): true incluye la cadena tangente conectada a la ruta seleccionada.

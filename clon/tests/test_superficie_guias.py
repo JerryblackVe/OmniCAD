@@ -655,6 +655,21 @@ def test_paso_de_solevacion_con_condicion_y_rieles_reabre():
     _roundtrip(SupSolevacion, op, doc)
 
 
+def test_panel_de_coser_avisa_cuando_no_se_cose_nada():
+    """SUP-31: dos tiras separadas 0,05 mm; a 0,01 mm el panel lo dice y a 0,1 mm ya no."""
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.superficie import Coser, SupExtruir
+    doc = Documento()
+    bid, ids = _boceto(doc, lineas=[((0, 0), (10, 0)), ((0, 0.05), (10, 0.05))])
+    for i in ids:
+        _ejecutar(doc, SupExtruir, curvas=_curvas(doc, bid, [i]), distancia="5 mm")
+    cuerpos = [_hit_cuerpo(doc, c) for c in doc.estado_final.cuerpos]
+    cmd, ctx = Coser(), ContextoComando(doc)
+    cmd._tabla(_Panel())
+    assert "No se cosió nada" in cmd._libres({"cuerpos": cuerpos, "tolerancia": "0.01 mm"}, ctx)
+    assert "No se cosió nada" not in cmd._libres({"cuerpos": cuerpos, "tolerancia": "0.1 mm"}, ctx)
+
+
 def test_coser_con_tolerancia_invalida_no_rompe_el_panel():
     from omnicad.ui.comando import ContextoComando
     from omnicad.ui.comandos.superficie import Coser, SupExtruir

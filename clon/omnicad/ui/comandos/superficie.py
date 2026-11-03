@@ -4,7 +4,7 @@ import numpy as np
 
 from PySide6.QtWidgets import QAbstractItemView, QComboBox, QHeaderView, QTableWidget, QTableWidgetItem
 
-from ...timeline.ops_superficie import (OpCoser, OpDescoser, OpDestrimar, OpEngrosar, OpExtenderSup,
+from ...timeline.ops_superficie import (AVISO_NADA_COSIDO, OpCoser, OpDescoser, OpDestrimar, OpEngrosar, OpExtenderSup,
                                         OpInvertirNormal, OpParche, OpRecortar, OpReglada, OpSupBarrido, OpSupBobina,
                                         OpSupDesfase, OpSupEmpalme, OpSupExtruir, OpSupPrimitiva, OpSupRevolucion,
                                         OpSupSolevacion, OpSupTuberia)
@@ -504,7 +504,8 @@ class Coser(Comando):
         if r["es_solido"]:
             return "Ninguno: se cierra un sólido." + cosidas
         n = r["total_libres"]
-        return f"{n} {'borde libre' if n == 1 else 'bordes libres'}{cosidas}: el resultado sigue siendo una superficie."
+        nada = f" {AVISO_NADA_COSIDO}" if not r["aristas_cosidas"] else ""
+        return f"{n} {'borde libre' if n == 1 else 'bordes libres'}{cosidas}: el resultado sigue siendo una superficie.{nada}"
 
     def previa_vista(self, ctx, v, op):
         from ..visor3d import _segmentos

@@ -82,7 +82,7 @@ Descoser usa un solo campo: Caras o cuerpos.
 
 ## SUP-31 · Coser
 
-- Tolerancia por defecto 0,10 mm con deslizador. Hoy es 0,01 mm.
+- Tolerancia por defecto 0,01 mm, como dice la ayuda de Fusion (`docs/fusion_docs/contenido/fusion-patch/activity-4-create-solid-bodies-from-surfaces-bc2b24087e4.md`, «default stitch tolerance of 0.01 mm»). OmniCAD ya la usa. Con deslizador: pendiente.
 - Sección Resultado del cosido.
 - Tabla Aristas no cosidas: Arista y Separación máxima, con Buscar arista en la ventana y Establecer la separación máxima como tolerancia.
 - Aristas dentro de tolerancia en verde.

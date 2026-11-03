@@ -2031,8 +2031,9 @@ def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear")
 
 def coser(formas, tolerancia=0.01):
     """Coser superficies [SFC-STITCH] (BRepBuilderAPI_Sewing). Si el resultado queda cerrado
-    (estanco) se convierte en sólido, como Fusion. Devuelve {"forma", "es_solido", "aristas_libres", "libres_en"};
-    `libres_en` son los puntos medios (mm) de los bordes que quedaron libres (hasta 20), para saber cuáles son."""
+    (estanco) se convierte en sólido, como Fusion. Devuelve {"forma", "es_solido", "aristas_libres", "libres_en",
+    "aristas_cosidas"}; `libres_en` son los puntos medios (mm) de los bordes que quedaron libres (hasta 20), para saber
+    cuáles son, y `aristas_cosidas` cuántas aristas entraron en la tolerancia."""
     if not math.isfinite(tolerancia) or tolerancia <= 0:
         raise geo.ErrorGeometria(f"La tolerancia de costura tiene que ser mayor que 0 mm; recibió {tolerancia:g} mm.")
     cos = BRepBuilderAPI_Sewing(float(tolerancia))
@@ -2040,7 +2041,7 @@ def coser(formas, tolerancia=0.01):
         cos.Add(f)
     cos.Perform()
     cosido = _simplificar(cos.SewedShape())
-    libres = cos.NbFreeEdges()
+    libres, cosidas = cos.NbFreeEdges(), cos.NbContigousEdges()
     cascarones = [TopoDS.Shell(s) for s in geo._explorar(cosido, TopAbs_SHELL)]
     if libres == 0 and cascarones and all(BRep_Tool.IsClosed_s(s) for s in cascarones):
         solidos = []
@@ -2048,8 +2049,10 @@ def coser(formas, tolerancia=0.01):
             sol = BRepBuilderAPI_MakeSolid(s).Solid()
             BRepLib.OrientClosedSolid_s(sol)
             solidos.append(sol)
-        return {"forma": _juntar(solidos), "es_solido": True, "aristas_libres": 0, "libres_en": []}
-    return {"forma": cosido, "es_solido": False, "aristas_libres": libres, "libres_en": _bordes_libres(cosido)[:20]}
+        return {"forma": _juntar(solidos), "es_solido": True, "aristas_libres": 0, "libres_en": [],
+                "aristas_cosidas": cosidas}
+    return {"forma": cosido, "es_solido": False, "aristas_libres": libres, "libres_en": _bordes_libres(cosido)[:20],
+            "aristas_cosidas": cosidas}
 
 
 def coser_previa(formas, tolerancia=0.01):

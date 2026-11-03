@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 236: Abierto 157 · Parcial 46 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 235: Abierto 156 · Parcial 46 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
 
 ## Pendientes generales
 
@@ -78,7 +78,7 @@ Abierto 3 · Parcial 1 · Sin verificar 0.
 |---|---|---|---|---|---|---|
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: derivación y Duplicar con uniones hechos; falta el catálogo de piezas | Parcial | Media | Falta un catálogo local de piezas estándar más allá de las fijaciones (rodamientos, perfiles, pasadores…; sin servicios en línea): hay que decidir qué piezas y sus medidas. Duplicar con uniones copia un componente por vez, las copias son independientes (sin instancias asociativas) y no tiene los modos de destino «Entre dos caras» e «Intersección de dos aristas» ni «Borrar último duplicado». | ui/cinta.py:59 (Duplicar con uniones); api/herramientas_ensamble.py (duplicate_with_joints); ui/comandos/derivacion.py:16; api/herramientas_documento.py:322 (insert_derive); tests/test_derivacion.py; tests/test_duplicar_con_uniones.py; nucleo/fijaciones.py (solo fijaciones) | 2026-10-31 |
-| H-63 | create_pipe no toma curvas de un boceto 3D | Abierto | Media | Reproducido: `draw_spline_3d` crea la curva 4 y `create_pipe(path_sketch="Ruta", path_curves=[4])` da ENTITY_NOT_FOUND («El boceto «Ruta» no tiene la curva 4»). Falta tubo por `draw_spline_3d`. | omnicad/api/herramientas_solido_extra.py:181 | 2026-11-02 |
+| H-67 | Una curva de Boceto 3D no se puede elegir con el mouse en la vista | Abierto | Media | El visor elige solo curvas de bocetos 2D: Tubo y Barrer aceptan una curva 3D por API o al editar, pero en la ventana no se puede hacer clic sobre ella. Sumar las curvas 3D a `_curvas_boceto` del visor (tipo desde `geo3d`) y correr la prueba de humo, porque toca la elección de todos los comandos. | ui/visor3d.py:1531 | 2026-11-03 |
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
@@ -142,7 +142,6 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 | SUP-28 | Empalme y Chaflán de superficie completos | Abierto | Alta | Tipos, tipo de radio, cadena tangente y esquina; hoy son 3 campos. | docs/brechas_superficie.md § SUP-28; `fillet_surface` rechaza radius_type y tangent_chain, por API | 2026-11-01 |
 | SUP-29 | Encadenado en los comandos de superficie | Abierto | Media | Extruir, Revolución, Contorno, Reglada, Desfase, Alargar y Descoser. | docs/brechas_superficie.md § SUP-29 | 2026-11-01 |
 | SUP-30 | Valores por defecto de superficie y paneles de material | Abierto | Media | Agrupar, Eje de proyecto, Anular recorte, Alargar y biblioteca de Material físico (el panel Aspecto ya está completo: `tests/test_aspecto_panel.py`). | docs/brechas_superficie.md § SUP-30 | 2026-11-01 |
-| SUP-31 | Coser: tolerancia y resultado | Abierto | Media | Tolerancia por defecto 0,10 mm con deslizador (hoy 0,01 mm) y mensaje cuando no se cose nada. La tabla «Aristas sin coser» ya existe (`ui/comandos/superficie.py:437`). | docs/brechas_superficie.md § SUP-31; con 0,05 mm de separación responde ok y 0 aristas cosidas, por API | 2026-11-01 |
 
 ## ENSAMBLAR contra capturas de Fusion (2026-11-01)
 

@@ -11,7 +11,7 @@ from .errores import ErrorAPI, error
 from .herramientas_boceto import boceto_activo, nombre_nuevo, seleccionar_perfiles, texto_expr
 from .herramientas_construccion import _referencia
 from .herramientas_solido import (OPERACIONES, Cuerpos, Operacion, Perfiles, _agregar,
-                                  _ids_cuerpos, _numero_positivo, _objetivos, _ref_perfil)
+                                  _curvas_de_boceto, _ids_cuerpos, _numero_positivo, _objetivos, _ref_perfil)
 from .registro import Expr, herramienta
 
 Referencia = str | dict
@@ -125,7 +125,7 @@ def create_pipe(sesion, path_sketch: str | None = None, path_curves: list[int] |
                 operation: Operacion = "new_body", target: Cuerpos | None = None):
     """
     path_sketch: nombre/id del boceto de ruta; se combina con aristas si se dan ambas fuentes.
-    path_curves: ids de curvas; vacío = todas las no constructivas; requiere path_sketch.
+    path_curves: ids de curvas (también las del Boceto 3D); sin pasarlo = todas las no constructivas; una lista vacía es un error; requiere path_sketch.
     edges: selector o ids de find_edges, o lista, como ruta adicional.
     body: cuerpo donde se evalúan los selectores de aristas.
     chain: true incluye la cadena tangente conectada a la ruta seleccionada.
@@ -138,9 +138,12 @@ def create_pipe(sesion, path_sketch: str | None = None, path_curves: list[int] |
     operation: new_body, join, cut o intersect.
     target: cuerpos afectados por la booleana; vacío = automático.
     """
-    ruta = _curvas(sesion, path_sketch, path_curves) if path_sketch is not None else []
     if path_curves is not None and path_sketch is None:
         raise error("INVALID_ARGUMENTS", "path_curves requiere path_sketch.")
+    curvas = list(dict.fromkeys(path_curves)) if path_curves is not None else None
+    if curvas is not None and not curvas:
+        raise error("INVALID_ARGUMENTS", "Seleccioná curvas del boceto.")
+    ruta = _curvas_de_boceto(sesion, path_sketch, curvas, "la ruta") if path_sketch is not None else []
     if edges is not None:
         ruta += [sl.referencia(c, e) for c, e in sl.elegir(sesion, edges, "arista", body)]
     if not ruta:

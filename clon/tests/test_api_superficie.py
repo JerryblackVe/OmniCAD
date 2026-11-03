@@ -214,6 +214,21 @@ def test_coser_y_descoser_conservan_area_y_un_solo_cuerpo():
     area(s, base, 200)
 
 
+def test_coser_avisa_si_no_cose_nada_y_cose_con_mayor_tolerancia():
+    """SUP-31: dos superficies a 0,05 mm; con la tolerancia por defecto de Fusion (0,01 mm) no se cosen y llega un aviso."""
+    s = api.Sesion()
+    a = parche(s, nombre="A", x1=0, x2=10)
+    b = parche(s, nombre="B", x1=10.05, x2=20)
+    r = api.llamar(s, "stitch_surfaces", {"bodies": [a, b]})
+    assert r["ok"] and any("No se cosió nada" in t and "mayor" in t for t in r["avisos"]), r
+    s = api.Sesion()
+    a = parche(s, nombre="A", x1=0, x2=10)
+    b = parche(s, nombre="B", x1=10.05, x2=20)
+    r = api.llamar(s, "stitch_surfaces", {"bodies": [a, b], "tolerance": "0.1 mm"})
+    assert r["ok"] and not any("No se cosió nada" in t for t in r["avisos"]), r
+    assert len(s.doc.estado_final.cuerpos) == 1
+
+
 @pytest.mark.parametrize("tolerancia", ["0", "-1"])
 def test_coser_rechaza_tolerancia_cero_o_negativa(tolerancia):
     """SUP-8: una tolerancia ≤ 0 no cose nada y antes pasaba en silencio."""

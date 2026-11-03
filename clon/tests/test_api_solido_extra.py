@@ -6,6 +6,7 @@ import pytest
 
 from omnicad import api
 from omnicad.nucleo import geometria as geo
+from omnicad.timeline import entidades as ent
 from omnicad.timeline.ops_superficie import OpSupExtruir
 
 
@@ -83,6 +84,30 @@ def test_create_pipe_hueco_y_limites():
     _volumen(s, r["bodies_created"][0]["id"], math.pi * (25 - 16) * 30)
     r = _ok(s, "create_pipe", path_sketch=b, chain=False, start=0.25, end=0.75, section_size=2)
     _volumen(s, r["bodies_created"][0]["id"], math.pi * 15)
+
+
+def test_create_pipe_sobre_una_curva_2d_da_lo_mismo():
+    """La ruta de un boceto 2D: el tubo sigue siendo el de siempre (una línea de 30 mm)."""
+    s = api.Sesion()
+    b = _boceto(s, "XZ")
+    _linea(s, b, 0, 0, 0, 30)
+    curva = _ok(s, "get_sketch", sketch=b)["entities"][0]["id"]
+    r = _ok(s, "create_pipe", path_sketch=b, path_curves=[curva], section_size=4)
+    _tipo(s, r, "tuberia")
+    _volumen(s, r["bodies_created"][0]["id"], math.pi * 4 * 30)
+
+
+def test_create_pipe_sobre_una_curva_de_boceto_3d():
+    """H-63: el tubo sigue una curva del Boceto 3D (como el barrido): sólido válido de π·r²·largo."""
+    s = api.Sesion()
+    b = _boceto(s)
+    cid = _ok(s, "draw_spline_3d", points=[[0, 0, 0], [10, 10, 10], [20, 0, 20], [30, 5, 0]], sketch=b)["entity"]
+    largo = geo.longitud(ent.resolver({"tipo": "curva_boceto", "boceto": b, "curva": cid}, s.doc.estado_final).forma)
+    r = _ok(s, "create_pipe", path_sketch=b, path_curves=[cid], section_size=5)
+    _tipo(s, r, "tuberia")
+    forma = s.cuerpo(r["bodies_created"][0]["id"]).forma
+    assert geo.es_valida(forma)
+    assert geo.volumen(forma) == pytest.approx(math.pi * 2.5 ** 2 * largo, rel=0.05)
 
 
 def test_create_pipe_arista_persistente():
@@ -276,3 +301,12 @@ def test_catalogo_documentado():
     for h in herramientas:
         assert h["grupo"] == "solido" and h["modifica"]
         assert all(p.get("description") for p in h["esquema"]["properties"].values())
+
+
+def test_run_operation_acepta_una_curva_de_boceto_3d_por_referencia():
+    """La referencia genérica {"sketch", "curve"} también encuentra las curvas del Boceto 3D (antes, ENTITY_NOT_FOUND)."""
+    from omnicad.api.herramientas_avanzado import _de_boceto
+    s = api.Sesion()
+    b = _boceto(s)
+    cid = _ok(s, "draw_spline_3d", points=[[0, 0, 0], [10, 10, 10], [20, 0, 20]], sketch=b)["entity"]
+    assert _de_boceto(s, "ruta", {"sketch": b, "curve": cid}) == [{"tipo": "curva_boceto", "boceto": b, "curva": cid}]

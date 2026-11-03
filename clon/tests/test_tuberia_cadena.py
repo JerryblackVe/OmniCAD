@@ -9,6 +9,7 @@ from omnicad import api
 from omnicad.nucleo import geometria as geo
 from omnicad.nucleo import solidos_crear as sc
 from omnicad.restricciones import Boceto
+from omnicad.timeline import entidades as ent
 from omnicad.timeline.documento import Documento
 from omnicad.timeline.operaciones import OpBoceto, operacion_desde_dict
 from omnicad.timeline.ops_solido import OpTuberia
@@ -152,3 +153,23 @@ def test_dialogo_predeterminados_textos_y_edicion_compatible():
     vieja = OpTuberia("vieja", ruta=refs[:1])
     editados = comando.desde_op(vieja, contexto)
     assert editados["cadena"] is False and editados["distancia2"] == "0"
+
+
+def test_el_comando_tuberia_acepta_una_curva_de_boceto_3d():
+    """H-63: el comando Tubería de la ventana también sigue una curva del Boceto 3D."""
+    from omnicad.ui.comando import ContextoComando, hit_desde_ref
+    from omnicad.ui.comandos.crear import Tuberia
+    s = api.Sesion()
+    b = api.llamar(s, "create_sketch", {"plane": "XY"})["result"]["sketch"]["id"]
+    cid = api.llamar(s, "draw_spline_3d", {"points": [[0, 0, 0], [10, 10, 10], [20, 0, 20], [30, 5, 0]],
+                                           "sketch": b})["result"]["entity"]
+    doc = s.doc
+    ref = {"tipo": "curva_boceto", "boceto": b, "curva": cid}
+    largo = geo.longitud(ent.resolver(ref, doc.estado_final).forma)
+    comando, contexto = Tuberia(), ContextoComando(doc)
+    campos = {campo.clave: campo for campo in comando.campos(contexto)}
+    valores = {clave: campo.defecto for clave, campo in campos.items()}
+    valores["ruta"] = [hit_desde_ref(ref, doc.estado_final)]
+    op = comando.construir(valores, contexto)
+    assert _volumen(doc, op) == pytest.approx(math.pi * 2.5 ** 2 * largo, rel=0.05)
+    assert comando.desde_op(op, contexto)["ruta"][0]["ref"] == ref

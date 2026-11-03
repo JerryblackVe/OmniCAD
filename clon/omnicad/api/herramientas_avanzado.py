@@ -189,8 +189,8 @@ def _de_boceto(sesion, clave, item):
         return [dict(OpExtrusion.referencia_perfil(p), tipo="perfil", boceto=sop.id)
                 for p in seleccionar_perfiles(br, sop, item["profile"])]
     numeros = item[que] if isinstance(item[que], list) else [item[que]]
-    existentes, tipo, k = ((br.boceto.puntos, "punto_boceto", "punto") if que == "point"
-                           else (br.boceto.curvas, "curva_boceto", "curva"))
+    existentes, tipo, k = ((br.boceto.puntos, "punto_boceto", "punto") if que == "point"   # curvas: también las 3D
+                           else ({**br.boceto.curvas, **br.boceto.geo3d.get("curvas", {})}, "curva_boceto", "curva"))
     for n in numeros:
         if isinstance(n, bool) or not isinstance(n, int) or n not in existentes:
             raise error("ENTITY_NOT_FOUND", f"«{clave}»: el boceto «{sop.nombre}» ({sop.id}) no tiene "
