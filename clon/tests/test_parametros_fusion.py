@@ -376,7 +376,7 @@ def test_texto_con_llaves():
     r = llamar(s, "create_parameter", name="etiqueta", expression="Pieza {PartNumber}", kind="text")
     assert r["value"] == "Pieza A-7" and r["expression"] == "Pieza {PartNumber}"
     r = llamar(s, "create_parameter", name="caja", expression="Es {Length} x {Width} y {Length*Width/1 mm}", kind="text")
-    assert r["value"] == "Es 10 mm x 4 mm y 40"
+    assert r["value"] == "Es 10 mm x 4 mm y 40 mm"       # H-66: la cuenta lleva la unidad que sale de la expresión
     llamar(s, "set_parameter", name="PartNumber", expression="B-8")
     assert parametro(s, "etiqueta")["value"] == "Pieza B-8"
     llamar(s, "set_parameter", name="PartNumber", new_name="Codigo")
@@ -400,6 +400,23 @@ def test_cf12_texto_con_unidades():
     assert texto_con_valores("Plano {largo / mm}", v) == "Plano 150"
     assert texto_con_valores("Plano {angulo / deg}", v) == "Plano 30"
     assert texto_con_valores("Formateado {largo:.1f}", v) == "Formateado 150.0"
+
+
+def test_h66_texto_con_cuentas_de_parametros_lleva_unidad():
+    """H-66: la cuenta lleva la unidad que sale de la expresión («{largo * 2}» da «300 mm»); una cuenta sin
+    unidad, solo el número («{largo / mm}» da «150»)."""
+    from omnicad.timeline.operaciones import texto_con_valores
+    t = TablaParametros()
+    t.agregar("largo", "150 mm")
+    t.agregar("angulo", "30 deg", tipo=ANGULO)
+    t.agregar("sin_unidad", "5", tipo=ESCALAR)
+    v = t.valores()
+    assert texto_con_valores("Doble {largo * 2}", v) == "Doble 300 mm"
+    assert texto_con_valores("Más {largo + 10}", v) == "Más 160 mm"
+    assert texto_con_valores("Doble ángulo {angulo * 2}", v) == "Doble ángulo 60 deg"
+    assert texto_con_valores("Entero {sin_unidad * 2}", v) == "Entero 10"
+    assert texto_con_valores("Pelado {largo * 2 / mm}", v) == "Pelado 300"
+    assert texto_con_valores("Formateado {largo * 2:.1f}", v) == "Formateado 300.0"
 
 
 def test_texto_viejo_con_llaves_sin_resolver_queda_igual():

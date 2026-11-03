@@ -2269,7 +2269,15 @@ class VentanaPrincipal(QMainWindow):
         creo = list(dict.fromkeys(o["creo"] for o in origenes if o["creo"]))
         modificaron = [m for m in dict.fromkeys(m for o in origenes for m in o["modificaron"]) if m not in creo]
         self.timeline.resaltar_origen(creo, modificaron)
-        claves = lambda ops: [k for op in ops for k in self.claves_navegador_de(op)]  # noqa: E731
+        cuerpos = {o["cuerpo"] for o in origenes if o["cuerpo"]}
+        estado = self.doc.estado_final
+
+        def claves(ops):
+            """Claves del navegador de los pasos `ops`: entre los CUERPOS, solo los de lo elegido (un paso puede crear
+            varios: un STEP importado, un patrón); las filas que no son cuerpos (boceto, plano, unión) quedan igual."""
+            return [k for op in ops for k in self.claves_navegador_de(op)
+                    if k not in estado.cuerpos or k in cuerpos]
+
         ubicacion = ()
         if self.prefs["navegador/no_desplegar_al_seleccionar"] and self.panel is None and not self.modo_boceto.activo:
             ubicacion = [h["ref"].get("cuerpo") or h["ref"].get("boceto") or h["ref"].get("id")

@@ -3367,6 +3367,13 @@ def transformacion_simetria(plano):
     return t
 
 
+def transformacion_escala(factor):
+    """gp_Trsf del cambio de escala uniforme (Scaled de FreeCAD) respecto del origen de coordenadas."""
+    t = gp_Trsf()
+    t.SetScale(gp_Pnt(0.0, 0.0, 0.0), float(factor))
+    return t
+
+
 def _clave_trsf(t):
     """Huella de una gp_Trsf (matriz 3×4 redondeada a 1e-6): dos instancias con la misma huella son la misma."""
     return tuple(round(t.Value(i, j), 6) + 0.0 for i in (1, 2, 3) for j in (1, 2, 3, 4))

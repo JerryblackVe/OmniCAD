@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 239: Abierto 157 · Parcial 49 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 236: Abierto 157 · Parcial 46 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
 
 ## Pendientes generales
 
@@ -204,7 +204,6 @@ Especificación y prompt: [brechas_extensiones.md](../brechas_extensiones.md).
 | PLA-3 | Saliente de fijación de dos lados, con fijador y nervios | Parcial | Alta | Hoy es un solo lado: exterior, agujero, alto y desmoldeo. Falta Lado 2, escariado, escalón, fijador y pestaña de nervios. | api create_boss: volumen 30681,51 en la caja medida; docs/brechas_extensiones.md | 2026-11-01 |
 | PLA-4 | Labio: tipo Labio y acanalado sobre dos cuerpos | Parcial | Media | Labio y ranura andan. Falta el tipo combinado, Cadena tangente, Guía de cara y extensiones. | api create_lip_groove: lip_type solo lip o groove; docs/brechas_extensiones.md | 2026-11-01 |
 | PLA-5 | Reglas de plástico: árbol, editar, biblioteca y quitar la regla | Parcial | Media | Crear, asignar y borrar andan. Falta el árbol, Editar, Nueva desde otra, elegir en el lienzo, quitar desde el navegador y las reglas de fábrica de Fusion. | ui/comandos/plastico.py; docs/brechas_extensiones.md | 2026-11-01 |
-| PLA-6 | Cinta PLÁSTICO y nombres de Fusion | Parcial | Baja | Falta el grupo CONFIGURACIÓN, el CREAR completo, Duplicar con uniones en INSERTAR y los nombres de Fusion. | ui/cinta.py:56-59 y 156-165; docs/brechas_extensiones.md | 2026-11-01 |
 | PLA-7 | Patrón geométrico: objeto personalizado y caras curvas | Parcial | Media | Faltan Dirección perpendicular, Cambiar y Expandir. Comprobar en Fusion real si acepta caras curvas: hoy OmniCAD las rechaza. | api create_geometric_pattern: «necesita una cara plana»; docs/brechas_extensiones.md | 2026-11-01 |
 | PLA-8 | Sólido delimitador: tipos fijos, desfases, redondeo, origen y cotas | Parcial | Media | Hoy tres formas y un margen. Faltan seis tipos, modo de desfase, redondeo, cuatro orígenes y cotas en vivo. | ui/cinta.py:102; api create_bounding_solid; docs/brechas_extensiones.md | 2026-11-01 |
 | PLA-9 | Simplificar: Eliminar operaciones, Eliminar caras y Reemplazar con primitivas | Abierto | Alta | Submenú vacío. Existe `delete_faces` sin botón y `remove_fillets` solo para empalmes. | ui/cinta.py:113; docs/brechas_extensiones.md | 2026-11-01 |
@@ -248,7 +247,7 @@ Abierto 2 · Bloqueado 1. Especificación: [brechas_fusion.md](../brechas_fusion
 
 ## FreeCAD
 
-Abierto 3 · Parcial 7 · Bloqueado 4. Especificación: [brechas_freecad.md](../brechas_freecad.md).
+Abierto 3 · Parcial 5 · Bloqueado 4. Especificación: [brechas_freecad.md](../brechas_freecad.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -256,8 +255,6 @@ Abierto 3 · Parcial 7 · Bloqueado 4. Especificación: [brechas_freecad.md](../
 | F15 | Parámetros desde XLSX y familias de piezas desde hoja | Abierto | Media | El CSV ya anda: falta XLSX y las familias de piezas. | api/herramientas_parametros_csv.py y ui/dialogos.py:254 ya importan CSV; timeline/documento.py:168 tabla de configuraciones | 2026-11-01 |
 | F13 | Estructura de perfiles con ingletes y lista de cortes | Abierto | Alta | Perfiles estándar a lo largo de rutas con ingletes automáticos y lista de cortes | sin código (grep); nucleo/superficies.py:525 aclara que no hay esquinas a inglete | 2026-10-20 |
 | F1 | Engranajes, cremallera y rueda de cadena | Parcial | Baja | Polea dentada (correa); valores ISO 606 de la rueda de cadena por verificar | ed0c4dc; nucleo/engranajes.py; timeline/ops_engranaje.py; ui/comandos/engranaje.py; api create_gear, create_gear_pair, create_rack, create_sprocket; tests/test_engranajes.py; tests/test_api_engranajes.py | 2026-10-20 |
-| F3 | Patrón en puntos y en ruta con giro | Parcial | Baja | Vista previa de las copias como fantasmas | c606f26; api point_pattern, path_pattern; ui/comandos/patrones.py; tests/test_patrones_avanzados.py::test_transformaciones_en_puntos; ::test_ruta_con_giro_progresivo; tests/test_patrones_solidos_semantica.py::test_patron_en_puntos_traslacion_igual_a_destino_menos_referencia | 2026-10-31 |
-| F18 | Multitransformación | Parcial | Baja | Transformación de escala (Scaled de FreeCAD) | c606f26; timeline/ops_solido.py:667 OpMultitransformar; api multi_transform; tests/test_patrones_avanzados.py::test_multitransformar_cuerpos_patron_y_simetria; tests/test_patrones_solidos_semantica.py::test_multitransformar_conserva_simetria_y_supresion_en_cada_transformacion | 2026-10-31 |
 | F2 | Revisar geometría con botón Reparar | Parcial | Media | Lista con clic por problema que resalta la pieza; mapa de color del espesor | 4fca4c7; nucleo/revision.py; ui/comandos/revision.py; api check_geometry, repair_body; tests/test_revision.py; tests/test_api_revision.py | 2026-10-20 |
 | F8 | Uniones de transmisión (engranaje, cremallera-piñón, tornillo, correa) | Parcial | Media | Tipos de unión propios que calculen la relación solos (cremallera-piñón, tornillo, correa) | timeline/ops_ensamblar.py:461 OpVinculoMovimiento (factor manual); api/herramientas_ensamble.py:642 create_motion_link; create_gear_pair crea el vínculo con la relación de dientes | 2026-10-20 |
 | F9 | Dibujo: vista interrumpida, soldadura, acabado, ajuste, cotas en cadena | Parcial | Media | Vista interrumpida, símbolos de soldadura y acabado, ajuste, cotas en cadena y de chaflán | nucleo/dibujo.py (rayado:520, cota de diámetro ⌀:659; sin esos símbolos); io_archivos/svg_salida.py | 2026-10-20 |
@@ -291,7 +288,7 @@ Abierto 8 · Parcial 5 · Bloqueado 2. Especificación: [brechas_blender.md](../
 | B10 | Ajustar a superficie (Shrinkwrap) | Abierto | Alta | Llevar curvas, mallas o puntos a una superficie (más cercano, eje o normal) | sin código (grep shrinkwrap/ajustar a superficie) | 2026-10-20 |
 | B13 | Relieve por textura en caras (Displace) | Abierto | Alta | Desplazar caras con ruido o imagen: cuero, panal, agarre | sin código (grep); existe repujado de perfiles y texto (timeline/ops_solido.py:156) | 2026-10-20 |
 | B18 | Mapeo UV y texturas | Abierto | Alta | Desenvolver y proyecciones caja, cilindro y esfera; va con el render y con RH21 | sin código UV (grep); existe calcomanía sobre cilindro (tests/test_calcomania_cilindro.py) | 2026-10-20 |
-| B4 | Vectorizar imagen: vista previa y esquinas | Parcial | Baja | Detección de esquinas e ignorar manchas en el diálogo; vista previa propia de las curvas | 32c9e2d; io_archivos/vectorizar.py:93; ui/comandos/insertar.py:125; api trace_image; tests/test_texto_vectores.py | 2026-10-20 |
+| B4 | Vectorizar imagen: vista previa y esquinas | Parcial | Baja | Detección de esquinas en el diálogo; vista previa propia de las curvas | 32c9e2d; io_archivos/vectorizar.py:93; ui/comandos/insertar.py:125; api trace_image; tests/test_texto_vectores.py | 2026-10-20 |
 | B2 | Revisión de impresión 3D (espesor, voladizos, aristas filosas) | Parcial | Media | Lista con clic por problema y mapa de color sobre la pieza | 4fca4c7; nucleo/revision.py revisar_impresion; api check_printability; tests/test_revision.py; tests/test_api_revision.py | 2026-10-20 |
 | B3 | Exportar FBX y USD (glTF ya está) | Parcial | Alta | Escritor de FBX (sin especificación pública) y de USD (pide la biblioteca pxr) | 8e1a1fe; io_archivos/gltf.py (docstring: FBX y USD no se escriben); tests/test_gltf.py | 2026-10-20 |
 | B7 | Imán (snapping) completo en el visor | Parcial | Alta | Barra de imanes: vértice, arista, cara, centro de arista, perpendicular, varios a la vez | ui/manipuladores.py:51,297-347 (enganche a centro de cara, esquinas y puntos medios al ubicar) | 2026-10-20 |

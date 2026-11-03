@@ -1626,7 +1626,7 @@ class RellenoContorno(Comando):
 
 
 class SolidoEnvolvente(Comando):
-    CLAVE, TITULO, ICONO = "cuerpo_envolvente", "Sólido envolvente", "cuerpo_envolvente"
+    CLAVE, TITULO, ICONO = "cuerpo_envolvente", "Sólido delimitador", "cuerpo_envolvente"
     AYUDA = "Caja, cilindro o tubo que encierra los cuerpos elegidos."
     CLASE_OP = OpSolidoEnvolvente
 
@@ -1698,7 +1698,7 @@ class VolumenFluido(Comando):
 
 
 class Saliente(Comando):
-    CLAVE, TITULO, ICONO = "saliente", "Saliente", "saliente"
+    CLAVE, TITULO, ICONO = "saliente", "Saliente de fijación", "saliente"
     AYUDA = "Columna para tornillo (plástico) en puntos de boceto."
     CLASE_OP = OpSaliente
 
@@ -1723,7 +1723,7 @@ class Saliente(Comando):
 
 
 class Labio(Comando):
-    CLAVE, TITULO, ICONO = "labio", "Labio y ranura", "labio"
+    CLAVE, TITULO, ICONO = "labio", "Labio", "labio"
     AYUDA = "Labio o ranura a lo largo del borde de una pared (carcasas de plástico)."
     CLASE_OP = OpLabio
     TITULOS_MODO = ("tipo", {"labio": ("Labio", "labio"), "ranura": ("Ranura", "labio")})

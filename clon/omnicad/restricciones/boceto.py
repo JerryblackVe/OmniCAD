@@ -3718,7 +3718,10 @@ class Boceto:
             elif isinstance(c, Texto):
                 c.altura *= factor
                 if c.altura_expr:                # si no, el recálculo vuelve a la altura de antes
-                    c.altura_expr = f"{c.altura:.12g} mm"
+                    try:
+                        c.altura_expr = _numero(float(c.altura_expr.replace(",", ".")) * factor)
+                    except ValueError:
+                        c.altura_expr = f"({c.altura_expr}) * {_numero(factor)}"
                 c.espaciado *= factor
                 c.ancho_caja *= factor
                 c.camino_desfase *= factor

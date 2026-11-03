@@ -47,7 +47,7 @@ def _propiedades(v, ctx):
 
 
 class InsertarFijacion(Comando):
-    CLAVE, TITULO, ICONO = "fijacion", "Insertar fijación", "fijacion"
+    CLAVE, TITULO, ICONO = "fijacion", "Insertar fijador", "fijacion"
     AYUDA = ("Inserta tornillos, tuercas, arandelas, varilla roscada o espárragos normalizados (ISO/DIN) en "
              "agujeros, caras cilíndricas o puntos; el tamaño se propone según el agujero.")
     CLASE_OP = OpFijacion

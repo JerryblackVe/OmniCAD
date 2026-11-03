@@ -64,7 +64,7 @@ Son UNA sola tarea: al hacerla se borran todas sus filas juntas (y su ID de esta
 | Puntos de control y B-spline | F12 · RH9 |
 | Deformar y ajustar a superficie | RH7 · B10 · P-27-8 |
 | Relieve desde imagen o textura | RH10 · B13 · P-27-9 |
-| Patrón en puntos y esparcir | F3 · B12 · VR9 |
+| Patrón en puntos y esparcir | B12 · VR9 |
 | Rebanar y curvas de corte | F6 · RH18 |
 | Mapeo UV | RH21 · B18 |
 | Pases de render | KS11 · VR3 |

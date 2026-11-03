@@ -1270,6 +1270,7 @@ _CLAVES_TRANSFORMACION = {
                     "symmetric2", "distribution", "suppress", "body"},
     "circular": {"type", "axis", "count", "total_angle", "symmetric", "distribution", "suppress", "body"},
     "mirror": {"type", "plane", "body"},
+    "scale": {"type", "factor", "count"},
     "points": {"type", "points", "sketch", "reference", "point_refs", "reference_point", "suppress", "body"},
     "path": {"type", "path_sketch", "path_curves", "count", "distance", "spacing_mode", "start", "orientation",
              "twist", "symmetric", "path_edges", "suppress", "body"},
@@ -1329,6 +1330,9 @@ def _transformacion_api(sesion, t, i):
         return d, n
     if tipo == "mirror":
         return {"tipo": "simetria", "plano": referencia_plano_o_cara(sesion, t.get("plane", "YZ"), t.get("body"))}, 2
+    if tipo == "scale":
+        n = _entero_api(t.get("count", 2), f"{que}.count", 2)
+        return {"tipo": "escala", "factor": texto_expr(t.get("factor", 2)), "n": n}, n
     if tipo == "points":
         d = _params_puntos(sesion, t.get("points"), t.get("sketch"), t.get("reference"), t.get("point_refs"),
                            t.get("reference_point"), t.get("body"))
@@ -1350,7 +1354,7 @@ def _transformacion_api(sesion, t, i):
              "una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular "
              "de 3 + mirror = 6). Tipos: {\"type\": \"rectangular\", \"axis\": \"x\", \"count\": 3, \"spacing\": 20} "
              "(y axis2 o plane2, count2, spacing2, symmetric), {\"type\": \"circular\", \"axis\": \"z\", \"count\": 6, "
-             "\"total_angle\": 360}, {\"type\": \"mirror\", \"plane\": \"YZ\"}, {\"type\": \"points\", \"points\": "
+             "\"total_angle\": 360}, {\"type\": \"mirror\", \"plane\": \"YZ\"}, {\"type\": \"scale\", \"factor\": 2, \"count\": 3} (la copia k queda escalada factor^k respecto del origen), {\"type\": \"points\", \"points\": "
              "[[x, y, z]], \"sketch\": …, \"reference\": [x, y, z]} y {\"type\": \"path\", \"path_sketch\": …, "
              "\"count\": 4, \"distance\": 60, \"twist\": 90} (las mismas opciones que path_pattern). Repite cuerpos "
              "(bodies) u operaciones del timeline (features).", modifica=True)
@@ -1359,7 +1363,7 @@ def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = Non
                     components: list[str] | None = None,
                     construction: list[str] | None = None, compute: Calculo = "identical"):
     """
-    transforms: lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, points o path; ver la descripción).
+    transforms: lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, scale, points o path; ver la descripción).
     bodies: cuerpo(s) a repetir (id o nombre).
     features: pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
     faces: caras a repetir (selector, ids de find_faces o lista): cada copia queda como un cuerpo de superficie nuevo. No se combina con bodies, features ni components.
@@ -1378,8 +1382,8 @@ def multi_transform(sesion, transforms: list[dict], bodies: Cuerpos | None = Non
         lista.append(d)
         total *= n
     _exigir_instancias(total, "el producto de las transformaciones")
-    if lightweight and any(d["tipo"] == "simetria" for d in lista):
-        sesion.avisar("Las copias de una simetría son copias de verdad (un espejo no es un movimiento rígido): solo las "
+    if lightweight and any(d["tipo"] in ("simetria", "escala") for d in lista):
+        sesion.avisar("Las copias de una simetría o de una escala son copias de verdad (no son un movimiento rígido): solo las "
                       "demás transformaciones quedan como copias ligeras.")
     doc = sesion.doc
     op = OpMultitransformar(doc.nuevo_id(), nombre_nuevo(doc, "Multitransformación", OpMultitransformar),

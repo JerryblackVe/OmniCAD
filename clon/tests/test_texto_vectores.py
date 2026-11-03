@@ -358,6 +358,49 @@ def test_comandos_insertar_svg_con_filtro_y_vectorizar_imagen(app_qt, svg, anill
     assert len(doc.estado_final.bocetos[op2.id].perfiles) == 3
 
 
+# ---------------------------------------------------------------- diálogo de «Vectorizar imagen»
+
+def _vectorizar_cmd_ctx(app_qt):
+    from omnicad.timeline.documento import Documento
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.insertar import VectorizarImagen
+    return VectorizarImagen(), ContextoComando(Documento())
+
+
+def test_dialogo_vectorizar_tiene_las_tres_nuevas_opciones(app_qt):
+    from omnicad.io_archivos.vectorizar import CANALES
+    cmd, ctx = _vectorizar_cmd_ctx(app_qt)
+    campos = {c.clave: c for c in cmd.campos(ctx)}
+    for clave in ("area_minima", "tolerancia", "canal"):
+        assert clave in campos and campos[clave].avanzado  # «Más opciones»
+    assert campos["area_minima"].defecto == 4              # igual que vectorizar_imagen
+    assert campos["tolerancia"].defecto == 0.5
+    assert campos["canal"].defecto == "auto"
+    assert set(campos["canal"].opciones) == set(CANALES)   # las claves de CANALES
+
+
+def test_clave_filtro_cambia_si_cambia_la_tolerancia(app_qt):
+    cmd, ctx = _vectorizar_cmd_ctx(app_qt)
+    base = {c.clave: c.defecto for c in cmd.campos(ctx)}
+    assert cmd.clave_filtro(base) != cmd.clave_filtro({**base, "tolerancia": 2.0})
+
+
+def test_ignorar_manchas_oculta_el_punto_de_ruido(tmp_path):
+    from PIL import Image, ImageDraw
+    from omnicad.ui.comandos.insertar import VectorizarImagen
+    img = Image.new("RGB", (60, 60), "white")
+    dibujo = ImageDraw.Draw(img)
+    dibujo.rectangle((10, 10, 50, 50), fill="black")   # trazo grande: nunca se descarta
+    dibujo.rectangle((55, 55, 57, 57), fill="black")   # punto de ruido: 3 px²
+    ruta = tmp_path / "con_ruido.png"
+    img.save(ruta)
+    cmd = VectorizarImagen()
+    con_filtro = cmd.leer(ruta, {"area_minima": 100})
+    sin_filtro = cmd.leer(ruta, {"area_minima": 0})
+    assert len(con_filtro) >= 1                           # el trazo grande sigue ahí
+    assert len(sin_filtro) == len(con_filtro) + 1         # con 0 aparece el punto de ruido
+
+
 # ---------------------------------------------------------------- fx: parámetros dentro del texto
 def test_expresiones_en_el_texto_helpers():
     from omnicad.restricciones.boceto import expresiones_de_texto, sustituir_expresiones
@@ -1570,3 +1613,14 @@ def test_huecos_de_un_texto_en_un_plano_lejos_del_origen():
     textos = [c.id for c in br.boceto.curvas.values() if c.tipo == "texto"]
     assert len(br.perfiles) == 12
     assert len(letras_de_texto(br.perfiles, textos)) == 8                # h, o, l, a dos veces; sin los 4 huecos
+
+
+def test_escalar_texto_con_altura_formula_conserva_formula():
+    from omnicad.restricciones import Boceto
+    b = Boceto()
+    tid = b.agregar_texto((0, 0), "ABC", altura=40, altura_expr="ancho / 2")
+    assert b.curvas[tid].altura_expr == "ancho / 2"
+    b.escalar([tid], (0, 0), 2)
+    assert b.curvas[tid].altura == 80
+    assert b.curvas[tid].altura_expr == "(ancho / 2) * 2"
+

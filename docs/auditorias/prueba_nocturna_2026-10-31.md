@@ -356,6 +356,8 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 
 - Tandas 1 a 3 integradas (hasta `30b04d4`): sus tests se corrieron sueltos. Falta verlas en la suite completa y en la prueba de humo.
 - Tanda 4 (`fa934e5`) y prueba en Cline (AUD-13, PLA-14) integradas con sus tests sueltos. Falta: suite completa, humo y una pieza de ventana para ANI-4.
+- Tanda 5 (H-66, PLA-6, F3, F18) integrada con sus tests sueltos. Falta en la ventana: la pieza `cinta_completa` de `todo.py` (cinta PLÁSTICO) y la vista previa de patrón en puntos y en ruta.
+- B-185 integrado con sus tests: falta mirar en la ventana real que la fila elegida se ve elegida y con el borde de origen.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 

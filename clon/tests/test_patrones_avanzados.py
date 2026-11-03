@@ -309,3 +309,63 @@ def test_multitransformar_operaciones_y_errores():
     r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[
         {"tipo": "circular", "n": 3}]))
     assert r.estado == "error" and "Transformación 1 (circular)" in r.mensaje and "eje" in r.mensaje
+
+
+# ---------------------------------------------------------------- F18: escala (Scaled de FreeCAD)
+def test_escala_cada_copia_queda_factor_a_la_k_desde_el_origen():
+    doc = Documento()
+    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="20", largo="20", alto="20"))
+    _ok(doc, OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"],
+                                transformaciones=[{"tipo": "escala", "factor": 2, "n": 3}]))
+    vols = sorted(round(g.volumen(c.forma), 4) for c in doc.estado_final.cuerpos.values())
+    assert vols == [8000.0, 64000.0, 512000.0]          # 20³ y las copias escaladas ×2 y ×4
+    latos = []
+    for c in doc.estado_final.cuerpos.values():
+        assert g.es_valida(c.forma)
+        lo, hi = g.caja_envolvente(c.forma)
+        assert np.allclose([round(x, 6) for x in lo], (0, 0, 0))    # la esquina menor ancla en el origen: crece alejándose
+        latos.append(tuple(round(float(v), 6) for v in hi))
+    assert sorted(latos) == [(20.0, 20.0, 20.0), (40.0, 40.0, 40.0), (80.0, 80.0, 80.0)]
+
+
+def test_multitransformar_escala_con_parametro_y_despues_de_un_patron_rectangular():
+    doc = Documento()
+    doc.parametros.agregar("ga", "2")
+    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    _ok(doc, OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[
+        {"tipo": "escala", "factor": "ga * 2", "n": 2}]))
+    vols = sorted(round(g.volumen(c.forma), 6) for c in doc.estado_final.cuerpos.values())
+    assert vols == [1000.0, 64000.0]                    # 10³ el original; ga*2 = 4: la copia única queda 40³
+    doc.deshacer()
+    _ok(doc, OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[
+        {"tipo": "rectangular", "dir1": EJE_X, "n1": 2, "d1": "30 mm", "distribucion": "espaciado"},
+        {"tipo": "escala", "factor": 2, "n": 2}]))                  # primero el patrón, después escala lo duplica
+    vols = sorted(round(g.volumen(c.forma), 6) for c in doc.estado_final.cuerpos.values())
+    assert vols == [1000.0, 1000.0, 8000.0, 8000.0]     # el original, su copia a 30 mm y las dos escaladas ×2
+    assert g.es_valida(doc.estado_final.cuerpos["op1.c1"].forma)
+
+
+def test_multitransformar_escala_errores_claros():
+    doc = Documento()
+    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"],
+                                       transformaciones=[{"tipo": "escala", "factor": 2, "n": 1}]))
+    assert r.estado == "error" and "al menos 2" in r.mensaje
+    doc.deshacer()
+    r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"],
+                                       transformaciones=[{"tipo": "escala", "factor": 0, "n": 3}]))
+    assert r.estado == "error" and "factor" in r.mensaje and "mayor que cero" in r.mensaje
+    doc.deshacer()
+    r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"],
+                                       transformaciones=[{"tipo": "escala", "factor": 1, "n": 3}]))
+    assert r.estado == "error" and "no puede ser 1" in r.mensaje
+
+
+def test_multitransformar_escala_fuera_de_rango_da_error_claro():
+    doc = Documento()
+    _ok(doc, OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    for factor, n in ((2, 2000), (0.5, 2000)):                         # 2^1999 desborda; 0.5^1999 no lo acepta OCC
+        r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"],
+                                           transformaciones=[{"tipo": "escala", "factor": factor, "n": n}]))
+        assert r.estado == "error" and "fuera de 1e-6 a 1e6" in r.mensaje
+        doc.deshacer()

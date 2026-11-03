@@ -16,6 +16,7 @@ from . import entidades as ent
 from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo,
                           _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, atributos_copia,
                           poner_resultado, registrar_operacion)
+from .parametros import ESCALAR, ErrorExpresion
 
 ESPESORES = ("simetrica", "lado1", "lado2")     # dirección del espesor de nervio y red (nucleo.solidos_crear)
 
@@ -1050,7 +1051,7 @@ def _ejecutar_patron(op, estado, ctx, sin_cuerpos):
     copiar_objetos(op, estado, ctx, trsfs, sin_cuerpos)
 
 
-TIPOS_TRANSFORMACION = ("rectangular", "circular", "ruta", "puntos", "simetria")
+TIPOS_TRANSFORMACION = ("rectangular", "circular", "ruta", "puntos", "simetria", "escala")
 
 
 class OpMultitransformar(_OpCrear):
@@ -1058,10 +1059,12 @@ class OpMultitransformar(_OpCrear):
     una lista de transformaciones apilables en un solo paso. Cada una se aplica a TODAS las instancias que dejaron
     las anteriores: patrón rectangular de 3 + simetría = 6 instancias.
 
-    `transformaciones`: lista de dicts con "tipo" ("rectangular", "circular", "ruta", "puntos" o "simetria") y los
-    campos de ese tipo con las mismas claves que el Patrón (dir1, n1, d1, dir2, n2, d2, distribucion, simetrico,
-    eje, n, angulo, ruta, orientacion, inicio, giro, puntos, coordenadas, referencia, referencia_xyz, suprimir) o,
-    en la simetría, "plano". `objeto`, `cuerpos`, `pasos` y `combinar`, como en el Patrón."""
+    `transformaciones`: lista de dicts con "tipo" ("rectangular", "circular", "ruta", "puntos", "simetria" o
+    "escala") y los campos de ese tipo con las mismas claves que el Patrón (dir1, n1, d1, dir2, n2, d2, distribucion,
+    simetrico, eje, n, angulo, ruta, orientacion, inicio, giro, puntos, coordenadas, referencia, referencia_xyz,
+    suprimir) o, en la simetría, "plano". La escala (Scaled de FreeCAD, F18) lleva "factor" (expresión sin unidad)
+    y "n" (cantidad de instancias con el original, ≥ 2): la copia k queda escalada factor^k respecto del origen de
+    coordenadas. `objeto`, `cuerpos`, `pasos` y `combinar`, como en el Patrón."""
     TIPO, ETIQUETA, ICONO = "multitransformar", "Multitransformación", "✣"
     PARAMS = {"objeto": "cuerpos", "cuerpos": [], "pasos": [], "transformaciones": [], "combinar": False,
               "ligeras": False, "caras": [], "componentes": [], "construccion": [], "calculo": "identico",
@@ -1100,14 +1103,15 @@ class OpMultitransformar(_OpCrear):
             lista = self._lista()
         except ErrorOperacion:
             return []
-        return [e for t in lista if t.get("tipo") in TIPOS_TRANSFORMACION and t.get("tipo") != "simetria"
-                for e in self._patron(t).expresiones()]
+        salida = [t["factor"] for t in lista if t.get("tipo") == "escala" and isinstance(t.get("factor"), str)]
+        return salida + [e for t in lista if t.get("tipo") in TIPOS_TRANSFORMACION and t.get("tipo") not in ("simetria", "escala")
+                         for e in self._patron(t).expresiones()]
 
     def transformaciones(self, estado, ctx):
         """Lista compuesta de gp_Trsf (la primera, la identidad = el original)."""
         lista = self._lista()
         if not lista:
-            raise ErrorOperacion("Agregá al menos una transformación (rectangular, circular, ruta, puntos o simetria).")
+            raise ErrorOperacion("Agregá al menos una transformación (rectangular, circular, ruta, puntos, simetria o escala).")
         from ..nucleo.consultas import transformacion_identidad
         sc, listas = _sc(), []
         for i, t in enumerate(lista, start=1):
@@ -1122,15 +1126,35 @@ class OpMultitransformar(_OpCrear):
                     plano = ent.como_plano(_resolver(t["plano"], estado))
                     listas.append([transformacion_identidad(), sc.transformacion_simetria(plano)])
                     continue
+                if tipo == "escala":
+                    listas.append(self._escalas(t, ctx, transformacion_identidad()))
+                    continue
                 patron = self._patron(t, i)
                 patron.revisar_parametros()
                 patron.validar_opciones()
                 listas.append(patron.transformaciones(estado, ctx))
             except ParametroMalFormado:
                 raise
-            except (ErrorOperacion, ent.ErrorReferencia, geo.ErrorGeometria) as e:
+            except (ErrorOperacion, ErrorExpresion, ent.ErrorReferencia, geo.ErrorGeometria) as e:
                 raise ErrorOperacion(f"Transformación {i} ({tipo}): {e}") from e
         return sc.componer_transformaciones(listas)
+
+    @staticmethod
+    def _escalas(t, ctx, identidad):
+        """[identidad, escala factor, escala factor², …] de una transformación de escala (n instancias con el original)."""
+        n = t.get("n", 2)
+        if isinstance(n, bool) or not isinstance(n, (int, float)) or int(n) != n or n < 2:
+            raise ErrorOperacion(f"«n» (instancias con el original) tiene que ser un entero de al menos 2; llegó {ent.describir_valor(n)}.")
+        _sc()._exigir_instancias(int(n))
+        factor = ctx.evaluar(str(t.get("factor", "2")), ESCALAR)
+        if not factor > 0:
+            raise ErrorOperacion(f"«factor» tiene que ser mayor que cero; llegó {factor:g}.")
+        if abs(factor - 1) < 1e-9:
+            raise ErrorOperacion("«factor» no puede ser 1: todas las copias quedarían encimadas en el original.")
+        escalas = [factor ** k if k * abs(math.log(factor)) < 14 else None for k in range(1, int(n))]
+        if None in escalas:                                    # la última copia sale de 1e-6…1e6 (el kernel no la calcula)
+            raise ErrorOperacion(f"«factor» {factor:g} con {int(n)} instancias da una escala fuera de 1e-6 a 1e6: bajá la cantidad o el factor.")
+        return [identidad] + [_sc().transformacion_escala(s) for s in escalas]
 
     def ejecutar(self, estado, ctx):
         _ejecutar_patron(self, estado, ctx, "Elegí los cuerpos de la multitransformación.")

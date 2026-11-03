@@ -239,15 +239,31 @@ def _siluetas(base, trsfs, color):
     return salida
 
 
-def _fantasmas(ctx, v, op):
-    """La silueta (aristas) de cada copia suprimida, en rojo: se ve qué se está sacando del patrón."""
+def _instancias(ctx, op):
+    """Las instancias del patrón (id, gp_Trsf, estado); [] si el patrón todavía no da para calcularlas (lo que falta lo
+    explica la vista previa del propio panel)."""
     try:
-        instancias = op.instancias(ctx.estado, Contexto(ctx.doc.parametros.valores()))
+        return op.instancias(ctx.estado, Contexto(ctx.doc.parametros.valores()))
     except Exception:  # noqa: BLE001 — la vista previa del propio panel ya explica el error
         return []
-    suprimidas = [t for _, t, estado in instancias if estado == "suprimida" and t is not None][:MAX_FANTASMAS]
+
+
+def _fantasmas(ctx, v, op):
+    """La silueta (aristas) de cada copia suprimida, en rojo: se ve qué se está sacando del patrón."""
+    suprimidas = [t for _, t, estado in _instancias(ctx, op) if estado == "suprimida" and t is not None][:MAX_FANTASMAS]
     base = _segmentos_origen(ctx, v) if suprimidas else None
     return [] if base is None else _siluetas(base, suprimidas, ROJO_FANTASMA)
+
+
+def _copias_vivas(ctx, v, op):
+    """La silueta (aristas) de cada copia del patrón en puntos y en ruta, en azul: se ven las copias en el diálogo
+    antes de aceptar. El original (transformación identidad) ya se ve en el visor y las suprimidas van en rojo."""
+    identidad = np.eye(4)
+    vivas = [t for _, t, estado in _instancias(ctx, op)
+             if estado == "ok" and t is not None and not np.allclose(sc.a_matriz(t), identidad, atol=1e-9)]
+    vivas = vivas[:MAX_SILUETAS]
+    base = _segmentos_origen(ctx, v) if vivas else None
+    return [] if base is None else _siluetas(base, vivas, AZUL_DESTINO)
 
 
 def instancias_hasta_etapa(ctx, op, k):
@@ -274,7 +290,7 @@ def manipuladores_etapa(ctx, v):
     """Asas de la transformación elegida de una Multitransformación: las del patrón de ese tipo (sobre el original), con
     las claves del editor («t_…»)."""
     tipo = v.get("t_tipo", "rectangular")
-    if tipo == "simetria":
+    if tipo in ("simetria", "escala"):
         return []
     w = {c[2:]: x for c, x in v.items() if c.startswith("t_")}
     w.update({c: v.get(c) for c in ("objeto", "cuerpos", "pasos", "caras", "componentes", "construccion")}, forma=tipo)
@@ -288,7 +304,8 @@ def manipuladores_etapa(ctx, v):
 
 def previa_vista(comando, ctx, v, op):
     """Patrón en puntos: la referencia (cruz verde), los destinos (cruces azules) y una línea de la referencia a cada
-    destino (así se ve qué punto se lleva a dónde). En todos: la silueta roja de las copias suprimidas."""
+    destino (así se ve qué punto se lleva a dónde). En puntos y en ruta: la silueta azul de cada copia, se ve dónde caen
+    antes de aceptar. En todos: la silueta roja de las copias suprimidas."""
     salida = []
     if op.p.get("forma_patron") == "puntos":
         puntos, ref = op.puntos_patron(ctx.estado, Contexto(ctx.doc.parametros.valores()))
@@ -296,4 +313,6 @@ def previa_vista(comando, ctx, v, op):
         lineas = np.stack([np.tile(ref, (len(destinos), 1)), destinos], axis=1).reshape(-1, 3)
         salida = [("lineas", lineas, AZUL_DESTINO, 1.4), ("puntos", destinos, AZUL_DESTINO, 10),
                   ("puntos", np.array([ref], float), VERDE_REFERENCIA, 13)]
+    if op.p.get("forma_patron") in ("puntos", "ruta"):
+        salida += _copias_vivas(ctx, v, op)
     return salida + _fantasmas(ctx, v, op) or None

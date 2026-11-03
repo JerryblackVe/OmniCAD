@@ -2529,11 +2529,11 @@ Patrón en ruta (Pattern on Path de Fusion; con twist, el Twisted Path Array de 
 
 ### `multi_transform`
 
-Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular de 3 + mirror = 6). Tipos: {"type": "rectangular", "axis": "x", "count": 3, "spacing": 20} (y axis2 o plane2, count2, spacing2, symmetric), {"type": "circular", "axis": "z", "count": 6, "total_angle": 360}, {"type": "mirror", "plane": "YZ"}, {"type": "points", "points": [[x, y, z]], "sketch": …, "reference": [x, y, z]} y {"type": "path", "path_sketch": …, "count": 4, "distance": 60, "twist": 90} (las mismas opciones que path_pattern). Repite cuerpos (bodies) u operaciones del timeline (features).
+Multitransformación (MultiTransform de FreeCAD): patrón + simetría + patrón… en UN paso. transforms es una lista ordenada y cada transformación se aplica a TODAS las instancias de las anteriores (rectangular de 3 + mirror = 6). Tipos: {"type": "rectangular", "axis": "x", "count": 3, "spacing": 20} (y axis2 o plane2, count2, spacing2, symmetric), {"type": "circular", "axis": "z", "count": 6, "total_angle": 360}, {"type": "mirror", "plane": "YZ"}, {"type": "scale", "factor": 2, "count": 3} (la copia k queda escalada factor^k respecto del origen), {"type": "points", "points": [[x, y, z]], "sketch": …, "reference": [x, y, z]} y {"type": "path", "path_sketch": …, "count": 4, "distance": 60, "twist": 90} (las mismas opciones que path_pattern). Repite cuerpos (bodies) u operaciones del timeline (features).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `transforms` (lista de objeto; obligatorio): lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, points o path; ver la descripción).
+  - `transforms` (lista de objeto; obligatorio): lista ordenada de transformaciones (dicts con "type": rectangular, circular, mirror, scale, points o path; ver la descripción).
   - `bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) a repetir (id o nombre).
   - `features` (texto o lista de texto o null; opcional, por defecto `null`): pasos anteriores del timeline (id o nombre) cuyo efecto se repite en vez de cuerpos (agujeros, cortes…; ver rectangular_pattern). No se combina con bodies.
   - `combine` (true/false; opcional, por defecto `false`): true para unir las copias al cuerpo original (solo con bodies).

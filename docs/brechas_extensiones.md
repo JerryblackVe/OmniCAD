@@ -15,7 +15,7 @@ Especificación de PLA-1 a PLA-14 y EXT-1 a EXT-4. El estado vive solo en `docs/
 | Saliente de fijación (Boss) | `saliente`: un solo lado | A medias | PLA-3 |
 | Labio | `labio`: labio o ranura | A medias | PLA-4 |
 | Asignar y Administrar reglas de plástico | Hechas, sin árbol ni editar | A medias | PLA-5 |
-| Cinta PLÁSTICO | Tres grupos cortos | A medias | PLA-6 |
+| Cinta PLÁSTICO | CONFIGURACIÓN, CREAR completo y nombres de Fusion | Hecho | — |
 | Patrón geométrico | Casi completo | A medias | PLA-7 |
 | Sólido delimitador | `cuerpo_envolvente` | A medias | PLA-8 |
 | Simplificar | Submenú vacío | Falta | PLA-9 |
@@ -25,7 +25,7 @@ Especificación de PLA-1 a PLA-14 y EXT-1 a EXT-4. El estado vive solo en `docs/
 | Valores predefinidos | `preajustes_ui.py` | Hecho | PLA-14 |
 | Consejos de diseño | `consejos_diseno` | Hecho | — |
 | Sustainability Insights | `sustentabilidad` | Hecho | H-55 (mejora) |
-| Duplicar con uniones | Está en ENSAMBLAR | Hecho, falta en INSERTAR | PLA-6 |
+| Duplicar con uniones | Está en ENSAMBLAR e INSERTAR | Hecho | — |
 | Insertar malla, componente, derivación, SVG, DXF | Hechos | Hecho | — |
 | McMaster, TraceParts, pieza de fabricante | No | Bloqueado | P-25g2 |
 
@@ -71,7 +71,6 @@ Especificación de PLA-1 a PLA-14 y EXT-1 a EXT-4. El estado vive solo en `docs/
 
 **PLA-5 Reglas de plástico.** Árbol «En este diseño» y «Biblioteca». Elegir el componente en el lienzo. Editar y Nueva regla desde una existente. Quitar la regla desde el navegador. Las reglas de fábrica de Fusion son ABS 1,5 mm, Nilón 2,5 mm y Polipropileno 3 mm, más sus versiones de 0,1 pulgadas. Las de OmniCAD son otras.
 
-**PLA-6 Cinta y nombres.** Grupo CONFIGURACIÓN con las dos reglas. CREAR con todo lo del menú de SÓLIDO. «Duplicar con uniones» también en INSERTAR. Nombres de Fusion en español: Saliente de fijación, Grampa de fijación, Labio, Sólido delimitador, Entramado volumétrico, Insertar fijador. En el timeline, Fusion dice «Suprimir» para borrar y «Desactivar operaciones» para suprimir; OmniCAD dice «Eliminar» y «Suprimir». Quien venga de Fusion puede borrar o no borrar sin querer.
 
 **PLA-7 Patrón geométrico.** Con objeto personalizado faltan Dirección perpendicular, Cambiar y Expandir con deslizador. Fusion arranca en Cuerpo nuevo y OmniCAD en Cortar. Falta comprobar en Fusion real si acepta caras curvas: la opción «Dirección de cara» sugiere que sí.
 

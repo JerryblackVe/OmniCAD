@@ -11,16 +11,18 @@ import copy
 from PySide6.QtWidgets import QHBoxLayout, QListWidget, QMenu, QPushButton, QToolButton, QVBoxLayout, QWidget
 
 from ...timeline.ops_solido import OpMultitransformar
-from ..comando import Casilla, Comando, ErrorComando, Info, Opciones, Personalizado, Seleccion, ref1
+from ...timeline.parametros import ESCALAR
+from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Personalizado, Seleccion, ref1
 from . import registrar
-from .crear import (_de_cuerpos, _h1, _Patron, campos_objeto, campos_patron, objeto_params, objeto_valores,
+from .crear import (_cantidad, _de_cuerpos, _h1, _Patron, campos_objeto, campos_patron, objeto_params, objeto_valores,
                     params_patron, valores_patron)
 
 MAX_TRANSFORMACIONES = 12                         # recursos: cada una multiplica las instancias (tope total: 10.000)
 TIPOS_TRANSFORMACION = {"rectangular": "Patrón rectangular", "circular": "Patrón circular",
-                        "ruta": "Patrón en trayectoria", "puntos": "Patrón en puntos", "simetria": "Simetría"}
+                        "ruta": "Patrón en trayectoria", "puntos": "Patrón en puntos", "simetria": "Simetría",
+                        "escala": "Escala"}
 FALTA = {"rectangular": "la dirección 1", "circular": "el eje", "ruta": "la ruta", "puntos": "los puntos",
-         "simetria": "el plano de simetría"}
+         "simetria": "el plano de simetría", "escala": "el factor"}
 
 
 class PatronPuntos(_Patron):
@@ -40,6 +42,8 @@ def _completa(item):
         return bool(item.get("ruta"))
     if tipo == "puntos":
         return bool(item.get("puntos") or item.get("coordenadas"))
+    if tipo == "escala":
+        return bool(str(item.get("factor", "")).strip())
     return tipo == "simetria" and bool(item.get("plano"))
 
 
@@ -47,7 +51,8 @@ def _etiqueta(i, item):
     tipo = item.get("tipo")
     detalle = {"rectangular": f" {item.get('n1', 3)}×{item.get('n2', 1)}", "circular": f" ×{item.get('n', 6)}",
                "ruta": f" ×{item.get('n1', 3)}",
-               "puntos": f" ({len(item.get('puntos') or []) + len(item.get('coordenadas') or [])})"}.get(tipo, "")
+               "puntos": f" ({len(item.get('puntos') or []) + len(item.get('coordenadas') or [])})",
+               "escala": f" ×{item.get('factor', 2)} ×{item.get('n', 2)}"}.get(tipo, "")
     falta = "" if _completa(item) else f"   ⚠ falta {FALTA.get(tipo, 'completarla')}"
     return f"{i + 1}. {TIPOS_TRANSFORMACION.get(tipo, str(tipo))}{detalle}{falta}"
 
@@ -61,6 +66,8 @@ def _valores_item(item, estado):
     tipo = item.get("tipo") if item.get("tipo") in TIPOS_TRANSFORMACION else "rectangular"
     if tipo == "simetria":
         return {"t_tipo": tipo, "t_plano": _h1(item.get("plano"), estado)}
+    if tipo == "escala":
+        return {"t_tipo": tipo, "t_factor": item.get("factor", "2"), "t_n_escala": item.get("n", 2)}
     return {**valores_patron(dict(item, tipo=tipo), estado, "t_"), "t_tipo": tipo}
 
 
@@ -81,6 +88,9 @@ class Multitransformar(Comando):
                 + campos_patron("t_", forma=tipo)
                 + [Seleccion("t_plano", "Plano de simetría", {"plano", "cara_plana"},
                              visible_si=lambda v: tipo(v) == "simetria"),
+                   Expresion("t_factor", "Factor de escala", "2", ESCALAR, visible_si=lambda v: tipo(v) == "escala",
+                             ayuda="La copia k queda escalada factor^k respecto del origen de coordenadas."),
+                   Entero("t_n_escala", "Instancias (con el original)", 2, 2, visible_si=lambda v: tipo(v) == "escala"),
                    Casilla("combinar", "Unir al original", visible_si=_de_cuerpos),
                    Casilla("ligeras", "Copias ligeras (comparten la geometría)", avanzado=True,
                            visible_si=lambda v: _de_cuerpos(v) and not v.get("combinar"),
@@ -133,6 +143,10 @@ class Multitransformar(Comando):
             d = {"plano": ref1(v, "t_plano")}
             if estricto and not d["plano"]:
                 raise ErrorComando("Seleccioná el plano de simetría.")
+        elif tipo == "escala":
+            d = {"factor": str(v.get("t_factor") or "").strip(), "n": _cantidad(v, "t_n_escala")}
+            if estricto and not d["factor"]:
+                raise ErrorComando("Escribí el factor de escala.")
         else:
             d = params_patron(v, tipo, "t_", estricto=estricto)
             d.pop("forma_patron")

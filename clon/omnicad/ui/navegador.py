@@ -49,8 +49,9 @@ class _Delegado(QStyledItemDelegate):
         fila = QColor(c["nav_fila"])
         fila.setAlpha(242)
         origen = index.data(ROL_ORIGEN)
-        p.setBrush(QColor(temas.ORIGEN[origen]) if origen else
-                   QColor(c["seleccion"]) if option.state & QStyle.State_Selected else fila)
+        elegido = bool(option.state & QStyle.State_Selected)
+        p.setBrush(QColor(c["seleccion"]) if elegido else          # lo elegido se ve elegido (con o sin marca)
+                   QColor(temas.ORIGEN[origen]) if origen else fila)
         p.drawRect(caja)
         if index.data(ROL_MUESTRA):
             p.fillRect(QRectF(caja.left(), caja.top(), 3, caja.height()), QColor(index.data(ROL_MUESTRA)))
@@ -70,9 +71,13 @@ class _Delegado(QStyledItemDelegate):
         p.drawPixmap(QPointF(x, y), ico.pixmap(tam, dpr))
         x += 22
         p.setFont(f)
-        p.setPen(QColor(temas.ORIGEN["texto"]) if origen else
-                 QColor(c["seleccion_texto"] if option.state & QStyle.State_Selected else c["texto"])
-                 if index.data(ROL_OJO) is not False else QColor(c["texto_inactivo"]))
+        if elegido:
+            color_texto = QColor(c["seleccion_texto"])          # lo elegido: texto de la selección (se lee siempre)
+        elif origen:
+            color_texto = QColor(temas.ORIGEN["texto"])
+        else:
+            color_texto = QColor(c["texto"]) if index.data(ROL_OJO) is not False else QColor(c["texto_inactivo"])
+        p.setPen(color_texto)
         p.drawText(QRectF(x, caja.top(), caja.right() - x, caja.height()), Qt.AlignVCenter | Qt.AlignLeft, texto)
         p.restore()
 

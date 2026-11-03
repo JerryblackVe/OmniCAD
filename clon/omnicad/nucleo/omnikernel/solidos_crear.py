@@ -37,6 +37,10 @@ def transformacion_simetria(plano):
     return m
 
 
+def transformacion_escala(factor):
+    return np.diag([float(factor)] * 3 + [1.0])
+
+
 def aplicar(forma, trsf):
     return geo.transformar(forma, np.asarray(trsf, float))
 

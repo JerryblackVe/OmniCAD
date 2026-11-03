@@ -52,7 +52,8 @@ INSERTAR = ("INSERTAR", ["insertar_diseno", "lienzo", "fijacion"], [
     _i("Calcomanía", "calcomania"), _i("Lienzo", "lienzo"), _i("Insertar SVG", "insertar_svg"), _i("Vectorizar imagen", "vectorizar_imagen"),
     _i("Insertar archivos DXF", "insertar_dxf"),
     _i("Insertar malla", "insertar_malla"),
-    _i("Insertar STEP…", "importar_step"), SEP, _i("Insertar fijación", "fijacion"),
+    _i("Insertar STEP…", "importar_step"), SEP, _i("Insertar fijador", "fijacion"),
+    _i("Duplicar con uniones", "duplicar_con_uniones"),
     _i("Insertar componente", "insertar_diseno"), _i("Insertar derivación", "insertar_derivacion")])
 ENSAMBLAR = ("ENSAMBLAR", ["union"], [
     _i("Nuevo componente", "nuevo_componente"), _i("Unión", "union"), _i("Unión como está", "union_construida"),
@@ -85,30 +86,35 @@ SELECCIONAR = ("SELECCIONAR", ["seleccionar"], [
 COMPARTIDOS = [CONFIGURAR, CONSTRUIR, INSPECCIONAR, INSERTAR, ENSAMBLAR, SELECCIONAR]
 
 # ------------------------------------------------------------------ pestañas
+# Menú CREAR de SÓLIDO; PLÁSTICO reutiliza todo y le suma sus comandos después de Repujado (PLA-6).
+_COMIENZO_CREAR = [
+    _i("Crear boceto", "boceto"), _i("Crear forma", ico="crear_forma"), _i("Derivar", "insertar_derivacion"), _i("Reconocer funciones", "reconocer_funciones"), SEP,
+    _i("Extruir", "extruir"), _i("Revolución", "revolucion"), _i("Barrido", "barrido"),
+    _i("Solevación", "solevacion"), _i("Nervio", "nervio"), _i("Red", "red"), _i("Repujado", "repujado")]
+_FIN_CREAR = [
+    SEP,
+    _i("Agujero", "agujero"), _i("Rosca", "rosca"), SEP,
+    _i("Prisma rectangular", "caja"), _i("Cilindro", "cilindro"), _i("Esfera", "esfera"), _i("Toroide", "toroide"),
+    _i("Bobina", "bobina"), _i("Tubería", "tuberia"), _i("Engranaje", "engranaje"), _i("Eje", "eje_escalonado"),
+    SEP,
+    _sub("Patrón", [_i("Patrón rectangular", "patron_rectangular_3d"), _i("Patrón circular", "patron_circular_3d"),
+                    _i("Patrón en trayectoria", "patron_ruta"), _i("Patrón en puntos", "patron_puntos"),
+                    _i("Multitransformación", "multitransformar")]),
+    _i("Simetría", "simetria_3d"), SEP,
+    _i("Engrosar", "engrosar"), _i("Llenado de contorno", "relleno_contorno"),
+    _i("Sólido delimitador", "cuerpo_envolvente"), _i("Volumen de fluido", "volumen_fluido"), SEP,
+    _i("Crear operación base", "operacion_base"), _sub("Crear placa de circuito impreso", []),
+    _i("Origen de la unión", "origen_union")]
 SOLIDO = [
-    ("CREAR", ["extruir", "revolucion", "agujero", "patron_rectangular_3d", "boceto"], [
-        _i("Crear boceto", "boceto"), _i("Crear forma", ico="crear_forma"), _i("Derivar", "insertar_derivacion"), _i("Reconocer funciones", "reconocer_funciones"), SEP,
-        _i("Extruir", "extruir"), _i("Revolución", "revolucion"), _i("Barrido", "barrido"),
-        _i("Solevación", "solevacion"), _i("Nervio", "nervio"), _i("Red", "red"), _i("Repujado", "repujado"), SEP,
-        _i("Agujero", "agujero"), _i("Rosca", "rosca"), SEP,
-        _i("Prisma rectangular", "caja"), _i("Cilindro", "cilindro"), _i("Esfera", "esfera"), _i("Toroide", "toroide"),
-        _i("Bobina", "bobina"), _i("Tubería", "tuberia"), _i("Engranaje", "engranaje"), _i("Eje", "eje_escalonado"),
-        SEP,
-        _sub("Patrón", [_i("Patrón rectangular", "patron_rectangular_3d"), _i("Patrón circular", "patron_circular_3d"),
-                        _i("Patrón en trayectoria", "patron_ruta"), _i("Patrón en puntos", "patron_puntos"),
-                        _i("Multitransformación", "multitransformar")]),
-        _i("Simetría", "simetria_3d"), SEP,
-        _i("Engrosar", "engrosar"), _i("Llenado de contorno", "relleno_contorno"),
-        _i("Sólido envolvente", "cuerpo_envolvente"), _i("Volumen de fluido", "volumen_fluido"), SEP,
-        _i("Crear operación base", "operacion_base"), _sub("Crear placa de circuito impreso", []),
-        _i("Origen de la unión", "origen_union")]),
+    ("CREAR", ["extruir", "revolucion", "agujero", "patron_rectangular_3d", "boceto"],
+     _COMIENZO_CREAR + [SEP] + _FIN_CREAR),
     ("MODIFICAR", ["empalme_3d", "vaciado", "combinar", "dividir_cuerpo", "mover_copiar"], [
         _i("Pulsar/Tirar", "pulsar_tirar"), _i("Empalme", "empalme_3d"), _i("Chaflán", "chaflan_3d"),
         _i("Quitar empalmes", "quitar_empalmes"), SEP,
         _i("Vaciado", "vaciado"), _i("Desmoldeo", "desmoldeo"), _i("Escala", "escala_3d"), _i("Combinar", "combinar"),
         _i("Desfase", "desfase"), _i("Reemplazar cara", "reemplazar_cara"), _i("Editar cara", "editar_cara"), _i("Dividir cara", "dividir_cara"),
         _i("Dividir cuerpo", "dividir_cuerpo"), _i("División de silueta", "division_silueta"),
-        _i("Retícula volumétrica", "reticula_volumetrica"), SEP,
+        _i("Entramado volumétrico", "reticula_volumetrica"), SEP,
         _i("Mover/copiar", "mover_copiar"), _i("Alinear", "alinear"), _i("Apoyar en el plano", "apoyar"), _i("Suprimir", "suprimir"), _i("Quitar", "quitar"),
         SEP, _sub("Simplificar", []), SEP,
         _i("Material físico", "material_fisico"), _i("Aspecto", "aspecto"), _i("Administrar materiales", ico="administrar_materiales"), SEP,
@@ -154,14 +160,15 @@ CHAPA = [
         _i("Reglas de chapa", "reglas_chapa")]),
 ] + COMPARTIDOS
 PLASTICO = [
-    ("CREAR", ["boceto", "extruir", "nervio", "saliente", "labio"], [
-        _i("Crear boceto", "boceto"), SEP, _i("Extruir", "extruir"), _i("Revolución", "revolucion"),
-        _i("Nervio", "nervio"), _i("Red", "red"), _i("Saliente", "saliente"), _i("Labio y ranura", "labio"),
-        _i("Encaje a presión", ico="encaje_presion"), _i("Apoyo"), _i("Patrón geométrico", "patron_geometrico")]),
+    ("CONFIGURACIÓN", ["asignar_regla_plastico"], [
+        _i("Asignar regla de plástico", "asignar_regla_plastico"),
+        _i("Administrar reglas de plástico", "reglas_plastico")]),
+    ("CREAR", ["boceto", "saliente", "labio", "nervio", "red", "patron_geometrico"], _COMIENZO_CREAR + [
+        _i("Saliente de fijación", "saliente"), _i("Grampa de fijación", ico="encaje_presion"),
+        _i("Labio", "labio"), _i("Apoyo"), _i("Patrón geométrico", "patron_geometrico"), SEP] + _FIN_CREAR),
     ("MODIFICAR", ["vaciado", "desmoldeo", "empalme_3d"], [
         _i("Vaciado", "vaciado"), _i("Desmoldeo", "desmoldeo"), _i("Empalme", "empalme_3d"),
-        _i("Chaflán", "chaflan_3d"), SEP, _i("Asignar regla de plástico", "asignar_regla_plastico"),
-        _i("Administrar reglas de plástico", "reglas_plastico")]),
+        _i("Chaflán", "chaflan_3d")]),
     ("REVISAR", ["consejos_diseno"], [_i("Consejos de diseño", "consejos_diseno")]),
 ] + COMPARTIDOS
 MALLA = [

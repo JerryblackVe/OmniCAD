@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 134: Abierto 70 · Parcial 49 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 132: Abierto 68 · Parcial 49 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
 
 ## Pendientes generales
 
@@ -44,12 +44,10 @@ Abierto 14 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 10 · Parcial 1 · Sin verificar 0.
+Abierto 8 · Parcial 1 · Sin verificar 0.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| H-66 | El texto con una cuenta de parámetros sale sin unidad | Abierto | Baja | `{largo}` da «150 mm», pero `{largo * 2}` da «300» sin «mm». Ver en la ayuda de Fusion qué muestra una expresión y repetir esa regla. | clon/omnicad/restricciones/boceto.py (`_FX`); tests/test_parametros_fusion.py::test_cf12_texto_con_unidades | 2026-11-03 |
-| H-58 | Escalar un texto con la altura en fórmula pierde el vínculo con esa fórmula | Abierto | Baja | La medida queda bien, pero la altura pasa a un número fijo: `ancho / 2` escalado × 2 queda `40 mm` y ya no sigue a `ancho`. Hace falta escribir la expresión vieja por el factor. | clon/omnicad/restricciones/boceto.py (`escalar`) | 2026-11-01 |
 | H-57 | Medir formas tarda en mallas reales con cientos de planos chicos | Abierto | Media | Con 311.000 triángulos de una pieza simple tarda 5 s, pero en 15.000 triángulos con 130 formas tarda 10 s por medición: `_juntar` prueba un toro por cada par de vecinas (7.379 ajustes con derivadas numéricas, 77 s de 245 s). Dar la derivada exacta o filtrar los pares antes; también candidato a Rust. Dos de los 51 STL reales tardan más de 5 minutos: `Vite` 551 s y `Rugged Box` pasa de 600 s, porque un solo intento ya supera el plazo de 180 s que se revisa entre intentos. | nucleo/formas_malla.py:93 `_afinar`; perfil en evidencias/reconstruir_2026-11-01/ | 2026-11-01 |
 | H-56 | Mapa de entorno: una cara plana refleja un solo color | Abierto | Media | El reflejo se calcula con una sola dirección de vista: hace falta una por píxel para que el entorno se vea en una cara plana. | nucleo/analisis.py (`colores_mapa_entorno`) | 2026-11-01 |
 | H-55 | Sustainability Insights: la región y el país no cambian el cálculo | Abierto | Media | Sumar la energía de fabricación por región con un factor de red eléctrica con fuente. Hoy el resultado lo avisa. | nucleo/sustentabilidad.py | 2026-11-01 |

@@ -322,7 +322,8 @@ def test_puntos_marcadores_explicacion_y_traslacion_exacta(app_qt):  # noqa: F81
     assert "origen" in panel.widgets["info_puntos"].text() and "puntos sueltos" in panel.widgets["info_puntos"].text()
     assert _esquinas(estados[-1], panel.ultima_op.id) == [(0.0, 0.0, 0.0), (0.0, 60.0, 0.0), (50.0, 0.0, 0.0)]
     prims = panel.comando.previa_vista(panel.ctx, panel.valores, panel.ultima_op)
-    assert [p[0] for p in prims] == ["lineas", "puntos", "puntos"] and len(prims[1][1]) == 2
+    clases = [p[0] for p in prims]
+    assert clases[:3] == ["lineas", "puntos", "puntos"] and clases.count("lineas") == 3 and len(prims[1][1]) == 2
     # referencia: el punto (50, 0) va a cada destino; el destino igual a la referencia no repite la copia
     panel.set_valor("referencia", [_hit(doc, ref(p1))])
     panel._calcular_previa()
@@ -574,4 +575,81 @@ def test_pat5_la_direccion_2_derivada_se_puede_llevar_a_un_plano_de_referencia(a
     # elegir una dirección 2 explícita oculta el campo del plano
     panel.set_valor("dir2", [_hit(doc, EJE_Y)])
     assert not panel._visible(next(c for c in panel.campos if c.clave == "plano_dir2"))
+    panel.cancelar()
+
+
+# ---------------------------------------------------------------- copias como siluetas (F3)
+def test_puntos_y_ruta_muestran_las_copias_como_siluetas_antes_de_aceptar(app_qt):  # noqa: F811
+    from omnicad.ui.comandos.asas_patron import AZUL_DESTINO, ROJO_FANTASMA
+    # patrón en puntos: el cuerpo va a (50, 0) y a (0, 60); dos siluetas azules y el original no se dibuja
+    doc = _doc_caja()
+    b = Boceto()
+    p1, p2 = b.agregar_punto(50, 0), b.agregar_punto(0, 60)
+    sk = OpBoceto(doc.nuevo_id(), plano="XY", boceto=b)
+    doc.agregar(sk)
+    ref = lambda p: {"tipo": "punto_boceto", "boceto": sk.id, "punto": p}  # noqa: E731
+    panel, visor, _e, _d = _abrir("patron_puntos", doc, {"puntos": [_hit(doc, ref(p1)), _hit(doc, ref(p2))]})
+    panel._calcular_previa()
+    prims = panel.comando.previa_vista(panel.ctx, panel.valores, panel.ultima_op)
+    lineas = [p for p in prims if p[0] == "lineas"]
+    assert len(lineas) == 3                    # la líneas referencia→destino primero, después una silueta por copia
+    copias = lineas[1:]
+    assert all(p[2] == AZUL_DESTINO for p in copias) and not any(p[2] == ROJO_FANTASMA for p in lineas)
+    cajas = sorted((round(float(p[1][:, 0].min()), 1), round(float(p[1][:, 0].max()), 1)) for p in copias)
+    assert cajas == [(0.0, 20.0), (50.0, 70.0)]                     # la caja (x en 0..20) copiada a x = 0 y a x = 50
+    # solamente las copias vivas: al suprimir la del punto 1 su silueta azul no aparece (la suprimida va en rojo)
+    panel.set_valor("suprimir", "1")
+    panel._calcular_previa()
+    prims = panel.comando.previa_vista(panel.ctx, panel.valores, panel.ultima_op)
+    lineas = [p for p in prims if p[0] == "lineas"]
+    vivas = [p for p in lineas if p[2] == AZUL_DESTINO]
+    rojas = [p for p in lineas if p[2] == ROJO_FANTASMA]
+    assert len(vivas) == 2 and len(rojas) == 1          # conexión ref→destinos + copia viva; la suprimida, en rojo
+    viva = vivas[-1]
+    assert (round(float(viva[1][:, 0].min()), 1), round(float(viva[1][:, 0].max()), 1)) == (0.0, 20.0)
+    suprimida = rojas[-1]
+    assert (round(float(suprimida[1][:, 0].min()), 1), round(float(suprimida[1][:, 0].max()), 1)) == (50.0, 70.0)
+    panel.cancelar()
+    # patrón en ruta: el cuerpo cada 20 mm a lo largo de 40: el original no se dibuja, las otras 2 copias sí
+    doc, ruta = _doc_ruta([(0, 0), (40, 0)])
+    panel, visor, _e, _d = _abrir("patron_ruta", doc, {"ruta": ruta, "rn": 3, "rd": "40 mm",
+                                                      "distribucion": "extension"})
+    panel._calcular_previa()
+    prims = panel.comando.previa_vista(panel.ctx, panel.valores, panel.ultima_op)
+    copias = [p for p in prims if p[0] == "lineas"]          # en ruta no hay líneas de referencia: todas son copias
+    assert len(copias) == 2 and all(p[2] == AZUL_DESTINO for p in copias)
+    cajas = sorted((round(float(p[1][:, 0].min()), 1), round(float(p[1][:, 0].max()), 1)) for p in copias)
+    assert cajas == [(19.0, 21.0), (39.0, 41.0)]            # la caja en x −1..1 llevada a 20 mm y a 40 mm de la ruta
+    panel.cancelar()
+    assert visor._capas.get("previa_comando") is None        # al cancelar se borran (Esc vuelve al estado)
+
+def test_f18_multitransformar_escala_en_el_dialogo(app_qt):  # noqa: F811
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from omnicad.ui.comando import PanelComando
+    from omnicad.ui.comandos.patrones import Multitransformar
+    from omnicad.ui.visor3d import Visor3D
+    doc = _doc_caja()
+    visor = Visor3D()
+    visor.resize(800, 600)
+    visor.set_modelo(doc.estado_final)
+    panel = PanelComando(Multitransformar(), ContextoComando(doc), visor,
+                         {"cuerpos": [_hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})]})
+    lista = panel.widgets["lista"]
+    lista.agregar.menu().actions()[5].trigger()                          # «Escala»
+    assert panel.valores["t_tipo"] == "escala" and "Escala" in lista.lista.item(1).text()
+    QTest.keyClick(lista.lista, Qt.Key_Up)                               # la 1.ª es un rectangular sin dirección
+    panel.set_valor("t_dir1", [_hit(doc, EJE_X)])
+    _teclear(panel.widgets["t_n1"], "2")
+    _teclear(panel.widgets["t_d1"], "100 mm")
+    QTest.keyClick(lista.lista, Qt.Key_Down)
+    _teclear(panel.widgets["t_factor"], "3")
+    _teclear(panel.widgets["t_n_escala"], "2")
+    assert "×3 ×2" in lista.lista.item(1).text()
+    panel._calcular_previa()
+    assert panel._previa_ok and panel.ultima_op.p["transformaciones"][1] == {"tipo": "escala", "factor": "3", "n": 2}
+    _teclear(panel.widgets["t_factor"], "1")                              # factor 1: el mensaje sale en el panel
+    panel._calcular_previa()
+    assert not panel._previa_ok and "no puede ser 1" in panel.mensaje.text()
     panel.cancelar()

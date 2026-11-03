@@ -331,7 +331,7 @@ class Desmoldeo(Comando):
 
 
 class ReticulaVolumetrica(Comando):
-    CLAVE, TITULO, ICONO = "reticula_volumetrica", "Retícula volumétrica", "reticula_volumetrica"
+    CLAVE, TITULO, ICONO = "reticula_volumetrica", "Entramado volumétrico", "reticula_volumetrica"
     AYUDA = ("Llena un sólido o una malla cerrada con una estructura interna por celdas: barras (cruz, celda X, celda X "
              "2.5D, a medida) o superficies mínimas (gyroid, Schwarz P y D, que quedan como cuerpo de malla). La solidez "
              "es el porcentaje de material; puede ir en gradiente por una ruta y cambiar cerca de las paredes (desfase).")

@@ -6,7 +6,8 @@ from pathlib import Path
 from ...timeline.operaciones import OpBoceto
 from ...timeline.ops_insertar import OpLienzo
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Porcentaje, Seleccion, Texto, exigir
+from ..comando import (Casilla, Comando, Deslizador, Entero, ErrorComando, Expresion, Opciones,
+                       Porcentaje, Seleccion, Texto, exigir)
 from . import registrar
 
 
@@ -121,6 +122,10 @@ class InsertarSVG(_InsertarArchivo2D):
         return leer_svg(ruta, capas=_lista(v.get("capas")) or None, colores=_lista(v.get("colores")) or None)
 
 
+# «Canal» del diálogo: las claves son las de `vectorizar.CANALES` (un test lo exige).
+_CANALES = {"auto": "Automático", "luminosidad": "Luminosidad", "alfa": "Alfa"}
+
+
 class VectorizarImagen(_InsertarArchivo2D):
     """INSERTAR › Vectorizar imagen: PNG/JPG a contornos cerrados en un boceto (no existe en Fusion)."""
     CLAVE, TITULO, ICONO = "vectorizar_imagen", "Vectorizar imagen", "vectorizar_imagen"
@@ -141,17 +146,24 @@ class VectorizarImagen(_InsertarArchivo2D):
                 # Más opciones (sin grupo: ver el comentario de Engranaje.campos)
                 Entero("umbral", "Umbral (0 = auto)", 0, 0, 254, avanzado=True),
                 Entero("suavizado", "Suavizado (px)", 1, 0, 10, avanzado=True),
+                Entero("area_minima", "Ignorar manchas (px²)", 4, 0, avanzado=True),
+                Deslizador("tolerancia", "Tolerancia (px)", 0.5, 0, 10, 2, avanzado=True),
+                Opciones("canal", "Canal", _CANALES, defecto="auto", avanzado=True),
                 Casilla("voltear_h", "Volteo horizontal", avanzado=True),
                 Casilla("voltear_v", "Volteo vertical", avanzado=True)]
 
     def clave_filtro(self, v):
-        return (v.get("umbral"), bool(v.get("invertir")), v.get("suavizado"), bool(v.get("curvas")))
+        return (v.get("umbral"), bool(v.get("invertir")), v.get("suavizado"), bool(v.get("curvas")),
+                v.get("area_minima"), v.get("tolerancia"), v.get("canal"))
 
     def leer(self, ruta, v=None):
         from ...io_archivos.vectorizar import vectorizar_imagen
         v = v or {}
         return vectorizar_imagen(ruta, umbral=(v.get("umbral") or None), invertir=bool(v.get("invertir")),
-                                 suavizado=float(v.get("suavizado", 1)), curvas=bool(v.get("curvas")))
+                                 tolerancia=float(v.get("tolerancia", 0.5)),
+                                 area_minima=float(v.get("area_minima", 4)),
+                                 suavizado=float(v.get("suavizado", 1)), canal=v.get("canal", "auto"),
+                                 curvas=bool(v.get("curvas")))
 
     def transformacion(self, v, ctx):
         return {"ancho": ctx.evaluar(v["ancho"]), "desplazamiento": (ctx.evaluar(v["dx"]), ctx.evaluar(v["dy"])),

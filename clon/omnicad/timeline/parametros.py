@@ -476,27 +476,29 @@ def tipo_de_clave(clave, expresion):
     return regla
 
 
-def evaluar(expr, tipo=LONGITUD, nombres=None, estricto=False, unidad=None):
+def evaluar(expr, tipo=LONGITUD, nombres=None, estricto=False, unidad=None, con_dimension=False):
     """Evalúa `expr` y devuelve el valor en la unidad interna de `tipo`. `unidad`: la del parámetro o campo, si no es
-    la interna; los números sueltos la toman. `estricto`: además exige la magnitud del campo, como Fusion."""
+    la interna; los números sueltos la toman. `estricto`: además exige la magnitud del campo, como Fusion.
+    `con_dimension=True`: devuelve (valor, dimensión), para saber qué unidad sale de la cuenta (H-66)."""
     if tipo not in TIPOS:
         raise ValueError(f"tipo inválido: {tipo}")
     if tipo == TEXTO:
-        return str(expr)
+        return (str(expr), None) if con_dimension else str(expr)
     if isinstance(expr, (int, float)):
-        return float(expr)
+        return (float(expr), None) if con_dimension else float(expr)
     texto = (expr or "").strip()
     if not texto:
         raise ErrorExpresion("Expresión vacía.")
     arbol, ajena = _compilar(texto, tipo)
     if ajena and not estricto:
         raise ErrorExpresion(ajena)
-    c = _Calculo(nombres or {}, estricto, unidad_de(tipo, unidad), estricto or unidad is not None)
+    c = _Calculo(nombres or {}, estricto, unidad_de(tipo, unidad), estricto or unidad is not None or con_dimension)
     try:
         v, dim = _calc(arbol, c)
     except RecursionError:
         raise ErrorExpresion("La expresión es demasiado larga.") from None
-    return _real(_en_el_campo(v, dim, c))
+    v = _real(_en_el_campo(v, dim, c))
+    return (v, dim) if con_dimension else v
 
 
 def _en_el_campo(v, dim, c):
@@ -590,7 +592,9 @@ def validar_nombre(nombre):
 
 def texto_con_valores(texto, valores):
     """Texto con sus {expresión} reemplazadas por el valor que tienen con los parámetros `valores` (longitudes
-    en mm, ángulos en grados, números sueltos o cadenas literales). Levanta ErrorExpresion si alguna no se puede calcular."""
+    en mm, ángulos en grados, números sueltos o cadenas literales). La cuenta lleva la unidad que sale de la
+    expresión (H-66): «{largo * 2}» da «300 mm»; una cuenta sin unidad, solo el número.
+    Levanta ErrorExpresion si alguna no se puede calcular."""
     from ..restricciones.boceto import sustituir_expresiones
 
     def valor(expr):
@@ -599,14 +603,13 @@ def texto_con_valores(texto, valores):
         ultimo = None
         for tipo in (LONGITUD, ANGULO, ESCALAR):
             try:
-                v = evaluar(expr, tipo, valores)
+                v, dim = evaluar(expr, tipo, valores, con_dimension=True)
                 break
             except ErrorExpresion as e:
                 ultimo = ultimo or e
         else:
             raise ultimo
-        dim = getattr(valores.get(expr), "dim", None)      # CF-12: «{largo}» da «150 mm», con la unidad del
-        return (v, texto_dimension(dim)) if dim not in (None, SIN_DIMENSION) else v     # parámetro; sin unidad, el número
+        return (v, texto_dimension(dim)) if dim not in (None, SIN_DIMENSION) else v
     try:
         return sustituir_expresiones(texto, valor)
     except ValueError as e:                       # formato inválido: «{ancho:xyz}»

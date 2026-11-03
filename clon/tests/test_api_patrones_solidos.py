@@ -112,3 +112,15 @@ def test_pat5_multi_transform_acepta_plane2_en_la_transformacion_rectangular(s):
         {"type": "rectangular", "axis": "x", "count": 2, "spacing": 30, "count2": 2, "spacing2": 25, "plane2": "XZ"}])
     assert minimos(s, r) == [(-5.0, -5.0, 25.0), (25.0, -5.0, 0.0), (25.0, -5.0, 25.0)]
     falla(s, "multi_transform", bodies=c, transforms=[{"type": "rectangular", "axis": "x", "count": 2, "count2": 2}])
+
+
+def test_f18_multi_transform_escala_por_api(s):
+    c = cubo(s)
+    r = llamar(s, "multi_transform", bodies=c, transforms=[{"type": "scale", "factor": 2, "count": 3}])
+    assert s.doc.operaciones[-1].p["transformaciones"] == [{"tipo": "escala", "factor": "2.0", "n": 3}]
+    nuevos = {b["id"] for b in r["bodies_created"]}
+    vols = sorted(round(c["volume"]) for c in llamar(s, "get_scene_info")["bodies"] if c["id"] in nuevos)
+    assert vols == [8000, 64000]                            # 10³ el original; las copias ×2 y ×4 (aristas 20 y 40)
+    falla(s, "multi_transform", bodies=c, transforms=[{"type": "scale", "factor": 1, "count": 3}])
+    falla(s, "multi_transform", bodies=c, transforms=[{"type": "scale", "factor": 2, "count": 1}])
+    falla(s, "multi_transform", bodies=c, transforms=[{"type": "scale", "factor": 2, "axis": "x"}])
