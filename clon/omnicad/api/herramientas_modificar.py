@@ -617,8 +617,11 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
         from .herramientas_construccion import _PUNTO, _referencia
         refs = [_referencia(sesion, p, _PUNTO, body) for p in positions]
         principal = sl.cuerpo_objetivo(sesion, body).id if not extras else extras[0]
+        # NOV-b80-3: cada posición puede ser un vértice de otro cuerpo: su referencia sabe de quién es.
+        de_posiciones = [r["cuerpo"] for r in refs if r.get("cuerpo")]
         op = OpAgujero(sesion.doc.nuevo_id(), nombre_nuevo(sesion.doc, "Agujero", OpAgujero), posiciones=refs,
-                       invertir=bool(flip), objetivos=list(dict.fromkeys([principal, *extras])), **comunes)
+                       invertir=bool(flip),
+                       objetivos=list(dict.fromkeys([principal, *de_posiciones, *extras])), **comunes)
         res = _agregar(sesion, op, combina=True)
         res["holes"] = len(refs)
         if hole_tap != "simple":

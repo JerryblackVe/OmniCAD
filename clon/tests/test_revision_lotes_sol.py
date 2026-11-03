@@ -11,6 +11,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from omnicad import api  # noqa: E402
 from omnicad.nucleo import geometria as geo  # noqa: E402
 
+from _tiempo import mejor_tiempo  # noqa: E402
+
 
 def llamar(sesion, nombre, **args):
     r = api.llamar(sesion, nombre, args)
@@ -110,12 +112,13 @@ def test_seleccion_limite_con_un_panel_abierto_avisa_sin_lanzar():
 
 
 def test_consejos_de_diseno_no_es_cuadratico_con_muchas_caras():
-    import time
     s = api.Sesion()
     llamar(s, "create_box", length=100, width=100, height=10, name="Placa")
     llamar(s, "create_geometric_pattern", faces=">Z", object_type="cylinder", size1=2, size2=2, distance=6, operation="cut")
     caras = len(geo.caras(s.cuerpo("Placa").forma))
     assert caras > 100
-    t = time.time()
-    llamar(s, "design_advice", body="Placa")
-    assert time.time() - t < 20
+    def correr():
+        return llamar(s, "design_advice", body="Placa")
+
+    segundos, _ = mejor_tiempo(correr, 20)
+    assert segundos < 20

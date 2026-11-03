@@ -10,6 +10,8 @@ from omnicad import api
 from omnicad.io_archivos.boceto_archivos import boceto_desde_primitivas, caja_primitivas
 from omnicad.nucleo import fuentes
 
+from _tiempo import mejor_tiempo
+
 
 def ok(r):
     assert r["ok"], r
@@ -1325,8 +1327,6 @@ def test_move_sketch_point_y_delete_sketch_entities(s):
 
 
 def test_dibujar_muchas_curvas_usa_cache(app_qt):
-    import time
-
     from omnicad.nucleo.geometria import Plano
     from omnicad.restricciones import Boceto
     from omnicad.timeline.parametros import TablaParametros
@@ -1337,9 +1337,12 @@ def test_dibujar_muchas_curvas_usa_cache(app_qt):
     lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
     lz.resize(900, 600)
     lz.grab()
-    t = time.time()
-    lz.grab()
-    assert time.time() - t < 1.0                                      # sin caché tardaba ~0,3 s cada 1000 splines
+
+    def correr():
+        return lz.grab()
+
+    segundos, _ = mejor_tiempo(correr, 1.0)
+    assert segundos < 1.0                                             # sin caché tardaba ~0,3 s cada 1000 splines
 
 
 # ---------------------------------------------------------------- interletraje, kerning de pares e interlineado

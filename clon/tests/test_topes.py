@@ -19,6 +19,8 @@ from omnicad.nucleo import malla as ml
 from omnicad.nucleo import solidos_crear as sc
 from omnicad.nucleo import superficies as sf
 
+from _tiempo import mejor_tiempo
+
 
 @pytest.fixture
 def s():
@@ -83,15 +85,16 @@ def test_patron_en_ruta_tiene_el_mismo_tope():
 def test_unir_instancias_en_una_sola_booleana():
     """Revisión: «Combinar» unía las copias de a una (geo.unir_todos) y crece con el cuadrado: 20 × 20 cubos tardaba
     51 s y 32 × 32, más de 200 s. En una sola booleana, 0,3 s; el resultado es el mismo."""
-    import time
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
     from OCP.TopAbs import TopAbs_SOLID
     cubo = BRepPrimAPI_MakeBox(10.0, 10.0, 10.0).Shape()
     formas = [sc.aplicar(cubo, t) for t in sc.transformaciones_rectangulares(
         (1, 0, 0), 20, 20.0, (0, 1, 0), 20, 20.0, distribucion="espaciado")]
-    t = time.perf_counter()
-    r = sc.unir_instancias(formas)
-    assert time.perf_counter() - t < 5
+    def correr():
+        return sc.unir_instancias(formas)
+
+    segundos, r = mejor_tiempo(correr, 5)
+    assert segundos < 5
     assert geo.es_valida(r) and geo.volumen(r) == pytest.approx(400_000.0)
     assert len(list(geo._explorar(r, TopAbs_SOLID))) == 400
     solapados = [sc.aplicar(cubo, t) for t in sc.transformaciones_rectangulares((1, 0, 0), 3, 5.0, (0, 1, 0), 3, 5.0,

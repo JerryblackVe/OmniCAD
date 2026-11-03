@@ -2,11 +2,11 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 140: Abierto 73 · Parcial 52 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 136: Abierto 70 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
 
 ## Pendientes generales
 
-Abierto 15 · Parcial 12 · Bloqueado 3 · Sin verificar 2.
+Abierto 14 · Parcial 11 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -15,7 +15,6 @@ Abierto 15 · Parcial 12 · Bloqueado 3 · Sin verificar 2.
 | P-35 | `volumen_exacto` de un cuerpo con 500 caras B-spline cuesta 0,5 s por llamada | Abierto | Baja | `aplicar_resultado` lo llama tres veces en una unión (resultado, cuerpo y herramienta): 1,4 s de los 3 s de Unir en `bspline500`. Guardar el volumen por forma en el cuerpo (se invalida al cambiar `forma`) o no medirlo cuando no hay aviso posible. | omnicad/timeline/operaciones.py (`aplicar_resultado`), omnicad/nucleo/geometria.py (`_integral`); scripts/bench_booleana.py bspline500 | 2026-10-26 |
 | P-36 | B-39 no revisa con BRepCheck las caras cambiadas con más de 200 contornos | Parcial | Baja | `_es_valida_tras_booleana` las salta porque BRepCheck clasifica los contornos de a pares (3000 agujeros: 11 s); el volumen y las aristas libres siguen vigentes. Revisar solo los contornos nuevos de esa cara (hoy la booleana rearma todos los contornos y no se distinguen por forma). | omnicad/nucleo/geometria.py (`_es_valida_tras_booleana`, `_MAX_CONTORNOS_REVISADOS`) | 2026-10-26 |
 | P-33 | CI en GitHub para main: ruff y pytest rápido en cada push (sin la prueba de humo, que pide ventana) | Abierto | Media | Todo. AGENTS.md (Seguridad) ya exige «subir solo con la CI verde» pero no hay workflow: solo `instaladores.yml`, por tag. Puede pedir ajustar tests que necesitan OpenGL en la máquina de GitHub. Pendiente por decisión de Gerardo (2026-10-25). | .github/workflows/ (solo instaladores.yml); AGENTS.md:50 | 2026-10-25 |
-| NOV-b80-3 | create_hole(positions) usa un solo cuerpo objetivo | Abierto | Baja | Si el vértice es de otro cuerpo, el agujero se hace en el principal y solo avisa que no cambió el volumen: resolver el cuerpo desde la referencia. | omnicad/api/herramientas_modificar.py:492 | 2026-10-20 |
 | P-12b | Registrar la tarea programada de Windows para el informe mensual | Abierto | Baja | La tarea no se registra sola; el comando está en el docstring del script. | scripts/novedades.py | 2026-10-20 |
 | P-26a | CI en macOS (ruff + pytest + humo) para ver qué falla | Abierto | Baja | El workflow solo tiene jobs de Windows y Ubuntu. | .github/workflows/instaladores.yml | 2026-10-20 |
 | P-8d | Paquetes .deb o Flatpak para Linux (dicho como «quizás») | Abierto | Media | Sin empezar; hoy solo AppImage. | instalador/linux/ solo tiene armar_appimage.sh | 2026-10-20 |
@@ -43,11 +42,10 @@ Abierto 15 · Parcial 12 · Bloqueado 3 · Sin verificar 2.
 | P-1b | Probar en Linux nativo (GNOME/KDE, GPU real, atajos, diálogos de archivo) | Bloqueado | Media | Falta una PC con Linux nativo para probar a mano atajos y diálogos de archivo. | Solo hay corridas en WSL2 (Registro); el CI de Linux arma AppImage pero no prueba la interfaz | 2026-10-20 |
 | P-11k | Comparar EXTRUSOR XOX.f3z contra Fusion y probar mallas convertidas | Sin verificar | Baja | Importarlo en Fusion puede crear diseños en la nube del usuario; sin ejemplo BINCHA a mano. | PROJECT_LOG.md:32 | 2026-10-20 |
 | P-31-lic | Respetar licencias AGPL-3.0 (PartMode, QymCAD, Chili3D): solo ideas, nunca código | Sin verificar | Media | Regla de proceso, no tarea; no se puede comprobar contra el código. | PROJECT_LOG.md:117 | 2026-10-20 |
-| P-57 | Tests con tope absoluto de reloj de pared se ponen rojos con la PC cargada | Parcial | Baja | Ya usan el mejor de 3 corridas (`tests/_tiempo.py`) los primeros 10 archivos: `test_analisis.py`, `test_api_avanzado.py`, `test_api_ayuda.py`, `test_boceto_fase2.py`, `test_boceto_fase4.py`, `test_boceto_fase7.py`, `test_boceto_fase9_fuentes.py`, `test_boceto_fase9_revision_shx.py`, `test_f3d_reales.py` y `test_p11a_f3d_instancias.py`. Faltan `test_resultados_vacios.py:322`, `test_revision_lotes_sol.py:121`, `test_solidos_crear.py:478`, `:494` y `:535`, `test_texto_vectores.py:1342` y `test_topes.py:94`. | tests/_tiempo.py (`mejor_tiempo`); tests/test_render_rapido.py::test_el_tope_de_tiempo_sigue_detectando_una_regresion (la mutación) | 2026-11-02 |
 
 ## Hallazgos de pruebas de uso
 
-Abierto 10 · Parcial 1 · Sin verificar 0.
+Abierto 9 · Parcial 1 · Sin verificar 0.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -58,17 +56,15 @@ Abierto 10 · Parcial 1 · Sin verificar 0.
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
 | H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | Falta barrido automático de tipos sin caso válido; solo hay tests sueltos por tipo. | tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py; tests/test_chapa.py (unir plegando); tests/test_fijaciones.py; humo 168 pasos según el log (no corrido acá) | 2026-10-20 |
 | H-59 | Con el diálogo Parámetros abierto, un comando hecho en la ventana cae en el mismo deshacer | Abierto | Media | `agrupar_deshacer` junta todo lo posterior a la marca: un Deshacer revierte el cambio de parámetro y ese comando juntos. No se pierde nada. Separar solo lo que hizo el diálogo. | ui/dialogo_parametros.py › done; timeline/documento.py › agrupar_deshacer | 2026-11-01 |
-| H-61 | Un arco de asa visto de canto no se deja arrastrar | Abierto | Baja | Se ve como una línea con su asa, pero hay que girar la vista para tomarlo. Falta arrastrar en pantalla a lo largo de la tangente del arco, como ya hace la flecha de frente. Sale de la revisión de H-60. | omnicad/ui/manipuladores.py:498 | 2026-11-02 |
 | H-64 | render_image rechaza 3840 × 2160 en standard y final | Abierto | Baja | Reproducido: standard (33,2 Mpx con el 2×) y final (74,6 Mpx con el 3×) responden INVALID_ARGUMENTS por el tope de 25 Mpx; el docstring documenta ese tope. | omnicad/api/herramientas_render.py:179 | 2026-11-02 |
 | H-65 | insert_fastener no perfora el cuerpo de abajo | Abierto | Media | Reproducido: agujero Ø6,6 en el cuerpo de arriba y tornillo M6 de 20 mm; el volumen del cuerpo de abajo queda en 16 000 mm³ (no lo perfora). El docstring dice que inserta la fijación sobre agujeros o puntos, no que haga el agujero. | omnicad/api/herramientas_construccion.py:244 | 2026-11-02 |
 
 ## Fusion 360
 
-Abierto 4 · Parcial 1 · Sin verificar 1. Especificación: [brechas_fusion.md](../brechas_fusion.md).
+Abierto 3 · Parcial 1 · Sin verificar 1. Especificación: [brechas_fusion.md](../brechas_fusion.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| FU-4 | Asas de conicidad del lado 2 y desfase de inicio en Extruir | Abierto | Baja | Asas para conicidad2 (ya existe en la API) y para el desfase de inicio | ui/comandos/solido.py:74-100 (solo asas distancia, distancia2 y conicidad del lado 1); api/herramientas_solido.py:174 | 2026-10-20 |
 | FU-2 | Imagen del agujero con cotas editables en el diálogo | Abierto | Media | Esquema del agujero con cotas editables dentro del diálogo de Agujero | ui/comandos/crear.py:314 (Agujero solo con campos de texto; sin imagen en ui/comando.py) | 2026-10-20 |
 | FU-3 | Cota de ángulo contra el eje X y barrido del arco | Abierto | Media | Cota de ángulo línea contra eje X y barrido del arco de centro escrito | restricciones/boceto.py:1606 (la cota de ángulo solo admite linea-linea) | 2026-10-20 |
 | FU-6 | Tabla de grupos de aristas en Empalme (radios distintos) | Abierto | Media | Varios grupos de aristas con radio propio por operación (el núcleo ya admite grupos) | timeline/ops_modificar.py:197-226 (OpEmpalme con un solo grupo y un solo radio) | 2026-10-20 |

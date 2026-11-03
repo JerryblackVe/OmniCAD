@@ -78,7 +78,8 @@ class Extruir(Comando):
 
     def manipuladores(self, ctx, v):
         """Flecha de distancia desde el centro del perfil a lo largo de la normal (la del lado 2 en «Dos
-        lados») y el asa de la conicidad en el borde del perfil, como Fusion."""
+        lados»), el asa de la conicidad en el borde del perfil y, como Fusion, la flecha del desfase de
+        inicio sobre el borde (solo con Inicio=Desfase) y la conicidad del lado 2 (solo en «Dos lados»)."""
         from .. import manipuladores as mp
         if v.get("extension") != "distancia":
             return []
@@ -87,21 +88,28 @@ class Extruir(Comando):
             return []
         centro, plano, formas = base
         n = mp.unitario(plano.normal) * (-1.0 if v.get("invertir") else 1.0)
+        lateral = mp.unitario(plano.u)
+        borde = mp.punto_borde(formas, centro, lateral)
+        antes = [mp.Flecha("desfase_inicio", borde, n)] if v.get("inicio") == "desfase" else []
         if v.get("inicio") == "desfase":
             centro = centro + n * _evaluar(ctx, v.get("desfase_inicio"))
+        borde = borde + n * float((centro - borde) @ n)          # a la altura del inicio (desfase)
         direccion = v.get("direccion")
         if direccion == "simetrica":
-            return [mp.Flecha("distancia", centro, n, factor=1.0 if v.get("medida") != "total" else 0.5, minimo=0.0)]
-        salida = [mp.Flecha("distancia", centro, n)]
+            return antes + [mp.Flecha("distancia", centro, n, factor=1.0 if v.get("medida") != "total" else 0.5,
+                                       minimo=0.0)]
+        salida = antes + [mp.Flecha("distancia", centro, n)]
         if direccion == "dos_lados":
             salida.append(mp.Flecha("distancia2", centro, -n, minimo=0.0))
         d = _evaluar(ctx, v.get("distancia"))
-        lateral = mp.unitario(plano.u)
-        borde = mp.punto_borde(formas, centro, lateral)
-        borde = borde + n * float((centro - borde) @ n)          # a la altura del inicio (desfase)
         t = n * (-1.0 if d < 0 else 1.0)
         salida.append(mp.Angulo("conicidad", borde, np.cross(t, lateral), t, minimo=-89.0, maximo=89.0,
                                 caja="arrastre"))
+        if direccion == "dos_lados":
+            d2 = _evaluar(ctx, v.get("distancia2"))
+            t2 = -n * (-1.0 if d2 < 0 else 1.0)
+            salida.append(mp.Angulo("conicidad2", borde, np.cross(t2, lateral), t2, minimo=-89.0, maximo=89.0,
+                                    caja="arrastre"))
         return salida
 
     @staticmethod

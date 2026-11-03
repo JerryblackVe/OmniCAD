@@ -185,7 +185,7 @@ def test_extruir_dos_lados_y_conicidad(app_qt):
     doc = _doc_rectangulo()
     panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "direccion": "dos_lados"})
     idents = [m.ident for m in panel.manipuladores.manips]
-    assert idents == ["flecha:distancia", "flecha:distancia2", "angulo:conicidad"]
+    assert idents == ["flecha:distancia", "flecha:distancia2", "angulo:conicidad", "angulo:conicidad2"]
     assert set(panel.manipuladores.cajas) == {"distancia", "distancia2"}
     gestor = panel.manipuladores
     angulo = _manip(panel, "angulo:conicidad")
@@ -198,6 +198,32 @@ def test_extruir_dos_lados_y_conicidad(app_qt):
     conicidad = panel.ctx.evaluar(panel.valores["conicidad"], "angulo")
     assert 0 < conicidad < 89 and panel.valores["conicidad"].endswith(" deg")
     panel.cancelar()
+
+
+def test_asas_de_conicidad2_y_desfase_inicio_en_extruir(app_qt):
+    """FU-4: asas para la conicidad del lado 2 (solo en «Dos lados») y para el desfase de inicio
+    (solo con Inicio=Desfase), como las que ya existen."""
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "direccion": "dos_lados"})
+    assert "angulo:conicidad2" in [m.ident for m in panel.manipuladores.manips]
+    gestor = panel.manipuladores
+    angulo2 = _manip(panel, "angulo:conicidad2")
+    asa, ok = gestor.pantalla([angulo2.asa(gestor)])
+    assert ok.all()
+    centro = gestor.pantalla([angulo2.centro])[0][0]
+    afuera = gestor.pantalla([angulo2.centro + angulo2.v * 30])[0][0]
+    _arrastrar(visor, asa[0], asa[0] + (afuera - centro) * 0.5)
+    conicidad2 = panel.ctx.evaluar(panel.valores["conicidad2"], "angulo")
+    assert 0 < conicidad2 < 89 and panel.valores["conicidad2"].endswith(" deg")
+    panel.cancelar()
+    panel2, visor2, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "inicio": "desfase"})
+    assert "flecha:desfase_inicio" in [m.ident for m in panel2.manipuladores.manips]
+    medio, d = _sobre_flecha(panel2, "flecha:desfase_inicio")
+    _arrastrar(visor2, medio, medio + d * 80)
+    desfase = panel2.ctx.evaluar(panel2.valores["desfase_inicio"])
+    assert desfase > 2 and panel2.valores["desfase_inicio"].endswith(" mm")
+    panel2.cancelar()
 
 
 # ---------------------------------------------------------------- cierre
@@ -770,8 +796,6 @@ def test_seccion_usa_la_triada_y_ninguna_caja_tapa_nada_en_4_vistas(app_qt):
         s, ok = gestor.pantalla(partes[("eje", 2)])
         assert np.linalg.norm(s[-1] - s[0]) >= 0.45 * mp.LARGO_TRIADA * 0.8, nombre       # el eje se reconoce en toda vista
         for sub in (("eje", 2), ("giro", 0)):                 # con cada asa tomada, su caja de valor no tapa nada
-            if sub == ("giro", 0) and abs(float(triada.ejes[0] @ visor.R[2])) > 0.92:
-                continue                                       # el plano del arco se ve de canto: no se puede tomar
             s, ok = gestor.pantalla(partes[sub])
             gestor._arrastre = {"m": triada, "sub": sub, "estado": {}}
             gestor.sincronizar_cajas()
@@ -838,3 +862,55 @@ def test_la_triada_de_seccion_esta_en_el_pivote_real_de_giro(app_qt):
 def _manip_de(panel):
     from omnicad.ui import manipuladores as mp
     return mp.entidad(panel.valores["plano"][0], panel.ctx.estado)
+
+
+def test_el_arco_visto_de_canto_se_arrastra_por_la_tangente(app_qt):
+    """H-61: un arco de asa visto de canto (se ve como una línea con su asa) se arrastra a lo largo de la tangente
+    en pantalla, como la flecha de frente; arrastrar a favor del ángulo lo sube y en contra lo baja."""
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.comandos.solido import Revolucion
+    from omnicad.ui import manipuladores as mp_triada
+    doc = Documento()
+    b = Boceto()
+    b.agregar_rectangulo((5, 0), (10, 10))
+    doc.agregar(OpBoceto(doc.nuevo_id(), "Boceto1", plano="XZ", boceto=b))
+    eje = hit_desde_ref({"tipo": "eje", "id": "Z"}, doc.estado_final)
+    panel, visor, _ = _panel(Revolucion(), doc, {"perfiles": [_perfil(doc)], "eje": [eje], "angulo": "45 deg"})
+    angulo = _manip(panel, "angulo:angulo")
+    gestor = panel.manipuladores
+    _camara(visor, np.array([1.0, 0.0, 0.0]))          # el plano del arco (eje Z) se ve de canto
+    gestor.redibujar()
+    t = np.radians(panel.ctx.evaluar(panel.valores["angulo"], "angulo"))
+    tangente = -angulo.u * np.sin(t) + angulo.v * np.cos(t)          # sentido del ángulo creciente
+    s, ok = gestor.pantalla(np.array([angulo.asa(gestor), angulo.asa(gestor) + tangente * angulo.radio]))
+    assert ok.all()
+    e = (s[1] - s[0]) / np.linalg.norm(s[1] - s[0])
+    _arrastrar(visor, s[0], s[0] + e * 50)
+    subio = panel.ctx.evaluar(panel.valores["angulo"], "angulo")
+    assert 50 < subio < 90, subio                                     # arrastró a favor: subió
+    asa2 = gestor.pantalla([angulo.asa(gestor)])[0][0]
+    _arrastrar(visor, asa2, asa2 - e * 50)
+    bajo = panel.ctx.evaluar(panel.valores["angulo"], "angulo")
+    assert bajo < subio, bajo                                         # en contra: bajó
+    panel.cancelar()
+    # y el arco de giro de la tríada (Sección), también de canto
+    doc2 = _doc_caja()
+    plano = hit_desde_ref({"tipo": "plano", "id": "XZ"}, doc2.estado_final)
+    panel2, visor2, _ = _panel(CATALOGO["seccion"](), doc2, {"plano": [plano], "desfase": "3 mm", "angulo": "45 deg"})
+    triada = _manip(panel2, "triada")
+    gestor2 = panel2.manipuladores
+    _camara(visor2, triada.ejes[2])                # el plano del arco de giro 0 (⊥ ejes[0]) se ve de canto
+    gestor2.redibujar()
+    _, a, b = triada._base(0)
+    m = np.radians(45.0)                           # el punto del asa, en el medio del arco
+    radio = 0.7 * mp_triada.LARGO_TRIADA * triada._partes(gestor2)[1]
+    asa3 = triada.centro + (a * np.cos(m) + b * np.sin(m)) * radio
+    tangente3 = -a * np.sin(m) + b * np.cos(m)
+    s3, ok3 = gestor2.pantalla(np.array([asa3, asa3 + tangente3 * radio]))
+    assert ok3.all()
+    e3 = (s3[1] - s3[0]) / np.linalg.norm(s3[1] - s3[0])
+    _arrastrar(visor2, s3[0], s3[0] + e3 * 50)
+    subio3 = panel2.ctx.evaluar(panel2.valores["angulo"], "angulo")
+    assert subio3 > 45, subio3                      # arrastró a favor: subió
+    panel2.cancelar()

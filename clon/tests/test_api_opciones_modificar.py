@@ -180,3 +180,17 @@ def test_agujero_en_un_vertice_con_angulo_de_punta_flip_y_varios_cuerpos():
     assert V - volumen(s3, "Abajo") == pytest.approx(math.pi * 4 * L, rel=1e-4)      # el mismo agujero atravesó los dos
     falla(s, "create_hole", diameter=4, depth=5, positions=[[1, 2, 3]], esperado="ELEMENT_NOT_FOUND")
     falla(s, "create_hole", diameter=4, depth=5, positions=[[10, 10, 20]], face=">Z", points=[[0, 0]])
+
+
+def test_positions_agujerea_el_cuerpo_del_vertice_no_solo_el_principal():
+    """NOV-b80-3: con positions, el cuerpo se resuelve desde la referencia de cada posición: un vértice de otro
+    cuerpo hace el agujero en ese cuerpo, no en el principal (que solo avisaba que no cambió el volumen)."""
+    s = api.Sesion()
+    from omnicad.nucleo import referencias as refs
+    ok(s, "create_box", length=L, width=L, height=L, name="A")                       # x de -10 a 10
+    b = ok(s, "create_box", length=L, width=L, height=L, x=L + 10, name="B")["bodies_created"][0]["id"]  # x de 20 a 40
+    vs = refs.subformas(s.cuerpo(b).forma, "vertice")
+    vertice = 1 + next(i for i, v in enumerate(vs) if refs.firma_vertice(v)["punto"][2] == L)  # una esquina de arriba
+    ok(s, "create_hole", diameter=4, depth=5, positions=[{"body": "B", "vertex": vertice}], body="A")
+    assert V - volumen(s, "B") == pytest.approx(math.pi * 2 ** 2 * 5 / 4, rel=1e-4)  # cuarto de cilindro en la esquina de B
+    assert volumen(s, "A") == pytest.approx(V)                                       # el principal queda igual

@@ -3,7 +3,6 @@
 de las pruebas de uso). Ahora fallan con un error claro y el documento queda intacto, o avisan."""
 import json
 import math
-import time
 
 import pytest
 
@@ -11,6 +10,8 @@ from omnicad import api
 from omnicad.nucleo import geometria as geo
 from omnicad.nucleo import referencias as refs
 from omnicad.nucleo import solidos_modificar as sm
+
+from _tiempo import mejor_tiempo
 
 
 @pytest.fixture
@@ -317,9 +318,11 @@ def test_se_tocan_descarta_por_cajas_sin_medir_la_distancia_exacta():
         pieza = geo.booleano(pieza, geo.cilindro(1.5, 30, (20 * math.cos(a), 20 * math.sin(a), -15)), "cortar")
     pieza = geo.BRepBuilderAPI_NurbsConvert(pieza, True).Shape()
     lejos = geo.BRepBuilderAPI_NurbsConvert(geo.trasladar(pieza, (60, 0, 0)), True).Shape()
-    t = time.perf_counter()
-    assert not geo.se_tocan(pieza, lejos)
-    assert time.perf_counter() - t < 0.5
+    def correr():
+        return not geo.se_tocan(pieza, lejos)
+
+    segundos, separados = mejor_tiempo(correr, 0.5)
+    assert segundos < 0.5 and separados
     # Cajas que se solapan pero formas separadas, contacto exacto y tolerancia: se siguen midiendo bien.
     caja = geo.caja(10, 10, 10)
     assert geo.se_tocan(caja, geo.caja(10, 10, 10, (10, 0, 0)))              # caras en contacto

@@ -144,6 +144,22 @@ def _mover_en_pantalla(estado, pos):
     return float((np.array([pos.x(), pos.y()], float) - estado["q0"]) @ estado["e"]) * estado["mm"]
 
 
+def _arco_pantalla(g, asa, tangente, radio, pos):
+    """Estado de arrastre de un arco visto de canto (H-61): el asa sigue al cursor a lo largo de la tangente del
+    arco en pantalla (el arco proyectado es casi una línea). None si la tangente no se ve en pantalla."""
+    s, ok = g.pantalla(np.array([asa, asa + tangente * radio]))
+    e = s[1] - s[0]
+    px = float(np.linalg.norm(e))
+    if not ok.all() or px < 1e-9:
+        return None
+    return {"pantalla": True, "q0": np.array([pos.x(), pos.y()], float), "e": e / px, "px_rad": px}
+
+
+def _mover_arco_pantalla(estado, pos):
+    """Radián que avanzó el cursor sobre la tangente en pantalla del arco visto de canto."""
+    return float((np.array([pos.x(), pos.y()], float) - estado["q0"]) @ estado["e"]) / estado["px_rad"]
+
+
 def recta_rayo(o, r, p0, d):
     """Parámetro s del punto de la recta p0 + s·d más cercano al rayo o + t·r (None si son paralelos)."""
     d, r = unitario(d), unitario(r)
@@ -512,10 +528,20 @@ class Angulo(Manipulador):
         t0 = self._theta(g)
         a0 = self._angulo_en(g, pos, t0)
         if a0 is None:
-            return None
+            if abs(float(unitario(g.rayo(pos)[1]) @ self.eje)) >= 0.08:
+                return None                      # el cursor cayó fuera del plano del arco
+            # H-61: el plano del arco se ve de canto: se arrastra a lo largo de la tangente del asa en pantalla.
+            tangente = -self.u * math.sin(t0) + self.v * math.cos(t0)
+            est = _arco_pantalla(g, self.asa(g), tangente, self._r(g), pos)
+            return None if est is None else {**est, "v0": g.valor(self.clave)}
         return {"a0": a0, "ultimo": a0, "v0": g.valor(self.clave)}
 
     def mover(self, g, estado, pos):
+        if estado.get("pantalla"):
+            if abs(self.factor) < 1e-12:
+                return {}
+            v = estado["v0"] + math.degrees(_mover_arco_pantalla(estado, pos)) / self.factor
+            return {self.clave: max(self.minimo, min(self.maximo, v))}
         a = self._angulo_en(g, pos, estado["ultimo"])
         if a is None or abs(self.factor) < 1e-12:
             return {}
@@ -1169,11 +1195,16 @@ class Triada(Manipulador):
         if tipo == "giro":
             _, a, b = self._base(i)
             p = plano_rayo(o, r, c, self.ejes[i])
-            if p is None or abs(float(unitario(r) @ self.ejes[i])) < 0.08:
-                return None
-            w = p - c
-            ang = math.atan2(float(w @ b), float(w @ a))
-            return {"sub": sub, "c": c, "a0": ang, "ultimo": ang, "v0": g.valor(self.giros[i])}
+            if p is not None and abs(float(unitario(r) @ self.ejes[i])) >= 0.08:
+                w = p - c
+                ang = math.atan2(float(w @ b), float(w @ a))
+                return {"sub": sub, "c": c, "a0": ang, "ultimo": ang, "v0": g.valor(self.giros[i])}
+            # H-61: el plano del arco se ve de canto: se arrastra a lo largo de la tangente del asa en pantalla.
+            m = math.radians(45.0)             # el punto del asa, en el medio del arco (de 15° a 75°)
+            radio = LARGO_TRIADA * g.escala(c) * 0.7
+            tangente = -a * math.sin(m) + b * math.cos(m)
+            est = _arco_pantalla(g, c + (a * math.cos(m) + b * math.sin(m)) * radio, tangente, radio, pos)
+            return None if est is None else {**est, "sub": sub, "c": c, "v0": g.valor(self.giros[i])}
         n = self.ejes[i] if tipo == "plano" else np.asarray(g.visor.R[2], float)
         p0 = plano_rayo(o, r, c, n)
         if p0 is None:
@@ -1190,6 +1221,8 @@ class Triada(Manipulador):
             s = recta_rayo(o, r, c, self.ejes[i])
             return {} if s is None else {self.claves[i]: estado["v0"] + s - estado["s0"]}
         if tipo == "giro":
+            if estado.get("pantalla"):
+                return {self.giros[i]: estado["v0"] + math.degrees(_mover_arco_pantalla(estado, pos))}
             _, a, b = self._base(i)
             p = plano_rayo(o, r, c, self.ejes[i])
             if p is None:
