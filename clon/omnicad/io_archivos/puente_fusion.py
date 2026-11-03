@@ -17,6 +17,7 @@ Protocolo (HTTP + JSON, cabecera `X-OmniCAD-Token`):
 Sin Qt: lo usan la ventana, la API, la CLI y el MCP.
 """
 import json
+import os
 import shutil
 import urllib.error
 import urllib.request
@@ -25,7 +26,7 @@ from pathlib import Path
 
 VERSION_PROTOCOLO = 1
 EXTENSIONES = (".f3d", ".f3z")
-VARIABLE_CARPETA = "OMNICAD_PUENTE_FUSION_DIR"
+VARIABLE_CARPETA = "OMNICAD_PUENTE_FUSION_DIR"      # vieja: se acepta por compatibilidad; la común es OMNICAD_PUENTE_DIR
 TIEMPO_ESTADO_S = 5
 TIEMPO_CONVERTIR_S = 600        # un ensamblaje grande puede tardar minutos en abrirse en Fusion
 
@@ -45,10 +46,14 @@ class ErrorPuenteFusion(RuntimeError):
 
 
 def carpeta_info():
-    """Carpeta de `puente_fusion.json`: OMNICAD_PUENTE_FUSION_DIR o %LOCALAPPDATA%/OmniCAD (la del complemento).
-    El helper es el del puente en vivo; aquí diferido: `api.errores` importa de ESTE módulo (import cíclico)."""
+    """Carpeta de `puente_fusion.json`: OMNICAD_PUENTE_FUSION_DIR (compatibilidad con lo viejo), después
+    OMNICAD_PUENTE_DIR, después %LOCALAPPDATA%/OmniCAD (la del complemento). Lo segundo y lo tercero son la regla del
+    puente en vivo; aquí diferido: `api.errores` importa de ESTE módulo (import cíclico)."""
+    propia = os.environ.get(VARIABLE_CARPETA)
+    if propia:
+        return Path(propia)
     from ..api import protocolo_puente as proto
-    return proto.carpeta_info(VARIABLE_CARPETA)
+    return proto.carpeta_info()
 
 
 def ruta_info():

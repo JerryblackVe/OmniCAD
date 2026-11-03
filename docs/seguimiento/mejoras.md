@@ -2,15 +2,14 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 136: Abierto 71 · Parcial 50 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 134: Abierto 70 · Parcial 49 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
 
 ## Pendientes generales
 
-Abierto 14 · Parcial 11 · Bloqueado 3 · Sin verificar 2.
+Abierto 14 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| PLA-14 | Valores predefinidos: sumar Restablecer y Ordenar por | Parcial | Baja | Restablecer y Ordenar por creación y nombre ya están. Falta recordar el orden entre diálogos y ordenar por última modificación o uso, como Fusion: toca `nucleo/preajustes.py`. | tests/test_sol27_preajustes.py::test_el_menu_restablece_los_valores_y_ordena_los_preajustes | 2026-11-02 |
 | P-40 | Extruir arranca en 10 mm; Fusion arranca en 0 mm y se arrastra la flecha | Abierto | Baja | Video 2026-10-28 11-28-09: en Fusion la distancia empieza en 0,00 mm y el cuerpo aparece al arrastrar; en OmniCAD entra con 10 mm y ya se ve un cuerpo. Es una decisión de producto de Gerardo: replicar Fusion o dejar el cuerpo de entrada. | omnicad/ui/comandos/solido.py (`Extruir`, valor inicial de la distancia) | 2026-10-28 |
 | P-35 | `volumen_exacto` de un cuerpo con 500 caras B-spline cuesta 0,5 s por llamada | Abierto | Baja | `aplicar_resultado` lo llama tres veces en una unión (resultado, cuerpo y herramienta): 1,4 s de los 3 s de Unir en `bspline500`. Guardar el volumen por forma en el cuerpo (se invalida al cambiar `forma`) o no medirlo cuando no hay aviso posible. | omnicad/timeline/operaciones.py (`aplicar_resultado`), omnicad/nucleo/geometria.py (`_integral`); scripts/bench_booleana.py bspline500 | 2026-10-26 |
 | P-36 | B-39 no revisa con BRepCheck las caras cambiadas con más de 200 contornos | Parcial | Baja | `_es_valida_tras_booleana` las salta porque BRepCheck clasifica los contornos de a pares (3000 agujeros: 11 s); el volumen y las aristas libres siguen vigentes. Revisar solo los contornos nuevos de esa cara (hoy la booleana rearma todos los contornos y no se distinguen por forma). | omnicad/nucleo/geometria.py (`_es_valida_tras_booleana`, `_MAX_CONTORNOS_REVISADOS`) | 2026-10-26 |
@@ -279,13 +278,12 @@ Abierto 5 · Parcial 5 · Sin verificar 1. Especificación: [plan_cpp.md](../pla
 
 ## Auditoría del 2026-10-14
 
-Abierto 10 · Sin verificar 2. Especificación: [auditorias/](../auditorias/).
+Abierto 9 · Sin verificar 2. Especificación: [auditorias/](../auditorias/).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | AUD-1 | Sin medición de cobertura de tests (pytest-cov) | Abierto | Baja | Agregar pytest-cov como dependencia de desarrollo y medir sin umbral. | grep de pytest-cov/--cov en clon/requirements*.txt, pyproject.toml y .github: sin resultados | 2026-10-20 |
 | AUD-2 | Sin lockfile (requirements pineado con == pero sin lock) | Abierto | Baja | Generar un lock (uv pip compile) y usarlo en CI e instaladores. | clon/ no tiene lockfile; clon/requirements.txt pineado con == | 2026-10-20 |
-| AUD-13 | Variables OMNICAD_PUENTE_DIR y OMNICAD_PUENTE_FUSION_DIR redundantes | Abierto | Baja | Unificar en un solo override de carpeta_datos() con migración documentada. | io_archivos/puente_fusion.py:28 y integraciones/fusion/OmniCADPuente/OmniCADPuente.py:40 siguen usando OMNICAD_PUENTE_FUSION_DIR | 2026-10-20 |
 | AUD-3 | Sin verificador de tipos (mypy o pyright) | Abierto | Media | Empezar mypy no estricto sobre nucleo/. | Sin mypy/pyright en clon/pyproject.toml, requirements*.txt ni .github; sin mypy.ini | 2026-10-20 |
 | AUD-5 | Seis funciones con complejidad mayor a 20 | Abierto | Media | Reemplazar los if/elif por tablas tipo→función en las funciones señaladas. | Conteo propio por ast (aprox.): registro._convertir 40, svg._recorrer 46, solver.auto_restringir 39, entidades.resolver 29, boceto_desde_primitivas 33, fuentes._tabla_kern 24 | 2026-10-20 |
 | AUD-7 | add_text/edit_text con 33 y 34 parámetros | Abierto | Media | Agrupar las opciones de texto en un dict de opciones documentado. | api/herramientas_vectores.py:185 (conteo por ast: add_text 33, edit_text 34) | 2026-10-20 |

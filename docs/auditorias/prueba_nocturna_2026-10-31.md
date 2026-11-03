@@ -355,8 +355,7 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 ## 3m. Tareas chicas de OpenCode (tandas 1 a 4)
 
 - Tandas 1 a 3 integradas (hasta `30b04d4`): sus tests se corrieron sueltos. Falta verlas en la suite completa y en la prueba de humo.
-- Tanda 4 (CL7, B-179, B-163, CF-12, H-54, ANI-4, `docs/plan_bugs_faciles.md`) en marcha: al integrarla, sumar las piezas de ventana de H-54 y ANI-4.
-- Prueba en Cline (AUD-13, PLA-14, `docs/plan_prueba_cline.md`): al integrarla, correr los tests del puente y `test_sol27_preajustes.py`.
+- Tanda 4 (`fa934e5`) y prueba en Cline (AUD-13, PLA-14) integradas con sus tests sueltos. Falta: suite completa, humo y una pieza de ventana para ANI-4.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 

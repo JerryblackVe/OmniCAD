@@ -208,3 +208,86 @@ def test_el_boton_de_preajustes_se_alcanza_con_tab_y_abre_con_espacio_o_enter():
         boton.menu.close()
     assert abierto == [True, True] and aceptado == [] and atajo == [] and panel.isVisible()      # Espacio no disparó el atajo
     panel.close()
+
+
+def test_orden_se_recuerda_al_reabrir():
+    pre.guardar("nervio", "A", {"x": 1})
+    pre.guardar_orden("nervio", "uso")
+    assert pre.orden_de("nervio") == "uso"
+    assert pre.orden_de("red") == "creacion"          # por comando, no global
+
+
+def test_el_menu_recuerda_el_orden_al_reabrir(monkeypatch):
+    from omnicad.ui.comandos.crear import Nervio
+    panel = _panel(Nervio())
+    boton = panel.boton_preajustes
+    boton.menu.aboutToShow.emit()   # arma el menú (incluye «Ordenar por»)
+    sub = next(a.menu() for a in boton.menu.actions() if a.text() == "Ordenar por")
+    next(a for a in sub.actions() if a.text() == "Nombre").trigger()
+    assert pre.orden_de("nervio") == "nombre"         # se guardó
+    panel2 = _panel(Nervio())                           # diálogo nuevo: lee el orden guardado
+    assert panel2.boton_preajustes.orden == "nombre"
+
+
+def test_el_menu_ordena_por_ultimo_uso(monkeypatch):
+    from omnicad.ui.comandos.crear import Nervio
+    ticks = iter([10, 20, 30, 40, 50])
+    monkeypatch.setattr(pre.time, "time", lambda: next(ticks))
+    panel = _panel(Nervio())
+    boton = panel.boton_preajustes
+    clave = next(c.clave for c in panel.campos if c.clave == "espesor")
+    for nombre, valor in (("Alfa", "1 mm"), ("Beta", "2 mm"), ("Gamma", "3 mm")):
+        panel.set_valor(clave, valor)
+        monkeypatch.setattr(QInputDialog, "getText", lambda *a, n=nombre, **_k: (n, True))
+        _accion(boton, "Guardar los valores actuales como nuevo").trigger()
+    _accion(boton, "Beta").trigger()                  # usa Beta
+    _accion(boton, "Gamma").trigger()                 # usa Gamma (más reciente)
+    sub = next(a.menu() for a in boton.menu.actions() if a.text() == "Ordenar por")
+    next(a for a in sub.actions() if a.text() == "Último uso").trigger()
+    boton.menu.aboutToShow.emit()                     # reconstruye con orden = uso
+    nombres = [a.text() for a in boton.menu.actions() if a.text() in ("Alfa", "Beta", "Gamma")]
+    assert nombres == ["Gamma", "Beta", "Alfa"]
+
+
+def test_archivo_viejo_sin_orden_abre_sin_error(tmp_path, monkeypatch):
+    ruta = pre.ruta_preajustes()
+    ruta.write_text('{"nervio": {"preajustes": {"Viejo": {"x": 1}}, "defecto": "Viejo"}}', encoding="utf-8")
+    assert pre.listar("nervio") == {"presets": ["Viejo"], "default": "Viejo"}
+    assert pre.orden_de("nervio") == "creacion"        # valor por defecto
+    assert pre.obtener("nervio", "Viejo") == {"x": 1}
+
+
+def test_manage_command_presets_lista_ordenada_por_modificacion_y_uso(monkeypatch):
+    ticks = iter([1, 2, 3, 4, 5])
+    monkeypatch.setattr(pre.time, "time", lambda: next(ticks))
+    s = api.Sesion()
+    for nombre in ("Alfa", "Beta", "Gamma"):
+        llamar(s, "manage_command_presets", command="red", action="save", name=nombre, values={"espesor": "2 mm"})
+    assert llamar(s, "manage_command_presets", command="red", action="list", sort_by="modified")["presets"] == ["Gamma", "Beta", "Alfa"]
+    pre.obtener("red", "Alfa")       # el diálogo aplica Alfa
+    pre.obtener("red", "Gamma")      # y después Gamma (más reciente)
+    llamar(s, "manage_command_presets", command="red", action="get", name="Beta")     # leer por la API no es usar
+    assert llamar(s, "manage_command_presets", command="red", action="list", sort_by="used")["presets"] == ["Gamma", "Alfa", "Beta"]
+
+
+def test_renombrar_conserva_las_fechas_y_borrar_las_quita(monkeypatch):
+    ticks = iter([1, 2, 3])
+    monkeypatch.setattr(pre.time, "time", lambda: next(ticks))
+    pre.guardar("red", "Alfa", {"espesor": "2 mm"})
+    pre.guardar("red", "Beta", {"espesor": "3 mm"})
+    pre.obtener("red", "Alfa")
+    pre.renombrar("red", "Alfa", "Uno")
+    assert pre.ordenar_presets("red", pre.MODIFICACION) == ["Beta", "Uno"]
+    assert pre.ordenar_presets("red", pre.USO) == ["Uno", "Beta"]
+    pre.borrar("red", "Uno")
+    assert "Uno" not in pre._comando(pre._leer(), "red")["usado"]
+
+
+def test_aplicar_un_preajuste_anda_aunque_el_archivo_no_se_pueda_escribir(monkeypatch):
+    pre.guardar("red", "Alfa", {"espesor": "2 mm"})
+
+    def falla(_datos):
+        raise PermissionError("bloqueado")
+    monkeypatch.setattr(pre, "_guardar", falla)
+    assert pre.obtener("red", "Alfa") == {"espesor": "2 mm"}
+    pre.guardar_orden("red", pre.NOMBRE)

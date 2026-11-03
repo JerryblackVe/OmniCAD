@@ -87,7 +87,7 @@ class BotonPreajustes(QToolButton):
         self.setMenu(self.menu)
         self.menu.aboutToShow.connect(self._armar_menu)
         self.actual = None                          # nombre del preajuste elegido (None = valores de fábrica)
-        self.orden = "creacion"
+        self.orden = pre.orden_de(self.clave)       # se recuerda entre diálogos, por comando
         self.recargar()
 
     def event(self, e):
@@ -156,7 +156,7 @@ class BotonPreajustes(QToolButton):
     def _armar_menu(self):
         self.menu.clear()
         info = pre.listar(self.clave)
-        nombres = sorted(info["presets"], key=str.casefold) if self.orden == "nombre" else info["presets"]
+        nombres = pre.ordenar_presets(self.clave, self.orden)
         grupo = QActionGroup(self.menu)
         fabrica = FABRICA + (" · el predeterminado es el último usado" if info["default"] == pre.ULTIMO else "")
         opciones = [(fabrica, None)] + [(n + (" (predeterminado)" if info["default"] == n else ""), n)
@@ -179,10 +179,12 @@ class BotonPreajustes(QToolButton):
         sub.addAction("Valores de fábrica", lambda: self._predeterminado(pre.FABRICA))
         sub = self.menu.addMenu("Ordenar por")
         grupo_orden = QActionGroup(sub)
-        for texto, por in (("Última creación", "creacion"), ("Nombre", "nombre")):
+        for texto, por in (("Última creación", "creacion"), ("Nombre", "nombre"),
+                           ("Última modificación", "modificacion"), ("Último uso", "uso")):
             a = grupo_orden.addAction(sub.addAction(texto, lambda p=por: self._ordenar(p)))
             a.setCheckable(True)
             a.setChecked(por == self.orden)
 
     def _ordenar(self, por):
+        pre.guardar_orden(self.clave, por)          # se recuerda entre diálogos, por comando
         self.orden = por

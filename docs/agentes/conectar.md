@@ -21,6 +21,9 @@ omnicad setup --cliente todos --aplicar  # lo hace: respalda cada archivo con .b
   nunca a la instalación de Fusion). Arranca solo con Fusion; la primera vez, reiniciá Fusion o ejecutalo en Utilidades ›
   Complementos (Mayús+S). Es OPCIONAL: `open_document` y Archivo › Abrir leen los `.f3d`/`.f3z` sin Fusion
   (`io_archivos/f3d_nativo.py`); el complemento queda de respaldo si esa lectura falla y además trae los parámetros.
+- Carpeta de datos del puente: `OMNICAD_PUENTE_DIR` es la variable que se usa. `OMNICAD_PUENTE_FUSION_DIR` se sigue aceptando solo
+  por compatibilidad con lo viejo y, si ambas están, gana `OMNICAD_PUENTE_FUSION_DIR`. La regla rige igual en
+  `io_archivos/puente_fusion.py` y en el complemento `integraciones/fusion/OmniCADPuente/OmniCADPuente.py`.
 - Claude Code: usa `claude mcp add --scope user`; la skill va a `~/.claude/skills/omnicad/`.
 - OpenCode: suma `mcp.omnicad` a `~/.config/opencode/opencode.jsonc` (o `.json`). Con `todos`, la skill queda solo en
   `~/.claude/skills/` porque OpenCode también lee esa carpeta (dos copias darían «duplicate skill name»).

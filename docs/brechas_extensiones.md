@@ -22,7 +22,7 @@ Especificación de PLA-1 a PLA-14 y EXT-1 a EXT-4. El estado vive solo en `docs/
 | Insertar fijador | 5 familias y 14 normas, sin biblioteca | A medias | PLA-10 |
 | Menú del timeline | Casi completo | A medias | PLA-11 |
 | Entramado volumétrico | `reticula_volumetrica`: 7 de 9 formas | A medias | SOL-22 |
-| Valores predefinidos | `preajustes_ui.py` | Hecho, faltan detalles | PLA-14 |
+| Valores predefinidos | `preajustes_ui.py` | Hecho | PLA-14 |
 | Consejos de diseño | `consejos_diseno` | Hecho | — |
 | Sustainability Insights | `sustentabilidad` | Hecho | H-55 (mejora) |
 | Duplicar con uniones | Está en ENSAMBLAR | Hecho, falta en INSERTAR | PLA-6 |

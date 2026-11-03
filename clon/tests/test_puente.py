@@ -297,3 +297,41 @@ def test_app_y_puentes_usan_la_misma_carpeta_de_datos(monkeypatch, tmp_path):
     assert proto.carpeta_info() == puente_fusion.carpeta_info() == carpeta_datos()
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))                   # Windows
     assert proto.carpeta_info() == puente_fusion.carpeta_info() == carpeta_datos() == tmp_path / "local" / "OmniCAD"
+
+
+def test_puente_fusion_carpeta_info_solo_variable_vieja(monkeypatch, tmp_path):
+    """Solo OMNICAD_PUENTE_DIR: el puente con Fusion la usa."""
+    from omnicad.io_archivos import puente_fusion
+    for variable in ("OMNICAD_PUENTE_FUSION_DIR", "OMNICAD_PUENTE_DIR", "LOCALAPPDATA"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("OMNICAD_PUENTE_DIR", str(tmp_path / "vieja"))
+    assert puente_fusion.carpeta_info() == tmp_path / "vieja"
+
+
+def test_puente_fusion_carpeta_info_solo_variable_nueva(monkeypatch, tmp_path):
+    """Solo OMNICAD_PUENTE_FUSION_DIR: el puente con Fusion la usa."""
+    from omnicad.io_archivos import puente_fusion
+    for variable in ("OMNICAD_PUENTE_FUSION_DIR", "OMNICAD_PUENTE_DIR", "LOCALAPPDATA"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("OMNICAD_PUENTE_FUSION_DIR", str(tmp_path / "nueva"))
+    assert puente_fusion.carpeta_info() == tmp_path / "nueva"
+
+
+def test_puente_fusion_carpeta_info_ambas_gana_la_fusion(monkeypatch, tmp_path):
+    """Ambas puestas: gana OMNICAD_PUENTE_FUSION_DIR (compatibilidad con lo viejo)."""
+    from omnicad.io_archivos import puente_fusion
+    for variable in ("OMNICAD_PUENTE_FUSION_DIR", "OMNICAD_PUENTE_DIR", "LOCALAPPDATA"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("OMNICAD_PUENTE_FUSION_DIR", str(tmp_path / "fusion"))
+    monkeypatch.setenv("OMNICAD_PUENTE_DIR", str(tmp_path / "vieja"))
+    assert puente_fusion.carpeta_info() == tmp_path / "fusion"
+
+
+def test_puente_fusion_carpeta_info_ninguna_usa_por_defecto(monkeypatch, tmp_path):
+    """Ninguna puesta: carpeta por defecto de la app."""
+    from pathlib import Path
+    from omnicad.io_archivos import puente_fusion
+    for variable in ("OMNICAD_PUENTE_FUSION_DIR", "OMNICAD_PUENTE_DIR", "LOCALAPPDATA"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    assert puente_fusion.carpeta_info() == tmp_path / ".local" / "share" / "OmniCAD"

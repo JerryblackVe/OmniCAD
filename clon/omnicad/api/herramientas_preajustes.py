@@ -12,7 +12,8 @@ from .registro import herramienta
 
 def _estado(comando, sort_by="created"):
     info = pre.listar(comando)
-    nombres = sorted(info["presets"], key=str.casefold) if sort_by == "name" else info["presets"]
+    por = {"created": "creacion", "name": "nombre", "modified": "modificacion", "used": "uso"}.get(sort_by, "creacion")
+    nombres = pre.ordenar_presets(comando, por)
     return {"command": comando, "presets": nombres,
             "default": {pre.FABRICA: "factory", pre.ULTIMO: "last_used"}.get(info["default"], info["default"])}
 
@@ -25,7 +26,7 @@ def _estado(comando, sort_by="created"):
              "delete; set_default elige qué trae el diálogo al abrirse (factory, last_used o el nombre de un preajuste).")
 def manage_command_presets(sesion, command: str, action: Literal["list", "get", "save", "rename", "delete", "set_default"],
                            name: str = "", values: dict | None = None, new_name: str = "", default: str = "",
-                           sort_by: Literal["created", "name"] = "created"):
+                           sort_by: Literal["created", "name", "modified", "used"] = "created"):
     """
     command: clave del comando de la ventana (la de la cinta: "nervio", "red", "agujero", "saliente"…).
     action: list, get, save, rename, delete o set_default.
@@ -33,7 +34,8 @@ def manage_command_presets(sesion, command: str, action: Literal["list", "get", 
     values: con save, los valores del diálogo {campo: valor}; los que no son texto, número o casilla se descartan.
     new_name: con rename, el nombre nuevo.
     default: con set_default: factory, last_used o el nombre de un preajuste existente.
-    sort_by: con list, created (orden de creación) o name (alfabético).
+    sort_by: con list, created (orden de creación), name (alfabético), modified (última modificación)
+    o used (último uso).
     """
     command = command.strip()
     if not command:
@@ -44,7 +46,7 @@ def manage_command_presets(sesion, command: str, action: Literal["list", "get", 
                     *([f"Parecidos: {', '.join(parecidas)}."] if parecidas else ["Las claves son las de la cinta."]))
     try:
         if action == "get":
-            return {"command": command, "name": name, "values": pre.obtener(command, name)}
+            return {"command": command, "name": name, "values": pre.obtener(command, name, uso=False)}
         if action == "save":
             if not isinstance(values, dict) or not pre.simples(values):
                 raise error("INVALID_ARGUMENTS", "save necesita values: {campo: valor} con texto, números o casillas.")

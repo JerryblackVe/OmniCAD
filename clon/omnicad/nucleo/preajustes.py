@@ -12,12 +12,16 @@ Por comando hay además un «predeterminado», lo que el diálogo trae al abrirs
 """
 import json
 import os
+import time
 from pathlib import Path
 
 from . import geometria as geo
 
 VAR_PREAJUSTES = "OMNICAD_PREAJUSTES"
 FABRICA, ULTIMO = "fabrica", "ultimo"
+CREACION, NOMBRE = "creacion", "nombre"
+MODIFICACION, USO = "modificacion", "uso"
+ORDEN_POR_DEFECTO = CREACION
 
 
 def ruta_preajustes():
@@ -52,7 +56,18 @@ def _guardar(datos):
 
 def _comando(datos, clave):
     c = datos.get(clave)
-    return c if isinstance(c, dict) else {}
+    if not isinstance(c, dict):
+        c = {}
+        datos[clave] = c
+    c.setdefault("preajustes", {})
+    if not isinstance(c.get("preajustes"), dict):
+        c["preajustes"] = {}
+    c.setdefault("orden", ORDEN_POR_DEFECTO)
+    if not isinstance(c.get("modificado"), dict):
+        c["modificado"] = {}
+    if not isinstance(c.get("usado"), dict):
+        c["usado"] = {}
+    return c
 
 
 def simples(valores):
@@ -74,12 +89,60 @@ def listar(clave):
     return {"presets": list(presets), "default": c.get("defecto", FABRICA)}
 
 
-def obtener(clave, nombre):
-    """Los valores de un preajuste; error si no existe."""
-    presets = _comando(_leer(), clave).get("preajustes") or {}
+def orden_de(clave):
+    """Orden de listado guardado del comando: creacion, nombre, modificacion o uso."""
+    return _comando(_leer(), clave).get("orden", ORDEN_POR_DEFECTO)
+
+
+def guardar_orden(clave, orden):
+    """Persiste el orden elegido del comando para recordarlo al reabrir el diálogo."""
+    datos = _leer()
+    c = _comando(datos, clave)
+    c["orden"] = orden
+    _guardar_si_se_puede(datos)
+
+
+def ordenar_presets(clave, por=CREACION):
+    """Nombres de los preajustes del comando ordenados según `por`.
+
+    creacion: orden de alta. nombre: alfabético. modificacion: último guardado primero.
+    uso: último aplicado primero.
+    """
+    c = _comando(_leer(), clave)
+    presets = c.get("preajustes") or {}
+    nombres = list(presets)
+    if por == NOMBRE:
+        return sorted(nombres, key=str.casefold)
+    if por == MODIFICACION:
+        modificado = c.get("modificado") or {}
+        return sorted(nombres, key=lambda n: modificado.get(n, 0), reverse=True)
+    if por == USO:
+        usado = c.get("usado") or {}
+        return sorted(nombres, key=lambda n: usado.get(n, 0), reverse=True)
+    return nombres
+
+
+def obtener(clave, nombre, uso=True):
+    """Los valores de un preajuste; error si no existe. Con `uso`, registra el último uso (aplicarlo en el diálogo);
+    leerlo sin aplicarlo, como hace la API con get, no cambia el orden por uso."""
+    datos = _leer()
+    c = _comando(datos, clave)
+    presets = c.get("preajustes") or {}
     if nombre not in presets:
         raise geo.ErrorGeometria(f"El comando «{clave}» no tiene un preajuste «{nombre}».")
+    if uso:
+        c["usado"][nombre] = time.time()
+        _guardar_si_se_puede(datos)
     return dict(presets[nombre])
+
+
+def _guardar_si_se_puede(datos):
+    """Guarda un dato de comodidad (orden, fecha de uso): si el archivo no se puede escribir, se pierde ese dato y el
+    preajuste se aplica igual."""
+    try:
+        _guardar(datos)
+    except OSError:
+        pass
 
 
 def guardar(clave, nombre, valores, sobrescribir=True):
@@ -91,6 +154,7 @@ def guardar(clave, nombre, valores, sobrescribir=True):
     if nombre in presets and not sobrescribir:
         raise geo.ErrorGeometria(f"Ya existe el preajuste «{nombre}».")
     presets[nombre] = simples(valores)
+    c.setdefault("modificado", {})[nombre] = time.time()
     _guardar(datos)
     return presets[nombre]
 
@@ -105,6 +169,9 @@ def renombrar(clave, nombre, nuevo):
     if nuevo in presets and nuevo != nombre:
         raise geo.ErrorGeometria(f"Ya existe el preajuste «{nuevo}».")
     c["preajustes"] = {(nuevo if n == nombre else n): v for n, v in presets.items()}
+    for fechas in (c["modificado"], c["usado"]):         # renombrar no es modificar ni usar: las fechas siguen
+        if nombre in fechas:
+            fechas[nuevo] = fechas.pop(nombre)
     if c.get("defecto") == nombre:
         c["defecto"] = nuevo
     _guardar(datos)
@@ -117,6 +184,8 @@ def borrar(clave, nombre):
     if nombre not in presets:
         raise geo.ErrorGeometria(f"El comando «{clave}» no tiene un preajuste «{nombre}».")
     del presets[nombre]
+    c["modificado"].pop(nombre, None)
+    c["usado"].pop(nombre, None)
     if c.get("defecto") == nombre:
         c["defecto"] = FABRICA
     _guardar(datos)

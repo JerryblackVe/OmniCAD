@@ -45,10 +45,13 @@ _activo = {}               # lo que tiene que seguir vivo mientras corre el comp
 
 # ---------------------------------------------------------------- archivo de descubrimiento
 def carpeta_info():
-    """La misma regla que `puente_fusion.carpeta_info` de OmniCAD (no se puede importar desde Fusion)."""
-    propia = os.environ.get(VARIABLE_CARPETA)
-    if propia:
-        return Path(propia)
+    """La misma regla que `puente_fusion.carpeta_info` de OmniCAD (no se puede importar desde Fusion):
+    OMNICAD_PUENTE_FUSION_DIR (compatibilidad con lo viejo), después OMNICAD_PUENTE_DIR, después
+    %LOCALAPPDATA%/OmniCAD."""
+    for variable in (VARIABLE_CARPETA, "OMNICAD_PUENTE_DIR"):
+        propia = os.environ.get(variable)
+        if propia:
+            return Path(propia)
     base = os.environ.get("LOCALAPPDATA")
     return (Path(base) if base else Path.home() / ".local" / "share") / "OmniCAD"
 

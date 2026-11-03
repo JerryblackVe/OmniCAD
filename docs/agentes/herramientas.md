@@ -509,7 +509,7 @@ Preajustes de los diálogos de comandos (Nervio, Red, Agujero…; Fusion: Create
   - `values` (objeto; opcional, por defecto `null`): con save, los valores del diálogo {campo: valor}; los que no son texto, número o casilla se descartan.
   - `new_name` (texto; opcional, por defecto `""`): con rename, el nombre nuevo.
   - `default` (texto; opcional, por defecto `""`): con set_default: factory, last_used o el nombre de un preajuste existente.
-  - `sort_by` ("created" | "name"; opcional, por defecto `"created"`): con list, created (orden de creación) o name (alfabético).
+  - `sort_by` ("created" | "name" | "modified" | "used"; opcional, por defecto `"created"`): con list, created (orden de creación), name (alfabético), modified (última modificación)
 - CLI: `omnicad call manage_command_presets --doc pieza.omnicad command=… action=…`
 
 ### `manage_selection_sets`

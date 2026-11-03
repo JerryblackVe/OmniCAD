@@ -80,7 +80,6 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 
 | Tema | Documento |
 |---|---|
-| Prueba de un modelo gratis en Cline | [plan_prueba_cline.md](../plan_prueba_cline.md) |
 | Caza automática de errores | [plan_caza_errores.md](../plan_caza_errores.md) |
 | Asas de la ventana | [brechas_gizmos.md](../brechas_gizmos.md) |
 | Vista previa en proceso aparte | [brechas_previa_aislada.md](../brechas_previa_aislada.md) |
