@@ -20,6 +20,7 @@ import traceback
 from pathlib import Path
 from typing import Literal
 
+from .. import VERSION
 from ..timeline.documento import VERSION_RECETA
 from ..timeline.operaciones import TIPOS_OPERACION, OpExtrusion, OpOperacionBase, operacion_desde_dict
 from . import selectores as sl
@@ -924,4 +925,4 @@ def get_guide(sesion, topic: str | None = None):
     archivo = _GUIA / f"{tema}.md"
     if not re.fullmatch(r"[a-z0-9_]+", tema) or not archivo.is_file():
         raise error("TOPIC_NOT_FOUND", f"No existe el tema '{topic}'.", f"Temas: {', '.join(_temas())}.")
-    return {"topic": tema, "text": archivo.read_text(encoding="utf-8"), "topics": _temas()}
+    return {"topic": tema, "text": archivo.read_text(encoding="utf-8"), "topics": _temas(), "version": VERSION}

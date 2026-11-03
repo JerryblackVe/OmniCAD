@@ -273,6 +273,86 @@ v.resize(1280, 720)
 A.esperar(200)
 tecla(lz, Qt.Key_Escape)
 
+# ---------------------------------------------------------------- planos, ejes y puntos de trabajo (H-54)
+v.vis["origen"] = True                  # la persona abre la carpeta Origen del navegador
+v._refrescar_visibilidad()
+A.esperar(250)
+L("create_construction_plane", plane="YZ", offset=40, name="Guia")
+L("create_sketch", name="Puntos", plane="XY")
+L("draw_point", sketch="Puntos", x=50, y=50)
+top = L("find_faces", selector=">Z")["faces"][0]["id"]
+L("create_construction_point", type="centro", references=[top], name="Pivote")
+trabajo = L("create_sketch", name="Trabajo", plane=">Z")["sketch"]["id"]
+A.esperar(300)
+v.editar_operacion(trabajo)
+A.esperar(500)
+v.visor.encuadrar()
+A.esperar(250)
+lz = v.modo_boceto.lienzo
+lz.mensaje.connect(MENSAJES.append)
+t = v.modo_boceto.tarjeta
+herramienta()
+TODO = {"plano", "eje", "punto", "punto_boceto", "arista", "cara", "vertice", "curva_boceto"}
+
+
+def punto_de_clic(tipo, candidatos):
+    """El punto 3D donde la persona ve lo que busca (lo confirma el visor con los filtros del clic real)."""
+    for p in candidatos:
+        pos = v.visor.proyectar(np.array(p, float))
+        info = v.visor.elegir_entidad(pos, TODO) if pos is not None else None
+        if info and info.get("tipo") == tipo:
+            return p
+    return None
+
+
+for tipo, candidatos in (("plano", [(40, y, z) for z in (47, 60, 30, 20, 70) for y in (20, -20, 30, -30, 0)]),
+                         ("eje", [(x, 0, 0) for x in (30, 25, 20, 35, 38, 15)]),
+                         ("punto", [(0, 0, 47)]),
+                         ("punto_boceto", [(50, 50, 0)])):
+    donde = punto_de_clic(tipo, candidatos)
+    A.reg(AR, f"hay un {tipo} de trabajo a la vista en el modelo", donde is not None, donde)
+    clic(lz, donde)
+tipos = [e["tipo"] for e in lz._elegidos_proy]
+A.reg(AR, "la tarjeta elige plano, eje, punto de trabajo y punto de boceto",
+      tipos == ["plano", "eje", "punto", "punto_boceto"], tipos)
+A.reg(AR, "cada uno se lee con su nombre",
+      [lz._nombre_elegido(x) for x in lz._elegidos_proy] == ["Plano", "Eje", "Punto de trabajo", "Punto de boceto"],
+      [lz._nombre_elegido(x) for x in lz._elegidos_proy])
+A.foto(v, "proyectar_16_trabajo")
+p_antes = sum(1 for p in lz.b.puntos.values() if p.id > 0 and p.proyectado)
+QTest.mouseClick(t.boton_ok, Qt.LeftButton)
+A.esperar(250)
+vis = visibles(lz)
+A.reg(AR, "la traza del plano y el eje entran como líneas proyectadas y visibles",
+      len(vis) == 2 and all(c.proyectada for c in vis), [c.tipo for c in vis])
+A.reg(AR, "los dos puntos entran proyectados",
+      sum(1 for p in lz.b.puntos.values() if p.id > 0 and p.proyectado
+          and p.id not in {q for c in lz.b.curvas.values() if c.id > 0 for q in c.puntos()}) - p_antes == 2,
+      sum(1 for p in lz.b.puntos.values() if p.id > 0 and p.proyectado) - p_antes)
+A.reg(AR, "cada uno lleva el vínculo a su referencia de trabajo",
+      {r["refs"][0]["tipo"] for r in lz.b.proyecciones if not r.get("auto")} == {"plano", "eje", "punto", "punto_boceto"},
+      sorted({r["refs"][0]["tipo"] for r in lz.b.proyecciones if not r.get("auto")}))
+v.modo_boceto.terminar()
+A.esperar(400)
+br = v.doc.estado_final.bocetos[trabajo]
+lineas = [c for c in br.boceto.curvas.values() if c.id > 0 and c.proyectada and c.tipo == "linea"]
+
+
+def u_de(c):
+    return [br.plano.a_3d(br.boceto.puntos[i].x, br.boceto.puntos[i].y)[0] for i in c.extremos()]
+
+
+A.reg(AR, "la traza cae sobre el plano de trabajo y el eje pasa por el origen",
+      any(all(abs(x - 40) < 1e-5 for x in u_de(c)) for c in lineas)
+      and any(min(u_de(c)) < 0 < max(u_de(c)) for c in lineas), [u_de(c) for c in lineas])
+L("edit_feature", feature="Guia", params={"distancia": "60 mm"})
+A.esperar(400)
+br = v.doc.estado_final.bocetos[trabajo]
+lineas = [c for c in br.boceto.curvas.values() if c.id > 0 and c.proyectada and c.tipo == "linea"]
+A.reg(AR, "mover el plano de trabajo mueve su traza: el vínculo sigue",
+      any(all(abs(x - 60) < 1e-5 for x in u_de(c)) for c in lineas), [u_de(c) for c in lineas])
+A.reg(AR, "el eje proyectado no se mueve", any(min(u_de(c)) < 0 < max(u_de(c)) for c in lineas), "")
+
 ruta = os.path.join(tempfile.mkdtemp(prefix="omnicad_ui_"), "proyectar.omnicad")
 v.modo_boceto.terminar()
 A.esperar(300)

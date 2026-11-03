@@ -150,3 +150,17 @@ def test_lista_de_materiales_agrupa_piezas_iguales(tmp_path):
     lineas = datos.decode("utf-8-sig").splitlines()
     assert lineas[0].startswith("N.º,Nombre,Cantidad") and len(lineas) == 3
     falla(s, "get_bill_of_materials", "FILE_EXISTS", csv_path=str(tmp_path / "bom.csv"))
+
+
+def test_b179_la_suma_de_las_masas_de_fila_da_el_total():
+    """Cada fila lleva su masa total (por unidad × cantidad): sumarlas da total_mass_g; sumar mass_g no."""
+    s = api.Sesion()
+    rueda = cubo(s)
+    llamar(s, "create_component", bodies=[rueda], name="Rueda")
+    llamar(s, "set_material", bodies=[rueda], material="Goma natural")
+    llamar(s, "rectangular_pattern", bodies=[rueda], x_count=2, x_spacing=20)
+    cubo(s, 20, x=200)
+    r = llamar(s, "get_bill_of_materials")
+    assert all(f["total_mass_g"] == pytest.approx(f["mass_g"] * f["quantity"]) for f in r["rows"])
+    assert sum(f["total_mass_g"] for f in r["rows"]) == pytest.approx(r["total_mass_g"], abs=1e-9)
+    assert sum(f["mass_g"] for f in r["rows"]) == pytest.approx(r["total_mass_g"] - 0.93, abs=1e-9)

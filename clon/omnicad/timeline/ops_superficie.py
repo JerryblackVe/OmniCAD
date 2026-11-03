@@ -375,6 +375,8 @@ class OpDestrimar(_OpSuperficie):
         extension = ctx.evaluar(self.p["extension"])
         for e in _resolver_todas(self.p["caras"], estado, ("cara",)):
             c = estado.cuerpo(e.cuerpo)
+            if c.tipo != "superficie":      # B-163: Destrimar solo toca superficies, como Untrim de Fusion
+                raise ErrorOperacion(f"Destrimar solo se aplica a cuerpos de superficie: «{c.nombre}» no es una superficie.")
             original = _sf().cara_original(e.forma, estado.recortes.get(c.id))
             if manual:                    # las aristas elegidas son las de la cara que se ve, no las de la original
                 nueva = _sf().destrimar(e.forma, contornos="manual", aristas=elegidas, extension=extension,
@@ -405,6 +407,8 @@ class OpExtenderSup(_OpSuperficie):
             raise ErrorOperacion("Elegí los bordes a extender.")
         for cid, aristas in grupos.items():
             c = estado.cuerpo(cid)
+            if c.tipo != "superficie":      # B-163: Extender solo toca superficies, como Extend de Fusion
+                raise ErrorOperacion(f"Extender solo se aplica a cuerpos de superficie: «{c.nombre}» no es una superficie.")
             c.forma = _sf().extender(c.forma, aristas, ctx.evaluar(self.p["distancia"]), tipo=self.p["tipo"],
                                      alineacion=self.p["alineacion"])
 

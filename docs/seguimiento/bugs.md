@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 33: Abierto 27 · Parcial 4 · Bloqueado 1 · Sin verificar 1 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 31: Abierto 25 · Parcial 4 · Bloqueado 1 · Sin verificar 1 (recontado 2026-11-02).
 
 ## Abiertos y parciales
 
@@ -11,7 +11,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-184 | Dividir un cuerpo importado de STEP deja una mitad con volumen negativo y el paso sale ok | Abierto | Alta | Cuerpo7 quedó en −46.885 mm³ y −33.256 mm², y Cuerpo3 en 65.205 mm³. `check_geometry` en vivo sobre ese documento trabó la ventana más de 5 min. Falta reproducirlo en proceso aparte. | omnicad/nucleo/solidos_modificar.py:1564 | 2026-11-02 |
 | B-177 | El sentido de una unión con origen en arista circular se invierte si el padre gira | Abierto | Alta | Con el padre a más de unos 45° el mismo valor mueve al revés: −207,9 mm en vez de −56,9. Con origen en cara plana no pasa. | omnicad/api/herramientas_ensamble.py:725 | 2026-11-02 |
 | B-178 | Lo creado después de una unión no la sigue al accionarla | Abierto | Alta | Agujeros y fijaciones con puntos absolutos salen corridos y el recálculo da REFERENCE_LOST. Esquive: uniones al final del timeline. | omnicad/api/herramientas_ensamble.py:650 | 2026-11-02 |
-| B-179 | La suma de filas de la lista de materiales no da la masa total | Abierto | Media | Filas 77,41 kg contra total 79,54 kg, con todos los cuerpos en alguna fila. | omnicad/api/herramientas_material.py:200 | 2026-11-02 |
 | B-181 | Un spline cerrado con control_points da PROFILE_NOT_CLOSED | Abierto | Media | Reproducido: `closed` se ignora en `control_points` (aviso al crearla), quedan 0 perfiles y `extrude` da PROFILE_NOT_CLOSED. El docstring de `draw_spline` dice que `closed` cierra solo la de ajuste. | omnicad/api/herramientas_boceto.py:1950 | 2026-11-02 |
 | B-183 | section_view no aparece en render_image | Abierto | Media | Reproducido: `section_view` da área 1600 mm² sobre una caja de 40³, pero `render_image` sale idéntico con la sección visible u oculta (0 de 76 800 píxeles distintos). | omnicad/api/herramientas_analisis.py:439 | 2026-11-02 |
 | B-172 | Pedir propiedades de un cuerpo recién solevado cerró la app | Abierto | Alta | Violación de acceso en TKernel dentro de `_por_malla`, una vez en vivo; no se repite abriendo el autoguardado. Falta aislar esa medición o validar el sólido antes. | omnicad/nucleo/geometria.py:1034 | 2026-11-02 |
@@ -24,7 +23,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-158 | Labio sobre una esfera cierra la app | Abierto | Media | `create_lip_groove` sobre la arista de costura de una esfera mide un alambre sin largo y da una violación de acceso. Falta rechazar esa arista con un error claro. | nucleo/solidos_crear.py:236 | 2026-11-02 |
 | B-160 | Un STEP con bytes alterados cierra la app | Abierto | Alta | `STEPCAFControl_Reader.ReadFile` da una violación de acceso con el archivo de `tests/corpus_caza/`. Abrir STEP de otros tiene que correr en el proceso aislado (`nucleo/aislado.py`), o la app cae con un archivo ajeno. | nucleo/intercambio.py:225 | 2026-11-02 |
 | B-162 | Un chaflán mayor que el radio deja el sólido abierto y el paso sale ok | Abierto | Media | Cilindro de radio 10 y chaflán de 15 en su arista: cuerpo sólido y no estanco, sin error. Falta rechazarlo o cerrar la forma, comparando con Fusion. | nucleo/solidos_modificar.py | 2026-11-02 |
-| B-163 | Extender superficie sobre un sólido lo deja abierto | Abierto | Media | `extend_surface` en una arista de una caja da ok; el cuerpo sigue como sólido, no estanco, y en cadenas llegó a volumen negativo. `untrim_surface` sobre un sólido hace lo mismo. Falta rechazarlo en sólidos o pasarlo a superficie. | api/herramientas_superficie.py | 2026-11-02 |
 | B-164 | Extruir varias caras a la vez deja un cuerpo roto | Abierto | Media | Con caras de distinta orientación el cuerpo nuevo sale con volumen 0 o con autointersecciones, y el STEP exportado pierde ese cuerpo. Falta rechazarlo o extruir cada cara aparte. | timeline/operaciones.py | 2026-11-02 |
 | B-165 | Un agujero tangente a dos paredes deja aristas no manifold y sale ok | Abierto | Media | Agujero de 60 mm en una cara de 60 mm de ancho: pasa justo por las dos paredes. Falta decidir si da error o aviso, comparando con Fusion. | nucleo/solidos_crear.py | 2026-11-02 |
 | B-166 | Desfasar caras de una superficie la deja inválida y sale ok | Abierto | Media | `offset_surface` y después `offset_faces` de 40 mm sobre la cara nueva: `check_geometry` da inválido. El paso tendría que fallar o avisar. | nucleo/solidos_modificar.py | 2026-11-02 |
@@ -100,14 +98,6 @@ de arriba manda sobre este texto.
 - **Obtenido:** el hijo no sigue la unión, los agujeros salen corridos y el recálculo da REFERENCE_LOST (Fijación2 y 3 de `06_TORNILLERIA_A5`).
 - **Esquive:** las uniones al final del timeline con `move_feature`.
 - **Prueba propuesta:** unión, hijo nuevo y `drive_joint`: el hijo acompaña.
-- **Evidencia:** `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\REPORTE_OMNICAD_brazo-robotico.md`.
-
-### B-179 · La suma de filas de la lista de materiales no da la masa total
-
-- **Qué:** `get_bill_of_materials` sobre `brazo_robotico.omnicad` (426 pasos, 257 cuerpos).
-- **Esperado:** la suma de `rows[].mass_g` da `total_mass_g`, salvo redondeo.
-- **Obtenido:** cerca de 77,41 kg contra 79,54 kg.
-- **Prueba propuesta:** suma de filas igual al total.
 - **Evidencia:** `D:\DISEÑOS BLENDER\01_EN_PROCESO\brazo-robotico\REPORTE_OMNICAD_brazo-robotico.md`.
 
 ### B-172 · Pedir propiedades de un cuerpo recién solevado cerró la app
@@ -189,15 +179,6 @@ de arriba manda sobre este texto.
 - **Qué:** `create_cylinder(radius=10, height=30)`, `chamfer(edges=["Cuerpo1/E1"], distance=15)`.
 - **Esperado:** Un error, o una forma cerrada.
 - **Obtenido:** Paso ok y `check_geometry` no estanco.
-- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
-- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
-### B-163 · Extender superficie sobre un sólido lo deja abierto
-
-- **Qué:** `create_box(80, 60, 40)`, `extend_surface(edges=["Cuerpo1/E4"], extension_type="tangent")`.
-- **Esperado:** Un error: un sólido no se extiende, o el cuerpo pasa a superficie.
-- **Obtenido:** Paso ok, tipo sólido y no estanco.
 - **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
 - **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.

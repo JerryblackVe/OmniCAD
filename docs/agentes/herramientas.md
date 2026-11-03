@@ -4595,7 +4595,7 @@ Asigna el material físico a cuerpos (MODIFICAR › Material físico): da la den
 
 ### `get_bill_of_materials`
 
-Lista de materiales (ADMINISTRAR › Lista de materiales): las piezas sólidas del modelo agrupadas (cuerpos iguales del mismo componente y material = una fila con su cantidad), con material, masa (g) y volumen (mm³) por unidad. Como en la ventana, un cuerpo sin material cuenta como Acero (default_material=true). El patrón plano de una chapa no es una pieza. Con csv_path, la escribe además en CSV.
+Lista de materiales (ADMINISTRAR › Lista de materiales): las piezas sólidas del modelo agrupadas (cuerpos iguales del mismo componente y material = una fila con su cantidad), con material, masa (g) y volumen (mm³) por unidad. `mass_g` es la masa POR UNIDAD: la de la fila entera es `total_mass_g` (mass_g × quantity). Como en la ventana, un cuerpo sin material cuenta como Acero (default_material=true). El patrón plano de una chapa no es una pieza. Con csv_path, la escribe además en CSV.
 
 - Modifica el documento: no.
 - Parámetros:

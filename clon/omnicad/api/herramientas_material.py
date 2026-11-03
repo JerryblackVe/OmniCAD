@@ -194,9 +194,10 @@ MATERIAL_POR_DEFECTO = "Acero"     # el de un cuerpo sin material en la lista de
 
 @herramienta("get_bill_of_materials", "material", "Lista de materiales (ADMINISTRAR › Lista de materiales): las piezas "
              "sólidas del modelo agrupadas (cuerpos iguales del mismo componente y material = una fila con su "
-             "cantidad), con material, masa (g) y volumen (mm³) por unidad. Como en la ventana, un cuerpo sin "
-             "material cuenta como Acero (default_material=true). El patrón plano de una chapa no es una pieza. Con "
-             "csv_path, la escribe además en CSV.")
+             "cantidad), con material, masa (g) y volumen (mm³) por unidad. `mass_g` es la masa POR UNIDAD: la de la "
+             "fila entera es `total_mass_g` (mass_g × quantity). Como en la ventana, un cuerpo sin material cuenta "
+             "como Acero (default_material=true). El patrón plano de una chapa no es una pieza. Con csv_path, la "
+             "escribe además en CSV.")
 def get_bill_of_materials(sesion, csv_path: str | None = None, overwrite: bool = False):
     """
     csv_path: ruta de un .csv donde escribir la lista (columnas como la de la ventana); vacío = no escribe.
@@ -226,6 +227,7 @@ def get_bill_of_materials(sesion, csv_path: str | None = None, overwrite: bool =
         masa = None if densidad is None else g["volume"] * densidad * 1e-3
         filas.append({"item": i, "name": g["name"], "quantity": g["quantity"], "material": g["material"],
                       "default_material": g["default_material"], "mass_g": None if masa is None else _r(masa),
+                      "total_mass_g": None if masa is None else _r(masa * g["quantity"]),
                       "volume": _r_chico(g["volume"]), "component": g["component"], "bodies": g["bodies"]})
     sin = [f["material"] for f in filas if f["mass_g"] is None]
     if sin:

@@ -315,6 +315,72 @@ def v(ventana):
         ventana.modo_boceto.cancelar()
 
 
+@pytest.fixture
+def v54(ventana):
+    """Como `v`, con el plano, el punto de trabajo y el boceto de puntos ya creados: las referencias de una
+    proyección van hacia atrás (el plano de trabajo es anterior al boceto), así que el boceto se crea por API y se
+    reedita, como lo haría la persona con un boceto viejo."""
+    s = api.Sesion()
+    for nombre, args in (("create_cylinder", {"radius": 14, "height": 47, "name": "Cilindro"}),
+                         ("create_construction_plane", {"plane": "YZ", "offset": 40, "name": "Guia"}),
+                         ("create_sketch", {"plane": "XY", "name": "Puntos"}),
+                         ("draw_point", {"sketch": "Puntos", "x": 50, "y": 50})):
+        assert api.llamar(s, nombre, args)["ok"], nombre
+    top = _llamar(s, "find_faces", selector=">Z")["faces"][0]["id"]
+    _llamar(s, "create_construction_point", type="centro", references=[top], name="Pivote")
+    _llamar(s, "create_sketch", name="Trabajo", plane=">Z")
+    ventana.set_documento(s.doc)
+    ventana.visor.encuadrar()
+    QApplication.processEvents()
+    ventana.editar_operacion(s.paso("Trabajo").id)
+    QApplication.processEvents()
+    assert ventana.modo_boceto.activo
+    yield ventana, s
+    if ventana.modo_boceto.activo:
+        ventana.modo_boceto.cancelar()
+    QApplication.processEvents()
+
+
+def test_h54_proyectar_elige_plano_eje_y_puntos_y_aceptar_deja_el_vinculo(v54):
+    """H-54 (VENTANA): con el boceto abierto, Proyectar elige con clics un plano de trabajo, un eje, un punto de
+    trabajo y un punto de otro boceto, y Aceptar los proyecta siguiendo a cada referencia."""
+    ventana, s = v54
+    ventana.vis["origen"] = True                   # la persona abre la carpeta Origen del navegador
+    ventana._refrescar_visibilidad()
+    QApplication.processEvents()
+    lz = _proyectar(ventana)
+    tarjeta = ventana.modo_boceto.tarjeta
+    for punto in ((40, 20, 47), (30, 0, 0), (0, 0, 47), (50, 50, 0)):
+        _clic(ventana, punto)
+    assert [e["tipo"] for e in lz._elegidos_proy] == ["plano", "eje", "punto", "punto_boceto"]
+    assert ([lz._nombre_elegido(e) for e in lz._elegidos_proy]
+            == ["Plano", "Eje", "Punto de trabajo", "Punto de boceto"])
+    QTest.mouseClick(tarjeta.boton_ok, Qt.LeftButton)
+    QApplication.processEvents()
+    curvas = _visibles(lz)
+    assert len(curvas) == 2 and all(c.proyectada for c in curvas)     # la traza del plano y el eje
+    extremos = {q for c in lz.b.curvas.values() if c.id > 0 for q in c.puntos()}
+    sueltos = [p for p in lz.b.puntos.values() if p.id > 0 and p.proyectado and p.id not in extremos]
+    assert len(sueltos) == 2                                          # el punto de trabajo y el de boceto
+    assert {r["refs"][0]["tipo"] for r in lz.b.proyecciones if not r.get("auto")} == \
+        {"plano", "eje", "punto", "punto_boceto"}
+    ventana.modo_boceto.terminar()
+    QApplication.processEvents()
+    br = s.doc.estado_final.bocetos[s.paso("Trabajo").id]
+    lineas = [c for c in br.boceto.curvas.values() if c.id > 0 and c.proyectada and c.tipo == "linea"]
+
+    def u_de(c):
+        return [br.plano.a_3d(br.boceto.puntos[i].x, br.boceto.puntos[i].y)[0] for i in c.extremos()]
+
+    assert any(all(abs(x - 40) < 1e-5 for x in u_de(c)) for c in lineas)          # la traza cae sobre el plano
+    assert any(min(u_de(c)) < 0 < max(u_de(c)) for c in lineas)                   # el eje pasa por el origen
+    _llamar(s, "edit_feature", feature="Guia", params={"distancia": "60 mm"})
+    QApplication.processEvents()
+    br = s.doc.estado_final.bocetos[s.paso("Trabajo").id]
+    lineas = [c for c in br.boceto.curvas.values() if c.id > 0 and c.proyectada and c.tipo == "linea"]
+    assert any(all(abs(x - 60) < 1e-5 for x in u_de(c)) for c in lineas)          # el vínculo sigue al plano
+
+
 def _clic(v, punto):
     lz = v.modo_boceto.lienzo
     q = v.visor.mapToGlobal(v.visor.proyectar(np.array(punto, float)).toPoint())

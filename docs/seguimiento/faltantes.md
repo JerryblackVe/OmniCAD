@@ -2,11 +2,11 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 160 · Parcial 48 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 239: Abierto 157 · Parcial 49 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
 
 ## Pendientes generales
 
-Abierto 54 · Parcial 3 · Bloqueado 2.
+Abierto 53 · Parcial 3 · Bloqueado 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -76,7 +76,6 @@ Abierto 3 · Parcial 1 · Sin verificar 0.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| H-54 | La tarjeta de Proyectar no elige planos, ejes ni puntos de trabajo | Abierto | Baja | Fusion también proyecta geometría de trabajo y puntos de boceto; la tarjeta elige caras, aristas, vértices, cuerpos y curvas de otro boceto. `project_to_sketch` ya los acepta por `references`: falta sumarlos a `_filtros_proyeccion` y darles forma en la selección. | ui/editor_boceto.py (`_filtros_proyeccion`); api/herramientas_boceto.py (`_proyectar_seleccion`) | 2026-10-31 |
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: derivación y Duplicar con uniones hechos; falta el catálogo de piezas | Parcial | Media | Falta un catálogo local de piezas estándar más allá de las fijaciones (rodamientos, perfiles, pasadores…; sin servicios en línea): hay que decidir qué piezas y sus medidas. Duplicar con uniones copia un componente por vez, las copias son independientes (sin instancias asociativas) y no tiene los modos de destino «Entre dos caras» e «Intersección de dos aristas» ni «Borrar último duplicado». | ui/cinta.py:59 (Duplicar con uniones); api/herramientas_ensamble.py (duplicate_with_joints); ui/comandos/derivacion.py:16; api/herramientas_documento.py:322 (insert_derive); tests/test_derivacion.py; tests/test_duplicar_con_uniones.py; nucleo/fijaciones.py (solo fijaciones) | 2026-10-31 |
 | H-63 | create_pipe no toma curvas de un boceto 3D | Abierto | Media | Reproducido: `draw_spline_3d` crea la curva 4 y `create_pipe(path_sketch="Ruta", path_curves=[4])` da ENTITY_NOT_FOUND («El boceto «Ruta» no tiene la curva 4»). Falta tubo por `draw_spline_3d`. | omnicad/api/herramientas_solido_extra.py:181 | 2026-11-02 |
@@ -161,7 +160,7 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 | ANI-1 | Navegador y Comentarios en ANIMACIÓN | Abierto | Alta | Elegir, ocultar y transformar desde el Navegador. | docs/brechas_animacion.md § ANI-1; ui/animacion.py (`VentanaAnimacion`) | 2026-11-01 |
 | ANI-2 | Explosión manual y barra de explosión | Abierto | Alta | Eje por componente, escala y secuencia en la barra. | docs/brechas_animacion.md § ANI-2; ui/animacion.py:695 (grisado) | 2026-11-01 |
 | ANI-3 | Aspecto y trayectorias en la animación | Abierto | Media | Guardados en el guion, con herramienta. | docs/brechas_animacion.md § ANI-3; ui/animacion.py:696 (grisados); `add_animation_action` rechaza appearance, por API | 2026-11-01 |
-| ANI-4 | Llamada, nombres y atajos de ANIMACIÓN | Abierto | Baja | Barra de la llamada, doble clic, M, U, E, P y Ctrl+R. | docs/brechas_animacion.md § ANI-4 | 2026-11-01 |
+| ANI-4 | Llamada, nombres y atajos de ANIMACIÓN | Parcial | Baja | Comparar la línea de tiempo con la captura (regla, zoom 1.0, pestañas de guion con +, botones de reproducción). El atajo E queda con Explosión manual (ANI-2). | docs/brechas_animacion.md § ANI-4; ui/animacion.py (`CajaLlamada`, `ATAJOS`); tests/test_animacion.py::test_crear_llamada_con_caja_y_barra | 2026-11-03 |
 | ANI-5 | Pieza de ANIMACIÓN en la prueba de ventana | Abierto | Media | Guion completo con publicación. | docs/brechas_animacion.md § ANI-5 | 2026-11-01 |
 
 ## Botones grisados sin fila (2026-11-01)
@@ -176,7 +175,7 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 
 ## Capturas de Fusion sin clasificar (2026-11-02)
 
-Salen de las 674 capturas del escritorio, ya ordenadas en `analisis/capturas_fusion/` (índice: `INDICE.md`; las ya hechas se borraron, ver `borradas.tsv`). Abierto 12 · Bloqueado 2. Especificación: mirar las capturas de su sección y `scripts/fusion_docs.py buscar`.
+Salen de las 674 capturas del escritorio, ya ordenadas en `analisis/capturas_fusion/` (índice: `INDICE.md`; las ya hechas se borraron, ver `borradas.tsv`). Abierto 11 · Bloqueado 2. Especificación: mirar las capturas de su sección y `scripts/fusion_docs.py buscar`.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -191,7 +190,6 @@ Salen de las 674 capturas del escritorio, ya ordenadas en `analisis/capturas_fus
 | CF-9 | MALLA: Suavizar contorno, Puente e Insertar malla completo | Abierto | Media | Suavizar contorno (suavidad, iteraciones, anillos) y Puente no existen; Insertar malla solo pregunta la unidad: faltan Voltear dirección, Centro, Mover a suelo, entradas numéricas y Restablecer. MAL-2 y MAL-3 no nombran la paleta de pincel. | grep sin resultados en api/ y ui/comandos/; capturas `MALLA/` e `INSERTAR/Insertar_malla` | 2026-11-02 |
 | CF-10 | MATERIALES: Explorador de materiales y propiedades | Abierto | Media | Propiedades térmicas y mecánicas, favoritos, materiales nuevos y bibliotecas personales. P-25d cubre solo Administrar. | capturas `MATERIALES/` | 2026-11-02 |
 | CF-11 | BOCETO: Buscar subrestringidos y Calcular boceto | Abierto | Baja | Nuevos de octubre de Fusion. El diálogo de restricciones automáticas existe pero no está en la paleta. | grep «subrestring» en omnicad/: sin resultados; capturas `BOCETO/` | 2026-11-02 |
-| CF-12 | BOCETO: unidades en el texto con parámetros | Abierto | Baja | `{largo}` da «150» sin unidad: tiene que dar «150 mm»; `{largo / mm}` y `{angulo / deg}` fallan hoy. | prueba por API del 2026-11-02; capturas `BOCETO/` | 2026-11-02 |
 | CF-13 | SÓLIDO: Modelado automatizado | Bloqueado | Muy alta | Genera alternativas entre geometrías a conectar y a evitar; emparentado con EXT-3 (diseño generativo). Espera el alcance. | sin herramienta; capturas `SOLIDO/Modelado_automatizado` | 2026-11-02 |
 | CF-14 | ELECTRÓNICA: esquemas, placas y biblioteca de componentes | Bloqueado | Muy alta | Diseño de electrónica 2D y 3D, biblioteca de componentes y leyenda de taladro. P-25i solo nombra la placa. Espera el alcance. | sin código; capturas `ELECTRONICA/` | 2026-11-02 |
 

@@ -375,11 +375,11 @@ def test_texto_con_parametro_se_actualiza_y_protege_el_parametro(s):
     tid = r["entities"][0]["id"]
     doc = s.doc
     op = doc.operaciones[0]
-    assert doc.estado_final.bocetos[op.id].boceto.curvas[tid].texto == "W=60"
+    assert doc.estado_final.bocetos[op.id].boceto.curvas[tid].texto == "W=60 mm"
     assert op.boceto.curvas[tid].texto == "W={ancho}"                 # lo guardado conserva la expresión
     n60 = len(doc.estado_final.bocetos[op.id].boceto.geometria())
     ok(api.llamar(s, "set_parameter", {"name": "ancho", "expression": "7 mm"}))
-    assert doc.estado_final.bocetos[op.id].boceto.curvas[tid].texto == "W=7"
+    assert doc.estado_final.bocetos[op.id].boceto.curvas[tid].texto == "W=7 mm"
     assert len(doc.estado_final.bocetos[op.id].boceto.geometria()) < n60       # «7» tiene menos trazos que «60»
     falla(api.llamar(s, "delete_parameter", {"name": "ancho"}), "PARAMETER_IN_USE")
     # un parámetro que no existe: avisa pero no rompe el boceto

@@ -293,3 +293,115 @@ def test_comandos_de_la_cinta_con_dialogo(ventana, monkeypatch):
     pub = an.DialogoPublicar(v, (300, 200), "x.gif")
     pub.formato.setCurrentIndex(1)
     assert pub.valores()["formato"] == "png" and not pub.valores()["ruta"].endswith(".gif")
+
+
+# ---------------------------------------------------------------- ANI-4: llamada, nombres y atajos
+def test_nombres_y_atajos_de_fusion(ventana, monkeypatch):
+    from PySide6.QtGui import QKeySequence
+    v = ventana
+    assert [v.acciones[k].text() for k in ("restaurar", "anotacion", "vista", "nuevo_guion")] == [
+        "Restablecer inicio", "Crear llamada", "Vista", "Nuevo guion gráfico"]
+    esperados = {"transformar": "M", "explosion_todos": "U", "publicar": "P", "vista": "Ctrl+R"}
+    for clave, tecla in esperados.items():
+        assert v.acciones[clave].shortcut() == QKeySequence(tecla)
+        assert not v.acciones[clave].autoRepeat()           # mantener la tecla no repite el comando
+    assert v.acciones["anotacion"].shortcut().isEmpty()     # Fusion no le da atajo: no se inventa uno
+    llamadas = []
+    monkeypatch.setattr(v, "comando", lambda tipo, **kw: llamadas.append((tipo, kw)))
+    monkeypatch.setattr(v, "dialogo_publicar", lambda: llamadas.append("publicar"))
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    v.show()
+    v.activateWindow()
+    assert QTest.qWaitForWindowActive(v)
+    for tecla, mod in ((Qt.Key_M, Qt.NoModifier), (Qt.Key_U, Qt.NoModifier), (Qt.Key_R, Qt.ControlModifier)):
+        QTest.keyClick(v, tecla, mod)
+    assert llamadas == [("transformar", {}), ("explosion", {"nivel": "todos"}), ("vista", {})]
+
+
+def _clic(lienzo, x, y, doble=False):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    if doble:
+        QTest.mouseDClick(lienzo, Qt.LeftButton, Qt.NoModifier, QPoint(x, y))
+    else:
+        QTest.mouseClick(lienzo, Qt.LeftButton, Qt.NoModifier, QPoint(x, y))
+
+
+def _tecla(w, tecla):
+    from PySide6.QtTest import QTest
+    QTest.keyClick(w, tecla)
+
+
+def test_crear_llamada_con_caja_y_barra(ventana):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    v = ventana
+    v.show()
+    v.empezar_anotacion()
+    assert v._colocando_nota
+    _clic(v.lienzo, 12, 12)                                  # el vacío del lienzo: alfiler rojo
+    caja = v._caja
+    assert caja is not None and caja.isVisible() and not v._colocando_nota
+    assert v.notas.provisoria is not None and v.notas.provisoria[1] is False
+    QTest.mouseClick(caja.ok, Qt.LeftButton)                 # ✓ sin texto: sigue abierta
+    assert v._caja is caja and not v.guion.acciones
+    QTest.keyClicks(caja.campo, "Tapa")
+    QTest.mouseClick(caja.ok, Qt.LeftButton)
+    assert v._caja is None and v.notas.provisoria is None
+    a = v.guion.acciones[0]
+    assert a["tipo"] == "anotacion" and a["texto"] == "Tapa" and a["cuerpo"] == ""
+    # × y Esc cancelan sin crear nada
+    v.empezar_anotacion()
+    _clic(v.lienzo, 30, 30)
+    QTest.keyClicks(v._caja.campo, "Nada")
+    QTest.mouseClick(v._caja.no, Qt.LeftButton)
+    assert v._caja is None and len(v.guion.acciones) == 1
+    v.empezar_anotacion()
+    _clic(v.lienzo, 30, 30)
+    _tecla(v._caja.campo, Qt.Key_Escape)
+    assert v._caja is None and len(v.guion.acciones) == 1
+    # Enter acepta
+    v.empezar_anotacion()
+    _clic(v.lienzo, 40, 40)
+    QTest.keyClicks(v._caja.campo, "Base")
+    _tecla(v._caja.campo, Qt.Key_Return)
+    assert [x["texto"] for x in v.guion.acciones] == ["Tapa", "Base"]
+    # cambiar de guion con la caja abierta la cierra: no edita la acción de otro guion con el mismo id
+    v.empezar_anotacion()
+    _clic(v.lienzo, 50, 50)
+    v.nuevo_guion("limpio")
+    assert v._caja is None and [x["texto"] for x in v.guiones[0].acciones] == ["Tapa", "Base"]
+
+
+def test_esc_cancela_el_alfiler_antes_del_clic(ventana):
+    from PySide6.QtCore import Qt
+    v = ventana
+    v.show()
+    v.empezar_anotacion()
+    v.lienzo.setFocus()
+    _tecla(v.lienzo, Qt.Key_Escape)
+    assert not v._colocando_nota and v._caja is None and not v.guion.acciones
+
+
+def test_doble_clic_edita_el_texto_de_la_llamada(ventana):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    v = ventana
+    v.show()
+    a = v.crear_anotacion("Vieja", [0, 0, 0], inicio=0, duracion=0)
+    v.ir_a(0.0)
+    q = v.lienzo.proyectar([0, 0, 0])
+    assert q is not None
+    _clic(v.lienzo, int(q.x()), int(q.y()), doble=True)      # doble clic sobre el alfiler
+    assert v._caja is not None and v._caja.campo.text() == "Vieja"
+    v._caja.campo.selectAll()
+    QTest.keyClicks(v._caja.campo, "Nueva")
+    QTest.mouseClick(v._caja.ok, Qt.LeftButton)
+    assert v.guion.accion(a["id"])["texto"] == "Nueva" and v._caja is None
+    assert v.notas.notas[0]["texto"] == "Nueva"
+    _clic(v.lienzo, int(q.x()), int(q.y()), doble=True)      # Esc deja el texto como estaba
+    _tecla(v._caja.campo, Qt.Key_Escape)
+    assert v.guion.accion(a["id"])["texto"] == "Nueva" and v._caja is None
+    _clic(v.lienzo, 3, 3, doble=True)                        # doble clic en el vacío: no abre nada
+    assert v._caja is None

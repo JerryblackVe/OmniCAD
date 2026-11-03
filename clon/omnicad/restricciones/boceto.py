@@ -1269,11 +1269,15 @@ def sustituir_expresiones(texto, valor):
         v = valor(expresion)
         if isinstance(v, str):
             return v
+        unidad = None
+        if isinstance(v, tuple):        # (número, unidad): el texto muestra «150 mm» (CF-12)
+            v, unidad = v
         v = float(v)
         if formato:
             return format(v, formato)
         s = f"{v:.4f}".rstrip("0").rstrip(".")
-        return "0" if s in ("", "-0") else s
+        s = "0" if s in ("", "-0") else s
+        return f"{s} {unidad}" if unidad else s
 
     def reemplazo(m):
         expresion, formato = _partes_fx(m.group(1))

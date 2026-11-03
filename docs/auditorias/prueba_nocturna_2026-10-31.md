@@ -352,6 +352,12 @@ Sin empezar. Cada herramienta suma tests y la pieza nueva `plastico` en `todo.py
 
 Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modificar`, `superficie` y `asas`, porque tocan empalme, chaflán, solevación y abrir archivos. Después, `scripts/caza/cazar.py rapida` y `noche`, que nunca corrió.
 
+## 3m. Tareas chicas de OpenCode (tandas 1 a 4)
+
+- Tandas 1 a 3 integradas (hasta `30b04d4`): sus tests se corrieron sueltos. Falta verlas en la suite completa y en la prueba de humo.
+- Tanda 4 (CL7, B-179, B-163, CF-12, H-54, ANI-4, `docs/plan_bugs_faciles.md`) en marcha: al integrarla, sumar las piezas de ventana de H-54 y ANI-4.
+- Prueba en Cline (AUD-13, PLA-14, `docs/plan_prueba_cline.md`): al integrarla, correr los tests del puente y `test_sol27_preajustes.py`.
+
 ## 4. Cosas que ninguna prueba cubre todavía
 
 | # | Qué falta | Dónde está anotado |

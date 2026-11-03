@@ -5,6 +5,7 @@ import re
 
 import pytest
 
+import omnicad
 from omnicad import api
 from omnicad.api import herramientas_avanzado as av
 from omnicad.ejemplo import crear_documento_ejemplo
@@ -438,8 +439,9 @@ def test_execute_code_timeout_invalido_none_y_anidado(s):
 def test_guia_indice_y_flujo(s):
     ind = ok(api.llamar(s, "get_guide"))
     assert ind["topic"] == "indice" and "flujo" in ind["topics"] and "indice" in ind["topics"] and "flujo" in ind["text"]
+    assert ind["version"] == omnicad.VERSION                      # CL7: la guía dice con qué versión viene
     flujo = ok(api.llamar(s, "get_guide", {"topic": "flujo"}))
-    assert flujo["topic"] == "flujo" and flujo["text"].startswith("# Ciclo de trabajo")
+    assert flujo["topic"] == "flujo" and flujo["text"].startswith("# Ciclo de trabajo") and flujo["version"] == omnicad.VERSION
     assert ok(api.llamar(s, "get_guide", {"topic": "Flujo.md"}))["text"] == flujo["text"]
 
 

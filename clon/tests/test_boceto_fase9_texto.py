@@ -207,10 +207,10 @@ def test_text_automatico_con_expresiones_sigue_parametros_y_edicion(sesion, tmp_
     assert resuelto(sesion).curvas[tid].texto == "Ancho 30.0"
     llamar(sesion, "edit_text", entity=tid, text="Medida {ancho}")
     assert sesion.doc.parametros.valores()["Text"] == "Medida {ancho}"
-    assert resuelto(sesion).curvas[tid].texto == "Medida 30"
+    assert resuelto(sesion).curvas[tid].texto == "Medida 30 mm"
     llamar(sesion, "create_parameter", name="alto", expression="10 mm")
     llamar(sesion, "set_parameter", name="Text", expression="Alto {alto}")
-    assert resuelto(sesion).curvas[tid].texto == "Alto 10"
+    assert resuelto(sesion).curvas[tid].texto == "Alto 10 mm"
     respuesta = api.llamar(sesion, "delete_parameter", {"name": "alto"})
     assert not respuesta["ok"]
     ruta = str(tmp_path / "plantilla.omnicad")
@@ -218,7 +218,7 @@ def test_text_automatico_con_expresiones_sigue_parametros_y_edicion(sesion, tmp_
     otra = api.Sesion()
     llamar(otra, "open_document", path=ruta)
     llamar(otra, "set_parameter", name="alto", expression="15 mm")
-    assert resuelto(otra).curvas[tid].texto == "Alto 15"
+    assert resuelto(otra).curvas[tid].texto == "Alto 15 mm"
 
 
 def test_parametro_automatico_se_revierte_si_falla_el_dibujo(sesion):

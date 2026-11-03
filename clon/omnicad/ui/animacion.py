@@ -39,9 +39,9 @@ from types import SimpleNamespace
 
 import numpy as np
 from PySide6.QtCore import QEvent, QEventLoop, QPointF, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QFontMetricsF, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QAction, QColor, QFontMetricsF, QKeySequence, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
+                               QFileDialog, QFormLayout, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
                                QMenu, QMessageBox, QProgressDialog, QRadioButton, QScrollArea, QSlider, QSpinBox,
                                QTabBar, QToolButton, QVBoxLayout, QWidget)
 
@@ -86,6 +86,7 @@ class CapaNotas(QWidget):
         super().__init__(parent)
         self.lienzo = lienzo
         self.notas = []
+        self.provisoria = None          # (punto en pantalla, ¿sobre una pieza?) mientras se ubica una llamada
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
         lienzo.camara_cambiada.connect(self.update)
@@ -94,17 +95,39 @@ class CapaNotas(QWidget):
         self.notas = list(notas)
         self.update()
 
+    def set_provisoria(self, pos, sobre_pieza):
+        """Alfiler de la llamada que se está ubicando: rojo en el vacío, verde sobre una pieza (Fusion)."""
+        self.provisoria = None if pos is None else (QPointF(pos), bool(sobre_pieza))
+        self.update()
+
+    def _caja(self, n, q, fm=None):
+        fm = fm or QFontMetricsF(self.font())
+        return QRectF(q.x() + 40, q.y() - 46, fm.horizontalAdvance(n["texto"] or " ") + 16, fm.height() + 10)
+
+    def nota_en(self, pos):
+        """Id de la llamada cuyo alfiler o cuadro está bajo `pos` (para el doble clic que la edita), o None."""
+        for n in reversed(self.notas):
+            q = self.lienzo.proyectar(n["punto"])
+            if q is not None and (self._caja(n, q).contains(pos) or (QPointF(pos) - q).manhattanLength() < 10):
+                return n.get("id")
+        return None
+
     def paintEvent(self, _e):
-        if not self.notas:
+        if not self.notas and self.provisoria is None:
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         fm = QFontMetricsF(self.font())
+        if self.provisoria is not None:
+            q, verde = self.provisoria
+            p.setPen(QPen(QColor("#ffffff"), 1))
+            p.setBrush(QColor("#2fa84f" if verde else "#d64545"))
+            p.drawEllipse(q, 6, 6)
         for n in self.notas:
             q = self.lienzo.proyectar(n["punto"])
             if q is None:
                 continue
-            caja = QRectF(q.x() + 40, q.y() - 46, fm.horizontalAdvance(n["texto"] or " ") + 16, fm.height() + 10)
+            caja = self._caja(n, q, fm)
             p.setPen(QPen(QColor("#2b78c2"), 2))
             p.drawLine(q, QPointF(caja.left(), caja.center().y()))
             p.setBrush(QColor("#ffffff"))
@@ -114,6 +137,51 @@ class CapaNotas(QWidget):
             p.setPen(QPen(QColor("#ffffff"), 1))
             p.setBrush(QColor("#d64545"))
             p.drawEllipse(q, 4, 4)
+
+
+class CajaLlamada(QFrame):
+    """Caja de texto de una llamada sobre el lienzo, con la barra ✓ y × (Fusion: Crear llamada). Enter acepta y Esc
+    cancela. Se ubica junto al alfiler y se queda dentro del lienzo."""
+    aceptada = Signal(str)
+    cancelada = Signal()
+
+    def __init__(self, lienzo, pos, texto=""):
+        super().__init__(lienzo)
+        self.setObjectName("cajaLlamada")
+        self.setAutoFillBackground(True)
+        self.setFrameShape(QFrame.StyledPanel)
+        fila = QHBoxLayout(self)
+        fila.setContentsMargins(6, 4, 6, 4)
+        self.campo = QLineEdit(texto)
+        self.campo.setPlaceholderText("Texto de la llamada")
+        self.campo.setMinimumWidth(180)
+        self.ok = QToolButton(text="✓")
+        self.ok.setToolTip("Aceptar (Enter)")
+        self.no = QToolButton(text="×")
+        self.no.setToolTip("Cancelar (Esc)")
+        for w in (self.campo, self.ok, self.no):
+            fila.addWidget(w)
+        self.ok.clicked.connect(self._aceptar)
+        self.no.clicked.connect(self.cancelada.emit)
+        self.campo.returnPressed.connect(self._aceptar)
+        self.adjustSize()
+        x = max(0, min(int(pos.x()) + 40, lienzo.width() - self.width()))
+        y = max(0, min(int(pos.y()) - 46, lienzo.height() - self.height()))
+        self.move(x, y)
+        self.show()
+        self.campo.setFocus()
+        self.campo.selectAll()
+
+    def _aceptar(self):
+        texto = self.campo.text().strip()
+        if texto:                       # una llamada vacía no se acepta: queda abierta, como el diálogo de Fusion
+            self.aceptada.emit(texto)
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape:
+            self.cancelada.emit()
+        else:
+            super().keyPressEvent(e)
 
 
 class PistasAnimacion(QWidget):
@@ -689,6 +757,10 @@ class DialogoPublicar(QDialog):
                 "motor": self.motor.currentData(), "estilo": self.estilo.currentData()}
 
 
+# Atajos de Fusion para ANIMACIÓN. E (Explosión manual) falta porque esa herramienta sigue grisada (ANI-2); la llamada
+# no tiene atajo en la referencia de Fusion y no se inventa uno.
+ATAJOS = {"transformar": "M", "explosion_todos": "U", "publicar": "P", "vista": "Ctrl+R"}
+
 GRUPOS_ANIMACION = [
     ("GUION GRÁFICO", ["nuevo_guion"], ["nuevo_guion", "copiar_guion", "invertir_guion", SEP, "eliminar_guion"]),
     ("TRANSFORMAR", ["transformar", "restaurar", "explosion_uno", "explosion_todos", "visibilidad"],
@@ -720,6 +792,7 @@ class VentanaAnimacion(QMainWindow):
         self.centros = {}
         self._programado = self._pendiente = False
         self._colocando_nota = False
+        self._caja = None               # CajaLlamada abierta (nueva o editando)
         self._dialogo = None            # diálogo de acción abierto con asas en el lienzo
         self._cam_referencia = None
         self._reloj = None
@@ -766,27 +839,31 @@ class VentanaAnimacion(QMainWindow):
     # ------------------------------------------------------------ acciones de la cinta
     def _crear_acciones(self):
         definicion = [
-            ("nuevo_guion", "Nuevo guion gráfico…", "guion", self.nuevo_guion, False),
+            ("nuevo_guion", "Nuevo guion gráfico", "guion", self.nuevo_guion, False),
             ("copiar_guion", "Copiar guion gráfico", "guion", lambda: self.copiar_guion(self.actual), False),
             ("invertir_guion", "Invertir guion gráfico", "invertir", lambda: self.invertir_guion(self.actual), False),
             ("eliminar_guion", "Eliminar guion gráfico", "suprimir", lambda: self.eliminar_guion(self.actual), False),
             ("transformar", "Transformar componentes", "mover", lambda: self.comando("transformar"), False),
-            ("restaurar", "Restaurar posición inicial", "casa", lambda: self.comando("restaurar"), False),
+            ("restaurar", "Restablecer inicio", "casa", lambda: self.comando("restaurar"), False),
             ("explosion_uno", "Explosión automática: un nivel", "explosion",
              lambda: self.comando("explosion", nivel="uno"), False),
             ("explosion_todos", "Explosión automática: todos los niveles", "explosion_todos",
              lambda: self.comando("explosion", nivel="todos"), False),
             ("visibilidad", "Mostrar/Ocultar", "ojo", lambda: self.comando("visibilidad"), False),
-            ("anotacion", "Crear anotación", "anotacion", self.empezar_anotacion, False),
-            ("vista", "Vista (guardar la cámara)", "camara", lambda: self.comando("vista"), False),
+            ("anotacion", "Crear llamada", "anotacion", self.empezar_anotacion, False),
+            ("vista", "Vista", "camara", lambda: self.comando("vista"), False),
             ("grabar_vista", "Grabar cámara", "mirar_a", self._grabar_vista, True),
-            ("publicar", "Publicar video…", "video", self.dialogo_publicar, False),
+            ("publicar", "Publicar video", "video", self.dialogo_publicar, False),
         ]
         acciones = {}
         for clave, texto, ico, funcion, marcable in definicion:
             a = QAction(icono_render(ico), texto, self)
             a.setToolTip(texto.rstrip("…"))
             a.setCheckable(marcable)
+            if clave in ATAJOS:         # los de Fusion (Referencia de atajos › ANIMACIÓN); sin repetición al mantener
+                a.setShortcut(QKeySequence(ATAJOS[clave]))
+                a.setAutoRepeat(False)
+                self.addAction(a)       # anda aunque el botón no esté a la vista
             a.triggered.connect(lambda _c=False, f=funcion: f())
             acciones[clave] = a
         return acciones
@@ -1041,6 +1118,7 @@ class VentanaAnimacion(QMainWindow):
         self._cambio()
 
     def eliminar_accion(self, ident):
+        self._cerrar_caja()             # la caja de una llamada apunta a una acción de este guion
         self.guion.quitar(ident)
         if self.linea.pistas.seleccion == ident:
             self.linea.pistas.seleccion = None
@@ -1056,10 +1134,11 @@ class VentanaAnimacion(QMainWindow):
 
     # ------------------------------------------------------------ anotación y vista
     def empezar_anotacion(self):
+        self._cerrar_caja()
         self._colocando_nota = True
         self.lienzo.setCursor(Qt.CrossCursor)
-        self.indicar("Hacé clic en un cuerpo (la anotación lo sigue) o en el lienzo para ubicar la anotación. "
-                     "Esc cancela.")
+        self.lienzo.setMouseTracking(True)
+        self.indicar("Hacé clic en un cuerpo (la llamada lo sigue) o en el lienzo para ubicarla. Esc cancela.")
 
     def crear_anotacion(self, texto, punto, cuerpo="", inicio=None, duracion=2.0):
         """Anotación en `punto` (mundo). Si `cuerpo` no está vacío queda pegada a ese cuerpo."""
@@ -1077,25 +1156,62 @@ class VentanaAnimacion(QMainWindow):
             if e.type() == QEvent.KeyPress and e.key() == Qt.Key_Escape:
                 self._terminar_nota()
                 return True
+            if e.type() == QEvent.MouseMove:         # rojo en el vacío, verde sobre una pieza
+                self.notas.set_provisoria(e.position(), self.lienzo.elegir_entidad(e.position(), {"cuerpo"}))
             if e.type() == QEvent.MouseButtonRelease and e.button() == Qt.LeftButton:
                 pos = e.position()
                 hit = self.lienzo.elegir_entidad(pos, {"cuerpo"})
                 punto = hit["punto"] if hit else self.lienzo.punto_focal(pos)
-                self._terminar_nota()
-                if punto is not None:
-                    texto, ok = QInputDialog.getText(self, "Anotación", "Texto de la anotación:")
-                    if ok and texto.strip():
-                        self.crear_anotacion(texto.strip(), punto, hit["cuerpo"] if hit else "")
+                if punto is None:
+                    return True
+                self._terminar_nota(provisoria=(pos, hit))
+                self._abrir_caja(pos, "", lambda texto: self.crear_anotacion(texto, punto, hit["cuerpo"] if hit else ""))
                 return True
             if e.type() == QEvent.MouseButtonPress and e.button() == Qt.LeftButton:
+                return True
+        elif obj is self.lienzo and e.type() == QEvent.MouseButtonDblClick and e.button() == Qt.LeftButton:
+            ident = self.notas.nota_en(e.position())     # doble clic en una llamada: edita su texto
+            if ident is not None:
+                self.editar_llamada(ident, e.position())
                 return True
         if obj is self.area.viewcube and e.type() == QEvent.MouseButtonRelease:
             QTimer.singleShot(0, self._navegacion_terminada)
         return super().eventFilter(obj, e)
 
-    def _terminar_nota(self):
+    def editar_llamada(self, ident, pos=None):
+        """Abre la caja de texto sobre la llamada `ident` con su texto; ✓ o Enter lo cambia y × o Esc lo deja."""
+        a = self.guion.accion(ident)
+        if a["tipo"] != "anotacion":
+            return
+        if pos is None:                  # sin clic: junto al alfiler de la llamada (si está a la vista)
+            pos = next((self.lienzo.proyectar(n["punto"]) for n in self.cuadro()["notas"] if n.get("id") == ident),
+                       None) or QPointF(40, 60)
+        self._abrir_caja(pos, a.get("texto", ""), lambda texto: self._cambiar_texto(ident, texto))
+
+    def _cambiar_texto(self, ident, texto):
+        self.guion.accion(ident)["texto"] = texto
+        self.ir_a(self.t)
+        self._cambio()
+
+    def _abrir_caja(self, pos, texto, al_aceptar):
+        self._cerrar_caja(limpiar=False)
+        self._caja = CajaLlamada(self.lienzo, pos, texto)
+        self._caja.aceptada.connect(lambda t: (self._cerrar_caja(), al_aceptar(t)))
+        self._caja.cancelada.connect(self._cerrar_caja)
+
+    def _cerrar_caja(self, limpiar=True):
+        if self._caja is not None:
+            caja, self._caja = self._caja, None
+            caja.hide()
+            caja.deleteLater()
+        if limpiar:
+            self.notas.set_provisoria(None, False)
+            self.lienzo.setFocus()
+
+    def _terminar_nota(self, provisoria=None):
         self._colocando_nota = False
         self.lienzo.setCursor(Qt.ArrowCursor)
+        self.notas.set_provisoria(*(provisoria or (None, False)))
         self.indicar("")
 
     def _grabar_vista(self):
@@ -1119,6 +1235,7 @@ class VentanaAnimacion(QMainWindow):
     # ------------------------------------------------------------ guiones
     def nuevo_guion(self, tipo=None):
         """GUION GRÁFICO › Nuevo guion gráfico [GUID-0EAFB4F6]: «limpio» o «continuar» (desde el final del actual)."""
+        self._cerrar_caja()
         if tipo is None:
             opciones = ["Limpio", "Comenzar desde el final del anterior"]
             if self.isVisible():
@@ -1139,6 +1256,7 @@ class VentanaAnimacion(QMainWindow):
         return self.guion
 
     def elegir_guion(self, i):
+        self._cerrar_caja()
         if 0 <= i < len(self.guiones):
             self.pausar()
             self.actual = i
@@ -1167,6 +1285,7 @@ class VentanaAnimacion(QMainWindow):
         self._cambio()
 
     def eliminar_guion(self, i):
+        self._cerrar_caja()
         if len(self.guiones) <= 1:
             self.guiones[0] = Guion(self.guiones[0].nombre)
         else:
@@ -1252,6 +1371,7 @@ class VentanaAnimacion(QMainWindow):
         return datos
 
     def desde_dict(self, datos):
+        self._cerrar_caja()
         datos = datos or {}
         guiones = [Guion.desde_dict(g) for g in datos.get("guiones") or []]
         self.guiones = guiones or [Guion("Guion gráfico1")]

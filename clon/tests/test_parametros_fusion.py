@@ -376,13 +376,30 @@ def test_texto_con_llaves():
     r = llamar(s, "create_parameter", name="etiqueta", expression="Pieza {PartNumber}", kind="text")
     assert r["value"] == "Pieza A-7" and r["expression"] == "Pieza {PartNumber}"
     r = llamar(s, "create_parameter", name="caja", expression="Es {Length} x {Width} y {Length*Width/1 mm}", kind="text")
-    assert r["value"] == "Es 10 x 4 y 40"
+    assert r["value"] == "Es 10 mm x 4 mm y 40"
     llamar(s, "set_parameter", name="PartNumber", expression="B-8")
     assert parametro(s, "etiqueta")["value"] == "Pieza B-8"
     llamar(s, "set_parameter", name="PartNumber", new_name="Codigo")
     assert parametro(s, "etiqueta")["expression"] == "Pieza {Codigo}"
     assert api.llamar(s, "delete_parameter", {"name": "Codigo"})["error_kind"] == "PARAMETER_IN_USE"
     assert llamar(s, "create_parameter", name="suelto", expression="{no_existe}", kind="text")["value"] == "{no_existe}"
+
+
+def test_cf12_texto_con_unidades():
+    """CF-12: «{largo}» muestra el valor con la unidad del parámetro; sin unidad, solo el número; y dividir por una
+    unidad («{largo / mm}») da el número pelado, como en Fusion."""
+    from omnicad.timeline.operaciones import texto_con_valores
+    t = TablaParametros()
+    t.agregar("largo", "150 mm")
+    t.agregar("angulo", "30 deg", tipo=ANGULO)
+    t.agregar("sin_unidad", "5", tipo=ESCALAR)
+    v = t.valores()
+    assert texto_con_valores("Largo {largo}", v) == "Largo 150 mm"
+    assert texto_con_valores("Ángulo {angulo}", v) == "Ángulo 30 deg"
+    assert texto_con_valores("Liso {sin_unidad}", v) == "Liso 5"
+    assert texto_con_valores("Plano {largo / mm}", v) == "Plano 150"
+    assert texto_con_valores("Plano {angulo / deg}", v) == "Plano 30"
+    assert texto_con_valores("Formateado {largo:.1f}", v) == "Formateado 150.0"
 
 
 def test_texto_viejo_con_llaves_sin_resolver_queda_igual():

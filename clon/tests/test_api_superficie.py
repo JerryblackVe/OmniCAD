@@ -361,6 +361,45 @@ def test_error_del_kernel_revierte_transaccion():
     assert len(s.doc._deshacer) == pila
 
 
+def test_b163_extender_y_destrimar_rechazan_un_solido():
+    """B-163: como Extend y Untrim de Fusion, solo tocan superficies; un sólido da un error claro y el documento
+    queda igual (antes el paso salía ok y dejaba el sólido abierto)."""
+    s = api.Sesion()
+    caja = creado(s, "create_box", length=80, width=60, height=40)
+    antes = json.dumps(s.doc.a_dict(), sort_keys=True)
+    r = api.llamar(s, "extend_surface", {"edges": [f"{caja}/E4"], "extension_type": "tangent"})
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
+    assert "Extender solo se aplica a cuerpos de superficie" in r["mensaje"] and "Cuerpo1" in r["mensaje"]
+    r = api.llamar(s, "untrim_surface", {"faces": [f"{caja}/F3"]})
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
+    assert "Destrimar solo se aplica a cuerpos de superficie" in r["mensaje"] and "Cuerpo1" in r["mensaje"]
+    assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
+
+
+def test_b163_un_documento_guardado_con_destrimar_sobre_un_solido_abre_y_muestra_el_error(tmp_path):
+    """B-163: un documento guardado con el paso viejo abre igual: el paso falla (y lo dice) y el resto del modelo
+    queda como estaba."""
+    from omnicad.timeline.documento import Documento
+    s = api.Sesion()
+    caja = creado(s, "create_box", length=80, width=60, height=40)
+    # cara del sólido con su firma, como la guardaba un paso de la época del bug
+    llamar(s, "run_operation", type="sup_desfase", params={"caras": [f"{caja}/F3"], "distancia": "2 mm"})
+    cara = s.doc.operaciones[-1].p["caras"][0]
+    datos = s.doc.a_dict()
+    datos["operaciones"] = [o for o in datos["operaciones"] if o["tipo"] != "sup_desfase"]
+    datos["operaciones"].append({"tipo": "destrimar", "id": "opX", "nombre": "Destrimar",
+                                 "params": {"caras": [cara], "contornos": "exteriores", "aristas": [],
+                                            "extension": "0 mm", "mantener_copia": False}})
+    ruta = str(tmp_path / "viejo.omnicad")
+    api.Sesion(Documento.desde_dict(datos)).guardar(ruta)
+    s2 = api.Sesion()
+    llamar(s2, "open_document", path=ruta)
+    pasos = llamar(s2, "get_timeline", include_params=False)["steps"]
+    roto = next(p for p in pasos if p["type"] == "destrimar")
+    assert roto["status"] == "error" and "Destrimar solo se aplica a cuerpos de superficie" in roto["message"]
+    assert [b["name"] for b in llamar(s2, "get_scene_info")["bodies"]] == ["Cuerpo1"]
+
+
 def _curva_de(sesion, nombre):
     curvas = sesion.doc.estado_final.bocetos[sesion.paso(nombre).id].boceto.curvas
     return {"sketch": nombre, "curve": next(iter(curvas))}

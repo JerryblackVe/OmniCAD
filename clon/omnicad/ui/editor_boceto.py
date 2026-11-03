@@ -2469,7 +2469,7 @@ class Lienzo(QWidget):
     def _elegir_proyeccion(self, info):
         """Clic en el modelo: suma lo elegido a la selección de la tarjeta; otro clic en lo mismo lo saca. El boceto no
         cambia: eso lo hace Aceptar."""
-        ref, forma = info.get("ref"), info["forma"]
+        ref, forma = info.get("ref"), info.get("forma")
         repetido = next((e for e in self._elegidos_proy
                          if (e["ref"] == ref if ref else e["forma"].IsSame(forma))), None)
         if repetido is not None:
@@ -2506,8 +2506,23 @@ class Lienzo(QWidget):
         for e in self._elegidos_proy:
             try:
                 if estado is not None and e.get("ref"):
-                    ent.resolver(e["ref"], estado)
-                tanda = self._tanda_proyeccion(e["forma"], self.herramienta, e.get("ref"))
+                    entidad = ent.resolver(e["ref"], estado)
+                else:
+                    entidad = None
+                if e.get("tipo") in ("plano", "eje", "punto", "punto_boceto"):
+                    # H-54: planos, ejes y puntos de trabajo o de boceto: la proyección sale de la entidad
+                    # resuelta (como la API); sus líneas son infinitas y al recalcular se recortan al modelo
+                    if self.plano is None:
+                        raise ErrorBoceto("El boceto no tiene plano.")
+                    if entidad is None:
+                        raise ent.ErrorReferencia("La referencia de trabajo no se puede resolver.")
+                    prims, puntos = ent.proyectar_entidad(entidad, self.plano)
+                    origen = {"modo": "project", "refs": [e["ref"]]} if self.opciones["vinculo_proyeccion"] else None
+                    if origen is not None and prims:
+                        origen["infinitas"] = {str(k): 0.0 for k in range(len(prims))}
+                    tanda = (prims, puntos, self.construccion, origen)
+                else:
+                    tanda = self._tanda_proyeccion(e["forma"], self.herramienta, e.get("ref"))
             except (ent.ErrorReferencia, ent.ReferenciaMalFormada):
                 return [], None, f"La referencia de «{self._nombre_elegido(e)}» ya no es válida: sacala y elegila de nuevo."
             except (geo.ErrorGeometria, ErrorBoceto) as error:
@@ -2525,14 +2540,15 @@ class Lienzo(QWidget):
         cuerpo = getattr(getattr(estado, "cuerpos", {}).get(ref.get("cuerpo")), "nombre", ref.get("cuerpo") or "")
         geom = (ref.get("firma") or {}).get("geom")
         tipo = {"cuerpo": "Cuerpo", "vertice": "Vértice", "cara": "Cara plana" if geom == "plano" else "Cara",
-                "curva_boceto": "Curva de boceto",
+                "curva_boceto": "Curva de boceto", "plano": "Plano", "eje": "Eje",
+                "punto": "Punto de trabajo", "punto_boceto": "Punto de boceto",
                 "arista": {"linea": "Arista recta", "circulo": "Arista circular"}.get(geom, "Arista")}.get(e.get("tipo"), "Geometría")
         return cuerpo if tipo == "Cuerpo" and cuerpo else f"{tipo} · {cuerpo}" if cuerpo else tipo
 
     def estado_proyeccion(self):
         """Lo que muestra la tarjeta: las referencias elegidas, el resultado provisional y si se puede aceptar."""
         vacio = "Elegí cuerpos en el modelo." if self.opciones["filtro_proyectar"] == "cuerpos" else (
-            "Elegí caras, aristas o vértices en el modelo.")
+            "Elegí caras, aristas, vértices, planos, ejes o puntos en el modelo.")
         e = {"elegidos": [self._nombre_elegido(x) for x in self._elegidos_proy], "valido": False, "nota": self._nota_proy,
              "resultado": vacio, "error": "", "prims": [], "puntos": []}
         if not self._elegidos_proy:
@@ -2759,6 +2775,8 @@ class Lienzo(QWidget):
         comunes = {"cara", "arista", "vertice"}
         if h in COMANDO_PROYECCION:
             comunes.add("curva_boceto")
+        if h == "proyectar":                       # H-54: Proyectar también elige planos, ejes y puntos
+            comunes |= {"plano", "eje", "punto", "punto_boceto"}
         return comunes | ({"cuerpo"} if h in ("intersecar", "perfil_giratorio") else set())
 
     def _clic_proyectar(self, pos):
@@ -2774,7 +2792,8 @@ class Lienzo(QWidget):
         if info and info.get("tipo") == "curva_boceto":                  # el visor da la referencia; la forma la da el documento
             from ..timeline import entidades as ent
             info["forma"] = ent.resolver(info["ref"], self.estado_referencias()).forma
-        if not info or info.get("forma") is None:
+        if not info or (info.get("forma") is None
+                        and info.get("tipo") not in ("plano", "eje", "punto", "punto_boceto")):
             self.mensaje.emit("Hacé clic en una arista, una cara o un cuerpo del modelo.")
             return
         if self._hay_tarjeta_proyeccion():

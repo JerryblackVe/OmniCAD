@@ -312,6 +312,8 @@ def _nombre(n, c):
         return v, getattr(v, "dim", None) if c.dimensiones else None
     if n in CONSTANTES:                 # después de los nombres: un parámetro viejo `E` gana sobre la constante
         return CONSTANTES[n], _DIM_CONSTANTE.get(n)
+    if n in TABLA:                      # CF-12: dividir por una unidad («largo / mm») da el número sin unidad
+        return TABLA[n].factor, TABLA[n].dim
     raise ErrorExpresion(f"Nombre desconocido: '{n}'.")
 
 
@@ -597,10 +599,14 @@ def texto_con_valores(texto, valores):
         ultimo = None
         for tipo in (LONGITUD, ANGULO, ESCALAR):
             try:
-                return evaluar(expr, tipo, valores)
+                v = evaluar(expr, tipo, valores)
+                break
             except ErrorExpresion as e:
                 ultimo = ultimo or e
-        raise ultimo
+        else:
+            raise ultimo
+        dim = getattr(valores.get(expr), "dim", None)      # CF-12: «{largo}» da «150 mm», con la unidad del
+        return (v, texto_dimension(dim)) if dim not in (None, SIN_DIMENSION) else v     # parámetro; sin unidad, el número
     try:
         return sustituir_expresiones(texto, valor)
     except ValueError as e:                       # formato inválido: «{ancho:xyz}»
