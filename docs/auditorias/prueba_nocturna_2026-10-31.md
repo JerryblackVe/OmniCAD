@@ -377,6 +377,14 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 
 Prompt en `docs/auditoria_extruir.md` (2026-11-05). Tocará `timeline/operaciones.py`, `timeline/ops_superficie.py`, `nucleo/solidos_crear.py` y las asas de `ui/comandos/solido.py`. Cuando termine: suite completa y prueba de humo, todas las piezas que extruyen (`solido_crear`, `teclear`, `asas`, `herramientas_solido`, `superficie`, `extruir_espacios`) y `extruir_espacios` con `--ventana visible`, mirando las capturas.
 
+## 3q. Tarea nueva: auditoría de Revolución, Barrido y Solevación (2026-11-05)
+
+Solo documenta, sin tocar la app. Si deja la pieza `revolucion_barrido_solevacion`, correrla en el cierre integrado y con `--ventana visible`.
+
+## 3r. Tarea nueva: auditoría de Nervio, Red y Repujado (2026-11-05)
+
+Segunda tanda, va después de la 3q. Si deja la pieza `nervio_red_repujado`, correrla en el cierre integrado y con `--ventana visible`.
+
 ## 4. Cosas que ninguna prueba cubre todavía
 
 | # | Qué falta | Dónde está anotado |
