@@ -45,7 +45,7 @@ de los propios faltantes.
 | 5 | Dibujar con precisión | BOC-9, BOC-12, BOC-24, BOC-13, BOC-19, BOC-15, BOC-26 | `ui/editor_boceto.py`, `api/herramientas_boceto.py`, `ui/modo_boceto.py` | Opus, alto para BOC-9; Sonnet para el resto | Snaps de punto medio, curva, tangente y perpendicular con guías; valores tipeables en todas las herramientas; línea central como eje |
 | 6 | Modificar, patrones y proyección | BOC-14, BOC-16, BOC-17, BOC-10, BOC-8, BOC-18, BOC-30 | `restricciones/boceto.py`, `api/herramientas_boceto.py`, `timeline/operaciones.py` | Opus, alto | Desfase de dos lados y de spline; patrones editables; romper vínculo de proyección; copiar y pegar entre bocetos |
 | 7 | Splines y texto | BOC-11, BOC-20, BOC-21, BOC-28 | `restricciones/boceto.py`, `nucleo/fuentes.py`, `ui/editor_boceto.py` | Opus, alto para BOC-11; Sonnet para el resto | Manijas, peine, insertar punto y cambiar grado con herramienta de API; parámetros de texto automáticos |
-| 8 | Grandes | FU-1 (Boceto 3D), BOC-22 (curvas a malla), BOC-27 (rendimiento), SC4, P-10b-f | varios | Fable, alto, una sesión por ítem | Cada uno con su propio plan; BOC-18 (intersección y proyección a superficie) espera a FU-1 |
+| 8 | Grandes | FU-1 (Boceto 3D), BOC-22 (curvas a malla), BOC-27 (rendimiento), SC4, P-10b-f | varios | Opus, alto, una sesión por ítem | Cada uno con su propio plan; BOC-18 (intersección y proyección a superficie) espera a FU-1 |
 
 ## Orden y dependencias
 

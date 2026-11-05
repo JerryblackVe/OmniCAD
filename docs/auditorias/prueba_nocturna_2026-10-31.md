@@ -24,7 +24,7 @@ Lanzada por Gerardo el 2026-10-31 a las 21:30. Extruir y Proyectar ya terminaron
 | 5 | **Control** (**terminado**: 7473 tests, humo OK, rojos corregidos, commits hechos) | coordinador | Cierre completo, rojos, commits separados | — |
 | 6 | Alta: sólido y superficie (**terminado**; SUP-13 queda Parcial; Opus alto alcanzó) | A | CAP-13, SUP-13, B-124 | Opus alto |
 | 7 | Alta: ensamble (**terminado**; ASM-16 y B-123 nuevos; Opus alto alcanzó) | B | ASM-15, B-108 | Opus alto |
-| 8 | Muy alta (**terminado**; ASM-9 queda Parcial, falta Activar componente; Fable alto alcanzó) | B | ASM-9 | Fable alto |
+| 8 | Muy alta (**terminado**; ASM-9 queda Parcial, falta Activar componente; lo que falte va con Opus alto) | B | ASM-9 | Opus alto |
 | 9 | **Final** (**terminado** a las 07:10: cierre verde con 7567 tests, `test_motor` aparte OK, 41 piezas 0 ✗, humo y foco OK; tortura con 10 hallazgos, B-125 a B-129 y T-19 a T-23; commits hechos) | coordinador | Cierre completo, rojos, tortura, commits | — |
 
 Reglas de la noche:
@@ -210,7 +210,7 @@ El orden que manda desde ahora es la sección 0; las tandas 3 y 4 quedaron dentr
 - Tanda 1 bis (Sonnet alto): terminada; `asas` volvió a 0 ✗ (291) antes del último cambio de `GestorAsas2D`.
 - Tanda 2 (Opus alto): PAT-6 en `local_230279c4-0388-4bc1-b032-0782fcf6f3a7`. BOC-52 y BOC-78 terminaron junto con BOC-77 (ver abajo).
 - Tanda 3 (Opus alto): SUP-13, CAP-13 y ASM-15, después de Proyectar y Extruir.
-- Tanda 4 (Fable alto): ASM-9.
+- Tanda 4 (Opus alto): ASM-9.
 - Boceto, tanda 1 terminó (BOC-41, 47 y 36 resueltos; BOC-73, 74 y 75 nuevos; sin commitear en `main`). Pieza `boceto_herramientas` ampliada (secciones 8 a 10, 0 ✗ en ventana transparente). Falta probar de noche:
   - `boceto_herramientas` con `--ventana visible` una vez, y mirar `capturas/herr_escala_panel.png`, `herr_mover_chica_1024x640.png`, `herr_mover_chica_800x520.png`, `herr_boceto3d_punto_medio.png`, `herr_boceto3d_alineacion.png`, `herr_isoparametrica_unica.png` y `herr_isoparametrica_distribuidas.png` (el marcador y la etiqueta de la ayuda 3D, y las curvas sobre la cara).
   - Las piezas `patrones_boceto`, `desfase_boceto`, `inferencias` y `auditoria_boceto`: tocan `editor_boceto.py` (set_herramienta, Enter, Esc, dibujo) y `Lienzo._rotulo`.
