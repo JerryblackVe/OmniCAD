@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 238: Abierto 157 · Parcial 48 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-05).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 160 · Parcial 48 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-05; después H-95 a H-97 de Nervio y Repujado).
 
 ## Pendientes generales
 
@@ -71,7 +71,7 @@ Abierto 53 · Parcial 3 · Bloqueado 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 15 · Parcial 1.
+Abierto 18 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -84,6 +84,9 @@ Abierto 15 · Parcial 1.
 | H-89 | Barrido sólido › Ruta + Rail guía: Extensión «Perpendicular a la ruta» o «Extensión completa» con la fracción del rail | Abierto | Media | La ayuda de Fusion (`Sweep reference`) la tiene en el sólido; OmniCAD solo la tiene en el barrido de superficie (`extent`, `rail_distance`). Falta en `OpBarrido`, en `sweep` y en la ventana. | timeline/ops_solido.py:125 (`PARAMS` sin `extension`) | 2026-11-05 |
 | H-90 | Solevación sólida: condición «Punto tangente» en un perfil punto | Abierto | Baja | Fusion ofrece Sharp y Point Tangent (cúpula). La ventana del sólido solo ofrece «Aguda» y `loft end_condition={"type": "point_tangent"}` da «type es free, direction, tangent o smooth». La superficie ya lo hace (157,12 mm² contra la media esfera de 157,08). | ui/comandos/crear.py:144 (`_condiciones_de`) | 2026-11-05 |
 | H-91 | Solevación sólida: condiciones de borde junto con carriles, línea central, cerrada o reglada, y exactas | Abierto | Alta | En el sólido, Dirección, Tangente y Suave son aproximadas con una sección auxiliar y dan «no se combinan con carriles, línea central, solevado cerrado ni reglado». Fusion las combina, y la superficie ya lo hace con la derivada exacta (SUP-13). | nucleo/solidos_crear.py:1307 | 2026-11-05 |
+| H-95 | Nervio: Radio de empalme e Invertir la dirección de extracción | Abierto | Media | Fusion Rib tiene Fillet Radius (redondea la base) y Flip Direction de la extracción. OmniCAD guarda `radio_empalme` en el paso pero el Nervio lo ignora (une sin empalme), la ventana lo muestra solo en la Red y `create_rib` no tiene `fillet_radius`; la extracción siempre se fuerza del cuerpo hacia la curva. Pieza `nervio_red_repujado` («Nervio › tiene Radio del empalme»). | timeline/ops_solido.py:271 (une sin `unir_con_empalme`); nucleo/solidos_crear.py:1457 | 2026-11-05 |
+| H-96 | Repujado sobre caras que no son planas ni cilíndricas (esfera, cono, forma libre) | Abierto | Alta | Fusion repuja sobre cualquier cara del cuerpo. OmniCAD da «El repujado admite caras planas o cilíndricas (envolviendo)»: cuadro 6×6 sobre el polo de una esfera r 20 (`sondas_nrr.py rep_esfera`). | nucleo/solidos_crear.py:1571 | 2026-11-05 |
+| H-97 | Repujado: asas de alineación (desplazamiento horizontal, vertical y giro) en la vista | Abierto | Media | Fusion: «Use the distance manipulator… / angle manipulator in the canvas» para Horizontal Distance, Vertical Distance y Rotation Angle. OmniCAD tiene los tres campos (en Más opciones) pero solo el asa de Profundidad. Pieza `nervio_red_repujado` («asas de alineación»). | ui/comandos/asas_extra.py:308 (`_asas_repujado`) | 2026-11-05 |
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: derivación y Duplicar con uniones hechos; falta el catálogo de piezas | Parcial | Media | Falta un catálogo local de piezas estándar más allá de las fijaciones (rodamientos, perfiles, pasadores…; sin servicios en línea): hay que decidir qué piezas y sus medidas. Duplicar con uniones copia un componente por vez, las copias son independientes (sin instancias asociativas) y no tiene los modos de destino «Entre dos caras» e «Intersección de dos aristas» ni «Borrar último duplicado». | ui/cinta.py:59 (Duplicar con uniones); api/herramientas_ensamble.py (duplicate_with_joints); ui/comandos/derivacion.py:16; api/herramientas_documento.py:322 (insert_derive); tests/test_derivacion.py; tests/test_duplicar_con_uniones.py; nucleo/fijaciones.py (solo fijaciones) | 2026-10-31 |
 | H-69 | Organización del boceto: la geometría suelta no tiene nombre, ocultar, bloquear ni «en perfiles» propios | Abierto | Media | Hoy cada curva suelta se lista en Geometrías y su menú ofrece Seleccionar, Convertir en objeto (queda rígido, fuera del solver) y Eliminar. Falta guardar esas propiedades por curva sin sacarla del solver ni duplicar el modelo de objetos (plan_boceto_organizar.md, secciones 4 y 8). | clon/omnicad/ui/navegador_boceto.py (menú de `curva_boceto`); clon/tests/test_boceto_organizar.py::test_categorias_salen_del_dato_y_un_grupo_no_cambia_la_de_sus_miembros | 2026-11-05 |

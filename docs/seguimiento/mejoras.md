@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 135: Abierto 69 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-05).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 138: Abierto 72 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-05; después H-98 a H-100 de Repujado y Plástico).
 
 ## Pendientes generales
 
@@ -44,7 +44,7 @@ Abierto 16 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 9 · Parcial 1.
+Abierto 12 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -53,6 +53,9 @@ Abierto 9 · Parcial 1.
 | H-92 | Revolución › «Proyectar eje»: otro nombre y otro valor por defecto según por dónde se use | Abierto | Baja | La ventana del sólido dice «Eje de proyecto» y arranca marcada; la de superficie dice «Proyectar eje» y arranca sin marcar; `revolve` y `create_surface_revolve` arrancan en `false`. Fusion la llama Project Axis y la ayuda la muestra marcada («Uncheck to keep the axis in its original location»; ⚠ sin abrir Fusion). Además `create_surface_revolve` arranca con `chain=true` y su paso con `cadena` falso. | ui/comandos/solido.py:308; ui/comandos/superficie.py:106 | 2026-11-05 |
 | H-93 | Barrido: aviso de «Selección de cadena» en cada barrido por curvas de boceto | Abierto | Baja | La casilla viene marcada en la ventana y cada barrido normal por un boceto avisa «La selección de cadena solo suma aristas de cuerpos». En Fusion la cadena también junta curvas de boceto tangentes. Basta no avisar cuando la ruta son curvas de boceto (ya son una cadena), o encadenarlas. | timeline/ops_solido.py:149 | 2026-11-05 |
 | H-94 | El aviso flotante de abajo a la derecha tapa el Aceptar del panel y los campos en ventana chica | Abierto | Baja | El aviso «1 advertencia(s)» del barrido anterior queda abierto al pasar a otro comando y se dibuja encima del panel: en 1900×1000 tapa la mitad de Aceptar y Cancelar de Solevación; en 800×520 tapa Distancia y Escala del perfil del Barrido. Fusion lo muestra sin tapar el diálogo. Capturas en evidencias/ui_2026-11-05/capturas (solevacion_punta y barrido_800x520). | ui/avisos.py:3 | 2026-11-05 |
+| H-98 | Repujado sobre un cilindro exige marcar «Envolver en la cara» | Abierto | Baja | Fusion no tiene esa casilla: envuelve solo sobre una cara curva. OmniCAD da «Sobre una cara cilíndrica el repujado se hace envolviendo (envolver=True)» si no se marca; marcado anda (cuadro 6×6 en un cilindro r 10: +37,80 mm³, la cuenta). | nucleo/solidos_crear.py:1573 | 2026-11-05 |
+| H-99 | Repujado: con profundidad negativa el «Tipo» del panel sigue en Relieve | Abierto | Baja | Fusion: «If you adjust the depth value from positive to negative, the Effect will automatically change from Emboss to Deboss». OmniCAD graba bien (−1 da 23900 mm³ en la placa de 24000), pero el panel sigue diciendo Relieve y el asa de Profundidad no baja de 0. Pieza `nervio_red_repujado`. | ui/comandos/crear.py:356 | 2026-11-05 |
+| H-100 | PLÁSTICO › Nervio y Red no toman el desmoldeo ni el radio de la regla asignada | Abierto | Baja | Fusion: la regla da Thickness, Draft Angle y Nominal Radius «used by modeling tools such as Extrude, Rib, Web, Boss, Snap Fit, Emboss» (ayuda `Plastic rules`). OmniCAD arranca en 0 deg y 0 mm. El espesor ya está en H-87. | ui/comandos/crear.py:313 y 316 | 2026-11-05 |
 | H-75 | Un cuerpo negro se ve plano en el visor: arriba y costados del mismo negro, y una letra negra sobre una placa negra desaparece | Abierto | Media | El visor ilumina con luces fijas (difuso × color, brillo chico); con color 0 solo queda el brillo especular en ángulos justos. Fusion ilumina con el entorno y el negro brillante refleja. Probar un reflejo de entorno simple o un mínimo de luz en el visor, y compararlo con Fusion. Visto en el video de Gerardo del 2026-11-05 (docs/brechas_aspecto.md). | clon/omnicad/ui/visor3d.py (LUZ_AMBIENTE, LUZ_BRILLO, GL_SPECULAR) | 2026-11-05 |
 | H-68 | Parámetros automáticos (a futuro): al dibujar un boceto y al aplicar una operación, crear solos los parámetros de sus cotas y valores, con una preferencia para activarlo o desactivarlo | Abierto | Media | Pedido de Gerardo con «Reportar problema» (registro de uso, sesión 2026-11-03_210154, seq 112). Hoy los parámetros se crean a mano. Copiar cómo nombra Fusion los parámetros de modelo (d1, d2…) antes de construir. | timeline/parametros.py | 2026-11-03 |
 | H-55 | Sustainability Insights: la región y el país no cambian el cálculo | Abierto | Media | Sumar la energía de fabricación por región con un factor de red eléctrica con fuente. Hoy el resultado lo avisa. | nucleo/sustentabilidad.py | 2026-11-01 |

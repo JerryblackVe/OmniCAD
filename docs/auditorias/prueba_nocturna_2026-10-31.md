@@ -388,6 +388,10 @@ Solo documenta, sin tocar la app. Si deja la pieza `revolucion_barrido_solevacio
 
 Segunda tanda, va después de la 3q. Si deja la pieza `nervio_red_repujado`, correrla en el cierre integrado y con `--ventana visible`.
 
+- Pieza nueva `scripts/prueba_ui/nervio_red_repujado.py` (en `PIEZAS` de `todo.py`): los botones de Nervio, Red y Repujado en SÓLIDO y PLÁSTICO (y ninguno en SUPERFICIE, CHAPA ni MALLA), el Nervio de una escuadra por el corredor (+1200 mm³, reabrir, deshacer), Grosor tecleado («2,5», «e * 2», vacío, «10 deg», «abc», pegar «3 mm»), Enter, Invertir, dos curvas sueltas, desmoldeo −1° y con extracción, los campos de Fusion del Nervio, la Red con Invertir en una caja hueca, el Repujado con y sin cadena tangente y la Profundidad tecleada, las asas de los tres (3 mm y más allá del cero), la Red con «Más opciones» en 1024×640 y 800×520, y guardar → reabrir. Corrió en minimizada: 82 comprobaciones, 9 ✗ de la app (B-213, B-214, B-215 dos veces, B-216, B-217, H-95, H-97 y H-99): deben seguir en ✗ hasta que se arreglen.
+- Falta: correrla en `--ventana visible` (el chequeo de Tab necesita el foco real: en minimizada sale con ⚠) y en el cierre integrado junto con `solido_crear` y `asas`. Las sondas sin ventana (`evidencias/ui_2026-11-05/sondas_nrr.py`, 61 casos) se pueden repetir para comprobar los arreglos.
+- La corrieron con el código de Extruir de OpenCode sin commitear (`comando.py`, `manipuladores.py`, `solidos_crear.py`…): si algo cambia al integrarlo, puede venir de ahí.
+
 ## 4. Cosas que ninguna prueba cubre todavía
 
 | # | Qué falta | Dónde está anotado |
