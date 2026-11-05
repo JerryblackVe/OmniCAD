@@ -371,7 +371,7 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 ## 3o. Auditoría de Extruir en todos los espacios (2026-11-05)
 
 - Pieza nueva `scripts/prueba_ui/pieza_extruir_espacios.py` (en `PIEZAS` de `todo.py`): botón Extruir en SÓLIDO, SUPERFICIE y PLÁSTICO (y que CHAPA no lo tenga), clic en perfil y en cara plana con el filtro de Extruir superficie, «Dos lados» con el lado 2 tecleado en −5 mm, Enter, reabrir, deshacer, Inicio › Objeto inclinado y el panel más largo en 1024×640 y 800×520. Corrió en minimizada: 18 comprobaciones (una es el control de que los clics sirven), 4 ✗ esperadas (B-205, B-206 y H-85, dos veces): deben seguir en ✗ hasta que se arreglen.
-- Falta: correrla en `--ventana visible`, y en el cierre integrado junto con `solido_crear`, `teclear` y `asas`. Las capturas `evidencias/ui_2026-11-05/capturas/extruir_*.png` no se miraron a ojo (solo la comprobación geométrica del botón Aceptar).
+- Falta: correrla en `--ventana visible`, y en el cierre integrado junto con `solido_crear`, `teclear` y `asas`. Capturas `extruir_*.png` miradas por el coordinador: Aceptar entra en 1024×640 y 800×520; las cajas de valor se pisan (B-207).
 
 ## 4. Cosas que ninguna prueba cubre todavía
 
