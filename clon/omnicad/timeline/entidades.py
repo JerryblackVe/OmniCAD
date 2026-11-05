@@ -29,7 +29,7 @@ import numpy as np
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
 from ..nucleo.perfiles import (aristas_boceto, buscar_por_firma_tolerante, intersecar_forma, proyectar_forma,
-                               proyectar_giro_forma)
+                               proyectar_giro_forma, silueta_forma)
 
 EJES_ORIGEN = {"X": (1.0, 0.0, 0.0), "Y": (0.0, 1.0, 0.0), "Z": (0.0, 0.0, 1.0)}
 
@@ -476,12 +476,16 @@ def proyectar_entidad(e, plano, modo="project", giro=None):
     """(primitivas, puntos) de la entidad resuelta `e` proyectada (o intersecada, `modo="intersect"`) sobre el plano de
     un boceto: formas con `proyectar_forma` / `intersecar_forma`; un punto de trabajo, su proyección; un eje, una
     línea; un plano, su traza en el plano del boceto. shortcut: el eje y la traza se dibujan de ±EXTENSION_EJE mm.
-    Con `giro` ({"eje": (punto, dirección), "tolerancia", "invertir"}) es el perfil giratorio de la forma."""
+    Con `giro` ({"eje": (punto, dirección), "tolerancia", "invertir"}) es el perfil giratorio de la forma.
+    `modo="silueta"` (Proyectar con el filtro Cuerpos, B-119): un cuerpo o un componente da el contorno cerrado de su
+    sombra (`silueta_forma`); lo demás se proyecta como con "project"."""
     n = plano.normal
     if giro is not None:
         if e.forma is None:
             return [], []
         return proyectar_giro_forma(e.forma, plano, giro["eje"], giro["tolerancia"], giro["invertir"])
+    if modo == "silueta" and e.forma is not None and e.tipo in ("cuerpo", "componente"):
+        return silueta_forma(e.forma, plano)
     if e.forma is not None:
         return (intersecar_forma if modo == "intersect" else proyectar_forma)(e.forma, plano)
     if e.punto is not None:

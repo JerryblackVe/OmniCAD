@@ -688,6 +688,7 @@ class OpBoceto(Operacion):
         super().__init__(id, nombre, suprimida, **params)
         self.boceto = boceto if boceto is not None else Boceto()
         self.perdidas = []              # ids de las proyecciones que no coincidieron en el último cálculo (solo memoria)
+        self.rehechas = {}              # {id: (primitivas, puntos)} de las siluetas rehechas en el último cálculo (H-77)
         self._textos_parametricos = {}  # contenido leído al calcular, para declarar sus expresiones actuales
 
     def valores_cotas(self, ctx):
@@ -748,6 +749,8 @@ class OpBoceto(Operacion):
         for c in self.boceto.geo3d.get("curvas", {}).values():     # Intersection Curve / Project To Surface
             if "origen" in c:
                 deps |= ent.dependencias_de(c["origen"].get("refs"), c["origen"].get("curves")) - {self.id}
+        for origen in self.boceto.geo3d.get("vinculos", {}).values():      # vértices de Incluir geometría 3D
+            deps |= ent.dependencias_de(origen.get("refs")) - {self.id}
         return deps
 
     def plano(self, estado, ctx):
@@ -760,8 +763,8 @@ class OpBoceto(Operacion):
     def _reproyectar(self, boceto, plano, estado, ctx):
         """Recalcula las proyecciones asociativas antes del solver, sin alterar el boceto guardado. Las que ya no
         coinciden con el modelo quedan como estaban y se anotan en `perdidas` (Manage Lost Projections)."""
-        self.perdidas = []
-        for registro in boceto.proyecciones:
+        self.perdidas, self.rehechas = [], {}
+        for registro in list(boceto.proyecciones):      # una silueta rehecha cambia de lugar en la lista
             primitivas, puntos = [], []
             try:
                 entidades = [ent.resolver(ref, estado) for ref in registro["refs"]]
@@ -776,9 +779,32 @@ class OpBoceto(Operacion):
                     primitivas.extend(p)
                     puntos.extend(q)
                 coincide = boceto.reproyectar(registro, primitivas, puntos)
+                if not coincide and registro["modo"] == "silueta" and (primitivas or puntos):
+                    quitadas = boceto.rehacer_proyeccion(registro, primitivas, puntos)       # H-77: como Fusion
+                    self.rehechas[registro["id"]] = (primitivas, puntos)
+                    coincide = True
+                    if quitadas:
+                        ctx.aviso(f"{self.nombre}: la silueta proyectada cambió de forma y se rehízo; se quitaron "
+                                  f"{quitadas} restricciones o cotas de tramos que ya no están.")
             if not coincide:
                 self.perdidas.append(registro["id"])
                 ctx.aviso(f"{self.nombre}: la proyección ya no coincide con el modelo; queda como estaba.")
+
+    def rehacer_en(self, boceto):
+        """Aplica a `boceto` (una copia del guardado, para editarla) las siluetas que el último cálculo rehízo (H-77), en
+        el mismo orden: así sus tramos tienen los mismos ids que muestran get_sketch y la ventana, y se pueden
+        restringir. La edición guarda la silueta nueva, como Fusion. Devuelve `boceto`."""
+        for rid, (primitivas, puntos) in self.rehechas.items():
+            registro = next((r for r in boceto.proyecciones if r["id"] == rid), None)
+            if registro is not None:
+                boceto.rehacer_proyeccion(registro, primitivas, puntos)
+        return boceto
+
+    def copia(self):
+        """Las ediciones (API, parámetros, ventana) parten de una copia: lleva las siluetas rehechas (`rehacer_en`)."""
+        nueva = super().copia()
+        self.rehacer_en(nueva.boceto)
+        return nueva
 
     def _conservar_lado_cotas(self, boceto):
         """Si un borde proyectado cruzó una entidad acotada, inicia el solver del lado original de la cota."""
@@ -805,8 +831,9 @@ class OpBoceto(Operacion):
                     boceto.puntos[pid].y += ux * (antes - despues)
 
     def _seguir_al_modelo(self, boceto, plano, estado, ctx):
-        """Recalcula EN LA COPIA las curvas 3D de Intersection Curve / Project To Surface con el modelo actual,
-        conservando sus ids. Cada curva sigue a la de su «index» en el resultado (las que se borraron no cuentan); si
+        """Recalcula EN LA COPIA las curvas 3D de Intersection Curve / Project To Surface / Include 3D Geometry (y los
+        vértices incluidos) con el modelo actual, conservando sus ids. Cada curva sigue a la de su «index» en el
+        resultado (las que se borraron no cuentan); si
         la referencia se perdió o esa curva ya no existe o cambió de tipo, aviso y queda como estaba."""
         from ..restricciones import boceto3d as b3
         g = b3.datos(boceto)
@@ -837,6 +864,11 @@ class OpBoceto(Operacion):
                 for clave in ("radio", "normal", "eje_mayor", "radio_menor", "cerrada"):
                     if clave in h["curvas"][n]:
                         g["curvas"][i][clave] = h["curvas"][n][clave]
+        for pid, origen in g.get("vinculos", {}).items():                 # H-79: los vértices incluidos también
+            try:
+                g["puntos"][pid] = b3.a_boceto(plano, ent.resolver(origen["refs"][0], estado).punto)
+            except (ent.ErrorReferencia, ent.ReferenciaMalFormada, KeyError, TypeError) as e:
+                ctx.aviso(f"{self.nombre}: un vértice incluido ya no se encuentra ({e}); queda como estaba.")
 
     def ejecutar(self, estado, ctx):
         plano = self.plano(estado, ctx)
@@ -914,6 +946,8 @@ def aristas_de_origen(origen, estado):
     if origen["tool"] == "isoparametric_curve":
         return curvas3d.isoparametricas(objetivos[0], origen["point"], origen["direction"], origen["type"],
                                         origen.get("distance"), origen.get("quantity"))
+    if origen["tool"] == "include_3d":           # Include 3D Geometry: las aristas (o el borde de la cara) donde están
+        return [curvas3d.describir(a) for f in objetivos for a in geo._aristas_unicas(f)]
     fuente = [(e.forma, e.plano.normal) for e in (ent.resolver(r, estado) for r in origen["curves"])]
     if origen["tool"] == "project_to_surface":
         caras = geo.compuesto(objetivos)

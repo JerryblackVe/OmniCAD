@@ -963,7 +963,7 @@ def info_boceto(sesion, op):
                            for k in b.cotas.values()],
             "profiles": info_perfiles(br) if br is not None else []}
     if b.proyecciones:
-        info["projections"] = [{"id": r["id"], "mode": r["modo"], "lost": r["id"] in op.perdidas, "entities": r["ids"],
+        info["projections"] = [{"id": r["id"], "mode": {"silueta": "silhouette"}.get(r["modo"], r["modo"]), "lost": r["id"] in op.perdidas, "entities": r["ids"],
                                 "automatic": bool(r.get("auto"))} for r in b.proyecciones]
     if b.patrones:
         info["patterns"] = [{"id": r["id"], "type": "rectangular" if r["tipo"] == "rectangular" else "circular",
@@ -1647,7 +1647,8 @@ def _cota_sobre_restringe(sesion, boceto, anterior):
              "se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), "
              "el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica "
              "una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. Si el boceto "
-             "tiene geometría 3D (draw_line_3d y las demás *_3d) trae además entities_3d, points_3d (x, y, z), "
+             "tiene geometría 3D (draw_line_3d y las demás *_3d) trae además entities_3d, points_3d (x, y, z; source "
+             "si sigue a un vértice del modelo), "
              "constraints_3d, dimensions_3d, status_3d y dof_3d. tangents_off_arc lista los pares [a, b] tangentes cuyo "
              "contacto cae fuera del tramo dibujado de un arco: la tangencia se resuelve contra su círculo entero.")
 def get_sketch(sesion, sketch: str | None = None):
@@ -2858,7 +2859,8 @@ def _alcance_modelo(sesion, plano, linea):
 @herramienta("project_to_sketch", "boceto",
              "Proyecta aristas, caras, cuerpos, planos, ejes y puntos de trabajo, o curvas y puntos de otro boceto, "
              "sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; "
-             "Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para "
+             "Fusion: Intersecar). Un cuerpo entero (bodies) se proyecta como su silueta: el contorno cerrado de lo "
+             "que tapa sobre el plano, aunque sea curvo y se vea de costado. La geometría queda proyectada: fija (violeta en la interfaz), sirve para "
              "restricciones, cotas y perfiles, y con link=true (por defecto) sigue al modelo si después cambia; con "
              "link=false queda congelada. Si el vínculo se pierde: manage_lost_projections; para soltarlo: "
              "break_projection_link. Un eje o la traza de un plano (infinitos) se dibujan como una línea que llega "
@@ -2878,7 +2880,7 @@ def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[
     """
     edges: aristas a proyectar: selector ('|Z', '%CIRCLE and >Z') o ids ('Cuerpo1/E3'); vacío = ninguna.
     faces: caras a proyectar (su contorno): selector o ids ('Cuerpo1/F6'); vacío = ninguna.
-    bodies: ids o nombres de cuerpos enteros; vacío = ninguno.
+    bodies: ids o nombres de cuerpos enteros; vacío = ninguno. Con mode=project cada cuerpo da su silueta: el contorno cerrado de lo que tapa sobre el plano, listo para perfil (Fusion: filtro Bodies).
     mode: project (proyección ortogonal) o intersect (corte con el plano del boceto).
     body: cuerpo donde se evalúan los selectores de edges y faces; vacío = el único cuerpo.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
@@ -2888,16 +2890,17 @@ def project_to_sketch(sesion, edges: list[str] | str | None = None, faces: list[
     references: planos ("XY", id o nombre), ejes ("X", id o nombre), puntos de trabajo ("O", id o nombre), y curvas o puntos de otro boceto ({"sketch": "Boceto1", "curve": 3} o {"sketch": …, "point": 2}).
     """
     op, br = boceto_activo(sesion, sketch, derivados=False)
-    prims, puntos, refs, infinitas = _proyectar_seleccion(sesion, br.plano, mode, edges, faces, bodies, vertices,
+    modo = "silueta" if mode == "project" and bodies else mode      # un cuerpo da su silueta cerrada (B-119)
+    prims, puntos, refs, infinitas = _proyectar_seleccion(sesion, br.plano, modo, edges, faces, bodies, vertices,
                                                           references, body)
     if not refs:
         raise error("INVALID_ARGUMENTS", "Elegí qué proyectar: edges, faces, vertices, bodies o references.")
     if not prims and not puntos:
         raise error("INVALID_GEOMETRY", "Eso no deja nada sobre el plano del boceto"
                     + (": no corta su plano." if mode == "intersect" else "."))
-    datos = {"modo": mode, "refs": refs, "infinitas": infinitas}
+    datos = {"modo": modo, "refs": refs, "infinitas": infinitas}
     r, ids = _sumar_proyecciones(sesion, op, [(prims, puntos, construction, link, datos)])
-    r["mode"] = mode
+    r["mode"] = "silhouette" if modo == "silueta" else mode
     r["projection"] = ids[0]
     return r
 

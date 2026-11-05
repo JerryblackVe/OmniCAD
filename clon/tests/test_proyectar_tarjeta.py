@@ -602,6 +602,57 @@ def test_sin_vinculo_no_sigue_al_modelo(v):
     assert next(c for c in v.doc.estado_final.bocetos[op.id].boceto.curvas.values() if c.id > 0).radio == pytest.approx(14)
 
 
+def test_b119_cuerpo_de_costado_da_su_silueta_cerrada_y_sigue_al_modelo(ventana):
+    """B-119 (VENTANA), el video de Gerardo: boceto en un plano por el eje del cuerpo, Proyectar con el filtro Cuerpos y
+    el vínculo tildado. Clic en el cuerpo, Enter: el contorno cerrado (un perfil para extruir), no las aristas sueltas."""
+    s = api.Sesion()
+    _llamar(s, "create_parameter", name="radio", expression="14 mm")
+    _llamar(s, "create_cylinder", radius="radio", height=47, name="Cilindro")
+    _llamar(s, "create_sketch", plane="XZ", name="Costado")
+    ventana.set_documento(s.doc)
+    ventana.visor.encuadrar()
+    QApplication.processEvents()
+    visor = ventana.visor
+    camara = visor.R.copy(), visor.objetivo.copy(), visor.distancia, visor._orto_cara      # editar mira de frente al XZ
+    ventana.editar_operacion(s.paso("Costado").id)
+    QApplication.processEvents()
+    try:
+        lz = _proyectar(ventana)
+        tarjeta = ventana.modo_boceto.tarjeta
+        combo = next(c for c in tarjeta.contexto.findChildren(QComboBox) if c.findData("cuerpos") >= 0)
+        combo.setCurrentIndex(combo.findData("cuerpos"))
+        QApplication.processEvents()
+        _clic(ventana, (0.0, -14.0, 20.0))                                   # la cara curva, de frente
+        assert lz._elegidos_proy and lz._elegidos_proy[0]["tipo"] == "cuerpo"
+        _tecla(lz, Qt.Key_Return)
+        assert [c.tipo for c in _curvas(lz.b)] == ["linea"] * 4
+        assert [round(p.area) for p in detectar(lz.b.geometria(), lz.plano)] == [28 * 47]
+        assert lz.b.proyecciones[0]["modo"] == "silueta"
+        assert ventana.modo_boceto.terminar()
+    finally:
+        if ventana.modo_boceto.activo:
+            ventana.modo_boceto.cancelar()
+        visor.R, visor.objetivo, visor.distancia, visor._orto_cara = camara
+    _llamar(s, "set_parameter", name="radio", expression="20 mm")
+    info = _llamar(s, "get_sketch", sketch="Costado")
+    assert not info["projections"][0]["lost"] and [round(p["area"]) for p in info["profiles"]] == [40 * 47]
+
+
+def test_incluir_3d_con_clic_deja_una_curva_3d_vinculada_y_se_deshace(v):
+    """Include 3D Geometry (VENTANA): clic en el borde del cilindro con la herramienta; queda como curva 3D con vínculo
+    (no como curva proyectada del boceto plano). Deshacer la saca."""
+    v.modo_boceto.herramienta("incluir_3d")
+    QApplication.processEvents()
+    lz = v.modo_boceto.lienzo
+    planas = len(_curvas(lz.b))
+    _clic(v, BORDE)
+    curvas3d = list(lz.b.geo3d.get("curvas", {}).values())
+    assert [c["tipo"] for c in curvas3d] == ["circulo"] and curvas3d[0]["origen"]["tool"] == "include_3d"
+    assert len(_curvas(lz.b)) == planas
+    lz.deshacer()                                                         # Ctrl+Z de la ventana
+    assert not lz.b.geo3d.get("curvas")
+
+
 @pytest.mark.parametrize("ancho,alto", [(1280, 720), (1024, 640), (800, 520)])
 def test_tarjeta_y_paleta_no_se_tapan_y_se_ven_sus_acciones(v, ancho, alto):
     v.resize(ancho, alto)                                 # con la cinta del boceto, la ventana no baja de ~960 de ancho

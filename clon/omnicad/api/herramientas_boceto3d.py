@@ -539,6 +539,44 @@ def project_to_surface(sesion, faces: list[str] | str, curves: list[int | dict],
     return _agregar_curvas(sesion, sketch, origen, construction)
 
 
+@herramienta("include_3d_geometry", "boceto",
+             "Boceto 3D: Include 3D Geometry de Fusion: incluye aristas (o el borde de caras) y vértices del modelo en "
+             "el boceto DONDE ESTÁN, como curvas y puntos 3D (no se llevan al plano: para eso, project_to_sketch). Con "
+             "link=true (por defecto) las curvas y los puntos siguen al modelo si cambia (source anota de dónde "
+             "salieron); con link=false quedan congelados.", modifica=True)
+def include_3d_geometry(sesion, edges: list[str] | str | None = None, faces: list[str] | str | None = None,
+                        vertices: list[list[float]] | None = None, body: str | None = None, sketch: str | None = None,
+                        construction: bool = False, link: bool = True):
+    """
+    edges: aristas a incluir: selector ('>Z') o ids ('Cuerpo1/E3').
+    faces: caras cuyo borde se incluye: selector o ids ('Cuerpo1/F6').
+    vertices: vértices del modelo por sus coordenadas [[x, y, z], …] (a menos de 0,001 mm de uno).
+    body: cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+    sketch: id o nombre del boceto donde quedan; vacío = el último boceto del timeline.
+    construction: true deja las curvas como construcción.
+    link: true = las curvas y los puntos siguen al modelo; false = quedan congelados.
+    """
+    from ..nucleo import referencias as refs_occ
+    refs = [sl.referencia(c, e) for tipo, sel in (("arista", edges), ("cara", faces))
+            for c, e in sl.elegir(sesion, sel, tipo, body, permitir_vacio=True)]
+    puntos = [(refs_occ.firma_vertice(v)["punto"], ref) for _c, ref, v in
+              (sl.vertice_cercano(sesion, _punto(p, "vertices"), body) for p in vertices or [])]
+    if not refs and not puntos:
+        raise error("INVALID_ARGUMENTS", "Elegí qué incluir: edges, faces o vertices.")
+    r = _agregar_curvas(sesion, sketch, {"tool": "include_3d", "refs": refs}, construction, link) if refs else {}
+    if puntos:
+        def crear(b):
+            plano = boceto_resuelto(sesion, op_boceto(sesion, sketch)).plano
+            ids = [b3.agregar_punto(b, b3.a_boceto(plano, p), unir=False) for p, _ref in puntos]
+            for pid, (_p, ref) in zip(ids, puntos, strict=True):
+                if link:                          # H-79: el punto sigue al vértice, como las aristas
+                    b3.vincular_punto(b, pid, {"tool": "include_3d", "refs": [ref]})
+            return ids
+        ids, op, br = _editar(sesion, sketch, crear)
+        r = {**_informe(sesion, op, br, entities=r.get("entities", []), linked=link), "points": ids}
+    return r
+
+
 @herramienta("isoparametric_curve", "boceto",
              "Boceto 3D: Isoparametric Curve de Fusion (Proyectar/Incluir): saca de una cara las curvas de parámetro "
              "constante, recortadas a su contorno, y las deja como curvas 3D del boceto. direction=u: las que siguen el "
@@ -628,7 +666,8 @@ def info_3d(sesion, b, br):
             return None
     estado, gdl = _estado(br)
     info = {"entities_3d": entidades,
-            "points_3d": [{"id": p, "x": v[0], "y": v[1], "z": v[2], "fixed": p in fijos}
+            "points_3d": [{"id": p, "x": v[0], "y": v[1], "z": v[2], "fixed": p in fijos,
+                           **({"source": g["vinculos"][p]} if p in g.get("vinculos", {}) else {})}
                           for p, v in ((p, xyz(p)) for p in g["puntos"])],
             "constraints_3d": [{"id": k, "type": _A_INGLES[r["tipo"]], "entities": list(r["entidades"]),
                                 **({"axis": r["eje"]} if "eje" in r else {})} for k, r in g["restricciones"].items()],

@@ -57,7 +57,7 @@ HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw
                 "delete_sketch_entities_3d",
                 # Fase 9: boceto 3D completo (tests/test_boceto_fase9_3d.py)
                 "draw_arc_3d", "draw_circle_3d", "draw_ellipse_3d", "draw_rectangle_3d", "draw_conic_3d",
-                "draw_text_3d", "transform_sketch_3d", "intersect_curves", "project_to_surface", "isoparametric_curve", "infer_sketch_snap_3d",
+                "draw_text_3d", "transform_sketch_3d", "intersect_curves", "project_to_surface", "include_3d_geometry", "isoparametric_curve", "infer_sketch_snap_3d",
                 "infer_sketch_snap"]
 
 

@@ -2827,7 +2827,7 @@ class VentanaPrincipal(QMainWindow):
                                         "activalo o corregí su plano de referencia para editarlo.")
                 return
             from ..api.herramientas_boceto import actualizar_alturas_texto
-            boceto = op.boceto.copia()
+            boceto = op.rehacer_en(op.boceto.copia())     # con las siluetas rehechas (H-77)
             actualizar_alturas_texto(boceto, br)
             # La receta guarda fórmulas; el editor arranca en las matrices ya evaluadas que muestra el visor.
             for oid, objeto in boceto.objetos.items():

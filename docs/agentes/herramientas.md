@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-417 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+418 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 49 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 67 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 68 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 36 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -795,6 +795,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`transform_sketch_3d`](#transform_sketch_3d) | sí | Boceto 3D: mover, rotar, escalar o copiar entidades 3D (Fusion: Mover/copiar y Escalar sobre el boceto 3D). |
 | [`intersect_curves`](#intersect_curves) | sí | Boceto 3D: Intersection Curve de Fusion. |
 | [`project_to_surface`](#project_to_surface) | sí | Boceto 3D: Project To Surface de Fusion: proyecta curvas de boceto sobre caras. mode=closest (Closest Point): cada punto de la curva va al punto más cercano de las caras (spline por 49 puntos); mode=vector (Along Vector): proyecta a lo largo de direction (vector [x, y, z] del mundo o un eje: 'X', 'Y', 'Z', id de un eje o una arista recta), hacia donde apunta. |
+| [`include_3d_geometry`](#include_3d_geometry) | sí | Boceto 3D: Include 3D Geometry de Fusion: incluye aristas (o el borde de caras) y vértices del modelo en el boceto DONDE ESTÁN, como curvas y puntos 3D (no se llevan al plano: para eso, project_to_sketch). |
 | [`isoparametric_curve`](#isoparametric_curve) | sí | Boceto 3D: Isoparametric Curve de Fusion (Proyectar/Incluir): saca de una cara las curvas de parámetro constante, recortadas a su contorno, y las deja como curvas 3D del boceto. direction=u: las que siguen el parámetro U (V constante), v: las que siguen V, both: las dos. type=single: la que pasa por point (un punto de la cara, se proyecta a ella); type=distributed: las de toda la cara, a lo ancho, una cada distance mm (medidos sobre la curva perpendicular por point; una pasa por el punto) o quantity curvas parejas sin tocar los bordes. |
 | [`infer_sketch_snap_3d`](#infer_sketch_snap_3d) | no | Boceto 3D: dice qué ayuda de dibujo propone la interfaz con el cursor en [x, y, z] (Fusion: 3D Sketch › ayudas de dibujo): punto medio, intersección, sobre la curva, tangente y perpendicular desde un punto base, alineación con otros puntos (misma coordenada en el plano) y horizontal/vertical (los ejes de la tríada). |
 | [`draw_spiral`](#draw_spiral) | sí | Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. |
@@ -997,7 +998,7 @@ Agrega una cota (dimensión) que maneja la geometría. El valor es un número (m
 
 ### `get_sketch`
 
-Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. Si el boceto tiene geometría 3D (draw_line_3d y las demás *_3d) trae además entities_3d, points_3d (x, y, z), constraints_3d, dimensions_3d, status_3d y dof_3d. tangents_off_arc lista los pares [a, b] tangentes cuyo contacto cae fuera del tramo dibujado de un arco: la tangencia se resuelve contra su círculo entero.
+Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. Si el boceto tiene geometría 3D (draw_line_3d y las demás *_3d) trae además entities_3d, points_3d (x, y, z; source si sigue a un vértice del modelo), constraints_3d, dimensions_3d, status_3d y dof_3d. tangents_off_arc lista los pares [a, b] tangentes cuyo contacto cae fuera del tramo dibujado de un arco: la tangencia se resuelve contra su círculo entero.
 
 - Modifica el documento: no.
 - Parámetros:
@@ -1310,13 +1311,13 @@ Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón)
 
 ### `project_to_sketch`
 
-Proyecta aristas, caras, cuerpos, planos, ejes y puntos de trabajo, o curvas y puntos de otro boceto, sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y con link=true (por defecto) sigue al modelo si después cambia; con link=false queda congelada. Si el vínculo se pierde: manage_lost_projections; para soltarlo: break_projection_link. Un eje o la traza de un plano (infinitos) se dibujan como una línea que llega al 110 % de lo más lejano entre el modelo y la geometría del boceto, y crece con el boceto al recalcular (±100 mm si no hay nada alrededor). edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces; vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos). Lo que coincide con geometría ya proyectada no se duplica: se reutiliza, y si era el contorno automático de la cara queda visible con la referencia elegida. result dice qué pasó: created (hay geometría nueva), reused (solo se reutilizó; reused lista sus ids) o unchanged (ya estaba: no hay paso de deshacer).
+Proyecta aristas, caras, cuerpos, planos, ejes y puntos de trabajo, o curvas y puntos de otro boceto, sobre el plano del boceto (Fusion: Proyectar) o agrega donde cortan ese plano (mode=intersect; Fusion: Intersecar). Un cuerpo entero (bodies) se proyecta como su silueta: el contorno cerrado de lo que tapa sobre el plano, aunque sea curvo y se vea de costado. La geometría queda proyectada: fija (violeta en la interfaz), sirve para restricciones, cotas y perfiles, y con link=true (por defecto) sigue al modelo si después cambia; con link=false queda congelada. Si el vínculo se pierde: manage_lost_projections; para soltarlo: break_projection_link. Un eje o la traza de un plano (infinitos) se dibujan como una línea que llega al 110 % de lo más lejano entre el modelo y la geometría del boceto, y crece con el boceto al recalcular (±100 mm si no hay nada alrededor). edges y faces aceptan selectores (con body si hay varios cuerpos) o ids de find_edges / find_faces; vertices, las coordenadas [x, y, z] de vértices del modelo (proyecta o interseca puntos). Lo que coincide con geometría ya proyectada no se duplica: se reutiliza, y si era el contorno automático de la cara queda visible con la referencia elegida. result dice qué pasó: created (hay geometría nueva), reused (solo se reutilizó; reused lista sus ids) o unchanged (ya estaba: no hay paso de deshacer).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `edges` (lista de texto o texto o null; opcional, por defecto `null`): aristas a proyectar: selector ('|Z', '%CIRCLE and >Z') o ids ('Cuerpo1/E3'); vacío = ninguna.
   - `faces` (lista de texto o texto o null; opcional, por defecto `null`): caras a proyectar (su contorno): selector o ids ('Cuerpo1/F6'); vacío = ninguna.
-  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos enteros; vacío = ninguno.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de cuerpos enteros; vacío = ninguno. Con mode=project cada cuerpo da su silueta: el contorno cerrado de lo que tapa sobre el plano, listo para perfil (Fusion: filtro Bodies).
   - `mode` ("project" | "intersect"; opcional, por defecto `"project"`): project (proyección ortogonal) o intersect (corte con el plano del boceto).
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de edges y faces; vacío = el único cuerpo.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
@@ -1716,6 +1717,21 @@ Boceto 3D: Project To Surface de Fusion: proyecta curvas de boceto sobre caras. 
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto 3D donde quedan las curvas; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true deja las curvas como construcción.
 - CLI: `omnicad call project_to_surface --doc pieza.omnicad faces=… curves=…`
+
+### `include_3d_geometry`
+
+Boceto 3D: Include 3D Geometry de Fusion: incluye aristas (o el borde de caras) y vértices del modelo en el boceto DONDE ESTÁN, como curvas y puntos 3D (no se llevan al plano: para eso, project_to_sketch). Con link=true (por defecto) las curvas y los puntos siguen al modelo si cambia (source anota de dónde salieron); con link=false quedan congelados.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `edges` (lista de texto o texto o null; opcional, por defecto `null`): aristas a incluir: selector ('>Z') o ids ('Cuerpo1/E3').
+  - `faces` (lista de texto o texto o null; opcional, por defecto `null`): caras cuyo borde se incluye: selector o ids ('Cuerpo1/F6').
+  - `vertices` (lista de lista de número o null; opcional, por defecto `null`): vértices del modelo por sus coordenadas [[x, y, z], …] (a menos de 0,001 mm de uno).
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto donde quedan; vacío = el último boceto del timeline.
+  - `construction` (true/false; opcional, por defecto `false`): true deja las curvas como construcción.
+  - `link` (true/false; opcional, por defecto `true`): true = las curvas y los puntos siguen al modelo; false = quedan congelados.
+- CLI: `omnicad call include_3d_geometry --doc pieza.omnicad`
 
 ### `isoparametric_curve`
 

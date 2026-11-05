@@ -40,7 +40,7 @@ Quedan afuera:
 - Instalar o comprar algo: AUD-1, AUD-2, AUD-8, AUD-9, FU-12.
 - Monitor real: UI-2.
 - Límite de OpenCascade o de recetas: SUP-14, SUP-17.
-- Alta sin turno esta noche: SOL-8, SOL-22, H-19, B-119. FU-14 necesita ASM-9.
+- Alta sin turno esta noche: SOL-8, SOL-22, H-19. FU-14 necesita ASM-9.
 - Baja sin turno esta noche: H-54.
 - Espera decisión: B-121 (cambiaría lo que dan las recetas guardadas).
 
@@ -61,7 +61,7 @@ Al terminar, en este orden:
 7. Repetir la tortura con 200 pasos y cadena de 200, más una pasada con la ventana real, que quedaron sin probar.
 8. Cierre completo y commits hechos el 2026-11-01 (`evidencias/cierre_2026-11-01/`): 8230 tests en verde, 3 rojos y 3 piezas corregidos y repetidos (1190 tests cruzados con `-W error`), humo OK. Después de esos arreglos no se repitió la suite entera. El push espera el «sí» de Gerardo. La tortura de 200 pasos queda para la próxima tanda.
 
-**Para próximas sesiones (Gerardo, 2026-11-01):** queda sin asignar, para Claude o para OpenCode con DeepSeek 4.1 Flash o OpenAI Sol. Lo mecánico y de un solo archivo sirve para OpenCode: H-55, H-56, H-58 y T-21. Lo que toca geometría o timeline va con Sol o Opus: B-144, B-119, B-123, H-54, ASM-16, ASM-9, H-4, SUP-13, RI-2 y H-57. Después, Rust: RS-X6, RS-X7 y RS-X8. B-149 espera su decisión.
+**Para próximas sesiones (Gerardo, 2026-11-01):** queda sin asignar, para Claude o para OpenCode con DeepSeek 4.1 Flash o OpenAI Sol. Lo mecánico y de un solo archivo sirve para OpenCode: H-55, H-56, H-58 y T-21. Lo que toca geometría o timeline va con Sol o Opus: B-144, B-123, H-54, ASM-16, ASM-9, H-4, SUP-13, RI-2 y H-57. Después, Rust: RS-X6, RS-X7 y RS-X8. B-149 espera su decisión.
 
 **Para mirar con Fusion real (INSPECCIONAR):** Interferencia con componentes y Quitar volumen en modo directo; si Mostrar puntos de forzado sigue visible con el filtro de cuerpos o componentes; Aceptar gris sin selección en los análisis; Sustainability Insights con un cuerpo elegido.
 
@@ -409,3 +409,5 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 6. Anotar en `PROJECT_LOG.md` (Registro) y en `docs/seguimiento/`; borrar de esta lista lo que quedó verde.
 7. Refrescar la página de seguimiento (pasos en `CLAUDE.md`) y avisar a Gerardo los números.
 - **Tandas del 3 y 4/11 revisadas e integradas el 2026-11-05** (suite completa en verde salvo B-197, que ya fallaba en HEAD; ruff limpio). Falta probar en ventana real, como usuario: piezas `registro_uso` con foco real (botón «Reportar problema y sugerencia» y la sección Registro de uso de Configuración, en 800x520 y en los dos temas), Unión con el campo Tipo más abajo (ASM-20), línea de tiempo de ANIMACIÓN (ANI-4), Empalme con tabla de grupos (FU-6), barrido de parámetros en INSPECCIONAR (SC18), carpetas del timeline (SC9), cotas de línea base y longitud de arco en DIBUJO (CF-3), organización del boceto y texto en ruta con arrastre (B-187), y el pintado del mapa de entorno en perspectiva (H-56).
+- **2026-11-05, Proyección (B-119, B-203, B-204):** verde por API y con clic real en tests/test_proyeccion_seccion.py y tests/test_proyectar_tarjeta.py. Falta en ventana real: Intersecar con Cuerpos, Proyectar en superficie y Curva de intersección; mirar la silueta de la bala en la ventana de Gerardo.
+- **2026-11-05, Proyección (H-77, H-78, H-79):** verde por API en tests/test_proyeccion_seccion.py y con arrastre simulado en tests/test_boceto_fase9_3d_ui.py::test_arrastrar_lo_vinculado_al_modelo_lo_suelta_y_deshacer_lo_vuelve. Falta en ventana real: proyectar la bala, mover un empalme antes del boceto en el timeline y mirar que la silueta se rehace y el aviso; proyectar una rosca modelada y medir la espera; incluir un vértice con Incluir geometría 3D, mover el cuerpo y arrastrar el punto con la tríada.

@@ -137,6 +137,27 @@ def test_seleccionar_y_arrastrar_un_punto_3d(boceto3d):
     assert len(m.lienzo.historial) == pasos
 
 
+def test_arrastrar_lo_vinculado_al_modelo_lo_suelta_y_deshacer_lo_vuelve(boceto3d):
+    """Un vértice o una arista de Incluir geometría 3D arrastrados a mano dejan de seguir al modelo (si no, el
+    recálculo los devolvía a donde estaban); deshacer recupera el vínculo."""
+    m, it = boceto3d, boceto3d.interaccion3d
+    g = b3.datos(m.boceto)
+    pid = b3.agregar_punto(m.boceto, [0, 30, 0], unir=False)
+    b3.vincular_punto(m.boceto, pid, {"tool": "include_3d", "refs": ["x"]})
+    cid = b3.agregar_linea(m.boceto, (0, 0, 0), (30, 0, 0))
+    g["curvas"][cid]["origen"] = {"tool": "include_3d", "refs": ["y"]}
+    m._cambio()
+    _herramienta(m, "seleccionar")
+    _arrastrar(m.lienzo, it.a_pantalla((0, 30, 0)), it.a_pantalla((10, 40, 0)))
+    assert "vinculos" not in g and "origen" in g["curvas"][cid]
+    _arrastrar(m.lienzo, it.a_pantalla((30, 0, 0)), it.a_pantalla((30, 20, 0)))
+    assert "origen" not in g["curvas"][cid]
+    m.lienzo.deshacer()
+    m.lienzo.deshacer()
+    g = b3.datos(m.boceto)
+    assert g["vinculos"][pid]["refs"] == ["x"] and g["curvas"][cid]["origen"]["refs"] == ["y"]
+
+
 def test_arrastrar_una_curva_respeta_las_restricciones(boceto3d):
     m, it = boceto3d, boceto3d.interaccion3d
     cid = b3.agregar_linea(m.boceto, (0, 20, 0), (30, 20, 0))       # lejos de los ejes de la tríada (mandan ellos)

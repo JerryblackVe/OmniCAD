@@ -1902,15 +1902,19 @@ class Boceto:
 
     def revincular(self, pid, refs, primitivas, puntos, infinitas=None):
         """Re-vincular (Manage Lost Projections › Re-Link): la proyección pasa a seguir las referencias `refs`, cuya
-        proyección (`primitivas`, `puntos`) tiene que tener la misma forma que la que había. `infinitas`: las líneas
-        de ejes o planos de la selección nueva (ver `derivar_proyeccion`); None = las que tenía."""
+        proyección (`primitivas`, `puntos`) tiene que tener la misma forma que la que había (una silueta se rehace,
+        H-77). `infinitas`: las líneas de ejes o planos de la selección nueva (ver `derivar_proyeccion`); None = las
+        que tenía."""
         r = self._proyeccion(pid)
         if infinitas is not None:
             r["infinitas"] = dict(infinitas)
+        r["refs"], viejas = copy.deepcopy(refs), r["refs"]
         if not self.reproyectar(r, primitivas, puntos):
-            raise ErrorBoceto("Lo que elegiste no se proyecta con la misma forma que la proyección original (otra "
-                              "cantidad o tipo de curvas): usá Romper vínculo o Borrar geometría y proyectá de nuevo.")
-        r["refs"] = copy.deepcopy(refs)
+            if r["modo"] != "silueta":
+                r["refs"] = viejas
+                raise ErrorBoceto("Lo que elegiste no se proyecta con la misma forma que la proyección original (otra "
+                                  "cantidad o tipo de curvas): usá Romper vínculo o Borrar geometría y proyectá de nuevo.")
+            self.rehacer_proyeccion(r, primitivas, puntos)        # H-77: una silueta se rehace con lo nuevo
 
     def reproyectar(self, registro, primitivas, puntos) -> bool:
         """Actualiza Proyectar / Intersecar de Fusion conservando ids; si cambia la topología, no toca nada."""
@@ -1948,6 +1952,38 @@ class Boceto:
             for atributo in type(anterior).DATOS:
                 setattr(anterior, atributo, copy.deepcopy(getattr(actual, atributo)))
         return True
+
+    def rehacer_proyeccion(self, registro, primitivas, puntos=()):
+        """H-77 (Fusion: la proyección de un cuerpo se regenera): la silueta cambió de cantidad o tipo de tramos, así que
+        se rehace entera con `primitivas` en lugar de quedar perdida. Los tramos que no se movieron conservan su id (se
+        reutilizan); una restricción o cota de un tramo que cambió pasa al tramo nuevo del mismo tipo que pasa por su
+        punto medio. Devuelve cuántas restricciones y cotas se quitaron porque su tramo ya no está."""
+        medios = {}
+        for i in (i for i in registro["ids"] if i in self.curvas):
+            prim = self.primitivas(i)[0]
+            t0, t1, _ = dominio(prim)
+            medios[i] = (self.curvas[i].tipo, evaluar_primitiva(prim, (t0 + t1) / 2)[0])
+        self.proyecciones.remove(registro)
+        datos = {k: v for k, v in registro.items() if k not in ("id", "ids", "huecos", "construccion")}
+        ids = self.agregar_proyeccion(primitivas, puntos, registro["construccion"], origen=datos)
+        nuevo = next((r for r in self.proyecciones if r["ids"] == ids), None)
+        if nuevo is None:                     # todo reutilizado por otra proyección explícita: no queda registro propio
+            nuevo = {**copy.deepcopy(datos), "construccion": registro["construccion"], "ids": list(ids)}
+            self.proyecciones.append(nuevo)
+        nuevo["id"] = registro["id"]
+        cambio = {}
+        for i, (tipo, centro) in medios.items():
+            if i not in ids:
+                cambio[i] = next((j for j in ids if j in self.curvas and self.curvas[j].tipo == tipo
+                                  and distancia_primitiva(self.primitivas(j)[0], centro) < 1e-6), None)
+        antes = len(self.restricciones) + len(self.cotas)
+        for r in list(self.restricciones.values()) + list(self.cotas.values()):
+            r.entidades = [cambio.get(e) or e for e in r.entidades]
+        siguen = {i for r in self.proyecciones for i in r["ids"]}
+        for i in cambio:
+            if i in self.curvas and i not in siguen:
+                self.eliminar(i)
+        return antes - len(self.restricciones) - len(self.cotas)
 
     def agregar_restriccion(self, tipo, entidades, datos=None):
         self._validar_restriccion(tipo, entidades)

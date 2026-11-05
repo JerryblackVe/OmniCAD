@@ -318,7 +318,30 @@ def borrar(b, ids):
     for tabla in ("puntos", "curvas", "restricciones", "cotas"):
         for k in borrar_ids & set(g[tabla]):
             del g[tabla][k]
+    for k in borrar_ids & set(g.get("vinculos", ())):
+        del g["vinculos"][k]
+    if "vinculos" in g and not g["vinculos"]:
+        del g["vinculos"]
     return sorted(borrar_ids)
+
+
+def vincular_punto(b, pid, origen):
+    """Incluir geometría 3D (H-79): el punto 3D `pid` sigue al vértice de `origen` ({"tool": "include_3d", "refs":
+    [referencia del vértice]}) cuando el modelo cambia (`OpBoceto._seguir_al_modelo`)."""
+    datos(b).setdefault("vinculos", {})[pid] = origen
+
+
+def soltar_del_modelo(b, pids):
+    """Lo que se movió a mano (los puntos `pids`) deja de seguir al modelo, como en Fusion: si no, el próximo recálculo
+    (`OpBoceto._seguir_al_modelo`) lo devuelve a donde estaba. Las curvas que tocan esos puntos pierden su `origen`."""
+    g, pids = datos(b), set(pids)
+    for c in g["curvas"].values():
+        if pids.intersection(c["puntos"]):
+            c.pop("origen", None)
+    for p in pids & set(g.get("vinculos", ())):
+        del g["vinculos"][p]
+    if "vinculos" in g and not g["vinculos"]:
+        del g["vinculos"]
 
 
 def transformar(b, ids, matriz, traslacion=(0, 0, 0), centro=(0, 0, 0), copiar=False):
@@ -344,6 +367,7 @@ def transformar(b, ids, matriz, traslacion=(0, 0, 0), centro=(0, 0, 0), copiar=F
     if not copiar:
         for p in puntos:
             g["puntos"][p] = nuevo[p]
+        soltar_del_modelo(b, puntos)
     salida = []
     for cid in curvas:
         c = dict(g["curvas"][cid], puntos=[mapa[p] for p in g["curvas"][cid]["puntos"]])
@@ -782,11 +806,14 @@ def agregar_desde_mundo(b, desc, plano, construccion=False, origen=None):
 # ---------------------------------------------------------------- serialización (claves enteras ↔ listas JSON)
 def a_dict(g):
     return {"puntos": [[k, *v] for k, v in g.get("puntos", {}).items()],
-            **{t: [{"id": k, **v} for k, v in g.get(t, {}).items()] for t in ("curvas", "restricciones", "cotas")}}
+            **{t: [{"id": k, **v} for k, v in g.get(t, {}).items()] for t in ("curvas", "restricciones", "cotas")},
+            **({"vinculos": [{"id": k, **v} for k, v in g["vinculos"].items()]} if g.get("vinculos") else {})}
 
 
 def desde_dict(d):
     g = {"puntos": {int(p[0]): [float(v) for v in p[1:4]] for p in d.get("puntos", [])}}
     for t in ("curvas", "restricciones", "cotas"):
         g[t] = {int(x["id"]): {k: v for k, v in x.items() if k != "id"} for x in d.get(t, [])}
+    if d.get("vinculos"):
+        g["vinculos"] = {int(x["id"]): {k: v for k, v in x.items() if k != "id"} for x in d["vinculos"]}
     return g

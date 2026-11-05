@@ -19,6 +19,7 @@ cotas (versión simple de las referencias estables de Fusion, `entityToken` — 
 Además: contornos de un texto (Font de OCC, como el Texto de boceto de Fusion) y la proyección /
 intersección de aristas, caras y cuerpos sobre el plano del boceto (Proyectar / Intersecar).
 """
+import hashlib
 import math
 from functools import partial
 
@@ -887,6 +888,261 @@ def proyectar_forma(forma, plano):
     return prims, []
 
 
+PLAZO_SILUETA = 3.0      # s para el HLR exacto de una forma libre, en un proceso aparte (la bala con empalme: 0,01 s)
+POLOS_EXACTO = 300       # polos B-spline: con más, la silueta sale de la malla (H-80; bala 60, rosca M8 de 12 mm 780)
+TOL_SILUETA = 0.01       # mm: lo más que se aleja una curva ajustada del borde de la sombra de la malla (H-78)
+DESVIO_SILUETA = 0.03    # mm: desvío de la malla de la sombra; con TOL_SILUETA, la curva queda a < 0,05 mm (H-78)
+
+
+def _hlr_exacto(forma, plano):
+    """Aristas del HLR exacto de OpenCascade (aristas y siluetas, visibles y ocultas) llevadas al plano del boceto."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.HLRAlgo import HLRAlgo_Projector
+    from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
+    from OCP.gp import gp_Trsf
+    ax2 = gp_Ax2(plano.pnt(0, 0), gp_Dir(*map(float, plano.normal)), gp_Dir(*map(float, plano.u)))
+    algo = HLRBRep_Algo()
+    algo.Add(forma)
+    algo.Projector(HLRAlgo_Projector(ax2))
+    algo.Update()
+    algo.Hide()
+    conv = HLRBRep_HLRToShape(algo)
+    t = gp_Trsf()
+    t.SetTransformation(gp_Ax3(ax2), gp_Ax3())          # del plano XY del proyector al plano del boceto
+    aristas = []
+    for nombre in ("VCompound", "OutLineVCompound", "Rg1LineVCompound", "HCompound", "OutLineHCompound",
+                   "Rg1LineHCompound"):
+        c = getattr(conv, nombre)()
+        if c is not None and not c.IsNull():
+            BRepLib.BuildCurves3d_s(c)                 # el HLR da aristas 2D: sin curva 3D no se transforman
+            aristas += _aristas_unicas(BRepBuilderAPI_Transform(c, t, True).Shape())
+    return aristas
+
+
+def hlr_exacto_texto(forma, origen, normal, u):
+    """`_hlr_exacto` como texto BREP: lo corre `aislado` en un proceso aparte (en una forma libre puede no terminar)."""
+    from . import intercambio
+    return intercambio.brep_a_texto(geo.compuesto(_hlr_exacto(forma, geo.Plano.desde_marco(origen, normal, u))))
+
+
+def _polos(forma):
+    """Polos de las caras B-spline y Bézier de la forma: mide lo que le cuesta el HLR exacto (H-80)."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_BezierSurface, GeomAbs_BSplineSurface
+    total = 0
+    for cara in geo.caras(forma):
+        s = BRepAdaptor_Surface(cara)
+        if s.GetType() in (GeomAbs_BSplineSurface, GeomAbs_BezierSurface):
+            total += s.NbUPoles() * s.NbVPoles()
+    return total
+
+
+def _curvas_ajustadas(puntos, tol):
+    """Primitivas por la cadena `puntos` (u, v). Primero se le sacan los dientes de la malla (Douglas-Peucker a tol/2) y
+    se corta en las esquinas (más de 25°); cada tramo queda recto si cabe a `tol` de su cuerda o, si no, una B-spline suave
+    por sus puntos (GeomAPI_PointsToBSpline a `tol`). Los extremos de cada tramo son puntos de la cadena: los tramos
+    seguidos comparten el punto y el perfil cierra. Una cadena cerrada arranca en una esquina, si tiene."""
+    from OCP.GeomAPI import GeomAPI_PointsToBSpline
+    from OCP.GeomAbs import GeomAbs_C2
+    pts = _simplificar([q for k, q in enumerate(puntos) if k == 0 or math.dist(q, puntos[k - 1]) > 1e-9], tol / 2)
+
+    def esquina(a, b, c):
+        u, w = np.subtract(b, a), np.subtract(c, b)
+        return float(u @ w) < math.cos(math.radians(25)) * float(np.linalg.norm(u) * np.linalg.norm(w))
+    if len(pts) > 3 and math.dist(pts[0], pts[-1]) < 1e-9:
+        anillo = pts[:-1]
+        k = next((k for k in range(len(anillo)) if esquina(anillo[k - 1], anillo[k], anillo[(k + 1) % len(anillo)])), 0)
+        pts = anillo[k:] + anillo[:k] + [anillo[k]]
+    cortes = [0] + [k for k in range(1, len(pts) - 1) if esquina(pts[k - 1], pts[k], pts[k + 1])] + [len(pts) - 1]
+    salida = []
+    for k0, k1 in zip(cortes, cortes[1:], strict=False):
+        tramo = pts[k0:k1 + 1]
+        if len(tramo) == 2 or len(_simplificar(tramo, tol)) == 2:
+            if math.dist(tramo[0], tramo[-1]) > 1e-9:
+                salida.append(("linea", None, tuple(tramo[0]), tuple(tramo[-1])))
+            continue
+        arr = Array1_gp_Pnt(1, len(tramo))
+        for k, q in enumerate(tramo, start=1):
+            arr.SetValue(k, gp_Pnt(float(q[0]), float(q[1]), 0.0))
+        try:
+            bs = GeomAPI_PointsToBSpline(arr, 3, 8, GeomAbs_C2, tol).Curve()
+        except Exception:  # noqa: BLE001 — OCC no ajusta (puntos casi repetidos): queda la poligonal del tramo
+            salida += [("linea", None, tuple(a), tuple(b)) for a, b in zip(tramo, tramo[1:], strict=False)
+                       if math.dist(a, b) > 1e-9]
+            continue
+        polos = [(bs.Pole(i).X(), bs.Pole(i).Y()) for i in range(1, bs.NbPoles() + 1)]
+        polos[0], polos[-1] = tuple(tramo[0]), tuple(tramo[-1])      # B-spline anclada: sus extremos son estos polos
+        nudos = tuple(bs.Knot(i) for i in range(1, bs.NbKnots() + 1) for _ in range(bs.Multiplicity(i)))
+        salida.append(("spline", None, tuple(polos), nudos, bs.Degree(), None))
+    return salida
+
+
+def _silueta_malla(forma, plano, caja):
+    """Silueta de una forma libre (B-spline: roscas, solevados) por su malla: los triángulos de frente se proyectan y se
+    unen en 2D (CrossSection de manifold3d, Clipper2) y el borde de la sombra se ajusta con curvas (`_curvas_ajustadas`).
+    Para las que el HLR exacto no conviene: una rosca M8 vista desde su eje no termina en 30 s, y su contorno de malla,
+    una vuelta encima de otra, tardaba ~10 s en partir la cara (H-80); así tarda 0,2 s."""
+    import manifold3d as m3
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+    escala = math.dist(*caja) if caja else 1.0
+    copia = BRepBuilderAPI_Copy(forma, True, False).Shape()     # la malla de la sombra queda en la copia, no en la del visor
+    tris = [t for _cara, t in geo.teselar_por_cara(copia, max(escala * 5e-4, DESVIO_SILUETA)) if len(t)]
+    if not tris:
+        return proyectar_forma(forma, plano)
+    tris = np.concatenate(tris).astype(float)
+    n = np.asarray(plano.normal, float)
+    normal = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    frente = tris[normal @ n > 1e-12 * np.linalg.norm(normal, axis=1)]
+    frente = frente[np.argsort(frente.mean(axis=1) @ n)]     # por profundidad: cada tanda tapa una franja y se une rápido
+    uv = (frente - plano.origen) @ np.stack([plano.u, plano.v]).T
+    partes = [m3.CrossSection(list(c), m3.FillRule.NonZero) for c in np.array_split(uv, max(1, len(uv) // 500))]
+    lazos = []
+    for lazo in m3.CrossSection.batch_boolean(partes, m3.OpType.Add).to_polygons():
+        x, y = lazo[:, 0], lazo[:, 1]
+        if abs(float(x @ np.roll(y, -1) - y @ np.roll(x, -1))) / 2 < (escala * 1e-4) ** 2:
+            continue                                   # un poro entre caras de la malla que no comparten vértices
+        puntos = [tuple(map(float, q)) for q in lazo]
+        lazos.append(_curvas_ajustadas(puntos + puntos[:1], TOL_SILUETA))
+    return _en_orden(lazos), []
+
+
+def _en_orden(lazos):
+    """Cada lazo arrancando por su punto de menor (u, v), y los lazos en ese orden: así `Boceto.reproyectar` reconoce la
+    silueta cuando el cuerpo cambia de medida."""
+    claves = []
+    for lazo in (lz for lz in lazos if lz):
+        inicio = [tuple(round(c, 6) for c in puntos_primitiva(p, 2)[0]) for p in lazo]
+        k = inicio.index(min(inicio))
+        claves.append((min(inicio), lazo[k:] + lazo[:k]))
+    return [p for _clave, lazo in sorted(claves, key=lambda x: x[0]) for p in lazo]
+
+
+_CACHE_SILUETA, _CACHE_SILUETA_MAX = {}, 32
+
+
+def silueta_forma(forma, plano, tolerancia=1e-4):
+    """Proyectar un cuerpo (Fusion: Project con el filtro Bodies, «projects closed profiles»): el contorno cerrado de
+    su sombra sobre el plano del boceto, sin las aristas que quedan adentro. Sirve igual para cuerpos curvos vistos de
+    costado (B-119): un cilindro acostado da un rectángulo; un toro desde arriba, sus dos círculos.
+    Método: se parte una cara enorme con lo que da el HLR exacto (`_hlr_exacto`), se quedan las regiones cuya normal
+    pega en el cuerpo y se unen (ShapeUpgrade_UnifySameDomain junta las caras y las aristas alineadas). Una forma libre
+    va al HLR exacto en un proceso aparte, con tope; si es pesada (`POLOS_EXACTO`) o no termina, sale de su malla
+    (`_silueta_malla`).
+    Devuelve (primitivas, puntos sueltos): cada lazo en orden y arrancando por su punto de menor (u, v), para que
+    `Boceto.reproyectar` las reconozca cuando el cuerpo cambia de medida (si cambia la cantidad de tramos, la proyección
+    se rehace: `Boceto.rehacer_proyeccion`, H-77)."""
+    caja = geo.caja_envolvente(forma)
+    # recalcular el timeline sin cambiar el cuerpo no repite el HLR (una rosca tarda segundos): la clave es el texto
+    # BREP de la forma (0,05 s en una rosca M8), igual aunque «Recalcular todo» la vuelva a construir; otro paso de
+    # rosca con la misma caja da otro texto.
+    from . import intercambio
+    clave = (hashlib.sha1(intercambio.brep_a_texto(forma, 1).encode()).digest(), _clave_plano(plano), tolerancia)
+    if clave in _CACHE_SILUETA:
+        prims, puntos = _CACHE_SILUETA[clave]
+        return list(prims), list(puntos)
+    salida = _silueta(forma, plano, tolerancia, caja)
+    if len(_CACHE_SILUETA) >= _CACHE_SILUETA_MAX:
+        _CACHE_SILUETA.pop(next(iter(_CACHE_SILUETA)))
+    _CACHE_SILUETA[clave] = (tuple(salida[0]), tuple(salida[1]))
+    return salida
+
+
+def _a_vertices(prim, arista, a_uv):
+    """La unión difusa mueve los vértices hasta la holgura y deja la curva como estaba: los extremos de una línea o de
+    una spline van a los vértices de la arista, para que el boceto los comparta y el perfil cierre."""
+    if prim is None or prim[0] not in ("linea", "spline"):
+        return prim
+    from OCP.TopExp import TopExp
+    vs = [a_uv(BRep_Tool.Pnt_s(v)) for v in (TopExp.FirstVertex_s(arista), TopExp.LastVertex_s(arista))]
+    inicio = prim[2] if prim[0] == "linea" else prim[2][0]
+    if math.dist(vs[1], inicio) < math.dist(vs[0], inicio):
+        vs.reverse()
+    if prim[0] == "linea":
+        return ("linea", None, vs[0], vs[1])
+    polos = list(prim[2])
+    polos[0], polos[-1] = vs
+    return (prim[0], prim[1], polos, *prim[3:])
+
+
+def _silueta(forma, plano, tolerancia, caja):
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepTools import BRepTools
+    from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+    from OCP.TopAbs import TopAbs_WIRE
+    from OCP.TopoDS import TopoDS_Compound
+    from OCP.gp import gp_Lin
+    if not geo.es_forma_libre(forma):
+        aristas = _hlr_exacto(forma, plano)
+    elif _polos(forma) > POLOS_EXACTO:
+        return _silueta_malla(forma, plano, caja)
+    else:                                   # forma libre chica (empalmes, solevados): exacta, aparte y con tope
+        from . import aislado, intercambio
+        try:
+            aristas = _aristas_unicas(intercambio.forma_de_texto(aislado.correr(
+                "silueta_exacta", forma, PLAZO_SILUETA, origen=[float(x) for x in plano.origen],
+                normal=[float(x) for x in plano.normal], u=[float(x) for x in plano.u])))
+        except aislado.TareaAislada:
+            return _silueta_malla(forma, plano, caja)
+    if not aristas:
+        return proyectar_forma(forma, plano)            # sin área a la vista (un punto, una arista suelta)
+    normal = gp_Dir(*map(float, plano.normal))
+    grande = BRepBuilderAPI_MakeFace(gp_Pln(plano.pnt(0, 0), normal), -_TAM_CARA, _TAM_CARA, -_TAM_CARA,
+                                     _TAM_CARA).Face()
+    args, herramientas = List_TopoDS_Shape(), List_TopoDS_Shape()
+    args.Append(grande)
+    for e in aristas:
+        herramientas.Append(e)
+    sp = BRepAlgoAPI_Splitter()
+    sp.SetArguments(args)
+    sp.SetTools(herramientas)
+    sp.SetFuzzyValue(max(tolerancia, math.dist(*caja) * 5e-5 if caja else 0.0))   # el HLR de un toro deja huecos ~1e-5
+    sp.Build()
+    if not sp.IsDone():
+        raise geo.ErrorGeometria("No se pudo calcular la silueta del cuerpo.")
+    borde = {hash(a) for a in _aristas_unicas(grande)}
+    for a in _aristas_unicas(grande):
+        borde.update(hash(h) for h in geo.lista_occ(sp.Modified(a)))
+    rayo = IntCurvesFace_ShapeIntersector()
+    rayo.Load(forma, 1e-7)
+    constructor, sombra, hay = BRep_Builder(), TopoDS_Compound(), False
+    constructor.MakeCompound(sombra)
+    for cara in geo.caras(sp.Shape()):
+        if any(hash(a) in borde for a in _aristas_unicas(cara)):
+            continue                                    # la región de afuera (toca el borde de la cara enorme)
+        try:
+            adentro = geo.punto_dentro(cara)
+        except geo.ErrorGeometria:
+            continue                                    # una astilla sin área (dos curvas casi encimadas)
+        rayo.Perform(gp_Lin(gp_Pnt(*map(float, adentro)), normal), -1e12, 1e12)
+        if rayo.NbPnt():
+            constructor.Add(sombra, cara)
+            hay = True
+    if not hay:
+        return proyectar_forma(forma, plano)
+    a_uv = lambda p: plano.a_uv((p.X(), p.Y(), p.Z()))  # noqa: E731
+    unir = ShapeUpgrade_UnifySameDomain(sombra, True, True, True)
+    try:
+        unir.Build()
+    except Exception:  # noqa: BLE001 — con miles de tramos del teselado (roscas) puede fallar por un tramo casi nulo
+        veces = {}                                       # sin unir: el borde son las aristas de una sola región
+        for cara in geo.caras(sombra):
+            for a in _aristas_unicas(cara):
+                veces.setdefault(hash(a), [a, 0])[1] += 1
+        prims = [arista_a_primitiva(a, a_uv, tuple(plano.normal)) for a, n in veces.values() if n == 1]
+        return [p for p in prims if p is not None], []
+    lazos = []
+    for cara in geo.caras(unir.Shape()):
+        externo = BRepTools.OuterWire_s(cara)
+        alambres = [externo] + [TopoDS.Wire(w) for w in geo._explorar(cara, TopAbs_WIRE) if not w.IsSame(externo)]
+        for w in alambres:
+            # en el orden del alambre (TopExp): BRepTools_WireExplorer se corta si la unión difusa dejó vértices sin
+            # compartir y perdía tramos
+            lazos.append([p for p in (_a_vertices(arista_a_primitiva(e, a_uv, tuple(plano.normal)), e, a_uv)
+                                      for e in _aristas_unicas(w)) if p])
+    return _en_orden(lazos), []
+
+
 def intersecar_forma(forma, plano):
     """Intersecar (Fusion: Project/Include > Intersect): curvas donde la forma corta el plano del boceto.
     Devuelve (primitivas, puntos sueltos (u, v)) — una arista que atraviesa el plano da un punto."""
@@ -950,9 +1206,34 @@ def proyectar_giro_forma(forma, plano, eje, tolerancia=0.1, invertir=False, mues
         ts = np.linspace(f, l, muestras)
         pts = _simplificar([a_uv(curva.Value(float(t))) for t in ts], tolerancia)
         prims += [("linea", None, a, b) for a, b in zip(pts, pts[1:], strict=False) if math.dist(a, b) > 1e-9]
+    prims += _frentes_en_el_eje(forma, p0, d, a_uv)
     if prims:
         return prims, []
     return [], [a_uv(p) for p in _vertices(forma)]
+
+
+def _frentes_en_el_eje(forma, p0, d, a_uv):
+    """Una cara que corta el eje (la tapa de un cilindro, el fondo de una caja) gira en un disco que llega hasta el eje,
+    pero sus aristas giradas se quedan en su radio menor. Por cada corte, el segmento radial desde el eje (r = 0) hasta
+    el vértice más lejano de esa cara a la misma altura: así el perfil giratorio cierra contra el eje.
+    shortcut: solo usa los vértices de la cara a la altura del corte (tapas planas); una cara inclinada que corta el eje
+    sin vértices a esa altura no suma frente."""
+    from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
+    from OCP.gp import gp_Lin
+    rayo = IntCurvesFace_ShapeIntersector()
+    rayo.Load(forma, 1e-7)
+    rayo.Perform(gp_Lin(gp_Pnt(*map(float, p0)), gp_Dir(*map(float, d))), -1e12, 1e12)
+    salida = []
+    for i in range(1, rayo.NbPnt() + 1):
+        corte = np.array(rayo.Pnt(i).Coord())
+        h = float((corte - p0) @ d)
+        lejos = [q for q in (np.array(v.Coord()) for v in _vertices(rayo.Face(i))) if abs(float((q - p0) @ d) - h) < 1e-6]
+        if lejos:
+            q = max(lejos, key=lambda q: float(np.linalg.norm((q - p0) - d * float((q - p0) @ d))))
+            a, b = a_uv(gp_Pnt(*corte)), a_uv(gp_Pnt(*q))
+            if math.dist(a, b) > 1e-9:
+                salida.append(("linea", None, a, b))
+    return salida
 
 
 _motor.registrar(globals(), _iniciar_opencascade)

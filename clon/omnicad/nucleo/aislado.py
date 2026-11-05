@@ -74,7 +74,13 @@ def _proyeccion_exacta(forma, e, x, deflexion):
     return dibujo._hlr(forma, dibujo.Marco(e, x), "exacto", deflexion)
 
 
-_TAREAS = {"autointersecciones": _autointersecciones, "proyeccion_exacta": _proyeccion_exacta}
+def _silueta_exacta(forma, origen, normal, u):
+    from . import perfiles
+    return perfiles.hlr_exacto_texto(forma, origen, normal, u)
+
+
+_TAREAS = {"autointersecciones": _autointersecciones, "proyeccion_exacta": _proyeccion_exacta,
+           "silueta_exacta": _silueta_exacta}
 
 
 def _documento(receta):

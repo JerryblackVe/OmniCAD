@@ -373,6 +373,7 @@ class Interaccion3D(QObject):
         if self.arrastre is None:
             return False
         geometria = self.arrastre[0] == "geometria"
+        movidos = self.arrastre[2] if geometria else ()
         clic, self._clic_asa = self._clic_asa, None
         self.arrastre = None
         if clic is not None:
@@ -382,6 +383,7 @@ class Interaccion3D(QObject):
             if lz.historial and lz.historial[-1] == lz.b.a_dict():
                 lz.historial.pop()              # un clic sin mover no deja un paso vacío de deshacer
             else:
+                b3.soltar_del_modelo(self.modo.boceto, movidos)     # arrastrado a mano: ya no sigue al modelo
                 lz.pila_rehacer.clear()
                 self.modo._cambio()
         self.dibujar()

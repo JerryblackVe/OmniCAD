@@ -87,6 +87,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [brechas_previa_aislada.md](brechas_previa_aislada.md) | B-155 y RS-X6: error oculto y demora de la vista previa aparte |
 | [brechas_inspeccionar.md](brechas_inspeccionar.md) | Especificación de INSPECCIONAR contra capturas de Fusion (resuelta, ver su auditoría) |
 | [brechas_construir.md](brechas_construir.md) | CON-1–CON-8: CONSTRUIR contra capturas de Fusion |
+| [brechas_proyeccion.md](brechas_proyeccion.md) | Proyectar/Incluir del boceto contra la ayuda de Fusion (B-119, B-203, B-204, H-77 a H-80) |
 | [brechas_herramientas_solido.md](brechas_herramientas_solido.md) | CAP-1–CAP-14: herramientas de SÓLIDO contra capturas de Fusion |
 | [brechas_freecad.md](brechas_freecad.md) | F1–F23 |
 | [brechas_plasticity.md](brechas_plasticity.md) | PL1–PL13 |

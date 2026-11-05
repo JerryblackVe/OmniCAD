@@ -116,8 +116,8 @@ HERRAMIENTAS = {
                   "Enter los proyecta sobre el plano del boceto (violeta, fijos); Esc cancela."),
     "intersecar": ("Intersecar", "Elegí caras, aristas o cuerpos y revisá la vista previa. Aceptar o Enter agrega las "
                    "curvas donde cortan el plano del boceto; Esc cancela."),
-    "incluir_3d": ("Incluir geometría 3D", "Clic en aristas o vértices del modelo para incluirlos en el boceto "
-                   "(el boceto es plano: se llevan al plano)."),
+    "incluir_3d": ("Incluir geometría 3D", "Clic en aristas o vértices del modelo: quedan en el boceto donde están, "
+                   "como curvas y puntos 3D (para llevarlos al plano, Proyectar)."),
     "proyectar_eje": ("Proyectar eje", "Proyecta el eje del perfil giratorio elegido en la tarjeta sobre el plano "
                       "del boceto, con el vínculo de proyección elegido."),
     "isoparametrica": ("Curva isoparamétrica", "Clic en un punto de una cara del modelo: saca sus curvas U, V o ambas "
@@ -2546,13 +2546,15 @@ class Lienzo(QWidget):
         return max(round(v / e) * e, 1e-3)
 
     # ------------------------------------------------------------ Proyectar / Intersecar / Incluir
-    def _tanda_proyeccion(self, forma, modo, ref):
-        """Argumentos de `Boceto.agregar_proyeccion` para una forma OCC, con el tipo de línea y el vínculo actuales."""
-        from ..nucleo.perfiles import intersecar_forma, proyectar_forma
+    def _tanda_proyeccion(self, forma, modo, ref, tipo=None):
+        """Argumentos de `Boceto.agregar_proyeccion` para una forma OCC, con el tipo de línea y el vínculo actuales.
+        Un cuerpo entero (`tipo` "cuerpo", filtro Cuerpos) se proyecta como su silueta cerrada (B-119)."""
+        from ..timeline import entidades as ent
         if self.plano is None:
             raise ErrorBoceto("El boceto no tiene plano.")
-        prims, puntos = (intersecar_forma if modo == "intersecar" else proyectar_forma)(forma, self.plano)
-        origen = {"modo": "intersect" if modo == "intersecar" else "project", "refs": [ref]} if ref else None
+        clave = "intersect" if modo == "intersecar" else "silueta" if tipo == "cuerpo" else "project"
+        prims, puntos = ent.proyectar_entidad(ent.Entidad(tipo or "forma", forma=forma), self.plano, clave)
+        origen = {"modo": clave, "refs": [ref]} if ref else None
         if not self.opciones["vinculo_proyeccion"]:          # Projection Link apagado: queda congelada
             origen = None
         return prims, puntos, self.construccion, origen
@@ -2569,10 +2571,10 @@ class Lienzo(QWidget):
         self.mensaje.emit(f"{nombre}: {texto_proyeccion(resumen)}")
         return True
 
-    def proyectar_forma(self, forma, modo="proyectar", ref=None):
+    def proyectar_forma(self, forma, modo="proyectar", ref=None, tipo=None):
         """Agrega al boceto la proyección (o la intersección) de una forma OCC sobre su plano, sin pasar por la tarjeta.
         Con `ref` (la referencia persistente de lo elegido) la proyección sigue al modelo cuando este cambia (B-09)."""
-        tanda = self._tanda_proyeccion(forma, modo, ref)
+        tanda = self._tanda_proyeccion(forma, modo, ref, tipo)
         if not tanda[0] and not tanda[1]:
             self.mensaje.emit("Eso no deja nada sobre el plano del boceto.")
             return False
@@ -2638,7 +2640,7 @@ class Lienzo(QWidget):
                         origen["infinitas"] = {str(k): 0.0 for k in range(len(prims))}
                     tanda = (prims, puntos, self.construccion, origen)
                 else:
-                    tanda = self._tanda_proyeccion(e["forma"], self.herramienta, e.get("ref"))
+                    tanda = self._tanda_proyeccion(e["forma"], self.herramienta, e.get("ref"), e.get("tipo"))
             except (ent.ErrorReferencia, ent.ReferenciaMalFormada):
                 return [], None, f"La referencia de «{self._nombre_elegido(e)}» ya no es válida: sacala y elegila de nuevo."
             except (geo.ErrorGeometria, ErrorBoceto) as error:
@@ -2817,6 +2819,31 @@ class Lienzo(QWidget):
                 b3.agregar_desde_mundo(self.b, d, self.plano, self.construccion, {**origen, "index": i} if vinculo else None)
         return self.aplicar_cambio(agregar, anclar=False)
 
+    def incluir_3d_forma(self, forma, ref):
+        """Incluir geometría 3D (Fusion: Project/Include › Include 3D Geometry): la arista queda DONDE ESTÁ, como curva
+        3D del boceto; un vértice, como punto 3D. Con vínculo los dos siguen al modelo, como `include_3d_geometry`."""
+        from ..nucleo import curvas3d
+        from ..nucleo import geometria as geo
+        from ..restricciones import boceto3d as b3
+        origen = {"tool": "include_3d", "refs": [ref]} if ref and self.opciones["vinculo_proyeccion"] else None
+        if forma.ShapeType() == geo.TopAbs_VERTEX:
+            from ..nucleo import referencias as refs
+            p = refs.firma_vertice(forma)["punto"]
+
+            def agregar_punto():
+                pid = b3.agregar_punto(self.b, b3.a_boceto(self.plano, p), unir=False)
+                if origen:
+                    b3.vincular_punto(self.b, pid, origen)
+            ok = self.aplicar_cambio(agregar_punto, anclar=False)
+        else:
+            curvas = [curvas3d.describir(a) for a in geo._aristas_unicas(forma)]
+            ok = self.aplicar_cambio(lambda: [b3.agregar_desde_mundo(self.b, d, self.plano, self.construccion,
+                                                                     {**origen, "index": i} if origen else None)
+                                              for i, d in enumerate(curvas)], anclar=False)
+        if ok:
+            self.mensaje.emit(f"{HERRAMIENTAS['incluir_3d'][0]}: listo. Seguí eligiendo o Esc.")
+        return ok
+
     def _curvas_iso(self, forma, punto):
         """(curvas, tipo, distancia, cantidad) de la isoparamétrica de `forma` por `punto` con las opciones de la paleta;
         `ErrorGeometria` si no sale ninguna."""
@@ -2940,7 +2967,9 @@ class Lienzo(QWidget):
             return ok
         if h == "perfil_giratorio":
             return self.perfil_giratorio_forma(forma, ref)
-        return self.proyectar_forma(forma, "intersecar" if h == "intersecar" else "proyectar", ref)
+        if h == "incluir_3d":
+            return self.incluir_3d_forma(forma, ref)
+        return self.proyectar_forma(forma, "intersecar" if h == "intersecar" else "proyectar", ref, info.get("tipo"))
 
     # ------------------------------------------------------------ vínculo de proyección (BOC-17)
     def _proyecciones_de(self, ids):
@@ -2986,7 +3015,8 @@ class Lienzo(QWidget):
             if reg["modo"] == "giro":
                 giro = {"eje": ent.como_eje(ent.resolver(reg["eje"], self.estado_referencias())),
                         "tolerancia": reg["tolerancia"], "invertir": reg["invertir"]}
-            prims, puntos = ent.proyectar_entidad(ent.Entidad("cuerpo", forma=forma), self.plano, reg["modo"], giro)
+            prims, puntos = ent.proyectar_entidad(ent.Entidad(ref.get("tipo", "cuerpo"), forma=forma), self.plano,
+                                                  reg["modo"], giro)
         except (geo.ErrorGeometria, ent.ErrorReferencia, ErrorBoceto) as e:
             self.mensaje.emit(str(e))
             return False
