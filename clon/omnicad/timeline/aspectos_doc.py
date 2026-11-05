@@ -102,13 +102,24 @@ def _cambios_de_cuerpo(doc, cid):
     return doc.propiedades.get(cid, {})
 
 
-def asignar(doc, aspecto, cuerpos=(), caras=(), origen=None):
+def _sin_caras(quitar_caras):
+    """Al pintar un cuerpo, Fusion deja conservar o quitar los aspectos propios de sus caras (H-73)."""
+    return {"caras": None} if quitar_caras else {}
+
+
+def caras_pintadas_de(doc, cuerpos):
+    """{id de cuerpo: cuántas caras con aspecto propio} de esos cuerpos (las que tapan el aspecto del cuerpo)."""
+    return {cid: n for cid in cuerpos if (n := len(caras_propias(doc.propiedades.get(cid, {}))))}
+
+
+def asignar(doc, aspecto, cuerpos=(), caras=(), origen=None, quitar_caras=False):
     """Pone `aspecto` (un dict de `nucleo.aspectos`, o el de «En este diseño») en los cuerpos y en las caras
-    (lista de (id de cuerpo, referencia de cara)). Devuelve la entrada del diseño."""
+    (lista de (id de cuerpo, referencia de cara)). `quitar_caras`: los cuerpos pierden además los aspectos propios de
+    sus caras. Devuelve la entrada del diseño."""
     todos, entrada = entrada_para(doc, aspecto, origen)
     cambios = {CLAVE: {"lista": todos}}
     for cid in cuerpos:
-        cambios.setdefault(cid, {}).update(_con_aspecto(entrada))
+        cambios.setdefault(cid, {}).update(_con_aspecto(entrada), **_sin_caras(quitar_caras))
     for cid, refs in _por_cuerpo(caras).items():
         actuales = [c for c in _cambios_de_cuerpo(doc, cid).get("caras", []) if c["ref"] not in refs]
         cambios.setdefault(cid, {})["caras"] = actuales + [dict(_con_aspecto(entrada), ref=ref) for ref in refs]
@@ -116,21 +127,21 @@ def asignar(doc, aspecto, cuerpos=(), caras=(), origen=None):
     return entrada
 
 
-def asignar_color(doc, rgb, cuerpos=(), caras=()):
+def asignar_color(doc, rgb, cuerpos=(), caras=(), quitar_caras=False):
     """Un color suelto (sin aspecto del diseño): los cuerpos y caras toman el color y pierden su acabado."""
     suelto = {"apariencia": list(rgb), "acabado": None, "aspecto": None}
-    cambios = {cid: dict(suelto) for cid in cuerpos}
+    cambios = {cid: dict(suelto, **_sin_caras(quitar_caras)) for cid in cuerpos}
     for cid, refs in _por_cuerpo(caras).items():
         actuales = [c for c in _cambios_de_cuerpo(doc, cid).get("caras", []) if c["ref"] not in refs]
         cambios.setdefault(cid, {})["caras"] = actuales + [dict(suelto, ref=ref) for ref in refs]
     doc.set_propiedades(cambios)
 
 
-def quitar(doc, cuerpos=(), caras=()):
+def quitar(doc, cuerpos=(), caras=(), quitar_caras=False):
     """Saca el aspecto de los cuerpos (queda el color de su material) y de las caras (vuelven al del cuerpo)."""
     cambios = {}
     for cid in cuerpos:
-        cambios.setdefault(cid, {}).update({"apariencia": None, "acabado": None, "aspecto": None})
+        cambios.setdefault(cid, {}).update({"apariencia": None, "acabado": None, "aspecto": None}, **_sin_caras(quitar_caras))
     for cid, refs in _por_cuerpo(caras).items():
         resto = [c for c in _cambios_de_cuerpo(doc, cid).get("caras", []) if c["ref"] not in refs]
         cambios.setdefault(cid, {})["caras"] = resto or None
@@ -253,13 +264,14 @@ def propiedades_con(doc, nueva):
 def aplicar_panel(doc, diseno, elegido=None, cuerpos=(), caras=(), rgb=None):
     """Lo que escribe el panel Aspecto al aplicar (Aceptar en Diseño, aplicar en Render): la lista editada de «En este
     diseño» (`diseno`, None = sin tocarla) y después el color suelto `rgb` o el aspecto `elegido` en los cuerpos y las
-    caras. Devuelve {id provisorio: id definitivo} de los aspectos nuevos. Pensada para correr en una transacción."""
+    caras. Un cuerpo queda ENTERO con lo elegido: pierde los aspectos propios de sus caras (pedido de Gerardo,
+    2026-11-05). Devuelve {id provisorio: id definitivo} de los aspectos nuevos. Pensada para correr en una transacción."""
     mapa = reemplazar_lista(doc, diseno) if diseno is not None and diseno != lista(doc) else {}
     if rgb is not None:
-        asignar_color(doc, rgb, cuerpos, caras)
+        asignar_color(doc, rgb, cuerpos, caras, quitar_caras=True)
     elif elegido is not None:
         origen = None if "id" in elegido else ("mis" if elegido["nombre"] in asp.cargar_usuario()["mis"] else "biblioteca")
-        asignar(doc, elegido, cuerpos, caras, origen)
+        asignar(doc, elegido, cuerpos, caras, origen, quitar_caras=True)
     return mapa
 
 

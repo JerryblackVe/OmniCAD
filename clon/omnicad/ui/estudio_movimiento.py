@@ -6,14 +6,14 @@ el documento. Las cuentas están en `timeline/ops_ensamblar.poses_de_estudio`.""
 import time
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QValidator
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QHBoxLayout, QLabel, QPushButton,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QHBoxLayout, QLabel, QPushButton,
                                QScrollArea, QSlider, QVBoxLayout, QWidget)
 
 from ..nucleo import geometria as geo
 from ..timeline.operaciones import Contexto, ErrorOperacion
 from ..timeline.parametros import ErrorExpresion
 from ..timeline.ops_ensamblar import MOVIMIENTOS, poses_de_estudio, valores_de_estudio
+from .formulario import NumeroDecimal
 
 MODOS = {"una_vez": "En un sentido", "ida_vuelta": "Ida y vuelta", "bucle": "Bucle"}
 NOMBRES = {"giro": "Giro", "giro2": "Giro 2 (cabeceo)", "giro3": "Giro 3 (guiñada)", "desliz": "Deslizamiento",
@@ -58,26 +58,6 @@ def rango(doc, uid, clave, tam):
 def aplicar_poses(ventana, poses):
     ventana.visor.transformaciones = poses
     ventana.visor.update()
-
-
-class CampoNumero(QDoubleSpinBox):
-    """Campo de valor que acepta el punto y la coma decimal («45.5» y «45,5»), sea cual sea la configuración regional."""
-
-    def validate(self, texto, pos):
-        estado, nuevo, pos = super().validate(texto, pos)
-        if estado == QValidator.Invalid:        # el separador de la otra convención
-            otro = texto.replace(",", ".") if "," in texto else texto.replace(".", ",")
-            estado2, nuevo2, pos2 = super().validate(otro, pos)
-            if estado2 != QValidator.Invalid:
-                return estado2, nuevo2, pos2
-        return estado, nuevo, pos
-
-    def valueFromText(self, texto):
-        limpio = texto.replace(self.suffix(), "").replace(self.prefix(), "").strip().replace(",", ".")
-        try:
-            return float(limpio)
-        except ValueError:
-            return super().valueFromText(texto)
 
 
 class PanelEstudioMovimiento(QDialog):
@@ -163,7 +143,7 @@ class PanelEstudioMovimiento(QDialog):
         marca.setChecked(not sigue)
         marca.setEnabled(not sigue)
         marca.setToolTip("Anima este movimiento al reproducir" + (" (lo mueve un vínculo)" if sigue else ""))
-        spin = CampoNumero(decimals=2, minimum=min(mn, u["valores"].get(clave, 0.0)) - 1e-9,
+        spin = NumeroDecimal(decimals=2, minimum=min(mn, u["valores"].get(clave, 0.0)) - 1e-9,
                               maximum=max(mx, u["valores"].get(clave, 0.0)) + 1e-9, suffix=" °" if gira else " mm",
                               value=u["valores"].get(clave, 0.0))
         spin.setAccessibleName(f"Valor de {u['nombre']} · {NOMBRES[clave]}")

@@ -154,6 +154,158 @@ def test_aplicar_a_caras_pinta_solo_la_cara_en_vivo_y_al_aceptar(v):
     assert v.visor.caras_pintadas == []
 
 
+def test_caras_elegidas_antes_de_abrir_abren_en_caras_y_se_pintan(v):
+    """B-198: con caras preseleccionadas, Aspecto abría en «Cuerpos» y escondía las caras (Aceptar pedía cuerpos)."""
+    v._seleccionar([_hit_cara(v, ">Z", "op1.c1")])
+    p, w = _abrir(v)
+    assert p.valores["aplicar_a"] == "caras" and p.widgets["aplicar_a"].r_caras.isChecked()
+    assert p._a_la_vista(p._por_clave["caras"]) and not p._a_la_vista(p._por_clave["cuerpos"])
+    w.elegir(asp.buscar("Pintura - Brillante (Rojo)"), desde_biblioteca=True)
+    p.aceptar()
+    assert v.panel is None and len(v.doc.propiedades["op1.c1"]["caras"]) == 1
+
+
+def _ventana_en_el_visor(visor, desde, hasta):
+    """Arrastre con el botón izquierdo como una persona: apretar, varios movimientos, soltar (eventos al widget)."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    def ev(tipo, p, boton, botones):
+        p = QPointF(*p)
+        QApplication.sendEvent(visor, QMouseEvent(tipo, p, visor.mapToGlobal(p), boton, botones, Qt.NoModifier))
+    ev(QEvent.MouseButtonPress, desde, Qt.LeftButton, Qt.LeftButton)
+    for k in range(1, 6):
+        ev(QEvent.MouseMove, [a + (b - a) * k / 5 for a, b in zip(desde, hasta, strict=True)], Qt.NoButton, Qt.LeftButton)
+    ev(QEvent.MouseButtonRelease, hasta, Qt.LeftButton, Qt.NoButton)
+
+
+def test_ventana_dentro_de_aspecto_elige_todas_las_caras_o_cuerpos(v):
+    """H-72: en Fusion, arrastrar una ventana dentro del comando elige de una lo que encierra (no hace falta un clic
+    por cara: en el video del 2026-11-05 hicieron ~30 para pintar cinco letras)."""
+    v.visor.encuadrar()
+    QTest.qWait(10)
+    esquinas = ((3, 3), (v.visor.width() - 3, v.visor.height() - 3))
+    p, w = _abrir(v)
+    assert v.visor.ventana_en_comando                    # el campo Cuerpos admite varios: arrastrar hace la ventana
+    _ventana_en_el_visor(v.visor, *esquinas)
+    assert sorted(h["ref"]["cuerpo"] for h in p.valores["cuerpos"]) == ["op1.c1", "op2.c1"]
+    p.widgets["aplicar_a"].set_valor("caras")
+    _ventana_en_el_visor(v.visor, *esquinas)
+    caras = p.valores["caras"]
+    assert len(caras) == 9 and {h["tipo"] for h in caras} == {"cara"}       # 6 de la caja + 3 del cilindro
+    _ventana_en_el_visor(v.visor, *esquinas)                                  # otra vez: no duplica ni quita
+    assert len(p.valores["caras"]) == 9
+    w.elegir(asp.buscar("Pintura - Brillante (Rojo)"), desde_biblioteca=True)
+    p.aceptar()
+    assert len(v.doc.propiedades["op1.c1"]["caras"]) == 6 and not v.visor.ventana_en_comando
+
+
+def test_seleccion_de_pintura_dentro_de_aspecto_suma_lo_que_toca(v):
+    """H-72: SELECCIONAR › Selección de pintura (tecla 3) también anda con el comando abierto: elige para su campo."""
+    import numpy as np
+    v.visor.encuadrar()
+    QTest.qWait(10)
+    p, _w = _abrir(v)
+    v.acciones["sel_pintura"].trigger()
+    assert v.visor.modo == "sel_pintura"
+    (a, b), _ok = v.visor.puntos_pantalla(np.array([[0, 0, 20.0], [90, 0, 30.0]]))   # arriba de la caja y del cilindro
+    _ventana_en_el_visor(v.visor, tuple(map(float, a)), tuple(map(float, b)))
+    assert sorted(h["ref"]["cuerpo"] for h in p.valores["cuerpos"]) == ["op1.c1", "op2.c1"]
+    v.acciones["sel_pintura"].trigger()                                       # otra vez: vuelve a la selección común
+    assert v.visor.modo is None
+
+
+def _clic_en_el_visor(visor, pos, doble=False):
+    """Clic izquierdo como una persona. Doble: Qt manda press, release, press, doble clic y release (registro del
+    2026-11-05: cada doble clic de Gerardo dejó dos «clic»)."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    def ev(tipo, boton, botones):
+        q = QPointF(*pos)
+        QApplication.sendEvent(visor, QMouseEvent(tipo, q, visor.mapToGlobal(q), boton, botones, Qt.NoModifier))
+    ev(QEvent.MouseMove, Qt.NoButton, Qt.NoButton)
+    ev(QEvent.MouseButtonPress, Qt.LeftButton, Qt.LeftButton)
+    ev(QEvent.MouseButtonRelease, Qt.LeftButton, Qt.NoButton)
+    if doble:
+        ev(QEvent.MouseButtonPress, Qt.LeftButton, Qt.LeftButton)
+        ev(QEvent.MouseButtonDblClick, Qt.LeftButton, Qt.LeftButton)
+        ev(QEvent.MouseButtonRelease, Qt.LeftButton, Qt.NoButton)
+
+
+def test_placa_con_letras_caras_elegidas_todas_blancas_y_despues_el_cuerpo_entero_negro(v):
+    """B-200 y H-73, el caso de Gerardo (2026-11-05): placa con letras unidas y sueltas. En «Caras» se pintan TODAS las
+    caras elegidas, también las elegidas con doble clic (antes el segundo clic la soltaba y quedaba sin pintar). En
+    «Cuerpos» el cuerpo queda ENTERO del color nuevo: ninguna cara conserva otro color."""
+    import numpy as np
+    s = api.Sesion()
+    assert api.llamar(s, "create_box", {"length": 120, "width": 40, "height": 2, "name": "Placa"})["ok"]
+    for i, x in enumerate((-40, -20, 0, 20, 40)):                # unidas las pares, sueltas las impares
+        extra = {"operation": "join", "target": "Placa"} if i % 2 == 0 else {}
+        assert api.llamar(s, "create_box", {"length": 10, "width": 16, "height": 4, "z": 2, "x": x, **extra})["ok"]
+    v.set_documento(s.doc)
+    QTest.qWait(20)
+    v.visor.encuadrar()
+    QTest.qWait(10)
+    arriba = v.visor.puntos_pantalla(np.array([[x, 0, 6.0] for x in (-40, -20, 0, 20, 40)]))[0]
+    p, w = _abrir(v)
+    p.widgets["aplicar_a"].set_valor("caras")
+    for k, pos in enumerate(arriba):                              # la cara de arriba de cada letra
+        _clic_en_el_visor(v.visor, tuple(map(float, pos)), doble=k % 2 == 1)
+    assert len(p.valores["caras"]) == 5
+    w.elegir(asp.buscar("Plástico - Brillante (Blanco)"), desde_biblioteca=True)
+    p.aceptar()
+    pintadas = ad.caras_con_aspecto(v.doc, v.doc.estado_final)
+    blanco = pytest.approx(asp.BIBLIOTECA["Plástico - Brillante (Blanco)"]["color"])
+    assert len(pintadas) == 5 and all(rgb == blanco for _c, _r, rgb in pintadas)
+    assert len(v.visor.caras_pintadas) == 5
+    p, w = _abrir(v)                                              # ahora la placa entera en negro
+    _clic_en_el_visor(v.visor, tuple(map(float, v.visor.puntos_pantalla(np.array([[0, -17, 2.0]]))[0][0])))
+    assert [h["ref"]["cuerpo"] for h in p.valores["cuerpos"]] == ["op1.c1"]
+    w.elegir(asp.buscar("Plástico - Brillante (Negro)"), desde_biblioteca=True)
+    _previsualizar(p)
+    assert {c for c, *_r in v.visor.caras_pintadas} == {"op3.c1", "op5.c1"}   # la previa ya muestra la placa entera
+    p.aceptar()
+    assert "caras" not in v.doc.propiedades["op1.c1"]
+    assert {c for c, _r, _rgb in ad.caras_con_aspecto(v.doc, v.doc.estado_final)} == {"op3.c1", "op5.c1"}
+    v.doc.deshacer()                                              # deshacer devuelve las letras blancas de la placa
+    assert len(v.doc.propiedades["op1.c1"]["caras"]) == 3
+
+
+def test_ventana_y_pintura_no_pasan_el_maximo_del_campo(v):
+    """Revisión de H-72: un campo de 2 no recibe 9 caras de una ventana."""
+    v.visor.encuadrar()
+    QTest.qWait(10)
+    p, _w = _abrir(v)
+    p.widgets["aplicar_a"].set_valor("caras")
+    p._por_clave["caras"].maximo = 2
+    try:
+        _ventana_en_el_visor(v.visor, (3, 3), (v.visor.width() - 3, v.visor.height() - 3))
+        assert len(p.valores["caras"]) == 2
+    finally:
+        p._por_clave["caras"].maximo = None
+
+
+def test_material_fisico_desde_la_ventana_da_masa_y_color(v):
+    """MODIFICAR › Material físico como una persona: elegir el cuerpo, el material en la lista y Aceptar. La masa sale de
+    la densidad y, sin aspecto propio, el cuerpo se ve del color del material."""
+    from PySide6.QtCore import Qt
+    from omnicad.nucleo.analisis import TABLA_MATERIALES
+    from omnicad.ui.comandos import CATALOGO
+    v._seleccionar([_hit_cuerpo(v, "op1.c1")])
+    v.ejecutar_comando(CATALOGO["material_fisico"]())
+    p = v.panel
+    lista = p.widgets["material"]
+    lista.setCurrentIndex(lista.findData("ABS"))                      # lo que hace elegir en la lista desplegable
+    QTest.mouseClick(p.boton_ok, Qt.LeftButton)
+    assert v.panel is None and v.doc.propiedad("op1.c1", "material") == "ABS"
+    r = api.llamar(api.Sesion(v.doc), "get_physical_properties", {"bodies": ["op1.c1"]})["result"]["bodies"][0]
+    assert r["mass_g"] == pytest.approx(100 * 60 * 20 * 1.06e-3, rel=1e-6)
+    assert _color_en_el_visor(v, "op1.c1") == pytest.approx(TABLA_MATERIALES["ABS"]["color"])
+    v.doc.deshacer()
+    assert v.doc.propiedad("op1.c1", "material") is None
+
+
 def test_ocultar_el_cuerpo_oculta_su_cara_pintada(v):
     _ = api.llamar(v.sesion_aspecto, "set_appearance", {"faces": ">Z", "body": "op1.c1", "color": "#ff0000"})
     v._refrescar_visibilidad()
@@ -274,6 +426,27 @@ def test_selector_rapido_espectro_rgb_y_deslizadores_emiten_cambios(v):
     sel.b_avanzada.click()
     assert avanzada == [1]
     sel.close()
+
+
+@pytest.mark.parametrize("escrito,esperado", [("0.25", 0.25), ("0,25", 0.25), ("1", 1.0)])
+def test_los_numeros_del_aspecto_aceptan_punto_y_coma_tecleando(v, escrito, esperado):
+    """B-202: con la PC en español, «0.25» tecleado en Aspereza quedaba en 0 (solo entraba la coma)."""
+    from PySide6.QtCore import Qt
+    from omnicad.ui.aspectos_ui import EditorMateriales, SelectorRapido
+    sel = SelectorRapido()
+    sel.cargar(asp.BIBLIOTECA["Plástico - Brillante (Azul)"])
+    ed = EditorMateriales(asp.BIBLIOTECA["Plástico - Mate (Gris)"])
+    ed.g_transl.setChecked(True)                            # la profundidad se escribe con la translucidez prendida
+    sel.show()
+    ed.show()
+    for campo in (sel.aspereza.numero, ed.reflectancia.numero, ed.profundidad):
+        campo.setFocus()
+        campo.selectAll()                                   # el número (sin el sufijo): lo tipeado lo reemplaza
+        QTest.keyClicks(campo, escrito)
+        QTest.keyClick(campo, Qt.Key_Tab)
+        assert campo.value() == pytest.approx(esperado)
+    sel.close()
+    ed.close()
 
 
 def test_editor_de_materiales_en_vivo_aplicar_y_cancelar(v, tmp_path):

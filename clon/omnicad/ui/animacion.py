@@ -40,11 +40,11 @@ from types import SimpleNamespace
 import numpy as np
 from PySide6.QtCore import QEvent, QEventLoop, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QFontMetricsF, QKeySequence, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFileDialog, QFormLayout, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
                                QMenu, QMessageBox, QProgressDialog, QRadioButton, QScrollArea, QSlider, QSpinBox,
                                QTabBar, QToolButton, QVBoxLayout, QWidget)
 
+from .formulario import NumeroDecimal     # B-202: acepta «0.25» y «0,25»
 from .. import NOMBRE_APP
 from ..nucleo import render_cpu as rc
 from ..nucleo.animacion import (DURACION_DEFECTO, TIPOS, Guion, centros_de, calcular_explosion, cuadro_gif,
@@ -448,7 +448,7 @@ class LineaTiempoAnimacion(QWidget):
             b.clicked.connect(funcion)
             barra.addWidget(b)
             self.botones[clave] = b
-        self.tiempo = QDoubleSpinBox()
+        self.tiempo = NumeroDecimal()
         self.tiempo.setDecimals(2)
         self.tiempo.setRange(0.0, 3600.0)
         self.tiempo.setSingleStep(0.1)
@@ -648,7 +648,7 @@ class DialogoAccion(QDialog):
 
     @staticmethod
     def _num(valor, minimo, maximo, sufijo):
-        s = QDoubleSpinBox()
+        s = NumeroDecimal()
         s.setRange(minimo, maximo)
         s.setDecimals(2)
         s.setSuffix(sufijo)

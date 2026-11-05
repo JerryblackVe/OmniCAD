@@ -1265,8 +1265,9 @@ class VentanaPrincipal(QMainWindow):
         from ..nucleo import render_cpu as rc
         from ..timeline import aspectos_doc
         previa = [p for p in self._previa_aspecto.get("caras", []) if p[0] in estado.cuerpos]
+        sin_caras = self._previa_aspecto.get("sin_caras", ())      # «Quitar el aspecto de sus caras» (H-73)
         propias = [p for p in aspectos_doc.caras_con_aspecto(self.doc, estado)
-                   if not any(p[0] == q[0] and p[1] == q[1] for q in previa)]
+                   if p[0] not in sin_caras and not any(p[0] == q[0] and p[1] == q[1] for q in previa)]
         salida, usadas = [], set()
         for cid, ref, rgb in propias + previa:
             if cid in ocultos:
@@ -1634,7 +1635,10 @@ class VentanaPrincipal(QMainWindow):
             self._cancelar_eleccion()
 
     def _modo_seleccion(self, modo):
-        if self.panel is not None or not self._salir_de_boceto():
+        if self.panel is not None:              # H-72: con un comando abierto, la herramienta elige para su campo
+            if self.modo_boceto.activo:
+                return
+        elif not self._salir_de_boceto():
             return
         self.visor.set_modo(None if self.visor.modo == modo else modo)
         self.visor.setFocus()
@@ -1645,11 +1649,15 @@ class VentanaPrincipal(QMainWindow):
         return [hit_desde_ref({"tipo": "cuerpo", "cuerpo": c}, estado) for c in ids]
 
     def _seleccion_region(self, poligono, cruce):
-        """Selección en ventana o de forma libre: cuerpos (o caras con prioridad de cara) dentro del polígono."""
-        estado = self._estado_visible()
-        caras = getattr(self, "prioridad_seleccion", None) == "cara"
+        """Selección en ventana o de forma libre: cuerpos (o caras con prioridad de cara) dentro del polígono. Con un
+        comando abierto (H-72) va al campo activo, caras o cuerpos según lo que pide ese campo."""
+        campo = self.panel.activa if self.panel is not None else None
+        estado = self.panel.ctx.estado if self.panel is not None else self._estado_visible()
+        caras = "cara" in campo.filtros if campo is not None else getattr(self, "prioridad_seleccion", None) == "cara"
         nuevos = []
         for m in self.visor._mallas:
+            if m["id"] in self.visor.cuerpos_de_previa or m["id"] not in estado.cuerpos:
+                continue                              # lo que solo existe en la vista previa no se elige
             if caras:
                 lista, tris, indice = self.visor._datos_pick(m["id"])
                 for i, cara in enumerate(lista):
@@ -1669,6 +1677,9 @@ class VentanaPrincipal(QMainWindow):
                 nuevos.append(m["id"])
         if not caras:
             nuevos = self._hits_cuerpos(self._expandir_componentes(nuevos))
+        if self.panel is not None:
+            self.panel.elegir_varias(nuevos)
+            return
         aditivo = bool(QApplication.keyboardModifiers() & (Qt.ControlModifier | Qt.ShiftModifier))
         refs_previas = [h["ref"] for h in self.seleccion]
         self._seleccionar((self.seleccion if aditivo else []) +
@@ -1683,6 +1694,7 @@ class VentanaPrincipal(QMainWindow):
 
     def _entidad_pintada(self, hit):
         if self.panel is not None:
+            self.panel.elegir_varias([hit])
             return
         if all(h["ref"] != hit["ref"] for h in self.seleccion):
             self._seleccionar(self.seleccion + [hit])
@@ -2598,7 +2610,7 @@ class VentanaPrincipal(QMainWindow):
                 and self.modo_boceto.activo):
             self.modo_boceto.lienzo.setAttribute(Qt.WA_TransparentForMouseEvents, False)
             self.modo_boceto.objetos.set_suspendido(False)
-        self.visor.ventana_libre = True
+        self.visor.ventana_libre, self.visor.ventana_en_comando = True, False
         self.visor.set_filtro(self.filtro_actual())
         self._estado_previa = None
         self.area.set_panel(None)

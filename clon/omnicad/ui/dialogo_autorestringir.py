@@ -10,10 +10,11 @@ Cada resultado lleva el candado de Fusion (totalmente / parcialmente restringido
 `ELEGIR_DATUM`; el lienzo captura el clic en un punto y lo vuelve a abrir con `fijar_datum`.
 """
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
                                QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QSlider,
                                QVBoxLayout)
 
+from .formulario import NumeroDecimal     # B-202: acepta «0.25» y «0,25»
 from ..restricciones import sugerir_auto_restricciones
 from .iconos import icono
 
@@ -31,9 +32,9 @@ class DialogoAutoRestringir(QDialog):
         self.b, self.valores = boceto, valores_cotas
         self.pedidos, self.excluidas, self.resultados = 3, set(), []
         self.fijados = []               # resultados con la casilla marcada: sobreviven a recalcular
-        self.tol_angulo = QDoubleSpinBox(decimals=2, minimum=0.01, maximum=45.0, singleStep=0.5, suffix=" °")
+        self.tol_angulo = NumeroDecimal(decimals=2, minimum=0.01, maximum=45.0, singleStep=0.5, suffix=" °")
         self.tol_angulo.setValue(1.0)
-        self.tol_distancia = QDoubleSpinBox(decimals=4, minimum=0.0001, maximum=10.0, singleStep=0.001, suffix=" mm")
+        self.tol_distancia = NumeroDecimal(decimals=4, minimum=0.0001, maximum=10.0, singleStep=0.001, suffix=" mm")
         self.tol_distancia.setValue(0.001)
         self.datum = QComboBox()
         self.datum.addItem("Automático (origen)", None)

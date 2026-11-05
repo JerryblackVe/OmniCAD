@@ -4982,7 +4982,7 @@ Lista de materiales (ADMINISTRAR › Lista de materiales): las piezas sólidas d
 
 ### `set_appearance`
 
-Cambia cómo se ven cuerpos o CARAS (MODIFICAR › Aspecto, «Aplicar a»: Cuerpos/componentes o Caras): un aspecto del diseño, de la biblioteca o de Mis aspectos (appearance, p. ej. 'Aluminio - Anodizado (rojo)', 'Hormigón - Liso'; list_appearances los lista) y/o un color propio (color «#rrggbb» o [r, g, b]). Con los dos, el acabado del aspecto con ese color. Con solo el color, pinta con un color suelto. Sin ninguno, quita el aspecto (vuelve al color del material, o al del cuerpo en las caras). No cambia la masa.
+Cambia cómo se ven cuerpos o CARAS (MODIFICAR › Aspecto, «Aplicar a»: Cuerpos/componentes o Caras): un aspecto del diseño, de la biblioteca o de Mis aspectos (appearance, p. ej. 'Aluminio - Anodizado (rojo)', 'Hormigón - Liso'; list_appearances los lista) y/o un color propio (color «#rrggbb» o [r, g, b]). Con los dos, el acabado del aspecto con ese color. Con solo el color, pinta con un color suelto. Sin ninguno, quita el aspecto (vuelve al color del material, o al del cuerpo en las caras). Pintar un cuerpo lo deja ENTERO de ese aspecto: sus caras con aspecto propio lo pierden, salvo clear_face_overrides=false (las conserva y avisa cuántas tapan al cuerpo). No cambia la masa.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -4991,6 +4991,7 @@ Cambia cómo se ven cuerpos o CARAS (MODIFICAR › Aspecto, «Aplicar a»: Cuerp
   - `color` (texto o lista de número o null; opcional, por defecto `null`): color propio «#rrggbb» o [r, g, b] (0..1 o 0..255); vacío = el del aspecto.
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras en vez de cuerpos (Aplicar a: Caras): selector (">Z"), id de find_faces ("Cuerpo1/F6") o lista de ellos.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores de faces; vacío = el único cuerpo del documento.
+  - `clear_face_overrides` (true/false; opcional, por defecto `true`): con bodies, true (por defecto) quita el aspecto propio de sus caras; false las conserva.
 - CLI: `omnicad call set_appearance --doc pieza.omnicad`
 
 ### `list_appearances`

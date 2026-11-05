@@ -37,7 +37,7 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (QAction, QBrush, QColor, QIcon, QImage, QLinearGradient, QPainter, QPen, QPixmap,
                            QRadialGradient)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
-                               QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit,
+                               QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit,
                                QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox, QProgressDialog,
                                QPushButton, QScrollArea, QSizePolicy, QSlider, QSpinBox, QTabWidget, QToolButton,
                                QVBoxLayout, QWidget)
@@ -51,6 +51,7 @@ from ..timeline.ops_insertar import calcomanias_vigentes
 from ..timeline.operaciones import propiedades_cuerpo
 from . import temas
 from .aspectos_ui import PanelAspectos, RadiosAplicarA
+from .formulario import NumeroDecimal     # B-202: acepta «0.25» y «0,25»
 from .cinta import ESPACIOS, accion_secundaria, grupo_secundario
 from .formulario import ANCHOS, armar_cabecera, fila_mensaje, poner_mensaje
 from .iconos import icono
@@ -1336,7 +1337,7 @@ class _Deslizador(QWidget):
         h.setContentsMargins(0, 0, 0, 0)
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setRange(int(minimo * self.k), int(maximo * self.k))
-        self.caja = QDoubleSpinBox()
+        self.caja = NumeroDecimal()                 # B-202: acepta «0.5» y «0,5»
         self.caja.setRange(minimo, maximo)
         self.caja.setDecimals(decimales)
         self.caja.setSingleStep({0: 1.0, 1: 0.1}.get(decimales, 0.05))
@@ -2104,7 +2105,7 @@ class VentanaRender(QMainWindow):
         if not ids and not caras:
             self.indicar("Elegí los cuerpos o las caras a los que querés quitarles el aspecto.")
             return
-        ad.quitar(self.doc, ids, caras)
+        ad.quitar(self.doc, ids, caras, quitar_caras=True)     # un cuerpo vuelve entero a su material (H-73)
         self.actualizar()
         self.cambiado.emit()
 

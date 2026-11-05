@@ -17,7 +17,7 @@ import time
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFrame, QGridLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QFrame, QGridLayout,
                                QHBoxLayout, QHeaderView, QLabel, QLayout, QLineEdit, QMenu, QPlainTextEdit, QPushButton, QScrollArea,
                                QSizePolicy, QSlider, QSpinBox, QTabBar, QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout,
                                QWidget)
@@ -28,8 +28,8 @@ from .. import registro_uso
 from ..registro_uso.ganchos import error as registrar_error
 from . import formato, preajustes_ui, temas
 from .campo_expresion import CampoExpresion
-from .formulario import (ANCHO_ETIQUETA, ANCHOS, Seccion, armar_cabecera, describir_ref, describir_seleccion, fila_mensaje,
-                         poner_mensaje, texto_filtros)
+from .formulario import (ANCHO_ETIQUETA, ANCHOS, NumeroDecimal, Seccion, armar_cabecera, describir_ref,
+                         describir_seleccion, fila_mensaje, poner_mensaje, texto_filtros)
 from .iconos import icono
 
 
@@ -543,7 +543,7 @@ class _FilaDosTopes(QWidget):
         v.setSpacing(2)
         fila = QHBoxLayout()
         fila.setContentsMargins(0, 0, 0, 0)
-        self.numero_a, self.numero_b = (QDoubleSpinBox(decimals=campo.decimales, minimum=campo.minimo, maximum=campo.maximo,
+        self.numero_a, self.numero_b = (NumeroDecimal(decimals=campo.decimales, minimum=campo.minimo, maximum=campo.maximo,
                                                        suffix=f" {campo.sufijo}" if campo.sufijo else "") for _ in range(2))
         fila.addWidget(self.numero_a)
         fila.addStretch(1)
@@ -921,7 +921,8 @@ class PanelComando(QFrame):
                     valor = self.ctx.evaluar(valor, c.tipo)
                 except (ErrorExpresion, TypeError, ValueError):
                     pass
-            valores[c.clave] = valor if isinstance(valor, (int, float, bool, str)) else len(valor) if isinstance(valor, list) else None
+            valores[c.clave] = (valor if isinstance(valor, (int, float, bool, str)) else len(valor) if isinstance(valor, list)
+                                else valor.get("nombre") if isinstance(valor, dict) else None)   # un aspecto: su nombre
             if isinstance(c, Texto):
                 libres.append(c.clave)                        # texto libre: se guarda como largo salvo en detallado
         registro_uso.activo.emitir(tipo, {"comando": self.comando.CLAVE, "valores": valores,
@@ -1051,7 +1052,7 @@ class PanelComando(QFrame):
             fila = QHBoxLayout(w)
             fila.setContentsMargins(0, 0, 0, 0)
             escala = 10 ** campo.decimales
-            numero = (QDoubleSpinBox(decimals=campo.decimales, minimum=campo.minimo, maximum=campo.maximo,
+            numero = (NumeroDecimal(decimals=campo.decimales, minimum=campo.minimo, maximum=campo.maximo,
                                      suffix=f" {campo.sufijo}" if campo.sufijo else "") if campo.decimales
                       else QSpinBox(minimum=campo.minimo, maximum=campo.maximo))
             deslizador = QSlider(Qt.Horizontal, minimum=int(campo.minimo * escala), maximum=int(campo.maximo * escala))
@@ -1315,6 +1316,9 @@ class PanelComando(QFrame):
         self.activa = campo
         self._pintar_filas()
         self.visor.set_filtro(campo.filtros if campo is not None else None)
+        # H-72: en un campo de varias caras o cuerpos, arrastrar en la vista elige con una ventana (como Fusion)
+        self.visor.ventana_en_comando = bool(campo is not None and campo.maximo != 1
+                                             and set(campo.filtros) & {"cara", "cuerpo"})
         # en un campo de varios perfiles, tocar una letra elige el texto entero (como Fusion)
         self.visor.texto_entero = bool(campo is not None and campo.maximo is None and "perfil" in campo.filtros)
 
@@ -1374,6 +1378,18 @@ class PanelComando(QFrame):
             faltante = next((h for h in hits if all(x["ref"] != h["ref"] for x in self.valores.get(campo.clave) or [])), hits[0])
             self._elegida(faltante, hits)
         return bool(hits)
+
+    def elegir_varias(self, hits):
+        """Selección en ventana dentro del comando (H-72): suma al campo activo lo que acepta y todavía no tiene."""
+        campo = self.activa
+        if campo is None:
+            return
+        tiene = [h["ref"] for h in self.valores.get(campo.clave) or []]
+        nuevos = [h for h in hits if acepta(campo.filtros, h) and h["ref"] not in tiene]
+        if campo.maximo is not None:                  # un campo de 1 o 2 no recibe más de lo que admite
+            nuevos = nuevos[:max(0, campo.maximo - len(tiene))]
+        if nuevos:
+            self._elegida(nuevos[0], grupo=nuevos)
 
     def _elegida(self, hit, grupo=None):
         campo = self.activa

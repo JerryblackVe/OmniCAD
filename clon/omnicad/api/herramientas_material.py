@@ -261,16 +261,18 @@ def get_bill_of_materials(sesion, csv_path: str | None = None, overwrite: bool =
              "'Aluminio - Anodizado (rojo)', 'Hormigón - Liso'; list_appearances los lista) y/o un color propio (color "
              "«#rrggbb» o [r, g, b]). Con los dos, el acabado del aspecto con ese color. Con solo el color, pinta con "
              "un color suelto. Sin ninguno, quita el aspecto (vuelve al color del material, o al del cuerpo en las "
-             "caras). No cambia la masa.", modifica=True)
+             "caras). Pintar un cuerpo lo deja ENTERO de ese aspecto: sus caras con aspecto propio lo pierden, salvo "
+             "clear_face_overrides=false (las conserva y avisa cuántas tapan al cuerpo). No cambia la masa.", modifica=True)
 def set_appearance(sesion, bodies: list[str] | None = None, appearance: str | None = None,
                    color: str | list[float] | None = None, faces: str | list[str] | None = None,
-                   body: str | None = None):
+                   body: str | None = None, clear_face_overrides: bool = True):
     """
     bodies: ids o nombres de los cuerpos (Aplicar a: Cuerpos/componentes).
     appearance: nombre o id de un aspecto del diseño, de la biblioteca o de Mis aspectos (sin distinguir mayúsculas); vacío = solo el color.
     color: color propio «#rrggbb» o [r, g, b] (0..1 o 0..255); vacío = el del aspecto.
     faces: caras en vez de cuerpos (Aplicar a: Caras): selector (">Z"), id de find_faces ("Cuerpo1/F6") o lista de ellos.
     body: cuerpo sobre el que se evalúan los selectores de faces; vacío = el único cuerpo del documento.
+    clear_face_overrides: con bodies, true (por defecto) quita el aspecto propio de sus caras; false las conserva.
     """
     from ..nucleo import aspectos as asp
     from ..timeline import aspectos_doc as ad
@@ -288,6 +290,7 @@ def set_appearance(sesion, bodies: list[str] | None = None, appearance: str | No
         ids = _cuerpos(sesion, bodies)
     rgb = None if color is None else color_rgb(color)
     cuerpos = [] if faces is not None else ids
+    pintadas = ad.caras_pintadas_de(doc, cuerpos)          # antes de cambiar nada: las que tapan al cuerpo
     entrada = None
     try:
         if appearance is not None and str(appearance).strip():
@@ -295,12 +298,12 @@ def set_appearance(sesion, bodies: list[str] | None = None, appearance: str | No
             origen = None if "id" in a else ("mis" if a["nombre"] in asp.cargar_usuario()["mis"] else "biblioteca")
             if rgb is not None:
                 a = dict(a, color=[float(x) for x in rgb])
-            entrada = ad.asignar(doc, a, cuerpos, caras, origen)
+            entrada = ad.asignar(doc, a, cuerpos, caras, origen, clear_face_overrides)
             rgb = entrada["color"]
         elif rgb is not None:
-            ad.asignar_color(doc, [float(x) for x in rgb], cuerpos, caras)
+            ad.asignar_color(doc, [float(x) for x in rgb], cuerpos, caras, clear_face_overrides)
         else:
-            ad.quitar(doc, cuerpos, caras)
+            ad.quitar(doc, cuerpos, caras, clear_face_overrides)
     except geo.ErrorGeometria as e:
         raise error("INVALID_ARGUMENTS", str(e)) from e
     salida = {"bodies": [{"id": cid, "name": sesion.nombre_cuerpo(doc.estado_final.cuerpos[cid]),
@@ -309,6 +312,11 @@ def set_appearance(sesion, bodies: list[str] | None = None, appearance: str | No
               "cleared": rgb is None}
     if faces is not None:
         salida["faces"] = len(caras)
+    if pintadas:
+        salida["face_overrides_removed" if clear_face_overrides else "face_overrides_kept"] = sum(pintadas.values())
+        if not clear_face_overrides:
+            sesion.avisar(f"{sum(pintadas.values())} cara(s) conservan su propio aspecto y tapan el del cuerpo; "
+                          "sin clear_face_overrides=false quedan con el del cuerpo.")
     if entrada is not None:
         salida["appearance_id"] = entrada["id"]
     return salida

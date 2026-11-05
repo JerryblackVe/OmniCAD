@@ -13,7 +13,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
   (p. ej. Blender) también, citando el origen.
 - TODO en español: código, docstrings, comentarios, mensajes de error, nombres.
 - No gastar en APIs pagas sin pedido explícito del usuario. No instalar paquetes sin permiso.
-- Git: no commitear ni hacer `push` si no te lo piden. Nunca subir `privado/`, `analisis/` ni `evidencias/`
+- Git: no commitear ni hacer `push` si no te lo piden (el coordinador commitea al verificar: ver CLAUDE.md). Nunca subir `privado/`, `analisis/` ni `evidencias/`
   (están en `.gitignore`: no los fuerces con `git add -f`).
 - Todo dentro de la carpeta del repo. Unidades: milímetros y grados.
 - Otros agentes trabajan EN PARALELO: tocá solo los archivos que te asignaron; si necesitás un cambio

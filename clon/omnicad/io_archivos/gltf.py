@@ -42,10 +42,9 @@ def srgb_a_lineal(color):
     return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
 
 
-def _geometria(forma, deflexion):
-    """(posiciones en m, normales unitarias, triángulos) de un cuerpo: los vértices de igual posición y normal se
-    comparten. None si el cuerpo no tiene triángulos."""
-    v, n = rc.malla_suave(forma, deflexion)
+def _geometria(v, n):
+    """(posiciones en m, normales unitarias, triángulos) de una malla de `rc.malla_suave` (vértices y normales por
+    vértice de cada triángulo): los vértices de igual posición y normal se comparten. None si no hay triángulos."""
     if not len(v):
         return None
     v = np.asarray(v, np.float64).reshape(-1, 3)
@@ -72,6 +71,18 @@ def _geometria(forma, deflexion):
         return None
     unicas = unicas[orden]
     return np.ascontiguousarray(unicas[:, :3]), np.ascontiguousarray(unicas[:, 3:]), tris
+
+
+def _partes(cuerpo, props, deflexion):
+    """[(malla, props)] de un cuerpo: él mismo y, aparte, cada cara con aspecto propio (Aspecto › Caras) con el suyo."""
+    from ..nucleo import referencias as refs
+    from ..timeline.aspectos_doc import caras_propias
+    caras = [(f, p) for r, p in caras_propias(props) if (f := refs.resolver(cuerpo.forma, r)) is not None]
+    if not caras:
+        return [(rc.malla_suave(cuerpo.forma, deflexion), props)]
+    v, n, aparte = rc.malla_suave_aparte(cuerpo.forma, [f for f, _p in caras], deflexion)
+    return [((v, n), props)] + [(m, dict(props, apariencia=p["apariencia"], acabado=p.get("acabado")))
+                                for m, (_f, p) in zip(aparte, caras, strict=True)]
 
 
 def _props(cuerpo, propiedades):
@@ -120,30 +131,34 @@ def armar_gltf(cuerpos, *, propiedades=None, deflexion=0.02, nombre=NOMBRE_APP):
     total = 0
     for c in cuerpos:
         props = _props(c, propiedades)
-        geo_c = _geometria(c.forma, deflexion)
-        if geo_c is None:
-            continue
-        pos, nor, tris = geo_c
-        nombre_c = str(props.get("nombre") or getattr(c, "nombre", "") or getattr(c, "id", "Cuerpo"))
-        material = material_pbr(c, props)
-        clave = json.dumps(material, sort_keys=True)
-        if clave not in claves_material:
-            claves_material[clave] = len(materiales)
-            materiales.append(material)
-        tipo_indice, dt = (UINT16, "<u2") if len(pos) <= 65535 else (UINT32, "<u4")
-        i_pos = len(accesores)
-        accesores.append({"bufferView": _agregar_vista(buffer, vistas, pos.astype("<f4").tobytes(), ARRAY_BUFFER),
-                          "componentType": FLOAT, "count": len(pos), "type": "VEC3",
-                          "min": [float(x) for x in pos.min(0)], "max": [float(x) for x in pos.max(0)]})
-        accesores.append({"bufferView": _agregar_vista(buffer, vistas, nor.astype("<f4").tobytes(), ARRAY_BUFFER),
-                          "componentType": FLOAT, "count": len(nor), "type": "VEC3"})
-        accesores.append({"bufferView": _agregar_vista(buffer, vistas, tris.astype(dt).tobytes(), ELEMENT_ARRAY_BUFFER),
-                          "componentType": tipo_indice, "count": int(tris.size), "type": "SCALAR"})
-        mallas.append({"name": nombre_c, "primitives": [{"attributes": {"POSITION": i_pos, "NORMAL": i_pos + 1},
-                                                         "indices": i_pos + 2, "material": claves_material[clave],
-                                                         "mode": TRIANGULOS}]})
-        nodos.append({"name": nombre_c, "mesh": len(mallas) - 1})
-        total += len(tris)
+        primitivas = []
+        for malla, props_parte in _partes(c, props, deflexion):     # una primitiva por material (B-201: caras pintadas)
+            geo_c = _geometria(*malla)
+            if geo_c is None:
+                continue
+            pos, nor, tris = geo_c
+            material = material_pbr(c, props_parte)
+            clave = json.dumps(material, sort_keys=True)
+            if clave not in claves_material:
+                claves_material[clave] = len(materiales)
+                materiales.append(material)
+            tipo_indice, dt = (UINT16, "<u2") if len(pos) <= 65535 else (UINT32, "<u4")
+            i_pos = len(accesores)
+            accesores.append({"bufferView": _agregar_vista(buffer, vistas, pos.astype("<f4").tobytes(), ARRAY_BUFFER),
+                              "componentType": FLOAT, "count": len(pos), "type": "VEC3",
+                              "min": [float(x) for x in pos.min(0)], "max": [float(x) for x in pos.max(0)]})
+            accesores.append({"bufferView": _agregar_vista(buffer, vistas, nor.astype("<f4").tobytes(), ARRAY_BUFFER),
+                              "componentType": FLOAT, "count": len(nor), "type": "VEC3"})
+            accesores.append({"bufferView": _agregar_vista(buffer, vistas, tris.astype(dt).tobytes(),
+                                                           ELEMENT_ARRAY_BUFFER),
+                              "componentType": tipo_indice, "count": int(tris.size), "type": "SCALAR"})
+            primitivas.append({"attributes": {"POSITION": i_pos, "NORMAL": i_pos + 1}, "indices": i_pos + 2,
+                               "material": claves_material[clave], "mode": TRIANGULOS})
+            total += len(tris)
+        if primitivas:
+            nombre_c = str(props.get("nombre") or getattr(c, "nombre", "") or getattr(c, "id", "Cuerpo"))
+            mallas.append({"name": nombre_c, "primitives": primitivas})
+            nodos.append({"name": nombre_c, "mesh": len(mallas) - 1})
     if not total:
         raise ErrorExportacion("La malla quedó vacía.")
     while len(buffer) % 4:

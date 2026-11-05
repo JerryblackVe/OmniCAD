@@ -82,6 +82,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [brechas_animacion.md](brechas_animacion.md) | ANI-1–ANI-5: ANIMACIÓN contra capturas de Fusion, con prompt |
 | [brechas_extensiones.md](brechas_extensiones.md) | PLA-1–PLA-14 y EXT-1–EXT-4: plástico y extensiones contra capturas de Fusion, con prompt |
 | [brechas_parametros.md](brechas_parametros.md) | PAR-1–PAR-11: Parámetros contra Fusion |
+| [brechas_aspecto.md](brechas_aspecto.md) | Aspecto, materiales y colores contra Fusion; el video de la placa del 2026-11-05 (B-198–B-202, H-72–H-76) |
 | [brechas_gizmos.md](brechas_gizmos.md) | H-60 (cerrado el 2026-11-02): asas que se vean y se entiendan |
 | [brechas_previa_aislada.md](brechas_previa_aislada.md) | B-155 y RS-X6: error oculto y demora de la vista previa aparte |
 | [brechas_inspeccionar.md](brechas_inspeccionar.md) | Especificación de INSPECCIONAR contra capturas de Fusion (resuelta, ver su auditoría) |

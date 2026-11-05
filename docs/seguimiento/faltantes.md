@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 224: Abierto 146 · Parcial 48 · Bloqueado 30 (recontado 2026-11-05).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 229: Abierto 148 · Parcial 48 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-05).
 
 ## Pendientes generales
 
@@ -71,7 +71,7 @@ Abierto 53 · Parcial 3 · Bloqueado 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 4 · Parcial 1.
+Abierto 6 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -80,6 +80,8 @@ Abierto 4 · Parcial 1.
 | H-69 | Organización del boceto: la geometría suelta no tiene nombre, ocultar, bloquear ni «en perfiles» propios | Abierto | Media | Hoy cada curva suelta se lista en Geometrías y su menú ofrece Seleccionar, Convertir en objeto (queda rígido, fuera del solver) y Eliminar. Falta guardar esas propiedades por curva sin sacarla del solver ni duplicar el modelo de objetos (plan_boceto_organizar.md, secciones 4 y 8). | clon/omnicad/ui/navegador_boceto.py (menú de `curva_boceto`); clon/tests/test_boceto_organizar.py::test_categorias_salen_del_dato_y_un_grupo_no_cambia_la_de_sus_miembros | 2026-11-05 |
 | H-70 | Organización del boceto: expandir el contenido interno de un SVG o DXF (capas y formas) en el navegador | Abierto | Media | El SVG/DXF se lista como una unidad y sus partes solo se cuentan. Falta listar capas y formas bajo demanda (sin crear miles de filas) y poder elegir una pieza interna sin romper el contorno ni el relleno (plan_boceto_organizar.md, secciones 2 y 7). | clon/omnicad/ui/navegador.py (`_ramas_boceto`); clon/omnicad/restricciones/objetos.py (`unidades`) | 2026-11-05 |
 | H-71 | Organización del boceto: accesos en el clic derecho del visor, arrastrar filas entre grupos y teclado en el árbol | Abierto | Baja | El visor conserva su menú radial sin las acciones nuevas; cambiar de grupo se hace por el menú del navegador (no arrastrando) y el árbol no toma el foco del teclado (era así antes). Superpuestos: Alt+clic elige el de abajo (plan_boceto_organizar.md, secciones 9.5 y 10). | clon/tests/test_boceto_organizar_ui.py::test_alt_clic_elige_el_objeto_de_abajo; clon/omnicad/ui/navegador.py (`setFocusPolicy`) | 2026-11-05 |
+| H-74 | Aspecto: «Quitar y suprimir» en el menú de «En este diseño» | Abierto | Baja | En Fusion, «Unassign and Delete» saca el aspecto de todos los que lo usan y lo borra. En OmniCAD, Suprimir queda gris si el aspecto se usa; solo la API lo hace (`manage_appearance` con `remove_users`). Ver docs/brechas_aspecto.md. | clon/omnicad/ui/aspectos_ui.py (menú de «En este diseño»); clon/omnicad/api/herramientas_aspecto.py (manage_appearance) | 2026-11-05 |
+| H-76 | Exportar STEP y OBJ con los colores (cuerpos y caras pintadas) | Abierto | Media | El STEP se escribe sin colores (`escribir_step` usa STEPControl, no la versión con XCAF) y el OBJ sin .mtl; el glTF sí los lleva. Comprobar en Fusion qué colores guarda su STEP antes de construir. El 3MF multicolor es P-27-11. Ver docs/brechas_aspecto.md. | clon/omnicad/nucleo/intercambio.py (`escribir_step`); clon/omnicad/io_archivos/exportar.py (`exportar_obj`) | 2026-11-05 |
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
@@ -346,7 +348,7 @@ Abierto 9 · Parcial 3 · Bloqueado 1. Especificación: [brechas_keyshot.md](../
 | KS12 | Materiales de fuente de luz (área, IES, foco) | Abierto | Muy alta | Pide trazado de rayos: no hay trazador (render rasterizado). | grep cycles/embree/pathtrac sin resultados en clon/omnicad | 2026-10-20 |
 | KS13 | Vidrio grueso, gemas, cáusticas, subsuperficie, iluminación global | Abierto | Muy alta | Pide trazado de rayos o Cycles de Blender. | grep cycles/embree sin resultados; render_cpu.py es rasterizador (docstring l.1-12) | 2026-10-20 |
 | KS14 | Imagen que se refina sola en el lienzo (muestreo progresivo) | Abierto | Muy alta | Pide trazador propio progresivo. | render_cpu.py renderiza por mosaicos una sola pasada | 2026-10-20 |
-| KS5 | Biblioteca de materiales: arrastrar, favoritos, copiar aspecto | Parcial | Media | Faltan arrastrar y soltar sobre la pieza y «Copiar aspecto» entre piezas. | omnicad/nucleo/aspectos.py (biblioteca, Mis aspectos, favoritos); tests/test_aspectos_api.py::test_menu_de_en_este_diseno_duplicar_renombrar_suprimir_mis_aspectos_y_favoritos; grep dragEnter/copiar_aspecto sin resultados | 2026-10-20 |
+| KS5 | Biblioteca de materiales: arrastrar, favoritos, copiar aspecto | Parcial | Media | Faltan arrastrar y soltar la muestra sobre la pieza (en la vista y en el navegador) y «Copiar aspecto» entre piezas. En Fusion arrastrar es LA forma de aplicar un aspecto: cada suelta se aplica al instante (docs/brechas_aspecto.md). | omnicad/nucleo/aspectos.py (biblioteca, Mis aspectos, favoritos); tests/test_aspectos_api.py::test_menu_de_en_este_diseno_duplicar_renombrar_suprimir_mis_aspectos_y_favoritos; grep dragEnter/copiar_aspecto sin resultados | 2026-11-05 |
 | KS8 | Giratoria (turntable) y explosionada en un clic | Parcial | Media | Falta la acción Giratoria (ángulo, duración, cuadros) en ANIMACIÓN. | omnicad/api/herramientas_animacion.py (auto_explode hecho); grep giratoria/turntable sin resultados | 2026-10-20 |
 | KS-S1 | Exportar a GLB y USD para web y AR | Parcial | Alta | Falta USD (necesita escritor propio o pxr). | omnicad/io_archivos/gltf.py; io_archivos/exportar.py:19-20; commit c1c40f2 (2026-10-10) | 2026-10-20 |
 | KS15 | «AI Shots»: restilizar y generar variantes con modelo local | Bloqueado | Muy alta | Espera decisión del usuario: no gastar en APIs y exige un modelo local grande. | docs/brechas_keyshot.md:72 (decisión del usuario); sin código | 2026-10-20 |

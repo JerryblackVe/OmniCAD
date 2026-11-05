@@ -232,6 +232,25 @@ def test_un_dialogo_distingue_opcion_de_texto_libre(tmp_path, detallado, esperad
         ru.ultimo = None
 
 
+def test_el_aspecto_elegido_se_registra_por_su_nombre(tmp_path):
+    """B-199 (video del 2026-11-05): Aspecto aceptado quedaba con «aspecto»: null aunque se había elegido negro."""
+    from types import SimpleNamespace
+    from omnicad.ui.comando import PanelComando, Personalizado
+    ru.configurar(True)
+    try:
+        panel = SimpleNamespace(campos=[Personalizado("aspecto", "", None, None)],
+                                valores={"aspecto": {"id": "asp1", "nombre": "Plástico - Brillante (Negro)", "color": [0, 0, 0]}},
+                                ctx=SimpleNamespace(op=None), comando=SimpleNamespace(CLAVE="aspecto"),
+                                _uso_inicio=None, _uso_cambios=0)
+        PanelComando._registrar_uso(panel, "comando_aceptado")
+        ru.activo.cola.join()
+        e = [x for x in eventos(ru.carpeta()) if x["tipo"] == "comando_aceptado"][-1]
+        assert e["datos"]["valores"]["aspecto"] == "Plástico - Brillante (Negro)"
+    finally:
+        ru.configurar(False)
+        ru.ultimo = None
+
+
 def test_nombres_de_pasos_y_cuerpos_se_guardan(tmp_path):
     r = ru.Registro(destino=tmp_path)
     r.emitir("op_ejecutada", {"paso": "op3", "nombre": "Extruir la placa", "tipo_op": "extrusion",

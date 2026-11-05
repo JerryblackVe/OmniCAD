@@ -136,6 +136,24 @@ def test_set_appearance_en_caras_pinta_la_cara_y_no_el_cuerpo():
     assert r["cleared"] and "caras" not in s.doc.propiedades.get("op1.c1", {})
 
 
+def test_pintar_el_cuerpo_lo_deja_entero_y_clear_false_conserva_las_caras_con_aviso():
+    """H-73 (Gerardo, 2026-11-05): pintar un cuerpo lo pinta ENTERO, también las caras que tenían color propio.
+    clear_face_overrides=false las conserva y avisa cuántas tapan al cuerpo."""
+    s = _escena()
+    _ok(s, "set_appearance", faces=">Z", body="op1.c1", color="#000000")
+    r = _ok(s, "set_appearance", bodies=["op1.c1"], color="#ffffff")
+    assert r["face_overrides_removed"] == 1 and "caras" not in s.doc.propiedades["op1.c1"]
+    assert ad.caras_con_aspecto(s.doc, s.doc.estado_final) == []
+    _ok(s, "undo")                                                              # quitar las caras es parte del mismo paso
+    assert len(s.doc.propiedades["op1.c1"]["caras"]) == 1
+    r = api.llamar(s, "set_appearance", {"bodies": ["op1.c1"], "appearance": "Granito - Gris",
+                                         "clear_face_overrides": False})
+    assert r["ok"] and r["result"]["face_overrides_kept"] == 1 and "conservan su propio aspecto" in r["avisos"][0]
+    assert len(s.doc.propiedades["op1.c1"]["caras"]) == 1                       # la cara negra sigue tapando al cuerpo
+    r = _ok(s, "set_appearance", bodies=["op1.c1"])                              # sin aspecto: todo vuelve al material
+    assert r["cleared"] and "op1.c1" not in s.doc.propiedades
+
+
 def test_el_color_suelto_no_crea_un_aspecto_del_diseno():
     s = _escena()
     _ok(s, "set_appearance", bodies=["op1.c1"], color="#336699")

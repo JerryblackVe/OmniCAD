@@ -12,10 +12,32 @@ paneles de boceto (patrón, simetría…). Sin lógica geométrica: solo cómo s
     estado con símbolo que usan TODOS los paneles de herramienta (comando, patrón, simetría, escala/mover y carácter).
 """
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtGui import QValidator
+from PySide6.QtWidgets import QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 from . import temas
 from .superposiciones import CabeceraMovible
+
+
+class NumeroDecimal(QDoubleSpinBox):
+    """Campo de valor que acepta el punto y la coma decimal («45.5» y «45,5»), sea cual sea la configuración regional."""
+
+    def validate(self, texto, pos):
+        estado, nuevo, pos = super().validate(texto, pos)
+        if estado == QValidator.Invalid:        # el separador de la otra convención
+            otro = texto.replace(",", ".") if "," in texto else texto.replace(".", ",")
+            estado2, nuevo2, pos2 = super().validate(otro, pos)
+            if estado2 != QValidator.Invalid:
+                return estado2, nuevo2, pos2
+        return estado, nuevo, pos
+
+    def valueFromText(self, texto):
+        limpio = texto.replace(self.suffix(), "").replace(self.prefix(), "").strip().replace(",", ".")
+        try:
+            return float(limpio)
+        except ValueError:
+            return super().valueFromText(texto)
+
 
 # Ancho del panel (px) por complejidad: formulario corto, normal (la mayoría) y con tablas o filas anchas.
 ANCHOS = {"simple": 320, "normal": 360, "ancho": 460}

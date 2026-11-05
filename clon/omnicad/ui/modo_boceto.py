@@ -16,7 +16,7 @@ import time
 import numpy as np
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QKeySequence, QPainter, QPen
-from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QCompleter, QDoubleSpinBox, QFormLayout, QFrame,
+from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QCompleter, QFormLayout, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit, QMessageBox, QPushButton,
                                QScrollArea, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
@@ -30,7 +30,7 @@ from .campo_expresion import nombres_sugeridos
 from .editor_boceto import (AYUDA_RESTRICCION, CAPA_PROYECCION, COMANDO_PROYECCION, HERRAMIENTAS, NOMBRES_RESTRICCION,
                             RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia)
 from . import navegador_boceto
-from .formulario import armar_cabecera
+from .formulario import armar_cabecera, NumeroDecimal
 from .iconos import icono
 from .panel_patron import PanelPatron
 from .panel_transformar import PanelTransformar
@@ -257,7 +257,7 @@ class PaletaBoceto(QFrame):
                              ("circulo", "Círculo (ratón)"), ("rectangulo", "Rectángulo (ratón)"),
                              ("elipse", "Elipse (ratón)"), ("conica", "Cónica (ratón)"), ("texto", "Texto (ratón)")):
             self.h3d.addItem(texto, clave)
-        self.texto3d, self.altura3d = QLineEdit("Texto"), QDoubleSpinBox()
+        self.texto3d, self.altura3d = QLineEdit("Texto"), NumeroDecimal()
         self.altura3d.setRange(0.1, 1000.0)
         self.altura3d.setValue(5.0)
         self.altura3d.setSuffix(" mm")
@@ -493,7 +493,7 @@ class TarjetaHerramienta(QFrame):
             combo.currentIndexChanged.connect(lambda _i, cb=combo, k=clave: self.ajuste.emit(k, cb.currentData()))
             self.form_contexto.addRow(etiqueta, combo)
         for clave, etiqueta, minimo, maximo, paso, sufijo in NUMEROS_HERRAMIENTA.get(h, []):
-            sp = QDoubleSpinBox(decimals=3, minimum=minimo, maximum=maximo, singleStep=paso, suffix=sufijo)
+            sp = NumeroDecimal(decimals=3, minimum=minimo, maximum=maximo, singleStep=paso, suffix=sufijo)
             sp.setValue(float(opciones.get(clave, minimo)))
             sp.valueChanged.connect(lambda x, k=clave: self.ajuste.emit(k, float(x)))
             self.form_contexto.addRow(etiqueta, sp)
@@ -856,7 +856,7 @@ class PanelCaracter(QFrame):
         return cb
 
     def _spin(self, clave, minimo, maximo, paso, sufijo, ayuda):
-        sp = QDoubleSpinBox()
+        sp = NumeroDecimal()
         sp.setDecimals(2)
         sp.setRange(minimo, maximo)
         sp.setSingleStep(paso)

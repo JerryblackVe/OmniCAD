@@ -8,10 +8,10 @@ Para editar un paso existente se usa el estado del modelo ANTERIOR a ese paso, c
 al editar una feature del timeline.
 """
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox,
                                QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
+from .formulario import NumeroDecimal     # B-202: acepta «0.25» y «0,25»
 from ..io_archivos import proyecto
 from ..timeline.operaciones import OPERACIONES_CUERPO, OpPrimitiva
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
@@ -123,7 +123,7 @@ class DialogoRejilla(QDialog):
         self.setWindowIcon(icono("rejilla"))
         self.adaptativa = QRadioButton("Adaptativa (cambia con el zoom)")
         self.fija = QRadioButton("Fija")
-        self.espaciado = QDoubleSpinBox(decimals=3, minimum=0.001, maximum=100000.0, suffix=" mm")
+        self.espaciado = NumeroDecimal(decimals=3, minimum=0.001, maximum=100000.0, suffix=" mm")
         self.subdivisiones = QSpinBox(minimum=1, maximum=1000)
         mayor, sub = fija if fija else (10.0, 5)
         self.espaciado.setValue(mayor)

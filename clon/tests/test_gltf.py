@@ -115,6 +115,25 @@ def test_caja_de_10_mm_en_glb_con_el_color_del_cuerpo(tmp_path):
     assert rotar(raiz["rotation"], [0, -1, 0]) == pytest.approx([0, 0, 1], abs=1e-12)     # frente → +Z
 
 
+def test_la_cara_pintada_viaja_al_glb_con_su_color(tmp_path):
+    """B-201: el .glb llevaba el color del cuerpo y perdía las caras pintadas (Aspecto › Caras)."""
+    s = api.Sesion()
+    assert api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10, "z": -5})["ok"]
+    assert api.llamar(s, "set_appearance", {"bodies": ["op1.c1"], "color": "#ffffff"})["ok"]
+    assert api.llamar(s, "set_appearance", {"faces": ">Z", "body": "op1.c1", "color": "#ff0000"})["ok"]
+    r = api.llamar(s, "export", {"path": str(tmp_path / "caja.glb")})
+    assert r["ok"] and r["result"]["triangles"] == 12
+    js, binario = leer_glb(tmp_path / "caja.glb")
+    (malla,) = js["meshes"]
+    colores = []
+    for p in malla["primitives"]:
+        tris = accessor(js, binario, p["indices"]).reshape(-1, 3)
+        colores.append((len(tris), js["materials"][p["material"]]["pbrMetallicRoughness"]["baseColorFactor"][:3]))
+    assert sorted(n for n, _c in colores) == [2, 10]                      # la cara de arriba aparte: 2 triángulos
+    rojo = next(c for n, c in colores if n == 2)
+    assert rojo == pytest.approx([1.0, 0.0, 0.0]) and next(c for n, c in colores if n == 10) == pytest.approx([1.0] * 3)
+
+
 def test_gltf_con_bufer_embebido_y_un_nodo_por_cuerpo(tmp_path):
     cuerpos = [_Cuerpo(geo.caja(10, 10, 10, (0, 0, 0)), nombre="A", cid="op1.c1"),
                _Cuerpo(geo.cilindro(5, 20), nombre="B", cid="op2.c1")]

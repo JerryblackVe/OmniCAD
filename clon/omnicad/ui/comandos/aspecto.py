@@ -51,6 +51,8 @@ class Aspecto(Comando):
 
     # ------------------------------------------------------------ widgets
     def _radios(self, panel):
+        if panel.valores.get("caras") and not panel.valores.get("cuerpos"):
+            panel.valores["aplicar_a"] = "caras"      # caras elegidas antes de abrir: se ven y se pintan
         w = RadiosAplicarA(panel.valores.get("aplicar_a") or "cuerpos")
         w.cambiado.connect(lambda valor: (self._cambiar_foco(panel, valor), panel._cambiar("aplicar_a", valor)))
         return w
@@ -96,6 +98,7 @@ class Aspecto(Comando):
             cuerpos, caras = self._objetivos(v)
             previa["cuerpos"].update({c: rgb for c in cuerpos})
             previa["caras"] += [(c, r, rgb) for c, r in caras]
+            previa["sin_caras"] = set(cuerpos)      # un cuerpo se pinta entero: sus caras pintadas se van (H-73)
         return previa
 
     def preparar_panel(self, panel):

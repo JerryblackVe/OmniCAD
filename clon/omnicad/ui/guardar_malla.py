@@ -3,10 +3,11 @@
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout, QGroupBox,
+from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QGroupBox,
                                QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
                                QVBoxLayout, QWidget)
 
+from .formulario import NumeroDecimal     # B-202: acepta «0.25» y «0,25»
 from ..io_archivos import exportar as ex
 from ..nucleo import geometria as geo
 from .dialogos import _combo
@@ -60,7 +61,7 @@ class DialogoGuardarMalla(QDialog):
                 ("angulo", "Desviación de normal", ex.ANGULO_MALLA, 0.000001, 179.999999, "°"),
                 ("longitud_maxima", "Longitud máxima de arista", 0.0, 0.0, 1e6, " mm"),
                 ("relacion_aspecto", "Relación de aspecto", 0.0, 0.0, 1e6, "")):
-            campo = QDoubleSpinBox()
+            campo = NumeroDecimal()
             campo.setDecimals(9)
             campo.setRange(minimo, maximo)
             campo.setValue(valor)

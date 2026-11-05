@@ -14,13 +14,14 @@ from pathlib import Path
 
 from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPixmap
-from PySide6.QtWidgets import (QColorDialog, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
+from PySide6.QtWidgets import (QColorDialog, QComboBox, QDialog, QFileDialog, QFormLayout,
                                QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget,
                                QListWidgetItem, QMenu, QPushButton, QRadioButton, QScrollArea, QSlider, QSpinBox, QTabBar,
                                QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from ..nucleo import aspectos as asp
 from . import temas
+from .formulario import NumeroDecimal     # B-202: acepta «0.25» y «0,25»
 
 _ICONOS = {}
 
@@ -82,7 +83,7 @@ class Deslizante(QWidget):
         fila = QHBoxLayout(self)
         fila.setContentsMargins(0, 0, 0, 0)
         self.maximo = maximo
-        self.numero = QDoubleSpinBox(decimals=decimales, minimum=0.0, maximum=maximo, singleStep=maximo / 100)
+        self.numero = NumeroDecimal(decimals=decimales, minimum=0.0, maximum=maximo, singleStep=maximo / 100)
         self.numero.setFixedWidth(72)
         self.barra = QSlider(Qt.Horizontal, minimum=0, maximum=1000)
         fila.addWidget(self.numero)
@@ -303,7 +304,7 @@ class EditorMateriales(QDialog):
         self.g_transl = QGroupBox("Translucidez")
         self.g_transl.setCheckable(True)
         f = QFormLayout(self.g_transl)
-        self.profundidad = QDoubleSpinBox(decimals=3, minimum=0.0, maximum=1000.0, suffix=" mm")
+        self.profundidad = NumeroDecimal(decimals=3, minimum=0.0, maximum=1000.0, suffix=" mm")
         self.grosor = BotonColor(self.a["grosor_color"], "Grosor")
         self.transparencia = Deslizante()
         f.addRow("Profundidad", self.profundidad)
@@ -314,7 +315,7 @@ class EditorMateriales(QDialog):
         self.g_emi = QGroupBox("Emisividad")
         self.g_emi.setCheckable(True)
         f = QFormLayout(self.g_emi)
-        self.luminancia = QDoubleSpinBox(decimals=2, minimum=0.0, maximum=1e6, suffix=" cd/m²")
+        self.luminancia = NumeroDecimal(decimals=2, minimum=0.0, maximum=1e6, suffix=" cd/m²")
         self.filtro = BotonColor(self.a["color_filtro"], "Color de filtro")
         f.addRow("Luminancia", self.luminancia)
         f.addRow("Color de filtro", self.filtro)
@@ -346,7 +347,7 @@ class EditorMateriales(QDialog):
         avanzado = QGroupBox("Controles avanzados de resaltes")
         f = QFormLayout(avanzado)
         self.anisotropia = Deslizante()
-        self.orientacion = QDoubleSpinBox(decimals=2, minimum=-360.0, maximum=360.0, suffix="°")
+        self.orientacion = NumeroDecimal(decimals=2, minimum=-360.0, maximum=360.0, suffix="°")
         self.color_resalte = BotonColor((1, 1, 1), "Color del resalte")
         self.forma = QComboBox()
         self.forma.addItems(asp.FORMAS_RESALTE)

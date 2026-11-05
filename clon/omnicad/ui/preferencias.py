@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QF
                                QMessageBox, QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
                                QWidget)
 
+from .formulario import NumeroDecimal     # B-202: acepta «0.25» y «0,25»
 from .. import NOMBRE_APP
 from .. import registro_uso
 from ..asistente import config as config_asistente
@@ -864,7 +865,7 @@ class DialogoPreferencias(QDialog):
                     self.controles[clave] = c
                     continue
             elif tipo == "decimal":
-                c = QDoubleSpinBox(suffix=" USD", decimals=2, singleStep=0.1)
+                c = NumeroDecimal(suffix=" USD", decimals=2, singleStep=0.1)
                 c.setRange(*opciones)
                 c.setValue(float(actual))
                 c.setFixedWidth(120)

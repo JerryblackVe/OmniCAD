@@ -559,8 +559,10 @@ class Visor3D(QOpenGLWidget):
         self._t_largo = QTimer(self, singleShot=True, interval=550)   # mantener apretado: "Seleccionar otro"
         self._t_largo.timeout.connect(self._pulsacion_larga)
         self._largo_hecho = False
+        self._doble_clic = False           # B-200: el segundo clic de un doble clic no vuelve a elegir
         self._banda_libre = False          # ventana empezada arrastrando, sin elegir antes la herramienta
         self.ventana_libre = True          # la ventana pone False mientras hay un comando abierto
+        self.ventana_en_comando = False    # H-72: campo de varias caras o cuerpos activo: arrastrar hace la ventana
         self._stencil = False
         self.plano_boceto = None
         self.opciones_boceto = {"rejilla": True, "corte": False}
@@ -2388,6 +2390,7 @@ class Visor3D(QOpenGLWidget):
 
     def mousePressEvent(self, e):
         self._cancelar_animacion()
+        self._doble_clic = False           # Qt manda el press antes del doble clic: una marca vieja no sobrevive
         if self._arrastrando:              # otro botón durante el arrastre de un componente: lo cancela
             self.cancelar_arrastre()
             return
@@ -2424,7 +2427,7 @@ class Visor3D(QOpenGLWidget):
             self._largo_hecho = False
             self._t_largo.start()
         if (e.button() == Qt.LeftButton and self._accion is None and self.modo is None and self.filtro
-                and self.ventana_libre):
+                and (self.ventana_libre or self.ventana_en_comando)):
             self._banda_pendiente = pos.toPoint()     # en Fusion, arrastrar en la vista hace la ventana
 
     def _empezar_banda(self, inicio):
@@ -2482,7 +2485,8 @@ class Visor3D(QOpenGLWidget):
                 self.gesto_radial.emit(sector(d.x(), d.y()))
                 return
         presion, self._presion = self._presion, None
-        if presion is None or presion[1] != e.button():
+        doble, self._doble_clic = self._doble_clic, False
+        if presion is None or presion[1] != e.button() or doble:
             return
         movido = (e.position() - presion[0]).manhattanLength() > 4
         if movido or self.modo not in (None,):
@@ -2567,6 +2571,8 @@ class Visor3D(QOpenGLWidget):
     def mouseDoubleClickEvent(self, e):
         if e.button() == Qt.MiddleButton:
             self.encuadrar()
+        elif e.button() == Qt.LeftButton:     # B-200: Qt manda otro press: elegía y soltaba lo mismo
+            self._doble_clic = True
 
     def mouseMoveEvent(self, e):
         pos = e.position()

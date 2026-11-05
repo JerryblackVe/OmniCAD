@@ -22,6 +22,16 @@
   Las reglas resumen y enlazan a `AGENTS.md` y a este archivo.
 - Antes de afirmar algo en él, se verifica en el código. El coordinador lo revisa al cerrar cada tanda.
 
+## Regla: commit automático del coordinador (Gerardo, 2026-11-05)
+- **El coordinador hace commit solo, sin preguntar, cada vez que una tarea o tanda queda verificada**: suite completa
+  verde (los rojos que ya fallaban en HEAD, con su fila en `docs/seguimiento/`), `ruff check .` limpio y prueba de humo
+  OK si se tocó la UI, más seguimiento, `PROJECT_LOG.md` y lista nocturna al día. Un commit por tarea o tanda cerrada,
+  antes de lanzar otra tanda de agentes.
+- `git add` explícito, archivo por archivo (nunca `privado/`, `analisis/`, `evidencias/`, `docs/fusion_docs/`,
+  `PROJECT_CONTEXT.md` ni `.agents/`). Mensaje con qué se hizo y los IDs.
+- **El `push` sigue siendo solo con el pedido de Gerardo.** Los agentes y las sesiones de ejecución no commitean
+  (`AGENTS.md`): commitea el coordinador después de revisar.
+
 ## Regla estricta: bugs, faltantes y mejoras en un solo lugar
 - Todo lo que falta resolver se recopila SOLO en `docs/seguimiento/`:
   - `bugs.md`: lo que falla.
