@@ -28,6 +28,14 @@ class ErrorDXF(ValueError):
     pass
 
 
+class PrimitivasDXF(list):
+    """Geometría compatible con listas anteriores y capas como jerarquía de un recurso único."""
+    def __init__(self, capas, nombre):
+        super().__init__(p for _capa, p in capas)
+        self.grupos = [(capa,) for capa, _p in capas]
+        self.nombre, self.como_objeto, self.tipo_origen = nombre, True, "DXF"
+
+
 TIPOS_LINEA = {"continua": "CONTINUOUS", "trazos": "DASHED", "trazo_punto": "CENTER"}
 _PATRONES = {"DASHED": ("Trazos __ __ __", (3.0, -1.5)), "CENTER": ("Centro ____ _ ____", (12.0, -3.0, 2.0, -3.0))}
 _GROSORES = (0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211)
@@ -841,4 +849,5 @@ def leer_dxf(ruta, con_capas=False, a_mm=True):
         texto = texto[1:]
     if "SECTION" not in texto:
         raise ErrorDXF("El archivo no parece un DXF (no tiene secciones).")
-    return leer_dxf_texto(texto, con_capas, a_mm)
+    capas = leer_dxf_texto(texto, True, a_mm)
+    return capas if con_capas else PrimitivasDXF(capas, Path(ruta).stem)

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Comandos del espacio MALLA (pestaña MALLA de la cinta)."""
-from ...timeline.ops_malla import (OpCombinarGruposCaras, OpCombinarMallas, OpConvertirMalla, OpCortarPlanoMalla,
-                                   OpEscalarMalla,
-                                   OpGruposCaras, OpInvertirNormalMalla, OpLimpiarMalla, OpReducirMalla, OpRemallar,
-                                   OpRepararMalla, OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
+from ...timeline.ops_malla import (OpBorrarRellenarMalla, OpCombinarGruposCaras, OpCombinarMallas, OpConvertirMalla,
+                                   OpCortarPlanoMalla, OpCrearGrupoCaras, OpEscalarMalla, OpGruposCaras,
+                                   OpInvertirNormalMalla, OpLimpiarMalla, OpReducirMalla, OpRemallar, OpRepararMalla,
+                                   OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Casilla, Comando, Entero, ErrorComando, Expresion, Opciones, Seleccion, Texto, exigir,
                        hit_desde_ref, hits_cuerpos as _hits)
@@ -98,6 +98,31 @@ class CombinarGruposCaras(Comando):
 
     def desde_op(self, op, ctx):
         return dict(op.p, cuerpos=_hits(op.p["cuerpos"], ctx.estado), grupos=", ".join(map(str, op.p["grupos"])))
+
+
+class CrearGrupoCaras(Comando):
+    CLAVE, TITULO, ICONO = "crear_grupo_caras", "Crear grupo de caras", "crear_grupo_caras"
+    AYUDA = "Pasa las caras elegidas de un cuerpo de malla a un grupo nuevo."
+    CLASE_OP = OpCrearGrupoCaras
+    verificar = staticmethod(_mallas)
+
+    def campos(self, ctx):
+        return [Seleccion("cuerpos", "Cuerpos de malla", {"cuerpo"}, maximo=None),
+                Texto("caras", "Caras", "", ayuda="Índices de triángulo separados por coma, aplicados a cada cuerpo "
+                      "elegido (p. ej. 0, 2, 4)."),
+                Texto("grupos", "Grupos existentes", "",
+                      ayuda="Números de grupos que pasan completos al grupo nuevo.")]
+
+    def construir(self, v, ctx):
+        exigir(v, "cuerpos", "Seleccioná los cuerpos de malla.")
+        caras, grupos = _parsear_caras(v.get("caras")), _parsear_grupos(v.get("grupos"))
+        if not caras and not grupos:
+            raise ErrorComando("Indicá las caras o los grupos para el grupo nuevo.")
+        return self.crear_op(OpCrearGrupoCaras, v, ctx, cuerpos=_ids(v["cuerpos"]), caras=caras, grupos=grupos)
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, cuerpos=_hits(op.p["cuerpos"], ctx.estado), caras=", ".join(map(str, op.p["caras"])),
+                    grupos=", ".join(map(str, op.p["grupos"])))
 Reducir = _clase("reducir_malla", "Reducir", "reducir_malla", OpReducirMalla, "Baja la cantidad de triángulos.",
                  [lambda: Opciones("tipo", "Tipo de reducción", {"proporcion": "Proporción", "caras": "Cantidad de caras",
                                                                   "tolerancia": "Tolerancia"}),
@@ -121,6 +146,40 @@ Suavizar = _clase("suavizar_malla", "Suavizar", "suavizar_malla", OpSuavizarMall
                   lambda v, ctx: {"intensidad": v["intensidad"], "iteraciones": v["iteraciones"]})
 InvertirNormal = _clase("invertir_normal_malla", "Invertir normal", "invertir_normal_malla", OpInvertirNormalMalla,
                         "Da vuelta la orientación de los triángulos.")
+
+
+def _parsear_caras(texto):
+    """«0, 2 4» → [0, 2, 4]."""
+    try:
+        return [int(x) for x in str(texto or "").replace(",", " ").split()]
+    except ValueError:
+        raise ErrorComando("Los índices de caras se indican con números separados por coma.") from None
+
+
+class BorrarRellenar(Comando):
+    CLAVE, TITULO, ICONO = "borrar_rellenar_malla", "Borrar y rellenar", "borrar_rellenar"
+    AYUDA = "Borra caras de la malla y rellena los agujeros."
+    CLASE_OP = OpBorrarRellenarMalla
+    verificar = staticmethod(_mallas)
+
+    def campos(self, ctx):
+        return [Seleccion("cuerpos", "Cuerpos de malla", {"cuerpo"}, maximo=None),
+                Texto("caras", "Caras a borrar", "", ayuda="Índices de caras separados por coma, aplicados a cada "
+                      "cuerpo elegido (p. ej. 0, 2, 4)."),
+                Opciones("tipo", "Tipo de relleno", {"uniforme": "Uniforme", "minimo": "Mínimo"}),
+                Expresion("densidad", "Densidad", "1", ESCALAR, visible_si=lambda v: v.get("tipo") == "uniforme")]
+
+    def construir(self, v, ctx):
+        exigir(v, "cuerpos", "Seleccioná los cuerpos de malla.")
+        caras = _parsear_caras(v.get("caras"))
+        if not caras:
+            raise ErrorComando("Indicá las caras a borrar.")
+        return self.crear_op(OpBorrarRellenarMalla, v, ctx, cuerpos=_ids(v["cuerpos"]), caras=caras,
+                             tipo=v["tipo"], densidad=v["densidad"])
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, cuerpos=_hits(op.p["cuerpos"], ctx.estado),
+                    caras=", ".join(map(str, op.p["caras"])))
 Separar = _clase("separar_malla", "Separar", "separar_malla", OpSepararMalla,
                  "Separa la malla en un cuerpo por cáscara (o por grupo de caras).",
                  [lambda: Opciones("tipo", "Tipo", {"cascaras": "Cáscaras", "grupos": "Grupos de caras"})],
@@ -213,6 +272,5 @@ class CombinarMallas(Comando):
                                                                                           ctx.estado))
 
 
-registrar(Teselar, Reparar, Limpiar, Grupos, CombinarGruposCaras, Reducir, Remallar, CortarPlano, Vaciado, CombinarMallas,
-          Suavizar,
-          InvertirNormal, Separar, Escalar, Convertir)
+registrar(Teselar, Reparar, Limpiar, Grupos, CombinarGruposCaras, CrearGrupoCaras, Reducir, Remallar, CortarPlano,
+          Vaciado, CombinarMallas, Suavizar, InvertirNormal, BorrarRellenar, Separar, Escalar, Convertir)

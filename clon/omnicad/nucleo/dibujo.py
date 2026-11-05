@@ -96,6 +96,7 @@ FLECHA, MEDIA_FLECHA = 3.0, 0.5
 HUECO_EXT, EXCESO_EXT = 1.0, 2.0      # líneas de referencia: separación del objeto y exceso sobre la cota
 SOBREPASO_EJE = 3.0                   # cuánto pasan las líneas de centro del contorno
 PASO_RAYADO = 2.5                     # separación del rayado en la hoja (mm)
+SEPARACION_BASE = 8.0                 # apilado de las cotas de línea base (mm de hoja)
 
 
 def tamano_hoja(nombre, orientacion="horizontal"):
@@ -419,6 +420,38 @@ def circulos_de_frente(forma, marco):
     return [(np.array([x, y]), r, completo) for (x, y, r), completo in sorted(circulos.items())]
 
 
+def arcos_de_frente(forma, marco):
+    """Arcos circulares vistos de frente (eje paralelo a la mirada) que no cierran 360° (empalmes, aristas
+    curvas): [(centro 2D, radio, t1, t2)] con el arco recorrido de t1 a t2 en sentido antihorario (radianes)."""
+    arcos = {}
+    dos_pi = 2 * math.pi
+    for arista in _aristas_unicas(forma):
+        curva = BRepAdaptor_Curve(arista)
+        if curva.GetType() != GeomAbs_Circle:
+            continue
+        circ = curva.Circle()
+        d = circ.Axis().Direction()
+        if abs(abs(d.X() * marco.e[0] + d.Y() * marco.e[1] + d.Z() * marco.e[2]) - 1.0) > 1e-6:
+            continue
+        t0, t1 = curva.FirstParameter(), curva.LastParameter()
+        if t1 - t0 >= dos_pi - 1e-6:          # la circunferencia completa la guarda v.circulos
+            continue
+        c2 = marco.a_2d(np.array([circ.Location().X(), circ.Location().Y(), circ.Location().Z()]))
+        p2 = [marco.a_2d(np.array([q.X(), q.Y(), q.Z()]))
+              for q in (curva.Value(t0), curva.Value((t0 + t1) / 2), curva.Value(t1))]
+        a0, am, a1 = (math.atan2(float(q[1] - c2[1]), float(q[0] - c2[0])) for q in p2)
+        # el tramo se guarda antihorario: si el punto medio queda en sentido horario respecto del inicio,
+        # el arco se recorre al revés (de la punta final a la inicial)
+        cruce = float((p2[1] - c2)[0] * (p2[0] - c2)[1] - (p2[1] - c2)[1] * (p2[0] - c2)[0])
+        ts, barrido = (a1, (a0 - a1) % dos_pi) if cruce >= 0 else (a0, (a1 - a0) % dos_pi)
+        if barrido < 1e-9:
+            continue
+        clave = (round(c2[0], 4), round(c2[1], 4), round(circ.Radius(), 4))
+        if clave not in arcos or barrido > arcos[clave][2]:
+            arcos[clave] = (c2, circ.Radius(), ts, ts + barrido)
+    return [arcos[clave] for clave in sorted(arcos, key=lambda k: (k[0], k[1], k[2]))]
+
+
 def ejes_de_cilindros(forma, marco):
     """Ejes de caras cilíndricas vistas de costado (agujeros, redondos): [(p0 2D, p1 2D)]. Solo cilindros de
     al menos media vuelta (un empalme no lleva eje). Ejes colineales se unen."""
@@ -730,6 +763,67 @@ def dibujar_cota_angular(a0, a1, b0, b1, lugar, texto=None, decimales=1):
     return prims, grados
 
 
+def dibujar_cota_arco(centro, radio, t1, t2, lugar, texto):
+    """Cota de longitud de arco (Arc Length Dimension): arco concéntrico que pasa por `lugar`, flechas tangentes
+    en los extremos y el símbolo de arco sobre el número."""
+    c, lugar = np.asarray(centro, float), np.asarray(lugar, float)
+    r2 = float(np.linalg.norm(lugar - c))
+    if r2 < 1e-6:
+        r2 = radio
+    dentro = r2 < radio
+    s = -1.0 if dentro else 1.0
+
+    def u(t):
+        return np.array([math.cos(t), math.sin(t)])
+
+    prims = [("COTAS", ("arco", _p(c), r2, t1, t2))]
+    for t in (t1, t2):
+        ur = u(t)
+        if dentro:
+            prims.append(_linea(c + ur * (radio - HUECO_EXT), c + ur * (r2 - EXCESO_EXT)))
+        else:
+            prims.append(_linea(c + ur * (radio + HUECO_EXT), c + ur * (r2 + EXCESO_EXT)))
+        tang = np.array([-ur[1], ur[0]])
+        prims.append(_flecha(c + ur * r2, tang if t == t2 else -tang))
+    dm = u((t1 + t2) / 2)
+    rot, arriba = _rotacion_legible(np.array([-dm[1], dm[0]]) * s)
+    pos = c + dm * (r2 + s * 1.2)
+    prims.append(_texto(pos, texto, rotacion=rot))
+    prims.append(("COTAS", ("arco", _p(pos + arriba * (ALTURA_TEXTO / 2 + 1.6)), 1.7,
+                            math.radians(200), math.radians(340))))
+    return prims
+
+
+def _barrido_arco(p):
+    """Barrido (radianes) del arco que pasa por los puntos de una cota de longitud de arco:
+    centro p[0], inicio p[1], un punto interior p[2] (fija el sentido) y fin p[3]."""
+    centro = np.asarray(p[0], float)
+    a1 = math.atan2(float(p[1][1] - centro[1]), float(p[1][0] - centro[0]))
+    a2 = math.atan2(float(p[3][1] - centro[1]), float(p[3][0] - centro[0]))
+    cruce = float((p[2] - centro)[0] * (p[1] - centro)[1] - (p[2] - centro)[1] * (p[1] - centro)[0])
+    # cruce > 0: el inicio está en sentido antihorario respecto del punto interior, el arco se recorre al revés
+    return ((a1 - a2) % (2 * math.pi)) if cruce > 0 else ((a2 - a1) % (2 * math.pi))
+
+
+def lugar_linea_base(base, punto, lugar, indice=0):
+    """(lugar apilado, subtipo) de la cota `indice` de una línea base medida desde `base` (Baseline Dimension):
+    la primera va en `lugar` y las siguientes se apilan con SEPARACION_BASE, del mismo lado de la geometría."""
+    base, punto, lugar = (np.asarray(v, float) for v in (base, punto, lugar))
+    if np.linalg.norm(punto - base) < 1e-9:
+        raise geo.ErrorGeometria("La cota de línea base necesita un punto distinto de la referencia.")
+    u = _unit(punto - base)
+    if abs(u[0]) > abs(u[1]):
+        u, tipo = np.array([1.0, 0.0]) * math.copysign(1.0, u[0]), "horizontal"
+    elif abs(u[1]) > abs(u[0]):
+        u, tipo = np.array([0.0, 1.0]) * math.copysign(1.0, u[1]), "vertical"
+    else:
+        tipo = "alineada"
+    n = np.array([-u[1], u[0]])
+    off = float((lugar - base) @ n)
+    s = 1.0 if off >= 0 else -1.0
+    return base + n * (off + s * SEPARACION_BASE * indice), tipo
+
+
 def dibujar_cota_ordenada(punto, lugar, texto, eje="x"):
     """Cota de ordenadas (Ordinate Dimension): directriz desde el punto y el valor en su punta."""
     p, lugar = np.asarray(punto, float), np.asarray(lugar, float)
@@ -957,6 +1051,7 @@ class Vista:
         self.rayado = np.zeros((0, 2, 2))
         self.regiones = []
         self.circulos = []
+        self.arcos = []
         self.ejes = []
         self.centro = np.zeros(2)
         self.caja = None
@@ -1093,7 +1188,7 @@ class Dibujo:
         padre = self._cache[v.padre][0] if v.padre in self._cache else None
         return (propia, cuerpos, padre)
 
-    _GEOMETRIA = ("marco", "lineas", "rayado", "regiones", "circulos", "ejes", "centro", "caja", "error")
+    _GEOMETRIA = ("marco", "lineas", "rayado", "regiones", "circulos", "arcos", "ejes", "centro", "caja", "error")
 
     def _calcular(self, v):
         firma = self._firma(v)
@@ -1105,7 +1200,7 @@ class Dibujo:
             return False
         v.error = ""
         v.lineas = {c: [] for c in CATEGORIAS}
-        v.rayado, v.regiones, v.circulos, v.ejes = np.zeros((0, 2, 2)), [], [], []
+        v.rayado, v.regiones, v.circulos, v.arcos, v.ejes = np.zeros((0, 2, 2)), [], [], [], []
         try:
             self._geometria(v)
         except geo.ErrorGeometria as e:
@@ -1137,6 +1232,7 @@ class Dibujo:
             segs = [s for reg in padre.regiones for s in rayado(reg, 45.0, paso)]
             v.rayado = np.array([s for s in recortar_a_circulo(segs, c, r) if len(s) == 2]).reshape(-1, 2, 2)
             v.circulos = [(cc, rr, comp) for cc, rr, comp in padre.circulos if np.linalg.norm(cc - c) < r]
+            v.arcos = [(cc, rr, t1, t2) for cc, rr, t1, t2 in padre.arcos if np.linalg.norm(cc - c) < r]
             v.ejes = [(s[0], s[-1]) for s in recortar_a_circulo([np.array([a, b]) for a, b in padre.ejes], c, r)]
             return
         forma, faltan = self._forma_de(v)
@@ -1151,6 +1247,7 @@ class Dibujo:
                 else np.zeros((0, 2, 2))
         v.lineas = proyectar(forma, v.marco, self.metodo)
         v.circulos = circulos_de_frente(forma, v.marco)
+        v.arcos = arcos_de_frente(forma, v.marco)
         v.ejes = ejes_de_cilindros(forma, v.marco)
         if faltan:
             v.error = "Faltan cuerpos del diseño: " + ", ".join(faltan)
@@ -1282,9 +1379,10 @@ class Dibujo:
         """Cota asociada a una vista; `puntos` y `lugar` en la hoja (se guardan en el modelo 2D de la vista).
 
         tipo: "horizontal" | "vertical" | "alineada" (2 puntos), "radio" | "diametro" (centro + extra radio en
-        la hoja), "angulo" (4 puntos: dos aristas), "ordenada_x" | "ordenada_y" (origen y punto)."""
+        la hoja), "angulo" (4 puntos: dos aristas), "ordenada_x" | "ordenada_y" (origen y punto),
+        "longitud_arco" (4 puntos: centro, inicio, un punto interior y fin)."""
         esperados = {"horizontal": 2, "vertical": 2, "alineada": 2, "radio": 1, "diametro": 1, "angulo": 4,
-                     "ordenada_x": 2, "ordenada_y": 2}
+                     "ordenada_x": 2, "ordenada_y": 2, "longitud_arco": 4}
         if tipo not in esperados:
             raise geo.ErrorGeometria(f"Tipo de cota desconocido: {tipo}")
         if len(puntos) != esperados[tipo]:
@@ -1297,8 +1395,35 @@ class Dibujo:
             a["radio"] = float(extra["radio"]) / v.escala
         if tipo == "angulo":
             sector_angular(*np.asarray(a["puntos"]), np.asarray(a["lugar"]))   # valida que no sean paralelas
+        if tipo == "longitud_arco":
+            q = np.asarray(a["puntos"], float)
+            dist = np.linalg.norm(q[1:] - q[0], axis=1)
+            if np.ptp(dist) > max(1e-6, 1e-6 * float(dist[0])):
+                raise geo.ErrorGeometria("Los puntos del arco no están todos a la misma distancia del centro.")
+            if _barrido_arco(q) < 1e-9:
+                raise geo.ErrorGeometria("El arco a acotar no tiene recorrido (inicio y fin coinciden).")
         self.anotaciones.append(a)
         return a
+
+    def agregar_cota_linea_base(self, vista_id, base, punto, lugar, indice=0):
+        """Una cota de línea base (Baseline Dimension): mide `punto` desde `base`; la primera (indice 0) se
+        coloca en `lugar` y las siguientes se apilan con SEPARACION_BASE. Devuelve la anotación creada."""
+        lugar_i, tipo = lugar_linea_base(base, punto, lugar, indice)
+        return self.agregar_cota(tipo, vista_id, [base, punto], lugar_i)
+
+    def puntos_de_arco(self, arco):
+        """Puntos en la hoja de un arco de `arco_cercano` (vista, centro, radio, t1, t2):
+        [centro, punta inicial, un punto interior, punta final] (para agregar_cota)."""
+        vid, c, r, t1, t2 = arco
+        v = self.vista(vid)
+        R, c_h, rot = r * v.escala, v.a_hoja(c), math.radians(v.rotacion)
+        return vid, [c_h] + [c_h + R * np.array([math.cos(t + rot), math.sin(t + rot)])
+                             for t in (t1, (t1 + t2) / 2, t2)]
+
+    def agregar_cota_arco(self, arco, lugar):
+        """Cota de longitud de arco (Arc Length Dimension) sobre un arco de `arco_cercano`; `lugar` en la hoja."""
+        vid, puntos = self.puntos_de_arco(arco)
+        return self.agregar_cota("longitud_arco", vid, puntos, lugar)
 
     def agregar_texto(self, posicion, texto, altura=ALTURA_TEXTO):
         a = {"id": self._nuevo_id("a"), "tipo": "texto", "posicion": _lista(posicion), "texto": str(texto),
@@ -1542,6 +1667,9 @@ class Dibujo:
             return 2 * a["radio"]
         if t == "angulo":
             return math.degrees(sector_angular(*p, np.asarray(a["lugar"], float))[2])
+        if t == "longitud_arco":
+            barrido = _barrido_arco(p)
+            return float(np.linalg.norm(p[1] - p[0])) * barrido
         return abs(p[1][0 if t == "ordenada_x" else 1] - p[0][0 if t == "ordenada_x" else 1])
 
     def texto_cota(self, a):
@@ -1574,6 +1702,10 @@ class Dibujo:
                 return dibujar_cota_radial(p[0], a["radio"] * v.escala, lugar, texto, st == "diametro")
             if st == "angulo":
                 return dibujar_cota_angular(*p, lugar, texto)[0]
+            if st == "longitud_arco":
+                barrido = _barrido_arco(p)
+                a1 = math.atan2(float(p[1][1] - p[0][1]), float(p[1][0] - p[0][0]))
+                return dibujar_cota_arco(p[0], float(np.linalg.norm(p[1] - p[0])), a1, a1 + barrido, lugar, texto)
             return dibujar_cota_ordenada(p[1], lugar, texto, "x" if st == "ordenada_x" else "y")
         if t == "texto":
             prims = []
@@ -1672,6 +1804,26 @@ class Dibujo:
                 d = abs(float(np.linalg.norm(v.a_hoja(c) - p)) - r * v.escala)
                 if d <= tol and (mejor is None or d < mejor[0]):
                     mejor = (d, v.id, c, r, completo)
+        return None if mejor is None else mejor[1:]
+
+    def arco_cercano(self, p_hoja, tol):
+        """(vista, centro modelo, radio modelo, t1, t2) del arco parcial más cercano al punto, o None.
+        El punto tiene que estar a `tol` mm de hoja del círculo y dentro del tramo angular del arco."""
+        p = np.asarray(p_hoja, float)
+        mejor = None
+        for v in self.vistas:
+            rot = math.radians(v.rotacion)
+            for c, r, t1, t2 in v.arcos:
+                c_h = v.a_hoja(c)
+                d = abs(float(np.linalg.norm(c_h - p)) - r * v.escala)
+                if d > tol:
+                    continue
+                ang = math.atan2(float(p[1] - c_h[1]), float(p[0] - c_h[0]))
+                rel = (ang - t1 - rot) % (2 * math.pi)
+                if rel > (t2 - t1) % (2 * math.pi):
+                    continue
+                if mejor is None or d < mejor[0]:
+                    mejor = (d, v.id, c, r, t1, t2)
         return None if mejor is None else mejor[1:]
 
     def vista_en(self, p_hoja):

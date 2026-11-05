@@ -233,3 +233,14 @@ def test_sin_posicion_avisa_en_el_dialogo():
     v = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in cmd.campos(ctx)}
     with pytest.raises(ErrorComando):
         cmd.construir(v, ctx)
+
+
+def test_el_dialogo_dice_que_no_taladra_los_cuerpos():
+    """H-65: Fusion taladra con Agujero, no con Insertar fijación; el diálogo tiene que decirlo en una línea."""
+    from omnicad.ui.comando import ContextoComando, Info
+    from omnicad.ui.comandos.fijacion import InsertarFijacion
+    doc = _placa((20, 20))
+    ctx = ContextoComando(doc)
+    campo = next((c for c in InsertarFijacion().campos(ctx) if c.clave == "no_taladra"), None)
+    assert isinstance(campo, Info), "el diálogo no tiene la línea que aclara que no taladra"
+    assert "no taladra" in campo.funcion({}, ctx).lower()

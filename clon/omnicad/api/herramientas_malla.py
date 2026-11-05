@@ -16,10 +16,10 @@ from typing import Literal
 
 from ..nucleo import geometria as geo
 from ..nucleo import malla as ml
-from ..timeline.ops_malla import (OpCombinarGruposCaras, OpCombinarMallas, OpConvertirMalla, OpCortarPlanoMalla,
-                                  OpEscalarMalla,
-                                  OpGruposCaras, OpInvertirNormalMalla, OpLimpiarMalla, OpReducirMalla, OpRemallar,
-                                  OpRepararMalla, OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
+from ..timeline.ops_malla import (OpBorrarRellenarMalla, OpCombinarGruposCaras, OpCombinarMallas, OpConvertirMalla,
+                                  OpCortarPlanoMalla, OpCrearGrupoCaras, OpEscalarMalla, OpGruposCaras,
+                                  OpInvertirNormalMalla, OpLimpiarMalla, OpReducirMalla, OpRemallar, OpRepararMalla,
+                                  OpSepararMalla, OpSuavizarMalla, OpTeselar, OpVaciadoMalla)
 from .errores import error
 from .herramientas_boceto import referencia_plano_o_cara, texto_expr
 from .herramientas_documento import _r_chico
@@ -251,6 +251,25 @@ def combine_face_groups(sesion, bodies: Cuerpos, groups: list[int], name: str | 
                                   grupos=list(groups)))
 
 
+@herramienta("create_face_group", "malla", "Crea un grupo de caras nuevo (MALLA › PREPARAR › Crear grupo de caras de "
+             "Fusion): entran al grupo nuevo las caras de faces y los triángulos de los grupos enteros de groups, "
+             "aplicados a cada cuerpo elegido. Hace falta al menos una de las dos; a diferencia de "
+             "combine_face_groups, no pide que estén unidos.", modifica=True)
+def create_face_group(sesion, bodies: Cuerpos, faces: list[int] | None = None, groups: list[int] | None = None,
+                      name: str | None = None):
+    """
+    bodies: id o nombre de los cuerpos de malla.
+    faces: índices de las caras que entran al grupo nuevo, en cada cuerpo elegido.
+    groups: números de grupos existentes cuyos triángulos pasan al grupo nuevo.
+    name: nombre del paso en el timeline; vacío = automático.
+    """
+    if not faces and not groups:
+        raise error("INVALID_ARGUMENTS", "Indicá faces o groups para el grupo nuevo.")
+    ids = [c.id for c in _cuerpos(sesion, bodies)]
+    return _agregar(sesion, _paso(sesion, OpCrearGrupoCaras, name, "Crear grupo de caras", cuerpos=ids,
+                                  caras=list(faces or []), grupos=list(groups or [])))
+
+
 # ---------------------------------------------------------------- modificar
 _REDUCIR = {"proportion": "proporcion", "face_count": "caras", "tolerance": "tolerancia"}
 
@@ -420,6 +439,29 @@ def reverse_mesh_normals(sesion, bodies: Cuerpos, name: str | None = None):
     """
     ids = [c.id for c in _cuerpos(sesion, bodies)]
     return _agregar(sesion, _paso(sesion, OpInvertirNormalMalla, name, "Invertir normal", cuerpos=ids))
+
+
+@herramienta("erase_and_fill_mesh", "malla", "Borra caras de mallas y rellena los agujeros (MALLA › MODIFICAR › "
+             "Borrar y rellenar). kind: uniform (remalla el parche con triángulos parejos) o minimal (triángulos "
+             "mínimos del contorno, pueden ser largos y finos). density: con kind=uniform, densidad del relleno "
+             "(mayor que cero).", modifica=True)
+def erase_and_fill_mesh(sesion, bodies: Cuerpos, faces: list[int], kind: Literal["uniform", "minimal"] = "uniform",
+                        density: Expr = 1, name: str | None = None):
+    """
+    bodies: id o nombre de los cuerpos de malla.
+    faces: índices de las caras a borrar, en cada cuerpo elegido (al menos una; no todas).
+    kind: "uniform" (triángulos parejos) o "minimal" (mínimos).
+    density: con kind=uniform, densidad del relleno (mayor que cero; 1 = parecida al contorno).
+    name: nombre del paso en el timeline; vacío = automático.
+    """
+    if not faces:
+        raise error("INVALID_ARGUMENTS", "Indicá al menos una cara en faces.")
+    if isinstance(density, (int, float)) and density <= 0:
+        raise error("INVALID_ARGUMENTS", f"density tiene que ser mayor que cero (recibió {density:g}).")
+    ids = [c.id for c in _cuerpos(sesion, bodies)]
+    return _agregar(sesion, _paso(sesion, OpBorrarRellenarMalla, name, "Borrar y rellenar", cuerpos=ids,
+                                  caras=list(faces), tipo={"uniform": "uniforme", "minimal": "minimo"}[kind],
+                                  densidad=texto_expr(density)))
 
 
 @herramienta("scale_mesh", "malla", "Escala mallas desde el origen (MALLA › MODIFICAR › Escalar malla de Fusion): "

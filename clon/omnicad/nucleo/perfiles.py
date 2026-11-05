@@ -91,10 +91,8 @@ class Perfil:
 
 
 def _punto_adentro(cara):
-    """Un punto seguro dentro de `cara`: el centro de su triángulo más grande."""
-    tris = np.asarray(geo.teselar(cara)[0], float).reshape(-1, 3, 3)
-    areas = np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
-    return tris[int(np.argmax(areas))].mean(axis=0)
+    """Un punto del material de la cara, también cuando el mallador no produce triángulos."""
+    return geo.punto_dentro(cara)
 
 
 def _cajas(caras):
@@ -138,10 +136,45 @@ def partes_de_texto(perfiles, ids_texto):
 def sin_huecos(perfiles, boceto):
     """Los `perfiles` de `boceto` menos los huecos de sus letras."""
     textos = [c.id for c in boceto.curvas.values() if c.tipo == "texto"]
-    if not textos:
+    if not textos and not boceto.objetos:
         return list(perfiles)
     huecos = {id(p) for p in partes_de_texto(perfiles, textos)[1]}
+    if boceto.objetos:
+        from ..restricciones import objetos
+        for oid in objetos.raices(boceto):
+            cids = set(objetos.curvas(boceto, [oid]))
+            propios = [p for p in perfiles if p.firma and p.firma <= cids]
+            formas_svg = [o for o in boceto.objetos.values() if "regla_relleno" in o
+                          and set(objetos.curvas(boceto, [o["id"]])) <= cids]
+            if formas_svg:
+                preparadas = [(objetos.caja(boceto, [o["id"]]), o["regla_relleno"],
+                               [(g, o.get("sentidos_svg", {}).get(str(g[1]), 1) *
+                                 (-1 if g[0] in ("arco", "arco_elipse") and
+                                  np.linalg.det(objetos.indice(boceto)[g[1]][2][:2, :2]) < 0 else 1))
+                                for g in objetos.primitivas(boceto, o["id"])])
+                              for o in formas_svg]
+                huecos.update(id(p) for p in propios if not _tinta_svg(p, preparadas))
+            else:
+                huecos.update(id(p) for p in _capas_de_texto(propios)[1])
     return [p for p in perfiles if id(p) not in huecos]
+
+
+def _tinta_svg(perfil, formas):
+    """Regla de relleno por elemento SVG; objetos superpuestos no se restan entre sí."""
+    from ..restricciones.objetos import vueltas_primitiva
+    # El centroide de una letra puede caer dentro de su agujero; usar un punto de la cara.
+    plano = getattr(perfil, "plano_boceto", None)
+    q = perfil.centroide_uv
+    if plano is not None and not _cara_contiene(perfil.cara, q, plano):
+        q = tuple(plano.a_uv(_punto_adentro(perfil.cara)))
+    for limites, regla, primitivas in formas:
+        x0, y0, x1, y1 = limites
+        if not (x0 - 1e-7 <= q[0] <= x1 + 1e-7 and y0 - 1e-7 <= q[1] <= y1 + 1e-7):
+            continue
+        vueltas = sum(sentido * vueltas_primitiva(g, q) for g, sentido in primitivas)
+        if (vueltas % 2) if regla == "evenodd" else (vueltas != 0):
+            return True
+    return False
 
 
 def perfiles_de_boceto(br):
@@ -294,12 +327,62 @@ def detectar_boceto(boceto, plano, geometria=None):
 
     shortcut: cada grupo usa una entrada del caché de `detectar`; con más textos que `_CACHE_MAX` se recalcula, y alcanza."""
     textos = {c.id for c in boceto.curvas.values() if c.tipo == "texto"}
+    from ..restricciones import objetos
+    indice = objetos.indice(boceto) if boceto.objetos else {}
+    fuera = objetos.curvas_sin_perfil(boceto) if boceto.objetos else ()
     grupos = {}
     for g in boceto.geometria() if geometria is None else geometria:
-        grupos.setdefault(g[1] if g[1] in textos else None, []).append(g)
-    perfiles = [p for grupo in grupos.values() for p in detectar(grupo, plano)]
+        if g[1] in fuera:
+            continue                       # objeto con «Participar en perfiles» apagado
+        clave = ("texto", g[1]) if g[1] in textos else ("objeto", indice[g[1]][0]) if g[1] in indice else None
+        grupos.setdefault(clave, []).append(g)
+    locales = boceto
+    if any(k is not None and k[0] == "objeto" for k in grupos):
+        if any(not np.array_equal(boceto.objetos[i]["matriz"], objetos.IDENTIDAD) for i in objetos.raices(boceto)):
+            locales = boceto.copia()
+            for oid in objetos.raices(locales):
+                locales.objetos[oid]["matriz"] = [list(f) for f in objetos.IDENTIDAD]
+            objetos.invalidar(locales)
+    perfiles = []
+    for clave, grupo in grupos.items():
+        if clave is None or clave[0] != "objeto":
+            perfiles.extend(detectar(grupo, plano))
+            continue
+        # Una matriz no cambia qué curvas se intersectan dentro del recurso. Se intersecta una vez, en XY local.
+        m = objetos.matriz(boceto.objetos[clave[1]]["matriz"])
+        prims = [p for cid in dict.fromkeys(g[1] for g in grupo) for p in locales.primitivas(cid)]
+        originales = detectar(prims, geo.Plano("XY"))
+        matriz4 = np.eye(4)
+        matriz4[:3, :2] = np.column_stack((plano.u, plano.v)) @ m[:2, :2]
+        matriz4[:3, 3] = plano.a_3d(*m[:2, 2])
+        # Con escala uniforme se conserva la representación analítica de círculos y elipses en OCC.
+        escala = float(np.linalg.norm(m[:2, 0]))
+        uniforme = np.allclose(m[:2, :2].T @ m[:2, :2], np.eye(2) * escala ** 2,
+                              rtol=1e-10, atol=escala ** 2 * 1e-12)
+        matriz4[:3, 2] = plano.normal * (escala if uniforme else 1.)
+        factor = abs(float(np.linalg.det(m[:2, :2])))
+        for p in originales:
+            q = tuple(m[:2, :2] @ p.centroide_uv + m[:2, 2])
+            nuevo = Perfil(None, p.area * factor, q, p.firma,
+                           fabrica=partial(_cara_de_objeto, p, matriz4))
+            nuevo.objeto = clave[1]
+            nuevo.centroide_local = p.centroide_uv
+            perfiles.append(nuevo)
+    for p in perfiles:
+        p.plano_boceto = plano
     perfiles.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
     return perfiles
+
+
+def _cara_de_objeto(perfil, matriz4):
+    """Sketch.profiles de un recurso rígido: transforma la cara local sin volver a intersectar curvas."""
+    from .solidos_modificar import transformar
+    if np.array_equal(matriz4, np.eye(4)):
+        return perfil.cara
+    caras = geo.caras(transformar(perfil.cara, matriz4))
+    if len(caras) != 1:
+        raise geo.ErrorGeometria("La transformación del perfil no produjo una única cara.")
+    return caras[0]
 
 
 def _aristas_de(forma):
@@ -600,11 +683,21 @@ def buscar_por_firma(perfiles, firma, centroide=None):
     return min(candidatos, key=lambda p: math.dist(p.centroide_uv, centroide))
 
 
-def buscar_por_firma_tolerante(perfiles, firma, centroide=None):
+def _cara_contiene(cara, uv, plano):
+    """True si el punto uv del plano del boceto cae dentro de la cara (o en su borde)."""
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.TopAbs import TopAbs_IN, TopAbs_ON
+    return BRepClass_FaceClassifier(cara, plano.pnt(*uv), 1e-7).State() in (TopAbs_IN, TopAbs_ON)
+
+
+def buscar_por_firma_tolerante(perfiles, firma, centroide=None, plano=None):
     """Busca por firma exacta; si no hay, re-enlaza al perfil que comparte más curvas de la firma
 
     (un cambio de parámetro degeneró una curva o una nueva curva parte la región), con el centroide
-    guardado como desempate y ventaja clara. Devuelve (perfil, nota) con nota None en el caso exacto,
+    guardado como desempate y ventaja clara. Si el empate sigue (B-154: una letra y su hueco quedan
+    casi en el mismo lugar, y un pedazo viejo de letra no los distingue por el centroide), gana el más
+    chico de los que contienen al centroide guardado; el parámetro plano es el del boceto, que ubica
+    ese punto sobre las caras. Devuelve (perfil, nota) con nota None en el caso exacto,
     o (None, None) si no hay un único candidato claro.
     """
     exacto = buscar_por_firma(perfiles, firma, centroide)
@@ -624,8 +717,14 @@ def buscar_por_firma_tolerante(perfiles, firma, centroide=None):
         iguales.sort(key=lambda p: math.dist(p.centroide_uv, centroide))
         d0, d1 = math.dist(iguales[0].centroide_uv, centroide), math.dist(iguales[1].centroide_uv, centroide)
         if d1 <= 1e-12 or d0 >= 0.25 * d1:
-            return None, None
-        mejor = iguales[0]
+            if plano is None:
+                return None, None
+            adentro = [p for p in iguales if p.cara is not None and _cara_contiene(p.cara, centroide, plano)]
+            if not adentro:
+                return None, None
+            mejor = min(adentro, key=lambda p: p.area)
+        else:
+            mejor = iguales[0]
     return mejor, ("El perfil se re-vinculó con firma parcial: un cambio del boceto alteró su "
                    "contorno (revisá la operación).")
 

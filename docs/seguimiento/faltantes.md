@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 233: Abierto 151 · Parcial 49 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 224: Abierto 146 · Parcial 48 · Bloqueado 30 (recontado 2026-11-05).
 
 ## Pendientes generales
 
@@ -14,7 +14,6 @@ Abierto 53 · Parcial 3 · Bloqueado 2.
 | P-8c | Primer arranque guiado dentro de la app (idioma, conectar agentes con un botón) | Abierto | Media | Hoy conectar agentes es una tarea opcional del instalador; la app no tiene asistente de primer arranque. | instalador/windows/omnicad.iss:62,79 (tarea «agentes»); grep de «primer arranque» en omnicad/: sin resultados | 2026-10-20 |
 | P-9f | Temas con tipografía propia y fondo con imagen en el visor | Abierto | Media | Los temas solo definen colores; la fuente está fija en el QSS y no hay imagen de fondo. | omnicad/ui/temas.py:208 (font-family fija «Segoe UI») | 2026-10-20 |
 | P-12e | Página web del proyecto y GitHub Actions que la actualice con cada versión | Abierto | Media | No existe la página; comparte las Actions por versión con el pendiente 8. | .github/workflows/instaladores.yml (solo instaladores) | 2026-10-20 |
-| P-12j | Grupos en la línea de tiempo | Abierto | Media | Los grupos existen solo en el navegador de cuerpos; el timeline no tiene carpetas. | omnicad/ui/panel_timeline.py sin grupos (grep «grupo»: solo TIPOS_UNION); coincide con SC9 | 2026-10-20 |
 | P-22a | Modo seguro (contador de arranques fallidos) | Abierto | Media | Sin programar. | grep «modo seguro» y «arranques fallidos» en omnicad/: sin resultados | 2026-10-20 |
 | P-22b | Diario del solver de bocetos (grabar y reproducir) | Abierto | Media | Sin programar; serviría de corpus para R4. | omnicad/restricciones/ sin diario | 2026-10-20 |
 | P-23c3 | c) Grupos anidados (mover un grupo dentro de otro) | Abierto | Media | Opción grisada: sin grupos anidados. | omnicad/ui/acciones_navegador.py | 2026-10-20 |
@@ -72,12 +71,15 @@ Abierto 53 · Parcial 3 · Bloqueado 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 2 · Parcial 1 · Sin verificar 0.
+Abierto 4 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: derivación y Duplicar con uniones hechos; falta el catálogo de piezas | Parcial | Media | Falta un catálogo local de piezas estándar más allá de las fijaciones (rodamientos, perfiles, pasadores…; sin servicios en línea): hay que decidir qué piezas y sus medidas. Duplicar con uniones copia un componente por vez, las copias son independientes (sin instancias asociativas) y no tiene los modos de destino «Entre dos caras» e «Intersección de dos aristas» ni «Borrar último duplicado». | ui/cinta.py:59 (Duplicar con uniones); api/herramientas_ensamble.py (duplicate_with_joints); ui/comandos/derivacion.py:16; api/herramientas_documento.py:322 (insert_derive); tests/test_derivacion.py; tests/test_duplicar_con_uniones.py; nucleo/fijaciones.py (solo fijaciones) | 2026-10-31 |
+| H-69 | Organización del boceto: la geometría suelta no tiene nombre, ocultar, bloquear ni «en perfiles» propios | Abierto | Media | Hoy cada curva suelta se lista en Geometrías y su menú ofrece Seleccionar, Convertir en objeto (queda rígido, fuera del solver) y Eliminar. Falta guardar esas propiedades por curva sin sacarla del solver ni duplicar el modelo de objetos (plan_boceto_organizar.md, secciones 4 y 8). | clon/omnicad/ui/navegador_boceto.py (menú de `curva_boceto`); clon/tests/test_boceto_organizar.py::test_categorias_salen_del_dato_y_un_grupo_no_cambia_la_de_sus_miembros | 2026-11-05 |
+| H-70 | Organización del boceto: expandir el contenido interno de un SVG o DXF (capas y formas) en el navegador | Abierto | Media | El SVG/DXF se lista como una unidad y sus partes solo se cuentan. Falta listar capas y formas bajo demanda (sin crear miles de filas) y poder elegir una pieza interna sin romper el contorno ni el relleno (plan_boceto_organizar.md, secciones 2 y 7). | clon/omnicad/ui/navegador.py (`_ramas_boceto`); clon/omnicad/restricciones/objetos.py (`unidades`) | 2026-11-05 |
+| H-71 | Organización del boceto: accesos en el clic derecho del visor, arrastrar filas entre grupos y teclado en el árbol | Abierto | Baja | El visor conserva su menú radial sin las acciones nuevas; cambiar de grupo se hace por el menú del navegador (no arrastrando) y el árbol no toma el foco del teclado (era así antes). Superpuestos: Alt+clic elige el de abajo (plan_boceto_organizar.md, secciones 9.5 y 10). | clon/tests/test_boceto_organizar_ui.py::test_alt_clic_elige_el_objeto_de_abajo; clon/omnicad/ui/navegador.py (`setFocusPolicy`) | 2026-11-05 |
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
@@ -87,7 +89,7 @@ Abierto 0 (BOC-36 y BOC-47 se resolvieron el 2026-10-31). Plan por fases: [plan_
 
 Cada fila salió de comparar la pestaña SUPERFICIE con los artículos de la ayuda de Fusion (sección Fusion-Patch de `docs/fusion_docs/`) y de probar las 14 herramientas por MCP/CLI. Los bugs se reprodujeron; los scripts de prueba (`sonda*.py`) están en `evidencias/superficie_2026-10-24/`, fuera de git.
 
-Abierto 0 · Parcial 3.
+Parcial 3.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -99,7 +101,7 @@ Abierto 0 · Parcial 3.
 
 Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPECCIONAR, INSERTAR, SELECCIONAR) con los artículos de la ayuda de Fusion (carpeta `fusion-model`) y de probar unas 70 herramientas por API con valores normales, de borde e inválidos. Los bugs se reprodujeron; los scripts (`s*.py`) están en `evidencias/solido_2026-10-24/`, fuera de git. Lo que ya estaba cargado (SC12, SC3, P-25d, P-25f, P-25g2, P-25i, P-25j) no se repite.
 
-Abierto 0 · Parcial 3 · Bloqueado 0.
+Parcial 3.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -139,7 +141,6 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 |---|---|---|---|---|---|---|
 | SUP-27 | Cinta de SUPERFICIE como Fusion: ítems y nombres | Abierto | Media | Faltan Derivar, Patrón, Simetría, Llenado, Origen de la unión, Chaflán, Quitar, Material físico, Administrar y Lista de materiales. | docs/brechas_superficie.md § SUP-27; ui/cinta.py:128 | 2026-11-01 |
 | SUP-28 | Empalme y Chaflán de superficie completos | Abierto | Alta | Tipos, tipo de radio, cadena tangente y esquina; hoy son 3 campos. | docs/brechas_superficie.md § SUP-28; `fillet_surface` rechaza radius_type y tangent_chain, por API | 2026-11-01 |
-| SUP-29 | Encadenado en los comandos de superficie | Abierto | Media | Extruir, Revolución, Contorno, Reglada, Desfase, Alargar y Descoser. | docs/brechas_superficie.md § SUP-29 | 2026-11-01 |
 | SUP-30 | Valores por defecto de superficie y paneles de material | Abierto | Media | Agrupar, Eje de proyecto, Anular recorte, Alargar y biblioteca de Material físico (el panel Aspecto ya está completo: `tests/test_aspecto_panel.py`). | docs/brechas_superficie.md § SUP-30 | 2026-11-01 |
 
 ## ENSAMBLAR contra capturas de Fusion (2026-11-01)
@@ -149,7 +150,6 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 | ASM-17 | Restricción de componentes: Alinear, Ángulo, Centro y Tangente | Abierto | Muy alta | Comando, tabla, límites, paso del timeline, conflictos y herramienta. | docs/brechas_ensamblar.md § ASM-17; no hay herramienta en la API (probado por nombre) ni comando en ui/cinta.py:57 | 2026-11-01 |
 | ASM-18 | Nuevo componente vacío y con opciones de Fusion | Abierto | Alta | Padre, Externo, tipos, nombre, A partir de cuerpos y Activar. | docs/brechas_ensamblar.md § ASM-18; `create_component` exige cuerpos, por API | 2026-11-01 |
 | ASM-19 | Menú ENSAMBLAR y paneles como Fusion | Abierto | Media | Orden, nombres, atajo Mayús+J, pestañas de Unión e Incluir hijos encendido. | docs/brechas_ensamblar.md § ASM-19; ui/cinta.py:57 | 2026-11-01 |
-| ASM-20 | Orden de campos de los paneles de unión | Abierto | Baja | Revisar contra las capturas. | docs/brechas_ensamblar.md § ASM-20 | 2026-11-01 |
 
 ## ANIMACIÓN contra capturas de Fusion (2026-11-01)
 
@@ -158,16 +158,13 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 | ANI-1 | Navegador y Comentarios en ANIMACIÓN | Abierto | Alta | Elegir, ocultar y transformar desde el Navegador. | docs/brechas_animacion.md § ANI-1; ui/animacion.py (`VentanaAnimacion`) | 2026-11-01 |
 | ANI-2 | Explosión manual y barra de explosión | Abierto | Alta | Eje por componente, escala y secuencia en la barra. | docs/brechas_animacion.md § ANI-2; ui/animacion.py:695 (grisado) | 2026-11-01 |
 | ANI-3 | Aspecto y trayectorias en la animación | Abierto | Media | Guardados en el guion, con herramienta. | docs/brechas_animacion.md § ANI-3; ui/animacion.py:696 (grisados); `add_animation_action` rechaza appearance, por API | 2026-11-01 |
-| ANI-4 | Llamada, nombres y atajos de ANIMACIÓN | Parcial | Baja | Comparar la línea de tiempo con la captura (regla, zoom 1.0, pestañas de guion con +, botones de reproducción). El atajo E queda con Explosión manual (ANI-2). | docs/brechas_animacion.md § ANI-4; ui/animacion.py (`CajaLlamada`, `ATAJOS`); tests/test_animacion.py::test_crear_llamada_con_caja_y_barra | 2026-11-03 |
 | ANI-5 | Pieza de ANIMACIÓN en la prueba de ventana | Abierto | Media | Guion completo con publicación. | docs/brechas_animacion.md § ANI-5 | 2026-11-01 |
 
 ## Botones grisados sin fila (2026-11-01)
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| MAL-1 | MALLA: Crear grupo de caras y Combinar grupos de caras | Parcial | Media | Combinar grupos de caras anda (`combine_face_groups`, botón con clave). Falta Crear grupo de caras, todavía grisado. | ui/cinta.py:173; ayuda `Combine face groups on a mesh body` | 2026-11-03 |
 | MAL-2 | MALLA: Alinear, Extruir textura y Edición directa | Abierto | Alta | Tres botones grisados y sin comando. | ui/cinta.py:175 y 178; ayuda `Extrude texture on a mesh body` | 2026-11-01 |
-| MAL-3 | MALLA: Borrar y rellenar | Abierto | Media | Botón grisado; comprobar en la ayuda si aplica a malla o solo a T-Spline. | ui/cinta.py:177; ayuda `Erase and fill an area of a T-Spline body` | 2026-11-01 |
 | CHA-1 | CHAPA: Pestaña solevada y Cierre de esquina | Abierto | Alta | Dos botones grisados y sin comando. | ui/cinta.py:148 y 151; ayuda `Create lofted flange` | 2026-11-01 |
 | CFG-1 | Reglas de configuración | Abierto | Media | Botón grisado en CONFIGURAR. | ui/cinta.py:27; ayuda `Configuration Rules` | 2026-11-01 |
 
@@ -179,7 +176,7 @@ Salen de las 674 capturas del escritorio, ya ordenadas en `analisis/capturas_fus
 |---|---|---|---|---|---|---|
 | CF-1 | DIBUJO: diálogo Crear dibujo completo | Abierto | Media | Modo Automático, contenido (todo, visible, selección), creación de planos por nivel, documento base, unidades, recuento de planos y tamaño personalizado. | ui/dibujo.py (solo `DialogoHoja`); capturas `DIBUJO/Crear_dibujo` | 2026-11-02 |
 | CF-2 | DIBUJO: panel Vista de dibujo | Abierto | Alta | Estilos sombreados, mejorar calidad, aristas de interferencia y de rosca, aristas tangentes (longitud completa, acortado), marcas y líneas de centro por tipo (agujero, cortes redondos, extrusiones redondas, patrón, empalme), orientación con vistas guardadas y referencia/instancia/representación. RH14 solo cubre estilos importables. | ui/dibujo.py; capturas `DIBUJO/Vista_de_dibujo` y `DIBUJO/Vista_base` | 2026-11-02 |
-| CF-3 | DIBUJO: menú COTAS completo | Abierto | Media | Cota automática, ordenar, organizar, igualar, voltear flechas, recodo, longitud de arco, línea base y máx/mín. F9 cubre solo cadena y RH14 solo curva. | nucleo/dibujo.py; capturas `DIBUJO/Menu_de_cotas` y `DIBUJO/Ordenar` | 2026-11-02 |
+| CF-3 | DIBUJO: menú COTAS completo | Parcial | Media | Hechas Línea base y Longitud de arco (2026-11-04, tests/test_dibujo.py). Faltan cota automática, ordenar, organizar, igualar, voltear flechas, recodo y máx/mín. | nucleo/dibujo.py; capturas `DIBUJO/Menu_de_cotas` y `DIBUJO/Ordenar` | 2026-11-02 |
 | CF-4 | DIBUJO: notas, tablas y símbolos | Abierto | Media | Nota de agujero y rosca, de pliegue, panel de Texto con formato; tablas de plegado, agujeros, personalizada, revisiones y nube; símbolos de rectángulo de tolerancia, identificador de referencia, ángulo, inclinación, arista y boceto; extensión de arista. F9 cubre solo soldadura y acabado. | ui/dibujo.py; capturas `DIBUJO/Tablas`, `Simbolos_de_dibujo`, `Texto_y_notas` | 2026-11-02 |
 | CF-5 | DIBUJO: navegador, hojas, cinta y exportar | Abierto | Media | Navegador de dibujo con hojas múltiples, pestañas ADMINISTRAR y UTILIDADES, grupos SÍMBOLOS, INSERTAR e INSPECCIONAR, Exportar DWG y CSV, vista de sección parcial y recortada, boceto de dibujo, patrón de marcas de centro. | ui/dibujo.py; capturas `DIBUJO/Navegador_de_dibujo`, `Exportar_dibujo` | 2026-11-02 |
 | CF-6 | Diálogo «¿Qué desea diseñar?» al crear un diseño | Abierto | Media | Tipo (piezas, ensamblaje, híbrido, dibujo), sistema de unidades y plantilla. Hoy `nuevo()` crea siempre un diseño vacío. Relacionada con H-5. | grep «Qué desea» en omnicad/: sin resultados; capturas `INTERFAZ/Nuevo_diseno*` | 2026-11-02 |
@@ -197,10 +194,9 @@ Especificación y prompt: [brechas_extensiones.md](../brechas_extensiones.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| PLA-1 | Grampa de fijación (Snap Fit): gancho y ranurado paralelos o perpendiculares, gancho y contorno | Abierto | Alta | Comando, operación y herramienta nuevos. Puntos automáticos o manuales, giro y extensión. | ui/cinta.py:160 (botón gris); docs/brechas_extensiones.md | 2026-11-01 |
-| PLA-2 | Apoyo (Rest): área plana desde un perfil cerrado y un cuerpo | Parcial | Alta | Anda con desfase, grosor, Lado 1 y Lado 2, desmoldeo y extensión Todo o Hasta objeto (`create_rest`, botón y comando). Faltan Caras superiores y Recortar. | tests/test_apoyo.py; docs/brechas_extensiones.md | 2026-11-03 |
+| PLA-1 | Grampa de fijación (Snap Fit): gancho y ranurado paralelos o perpendiculares, gancho y contorno | Parcial | Alta | Hecho (2026-11-03): los 3 tipos con puntos manuales, giro Uniforme, extensión Hasta el siguiente o Distancia, API y botón. Faltan selección Automática, giro Independiente o Alineado, Flip y radio de empalme de la base; cabeza y ranura son cajas simples. | ui/cinta.py:160 (botón gris); docs/brechas_extensiones.md | 2026-11-01 |
 | PLA-3 | Saliente de fijación de dos lados, con fijador y nervios | Parcial | Alta | Hoy es un solo lado: exterior, agujero, alto y desmoldeo. Falta Lado 2, escariado, escalón, fijador y pestaña de nervios. | api create_boss: volumen 30681,51 en la caja medida; docs/brechas_extensiones.md | 2026-11-01 |
-| PLA-4 | Labio: tipo Labio y acanalado sobre dos cuerpos | Parcial | Media | Labio y ranura andan. Falta el tipo combinado, Cadena tangente, Guía de cara y extensiones. | api create_lip_groove: lip_type solo lip o groove; docs/brechas_extensiones.md | 2026-11-01 |
+| PLA-4 | Labio: tipo Labio y acanalado sobre dos cuerpos | Parcial | Media | Hecho (2026-11-03): labio y ranura base con validación de aristas (B-158). Faltan Cadena tangente, Guía de cara y Avanzado (extensiones, Flip). | api create_lip_groove: lip_type solo lip o groove; docs/brechas_extensiones.md | 2026-11-01 |
 | PLA-5 | Reglas de plástico: árbol, editar, biblioteca y quitar la regla | Parcial | Media | Crear, asignar y borrar andan. Falta el árbol, Editar, Nueva desde otra, elegir en el lienzo, quitar desde el navegador y las reglas de fábrica de Fusion. | ui/comandos/plastico.py; docs/brechas_extensiones.md | 2026-11-01 |
 | PLA-7 | Patrón geométrico: objeto personalizado y caras curvas | Parcial | Media | Faltan Dirección perpendicular, Cambiar y Expandir. Comprobar en Fusion real si acepta caras curvas: hoy OmniCAD las rechaza. | api create_geometric_pattern: «necesita una cara plana»; docs/brechas_extensiones.md | 2026-11-01 |
 | PLA-8 | Sólido delimitador: tipos fijos, desfases, redondeo, origen y cotas | Parcial | Media | Hoy tres formas y un margen. Faltan seis tipos, modo de desfase, redondeo, cuatro orígenes y cotas en vivo. | ui/cinta.py:102; api create_bounding_solid; docs/brechas_extensiones.md | 2026-11-01 |
@@ -218,7 +214,7 @@ Especificación y prompt: [brechas_extensiones.md](../brechas_extensiones.md).
 
 Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, vínculos, estudio de movimiento) con los artículos de la ayuda de Fusion (carpeta `fusion-assemble`), de probar unas 60 llamadas por API (`evidencias/ensamble_2026-10-25/a*.py`) y de usar la ventana real como una persona (`scripts/prueba_ui/ensamblar.py`, 224 comprobaciones). Lo que ya estaba cargado (P-25e, P-25e2, SC6, SC7, SC8, SC15, H-4, H-5, H-19, F8, P-6d) no se repite.
 
-Abierto 2.
+Abierto 1 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -235,7 +231,7 @@ Se recorrieron los 148 comandos del catálogo y las cintas: 44 tienen asas (`Com
 
 ## Fusion 360
 
-Abierto 2 · Bloqueado 1. Especificación: [brechas_fusion.md](../brechas_fusion.md).
+Abierto 1 · Parcial 1 · Bloqueado 1. Especificación: [brechas_fusion.md](../brechas_fusion.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -296,7 +292,7 @@ Abierto 8 · Parcial 5 · Bloqueado 2. Especificación: [brechas_blender.md](../
 
 ## Rhino 8
 
-Abierto 9 · Parcial 3 · Bloqueado 4 · Sin verificar 3. Especificación: [brechas_rhino.md](../brechas_rhino.md).
+Abierto 9 · Parcial 3 · Bloqueado 4. Especificación: [brechas_rhino.md](../brechas_rhino.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -392,12 +388,10 @@ Parcial 2. Especificación: [plan_asistente_ia.md](../plan_asistente_ia.md).
 
 ## SolidCraft
 
-Abierto 12 · Parcial 3 · Bloqueado 1. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
+Abierto 9 · Parcial 3 · Bloqueado 1. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| SC18 | Barrido de parámetros: variar un parámetro en un rango y medir volumen, masa o interferencia en cada valor | Abierto | Media | Todo. En SolidCraft es el comando `inspect.parameter_sweep`: recalcula el diseño con cada valor y devuelve la tabla. Acá sería una herramienta `parameter_sweep` (MCP/CLI) más un diálogo en INSPECCIONAR; reutiliza `set_parameter` sobre una copia y `get_physical_properties`. | grep parameter_sweep y barrido de parámetros sin resultados en clon/omnicad | 2026-10-26 |
-| SC9 | Timeline: carpetas de pasos y copiar/pegar pasos | Abierto | Media | Todo. | grep carpeta/copiar/pegar en ui/panel_timeline.py sin resultados | 2026-10-20 |
 | SC14 | Importar .FCStd de FreeCAD | Abierto | Media | Leer el ZIP y los .brp con BRepTools.Read, con topes de seguridad. | grep FCStd sin resultados | 2026-10-20 |
 | SC15 | Exportar URDF desde un ensamble con uniones | Abierto | Media | Eslabones, masa, inercia y juntas con límites. | grep urdf sin resultados en clon/omnicad | 2026-10-20 |
 | SC2 | Robustez con semilla: generador de diseños y minimizador | Abierto | Alta | Generador aleatorio, chequeo de volumen, CLI omnicad fuzz. | grep fuzz sin resultados; solo tortura manual (tests/test_hallazgos_tortura.py) | 2026-10-20 |

@@ -7,6 +7,22 @@ from pathlib import Path
 
 from .. import registro_uso as registro
 
+_RAIZ_PROYECTO = Path(__file__).resolve().parents[2]        # clon/: los cuadros quedan relativos a la raíz del repo
+
+
+def _traza(excepcion):
+    """Como mucho 15 cuadros del proyecto (omnicad/ y tests/), con su archivo relativo a la raíz del repo y línea."""
+    marcos = []
+    for marco in traceback.extract_tb(excepcion.__traceback__):
+        try:
+            relativa = Path(marco.filename).resolve().relative_to(_RAIZ_PROYECTO)
+        except (ValueError, OSError):
+            continue
+        if relativa.parts[0] not in ("omnicad", "tests"):
+            continue
+        marcos.append({"archivo": relativa.as_posix(), "linea": marco.lineno, "funcion": marco.name})
+    return marcos[-15:]
+
 
 def calculo(funcion):
     """Difiere el enriquecimiento geométrico hasta terminar el recálculo (OCP retiene el GIL)."""
@@ -29,17 +45,14 @@ def calculo(funcion):
 
 
 def error(excepcion=None, *, origen="operacion", comando="", mensaje=""):
-    """Categoría y traza sin mensajes, código fuente, rutas ni variables locales."""
+    """Categoría, mensaje y traza del proyecto (archivo:línea); sin código fuente, rutas de la PC ni variables."""
     if registro.activo is None:
         return
-    traza = []
-    if excepcion is not None:
-        for marco in traceback.extract_tb(excepcion.__traceback__)[-5:]:
-            if "/omnicad/" in marco.filename.replace("\\", "/"):
-                traza.append({"linea": marco.lineno, "categoria": marco.name})
+    traza = _traza(excepcion) if excepcion is not None else []
+    texto = str(excepcion) if excepcion is not None else mensaje
     registro.activo.emitir("error", {"origen": origen, "comando": comando,
         "excepcion": type(excepcion).__name__ if excepcion is not None else "AvisoOperacion",
-        "mensaje": str(excepcion) if excepcion is not None else mensaje, "traza": traza})
+        "mensaje": texto, "traza": traza})
 
 
 def archivo(tipo):

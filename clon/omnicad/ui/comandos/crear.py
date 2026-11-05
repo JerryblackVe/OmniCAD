@@ -1724,25 +1724,35 @@ class Saliente(Comando):
 
 class Labio(Comando):
     CLAVE, TITULO, ICONO = "labio", "Labio", "labio"
-    AYUDA = "Labio o ranura a lo largo del borde de una pared (carcasas de plástico)."
+    AYUDA = "Labio, ranura o labio y acanalado a lo largo del borde de una pared (carcasas de plástico)."
     CLASE_OP = OpLabio
-    TITULOS_MODO = ("tipo", {"labio": ("Labio", "labio"), "ranura": ("Ranura", "labio")})
+    TITULOS_MODO = ("tipo", {"labio": ("Labio", "labio"), "ranura": ("Ranura", "labio"),
+                             "labio y acanalado": ("Labio y acanalado", "labio")})
 
     def campos(self, ctx):
-        return [Opciones("tipo", "Tipo", {"labio": "Labio", "ranura": "Ranura"}),
+        return [Opciones("tipo", "Tipo", {"labio": "Labio", "ranura": "Ranura",
+                                          "labio y acanalado": "Labio y acanalado"}),
                 Seleccion("aristas", "Aristas del borde", {"arista"}, maximo=None),
+                Seleccion("cuerpo_ranura", "Cuerpo de la ranura", {"cuerpo"}, minimo=0,
+                          visible_si=lambda v: v.get("tipo") == "labio y acanalado",
+                          ayuda="El cuerpo que recibe la ranura del labio; tiene que tocar al del labio."),
                 Expresion("ancho", "Ancho", "1 mm"), Expresion("alto", "Alto", "1.5 mm"),
-                Expresion("holgura", "Holgura", "0.1 mm", visible_si=lambda v: v.get("tipo") == "ranura"),
+                Expresion("holgura", "Holgura", "0.1 mm", visible_si=lambda v: v.get("tipo") != "labio"),
                 Casilla("invertir", "Invertir"),
                 Seleccion("direccion", "Dirección de tirado", {"plano", "cara_plana", "eje", "arista_lineal"}, minimo=0)]
 
     def construir(self, v, ctx):
         exigir(v, "aristas", "Seleccioná las aristas del borde.")
+        if v["tipo"] == "labio y acanalado":
+            exigir(v, "cuerpo_ranura", "Elegí el cuerpo de la ranura del labio y acanalado.")
+        ranura = next((h["ref"]["cuerpo"] for h in v.get("cuerpo_ranura") or [] if h["ref"].get("tipo") == "cuerpo"), None)
         return self.crear_op(OpLabio, v, ctx, aristas=refs(v, "aristas"), direccion=ref1(v, "direccion"),
+                             cuerpo_ranura={"tipo": "cuerpo", "cuerpo": ranura} if ranura else None,
                              **{k: v[k] for k in ("tipo", "ancho", "alto", "holgura", "invertir")})
 
     def desde_op(self, op, ctx):
-        return dict(op.p, aristas=hits(op.p["aristas"], ctx.estado), direccion=_h1(op.p["direccion"], ctx.estado))
+        return dict(op.p, aristas=hits(op.p["aristas"], ctx.estado), direccion=_h1(op.p["direccion"], ctx.estado),
+                    cuerpo_ranura=hits([op.p["cuerpo_ranura"]], ctx.estado) if op.p.get("cuerpo_ranura") else [])
 
 
 registrar(Barrido, Solevacion, Nervio, Red, Repujado, Agujero, Rosca, Bobina, Tuberia, PatronRectangular, VolumenFluido,

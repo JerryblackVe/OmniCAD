@@ -722,11 +722,7 @@ def _punto_en_cara(cara):
     p = np.array(geo.centro_masa(cara, superficie=True))
     if BRepClass_FaceClassifier(cara, gp_Pnt(*map(float, p)), 1e-6).State() == TopAbs_IN:
         return p
-    for _c, tris in geo.teselar_por_cara(cara, 0.5):
-        if len(tris):
-            areas = np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
-            return tris[int(np.argmax(areas))].mean(axis=0)
-    return p
+    return geo.punto_dentro(cara)
 
 
 def placa_de_cara(modelo, cara, punto=None):

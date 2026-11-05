@@ -41,6 +41,8 @@ class SupExtruir(Comando):
         objeto = lambda v: v.get("extension") == "objeto"  # noqa: E731
         return [Seleccion("curvas", "Perfiles", CURVAS, maximo=None,
                           ayuda="Curvas de boceto o aristas. Un texto de una sola línea extruye todos sus trazos."),
+                Casilla("cadena", "Selección de cadena", True,
+                        ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
                 Opciones("inicio", "Inicio", {"plano": "Plano de perfil", "desfase": "Plano de desfase", "objeto": "Desde objeto"}),
                 Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") == "desfase"),
                 Seleccion("inicio_objeto", "Objeto de inicio", {"cara_plana", "plano"},
@@ -69,7 +71,7 @@ class SupExtruir(Comando):
             ctx.evaluar(v.get(clave) or "0")
         lados = "simetrica" if v.get("simetrica") else v["lados"]      # `simetrica`: el campo de las recetas viejas
         params = {k: v[k] for k in ("distancia", "conicidad", "medida", "inicio", "desfase_inicio", "extension",
-                                    "desfase_hasta", "distancia2", "invertir")}
+                                    "desfase_hasta", "distancia2", "invertir", "cadena")}
         return self.crear_op(OpSupExtruir, v, ctx, curvas=refs(v, "curvas"), direccion=ref1(v, "direccion"),
                              simetrica=False, lados=lados, inicio_objeto=ref1(v, "inicio_objeto"),
                              hasta=ref1(v, "hasta"), **params)
@@ -89,7 +91,10 @@ class SupRevolucion(Comando):
 
     def campos(self, ctx):
         angulo = lambda v: v.get("extension") == "angulo"  # noqa: E731
-        return [Seleccion("curvas", "Perfil", CURVAS, maximo=None), Seleccion("eje", "Eje", {"eje"}),
+        return [Seleccion("curvas", "Perfil", CURVAS, maximo=None),
+                Casilla("cadena", "Selección de cadena", True,
+                        ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
+                Seleccion("eje", "Eje", {"eje"}),
                 Opciones("extension", "Tipo de extensión", {"angulo": "Ángulo", "objeto": "A objeto", "completa": "Completo"}),
                 Seleccion("hasta", "Objeto límite", {"vertice", "cara", "plano", "cuerpo"},
                           visible_si=lambda v: v.get("extension") == "objeto"),
@@ -110,7 +115,7 @@ class SupRevolucion(Comando):
         ctx.evaluar(v.get("angulo2") or "0", ANGULO)
         return self.crear_op(OpSupRevolucion, v, ctx, curvas=refs(v, "curvas"), eje=ref1(v, "eje"),
                              hasta=ref1(v, "hasta"), **{k: v[k] for k in ("angulo", "angulo2", "extension", "lados",
-                                                                          "proyectar_eje")})
+                                                                          "proyectar_eje", "cadena")})
 
     def desde_op(self, op, ctx):
         return dict(op.p, curvas=hits(op.p["curvas"], ctx.estado), eje=_h1(op.p["eje"], ctx.estado),
@@ -277,6 +282,8 @@ class Parche(Comando):
         return [Casilla("agrupar", "Agrupar aristas", True,
                         ayuda="Marcado: una sola continuidad para todo el contorno. Desmarcado: una por arista."),
                 Seleccion("contorno", "Aristas de contorno", CURVAS, maximo=None),
+                Casilla("cadena", "Selección de cadena", True,
+                        ayuda="Suma a cada arista o curva del contorno las que le siguen tangentes."),
                 Opciones("continuidad", "Continuidad", {"G0": "Conexión (G0)", "G1": "Tangente (G1)",
                                                          "G2": "Curvatura (G2)"}),
                 Texto("continuidades", "Continuidad por arista", "", visible_si=lambda v: not v.get("agrupar", True),
@@ -292,7 +299,7 @@ class Parche(Comando):
         continuidades = [] if agrupar else _lista_continuidades(v.get("continuidades"), len(v["contorno"]))
         return self.crear_op(OpParche, v, ctx, contorno=refs(v, "contorno"), continuidad=v["continuidad"],
                              agrupar=agrupar, continuidades=continuidades, interior=refs(v, "interior"),
-                             invertir=bool(v.get("invertir")))
+                             invertir=bool(v.get("invertir")), cadena=bool(v.get("cadena")))
 
     def desde_op(self, op, ctx):
         return dict(op.p, contorno=hits(op.p["contorno"], ctx.estado), interior=_h_lista(op.p["interior"], ctx.estado),
@@ -307,6 +314,8 @@ class Reglada(Comando):
 
     def campos(self, ctx):
         return [Seleccion("aristas", "Aristas", CURVAS, maximo=None),
+                Casilla("cadena", "Selección de cadena", True,
+                        ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
                 Opciones("tipo", "Tipo", {"normal": "Normal", "tangente": "Tangente", "direccion": "Dirección"}),
                 Seleccion("direccion", "Dirección", {"plano", "cara_plana", "eje", "arista_lineal"},
                           visible_si=lambda v: v.get("tipo") == "direccion"),
@@ -320,7 +329,8 @@ class Reglada(Comando):
         exigir(v, "aristas", "Seleccioná las aristas.")
         return self.crear_op(OpReglada, v, ctx, aristas=refs(v, "aristas"), tipo=v["tipo"],
                              direccion=ref1(v, "direccion"), distancia=v["distancia"], angulo=v["angulo"],
-                             ingletear=bool(v.get("ingletear")), alternas=bool(v.get("alternas")))
+                             ingletear=bool(v.get("ingletear")), alternas=bool(v.get("alternas")),
+                             cadena=bool(v.get("cadena")))
 
     def desde_op(self, op, ctx):
         return dict(op.p, aristas=hits(op.p["aristas"], ctx.estado), direccion=_h1(op.p["direccion"], ctx.estado))
@@ -333,12 +343,15 @@ class SupDesfase(Comando):
 
     def campos(self, ctx):
         return [Seleccion("caras", "Caras", {"cara", "cuerpo"}, maximo=None),
+                Casilla("cadena", "Selección de cadena", True,
+                        ayuda="Suma a cada cara elegida las que le siguen tangentes."),
                 Expresion("distancia", "Distancia de desfase", "2 mm"),
                 Opciones("tipo", "Tipo de desfase", {"agudo": "Desfase afilado", "redondeado": "Desfase redondeado"})]
 
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras.")
-        return self.crear_op(OpSupDesfase, v, ctx, caras=refs(v, "caras"), distancia=v["distancia"], tipo=v["tipo"])
+        return self.crear_op(OpSupDesfase, v, ctx, caras=refs(v, "caras"), distancia=v["distancia"], tipo=v["tipo"],
+                             cadena=bool(v.get("cadena")))
 
     def desde_op(self, op, ctx):
         return dict(op.p, caras=hits(op.p["caras"], ctx.estado))
@@ -403,7 +416,9 @@ class Extender(Comando):
     CLASE_OP = OpExtenderSup
 
     def campos(self, ctx):
-        return [Seleccion("aristas", "Aristas", {"arista"}, maximo=None), Expresion("distancia", "Distancia", "5 mm"),
+        return [Seleccion("aristas", "Aristas", {"arista"}, maximo=None),
+                Casilla("cadena", "Selección de cadena", True, ayuda="Extiende toda la cadena tangente del borde elegido."),
+                Expresion("distancia", "Distancia", "5 mm"),
                 Opciones("tipo", "Tipo de extensión", {"natural": "Natural", "tangente": "Tangente",
                                                        "perpendicular": "Perpendicular"}),
                 Opciones("alineacion", "Alineación de bordes", {"alinear": "Alinear bordes (G1)", "libre": "Bordes libres (G0)"},
@@ -414,7 +429,7 @@ class Extender(Comando):
     def construir(self, v, ctx):
         exigir(v, "aristas", "Seleccioná los bordes.")
         return self.crear_op(OpExtenderSup, v, ctx, aristas=refs(v, "aristas"), distancia=v["distancia"], tipo=v["tipo"],
-                             alineacion=v["alineacion"])
+                             alineacion=v["alineacion"], cadena=bool(v.get("cadena")))
 
     def desde_op(self, op, ctx):
         return dict(op.p, aristas=hits(op.p["aristas"], ctx.estado))
@@ -535,12 +550,15 @@ class Descoser(Comando):
         return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, minimo=0, maximo=None,
                           ayuda="Cada cara del cuerpo pasa a ser una superficie suelta."),
                 Seleccion("caras", "Caras", {"cara"}, minimo=0, maximo=None,
-                          ayuda="Solo estas caras se separan; el resto del cuerpo queda cosido.")]
+                          ayuda="Solo estas caras se separan; el resto del cuerpo queda cosido."),
+                Casilla("cadena", "Selección de cadena", True,
+                        ayuda="Suma a cada cara elegida las que le siguen tangentes.")]
 
     def construir(self, v, ctx):
         if not v.get("cuerpos") and not v.get("caras"):
             raise ErrorComando("Seleccioná los cuerpos o las caras.")
-        return self.crear_op(OpDescoser, v, ctx, cuerpos=_cuerpos(v.get("cuerpos")), caras=refs(v, "caras"))
+        return self.crear_op(OpDescoser, v, ctx, cuerpos=_cuerpos(v.get("cuerpos")), caras=refs(v, "caras"),
+                             cadena=bool(v.get("cadena")))
 
     def desde_op(self, op, ctx):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado), caras=_h_lista(op.p["caras"], ctx.estado))

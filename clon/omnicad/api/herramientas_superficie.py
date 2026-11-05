@@ -80,7 +80,8 @@ def create_surface_extrude(sesion, profiles: Seleccion, distance: Expr = "10 mm"
                            start: Literal["profile_plane", "offset", "object"] = "profile_plane",
                            start_offset: Expr = 0, start_object: Referencia | None = None,
                            extent: Literal["distance", "to_object", "all"] = "distance",
-                           to: Referencia | None = None, to_offset: Expr = 0, flip: bool = False):
+                           to: Referencia | None = None, to_offset: Expr = 0, flip: bool = False,
+                           chain: bool = True):
     """
     profiles: curvas {"sketch": "Boceto1", "curve": [1, 2]} (un texto de una línea da todos sus trazos), perfiles {"sketch": "Boceto1", "profile": 0}, caras, aristas o cuerpos; admite listas, ids y selectores.
     distance: distancia en mm o expresión; negativa invierte el sentido (con sides=one_side).
@@ -98,12 +99,14 @@ def create_surface_extrude(sesion, profiles: Seleccion, distance: Expr = "10 mm"
     to: con extent=to_object: cara (selector o id), plano o cuerpo hasta donde llega.
     to_offset: desfase en mm sobre el «hasta» (positivo = más lejos); con extent=to_object.
     flip: true invierte el sentido de la extrusión (el de la normal del boceto o de direction).
+    chain: true toma la cadena tangente entera de cada arista o curva de boceto de profiles (Chaining de Fusion, encendido por defecto); false usa solo las elegidas.
     """
     clase = ops.OpSupExtruir
     params = {"lados": "simetrica" if symmetric else {"one_side": "un_lado", "two_sides": "dos_lados",
                                                       "symmetric": "simetrica"}[sides],
               "medida": "mitad" if symmetric_measure == "half" else "total",
-              "distancia2": texto_expr(distance if distance2 is None else distance2), "invertir": flip}
+              "distancia2": texto_expr(distance if distance2 is None else distance2), "invertir": flip,
+              "cadena": chain}
     if start == "offset":
         params.update(inicio="desfase", desfase_inicio=texto_expr(start_offset))
     elif start == "object":
@@ -131,7 +134,7 @@ def create_surface_revolve(sesion, profiles: Seleccion, axis: Referencia, angle:
                            body: str | None = None,
                            direction: Literal["one_side", "two_sides", "symmetric"] = "one_side",
                            angle2: Expr | None = None, to_object: Referencia | list[float] | None = None,
-                           project_axis: bool = False):
+                           project_axis: bool = False, chain: bool = True):
     """
     profiles: curvas o perfiles de boceto ({"sketch": "Boceto1", "curve": 1} o "profile": 0), caras, aristas o cuerpos; admite listas, ids y selectores.
     axis: eje X, Y, Z, eje de construcción o referencia a una línea de boceto/arista lineal.
@@ -141,10 +144,12 @@ def create_surface_revolve(sesion, profiles: Seleccion, axis: Referencia, angle:
     angle2: ángulo del segundo lado con direction=two_sides; vacío = igual a angle.
     to_object: vértice ([x, y, z] o selector), plano, cara plana o cuerpo hasta donde gira el perfil; reemplaza a angle.
     project_axis: true proyecta el eje al plano del perfil (curvas de boceto); false lo deja donde está.
+    chain: true toma la cadena tangente entera de cada arista o curva de boceto de profiles (Chaining de Fusion, encendido por defecto); false usa solo las elegidas.
     """
     clase = ops.OpSupRevolucion
     params = {"lados": {"one_side": "un_lado", "two_sides": "dos_lados", "symmetric": "simetrica"}[direction],
-              "angulo2": texto_expr(angle if angle2 is None else angle2), "proyectar_eje": project_axis}
+              "angulo2": texto_expr(angle if angle2 is None else angle2), "proyectar_eje": project_axis,
+              "cadena": chain}
     if to_object is not None:
         if direction != "one_side":
             raise error("INVALID_ARGUMENTS", "to_object gira hacia un solo lado: usá direction=one_side.")
@@ -269,16 +274,19 @@ def create_surface_loft(sesion, profiles: list[str | dict], closed: bool = False
 
 @herramienta("offset_surface", "solido", "Crea una superficie paralela a caras o cuerpos.", modifica=True)
 def offset_surface(sesion, faces: Seleccion, distance: Expr = "2 mm",
-                   offset_type: Literal["sharp", "rounded"] = "sharp", body: str | None = None):
+                   offset_type: Literal["sharp", "rounded"] = "sharp", body: str | None = None,
+                   chain: bool = True):
     """
     faces: caras (ids o selectores) o cuerpos por id, nombre o {"body": "Cuerpo1"}; admite listas.
     distance: desfase en mm o expresión; admite valores negativos.
     offset_type: sharp para esquinas agudas; rounded para redondeadas.
     body: cuerpo sobre el que evaluar selectores.
+    chain: true suma a cada cara de faces las tangentes de su cuerpo (Chain Selection de Fusion, encendido por defecto); false usa solo las elegidas.
     """
     clase = ops.OpSupDesfase
     return _crear(sesion, clase, caras=_seleccion(sesion, clase, "caras", faces, body, tipo="cara"),
-                  distancia=texto_expr(distance), tipo="agudo" if offset_type == "sharp" else "redondeado")
+                  distancia=texto_expr(distance), tipo="agudo" if offset_type == "sharp" else "redondeado",
+                  cadena=chain)
 
 
 @herramienta("fillet_surface", "solido", "Redondea o bisela aristas entre superficies.", modifica=True)
@@ -303,7 +311,7 @@ def fillet_surface(sesion, edges: Seleccion, size: Expr = "1 mm",
 def create_patch(sesion, boundary: Seleccion, continuity: Literal["G0", "G1", "G2"] = "G0",
                  body: str | None = None, group_edges: bool = True,
                  edge_continuity: list[Literal["G0", "G1", "G2"]] | None = None,
-                 interior: Seleccion | None = None, flip: bool = False):
+                 interior: Seleccion | None = None, flip: bool = False, chain: bool = True):
     """
     boundary: curvas o perfiles {"sketch": "Boceto1", "profile": 0}, aristas, caras o cuerpos; admite listas, ids y selectores.
     continuity: G0 conexión, G1 tangencia o G2 curvatura; G1/G2 necesitan caras de soporte.
@@ -312,10 +320,11 @@ def create_patch(sesion, boundary: Seleccion, continuity: Literal["G0", "G1", "G
     edge_continuity: con group_edges=false, la continuidad de cada referencia de boundary, en el mismo orden.
     interior: curvas, aristas o puntos de boceto que guían el parche (Interior Rails/Points).
     flip: true da vuelta la normal del parche.
+    chain: true toma la cadena tangente entera de cada arista o curva de boceto de boundary (Tangent Chain de Fusion, encendido por defecto); false usa solo las elegidas.
     """
     clase = ops.OpParche
     refs = _seleccion(sesion, clase, "contorno", boundary, body, curvas=True)
-    params = {"agrupar": group_edges, "invertir": flip}
+    params = {"agrupar": group_edges, "invertir": flip, "cadena": chain}
     if not group_edges:
         if not edge_continuity or len(edge_continuity) != len(refs):
             raise error("INVALID_ARGUMENTS", f"group_edges=false necesita edge_continuity con una continuidad por "
@@ -330,7 +339,7 @@ def create_patch(sesion, boundary: Seleccion, continuity: Literal["G0", "G1", "G
 def create_ruled_surface(sesion, edges: Seleccion, distance: Expr = "10 mm",
                          surface_type: Literal["normal", "tangent", "direction"] = "normal",
                          direction: Referencia | None = None, angle: Expr = 0, body: str | None = None,
-                         mitered_corners: bool = False, alternate_faces: bool = False):
+                         mitered_corners: bool = False, alternate_faces: bool = False, chain: bool = True):
     """
     edges: curvas o perfiles de boceto, aristas, caras o cuerpos; admite listas, ids y selectores.
     distance: largo en mm o expresión.
@@ -340,6 +349,7 @@ def create_ruled_surface(sesion, edges: Seleccion, distance: Expr = "10 mm",
     body: cuerpo sobre el que evaluar selectores.
     mitered_corners: true corta en ángulo vivo las esquinas entre aristas rectas, arcos o curvas (Mitered Corners); donde dos curvas siguen tangentes no hay esquina; una esquina que no se puede cortar (curvas 3D que no se cruzan, tres aristas en un punto) queda como estaba y el resultado trae un aviso.
     alternate_faces: true usa la otra cara cuando una arista comparte dos (Alternate Faces).
+    chain: true toma la cadena tangente entera de cada arista o curva de boceto de edges (Tangent Chain de Fusion, encendido por defecto); false usa solo las elegidas.
     """
     if surface_type == "direction" and direction is None:
         raise error("INVALID_ARGUMENTS", "Indicá direction para una superficie reglada por dirección.")
@@ -347,24 +357,25 @@ def create_ruled_surface(sesion, edges: Seleccion, distance: Expr = "10 mm",
     return _crear(sesion, clase, aristas=_seleccion(sesion, clase, "aristas", edges, body, curvas=True),
                   distancia=texto_expr(distance), tipo={"normal": "normal", "tangent": "tangente", "direction": "direccion"}[surface_type],
                   direccion=_una(sesion, clase, "direccion", direction, body) if direction is not None else None,
-                  angulo=texto_expr(angle), ingletear=mitered_corners, alternas=alternate_faces)
+                  angulo=texto_expr(angle), ingletear=mitered_corners, alternas=alternate_faces, cadena=chain)
 
 
 @herramienta("extend_surface", "solido", "Alarga bordes libres de superficies.", modifica=True)
 def extend_surface(sesion, edges: Seleccion, distance: Expr = "5 mm",
                    extension_type: Literal["natural", "tangent", "perpendicular"] = "natural", body: str | None = None,
-                   edge_alignment: Literal["free", "align"] = "align"):
+                   edge_alignment: Literal["free", "align"] = "align", chain: bool = True):
     """
     edges: bordes libres por id o selector; admite listas y {"body": "Cuerpo1", "edges": ">X"}.
     distance: extensión en mm o expresión.
     extension_type: natural, tangent o perpendicular.
     body: cuerpo sobre el que evaluar selectores.
     edge_alignment: con extension_type=natural, align (Align Edges, G1: la extensión sigue los lados de la cara; por defecto) o free (Free Edges, G0: además admite caras no rectangulares: las planas con una franja tangente, las curvas —esfera, cilindro, cono, toroide, B-spline— sobre su propia superficie).
+    chain: true estira toda la cadena tangente de cada borde elegido (Enable Chaining de Fusion, encendido por defecto); false solo el borde.
     """
     clase = ops.OpExtenderSup
     return _crear(sesion, clase, aristas=_seleccion(sesion, clase, "aristas", edges, body),
                   distancia=texto_expr(distance), tipo="tangente" if extension_type == "tangent" else extension_type,
-                  alineacion="alinear" if edge_alignment == "align" else "libre")
+                  alineacion="alinear" if edge_alignment == "align" else "libre", cadena=chain)
 
 
 @herramienta("trim_surface", "solido", "Recorta una superficie y quita la región indicada por un punto.", modifica=True)
@@ -436,17 +447,19 @@ def inspect_stitch(sesion, bodies: str | list[str], tolerance: float = 0.01):
              "Separa cada cara en un cuerpo de superficie independiente: de los bodies enteros o solo de las faces "
              "elegidas (lo demás queda cosido).", modifica=True)
 def unstitch_surfaces(sesion, bodies: str | list[str] | None = None, faces: Seleccion | None = None,
-                      body: str | None = None):
+                      body: str | None = None, chain: bool = True):
     """
     bodies: ids o nombres de cuerpos; cada cara pasa a ser un cuerpo nuevo.
     faces: caras (ids o selectores) que se separan del resto; admite listas.
     body: cuerpo sobre el que evaluar selectores de faces.
+    chain: true suma a cada cara de faces las tangentes de su cuerpo (Chain Selection de Fusion, encendido por defecto); false separa solo las elegidas.
     """
     if bodies is None and faces is None:
         raise error("INVALID_ARGUMENTS", "Elegí bodies (cuerpos enteros) o faces (caras sueltas).")
     clase = ops.OpDescoser
     return _crear(sesion, clase, cuerpos=_cuerpos(sesion, bodies) if bodies is not None else [],
-                  caras=_seleccion(sesion, clase, "caras", faces, body, tipo="cara") if faces is not None else [])
+                  caras=_seleccion(sesion, clase, "caras", faces, body, tipo="cara") if faces is not None else [],
+                  cadena=chain)
 
 
 @herramienta("reverse_surface_normal", "solido", "Invierte la orientación de cuerpos de superficie.", modifica=True)

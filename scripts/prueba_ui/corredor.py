@@ -43,6 +43,9 @@ def caso(v, area, clave, sel, vals=None, esperado=None, deshacer=True, foto=None
                 return None
             A.elegir(p, campo, *hs)
         for k, val in vals.items():
+            if callable(val):
+                val(p)                     # un caso que necesita tocar el panel a mano (p. ej. el «+» de una tabla)
+                continue
             p.set_valor(k, val)
         p._t_previa.stop()
         p._calcular_previa()

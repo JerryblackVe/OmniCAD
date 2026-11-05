@@ -252,8 +252,9 @@ def create_ucs(sesion, origin: Referencia, x_axis: Referencia | None = None, y_a
             "planes": {k: f"{op.id}_{k}" for k in ("xy", "xz", "yz")}}
 
 
-@herramienta("insert_fastener", "solido", "Inserta fijaciones normalizadas sobre agujeros o puntos, con tamaño automático.",
-             modifica=True)
+@herramienta("insert_fastener", "solido", "Inserta fijaciones normalizadas sobre agujeros o puntos existentes, con "
+             "tamaño automático; no taladra los cuerpos que atraviesa: los agujeros de paso o roscados los hace "
+             "create_hole (como en Fusion).", modifica=True)
 def insert_fastener(sesion, positions: list[Referencia], family: Literal["screw", "nut", "washer", "rod", "stud"] = "screw",
                     standard: str | None = None, size: str = "auto", length: str | float = "auto",
                     thread: Literal["cosmetic", "modeled"] = "cosmetic", similar: bool = True,

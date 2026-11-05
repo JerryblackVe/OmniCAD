@@ -27,11 +27,12 @@ import numpy as np
 from PySide6.QtCore import QEvent, QEventLoop, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
-                               QMessageBox, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
+                               QMessageBox, QSizePolicy, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, RECURSOS, VERSION
 from ..ejemplo import crear_documento_ejemplo
 from .. import informes_error
+from . import navegador_boceto
 from .mas_comando import FiltroMas, _normal, leer_barra, leer_teclas
 from .sugerencias import TiraSugerencias, comandos_sugeridos, tipos_de_seleccion
 from ..io_archivos import abrir_externo, proyecto, puente_fusion
@@ -187,6 +188,8 @@ class VentanaPrincipal(QMainWindow):
         self.visor = Visor3D()
         self.area = AreaVisor(self.visor)
         self.visor.arrastre = self.arrastre = ArrastreComponente(self)
+        from .vectores_en_vista import VectoresEnVista
+        self.vectores = VectoresEnVista(self)
         try:                                        # dónde dejó la persona los paneles de comando (vacío: el de siempre)
             derecha, arriba = self.prefs["vista/posicion_panel_comando"].split(",")
             self.area.posicion_panel = (int(derecha), int(arriba))
@@ -196,6 +199,7 @@ class VentanaPrincipal(QMainWindow):
         self.navegador = Navegador()
         from . import acciones_navegador
         self.navegador.menu_elemento = lambda item: acciones_navegador.menu(self, item)
+        self.navegador.menu_boceto = lambda item: navegador_boceto.menu(self, item)
         self.area.anclar_arriba_izq(self.navegador)
         self.barra_nav = BarraNavegacion(self.visor, self)
         self.area.set_barra(self.barra_nav)
@@ -230,6 +234,9 @@ class VentanaPrincipal(QMainWindow):
             self.acciones[f"filtro_{grupo}"].setChecked(True)
 
         self.timeline = PanelTimeline()
+        self.timeline.estado.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.timeline.layout().setStretchFactor(self.timeline.estado, 1)
+        self.timeline.estado.installEventFilter(self)
         self.timeline.editar.connect(self.editar_operacion)
         self.timeline.tocado.connect(lambda i: self.panel is not None and self.panel.comando.al_tocar_paso(self.panel, i))
         self.timeline.renombrar.connect(self._renombrar)
@@ -244,6 +251,13 @@ class VentanaPrincipal(QMainWindow):
         self.timeline.buscar_navegador.connect(self.buscar_en_navegador)
         self.timeline.animar_union.connect(self.animar_union)
         self.timeline.color_componente_cambiado.connect(self._guardar_color_componente)
+        # Carpetas del timeline y copiar/pegar pasos (SC9): una carpeta no es un paso, solo ordena la vista.
+        self.timeline.agrupar.connect(lambda ids: self._intentar(lambda: self.doc.agrupar(ids)))
+        self.timeline.desagrupar.connect(lambda i: self._intentar(lambda: self.doc.desagrupar(i)))
+        self.timeline.plegar.connect(lambda i, p: self._intentar(lambda: self.doc.plegar_grupo(i, p)))
+        self.timeline.renombrar_grupo.connect(
+            lambda i, n: self._intentar(lambda: self.doc.renombrar_grupo(i, n)))
+        self.timeline.pegar.connect(lambda r, u: self._intentar(lambda: self.doc.pegar(r, u)))
         self._crear_menu_unidades()
 
         self.panel_datos = PanelDatos(self.prefs)
@@ -444,7 +458,7 @@ class VentanaPrincipal(QMainWindow):
            "Renombra en el navegador el elemento elegido.")
         A("alternar_visibilidad", "Mostrar/ocultar", self._alternar_visibilidad_elegida, "V",
           "Muestra u oculta los cuerpos y bocetos elegidos.")
-        A("ajustar", "Ajustar", lambda: self.visor.animar_vista(self.visor.encuadrar), "F6", "Encuadra todo el modelo en la vista.", "ajustar")
+        A("ajustar", "Ajustar", self._ajustar_vista, "F6", "Encuadra el boceto activo, el vector seleccionado o todo el modelo.", "ajustar")
         for clave, texto, ayuda in (("iso", "Vista inicial (isométrica)", "Vuelve la cámara a la vista inicial."),
                                     ("frente", "Frente", "Mira el modelo de frente."),
                                     ("arriba", "Superior", "Mira el modelo desde arriba."),
@@ -645,9 +659,11 @@ class VentanaPrincipal(QMainWindow):
             self._perfil_aplicado = perfil
         elif perfil in PERFILES and any(p[clave] != valor for clave, valor in PERFILES[perfil].items()):
             p["interfaz/perfil"] = self._perfil_aplicado = "personalizado"
-        if hasattr(self, "registro_uso") and p["general/registro_uso"] != self.registro_uso.preferencia:
-            self.registro_uso.preferencia = p["general/registro_uso"]
-            self.registro_uso.configurar(p["general/registro_uso"])
+        if hasattr(self, "registro_uso"):
+            self.registro_uso.aplicar_valores()            # los topes y modos rigen al aceptar, sin reiniciar
+            if p["general/registro_uso"] != self.registro_uso.preferencia:
+                self.registro_uso.preferencia = p["general/registro_uso"]
+                self.registro_uso.configurar(p["general/registro_uso"])
         from ..nucleo import motor
         if self.doc is not None and self.doc.motor != motor.motor_activo():
             self.doc.recalcular(0)
@@ -987,7 +1003,12 @@ class VentanaPrincipal(QMainWindow):
     def _mostrar_estado(self, texto):
         etiqueta = self.timeline.estado
         etiqueta.setToolTip(texto)
-        etiqueta.setText(etiqueta.fontMetrics().elidedText(texto, Qt.ElideMiddle, 560))
+        etiqueta.setText(etiqueta.fontMetrics().elidedText(texto, Qt.ElideMiddle, min(560, etiqueta.width())))
+
+    def eventFilter(self, objeto, evento):
+        if objeto is self.timeline.estado and evento.type() == QEvent.Resize:
+            self._mostrar_estado(objeto.toolTip())
+        return super().eventFilter(objeto, evento)
 
     # ------------------------------------------------------------ documento
     def _calculando(self, op):
@@ -1047,6 +1068,11 @@ class VentanaPrincipal(QMainWindow):
         en_boceto = getattr(self, "modo_boceto", None) is not None and self.modo_boceto.activo
         self.acciones["deshacer"].setEnabled(en_boceto or self.doc.puede_deshacer() or self.arrastre.mostrado)
         self.acciones["rehacer"].setEnabled(en_boceto or self.doc.puede_rehacer())
+
+    def _ajustar_vista(self):
+        lz = self.modo_boceto.lienzo if self.modo_boceto.activo else self.vectores.activo
+        ajustar = lz.encuadrar if lz is not None and (self.modo_boceto.activo or lz.objetos.seleccion()) else self.visor.encuadrar
+        self.visor.animar_vista(ajustar)
 
     def _actualizar(self):
         self._actualizar_unidades()
@@ -1128,6 +1154,7 @@ class VentanaPrincipal(QMainWindow):
         activo = self.modo_boceto.datos.get("op") if self.modo_boceto.activo else None
         excluir = (activo.id,) if activo is not None else ()
         ocultos = frozenset(self._ocultos_efectivos(estado))
+        excluir += self.vectores.sincronizar(estado, ocultos)
         vigentes = calcomanias_vigentes(self.doc, estado)      # cada calcomanía con su cuerpo (copias incluidas)
         c.lienzos = [(ident, datos) for ident, datos in vigentes if self.vis["todo"]
                      and ident.split("@")[0] not in self.ocultos
@@ -1547,6 +1574,9 @@ class VentanaPrincipal(QMainWindow):
         self._refrescar_visibilidad()
 
     def _ojo(self, clave):
+        if clave.startswith(("bo:", "bg:")):              # objeto del boceto en edición
+            navegador_boceto.alternar_visible(self, clave)
+            return
         if clave.startswith("analisis:"):
             self.doc.alternar_analisis(clave.split(":", 1)[1])
             return
@@ -1888,7 +1918,15 @@ class VentanaPrincipal(QMainWindow):
             self.mostrar_elementos(ids, any(i in self.ocultos for i in ids))
 
     def _seleccion_desde_navegador(self, claves):
+        if self.modo_boceto.activo and self.panel is None:
+            navegador_boceto.seleccionar(self, claves)
+            return
         if self.panel is not None or self.modo_boceto.activo:
+            return
+        if len(claves) == 1 and claves[0] in self.vectores.capas:
+            from ..restricciones import objetos
+            lz = self.vectores.capas[claves[0]]
+            self.vectores.seleccionar(claves[0], objetos.raices(lz.b))
             return
         from .comando import hit_desde_ref
         estado = self._estado_visible()
@@ -2410,7 +2448,9 @@ class VentanaPrincipal(QMainWindow):
 
     def _renombrar_desde_navegador(self, tipo, clave, nombre):
         """Nombre nuevo escrito en el lugar en el navegador (doble clic o F2)."""
-        if tipo == "cuerpo":
+        if tipo == "objeto_boceto":
+            navegador_boceto.renombrar(self, clave, nombre)
+        elif tipo == "cuerpo":
             self._intentar(lambda: self.doc.set_propiedad([clave], "nombre", nombre))
         else:
             self._intentar(lambda: self.doc.renombrar(clave.split("_")[0], nombre))
@@ -2534,8 +2574,11 @@ class VentanaPrincipal(QMainWindow):
         self.panel = panel
         self.visor.ventana_libre = False
         self.area.set_panel(panel)
+        self.modo_boceto.lienzo.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.modo_boceto.objetos.set_suspendido(True)
         panel.show()
         self.area.reubicar()
+        self.visor.setFocus()
         return panel
 
     def _cerrar_panel_de_boceto(self):
@@ -2549,8 +2592,12 @@ class VentanaPrincipal(QMainWindow):
         self._estado_previa = estado if estado is not None else self.panel.ctx.estado
         self._refrescar_visibilidad()
 
-    def _comando_cerrado(self):
+    def _comando_cerrado(self, aceptada=None):
         panel, self.panel = self.panel, None
+        if (panel is not None and getattr(panel.comando, "EN_BOCETO_ABIERTO", False)
+                and self.modo_boceto.activo):
+            self.modo_boceto.lienzo.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            self.modo_boceto.objetos.set_suspendido(False)
         self.visor.ventana_libre = True
         self.visor.set_filtro(self.filtro_actual())
         self._estado_previa = None
@@ -2558,6 +2605,9 @@ class VentanaPrincipal(QMainWindow):
         if panel is not None:
             panel.deleteLater()
         self._refrescar_visibilidad()
+        if isinstance(aceptada, OpBoceto) and aceptada.boceto.objetos and not self.modo_boceto.activo:
+            from ..restricciones import objetos
+            self.vectores.seleccionar(aceptada.id, objetos.raices(aceptada.boceto))
 
     def _comando_aceptado(self, op, edicion):
         """Aplica el cambio; el panel se cierra solo cuando devuelve True."""
@@ -2767,6 +2817,10 @@ class VentanaPrincipal(QMainWindow):
             from ..api.herramientas_boceto import actualizar_alturas_texto
             boceto = op.boceto.copia()
             actualizar_alturas_texto(boceto, br)
+            # La receta guarda fórmulas; el editor arranca en las matrices ya evaluadas que muestra el visor.
+            for oid, objeto in boceto.objetos.items():
+                if oid in br.boceto.objetos:
+                    objeto["matriz"] = [list(fila) for fila in br.boceto.objetos[oid]["matriz"]]
             self._iniciar_boceto(boceto, br.plano, {"op": op}, self.doc.indice(op.id))
         elif isinstance(op, OpImportarSTEP):
             QMessageBox.information(self, NOMBRE_APP, f"Importación de «{op.p['archivo']}»: no tiene parámetros editables.")

@@ -92,10 +92,11 @@ def _objetos_render(sesion, cuerpos, cam=None, alto=600, cajas=None, colores_com
     return objetos
 
 
-def _con_analisis(sesion, objetos, cam, alto, analisis):
+def _con_analisis(sesion, objetos, cam, alto, analisis, tipos=None):
     """Los objetos con los análisis dibujados como los dibuja la ventana: mallas de colores que reemplazan a un cuerpo,
     colores que dependen de la cámara (cebra, mapa de entorno), recorte por planos y capas (tapas, líneas).
-    `analisis`: nombres, [] ninguno, None = los visibles del documento. Devuelve (objetos, cortes, nombres)."""
+    `analisis`: nombres, [] ninguno, None = los visibles del documento. `tipos`: si se indica, solo se usan los análisis
+    de esos tipos (el render final usa solo las secciones). Devuelve (objetos, cortes, nombres)."""
     from ..timeline import analisis_vista as av
     doc = sesion.doc
     explicitos = analisis is not None
@@ -104,6 +105,8 @@ def _con_analisis(sesion, objetos, cam, alto, analisis):
         if n not in doc.analisis:
             raise error("INVALID_ARGUMENTS", f"No existe el análisis «{n}».",
                         f"Existen: {', '.join(doc.analisis) or 'ninguno'}.")
+    if tipos:
+        nombres = [n for n in nombres if doc.analisis[n]["tipo"] in tipos]
     resultados, aplicados = [], []
     for n in nombres:
         a = doc.analisis[n]
@@ -117,19 +120,20 @@ def _con_analisis(sesion, objetos, cam, alto, analisis):
     if not resultados:
         return objetos, [], []
     datos = av.combinar(resultados)
+    R = np.asarray(cam["R"], float)
+    ojo = None if cam.get("ortografica") else np.asarray(cam["objetivo"], float) + R[2] * float(cam["distancia"])
     salida = []
     for o in objetos:
         if o.get("cuerpo") in datos["mallas"]:
             continue
         if datos["colores"] is not None and (datos["solo"] is None or o.get("cuerpo") in datos["solo"]):
-            o = dict(o, colores=np.asarray(datos["colores"](np.asarray(o["n"], float), np.asarray(cam["R"], float)[2]),
-                                           float))
+            o = dict(o, colores=np.asarray(datos["colores"](np.asarray(o["n"], float), R[2], puntos=o["v"], ojo=ojo), float))
         salida.append(o)
     for cid, (v, n, c) in datos["mallas"].items():
         base = next((o for o in objetos if o.get("cuerpo") == cid), None)
         if base is not None and len(v):
             if c is None:                                       # cebra en «Calidad alta»: malla fina con los mismos colores
-                c = np.asarray(datos["colores"](np.asarray(n, float), np.asarray(cam["R"], float)[2]), float)
+                c = np.asarray(datos["colores"](np.asarray(n, float), R[2], puntos=v, ojo=ojo), float)
             salida.append(dict(base, v=v, n=n, colores=c, acabado={}))
     cortes = datos["cortes"]
     if cortes:

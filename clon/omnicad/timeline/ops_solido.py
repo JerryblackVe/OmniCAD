@@ -36,6 +36,18 @@ def _pg():
     return patron_geometrico
 
 
+def _avisar_autointersecciones(ctx, forma, que, causa):
+    """Un paso no puede quedar «ok» con una forma que se cruza consigo misma (B-168, B-167): se avisa con el mismo
+    análisis BOPAlgo que usa el desfase de superficies (`nucleo/superficies.py`). `que` es lo que creó el paso y
+    `causa` cómo evitarlo."""
+    from ..nucleo import revision                  # local: revision carga medio núcleo
+    n, problemas, _ = revision._autointersecciones_seguras(forma, 1, 5.0)
+    if n is None:                                  # no se pudo contar (forma B-spline lenta): tampoco queda callado
+        ctx.aviso(problemas[0]["mensaje"])
+    elif n:
+        ctx.aviso(f"{que} quedó con {n} {'autointersección' if n == 1 else 'autointersecciones'}: {causa}")
+
+
 def _caras(refs, estado, que="perfiles"):
     """(plano, caras) de perfiles de boceto y caras planas."""
     ents = _resolver_todas(refs, estado)
@@ -472,7 +484,12 @@ class OpAgujero(_OpCrear):
                                              True)
             if aviso:
                 ctx.aviso(aviso)
-        self._aplicar(estado, ctx, geo.unir_todos(herramientas), "cortar")
+        antes = {cid: c.forma for cid, c in estado.cuerpos.items()}
+        afectados = aplicar_resultado(estado, ctx, self.id, geo.unir_todos(herramientas), "cortar",
+                                      p.get("objetivos") or "")
+        self._registrar_usados(afectados)
+        _sc().exigir_agujero_sin_pellizco([antes[c] for c in afectados if c in antes],
+                                          [estado.cuerpos[c].forma for c in afectados if c in estado.cuerpos])
 
 
 class OpRosca(_OpCrear):
@@ -567,6 +584,13 @@ class OpTuberia(_OpCrear):
                               hueca=self.p["hueca"], espesor=ctx.evaluar(self.p["espesor"]),
                               distancia=ctx.evaluar(self.p["distancia"], "escalar"),
                               distancia2=ctx.evaluar(self.p["distancia2"], "escalar"))
+        # shortcut: con un solo tramo la ruta no tiene esquina donde la sección se pliegue, y el chequeo de una
+        # forma B-spline se corre a un proceso aparte (~1 s). Se hace recién con dos tramos o más.
+        if len(ruta) > 1:
+            _avisar_autointersecciones(
+                ctx, forma, "El tubo",
+                "en las esquinas de la ruta la sección se pliega sobre sí misma y el kernel no logra "
+                "redondear esas esquinas. Probá una sección más chica o una ruta con esquinas menos cerradas.")
         self._aplicar(estado, ctx, forma)
 
 
@@ -1232,7 +1256,12 @@ class OpPatronGeometrico(_OpCrear):
                     limpiar_perimetro=bool(p["limpiar_perimetro"]), desfase_perimetro=L("desfase_perimetro")))
             except geo.ErrorGeometria as err:
                 raise ErrorOperacion(str(err)) from err
-        self._aplicar(estado, ctx, geo.compuesto(formas))
+        herramienta = geo.compuesto(formas)
+        _avisar_autointersecciones(
+            ctx, herramienta, "El patrón",
+            "las copias son más grandes que la distancia que las separa, o caen en dos caras separadas menos que su "
+            "tamaño. Aumentá la distancia, bajá el tamaño o elegí una sola cara.")
+        self._aplicar(estado, ctx, herramienta)
 
 
 class OpReticulaVolumetrica(Operacion):
@@ -1576,27 +1605,44 @@ def _vertice(p):
 
 
 class OpLabio(_OpCrear):
-    """Labio / ranura de PLÁSTICO [SLD-LIP], simplificado: sección rectangular a lo largo del borde."""
+    """Labio / ranura / labio y acanalado de PLÁSTICO [SLD-LIP], simplificado: sección rectangular a lo largo del
+    borde. El tipo "labio y acanalado" une el labio a un cuerpo y le corta al otro la ranura del labio (con holgura)."""
     TIPO, ETIQUETA, ICONO = "labio", "Labio", "⊓"
     PARAMS = {"aristas": [], "tipo": "labio", "ancho": "1 mm", "alto": "1.5 mm", "holgura": "0.1 mm",
-              "direccion": None, "invertir": False}
+              "direccion": None, "invertir": False, "cuerpo_ranura": None}
     EXPRESIONES = ("ancho", "alto", "holgura")
-    OPCIONES = {"tipo": ("labio", "ranura")}
-    REFS = ("aristas", "direccion")
+    OPCIONES = {"tipo": ("labio", "ranura", "labio y acanalado")}
+    REFS = ("aristas", "direccion", "cuerpo_ranura")
 
     def ejecutar(self, estado, ctx):
         ents, aristas = _aristas(self.p["aristas"], estado, "las aristas del borde")
         cuerpo = estado.cuerpo(ents[0].cuerpo)
         d = ent.direccion(_resolver(self.p["direccion"], estado)) if self.p["direccion"] else np.array([0, 0, 1.0])
+        ancho, alto, holgura = (ctx.evaluar(self.p[k]) for k in ("ancho", "alto", "holgura"))
         antes = geo.volumen(cuerpo.forma)
-        cuerpo.forma = _sc().labio_ranura(cuerpo.forma, aristas, -d if self.p["invertir"] else d, tipo=self.p["tipo"],
-                                          ancho=ctx.evaluar(self.p["ancho"]), alto=ctx.evaluar(self.p["alto"]),
-                                          holgura=ctx.evaluar(self.p["holgura"]))
+        if self.p["tipo"] == "labio y acanalado":
+            if not self.p.get("cuerpo_ranura"):
+                raise ErrorOperacion("Elegí el cuerpo de la ranura del labio y acanalado.")
+            ranura = estado.cuerpo(_resolver(self.p["cuerpo_ranura"], estado, ("cuerpo",)).cuerpo)
+            if ranura.id == cuerpo.id:
+                raise ErrorOperacion("El cuerpo de la ranura tiene que ser distinto del cuerpo del labio.")
+            antes_ranura = geo.volumen(ranura.forma)
+            r = _sc().labio_y_ranura(cuerpo.forma, ranura.forma, aristas, -d if self.p["invertir"] else d,
+                                     ancho=ancho, alto=alto, holgura=holgura)
+            cuerpo.forma, ranura.forma = r["labio"], r["ranura"]
+            usados = [cuerpo.id, ranura.id]
+            if abs(geo.volumen(ranura.forma) - antes_ranura) <= max(antes_ranura, 1.0) * 1e-9:
+                ctx.aviso(f"{ranura.nombre}: la ranura del labio no cortó nada "
+                          "(¿los cuerpos no se tocan o las aristas no están alineadas?)")
+        else:
+            cuerpo.forma = _sc().labio_ranura(cuerpo.forma, aristas, -d if self.p["invertir"] else d,
+                                              tipo=self.p["tipo"], ancho=ancho, alto=alto, holgura=holgura)
+            usados = [cuerpo.id]
         dv = geo.volumen(cuerpo.forma) - antes
         if abs(dv) <= max(antes, 1.0) * 1e-9:   # un labio que quedó entero dentro no avisa solo (B-62)
             ctx.aviso(f"{cuerpo.nombre}: el {self.p['tipo']} no cambió el volumen "
                       "(¿la dirección o el lado lo dejaron dentro de la pared? Probá «Invertir»).")
-        self._registrar_usados([cuerpo.id])
+        self._registrar_usados(usados)
 
 
 class OpApoyo(_OpCrear):
@@ -1605,10 +1651,11 @@ class OpApoyo(_OpCrear):
     extensión "todo" o "objeto" (hasta las caras del cuerpo elegido). El grosor tiene que ser la suma de los lados."""
     TIPO, ETIQUETA, ICONO = "apoyo", "Apoyo", "apoyo"
     PARAMS = {"perfiles": [], "cuerpo": None, "desfase": "0 mm", "grosor": "2 mm", "lado1": "2 mm", "lado2": "0 mm",
-              "angulo_desmoldeo": "0 deg", "invertir": False, "extension": "todo"}
+              "angulo_desmoldeo": "0 deg", "invertir": False, "extension": "todo",
+              "caras_superiores": [], "recortar": True}
     EXPRESIONES = ("desfase", "grosor", "lado1", "lado2", "angulo_desmoldeo")
     OPCIONES = {"extension": ("todo", "objeto")}
-    REFS = ("perfiles", "cuerpo")
+    REFS = ("perfiles", "cuerpo", "caras_superiores")
 
     def ejecutar(self, estado, ctx):
         perfiles = []
@@ -1623,16 +1670,61 @@ class OpApoyo(_OpCrear):
         if not self.p.get("cuerpo"):
             raise ErrorOperacion("Elegí el cuerpo del apoyo.")
         cuerpo = estado.cuerpo(_resolver(self.p["cuerpo"], estado, ("cuerpo",)).cuerpo)
+        caras = [e.forma for e in _resolver_todas(self.p.get("caras_superiores", []), estado, ("cara",))]
         L = lambda k: ctx.evaluar(self.p[k])  # noqa: E731
         herramienta = _sc().apoyo([cuerpo.forma], perfiles, direccion=planos[0].normal, invertir=self.p["invertir"],
                                   desfase=L("desfase"), grosor=L("grosor"),
                                   lados=[(1, L("lado1")), (-1, L("lado2"))] if L("lado2") > 0 else [(1, L("lado1"))],
                                   angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO),
-                                  extension=self.p["extension"])
+                                  extension=self.p["extension"], caras_superiores=caras,
+                                  recortar=bool(self.p.get("recortar", True)))
         self._aplicar(estado, ctx, herramienta, "unir")
+
+
+class OpGrampa(_OpCrear):
+    """Grampa de fijación (Snap Fit) de PLÁSTICO [PLA-1]: en cada punto del boceto arma un gancho en voladizo que
+    se une al cuerpo del gancho y le copia al cuerpo de la ranura un hueco con holgura. Geometría en
+    `nucleo.solidos_crear.grampa`."""
+    TIPO, ETIQUETA, ICONO = "grampa", "Grampa", "encaje_presion"
+    PARAMS = {"posiciones": [], "cuerpo_gancho": None, "cuerpo_ranura": None, "tipo": "paralelo",
+              "largo": "10 mm", "ancho": "4 mm", "espesor": "1.5 mm", "alto_gancho": "1 mm", "holgura": "0.1 mm",
+              "angulo": "0 deg", "extension": "siguiente", "distancia": "", "invertir": False}
+    EXPRESIONES = ("largo", "ancho", "espesor", "alto_gancho", "holgura", "angulo", "distancia")
+    OPCIONES = {"tipo": ("paralelo", "perpendicular", "contorno"), "extension": ("siguiente", "distancia")}
+    REFS = ("posiciones", "cuerpo_gancho", "cuerpo_ranura")
+
+    def ejecutar(self, estado, ctx):
+        ents = _resolver_todas(self.p["posiciones"], estado)
+        if not ents:
+            raise ErrorOperacion("Elegí los puntos de boceto donde van las grampas.")
+        if not self.p.get("cuerpo_gancho"):
+            raise ErrorOperacion("Elegí el cuerpo del gancho.")
+        gancho = estado.cuerpo(_resolver(self.p["cuerpo_gancho"], estado, ("cuerpo",)).cuerpo)
+        ranura = (estado.cuerpo(_resolver(self.p["cuerpo_ranura"], estado, ("cuerpo",)).cuerpo)
+                  if self.p.get("cuerpo_ranura") else None)
+        if ranura is not None and ranura.id == gancho.id:
+            raise ErrorOperacion("El cuerpo del gancho y el de la ranura tienen que ser distintos.")
+        marcos = []
+        for e in ents:
+            n = e.plano.normal if e.plano is not None else np.array([0.0, 0.0, 1.0])
+            u = e.plano.u if e.plano is not None else np.array([1.0, 0.0, 0.0])
+            marcos.append((ent.como_punto(e), -n if self.p["invertir"] else n, u))
+        # Las medidas del gancho son obligatorias: una vacía tiene que dar «Expresión vacía», no un TypeError.
+        L = lambda k: ctx.evaluar(self.p[k])  # noqa: E731
+        distancia = ctx.evaluar(self.p["distancia"]) if str(self.p.get("distancia") or "").strip() else None
+        r = _sc().grampa(gancho.forma, ranura.forma if ranura else None, marcos, tipo=self.p["tipo"],
+                         largo=L("largo"), ancho=L("ancho"), espesor=L("espesor"), alto_gancho=L("alto_gancho"),
+                         holgura=L("holgura"), angulo=ctx.evaluar(self.p["angulo"], ANGULO),
+                         extension=self.p["extension"], distancia=distancia)
+        gancho.forma = r["gancho"]
+        usados = [gancho.id]
+        if ranura:
+            ranura.forma = r["ranura"]
+            usados.append(ranura.id)
+        self._registrar_usados(usados)
 
 
 registrar_operacion(OpBarrido, OpSolevacion, OpNervio, OpRed, OpRepujado, OpAgujero, OpRosca, OpBobina, OpTuberia,
                     OpPatron, OpSimetria, OpRellenoContorno, OpSolidoEnvolvente, OpVolumenFluido, OpReglaPlastico, OpSaliente, OpLabio,
-                    OpApoyo)
+                    OpApoyo, OpGrampa)
 registrar_operacion(OpMultitransformar, OpPatronGeometrico, OpReticulaVolumetrica)

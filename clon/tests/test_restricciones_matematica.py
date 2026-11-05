@@ -738,7 +738,7 @@ def test_tangente_con_el_comando_no_cambia_el_radio_del_arco(otra, r2):
     assert b.radio(k) == pytest.approx(10, abs=TOL)
     assert all(_p(b, p) == pytest.approx(q, abs=TOL) for p, q in puntos.items())     # el primer arco queda quieto
     assert resolver(b, {}).ok
-    assert b.radio(k) == pytest.approx(10, abs=TOL if r2 else 0.02)                  # con la spline, B-121
+    assert b.radio(k) == pytest.approx(10, abs=TOL)                                   # también con la spline (B-121)
     if r2 is not None:
         assert b.radio(o) == pytest.approx(r2, abs=TOL)
 
@@ -893,3 +893,33 @@ def test_cambiar_paralela_por_perpendicular_no_colapsa_la_linea():
     assert abs(u[0] * v[0] + u[1] * v[1]) < ANG
     assert math.dist(*[_p(b, i) for i in b.curvas[l2].extremos()]) > 10
 
+
+
+@pytest.mark.parametrize("otra", ["spline", "elipse"])
+def test_resolver_de_nuevo_una_tangente_general_no_mueve_nada(otra):
+    """B-121: el contacto arrancaba de una muestra de 96 puntos y cada pasada corría la geometría (10 → 10,03 mm en
+    cuatro pasadas). Ya tangentes, 50 resoluciones seguidas no mueven ningún punto más de 1e-9 mm."""
+    b = Boceto()
+    k = _arco_libre(b)
+    o = (b.agregar_spline([(14, -5), (18, 5), (14, 15)]) if otra == "spline"
+         else b.agregar_elipse((24, 3), (31, 3), 4))
+    b.agregar_restriccion("tangente", [k, o])
+    acomodar_tangente(b, [k, o])
+    assert resolver(b, {}).ok
+    antes = {p: _p(b, p) for p in b.puntos}
+    for _ in range(50):
+        assert resolver(b, {}).ok
+    assert max(math.dist(antes[p], _p(b, p)) for p in b.puntos) < 1e-9
+
+
+def test_punto_sobre_spline_en_su_prolongacion_no_deriva():
+    """Gemelo de B-121: el pie arrancaba recortado al extremo de la spline y el punto se corría ~0,01 mm por pasada."""
+    b = Boceto()
+    s = b.agregar_spline([(0, 0), (10, 5), (20, 0)])
+    p = b.agregar_punto(26, -6)
+    b.agregar_restriccion("coincidente", [p, s])
+    assert resolver(b, {}).ok
+    antes = {q: _p(b, q) for q in b.puntos}
+    for _ in range(20):
+        assert resolver(b, {}).ok
+    assert max(math.dist(antes[q], _p(b, q)) for q in b.puntos) < 1e-9

@@ -57,6 +57,7 @@ from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, 
                                     _validar_opciones_texto)
 from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, nombres_usados, separar_nombre,
                                    validar_nombre)
+from .. import registro_uso as _ru
 from . import formato, temas
 from .campo_expresion import autocompletar
 from .iconos import icono
@@ -574,6 +575,47 @@ class EntradaValor(QFrame):
         self.campos[i].setStyleSheet(f"background: {temas.color('campo_error')};" if malo else "")
 
 
+
+def _registro_uso(tipo, datos):
+    """Evento del boceto en el registro local; ninguna costo si está apagado (no interfiere con el dibujo)."""
+    r = _ru.activo
+    if r is not None:
+        r.emitir(tipo, datos)
+
+
+def _diff_uso(lienzo, antes):
+    """Qué cambiaron en el boceto respecto de una foto previa: entidades, restricciones y cotas."""
+    salientes = set(lienzo.b.curvas) - set(antes["curvas"])
+    por_borrar = set(antes["curvas"]) - set(lienzo.b.curvas)
+    for i in list(salientes)[:16]:
+        _registro_uso("boceto_entidad", {"accion": "creada", "tipo": lienzo.b.curvas[i].tipo})
+    for i in list(por_borrar)[:16]:
+        _registro_uso("boceto_entidad", {"accion": "borrada", "tipo": antes["curvas"][i].tipo})
+    nuevos_r = set(lienzo.b.restricciones) - set(antes["restricciones"])
+    quitados_r = set(antes["restricciones"]) - set(lienzo.b.restricciones)
+    for i in list(nuevos_r)[:16]:
+        _registro_uso("boceto_restriccion", {"accion": "agregada", "tipo": lienzo.b.restricciones[i].tipo})
+    for i in list(quitados_r)[:16]:
+        _registro_uso("boceto_restriccion", {"accion": "borrada", "tipo": antes["restricciones"][i].tipo})
+    nuevos_c = set(lienzo.b.cotas) - set(antes["cotas"])
+    quitados_c = set(antes["cotas"]) - set(lienzo.b.cotas)
+    for i in list(nuevos_c)[:16]:
+        c = lienzo.b.cotas[i]
+        _registro_uso("boceto_cota", {"accion": "agregada", "tipo": c.tipo, "valor": c.expresion})
+    for i in list(quitados_c)[:16]:
+        _registro_uso("boceto_cota", {"accion": "borrada", "tipo": antes["cotas"][i].tipo})
+
+
+def _foto_uso(lienzo):
+    return {"curvas": dict(lienzo.b.curvas), "restricciones": dict(lienzo.b.restricciones),
+            "cotas": dict(lienzo.b.cotas)} if _ru.activo is not None else None
+
+def _suelta_aislada(b, cid):
+    """Durante un aislamiento (navegador › Aislar) la geometría suelta tampoco se ve ni se captura."""
+    from ..restricciones import objetos
+    return objetos.aislamiento_activo(b) and cid not in objetos.indice(b)
+
+
 class Lienzo(QWidget):
     cambio = Signal()
     mensaje = Signal(str)
@@ -581,6 +623,7 @@ class Lienzo(QWidget):
     texto_en_edicion = Signal()     # se edita un texto ya creado: la paleta muestra sus opciones (fuente, estilo…)
     texto_valores = Signal(float, float, float, float)   # altura, interletraje, interlineado y kerning en el cursor
     info = Signal(str)          # medidas de lo elegido, como Fusion ("1 línea de boceto | Longitud: …")
+    seleccion_cambiada = Signal()   # la ventana la refleja en el navegador
     aviso = Signal(str)         # aviso flotante (p. ej. una operación borró restricciones o cotas)
     simetria_estado = Signal(object)    # lo que muestra el panel SIMETRÍA (ver `estado_simetria`)
     proyeccion_estado = Signal(object)  # lo que muestra la tarjeta de Proyectar (ver `estado_proyeccion`)
@@ -747,6 +790,8 @@ class Lienzo(QWidget):
         else:
             self.setAttribute(Qt.WA_TranslucentBackground)
             visor.camara_cambiada.connect(self.update)
+        from .objetos_vectoriales import ControlObjetos
+        self.objetos = ControlObjetos(self)
         self.resolver()
 
     # ------------------------------------------------------------ coordenadas (2D o proyectadas por el visor)
@@ -785,7 +830,11 @@ class Lienzo(QWidget):
 
     def encuadrar(self):
         xs, ys = [], []
+        from ..restricciones import objetos
+        internos = {p for cid in objetos.indice(self.b) for p in self.b.curvas[cid].puntos()}
         for p in self.b.puntos.values():
+            if p.id in internos:
+                continue
             xs.append(p.x)
             ys.append(p.y)
         for c in self.b.curvas.values():
@@ -797,6 +846,23 @@ class Lienzo(QWidget):
                 self.visor.objetivo = self.plano.a_3d((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
                 radio = max(max(xs) - min(xs), max(ys) - min(ys), 20) / 2
                 self.visor.distancia = radio / math.sin(math.radians(self.visor.fov) / 2) * 1.3
+                area = self.parentWidget()
+                if self.b.objetos and area is not None and hasattr(area, "reubicar"):
+                    area.reubicar()
+                    izquierda, derecha = 24., self.width() - 24.
+                    for w in area.arriba_izq:
+                        if w.isVisible():
+                            izquierda = max(izquierda, w.geometry().right() - self.x() + 24)
+                    for w in [area.paleta, self.objetos.panel]:
+                        if w is not None and w.isVisible():
+                            derecha = min(derecha, w.x() - self.x() - 24)
+                    alto_util = max(self.height() - 120, 80)
+                    ancho_util = max(derecha - izquierda, 80)
+                    alto_mm = max((max(xs) - min(xs)) * self.height() / ancho_util,
+                                  (max(ys) - min(ys)) * self.height() / alto_util, 20)
+                    self.visor.distancia = alto_mm / (2 * math.tan(math.radians(self.visor.fov) / 2)) * 1.3
+                    self.visor.desplazar((izquierda + derecha) / 2 - self.width() / 2, 0)
+                    self._camara()
                 self.visor.update()
             return
         if not xs:
@@ -815,6 +881,9 @@ class Lienzo(QWidget):
     def _restaurar(self, datos):
         nuevo = Boceto.desde_dict(datos)
         self.b.__dict__.update(nuevo.__dict__)   # se conserva el mismo objeto (lo referencian otros)
+        from ..restricciones import objetos
+        objetos.invalidar(self.b)
+        self.objetos._firma = None
         self._indice_inf = None
 
     def deshacer(self):
@@ -833,7 +902,9 @@ class Lienzo(QWidget):
         self._tras_deshacer()
 
     def _tras_deshacer(self):
-        self.seleccion, self.clics, self.picks, self.picks_xy = [], [], [], []
+        elegidos = [i for i in self.objetos.seleccion() if i in self.b.objetos]
+        self.objetos.cancelar()
+        self.seleccion, self.clics, self.picks, self.picks_xy = elegidos, [], [], []
         self.perfiles_sel = []
         self.inf_actual = self.inferencia = self._inf_inicio = None
         self._reiniciar_vivo()
@@ -874,6 +945,10 @@ class Lienzo(QWidget):
             valores = {}
         previo = self.resultado if rapido and arrastrado is not None else None
         self.resultado = resolver(self.b, valores, arrastrado, previo)
+        r_uso = _ru.activo
+        if r_uso is not None and time.monotonic() - getattr(self, "_uso_solver", 0.0) >= 0.5:
+            self._uso_solver = time.monotonic()
+            r_uso.emitir("boceto_solver", {"estado": self.resultado.estado, "gdl": self.resultado.gdl})
         self._cache_cortes = {}
         self._indice_inf = None
         if arrastrado is None:
@@ -1006,6 +1081,7 @@ class Lienzo(QWidget):
         Con `operacion` (empalme, chaflán, recortar…), si se perdieron restricciones o cotas se avisa
         como Fusion."""
         estaba_ok = self.resultado is None or self.resultado.ok
+        foto_uso = _foto_uso(self)
         antes = set(self.b.curvas)
         puntos_antes = set(self.b.puntos)
         vinculos = set(self.b.restricciones) | set(self.b.cotas)
@@ -1036,6 +1112,8 @@ class Lienzo(QWidget):
             return False
         self.pila_rehacer.clear()
         self.perfiles_sel = []                     # los índices de perfil dejan de valer al cambiar el boceto
+        if foto_uso is not None:
+            _diff_uso(self, foto_uso)
         if operacion and not vinculos <= (set(self.b.restricciones) | set(self.b.cotas)):
             self.aviso.emit(AVISO_BORRADAS)
         return True
@@ -1054,7 +1132,9 @@ class Lienzo(QWidget):
             if c.parametro_texto in valores:
                 c = copy.copy(c)
                 c.texto = texto_con_valores(_contenido_texto(c, valores), valores)
-                return [_muestras(p, pasos) for p in primitivas_entidad(c, self.b.coords, curvas=self.b.curvas)]
+                from ..restricciones import objetos
+                prims = primitivas_entidad(c, self.b.coords, curvas=self.b.curvas)
+                return [_muestras(p, pasos) for p in objetos.aplicar_a_primitivas(self.b, c.id, prims)]
         return [_muestras(p, pasos) for p in self.b.primitivas(c.id)]
 
     def geometria_real(self):
@@ -1107,18 +1187,23 @@ class Lienzo(QWidget):
 
     def _visible(self, c):
         return not ((c.construccion and not self.mostrar["construccion"])
-                    or (c.proyectada and not self.mostrar["proyectadas"]) or c.id in self.copias_en_edicion)
+                    or (c.proyectada and not self.mostrar["proyectadas"]) or c.id in self.copias_en_edicion
+                    or self.b.objetos and _suelta_aislada(self.b, c.id))
 
     def _ocultos(self):
         """(curvas, puntos) que no se ven —construcción o proyectadas apagadas, o las copias de un patrón que se
         edita (BOC-60)—: tampoco se pueden capturar."""
-        if self.mostrar["construccion"] and self.mostrar["proyectadas"] and not self.copias_en_edicion:
+        if self.mostrar["construccion"] and self.mostrar["proyectadas"] and not self.copias_en_edicion and not self.b.objetos:
             return frozenset(), frozenset()
         curvas = {c.id: c for c in self.b.curvas.values() if not self._visible(c)}
         vistos = {p for c in self.b.curvas.values() if c.id not in curvas for p in c.puntos()}
         ocultos = {p for c in curvas.values() for p in c.puntos()}
         ocultos |= {p.id for p in self.b.puntos.values() if p.proyectado and not self.mostrar["proyectadas"]}
         ocultos |= {i for i in self.copias_en_edicion if i in self.b.puntos}
+        if self.b.objetos:
+            from ..restricciones import objetos
+            internos = {p for cid in objetos.indice(self.b) for p in self.b.curvas[cid].puntos()}
+            return frozenset(curvas), frozenset(ocultos - vistos | internos)
         return frozenset(curvas), frozenset(ocultos - vistos)
 
     def _clave_geometria(self):
@@ -1164,6 +1249,10 @@ class Lienzo(QWidget):
         for c in self.b.curvas.values():
             if not self._visible(c) or (tipos and c.tipo not in tipos):
                 continue
+            if self.b.objetos and tipos != ("texto",) and not isinstance(c, Texto):
+                from ..restricciones import objetos
+                if c.id in objetos.indice(self.b):
+                    continue
             if interior and isinstance(c, Circulo) and radio_px * 0.8 < dmin:
                 # círculo chico (un agujero): también se agarra desde adentro, cediendo ante lo que esté más cerca
                 centro = self.a_px(*self.b.coords(c.centro))
@@ -1179,12 +1268,28 @@ class Lienzo(QWidget):
                 if isinstance(c, Texto):
                     xs += [q.x() for q in px]
                     ys += [q.y() for q in px]
-            if xs and min(xs) - radio_px <= pos.x() <= max(xs) + radio_px \
-                    and min(ys) - radio_px <= pos.y() <= max(ys) + radio_px and radio_px * 0.9 < dmin:
+            if xs and min(xs) - radio_px <= pos.x() <= max(xs) + radio_px                     and min(ys) - radio_px <= pos.y() <= max(ys) + radio_px and radio_px * 0.9 < dmin:
                 mejor, dmin = c.id, radio_px * 0.9      # dentro de la caja del texto: cede ante lo que esté más cerca
+            if isinstance(c, Texto) and min(xs) <= pos.x() <= max(xs) and min(ys) <= pos.y() <= max(ys):
+                # clic sobre la tinta de una letra: el texto gana (B-187), aunque la curva de abajo cruce la letra
+                cruces = 0
+                for poli in self._polilineas(c, 48):
+                    px = self._poli_px(poli)
+                    for a, b in zip(px, px[1:], strict=False):
+                        if (a.y() > pos.y()) != (b.y() > pos.y()) and pos.x() < a.x() + (pos.y() - a.y()) * (b.x() - a.x()) / (b.y() - a.y()):
+                            cruces += 1
+                if cruces % 2 == 1:
+                    mejor, dmin = c.id, -1.0
+
         return mejor
 
     def entidad_en(self, pos):
+        if self.herramienta == "seleccionar":
+            if self.objetos.modo_perfiles:
+                return None
+            oid = self.objetos.en(pos)
+            if oid is not None:
+                return oid
         pid = self._punto_cercano(pos)
         return pid if pid is not None else self._curva_cercana(pos, interior=True)
 
@@ -1217,6 +1322,9 @@ class Lienzo(QWidget):
     def _clic_perfil(self, pos):
         if self.herramienta != "seleccionar":
             return
+        if self.b.objetos and not self.objetos.modo_perfiles and any(
+                camino.boundingRect().contains(pos) for camino, _borde in self.objetos._datos().values()):
+            return  # el vacío entre trazos de un recurso no cambia implícitamente a selección CAD
         i = self.perfil_en(pos)
         if i is None:
             return
@@ -1344,6 +1452,7 @@ class Lienzo(QWidget):
         self.mensaje.emit(f"{nota} {texto}" if nota else texto)
         self._emitir_simetria()
         self.herramienta_cambiada.emit(h)
+        _registro_uso("boceto_herramienta", {"herramienta": h})
         self._emitir_proyeccion()
         self.update()
 
@@ -1356,6 +1465,8 @@ class Lienzo(QWidget):
     def cancelar(self):
         """Esc y clic derecho sin arrastrar: si hay algo a medias lo corta y la herramienta sigue; si no, sale de la
         herramienta y vuelve a Seleccionar; en Seleccionar, borra la selección."""
+        if self.objetos.cancelar():
+            return
         if self._eligiendo_punto is not None:
             self._terminar_eleccion()
             return
@@ -1746,7 +1857,7 @@ class Lienzo(QWidget):
                 c.pop()                                 # ya hay una caja de texto abierta
                 return
             pid, xy = c[0]
-            # clic sobre una curva (no sobre un punto): texto en curva, centrado donde se hizo clic
+            # El clic elige el camino; en uno abierto, la alineación usa todo el recorrido (Fusion).
             camino = None
             if len(c) == 1 and pid is None:
                 camino = self._curva_cercana(self.a_px(*xy))
@@ -1759,7 +1870,11 @@ class Lienzo(QWidget):
             en_curva, caja, altura_ini, rect = {}, {}, self.opciones["altura_texto"], None
             if camino is not None:
                 prim_camino = self.b.primitivas(camino)[0]
-                en_curva = {"camino": camino, "camino_pos": fraccion_en_camino(prim_camino, xy), "alineacion": "centro"}
+                cerrada = prim_camino[0] in ("circulo", "elipse") or bool(getattr(self.b.curvas[camino], "cerrada", False))
+                en_curva = {"camino": camino, "camino_alineado": not cerrada}
+                if cerrada:
+                    en_curva["camino_pos"] = fraccion_en_camino(prim_camino, xy)
+                self.opciones["alineacion"] = "centro"
                 self.opciones["camino_lado"] = lado_natural(prim_camino)
             elif len(c) == 2:
                 fin_xy = c[1][1]
@@ -1832,7 +1947,8 @@ class Lienzo(QWidget):
 
     # ------------------------------------------------------------ herramientas sobre una selección
     def _seleccion_util(self):
-        return [i for i in self.seleccion if i in self.b.curvas or i in self.b.puntos]
+        return [i for i in self.seleccion if i in self.b.curvas or i in self.b.puntos
+                or self.herramienta in TRANSFORMAR and i in self.b.objetos]
 
     def _avanzar_seleccion(self, avisar=True):
         """Enter en la fase de selección: pasa al paso siguiente de la herramienta."""
@@ -3313,7 +3429,7 @@ class Lienzo(QWidget):
         info = (self._previa_texto or {}).get("mapa")
         if not info:
             return None
-        x, y = self.a_mm(pos)
+        x, y = self.a_mm(self.objetos.posicion_texto(pos))
         mejor, menor = None, None
         for i, (a, b) in enumerate(info["paradas"]):
             dx, dy = b[0] - a[0], b[1] - a[1]
@@ -3331,7 +3447,7 @@ class Lienzo(QWidget):
         if d is None or self.entrada is None:
             return False
         info = d.get("mapa")
-        x, y = self.a_mm(pos)
+        x, y = self.a_mm(self.objetos.posicion_texto(pos))
         margen = 6.0 / max(self.px_por_mm(), 1e-6)
         cajas = [c for c in (d.get("caja"), info and info.get("caja")) if c]
         return any(c[0] - margen <= x <= c[2] + margen and c[1] - margen <= y <= c[3] + margen for c in cajas)
@@ -3349,6 +3465,7 @@ class Lienzo(QWidget):
             d["ancla"] = i
         d["cursor"], d["col"] = i, None
         self._arrastre_texto = True
+        self._pos_clic_texto = pos
         self._caret_on = True
         self._t_caret.start()
         self._actualizar_cursor()
@@ -4473,6 +4590,7 @@ class Lienzo(QWidget):
 
             def cambiar():
                 cota.expresion = texto
+                _registro_uso("boceto_cota", {"accion": "editada", "tipo": cota.tipo, "valor": texto})
                 if nombre:
                     cota.nombre, self._nombradas[nombre] = nombre, cota.id
             self.aplicar_cambio(cambiar)
@@ -4679,12 +4797,19 @@ class Lienzo(QWidget):
     # ------------------------------------------------------------ selección y borrado
     def borrar_seleccion(self):
         ids = [i for i in self.seleccion if i in self.b.puntos or i in self.b.curvas
-               or i in self.b.restricciones or i in self.b.cotas]
+               or i in self.b.restricciones or i in self.b.cotas or i in self.b.objetos]
         if not ids:
             return
 
         def borrar():
             for i in ids:
+                if i in self.b.objetos:
+                    from ..restricciones import objetos
+                    if self.b.objetos[i]["bloqueado"]:
+                        raise ErrorBoceto("Desbloqueá el objeto antes de borrarlo.")
+                    for cid in objetos.curvas(self.b, [i]):
+                        self.b.eliminar(cid)
+                    continue
                 if i in self.b.puntos or i in self.b.curvas or i in self.b.restricciones or i in self.b.cotas:
                     self.b.eliminar(i)
         self.aplicar_cambio(borrar)
@@ -4751,6 +4876,9 @@ class Lienzo(QWidget):
     def mousePressEvent(self, e):
         pos = e.position()
         self._modificadores_raton = e.modifiers()
+        if self.objetos.arrastre is not None:
+            self.objetos.cancelar()
+            return
         if self._asas is not None and e.button() == Qt.LeftButton and self._asas.empezar(pos):
             return                                   # se tira de un asa de la herramienta
         if (e.button() == Qt.LeftButton and self.herramienta == "desfase" and self.picks and self.entrada is not None
@@ -4899,6 +5027,8 @@ class Lienzo(QWidget):
         return m
 
     def _presionar_marco(self, pos):
+        if self.objetos.seleccion():
+            return self.objetos.presionar(pos)
         caja = self._caja_marco()
         if caja is None:
             return False
@@ -4964,6 +5094,8 @@ class Lienzo(QWidget):
         self.aplicar_cambio(accion)
 
     def _dibujar_marco(self, p):
+        if self.objetos.seleccion():
+            return
         caja = self._marco["caja"] if self._marco is not None else self._caja_marco()
         if caja is None:
             return
@@ -5014,6 +5146,15 @@ class Lienzo(QWidget):
             ent = self.entidad_en(pos)
         if not suma:
             self.perfiles_sel = []
+        if mods & Qt.AltModifier and not suma and ent in self.b.objetos:
+            debajo = self.objetos.todos_en(pos)           # Alt+clic: el siguiente objeto superpuesto, en ciclo
+            if len(debajo) > 1:
+                actual = self.objetos.seleccion()
+                k = debajo.index(actual[0]) + 1 if len(actual) == 1 and actual[0] in debajo else 1
+                ent = debajo[k % len(debajo)]
+                self.seleccion = []
+                self.mensaje.emit(f"Objeto {debajo.index(ent) + 1} de {len(debajo)} bajo el cursor: "
+                                  f"{self.b.objetos[ent]['nombre']} (Alt+clic elige el de abajo)")
         if ent is None:
             if not suma:
                 self.seleccion = []
@@ -5023,11 +5164,16 @@ class Lienzo(QWidget):
                 self.seleccion.remove(ent)
             else:
                 self.seleccion.append(ent)
-        else:
+        elif ent not in self.b.objetos or ent not in self.seleccion:
             self.seleccion = [ent]
         if arrastrar and ent is not None:
-            self._empezar_arrastre(ent, pos)
-        self.cambio.emit()
+            if ent in self.b.objetos:
+                if not suma:
+                    self.objetos.iniciar("mover", pos)
+            else:
+                self._empezar_arrastre(ent, pos)
+        if ent not in self.b.objetos:
+            self.cambio.emit()
         self._notificar_seleccion()
 
     # ------------------------------------------------------------ arrastrar puntos y curvas (con el solver)
@@ -5159,17 +5305,26 @@ class Lienzo(QWidget):
     def _actualizar_sobre(self, pos):
         """Seleccionar: resalta lo que hay bajo el ratón (manija, cota, símbolo, curva o punto) y cambia el
         cursor, para que se vea dónde agarrar. Orden igual al del clic: manija, cota/símbolo, entidad."""
-        manija = self._manija_en(pos)
+        manija = self.objetos.manija_en(pos) if self.objetos.seleccion() else self._manija_en(pos)
         zona = None if manija is not None else self._zona_en(pos)
         ent = None
-        if manija is None and zona is None and len(self.b.curvas) <= 400:
+        if manija is None and zona is None:
+            ent = self.objetos.en(pos)
+        if manija is None and zona is None and ent is None and len(self.b.curvas) <= 400:
             ent = self.entidad_en(pos)
-            if ent is not None and ent not in self.b.curvas and ent not in self.b.puntos:
+            if ent is not None and ent not in self.b.curvas and ent not in self.b.puntos and ent not in self.b.objetos:
                 ent = None
         if (ent, manija, zona) != (self._sobre, self._manija_sobre, self._zona_sobre):
             self._sobre, self._manija_sobre, self._zona_sobre = ent, manija, zona
+            from ..restricciones import objetos
+            self.objetos._sobre = objetos.indice(self.b).get(ent, (ent,))[0]
             if manija is not None:
-                self.setCursor(Qt.CrossCursor if manija == "rotar" else Qt.SizeAllCursor)
+                cursores = {"escala0": Qt.SizeBDiagCursor, "escala4": Qt.SizeBDiagCursor,
+                            "escala2": Qt.SizeFDiagCursor, "escala6": Qt.SizeFDiagCursor,
+                            "escala1": Qt.SizeVerCursor, "escala5": Qt.SizeVerCursor,
+                            "escala3": Qt.SizeHorCursor, "escala7": Qt.SizeHorCursor,
+                            "rotar": Qt.CrossCursor, "pivote": Qt.CrossCursor}
+                self.setCursor(cursores.get(manija, Qt.SizeAllCursor))
             elif zona is not None:
                 self.setCursor(Qt.PointingHandCursor)
             elif ent is not None:
@@ -5183,6 +5338,12 @@ class Lienzo(QWidget):
         self._modificadores_raton = e.modifiers()
         self._pos_cursor = pos
         self._camara()
+        if self.objetos.arrastre is not None:
+            if e.buttons() & Qt.LeftButton:
+                self.objetos.mover(pos, e.modifiers())
+            else:
+                self.objetos.soltar()  # un botón liberado fuera de la ventana no deja un gesto colgado
+            return
         if self._asas is not None:
             if self._asas.arrastrando:
                 self._asas.mover(pos)
@@ -5191,13 +5352,21 @@ class Lienzo(QWidget):
                 self._asas.pasar(pos)
         if self._previa_texto is not None and self.entrada is not None:
             if self._arrastre_texto and e.buttons() & Qt.LeftButton:       # arrastrando: selecciona texto
-                i = self._indice_en_texto(pos)
                 d = self._previa_texto
-                if i is not None and i != d["cursor"]:
-                    d["cursor"], d["col"] = i, None
-                    self._actualizar_cursor()
-                    self.update()
-                return
+                tid = d.get("existente")
+                if (tid is not None and tid in self.b.curvas and isinstance(self.b.curvas[tid], Texto)
+                        and self.b.curvas[tid].camino in self.b.curvas
+                        and (pos - self._pos_clic_texto).manhattanLength() > 8):
+                    # arrastrar las letras de un texto en ruta con la paleta abierta lo desliza (B-187)
+                    self._arrastre_texto = False
+                    self._empezar_arrastre(tid, self._pos_clic_texto)   # desde donde se agarró, no del umbral
+                else:
+                    i = self._indice_en_texto(pos)
+                    if i is not None and i != d["cursor"]:
+                        d["cursor"], d["col"] = i, None
+                        self._actualizar_cursor()
+                        self.update()
+                    return
             self.setCursor(Qt.IBeamCursor if self._sobre_texto(pos) else Qt.ArrowCursor)
         if (self.herramienta == "seleccionar" and not (e.buttons() & Qt.LeftButton) and self.entrada is None
                 and self._reenvio is None and self._marco is None):
@@ -5270,6 +5439,13 @@ class Lienzo(QWidget):
     def mouseReleaseEvent(self, e):
         pos = e.position()
         self._modificadores_raton = e.modifiers()
+        if self.objetos.arrastre is not None:
+            if e.button() == Qt.LeftButton:
+                self.objetos.mover(pos, e.modifiers())
+                self.objetos.soltar()
+            else:
+                self.objetos.cancelar()
+            return
         if self._asas is not None and self._asas.arrastrando:
             self._asas.soltar()
             return
@@ -5353,19 +5529,27 @@ class Lienzo(QWidget):
         return VENTANA_RELLENO, VENTANA_BORDE   # de izquierda a derecha: naranja, elige lo que queda adentro
 
     def _seleccionar_ventana(self, a, b):
+        if self.objetos.modo_perfiles:
+            self.mensaje.emit("Perfiles CAD: usá Ctrl o Mayús + clic para seleccionar varias regiones.")
+            return
         rect = QRectF(a, b).normalized()
         if rect.width() < 3 and rect.height() < 3:
             return
         cruce = b.x() < a.x()       # de derecha a izquierda: alcanza con tocar (como en Fusion)
         sel = list(self.seleccion)
+        internos = self._ocultos()[1]
         visibles = {q for c in self.b.curvas.values() if self._visible(c) for q in c.puntos()}
         sueltos = {p for p in self.b.puntos if not any(p in c.puntos() for c in self.b.curvas.values())}
         for p in self.b.puntos.values():
-            if (p.id in visibles or p.id in sueltos) and rect.contains(self.a_px(p.x, p.y)) and p.id not in sel:
+            if p.id not in internos and (p.id in visibles or p.id in sueltos) and rect.contains(self.a_px(p.x, p.y)) and p.id not in sel:
                 sel.append(p.id)
         for c in self.b.curvas.values():
             if not self._visible(c) or c.id in sel:
                 continue
+            if self.b.objetos:
+                from ..restricciones import objetos
+                if c.id in objetos.indice(self.b):
+                    continue
             polis = [self._poli_px(poli) for poli in self._polilineas(c, 24)]
             pts = [q for poli in polis for q in poli]
             if not pts:
@@ -5377,6 +5561,11 @@ class Lienzo(QWidget):
                 toca = all(rect.contains(q) for q in pts)
             if toca:
                 sel.append(c.id)
+        for oid, (camino, _borde) in self.objetos._datos().items():
+            o = self.b.objetos[oid]
+            if o["visible"] and not o["bloqueado"] and oid not in sel and (
+                    rect.intersects(camino.boundingRect()) if cruce else rect.contains(camino.boundingRect())):
+                sel.append(oid)
         self.seleccion = sel
         self.cambio.emit()
         self._notificar_seleccion()
@@ -5420,6 +5609,9 @@ class Lienzo(QWidget):
 
     def describir_seleccion(self):
         """Medidas de lo elegido con el formato de Fusion ("1 línea de boceto | Longitud: 123.698 mm")."""
+        elegidos = self.objetos.seleccion()
+        if elegidos:
+            return f"{len(elegidos)} objeto(s) vectorial(es)" + (f" · {self.b.objetos[elegidos[0]]['nombre']}" if len(elegidos) == 1 else "")
         curvas = [i for i in self.seleccion if i in self.b.curvas]
         puntos = [i for i in self.seleccion if i in self.b.puntos]
         perfiles = self.perfiles_seleccionados() if self.perfiles_sel else []
@@ -5448,12 +5640,15 @@ class Lienzo(QWidget):
         return ""
 
     def _notificar_seleccion(self):
+        self.objetos.registrar_textos()
+        self.objetos.notificar()
         texto = self.describir_seleccion()
         if texto != self._info:
             self._info = texto
             self.info.emit(texto)
         self._emitir_simetria()
         self.patron.notificar()
+        self.seleccion_cambiada.emit()
         self.transformar.notificar()
 
     def mouseDoubleClickEvent(self, e):
@@ -5513,6 +5708,8 @@ class Lienzo(QWidget):
         return bool(self._claves_vivas())
 
     def event(self, e):
+        if e.type() == QEvent.WindowDeactivate and getattr(self, "objetos", None) is not None:
+            self.objetos.cancelar()
         # Mientras se dibuja, los números son la entrada dinámica (no los atajos de vista 0-3) y
         # Supr / Enter / Esc son del boceto: se reclaman antes de que actúen los atajos de la ventana.
         if e.type() == e.Type.ShortcutOverride and self._previa_texto is not None and self.entrada is not None:
@@ -5706,8 +5903,13 @@ class Lienzo(QWidget):
         en_conflicto = self.geometria_en_conflicto(esperar=False) if res is not None and not res.ok else set()
         self._dibujar_perfiles(p)
         ocultos = set()
+        from ..restricciones import objetos
+        internas = objetos.indice(self.b) if self.b.objetos else {}
+        puntos_internos = {p for cid in internas for p in self.b.curvas[cid].puntos()}
         solo_auto, puntos_auto = self.b.ocultos_por_proyeccion_auto()    # no se dibujan (como Fusion)
         for c in self.b.curvas.values():
+            if c.id in internas:
+                continue
             if c.id == self._texto_oculto or c.id in solo_auto:
                 continue                     # se está editando: se ve la vista previa en vivo
             if not self._visible(c):
@@ -5736,6 +5938,8 @@ class Lienzo(QWidget):
                 q for c in self.b.curvas.values() if c.id in self._brillantes for q in c.puntos()}
             ancho, alto = self.width() + 8, self.height() + 8
             for pt in self.b.puntos.values():
+                if pt.id in puntos_internos:
+                    continue
                 if pt.id in ocultos and pt.id not in visibles or (pt.proyectado and not self.mostrar["proyectadas"]) \
                         or pt.id in puntos_auto:
                     continue
@@ -5773,6 +5977,7 @@ class Lienzo(QWidget):
         self._zonas_cotas = self._dibujar_cotas(p) if self.mostrar["cotas"] else {}
         self._dibujar_previa_auto(p)
         self._dibujar_marco(p)
+        self.objetos.dibujar(p)
         if self._zona_sobre is not None:                # la cota ya se resalta al dibujarse; el glifo, acá
             cajas = [self._zonas_glifos[self._zona_sobre]] if self._zona_sobre in self._zonas_glifos else []
             cajas += [c for i, c in self._zonas_glifos_extra if i == self._zona_sobre]
@@ -5780,7 +5985,11 @@ class Lienzo(QWidget):
             p.setPen(QPen(QColor(255, 170, 40), 2))
             for rect in cajas:
                 p.drawRect(rect.adjusted(-3, -3, 3, 3))
+        p.save()
+        if self._previa_texto is not None:
+            p.setTransform(self.objetos.transformacion_texto(), True)
         self._dibujar_previa(p)
+        p.restore()
         self._dibujar_campos_vivos(p)
         if self._ventana is not None:
             a, b = self._ventana
@@ -5856,7 +6065,12 @@ class Lienzo(QWidget):
         self._zonas_glifos_extra = extras = []
         en_conflicto = set(self.conflictos_sin_esperar()) if self.resultado is not None and not self.resultado.ok else set()
         p.setPen(QPen(QColor(150, 150, 150), 1))
+        from ..restricciones import objetos
+        internas = set(objetos.indice(self.b))
+        internas.update(p for cid in list(internas) for p in self.b.curvas[cid].puntos())
         for r in self.b.restricciones.values():
+            if set(r.entidades) <= internas:
+                continue
             if r.datos.get("origen"):                 # pegado al origen: Fusion no le dibuja ícono aparte
                 continue
             grupo = r.datos.get("grupo")

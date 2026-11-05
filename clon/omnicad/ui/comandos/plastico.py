@@ -3,7 +3,7 @@
 (Rest), que es una operación de sólido como el Saliente y el Labio."""
 from ...nucleo import geometria as geo
 from ...nucleo import plastico
-from ...timeline.ops_solido import OpApoyo, OpPatronGeometrico, OpReglaPlastico
+from ...timeline.ops_solido import OpApoyo, OpGrampa, OpPatronGeometrico, OpReglaPlastico
 from ...timeline.parametros import ESCALAR
 from ..comando import (ANGULO, Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
                        hits, refs)
@@ -191,7 +191,11 @@ class Apoyo(Comando):
                 Expresion("lado2", "Lado 2", "0 mm", ayuda="0 = sin pared de ese lado."),
                 Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", "0 deg", ANGULO),
                 Casilla("invertir", "Invertir"),
-                Opciones("extension", "Tipo de extensión", {"todo": "Todo", "objeto": "Hasta objeto"})]
+                Opciones("extension", "Tipo de extensión", {"todo": "Todo", "objeto": "Hasta objeto"}),
+                Seleccion("caras_superiores", "Caras superiores", {"cara"}, minimo=0, grupo="Avanzado",
+                          ayuda="El apoyo solo se crea bajo las caras elegidas y termina en ellas."),
+                Casilla("recortar", "Recortar", True, grupo="Avanzado",
+                        ayuda="Quita el área del apoyo que sobresale del cuerpo.")]
 
     def construir(self, v, ctx):
         exigir(v, "perfiles", "Seleccioná los perfiles cerrados del apoyo.")
@@ -200,11 +204,55 @@ class Apoyo(Comando):
             ctx.evaluar(v[k])
         cuerpo = [h["ref"]["cuerpo"] for h in v["cuerpo"] if h["ref"].get("tipo") == "cuerpo"][0]
         return self.crear_op(OpApoyo, v, ctx, perfiles=refs(v, "perfiles"), cuerpo={"tipo": "cuerpo", "cuerpo": cuerpo},
+                             caras_superiores=refs(v, "caras_superiores"),
                              **{k: v[k] for k in ("desfase", "grosor", "lado1", "lado2", "angulo_desmoldeo", "invertir",
-                                                  "extension")})
+                                                  "extension", "recortar")})
 
     def desde_op(self, op, ctx):
-        return dict(op.p, perfiles=hits(op.p["perfiles"], ctx.estado), cuerpo=hits([op.p["cuerpo"]], ctx.estado))
+        return dict(op.p, perfiles=hits(op.p["perfiles"], ctx.estado), cuerpo=hits([op.p["cuerpo"]], ctx.estado),
+                    caras_superiores=hits(op.p.get("caras_superiores", []), ctx.estado))
 
 
-registrar(AsignarReglaPlastico, AdministrarReglasPlastico, ConsejosDiseno, PatronGeometrico, Apoyo)
+class Grampa(Comando):
+    CLAVE, TITULO, ICONO = "grampa", "Grampa de fijación", "encaje_presion"
+    AYUDA = ("Gancho en voladizo (plástico) en puntos de boceto que encaja en una ranura con holgura copiada en el "
+             "otro cuerpo. El giro es uniforme para todos los puntos.")
+    CLASE_OP = OpGrampa
+
+    def campos(self, ctx):
+        return [Seleccion("posiciones", "Puntos", {"punto", "vertice"}, maximo=None),
+                Opciones("tipo", "Tipo", {"paralelo": "Gancho y ranurado paralelos",
+                                          "perpendicular": "Gancho y ranurado perpendiculares",
+                                          "contorno": "Gancho y contorno"}),
+                Seleccion("cuerpo_gancho", "Cuerpo del gancho", {"cuerpo"}),
+                Seleccion("cuerpo_ranura", "Cuerpo de la ranura", {"cuerpo"}, minimo=0),
+                Expresion("largo", "Largo del brazo", "10 mm", grupo="Gancho"),
+                Expresion("ancho", "Ancho", "4 mm", grupo="Gancho"),
+                Expresion("espesor", "Espesor", "1.5 mm", grupo="Gancho"),
+                Expresion("alto_gancho", "Alto del gancho", "1 mm", grupo="Gancho"),
+                Expresion("holgura", "Holgura de la ranura", "0.1 mm", grupo="Ranura"),
+                Expresion("angulo", "Ángulo de giro", "0 deg", ANGULO),
+                Opciones("extension", "Tipo de extensión", {"siguiente": "Hasta el siguiente",
+                                                            "distancia": "Distancia"}),
+                Expresion("distancia", "Distancia", "12 mm",
+                          visible_si=lambda v: v.get("extension") == "distancia"),
+                Casilla("invertir", "Invertir")]
+
+    def construir(self, v, ctx):
+        exigir(v, "posiciones", "Seleccioná los puntos donde van las grampas.")
+        exigir(v, "cuerpo_gancho", "Elegí el cuerpo del gancho.")
+        cuerpo = lambda k: ([h["ref"]["cuerpo"] for h in v[k] if h["ref"].get("tipo") == "cuerpo"] or [None])[0]  # noqa: E731
+        ranura = cuerpo("cuerpo_ranura")
+        return self.crear_op(OpGrampa, v, ctx, posiciones=refs(v, "posiciones"),
+                             cuerpo_gancho={"tipo": "cuerpo", "cuerpo": cuerpo("cuerpo_gancho")},
+                             cuerpo_ranura={"tipo": "cuerpo", "cuerpo": ranura} if ranura else None,
+                             **{k: v[k] for k in ("tipo", "largo", "ancho", "espesor", "alto_gancho", "holgura",
+                                                  "angulo", "extension", "distancia", "invertir")})
+
+    def desde_op(self, op, ctx):
+        return dict(op.p, posiciones=hits(op.p["posiciones"], ctx.estado),
+                    cuerpo_gancho=hits([op.p["cuerpo_gancho"]], ctx.estado),
+                    cuerpo_ranura=hits([op.p["cuerpo_ranura"]], ctx.estado) if op.p.get("cuerpo_ranura") else [])
+
+
+registrar(AsignarReglaPlastico, AdministrarReglasPlastico, ConsejosDiseno, PatronGeometrico, Apoyo, Grampa)

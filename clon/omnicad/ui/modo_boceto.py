@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QCompleter
                                QScrollArea, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
+from .. import registro_uso as _ru
 from ..nucleo import fuentes
 from ..nucleo.perfiles import detectar_boceto
 from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
@@ -28,6 +29,7 @@ from . import temas
 from .campo_expresion import nombres_sugeridos
 from .editor_boceto import (AYUDA_RESTRICCION, CAPA_PROYECCION, COMANDO_PROYECCION, HERRAMIENTAS, NOMBRES_RESTRICCION,
                             RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia)
+from . import navegador_boceto
 from .formulario import armar_cabecera
 from .iconos import icono
 from .panel_patron import PanelPatron
@@ -717,7 +719,8 @@ class PanelCaracter(QFrame):
         # ---- Alineación y curva
         self._seccion(c, "Alineación y curva", True)
         self.alineacion = self._combo(ALINEACIONES_TEXTO, "alineacion", "<b>Alineación</b><br>De cada línea dentro "
-                                      "de la caja (en curva: qué parte del texto cae en su posición).")
+                                      "de la caja; en un camino abierto nuevo: inicio, centro o fin del recorrido. "
+                                      "Un texto anterior con posición manual conserva su ancla.")
         self.ancla_v = self._combo(ANCLAJES_TEXTO, "ancla_v", "<b>Punto de anclaje</b><br>Qué parte del bloque "
                                    "de texto cae sobre el punto donde se hizo clic.")
         self.camino_colocacion = self._combo(COLOCACIONES_TEXTO, "camino_colocacion", "<b>Colocación</b><br>Las "
@@ -1028,6 +1031,7 @@ class ModoBoceto(QObject):
         self.grupo = QActionGroup(self)
         for clave, texto, herramienta, atajo, ico in ACCIONES_BOCETO:
             a = QAction(icono(ico), texto, ventana, checkable=herramienta != "proyectar_eje")
+            a.setProperty("clave", clave)
             ayuda = HERRAMIENTAS.get(herramienta, ("", AYUDA_RESTRICCION.get(herramienta, "")))[1]
             visible = (atajo or "").replace("Shift", "Mayúsculas")
             a.setToolTip(f"<b>{texto}</b><br>{ayuda}" + (f"<br><span style='color:#bbbbbb'>{visible}</span>" if atajo else ""))
@@ -1069,6 +1073,7 @@ class ModoBoceto(QObject):
                  lambda: self._en_lienzo("administrar_perdidas"),
                  "Proyecciones que ya no coinciden con el modelo: re-vincular, romper vínculo o borrar.")):
             a = QAction(icono(ico), texto, ventana)
+            a.setProperty("clave", clave)
             a.setToolTip(f"<b>{texto}</b><br>{ayuda}")
             if atajo:
                 a.setShortcut(QKeySequence(atajo))
@@ -1099,6 +1104,7 @@ class ModoBoceto(QObject):
         self.lienzo.op_boceto = getattr((datos or {}).get("op"), "id", None)
         self.lienzo.mensaje.connect(lambda t: v.mensaje(t, 7000))
         self.lienzo.cambio.connect(self._cambio)
+        self.lienzo.seleccion_cambiada.connect(lambda: navegador_boceto.seleccion_editor(self.v))
         self.lienzo.herramienta_cambiada.connect(self._sincronizar_herramienta)
         self.lienzo.texto_en_edicion.connect(self._opciones_de_texto)
         self.lienzo.info.connect(v.info_seleccion)               # "1 línea de boceto | Longitud: …"
@@ -1159,8 +1165,10 @@ class ModoBoceto(QObject):
         self.transformar.aceptado.connect(control.aceptar)
         self.transformar.cancelado.connect(control.cancelar)
         self.transformar.hide()
+        from .objetos_vectoriales import PanelObjetos
+        self.objetos = PanelObjetos(lz.objetos, area)
         area.set_capa_boceto(self.lienzo, self.paleta, self.caracter, self.simetria, self.patron, self.transformar,
-                             self.tarjeta)
+                             self.tarjeta, self.objetos)
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())
         if mirar:
@@ -1193,6 +1201,8 @@ class ModoBoceto(QObject):
                 return False
         nota = self.lienzo.descartar_proyeccion()    # Terminar boceto no es Aceptar Proyectar
         boceto, datos = self.boceto, self.datos
+        _ru.activo and _ru.activo.emitir("boceto_cerrado", {"resultado": "aceptado",
+                                                            "entidades": contar_entidades(boceto)})
         self._limpiar()
         self.terminado.emit(boceto, datos)
         if nota:
@@ -1219,6 +1229,8 @@ class ModoBoceto(QObject):
     def cancelar(self):
         """Sale del boceto SIN guardar (al cambiar de documento)."""
         if self.activo:
+            _ru.activo and _ru.activo.emitir("boceto_cerrado", {"resultado": "cancelado",
+                                                                "entidades": contar_entidades(self.boceto)})
             self._limpiar()
             self.v._indice_boceto = None
             self.v._refrescar_visibilidad()
@@ -1246,10 +1258,11 @@ class ModoBoceto(QObject):
     def _limpiar(self):
         self.lienzo._cerrar_entrada()
         self.v.area.set_capa_boceto(None, None)
-        for w in (self.lienzo, self.paleta, self.caracter, self.simetria, self.patron, self.transformar, self.tarjeta):
+        for w in (self.lienzo, self.paleta, self.caracter, self.simetria, self.patron, self.transformar, self.tarjeta, self.objetos):
             w.hide()
             w.deleteLater()
         self.lienzo = self.paleta = self.caracter = self.simetria = self.patron = self.transformar = self.tarjeta = None
+        self.objetos = None
         self.v.visor.set_capa("boceto3d", None)
         self.v.visor.set_capa("triada3d", None)
         self.v.visor.set_capa("iso_previa", None)
@@ -1264,6 +1277,7 @@ class ModoBoceto(QObject):
         for a in self._tapadas:
             a.setEnabled(True)
         self._tapadas = []
+        navegador_boceto.refrescar(self.v)   # fuera del boceto el navegador vuelve a su forma normal
 
     # ------------------------------------------------------------ herramientas y opciones
     def herramienta(self, h):
@@ -1465,6 +1479,7 @@ class ModoBoceto(QObject):
         op = (self.datos or {}).get("op")
         if op is not None:                   # BOC-7: candado o marca roja del boceto en el navegador, en vivo
             self.v.navegador.marcar_boceto(op.id, self.lienzo.resultado if self.boceto.curvas else None)
+        navegador_boceto.refrescar(self.v)   # categorías, grupos y banderas del boceto en el navegador
         self._capa3d()
         if not self._t_perfiles.isActive():  # sin reiniciarlo: con un arrastre seguido nunca llegaría a dispararse
             self._t_perfiles.start()
@@ -1472,11 +1487,16 @@ class ModoBoceto(QObject):
     def _actualizar_perfiles(self):
         if not self.activo:
             return
+        if self.lienzo.objetos.arrastre is not None or self.lienzo.objetos.previa is not None:
+            self.v.visor.set_perfiles([])
+            return
         inicio = time.perf_counter()
         try:
             perfiles = detectar_boceto(self.lienzo.b, self.plano, self.lienzo.geometria_real())
-        except Exception:  # noqa: BLE001 — un boceto a medio dibujar no debe romper la vista
-            perfiles = []
-        self.v.visor.set_perfiles([p.cara for p in perfiles_a_pintar(perfiles, self.lienzo.b)])
+            pintables = perfiles_a_pintar(perfiles, self.lienzo.b, self.v.mensaje)
+            self.v.visor.set_perfiles([p.cara for p in pintables])
+        except Exception as e:  # noqa: BLE001 — el temporizador también debe contener los fallos nativos al mallar
+            self.v.visor.set_perfiles([])
+            self.v.mensaje(f"No se pudo actualizar el relleno del boceto: {e}", 7000)
         costo = time.perf_counter() - inicio
         self._t_perfiles.setInterval(0 if costo < 0.1 else int(3000 * costo))    # un boceto pesado no traba el arrastre

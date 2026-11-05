@@ -213,6 +213,16 @@ def seleccionar_perfiles(br, op, profile):
             return _letras(br, op, clave[5:].strip())
         if clave == "sketch":
             return perfiles_mod.perfiles_de_boceto(br)
+        if clave.startswith("object:"):
+            from ..restricciones import objetos
+            try:
+                oid = int(clave.partition(":")[2])
+                if oid not in br.boceto.objetos:
+                    raise ValueError
+                ids = set(objetos.curvas(br.boceto, [oid]))
+            except ValueError:
+                raise error("PROFILE_NOT_FOUND", "El objeto vectorial indicado no existe en ese boceto.") from None
+            return [p for p in perfiles_mod.sin_huecos(perfiles, br.boceto) if p.firma and p.firma <= ids]
         if clave.lstrip("-").isdigit():
             profile = int(clave)
         else:
@@ -831,7 +841,8 @@ def _info_curva(b, c):
         if c.camino is not None:
             d.update(path_entity=c.camino, path_side="left" if c.camino_lado == "izq" else "right",
                      path_placement="above" if c.camino_colocacion == "arriba" else "below",
-                     path_position=_r(c.camino_pos), path_offset=_r(c.camino_desfase), fit_path=c.camino_ajustar)
+                     path_position=_r(c.camino_pos), path_aligned=c.camino_alineado,
+                     path_offset=_r(c.camino_desfase), fit_path=c.camino_ajustar)
         if c.altura_expr:
             d["height_expression"] = c.altura_expr
         if c.marco:
@@ -1724,7 +1735,7 @@ def _texto_spec(b, i, e, alias, sesion):
                                   "kerning", "skew", "scale_x", "scale_y", "baseline_shift", "case", "underline",
                                   "strikethrough", "decoration_thickness", "no_wrap", "kerning_pairs") if k in e})
     if camino is not None:
-        opciones |= _opciones_camino(camino, e.get("path_side", "left"), e.get("path_position", 0.5),
+        opciones |= _opciones_camino(camino, e.get("path_side", "left"), e.get("path_position"),
                                     e.get("path_offset", 0.0), e.get("fit_path", False),
                                     e.get("path_placement", "above"))
         if e.get("underline", "none") != "none" or e.get("strikethrough", "none") != "none":

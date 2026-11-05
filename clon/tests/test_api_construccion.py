@@ -129,6 +129,24 @@ def test_fijacion_m6_respeta_agujero_y_no_modifica_placa(posicion, zmin, zmax):
     assert geo.es_valida(s.cuerpo(cid).forma)
 
 
+def test_fijacion_m6_no_taladra_el_cuerpo_de_abajo():
+    """H-65: como en Fusion, la fijación se apoya en el agujero existente y no perfora los cuerpos que atraviesa."""
+    s = api.Sesion()
+    arriba = llamar(s, "create_box", length=30, width=30, height=10)["bodies_created"][0]["id"]
+    abajo = llamar(s, "create_box", length=20, width=20, height=40, z=-40)["bodies_created"][0]["id"]
+    llamar(s, "create_hole", body=arriba, face=">Z", points=[[0, 0, 10]], diameter=6.6, through_all=True)
+    r = llamar(s, "insert_fastener", positions=["edges:%CIRCLE and >Z"], body=arriba, standard="ISO 4762", size="M6",
+               length=20, similar=False)
+    assert len(r["bodies_created"]) == 1
+    tornillo = s.cuerpo(r["bodies_created"][0]["id"]).forma
+    minimo, maximo = geo.caja_envolvente(tornillo)
+    assert minimo[2] == pytest.approx(-10, abs=1e-5)          # la punta entra 10 mm en el cuerpo de abajo
+    assert maximo[2] == pytest.approx(16, abs=1e-5)
+    assert geo.es_valida(tornillo)
+    assert geo.volumen(s.cuerpo(abajo).forma) == pytest.approx(16000)     # 20 × 20 × 40 intacto
+    assert geo.es_valida(s.cuerpo(abajo).forma)
+
+
 def test_lienzo_embebido_se_guarda_y_reabre(tmp_path):
     s = api.Sesion()
     ruta = tmp_path / "imagen.png"

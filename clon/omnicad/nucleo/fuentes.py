@@ -893,7 +893,7 @@ def _alto_letras(glifos):
 
 
 def _texto_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado, alineacion, posicion, lado,
-                     desfase, ajustar, opciones):
+                     desfase, ajustar, opciones, alinear_camino=False):
     """Lo que comparten los contornos y el cursor de un texto en curva: (glifos, ancho, xs, avances, maqueta,
     inicio, extra, colocar) con `colocar(s)` = (bx, by, cos, sen) del punto a la distancia `s` del camino."""
     import numpy as np
@@ -916,6 +916,14 @@ def _texto_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado,
     d = _fuente_datos(fuente, negrita, cursiva)
     o = _opciones(opciones)
     glifos, ancho, xs, avances, m = _glifos_linea(texto, d, altura, espaciado, o)
+    tinta_ini, tinta_fin = 0.0, ancho
+    if alinear_camino and glifos:
+        limites = [x + q[0] for x, _av, prims, _j in glifos for pr in prims
+                   for q in (pr[2:4] if pr[0] == "linea" else pr[2])]
+        tinta_ini, tinta_fin = min(limites), max(limites)
+        if o["voltear_h"]:
+            tinta_ini, tinta_fin = ancho - tinta_fin, ancho - tinta_ini
+    ancho_tinta = tinta_fin - tinta_ini
     if o["camino_colocacion"] == "abajo":          # Fusion: la misma lectura, con las letras colgando de la curva
         desfase -= _alto_letras(glifos)
     validos = tramos > 1e-12
@@ -934,11 +942,16 @@ def _texto_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado,
     h = max(largo * 1e-3, float(altura) * 0.05)
     extra = 0.0
     if ajustar:                    # la primera letra arranca en la punta, la última termina en la otra
-        inicio = 0.0
+        inicio = -tinta_ini
         if len(glifos) > 1:
-            extra = (largo - ancho) / (len(glifos) - 1)
+            extra = (largo - ancho_tinta) / (len(glifos) - 1)
         else:
-            inicio = (largo - ancho) / 2
+            inicio = (largo - ancho_tinta) / 2 - tinta_ini
+    elif alinear_camino:
+        fraccion = {"izq": 0.0, "centro": 0.5, "der": 1.0}[alineacion]
+        if lado == "der":
+            fraccion = 1.0 - fraccion
+        inicio = (largo - ancho_tinta) * fraccion - tinta_ini + (posicion - 0.5) * largo
     else:
         inicio = posicion * largo - {"izq": 0.0, "centro": ancho / 2, "der": ancho}[alineacion]
 
@@ -957,14 +970,17 @@ def _volteado(q, medio, alto, o):
 
 
 def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False, cursiva=False, *, espaciado=0.0,
-                        alineacion="centro", posicion=0.5, lado="izq", desfase=0.0, ajustar=False, **opciones):
+                        alineacion="centro", posicion=0.5, lado="izq", desfase=0.0, ajustar=False,
+                        alinear_camino=False, **opciones):
     """Texto sobre un camino (Fusion: Texto en trayectoria), con las letras rígidas y perpendiculares a la curva.
 
     camino: polilínea densa [(x, y)…] que sigue la curva (cerrada si el último punto es el primero). Las letras
     quedan del lado izquierdo del sentido de recorrido; lado "der" recorre al revés (las letras pasan al otro lado
     y se siguen leyendo derechas). camino_colocacion: "arriba" apoya la línea base en la curva; "abajo" cuelga las
     letras del otro lado, con la misma lectura (Fusion: Placement). voltear_h / voltear_v: espejo del texto antes de
-    doblarlo. posicion: fracción 0-1 del largo, medida en el sentido ORIGINAL del camino,
+    doblarlo. Con alinear_camino=True, alineacion ubica la tinta al inicio, centro o fin del camino original;
+    posicion=0.5 no la desplaza y el arrastre suma su fracción de recorrido a esa alineación.
+    Sin esa marca se conserva el cálculo anterior: posicion es la fracción 0-1 del largo, medida en el sentido ORIGINAL del camino,
     donde va el ancla del texto; alineacion: qué parte del texto cae ahí (izq, centro, der). desfase: mm entre la
     curva y la línea base (positivo = hacia el lado de las letras). ajustar: reparte el texto en todo el largo
     (ignora posición y alineación). En un camino cerrado el texto da la vuelta; en uno abierto sigue recto más
@@ -972,7 +988,7 @@ def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False
     capitalizacion (como en `contornos_texto`); el subrayado y el tachado no se aplican en curva."""
     glifos, ancho, _xs, _av, _m, inicio, extra, colocar = _texto_en_camino(
         texto, camino, fuente, altura, negrita, cursiva, espaciado, alineacion, posicion, lado, desfase, ajustar,
-        opciones)
+        opciones, alinear_camino)
     if not glifos:
         return []
     o, alto, salida = _opciones(opciones), _alto_letras(glifos), []
@@ -994,12 +1010,13 @@ def contornos_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False
 
 
 def paradas_en_camino(texto, camino, fuente="Arial", altura=5.0, negrita=False, cursiva=False, *, espaciado=0.0,
-                      alineacion="centro", posicion=0.5, lado="izq", desfase=0.0, ajustar=False, **opciones):
+                      alineacion="centro", posicion=0.5, lado="izq", desfase=0.0, ajustar=False,
+                      alinear_camino=False, **opciones):
     """Cursor de un texto en curva: n + 1 segmentos ((x, y) de abajo, (x, y) de arriba), uno por posición del
     texto (la i es el borde izquierdo del carácter i; la n, el final). Mismas opciones que `contornos_en_camino`."""
     glifos, ancho, xs, avances, m, inicio, extra, colocar = _texto_en_camino(
         texto, camino, fuente, altura, negrita, cursiva, espaciado, alineacion, posicion, lado, desfase, ajustar,
-        opciones)
+        opciones, alinear_camino)
     visibles = [g[3] for g in glifos]
     o, alto, ultimo = _opciones(opciones), _alto_letras(glifos), max(len(glifos) - 1, 0)
     n, salida = len(xs), []

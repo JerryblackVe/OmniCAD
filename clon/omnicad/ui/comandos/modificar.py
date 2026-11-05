@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 """Comandos de SÓLIDO › MODIFICAR con diálogo al estilo Fusion."""
+from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView, QTableWidget, QTableWidgetItem,
+                               QToolButton, QVBoxLayout, QWidget)
+
 from ...nucleo.analisis import TABLA_MATERIALES as MATERIALES
 from ...timeline.operaciones import OPERACIONES_COMBINAR, OpCombinar
 from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, OpBorrarCaras, OpChaflan, OpDesfaseAristas,
@@ -9,7 +12,7 @@ from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, Op
                                        OpEscala, OpMover, OpReemplazarCara, OpVaciado)
 from ...timeline.ops_solido import OpReticulaVolumetrica, OpSolidoEnvolvente
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Seleccion, Texto, exigir,
+from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Personalizado, Seleccion, Texto, exigir,
                        hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
 from .aspecto import Aspecto  # noqa: F401  (el comando vive en aspecto.py; se sigue pudiendo importar desde acá)
@@ -70,6 +73,7 @@ def _cara_y_normal(ctx, seleccion):
 
 class Empalme(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "empalme_3d", "Empalme", "empalme_3d", "F"
+    ANCHO_PANEL = "ancho"          # la tabla de conjuntos y su editor necesitan el panel ancho
     AYUDA = "Redondea aristas (quita material en las exteriores y agrega en las interiores)."
     CLASE_OP = OpEmpalme
     TITULOS_MODO = ("tipo", {"empalme": ("Empalme", "empalme_3d"), "reglas": ("Empalme de reglas", "empalme_3d"),
@@ -105,17 +109,19 @@ class Empalme(Comando):
                       visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable"),
             Expresion("cuerda", "Longitud de cuerda", "1 mm",
                       visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "cuerda"),
-            Seleccion("aristas_2", "Aristas 2", {"arista"}, minimo=0, maximo=None, visible_si=empalme, grupo="Conjunto 2",
-                      ayuda="Otro conjunto de aristas con su propio radio, en el mismo paso (el «+» de Fusion)."),
-            Opciones("tipo_radio_2", "Tipo de radio 2", {"constante": "Constante", "cuerda": "Longitud de cuerda",
-                                                         "variable": "Variable"}, grupo="Conjunto 2",
-                     visible_si=lambda v: empalme(v) and bool(v.get("aristas_2"))),
-            Expresion("radio_2", "Radio 2", "1 mm", grupo="Conjunto 2",
-                      visible_si=lambda v: empalme(v) and bool(v.get("aristas_2")) and v.get("tipo_radio_2") != "cuerda"),
-            Expresion("radio_fin_2", "Radio final 2", "2 mm", grupo="Conjunto 2",
-                      visible_si=lambda v: empalme(v) and bool(v.get("aristas_2")) and v.get("tipo_radio_2") == "variable"),
-            Expresion("cuerda_2", "Longitud de cuerda 2", "1 mm", grupo="Conjunto 2",
-                      visible_si=lambda v: empalme(v) and bool(v.get("aristas_2")) and v.get("tipo_radio_2") == "cuerda"),
+            Personalizado("conjuntos", "Otros conjuntos", self._crear_conjuntos, ancho_completo=True, visible_si=empalme,
+                          ayuda="Una fila por conjunto de aristas con su propio radio (la tabla de Fusion): «+» agrega, «−» quita la elegida."),
+            Seleccion("c_aristas", "Aristas del conjunto", {"arista"}, minimo=0, maximo=None,
+                      visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos"))),
+            Opciones("c_tipo_radio", "Tipo de radio", {"constante": "Constante", "cuerda": "Longitud de cuerda",
+                                                       "variable": "Variable"},
+                     visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos"))),
+            Expresion("c_radio", "Radio", "1 mm",
+                      visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") != "cuerda"),
+            Expresion("c_radio_fin", "Radio final", "2 mm",
+                      visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") == "variable"),
+            Expresion("c_cuerda", "Longitud de cuerda", "1 mm",
+                      visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") == "cuerda"),
             Texto("puntos_radio", "Puntos intermedios", "", avanzado=True,
                   visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable",
                   ayuda="Posición (0 a 1) y radio separados por «:», uno por punto y separados por «;», p. ej. 0.5:3 mm; 0.8:2 mm."),
@@ -165,14 +171,7 @@ class Empalme(Comando):
         if setback:
             ctx.evaluar(v["setback"])
         puntos = self._puntos_radio(v.get("puntos_radio"), ctx) if v.get("tipo_radio") == "variable" else []
-        previos = list(ctx.op.p.get("conjuntos") or []) if ctx.op else []
-        conjuntos = previos[1:]            # el primero lo edita «conjunto 2» (vaciarlo lo quita); los demás se conservan
-        if v.get("aristas_2") and v.get("tipo") == "empalme":
-            tipo2 = v.get("tipo_radio_2", "constante")
-            for clave in ("cuerda_2" if tipo2 == "cuerda" else "radio_2", *(("radio_fin_2",) if tipo2 == "variable" else ())):
-                ctx.evaluar(v[clave])
-            conjuntos.insert(0, {**(previos[0] if previos else {}), "aristas": refs(v, "aristas_2"), "tipo_radio": tipo2,
-                                 "radio": v["radio_2"], "radio_fin": v["radio_fin_2"], "cuerda": v["cuerda_2"]})
+        conjuntos = self._conjuntos_de_valores(v, ctx)
         return self.crear_op(OpEmpalme, v, ctx, tipo=v["tipo"], aristas=refs(v, "aristas"), tipo_radio=v["tipo_radio"],
                              radio=v["radio"], radio_fin=v["radio_fin"], cuerda=v["cuerda"], radio2=v["radio2"],
                              esquina="setback" if setback else "bola", setback=v["setback"],
@@ -192,10 +191,149 @@ class Empalme(Comando):
             v[k] = hits(op.p.get(k) or [], ctx.estado)
         v["central"] = _hit1(op.p["central"], ctx.estado) if op.p.get("central") else []
         v["puntos_radio"] = "; ".join(f"{q['posicion']}: {q['radio']}" for q in op.p.get("puntos_radio") or [])
-        for c in (op.p.get("conjuntos") or [])[:1]:     # el primer conjunto adicional va a los campos «2»
-            v.update(aristas_2=hits(c.get("aristas") or [], ctx.estado), tipo_radio_2=c.get("tipo_radio", "constante"),
-                     radio_2=c.get("radio", "1 mm"), radio_fin_2=c.get("radio_fin", "2 mm"), cuerda_2=c.get("cuerda", "1 mm"))
+        v["_conjuntos"] = [dict(c, aristas=hits(c.get("aristas") or [], ctx.estado))
+                            for c in op.p.get("conjuntos") or []]
+        v["_conj_sel"] = 0
         return v
+
+    # ------------------------------------------------ tabla de conjuntos (la tabla de grupos de Fusion)
+
+    @staticmethod
+    def _fila_nueva():
+        return {"aristas": [], "tipo_radio": "constante", "radio": "1 mm", "radio_fin": "2 mm", "cuerda": "1 mm"}
+
+    @staticmethod
+    def _sel_fila(v):
+        filas = v.get("_conjuntos") or []
+        return -1 if not filas else min(max(int(v.get("_conj_sel", 0)), 0), len(filas) - 1)
+
+    def _crear_conjuntos(self, panel):
+        w = QWidget()
+        col = QVBoxLayout(w)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(2)
+        w.tabla = QTableWidget(0, 2, objectName="tabla_conjuntos", showGrid=False,
+                               selectionBehavior=QAbstractItemView.SelectRows,
+                               selectionMode=QAbstractItemView.SingleSelection,
+                               editTriggers=QAbstractItemView.NoEditTriggers)
+        w.tabla.setMaximumHeight(92)
+        w.tabla.horizontalHeader().hide()
+        w.tabla.verticalHeader().hide()
+        w.tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        w.tabla.itemSelectionChanged.connect(lambda: self._ir_a(panel, w.tabla.currentRow()))
+        col.addWidget(w.tabla)
+        pie = QHBoxLayout()
+        pie.setSpacing(2)
+        w.agregar = QToolButton(text="+", toolTip="Agregar un conjunto", objectName="agregar_conjunto")
+        w.agregar.clicked.connect(lambda: self._agregar_conjunto(panel))
+        w.quitar = QToolButton(text="−", toolTip="Quitar el conjunto elegido", objectName="quitar_conjunto")
+        w.quitar.clicked.connect(lambda: self._quitar_conjunto(panel))
+        for b in (w.agregar, w.quitar):
+            pie.addWidget(b)
+        pie.addStretch(1)
+        col.addLayout(pie)
+        return w
+
+    def preparar_panel(self, panel):
+        if "_conjuntos" not in panel.valores:
+            panel.valores["_conjuntos"], panel.valores["_conj_sel"] = [], 0
+        self._refrescar_conjuntos(panel)
+        if panel.valores["_conjuntos"]:
+            self._cargar_fila(panel)
+
+    def al_cambiar(self, panel, clave):
+        if clave in ("c_aristas", "c_tipo_radio", "c_radio", "c_radio_fin", "c_cuerda"):
+            self._guardar_fila(panel.valores)    # la fila elegida se ve mientras se teclea
+            self._refrescar_conjuntos(panel)
+
+    def _cargar_fila(self, panel):
+        """Muestra en el editor el conjunto elegido (lo que la fila no guarda queda por defecto)."""
+        v = panel.valores
+        i = self._sel_fila(v)
+        fila = v["_conjuntos"][i] if i >= 0 else self._fila_nueva()
+        panel.set_valores({"c_aristas": list(fila.get("aristas") or []),
+                           "c_tipo_radio": fila.get("tipo_radio", "constante"), "c_radio": fila.get("radio", "1 mm"),
+                           "c_radio_fin": fila.get("radio_fin", "2 mm"), "c_cuerda": fila.get("cuerda", "1 mm")})
+        v["_conj_editor"] = True
+
+    def _guardar_fila(self, v):
+        """Lo que muestra el editor va a la fila elegida, sin exigir nada (se puede saltar a otra a medio escribir)."""
+        i = self._sel_fila(v)
+        if i < 0:
+            return
+        (v.get("_conjuntos") or [])[i].update(
+            aristas=list(v.get("c_aristas") or []), tipo_radio=v.get("c_tipo_radio", "constante"),
+            radio=v.get("c_radio", "1 mm"), radio_fin=v.get("c_radio_fin", "2 mm"), cuerda=v.get("c_cuerda", "1 mm"))
+
+    def _refrescar_conjuntos(self, panel):
+        """La tabla: una fila por conjunto, con cuántas aristas tiene y su radio."""
+        w = panel.widgets.get("conjuntos")
+        if w is None:
+            return
+        v = panel.valores
+        filas = v.get("_conjuntos") or []
+        sel = self._sel_fila(v)
+        w.tabla.blockSignals(True)
+        w.tabla.setRowCount(len(filas))
+        for i, f in enumerate(filas):
+            n = len(f.get("aristas") or [])
+            tipo = f.get("tipo_radio", "constante")
+            medida = str(f.get("cuerda", "1 mm") if tipo == "cuerda" else f.get("radio", "1 mm"))
+            w.tabla.setItem(i, 0, QTableWidgetItem(f"{n} aristas" if n else "Elegir aristas"))
+            w.tabla.setItem(i, 1, QTableWidgetItem(medida))
+        if sel >= 0:
+            w.tabla.selectRow(sel)
+        w.tabla.blockSignals(False)
+
+    def _ir_a(self, panel, i):
+        v = panel.valores
+        if not 0 <= i < len(v.get("_conjuntos") or []) or i == self._sel_fila(v):
+            return
+        self._guardar_fila(v)
+        v["_conj_sel"] = i
+        self._cargar_fila(panel)
+        self._refrescar_conjuntos(panel)
+
+    def _agregar_conjunto(self, panel):
+        v = panel.valores
+        self._guardar_fila(v)
+        v.setdefault("_conjuntos", []).append(self._fila_nueva())
+        v["_conj_sel"] = len(v["_conjuntos"]) - 1
+        self._cargar_fila(panel)
+        self._refrescar_conjuntos(panel)
+        panel._cambiar("_conjuntos", v["_conjuntos"])
+        panel._activar(next(c for c in panel.campos if c.clave == "c_aristas"))   # como Fusion: espera aristas
+
+    def _quitar_conjunto(self, panel):
+        v = panel.valores
+        filas = v.get("_conjuntos") or []
+        if not filas:
+            return
+        del filas[self._sel_fila(v)]
+        v["_conj_sel"] = min(self._sel_fila(v), len(filas) - 1)
+        self._cargar_fila(panel)
+        self._refrescar_conjuntos(panel)
+        panel._cambiar("_conjuntos", filas)
+
+    def _conjuntos_de_valores(self, v, ctx):
+        """Las filas de la tabla → OpEmpalme.conjuntos: sin aristas no hay conjunto; el radio de cada fila se valida acá."""
+        filas = list(v.get("_conjuntos") or [])
+        # El editor manda sobre la fila elegida solo si se cargó (_conj_editor: la pone _cargar_fila); así un construir
+        # sin panel no pisa el paso, y los tipos que el combo no muestra, como asimétrico, sobreviven a la ida y vuelta.
+        if (filas and v.get("tipo") == "empalme" and v.get("_conj_editor")
+                and v.get("c_aristas") is not None):
+            filas[self._sel_fila(v)] = dict(filas[self._sel_fila(v)],
+                aristas=list(v.get("c_aristas") or []), tipo_radio=v.get("c_tipo_radio", "constante"),
+                radio=v.get("c_radio", "1 mm"), radio_fin=v.get("c_radio_fin", "2 mm"), cuerda=v.get("c_cuerda", "1 mm"))
+        conjuntos = []
+        for f in filas:
+            if not f.get("aristas"):
+                continue                          # vaciar la selección de una fila la quita
+            tipo = f.get("tipo_radio", "constante")
+            for clave in ("cuerda" if tipo == "cuerda" else "radio", *(("radio_fin",) if tipo == "variable" else ())):
+                ctx.evaluar(f.get(clave, "1 mm"))
+            conjuntos.append({**f, "aristas": [h["ref"] for h in f["aristas"]]})
+        return conjuntos
 
 
 class Chaflan(Comando):

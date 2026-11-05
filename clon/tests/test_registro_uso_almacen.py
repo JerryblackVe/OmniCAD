@@ -29,7 +29,7 @@ def sesion_sintetica(tmp_path):
                               "despues": {"cuerpos": 1, "volumen": 6000}})
     r.emitir("error", {"origen": "api", "comando": "empalme", "excepcion": "ValueError",
                        "mensaje": "SECRETO C:/privado"})
-    r.emitir("marca", {"label": "prueba_ia", "nota": "SECRETO"})
+    r.emitir("marca", {"label": "prueba_ia", "nota": "el empalme borra la cara"})
     r.cerrar()
     return r.id
 
@@ -70,6 +70,8 @@ def test_herramientas_lectura_resumen_marca_e_informe(tmp_path):
     assert "Informe de sesión" in texto and "Línea de tiempo" in texto and "| B-? |" in texto
     assert "SECRETO" not in texto and "C:/privado" not in texto
     assert "prueba_ia" in texto
+    marca = almacen.eventos(sesion, tipos=["marca"])[-1]["datos"]
+    assert marca["nota"] == "el empalme borra la cara"        # la nota de «Marcar problema» se lee entera
 
 
 def test_marca_local_y_hooks_en_vivo():

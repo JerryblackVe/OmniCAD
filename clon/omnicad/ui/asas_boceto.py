@@ -204,6 +204,10 @@ def polilineas_de(l, ids):
     """Polilíneas (mm) de las curvas y puntos elegidos."""
     polis = []
     for i in ids:
+        if i in l.b.objetos:
+            from ..restricciones import objetos
+            polis.extend(p for cid in objetos.curvas(l.b, [i]) for p in l._polilineas(l.b.curvas[cid]))
+            continue
         c = l.b.curvas.get(i)
         if c is not None:
             polis += [list(p) for p in l._polilineas(c)]

@@ -707,18 +707,21 @@ def test_un_texto_se_agarra_desde_cualquier_parte_de_su_caja(app_qt):
     assert lz._curva_cercana(hueco) == tid
     assert lz._curva_cercana(lz.a_px(max(xs) + 50, centro[1])) is None      # lejos de la caja: nada
     lz._actualizar_sobre(hueco)
-    assert lz._sobre == tid
+    from omnicad.restricciones import objetos
+    oid = objetos.indice(b)[tid][0]
+    assert lz._sobre == oid
     lz._actualizar_sobre(lz.a_px(max(xs) + 50, centro[1]))
     assert lz._sobre is None
     # arrastrarlo desde ese lugar lo mueve (texto suelto)
-    x0, y0 = b.coords(b.curvas[tid].punto)
+    x0, y0, _x1, _y1 = objetos.caja(b, [oid])
+    lz.objetos.snap = False
     lz._presionar_seleccion(hueco, Qt.NoModifier)
-    assert lz._arrastre == ("curva", tid, "mover")
+    assert lz.objetos.arrastre["tipo"] == "mover"
     destino = lz.a_px(centro[0] + 15, centro[1] + 10)
     lz.mouseMoveEvent(QMouseEvent(QEvent.Type.MouseMove, QPointF(destino), QPointF(destino), Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
     lz.mouseReleaseEvent(QMouseEvent(QEvent.Type.MouseButtonRelease, QPointF(destino), QPointF(destino), Qt.LeftButton, Qt.NoButton,
                                      Qt.NoModifier))
-    x1, y1 = b.coords(b.curvas[tid].punto)
+    x1, y1, _x2, _y2 = objetos.caja(b, [oid])
     assert (x1 - x0, y1 - y0) == pytest.approx((15.0, 10.0), abs=0.5)
 
 

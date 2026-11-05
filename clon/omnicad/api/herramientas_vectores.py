@@ -126,12 +126,17 @@ def _opciones_camino(path_entity, path_side, path_position, path_offset, fit_pat
     op = {}
     if path_entity is not None:
         op["camino"] = None if int(path_entity) == 0 else int(path_entity)
+        if path_entity:
+            op["camino_alineado"] = path_position is None
+            if path_position is None:
+                op["camino_pos"] = 0.5
     if path_side is not None:
         op["camino_lado"] = "izq" if path_side == "left" else "der"
     if path_placement is not None:
         op["camino_colocacion"] = "arriba" if path_placement == "above" else "abajo"
     if path_position is not None:
         op["camino_pos"] = float(path_position)
+        op["camino_alineado"] = False
     if path_offset is not None:
         op["camino_desfase"] = float(path_offset)
     if fit_path is not None:
@@ -253,7 +258,7 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
              anchor: Literal["baseline", "top", "middle", "bottom"] = "baseline", box_width: float = 0.0,
              flip_h: bool = False, flip_v: bool = False, path_entity: int | None = None,
              path_side: Literal["left", "right"] = "left", path_placement: Literal["above", "below"] = "above",
-             path_position: float = 0.5, path_offset: float = 0.0,
+             path_position: float | None = None, path_offset: float = 0.0,
              fit_path: bool = False, kerning: bool = True, skew: float = 0.0, scale_x: float = 100.0,
              scale_y: float = 100.0, baseline_shift: float = 0.0,
              case: Literal["none", "upper", "lower", "title", "small_caps"] = "none",
@@ -274,7 +279,7 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
     letter_spacing: mm extra entre letras (negativo junta).
     character_spacing: lo mismo en %, como Character Spacing de Fusion: % del ancho medio de la fuente (en lugar de letter_spacing).
     line_spacing: factor del salto de línea de la fuente (1 = el de la fuente).
-    align: alineación de cada línea dentro de la caja (left, center o right); en curva, qué parte del texto cae en path_position. Vacío = left (recto) o center (en curva).
+    align: left, center o right; en curva, inicio, centro o fin del camino. Vacío = left (recto) o center (curva).
     anchor: qué parte del bloque cae sobre (x, y): baseline (línea base de la primera), top, middle o bottom.
     box_width: ancho de la caja en mm; 0 = sin caja (el bloque mide lo que mide su línea más larga).
     flip_h: espejo horizontal del texto dentro de su bloque.
@@ -282,7 +287,7 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
     path_entity: id de la curva (get_sketch) que sigue el texto; vacío = texto recto.
     path_side: left = letras a la izquierda del sentido de la curva; right = la recorre al revés (letras del otro lado, se siguen leyendo derechas).
     path_placement: above = la línea base apoya en la curva; below = las letras cuelgan del otro lado, con la misma lectura (Placement de Fusion).
-    path_position: fracción 0-1 del largo de la curva (en su sentido propio) donde cae el texto; un círculo empieza a la derecha y gira antihorario (0.25 = arriba).
+    path_position: ancla manual 0-1 en la curva (círculo: 0.25 = arriba). Omitir = alineado al camino (path_aligned en get_sketch).
     path_offset: mm entre la curva y la línea base (positivo = hacia el lado de las letras).
     fit_path: true reparte el texto en todo el largo de la curva.
     kerning: false ignora los pares de letras (kerning) de la fuente.
@@ -380,7 +385,7 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
     path_entity: id de la curva que sigue el texto; 0 = quitar la curva (texto recto otra vez).
     path_side: left o right (lado de la curva).
     path_placement: above (apoyado en la curva) o below (colgando de ella, con la misma lectura).
-    path_position: fracción 0-1 del largo de la curva.
+    path_position: ancla manual 0-1 en la curva; omitir conserva la actual.
     path_offset: mm entre la curva y la línea base.
     fit_path: repartir el texto en todo el largo.
     kerning: false ignora los pares de letras de la fuente.
@@ -414,6 +419,9 @@ def edit_text(sesion, entity: int, text: str | None = None, x: float | None = No
             (t.cursiva if italic is None else italic)
         _verificar_fuente(_f, _b, _i)
         _avisos_texto(sesion, nuevo_texto, _f, _b, _i)
+        if path_position is None and op.get("camino") is not None and op["camino"] == t.camino:
+            op.pop("camino_alineado", None)             # misma curva y sin posición nueva: conserva el ancla del texto
+            op.pop("camino_pos", None)
         _validar_opciones_texto(op)
         if character_spacing is not None:
             op["espaciado"] = _mm_de_caracter(character_spacing, letter_spacing, _f, t.altura if altura is None else altura, _b, _i)
@@ -487,6 +495,7 @@ def explode_text(sesion, entity: int, sketch: str | None = None):
 def _insertar(sesion, prims, plane, sketch, name, body, **transformacion):
     """Agrega las primitivas a un boceto nuevo sobre `plane` o al boceto `sketch` (por defecto, el último)."""
     doc = sesion.doc
+    objetos_antes = set()
     try:
         if plane is not None and str(plane).strip():
             b = boceto_desde_primitivas(prims, **transformacion)
@@ -498,6 +507,7 @@ def _insertar(sesion, prims, plane, sketch, name, body, **transformacion):
         else:
             op0 = op_boceto(sesion, sketch)
             nueva = op0.copia()
+            objetos_antes = set(nueva.boceto.objetos)
             antes = len(nueva.boceto.curvas)
             boceto_desde_primitivas(prims, destino=nueva.boceto, **transformacion)
             nuevas = len(nueva.boceto.curvas) - antes
@@ -509,7 +519,8 @@ def _insertar(sesion, prims, plane, sketch, name, body, **transformacion):
     estado, gdl = estado_solver(br)
     caja = caja_primitivas(prims)
     return {"sketch": _paso(op), "entities_added": nuevas, "profiles": None if br is None else len(br.perfiles),
-            "dof": gdl, "status": estado,
+            "dof": gdl, "status": estado, "object_ids": [i for i in op.boceto.objetos if i not in objetos_antes
+                                                           and not any(i in o["entidades"] for o in op.boceto.objetos.values())],
             "source_size_mm": None if caja is None else [round(caja[1][0] - caja[0][0], 4),
                                                          round(caja[1][1] - caja[0][1], 4)]}
 

@@ -27,6 +27,8 @@ AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parents[1]
 SALIDA = Path(os.environ.get("OMNICAD_PRUEBA_SALIDA") or RAIZ / "evidencias" / f"ui_{date.today().isoformat()}")
 PIEZAS = ["cinta_completa", "superficie", "superficie_fusion", "superficie_guias", "solido_crear", "solido_modificar", "asas", "teclear", "herramientas_solido", "ventana_uso", "ensamblar", "ensamblar_asm", "posicion_asm", "boceto_cotas", "asistente", "iconos", "boton_asistente", "abrir_f3d", "booleana_unir", "origen_cara", "auditoria_boceto", "simetria_boceto", "auditoria_undo", "seccion_color", "perdidas_atenuar", "registro_uso", "inferencias", "desfase_boceto", "patrones_boceto", "restricciones_boceto", "patrones_solidos", "paneles_inventario", "dialogos_inventario", "paneles_temas", "patrones_ensamble_rosca", "boceto_herramientas", "proyectar_boceto", "panel_movible", "paneles_boceto", "timeline_menu", "subensamblaje", "pasos_largos", "construir", "mapa_desviacion", "texto_curva", "inspeccionar", "parametros", "previa_aparte"]
+PIEZAS.append("objetos_vectoriales")
+PIEZAS.append("manipulacion_vectorial")
 # Piezas que necesitan el foco REAL de Windows (no solo el activo de Qt). Vacía hasta que la A/B demuestre alguna.
 PIEZAS_CON_FOCO_REAL = {"registro_uso"}      # el indicador y la sesión real no arrancan con la ventana transparente
 

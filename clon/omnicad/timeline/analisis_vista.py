@@ -152,7 +152,8 @@ def calcular(tipo, params, estado, propiedades=None):
         return salida
     if tipo == "mapa_entorno":
         entorno, rotacion, reflejo = params.get("entorno"), float(params.get("rotacion", 0.0)), params.get("reflejo", True)
-        salida["colores"] = lambda n, d: an.colores_mapa_entorno(n, d, entorno=entorno, rotacion=rotacion, reflejo=reflejo)
+        salida["colores"] = lambda n, d, puntos=None, ojo=None: an.colores_mapa_entorno(
+            n, d, entorno=entorno, rotacion=rotacion, reflejo=reflejo, puntos=puntos, ojo=ojo)
         if params.get("cuerpos"):
             salida["solo"] = [c for c in params["cuerpos"] if c in estado.cuerpos]
         return salida
@@ -165,7 +166,7 @@ def calcular(tipo, params, estado, propiedades=None):
     if tipo == "cebra":
         frecuencia, vertical = int(params.get("frecuencia", 8)), params.get("orientacion") == "vertical"
         opacidad, fija = int(params.get("opacidad", 100)), params.get("vista_fija")      # «Bloquear rayas»: no sigue a la cámara
-        salida["colores"] = lambda n, d: an.colores_cebra(n, d if fija is None else fija, frecuencia=frecuencia,
+        salida["colores"] = lambda n, d, **_: an.colores_cebra(n, d if fija is None else fija, frecuencia=frecuencia,
                                                           vertical=vertical, opacidad=opacidad)
         if params.get("cuerpos"):
             salida["solo"] = list(cuerpos)

@@ -198,6 +198,15 @@ class OpCombinarGruposCaras(_OpMallaSimple):
         return _ml().combinar_grupos(m, self.p["grupos"])
 
 
+class OpCrearGrupoCaras(_OpMallaSimple):
+    """PREPARAR › Crear grupo de caras [MESH-CREATE-FACE-GROUP]."""
+    TIPO, ETIQUETA, ICONO = "crear_grupo_caras", "Crear grupo de caras", "◩"
+    PARAMS = {"cuerpos": [], "caras": [], "grupos": []}
+
+    def transformar(self, m, ctx):
+        return _ml().crear_grupo(m, self.p["caras"], self.p["grupos"])
+
+
 class OpReducirMalla(_OpMallaSimple):
     """MODIFICAR › Reducir [MESH-REDUCE]."""
     TIPO, ETIQUETA, ICONO = "reducir_malla", "Reducir", "▽"
@@ -299,6 +308,18 @@ class OpInvertirNormalMalla(_OpMallaSimple):
         return _ml().invertir_normales(m)
 
 
+class OpBorrarRellenarMalla(_OpMallaSimple):
+    """MODIFICAR › Borrar y rellenar [MESH-ERASE-FILL]."""
+    TIPO, ETIQUETA, ICONO = "borrar_rellenar_malla", "Borrar y rellenar", "✄"
+    PARAMS = {"cuerpos": [], "caras": [], "tipo": "uniforme", "densidad": "1"}
+    EXPRESIONES = ("densidad",)
+    OPCIONES = {"tipo": ("uniforme", "minimo")}
+
+    def transformar(self, m, ctx):
+        return _ml().borrar_y_rellenar(m, self.p["caras"], tipo=self.p["tipo"],
+                                      densidad=ctx.evaluar(self.p["densidad"], "escalar"))
+
+
 class OpSepararMalla(_OpMalla):
     """MODIFICAR › Separar [MESH-SEPARATE]: cada cáscara (o grupo de caras) pasa a ser un cuerpo."""
     TIPO, ETIQUETA, ICONO = "separar_malla", "Separar", "⊞"
@@ -342,6 +363,6 @@ class OpConvertirMalla(_OpMalla):
 
 
 registrar_operacion(OpInsertarMalla, OpTeselar, OpRepararMalla, OpLimpiarMalla, OpGruposCaras, OpCombinarGruposCaras,
-                    OpReducirMalla,
-                    OpRemallar, OpCortarPlanoMalla, OpVaciadoMalla, OpCombinarMallas, OpSuavizarMalla,
-                    OpInvertirNormalMalla, OpSepararMalla, OpEscalarMalla, OpConvertirMalla)
+                    OpCrearGrupoCaras, OpReducirMalla, OpRemallar, OpCortarPlanoMalla, OpVaciadoMalla,
+                    OpCombinarMallas, OpSuavizarMalla, OpInvertirNormalMalla, OpBorrarRellenarMalla, OpSepararMalla,
+                    OpEscalarMalla, OpConvertirMalla)

@@ -7,6 +7,7 @@ import pytest
 
 from omnicad import api
 from omnicad.api import herramientas_dibujo_notas as notas
+from omnicad.nucleo import dibujo as nd
 
 
 def _ok(sesion, nombre, args=None):
@@ -66,12 +67,12 @@ def test_geometria_limite_y_sin_enganche(plano):
     geometria = _ok(sesion, "get_drawing_geometry", {"view": base["id"]})
     assert len(geometria["points"]) == 8
     assert len(geometria["segments"]) == 4
-    assert geometria["circles"] == []
+    assert geometria["circles"] == [] and geometria["arcs"] == []
     assert all(list(p) in geometria["points"] for p in _esquinas(base))
     limitado = _ok(sesion, "get_drawing_geometry", {"view": base["id"], "limit": 1})
     assert len(limitado["points"]) == len(limitado["segments"]) == 1
     assert _ok(sesion, "get_drawing_geometry", {"view": base["id"], "limit": 0}) == {
-        "points": [], "segments": [], "circles": []}
+        "points": [], "segments": [], "circles": [], "arcs": []}
     a, b, _, _ = _esquinas(base)
     b[0] -= 1
     cota = _ok(sesion, "add_drawing_dimension", {"view": base["id"], "type": "horizontal",
@@ -106,6 +107,49 @@ def test_cota_angular(plano, explicitos):
     cota = _ok(sesion, "add_drawing_dimension", {"view": base["id"], "type": "angle", "points": puntos,
                                                 "place": [b[0] - 5, b[1] + 5]})
     assert cota["value"] == 90 and cota["text"] == "90°"
+
+
+def test_cota_linea_base(plano):
+    sesion, base, _ = plano
+    a, b, _, _ = _esquinas(base)
+    x0, y0 = a
+    puntos = [[x0 + 0.2, y0], [x0 + 40, y0], [b[0] - 0.1, y0]]   # vértice, punto medio y vértice (enganche)
+    creadas = _ok(sesion, "add_drawing_dimension", {"view": base["id"], "type": "baseline", "points": puntos,
+                                                   "place": [x0 + 10, y0 - 12]})
+    assert [c["value"] for c in creadas["created"]] == pytest.approx([20.0, 40.0])
+    assert all(c["subtype"] == "horizontal" for c in creadas["created"])
+    lugares = [c["place"][1] for c in creadas["created"]]
+    assert (lugares[0] - lugares[1]) * base["scale"] == pytest.approx(nd.SEPARACION_BASE)   # apiladas en la hoja
+    fallo = api.llamar(sesion, "add_drawing_dimension", {"view": base["id"], "type": "baseline",
+                                                        "points": [puntos[0]], "place": [0, 0]})
+    assert not fallo["ok"] and fallo["error_kind"] == "INVALID_ARGUMENTS"   # una sola línea base no da dirección
+
+
+def test_cota_longitud_de_arco_por_la_api():
+    sesion = api.Sesion()
+    _ok(sesion, "create_box", {"length": 40, "width": 30, "height": 10, "name": "Con arco"})
+    _ok(sesion, "fillet", {"edges": "|Z", "radius": 10})
+    _ok(sesion, "create_drawing", {"bodies": ["Con arco"]})
+    sup = _ok(sesion, "add_drawing_view", {"type": "base", "bodies": ["Con arco"], "orientation": "top"})
+    d = notas.cargar_dibujo(sesion)
+    v = d.vista(sup["id"])
+    c, r, t1, t2 = max(v.arcos, key=lambda a: a[3] - a[1])       # un arco de empalme de 90°
+    am = (t1 + t2) / 2
+    medio = v.a_hoja([c[0] + r * math.cos(am), c[1] + r * math.sin(am)]).tolist()
+    arcos = _ok(sesion, "get_drawing_geometry", {"view": sup["id"]})["arcs"]     # CF-3: los arcos salen con sus ángulos
+    assert len(arcos) == len(v.arcos) >= 4
+    assert all((a["end_angle"] - a["start_angle"]) % 360 == pytest.approx(90.0, abs=1e-3) for a in arcos)
+    assert all(a["radius"] == pytest.approx(r * v.escala, abs=1e-3) for a in arcos)
+    c_h = v.a_hoja(c)
+    lugar = [c_h[0] + (r * v.escala + 8.0) * math.cos(am), c_h[1] + (r * v.escala + 8.0) * math.sin(am)]
+    cota = _ok(sesion, "add_drawing_dimension", {"view": sup["id"], "type": "arc_length", "points": [medio],
+                                                "place": lugar, "snap": False})
+    assert cota["subtype"] == "longitud_arco"
+    assert cota["value"] == pytest.approx(10 * math.pi / 2, abs=1e-4)   # r·θ = 15,71 mm
+    assert cota["text"] == "15.71"
+    fallo = api.llamar(sesion, "add_drawing_dimension", {"view": sup["id"], "type": "arc_length",
+                                                        "points": [list(sup["position"])], "place": [0, 0]})
+    assert not fallo["ok"] and fallo["error_kind"] == "INVALID_ARGUMENTS"   # el clic no cae sobre un arco
 
 
 def test_texto_propio_edicion_y_deshacer(plano):

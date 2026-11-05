@@ -71,6 +71,14 @@ def eventos(sesion=None, desde=0, tipos=None, limite=None):
     return salida[-limite:] if limite else salida
 
 
+def pausado_por_disco():
+    """True si el volumen del registro tiene menos espacio libre que el mínimo elegido."""
+    from . import valores
+    from .sistema import disco_libre
+    libre = disco_libre(carpeta())
+    return libre is not None and libre < valores()["disco_libre_min_gb"] * 10**9
+
+
 def activa(sesion=None):
     """Verdadero si la sesión se escribió hace menos de 10 s (la app la tiene abierta)."""
     sesion = sesion or ultima_sesion()

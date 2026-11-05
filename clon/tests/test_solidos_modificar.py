@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
+import json
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -135,6 +137,52 @@ def test_chaflan_demasiado_grande_abre_el_solido():
     assert g.es_valida(r)
     assert g.volumen(r) == pytest.approx(9307.49, rel=1e-4)      # π·100·30 menos el anillo del chaflán
 
+
+@pytest.mark.parametrize("archivo,cambios", [
+    ("b157_empalme.json", {}),
+    ("b157_chaflan_volumen.json", {}),
+    pytest.param("b157_chaflan_volumen.json", {"edges": ["Cuerpo1/E1"], "distance": 16},
+                 id="chaflan_autointersecado_con_volumen_positivo"),
+])
+def test_b157_un_recorte_que_cruza_la_pared_falla_sin_romper_el_documento(archivo, cambios):
+    from omnicad.nucleo import revision
+    caso = json.loads((Path(__file__).parent / "corpus_caza" / archivo).read_text(encoding="utf-8"))
+    s = api.Sesion()
+    for paso in caso["pasos"][:-1]:
+        r = api.llamar(s, paso["tool"], paso["args"])
+        assert r["ok"], r
+    receta = s.doc.a_dict()
+    volumen = 80 * 60 * 40 - 76 * 56 * 38
+    assert g.volumen(s.cuerpo("Cuerpo1").forma) == pytest.approx(volumen)
+    paso = caso["pasos"][-1]
+    args = dict(paso["args"], **cambios)
+    r = api.llamar(s, paso["tool"], args)
+    assert not r["ok"], r
+    assert r["error_kind"] == "OPERATION_FAILED"
+    assert "grosor de la pared" in r["mensaje"].lower()
+    assert s.doc.a_dict() == receta
+    forma = s.cuerpo("Cuerpo1").forma
+    assert g.es_valida(forma)
+    assert g.volumen(forma) == pytest.approx(volumen)
+    assert revision._autointersecciones_seguras(forma, 1, 5.0)[0] == 0
+    # Tras el rechazo, la misma arista admite un recorte que sí entra en la pared.
+    medida = "radius" if paso["tool"] == "fillet" else "distance"
+    r = api.llamar(s, paso["tool"], dict(args, **{medida: 0.5}))
+    assert r["ok"], r
+    forma = s.cuerpo("Cuerpo1").forma
+    assert g.es_valida(forma) and 0 < g.volumen(forma) < volumen
+    assert revision._autointersecciones_seguras(forma, 1, 5.0)[0] == 0
+
+
+
+def test_b157_un_cuerpo_que_ya_venia_cruzado_admite_empalme_y_chaflan():
+    """Dos cajas superpuestas (compuesto, 26 autointersecciones de entrada): una arista lejana se empalma sin error."""
+    from omnicad.nucleo import revision
+    b = g.compuesto([g.caja(10, 10, 10), g.caja(10, 10, 10, origen=(5, 5, 0))])
+    assert revision._autointersecciones_seguras(b, 1, 5.0)[0] > 0
+    e = arista_en(b, (5, 0, 10))
+    assert g.es_valida(sm.empalme(b, [{"aristas": [e], "tipo": "constante", "radio": 1}]))
+    assert g.es_valida(sm.chaflan(b, [{"aristas": [e], "tipo": "distancia_igual", "distancia": 1}]))
 
 # ---------------------------------------------------------------- vaciado
 def test_vaciado_interior_exterior_ambos():

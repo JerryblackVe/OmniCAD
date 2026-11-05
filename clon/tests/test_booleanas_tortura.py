@@ -122,11 +122,32 @@ def test_b125_esfera_centrada_en_la_cara_de_una_pared(radio, centro, comun):
 
 
 def test_b125_esfera_casi_tangente_no_se_queda_sin_cortar():
-    """Quitaba 0 de 122,5 mm³. Hoy quita 103,8: el resto sigue abierto en docs/seguimiento (B-144)."""
+    """Quitaba 0 de 122,5 mm³; después quitaba 103,8 sin que el chequeo lo viera (B-144). Hoy quita el común entero."""
     hueca = _hueca()
     v = geo.volumen_exacto(hueca)
     corte = geo.booleano(hueca, geo.esfera(4.0, (18.537165, 20.0001, 10.0001)), "cortar")
     assert v - geo.volumen_exacto(corte) > 100
+    assert geo.es_valida(corte)
+
+
+def test_b144_corte_casi_tangente_no_quita_de_menos():
+    """B-144: con la esfera casi tangente a la pared, el corte quitaba 103,8 de los 122,5 mm³ que comparten y el
+    chequeo no lo veía: el común reclamado era intermedio (ni borde del rango), así que las muestras del borde
+    no corrían. Hoy el chequeo lo desmiente y el reintento con tolerancia difusa corrige."""
+    hueca = _hueca()
+    v = geo.volumen_exacto(hueca)
+    corte = geo.booleano(hueca, geo.esfera(4.0, (18.537165, 20.0001, 10.0001)), "cortar")
+    assert v - geo.volumen_exacto(corte) == pytest.approx(122.5, abs=0.2)
+    assert geo.es_valida(corte)
+
+
+def test_b144_el_muestreo_fino_no_desmiente_con_una_herramienta_rala():
+    """B-144: con una herramienta rala (un anillo) los puntos de muestra no llenan las 500 muestras: el margen
+    quedaría mal calculado y el chequeo podría desmentir un corte bueno. Si no alcanzan, no se desmiente."""
+    objetivo = geo.caja(60, 40, 20, (-30, -20, 0))
+    anillo = geo.booleano(geo.cilindro(10, 10, (25, 0, 5)), geo.cilindro(9.8, 10, (25, 0, 5)), "cortar")
+    assert geo._parte_afuera(anillo, objetivo, 500, al_menos=500) is None
+    corte = geo.booleano(objetivo, anillo, "cortar")
     assert geo.es_valida(corte)
 
 

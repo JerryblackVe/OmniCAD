@@ -9,15 +9,19 @@ según el tipo de paso, como Fusion: boceto (Editar boceto), operación (Editar 
 perfil»), unión (Editar unión, Animar unión); todos con Renombrar, Suprimir, Configurar, Mover, «Rodar marcador aquí»,
 «Retroceder antes de este paso», «Buscar en navegador», «Buscar en la ventana», «Crear conjunto de selección» y Eliminar.
 Con Ctrl se eligen varios pasos: Suprimir (Fusion: «Suprimir operaciones»), Buscar en la ventana y Crear conjunto actúan sobre todos.
+Varios elegidos + clic derecho → «Agrupar N pasos» (Fusion: Create Group): forman una carpeta que va delante de sus pasos; su menú
+la contrae o la expande (+/− de Fusion), la suprime entera y la desagrupa (Edit Group › Expand), y doble clic la renombra. La
+carpeta no es un paso: sólo ordena la vista. Ctrl+C y Ctrl+V copian y pegan el paso elegido (SC9).
 El engranaje de la derecha («Opciones» de Fusion) tiene «Muestra de color por componente»: pinta el fondo de cada
 paso con el color de su componente. «Ocultar pasos inactivos» y «Cambiar a modelado directo» no están: OmniCAD no
 tiene componente activo ni modo sin historial.
 """
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QPen
-from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QLabel, QListView, QListWidget, QListWidgetItem, QMenu,
-                               QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolButton, QWidget)
-
+from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QInputDialog, QLabel, QListView, QListWidget,
+                               QListWidgetItem, QMenu, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolButton,
+                               QWidget)
+
 from ..timeline import aspectos_doc
 from ..timeline.operaciones import OPERACIONES_CUERPO
 from . import temas
@@ -26,6 +30,7 @@ from .insignias import icono_con_insignia, insignia_de
 
 COLORES = {"aviso": QColor(255, 214, 102), "error": QColor(255, 140, 140)}
 MARCADOR = "__marcador__"
+GRUPO = "grupo:"              # prefijo de la fila de una carpeta del timeline (Fusion: Timeline Group)
 ROL_ORIGEN = Qt.UserRole + 1     # «creo» | «modifico»: el paso es de donde viene lo elegido en la vista (amarillo)
 PALETA_COMPONENTES = [QColor(*c) for c in aspectos_doc.PALETA_COMPONENTES]
 # Pasos que ningún comando de la cinta crea: su ícono. Todos los demás usan el del comando que los crea (`comando_para`).
@@ -67,10 +72,10 @@ def destino_arrastre(claves, origen, fila_destino):
     """
     Dónde queda lo arrastrado. `claves`: filas actuales (ids de pasos y MARCADOR); `origen`: la
     clave arrastrada; `fila_destino`: fila ANTES de la cual se soltó (len(claves) = al final).
-    Devuelve el índice nuevo entre los pasos (sin contar el marcador ni lo arrastrado), que es
+    Devuelve el índice nuevo entre los pasos (sin contar el marcador, las carpetas ni lo arrastrado), que es
     lo que esperan Documento.mover y Documento.mover_marcador.
     """
-    return sum(1 for c in claves[:fila_destino] if c not in (MARCADOR, origen))
+    return sum(1 for c in claves[:fila_destino] if c not in (MARCADOR, origen) and not str(c).startswith(GRUPO))
 
 
 class _Delegado(QStyledItemDelegate):
@@ -95,6 +100,14 @@ class _Delegado(QStyledItemDelegate):
 
 class _Lista(QListWidget):
     soltado = Signal(str, int)          # clave arrastrada, fila antes de la que se soltó
+    copiar = Signal()                   # Ctrl+C: copiar el paso elegido (SC9)
+    pegar = Signal()                    # Ctrl+V: pegar la copia
+
+    def keyPressEvent(self, e):
+        if e.modifiers() == Qt.ControlModifier and e.key() in (Qt.Key_C, Qt.Key_V):
+            (self.copiar if e.key() == Qt.Key_C else self.pegar).emit()
+            return                      # en el timeline Ctrl+C copia el paso, no lo elegido de la lista
+        super().keyPressEvent(e)
 
     def dropEvent(self, e):
         item = self.currentItem()
@@ -125,6 +138,11 @@ class PanelTimeline(QWidget):
     crear_conjunto = Signal(list)       # «Crear conjunto de selección»: ids de los pasos cuyos cuerpos se guardan
     tocado = Signal(str)                # clic en un paso: un comando abierto lo puede tomar (Simetría › Operaciones)
     color_componente_cambiado = Signal(bool)    # casilla «Muestra de color por componente» del engranaje
+    agrupar = Signal(list)              # «Agrupar N pasos» (Fusion: Create Group): los ids elegidos
+    desagrupar = Signal(str)            # «Desagrupar» (Fusion: Edit Group › Expand): id de la carpeta
+    plegar = Signal(str, bool)          # clic en la carpeta: su id y si queda contraída
+    renombrar_grupo = Signal(str, str)  # doble clic en la carpeta: id y nombre nuevo
+    pegar = Signal(dict, list)          # Ctrl+V: la receta copiada y los pasos que usaba el original
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -134,6 +152,7 @@ class PanelTimeline(QWidget):
         self.color_componente = False
         self.colores_en_lienzo = False      # Mostrar colores de componente también pinta las muestras
         self.muestras = {}                  # id de paso → color de lo último que se dibujó
+        self._copiado = None                # Ctrl+C del timeline: (receta del paso, los pasos que usa)
         self._origen = ((), ())            # (pasos que crearon lo elegido, pasos que lo modificaron): `resaltar_origen`
         self.lista = _Lista()
         self.lista.setItemDelegate(_Delegado(self.lista))
@@ -151,6 +170,8 @@ class PanelTimeline(QWidget):
         self.lista.itemDoubleClicked.connect(self._doble_clic)
         self.lista.itemClicked.connect(self._clic)
         self.lista.soltado.connect(self._soltado)
+        self.lista.copiar.connect(self._copiar_paso)
+        self.lista.pegar.connect(self._pegar_paso)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(8, 0, 4, 0)
         lay.setSpacing(0)
@@ -236,18 +257,31 @@ class PanelTimeline(QWidget):
         # Sin cambios en lo que se muestra no se reconstruye (llega en cada aviso del documento).
         colores = self.muestras = colores_por_componente(doc) if self.color_componente or self.colores_en_lienzo else {}
         nombres = [icono_operacion(op) for op in doc.operaciones]       # una vez por paso: resolver el comando recorre el catálogo
+        existentes = {op.id for op in doc.operaciones}
+        plegados = {i for g in doc.grupos if g["plegado"] for i in g["pasos"]}
+        chips = {}                        # carpeta que va delante de este paso (la de su paso más antiguo)
+        for g in doc.grupos:
+            reales = [i for i in g["pasos"] if i in existentes]
+            if reales:
+                chips[min(reales, key=doc.indice)] = g
         firma = (id(doc), doc.marcador, [(op.id, op.nombre, op.ETIQUETA, nombre, insignia_de(op, res.estado),
                                           res.estado, res.mensaje, colores.get(op.id))
                                          for op, res, nombre in zip(doc.operaciones, doc.resultados, nombres, strict=True)],
-                 self._origen)
+                 self._origen, [(g["id"], g["nombre"], g["plegado"], tuple(g["pasos"])) for g in doc.grupos])
         if doc is self.doc and firma == getattr(self, "_firma", None):
             return
         self._firma = firma
+        if doc is not self.doc:
+            self._copiado = None              # lo copiado en OTRO documento no se pega acá: los ids significan otra cosa
         self.doc = doc
         self.lista.clear()
         for i, (op, res) in enumerate(zip(doc.operaciones, doc.resultados, strict=True)):
+            if op.id in chips:
+                self._agregar_grupo(chips[op.id])
             if i == doc.marcador:
-                self._agregar_marcador()
+                self._agregar_marcador()                  # dentro de una carpeta contraída asoma detrás de su fila
+            if op.id in plegados:
+                continue                                  # contraída: sus pasos no se dibujan
             insignia = insignia_de(op, res.estado)
             ico = icono_con_insignia(nombres[i], insignia) if insignia else icono(nombres[i])
             apagado = res.estado in ("suprimida", "retrocedida")
@@ -299,8 +333,32 @@ class PanelTimeline(QWidget):
         it.setToolTip("Marcador del timeline: arrastralo. Lo que queda a la derecha no se calcula.")
         self.lista.addItem(it)
 
+    def _grupo(self, clave):
+        """La carpeta de una fila «grupo:id»; None si la fila no es una carpeta o la carpeta ya no está."""
+        if not isinstance(clave, str) or not clave.startswith(GRUPO):
+            return None
+        return next((g for g in (self.doc.grupos if self.doc else []) if g["id"] == clave[len(GRUPO):]), None)
+
+    def _agregar_grupo(self, g):
+        """La fila de una carpeta (Fusion: el bloque del grupo con su botón +/−): contraída se ve con ▸ y esconde sus
+        pasos; la carpeta no es un paso, así que no tiene estado ni insignia propia."""
+        n = len(g["pasos"])
+        suprimidos = sum(1 for o in self.doc.operaciones if o.id in g["pasos"] and o.suprimida)
+        texto = ("▸ " if g["plegado"] else "▾ ") + g["nombre"]
+        it = QListWidgetItem(icono("carpeta"), texto)
+        it.setSizeHint(QSize(24 + self.lista.fontMetrics().horizontalAdvance(texto), 34))
+        it.setData(Qt.UserRole, GRUPO + g["id"])
+        it.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)     # la carpeta no se arrastra: se arrastran sus pasos
+        it.setToolTip(f"<b>{g['nombre']}</b> · {n} pasos"
+                      + (f"<br>{suprimidos} de {n} suprimidos" if suprimidos else "")
+                      + "<br>Doble clic: renombrar · clic derecho: contraer, suprimir el grupo o desagrupar")
+        self.lista.addItem(it)
+
     def resaltar(self, op_id):
         """"Buscar en el timeline": elige el ícono del paso y lo trae a la vista."""
+        for g in (self.doc.grupos if self.doc else []):
+            if g["plegado"] and op_id in g["pasos"]:
+                self.plegar.emit(g["id"], False)        # si está en una carpeta contraída, primero la expande
         for i in range(self.lista.count()):
             it = self.lista.item(i)
             if it.data(Qt.UserRole) == op_id:
@@ -315,7 +373,16 @@ class PanelTimeline(QWidget):
     def _soltado(self, clave, fila):
         if self.doc is None:
             return
-        nuevo = destino_arrastre(self.claves(), clave, fila)
+        existentes = {o.id for o in self.doc.operaciones}
+
+        def ranura(c):
+            """Las filas que ocupa una fila de la lista: una carpeta contraída ocupa las de sus pasos escondidos."""
+            g = self._grupo(c)
+            return [i for i in g["pasos"] if i in existentes] if g is not None and g["plegado"] else [c]
+
+        claves = self.claves()
+        paso_de_fila = sum(len(ranura(c)) for c in claves[:fila])
+        nuevo = destino_arrastre([x for c in claves for x in ranura(c)], clave, paso_de_fila)
         if clave == MARCADOR:
             if nuevo != self.doc.marcador:
                 self.marcador.emit(nuevo)
@@ -323,17 +390,43 @@ class PanelTimeline(QWidget):
             self.mover.emit(clave, nuevo)
 
     def _clic(self, item):
-        if item.data(Qt.UserRole) not in (None, MARCADOR):
-            self.tocado.emit(item.data(Qt.UserRole))
+        clave = item.data(Qt.UserRole)
+        if clave in (None, MARCADOR) or self._grupo(clave) is not None:
+            return                      # la carpeta se maneja con su menú: un clic suyo reconstruiría la lista a mitad
+        self.tocado.emit(clave)
 
     def _doble_clic(self, item):
-        op_id = item.data(Qt.UserRole)
-        if op_id and op_id != MARCADOR:
-            self.editar.emit(op_id)
+        clave = item.data(Qt.UserRole)
+        if not clave or clave == MARCADOR:
+            return
+        g = self._grupo(clave)
+        if g is None:
+            self.editar.emit(clave)
+        else:
+            self._renombrar_grupo(g)                        # Fusion: Rename sobre el bloque del grupo
+
+    def _renombrar_grupo(self, g):
+        """Fusion: Rename sobre la carpeta (doble clic en el nombre o desde su menú); Esc o Cancelar no cambian nada."""
+        nombre, ok = QInputDialog.getText(self, "Renombrar grupo", "Nombre:", text=g["nombre"])
+        if ok and nombre.strip():
+            self.renombrar_grupo.emit(g["id"], nombre.strip())
+
+    def _copiar_paso(self):
+        """Ctrl+C: guarda la receta del paso elegido y los pasos que usa, para pegarla con Ctrl+V (SC9)."""
+        it = self.lista.currentItem()
+        clave = it.data(Qt.UserRole) if it is not None else None
+        op = None if not clave or clave == MARCADOR or self._grupo(clave) else self.doc.operacion(clave)
+        self._copiado = (op.a_dict(), sorted(op.dependencias())) if op is not None else None
+
+    def _pegar_paso(self):
+        """Ctrl+V: Documento.pegar copia el paso al final; si una referencia no está, la ventana avisa y no pega nada."""
+        if self._copiado is not None:
+            self.pegar.emit(*self._copiado)
 
     def elegidos(self):
-        """Ids de los pasos elegidos en la lista (sin el marcador)."""
-        return [it.data(Qt.UserRole) for it in self.lista.selectedItems() if it.data(Qt.UserRole) != MARCADOR]
+        """Ids de los pasos elegidos en la lista (sin el marcador ni las carpetas)."""
+        return [i for i in (it.data(Qt.UserRole) for it in self.lista.selectedItems())
+                if i not in (None, MARCADOR) and not str(i).startswith(GRUPO)]
 
     def entradas_menu(self, op_id, ids=None):
         """Menú contextual del paso, distinto según su tipo como en Fusion (boceto, operación, unión):
@@ -373,6 +466,9 @@ class PanelTimeline(QWidget):
               ayuda="Suma la supresión de este paso a la tabla de configuraciones (una columna «Suprimir»).",
               habilitada=len(ids) == 1),
             None,
+            # Fusion: Create Group sobre las operaciones elegidas; con un solo paso no hay nada que agrupar (SC9).
+            *([E(f"Agrupar {len(ids)} pasos", emitir(self.agrupar, ids),
+                 ayuda="Los pasos elegidos pasan a una carpeta del timeline, como en Fusion.")] if len(ids) > 1 else []),
             E("Mover a la izquierda", emitir(self.mover, op_id, i - 1), i > 0),
             E("Mover a la derecha", emitir(self.mover, op_id, i + 1), i < len(doc.operaciones) - 1),
             # «Rodar marcador aquí» de Fusion (antes «Retroceder hasta aquí»): el paso queda calculado
@@ -393,12 +489,38 @@ class PanelTimeline(QWidget):
             E("Eliminar", emitir(self.eliminar, op_id)),
         ]
 
+    def entradas_grupo(self, g):
+        """Menú de una carpeta (Fusion: Rename, Supprimir operaciones y Edit Group › Expand)."""
+        E = Entrada
+        n = len(g["pasos"])
+        todas = all(self.doc.operacion(i).suprimida for i in g["pasos"])
+        return [
+            E(f"{'Expandir' if g['plegado'] else 'Contraer'} el grupo", lambda: self.plegar.emit(g["id"],
+                                                                                                 not g["plegado"]),
+              ayuda="El +/− del bloque de Fusion: contraído esconde sus pasos en la barra (no cambia el modelo)."),
+            E("Renombrar…", lambda: self._renombrar_grupo(g)),
+            E(f"{'Desuprimir' if todas else 'Suprimir'} el grupo ({n} pasos)",
+              lambda: self.suprimir_varios.emit(g["pasos"], not todas),
+              ayuda="Suprime o reactiva de una vez todos los pasos de la carpeta (un solo paso de deshacer)."),
+            None,
+            E("Desagrupar", lambda: self.desagrupar.emit(g["id"]),
+              ayuda="Fusion: Edit Group › Expand: borra la carpeta y deja sus pasos sueltos, sin tocar el modelo."),
+        ]
+
     def _menu(self, pos):
         item = self.lista.itemAt(pos)
-        if item is None or item.data(Qt.UserRole) in (None, MARCADOR) or self.doc is None:
+        if item is None or self.doc is None:
             return
+        clave = item.data(Qt.UserRole)
+        grupo = self._grupo(clave)
+        if grupo is not None:
+            entradas = self.entradas_grupo(grupo)
+        elif clave in (None, MARCADOR):
+            return
+        else:
+            entradas = self.entradas_menu(clave, self.elegidos())
         m = QMenu(self)
-        _llenar_menu(m, self.entradas_menu(item.data(Qt.UserRole), self.elegidos()))
+        _llenar_menu(m, entradas)
         m.exec(self.lista.mapToGlobal(pos))
 
 

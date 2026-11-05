@@ -50,33 +50,35 @@ def _desliza(v):
 
 
 def _campos_movimiento():
+    """La pestaña Motion de Fusion (Joint reference): el Tipo, los ejes de Rotation/Translation con su eje propio al
+    lado y después los valores; los límites van a «Más opciones»."""
     t = lambda *tipos: (lambda v: v.get("tipo") in tipos)  # noqa: E731
     return [
         Opciones("tipo", "Tipo de movimiento", TIPOS_UNION),
         Opciones("eje_giro", "Eje de giro", EJES, visible_si=t("revolucion", "cilindrica", "pasador_ranura", "planar"),
                  etiqueta_si=lambda v: "Normal del plano" if v.get("tipo") == "planar" else "Eje de giro"),
-        Opciones("eje_desliz", "Eje de deslizamiento", {"X": "X", "Y": "Y", "Z": "Z"}, "X",
-                 visible_si=t("deslizante", "pasador_ranura")),
-        Expresion("giro", "Ángulo de giro", "0 deg", ANGULO, visible_si=_gira),
-        Expresion("giro2", "Ángulo 2 (cabeceo)", "0 deg", ANGULO, visible_si=t("bola")),
-        Expresion("giro3", "Ángulo 3 (guiñada)", "0 deg", ANGULO, visible_si=t("bola")),
-        Expresion("desliz", "Distancia", "0 mm", visible_si=_desliza),
-        Expresion("desliz2", "Distancia 2", "0 mm", visible_si=t("planar")),
         Seleccion("ref_eje_giro", "Eje de giro propio", EJE_PROPIO, minimo=0,
                   visible_si=t("revolucion", "cilindrica", "pasador_ranura", "planar", "bola"),
                   ayuda="Una arista, un eje de construcción o un cilindro en vez de X, Y o Z del marco."),
+        Opciones("eje_desliz", "Eje de deslizamiento", {"X": "X", "Y": "Y", "Z": "Z"}, "X",
+                 visible_si=t("deslizante", "pasador_ranura")),
         Seleccion("ref_eje_desliz", "Eje de deslizamiento propio", EJE_PROPIO, minimo=0,
                   visible_si=t("deslizante", "pasador_ranura"),
                   ayuda="Una arista, un eje de construcción o un cilindro en vez de X, Y o Z del marco."),
         Opciones("eje_cabeceo", "Eje de cabeceo (Pitch)", {"": "Automático (Y)", **EJES}, "", visible_si=t("bola"),
                  ayuda="El eje lateral de la bola: el «Ángulo 2» gira sobre él."),
+        Seleccion("ref_eje_cabeceo", "Eje de cabeceo propio", EJE_PROPIO, minimo=0, visible_si=t("bola"),
+                  ayuda="Una arista, un eje de construcción o un cilindro en vez de X, Y o Z del marco."),
         Opciones("eje_guinada", "Eje de guiñada (Yaw)", {"": "Automático (X)", **EJES}, "", visible_si=t("bola"),
                  ayuda="El eje perpendicular al de cabeceo: el «Ángulo 3» gira sobre él. El balanceo (Roll, «Ángulo de "
                        "giro») sale solo de los dos."),
-        Seleccion("ref_eje_cabeceo", "Eje de cabeceo propio", EJE_PROPIO, minimo=0, visible_si=t("bola"),
-                  ayuda="Una arista, un eje de construcción o un cilindro en vez de X, Y o Z del marco."),
         Seleccion("ref_eje_guinada", "Eje de guiñada propio", EJE_PROPIO, minimo=0, visible_si=t("bola"),
                   ayuda="Una arista, un eje de construcción o un cilindro en vez de X, Y o Z del marco."),
+        Expresion("giro", "Ángulo de giro", "0 deg", ANGULO, visible_si=_gira),
+        Expresion("giro2", "Ángulo 2 (cabeceo)", "0 deg", ANGULO, visible_si=t("bola")),
+        Expresion("giro3", "Ángulo 3 (guiñada)", "0 deg", ANGULO, visible_si=t("bola")),
+        Expresion("desliz", "Distancia", "0 mm", visible_si=_desliza),
+        Expresion("desliz2", "Distancia 2", "0 mm", visible_si=t("planar")),
         Expresion("minimo", "Límite mínimo", "", visible_si=lambda v: _gira(v) or _desliza(v), avanzado=True),
         Expresion("maximo", "Límite máximo", "", visible_si=lambda v: _gira(v) or _desliza(v), avanzado=True),
     ] + _campos_limites()
@@ -182,10 +184,9 @@ class Union(Comando):
         return None if ctx.estado.componentes else "Primero creá componentes (ENSAMBLAR › Nuevo componente)."
 
     def campos(self, ctx):
-        tipo, *movimiento = _campos_movimiento()          # el tipo de movimiento va primero
         simple = lambda lado: (lambda v: v.get(f"modo{lado}", "simple") == "simple")  # noqa: E731
         otro = lambda lado: (lambda v: v.get(f"modo{lado}", "simple") != "simple")  # noqa: E731
-        campos = [tipo, Opciones("modo1", "Modo del origen 1", MODOS_POSICION),
+        campos = [Opciones("modo1", "Modo del origen 1", MODOS_POSICION),
                   Seleccion("origen1", "Componente 1: ajuste", SNAP),
                   Seleccion("origen1b", "Componente 1: segundo ajuste", SNAP, visible_si=otro(1),
                             ayuda="La segunda cara o la segunda arista del modo elegido."),
@@ -202,7 +203,7 @@ class Union(Comando):
                        Expresion("dx", "Desfase X", "0 mm", avanzado=True),
                        Expresion("dy", "Desfase Y", "0 mm", avanzado=True),
                        Expresion("dz", "Desfase Z", "0 mm", avanzado=True), Casilla("voltear", "Voltear", avanzado=True)]
-        return campos + movimiento
+        return campos + _campos_movimiento()      # la pestaña Position de Fusion primero; Motion (con el Tipo) después
 
     def construir(self, v, ctx):
         exigir(v, "origen1", "Seleccioná el origen en el componente 1.")

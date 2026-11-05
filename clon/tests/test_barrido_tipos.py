@@ -76,6 +76,123 @@ def _caso_revolucion(sesion):
     ok(api.llamar(sesion, "revolve", {"sketch": "Boceto1", "axis": "sketch_y", "angle": 360}))
 
 
+def _caso_eje(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
+    ok(api.llamar(sesion, "create_construction_axis", {"type": "dos_planos", "references": ["XY", "XZ"]}))
+
+
+def _caso_punto(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
+    ok(api.llamar(sesion, "create_construction_point", {"type": "tres_planos", "references": ["XY", "XZ", "YZ"]}))
+
+
+def _caso_sup_extruir(sesion):
+    ok(api.llamar(sesion, "create_sketch", {}))
+    ok(api.llamar(sesion, "draw_rectangle", {"x1": 0, "y1": 0, "x2": 5, "y2": 5}))
+    ok(api.llamar(sesion, "create_surface_extrude", {"profiles": {"sketch": "Boceto1", "profile": "all"}, "distance": "5 mm"}))
+
+
+def _caso_sup_revolucion(sesion):
+    ok(api.llamar(sesion, "create_sketch", {"plane": "XZ"}))
+    ok(api.llamar(sesion, "draw_rectangle", {"x1": 2, "y1": 0, "x2": 6, "y2": 8}))
+    ok(api.llamar(sesion, "create_surface_revolve", {"profiles": {"sketch": "Boceto1", "profile": "all"}, "axis": "Z", "angle": "360 deg"}))
+
+
+def _caso_sup_tuberia(sesion):
+    ok(api.llamar(sesion, "create_sketch", {"plane": "XZ"}))
+    ok(api.llamar(sesion, "draw_line", {"start_x": 0, "start_y": 0, "end_x": 10, "end_y": 0}))
+    ok(api.llamar(sesion, "create_surface_pipe", {"path": {"sketch": "Boceto1", "curve": 3}}))
+
+
+def _caso_recortar_sup(sesion):
+    ok(api.llamar(sesion, "create_surface_box", {"length": 10, "width": 10, "height": 10}))
+    ok(api.llamar(sesion, "trim_surface", {"surface": "Cuerpo1", "tool": "XY", "remove_point": [0, 0, 0]}))
+
+
+def _caso_invertir_normal(sesion):
+    ok(api.llamar(sesion, "create_surface_box", {"length": 10, "width": 10, "height": 10}))
+    ok(api.llamar(sesion, "reverse_surface_normal", {"bodies": "Cuerpo1"}))
+
+
+def _caso_pestana(sesion):
+    ok(api.llamar(sesion, "create_sketch", {}))
+    ok(api.llamar(sesion, "draw_rectangle", {"x1": 0, "y1": 0, "x2": 20, "y2": 20}))
+    ok(api.llamar(sesion, "create_base_flange", {"sketch": "Boceto1", "profile": "all"}))
+
+
+def _caso_patron_plano(sesion):
+    ok(api.llamar(sesion, "create_sketch", {}))
+    ok(api.llamar(sesion, "draw_rectangle", {"x1": 0, "y1": 0, "x2": 20, "y2": 20}))
+    ok(api.llamar(sesion, "create_base_flange", {"sketch": "Boceto1", "profile": "all"}))
+    ok(api.llamar(sesion, "create_flat_pattern", {"face": ">Z"}))
+
+
+def _caso_sup_solevacion(sesion):
+    ok(api.llamar(sesion, "create_sketch", {}))
+    ok(api.llamar(sesion, "draw_circle", {"center_x": 0, "center_y": 0, "radius": 5}))
+    ok(api.llamar(sesion, "create_sketch", {"plane": "XZ"}))
+    ok(api.llamar(sesion, "draw_circle", {"center_x": 0, "center_y": 0, "radius": 3}))
+    ok(api.llamar(sesion, "create_surface_loft", {"profiles": [{"sketch": "Boceto1", "profile": "all"}, {"sketch": "Boceto2", "profile": "all"}]}))
+
+
+def _caso_multitransformar(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 10, "width": 10, "height": 10}))
+    ok(api.llamar(sesion, "multi_transform", {"bodies": "Cuerpo1", "transforms": [{"type": "rectangular", "axis": "x", "count": 2, "spacing": 15}]}))
+
+
+def _caso_desmoldeo(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
+    ok(api.llamar(sesion, "draft", {"faces": ">X", "angle": 5, "neutral": "XY"}))
+
+
+def _caso_dividir_cara(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
+    ok(api.llamar(sesion, "split_face", {"faces": ">Z", "tool": "XZ"}))
+
+
+def _caso_desfase_aristas(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
+    ok(api.llamar(sesion, "offset_edges", {"edges": ">Z", "distance": "2 mm"}))
+
+
+def _caso_parche(sesion):
+    ok(api.llamar(sesion, "create_surface_box", {"length": 10, "width": 10, "height": 10}))
+    ok(api.llamar(sesion, "create_patch", {"boundary": ">Z"}))
+
+
+def _caso_relleno_contorno(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
+    ok(api.llamar(sesion, "create_boundary_fill", {"tools": ["Cuerpo1", "XY"]}))
+
+
+def _caso_volumen_fluido(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
+    ok(api.llamar(sesion, "create_fluid_volume", {"bodies": "Cuerpo1", "volume_type": "external"}))
+
+
+def _caso_regla_plastico(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
+    ok(api.llamar(sesion, "create_component", {"bodies": ["Cuerpo1"], "name": "Comp1"}))
+    ok(api.llamar(sesion, "assign_plastic_rule", {"component": "Comp1"}))
+
+
+def _caso_repujado(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
+    ok(api.llamar(sesion, "create_sketch", {}))
+    ok(api.llamar(sesion, "draw_rectangle", {"x1": 0, "y1": 0, "x2": 5, "y2": 5}))
+    ok(api.llamar(sesion, "create_emboss", {"sketch": "Boceto1", "faces": ">Z", "depth": 2}))
+
+
+def _caso_apoyo(sesion):
+    ok(api.llamar(sesion, "create_box", {"length": 40, "width": 20, "height": 10, "anchor": "corner"}))
+    ok(api.llamar(sesion, "shell", {"body": "Cuerpo1", "faces": ">Z", "thickness": 2}))
+    ok(api.llamar(sesion, "create_sketch", {"plane": "XY"}))
+    ok(api.llamar(sesion, "draw_rectangle", {"x1": 10, "y1": 6, "x2": 20, "y2": 16}))
+    ok(api.llamar(sesion, "create_rest", {"sketch": "Boceto1", "body": "Cuerpo1"}))
+    # caja 40x20x10 vaciada a 2 mm (3392) más el apoyo de 10x10 que llena el hueco hasta la tapa (8 mm): 4192
+    assert ok(api.llamar(sesion, "get_physical_properties", {}))["total"]["volume"] == pytest.approx(4192, abs=1)
+
+
 def _caso_empalme(sesion):
     ok(api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 10}))
     ok(api.llamar(sesion, "fillet", {"edges": "|Z", "radius": 2}))
@@ -88,10 +205,7 @@ def _caso_chaflan(sesion):
 
 def _caso_vaciado(sesion):
     ok(api.llamar(sesion, "create_box", {"length": 30, "width": 30, "height": 20}))
-    try:
-        ok(api.llamar(sesion, "shell", {"body": "Cuerpo1", "faces": ">Z", "thickness": 2}))
-    except Exception:
-        _armar_via_run(sesion, "vaciado")
+    ok(api.llamar(sesion, "shell", {"body": "Cuerpo1", "faces": ">Z", "thickness": 2}))
 
 
 def _caso_agujero(sesion):
@@ -99,37 +213,19 @@ def _caso_agujero(sesion):
     ok(api.llamar(sesion, "create_hole", {"face": ">Z", "diameter": 8, "depth": 6}))
 
 
-def _caso_combinar(sesion):
-    ok(api.llamar(sesion, "create_box", {"length": 10, "width": 10, "height": 10}))
-    ok(api.llamar(sesion, "create_cylinder", {"radius": 4, "height": 15, "x": 3}))
-    try:
-        ok(api.llamar(sesion, "boolean_operation", {"type": "union", "bodies": ["Cuerpo1", "Cuerpo2"]}))
-    except Exception:
-        _armar_via_run(sesion, "combinar")
-
-
 def _caso_simetria(sesion):
     ok(api.llamar(sesion, "create_box", {"length": 10, "width": 10, "height": 10, "x": 5}))
-    try:
-        ok(api.llamar(sesion, "mirror", {"bodies": ["Cuerpo1"], "plane": "YZ"}))
-    except Exception:
-        _armar_via_run(sesion, "simetria")
+    ok(api.llamar(sesion, "mirror", {"bodies": ["Cuerpo1"], "plane": "YZ"}))
 
 
 def _caso_patron(sesion):
     ok(api.llamar(sesion, "create_box", {"length": 10, "width": 10, "height": 10}))
-    try:
-        ok(api.llamar(sesion, "rectangular_pattern", {"bodies": ["Cuerpo1"], "x_count": 2, "x_spacing": 15, "y_count": 1, "y_spacing": 15}))
-    except Exception:
-        _armar_via_run(sesion, "patron")
+    ok(api.llamar(sesion, "rectangular_pattern", {"bodies": ["Cuerpo1"], "x_count": 2, "x_spacing": 15, "y_count": 1, "y_spacing": 15}))
 
 
 def _caso_escala(sesion):
     ok(api.llamar(sesion, "create_box", {"length": 10, "width": 10, "height": 10}))
-    try:
-        ok(api.llamar(sesion, "scale_body", {"bodies": ["Cuerpo1"], "factor": 1.5}))
-    except Exception:
-        _armar_via_run(sesion, "escala")
+    ok(api.llamar(sesion, "scale_body", {"bodies": ["Cuerpo1"], "factor": 1.5}))
 
 
 CASOS = {}
@@ -162,6 +258,26 @@ CASOS["patron"] = _caso_patron
 CASOS["escala"] = _caso_escala
 CASOS["simetria"] = _caso_simetria
 CASOS["revolucion"] = _caso_revolucion
+CASOS["eje"] = _caso_eje
+CASOS["punto"] = _caso_punto
+CASOS["sup_extruir"] = _caso_sup_extruir
+CASOS["sup_revolucion"] = _caso_sup_revolucion
+CASOS["sup_tuberia"] = _caso_sup_tuberia
+CASOS["recortar_sup"] = _caso_recortar_sup
+CASOS["invertir_normal"] = _caso_invertir_normal
+CASOS["pestana"] = _caso_pestana
+CASOS["patron_plano"] = _caso_patron_plano
+CASOS["sup_solevacion"] = _caso_sup_solevacion
+CASOS["multitransformar"] = _caso_multitransformar
+CASOS["desmoldeo"] = _caso_desmoldeo
+CASOS["dividir_cara"] = _caso_dividir_cara
+CASOS["desfase_aristas"] = _caso_desfase_aristas
+CASOS["parche"] = _caso_parche
+CASOS["relleno_contorno"] = _caso_relleno_contorno
+CASOS["volumen_fluido"] = _caso_volumen_fluido
+CASOS["regla_plastico"] = _caso_regla_plastico
+CASOS["repujado"] = _caso_repujado
+CASOS["apoyo"] = _caso_apoyo
 
 _PENDIENTES_RAW = sorted(set(TIPOS_OPERACION.keys()) - set(CASOS.keys()))
 
@@ -172,7 +288,7 @@ def _razon_pendiente(t):
         return "requiere un archivo externo (STEP/IGES/OBJ/STL)"
     if "chapa" in tl or "pleg" in tl or "doblad" in tl or "despleg" in tl or "unir_pleg" in tl:
         return "requiere chapa/plegado previo"
-    if "malla" in tl or "remall" in tl or "suaviz" in tl or "reducir_malla" in tl or "separar_malla" in tl or "limpiar_malla" in tl or "reparar_malla" in tl or "convertir_malla" in tl or "vaciado_malla" in tl or "escalar_malla" in tl or "invertir_normal_malla" in tl or "grupos_caras" in tl or "combinar_grupos_caras" in tl:
+    if "malla" in tl or "remall" in tl or "suaviz" in tl or "reducir_malla" in tl or "separar_malla" in tl or "limpiar_malla" in tl or "reparar_malla" in tl or "convertir_malla" in tl or "vaciado_malla" in tl or "escalar_malla" in tl or "invertir_normal_malla" in tl or "grupos_caras" in tl or "grupo_caras" in tl:
         return "requiere malla previa"
     if "componente" in tl or "ensambl" in tl or "union" in tl or "origen_union" in tl or "grupo_rigido" in tl or "vinculo" in tl or "anclar" in tl or "posicion_inicial" in tl or "capturar_posicion" in tl or "revertir_posicion" in tl or "copiar_componente" in tl or "fijacion" in tl:
         return "requiere ensamble/componentes previos"
@@ -190,10 +306,20 @@ def _razon_pendiente(t):
         return "requiere curva/boceto de trayectoria"
     if "parche" in tl or "recortar_sup" in tl or "destrimar" in tl or "extender_sup" in tl or "descoser" in tl or "invertir_normal" in tl or "relleno_contorno" in tl or "regla_plastico" in tl or "volumen_fluido" in tl:
         return "requiere superficies o caras especificas"
-    if "eje" == tl or "punto" == tl or "derivacion" in tl:
-        return "requiere referencias especificas"
+    if "derivacion" in tl:
+        return "requiere otro archivo .omnicad como origen: el paso lo relee al recalcular"
     if "cortar_plano" in tl:
         return "requiere plano/corte especifico"
+    if t == "boceto":
+        return "crea un boceto vacío: no es geometría 3D verificable con check_geometry"
+    if t == "division_silueta":
+        return "requiere una cara con silueta para dividir"
+    if t == "grampa":
+        return "requiere marcos (puntos, normales y brazos) del boceto y dos cuerpos"
+    if t == "insertar_diseno":
+        return "requiere un archivo .omnicad externo"
+    if t == "red":
+        return "requiere curvas abiertas dibujadas sobre un cuerpo"
     return "caso minimo no armado en esta tanda (requiere geometria o referencias especificas)"
 
 
@@ -206,7 +332,7 @@ def test_todos_los_tipos_tienen_caso_o_razon():
     pend_keys = set(PENDIENTES.keys())
     assert casos_keys.union(pend_keys) == tipos
     assert casos_keys.intersection(pend_keys) == set()
-    assert len(casos_keys) >= 37                 # piso: lo que hoy pasa; la meta de la tanda era 40
+    assert len(casos_keys) >= 57                 # piso: 37 + 20 nuevos (H-37)
 
 
 def _guardar_y_abrir(sesion, tmp_path):

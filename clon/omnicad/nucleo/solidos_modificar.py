@@ -153,6 +153,14 @@ def _fusionar_costuras(forma):
     return u.Shape()
 
 
+def _cruza_mas_que(entrada, resultado):
+    """B-157: True si `resultado` tiene más autointersecciones que `entrada`. Un cuerpo que ya venía cruzado (p. ej. un
+    compuesto de cajas superpuestas) no bloquea el empalme o el chaflán; la entrada se mide solo si el resultado cruza."""
+    from . import revision                  # local: revision carga medio núcleo
+    n = revision._autointersecciones_seguras(resultado, 1, 5.0)[0]
+    return bool(n) and n > (revision._autointersecciones_seguras(entrada, 1, 5.0)[0] or 0)
+
+
 def _validar(forma, operacion):
     if forma is None or forma.IsNull() or geo.esta_vacia(forma):
         raise geo.ErrorGeometria(f"{operacion}: el kernel devolvió una forma vacía.")
@@ -555,7 +563,13 @@ def empalme(forma, grupos, *, cadena_tangente=True):
                                  "Achicalo. Si el timeline tiene otros empalmes en la misma zona, probá primero el "
                                  "radio MAYOR y después los más chicos (de lo grande a lo chico) y reordená los "
                                  "empalmes del timeline en ese orden.")
-    return _validar(mf.Shape(), "Empalme")
+    resultado = _validar(mf.Shape(), "Empalme")
+    # BRepCheck puede dar válido y estanco aunque el empalme atraviese la pared de una cavidad.
+    if ((geo.solidos(resultado) and geo.volumen_exacto(resultado) <= 0)
+            or _cruza_mas_que(forma, resultado)):
+        raise geo.ErrorGeometria("El empalme falló: el radio supera el grosor de la pared o el espacio disponible. "
+                                 "El resultado tiene caras cruzadas o un volumen inválido. Probá un radio menor.")
+    return resultado
 
 
 def empalme_completo(forma, central, lateral1, lateral2):
@@ -811,6 +825,10 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
         else:
             resultado = _mezclar(forma, resultado, alcance, min(float(g.get(k) or 0) for g in grupos
                                                                 for k in ("distancia", "distancia2") if g.get(k)))
+    if ((geo.solidos(resultado) and geo.volumen_exacto(resultado) <= 0)
+            or _cruza_mas_que(forma, resultado)):
+        raise geo.ErrorGeometria("El chaflán falló: la distancia supera el grosor de la pared o el espacio disponible. "
+                                 "El resultado tiene caras cruzadas o un volumen inválido. Probá una distancia menor.")
     return resultado
 
 

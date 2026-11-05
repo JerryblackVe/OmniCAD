@@ -2,8 +2,8 @@
 
 Lee docs/seguimiento/{bugs,faltantes,mejoras}.md y la sección «Registro» de PROJECT_LOG.md y escribe, en la
 carpeta que se pase (por defecto, la actual), `seguimiento.json` (una fila por pendiente), `resueltos.json` (las
-últimas 25 entradas del Registro) y `prompts.json` (los prompts de la tabla «Prompts guardados» del README de
-seguimiento). Cómo subirlos a la página: sección «Página de seguimiento» de CLAUDE.md.
+últimas 25 entradas del Registro) `prompts.json` (los prompts de la tabla «Prompts guardados» del README de
+seguimiento) y `agenda.json` (las tareas programadas de docs/seguimiento/agenda.md). Cómo subirlos a la página: sección «Página de seguimiento» de CLAUDE.md.
 
 Uso: python scripts/seguimiento_json.py [carpeta_de_salida]
 """
@@ -72,11 +72,23 @@ def prompts():
     return salida
 
 
+def agenda():
+    """Filas de docs/seguimiento/agenda.md: tareas que Gerardo programa para una fecha."""
+    filas = []
+    for linea in (RAIZ / "docs" / "seguimiento" / "agenda.md").read_text(encoding="utf-8").splitlines():
+        c = [x.strip() for x in linea.strip().strip("|").split("|")] if linea.startswith("|") else []
+        if len(c) == 5 and c[0] != "ID" and not set(c[0]) <= set("-: "):
+            filas.append({"id": c[0], "tarea": limpiar(c[1]), "cuando": c[2], "pedido": c[3], "estado": c[4]})
+    # primero las que tienen fecha, de la más cercana a la más lejana; «A definir» al final
+    return sorted(filas, key=lambda f: (not re.fullmatch(r"\d{4}-\d{2}-\d{2}", f["cuando"]), f["cuando"]))
+
+
 if __name__ == "__main__":
     carpeta = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
-    filas, hechos, guardados = pendientes(), resueltos(), prompts()
+    filas, hechos, guardados, programadas = pendientes(), resueltos(), prompts(), agenda()
     (carpeta / "seguimiento.json").write_text(json.dumps(filas, ensure_ascii=False), encoding="utf-8")
     (carpeta / "resueltos.json").write_text(json.dumps(hechos, ensure_ascii=False), encoding="utf-8")
     (carpeta / "prompts.json").write_text(json.dumps(guardados, ensure_ascii=False), encoding="utf-8")
+    (carpeta / "agenda.json").write_text(json.dumps(programadas, ensure_ascii=False), encoding="utf-8")
     print(f"{len(filas)} pendientes ({dict(Counter(f['tipo'] for f in filas))}), {len(hechos)} resueltos, "
-          f"{len(guardados)} prompts")
+          f"{len(guardados)} prompts, {len(programadas)} en agenda")

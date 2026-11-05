@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Texto en curva que toca o cruza otra curva y su extrusión: B-132 a B-134, B-136, B-137, TXT-8 y TXT-9."""
 import importlib.util
+import math
 import os
 
 import pytest
@@ -94,6 +95,53 @@ def test_una_referencia_vieja_al_disco_cortado_encuentra_el_disco_entero():
     c, t, br = hola(api.Sesion())
     perfil, nota = pf.buscar_por_firma_tolerante(br.perfiles, [c, t], [0.0, 0.2])
     assert perfil.area == pytest.approx(DISCO, abs=0.01) and nota
+
+
+def _uv_adentro(cara, uv, plano):
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.TopAbs import TopAbs_IN, TopAbs_ON
+    return BRepClass_FaceClassifier(cara, plano.pnt(*uv), 1e-7).State() in (TopAbs_IN, TopAbs_ON)
+
+
+def _punto_del_anillo(letra, hueco, plano):
+    """Un punto uv del anillo de la letra (adentro de la letra pero no de su hueco), barriendo desde el centroide
+    del hueco hacia +u en pasos de 0,25 mm."""
+    x, y = hueco.centroide_uv
+    for i in range(1, 200):
+        punto = (x + 0.25 * i, y)
+        if _uv_adentro(letra.cara, punto, plano) and not _uv_adentro(hueco.cara, punto, plano):
+            return punto
+    raise AssertionError("no se halló un punto del anillo de la letra")
+
+
+@hay_arial
+def test_un_pedazo_viejo_de_letra_partida_vuelve_a_la_letra_entera():
+    """B-154: una referencia vieja a un pedazo de la O partida por el círculo (antes de B-134 el boceto entero se
+    partía en regiones) vuelve a la letra entera: el centroide guardado solo no la distingue de su hueco."""
+    from omnicad.timeline import entidades as ent
+    s = api.Sesion()
+    c, t, br = hola(s)
+    letras, huecos = pf.partes_de_texto(br.perfiles, [t])
+    ohueco = max(huecos, key=lambda p: p.area)          # el hueco de la O, el más grande de «HOLA»
+    o = min(letras, key=lambda p: math.dist(p.centroide_uv, ohueco.centroide_uv))
+    punto = _punto_del_anillo(o, ohueco, br.plano)
+    perfil, nota = pf.buscar_por_firma_tolerante(br.perfiles, [c, t], punto, plano=br.plano)
+    assert perfil is o and nota
+    # el paso que guarda la referencia vieja la resuelve y toma la letra entera
+    entidad = ent.resolver({"tipo": "perfil", "boceto": br.op_id, "firma": [c, t], "centroide": list(punto)},
+                            s.doc.estado_final)
+    assert entidad.perfil is o
+
+
+@hay_arial
+def test_un_pedazo_viejo_de_letra_que_no_se_puede_vincular_da_un_error_claro():
+    """B-154: si el pedazo de letra viejo ya no se puede re-vincular, el error dice «volvé a elegir el texto»."""
+    from omnicad.timeline import entidades as ent
+    s = api.Sesion()
+    c, t, br = hola(s)
+    with pytest.raises(ent.ErrorReferencia, match="volvé a elegir el texto"):
+        ent.resolver({"tipo": "perfil", "boceto": br.op_id, "firma": [t, 999999], "centroide": None},
+                     s.doc.estado_final)
 
 
 @hay_arial
@@ -258,6 +306,15 @@ def test_cambiar_la_curva_despues_de_crear_el_texto_lo_arrastra():
     otra = ok(api.llamar(s, "draw_line", {"sketch": "b", "start_x": -100, "start_y": 200, "end_x": 100, "end_y": 200}))
     ok(api.llamar(s, "edit_text", {"sketch": "b", "entity": t, "path_entity": otra["entities"][0]["id"], "path_side": "left"}))
     assert caja_texto(s, t)[1] > 199
+
+
+@hay_arial
+def test_edit_text_con_la_misma_curva_y_sin_posicion_conserva_el_ancla():
+    s = api.Sesion()
+    c, t, _br = hola(s)
+    ok(api.llamar(s, "edit_text", {"sketch": "b", "entity": t, "path_entity": c, "path_side": "left"}))
+    texto = s.paso("b").boceto.curvas[t]
+    assert texto.camino_pos == pytest.approx(0.25) and texto.camino_alineado is False
 
 
 def test_lado_natural_se_lee_de_izquierda_a_derecha_y_por_fuera_en_una_curva_cerrada():
@@ -705,3 +762,319 @@ def test_un_texto_viejo_se_ve_igual_y_abrirlo_sin_tocar_no_cambia_sus_mm(app_qt)
     lz.editar_texto(t.id, lz.a_px(0, 0))
     lz.entrada.aceptado.emit([c.text() for c in lz.entrada.campos])
     assert t.espaciado == 1.2345678
+
+
+def _camino_b187(tipo="linea", proyectada=False):
+    from omnicad.restricciones import Boceto
+    b = Boceto()
+    if tipo == "arco":
+        camino = b.agregar_arco_centro((-500, 0), (0, 0),
+                                        (-500 + 500 * math.cos(0.06), 500 * math.sin(0.06)))
+    else:
+        camino = b.agregar_linea((0, 0), (0, 30))
+    b.curvas[camino].proyectada = proyectada
+    return b, camino
+
+
+def _puntos_b187(b, tid):
+    from omnicad.restricciones.boceto import puntos_primitiva
+    return [q for pr in b.primitivas(tid) for q in puntos_primitiva(pr, 64)]
+
+
+def _medidas_b187(b, tid, tipo="linea"):
+    """Extremos de la tinta, en mm de recorrido y de normal izquierda del camino original."""
+    puntos = _puntos_b187(b, tid)
+    if tipo == "arco":
+        ss = [500 * math.atan2(y, x + 500) for x, y in puntos]
+        ns = [500 - math.hypot(x + 500, y) for x, y in puntos]
+    else:
+        ss, ns = [y for x, y in puntos], [-x for x, y in puntos]
+    return min(ss), max(ss), min(ns), max(ns)
+
+
+@hay_arial
+@pytest.mark.parametrize("tipo", ["linea", "arco"])
+@pytest.mark.parametrize("lado", ["izq", "der"])
+@pytest.mark.parametrize("alineacion", ["izq", "centro", "der"])
+@pytest.mark.parametrize("proyectada", [False, True])
+def test_b187_la_alineacion_usa_el_camino_entero(tipo, lado, alineacion, proyectada):
+    b, camino = _camino_b187(tipo, proyectada)
+    tid = b.agregar_texto((0, 29), "Texto", altura=5, camino=camino,
+                          alineacion=alineacion, camino_lado=lado)
+    inicio, fin, _, _ = _medidas_b187(b, tid, tipo)
+    assert inicio >= -0.1 and fin <= 30.1, (inicio, fin)
+    ancla = {"izq": inicio, "centro": (inicio + fin) / 2, "der": fin}[alineacion]
+    assert ancla == pytest.approx({"izq": 0, "centro": 15, "der": 30}[alineacion], abs=0.1)
+
+
+@hay_arial
+@pytest.mark.parametrize("tipo", ["linea", "arco"])
+@pytest.mark.parametrize("lado", ["izq", "der"])
+@pytest.mark.parametrize("colocacion", ["arriba", "abajo"])
+@pytest.mark.parametrize("desfase", [0, -1])
+def test_b187_el_borde_apoyado_respeta_el_desfase_con_signo(tipo, lado, colocacion, desfase):
+    b, camino = _camino_b187(tipo)
+    tid = b.agregar_texto((0, 29), "HH", altura=5, camino=camino, alineacion="centro",
+                          camino_lado=lado, camino_colocacion=colocacion, camino_desfase=desfase)
+    _, _, normal_min, normal_max = _medidas_b187(b, tid, tipo)
+    # Abajo cuelga del borde superior; Al revés invierte la normal de lectura.
+    borde = normal_min if (colocacion == "arriba") == (lado == "izq") else normal_max
+    assert borde == pytest.approx(desfase if lado == "izq" else -desfase, abs=0.05)
+    assert normal_max - normal_min == pytest.approx(5, abs=0.05)
+
+
+@hay_arial
+@pytest.mark.parametrize("tipo", ["linea", "arco"])
+@pytest.mark.parametrize("lado", ["izq", "der"])
+def test_b187_ajustar_ocupa_el_largo_del_camino(tipo, lado):
+    b, camino = _camino_b187(tipo)
+    tid = b.agregar_texto((0, 29), "Texto", altura=5, camino=camino,
+                          camino_lado=lado, camino_ajustar=True)
+    inicio, fin, _, _ = _medidas_b187(b, tid, tipo)
+    assert (inicio, fin) == pytest.approx((0, 30), abs=0.1)
+
+
+@hay_arial
+def test_b187_add_text_y_edit_text_exponen_y_aplican_las_opciones_de_ruta(tmp_path):
+    s = api.Sesion()
+    ok(api.llamar(s, "create_sketch", {"plane": "XY", "name": "b"}))
+    camino = ok(api.llamar(s, "draw_line", {"sketch": "b", "start_x": 0, "start_y": 0, "end_x": 0, "end_y": 30}))["entities"][0]["id"]
+    tid = ok(api.llamar(s, "add_text", {"sketch": "b", "text": "HH", "height": 5,
+        "path_entity": camino, "align": "left", "path_placement": "below", "path_side": "right",
+        "path_offset": -1, "fit_path": False}))["entities"][0]["id"]
+
+    def boceto():
+        return s.doc.estado_final.bocetos[s.paso("b").id].boceto
+
+    assert _medidas_b187(boceto(), tid)[0] == pytest.approx(0, abs=0.1)
+    ok(api.llamar(s, "edit_text", {"sketch": "b", "entity": tid, "align": "right", "path_placement": "above",
+                                   "path_side": "left", "path_offset": 3, "fit_path": False}))
+    assert _medidas_b187(boceto(), tid)[1:3] == pytest.approx((30, 3), abs=0.1)
+    datos = next(e for e in ok(api.llamar(s, "get_sketch", {"sketch": "b"}))["entities"] if e["id"] == tid)
+    assert (datos["align"], datos["path_placement"], datos["path_side"], datos["path_offset"], datos["fit_path"]) == (
+        "right", "above", "left", 3, False)
+    ok(api.llamar(s, "edit_text", {"sketch": "b", "entity": tid, "fit_path": True}))
+    assert _medidas_b187(boceto(), tid)[:2] == pytest.approx((0, 30), abs=0.1)
+    ruta = str(tmp_path / "alineado.omnicad")
+    ok(api.llamar(s, "save_document", {"path": ruta}))
+    ok(api.llamar(s, "open_document", {"path": ruta}))
+    assert _medidas_b187(boceto(), tid)[:2] == pytest.approx((0, 30), abs=0.1)
+
+
+@hay_arial
+@pytest.mark.parametrize("posicion", [None, 0.9])
+def test_b187_una_receta_anterior_conserva_su_ancla_y_su_caja(posicion, tmp_path):
+    from omnicad.restricciones import Boceto
+    receta = {"puntos": [{"id": 1, "x": 0, "y": 0}, {"id": 2, "x": 0, "y": 30},
+                          {"id": 4, "x": 0, "y": 29}],
+               "curvas": [{"tipo": "linea", "id": 3, "p1": 1, "p2": 2},
+                          {"tipo": "texto", "id": 5, "punto": 4, "texto": "Texto", "altura": 5,
+                           "camino": 3, "alineacion": "centro", "camino_lado": "der", "camino_desfase": -1}]}
+    if posicion is not None:
+        receta["curvas"][1]["camino_pos"] = posicion
+    b = Boceto.desde_dict(receta)
+    esperado = fuentes.contornos_en_camino("Texto", ((0, 0), (0, 30)), "Arial", 5,
+                                           posicion=0.5 if posicion is None else posicion, lado="der", desfase=-1)
+    from omnicad.restricciones.boceto import puntos_primitiva
+    assert _puntos_b187(b, 5) == pytest.approx([q for pr in esperado for q in puntos_primitiva(pr, 64)])
+    assert Boceto.desde_dict(b.a_dict()).a_dict() == b.a_dict()
+    assert "camino_alineado" not in b.curvas[5].a_dict()
+    s = api.Sesion()
+    ok(api.llamar(s, "create_sketch", {"plane": "XY", "name": "b"}))
+    s.paso("b").boceto = b
+    s.doc.recalcular()
+    antes = _puntos_b187(s.doc.estado_final.bocetos[s.paso("b").id].boceto, 5)
+    ruta = str(tmp_path / "anterior.omnicad")
+    ok(api.llamar(s, "save_document", {"path": ruta}))
+    ok(api.llamar(s, "open_document", {"path": ruta}))
+    abierto = s.doc.estado_final.bocetos[s.paso("b").id].boceto
+    assert _puntos_b187(abierto, 5) == pytest.approx(antes)
+    assert not abierto.curvas[5].camino_alineado
+
+
+@hay_arial
+def test_b187_el_clic_cerca_del_extremo_no_desplaza_el_centro_y_la_previa_respeta_la_alineacion(app_qt):
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    b, camino = _camino_b187(proyectada=True)
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    try:
+        lz.ajustar_grilla = False
+        lz.set_herramienta("texto")
+        lz.clics.append((None, (0, 29)))
+        lz._procesar_clics()
+        assert lz.entrada is not None
+        lz.opciones["alineacion"] = "izq"
+        lz.refrescar_previa_texto()
+        puntos = [q for poli in lz._previa_polis for q in poli]
+        assert min(q[1] for q in puntos) == pytest.approx(0, abs=0.1)
+        lz.opciones["alineacion"] = "centro"
+        lz.entrada.aceptado.emit([c.text() for c in lz.entrada.campos])
+        t = next(c for c in b.curvas.values() if c.tipo == "texto")
+        assert t.camino == camino
+        inicio, fin, _, _ = _medidas_b187(b, t.id)
+        assert (inicio + fin) / 2 == pytest.approx(15, abs=0.1)
+    finally:
+        lz.close()
+        lz.deleteLater()
+
+
+def _segmentos_tinta_b187(b, tid):
+    """Segmentos ((x, y), (x, y)) de la tinta de un texto en curva, para paridad y distancias."""
+    from omnicad.restricciones.boceto import puntos_primitiva
+    segmentos = []
+    for pr in b.primitivas(tid):
+        q = puntos_primitiva(pr, 64)
+        segmentos += list(zip(q, q[1:], strict=False))
+    return segmentos
+
+
+def _dentro_de_tinta(segmentos, p):
+    """Paridad par-impar de `p` contra todos los contornos (los huecos quedan afuera)."""
+    cruces = sum(1 for (x1, y1), (x2, y2) in segmentos
+                 if (y1 > p[1]) != (y2 > p[1])
+                 and p[0] < x1 + (p[1] - y1) * (x2 - x1) / (y2 - y1))
+    return cruces % 2 == 1
+
+
+def _distancia_a_raya(p, a, b):
+    ax, ay = a
+    dx, dy = b[0] - ax, b[1] - ay
+    t = max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / (dx * dx + dy * dy))) if (dx or dy) else 0.0
+    return math.hypot(p[0] - ax - t * dx, p[1] - ay - t * dy)
+
+
+def _punto_de_tinta_b187(b, tid, linea, mas_de_la_tinta=False):
+    """Un punto (x, y) sobre la tinta del texto. Con `mas_de_la_tinta`, uno donde la línea está más cerca que
+    cualquier trazo de letra (el clic cae «entre» la letra y la curva: el caso del usuario)."""
+    segmentos = _segmentos_tinta_b187(b, tid)
+    puntos = [q for s in segmentos for q in s]
+    xs, ys = [q[0] for q in puntos], [q[1] for q in puntos]
+    elegido = None
+    for i in range(1, 90):
+        for j in range(1, 90):
+            p = (min(xs) + (max(xs) - min(xs)) * i / 90, min(ys) + (max(ys) - min(ys)) * j / 90)
+            if not _dentro_de_tinta(segmentos, p):
+                continue
+            d_tinta = min(_distancia_a_raya(p, a, c) for a, c in segmentos)
+            d_linea = min(_distancia_a_raya(p, *raya) for raya in linea)
+            if mas_de_la_tinta:
+                if d_linea < d_tinta:
+                    return p
+            elif elegido is None or d_tinta > elegido[1]:
+                elegido = (p, d_tinta)
+    if elegido is not None:
+        return elegido[0]
+    raise AssertionError("no se halló un punto sobre la tinta del texto")
+
+
+def _lienzo_b187(b, app_qt):
+    from omnicad.nucleo.geometria import Plano
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+    lz = Lienzo(b, TablaParametros().evaluar, plano=Plano("XY"))
+    lz.resize(500, 500)
+    lz.show()
+    app_qt.processEvents()
+    return lz
+
+
+def _arrastrar_b187(lz, app_qt, de, a, pasos=8):
+    """Presionar, arrastrar y soltar con eventos de ratón simulados (el cursor real no se toca)."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    if isinstance(de, QPointF):
+        de = (de.x(), de.y())
+    if isinstance(a, QPointF):
+        a = (a.x(), a.y())
+
+    def evento(tipo, pos, botones, boton):
+        p = QPointF(*pos)
+        QApplication_send = __import__("PySide6.QtWidgets", fromlist=["QApplication"]).QApplication.sendEvent
+        QApplication_send(lz, QMouseEvent(tipo, p, lz.mapToGlobal(p), boton, botones, Qt.NoModifier))
+
+    evento(QEvent.MouseMove, de, Qt.NoButton, Qt.NoButton)
+    app_qt.processEvents()
+    evento(QEvent.MouseButtonPress, de, Qt.LeftButton, Qt.LeftButton)
+    app_qt.processEvents()
+    for i in range(1, pasos + 1):
+        medio = (de[0] + (a[0] - de[0]) * i / pasos, de[1] + (a[1] - de[1]) * i / pasos)
+        evento(QEvent.MouseMove, medio, Qt.LeftButton, Qt.NoButton)
+        app_qt.processEvents()
+    evento(QEvent.MouseButtonRelease, a, Qt.NoButton, Qt.LeftButton)
+    app_qt.processEvents()
+
+
+LINEA_B187 = (((0, 0), (0, 60)),)
+
+
+@hay_arial
+def test_b187_un_clic_sobre_las_letras_elige_el_texto_y_no_la_linea_de_abajo(app_qt):
+    """B-187, captura 2: con Desfase -1 la línea cruza las letras; el clic sobre una letra elige el texto."""
+    from omnicad.restricciones import Boceto
+    b = Boceto()
+    camino = b.agregar_linea((0, 0), (0, 60))
+    b.curvas[camino].proyectada = True
+    tid = b.agregar_texto((0, 59), "ZAI FAST", altura=5, camino=camino, alineacion="centro",
+                          camino_lado="der", camino_desfase=-1)
+    lz = _lienzo_b187(b, app_qt)
+    try:
+        lz.set_herramienta("seleccionar")
+        p = _punto_de_tinta_b187(b, tid, LINEA_B187, mas_de_la_tinta=True)
+        assert lz.entidad_en(lz.a_px(*p)) == tid
+    finally:
+        lz.close()
+        lz.deleteLater()
+
+
+@hay_arial
+def test_b187_arrastrar_las_letras_desliza_el_texto_por_la_linea_proyectada(app_qt):
+    """B-187, captura 2: agarrar el texto y arrastrar 20 mm por la línea lo desliza 20 mm; deshacer lo vuelve."""
+    from omnicad.restricciones import Boceto
+    b = Boceto()
+    camino = b.agregar_linea((0, 0), (0, 60))
+    b.curvas[camino].proyectada = True
+    tid = b.agregar_texto((0, 59), "ZAI FAST", altura=5, camino=camino, alineacion="centro")
+    lz = _lienzo_b187(b, app_qt)
+    try:
+        lz.set_herramienta("seleccionar")
+        de = _punto_de_tinta_b187(b, tid, LINEA_B187)
+        pos_de = lz.a_px(*de)
+        assert lz.entidad_en(pos_de) == tid
+        antes = _medidas_b187(b, tid)
+        assert b.curvas[tid].camino_pos == pytest.approx(0.5)
+        _arrastrar_b187(lz, app_qt, pos_de, lz.a_px(de[0], de[1] - 20))
+        assert b.curvas[tid].camino_pos == pytest.approx(0.5 - 20 / 60, abs=0.02), b.curvas[tid].camino_pos
+        despues = _medidas_b187(b, tid)
+        assert despues[0] == pytest.approx(antes[0] - 20, abs=0.2), (antes, despues)
+        lz.deshacer()
+        app_qt.processEvents()
+        assert b.curvas[tid].camino_pos == pytest.approx(0.5)
+    finally:
+        lz.close()
+        lz.deleteLater()
+
+
+@hay_arial
+def test_b187_arrastrar_con_el_panel_caracter_abierto_tambien_desliza(app_qt):
+    """B-187, captura 2: con la paleta CARÁCTER abierta (editando el texto), el clic en las letras cierra la
+    paleta y arrastra igual."""
+    from omnicad.restricciones import Boceto
+    b = Boceto()
+    camino = b.agregar_linea((0, 0), (0, 60))
+    b.curvas[camino].proyectada = True
+    tid = b.agregar_texto((0, 59), "ZAI FAST", altura=5, camino=camino, alineacion="centro")
+    lz = _lienzo_b187(b, app_qt)
+    try:
+        lz.set_herramienta("seleccionar")
+        de = _punto_de_tinta_b187(b, tid, LINEA_B187)
+        pos_de = lz.a_px(*de)
+        lz.editar_texto(tid, pos_de)
+        assert lz.entrada is not None
+        _arrastrar_b187(lz, app_qt, pos_de, lz.a_px(de[0], de[1] - 20))
+        assert b.curvas[tid].camino_pos == pytest.approx(0.5 - 20 / 60, abs=0.02), b.curvas[tid].camino_pos
+    finally:
+        lz.close()
+        lz.deleteLater()

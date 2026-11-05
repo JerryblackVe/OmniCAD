@@ -2,11 +2,11 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28). Total 130: Abierto 66 · Parcial 49 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 129: Abierto 63 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-05).
 
 ## Pendientes generales
 
-Abierto 14 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
+Abierto 16 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -44,26 +44,23 @@ Abierto 14 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 6 · Parcial 1 · Sin verificar 0.
+Abierto 3 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| H-56 | Mapa de entorno: una cara plana refleja un solo color | Abierto | Media | El reflejo se calcula con una sola dirección de vista: hace falta una por píxel para que el entorno se vea en una cara plana. | nucleo/analisis.py (`colores_mapa_entorno`) | 2026-11-01 |
+| H-68 | Parámetros automáticos (a futuro): al dibujar un boceto y al aplicar una operación, crear solos los parámetros de sus cotas y valores, con una preferencia para activarlo o desactivarlo | Abierto | Media | Pedido de Gerardo con «Reportar problema» (registro de uso, sesión 2026-11-03_210154, seq 112). Hoy los parámetros se crean a mano. Copiar cómo nombra Fusion los parámetros de modelo (d1, d2…) antes de construir. | timeline/parametros.py | 2026-11-03 |
 | H-55 | Sustainability Insights: la región y el país no cambian el cálculo | Abierto | Media | Sumar la energía de fabricación por región con un factor de red eléctrica con fuente. Hoy el resultado lo avisa. | nucleo/sustentabilidad.py | 2026-11-01 |
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
-| H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | El barrido automático cubre 37 de 111 tipos (crear, guardar y abrir, deshacer). Faltan casos para los otros 74, que `PENDIENTES` lista con una razón; varias son genéricas y hay que precisarlas. | tests/test_barrido_tipos.py; tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py | 2026-11-03 |
-| H-64 | render_image rechaza 3840 × 2160 en standard y final | Abierto | Baja | Reproducido: standard (33,2 Mpx con el 2×) y final (74,6 Mpx con el 3×) responden INVALID_ARGUMENTS por el tope de 25 Mpx; el docstring documenta ese tope. | omnicad/api/herramientas_render.py:179 | 2026-11-02 |
-| H-65 | insert_fastener no perfora el cuerpo de abajo | Abierto | Media | Reproducido: agujero Ø6,6 en el cuerpo de arriba y tornillo M6 de 20 mm; el volumen del cuerpo de abajo queda en 16 000 mm³ (no lo perfora). El docstring dice que inserta la fijación sobre agujeros o puntos, no que haga el agujero. | omnicad/api/herramientas_construccion.py:244 | 2026-11-02 |
+| H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | 57 de 116 tipos con caso en tests/test_barrido_tipos.py (2026-11-05). Faltan casos para los otros 59 y cambiar la razón adivinada por nombre (`_razon_pendiente`) por una lista explícita por tipo. | tests/test_barrido_tipos.py; tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py | 2026-11-03 |
 
 ## Fusion 360
 
-Abierto 3 · Parcial 1 · Sin verificar 1. Especificación: [brechas_fusion.md](../brechas_fusion.md).
+Abierto 2 · Parcial 1 · Sin verificar 1. Especificación: [brechas_fusion.md](../brechas_fusion.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | FU-2 | Imagen del agujero con cotas editables en el diálogo | Abierto | Media | Esquema del agujero con cotas editables dentro del diálogo de Agujero | ui/comandos/crear.py:314 (Agujero solo con campos de texto; sin imagen en ui/comando.py) | 2026-10-20 |
 | FU-3 | Cota de ángulo contra el eje X y barrido del arco | Abierto | Media | Cota de ángulo línea contra eje X y barrido del arco de centro escrito | restricciones/boceto.py:1606 (la cota de ángulo solo admite linea-linea) | 2026-10-20 |
-| FU-6 | Tabla de grupos de aristas en Empalme (radios distintos) | Abierto | Media | Varios grupos de aristas con radio propio por operación (el núcleo ya admite grupos) | timeline/ops_modificar.py:197-226 (OpEmpalme con un solo grupo y un solo radio) | 2026-10-20 |
 | FU-10 | .f3z con referencias externas | Parcial | Media | Resolver los diseños referenciados; hoy se abre solo el diseño principal | io_archivos/f3d_nativo.py:24,70; io_archivos/abrir_externo.py:39 | 2026-10-20 |
 | FU-5 | Relleno azul del perfil en la vista previa al dibujar | Sin verificar | Media | Comprobar en la app si el perfil se rellena mientras se dibuja | ui/editor_boceto.py: sin código de relleno de perfil encontrado, pero no se probó en la app | 2026-10-20 |
 
@@ -130,7 +127,7 @@ Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 5 · Parcial 1 · Sin verificar 1. Plan por fases: [plan_boceto.md](../plan_boceto.md).
+Abierto 4 · Parcial 1 · Sin verificar 1. Plan por fases: [plan_boceto.md](../plan_boceto.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -207,7 +204,7 @@ Abierto 2. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
 
 ## Otros CAD libres
 
-Abierto 1 · Parcial 3. Especificación: [brechas_cad_libres.md](../brechas_cad_libres.md).
+Abierto 2 · Parcial 4. Especificación: [brechas_cad_libres.md](../brechas_cad_libres.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -220,11 +217,13 @@ Abierto 1 · Parcial 3. Especificación: [brechas_cad_libres.md](../brechas_cad_
 
 ## Texto y vectores
 
-Parcial 1. Especificación: [plan_texto_vectores.md](../plan_texto_vectores.md).
+Parcial 3. Especificación: [plan_texto_vectores.md](../plan_texto_vectores.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | TXT-7 | Fase 7 velocidad (SVG de 5000 nodos en menos de 1 s) | Parcial | Media | Bajar de 2,5 s a menos de 1 s el SVG de 5000 nodos. | El log midió 2,5 s; la meta < 1 s no se cumple. tests/test_texto_vectores.py | 2026-10-20 |
+| TXT-8 | Los vectores importados (SVG/DXF) y el texto se manejan como un objeto: mover, escalar, rotar, alinear, agrupar, pivotear, desfasear, unir y separar | Parcial | Media | Hecho 2026-11-04: el objeto es una matriz afín sobre las curvas (los ids y las firmas no cambian), con panel de tiradores y medidas exactas, API/MCP/CLI de 15 herramientas y formato de proyecto 2. Queda: editar el trazado nodo a nodo (decidido no hacerlo), más de 5000 curvas por objeto (ver TXT-7), deshacer/rehacer de un objeto dentro de un grupo desde la API (hoy se deshace el grupo entero) y «Unir perfiles» deja los originales ocultos pero con su geometría (sus regiones siguen existiendo: hay que elegir la región combinada al extruir). | clon/omnicad/restricciones/objetos.py; clon/omnicad/ui/objetos_vectoriales.py; clon/omnicad/api/herramientas_objetos_vectoriales.py; tests/test_objetos_vectoriales.py::test_api_transformacion_parametrica_extruye_y_sobrevive_guardar_undo; scripts/bench_objetos_vectoriales.py | 2026-11-04 |
+| TXT-9 | El visor elige el trazo del boceto antes que la región rellena cuando están a menos de 9 px | Parcial | Media | Hecho 2026-11-04: la prioridad del visor (curvas antes que perfiles) es la de Fusion, pero con un SVG pequeño en pantalla los 9 px de tolerancia se comen la pieza rellena y cuesta llegar al perfil para extruir. Queda: que el comando que pide un perfil avise cuando el clic cayó en un trazo («ese clic fue a un trazo: acercá la vista o hacé clic en el relleno»). | clon/omnicad/ui/visor3d.py:1637 (TOL_PX_ARISTA) y 1668 (curvas antes que perfiles); scripts/prueba_ui/objetos_vectoriales.py | 2026-11-04 |
 
 ## Rust
 

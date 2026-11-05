@@ -862,3 +862,13 @@ def test_saliente_y_labio_ranura():
     labio = valido(sc.labio_ranura(hueca, borde, Z, ancho=1, alto=1.5), v + 4 * 37 * 1 * 1.5)
     assert caja_de(labio)[5] == pytest.approx(21.5)
     valido(sc.labio_ranura(hueca, borde, Z, tipo="ranura", ancho=1, alto=1.5, holgura=0.1), v - 4 * 37.1 * 1.1 * 1.6)
+
+
+def test_labio_y_acanalado_sobre_dos_cuerpos():
+    """PLA-4: el tipo combinado une el labio a un cuerpo y le corta al otro la ranura del labio, con la holgura."""
+    abajo = g.caja(40, 20, 20)                       # z 0 a 20
+    arriba = g.caja(40, 20, 20, (0, 0, 20))          # apoyada sobre la de abajo: z 20 a 40
+    borde = [linea((0, 0, 20), (40, 0, 20))]
+    r = sc.labio_y_ranura(abajo, arriba, borde, Z, ancho=1, alto=1.5, holgura=0.1)
+    valido(r["labio"], 40 * 20 * 20 + 40 * 1 * 1.5)
+    valido(r["ranura"], 40 * 20 * 20 - 40 * 1.1 * 1.6)

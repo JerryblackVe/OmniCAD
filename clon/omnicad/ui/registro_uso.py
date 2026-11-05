@@ -1,16 +1,35 @@
 """Adaptador Qt: ganchos reversibles, vigilante y muestras únicamente al estar activo."""
+import platform
 import sys
 import time
 from collections import deque
 
-from PySide6.QtCore import QEvent, QObject, QTimer, qInstallMessageHandler
-from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QAbstractButton, QApplication, QCheckBox, QDialog, QDialogButtonBox, QLabel,
-                               QLineEdit, QMenu, QPushButton, QToolButton, QVBoxLayout)
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, QUrl, qInstallMessageHandler
+from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
+from PySide6.QtWidgets import (QAbstractButton, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+                               QFormLayout, QLabel, QLineEdit, QMenu, QPlainTextEdit, QPushButton, QToolButton,
+                               QVBoxLayout)
 
+from .. import VERSION
 from .. import registro_uso as registro
 from ..registro_uso.sistema import ram_total
 from ..registro_uso.ganchos import error
+from .iconos import icono
+
+
+class _DialogoReporte(QDialog):
+    def eventFilter(self, obj, evento):
+        # QDialogButtonBox vuelve a elegir un botón por defecto al mostrarse.
+        if evento.type() == QEvent.KeyPress and evento.key() in (Qt.Key_Return, Qt.Key_Enter):
+            return True
+        return super().eventFilter(obj, evento)
+
+
+def _nombre_accion(accion, con_texto=True):
+    """Clave de la QAction; si no tiene, su objectName; si tampoco, su texto (evita «sin_clave»).
+    `con_texto=False` lo omite: el texto de un botón puede ser lo que la persona escribió o un nombre de archivo."""
+    nombre = accion.property("clave") or accion.objectName()
+    return nombre or (accion.text().replace("&", "").strip() if con_texto else "")
 
 
 class RegistroVentana(QObject):
@@ -29,15 +48,50 @@ class RegistroVentana(QObject):
         self.indicador.setToolTip("Registro local de uso activo. No se envía nada.")
         self.indicador.setParent(ventana)
         self.indicador.hide()
-        self.boton = QPushButton("Marcar problema", objectName="marcar_problema")
+        nombre = "Reportar problema y sugerencia"
+        self.boton = QPushButton("Reportar", objectName="marcar_problema")
+        self.boton.setIcon(icono("reportar_problema"))
+        self.boton.setIconSize(QSize(16, 16))
+        self.boton.setToolTip(nombre)
+        self.boton.setAccessibleName(nombre)
+        self.boton.setStyleSheet("""
+            QPushButton { padding: 3px 8px; border: 1px solid palette(mid); border-radius: 5px;
+                          background: palette(button); color: palette(button-text); }
+            QPushButton:hover { background: palette(light); border-color: palette(highlight); }
+            QPushButton:pressed { background: palette(alternate-base); }
+            QPushButton:focus { border-color: palette(highlight); }
+        """)
         self.boton.clicked.connect(self._dialogo_marca)
         self.boton.setParent(ventana)
         self.boton.hide()
-        self.accion = QAction("Marcar problema", ventana)
+        self.accion = QAction(icono("reportar_problema"), nombre, ventana)
+        self.accion.setToolTip(nombre)
         self.accion.setShortcut(QKeySequence("Ctrl+Shift+M"))
         self.accion.triggered.connect(self._dialogo_marca)
         ventana.addAction(self.accion)
         self.accion.setEnabled(False)
+
+    def aplicar_ajustes(self, opciones):
+        """Desde la API (MCP en vivo): escribe las preferencias y se las aplica a la ventana."""
+        p = self.ventana.prefs
+        for clave, valor in opciones.items():
+            p[registro.CLAVES_PREFS[clave]] = valor
+        self.aplicar_valores()
+        return registro.activo.estado() if registro.activo else {"enabled": False, "session": None,
+                                                                 "error": None, "dropped": 0}
+
+    def aplicar_valores(self):
+        """Preferencias › Registro de uso: los valores nuevos rigen al aceptar, sin reiniciar."""
+        p = self.ventana.prefs
+        guardados = {clave: p[clave_prefs] for clave, clave_prefs in registro.CLAVES_PREFS.items()}
+        try:
+            nuevos = registro.aplicar(guardados)
+        except ValueError:                     # un .ini tocado a mano: se vuelve a fábrica, no se rompe la app
+            nuevos = registro.aplicar(registro.FABRICA)
+        r = registro.activo
+        if r is not None:
+            r.reajustar(nuevos)
+        return nuevos
 
     def configurar(self, encendido):
         v = self.ventana
@@ -74,6 +128,7 @@ class RegistroVentana(QObject):
         QApplication.instance().installEventFilter(self)
         v.visor._cuadros_uso = deque(maxlen=6000)
         self._ultimo = self._muestra = time.perf_counter()
+        self._rss, self._pausado = None, False
         self._duda = None
         self.reloj.start()
 
@@ -107,6 +162,20 @@ class RegistroVentana(QObject):
         if self._anterior_qt:
             self._anterior_qt(tipo, contexto, mensaje)
 
+    def _capturar_error(self):
+        """La foto chica del visor que el registro pidió para el último error (modo detallado)."""
+        r = registro.activo
+        if r is None or r._captura_pendiente is None:
+            return
+        seq, r._captura_pendiente = r._captura_pendiente, None
+        png = self.ventana.visor.captura_png(ancho=640)
+        if not png:
+            return
+        try:
+            r.escribir_captura(f"error_{r.id}_{seq}.png", png)
+        except OSError:
+            pass                                         # el error ya se registró; la captura es un extra
+
     def _comando(self):
         p = self.ventana.panel
         return p.comando.CLAVE if p is not None else ""
@@ -117,26 +186,27 @@ class RegistroVentana(QObject):
             return False
         tipo = evento.type()
         if tipo == QEvent.Shortcut and isinstance(obj, QAction):
-            clave = obj.property("clave") or obj.objectName() or "sin_clave"
+            clave = _nombre_accion(obj) or "sin_clave"
             self._ultima_accion = clave
             r.emitir("atajo", {"accion": clave})
         elif tipo == QEvent.MouseButtonPress:
             # Solo visor y botones: nunca se observa el teclado ni los campos de texto (chat incluido).
             if obj is not self.ventana.visor and not isinstance(obj, QAbstractButton):
                 return False
-            r.emitir("clic", {"objetivo": id(obj), "x": int(evento.position().x()) // 8,
-                               "y": int(evento.position().y()) // 8})
+            r.emitir("clic", {"objetivo": obj.objectName() or type(obj).__name__,
+                              "clase": type(obj).__name__, "x": int(evento.position().x()) // 8,
+                              "y": int(evento.position().y()) // 8})
             if isinstance(obj, QToolButton) and obj.defaultAction():
-                clave = obj.defaultAction().property("clave")
+                clave = _nombre_accion(obj.defaultAction(), con_texto=False)
                 if clave:
                     self._ultima_accion = clave
                     r.emitir("boton_cinta", {"accion": clave})
         elif tipo == QEvent.MouseButtonRelease and isinstance(obj, QMenu):
             a = obj.activeAction()
             if a is not None:
-                clave = a.property("clave") or obj.objectName() or "sin_clave"
+                clave = _nombre_accion(a) or obj.objectName() or "sin_clave"
                 self._ultima_accion = clave
-                r.emitir("menu_item", {"accion": clave, "etiqueta": a.text()})
+                r.emitir("menu_item", {"accion": clave, "etiqueta": a.text().replace("&", "")[:64]})
         return False
 
     def _latido(self):
@@ -147,6 +217,15 @@ class RegistroVentana(QObject):
             self.configurar(False)
             self.ventana.mensaje("Se detuvo el registro local por un error de escritura.", 10000)
             return
+        self._capturar_error()
+        if registro.toca_podar():
+            registro.marcar_podar()
+            registro.podar()
+        pausado = r.disco_bajo()
+        if pausado != self._pausado:
+            self._pausado = pausado
+            if pausado:
+                self.ventana.mensaje("El registro de uso está pausado: queda poco espacio libre en disco.", 10000)
         ahora = time.perf_counter()
         demora, self._ultimo = (ahora - self._ultimo - 0.05) * 1000, ahora
         comando = self._comando()
@@ -157,14 +236,18 @@ class RegistroVentana(QObject):
         if cambio is not None and ahora - cambio > 20 and self._duda != cambio:
             r.emitir("dialogo_inactivo", {"comando": comando, "duracion_s": ahora - cambio})
             self._duda = cambio
-        if ahora - self._muestra < 5:
-            return
-        self._muestra = ahora
+        cada = registro.valores()["memoria_cada_s"]
         from .bench import memoria_mb
         try:
             rss = memoria_mb()[0] * 2**20
         except OSError:
             rss = None
+        # menos ruido: se mide cada `memoria_cada_s`, o antes si la memoria se movió más de un 5 %
+        salto = self._rss is None or rss is None or abs(rss - self._rss) > 0.05 * self._rss
+        if not salto and ahora - self._muestra < cada:
+            return
+        self._muestra = ahora
+        self._rss = rss
         doc = self.ventana.doc
         formas = {id(c.forma) for estado in doc._estados for c in estado.cuerpos.values()}
         r.emitir("memoria", {"rss": rss, "objetos_occ": len(formas), "cuerpos": len(doc.estado_final.cuerpos)})
@@ -181,29 +264,84 @@ class RegistroVentana(QObject):
     def _dialogo_marca(self):
         if registro.activo is None:
             return
-        d = QDialog(self.ventana)
-        d.setWindowTitle("Marcar problema")
+        d = _DialogoReporte(self.ventana)
+        d.setWindowTitle("Reportar problema y sugerencia")
+        d.resize(480, 350)
         l = QVBoxLayout(d)
-        l.addWidget(QLabel("Nota opcional (solo se guarda su longitud):"))
-        nota = QLineEdit(maxLength=160)
+        formulario = QFormLayout()
+        tipo = QComboBox()
+        tipo.addItems(["Problema", "Sugerencia"])
+        titulo = QLineEdit(maxLength=2000)
+        titulo.setPlaceholderText("Obligatorio para GitHub")
+        formulario.addRow("Tipo:", tipo)
+        formulario.addRow("Título:", titulo)
+        l.addLayout(formulario)
+        l.addWidget(QLabel("Nota (hasta 2000 caracteres; se guarda tal cual):"))
+        nota = QPlainTextEdit()
         l.addWidget(nota)
-        captura = QCheckBox("Guardar también una captura del visor (puede mostrar el diseño)")
+        captura = QCheckBox("Adjuntar captura", objectName="adjuntar_captura")
+        captura.setToolTip("Guarda un PNG del visor que puede mostrar el diseño; lo podés arrastrar al issue.")
         l.addWidget(captura)
+        github = QCheckBox("Abrir issue en GitHub", objectName="abrir_issue_github")
+        github.setToolTip("Abre un borrador en el navegador para que lo revises y lo envíes vos.")
+        l.addWidget(github)
         botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        aceptar = botones.button(QDialogButtonBox.Ok)
+        aceptar.setText("Aceptar")
+        botones.button(QDialogButtonBox.Cancel).setText("Cancelar")
+        for boton in botones.buttons():
+            boton.setAutoDefault(False)
+            boton.setDefault(False)
         botones.accepted.connect(d.accept)
         botones.rejected.connect(d.reject)
         l.addWidget(botones)
-        if d.exec() == QDialog.Accepted:
-            try:
-                self.marcar(nota.text(), captura.isChecked())
-            except OSError as e:
-                self.ventana.mensaje(f"No se pudo guardar la captura del marcador: {e}", 8000)
+        for control in (d, tipo, captura, github, *botones.buttons()):
+            control.installEventFilter(d)
 
-    def marcar(self, nota="", captura=False, label=None):
+        def validar():
+            aceptar.setEnabled(not github.isChecked() or bool(titulo.text().strip()))
+
+        def limitar_nota():
+            texto = nota.toPlainText()
+            if len(texto) > 2000:
+                posicion = nota.textCursor().position()
+                nota.setPlainText(texto[:2000])
+                cursor = nota.textCursor()
+                cursor.setPosition(min(posicion, nota.document().characterCount() - 1))
+                nota.setTextCursor(cursor)
+
+        github.toggled.connect(validar)
+        titulo.textChanged.connect(validar)
+        titulo.returnPressed.connect(aceptar.click)
+        nota.textChanged.connect(limitar_nota)
+        titulo.setFocus()
+        if d.exec() != QDialog.Accepted:
+            return
+        r = registro.activo
+        try:
+            seq = self.marcar(nota.toPlainText(), captura.isChecked(), tipo=tipo.currentText(), titulo=titulo.text())
+        except OSError as e:
+            self.ventana.mensaje(f"No se pudo guardar la captura del reporte: {e}", 8000)
+            return
+        if seq is None:
+            self.ventana.mensaje("No se pudo guardar el reporte local: revisá el estado del registro de uso.", 8000)
+            return
+        if github.isChecked():
+            png = str(r.carpeta / f"marca_{r.id}_{seq}.png") if captura.isChecked() else None
+            try:
+                url = registro.url_issue(tipo.currentText(), titulo.text(), nota.toPlainText(),
+                                         VERSION, platform.system(), png)
+            except ValueError as e:
+                self.ventana.mensaje(f"El reporte local quedó guardado. {e}", 8000)
+                return
+            if not QDesktopServices.openUrl(QUrl(url)):
+                self.ventana.mensaje("El reporte local quedó guardado, pero no se pudo abrir el navegador.", 8000)
+
+    def marcar(self, nota="", captura=False, label=None, *, tipo="Problema", titulo=""):
         r = registro.activo
         if r is None:
             return None
-        datos = {"nota": nota, "captura": captura}
+        datos = {"nota": nota, "captura": captura, "tipo": tipo, "titulo": titulo}
         if label:
             datos["label"] = label
         seq = r.emitir("marca", datos)

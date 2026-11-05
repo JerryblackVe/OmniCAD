@@ -592,3 +592,15 @@ def test_engranaje_par_con_ensamblaje_y_eje_por_dialogo():
     assert g.volumen(_ultimo(doc).forma) == pytest.approx(en.volumen_eje(tramos), rel=1e-9)
     v3 = Eje().desde_op(op, ContextoComando(doc, op=op))
     assert v3["n"] == 2 and (v3["d2"], v3["fin2"], v3["mf2"]) == ("6 mm", "chaflan", "0.5 mm")
+
+
+def test_labio_y_acanalado_en_el_dialogo():
+    """PLA-4: el diálogo del Labio trae el tipo «Labio y acanalado» con su cuerpo de la ranura (solo en ese tipo)."""
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.crear import Labio
+    cmd, ctx = Labio(), ContextoComando(Documento())
+    campos = {c.clave: c for c in cmd.campos(ctx)}
+    assert list(campos["tipo"].opciones) == ["labio", "ranura", "labio y acanalado"]
+    assert campos["cuerpo_ranura"].visible_si({"tipo": "labio y acanalado"})
+    assert not campos["cuerpo_ranura"].visible_si({"tipo": "labio"})
+    assert campos["holgura"].visible_si({"tipo": "labio y acanalado"})

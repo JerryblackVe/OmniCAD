@@ -222,6 +222,120 @@ def test_cotas_miden_el_modelo_y_no_la_hoja(pieza_agujero):
                        b.a_hoja((4, 4)))
 
 
+# ---------------------------------------------------------------- línea base y longitud de arco
+def _empalme_esquina():
+    """Caja 40×30×10 con la arista vertical de la esquina (40, 30) empalmada r 10: arco de 90° desde arriba."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
+    from OCP.GeomAbs import GeomAbs_Line
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+    b = geo.caja(40, 30, 10)
+    mk = BRepFilletAPI_MakeFillet(b)
+    ex = TopExp_Explorer(b, TopAbs_EDGE)
+    while ex.More():
+        e = TopoDS.Edge(ex.Current())
+        c = BRepAdaptor_Curve(e)
+        if c.GetType() == GeomAbs_Line:
+            p0, p1 = c.Value(c.FirstParameter()), c.Value(c.LastParameter())
+            if (abs(p0.X() - 40) < 1e-6 and abs(p0.Y() - 30) < 1e-6
+                    and abs(p0.X() - p1.X()) < 1e-9 and abs(p0.Y() - p1.Y()) < 1e-9):
+                mk.Add(10.0, e)
+        ex.Next()
+    forma = mk.Shape()
+    assert geo.es_valida(forma)
+    return forma
+
+
+def test_linea_base_apila_tres_cotas_desde_una_misma_referencia(tmp_path):
+    placa = geo.caja(60, 30, 10)
+    for x in (10.0, 30.0, 50.0):
+        placa = geo.booleano(placa, geo.cilindro(3, 10, base=(x, 15, 0)), "cortar")
+    d = _dibujo({"p": placa})
+    sup = d.agregar_vista_base(["p"], "superior", posicion=(150, 150), escala=1)
+    base = sup.a_hoja((10, 15))
+    lugar = sup.a_hoja((30, -6))
+    cotas = [d.agregar_cota_linea_base(sup.id, base, sup.a_hoja(q), lugar, i)
+             for i, q in enumerate(((30, 15), (50, 15), (60, 15)))]
+    assert len(cotas) == 3 and all(c["subtipo"] == "horizontal" for c in cotas)
+    assert [d.valor_cota(c) for c in cotas] == pytest.approx([20.0, 40.0, 50.0])
+    assert [d.texto_cota(c) for c in cotas] == ["20", "40", "50"]
+    ys = [float(sup.a_hoja([c["lugar"]])[0][1]) for c in cotas]
+    assert ys == pytest.approx([ys[0] - i * nd.SEPARACION_BASE for i in range(3)])   # apiladas, sin pisarse
+    for c in cotas:                                   # cada una con su línea de cota y sus dos flechas
+        assert sum(1 for _, p in d.primitivas_anotacion(c) if p[0] == "solido") == 2
+    dxf.escribir_dxf(tmp_path / "base.dxf", d.primitivas(), capas=nd.CAPAS)
+    leido = dxf.leer_dxf(tmp_path / "base.dxf", con_capas=True)
+    textos = {p[3] for c, p in leido if c == "COTAS" and p[0] == "texto"}
+    assert {"20", "40", "50"} <= textos
+
+
+def test_longitud_de_arco_mide_el_arco_real(tmp_path):
+    d = _dibujo({"e": _empalme_esquina()})
+    sup = d.agregar_vista_base(["e"], "superior", posicion=(150, 150), escala=1)
+    medio = sup.a_hoja((30 + 10 * math.cos(math.radians(45.0)), 20 + 10 * math.sin(math.radians(45.0))))
+    assert d.arco_cercano(sup.a_hoja((0, 0)), 3.0) is None          # lejos de todo arco
+    arco = d.arco_cercano(medio, 3.0)
+    assert arco[0] == sup.id and arco[1] == pytest.approx((30, 20)) and arco[2] == pytest.approx(10)
+    t1, t2 = arco[3], arco[4]
+    assert math.degrees(t2 - t1) == pytest.approx(90.0)
+    cota = d.agregar_cota_arco(arco, sup.a_hoja((30 + 16, 20 + 16)))
+    assert cota["subtipo"] == "longitud_arco" and cota["vista"] == sup.id
+    assert d.valor_cota(cota) == pytest.approx(10 * math.pi / 2)     # r·θ = 15,71 mm
+    assert d.texto_cota(cota) == "15.71"
+    prims = [p for _, p in d.primitivas_anotacion(cota)]
+    arcos = [p for p in prims if p[0] == "arco"]
+    assert len(arcos) == 2                     # la línea de cota y el símbolo de arco sobre el número
+    assert any(p[2] == pytest.approx(16 * math.sqrt(2)) for p in arcos) and any(p[2] < 5 for p in arcos)
+    assert any(p[0] == "texto" and p[3] == "15.71" for p in prims)
+    assert sum(1 for p in prims if p[0] == "solido") == 2            # dos flechas tangentes
+    with pytest.raises(geo.ErrorGeometria):                          # el punto interior fuera del círculo
+        d.agregar_cota("longitud_arco", sup.id, [sup.a_hoja((30, 20)), sup.a_hoja((40, 20)),
+                                                 sup.a_hoja((35, 25)), sup.a_hoja((30, 30))],
+                       sup.a_hoja((46, 36)))
+    dxf.escribir_dxf(tmp_path / "arco.dxf", d.primitivas(), capas=nd.CAPAS)
+    leido = dxf.leer_dxf(tmp_path / "arco.dxf", con_capas=True)
+    assert ("COTAS", "15.71") in {(c, p[3]) for c, p in leido if p[0] == "texto"}
+    assert any(c == "COTAS" and p[0] == "arco" for c, p in leido)
+
+
+def test_ventana_linea_base_y_arco_por_menu_clics_y_esc(app):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QAction, QKeySequence
+    from omnicad.ui.dibujo import HerrCotaArco, HerrCotaLineaBase, HerrSeleccion, VentanaDibujo
+    doc = _documento()
+    v = VentanaDibujo(doc)
+    v.dibujo.actualizar({"op1.c1": _empalme_esquina()})    # la pieza pasa a tener un arco de 90°
+    b = v.dibujo.agregar_vista_base(["op1.c1"], "superior", posicion=(150, 150), escala=1)
+    v.redibujar()
+    accion = next(a for a in v.findChildren(QAction) if a.text() == "Cota de línea base")
+    accion.trigger()
+    assert isinstance(v.herramienta, HerrCotaLineaBase)
+    h = v.herramienta
+    h.clic(b.a_hoja((0, 0)) + (0.2, 0.1), None)            # el enganche lleva al vértice
+    h.clic(b.a_hoja((20, 0)) + (-0.1, 0.2), None)          # punto medio de la arista inferior
+    h.clic(b.a_hoja((0, -8)), None)                        # coloca la primera cota
+    h.mover(b.a_hoja((40, 0)), None)                       # CF-3: con la primera cota puesta no tira ValueError
+    h.clic(b.a_hoja((40, 0)) + (0.1, 0.2), None)           # segunda, apilada
+    cotas = [a for a in v.dibujo.anotaciones if a["tipo"] == "cota"]
+    assert [v.dibujo.texto_cota(c) for c in cotas] == ["20", "40"]
+    ys = sorted(round(float(b.a_hoja([c["lugar"]])[0][1]), 6) for c in cotas)
+    assert ys[1] - ys[0] == pytest.approx(nd.SEPARACION_BASE)
+    accion = next(a for a in v.findChildren(QAction) if a.text() == "Longitud de arco")
+    accion.trigger()
+    assert isinstance(v.herramienta, HerrCotaArco)
+    h = v.herramienta
+    h.clic(b.a_hoja((30 + 10 * math.cos(math.radians(45.0)), 20 + 10 * math.sin(math.radians(45.0)))), None)
+    h.clic(b.a_hoja((30 + 16, 20 + 16)), None)
+    cotas = [a for a in v.dibujo.anotaciones if a["tipo"] == "cota"]
+    assert v.dibujo.texto_cota(cotas[-1]) == "15.71"
+    cancelar = next(a for a in v.findChildren(QAction) if a.text() == "Cancelar comando")
+    assert cancelar.shortcut() == QKeySequence(Qt.Key_Escape)   # Esc cancela el comando
+    cancelar.trigger()
+    assert isinstance(v.herramienta, HerrSeleccion)
+
+
 def test_sector_angular_elige_el_angulo_del_cursor():
     v, t0, barrido = nd.sector_angular((0, 0), (10, 0), (0, 0), (10, 10), (5, 1))
     assert v == pytest.approx((0, 0)) and math.degrees(barrido) == pytest.approx(45)

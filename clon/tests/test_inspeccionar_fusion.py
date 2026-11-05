@@ -111,6 +111,9 @@ def test_radio_minimo_degrade_entre_dos_radios():
     c = np.asarray(an.colores_radio_minimo(hueca, 25.0, radio_minimo=0.0)[2], np.float32).reshape(-1, 3)
     rojo = float((c == np.asarray(an.ROJO, np.float32)).all(1).mean())
     assert 0 < rojo < 0.25                                    # una banda junto a los rincones, no las paredes enteras
+    sin_min = np.asarray(an.colores_radio_minimo(hueca, 25.0)[2], np.float32).reshape(-1, 3)
+    rojo_sin = float((sin_min == np.asarray(an.ROJO, np.float32)).all(1).mean())
+    assert 0 < rojo_sin < 0.25                                 # B-149: sin radio_minimo, también es solo la banda
     with pytest.raises(geo.ErrorGeometria, match="radio mínimo"):
         an.colores_radio_minimo(forma, 5.0, radio_minimo=6.0)
 

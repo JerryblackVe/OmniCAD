@@ -176,6 +176,13 @@ def problema_perfil(ref):
     return None
 
 
+def es_de_texto(firma, br):
+    """True si la firma de la referencia incluye el id de algún texto del boceto: desde B-134 cada texto se calcula
+    entero y un pedazo viejo de letra no siempre tiene a dónde volver (B-154)."""
+    textos = {c.id for c in br.boceto.curvas.values() if c.tipo == "texto"}
+    return any(i in textos for i in firma)
+
+
 class Entidad:
     """Resultado de resolver una referencia. Solo se llenan los campos que tienen sentido."""
 
@@ -269,8 +276,11 @@ def resolver(ref, estado):
         return Entidad(t, punto=np.asarray(estado.puntos[i][0], float))
     if t == "perfil":
         br = _boceto(estado, ref["boceto"])
-        perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"))
+        perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano)
         if perfil is None:
+            if es_de_texto(ref["firma"], br):
+                raise ErrorReferencia("Un perfil seleccionado era un pedazo de una letra y ya no existe como "
+                                      "región: volvé a elegir el texto.")
             raise ErrorReferencia("Un perfil seleccionado ya no existe en el boceto (cambió su contorno).")
         if nota:
             logging.getLogger("omnicad").warning(nota + " (boceto %s)", ref["boceto"])

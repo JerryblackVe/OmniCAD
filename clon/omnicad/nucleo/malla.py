@@ -1262,6 +1262,26 @@ def combinar_grupos(m, ids):
     return Malla(m.vertices, m.caras, g)
 
 
+def crear_grupo(m, ids_caras=(), ids_grupos=()):
+    """Crear grupo de caras [MESH-CREATE-FACE-GROUP]: los triángulos elegidos —por su número de cara, o los de
+    grupos enteros— pasan a un grupo nuevo. A diferencia de combinar, no exige que estén unidos entre sí."""
+    c = np.unique(np.asarray(list(ids_caras), np.int64))
+    gs = np.unique(np.asarray(list(ids_grupos), np.int64))
+    if not len(c) and not len(gs):
+        raise geo.ErrorGeometria("Elegí las caras o los grupos para el grupo nuevo.")
+    if len(c) and (c.min() < 0 or c.max() >= len(m.caras)):
+        raise geo.ErrorGeometria("Las caras elegidas no existen en la malla.")
+    if len(gs):
+        faltan = np.setdiff1d(gs, m.grupos)
+        if len(faltan):
+            raise geo.ErrorGeometria(f"La malla no tiene los grupos {faltan.tolist()}.")
+    sel = np.isin(m.grupos, gs)
+    sel[c] = True
+    g = m.grupos.copy()
+    g[sel] = int(g.max()) + 1
+    return Malla(m.vertices, m.caras, g)
+
+
 # ---------------------------------------------------------------- edición por aristas (reducir, remallar)
 class _Editor:
     """Malla editable (colapsar, dividir y voltear aristas) que usan Reducir y Remallar."""

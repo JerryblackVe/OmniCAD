@@ -9,6 +9,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 |---|---|
 | [seguimiento/README.md](seguimiento/README.md) | Método: dónde se anota cada cosa y cómo se borra al resolverse |
 | [seguimiento/bugs.md](seguimiento/bugs.md) | Bugs pendientes, verificados contra el código |
+| [seguimiento/agenda.md](seguimiento/agenda.md) | Tareas que Gerardo programa para una fecha (AG-n) |
 | [seguimiento/faltantes.md](seguimiento/faltantes.md) | Funciones pendientes (todavía no existen) |
 | [seguimiento/mejoras.md](seguimiento/mejoras.md) | Mejoras pendientes de lo que ya existe: rendimiento, interfaz, instalador |
 | Página de seguimiento (Artifact) | Vista web de bugs, faltantes, mejoras, lo último resuelto y los prompts para agentes; se refresca con `scripts/seguimiento_json.py` (pasos en `CLAUDE.md`). No es fuente de verdad |
@@ -24,6 +25,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [arquitectura.md](arquitectura.md) | Capas de la app, flujo de datos y motores de geometría |
 | [guia_comandos.md](guia_comandos.md) | Cómo se agrega un comando de diseño |
 | [grafo.md](grafo.md) | Grafo de nodos (programación visual sin ventana) |
+| [boceto_organizacion.md](boceto_organizacion.md) | Organización del boceto: categorías, grupos, visible / bloqueado / en perfiles, aislar, solver, API y cómo sumar un tipo de objeto |
 | [registro_uso.md](registro_uso.md) | Registro local optativo de uso: privacidad, activación, archivos, detector, herramientas e informe |
 | [f3d_formato.md](f3d_formato.md) | Archivos `.f3d` de Fusion: qué se lee (cuerpos, ocultos, bocetos, tabla del historial), qué no y la evidencia de por qué; rendimiento medido de BINCHA |
 | [../clon/rust/README.md](../clon/rust/README.md) | Módulo Rust del render: compilar y probar |
@@ -57,6 +59,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [plan_mcp_cli.md](plan_mcp_cli.md) | Plan de la capa para agentes (paquetes A–L) |
 | [plan_rust.md](plan_rust.md) | Qué pasa a Rust (R1–R13) y arreglos de Python (P1–P24) |
 | [plan_cpp.md](plan_cpp.md) | Qué pasa a C++ (C1–C5) |
+| [plan_boceto_organizar.md](plan_boceto_organizar.md) | Organización, agrupación y manipulación de objetos en Boceto (prompt maestro de Gerardo); se borra al terminarla |
 | [plan_caza_errores.md](plan_caza_errores.md) | Programa que busca errores solo (`scripts/caza/`): capas, jueces automáticos, comandos y cómo quedó |
 | [plan_reconstruir_solido.md](plan_reconstruir_solido.md) | De una malla a una pieza paramétrica (RI-1–RI-6, F10, F11) |
 | [plan_escaneo_celular.md](plan_escaneo_celular.md) | Escanear una pieza con el celular (ESC-1–ESC-7) |

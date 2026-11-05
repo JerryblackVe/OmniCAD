@@ -611,11 +611,10 @@ def redo(sesion):
     return _pila(sesion)
 
 
-@herramienta("get_timeline", "documento", "Lista los pasos del timeline en orden: índice, id, tipo, nombre, si está "
-             "suprimido, estado (ok, warning, error, suppressed, rolled_back), mensaje, parámetros tal como se guardaron "
-             "(params: expresiones como «5 * placa»), cuánto da cada expresión con los parámetros actuales (values, "
-             "en mm o grados) y, en primitivas y Mover, qué campo guardado corresponde a cada argumento de la "
-             "herramienta (aliases: length → ancho = X, width → largo = Y…), que edit_feature también acepta.")
+@herramienta("get_timeline", "documento", "Pasos del timeline en orden: índice, id, tipo, nombre, carpeta (group, o "
+             "null), suprimido, estado (ok, warning, error, suppressed, rolled_back), mensaje, params guardados "
+             "(expresiones como «5 * placa»), values (en mm o grados) y, en primitivas y Mover, aliases de cada "
+             "argumento (length → ancho = X…), que edit_feature también acepta.")
 def get_timeline(sesion, include_params: bool = True):
     """
     include_params: false para omitir los parámetros de cada paso (respuesta más corta).
@@ -624,8 +623,9 @@ def get_timeline(sesion, include_params: bool = True):
     nombres = _nombres_parametros(doc) if include_params else {}
     pasos = []
     for i, (op, r) in enumerate(zip(doc.operaciones, doc.resultados, strict=False)):
+        g = doc.grupo_de(op.id)
         paso = dict(_paso_info(op), index=i, suppressed=op.suprimida, status=ESTADOS.get(r.estado, r.estado),
-                    message=r.mensaje)
+                    group={"id": g["id"], "name": g["nombre"]} if g else None, message=r.mensaje)
         if include_params:
             paso["params"] = _params_json(op)
             paso["values"] = _valores_json(op, nombres)

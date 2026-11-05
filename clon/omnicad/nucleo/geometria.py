@@ -418,6 +418,7 @@ _REINTENTOS_BOOLEANA = (
 _TOPE_VOLUMEN_BOOLEANA = 1e-3     # parte del volumen de la pieza más chica que se tolera de más o de menos (más 1e-6 del total)
 _RESOLUCION_BOOLEANA = 1e-5       # mm: debajo de esto una herramienta deja autointersecciones o partes sueltas (B-128)
 _MUESTRAS_AFUERA = 16
+_MUESTRAS_COMUN = (500, 4000)    # B-144: muestreo del común intermedio; la 2.ª etapa solo si la diferencia es ambigua
 _MAX_PIEZAS_REVISADAS = 16
 
 
@@ -492,9 +493,12 @@ def _muestras_adentro(forma, cuantas, intentos):
             return
 
 
-def _parte_afuera(chica, grande):
+def _parte_afuera(chica, grande, cuantas=_MUESTRAS_AFUERA, al_menos=1):
     """Qué parte de `chica` queda afuera de `grande` (0 a 1), contando puntos: el kernel no sirve para decidirlo (con un
-    contacto casi tangente el común de dos toros devolvía un toro entero). None si no se puede saber.
+    contacto casi tangente el común de dos toros devolvía un toro entero). None si no se puede saber. `cuantas` sube
+    la precisión (y el costo: ~0,03 s con 500, ~0,25 s con 4000 en piezas chicas). `al_menos`: si se juntan menos
+    muestras que las pedidas, None: con menos puntos el margen de error sale mal (una herramienta rala, como un anillo,
+    deja la caja casi vacía) y el margen desmentiría un corte bueno.
     shortcut: si la caja de `chica` entra en la de un `grande` de más de _MAX_CARAS_REVISADAS caras da None sin muestrear
     (7 ms por punto en una placa de 3000 agujeros), subir si aparece una pieza perdida en un hueco de un cuerpo grande."""
     if len(caras(grande)) > _MAX_CARAS_REVISADAS:
@@ -509,26 +513,51 @@ def _parte_afuera(chica, grande):
             if c.State() in (TopAbs_IN, TopAbs_ON):
                 return True
         return False
-    muestras = list(_muestras_adentro(chica, _MUESTRAS_AFUERA, 20 * _MUESTRAS_AFUERA))
-    return sum(not adentro(p) for p in muestras) / len(muestras) if muestras else None
+    muestras = list(_muestras_adentro(chica, cuantas, 20 * cuantas))
+    if len(muestras) < al_menos:
+        return None
+    return sum(not adentro(p) for p in muestras) / len(muestras)
 
 
 def _comun_desmentido(objetivo, herramienta, operacion, vr, volumenes):
     """Cada booleana afirma cuánto comparten las piezas: unir va + vb − vr, cortar va − vr, intersecar vr. Si afirma un
     extremo (la chica entera adentro, o nada en común) cae justo en el borde del rango de volumen, donde un resultado
     malo pasa: dos toros casi tangentes perdían uno al unir y una esfera apoyada en una pared no cortaba nada (B-125).
-    Ahí lo comprueban los puntos. Unir sin nada en común no se mira: es lo normal y no pierde material. Devuelve el
-    problema o None. Un margen de 1/4 de la chica porque un falso positivo rechaza un resultado bueno."""
+    Ahí lo comprueban los puntos con un margen de 1/4 de la chica (un falso positivo rechaza un resultado bueno). El
+    kernel también pierde material EN EL MEDIO del rango (B-144: una esfera casi tangente a una pared quitaba 104 de
+    los 122,5 mm³ compartidos y el margen de 1/4 no lo ve): ahí se prueba la proporción reclamada contra un muestreo
+    más fino, con margen de 4,5 desvíos de esa proporción; solo si la diferencia queda ambigua se afina el muestreo.
+    Unir sin nada en común no se mira: es lo normal y no pierde material. El muestreo fino se salta cuando la pieza es
+    compleja o la herramienta es rala (un anillo no llena las muestras): mejor sin chequeo que lento o falso.
+    Devuelve el problema o None."""
     vb, vh = volumenes
     v = min(vb, vh)
     tol = 1e-6 * (vb + vh) + _TOPE_VOLUMEN_BOOLEANA * v
     comun = {"unir": vb + vh - vr, "cortar": vb - vr, "intersecar": vr}[operacion]
-    if comun < v - tol and (comun > tol or operacion == "unir"):
-        return None
     chica, grande = (objetivo, herramienta) if vb <= vh else (herramienta, objetivo)
-    afuera = _parte_afuera(chica, grande)
-    if afuera is None or abs(comun - (1 - afuera) * v) < v / 4:
-        return None
+    if operacion != "unir" and tol < comun < v - tol:
+        if len(caras(chica)) > _MAX_CARAS_REVISADAS or len(caras(grande)) > _MAX_CARAS_REVISADAS:
+            return None       # el muestreo fino sería lento sobre una pieza compleja: mejor sin chequeo que lento
+        for cuantas in _MUESTRAS_COMUN:
+            afuera = _parte_afuera(chica, grande, cuantas, al_menos=cuantas)
+            if afuera is None:
+                return None
+            dif = abs(comun - (1 - afuera) * v)
+            # desvío de la proporción muestreada si el común reclamado fuera el verdadero, en mm³
+            ruido = 4.5 * math.sqrt(comun * (v - comun) / cuantas)
+            if dif >= ruido:
+                break                # desmentida con confianza: cae al aviso de abajo
+            if dif < ruido * (2 / 4.5):
+                return None          # consistente con el muestreo
+            # ambigua: se afina con más muestras; si sigue ambigua, no se desmiente
+        else:
+            return None
+    else:
+        if operacion == "unir" and comun < v - tol:
+            return None
+        afuera = _parte_afuera(chica, grande)
+        if afuera is None or abs(comun - (1 - afuera) * v) < v / 4:
+            return None
     return 2, (f"el resultado dice que las piezas comparten {comun:.6g} mm³ y los puntos dan cerca de "
                f"{(1 - afuera) * v:.6g} mm³"), abs(comun - (1 - afuera) * v), vb + vh
 
@@ -576,6 +605,13 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, c
             return 2, "el resultado quedó vacío", float("inf"), 0.0
         if operacion == "cortar" and volumenes is not None and volumenes[0] > volumenes[1] * (1 + 1e-6) + 1e-6:
             return 2, "el resultado quedó vacío aunque la herramienta no cubre el objetivo", float("inf"), 0.0
+        if operacion == "cortar":
+            # B-165: un agujero tangente a dos paredes borraba la caja y le quedaba el 8 % en las esquinas; el margen de
+            # 1/4 de `_comun_desmentido` no lo ve. Si no queda nada, el objetivo fuera de la herramienta lo desmiente.
+            afuera = _parte_afuera(objetivo, herramienta, _MUESTRAS_COMUN[0])
+            if afuera is not None and afuera > 0.01:
+                return 2, (f"el resultado quedó vacío aunque el {afuera:.0%} del objetivo está fuera de la "
+                           "herramienta"), float("inf"), 0.0
         return None if volumenes is None else _comun_desmentido(objetivo, herramienta, operacion, 0.0, volumenes)
     try:
         if volumenes is not None:
@@ -1138,6 +1174,64 @@ def punto_toca(forma, punto, tolerancia=1e-6):
     """¿El punto está sobre la forma (o dentro de ella si es un sólido), con esa tolerancia?"""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
     return se_tocan(BRepBuilderAPI_MakeVertex(gp_Pnt(*[float(c) for c in punto])).Vertex(), forma, tolerancia)
+
+
+def _dentro_de_cara(cara, punto, tolerancia=1e-7):
+    """Pertenencia en UV de una cara plana: evita la costosa proyección general del clasificador 3D."""
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.ElSLib import ElSLib
+    superficie = BRepAdaptor_Surface(cara)
+    if superficie.GetType() != GeomAbs_Plane:
+        return False
+    uv = ElSLib.Parameters_s(superficie.Plane(), gp_Pnt(*map(float, punto)))
+    return BRepClass_FaceClassifier(cara, gp_Pnt2d(*uv), tolerancia).State() == TopAbs_IN
+
+
+def punto_dentro(cara):
+    """Punto interior de una cara plana, para clasificar perfiles de boceto como `Sketch.profiles` de Fusion.
+
+    Verifica el centro del mayor triángulo útil. Sin malla o si el redondeo desplaza ese punto fuera de la cara,
+    busca sobre el B-rep exacto. No modifica los contornos ni rellena los agujeros.
+    """
+    from OCP.BRepClass3d import BRepClass3d_SolidExplorer
+    if cara is None or cara.IsNull() or cara.ShapeType() != TopAbs_FACE:
+        raise ErrorGeometria("El perfil no tiene una cara válida para calcular su punto interior.")
+    try:
+        tris = np.asarray(teselar(cara)[0], float).reshape(-1, 3, 3)
+        if len(tris):
+            areas = np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
+            utiles = np.isfinite(areas) & (areas > 0)
+            if utiles.any():
+                punto = tris[int(np.argmax(np.where(utiles, areas, -1)))].mean(axis=0)
+                if _dentro_de_cara(cara, punto):
+                    return punto
+    except Exception:  # noqa: BLE001 — OCC puede fallar al mallar una cara válida; se consulta su B-rep
+        pass
+    try:
+        if not es_valida(cara) or _integral(cara, BRepGProp.SurfaceProperties_s) <= 0:
+            raise ErrorGeometria("El perfil tiene una cara inválida o sin área interior. Revisá sus contornos.")
+        if BRepAdaptor_Surface(cara).GetType() != GeomAbs_Plane:
+            raise ErrorGeometria("El punto interior del perfil necesita una cara plana.")
+        caja = caja_envolvente(cara)
+        escala = math.dist(*caja)
+        trabajo, cambio = cara, None
+        if 0 < escala < 1e-3:
+            # El clasificador falla por debajo de su precisión absoluta; una copia a escala evita esa ambigüedad.
+            cambio = gp_Trsf()
+            cambio.SetScale(gp_Pnt(*caja[0]), 1 / escala)
+            trabajo = TopoDS.Face(BRepBuilderAPI_Transform(cara, cambio, True).Shape())
+        punto = gp_Pnt()
+        if BRepClass3d_SolidExplorer.FindAPointInTheFace_s(trabajo, punto) and _dentro_de_cara(
+                trabajo, (punto.X(), punto.Y(), punto.Z())):
+            if cambio is not None:
+                punto.Transform(cambio.Inverted())
+            return np.array([punto.X(), punto.Y(), punto.Z()])
+    except ErrorGeometria:
+        raise
+    except Exception as e:  # noqa: BLE001 — las excepciones nativas de OCC no comparten una clase base
+        raise ErrorGeometria("No se pudo clasificar el interior del perfil con OpenCascade.") from e
+    raise ErrorGeometria("La cara es válida, pero no se pudo localizar un punto interior sin triangulación. "
+                         "Revisá las tolerancias de sus contornos.")
 
 
 def _brepcheck_estable(forma):

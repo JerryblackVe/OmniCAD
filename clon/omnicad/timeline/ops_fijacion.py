@@ -101,7 +101,8 @@ class OpFijacion(Operacion):
     """Insertar fijación de Fusion [SLD-INSERT-FASTENER]: posición (aristas circulares, caras cilíndricas o
     cónicas, puntos con dirección opcional), «Seleccionar similares», familia y norma, tamaño nominal y largo
     (automáticos o elegidos), rosca cosmética o modelada, voltear y material. Crea un cuerpo sólido por
-    posición, con el nombre de la designación («ISO 4762 M6x20»)."""
+    posición, con el nombre de la designación («ISO 4762 M6x20»). No modifica los demás cuerpos: en Fusion el
+    agujero de paso o roscado lo hace Agujero [GUID-0DFCBD4F, GUID-3A76B269], no esta operación."""
     TIPO, ETIQUETA, ICONO = "fijacion", "Fijación", "⚲"
     PARAMS = {"posiciones": [], "direccion": None, "similares": True, "familia": "tornillo", "norma": "ISO 4762",
               "tamano": AUTO, "largo": AUTO, "rosca": "cosmetica", "voltear": False, "material": "Acero"}

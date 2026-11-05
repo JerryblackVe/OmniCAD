@@ -117,7 +117,9 @@ class _Arbol(QTreeWidget):
         p.restore()
 
 
-RENOMBRABLES = {"cuerpo", "boceto", "plano", "eje", "punto", "calcomania"}
+RENOMBRABLES = {"cuerpo", "boceto", "plano", "eje", "punto", "calcomania", "objeto_boceto"}
+TIPOS_BOCETO = {"categoria_boceto", "objeto_boceto", "curva_boceto"}   # filas del boceto que se está editando
+TOPE_SUELTAS = 200     # filas de curvas sueltas por boceto: más que eso no se lee y rearmarlas frena cada cambio
 
 
 def estado_boceto(resultado):
@@ -155,7 +157,9 @@ class Navegador(QFrame):
         self._origen = {}            # {clave: «creo» | «modifico»} resaltadas en amarillo (`resaltar_origen`)
         self.estados = {}            # {clave de cuerpo o boceto: «aviso» | «error»} del paso que lo creó (insignia del ícono)
         self.organizacion = {"grupos": {}, "conjuntos": {}}
+        self.boceto_edicion = None   # (id del boceto, organización de get_sketch_organization) mientras se edita
         self.menu_elemento = None
+        self.menu_boceto = None      # fn(ítem o None) → QMenu de la organización del boceto en edición
         self.setFixedWidth(300)
         cabecera = QFrame(objectName="cabecera_navegador")
         h = QHBoxLayout(cabecera)
@@ -207,17 +211,18 @@ class Navegador(QFrame):
         para que se vea el hallazgo."""
         t = texto.strip().lower()
 
-        def coincide(item):
-            return t in item.text(0).lower() or any(coincide(item.child(i))
-                                                    for i in range(item.childCount()))
+        def aplicar(item, por_padre):
+            """Queda a la vista lo que coincide, sus ramas de arriba (abiertas) y lo que cuelga de un hallazgo."""
+            propio = t in item.text(0).lower()
+            debajo = [aplicar(item.child(i), por_padre or propio) for i in range(item.childCount())]
+            item.setHidden(bool(t) and not (propio or any(debajo) or por_padre))
+            if t and any(debajo):
+                item.setExpanded(True)
+            return propio or any(debajo)
 
         raiz = self.arbol.invisibleRootItem()
         for i in range(raiz.childCount()):
-            it = raiz.child(i)
-            mostrar = not t or coincide(it)
-            it.setHidden(not mostrar)
-            if mostrar and t:
-                it.setExpanded(True)
+            aplicar(raiz.child(i), False)
         self.ajustar_alto()
 
     # ------------------------------------------------------------ contenido
@@ -240,6 +245,7 @@ class Navegador(QFrame):
         Si no cambió nada de lo que se muestra, no se reconstruye (la ventana lo llama en cada aviso del documento)."""
         firma = repr((titulo, cuerpos, bocetos, sorted(ocultos), vis, planos, vistas, self.calcomanias,
                       self.componentes, self.lienzos, self.uniones, self.analisis, self.organizacion, self.estados, self.muestras,
+                      self.boceto_edicion,
                       formato.unidad_longitud(), formato.unidad_masa()))
         if self._items and firma == getattr(self, "_firma", None):
             return
@@ -278,6 +284,8 @@ class Navegador(QFrame):
                 it = self._item(carpeta, ident, nombre, ico_e, tipo_e, ident not in ocultos)
                 if len(elemento) > 3:
                     it.setToolTip(0, elemento[3])
+        if self.boceto_edicion is not None and self.boceto_edicion[0] in self._items:
+            self._ramas_boceto(self._items[self.boceto_edicion[0]], self.boceto_edicion[1])
         for ident, nombre, fijo, cuerpos_c, padre in self.componentes:     # componentes con sus cuerpos, en árbol (ASM-9)
             arriba = self._items[padre] if padre and padre in self._items else raiz
             comp = self._item(arriba, ident, nombre + ("  (fijo)" if fijo else ""), "componente", "componente",
@@ -315,6 +323,68 @@ class Navegador(QFrame):
         if clave_actual in self._items:
             self.arbol.setCurrentItem(self._items[clave_actual], 0, QItemSelectionModel.NoUpdate)
         bloqueo.unblock()
+        self.ajustar_alto()
+
+    def _ramas_boceto(self, it_boceto, org):
+        """Organización del boceto que se edita: Geometrías, Textos, SVG / DXF y Grupos personalizados (las categorías
+        salen del dato; los grupos son objetos reales del boceto). Al salir del boceto la ventana pasa None."""
+        it_boceto.setText(0, it_boceto.text(0) + " — En edición")
+        filas = {o["id"]: o for c in org["categories"].values() for o in c["objects"]}
+
+        def objeto(padre, o, clave):
+            marcas = (["bloqueado"] if o["locked"] else []) + ([] if o["in_profiles"] else ["sin perfiles"])
+            ico = {"textos": "texto", "vectores": "insertar_dxf" if o.get("source") == "DXF" else "insertar_svg",
+                   "grupos": "componente"}.get(o["category"], "spline")
+            it = self._item(padre, clave, o["name"] + "".join(f"  [{m}]" for m in marcas), ico, "objeto_boceto",
+                            o["visible"])
+            it.setToolTip(0, f"{o['name']} · {'visible' if o['visible'] else 'oculto'} · "
+                             f"{'bloqueado' if o['locked'] else 'editable'} · "
+                             f"{'forma perfiles' if o['in_profiles'] else 'fuera de los perfiles CAD'}")
+            for h in o["children"]:
+                if h in filas:
+                    objeto(it, filas[h], f"bg:{o['id']}:{h}")
+            return it
+        for cat, datos in org["categories"].items():
+            carpeta = self._item(it_boceto, f"bk:{cat}", f"{datos['title']} ({datos['count']})", "carpeta",
+                                 "categoria_boceto")
+            for o in datos["objects"]:
+                objeto(carpeta, o, f"bo:{o['id']}")
+            for c in datos["curves"][:TOPE_SUELTAS]:     # un boceto viejo puede tener miles de curvas sueltas
+                self._item(carpeta, f"bc:{c['id']}", c["name"] + ("  [construcción]" if c["construction"] else ""),
+                           c["type"] if c["type"] in ("linea", "circulo", "arco", "spline", "texto") else "spline",
+                           "curva_boceto")
+            if len(datos["curves"]) > TOPE_SUELTAS:
+                self._item(carpeta, f"bk:{cat}:mas", f"… y {len(datos['curves']) - TOPE_SUELTAS} curvas más "
+                           "(elegilas en el visor)", "spline", "info")
+
+    def actualizar_boceto(self, ident, org):
+        """Rearma en el lugar solo la rama del boceto en edición (org None la saca): el resto del árbol no se toca."""
+        self.boceto_edicion = None if org is None else (ident, org)
+        self._firma = None                      # el próximo `actualizar` completo vuelve a armar todo
+        it = self._items.get(ident)
+        if it is None:
+            return
+        primera = "bk:geometrias" not in self._items
+        abiertos = {k for k, i in self._items.items() if i.isExpanded()}
+        elegidos = {i.data(0, ROL_CLAVE) for i in self.arbol.selectedItems()}
+        with QSignalBlocker(self.arbol):
+            for k in [k for k in self._items if k.startswith(("bk:", "bo:", "bc:", "bg:"))]:
+                del self._items[k]
+            for i in reversed(range(it.childCount())):
+                if str(it.child(i).data(0, ROL_CLAVE)).startswith("bk:"):
+                    it.takeChild(i)
+            it.setText(0, it.text(0).removesuffix(" — En edición"))
+            if org is not None:
+                self._ramas_boceto(it, org)
+                for k, i in self._items.items():
+                    if k.startswith(("bk:", "bo:", "bg:")):
+                        i.setExpanded(k in abiertos or (primera and k.startswith("bk:")))
+                        i.setSelected(k in elegidos)
+                if primera:
+                    padre = it
+                    while padre is not None:
+                        padre.setExpanded(True)
+                        padre = padre.parent()
         self.ajustar_alto()
 
     def item(self, clave):
@@ -409,7 +479,7 @@ class Navegador(QFrame):
     # ------------------------------------------------------------ interacción
     def _seleccion_cambiada(self):
         self.seleccion_cambiada.emit([it.data(0, ROL_CLAVE) for it in self.arbol.selectedItems()
-                                     if it.data(0, ROL_TIPO) in RENOMBRABLES])
+                                     if it.data(0, ROL_TIPO) in RENOMBRABLES | TIPOS_BOCETO])
 
     def _clic(self, item, _col):
         if item.data(0, ROL_TIPO) == "conjunto":
@@ -459,6 +529,12 @@ class Navegador(QFrame):
 
     def _menu(self, pos):
         item = self.arbol.itemAt(pos)
+        en_boceto = self.boceto_edicion is not None and self.menu_boceto is not None
+        if en_boceto and (item is None or item.data(0, ROL_TIPO) in TIPOS_BOCETO):
+            menu = self.menu_boceto(item)          # objeto, grupo, categoría o área vacía del boceto en edición
+            if menu is not None and not menu.isEmpty():
+                menu.exec(self.arbol.viewport().mapToGlobal(pos))
+            return
         if item is None:
             return
         tipo, clave = item.data(0, ROL_TIPO), item.data(0, ROL_CLAVE)

@@ -88,6 +88,25 @@ def _unitario(v):
     return v[0] / n, v[1] / n
 
 
+def _afinar_contacto(residuo, inicio):
+    """B-121: afina parámetros de contacto con la geometría quieta. Si la restricción ya se cumple, el solver arranca
+    de la solución y no mueve nada; si no, queda el arranque de siempre (punto más cercano o muestras), así una
+    restricción nueva se resuelve igual que antes. Sin recortar al tramo: el solver tampoco lo hace, y el contacto
+    puede caer en la prolongación de la curva (recortarlo al extremo en cada pasada era la deriva)."""
+    from scipy.optimize import least_squares
+    s = least_squares(residuo, inicio, method="lm", xtol=1e-15, ftol=1e-15, gtol=1e-15, max_nfev=200)
+    return [float(v) for v in s.x] if max(abs(v) for v in residuo(s.x)) < TOLERANCIA else list(inicio)
+
+
+def _contacto_exacto(pa, pb, ta, tb):
+    """Parámetros de contacto de una tangencia general entre las primitivas `pa` y `pb` (ver `_afinar_contacto`)."""
+    def residuo(t):
+        Ca, Da = evaluar_primitiva(pa, t[0], 1)
+        Cb, Db = evaluar_primitiva(pb, t[1], 1)
+        return [Ca[0] - Cb[0], Ca[1] - Cb[1], _cruz(_unitario(Da), _unitario(Db)) * _ESCALA_TANGENTE]
+    return _afinar_contacto(residuo, [ta, tb])
+
+
 class _Sistema:
     """Arma el vector de incógnitas y la función de residuos de un boceto."""
 
@@ -552,8 +571,10 @@ class _Sistema:
 
     def _contacto_punto(self, pid, cid):
         """Punto sobre una curva libre (spline o cónica): un parámetro auxiliar t y P(t) = punto."""
-        prim0 = self.prim(self.x0, cid)
-        j = self._parametro(mas_cercano(prim0, self.P(self.x0, pid))[0])
+        prim0, p0 = self.prim(self.x0, cid), self.P(self.x0, pid)
+        t0 = _afinar_contacto(lambda t: np.subtract(evaluar_primitiva(prim0, t[0])[0], p0),
+                              [mas_cercano(prim0, p0)[0]])[0]
+        j = self._parametro(t0)
 
         def f(x, pid=pid, cid=cid, j=j):
             q = evaluar_primitiva(self.prim(x, cid), x[j])[0]
@@ -607,8 +628,8 @@ class _Sistema:
         pa0, pb0 = self.prim(x0, e[0]), self.prim(x0, e[1])
         ma = puntos_primitiva(pa0, 96)
         mejor = min(((math.dist(q, mas_cercano(pb0, q)[2]), q) for q in ma), key=lambda z: z[0])[1]
-        ja = self._parametro(mas_cercano(pa0, mejor)[0])
-        jb = self._parametro(mas_cercano(pb0, mejor)[0])
+        ta, tb = _contacto_exacto(pa0, pb0, mas_cercano(pa0, mejor)[0], mas_cercano(pb0, mejor)[0])
+        ja, jb = self._parametro(ta), self._parametro(tb)
 
         def f(x, a=e[0], c=e[1], ja=ja, jb=jb):
             Ca, Da = evaluar_primitiva(self.prim(x, a), x[ja], 1)
@@ -844,6 +865,13 @@ def _fijos(b):
             fijos_p.update(c.puntos())
             fijos_r.add(c.id)
     fijos_p.update(p.id for p in b.puntos.values() if p.proyectado)
+    if b.objetos:
+        from . import objetos
+        for cid, (raiz, _hoja, _m) in objetos.indice(b).items():
+            if b.objetos[raiz].get("texto_automatico"):
+                continue
+            fijos_p.update(b.curvas[cid].puntos())
+            fijos_r.add(cid)
     return fijos_p, fijos_r
 
 

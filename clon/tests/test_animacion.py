@@ -405,3 +405,145 @@ def test_doble_clic_edita_el_texto_de_la_llamada(ventana):
     assert v.guion.accion(a["id"])["texto"] == "Nueva" and v._caja is None
     _clic(v.lienzo, 3, 3, doble=True)                        # doble clic en el vacío: no abre nada
     assert v._caja is None
+
+
+# ---------------------------------------------------------------- ANI-4: la línea de tiempo de la captura de Fusion
+def test_regla_muestra_el_tiempo(ventana):
+    v = ventana
+    v.show()
+    cid = list(v.lienzo.objetos)[0]
+    v.agregar_accion({"tipo": "transformar", "cuerpos": [cid], "traslacion": [0, 0, 10], "inicio": 0, "duracion": 3})
+    p = v.linea.pistas
+    marcas = p.marcas(600)
+    assert marcas[0] == (0.0, "0 s")                         # la regla empieza en cero y numera el tiempo
+    assert marcas[-1][0] >= 3.0                              # llega más allá del final del guion
+    assert all(t < t2 for (t, _), (t2, _) in zip(marcas, marcas[1:], strict=False))
+    assert p.texto_cursor() == "0.0"
+    antes = p.grab()
+    v.ir_a(2.5)
+    assert p.texto_cursor() == "2.5"                         # el número que la regla pinta en el cursor
+    assert p.grab() != antes                                 # y ese número se dibuja en la regla
+
+
+def _rueda(w, giros, mod=None):
+    """Rueda del ratón sobre el widget (QTest no trae mouseWheel en PySide6): `giros` de 120 por paso."""
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtWidgets import QApplication
+    centro = w.rect().center()
+    e = QWheelEvent(QPointF(centro), w.mapToGlobal(centro), QPoint(0, 0), QPoint(0, 120 * giros),
+                    Qt.NoButton, Qt.ControlModifier if mod is None else mod, Qt.ScrollUpdate, False)
+    QApplication.sendEvent(w, e)
+
+
+def test_zoom_arranca_en_1_0_y_cambia_con_la_rueda(ventana):
+    v = ventana
+    v.show()
+    assert v.linea.zoom.value() == 10                          # décimas del factor: 10 = zoom 1,0
+    assert v.linea.zoom_valor.text() == "1.0"
+    assert v.linea.pistas.escala == pytest.approx(an.ZOOM_BASE)
+    _rueda(v.linea.pistas, 1)
+    assert v.linea.zoom.value() > 10 and v.linea.pistas.escala > an.ZOOM_BASE
+    assert v.linea.zoom_valor.text() == f"{v.linea.zoom.value() / 10:.1f}"
+    _rueda(v.linea.pistas, -6)                               # la rueda para abajo vuelve a un zoom chico
+    assert v.linea.zoom.value() < 10
+
+
+def test_zoom_con_la_rueda_se_mueve_tambien_en_los_extremos(ventana):
+    v = ventana
+    v.show()
+    z = v.linea.zoom
+    z.setValue(2)
+    _rueda(v.linea.pistas, 1)
+    assert z.value() == 3                                      # ANI-4: antes el redondeo lo dejaba en 2
+    _rueda(v.linea.pistas, -1)
+    assert z.value() == 2
+    _rueda(v.linea.pistas, -1)
+    assert z.value() == 2                                      # el mínimo del deslizador se respeta
+    z.setValue(80)
+    _rueda(v.linea.pistas, 1)
+    assert z.value() == 80
+    _rueda(v.linea.pistas, -1)
+    assert z.value() < 80
+
+
+def test_mas_de_la_pestanas_crea_un_guion_y_deshacer_lo_saca(ventana, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    v = ventana
+    v.show()
+    monkeypatch.setattr(an.QInputDialog, "getItem", lambda *a, **k: ("Limpio", True))
+    cid = list(v.lienzo.objetos)[0]
+    v.agregar_accion({"tipo": "transformar", "cuerpos": [cid], "traslacion": [0, 0, 10], "inicio": 0, "duracion": 1})
+    QTest.mouseClick(v.linea.boton_nuevo, Qt.LeftButton)
+    assert [g.nombre for g in v.guiones] == ["Guion gráfico1", "Guion gráfico2"]
+    assert v.actual == 1 and not v.guion.acciones            # limpio: no hereda las acciones
+    assert v.linea.pestanas.tabText(1) == "Guion gráfico2"
+    assert len(v.doc.espacios["animacion"]["guiones"]) == 2
+    v.doc.deshacer()
+    assert [g["nombre"] for g in v.doc.espacios["animacion"]["guiones"]] == ["Guion gráfico1"]
+    v.doc.rehacer()
+    assert len(v.doc.espacios["animacion"]["guiones"]) == 2
+    monkeypatch.setattr(an.QInputDialog, "getItem", lambda *a, **k: ("Limpio", False))
+    QTest.mouseClick(v.linea.boton_nuevo, Qt.LeftButton)   # Cancelar en el diálogo: no crea el guion
+    assert [g.nombre for g in v.guiones] == ["Guion gráfico1", "Guion gráfico2"]
+
+
+def test_botones_de_reproduccion_de_la_linea(ventana):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    v = ventana
+    v.show()
+    cid = list(v.lienzo.objetos)[0]
+    v.agregar_accion({"tipo": "transformar", "cuerpos": [cid], "traslacion": [0, 0, 10], "inicio": 0, "duracion": 2})
+    QTest.mouseClick(v.linea.botones["reproducir"], Qt.LeftButton)
+    assert v.reproduciendo                                   # ▶ arranca
+    QTest.qWait(200)
+    assert v.t > 0.0 and v.linea.pistas.texto_cursor() != "0.0"
+    QTest.mouseClick(v.linea.botones["reproducir"], Qt.LeftButton)
+    assert not v.reproduciendo                               # el mismo botón pausa
+    quieto = v.t
+    QTest.qWait(200)
+    assert v.t == quieto
+    QTest.mouseClick(v.linea.botones["fin"], Qt.LeftButton)
+    assert v.t == pytest.approx(2.0)
+    QTest.mouseClick(v.linea.botones["inicio"], Qt.LeftButton)
+    assert v.t == pytest.approx(0.0)
+
+
+def test_E_sigue_siendo_explosion_manual(ventana, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtGui import QKeySequence
+    v = ventana
+    disparadas = []
+    monkeypatch.setattr(v, "comando", lambda tipo, **kw: disparadas.append((tipo, kw)))
+    monkeypatch.setattr(v, "dialogo_publicar", lambda: disparadas.append("publicar"))
+    v.show()
+    assert QTest.qWaitForWindowActive(v)
+    assert [k for k, a in v.acciones.items() if a.shortcut() == QKeySequence(Qt.Key_E)] == []
+    grisados = [a for a in v.cinta.no_disponibles if a.text() == "Explosión manual"]
+    assert len(grisados) == 1 and not grisados[0].isEnabled()   # regla de honestidad: grisado, no activo
+    QTest.keyClick(v, Qt.Key_E)
+    assert disparadas == []                                  # E no hace nada hasta que ANI-2 lo implemente
+
+
+def test_linea_de_tiempo_cabe_en_800x520(ventana):
+    """La línea de tiempo entra en 800x520 sin comerse el lienzo. Offscreen la ventana no baja de 1054 px de ancho
+    (el mínimo de la cinta), así que acá se mide el alto; los 800 px reales se miraron en
+    evidencias/informes_2026-11-04/linea_800x520.png (plataforma windows)."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+    v = ventana
+    v.resize(800, 520)
+    v.show()
+    assert QTest.qWaitForWindowExposed(v)
+    QTest.qWait(60)
+    linea, pistas = v.linea, v.linea.pistas
+    assert pistas.isVisible()
+    assert v.height() == 520 and linea.mapTo(v, QPoint(0, 0)).y() + linea.height() <= v.height() + 1
+    assert linea.height() <= v.height() // 2                     # deja más de la mitad para el lienzo
+    assert pistas.height() >= pistas.REGLA + pistas.FILA * 2      # regla y al menos dos filas
+    for w in (linea.botones["reproducir"], linea.zoom, linea.zoom_valor, linea.pestanas, linea.boton_nuevo):
+        assert w.isVisible()
+    assert pistas.width() >= 300

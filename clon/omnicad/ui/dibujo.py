@@ -430,7 +430,8 @@ _DIBUJOS_ICONO = {
     "linea_centro": _i_linea_centro, "marca_centro": _i_marca_centro, "cota": _i_cota,
     "cota_lineal": _i_cota, "cota_alineada": _i_cota_alineada, "cota_ordenadas": _i_cota_ordenadas,
     "cota_radial": _i_cota_radial, "cota_radio": _i_cota_radial, "cota_diametro": _i_cota_diametro,
-    "cota_angular": _i_cota_angular, "texto": _i_texto, "nota": _i_nota, "tabla": _i_tabla, "globo": _i_globo,
+    "cota_angular": _i_cota_angular, "cota_linea_base": _i_cota_ordenadas, "cota_arco": _i_cota_angular,
+    "texto": _i_texto, "nota": _i_nota, "tabla": _i_tabla, "globo": _i_globo,
     "exportar_pdf": lambda p: _i_exportar(p, "PDF", _ROJO), "exportar_dxf": lambda p: _i_exportar(p, "DXF", _AZUL),
     "exportar_svg": lambda p: _i_exportar(p, "SVG", _AZUL_OSC),
     "hoja": _i_hoja,
@@ -468,7 +469,7 @@ GRUPOS = [  # (título, botones rápidos, menú); un ítem ("texto",) es un coma
      ["linea_centro", "marca_centro", SEP, ("Patrón de marcas de centro",), ("Extensión de arista",)]),
     ("COTAS", ["cota", "cota_ordenadas", "cota_radial", "cota_angular"],
      ["cota", "cota_ordenadas", "cota_lineal", "cota_alineada", "cota_angular", "cota_radio", "cota_diametro",
-      SEP, ("Cota de línea base",), ("Cota en cadena",), ("Corte de cota",)]),
+      SEP, "cota_linea_base", "cota_arco", ("Cota en cadena",), ("Corte de cota",)]),
     ("TEXTO", ["texto", "nota"], ["texto", "nota"]),
     ("TABLAS", ["tabla", "globo"], ["tabla", "globo", SEP, ("Renumerar",)]),
     ("EXPORTAR", ["exportar_pdf", "exportar_dxf", "exportar_svg"],
@@ -1084,6 +1085,97 @@ class HerrCotaAngular(HerrCota):
         super().mover(p, e)
 
 
+class HerrCotaLineaBase(Herramienta):
+    """Cota de línea base (Baseline Dimension): punto de referencia, primer punto y lugar de la primera cota;
+    cada punto siguiente se apila solo con SEPARACION_BASE. Fusion las crea desde la línea de referencia de
+    una cota existente; Esc termina."""
+    indicacion = "Elegí el punto de referencia de la línea base."
+
+    def iniciar(self):
+        self.vista_id = None
+        self.base = self.punto = self.lugar = None
+        self.indice = 0
+        super().iniciar()
+
+    def mover(self, p, e):
+        k = self.v.punto_cercano(p)
+        if k and self.vista_id and k[0] != self.vista_id:
+            k = None
+        if self.base is None or self.punto is None:
+            self.v.previa([], k[2] if k else None)
+            return
+        punto = k[2] if k else p
+        lugar = self.lugar if self.lugar is not None else p
+        try:
+            lugar_i, tipo = nd.lugar_linea_base(self.base, punto, lugar, self.indice)
+        except ErrorGeometria:                     # el cursor cayó sobre la referencia: nada para prever
+            self.v.previa([], k[2] if k else None)
+            return
+        v = self.d.vista(self.vista_id)
+        prims = self.d.primitivas_anotacion({"tipo": "cota", "subtipo": tipo, "vista": self.vista_id,
+                                             "puntos": v.de_hoja([self.base, punto]).tolist(),
+                                             "lugar": v.de_hoja([lugar_i])[0].tolist(), "texto": None})
+        self.v.previa(prims, k[2] if k else None)
+
+    def clic(self, p, e):
+        if self.base is None:
+            k = self.v.punto_cercano(p)
+            if k:
+                self.vista_id, self.base = k[0], k[2]
+                self.v.indicar("Elegí el primer punto a acotar.")
+            return
+        if self.punto is None:
+            k = self.v.punto_cercano(p)
+            if k and k[0] == self.vista_id and np.linalg.norm(k[2] - self.base) > 1e-6:
+                self.punto = k[2]
+                self.v.indicar("Clic para colocar la primera cota; los demás puntos se apilan solos.")
+            return
+        if self.lugar is None:
+            self.lugar = p
+            punto, lugar = self.punto, p
+            self.v.modificar(lambda: self.d.agregar_cota_linea_base(self.vista_id, self.base, punto, lugar, 0))
+            self.indice = 1
+            self.v.indicar("Elegí otro punto a acotar (Esc termina).")
+            return
+        k = self.v.punto_cercano(p)
+        if k and k[0] == self.vista_id:
+            punto, lugar, indice = k[2], self.lugar, self.indice
+            self.v.modificar(lambda: self.d.agregar_cota_linea_base(self.vista_id, self.base, punto, lugar, indice))
+            self.indice += 1
+            self.v.indicar("Elegí otro punto a acotar (Esc termina).")
+
+
+class HerrCotaArco(Herramienta):
+    """Cota de longitud de arco (Arc Length Dimension): un arco parcial de una vista y el lugar del texto."""
+    indicacion = "Elegí un arco de una vista (las circunferencias completas van con cota de radio o diámetro)."
+
+    def iniciar(self):
+        self.arco = None
+        super().iniciar()
+
+    def mover(self, p, e):
+        if self.arco is None:
+            self.v.previa([])
+            return
+        vid, puntos = self.d.puntos_de_arco(self.arco)
+        v = self.d.vista(vid)
+        a = {"tipo": "cota", "subtipo": "longitud_arco", "vista": vid, "puntos": v.de_hoja(puntos).tolist(),
+             "lugar": v.de_hoja([p])[0].tolist(), "texto": None}
+        self.v.previa(self.d.primitivas_anotacion(a))
+
+    def clic(self, p, e):
+        if self.arco is None:
+            a = self.d.arco_cercano(p, self.v.vista.tolerancia())
+            if a:
+                self.arco = a
+                self.v.indicar("Clic para colocar la cota.")
+            return
+        arco = self.arco
+        self.v.modificar(lambda: self.d.agregar_cota_arco(arco, p))
+        self.arco = None
+        self.v.indicar(self.indicacion)
+
+
 class HerrOrdenadas(Herramienta):
     indicacion = "Clic en el punto de origen (0, 0) de las cotas de ordenadas."
 
@@ -1465,6 +1557,8 @@ class VentanaDibujo(QMainWindow):
             ("cota_radio", "Cota de radio", lambda: self.usar(HerrCotaRadial(self, "radio"))),
             ("cota_diametro", "Cota de diámetro", lambda: self.usar(HerrCotaRadial(self, "diametro"))),
             ("cota_angular", "Cota angular", lambda: self.usar(HerrCotaAngular(self))),
+            ("cota_linea_base", "Cota de línea base", lambda: self.usar(HerrCotaLineaBase(self))),
+            ("cota_arco", "Longitud de arco", lambda: self.usar(HerrCotaArco(self))),
             ("texto", "Texto", lambda: self.usar(HerrTexto(self))),
             ("nota", "Nota con directriz", lambda: self.usar(HerrNota(self))),
             ("tabla", "Tabla (lista de piezas)", lambda: self.usar(HerrTabla(self))),

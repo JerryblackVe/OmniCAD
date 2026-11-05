@@ -942,15 +942,15 @@ def _es_concava(arista, vecinas):
     return float(np.cross(n1, tg) @ n2) > 0.05
 
 
-def _mascara_aristas_concavas(forma, bloques, n_total, solo_lados=False):
-    """Vértices sobre aristas cóncavas. `solo_lados`: una banda junto a la arista (`_Bloque.expandir_borde`)."""
+def _mascara_aristas_concavas(forma, bloques, n_total):
+    """Vértices de la banda junto a aristas cóncavas (`_Bloque.expandir_borde`)."""
     vecinas = IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
     TopExp.MapShapesAndAncestors_s(forma, TopAbs_EDGE, TopAbs_FACE, vecinas)
     cache = {}
     mascara = np.zeros(n_total, bool)
     for bloque in bloques:
         nodos = np.zeros(bloque.tri.NbNodes(), bool)
-        lados = set() if solo_lados else None
+        lados = set()
         for arista in _aristas_unicas(bloque.cara):
             if BRep_Tool.Degenerated_s(arista) or BRep_Tool.IsClosed_s(arista, bloque.cara):
                 continue
@@ -965,7 +965,7 @@ def _mascara_aristas_concavas(forma, bloques, n_total, solo_lados=False):
                     lista = pol.Nodes()
                     for j in range(1, pol.NbNodes() + 1):
                         nodos[lista.Value(j) - 1] = True
-                        if solo_lados and j > 1:
+                        if j > 1:
                             p, q = lista.Value(j - 1) - 1, lista.Value(j) - 1
                             lados.add((min(p, q), max(p, q)))
         if nodos.any():
@@ -979,7 +979,7 @@ def colores_radio_minimo(forma, radio_herramienta, *, aristas_vivas=True, radio_
 
     Rojo donde una fresa de `radio_herramienta` (mm) no entra: zonas cóncavas con radio de curvatura
     menor que el de la herramienta y, con `aristas_vivas=True` ("Curvas vivas"), los rincones interiores
-    sin empalme (radio 0). Verde en el resto (zonas planas, convexas o cóncavas con radio suficiente).
+    sin empalme (radio 0) en la banda junto al rincón. Verde en el resto (zonas planas, convexas o cóncavas con radio suficiente).
     Con `radio_minimo` es el panel de Fusion: `radio_herramienta` es el Radio máximo y las zonas cóncavas van en degradé,
     rojo hasta `radio_minimo` y verde desde el máximo. `opacidad`: ver `_con_opacidad`.
     """
@@ -988,8 +988,8 @@ def colores_radio_minimo(forma, radio_herramienta, *, aristas_vivas=True, radio_
     if radio_minimo is not None and not 0 <= radio_minimo <= radio_herramienta:
         raise geo.ErrorGeometria("El radio mínimo va de 0 al radio máximo de la herramienta.")
     v, n, k, bloques = _malla(forma, deflexion, angular, True, alta_calidad)
-    # El modo viejo (sin radio_minimo) conserva lo que pintaba: un análisis guardado se ve igual.
-    vivas = (_mascara_aristas_concavas(forma, bloques, len(v), radio_minimo is not None) if aristas_vivas
+    # Sin radio_minimo también se pinta solo la banda junto al rincón (mismo criterio que con radio_minimo).
+    vivas = (_mascara_aristas_concavas(forma, bloques, len(v)) if aristas_vivas
              else np.zeros(len(v), bool))
     if radio_minimo is None:
         malo = (k[:, 0] * float(radio_herramienta) < -(1.0 + 1e-6)) | vivas
@@ -1004,9 +1004,10 @@ def colores_radio_minimo(forma, radio_herramienta, *, aristas_vivas=True, radio_
 
 # ---------------------------------------------------------------- cebra y mapa de entorno
 def _reflejo(normales, direccion_vista):
+    """`direccion_vista`: una dirección (3,) o una por vértice (N, 3), del punto hacia la cámara."""
     n = _normalizar_filas(np.asarray(normales, float).reshape(-1, 3))
-    v = _unitario(direccion_vista, "dirección de vista")
-    return n, v, v - 2.0 * (n @ v)[:, None] * n
+    v = _unitario(direccion_vista, "dirección de vista") if np.ndim(direccion_vista) == 1 else direccion_vista
+    return n, v, v - 2.0 * np.sum(n * v, axis=1)[:, None] * n
 
 
 def _base_vista(v, arriba):
@@ -1072,15 +1073,21 @@ def _color_entorno(elev, azim, datos):
     return col
 
 
-def colores_mapa_entorno(normales, direccion_vista, *, arriba=(0.0, 0.0, 1.0), rotacion=0.0, entorno=None, reflejo=True):
+def colores_mapa_entorno(normales, direccion_vista, *, arriba=(0.0, 0.0, 1.0), rotacion=0.0, entorno=None, reflejo=True,
+                         puntos=None, ojo=None):
     """Inspeccionar > Mapa de entorno: cromo espejado que refleja un estudio procedural (cielo con
     degradé, horizonte marcado, piso oscuro y dos softboxes). `rotacion` (grados) gira el entorno
     alrededor de `arriba`, como el control "Girar". Vectorizado: se recalcula con cada cámara.
     `entorno`: clave de ENTORNOS_ANALISIS (None = el estudio de los análisis guardados sin opciones). `reflejo=False` es
-    «Aplicar simetría» apagada: el cromo sin el entorno, sombreado solo por el ángulo con la vista."""
+    «Aplicar simetría» apagada: el cromo sin el entorno, sombreado solo por el ángulo con la vista.
+    `ojo` (posición de la cámara en perspectiva) con `puntos` (los vértices): la vista va de cada vértice a la cámara
+    (H-56), así una cara plana refleja más de un color, como en Fusion."""
+    if ojo is not None:
+        direccion_vista = _normalizar_filas(np.asarray(ojo, float) - np.asarray(puntos, float).reshape(-1, 3))
+    # Sin `ojo` (vista ortográfica) la dirección es la misma para todos los vértices.
     n, _v, r = _reflejo(normales, direccion_vista)
     if not reflejo:
-        return np.repeat((0.32 + 0.5 * np.abs(n @ _v))[:, None], 3, axis=1).astype(np.float32)
+        return np.repeat((0.32 + 0.5 * np.abs(np.sum(n * _v, axis=1)))[:, None], 3, axis=1).astype(np.float32)
     up = _unitario(arriba, "dirección arriba")
     e1 = np.cross(up, (1.0, 0.0, 0.0) if abs(up[0]) < 0.9 else (0.0, 1.0, 0.0))
     e1 /= np.linalg.norm(e1)

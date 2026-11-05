@@ -5,20 +5,21 @@ import numpy as np
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColorDialog, QFrame, QHBoxLayout, QHeaderView, QLabel,
-                               QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
+                               QMessageBox, QProgressDialog, QPushButton, QTableWidget, QTableWidgetItem, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from ...nucleo import analisis as an
 from ...nucleo import geometria as geo
 from ...timeline import entidades as ent
 from ...timeline.ops_chapa import cuerpos_del_modelo
 from ...timeline.analisis_vista import COLOR_SECCION, _segmentos, centro_de_masa
-from ...timeline.parametros import ANGULO
+from ...timeline.parametros import ANGULO, ErrorExpresion, TEXTO, unidad_de
 from .. import analisis_vista, formato
 from ..formulario import armar_cabecera
 from ..iconos import icono
 from .comunes import campos_cebra, campos_iso, campos_mapa, params_cebra, params_iso, params_mapa
-from ..comando import (Botones, Casilla, Comando, Deslizador, DosTopes, ErrorComando, Expresion, Info, Opciones, Personalizado,
-                       Seleccion, hit_desde_ref, hits, ref1)
+from ..comando import (Botones, Casilla, Comando, Deslizador, DosTopes, Entero, ErrorComando, Expresion, Info, Opciones,
+                       Personalizado, Seleccion, hit_desde_ref, hits, ref1)
 from . import registrar
 
 GEOMETRIA = {"cara", "arista", "vertice", "punto", "curva_boceto", "perfil", "centro_masa"}
@@ -736,6 +737,157 @@ class ReconocerFunciones(Comando):
                 + "; ".join(f["reason"] for f in r["result"]["not_rebuilt"][:3]), 8000)
 
 
+# ---------------------------------------------------------------- barrido de parámetros (SC18)
+_MEDIDAS_BARRIDO = ["volume", "mass", "area", "bounding_box"]      # lo que mide parameter_sweep por defecto
+_COLUMNAS_BARRIDO = [("Valor", "value"), ("Volumen (mm³)", "volume"), ("Masa (g)", "mass_g"), ("Área (mm²)", "area"),
+                     ("Caja (mm)", "bounding_box"), ("Interferencia", "interference"), ("Error", "error")]
+
+
+def _celda_barrido(f, clave, crudo=False):
+    """El texto de una celda de la tabla del barrido (y, con crudo, lo que va al portapapeles)."""
+    v = f.get(clave)
+    if clave == "error":
+        return v or ""
+    if clave == "interference":
+        return "" if v is None else ("Sí" if v else "No")
+    if v is None:
+        return ""
+    if clave == "bounding_box":
+        x, y, z = v["size"]
+        return f"{x:g}; {y:g}; {z:g}" if crudo else f"{_n(x)} × {_n(y)} × {_n(z)}"
+    return f"{v:g}" if crudo else _n(v)
+
+
+class _ResultadosBarrido(QWidget):
+    """Tabla del barrido de parámetros: «Copiar» la pasa al portapapeles separada por tabuladores."""
+
+    def __init__(self, comando, panel, r):
+        super().__init__(panel)
+        self.comando = comando
+        self.setFixedWidth(min(760, max(panel.width() - 24, 420)))
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        cab, ico, titulo = armar_cabecera(self, panel.cancelar)
+        ico.setPixmap(icono("parametros").pixmap(18, 18))
+        titulo.setText(f"RESULTADOS DEL BARRIDO DE {r['parameter'].upper()}")
+        v.addWidget(cab)
+        filas = r["rows"]
+        self.filas = filas
+        self.tabla = t = QTableWidget(len(filas), len(_COLUMNAS_BARRIDO))
+        t.setHorizontalHeaderLabels([c[0] for c in _COLUMNAS_BARRIDO])
+        t.verticalHeader().hide()
+        t.setSelectionBehavior(QAbstractItemView.SelectRows)
+        t.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        t.horizontalHeader().setStretchLastSection(True)
+        t.setFixedHeight(min(40 + 30 * len(filas), 240))
+        for i, f in enumerate(filas):
+            for j, (_t, clave) in enumerate(_COLUMNAS_BARRIDO):
+                t.setItem(i, j, QTableWidgetItem(_celda_barrido(f, clave)))
+        v.addWidget(t)
+        pie = QHBoxLayout()
+        pie.setContentsMargins(10, 4, 10, 8)
+        self.boton_copiar = QPushButton("Copiar", toolTip="Copia la tabla al portapapeles (separada por tabuladores)")
+        self.boton_copiar.clicked.connect(self._copiar)
+        pie.addWidget(self.boton_copiar)
+        pie.addStretch(1)
+        self.boton_cerrar = QPushButton("Cerrar", objectName="boton_primario")
+        self.boton_cerrar.clicked.connect(self.close)
+        pie.addWidget(self.boton_cerrar)
+        v.addLayout(pie)
+        self.adjustSize()
+        self.move((self.parent().width() - self.width()) // 2, max(12, self.parent().height() - self.height() - 48))
+        self.show()
+        self.raise_()
+
+    def _copiar(self):
+        QApplication.clipboard().setText("\n".join(
+            ["\t".join(c[0] for c in _COLUMNAS_BARRIDO)]
+            + ["\t".join(_celda_barrido(f, clave, crudo=True) for _t, clave in _COLUMNAS_BARRIDO)
+               for f in self.filas]))
+
+    def closeEvent(self, e):
+        self.comando.dialogo = None
+        super().closeEvent(e)
+
+
+class BarridoParametros(Comando):
+    CLAVE, TITULO, ICONO = "barrido_parametros", "Barrido de parámetros", "parametros"
+    AYUDA = ("Recalcula el diseño con cada valor de un parámetro en un rango y arma una tabla con volumen, masa, "
+             "área, caja envolvente y, si se pide, interferencia. El diseño no cambia.")
+    SIN_OP, TEXTO_ACEPTAR = True, "Cerrar"
+    dialogo = None
+
+    def campos(self, ctx):
+        opciones = {p.nombre: p.nombre for p in ctx.doc.parametros if p.tipo != TEXTO}
+        return [Opciones("parametro", "Parámetro", opciones or {"": "(sin parámetros)"}),
+                Expresion("desde", "Desde", "10 mm", ayuda="Primer valor, en la unidad del parámetro."),
+                Expresion("hasta", "Hasta", "30 mm", ayuda="Último valor, en la unidad del parámetro."),
+                Entero("pasos", "Pasos", 5, 2, 50, ayuda="Cantidad de valores entre Desde y Hasta, ambos incluidos."),
+                Casilla("interferencia", "Buscar interferencia",
+                        ayuda="Con cada valor busca choques entre los cuerpos sólidos (más lento)."),
+                Personalizado("calcular", "Calcular", self._boton_calcular)]
+
+    def verificar(self, ctx):
+        return (None if any(p.tipo != TEXTO for p in ctx.doc.parametros)
+                else "Este documento no tiene parámetros que se puedan barrer.")
+
+    def _numero(self, v, ctx, texto):
+        """La expresión tecleada como número en la unidad del parámetro (lo que entiende parameter_sweep)."""
+        p = ctx.doc.parametros.obtener(v["parametro"])
+        return unidad_de(p.tipo, p.unidad).desde_interno(ctx.evaluar(texto, p.tipo))
+
+    def _boton_calcular(self, panel):
+        b = QPushButton("Calcular")
+        b.setIcon(icono("parametros"))
+        b.clicked.connect(lambda: self.calcular(panel))
+        return b
+
+    def calcular(self, panel):
+        from ...api.errores import ErrorAPI
+        from ...api.herramientas_barrido import _barrido
+        from ...api.sesion import Sesion
+        ctx, v = panel.ctx, panel.valores
+        if not v.get("parametro"):
+            panel._mostrar("No hay parámetros que se puedan barrer.")
+            return
+        try:
+            desde, hasta = self._numero(v, ctx, v["desde"]), self._numero(v, ctx, v["hasta"])
+        except (ErrorComando, ErrorExpresion) as e:
+            panel._mostrar(str(e))
+            return
+        dlg = QProgressDialog("Calculando el barrido…", "Cancelar", 0, int(v["pasos"]), panel)
+        dlg.setWindowModality(Qt.WindowModal)
+        dlg.setMinimumDuration(0)
+
+        def progreso(i, n):
+            dlg.setValue(i)
+            QApplication.processEvents()
+        try:
+            r = _barrido(Sesion(ctx.doc), v["parametro"], desde, hasta, int(v["pasos"]),
+                         _MEDIDAS_BARRIDO + (["interference"] if v.get("interferencia") else []),
+                         None, None, progreso=progreso, cancelado=dlg.wasCanceled)
+        except ErrorAPI as e:              # cancelado o error del barrido: se informa en el panel
+            dlg.close()
+            if not dlg.wasCanceled():
+                panel._mostrar(e.mensaje)
+            return
+        dlg.close()
+        if self.dialogo is not None:
+            d, self.dialogo = self.dialogo, None
+            d.close()
+            d.deleteLater()
+        self.dialogo = _ResultadosBarrido(self, panel, r)
+
+    def construir(self, v, ctx):
+        return None
+
+    def al_cerrar(self, ctx):
+        if self.dialogo is not None:
+            d, self.dialogo = self.dialogo, None
+            d.deleteLater()
+
+
 # ---------------------------------------------------------------- análisis guardados en el navegador
 ANALISIS_POR_TIPO = {}             # tipo guardado en el documento → comando que lo crea y lo edita (`Editar` del navegador)
 
@@ -1072,7 +1224,7 @@ class CentroMasa(_Analisis):
         return "No hay cuerpos sólidos." if c is None else f"{_vec(c)} {formato.sufijo()}\nMasa total: {_n(formato.masa(masa))} {formato.unidad_masa()}"
 
 
-registrar(ReconocerFunciones, BuscarSimilares, Medir, Interferencia, Seccion, Cebra, MapaEntorno, AnguloDesmoldeo, MapaCurvatura, PeineCurvatura, Isocurva,
-          Accesibilidad, RadioMinimo, CentroMasa)
+registrar(ReconocerFunciones, BuscarSimilares, Medir, Interferencia, BarridoParametros, Seccion, Cebra, MapaEntorno,
+          AnguloDesmoldeo, MapaCurvatura, PeineCurvatura, Isocurva, Accesibilidad, RadioMinimo, CentroMasa)
 ANALISIS_POR_TIPO.update({c.TIPO_ANALISIS: c for c in (Seccion, Cebra, MapaEntorno, AnguloDesmoldeo, MapaCurvatura, PeineCurvatura, Isocurva,
                                                        Accesibilidad, RadioMinimo, CentroMasa)})

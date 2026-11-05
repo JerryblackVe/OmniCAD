@@ -68,7 +68,7 @@ def test_crear_de_plastico_es_el_de_solido_mas_los_de_plastico(cinta):
     plas = [a.text() for a in _menu(pag_pl, "CREAR")]
     i = sol.index("Repujado") + 1
     bloque = plas[i:i + 5]
-    assert bloque == ["Saliente", "Grampa de fijación", "Labio", "Apoyo", "Patron geometrico"]
+    assert bloque == ["Saliente", "Grampa", "Labio", "Apoyo", "Patron geometrico"]
     assert plas[:i] + plas[i + 5:] == sol, "CREAR de PLÁSTICO debe tener los comandos de SÓLIDO, en el mismo orden"
     # los comandos reales son la misma QAction (los grisados son nuevas en cada menú)
     reales = [a for a in _menu(pag_sol, "CREAR") if a.isEnabled() and a.menu() is None]

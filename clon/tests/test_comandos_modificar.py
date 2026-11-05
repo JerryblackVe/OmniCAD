@@ -264,22 +264,27 @@ def test_empalme_con_dos_conjuntos_en_el_dialogo_se_edita_y_se_quita():
     from omnicad.ui.comandos.modificar import Empalme
     doc = _doc_caja()
     a, b = _hit_sub(doc, "arista", (10, 0, 20)), _hit_sub(doc, "arista", (10, 20, 20))
-    op = _ejecutar(doc, Empalme, aristas=[a], radio="2 mm", aristas_2=[b], radio_2="3 mm")
+    op = _ejecutar(doc, Empalme, aristas=[a], radio="2 mm",
+                   _conjuntos=[{"aristas": [b], "radio": "3 mm"}], _conj_sel=0)
     assert len(op.p["conjuntos"]) == 1 and op.p["conjuntos"][0]["radio"] == "3 mm"
     quitado = (4 - math.pi) * 20 + (9 - 9 * math.pi / 4) * 20
     assert g.volumen(_cuerpo(doc).forma) == pytest.approx(8000 - quitado)
     cmd, ctx = Empalme(), ContextoComando(doc, op=op)
     v = cmd.desde_op(op, ctx)
-    assert v["radio_2"] == "3 mm" and len(v["aristas_2"]) == 1                 # ida y vuelta
-    v["radio_2"] = "1 mm"
+    assert v["_conjuntos"][0]["radio"] == "3 mm" and len(v["_conjuntos"][0]["aristas"]) == 1   # ida y vuelta
+    v["_conj_editor"] = True                                                   # el editor se cargó: manda sobre la fila
+    v["c_aristas"] = v["_conjuntos"][0]["aristas"]
+    v["c_radio"] = "1 mm"
     assert cmd.construir(v, ctx).p["conjuntos"][0]["radio"] == "1 mm"
-    v["aristas_2"] = []                                                        # vaciar el campo quita el conjunto
+    v["_conjuntos"] = []                                                       # sin filas no hay conjuntos
     assert cmd.construir(v, ctx).p["conjuntos"] == []
+    d = cmd.desde_op(op, ctx)                       # reabrir de nuevo: la fila vuelve del paso
     with pytest.raises(Exception, match="no es válida|inválid|expresión|Expresión|evaluar"):
-        cmd.construir(dict(cmd.desde_op(op, ctx), radio_2="2 xx"), ctx)        # el radio 2 se valida en la ventana
+        cmd.construir(dict(d, _conj_editor=True, c_aristas=d["_conjuntos"][0]["aristas"],
+                           c_radio="2 xx"), ctx)                                # el radio se valida
 
 
-def test_empalme_del_dialogo_conserva_lo_que_la_api_puso_en_el_conjunto_2():
+def test_empalme_del_dialogo_conserva_lo_que_la_api_puso_en_el_conjunto():
     from omnicad.ui.comando import ContextoComando
     from omnicad.ui.comandos.modificar import Empalme
     from omnicad import api
@@ -291,7 +296,7 @@ def test_empalme_del_dialogo_conserva_lo_que_la_api_puso_en_el_conjunto_2():
     op = doc.operaciones[-1]
     cmd, ctx = Empalme(), ContextoComando(doc, op=op)
     nueva = cmd.construir(cmd.desde_op(op, ctx), ctx)
-    assert nueva.p["conjuntos"][0]["tipo_radio"] == "asimetrico"
+    assert nueva.p["conjuntos"][0]["tipo_radio"] == "asimetrico"               # el combo no lo muestra, pero no se pisa
     assert nueva.p["conjuntos"][0]["radio2"] == "2.0"                         # no vuelve a 1 mm
 
 

@@ -62,6 +62,7 @@ from .superposiciones import AreaVisor
 # =============================================================== interfaz
 COLORES = {"transformar": "#4a9be0", "restaurar": "#8fbde6", "explosion": "#ef9a2a", "visibilidad": "#e8c13a",
            "vista": "#2fa84f", "anotacion": "#a77ad6"}
+ZOOM_BASE = 90.0          # píxeles por segundo del zoom 1,0, el valor por defecto de la línea de tiempo
 
 
 def etiqueta(a):
@@ -193,7 +194,7 @@ class PistasAnimacion(QWidget):
     def __init__(self, ventana):
         super().__init__(ventana)
         self.v = ventana
-        self.escala = 90.0                  # píxeles por segundo
+        self.escala = ZOOM_BASE               # píxeles por segundo, con el zoom 1,0 por defecto
         self.seleccion = None               # id de la acción elegida
         self._arrastre = None
         self.setMouseTracking(True)
@@ -214,6 +215,20 @@ class PistasAnimacion(QWidget):
 
     def t_de(self, x):
         return max(0.0, (x - self.NOMBRES - 8) / self.escala)
+
+    def marcas(self, ancho):
+        """[(segundos, texto)] de la regla: el paso más chico que deja los marcas a 40 px (Fusion numera los
+        segundos de la línea de tiempo)."""
+        paso = next(s for s in (0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60) if s * self.escala >= 40)
+        salida, t = [], 0.0
+        while t <= self.t_de(ancho) + 1e-9:
+            salida.append((round(t, 3), f"{t:g} s"))
+            t += paso
+        return salida
+
+    def texto_cursor(self):
+        """El tiempo que la regla pinta en la burbuja del cursor (Fusion: «5.5»)."""
+        return f"{self.v.t:.1f}"
 
     def barras(self):
         """[(QRectF, acción, fila)] — una por fila afectada (la explosión, con el tramo de cada pieza)."""
@@ -269,17 +284,14 @@ class PistasAnimacion(QWidget):
         p.drawLine(QPointF(self.NOMBRES, 0), QPointF(self.NOMBRES, h))
         # regla
         p.fillRect(QRectF(self.NOMBRES + 1, 0, w, self.REGLA), QColor(tc["fondo"]))
-        paso = next(s for s in (0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60) if s * self.escala >= 40)
-        t, fin = 0.0, self.t_de(w)
-        while t <= fin + 1e-9:
+        for t, texto in self.marcas(w):
             x = self.x_de(t)
             p.setPen(QColor(tc["texto_tenue"]))
             p.drawLine(QPointF(x, self.REGLA - 7), QPointF(x, self.REGLA))
             p.setPen(QColor(tc["borde_suave"]))
             p.drawLine(QPointF(x, self.REGLA), QPointF(x, h))
             p.setPen(QColor(tc["texto_tenue"]))
-            p.drawText(QRectF(x - 30, 2, 60, 14), Qt.AlignCenter, f"{t:g} s")
-            t += paso
+            p.drawText(QRectF(x - 30, 2, 60, 14), Qt.AlignCenter, texto)
         dur = self.v.guion.duracion
         p.fillRect(QRectF(self.x_de(dur), self.REGLA, 2, h), QColor(tc["borde"]))
         # barras
@@ -302,13 +314,17 @@ class PistasAnimacion(QWidget):
                 p.setPen(QColor("#ffffff") if a["tipo"] not in ("visibilidad",) else QColor("#3c3c3c"))
                 p.drawText(r.adjusted(5, 0, -3, 0), Qt.AlignVCenter | Qt.AlignLeft,
                            p.fontMetrics().elidedText(texto, Qt.ElideRight, int(r.width() - 8)))
-        # cursor de tiempo
-        x = self.x_de(self.v.t)
+        # cursor de tiempo, con el instante escrito en la regla (la burbuja de Fusion)
+        x, texto = self.x_de(self.v.t), self.texto_cursor()
         p.setPen(QPen(QColor("#d64545"), 2))
         p.drawLine(QPointF(x, 4), QPointF(x, h))
-        p.setBrush(QColor("#d64545"))
-        p.setPen(Qt.NoPen)
-        p.drawPolygon(QPolygonF([QPointF(x - 6, 2), QPointF(x + 6, 2), QPointF(x, 11)]))
+        ancho = p.fontMetrics().horizontalAdvance(texto) + 10.0
+        caja = QRectF(min(max(1.0, x - ancho / 2), w - ancho - 1.0), 2.0, ancho, self.REGLA - 7.0)
+        p.setPen(QPen(QColor("#d64545"), 1))
+        p.setBrush(QColor("#ffffff"))
+        p.drawRoundedRect(caja, 3, 3)
+        p.setPen(QColor("#282828"))
+        p.drawText(caja, Qt.AlignCenter, texto)
 
     def _barra_en(self, pos):
         for r, a, fila in reversed(self.barras()):
@@ -389,9 +405,13 @@ class PistasAnimacion(QWidget):
             super().keyPressEvent(e)
 
     def wheelEvent(self, e):
-        if e.modifiers() & Qt.ControlModifier:
-            self.escala = min(800.0, max(10.0, self.escala * 1.15 ** (e.angleDelta().y() / 120)))
-            self.update()
+        if e.modifiers() & Qt.ControlModifier:      # el zoom pasa por el control del panel: siempre coinciden
+            giro = e.angleDelta().y()
+            zoom = self.v.linea.zoom
+            nuevo = round(self.escala * 1.15 ** (giro / 120) / ZOOM_BASE * 10)
+            if nuevo == zoom.value() and giro:           # ANI-4: en zoom 0,2 o 0,3 el redondeo a décimas no movía nada
+                nuevo += 1 if giro > 0 else -1
+            zoom.setValue(nuevo)
             e.accept()
         else:
             super().wheelEvent(e)
@@ -445,13 +465,15 @@ class LineaTiempoAnimacion(QWidget):
         barra.addStretch(1)
         barra.addWidget(QLabel("Zoom"))
         self.zoom = QSlider(Qt.Horizontal)
-        self.zoom.setRange(15, 400)
-        self.zoom.setValue(90)
+        self.zoom.setRange(2, 80)              # décimas del factor: 10 = zoom 1,0 (el valor por defecto)
+        self.zoom.setValue(10)
         self.zoom.setFixedWidth(120)
+        self.zoom.setToolTip("Zoom de la línea de tiempo (Ctrl + rueda sobre la regla)")
+        self.zoom_valor = QLabel("1.0")
         barra.addWidget(self.zoom)
+        barra.addWidget(self.zoom_valor)
         lay.addLayout(barra)
         self.pistas = PistasAnimacion(ventana)
-        self._zoom_manual = self._ajustando = False
         self.zoom.valueChanged.connect(self._zoom)
         area = QScrollArea()
         area.setWidget(self.pistas)
@@ -470,30 +492,18 @@ class LineaTiempoAnimacion(QWidget):
         self.pestanas.setContextMenuPolicy(Qt.CustomContextMenu)
         self.pestanas.customContextMenuRequested.connect(self._menu_pestana)
         abajo.addWidget(self.pestanas)
-        nuevo = QToolButton(text="+")
-        nuevo.setToolTip("Nuevo guion gráfico")
-        nuevo.clicked.connect(ventana.nuevo_guion)
-        abajo.addWidget(nuevo)
+        self.boton_nuevo = QToolButton(text="+")
+        self.boton_nuevo.setToolTip("Nuevo guion gráfico")
+        self.boton_nuevo.clicked.connect(lambda: ventana.nuevo_guion())   # sin lambda, `clicked` pasaría el chequeo
+        abajo.addWidget(self.boton_nuevo)
         abajo.addStretch(1)
         lay.addLayout(abajo)
 
     def _zoom(self, v):
-        if self._ajustando:
-            return
-        self._zoom_manual = True
-        self.pistas.escala = float(v)
+        """El deslizador va en décimas del factor: 10 = zoom 1,0 = ZOOM_BASE píxeles por segundo."""
+        self.pistas.escala = ZOOM_BASE * v / 10.0
+        self.zoom_valor.setText(f"{v / 10:.1f}")
         self.pistas.update()
-
-    def ajustar_zoom(self):
-        """Escala de la línea de tiempo para que entre el guion entero (hasta que el usuario use el zoom)."""
-        if self._zoom_manual:
-            return
-        ancho = max(200, self.pistas.width() - PistasAnimacion.NOMBRES - 40)
-        escala = min(400.0, max(15.0, ancho / max(self.v.guion.duracion * 1.15, 4.0)))
-        self.pistas.escala = escala
-        self._ajustando = True
-        self.zoom.setValue(int(escala))
-        self._ajustando = False
 
     def _menu_pestana(self, pos):
         i = self.pestanas.tabAt(pos)
@@ -523,7 +533,6 @@ class LineaTiempoAnimacion(QWidget):
         self.tiempo.setValue(v.t)
         self.tiempo.blockSignals(False)
         self.total.setText(f" / {v.guion.duracion:.2f} s")
-        self.ajustar_zoom()
         self.botones["reproducir"].setIcon(icono_render("pausa" if v.reproduciendo else "tl_reproducir"))
         self.pistas.updateGeometry()
         self.pistas.adjustSize()
@@ -1246,11 +1255,8 @@ class VentanaAnimacion(QMainWindow):
                 elegido = opciones[0]
             tipo = "continuar" if elegido == opciones[1] else "limpio"
         inicial = estado_final(self.guion, self.centros) if tipo == "continuar" else None
-        nombres = {g.nombre for g in self.guiones}
-        n = len(self.guiones) + 1
-        while f"Guion gráfico{n}" in nombres:
-            n += 1
-        self.guiones.append(Guion(f"Guion gráfico{n}", None, inicial))
+        from ..api.herramientas_animacion import crear_guion    # el mismo paso que la herramienta create_storyboard,
+        crear_guion(self.doc, self.guiones, self.actual, inicial=inicial)   # con su paso de deshacer
         self.elegir_guion(len(self.guiones) - 1)
         self._cambio()
         return self.guion

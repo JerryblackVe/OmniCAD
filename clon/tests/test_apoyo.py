@@ -27,6 +27,27 @@ def caja_hueca():
     return sm.vaciado(caja, [tapa], espesor_interior=PARED)
 
 
+@pytest.fixture(scope="module")
+def escalones():
+    """Caja 40×20×4 con otra de 20×20×10 (z∈[4,14]) montada en x∈[0,20]: cara de tapa en 14 y de repisa en 4."""
+    return geo.booleano(geo.caja(40, 20, 4), geo.caja(20, 20, 10, origen=(0.0, 0.0, 4.0)), "unir")
+
+
+def _cara_horizontal(forma, z):
+    """La cara plana con centro de masa en la altura `z` y normal vertical (candidata a cara superior)."""
+    for c in refs.subformas(forma, "cara"):
+        f = refs.firma(c)
+        if f["geom"] == "plano" and abs(f["centro"][2] - z) < 1e-6 and abs(abs(f["normal"][2]) - 1) < 1e-6:
+            return c
+    raise AssertionError(f"no hay cara horizontal en z={z}")
+
+
+def _apoyo_repisa(cuerpo, cuadro=(22, 5, 38, 15), **kwargs):
+    kwargs.setdefault("grosor", PARED)
+    kwargs.setdefault("lados", [(1, kwargs["grosor"])])
+    return sc.apoyo([cuerpo], [_perfil(cuadro)], direccion=ARRIBA, **kwargs)
+
+
 def _perfil(cuadro):
     """Cara de la región rectangular (u0, v0, u1, v1) del plano XY (u = x, v = y)."""
     u0, v0, u1, v1 = cuadro
@@ -103,6 +124,40 @@ def test_hasta_objeto_termina_en_el_fondo(caja_hueca):
     assert geo.es_valida(herramienta) and len(geo.solidos(herramienta)) == 1
     assert _altura(herramienta) == pytest.approx((0.0, PARED), abs=1e-6)
     assert geo.volumen(herramienta) == pytest.approx(10 * 10 * PARED, rel=1e-6)
+
+
+def test_sin_recortar_deja_el_exceso_fuera_del_cuerpo(caja_hueca):
+    """Trim desactivado: con Offset Position 2 la pared extruye hasta z = 12 y sobresale 2 mm del cuerpo (que
+    termina en 10); con Recortar (por defecto) el corte lo deja en la cara extrema (test de arriba)."""
+    herramienta = _apoyo(caja_hueca, desfase=2, recortar=False)
+    assert geo.es_valida(herramienta)
+    assert _altura(herramienta) == pytest.approx((PARED, ALTO + PARED), abs=1e-6)
+    assert geo.volumen(herramienta) == pytest.approx(10 * 10 * ALTO, rel=1e-6)
+
+
+def test_caras_superiores_limitan_el_area_y_terminan_en_la_cara(escalones):
+    """Top Faces: el apoyo se crea solo en el área de la cara elegida y termina en ella (la repisa, z = 4), sin
+    sobresalir por encima como pasa con la extensión Todo (que corta en la tapa, z = 14)."""
+    sin = _apoyo_repisa(escalones)
+    assert _altura(sin) == pytest.approx((0.0, 14.0), abs=1e-6)
+    assert geo.volumen(sin) == pytest.approx(16 * 10 * 14, rel=1e-6)
+    herramienta = _apoyo_repisa(escalones, caras_superiores=[_cara_horizontal(escalones, 4.0)])
+    assert geo.es_valida(herramienta) and len(geo.solidos(herramienta)) == 1
+    assert _altura(herramienta) == pytest.approx((0.0, 4.0), abs=1e-6)
+    assert geo.volumen(herramienta) == pytest.approx(16 * 10 * 4, rel=1e-6)
+
+
+def test_cara_superior_lejana_al_perfil_falla(escalones):
+    """La cara elegida (la tapa de z = 14, en x∈[0,20]) no pisa el perfil (x∈[22,38]): no hay área de apoyo."""
+    with pytest.raises(geo.ErrorGeometria, match="caras superiores"):
+        _apoyo_repisa(escalones, caras_superiores=[_cara_horizontal(escalones, 14.0)])
+
+
+def test_cara_superior_no_plana_falla():
+    with pytest.raises(geo.ErrorGeometria, match="planas"):
+        cilindro = geo.cilindro(8, 10)
+        lateral = [c for c in refs.subformas(cilindro, "cara") if refs.firma(c)["geom"] == "cilindro"][0]
+        _apoyo_repisa(cilindro, cuadro=(2, -2, 6, 2), caras_superiores=[lateral])
 
 
 @pytest.mark.parametrize("grosor, lados", [(0, [(1, 0)]), (-2, [(1, 2)]), (2, [(1, -2), (-1, 4)]),
@@ -194,6 +249,35 @@ def test_create_rest():
     assert geo.volumen(forma) == pytest.approx(hueca + area * 10, rel=1e-6)
 
 
+def test_create_rest_recortar_falso_sobresale_del_cuerpo():
+    s, cid, boceto = _sesion()
+    hueca = geo.volumen(s.cuerpo(cid).forma)
+    r = _ok(s, "create_rest", sketch=boceto, body=cid, offset=2, trim=False)
+    forma = s.cuerpo(cid).forma
+    assert geo.es_valida(forma) and len(geo.solidos(forma)) == 1
+    assert s.paso(r["feature"]["id"]).p["recortar"] is False
+    assert geo.volumen(forma) == pytest.approx(hueca + 10 * 10 * 10, rel=1e-6)
+
+
+def test_create_rest_caras_superiores_terminan_en_la_cara_elegida():
+    """<Z[1] del cuerpo hueco es la cara del fondo (z = 2): el apoyo termina ahí, dentro del material existente,
+    y no agrega volumen."""
+    s, cid, boceto = _sesion()
+    hueca = geo.volumen(s.cuerpo(cid).forma)
+    r = _ok(s, "create_rest", sketch=boceto, body=cid, top_faces="<Z[1]")
+    op = s.paso(r["feature"]["id"])
+    assert len(op.p["caras_superiores"]) == 1 and op.p["caras_superiores"][0]["tipo"] == "cara"
+    assert geo.volumen(s.cuerpo(cid).forma) == pytest.approx(hueca, rel=1e-9)
+
+
+def test_create_rest_caras_superiores_invalidas_no_cambian_el_documento():
+    s, cid, boceto = _sesion()
+    antes = len(s.doc.operaciones)
+    r = api.llamar(s, "create_rest", {"sketch": boceto, "body": cid, "top_faces": ">Z"})
+    assert not r["ok"] and "caras superiores" in r["mensaje"], r
+    assert len(s.doc.operaciones) == antes
+
+
 @pytest.mark.parametrize("grosor, lados", [(0, (0, 0)), (-1, (0, 0)), (3, (2, 0))])
 def test_create_rest_grosor_imposible(grosor, lados):
     s, cid, boceto = _sesion()
@@ -276,4 +360,34 @@ def test_el_dialogo_construye_y_reabre():
     assert comando_para(op) is Apoyo
     vuelta = cmd.desde_op(op, ContextoComando(s.doc, op=op))
     assert len(vuelta["perfiles"]) == len(hits) and len(vuelta["cuerpo"]) == len(cuerpo)
+    assert cmd.construir(vuelta, ContextoComando(s.doc)).p == op.p
+
+
+def test_el_dialogo_lleva_caras_superiores_y_recortar():
+    from omnicad.timeline.operaciones import OpExtrusion
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import comando_para
+    from omnicad.ui.comandos.plastico import Apoyo
+    s, cid, boceto = _sesion()
+    perfil = s.doc.estado_final.bocetos[boceto].perfiles[0]
+    perfil_hits = [hit_desde_ref({"tipo": "perfil", "boceto": boceto, **OpExtrusion.referencia_perfil(perfil)},
+                                 s.doc.estado_final)]
+    cuerpo_hits = [hit_desde_ref({"tipo": "cuerpo", "cuerpo": cid}, s.doc.estado_final)]
+    cara = _cara_horizontal(s.cuerpo(cid).forma, PARED)                       # el fondo del hueco (z = 2)
+    cara_hits = [hit_desde_ref({"tipo": "cara", "cuerpo": cid, "firma": refs.firma_cara(cara)}, s.doc.estado_final)]
+    cmd, ctx = Apoyo(), ContextoComando(s.doc)
+    v = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in cmd.campos(ctx)}
+    assert v["recortar"] is True, "Recortar (Trim) viene activado por defecto, como en Fusion"
+    op = cmd.construir(dict(v, perfiles=perfil_hits, cuerpo=cuerpo_hits, caras_superiores=cara_hits,
+                            recortar=False), ctx)
+    assert op.TIPO == "apoyo" and op.p["recortar"] is False
+    assert len(op.p["caras_superiores"]) == 1 and op.p["caras_superiores"][0]["tipo"] == "cara"
+    hueca = geo.volumen(s.cuerpo(cid).forma)
+    res = s.doc.agregar(op)
+    assert res.estado in ("ok", "aviso"), res.mensaje
+    assert geo.volumen(s.cuerpo(cid).forma) == pytest.approx(hueca, rel=1e-9), \
+        "el apoyo termina en la cara del fondo, dentro del material existente"
+    assert comando_para(op) is Apoyo
+    vuelta = cmd.desde_op(op, ContextoComando(s.doc, op=op))
+    assert len(vuelta["caras_superiores"]) == 1 and vuelta["recortar"] is False
     assert cmd.construir(vuelta, ContextoComando(s.doc)).p == op.p

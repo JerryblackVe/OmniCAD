@@ -697,19 +697,28 @@ class OpBoceto(Operacion):
                 for c in self.boceto.cotas.values() if not c.referencia}
 
     def expresiones(self):
+        from ..restricciones import objetos
         en_textos = [e for c in self.boceto.curvas.values() if isinstance(c, Texto)
                      for e in (expresiones_de_texto(self._textos_parametricos.get(c.id, c.texto))
                                + ([c.parametro_texto] if c.parametro_texto else [])
                                + ([c.altura_expr] if c.altura_expr else []))]
         return (super().expresiones() + [e for c in self.boceto.cotas.values() if not c.referencia
                                        for e in (c.nombre, c.expresion)]
-                + en_textos + [c["expresion"] for c in self.boceto.geo3d.get("cotas", {}).values()])
+                + en_textos + [c["expresion"] for c in self.boceto.geo3d.get("cotas", {}).values()]
+                + objetos.expresiones(self.boceto))
 
     def claves_modelo(self):
         return []                # los parámetros de un boceto son sus cotas
 
     def renombrar_parametro(self, viejo, nuevo):
         cambio = super().renombrar_parametro(viejo, nuevo)
+        for objeto in self.boceto.objetos.values():
+            for paso in objeto.get("pasos", []):
+                for clave, valor in paso.get("parametros", {}).items():
+                    if isinstance(valor, str):
+                        texto = renombrar_en(valor, viejo, nuevo)
+                        cambio = cambio or texto != valor
+                        paso["parametros"][clave] = texto
         for c in self.boceto.cotas.values():
             expresion = renombrar_en(c.expresion, viejo, nuevo)
             cambio = cambio or c.nombre == viejo or expresion != c.expresion
@@ -834,6 +843,10 @@ class OpBoceto(Operacion):
         # Se resuelve una COPIA: el boceto guardado no se toca. Si un parámetro deja el boceto en
         # conflicto, al volver a un valor válido se parte otra vez de la geometría original.
         boceto = self.boceto.copia()
+        if boceto.objetos:
+            from ..restricciones import objetos
+            objetos.evaluar(boceto, lambda v, k: ctx.evaluar(v, ANGULO if k == "angulo" else
+                                                            ESCALAR if k in ("sx", "sy") else LONGITUD))
         self._reproyectar(boceto, plano, estado, ctx)
         if boceto.proyecciones:
             self._conservar_lado_cotas(boceto)
@@ -1009,8 +1022,11 @@ class _OpConPerfiles(Operacion):
                 detalle = ent.problema_perfil(ref)
                 if detalle:
                     raise ParametroMalFormado(ref, detalle)
-                perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"))
+                perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano)
                 if perfil is None:
+                    if ent.es_de_texto(ref["firma"], br):
+                        raise ErrorOperacion("Un perfil seleccionado era un pedazo de una letra y ya no existe como "
+                                             "región: volvé a elegir el texto.")
                     raise ErrorOperacion("Un perfil seleccionado ya no existe en el boceto (cambió su contorno).")
                 if nota and ctx is not None:
                     ctx.aviso(nota)

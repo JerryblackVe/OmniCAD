@@ -42,14 +42,14 @@ SECCIONES = {
     "SUPERFICIE": ["sup_extruir", "sup_revolucion", "sup_barrido", "sup_solevacion", "parche", "reglada",
                    "sup_desfase", "recortar_sup", "destrimar", "extender_sup", "coser", "descoser", "invertir_normal", "sup_empalme",
                    "sup_caja", "sup_cilindro", "sup_esfera", "sup_toroide", "sup_bobina", "sup_tuberia"],
-    "MALLA": ["malla_teselar", "reparar_malla", "limpiar_malla", "grupos_caras", "combinar_grupos_caras", "reducir_malla", "remallar", "cortar_plano",
+    "MALLA": ["malla_teselar", "reparar_malla", "limpiar_malla", "grupos_caras", "crear_grupo_caras", "combinar_grupos_caras", "reducir_malla", "remallar", "cortar_plano",
               "vaciado_malla", "combinar_mallas", "suavizar_malla", "separar_malla", "escalar_malla",
               "convertir_malla", "borrar_rellenar", "alinear_malla", "exportar_malla", "seccion_malla", "invertir_normal_malla"],
     "CHAPA": ["reglas_chapa", "pestana", "pestana_contorno", "pestana_solevada", "dobladillo", "cierre_esquina",
               "desgarro", "unir_plegando", "plegar", "desplegar", "patron_plano", "convertir_chapa", "replegar", "exportar_dxf_chapa"],
     "ESPACIOS / VARIOS": ["dibujo", "render", "animacion", "configuracion_tabla", "parametros_exportar",
                           "parametros_importar", "parametro_usuario", "estrella", "estrella_vacia", "mas", "copiar",
-                          "papelera", "info", "secuencias", "asistente", "clip"],
+                          "papelera", "info", "secuencias", "asistente", "clip", "reportar_problema"],
     "PASOS SIN COMANDO": ["grafo", "insertar_diseno", "importar_iges", "borrar_caras", "calibracion_holguras"],
 }
 NOMBRES = [n for lista in SECCIONES.values() for n in lista]
@@ -94,7 +94,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 196
+    assert len(NOMBRES) == len(set(NOMBRES)) == 198
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

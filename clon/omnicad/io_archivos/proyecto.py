@@ -44,7 +44,7 @@ FORMATO = "OmniCAD-proyecto"
 # Proyectos guardados cuando el programa se llamaba FusionClone (antes del 2026-10-09): se abren y se guardan igual.
 EXTENSIONES = (EXTENSION, ".fclone")
 FORMATOS_LEGIBLES = (FORMATO, "FusionClone-proyecto")
-VERSION_FORMATO = 1
+VERSION_FORMATO = 2
 VERSION_CACHE = 1
 # Tope de cada miembro del ZIP al abrir un proyecto (512 MB): un .omnicad es un archivo de OTRO (o
 # directamente hostil) y un miembro declarado gigante no puede quedarse con toda la memoria (zip bomb).
@@ -200,10 +200,12 @@ def _preparar(doc, ruta):
     ruta = Path(ruta)
     if ruta.suffix.lower() not in EXTENSIONES:
         ruta = ruta.with_suffix(EXTENSION)
-    manifiesto = {"formato": FORMATO, "version_formato": VERSION_FORMATO, "aplicacion": NOMBRE_APP,
+    datos = doc.a_dict()
+    version = 2 if datos["version_receta"] >= 2 else 1
+    manifiesto = {"formato": FORMATO, "version_formato": version, "aplicacion": NOMBRE_APP,
                   "version_aplicacion": VERSION, "guardado": _ahora(), "nombre": doc.nombre,
                   "unidades": {"longitud": "mm", "angulo": "deg"}}
-    return ruta, manifiesto, json.dumps(doc.a_dict(), indent=1, ensure_ascii=False).encode("utf-8")
+    return ruta, manifiesto, json.dumps(datos, indent=1, ensure_ascii=False).encode("utf-8")
 
 
 def _escribir(ruta, manifiesto, receta, miniatura_png=None, doc_cache=None):

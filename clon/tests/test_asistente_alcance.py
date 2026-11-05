@@ -13,7 +13,7 @@ from omnicad.asistente.herramientas import MODOS, NUCLEO, TOPE_BUSQUEDA, TOPE_RE
 from omnicad.asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
 from omnicad.servidor_mcp.servidor import CALL_TOOL, FIND_TOOLS, crear_servidor
 
-TOPE_TOKENS = 25_000
+TOPE_TOKENS = 25_300  # 2026-11-05: subió con las carpetas del timeline (SC9) y la guía; recortar antes de volver a subir
 CATALOGO = {h["nombre"]: h for h in api.catalogo()}
 PROHIBIDAS = ["execute_code", "assistant_ask", next(h["nombre"] for h in api.catalogo("dev")), "no_existe",
               "call_tool", "find_tools"]

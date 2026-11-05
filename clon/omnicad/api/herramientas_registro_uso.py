@@ -4,15 +4,39 @@ Todo queda en la carpeta de datos del usuario. Nada se envía. Las herramientas 
 que la app escribe con flush por línea, así que el modo en vivo usa la misma sesión abierta.
 """
 import os
+import platform
 import re
+from typing import Literal
 
-from .. import registro_uso
+from .. import VERSION, registro_uso
 from ..registro_uso import almacen, detector
 from .errores import error
 from .registro import herramienta
 
 _SESION = re.compile(r"[A-Za-z0-9_.-]{1,200}\Z")
 _LABEL = re.compile(r"[^A-Za-z0-9_.-]+")
+# Nombre de la herramienta (inglés, receta C) → clave interna de registro_uso.
+_OPCION = {"detailed": "detallado", "capture_on_error": "captura_error", "retention_days": "retencion_dias",
+           "total_mb": "tope_total_mb", "captures_mb": "tope_capturas_mb", "min_free_gb": "disco_libre_min_gb",
+           "memory_every_s": "memoria_cada_s"}
+_FABRICA_API = {"enabled": False, **{api: registro_uso.FABRICA[opt] for api, opt in _OPCION.items()}}
+
+
+@herramienta("report_issue_url", "avanzado", "Prepara un issue de GitHub con el texto elegido, la versión y el SO. "
+             "Solo devuelve la URL: no abre el navegador, no envía datos ni lee el registro local.", modifica=False)
+def report_issue_url(sesion, title: str, note: str = "", type: Literal["Problema", "Sugerencia"] = "Problema",
+                     screenshot: str | None = None):
+    """
+    title: título del issue (obligatorio y no vacío).
+    note: nota del reporte; se recorta con aviso si la URL supera 7000 caracteres.
+    type: Problema usa la etiqueta bug; Sugerencia usa enhancement.
+    screenshot: ruta del PNG que la persona eligió adjuntar; se incluye para arrastrarlo a GitHub, no se sube.
+    """
+    try:
+        url = registro_uso.url_issue(type, title, note, VERSION, platform.system(), screenshot)
+    except ValueError as e:
+        raise error("INVALID_ARGUMENTS", str(e)) from None
+    return {"url": url}
 
 
 def _sesion(sesion):
@@ -24,17 +48,114 @@ def _sesion(sesion):
     return sesion
 
 
-@herramienta("set_usage_logging", "avanzado", "Prende o apaga el registro LOCAL de uso. No envía datos; "
-             "solo números, claves y longitudes. Apagado de fábrica. No entra en deshacer.",
-             modifica=False)
-def set_usage_logging(sesion, enabled: bool):
+def _ajustes():
+    """Los QSettings de la app, igual que api/herramientas_preferencias.py (las pruebas los redirigen)."""
+    from PySide6.QtCore import QSettings
+
+    from .. import NOMBRE_APP
+    ruta = os.environ.get("OMNICAD_AJUSTES_INI")
+    return QSettings(ruta, QSettings.IniFormat) if ruta else QSettings(NOMBRE_APP, NOMBRE_APP)
+
+
+def _leer_opciones():
+    """Opciones guardadas del registro (lo que vería Preferencias › Registro de uso)."""
+    salida = dict(registro_uso.FABRICA)
+    try:
+        ajustes = _ajustes()
+    except Exception:  # noqa: BLE001 — sin Qt o sin entorno de escritorio: queda lo de fábrica
+        return salida
+    for opcion, clave in registro_uso.CLAVES_PREFS.items():
+        defecto = registro_uso.FABRICA[opcion]
+        valor = ajustes.value(clave, defecto)
+        if isinstance(defecto, bool):
+            salida[opcion] = valor if isinstance(valor, bool) else str(valor).lower() in ("true", "1")
+            continue
+        try:
+            numero = float(valor)
+            minimo, maximo = registro_uso.RANGOS[opcion]
+            if not minimo <= numero <= maximo:
+                continue
+            salida[opcion] = int(numero) if isinstance(defecto, int) else numero
+        except (TypeError, ValueError):
+            continue
+    salida["tope_capturas_mb"] = min(salida["tope_capturas_mb"], salida["tope_total_mb"])
+    return salida
+
+
+def _escribir_opciones(opciones):
+    ajustes = _ajustes()
+    for opcion, clave in registro_uso.CLAVES_PREFS.items():
+        if opcion in opciones:
+            ajustes.setValue(clave, opciones[opcion])
+    ajustes.sync()
+
+
+def _bloque(sesion, opciones=None):
+    """Ajustes + estado, en las claves de la herramienta."""
+    opciones = opciones if opciones is not None else _leer_opciones()
+    try:
+        ajustes_prendido = bool(_ajustes().value("general/registro_uso", False))
+    except Exception:  # noqa: BLE001
+        ajustes_prendido = False
+    bytes_usados, sesiones = registro_uso.inventario()
+    activo = registro_uso.activo
+    estado = activo.estado() if activo else {"session": None, "error": None, "dropped": 0}
+    prendido = activo is not None or ajustes_prendido
+    settings = {"enabled": prendido, **{api: opciones[opt] for api, opt in _OPCION.items()}}
+    ranges = {api: ([False, True] if opt in registro_uso.FABRICA and isinstance(registro_uso.FABRICA[opt], bool)
+                    else list(registro_uso.RANGOS[opt])) for api, opt in _OPCION.items()}
+    ranges["enabled"] = [False, True]
+    return {"settings": settings, "ranges": ranges, "factory": dict(_FABRICA_API),
+            "state": {**estado, "enabled": prendido, "paused_low_disk": almacen.pausado_por_disco(),
+                      "folder": str(registro_uso.carpeta()).replace("\\", "/"), "used_mb": round(bytes_usados / 2**20, 2),
+                      "sessions": sesiones}}
+
+
+@herramienta("get_usage_settings", "avanzado", "Devuelve todas las opciones del registro LOCAL (valores actuales, "
+             "rango y valor de fábrica) y su estado: espacio usado, sesiones, carpeta y si está pausado por poco "
+             "disco. No envía nada.", modifica=False)
+def get_usage_settings(sesion):
     """
-    enabled: true activa la sesión local; false la drena y apaga.
+    (sin parámetros)
     """
-    configurar = getattr(sesion, "configurar_registro", None)
-    if configurar:
-        return configurar(enabled)
-    return registro_uso.configurar(enabled, {"proyecto": sesion.doc.nombre})
+    return _bloque(sesion)
+
+
+@herramienta("set_usage_logging", "avanzado", "Prende o apaga el registro LOCAL de uso y cambia sus opciones "
+             "(retención, topes, modo detallado). No envía datos: guarda texto saneado: rutas con ~, tokens ocultos, 500 caracteres; el texto libre solo en modo detallado. Apagado de "
+             "fábrica. Los cambios rigen sin reiniciar. No entra en deshacer.", modifica=False)
+def set_usage_logging(sesion, enabled: bool | None = None, detailed: bool | None = None,
+                      capture_on_error: bool | None = None, retention_days: float | None = None,
+                      total_mb: float | None = None, captures_mb: float | None = None,
+                      min_free_gb: float | None = None, memory_every_s: float | None = None):
+    """
+    enabled: true activa la sesión local; false la drena y apaga; omitido deja el estado actual.
+    detailed: modo detallado para reportar bugs: guarda también el texto libre de los diálogos.
+    capture_on_error: captura chica del visor en cada error (solo tiene efecto con detailed=true).
+    retention_days: días que se guarda (1 a 90; de fábrica 7).
+    total_mb: tope total del registro en MB (20 a 2000; de fábrica 150). Si se achica, se poda en el acto.
+    captures_mb: tope de las capturas en MB (0 a 500; de fábrica 50; nunca mayor que total_mb).
+    min_free_gb: espacio libre mínimo en disco antes de pausar el registro (0,5 a 50; de fábrica 2).
+    memory_every_s: cada cuántos segundos se mide la memoria (5 a 300; de fábrica 30).
+    """
+    pedidos = {"detailed": detailed, "capture_on_error": capture_on_error, "retention_days": retention_days,
+               "total_mb": total_mb, "captures_mb": captures_mb, "min_free_gb": min_free_gb,
+               "memory_every_s": memory_every_s}
+    cambios = {_OPCION[api]: valor for api, valor in pedidos.items() if valor is not None}
+    try:
+        registro_uso.normalizar(cambios)
+    except (TypeError, ValueError) as e:
+        raise error("INVALID_ARGUMENTS", str(e),
+                    "Rangos: " + " · ".join(f"{k} {a}–{b}" for k, (a, b) in registro_uso.RANGOS.items())) from None
+    guardar = getattr(sesion, "aplicar_ajustes_registro", None)      # la ventana abierta: ella misma se los aplica
+    if cambios:                        # solo se escriben las opciones que alguien pidió cambiar
+        guardar(cambios) if guardar else (_escribir_opciones(cambios), registro_uso.aplicar(cambios))
+    estado = {}
+    if enabled is not None:
+        configurar = getattr(sesion, "configurar_registro", None)
+        estado = configurar(bool(enabled)) if configurar else registro_uso.configurar(
+            bool(enabled), {"proyecto": sesion.doc.nombre})
+    return {**_bloque(sesion), **estado}
 
 
 @herramienta("get_usage_log", "avanzado", "Lee eventos recientes del registro LOCAL de uso. En vivo lee la sesión "
@@ -56,7 +177,8 @@ def get_usage_log(sesion, since: int = 0, kinds: list[str] | None = None, limit:
     sesion = _sesion(session)
     lista = almacen.eventos(sesion, desde=since, tipos=kinds, limite=limit)
     return {"session": sesion, "events": lista, "count": len(lista),
-            "last_seq": lista[-1]["seq"] if lista else since, "active": almacen.activa(sesion)}
+            "last_seq": lista[-1]["seq"] if lista else since, "active": almacen.activa(sesion),
+            "paused_low_disk": almacen.pausado_por_disco()}
 
 
 @herramienta("get_usage_summary", "avanzado", "Resume la sesión local: tiempo por comando, top 10 de operaciones "
@@ -171,7 +293,7 @@ def _informe(sesion, lista, resumen):
     else:
         lineas.append("Sin filas: la sesión no disparó ninguna regla.")
     lineas += ["```", "",
-               "Los datos son locales y ya vienen saneados (sin texto de campos, chat ni rutas).",
+               "Los datos son locales y vienen con texto saneado: rutas con ~, tokens ocultos, 500 caracteres; el texto libre solo en modo detallado.",
                "Este informe NO se agregó a docs/seguimiento/: revisalo antes de cargar una fila.", ""]
     return "\n".join(lineas)
 

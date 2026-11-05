@@ -384,14 +384,15 @@ def polilineas_construccion(boceto_resuelto):
     return salida
 
 
-def perfiles_a_pintar(perfiles, boceto):
-    """Los perfiles sin los huecos de las letras, que pintados oscurecerían lo que tengan debajo. Un motor que no los
-    separa los deja: es solo el relleno."""
+def perfiles_a_pintar(perfiles, boceto, avisar=None):
+    """Relleno sin contraformas; si no puede clasificarse, conserva las curvas sin inventar regiones sólidas."""
     from ..nucleo.perfiles import sin_huecos
     try:
         return sin_huecos(perfiles, boceto)
-    except geo.ErrorGeometria:
-        return perfiles
+    except geo.ErrorGeometria as e:
+        if avisar is not None:
+            avisar(f"No se pudo mostrar el relleno del boceto: {e}")
+        return []
 
 
 def tris_perfil_terminado(boceto_resuelto, tope=300):
@@ -404,10 +405,17 @@ def tris_perfil_terminado(boceto_resuelto, tope=300):
         return []                      # solo la proyección de una cara: la pieza no se marca (B-109)
     salida = []
     if getattr(boceto_resuelto, "_a_pintar", None) is None:
-        boceto_resuelto._a_pintar = perfiles_a_pintar(boceto_resuelto.perfiles, b)
+        avisos = []
+        pintables = perfiles_a_pintar(boceto_resuelto.perfiles, b, avisos.append)
+        if avisos:
+            return []                  # el fallo es transitorio: no memorizar un relleno vacío
+        boceto_resuelto._a_pintar = pintables
     for p in boceto_resuelto._a_pintar:
         if getattr(p, "_tris_visor", None) is None:
-            p._tris_visor = geo.teselar(p.cara)[0]
+            try:
+                p._tris_visor = geo.teselar(p.cara)[0]
+            except Exception:  # noqa: BLE001 — un fallo del relleno no debe escapar al repintado de Qt
+                continue
         salida.append(p._tris_visor)
     return salida
 
@@ -1614,7 +1622,11 @@ class Visor3D(QOpenGLWidget):
                 candidatos += [(i, np.asarray(p), {"tipo": "punto", "id": i}) for i, _n, p in
                                getattr(self.config, "puntos_usuario", [])]
                 for br in self._bocetos_visibles():
+                    from ..restricciones import objetos
+                    internos = {p for cid in objetos.indice(br.boceto) for p in br.boceto.curvas[cid].puntos()}
                     for pid, pt in br.boceto.puntos.items():
+                        if pid in internos:
+                            continue
                         candidatos.append((pid, br.plano.a_3d(pt.x, pt.y),
                                            {"tipo": "punto_boceto", "boceto": br.op_id, "punto": pid}))
                 candidatos += [(n, p, {"tipo": "centro_masa", "analisis": n}) for n, p in self.centros_masa if "centro_masa" in filtros]
@@ -1678,7 +1690,8 @@ class Visor3D(QOpenGLWidget):
                         curva_id, poli, tipo_curva = curvas[quien[j]]
                         if "curva_boceto" not in filtros and tipo_curva != "linea":
                             continue
-                        if tipo_curva == "texto" and "perfil" in filtros:   # con letras finas todo clic cae cerca de un borde
+                        from ..restricciones import objetos
+                        if "perfil" in filtros and (tipo_curva == "texto" or curva_id in objetos.indice(br.boceto)):
                             continue
                         dist, p = self._dist_polilinea(q, poli, mvp, (o, d))
                         if dist < mejor[0] and p is not None:
@@ -2068,11 +2081,13 @@ class Visor3D(QOpenGLWidget):
                 v, n, colores = self.mallas_analisis[m["id"]]
                 dinamico = dinamico and colores is None         # malla fina de «Calidad alta», con colores que siguen a la cámara
             if dinamico:
-                clave = (m["id"], id(v), self.R.tobytes())
+                ojo = None if self.ortografica else self.ojo()      # H-56: en perspectiva, la vista por vértice
+                clave = (m["id"], id(v), self.R.tobytes(), None if ojo is None else ojo.tobytes())
                 if clave not in self._cache_dinamico:
                     if len(self._cache_dinamico) > 64:
                         self._cache_dinamico.clear()
-                    self._cache_dinamico[clave] = np.asarray(self.funcion_colores(n, self.R[2]), np.float32)
+                    self._cache_dinamico[clave] = np.asarray(self.funcion_colores(n, self.R[2], puntos=v, ojo=ojo),
+                                                             np.float32)
                 colores = self._cache_dinamico[clave]
             elif colores is None:               # los colores por vértice (análisis) van con la malla fina
                 v, n = self._malla_dibujo(i, m)

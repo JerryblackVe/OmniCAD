@@ -35,3 +35,9 @@ CLAUDE.local.md
 
 # Documentación de Fusion 360 descargada (4,4 GB): recurso local, nunca se sube
 /docs/fusion_docs/
+
+# Contexto maestro del proyecto para agentes: local, nunca se sube (regla en CLAUDE.md)
+/PROJECT_CONTEXT.md
+
+# Estado interno de agentes externos (Kiro y otros): no es del proyecto
+/.agents/

@@ -2,31 +2,26 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 24: Abierto 19 · Parcial 4 · Bloqueado 1 · Sin verificar 0 (recontado 2026-11-02).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 19: Abierto 13 · Parcial 5 · Bloqueado 1 (recontado 2026-11-05).
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-186 | Después de Mover, «De dónde viene» dice que Mover creó la cara | Abierto | Media | Caja (op1) movida con Mover (op2): `origen_de` de una cara da creo op2. Tiene que dar creo op1 y, si cuenta, Mover entre los que la modificaron. El docstring de `timeline/origen.py` dice además que un cuerpo importado no da origen, y sí da. | timeline/origen.py:50 (`_caminar`, `_previa`) | 2026-11-03 |
+| B-197 | Extruir con inclinación: el tronco de pirámide y cono da otro volumen que el esperado | Abierto | Media | El test da 2185,18 contra 2020,41 esperado; falla igual en HEAD ca87869 (comprobado en un worktree limpio el 2026-11-05). Falta ver si el error es del test o de la extrusión cónica comparando con Fusion. | tests/test_solidos_crear.py::test_extrusion_con_inclinacion_tronco_de_piramide_y_cono | 2026-11-05 |
+| B-196 | Barrer y el sector del labio pierden la autointersección sin avisar | Abierto | Media | `barrer` (dos sitios) y `_sector_labio` no pasan por el aviso de autointersección que ya tienen Tubo y Patrón geométrico (B-167, B-168). Hallado en la revisión del 2026-11-05. | nucleo/solidos_crear.py | 2026-11-05 |
+| B-195 | Extruir el logo ZAI.svg entero falla: dos regiones salen con contorno autointersectado | Abierto | Alta | Pasa también sin transformar y sin Rust: el arreglo planar da 277 regiones y 2 son inválidas (8,35 mm² con 36 curvas y 0,0027 mm²; `BRepAlgoAPI_Check` falla y `ShapeAnalysis_Wire.CheckSelfIntersection` da verdadero en un alambre). La extrusión de `object:<id>` termina en «La operación 'unir' dio un resultado imposible». Revisar qué cruce casi tangente no se corta en `nucleo/perfiles.py` (`_detectar`) y validar las caras antes de entregarlas. | clon/omnicad/nucleo/perfiles.py (`_detectar`); evidencia local `evidencias/boceto_organizar_2026-11-05/zai_caras.py` y `zai_sonda.py` (necesita el `ZAI.svg` del Escritorio) | 2026-11-05 |
+| B-189 | OmniKernel no arranca: un argumento por defecto usa un enum de OCC sin inicializar | Abierto | Baja | `_trozos(..., tipo=TopAbs_SOLID)` evalúa el enum al importar `solidos_crear`, pero `_iniciar_opencascade` no corre al elegir OmniKernel. Reproducido en `test_motor` y los 68 casos de `test_paridad_motor`: todos fallan antes de modelar con `NameError: name 'TopAbs_SOLID' is not defined`. También está en HEAD (`solidos_crear.py:3868`), independiente del arreglo de perfiles. Integrar la corrección en ese módulo y repetir las pruebas de ambos motores. | clon/tests/test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado; clon/omnicad/nucleo/solidos_crear.py (`_trozos`) | 2026-11-04 |
+| B-188 | Investigar la cara sin triangulación del proyecto REMOVEDOR | Parcial | Media | Corregido el supuesto que hacía `argmax` sobre una malla vacía, con recuperación por B-rep y errores de geometría claros; pruebas sin malla, visor, terminar, extruir, recalcular y persistencia. Falta el `.omnicad` o receta exacta con el boceto/SVG y los movimientos op22/op23/op55 para explicar por qué esa cara concreta quedó sin malla. El STEP REMOVEDOR DE TRAGO disponible se importa y proyecta sin reproducir el fallo; no se atribuye a archivo dañado ni a cara inválida. | clon/tests/test_perfiles_interior.py::test_sin_huecos_preserva_el_svg_valido_sin_malla; clon/omnicad/nucleo/geometria.py (`punto_dentro`) | 2026-11-04 |
 | B-184 | Dividir un cuerpo importado de STEP deja una mitad con volumen negativo y el paso sale ok | Abierto | Alta | Cuerpo7 quedó en −46.885 mm³ y −33.256 mm², y Cuerpo3 en 65.205 mm³. `check_geometry` en vivo sobre ese documento trabó la ventana más de 5 min. Falta reproducirlo en proceso aparte. | omnicad/nucleo/solidos_modificar.py:1564 | 2026-11-02 |
 | B-177 | El sentido de una unión con origen en arista circular se invierte si el padre gira | Abierto | Alta | Con el padre a más de unos 45° el mismo valor mueve al revés: −207,9 mm en vez de −56,9. Con origen en cara plana no pasa. | omnicad/api/herramientas_ensamble.py:725 | 2026-11-02 |
 | B-178 | Lo creado después de una unión no la sigue al accionarla | Abierto | Alta | Agujeros y fijaciones con puntos absolutos salen corridos y el recálculo da REFERENCE_LOST. Esquive: uniones al final del timeline. | omnicad/api/herramientas_ensamble.py:650 | 2026-11-02 |
-| B-183 | section_view no aparece en render_image | Abierto | Media | Reproducido: `section_view` da área 1600 mm² sobre una caja de 40³, pero `render_image` sale idéntico con la sección visible u oculta (0 de 76 800 píxeles distintos). | omnicad/api/herramientas_analisis.py:439 | 2026-11-02 |
 | B-172 | Pedir propiedades de un cuerpo recién solevado cerró la app | Abierto | Alta | Violación de acceso en TKernel dentro de `_por_malla`, una vez en vivo; no se repite abriendo el autoguardado. Falta aislar esa medición o validar el sólido antes. | omnicad/nucleo/geometria.py:1034 | 2026-11-02 |
 | B-173 | Solevación de 3 splines cerrados sale ok con el sólido plegado, y check_geometry da válido | Abierto | Alta | Da 40 % del volumen esperado y el orden de las secciones cambia el resultado sin avisar. `valid` y `all_valid` siguen en true con un problema de severidad error. | omnicad/api/herramientas_revision.py:74 | 2026-11-02 |
 | B-170 | La vista previa de Solevación cierra la app | Abierto | Alta | Con perfiles elegidos, `BRepOffsetAPI_MakePipeShell` da una violación de acceso dentro de la previa, en `solevar`: se cae la ventana entera. La previa tiene que correr aislada o validar antes. | nucleo/solidos_crear.py:1321 | 2026-11-02 |
-| B-168 | Un tubo por aristas con esquinas da autointersecciones y sale ok | Abierto | Media | `create_pipe` sobre tres aristas de un cuerpo que forman esquinas: 1 autointersección en el cuerpo nuevo. Falta ver cómo resuelve Fusion las esquinas y si corresponde un aviso. | api/herramientas_solido_extra.py | 2026-11-02 |
 | B-159 | Un empalme chico sobre un vaciado cierra la app | Abierto | Alta | Caja 60 × 50 × 40, vaciado de 1 mm quitando la base y empalme de 1 mm en E10: `BRepFilletAPI_MakeFillet.Build` da una violación de acceso y se cae todo el programa. Hay que ver por qué no lo frena el `try`: un cierre nativo no es una excepción de Python; correrlo aislado o validar antes. | nucleo/solidos_modificar.py:548 | 2026-11-02 |
-| B-158 | Labio sobre una esfera cierra la app | Abierto | Media | `create_lip_groove` sobre la arista de costura de una esfera mide un alambre sin largo y da una violación de acceso. Falta rechazar esa arista con un error claro. | nucleo/solidos_crear.py:236 | 2026-11-02 |
 | B-160 | Un STEP con bytes alterados cierra la app | Abierto | Alta | `STEPCAFControl_Reader.ReadFile` da una violación de acceso con el archivo de `tests/corpus_caza/`. Abrir STEP de otros tiene que correr en el proceso aislado (`nucleo/aislado.py`), o la app cae con un archivo ajeno. | nucleo/intercambio.py:225 | 2026-11-02 |
-| B-165 | Un agujero tangente a dos paredes deja aristas no manifold y sale ok | Abierto | Media | Agujero de 60 mm en una cara de 60 mm de ancho: pasa justo por las dos paredes. Falta decidir si da error o aviso, comparando con Fusion. | nucleo/solidos_crear.py | 2026-11-02 |
-| B-167 | El patrón geométrico sobre chapa da autointersecciones y sale ok | Abierto | Media | Dos caras de una pestaña con los valores por defecto: 2 autointersecciones. Falta ver si las copias se pisan y si tiene que unirlas o avisar. Con una distancia de 2 mm sobre una cara grande tarda más de 40 s y no se puede cortar. | api/herramientas_solido_extra.py | 2026-11-02 |
-| B-157 | Un empalme o chaflán más grande que la pared de un vaciado deja aletas y el paso sale ok | Abierto | Alta | El corte exterior atraviesa la pared y las caras de la cavidad quedan sueltas por fuera. El cuerpo da válido y estanco, pero con 16 autointersecciones: falta detectarlo y decidir qué hace cada caso comparando con Fusion. | omnicad/nucleo/solidos_modificar.py:496 | 2026-11-02 |
-| B-149 | Radio mínimo sin radio mínimo pinta de rojo las paredes enteras de un vaciado | Parcial | Baja | El panel y `min_radius` de la API ya pintan una banda junto al rincón. Un análisis guardado antes, y la API sin `min_radius`, siguen igual para que un documento viejo se vea igual: decidir si también cambian. | nucleo/analisis.py (`colores_radio_minimo`); tests/test_inspeccionar_fusion.py | 2026-11-01 |
-| B-144 | Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar | Abierto | Media | Hueca de pared 3 (caja 60×40×20 menos 54×34 desde z = 3) y esfera r 4 en (18,537165, 20,0001, 10,0001): cortar quita 103,79 mm³ de 122,5 (antes de B-125 quitaba 0) y el común da 121,97. Las muestras de `_comun_desmentido` solo ven diferencias de 1/4 de la pieza chica. | clon/tests/test_booleanas_tortura.py::test_b125_esfera_casi_tangente_no_se_queda_sin_cortar | 2026-11-01 |
-| B-154 | Un paso viejo con un pedazo de letra partida, elegido a mano, ya no calcula | Abierto | Media | Volver a elegir el texto en ese paso. Ese pedazo dejó de existir con B-134 y la referencia no guarda con qué distinguir la letra de su hueco. | clon/omnicad/nucleo/perfiles.py › `buscar_por_firma_tolerante` | 2026-11-01 |
-| B-121 | Volver a resolver un boceto con una tangente general (spline) corre la geometría un poco cada vez | Abierto | Media | En `_tangencia` el contacto arranca de una muestra de 96 puntos, no del contacto exacto: el solver no parte de la solución y reparte el error entre la curva y el parámetro. Medido 2026-10-31 con arco de radio 10 y spline ya tangentes: 10,0000 → 10,0091 → 10,0175 → 10,0254 → 10,0326 por pasada. Arreglarlo cambia lo que dan las recetas guardadas con esas tangentes: decidir antes de tocar el solver (idea: afinar los dos parámetros con la geometría quieta y usarlos solo si el residuo ya es cero) | `tests/test_restricciones_matematica.py::test_tangente_con_el_comando_no_cambia_el_radio_del_arco`; `omnicad/restricciones/solver.py` (`_tangencia`) | 2026-10-31 |
+| B-167 | El patrón geométrico sobre chapa da autointersecciones y sale ok | Parcial | Media | Ahora avisa la autointersección (tests/test_b167_b168_autointersecciones.py, 2026-11-04). Falta la lentitud: con 2 mm sobre una cara grande tarda más de 40 s y no se puede cortar. | api/herramientas_solido_extra.py | 2026-11-02 |
 | B-119 | Proyectar un cuerpo curvo visto de costado no da su silueta | Abierto | Alta | Fusion promete perfiles cerrados con el filtro Cuerpos («closed profiles»), pero `proyectar_forma` proyecta solo aristas: un cilindro R14 sobre XZ da 3 líneas abiertas (falta el lado opuesto a la costura) y 0 perfiles; una esfera da una línea o un arco. Hace falta sumar la silueta (HLR de `nucleo/dibujo.py`), con cuidado: un vínculo a un cuerpo la recalcularía en cada paso del timeline, y sobre roscas tarda más de 90 s. Mirado de frente anda bien (cilindro sobre XY: 1 círculo, 1 perfil). | omnicad/nucleo/perfiles.py (`proyectar_forma`); tests/test_proyectar_tarjeta.py::test_cambiar_de_filtro_saca_lo_incompatible_y_lo_dice | 2026-10-31 |
 | P-12c | Fuente de novedades de Fusion (la ayuda es un shell JS sin titulares) | Parcial | Baja | Autodesk le responde 403 a los scripts: ahora se lee la última copia de archive.org del blog «What's New» (hoy del 2026-05-16, 5 meses atrás) y el informe lo avisa; falta una fuente al día que no bloquee (feed o API) o seguir revisando a mano. | scripts/novedades.py (`bajar`, `COPIAS`); tests/test_novedades.py::test_fusion_apunta_al_blog_y_cae_a_archive_org_si_autodesk_bloquea | 2026-10-20 |
 | P-1c | Wayland nativo: menús emergentes se cierran solos | Bloqueado | Alta | Necesita PC con Linux nativo (ver P-1b): el fallo solo aparece con Wayland y esta PC es Windows, así que no se pudo reproducir ni probar un arreglo; hoy se fuerza xcb y no molesta. | omnicad/ui/__init__.py:11-19 | 2026-10-20 |
@@ -65,15 +60,17 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
 
+### B-188 · Reproducción exacta pendiente de REMOVEDOR
 
-### B-186 · Después de Mover, «De dónde viene» dice que Mover creó la cara
+- **Fallo confirmado:** `_punto_adentro` suponía que `geo.teselar(cara)` siempre devolvía triángulos. Con malla vacía, `sin_huecos → _tinta_svg → _punto_adentro` daba `ValueError: attempt to get argmax of an empty sequence`. La misma regresión con la función anterior falla; con la corrección pasa.
+- **Corrección comprobada:** `geometria.punto_dentro` verifica en UV el centro del mayor triángulo útil y, si falta/falla el mallado o el punto quedó fuera por el redondeo float32, valida la cara y usa `BRepClass3d_SolidExplorer.FindAPointInTheFace_s` con clasificación de pertenencia. Las caras diminutas se consultan en una copia escalada. No se reconstruyen contornos ni se convierte la malla en geometría CAD.
+- **Geometría inválida:** un hueco que cruza el exterior es un caso sintético inválido, no el caso real. Se rechaza con `ErrorGeometria`; encontrar un punto que el clasificador dé por interior no basta para declarar válida esa cara.
+- **Caso disponible:** STEP REMOVEDOR DE TRAGO, cuerpo Cuerpo5, 6 caras, volumen 2697,2602 mm³; importar, crear bocetos en las caras y proyectar sus aristas no reprodujo el fallo. Falta la receta del documento con su boceto/SVG y movimientos, no solo la forma final del STEP.
+- **Banco reproducible:** `scripts/bench_perfiles_interior.py`, 1008 perfiles de texto y 1000 de SVG: 0 diferencias de clasificación con malla normal o vacía, 2008 puntos interiores comprobados y recetas intactas. Evidencia local: `evidencias/perfiles_interior_2026-11-04.json`.
+- **Costo de la verificación adicional:** medianas de tres corridas alternadas, cachés calientes: texto 3735 → 4288 ms (+14,8 %), SVG 398 → 449 ms (+12,8 %). Con todos los mallados vacíos, recuperación en 5833/454 ms. No es una mejora de velocidad; queda evaluar el costo en el proyecto original y optimizarlo conservando la comprobación de pertenencia.
+- **Para cerrar:** reproducir la cara concreta del documento original, registrar su validez y estado del mallado, y comprobar el flujo de la ventana sobre una copia del proyecto.
 
-- **Qué:** sin ventana: `create_box` 20 × 20 × 10 (op1), `move_body` con `translate=[30, 0, 0]` (op2), `origen_de` de la primera cara.
-- **Esperado:** creo op1; Mover en `modificaron` o en ninguna parte.
-- **Obtenido:** creo op2. Antes de mover daba op1.
-- **Causa probable:** `_previa` busca la cara en el cuerpo de antes por firma y misma portadora: una cara trasladada está en otro plano y cuenta como nueva.
-- **Evidencia:** script en el scratchpad de la sesión del 2026-11-03 (no en git).
-- **Prueba propuesta:** el caso de arriba en `tests/`, más una rotación.
+
 ### B-184 · Dividir un cuerpo importado de STEP deja una mitad con volumen negativo y el paso sale ok
 
 - **Qué:** 0.2.0 en vivo. `Configuración 1.step` importado, Mover1 con rx = 90, Apoyar1 y Apoyar2, Boceto1 en una cara y Dividir1 de `op1.c2` con el plano YZ y `extender=true`.
@@ -131,29 +128,11 @@ de arriba manda sobre este texto.
 - **Entorno:** Windows, versión 0.2.0, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
 
-### B-168 · Un tubo por aristas con esquinas da autointersecciones y sale ok
-
-- **Qué:** cuerpo con caras extruidas y `create_pipe(edges=["Cuerpo2/E9", "Cuerpo2/E4", "Cuerpo2/E8"])`.
-- **Esperado:** un tubo sin autointersecciones, o un aviso.
-- **Obtenido:** paso ok, cuerpo nuevo con 1 autointersección.
-- **Cómo reproducir:** `clon/tests/corpus_caza/b168_tubo_esquinas.json`; `cazar.py repetir <firma>`.
-- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
 ### B-159 · Un empalme chico sobre un vaciado cierra la app
 
 - **Qué:** `create_box(60, 50, 40)`, `shell(body="Cuerpo1", thickness=1, faces="<Z")`, `find_edges`, `fillet(body="op1.c1", edges=["Cuerpo1/E10"], radius=1)`.
 - **Esperado:** El empalme, o un error.
 - **Obtenido:** Violación de acceso en `mf.Build()`: se cae el proceso entero, sin error ni autoguardado.
-- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
-- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
-### B-158 · Labio sobre una esfera cierra la app
-
-- **Qué:** `create_sphere(radius=10)`, `find_edges`, `create_lip_groove(edges=["Cuerpo1/E3"])`.
-- **Esperado:** Un error claro: esa arista no sirve para un labio.
-- **Obtenido:** Violación de acceso en `_punto_en`: se cae el proceso.
 - **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
 - **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
@@ -167,15 +146,6 @@ de arriba manda sobre este texto.
 - **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
 
-### B-165 · Un agujero tangente a dos paredes deja aristas no manifold y sale ok
-
-- **Qué:** `create_box(80, 60, 40)`, `create_hole(diameter=60, face="Cuerpo1/F5", depth=60)`.
-- **Esperado:** Sin aristas compartidas por más de dos caras, o un aviso.
-- **Obtenido:** Paso ok y una arista no manifold.
-- **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
-- **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
-- **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
 ### B-167 · El patrón geométrico sobre chapa da autointersecciones y sale ok
 
 - **Qué:** Pestaña de chapa de 80 × 50 y `create_geometric_pattern(faces=["Cuerpo1/F5", "Cuerpo1/F6"])`.
@@ -184,47 +154,6 @@ de arriba manda sobre este texto.
 - **Cómo reproducir:** caso del cazador en `clon/tests/corpus_caza/`; `cazar.py repetir <firma>` lo repite. Firma en `scripts/caza/conocidos.json`.
 - **Entorno:** Windows, versión 0.2.0, API sin ventana, 2026-11-02.
 - **Prueba propuesta:** `tests/test_caza_regresion.py` pasa de xfail a verde al borrar esta fila.
-
-### B-157 · Un empalme o chaflán más grande que la pared de un vaciado deja aletas y el paso sale ok
-
-- **Qué:** versión 0.2.0, en vivo. Boceto en XZ, trapecio de 82,74 × 71,14 mm; Extrusión 43,66 mm con conicidad −31,5°; Vaciado interior 1,91 mm quitando la cara de y = −43,66; Empalme 16,05 mm en la arista de (0, 0) y Chaflán 20,28 mm en la de (−82,74, 0), las dos en la cara de y = 0.
-- **Esperado:** quitar la esquina también abre o corta la cavidad, sin caras sueltas, o un error claro si no se puede. Falta comparar con Fusion.
-- **Obtenido:** los pasos dan `ok`, pero las esquinas interiores de la cavidad quedan afuera como dos aletas. `check_geometry`: válido, estanco y 16 autointersecciones. La caja da 75,92 mm de ancho, y esa medida la marcan las aletas.
-- **Cómo reproducir:** los pasos de arriba en un documento nuevo; mirar la vista superior en alambre o correr `check_geometry`.
-- **Causa probable:** sin leer en detalle. `BRepFilletAPI_MakeFillet` solo mira las caras vecinas de la arista y no ve la cavidad; el paso acepta su salida porque `es_valida` no busca autointersecciones.
-- **También:** el cazador la encontró solo (2026-11-02): desde 5 veces la pared aparecen autointersecciones, y con un chaflán de 48,4 mm sobre una pared de 2 el volumen da negativo (−16 579 mm³). Casos en `clon/tests/corpus_caza/b157_*.json`.
-- **Esquive:** empalme y chaflán antes del vaciado, o un tamaño menor que la pared.
-- **Prueba propuesta:** caja vaciada con empalme mayor que la pared: el resultado sin autointersecciones, o un error claro.
-- **Evidencia:** los tres renders y la captura de esta revisión quedaron en la sesión; `check_geometry` del 2026-11-02 sobre `op159.c1`.
-
-### B-154 · Un paso viejo con un pedazo de letra partida, elegido a mano, ya no calcula
-
-- **Qué:** documento guardado antes de B-134, con una curva que cruza una letra y una Extrusión que eligió a mano un pedazo de esa letra. Referencia de firma `{círculo, texto}` y centro (-8,8; 67,3).
-- **Esperado:** que el paso encuentre la letra entera.
-- **Obtenido:** «Un perfil seleccionado ya no existe en el boceto (cambió su contorno)». La referencia al disco cortado sí encuentra el disco, con aviso.
-- **Reproducir:** `pf.detectar(boceto.geometria(), plano)` da los pedazos viejos (158,96 y 1,29 mm²); `pf.buscar_por_firma_tolerante(br.perfiles, firma, centro)` devuelve `(None, None)`.
-- **Causa probable:** la O y su hueco tienen el mismo centro y la misma firma, y la referencia vieja no guarda con qué desempatar.
-- **Esquive:** volver a elegir el texto en ese paso.
-- **Prueba propuesta:** una referencia vieja a un pedazo de letra encuentra la letra entera.
-
-### B-149 · Radio mínimo sin radio mínimo pinta de rojo las paredes enteras de un vaciado
-
-- **Qué:** `analyze_geometry(type="min_radius", radius=25)` o un análisis guardado antes del 2026-11-01 sobre una caja vaciada.
-- **Esperado:** rojo solo junto a los rincones.
-- **Obtenido:** las paredes y el piso interiores enteros en rojo: una cara plana con sus cuatro esquinas sobre aristas cóncavas queda marcada completa.
-- **Esquive:** dar `min_radius`, o reabrir el análisis desde el panel y aceptar.
-- **Prueba propuesta:** extender `test_radio_minimo_degrade_entre_dos_radios` al modo viejo si se decide cambiarlo.
-- **Evidencia:** `evidencias/inspeccionar_2026-11-01/despues/capturas/inspeccionar_radio_minimo_cerca.png`.
-
-### B-144 · Cortar con una esfera casi tangente a una pared puede quitar de menos sin avisar
-
-**Gravedad:** media (hace falta un contacto casi tangente; el cuerpo sale válido y estanco). **Entorno:** OmniCAD, Windows, API sin ventana. **Estado:** reproducido; apareció comparando cortar junto y de a una en 300 casos al azar con un árbitro de puntos.
-
-**Qué hice:** `geo.booleano(hueca, geo.esfera(4, (18.537165, 20.0001, 10.0001)), "cortar")`, con `hueca` = caja 60×40×20 en (-30, -20, 0) menos caja 54×34×20 en (-27, -17, 3).
-
-**Esperado:** quitar 122,5 mm³ (media esfera menos el casquete que pasa al hueco). **Obtenido:** quita 103,79 mm³, válido y sin aviso; el común da 121,97.
-
-**Causa probable (leída):** el primer reintento creíble gana. `_comun_desmentido` deja pasar lo que difiere menos de 1/4 de la pieza chica, porque con 16 muestras no se puede afirmar menos. Reordenar `_REINTENTOS_BOOLEANA` podría resolverlo, pero cambia recetas que hoy dan bien. También: en ese mismo banco, 1 caso de 300 (el 60) da mal cortando de a una, y 3 terminan en error claro. **Esquive:** mover la esfera una milésima. **Prueba propuesta:** el caso de arriba, esperando 122,5 mm³ con tolerancia 1 mm³.
 
 ### B-119 · Proyectar un cuerpo curvo visto de costado no da su silueta
 

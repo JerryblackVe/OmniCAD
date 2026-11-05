@@ -40,7 +40,7 @@ from .parametros import (ANGULO, LONGITUD, LONGITUDES, MASAS, ErrorExpresion, Ta
 
 log = logging.getLogger(__name__)
 
-VERSION_RECETA = 1
+VERSION_RECETA = 2
 UNIDADES_DEFECTO = {"longitud": "mm", "masa": "g"}      # con qué se MUESTRAN las medidas; el modelo siempre va en mm y g
 TOPE_INSTRUCCIONES = 4000   # caracteres de las instrucciones del asistente (las generales y las de cada proyecto)
 _LIMITE_DESHACER = 200   # con 50 se perdía el deshacer de lo primero en una sesión larga; la memoria la acota el tope de bytes
@@ -126,6 +126,22 @@ def _migrar(d):
     return migrar(d) if migrar else d
 
 
+def _grupos_de(datos, ids):
+    """Las carpetas del timeline de una receta (texto venido de un archivo ajeno): se tira lo que no tenga forma de
+    carpeta, los pasos que no existen en esa receta y los repetidos, y una carpeta sin pasos (SC9)."""
+    salida = []
+    for g in datos.get("grupos") if isinstance(datos.get("grupos"), list) else []:
+        if not isinstance(g, dict) or not isinstance(g.get("id"), str):
+            continue
+        pasos = list(dict.fromkeys(i for i in (g.get("pasos") or []) if isinstance(i, str) and i in ids))
+        if not pasos:
+            continue
+        nombre = g.get("nombre")
+        salida.append({"id": g["id"], "nombre": nombre.strip() if isinstance(nombre, str) and nombre.strip()
+                       else f"Grupo {len(salida) + 1}", "pasos": pasos, "plegado": bool(g.get("plegado"))})
+    return salida
+
+
 class ResultadoPaso:
     def __init__(self, estado, mensaje=""):
         self.estado, self.mensaje = estado, mensaje
@@ -181,6 +197,9 @@ class Documento:
         # Tabla de configuraciones (CONFIGURAR): {"columnas": [{"tipo": "parametro", "nombre"} |
         # {"tipo": "suprimir", "op"}], "filas": [{"nombre", "valores"}], "activa": nombre}.
         self.configuraciones = {}
+        # Carpetas del timeline (Fusion: Organize features into groups): [{"id", "nombre", "pasos", "plegado"}].
+        # Una carpeta NO es un paso: agrupa pasos ya existentes, no entra en el recálculo ni cambia el orden (SC9).
+        self.grupos = []
         # Unidades de pantalla del documento (cm, m, in, ft; kg, lb): solo cambian cómo se muestran las medidas. Como los
         # comentarios, se guardan con el proyecto (solo si no son las de siempre) pero no entran en deshacer.
         self.unidades = dict(UNIDADES_DEFECTO)
@@ -320,6 +339,7 @@ class Documento:
         self.configuraciones = dict(datos.get("configuraciones") or {})
         self.espacios = dict(datos.get("espacios", {}))    # deshacer/rehacer también revierten los espacios
         nuevas = [operacion_desde_dict(_migrar(d)) for d in datos.get("operaciones", [])]
+        self.grupos = _grupos_de(datos, {o.id for o in nuevas})     # deshacer/rehacer también revierten las carpetas
         antes_sin_partir, self._sin_partir = self._sin_partir, self._pasos_sin_partir(datos, nuevas)
         if self._sin_partir != antes_sin_partir:
             self._memo.clear()
@@ -403,6 +423,28 @@ class Documento:
         self.modificado = True
         self._terminar_recalculo(desde, calculo)
         return self.resultados[i]
+
+    def pegar(self, receta, usa=()):
+        """Ctrl+V del timeline (SC9): copia el paso de `receta` con un id y un nombre nuevos («X (1)»), en el puesto
+        donde el timeline inserta un paso nuevo (el marcador). Equivale a copiar y pegar una operación en Fusion.
+        `usa`: los pasos que usaba el original (su `dependencias()`: la copia recién hecha no los conoce). Si usa algo
+        que no está antes del marcador, avisa y no pega nada."""
+        nueva = operacion_desde_dict(dict(receta))
+        faltan = sorted((set(nueva.dependencias()) | set(usa)) - {o.id for o in self.operaciones[:self.marcador]})
+        if faltan:
+            que = ", ".join(faltan)
+            if any(i in {o.id for o in self.operaciones} for i in faltan):
+                raise ErrorDocumento(f"«{nueva.nombre}» usa {que}, que queda después del marcador: no se pegó. "
+                                     "Rodá el marcador al final.")
+            raise ErrorDocumento(f"«{nueva.nombre}» usa {que}, que no está en este documento: no se pegó.")
+        nueva.id = self.nuevo_id()
+        nombres = {o.nombre for o in self.operaciones}
+        n = 1
+        while f"{nueva.nombre} ({n})" in nombres:
+            n += 1
+        nueva.nombre = f"{nueva.nombre} ({n})"
+        self.agregar(nueva)
+        return nueva
 
     def set_propiedad(self, ids_cuerpos, clave, valor):
         """Aspecto, material, nombre u opacidad de uno o más cuerpos (None borra la sustitución)."""
@@ -569,11 +611,78 @@ class Documento:
         calculo = self._prevuelo_cambio({"tipo": "eliminar", "indice": i})
         self._guardar_para_deshacer()
         del self.operaciones[i]
+        for g in self.grupos:
+            g["pasos"] = [j for j in g["pasos"] if j != op_id]
+        self.grupos = [g for g in self.grupos if g["pasos"]]
         self.parametros, self._contador_cotas = tabla, contador
         if i < self.marcador:
             self.marcador -= 1
         self.modificado = True
         self._terminar_recalculo(desde, calculo)
+
+    # ------------------------------------------------------------ carpetas del timeline (SC9)
+    def grupo(self, grupo_id):
+        """La carpeta `grupo_id` (Fusion: Timeline Group); ErrorDocumento si no existe."""
+        g = next((x for x in self.grupos if x["id"] == grupo_id), None)
+        if g is None:
+            raise ErrorDocumento(f"No existe el grupo '{grupo_id}'.")
+        return g
+
+    def grupo_de(self, op_id):
+        """La carpeta que contiene a un paso; None si está suelto."""
+        return next((g for g in self.grupos if op_id in g["pasos"]), None)
+
+    def agrupar(self, ids, nombre=None):
+        """Fusion: elegir varias operaciones y Create Group. Los pasos pasan a una carpeta nueva, nombrada y en el
+        orden del timeline; si uno estaba en otra carpeta, pasa a esta. No toca el recálculo ni el orden (la carpeta
+        no es un paso)."""
+        ids = list(dict.fromkeys(ids))
+        falta = [i for i in ids if i not in {o.id for o in self.operaciones}]
+        if falta:
+            raise ErrorDocumento(f"No existe la operación '{falta[0]}'.")
+        if len(ids) < 2:
+            raise ErrorDocumento("Agrupar necesita al menos dos pasos del timeline.")
+        ids.sort(key=self.indice)
+        self._guardar_para_deshacer()
+        for g in self.grupos:
+            g["pasos"] = [j for j in g["pasos"] if j not in set(ids)]
+        n = 1
+        while any(g["id"] == f"g{n}" for g in self.grupos):
+            n += 1
+        viejos = [g for g in self.grupos if g["pasos"]]
+        base = f"Grupo {len(viejos) + 1}"
+        self.grupos = viejos + [{"id": f"g{n}", "nombre": str(nombre or base).strip() or base,
+                                 "pasos": ids, "plegado": False}]
+        self.modificado = True
+        self._notificar()
+        return self.grupo(f"g{n}")
+
+    def renombrar_grupo(self, grupo_id, nombre):
+        """Fusion: Rename sobre un grupo del timeline."""
+        g = self.grupo(grupo_id)
+        nombre = str(nombre).strip()
+        if not nombre:
+            raise ErrorDocumento("El nombre del grupo está vacío.")
+        self._guardar_para_deshacer()
+        g["nombre"] = nombre
+        self.modificado = True
+        self._notificar()
+
+    def plegar_grupo(self, grupo_id, plegado=None):
+        """El botón +/− de la carpeta (Fusion: expand / collapse). None la alterna. Es solo cómo se muestra: no gasta
+        un paso de deshacer (una instantánea con un STEP importado pesa cientos de MB y desalojaría cambios reales)."""
+        g = self.grupo(grupo_id)
+        g["plegado"] = not g["plegado"] if plegado is None else bool(plegado)
+        self.modificado = True
+        self._notificar()
+
+    def desagrupar(self, grupo_id):
+        """Fusion: Edit Group › Expand: borra la carpeta y deja sus pasos sueltos, en el mismo orden."""
+        g = self.grupo(grupo_id)
+        self._guardar_para_deshacer()
+        self.grupos = [x for x in self.grupos if x is not g]
+        self.modificado = True
+        self._notificar()
 
     def puede_mover(self, op_id, nuevo_indice):
         """Como TimelineObject.canReorder: un paso no puede quedar antes de lo que usa ni después de quien lo usa."""
@@ -1117,9 +1226,10 @@ class Documento:
             self._duraciones.append(duracion)
             if registro is not None and i < self.marcador and not op.suprimida:
                 ms = (time.perf_counter() - inicio_paso) * 1000
-                datos_uso = {"paso": op.id, "tipo_op": op.TIPO, "duracion_ms": ms,
+                datos_uso = {"paso": op.id, "nombre": op.nombre, "tipo_op": op.TIPO, "duracion_ms": ms,
                              "exito": self.resultados[-1].estado != "error",
-                             "mensaje": self.resultados[-1].mensaje}
+                             "mensaje": self.resultados[-1].mensaje,
+                             "cuerpos": [c.nombre for c in estado.cuerpos.values()][:32]}
                 registro.emitir("op_ejecutada", datos_uso, medidas=(antes_registro,
                     [(c.tipo, c.forma) for c in estado.cuerpos.values()]))
                 tiempos_registro.append({"paso": op.id, "duracion_ms": ms})
@@ -1291,13 +1401,15 @@ class Documento:
 
     # ------------------------------------------------------------ serialización (receta)
     def a_dict(self):
-        return {"version_receta": VERSION_RECETA, "nombre": self.nombre,
+        version = 2 if any(getattr(o, "boceto", None) is not None and o.boceto.objetos for o in self.operaciones) else 1
+        return {"version_receta": version, "nombre": self.nombre,
                 "parametros": self.parametros.a_lista(), "marcador": self.marcador,
                 "contador": self._contador, "operaciones": [o.a_dict() for o in self.operaciones],
                 "sin_partir": sorted(self._sin_partir),
                 **({"contador_cotas": self._contador_cotas} if self._contador_cotas else {}),
                 "vistas": self.vistas, "propiedades": self.propiedades, "analisis": self.analisis,
                 "configuraciones": self.configuraciones,
+                **({"grupos": self.grupos} if self.grupos else {}),
                 "espacios": self.espacios, "comentarios": self.comentarios,
                 **({"unidades": self.unidades} if self.unidades != UNIDADES_DEFECTO else {}),
                 **({"instrucciones": self.instrucciones} if self.instrucciones else {})}

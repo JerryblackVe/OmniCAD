@@ -421,6 +421,8 @@ class Texto(_Curva):
     `alineacion`), `camino_desfase` (mm entre la curva y la línea base), `camino_ajustar` (repartir en todo el largo)
     y `camino_colocacion` ("arriba": la línea base apoya en la curva; "abajo": las letras cuelgan de ella con la misma
     lectura, la Placement de Fusion). Si la curva se borra, el texto vuelve a ser recto. En curva no se dibujan subrayado ni tachado.
+    `camino_alineado`: los textos nuevos sin posición manual se alinean al inicio, centro o fin del camino; en ellos
+    `camino_pos` es el desplazamiento por arrastre (0.5 = sin mover). Sin la marca, una receta anterior conserva su ancla.
 
     Marco (Fusion: el rectángulo del texto, que se acota y restringe): `marco` = [esquina derecha, esquina de
     arriba], ids de puntos; con `punto` (esquina de abajo a la izquierda) definen el giro, el ancho de la caja y el
@@ -436,7 +438,7 @@ class Texto(_Curva):
              "ancla_v", "ancho_caja", "voltear_h", "voltear_v", "camino", "camino_lado", "camino_pos",
              "camino_desfase", "camino_ajustar", "kerning", "inclinacion", "escala_h", "escala_v", "desfase_base",
              "capitalizacion", "subrayado", "tachado", "grosor_decoracion", "sin_division", "ajustes_kerning",
-             "marco", "altura_expr", "parametro_texto", "camino_colocacion", "parametro_altura", "altura_a")
+             "marco", "altura_expr", "parametro_texto", "camino_colocacion", "parametro_altura", "altura_a", "camino_alineado")
     _PREDETERMINADOS = {"espaciado": 0.0, "interlineado": 1.0, "alineacion": "izq", "ancla_v": "base",
                         "ancho_caja": 0.0, "voltear_h": False, "voltear_v": False, "camino": None,
                         "camino_lado": "izq", "camino_pos": 0.5, "camino_desfase": 0.0, "camino_ajustar": False,
@@ -444,7 +446,7 @@ class Texto(_Curva):
                         "desfase_base": 0.0, "capitalizacion": "ninguno", "subrayado": "ninguno",
                         "tachado": "ninguno", "grosor_decoracion": 0.0, "sin_division": False,
                         "ajustes_kerning": [], "marco": None, "altura_expr": None, "parametro_texto": None,
-                        "camino_colocacion": "arriba", "parametro_altura": None, "altura_a": False}
+                        "camino_colocacion": "arriba", "parametro_altura": None, "altura_a": False, "camino_alineado": False}
     # opciones del panel «Carácter» que se guardan tal cual (el tipo de cada una, para convertir lo que llega)
     TIPOGRAFIA = {"kerning": bool, "inclinacion": float, "escala_h": float, "escala_v": float, "desfase_base": float,
                   "capitalizacion": str, "subrayado": str, "tachado": str, "grosor_decoracion": float,
@@ -458,7 +460,7 @@ class Texto(_Curva):
                  inclinacion=0.0, escala_h=100.0, escala_v=100.0, desfase_base=0.0, capitalizacion="ninguno",
                  subrayado="ninguno", tachado="ninguno", grosor_decoracion=0.0, sin_division=False,
                  ajustes_kerning=None, marco=None, altura_expr=None, parametro_texto=None,
-                 camino_colocacion="arriba", parametro_altura=None, altura_a=False):
+                 camino_colocacion="arriba", parametro_altura=None, altura_a=False, camino_alineado=False):
         self.id, self.punto, self.texto, self.fuente = id, punto, str(texto), str(fuente)
         self.altura, self.angulo = float(altura), float(angulo)
         self.negrita, self.cursiva = bool(negrita), bool(cursiva)
@@ -479,6 +481,7 @@ class Texto(_Curva):
         self.camino_colocacion = str(camino_colocacion)
         self.parametro_altura = None if parametro_altura is None else str(parametro_altura)
         self.altura_a = bool(altura_a)
+        self.camino_alineado = bool(camino_alineado)
         self._estilo(construccion, eje, proyectada)
 
     def puntos(self):
@@ -1030,13 +1033,13 @@ def _contornos_texto(texto, fuente, altura, negrita, cursiva, opciones=(0.0, 1.0
 
 @lru_cache(maxsize=128)
 def _contornos_camino(texto, fuente, altura, negrita, cursiva, espaciado, alineacion, pos, lado, desfase, ajustar,
-                      camino, tipografia=(), colocacion="arriba", voltear=(False, False)):
+                      camino, tipografia=(), colocacion="arriba", voltear=(False, False), alinear_camino=False):
     from ..nucleo.fuentes import contornos_en_camino
     try:
         return tuple(contornos_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado=espaciado,
                                          alineacion=alineacion, posicion=pos, lado=lado, desfase=desfase,
                                          ajustar=ajustar, camino_colocacion=colocacion, voltear_h=voltear[0],
-                                         voltear_v=voltear[1], **_tipografia_camino(tipografia)))
+                                         voltear_v=voltear[1], alinear_camino=alinear_camino, **_tipografia_camino(tipografia)))
     except Exception:  # noqa: BLE001 — una fuente rota o un camino degenerado no deben romper el boceto
         return ()
 
@@ -1061,13 +1064,13 @@ def _mapa_texto(texto, fuente, altura, negrita, cursiva, opciones):
 
 @lru_cache(maxsize=64)
 def _paradas_camino(texto, fuente, altura, negrita, cursiva, espaciado, alineacion, pos, lado, desfase, ajustar,
-                    camino, tipografia=(), colocacion="arriba", voltear=(False, False)):
+                    camino, tipografia=(), colocacion="arriba", voltear=(False, False), alinear_camino=False):
     from ..nucleo.fuentes import paradas_en_camino
     try:
         return tuple(paradas_en_camino(texto, camino, fuente, altura, negrita, cursiva, espaciado=espaciado,
                                        alineacion=alineacion, posicion=pos, lado=lado, desfase=desfase,
                                        ajustar=ajustar, camino_colocacion=colocacion, voltear_h=voltear[0],
-                                       voltear_v=voltear[1], **_tipografia_camino(tipografia)))
+                                       voltear_v=voltear[1], alinear_camino=alinear_camino, **_tipografia_camino(tipografia)))
     except Exception:  # noqa: BLE001
         return None
 
@@ -1082,7 +1085,7 @@ def paradas_cursor(t, origen, prim_camino=None):
         paradas = _paradas_camino(t.texto, t.fuente, t.tamano_fuente(), t.negrita, t.cursiva, t.espaciado, t.alineacion,
                                   t.camino_pos, t.camino_lado, t.camino_desfase + t.desfase_base, t.camino_ajustar,
                                   polilinea_camino(prim_camino), t.opciones_tipografia(), t.camino_colocacion,
-                                  (t.voltear_h, t.voltear_v))
+                                  (t.voltear_h, t.voltear_v), t.camino_alineado)
         if paradas is None:
             return None
         n = len(paradas) - 1
@@ -1122,8 +1125,15 @@ def fraccion_en_camino(prim, q):
     acum = np.concatenate([[0.0], np.cumsum(tramos)])
     if acum[-1] < 1e-12:
         return 0.5
-    i = int(np.argmin(np.hypot(pts[:, 0] - q[0], pts[:, 1] - q[1])))
-    return float(acum[i] / acum[-1])
+    # proyección sobre cada tramo, no el vértice más cercano: una línea da solo 2 vértices y cuantizaba a 0 o 1
+    qv = np.asarray(q, float)
+    a, b = pts[:-1], pts[1:]
+    d = b - a
+    dd = np.einsum("ij,ij->i", d, d)
+    t = np.clip(np.einsum("ij,ij->i", qv - a, d) / np.maximum(dd, 1e-18), 0.0, 1.0)
+    proy = a + t[:, None] * d
+    i = int(np.argmin(np.hypot(proy[:, 0] - qv[0], proy[:, 1] - qv[1])))
+    return float((acum[i] + t[i] * tramos[i]) / acum[-1])
 
 
 def _medidas_marco(a, b, t):
@@ -1194,7 +1204,7 @@ def primitivas_entidad(c, P, R=None, curvas=None):
             return [(p[0], c.id) + tuple(p[2:]) for p in _contornos_camino(
                 c.texto, c.fuente, c.tamano_fuente(), c.negrita, c.cursiva, c.espaciado, c.alineacion, c.camino_pos,
                 c.camino_lado, c.camino_desfase + c.desfase_base, c.camino_ajustar, polilinea_camino(base[0]),
-                c.opciones_tipografia(), c.camino_colocacion, (c.voltear_h, c.voltear_v))]
+                c.opciones_tipografia(), c.camino_colocacion, (c.voltear_h, c.voltear_v), c.camino_alineado)]
     if isinstance(c, Texto):
         ox, oy = P(c.punto)
         ang = math.radians(c.angulo)
@@ -1355,6 +1365,7 @@ class Boceto:
     def __init__(self):
         self.puntos = {}
         self.curvas = {}
+        self.objetos = {}              # jerarquía vectorial; curvas originales + matrices, sin duplicar geometría
         self.restricciones = {}
         self.cotas = {}
         self.proyecciones = []
@@ -1516,8 +1527,13 @@ class Boceto:
         validar_texto_boceto(texto, altura)
         _validar_opciones_texto(opciones)
         self._validar_camino(opciones.get("camino"))
-        return self._agregar_curva(Texto(self._nuevo_id(), self._punto(posicion), texto, fuente, altura, angulo,
-                                         negrita, cursiva, **{"altura_a": True} | opciones))
+        tid = self._agregar_curva(Texto(self._nuevo_id(), self._punto(posicion), texto, fuente, altura, angulo,
+                                        negrita, cursiva, **{"altura_a": True,
+                                            "camino_alineado": opciones.get("camino") is not None and "camino_pos" not in opciones} | opciones))
+        from . import objetos
+        oid = objetos.crear(self, [tid], "Texto")
+        self.objetos[oid]["texto_automatico"] = tid
+        return tid
 
     def _validar_camino(self, camino):
         """El camino de un texto en curva tiene que ser una curva del boceto que no sea otro texto."""
@@ -2099,6 +2115,18 @@ class Boceto:
         return [l.id for l in self.curvas.values() if isinstance(l, Linea) and {l.p1, l.p2} in pares]
 
     def _quitar_huerfanas(self):
+        if self.objetos:
+            from . import objetos
+            cambio = True
+            while cambio:
+                cambio = False
+                vivos_obj = set(self.curvas) | set(self.objetos)
+                for oid, o in list(self.objetos.items()):
+                    o["entidades"] = [i for i in o["entidades"] if i in vivos_obj]
+                    if not o["entidades"]:
+                        del self.objetos[oid]
+                        cambio = True
+            objetos.invalidar(self)
         vivos = set(self.puntos) | set(self.curvas)
         for c in self.curvas.values():
             if isinstance(c, Texto) and c.camino is not None and c.camino not in self.curvas:
@@ -2159,6 +2187,10 @@ class Boceto:
     def puntos_fijos(self):
         """Puntos inmóviles: por una restricción 'fijo' (sobre el punto o su curva) o por ser proyectados."""
         fijos = {p.id for p in self.puntos.values() if p.proyectado}
+        if self.objetos:
+            from . import objetos
+            fijos.update(p for cid, (raiz, _hoja, _m) in objetos.indice(self).items()
+                         if not self.objetos[raiz].get("texto_automatico") for p in self.curvas[cid].puntos())
         for c in self.curvas.values():
             if c.proyectada:
                 fijos.update(c.puntos())
@@ -2565,7 +2597,11 @@ class Boceto:
     # ------------------------------------------------------------ geometría para perfiles y dibujo
     def primitivas(self, cid):
         """Primitivas 2D de una curva (un texto da varias; las demás, una)."""
-        return primitivas_entidad(self.curvas[cid], self.coords, curvas=self.curvas)
+        prims = primitivas_entidad(self.curvas[cid], self.coords, curvas=self.curvas)
+        if self.objetos:
+            from . import objetos
+            return objetos.aplicar_a_primitivas(self, cid, prims)
+        return prims
 
     def geometria(self, incluir_construccion=False):
         """Lista de primitivas 2D (formato de cada tupla):
@@ -3508,6 +3544,7 @@ class Boceto:
                 c.proyectada = False
                 if isinstance(c, Texto):
                     c.angulo += angulo
+                    c.parametro_texto = c.parametro_altura = None
                 self.curvas[c.id] = c
                 mapa_c[i] = c.id
         if restricciones:
@@ -3526,12 +3563,22 @@ class Boceto:
         """ErrorBoceto si `transformar` (sin copiar) no puede mover lo elegido: lo de adentro es fijo o proyectado.
         Es la misma comprobación de `transformar`; el panel la usa para avisar antes de aceptar sin copiar el boceto."""
         fijos = self.puntos_fijos()
+        if any(self.objetos[i]["bloqueado"] for i in ids if i in self.objetos):
+            raise ErrorBoceto("Desbloqueá el objeto antes de moverlo.")
         if any(p in fijos for p in self.puntos_de(ids)):
             raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección: no se puede mover.")
 
     def transformar(self, ids, dx=0.0, dy=0.0, angulo=0.0, centro=(0.0, 0.0), copiar=False):
         """Mover/copiar (M): traslada (dx, dy) y gira `angulo` grados alrededor de `centro`. Con `copiar`
         duplica la geometría con sus restricciones internas. Devuelve los ids resultantes."""
+        from . import objetos
+        ids = objetos.normalizar_seleccion(self, ids)
+        objetos_ids = [i for i in ids if i in self.objetos]
+        if objetos_ids:
+            if copiar:
+                objetos_ids = objetos.duplicar(self, objetos_ids, 0, 0)
+            objetos.transformar(self, objetos_ids, objetos.afin(dx, dy, angulo, pivote=centro))
+            ids = [i for i in ids if i not in self.objetos]
         a = math.radians(angulo)
 
         def f(q):
@@ -3539,7 +3586,7 @@ class Boceto:
             return x + centro[0] + dx, y + centro[1] + dy
         if copiar:
             mapa, mapa_c = self._copiar(ids, f, True, angulo)
-            return list(mapa_c.values()) + [mapa[i] for i in ids if i in mapa]
+            return objetos_ids + list(mapa_c.values()) + [mapa[i] for i in ids if i in mapa]
         self.comprobar_mover(ids)
         pts = self.puntos_de(ids)
         self._transformar_puntos(pts, f)
@@ -3554,7 +3601,7 @@ class Boceto:
             for k in [k for k, c in self.cotas.items()
                       if c.tipo in _COTAS_ORIENTADAS and set(c.entidades) <= afectados]:
                 del self.cotas[k]
-        return list(ids)
+        return objetos_ids + list(ids)
 
     # ------------------------------------------------------------ limpiar geometría importada
     def _referencias(self):
@@ -3673,6 +3720,13 @@ class Boceto:
         por `centro`. Los arcos invierten su sentido para seguir siendo antihorarios. Los textos rectos no se
         pueden espejar así (sus letras no se reflejan): se dejan como están y se devuelven aparte.
         Devuelve (ids espejados, ids de textos que no se espejaron)."""
+        from . import objetos
+        ids = objetos.normalizar_seleccion(self, ids)
+        objetos_ids = [i for i in ids if i in self.objetos]
+        if objetos_ids:
+            objetos.transformar(self, objetos_ids, objetos.afin(sx=-1 if horizontal else 1,
+                                                              sy=1 if horizontal else -1, pivote=centro))
+            ids = [i for i in ids if i not in self.objetos]
         cx, cy = centro
         textos = [i for i in ids if isinstance(self.curvas.get(i), Texto) and self.curvas[i].camino is None]
         ids = [i for i in ids if i not in textos]
@@ -3690,11 +3744,13 @@ class Boceto:
             elif isinstance(c, Texto):                   # texto en curva: sigue a su curva, del otro lado
                 c.camino_lado = "der" if c.camino_lado == "izq" else "izq"
                 c.camino_pos = 1.0 - c.camino_pos
-        return list(ids), textos
+        return objetos_ids + list(ids), textos
 
     def comprobar_escalar(self, ids, base):
         """ErrorBoceto si `escalar` no puede mover lo elegido desde `base`: un punto fijo solo vale como base."""
         fijos = self.puntos_fijos()
+        if any(self.objetos[i]["bloqueado"] for i in ids if i in self.objetos):
+            raise ErrorBoceto("Desbloqueá el objeto antes de escalarlo.")
         if any(p in fijos and math.dist(self.coords(p), base) > 1e-9 for p in self.puntos_de(ids)):
             raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección que no está en la base: no se puede escalar.")
 
@@ -3703,6 +3759,12 @@ class Boceto:
         de longitud de esa geometría se multiplican por el factor. Un punto fijo puede ser la base."""
         if factor <= 0:
             raise ErrorBoceto("El factor de escala debe ser positivo.")
+        from . import objetos
+        ids = objetos.normalizar_seleccion(self, ids)
+        objetos_ids = [i for i in ids if i in self.objetos]
+        if objetos_ids:
+            objetos.transformar(self, objetos_ids, objetos.afin(sx=factor, sy=factor, pivote=base))
+            ids = [i for i in ids if i not in self.objetos]
         self.comprobar_escalar(ids, base)
         pts = self.puntos_de(ids)
         self._transformar_puntos(pts, lambda q: (base[0] + factor * (q[0] - base[0]), base[1] + factor * (q[1] - base[1])))
@@ -3717,7 +3779,9 @@ class Boceto:
                 c.manijas = [[a, b, None if k is None else k / factor] for a, b, k in c.manijas]
             elif isinstance(c, Texto):
                 c.altura *= factor
-                if c.altura_expr:                # si no, el recálculo vuelve a la altura de antes
+                if c.parametro_altura and c.altura_expr == c.parametro_altura:
+                    c.altura_expr = _numero(c.altura) + " mm"  # la API actualiza Text_height; sin autorreferencia
+                elif c.altura_expr:                # si no, el recálculo vuelve a la altura de antes
                     try:
                         c.altura_expr = _numero(float(c.altura_expr.replace(",", ".")) * factor)
                     except ValueError:
@@ -3737,7 +3801,7 @@ class Boceto:
                     k.expresion = _numero(float(k.expresion.replace(",", ".")) * factor)
                 except ValueError:
                     k.expresion = f"({k.expresion}) * {_numero(factor)}"
-        return list(ids)
+        return objetos_ids + list(ids)
 
     # ------------------------------------------------------------ CREAR: simetría y patrones
     def simetria(self, ids, eje):
@@ -4288,11 +4352,11 @@ class Boceto:
         t.angulo = float(angulo)
 
     def desglosar_texto(self, tid):
-        """Desglosar texto (SKT-EXPLODE-TEXT): el texto pasa a ser líneas y splines fijas."""
+        """Desglosar texto (SKT-EXPLODE-TEXT): curvas exactas dentro del mismo objeto lógico."""
         c = self.curvas.get(tid)
         if not isinstance(c, Texto):
             raise ErrorBoceto("Hacé clic en un texto.")
-        prims = self.primitivas(tid)
+        prims = primitivas_entidad(c, self.coords, curvas=self.curvas)
         if not prims:
             raise ErrorBoceto("No se pudo generar la geometría del texto (¿fuente disponible?).")
         cache = {}
@@ -4302,6 +4366,7 @@ class Boceto:
             if clave not in cache:
                 cache[clave] = self.agregar_punto(*q)
             return cache[clave]
+        objetos_antes = copy.deepcopy(self.objetos)
         self.eliminar(tid)
         ids = []
         for prim in prims:
@@ -4312,6 +4377,19 @@ class Boceto:
                                                       prim[4], False, prim[5], prim[3])))
         if ids:
             self.agregar_restriccion("fijo", ids)
+            from . import objetos
+            if any(tid in o["entidades"] for o in objetos_antes.values()):
+                for oid, o in objetos_antes.items():
+                    o["entidades"] = [j for i in o["entidades"] for j in (ids if i == tid else [i])
+                                      if j in self.curvas or j in objetos_antes]
+                    if o.get("texto_automatico") == tid:
+                        o.pop("texto_automatico")
+                        o["clase"] = "texto"           # convertido, sigue en «Textos» del navegador
+                    if o["entidades"]:
+                        self.objetos[oid] = o
+                objetos.invalidar(self)
+            else:
+                self.objetos[objetos.crear(self, ids, "Texto convertido")]["clase"] = "texto"
         return ids
 
     # ------------------------------------------------------------ serialización
@@ -4325,6 +4403,8 @@ class Boceto:
             d["proyecciones"] = copy.deepcopy(self.proyecciones)
         if self.patrones:
             d["patrones"] = copy.deepcopy(self.patrones)
+        if self.objetos:
+            d["objetos"] = copy.deepcopy(list(self.objetos.values()))
         if any(self.geo3d.values()):
             from . import boceto3d
             d["geo3d"] = boceto3d.a_dict(self.geo3d)
@@ -4338,6 +4418,9 @@ class Boceto:
         for n, r in enumerate(b.proyecciones, 1):          # los proyectos viejos no numeraban sus proyecciones
             r.setdefault("id", n)
         b.patrones = copy.deepcopy(d.get("patrones", []))
+        b.objetos = {o["id"]: copy.deepcopy(o) for o in d.get("objetos", [])}
+        if len(b.objetos) != len(d.get("objetos", [])):
+            raise ErrorBoceto("Hay identificadores de objetos repetidos en el proyecto.")
         for p in d.get("puntos", []):
             b.puntos[p["id"]] = Punto(p["id"], p["x"], p["y"], p.get("proyectado", False))
         for c in d.get("curvas", []):
@@ -4351,7 +4434,10 @@ class Boceto:
         if d.get("geo3d"):
             from . import boceto3d
             b.geo3d = boceto3d.desde_dict(d["geo3d"])
-        todos = list(b.puntos) + list(b.curvas) + list(b.restricciones) + list(b.cotas)
+        if b.objetos:
+            from . import objetos
+            objetos.validar(b)
+        todos = list(b.puntos) + list(b.curvas) + list(b.restricciones) + list(b.cotas) + list(b.objetos)
         todos += [i for tabla in b.geo3d.values() for i in tabla]
         b._siguiente = max([b._siguiente] + [i + 1 for i in todos])
         b._depurar()          # un .omnicad es un archivo de otro: lo que cita algo inexistente o ya no aplica, se descarta

@@ -64,8 +64,10 @@ class PuenteAgentes(QObject):
         self.sesion.capturar_visor = getattr(ventana, "capturar_visor", None)
         self.sesion.leer_seleccion = getattr(ventana, "leer_seleccion", None)
         self.sesion.seleccionar_entidades = getattr(ventana, "seleccionar_entidades", None)
+        self.sesion.seleccionar_objetos_vectoriales = self._seleccionar_objetos_vectoriales
         self.sesion.al_cambiar_espacios = getattr(ventana, "releer_espacios", None)
         self.sesion.configurar_registro = lambda activo: ventana.registro_uso.configurar(activo)
+        self.sesion.aplicar_ajustes_registro = lambda opciones: ventana.registro_uso.aplicar_ajustes(opciones)
         self.sesion.registrar_marca = lambda label: ventana.registro_uso.marcar(label=label)
         self._conexiones = {}               # socket → {"buffer": bytearray, "autenticado": bool, "cerrando": bool}
         self._cola = deque()                # (socket, línea) pendientes: se atienden de a uno, sin reentrar
@@ -80,6 +82,30 @@ class PuenteAgentes(QObject):
             app.aboutToQuit.connect(self.detener)
 
     # ------------------------------------------------------------ encendido
+    def _seleccionar_objetos_vectoriales(self, ids, modo, sketch=None):
+        editor = getattr(self.ventana, "modo_boceto", None)
+        if editor is None or not editor.activo:
+            from ..api.herramientas_boceto import op_boceto
+            op = op_boceto(self.sesion, sketch)
+            return self.ventana.vectores.seleccionar(op.id, ids, modo)
+        lz = editor.lienzo
+        if any(i not in lz.b.objetos for i in ids):
+            raise error("ENTITY_NOT_FOUND", "Uno de los objetos no existe en el boceto abierto.")
+        from ..restricciones.objetos import unidades
+        piezas = {i for lista in unidades(lz.b).values() for i in lista}
+        if any(i not in piezas for i in ids):
+            raise error("INVALID_ARGUMENTS", "Seleccioná el SVG, el DXF, el texto o el grupo completo, no una pieza interna.")
+        if any(lz.b.objetos[i]["bloqueado"] or not lz.b.objetos[i]["visible"] for i in ids):
+            raise error("INVALID_ARGUMENTS", "Mostrá y desbloqueá esos objetos antes de seleccionarlos.")
+        actuales = lz.objetos.seleccion()
+        lz.seleccion = (list(dict.fromkeys(actuales + ids)) if modo == "add" else
+                        [i for i in actuales if i not in ids] if modo == "remove" else list(dict.fromkeys(ids)))
+        lz.objetos.modo_perfiles = False
+        lz.perfiles_sel = []
+        lz._notificar_seleccion()
+        lz.update()
+        return {"objects": lz.seleccion, "count": len(lz.seleccion)}
+
     @property
     def activo(self):
         return self.servidor is not None and self.servidor.isListening()

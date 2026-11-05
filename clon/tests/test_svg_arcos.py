@@ -87,6 +87,14 @@ def _orig_arc_mids(prims):
 
 
 def _svg_midpoints(prims):
+    # El lector conserva ahora los arcos analíticos; las Bézier siguen cubriendo SVG anteriores.
+    mids = _dxf_midpoints(prims)
+    for p in prims:
+        if p[0] == "arco_elipse":
+            (cx, cy), a, b, giro, t0, t1 = p[1:7]
+            t = t0 + ((t1 - t0) % (2 * math.pi)) / 2
+            mids.append((cx + a * math.cos(t) * math.cos(giro) - b * math.sin(t) * math.sin(giro),
+                         cy + a * math.cos(t) * math.sin(giro) + b * math.sin(t) * math.cos(giro)))
     chains = []
     cur = []
     for p in prims:
@@ -98,7 +106,7 @@ def _svg_midpoints(prims):
                 cur = []
     if cur:
         chains.append(cur)
-    res = []
+    res = mids
     for chain in chains:
         pts_chain = []
         for bz in chain:

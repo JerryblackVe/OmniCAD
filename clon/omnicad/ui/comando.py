@@ -913,7 +913,7 @@ class PanelComando(QFrame):
         if registro_uso.activo is None:
             return
         ahora = time.perf_counter()
-        valores = {}
+        valores, libres = {}, []
         for c in self.campos:
             valor = self.valores.get(c.clave)
             if isinstance(c, Expresion):
@@ -922,9 +922,11 @@ class PanelComando(QFrame):
                 except (ErrorExpresion, TypeError, ValueError):
                     pass
             valores[c.clave] = valor if isinstance(valor, (int, float, bool, str)) else len(valor) if isinstance(valor, list) else None
+            if isinstance(c, Texto):
+                libres.append(c.clave)                        # texto libre: se guarda como largo salvo en detallado
         registro_uso.activo.emitir(tipo, {"comando": self.comando.CLAVE, "valores": valores,
             "duracion_s": ahora - self._uso_inicio if self._uso_inicio is not None else 0,
-            "cambios": self._uso_cambios, "editando": self.ctx.op is not None})
+            "cambios": self._uso_cambios, "editando": self.ctx.op is not None}, libres=libres)
 
     def _antes_de_mas_opciones(self, marco):
         """Posición de `marco` para agregar algo: «Más opciones» siempre queda al final."""

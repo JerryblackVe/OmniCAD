@@ -61,7 +61,8 @@ def test_herramientas_del_grupo_solido():
         "create_surface_box", "create_surface_cylinder", "create_surface_sphere", "create_surface_torus",
         "create_surface_coil", "create_surface_pipe", "inspect_stitch",
         "move_faces", "create_geometric_pattern", "assign_plastic_rule", "create_volumetric_lattice",
-        "rebuild_features"])                   # SOL-15, SOL-20, SOL-21
+        "rebuild_features",                    # SOL-15, SOL-20, SOL-21
+        "create_snap_fit", "create_rest", "remove_features", "replace_with_primitive"])   # solido_extra / modificar
     assert all(h["modifica"] for h in api.catalogo("solido") if h["nombre"] not in ("gear_info", "inspect_stitch"))    # solo calculan
 
 

@@ -633,6 +633,12 @@ class AreaVisor(QWidget):
                         lateral.ajustar()
                     sube = y + lateral.height() > abajo and lateral.height() <= abajo - g.top() - 4
                     x, ly = max(g.left() + 4, self.paleta.x() - lateral.width() - 8), abajo - lateral.height() if sube else y     # en una ventana baja sube: la barra de vista no lo tapa
+                    if (g.width() < 1100 and getattr(lateral, "control", None) is not None and getattr(lateral, "control", None) is
+                            getattr(self.capa, "objetos", None)):
+                        # En una ventana baja las dos tarjetas comparten columna; Terminar sigue a la vista.
+                        x, ly = g.right() - lateral.width() - 10, g.top() + 4
+                        pie = self.paleta.b_terminar.mapTo(self, QPoint(0, 0)).y() - 8
+                        lateral.ajustar_alto(max(80, min(abajo, pie) - ly))
                     fija = getattr(lateral, "posicion_usuario", None)
                     if fija is not None:                 # la movió la persona: queda ahí, sin salirse de la vista
                         x = max(g.left() + 4, min(fija.x(), g.right() - lateral.width() - 4))
@@ -643,6 +649,14 @@ class AreaVisor(QWidget):
             self.barra.adjustSize()
             self.barra.move((w - self.barra.width()) // 2, h - self.barra.height() - 8)
             self.barra.raise_()
+        panel_objetos = getattr(self, "panel_objetos", None)
+        if panel_objetos is not None and panel_objetos.isVisible() and self.panel is None and self.paleta is None:
+            y_objetos = self.viewcube.geometry().bottom() + 8
+            if abajo - y_objetos < ALTO_UTIL_PANEL:
+                y_objetos = g.top() + 8
+            panel_objetos.ajustar_alto(abajo - y_objetos)
+            panel_objetos.move(g.right() - panel_objetos.width() - 8, y_objetos)
+            panel_objetos.raise_()
         if self.tira is not None and self.tira.isVisible():
             self.tira.adjustSize()
             abajo = h - (self.barra.height() + 8 if self.barra is not None and self.barra.isVisible() else 0) - 8

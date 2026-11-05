@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """Geometría de referencia, cotas y anotaciones del plano, sin Qt."""
 from copy import copy
-from math import isfinite
+from math import degrees, isfinite, radians
 from typing import Literal
 
 import numpy as np
 
 from .errores import error
 from .herramientas_dibujo import (
-    cargar_dibujo, elemento, guardar_dibujo, info_elemento, punto, vista,
+    cargar_dibujo, elemento, guardar_dibujo, info_anotacion, info_elemento, punto, vista,
 )
 from .registro import herramienta
 
@@ -51,45 +51,74 @@ def _guardar(sesion, d, a):
     return info_elemento(d, a)
 
 
-@herramienta("get_drawing_geometry", "dibujo", "Puntos clave, circunferencias y aristas rectas visibles de una vista, en mm de la hoja.")
+@herramienta("get_drawing_geometry", "dibujo", "Puntos clave, circunferencias, arcos parciales y aristas rectas visibles de una vista, en mm de la hoja.")
 def get_drawing_geometry(sesion, view: str, limit: int = 200):
     """
     view: id de la vista.
-    limit: máximo de puntos, círculos y segmentos por separado; entero no negativo.
+    limit: máximo de puntos, círculos, arcos y segmentos por separado; entero no negativo.
     """
     d = cargar_dibujo(sesion)
     v = vista(d, view)
     if limit < 0:
         raise error("INVALID_ARGUMENTS", "limit debe ser un entero no negativo.")
+    rot = radians(v.rotacion)
     return {"points": [_mm(ph) for _, _, ph in _solo_vista(d, v).puntos_clave()][:limit],
             "circles": [{"center": _mm(v.a_hoja(c)), "radius": round(r * v.escala, 4), "full": completo}
                         for c, r, completo in v.circulos][:limit],
+            "arcs": [{"center": _mm(v.a_hoja(c)), "radius": round(r * v.escala, 4),
+                      "start_angle": round(degrees(t1 + rot), 4), "end_angle": round(degrees(t2 + rot), 4)}
+                     for c, r, t1, t2 in v.arcos][:limit],
             "segments": [_mm(v.a_hoja(pl)) for categoria in ("visibles", "silueta")
                          for pl in v.lineas[categoria] if len(pl) == 2][:limit]}
 
 
 @herramienta("add_drawing_dimension", "dibujo", "Agrega una cota asociada a una vista; puntos y colocación en mm de la hoja.", modifica=True)
 def add_drawing_dimension(sesion, view: str,
-                          type: Literal["horizontal", "vertical", "aligned", "radius", "diameter", "angle", "ordinate_x", "ordinate_y"],
+                          type: Literal["horizontal", "vertical", "aligned", "radius", "diameter", "angle",
+                                        "ordinate_x", "ordinate_y", "baseline", "arc_length"],
                           points: list[list[float]], place: list[float], text: str | None = None, snap: bool = True):
     """
     view: id de la vista.
-    type: horizontal, vertical, aligned, radius, diameter, angle, ordinate_x u ordinate_y.
-    points: dos puntos; radial: uno sobre la circunferencia; angular: dos sobre aristas o cuatro extremos explícitos.
-    place: posición de la cota [x, y] en mm de la hoja.
-    text: texto propio que reemplaza el valor; vacío restaura el valor medido.
+    type: horizontal, vertical, aligned, radius, diameter, angle, ordinate_x, ordinate_y, baseline u arc_length.
+    points: dos puntos; radial: uno sobre la circunferencia; angular: dos sobre aristas o cuatro extremos
+        explícitos; baseline: la referencia y los puntos a acotar (crea una cota apilada por punto, las
+        siguientes a SEPARACION_BASE mm de la primera); arc_length: un punto sobre un arco parcial de la vista.
+    place: posición de la cota [x, y] en mm de la hoja (en baseline, de la primera; las demás se apilan solas).
+    text: texto propio que reemplaza el valor; vacío restaura el valor medido. No aplica a baseline ni arc_length.
     snap: enganchar puntos a puntos clave de esta vista dentro de 3 mm de hoja.
     """
     d = cargar_dibujo(sesion)
     v = vista(d, view)
     consulta = _solo_vista(d, v)
+    lugar = punto(place, "place")
+    if type == "baseline":
+        if len(points) < 2:
+            raise error("INVALID_ARGUMENTS", "La línea base necesita la referencia y al menos un punto a acotar.",
+                        "points: [[x, y] de la referencia, [x, y] de cada punto].")
+        referencia = punto(points[0], "points[0]")
+        puntos = [punto(p, f"points[{i + 1}]") for i, p in enumerate(points[1:])]
+        if snap:
+            referencia = _enganchar(consulta, referencia)
+            puntos = [_enganchar(consulta, p) for p in puntos]
+        creadas = [d.agregar_cota_linea_base(v.id, referencia, q, lugar, i) for i, q in enumerate(puntos)]
+        guardar_dibujo(sesion, d)
+        return {"created": [info_anotacion(d, a) for a in creadas]}
+    if type == "arc_length":
+        if len(points) != 1:
+            raise error("INVALID_ARGUMENTS", "arc_length necesita UN punto sobre el arco a acotar.",
+                        "Usá get_drawing_geometry (arcs) para localizar los arcos de la vista.")
+        p = punto(points[0], "points[0]")
+        arco = consulta.arco_cercano(p, 3.0)
+        if arco is None:
+            raise error("INVALID_ARGUMENTS", "No hay un arco a menos de 3 mm del punto (las circunferencias "
+                        "completas se acotan con radius o diameter).")
+        return _guardar(sesion, d, d.agregar_cota_arco(arco, lugar))
     tipos = {"horizontal": "horizontal", "vertical": "vertical", "aligned": "alineada", "radius": "radio",
              "diameter": "diametro", "angle": "angulo", "ordinate_x": "ordenada_x", "ordinate_y": "ordenada_y"}
     cantidades = (1,) if type in ("radius", "diameter") else ((2, 4) if type == "angle" else (2,))
     if type not in tipos or len(points) not in cantidades:
         raise error("INVALID_ARGUMENTS", "Tipo de cota o cantidad de puntos incorrectos.")
     puntos = [punto(p, "points") for p in points]
-    lugar = punto(place, "place")
     extra = {"texto": text.strip() or None if text is not None else None}
     if type in ("radius", "diameter"):
         _, centro, radio, _ = _circulo(consulta, puntos[0])

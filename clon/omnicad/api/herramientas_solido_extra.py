@@ -3,9 +3,9 @@ from typing import Literal
 
 from ..timeline import entidades as ent
 from ..timeline.ops_modificar import OpAlinear, OpEscala, OpMover
-from ..timeline.ops_solido import (OpApoyo, OpBobina, OpLabio, OpNervio, OpPatronGeometrico, OpRed, OpRellenoContorno,
-                                   OpReticulaVolumetrica, OpRepujado, OpSaliente, OpSolidoEnvolvente, OpTuberia,
-                                   OpVolumenFluido)
+from ..timeline.ops_solido import (OpApoyo, OpBobina, OpGrampa, OpLabio, OpNervio, OpPatronGeometrico, OpRed,
+                                   OpRellenoContorno, OpReticulaVolumetrica, OpRepujado, OpSaliente,
+                                   OpSolidoEnvolvente, OpTuberia, OpVolumenFluido)
 from ..timeline.ops_superficie import OpEngrosar
 from . import selectores as sl
 from .errores import ErrorAPI, error
@@ -275,28 +275,34 @@ def create_boss(sesion, positions: list[Referencia], outer_diameter: Expr = 8, h
                   altura="" if height is None else texto_expr(height), angulo_desmoldeo=texto_expr(draft_angle), invertir=reverse)
 
 
-@herramienta("create_lip_groove", "solido", "Crea un labio o una ranura a lo largo del borde de una pared.", modifica=True)
-def create_lip_groove(sesion, edges: Elementos, lip_type: Literal["lip", "groove"] = "lip", width: Expr = 1,
-                      height: Expr = 1.5, clearance: Expr = 0.1, direction: Referencia | None = None,
-                      reverse: bool = False, body: str | None = None):
+@herramienta("create_lip_groove", "solido", "Crea un labio, una ranura o un labio y acanalado a lo largo del borde de "
+             "una pared (con dos cuerpos, el labio y su ranura).", modifica=True)
+def create_lip_groove(sesion, edges: Elementos, lip_type: Literal["lip", "groove", "lip_and_groove"] = "lip",
+                      width: Expr = 1, height: Expr = 1.5, clearance: Expr = 0.1, direction: Referencia | None = None,
+                      reverse: bool = False, body: str | None = None, groove_body: str | None = None):
     """
     edges: selector o ids de find_edges, o lista; todas deben pertenecer al mismo cuerpo.
-    lip_type: lip (labio) o groove (ranura).
+    lip_type: lip (labio), groove (ranura) o lip_and_groove (labio y acanalado: el labio en un cuerpo y su ranura, con clearance, en groove_body).
     width: ancho en mm.
     height: alto en mm.
-    clearance: holgura en mm para groove.
+    clearance: holgura en mm para groove y para la ranura de lip_and_groove.
     direction: eje X/Y/Z, plano XY/XZ/YZ, geometría de construcción o selector/id de cara plana o arista recta; vacío = Z.
     reverse: true invierte la dirección de tirado.
     body: cuerpo donde se evalúan los selectores.
+    groove_body: cuerpo de la ranura en lip_and_groove; los dos cuerpos tienen que tocarse y las aristas estar alineadas.
     """
     elegidos = sl.elegir(sesion, edges, "arista", body)
     if len({c.id for c, _ in elegidos}) != 1:
         raise error("INVALID_ARGUMENTS", "Las aristas del labio deben ser del mismo cuerpo.")
     _numero_positivo(width, "width")
     _numero_positivo(height, "height")
+    ranura = sesion.cuerpo(groove_body).id if groove_body else None
+    if lip_type == "lip_and_groove" and ranura is None:
+        raise error("INVALID_ARGUMENTS", "El labio y acanalado necesita groove_body (el cuerpo de la ranura).")
     return _crear(sesion, OpLabio, aristas=[sl.referencia(c, e) for c, e in elegidos],
-                  tipo="labio" if lip_type == "lip" else "ranura", ancho=texto_expr(width), alto=texto_expr(height),
-                  holgura=texto_expr(clearance),
+                  tipo={"lip": "labio", "groove": "ranura", "lip_and_groove": "labio y acanalado"}[lip_type],
+                  ancho=texto_expr(width), alto=texto_expr(height), holgura=texto_expr(clearance),
+                  cuerpo_ranura={"tipo": "cuerpo", "cuerpo": ranura} if ranura else None,
                   direccion=_referencia(sesion, direction, {"plano", "cara", "eje", "arista", "curva_boceto"}, body)
                   if direction is not None else None,
                   invertir=reverse)
@@ -306,7 +312,7 @@ def create_lip_groove(sesion, edges: Elementos, lip_type: Literal["lip", "groove
              "un área plana en la cara del cuerpo.", modifica=True)
 def create_rest(sesion, sketch: str, body: str, profile: Perfiles = 0, offset: Expr = 0, thickness: Expr = 2,
                 side1: Expr = 2, side2: Expr = 0, draft_angle: Expr = 0, extent: Literal["all", "to_object"] = "all",
-                reverse: bool = False):
+                reverse: bool = False, top_faces: Elementos | None = None, trim: bool = True):
     """
     sketch: id o nombre del boceto de los perfiles cerrados del apoyo.
     body: cuerpo (id o nombre) donde se hace el apoyo: el perfil tiene que quedar en su lugar, dentro de él.
@@ -318,6 +324,9 @@ def create_rest(sesion, sketch: str, body: str, profile: Perfiles = 0, offset: E
     draft_angle: ángulo de desmoldeo en grados; la pared se angosta hacia la cara donde apoya.
     extent: all (atraviesa el cuerpo) o to_object (termina en las caras del cuerpo).
     reverse: true da vuelta el sentido del desmoldeo (Flip).
+    top_faces: selectores o ids de caras superiores (Avanzado «Top Faces»): el apoyo solo se crea bajo esas caras
+        planas y termina en ellas; vacío = sin restricción.
+    trim: Avanzado «Trim»: true (por defecto) quita el área del apoyo que sobresale del cuerpo; false la deja.
     """
     cid = sesion.cuerpo(body).id
     sop, br = boceto_activo(sesion, sketch)
@@ -326,10 +335,51 @@ def create_rest(sesion, sketch: str, body: str, profile: Perfiles = 0, offset: E
         raise error("INVALID_ARGUMENTS", f"thickness ({thickness:g}) tiene que ser la suma de side1 y side2 "
                                          f"({side1 + side2:g}): con otro valor el apoyo no tiene el grosor pedido "
                                          "en los dos lados.")
+    superiores = [sl.referencia(c, e) for c, e in sl.elegir(sesion, top_faces, "cara", cid, permitir_vacio=True)]
     return _crear(sesion, OpApoyo, perfiles=[_ref_perfil(sop, p) for p in seleccionar_perfiles(br, sop, profile)],
                   cuerpo={"tipo": "cuerpo", "cuerpo": cid}, desfase=texto_expr(offset), grosor=texto_expr(thickness),
                   lado1=texto_expr(side1), lado2=texto_expr(side2), angulo_desmoldeo=texto_expr(draft_angle),
-                  invertir=reverse, extension="todo" if extent == "all" else "objeto")
+                  invertir=reverse, extension="todo" if extent == "all" else "objeto",
+                  caras_superiores=superiores, recortar=trim)
+
+
+@herramienta("create_snap_fit", "solido", "Crea una grampa de fijación (Snap Fit, PLÁSTICO › Grampa): un gancho en "
+             "voladizo en puntos de boceto que une dos cuerpos con su ranura con holgura.", modifica=True)
+def create_snap_fit(sesion, positions: list[Referencia], hook_body: str, groove_body: str | None = None,
+                    snap_type: Literal["parallel", "perpendicular", "hook_loop"] = "parallel", length: Expr = 10,
+                    width: Expr = 4, thickness: Expr = 1.5, hook_height: Expr = 1, clearance: Expr = 0.1,
+                    rotation_angle: Expr = 0, extent: Literal["to_next", "distance"] = "to_next",
+                    distance: Expr | None = None, reverse: bool = False):
+    """
+    positions: puntos del boceto {"sketch": nombre, "point": id}, vértices [x, y, z] o {body, vertex}.
+    hook_body: cuerpo (id o nombre) que lleva el gancho.
+    groove_body: cuerpo (id o nombre) donde se corta la ranura; vacío = solo el gancho.
+    snap_type: parallel (gancho y ranurado paralelos), perpendicular (perpendiculares) o hook_loop (gancho y contorno).
+    length: largo del brazo en mm.
+    width: ancho del brazo en mm.
+    thickness: espesor del brazo en mm.
+    hook_height: alto del gancho en mm.
+    clearance: holgura de la ranura alrededor del gancho en mm.
+    rotation_angle: giro del brazo alrededor de la normal del plano, en grados (uniforme para todos los puntos).
+    extent: to_next (hunde la base hasta la cara más cercana del cuerpo del gancho) o distance (hasta distance).
+    distance: profundidad de la base en mm; hace falta con extent=distance.
+    reverse: true da vuelta la normal del plano del boceto.
+    """
+    if not positions:
+        raise error("INVALID_ARGUMENTS", "Seleccioná los puntos de las grampas.")
+    for v, n in ((length, "length"), (width, "width"), (thickness, "thickness"), (hook_height, "hook_height")):
+        _numero_positivo(v, n)
+    if extent == "distance" and distance is None:
+        raise error("INVALID_ARGUMENTS", "distance hace falta con extent=distance.")
+    return _crear(sesion, OpGrampa,
+                  posiciones=[_referencia(sesion, q, {"punto", "punto_boceto", "vertice"}) for q in positions],
+                  cuerpo_gancho={"tipo": "cuerpo", "cuerpo": sesion.cuerpo(hook_body).id},
+                  cuerpo_ranura={"tipo": "cuerpo", "cuerpo": sesion.cuerpo(groove_body).id} if groove_body else None,
+                  tipo={"parallel": "paralelo", "perpendicular": "perpendicular", "hook_loop": "contorno"}[snap_type],
+                  largo=texto_expr(length), ancho=texto_expr(width), espesor=texto_expr(thickness),
+                  alto_gancho=texto_expr(hook_height), holgura=texto_expr(clearance),
+                  angulo=texto_expr(rotation_angle), extension="siguiente" if extent == "to_next" else "distancia",
+                  distancia="" if distance is None else texto_expr(distance), invertir=reverse)
 
 
 @herramienta("create_boundary_fill", "solido", "Rellena celdas encerradas por cuerpos, caras y planos.", modifica=True)

@@ -74,6 +74,22 @@ def _nombre_nuevo(guiones):
     return f"Guion gráfico{n}"
 
 
+def crear_guion(doc, guiones, actual, nombre=None, inicial=None):
+    """Crea un guion gráfico (Nuevo guion gráfico de Fusion): nombre único, UN paso de deshacer y guardado en
+    `doc.espacios["animacion"]`. Lo usan la herramienta `create_storyboard` y la línea de tiempo de la ventana, que
+    pasa sus guiones en memoria. Devuelve el `Guion` nuevo."""
+    nombre = (nombre or "").strip() or _nombre_nuevo(guiones)
+    if any(g.nombre.casefold() == nombre.casefold() for g in guiones):
+        raise error("NAME_EXISTS", f"Ya hay un guion gráfico llamado «{nombre}».")
+    datos = doc.espacios.setdefault("animacion", {"version": 1, "actual": 0, "guiones": []})
+    _guardar(doc, datos, guiones, actual)      # la instantánea tiene que incluir los guiones de la ventana: si no,
+    doc._guardar_para_deshacer()               # deshacer vaciaría el espacio en vez de sacar solo el guion nuevo
+    g = anim.Guion(nombre, None, inicial)
+    guiones.append(g)
+    _guardar(doc, datos, guiones, len(guiones) - 1)
+    return g
+
+
 def _ids(sesion, bodies, todos=None):
     """Ids de cuerpos por id o nombre (get_scene_info); sin lista, todos los del modelo."""
     if bodies is None:
@@ -149,15 +165,11 @@ def create_storyboard(sesion, name: str | None = None, from_final: bool = False)
     from_final: true arranca donde termina el guion actual (posición de los cuerpos y cámara); false = limpio.
     """
     doc = sesion.doc
-    datos, guiones, actual = _guiones(doc, crear=True)
+    _datos, guiones, actual = _guiones(doc, crear=True)
     centros = anim.centros_de(doc.estado_final)
     inicial = anim.estado_final(guiones[actual], centros) if from_final and guiones else None
-    nombre = (name or "").strip() or _nombre_nuevo(guiones)
-    if any(g.nombre.casefold() == nombre.casefold() for g in guiones):
-        raise error("NAME_EXISTS", f"Ya hay un guion gráfico llamado «{nombre}».")
-    guiones.append(anim.Guion(nombre, None, inicial))
-    _guardar(doc, datos, guiones, len(guiones) - 1)
-    return {"name": nombre, "index": len(guiones) - 1, "storyboards": len(guiones), "current": nombre}
+    g = crear_guion(doc, guiones, actual, name, inicial)
+    return {"name": g.nombre, "index": len(guiones) - 1, "storyboards": len(guiones), "current": g.nombre}
 
 
 @herramienta("list_storyboards", "animacion", "Lista los guiones gráficos (storyboards) del documento con su "

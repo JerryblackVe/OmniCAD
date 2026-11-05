@@ -39,7 +39,8 @@ CONSTRUIR = ("CONSTRUIR", ["plano_desfase"], [
     _i("Punto en el centro de círculo/esfera/toroide", "punto_centro"), _i("Punto en arista y plano", "punto_arista_plano"),
     _i("Punto a lo largo de la ruta", "punto_ruta")])
 INSPECCIONAR = ("INSPECCIONAR", ["medir", "seccion"], [
-    _i("Medir", "medir"), _i("Interferencia", "interferencia"), _i("Revisar geometría", "revisar_geometria"),
+    _i("Medir", "medir"), _i("Interferencia", "interferencia"), _i("Barrido de parámetros", "barrido_parametros"),
+    _i("Revisar geometría", "revisar_geometria"),
     _i("Reparar cuerpo", "reparar_cuerpo"), SEP,
     _i("Análisis de curvatura en peine", "curvatura_peine"), _i("Análisis cebra", "cebra"),
     _i("Análisis de mapas de entorno", "mapa_entorno"), _i("Análisis de ángulo de desmoldeo", "angulo_desmoldeo"),
@@ -164,8 +165,8 @@ PLASTICO = [
     ("CONFIGURACIÓN", ["asignar_regla_plastico"], [
         _i("Asignar regla de plástico", "asignar_regla_plastico"),
         _i("Administrar reglas de plástico", "reglas_plastico")]),
-    ("CREAR", ["boceto", "saliente", "labio", "apoyo", "nervio", "red", "patron_geometrico"], _COMIENZO_CREAR + [
-        _i("Saliente de fijación", "saliente"), _i("Grampa de fijación", ico="encaje_presion"),
+    ("CREAR", ["boceto", "saliente", "grampa", "labio", "apoyo", "nervio", "red", "patron_geometrico"], _COMIENZO_CREAR + [
+        _i("Saliente de fijación", "saliente"), _i("Grampa de fijación", "grampa", ico="encaje_presion"),
         _i("Labio", "labio"), _i("Apoyo", "apoyo"), _i("Patrón geométrico", "patron_geometrico"), SEP] + _FIN_CREAR),
     ("MODIFICAR", ["vaciado", "desmoldeo", "empalme_3d"], [
         _i("Vaciado", "vaciado"), _i("Desmoldeo", "desmoldeo"), _i("Empalme", "empalme_3d"),
@@ -178,11 +179,11 @@ MALLA = [
         _i("Crear boceto de sección de malla", "seccion_malla")]),
     ("PREPARAR", ["reparar_malla", "limpiar_malla", "grupos_caras"], [
         _i("Reparar", "reparar_malla"), _i("Limpiar", "limpiar_malla"), _i("Generar grupos de caras", "grupos_caras"),
-        _i("Combinar grupos de caras", "combinar_grupos_caras"), _i("Crear grupo de caras")]),
+        _i("Combinar grupos de caras", "combinar_grupos_caras"), _i("Crear grupo de caras", "crear_grupo_caras")]),
     ("MODIFICAR", ["reducir_malla", "remallar", "cortar_plano", "combinar_mallas", "convertir_malla"], [
         _i("Edición directa"), _i("Remallar", "remallar"), _i("Reducir", "reducir_malla"),
         _i("Corte de plano", "cortar_plano"), _i("Vaciado", "vaciado_malla"), _i("Combinar", "combinar_mallas"),
-        _i("Suavizar", "suavizar_malla"), _i("Invertir normal", "invertir_normal_malla"), _i("Borrar y rellenar", ico="borrar_rellenar"),
+        _i("Suavizar", "suavizar_malla"), _i("Invertir normal", "invertir_normal_malla"), _i("Borrar y rellenar", "borrar_rellenar_malla"),
         _i("Alinear", ico="alinear_malla"), _i("Extruir textura"), _i("Separar", "separar_malla"), _i("Escalar malla", "escalar_malla"),
         SEP, _i("Convertir malla", "convertir_malla")]),
 ] + COMPARTIDOS + [
@@ -311,8 +312,10 @@ class Cinta(QWidget):
         self.pestanas = []
         for i, (nombre, grupos) in enumerate(PESTANAS):
             b = QToolButton(objectName="pestana", text=nombre, checkable=True, autoExclusive=True)
+            b.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+            b.setToolTip(nombre)
             b.clicked.connect(lambda _=False, i=i: self.pila.setCurrentIndex(i))
-            fila.addWidget(b)
+            fila.addWidget(b, 1)
             self.pestanas.append(b)
             self.pila.addWidget(self._fila_grupos(grupos))
         self.pestanas[0].setChecked(True)
@@ -320,10 +323,12 @@ class Cinta(QWidget):
         self.contextuales = {}
         for nombre, grupos in CONTEXTUALES:     # pestañas que aparecen solo en su entorno (BOCETO)
             b = QToolButton(objectName="pestana", text=nombre, checkable=True, autoExclusive=True)
+            b.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+            b.setToolTip(nombre)
             indice = self.pila.count()
             b.clicked.connect(lambda _=False, i=indice: self.pila.setCurrentIndex(i))
             b.hide()
-            fila.addWidget(b)
+            fila.addWidget(b, 1)
             self.pila.addWidget(self._fila_grupos(grupos))
             self.contextuales[nombre] = b
         fila.addStretch(1)

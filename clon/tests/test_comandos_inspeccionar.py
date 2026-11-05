@@ -198,6 +198,63 @@ def test_revisar_y_reparar_en_el_panel_de_comando():
     editar.cancelar()
 
 
+def test_barrido_de_parametros_en_el_panel():
+    """SC18: abrir Barrido de parámetros, teclear valores (vacío, 0, negativo, «2 mm»), Calcular, ver la tabla,
+    Copiar y Cancelar."""
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtTest import QTest
+
+    from omnicad import api
+    from omnicad.ui.comando import ContextoComando, PanelComando
+    from omnicad.ui.comandos.inspeccionar import BarridoParametros
+    from omnicad.ui.visor3d import Visor3D
+
+    doc = Documento()
+    s = api.Sesion(doc)
+    api.llamar(s, "create_parameter", {"name": "ancho", "expression": 10})
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="ancho", largo="20", alto="5"))
+    visor = Visor3D()
+    visor.set_modelo(doc.estado_final)
+    cmd = BarridoParametros()
+    panel = PanelComando(cmd, ContextoComando(doc), visor)
+    panel.show()
+
+    def teclear(clave, texto):
+        campo = panel.widgets[clave]
+        campo.clear()
+        QTest.keyClicks(campo, texto)
+
+    # vacío: avisa en el panel y no abre la tabla
+    teclear("desde", "")
+    panel.widgets["calcular"].click()
+    assert cmd.dialogo is None and panel.mensaje.text()
+    # 0 a 30 mm en 5 pasos: la fila de 0 queda con error, las demás con volumen
+    teclear("desde", "0")
+    teclear("hasta", "30 mm")
+    panel.set_valor("pasos", 5)
+    panel.widgets["calcular"].click()
+    assert cmd.dialogo is not None and cmd.dialogo.tabla.rowCount() == 5
+    assert cmd.dialogo.tabla.item(0, 1).text() == ""                   # la fila de 0: sin volumen
+    assert "Las medidas de la caja" in cmd.dialogo.tabla.item(0, 6).text()
+    assert cmd.dialogo.tabla.item(4, 1).text().replace(",", "").startswith("3000")   # 30 × 20 × 5 = 3000 mm³
+    panel.widgets["calcular"].click()                                  # Calcular de nuevo reemplaza la tabla
+    assert cmd.dialogo.tabla.rowCount() == 5
+    # «Copiar»: texto separado por tabuladores con encabezado y los 5 valores
+    panel.widgets["calcular"].click()
+    cmd.dialogo.boton_copiar.click()
+    texto = QApplication.clipboard().text()
+    assert texto.splitlines()[0].startswith("Valor\t") and len(texto.splitlines()) == 6 and "\t3000" in texto
+    # negativo: fila con error
+    teclear("desde", "-5 mm")
+    teclear("hasta", "15 mm")
+    panel.widgets["calcular"].click()
+    assert "Las medidas de la caja" in cmd.dialogo.tabla.item(0, 6).text()
+    # Cancelar cierra la tabla y deja el panel abierto
+    cmd.dialogo.boton_cerrar.click()
+    assert cmd.dialogo is None and panel.isVisible()
+    panel.cancelar()
+
+
 def test_reparar_cuerpo_construye_y_edita_el_paso():
     from omnicad.nucleo import geometria as geo
     from omnicad.ui.comando import ContextoComando, ErrorComando

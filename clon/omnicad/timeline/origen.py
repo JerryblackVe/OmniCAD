@@ -8,9 +8,10 @@ tocó; si no, la subforma se busca en el cuerpo de antes (misma subforma OCC, o 
 - no está → ese paso la CREÓ;
 - está con otra geometría → ese paso la MODIFICÓ y se sigue buscando su origen en el cuerpo de antes;
 - está igual (una operación que rehízo la topología) → no cuenta.
+Mover cuerpos conserva el orden de las subformas: se sigue esa correspondencia aunque hayan cambiado de lugar.
 shortcut: es una aproximación por geometría, no el historial Modified/Generated del kernel (SC3); una cara que un
 paso deja idéntica a otra no se distingue. Una cara que viene de otro cuerpo (la herramienta de una resta) se
-atribuye al paso que la unió, y un cuerpo importado o una malla no dan origen (None).
+atribuye al paso que la unió; un sólido importado se atribuye al paso de importación. Una malla no da origen (None).
 """
 import logging
 import math
@@ -59,7 +60,9 @@ def _caminar(doc, cid, tipo, sub):
             return {"creo": op.id, "modificaron": modificaron[::-1], "cuerpo": cid}
         if antes.forma is despues.forma:
             continue
-        previa = _previa(antes.forma, tipo, sub)
+        movida = (op.TIPO == "mover" and cid in op.p.get("cuerpos", []) and not op.p.get("copiar")
+                  and not op.p.get("caras") and not op.p.get("curvas_boceto"))
+        previa = _previa(antes.forma, tipo, sub, despues.forma if movida else None)
         if previa is None:
             return {"creo": op.id, "modificaron": modificaron[::-1], "cuerpo": cid}
         sub, cambio = previa
@@ -69,10 +72,20 @@ def _caminar(doc, cid, tipo, sub):
     return None         # todos los pasos hasta el principio están suprimidos
 
 
-def _previa(antes, tipo, sub):
+def _previa(antes, tipo, sub, despues=None):
     """(subforma de `antes` de la que viene `sub`, si cambió) o None si `sub` nació en este paso."""
     if refs.mapa_de_subformas(antes, tipo).FindIndex(sub):
         return sub, False
+    if despues is not None:             # Mover cuerpos copia la topología sin reordenarla.
+        mapa = refs.mapa_de_subformas(despues, tipo)
+        indice = mapa.FindIndex(sub)
+        subs = refs.subformas(antes, tipo)
+        if not indice or mapa.Size() != len(subs):
+            return None
+        previa = subs[indice - 1]
+        igual = (refs._distancia(tipo, refs.firma(sub), refs.firma(previa), 1.0) <= UMBRAL_IGUAL
+                 and np.allclose(geo.caja_envolvente(sub), geo.caja_envolvente(previa), rtol=0, atol=UMBRAL_IGUAL))
+        return previa, not igual
     ref = refs.referencia("", sub)      # sin posición relativa a la caja: un paso que agranda el cuerpo la desplaza
     previa = refs.resolver(antes, ref)
     if previa is None:

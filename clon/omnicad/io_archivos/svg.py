@@ -19,6 +19,16 @@ import numpy as np
 
 PX_MM = 25.4 / 96.0          # 96 px por pulgada (CSS)
 _UNIDADES = {"mm": 1.0, "cm": 10.0, "in": 25.4, "pt": 25.4 / 72, "pc": 25.4 / 6, "px": PX_MM, "": PX_MM}
+TOPE_SVG = 20 * 1024 * 1024
+
+
+class PrimitivasSVG(list):
+    """Lista compatible con los lectores anteriores, con la jerarquía de importación."""
+    def __init__(self, primitivas=(), grupos=(), nombre="SVG"):
+        super().__init__(primitivas)
+        self.grupos, self.nombre = list(grupos), str(nombre)
+        self.como_objeto = True
+        self.tipo_origen = "SVG"
 
 
 class ErrorSVG(ValueError):
@@ -64,10 +74,12 @@ def _numeros(texto):
     return [float(x) for x in re.findall(r"[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?", texto or "")]
 
 
-def _arco_a_beziers(p0, rx, ry, phi, grande, barrido, p1):
-    """Arco elíptico de SVG (notación de extremos) → lista de Bézier cúbicas (≤ 90° cada una)."""
-    if rx == 0 or ry == 0 or np.allclose(p0, p1):
-        return [[p0, p0, p1, p1]]
+def _arco_svg(p0, rx, ry, phi, grande, barrido, p1):
+    """Notación de extremos de SVG → arco elíptico analítico, sin aproximación cúbica."""
+    if p0 == p1:
+        return []
+    if rx == 0 or ry == 0:
+        return [("linea", p0, p1)]
     rx, ry = abs(rx), abs(ry)
     c, s = math.cos(math.radians(phi)), math.sin(math.radians(phi))
     dx, dy = (p0[0] - p1[0]) / 2, (p0[1] - p1[1]) / 2
@@ -87,18 +99,8 @@ def _arco_a_beziers(p0, rx, ry, phi, grande, barrido, p1):
         dt -= 2 * math.pi
     elif barrido and dt < 0:
         dt += 2 * math.pi
-    n = max(1, int(math.ceil(abs(dt) / (math.pi / 2) - 1e-9)))
-    salida, paso = [], dt / n
-    alfa = 4 / 3 * math.tan(paso / 4)
-    punto = lambda t: (cx + rx * math.cos(t) * c - ry * math.sin(t) * s, cy + rx * math.cos(t) * s + ry * math.sin(t) * c)  # noqa: E731,E501
-    deriv = lambda t: (-rx * math.sin(t) * c - ry * math.cos(t) * s, -rx * math.sin(t) * s + ry * math.cos(t) * c)  # noqa: E731,E501
-    for i in range(n):
-        ta, tb = t1 + i * paso, t1 + (i + 1) * paso
-        a, b = punto(ta), punto(tb)
-        da, db = deriv(ta), deriv(tb)
-        salida.append([a, (a[0] + alfa * da[0], a[1] + alfa * da[1]), (b[0] - alfa * db[0], b[1] - alfa * db[1]), b])
-    salida[0][0], salida[-1][3] = tuple(p0), tuple(p1)
-    return salida
+    ini, fin = (t1, t1 + dt) if dt > 0 else (t1 + dt, t1)
+    return [("arco_elipse", (cx, cy), rx, ry, math.radians(phi), ini, fin, 1 if dt > 0 else -1)]
 
 
 def _path(d):
@@ -128,6 +130,8 @@ def _path(d):
                 continue
         if cmd is None:
             raise ErrorSVG("El trazado SVG no empieza con un comando.")
+        if cmd in "Zz":
+            raise ErrorSVG("Después de cerrar un trazado SVG hace falta otro comando.")
         rel = cmd.islower()
         base = cur if rel else (0.0, 0.0)
         c = cmd.upper()
@@ -175,9 +179,10 @@ def _path(d):
             ultimo_ctrl, cur = q, fin
         elif c == "A":
             rx, ry, phi, grande, barrido, x, y = leer(7)
+            if grande not in (0, 1) or barrido not in (0, 1):
+                raise ErrorSVG("Los indicadores de un arco SVG deben ser 0 o 1.")
             fin = (base[0] + x, base[1] + y)
-            for bz in _arco_a_beziers(cur, rx, ry, phi, bool(grande), bool(barrido), fin):
-                salida.append(("bezier", bz))
+            salida.extend(_arco_svg(cur, rx, ry, phi, bool(grande), bool(barrido), fin))
             cur = fin
         ultimo_cmd = cmd
     return salida
@@ -191,6 +196,10 @@ def _transformar(prim, m):
         return ("bezier", [f(p) for p in prim[1]])
     if prim[0] == "polilinea":
         return ("polilinea", [f(p) for p in prim[1]], prim[2])
+    if prim[0] in ("circulo", "arco", "elipse", "arco_elipse"):
+        from ..restricciones.objetos import transformar_primitiva
+        p = transformar_primitiva((prim[0], None, *prim[1:]), m)
+        return (p[0], *p[2:])
     raise ErrorSVG(prim[0])
 
 
@@ -234,7 +243,7 @@ def _color(valor):
 
 def _estilo(nodo):
     """{propiedad: valor} del atributo style y de los atributos de presentación (style gana)."""
-    d = {k: nodo.get(k) for k in ("stroke", "fill", "display", "visibility") if nodo.get(k) is not None}
+    d = {k: nodo.get(k) for k in ("stroke", "fill", "fill-rule", "display", "visibility") if nodo.get(k) is not None}
     for par in (nodo.get("style") or "").split(";"):
         if ":" in par:
             k, _, v = par.partition(":")
@@ -242,10 +251,12 @@ def _estilo(nodo):
     return d
 
 
-def _recorrer(ruta):
+def _recorrer(ruta, con_formas=False):
     """[(primitiva, capa, color)] del SVG: `capa` es la tupla de ids/etiquetas de los grupos que la contienen
     y `color` el '#rrggbb' del trazo (o del relleno si no hay trazo); None si no se pinta."""
     try:
+        if Path(ruta).stat().st_size > TOPE_SVG:
+            raise ErrorSVG("El SVG supera el límite de 20 MB.")
         raiz = ET.fromstring(Path(ruta).read_bytes())
     except (ET.ParseError, OSError) as e:
         raise ErrorSVG(f"No se pudo leer el SVG: {e}") from e
@@ -267,18 +278,34 @@ def _recorrer(ruta):
         alto_doc, u_alto = _longitud(raiz.get("height", ""))
         x0, alto = 0.0, (alto_doc * _UNIDADES.get(u_alto, PX_MM) / escala) if alto_doc else 0.0
     base = np.array([[escala, 0, -escala * x0], [0, -escala, escala * alto], [0, 0, 1.0]])
+    alto_doc, u_alto = _longitud(raiz.get("height", ""))
+    if len(vb) == 4:
+        if min(vb[2:]) <= 0:
+            raise ErrorSVG("El viewBox del SVG debe tener ancho y alto positivos.")
+        w = ancho * _UNIDADES.get(u, PX_MM) if ancho else vb[2] * PX_MM
+        h = alto_doc * _UNIDADES.get(u_alto, PX_MM) if alto_doc else w * vb[3] / vb[2]
+        sx, sy = w / vb[2], h / vb[3]
+        aspecto = raiz.get("preserveAspectRatio", "xMidYMid meet")
+        if not aspecto.startswith("none"):
+            sx = sy = max(sx, sy) if "slice" in aspecto else min(sx, sy)
+        tx = -vb[0] * sx + (w - vb[2] * sx) * (0.5 if "xMid" in aspecto else 1 if "xMax" in aspecto else 0)
+        ty = -vb[1] * sy + (h - vb[3] * sy) * (0.5 if "YMid" in aspecto else 1 if "YMax" in aspecto else 0)
+        base = np.array([[sx, 0, tx], [0, -sy, h - ty], [0, 0, 1.0]])
     salida = []
+    numero_forma = 0
 
     def visitar(nodo, m, capa, heredado, profundidad=0):
+        nonlocal numero_forma
         if profundidad > 40:
-            return
+            raise ErrorSVG("El SVG supera 40 niveles de grupos o referencias use.")
         est = _estilo(nodo)
         if est.get("display") == "none" or est.get("visibility") in ("hidden", "collapse"):
             return
         t = ns(nodo.tag)
         stroke = _color(est.get("stroke")) or heredado[0]
         fill = _color(est.get("fill")) or heredado[1]
-        heredado = (stroke, fill)
+        regla = est.get("fill-rule", heredado[2])
+        heredado = (stroke, fill, regla)
         if t == "g":
             nombre = nodo.get("{http://www.inkscape.org/namespaces/inkscape}label") or nodo.get("id")
             if nombre:
@@ -290,6 +317,14 @@ def _recorrer(ruta):
         else:
             color = "#000000" if fill is None and stroke is None else None
         m = m @ _matriz(nodo.get("transform"))
+        if not np.isfinite(m).all():
+            raise ErrorSVG("El SVG contiene una transformación no finita.")
+        numero_forma += 1
+        forma = {"nombre": nodo.get("id") or f"Trazo {numero_forma}", "numero": numero_forma,
+                 "regla": regla, "relleno": fill != "none"}
+
+        def sumar(p, sentido=1):
+            salida.append((p, capa, color, dict(forma, sentido=sentido)) if con_formas else (p, capa, color))
         prims = []
         if t == "use":
             ref = (nodo.get("{http://www.w3.org/1999/xlink}href") or nodo.get("href") or "").lstrip("#")
@@ -315,22 +350,20 @@ def _recorrer(ruta):
             cx, cy = float(nodo.get("cx", 0)), float(nodo.get("cy", 0))
             rx = float(nodo.get("r", 0)) if t == "circle" else float(nodo.get("rx", 0))
             ry = float(nodo.get("r", 0)) if t == "circle" else float(nodo.get("ry", 0))
-            # círculo exacto si la transformación total es semejanza (sin deformar)
-            a = m[:2, :2]
-            sx, sy = np.linalg.norm(a[:, 0]), np.linalg.norm(a[:, 1])
-            if abs(rx - ry) < 1e-9 and abs(sx - sy) < 1e-9 * max(sx, 1) and abs(float(a[:, 0] @ a[:, 1])) < 1e-9:
-                c = m @ np.array([cx, cy, 1.0])
-                salida.append((("circulo", (float(c[0]), float(c[1])), rx * sx), capa, color))
-                prims = []
-            else:
-                prims = _elipse_beziers(cx, cy, rx, ry)
+            if rx > 0 and ry > 0:
+                prims = [("elipse", (cx, cy), rx, ry, 0.0)]
         for p in prims:
-            salida.append((_transformar(p, m), capa, color))
+            sentido = (p[7] if len(p) == 8 else 1) * (1 if np.linalg.det(m[:2, :2]) > 0 else -1) \
+                if p[0] == "arco_elipse" else 1
+            sumar(_transformar(p, m), sentido)
         for hijo in nodo:
             if ns(hijo.tag) not in _NO_DIBUJAN:
-                visitar(hijo, m, capa, heredado, profundidad)
+                visitar(hijo, m, capa, heredado, profundidad + 1)
 
-    visitar(raiz, base, (), (None, None))
+    try:
+        visitar(raiz, base, (), (None, None, "nonzero"))
+    except (ValueError, IndexError, OverflowError, ZeroDivisionError) as e:
+        raise ErrorSVG(f"El SVG contiene geometría o una transformación inválida: {e}") from e
     return salida
 
 
@@ -341,17 +374,21 @@ def leer_svg(ruta, capas=None, colores=None):
     `colores`: solo los trazos (o rellenos) de esos '#rrggbb'. Ver `listar_capas_svg`."""
     capas = {str(c).casefold() for c in capas} if capas else None
     colores = {_color(c) or str(c).casefold() for c in colores} if colores else None
-    salida = []
-    for prim, capa, color in _recorrer(ruta):
+    salida, grupos, formas = [], [], []
+    for prim, capa, color, forma in _recorrer(ruta, con_formas=True):
         if capas is not None and not any(g.casefold() in capas for g in capa):
             continue
         if colores is not None and color not in colores:
             continue
         salida.append(prim)
+        grupos.append(capa)
+        formas.append(forma)
     if not salida:
         filtro = " con ese filtro de capas o colores" if (capas or colores) else ""
         raise ErrorSVG(f"El SVG no tiene geometría que se pueda importar{filtro}.")
-    return salida
+    resultado = PrimitivasSVG(salida, grupos, Path(ruta).stem)
+    resultado.formas = formas
+    return resultado
 
 
 def listar_capas_svg(ruta):

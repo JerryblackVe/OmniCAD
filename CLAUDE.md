@@ -11,6 +11,17 @@
   (`docs/agentes/herramientas.md`).
 - Si encontrás algo de la app sin herramienta, se la agregás en el mismo turno.
 
+## Regla estricta: PROJECT_CONTEXT.md siempre al día (local, nunca a GitHub)
+- `PROJECT_CONTEXT.md`, en la raíz, es el documento maestro para que cualquier IA entienda y continúe OmniCAD:
+  qué es, funciones, tecnologías, arquitectura, carpetas, datos, APIs, integraciones, estado, decisiones y cómo seguir.
+- **No se sube a git**: está en `.gitignore`. Nunca `git add -f`.
+- **Se actualiza en el mismo turno** que cualquier cambio que lo deje viejo: una función, módulo, carpeta,
+  dependencia, herramienta del MCP o regla nueva o borrada, o una decisión técnica. Al pie lleva
+  `Actualizado: AAAA-MM-DD — qué cambió`.
+- **No duplica fuentes de verdad.** La sección de estado da conteos y enlaces a `docs/seguimiento/`, sin copiar filas.
+  Las reglas resumen y enlazan a `AGENTS.md` y a este archivo.
+- Antes de afirmar algo en él, se verifica en el código. El coordinador lo revisa al cerrar cada tanda.
+
 ## Regla estricta: bugs, faltantes y mejoras en un solo lugar
 - Todo lo que falta resolver se recopila SOLO en `docs/seguimiento/`:
   - `bugs.md`: lo que falla.
@@ -30,16 +41,23 @@
   `docs/seguimiento/` y los documentos de cada prompt.
 - **Prompt nuevo:** se guarda en su documento (`## Prompt para el agente`) y se suma a la tabla «Prompts guardados»
   de `docs/seguimiento/README.md`, en el mismo turno. `tests/test_seguimiento.py` falla si queda afuera.
+- **Prompt hecho:** cuando el coordinador revisa y cierra el trabajo de un prompt, borra su sección `## Prompt para el agente`
+  (o el documento entero si era solo el prompt) y su fila de «Prompts guardados», y refresca `datasets/prompts`: la
+  página muestra solo prompts por hacer o por revisar.
 - **No se actualiza sola.** Quien cierra una tanda (el coordinador) la refresca, sin esperar el push:
-  1. `python scripts/seguimiento_json.py <carpeta_temporal>` escribe `seguimiento.json`, `resueltos.json` y
-     `prompts.json` (pendientes de `docs/seguimiento/`, las últimas 25 entradas del Registro de `PROJECT_LOG.md` y
+  1. `python scripts/seguimiento_json.py <carpeta_temporal>` escribe `seguimiento.json`, `resueltos.json`,
+     `prompts.json` y `agenda.json` (pendientes de `docs/seguimiento/`, las últimas 25 entradas del Registro de `PROJECT_LOG.md` y
      los prompts guardados).
   2. Subir cada archivo con la herramienta `Artifact` (`url` de la página, `asset: true`, `file_path`; uno por llamada).
   3. Con `ArtifactData` `update`, poner el `source` completo (`format`, `kind`, `name` y la `url` nueva `/_blob/...`) y `updated` = `{at, by}` en `datasets/seguimiento`,
-     `datasets/resueltos` y `datasets/prompts`. Las tarjetas, las tablas y el gráfico se recalculan solos.
+     `datasets/resueltos`, `datasets/prompts` y `datasets/agenda`. Las tarjetas, las tablas y el gráfico se recalculan solos.
+- **Agenda (`docs/seguimiento/agenda.md`):** tareas que Gerardo programa para una fecha («agendá X para el
+  viernes»). Solo él las pide; el coordinador anota la fila (siguiente AG-n, fecha `AAAA-MM-DD` o «A definir»)
+  y refresca la página en ese turno. **Al empezar cada sesión, el coordinador lee la agenda y avisa en una línea
+  lo que vence hoy o ya venció.** Hecha la tarea, la fila se borra y va al Registro de `PROJECT_LOG.md`.
 - La página no se vuelve a escribir salvo que Gerardo pida un cambio de diseño (documento `files/index.html`).
 - Si se pierde el acceso al Artifact, se vuelve a crear desde la herramienta `Artifact` con el tipo Dashboard:
-  datasets `seguimiento`, `resueltos` y `prompts` como archivos JSON y las calcs `resumen`, `total` y `por_tema`.
+  datasets `seguimiento`, `resueltos`, `prompts` y `agenda` como archivos JSON y las calcs `resumen`, `total` y `por_tema`.
 
 ## Regla estricta: toda prueba se hace como un usuario humano habitual
 - Al probar la app (a mano, con QTest, MCP en vivo o computer use) se simula a una persona que la usa todos los días:

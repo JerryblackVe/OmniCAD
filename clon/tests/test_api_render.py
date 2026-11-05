@@ -195,20 +195,75 @@ def test_render_usa_camara_escena_y_calcomanias(sesion, monkeypatch):
     assert escena == rc.escena_normalizada(sesion.doc.espacios["render"]["escena"])
     assert opciones["cielo"] == rc.cielo_de("azul_tranquilidad")
     assert opciones["calcomanias"] == [calcomania]
-    assert opciones["supermuestreo"] == 2 and opciones["mosaico"] == 2048
+    assert opciones["supermuestreo"] == 2 and opciones["mosaico"] == 1024
     _llamar(sesion, "render_image", width=32, height=24, view="top", direction=[1, 0, 0])
     assert llamadas[-1][0]["R"][2] == [1, 0, 0]
     assert sesion.doc.espacios["render"]["camara"] == cam_guardada
 
 
 def test_presets_sin_render_grande():
-    assert _tamano(32, 24, "full_hd", "final") == (1920, 1080, 3)
-    assert _tamano(32, 24, "hd", "standard") == (1280, 720, 2)
-    assert _tamano(32, 24, "web", "draft") == (1024, 768, 1)
+    assert _tamano(32, 24, "full_hd", "final") == (1920, 1080, 3, None)
+    assert _tamano(32, 24, "hd", "standard") == (1280, 720, 2, None)
+    assert _tamano(32, 24, "web", "draft") == (1024, 768, 1, None)
+
+
+def test_multiplicador_ajustado_al_tope_de_25_mpx():
+    """H-64: el 4K entra en las tres calidades; si el supermuestreo no cabe en el tope, se baja lo justo y se avisa."""
+    assert hr._multiplicador(3840, 2160, "draft") == (1, None)
+    for calidad in ("standard", "final"):
+        multiplicador, aviso = hr._multiplicador(3840, 2160, calidad)
+        assert multiplicador == 1.5
+        assert 3840 * 2160 * multiplicador ** 2 <= 25_000_000
+        assert "1,5x" in aviso and "25 Mpx" in aviso
+    assert hr._multiplicador(800, 600, "final") == (3, None)
+    assert hr._multiplicador(6000, 5000, "draft") == (None, None)
+
+
+def test_render_4k_baja_el_suavizado_y_avisa(sesion, monkeypatch):
+    """El 4K en standard ya no falla: hace la grilla de muestras un 50% más fina (1,5×), avisa y sigue renderizando."""
+    llamadas = []
+
+    def capturar(objetos, cam, escena, ancho, alto, **opciones):
+        llamadas.append((ancho, alto, opciones["supermuestreo"]))
+        return np.zeros((4, 4, 4), dtype=np.uint8)
+
+    monkeypatch.setattr(rc, "renderizar", capturar)
+    r = api.llamar(sesion, "render_image", {"width": 3840, "height": 2160, "quality": "standard"})
+    assert r["ok"], r
+    assert llamadas == [(5760, 3240, 1)]
+    assert any("1,5x" in aviso and "25 Mpx" in aviso for aviso in r["avisos"]), r["avisos"]
+
+
+def test_render_con_multiplicador_fraccionario(sesion, monkeypatch):
+    """El camino del 1,5× completo: grilla de muestras más fina, promedio al bajar y PNG del tamaño pedido."""
+    monkeypatch.setattr(hr, "_multiplicador",
+                        lambda ancho, alto, calidad: (1.5, "Se bajó el suavizado a 1,5x para no pasar 25 Mpx"))
+    resultado = _llamar(sesion, "render_image", width=32, height=24, quality="standard")
+    with Image.open(io.BytesIO(resultado["image"].png)) as imagen:
+        assert imagen.size == (32, 24)
+
+
+def test_reducir_promedia_los_bloques():
+    """El multiplicador fraccionario promedia la grilla de muestras al bajar: el borde queda a medio camino."""
+    rgba = np.zeros((4, 4, 4), dtype=np.uint8)
+    rgba[:, 0] = 255
+    salida = hr._reducir(rgba, 2, 2, False)
+    assert salida.shape == (2, 2, 3)
+    assert 0 < salida[0, 0, 0] < 255 and salida[0, 1, 0] == 0
+
+
+def test_reducir_con_transparencia_no_oscurece_el_borde():
+    """Con fondo transparente el color se premultiplica al promediar: el borde de la pieza no sale negro."""
+    rgba = np.zeros((2, 2, 4), dtype=np.uint8)
+    rgba[0, 0] = (255, 0, 0, 255)
+    salida = hr._reducir(rgba, 1, 1, True)
+    assert salida.shape == (1, 1, 4)
+    assert salida[0, 0, 0] == 255
+    assert 60 <= salida[0, 0, 3] <= 70
 
 
 @pytest.mark.parametrize("argumentos", [{"width": 15}, {"height": 4097},
-                                       {"width": 4096, "height": 4096, "quality": "standard"}])
+                                       {"width": 6000, "height": 5000, "quality": "draft"}])
 def test_tamano_invalido(argumentos):
     r = api.llamar(api.Sesion(), "render_image", argumentos)
     assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r

@@ -12,9 +12,10 @@ V_CUBO = np.array([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0],
                    [0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 10, 10]], float)
 F_CUBO = np.array([[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4],
                    [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]])
-HERRAMIENTAS = {"get_mesh_info", "tessellate", "repair_mesh", "clean_mesh", "generate_face_groups", "combine_face_groups", "reduce_mesh",
+HERRAMIENTAS = {"get_mesh_info", "tessellate", "repair_mesh", "clean_mesh", "generate_face_groups", "combine_face_groups",
+               "create_face_group", "reduce_mesh",
                 "remesh", "smooth_mesh", "shell_mesh", "plane_cut_mesh", "combine_meshes", "separate_mesh",
-                "reverse_mesh_normals", "scale_mesh", "convert_mesh",
+                "reverse_mesh_normals", "scale_mesh", "convert_mesh", "erase_and_fill_mesh",
                 "create_mesh_section_sketch", "fit_curves_to_mesh_section", "analyze_mesh_features",
                 "reconstruct_from_mesh"}
 
@@ -172,6 +173,35 @@ def llamar_ok(s, m, grupos):
     return api.llamar(s, "combine_face_groups", {"bodies": m, "groups": grupos})["ok"]
 
 
+def test_crear_grupo_de_caras(s, tmp_path):
+    """MAL-1: la selección pasa a un grupo nuevo, elegida por cara o por grupo, y sin exigir que esté unida."""
+    m = insertar(s, tmp_path, ml.Malla(V_CUBO, F_CUBO))                 # el STL no trae grupos: uno solo
+    arriba = [i for i, tri in enumerate(F_CUBO) if all(V_CUBO[tri][:, 2] == 10)]
+    r = llamar(s, "create_face_group", bodies=m, faces=arriba)["bodies_modified"][0]
+    assert (r["face_groups"], r["triangles"], r["before"]["triangles"]) == (2, 12, 12)
+    assert r["volume"] == pytest.approx(1000)
+    assert set(s.cuerpo(m).forma.grupos[arriba].tolist()) == {1}        # las dos caras de arriba, solas en el 1
+
+    llamar(s, "generate_face_groups", bodies=m, angle=30)               # seis grupos, uno por cara del cubo
+    abajo = [i for i, tri in enumerate(F_CUBO) if all(V_CUBO[tri][:, 2] == 0)]
+    g = s.cuerpo(m).forma.grupos
+    viejos, arriba_g, abajo_g = set(g.tolist()), int(g[arriba[0]]), int(g[abajo[0]])
+    assert not api.llamar(s, "combine_face_groups", {"bodies": m, "groups": [arriba_g, abajo_g]})["ok"]
+    r = llamar(s, "create_face_group", bodies=m, groups=[arriba_g, abajo_g])["bodies_modified"][0]
+    assert r["face_groups"] == 5 and r["triangles"] == 12               # desaparecen dos grupos y entra uno nuevo
+    nuevo = s.cuerpo(m).forma.grupos
+    assert set(nuevo[arriba].tolist()) == set(nuevo[abajo].tolist())    # arriba y abajo, juntos y sin tocarse
+    assert set(nuevo.tolist()) == viejos - {arriba_g, abajo_g} | {int(nuevo[arriba[0]])}
+    llamar(s, "undo")                                                    # todo el cambio es UN paso
+    assert llamar(s, "get_mesh_info", body=m)["bodies"][0]["face_groups"] == 6
+
+    fallo(s, "create_face_group", "INVALID_ARGUMENTS", bodies=m)
+    fallo(s, "create_face_group", "OPERATION_FAILED", bodies=m, groups=[999])
+    fallo(s, "create_face_group", "OPERATION_FAILED", bodies=m, faces=[999])
+    caja = llamar(s, "create_box", length=5, width=5, height=5)["bodies_created"][0]["id"]
+    fallo(s, "create_face_group", "UNSUPPORTED_BODY_TYPE", bodies=caja, faces=[0])
+
+
 def test_reducir_y_remallar(s):
     cid = llamar(s, "create_sphere", radius=10)["bodies_created"][0]["id"]
     m = llamar(s, "tessellate", bodies=cid, keep_original=False, refinement="low")["bodies_created"][0]
@@ -296,3 +326,41 @@ def test_comando_combinar_grupos_lee_los_numeros_del_campo():
     assert _parsear_grupos("1, 3 4") == [1, 3, 4] and _parsear_grupos("") == []
     with pytest.raises(ErrorComando):
         _parsear_grupos("1, dos")
+
+
+def test_comando_borrar_rellenar_lee_los_numeros_del_campo():
+    """El diálogo pide las caras como texto («0, 2 4») y al editar las vuelve a mostrar igual."""
+    from omnicad.ui.comando import ErrorComando
+    from omnicad.ui.comandos.malla import _parsear_caras
+    assert _parsear_caras("0, 2 4") == [0, 2, 4] and _parsear_caras("") == []
+    with pytest.raises(ErrorComando):
+        _parsear_caras("0, dos")
+
+
+def test_borrar_y_rellenar(s, tmp_path):
+    """MAL-3: Borra caras de una malla y rellena el agujero (uniforme y mínimo)."""
+    m = insertar(s, tmp_path, ml.Malla(V_CUBO, F_CUBO))
+    # Identificar las caras superiores (z > 5)
+    caras = llamar(s, "get_mesh_info", body=m)["bodies"][0]
+    assert caras["triangles"] == 12 and caras["closed"]
+    # Las caras de la tapa superior son las que tienen todos sus vértices con z=10
+    z_vertices = V_CUBO[:, 2]
+    tapa_arriba = [i for i, tri in enumerate(F_CUBO) if all(z_vertices[tri] == 10)]
+    assert len(tapa_arriba) == 2  # El cubo tiene 2 triángulos por cara
+    # Borrar y rellenar (uniforme)
+    r = llamar(s, "erase_and_fill_mesh", bodies=m, faces=tapa_arriba, kind="uniform")
+    b = r["bodies_modified"][0]
+    assert b["closed"] and b["triangles"] >= 12  # Se rellenó
+    assert b["volume"] == pytest.approx(1000, rel=0.01)
+    assert r["feature"]["type"] == "borrar_rellenar_malla"
+    # Deshacer y probar con minimal
+    llamar(s, "undo")
+    r = llamar(s, "erase_and_fill_mesh", bodies=m, faces=tapa_arriba, kind="minimal")
+    b = r["bodies_modified"][0]
+    assert b["closed"] and b["triangles"] >= 12
+    assert b["volume"] == pytest.approx(1000, rel=0.01)
+    # Validar errores
+    fallo(s, "erase_and_fill_mesh", "INVALID_ARGUMENTS", bodies=m, faces=[])
+    fallo(s, "erase_and_fill_mesh", "INVALID_ARGUMENTS", bodies=m, faces=tapa_arriba, density=0)
+    caja = llamar(s, "create_box", length=5, width=5, height=5)["bodies_created"][0]["id"]
+    fallo(s, "erase_and_fill_mesh", "UNSUPPORTED_BODY_TYPE", bodies=caja, faces=[0])

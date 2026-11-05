@@ -1510,6 +1510,27 @@ def _asistente(p):
     p.restore()
 
 
+def _reportar_problema(p):
+    """Globo de diálogo con exclamación; el trazo sigue el texto del tema activo."""
+    from . import temas
+    c = QPainterPath(QPointF(9, 5))
+    c.lineTo(23, 5)
+    c.quadTo(27, 5, 27, 9)
+    c.lineTo(27, 21)
+    c.quadTo(27, 25, 23, 25)
+    c.lineTo(13, 25)
+    c.lineTo(7, 29)
+    c.lineTo(7, 25)
+    c.quadTo(4, 25, 4, 21)
+    c.lineTo(4, 9)
+    c.quadTo(4, 5, 9, 5)
+    p.setPen(QPen(QColor(temas.color("texto")), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+    p.setBrush(Qt.NoBrush)
+    p.drawPath(c)
+    p.drawLine(QPointF(16, 10), QPointF(16, 17))
+    p.drawPoint(QPointF(16, 21))
+
+
 def _clip(p):
     """Adjuntar (IA-9): clip de papel inclinado, solo trazo (iconos_tema lo aclara en temas oscuros)."""
     c = QPainterPath(QPointF(19, 10))
@@ -1994,6 +2015,16 @@ def _grupos_caras(p):
     _cara_malla(p, q(0, b, h), q(a, b, h), q(a, b, 0), q(0, b, 0), QColor("#f2a65a"), 2)
     _cara_malla(p, q(a, b, h), q(a, 0, h), q(a, 0, 0), q(a, b, 0), QColor("#a27fd6"), 2)
     _cara_malla(p, q(0, 0, h), q(a, 0, h), q(a, b, h), q(0, b, h), QColor("#8fd18f"), 2)
+
+
+def _crear_grupo_caras(p):
+    """Caras grises de malla; las elegidas pasan a un grupo nuevo (naranja) con un «+»."""
+    q = _q(14, 5)
+    for i in range(3):
+        for j in range(3):
+            color = QColor("#f2a65a") if (i, j) in ((1, 0), (2, 0), (2, 1)) else MALLA[1]
+            _cara_malla(p, *_cuadro(q, i * 4, j * 4, i * 4 + 4, j * 4 + 4, 0), color, 1)
+    _mas(p, 25, 25, 4)
 
 
 def _combinar_grupos_caras(p):
@@ -2625,6 +2656,7 @@ DIBUJOS_EXTRA = {
     # malla
     "malla_teselar": _malla_teselar, "reparar_malla": _reparar_malla, "limpiar_malla": _limpiar_malla,
     "grupos_caras": _grupos_caras,
+    "crear_grupo_caras": _crear_grupo_caras,
     "combinar_grupos_caras": _combinar_grupos_caras,
     "reemplazar_primitivas": _reemplazar_primitivas,
     "reducir_malla": _reducir_malla, "remallar": _remallar, "cortar_plano": _cortar_plano,
@@ -2644,7 +2676,7 @@ DIBUJOS_EXTRA = {
     # espacios de trabajo / varios
     "dibujo": _dibujo, "render": _render, "animacion": _animacion, "configuracion_tabla": _configuracion_tabla,
     "parametros_exportar": _parametros_exportar, "parametros_importar": _parametros_importar,
-    "secuencias": _secuencias, "asistente": _asistente, "clip": _clip,
+    "secuencias": _secuencias, "asistente": _asistente, "clip": _clip, "reportar_problema": _reportar_problema,
     # pasos sin comando propio
     "grafo": _grafo, "insertar_diseno": _insertar_diseno, "importar_iges": _importar_iges,
     "borrar_caras": _borrar_caras, "calibracion_holguras": _calibracion_holguras,

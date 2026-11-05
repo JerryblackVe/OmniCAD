@@ -73,6 +73,10 @@ Son UNA sola tarea: al hacerla se borran todas sus filas juntas (y su ID de esta
 | Video MP4 y cámara en ruta | B6 · P-27-15 |
 | Puente con Blender | P-3a · PL10 · B1 |
 
+## Agenda
+
+Tareas que Gerardo programa para una fecha: [agenda.md](agenda.md) (IDs AG-n). Reglas en `CLAUDE.md`, «Página de seguimiento».
+
 ## Prompts guardados
 
 Cada tema tiene su prompt al final del documento, en la sección «Prompt para el agente».
@@ -80,17 +84,13 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 
 | Tema | Documento |
 |---|---|
+| Organización del boceto | [plan_boceto_organizar.md](../plan_boceto_organizar.md) |
 | Caza automática de errores | [plan_caza_errores.md](../plan_caza_errores.md) |
-| Asas de la ventana | [brechas_gizmos.md](../brechas_gizmos.md) |
-| Vista previa en proceso aparte | [brechas_previa_aislada.md](../brechas_previa_aislada.md) |
-| Texto en curva | [brechas_texto_curva.md](../brechas_texto_curva.md) |
-| Parámetros | [brechas_parametros.md](../brechas_parametros.md) |
 | INSPECCIONAR | [brechas_inspeccionar.md](../brechas_inspeccionar.md) |
 | SUPERFICIE | [brechas_superficie.md](../brechas_superficie.md) |
 | ENSAMBLAR | [brechas_ensamblar.md](../brechas_ensamblar.md) |
 | ANIMACIÓN | [brechas_animacion.md](../brechas_animacion.md) |
 | Plástico y extensiones | [brechas_extensiones.md](../brechas_extensiones.md) |
-| Reconstruir sólido | [plan_reconstruir_solido.md](../plan_reconstruir_solido.md) |
 | Escanear con el celular | [plan_escaneo_celular.md](../plan_escaneo_celular.md) |
 
 ## Otras listas que se siguen aparte

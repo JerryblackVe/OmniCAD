@@ -44,6 +44,7 @@ PISTAS = {
     "TOOL_NOT_AVAILABLE": ["Usá buscar_herramientas o elegí una herramienta habilitada para el asistente."],
     "CANCELLED": ["El usuario canceló el pedido; no se ejecutó."],
     "FEATURE_NOT_FOUND": ["Usá el id (p. ej. 'op3') o el nombre exacto del paso.", _VER_TIMELINE],
+    "GROUP_NOT_FOUND": ["manage_feature_groups con action='list' muestra las carpetas del timeline.", _VER_TIMELINE],
     "BODY_NOT_FOUND": ["get_scene_info lista los cuerpos con su id y nombre.",
                        "El cuerpo puede no existir en ese punto del timeline (borrado, suprimido o después del marcador)."],
     "PARAMETER_NOT_FOUND": [_VER_PARAMETROS, "Para uno nuevo usá create_parameter."],

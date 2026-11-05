@@ -360,6 +360,14 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 - B-185 integrado con sus tests: falta mirar en la ventana real que la fila elegida se ve elegida y con el borde de origen.
 - Tareas del 2026-11-03 (MAL-1, H-67, KS1, H-59 en `b7db046`; PLA-9 después): tests sueltos verdes. Falta: suite completa y humo; en la ventana real, el botón Combinar grupos de caras, elegir una curva de Boceto 3D en el visor, el selector «Preajuste» de Configuración de escena, deshacer con el diálogo Parámetros abierto y un comando de afuera, y SÓLIDO › MODIFICAR › Simplificar › Eliminar caras (clic, elegir, Aceptar, doble clic en el timeline).
 
+- Tarde del 2026-11-03 (en `ca87869`): en la ventana real, SÓLIDO › Simplificar (Eliminar caras, Eliminar operaciones, Reemplazar con primitivas), PLÁSTICO › Apoyo, Vectorizar con Ángulo de esquina y el Preajuste de render; suite completa y humo.
+
+## 3n. Perfiles sin triangulación y reproducción de REMOVEDOR (2026-11-04)
+
+- Incluir `tests/test_perfiles_interior.py` y `scripts/bench_perfiles_interior.py` en el próximo cierre integrado.
+- Sigue pendiente la suite completa con los cambios concurrentes. La tanda focalizada de 14 archivos dio 548 passed y 69 failed: un fallo de `test_motor` y los 68 de `test_paridad_motor` por el arranque de OmniKernel, B-189. Repetir ambos después de corregir `_trozos` en `solidos_crear.py`.
+- Falta reproducir B-188 con el proyecto `.omnicad` o receta original, incluyendo el boceto/SVG y los movimientos op22/op23/op55. El STEP final disponible no lo reproduce.
+
 ## 4. Cosas que ninguna prueba cubre todavía
 
 | # | Qué falta | Dónde está anotado |
@@ -400,3 +408,4 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 5. Mediciones (#14, #13), después la tortura (§5).
 6. Anotar en `PROJECT_LOG.md` (Registro) y en `docs/seguimiento/`; borrar de esta lista lo que quedó verde.
 7. Refrescar la página de seguimiento (pasos en `CLAUDE.md`) y avisar a Gerardo los números.
+- **Tandas del 3 y 4/11 revisadas e integradas el 2026-11-05** (suite completa en verde salvo B-197, que ya fallaba en HEAD; ruff limpio). Falta probar en ventana real, como usuario: piezas `registro_uso` con foco real (botón «Reportar problema y sugerencia» y la sección Registro de uso de Configuración, en 800x520 y en los dos temas), Unión con el campo Tipo más abajo (ASM-20), línea de tiempo de ANIMACIÓN (ANI-4), Empalme con tabla de grupos (FU-6), barrido de parámetros en INSPECCIONAR (SC18), carpetas del timeline (SC9), cotas de línea base y longitud de arco en DIBUJO (CF-3), organización del boceto y texto en ruta con arrastre (B-187), y el pintado del mapa de entorno en perspectiva (H-56).

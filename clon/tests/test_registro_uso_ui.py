@@ -31,13 +31,15 @@ def test_vigilante_muestras_y_ganchos_reversibles(tmp_path, monkeypatch):
         qWarning("SECRETO QT C:/datos/privado")
         e = ValueError("SECRETO SLOT")
         sys.excepthook(type(e), e, None)
-        c._muestra -= 6
+        c._muestra -= 40                                     # la cadencia de fábrica es 30 s, no 5
         v.visor._cuadros_uso.extend([10, 20, 100])
         c._latido()
         ru.activo.cola.join()
         es = [json.loads(l) for p in ru.carpeta().glob("sesion_*.jsonl") for l in p.read_text(encoding="utf-8").splitlines()]
         assert {"bloqueo_ui", "error", "memoria", "visor_cuadros"} <= {e["tipo"] for e in es}
-        assert "SECRETO" not in json.dumps(es)
+        volcado = json.dumps(es, ensure_ascii=False)
+        assert "SECRETO QT" not in volcado and "privado" not in volcado    # lo que dice Qt: solo su longitud
+        assert "SECRETO SLOT" in volcado                       # el texto de una excepción de la app sí se guarda
         assert len(vistos) == 1
         v.prefs["general/registro_uso"] = False
         v.aplicar_preferencias()

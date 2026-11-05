@@ -8,6 +8,7 @@ import math
 import numpy as np
 
 from ..nucleo import geometria as geo
+from ..nucleo.solidos_modificar import caras_en_cadena
 from . import entidades as ent
 from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, OpPrimitiva, _caja_todo, _deps_objetivo,
                           _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, registrar_operacion)
@@ -40,17 +41,35 @@ def _trazos_texto(ref, estado):
     return [arista for _, arista in perfiles.aristas_boceto(geom, br.plano)]
 
 
-def _curvas(refs, estado, que="curvas"):
-    ents, aristas = [], []
+def _curvas(refs, estado, que="curvas", cadena=False):
+    """Las aristas de lo elegido; con `cadena` (Encadenado de Fusion) cada arista o curva de boceto arrastra a las que
+    le siguen tangentes (`_en_cadena`). Un texto de una línea ya trae todos sus trazos: no se encadena."""
+    ents, aristas, formas_boceto = [], [], {}
     for ref in refs or []:
         trazos = _trazos_texto(ref, estado)
         resueltas = _resolver_todas([ref], estado)
         ents += resueltas
         nuevas = trazos if trazos else [e.forma for e in resueltas if e.forma is not None]
+        if cadena and not trazos:
+            nuevas = _en_cadena(resueltas, nuevas, estado, formas_boceto)
         aristas += [a for a in nuevas if not any(a.IsSame(x) for x in aristas)]
     if not aristas:
         raise ErrorOperacion(f"Elegí {que}.")
     return ents, aristas
+
+
+def _caras_de_la_cadena(ents, estado):
+    """Chain Selection de caras: cada cara arrastra a las tangentes de su cuerpo (`caras_en_cadena`); lo que no es cara
+    (un cuerpo entero) pasa igual."""
+    salida, por_cuerpo = [], {}
+    for e in ents:
+        if e.tipo == "cara" and e.cuerpo:
+            por_cuerpo.setdefault(e.cuerpo, []).append(e.forma)
+        else:
+            salida.append(e.forma)
+    for cid, caras in por_cuerpo.items():
+        salida += [c for c in caras_en_cadena(estado.cuerpo(cid).forma, caras) if not any(c.IsSame(x) for x in salida)]
+    return salida
 
 
 def _direccion_curvas(ents, ref_dir, estado):
@@ -83,12 +102,13 @@ class OpSupExtruir(_OpSuperficie):
     `inicio` (plano del perfil, desfase u objeto), `lados` (un lado, dos lados con distancias distintas, simétrica
     por longitud total o `medida` mitad) y `extension` (distancia, al objeto o todo). `simetrica` es el campo de las
     recetas viejas: vale como lados = simétrica. `version_normal`: 2 (SUP-23): un contorno cerrado da la normal hacia
-    afuera, como Fusion; 1 (recetas viejas): el lado que dio siempre."""
+    afuera, como Fusion; 1 (recetas viejas): el lado que dio siempre. `cadena` (Chaining) toma la cadena tangente
+    entera de cada arista o curva elegida."""
     TIPO, ETIQUETA, ICONO = "sup_extruir", "Extrusión de superficie", "⬆"
     PARAMS = {"curvas": [], "direccion": None, "distancia": "10 mm", "simetrica": False, "conicidad": "0 deg",
               "lados": "un_lado", "medida": "total", "distancia2": "10 mm", "inicio": "plano", "desfase_inicio": "0 mm",
               "inicio_objeto": None, "extension": "distancia", "hasta": None, "desfase_hasta": "0 mm", "invertir": False,
-              "version_normal": 2}
+              "cadena": False, "version_normal": 2}
     EXPRESIONES = ("distancia", "conicidad", "distancia2", "desfase_inicio", "desfase_hasta")
     OPCIONES = {"lados": LADOS, "medida": ("mitad", "total"), "inicio": ("plano", "desfase", "objeto"),
                 "extension": ("distancia", "objeto", "todo")}
@@ -97,7 +117,7 @@ class OpSupExtruir(_OpSuperficie):
 
     def ejecutar(self, estado, ctx):
         p = self.p
-        ents, aristas = _curvas(p["curvas"], estado)
+        ents, aristas = _curvas(p["curvas"], estado, cadena=p["cadena"])
         d = _direccion_curvas(ents, p["direccion"], estado) * (-1 if p["invertir"] else 1)
         lados = "simetrica" if p["simetrica"] else p["lados"]
         desfase = 0.0
@@ -128,10 +148,11 @@ class OpSupExtruir(_OpSuperficie):
 
 class OpSupRevolucion(_OpSuperficie):
     """SUPERFICIE › Revolución [SFC-REVOLVE]: `extension` (ángulo, completa o al objeto), `lados` (un lado, dos lados
-    con `angulo2`, simétrica) y `proyectar_eje` (el eje se lleva al plano del perfil)."""
+    con `angulo2`, simétrica), `proyectar_eje` (el eje se lleva al plano del perfil) y `cadena` (Chaining: la cadena
+    tangente entera de cada arista o curva elegida)."""
     TIPO, ETIQUETA, ICONO = "sup_revolucion", "Revolución de superficie", "↻"
     PARAMS = {"curvas": [], "eje": None, "angulo": "360 deg", "extension": "angulo", "lados": "un_lado",
-              "angulo2": "90 deg", "hasta": None, "proyectar_eje": False}
+              "angulo2": "90 deg", "hasta": None, "proyectar_eje": False, "cadena": False}
     EXPRESIONES = ("angulo", "angulo2")
     OPCIONES = {"extension": ("angulo", "completa", "objeto"), "lados": LADOS}
     REFS = ("curvas", "eje", "hasta")
@@ -151,7 +172,7 @@ class OpSupRevolucion(_OpSuperficie):
 
     def ejecutar(self, estado, ctx):
         p = self.p
-        ents, aristas = _curvas(p["curvas"], estado)
+        ents, aristas = _curvas(p["curvas"], estado, cadena=p["cadena"])
         if not p["eje"]:
             raise ErrorOperacion("Elegí el eje.")
         punto, d = ent.como_eje(_resolver(p["eje"], estado))
@@ -270,16 +291,18 @@ class OpSupSolevacion(_OpSuperficie):
 class OpParche(_OpSuperficie):
     """SUPERFICIE › Parche [SFC-PATCH]: cierra un contorno con una superficie. `agrupar` (Group Edges): una
     continuidad para todo el contorno; sin agrupar, `continuidades` da una por cada referencia de `contorno` (vacía =
-    la general). `interior`: curvas, aristas o puntos que guían el parche. `invertir`: da vuelta la normal."""
+    la general). `interior`: curvas, aristas o puntos que guían el parche. `invertir`: da vuelta la normal. `cadena`
+    (Tangent Chain) suma al contorno las aristas o curvas tangentes a las elegidas; las agregadas toman la
+    continuidad general."""
     TIPO, ETIQUETA, ICONO = "parche", "Parche", "◍"
     PARAMS = {"contorno": [], "continuidad": "G0", "agrupar": True, "continuidades": [], "interior": [],
-              "invertir": False}
+              "invertir": False, "cadena": False}
     OPCIONES = {"continuidad": ("G0", "G1", "G2")}
     REFS = ("contorno", "interior")
 
     def ejecutar(self, estado, ctx):
         p = self.p
-        ents, aristas = _curvas(p["contorno"], estado, "el contorno")
+        ents, aristas = _curvas(p["contorno"], estado, "el contorno", p["cadena"])
         cont = p["continuidad"]
         por = []
         if not p["agrupar"]:
@@ -300,16 +323,16 @@ class OpParche(_OpSuperficie):
 
 
 class OpReglada(_OpSuperficie):
-    """SUPERFICIE › Reglada [SFC-RULED]."""
+    """SUPERFICIE › Reglada [SFC-RULED]. `cadena` (Tangent Chain) suma a cada arista las que le siguen tangentes."""
     TIPO, ETIQUETA, ICONO = "reglada", "Superficie reglada", "▥"
     PARAMS = {"aristas": [], "tipo": "normal", "distancia": "10 mm", "angulo": "0 deg", "direccion": None,
-              "ingletear": False, "alternas": False}
+              "ingletear": False, "alternas": False, "cadena": False}
     EXPRESIONES = ("distancia", "angulo")
     OPCIONES = {"tipo": ("normal", "tangente", "direccion")}
     REFS = ("aristas", "direccion")
 
     def ejecutar(self, estado, ctx):
-        ents, aristas = _curvas(self.p["aristas"], estado, "las aristas")
+        ents, aristas = _curvas(self.p["aristas"], estado, "las aristas", self.p["cadena"])
         cid = next((e.cuerpo for e in ents if e.cuerpo), None)
         referencia = estado.cuerpo(cid).forma if cid else next((e.plano for e in ents if e.plano is not None), None)
         direccion = ent.direccion(_resolver(self.p["direccion"], estado)) if self.p["direccion"] else None
@@ -324,9 +347,10 @@ class OpReglada(_OpSuperficie):
 
 
 class OpSupDesfase(_OpSuperficie):
-    """SUPERFICIE › Desfase [SFC-OFFSET]: crea una superficie paralela a caras o cuerpos."""
+    """SUPERFICIE › Desfase [SFC-OFFSET]: crea una superficie paralela a caras o cuerpos. `cadena` (Chain Selection)
+    suma a cada cara las tangentes de su cuerpo, como Fusion."""
     TIPO, ETIQUETA, ICONO = "sup_desfase", "Desfase de superficie", "⧉"
-    PARAMS = {"caras": [], "distancia": "2 mm", "tipo": "agudo"}
+    PARAMS = {"caras": [], "distancia": "2 mm", "tipo": "agudo", "cadena": False}
     EXPRESIONES = ("distancia",)
     OPCIONES = {"tipo": ("agudo", "redondeado")}
     REFS = ("caras",)
@@ -335,7 +359,8 @@ class OpSupDesfase(_OpSuperficie):
         ents = _resolver_todas(self.p["caras"], estado)
         if not ents:
             raise ErrorOperacion("Elegí caras o un cuerpo.")
-        base = geo.compuesto([e.forma for e in ents]) if len(ents) > 1 else ents[0].forma
+        formas = _caras_de_la_cadena(ents, estado) if self.p["cadena"] else [e.forma for e in ents]
+        base = geo.compuesto(formas) if len(formas) > 1 else formas[0]
         self._nuevo(estado, ctx, _sf().desfasar_superficie(base, ctx.evaluar(self.p["distancia"]), tipo=self.p["tipo"]))
 
 
@@ -390,9 +415,9 @@ class OpDestrimar(_OpSuperficie):
 
 
 class OpExtenderSup(_OpSuperficie):
-    """SUPERFICIE › Extender [SFC-EXTEND]."""
+    """SUPERFICIE › Extender [SFC-EXTEND]. `cadena` (Enable Chaining) estira toda la cadena tangente del borde elegido."""
     TIPO, ETIQUETA, ICONO = "extender_sup", "Extender", "⇲"
-    PARAMS = {"aristas": [], "distancia": "5 mm", "tipo": "natural", "alineacion": "alinear"}
+    PARAMS = {"aristas": [], "distancia": "5 mm", "tipo": "natural", "alineacion": "alinear", "cadena": False}
     EXPRESIONES = ("distancia",)
     OPCIONES = {"tipo": ("natural", "tangente", "perpendicular"), "alineacion": ("libre", "alinear")}
     REFS = ("aristas",)
@@ -402,13 +427,15 @@ class OpExtenderSup(_OpSuperficie):
         for e in _resolver_todas(self.p["aristas"], estado, ("arista",)):
             if e.cuerpo is None:
                 raise ErrorOperacion("Elegí bordes de un cuerpo de superficie.")
-            grupos.setdefault(e.cuerpo, []).append(e.forma)
+            grupos.setdefault(e.cuerpo, []).append(e)
         if not grupos:
             raise ErrorOperacion("Elegí los bordes a extender.")
-        for cid, aristas in grupos.items():
+        for cid, ents in grupos.items():
             c = estado.cuerpo(cid)
             if c.tipo != "superficie":      # B-163: Extender solo toca superficies, como Extend de Fusion
                 raise ErrorOperacion(f"Extender solo se aplica a cuerpos de superficie: «{c.nombre}» no es una superficie.")
+            formas = [e.forma for e in ents]
+            aristas = _en_cadena(ents, formas, estado) if self.p["cadena"] else formas
             c.forma = _sf().extender(c.forma, aristas, ctx.evaluar(self.p["distancia"]), tipo=self.p["tipo"],
                                      alineacion=self.p["alineacion"])
 
@@ -442,9 +469,9 @@ class OpCoser(_OpSuperficie):
 
 class OpDescoser(_OpSuperficie):
     """SUPERFICIE › Descoser [SFC-UNSTITCH]: cada cara de los `cuerpos` pasa a ser un cuerpo de superficie; con
-    `caras` solo esas se separan y lo demás queda cosido en el cuerpo."""
+    `caras` solo esas se separan y lo demás queda cosido. `cadena` (Chain Selection) suma las caras tangentes."""
     TIPO, ETIQUETA, ICONO = "descoser", "Descoser", "⧈"
-    PARAMS = {"cuerpos": [], "caras": []}
+    PARAMS = {"cuerpos": [], "caras": [], "cadena": False}
     REFS = ("caras",)
 
     def ejecutar(self, estado, ctx):
@@ -462,6 +489,8 @@ class OpDescoser(_OpSuperficie):
                 por_cuerpo.setdefault(e.cuerpo, []).append(e.forma)
         for cid, formas in por_cuerpo.items():
             c = estado.cuerpo(cid)
+            if self.p["cadena"]:
+                formas = caras_en_cadena(c.forma, formas)
             resto, sueltas = _sf().descoser_caras(c.forma, formas)
             if resto is None:
                 del estado.cuerpos[c.id]
@@ -502,11 +531,7 @@ class OpEngrosar(_OpSuperficie):
             raise ErrorOperacion("Elegí las caras o superficies a engrosar.")
         formas = [e.forma for e in ents]
         if self.p.get("cadena"):
-            from ..nucleo.solidos_modificar import caras_en_cadena
-            formas = [e.forma for e in ents if e.tipo != "cara"]
-            cuerpos = dict.fromkeys(e.cuerpo for e in ents if e.tipo == "cara")
-            for cid in cuerpos:
-                formas += caras_en_cadena(estado.cuerpo(cid).forma, [e.forma for e in ents if e.tipo == "cara" and e.cuerpo == cid])
+            formas = _caras_de_la_cadena(ents, estado)
         base = geo.compuesto(formas) if len(formas) > 1 else formas[0]
         forma = _sf().engrosar_superficie(base, ctx.evaluar(self.p["espesor"]),
                                           simetrica=self.p["direccion"] == "simetrica", tipo=self.p["tipo"])

@@ -172,6 +172,31 @@ def test_create_lip_groove(modo, volumen):
     assert "firma" in s.paso(r["feature"]["id"]).p["aristas"][0]
 
 
+def test_create_lip_groove_rechaza_arista_sin_largo_o_de_costura():
+    """B-158: en una esfera, la arista de costura y las degeneradas no sirven para un labio: error claro, sin caerse."""
+    s = api.Sesion()
+    cid = _ok(s, "create_sphere", radius=10)["bodies_created"][0]["id"]
+    aristas = _ok(s, "find_edges", body=cid)["edges"]
+    sin_largo = next(a["id"] for a in aristas if not a.get("length"))
+    costura = next(a["id"] for a in aristas if a.get("length"))
+    r = api.llamar(s, "create_lip_groove", {"edges": [sin_largo]})
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and "largo" in r["mensaje"], r
+    r = api.llamar(s, "create_lip_groove", {"edges": [costura]})
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and "costura" in r["mensaje"], r
+
+
+def test_create_lip_groove_labio_y_acanalado_sobre_dos_cuerpos():
+    """PLA-4: el tipo combinado deja el labio en un cuerpo y la ranura del labio (con holgura) en el otro, en un paso."""
+    s = api.Sesion()
+    abajo = _ok(s, "create_box", length=40, width=20, height=20, anchor="corner")["bodies_created"][0]["id"]
+    arriba = _ok(s, "create_box", length=40, width=20, height=20, z=20, anchor="corner")["bodies_created"][0]["id"]
+    r = _ok(s, "create_lip_groove", body=abajo, groove_body=arriba, edges="|X and >Z and <Y", lip_type="lip_and_groove",
+            width=1, height=1.5, clearance=0.1, direction="Z")
+    _tipo(s, r, "labio")
+    _volumen(s, abajo, 40 * 20 * 20 + 40 * 1 * 1.5)             # labio de 40 × 1 × 1,5 sobre el borde
+    _volumen(s, arriba, 40 * 20 * 20 - 40 * 1.1 * 1.6)          # ranura del labio agrandada por la holgura
+
+
 def test_create_boundary_fill():
     s = api.Sesion()
     cid = _caja(s)

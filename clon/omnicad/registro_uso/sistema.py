@@ -22,3 +22,19 @@ def ram_total():
     except (OSError, ValueError, AttributeError):
         pass
     return None
+
+
+def disco_libre(ruta):
+    """Bytes libres en el volumen de `ruta`, o None si el SO no los informa."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            libre = ctypes.c_ulonglong()
+            if not ctypes.windll.kernel32.GetDiskFreeSpaceExW(str(ruta), ctypes.byref(libre), None, None):
+                return None
+            return libre.value
+        st = os.statvfs(str(ruta))
+        return st.f_bavail * st.f_frsize
+    except (OSError, ValueError, AttributeError):
+        return None

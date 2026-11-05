@@ -41,8 +41,9 @@ def test_lineas_privadas_ordenadas_y_visibles_en_vivo(tmp_path):
     assert es[0]["tipo"] == "sesion_inicio"
     assert es[0]["datos"]["proyecto"] == "pieza.omnicad"
     texto = "".join(p.read_text(encoding="utf-8") for p in r.archivos)
-    assert "SECRETO" not in texto and "privado" not in texto and "CHAT_" not in texto
-    assert es[1]["datos"]["valores"]["texto"] == {"longitud": 7}
+    assert "CHAT_SECRETO" not in texto and "privado" not in texto   # texto libre y rutas: longitudes
+    assert "SECRETO" not in texto                                   # no es una opción de lista fija
+    assert es[1]["datos"]["valores"]["texto"] == {"longitud": 7}      # texto libre: solo su largo
 
 
 def test_rotacion_tope_y_retencion(tmp_path):
@@ -87,3 +88,85 @@ def test_entorno_sin_qt():
     import sys
     codigo = "import sys; from omnicad.registro_uso.sistema import ram_total; assert ram_total() > 0; assert not any(k.startswith('PySide') for k in sys.modules)"
     subprocess.run([sys.executable, "-c", codigo], check=True)
+
+
+@pytest.mark.parametrize("via", ["atajo", "boton", "menu"])
+@pytest.mark.parametrize("origen", ["clave", "objeto"])
+def test_b187_las_herramientas_del_boceto_se_registran_con_nombre(tmp_path, via, origen):
+    from types import SimpleNamespace
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QAction, QMouseEvent
+    from PySide6.QtWidgets import QApplication, QMenu, QToolButton
+    from omnicad.ui.registro_uso import RegistroVentana
+    app = QApplication.instance() or QApplication([])
+    accion = QAction("Texto en ruta")
+    esperado = "sk_texto"
+    if origen == "clave":
+        accion.setProperty("clave", esperado)
+        accion.setObjectName("otra_cosa")
+    elif origen == "objeto":
+        accion.setObjectName(esperado)
+    observador = SimpleNamespace(ventana=SimpleNamespace(visor=object()), _ultima_accion="")
+    ru.configurar(True)
+    menu, boton = QMenu(), QToolButton()
+    try:
+        if via == "atajo":
+            obj, evento, tipo = accion, QEvent(QEvent.Shortcut), "atajo"
+        elif via == "boton":
+            boton.setDefaultAction(accion)
+            obj, tipo = boton, "boton_cinta"
+            evento = QMouseEvent(QEvent.MouseButtonPress, QPointF(8, 8), QPointF(8, 8),
+                                  Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+        else:
+            menu.addAction(accion)
+            menu.setActiveAction(accion)
+            menu.setObjectName("menu_boceto")
+            obj, evento, tipo = menu, QEvent(QEvent.MouseButtonRelease), "menu_item"
+        assert RegistroVentana.eventFilter(observador, obj, evento) is False
+        ru.activo.cola.join()
+        datos = [e["datos"] for e in eventos(tmp_path / "registro") if e["tipo"] == tipo]
+        assert datos and datos[-1]["accion"] == esperado
+        assert observador._ultima_accion == esperado
+    finally:
+        menu.close()
+        boton.close()
+        app.processEvents()
+
+
+def test_b187_todas_las_acciones_reales_del_boceto_tienen_su_clave(tmp_path):
+    from types import SimpleNamespace
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication, QMainWindow
+    from omnicad.ui.modo_boceto import ModoBoceto
+    from omnicad.ui.registro_uso import RegistroVentana
+    app = QApplication.instance() or QApplication([])
+    ventana = QMainWindow()
+    modo = ModoBoceto(ventana)
+    observador = SimpleNamespace(ventana=ventana, _ultima_accion="")
+    ru.configurar(True)
+    try:
+        for clave, accion in modo.acciones.items():
+            assert accion.property("clave") == clave
+            RegistroVentana.eventFilter(observador, accion, QEvent(QEvent.Shortcut))
+        ru.activo.cola.join()
+        assert [e["datos"]["accion"] for e in eventos(tmp_path / "registro") if e["tipo"] == "atajo"] == list(modo.acciones)
+    finally:
+        ventana.close()
+        ventana.deleteLater()
+        app.processEvents()
+
+
+def test_sano_oculta_tokens_pero_no_rutas_de_codigo_y_abrevia_rutas_de_windows():
+    assert ru._sano("Fallo en omnicad/ui/editor_boceto.py cuando x = 5") == "Fallo en omnicad/ui/editor_boceto.py cuando x = 5"
+    assert ru._sano("Fallo en omnicad/ui/editor_3d.py con x = 5") == "Fallo en omnicad/ui/editor_3d.py con x = 5"
+    assert ru._sano("clave sk-ABCdef1234567890xyz_abc fin") == "clave [token] fin"
+    assert ru._sano(r"D:\Clientes\Juan\pieza.step no existe") == "~/pieza.step no existe"
+
+
+def test_boton_de_la_cinta_sin_clave_ni_nombre_no_usa_su_texto():
+    from PySide6.QtGui import QAction
+    from PySide6.QtWidgets import QApplication
+    from omnicad.ui.registro_uso import _nombre_accion
+    QApplication.instance() or QApplication([])
+    accion = QAction("Algo que escribió la persona")
+    assert _nombre_accion(accion, con_texto=False) == "" and _nombre_accion(accion) == "Algo que escribió la persona"

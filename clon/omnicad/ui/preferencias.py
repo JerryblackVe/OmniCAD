@@ -13,10 +13,12 @@ import threading
 from PySide6.QtCore import QRectF, QSettings, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QPainter, QPen
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QFrame, QHBoxLayout,
-                               QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSlider,
-                               QSpinBox, QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+                               QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSlider, QSpinBox,
+                               QMessageBox, QStackedWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
+                               QWidget)
 
 from .. import NOMBRE_APP
+from .. import registro_uso
 from ..asistente import config as config_asistente
 from ..asistente import modelos
 from ..asistente.proveedores.agente_local import AGENTES, AgenteLocal, ejecutable
@@ -58,6 +60,15 @@ DEFECTOS = {
     "general/puente_agentes": False,         # MCP en vivo: apagado por defecto (ui/puente.py)
     "general/puente_codigo": False,          # execute_code en vivo (corre Python en la interfaz)
     "general/registro_uso": False,           # telemetría exclusivamente local y optativa
+    # Registro de uso (Preferencias › Registro de uso): los rangos y valores de fábrica viven en
+    # omnicad/registro_uso/__init__.py (FABRICA y RANGOS), que es la misma fuente que ve la API.
+    "registro/detallado": False,
+    "registro/captura_error": False,
+    "registro/retencion_dias": 7,
+    "registro/tope_total_mb": 150,
+    "registro/tope_capturas_mb": 50,
+    "registro/disco_libre_min_gb": 2.0,
+    "registro/memoria_cada_s": 30,
     "navegador/no_desplegar_al_seleccionar": False,   # al elegir en el visor, no abrir ni desplazar el navegador
     # Asistente IA (ui/asistente.py), definidas en asistente/config.py › DEFECTOS. La clave de API NO se guarda acá.
     **{f"asistente/{k}": v for k, v in config_asistente.DEFECTOS.items()},
@@ -237,6 +248,51 @@ class CampoInstrucciones(QPlainTextEdit):
         return self.toPlainText().strip()
 
 
+class CampoNumero(QLineEdit):
+    """Número con unidad para las opciones del registro: acepta «15», «2,5», «150 MB». Fuera de rango el campo
+    se pone en rojo y el tooltip dice el rango; el diálogo nunca guarda un valor inválido."""
+
+    def __init__(self, opcion, actual, unidad=""):
+        super().__init__(str(actual))
+        self.opcion, self.unidad = opcion, unidad
+        self.setObjectName("numero_" + opcion)
+        self.setFixedWidth(110)
+        self.setPlaceholderText(f"{registro_uso.RANGOS[opcion][0]} a {registro_uso.RANGOS[opcion][1]} {unidad}".strip())
+        self.textChanged.connect(self._validar)
+        self._validar()
+
+    def valor(self):
+        return registro_uso.parse_numero(self.text())
+
+    def valido(self):
+        v = self.valor()
+        minimo, maximo = registro_uso.RANGOS[self.opcion]
+        if v is None or not minimo <= v <= maximo:
+            return False
+        if isinstance(registro_uso.FABRICA[self.opcion], int) and v != int(v):
+            return False
+        if self.opcion != "tope_capturas_mb":
+            return True
+        total = self.parentWidget().findChild(CampoNumero, "numero_tope_total_mb") if self.parentWidget() else None
+        return not (total and total.valor() is not None and v > total.valor())   # las capturas no pasan del total
+
+    def _validar(self):
+        minimo, maximo = registro_uso.RANGOS[self.opcion]
+        unidad = f" {self.unidad}" if self.unidad else ""
+        v = self.valor()
+        en_rango = v is not None and minimo <= v <= maximo
+        if self.valido():
+            self.setStyleSheet("")
+            self.setToolTip(f"Entre {minimo} y {maximo}{unidad}.")
+            if self.opcion == "tope_capturas_mb":
+                self.setToolTip(self.toolTip() + " Nunca mayor que el tope total.")
+        else:
+            self.setStyleSheet(f"background: {temas.color('campo_error')};")
+            motivo = ("no puede pasar del tope total." if en_rango and self.opcion == "tope_capturas_mb" else
+                      f"tiene que estar entre {minimo} y {maximo}{unidad}.")
+            self.setToolTip(f" Fuera de rango: {motivo}")
+
+
 def _combo(opciones, actual):
     c = QComboBox()
     for clave, texto in opciones:
@@ -412,7 +468,6 @@ PAGINAS = [
         ("general/info_herramientas", "Mostrar información de herramientas", "check", None),
         ("navegador/no_desplegar_al_seleccionar", "Al seleccionar en el visor, no desplegar el navegador "
          "(solo resaltar en amarillo dónde está)", "check", None),
-        ("general/registro_uso", "Registro de uso local (14 días, hasta 50 MB; no se envía nada)", "check", None),
         ("general/raton", "Configuración del ratón (encuadre, zoom, órbita)", "combo",
          [("omnicad", "OmniCAD (izquierdo: órbita)"), ("fusion", "Fusion (Mayús + medio: órbita)"),
           ("tinkercad", "Tinkercad (derecho: órbita)")]),
@@ -429,6 +484,19 @@ PAGINAS = [
         ("general/puente_agentes", "Permitir que agentes IA controlen OmniCAD (MCP en vivo)", "check", None),
         ("general/puente_codigo", "Permitir también execute_code en vivo (congela la app mientras corre: como mucho 100 s)",
          "check", None),
+    ]),
+    ("registro", None, "Registro de uso", "Todo lo que guarda el registro LOCAL de uso (nada sale de esta PC). "
+     "Los cambios rigen al aceptar, sin reiniciar", [
+        ("general/registro_uso", "Registro de uso", "check", None),
+        ("registro/detallado", "Registro detallado (para reportar bugs)", "check", None),
+        ("registro/captura_error", "Captura del visor en cada error", "check", None),
+        ("registro/retencion_dias", "Días que se guarda", "numero", (1, 90, "días")),
+        ("registro/tope_total_mb", "Tope total", "numero", (20, 2000, "MB")),
+        ("registro/tope_capturas_mb", "Tope de capturas", "numero", (0, 500, "MB")),
+        ("registro/disco_libre_min_gb", "Espacio libre mínimo en disco", "numero", (0.5, 50, "GB")),
+        ("registro/memoria_cada_s", "Cadencia de la medición de memoria", "numero", (5, 300, "s")),
+        (None, "Estado", "estado_registro", None),
+        (None, "Carpeta del registro", "acciones_registro", None),
     ]),
     ("apariencia", None, "Apariencia", "Perfil, fuente, tamaño y color del texto de la interfaz y de las cotas del "
      "boceto. Se aplica al instante, sin reiniciar; un color solo se aplica si se lee bien sobre el tema", [
@@ -525,6 +593,27 @@ PAGINAS = [
 
 
 CLAVES_GRAFICOS = tuple(clave for pagina, *_r, filas in PAGINAS if pagina == "graficos" for clave, *_x in filas if clave)
+# Preferencias › Registro de uso: tooltip corto y una línea de ayuda bajo la fila, para todas las opciones.
+AYUDAS_REGISTRO = {
+    "general/registro_uso": ("Guarda en esta PC qué comandos usaste y por qué falló algo. No se envía nada.",
+                             "Encendido: se anotan comandos, clics, errores y medidas en la carpeta del registro."),
+    "registro/detallado": ("Para reportar bugs: guarda también el texto libre de los diálogos.",
+                           "Apagado, el texto que escribís se guarda solo como su longitud."),
+    "registro/captura_error": ("Captura chica del visor (640 px de ancho) cada vez que aparece un error.",
+                               "Tiene efecto solo con el registro detallado encendido."),
+    "registro/retencion_dias": ("Días que se guarda la información antes de borrarse lo más viejo.",
+                                 "1 a 90 días; de fábrica 7."),
+    "registro/tope_total_mb": ("Cuánto puede ocupar todo el registro en el disco.",
+                                "20 a 2000 MB; de fábrica 150. Si lo achicás por debajo de lo que ocupa, se poda ya."),
+    "registro/tope_capturas_mb": ("Cuánto pueden ocupar las capturas dentro del tope total.",
+                                   "0 a 500 MB; de fábrica 50; nunca mayor que el tope total."),
+    "registro/disco_libre_min_gb": ("Con menos espacio libre que este, el registro se pausa y avisa.",
+                                     "0,5 a 50 GB; de fábrica 2."),
+    "registro/memoria_cada_s": ("Cada cuántos segundos se mide la memoria (también se mide si salta un 5 %).",
+                                 "5 a 300 segundos; de fábrica 30."),
+}
+_OPCION_REGISTRO = {clave: opcion for opcion, clave in registro_uso.CLAVES_PREFS.items()}
+CLAVES_REGISTRO = tuple(["general/registro_uso"] + list(registro_uso.CLAVES_PREFS.values()))
 # Apariencia al instante (como Gráficos): cada cambio se escribe y se ve; Cancelar vuelve a lo que había.
 CLAVES_APARIENCIA = ("interfaz/perfil", "interfaz/fuente", "interfaz/tamano_pct", "interfaz/color_texto",
                      "interfaz/color_texto_tenue", "interfaz/color_acento", "boceto/fuente_cotas",
@@ -660,6 +749,23 @@ class DialogoPreferencias(QDialog):
         for clave, etiqueta, tipo, opciones in filas:
             actual = self.prefs[clave] if clave else None
             texto = _EtiquetaFila(etiqueta)           # F3: con letra grande la etiqueta crece sin cortarse
+            if tipo == "numero":
+                _minimo, _maximo, unidad = opciones
+                c = CampoNumero(_OPCION_REGISTRO[clave], actual, unidad)
+                c.textChanged.connect(self._cambio)
+                form.addRow(texto, c)
+                self._ayuda(clave, c, form)
+                self.controles[clave] = c
+                continue
+            if tipo == "estado_registro":
+                self.estado_registro = QLabel(wordWrap=True, objectName="estado_registro_uso")
+                temas.poner_rol(self.estado_registro, "tenue")
+                self._refrescar_estado_registro()
+                form.addRow(self.estado_registro)
+                continue
+            if tipo == "acciones_registro":
+                form.addRow(texto, self._acciones_registro())
+                continue
             if tipo == "version_motor":
                 form.addRow(texto, QLabel(motor.version_omnikernel() or "No instalado"))
                 continue
@@ -794,7 +900,73 @@ class DialogoPreferencias(QDialog):
             form.addRow(texto, c)
             if clave:
                 self.controles[clave] = c
+                self._ayuda(clave, c, form)
         return w
+
+    # ------------------------------------------------------------ registro de uso
+    def _ayuda(self, clave, control, form):
+        """Tooltip corto, qué es (F1) y una línea de ayuda debajo de la fila."""
+        texto = AYUDAS_REGISTRO.get(clave)
+        if texto is None:
+            return
+        control.setToolTip(texto[0])
+        control.setWhatsThis(f"<b>{texto[0]}</b><br>{texto[1]}")
+        etiqueta = QLabel(texto[1], wordWrap=True)
+        temas.poner_rol(etiqueta, "tenue")
+        form.addRow(etiqueta)
+
+    def _acciones_registro(self):
+        caja = QVBoxLayout()
+        botones = {}
+        for texto, tooltip, nombre_ranura in (
+                ("Abrir carpeta", "Muestra en el explorador la carpeta donde queda el registro.",
+                 "_abrir_carpeta_registro"),
+                ("Borrar registros viejos ahora", "Poda lo más viejo y lo que pase los topes. La sesión que estás "
+                 "usando no se borra.", "_podar_ahora"),
+                ("Volver a valores de fábrica", "Deja todas las opciones del registro en sus valores de fábrica; "
+                 "se guardan al aceptar.", "_registro_fabrica")):
+            b = QPushButton(texto)
+            b.setToolTip(tooltip)
+            b.clicked.connect(getattr(self, nombre_ranura))
+            botones[texto] = b
+            caja.addWidget(b, 0, Qt.AlignLeft)
+        (self.b_abrir_carpeta_registro, self.b_podar_registro,
+         self.b_fabrica_registro) = (botones["Abrir carpeta"], botones["Borrar registros viejos ahora"],
+                                     botones["Volver a valores de fábrica"])
+        return caja
+
+    def _estado_registro(self):
+        """La línea de estado, en criollo: espacio usado, sesiones, pausa por disco y carpeta."""
+        from ..registro_uso import almacen
+        usados, sesiones = registro_uso.inventario()
+        pausado = (registro_uso.activo.estado()["paused_low_disk"] if registro_uso.activo
+                   else almacen.pausado_por_disco())
+        return (f"Ocupa {usados / 2**20:.1f} MB · {sesiones} {'sesión' if sesiones == 1 else 'sesiones'} · "
+                + ("pausado: queda poco espacio libre en disco" if pausado else "sin pausar")
+                + f" · {registro_uso.carpeta()}")
+
+    def _refrescar_estado_registro(self):
+        if getattr(self, "estado_registro", None) is not None:
+            self.estado_registro.setText(self._estado_registro())
+
+    def _abrir_carpeta_registro(self):
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        registro_uso.carpeta().mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(registro_uso.carpeta())))
+
+    def _podar_ahora(self):
+        respuesta = QMessageBox.question(self, "Borrar registros viejos",
+                                         "Se borra lo más viejo del registro (y lo que pase los topes). "
+                                         "La sesión en curso no se toca. ¿Continuar?")
+        if respuesta == QMessageBox.Yes:
+            registro_uso.podar()
+            self._refrescar_estado_registro()
+
+    def _registro_fabrica(self):
+        for clave in CLAVES_REGISTRO:
+            self._poner(clave, DEFECTOS[clave])
+        self._cambio()
 
     # ------------------------------------------------------------ apariencia
     def _acciones_apariencia(self):
@@ -1074,11 +1246,20 @@ class DialogoPreferencias(QDialog):
             indice, descripcion = item.data(0, Qt.UserRole)
         self.pila.setCurrentIndex(indice)
         self.cabecera.setText(descripcion)
+        if item is self._items.get("registro"):
+            self._refrescar_estado_registro()
         if item is self._items["asistente"]:
             self._pedir_modelos()
 
+    def _hay_invalidos(self):
+        """Un campo numérico fuera de rango bloquea guardar: Aplicar queda apagado."""
+        return any(isinstance(c, CampoNumero) and not c.valido() for c in self.controles.values())
+
     def _cambio(self, *_):
-        self.b_aplicar.setEnabled(True)
+        for c in self.controles.values():
+            if isinstance(c, CampoNumero):
+                c._validar()                       # una regla cruzada (capturas ≤ total) se ve al instante
+        self.b_aplicar.setEnabled(not self._hay_invalidos())
 
     # ------------------------------------------------------------ gráficos (al instante)
     def _poner(self, clave, valor):
@@ -1089,6 +1270,8 @@ class DialogoPreferencias(QDialog):
                 c.addItem(str(valor), valor)
                 i = c.count() - 1
             c.setCurrentIndex(i)
+        elif isinstance(c, CampoNumero):
+            c.setText(str(valor))
         elif isinstance(c, (QSlider, QSpinBox, QDoubleSpinBox)):
             c.setValue(valor)
         elif isinstance(c, CampoColor):
@@ -1139,6 +1322,8 @@ class DialogoPreferencias(QDialog):
                 salida[clave] = c.currentData()
             elif isinstance(c, QCheckBox):
                 salida[clave] = c.isChecked()
+            elif isinstance(c, CampoNumero):
+                salida[clave] = c.valor()
             elif isinstance(c, QLineEdit):
                 salida[clave] = c.text().strip()
             elif isinstance(c, CampoInstrucciones):
@@ -1156,6 +1341,8 @@ class DialogoPreferencias(QDialog):
                 c.setCurrentIndex(max(c.findData(valor), 0))
             elif isinstance(c, QCheckBox):
                 c.setChecked(bool(valor))
+            elif isinstance(c, CampoNumero):
+                c.setText(str(valor))
             elif isinstance(c, QLineEdit):
                 c.setText(valor)
             elif isinstance(c, CampoInstrucciones):
@@ -1168,14 +1355,20 @@ class DialogoPreferencias(QDialog):
                 c.setValue(int(valor))
 
     def _aplicar(self):
+        if self._hay_invalidos():
+            QMessageBox.warning(self, "Valores fuera de rango",
+                                "Hay campos en rojo: el rango está en su aviso. No se guardó nada.")
+            return False
         for clave, valor in self.valores().items():
             self.prefs[clave] = valor
         self.b_aplicar.setEnabled(False)
         self.aplicado.emit()
+        self._refrescar_estado_registro()
+        return True
 
     def _aceptar(self):
-        self._aplicar()
-        self.accept()
+        if self._aplicar():
+            self.accept()
 
     def _restablecer(self):
         self.prefs.restablecer()

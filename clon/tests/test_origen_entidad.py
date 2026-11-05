@@ -151,6 +151,62 @@ def test_herramienta_get_entity_origin(caja_agujero_empalme):
     assert not malo["ok"] and malo["error_kind"] == "AMBIGUOUS_REFERENCE"
 
 
+@pytest.mark.parametrize("movimiento", [
+    {"translate": [100, -50, 30]},
+    {"rotate": [0, 90, 0]},
+    {"translate": [100, -50, 30], "rotate": [25, 40, 70]},
+])
+def test_b186_mover_conserva_el_creador_de_caras_y_aristas(movimiento):
+    s = api.Sesion()
+    llamar(s, "create_box", length=40, width=30, height=20)
+    llamar(s, "move_body", body="op1.c1", **movimiento)
+    for herramienta, clave in (("find_faces", "faces"), ("find_edges", "edges")):
+        for entidad in llamar(s, herramienta)[clave]:
+            r = llamar(s, "get_entity_origin", entity=entidad["id"])
+            assert r["known"]
+            assert r["created_by"]["id"] == "op1"
+            assert [p["id"] for p in r["modified_by"]] == ["op2"]
+
+
+def test_b186_mover_sigue_hasta_las_modificaciones_anteriores(caja_agujero_empalme):
+    s = caja_agujero_empalme
+    llamar(s, "move_body", body="op1.c1", translate=[100, 0, 0])
+    r = llamar(s, "get_entity_origin", entity=">Z")
+    assert r["created_by"]["id"] == "op1"
+    assert [p["id"] for p in r["modified_by"]] == ["op2", "op3", "op4"]
+
+
+def test_b186_mover_sin_desplazamiento_y_crear_copia():
+    s = api.Sesion()
+    llamar(s, "create_box", length=40, width=30, height=20)
+    llamar(s, "move_body", body="op1.c1", translate=[0, 0, 0])
+    r = llamar(s, "get_entity_origin", entity=">Z")
+    assert r["created_by"]["id"] == "op1" and r["modified_by"] == []
+    llamar(s, "move_body", body="op1.c1", translate=[100, 0, 0], copy=True)
+    r = llamar(s, "get_entity_origin", entity=">Z", body="op3.c1")
+    assert r["created_by"]["id"] == "op3" and r["modified_by"] == []
+    r = llamar(s, "get_entity_origin", entity=">Z", body="op1.c1")
+    assert r["created_by"]["id"] == "op1" and r["modified_by"] == []
+
+
+def test_b186_un_solido_step_da_como_origen_la_importacion(tmp_path):
+    fuente = api.Sesion()
+    llamar(fuente, "create_box", length=40, width=30, height=20)
+    ruta = str(tmp_path / "caja.step")
+    llamar(fuente, "export", path=ruta)
+    s = api.Sesion()
+    llamar(s, "insert_file", path=ruta)
+    r = llamar(s, "get_entity_origin", entity=">Z")
+    assert r["known"]
+    assert r["created_by"]["id"] == "op1"
+    assert r["created_by"]["type"] == "importar_step"
+    assert r["modified_by"] == []
+    llamar(s, "move_body", body=r["body"]["id"], translate=[100, 0, 0])
+    r = llamar(s, "get_entity_origin", entity=">Z")
+    assert r["created_by"]["id"] == "op1"
+    assert [p["id"] for p in r["modified_by"]] == ["op2"]
+
+
 @pytest.mark.parametrize("clave", list(temas.INCLUIDOS))
 def test_amarillo_con_texto_legible_en_todos_los_temas(clave):
     """El texto oscuro sobre el amarillo se lee, y el amarillo (o su borde) se despega del fondo del tema."""
