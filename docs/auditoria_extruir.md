@@ -2,14 +2,14 @@
 
 Pedido de Gerardo (2026-11-05): auditar la herramienta Extruir y todas sus opciones, comparar con Fusion 360 y buscar
 bugs, mal funcionamiento y faltantes en SÓLIDO, SUPERFICIE, PLÁSTICO, CHAPA y el resto de los espacios donde exista.
-Lo ejecuta una sesión aparte (Opus 5, esfuerzo alto). El prompt ya se cerró (2026-11-05).
+Lo ejecuta una sesión aparte (Opus 5, esfuerzo alto). El prompt de la auditoría ya se cerró; al pie está el de los arreglos (OpenCode).
 
 ## Resultado (2026-11-05)
 
 Extruir anda bien en lo común: 50 casos por la API y 18 comprobaciones en la ventana dan los números de la cuenta a
 mano. Se encontraron **2 bugs** (B-205, B-206), **5 faltantes** (H-81 a H-85) y **2 mejoras** (H-86, H-87). No se
 tocó código de la app. Evidencia: `evidencias/ui_2026-11-05/` (`sondas_extruir.py` y sus salidas `.txt`, el registro
-`pieza_extruir_espacios.json` y las capturas).
+`extruir_espacios.json` y las capturas).
 
 ### Referencia de Fusion por espacio
 
@@ -60,13 +60,13 @@ Leyenda: ✔ igual que Fusion · ✘ falla o falta · ≈ parecido. «CLI» es e
 | Objetos para cortar (vacío = automático) | ✔ | ✔ `target` | ≈ | Fusion congela los cuerpos al crear y ofrece Auto-select al editar; OmniCAD queda automático si no se eligen |
 | Asas: distancia, lado 2, conicidad 1 y 2, desfase de inicio | ✔ | — | ✔ | `ui/comandos/solido.py:79-113`; probadas en la pieza `asas` |
 | Previa en rojo al cortar y paso solo a Cortar | ✔ | — | ✔ | `ui/comandos/solido.py:127-190` |
-| Enter, Esc, reabrir el paso, deshacer, rehacer, guardar y reabrir | ✔ | ✔ | ✔ | pieza `pieza_extruir_espacios`; `guardar_y_reabrir` da igual |
+| Enter, Esc, reabrir el paso, deshacer, rehacer, guardar y reabrir | ✔ | ✔ | ✔ | pieza `extruir_espacios`; `guardar_y_reabrir` da igual |
 | Panel en 1024×640 y 800×520 (delgada + dos lados + cortar + desfase) | ✔ | — | ✔ | Aceptar dentro de la ventana en los dos tamaños |
 | PLÁSTICO: espesor de la regla en la delgada | ≈ | ≈ | Mejora | H-87: anda solo escribiendo `PlasticThickness` |
 | SUPERFICIE: curva abierta, perfil cerrado, cara plana | ✘ perfil y cara | ✔ | Falta en la ventana | H-85; API: 200 / 600 / 600 mm² |
 | SUPERFICIE: Simétrica, Dos lados, Al objeto, Todo, Conicidad | ✔ | ✔ | ✔ | 400 / 300 mm², 700 mm² hasta z=35, conicidad 10° = 203,09 mm² |
 | SUPERFICIE: Al objeto con Extend / Chain Faces | ✘ | ✘ | Falta | H-82 |
-| Botón Extruir en SÓLIDO, SUPERFICIE, PLÁSTICO; ninguno en CHAPA | ✔ | — | ✔ | pieza `pieza_extruir_espacios` |
+| Botón Extruir en SÓLIDO, SUPERFICIE, PLÁSTICO; ninguno en CHAPA | ✔ | — | ✔ | pieza `extruir_espacios` |
 
 ### Bugs y cómo reproducirlos
 
@@ -135,14 +135,14 @@ Not checked: the T-Spline path (does not exist), Press/Pull on a profile, `recon
 
 ### Salida de `ponytail-review`
 
-What this change does: Agrega una pieza de prueba de ventana para Extruir (`pieza_extruir_espacios.py`, sumada a
+What this change does: Agrega una pieza de prueba de ventana para Extruir (`extruir_espacios.py`, sumada a
 `todo.py`), el informe de auditoría con matriz y salida de `ponytail-audit`, y anota los hallazgos en el seguimiento
 (B-205, B-206, H-81 a H-87), la lista nocturna §3o y el Registro. No toca código de la app. Carga asumida: una persona
 corriendo la prueba en la PC.
 
 **Should fix**
 
-1. **Los dos clics de SUPERFICIE pueden seguir en ✗ aunque se arregle H-85** (`scripts/prueba_ui/pieza_extruir_espacios.py:70-84`)
+1. **Los dos clics de SUPERFICIE pueden seguir en ✗ aunque se arregle H-85** (`scripts/prueba_ui/extruir_espacios.py:70-84`)
    - **What this is:** La prueba hace clic en el centro del rectángulo «Rect» (20×10) y en la tapa de la caja con el filtro de Extruir superficie.
    - **Problem:** Con toda la escena en pantalla, el borde del rectángulo y la arista de la caja quedan a pocos píxeles del clic, y el visor prefiere curvas y aristas dentro de 9 px (TXT-9). Aunque el filtro sume perfiles y caras, el clic puede devolver el borde y la prueba sigue roja.
    - **Fix:** Crear en la pieza un rectángulo y una caja grandes (200 mm) y hacer clic en su centro, lejos de todo borde.
@@ -157,8 +157,61 @@ clics eligen perfil y cara: OK). Re-corrida en minimizada: 18 comprobaciones, 4 
 ### Lo que no se pudo verificar (⚠)
 
 - ⚠ Fusion real no se abrió: B-206 y la conicidad de la delgada abierta (H-84) se apoyan solo en la ayuda.
-- ⚠ Las capturas `evidencias/ui_2026-11-05/capturas/extruir_*.png` no se miraron a ojo: el filtro de contexto de esta
-  sesión no deja leer imágenes. El botón Aceptar se comprobó por geometría.
+- Capturas `evidencias/ui_2026-11-05/capturas/extruir_*.png` miradas por el coordinador: Aceptar entra en 1024×640 y
+  800×520; las cajas de valor de la distancia y del desfase se pisan (B-207).
 - ⚠ La pieza nueva corrió solo en `--ventana minimizada`; no corrieron la suite completa ni la prueba de humo (las
   corre el coordinador).
 - ⚠ Pulsar/Tirar sobre un perfil y Objetos para cortar «# cuerpos» al editar no se probaron.
+
+## Prompt para el agente
+
+Entregado el 2026-11-05 para OpenCode. Modelo sugerido: GPT Sol en OpenCode, esfuerzo alto (variante high). Modelo: `openai/gpt-6.1-sol --variant high`. Antes de usarlo, revisar que los IDs y las rutas sigan vigentes.
+
+```text
+ANTES DE TODO, invocá con la herramienta skill: /fable-method y /ponytail al empezar; /plan-then-do, /tool-calling-guard y /verify-before-commit durante el trabajo; /ponytail-review antes de cerrar. Si alguna skill no existe en OpenCode, seguí igual estas reglas: el cambio más chico que arregla el bug entero, sin dependencias nuevas, sin tocar nada que no se pidió, cada línea necesaria; leé el archivo real antes de editar; nunca digas "listo" sin pegar la salida real de la verificación.
+
+PROYECTO
+OmniCAD: CAD 3D paramétrico en Python (PySide6 + OpenCascade vía cadquery-ocp) que copia Fusion 360. Repo D:\PROGRAMA, código en clon/. Leé AGENTS.md (reglas, recetas A, B y C) antes de tocar código. Todo en español: código, comentarios, mensajes. Unidades: mm y grados.
+
+TAREA: arreglar los bugs abiertos de Extruir, de a uno y en este orden. Cerrá y verificá cada uno antes de pasar al siguiente. El detalle de cada bug está en docs/seguimiento/bugs.md (fila y sección «Detalle») y en docs/auditoria_extruir.md.
+
+FUENTE DE VERDAD DE FUSION: antes de cada arreglo leé la ayuda oficial con
+  clon/.venv/Scripts/python.exe scripts/fusion_docs.py buscar extrude -s fusion-model
+  clon/.venv/Scripts/python.exe scripts/fusion_docs.py ver "Extrude reference" -s fusion-model
+(y -s fusion-patch para superficie). No programes de memoria.
+
+1. B-205 · «Dos lados» con distancia negativa da 2000 mm³ sin conicidad y 3000 mm³ con conicidad.
+   Dónde: timeline/operaciones.py:1229 (_extrusion_basica usa la distancia con signo) y nucleo/solidos_crear.py:595 (extruir_avanzado usa abs). geo.exigir_distancias_extrusion deja pasar el negativo.
+   Qué hacer: una sola regla para los dos caminos, decidida con la ayuda de Fusion (rechazar con un error claro en español, o tomar el valor absoluto). Que ventana, MCP (extrude, create_surface_extrude) y CLI den lo mismo.
+   Prueba: rectángulo 20×10, lado 1 = 10, lado 2 = −5: mismo volumen (o mismo error) con y sin conicidad.
+
+2. B-207 · Extruir «Dos lados» con Inicio › Desfase: las cajas de valor de la distancia («10 mm») y del desfase («0 mm») quedan una encima de la otra junto a la flecha.
+   Dónde: asas de Extruir en clon/omnicad/ui/comandos/solido.py:81-112 (flechas desfase_inicio y distancia) y la ubicación de las cajas de valor en el código de asas/manipuladores que use.
+   Qué hacer: que cada caja quede junto a su asa sin solaparse, como en Fusion. Evidencia: evidencias/ui_2026-11-05/capturas/extruir_1024x640.png.
+   Prueba: un test que compruebe que los rectángulos de las cajas no se intersecan con Inicio=Desfase y Dirección=Dos lados.
+
+3. B-206 · Inicio › Objeto sobre un plano o cara inclinados se ignora: el cuerpo arranca en el plano del boceto.
+   Dónde: timeline/operaciones.py:1161 y timeline/ops_superficie.py:131 (solo se usa la distancia del origen sobre la normal).
+   Qué hacer (como Fusion: la base de la extrusión queda sobre la cara o el plano elegido): proyectá el perfil sobre el plano o la cara plana de inicio a lo largo de la dirección de extrusión y extruí esa cara desde ahí. Hacelo en sólido y en superficie. Si el objeto es una cara curva y no sale en esta tanda, dá un error claro en español en lugar de ignorarlo en silencio, y dejá la fila en «Parcial» con lo que falta.
+   Prueba: plano a 30° que pasa por el boceto: la cara de inicio del cuerpo queda sobre ese plano (vértices sobre el plano); con un objeto paralelo da lo mismo que hoy.
+
+4. B-197 · Extruir con conicidad: tronco de pirámide y cono da 2185,18 contra 2020,41 esperado (tests/test_solidos_crear.py::test_extrusion_con_inclinacion_tronco_de_piramide_y_cono; falla igual en HEAD).
+   Qué hacer: calculá a mano el volumen del tronco con la definición de conicidad de la ayuda de Fusion (ángulo respecto de la dirección de extrusión) y decidí si está mal el test o la extrusión. Arreglá el que está mal y escribí en el informe la cuenta.
+
+Fuera de esta tanda: B-195 (logo ZAI.svg), que es de perfiles (nucleo/perfiles.py) y necesita un archivo del Escritorio.
+
+REGLAS
+- Toda opción o cambio de comportamiento que toque el MCP/CLI va con su herramienta en clon/omnicad/api/ (receta C) y regenerás docs/agentes/herramientas.md con: omnicad tools --markdown --output docs/agentes/herramientas.md
+- Errores del núcleo: raise geo.ErrorGeometria("mensaje"). Nunca modificar self.p al ejecutar una operación.
+- Comandos pesados de a uno con turno, desde clon/:
+  .venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe -m pytest tests/<archivo>.py -q
+  NO corras la suite completa ni la prueba de humo (las corre el coordinador de noche).
+- Verificación por cada bug: .venv/Scripts/python.exe -m ruff check . ; los tests del área (test_solidos_crear.py, test_extrusion*.py, test_comandos*.py, test_api*.py que toquen extrude, test_seguimiento.py, test_doc_agentes.py) ; y la pieza de ventana en minimizada:
+  .venv/Scripts/python.exe ../scripts/prueba_ui/todo.py extruir_espacios --ventana minimizada
+- Al resolver un bug: borrá su fila de docs/seguimiento/bugs.md, su sección «Detalle» y su ID en las tablas de docs/seguimiento/README.md; sumá una viñeta en «## Registro» de PROJECT_LOG.md con el ID y el test que lo cubre. Si queda a medias: fila en «Parcial» con lo que falta.
+- No commitees ni hagas push. Tocá solo lo necesario para estos bugs. Nada de archivos sueltos: evidencias en evidencias/ui_2026-11-05/.
+- Si te quedás sin cupo o algo te frena, pará y escribí el informe con lo que llegaste a hacer.
+
+INFORME FINAL (obligatorio)
+Escribilo en docs/auditoria_extruir.md, en una sección nueva «## Informe de arreglos (OpenCode)» ARRIBA de «## Prompt para el agente» (no borres el prompt). Por cada bug: estado (Resuelto / Parcial / No), qué cambiaste (archivo:línea), qué dice la ayuda de Fusion, el test que lo cubre y su salida real. Después: salida real de ruff, de los tests y de la pieza extruir_espacios; la salida completa de /ponytail-review; y lo que no pudiste verificar, con ⚠.
+```

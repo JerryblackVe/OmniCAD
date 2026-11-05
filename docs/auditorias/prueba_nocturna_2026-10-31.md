@@ -370,8 +370,12 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 
 ## 3o. Auditoría de Extruir en todos los espacios (2026-11-05)
 
-- Pieza nueva `scripts/prueba_ui/pieza_extruir_espacios.py` (en `PIEZAS` de `todo.py`): botón Extruir en SÓLIDO, SUPERFICIE y PLÁSTICO (y que CHAPA no lo tenga), clic en perfil y en cara plana con el filtro de Extruir superficie, «Dos lados» con el lado 2 tecleado en −5 mm, Enter, reabrir, deshacer, Inicio › Objeto inclinado y el panel más largo en 1024×640 y 800×520. Corrió en minimizada: 18 comprobaciones (una es el control de que los clics sirven), 4 ✗ esperadas (B-205, B-206 y H-85, dos veces): deben seguir en ✗ hasta que se arreglen.
+- Pieza nueva `scripts/prueba_ui/extruir_espacios.py` (en `PIEZAS` de `todo.py`): botón Extruir en SÓLIDO, SUPERFICIE y PLÁSTICO (y que CHAPA no lo tenga), clic en perfil y en cara plana con el filtro de Extruir superficie, «Dos lados» con el lado 2 tecleado en −5 mm, Enter, reabrir, deshacer, Inicio › Objeto inclinado y el panel más largo en 1024×640 y 800×520. Corrió en minimizada: 18 comprobaciones (una es el control de que los clics sirven), 4 ✗ esperadas (B-205, B-206 y H-85, dos veces): deben seguir en ✗ hasta que se arreglen.
 - Falta: correrla en `--ventana visible`, y en el cierre integrado junto con `solido_crear`, `teclear` y `asas`. Capturas `extruir_*.png` miradas por el coordinador: Aceptar entra en 1024×640 y 800×520; las cajas de valor se pisan (B-207).
+
+## 3p. Tarea nueva: arreglos de Extruir en OpenCode con Sol (B-205, B-206, B-207, B-197)
+
+Prompt en `docs/auditoria_extruir.md` (2026-11-05). Tocará `timeline/operaciones.py`, `timeline/ops_superficie.py`, `nucleo/solidos_crear.py` y las asas de `ui/comandos/solido.py`. Cuando termine: suite completa y prueba de humo, todas las piezas que extruyen (`solido_crear`, `teclear`, `asas`, `herramientas_solido`, `superficie`, `extruir_espacios`) y `extruir_espacios` con `--ventana visible`, mirando las capturas.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 
