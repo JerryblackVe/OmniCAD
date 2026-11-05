@@ -2,12 +2,14 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 18: Abierto 12 · Parcial 5 · Bloqueado 1 (recontado 2026-11-05).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 20: Abierto 14 · Parcial 5 · Bloqueado 1 (recontado 2026-11-05).
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-205 | Extruir «Dos lados» con una distancia negativa da dos resultados distintos según haya o no conicidad | Abierto | Baja | Rectángulo 20×10, lado 1 = 10 mm, lado 2 = −5 mm: sin conicidad sale 2000 mm³ (el lado 2 se pierde en silencio); con 0,001° de conicidad sale 3000 mm³. Pasa en la ventana, la API y la CLI. Decidir con Fusion si se rechaza o se toma el valor absoluto, y que los dos caminos hagan lo mismo. | timeline/operaciones.py:1229 (`_extrusion_basica` usa la distancia con signo) contra nucleo/solidos_crear.py:595 (`abs`); docs/auditoria_extruir.md | 2026-11-05 |
+| B-206 | Extruir con Inicio › Objeto en un plano o cara inclinados arranca en el plano del boceto, sin aviso | Abierto | Media | Plano a 30° que pasa por el boceto: la extrusión sale igual que sin Inicio (caja z 0..10), en sólido y en superficie. Solo se toma la distancia del origen del plano. Fusion arranca la extrusión sobre la cara o el plano elegido. | timeline/operaciones.py:1161 y timeline/ops_superficie.py:131; docs/auditoria_extruir.md | 2026-11-05 |
 | B-197 | Extruir con inclinación: el tronco de pirámide y cono da otro volumen que el esperado | Abierto | Media | El test da 2185,18 contra 2020,41 esperado; falla igual en HEAD ca87869 (comprobado en un worktree limpio el 2026-11-05). Falta ver si el error es del test o de la extrusión cónica comparando con Fusion. | tests/test_solidos_crear.py::test_extrusion_con_inclinacion_tronco_de_piramide_y_cono | 2026-11-05 |
 | B-196 | Barrer y el sector del labio pierden la autointersección sin avisar | Abierto | Media | `barrer` (dos sitios) y `_sector_labio` no pasan por el aviso de autointersección que ya tienen Tubo y Patrón geométrico (B-167, B-168). Hallado en la revisión del 2026-11-05. | nucleo/solidos_crear.py | 2026-11-05 |
 | B-195 | Extruir el logo ZAI.svg entero falla: dos regiones salen con contorno autointersectado | Abierto | Alta | Pasa también sin transformar y sin Rust: el arreglo planar da 277 regiones y 2 son inválidas (8,35 mm² con 36 curvas y 0,0027 mm²; `BRepAlgoAPI_Check` falla y `ShapeAnalysis_Wire.CheckSelfIntersection` da verdadero en un alambre). La extrusión de `object:<id>` termina en «La operación 'unir' dio un resultado imposible». Revisar qué cruce casi tangente no se corta en `nucleo/perfiles.py` (`_detectar`) y validar las caras antes de entregarlas. | clon/omnicad/nucleo/perfiles.py (`_detectar`); evidencia local `evidencias/boceto_organizar_2026-11-05/zai_caras.py` y `zai_sonda.py` (necesita el `ZAI.svg` del Escritorio) | 2026-11-05 |
@@ -58,6 +60,24 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
+
+### B-205 · Extruir «Dos lados» con distancia negativa: el resultado depende de la conicidad
+
+- **Qué:** OmniCAD 2026-11-05, sin ventana. Boceto XY con rectángulo 0,0–20,10; `extrude` con `direction="two_sides"`, `distance=10`, `distance2=-5` (y lo mismo con `distance=-10`, `distance2=5`). En la ventana: Extruir, Dirección «Dos lados», teclear 10 mm y −5 mm.
+- **Esperado:** un error claro, o el valor absoluto (20·10·15 = 3000 mm³), pero lo mismo siempre.
+- **Obtenido:** sin conicidad, 2000 mm³ y caja z 0..10: el lado 2 va hacia el mismo lado que el 1 y se pierde en la unión. Con `taper_angle=0.001`, 3000 mm³ y caja z −5..10. Sin aviso en ningún caso.
+- **Cómo reproducir:** `evidencias/ui_2026-11-05/sondas_extruir.py dos_lados` y la pieza `pieza_extruir_espacios`.
+- **Causa probable (leída):** `_extrusion_basica` (timeline/operaciones.py:1229) extruye `-n` por `d2` con signo; `extruir_avanzado` (nucleo/solidos_crear.py:595) usa `abs(distancia2)`. `geo.exigir_distancias_extrusion` deja pasar el negativo.
+- **Prueba propuesta:** el mismo «Dos lados» con −5 da el mismo volumen (o el mismo error) con y sin conicidad.
+
+### B-206 · Inicio › Objeto en un plano no paralelo se ignora
+
+- **Qué:** plano de construcción a 30° sobre X (`create_construction_plane type=angle`), boceto en XY con rectángulo 20×10, `extrude start=object start_object=<plano>`, distancia 10. Igual con `create_surface_extrude` y en la ventana.
+- **Esperado (Fusion):** «Object: Starts extrusion from a face or plane that you select» (ayuda `Extrude reference`): la base de la extrusión queda sobre el plano inclinado.
+- **Obtenido:** caja z 0..10, idéntica a Inicio › Plano de perfil, sin aviso.
+- **Causa probable (leída):** `desfase = (plano_objeto.origen − plano_perfil.origen) · n` (timeline/operaciones.py:1161; en superficie, timeline/ops_superficie.py:131): solo una distancia sobre la normal; la orientación del objeto no se usa.
+- **Esquive:** usar Desfase con la distancia a mano (solo sirve para planos paralelos).
+- **Prueba propuesta:** con el plano a 30°, la cara de inicio del cuerpo está sobre ese plano; con un objeto paralelo sigue dando lo de hoy.
 
 ### B-188 · Reproducción exacta pendiente de REMOVEDOR
 
