@@ -381,6 +381,9 @@ Prompt en `docs/auditoria_extruir.md` (2026-11-05). Tocará `timeline/operacione
 
 Solo documenta, sin tocar la app. Si deja la pieza `revolucion_barrido_solevacion`, correrla en el cierre integrado y con `--ventana visible`.
 
+- Pieza nueva `scripts/prueba_ui/revolucion_barrido_solevacion.py` (en `PIEZAS` de `todo.py`): los botones de Revolución, Barrido y Solevación en SÓLIDO, SUPERFICIE y PLÁSTICO (y ninguno en CHAPA), Revolución «Dos lados» con −45° tecleado, Enter, reabrir, deshacer y rehacer, «A objeto» con Dirección, «Proyectar eje», las opciones y el volumen del Barrido con carril, Distancia tecleada («0,5», «0», «1,5», vacío), Solevación de dos cuadros y la fila de una punta, y el Barrido con carril en 1024×640 y 800×520. Corrió en minimizada: 40 comprobaciones, 10 ✗ esperadas (B-208, B-209, B-210, B-211, H-88 dos veces, H-89, H-90 y H-92 dos veces): deben seguir en ✗ hasta que se arreglen.
+- Falta: correrla en `--ventana visible` y en el cierre integrado junto con `solido_crear`, `superficie` y `asas`. Las sondas sin ventana (`evidencias/ui_2026-11-05/sondas_rbs.py`, 78 casos) se pueden repetir para comprobar los arreglos.
+
 ## 3r. Tarea nueva: auditoría de Nervio, Red y Repujado (2026-11-05)
 
 Segunda tanda, va después de la 3q. Si deja la pieza `nervio_red_repujado`, correrla en el cierre integrado y con `--ventana visible`.

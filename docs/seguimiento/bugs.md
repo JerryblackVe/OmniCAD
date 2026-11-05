@@ -8,6 +8,11 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-208 | Barrido con carril guía deforma el perfil aunque el carril sea paralelo a la ruta (sólido y superficie) | Abierto | Alta | Cuadrado 4×4 barrido 50 mm con un carril paralelo y escala «Ninguna» da 784,03 mm³ en vez de 800 (caja ±2,31 en vez de ±2); la superficie da 797,57 mm² en vez de 800. Con «Escalar» y el carril de 2 a 6 da 3364,59 contra 3466,67. Los dos extremos quedan bien; el medio se tuerce. También en la ventana (pieza `revolucion_barrido_solevacion`). | nucleo/solidos_crear.py:819 | 2026-11-05 |
+| B-209 | Barrido sólido con escala «Estirar» hace «Escalar» sin avisar | Abierto | Media | `sweep rail_scale="stretch"` da 3364,59 mm³, lo mismo que `scale`; debería estirar en una sola dirección. La superficie sí estira (400 mm² exactos). La ventana del sólido ni ofrece Estirar. | nucleo/solidos_crear.py:877 | 2026-11-05 |
+| B-210 | Revolución «Dos lados» con un ángulo negativo da otra forma en sólido que en superficie | Abierto | Baja | Lado 1 = 90°, lado 2 = −45°: el sólido toma el signo y el lado 2 vuelve sobre el lado 1 (1570,80 mm³, como sin lado 2, sin aviso); la superficie toma el valor absoluto (235,62 mm², igual que +45°). Falta una sola regla para los dos. | timeline/operaciones.py:1305 (`OpRevolucion.ejecutar`) y nucleo/superficies.py:475 | 2026-11-05 |
+| B-211 | Barrido: la Distancia mayor que 1 se acepta y se recorta a 1 sin avisar | Abierto | Baja | En la ventana «1,5» deja la vista previa en verde y `edit_feature` con `distancia="2"` sale ok: el cuerpo es el de 1 (628,32 mm³). La API solo rechaza números sueltos (`path_distance=1.5`). Fusion: Range 0.00-1.00. | nucleo/solidos_crear.py:256 | 2026-11-05 |
+| B-212 | Solevación sólida con un carril recto falla: «el kernel produjo un sólido inválido» | Abierto | Media | Cuadros 10×10 en z 0 y 20×20 en z 10, carril recto del medio de un lado al medio del otro: el sólido da OPERATION_FAILED; la misma solevación de superficie sale bien (670,82 mm², el área lateral exacta del tronco). Fusion la hace. | nucleo/solidos_crear.py:1324 | 2026-11-05 |
 | B-205 | Extruir «Dos lados» con una distancia negativa da dos resultados distintos según haya o no conicidad | Abierto | Baja | Rectángulo 20×10, lado 1 = 10 mm, lado 2 = −5 mm: sin conicidad sale 2000 mm³ (el lado 2 se pierde en silencio); con 0,001° de conicidad sale 3000 mm³. Pasa en la ventana, la API y la CLI. Decidir con Fusion si se rechaza o se toma el valor absoluto, y que los dos caminos hagan lo mismo. | timeline/operaciones.py:1229 (`_extrusion_basica` usa la distancia con signo) contra nucleo/solidos_crear.py:595 (`abs`); docs/auditoria_extruir.md | 2026-11-05 |
 | B-207 | Extruir «Dos lados» con Inicio › Desfase: las cajas de valor «10 mm» (distancia) y «0 mm» (desfase) quedan una encima de la otra junto a la flecha | Abierto | Baja | En 1024×640 se pisan y la de abajo no se lee ni se puede clicar. Separarlas como en Fusion: cada caja junto a su asa, sin solaparse. | evidencias/ui_2026-11-05/capturas/extruir_1024x640.png (pieza `extruir_espacios`, Extrusión delgada en PLÁSTICO) | 2026-11-05 |
 | B-206 | Extruir con Inicio › Objeto en un plano o cara inclinados arranca en el plano del boceto, sin aviso | Abierto | Media | Plano a 30° que pasa por el boceto: la extrusión sale igual que sin Inicio (caja z 0..10), en sólido y en superficie. Solo se toma la distancia del origen del plano. Fusion arranca la extrusión sobre la cara o el plano elegido. | timeline/operaciones.py:1161 y timeline/ops_superficie.py:131; docs/auditoria_extruir.md | 2026-11-05 |
@@ -61,6 +66,50 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
+
+### B-208 · Barrido con carril guía deforma el perfil
+
+- **Qué:** boceto en YZ con un cuadrado 4×4 centrado en el origen, ruta = línea de X 0 a 50 en XY, carril = línea en XZ de (0, 2) a (50, 2); `sweep rail_sketch=C rail_scale="none"` (y `"scale"`). Igual con `create_surface_sweep guide_rail=… profile_scaling="none"`. En la ventana: Barrido › Ruta + Rail guía, Escala Ninguna, Enter.
+- **Esperado (Fusion):** «None: do not scale profile along sweep; just use guide rail as a orientation guide» (ayuda `Sweep reference`): con el carril paralelo, un prisma de 800 mm³ (superficie: 800 mm²). Con «Escalar» y el carril de 2 a 6, el tronco de pirámide de 50/3·(16+144+48) = 3466,67 mm³.
+- **Obtenido:** 784,03 mm³ y caja y ±2,31 (sólido), 797,57 mm² (superficie); con Escalar, 3364,59 mm³ y caja y ±6,44. Las caras de los extremos están bien (área 16 y 144, normal X): el perfil gira en el medio de la ruta.
+- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py` (salida en `sonda_carril.txt`), o la pieza `revolucion_barrido_solevacion` («Barrido con carril paralelo y escala Ninguna»).
+- **Entorno:** OmniCAD 0.2.0, Windows 11, motor OCC. Sin ventana y en la ventana minimizada.
+- **Causa probable (leída):** el carril se pasa como espina auxiliar con `SetMode(carril, True, BRepFill_NoContact)` en `nucleo/solidos_crear.py:819`; no se comprobó qué triedro arma OCC ahí.
+- **Esquive:** sin carril (escala por conicidad) o con Solevación entre perfiles.
+- **Prueba propuesta:** carril paralelo con Ninguna = 800 mm³ y con Escalar de 2 a 6 = 3466,67 mm³ (sólido y superficie).
+
+### B-209 · Barrido sólido con «Estirar» hace «Escalar»
+
+- **Qué:** el mismo barrido de B-208 con el carril de (0, 2) a (50, 6): `sweep rail_scale="stretch"` y `rail_scale="scale"`.
+- **Esperado (Fusion):** «Stretch: use path - guide rail distance to scale profile in X» (ayuda `Sweep reference`): el perfil crece solo hacia el carril, 4·(4+12)/2·50 = 1600 mm³ (la superficie da sus 400 mm² exactos).
+- **Obtenido:** 3364,59 mm³ en los dos modos, sin aviso. El docstring de `barrer` dice que «estirar» no existe en OCC y se hace como «escalar» (`nucleo/solidos_crear.py:877`), pero `superficies._estirar` (`nucleo/superficies.py:617`) ya lo resuelve.
+- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py`.
+- **Esquive:** ninguno en sólido; superficie y después Engrosar o Coser.
+- **Prueba propuesta:** estirar ≠ escalar y da 1600 mm³ con el carril de 2 a 6; la ventana ofrece Estirar.
+
+### B-210 · Revolución «Dos lados» con ángulo negativo: sólido y superficie distintos
+
+- **Qué:** rectángulo x 10..20, y 0..10 en XY, eje Y; `revolve direction=two_sides angle=90 angle2=-45` y `create_surface_revolve` con la línea x=10 y los mismos ángulos. En la ventana: Dos lados, teclear «90 deg» y «-45 deg», Enter.
+- **Esperado:** el mismo criterio en los dos (Fusion no dice qué hace con un ángulo negativo en Dos lados: ⚠ sin abrir Fusion).
+- **Obtenido:** sólido 2356,19 mm³ (el lado 2 se pierde en la unión, sin aviso); superficie 235,62 mm² (toma −45 como +45, `abs` en `nucleo/superficies.py:475`).
+- **Reproducir:** `evidencias/ui_2026-11-05/sondas_rbs.py rev_dos_lados_90_menos45 srev_dos_lados_neg`.
+- **Prueba propuesta:** lado 2 negativo da lo mismo (o el mismo error) en sólido y en superficie.
+
+### B-211 · Barrido: Distancia mayor que 1 se recorta sin avisar
+
+- **Qué:** círculo r 2 en YZ y ruta de 50 en X; `sweep` y después `edit_feature feature=op3 params={"distancia": "2"}`; en la ventana, teclear «1,5» en Distancia.
+- **Esperado (Fusion):** «Value is measured in percentage of the total distance. Range: 0.00-1.00» (ayuda `Sweep reference`): un error claro, como «0».
+- **Obtenido:** `ok`, el cuerpo de la ruta entera (628,32 mm³) y la previa en verde; `_recortar_alambre` hace `min(fraccion, 1.0)` (`nucleo/solidos_crear.py:256`). La API rechaza solo `path_distance` numérico (`api/herramientas_solido.py:452`).
+- **Prueba propuesta:** distancia 1,5 da error en la ventana, en `edit_feature` y en la API.
+
+### B-212 · Solevación sólida con un carril recto da un sólido inválido
+
+- **Qué:** boceto XY con cuadro −5..5, plano a z 10 con cuadro −10..10, boceto XZ con la línea de (5, 0) a (10, 10) (carril que toca el medio del lado x=5 abajo y del lado x=10 arriba); `loft sketches=["S1","S2"] rails=[{"sketch":"C","curve":<id>}]`.
+- **Esperado (Fusion):** «Rails must intersect each section» (ayuda `Loft reference`): este carril los toca, y el resultado es el mismo tronco de 2333,33 mm³ que sin carril.
+- **Obtenido:** «Solevado: el kernel produjo un sólido inválido con estos valores». `create_surface_loft` con los mismos perfiles y carril sale bien (670,82 mm²).
+- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril_solevacion.py` (salida en `sonda_carril_solevacion.txt`).
+- **Causa probable:** no se leyó a fondo; el carril se pasa a `MakePipeShell` con `BRepFill_ContactOnBorder` (`nucleo/solidos_crear.py:1324`) y la superficie usa otro camino.
+- **Prueba propuesta:** este caso da 2333,33 mm³ y `geo.es_valida`.
 
 ### B-205 · Extruir «Dos lados» con distancia negativa: el resultado depende de la conicidad
 

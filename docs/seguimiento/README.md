@@ -86,7 +86,6 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 |---|---|
 | Organización del boceto | [plan_boceto_organizar.md](../plan_boceto_organizar.md) |
 | Arreglos de Extruir (B-205, B-206, B-207, B-197) | [auditoria_extruir.md](../auditoria_extruir.md) |
-| Auditoría de Revolución, Barrido y Solevación | [auditoria_revolucion_barrido_solevacion.md](../auditoria_revolucion_barrido_solevacion.md) |
 | Auditoría de Nervio, Red y Repujado | [auditoria_nervio_red_repujado.md](../auditoria_nervio_red_repujado.md) |
 | Caza automática de errores | [plan_caza_errores.md](../plan_caza_errores.md) |
 | INSPECCIONAR | [brechas_inspeccionar.md](../brechas_inspeccionar.md) |

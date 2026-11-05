@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 132: Abierto 66 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-05).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 135: Abierto 69 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-05).
 
 ## Pendientes generales
 
@@ -44,12 +44,15 @@ Abierto 16 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 6 · Parcial 1.
+Abierto 9 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-86 | Extruir simétrico: la «Medida» por defecto cambia según por dónde se use | Abierto | Baja | Con la misma distancia, el panel (sólido y superficie) arranca en Media longitud y `extrude` / `create_surface_extrude` en Longitud total: 10 mm da 4000 mm³ en la ventana y 2000 en la API. Elegir el defecto de Fusion y usarlo en los dos lados. | ui/comandos/solido.py:42 y ui/comandos/superficie.py:51 contra api/herramientas_solido.py:189 y api/herramientas_superficie.py:80 | 2026-11-05 |
 | H-87 | PLÁSTICO › Extruir delgada no toma el espesor de la regla asignada | Abierto | Baja | Fusion usa el espesor de la regla en Extruir. En OmniCAD la pared arranca en 1 mm; anda si se escribe `PlasticThickness`, que solo existe si la regla se asignó con `create_parameters`. Nervio, Red, Vaciado y Engrosar tampoco la leen. | timeline/operaciones.py:1117 (`espesor` 1 mm); timeline/ops_solido.py:1534 (solo la guarda); ayuda `Plastic rules` | 2026-11-05 |
+| H-92 | Revolución › «Proyectar eje»: otro nombre y otro valor por defecto según por dónde se use | Abierto | Baja | La ventana del sólido dice «Eje de proyecto» y arranca marcada; la de superficie dice «Proyectar eje» y arranca sin marcar; `revolve` y `create_surface_revolve` arrancan en `false`. Fusion la llama Project Axis y la ayuda la muestra marcada («Uncheck to keep the axis in its original location»; ⚠ sin abrir Fusion). Además `create_surface_revolve` arranca con `chain=true` y su paso con `cadena` falso. | ui/comandos/solido.py:308; ui/comandos/superficie.py:106 | 2026-11-05 |
+| H-93 | Barrido: aviso de «Selección de cadena» en cada barrido por curvas de boceto | Abierto | Baja | La casilla viene marcada en la ventana y cada barrido normal por un boceto avisa «La selección de cadena solo suma aristas de cuerpos». En Fusion la cadena también junta curvas de boceto tangentes. Basta no avisar cuando la ruta son curvas de boceto (ya son una cadena), o encadenarlas. | timeline/ops_solido.py:149 | 2026-11-05 |
+| H-94 | El aviso flotante de abajo a la derecha tapa el Aceptar del panel y los campos en ventana chica | Abierto | Baja | El aviso «1 advertencia(s)» del barrido anterior queda abierto al pasar a otro comando y se dibuja encima del panel: en 1900×1000 tapa la mitad de Aceptar y Cancelar de Solevación; en 800×520 tapa Distancia y Escala del perfil del Barrido. Fusion lo muestra sin tapar el diálogo. Capturas en evidencias/ui_2026-11-05/capturas (solevacion_punta y barrido_800x520). | ui/avisos.py:3 | 2026-11-05 |
 | H-75 | Un cuerpo negro se ve plano en el visor: arriba y costados del mismo negro, y una letra negra sobre una placa negra desaparece | Abierto | Media | El visor ilumina con luces fijas (difuso × color, brillo chico); con color 0 solo queda el brillo especular en ángulos justos. Fusion ilumina con el entorno y el negro brillante refleja. Probar un reflejo de entorno simple o un mínimo de luz en el visor, y compararlo con Fusion. Visto en el video de Gerardo del 2026-11-05 (docs/brechas_aspecto.md). | clon/omnicad/ui/visor3d.py (LUZ_AMBIENTE, LUZ_BRILLO, GL_SPECULAR) | 2026-11-05 |
 | H-68 | Parámetros automáticos (a futuro): al dibujar un boceto y al aplicar una operación, crear solos los parámetros de sus cotas y valores, con una preferencia para activarlo o desactivarlo | Abierto | Media | Pedido de Gerardo con «Reportar problema» (registro de uso, sesión 2026-11-03_210154, seq 112). Hoy los parámetros se crean a mano. Copiar cómo nombra Fusion los parámetros de modelo (d1, d2…) antes de construir. | timeline/parametros.py | 2026-11-03 |
 | H-55 | Sustainability Insights: la región y el país no cambian el cálculo | Abierto | Media | Sumar la energía de fabricación por región con un factor de red eléctrica con fuente. Hoy el resultado lo avisa. | nucleo/sustentabilidad.py | 2026-11-01 |

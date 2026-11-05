@@ -30,6 +30,7 @@ PIEZAS = ["cinta_completa", "superficie", "superficie_fusion", "superficie_guias
 PIEZAS.append("objetos_vectoriales")
 PIEZAS.append("manipulacion_vectorial")
 PIEZAS.append("extruir_espacios")
+PIEZAS.append("revolucion_barrido_solevacion")
 # Piezas que necesitan el foco REAL de Windows (no solo el activo de Qt). Vacía hasta que la A/B demuestre alguna.
 PIEZAS_CON_FOCO_REAL = {"registro_uso"}      # el indicador y la sesión real no arrancan con la ventana transparente
 
