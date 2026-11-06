@@ -34,6 +34,22 @@ AL RESOLVER: borrá la fila de bugs.md, su «Detalle» y su ID en docs/seguimien
 INFORME: en docs/corrida_nocturna_2026-11-05.md, sección «## Informe Sol · BUG» arriba de «## Prompt para el agente»: estado, ayuda de Fusion, cambios (archivo:línea), gemelos, test rojo y verde, salida de ruff y de los grupos de tests, salida completa de /ponytail-review, ⚠ lo no verificado.
 ```
 
+## Uso y ahorro
+
+Plan de Claude (coordinador nocturno, `get_usage`):
+
+| Hora | 5 horas | Semanal |
+|---|---|---|
+| 22:46 (inicio) | 58 % (se renueva 23:20) | 20 % |
+
+Corridas (tokens de `opencode stats` / sesiones de Qoder; «sin dato» si no se pudo sacar):
+
+| Hora | Modelo | Tarea | Duración | Tokens entrada / salida | Resultado |
+|---|---|---|---|---|---|
+| 22:34 | Qwen en Qoder con `-m Qwen3.8-Flash` | tanda 1 | 6 s | 0 | no corrió: «not available, using auto» (el modelo se llama `qfmodel` en la config; se corre sin `-m`) |
+| 22:35 | Qwen en OpenCode Go | tanda 1 | 8 s | 0 | no corrió: sin suscripción a OpenCode Go |
+| 22:36 | GLM-5.3-Flash free (OpenCode) | tanda 1 | 2 min | 0 | ⚠ lanzado por error del coordinador (cambio de modelo no autorizado); límite gratis alcanzado, cortado sin tocar archivos |
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Opus 5, esfuerzo alto (coordinador nocturno; la geometría de Sol se revisa a fondo).
