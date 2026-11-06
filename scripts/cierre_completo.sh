@@ -1,9 +1,20 @@
 #!/bin/bash
-# Cierre completo (lo corre el coordinador o la sesión nocturna, nunca dos a la vez): ruff, suite en 10 tandas con -W error, piezas de ventana minimizadas, humo minimizado y, con la PC sin uso, piezas con foco real. Resumen en evidencias/cierre_<fecha>/resumen.txt.
-cd /d/PROGRAMA/clon || exit 1
-S="/d/PROGRAMA/evidencias/cierre_$(date +%F)"
+# Cierre completo (coordinador o sesión nocturna): suite paralela, piezas y humo minimizados, foco real con la PC sin uso.
+# --serie conserva la suite sin xdist hasta tener dos noches paralelas verdes. Resumen en evidencias/cierre_<fecha>/.
+PROCESOS=4
+PARALELO=(-n 4 --dist loadfile)
+MEMORIA=(env OMNICAD_TURNO_TOPE_MB=6500 OMNICAD_TURNO_MB=6500)
+case "$*" in
+  "") ;;
+  --serie) PROCESOS=1; PARALELO=(); MEMORIA=() ;;
+  *) echo "Uso: bash scripts/cierre_completo.sh [--serie]" >&2; exit 2 ;;
+esac
+RAIZ=$(cd "$(dirname "$0")/.." && pwd) || exit 1
+cd "$RAIZ/clon" || exit 1
+S="$RAIZ/evidencias/cierre_$(date +%F)"
 rm -rf "$S"; mkdir -p "$S"
 PY=.venv/Scripts/python.exe
+[ -x "$PY" ] || PY=/d/PROGRAMA/clon/.venv/Scripts/python.exe  # el worktree comparte el venv de main
 R="$S/resumen.txt"; inicio=$(date +%s)
 echo "inicio $(date '+%H:%M:%S') HEAD $(git rev-parse --short HEAD)" > "$R"
 espera_ocio() {
@@ -23,10 +34,16 @@ $PY -m ruff check . > "$S/ruff.txt" 2>&1
 echo "ruff exit=$? | $(tail -n 1 "$S/ruff.txt")" >> "$R"
 MOTOR=tests/test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado
 ls tests/test_*.py | sort > "$S/lista.txt"
-split -n l/10 -d "$S/lista.txt" "$S/parte_"
-for p in "$S"/parte_0*; do
+if [ -f "$RAIZ/evidencias/tiempos.json" ]; then
+  $PY ../scripts/tiempos.py "$S/lista.txt" --tandas "$S" --procesos "$PROCESOS" || exit 1
+else
+  split -n l/10 -d "$S/lista.txt" "$S/parte_" || exit 1
+fi
+for p in "$S"/parte_*; do
+  [ -s "$p" ] || continue
   n=$(basename "$p")
-  $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest $(tr '\n' ' ' < "$p") -q -W error -p no:cacheprovider --deselect "$MOTOR" --durations=0 --junitxml="$S/$n.xml" > "$S/$n.txt" 2>&1
+  mapfile -t archivos < "$p"
+  "${MEMORIA[@]}" $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest "${archivos[@]}" "${PARALELO[@]}" -q -W error -p no:cacheprovider --deselect "$MOTOR" --durations=0 --junitxml="$S/$n.xml" > "$S/$n.txt" 2>&1
   echo "$n exit=$? | $(tail -n 1 "$S/$n.txt")" >> "$R"
 done
 # Abre otra app entera dentro de pytest: junto a una tanda pasa el tope de memoria de turno.py (MemoryError, 2026-11-01).
