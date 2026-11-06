@@ -4,11 +4,56 @@ Pedido de Gerardo (2026-11-05, noche): que trabajen solos Qwen3.8-Flash (Qoder C
 tiene un tope de 5 horas y puede no terminar). Una sesión de Claude (Opus 5, esfuerzo alto) hace de coordinador
 nocturno: lanza, revisa, commitea lo verde y deja el informe para la mañana.
 
+## Informe de la mañana
+
+Sin rechazos. Se cumplieron las tres líneas. La PC se reinició a las 04:29: se cortaron la tanda 4 de Qwen y la revisión de C11, y las dos se retomaron.
+
+| Tanda o bug | Estado | Commit | Tests |
+|---|---|---|---|
+| Qwen 1: B-211, B-210 | Resueltos | `799d6f6` (main) | 632 + 303 |
+| Qwen 2: B-216, B-214 | Resueltos; nuevo B-219 | `7e95678` (main) | 1105 + 444 |
+| Qwen 3: B-217, B-209 | Resueltos; nuevo B-220 | `64a79f0` (main) | 1628 + 1095 |
+| Qwen 4: H-92, H-86 | Resueltos | `ba26cc0` (main) | 894 + 866 + 833 |
+| Qwen 5 | No se lanzó: pasa a hoy | — | — |
+| Sol: B-212, B-215, B-208 | Resueltos | `32a9c4c`, `9eeb89f`, `a8816d5` (rama Sol) | 938 + 601 · 685 + 522 · 605 + 331 |
+| Sol: B-213 | Parcial de noche; lo terminó otra sesión a las 07:49 | `95d19f2`, `4e89932` (rama Sol) | 1356 |
+| Sol: B-206 | Parcial: el círculo inclinado con conicidad sigue en xfail | `bd7e3e5` (rama Sol) | 2073 |
+| CodeBuddy: H-87, H-100, H-102, H-93, H-74, H-103, CF-11, H-71, H-85, H-104 | Resueltos | `64eb920` … `2518829` (rama CodeBuddy) | 270 a 2500 por tanda |
+| CodeBuddy C11: CF-8 | Parcial (dos opciones hechas) | `7687fab` (rama CodeBuddy) | 1595 |
+
+**Ramas sin fusionar.** `sol-geometria-nocturna` (6 commits) y `codebuddy-nocturna` (22 commits). Para fusionarlas:
+- resolver los conflictos de `nucleo/solidos_crear.py` (Sol B-213/B-215 contra Qwen B-216/B-214) y `timeline/ops_solido.py` (CodeBuddy contra `main`), más los docs de seguimiento;
+- correr la suite completa sobre lo fusionado;
+- tener el «sí» de Gerardo.
+
+**Cambian proyectos viejos:**
+- una «Distancia» del barrido mayor que 1 ahora da error (B-211);
+- la Red invertida puede cambiar de lado (B-216);
+- «Estirar» y «Cadena tangente» cambian la forma (B-209, B-217);
+- la cadena del barrido ahora encadena curvas de boceto (H-93).
+
+**Cierre completo:** Hecho a las 12:28 sobre `ba26cc0` (`evidencias/cierre_2026-11-06/`):
+- ruff limpio y suite verde (unos 9100 tests). `parte_04` pasó el tope de 900 s y se rehízo en dos mitades. Un test de la previa aislada falló por falta de memoria de OpenBLAS y pasó solo (20/20).
+- Humo OK. Piezas con foco real (`registro_uso`, `asistente`) sin ✗.
+- Piezas de ventana: 14 ✗ en 5 piezas. Una venía del defecto nuevo de H-86 (`solido_crear` suponía «media longitud»): se arregló la prueba. Las demás ya tienen fila (H-85, H-88, H-89, H-90, H-95, H-97, H-99; B-208 y B-215 resueltos en la rama de Sol). Nueva: B-221 (silueta roja de la copia suprimida en PAT-3).
+
+**Modelos de CodeBuddy:**
+- deepseek-v4.1-flash: la 1.ª tanda se cortó dos veces sin informe; después anduvo rápido y bien (C3, C5, C7, C9, C11; de 8 a 20 min).
+- hy3: muy bueno y rápido (de 8 a 28 min). Dos fallas, las dos arregladas en la revisión: normalizó finales de línea (C8) y regeneró la doc desde `main` (C2).
+
+**Uso y ahorro:**
+- Tokens: Sol usó 1,31 M de entrada (+40,0 M de caché) y 106 k de salida. A precios de Claude Opus 5 serían unos US$ 29 (entrada $5/M, salida $25/M, caché $0,50/M). Qwen y CodeBuddy no dejan registro de tokens.
+- Plan de Claude para coordinar: semanal del 20 % al 22 %.
+
+⚠ A las 22:36 el coordinador lanzó GLM-5.3-Flash por error, sin autorización. Se cortó sin tocar archivos.
+⚠ En el worktree de Sol hay cambios sin commitear de otra sesión (H-101, B-195). No se tocaron.
+⚠ Qwen terminó 3 de sus 4 tandas sin escribir el informe; el coordinador cerró la revisión.
+
 ## Plan
 
 | Línea | Quién | Dónde | Qué | Cómo se lanza |
 |---|---|---|---|---|
-| A | Qwen3.8-Flash en Qoder CLI | `main`, en `D:\PROGRAMA` | las 5 tandas de [arreglos_qwen.md](arreglos_qwen.md), en orden | `qodercli -p --dangerously-skip-permissions -m Qwen3.8-Flash -w D:/PROGRAMA "<texto>"` |
+| A | Qwen3.8-Flash en Qoder CLI | `main`, en `D:\PROGRAMA` | las 5 tandas de [arreglos_qwen.md](arreglos_qwen.md), en orden | `qodercli -p --dangerously-skip-permissions -w D:/PROGRAMA "<texto>"` (sin `-m`: el modelo es `qfmodel` en la config de Qoder) |
 | B | GPT-6.1 Sol en OpenCode | rama `sol-geometria-nocturna`, worktree `D:\PROGRAMA-sol` | bugs de geometría difícil, uno por corrida: B-212, B-215, B-213, B-208 | `opencode run -m openai/gpt-6.1-sol --variant high "<texto>"` con la carpeta del worktree |
 
 Las dos líneas corren en paralelo porque no comparten árbol de trabajo. Los comandos pesados de las dos pasan por
@@ -43,6 +88,7 @@ Plan de Claude (coordinador nocturno, `get_usage`):
 | 22:46 (inicio) | 58 % (se renueva 23:20) | 20 % |
 | 00:50 | 3 % (ventana nueva, se renueva 04:20) | 20 % |
 | 03:23 | 7 % | 21 % |
+| 09:45 (cierre) | 9 % (ventana nueva tras el reinicio) | 22 % |
 
 Corridas (tokens de `opencode stats` / sesiones de Qoder; «sin dato» si no se pudo sacar):
 
@@ -75,37 +121,3 @@ Corridas (tokens de `opencode stats` / sesiones de Qoder; «sin dato» si no se 
 | 00:41 | GPT-6.1 Sol (OpenCode) | B-208 | 14 min | 204 k (+6,2 M caché) / 15 k (+5 k razonamiento) | commit `a8816d5` (605 + 331 verdes) |
 | 01:01 | GPT-6.1 Sol (OpenCode) | B-206 (resto) | 10 min | 242 k (+6,3 M caché) / 13 k (+5 k razonamiento) | Parcial: rectángulo inclinado con conicidad anda, círculo no (xfail estricto); commit `bd7e3e5` (2073 verdes). Fin de la línea B: 6 corridas de 6 |
 
-## Prompt para el agente
-
-Entregado el 2026-11-05. Modelo sugerido: Opus 5, esfuerzo alto (coordinador nocturno; la geometría de Sol se revisa a fondo).
-
-```text
-ARRIBA DE TODO: invocá con la herramienta Skill fable-method y ponytail; usá plan-then-do, tool-calling-guard y verify-before-commit; ponytail-review sobre cada tanda o bug antes de commitear. Sos el COORDINADOR NOCTURNO de OmniCAD (repo D:\PROGRAMA). Gerardo duerme: no le preguntes nada; decidí con estas reglas y dejá todo escrito. Leé CLAUDE.md y AGENTS.md (las reglas del coordinador valen para vos esta noche).
-
-TU TRABAJO: correr las dos líneas de docs/corrida_nocturna_2026-11-05.md (sección «Plan»), revisar cada entrega como coordinador, commitear lo verde y dejar el informe de la mañana. Gerardo te autoriza a commitear esta noche lo que verifiques (git add explícito, archivo por archivo; nunca privado/, analisis/, evidencias/, docs/fusion_docs/, PROJECT_CONTEXT.md ni .agents/). Nunca push.
-
-PREPARAR
-1. git status limpio en main (si no, anotalo y seguí con lo tuyo). Creá el worktree de Sol: git worktree add D:/PROGRAMA-sol -b sol-geometria-nocturna main. Comprobá que los tests del worktree importan su propio código: desde D:/PROGRAMA-sol/clon, D:/PROGRAMA/clon/.venv/Scripts/python.exe -c "import omnicad; print(omnicad.__file__)" tiene que mostrar D:\PROGRAMA-sol. Si no, anotalo y corré la línea B igual, pero con PYTHONPATH apuntando al worktree.
-2. Carpeta de registros: evidencias/nocturna_2026-11-05/ (un .log por corrida).
-
-LÍNEA A (Qwen, main): para N = 1 a 5, en orden:
-- Lanzá en segundo plano (run_in_background), con tope de 90 minutos: timeout 5400 qodercli -p --dangerously-skip-permissions -m Qwen3.8-Flash -w D:/PROGRAMA "<Texto para Qwen con TANDA = N>" > evidencias/nocturna_2026-11-05/qwen_tanda_N.log 2>&1. Si acepta --reasoning-effort, usá el nivel más alto que liste --help.
-- Cuando termine, revisá como coordinador: git diff; el «## Informe tanda N» de docs/arreglos_qwen.md (gemelos listados, test rojo y verde, salida de /ponytail-review con sus arreglos); ruff check .; los «Tests obligatorios» de la tanda MÁS todos los archivos de clon/tests que usan lo tocado (grep -l con cada función cambiada), con ../scripts/turno.py en grupos que terminen en menos de 900 s (si uno se corta, partilo: un corte no es verde); si tocó la ventana, la pieza en --ventana minimizada y mirá la captura con Read.
-- Verde: commit con mensaje «Qwen tanda N: <IDs> (...)» y los IDs. Rojo: una sola vuelta de arreglo: timeout 3600 qodercli -p --dangerously-skip-permissions -c -m Qwen3.8-Flash -w D:/PROGRAMA "<qué falló, con la salida real>". Si sigue rojo: guardá git diff > evidencias/nocturna_2026-11-05/qwen_tanda_N_rechazada.patch, restaurá SOLO los archivos de esa tanda con git checkout -- <archivo> (nunca stash ni reset), anotá en el informe y seguí con la tanda siguiente.
-- Si Qoder no responde (log en 0 bytes, sin CPU ni archivos tocados durante 25 minutos), cortá ese proceso y seguí.
-
-LÍNEA B (Sol, worktree D:/PROGRAMA-sol), en paralelo con la A:
-- Para BUG = B-212, B-215, B-213, B-208, en ese orden, uno por corrida: en segundo plano, con la carpeta del worktree como directorio de trabajo, timeout 1500 opencode run -m openai/gpt-6.1-sol --variant high "<Texto para Sol con BUG = ...>" > D:/PROGRAMA/evidencias/nocturna_2026-11-05/sol_<BUG>.log 2>&1. Antes de cada corrida, copiá los archivos que va a tocar (cp a evidencias/nocturna_2026-11-05/respaldo_<BUG>/).
-- Si se corta por tiempo con avance real, una segunda corrida «seguí con BUG desde donde quedaste». Si el log dice que se acabó el cupo o el límite de uso, la línea B termina: anotalo.
-- Revisión igual que en la A, pero dentro del worktree (los tests desde D:/PROGRAMA-sol/clon con el Python de D:/PROGRAMA/clon/.venv). Verde: commit en la rama sol-geometria-nocturna. Rojo: una vuelta de arreglo con el mismo texto más lo que falló; si sigue rojo, guardá el parche, restaurá esos archivos y anotalo.
-- NO fusiones la rama en main.
-
-CIERRE (cuando terminen las dos líneas, o a las 07:00 si siguen corriendo)
-1. En main: el cierre completo con scripts/cierre_completo.sh (suite completa, prueba de humo y piezas; una sola corrida pesada a la vez). Lo rojo va a docs/seguimiento/ con su ID; lo verde se borra de docs/auditorias/prueba_nocturna_2026-10-31.md.
-2. PROJECT_LOG.md (Registro): una viñeta por tanda y bug con su commit, y si el modelo alcanzó.
-3. Refrescá la página de seguimiento (CLAUDE.md › «Página de seguimiento», pasos 1 a 3). Cuando cierres este prompt, borrá esta sección «## Prompt para el agente» y su fila de «Prompts guardados» en docs/seguimiento/README.md, y refrescá datasets/prompts.
-4. Informe de la mañana en este documento, sección «## Informe de la mañana» arriba de las demás: tabla corta (tanda o bug · estado · commit · tests), lo rechazado y por qué, cómo quedó la rama de Sol (commits, qué falta para fusionar), resultado del cierre completo, y ⚠ lo que no se pudo. Máximo una pantalla.
-5. Commit final de docs. Contexto: si llegás al 60 %, cerrá con el informe y pará (regla de CLAUDE.md).
-
-PROHIBIDO: push, git stash, git reset --hard, borrar ramas o worktrees ajenos, gastar en APIs pagas, tocar archivos fuera de D:\PROGRAMA y D:\PROGRAMA-sol.
-```

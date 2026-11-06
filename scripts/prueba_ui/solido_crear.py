@@ -25,7 +25,7 @@ eje = lambda i: (lambda: [A.hit_eje(v, i)])  # noqa: E731
 # Extruir ---------------------------------------------------------------------------------------------------------
 run("extruir", lambda: (
     C.caso(v, AR, "extruir", {"perfiles": per("Rect")}, {"distancia": "15 mm"}, esperado=20 * 10 * 15, foto="extruir"),
-    C.caso(v, AR, "extruir", {"perfiles": per("Rect")}, {"distancia": "15 mm", "direccion": "simetrica"}, esperado=6000, etiqueta="extruir simétrico (media longitud = 15 a cada lado)"),
+    C.caso(v, AR, "extruir", {"perfiles": per("Rect")}, {"distancia": "15 mm", "direccion": "simetrica", "medida": "mitad"}, esperado=6000, etiqueta="extruir simétrico (media longitud = 15 a cada lado)"),
     C.caso(v, AR, "extruir", {"perfiles": per("Rect")}, {"distancia": "15 mm", "direccion": "dos_lados", "distancia2": "5 mm"}, esperado=20 * 10 * 20,
            etiqueta="extruir dos lados 15+5"),
     C.caso(v, AR, "extruir", {"perfiles": per("Rect")}, {"distancia": "15 mm", "invertir": True}, esperado=3000, etiqueta="extruir invertido"),

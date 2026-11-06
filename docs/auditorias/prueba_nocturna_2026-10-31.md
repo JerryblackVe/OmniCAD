@@ -371,7 +371,7 @@ Pedido el 2026-11-02. Falta en el cierre: suite completa, humo y `solido_modific
 ## 3o. Auditoría de Extruir en todos los espacios (2026-11-05)
 
 - Pieza nueva `scripts/prueba_ui/extruir_espacios.py` (en `PIEZAS` de `todo.py`): botón Extruir en SÓLIDO, SUPERFICIE y PLÁSTICO (y que CHAPA no lo tenga), clic en perfil y en cara plana con el filtro de Extruir superficie, «Dos lados» con el lado 2 tecleado en −5 mm, Enter, reabrir, deshacer, Inicio › Objeto inclinado y el panel más largo en 1024×640 y 800×520. Corrió en minimizada: 18 comprobaciones (una es el control de que los clics sirven), 4 ✗ esperadas (B-205, B-206 y H-85, dos veces): deben seguir en ✗ hasta que se arreglen.
-- Falta: correrla en `--ventana visible`, y en el cierre integrado junto con `solido_crear`, `teclear` y `asas`. Capturas `extruir_*.png` miradas por el coordinador: Aceptar entra en 1024×640 y 800×520; las cajas de valor se pisan (B-207).
+- Cierre integrado del 2026-11-06 (`evidencias/cierre_2026-11-06/`): corrió en minimizada; sus 2 ✗ son H-85 (resuelto en la rama `codebuddy-nocturna`, sin fusionar). Falta: correrla en `--ventana visible`. Capturas `extruir_*.png` miradas por el coordinador: Aceptar entra en 1024×640 y 800×520; las cajas de valor se pisan (B-207).
 
 ## 3p. Tarea nueva: arreglos de Extruir en OpenCode con Sol (B-205, B-206, B-207, B-197)
 
@@ -382,19 +382,21 @@ Prompt en `docs/auditoria_extruir.md` (2026-11-05). Tocará `timeline/operacione
 Solo documenta, sin tocar la app. Si deja la pieza `revolucion_barrido_solevacion`, correrla en el cierre integrado y con `--ventana visible`.
 
 - Pieza nueva `scripts/prueba_ui/revolucion_barrido_solevacion.py` (en `PIEZAS` de `todo.py`): los botones de Revolución, Barrido y Solevación en SÓLIDO, SUPERFICIE y PLÁSTICO (y ninguno en CHAPA), Revolución «Dos lados» con −45° tecleado, Enter, reabrir, deshacer y rehacer, «A objeto» con Dirección, «Proyectar eje», las opciones y el volumen del Barrido con carril, Distancia tecleada («0,5», «0», «1,5», vacío), Solevación de dos cuadros y la fila de una punta, y el Barrido con carril en 1024×640 y 800×520. Corrió en minimizada: 40 comprobaciones, 10 ✗ esperadas (B-208, B-209, B-210, B-211, H-88 dos veces, H-89, H-90 y H-92 dos veces): deben seguir en ✗ hasta que se arreglen.
-- Falta: correrla en `--ventana visible` y en el cierre integrado junto con `solido_crear`, `superficie` y `asas`. Las sondas sin ventana (`evidencias/ui_2026-11-05/sondas_rbs.py`, 78 casos) se pueden repetir para comprobar los arreglos.
+- Cierre integrado del 2026-11-06: 5 ✗, todas con fila (H-88 ×2, H-89, B-208 resuelto en la rama de Sol, H-90). Falta: correrla en `--ventana visible`. Las sondas sin ventana (`evidencias/ui_2026-11-05/sondas_rbs.py`, 78 casos) se pueden repetir para comprobar los arreglos.
 
 ## 3r. Tarea nueva: auditoría de Nervio, Red y Repujado (2026-11-05)
 
 Segunda tanda, va después de la 3q. Si deja la pieza `nervio_red_repujado`, correrla en el cierre integrado y con `--ventana visible`.
 
 - Pieza nueva `scripts/prueba_ui/nervio_red_repujado.py` (en `PIEZAS` de `todo.py`): los botones de Nervio, Red y Repujado en SÓLIDO y PLÁSTICO (y ninguno en SUPERFICIE, CHAPA ni MALLA), el Nervio de una escuadra por el corredor (+1200 mm³, reabrir, deshacer), Grosor tecleado («2,5», «e * 2», vacío, «10 deg», «abc», pegar «3 mm»), Enter, Invertir, dos curvas sueltas, desmoldeo −1° y con extracción, los campos de Fusion del Nervio, la Red con Invertir en una caja hueca, el Repujado con y sin cadena tangente y la Profundidad tecleada, las asas de los tres (3 mm y más allá del cero), la Red con «Más opciones» en 1024×640 y 800×520, y guardar → reabrir. Corrió en minimizada: 82 comprobaciones, 9 ✗ de la app (B-213, B-214, B-215 dos veces, B-216, B-217, H-95, H-97 y H-99): deben seguir en ✗ hasta que se arreglen.
-- Falta: correrla en `--ventana visible` (el chequeo de Tab necesita el foco real: en minimizada sale con ⚠) y en el cierre integrado junto con `solido_crear` y `asas`. Las sondas sin ventana (`evidencias/ui_2026-11-05/sondas_nrr.py`, 61 casos) se pueden repetir para comprobar los arreglos.
+- Cierre integrado del 2026-11-06: 5 ✗, todas con fila (B-215 ×2, resuelto en la rama de Sol; H-95, H-99, H-97). Falta: correrla en `--ventana visible` (el chequeo de Tab necesita el foco real: en minimizada sale con ⚠). Las sondas sin ventana (`evidencias/ui_2026-11-05/sondas_nrr.py`, 61 casos) se pueden repetir para comprobar los arreglos.
 - La corrieron con el código de Extruir de OpenCode sin commitear (`comando.py`, `manipuladores.py`, `solidos_crear.py`…): si algo cambia al integrarlo, puede venir de ahí.
 
 ## 3s. Tarea nueva: arreglos con Qwen3.8-Flash en cinco tandas (2026-11-05)
 
 Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-92, H-86, H-99, H-94). Cada tanda la revisa el coordinador con todos los tests que usan lo tocado. Al terminar las cinco: suite completa y prueba de humo, y las piezas `revolucion_barrido_solevacion`, `nervio_red_repujado`, `solido_crear` y `superficie` con `--ventana visible`.
+
+- Tandas 1 a 4 commiteadas en `main` (`799d6f6`, `7e95678`, `64a79f0`, `ba26cc0`). Cierre completo del 2026-11-06 sobre `ba26cc0`: ruff limpio, suite verde (`parte_04` rehecha en dos mitades por el tope de 900 s; un rojo por falta de memoria de OpenBLAS pasó solo), humo OK, piezas con foco OK. La pieza `solido_crear` daba ✗ en «extruir simétrico» por el defecto nuevo de H-86: la prueba ahora pide «mitad» explícito. Falta: la tanda 5 (H-99, H-94) y las cuatro piezas con `--ventana visible`.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 

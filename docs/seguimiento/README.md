@@ -86,7 +86,6 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 |---|---|
 | Organización del boceto | [plan_boceto_organizar.md](../plan_boceto_organizar.md) |
 | Arreglos con Qwen3.8-Flash (tandas 1 a 5) | [arreglos_qwen.md](../arreglos_qwen.md) |
-| Corrida nocturna del 2026-11-05 (Qwen en Qoder y Sol en OpenCode) | [corrida_nocturna_2026-11-05.md](../corrida_nocturna_2026-11-05.md) |
 | Caza automática de errores | [plan_caza_errores.md](../plan_caza_errores.md) |
 | INSPECCIONAR | [brechas_inspeccionar.md](../brechas_inspeccionar.md) |
 | SUPERFICIE | [brechas_superficie.md](../brechas_superficie.md) |
