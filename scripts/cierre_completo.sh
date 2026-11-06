@@ -26,12 +26,15 @@ ls tests/test_*.py | sort > "$S/lista.txt"
 split -n l/10 -d "$S/lista.txt" "$S/parte_"
 for p in "$S"/parte_0*; do
   n=$(basename "$p")
-  $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest $(tr '\n' ' ' < "$p") -q -W error -p no:cacheprovider --deselect "$MOTOR" > "$S/$n.txt" 2>&1
+  $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest $(tr '\n' ' ' < "$p") -q -W error -p no:cacheprovider --deselect "$MOTOR" --durations=0 --junitxml="$S/$n.xml" > "$S/$n.txt" 2>&1
   echo "$n exit=$? | $(tail -n 1 "$S/$n.txt")" >> "$R"
 done
 # Abre otra app entera dentro de pytest: junto a una tanda pasa el tope de memoria de turno.py (MemoryError, 2026-11-01).
-$PY ../scripts/turno.py --plazo 900 -- $PY -m pytest "$MOTOR" -q -W error -p no:cacheprovider > "$S/motor.txt" 2>&1
+$PY ../scripts/turno.py --plazo 900 -- $PY -m pytest "$MOTOR" -q -W error -p no:cacheprovider --durations=0 --junitxml="$S/motor.xml" > "$S/motor.txt" 2>&1
 echo "motor exit=$? | $(tail -n 1 "$S/motor.txt")" >> "$R"
+# Ranking de los tests y archivos lentos de toda la suite (paquete A de docs/plan_velocidad.md).
+$PY ../scripts/tiempos.py "$S" > "$S/tiempos.txt" 2>&1
+echo "tiempos exit=$? | $(head -n 1 "$S/tiempos.txt")" >> "$R"
 $PY ../scripts/prueba_ui/todo.py > "$S/ui.txt" 2>&1
 echo "ui exit=$? | $(grep -cE '[1-9][0-9]* con ✗' "$S/ui.txt") piezas con ✗" >> "$R"
 if espera_ocio 120 10800; then
