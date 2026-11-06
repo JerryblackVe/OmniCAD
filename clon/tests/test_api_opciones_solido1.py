@@ -200,8 +200,10 @@ def test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el():
     cid = ok(s, "extrude", sketch="C", distance=10, start="object", start_object="PInc", thin=True, wall_thickness=1,
              wall_location="center", operation="new_body")["bodies_created"][0]["id"]
     assert geo.volumen_exacto(s.cuerpo(cid).forma) == pytest.approx(100 * math.pi, rel=1e-9)   # π(5,5² − 4,5²)·10
-    falla(s, "extrude", sketch="C", distance=10, start="object", start_object="PInc", taper_angle=5,
-          esperado="OPERATION_FAILED")                                  # conicidad + inicio inclinado: aviso claro
+    cid = ok(s, "extrude", sketch="C", distance=10, start="object", start_object="PInc",
+             taper_angle=5)["bodies_created"][0]["id"]
+    assert geo.es_valida(s.cuerpo(cid).forma)
+    assert geo.volumen_exacto(s.cuerpo(cid).forma) > 250 * math.pi
     s = api.Sesion()
     rect(s)
     ok(s, "create_construction_plane", plane="XY", offset=4, name="Par")

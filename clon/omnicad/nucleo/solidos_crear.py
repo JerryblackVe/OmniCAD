@@ -24,7 +24,7 @@ def _iniciar_opencascade():
     global BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
     global BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire, BRepBuilderAPI_RightCorner
     global BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform, BRepClass3d_SolidClassifier
-    global BRepClass_FaceClassifier, BRepExtrema_DistShapeShape, BRepFill_ContactOnBorder, BRepFill_NoContact
+    global BRepClass_FaceClassifier, BRepExtrema_DistShapeShape, BRepFill_NoContact
     global BRepGProp, BRepLib, BRepOffsetAPI_DraftAngle, BRepOffsetAPI_MakeOffset
     global BRepOffsetAPI_MakeOffsetShape, BRepOffsetAPI_MakePipeShell, BRepOffsetAPI_ThruSections
     global BRepOffset_MakeOffset, BRepOffset_Skin, BRepPrimAPI_MakeHalfSpace, BRepPrimAPI_MakePrism
@@ -50,7 +50,7 @@ def _iniciar_opencascade():
     from OCP.BRepClass import BRepClass_FaceClassifier
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-    from OCP.BRepFill import BRepFill_ContactOnBorder, BRepFill_NoContact
+    from OCP.BRepFill import BRepFill_NoContact
     from OCP.BRepGProp import BRepGProp
     from OCP.BRepLib import BRepLib
     from OCP.BRepOffset import BRepOffset_MakeOffset, BRepOffset_Skin
@@ -421,18 +421,21 @@ def _prisma(cara, n, d, conicidad=0.0):
     if abs(conicidad) >= 89.0:
         raise geo.ErrorGeometria("El ángulo de inclinación debe estar entre -89° y 89°.")
     n = np.asarray(n, float)
-    if abs(float(_normal_superficie(cara) @ n)) < 1 - 1e-6:
-        raise geo.ErrorGeometria("Con inclinación, la extrusión debe ser perpendicular al perfil.")
+    plano = geo.plano_de_cara(cara)
+    if plano is None or abs(float(plano.normal @ n)) < 1e-9:
+        raise geo.ErrorGeometria("Con inclinación, el perfil debe ser plano y transversal a la extrusión.")
+    if abs(float(plano.normal @ n)) < 1 - 1e-9 and any(
+            BRepAdaptor_Curve(e).GetType() != GeomAbs_Line for e in _aristas_de(cara)):
+        return _prisma_curvo_inclinado(cara, n, d, conicidad)
     # Prisma recto + desmoldeo de las caras laterales con el plano del perfil como plano neutro: las
     # esquinas quedan vivas (tronco de pirámide), como en Fusion. LocOpe_DPrism las redondea al ensanchar.
     tirar = n * math.copysign(1.0, d)
     prisma = BRepPrimAPI_MakePrism(cara, _gvec(n * d)).Shape()
-    centro = np.array(geo.centro_masa(cara, superficie=True))
-    neutro = gp_Pln(_pnt(centro), _gdir(tirar))
+    neutro = gp_Pln(_pnt(plano.origen), _gdir(plano.normal))
     da = BRepOffsetAPI_DraftAngle(prisma)
     for f in geo.caras(prisma):
         pl = geo.plano_de_cara(f)
-        if pl is not None and abs(abs(float(pl.normal @ tirar)) - 1) < 1e-9:
+        if pl is not None and abs(abs(float(pl.normal @ plano.normal)) - 1) < 1e-9:
             continue   # tapas
         da.Add(f, _gdir(tirar), math.radians(-conicidad), neutro, True)
         if not da.AddDone():
@@ -441,6 +444,31 @@ def _prisma(cara, n, d, conicidad=0.0):
     if not da.IsDone():
         raise geo.ErrorGeometria("El kernel no pudo aplicar la inclinación a la extrusión.")
     return _validar(da.Shape(), "Extrusión con inclinación")
+
+
+def _prisma_curvo_inclinado(cara, n, d, conicidad):
+    """Extruir › Inicio Objeto: lateral reglado entre la base curva y su desfase en el plano neutro.
+
+    DraftAngle no admite el lateral de una elipse oblicua. El extremo conserva el plano de inicio
+    trasladado según la dirección; los huecos se cierran al ensanchar el material.
+    """
+    exterior = BRepTools.OuterWire_s(TopoDS.Face(cara))
+    desfase = abs(d) * math.tan(math.radians(conicidad))
+    piezas = []
+    alambres = [exterior] + [TopoDS.Wire(w) for w in _explorar(cara, TopAbs_WIRE) if not w.IsSame(exterior)]
+    for i, w in enumerate(alambres):
+        extremo = _desfase_alambre(w, desfase if i == 0 else -desfase)
+        mk = BRepOffsetAPI_ThruSections(True, True)
+        mk.AddWire(w)
+        mk.AddWire(_trasladar(extremo, n * d))
+        mk.Build()
+        if not mk.IsDone():
+            raise geo.ErrorGeometria("No se pudo crear el lateral curvo de la extrusión con inclinación.")
+        piezas.append(_validar(mk.Shape(), "Extrusión curva con inclinación"))
+    resultado = piezas[0]
+    for hueco in piezas[1:]:
+        resultado = geo.booleano(resultado, hueco, "cortar")
+    return _validar(resultado, "Extrusión curva con inclinación")
 
 
 def _desfase_alambre(alambre, d):
@@ -836,6 +864,20 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
             # El carril orienta el perfil (normal hacia el carril) y, salvo "ninguna", lo escala con la distancia
             # ruta→carril (ley propia: el modo ContactOnBorder de OCC solo funciona con perfiles suaves).
             ps.SetMode(carril, True, BRepFill_NoContact)
+            aristas_ruta = list(_explorar(tramo, TopAbs_EDGE))
+            aristas_carril = list(_explorar(carril, TopAbs_EDGE))
+            if len(aristas_ruta) == len(aristas_carril) == 1 and all(
+                    BRepAdaptor_Curve(TopoDS.Edge(a)).GetType() == GeomAbs_Line
+                    for a in (aristas_ruta[0], aristas_carril[0])):
+                p0, t0 = _punto_en(tramo, 0.0)
+                p1, _ = _punto_en(tramo, 1.0)
+                v0 = _punto_en(carril, 0.0)[0] - p0
+                v1 = _punto_en(carril, 1.0)[0] - p1
+                v0, v1 = v0 - t0 * float(v0 @ t0), v1 - t0 * float(v1 @ t0)
+                if np.linalg.norm(v0) > 1e-6 and np.linalg.norm(v1) > 1e-6 and float(
+                        _unit(v0) @ _unit(v1)) > 1 - 1e-12:
+                    # Marco constante exacto: el auxiliar de OCC deforma hasta un prisma recto.
+                    ps.SetMode(gp_Ax2(_pnt(p0), _gdir(t0), _gdir(v0)))
             if escala_carril != "ninguna":
                 ley = _ley_escala_carril(tramo, carril)
         elif abs(torsion) > 1e-9:       # True = curvilíneo, False = plano (ver _guia_plana_posible)
@@ -1303,10 +1345,11 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
 
     secciones: caras (se respetan los agujeros si todas tienen la misma cantidad), alambres/aristas, o un
     punto/vértice como primera o última sección. `cerrada` une la última sección con la primera. Con
-    `linea_central` se usa MakePipeShell con todas las secciones. Con `carriles`: OpenCascade no tiene
-    solevado con varios carriles; se admite UNO, como guía de contacto (el borde del solevado lo sigue)
-    sobre una línea central dada o sobre la polilínea de los centros de las secciones. Las caras planas y las
-    aristas rectas o circulares salen analíticas, como en Fusion (ver _canonizar).
+    `linea_central` se usa MakePipeShell con todas las secciones. Con `carriles` se admite UNO y se comparte
+    la construcción de secciones intermedias de la solevación de superficie, conservando las esquinas;
+    el sólido se cierra con tapas sobre esas mismas secciones. Los contornos y carriles curvos se aproximan
+    por muestras (ver superficies._solevar_con_rieles). Las formas analíticas se recuperan si cumplen la
+    tolerancia de _canonizar.
     """
     secs = [_seccion(s) for s in _lista(secciones)]
     if len(secs) < 2:
@@ -1316,6 +1359,8 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     if cerrada and any(s[0] == "vertice" for s in secs):
         raise geo.ErrorGeometria("Un solevado cerrado no admite puntos como sección.")
     carriles = _lista(carriles)
+    if carriles and linea_central is not None:
+        raise geo.ErrorGeometria("Elegí carriles o una línea central, no los dos.")
     if len(carriles) > 1:
         raise geo.ErrorGeometria("OpenCascade no admite solevado con varios carriles: usá uno solo o una "
                                  "línea central.")
@@ -1327,23 +1372,15 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
             raise geo.ErrorGeometria("Las condiciones de borde no se combinan con carriles, línea central, solevado "
                                      "cerrado ni reglado.")
         exteriores = _con_condiciones(exteriores, condicion_inicio, condicion_fin, condiciones_medias)
-    if linea_central is not None or carriles:
-        if cerrada:
-            raise geo.ErrorGeometria("El solevado cerrado no se combina con línea central ni carril.")
-        if linea_central is not None:
-            espina = _alambre(linea_central)
-        else:
-            # Polilínea por los centros. Se redondean: un ruido de 1e-14 en los centros hace fallar a
-            # Approx_CurvlinFunc al barrer con carril.
-            centros = [np.round(_xyz(BRep_Tool.Pnt_s(f)) if t == "vertice" else _centro_alambre(f), 9)
-                       for t, f in exteriores]
-            espina = _alambre([BRepBuilderAPI_MakeEdge(_pnt(a), _pnt(b)).Edge()
-                               for a, b in zip(centros[:-1], centros[1:], strict=True)])
+    if cerrada and (linea_central is not None or carriles):
+        raise geo.ErrorGeometria("El solevado cerrado no se combina con línea central ni carril.")
+    if carriles:
+        from .superficies import _solevar_con_rieles
+        forma = _solevar_con_rieles(exteriores, [_alambre(carriles[0])], solido=solido)
+    elif linea_central is not None:
+        espina = _alambre(linea_central)
         ps = BRepOffsetAPI_MakePipeShell(espina)
-        if carriles:
-            ps.SetMode(_alambre(carriles[0]), True, BRepFill_ContactOnBorder)
-        else:
-            ps.SetMode(False)
+        ps.SetMode(False)
         for _t, f in exteriores:
             ps.Add(f, False, False)
         try:
@@ -1352,9 +1389,7 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         except Exception:  # noqa: BLE001 — OCC lanza Standard_ConstructionError en los casos que no resuelve
             hecho = False
         if not hecho:
-            raise geo.ErrorGeometria("El kernel no pudo solevar con ese carril (OpenCascade solo lo logra con "
-                                     "secciones suaves, sin esquinas)." if carriles else
-                                     "El kernel no pudo solevar con esa línea central.")
+            raise geo.ErrorGeometria("El kernel no pudo solevar con esa línea central.")
         if solido:
             ps.MakeSolid()
         forma = ps.Shape()
@@ -1413,21 +1448,24 @@ def _sentido_hacia_cuerpo(cuerpo, alambre, candidatos, invertir, *, exigir_cara=
     return opuesto
 
 
-def _caja_de(forma, margen):
-    (x0, y0, z0), (x1, y1, z1) = geo.caja_envolvente(forma)
-    return geo.caja(x1 - x0 + 2 * margen, y1 - y0 + 2 * margen, z1 - z0 + 2 * margen,
-                    (x0 - margen, y0 - margen, z0 - margen))
-
-
 def _diagonal(forma):
     bb = geo.caja_envolvente(forma)
     return float(np.linalg.norm(np.subtract(bb[1], bb[0])))
 
 
-def _hasta_el_cuerpo(bruto, cuerpo, curvas, margen, que, profundidad):
-    """Recorta un nervio/red largo: dentro de la caja del cuerpo, fuera del cuerpo, y solo el trozo que
-    nace de las curvas. Sin profundidad (To Next) además tiene que tocar al cuerpo."""
-    bruto = geo.booleano(bruto, _caja_de(cuerpo, margen), "intersecar")
+def _hasta_el_cuerpo(bruto, cuerpo, curvas, direccion, largo, que, profundidad):
+    """Red de Fusion: limita las prolongaciones a la sombra del cuerpo hacia el perfil, sin cortar el inicio.
+    El corte volumétrico conserva la llegada oblicua en todo el grosor y las uniones entre curvas."""
+    sombras = [cuerpo]
+    for cara in _caras_de(cuerpo):
+        plano = geo.plano_de_cara(cara)
+        if plano is not None and float(plano.normal @ direccion) >= -1e-7:
+            continue
+        prisma = BRepPrimAPI_MakePrism(cara, _gvec(-direccion * largo)).Shape()
+        volumen = geo.volumen(prisma)
+        if abs(volumen) > 1e-9:
+            sombras.append(prisma if volumen > 0 else prisma.Reversed())
+    bruto = geo.booleano(bruto, _unir(sombras), "intersecar")
     piezas = _piezas_que_tocan(geo.booleano(bruto, cuerpo, "cortar"), curvas)
     if not piezas:
         raise geo.ErrorGeometria(f"{que}: la curva queda dentro del cuerpo.")
@@ -1437,11 +1475,62 @@ def _hasta_el_cuerpo(bruto, cuerpo, curvas, margen, que, profundidad):
     return _validar(resultado, que)
 
 
-def _desmoldear_pared(bruto, direccion, angulo, origen):
-    """Inclina las caras laterales de un nervio o una red `angulo` grados hacia `direccion` (la de extracción, del
-    cuerpo hacia el borde libre): la pared queda más fina en el borde libre, donde pasa el plano neutro por `origen`,
-    que en la base."""
-    from .solidos_modificar import desmoldeo
+def _lamina_hasta_el_cuerpo(lamina, cuerpo, curvas, finales, que, profundidad):
+    """Al siguiente de Nervio/Red de Fusion: recorta la lámina antes de darle espesor.
+    El extremo auxiliar lejano no puede quedar en el resultado de «Al siguiente»."""
+    piezas = [c for c in _caras_de(geo.booleano(lamina, cuerpo, "cortar"))
+              if any(geo.se_tocan(c, w, 1e-5) for w in curvas)]
+    if not piezas:
+        raise geo.ErrorGeometria(f"{que}: la curva queda dentro del cuerpo.")
+    resultado = geo.compuesto(piezas)
+    if profundidad is None and (not geo.se_tocan(resultado, cuerpo, 1e-4)
+                               or any(geo.se_tocan(resultado, f, 1e-5) for f in finales)):
+        raise geo.ErrorGeometria(f"{que}: no llega al cuerpo (revisá el sentido o usá una profundidad).")
+    return resultado
+
+
+def _engrosar_nervio(recorte, cuerpo, n, lo, hi, profundidad):
+    """Engrosa el Nervio de Fusion y lleva sus caras de llegada planas al contacto oblicuo real."""
+    llegadas = []
+    if profundidad is None:
+        for cara in _caras_de(cuerpo):
+            plano = geo.plano_de_cara(cara)
+            if plano is not None and 1e-7 < abs(float(plano.normal @ n)) < 1 - 1e-7:
+                llegadas.append((cara, -math.asin(float(plano.normal @ n))))
+    if not llegadas:
+        return _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
+                      for f in _caras_de(recorte)])
+    solidos = []
+    for cara in _caras_de(recorte):
+        prisma = BRepPrimAPI_MakePrism(cara, _gvec(n * (hi - lo)))
+        forma = prisma.Shape()
+        ajuste = BRepOffsetAPI_DraftAngle(forma)
+        neutro = gp_Pln(_pnt(geo.plano_de_cara(cara).origen - n * lo), _gdir(n))
+        ajustadas = False
+        for arista in _aristas_de(cara):
+            for llegada, angulo in llegadas:
+                if not _aristas_de(geo.booleano(arista, llegada, "intersecar")):
+                    continue
+                for lateral in prisma.Generated(arista):
+                    ajuste.Add(TopoDS.Face(lateral), _gdir(n), angulo, neutro, False)
+                    if not ajuste.AddDone():
+                        raise geo.ErrorGeometria("Nervio: no se pudo ajustar la cara de llegada oblicua.")
+                    ajustadas = True
+                break
+        if ajustadas:
+            ajuste.Build()
+            if not ajuste.IsDone():
+                raise geo.ErrorGeometria("Nervio: el kernel no pudo ajustar la llegada oblicua.")
+            forma = _validar(ajuste.Shape(), "Nervio con llegada oblicua")
+        solidos.append(_trasladar(forma, n * lo))
+    return _unir(solidos)
+
+
+def _desmoldear_pared(bruto, direccion, angulo, origen, *, recortado):
+    """Desmoldeo del Nervio/Red de Fusion: inclina los laterales originales sobre la pared `recortado`.
+    El plano neutro pasa por `origen` y es normal a la extracción `direccion`. Con extracción por defecto,
+    un ángulo positivo engorda la base; uno negativo la afina."""
+    from .solidos_modificar import _cara_dentro_de, desmoldeo
     d = _unit(direccion, "dirección de desmoldeo")
     laterales = []
     for cara in _caras_de(bruto):
@@ -1450,8 +1539,10 @@ def _desmoldear_pared(bruto, direccion, angulo, origen):
             if abs(float(normal @ d)) > 1e-6:           # tapas y fondos: no se inclinan
                 continue
         laterales.append(cara)
+    # El prisma auxiliar puede cruzarse lejos del cuerpo; inclinar solo la pared real y sus caras originales.
+    laterales = [c for c in _caras_de(recortado) if any(_cara_dentro_de(c, f) for f in laterales)]
     plano_neutro = geo.Plano.desde_marco(origen, d, _perpendicular(d))
-    return desmoldeo(bruto, laterales, d, angulo, plano_neutro)
+    return desmoldeo(recortado, laterales, d, angulo, plano_neutro)
 
 
 def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, direccion="simetrica",
@@ -1461,9 +1552,10 @@ def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, di
     o una `profundidad` — un nervio por curva, unidos en un solo paso, como en Fusion. El espesor se mide
     perpendicular al plano: "simetrica" (mitad a cada lado), "lado1" (hacia +normal) o "lado2". `invertir` cambia el
     sentido de crecimiento. Devuelve solo el nervio, ya recortado contra el cuerpo (la unión la hace la capa de
-    operaciones). `angulo_desmoldeo` (Draft Angle) afina el nervio hacia su borde libre (la curva del boceto, que
-    conserva el espesor); `direccion_desmoldeo` (Draft Pull Direction) es la dirección de extracción (por defecto,
-    del cuerpo hacia la curva)."""
+    operaciones). `angulo_desmoldeo` (Draft Angle) positivo afina el nervio hacia su borde libre; el negativo
+    invierte el efecto. `direccion_desmoldeo` (Draft Pull Direction) es la extracción (por defecto, del cuerpo hacia
+    la curva). El plano neutro pasa por el punto medio de cada curva: allí se conserva el espesor, también con una
+    extracción oblicua."""
     n = _unit(normal_plano, "normal del plano del boceto")
     cadenas = _cadenas(aristas_curva)
     if not cadenas or any(_es_cerrado(w) for w in cadenas):
@@ -1475,22 +1567,26 @@ def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, di
     if lo is None:
         raise geo.ErrorGeometria(f"Dirección de espesor desconocida: {direccion}")
     largo_max = 2 * _diagonal(cuerpo)
-    brutos = []
+    nervios = []
     for w in cadenas:
         cuerda = _punto_en(w, 1.0)[0] - _punto_en(w, 0.0)[0]
         m = _unit(np.cross(n, cuerda), "cuerda de la curva")
         m = _sentido_hacia_cuerpo(cuerpo, w, (m, -m), invertir, exigir_cara=profundidad is None)
         w_ext = _extender_extremos(w, largo_max) if extender else w
         region = _unificar(BRepPrimAPI_MakePrism(w_ext, _gvec(m * (profundidad or largo_max))).Shape())
-        bruto = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
-                       for f in _caras_de(region)])
+        recorte = _lamina_hasta_el_cuerpo(region, cuerpo, [w], [_trasladar(w_ext, m * largo_max)], "Nervio",
+                                          profundidad)
+        recortado = _engrosar_nervio(recorte, cuerpo, n, lo, hi, profundidad)
+        recortado = _validar(geo.booleano(recortado, cuerpo, "cortar"), "Nervio")
         if abs(angulo_desmoldeo) > 1e-9:
+            bruto = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
+                           for f in _caras_de(region)])
             pull = -m if direccion_desmoldeo is None else _unit(direccion_desmoldeo, "dirección de desmoldeo")
             if float(pull @ m) > 0:             # la extracción va del cuerpo hacia el borde libre (la curva)
                 pull = -pull
-            bruto = _desmoldear_pared(bruto, pull, angulo_desmoldeo, _punto_en(w, 0.5)[0])
-        brutos.append(bruto)
-    return _hasta_el_cuerpo(_unir(brutos), cuerpo, cadenas, 0.0, "Nervio", profundidad)
+            recortado = _desmoldear_pared(bruto, pull, angulo_desmoldeo, _punto_en(w, 0.5)[0], recortado=recortado)
+        nervios.append(recortado)
+    return nervios[0] if len(nervios) == 1 else _validar(_unir(nervios), "Nervio")   # B-214: un nervio por curva
 
 
 def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, direccion="simetrica",
@@ -1520,9 +1616,10 @@ def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, dire
         lamina = BRepPrimAPI_MakePrism(w_ext, _gvec(d * (profundidad or largo_max))).Shape()
         solidos += [_engrosar_lamina(lamina, e) for e in espesores]
     bruto = _unir(solidos)
+    recortado = _hasta_el_cuerpo(bruto, cuerpo, cadenas, d, largo_max, "Red", profundidad)
     if abs(angulo_desmoldeo) > 1e-9:
-        bruto = _desmoldear_pared(bruto, -d, angulo_desmoldeo, _punto_en(cadenas[0], 0.5)[0])
-    return _hasta_el_cuerpo(bruto, cuerpo, cadenas, 0.0, "Red", profundidad)
+        return _desmoldear_pared(bruto, -d, angulo_desmoldeo, _punto_en(cadenas[0], 0.5)[0], recortado=recortado)
+    return recortado
 
 
 def unir_con_empalme(cuerpo, pieza, radio):

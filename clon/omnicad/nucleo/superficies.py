@@ -305,8 +305,23 @@ def _extruir_tramos(ws, n, arriba, abajo, conicidad, afuera=False):
             piezas.append(BRepPrimAPI_MakePrism(base, gp_Vec(*map(float, n * (arriba + abajo)))).Shape())
             continue
         caras = []
+        cara = plano = None
+        if BRep_Tool.IsClosed_s(w):
+            mk = BRepBuilderAPI_MakeFace(w, True)
+            if mk.IsDone():
+                candidata = mk.Face()
+                plano = geo.plano_de_cara(candidata)
+                if plano is not None and 1e-9 < abs(float(plano.normal @ n)) < 1 - 1e-9:
+                    cara = candidata
         for d, alto in ((n, arriba), (-n, abajo)):
             if alto <= 0:
+                continue
+            if cara is not None:
+                # Inicio oblicuo: compartir los planos límite y el lateral con Extruir sólido.
+                from .solidos_crear import _prisma
+                forma = _prisma(cara, d, alto, conicidad)
+                caras.extend(c for c in geo.caras(forma) if (p := geo.plano_de_cara(c)) is None
+                             or abs(float(p.normal @ plano.normal)) < 1 - 1e-9)
                 continue
             ang = math.radians(abs(conicidad))
             try:
@@ -1030,7 +1045,7 @@ def _derivadas(q, auxiliares, sentido, peso):
     return sentido * peso * d / np.maximum(np.linalg.norm(d, axis=-1, keepdims=True), 1e-12), peso * peso * curva
 
 
-def _solevar_con_rieles(secs, rieles, inicio=None, fin=None, medias=None, cerrada=False, exacta=False):
+def _solevar_con_rieles(secs, rieles, inicio=None, fin=None, medias=None, cerrada=False, exacta=False, *, solido=False):
     """Rails de la solevación [SFC-REF-LOFT-DLG]: cualquier cantidad de rieles, que tocan cada perfil y terminan en el
     primero y el último (o más allá). OCC admite uno solo y con perfiles lisos, así que se arman secciones intermedias:
     cada una es la interpolación de los perfiles más un corrimiento que la lleva hasta los rieles, repartido entre ellos
@@ -1044,7 +1059,7 @@ def _solevar_con_rieles(secs, rieles, inicio=None, fin=None, medias=None, cerrad
 
     Con `exacta` Dirección, Tangente y Suave no pasan por las auxiliares: de ellas sale la derivada con que la interpolación deja
     el perfil (la segunda en Suave), y así se cumplen en el perfil, con el peso como velocidad de salida. También sirve sin rieles,
-    si los perfiles son compatibles (`_exacta_posible`)."""
+    si los perfiles son compatibles (`_exacta_posible`). `solido` agrega las tapas sobre las mismas secciones reconstruidas."""
     from scipy.interpolate import CubicSpline, make_interp_spline
 
     from . import solidos_crear as sc
@@ -1197,7 +1212,7 @@ def _solevar_con_rieles(secs, rieles, inicio=None, fin=None, medias=None, cerrad
         return salida
 
     pasos = _SECCIONES_TRAMO * (3 if con_condicion else 1)
-    ts = BRepOffsetAPI_ThruSections(False, False)
+    ts = BRepOffsetAPI_ThruSections(solido, False)
     primera = None
     tramos_x = n if cerrada else n - 1
     for i in range(tramos_x):

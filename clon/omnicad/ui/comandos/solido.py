@@ -35,7 +35,7 @@ class Extruir(Comando):
                       ayuda="Perfiles cerrados o caras planas; en la extrusión delgada también curvas abiertas."),
             Opciones("inicio", "Inicio", {"plano": ("Plano de perfil", "ini_plano"), "desfase": ("Desfase", "ini_desfase"),
                                           "objeto": ("Objeto", "ini_objeto")}),
-            Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") == "desfase"),
+            Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") in ("desfase", "objeto")),
             Seleccion("inicio_objeto", "Objeto de inicio", {"cara_plana", "plano"},
                       visible_si=lambda v: v.get("inicio") == "objeto"),
             Opciones("direccion", "Dirección", DIRECCIONES_UI),
@@ -49,7 +49,11 @@ class Extruir(Comando):
                      visible_si=lambda v: v.get("extension") == "objeto"),
             Expresion("desfase_hasta", "Desfase del límite", "0 mm", visible_si=lambda v: v.get("extension") == "objeto"),
             Casilla("invertir", "Invertir dirección"),
-            Expresion("distancia2", "Distancia del lado 2", "10 mm", visible_si=dos),
+            Opciones("extension2", "Tipo de extensión del lado 2", EXTENSIONES, visible_si=dos),
+            Expresion("distancia2", "Distancia del lado 2", "10 mm",
+                      visible_si=lambda v: dos(v) and v.get("extension2") == "distancia"),
+            Seleccion("hasta2", "Objeto límite del lado 2", {"cara", "plano", "cuerpo"},
+                      visible_si=lambda v: dos(v) and v.get("extension2") == "objeto"),
             Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, avanzado=True),
             Expresion("conicidad2", "Conicidad del lado 2", "0 deg", ANGULO, visible_si=dos, avanzado=True),
             Expresion("espesor", "Grosor de pared", "1 mm", visible_si=lambda v: v.get("tipo") == "delgada"),
@@ -69,11 +73,14 @@ class Extruir(Comando):
             ctx.evaluar(v.get(clave) or "0", tipo or LONGITUD)
         if v.get("extension") == "objeto" and not v.get("hasta"):
             raise ErrorComando("Elegí el objeto hasta donde llega la extrusión.")
+        if v.get("direccion") == "dos_lados" and v.get("extension2") == "objeto" and not v.get("hasta2"):
+            raise ErrorComando("Elegí el objeto hasta donde llega el lado 2 de la extrusión.")
         params = {k: v.get(k) for k in ("tipo", "inicio", "desfase_inicio", "direccion", "medida", "extension",
                                          "distancia", "invertir", "conicidad", "distancia2", "conicidad2", "espesor",
-                                         "ubicacion", "operacion", "hasta_modo", "desfase_hasta")}
+                                         "ubicacion", "operacion", "hasta_modo", "desfase_hasta", "extension2")}
         params.update(boceto=boceto, perfiles=perfiles, caras=caras, curvas=curvas, objetivos=objetivos(v),
-                      objetivo="", inicio_objeto=ref1(v, "inicio_objeto"), hasta=ref1(v, "hasta"), simetrica=False)
+                      objetivo="", inicio_objeto=ref1(v, "inicio_objeto"), hasta=ref1(v, "hasta"),
+                      hasta2=ref1(v, "hasta2"), simetrica=False)
         return self.crear_op(OpExtrusion, v, ctx, **params)
 
     def manipuladores(self, ctx, v):
@@ -110,7 +117,10 @@ class Extruir(Comando):
             if valor < 0:
                 return mp.Flecha(clave, centro, -sentido, maximo=0.0)
             return mp.Flecha(clave, centro, sentido, minimo=0.0)
-        return antes + [lado("distancia", d, n), lado("distancia2", _evaluar(ctx, v.get("distancia2")), -n)] + [
+        flechas = [lado("distancia", d, n)]
+        if v.get("extension2", "distancia") == "distancia":
+            flechas.append(lado("distancia2", _evaluar(ctx, v.get("distancia2")), -n))
+        return antes + flechas + [
             mp.Angulo(clave, borde, np.cross(t, lateral), t, minimo=-89.0, maximo=89.0, caja="arrastre")
             for clave, t in (("conicidad", n), ("conicidad2", -n))]
 
@@ -243,7 +253,7 @@ class Extruir(Comando):
             v.update(direccion="simetrica", medida="total")
         v["perfiles"] = perfiles_desde_op(op, ctx.estado) + hits(op.p.get("curvas") or [], ctx.estado)
         v["objetivos"] = objetivos_desde_op(op, ctx.estado)
-        for clave in ("inicio_objeto", "hasta"):
+        for clave in ("inicio_objeto", "hasta", "hasta2"):
             v[clave] = [hit_desde_ref(op.p[clave], ctx.estado)] if op.p.get(clave) else []
         return v
 

@@ -93,7 +93,7 @@ def create_surface_extrude(sesion, profiles: Seleccion, distance: Expr = "10 mm"
     distance2: distancia del segundo lado con sides=two_sides; vacío = igual a distance.
     symmetric_measure: con sides=symmetric, total (distance es el largo total) o half (distance es la mitad, a cada lado).
     start: dónde empieza la extrusión: profile_plane (el plano de las curvas), offset (a start_offset de él) o object (en la cara plana o plano start_object).
-    start_offset: desfase del inicio en mm (número o expresión); con start=offset.
+    start_offset: desfase del inicio en mm según la dirección (número o expresión); con start=offset desde el perfil, con start=object desde el objeto; 0 por defecto.
     start_object: cara plana (selector o id) o plano donde empieza; con start=object.
     extent: hasta dónde llega: distance (por defecto), to_object (hasta to) o all (atraviesa todos los cuerpos).
     to: con extent=to_object: cara (selector o id), plano o cuerpo hasta donde llega.
@@ -112,7 +112,8 @@ def create_surface_extrude(sesion, profiles: Seleccion, distance: Expr = "10 mm"
     elif start == "object":
         if start_object is None:
             raise error("INVALID_ARGUMENTS", "start=object necesita start_object (una cara plana o un plano).")
-        params.update(inicio="objeto", inicio_objeto=_referencia(sesion, start_object, {"cara", "plano"}, body, "plano"))
+        params.update(inicio="objeto", inicio_objeto=_referencia(sesion, start_object, {"cara", "plano"}, body, "plano"),
+                      desfase_inicio=texto_expr(start_offset))
     if extent == "to_object":
         if to is None:
             raise error("INVALID_ARGUMENTS", "extent=to_object necesita to (una cara, un plano o un cuerpo).")

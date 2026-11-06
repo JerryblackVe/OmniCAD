@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 22: Abierto 18 · Parcial 4 (recontado 2026-11-06 por fila: se cerraron B-210 y B-211 de la tanda 1, B-214 y B-216 de la tanda 2 y B-209 y B-217 de la tanda 3, y sumaron B-219 — la flecha de «Distancia» del Nervio y la Red — y B-220 — Envolver del Repujado fuera de zona).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 17: Abierto 14 · Parcial 3 (recontado 2026-11-06 por fila: se cerraron B-210 y B-211 de la tanda 1, B-214 y B-216 de la tanda 2 y B-209 y B-217 de la tanda 3, y sumaron B-219 — la flecha de «Distancia» del Nervio y la Red — y B-220 — Envolver del Repujado fuera de zona).
 
 ## Abiertos y parciales
 
@@ -10,15 +10,9 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 |---|---|---|---|---|---|---|
 | B-221 | Patrón en trayectoria › la copia suprimida ya no se ve como silueta roja en la vista previa | Abierto | Baja | En el cierre del 2026-11-06 la pieza `patrones_ensamble_rosca` marca ✗ en «PAT-3: la copia suprimida se ve como una silueta roja»: `suprimir` queda en «1» pero `previa_vista` no devuelve una sola primitiva roja (0.88, 0.18, 0.15). El 2026-10-31 la misma pieza dio 0 ✗. Falta ver si cambió la previa o la prueba (`evidencias/ui_2026-11-06/patrones_ensamble_rosca.log`, captura `patron_ruta_inicio_porcentaje.png`). | scripts/prueba_ui/patrones_ensamble_rosca.py:151 | 2026-11-06 |
 | B-222 | Test de rosca con tope de tiempo cae cuando la PC está cargada | Abierto | Baja | `test_rosca_en_varios_agujeros_iguales_reusa_el_surco` exige `tiempo < 10` s para 4 roscas M3: el 2026-11-06 falló dentro de una corrida de 4 archivos (con la línea Sol usando la PC) y pasó solo (1 passed en 19,77 s). El tope mide la máquina, no el arreglo L138; lo que importa ya lo cubre `len(llamadas) == 1` (el barrido se arma una sola vez). | clon/tests/test_solidos_crear.py:604 | 2026-11-06 |
-| B-206 | Extruir Inicio › Objeto con un plano inclinado: falta combinarlo con la conicidad | Parcial | Media | Resuelto: el perfil se proyecta sobre el plano a lo largo de la dirección con aristas analíticas (círculo r5 a 30° → 785,40 mm³ exactos), la delgada mide la pared en el plano del perfil (600 mm³ como la recta) y «Al objeto»/«Todo» llegan desde toda la base. Queda: conicidad + inicio inclinado da un error claro («La conicidad todavía no se combina con Inicio › Objeto en un plano inclinado…»); `_prisma` toma como plano neutro uno perpendicular a la dirección. | timeline/operaciones.py (`inclinado`), nucleo/solidos_crear.py (`extruir_avanzado`, `inicio_plano`); tests/test_api_opciones_solido1.py::test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el | 2026-11-05 |
-| B-208 | Barrido con carril guía deforma el perfil aunque el carril sea paralelo a la ruta (sólido y superficie) | Abierto | Alta | Cuadrado 4×4 barrido 50 mm con un carril paralelo y escala «Ninguna» da 784,03 mm³ en vez de 800 (caja ±2,31 en vez de ±2); la superficie da 797,57 mm² en vez de 800. Con «Escalar» y el carril de 2 a 6 da 3364,59 contra 3466,67. Los dos extremos quedan bien; el medio se tuerce. También en la ventana (pieza `revolucion_barrido_solevacion`). | nucleo/solidos_crear.py:819 | 2026-11-05 |
-| B-212 | Solevación sólida con un carril recto falla: «el kernel produjo un sólido inválido» | Abierto | Media | Cuadros 10×10 en z 0 y 20×20 en z 10, carril recto del medio de un lado al medio del otro: el sólido da OPERATION_FAILED; la misma solevación de superficie sale bien (670,82 mm², el área lateral exacta del tronco). Fusion la hace. | nucleo/solidos_crear.py:1324 | 2026-11-05 |
-| B-213 | Nervio y Red se recortan contra la caja del cuerpo: rellenan hasta el borde o pierden la mitad | Abierto | Media | Con el boceto en el borde del cuerpo, el simétrico pierde la mitad (+600 en vez de +1200) y el de un lado da «Nervio: la curva queda dentro del cuerpo»; con `thickness=1e6` el nervio queda recortado al ancho del cuerpo (61500 mm³) sin aviso, y la Red con el boceto delante de la caja da el mismo error falso. (Lo que el 2026-11-05 era «invertido rellena hasta la caja, +1950»: hoy «Cambiar dirección» hacia un lado sin cara avisa claro; ver B-216.) También en la ventana (pieza `nervio_red_repujado`). | nucleo/solidos_crear.py:1411 (`_hasta_el_cuerpo`); tests/test_sol10_nervio_red.py::test_red_invertir_hacia_la_boca_abierta_avisa | 2026-11-06 |
-| B-215 | Desmoldeo del Nervio: falla con ángulo negativo y con una dirección de extracción que no es la de crecimiento | Abierto | Media | Escuadra con la línea en diagonal: `draft_angle=-1` y `draft_angle=1, pull_direction="XY"` dan «El desmoldeo falló en el kernel (ángulo demasiado grande?)». La API acepta −45..45 y anuncia la dirección de extracción; solo anda cuando la extracción coincide con el crecimiento (el caso de `test_sol10_nervio_red.py`). | nucleo/solidos_crear.py:1412 (`_desmoldear_pared`) y 1457 | 2026-11-05 |
 | B-220 | Repujado con «Envolver» en un cilindro lejos del perfil: la lámina da vueltas y repuja al otro lado | Abierto | Media | Placa 60×40×10 con las aristas de arriba empalmadas r3 y cuadro 10×10 en el centro de la tapa: `create_emboss faces="Cuerpo1/F3" wrap=true depth=1` sobre el empalme izquierdo (a 19 mm del cuadro) suma **+39,71 mm³** en ese empalme, y con los cuatro (+287,14). `_envolver_en_cilindro` pasa la coordenada tangencial del perfil a ángulo sin tope (`a_uv`, arco/radio ≈ 6,7 rad), así que la lámina envuelve el cilindro más de una vuelta y `recortar` la recorta contra la cara justo donde no debía. Fusion no repuja ahí. Arreglo: exigir que el arco del perfil quede dentro de ±π/2 de la generatriz que lo mira (o recortar contra el prisma del perfil). | clon/omnicad/nucleo/solidos_crear.py (`_envolver_en_cilindro`, `a_uv`); evidencia local `evidencias/ui_2026-11-06/sonda_b217_caras.py` | 2026-11-06 |
 | B-219 | Nervio y Red › la flecha de «Distancia» no apunta al sentido que elige el núcleo | Abierto | Baja | El Nervio y la Red van a la cara **más cercana** del cuerpo (`_sentido_hacia_cuerpo`), pero la flecha del asa de Distancia se dibuja sobre ±normal del plano del boceto, girada con «Cambiar dirección»: en una caja 40³ cerrada con el boceto en y = 30 (paredes a 8 y a 28) la red crece hacia +Y y la flecha apunta −Y, con y sin invertir (`evidencias/ui_2026-11-06/sonda_asas_red.py`). En el Nervio la flecha es además perpendicular al crecimiento (el nervio crece en el plano del boceto). Arreglo: pedir el sentido al núcleo con el cuerpo objetivo, o dibujar la flecha desde la forma ya calculada de la previa. | clon/omnicad/ui/comandos/asas_extra.py:295 (`_asas_nervio`) | 2026-11-06 |
 | B-196 | Barrer y el sector del labio pierden la autointersección sin avisar | Abierto | Media | `barrer` (dos sitios) y `_sector_labio` no pasan por el aviso de autointersección que ya tienen Tubo y Patrón geométrico (B-167, B-168). Hallado en la revisión del 2026-11-05. | nucleo/solidos_crear.py | 2026-11-05 |
-| B-195 | Extruir el logo ZAI.svg entero falla: dos regiones salen con contorno autointersectado | Abierto | Alta | Pasa también sin transformar y sin Rust: el arreglo planar da 277 regiones y 2 son inválidas (8,35 mm² con 36 curvas y 0,0027 mm²; `BRepAlgoAPI_Check` falla y `ShapeAnalysis_Wire.CheckSelfIntersection` da verdadero en un alambre). La extrusión de `object:<id>` termina en «La operación 'unir' dio un resultado imposible». Revisar qué cruce casi tangente no se corta en `nucleo/perfiles.py` (`_detectar`) y validar las caras antes de entregarlas. | clon/omnicad/nucleo/perfiles.py (`_detectar`); evidencia local `evidencias/boceto_organizar_2026-11-05/zai_caras.py` y `zai_sonda.py` (necesita el `ZAI.svg` del Escritorio) | 2026-11-05 |
 | B-189 | OmniKernel no arranca: un argumento por defecto usa un enum de OCC sin inicializar | Abierto | Baja | `_trozos(..., tipo=TopAbs_SOLID)` evalúa el enum al importar `solidos_crear`, pero `_iniciar_opencascade` no corre al elegir OmniKernel. Reproducido en `test_motor` y los 68 casos de `test_paridad_motor`: todos fallan antes de modelar con `NameError: name 'TopAbs_SOLID' is not defined`. También está en HEAD (`solidos_crear.py:3868`), independiente del arreglo de perfiles. Integrar la corrección en ese módulo y repetir las pruebas de ambos motores. | clon/tests/test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado; clon/omnicad/nucleo/solidos_crear.py (`_trozos`) | 2026-11-04 |
 | B-188 | Investigar la cara sin triangulación del proyecto REMOVEDOR | Parcial | Media | Corregido el supuesto que hacía `argmax` sobre una malla vacía, con recuperación por B-rep y errores de geometría claros; pruebas sin malla, visor, terminar, extruir, recalcular y persistencia. Falta el `.omnicad` o receta exacta con el boceto/SVG y los movimientos op22/op23/op55 para explicar por qué esa cara concreta quedó sin malla. El STEP REMOVEDOR DE TRAGO disponible se importa y proyecta sin reproducir el fallo; no se atribuye a archivo dañado ni a cara inválida. | clon/tests/test_perfiles_interior.py::test_sin_huecos_preserva_el_svg_valido_sin_malla; clon/omnicad/nucleo/geometria.py (`punto_dentro`) | 2026-11-04 |
 | B-184 | Dividir un cuerpo importado de STEP deja una mitad con volumen negativo y el paso sale ok | Abierto | Alta | Cuerpo7 quedó en −46.885 mm³ y −33.256 mm², y Cuerpo3 en 65.205 mm³. `check_geometry` en vivo sobre ese documento trabó la ventana más de 5 min. Falta reproducirlo en proceso aparte. | omnicad/nucleo/solidos_modificar.py:1564 | 2026-11-02 |
@@ -67,44 +61,6 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
 
-### B-208 · Barrido con carril guía deforma el perfil
-
-- **Qué:** boceto en YZ con un cuadrado 4×4 centrado en el origen, ruta = línea de X 0 a 50 en XY, carril = línea en XZ de (0, 2) a (50, 2); `sweep rail_sketch=C rail_scale="none"` (y `"scale"`). Igual con `create_surface_sweep guide_rail=… profile_scaling="none"`. En la ventana: Barrido › Ruta + Rail guía, Escala Ninguna, Enter.
-- **Esperado (Fusion):** «None: do not scale profile along sweep; just use guide rail as a orientation guide» (ayuda `Sweep reference`): con el carril paralelo, un prisma de 800 mm³ (superficie: 800 mm²). Con «Escalar» y el carril de 2 a 6, el tronco de pirámide de 50/3·(16+144+48) = 3466,67 mm³.
-- **Obtenido:** 784,03 mm³ y caja y ±2,31 (sólido), 797,57 mm² (superficie); con Escalar, 3364,59 mm³ y caja y ±6,44. Las caras de los extremos están bien (área 16 y 144, normal X): el perfil gira en el medio de la ruta.
-- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py` (salida en `sonda_carril.txt`), o la pieza `revolucion_barrido_solevacion` («Barrido con carril paralelo y escala Ninguna»).
-- **Entorno:** OmniCAD 0.2.0, Windows 11, motor OCC. Sin ventana y en la ventana minimizada.
-- **Causa probable (leída):** el carril se pasa como espina auxiliar con `SetMode(carril, True, BRepFill_NoContact)` en `nucleo/solidos_crear.py:819`; no se comprobó qué triedro arma OCC ahí.
-- **Esquive:** sin carril (escala por conicidad) o con Solevación entre perfiles.
-- **Prueba propuesta:** carril paralelo con Ninguna = 800 mm³ y con Escalar de 2 a 6 = 3466,67 mm³ (sólido y superficie).
-
-### B-212 · Solevación sólida con un carril recto da un sólido inválido
-
-- **Qué:** boceto XY con cuadro −5..5, plano a z 10 con cuadro −10..10, boceto XZ con la línea de (5, 0) a (10, 10) (carril que toca el medio del lado x=5 abajo y del lado x=10 arriba); `loft sketches=["S1","S2"] rails=[{"sketch":"C","curve":<id>}]`.
-- **Esperado (Fusion):** «Rails must intersect each section» (ayuda `Loft reference`): este carril los toca, y el resultado es el mismo tronco de 2333,33 mm³ que sin carril.
-- **Obtenido:** «Solevado: el kernel produjo un sólido inválido con estos valores». `create_surface_loft` con los mismos perfiles y carril sale bien (670,82 mm²).
-- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril_solevacion.py` (salida en `sonda_carril_solevacion.txt`).
-- **Causa probable:** no se leyó a fondo; el carril se pasa a `MakePipeShell` con `BRepFill_ContactOnBorder` (`nucleo/solidos_crear.py:1324`) y la superficie usa otro camino.
-- **Prueba propuesta:** este caso da 2333,33 mm³ y `geo.es_valida`.
-
-### B-213 · Nervio y Red recortados contra la caja del cuerpo
-
-- **Qué:** escuadra (piso x 0..40, y −30..30, z 0..5 y pared x 0..5, z 0..50: 25500 mm³), boceto XZ con la línea (35, 5) → (5, 45); `create_rib thickness=2 reverse=true`. La misma escuadra en y 0..60 (el boceto queda en el borde) con `direction` symmetric y side1. Red: caja 40³ abierta en y = 0 y boceto en un plano delante de la boca. En la ventana: Nervio › Cambiar dirección, Enter.
-- **Esperado (Fusion):** «To Next: Extrudes the rib from the sketch profile to the nearest faces on a solid body» (ayuda `Rib reference`): hacia afuera no hay cara, así que avisa; en el borde, el nervio entero (1200 mm³), con la mitad afuera del cuerpo.
-- **Obtenido (2026-11-06):** lo de afuera ya avisa («El sentido invertido no llega al cuerpo: desactivá «Cambiar dirección» o mové el boceto», B-216 tanda 2); queda: en el borde, simétrico +600 (26100 en vez de 26700) y side1 «Nervio: la curva queda dentro del cuerpo» (medido hoy con `sondas_nrr.py nervio_borde`); con `thickness=1e6`, 61500 mm³ (recortado al ancho del cuerpo, sin aviso).
-- **Reproducir:** `evidencias/ui_2026-11-05/sondas_nrr.py nervio_borde nervio_espesor_enorme` (salida en `sondas_nrr.txt`) o la pieza `nervio_red_repujado`.
-- **Causa probable (leída):** `_hasta_el_cuerpo` interseca el nervio con la caja del cuerpo (`nucleo/solidos_crear.py:1419`) antes de buscar las piezas que tocan la curva: eso recorta el espesor y deja de comprobar que el nervio termine en una cara.
-- **Prueba propuesta:** en el borde, +1200 en simétrico, side1 y side2; `thickness` enorme sin recorte mudo.
-
-### B-215 · Desmoldeo del Nervio con ángulo negativo o con dirección de extracción
-
-- **Qué:** la escuadra de B-213; `create_rib thickness=2 draft_angle=-1` y `create_rib thickness=2 draft_angle=1 pull_direction="XY"` (también −5 y 5). En la ventana: Ángulo de desmoldeo «-1 deg», o Dirección de extracción = plano XY.
-- **Esperado (Fusion):** «Draft Angle» y «Draft Pull Direction: Select a face or plane to define the pull direction» (ayuda `Rib reference`); la API anuncia −45..45 grados.
-- **Obtenido:** «El desmoldeo falló en el kernel (ángulo demasiado grande?)» en los cuatro. Con +5 y sin dirección anda (27539,89 mm³: el nervio engorda hacia la base).
-- **Reproducir:** `sondas_nrr.py nervio_desmoldeo`; pieza `nervio_red_repujado` («Nervio desmoldeo −1°» y «… con extracción»).
-- **Causa probable:** no se leyó a fondo. `_desmoldear_pared` deja afuera las caras cuya normal no es perpendicular a la extracción (`nucleo/solidos_crear.py:1412`) y `nervio` fuerza el sentido de la extracción (línea 1457); el único test con dirección usa la misma que el crecimiento.
-- **Prueba propuesta:** −1° da un poco menos de 26700 y 1° con extracción Z da un sólido válido.
-
 ### B-220 · Repujado con «Envolver» en un cilindro lejos del perfil repuja dando una vuelta de más
 
 - **Qué:** placa 60×40×10 con las cuatro aristas de arriba empalmadas r 3 (`fillet edges=">Z" radius=3`), cuadro
@@ -133,16 +89,6 @@ de arriba manda sobre este texto.
   (`ui/comandos/asas_extra.py:295`), mientras `_sentido_hacia_cuerpo` elige el sentido por la cara más cercana.
 - **Prueba propuesta:** con el boceto a y = 30 la flecha de Distancia apunta +Y sin invertir y −Y invertida, igual que
   la previa.
-
-### B-206 · Inicio › Objeto en un plano no paralelo (Parcial)
-
-- **Arreglado:** el perfil se proyecta sobre el plano elegido a lo largo de la dirección (`geo.proyectar_sobre_plano`,
-  con las aristas pasadas a recta, círculo o elipse por `GeomConvert_CurveToAnaCurve`); la delgada arma la pared en el
-  plano del perfil y recién después proyecta (`extruir_avanzado(inicio_plano=...)`); «Al objeto» y «Todo» pasan de largo
-  desde el punto más bajo de la base. Test:
-  `tests/test_api_opciones_solido1.py::test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el`.
-- **Queda — conicidad + inicio inclinado:** error claro en `timeline/operaciones.py` (`inclinado` con conicidad). Para
-  hacerlo, `_prisma` (`nucleo/solidos_crear.py`) tendría que usar la cara inclinada como plano neutro del desmoldeo.
 
 ### B-188 · Reproducción exacta pendiente de REMOVEDOR
 
