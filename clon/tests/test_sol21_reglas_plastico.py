@@ -56,6 +56,40 @@ def test_asignar_pasa_el_material_y_crea_parametros():
     assert "2 " in str(p["PlasticThickness"]) + " " or "2mm" in str(p["PlasticThickness"]).replace(" ", "")
 
 
+def test_la_delgada_toma_el_espesor_de_la_regla_asignada():
+    """H-87: con una regla de plástico asignada, Extruir delgada arranca con su espesor (Fusion: la regla da
+    Thickness y la usan Extrude, Rib, Web…). Sin regla sigue en 1 mm; lo escrito a mano manda."""
+    s = _pieza()                                   # la caja de 20×20×10 queda en el componente Carcasa
+    llamar(s, "assign_plastic_rule", component="Carcasa", rule="ABS 2 mm")
+    llamar(s, "create_sketch", plane="XY", name="B")
+    llamar(s, "draw_rectangle", x1=30, y1=0, x2=50, y2=10)
+    cuerpo = llamar(s, "extrude", sketch="B", distance=10, thin=True)["bodies_created"][0]
+    assert cuerpo["volume"] == pytest.approx(1360)          # pared de 2 mm (con 1 mm da 640)
+    escrito = llamar(s, "extrude", sketch="B", distance=10, thin=True, wall_thickness=1)["bodies_created"][0]
+    assert escrito["volume"] == pytest.approx(640)
+    from omnicad.timeline.documento import Documento
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.solido import Extruir
+    campos = {c.clave: c.defecto for c in Extruir().campos(ContextoComando(s.doc))}
+    assert campos["espesor"] == "2 mm"                       # el panel arranca con el de la regla
+    sin_regla = {c.clave: c.defecto for c in Extruir().campos(ContextoComando(Documento()))}
+    assert sin_regla["espesor"] == "1 mm"
+
+
+def test_el_espesor_de_la_regla_no_se_toma_de_otro_componente():
+    """La regla es la del componente del cuerpo que se toca; sin cuerpos (cuerpo nuevo) manda la única del diseño."""
+    from omnicad.nucleo import geometria as geo
+    from omnicad.timeline.operaciones import EstadoModelo, espesor_plastico
+    e = EstadoModelo()
+    con_regla = e.nuevo_cuerpo("op1", geo.caja(10, 10, 10))
+    suelto = e.nuevo_cuerpo("op1", geo.caja(10, 10, 10))
+    e.componentes["op1"] = {"nombre": "Carcasa", "regla_plastico": {"espesor": 3.0}}
+    e.cuerpos[con_regla].componente = "op1"
+    assert espesor_plastico(e, [suelto]) == "1 mm"     # su componente no tiene regla: no toma la de al lado
+    assert espesor_plastico(e, [con_regla]) == "3 mm"
+    assert espesor_plastico(e) == "3 mm"               # sin cuerpos: la única regla asignada
+
+
 def test_errores_claros():
     s = _pieza()
     assert not api.llamar(s, "assign_plastic_rule", {"component": "Nada"})["ok"]

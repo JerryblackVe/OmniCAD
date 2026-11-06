@@ -3,7 +3,7 @@
 import numpy as np
 
 from ...nucleo import geometria as geo
-from ...timeline.operaciones import OpExtrusion, OpRevolucion
+from ...timeline.operaciones import OpExtrusion, OpRevolucion, espesor_plastico
 from ...timeline.parametros import ANGULO, LONGITUD
 from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir,
                        hit_desde_ref, hits, ref1)
@@ -52,7 +52,8 @@ class Extruir(Comando):
             Expresion("distancia2", "Distancia del lado 2", "10 mm", visible_si=dos),
             Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, avanzado=True),
             Expresion("conicidad2", "Conicidad del lado 2", "0 deg", ANGULO, visible_si=dos, avanzado=True),
-            Expresion("espesor", "Grosor de pared", "1 mm", visible_si=lambda v: v.get("tipo") == "delgada"),
+            Expresion("espesor", "Grosor de pared", espesor_plastico(ctx.estado),
+                      visible_si=lambda v: v.get("tipo") == "delgada"),
             Opciones("ubicacion", "Ubicación de pared", {"lado1": "Lado 1", "lado2": "Lado 2", "centro": "Centro"},
                      visible_si=lambda v: v.get("tipo") == "delgada"),
             campo_operacion(),

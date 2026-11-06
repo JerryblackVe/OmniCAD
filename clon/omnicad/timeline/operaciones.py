@@ -59,6 +59,21 @@ def id_cuerpo(valor):
                                      '{"tipo": "cuerpo", "cuerpo": "op1.c1"}')
 
 
+def espesor_plastico(estado, cuerpos=()):
+    """Espesor de pared de las herramientas de plástico: el de la regla del componente de `cuerpos` y, sin cuerpos
+    (cuerpo nuevo), el de la única regla asignada en el diseño (Fusion usa la del componente en el que se trabaja).
+    1 mm si no hay regla."""
+    for cid in cuerpos:
+        cuerpo = estado.cuerpos.get(id_cuerpo(cid))
+        regla = (estado.componentes.get((cuerpo.componente if cuerpo else "") or "") or {}).get("regla_plastico")
+        if regla:
+            return f"{regla['espesor']:g} mm"
+    if cuerpos:                    # el componente del cuerpo que se toca no tiene regla: no se toma la de otro
+        return "1 mm"
+    asignadas = [c["regla_plastico"] for c in estado.componentes.values() if c.get("regla_plastico")]
+    return f"{asignadas[0]['espesor']:g} mm" if len(asignadas) == 1 else "1 mm"
+
+
 # ---------------------------------------------------------------- estado del modelo
 class Cuerpo:
     """Cuerpo del modelo. `tipo`: "solido" | "superficie" | "malla" (como los cuerpos de Fusion).
@@ -1114,10 +1129,11 @@ class OpExtrusion(_OpConPerfiles):
     PARAMS = {"boceto": "", "perfiles": [], "caras": [], "tipo": "solida", "inicio": "plano", "desfase_inicio": "0 mm",
               "inicio_objeto": None, "direccion": "un_lado", "medida": "mitad", "extension": "distancia",
               "distancia": "10 mm", "hasta": None, "extension2": "distancia", "distancia2": "10 mm", "hasta2": None,
-              "conicidad": "0 deg", "conicidad2": "0 deg", "espesor": "1 mm", "ubicacion": "lado1", "invertir": False,
+              "conicidad": "0 deg", "conicidad2": "0 deg", "espesor": "", "ubicacion": "lado1", "invertir": False,
               "hasta_modo": "cara", "desfase_hasta": "0 mm", "curvas": [],
               "simetrica": False, "operacion": "nuevo", "objetivo": "", "objetivos": []}
     EXPRESIONES = ("distancia", "distancia2", "desfase_inicio", "conicidad", "conicidad2", "espesor", "desfase_hasta")
+    # espesor "" = el de la regla de plástico asignada (1 mm sin regla)
     # Lo que no se usa con estas opciones no se lista: Fusion crea AlongDistance y TaperAngle, por lado.
     def claves_modelo(self):
         p = self.p
@@ -1176,7 +1192,8 @@ class OpExtrusion(_OpConPerfiles):
             raise ErrorOperacion("«Al objeto» en el lado 2 todavía no está disponible: usá una distancia.")
         delgado = None
         if p.get("tipo") == "delgada":
-            delgado = {"espesor": ctx.evaluar(p["espesor"]), "ubicacion": p.get("ubicacion", "lado1")}
+            espesor = str(p.get("espesor") or "").strip() or espesor_plastico(estado, self._cuerpos_objetivo())
+            delgado = {"espesor": ctx.evaluar(espesor), "ubicacion": p.get("ubicacion", "lado1")}
         conicidad = ctx.evaluar(p.get("conicidad", "0"), ANGULO)
         conicidad2 = ctx.evaluar(p.get("conicidad2", "0"), ANGULO)
         if inclinado is not None and (abs(conicidad) > 1e-9 or abs(conicidad2) > 1e-9):
@@ -1206,6 +1223,11 @@ class OpExtrusion(_OpConPerfiles):
         afectados = aplicar_resultado(estado, ctx, self.id, forma, p["operacion"], self._objetivo())
         self._registrar_usados(afectados)
         _exigir_cuerpo_con_volumen(estado, afectados)
+
+    def _cuerpos_objetivo(self):
+        """Los cuerpos de «Objetos para cortar», siempre como lista (vacía = automático)."""
+        o = self._objetivo()
+        return list(o) if isinstance(o, (list, tuple)) else ([o] if o else [])
 
     @staticmethod
     def _forma_objeto(e):

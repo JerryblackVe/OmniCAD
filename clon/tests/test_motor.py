@@ -174,6 +174,23 @@ def test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado():
         assert prohibido not in salida, salida[-3000:]
 
 
+def test_ningun_valor_por_defecto_usa_un_enum_de_ocp():
+    """Un `def f(x=TopAbs_SOLID)` evalúa el enum al importar el módulo: con OmniKernel no hay OpenCascade y la app no
+    arranca (B-189). Los nombres de OCP los declara `_iniciar_opencascade`, nunca un valor por defecto."""
+    import ast
+    import re
+    from pathlib import Path
+    ocp = re.compile(r"^(TopAbs_|GeomAbs_|TopoDS|gp_|BRep|Geom_|GProp|Law_|ShapeFix|BOPAlgo|TopExp|TopLoc|ElCLib|GCPnts)")
+    malos = []
+    for ruta in Path(__file__).resolve().parents[1].joinpath("omnicad").rglob("*.py"):
+        for nodo in ast.walk(ast.parse(ruta.read_text(encoding="utf-8"))):
+            if isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for defecto in [*nodo.args.defaults, *(d for d in nodo.args.kw_defaults if d is not None)]:
+                    malos += [f"{ruta.name}:{nodo.lineno} {nodo.name}: {n.id}"
+                              for n in ast.walk(defecto) if isinstance(n, ast.Name) and ocp.match(n.id)]
+    assert not malos, malos
+
+
 def test_metodos_de_clase_con_occ_no_corren_con_omnikernel(monkeypatch):
     plano = geo.Plano("XY")
     monkeypatch.setenv("OMNICAD_MOTOR", "omnikernel")

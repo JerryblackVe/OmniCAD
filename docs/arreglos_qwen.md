@@ -31,6 +31,10 @@ Se corren de a una y en orden. El coordinador revisa y commitea cada tanda antes
 En cada tanda, además de esa lista: todos los archivos que da
 `grep -l "<cada función que tocaste>" clon/tests/test_*.py`.
 
+## Informe tanda C1 (escrito por el coordinador)
+
+CodeBuddy con deepseek-v4.1-flash, 2 corridas cortadas por el tope de 45 min, sin informe propio. **H-87 resuelto**: Extruir delgada arranca con el espesor de la regla de plástico (`timeline/operaciones.py` › `espesor_plastico`, ventana, API `wall_thickness` vacío). **B-189**: ya estaba resuelto en HEAD; queda `test_motor.py::test_ningun_valor_por_defecto_usa_un_enum_de_ocp`. Nuevos: B-218 y H-102. Revisión del coordinador: ruff limpio, 550 + 728 tests verdes.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.
