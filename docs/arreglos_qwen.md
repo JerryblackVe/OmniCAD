@@ -691,6 +691,127 @@ lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
   - No probé con la app real abierta bajo OmniKernel + OCP bloqueado más allá del import (el test de humo del coordinador cubre ese recorrido).
   - `nucleo/omnikernel/editar_cara.py` no existe a propósito: la operación queda sin soporte con OmniKernel.
 
+## Informe tanda C13
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash. **Tanda:** C13 · **Ítem:** CF-8 (lo que falta). **Sin commitear** (lo commitea el coordinador).
+**Alcance:** se hicieron **completas** las dos primeras opciones del orden de la fila C13 —tema del sistema y ratón estilo Alias/Inventor/PowerMill/SOLIDWORKS—, cada una con preferencia guardada, control en Preferencias › General, efecto real en la app, la misma opción en `get_preferences`/`set_preference` y test rojo→verde. Las **cinco restantes no entraron** y la fila queda **Parcial** con la lista exacta y el motivo de cada una (abajo, en «Lo que falta»).
+
+### CF-8 (1) — Tema del sistema — **Hecho**
+
+- **Qué dice la ayuda de Fusion:**
+  - `docs/fusion_docs/contenido/fusion-releasenotes/2025-release-notes-3e142024d7c.md:546` — «New UI Themes allows you to switch between **Dark Blue**, **Match Device Theme**, **Light Gray** and **Fusion Classic**». Además de los temas fijos hay uno que sigue al claro/oscuro del sistema.
+  - `fusion-preferences-reference-073442e64a1.md` (la referencia de Preferencias) **no** lo nombra: habla de Mouse setup, orientación de modelado, unidades y gráficos. El tema sale de las notas de versión, igual que en C11 pasó con la barra espaciadora.
+- **Qué cambié:**
+  - `clon/omnicad/ui/temas.py:27` — `SISTEMA = "sistema"`, **fuera** de `INCLUIDOS`: los cinco temas de siempre no cambian y `test_hay_cinco_temas_y_el_de_fabrica_es_oscuro_moderno` sigue verde.
+  - `clon/omnicad/ui/temas.py:542` — `disponibles()` lo pone primero, con el nombre «Tema del sistema» (y el docstring del módulo, `:7`, lo cuenta).
+  - `clon/omnicad/ui/temas.py:551` — `esquema_sistema()`: «claro» solo si `QGuiApplication.styleHints().colorScheme()` dice Light; cualquier otra cosa (Unknown incluido) es «oscuro», que es el tema de fábrica. `:560` `tema_del_sistema()` lo traduce a `claro_moderno` / `oscuro_moderno`. El import de Qt va **dentro** de la función, como pide el docstring del módulo («no importa Qt al cargarse»).
+  - `clon/omnicad/ui/temas.py:565` — `resolver("sistema")` devuelve los colores del tema concreto pero con `clave` «sistema» y `base` = ese tema concreto: el aviso de contraste, la vista previa y la plantilla exportada siguen funcionando sin tocar nada.
+  - `clon/omnicad/ui/ventana.py:164` — `QGuiApplication.styleHints().colorSchemeChanged` conectado a `_al_cambiar_esquema` (`:624`), que vuelve a llamar a `aplicar_tema()`: si el sistema pasa a claro u oscuro mientras la app está abierta, el tema cambia sin reiniciar. Es un método de la ventana y no un `lambda` a propósito: Qt suelta la conexión cuando la ventana se destruye (con el lambda, cada ventana cerrada quedaba viva para siempre y el aviso podía llegar a un objeto ya borrado).
+  - `clon/omnicad/api/herramientas_preferencias.py:13` — `general/tema` entra en la lista blanca con **seis valores fijos** (los cinco incluidos y «sistema»), así `get_preferences` y `set_preference` ven la opción. Los temas propios (`usuario:…`, que son archivos del disco) **siguen prohibidos**: `_exigir_clave` (`:96`) y el docstring de `set_preference` (`:157`) pasan a decir «temas propios (usuario:…)», y hay un test que comprueba que `set_preference("general/tema", "usuario:mi_tema")` falla. `docs/agentes/herramientas.md` regenerado (una línea, la del docstring).
+- **Gemelos revisados:**
+  - El combo de Preferencias › General (`ui/preferencias.py` › `_combo_temas`): arma la lista con `temas.disponibles()`, así que la opción nueva aparece sin tocar el diálogo. ✔
+  - La lista blanca de la API: mismas claves y mismo valor por defecto (`test_las_preferencias_autorizadas_existen_en_la_ventana`, verde) y la lista de temas comparada contra `temas.INCLUIDOS + ["sistema"]` en el test nuevo, para que no se desvíe si mañana se agrega un tema. ✔
+  - `temas.resolver()`: lo usan el aviso de contraste (`_mostrar_aviso_tema`), la vista previa (`activar`) y `exportar_plantilla`; los tres siguen andando porque el tema del sistema devuelve los colores de un tema concreto. ✔
+  - `tests/test_temas.py:217` y `:305`: las dos listas de `disponibles()` que se comparaban por posición se ajustaron (ahora «sistema» va primero). Es un cambio esperado, no un test debilitado: se sigue exigiendo la lista exacta y el orden. ✔
+  - `ui/ventana.py` › `aplicar_tema`: es el único que aplica QSS/paleta a la app; el camino de Preferencias › Aplicar no cambió. ✔
+
+### CF-8 (2) — Ratón estilo Alias, Inventor, PowerMill y SOLIDWORKS — **Hecho**
+
+- **Qué dice la ayuda de Fusion:** `fusion-preferences-reference-073442e64a1.md` › «Program-specific mouse shortcut presets»:
+  - **Alias** — Zoom: Shift + Alt + botón derecho · Pan: Shift + Alt + botón medio · Orbit: Shift + Alt + botón izquierdo.
+  - **Inventor (solo Windows)** — Zoom: F3 + izquierdo · Pan: F2 + izquierdo · Orbit: F4 + izquierdo.
+  - **PowerMill** — Zoom: rueda · Pan: Mayús + medio · Orbit: medio · (nota: «The PowerMill preset uses its own Default Orbit type») · Zoom to box: Ctrl+Mayús+medio · Rotate about X/Y/Z: Mayús+Alt+izquierdo/medio/derecho.
+  - **SOLIDWORKS** — Zoom: Mayús + rueda · Pan: Ctrl + medio · Orbit: medio.
+  - Y el aviso general: «When using any of the presets above, you can press F6 to resize the view to fit in the current window» (F6 no existe en OmniCAD; ver ⚠).
+- **Qué cambié:**
+  - `clon/omnicad/ui/visor3d.py:2374` — `accion_raton` suma los cuatro esquemas. Alias: con Mayús+Alt, izquierdo órbita, medio encuadre, derecho **zoom de arrastre** (la acción «zoom» que ya usaba la barra de navegación y que `mouseMoveEvent` resuelve con `acercar`). Inventor: con F2/F3/F4 mantenida y el izquierdo, encuadre/zoom/órbita; el medio encuadra y Mayús+medio orbita. PowerMill: medio órbita, Mayús+medio encuadre. SOLIDWORKS: medio órbita, Ctrl+medio encuadre.
+  - El `Mayús + medio = órbita` que antes valía para **todos** los esquemas bajó adentro de los esquemas que lo usan: si quedaba arriba, PowerMill (que lo quiere como encuadre) y SOLIDWORKS (Ctrl+medio) nunca lo alcanzaban. Es el gemelo que se rompía.
+  - `clon/omnicad/ui/visor3d.py:500` — `_tecla_nav` (None o F2/F3/F4), que se pone en `keyPressEvent` (`:2691`), se limpia en `keyReleaseEvent` (`:2704`) y también en `focusOutEvent` (`:2710`): sin lo último, una tecla apretada y un Alt+Tab dejaban el esquema «Inventor» en zoom para siempre.
+  - `clon/omnicad/ui/preferencias.py:473` — el combo pasa de tres a siete opciones, cada una con su combinación en el texto.
+  - `clon/omnicad/api/herramientas_preferencias.py:15` — las mismas siete en `general/raton`.
+- **Gemelos revisados:**
+  - `mousePressEvent` / `mouseMoveEvent` / `mouseReleaseEvent` (`ui/visor3d.py`): consumen lo que devuelve `accion_raton` («orbita», «encuadre», «zoom») y ya sabían hacer las tres cosas; no hubo que tocarlos. El zoom de arrastre usa el mismo camino que el modo Zoom de la barra de navegación. ✔
+  - El gesto del menú radial (clic derecho + arrastre) sigue igual: en Alias el derecho **con** Mayús+Alt es zoom y **sin** modificadores sigue abriendo el menú contextual (devuelve None). ✔
+  - `wheelEvent`: la rueda sigue haciendo zoom en **todos** los esquemas, también en Alias e Inventor, donde Fusion no la usa. Es una decisión: sin rueda, cambiar el preset parecería romper el ratón. Queda anotado como diferencia deliberada con Fusion. ✔
+  - `test_f16_visor.py` (usa el esquema «omnicad») y los tests que usan el de fábrica («fusion»): el camino de esos dos esquemas quedó idéntico, línea por línea. ✔
+  - `ui/comandos/comunes.py`, `ui/manipuladores.py`, `ui/render.py` leen `visor.R` como dirección del mundo: **no** cambian, porque este ítem no toca la cámara. ✔ (Sí habría que tocarlos para la orientación Y arriba: ver «Lo que falta».)
+
+### Tests
+
+- `clon/tests/test_preferencias.py:103` — `test_tema_del_sistema_sigue_al_claro_oscuro_de_windows`: «sistema» está en `disponibles()`; con el esquema simulado en claro, `aplicar_tema()` deja el fondo de `claro_moderno`; cambiándolo a oscuro, el de `oscuro_moderno`; el combo de Preferencias lo deja elegido con el texto «Tema del sistema»; la API tiene los seis valores; y `_validar("general/tema", "usuario:mi_tema")` falla.
+- `clon/tests/test_preferencias.py:131` — `test_raton_estilos_alias_inventor_powermill_solidworks`: las combinaciones de los cuatro presets, con la tecla F3 apretada de verdad (`QTest.keyPress`/`keyRelease` sobre el visor) y el combo y la API con las mismas siete opciones.
+- **Salida ROJA (antes del arreglo):**
+  `FAILED tests/test_preferencias.py::test_tema_del_sistema_sigue_al_claro_oscuro_de_windows` → `AssertionError: assert 'sistema' in ['oscuro_moderno', 'claro_moderno', 'azul_profesional', 'minimalista', 'clasico']`;
+  `FAILED tests/test_preferencias.py::test_raton_estilos_alias_inventor_powermill_solidworks` → `AssertionError: assert 'encuadre' == 'orbita'`;
+  `2 failed, 2 passed in 2.96s`.
+- **Salida VERDE (con el arreglo):** `4 passed in 3.34s` (`tests/test_preferencias.py`).
+- **ruff check .** (repo entero, desde `clon/`): `All checks passed!`
+
+### Grupos de tests (con `../scripts/turno.py`, todos < 900 s)
+
+- `test_preferencias.py + test_temas.py + test_iconos_tema_vivo.py + test_f16_visor.py + test_api_misc.py` → **71 passed in 9.25s**
+- `test_doc_agentes.py + test_comandos.py` → **51 passed in 6.95s**
+- `test_cobertura_ui_api.py` → **347 passed in 2.35s**
+- `test_preferencias.py + test_temas.py + test_iconos_tema_vivo.py` (después de cambiar el lambda por el método) → **54 passed in 5.14s**
+- `test_tipografia_ui.py -k "aplicar_tema or colores_de_texto_y_descarta or muestra_y_el_aviso or restablecer_apariencia"` (los 4 que tocan el tema) → **4 passed, 19 deselected in 8.35s**
+- ~~`test_tipografia_ui.py` entero no se puede correr en esta PC~~ **Corrección del coordinador:** corrido entero con turno, 23 passed (en main y en esta rama con la tanda); el corte de la corrida del agente no se reproduce.
+
+### `/ponytail-review` (salida completa)
+
+> **What this change does:** Preferencias › General gana dos opciones de Fusion que faltaban. (1) «Tema del sistema»: un tema virtual, fuera de `INCLUIDOS`, que resuelve al claro o al oscuro según lo que informe el sistema operativo y se vuelve a aplicar cuando el sistema cambia. (2) Los presets de ratón Alias, Inventor, PowerMill y SOLIDWORKS en `general/raton`, con el zoom, el encuadre y la órbita de cada uno.
+>
+> **Must fix:** ninguno.
+>
+> 1. **La conexión al cambio de esquema dejaba viva a cada ventana cerrada** (`ui/ventana.py:164`, versión anterior)
+>    - **What this is:** La ventana se suscribe al aviso global «cambió el claro/oscuro del sistema».
+>    - **Problem:** Estaba suscripta con un `lambda` que capturaba `self`. El objeto global del aviso guarda una referencia fuerte al lambda, así que la ventana nunca se liberaba, y si el sistema cambiaba después de cerrarla, el aviso llamaba a `aplicar_tema()` sobre un objeto Qt ya destruido. En la app es una sola ventana; en los tests se crean y se cierran decenas.
+>    - **Fix:** Un método de la ventana (`_al_cambiar_esquema`, `:624`) y conectarlo a él: Qt suelta la conexión cuando el receptor se destruye. 3 líneas, sin `lambda`.
+>    - **If we skip it:** Fuga de memoria por ventana y un posible `RuntimeError`/cierre al cambiar el tema de Windows con una ventana cerrada.
+>
+> **Should fix:** ninguno.
+>
+> **Nice to have:**
+>
+> 2. **La lista de temas de la API es una copia** (`api/herramientas_preferencias.py:13`)
+>    - **What this is:** `_OPCIONES` repite a mano las seis claves de tema que la UI saca de `temas.INCLUIDOS`.
+>    - **Problem:** Si mañana se agrega un tema incluido, la API se queda con cinco y nadie se entera.
+>    - **Fix:** Ya está atajado con un test (`test_tema_del_sistema…` compara contra `temas.INCLUIDOS + ["sistema"]`), así que la copia no puede desviarse sin que falle la suite. Importar `temas` desde la API sería peor: la API no debe depender de la UI.
+>    - **If we skip it:** Nada, mientras el test esté.
+>
+> 3. **Las F2/F3/F4 del preset Inventor solo llegan con el foco en el lienzo** (`ui/visor3d.py:2691`)
+>    - **What this is:** La tecla se lee del `keyPressEvent` del visor.
+>    - **Problem:** Si el foco está en el navegador o en el timeline, F3 no llega al visor y el arrastre con el izquierdo no hace zoom.
+>    - **Fix:** No lo toco: en Fusion esas teclas también son del lienzo, y llevarlas a la ventana chocaría con los atajos de las acciones. Queda anotado.
+>    - **If we skip it:** El preset Inventor se siente incompleto si el lienzo no tiene el foco (un clic en el lienzo lo arregla).
+>
+> **Verdict:** Ship.
+> **Lean:** 0 lines possible (el cambio agrega la opción que se pidió y el único código propio es el que la resuelve; no quedó código muerto).
+> **Not checked:** no corrí la prueba de humo ni la suite completa (las corre el coordinador); no abrí Fusion (el comportamiento sale de la ayuda oficial); no miré la opción en pantalla con una captura (no hay pieza de Preferencias en `scripts/prueba_ui/`).
+
+**Qué arreglé de la review:** el punto 1 (el `lambda` → `_al_cambiar_esquema`), y volví a correr los grupos que lo tocan (54 y 4 verdes, ruff limpio). El 2 ya estaba cubierto con un test; el 3 queda como limitación anotada.
+
+### Lo que falta de CF-8 (la fila queda **Parcial**)
+
+En el orden de la fila C13, y por qué no entró:
+
+1. **Orientación Y o Z hacia arriba.** El combo «Orientación de modelado por defecto» solo ofrece «Z hacia arriba». Fusion (`fusion-preferences-reference`: «The default modeling orientation is Z up. To change it, select Y up, click OK, and restart Fusion. The ViewCube then indicates the new default modeling orientation by showing the Y up») lo aplica al mundo entero, y en OmniCAD eso significa meter una rotación mundo→pantalla en el marco de la cámara: hoy **15 lugares de 6 archivos** leen `visor.R` como dirección del mundo (`ui/visor3d.py`: `ojo`, `desplazar`, `encuadrar`, `mirar_a_plano`, `primitivas_centro_giro`, el orden de dibujo por profundidad y el sombreado de `funcion_colores`; `ui/render.py` › `u_atras` del shader; `ui/manipuladores.py`; `ui/comandos/comunes.py`, `editar_cara.py` e `inspeccionar.py`). Si uno solo queda sin convertir, el modelo se ve girado pero las luces, el gizmo o la vista «Mirar a» quedan mal, y eso **no se puede dar por bueno sin verlo en pantalla** (no hay pieza de `todo.py` que lo mire). Es una tanda propia, no una opción suelta.
+2. **Tipo de diseño por defecto** (Pieza/Ensamblaje/Híbrido). OmniCAD no tiene tipos de diseño: es una función que falta (está en CF-6, «¿Qué desea diseñar?»). Una preferencia sin nada que elegir sería un botón que no hace nada.
+3. **Finalidad de uso** (diseño, fabricación, electrónica). En Fusion (`fusion-home`: «Update your purpose for using Fusion… Purpose influences the First things to try section») solo elige **qué sugiere la puesta en marcha**. Sin puesta en marcha no hay nada que influir.
+4. **Experiencia de puesta en marcha.** OmniCAD no tiene asistente, tour ni «First things to try» de primer arranque.
+5. **Controlador de gráficos.** Fusion elige el motor de dibujo de la interfaz (DirectX 11 / Metal / OpenGL: `2026-release-notes`: «Fusion now automatically uses DirectX 11 when available, or software rendering…»; `2025-release-notes`: «This can be changed in the Compatibility & Troubleshooting section of Fusion's Preferences»). OmniCAD dibuja con el OpenGL de Qt: no hay una opción que se pueda cumplir de verdad, y la regla del módulo es no ofrecer lo que no se cumple.
+
+### Revisión del coordinador (2026-11-06)
+
+`ponytail-review` propio, dos Must fix arreglados por el coordinador: (1) con «Inventor», F2 lo atrapaba antes el atajo «Renombrar» de la ventana y el visor se tragaba F2–F4 con cualquier estilo: ahora el visor las toma solo con Inventor y acepta el `ShortcutOverride` (y no suelta la tecla con la repetición del teclado); test nuevo con y sin Inventor en `test_raton_estilos_alias_inventor_powermill_solidworks`. (2) el tema había entrado al MCP: CLAUDE.md y `docs/brechas_mcp.md` lo dejan afuera; sacado de `_OPCIONES` y el test exige que no esté (`herramientas.md` vuelve a quedar igual). `docs/brechas_mcp.md`: el ratón y el tamaño del ViewCube ya estaban en `set_preference`, se corrigió la frase que decía lo contrario. Verificación: `ruff check .` All checks passed!; 1089 passed (`test_preferencias`, `test_temas`, `test_iconos_tema_vivo`, `test_cobertura_ui_api`, `test_doc_agentes`, `test_seguimiento` y los 12 del grep); `test_comandos` 13 passed; `test_tipografia_ui` 23 passed.
+
+### Lo no verificado (⚠)
+
+- No corrí la prueba de humo ni la suite completa (las corre el coordinador), como pide la tanda.
+- **No miré las dos opciones en pantalla.** `scripts/prueba_ui/todo.py` no tiene ninguna pieza de Preferencias; lo que sí comprobé de verdad es la detección del esquema en esta PC (Windows en modo claro): `esquema_sistema()` devuelve «claro» y `tema_del_sistema()` → `claro_moderno`.
+- No probé el preset «Inventor» con el ratón real: el test aprieta y suelta F3 sobre el visor y consulta `accion_raton`, pero no arrastra con el botón izquierdo.
+- Diferencias deliberadas con Fusion, anotadas arriba: la rueda sigue haciendo zoom en Alias e Inventor; el «Zoom to box» de PowerMill (Ctrl+Mayús+medio) y sus «Rotate about X/Y/Z» (Mayús+Alt + izquierdo/medio/derecho) no se implementaron (el primero ya existe como modo Ventana de la barra de navegación, el segundo es la órbita libre); el F6 («resize the view to fit») no existe en OmniCAD.
+- ~~`tests/test_tipografia_ui.py` entero muere en esta PC~~ **Falso** (coordinador): corrido entero con turno pasa, 23 passed en HEAD de main y 23 passed en esta rama con la tanda.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

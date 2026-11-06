@@ -4,7 +4,8 @@ Sistema de temas de la interfaz: colores como datos, hoja de estilo (QSS) genera
 
   - Un tema es un dict de «tokens» de color (`#rrggbb`): superficies, textos, bordes, estados, menús, la vista 3D.
   - Hay cinco temas incluidos (`INCLUIDOS`); el de fábrica es `oscuro_moderno`. «clasico» conserva el aspecto de las
-    primeras versiones (medido de las capturas de Fusion que pasó el usuario).
+    primeras versiones (medido de las capturas de Fusion que pasó el usuario). Además se puede elegir «Tema del
+    sistema» (`SISTEMA`): el claro u oscuro que tenga el sistema operativo, como «Match Device Theme» de Fusion.
   - El QSS sale de UNA plantilla (`PLANTILLA_QSS`) y de los tokens: ningún color suelto en otro lado de la
     interfaz. Los widgets que dibujan a mano (navegador, menú radial, visor 3D) leen `activo()` al pintar.
   - Temas del usuario: archivos `.json` en la carpeta de temas (`carpeta_temas()`): `{"nombre": ..., "base": ...,
@@ -23,6 +24,8 @@ from string import Template
 from .. import carpeta_datos
 
 DEFECTO = "oscuro_moderno"
+SISTEMA = "sistema"                       # «Tema del sistema»: el claro u oscuro que tiene el sistema (el «Match
+                                          # Device Theme» de Fusion). No está en INCLUIDOS: se resuelve al vuelo.
 PREFIJO_USUARIO = "usuario:"
 VAR_CARPETA = "OMNICAD_TEMAS_DIR"        # reemplaza la carpeta de temas del usuario (pruebas, capturas)
 MIN_CONTRASTE = 4.5                       # WCAG AA para texto normal
@@ -537,15 +540,36 @@ def temas_usuario(carpeta=None):
 
 
 def disponibles(carpeta=None):
-    """[(clave, nombre, es_del_usuario)] de los temas elegibles (incluidos primero) y los avisos al leer la carpeta."""
+    """[(clave, nombre, es_del_usuario)] de los temas elegibles (el del sistema y los incluidos primero) y los avisos
+    al leer la carpeta."""
     usuario, avisos = temas_usuario(carpeta)
-    lista = [(k, t["nombre"], False) for k, t in INCLUIDOS.items()]
+    lista = [(SISTEMA, "Tema del sistema", False)]
+    lista += [(k, t["nombre"], False) for k, t in INCLUIDOS.items()]
     return lista + [(k, t["nombre"], True) for k, t in usuario.items()], avisos
+
+
+def esquema_sistema():
+    """«claro» u «oscuro», como lo tiene el sistema operativo (Qt lo informa en Windows, macOS y GNOME)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication
+    app = QGuiApplication.instance()
+    esquema = app.styleHints().colorScheme() if app is not None else Qt.ColorScheme.Unknown
+    return "claro" if esquema == Qt.ColorScheme.Light else "oscuro"
+
+
+def tema_del_sistema():
+    """La clave del tema incluido que corresponde al esquema del sistema (el de fábrica si no lo informa)."""
+    return "claro_moderno" if esquema_sistema() == "claro" else DEFECTO
 
 
 def resolver(clave, carpeta=None):
     """Tema completo de una clave: (tema, avisos). Una clave desconocida cae al tema de fábrica con un aviso."""
     usuario, avisos = temas_usuario(carpeta)
+    if clave == SISTEMA:
+        base = tema_del_sistema()
+        t = INCLUIDOS[base]
+        return {"clave": SISTEMA, "nombre": "Tema del sistema", "base": base, "colores": dict(t["colores"]),
+                "usuario": False}, avisos
     if clave in INCLUIDOS:
         t = INCLUIDOS[clave]
         return {"clave": clave, "nombre": t["nombre"], "base": clave, "colores": dict(t["colores"]),

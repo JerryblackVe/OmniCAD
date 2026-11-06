@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 
 from PySide6.QtCore import QEvent, QEventLoop, QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QSizePolicy, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
@@ -161,6 +161,7 @@ class VentanaPrincipal(QMainWindow):
         self.prefs = prefs or Preferencias()
         self._tema_aplicado = None          # tokens del tema que ya están en la aplicación
         self._avisos_tema = self.aplicar_tema()     # antes de crear los widgets: nacen con el estilo del tema
+        QGuiApplication.styleHints().colorSchemeChanged.connect(self._al_cambiar_esquema)
         self.doc = None
         self.dlg_parametros = None
         self.ocultos = set()
@@ -619,6 +620,11 @@ class VentanaPrincipal(QMainWindow):
             c.rejilla_fija = None
         c.visibilidad = {k: p[f"vista/vis_{k}"] for k in CLAVES_VISIBILIDAD}
         self.barra_nav.set_estilo(c.estilo_visual)
+
+    def _al_cambiar_esquema(self, *_a):
+        """«Tema del sistema»: el sistema pasó a claro u oscuro. Método de la ventana (y no un lambda) para que Qt
+        suelte la conexión cuando la ventana se destruye."""
+        self.aplicar_tema()
 
     def aplicar_tema(self, clave=None):
         """Preferencias › General › Tema: activa `clave` (o el guardado) en la aplicación entera —QSS, paleta y fondo

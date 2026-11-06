@@ -27,7 +27,7 @@ import weakref
 
 import numpy as np
 from OpenGL import GL
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPointF, QRect, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QBuffer, QByteArray, QEvent, QIODevice, QPointF, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import QApplication, QWidget
@@ -497,6 +497,7 @@ class Visor3D(QOpenGLWidget):
         self.forzar_orto = False           # vistas fijas de "Vistas múltiples" (superior, frontal, derecha)
         self.fov = 40.0
         self.modo = None   # None | orbita | encuadre | zoom | ventana | mirar | elegir_plano
+        self._tecla_nav = None              # F2/F3/F4 mantenida: el preset de ratón «Inventor» navega con el izquierdo
         self._mallas = []                  # [dict(v, n, seg, indice, id, color, tipo)] de los cuerpos visibles
         self.caras_pintadas = []           # [(id de cuerpo, v, n, color)]: caras con aspecto propio, sobre su cuerpo
         self._formas = {}                  # id_cuerpo → forma visible (para elegir caras)
@@ -2371,13 +2372,30 @@ class Visor3D(QOpenGLWidget):
 
     # ------------------------------------------------------------ ratón y teclado
     def accion_raton(self, boton, mods):
-        """Qué hace un arrastre según el modo activo y el esquema de Preferencias."""
+        """Qué hace un arrastre según el modo activo y el esquema de Preferencias: los de OmniCAD, Fusion y Tinkercad,
+        y los presets de Fusion para Alias, Inventor, PowerMill y SolidWorks (fusion-preferences-reference)."""
         mayus = bool(mods & Qt.ShiftModifier)
+        alt = bool(mods & Qt.AltModifier)
+        ctrl = bool(mods & Qt.ControlModifier)
         if self.modo in ("orbita", "encuadre", "zoom") and boton == Qt.LeftButton:
             return self.modo
+        esquema = self.config.esquema_raton
+        if esquema == "alias":                  # Mayús+Alt: izquierdo órbita, medio encuadre, derecho zoom
+            if mayus and alt:
+                return {Qt.LeftButton: "orbita", Qt.MiddleButton: "encuadre", Qt.RightButton: "zoom"}.get(boton)
+            return "encuadre" if boton == Qt.MiddleButton else None
+        if esquema == "inventor":               # F2 encuadre, F3 zoom y F4 órbita, arrastrando con el izquierdo
+            if boton == Qt.LeftButton:
+                return {Qt.Key_F2: "encuadre", Qt.Key_F3: "zoom", Qt.Key_F4: "orbita"}.get(self._tecla_nav)
+            if boton == Qt.MiddleButton:
+                return "orbita" if mayus else "encuadre"
+            return None
+        if esquema == "powermill":              # medio órbita, Mayús+medio encuadre
+            return (("encuadre" if mayus else "orbita") if boton == Qt.MiddleButton else None)
+        if esquema == "solidworks":             # medio órbita, Ctrl+medio encuadre
+            return (("encuadre" if ctrl else "orbita") if boton == Qt.MiddleButton else None)
         if boton == Qt.MiddleButton and mayus:
             return "orbita"
-        esquema = self.config.esquema_raton
         if esquema == "fusion":
             return "encuadre" if boton == Qt.MiddleButton else None
         if esquema == "tinkercad":
@@ -2670,7 +2688,19 @@ class Visor3D(QOpenGLWidget):
             self.update()
         super().leaveEvent(e)
 
+    def _es_tecla_inventor(self, e):
+        return self.config.esquema_raton == "inventor" and e.key() in (Qt.Key_F2, Qt.Key_F3, Qt.Key_F4)
+
+    def event(self, e):
+        if e.type() == QEvent.ShortcutOverride and self._es_tecla_inventor(e):
+            e.accept()                         # con «Inventor», F2 navega en el visor y no dispara Renombrar
+            return True
+        return super().event(e)
+
     def keyPressEvent(self, e):
+        if self._es_tecla_inventor(e):
+            self._tecla_nav = e.key()          # preset «Inventor»: F2 encuadre, F3 zoom, F4 órbita
+            return
         if e.key() == Qt.Key_Escape and self._arrastrando:
             self.cancelar_arrastre()
         elif e.key() == Qt.Key_Escape and self.modo:
@@ -2679,6 +2709,17 @@ class Visor3D(QOpenGLWidget):
             self.set_modo(None)
         else:
             super().keyPressEvent(e)
+
+    def keyReleaseEvent(self, e):
+        if self._es_tecla_inventor(e):
+            if not e.isAutoRepeat():           # mantener la tecla repite apretar/soltar: solo vale el soltar real
+                self._tecla_nav = None
+            return
+        super().keyReleaseEvent(e)
+
+    def focusOutEvent(self, e):
+        self._tecla_nav = None                 # sin foco no llega el «soltar»: una tecla quedaría apretada para siempre
+        super().focusOutEvent(e)
 
     # ------------------------------------------------------------ captura
     def captura_png(self, ancho=320):
