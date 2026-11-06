@@ -263,6 +263,213 @@ Revisión final: sin hallazgos pendientes; **Verdict: Ship.**
 - Sin type-check configurado en `clon/pyproject.toml`; no se construyó un instalador. No se crearon archivos
   temporales de prueba ni se tocó el índice de git.
 
+## Informe Sol · B-215
+
+**Estado: resuelto en `sol-geometria-nocturna`, sin commit.** La prueba propuesta de la escuadra produce un
+solo sólido válido: **26532,431377 mm³ con −1°**, **26839,640519 mm³ con +1° y extracción XY o Z**.
+El control de +5° con extracción por defecto conserva **27539,891170 mm³**. Son 14 regresiones nuevas y
+**1590 tests aprobados** en cuatro grupos completos de área/consumidores. El primer arreglo de OpenCascade
+pasó la prueba propuesta; no se necesitó otro intento de geometría ni dependencias nuevas.
+
+### Ayuda de Fusion y decisión
+
+Desde `D:/PROGRAMA`, con `D:/PROGRAMA/clon/.venv/Scripts/python.exe`:
+
+```console
+scripts/fusion_docs.py buscar Rib -s fusion-model
+scripts/fusion_docs.py ver "Rib reference" -s fusion-model
+scripts/fusion_docs.py ver "Create a rib" -s fusion-model
+```
+
+Leídos `docs/fusion_docs/contenido/fusion-model/rib-reference-74df3f99244.md` y
+`create-a-rib-b1cf2b2623b.md` de esa copia local; mirada la ilustración `recursos/34082c91a878d5eec1ea.png`.
+La referencia admite **Draft Angle** y **Draft Pull Direction**: «Select a face or plane to define the pull
+direction». El procedimiento confirma que se aplican al nervio. La ayuda no precisa el plano donde conserva
+el grosor: se mantiene el plano neutro existente, normal a la extracción y por el punto medio de la curva.
+
+INTENT: el código desmoldea el prisma auxiliar antes de recortarlo; la prueba exige un nervio válido con −1° y con extracción Z; la ayuda de Fusion admite ángulo de desmoldeo y una cara o plano para definir la extracción.
+
+La pared auxiliar se extiende mucho más allá del cuerpo: un ángulo que es viable en el nervio final puede
+cruzar sus caras fuera de él y hacer fallar `DraftAngle`. El arreglo recorta primero y conserva como candidatos
+solo los laterales originales que sobrevivieron. Así no inclina las caras nuevas de apoyo en x = 5 y z = 5.
+No se cambió el filtro por normal ni la orientación forzada de extracción: no fueron necesarios para la
+prueba propuesta. La conjetura inicial de la auditoría sobre ese filtro no era la causa completa.
+
+Cuenta independiente: triángulo 30 × 40 / 2 = 600 mm², espesor 2 mm. La profundidad media hasta la diagonal
+es 8 mm; hasta el plano z = 25 es 20/3 mm. Por tanto, el aumento es `1200 + 9600·tan(ángulo)` con extracción
+por defecto y `1200 + 8000·tan(ángulo)` con extracción Z. La base mide 25500 mm³.
+
+### Cambios (firmas y líneas)
+
+- `clon/omnicad/nucleo/solidos_crear.py:1414-1430`: helper privado
+  `_desmoldear_pared(bruto, direccion, angulo, origen, *, recortado)`.
+  Selecciona laterales en el bruto y los reconoce en el recorte con `_cara_dentro_de` existente; desmoldea
+  solo ese recorte. Se reutilizan la validación y los errores de `solidos_modificar.desmoldeo`.
+- `:1433-1467`: firma pública conservada
+  `nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, direccion="simetrica", invertir=False, extender=True, angulo_desmoldeo=0.0, direccion_desmoldeo=None)`.
+  Recorta antes del desmoldeo y entrega ambos sólidos al helper. Docstring precisa signo y plano neutro.
+- `:1470-1500`: firma pública conservada
+  `red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, direccion="simetrica", invertir=False, extender=True, angulo_desmoldeo=0.0)`.
+  Mismo orden para el gemelo; sin ángulo devuelve el recorte como antes.
+- `clon/tests/test_sol10_nervio_red.py:55-70,93-117`: 12 casos de Nervio (−1° por defecto, +1° con XY y Z,
+  +5° por defecto, cada uno simétrico y a ambos lados), Red negativa por API y Red curva por núcleo. Verifican
+  volumen, validez, un solo sólido y dos laterales cónicos en la curva. Los 10 tests anteriores siguen pasando.
+- `docs/seguimiento/bugs.md`: borradas fila y ficha; cabecera **26 = 19 abiertos + 6 parciales + 1 bloqueado**.
+  `docs/seguimiento/README.md` no tenía B-215: no había un ID que retirar allí.
+- `PROJECT_LOG.md`: Registro con fecha/modelo pedidos y lección respaldada por el rojo/verde.
+
+### Gemelos y consumidores
+
+TWINS: searched `_desmoldear_pared(` and draft-before-trim in `nervio` / `red` - found 1 other site: `red` in `clon/omnicad/nucleo/solidos_crear.py`; fixed with the same helper.
+
+| Camino | Evidencia y conclusión |
+|---|---|
+| Previa | `ui/comando.py:1515-1574` → `Documento.previsualizar` (`timeline/documento.py:1064-1127`) → `OpNervio`/`OpRed`. El atajo `ui/comando.py:1591-1599` solo vale para extrusión. No hay archivos `nucleo/previa*`. Comparte el arreglo; el gesto del panel no se ejecutó. |
+| Timeline | `timeline/ops_solido.py:260-271,279-289` pasa ángulo y dirección al núcleo. La API real de los tests recorre este camino y une el nervio al cuerpo. |
+| Superficie | Búsqueda en `nucleo/superficies.py` y `timeline/ops_superficie.py`: no tienen Nervio, Red ni una copia de este desmoldeo. La auditoría de Fusion confirma que esas herramientas no están en SUPERFICIE. |
+| OmniKernel | `nucleo/omnikernel/solidos_crear.py` no implementa Nervio ni Red; `omnikernel/superficies.py` solo declara pendientes. `omnikernel/solidos_modificar.py:89-103` tiene el desmoldeo genérico, sin este prisma auxiliar. `motor.py:107-154` informa falta de soporte de las operaciones sin adaptador. Inspección, sin ejecutarlo. |
+| API/MCP/CLI | `api/herramientas_solido_extra.py:161-227` valida −45..45 y traduce a `OpNervio`/`OpRed`; no duplica geometría. API, previa y aceptación consumen el mismo núcleo. |
+| Desmoldeo genérico | `solidos_modificar.py:1158-1217` conserva su constructor y validación; `_cara_dentro_de` de `:1220-1225` ya identifica caras procedentes de un corte en ese módulo. No se modificó. |
+
+Búsqueda literal por símbolos, desde la raíz:
+
+```console
+grep -l -E '_desmoldear_pared|\bnervio\b|\bred\b' clon/tests/test_*.py
+```
+
+Devolvió 32 archivos, todos incluidos en los grupos siguientes. Se conservaron incluso las coincidencias
+de `red` ajenas a geometría (asistentes, colores). Se agregaron `test_api_solido.py` y `test_comandos_crear.py`
+por el área. Se comprobó la importación desde `clon/`: `D:\PROGRAMA-sol\clon\omnicad\__init__.py`.
+
+### Rojo y verde reales
+
+Primero se agregaron solo −1° por defecto, +1° con XY y +1° con Z y se ejecutaron antes de tocar el núcleo:
+
+```console
+D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_sol10_nervio_red.py -k b215 -q -p no:cacheprovider
+FFF                                                                      [100%]
+E       AssertionError: {'ok': False, 'error_kind': 'OPERATION_FAILED', ...}
+FAILED tests/test_sol10_nervio_red.py::test_b215_nervio_diagonal_con_desmoldeo_negativo_o_extraccion_z[-1-None]
+FAILED tests/test_sol10_nervio_red.py::test_b215_nervio_diagonal_con_desmoldeo_negativo_o_extraccion_z[1-XY]
+FAILED tests/test_sol10_nervio_red.py::test_b215_nervio_diagonal_con_desmoldeo_negativo_o_extraccion_z[1-Z]
+3 failed, 10 deselected in 1.89s
+```
+
+Tras el arreglo, archivo completo (mismo prefijo, sin `-k b215`):
+
+```console
+.............                                                            [100%]
+13 passed in 3.14s
+```
+
+Después se amplió a 14 regresiones. La primera prueba de Red curva tenía solo un piso: B-213 recortaba
+el nervio entero contra su caja. Salida real: `Red: la curva queda dentro del cuerpo`,
+`1 failed, 23 passed in 4.38s`. Se agregó una pared alta a la **pieza de prueba**, sin cambiar el núcleo.
+El caso curva pasó (`1 passed, 23 deselected in 1.72s`) y el grupo 1 de abajo pasó el archivo final completo.
+
+### Ruff y grupos completos
+
+Desde `clon/`, `D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .`:
+
+```console
+All checks passed!
+```
+
+Cada grupo usa exactamente este prefijo y sufijo, desde `clon/`:
+`D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest <archivos> -q -p no:cacheprovider`.
+De a uno, sin ampliar el tope de 900 s de ejecución del turno.
+
+**Grupo 1:** `tests/test_sol10_nervio_red.py tests/test_solidos_crear.py tests/test_solidos_modificar.py tests/test_api_solido_extra.py tests/test_api_solido.py`
+
+```console
+........................................................................ [ 30%]
+........................................................................ [ 61%]
+........................................................................ [ 92%]
+.................                                                        [100%]
+233 passed in 46.35s
+```
+
+**Grupo 2:** `tests/test_herramientas_solido.py tests/test_barrido_tipos.py tests/test_comandos_crear.py`
+
+```console
+........................................................................ [ 32%]
+........................................................................ [ 64%]
+........................................................................ [ 96%]
+.......                                                                  [100%]
+223 passed in 141.32s (0:02:21)
+```
+
+**Grupo 3:** `tests/test_api_asistente.py tests/test_asistente_adjuntos.py tests/test_asistente_alcance.py tests/test_asistente_historial.py tests/test_asistente_modelos.py tests/test_asistente_nucleo.py tests/test_asistente_prompt.py tests/test_asistente_proveedores.py tests/test_asistente_ui.py`
+
+```console
+........................................................................ [ 36%]
+........................................................................ [ 72%]
+........................................................                 [100%]
+200 passed in 16.38s
+```
+
+**Grupo 4:** `tests/test_boceto_fase4.py tests/test_boceto_interaccion.py tests/test_cobertura_ui_api.py tests/test_dev.py tests/test_gizmo_lienzo.py tests/test_iconos_extra.py tests/test_insertar_2d.py tests/test_interaccion_fusion.py tests/test_malla.py tests/test_manipuladores.py tests/test_novedades.py tests/test_p23_calcomania.py tests/test_revision_lotes_sol.py tests/test_sol27_preajustes.py tests/test_svg_salida.py tests/test_temas.py tests/test_tipografia_ui.py`
+
+```console
+........................................................................ [  7%]
+........................................................................ [ 15%]
+........................................................................ [ 23%]
+........................................................................ [ 30%]
+........................................................................ [ 38%]
+........................................................................ [ 46%]
+........................................................................ [ 53%]
+........................................................................ [ 61%]
+........................................................................ [ 69%]
+........................................................................ [ 77%]
+........................................................................ [ 84%]
+........................................................................ [ 92%]
+......................................................................   [100%]
+934 passed in 687.11s (0:11:27)
+```
+
+**Corridas incompletas:** la primera tanda reunía los grupos 1 y 2; el timeout de la herramienta fue 300 s,
+incluyendo 122 s de cola, y cortó antes del resumen. Se repitió partida: ambas verdes arriba. El primer envío
+del grupo 4 se interrumpió por el tope de la sesión mientras esperaba turno. Al retomar se comprobó que no
+quedaban procesos de ese grupo; se repitió y terminó con salida 0. Ninguna corrida incompleta se cuenta como verde.
+`rg -l` tampoco estaba instalado (`rg: command not found`); se ejecutó la búsqueda pedida con `grep -l`.
+
+### Salida completa de /ponytail-review
+
+What this change does: Rib and Web now trim their long helper wall before applying draft. Only side faces
+from the original wall are tilted. Assumed load: one person or agent editing one CAD document.
+
+**Should fix**
+
+1. **The docstrings promise constant thickness along the whole curve** (`clon/omnicad/nucleo/solidos_crear.py:1415-1417,1439-1441`).
+   - **What this is:** The draft uses a plane normal to the pull direction, through the middle of the curve.
+   - **Problem:** With a diagonal curve and pull Z, that plane only crosses the curve at its midpoint. The old text says the whole free edge keeps its thickness. It also describes negative angles as if they were positive.
+   - **Fix:** State the neutral plane and explain that a negative angle reverses the taper.
+   - **If we skip it:** A caller may expect a thickness that the geometry does not preserve away from that plane.
+
+Verdict: fix 1 first.
+Not checked: the live panel gesture, Fusion itself, OmniKernel execution, and a large multi-curve draft benchmark.
+
+**Aplicación y relectura:** hallazgo 1 corregido en los dos docstrings; no cambió la geometría después de los
+grupos completos. Ambos consumidores pasan el nuevo argumento nombrado; el caso sin ángulo conserva su
+recorte. Las nuevas regresiones de Red comprueban el signo negativo y los dos conos de la curva. Los errores
+siguen pasando por `geo.ErrorGeometria` y la transacción existente de la API. No hay escrituras de datos nuevas,
+ni dependencias, ni cachés. El filtro de caras reutiliza el helper existente, con costo proporcional a caras del
+recorte por laterales originales; no corre durante el dibujo de cada cuadro.
+Revisión final: sin hallazgos pendientes; **Verdict: Ship.**
+
+### ⚠ Lo no verificado y límites
+
+- Sin suite completa ni prueba de humo por pedido. No se abrió Fusion ni se ejercitó la previa con clics en
+  la ventana; se trazó el camino real por código y pasaron los tests existentes de comandos.
+- La ayuda no confirma dónde Fusion conserva el grosor con extracción oblicua. Se mantuvo la convención
+  existente de OmniCAD (plano por el punto medio); no se declara equivalencia visual exacta con Fusion.
+- No se barrió todo −45..45 ni todas las orientaciones de extracción. −5° y +5° con extracción Z sobre la
+  misma pared de 2 mm no forman parte del verde: la pared puede agotarse dentro del nervio real, y no solo
+  en su prolongación auxiliar. No se aflojaron las validaciones del kernel para aceptar cruces físicos.
+- B-213 (recorte contra la caja), B-214 (curvas sueltas), B-216 (Invertir de Red) y H-95 (opciones de extracción
+  y empalme) siguen siendo tareas independientes. No se ejecutó OmniKernel, que no implementa Nervio/Red.
+- Sin banco grande de rendimiento ni instalador; `clon/pyproject.toml` no configura type-check separado.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Opus 5, esfuerzo alto (coordinador nocturno; la geometría de Sol se revisa a fondo).

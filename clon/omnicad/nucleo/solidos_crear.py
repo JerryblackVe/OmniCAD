@@ -1411,11 +1411,11 @@ def _hasta_el_cuerpo(bruto, cuerpo, curvas, margen, que, profundidad):
     return _validar(resultado, que)
 
 
-def _desmoldear_pared(bruto, direccion, angulo, origen):
-    """Inclina las caras laterales de un nervio o una red `angulo` grados hacia `direccion` (la de extracción, del
-    cuerpo hacia el borde libre): la pared queda más fina en el borde libre, donde pasa el plano neutro por `origen`,
-    que en la base."""
-    from .solidos_modificar import desmoldeo
+def _desmoldear_pared(bruto, direccion, angulo, origen, *, recortado):
+    """Desmoldeo del Nervio/Red de Fusion: inclina los laterales originales sobre la pared `recortado`.
+    El plano neutro pasa por `origen` y es normal a la extracción `direccion`. Con extracción por defecto,
+    un ángulo positivo engorda la base; uno negativo la afina."""
+    from .solidos_modificar import _cara_dentro_de, desmoldeo
     d = _unit(direccion, "dirección de desmoldeo")
     laterales = []
     for cara in _caras_de(bruto):
@@ -1424,8 +1424,10 @@ def _desmoldear_pared(bruto, direccion, angulo, origen):
             if abs(float(normal @ d)) > 1e-6:           # tapas y fondos: no se inclinan
                 continue
         laterales.append(cara)
+    # El prisma auxiliar puede cruzarse lejos del cuerpo; inclinar solo la pared real y sus caras originales.
+    laterales = [c for c in _caras_de(recortado) if any(_cara_dentro_de(c, f) for f in laterales)]
     plano_neutro = geo.Plano.desde_marco(origen, d, _perpendicular(d))
-    return desmoldeo(bruto, laterales, d, angulo, plano_neutro)
+    return desmoldeo(recortado, laterales, d, angulo, plano_neutro)
 
 
 def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, direccion="simetrica",
@@ -1435,8 +1437,9 @@ def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, di
     o una `profundidad`. El espesor se mide perpendicular al plano: "simetrica" (mitad a cada lado),
     "lado1" (hacia +normal) o "lado2". `invertir` cambia el sentido de crecimiento. Devuelve solo el nervio,
     ya recortado contra el cuerpo (la unión la hace la capa de operaciones). `angulo_desmoldeo` (Draft Angle)
-    afina el nervio hacia su borde libre (la curva del boceto, que conserva el espesor); `direccion_desmoldeo`
-    (Draft Pull Direction) es la dirección de extracción (por defecto, del cuerpo hacia la curva)."""
+    positivo afina el nervio hacia su borde libre; el negativo invierte el efecto. `direccion_desmoldeo`
+    (Draft Pull Direction) es la extracción (por defecto, del cuerpo hacia la curva). El plano neutro pasa por
+    el punto medio de la curva: allí se conserva el espesor, también con una extracción oblicua."""
     n = _unit(normal_plano, "normal del plano del boceto")
     w = _alambre(aristas_curva)
     if _es_cerrado(w):
@@ -1455,12 +1458,13 @@ def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, di
         raise geo.ErrorGeometria(f"Dirección de espesor desconocida: {direccion}")
     bruto = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
                    for f in _caras_de(region)])
+    recortado = _hasta_el_cuerpo(bruto, cuerpo, [w], 0.0, "Nervio", profundidad)
     if abs(angulo_desmoldeo) > 1e-9:
         pull = -m if direccion_desmoldeo is None else _unit(direccion_desmoldeo, "dirección de desmoldeo")
         if float(pull @ m) > 0:             # la extracción va del cuerpo hacia el borde libre (la curva)
             pull = -pull
-        bruto = _desmoldear_pared(bruto, pull, angulo_desmoldeo, _punto_en(w, 0.5)[0])
-    return _hasta_el_cuerpo(bruto, cuerpo, [w], 0.0, "Nervio", profundidad)
+        return _desmoldear_pared(bruto, pull, angulo_desmoldeo, _punto_en(w, 0.5)[0], recortado=recortado)
+    return recortado
 
 
 def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, direccion="simetrica",
@@ -1490,9 +1494,10 @@ def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, dire
         lamina = BRepPrimAPI_MakePrism(w_ext, _gvec(d * (profundidad or largo_max))).Shape()
         solidos += [_engrosar_lamina(lamina, e) for e in espesores]
     bruto = _unir(solidos)
+    recortado = _hasta_el_cuerpo(bruto, cuerpo, cadenas, 0.0, "Red", profundidad)
     if abs(angulo_desmoldeo) > 1e-9:
-        bruto = _desmoldear_pared(bruto, -d, angulo_desmoldeo, _punto_en(cadenas[0], 0.5)[0])
-    return _hasta_el_cuerpo(bruto, cuerpo, cadenas, 0.0, "Red", profundidad)
+        return _desmoldear_pared(bruto, -d, angulo_desmoldeo, _punto_en(cadenas[0], 0.5)[0], recortado=recortado)
+    return recortado
 
 
 def unir_con_empalme(cuerpo, pieza, radio):
