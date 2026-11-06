@@ -2,12 +2,16 @@
 docs/plan_velocidad.md)."""
 import json
 import os
+import runpy
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "tiempos.py"
+repartir = runpy.run_path(str(SCRIPT))["repartir"]
 
 
 def _xml(carpeta, nombre, casos, envolver=False):
@@ -48,3 +52,52 @@ def test_carpeta_sin_xml_falla(tmp_path):
     assert r.returncode != 0
     assert "no hay ningún *.xml" in r.stderr
     assert not (tmp_path / "tiempos.json").exists()
+
+
+@pytest.mark.parametrize("procesos", [1, 3, 4])
+def test_tandas_por_tiempo_respetan_archivos_enteros_y_carga_por_proceso(procesos):
+    archivos = [f"tests/test_{i}.py" for i in range(procesos + 1)]
+    # La media da menos de 600 s, pero el último archivo tardaría 958 s en un trabajador.
+    grupos = repartir(archivos, dict.fromkeys(archivos, 479), procesos)
+    assert grupos == [archivos[:procesos], archivos[procesos:]]
+
+
+def test_sin_dato_cuenta_diez_segundos_y_lista_vacia_no_crea_tanda():
+    archivos = [f"tests/test_{i}.py" for i in range(61)]
+    assert repartir(archivos, {}, procesos=1) == [archivos[:60], archivos[60:]]
+    assert repartir([], {}) == []
+
+
+@pytest.mark.parametrize("segundos", [-1, float("nan"), float("inf")])
+def test_reparto_rechaza_tiempos_invalidos(segundos):
+    with pytest.raises(ValueError, match="Tiempo inválido"):
+        repartir(["tests/test_uno.py"], {"tests/test_uno.py": segundos})
+
+
+@pytest.mark.parametrize("procesos", [0, -1])
+def test_reparto_rechaza_cantidad_de_procesos_no_positiva(procesos):
+    with pytest.raises(ValueError, match="procesos debe ser positiva"):
+        repartir([], {}, procesos)
+
+
+def test_archivo_mayor_de_600_va_solo_y_avisa(capsys):
+    assert repartir(["pesado", "otro"], {"pesado": 950}) == [["pesado"], ["otro"]]
+    assert "pesado tarda 950.0 s; va solo" in capsys.readouterr().out
+
+
+def test_cli_escribe_tandas_mas_lentas_primero_sin_modificar_el_json(tmp_path):
+    lista = tmp_path / "lista.txt"
+    lista.write_text("sin_dato\nrapido\nlento\nmediano\n", encoding="utf-8")
+    mediciones = tmp_path / "tiempos.json"
+    original = json.dumps({"archivos": {"rapido": 20, "lento": 590, "mediano": 570}})
+    mediciones.write_text(original, encoding="utf-8")
+    salida = tmp_path / "tandas"
+    r = subprocess.run([sys.executable, str(SCRIPT), str(lista), "--tandas", str(salida),
+                        "--mediciones", str(mediciones), "--procesos", "1"],
+                       capture_output=True, text=True, encoding="utf-8",
+                       env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    assert r.returncode == 0, r.stderr
+    assert "2 tandas, 1 procesos" in r.stdout
+    assert [(p.name, p.read_text(encoding="utf-8")) for p in sorted(salida.iterdir())] == [
+        ("parte_00", "lento\n"), ("parte_01", "mediano\nrapido\nsin_dato\n")]
+    assert mediciones.read_text(encoding="utf-8") == original

@@ -7,9 +7,11 @@ docs/plan_velocidad.md; lo llama scripts/cierre_completo.sh. Los segundos son el
 llamada y cierre del test): sin colección ni arranque del intérprete, así que el total queda por debajo del `pytest -q`.
 
 Uso: python scripts/tiempos.py <carpeta_con_xml> [--salida evidencias/tiempos.json]
+Tandas: python scripts/tiempos.py <lista.txt> --tandas <carpeta> [--mediciones tiempos.json] [--procesos 4]
 """
 import argparse
 import json
+import math
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -34,12 +36,48 @@ def leer(carpeta):
     return tests, archivos, [x.name for x in fuentes]
 
 
+def repartir(archivos, tiempos, procesos=4):
+    """Arma tandas de unos 600 s por proceso, con archivos enteros y los más lentos primero; sin dato, 10 s."""
+    if procesos < 1:
+        raise ValueError("La cantidad de procesos debe ser positiva")
+    grupos, grupo, cargas = [], [], [0.0] * procesos
+    for archivo in sorted(archivos, key=lambda a: -float(tiempos.get(a, 10))):
+        segundos = float(tiempos.get(archivo, 10))
+        if not math.isfinite(segundos) or segundos < 0:
+            raise ValueError(f"Tiempo inválido para {archivo}: {segundos}")
+        trabajador = min(range(procesos), key=cargas.__getitem__)
+        if grupo and cargas[trabajador] + segundos > 600:
+            grupos.append(grupo)
+            grupo, cargas, trabajador = [], [0.0] * procesos, 0
+        grupo.append(archivo)
+        cargas[trabajador] += segundos
+        if segundos > 600:
+            print(f"Aviso: {archivo} tarda {segundos:.1f} s; va solo y no se puede dividir por archivo.")
+            grupos.append(grupo)
+            grupo, cargas = [], [0.0] * procesos
+    if grupo:
+        grupos.append(grupo)
+    return grupos
+
+
 def main():
     ap = argparse.ArgumentParser(description="Ranking de tests lentos desde los JUnit XML del cierre.")
-    ap.add_argument("carpeta", type=Path, help="carpeta con los *.xml que dejó pytest --junitxml")
+    ap.add_argument("carpeta", type=Path, help="carpeta con los *.xml; con --tandas, lista de archivos de test")
     ap.add_argument("--salida", type=Path, default=RAIZ / "evidencias" / "tiempos.json",
                     help="JSON de salida (por defecto evidencias/tiempos.json en la raíz del repo)")
+    ap.add_argument("--tandas", type=Path, help="escribir parte_00, parte_01… en esta carpeta en vez del ranking")
+    ap.add_argument("--mediciones", type=Path, default=RAIZ / "evidencias" / "tiempos.json",
+                    help="JSON de tiempos por archivo para repartir las tandas")
+    ap.add_argument("--procesos", type=int, default=4, help="procesos por tanda (1 para serie)")
     args = ap.parse_args()
+    if args.tandas is not None:
+        tiempos = json.loads(args.mediciones.read_text(encoding="utf-8"))["archivos"]
+        grupos = repartir(args.carpeta.read_text(encoding="utf-8").splitlines(), tiempos, args.procesos)
+        args.tandas.mkdir(parents=True, exist_ok=True)
+        for i, grupo in enumerate(grupos):
+            (args.tandas / f"parte_{i:02d}").write_text("\n".join(grupo) + "\n", encoding="utf-8", newline="")
+        print(f"{len(grupos)} tandas, {args.procesos} procesos, objetivo 600 s por tanda")
+        return
     tests, archivos, fuentes = leer(args.carpeta)
     total = round(sum(tests.values()), 3)
     args.salida.parent.mkdir(parents=True, exist_ok=True)
