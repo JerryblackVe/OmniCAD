@@ -14,12 +14,11 @@ Devuelve 0 si todo pasa. Uso:  python OmniCAD.py --prueba-humo
 import os
 import sys
 import tempfile
-import warnings
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, QSettings, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMenu, QMessageBox
+from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QWidget
 
 from .io_archivos import exportar as ex
 from .io_archivos import proyecto
@@ -114,7 +113,7 @@ def _interfaz(v, r):
     objetivo = v.visor.objetivo.copy()
     centro = v.visor.rect().center()
     _presionar(v.visor, centro, Qt.LeftButton)
-    _mover(v.visor, centro + QPoint(40, 0))
+    _mover(v.visor, centro + QPoint(40, 0), Qt.LeftButton)
     _soltar(v.visor, centro + QPoint(40, 0), Qt.LeftButton)
     r.check(v.visor.modo == "encuadre" and (v.visor.objetivo != objetivo).any(), "Barra de navegación: modo encuadre")
     QTest.keyClick(v.visor, Qt.Key_Escape)
@@ -279,9 +278,7 @@ def _punto_del_plano(visor, nombre):
 def _tecla_s(v, w):
     """Tecla S sobre `w`. El atajo es de la ventana y Qt solo lo dispara con la ventana ACTIVA: Windows le niega el foco
     a un proceso de fondo y la caja no abría (B-72: 1 de cada 3 corridas). Sin foco, se dispara la acción del atajo."""
-    _activar_ventana(v)
-    activa = QTest.qWaitForWindowActive(v, 2000)
-    if activa:
+    if _activar_ventana(v):
         QTest.keyClick(w, Qt.Key_S)
     else:
         if _modo_ventana() == "minimizada":
@@ -292,7 +289,7 @@ def _tecla_s(v, w):
         v.acciones["caja_herramientas"].trigger()
 
 
-def _mover(w, pos, botones=Qt.NoButton):
+def _mover(w, pos, botones=Qt.NoButton, mods=Qt.NoModifier):
     """Movimiento del ratón SIMULADO, enviado al widget (SIN mover el cursor REAL de Windows). QTest.mouseMove mueve
     el cursor REAL: si la persona usa el ratón mientras corre la prueba gana el suyo, el boceto no ve el movimiento y
     «Entrada dinámica» fallaba (2026-10-09: falló 3 de 5 corridas, con y sin la caja de herramientas). `botones`
@@ -302,7 +299,7 @@ def _mover(w, pos, botones=Qt.NoButton):
     from PySide6.QtGui import QMouseEvent
     local = QPointF(pos)
     QApplication.sendEvent(w, QMouseEvent(QEvent.MouseMove, local, w.mapToGlobal(local), Qt.NoButton, botones,
-                                          Qt.NoModifier))
+                                          mods))
 
 
 def _presionar(w, pos, boton, mods=Qt.NoModifier):
@@ -330,28 +327,39 @@ def _modo_ventana():
     return modo
 
 
+def _preparar_invisible(widget):
+    """Transparente y sin foco ni clics, pero con el GL activo (como arnes.py › mostrar)."""
+    widget.setAttribute(Qt.WA_ShowWithoutActivating)
+    widget.setWindowFlags(widget.windowFlags() | Qt.Tool | Qt.WindowTransparentForInput
+                          | Qt.WindowDoesNotAcceptFocus)
+    widget.setWindowOpacity(0.0)
+
+
+class _VentanasInvisibles(QObject):
+    """Incluye menús y espacios auxiliares antes de mostrarlos; la opacidad no se hereda del padre."""
+
+    def eventFilter(self, widget, evento):
+        if evento.type() == QEvent.Polish and isinstance(widget, QWidget) and widget.isWindow():
+            _preparar_invisible(widget)
+        return False
+
+
 def _mostrar_ventana(widget):
-    """Muestra la ventana del humo. «minimizada» (en realidad transparente): no se ve ni roba el foco, para que
-    Gerardo use la PC mientras corre. Replica scripts/prueba_ui/arnes.py › mostrar."""
+    """Muestra la ventana del humo; en «minimizada» queda transparente, sin foco ni clics."""
     if _modo_ventana() == "minimizada":
-        widget.setAttribute(Qt.WA_ShowWithoutActivating)
-        # Transparente y sin foco ni clics: el GL sigue pintando y los atajos andan (ver arnes.py).
-        widget.setWindowFlags(widget.windowFlags() | Qt.Tool | Qt.WindowTransparentForInput
-                              | Qt.WindowDoesNotAcceptFocus)
-        widget.setWindowOpacity(0.0)
+        _preparar_invisible(widget)
     widget.show()
 
 
 def _activar_ventana(widget):
-    """Deja la ventana activa para los atajos. «visible»: foco real de Windows; «minimizada»: solo dentro de Qt
-    (sin robar el foco). Replica scripts/prueba_ui/arnes.py › activar."""
+    """Activa la ventana con el foco real de Windows (hasta 2 s) y dice si quedó activa. En «minimizada» no lo pide:
+    hasta `QApplication.setActiveWindow` le pedía el foco a Windows (medido: 2 robos por corrida), y los pasos que lo
+    esperan usan su respaldo."""
     if _modo_ventana() == "minimizada":
-        with warnings.catch_warnings():             # obsoleto pero es la única vía sin foco real (probado)
-            warnings.simplefilter("ignore", DeprecationWarning)
-            QApplication.setActiveWindow(widget)
-    else:
-        widget.activateWindow()
-        widget.raise_()
+        return False
+    widget.activateWindow()
+    widget.raise_()
+    return QTest.qWaitForWindowActive(widget, 2000)
 
 
 def _clic(lz, u, v):
@@ -384,7 +392,7 @@ def _gizmo_calcomania(v, r, carpeta):
         _mover(visor, a)
         QApplication.sendEvent(visor, QMouseEvent(QEvent.MouseButtonPress, a, visor.mapToGlobal(a),
                                                  Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
-        _mover(visor, b)
+        _mover(visor, b, Qt.LeftButton)
         QApplication.sendEvent(visor, QMouseEvent(QEvent.MouseButtonRelease, b, visor.mapToGlobal(b),
                                                  Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
         p._calcular_previa()
@@ -445,7 +453,6 @@ def _boceto_en_3d(v, r):
     # Linux (WSLg): al cerrar los diálogos de las fases anteriores la ventana queda sin activar y los atajos de
     # teclado (la S de abajo) no le llegan; en Windows la activación vuelve sola.
     _activar_ventana(v)
-    QTest.qWaitForWindowActive(v, 2000)
     v.crear_boceto()
     r.check(v.visor.modo == "elegir_plano" and v.area.aviso.isVisible(),
             "Crear boceto pide elegir un plano o una cara plana (planos de origen visibles)")
@@ -624,7 +631,7 @@ def _fase_interaccion(v, r):
     n = len(v.doc.operaciones)
     centro = QPoint(w // 2, h // 2)
     _presionar(v.visor, centro, Qt.RightButton)
-    _mover(v.visor, centro + QPoint(-90, 0))
+    _mover(v.visor, centro + QPoint(-90, 0), Qt.RightButton)
     _soltar(v.visor, centro + QPoint(-90, 0), Qt.RightButton)
     QTest.qWait(200)
     r.check(len(v.doc.operaciones) == n - 1, "Gesto: clic derecho y arrastrar a la izquierda = Deshacer")
@@ -802,7 +809,13 @@ def ejecutar():
     for flujo in (sys.stdout, sys.stderr):
         if flujo is not None and hasattr(flujo, "reconfigure"):
             flujo.reconfigure(encoding="utf-8", errors="replace")
-    _app = QApplication.instance() or QApplication([])  # noqa: F841 — mantiene viva la app
+    _app = QApplication.instance() or QApplication([])  # mantiene viva la app
+    filtro = _VentanasInvisibles()
+    if _modo_ventana() == "minimizada":
+        # Qt anima los menús con otra ventana opaca, aunque el menú sea transparente.
+        for efecto in (Qt.UI_AnimateMenu, Qt.UI_FadeMenu):
+            _app.setEffectEnabled(efecto, False)
+        _app.installEventFilter(filtro)
     from .nucleo import motor
     if motor.motor_activo() == "omnikernel":
         # Los pasos que OmniKernel todavía no hace quedan con error y la ventana avisa con un cartel modal: acá se
@@ -836,7 +849,7 @@ def ejecutar():
     az0, d0 = v.visor.azimut, v.visor.distancia
     centro = v.visor.rect().center()
     _presionar(v.visor, centro, Qt.MiddleButton, Qt.ShiftModifier)
-    _mover(v.visor, centro + QPoint(60, 20))
+    _mover(v.visor, centro + QPoint(60, 20), Qt.MiddleButton, Qt.ShiftModifier)
     _soltar(v.visor, centro + QPoint(60, 20), Qt.MiddleButton, Qt.ShiftModifier)
     r.check(v.visor.azimut != az0, "Órbita con Mayús + botón del medio (como Fusion)")
     v.visor.distancia = d0 * 0.5
@@ -1155,5 +1168,6 @@ def ejecutar():
     proyecto.borrar_autoguardado(v.doc)
     v.doc.modificado = False
     v.close()
+    _app.removeEventFilter(filtro)
     print(f"\nResultado: {'TODO OK' if r.fallas == 0 else f'{r.fallas} FALLA(S)'} — archivos en {carpeta}")
     return 0 if r.fallas == 0 else 1
