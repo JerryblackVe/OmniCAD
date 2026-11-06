@@ -10,11 +10,11 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "worktree_item.sh"
 
 
-def _ejecutar(raiz, *comando):
+def _ejecutar(raiz, *comando, **extra):
     # Los tests afectados pueden heredar otro índice; tampoco usamos configuración global.
     entorno = {clave: valor for clave, valor in os.environ.items()
                if not clave.upper().startswith("GIT_")}
-    entorno.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+    entorno.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, **extra)
     return subprocess.run(comando, cwd=raiz, env=entorno, capture_output=True,
                           text=True, encoding="utf-8", timeout=30)
 
@@ -34,7 +34,11 @@ def _guardar(raiz):
 
 
 def _script(bash, raiz, *argumentos):
-    return _ejecutar(raiz, bash, SCRIPT.as_posix(), *argumentos)
+    # Los argumentos van por variables de entorno: en Windows la línea de comandos pierde un salto de línea, y el
+    # script nunca vería un ID con salto de línea.
+    extra = {f"WT_A{i}": a for i, a in enumerate(argumentos)}
+    leer = 'a=(); for ((i=0; i<WT_N; i++)); do v="WT_A$i"; a+=("${!v}"); done; exec bash "$WT_SCRIPT" "${a[@]}"'
+    return _ejecutar(raiz, bash, "-c", leer, WT_N=str(len(argumentos)), WT_SCRIPT=SCRIPT.as_posix(), **extra)
 
 
 def _estado(repo):
