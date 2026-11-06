@@ -35,6 +35,81 @@ def test_sin_condiciones_es_un_cilindro():
     assert _volumen(s) == pytest.approx(math.pi * 100 * 30, rel=1e-3)
 
 
+@pytest.mark.parametrize("invertir_carril", [False, True])
+def test_b212_carril_recto_conserva_las_esquinas_y_el_volumen_del_tronco(invertir_carril):
+    s = api.Sesion()
+    llamar(s, "create_sketch", plane="XY", name="Base")
+    llamar(s, "draw_rectangle", x1=-5, y1=-5, x2=5, y2=5)
+    plano = llamar(s, "create_construction_plane", plane="XY", offset=10)["plane"]["id"]
+    llamar(s, "create_sketch", plane=plano, name="Tapa")
+    llamar(s, "draw_rectangle", x1=-10, y1=-10, x2=10, y2=10)
+    llamar(s, "create_sketch", plane="XZ", name="Carril")
+    inicio, fin = ((10, 10), (5, 0)) if invertir_carril else ((5, 0), (10, 10))
+    curva = llamar(s, "draw_line", start_x=inicio[0], start_y=inicio[1], end_x=fin[0], end_y=fin[1])["entities"][0]["id"]
+    llamar(s, "loft", sketches=["Base", "Tapa"], rails=[{"sketch": "Carril", "curve": curva}])
+    # Tronco de pirámide: h/3 · (A_base + A_tapa + √(A_base · A_tapa)).
+    assert _volumen(s) == pytest.approx(10 / 3 * (100 + 400 + 200), rel=1e-6)
+    (cuerpo,) = s.doc.estado_final.cuerpos.values()
+    minimo, maximo = geo.caja_envolvente(cuerpo.forma)
+    assert minimo == pytest.approx([-10, -10, 0], abs=1e-5)
+    assert maximo == pytest.approx([10, 10, 10], abs=1e-5)
+
+
+@pytest.mark.parametrize("solido", [False, True])
+def test_b212_nucleo_comparte_el_lateral_y_cierra_solo_el_solido(solido):
+    from omnicad.nucleo import solidos_crear as sc
+    from test_solidos_crear import linea, rect
+
+    forma = sc.solevar([rect(-5, -5, 5, 5), rect(-10, -10, 10, 10, 10)],
+                       carriles=[linea((5, 0, 0), (10, 0, 10))], solido=solido)
+    assert geo.es_valida(forma)
+    assert geo.area(forma) == pytest.approx(60 * math.sqrt(125) + (500 if solido else 0), rel=1e-6)
+    if solido:
+        from OCP.BRep import BRep_Tool
+        from OCP.TopAbs import TopAbs_SOLID
+
+        assert forma.ShapeType() == TopAbs_SOLID
+        assert BRep_Tool.IsClosed_s(forma)
+        assert geo.volumen(forma) == pytest.approx(7000 / 3, rel=1e-6)
+
+
+def test_b212_carril_curvo_guia_el_medio_del_solido():
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.GC import GC_MakeArcOfCircle
+    from OCP.gp import gp_Pnt
+
+    from omnicad.nucleo import solidos_crear as sc
+    from test_solidos_crear import rect
+
+    carril = BRepBuilderAPI_MakeEdge(GC_MakeArcOfCircle(gp_Pnt(5, 0, 0), gp_Pnt(8, 0, 5), gp_Pnt(5, 0, 10)).Value()).Edge()
+    forma = sc.solevar([rect(-5, -5, 5, 5), rect(-5, -5, 5, 5, 10)], carriles=[carril])
+    assert geo.es_valida(forma)
+    assert geo.volumen(forma) == pytest.approx(1000, rel=1e-5)
+    lonja = geo.booleano(forma, geo.caja(40, 40, 0.01, (-20, -20, 4.995)), "intersecar")
+    minimo, maximo = geo.caja_envolvente(lonja)
+    assert minimo[0] == pytest.approx(-2, abs=0.02)
+    assert maximo[0] == pytest.approx(8, abs=0.02)
+
+
+def test_b212_carril_que_no_toca_el_perfil_da_error():
+    from omnicad.nucleo import solidos_crear as sc
+    from test_solidos_crear import linea, rect
+
+    with pytest.raises(geo.ErrorGeometria, match="no toca el perfil"):
+        sc.solevar([rect(-5, -5, 5, 5), rect(-10, -10, 10, 10, 10)],
+                   carriles=[linea((6, 0, 0), (10, 0, 10))])
+
+
+def test_b212_nucleo_no_mezcla_carril_y_linea_central():
+    from omnicad.nucleo import solidos_crear as sc
+    from test_solidos_crear import linea, rect
+
+    with pytest.raises(geo.ErrorGeometria, match="no los dos"):
+        sc.solevar([rect(-5, -5, 5, 5), rect(-10, -10, 10, 10, 10)],
+                   carriles=[linea((5, 0, 0), (10, 0, 10))],
+                   linea_central=[linea((0, 0, 0), (0, 0, 10))])
+
+
 def test_condicion_de_direccion_abre_o_cierra_la_superficie():
     abierta, cerrada = _dos_circulos(), _dos_circulos()
     llamar(abierta, "loft", sketches=["Base", "Tapa"], start_condition={"type": "direction", "angle": 45})

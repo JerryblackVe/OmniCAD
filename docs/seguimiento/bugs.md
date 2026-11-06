@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 25: Abierto 21 · Parcial 4 (recontado 2026-11-05 por fila: se cerraron B-205, B-207 y B-197 de Extruir, B-206 quedó en Parcial, y sumaron B-208 a B-212 y B-213 a B-217).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 27: Abierto 20 · Parcial 6 · Bloqueado 1 (recontado 2026-11-05 por todas las filas tras el cierre de la solevación con carril).
 
 ## Abiertos y parciales
 
@@ -13,7 +13,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-209 | Barrido sólido con escala «Estirar» hace «Escalar» sin avisar | Abierto | Media | `sweep rail_scale="stretch"` da 3364,59 mm³, lo mismo que `scale`; debería estirar en una sola dirección. La superficie sí estira (400 mm² exactos). La ventana del sólido ni ofrece Estirar. | nucleo/solidos_crear.py:877 | 2026-11-05 |
 | B-210 | Revolución «Dos lados» con un ángulo negativo da otra forma en sólido que en superficie | Abierto | Baja | Lado 1 = 90°, lado 2 = −45°: el sólido toma el signo y el lado 2 vuelve sobre el lado 1 (1570,80 mm³, como sin lado 2, sin aviso); la superficie toma el valor absoluto (235,62 mm², igual que +45°). Falta una sola regla para los dos. | timeline/operaciones.py:1305 (`OpRevolucion.ejecutar`) y nucleo/superficies.py:475 | 2026-11-05 |
 | B-211 | Barrido: la Distancia mayor que 1 se acepta y se recorta a 1 sin avisar | Abierto | Baja | En la ventana «1,5» deja la vista previa en verde y `edit_feature` con `distancia="2"` sale ok: el cuerpo es el de 1 (628,32 mm³). La API solo rechaza números sueltos (`path_distance=1.5`). Fusion: Range 0.00-1.00. | nucleo/solidos_crear.py:256 | 2026-11-05 |
-| B-212 | Solevación sólida con un carril recto falla: «el kernel produjo un sólido inválido» | Abierto | Media | Cuadros 10×10 en z 0 y 20×20 en z 10, carril recto del medio de un lado al medio del otro: el sólido da OPERATION_FAILED; la misma solevación de superficie sale bien (670,82 mm², el área lateral exacta del tronco). Fusion la hace. | nucleo/solidos_crear.py:1324 | 2026-11-05 |
 | B-213 | Nervio y Red se recortan contra la caja del cuerpo: rellenan hasta el borde o pierden la mitad | Abierto | Media | Escuadra con un nervio invertido (hacia afuera, sin cara): en vez de avisar como Fusion, rellena hasta la caja del cuerpo (+1950 mm³). Con el boceto en el borde del cuerpo, el simétrico pierde la mitad (600 en vez de 1200) y el de un lado da «la curva queda dentro del cuerpo»; la Red con el boceto delante de la caja da el mismo error falso. También en la ventana (pieza `nervio_red_repujado`). | nucleo/solidos_crear.py:1402 (`_hasta_el_cuerpo`) | 2026-11-05 |
 | B-214 | Nervio con dos curvas sueltas falla con un mensaje de «ruta» | Abierto | Baja | La ventana deja elegir varias curvas, pero dos líneas sueltas dan «La ruta debe ser una sola cadena continua de aristas». Fusion hace un nervio por curva en un solo paso (la ayuda muestra cuatro). La Red sí las acepta. | nucleo/solidos_crear.py:1439 (`nervio`: un solo `_alambre`) | 2026-11-05 |
 | B-215 | Desmoldeo del Nervio: falla con ángulo negativo y con una dirección de extracción que no es la de crecimiento | Abierto | Media | Escuadra con la línea en diagonal: `draft_angle=-1` y `draft_angle=1, pull_direction="XY"` dan «El desmoldeo falló en el kernel (ángulo demasiado grande?)». La API acepta −45..45 y anuncia la dirección de extracción; solo anda cuando la extracción coincide con el crecimiento (el caso de `test_sol10_nervio_red.py`). | nucleo/solidos_crear.py:1412 (`_desmoldear_pared`) y 1457 | 2026-11-05 |
@@ -103,15 +102,6 @@ de arriba manda sobre este texto.
 - **Esperado (Fusion):** «Value is measured in percentage of the total distance. Range: 0.00-1.00» (ayuda `Sweep reference`): un error claro, como «0».
 - **Obtenido:** `ok`, el cuerpo de la ruta entera (628,32 mm³) y la previa en verde; `_recortar_alambre` hace `min(fraccion, 1.0)` (`nucleo/solidos_crear.py:256`). La API rechaza solo `path_distance` numérico (`api/herramientas_solido.py:452`).
 - **Prueba propuesta:** distancia 1,5 da error en la ventana, en `edit_feature` y en la API.
-
-### B-212 · Solevación sólida con un carril recto da un sólido inválido
-
-- **Qué:** boceto XY con cuadro −5..5, plano a z 10 con cuadro −10..10, boceto XZ con la línea de (5, 0) a (10, 10) (carril que toca el medio del lado x=5 abajo y del lado x=10 arriba); `loft sketches=["S1","S2"] rails=[{"sketch":"C","curve":<id>}]`.
-- **Esperado (Fusion):** «Rails must intersect each section» (ayuda `Loft reference`): este carril los toca, y el resultado es el mismo tronco de 2333,33 mm³ que sin carril.
-- **Obtenido:** «Solevado: el kernel produjo un sólido inválido con estos valores». `create_surface_loft` con los mismos perfiles y carril sale bien (670,82 mm²).
-- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril_solevacion.py` (salida en `sonda_carril_solevacion.txt`).
-- **Causa probable:** no se leyó a fondo; el carril se pasa a `MakePipeShell` con `BRepFill_ContactOnBorder` (`nucleo/solidos_crear.py:1324`) y la superficie usa otro camino.
-- **Prueba propuesta:** este caso da 2333,33 mm³ y `geo.es_valida`.
 
 ### B-213 · Nervio y Red recortados contra la caja del cuerpo
 

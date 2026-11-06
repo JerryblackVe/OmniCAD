@@ -24,7 +24,7 @@ def _iniciar_opencascade():
     global BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
     global BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire, BRepBuilderAPI_RightCorner
     global BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform, BRepClass3d_SolidClassifier
-    global BRepClass_FaceClassifier, BRepExtrema_DistShapeShape, BRepFill_ContactOnBorder, BRepFill_NoContact
+    global BRepClass_FaceClassifier, BRepExtrema_DistShapeShape, BRepFill_NoContact
     global BRepGProp, BRepLib, BRepOffsetAPI_DraftAngle, BRepOffsetAPI_MakeOffset
     global BRepOffsetAPI_MakeOffsetShape, BRepOffsetAPI_MakePipeShell, BRepOffsetAPI_ThruSections
     global BRepOffset_MakeOffset, BRepOffset_Skin, BRepPrimAPI_MakeHalfSpace, BRepPrimAPI_MakePrism
@@ -50,7 +50,7 @@ def _iniciar_opencascade():
     from OCP.BRepClass import BRepClass_FaceClassifier
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
-    from OCP.BRepFill import BRepFill_ContactOnBorder, BRepFill_NoContact
+    from OCP.BRepFill import BRepFill_NoContact
     from OCP.BRepGProp import BRepGProp
     from OCP.BRepLib import BRepLib
     from OCP.BRepOffset import BRepOffset_MakeOffset, BRepOffset_Skin
@@ -1292,10 +1292,11 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
 
     secciones: caras (se respetan los agujeros si todas tienen la misma cantidad), alambres/aristas, o un
     punto/vértice como primera o última sección. `cerrada` une la última sección con la primera. Con
-    `linea_central` se usa MakePipeShell con todas las secciones. Con `carriles`: OpenCascade no tiene
-    solevado con varios carriles; se admite UNO, como guía de contacto (el borde del solevado lo sigue)
-    sobre una línea central dada o sobre la polilínea de los centros de las secciones. Las caras planas y las
-    aristas rectas o circulares salen analíticas, como en Fusion (ver _canonizar).
+    `linea_central` se usa MakePipeShell con todas las secciones. Con `carriles` se admite UNO y se comparte
+    la construcción de secciones intermedias de la solevación de superficie, conservando las esquinas;
+    el sólido se cierra con tapas sobre esas mismas secciones. Los contornos y carriles curvos se aproximan
+    por muestras (ver superficies._solevar_con_rieles). Las formas analíticas se recuperan si cumplen la
+    tolerancia de _canonizar.
     """
     secs = [_seccion(s) for s in _lista(secciones)]
     if len(secs) < 2:
@@ -1305,6 +1306,8 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     if cerrada and any(s[0] == "vertice" for s in secs):
         raise geo.ErrorGeometria("Un solevado cerrado no admite puntos como sección.")
     carriles = _lista(carriles)
+    if carriles and linea_central is not None:
+        raise geo.ErrorGeometria("Elegí carriles o una línea central, no los dos.")
     if len(carriles) > 1:
         raise geo.ErrorGeometria("OpenCascade no admite solevado con varios carriles: usá uno solo o una "
                                  "línea central.")
@@ -1316,23 +1319,15 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
             raise geo.ErrorGeometria("Las condiciones de borde no se combinan con carriles, línea central, solevado "
                                      "cerrado ni reglado.")
         exteriores = _con_condiciones(exteriores, condicion_inicio, condicion_fin, condiciones_medias)
-    if linea_central is not None or carriles:
-        if cerrada:
-            raise geo.ErrorGeometria("El solevado cerrado no se combina con línea central ni carril.")
-        if linea_central is not None:
-            espina = _alambre(linea_central)
-        else:
-            # Polilínea por los centros. Se redondean: un ruido de 1e-14 en los centros hace fallar a
-            # Approx_CurvlinFunc al barrer con carril.
-            centros = [np.round(_xyz(BRep_Tool.Pnt_s(f)) if t == "vertice" else _centro_alambre(f), 9)
-                       for t, f in exteriores]
-            espina = _alambre([BRepBuilderAPI_MakeEdge(_pnt(a), _pnt(b)).Edge()
-                               for a, b in zip(centros[:-1], centros[1:], strict=True)])
+    if cerrada and (linea_central is not None or carriles):
+        raise geo.ErrorGeometria("El solevado cerrado no se combina con línea central ni carril.")
+    if carriles:
+        from .superficies import _solevar_con_rieles
+        forma = _solevar_con_rieles(exteriores, [_alambre(carriles[0])], solido=solido)
+    elif linea_central is not None:
+        espina = _alambre(linea_central)
         ps = BRepOffsetAPI_MakePipeShell(espina)
-        if carriles:
-            ps.SetMode(_alambre(carriles[0]), True, BRepFill_ContactOnBorder)
-        else:
-            ps.SetMode(False)
+        ps.SetMode(False)
         for _t, f in exteriores:
             ps.Add(f, False, False)
         try:
@@ -1341,9 +1336,7 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         except Exception:  # noqa: BLE001 — OCC lanza Standard_ConstructionError en los casos que no resuelve
             hecho = False
         if not hecho:
-            raise geo.ErrorGeometria("El kernel no pudo solevar con ese carril (OpenCascade solo lo logra con "
-                                     "secciones suaves, sin esquinas)." if carriles else
-                                     "El kernel no pudo solevar con esa línea central.")
+            raise geo.ErrorGeometria("El kernel no pudo solevar con esa línea central.")
         if solido:
             ps.MakeSolid()
         forma = ps.Shape()
