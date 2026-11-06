@@ -141,18 +141,12 @@ class OpBarrido(_OpCrear):
         return eje
 
     def _ruta(self, estado, ctx):
-        """Las aristas de la ruta; con `cadena` (Chain Selection), cada arista de un cuerpo suma las que siguen tangentes."""
+        """Las aristas de la ruta; con `cadena` (Chain Selection), cada arista de un cuerpo y cada curva de boceto
+        suma las que le siguen tangentes (`_en_cadena`, igual que en el barrido de superficie)."""
         ents, ruta = _aristas(self.p["ruta"], estado, "la ruta")
         if not self.p.get("cadena"):
             return ruta
-        sm, salida = _sm(), []
-        if any(not (e.tipo == "arista" and e.cuerpo) for e in ents):
-            ctx.aviso("La selección de cadena solo suma aristas de cuerpos: las curvas de boceto se usan tal cual.")
-        for e in ents:
-            tramo = sm._ampliar_tangentes(estado.cuerpo(e.cuerpo).forma, [e.forma], True) if (
-                e.tipo == "arista" and e.cuerpo) else [e.forma]
-            salida += [a for a in tramo if not any(a.IsSame(x) for x in salida)]
-        return salida
+        return _en_cadena(ents, ruta, estado)
 
     def _barrer_cuerpos(self, estado, ctx, ruta, eje):
         """Solid Sweep: el volumen que recorre cada cuerpo elegido a lo largo de la ruta."""

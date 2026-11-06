@@ -406,7 +406,8 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
              "sobre las que va la ruta) es el tipo Ruta + Superficie guía: el perfil sigue la normal de la superficie. "
              "sweep_bodies barre un cuerpo sólido (Solid Sweep) en lugar de un perfil: lo que recorre el cuerpo al "
              "moverse a lo largo de la ruta (aproximado con copias del cuerpo: el borde de un barrido curvo queda "
-             "escalonado). chain=true suma a cada arista de path_edges las que le siguen tangentes (Chain Selection).",
+             "escalonado). chain=true suma a cada arista de path_edges y a cada curva de path_sketch las que le siguen "
+             "tangentemente (Chain Selection).",
              modifica=True)
 def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch: str | None = None,
           path_curves: list[int] | None = None,
@@ -436,7 +437,7 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
     path_distance: fracción de la ruta que se barre (>0 hasta 1); 1 = toda.
     body: cuerpo donde se evalúan los selectores de faces y path_edges; vacío = el único cuerpo.
     sweep_bodies: cuerpo(s) (id o nombre) que se barren por la ruta (Solid Sweep) en vez de un perfil; sin carril, superficie guía, torsión ni conicidad.
-    chain: true suma a path_edges las aristas tangentes que le siguen (Chain Selection); las curvas de boceto se usan tal cual y se avisa.
+    chain: true suma a cada arista de path_edges y a cada curva de path_sketch las que le siguen tangentemente (Chain Selection).
     """
     cuerpos_barrido = _ids_cuerpos(sesion, sweep_bodies)
     if cuerpos_barrido and (sketch is not None or faces or rail_sketch is not None or guide_surface

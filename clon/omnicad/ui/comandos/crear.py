@@ -62,7 +62,7 @@ class Barrido(Comando):
                 Seleccion("cuerpos", "Cuerpo", {"cuerpo"}, maximo=None, visible_si=cuerpo,
                           ayuda="El volumen que recorre el cuerpo a lo largo de la ruta (aproximado con copias)."),
                 Seleccion("ruta", "Ruta", CURVA, maximo=None),
-                Casilla("cadena", "Selección de cadena", True, ayuda="Suma a cada arista de un cuerpo las que le siguen tangentes (las curvas de boceto se usan tal cual)."),
+                Casilla("cadena", "Selección de cadena", True, ayuda="Suma a cada arista de un cuerpo o curva de boceto las que le siguen tangentes."),
                 Seleccion("carril", "Rail guía", CURVA, maximo=None, visible_si=carril),
                 Seleccion("superficie_guia", "Superficie guía", {"cara"}, maximo=None, visible_si=superficie),
                 Expresion("distancia", "Distancia", "1", ESCALAR,

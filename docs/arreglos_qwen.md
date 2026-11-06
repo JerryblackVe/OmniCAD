@@ -147,6 +147,39 @@ lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
   `nervio_red_repujado` en minimizada; los paneles los ejercitan los tests de comando de la tanda, pero no se miró la
   pantalla. Tampoco se abrió Fusion: el comportamiento sale de la ayuda oficial, como en H-87 y H-100.
 
+## Informe tanda C4
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C4 · **Bug:** H-93 (mejora). **Sin commitear** (lo commitea el coordinador).
+
+### H-93 — SÓLIDO › Barrido: el aviso de «Selección de cadena» dejó de salir en cada barrido por curvas de boceto — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-model/sweep-reference-01a5bc5f7a3.md` y `tangent-chain-reference-c69a3eb5ea1.md` — la «Chain Selection» / «Tangent Chain» selecciona la geometría conectada tangentemente (aristas de un cuerpo **y** curvas de boceto). O sea que al barrer por un boceto la ruta ya es una cadena y no debe avisar «solo suma aristas de cuerpos».
+- **Qué cambié:**
+  - `clon/omnicad/timeline/ops_solido.py:143` — `OpBarrido._ruta` ahora delega en `_en_cadena` (la misma función que usa el barrido de superficie), que encadena tanto aristas de cuerpos como curvas de boceto tangentes; se borró el `ctx.aviso(...)` que lo decía. El cuerpo de la función pasa de 13 líneas a 3.
+  - `clon/omnicad/ui/comandos/crear.py:65` — la ayuda de la casilla «Selección de cadena» ahora dice «Suma a cada arista de un cuerpo o curva de boceto las que le siguen tangentes.» (antes decía «las curvas de boceto se usan tal cual»).
+  - `clon/omnicad/api/herramientas_solido.py:409` y `:439` — la descripción y el `:param chain` de `sweep` ya no dicen que las curvas de boceto «se usan tal cual y se avisa»; dicen que `chain` también encadena las curvas tangentes de `path_sketch`.
+  - `docs/agentes/herramientas.md` regenerado (comando del coordinador; la firma `chain: bool` no cambió, solo el texto).
+- **Gemelos revisados:**
+  - `OpBarrido._ruta` (`timeline/ops_solido.py`): cambiado, es el único lugar que calculaba la ruta del barrido sólido. ✔
+  - Barrido de superficie (`timeline/ops_superficie.py:223` y `_en_cadena` en `ops_solido.py:70`): ya usaba `_en_cadena` y no avisaba; ahora el sólido comparte exactamente esa lógica (los tres iguales: ventana, API, operación). ✔
+  - La previa del Barrido (`ui/comando.py`, `nucleo/previa*`): no tiene regla propia de cadena; ejecuta la operación, así que al delegar en `_en_cadena` también la cubre (grep sin coincidencias de «solo suma aristas» en `previa*`). ✔
+  - La API (`api/herramientas_solido.py:411` `sweep`): el parámetro `chain` ya existía; solo se corrigió su docstring para reflejar que ahora también encadena curvas de boceto. El valor por defecto `False` y el de la operación (`PARAMS["cadena"]=False`) siguen igual; la ventana lo marca `True` por defecto (`crear.py:65`), comportamiento que Fusion imita al encadenar la ruta del boceto. ✔
+  - **Fuera de alcance:** Solevación (`OpSolevacion`, `ops_solido.py:226`) tiene su propio `cadena` para secciones y no avisaba; no lo toqué. Tubería (`OpTuberia`) ya usaba `_en_cadena`.
+- **Test nuevo** (en `tests/test_sol08_barrido.py`): reemplacé `test_cadena_con_curvas_de_boceto_avisa_que_no_las_encadena` (que ASSERTÍA el aviso erróneo) por dos:
+  - `test_cadena_con_curvas_de_boceto_no_avisa_y_sigue_toda_la_ruta`: barrido de un cuerpo por un boceto con `chain=True` no avisa «solo suma aristas de cuerpos» y da el volumen correcto (caja 10³ por recta de 40 mm → 5000 mm³).
+  - `test_cadena_de_barrido_expande_las_curvas_de_boceto_tangentes`: eligiendo solo la primer curva de un boceto de dos curvas tangentes con `chain=True`, la ruta sigue toda la cadena (40 mm → 5000 mm³, no 3000 de la curva suelta).
+  - Salida **ROJA** (test viejo, con el código viejo): el barrido por boceto avisaba «La selección de cadena solo suma aristas de cuerpos…» y la ruta no se encadenaba.
+  - Salida **VERDE** (con el arreglo): `148 passed in 48.27s`.
+- **ruff check .:** `All checks passed!` (sobre los 4 archivos tocados).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_sol08_barrido.py`, `test_barrido_tipos.py`, `test_api_barrido.py`, `test_comandos.py`, `test_comandos_crear.py`, `test_doc_agentes.py` → **148 passed in 48.27s**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** unión de los grep `sweep` + `barrido`/`Barrido`/`OpBarrido` menos los 6 obligatorios: `test_analisis.py`, `test_api_boceto.py`, `test_api_boceto_herramientas.py`, `test_api_modificar.py`, `test_api_opciones_boceto.py`, `test_api_opciones_solido2.py`, `test_api_solido.py`, `test_api_solido_extra.py`, `test_api_superficie.py`, `test_b167_b168_autointersecciones.py`, `test_b52_espiral.py`, `test_b71_cadena.py`, `test_boceto_fase0.py`, `test_boceto_fase2.py`, `test_boceto_fase5.py`, `test_boceto_fase8_3d.py`, `test_boceto_fase9_3d.py`, `test_boceto_interaccion.py`, `test_cobertura_ui_api.py`, `test_comandos_inspeccionar.py`, `test_cuerpos_partidos.py`, `test_dibujo.py`, `test_ensamblar.py`, `test_gizmo_barrido.py`, `test_herramientas_solido.py`, `test_iconos_extra.py`, `test_patrones_boceto.py`, `test_restricciones_matematica.py`, `test_resultados_vacios.py`, `test_rocas_diametros_tabla.py`, `test_sol08_ui.py`, `test_sol24_reconocer_funciones.py`, `test_solidos_crear.py`, `test_superficie_guias.py`, `test_svg_arcos.py`, `test_texto_vectores.py`, `test_topes.py`. (La mayoría coinciden por el token genérico `sweep`/`barrido`, no porque toquen `OpBarrido._ruta`; los listo porque el prompt lo pide.)
+- **Salida de /ponytail-review:** revisé el diff y el flujo real (`OpBarrido.ejecutar` → `_ruta` → `_en_cadena`, llamado también por Tubería y el barrido de superficie). Hallazgos:
+  - **Must fix:** ninguno.
+  - **Should fix:** ninguno. La refactor elimina código (13→3 líneas) y reusa `_en_cadena` ya existente y probado; el caso de ruta mixta (aristas de cuerpo + curvas de boceto) ahora se encadena todo sin aviso, que es el comportamiento de Fusion; el `formas_boceto` se reconstruye por llamada (sin estado global).
+  - **Nice to have:** ninguno.
+  - **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:** no corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador). Tampoco corrí la captura `scripts/prueba_ui/todo.py` de la pieza `revolucion_barrido_solevacion` en minimizada: el panel del barrido no cambió de posición ni de campos, solo el texto de ayuda de la casilla «Selección de cadena»; los tests de `test_comandos_crear.py` (corridos) ejercitan el campo.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.
