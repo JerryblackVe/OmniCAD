@@ -11,7 +11,8 @@ from ..nucleo import geometria as geo
 from . import entidades as ent
 from .parametros import _NUM_CON_UNIDAD, LONGITUD, acotar
 from .operaciones import (ANGULO, Boceto, BocetoResuelto, ErrorBoceto, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
-                          _resolver_todas, atributos_copia, detectar_boceto, registrar_operacion, resolver)
+                          _resolver_todas, atributos_copia, detectar_boceto, espesor_plastico, registrar_operacion,
+                          resolver)
 
 
 def _sm():
@@ -376,7 +377,7 @@ class OpVaciado(Operacion):
     """Vaciado de Fusion [GUID-83A14252]: caras a quitar (o un cuerpo entero: queda hueco), espesor
     interior/exterior, dirección y cadena tangente."""
     TIPO, ETIQUETA, ICONO = "vaciado", "Vaciado", "▢"
-    PARAMS = {"caras": [], "cuerpos": [], "espesor_interior": "1 mm", "espesor_exterior": "1 mm",
+    PARAMS = {"caras": [], "cuerpos": [], "espesor_interior": "", "espesor_exterior": "",
               "direccion": "interior", "tangente": True, "tipo": "afilado"}
     EXPRESIONES = ("espesor_interior", "espesor_exterior")
     OPCIONES = {"direccion": ("interior", "exterior", "ambos"), "tipo": ("afilado", "redondeado")}
@@ -393,8 +394,11 @@ class OpVaciado(Operacion):
             raise ErrorOperacion("Elegí caras a quitar o un cuerpo para vaciar.")
         for cid, caras in grupos.items():
             c = estado.cuerpo(cid)
-            c.forma = sm.vaciado(c.forma, caras, espesor_interior=ctx.evaluar(p["espesor_interior"]),
-                                 espesor_exterior=ctx.evaluar(p["espesor_exterior"]), direccion=p["direccion"],
+            # Espesor vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y la usa Shell).
+            interior = str(p["espesor_interior"] or "").strip() or espesor_plastico(estado, (cid,), "1 mm")
+            exterior = str(p["espesor_exterior"] or "").strip() or espesor_plastico(estado, (cid,), "1 mm")
+            c.forma = sm.vaciado(c.forma, caras, espesor_interior=ctx.evaluar(interior),
+                                 espesor_exterior=ctx.evaluar(exterior), direccion=p["direccion"],
                                  tangente=p["tangente"], tipo=p["tipo"])
 
 

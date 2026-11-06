@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 138: Abierto 72 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-05; después H-98 a H-100 de Repujado y Plástico).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 137: Abierto 71 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-05; después H-98 a H-100 de Repujado y Plástico).
 
 ## Pendientes generales
 
@@ -44,12 +44,11 @@ Abierto 16 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 12 · Parcial 1.
+Abierto 11 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-86 | Extruir simétrico: la «Medida» por defecto cambia según por dónde se use | Abierto | Baja | Con la misma distancia, el panel (sólido y superficie) arranca en Media longitud y `extrude` / `create_surface_extrude` en Longitud total: 10 mm da 4000 mm³ en la ventana y 2000 en la API. Elegir el defecto de Fusion y usarlo en los dos lados. | ui/comandos/solido.py:42 y ui/comandos/superficie.py:51 contra api/herramientas_solido.py:189 y api/herramientas_superficie.py:80 | 2026-11-05 |
-| H-102 | PLÁSTICO › Nervio, Red, Vaciado y Engrosar no toman el espesor de la regla asignada | Abierto | Baja | Extruir delgada ya arranca con el espesor de la regla (H-87, resuelto); los otros cuatro siguen con un valor fijo: 2 mm en Nervio y Red, 1 mm en Vaciado y 2 mm en Engrosar. Fusion los alimenta con la misma regla («used by modeling tools such as Extrude, Rib, Web, Boss, Snap Fit, Emboss, Thicken, Shell»). Leerla con `regla_plastico` (`timeline/operaciones.py`), como Extruir. | `ui/comandos/crear.py:307` (Grosor de Nervio y Red); `timeline/ops_modificar.py` (`OpVaciado.PARAMS`); `timeline/ops_superficie.py` (`OpEngrosar.PARAMS`); ayuda `Plastic rules` | 2026-11-05 |
 | H-92 | Revolución › «Proyectar eje»: otro nombre y otro valor por defecto según por dónde se use | Abierto | Baja | La ventana del sólido dice «Eje de proyecto» y arranca marcada; la de superficie dice «Proyectar eje» y arranca sin marcar; `revolve` y `create_surface_revolve` arrancan en `false`. Fusion la llama Project Axis y la ayuda la muestra marcada («Uncheck to keep the axis in its original location»; ⚠ sin abrir Fusion). Además `create_surface_revolve` arranca con `chain=true` y su paso con `cadena` falso. | ui/comandos/solido.py:308; ui/comandos/superficie.py:106 | 2026-11-05 |
 | H-93 | Barrido: aviso de «Selección de cadena» en cada barrido por curvas de boceto | Abierto | Baja | La casilla viene marcada en la ventana y cada barrido normal por un boceto avisa «La selección de cadena solo suma aristas de cuerpos». En Fusion la cadena también junta curvas de boceto tangentes. Basta no avisar cuando la ruta son curvas de boceto (ya son una cadena), o encadenarlas. | timeline/ops_solido.py:149 | 2026-11-05 |
 | H-94 | El aviso flotante de abajo a la derecha tapa el Aceptar del panel y los campos en ventana chica | Abierto | Baja | El aviso «1 advertencia(s)» del barrido anterior queda abierto al pasar a otro comando y se dibuja encima del panel: en 1900×1000 tapa la mitad de Aceptar y Cancelar de Solevación; en 800×520 tapa Distancia y Escala del perfil del Barrido. Fusion lo muestra sin tapar el diálogo. Capturas en evidencias/ui_2026-11-05/capturas (solevacion_punta y barrido_800x520). | ui/avisos.py:3 | 2026-11-05 |

@@ -65,6 +65,87 @@ CodeBuddy con deepseek-v4.1-flash, 2 corridas cortadas por el tope de 45 min, si
 - **Salida de /ponytail-review:** no halló bugs ni riesgos. Lo único a notar (no es regresión, copia el diseño de H-87): cuando hay **varias** reglas asignadas a distintos componentes, el panel de Nervio/Red arranca en `0 deg` / `0 mm` (la función solo toma la regla cuando hay una sola asignada en el diseño); la operación, en cambio, sí usa la regla del componente del cuerpo elegido. Igual que el espesor de Extruir. No lo marcó como Must/Should fix. No hubo nada que arreglar.
 - **No verificado / ⚠:** no corrí la prueba de humo ni la suite completa (las corre el coordinador, regla 10 del prompt); no toqué la ventana más allá de los valores por defecto de los campos, así que no hice la captura `todo.py` de la pieza (la lógica de Nervio/Red ya la ejercitan los tests de API y ventana de la tanda).
 
+## Informe tanda C3
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash. **Tanda:** C3 · **Bug:** H-102 (mejora). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** se corrieron los 7 archivos obligatorios (un grupo) y, del `grep -l`, los cuatro de más riesgo
+(`test_previa_vaciado_aislada`, `test_comandos_superficie`, `test_comandos_modificar`, `test_manipuladores`); el resto de la
+lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
+
+### H-102 — PLÁSTICO › Nervio, Red, Vaciado y Engrosar toman el espesor de la regla asignada — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `contenido/fusion-model/plastic-rules-5619f43a2b0.md` — «Physical values: Thickness,
+  Draft Angle and Nominal Radius, which are referenced as parameters and used by modeling tools such as Extrude, Rib, Web,
+  Boss, Snap Fit, Emboss, **Thicken, Shell**, Draft». Y en Tips: «Assign plastic rules prior to adding parametric features
+  like **Shell** or **Thicken** to ensure those features inherit settings and parameters from the plastic rule». O sea que
+  los cuatro tienen que arrancar con el Thickness de la regla, no con un valor fijo.
+- **Qué cambié** (mismo patrón que H-87 en Extruir delgada y H-100 en el desmoldeo/radio):
+  - `clon/omnicad/timeline/operaciones.py:76` — `espesor_plastico(estado, cuerpos=(), por_defecto="1 mm")`: nuevo tercer
+    argumento para que cada herramienta conserve su propio defecto cuando **no** hay regla (Nervio, Red y Engrosar 2 mm;
+    Vaciado y Extruir delgada 1 mm). Sin eso, las cuatro caían a 1 mm y cambiaba el comportamiento sin regla.
+  - `clon/omnicad/timeline/ops_solido.py:254` — `OpNervio.PARAMS["espesor"]` pasa de `"2 mm"` a `""`; `:271` (Nervio) y
+    `:296` (Red) resuelven el grosor vacío contra `espesor_plastico(estado, (cuerpo.id,), "2 mm")`. Lo explícito manda.
+  - `clon/omnicad/timeline/ops_modificar.py:380` — `OpVaciado.PARAMS["espesor_interior"/"espesor_exterior"]` a `""`;
+    `:397` resuelve los dos por cuerpo del grupo contra `espesor_plastico(estado, (cid,), "1 mm")`.
+  - `clon/omnicad/timeline/ops_superficie.py:527` — `OpEngrosar.PARAMS["espesor"]` a `""`; `:542` resuelve contra
+    `espesor_plastico(estado, [cuerpos de las caras elegidas], "2 mm")` (filtra las entidades sin cuerpo).
+  - `clon/omnicad/ui/comandos/crear.py:308` (Grosor de Nervio/Red), `ui/comandos/modificar.py:386,388` (Espesor interior y
+    exterior de Vaciado) y `ui/comandos/superficie.py:592` (Grosor de Engrosar): el panel arranca con
+    `espesor_plastico(ctx.estado, (), "<defecto de la herramienta>")`.
+  - `clon/omnicad/api/herramientas_solido_extra.py:186,193,209,216,635,640` — `create_rib` / `create_web` (`thickness=""`),
+    `thicken` (`thickness=""`) y `api/herramientas_modificar.py:280` `shell` (`thickness: Expr = ""`, deja de ser
+    obligatorio) para que, sin valor, caigan en la regla; docstrings actualizados.
+  - `docs/agentes/herramientas.md` regenerado con el código de este worktree (comando del coordinador; 5 líneas).
+- **Los tres iguales (ventana / API / `PARAMS`)**: la ventana muestra el valor ya resuelto de la regla (o el defecto de la
+  herramienta), la API y `PARAMS` usan `""` como «no lo puse: tomá la regla» y la operación resuelve al ejecutar. Es el
+  mismo reparto que aceptó el coordinador en H-87 y H-100.
+- **Gemelos revisados:**
+  - `OpNervio` / `OpRed` (`timeline/ops_solido.py`): los dos cambiados. ✔
+  - `OpVaciado` (`timeline/ops_modificar.py`) y `OpEngrosar` (`timeline/ops_superficie.py`): cambiados los dos; no hay
+    versión de superficie del Vaciado ni de sólido del Engrosar (es la misma operación en las dos pestañas). ✔
+  - API `create_rib` / `create_web` / `shell` / `thicken`: defaults a vacío para que coincidan con la ventana. ✔
+  - `_regla_plastico` y las gemelas `angulo_desmoldeo_plastico` / `radio_nominal_plastico` (C1/C2): se reusaron sin
+    tocarlas; `espesor_plastico` solo ganó el `por_defecto`. ✔
+  - **Previa rápida** (`ui/comando.py`, `nucleo/previa*`): no evalúa espesores por su cuenta — ejecuta la operación, así que
+    la resolución al ejecutar también la cubre (comprobado con `test_previa_vaciado_aislada.py`, 85 passed). ✔
+  - **OmniKernel** (`nucleo/omnikernel/solidos_modificar.py:77`, `vaciado`): recibe el espesor ya calculado; no tiene
+    defaults que replicar. ✔
+  - **Fuera de alcance (no los toqué):** Saliente, Apoyo, Labio y Desmoldeo (su `angulo_desmoldeo` propio, ya anotado en
+    el informe de C2) y `OpMallaVaciado` (`timeline/ops_malla.py:268`, espesor de malla: la regla es de sólidos).
+- **Test nuevo** (`tests/test_sol21_reglas_plastico.py::test_nervio_red_vaciado_y_engrosar_toman_el_espesor_de_la_regla`):
+  con una regla de 3 mm asignada al componente, cada herramienta sin espesor da la misma geometría que con el valor puesto
+  a mano y distinta de su valor fijo de antes; los cuatro paneles arrancan en `3 mm` con regla y en `2 / 2 / 1 / 2 mm` sin
+  regla (documento nuevo).
+  - Salida **ROJA** (test escrito, código viejo):
+    `FAILED tests/test_sol21_reglas_plastico.py::test_nervio_red_vaciado_y_engrosar_toman_el_espesor_de_la_regla`
+    `AssertionError: {'ok': False, 'error_kind': 'INVALID_EXPRESSION', 'mensaje': 'El paso «Vaciado1» (op4) falló…'}` →
+    `1 failed, 6 passed in 2.97s`
+  - Salida **VERDE** (con el arreglo): `7 passed in 3.40s`
+- **ruff check .:** `All checks passed!`
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_sol10_nervio_red.py`, `test_sol21_reglas_plastico.py`,
+  `test_api_solido.py`, `test_api_solido_extra.py`, `test_comandos.py`, `test_comandos_crear.py`, `test_doc_agentes.py`
+  → **203 passed in 20.77s**
+- **Del `grep -l` corrí además (riesgo alto):** `test_previa_vaciado_aislada.py`, `test_comandos_superficie.py`,
+  `test_comandos_modificar.py`, `test_manipuladores.py` → **85 passed in 129.58s**
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** por `Vaciado`: `test_malla.py`, `test_p9b_mas.py`,
+  `test_pl5_sugerencias.py`, `test_previa_aislada_comandos.py`, `test_resultados_vacios.py`; por `create_rib` /
+  `create_web` / `thicken`: `test_cobertura_ui_api.py`, `test_herramientas_solido.py`; por el token genérico `"shell"`
+  (coincidencias de nombre, no de la herramienta): `test_api_avanzado.py`, `test_api_documento.py`, `test_api_modificar.py`,
+  `test_api_opciones_modificar.py`, `test_apoyo.py`, `test_asistente_modelos.py`, `test_barrido_tipos.py`,
+  `test_booleanas_tortura.py`, `test_bugs_solido.py`, `test_extruir_cara_api.py`, `test_f3d_nativo.py`,
+  `test_hallazgos_nucleo.py`, `test_hallazgos_tortura.py`, `test_origen_entidad.py`, `test_sol13_sol20_ui.py`,
+  `test_sol17_silueta.py`, `test_sol19_fluido.py`, `test_solidos_modificar.py`; por `OpRed`: `test_malla.py` (coincide con
+  otro nombre, no con la operación Red).
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff: (1) el `por_defecto` evita cambiar el
+  comportamiento sin regla — era el riesgo real del cambio; (2) `OpEngrosar` filtraba mal las entidades sin cuerpo y se
+  corrigió (`if e.cuerpo`) antes de cerrar; (3) la API gana defaults y no rompe firmas (`shell` pasa de obligatorio a
+  opcional; los demás solo cambian el valor); (4) los documentos viejos guardan el espesor explícito, así que no migran;
+  (5) `nucleo/` sigue sin importar Qt y no se agregó estado global. Nada quedó pendiente.
+- **No verificado / ⚠:** no corrí la suite completa ni la prueba de humo (regla 10: las corre el coordinador). Toqué la
+  ventana (valores por defecto de cuatro campos), así que **falta la captura** `scripts/prueba_ui/todo.py` de la pieza
+  `nervio_red_repujado` en minimizada; los paneles los ejercitan los tests de comando de la tanda, pero no se miró la
+  pantalla. Tampoco se abrió Fusion: el comportamiento sale de la ayuda oficial, como en H-87 y H-100.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

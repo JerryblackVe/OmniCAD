@@ -8,6 +8,7 @@ from ...timeline.ops_superficie import (AVISO_NADA_COSIDO, OpCoser, OpDescoser, 
                                         OpInvertirNormal, OpParche, OpRecortar, OpReglada, OpSupBarrido, OpSupBobina,
                                         OpSupDesfase, OpSupEmpalme, OpSupExtruir, OpSupPrimitiva, OpSupRevolucion,
                                         OpSupSolevacion, OpSupTuberia)
+from ...timeline.operaciones import espesor_plastico
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Botones, Casilla, Comando, ErrorComando, Expresion, Info, Opciones, Personalizado, Seleccion, Texto,
                        exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
@@ -588,7 +589,7 @@ class Engrosar(Comando):
     def campos(self, ctx):
         return [Seleccion("caras", "Caras/cuerpos", {"cara", "cuerpo"}, maximo=None),
                 Casilla("cadena", "Selección de cadena", True),
-                Expresion("espesor", "Grosor", "2 mm"),
+                Expresion("espesor", "Grosor", espesor_plastico(ctx.estado, (), "2 mm")),
                 Opciones("direccion", "Dirección", {"un_lado": ("Un lado", "dir_un_lado"), "simetrica": ("Simétrico", "dir_simetrica")}),
                 Botones("tipo", "Tipo de engrosado",
                         {"agudo": ("Engrosado agudo", "eng_agudo"), "redondeado": ("Engrosado redondeado", "eng_redondo")}),

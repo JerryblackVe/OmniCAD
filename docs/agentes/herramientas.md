@@ -2963,12 +2963,12 @@ Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quita
 - Parámetros:
   - `body` (texto; obligatorio): id o nombre del cuerpo a vaciar.
   - `faces` (texto o lista de texto; obligatorio): caras a quitar: selector (">Z" = la tapa), id de find_faces ("Cuerpo1/F6") o lista; [] = hueco cerrado.
-  - `thickness` (número o expresión; obligatorio): espesor de pared en mm (número o expresión con parámetros); es el interior, y también el exterior si no se da outside_thickness.
+  - `thickness` (número o expresión; opcional, por defecto `""`): espesor de pared en mm (número o expresión con parámetros); es el interior, y también el exterior si no se da outside_thickness; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Shell).
   - `direction` ("inside" | "outside" | "both"; opcional, por defecto `"inside"`): "inside", "outside" o "both".
   - `tangent_chain` (true/false; opcional, por defecto `true`): true (por defecto) quita también las caras tangentes encadenadas a las elegidas.
   - `outside_thickness` (número o expresión; opcional, por defecto `null`): espesor exterior en mm distinto del interior (con direction=both u outside); vacío = el mismo que thickness.
   - `corners` ("sharp" | "rounded"; opcional, por defecto `"sharp"`): "sharp" (desfase afilado, por defecto) o "rounded" (desfase redondeado en las esquinas).
-- CLI: `omnicad call shell --doc pieza.omnicad body=… faces=… thickness=…`
+- CLI: `omnicad call shell --doc pieza.omnicad body=… faces=…`
 
 ### `remove_fillets`
 
@@ -3407,7 +3407,7 @@ Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. di
 - Parámetros:
   - `sketch` (texto; obligatorio): nombre/id del boceto con curvas abiertas.
   - `curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas; vacío = todas las no constructivas.
-  - `thickness` (número o expresión; opcional, por defecto `2`): grosor en mm.
+  - `thickness` (número o expresión; opcional, por defecto `""`): grosor en mm; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Rib).
   - `extension` ("to_next" | "depth"; opcional, por defecto `"to_next"`): to_next (hasta el siguiente cuerpo) o depth (profundidad).
   - `depth` (número o expresión; opcional, por defecto `10`): profundidad en mm con extension=depth.
   - `direction` ("symmetric" | "side1" | "side2"; opcional, por defecto `"symmetric"`): grosor symmetric, side1 (un lado, empieza abajo) o side2 (un lado, empieza arriba).
@@ -3425,7 +3425,7 @@ Crea una red de nervios perpendicular al plano del boceto. draft_angle afina la 
 - Parámetros:
   - `sketch` (texto; obligatorio): nombre/id del boceto con curvas abiertas.
   - `curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas; vacío = todas las no constructivas.
-  - `thickness` (número o expresión; opcional, por defecto `2`): grosor en mm.
+  - `thickness` (número o expresión; opcional, por defecto `""`): grosor en mm; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Web).
   - `extension` ("to_next" | "depth"; opcional, por defecto `"to_next"`): to_next (hasta el siguiente cuerpo) o depth (profundidad).
   - `depth` (número o expresión; opcional, por defecto `10`): profundidad en mm con extension=depth.
   - `direction` ("symmetric" | "side1" | "side2"; opcional, por defecto `"symmetric"`): grosor symmetric, side1 o side2.
@@ -3641,7 +3641,7 @@ Da espesor a caras o cuerpos de superficie y crea un sólido.
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `faces` (texto o lista de texto; obligatorio): selector/ids de caras o nombres/ids de cuerpos de superficie, solos o en lista.
-  - `thickness` (número o expresión; opcional, por defecto `2`): grosor firmado en mm; negativo invierte el lado.
+  - `thickness` (número o expresión; opcional, por defecto `""`): grosor firmado en mm; negativo invierte el lado; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Thicken).
   - `direction` ("one_side" | "symmetric"; opcional, por defecto `"one_side"`): one_side (un lado) o symmetric (mitad a cada lado).
   - `thicken_type` ("sharp" | "rounded"; opcional, por defecto `"sharp"`): sharp (afilado) o rounded (redondeado).
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): new_body, join, cut o intersect.

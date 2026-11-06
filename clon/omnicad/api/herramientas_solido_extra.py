@@ -183,14 +183,14 @@ def _nervio(sesion, clase, sketch, curves, thickness, extension, depth, directio
              "direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). "
              "draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de "
              "extracción del desmoldeo (por defecto, del cuerpo hacia la curva).", modifica=True)
-def create_rib(sesion, sketch: str, curves: list[int] | None = None, thickness: Expr = 2,
+def create_rib(sesion, sketch: str, curves: list[int] | None = None, thickness: Expr = "",
                extension: Literal["to_next", "depth"] = "to_next", depth: Expr = 10,
                direction: Literal["symmetric", "side1", "side2"] = "symmetric", reverse: bool = False,
                target: str | None = None, draft_angle: Expr = "", pull_direction: Referencia | None = None):
     """
     sketch: nombre/id del boceto con curvas abiertas.
     curves: ids de curvas; vacío = todas las no constructivas.
-    thickness: grosor en mm.
+    thickness: grosor en mm; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Rib).
     extension: to_next (hasta el siguiente cuerpo) o depth (profundidad).
     depth: profundidad en mm con extension=depth.
     direction: grosor symmetric, side1 (un lado, empieza abajo) o side2 (un lado, empieza arriba).
@@ -206,14 +206,14 @@ def create_rib(sesion, sketch: str, curves: list[int] | None = None, thickness: 
 @herramienta("create_web", "solido", "Crea una red de nervios perpendicular al plano del boceto. draft_angle afina la "
              "red hacia su borde libre, fillet_radius redondea las aristas cóncavas donde se junta con el cuerpo y "
              "extend_curves=false la deja terminar donde terminan las curvas.", modifica=True)
-def create_web(sesion, sketch: str, curves: list[int] | None = None, thickness: Expr = 2,
+def create_web(sesion, sketch: str, curves: list[int] | None = None, thickness: Expr = "",
                extension: Literal["to_next", "depth"] = "to_next", depth: Expr = 10,
                direction: Literal["symmetric", "side1", "side2"] = "symmetric", reverse: bool = False,
                target: str | None = None, draft_angle: Expr = "", fillet_radius: Expr = "", extend_curves: bool = True):
     """
     sketch: nombre/id del boceto con curvas abiertas.
     curves: ids de curvas; vacío = todas las no constructivas.
-    thickness: grosor en mm.
+    thickness: grosor en mm; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Web).
     extension: to_next (hasta el siguiente cuerpo) o depth (profundidad).
     depth: profundidad en mm con extension=depth.
     direction: grosor symmetric, side1 o side2.
@@ -632,12 +632,12 @@ def create_fluid_volume(sesion, bodies: Cuerpos, volume_type: Literal["internal"
 
 
 @herramienta("thicken", "solido", "Da espesor a caras o cuerpos de superficie y crea un sólido.", modifica=True)
-def thicken(sesion, faces: Elementos, thickness: Expr = 2, direction: Literal["one_side", "symmetric"] = "one_side",
+def thicken(sesion, faces: Elementos, thickness: Expr = "", direction: Literal["one_side", "symmetric"] = "one_side",
             thicken_type: Literal["sharp", "rounded"] = "sharp", operation: Operacion = "new_body",
             target: Cuerpos | None = None, body: str | None = None, chain: bool = False):
     """
     faces: selector/ids de caras o nombres/ids de cuerpos de superficie, solos o en lista.
-    thickness: grosor firmado en mm; negativo invierte el lado.
+    thickness: grosor firmado en mm; negativo invierte el lado; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Thicken).
     direction: one_side (un lado) o symmetric (mitad a cada lado).
     thicken_type: sharp (afilado) o rounded (redondeado).
     operation: new_body, join, cut o intersect.

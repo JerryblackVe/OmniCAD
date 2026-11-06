@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView, QTab
                                QToolButton, QVBoxLayout, QWidget)
 
 from ...nucleo.analisis import TABLA_MATERIALES as MATERIALES
-from ...timeline.operaciones import OPERACIONES_COMBINAR, OpCombinar
+from ...timeline.operaciones import OPERACIONES_COMBINAR, OpCombinar, espesor_plastico
 from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, OpBorrarCaras, OpChaflan, OpDesfaseAristas,
                                        OpDesfaseCara, OpEliminarOperaciones,
                                        OpQuitar, OpQuitarEmpalmes,
@@ -383,9 +383,9 @@ class Vaciado(Comando):
                                                 "redondeado": ("Vaciado redondeado", "esq_redonda")}),
             Opciones("direccion", "Dirección", {"interior": ("Interior", "pos_interior"), "exterior": ("Exterior", "pos_exterior"),
                                                 "ambos": ("Ambos", "pos_centro")}),
-            Expresion("espesor_interior", "Espesor interior", "1 mm",
+            Expresion("espesor_interior", "Espesor interior", espesor_plastico(ctx.estado, (), "1 mm"),
                       visible_si=lambda v: v.get("direccion") != "exterior"),
-            Expresion("espesor_exterior", "Espesor exterior", "1 mm",
+            Expresion("espesor_exterior", "Espesor exterior", espesor_plastico(ctx.estado, (), "1 mm"),
                       visible_si=lambda v: v.get("direccion") != "interior"),
         ]
 

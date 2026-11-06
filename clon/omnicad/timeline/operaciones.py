@@ -73,12 +73,12 @@ def _regla_plastico(estado, cuerpos=()):
     return asignadas[0] if len(asignadas) == 1 else None
 
 
-def espesor_plastico(estado, cuerpos=()):
+def espesor_plastico(estado, cuerpos=(), por_defecto="1 mm"):
     """Espesor de pared de las herramientas de plástico: el de la regla del componente de `cuerpos` y, sin cuerpos
     (cuerpo nuevo), el de la única regla asignada en el diseño (Fusion usa la del componente en el que se trabaja).
-    1 mm si no hay regla."""
+    `por_defecto` (el de cada herramienta) si no hay regla."""
     regla = _regla_plastico(estado, cuerpos)
-    return f"{regla['espesor']:g} mm" if regla else "1 mm"
+    return f"{regla['espesor']:g} mm" if regla else por_defecto
 
 
 def angulo_desmoldeo_plastico(estado, cuerpos=()):

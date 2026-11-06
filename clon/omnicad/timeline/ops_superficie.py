@@ -11,7 +11,8 @@ from ..nucleo import geometria as geo
 from ..nucleo.solidos_modificar import caras_en_cadena
 from . import entidades as ent
 from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, OpPrimitiva, _caja_todo, _deps_objetivo,
-                          _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, registrar_operacion)
+                          _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, espesor_plastico,
+                          registrar_operacion)
 from .ops_solido import OpBobina, OpTuberia, _en_cadena
 
 LADOS = {"un_lado": "Un lado", "dos_lados": "Dos lados", "simetrica": "Simétrica"}
@@ -523,7 +524,7 @@ class OpEngrosar(_OpSuperficie):
     `tipo`: "agudo" (Sharp Thicken, esquinas en punta) o "redondeado" (Rounded Thicken). `cadena` (Chain Selection)
     suma a cada cara de un cuerpo las que le siguen tangentes."""
     TIPO, ETIQUETA, ICONO = "engrosar", "Engrosar", "▤"
-    PARAMS = {"caras": [], "espesor": "2 mm", "direccion": "un_lado", "tipo": "agudo", "operacion": "nuevo",
+    PARAMS = {"caras": [], "espesor": "", "direccion": "un_lado", "tipo": "agudo", "operacion": "nuevo",
               "objetivos": [], "cadena": False}
     EXPRESIONES = ("espesor",)
     OPCIONES = {"direccion": ("un_lado", "simetrica"), "tipo": ("agudo", "redondeado"),
@@ -538,7 +539,11 @@ class OpEngrosar(_OpSuperficie):
         if self.p.get("cadena"):
             formas = _caras_de_la_cadena(ents, estado)
         base = geo.compuesto(formas) if len(formas) > 1 else formas[0]
-        forma = _sf().engrosar_superficie(base, ctx.evaluar(self.p["espesor"]),
+        # Espesor vacío = el de la regla de plástico del componente de las caras (Fusion: la regla da Thickness y la
+        # usa Thicken).
+        espesor = str(self.p["espesor"] or "").strip() or espesor_plastico(
+            estado, [e.cuerpo for e in ents if e.cuerpo], "2 mm")
+        forma = _sf().engrosar_superficie(base, ctx.evaluar(espesor),
                                           simetrica=self.p["direccion"] == "simetrica", tipo=self.p["tipo"])
         self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"],
                                                  self.p.get("objetivos") or ""))

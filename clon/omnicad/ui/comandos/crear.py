@@ -11,7 +11,7 @@ from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpN
                                     OpSolidoEnvolvente, OpTuberia, OpVolumenFluido)
 from ...timeline import entidades as ent
 from ...timeline.ops_solido import TIPOS_REPETIBLES
-from ...timeline.operaciones import angulo_desmoldeo_plastico, radio_nominal_plastico
+from ...timeline.operaciones import angulo_desmoldeo_plastico, espesor_plastico, radio_nominal_plastico
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, ListaSeleccion, Opciones, OpcionesVivas, Personalizado,
                        Seleccion, Texto, exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
@@ -305,7 +305,7 @@ class _NervioRed(Comando):
                 Botones("direccion", "Dirección del espesor", {"simetrica": ("Simétrico", "esp_simetrico"),
                                                                "lado1": ("Un lado, desde abajo", "esp_lado1"),
                                                                "lado2": ("Un lado, desde arriba", "esp_lado2")}),
-                Expresion("espesor", "Grosor", "2 mm"),
+                Expresion("espesor", "Grosor", espesor_plastico(ctx.estado, (), "2 mm")),
                 Opciones("extension", "Tipo de extensión", {"hasta_siguiente": ("Al siguiente", "ext_siguiente"),
                                                             "profundidad": ("Distancia", "ext_distancia")}),
                 Expresion("profundidad", "Distancia", "10 mm",
