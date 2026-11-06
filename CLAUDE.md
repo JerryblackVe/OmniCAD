@@ -210,6 +210,17 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   en `docs/seguimiento/`, suma la firma a `scripts/caza/conocidos.json` y el caso mínimo a `clon/tests/corpus_caza/`.
   Lo que quedó «sin confirmar» se confirma solo en la corrida siguiente.
 
+## Regla estricta: aviso de contexto al 60 % (Gerardo, 2026-11-05)
+- El coordinador mira cuánto lleva lleno su contexto (`get_usage` con `session_id: "self"`) cada vez que cierra una
+  tarea o una tanda, y antes de lanzar otra.
+- **Al llegar al 55 %, avisa en una línea que se acerca al límite.** **Al llegar al 60 %, no arranca nada nuevo:**
+  1. guarda todo: commit de lo verificado; `docs/seguimiento/`, `PROJECT_LOG.md`, la lista nocturna y la página de
+     seguimiento al día;
+  2. escribe una nota de traspaso en `PROJECT_LOG.md` (Registro): sesiones abiertas y su estado, lo que espera
+     revisión, lo que quedó sin commitear y de quién es, y el próximo paso;
+  3. le dice a Gerardo en una línea que abra una sesión nueva de coordinación, que arranca leyendo esa nota.
+- Lo mismo vale para las sesiones de ejecución: al 60 % cierran su informe y lo dicen, en vez de seguir.
+
 ## Regla estricta: elegir modelo y esfuerzo por tarea (ahorrar tokens sin perder calidad)
 - **Cada tarea lleva su modelo y su esfuerzo elegidos a conciencia**, y se dicen en una línea ANTES de abrir la
   sesión (`start_session`, `model` y `effort`) o de mandar el trabajo. Nunca el valor por defecto ni «alto» por
