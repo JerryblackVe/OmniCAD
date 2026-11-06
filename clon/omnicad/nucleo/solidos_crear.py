@@ -421,6 +421,9 @@ def _prisma(cara, n, d, conicidad=0.0):
     plano = geo.plano_de_cara(cara)
     if plano is None or abs(float(plano.normal @ n)) < 1e-9:
         raise geo.ErrorGeometria("Con inclinación, el perfil debe ser plano y transversal a la extrusión.")
+    if abs(float(plano.normal @ n)) < 1 - 1e-9 and any(
+            BRepAdaptor_Curve(e).GetType() != GeomAbs_Line for e in _aristas_de(cara)):
+        return _prisma_curvo_inclinado(cara, n, d, conicidad)
     # Prisma recto + desmoldeo de las caras laterales con el plano del perfil como plano neutro: las
     # esquinas quedan vivas (tronco de pirámide), como en Fusion. LocOpe_DPrism las redondea al ensanchar.
     tirar = n * math.copysign(1.0, d)
@@ -438,6 +441,31 @@ def _prisma(cara, n, d, conicidad=0.0):
     if not da.IsDone():
         raise geo.ErrorGeometria("El kernel no pudo aplicar la inclinación a la extrusión.")
     return _validar(da.Shape(), "Extrusión con inclinación")
+
+
+def _prisma_curvo_inclinado(cara, n, d, conicidad):
+    """Extruir › Inicio Objeto: lateral reglado entre la base curva y su desfase en el plano neutro.
+
+    DraftAngle no admite el lateral de una elipse oblicua. El extremo conserva el plano de inicio
+    trasladado según la dirección; los huecos se cierran al ensanchar el material.
+    """
+    exterior = BRepTools.OuterWire_s(TopoDS.Face(cara))
+    desfase = abs(d) * math.tan(math.radians(conicidad))
+    piezas = []
+    alambres = [exterior] + [TopoDS.Wire(w) for w in _explorar(cara, TopAbs_WIRE) if not w.IsSame(exterior)]
+    for i, w in enumerate(alambres):
+        extremo = _desfase_alambre(w, desfase if i == 0 else -desfase)
+        mk = BRepOffsetAPI_ThruSections(True, True)
+        mk.AddWire(w)
+        mk.AddWire(_trasladar(extremo, n * d))
+        mk.Build()
+        if not mk.IsDone():
+            raise geo.ErrorGeometria("No se pudo crear el lateral curvo de la extrusión con inclinación.")
+        piezas.append(_validar(mk.Shape(), "Extrusión curva con inclinación"))
+    resultado = piezas[0]
+    for hueco in piezas[1:]:
+        resultado = geo.booleano(resultado, hueco, "cortar")
+    return _validar(resultado, "Extrusión curva con inclinación")
 
 
 def _desfase_alambre(alambre, d):

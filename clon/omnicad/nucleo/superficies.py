@@ -305,8 +305,23 @@ def _extruir_tramos(ws, n, arriba, abajo, conicidad, afuera=False):
             piezas.append(BRepPrimAPI_MakePrism(base, gp_Vec(*map(float, n * (arriba + abajo)))).Shape())
             continue
         caras = []
+        cara = plano = None
+        if BRep_Tool.IsClosed_s(w):
+            mk = BRepBuilderAPI_MakeFace(w, True)
+            if mk.IsDone():
+                candidata = mk.Face()
+                plano = geo.plano_de_cara(candidata)
+                if plano is not None and 1e-9 < abs(float(plano.normal @ n)) < 1 - 1e-9:
+                    cara = candidata
         for d, alto in ((n, arriba), (-n, abajo)):
             if alto <= 0:
+                continue
+            if cara is not None:
+                # Inicio oblicuo: compartir los planos límite y el lateral con Extruir sólido.
+                from .solidos_crear import _prisma
+                forma = _prisma(cara, d, alto, conicidad)
+                caras.extend(c for c in geo.caras(forma) if (p := geo.plano_de_cara(c)) is None
+                             or abs(float(p.normal @ plano.normal)) < 1 - 1e-9)
                 continue
             ang = math.radians(abs(conicidad))
             try:

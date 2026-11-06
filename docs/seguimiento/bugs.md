@@ -2,13 +2,12 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 23: Abierto 16 · Parcial 6 · Bloqueado 1 (recontado 2026-11-06 tras resolver B-213 y B-195).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 22: Abierto 16 · Parcial 5 · Bloqueado 1 (recontado 2026-11-06 tras resolver B-213, B-195 y B-206).
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-206 | Extruir Inicio › Objeto inclinado con conicidad: faltan perfiles curvos | Parcial | Media | Rectángulo a 30° con conicidad ±5° y distancia ±10 conserva el plano neutro y da volumen analítico. Se mantienen las curvas exactas, delgada y Al objeto/Todo sin conicidad del cierre anterior. Queda el círculo proyectado (elipse): DraftAngle no admite su lateral; MakeDraft se ensayó sin salida verificable. Dos intentos geométricos, detenidos; regresión curva visible en rojo, sin xfail. Superficie usa MakeDraft por su cuenta y no se verificó esta combinación. | nucleo/solidos_crear.py (`_prisma`); tests/test_b206_inicio_inclinado.py::test_b206_rectangulo_conserva_el_plano_neutro_y_el_volumen; tests/test_b206_inicio_inclinado.py::test_b206_circulo_inclinado_con_conicidad_es_un_solido_valido | 2026-11-05 |
 | B-209 | Barrido sólido con escala «Estirar» hace «Escalar» sin avisar | Abierto | Media | `sweep rail_scale="stretch"` usa la misma ley uniforme que `scale`; debería estirar en una sola dirección. La auditoría previa a B-208 midió 3364,59 mm³ en ambos; falta actualizar esa medida tras B-208 (sonda sin turno). La superficie sí estira (400 mm² exactos). La ventana del sólido ni ofrece Estirar. | nucleo/solidos_crear.py:877 | 2026-11-05 |
 | B-210 | Revolución «Dos lados» con un ángulo negativo da otra forma en sólido que en superficie | Abierto | Baja | Lado 1 = 90°, lado 2 = −45°: el sólido toma el signo y el lado 2 vuelve sobre el lado 1 (1570,80 mm³, como sin lado 2, sin aviso); la superficie toma el valor absoluto (235,62 mm², igual que +45°). Falta una sola regla para los dos. | timeline/operaciones.py:1305 (`OpRevolucion.ejecutar`) y nucleo/superficies.py:475 | 2026-11-05 |
 | B-211 | Barrido: la Distancia mayor que 1 se acepta y se recorta a 1 sin avisar | Abierto | Baja | En la ventana «1,5» deja la vista previa en verde y `edit_feature` con `distancia="2"` sale ok: el cuerpo es el de 1 (628,32 mm³). La API solo rechaza números sueltos (`path_distance=1.5`). Fusion: Range 0.00-1.00. | nucleo/solidos_crear.py:256 | 2026-11-05 |
@@ -114,24 +113,6 @@ de arriba manda sobre este texto.
 - **Reproducir:** `sondas_nrr.py rep_cadena_tangente` (la placa sola: `rep_cadena_tangente_base`, 23624,07); pieza `nervio_red_repujado` («Repujado con cadena tangente»).
 - **Causa probable (leída):** la cadena suma los costados planos (tangentes a los empalmes, `nucleo/solidos_crear.py:1548`) y cada grupo de caras paralelas pasa por `_perfiles_en_zona` con `adaptar`, que gira y achica el perfil para que entre.
 - **Prueba propuesta:** este caso da +100 y la caja no crece en x ni en y.
-
-### B-206 · Inicio › Objeto en un plano no paralelo (Parcial)
-
-- **Arreglado:** el perfil se proyecta sobre el plano elegido a lo largo de la dirección (`geo.proyectar_sobre_plano`,
-  con las aristas pasadas a recta, círculo o elipse por `GeomConvert_CurveToAnaCurve`); la delgada arma la pared en el
-  plano del perfil y recién después proyecta (`extruir_avanzado(inicio_plano=...)`); «Al objeto» y «Todo» pasan de largo
-  desde el punto más bajo de la base. Test:
-  `tests/test_api_opciones_solido1.py::test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el`.
-- **Avance 2026-11-05 (Sol):** `_prisma` usa el plano de la cara de inicio como plano neutro y reconoce las tapas por
-  su normal, no por la dirección de extrusión. Se quitó el veto global del timeline. Rectángulo 20×10 centrado,
-  inicio a 30°, conicidad +5°/−5° y distancia +10/−10: tres casos válidos con volumen analítico y ambas tapas exactas.
-- **Queda — perfiles curvos con conicidad + inicio inclinado:** el círculo r5 proyectado es una elipse, cuyo lateral
-  no es plano, cilíndrico ni cónico: tipos admitidos por `BRepOffsetAPI_DraftAngle.Add` según la documentación instalada.
-  El intento alternativo con `BRepOffsetAPI_MakeDraft` hasta el plano final terminó sin salida verificable; no se
-  incorpora ni se afirma que haya funcionado. Alcanzado el límite de dos intentos: no se sigue con geometría.
-- **Prueba propuesta pendiente:** `tests/test_b206_inicio_inclinado.py::test_b206_circulo_inclinado_con_conicidad_es_un_solido_valido`
-  debe crear un sólido válido, conservar el área de la base elíptica y aumentar el volumen con +5°. Sigue fallando
-  (sin xfail); los otros tres casos nuevos pasan. Informe completo en `docs/corrida_nocturna_2026-11-05.md`.
 
 ### B-188 · Reproducción exacta pendiente de REMOVEDOR
 
