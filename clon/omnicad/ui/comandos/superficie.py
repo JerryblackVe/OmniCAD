@@ -91,12 +91,13 @@ class SupExtruir(Comando):
 
 class SupRevolucion(Comando):
     CLAVE, TITULO, ICONO = "sup_revolucion", "Revolución de superficie", "sup_revolucion"
-    AYUDA = "Gira curvas alrededor de un eje y crea una superficie."
+    AYUDA = "Gira perfiles cerrados, curvas o caras planas alrededor de un eje y crea una superficie."
     CLASE_OP = OpSupRevolucion
 
     def campos(self, ctx):
         angulo = lambda v: v.get("extension") == "angulo"  # noqa: E731
-        return [Seleccion("curvas", "Perfil", CURVAS, maximo=None),
+        return [Seleccion("curvas", "Perfil", PERFILES_SUPERFICIE, maximo=None,
+                          ayuda="Perfiles cerrados, curvas de boceto, aristas o caras planas."),
                 Casilla("cadena", "Selección de cadena", True,
                         ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
                 Seleccion("eje", "Eje", {"eje"}),

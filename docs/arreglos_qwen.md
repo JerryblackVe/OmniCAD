@@ -536,6 +536,45 @@ lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
     (exterior e interior). Es lo que ya hacía la cara plana en el Barrido de superficie y lo que da `alambres`; no lo
     comparé con Fusion.
 
+## Informe tanda C10
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C10 · **Bug:** H-104 (faltante). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** un grupo con los 6 archivos obligatorios; los del `grep -l` NO se corrieron (regla del coordinador) y están listados abajo.
+
+### H-104 — SUPERFICIE › Revolución en la ventana: elegir perfiles cerrados y caras planas — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-patch/revolve-a-surface-body-a3f71a695c7.md`, paso 2: «In the canvas, select a **sketch profile, sketch curve, or planar face** to revolve». O sea que el campo Perfil de la Revolución de superficie tiene que aceptar, además de la curva y la arista que ya aceptaba, el perfil cerrado (la región) y la cara plana. Es el caso gemelo de H-85 en Extruir de superficie, que se arregló sin tocar Revolución.
+- **Qué cambié:**
+  - `clon/omnicad/ui/comandos/superficie.py:94` — `SupRevolucion.AYUDA` ahora dice «Gira perfiles cerrados, curvas o caras planas alrededor de un eje y crea una superficie.»
+  - `clon/omnicad/ui/comandos/superficie.py:99` — el campo «Perfil» pasa de `CURVAS` a `PERFILES_SUPERFICIE` (la constante de C9/H-85: `CURVAS | {"perfil", "cara_plana"}`) y su ayuda enumera los cuatro tipos que entran.
+  - **La operación y el núcleo no cambiaron una línea**: `OpSupRevolucion.ejecutar` ya delega en `_curvas` (`timeline/ops_superficie.py:45`), que resuelve un `perfil` a su cara y una `cara_plana` a la cara (`_resolver_todas`); `revolver_superficie` → `alambres` (`nucleo/superficies.py:164`) ya saca los alambres de una `TopAbs_FACE`. Por eso el mismo camino sirve para curva, perfil y cara plana.
+- **Gemelos revisados:**
+  - El filtro de Revolución sólida (`ui/comandos/solido.py:301`, `{"perfil", "cara_plana"}`): es el criterio que se copió; no se tocó y ya acepta perfil y cara plana, así que la superficie ahora coincide con ella (los tres iguales: ventana, API, operación). ✔
+  - La API `create_surface_revolve` (`api/herramientas_superficie.py:133`): **ya aceptaba** perfiles y caras (`_seleccion(..., curvas=True)` y docstring que lo dice); no cambió firma ni descripción, así que `docs/agentes/herramientas.md` **no** se regeneró. ✔
+  - La previa (`ui/comando.py` › `set_filtro` con `campo.filtros`; `nucleo/previa*`): no tiene regla propia, ejecuta la operación, así que hereda el filtro y la resolución sin cambios. ✔
+  - `PERFILES_SUPERFICIE` (C9/H-85, `ui/comandos/superficie.py:23`): se reusó tal cual, sin duplicar la constante (único nombre para una sola cosa). ✔
+  - Extruir de superficie (`ui/comandos/superficie.py:46`, ya en `PERFILES_SUPERFICIE`): comparten la misma constante; el comportamiento de Revolución es ahora idéntico al de Extruir. ✔
+  - **Fuera de alcance (no lo toqué):** el eje de Revolución sigue filtrando solo `{"eje"}` (Fusion: «sketch curve, edge, cylindrical face, or axis»); cambiarlo es otra fila. El «A objeto» y el «Proyectar eje» ya andaban.
+- **Test nuevo** (`clon/tests/test_comandos_superficie.py::test_revolucion_de_superficie_elige_perfiles_cerrados_y_caras_planas`): con un rectángulo de boceto [4,6]×[0,10] en XZ y una caja, comprueba que el campo «Perfil» de `SupRevolucion` acepta el hit del perfil y el de la cara plana (`acepta`), y que cada uno gira de verdad una superficie (el rectángulo da 240π ≈ 753,98 mm² al voltear 360° sobre Z; la cara plana da superficie positiva).
+  - Salida **ROJA** (antes del arreglo):
+    `FAILED tests/test_comandos_superficie.py::test_revolucion_de_superficie_elige_perfiles_cerrados_y_caras_planas`
+    `AssertionError: assert (False)` en `acepta({'arista', 'curva_boceto'}, {'tipo': 'perfil', ...})` → `1 failed in 2.44s`
+  - Salida **VERDE** (con el arreglo): `1 passed in 2.35s`
+- **ruff check .:** `All checks passed!` (sobre los dos archivos tocados).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_comandos_superficie.py`, `test_superficies.py`, `test_superficie_fusion.py`, `test_api_superficie.py`, `test_sol07_revolucion.py`, `test_cobertura_ui_api.py` → **483 passed in 9.94s**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** `test_sup29_encadenado_superficie.py`, `test_api_solido.py`, `test_barrido_tipos.py`, `test_bugs_solido.py` (los tres últimos por `create_surface_revolve`; `test_sup29...` por `SupRevolucion`). Revisados a ojo: ninguno depende del filtro del campo Perfil ni de la ayuda (buscan el comando por clave o usan la operación/API), pero el prompt manda correrlos y la nota del coordinador manda no hacerlo en esta corrida.
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff:
+  1. **No hay regresión para los campos que solo llevan curvas**: `CURVAS` no se borró, solo se dejó de usar en Revolución; Extruir, Barrido, Parche, Reglada, Recortar y las aristas de Desfase siguen con `CURVAS` o `{"arista"}`, intactos.
+  2. **El camino de la operación ya existía**: perfil → cara → `alambres` saca los alambres y `revolver_superficie` gira; el test lo prueba con geometría (240π), no solo con el filtro.
+  3. **`cadena` con un perfil o una cara**: `_curvas` con `cadena=True` (valor por defecto de la casilla) cae en la rama `else` de `_en_cadena` y devuelve la forma tal cual; el test gira un perfil y una cara con `cadena=True` y da superficie correcta.
+  4. **La API no cambió**: sin firma nueva, sin doc que regenerar, `test_doc_agentes.py` queda verde en el grupo.
+  5. **Se reusó `PERFILES_SUPERFICIE`**: un solo nombre para una sola cosa, sin duplicar la constante.
+  6. **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l` (los lista arriba).
+  - **Ventana (`revolucion_barrido_solevacion`, minimizada):** `40 comprobaciones, 10 con ✗`. Las 10 ✗ son **anteriores y ajenas a H-104**: 22 (Revolución dos lados 90/−45° da 1570,80 en vez de 2356,19 = H-88, «A objeto» con Dos lados); 26 y 27 (con «A objeto» se ve la Dirección Un/Dos lados = H-88); 28 y 29 (`proyectar_eje` se llama «Eje de proyecto» en sólido y «Proyectar eje» en superficie: incoherencia de etiqueta, no de filtro); 30, 31, 32 y 35 (Barrido sólido: Escala del perfil Estirar, Extensión del Rail, carril escala Ninguna, Distancia «1,5» = H-89); 38 (Solevación punto ofrece Aguda y Punto tangente = H-90). **Ninguna** de las 10 trata el filtro del Perfil ni la aceptación de perfil/cara plana; el campo «Perfil» de `sup_revolucion` abre bien (comprobación 8 OK) y su filtro es el que el test de `test_comandos_superficie.py` ya ejercita en geometría (240π).
+  - No abrí Fusion: el comportamiento sale de la ayuda oficial de `fusion-patch`, como en las tandas anteriores.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

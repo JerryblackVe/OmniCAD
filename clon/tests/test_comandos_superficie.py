@@ -91,6 +91,31 @@ def test_extruir_de_superficie_elige_perfiles_cerrados_y_caras_planas():
     assert g.area(_ultimo(doc).forma) == pytest.approx(200)
 
 
+def test_revolucion_de_superficie_elige_perfiles_cerrados_y_caras_planas():
+    """H-104: el campo Perfil de la Revolución de superficie filtraba solo curva y arista; el clic en el centro de un
+    perfil cerrado o de una cara plana no elegía nada. Fusion acepta «sketch profile, sketch curve, or planar face»
+    (revolve-a-surface-body-a3f71a695c7.md, paso 2)."""
+    from omnicad.ui.comando import ContextoComando, acepta
+    from omnicad.ui.comandos.superficie import SupRevolucion
+    from omnicad.timeline.operaciones import OpExtrusion
+    doc = Documento()
+    bid, _ids = _boceto(doc, plano="XZ", rect=((4, 0), (6, 10)))
+    perfil = doc.estado_final.bocetos[bid].perfiles[0]
+    h_perfil = _h(doc, {"tipo": "perfil", "boceto": bid, **OpExtrusion.referencia_perfil(perfil)})
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    caja = doc.estado_final.cuerpos["op2.c1"].forma
+    tapa = next(s for s in refs.subformas(caja, "cara") if np.allclose(refs.firma_cara(s)["centro"], (5, 5, 10)))
+    h_cara = _h(doc, refs.referencia("op2.c1", tapa, caja))
+    campo = next(c for c in SupRevolucion().campos(ContextoComando(doc)) if c.clave == "curvas")
+    assert acepta(campo.filtros, h_perfil) and acepta(campo.filtros, h_cara)
+    eje = [_h(doc, {"tipo": "eje", "id": "Z"})]
+    _ejecutar(doc, SupRevolucion, curvas=[h_perfil], eje=eje)
+    # Rectángulo [4,6]x[0,10] en XZ girado 360° alrededor de Z: superficie = 2π·H·(2R+w) + 2π·((R+w)²−R²) = 240π.
+    assert _ultimo(doc).tipo == "superficie" and g.area(_ultimo(doc).forma) == pytest.approx(240 * math.pi, rel=1e-3)
+    _ejecutar(doc, SupRevolucion, curvas=[h_cara], eje=eje)
+    assert _ultimo(doc).tipo == "superficie" and g.area(_ultimo(doc).forma) > 0
+
+
 def test_engrosar_recortar_coser_y_descoser():
     from omnicad.ui.comandos.superficie import Coser, Descoser, Engrosar, Parche, Recortar
     doc = Documento()
