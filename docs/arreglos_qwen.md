@@ -294,6 +294,125 @@ lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
   - No corrí los del `grep -l` (regla del coordinador: lista arriba, los corre él).
   - No toqué la ventana ni la API (la firma de `quitar` no cambió), así que no regeneré `docs/agentes/herramientas.md` (ninguna herramienta cambió de firma ni de descripción).
 
+## Informe tanda C7
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C7 · **Bug:** CF-11 (faltante). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** se corrió UN grupo con los 8 archivos obligatorios más el test nuevo; los del `grep -l` NO se corrieron y están listados abajo para el coordinador.
+
+### CF-11 — BOCETO › «Buscar subrestringidos» y «Calcular boceto» en la Paleta de boceto — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-sketch/find-underconstrained-sketch-geometry-a377d84ad10.md`:
+  - «When a sketch is not fully constrained, use **Find Under-Constrained** in the **Sketch Palette** to see a list of
+    all under-constrained sketch entities in the active sketch. **Select an item in the list to highlight that geometry
+    and zoom to it on the canvas.** […] (Optional) Click **X** on a row in the list to delete that under-constrained
+    sketch entity. **X is not available for sketch points.** […] While Find Under-Constrained is active, add constraints
+    or dimensions […]; the list and sketch status update as you work.»
+  - «If constraint status looks out of date after edits, rerun fully constrained analysis for the whole sketch. […]
+    click **Compute Sketch**. Fusion analyzes all geometry in the sketch and updates the constraint status for each
+    sketch entity.»
+  - `sketch-palette-reference-4baf4699c21.md`: la paleta es la que muestra el estado del boceto; ahí viven estas dos cosas.
+- **Qué cambié:**
+  - `clon/omnicad/ui/editor_boceto.py:831` — `encuadrar(ids=None)`: con `ids` centra y acerca la vista solo a esa
+    geometría (sin argumento sigue encuadrando el boceto entero, como antes). Es el «zoom to it» de Fusion.
+  - `clon/omnicad/ui/editor_boceto.py:1082` — `Lienzo.subrestringidas()`: `[(id, texto)]` de las curvas y los puntos que
+    **no** están en `resultado.determinadas` (los grados de libertad que ya calcula el solver, el mismo criterio que el
+    `state: free` de `get_sketch`). Vacío si el boceto está totalmente restringido o el solver falló.
+  - `clon/omnicad/ui/editor_boceto.py:1094` y `:1101` — `resaltar(ids)` (deja elegido y lleva la vista) y
+    `borrar_ids(ids)` (borra en **un** paso de deshacer, reusando `borrar_seleccion`).
+  - `clon/omnicad/ui/modo_boceto.py:296` y `:302` — dos botones en la Paleta de boceto, arriba del estado: «Buscar
+    subrestringidos» y «Calcular boceto», con la ayuda de Fusion en el tooltip; `:175` las cuatro señales nuevas.
+  - `clon/omnicad/ui/modo_boceto.py:351` — `PaletaBoceto.mostrar_subrestringidos(filas)`: una fila por entidad (botón con
+    el nombre → `resaltar`, ✕ → `borrar_sub`); sin filas, «Totalmente restringido: no queda geometría subrestringida».
+    La ✕ está también en los puntos: Fusion la deshabilita para puntos, pero el `Boceto` de OmniCAD borra el punto suelto
+    sin arrastrar la curva, así que no hay nada que proteger (ver la review).
+  - `clon/omnicad/ui/modo_boceto.py:1421`, `:1426` y `:1432` — `ModoBoceto._buscar_subrestringidos`, `_calcular_boceto`
+    (vuelve a resolver con `lienzo.resolver()` y rearma la lista) y `_borrar_subrestringida`; `:1549` rearma la lista en
+    `_cambio` mientras está abierta (el «the list and sketch status update as you work» de Fusion).
+  - `clon/omnicad/api/herramientas_boceto.py:1692` — `find_underconstrained(sketch=None)`: `status`, `dof`, `count`,
+    `entities` (id y tipo) y `points` (id, x, y) de lo que se puede mover. Reusa `info_boceto` (cero duplicación del
+    criterio `state: free`).
+  - `clon/omnicad/api/herramientas_boceto.py:1709` — `compute_sketch(sketch=None)`: resuelve el boceto de nuevo desde sus
+    restricciones y cotas actuales y devuelve `status`, `dof`, `constrained` (entidades en `determinadas`), `free` y
+    `message`. Receta C de `AGENTS.md`; las dos son de lectura (`modifica=False`).
+  - `docs/agentes/herramientas.md` regenerado con el comando del coordinador (código de ESTE worktree; +22/−2 líneas).
+- **Gemelos revisados:**
+  - El estado del boceto que ya existía (`PaletaBoceto.set_estado`, el «Status: Under-Constrained / Constrained» de
+    Fusion): no se duplicó ni se cambió; la lista nueva lo acompaña y se refresca con `_cambio`. ✔
+  - El diagnóstico que ya existía: `Lienzo.mostrar_conflictos` / `texto_redundantes` (F5, «Qué choca»: restricciones y
+    cotas que sobran) y `find_redundant_constraints` (API): son otra cosa (vínculos, no geometría); no se tocaron. ✔
+  - `auto_constrain` / `suggest_auto_constraints` (el diálogo de AutoConstrain que nombraba la fila CF-11): no se tocaron;
+    siguen en la pestaña BOCETO de la cinta (`sk_autorestringir`) y en la API. Lo que faltaba era la lista de
+    subrestringidos y el recálculo, no el diálogo. ✔
+  - `grados_de_libertad` / `resolver` / `ResultadoSolver.determinadas` (`restricciones/solver.py`): se usaron tal cual; no
+    se cambió una línea del solver. ✔
+  - La API y el MCP/CLI (receta C): las dos herramientas nuevas, con docstring de todos los parámetros, en el grupo
+    `boceto`, y `docs/agentes/herramientas.md` regenerado. `test_cobertura_ui_api.py` sigue verde: los botones viven en la
+    paleta, no en la cinta, así que no agregan claves de cinta (igual que Fusion, que los pone en la paleta). ✔
+  - La cinta (receta B): **no** se agregaron botones a la pestaña BOCETO a propósito (en Fusion están solo en la paleta).
+    Si Gerardo las quiere en la cinta, es una fila nueva. ✔
+  - **Fuera de alcance (no lo toqué):** el navegador (el ícono del boceto que ya marca si está restringido,
+    `navegador.marcar_boceto`), las asas y los atajos.
+- **Test nuevo** (`clon/tests/test_boceto_subrestringidos.py`, 4 pruebas):
+  - `test_api_buscar_subrestringidos_lista_lo_que_se_mueve_y_vacia_al_restringir`: un rectángulo suelto da
+    `under_constrained`, `dof > 0` y `count > 0`, y los ids listados son **exactamente** los `state: free` de
+    `get_sketch`; al fijar todas esas entidades (`add_constraint` › `fix`), `count == 0` y `fully_constrained`.
+  - `test_api_calcular_boceto_cuenta_fijas_y_libres`: `constrained + free == puntos + entidades` del boceto y `free > 0`.
+  - `test_lienzo_buscar_subrestringidos_resalta_acerca_y_borra`: el lienzo lista, `resaltar` deja la entidad elegida y
+    `centro` de la vista cae en el punto medio de esa curva (el zoom); `borrar_ids` la saca con **un** paso de deshacer
+    (`len(historial) == 1`) y `deshacer()` la devuelve.
+  - `test_paleta_muestra_la_lista_y_sus_botones_emiten`: los dos botones existen con su texto, la lista está oculta al
+    principio, `mostrar_subrestringidos([(7, "línea 7")])` la muestra y emite `resaltar(7)` y `borrar_sub(7)` al pulsar
+    la fila y su ✕; sin filas dice «Totalmente restringido…».
+  - **Salida ROJA:** la funcionalidad no existía en HEAD (`git show HEAD:… | grep -c` da **0** en `editor_boceto.py`
+    para `def subrestringidas|def resaltar|def borrar_ids`, **0** en `modo_boceto.py` para
+    `buscar_sub|mostrar_subrestringidos` y **0** en `api/herramientas_boceto.py` para
+    `find_underconstrained|compute_sketch`). Primera corrida del archivo contra el código a medio hacer:
+    `3 failed, 1 passed in 2.77s` (la lista no aparecía y las dos herramientas todavía no estaban en el catálogo; además
+    `test_herramientas_del_grupo_boceto` falló por los dos nombres nuevos).
+  - **Salida VERDE (con el arreglo):** `4 passed in 2.50s` (el archivo) y `696 passed in 28.09s` (grupo obligatorio +
+    el archivo nuevo).
+- **ruff check .:** `All checks passed!` (sobre el repo entero, dos veces).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_api_boceto.py`, `test_api_boceto_herramientas.py`,
+  `test_boceto_fase2.py`, `test_boceto_fase4.py`, `test_cobertura_ui_api.py`, `test_restricciones_matematica.py`,
+  `test_claves_comandos.py`, `test_doc_agentes.py` + `test_boceto_subrestringidos.py` → **696 passed in 28.09s**. (La
+  primera corrida del grupo, antes de sumar los dos nombres a `HERRAMIENTAS` de `test_api_boceto.py`, dio
+  `1 failed, 691 passed`: `test_herramientas_del_grupo_boceto` exige la lista exacta del catálogo; se agregaron
+  `find_underconstrained` y `compute_sketch` a la lista y a las «lecturas».)
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** por las funciones nuevas (`subrestringidas`,
+  `resaltar`, `borrar_ids`, `find_underconstrained`, `compute_sketch`, `mostrar_subrestringidos`) el grep devuelve solo
+  los dos que sí corrí (`test_api_boceto.py` y `test_boceto_subrestringidos.py`). Por haber cambiado `Lienzo.encuadrar`
+  (firma compatible, `ids=None` por defecto) y la paleta, el grep de `encuadrar(`/`PaletaBoceto`/`set_estado` da además:
+  `test_animacion.py`, `test_arrastre_ventana.py`, `test_asas_superficie.py`, `test_aspecto_panel.py`,
+  `test_boceto_fase3.py`, `test_boceto_fase8_3d.py`, `test_boceto_fase9_ui.py`, `test_boceto_fase9_ui2.py`,
+  `test_boceto_fase9_ui3.py`, `test_gizmo_boceto.py`, `test_graficos_rendimiento.py`, `test_hallazgos_ui.py`,
+  `test_manipulacion_vectorial_ui.py`, `test_manipuladores.py`, `test_p23_bocetos.py`, `test_posicion_ventana.py`,
+  `test_proyectar_tarjeta.py`, `test_render.py`, `test_render_aspecto.py`, `test_restricciones_ui.py`,
+  `test_superficie_guias.py`, `test_texto_vectores.py`, `test_transformar_boceto.py`, `test_vistas_animadas.py`. (Casi
+  todos coinciden por `encuadrar` de la cámara del visor o por `set_estado` de otros paneles, no por el boceto; los de
+  `PaletaBoceto` —`test_boceto_fase3.py`, `fase8_3d`, `fase9_ui2`, `fase9_ui3`— son los de más riesgo.)
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff:
+  1. **No se duplicó el criterio**: la lista de la UI sale de `resultado.determinadas` (solver) y la de la API del
+     `state: free` de `info_boceto`, que se calcula con el mismo `determinadas`; no hay una tercera copia.
+  2. **`encuadrar(ids=None)` es compatible**: el valor por defecto deja igual el zoom del boceto entero (lo usan el
+     arranque del modo y la barra de herramientas); los puntos internos de los objetos siguen excluidos.
+  3. **Un solo paso de deshacer**: la ✕ pasa por `borrar_seleccion` → `aplicar_cambio` (probado con
+     `len(historial) == 1` y `deshacer()`).
+  4. **La lista no cuesta nada si está cerrada**: `_cambio` solo la rearma con `lista_sub.isVisible()`.
+  5. **`compute_sketch` no escribe**: resuelve sobre una copia (`br.boceto.copia()`) y no toca el documento; por eso no
+     lleva `modifica=True` ni paso de deshacer. `find_underconstrained` tampoco.
+  6. **Nice to have, no aplicado:** la ✕ de Fusion no existe para puntos; acá sí, porque `Boceto.eliminar` de un punto
+     suelto no toca la curva (si molesta, es una línea: `if p.id in self.b.puntos: no ✕`).
+  7. **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l`
+    (los lista arriba).
+  - **Captura de la ventana:** `todo.py boceto_herramientas --ventana minimizada` → **100 comprobaciones, 0 con ✗**, y
+    la captura `evidencias/ui_2026-11-06/capturas/herr_cota_con_linea.png` muestra la paleta con los dos botones nuevos
+    («Buscar subrestringidos» y «Calcular boceto») entre la casilla «Boceto 3D» y el estado («Faltan 6 grado(s) de
+    libertad por restringir.»), sin nada cortado. También `paneles_boceto` → **127 comprobaciones, 0 con ✗**. Ninguna de
+    las dos piezas abre la lista (no la pulsan), así que el listado en sí solo está probado en los tests offscreen.
+  - No se abrió Fusion: el comportamiento sale de la ayuda oficial de `fusion-sketch`, como en las tandas anteriores.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

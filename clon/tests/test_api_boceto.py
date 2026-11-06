@@ -43,6 +43,8 @@ HERRAMIENTAS = ["create_construction_plane", "create_sketch", "draw_line", "draw
                 "edit_dimension", "auto_constrain", "suggest_auto_constraints",
                 # auditoría de restricciones (tests/test_restricciones_ui.py)
                 "find_redundant_constraints", "replace_constraint",
+                # CF-11: Find Under-Constrained y Compute Sketch (tests/test_boceto_subrestringidos.py)
+                "find_underconstrained", "compute_sketch",
                 # MCP-29, MCP-91 y MCP-92 (tests/test_api_boceto_extra.py) y MCP-76
                 "draw_spiral", "set_circle_radius", "extend_sketch_curve", "split_sketch_curve",
                 # B-80: redefinir plano y construcción (tests/test_api_misc.py, tests/test_api_construccion.py)
@@ -65,7 +67,7 @@ def test_herramientas_del_grupo_boceto():
     assert sorted(h["nombre"] for h in api.catalogo("boceto")) == sorted(HERRAMIENTAS)     # el orden depende de qué módulo se importó antes
     lecturas = {h["nombre"] for h in api.catalogo("boceto") if not h["modifica"]}
     assert lecturas == {"get_sketch", "find_snap_points", "suggest_auto_constraints", "get_spline_curvature", "infer_sketch_snap", "infer_sketch_snap_3d",
-                       "find_redundant_constraints"}
+                       "find_redundant_constraints", "find_underconstrained", "compute_sketch"}
 
 
 # ---------------------------------------------------------------- planos y bocetos vacíos

@@ -184,7 +184,7 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 
 ## Capturas de Fusion sin clasificar (2026-11-02)
 
-Salen de las 674 capturas del escritorio, ya ordenadas en `analisis/capturas_fusion/` (índice: `INDICE.md`; las ya hechas se borraron, ver `borradas.tsv`). Abierto 11 · Bloqueado 2. Especificación: mirar las capturas de su sección y `scripts/fusion_docs.py buscar`.
+Salen de las 674 capturas del escritorio, ya ordenadas en `analisis/capturas_fusion/` (índice: `INDICE.md`; las ya hechas se borraron, ver `borradas.tsv`). Abierto 10 · Bloqueado 2. Especificación: mirar las capturas de su sección y `scripts/fusion_docs.py buscar`.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -198,7 +198,6 @@ Salen de las 674 capturas del escritorio, ya ordenadas en `analisis/capturas_fus
 | CF-8 | Preferencias: opciones sueltas de General y Gráficos | Abierto | Baja | Finalidad de uso, tipo de diseño por defecto, experiencia de puesta en marcha, orientación Y o Z hacia arriba, tamaño del ViewCube, ratón estilo Alias/Inventor/PowerMill/SOLIDWORKS, controlador de gráficos, tema del sistema, barra espaciadora que repite el último comando. P-2d cubre el idioma. | omnicad/ui/preferencias.py; capturas `INTERFAZ/Preferencias_General` | 2026-11-02 |
 | CF-9 | MALLA: Suavizar contorno, Puente e Insertar malla completo | Abierto | Media | Suavizar contorno (suavidad, iteraciones, anillos) y Puente no existen; Insertar malla solo pregunta la unidad: faltan Voltear dirección, Centro, Mover a suelo, entradas numéricas y Restablecer. MAL-2 y MAL-3 no nombran la paleta de pincel. | grep sin resultados en api/ y ui/comandos/; capturas `MALLA/` e `INSERTAR/Insertar_malla` | 2026-11-02 |
 | CF-10 | MATERIALES: Explorador de materiales y propiedades | Abierto | Media | Propiedades térmicas y mecánicas, favoritos, materiales nuevos y bibliotecas personales. P-25d cubre solo Administrar. | capturas `MATERIALES/` | 2026-11-02 |
-| CF-11 | BOCETO: Buscar subrestringidos y Calcular boceto | Abierto | Baja | Nuevos de octubre de Fusion. El diálogo de restricciones automáticas existe pero no está en la paleta. | grep «subrestring» en omnicad/: sin resultados; capturas `BOCETO/` | 2026-11-02 |
 | CF-13 | SÓLIDO: Modelado automatizado | Bloqueado | Muy alta | Genera alternativas entre geometrías a conectar y a evitar; emparentado con EXT-3 (diseño generativo). Espera el alcance. | sin herramienta; capturas `SOLIDO/Modelado_automatizado` | 2026-11-02 |
 | CF-14 | ELECTRÓNICA: esquemas, placas y biblioteca de componentes | Bloqueado | Muy alta | Diseño de electrónica 2D y 3D, biblioteca de componentes y leyenda de taladro. P-25i solo nombra la placa. Espera el alcance. | sin código; capturas `ELECTRONICA/` | 2026-11-02 |
 

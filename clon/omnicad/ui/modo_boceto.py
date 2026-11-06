@@ -172,6 +172,10 @@ class PaletaBoceto(QFrame):
     construccion = Signal()
     eje = Signal()
     dibujar3d = Signal(str, str, str, str)     # Boceto 3D: herramienta, bloqueo de la tríada, puntos, largo
+    buscar_sub = Signal()                      # Find Under-Constrained: armar la lista de lo subrestringido
+    calcular = Signal()                        # Compute Sketch: volver a analizar el boceto entero
+    resaltar = Signal(int)                     # una fila de la lista: resaltar y acercar esa entidad
+    borrar_sub = Signal(int)                   # la ✕ de una fila: borrar esa entidad
 
     OPCIONES = [("rejilla", "Rejilla del boceto", True, True), ("forzar", "Forzar", False, True),
                 ("corte", "Corte", False, True), ("perfil", "Perfil", True, True), ("puntos", "Puntos", True, True),
@@ -289,6 +293,23 @@ class PaletaBoceto(QFrame):
         self.panel3d.setVisible(False)
         c.addWidget(self.panel3d)
         c.addStretch(1)
+        self.b_buscar_sub = QPushButton("Buscar subrestringidos")
+        self.b_buscar_sub.setToolTip("<b>Buscar subrestringidos</b><br>Find Under-Constrained: lista la geometría que "
+                                     "todavía se puede mover. Un clic en la lista la resalta y la acerca; su ✕ la "
+                                     "borra. La lista y el estado se actualizan mientras seguís trabajando.")
+        self.b_buscar_sub.clicked.connect(self.buscar_sub)
+        externo.addWidget(self.b_buscar_sub)
+        self.b_calcular = QPushButton("Calcular boceto")
+        self.b_calcular.setToolTip("<b>Calcular boceto</b><br>Compute Sketch: vuelve a analizar el boceto entero y "
+                                   "actualiza el estado de restricción de cada entidad.")
+        self.b_calcular.clicked.connect(self.calcular)
+        externo.addWidget(self.b_calcular)
+        self.lista_sub = QWidget()                     # las filas de Buscar subrestringidos
+        self.lista_sub.setVisible(False)
+        self._filas_sub = QVBoxLayout(self.lista_sub)
+        self._filas_sub.setContentsMargins(0, 0, 0, 0)
+        self._filas_sub.setSpacing(1)
+        externo.addWidget(self.lista_sub)
         self.estado = QLabel()
         self.estado.setWordWrap(True)
         externo.addWidget(self.estado)
@@ -325,6 +346,36 @@ class PaletaBoceto(QFrame):
     def _plegar(self):
         self.cuerpo.setVisible(not self.cuerpo.isVisible())
         self.b_plegar.setText("–" if self.cuerpo.isVisible() else "+")
+        self.ajustar()
+
+    def mostrar_subrestringidos(self, filas):
+        """Llena la lista de Buscar subrestringidos con [(id, texto)]; sin filas, el boceto está totalmente
+        restringido."""
+        while self._filas_sub.count():
+            w = self._filas_sub.takeAt(0).widget()
+            if w is not None:
+                w.deleteLater()
+        if not filas:
+            vacio = QLabel("Totalmente restringido: no queda geometría subrestringida.")
+            vacio.setWordWrap(True)
+            vacio.setStyleSheet("font-size: 8pt;")
+            self._filas_sub.addWidget(vacio)
+        for ident, texto in filas:
+            fila = QWidget()
+            h = QHBoxLayout(fila)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(2)
+            b = QPushButton(texto)
+            b.setFlat(True)
+            b.setToolTip("Resaltar y acercar en el boceto")
+            b.clicked.connect(lambda _=False, i=ident: self.resaltar.emit(i))
+            h.addWidget(b, 1)
+            x = QToolButton(text="✕", autoRaise=True)
+            x.setToolTip("Borrar esta geometría")
+            x.clicked.connect(lambda _=False, i=ident: self.borrar_sub.emit(i))
+            h.addWidget(x)
+            self._filas_sub.addWidget(fila)
+        self.lista_sub.setVisible(True)
         self.ajustar()
 
     def set_estado(self, resultado, conflictos=""):
@@ -1116,6 +1167,10 @@ class ModoBoceto(QObject):
         self.paleta.construccion.connect(self._construccion)
         self.paleta.eje.connect(self._eje)
         self.paleta.dibujar3d.connect(self._dibujar3d)
+        self.paleta.buscar_sub.connect(self._buscar_subrestringidos)
+        self.paleta.calcular.connect(self._calcular_boceto)
+        self.paleta.resaltar.connect(lambda i: self.lienzo.resaltar([i]))
+        self.paleta.borrar_sub.connect(self._borrar_subrestringida)
         self.tarjeta = TarjetaHerramienta(area)     # opciones de la herramienta activa; en Proyectar, también su selección
         self.tarjeta.herramienta.connect(self.herramienta)
         self.tarjeta.lados.connect(lambda n: setattr(self.lienzo, "lados", n))
@@ -1363,6 +1418,22 @@ class ModoBoceto(QObject):
         if self.activo:
             self.lienzo.mostrar_conflictos()
 
+    def _buscar_subrestringidos(self):
+        """Find Under-Constrained: la lista de lo que todavía se puede mover (y el estado, que ya está al día)."""
+        if self.activo:
+            self.paleta.mostrar_subrestringidos(self.lienzo.subrestringidas())
+
+    def _calcular_boceto(self):
+        """Compute Sketch: resuelve el boceto de nuevo y actualiza la lista y el estado."""
+        if self.activo:
+            self.lienzo.resolver()
+            self._buscar_subrestringidos()
+
+    def _borrar_subrestringida(self, ident):
+        if self.activo:
+            self.lienzo.borrar_ids([ident])
+            self._buscar_subrestringidos()
+
     def _en_lienzo(self, metodo):
         if self.activo:
             getattr(self.lienzo, metodo)()
@@ -1475,6 +1546,8 @@ class ModoBoceto(QObject):
     def _cambio(self):
         if self.paleta is not None:
             self.paleta.set_estado(self.lienzo.resultado, self.lienzo.texto_conflictos())
+            if self.paleta.lista_sub.isVisible():      # la lista de subrestringidos sigue el boceto en vivo
+                self.paleta.mostrar_subrestringidos(self.lienzo.subrestringidas())
             self.v.area.reubicar()
         op = (self.datos or {}).get("op")
         if op is not None:                   # BOC-7: candado o marca roja del boceto en el navegador, en vivo

@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-418 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+420 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 49 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 68 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 70 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 36 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -748,6 +748,8 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`add_dimension`](#add_dimension) | sí | Agrega una cota (dimensión) que maneja la geometría. |
 | [`get_sketch`](#get_sketch) | no | Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. |
 | [`find_redundant_constraints`](#find_redundant_constraints) | no | Dice qué restricciones y cotas SOBRAN en un boceto: las que no quitan ningún grado de libertad porque otras ya fijan lo mismo (el boceto está sobre-definido pero se puede cumplir; no es un conflicto, para eso mirá `conflicts` de get_sketch). |
+| [`find_underconstrained`](#find_underconstrained) | no | Lista la geometría SUBRESTRINGIDA del boceto (Fusion: Find Under-Constrained, en la Paleta de boceto): las curvas y los puntos que todavía se pueden mover porque ninguna restricción ni cota los fija. |
+| [`compute_sketch`](#compute_sketch) | no | Vuelve a analizar el boceto entero y devuelve el estado de restricción de cada entidad (Fusion: Compute Sketch, en la Paleta de boceto): resuelve el boceto de nuevo desde sus restricciones y cotas actuales y cuenta qué quedó fijo. |
 | [`sketch_from_spec`](#sketch_from_spec) | sí | Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 \| center,width,height \| origin,width,height}, circle{center,radius}, arc{center,start,sweep \| start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la izquierda de start→end; edge_points permite elegir el lado como create_polygon), tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. Boceto 3D (como draw_*_3d, coordenadas [x, y, z]): line_3d{start,end}, spline_3d{points,closed?}, point_3d{at}, arc_3d{start,through,end}, circle_3d{center,radius,normal?}, ellipse_3d{center,major_end,minor_radius,normal?}, rectangle_3d{corner,opposite,plane?} (citas 'id.l1..l4'), conic_3d{start,shoulder,end,rho?}, text_3d{text,origin,height?,plane?,font?}; normal vacía = [0, 0, 1], plane = xy, yz o zx (por defecto xy). |
 | [`draw_ellipse`](#draw_ellipse) | sí | Dibuja una elipse (Fusion: Elipse) por centro, radio mayor, radio menor y giro del eje mayor. |
 | [`draw_slot`](#draw_slot) | sí | Dibuja una ranura (Fusion: Ranura): dos lados y dos extremos redondos tangentes, más el eje de construcción. kind y points (cada uno [x, y] en mm): center_to_center = [centro de un extremo, centro del otro]; overall = [punta de un extremo, punta del otro] (largo total); center_point = [centro de la ranura, centro de un extremo]; arc_three_points = [centro de un extremo, centro del otro, un punto del arco del eje]; arc_center = [centro del arco, centro de un extremo, punto en la dirección del otro extremo] (antihorario). width es el ancho total. |
@@ -1013,6 +1015,24 @@ Dice qué restricciones y cotas SOBRAN en un boceto: las que no quitan ningún g
 - Parámetros:
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call find_redundant_constraints --doc pieza.omnicad`
+
+### `find_underconstrained`
+
+Lista la geometría SUBRESTRINGIDA del boceto (Fusion: Find Under-Constrained, en la Paleta de boceto): las curvas y los puntos que todavía se pueden mover porque ninguna restricción ni cota los fija. Los mismos ids de get_sketch (entities y points); su `state` es «free». Un boceto totalmente restringido devuelve las dos listas vacías y count=0. No cambia el boceto.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call find_underconstrained --doc pieza.omnicad`
+
+### `compute_sketch`
+
+Vuelve a analizar el boceto entero y devuelve el estado de restricción de cada entidad (Fusion: Compute Sketch, en la Paleta de boceto): resuelve el boceto de nuevo desde sus restricciones y cotas actuales y cuenta qué quedó fijo. `constrained` son las entidades que ya no se mueven, `free` las que sí, y `dof` los grados de libertad que sobran. No cambia el boceto.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call compute_sketch --doc pieza.omnicad`
 
 ### `sketch_from_spec`
 
