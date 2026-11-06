@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cierre completo (lo corre el coordinador o la sesión nocturna, nunca dos a la vez): ruff, suite en 6 tandas con -W error, piezas de ventana minimizadas y, con la PC sin uso, humo y piezas con foco real. Resumen en evidencias/cierre_<fecha>/resumen.txt.
+# Cierre completo (lo corre el coordinador o la sesión nocturna, nunca dos a la vez): ruff, suite en 10 tandas con -W error, piezas de ventana minimizadas y, con la PC sin uso, humo y piezas con foco real. Resumen en evidencias/cierre_<fecha>/resumen.txt.
 cd /d/PROGRAMA/clon || exit 1
 S="/d/PROGRAMA/evidencias/cierre_$(date +%F)"
 rm -rf "$S"; mkdir -p "$S"
@@ -23,7 +23,7 @@ $PY -m ruff check . > "$S/ruff.txt" 2>&1
 echo "ruff exit=$? | $(tail -n 1 "$S/ruff.txt")" >> "$R"
 MOTOR=tests/test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado
 ls tests/test_*.py | sort > "$S/lista.txt"
-split -n l/6 -d "$S/lista.txt" "$S/parte_"
+split -n l/10 -d "$S/lista.txt" "$S/parte_"
 for p in "$S"/parte_0*; do
   n=$(basename "$p")
   $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest $(tr '\n' ' ' < "$p") -q -W error -p no:cacheprovider --deselect "$MOTOR" > "$S/$n.txt" 2>&1

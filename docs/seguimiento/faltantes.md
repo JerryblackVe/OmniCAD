@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 159 · Parcial 48 · Bloqueado 30 · Sin verificar 4 (recontado 2026-11-05; después H-95 a H-97 de Nervio y Repujado; 2026-11-06: resuelto H-101 y H-81, nuevo H-105).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 237: Abierto 154 · Parcial 49 · Bloqueado 30 · Sin verificar 4 (recontado 2026-11-05; después H-95 a H-97 de Nervio y Repujado; 2026-11-06: resuelto H-101 y H-81, nuevo H-105).
 
 ## Pendientes generales
 

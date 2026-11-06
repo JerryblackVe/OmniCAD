@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 136: Abierto 70 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-06 por fila: se cerraron H-86 y H-92 de la tanda 4 de `docs/arreglos_qwen.md`).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 131: Abierto 65 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (recontado 2026-11-06 por fila: se cerraron H-86 y H-92 de la tanda 4 de `docs/arreglos_qwen.md`).
 
 ## Pendientes generales
 

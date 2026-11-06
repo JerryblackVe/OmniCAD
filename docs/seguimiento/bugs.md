@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 17: Abierto 14 · Parcial 3 (recontado 2026-11-06 por fila: se cerraron B-210 y B-211 de la tanda 1, B-214 y B-216 de la tanda 2 y B-209 y B-217 de la tanda 3, y sumaron B-219 — la flecha de «Distancia» del Nervio y la Red — y B-220 — Envolver del Repujado fuera de zona).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 19: Abierto 13 · Parcial 5 · Bloqueado 1 (recontado 2026-11-06 por fila: se cerraron B-210 y B-211 de la tanda 1, B-214 y B-216 de la tanda 2 y B-209 y B-217 de la tanda 3, y sumaron B-219 — la flecha de «Distancia» del Nervio y la Red — y B-220 — Envolver del Repujado fuera de zona).
 
 ## Abiertos y parciales
 
