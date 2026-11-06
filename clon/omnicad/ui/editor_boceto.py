@@ -1229,6 +1229,7 @@ class Lienzo(QWidget):
         ocultos = {p for c in curvas.values() for p in c.puntos()}
         ocultos |= {p.id for p in self.b.puntos.values() if p.proyectado and not self.mostrar["proyectadas"]}
         ocultos |= {i for i in self.copias_en_edicion if i in self.b.puntos}
+        ocultos.discard(Boceto.ORIGEN)  # la referencia del origen se sigue dibujando con esas capas apagadas
         if self.b.objetos:
             from ..restricciones import objetos
             internos = {p for cid in objetos.indice(self.b) for p in self.b.curvas[cid].puntos()}
@@ -1319,6 +1320,10 @@ class Lienzo(QWidget):
             oid = self.objetos.en(pos)
             if oid is not None:
                 return oid
+        # El origen se dibuja aunque todavía no lo haya citado ninguna restricción o cota.
+        origen = self.a_px(0, 0)
+        if math.hypot(pos.x() - origen.x(), pos.y() - origen.y()) < TOL_PUNTO:
+            self.b.asegurar_referencias([Boceto.ORIGEN])
         pid = self._punto_cercano(pos)
         return pid if pid is not None else self._curva_cercana(pos, interior=True)
 

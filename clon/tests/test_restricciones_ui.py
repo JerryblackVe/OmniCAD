@@ -7,6 +7,8 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QEvent, Qt  # noqa: E402
+from PySide6.QtGui import QMouseEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from omnicad import api  # noqa: E402
@@ -34,6 +36,137 @@ def _linea_inclinada(lz, y=30):
     a, c = lz.b.agregar_punto(40, y), lz.b.agregar_punto(70, y + 9)
     lz.resolver()
     return lz.b.agregar_linea(a, c)
+
+
+def _clic(lz, x, y, mods=Qt.NoModifier):
+    """Movimiento, presión y suelta al widget, sin mover el cursor real."""
+    pos = lz.a_px(x, y)
+    for tipo, boton, botones in ((QEvent.MouseMove, Qt.NoButton, Qt.NoButton),
+                                 (QEvent.MouseButtonPress, Qt.LeftButton, Qt.LeftButton),
+                                 (QEvent.MouseButtonRelease, Qt.LeftButton, Qt.NoButton)):
+        QApplication.sendEvent(lz, QMouseEvent(tipo, pos, pos, boton, botones, mods))
+
+
+@pytest.mark.parametrize("origen_primero", [False, True])
+@pytest.mark.parametrize("materializado", [False, True])
+@pytest.mark.parametrize("sobre_curva", [False, True])
+def test_b223_coincidente_punto_sobre_diagonal_con_origen(lz, origen_primero, materializado, sobre_curva):
+    """Recorrido del video: rectángulo, diagonal, Punto sobre la curva y dos clics Coincidente."""
+    lz.centro = [-50, 0]
+    lz.ajustar_grilla = False
+    lz.set_herramienta("rectangulo")
+    _clic(lz, -120, 0)
+    _clic(lz, -55, 50)
+    esquinas = list(lz.b.puntos)
+    lz.set_herramienta("linea")
+    lz.alternar_construccion()
+    _clic(lz, -120, 0)
+    _clic(lz, -55, 50)
+    diagonal = lz._ultima_linea
+    lz.set_herramienta("punto")
+    _clic(lz, -87.5, 25, Qt.ShiftModifier if sobre_curva else Qt.NoModifier)
+    punto = max(lz.b.puntos)
+    assert any(r.tipo == ("coincidente" if sobre_curva else "punto_medio") and r.entidades == [punto, diagonal]
+               for r in lz.b.restricciones.values())
+    if materializado:
+        lz.b.asegurar_referencias([Boceto.ORIGEN])
+    antes = {i: lz.b.coords(i) for i in esquinas}
+    lz.set_herramienta("r_coincidente")
+    clics = [(0, 0), (-87.5, 25)] if origen_primero else [(-87.5, 25), (0, 0)]
+    for xy in clics:
+        _clic(lz, *xy)
+    assert lz.b.coords(punto) == pytest.approx((0, 0), abs=1e-6)
+    assert lz.resultado.ok and not lz.picks
+    assert any("Restricción agregada" in m for m in lz.mensajes)
+    assert any(lz.b.coords(i) != antes[i] for i in esquinas)
+    # B-225 trata el reparto del movimiento; acá se conserva la forma rectangular, no se fija su tamaño.
+    a, b, c, d = (lz.b.coords(i) for i in esquinas)
+    assert (a[1], b[0], c[1], d[0]) == pytest.approx((b[1], c[0], d[1], a[0]), abs=1e-6)
+    if not sobre_curva:
+        for pid, xy in zip(esquinas, [(-32.5, -25), (32.5, -25), (32.5, 25), (-32.5, 25)], strict=True):
+            assert lz.b.coords(pid) == pytest.approx(xy, abs=1e-6)
+
+
+@pytest.mark.parametrize("herramienta", [*editor_boceto.RESTRICCIONES_HERRAMIENTA, "cota", "seleccionar"])
+def test_b223_origen_elegible_sin_citar_en_todas_las_herramientas(lz, herramienta):
+    assert Boceto.ORIGEN not in lz.b.puntos
+    lz.set_herramienta(herramienta)
+    assert lz.entidad_en(lz.a_px(0, 0)) == Boceto.ORIGEN
+    assert lz.b.puntos[Boceto.ORIGEN].proyectado
+    assert lz.b.coords(Boceto.ORIGEN) == (0, 0)
+    assert len(lz.b.puntos) == 1
+
+
+@pytest.mark.parametrize("origen_primero", [False, True])
+def test_b223_cota_entre_punto_y_origen_con_clics(lz, origen_primero):
+    lz.set_herramienta("punto")
+    _clic(lz, 30, 20)
+    punto = max(lz.b.puntos)
+    assert Boceto.ORIGEN not in lz.b.puntos
+    lz.set_herramienta("cota")
+    for xy in ([(0, 0), (30, 20)] if origen_primero else [(30, 20), (0, 0)]):
+        _clic(lz, *xy)
+    assert set(lz.picks) == {punto, Boceto.ORIGEN}
+    assert lz._esperando_ubicacion
+    _clic(lz, 15, 40)
+    assert lz.entrada is not None  # el tercer clic abre la cota, no vuelve a pedir entidades
+
+
+def test_b223_origen_no_habilita_puntos_ocultos_ni_crea_referencias_lejanas(lz):
+    oculto = lz.b.agregar_punto(0.5, 0.5, proyectado=True)
+    visible = lz.b.agregar_punto(30, 20)
+    lz.mostrar["proyectadas"] = False
+    lz.set_herramienta("r_coincidente")
+    assert lz.entidad_en(lz.a_px(20, 50)) is None
+    assert Boceto.ORIGEN not in lz.b.puntos
+    assert lz.entidad_en(lz.a_px(30, 20)) == visible
+    assert lz.entidad_en(lz.a_px(0.5, 0.5)) == Boceto.ORIGEN
+    assert lz.entidad_en(lz.a_px(0, 0)) == Boceto.ORIGEN  # origen materializado, proyecciones apagadas
+    assert lz.b.coords(oculto) == (0.5, 0.5)
+
+
+@pytest.mark.parametrize("materializado", [False, True])
+@pytest.mark.parametrize("proyectadas", [False, True])
+def test_b223_origen_compite_por_distancia_con_puntos_cercanos(lz, materializado, proyectadas):
+    punto = lz.b.agregar_punto(1, 0)
+    lz.mostrar["proyectadas"] = proyectadas
+    if materializado:
+        lz.b.asegurar_referencias([Boceto.ORIGEN])
+    lz.set_herramienta("r_coincidente")
+    assert lz.entidad_en(lz.a_px(1, 0)) == punto
+    assert lz.entidad_en(lz.a_px(0, 0)) == Boceto.ORIGEN
+
+
+def test_b223_ejes_ocultos_no_ocultan_el_origen(lz):
+    lz.b.asegurar_referencias([Boceto.EJE_X, Boceto.EJE_Y])
+    lz.mostrar.update(proyectadas=False, construccion=False)
+    lz.set_herramienta("cota")
+    assert lz.entidad_en(lz.a_px(0, 0)) == Boceto.ORIGEN
+    assert lz.entidad_en(lz.a_px(1, 0)) == Boceto.ORIGEN  # no el punto auxiliar oculto del eje X
+
+
+@pytest.mark.parametrize("origen_primero", [False, True])
+def test_b223_herramienta_punto_medio_con_origen_centra_rectangulo(lz, origen_primero):
+    """La herramienta Punto medio existente también elige el origen sin citarlo antes."""
+    lz.centro = [-50, 0]
+    lz.ajustar_grilla = False
+    lz.set_herramienta("rectangulo")
+    for xy in ((-120, 0), (-55, 50)):
+        _clic(lz, *xy)
+    esquinas = list(lz.b.puntos)
+    lz.set_herramienta("linea")
+    lz.alternar_construccion()
+    for xy in ((-120, 0), (-55, 50)):
+        _clic(lz, *xy)
+    diagonal = lz._ultima_linea
+    lz.set_herramienta("r_punto_medio")
+    for xy in ([(0, 0), (-87.5, 25)] if origen_primero else [(-87.5, 25), (0, 0)]):
+        _clic(lz, *xy)
+    assert lz.resultado.ok
+    assert any(r.tipo == "punto_medio" and r.entidades == [Boceto.ORIGEN, diagonal]
+               for r in lz.b.restricciones.values())
+    for pid, xy in zip(esquinas, [(-32.5, -25), (32.5, -25), (32.5, 25), (-32.5, 25)], strict=True):
+        assert lz.b.coords(pid) == pytest.approx(xy, abs=1e-6)
 
 
 def test_tangente_y_cambiar_por_tangente_en_el_lienzo_no_cambian_el_radio(lz):

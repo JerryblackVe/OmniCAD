@@ -187,3 +187,77 @@ con el solver, su interacción con el usuario y su efecto sobre la geometría pa
 estándares funcionales de referencia, con OmniCAD como implementación independiente. Ejecutá la investigación,
 auditoría, correcciones y verificaciones. Documentá con precisión todo lo que haya quedado sin resolver.
 ```
+
+## Corridas de agentes
+
+| Corrida | Ítem | Agente | Worktree / rama | Estado |
+|---|---|---|---|---|
+| restr-1 | B-223 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r1` / `restr-1` | Fusionada (B-223 cerrado; Sol sin cupo al terminar) |
+
+### Brief restr-1 (B-223)
+
+```text
+Corrida restr-1 · B-223 · OmniCAD (CAD paramétrico en Python, PySide6 + OpenCascade). Todo en español.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-r1` (rama `restr-1`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no instales nada.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, siempre desde `D:/PROGRAMA-r1/clon` y con `PYTHONPATH=D:/PROGRAMA-r1/clon` (si no, importa la copia de `D:/PROGRAMA`).
+- Leé primero `AGENTS.md` y `CLAUDE.md` de la raíz (reglas, recetas A/B/C, cómo verificar).
+- Reglas de trabajo (obligatorias): leé el archivo real antes de editar y mapeá sus llamadores; plan corto en pasos chicos; el cambio MÁS CHICO que resuelve el ítem entero (sin abstracciones, opciones ni código «para después»); llamá las herramientas de verdad, no narres.
+- Conservá los finales de línea de cada archivo (CRLF o LF): al terminar, `git diff --stat` no puede mostrar archivos enteros reescritos.
+
+## El ítem: B-223 (solo este)
+Video de Gerardo `C:/Users/mosos/Videos/2026-11-06 19-31-01.mp4` (sacá cuadros con ffmpeg si querés verlo):
+- **Fusion (0:54→1:02):** rectángulo de 2 puntos (x −120…−55, y 0…50) + diagonal de construcción. Con «Coincidente», clic en el
+  punto medio de la diagonal (Fusion dibuja un triángulo de punto medio en el centro de la línea) y clic en el origen: el
+  rectángulo entero se corre, sin cambiar de tamaño, y queda centrado en el origen.
+- **OmniCAD (1:40→2:00):** el usuario pone un Punto «Sobre la curva» en la mitad de la diagonal, abre «Coincidente», clic en
+  ese punto y clic en el origen (se ve el resaltado azul en el origen). No pasa nada: ni «Restricción agregada» ni error.
+
+Ya comprobado por el coordinador (no lo repitas, usalo):
+- El solver anda: `asegurar_referencias([0])` + `agregar_restriccion("punto_medio", [0, diagonal])` + `solver.resolver(b)` deja
+  el rectángulo en (−32.5,−25)…(32.5,25). El problema está antes del solver.
+- `_punto_cercano` (`clon/omnicad/ui/editor_boceto.py:1263`) solo encuentra puntos que están en `b.puntos`; el origen (id 0)
+  entra ahí solo cuando `Boceto.asegurar_referencias` lo materializa (`restricciones/boceto.py:2031`). Flujo de clic de las
+  restricciones: `_clic_restriccion` → `entidad_en` → `aplicar_restriccion` (`editor_boceto.py:4768-4854`).
+
+Qué tenés que hacer:
+1. Reproducí el caso de la ventana con eventos simulados de Qt (QTest / `scripts/prueba_ui/`, sin mover el cursor real;
+   ventana `OMNICAD_PRUEBA_VENTANA=minimizada`): dibujar el rectángulo, la diagonal, el punto sobre la curva, herramienta
+   Coincidente, clic en el punto, clic en el origen. Dejá la traza de qué devuelve `entidad_en` en cada clic y por qué no se
+   aplica nada (¿el origen no es elegible? ¿la restricción se rechaza callada? ¿el chequeo de GDL de `aplicar_restriccion`
+   la descarta?).
+2. Test rojo en `clon/tests/` (en el archivo de tests del editor de boceto que ya cubra restricciones con clics; buscalo con
+   grep) que haga exactamente ese recorrido con clics y compruebe coordenadas: el punto queda en (0,0) y el rectángulo se
+   mueve sin deformarse más de lo necesario.
+3. Corregí la CAUSA. Prohibido el parche «si es el origen…» en un solo comando: el origen tiene que ser elegible en todas las
+   herramientas de restricción y cota igual que cualquier punto fijo (también si nunca se citó antes).
+4. Punto medio como en Fusion: buscá en la ayuda oficial de Fusion
+   `D:/PROGRAMA/clon/.venv/Scripts/python.exe D:/PROGRAMA/scripts/fusion_docs.py buscar midpoint -s fusion-sketch` (y `ver
+   "<título>"`) y mirá el video. Si Fusion deja tomar el punto medio de una línea con Coincidente, hacé que un clic en el punto
+   medio de una línea (con su marca visual) cree la restricción «Punto medio» con el otro punto. Si la ayuda no lo confirma,
+   NO lo inventes: anotalo en el informe.
+5. Segundo test (si hiciste el 4): diagonal + clic en su punto medio + clic en el origen → rectángulo centrado en el origen,
+   ancho 65 y alto 50 intactos.
+6. Si cambia lo que acepta o devuelve una herramienta de `clon/omnicad/api/`, ajustala (receta C) y regenerá
+   `docs/agentes/herramientas.md` con `omnicad tools --markdown --output docs/agentes/herramientas.md` desde la raíz.
+NO toques B-224, B-225 ni B-226 (orden de entidades en la API, deformación del rectángulo con punto sobre línea, coincidente
+con la esquina opuesta): van en otras corridas. Si tu arreglo choca con ellos, decilo en el informe.
+
+## Verificación (en primer plano, nunca en segundo plano; una cosa por vez)
+Desde `D:/PROGRAMA-r1/clon`, con `PYTHONPATH=D:/PROGRAMA-r1/clon`:
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .`
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/tests_afectados.py --correr` (elige y corre los tests afectados con
+  turno; puede esperar en fila detrás de otra sesión: dejalo esperar). Prohibido la suite completa y `pytest -n`.
+- Si tocaste la ventana, el o los tests de ventana que agregaste también pasan.
+
+## Revisión antes de cerrar
+Releé tu diff como revisor: ¿la lógica es correcta en los bordes (orden de clic, origen ya materializado o no, punto oculto)?
+¿Cada línea hace falta? ¿Hay un test para cada rama nueva? ¿Algún llamador de lo que cambiaste se rompe? Arreglá lo que
+encuentres.
+
+## Informe (escribilo apenas termines el ítem, aunque falte algo)
+`D:/PROGRAMA-r1/evidencias/restr1/informe.md`: causa raíz con archivo:línea y la traza; qué cambiaste (archivo y función);
+tests nuevos (nombre); salida REAL de ruff y de tests_afectados (las últimas líneas); qué dice la ayuda de Fusion del punto
+medio (ruta del artículo); lo que no pudiste hacer o verificar.
+```
