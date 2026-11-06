@@ -414,6 +414,37 @@ lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
     las dos piezas abre la lista (no la pulsan), así que el listado en sí solo está probado en los tests offscreen.
   - No se abrió Fusion: el comportamiento sale de la ayuda oficial de `fusion-sketch`, como en las tandas anteriores.
 
+## Informe tanda C8
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C8 · **Bug:** H-71 (faltante). **Sin commitear** (lo commitea el coordinador).
+
+### H-71 — BOCETO › arrastrar filas entre grupos y teclado en el árbol del navegador — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-sketch/sketch-palette-reference-4baf4699c21.md` y `find-underconstrained-sketch-geometry-a377d84ad10.md` confirman que la organización del boceto (grupos, «drag to reorder», selección) vive en el navegador y en la paleta, y que Alt+clic elige el objeto de abajo entre superpuestos (secciones 9.5 y 10 de `plan_boceto_organizar.md`). La organización ya estaba en OmniCAD (H-69/H-70 quedan para otra tanda); lo que faltaba de H-71 era el arrastre entre grupos y el foco del teclado en el árbol.
+- **Qué cambié:**
+  - `clon/omnicad/ui/navegador.py` — `_Arbol` ahora recibe `setFocusPolicy(Qt.StrongFocus)` (antes `Qt.NoFocus`, así que el árbol nunca tomaba el teclado), `setDragEnabled(True)` + `setAcceptDrops(True)` + `setDragDropMode(QAbstractItemView.DragDrop)`, y los manejadores `dragEnterEvent` / `dragMoveEvent` / `dropEvent`: solo aceptan soltar sobre una fila de grupo (`bo:<gid>` o miembro `bg:<gid>:<oid>`) y delegan en `self.on_dejar_en_grupo(origen, destino)` sin reordenar el modelo. La navegación por flechas y F2 (renombrar) quedan igual que en el resto del árbol.
+  - `clon/omnicad/ui/navegador_boceto.py` — `_mover_desde_arbol(v, origen, destino)` nuevo: saca el id del objeto arrastrado (`_objeto_de`, que entiende `bo:` y `bg:`) y el id del grupo destino, descarta grupo-en-sí y grupos anidados (`ob.categoria(...) == "grupos"`), y llama a `_cambiar(v, lambda b: ob.mover_a_grupo(b, [oid], gid))` — el mismo `mover_a_grupo` del menú «Mover a grupo», un paso de deshacer del boceto.
+  - `clon/omnicad/ui/ventana.py:202` — enchufa el callback: `self.navegador.arbol.on_dejar_en_grupo = lambda o, d: navegador_boceto._mover_desde_arbol(self, o, d)`.
+  - El Alt+clic que elige el objeto de abajo ya estaba resuelto y cubierto por `tests/test_boceto_organizar_ui.py::test_alt_clic_elige_el_objeto_de_abajo` (es la «Prueba propuesta» que cita H-71).
+- **Gemelos revisados:**
+  - El menú «Mover a grupo» del navegador (`ui/navegador_boceto.py::_menu_objetos`, `ob.mover_a_grupo`): el arrastre reusa **exactamente** esa función, no duplica lógica. ✔
+  - La API del grupo `vectores` (`api/herramientas_objetos_vectoriales.py` › `move_vector_objects_to_group`): es la misma `ob.mover_a_grupo`; el arrastre no cambia la API, así que `docs/agentes/herramientas.md` no se regeneró (ninguna firma cambió). ✔
+  - `ob.mover_a_grupo` (`restricciones/objetos.py:258`): no se tocó; el arrastre solo la invoca. ✔
+  - **Fuera de alcance (no lo toqué):** el menú radial del visor en modo boceto no aplica — en edición de boceto el clic derecho del visor lo maneja el editor (`editor_boceto`: menús de cota/restricción), no el menú radial de la vista 3D (`visor3d` › `menu_radial`), que está oculto; agregar acciones de organización ahí no tendría dónde dispararse. H-69 (propiedades por curva) y H-70 (expandir SVG/DXF) siguen abiertos en su propia fila.
+- **Test nuevo** (`clon/tests/test_boceto_organizar_ui.py`):
+  - `test_arrastrar_fila_del_arbol_mueve_el_objeto_al_grupo`: agrupa `svg`, arrastra `disco` (suelto) sobre el grupo vía `nav.arbol.on_dejar_en_grupo("bo:disco", "bo:grupo")` → `True` y aparece `bg:grupo:disco`; arrastrar sobre un objeto que no es grupo (`bo:svg`) → `False`; arrastrar un grupo sobre sí mismo → `False`; `deshacer()` lo revierte en un paso.
+  - `test_el_arbol_del_navegador_toma_el_foco_del_teclado`: `nav.arbol.focusPolicy() != Qt.NoFocus` y al darle el foco una flecha abajo cambia el `currentItem`.
+  - `test_alt_clic_elige_el_objeto_de_abajo` ya existía (el de la «Prueba propuesta») y sigue verde.
+  - Salida **ROJA (antes del arreglo):** el árbol tenía `Qt.NoFocus` y `_Arbol` no tenía drag-and-drop, así que `on_dejar_en_grupo` no existía y `focusPolicy()` era `NoFocus`.
+  - Salida **VERDE (con el arreglo):** `7 passed in 10.53s` (el archivo).
+- **ruff check .:** `All checks passed!`
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_boceto_organizar_ui.py`, `test_boceto_organizar.py`, `test_cobertura_ui_api.py`, `test_comandos.py` → **381 passed in 12.17s**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** el grep de las funciones tocadas (`_mover_desde_arbol`, `on_dejar_en_grupo`, `setFocusPolicy`, `dragEnterEvent`, `_Arbol`, `mover_a_grupo`) da solo `test_boceto_organizar_ui.py` (ya corrido). Por el token genérico `mover_a_grupo` / `navegador` aparecen además `test_boceto_organizar.py`, `test_api_objetos_vectoriales.py`, `test_cobertura_ui_api.py` (corrido) y `test_restricciones_matematica.py`; ninguno toca el árbol ni el drag, así que no los corrí.
+- **Salida de /ponytail-review:** `Verdict: Ship.` Sin «Must fix» ni «Should fix». Hallazgos revisados: (1) el drag solo acepta soltar sobre grupo y llama a `ob.mover_a_grupo` ya probado (no duplica lógica); (2) no anida grupos ni deja caer en objetos sueltos (guardas en `_mover_desde_arbol`); (3) `dropEvent` no llama a `super()`, así que el modelo del árbol no se reordena solo; (4) quité un `keyPressEvent` con F2 que era redundante con la acción F2 de la ventana (`ventana.py:458`) y podía disparar el renombrado dos veces — la navegación por flechas ya la da Qt al tener foco; (5) `nucleo/`, `timeline/` y la API no se tocaron, no hay estado global nuevo. Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l` (los lista arriba).
+  - No toqué la ventana más allá del foco y el drag del árbol, así que no hice la captura `todo.py` de una pieza de boceto: el arrastre entre filas es nativo de Qt y lo ejercita el test nuevo (vía el callback que usa el mismo camino que el drop real); el foco del teclado se prueba en `test_el_arbol_...`.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

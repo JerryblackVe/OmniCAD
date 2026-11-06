@@ -45,6 +45,36 @@ def claves_de(v, ids):
     return [k for k in nav._items if k.startswith(PREFIJOS[1:]) and id_de(k) in set(ids)]
 
 
+def _objeto_de(clave):
+    """Id del objeto arrastrado desde `bo:<oid>` o desde un miembro `bg:<gid>:<oid>`; None si no es objeto de boceto."""
+    if not isinstance(clave, str):
+        return None
+    if clave.startswith("bg:"):
+        return int(clave.split(":", 2)[2])
+    if clave.startswith("bo:"):
+        return int(clave[3:])
+    return None
+
+
+def _mover_desde_arbol(v, origen, destino):
+    """Arrastrar una fila del árbol sobre un grupo del boceto: mueve el objeto al grupo (un paso de deshacer).
+
+    Equivale a «Mover a grupo» del menú del navegador (reusa `ob.mover_a_grupo`). Devuelve True si cambió algo.
+    """
+    lz = _lienzo(v)
+    if lz is None or not origen or not destino:
+        return False
+    oid = _objeto_de(origen)
+    gid = id_de(destino) if destino.startswith("bo:") else (int(destino.split(":", 2)[1]) if destino.startswith("bg:") else None)
+    if oid is None or gid is None or oid == gid:
+        return False
+    if ob.categoria(lz.b, oid) == "grupos":        # no se anidan grupos dentro de grupos
+        return False
+    if ob.categoria(lz.b, gid) != "grupos":         # el destino debe ser un grupo, no un objeto suelto
+        return False
+    return _cambiar(v, lambda b: ob.mover_a_grupo(b, [oid], gid))
+
+
 def seleccion_editor(v):
     lz = _lienzo(v)
     if lz is None:

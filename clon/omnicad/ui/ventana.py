@@ -200,6 +200,7 @@ class VentanaPrincipal(QMainWindow):
         from . import acciones_navegador
         self.navegador.menu_elemento = lambda item: acciones_navegador.menu(self, item)
         self.navegador.menu_boceto = lambda item: navegador_boceto.menu(self, item)
+        self.navegador.arbol.on_dejar_en_grupo = lambda o, d: navegador_boceto._mover_desde_arbol(self, o, d)
         self.area.anclar_arriba_izq(self.navegador)
         self.barra_nav = BarraNavegacion(self.visor, self)
         self.area.set_barra(self.barra_nav)

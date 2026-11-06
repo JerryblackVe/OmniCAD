@@ -215,3 +215,43 @@ def test_alt_clic_elige_el_objeto_de_abajo():
     lz.close()
     lz.deleteLater()
     app.processEvents()
+
+
+def test_arrastrar_fila_del_arbol_mueve_el_objeto_al_grupo(ventana, monkeypatch):
+    v, svg, disco = ventana
+    nav = v.navegador
+    v.editar_operacion("sk")
+    QApplication.processEvents()
+    lz = v.modo_boceto.lienzo
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("Composición1", True))
+    nav.seleccionar([f"bo:{svg}"])
+    _menu(v, f"bo:{svg}", "Agrupar")
+    grupo = next(i for i in lz.b.objetos if lz.b.objetos[i]["nombre"] == "Composición1")
+    assert nav.item(f"bg:{grupo}:{svg}") is not None and nav.item(f"bo:{disco}") is not None
+    # arrastrar el disco (suelto) sobre el grupo del árbol: entra al grupo (un paso de deshacer)
+    assert nav.arbol.on_dejar_en_grupo(f"bo:{disco}", f"bo:{grupo}") is True
+    QApplication.processEvents()
+    assert nav.item(f"bg:{grupo}:{disco}") is not None
+    # arrastrar sobre un objeto que no es grupo no hace nada
+    assert nav.arbol.on_dejar_en_grupo(f"bo:{disco}", f"bo:{svg}") is False
+    # arrastrar un grupo sobre sí mismo tampoco
+    assert nav.arbol.on_dejar_en_grupo(f"bo:{grupo}", f"bo:{grupo}") is False
+    # se deshace en un paso
+    lz.deshacer()
+    QApplication.processEvents()
+    assert nav.item(f"bg:{grupo}:{disco}") is None and nav.item(f"bo:{disco}") is not None
+
+
+def test_el_arbol_del_navegador_toma_el_foco_del_teclado(ventana):
+    v, svg, disco = ventana
+    nav = v.navegador
+    v.editar_operacion("sk")
+    QApplication.processEvents()
+    # H-71: el árbol ya no tiene NoFocus, así que las flechas eligen filas
+    assert nav.arbol.focusPolicy() != Qt.NoFocus
+    nav.arbol.setFocus()
+    nav.arbol.setCurrentItem(nav.item("bk:geometrias"))
+    QApplication.processEvents()
+    QTest.keyClick(nav.arbol, Qt.Key_Down)
+    QApplication.processEvents()
+    assert nav.arbol.currentItem() is not None and nav.arbol.currentItem() != nav.item("bk:geometrias")
