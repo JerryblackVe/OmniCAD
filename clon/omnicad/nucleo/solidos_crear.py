@@ -1384,8 +1384,10 @@ def _extender_extremos(alambre, largo):
                     + [BRepBuilderAPI_MakeEdge(_pnt(p1), _pnt(p1 + t1 * largo)).Edge()])
 
 
-def _sentido_hacia_cuerpo(cuerpo, alambre, candidatos, invertir):
-    """De los sentidos candidatos, el que choca antes con el cuerpo partiendo del medio de la curva."""
+def _sentido_hacia_cuerpo(cuerpo, alambre, candidatos, invertir, *, exigir_cara=True):
+    """De los sentidos candidatos, el que choca antes con el cuerpo partiendo del medio de la curva. Con `invertir`
+    («Cambiar dirección») se toma el contrario, que tiene que dar con una cara si `exigir_cara` (Al siguiente):
+    si no, el nervio o la red quedaría colgando en el aire."""
     medio, _ = _punto_en(alambre, 0.5)
     mejor = None
     for d in candidatos:
@@ -1394,7 +1396,13 @@ def _sentido_hacia_cuerpo(cuerpo, alambre, candidatos, invertir):
             mejor = (choques[0], d)
     if mejor is None:
         raise geo.ErrorGeometria("Desde la curva no se llega al cuerpo en ningún sentido.")
-    return -mejor[1] if invertir else mejor[1]
+    if not invertir:
+        return mejor[1]
+    opuesto = -mejor[1]
+    if exigir_cara and not [h for h in _rayo(cuerpo, medio, opuesto) if h > 1e-7]:
+        raise geo.ErrorGeometria("El sentido invertido no llega al cuerpo: desactivá «Cambiar dirección»"
+                                 " o mové el boceto.")
+    return opuesto
 
 
 def _caja_de(forma, margen):
@@ -1440,37 +1448,41 @@ def _desmoldear_pared(bruto, direccion, angulo, origen):
 
 def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, direccion="simetrica",
            invertir=False, extender=True, angulo_desmoldeo=0.0, direccion_desmoldeo=None):
-    """Nervio (Rib) de Fusion [SLD-RIB]: pared delgada que crece desde una curva abierta, PARALELA al plano
-    del boceto y perpendicular a la cuerda de la curva, hasta las caras más cercanas del cuerpo ("To Next")
-    o una `profundidad`. El espesor se mide perpendicular al plano: "simetrica" (mitad a cada lado),
-    "lado1" (hacia +normal) o "lado2". `invertir` cambia el sentido de crecimiento. Devuelve solo el nervio,
-    ya recortado contra el cuerpo (la unión la hace la capa de operaciones). `angulo_desmoldeo` (Draft Angle)
-    afina el nervio hacia su borde libre (la curva del boceto, que conserva el espesor); `direccion_desmoldeo`
-    (Draft Pull Direction) es la dirección de extracción (por defecto, del cuerpo hacia la curva)."""
+    """Nervio (Rib) de Fusion [SLD-RIB]: pared delgada que crece desde una o varias curvas abiertas, PARALELA al
+    plano del boceto y perpendicular a la cuerda de cada curva, hasta las caras más cercanas del cuerpo ("To Next")
+    o una `profundidad` — un nervio por curva, unidos en un solo paso, como en Fusion. El espesor se mide
+    perpendicular al plano: "simetrica" (mitad a cada lado), "lado1" (hacia +normal) o "lado2". `invertir` cambia el
+    sentido de crecimiento. Devuelve solo el nervio, ya recortado contra el cuerpo (la unión la hace la capa de
+    operaciones). `angulo_desmoldeo` (Draft Angle) afina el nervio hacia su borde libre (la curva del boceto, que
+    conserva el espesor); `direccion_desmoldeo` (Draft Pull Direction) es la dirección de extracción (por defecto,
+    del cuerpo hacia la curva)."""
     n = _unit(normal_plano, "normal del plano del boceto")
-    w = _alambre(aristas_curva)
-    if _es_cerrado(w):
+    cadenas = _cadenas(aristas_curva)
+    if not cadenas or any(_es_cerrado(w) for w in cadenas):
         raise geo.ErrorGeometria("El nervio necesita una curva abierta.")
     if espesor <= 0:
         raise geo.ErrorGeometria("El espesor del nervio debe ser positivo.")
-    cuerda = _punto_en(w, 1.0)[0] - _punto_en(w, 0.0)[0]
-    m = _unit(np.cross(n, cuerda), "cuerda de la curva")
-    m = _sentido_hacia_cuerpo(cuerpo, w, (m, -m), invertir)
-    largo_max = 2 * _diagonal(cuerpo)
-    w_ext = _extender_extremos(w, largo_max) if extender else w
-    region = _unificar(BRepPrimAPI_MakePrism(w_ext, _gvec(m * (profundidad or largo_max))).Shape())
     lo, hi = {"simetrica": (-espesor / 2, espesor / 2), "lado1": (0.0, espesor),
               "lado2": (-espesor, 0.0)}.get(direccion, (None, None))
     if lo is None:
         raise geo.ErrorGeometria(f"Dirección de espesor desconocida: {direccion}")
-    bruto = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
-                   for f in _caras_de(region)])
-    if abs(angulo_desmoldeo) > 1e-9:
-        pull = -m if direccion_desmoldeo is None else _unit(direccion_desmoldeo, "dirección de desmoldeo")
-        if float(pull @ m) > 0:             # la extracción va del cuerpo hacia el borde libre (la curva)
-            pull = -pull
-        bruto = _desmoldear_pared(bruto, pull, angulo_desmoldeo, _punto_en(w, 0.5)[0])
-    return _hasta_el_cuerpo(bruto, cuerpo, [w], 0.0, "Nervio", profundidad)
+    largo_max = 2 * _diagonal(cuerpo)
+    brutos = []
+    for w in cadenas:
+        cuerda = _punto_en(w, 1.0)[0] - _punto_en(w, 0.0)[0]
+        m = _unit(np.cross(n, cuerda), "cuerda de la curva")
+        m = _sentido_hacia_cuerpo(cuerpo, w, (m, -m), invertir, exigir_cara=profundidad is None)
+        w_ext = _extender_extremos(w, largo_max) if extender else w
+        region = _unificar(BRepPrimAPI_MakePrism(w_ext, _gvec(m * (profundidad or largo_max))).Shape())
+        bruto = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
+                       for f in _caras_de(region)])
+        if abs(angulo_desmoldeo) > 1e-9:
+            pull = -m if direccion_desmoldeo is None else _unit(direccion_desmoldeo, "dirección de desmoldeo")
+            if float(pull @ m) > 0:             # la extracción va del cuerpo hacia el borde libre (la curva)
+                pull = -pull
+            bruto = _desmoldear_pared(bruto, pull, angulo_desmoldeo, _punto_en(w, 0.5)[0])
+        brutos.append(bruto)
+    return _hasta_el_cuerpo(_unir(brutos), cuerpo, cadenas, 0.0, "Nervio", profundidad)
 
 
 def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, direccion="simetrica",
@@ -1486,7 +1498,7 @@ def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, dire
         raise geo.ErrorGeometria("La red necesita curvas abiertas.")
     if espesor <= 0:
         raise geo.ErrorGeometria("El espesor de la red debe ser positivo.")
-    d = _sentido_hacia_cuerpo(cuerpo, cadenas[0], (-n, n), invertir)
+    d = _sentido_hacia_cuerpo(cuerpo, cadenas[0], (-n, n), invertir, exigir_cara=profundidad is None)
     # Engrosar la lámina con +t va a la izquierda de la curva mirando desde el sentido de extrusión.
     s = 1.0 if float(d @ n) > 0 else -1.0
     espesores = {"simetrica": [espesor / 2, -espesor / 2], "lado1": [s * espesor],

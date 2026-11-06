@@ -3429,7 +3429,7 @@ Crea una red de nervios perpendicular al plano del boceto. draft_angle afina la 
   - `extension` ("to_next" | "depth"; opcional, por defecto `"to_next"`): to_next (hasta el siguiente cuerpo) o depth (profundidad).
   - `depth` (número o expresión; opcional, por defecto `10`): profundidad en mm con extension=depth.
   - `direction` ("symmetric" | "side1" | "side2"; opcional, por defecto `"symmetric"`): grosor symmetric, side1 o side2.
-  - `reverse` (true/false; opcional, por defecto `false`): true invierte la normal usada por el comando Red.
+  - `reverse` (true/false; opcional, por defecto `false`): true invierte el sentido de extrusión de la red (va a la otra pared del cuerpo).
   - `target` (texto; opcional, por defecto `null`): nombre/id del cuerpo objetivo; vacío = el más cercano.
   - `draft_angle` (número o expresión; opcional, por defecto `0`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fina en el borde libre), número o expresión.
   - `fillet_radius` (número o expresión; opcional, por defecto `0`): radio en mm del empalme entre la red y el cuerpo (0 = sin empalme), número o expresión.

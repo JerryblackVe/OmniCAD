@@ -346,6 +346,22 @@ def test_red_hasta_el_piso():
     valido(cruz, 36 * 10 * 2 + 20 * 10 * 2 - 2 * 2 * 10)
 
 
+def test_nervio_con_dos_curvas_sueltas_hace_un_nervio_por_curva():
+    """B-214: dos curvas sueltas del boceto dan la unión de los dos nervios en una sola llamada (Fusion: un nervio
+    por perfil). Sin alargar, cada nervio es la banda de su línea hasta el piso: 5 × 6 × 2 = 60 mm³."""
+    canal = canal_u()
+    c1, c2 = linea((10, 10, 8), (15, 10, 8)), linea((25, 10, 8), (30, 10, 8))
+    uno, otro = (sc.nervio(canal, [c], (0, 1, 0), 2.0, extender=False) for c in (c1, c2))
+    juntos = valido(sc.nervio(canal, [c1, c2], (0, 1, 0), 2.0, extender=False), 2 * 5 * 6 * 2)
+    assert g.volumen(juntos) == pytest.approx(g.volumen(uno) + g.volumen(otro), rel=1e-6)
+    # dos aristas encadenadas siguen siendo UN solo perfil, y una curva cerrada sigue dando el mismo error
+    recta = valido(sc.nervio(canal, [linea((10, 10, 8), (20, 10, 8)), linea((20, 10, 8), (30, 10, 8))],
+                             (0, 1, 0), 2.0, extender=False), 20 * 6 * 2)
+    assert caja_de(recta) == pytest.approx([10, 9, 2, 30, 11, 8])
+    with pytest.raises(g.ErrorGeometria, match="curva abierta"):
+        sc.nervio(canal, [alambre_circulo((20, 10, 8), 3, (0, 1, 0))], (0, 1, 0), 2.0)
+
+
 # ---------------------------------------------------------------- 6. repujado
 def test_repujado_plano_relieve_grabado_y_limite_de_cara():
     caja = g.caja(40, 20, 10)

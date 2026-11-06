@@ -267,6 +267,246 @@ La tabla de la tanda 1 no lista `timeline/operaciones.py` (donde está `OpRevolu
 - ⚠ El check de ventana de B-210 mide el **sólido** contra los 135° esperados; la igualdad con la superficie en la ventana no se volvió a medir ahí (sale del pytest `test_api_superficie.py::test_revolucion_segmento_alrededor_de_z` y de que la superficie nunca usó el signo).
 - ⚠ Proyectos `.omnicad` guardados con una Distancia de barrido mayor que 1 ahora dan error al abrir en vez del cuerpo recortado. En `ejemplos/` no hay ninguno (`grep -rln "barrido" ejemplos/` → nada), pero una pieza del usuario puede tenerlo.
 
+## Informe tanda 2
+
+Corrida del 2026-11-06 (01:30 a 03:00). OpenCode con Qwen3.8-Flash en Qoder. Bugs: B-216 y B-214, de a uno y en ese orden.
+
+### B-216 · Red › «Cambiar dirección» no invierte el sentido — **Resuelto**
+
+**Qué dice la ayuda de Fusion** (`fusion_docs.py ver "Web reference" -s fusion-model`, desde `clon/`):
+
+> ## Flip Direction
+> Flips the direction in which the web feature is extruded.
+
+Y en `Rib reference`, la misma frase para el Nervio. O sea: el botón gira la extrusión, no el espesor.
+
+**Estado del código antes de decidir** (medido con `../evidencias/ui_2026-11-05/sondas_nrr.py`, caja 40³ cerrada vaciada 2 mm, boceto en y = 15 con la línea z = 20):
+
+```
+red_adentro_normal    | ok | V=18280.00      red_abierta_y15            | ok | V=16408.00
+red_adentro_invertir  | ok | V=18280.00      red_abierta_y15_invertir   | ok | V=16408.00
+```
+
+18280 = 17344 + 36·13·2: la red siempre iba a la pared de enfrente (a 13 mm), con y sin invertir. La otra pared está a 23, así que invertida tenía que dar 17344 + 36·23·2 = **19000**.
+
+**Qué cambié** — `clon/omnicad/timeline/ops_solido.py:287` (`OpRed.ejecutar`): se deja de negar la normal y se baja el `invertir` del `PARAMS`, que `red()` ya recibía sin ningún llamador.
+
+```python
+forma = _sc().red(cuerpo.forma, aristas, plano.normal, ctx.evaluar(self.p["espesor"]), prof,
+                  direccion=self.p["direccion"], invertir=self.p["invertir"], extender=self.p["extender"],
+                  angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO))
+```
+
+Antes la normal negada entraba en `_sentido_hacia_cuerpo`, que prueba `(-n, n)` y elige la que choca antes: la negación se deshacía sola y el botón no movía nada (solo cambiaba el lado de «Un lado», porque de ahí sale `s`).
+
+**El arreglo de la revisión** (regla 3; detalle abajo) — `clon/omnicad/nucleo/solidos_crear.py:1387` (`_sentido_hacia_cuerpo`): con `invertir` devuelve el sentido contrario **sin mirar si ese lado tiene cara**, así que la red invertida hacia la boca abierta terminaba recortada contra la caja del cuerpo (+1080 mm³ colgando, el mismo recorte de B-213). Ahora, con `exigir_cara` (Al siguiente; con «Distancia» no, porque ahí la banda al aire es el resultado pedido), avisa:
+
+```python
+    opuesto = -mejor[1]
+    if exigir_cara and not [h for h in _rayo(cuerpo, medio, opuesto) if h > 1e-7]:
+        raise geo.ErrorGeometria("El sentido invertido no llega al cuerpo: desactivá «Cambiar dirección»"
+                                 " o mové el boceto.")
+    return opuesto
+```
+
+Con esto se cumple la segunda mitad de la fila («con la boca abierta, Fusion avisaría») y cae de paso el primer síntoma de **B-213**: el Nervio invertido hacia afuera, que antes rellenaba hasta la caja (+1950 → 27450 mm³), ahora da el aviso. B-213 sigue abierto con lo demás (medido hoy: `nervio_borde_simetrico` 26100, `nervio_borde_lado1` «la curva queda dentro del cuerpo», `nervio_espesor_enorme` 61500).
+
+**Gemelos revisados** (regla 1; `grep -rn "invertir" clon/omnicad` filtrado por nervio/red, `grep -rn "plano.normal"`, `grep -rn "nervio\|red" clon/omnicad/nucleo/omnikernel/`):
+
+| Gemelo | Regla hoy | Qué hice |
+|---|---|---|
+| `timeline/ops_solido.py:287` `OpRed` | negaba la normal | **arreglado** (pasa `invertir`) |
+| `nucleo/solidos_crear.py:1488` `red(invertir=)` | el parámetro existía sin llamador | ahora tiene llamador; sin cambio en su firma |
+| `nucleo/solidos_crear.py:1387` `_sentido_hacia_cuerpo` | invertía sin mirar la cara | **arreglado** (el aviso nuevo, con `exigir_cara`) |
+| `nucleo/solidos_crear.py:1449` `nervio(invertir=)` | usa el mismo helper | cubierto por el arreglo del helper; medido: `nervio_invertir` pasa de 27450 a avisar |
+| `api/herramientas_solido_extra.py:161` `_nervio` | ya pasaba `invertir=reverse` a las dos operaciones | sin cambio de código; texto de `create_web` › `reverse` («invertía la normal usada por el comando Red» → «invierte el sentido de extrusión… va a la otra pared») y regenerado `docs/agentes/herramientas.md` (1 línea) |
+| `ui/comandos/crear.py:312` `Alternar("invertir", "Cambiar dirección")` | el mismo campo para Nervio y Red | sin cambio |
+| `ui/comandos/asas_extra.py:295` `_asas_nervio` | la flecha de «Distancia» se dibuja sobre `normal × (−1 si invertir)`, no sobre el sentido que eligió el núcleo | revisado con medición (`evidencias/ui_2026-11-06/sonda_asas_red.py`) y **no lo toco**: es otro bug → fila nueva **B-219** |
+| `nucleo/plastico.py` | sin geometría de Nervio/Red (la regla de plástico es H-87 / H-100 / H-102); PLÁSTICO abre los mismos `OpNervio`/`OpRed` | no aplica; la pieza verifica los botones de PLÁSTICO |
+| `nucleo/omnikernel/` | `grep "nervio\|def red"` → nada | no aplica |
+| la previa (`ui/comando.py`) | la del Nervio y la Red corre la operación (`_previa_pesada`), no una regla copiada | cubierta sin cambio |
+| `edit_feature` (`api/herramientas_documento.py`) | recalcula el paso con el mismo `ejecutar` | cubierto |
+| `timeline/ops_superficie.py`, `nucleo/superficies.py` | Superficie no tiene Nervio ni Red (índice `fusion-patch`, visto en la auditoría) | no aplica |
+| `nucleo/analisis.py:1294` (`-plano.normal if invertir`) | es «Voltear» del corte de sección | otro comando; sin cambio |
+
+**Tests nuevos y su salida.** `tests/test_sol10_nervio_red.py::test_red_invertir_cambia_de_pared` (parametrizado 18280 / 19000, con la caja `y` de la red cortada contra el cuerpo antes) y `::test_red_invertir_hacia_la_boca_abierta_avisa` (16408 sin invertir; invertida, aviso y el documento intacto).
+
+ROJO antes del arreglo:
+
+```
+$ pytest tests/test_sol10_nervio_red.py -q -p no:cacheprovider -k "invertir"
+E   assert 18279.999999999993 == 19000.0 ± 1.9
+E     comparison failed
+E     Obtained: 18279.999999999993
+E     Expected: 19000.0 ± 1.9
+FAILED tests/test_sol10_nervio_red.py::test_red_invertir_cambia_de_pared[True-19000.0]
+1 failed, 1 passed, 10 deselected in 1.36s
+```
+
+ROJO del arreglo de la revisión (con el chequeo nuevo desactivado un momento, `if False and exigir_cara …`):
+
+```
+$ pytest tests/test_sol10_nervio_red.py -q -p no:cacheprovider -k "invertir"
+E   AssertionError: {'ok': True, 'result': {'feature': {'id': 'op5', 'name': 'Red1', 'type': 'red'},
+    'bodies_modified': [{'id': 'op1.c1', 'name': 'Cuerpo1', 'volume': 15832.0, 'previous_volume': 14752.0}], ...}}
+1 failed, 2 passed, 12 deselected in 1.71s
+```
+
+O sea: `ok` con una placa de 1080 mm³ colgando de la boca abierta, en vez del aviso.
+
+VERDE después: `3 passed, 12 deselected` (los dos de invertir y el control), y los grupos completos de la tabla de abajo.
+
+### B-214 · Nervio con dos curvas sueltas — **Resuelto**
+
+**Qué dice la ayuda de Fusion**: `Rib reference` dice «Select an open sketch profile» (uno), pero la imagen de «Create a rib» (`fusion_docs.py ver "Create a rib" -s fusion-model`, recurso `34082c91a878d5eec1ea.png`, mirada con Read) muestra **cuatro curvas sueltas en un boceto y sus cuatro nervios en un solo paso**. La Red ya lo hacía: `red()` recorre `_cadenas` (`nucleo/solidos_crear.py:1496`).
+
+**Qué cambié** — `clon/omnicad/nucleo/solidos_crear.py:1449` (`nervio`): sale el `_alambre` (que exigía una sola cadena y daba el mensaje de Barrido) y entra el mismo recorrido de `red()`: por cada cadena se saca su cuerda, su sentido hacia el cuerpo (`_sentido_hacia_cuerpo`, con su `invertir`) y su desmoldeo; las brutas se unen y se recortan contra el cuerpo una vez, con **todas** las cadenas como referencia de «tocan la curva». La validación de `direccion` subió antes del bucle (el mismo mensaje, sin calcular geometría para nada). Con una sola cadena el camino es idéntico al de antes: `_unir([x])` devuelve `x` sin unificar.
+
+**Gemelos revisados** (regla 1; `grep -rn "_alambre(\|_cadenas(" clon/omnicad`, `grep -rn "nervio" clon/omnicad/api clon/omnicad/ui clon/omnicad/timeline`):
+
+| Gemelo | Qué hice |
+|---|---|
+| `nucleo/solidos_crear.py:1488` `red()` | ya recorría `_cadenas`: de acá saqué la regla; sin cambio |
+| `nucleo/solidos_crear.py:1449` `nervio()` | **arreglado** |
+| `_alambre` (`nucleo/solidos_crear.py:213`) | sigue en la ruta del Barrido y la Tubería (`:907`, `:941`) y en las secciones del Solevado (`:1001`, `:1030`, `:1221`): ahí sí hay UNA cadena; sin cambio |
+| `timeline/ops_solido.py:261` `OpNervio.ejecutar` | `_aristas` (`:61`) devuelve la lista plana de aristas elegidas y ya las mandaba todas; sin cambio |
+| `ui/comandos/crear.py:303` `Seleccion("curvas", "Perfil", …, maximo=None)` | ya permitía varias curvas; sin cambio. `Nervio.AYUDA`: «una curva» → «una o varias curvas» |
+| `api/herramientas_solido_extra.py:174` `_curvas` | ya pasa todas las curvas del boceto (o las `curves` dadas); sin cambio de código ni de texto (`curves` ya decía «ids de curvas») |
+| `nucleo/plastico.py`, `nucleo/omnikernel/` | sin geometría de nervio propia (los botones de PLÁSTICO abren el mismo comando) | no aplica |
+| la previa y `edit_feature` | corren la operación | cubiertos sin cambio |
+| `timeline/ops_superficie.py` | no hay Nervio de superficie | no aplica |
+
+**Tests nuevos y su salida.** `tests/test_solidos_crear.py::test_nervio_con_dos_curvas_sueltas_hace_un_nervio_por_curva` (en el canal en U, dos líneas sueltas sin alargar = 2 × 5·6·2 = 120 mm³ y la cuenta cuadra con la unión de los dos nervios por separado; más dos guardas: dos aristas encadenadas siguen siendo UN perfil con su caja exacta, y una circunferencia cerrada sigue con «necesita una curva abierta») y `tests/test_sol10_nervio_red.py::test_nervio_con_varias_curvas_sueltas_hace_un_nervio_por_curva` (escuadra de la auditoría, parametrizado con una y con dos líneas: 26700 mm³ y **un** paso de tipo `nervio`).
+
+ROJO antes del arreglo:
+
+```
+$ pytest tests/test_solidos_crear.py -q -p no:cacheprovider -k "dos_curvas_sueltas"
+E           omnicad.nucleo.geometria.ErrorGeometria: La ruta debe ser una sola cadena continua de aristas.
+FAILED tests/test_solidos_crear.py::test_nervio_con_dos_curvas_sueltas_hace_un_nervio_por_curva
+1 failed, 65 deselected in 1.28s
+
+$ pytest tests/test_sol10_nervio_red.py -q -p no:cacheprovider -k "varias_curvas"
+E       AssertionError: {'ok': False, 'error_kind': 'OPERATION_FAILED', 'mensaje': 'El paso «Nervio1» (op4) falló y se
+    deshizo (el documento quedó como estaba): …'}
+FAILED tests/test_sol10_nervio_red.py::test_nervio_con_varias_curvas_sueltas_hace_un_nervio_por_curva[lineas1]
+1 failed, 1 passed, 12 deselected in 1.37s
+```
+
+El `1 passed` de la segunda corrida es la parametrización de una sola curva: el control de que no rompí el caso que ya andaba.
+
+VERDE después: `16 passed, 64 deselected in 4.02s` (todos los tests con la palabra `nervio` en los dos archivos) y los grupos de abajo.
+
+### `/ponytail-review` (salida completa, sobre el diff de los cinco archivos)
+
+`What this change does:` dos reglas de una línea cada una. La Red deja de «invertir» negando la normal del plano —que el núcleo deshacía al elegir la pared más cercana— y baja el `invertir` que su núcleo ya tenía; y el Nervio deja de exigir una sola cadena continua, haciendo un nervio por curva como su gemelo la Red. Además el sentido invertido, cuando del otro lado no hay cara, avisa en vez de dejar una placa recortada contra la caja del cuerpo. Carga esperada: una persona o un agente sobre un documento (el criterio del repo); nada de esto corre en un bucle, y el recorrido extra es una ray-cast por cadena.
+
+**Must fix:** nada.
+
+**Should fix:**
+
+1. **El sentido invertido no mira si del otro lado hay cara** (`nucleo/solidos_crear.py:1387`)
+   - **What this is:** `_sentido_hacia_cuerpo` elige el sentido que choca antes con el cuerpo y, con `invertir`, devuelve el contrario.
+   - **Problem:** Si el otro lado no toca nada (la caja abierta hacia ese lado), la placa igual se arma y `_hasta_el_cuerpo` la recorta contra la caja del cuerpo: `red_abierta_y15_invertir` daba 15832 mm³, una placa de 1080 mm³ colgando de la boca, sin aviso. Con el botón roto (antes de este arreglo) nadie llegaba a ese caso.
+   - **Fix:** un ray-cast más sobre el sentido elegido: si no da con ninguna cara, `ErrorGeometria` claro. Solo con «Al siguiente» (`exigir_cara=profundidad is None`), porque con «Distancia» la banda al aire es el resultado pedido. Cuatro líneas en el compartido, cubre Nervio y Red.
+   - **If we skip it:** El botón nuevo hace geometría muda; es el mismo fallo que B-213 pero alcanzable desde ya.
+   - **Arreglé:** sí, con su test (`test_red_invertir_hacia_la_boca_abierta_avisa`) y su salida ROJA tomada revirtiendo el cambio.
+
+2. **La flecha de «Distancia» del Nervio y la Red no sigue el sentido que eligió el núcleo** (`ui/comandos/asas_extra.py:295`)
+   - **What this is:** Con «Distancia», el diálogo dibuja un asa sobre `normal del plano × (−1 si invertir)`.
+   - **Problem:** Medido (`evidencias/ui_2026-11-06/sonda_asas_red.py`): caja 40³ cerrada, boceto en y = 30 (paredes a 8 y a 28) → la red crece hacia +Y y la flecha apunta −Y, con y sin invertir (MISMATCH en los dos). En el Nervio la flecha es perpendicular al crecimiento, que va dentro del plano del boceto.
+   - **Fix:** **no lo hice**: pide resolver el cuerpo objetivo y el sentido real en el camino de las asas (que corre con cada movimiento del mouse), o sea la referencia del «Cuerpo» más una ray-cast en la UI — otro bug, otro día.
+   - **If we skip it:** La ventana ofrece un arrastre cuya dirección miente; lo pide la regla de honestidad del repo.
+   - **Fila nueva:** **B-219** en `docs/seguimiento/bugs.md` (Abierto, Baja) con la reproducción medida. B-218 no lo usé: está tomado en `codebuddy-nocturna` (`64eb920`).
+
+**Nice to have:**
+
+3. **`nervio` validaba `direccion` después de prismatizar la curva** (`nucleo/solidos_crear.py:1455`)
+   - **What this is:** El chequeo «Dirección de espesor desconocida» estaba en el medio del cálculo.
+   - **Problem:** Con un `direccion` inválido se armaba el prisma entero para tirarlo después.
+   - **Fix:** subirlo antes del bucle. Mismo mensaje, menos trabajo.
+   - **If we skip it:** Nada grave; solo geometría de más en un caso que no anda.
+   - **Arreglé:** sí, incluido en el cambio de B-214.
+
+**Verdict: Ship** (con el ítem 1 ya arreglado y el 2 derivado a B-219).
+
+### Verificación
+
+`ruff check .` desde `clon/`: `All checks passed!` (antes y después del arreglo de la revisión).
+
+Tests: todos con `turno`, `-p no:cacheprovider`, en primer plano y de a un grupo (la lista obligatoria de la tanda más los archivos que da `grep -l` de lo tocado: `nervio`, `red`, `_sentido_hacia_cuerpo`, `_cadenas`, `OpNervio`, `OpRed`, `create_rib`, `create_web`; `_alambre` y `_hasta_el_cuerpo` no aparecen en ningún test por su nombre). Ninguna corrida cortada por tiempo:
+
+| Grupo | Archivos | Salida final |
+|---|---|---|
+| 1 · núcleo y plástico | test_solidos_crear, test_sol10_nervio_red, test_sol21_reglas_plastico | `84 passed in 39.52s` |
+| 2 · API | test_api_solido, test_api_solido_extra, test_cobertura_ui_api, test_herramientas_solido, test_sol27_preajustes | `630 passed in 105.83s (0:01:45)` |
+| 3 · diálogos, asas y lotes | test_comandos, test_manipuladores, test_iconos_extra, test_revision_lotes_sol | `278 passed in 10.16s` |
+| 4 · tras el arreglo de la revisión (núcleo) | test_sol10_nervio_red, test_solidos_crear | `81 passed in 58.89s` |
+| 5 · tras el arreglo (API + UI + plástico juntos) | los 10 archivos de los grupos 2 y 3 más test_sol21_reglas_plastico | `912 passed in 114.77s (0:01:54)` |
+| 6 · seguimiento y doc | test_seguimiento, test_doc_agentes, test_claves_comandos, test_api_catalogo, test_api_convenciones | `479 passed in 12.23s` |
+
+Suite completa y prueba de humo: no corridas (regla 10; las toma el coordinador).
+
+Sondas de la auditoría, corridas de nuevo (`../evidencias/ui_2026-11-05/sondas_nrr.py`, contra su `.txt` del 2026-11-05):
+
+| Caso | Antes | Después |
+|---|---|---|
+| `nervio_dos_curvas_sueltas` | ERR «La ruta debe ser una sola cadena…» | ok 26700 |
+| `nervio_base` / `nervio_polilinea` | 26700 / 26700 | 26700 / 26700 (sin cambio) |
+| `nervio_invertir` | ok 27450 (+1950 hasta la caja) | ERR «El sentido invertido no llega al cuerpo…» |
+| `nervio_invertir_prof` (Distancia 5) | ok 26041,67 | ok 26041,67 (sin cambio: con «Distancia» no se exige cara) |
+| `nervio_borde_simetrico` / `_lado1` / `_lado2` | 26100 / ERR / 26700 | iguales (B-213 sigue) |
+| `nervio_espesor_enorme` | ok 61500 | ok 61500 (B-213 sigue) |
+| `red_adentro_normal` / `red_adentro_invertir` | 18280 / 18280 | **18280 / 19000** |
+| `red_abierta_y15` / `red_abierta_y15_invertir` | 16408 / 16408 | 16408 / **ERR con aviso claro** |
+| `red_invertir_sin_cara` | ok 20072 | ERR con el mismo aviso |
+| `red_base`, `red_sin_extender`, `red_profundidad`, `red_lado1`, `red_lado2`, `red_empalme`, `red_desmoldeo` | 20072, 17640, 16152, 20072, 20072, 20197,61, 23411,72 | iguales |
+
+Ventana (regla 9, porque cambió el comportamiento de los diálogos de Nervio y Red y toqué el texto del comando): la pieza `nervio_red_repujado` en minimizada, con `PYTHONIOENCODING=utf-8` y `--plazo 2700` (la primera corrida, sin el `PYTHONIOENCODING`, se cortaba imprimiendo el `✗` con cp1252):
+
+```
+=== 84 comprobaciones, 6 con ✗ ===
+```
+
+En la auditoría eran 82 comprobaciones con 9 ✗. Pasaron los checks de esta tanda y el de B-213 que dependía del mismo botón:
+
+```
+[OK ] · Nervio con dos curvas sueltas: vista previa
+[OK ] · Nervio con dos curvas sueltas: aceptar — cambiados={'op1.c1': ('solido', 26700.0)}
+[OK ] · Nervio con dos curvas sueltas: deshacer vuelve al estado anterior (1 paso/s)
+[OK ] · Nervio invertido: se rechaza con un aviso claro — «⚠ El sentido invertido no llega al cuerpo: desactivá «Cambiar dirección» o mové el boceto.»
+[OK ] · Red dentro de la caja: resultado = 1656 — obtenido 1656.0
+[OK ] · Red invertida hacia la boca abierta: se rechaza con un aviso claro — «⚠ El sentido invertido no llega al cuerpo…»
+```
+
+(84 vs 82: el caso de las dos curvas ahora corre y suma sus checks de aceptar y deshacer, que antes se cortaban en la previa.)
+
+Las 6 ✗ que quedan son ítems ya anotados, ninguno de esta tanda: B-215 (2: desmoldeo −1° y 1° con extracción), H-95 (el Nervio no tiene Radio del empalme), B-217 (cadena tangente 437,12), H-99 (profundidad negativa no pasa el Efecto a Grabado) y H-97 (asas de alineación del Repujado).
+
+Capturas miradas con Read: `capturas/red_invertida.png` (el panel RED con «Cambiar dirección» activo, el aviso visible y el cuerpo intacto) y `capturas/red_caja.png`. Evidencia: `evidencias/ui_2026-11-06/nervio_red_repujado.log` y `.json`, y la sonda `evidencias/ui_2026-11-06/sonda_asas_red.py`.
+
+### Seguimiento
+
+- `docs/seguimiento/bugs.md`: borradas la fila y la sección «Detalle» de B-216 y de B-214; recuento del encabezado 23 → 22 (Abierto 19 → 18, con la fila nueva B-219 · Parcial 4).
+- B-213: actualizado. Su primer síntoma («invertido rellena hasta la caja, +1950») ya avisa, medido; quedan el borde (+600 y el error falso de un lado), el `thickness=1e6` y la Red delante de la caja. Su `archivo:línea` pasó a `solidos_crear.py:1419` (`_hasta_el_cuerpo`), que es donde está ahora.
+- Fila nueva **B-219** (con su ficha de «Detalle»): la flecha de «Distancia» del Nervio y la Red, ítem 2 de mi `ponytail-review`.
+- `docs/seguimiento/README.md`: no tenía filas de B-214 ni B-216 (`grep -n "B-214\|B-216"` → nada), así que no había qué borrar.
+- `README.md` y `README.en.md` (hoja de ruta): sin mención de estos bugs ni de Nervio/Red (`grep` → nada); no se tocaron.
+- Dos viñetas en «## Registro» de `PROJECT_LOG.md` y una lección en «## Lecciones aprendidas» (parámetro del núcleo sin llamador = botón roto).
+
+### Archivos fuera de mi tanda
+
+La tabla de la tanda 2 lista `nucleo/solidos_crear.py` y `timeline/ops_solido.py`. También toqué, una línea de texto en cada uno: `api/herramientas_solido_extra.py` (el `reverse` de `create_web` decía «invertir la normal usada por el comando Red», que era la descripción del botón roto) con su regeneración de `docs/agentes/herramientas.md`, y `ui/comandos/crear.py` (la ayuda del comando Nervio decía «una curva»). No se tocó `ui/comandos/asas_extra.py` (de ahí B-219) ni `nucleo/plastico.py` (sin geometría de Nervio/Red). `docs/corrida_nocturna_2026-11-05.md` aparece modificado en el árbol: es de otra corrida, no lo miré ni lo cambié.
+
+### Lo que no pude verificar
+
+- ⚠ **Fusion real no se abrió.** La regla del Flip sale del texto de la ayuda («Flips the direction in which the web feature is extruded») y la de varias curvas de la imagen de «Create a rib» (leída con Read: cuatro curvas, cuatro nervios). No se comparó con el programa: si Fusion en la boca abierta hiciera otra cosa que avisar (por ejemplo ir igual a la cara más lejana del sólido), el aviso nuevo vuelve a ser una línea en `_sentido_hacia_cuerpo`.
+- ⚠ **El asa de «Distancia» no se probó arrastrándola** con el nuevo sentido: ese arreglo quedó derivado a B-219 y la pieza solo teclea «Cambiar dirección»; sus checks de arrastre (`red › arrastrar «profundidad» 3 mm`) pasaron porque miden el valor, no la dirección de la flecha.
+- ⚠ **Desmoldeo + varias curvas**: cada cadena toma su propio `m` para el `pull` del desmoldeo, que es la única lectura razonable, pero no hay test que lo mida — el desmoldeo del Nervio con ángulo negativo o extracción que no coincide sigue roto (B-215, para Opus).
+- ⚠ **Nervio con curvas de dos bocetos distintos**: `OpNervio` usa el plano del primer boceto (`timeline/ops_solido.py:262`); con varias cadenas de bocetos de planos diferentes no lo probé (la Red ya aceptaba varias cadenas y tiene la misma regla, así que no es un cambio mío).
+- ⚠ **Proyectos guardados con una Red invertida**: antes daban la misma red que sin invertir; ahora pueden dar el aviso nuevo (boca abierta) o la otra pared (caja cerrada). En `ejemplos/` no hay recetas de nervio ni red (`grep -rln "nervio\|red" ejemplos/` → nada), pero una pieza del usuario puede cambiar de forma al abrir.
+- ⚠ **B-213 sigue abierto** y es vecino directo: el recorte contra la caja del cuerpo aparece en los dos caminos que arreglé (el invertido sin cara lo esquivé con el aviso; el `thickness=1e6` y el boceto en el borde quedan).
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

@@ -336,7 +336,7 @@ class _NervioRed(Comando):
 
 class Nervio(_NervioRed):
     CLAVE, TITULO, ICONO = "nervio", "Nervio", "nervio"
-    AYUDA = "Pared de refuerzo desde una curva abierta del boceto hasta el cuerpo."
+    AYUDA = "Pared de refuerzo desde una o varias curvas abiertas del boceto hasta el cuerpo."
     CLASE_OP = OpNervio
 
 

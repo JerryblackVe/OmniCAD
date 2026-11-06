@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 23: Abierto 19 · Parcial 4 (recontado 2026-11-05 por fila: se cerraron B-205, B-207 y B-197 de Extruir, B-206 quedó en Parcial, sumaron B-208 a B-212 y B-213 a B-217, y se cerraron B-210 y B-211 de la tanda 1).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 22: Abierto 18 · Parcial 4 (recontado 2026-11-06 por fila: se cerraron B-210 y B-211 de la tanda 1 y B-214 y B-216 de la tanda 2, y sumaron B-219 — la flecha de «Distancia» del Nervio y la Red).
 
 ## Abiertos y parciales
 
@@ -12,11 +12,10 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-208 | Barrido con carril guía deforma el perfil aunque el carril sea paralelo a la ruta (sólido y superficie) | Abierto | Alta | Cuadrado 4×4 barrido 50 mm con un carril paralelo y escala «Ninguna» da 784,03 mm³ en vez de 800 (caja ±2,31 en vez de ±2); la superficie da 797,57 mm² en vez de 800. Con «Escalar» y el carril de 2 a 6 da 3364,59 contra 3466,67. Los dos extremos quedan bien; el medio se tuerce. También en la ventana (pieza `revolucion_barrido_solevacion`). | nucleo/solidos_crear.py:819 | 2026-11-05 |
 | B-209 | Barrido sólido con escala «Estirar» hace «Escalar» sin avisar | Abierto | Media | `sweep rail_scale="stretch"` da 3364,59 mm³, lo mismo que `scale`; debería estirar en una sola dirección. La superficie sí estira (400 mm² exactos). La ventana del sólido ni ofrece Estirar. | nucleo/solidos_crear.py:877 | 2026-11-05 |
 | B-212 | Solevación sólida con un carril recto falla: «el kernel produjo un sólido inválido» | Abierto | Media | Cuadros 10×10 en z 0 y 20×20 en z 10, carril recto del medio de un lado al medio del otro: el sólido da OPERATION_FAILED; la misma solevación de superficie sale bien (670,82 mm², el área lateral exacta del tronco). Fusion la hace. | nucleo/solidos_crear.py:1324 | 2026-11-05 |
-| B-213 | Nervio y Red se recortan contra la caja del cuerpo: rellenan hasta el borde o pierden la mitad | Abierto | Media | Escuadra con un nervio invertido (hacia afuera, sin cara): en vez de avisar como Fusion, rellena hasta la caja del cuerpo (+1950 mm³). Con el boceto en el borde del cuerpo, el simétrico pierde la mitad (600 en vez de 1200) y el de un lado da «la curva queda dentro del cuerpo»; la Red con el boceto delante de la caja da el mismo error falso. También en la ventana (pieza `nervio_red_repujado`). | nucleo/solidos_crear.py:1402 (`_hasta_el_cuerpo`) | 2026-11-05 |
-| B-214 | Nervio con dos curvas sueltas falla con un mensaje de «ruta» | Abierto | Baja | La ventana deja elegir varias curvas, pero dos líneas sueltas dan «La ruta debe ser una sola cadena continua de aristas». Fusion hace un nervio por curva en un solo paso (la ayuda muestra cuatro). La Red sí las acepta. | nucleo/solidos_crear.py:1439 (`nervio`: un solo `_alambre`) | 2026-11-05 |
+| B-213 | Nervio y Red se recortan contra la caja del cuerpo: rellenan hasta el borde o pierden la mitad | Abierto | Media | Con el boceto en el borde del cuerpo, el simétrico pierde la mitad (+600 en vez de +1200) y el de un lado da «Nervio: la curva queda dentro del cuerpo»; con `thickness=1e6` el nervio queda recortado al ancho del cuerpo (61500 mm³) sin aviso, y la Red con el boceto delante de la caja da el mismo error falso. (Lo que el 2026-11-05 era «invertido rellena hasta la caja, +1950»: hoy «Cambiar dirección» hacia un lado sin cara avisa claro; ver B-216.) También en la ventana (pieza `nervio_red_repujado`). | nucleo/solidos_crear.py:1411 (`_hasta_el_cuerpo`); tests/test_sol10_nervio_red.py::test_red_invertir_hacia_la_boca_abierta_avisa | 2026-11-06 |
 | B-215 | Desmoldeo del Nervio: falla con ángulo negativo y con una dirección de extracción que no es la de crecimiento | Abierto | Media | Escuadra con la línea en diagonal: `draft_angle=-1` y `draft_angle=1, pull_direction="XY"` dan «El desmoldeo falló en el kernel (ángulo demasiado grande?)». La API acepta −45..45 y anuncia la dirección de extracción; solo anda cuando la extracción coincide con el crecimiento (el caso de `test_sol10_nervio_red.py`). | nucleo/solidos_crear.py:1412 (`_desmoldear_pared`) y 1457 | 2026-11-05 |
-| B-216 | Red › «Cambiar dirección» no invierte el sentido de la red | Abierto | Baja | Caja hueca con el boceto adentro: sin invertir y con invertir dan lo mismo (18280 mm³; invertida debería ir a la otra pared y dar 19000). Con la boca abierta del otro lado, Fusion avisaría; OmniCAD crea la misma red. Solo cambia el lado de «Un lado». | timeline/ops_solido.py:286 (`OpRed`: niega la normal, pero `red()` elige el lado más cercano de los dos) | 2026-11-05 |
 | B-217 | Repujado con «Cadena tangente» repuja también en los costados | Abierto | Media | Placa con las aristas de arriba empalmadas, cuadro 10×10 encima, relieve 1 mm con cadena tangente: +437,12 mm³ en vez de +100, caja 1 mm más ancha a cada lado. La cadena suma los costados (tangentes a los empalmes) y el cuadro se «adapta» y se repuja en cada uno. Se ve en la captura `repujado_cadena.png`. | nucleo/solidos_crear.py:1548 (cadena) y 1608 (`_perfiles_en_zona` con `adaptar`) | 2026-11-05 |
+| B-219 | Nervio y Red › la flecha de «Distancia» no apunta al sentido que elige el núcleo | Abierto | Baja | El Nervio y la Red van a la cara **más cercana** del cuerpo (`_sentido_hacia_cuerpo`), pero la flecha del asa de Distancia se dibuja sobre ±normal del plano del boceto, girada con «Cambiar dirección»: en una caja 40³ cerrada con el boceto en y = 30 (paredes a 8 y a 28) la red crece hacia +Y y la flecha apunta −Y, con y sin invertir (`evidencias/ui_2026-11-06/sonda_asas_red.py`). En el Nervio la flecha es además perpendicular al crecimiento (el nervio crece en el plano del boceto). Arreglo: pedir el sentido al núcleo con el cuerpo objetivo, o dibujar la flecha desde la forma ya calculada de la previa. | clon/omnicad/ui/comandos/asas_extra.py:295 (`_asas_nervio`) | 2026-11-06 |
 | B-196 | Barrer y el sector del labio pierden la autointersección sin avisar | Abierto | Media | `barrer` (dos sitios) y `_sector_labio` no pasan por el aviso de autointersección que ya tienen Tubo y Patrón geométrico (B-167, B-168). Hallado en la revisión del 2026-11-05. | nucleo/solidos_crear.py | 2026-11-05 |
 | B-195 | Extruir el logo ZAI.svg entero falla: dos regiones salen con contorno autointersectado | Abierto | Alta | Pasa también sin transformar y sin Rust: el arreglo planar da 277 regiones y 2 son inválidas (8,35 mm² con 36 curvas y 0,0027 mm²; `BRepAlgoAPI_Check` falla y `ShapeAnalysis_Wire.CheckSelfIntersection` da verdadero en un alambre). La extrusión de `object:<id>` termina en «La operación 'unir' dio un resultado imposible». Revisar qué cruce casi tangente no se corta en `nucleo/perfiles.py` (`_detectar`) y validar las caras antes de entregarlas. | clon/omnicad/nucleo/perfiles.py (`_detectar`); evidencia local `evidencias/boceto_organizar_2026-11-05/zai_caras.py` y `zai_sonda.py` (necesita el `ZAI.svg` del Escritorio) | 2026-11-05 |
 | B-189 | OmniKernel no arranca: un argumento por defecto usa un enum de OCC sin inicializar | Abierto | Baja | `_trozos(..., tipo=TopAbs_SOLID)` evalúa el enum al importar `solidos_crear`, pero `_iniciar_opencascade` no corre al elegir OmniKernel. Reproducido en `test_motor` y los 68 casos de `test_paridad_motor`: todos fallan antes de modelar con `NameError: name 'TopAbs_SOLID' is not defined`. También está en HEAD (`solidos_crear.py:3868`), independiente del arreglo de perfiles. Integrar la corrección en ese módulo y repetir las pruebas de ambos motores. | clon/tests/test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado; clon/omnicad/nucleo/solidos_crear.py (`_trozos`) | 2026-11-04 |
@@ -100,19 +99,10 @@ de arriba manda sobre este texto.
 
 - **Qué:** escuadra (piso x 0..40, y −30..30, z 0..5 y pared x 0..5, z 0..50: 25500 mm³), boceto XZ con la línea (35, 5) → (5, 45); `create_rib thickness=2 reverse=true`. La misma escuadra en y 0..60 (el boceto queda en el borde) con `direction` symmetric y side1. Red: caja 40³ abierta en y = 0 y boceto en un plano delante de la boca. En la ventana: Nervio › Cambiar dirección, Enter.
 - **Esperado (Fusion):** «To Next: Extrudes the rib from the sketch profile to the nearest faces on a solid body» (ayuda `Rib reference`): hacia afuera no hay cara, así que avisa; en el borde, el nervio entero (1200 mm³), con la mitad afuera del cuerpo.
-- **Obtenido:** invertido, 27450 mm³ (+1950: el triángulo de afuera de la línea, cortado por la caja del cuerpo); en el borde, simétrico +600 y side1 «Nervio: la curva queda dentro del cuerpo»; la Red delante de la boca, el mismo error falso. Con `thickness=1e6`, +36000 (recortado al ancho del cuerpo, sin aviso).
-- **Reproducir:** `evidencias/ui_2026-11-05/sondas_nrr.py nervio_invertir nervio_borde` (salida en `sondas_nrr.txt`) o la pieza `nervio_red_repujado` («Nervio invertido»).
-- **Causa probable (leída):** `_hasta_el_cuerpo` interseca el nervio con la caja del cuerpo (`nucleo/solidos_crear.py:1402`) antes de buscar las piezas que tocan la curva: eso recorta el espesor y deja de comprobar que el nervio termine en una cara.
-- **Prueba propuesta:** invertido sin cara = error claro; en el borde, +1200 en simétrico, side1 y side2.
-
-### B-214 · Nervio con varias curvas sueltas
-
-- **Qué:** la escuadra de B-213 y, en el mismo boceto, dos líneas sueltas: (35, 5) → (5, 45) y (30, 5) → (5, 38,33); `create_rib thickness=2`. En la ventana: elegir las dos curvas con el visor.
-- **Esperado (Fusion):** un nervio por curva en un paso (imágenes de `Create a rib`: cuatro curvas, cuatro nervios).
-- **Obtenido:** «La ruta debe ser una sola cadena continua de aristas»: el mensaje habla de una ruta que el nervio no tiene. Dos líneas encadenadas sí andan (26700 mm³).
-- **Reproducir:** `sondas_nrr.py nervio_dos_curvas_sueltas`; pieza `nervio_red_repujado` («Nervio con dos curvas sueltas»).
-- **Causa probable (leída):** `nervio` arma un solo alambre (`_alambre`, `nucleo/solidos_crear.py:1439`); `red` ya recorre `_cadenas`.
-- **Prueba propuesta:** dos curvas sueltas = la unión de los dos nervios, en un paso.
+- **Obtenido (2026-11-06):** lo de afuera ya avisa («El sentido invertido no llega al cuerpo: desactivá «Cambiar dirección» o mové el boceto», B-216 tanda 2); queda: en el borde, simétrico +600 (26100 en vez de 26700) y side1 «Nervio: la curva queda dentro del cuerpo» (medido hoy con `sondas_nrr.py nervio_borde`); con `thickness=1e6`, 61500 mm³ (recortado al ancho del cuerpo, sin aviso).
+- **Reproducir:** `evidencias/ui_2026-11-05/sondas_nrr.py nervio_borde nervio_espesor_enorme` (salida en `sondas_nrr.txt`) o la pieza `nervio_red_repujado`.
+- **Causa probable (leída):** `_hasta_el_cuerpo` interseca el nervio con la caja del cuerpo (`nucleo/solidos_crear.py:1419`) antes de buscar las piezas que tocan la curva: eso recorta el espesor y deja de comprobar que el nervio termine en una cara.
+- **Prueba propuesta:** en el borde, +1200 en simétrico, side1 y side2; `thickness` enorme sin recorte mudo.
 
 ### B-215 · Desmoldeo del Nervio con ángulo negativo o con dirección de extracción
 
@@ -123,15 +113,6 @@ de arriba manda sobre este texto.
 - **Causa probable:** no se leyó a fondo. `_desmoldear_pared` deja afuera las caras cuya normal no es perpendicular a la extracción (`nucleo/solidos_crear.py:1412`) y `nervio` fuerza el sentido de la extracción (línea 1457); el único test con dirección usa la misma que el crecimiento.
 - **Prueba propuesta:** −1° da un poco menos de 26700 y 1° con extracción Z da un sólido válido.
 
-### B-216 · Red › Cambiar dirección no invierte
-
-- **Qué:** caja 40³ vaciada 2 mm y cerrada, boceto en un plano a y = 15 con la línea z = 20, x 10..30; `create_web thickness=2` y `create_web thickness=2 reverse=true`. Con la caja abierta en y = 0 (boca hacia −Y), lo mismo. En la ventana: Red › Cambiar dirección.
-- **Esperado (Fusion):** «Flip Direction: Flips the direction in which the web feature is extruded» (ayuda `Web reference`): la red va hacia la otra pared (19000 mm³) o, con la boca abierta, avisa.
-- **Obtenido:** 18280 mm³ en los dos casos cerrados y 16408 en los dos abiertos: el botón no cambia nada (salvo el lado de «Un lado»).
-- **Reproducir:** `sondas_nrr.py red_adentro red_abierta`; pieza `nervio_red_repujado` («Red invertida hacia la boca abierta»).
-- **Causa probable (leída):** `OpRed` niega la normal (`timeline/ops_solido.py:286`), pero `red()` prueba los dos sentidos y se queda con el más cercano (`nucleo/solidos_crear.py:1477`); su parámetro `invertir` nunca se pasa.
-- **Prueba propuesta:** caja cerrada con el boceto en y = 15: 18280 sin invertir y 19000 invertida.
-
 ### B-217 · Repujado con cadena tangente se repite en los costados
 
 - **Qué:** placa 60×40×10, `fillet edges=">Z" radius=3`, cuadro 10×10 en (20..30, 15..25) sobre la cara de arriba; `create_emboss faces=">Z" depth=1 tangent_chain=true`. En la ventana: Repujado › Más opciones › Cadena tangente.
@@ -140,6 +121,19 @@ de arriba manda sobre este texto.
 - **Reproducir:** `sondas_nrr.py rep_cadena_tangente` (la placa sola: `rep_cadena_tangente_base`, 23624,07); pieza `nervio_red_repujado` («Repujado con cadena tangente»).
 - **Causa probable (leída):** la cadena suma los costados planos (tangentes a los empalmes, `nucleo/solidos_crear.py:1548`) y cada grupo de caras paralelas pasa por `_perfiles_en_zona` con `adaptar`, que gira y achica el perfil para que entre.
 - **Prueba propuesta:** este caso da +100 y la caja no crece en x ni en y.
+
+### B-219 · La flecha de «Distancia» del Nervio y la Red no muestra el sentido que elige el núcleo
+
+- **Qué:** caja 40³ cerrada, vaciada 2 mm; plano XZ desplazado −30 (boceto en y = 30, paredes a 8 y a 28) con la línea
+  z = 20 de x 10 a 30; Red › Tipo de extensión «Distancia» y «Cambiar dirección». Lo mismo con Nervio.
+- **Esperado (Fusion):** el manipulador de distancia sigue la extrusión real; «Flip Direction» lo gira con ella.
+- **Obtenido:** la red crece hacia +Y (la pared más cercana) y la flecha apunta −Y; con «Cambiar dirección» crece hacia
+  −Y y la flecha apunta +Y (`evidencias/ui_2026-11-06/sonda_asas_red.py`, MISMATCH en los dos). En el Nervio la flecha
+  va por la normal del plano, o sea perpendicular al crecimiento, que es dentro del plano.
+- **Causa (leída):** `_asas_nervio` arma la flecha con `normal del plano × (−1 si invertir)`
+  (`ui/comandos/asas_extra.py:295`), mientras `_sentido_hacia_cuerpo` elige el sentido por la cara más cercana.
+- **Prueba propuesta:** con el boceto a y = 30 la flecha de Distancia apunta +Y sin invertir y −Y invertida, igual que
+  la previa.
 
 ### B-206 · Inicio › Objeto en un plano no paralelo (Parcial)
 

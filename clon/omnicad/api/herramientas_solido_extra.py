@@ -217,7 +217,7 @@ def create_web(sesion, sketch: str, curves: list[int] | None = None, thickness: 
     extension: to_next (hasta el siguiente cuerpo) o depth (profundidad).
     depth: profundidad en mm con extension=depth.
     direction: grosor symmetric, side1 o side2.
-    reverse: true invierte la normal usada por el comando Red.
+    reverse: true invierte el sentido de extrusión de la red (va a la otra pared del cuerpo).
     target: nombre/id del cuerpo objetivo; vacío = el más cercano.
     draft_angle: ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fina en el borde libre), número o expresión.
     fillet_radius: radio en mm del empalme entre la red y el cuerpo (0 = sin empalme), número o expresión.

@@ -55,7 +55,13 @@ Corridas (tokens de `opencode stats` / sesiones de Qoder; «sin dato» si no se 
 | 22:41 | Qwen3.8-Flash (Qoder, `qfmodel`) | tanda 1 (B-211, B-210) | 71 min | sin dato (las sesiones de Qoder no guardan tokens) | terminó sin informe: dejó los tests en cola y salió; se retomó la sesión |
 | 22:50 | deepseek-v4.1-flash (CodeBuddy) | C1 (B-189, H-87) | 45 min (tope) | sin dato (salida json vacía al cortar) | cortado con H-87 hecho y B-189 a medias; se retomó la sesión |
 | 23:35 | deepseek-v4.1-flash (CodeBuddy) | C1, continuación | 45 min (tope) | sin dato | otra vez cortado, sin informe; el coordinador revisó (550 + 728 verdes) y commiteó `64eb920` en `codebuddy-nocturna` (H-87; B-189 ya estaba resuelto en HEAD, queda su test; nuevos B-218 y H-102) |
-| 00:00 | GPT-6.1 Sol (OpenCode) | B-213 | 19 min | sin dato aún | Parcial: Nervio arreglado, Red pendiente (2 tests en xfail estricto); commit `95d19f2` (689 + 2 xfail y 522 verdes) |
+| 00:00 | GPT-6.1 Sol (OpenCode) | B-213 | 19 min | 265 k (+5,5 M caché) / 18 k (+5 k razonamiento) | Parcial: Nervio arreglado, Red pendiente (2 tests en xfail estricto); commit `95d19f2` (689 + 2 xfail y 522 verdes) |
+| 23:53 | Qwen3.8-Flash (Qoder) | tanda 1, sesión retomada | 55 min | sin dato | informe escrito; commit `799d6f6` en `main` (632 + 303 verdes, más 2505 de Qwen) |
+| 00:39 | hy3 (CodeBuddy) | C2 (H-100) | 28 min | sin dato (salida de texto, sin tokens) | commit `2329d0f` en `codebuddy-nocturna` (538 + 842 verdes; el coordinador regeneró `herramientas.md` desde el worktree) |
+| 01:10 | deepseek-v4.1-flash (CodeBuddy) | C3 (H-102) | 17 min | sin dato | commit `04bfa86` en `codebuddy-nocturna` (1505 + 787 verdes) |
+| 01:41 | hy3 (CodeBuddy) | C4 (H-93) | 11 min | sin dato | commit `dade722` en `codebuddy-nocturna` (1519 + 1007 verdes) |
+| 00:41 | GPT-6.1 Sol (OpenCode) | B-208 | 14 min | 204 k (+6,2 M caché) / 15 k (+5 k razonamiento) | commit `a8816d5` (605 + 331 verdes) |
+| 01:01 | GPT-6.1 Sol (OpenCode) | B-206 (resto) | 10 min | 242 k (+6,3 M caché) / 13 k (+5 k razonamiento) | Parcial: rectángulo inclinado con conicidad anda, círculo no (xfail estricto); commit `bd7e3e5` (2073 verdes). Fin de la línea B: 6 corridas de 6 |
 
 ## Prompt para el agente
 

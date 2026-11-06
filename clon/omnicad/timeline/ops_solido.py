@@ -245,8 +245,9 @@ class OpSolevacion(_OpCrear):
 
 
 class OpNervio(_OpCrear):
-    """Nervio de Fusion [SLD-RIB]: pared desde una curva abierta del boceto hasta el cuerpo. `direccion` es la
-    Direction y el Start de Fusion juntos: simétrica, o a un lado empezando abajo («lado1») o arriba («lado2»).
+    """Nervio de Fusion [SLD-RIB]: pared desde una o varias curvas abiertas del boceto hasta el cuerpo, un nervio
+    por curva en un solo paso. `direccion` es la Direction y el Start de Fusion juntos: simétrica, o a un lado
+    empezando abajo («lado1») o arriba («lado2»).
     `angulo_desmoldeo` y `direccion_desmoldeo` (referencia a un plano, cara o eje) son Draft Angle y Draft Pull
     Direction; `radio_empalme` y `extender` (Fillet Radius y Extend Curves) solo valen en la Red."""
     TIPO, ETIQUETA, ICONO = "nervio", "Nervio", "⊥"
@@ -283,9 +284,9 @@ class OpRed(OpNervio):
             raise ErrorOperacion("La red se dibuja con curvas de un boceto.")
         cuerpo = _cuerpo_objetivo(estado, ents, self.p)
         prof = ctx.evaluar(self.p["profundidad"]) if self.p["extension"] == "profundidad" else None
-        n = -plano.normal if self.p["invertir"] else plano.normal
-        forma = _sc().red(cuerpo.forma, aristas, n, ctx.evaluar(self.p["espesor"]), prof, direccion=self.p["direccion"],
-                          extender=self.p["extender"], angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO))
+        forma = _sc().red(cuerpo.forma, aristas, plano.normal, ctx.evaluar(self.p["espesor"]), prof,
+                          direccion=self.p["direccion"], invertir=self.p["invertir"], extender=self.p["extender"],
+                          angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO))
         cuerpo.forma = _sc().unir_con_empalme(cuerpo.forma, forma, ctx.evaluar(self.p["radio_empalme"]))
         self._registrar_usados([cuerpo.id])
 
