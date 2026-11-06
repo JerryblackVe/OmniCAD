@@ -101,3 +101,29 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
 - **La selección por impacto se puede saltear un test.** La suite entera sigue corriendo en cada cierre: es la red.
 - **Placa de video integrada** con varias ventanas OpenGL a la vez: se empieza con 2 piezas en paralelo.
 - **Acelerar un test sin cambiar qué prueba**: todo cambio de fixture lo revisa Opus contra el diff de aserciones.
+
+## Prompt para el agente
+
+Entregado el 2026-11-06 (paquete G). Modelo sugerido: Sol en OpenCode, esfuerzo alto (`openai/gpt-6.1-sol --variant high`), en el worktree `D:/PROGRAMA-velG` con `timeout 1500`; revisa, commitea y fusiona el coordinador.
+
+```text
+ANTES DE NADA: cargá y seguí las skills `fable-method` y `ponytail` (y `plan-then-do`, `tool-calling-guard`, `verify-before-commit`). Al terminar, corré `ponytail-review` sobre tu cambio y pegá su salida real. Si no tenés las skills, seguí estas reglas igual: el cambio más chico que resuelve TODO lo pedido, sin opciones ni abstracciones que nadie pidió; leé cada archivo antes de editarlo; nunca digas "listo" sin pegar la salida real de los comandos de verificación.
+
+Paquete G de `docs/plan_velocidad.md` (OmniCAD): dos agentes a la vez, cada ítem en su worktree. Leé esa sección del plan.
+
+DÓNDE: trabajás SOLO en `D:/PROGRAMA-velG` (rama `velocidad-G`). Python: `/d/PROGRAMA/clon/.venv/Scripts/python.exe`. No instales nada. No hagas commit ni push: commitea el coordinador. Todo en español. Archivos que podés tocar: `scripts/worktree_item.sh` (nuevo) y su test `clon/tests/test_worktree_item.py` (nuevo). NO toques `docs/`, `AGENTS.md` ni `CLAUDE.md`. Ojo: en esta PC hay otros worktrees vivos (`git worktree list`, por ejemplo `D:/PROGRAMA-r1`): el script y sus pruebas NUNCA tocan worktrees ni ramas que no hayan creado ellos.
+
+QUÉ HACER: `scripts/worktree_item.sh`, en bash, chico:
+- `bash scripts/worktree_item.sh crear <ID>`: crea, desde `main` del repo, la rama `item/<ID>` y el worktree `<carpeta del repo>-<ID>` (al lado del repo, como `D:/PROGRAMA-B-223`). Imprime la ruta del worktree. Si ya existe la rama o la carpeta, falla con un mensaje claro y no toca nada. El ID solo admite letras, números y guiones (`B-223`, `P-62`, `ASM-9`): cualquier otro falla. El agente usa el Python del repo principal (`<repo>/clon/.venv`): el worktree no lleva venv propio, y el script lo dice en lo que imprime.
+- `bash scripts/worktree_item.sh borrar <ID>`: borra el worktree y la rama SOLO si la rama ya está fusionada en `main` (`git branch -d`, nunca `-D`) y el worktree no tiene cambios sin commitear. Si no, falla diciendo por qué y no borra nada.
+- Sin argumentos o con algo inválido: el uso y salida distinta de 0.
+- Funciona desde cualquier carpeta del repo o de un worktree (la raíz sale de `git rev-parse --show-toplevel` del repo principal, vía `git worktree list --porcelain` o `--git-common-dir`).
+- `clon/tests/test_worktree_item.py`: con un repo git armado en `tmp_path` (con rama `main` y un commit), prueba crear (rama y carpeta existen), crear repetido (falla), ID inválido (falla), borrar sin fusionar (falla y no borra), borrar con cambios sin commitear (falla), y fusionar y borrar (queda limpio). Corre el script con `bash` por subprocess; si `bash` no está en el PATH, el test se saltea con el motivo. Tiene que pasar con `-W error`.
+
+VERIFICACIÓN (pegá la salida real):
+- Desde `D:/PROGRAMA-velG/clon`: `/d/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .` y `bash -n ../scripts/worktree_item.sh`.
+- `/d/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/tests_afectados.py --correr`.
+- Una prueba real en este repo con un ID de prueba (`G-PRUEBA`): crear, `git worktree list`, borrar sin fusionar (tiene que fallar), y limpiar a mano solo lo que creaste (`git worktree remove` y `git branch -D item/G-PRUEBA`, únicamente ese ID). Pegá todo.
+
+INFORME FINAL (corto): uso del script, las salidas de arriba, la salida de `ponytail-review` y lo que no pudiste verificar (con ⚠).
+```
