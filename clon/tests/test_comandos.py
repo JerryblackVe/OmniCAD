@@ -82,6 +82,49 @@ def test_extruir_hasta_un_plano_y_cortar_con_todo(app_qt):
     assert (z0, z1) == pytest.approx((0, 25))
 
 
+@pytest.mark.parametrize("superficie", [False, True])
+def test_h101_panel_muestra_desfase_con_inicio_objeto(app_qt, superficie):
+    from omnicad.ui.comando import ContextoComando, PanelComando, hit_desde_ref
+    from omnicad.ui.comandos.solido import Extruir
+    from omnicad.ui.comandos.superficie import SupExtruir
+    from omnicad.ui.visor3d import Visor3D
+    doc = _doc_rectangulo()
+    doc.agregar(OpPlano(doc.nuevo_id(), "Inicio", base="XY", distancia="4 mm"))
+    ctx = ContextoComando(doc)
+    cmd = SupExtruir() if superficie else Extruir()
+    visor = Visor3D()
+    visor.set_modelo(ctx.estado)
+    panel = PanelComando(cmd, ctx, visor)
+    panel._t_previa.stop()
+    panel.set_valor("inicio", "objeto")
+    assert not panel.widgets["desfase_inicio"].isHidden()
+    panel.set_valor("desfase_inicio", "-3 mm")
+    panel.valores["inicio_objeto"] = [hit_desde_ref({"tipo": "plano", "id": "op2"}, ctx.estado)]
+    if superficie:
+        curva = next(iter(doc.operacion("op1").boceto.curvas))
+        panel.valores["curvas"] = [hit_desde_ref({"tipo": "curva_boceto", "boceto": "op1", "curva": curva}, ctx.estado)]
+    else:
+        panel.valores["perfiles"] = [_perfil(doc)]
+    op = cmd.construir(panel.valores, ctx)
+    assert op.p["desfase_inicio"] == "-3 mm"
+    assert cmd.desde_op(op, ctx)["desfase_inicio"] == "-3 mm"
+    previas = []
+    panel.previa.connect(previas.append)
+    panel._previa_aislada = True
+    panel._calcular_previa()
+    assert panel._previa_ok, panel.mensaje.text()
+    assert panel._prisma_previa is None  # Inicio › Objeto usa la operación exacta, incluso durante el arrastre.
+    forma = next(iter(previas[-1].cuerpos.values())).forma
+    assert g.es_valida(forma)
+    assert np.allclose(g.caja_envolvente(forma), [[0, 0, 1], [20, 0 if superficie else 10, 11]], atol=1e-6)
+    assert (g.area(forma) if superficie else g.volumen_exacto(forma)) == pytest.approx(200 if superficie else 2000)
+    panel.set_valor("inicio", "plano")
+    assert panel.widgets["desfase_inicio"].isHidden()
+    panel._t_previa.stop()
+    panel.deleteLater()
+    visor.deleteLater()
+
+
 def test_editar_extrusion_sin_cambios_conserva_los_perfiles(app_qt):
     """Regresión (antes con el diálogo modal): editar y aceptar sin tocar nada no cambia los perfiles."""
     from omnicad.ui.comando import ContextoComando

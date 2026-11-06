@@ -1123,7 +1123,7 @@ class OpExtrusion(_OpConPerfiles):
         p = self.p
         dos_lados = p.get("direccion") == "dos_lados"
         activas = {"distancia": p.get("extension") == "distancia", "distancia2": dos_lados and p.get("extension2") == "distancia",
-                   "desfase_inicio": p.get("inicio") == "desfase", "conicidad": True, "conicidad2": dos_lados,
+                   "desfase_inicio": p.get("inicio") in ("desfase", "objeto"), "conicidad": True, "conicidad2": dos_lados,
                    "espesor": p.get("tipo") == "delgada",
                    "desfase_hasta": "objeto" in (p.get("extension"), p.get("extension2"))}
         return [k for k in super().claves_modelo() if activas[k]]
@@ -1153,9 +1153,9 @@ class OpExtrusion(_OpConPerfiles):
         d2 = ctx.evaluar(p.get("distancia2", "0")) if direccion == "dos_lados" else None
         desfase = 0.0
         inclinado = None
-        if p.get("inicio") == "desfase":
+        if p.get("inicio") in ("desfase", "objeto"):
             desfase = ctx.evaluar(p.get("desfase_inicio", "0"))
-        elif p.get("inicio") == "objeto":
+        if p.get("inicio") == "objeto":
             e = _resolver(p.get("inicio_objeto"), estado) if p.get("inicio_objeto") else None
             if e is None or e.plano is None:
                 raise ErrorOperacion("Elegí una cara plana o un plano como inicio de la extrusión.")
@@ -1164,7 +1164,7 @@ class OpExtrusion(_OpConPerfiles):
                 # sobre él a lo largo de la dirección; con un objeto paralelo basta el desfase, como siempre.
                 inclinado = e.plano
             else:
-                desfase = float((e.plano.origen - plano.origen) @ n)
+                desfase += float((e.plano.origen - plano.origen) @ n)
         hasta = hasta2 = caja = None
         if p.get("extension") == "objeto":
             if not p.get("hasta"):

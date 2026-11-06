@@ -35,7 +35,7 @@ class Extruir(Comando):
                       ayuda="Perfiles cerrados o caras planas; en la extrusión delgada también curvas abiertas."),
             Opciones("inicio", "Inicio", {"plano": ("Plano de perfil", "ini_plano"), "desfase": ("Desfase", "ini_desfase"),
                                           "objeto": ("Objeto", "ini_objeto")}),
-            Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") == "desfase"),
+            Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") in ("desfase", "objeto")),
             Seleccion("inicio_objeto", "Objeto de inicio", {"cara_plana", "plano"},
                       visible_si=lambda v: v.get("inicio") == "objeto"),
             Opciones("direccion", "Dirección", DIRECCIONES_UI),

@@ -121,9 +121,9 @@ class OpSupExtruir(_OpSuperficie):
         d = _direccion_curvas(ents, p["direccion"], estado) * (-1 if p["invertir"] else 1)
         lados = "simetrica" if p["simetrica"] else p["lados"]
         desfase = 0.0
-        if p["inicio"] == "desfase":
+        if p["inicio"] in ("desfase", "objeto"):
             desfase = ctx.evaluar(p["desfase_inicio"])
-        elif p["inicio"] == "objeto":
+        if p["inicio"] == "objeto":
             e = _resolver(p["inicio_objeto"], estado) if p["inicio_objeto"] else None
             if e is None or e.plano is None:
                 raise ErrorOperacion("Elegí una cara plana o un plano como inicio de la extrusión.")
@@ -133,7 +133,7 @@ class OpSupExtruir(_OpSuperficie):
                 aristas = [geo.proyectar_sobre_plano(a, u, e.plano) for a in aristas]
             else:
                 caja = geo.caja_envolvente(aristas[0])
-                desfase = float((e.plano.origen - np.mean(caja, axis=0)) @ u)
+                desfase += float((e.plano.origen - np.mean(caja, axis=0)) @ u)
         hasta = caja_todo = None
         if p["extension"] == "objeto":
             if not p["hasta"]:

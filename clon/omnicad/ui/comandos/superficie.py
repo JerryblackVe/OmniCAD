@@ -44,7 +44,7 @@ class SupExtruir(Comando):
                 Casilla("cadena", "Selección de cadena", True,
                         ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
                 Opciones("inicio", "Inicio", {"plano": "Plano de perfil", "desfase": "Plano de desfase", "objeto": "Desde objeto"}),
-                Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") == "desfase"),
+                Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") in ("desfase", "objeto")),
                 Seleccion("inicio_objeto", "Objeto de inicio", {"cara_plana", "plano"},
                           visible_si=lambda v: v.get("inicio") == "objeto"),
                 Opciones("lados", "Dirección", DIRECCIONES_UI),
