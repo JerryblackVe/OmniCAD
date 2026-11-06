@@ -1179,9 +1179,6 @@ class OpExtrusion(_OpConPerfiles):
             delgado = {"espesor": ctx.evaluar(p["espesor"]), "ubicacion": p.get("ubicacion", "lado1")}
         conicidad = ctx.evaluar(p.get("conicidad", "0"), ANGULO)
         conicidad2 = ctx.evaluar(p.get("conicidad2", "0"), ANGULO)
-        if inclinado is not None and (abs(conicidad) > 1e-9 or abs(conicidad2) > 1e-9):
-            raise ErrorOperacion("La conicidad todavía no se combina con Inicio › Objeto en un plano inclinado: "
-                                 "sacá la conicidad o usá «Desfase» como inicio.")
         kernel = _kernel_crear()
         avanzada = delgado or abs(conicidad) > 1e-9 or abs(conicidad2) > 1e-9 or hasta is not None \
             or hasta2 is not None or caja is not None

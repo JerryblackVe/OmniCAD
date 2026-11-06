@@ -418,18 +418,18 @@ def _prisma(cara, n, d, conicidad=0.0):
     if abs(conicidad) >= 89.0:
         raise geo.ErrorGeometria("El ángulo de inclinación debe estar entre -89° y 89°.")
     n = np.asarray(n, float)
-    if abs(float(_normal_superficie(cara) @ n)) < 1 - 1e-6:
-        raise geo.ErrorGeometria("Con inclinación, la extrusión debe ser perpendicular al perfil.")
+    plano = geo.plano_de_cara(cara)
+    if plano is None or abs(float(plano.normal @ n)) < 1e-9:
+        raise geo.ErrorGeometria("Con inclinación, el perfil debe ser plano y transversal a la extrusión.")
     # Prisma recto + desmoldeo de las caras laterales con el plano del perfil como plano neutro: las
     # esquinas quedan vivas (tronco de pirámide), como en Fusion. LocOpe_DPrism las redondea al ensanchar.
     tirar = n * math.copysign(1.0, d)
     prisma = BRepPrimAPI_MakePrism(cara, _gvec(n * d)).Shape()
-    centro = np.array(geo.centro_masa(cara, superficie=True))
-    neutro = gp_Pln(_pnt(centro), _gdir(tirar))
+    neutro = gp_Pln(_pnt(plano.origen), _gdir(plano.normal))
     da = BRepOffsetAPI_DraftAngle(prisma)
     for f in geo.caras(prisma):
         pl = geo.plano_de_cara(f)
-        if pl is not None and abs(abs(float(pl.normal @ tirar)) - 1) < 1e-9:
+        if pl is not None and abs(abs(float(pl.normal @ plano.normal)) - 1) < 1e-9:
             continue   # tapas
         da.Add(f, _gdir(tirar), math.radians(-conicidad), neutro, True)
         if not da.AddDone():

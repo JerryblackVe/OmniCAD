@@ -858,6 +858,201 @@ the complete downstream test files, full suite, smoke test, separate type-check 
 - No hay type-check separado configurado en `clon/pyproject.toml`; no se construyó instalador.
 - La verificación documental automatizada y los grupos amplios quedan para el coordinador.
 
+## Informe Sol · B-206
+
+### Estado y alcance
+
+**Parcial, no cerrar ni integrar como arreglo completo.** Inicio › Objeto inclinado con conicidad ya funciona en el
+rectángulo verificado (20×10 mm, plano a 30°, conicidad ±5°, distancia ±10 mm). La base conserva el plano elegido,
+la tapa queda en ese plano trasladado la distancia pedida y el volumen coincide con la integral analítica.
+El círculo r5 proyectado al plano inclinado sigue fallando al aplicar conicidad. Su regresión queda roja, sin xfail.
+La fila y el detalle de B-206 permanecen en `seguimiento/bugs.md`; `seguimiento/README.md` no contenía este ID.
+
+Se leyeron `AGENTS.md`, el Registro de Extruir, `auditoria_extruir.md` (incluido el cierre de Opus) y el resumen/diff
+del antecedente `c5b8c1f`. Se conservó su proyección analítica y el tratamiento anterior de la pared delgada y de
+Al objeto/Todo. No hay dependencias nuevas ni cambios de firma pública. Trabajo sin commit, stash, checkout ni reset.
+
+INTENT: el código rechaza conicidad con inicio inclinado; el test exigirá una base conservada sobre el plano elegido y laterales con conicidad; la ayuda de Fusion define Object como inicio en la cara o plano seleccionado y ofrece Taper Angle.
+
+### Ayuda de Fusion y biblioteca instalada
+
+El primer comando sobre `scripts/fusion_docs.py` del worktree respondió `Falta el índice: correr primero
+fusion_docs.py construir`. Se usó la copia existente en el checkout principal, sin generar ni copiar el índice:
+
+```console
+D:/PROGRAMA/clon/.venv/Scripts/python.exe D:/PROGRAMA/scripts/fusion_docs.py buscar extrude -s fusion-model
+1. Extrude a solid body
+2. Extrude reference
+D:/PROGRAMA/clon/.venv/Scripts/python.exe D:/PROGRAMA/scripts/fusion_docs.py ver "Extrude reference" -s fusion-model
+```
+
+Artículo: `D:/PROGRAMA/docs/fusion_docs/contenido/fusion-model/extrude-reference-c698ec8f6e6.md`.
+Define Object: “Starts extrusion from a face or plane that you select”; Direction controla el sentido desde el
+perfil; Two Sides crea una extrusión por lado; Taper Angle especifica el ángulo. No describe el algoritmo para
+una elipse de inicio oblicuo: no se atribuye una solución geométrica concreta a esa ayuda ni se afirma comparación
+con Fusion ejecutándose.
+
+La documentación instalada, leída con `BRepOffsetAPI_DraftAngle.Add.__doc__`, dice expresamente:
+“Only planar, cylindrical or conical faces can be tapered”. En caras planas gira alrededor de la intersección de
+la cara con NeutralPlane. Se consultaron también `MakeDraft.Perform`, `SetOptions`, `SetDraft` y su constructor.
+
+### Cambios y dependencias
+
+- `clon/omnicad/nucleo/solidos_crear.py:412-440`, `_prisma(cara, n, d, conicidad=0.0)`: admite una cara plana
+  transversal, usa su plano como neutro (`:428`) y reconoce tapas paralelas a él (`:432`). Reutiliza el desmoldeo
+  existente; sin conicidad conserva el prisma directo. Continúa validando el resultado.
+- `clon/omnicad/timeline/operaciones.py:1180-1194`, `OpExtrusion.ejecutar(self, estado, ctx)`: retira el veto global;
+  sigue enviando `inicio_plano=inclinado` al núcleo, con sus mismas transacciones y validación de volumen.
+- `clon/tests/test_b206_inicio_inclinado.py:16-54`: tres rectángulos con volumen analítico, validez y planos de ambas
+  tapas; un círculo pendiente exige sólido válido, volumen creciente y área exacta de su base elíptica.
+- `docs/seguimiento/bugs.md:11,130`: conserva Parcial y especifica el alcance que falta.
+- `PROJECT_LOG.md`: entrada «2026-11-05 · B-206 (OpenCode con GPT-6.1 Sol, noche)» y lección con evidencia.
+
+Llamadores revisados mediante `trace_path` y búsqueda de `_prisma(`: `_herramienta_extrusion`, repujado,
+`saliente`, `apoyo` y `_caja_local`/`grampa`. Los caminos sin ángulo vuelven antes del cambio; los perpendiculares
+se cubren con los tests del área. No se afirma validación de todas las familias consumidoras.
+
+### Gemelos buscados antes de editar
+
+TWINS: searched `inicio_plano|inclinado|DraftAngle`, `conicidad`, `_prisma(` y los vetos de perpendicularidad - found 1 other DraftAngle construction site: `clon/omnicad/nucleo/solidos_modificar.py:1195`; usa el plano neutro elegido correctamente (`:1181`), sin cambios.
+
+- **Previa:** `ui/comando.py:1591-1600` excluye inicio Objeto y conicidad de PrismaVisual. La previa exacta pasa por
+  el mismo documento/operación (`timeline/calculo_aislado.py:220-241`). No hay archivos `nucleo/previa*` en este árbol
+  (búsqueda por nombre y por contenido). No se introdujo una geometría paralela para la previa.
+- **Superficie:** `timeline/ops_superficie.py:126-151` proyecta las aristas antes de extruir;
+  `nucleo/superficies.py:295-329` usa MakeDraft y un prisma inclinado de respaldo para rectas. Es otro algoritmo:
+  se enumeró como gemelo, sin afirmar ni extender el soporte curvo de inicio inclinado.
+- **OmniKernel:** `nucleo/omnikernel/solidos_crear.py` no implementa `extruir_avanzado`; el control `hasattr` del
+  timeline conserva el error de opción no disponible. No se añadió una importación OCP al motor alternativo.
+- **API:** `api/herramientas_solido.py:182-299`, `extrude`, ya traslada inicio/objeto y ambas conicidades a
+  `OpExtrusion`. La regresión pasa por esa herramienta real. Firma y documentación de la API sin cambios.
+
+### Rojo, intentos y verde real
+
+Todos los pytest se ejecutaron desde `D:/PROGRAMA-sol/clon` con el Python compartido y `../scripts/turno.py`.
+Se comprobó que `import omnicad; print(omnicad.__file__)` devuelve
+`D:\PROGRAMA-sol\clon\omnicad\__init__.py`.
+
+**Rojo antes del arreglo**, prueba nueva sin tocar producción:
+
+```console
+D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_b206_inicio_inclinado.py -q -p no:cacheprovider
+FFFF                                                                     [100%]
+FAILED tests/test_b206_inicio_inclinado.py::test_b206_rectangulo_conserva_el_plano_neutro_y_el_volumen[5-10]
+FAILED tests/test_b206_inicio_inclinado.py::test_b206_rectangulo_conserva_el_plano_neutro_y_el_volumen[-5-10]
+FAILED tests/test_b206_inicio_inclinado.py::test_b206_rectangulo_conserva_el_plano_neutro_y_el_volumen[5--10]
+FAILED tests/test_b206_inicio_inclinado.py::test_b206_circulo_inclinado_con_conicidad_es_un_solido_valido
+4 failed in 1.82s
+```
+
+Los cuatro fallaron con `OPERATION_FAILED` por el veto existente. **Intento 1:** plano neutro real más selección de
+tapas respecto de él. Misma prueba: `1 failed, 3 passed in 2.09s`; solo falló el círculo proyectado.
+**Intento 2 (sonda, sin incorporarlo a producción):** `BRepOffsetAPI_MakeDraft(cara, Z, 5°)` hasta
+`Geom_Plane` del inicio trasladado +10 mm (`Perform(superficie, True)`), para coser el resultado con la base usando
+`superficies.coser`. La llamada a través de turno terminó con salida literal `(no output)`, sin medida ni estado
+utilizable. No prueba éxito ni permite identificar una excepción concreta; no se afirma un crash confirmado.
+Un diagnóstico posterior sin geometría, `turno.py -- python -u -c "print(...)"`, sí devolvió la salida esperada.
+Se detuvo la investigación geométrica al consumir dos intentos; no se añadió el algoritmo alternativo al código.
+
+**Verde del avance rectangular**, después del arreglo (1 caso pendiente excluido expresamente):
+
+```console
+PYTHONIOENCODING=utf-8 D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_b206_inicio_inclinado.py -k rectangulo -q -p no:cacheprovider
+[turno] hay otro comando pesado corriendo: espero mi turno…
+[turno] arranca tras 35 s de espera
+...                                                                      [100%]
+3 passed, 1 deselected in 1.83s
+```
+
+**Grupo del área, incluyendo el caso pendiente**:
+
+```console
+PYTHONIOENCODING=utf-8 D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_b206_inicio_inclinado.py tests/test_api_opciones_solido1.py tests/test_solidos_crear.py tests/test_extruir_cara.py tests/test_extruir_cara_api.py tests/test_opciones_operaciones.py -k 'b206 or extrusion or extruir or inicio_objeto' -q -p no:cacheprovider
+...F.......................................                              [100%]
+FAILED tests/test_b206_inicio_inclinado.py::test_b206_circulo_inclinado_con_conicidad_es_un_solido_valido
+1 failed, 42 passed, 256 deselected in 4.77s
+```
+
+Los 42 aprobados incluyen los casos rectangulares nuevos y las regresiones previas de extrusión, conicidad,
+delgada, inicio inclinado sin conicidad y selección de caras. No es una tanda totalmente verde.
+
+Se mejoró el mensaje de aserción del helper del test para que muestre el error completo, y se repitieron ruff
+y el mismo grupo sobre el estado final:
+
+```console
+All checks passed!
+...F.......................................                              [100%]
+E       AssertionError: El paso «Extrusión1» (op3) falló y se deshizo (el documento quedó como estaba): No se pudo inclinar una cara lateral de la extrusión.
+FAILED tests/test_b206_inicio_inclinado.py::test_b206_circulo_inclinado_con_conicidad_es_un_solido_valido
+1 failed, 42 passed, 256 deselected in 5.42s
+```
+
+```console
+D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .
+All checks passed!
+git diff --check
+(sin salida)
+```
+
+### Grupos amplios para el coordinador (no ejecutados)
+
+Se listaron las coincidencias por contenido de `_prisma|OpExtrusion` en `clon/tests/test_*.py`, equivalente al
+`grep -l` solicitado (el ejecutable `rg` no estaba disponible; se usó la herramienta de búsqueda del código).
+Incluye homónimos y nombres de tests que también coinciden con `_prisma`, sin filtrarlos silenciosamente:
+
+- Grupo A: `test_manipuladores.py`, `test_hallazgos_ui.py`, `test_b105_panel_chico.py`, `test_boceto_3d.py`,
+  `test_chapa.py`, `test_comandos.py`, `test_comandos_crear.py`, `test_panel_movible.py`, `test_sol13_sol20_ui.py`.
+- Grupo B: `test_hallazgos_nucleo.py`, `test_simplificar.py`, `test_resultados_vacios.py`, `test_sol08_barrido.py`,
+  `test_sol24_reconocer_funciones.py`, `test_cuerpos_partidos.py`, `test_herramientas_solido.py`, `test_malla.py`.
+- Grupo C: `test_texto_curva.py`, `test_texto_vectores.py`, `test_interaccion_fusion.py`, `test_apoyo.py`,
+  `test_derivacion.py`, `test_patrones_avanzados.py`, `test_regresiones.py`, `test_previa_prisma.py`,
+  `test_opciones_operaciones.py` (solo su selección del área ya se ejecutó arriba).
+
+Todos bajo `clon/tests/`. Partir más si un grupo se acerca a 900 s. Completar también los archivos del grupo de
+área sin `-k` cuando corresponda a la integración. Por la nota de tiempo del coordinador no se ejecutaron estos
+grupos amplios, la suite completa ni humo.
+
+### Salida completa de /ponytail-review
+
+What this change does: It lets a tapered extrusion start on a tilted plane for straight-sided profiles.
+It keeps the starting face fixed and finds both end faces using that plane. The round profile is still blocked
+by OpenCascade, so this is a partial change. Assumed load: one CAD user or agent operation at a time.
+
+**Must fix**
+
+1. **The tilted circle still fails** (`clon/tests/test_b206_inicio_inclinado.py:39-54`,
+   `clon/omnicad/nucleo/solidos_crear.py:434-436`).
+   - **What this is:** A circle projected onto the tilted plane becomes an ellipse. Its side is not one of the
+     surface types supported by DraftAngle.
+   - **Problem:** Radius 5, start tilt 30°, distance 10 and taper 5° still return OPERATION_FAILED. The new test
+     fails at the API result, before any shape checks can pass.
+   - **Fix:** A later geometry pass must build and cap that curved side while keeping the real start boundary.
+     The MakeDraft probe did not return usable evidence. The requested two-attempt limit has been reached:
+     keep B-206 Partial and this failing test visible, rather than claiming a complete fix.
+   - **If we skip it:** Round tapered extrusions with a tilted start remain unavailable. This is recorded as
+     pending, not silently passed or hidden with xfail.
+
+No additional concrete regression was found in the inspected flow. The rectangular checks verify the volume
+from an independent plane-section integral, not from a second call to the same draft builder. The existing API
+transaction and final shape checks remain in place. The code adds one plane query per tapered prism and removes
+the old area-centroid calculation; no new loop, global state, file access or dependency was introduced.
+
+Verdict: fix 1 before treating B-206 as complete. Keep this delivery Partial; do not report an all-green result.
+Not checked: Fusion itself, live UI and preview transport, all downstream callers, OmniKernel runtime,
+two-sided tilted taper, thin tilted taper, tilted taper with To Object/All, arbitrary curved profiles,
+full suite, smoke test, installer build and separate type checking.
+
+### ⚠ Lo no verificado
+
+- El segundo intento carece de salida verificable; no se interpreta como aprobación ni se inventa su causa.
+- La combinación pendiente de círculos sigue en rojo. Dos lados y las combinaciones delgada/Al objeto/Todo
+  **con conicidad e inicio inclinado** no se ensayaron; sus versiones sin conicidad sí están en los tests previos.
+- Superficie conserva su algoritmo distinto; la búsqueda del gemelo no demuestra su corrección con esta entrada.
+- No se abrió la ventana ni Fusion; no se corrieron los grupos amplios, suite completa ni humo, según el pedido.
+- `pyproject.toml` configura ruff y pytest, sin una orden separada de type-check. No se construyó instalador.
+- La verificación documental automatizada queda para el coordinador. No se generaron archivos temporales de la
+  sonda ni un índice local de Fusion; el único archivo nuevo es el test de regresión.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Opus 5, esfuerzo alto (coordinador nocturno; la geometría de Sol se revisa a fondo).
