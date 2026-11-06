@@ -148,6 +148,19 @@ def test_create_emboss(modo, profundidad, signo):
     assert "firma" in s.paso(r["feature"]["id"]).p["caras"][0]
 
 
+def test_create_emboss_cadena_tangente_no_copia_el_perfil_en_los_costados():
+    """B-217 por la API: la cadena de la tapa suma los cuatro empalmes y los cuatro costados, pero el cuadro
+    sigue repujando solo la tapa (+100 mm³); antes también salía una copia achicada en cada costado."""
+    s = api.Sesion()
+    cid = _ok(s, "create_box", length=60, width=40, height=10, anchor="corner")["bodies_created"][0]["id"]
+    b = _boceto(s, "XY", offset=10)
+    _ok(s, "fillet", edges=">Z", radius=3, body=cid)
+    _ok(s, "draw_rectangle", sketch=b, x1=20, y1=15, x2=30, y2=25)
+    base = geo.volumen(s.cuerpo(cid).forma)
+    _tipo(s, _ok(s, "create_emboss", sketch=b, faces=">Z", depth=1, tangent_chain=True), "repujado")
+    _volumen(s, cid, base + 100)
+
+
 def test_create_boss():
     s = api.Sesion()
     cid = _caja(s)

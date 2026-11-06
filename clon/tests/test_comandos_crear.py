@@ -95,6 +95,26 @@ def test_barrido_distancia_fuera_de_rango_error_en_el_dialogo():
     assert res.estado == "error" and "va de 0 a 1" in res.mensaje, res.mensaje
 
 
+def test_barrido_dialogo_estirar_hacia_el_carril():
+    """B-209: el diálogo de Barrido ofrece «Estirar» (como el de superficie) y estira solo hacia el carril:
+    4·(4+12)/2·50 = 1600 mm³, no el tronco de 3364,59 de «Escalar»."""
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.crear import Barrido
+    campos = {c.clave: c for c in Barrido().campos(ContextoComando(Documento()))}
+    assert list(campos["escala_carril"].opciones) == ["escalar", "estirar", "ninguna"]
+
+    doc = Documento()
+    bp, _ = _boceto(doc, plano="YZ", rect=((-2, -2), (2, 2)))
+    br, ids = _boceto(doc, plano="XY", lineas=[((0, 0), (50, 0))])
+    bc, _ = _boceto(doc, plano="XZ", lineas=[((0, 2), (50, 6))])
+    valores = dict(perfiles=[_perfil(doc, bp)], ruta=_curvas(doc, br, ids), tipo="ruta_carril",
+                   carril=_curvas(doc, bc, ids), escala_carril="estirar")
+    _ejecutar(doc, Barrido, **valores)
+    assert g.volumen(_ultimo(doc).forma) == pytest.approx(1600, rel=1e-3)
+    _ejecutar(doc, Barrido, **{**valores, "escala_carril": "escalar"})
+    assert g.volumen(_ultimo(doc).forma) == pytest.approx(3364.59, rel=1e-3)
+
+
 def test_agujero_en_cara_y_desde_boceto_roscado():
     from omnicad.ui.comandos.crear import Agujero
     doc = Documento()

@@ -14,12 +14,23 @@ from omnicad.nucleo import solidos_crear as sc
 from omnicad.nucleo import solidos_modificar as sm
 
 
-def _rectangulo():
+def _rectangulo(x0=10, y0=8, x1=18, y1=12, z=15):
     contorno = BRepBuilderAPI_MakePolygon()
-    for p in [(10, 8, 15), (18, 8, 15), (18, 12, 15), (10, 12, 15)]:
+    for p in [(x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z)]:
         contorno.Add(gp_Pnt(*p))
     contorno.Close()
     return BRepBuilderAPI_MakeFace(contorno.Wire()).Face()
+
+
+def _aristas_en_z(cuerpo, z):
+    """Las aristas del cuerpo cuyo punto medio está a la altura `z` (en una caja: los cuatro bordes de esa cara)."""
+    salida = []
+    for e in sc._aristas_de(cuerpo):
+        curva = BRepAdaptor_Curve(e)
+        p = curva.Value((curva.FirstParameter() + curva.LastParameter()) / 2)
+        if abs(p.Z() - z) < 1e-6:
+            salida.append(e)
+    return salida
 
 
 def _tapa(cuerpo):
@@ -126,6 +137,21 @@ def test_cadena_tangente_agrega_el_empalme_sin_duplicar_caras():
     assert all(geo.es_valida(f) for f in (cuerpo, solo, resultado, explicito))
     assert geo.volumen(resultado) > geo.volumen(solo) + 1
     assert geo.volumen(resultado) == pytest.approx(geo.volumen(explicito))
+
+
+def test_cadena_tangente_no_copia_el_perfil_en_los_costados():
+    """B-217: la cadena suma los empalmes y los costados, pero un perfil paralelo a la tapa solo se proyecta
+    ahí (Fusion proyecta): costado a 20 mm del cuadro no recibe una copia achicada."""
+    cuerpo = geo.caja(60, 40, 10)
+    cuerpo = sm.empalme(cuerpo, [{"aristas": _aristas_en_z(cuerpo, 10), "radio": 3}])
+    assert len(sm.caras_tangentes(cuerpo, _tapa(cuerpo))) == 9      # tapa + 4 empalmes + 4 costados
+    perfil = _rectangulo(20, 15, 30, 25)
+    resultado = sc.repujado(cuerpo, [perfil], _tapa(cuerpo), 1, cadena_tangente=True)
+    nuevo = geo.booleano(resultado, cuerpo, "cortar")
+    assert geo.es_valida(resultado) and geo.es_valida(nuevo)
+    assert geo.volumen(nuevo) == pytest.approx(100)                  # 10 x 10 x 1, solo en la tapa
+    minimo, maximo = geo.caja_envolvente(nuevo)
+    assert np.subtract(maximo, minimo) == pytest.approx([10, 10, 1])
 
 
 def _llamar(sesion, nombre, argumentos):

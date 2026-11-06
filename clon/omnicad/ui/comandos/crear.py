@@ -72,8 +72,11 @@ class Barrido(Comando):
                          visible_si=lambda v: not carril(v) and not superficie(v)),
                 Seleccion("eje_alineado", "Eje de alineación", {"eje", "arista_lineal", "plano", "cara_plana"},
                           visible_si=lambda v: v.get("orientacion") == "alineada" and not carril(v) and not superficie(v)),
-                Opciones("escala_carril", "Escala del perfil", {"escalar": "Escalar", "ninguna": "Ninguna"},
-                         visible_si=carril),
+                Opciones("escala_carril", "Escala del perfil",
+                         {"escalar": "Escalar", "estirar": "Estirar", "ninguna": "Ninguna"},
+                         visible_si=carril,
+                         ayuda="Escalar: el perfil crece en las dos direcciones con la distancia entre la ruta y el "
+                               "rail. Estirar: solo hacia el rail. Ninguna: el rail solo lo orienta."),
                 Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v),
                           avanzado=True),
                 Expresion("torsion", "Ángulo de torsión", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v),

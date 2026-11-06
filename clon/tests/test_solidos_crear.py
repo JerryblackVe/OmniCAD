@@ -241,6 +241,22 @@ def test_barrido_con_carril_guia():
         sc.barrer([cuadrado], ruta, carril=[linea((1, 0, 0), (3, 0, 10))], torsion=10)
 
 
+def test_barrido_carril_estirar_no_es_escalar():
+    """B-209 · Profile Scaling › Stretch: el perfil crece SOLO hacia el carril y conserva la altura. Con el carril
+    abierto de 1 a 3 sobre una ruta de 10: sección de 2×2 a 2×6 → 10/2·(4+12)/2·2 = 80 mm³ (Escalar da 173,33)."""
+    ruta = [linea((0, 0, 0), (0, 0, 10))]
+    carril = [linea((1, 0, 0), (3, 0, 10))]
+    cuadrado = rect(-1, -1, 1, 1)
+    estirado = valido(sc.barrer([cuadrado], ruta, carril=carril, escala_carril="estirar"), 80, rel=1e-3)
+    assert caja_de(estirado) == pytest.approx([-3, -1, 0, 3, 1, 10], abs=1e-3)   # crece en x, conserva y
+    escalado = valido(sc.barrer([cuadrado], ruta, carril=carril, escala_carril="escalar"), 10 / 3 * (4 + 36 + 12),
+                      rel=1e-3)
+    assert g.volumen(estirado) < g.volumen(escalado)                              # y no es lo mismo que Escalar
+    # con un agujero: el hueco se estira igual que su contorno
+    anillo_cuadrado = g.caras(g.booleano(cuadrado, rect(-0.5, -0.5, 0.5, 0.5), "cortar"))[0]
+    valido(sc.barrer([anillo_cuadrado], ruta, carril=carril, escala_carril="estirar"), 80 - 20, rel=1e-3)
+
+
 # ---------------------------------------------------------------- 4. solevado
 def test_solevado_basico_punto_agujeros_y_cerrado():
     q1, q2 = rect(0, 0, 10, 10), rect(0, 0, 10, 10, 10)

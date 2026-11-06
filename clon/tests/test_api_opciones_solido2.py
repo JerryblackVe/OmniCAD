@@ -86,6 +86,32 @@ def test_barrido_de_una_cara_plana_y_con_carril_guia():
     falla(s, "sweep", sketch="Perfil", path_sketch="Ruta", rail_sketch="Ruta", rail_curves=[99], esperado="ENTITY_NOT_FOUND")
 
 
+def test_barrido_con_carril_estirar_no_es_escalar():
+    """B-209: con el carril abierto de 2 a 6, «Estirar» hace crecer el perfil solo hacia el carril:
+    4·(4+12)/2·50 = 1600 mm³ con la caja y sin cambiar; «Escalar» da 3364,59."""
+    def sesión_con_carril():
+        s = api.Sesion()
+        ok(s, "create_sketch", plane="YZ", name="Perfil")
+        ok(s, "draw_rectangle", x1=-2, y1=-2, x2=2, y2=2)
+        ok(s, "create_sketch", plane="XY", name="Ruta")
+        ok(s, "draw_line", start_x=0, start_y=0, end_x=50, end_y=0)
+        ok(s, "create_sketch", plane="XZ", name="Carril")
+        ok(s, "draw_line", start_x=0, start_y=2, end_x=50, end_y=6)
+        return s
+
+    s = sesión_con_carril()
+    ok(s, "sweep", sketch="Perfil", path_sketch="Ruta", rail_sketch="Carril", rail_scale="stretch")
+    estirado = cuerpos(s)[0]
+    assert estirado["volume"] == pytest.approx(1600, rel=1e-3)
+    assert estirado["bounding_box"]["size"] == pytest.approx([50, 4, 12], rel=1e-3)   # y no crece: 4 fijo
+
+    s = sesión_con_carril()
+    ok(s, "sweep", sketch="Perfil", path_sketch="Ruta", rail_sketch="Carril", rail_scale="scale")
+    escalado = cuerpos(s)[0]
+    assert escalado["volume"] == pytest.approx(3364.59, rel=1e-3)
+    assert estirado["volume"] < escalado["volume"]
+
+
 # ---------------------------------------------------------------- MCP-59: loft
 def test_solevacion_hasta_un_vertice_con_linea_central_y_con_carriles():
     s = api.Sesion()

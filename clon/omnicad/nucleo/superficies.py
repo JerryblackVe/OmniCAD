@@ -627,9 +627,10 @@ def _estirar(alambre, matriz):
 _SECCIONES_ESTIRADO = 33
 
 
-def _barrido_estirado(perfiles, espina, riel):
+def _barrido_estirado(perfiles, espina, riel, solido=False):
     """Profile Scaling › Stretch: el perfil se agranda solo en la dirección ruta-riel y conserva la altura. No existe
-    en OCC: se arman secciones deformadas (cada una en el plano perpendicular a la ruta) y se soleva entre ellas."""
+    en OCC: se arman secciones deformadas (cada una en el plano perpendicular a la ruta) y se soleva entre ellas.
+    Con `solido` las tapas de los extremos las pone ThruSections (lo que pide el Barrido de Fusion)."""
     from . import solidos_crear as sc
     marcos, _ = _marcos_ruta(espina, _SECCIONES_ESTIRADO)
 
@@ -646,7 +647,7 @@ def _barrido_estirado(perfiles, espina, riel):
     p0, f0, d0 = base(0)
     piezas = []
     for perfil in perfiles:
-        ts = BRepOffsetAPI_ThruSections(False, False)
+        ts = BRepOffsetAPI_ThruSections(solido, False)
         for i in range(len(marcos)):
             p, f, d = base(i)
             m = np.identity(4)

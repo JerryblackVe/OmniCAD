@@ -817,15 +817,22 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
     cerrada_con_torsion = carril is None and abs(torsion) > 1e-9 and _es_cerrado(ruta)
     rutas = [_recortar_alambre(ruta, 0.5), _recortar_alambre(ruta, 1.0, 0.5)] if cerrada_con_torsion else [ruta]
     torsion /= len(rutas)
+    if carril is not None:
+        if abs(torsion) > 1e-9 or abs(conicidad) > 1e-9:
+            raise geo.ErrorGeometria("La torsión y la inclinación no se combinan con un carril guía.")
+        if escala_carril not in ("escalar", "estirar", "ninguna"):
+            raise geo.ErrorGeometria(f"Escala de carril desconocida: {escala_carril}")
+        if escala_carril == "estirar":
+            from . import superficies as sfc        # Estirar: lo resuelven las secciones deformadas del gemelo
     partes = []
     for tramo in rutas:
+        if carril is not None and escala_carril == "estirar":
+            # El perfil crece solo hacia el carril y conserva la altura; la ley de escala de MakePipeShell es uniforme.
+            partes.append(sfc._barrido_estirado([perfil], tramo, carril, solido=solido))
+            continue
         ps = BRepOffsetAPI_MakePipeShell(tramo)
         ley = None
         if carril is not None:
-            if abs(torsion) > 1e-9 or abs(conicidad) > 1e-9:
-                raise geo.ErrorGeometria("La torsión y la inclinación no se combinan con un carril guía.")
-            if escala_carril not in ("escalar", "estirar", "ninguna"):
-                raise geo.ErrorGeometria(f"Escala de carril desconocida: {escala_carril}")
             # El carril orienta el perfil (normal hacia el carril) y, salvo "ninguna", lo escala con la distancia
             # ruta→carril (ley propia: el modo ContactOnBorder de OCC solo funciona con perfiles suaves).
             ps.SetMode(carril, True, BRepFill_NoContact)
@@ -886,7 +893,8 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
     fracción 0..1 de la ruta. `torsion` y `conicidad` en grados (conicidad positiva = la región se ensancha;
     se aplica como escala lineal de cada lazo: los agujeros se achican). `carril` = Path + Guide Rail:
     `escala_carril` "escalar" (el perfil se agranda con la distancia ruta→carril), "ninguna" (el carril solo
-    orienta); "estirar" (escala en una sola dirección) no existe en OCC y se hace como "escalar".
+    orienta) y "estirar" (crece solo hacia el carril y conserva la altura; lo resuelven las secciones deformadas
+    del barrido de superficie).
     `orientacion` "perpendicular" | "paralela" | "alineada" (Aligned: `eje_alineado` = dirección que el perfil mantiene
     como binormal, para el barrido de un cuerpo que no debe girar sobre su eje). `superficie_guia` (Path + Guide
     Surface): una cara o compuesto sobre el que va la ruta; el perfil sigue la normal de la superficie.
@@ -1553,8 +1561,10 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     `adaptar` (por defecto) se giran para mirar hacia afuera, se centran en la zona y se achican hasta entrar.
     Cara cilíndrica con `envolver=True`: el boceto (en un plano paralelo al eje) se enrolla sobre el cilindro
     conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial.
-    `cadena_tangente` agrega caras conectadas tangencialmente. La alineación gira alrededor del centro de
-    los perfiles y después desplaza en los ejes locales horizontal/vertical (mm); `giro` va en grados.
+    `cadena_tangente` agrega caras conectadas tangencialmente, pero esas caras agregadas reciben solo lo que les cae
+    encima (su proyección toca la caja del perfil): un cuadro en el medio de la tapa no se copia en los costados ni en
+    los empalmes de al lado. La alineación gira alrededor del centro de los perfiles y después desplaza en los ejes
+    locales horizontal/vertical (mm); `giro` va en grados.
     `invertir` cambia la dirección normal sin cambiar el efecto elegido (unión o corte)."""
     if profundidad < 0:
         profundidad, tipo = -profundidad, ("grabado" if tipo == "relieve" else "relieve")
@@ -1566,6 +1576,12 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
         raise geo.ErrorGeometria("Elegí al menos un perfil para repujar.")
     if not all(math.isfinite(x) for x in (desfase_h, desfase_v, giro)):
         raise geo.ErrorGeometria("La alineación del repujado debe tener valores finitos.")
+    # La cadena agrega caras que el usuario no eligió: solo reciben lo que les cae encima, así que se descarta la
+    # cara cuya caja proyectada sobre el plano del perfil no lo toca (planos perpendiculares, empalmes lejos, etc.).
+    # shortcut: la caja de todos los perfiles se mide en el plano del primero (como el alineado y el envoltorio);
+    # si alguna vez se mezclan perfiles de bocetos en planos distintos, proyectar cada perfil en el suyo.
+    pl_perfil = geo.plano_de_cara(perfiles[0])
+    caja_perfil = _caja_2d(perfiles, pl_perfil) if cadena_tangente else None
     caras = []
     for i, (cuerpo, cs) in enumerate(objetivos):
         for c in _lista(cs):
@@ -1574,7 +1590,9 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
                 cadena = caras_tangentes(cuerpo, c)
             else:
                 cadena = [c]
-            for cara in cadena:
+            for k, cara in enumerate(cadena):
+                if k and not _cajas_se_tocan(_caja_2d([cara], pl_perfil), caja_perfil):
+                    continue
                 if not any(j == i and cara.IsSame(otra) for j, otra in caras):
                     caras.append((i, TopoDS.Face(cara)))
     if not caras:

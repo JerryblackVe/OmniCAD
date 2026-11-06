@@ -511,6 +511,272 @@ La tabla de la tanda 2 lista `nucleo/solidos_crear.py` y `timeline/ops_solido.py
 - ⚠ **Proyectos guardados con una Red invertida**: antes daban la misma red que sin invertir; ahora pueden dar el aviso nuevo (boca abierta) o la otra pared (caja cerrada). En `ejemplos/` no hay recetas de nervio ni red (`grep -rln "nervio\|red" ejemplos/` → nada), pero una pieza del usuario puede cambiar de forma al abrir.
 - ⚠ **B-213 sigue abierto** y es vecino directo: el recorte contra la caja del cuerpo aparece en los dos caminos que arreglé (el invertido sin cara lo esquivé con el aviso; el `thickness=1e6` y el boceto en el borde quedan).
 
+## Informe tanda 3
+
+Corrida del 2026-11-06. OpenCode con Qwen3.8-Flash en Qoder. Bugs: B-217 y B-209, de a uno y en ese orden.
+
+### B-217 · Repujado con «Cadena tangente» repuja también en los costados — **Resuelto**
+
+**Qué dice la ayuda de Fusion** (`fusion_docs.py buscar "Emboss"` → `contenido/fusion-model/emboss-reference-a3f0ac82148.md`):
+
+> ## Tangent Chain
+> Check to automatically select tangentially connected geometry.
+
+y en `emboss-a-solid-body`: «Uncheck **Tangent Chain** if you don't want to automatically select tangentially connected geometry.» La ayuda no dice que el perfil se copie en esas caras; lo que rige en OmniCAD para las caras elegidas es la proyección («cada cara recibe solo la parte que le cae encima»), y la auditoría dejó anotada la única diferencia deliberada: «REP · cara perpendicular al boceto: OmniCAD «adapta» el perfil (decisión del 2026-10-13 en PROJECT_LOG); Fusion lo proyecta». ⚠ Fusion real no se abrió.
+
+**Estado del código antes de decidir** (medido con `../evidencias/ui_2026-11-06/sonda_tanda3.py`; placa 60×40×10 con las cuatro aristas de arriba empalmadas r 3, cuadro 10×10 en el centro de la tapa, relieve 1 mm):
+
+```
+placa: 23624.07  caras tangentes de la tapa: 9        (tapa + 4 empalmes + 4 costados)
+cadena_tangente=False: +100.00  caja [20,15,10]..[30,25,11]
+cadena_tangente=True:  +437.12  caja [-1,-1,0.35]..[61,41,11]
+```
+
+El 437,12 de la fila salió tal cual. Al desglosarlo por tipo de cara (`sonda_b217_caras.py`) apareció **más de lo que decía la fila**: no eran solo los cuatro costados adaptados; los cuatro empalmes cilíndricos también recibían material (+278,36 con los costados ya descartados), porque el envoltorio le da vueltas al cilindro (empalme izquierdo, a 19 mm del cuadro: +39,71). La regla había que escribirla antes de las dos ramas, no en una.
+
+**INTENT:** el código adaptaba/envolvió el perfil en TODAS las caras de la cadena y sumaba 437,12 mm³; la fila B-217 y su prueba propuesta piden +100 mm³ y la caja sin crecer; la decisión documentada del 2026-10-13 (`PROJECT_LOG.md` › «Repujado en varias caras a la vez», y sus tests `test_repujado_en_varias_caras_a_la_vez_adaptandose_a_cada_una` / `test_repujado_adaptado_se_achica_si_no_entra_en_la_cara`) dice que una cara **elegida a mano** perpendicular al perfil se adapta. Los dos conviven: la regla nueva alcanza solo a las caras que agregó la cadena.
+
+**Qué cambié** — `clon/omnicad/nucleo/solidos_crear.py:1579-1597` (`repujado_en_cuerpos`, la expansión de la cadena):
+
+```python
+    for k, cara in enumerate(cadena):
+        if k and not _cajas_se_tocan(_caja_2d([cara], pl_perfil), caja_perfil):
+            continue
+        if not any(j == i and cara.IsSame(otra) for j, otra in caras):
+            caras.append((i, TopoDS.Face(cara)))
+```
+
+`k == 0` es la cara que el usuario eligió (sigue adaptando/envolviendo como hasta ahora); las demás son regaladas por la cadena y se descartan si su caja proyectada sobre el plano del perfil no toca la del perfil. Es la misma cuenta en 2D que usa el reparto entre caras paralelas dos líneas más abajo (`_caja_2d` / `_cajas_se_tocan`, en `_repujado_en_grupo`), así que cubre planas y cilíndricas con una sola regla sin tocar ninguna de las dos ramas. `pl_perfil` es el `geo.plano_de_cara(perfiles[0])` que la rama cilíndrica ya calculaba (subido, no duplicado). La lección del 2026-10-13 («misma regla para uno y para varios») se respeta: la regla no depende de cuántas caras hay ni de su tipo.
+
+**Gemelos revisados** (regla 1; `grep -rn "cadena_tangente" clon/omnicad`, `grep -rn "caras_tangentes(" clon/omnicad`, `grep -rln "repuj\|emboss" clon/tests`):
+
+| Gemelo | Regla hoy | Qué hice |
+|---|---|---|
+| `nucleo/solidos_crear.py:1551` `repujado_en_cuerpos` | adaptaba toda la cadena | **arreglado** (el filtro, un punto) |
+| `_repujado_en_grupo` / `_perfiles_en_zona` (la adaptación) | gira, centra y achica | sin cambio: rige para las caras elegidas a mano (decisión 2026-10-13, tests verdes) |
+| `_envolver_en_cilindro(..., recortar=cadena_tangente)` | la cadena sumaba cilindros lejos del perfil | el filtro los descarta antes de llegar; **su vuelta de más con una cara elegida a mano queda como fila nueva B-220** (medida) |
+| `nucleo/solidos_crear.py:1542` `repujado` (la firma de un cuerpo) | pasa a `repujado_en_cuerpos` | cubierto por el mismo punto; sin cambio |
+| `timeline/ops_solido.py:319` `OpRepujado` | baja `cadena_tangente` del `PARAMS` | sin cambio (ninguna clave nueva: la receta vieja abre igual) |
+| `api/herramientas_solido_extra.py:230` `create_emboss` | «tangent_chain: true incluye las caras tangentes» | sigue siendo cierto (las incluye; reciben lo que cae) → **no se regenera** `docs/agentes/herramientas.md` |
+| `ui/comandos/crear.py:363` Casilla «Cadena tangente» | mismo campo | sin cambio |
+| `nucleo/calcomanias.py:43` (`encadenar` de la Calcomanía) | usa `caras_tangentes` | revisado y **no aplica**: proyecta la imagen con el marco UV de cada cara y la recorta contra esa cara; no adapta ni copia un perfil |
+| `nucleo/solidos_modificar.py:1097` (Desmoldeo con cadena) y `:1385` (Reemplazar cara) | suman la cadena | **no aplica**: transforman las caras de la cadena, no reparten un perfil |
+| `nucleo/omnikernel/` | `grep "repuj\|emboss"` → nada | no aplica (el otro motor no tiene Repujado) |
+| la previa (`ui/comando.py`) | `tramo_previa` es del prisma de Extruir; el Repujado corre la operación | cubierta sin cambio |
+| `edit_feature` (`api/herramientas_documento.py`) | recalcula el paso con el mismo `ejecutar` | cubierto |
+
+**Test nuevo y su salida.** `tests/test_repujado_alineacion.py::test_cadena_tangente_no_copia_el_perfil_en_los_costados` (+100 exactos y la caja del material 10×10×1) y `tests/test_api_solido_extra.py::test_create_emboss_cadena_tangente_no_copia_el_perfil_en_los_costados` (la repro de la fila por la API: `create_box` 60×40×10, `fillet edges=">Z" radius=3`, `create_emboss ... tangent_chain=true`). Auxiliares del primer archivo: `_rectangulo` ahora toma coordenadas (con los valores de siempre por defecto) y se sumó `_aristas_en_z`.
+
+ROJO antes del arreglo:
+
+```
+$ pytest tests/test_repujado_alineacion.py -q -p no:cacheprovider -k "cadena_tangente"
+E   assert 437.1154520899279 == 100 ± 1.0e-04
+1 failed, 1 passed, 13 deselected in 1.65s
+
+$ pytest tests/test_api_solido_extra.py -q -p no:cacheprovider -k "cadena_tangente"
+E   assert 24061.186141919094 == 23724.070689958793 ± 0.237241
+1 failed, 44 deselected in 1.79s
+```
+
+El `1 passed` de la primera corrida es el control que ya existía (`test_cadena_tangente_agrega_el_empalme_sin_duplicar_caras`), y `24061,19 − 23724,07 = 337,12` del rojo por la API es el mismo exceso visto desde la otra capa.
+
+VERDE después: `28 passed` con `-k "cadena or repujado or emboss"` sobre los tres archivos del área, y los grupos completos de la tabla abajo. Con la regla puesta a medias (solo para las caras planas) los dos tests nuevos Y el control viejo fallaban: ese fue el hallazgo que llevó a escribir la regla en la expansión de la cadena y no en cada rama.
+
+### B-209 · Barrido sólido con «Estirar» hace «Escalar» — **Resuelto**
+
+**Qué dice la ayuda de Fusion** (`fusion_docs.py ver "Sweep reference" -s fusion-model`):
+
+> #### Stretch
+> Stretch: use path - guide rail distance to scale profile in X
+
+o sea: el perfil crece **solo hacia el carril** y conserva la otra dimensión. La propia auditoría ya decía el arreglo en su `ponytail-audit` (ítems 2 y 7 de `docs/auditoria_revolucion_barrido_solevacion.md`): «Reuse the surface `_estirar` path» y «Add `"estirar": "Estirar"` once finding 2 is done».
+
+**Estado del código antes de decidir** (medido con la sonda de la auditoría, `evidencias/ui_2026-11-05/sonda_carril.py`: cuadrado 4×4 en YZ, ruta X 0..50, carril en XZ de (0, 2) a (50, 6)):
+
+```
+solido stretch: V=3364.59 caja y −6.44..6.44    <- idéntico a scale
+superf stretch: A=1201.28 caja y −2.00..2.00, z −6..6    <- estira bien
+solido scale: V=3364.59      solido none: V=784.03
+```
+
+La superficie ya lo resolvía con `_barrido_estirado` (`nucleo/superficies.py:630`: secciones deformadas en el plano perpendicular a la ruta, solevadas entre ellas); el sólido caía a la ley de escala de `MakePipeShell`, que es uniforme en las dos direcciones del perfil. El docstring de `barrer` lo contaba conforme: ««estirar» (escala en una sola dirección) no existe en OCC y se hace como «escalar»». No era cierto: el gemelo lo tenía hecho.
+
+**Qué cambié** — `clon/omnicad/nucleo/superficies.py:630` y `:650` (el gemelo gana un parámetro, no una copia) y `clon/omnicad/nucleo/solidos_crear.py:821-831`:
+
+```python
+    if carril is not None:
+        if abs(torsion) > 1e-9 or abs(conicidad) > 1e-9:
+            raise geo.ErrorGeometria("La torsión y la inclinación no se combinan con un carril guía.")
+        if escala_carril not in ("escalar", "estirar", "ninguna"):
+            raise geo.ErrorGeometria(f"Escala de carril desconocida: {escala_carril}")
+        if escala_carril == "estirar":
+            from . import superficies as sfc        # Estirar: lo resuelven las secciones deformadas del gemelo
+    ...
+        if carril is not None and escala_carril == "estirar":
+            partes.append(sfc._barrido_estirado([perfil], tramo, carril, solido=solido))
+            continue
+```
+
+`_barrido_estirado` pasa `solido` a `BRepOffsetAPI_ThruSections(solido, False)`, que es quien tapa los extremos (el mismo primer argumento con el que `_loft` hace sólida la Solevación, `solidos_crear.py:1127`). Va en `_barrido_alambre` y no en `barrer` porque es el único punto por el que pasan el perfil exterior y cada agujero: con un perfil anillado el hueco se estira igual que su contorno y se corta después (test abajo: 80 − 20 = 60 mm³). Las validaciones del carril subieron antes del bucle de tramos (mismos mensajes, sin armar el `MakePipeShell` para tirarlo después).
+
+**Gemelos revisados** (regla 1; `grep -rn "escala_carril\|_barrido_estirado\|carril=" clon/omnicad`):
+
+| Gemelo | Regla hoy | Qué hice |
+|---|---|---|
+| `nucleo/solidos_crear.py:827-831` `_barrido_alambre` (el Barrido, `barrer(solido=False)` y cada agujero) | hacía escalar | **arreglado** (delega) |
+| `nucleo/superficies.py:630` `_barrido_estirado` | firme, pero solo superficie | **arreglado** (`solido=`, por defecto `False`: la firma vieja sigue valiendo) |
+| `nucleo/superficies.py:727` `barrer_superficie` con `escala="estirar"` | llama al estirado sin `solido` | sin cambio: idéntico (medido A=1201,28 antes y después) |
+| `nucleo/superficies.py:728` (riel con escalar/ninguna → `sc.barrer(solido=False)`) | `escala_carril != "estirar"` | sin cambio (el estirar no llega) |
+| `nucleo/solidos_crear.py:798` `_ley_escala_carril` | la escala uniforme | sigue para «escalar»; sin cambio |
+| `nucleo/solidos_crear.py:2924` `tuberia` | `_barrido_alambre(w, None, …, "escalar", …)` | sin carril → no aplica |
+| `nucleo/solidos_crear.py:937` `barrer_cuerpo` (Solid Sweep) | sin carril | no aplica |
+| `timeline/ops_solido.py:129` `OpBarrido.OPCIONES` | ya tenía «estirar» | sin cambio (el `PARAMS` sigue en «escalar»: recetas viejas idénticas) |
+| `timeline/ops_superficie.py:216` `OpSupBarrido` | ya lo tenía y la superficie ya estiraba | sin cambio |
+| `ui/comandos/crear.py:75-78` (Barrido › Escala del perfil) | ofrecía solo Escalar/Ninguna | **arreglado**: «Estirar» con la misma ayuda que su par de superficie |
+| `ui/comandos/superficie.py:150` | ofrece los tres | referencia del texto; sin cambio |
+| `api/herramientas_solido.py:483` `sweep` (`rail_scale`) | mapea `stretch → "estirar"` y su texto no promete escalar | sin cambio de texto → no se regenera la doc |
+| `api/herramientas_superficie.py:192` `create_surface_sweep` | `profile_scaling` ídem | sin cambio |
+| `nucleo/omnikernel/` | `grep "barrer\|carril\|recortar"` → nada | no aplica |
+| la previa rápida (`ui/comando.py::tramo_previa`) | es del prisma de Extruir | no aplica: el Barrido calcula la previa con el núcleo (lo confirman el test del diálogo y el check de la pieza) |
+| `edit_feature` | recalcula el paso con el mismo `ejecutar` | cubierto por el arreglo del núcleo |
+
+**Tests nuevos y su salida.** `tests/test_solidos_crear.py::test_barrido_carril_estirar_no_es_escalar` (carril abierto de 1 a 3 sobre ruta de 10: 80 mm³ con caja ±3/±1 — el trapecio de sección media 8 sobre 10 mm —, distinto de los 173,33 de Escalar, y el agujero 80 − 20), `tests/test_api_opciones_solido2.py::test_barrido_con_carril_estirar_no_es_escalar` (la repro de la fila: 1600 mm³ y caja [50, 4, 12] contra 3364,59 de `scale`) y `tests/test_comandos_crear.py::test_barrido_dialogo_estirar_hacia_el_carril` (la lista de opciones del diálogo + 1600 mm³ y 3364,59 por el comando).
+
+ROJO antes del arreglo:
+
+```
+$ pytest tests/test_solidos_crear.py -q -p no:cacheprovider -k "estirar_no_es_escalar"
+E   assert 173.29644426000885 == 80 ± 0.08
+1 failed, 66 deselected in 0.98s
+
+$ pytest tests/test_api_opciones_solido2.py::test_barrido_con_carril_estirar_no_es_escalar tests/test_comandos_crear.py::test_barrido_dialogo_estirar_hacia_el_carril -q
+E   assert 3364.5884 == 1600 ± 1.6
+E   AssertionError: assert ['escalar', 'ninguna'] == ['escalar', '...', 'ninguna']
+2 failed in 1.91s
+```
+
+El 173,30 del primer rojo ES el volumen de Escalar en el mismo caso: la prueba de que el modo no existía. VERDE después: `5 passed` (los tres nuevos más los dos controles de carril que ya había) y los grupos completos de abajo.
+
+### `/ponytail-review` (salida completa, sobre el diff de los tres archivos de código y cinco de test)
+
+`What this change does:` dos reglas cortas. El Repujado con «Cadena tangente» ya no copia el perfil en las caras que agregó la cadena si el perfil no cae sobre ellas (decide la caja proyectada, y decide igual para planas y cilíndricas), y el «Estirar» del Barrido sólido pasa por las secciones deformadas de su gemelo de superficie en vez de por la escala uniforme de `MakePipeShell`, con su opción visible en el diálogo. Carga esperada: una persona o un agente sobre un documento (el criterio del repo); nada de esto corre en un bucle, y el filtro de la cadena cuesta una teselación por cara agregada — malla ya cacheada y que el reparto en 2D calculaba de todos modos.
+
+**Must fix:** nada.
+
+**Should fix:**
+
+1. **La caja de la cadena se mide en el plano del primer perfil** (`nucleo/solidos_crear.py:1581-1584`)
+   - **What this is:** `pl_perfil = geo.plano_de_cara(perfiles[0])` y `caja_perfil = _caja_2d(perfiles, pl_perfil)`; cada cara de la cadena se proyecta sobre ese plano y se descarta si no toca la caja.
+   - **Problem:** Con perfiles de dos bocetos en planos distintos en el MISMO repujado, la caja de todos se mide en el plano del primero: un perfil lejano puede colarse o quedarse afuera.
+   - **Fix:** un comentario `shortcut:` que nombra el límite y cuándo subir de nivel, no un cambio de comportamiento: el alineado (`_alinear_repujado`) y el envoltorio ya usan `perfiles[0]` como marco, así que la regla nueva no introduce la suposición, la hereda de lo que reutiliza.
+   - **If we skip it:** Mañana alguien mezcla bocetos, la cadena filtra de más y no queda ninguna pista en el código.
+   - **Arreglé:** sí, con el `shortcut:` (dos líneas de comentario sobre una de código).
+
+2. **Envolver en un cilindro lejos del perfil pone material dando una vuelta de más** (`nucleo/solidos_crear.py`, `a_uv` dentro de `_envolver_en_cilindro`)
+   - **What this is:** El envoltorio pasa la coordenada tangencial del perfil a ángulo: `u0 + giro · (distancia al eje)/radio`.
+   - **Problem:** Medido (`evidencias/ui_2026-11-06/sonda_b217_caras.py` y por la API): en la placa empalmada con el cuadro en el centro, elegir a mano el empalme izquierdo (`create_emboss faces="Cuerpo1/F3" wrap=true depth=1`) da **+39,71 mm³** sobre ese empalme, 19 mm lejos del cuadro; los cuatro dan +287,14. 19 mm sobre un radio 3 son 6,7 rad: la lámina le da más de una vuelta al cilindro y el `recortar` contra la cara justo la recorta donde no debía. Con la cadena este caso ya no se alcanza (el filtro descarta esas caras), pero con la cara elegida a mano sigue ahí, y esa es la rama que la decisión de 2026-10-13 decidió conservar.
+   - **Fix:** **no lo hice**: es otra regla (tope del arco envuelto, o recortar contra el prisma del perfil), en un camino que este bug no toca.
+   - **If we skip it:** El usuario ve relieve al lado contrario de donde apuntó.
+   - **Fila nueva:** **B-220** en `docs/seguimiento/bugs.md` (Abierto, Media) con su ficha y la medición.
+
+3. **El `import` del gemelo estaba dentro del bucle de tramos** (`nucleo/solidos_crear.py:821-825`)
+   - **What this is:** `from . import superficies as sfc` escrito dentro de `for tramo in rutas:`.
+   - **Problem:** Se repite por tramo y queda en medio del cálculo; `superficies` hace exactamente lo mismo una sola vez arriba.
+   - **Fix:** subirlo al bloque de validación del carril (mismo import diferido: ninguno de los dos módulos importa al otro a nivel de módulo, así que no hay ciclo).
+   - **If we skip it:** Nada, solo lectura.
+   - **Arreglé:** sí, antes de la verificación final.
+
+**Arreglé de la revisión:** los ítems 1 y 3 (el `shortcut:` y el import subido), con el grupo de tests vuelto a correr después (`184 passed`). El ítem 2 sale de la tanda como B-220.
+
+**Verdict: Ship** (con 1 y 3 ya aplicados y 2 derivado con fila).
+
+### Verificación
+
+`ruff check .` desde `clon/`: `All checks passed!` (antes y después del arreglo de la revisión).
+
+Tests: todos con `turno`, `-p no:cacheprovider`, en primer plano y de a un grupo (la lista obligatoria de la tanda más los archivos que da `grep -l` de lo tocado: `barrer`, `barrer_superficie`, `repujado`, `repujado_en_cuerpos`, `caras_tangentes`, `escala_carril`, `Barrido`, `emboss`; `_barrido_alambre`, `_barrido_estirado`, `_caja_2d` y `_cajas_se_tocan` no aparecen en ningún test por su nombre). Ninguna corrida cortada por tiempo:
+
+| Grupo | Archivos | Salida final |
+|---|---|---|
+| 1 · núcleo | test_solidos_crear, test_superficies, test_superficie_fusion, test_geometria, test_b52_espiral, test_bugs_solido, test_paridad_motor | `245 passed in 151.74s (0:02:31)` |
+| 2 · barrido, riel y tubería | test_sol08_barrido, test_barrido_tipos, test_api_barrido, test_gizmo_barrido, test_sol08_ui, test_superficie_guias, test_tuberia_cadena, test_topes, test_sup29_encadenado_superficie, test_graficos_rendimiento, test_rosca_diametros_tabla | `267 passed in 79.40s (0:01:19)` |
+| 3 · API sólido/superficie | test_api_solido, test_api_solido_extra, test_api_superficie, test_api_opciones_solido1, test_api_opciones_solido2, test_api_avanzado, test_herramientas_solido | `500 passed in 159.61s (0:02:39)` |
+| 4a · diálogos y repujado | test_comandos, test_comandos_superficie, test_comandos_crear, test_repujado_alineacion | `51 passed in 8.51s` |
+| 4b · asas, paneles y cobertura UI | test_manipuladores, test_b105_panel_chico, test_iconos_extra, test_comandos_inspeccionar, test_cobertura_ui_api | `625 passed in 8.42s` |
+| 5a · previa y calcomanías | test_previa_aislada_comandos, test_previa_prisma, test_previa_trabajador, test_previa_vaciado_aislada, test_p23_calcomania | `112 passed in 251.22s (0:04:11)` |
+| 5b · modificar, texto, plástico y lotes | test_solidos_modificar, test_texto_vectores, test_opciones_operaciones, test_resultados_vacios, test_referencias_mal_formadas, test_herramientas_solido, test_sup29_encadenado_superficie, test_sol21_reglas_plastico, test_revision_lotes_sol, test_cinta_plastico | `612 passed in 122.03s (0:02:02)` |
+| 6 · tras el arreglo de la revisión | test_repujado_alineacion, test_solidos_crear, test_api_opciones_solido2, test_comandos_crear, test_superficie_guias | `184 passed in 54.67s` |
+| 7 · seguimiento y doc (después de editar los tres docs) | test_seguimiento, test_doc_agentes, test_claves_comandos, test_api_documento, test_api_catalogo, test_api_convenciones | `510 passed in 18.43s` |
+
+Suite completa y prueba de humo: no corridas (regla 10; las toma el coordinador).
+
+Terminados `PROJECT_LOG.md`, `docs/seguimiento/bugs.md` y este informe, se volvieron a correr los tres archivos que leen esa documentación — `test_seguimiento.py`, `test_doc_agentes.py` y `test_claves_comandos.py` → `448 passed in 5.92s`, y `ruff check .` siguió `All checks passed!`.
+
+Sondas de la auditoría, corridas de nuevo:
+
+| Caso | Antes | Después |
+|---|---|---|
+| `sonda_carril.py` sólido stretch (carril 2→6) | V=3364,59, caja y ±6,44 | **V=1600,00, caja y ±2,00 / z −6..6** (la misma caja que su superficie) |
+| `sonda_carril.py` sólido scale / none | 3364,59 / 784,03 | 3364,59 / 784,03 (sin cambio) |
+| `sonda_carril.py` superficie stretch / scale / none | 1201,28 / 1667,89 / 797,57 mm² | iguales (sin cambio) |
+| Repujado placa cadena=True (`sonda_tanda3.py`) | +437,12, caja −1..61 / −1..41 | **+100,00, caja 20..30 / 15..25** |
+| Repujado placa cadena=False | +100,00 | +100,00 (control) |
+| Cadena en la caja 40×30×10 con un empalme, perfil cruzando el borde | +54,51 (solo +16 sin cadena) | +54,51 idéntico: ahí el perfil (x 33..41) sí cae sobre el empalme (x 37..40) y sobre el costado (x = 40), así que los dos siguen recibiendo |
+| Caras elegidas a mano (tapa + base + costado) | +450,00 | +450,00 (la decisión del 2026-10-13 intacta) |
+| Envolver a mano un empalme lejos del perfil (`sonda_b217_caras.py`) | +39,71 ese empalme (+287,14 los cuatro) | igual → **fila nueva B-220** |
+
+Ventana (regla 9, porque cambiaron el diálogo de Barrido y el comportamiento del Repujado): las dos piezas de la tanda, en minimizada, con `PYTHONIOENCODING=utf-8` y `--plazo 2700` por `turno` (la pieza entera pasa del tope interno de 900 s de `todo.py`):
+
+```
+$ ../scripts/turno.py --plazo 2700 -- .venv/Scripts/python.exe ../scripts/prueba_ui/revolucion_barrido_solevacion.py
+=== 40 comprobaciones, 7 con ✗ ===        (8 ✗ después de la tanda 1)
+[OK ] · Barrido sólido › Escala del perfil ofrece Estirar (Fusion: Scale, Stretch, None) — ofrece ['escalar', 'estirar', 'ninguna']
+[OK ] · Barrido › Distancia «1,5»: aviso — ⚠ La distancia sobre la ruta va de 0 a 1 (fracción del total); recibió 1.5.
+[OK ] · Revolución dos lados 90 / −45°: o aviso o 2356,19 mm³ (como la superficie), no el lado 2 perdido — volumen 2356.19 sin aviso «»
+[OK ] · ventana 1024x640: Aceptar se ve con el Barrido con carril — esquina 921,564 en 1024x640
+[OK ] · ventana 800x520: Aceptar se ve con el Barrido con carril — esquina 697,463 en 800x520
+```
+
+Pasó el check que la auditoría tenía en ✗ (B-209: «Estirar no está en la lista»). Las 7 ✗ que quedan son ítems ya anotados, ninguno de esta tanda: H-88 (2: «A objeto» no muestra Dirección, en sólido y en superficie), H-92 (2: «Proyectar eje» con nombre y valor por defecto distintos), H-89 (sin Extensión con carril), B-208 (el carril paralelo da 784,02 en vez de 800) y H-90 (la fila del punto solo ofrece «Aguda»).
+
+```
+$ ../scripts/turno.py --plazo 2700 -- .venv/Scripts/python.exe ../scripts/prueba_ui/nervio_red_repujado.py
+=== 84 comprobaciones, 5 con ✗ ===        (6 ✗ después de la tanda 2; 9 en la auditoría)
+[OK ] · Repujado con cadena tangente: vista previa
+[OK ] · Repujado con cadena tangente: resultado = 100 — obtenido 100.0; nuevos={} cambiados={'op9.c1': ('solido', 23724.071)}
+[OK ] · Repujado con cadena tangente: deshacer vuelve al estado anterior (1 paso/s)
+[OK ] · Repujado placa: resultado = 100 — obtenido 100.0; nuevos={} cambiados={'op9.c1': ('solido', 23724.071)}
+```
+
+Cerró el check de B-217 en la ventana real (23724,071 = la placa de 23624,07 + los 100 exactos; en la tanda 2 daba 24061,186). Las 5 ✗ que quedan son ítems ya anotados: B-215 (2: desmoldeo −1° y 1° con extracción), H-95 (el Nervio no tiene Radio del empalme), H-99 (profundidad negativa no pasa el Efecto a Grabado) y H-97 (asas de alineación del Repujado).
+
+Capturas miradas con Read: `capturas/barrido_carril.png` (la app entera con el aviso conocido de la selección de cadena; sin nada roto), las de tamaño de panel `barrido_1024x640.png` / `barrido_800x520.png` (los dos checks de «Aceptar se ve» de la primera pieza) y `capturas/repujado_cadena.png` (el panel REPUJADO con «Cadena tangente» activa: el relieve azul solo en la cara de arriba de la placa, los cuatro costados limpios — la imagen que la auditoría mostraba con cuatro cuadros achicados).
+
+Evidencia: `evidencias/ui_2026-11-06/revolucion_barrido_solevacion.log` y `.json`, `nervio_red_repujado.log` y `.json` (el `.log` de esta pieza quedó reconstruido desde su `.json` de la corrida porque el stdout se cortaba en el pipe de la consola; la línea de arriba del archivo lo aclara), y las sondas `sonda_tanda3.py` (con su salida `sonda_tanda3_despues.txt`), `sonda_b217_caras.py` y la re-corrida `../evidencias/ui_2026-11-05/sonda_carril.py`.
+
+### Seguimiento
+
+- `docs/seguimiento/bugs.md`: borradas la fila y la ficha de «Detalle» de B-217 y de B-209; fila y ficha nuevas de **B-220** (el envoltorio que da una vuelta de más); recuento del encabezado 22 → 21 (Abierto 18 → 17 · Parcial 4).
+- `docs/seguimiento/README.md`: no tenía filas de B-209 ni B-217 (`grep -n "B-209\|B-217"` → nada), así que no había qué borrar.
+- `README.md` y `README.en.md` (hoja de ruta): sin mención de «Estirar» ni de la cadena tangente (`grep` → nada); no se tocaron.
+- `docs/auditoria_revolucion_barrido_solevacion.md` y `docs/auditoria_nervio_red_repujado.md`: son el informe de esa corrida (histórico); no se cambiaron.
+- Dos viñetas en «## Registro» de `PROJECT_LOG.md` y dos lecciones en «## Lecciones aprendidas» (una selección automática no hereda el trato de la elección manual; un docstring que declara imposible un cálculo no es evidencia).
+
+### Archivos fuera de mi tanda
+
+La tabla de la tanda 3 lista `nucleo/solidos_crear.py` y `ui/comandos/crear.py`. También toqué `nucleo/superficies.py` — es la columna «Gemelos a revisar» de la misma fila (el Barrido de superficie), y ahí cambió solo `_barrido_estirado`: un parámetro nuevo con valor por defecto que su llamador de superficie ni pasa. No se tocaron `timeline/ops_solido.py`, `timeline/ops_superficie.py`, `api/herramientas_*.py`, `ui/comandos/superficie.py` ni `ui/comandos/asas_extra.py`: los gemelos ya tenían la regla o el parámetro. `docs/corrida_nocturna_2026-11-05.md` aparece modificado en el árbol: es de otra corrida, no lo miré ni lo cambié.
+
+### Lo que no pude verificar
+
+- ⚠ **Fusion real no se abrió** para ninguno de los dos. La regla del Stretch sale del texto de la ayuda («use path - guide rail distance to scale profile in X») y de que la superficie del propio OmniCAD ya la aplicaba; la de la cadena sale de la ayuda del Emboss y de la fila B-217, y **convive** con la decisión del 2026-10-13 (cara elegida a mano: adaptar). Si al abrir Fusion resultara que la cadena tampoco recibe lo que cae sobre un empalme —en el control de la caja 40×30×10 hoy recibe su parte—, la regla nueva pasa a mirar el tipo de cara en el filtro: una línea.
+- ⚠ **El estirar con `distancia` menor que 1** no mejoró: el sólido empareja la ruta recortada con el carril **entero** (fracción contra fracción), así que con 0,5 la sección final ya está al 3× — medido 40,00 mm³ con caja ±3 en z 0..5. Es la convención que ya tenía «escalar» (`_ley_escala_carril` hace el mismo emparejamiento; midió 146,78 mm³) y el sólido no tiene la opción `distancia_carril`/Extensión que la superficie sí (eso es H-89, ya anotado). Cambiarlo es otra decisión de producto, no este bug.
+- ⚠ **B-208 sigue abierto** y es vecino: con carril paralelo la forma todavía se tuerce en el medio (784,03 en vez de 800) en sólido y en superficie; el check de la pieza sigue ✗.
+- ⚠ **Perfil anillado (con agujero) estirado en la ventana**: lo mide el test del núcleo (80 − 20 = 60 mm³); el diálogo y la API se probaron sin agujero.
+- ⚠ **`edit_feature` con `escala_carril="estirar"`** no tiene test propio: recalcula el paso con el mismo `ejecutar` que el test de `sweep`, así que queda cubierto por el arreglo del núcleo, no por una corrida.
+- ⚠ **Proyectos `.omnicad` guardados con «Estirar»**: al abrir, el cuerpo cambia de forma (del tronco de 3364,59 al estirado de 1600 en el caso de la fila). En `ejemplos/` no hay recetas con `escala_carril` (`grep -rln "escala_carril" ejemplos/` → nada), pero una pieza del usuario puede tenerla. Con la cadena tangente pasa lo mismo a la inversa: el repujado pierde las copias de los costados.
+- ⚠ **B-220 queda abierto** y es el mismo síntoma por la otra puerta (cara elegida a mano): medido, con ficha, sin arreglo.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

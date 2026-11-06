@@ -42,6 +42,7 @@ Plan de Claude (coordinador nocturno, `get_usage`):
 |---|---|---|
 | 22:46 (inicio) | 58 % (se renueva 23:20) | 20 % |
 | 00:50 | 3 % (ventana nueva, se renueva 04:20) | 20 % |
+| 03:23 | 7 % | 21 % |
 
 Corridas (tokens de `opencode stats` / sesiones de Qoder; «sin dato» si no se pudo sacar):
 
@@ -60,6 +61,11 @@ Corridas (tokens de `opencode stats` / sesiones de Qoder; «sin dato» si no se 
 | 00:39 | hy3 (CodeBuddy) | C2 (H-100) | 28 min | sin dato (salida de texto, sin tokens) | commit `2329d0f` en `codebuddy-nocturna` (538 + 842 verdes; el coordinador regeneró `herramientas.md` desde el worktree) |
 | 01:10 | deepseek-v4.1-flash (CodeBuddy) | C3 (H-102) | 17 min | sin dato | commit `04bfa86` en `codebuddy-nocturna` (1505 + 787 verdes) |
 | 01:41 | hy3 (CodeBuddy) | C4 (H-93) | 11 min | sin dato | commit `dade722` en `codebuddy-nocturna` (1519 + 1007 verdes) |
+| 00:59 | Qwen3.8-Flash (Qoder) | tanda 2 (B-216, B-214) | 68 min | sin dato | commit `7e95678` en `main` (1105 + 444 verdes); nuevo B-219 |
+| 01:59 | deepseek-v4.1-flash (CodeBuddy) | C5 (H-74) | 8 min | sin dato | commit `75f541d` en `codebuddy-nocturna` (1280 + 268 verdes); la revisión halló una duplicación: fila H-103 |
+| 02:11 | hy3 (CodeBuddy) | C6 (H-103) | 8 min | sin dato | commit `2d4b769` en `codebuddy-nocturna` (1498 verdes) |
+| 02:22 | deepseek-v4.1-flash (CodeBuddy) | C7 (CF-11) | 14 min | sin dato | commit `23dd4c5` en `codebuddy-nocturna` (1402 + 763 verdes) |
+| 02:46 | hy3 (CodeBuddy) | C8 (H-71) | 15 min | sin dato | commit `7db9d93` en `codebuddy-nocturna` (867 + 524 verdes); el coordinador deshizo el cambio de finales de línea de 2 archivos |
 | 00:41 | GPT-6.1 Sol (OpenCode) | B-208 | 14 min | 204 k (+6,2 M caché) / 15 k (+5 k razonamiento) | commit `a8816d5` (605 + 331 verdes) |
 | 01:01 | GPT-6.1 Sol (OpenCode) | B-206 (resto) | 10 min | 242 k (+6,3 M caché) / 13 k (+5 k razonamiento) | Parcial: rectángulo inclinado con conicidad anda, círculo no (xfail estricto); commit `bd7e3e5` (2073 verdes). Fin de la línea B: 6 corridas de 6 |
 

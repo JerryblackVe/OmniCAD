@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 22: Abierto 18 · Parcial 4 (recontado 2026-11-06 por fila: se cerraron B-210 y B-211 de la tanda 1 y B-214 y B-216 de la tanda 2, y sumaron B-219 — la flecha de «Distancia» del Nervio y la Red).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 21: Abierto 17 · Parcial 4 (recontado 2026-11-06 por fila: se cerraron B-210 y B-211 de la tanda 1, B-214 y B-216 de la tanda 2 y B-209 y B-217 de la tanda 3, y sumaron B-219 — la flecha de «Distancia» del Nervio y la Red — y B-220 — Envolver del Repujado fuera de zona).
 
 ## Abiertos y parciales
 
@@ -10,11 +10,10 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 |---|---|---|---|---|---|---|
 | B-206 | Extruir Inicio › Objeto con un plano inclinado: falta combinarlo con la conicidad | Parcial | Media | Resuelto: el perfil se proyecta sobre el plano a lo largo de la dirección con aristas analíticas (círculo r5 a 30° → 785,40 mm³ exactos), la delgada mide la pared en el plano del perfil (600 mm³ como la recta) y «Al objeto»/«Todo» llegan desde toda la base. Queda: conicidad + inicio inclinado da un error claro («La conicidad todavía no se combina con Inicio › Objeto en un plano inclinado…»); `_prisma` toma como plano neutro uno perpendicular a la dirección. | timeline/operaciones.py (`inclinado`), nucleo/solidos_crear.py (`extruir_avanzado`, `inicio_plano`); tests/test_api_opciones_solido1.py::test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el | 2026-11-05 |
 | B-208 | Barrido con carril guía deforma el perfil aunque el carril sea paralelo a la ruta (sólido y superficie) | Abierto | Alta | Cuadrado 4×4 barrido 50 mm con un carril paralelo y escala «Ninguna» da 784,03 mm³ en vez de 800 (caja ±2,31 en vez de ±2); la superficie da 797,57 mm² en vez de 800. Con «Escalar» y el carril de 2 a 6 da 3364,59 contra 3466,67. Los dos extremos quedan bien; el medio se tuerce. También en la ventana (pieza `revolucion_barrido_solevacion`). | nucleo/solidos_crear.py:819 | 2026-11-05 |
-| B-209 | Barrido sólido con escala «Estirar» hace «Escalar» sin avisar | Abierto | Media | `sweep rail_scale="stretch"` da 3364,59 mm³, lo mismo que `scale`; debería estirar en una sola dirección. La superficie sí estira (400 mm² exactos). La ventana del sólido ni ofrece Estirar. | nucleo/solidos_crear.py:877 | 2026-11-05 |
 | B-212 | Solevación sólida con un carril recto falla: «el kernel produjo un sólido inválido» | Abierto | Media | Cuadros 10×10 en z 0 y 20×20 en z 10, carril recto del medio de un lado al medio del otro: el sólido da OPERATION_FAILED; la misma solevación de superficie sale bien (670,82 mm², el área lateral exacta del tronco). Fusion la hace. | nucleo/solidos_crear.py:1324 | 2026-11-05 |
 | B-213 | Nervio y Red se recortan contra la caja del cuerpo: rellenan hasta el borde o pierden la mitad | Abierto | Media | Con el boceto en el borde del cuerpo, el simétrico pierde la mitad (+600 en vez de +1200) y el de un lado da «Nervio: la curva queda dentro del cuerpo»; con `thickness=1e6` el nervio queda recortado al ancho del cuerpo (61500 mm³) sin aviso, y la Red con el boceto delante de la caja da el mismo error falso. (Lo que el 2026-11-05 era «invertido rellena hasta la caja, +1950»: hoy «Cambiar dirección» hacia un lado sin cara avisa claro; ver B-216.) También en la ventana (pieza `nervio_red_repujado`). | nucleo/solidos_crear.py:1411 (`_hasta_el_cuerpo`); tests/test_sol10_nervio_red.py::test_red_invertir_hacia_la_boca_abierta_avisa | 2026-11-06 |
 | B-215 | Desmoldeo del Nervio: falla con ángulo negativo y con una dirección de extracción que no es la de crecimiento | Abierto | Media | Escuadra con la línea en diagonal: `draft_angle=-1` y `draft_angle=1, pull_direction="XY"` dan «El desmoldeo falló en el kernel (ángulo demasiado grande?)». La API acepta −45..45 y anuncia la dirección de extracción; solo anda cuando la extracción coincide con el crecimiento (el caso de `test_sol10_nervio_red.py`). | nucleo/solidos_crear.py:1412 (`_desmoldear_pared`) y 1457 | 2026-11-05 |
-| B-217 | Repujado con «Cadena tangente» repuja también en los costados | Abierto | Media | Placa con las aristas de arriba empalmadas, cuadro 10×10 encima, relieve 1 mm con cadena tangente: +437,12 mm³ en vez de +100, caja 1 mm más ancha a cada lado. La cadena suma los costados (tangentes a los empalmes) y el cuadro se «adapta» y se repuja en cada uno. Se ve en la captura `repujado_cadena.png`. | nucleo/solidos_crear.py:1548 (cadena) y 1608 (`_perfiles_en_zona` con `adaptar`) | 2026-11-05 |
+| B-220 | Repujado con «Envolver» en un cilindro lejos del perfil: la lámina da vueltas y repuja al otro lado | Abierto | Media | Placa 60×40×10 con las aristas de arriba empalmadas r3 y cuadro 10×10 en el centro de la tapa: `create_emboss faces="Cuerpo1/F3" wrap=true depth=1` sobre el empalme izquierdo (a 19 mm del cuadro) suma **+39,71 mm³** en ese empalme, y con los cuatro (+287,14). `_envolver_en_cilindro` pasa la coordenada tangencial del perfil a ángulo sin tope (`a_uv`, arco/radio ≈ 6,7 rad), así que la lámina envuelve el cilindro más de una vuelta y `recortar` la recorta contra la cara justo donde no debía. Fusion no repuja ahí. Arreglo: exigir que el arco del perfil quede dentro de ±π/2 de la generatriz que lo mira (o recortar contra el prisma del perfil). | clon/omnicad/nucleo/solidos_crear.py (`_envolver_en_cilindro`, `a_uv`); evidencia local `evidencias/ui_2026-11-06/sonda_b217_caras.py` | 2026-11-06 |
 | B-219 | Nervio y Red › la flecha de «Distancia» no apunta al sentido que elige el núcleo | Abierto | Baja | El Nervio y la Red van a la cara **más cercana** del cuerpo (`_sentido_hacia_cuerpo`), pero la flecha del asa de Distancia se dibuja sobre ±normal del plano del boceto, girada con «Cambiar dirección»: en una caja 40³ cerrada con el boceto en y = 30 (paredes a 8 y a 28) la red crece hacia +Y y la flecha apunta −Y, con y sin invertir (`evidencias/ui_2026-11-06/sonda_asas_red.py`). En el Nervio la flecha es además perpendicular al crecimiento (el nervio crece en el plano del boceto). Arreglo: pedir el sentido al núcleo con el cuerpo objetivo, o dibujar la flecha desde la forma ya calculada de la previa. | clon/omnicad/ui/comandos/asas_extra.py:295 (`_asas_nervio`) | 2026-11-06 |
 | B-196 | Barrer y el sector del labio pierden la autointersección sin avisar | Abierto | Media | `barrer` (dos sitios) y `_sector_labio` no pasan por el aviso de autointersección que ya tienen Tubo y Patrón geométrico (B-167, B-168). Hallado en la revisión del 2026-11-05. | nucleo/solidos_crear.py | 2026-11-05 |
 | B-195 | Extruir el logo ZAI.svg entero falla: dos regiones salen con contorno autointersectado | Abierto | Alta | Pasa también sin transformar y sin Rust: el arreglo planar da 277 regiones y 2 son inválidas (8,35 mm² con 36 curvas y 0,0027 mm²; `BRepAlgoAPI_Check` falla y `ShapeAnalysis_Wire.CheckSelfIntersection` da verdadero en un alambre). La extrusión de `object:<id>` termina en «La operación 'unir' dio un resultado imposible». Revisar qué cruce casi tangente no se corta en `nucleo/perfiles.py` (`_detectar`) y validar las caras antes de entregarlas. | clon/omnicad/nucleo/perfiles.py (`_detectar`); evidencia local `evidencias/boceto_organizar_2026-11-05/zai_caras.py` y `zai_sonda.py` (necesita el `ZAI.svg` del Escritorio) | 2026-11-05 |
@@ -77,15 +76,6 @@ de arriba manda sobre este texto.
 - **Esquive:** sin carril (escala por conicidad) o con Solevación entre perfiles.
 - **Prueba propuesta:** carril paralelo con Ninguna = 800 mm³ y con Escalar de 2 a 6 = 3466,67 mm³ (sólido y superficie).
 
-### B-209 · Barrido sólido con «Estirar» hace «Escalar»
-
-- **Qué:** el mismo barrido de B-208 con el carril de (0, 2) a (50, 6): `sweep rail_scale="stretch"` y `rail_scale="scale"`.
-- **Esperado (Fusion):** «Stretch: use path - guide rail distance to scale profile in X» (ayuda `Sweep reference`): el perfil crece solo hacia el carril, 4·(4+12)/2·50 = 1600 mm³ (la superficie da sus 400 mm² exactos).
-- **Obtenido:** 3364,59 mm³ en los dos modos, sin aviso. El docstring de `barrer` dice que «estirar» no existe en OCC y se hace como «escalar» (`nucleo/solidos_crear.py:877`), pero `superficies._estirar` (`nucleo/superficies.py:617`) ya lo resuelve.
-- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py`.
-- **Esquive:** ninguno en sólido; superficie y después Engrosar o Coser.
-- **Prueba propuesta:** estirar ≠ escalar y da 1600 mm³ con el carril de 2 a 6; la ventana ofrece Estirar.
-
 ### B-212 · Solevación sólida con un carril recto da un sólido inválido
 
 - **Qué:** boceto XY con cuadro −5..5, plano a z 10 con cuadro −10..10, boceto XZ con la línea de (5, 0) a (10, 10) (carril que toca el medio del lado x=5 abajo y del lado x=10 arriba); `loft sketches=["S1","S2"] rails=[{"sketch":"C","curve":<id>}]`.
@@ -113,14 +103,21 @@ de arriba manda sobre este texto.
 - **Causa probable:** no se leyó a fondo. `_desmoldear_pared` deja afuera las caras cuya normal no es perpendicular a la extracción (`nucleo/solidos_crear.py:1412`) y `nervio` fuerza el sentido de la extracción (línea 1457); el único test con dirección usa la misma que el crecimiento.
 - **Prueba propuesta:** −1° da un poco menos de 26700 y 1° con extracción Z da un sólido válido.
 
-### B-217 · Repujado con cadena tangente se repite en los costados
+### B-220 · Repujado con «Envolver» en un cilindro lejos del perfil repuja dando una vuelta de más
 
-- **Qué:** placa 60×40×10, `fillet edges=">Z" radius=3`, cuadro 10×10 en (20..30, 15..25) sobre la cara de arriba; `create_emboss faces=">Z" depth=1 tangent_chain=true`. En la ventana: Repujado › Más opciones › Cadena tangente.
-- **Esperado (Fusion):** «Tangent Chain: Check to automatically select tangentially connected geometry» (ayuda `Emboss reference`); el perfil se repuja donde cae: +100 mm³.
-- **Obtenido:** +437,12 mm³ y la caja de x −1..61, y −1..41: un cuadro achicado en cada costado. Captura `evidencias/ui_2026-11-05/capturas/repujado_cadena.png`.
-- **Reproducir:** `sondas_nrr.py rep_cadena_tangente` (la placa sola: `rep_cadena_tangente_base`, 23624,07); pieza `nervio_red_repujado` («Repujado con cadena tangente»).
-- **Causa probable (leída):** la cadena suma los costados planos (tangentes a los empalmes, `nucleo/solidos_crear.py:1548`) y cada grupo de caras paralelas pasa por `_perfiles_en_zona` con `adaptar`, que gira y achica el perfil para que entre.
-- **Prueba propuesta:** este caso da +100 y la caja no crece en x ni en y.
+- **Qué:** placa 60×40×10 con las cuatro aristas de arriba empalmadas r 3 (`fillet edges=">Z" radius=3`), cuadro
+  10×10 en (20..30, 15..25) en un plano a z = 10; `create_emboss faces="Cuerpo1/F3" depth=1 wrap=true` eligiendo el
+  empalme izquierdo (su centro está en x = 1, el cuadro a 19 mm de ahí). En la ventana: Repujado › Envolver, cara =
+  ese empalme. Sin cadena tangente: la cara la eligió el usuario.
+- **Esperado (Fusion):** «Emboss … by a specified depth and direction» sobre la cara elegida; lo que no cae sobre
+  la cara se pierde (la ayuda de `Emboss reference` no promete envolver alrededor del cilindro). Ahí no va material.
+- **Obtenido:** +39,71 mm³ en ese empalme (caja x 0,7..5,6), y +287,14 mm³ repartidos en los cuatro (`evidencias/ui_2026-11-06/sonda_b217_caras.py`).
+- **Causa (leída):** `_envolver_en_cilindro` arma la coordenada U con `u0 + giro · (distancia tangencial)/radio`
+  (`nucleo/solidos_crear.py`, `a_uv`), sin tope: 20 mm sobre un radio 3 dan 6,7 rad, o sea más de una vuelta, y la
+  superficie cilíndrica es periódica, así que la lámina vuelve a pasar por el sector de la cara. El `recortar`
+  posterior corta contra la cara y deja la parte que ya había dado la vuelta.
+- **Prueba propuesta:** envolver en una cara cilíndrica que no está bajo el perfil no agrega material (o avisa);
+  envolver en la cara que sí está bajo el perfil sigue dando el mismo volumen que hoy (caso `test_repujado_envolviendo_un_cilindro`).
 
 ### B-219 · La flecha de «Distancia» del Nervio y la Red no muestra el sentido que elige el núcleo
 
