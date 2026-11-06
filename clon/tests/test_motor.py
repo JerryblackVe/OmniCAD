@@ -191,6 +191,23 @@ def test_ningun_valor_por_defecto_usa_un_enum_de_ocp():
     assert not malos, malos
 
 
+def test_nucleo_importa_sin_opencascade():
+    """Todo `nucleo/` carga sin OpenCascade (B-218: `editar_cara` importaba OCP al cargarse): con OmniKernel y OCP
+    bloqueado ningún módulo puede importar OCP al cargarse. El patrón es `_iniciar_opencascade` + `_motor.registrar`."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+    raiz = Path(__file__).resolve().parents[1]
+    entorno = dict(os.environ, OMNICAD_MOTOR="omnikernel", OMNICAD_BLOQUEAR_OCP="1", PYTHONIOENCODING="utf-8")
+    codigo = ("import importlib, pkgutil, omnicad.nucleo as n\n"
+              "for m in pkgutil.walk_packages(n.__path__, 'omnicad.nucleo.'): importlib.import_module(m.name)")
+    p = subprocess.run([sys.executable, "-c", codigo],
+                       cwd=raiz, env=entorno, capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", timeout=300)
+    assert p.returncode == 0, p.stderr
+
+
 def test_metodos_de_clase_con_occ_no_corren_con_omnikernel(monkeypatch):
     plano = geo.Plano("XY")
     monkeypatch.setenv("OMNICAD_MOTOR", "omnikernel")

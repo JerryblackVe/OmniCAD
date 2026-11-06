@@ -629,6 +629,67 @@ lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
   - El «Automático» de Fusion puede ser un tamaño que se adapta al lienzo; en OmniCAD es un tamaño fijo de 120 px (como ya era). No lo cambié porque la referencia no dice en qué se basa el automático.
   - **Finales de línea (importante para la revisión):** al editar, la herramienta dejó `ui/ventana.py` y `ui/superposiciones.py` enteros en LF y el `git diff --stat` saltó a 6357 y 1334 líneas. Se restauró **línea por línea** con difflib (los tramos iguales copian los bytes de `git show HEAD:archivo`, los nuevos llevan el final del vecino): el diff final es de **13 líneas en `ventana.py`** y **30 en `superposiciones.py`**, sin una sola línea de más. Queda anotado como lección en `PROJECT_LOG.md`.
 
+## Informe tanda C12
+
+**Modelo:** CodeBuddy con hy3. **Tanda:** C12 · **Bug:** B-218 (único ítem). **Sin commitear** (lo commitea el coordinador).
+
+### B-218 — Editar cara y Dividir cara cargan sin OpenCascade y quedan sin soporte con OmniKernel — **Resuelto**
+
+- **Estado:** Resuelto.
+- **Ayuda de Fusion:** No aplica: B-218 es un bug de compatibilidad con el motor OmniKernel, no un comportamiento de geometría a replicar.
+- **Qué cambié:** `clon/omnicad/nucleo/editar_cara.py` importaba OpenCascade (OCP) al cargarse (líneas 18-34 originales: `BRep_*`, `TopoDS`, `gp_*`, `Geom_*`, `IntTools_*`, `ShapeFix_*`, `Array*`, `TopAbs_*`, `TopExp_*`, `TopLoc_*`, `BRepTools*`, etc.). Con `OMNICAD_MOTOR=omnikernel` y `OMNICAD_BLOQUEAR_OCP=1` el import caía en «Import prohibido por OMNICAD_BLOQUEAR_OCP: OCP», así que Editar cara y Dividir cara no funcionaban con OmniKernel. Lo pasé al patrón de sus gemelos de `nucleo/` (`_iniciar_opencascade` + `_motor.registrar`):
+  - Los imports de OCP ahora viven en `_iniciar_opencascade()` (declarados con `global`) y se ejecutan solo si `motor_activo() == "opencascade"` (`clon/omnicad/nucleo/editar_cara.py:24-58`; guarda `:60-61`).
+  - Al final del módulo: `_motor.registrar(globals(), _iniciar_opencascade)` (`clon/omnicad/nucleo/editar_cara.py:514`), que envuelve las funciones públicas y, como no existe `clon/omnicad/nucleo/omnikernel/editar_cara.py`, hace que `editar_cara`, `grilla_cara`, `curvas_grilla`, `extruir_grilla`, `divisiones` y `remuestrear` informen `MOTOR_SIN_SOPORTE` con OmniKernel (igual que el resto de `nucleo/`).
+- **Gemelos revisados y qué hice con cada uno:**
+  - `nucleo/solidos_modificar.py`, `nucleo/geometria.py` y los demás módulos de `nucleo/` que usan `_iniciar_opencascade` + `_motor.registrar`: **copié el patrón** (declarar los nombres OCP como `global` y cargarlos solo con OpenCascade).
+  - `timeline/ops_modificar.py` (`OpEditarCara`, `clon/omnicad/timeline/ops_modificar.py:591,600`): ya importa `editar_cara` de forma perezosa dentro de `ejecutar` y lo usa envuelto por el dispatcher → sin cambio.
+  - `api/herramientas_dividir.py` (`clon/omnicad/api/herramientas_dividir.py:109,149`): ya hace el import perezoso de `editar_cara` → sin cambio.
+  - **Dividir cara** (`extruir_grilla`, `divisiones`, los `cortes_*`, etc.) vive dentro del propio `editar_cara.py` y quedó cubierto por el mismo patrón → sin cambio aparte.
+- **Test nuevo (rojo → verde):** `tests/test_motor.py::test_nucleo_importa_sin_opencascade`. Corre en subproceso con `OMNICAD_MOTOR=omnikernel` y `OMNICAD_BLOQUEAR_OCP=1` y afirma que `import omnicad.nucleo.editar_cara` sale con código 0.
+  - ROJO (antes del arreglo, con los imports de OCP al tope):
+        E       AssertionError: Traceback (most recent call last):
+        E           File "<string>", line 1, in <module>
+        E           File "D:\PROGRAMA-cb\clon\omnicad\nucleo\editar_cara.py", line 18, in <module>
+        E             from OCP.BRep import BRep_Builder, BRep_Tool
+        E           File "D:\PROGRAMA-cb\clon\omnicad\bloqueo_ocp.py", line 11, in find_spec
+        E             raise ImportError(f"Import prohibido por OMNICAD_BLOQUEAR_OCP: {fullname}")
+        E         ImportError: Import prohibido por OMNICAD_BLOQUEAR_OCP: OCP
+        E       assert 1 == 0
+        tests\test_motor.py:207: AssertionError
+        1 failed in 3.42s
+  - VERDE (con el patrón aplicado):
+        .                                                                        [100%]
+        1 passed in 2.05s
+- **Salida real de ruff check .:** `All checks passed!`
+- **Salida real de cada grupo de tests (con `../scripts/turno.py`, < 900 s cada uno):**
+  - `test_motor.py`: **14 passed in 22.39s**
+  - `test_sol16_dividir_cara.py` + `test_api_dividir.py` + `test_consultas_motor.py`: **18 passed in 4.20s**
+  - `test_herramientas_solido.py`: **148 passed in 98.81s**
+  - `test_api_solido.py`: **74 passed in 7.57s**
+  - `test_barrido_tipos.py` + `test_cobertura_ui_api.py`: **405 passed in 37.86s**
+  - `test_paridad_motor.py` (lento, omnikernel instalado): **68 passed in 126.29s**
+- **Salida completa de `/ponytail-review` y qué arreglé:**
+  > What this change does: `nucleo/editar_cara.py` no importa OpenCascade al cargarse: los imports de OCP se movieron a `_iniciar_opencascade()` y solo se cargan con el motor OpenCascade, envuelto por `_motor.registrar`. Así el módulo carga con OmniKernel y OCP bloqueado, y la operación informa `MOTOR_SIN_SOPORTE`.
+  >
+  > Must fix: ninguno.
+  >
+  > Should fix: ninguno que requiera código. La única sutileza es que `divisiones` (pública) es «común» (no nombra OCP directo) salvo cuando `espaciado > 0`, que entonces llama a `_largos` (usa `BRepAdaptor_Surface`); con OmniKernel y espaciado > 0 daría `NameError` en vez de `MOTOR_SIN_SOPORTE`. Es inalcanzable por la vía pública (la API `edit_face`/`get_face_grid` pasa primero por `grilla_cara`/`editar_cara`, que ya dan `sin_soporte`), y `remuestrear`/`extruir_grilla` y `divisiones` con espaciado = 0 son matemática pura que corre igual en los dos motores. Se deja como está y se anota como ⚠ (corregirlo forzaría `sin_soporte` en el caso puramente matemático, que es peor).
+  >
+  > Nice to have: lo mismo de arriba, como nota.
+  >
+  > Verdict: Ship.
+  > Lean: 0 lines possible (el cambio borra las líneas de imports al tope y agrega la función + el registro; no hay código muerto).
+  > Not checked: no corrí la prueba de humo ni la suite completa (las corre el coordinador, por instrucción de la tanda); no abrí Fusion (el bug es de compatibilidad de motor, no de comportamiento de geometría).
+
+  No tuve que arreglar nada del review.
+
+- **Revisión del coordinador (2026-11-06):** `ponytail-review` propio pidió que el test cubra todo `nucleo/` y no solo `editar_cara` (así se encontró B-218): renombrado a `test_nucleo_importa_sin_opencascade`, recorre `nucleo/` con `pkgutil.walk_packages`. TWINS: 0 otros módulos importan OCP al cargarse. `ruff check .`: All checks passed!; 931 passed en 10 archivos (`test_motor`, `test_api_dividir`, `test_api_solido`, `test_barrido_tipos`, `test_cobertura_ui_api`, `test_comandos_modificar`, `test_herramientas_solido`, `test_iconos_extra`, `test_revision_lotes_sol`, `test_solidos_modificar`).
+- **Lo no verificado (⚠):**
+  - No corrí la prueba de humo ni la suite completa (lo hace el coordinador, según la tanda).
+  - El caso `divisiones(espaciado > 0)` bajo OmniKernel daría `NameError` en vez de `MOTOR_SIN_SOPORTE` (inalcanzable por la API, ver arriba).
+  - No probé con la app real abierta bajo OmniKernel + OCP bloqueado más allá del import (el test de humo del coordinador cubre ese recorrido).
+  - `nucleo/omnikernel/editar_cara.py` no existe a propósito: la operación queda sin soporte con OmniKernel.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

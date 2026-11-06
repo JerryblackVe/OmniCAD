@@ -15,23 +15,39 @@ deja la extrusión con Alt (`extruir_grilla`) y el Espaciado de contorno (`espac
 import math
 
 import numpy as np
-from OCP.BRep import BRep_Builder, BRep_Tool
-from OCP.BRepAdaptor import BRepAdaptor_Curve2d, BRepAdaptor_Surface
-from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeWire
-from OCP.BRepClass3d import BRepClass3d_SolidClassifier
-from OCP.BRepLib import BRepLib
-from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
-from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
-from OCP.Geom import Geom_BSplineSurface
-from OCP.GeomAbs import GeomAbs_Plane
-from OCP.gp import gp_Pnt, gp_Pnt2d, gp_Vec
-from OCP.IntTools import IntTools_FClass2d
-from OCP.OCP.collections import Array1_double, Array1_int, Array2_gp_Pnt
-from OCP.ShapeFix import ShapeFix_ShapeTolerance
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FORWARD, TopAbs_IN, TopAbs_OUT, TopAbs_REVERSED, TopAbs_WIRE
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS
+from . import motor as _motor
+
+
+def _iniciar_opencascade():
+    global BRep_Builder, BRep_Tool, BRepAdaptor_Curve2d, BRepAdaptor_Surface
+    global BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeWire
+    global BRepClass3d_SolidClassifier, BRepLib, BRepPrimAPI_MakePrism
+    global BRepTools, BRepTools_WireExplorer, Geom_BSplineSurface, GeomAbs_Plane
+    global gp_Pnt, gp_Pnt2d, gp_Vec, IntTools_FClass2d
+    global Array1_double, Array1_int, Array2_gp_Pnt, ShapeFix_ShapeTolerance
+    global TopAbs_EDGE, TopAbs_FORWARD, TopAbs_IN, TopAbs_OUT, TopAbs_REVERSED, TopAbs_WIRE
+    global TopExp_Explorer, TopLoc_Location, TopoDS
+    from OCP.BRep import BRep_Builder, BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve2d, BRepAdaptor_Surface
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeWire
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.BRepLib import BRepLib
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
+    from OCP.Geom import Geom_BSplineSurface
+    from OCP.GeomAbs import GeomAbs_Plane
+    from OCP.gp import gp_Pnt, gp_Pnt2d, gp_Vec
+    from OCP.IntTools import IntTools_FClass2d
+    from OCP.OCP.collections import Array1_double, Array1_int, Array2_gp_Pnt
+    from OCP.ShapeFix import ShapeFix_ShapeTolerance
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FORWARD, TopAbs_IN, TopAbs_OUT, TopAbs_REVERSED, TopAbs_WIRE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS
+
+
+if _motor.motor_activo() == "opencascade":
+    _iniciar_opencascade()
 
 from . import geometria as geo
 
@@ -493,3 +509,6 @@ def curvas_grilla(cara, n_u, n_v, desplazamientos, muestras=48, cortes_u=(), cor
     a = _evaluar(sup, tu, gv) + _campo(desplazamientos, nudos_u, nudos_v, tu, gv)
     c = _evaluar(sup, gu, tv) + _campo(desplazamientos, nudos_u, nudos_v, gu, tv)
     return {"u": [a[:, j] for j in range(a.shape[1])], "v": [c[i] for i in range(c.shape[0])]}
+
+
+_motor.registrar(globals(), _iniciar_opencascade)
