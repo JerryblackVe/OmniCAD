@@ -59,7 +59,6 @@ def test_b213_nervio_invertido_sin_cara_da_error_y_conserva_el_cuerpo():
     assert _aumento(s, cid, 25500) == pytest.approx(0)
 
 
-@pytest.mark.xfail(strict=True, reason="B-213 Parcial: la Red delante de la boca sigue recortada (fila abierta en docs/seguimiento/bugs.md)")
 @pytest.mark.parametrize("extender", [False, True])
 def test_b213_red_delante_de_la_boca_conserva_el_inicio(extender):
     s = api.Sesion()
@@ -76,6 +75,28 @@ def test_b213_red_delante_de_la_boca_conserva_el_inicio(extender):
     else:
         assert aumento == pytest.approx(1720)  # 20 de largo · 43 hasta la pared · 2 de grosor
     assert geo.caja_envolvente(s.cuerpo(cid).forma)[0][1] == pytest.approx(-5)
+
+
+@pytest.mark.parametrize("tipo", ["red", "nervio"])
+@pytest.mark.parametrize("angulo", [-10, 10])
+@pytest.mark.parametrize("profundidad", [None, 3])
+@pytest.mark.parametrize("direccion,signo", [("simetrica", 0), ("lado1", 1), ("lado2", -1)])
+def test_b213_llega_a_la_cara_oblicua_en_todo_el_espesor(tipo, angulo, profundidad, direccion, signo):
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.gp import gp_Pnt
+    from omnicad.nucleo import solidos_crear as sc
+
+    piso = geo.rotar(geo.caja(40, 20, 2, (0, -10, -2)), (0, 0, 0), (1, 0, 0), angulo)
+    curva = BRepBuilderAPI_MakeEdge(gp_Pnt(10, 0, 8), gp_Pnt(30, 0, 8)).Edge()
+    normal = (0, 0, 1) if tipo == "red" else (0, 1, 0)
+    pared = getattr(sc, tipo)(piso, [curva], normal, 2, extender=False, direccion=direccion,
+                             profundidad=profundidad)
+    assert geo.es_valida(pared)
+    esperado = 120 if profundidad is not None else 320 - signo * 40 * math.tan(math.radians(angulo))
+    assert geo.volumen(pared) == pytest.approx(esperado)
+    assert geo.volumen(geo.booleano(pared, piso, "intersecar")) == pytest.approx(0, abs=1e-7)
+    if profundidad is None:
+        assert len(geo.solidos(geo.booleano(pared, piso, "unir"))) == 1
 
 
 def test_nervio_con_desmoldeo_es_mas_fino_en_el_borde_libre():

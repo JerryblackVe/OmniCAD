@@ -1401,21 +1401,24 @@ def _sentido_hacia_cuerpo(cuerpo, alambre, candidatos, invertir):
     return -mejor[1] if invertir else mejor[1]
 
 
-def _caja_de(forma, margen):
-    (x0, y0, z0), (x1, y1, z1) = geo.caja_envolvente(forma)
-    return geo.caja(x1 - x0 + 2 * margen, y1 - y0 + 2 * margen, z1 - z0 + 2 * margen,
-                    (x0 - margen, y0 - margen, z0 - margen))
-
-
 def _diagonal(forma):
     bb = geo.caja_envolvente(forma)
     return float(np.linalg.norm(np.subtract(bb[1], bb[0])))
 
 
-def _hasta_el_cuerpo(bruto, cuerpo, curvas, margen, que, profundidad):
-    """Recorta un nervio/red largo: dentro de la caja del cuerpo, fuera del cuerpo, y solo el trozo que
-    nace de las curvas. Sin profundidad (To Next) además tiene que tocar al cuerpo."""
-    bruto = geo.booleano(bruto, _caja_de(cuerpo, margen), "intersecar")
+def _hasta_el_cuerpo(bruto, cuerpo, curvas, direccion, largo, que, profundidad):
+    """Red de Fusion: limita las prolongaciones a la sombra del cuerpo hacia el perfil, sin cortar el inicio.
+    El corte volumétrico conserva la llegada oblicua en todo el grosor y las uniones entre curvas."""
+    sombras = [cuerpo]
+    for cara in _caras_de(cuerpo):
+        plano = geo.plano_de_cara(cara)
+        if plano is not None and float(plano.normal @ direccion) >= -1e-7:
+            continue
+        prisma = BRepPrimAPI_MakePrism(cara, _gvec(-direccion * largo)).Shape()
+        volumen = geo.volumen(prisma)
+        if abs(volumen) > 1e-9:
+            sombras.append(prisma if volumen > 0 else prisma.Reversed())
+    bruto = geo.booleano(bruto, _unir(sombras), "intersecar")
     piezas = _piezas_que_tocan(geo.booleano(bruto, cuerpo, "cortar"), curvas)
     if not piezas:
         raise geo.ErrorGeometria(f"{que}: la curva queda dentro del cuerpo.")
@@ -1437,6 +1440,43 @@ def _lamina_hasta_el_cuerpo(lamina, cuerpo, curvas, finales, que, profundidad):
                                or any(geo.se_tocan(resultado, f, 1e-5) for f in finales)):
         raise geo.ErrorGeometria(f"{que}: no llega al cuerpo (revisá el sentido o usá una profundidad).")
     return resultado
+
+
+def _engrosar_nervio(recorte, cuerpo, n, lo, hi, profundidad):
+    """Engrosa el Nervio de Fusion y lleva sus caras de llegada planas al contacto oblicuo real."""
+    llegadas = []
+    if profundidad is None:
+        for cara in _caras_de(cuerpo):
+            plano = geo.plano_de_cara(cara)
+            if plano is not None and 1e-7 < abs(float(plano.normal @ n)) < 1 - 1e-7:
+                llegadas.append((cara, -math.asin(float(plano.normal @ n))))
+    if not llegadas:
+        return _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
+                      for f in _caras_de(recorte)])
+    solidos = []
+    for cara in _caras_de(recorte):
+        prisma = BRepPrimAPI_MakePrism(cara, _gvec(n * (hi - lo)))
+        forma = prisma.Shape()
+        ajuste = BRepOffsetAPI_DraftAngle(forma)
+        neutro = gp_Pln(_pnt(geo.plano_de_cara(cara).origen - n * lo), _gdir(n))
+        ajustadas = False
+        for arista in _aristas_de(cara):
+            for llegada, angulo in llegadas:
+                if not _aristas_de(geo.booleano(arista, llegada, "intersecar")):
+                    continue
+                for lateral in prisma.Generated(arista):
+                    ajuste.Add(TopoDS.Face(lateral), _gdir(n), angulo, neutro, False)
+                    if not ajuste.AddDone():
+                        raise geo.ErrorGeometria("Nervio: no se pudo ajustar la cara de llegada oblicua.")
+                    ajustadas = True
+                break
+        if ajustadas:
+            ajuste.Build()
+            if not ajuste.IsDone():
+                raise geo.ErrorGeometria("Nervio: el kernel no pudo ajustar la llegada oblicua.")
+            forma = _validar(ajuste.Shape(), "Nervio con llegada oblicua")
+        solidos.append(_trasladar(forma, n * lo))
+    return _unir(solidos)
 
 
 def _desmoldear_pared(bruto, direccion, angulo, origen, *, recortado):
@@ -1485,8 +1525,7 @@ def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, di
     if lo is None:
         raise geo.ErrorGeometria(f"Dirección de espesor desconocida: {direccion}")
     recorte = _lamina_hasta_el_cuerpo(region, cuerpo, [w], [_trasladar(w_ext, m * largo_max)], "Nervio", profundidad)
-    recortado = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
-                       for f in _caras_de(recorte)])
+    recortado = _engrosar_nervio(recorte, cuerpo, n, lo, hi, profundidad)
     recortado = _validar(geo.booleano(recortado, cuerpo, "cortar"), "Nervio")
     if abs(angulo_desmoldeo) > 1e-9:
         bruto = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
@@ -1525,7 +1564,7 @@ def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, dire
         lamina = BRepPrimAPI_MakePrism(w_ext, _gvec(d * (profundidad or largo_max))).Shape()
         solidos += [_engrosar_lamina(lamina, e) for e in espesores]
     bruto = _unir(solidos)
-    recortado = _hasta_el_cuerpo(bruto, cuerpo, cadenas, 0.0, "Red", profundidad)
+    recortado = _hasta_el_cuerpo(bruto, cuerpo, cadenas, d, largo_max, "Red", profundidad)
     if abs(angulo_desmoldeo) > 1e-9:
         return _desmoldear_pared(bruto, -d, angulo_desmoldeo, _punto_en(cadenas[0], 0.5)[0], recortado=recortado)
     return recortado
