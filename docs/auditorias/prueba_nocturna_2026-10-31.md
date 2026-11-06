@@ -392,6 +392,10 @@ Segunda tanda, va después de la 3q. Si deja la pieza `nervio_red_repujado`, cor
 - Falta: correrla en `--ventana visible` (el chequeo de Tab necesita el foco real: en minimizada sale con ⚠) y en el cierre integrado junto con `solido_crear` y `asas`. Las sondas sin ventana (`evidencias/ui_2026-11-05/sondas_nrr.py`, 61 casos) se pueden repetir para comprobar los arreglos.
 - La corrieron con el código de Extruir de OpenCode sin commitear (`comando.py`, `manipuladores.py`, `solidos_crear.py`…): si algo cambia al integrarlo, puede venir de ahí.
 
+## 3s. Tarea nueva: arreglos con Qwen3.8-Flash en cinco tandas (2026-11-05)
+
+Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-92, H-86, H-99, H-94). Cada tanda la revisa el coordinador con todos los tests que usan lo tocado. Al terminar las cinco: suite completa y prueba de humo, y las piezas `revolucion_barrido_solevacion`, `nervio_red_repujado`, `solido_crear` y `superficie` con `--ventana visible`.
+
 ## 4. Cosas que ninguna prueba cubre todavía
 
 | # | Qué falta | Dónde está anotado |
