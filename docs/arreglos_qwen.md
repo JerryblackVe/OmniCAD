@@ -446,6 +446,95 @@ lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
   - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l` (los lista arriba).
   - No toqué la ventana más allá del foco y el drag del árbol, así que no hice la captura `todo.py` de una pieza de boceto: el arrastre entre filas es nativo de Qt y lo ejercita el test nuevo (vía el callback que usa el mismo camino que el drop real); el foco del teclado se prueba en `test_el_arbol_...`.
 
+## Informe tanda C9
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C9 · **Bug:** H-85 (faltante). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** un grupo con los 5 archivos obligatorios + `test_seguimiento.py` y `test_doc_agentes.py` (por haber tocado `docs/seguimiento/` y el Registro). Los del `grep -l` NO se corrieron (regla del coordinador) y están listados abajo.
+
+### H-85 — SUPERFICIE › Extruir en la ventana: elegir perfiles cerrados y caras planas — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-patch/extrude-a-surface-body-5889029bb69.md`
+  (paso 2): «In the canvas, select a **sketch profile, sketch curve, planar face, or single line text object**.» O sea:
+  el campo de perfiles de Extruir de superficie tiene que aceptar, además de la curva y la arista que ya aceptaba, el
+  perfil cerrado (la región) y la cara plana. El texto de una línea ya entraba por ser una `curva_boceto`.
+- **Qué cambié:**
+  - `clon/omnicad/ui/comandos/superficie.py:23` — constante nueva `PERFILES_SUPERFICIE = CURVAS | {"perfil", "cara_plana"}`
+    con el porqué en un comentario. `CURVAS` (curva de boceto y arista) queda igual para los campos que solo llevan
+    curvas (ruta del Barrido, contorno del Parche, aristas de Recortar, eje de Revolución).
+  - `clon/omnicad/ui/comandos/superficie.py:46` — `SupExtruir.campos`: el campo «Perfiles» pasa de `CURVAS` a
+    `PERFILES_SUPERFICIE`; la ayuda del campo enumera lo que entra.
+  - `clon/omnicad/ui/comandos/superficie.py:40` — la `AYUDA` del comando dice que extruye curvas, perfiles cerrados,
+    caras planas o un texto de una línea.
+  - `clon/omnicad/ui/comandos/superficie.py:142` — el campo «Perfil» del Barrido de superficie ya usaba
+    `CURVAS | {"perfil", "cara_plana"}` escrito a mano; ahora usa la misma constante (un solo nombre para una sola cosa).
+  - `scripts/prueba_ui/extruir_espacios.py:13,83,86` — la pieza importaba `CURVAS` para simular el clic; pasa a
+    `PERFILES_SUPERFICIE`. Sin esto la pieza seguía en ✗ **con el arreglo puesto** (era el «Should fix» que la auditoría
+    de Extruir ya había anticipado en `docs/auditoria_extruir.md:145`).
+  - **La operación y el núcleo no cambiaron una línea**: `_curvas` (`timeline/ops_superficie.py:43`) resuelve un
+    `perfil` a su cara (`entidades.resolver` → `perfil.cara`) y `nucleo/superficies.py::alambres` (línea 164) ya sabía
+    sacar los alambres de una `TopAbs_FACE`. Por eso el mismo camino sirve para curva, perfil y cara plana.
+- **Gemelos revisados:**
+  - El filtro de Extruir sólido (`ui/comandos/solido.py:33`, `{"perfil", "cara_plana", "curva_boceto"}`): es el criterio
+    que se copió; no se tocó. ✔
+  - El visor (`ui/visor3d.py::elegir_entidad`, secciones 4 y 5): ya devolvía hits `perfil` y `cara` con `plano`; no se
+    tocó. La pieza lo comprueba con un control (con el filtro de Extruir sólido los mismos clics sí eligen). ✔
+  - `acepta` (`ui/comando.py:377`): ya trataba `perfil` (`t in filtros`) y `cara_plana` (cara con plano); no se tocó. ✔
+  - La API `create_surface_extrude` (`api/herramientas_superficie.py:70`): **ya aceptaba** perfiles y caras
+    (`_seleccion(..., curvas=True)` y `profiles: curvas {...}, perfiles {...}, caras, aristas o cuerpos`); no cambió
+    firma ni docstring, así que `docs/agentes/herramientas.md` **no** se regeneró. ✔
+  - La previa (`ui/comando.py` › `set_filtro` con `campo.filtros`; `nucleo/previa*`): no tiene regla propia, ejecuta la
+    operación, así que hereda el filtro y la resolución sin cambios. ✔
+  - El Barrido de superficie (`ui/comandos/superficie.py:142`): misma constante, mismo valor que antes; su operación ya
+    aceptaba caras y perfiles. ✔
+  - **Fuera de alcance (fila nueva):** Revolución de superficie tiene el mismo defecto — Fusion dice «select a sketch
+    profile, sketch curve, or planar face to revolve» (`fusion-patch/revolve-a-surface-body-a3f71a695c7.md`) y su campo
+    Perfil sigue filtrando solo curva y arista (comprobado: `acepta(campo.filtros, hit_perfil) is False`). No lo toqué
+    porque H-85 es de Extruir: queda como **H-104** en `docs/seguimiento/faltantes.md`.
+- **Test nuevo** (`clon/tests/test_comandos_superficie.py::test_extruir_de_superficie_elige_perfiles_cerrados_y_caras_planas`):
+  con un rectángulo de boceto y una caja, comprueba que el campo «Perfiles» de `SupExtruir` acepta el hit del perfil y el
+  de la cara plana (`acepta`), y que cada uno extruye de verdad una superficie de 200 mm² (tubo de 10×10 por 5 de alto).
+  - Salida **ROJA** (antes del arreglo):
+    `FAILED tests/test_comandos_superficie.py::test_extruir_de_superficie_elige_perfiles_cerrados_y_caras_planas`
+    `AssertionError: assert (False) … where False = acepta({'arista', 'curva_boceto'}, {'tipo': 'perfil', …})`
+    → `1 failed, 4 deselected in 2.44s`
+  - Salida **VERDE** (con el arreglo): `1 passed, 4 deselected in 2.35s`
+- **ruff check .:** `All checks passed!` (tres veces: antes del arreglo, después y al cerrar).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_superficies.py`, `test_superficie_fusion.py`,
+  `test_api_superficie.py`, `test_comandos_superficie.py`, `test_cobertura_ui_api.py` → **476 passed in 9.46s**
+  (corrido tres veces: con el arreglo, después de unificar la constante del Barrido — 9.23 s — y al cerrar).
+- **Además corrí** (por haber tocado `docs/seguimiento/` y el Registro): `test_seguimiento.py` + `test_doc_agentes.py` →
+  **445 passed in 6.87s**.
+- **Ventana (pieza de la tanda, minimizada):** `todo.py extruir_espacios --ventana minimizada` → **18 comprobaciones,
+  0 con ✗** (antes del arreglo: 18, 2 con ✗ — justo «SUPERFICIE: clic dentro de un perfil cerrado lo elige» y «clic en
+  una cara plana la elige», las dos con «el visor devolvió None»). Ahora: «el visor devolvió perfil» y «el visor devolvió
+  cara». La captura `evidencias/ui_2026-11-06/capturas/extruir_1024x640.png` se miró: el panel entra sin cortes y
+  «Aceptar» se ve (esa captura es del paso de Plástico; el panel de SUPERFICIE lo abre y cierra la misma pieza).
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** por `SupExtruir` / `sup_extruir` (menos los que sí
+  corrí de la lista obligatoria): `test_api_solido_extra.py`, `test_b105_panel_chico.py`, `test_barrido_tipos.py`,
+  `test_busqueda_comandos.py`, `test_iconos_extra.py`, `test_manipuladores.py`, `test_opciones_operaciones.py`,
+  `test_referencias_mal_formadas.py`, `test_sup29_encadenado_superficie.py`, `test_superficie_guias.py`. Revisados a ojo:
+  ninguno depende del filtro ni del texto de ayuda (buscan el comando por clave o título, o usan la operación/API), pero
+  el prompt manda correrlos y la nota del coordinador manda no hacerlo en esta corrida.
+- **Salida de /ponytail-review:** **Must fix:** ninguno. **Should fix:** ninguno. **Nice to have:** ninguno. Lo revisado y
+  por qué queda así:
+  1. **No hay regresión para los campos que solo llevan curvas**: `CURVAS` no se tocó; el Barrido, el Parche, Recortar y
+     el eje de Revolución siguen igual (el diff del Barrido es el mismo valor con otro nombre).
+  2. **El camino de la operación ya existía**: perfil → cara → `alambres` saca los alambres; el test lo prueba con
+     geometría (200 mm²), no solo con el filtro.
+  3. **`cadena` con un perfil o una cara**: `_en_cadena` cae en su rama `else` y devuelve la forma tal cual; nada se
+     encadena ni se pierde.
+  4. **La API no cambió**: sin firma nueva, sin doc que regenerar, `test_doc_agentes.py` verde.
+  5. **`preseleccion`** (`ui/comando.py:404`) reparte lo elegido antes de abrir el comando: ahora un perfil
+     preseleccionado cae en «Perfiles» en vez de quedarse afuera. Es el comportamiento de Fusion.
+  6. **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l`
+    (los lista arriba).
+  - No abrí Fusion: el comportamiento sale de la ayuda oficial de `fusion-patch`, como en las tandas anteriores.
+  - Un perfil cerrado **con huecos** (una región con un agujero) extruido como superficie da un tubo por alambre
+    (exterior e interior). Es lo que ya hacía la cara plana en el Barrido de superficie y lo que da `alambres`; no lo
+    comparé con Fusion.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

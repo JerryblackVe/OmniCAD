@@ -18,6 +18,9 @@ from .crear import Bobina, Solevacion, Tuberia, _en_fila
 from .primitivas import Caja, Cilindro, Esfera, Toroide
 
 CURVAS = {"curva_boceto", "arista"}
+# Lo que Fusion deja elegir como perfil de una superficie: perfil cerrado, curva (un texto de una línea es una
+# curva), cara plana y arista (H-85).
+PERFILES_SUPERFICIE = CURVAS | {"perfil", "cara_plana"}
 
 
 def _h1(ref, estado):
@@ -34,14 +37,15 @@ def _h_lista(lista, estado):
 
 class SupExtruir(Comando):
     CLAVE, TITULO, ICONO = "sup_extruir", "Extruir superficie", "sup_extruir"
-    AYUDA = "Extruye curvas (abiertas o cerradas) o un texto de una línea y crea una superficie."
+    AYUDA = "Extruye curvas, perfiles cerrados, caras planas o un texto de una línea y crea una superficie."
     CLASE_OP = OpSupExtruir
 
     def campos(self, ctx):
         dos = lambda v: v.get("lados") == "dos_lados"  # noqa: E731
         objeto = lambda v: v.get("extension") == "objeto"  # noqa: E731
-        return [Seleccion("curvas", "Perfiles", CURVAS, maximo=None,
-                          ayuda="Curvas de boceto o aristas. Un texto de una sola línea extruye todos sus trazos."),
+        return [Seleccion("curvas", "Perfiles", PERFILES_SUPERFICIE, maximo=None,
+                          ayuda="Curvas de boceto, aristas, perfiles cerrados o caras planas. Un texto de una sola línea "
+                                "extruye todos sus trazos."),
                 Casilla("cadena", "Selección de cadena", True,
                         ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
                 Opciones("inicio", "Inicio", {"plano": "Plano de perfil", "desfase": "Plano de desfase", "objeto": "Desde objeto"}),
@@ -135,7 +139,7 @@ class SupBarrido(Comando):
         perpendicular = lambda v: ruta(v) and v.get("orientacion") == "perpendicular"  # noqa: E731
         return [Opciones("tipo", "Tipo", {"ruta": ("Ruta individual", "bar_ruta"), "ruta_carril": ("Ruta + Rail guía", "bar_carril"),
                                           "ruta_superficie": ("Trayectoria + Superficie guía", "bar_superficie")}),
-                Seleccion("perfil", "Perfil", CURVAS | {"perfil", "cara_plana"}, maximo=None),
+                Seleccion("perfil", "Perfil", PERFILES_SUPERFICIE, maximo=None),
                 Seleccion("ruta", "Ruta", CURVAS, maximo=None),
                 Casilla("cadena", "Selección de cadena", True,
                         ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
