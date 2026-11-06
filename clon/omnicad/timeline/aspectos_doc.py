@@ -221,10 +221,21 @@ def suprimir(doc, ref, quitar_usos=False):
     return anterior, cuerpos, caras
 
 
-def reemplazar_lista(doc, nueva):
+def _limpiar_usos(doc, cambios, cuerpos, caras):
+    """Suma a `cambios` lo que devuelve a los cuerpos y a las caras a su aspecto anterior («Quitar y suprimir»)."""
+    for cid in cuerpos:
+        cambios.setdefault(cid, {}).update({"apariencia": None, "acabado": None, "aspecto": None})
+    for cid, refs in _por_cuerpo(caras).items():
+        actuales = cambios.get(cid, {}).get("caras") or _cambios_de_cuerpo(doc, cid).get("caras") or []
+        resto = [c for c in actuales if c["ref"] not in refs]
+        cambios.setdefault(cid, {})["caras"] = resto or None
+
+
+def reemplazar_lista(doc, nueva, quitar_usos=()):
     """Escribe la lista de «En este diseño» que armó el panel Aspecto: los aspectos nuevos (id «nuevoN», duplicados) reciben
     su id definitivo, los que cambiaron ponen al día a sus cuerpos y caras, y uno que se sacó y todavía se usa es un
-    error. Devuelve {id provisorio: id definitivo}."""
+    error, salvo que su id esté en `quitar_usos` («Quitar y suprimir»: se los saca también). Devuelve
+    {id provisorio: id definitivo}."""
     actual = lista(doc)
     conocidos = {a["id"]: a for a in actual}
     destino, mapa = [], {}
@@ -235,11 +246,19 @@ def reemplazar_lista(doc, nueva):
         if entrada["id"] not in conocidos:
             mapa[entrada["id"]] = entrada["id"] = _id_nuevo(actual + destino)
         destino.append(entrada)
-    for anterior in actual:
-        if anterior["id"] not in {e["id"] for e in destino} and any(usos(doc, anterior["id"])):
-            raise geo.ErrorGeometria(f"«{anterior['nombre']}» todavía se usa: no se puede sacar del diseño.")
     cambiaron = [e for e in destino if e["id"] in conocidos and _contenido(conocidos[e["id"]]) != _contenido(e)]
-    doc.set_propiedades({CLAVE: {"lista": destino}, **_repartir(doc, cambiaron)})
+    cambios = _repartir(doc, cambiaron)
+    quedan = {e["id"] for e in destino}
+    for anterior in actual:
+        if anterior["id"] in quedan:
+            continue
+        cuerpos, caras = usos(doc, anterior["id"])
+        if not (cuerpos or caras):
+            continue
+        if anterior["id"] not in quitar_usos:
+            raise geo.ErrorGeometria(f"«{anterior['nombre']}» todavía se usa: no se puede sacar del diseño.")
+        _limpiar_usos(doc, cambios, cuerpos, caras)
+    doc.set_propiedades({CLAVE: {"lista": destino}, **cambios})
     return mapa
 
 
@@ -247,26 +266,35 @@ def renombrar(doc, ref, nombre):
     return editar(doc, ref, {"nombre": nombre})
 
 
-def propiedades_con(doc, nueva):
+def propiedades_con(doc, nueva, quitar_usos=()):
     """Las propiedades del documento como quedarían al escribir `nueva` («En este diseño» editado en un panel): la vista
-    previa de Render, que muestra los cambios sin tocar el documento. Sin cambios devuelve las propiedades tal cual."""
+    previa de Render, que muestra los cambios sin tocar el documento. `quitar_usos`: ids que se sacan además de los
+    cuerpos y caras que los usan («Quitar y suprimir»). Sin cambios devuelve las propiedades tal cual."""
     actual = {a["id"]: a for a in lista(doc)}
     cambiaron = [dict(asp.normalizar(a), id=a["id"]) for a in nueva
                  if a["id"] in actual and _contenido(actual[a["id"]]) != _contenido(a)]
-    if not cambiaron:
+    quedan = {a["id"] for a in nueva}
+    limpieza = {}
+    for aid in quitar_usos:
+        if aid not in quedan:
+            _limpiar_usos(doc, limpieza, *usos(doc, aid))
+    if not cambiaron and not limpieza:
         return doc.propiedades
     salida = {k: dict(v) if isinstance(v, dict) else v for k, v in doc.propiedades.items()}
     for cid, claves in _repartir(doc, cambiaron).items():
         salida.setdefault(cid, {}).update(claves)
+    for cid, claves in limpieza.items():
+        salida.setdefault(cid, {}).update(claves)
     return salida
 
 
-def aplicar_panel(doc, diseno, elegido=None, cuerpos=(), caras=(), rgb=None):
+def aplicar_panel(doc, diseno, elegido=None, cuerpos=(), caras=(), rgb=None, quitar_usos=()):
     """Lo que escribe el panel Aspecto al aplicar (Aceptar en Diseño, aplicar en Render): la lista editada de «En este
     diseño» (`diseno`, None = sin tocarla) y después el color suelto `rgb` o el aspecto `elegido` en los cuerpos y las
-    caras. Un cuerpo queda ENTERO con lo elegido: pierde los aspectos propios de sus caras (pedido de Gerardo,
-    2026-11-05). Devuelve {id provisorio: id definitivo} de los aspectos nuevos. Pensada para correr en una transacción."""
-    mapa = reemplazar_lista(doc, diseno) if diseno is not None and diseno != lista(doc) else {}
+    caras. `quitar_usos`: ids que «Quitar y suprimir» saca además de los cuerpos y caras que los usan. Un cuerpo queda
+    ENTERO con lo elegido: pierde los aspectos propios de sus caras (pedido de Gerardo, 2026-11-05). Devuelve
+    {id provisorio: id definitivo} de los aspectos nuevos. Pensada para correr en una transacción."""
+    mapa = reemplazar_lista(doc, diseno, quitar_usos) if diseno is not None and diseno != lista(doc) else {}
     if rgb is not None:
         asignar_color(doc, rgb, cuerpos, caras, quitar_caras=True)
     elif elegido is not None:

@@ -1255,6 +1255,8 @@ class VentanaPrincipal(QMainWindow):
                 salida[cid] = TABLA_MATERIALES[props["material"]]["color"]
         salida.update({cid: tuple(rgb) for cid, rgb in self._previa_aspecto.get("cuerpos", {}).items()
                        if cid in estado.cuerpos})
+        for cid in self._previa_aspecto.get("sin_apariencia", ()):      # «Quitar y suprimir» (H-74)
+            salida.pop(cid, None)
         return salida
 
     def _caras_pintadas(self, estado, ocultos):

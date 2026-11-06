@@ -31,8 +31,8 @@ Se descartó: que las caras de letras de texto se pierdan al recalcular. Pintada
 | Aplicar a: Cuerpos/componentes · Caras | Radio arriba del diálogo | Igual | Hecho |
 | Aplicar a: Todos los guiones · Guion actual | Solo en ANIMACIÓN | No | ANI-3 |
 | En este diseño | Los aspectos que usa el diseño | Igual, con miniaturas | Hecho |
-| Menú de En este diseño: Editar, Duplicar, Suprimir, Añadir a Favoritos, Copiar en Mis aspectos | Clic derecho | Igual | Hecho |
-| «Unassign and Delete» | Saca el aspecto de todos y lo borra | Solo por API (`manage_appearance` con `remove_users`); en el menú Suprimir queda gris si se usa | H-74 |
+| Menú de En este diseño: Editar, Duplicar, Suprimir, Quitar y suprimir, Añadir a Favoritos, Copiar en Mis aspectos | Clic derecho | Igual | Hecho |
+| «Unassign and Delete» | Saca el aspecto de todos y lo borra | Igual, con «Quitar y suprimir» en el menú (un solo paso de deshacer); también por API (`manage_appearance` con `remove_users`) | Hecho (H-74) |
 | Biblioteca: Aspectos de Fusion, Mis aspectos, Favoritos, buscador | Pestañas y familias | Igual | Hecho |
 | «Show downloadable materials» | Muestra los que se bajan | No aplica (todo local) | No aplica |
 | **Arrastrar la muestra** a un cuerpo, cara o componente en la vista o el navegador | Es LA forma de aplicar: cada suelta se aplica al instante | No existe: se elige el objetivo y se acepta | KS5 |

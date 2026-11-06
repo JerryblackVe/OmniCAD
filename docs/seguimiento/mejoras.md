@@ -44,7 +44,7 @@ Abierto 16 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 11 · Parcial 1.
+Abierto 12 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -53,6 +53,7 @@ Abierto 11 · Parcial 1.
 | H-94 | El aviso flotante de abajo a la derecha tapa el Aceptar del panel y los campos en ventana chica | Abierto | Baja | El aviso «1 advertencia(s)» del barrido anterior queda abierto al pasar a otro comando y se dibuja encima del panel: en 1900×1000 tapa la mitad de Aceptar y Cancelar de Solevación; en 800×520 tapa Distancia y Escala del perfil del Barrido. Fusion lo muestra sin tapar el diálogo. Capturas en evidencias/ui_2026-11-05/capturas (solevacion_punta y barrido_800x520). | ui/avisos.py:3 | 2026-11-05 |
 | H-98 | Repujado sobre un cilindro exige marcar «Envolver en la cara» | Abierto | Baja | Fusion no tiene esa casilla: envuelve solo sobre una cara curva. OmniCAD da «Sobre una cara cilíndrica el repujado se hace envolviendo (envolver=True)» si no se marca; marcado anda (cuadro 6×6 en un cilindro r 10: +37,80 mm³, la cuenta). | nucleo/solidos_crear.py:1573 | 2026-11-05 |
 | H-99 | Repujado: con profundidad negativa el «Tipo» del panel sigue en Relieve | Abierto | Baja | Fusion: «If you adjust the depth value from positive to negative, the Effect will automatically change from Emboss to Deboss». OmniCAD graba bien (−1 da 23900 mm³ en la placa de 24000), pero el panel sigue diciendo Relieve y el asa de Profundidad no baja de 0. Pieza `nervio_red_repujado`. | ui/comandos/crear.py:356 | 2026-11-05 |
+| H-103 | Aspecto: «quitar el aspecto de sus usos» está escrito dos veces | Abierto | Baja | `timeline/aspectos_doc.quitar` (API y Quitar) y `_limpiar_usos` (Quitar y suprimir del panel, H-74) arman los mismos cambios por separado; un arreglo en uno puede no llegar al otro. Que `quitar` use `_limpiar_usos` y conserve el caso `quitar_caras`. | clon/omnicad/timeline/aspectos_doc.py:140 y :224 | 2026-11-06 |
 | H-75 | Un cuerpo negro se ve plano en el visor: arriba y costados del mismo negro, y una letra negra sobre una placa negra desaparece | Abierto | Media | El visor ilumina con luces fijas (difuso × color, brillo chico); con color 0 solo queda el brillo especular en ángulos justos. Fusion ilumina con el entorno y el negro brillante refleja. Probar un reflejo de entorno simple o un mínimo de luz en el visor, y compararlo con Fusion. Visto en el video de Gerardo del 2026-11-05 (docs/brechas_aspecto.md). | clon/omnicad/ui/visor3d.py (LUZ_AMBIENTE, LUZ_BRILLO, GL_SPECULAR) | 2026-11-05 |
 | H-68 | Parámetros automáticos (a futuro): al dibujar un boceto y al aplicar una operación, crear solos los parámetros de sus cotas y valores, con una preferencia para activarlo o desactivarlo | Abierto | Media | Pedido de Gerardo con «Reportar problema» (registro de uso, sesión 2026-11-03_210154, seq 112). Hoy los parámetros se crean a mano. Copiar cómo nombra Fusion los parámetros de modelo (d1, d2…) antes de construir. | timeline/parametros.py | 2026-11-03 |
 | H-55 | Sustainability Insights: la región y el país no cambian el cálculo | Abierto | Media | Sumar la energía de fabricación por región con un factor de red eléctrica con fuente. Hoy el resultado lo avisa. | nucleo/sustentabilidad.py | 2026-11-01 |

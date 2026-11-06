@@ -181,6 +181,89 @@ lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
   - **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
 - **No verificado / ⚠:** no corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador). Tampoco corrí la captura `scripts/prueba_ui/todo.py` de la pieza `revolucion_barrido_solevacion` en minimizada: el panel del barrido no cambió de posición ni de campos, solo el texto de ayuda de la casilla «Selección de cadena»; los tests de `test_comandos_crear.py` (corridos) ejercitan el campo.
 
+## Informe tanda C5
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C5 · **Bug:** H-74 (faltante). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** se corrió UN grupo con los 5 archivos obligatorios; los del `grep -l` NO se corrieron y están listados abajo para el coordinador (la lista salió casi vacía: solo los mismos obligatorios).
+
+### H-74 — ASPECTO › «Quitar y suprimir» en el menú de «En este diseño» — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-render/modify-the-appearance-of-the-design-2c3eb0b892c.md`
+  › «Unassign and delete appearance»: «Right-click the appearance, and click **Unassign and Delete**. The appearance is
+  removed from the selected body/component/face.» O sea: del menú de «En este diseño», en un solo gesto, el aspecto se
+  saca de todos los que lo usan **y** se borra del diseño. (En `fusion-model` no hay artículo del menú; la única fuente
+  oficial es la de `fusion-render`.)
+- **Qué cambié:**
+  - `clon/omnicad/ui/aspectos_ui.py:736` — `PanelAspectos.quitar_y_suprimir(aid)` nuevo: descarta el id de `usados`,
+    lo suma a `self.quitar_usos` (atributo nuevo, `:523`) y reusa `suprimir(aid)` para sacarlo de la copia de trabajo.
+    Se escribe al Aceptar, como todo lo demás del panel (Cancelar lo descarta).
+  - `clon/omnicad/ui/aspectos_ui.py:654` — el armado del menú sale de `_menu_diseno` a un `_menu_de_diseno(aid)` que
+    devuelve el `QMenu` (el `_menu_diseno` solo lo ejecuta); ahí entra «Quitar y suprimir», después de Suprimir y
+    siempre habilitado (Suprimir sigue gris cuando lo usan, como antes).
+  - `clon/omnicad/ui/aspectos_ui.py:637` — `sincronizar` limpia `quitar_usos`: al aplicar ya se escribió.
+  - `clon/omnicad/timeline/aspectos_doc.py:224` — `_limpiar_usos(doc, cambios, cuerpos, caras)` nuevo: devuelve los
+    cuerpos a `apariencia/acabado/aspecto = None` y filtra las caras de ese aspecto de cada cuerpo.
+    `reemplazar_lista(doc, nueva, quitar_usos=())` (`:234`) lo usa en lugar de fallar con «todavía se usa», en el
+    **mismo** `set_propiedades` → UN paso de deshacer. `aplicar_panel(..., quitar_usos=())` (`:291`) y
+    `propiedades_con(..., quitar_usos=())` (`:269`, la previa de Render) lo pasan.
+  - `clon/omnicad/ui/comandos/aspecto.py:77` — `_avisar` copia `w.quitar_usos` a `panel.valores`; `:149` lo pasa a
+    `ad.aplicar_panel`. `_previa` (`:88`) muestra el cambio al instante: saca esos cuerpos de la previa y los suma a
+    `sin_caras` / `sin_apariencia` (si además se pinta el cuerpo con otro aspecto, lo elegido manda).
+  - `clon/omnicad/ui/ventana.py:1258` — `_apariencias` descarta los cuerpos de `sin_apariencia`: vuelven al color de su
+    material o al de fábrica, sin esperar al Aceptar.
+  - `clon/omnicad/ui/render.py:1976` y `:2065` — el panel de CONFIGURAR › Aspecto (que usa el mismo `PanelAspectos`)
+    pasa `quitar_usos` a la previa y a la escritura.
+- **Gemelos revisados:**
+  - La API (`api/herramientas_aspecto.py` › `manage_appearance` con `remove_users`): **ya lo hacía** y no se duplicó
+    nada — el camino nuevo usa `timeline/aspectos_doc.py` (`_limpiar_usos` + `reemplazar_lista`), el mismo módulo que
+    la herramienta. Firma y docstring sin cambios → `docs/agentes/herramientas.md` NO se regeneró (no cambió ninguna
+    firma ni descripción de la API).
+  - `ad.suprimir(doc, ref, quitar_usos=True)` (lo que usa la API): no se tocó; hace dos `set_propiedades` (lista y
+    después usos) y eso ya es un solo paso de deshacer dentro de `Sesion.transaccion`. El camino del panel usa
+    `reemplazar_lista` porque escribe la lista editada entera, no una acción por vez.
+  - El panel de Render (`ui/render.py`, otro consumidor del mismo `PanelAspectos`): cambiado, previa y escritura.
+  - La previa del comando (`ui/comandos/aspecto.py::_previa`) y el visor (`ui/ventana.py::_apariencias`): cambiados;
+    sin eso el menú borraba el aspecto de la lista pero el cuerpo seguía pintado hasta el Aceptar.
+  - `docs/brechas_aspecto.md`: las dos filas del menú y de «Unassign and Delete» al día.
+  - **Fuera de alcance (no lo toqué):** el arrastre de la muestra (KS5) y el resto de la tabla.
+- **Test nuevo** (`clon/tests/test_aspecto_panel.py`):
+  - `test_quitar_y_suprimir_saca_el_aspecto_de_todos_y_lo_borra_en_un_paso`: con `asp1` en `op1.c1`, Suprimir sigue
+    devolviendo `False`; `quitar_y_suprimir` devuelve `True`, la vista ya no pinta el cuerpo y el documento no cambió;
+    al Aceptar la lista queda vacía y el cuerpo sin `apariencia`; `deshacer()` —un solo paso— devuelve el aspecto y
+    el uso.
+  - `test_el_menu_de_en_este_diseno_ofrece_quitar_y_suprimir`: el menú del clic derecho trae «Quitar y suprimir»
+    habilitado y «Suprimir» gris.
+  - Salida **ROJA** (antes del arreglo): `AttributeError: 'PanelAspectos' object has no attribute 'quitar_y_suprimir'`
+    y `… has no attribute '_menu_de_diseno'` → `2 failed, 24 deselected in 2.97s`.
+  - Salida **VERDE**: `26 passed in 4.74s` (el archivo entero).
+- **ruff check .:** `All checks passed!` (dos veces: antes y después de rehacer un archivo).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_aspecto_panel.py` → 26; `test_aspectos_api.py`,
+  `test_formulario_paneles.py`, `test_render_aspecto.py`, `test_comandos.py` → `69 passed in 7.89s`. **Total 95 passed.**
+- **Además corrí** (por haber tocado `docs/seguimiento/` y el Registro): `test_aspecto_panel.py` +
+  `test_seguimiento.py` + `test_doc_agentes.py` → `473 passed in 9.56s`.
+- **Ventana (minimizada):** `todo.py paneles_inventario` → `172 comprobaciones, 0 con ✗` (ver ⚠).
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** el grep de las funciones tocadas
+  (`reemplazar_lista`, `propiedades_con`, `aplicar_panel`, `quitar_usos`, `sin_apariencia`, `_menu_de_diseno`,
+  `quitar_y_suprimir`) devuelve **solo los dos obligatorios** (`test_aspectos_api.py` por `reemplazar_lista`,
+  `test_render_aspecto.py` por `propiedades_con`), ya corridos. Por el token genérico `aspectos_doc` aparecen además
+  `test_api_visor.py` y `test_inspeccionar_fusion.py`, que NO corrí (no tocan el panel ni la previa).
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff: (1) no se duplicó la API: el
+  borrado vive en `aspectos_doc` y lo comparten la herramienta y el panel; (2) un solo `set_propiedades` → un solo
+  paso de deshacer (probado con `deshacer()`); (3) el panel sigue sin escribir nada hasta Aceptar, así que Cancelar
+  descarta el borrado; (4) `quitar_usos` con un id provisorio («nuevoN», un duplicado nunca usado) no hace nada
+  porque `usos()` no lo encuentra; (5) `_limpiar_usos` se aplica **después** de `_repartir`, así no pisa las caras de
+  un aspecto editado en el mismo Aceptar; (6) el `_menu_de_diseno` devuelve el `QMenu` sin abrirlo: mismo
+  comportamiento y testeable. Nada quedó pendiente.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador).
+  - **Captura de la ventana:** no hay pieza de aspecto en `PIEZAS` (`scripts/prueba_ui/todo.py:29`); corrí la más
+    cercana, `paneles_inventario --ventana minimizada` → **172 comprobaciones, 0 con ✗** y el panel ASPECTO abre bien
+    (`evidencias/ui_2026-11-06/paneles_inventario.log`: «PANELES·despues·1280x720 · aspecto — {abierto: true,
+    tipo_panel: PanelComando, titulo: ASPECTO, ancho: 462, alto: 377, campos: 5, visibles: 3, dentro_del_lienzo:
+    true}»). Esa pieza no abre el menú del clic derecho, así que el ítem nuevo no se vio en pantalla; en los tests se
+    inspecciona el `QMenu` sin `exec`.
+  - No se abrió Fusion: el comportamiento sale de la ayuda oficial de `fusion-render`.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

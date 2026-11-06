@@ -364,6 +364,32 @@ def test_menu_de_en_este_diseno_duplicar_suprimir_copiar_y_favoritos(v):
     assert v.doc.propiedad("op2.c1", "aspecto") == "asp2"
 
 
+def test_quitar_y_suprimir_saca_el_aspecto_de_todos_y_lo_borra_en_un_paso(v):
+    """H-74: «Unassign and Delete» de Fusion (clic derecho › Quitar y suprimir): el aspecto se saca de todos los cuerpos
+    y caras que lo usan y se borra del diseño, en UN paso de deshacer."""
+    api.llamar(v.sesion_aspecto, "set_appearance", {"bodies": ["op1.c1"], "appearance": "Hormigón - Liso"})
+    antes = list(v.doc.propiedad("op1.c1", "apariencia"))
+    p, w = _abrir(v)
+    assert w.usados == {"asp1"} and w.suprimir("asp1") is False          # Suprimir sigue gris: lo usa op1.c1
+    assert w.quitar_y_suprimir("asp1") is True and w.lista.count() == 0
+    _previsualizar(p)
+    assert _color_en_el_visor(v, "op1.c1") is None                        # la vista ya lo saca
+    assert ad.buscar(v.doc, "asp1") is not None and v.doc.propiedad("op1.c1", "apariencia") == pytest.approx(antes)
+    p.aceptar()
+    assert ad.lista(v.doc) == [] and not v.doc.propiedades.get("op1.c1", {}).get("apariencia")
+    assert _color_en_el_visor(v, "op1.c1") is None
+    v.doc.deshacer()                                                      # un solo paso de deshacer para las dos cosas
+    assert ad.buscar(v.doc, "asp1") is not None and ad.usos(v.doc, "asp1")[0] == ["op1.c1"]
+    assert v.doc.propiedad("op1.c1", "apariencia") == pytest.approx(antes)
+
+
+def test_el_menu_de_en_este_diseno_ofrece_quitar_y_suprimir(v):
+    api.llamar(v.sesion_aspecto, "set_appearance", {"bodies": ["op1.c1"], "appearance": "Hormigón - Liso"})
+    _p, w = _abrir(v)
+    acciones = {a.text(): a for a in w._menu_de_diseno("asp1").actions()}
+    assert acciones["Suprimir"].isEnabled() is False and acciones["Quitar y suprimir"].isEnabled() is True
+
+
 def test_editar_uno_de_la_biblioteca_deja_una_copia_en_el_diseno(v):
     p, w = _abrir(v)
     selector = w.editar_de_biblioteca(asp.buscar("Acero - Pulido"))

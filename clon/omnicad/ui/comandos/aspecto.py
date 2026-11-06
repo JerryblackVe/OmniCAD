@@ -74,6 +74,7 @@ class Aspecto(Comando):
     @staticmethod
     def _avisar(panel, w):
         panel.valores["aspecto"] = copy.deepcopy(w.elegido)
+        panel.valores["quitar_usos"] = sorted(w.quitar_usos)
         panel._cambiar("diseno", copy.deepcopy(w.diseno))
 
     # ------------------------------------------------------------ vista previa (sin tocar el documento)
@@ -86,6 +87,7 @@ class Aspecto(Comando):
 
     def _previa(self, v, doc):
         previa = {"cuerpos": {}, "caras": []}
+        sin_caras, sin_apariencia = set(), set()
         originales = {a["id"]: a for a in ad.lista(doc)}
         for a in v.get("diseno") or []:           # un aspecto del diseño editado: quienes lo usan ya lo muestran
             o = originales.get(a["id"])
@@ -93,12 +95,22 @@ class Aspecto(Comando):
                 cuerpos, caras = ad.usos(doc, a["id"])
                 previa["cuerpos"].update({c: a["color"] for c in cuerpos})
                 previa["caras"] += [(c, r, a["color"]) for c, r in caras]
+        for aid in v.get("quitar_usos") or []:    # «Quitar y suprimir»: la vista los deja como estaban
+            cuerpos, caras = ad.usos(doc, aid)
+            previa["cuerpos"] = {c: rgb for c, rgb in previa["cuerpos"].items() if c not in cuerpos}
+            refs = {(c, r) for c, r in caras}
+            previa["caras"] = [p for p in previa["caras"] if (p[0], p[1]) not in refs]
+            sin_caras.update(cuerpos)
+            sin_apariencia.update(cuerpos)
         rgb = _rgb_de(v.get("hex")) or (v["aspecto"]["color"] if v.get("aspecto") else None)
         if rgb is not None:
             cuerpos, caras = self._objetivos(v)
             previa["cuerpos"].update({c: rgb for c in cuerpos})
             previa["caras"] += [(c, r, rgb) for c, r in caras]
-            previa["sin_caras"] = set(cuerpos)      # un cuerpo se pinta entero: sus caras pintadas se van (H-73)
+            sin_caras.update(cuerpos)               # un cuerpo se pinta entero: sus caras pintadas se van (H-73)
+            sin_apariencia.difference_update(cuerpos)
+        previa["sin_caras"] = sin_caras
+        previa["sin_apariencia"] = sin_apariencia
         return previa
 
     def preparar_panel(self, panel):
@@ -133,7 +145,8 @@ class Aspecto(Comando):
             raise ErrorComando("Elegí un aspecto de la biblioteca o de «En este diseño».")
         with api.Sesion(doc).transaccion():          # un solo paso de deshacer para todo lo que hace Aceptar
             try:
-                ad.aplicar_panel(doc, diseno if hay_cambios else None, elegido, cuerpos, caras, rgb)
+                ad.aplicar_panel(doc, diseno if hay_cambios else None, elegido, cuerpos, caras, rgb,
+                                 v.get("quitar_usos") or ())
             except geo.ErrorGeometria as e:
                 raise ErrorComando(str(e)) from e
 
