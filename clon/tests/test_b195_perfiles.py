@@ -75,7 +75,9 @@ def test_b195_segundo_cruce_del_zai_entre_curvas_casi_paralelas():
     assert sum(p.area for p in regiones) == pytest.approx(16., abs=1e-8)
 
 
-def test_b195_si_el_cruce_no_se_puede_partir_da_error_sin_entregar_caras_invalidas(monkeypatch):
+def test_b195_si_el_cruce_no_se_puede_partir_no_entrega_caras_invalidas(monkeypatch):
+    """La región irreparable no se ofrece (como Fusion), sin hacer fallar el boceto entero: un boceto de ajuste a malla
+    con curvas superpuestas a propósito (test_boceto_fase8_malla) tiene que seguir recalculando."""
     monkeypatch.setattr(perfiles, "_partir_cruces", lambda caras, aristas: aristas)
-    with pytest.raises(geo.ErrorGeometria, match="quedan perfiles inválidos"):
-        perfiles._detectar_occ(curvas(), geo.Plano("XY"))
+    salida = perfiles._detectar_occ(curvas(), geo.Plano("XY"))
+    assert all(geo.es_valida(p.cara) for p in salida)

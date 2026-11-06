@@ -627,9 +627,9 @@ def _detectar_occ(geometria, plano, tolerancia=1e-4):
         if corregidas is not partidas:
             # La primera pasada ya unió los extremos difusos; no volver a fundir los cruces recién partidos.
             perfiles, _ = _perfiles_occ(geometria, plano, corregidas, min(tolerancia, 1e-7))
-        if any(not geo.es_valida(p.cara) for p in perfiles):
-            raise geo.ErrorGeometria("No se pudieron separar los cruces de las curvas del boceto: quedan perfiles "
-                                    "inválidos. Revisá las curvas superpuestas o casi tangentes.")
+        # La región que no se pudo reparar no se ofrece como perfil (Fusion tampoco la ofrece): el boceto sigue
+        # andando y nadie puede extruir una cara imposible (B-195).
+        perfiles = [p for p in perfiles if geo.es_valida(p.cara)]
     return perfiles
 
 

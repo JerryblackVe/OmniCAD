@@ -97,7 +97,7 @@ def test_barrido_distancia_fuera_de_rango_error_en_el_dialogo():
 
 def test_barrido_dialogo_estirar_hacia_el_carril():
     """B-209: el diálogo de Barrido ofrece «Estirar» (como el de superficie) y estira solo hacia el carril:
-    4·(4+12)/2·50 = 1600 mm³, no el tronco de 3364,59 de «Escalar»."""
+    4·(4+12)/2·50 = 1600 mm³, no el tronco de 3466,67 de «Escalar» (16·50·∫(1+2t)², exacto desde B-208)."""
     from omnicad.ui.comando import ContextoComando
     from omnicad.ui.comandos.crear import Barrido
     campos = {c.clave: c for c in Barrido().campos(ContextoComando(Documento()))}
@@ -112,7 +112,7 @@ def test_barrido_dialogo_estirar_hacia_el_carril():
     _ejecutar(doc, Barrido, **valores)
     assert g.volumen(_ultimo(doc).forma) == pytest.approx(1600, rel=1e-3)
     _ejecutar(doc, Barrido, **{**valores, "escala_carril": "escalar"})
-    assert g.volumen(_ultimo(doc).forma) == pytest.approx(3364.59, rel=1e-3)
+    assert g.volumen(_ultimo(doc).forma) == pytest.approx(16 * 50 * 13 / 3, rel=1e-3)
 
 
 def test_repujado_profundidad_negativa_pasa_el_tipo_a_grabado():

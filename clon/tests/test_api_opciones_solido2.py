@@ -88,7 +88,7 @@ def test_barrido_de_una_cara_plana_y_con_carril_guia():
 
 def test_barrido_con_carril_estirar_no_es_escalar():
     """B-209: con el carril abierto de 2 a 6, «Estirar» hace crecer el perfil solo hacia el carril:
-    4·(4+12)/2·50 = 1600 mm³ con la caja y sin cambiar; «Escalar» da 3364,59."""
+    4·(4+12)/2·50 = 1600 mm³ con la caja y sin cambiar; «Escalar» da 16·50·∫(1+2t)² = 3466,67 (exacto desde B-208)."""
     def sesión_con_carril():
         s = api.Sesion()
         ok(s, "create_sketch", plane="YZ", name="Perfil")
@@ -108,7 +108,7 @@ def test_barrido_con_carril_estirar_no_es_escalar():
     s = sesión_con_carril()
     ok(s, "sweep", sketch="Perfil", path_sketch="Ruta", rail_sketch="Carril", rail_scale="scale")
     escalado = cuerpos(s)[0]
-    assert escalado["volume"] == pytest.approx(3364.59, rel=1e-3)
+    assert escalado["volume"] == pytest.approx(16 * 50 * 13 / 3, rel=1e-3)   # 3466,67: lado 4→12 lineal
     assert estirado["volume"] < escalado["volume"]
 
 
