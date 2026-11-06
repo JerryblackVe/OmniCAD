@@ -1411,6 +1411,20 @@ def _hasta_el_cuerpo(bruto, cuerpo, curvas, margen, que, profundidad):
     return _validar(resultado, que)
 
 
+def _lamina_hasta_el_cuerpo(lamina, cuerpo, curvas, finales, que, profundidad):
+    """Al siguiente de Nervio/Red de Fusion: recorta la lámina antes de darle espesor.
+    El extremo auxiliar lejano no puede quedar en el resultado de «Al siguiente»."""
+    piezas = [c for c in _caras_de(geo.booleano(lamina, cuerpo, "cortar"))
+              if any(geo.se_tocan(c, w, 1e-5) for w in curvas)]
+    if not piezas:
+        raise geo.ErrorGeometria(f"{que}: la curva queda dentro del cuerpo.")
+    resultado = geo.compuesto(piezas)
+    if profundidad is None and (not geo.se_tocan(resultado, cuerpo, 1e-4)
+                               or any(geo.se_tocan(resultado, f, 1e-5) for f in finales)):
+        raise geo.ErrorGeometria(f"{que}: no llega al cuerpo (revisá el sentido o usá una profundidad).")
+    return resultado
+
+
 def _desmoldear_pared(bruto, direccion, angulo, origen, *, recortado):
     """Desmoldeo del Nervio/Red de Fusion: inclina los laterales originales sobre la pared `recortado`.
     El plano neutro pasa por `origen` y es normal a la extracción `direccion`. Con extracción por defecto,
@@ -1456,10 +1470,13 @@ def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, di
               "lado2": (-espesor, 0.0)}.get(direccion, (None, None))
     if lo is None:
         raise geo.ErrorGeometria(f"Dirección de espesor desconocida: {direccion}")
-    bruto = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
-                   for f in _caras_de(region)])
-    recortado = _hasta_el_cuerpo(bruto, cuerpo, [w], 0.0, "Nervio", profundidad)
+    recorte = _lamina_hasta_el_cuerpo(region, cuerpo, [w], [_trasladar(w_ext, m * largo_max)], "Nervio", profundidad)
+    recortado = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
+                       for f in _caras_de(recorte)])
+    recortado = _validar(geo.booleano(recortado, cuerpo, "cortar"), "Nervio")
     if abs(angulo_desmoldeo) > 1e-9:
+        bruto = _unir([BRepPrimAPI_MakePrism(_trasladar(f, n * lo), _gvec(n * (hi - lo))).Shape()
+                       for f in _caras_de(region)])
         pull = -m if direccion_desmoldeo is None else _unit(direccion_desmoldeo, "dirección de desmoldeo")
         if float(pull @ m) > 0:             # la extracción va del cuerpo hacia el borde libre (la curva)
             pull = -pull

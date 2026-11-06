@@ -470,6 +470,244 @@ Revisión final: sin hallazgos pendientes; **Verdict: Ship.**
   y empalme) siguen siendo tareas independientes. No se ejecutó OmniKernel, que no implementa Nervio/Red.
 - Sin banco grande de rendimiento ni instalador; `clon/pyproject.toml` no configura type-check separado.
 
+## Informe Sol · B-213
+
+**Estado: Parcial; no integrar como arreglo completo.** La prueba propuesta de Nervio está verde: invertido
+sin cara devuelve error y conserva el cuerpo; simétrico, side1 y side2 en el borde suman 1200 mm³ cada uno.
+Red conserva su implementación original: se retiró el cambio completo de Red al detectar que rompía la cruz
+de dos curvas de `test_red_hasta_el_piso`. Sus dos variantes exteriores siguen pendientes.
+Se paró la geometría tras dos intentos, según el límite del pedido. Se conservan fila y detalle en Parcial;
+`docs/seguimiento/README.md` no contiene B-213 y no necesita cambios. Sin commit ni cambios de rama.
+
+### Ayuda de Fusion y decisión
+
+El worktree no tiene el índice local de ayuda: el primer comando devolvió
+`Falta el índice: correr primero fusion_docs.py construir`. Se consultó la copia existente en `D:/PROGRAMA`,
+con el mismo Python pedido, sin construir ni modificar el índice:
+
+```console
+D:/PROGRAMA/clon/.venv/Scripts/python.exe scripts/fusion_docs.py buscar rib -s fusion-model
+1. Create a rib
+2. Rib reference
+D:/PROGRAMA/clon/.venv/Scripts/python.exe scripts/fusion_docs.py ver "Rib reference" -s fusion-model
+D:/PROGRAMA/clon/.venv/Scripts/python.exe scripts/fusion_docs.py ver "Web reference" -s fusion-model
+```
+
+Leídos `rib-reference-74df3f99244.md` y `web-reference-f26b3821965.md`, en
+`docs/fusion_docs/contenido/fusion-model/`: To Next llega a las caras más cercanas del sólido;
+Symmetric pone la mitad del grosor a cada lado y One Direction el grosor entero a un lado.
+Extend Curves prolonga hasta las caras del cuerpo. Se leyó también la auditoría original de Nervio/Red/Repujado.
+
+INTENT: code does recorte del sólido contra la caja del cuerpo; the failing check/task expects grosor entero en el borde y error sin cara de llegada; the spec (README/docs/docstring) says Al siguiente llega a caras del sólido y respeta el grosor elegido.
+
+### Cambios y gemelos
+
+- `clon/omnicad/nucleo/solidos_crear.py:1414`: `_lamina_hasta_el_cuerpo(lamina, cuerpo, curvas, finales, que, profundidad)`
+  recorta caras contra el cuerpo, conserva las que nacen de la curva y rechaza el extremo auxiliar en To Next.
+  Es un helper privado nuevo, solo de Nervio; devuelve un compuesto de caras.
+- `clon/omnicad/nucleo/solidos_crear.py:1447`: `nervio(cuerpo, aristas_curva, normal_plano, espesor, *,
+  profundidad=None, direccion="simetrica", invertir=False, extender=True, angulo_desmoldeo=0.0,
+  direccion_desmoldeo=None)` conserva la firma pública; engrosa después del recorte y quita el solape real.
+- `clon/omnicad/nucleo/solidos_crear.py:1487`: `red(cuerpo, aristas_curvas, normal_plano, espesor,
+  profundidad=None, *, direccion="simetrica", invertir=False, extender=True, angulo_desmoldeo=0.0)` conserva
+  la implementación original: el intento de recortar por cadena se retiró para no romper cruces.
+- `_hasta_el_cuerpo` y `_caja_de` originales siguen usados por Red. No se añadieron dependencias.
+- `clon/tests/test_sol10_nervio_red.py:37-78`: seis casos nuevos por API real, validez y volumen; rechazo
+  atómico del invertido. Las dos variantes exteriores de Red quedan rojas, sin ocultarlas con xfail.
+
+TWINS: searched `_hasta_el_cuerpo`, `_caja_de`, `nervio`, `red`, `create_rib`, `create_web` - found 1 other affected consumer: Red compartía el recorte de Nervio; tras fallar dos intentos, Red conserva el recorte original y queda pendiente en B-213.
+
+| Superficie revisada | Resultado |
+|---|---|
+| Previa `ui/comando.py:1665` y camino normal de `Documento.previsualizar` | Ejecuta la misma operación; sin fórmula de Nervio/Red duplicada. No hay archivos `nucleo/previa*` en este worktree. |
+| `nucleo/superficies.py`, `timeline/ops_superficie.py` | Sin Nervio/Red; coincide con la ausencia de estas herramientas en SUPERFICIE de Fusion. |
+| `nucleo/omnikernel/solidos_crear.py` | No implementa Nervio/Red; no se inventó un adaptador ni se declaró probado. |
+| `api/herramientas_solido_extra.py:161-227` | `create_rib`/`create_web` → `_nervio` → `OpNervio`/`OpRed`; mismo núcleo. |
+| `timeline/ops_solido.py:260-290` | Ambos consumidores usan las firmas públicas intactas. B-216 sigue independiente. |
+| `ui/comandos/crear.py:297-347` | `_NervioRed` crea esas operaciones; no recorta geometría por su cuenta. |
+| `_recortar_hasta` en el mismo núcleo | Extruir usa piezas que tocan el inicio, pero no `_caja_de`; no se cambió. |
+
+### Rojo, intentos y verde observado
+
+Python importado comprobado: `D:\PROGRAMA-sol\clon\omnicad\__init__.py`.
+Todos los pytest se lanzaron desde `clon/` con el Python compartido y `../scripts/turno.py --`,
+`-q -p no:cacheprovider`. Las esperas de turno no son tiempo de cálculo del kernel.
+
+**Antes del arreglo**, `tests/test_sol10_nervio_red.py -k b213`:
+
+```console
+[turno] arranca tras 66 s de espera
+FF.FFF
+Obtained: 599.9999999999709
+Expected: 1200 ± 0.0012
+Nervio invertido: ok=True, volume=27450.0, previous_volume=25500.0
+FAILED ...test_b213_nervio_en_el_borde_conserva_todo_el_espesor[symmetric]
+FAILED ...test_b213_nervio_en_el_borde_conserva_todo_el_espesor[side1]
+FAILED ...test_b213_nervio_invertido_sin_cara_da_error_y_conserva_el_cuerpo
+FAILED ...test_b213_red_delante_de_la_boca_conserva_el_inicio[False]
+FAILED ...test_b213_red_delante_de_la_boca_conserva_el_inicio[True]
+5 failed, 1 passed, 24 deselected in 2.26s
+```
+
+La primera versión del test de error decía `message`; se corrigió a la clave real `mensaje` al observar
+la respuesta de la API. No influyó en el rojo inicial: fallaba antes porque devolvía ok=True.
+El oráculo inicial de Red extendida (3096 mm³) se sustituyó por validez, aumento >1720 y caja y mínima −5:
+la ayuda no fija qué pasa con el tramo exterior sobre los labios y no se midió en Fusion. No se aflojó
+el punto que falla: crear la Red extendida debe tener éxito y sigue sin tenerlo.
+
+**Intento 1**, recorte de lámina antes de engrosar:
+
+```console
+[turno] arranca tras 16 s de espera
+.....F........................
+FAILED tests/test_sol10_nervio_red.py::test_b213_red_delante_de_la_boca_conserva_el_inicio[True]
+1 failed, 29 passed in 3.33s
+```
+
+**Intento 2**, separar las prolongaciones con Splitter y planos de las caras laterales tocadas:
+
+```console
+[turno] arranca tras 54 s de espera
+.....F........................
+FAILED tests/test_sol10_nervio_red.py::test_b213_red_delante_de_la_boca_conserva_el_inicio[True]
+1 failed, 29 passed in 3.39s
+```
+
+El segundo intento se retiró con parche preciso; no quedó un Splitter sin utilidad. Hipótesis para retomar:
+el corte/unificación posterior puede volver a unir caras coplanares separadas, y la región frente a la boca
+sigue conectando las prolongaciones. No se verificó esa causa interna. No se hizo un tercer intento.
+
+**Prueba propuesta en verde**, tras retirar el segundo intento:
+
+```console
+PYTHONIOENCODING=utf-8 D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_sol10_nervio_red.py -k 'b213 and not red_delante' -q -p no:cacheprovider
+[turno] arranca tras 102 s de espera
+....                                                                     [100%]
+4 passed, 26 deselected in 1.98s
+D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .
+All checks passed!
+```
+
+**Área antes de retirar el cambio de Red** (mismo prefijo de Python/turno):
+
+```console
+-m pytest tests/test_sol10_nervio_red.py tests/test_solidos_crear.py tests/test_api_solido_extra.py -k 'nervio or red' -q -p no:cacheprovider
+[turno] arranca tras 18 s de espera
+FAILED tests/test_sol10_nervio_red.py::test_b213_red_delante_de_la_boca_conserva_el_inicio[True]
+FAILED tests/test_solidos_crear.py::test_red_hasta_el_piso
+omnicad.nucleo.geometria.ErrorGeometria: Red: no llega al cuerpo (revisá el sentido o usá una profundidad).
+2 failed, 32 passed, 103 deselected in 3.87s
+```
+
+La cruz extiende una de las curvas hasta el borde abierto del canal: al recortar cada lámina por separado
+se perdía la unión que permitía limitar la cruz completa. Se retiraron los cambios de Red y se restauró
+su helper original; el helper nuevo solo queda en Nervio. Esto es retirada de la regresión, no tercer intento.
+La repetición final posterior a esa retirada agotó 120 s **esperando turno**, sin arrancar pytest.
+No se contó como verde. Se repitió con transporte de 180 s (sin cambiar el plazo de turno de 900 s):
+
+```console
+PYTHONIOENCODING=utf-8 D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_sol10_nervio_red.py tests/test_solidos_crear.py tests/test_api_solido_extra.py -k 'nervio or red' -q -p no:cacheprovider
+[turno] arranca tras 93 s de espera
+....FF............................                                       [100%]
+FAILED tests/test_sol10_nervio_red.py::test_b213_red_delante_de_la_boca_conserva_el_inicio[False]
+FAILED tests/test_sol10_nervio_red.py::test_b213_red_delante_de_la_boca_conserva_el_inicio[True]
+2 failed, 32 passed, 103 deselected in 5.55s
+D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .
+All checks passed!
+git diff --check
+(sin salida, código 0)
+```
+
+La cruz existente volvió a verde, los cuatro casos propuestos de Nervio permanecen verdes y solo fallan
+las dos regresiones exteriores nuevas de Red. El diff confirma que `red`, `_hasta_el_cuerpo` y `_caja_de`
+son los originales de HEAD. No se ejecutaron grupos amplios completos, solo estos tests del área filtrados.
+
+### Grupos amplios para el coordinador
+
+Se buscó antes de editar con codebase-memory y se repitió sobre disco. `rg` no está instalado;
+el comando literal solicitado se obtuvo con `grep -l -E '_hasta_el_cuerpo|nervio|red' clon/tests/test_*.py`.
+No se corrieron esos grupos por la nota de tiempo. Todos los nombres siguientes son `clon/tests/test_<nombre>.py`;
+`red` sin límites de palabra también encuentra colores, red de internet y palabras como pared/predeterminado:
+
+```console
+analisis animacion api_animacion api_asistente api_boceto api_boceto_herramientas api_catalogo
+api_construccion api_dibujo api_documento api_ensamble api_grafo api_malla api_material api_misc
+api_opciones_modificar api_opciones_solido1 api_render api_revision api_solido api_solido_extra
+api_superficie apoyo arrastre_ventana asistente_adjuntos asistente_agente_local asistente_alcance
+asistente_historial asistente_modelos asistente_nucleo asistente_prompt asistente_proveedores asistente_ui
+aspectos_api auditoria_boceto b105_panel_chico b165_agujero_tangente b167_b168_autointersecciones
+b39_enterrada b39_fuzz b70_pasante b71_cadena barrido_tipos boceto3d_tangente boceto_fase0
+boceto_fase3 boceto_fase4 boceto_fase7 boceto_fase8_malla boceto_fase9_3d boceto_fase9_3d_ui
+boceto_fase9_fuentes boceto_fase9_nucleo boceto_fase9_tangente boceto_fase9_texto boceto_interaccion
+boceto_organizar booleanas_tortura caja_herramientas caza_regresion chapa cinta_plastico cinta_textos
+cobertura_ui_api comandos_inspeccionar comandos_malla comandos_modificar comandos_superficie comparar_malla
+corte_visibles cotas_segmento cuerpos_partidos derivacion desfase_boceto desfase_equivalencia dev
+dialogo_parametros dibujo ejemplos_agentes engranajes ensamblar ensamblar_asm ensamblar_asm9
+ensamblar_bola_y_vinculo extruir_cara_api f3d_nativo f3d_reales geometria gizmo_lienzo graficos_rendimiento
+grampa guardado_sesion hallazgos_nucleo hallazgos_tortura herramientas_solido iconos_extra iconos_interfaz
+inferencia3d insertar_2d inspeccionar_fusion interaccion_fusion interfaz malla manipuladores nombres_ids
+novedades objetos_vectoriales origen_entidad p11a_f3d_instancias p23_bocetos p23_calcomania p9_ui
+panel_movible patrones_boceto patrones_solidos_semantica perfiles_interior pl7_desfase_aristas plasticidad
+posicion_asm proyeccion_seccion puente reconstruir_malla registro_uso_mas render render_motor resalte_contorno
+restricciones_matematica restricciones_ui resultados_vacios revision revision_lotes_sol servidor_mcp setup
+simetria_boceto simetria_patrones sol07_revolucion sol08_barrido sol10_nervio_red sol11_empalme
+sol12_esquina_chaflan sol13_desmoldeo sol15_bocetos sol15_mover_caras_y_escalar sol18_envolvente sol22_reticula
+sol24_reconocer_funciones sol25_consejos_diseno sol26_similares sol27_preajustes solidos_crear solidos_modificar
+solver_splines superficie_fusion superficies svg_salida temas teselado_cache texto_vectores tipografia_ui
+topes tortura_menores transformar_boceto tuberia_cadena
+```
+
+Prioridad funcional de esa lista: `test_sol10_nervio_red.py`, `test_solidos_crear.py`,
+`test_api_solido_extra.py`, `test_barrido_tipos.py`, `test_herramientas_solido.py`, `test_manipuladores.py`.
+El helper original queda con un consumidor (Red); el nuevo, con uno (Nervio). Ningún test llama al original directamente.
+
+### Salida completa de /ponytail-review
+
+What this change does: It trims the thin surface against the real body before adding thickness.
+It fixes the four proposed Rib cases. The Web change was withdrawn after an existing cross test failed. Assumed load:
+one user editing a local CAD document; a wrong solid matters more than a small speed gain.
+
+**Must fix**
+
+1. **The Web attempt breaks a cross and does not finish B-213** (`clon/omnicad/nucleo/solidos_crear.py::red`).
+   - **What this is:** The long surface must stop on body faces before it becomes a solid.
+   - **Problem:** The outside extended Web failed in both attempts. The area tests also found a regression
+     on two crossing curves: `test_red_hasta_el_piso` failed while processing the second curve alone.
+   - **Fix:** Applied: withdraw the entire Web change, retain its original helper, keep both outside Web
+     regressions and B-213 partial. Resume geometry only in a new run; no third attempt was made.
+   - **If we skip it:** An existing valid cross would stop working. After withdrawal, the original outside
+     Web bug remains; the complete fix cannot be shipped.
+
+**Should fix**
+
+2. **The raw wall is built even when draft is zero** (`nucleo/solidos_crear.py`, initial patch).
+   - **What this is:** Draft needs the original side faces; a straight wall does not.
+   - **Problem:** The first patch built a full raw solid and a trimmed solid on every ordinary call.
+   - **Fix:** Build the raw solid only inside the nonzero draft branch. Applied in Rib; Web was restored.
+   - **If we skip it:** Common calls do unnecessary OpenCascade work.
+
+3. **The old box helper has no caller** (`nucleo/solidos_crear.py::_caja_de`, initial patch).
+   - **What this is:** This helper made the artificial clipping box removed by the fix.
+   - **Problem:** After updating both callers, its only former use is gone.
+   - **Fix:** Initially deleted. Restored when Web was withdrawn, because Web still needs it.
+   - **If we skip it:** Deleting it from the final partial patch would break the restored Web.
+
+Verdict: fix 1 first. Its cross regression was removed by restoring Web, but B-213 remains incomplete
+under the explicit two-attempt stop. Findings 2 and 3 were reconciled with that withdrawal.
+Not checked: live window, Fusion itself, OmniKernel, oblique body faces across thickness, huge thickness,
+and the broad grep groups. No new dependency, file input, network path or transaction bypass was added.
+
+### ⚠ Lo no verificado
+
+- El arreglo completo **no** está verde: se conservan dos regresiones exteriores de Red y B-213 en Parcial.
+- Una repetición agotó el transporte esperando turno; la siguiente sí corrió y confirmó la retirada de
+  la regresión de la cruz. Las esperas observadas llegaron a 102 s; no se eludió el candado.
+- No se abrió Fusion ni la ventana; sin suite completa, humo ni grupos amplios por pedido.
+- El recorte central seguido del grosor aún debe contrastarse con caras del cuerpo inclinadas respecto del
+  espesor; no se afirma equivalencia general. El caso de grosor 1e6 no se ejecutó en esta corrida.
+- No se configura type-check separado en `clon/pyproject.toml`; no se construyó instalador.
+- B-214 y B-216 siguen fuera del alcance de esta corrida. La revisión funcional amplia queda al coordinador.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Opus 5, esfuerzo alto (coordinador nocturno; la geometría de Sol se revisa a fondo).

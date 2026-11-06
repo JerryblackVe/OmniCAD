@@ -34,6 +34,50 @@ def _aumento(s, cid, antes):
     return geo.volumen(forma) - antes
 
 
+@pytest.mark.parametrize("direccion", ["symmetric", "side1", "side2"])
+def test_b213_nervio_en_el_borde_conserva_todo_el_espesor(direccion):
+    s = api.Sesion()
+    cid = _ok(s, "create_box", length=40, width=60, height=5,
+              anchor="corner")["bodies_created"][0]["id"]
+    _ok(s, "create_box", length=5, width=60, height=50,
+        anchor="corner", operation="join", target=cid)
+    b = _linea(s, "XZ", 0, 35, 5, 5, 45)
+    _ok(s, "create_rib", sketch=b, thickness=2, target=cid, direction=direccion)
+    assert _aumento(s, cid, 25500) == pytest.approx(1200)
+
+
+def test_b213_nervio_invertido_sin_cara_da_error_y_conserva_el_cuerpo():
+    s = api.Sesion()
+    cid = _ok(s, "create_box", length=40, width=60, height=5, y=-30,
+              anchor="corner")["bodies_created"][0]["id"]
+    _ok(s, "create_box", length=5, width=60, height=50, y=-30,
+        anchor="corner", operation="join", target=cid)
+    b = _linea(s, "XZ", 0, 35, 5, 5, 45)
+    r = api.llamar(s, "create_rib", dict(sketch=b, thickness=2, target=cid, reverse=True))
+    assert not r["ok"], r
+    assert "no llega al cuerpo" in r["mensaje"].lower(), r
+    assert _aumento(s, cid, 25500) == pytest.approx(0)
+
+
+@pytest.mark.xfail(strict=True, reason="B-213 Parcial: la Red delante de la boca sigue recortada (fila abierta en docs/seguimiento/bugs.md)")
+@pytest.mark.parametrize("extender", [False, True])
+def test_b213_red_delante_de_la_boca_conserva_el_inicio(extender):
+    s = api.Sesion()
+    cid = _ok(s, "create_box", length=40, width=40, height=40,
+              anchor="corner")["bodies_created"][0]["id"]
+    _ok(s, "create_box", length=36, width=38, height=36, x=2, z=2,
+        anchor="corner", operation="cut", target=cid)
+    antes = geo.volumen(s.cuerpo(cid).forma)
+    b = _linea(s, "XZ", 5, 10, 20, 30, 20)  # y = -5, delante de la boca
+    _ok(s, "create_web", sketch=b, thickness=2, target=cid, extend_curves=extender)
+    aumento = _aumento(s, cid, antes)
+    if extender:
+        assert aumento > 1720
+    else:
+        assert aumento == pytest.approx(1720)  # 20 de largo · 43 hasta la pared · 2 de grosor
+    assert geo.caja_envolvente(s.cuerpo(cid).forma)[0][1] == pytest.approx(-5)
+
+
 def test_nervio_con_desmoldeo_es_mas_fino_en_el_borde_libre():
     s, cid = _canal()
     antes = geo.volumen(s.cuerpo(cid).forma)
