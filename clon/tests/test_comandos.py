@@ -69,6 +69,17 @@ def test_extruir_opciones(app_qt, valores, volumen, zs):
     assert op.nombre == "Extrusión1"
 
 
+def test_extruir_simetrico_arranca_en_longitud_total_como_la_api(app_qt):
+    """H-86: sin tocar «Medida», el panel de Extruir tiene que dar el mismo cuerpo que
+    `extrude direction=symmetric distance=10`: 10 mm en total, mitad a cada lado (Fusion: Whole Length)."""
+    doc = _doc_rectangulo()
+    op = _extruir(doc, direccion="simetrica", distancia="10 mm")
+    cid = f"{op.id}.c1"
+    assert g.volumen(doc.estado_final.cuerpos[cid].forma) == pytest.approx(2000)
+    (_, _, z0), (_, _, z1) = _caja(doc, cid)
+    assert (z0, z1) == pytest.approx((-5, 5))
+
+
 def test_extruir_hasta_un_plano_y_cortar_con_todo(app_qt):
     from omnicad.ui.comando import hit_desde_ref
     doc = _doc_rectangulo()

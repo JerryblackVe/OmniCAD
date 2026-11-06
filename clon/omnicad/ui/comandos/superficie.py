@@ -48,7 +48,7 @@ class SupExtruir(Comando):
                 Seleccion("inicio_objeto", "Objeto de inicio", {"cara_plana", "plano"},
                           visible_si=lambda v: v.get("inicio") == "objeto"),
                 Opciones("lados", "Dirección", DIRECCIONES_UI),
-                Opciones("medida", "Medida", {"mitad": "Media longitud", "total": "Longitud total"},
+                Opciones("medida", "Medida", {"mitad": "Media longitud", "total": "Longitud total"}, defecto="total",
                          visible_si=lambda v: v.get("lados") == "simetrica"),
                 Opciones("extension", "Tipo de extensión", {"distancia": "Distancia", "objeto": "A objeto", "todo": "Todo"}),
                 Expresion("distancia", "Distancia", "10 mm", visible_si=lambda v: v.get("extension") == "distancia"),
@@ -103,7 +103,7 @@ class SupRevolucion(Comando):
                           etiqueta_si=lambda v: "Ángulo del lado 1" if v.get("lados") == "dos_lados" else "Ángulo"),
                 Expresion("angulo2", "Ángulo del lado 2", "90 deg", ANGULO,
                           visible_si=lambda v: angulo(v) and v.get("lados") == "dos_lados"),
-                Casilla("proyectar_eje", "Proyectar eje", avanzado=True,
+                Casilla("proyectar_eje", "Eje de proyecto", True, avanzado=True,
                         ayuda="Lleva el eje al plano del perfil antes de girar (curvas de boceto). Desmarcado, el eje queda donde está.")]
 
     def construir(self, v, ctx):

@@ -1112,6 +1112,8 @@ class OpExtrusion(_OpConPerfiles):
     TIPO, ETIQUETA, ICONO = "extrusion", "Extrusión", "⬆"
     MENSAJE_CARAS = "Las caras elegidas no miran para el mismo lado: extruí cada cara por separado."
     PARAMS = {"boceto": "", "perfiles": [], "caras": [], "tipo": "solida", "inicio": "plano", "desfase_inicio": "0 mm",
+              # El panel y la API arrancan en «Longitud total» (H-86); acá queda "mitad": es lo que calcula una
+              # receta vieja sin la clave, que tiene que abrir igual (igual que en `proyectar_eje`, CAP-12).
               "inicio_objeto": None, "direccion": "un_lado", "medida": "mitad", "extension": "distancia",
               "distancia": "10 mm", "hasta": None, "extension2": "distancia", "distancia2": "10 mm", "hasta2": None,
               "conicidad": "0 deg", "conicidad2": "0 deg", "espesor": "1 mm", "ubicacion": "lado1", "invertir": False,
@@ -1250,7 +1252,10 @@ class OpRevolucion(_OpConPerfiles):
     TIPO, ETIQUETA, ICONO = "revolucion", "Revolución", "↻"
     PARAMS = {"boceto": "", "perfiles": [], "caras": [], "eje": "v", "eje_ref": None, "extension": "angulo",
               "angulo": "360 deg", "direccion": "un_lado", "angulo2": "90 deg", "invertir": False,
-              "operacion": "nuevo", "objetivo": "", "objetivos": [], "hasta": None, "proyectar_eje": False}
+              "operacion": "nuevo", "objetivo": "", "objetivos": [], "hasta": None,
+              # El panel y la API arrancan con el eje proyectado (Fusion lo trae marcado); acá queda False: es lo
+              # que calcula una receta guardada sin la clave, que tiene que abrir igual (docs/brechas_herramientas_solido.md › CAP-12).
+              "proyectar_eje": False}
     EXPRESIONES = ("angulo", "angulo2")
     OPCIONES = {"extension": ("angulo", "completa", "objeto"), "direccion": DIRECCIONES, "operacion": OPERACIONES_CUERPO}
 
@@ -1287,14 +1292,12 @@ class OpRevolucion(_OpConPerfiles):
     def ejecutar(self, estado, ctx):
         plano, caras = self._caras(estado, ctx)
         punto, direccion = self._eje(estado, plano)
-        if self.p.get("proyectar_eje"):         # «Project Axis»: el eje se lleva al plano del perfil
+        if self.p.get("proyectar_eje"):         # «Eje de proyecto»: el eje se lleva al plano del perfil
             n = np.asarray(plano.normal, float)
-            punto = np.asarray(punto, float)
-            punto = punto - n * float((punto - plano.origen) @ n)
-            direccion = np.asarray(direccion, float)
-            direccion = direccion - n * float(direccion @ n)
-            if np.linalg.norm(direccion) < 1e-9:
-                raise ErrorOperacion("El eje es perpendicular al plano del perfil: no se puede proyectar.")
+            proyectado = np.asarray(direccion, float) - n * float(np.asarray(direccion, float) @ n)
+            if np.linalg.norm(proyectado) >= 1e-9:   # eje perpendicular: no se proyecta, queda donde está
+                punto = np.asarray(punto, float) - n * float((np.asarray(punto, float) - plano.origen) @ n)
+                direccion = proyectado
         direccion = np.asarray(direccion, float) * (-1 if self.p.get("invertir") else 1)
         if self.p.get("extension") == "objeto":
             if self.p.get("direccion", "un_lado") != "un_lado":

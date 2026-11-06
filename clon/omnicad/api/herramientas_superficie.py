@@ -134,7 +134,7 @@ def create_surface_revolve(sesion, profiles: Seleccion, axis: Referencia, angle:
                            body: str | None = None,
                            direction: Literal["one_side", "two_sides", "symmetric"] = "one_side",
                            angle2: Expr | None = None, to_object: Referencia | list[float] | None = None,
-                           project_axis: bool = False, chain: bool = True):
+                           project_axis: bool = True, chain: bool = True):
     """
     profiles: curvas o perfiles de boceto ({"sketch": "Boceto1", "curve": 1} o "profile": 0), caras, aristas o cuerpos; admite listas, ids y selectores.
     axis: eje X, Y, Z, eje de construcción o referencia a una línea de boceto/arista lineal.
@@ -143,7 +143,7 @@ def create_surface_revolve(sesion, profiles: Seleccion, axis: Referencia, angle:
     direction: one_side, two_sides (angle hacia un lado y angle2 hacia el otro) o symmetric (angle es el total, mitad a cada lado).
     angle2: ángulo del segundo lado con direction=two_sides; vacío = igual a angle.
     to_object: vértice ([x, y, z] o selector), plano, cara plana o cuerpo hasta donde gira el perfil; reemplaza a angle.
-    project_axis: true proyecta el eje al plano del perfil (curvas de boceto); false lo deja donde está.
+    project_axis: true proyecta el eje al plano del perfil (curvas de boceto); false lo deja donde está (el defecto es true, con el panel de Fusion).
     chain: true toma la cadena tangente entera de cada arista o curva de boceto de profiles (Chaining de Fusion, encendido por defecto); false usa solo las elegidas.
     """
     clase = ops.OpSupRevolucion

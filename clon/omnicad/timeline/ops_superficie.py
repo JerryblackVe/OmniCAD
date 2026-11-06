@@ -157,7 +157,10 @@ class OpSupRevolucion(_OpSuperficie):
     tangente entera de cada arista o curva elegida)."""
     TIPO, ETIQUETA, ICONO = "sup_revolucion", "Revolución de superficie", "↻"
     PARAMS = {"curvas": [], "eje": None, "angulo": "360 deg", "extension": "angulo", "lados": "un_lado",
-              "angulo2": "90 deg", "hasta": None, "proyectar_eje": False, "cadena": False}
+              "angulo2": "90 deg", "hasta": None,
+              # El panel y la API arrancan con «Eje de proyecto» y «Selección de cadena» encendidos (captura de
+              # Fusion); los dos PARAMS quedan False: es lo que calcula una receta guardada sin la clave (SUP-29).
+              "proyectar_eje": False, "cadena": False}
     EXPRESIONES = ("angulo", "angulo2")
     OPCIONES = {"extension": ("angulo", "completa", "objeto"), "lados": LADOS}
     REFS = ("curvas", "eje", "hasta")
@@ -181,17 +184,14 @@ class OpSupRevolucion(_OpSuperficie):
         if not p["eje"]:
             raise ErrorOperacion("Elegí el eje.")
         punto, d = ent.como_eje(_resolver(p["eje"], estado))
-        if p["proyectar_eje"]:            # «Project Axis»: el eje se lleva al plano del perfil
+        if p["proyectar_eje"]:            # «Eje de proyecto»: el eje se lleva al plano del perfil
             plano = next((e.plano for e in ents if e.plano is not None), None)
-            if plano is None:
-                raise ErrorOperacion("«Proyectar eje» necesita curvas de un boceto: es el plano del perfil.")
-            n = np.asarray(plano.normal, float)
-            punto = np.asarray(punto, float)
-            punto = punto - n * float((punto - plano.origen) @ n)
-            d = np.asarray(d, float)
-            d = d - n * float(d @ n)
-            if np.linalg.norm(d) < 1e-9:
-                raise ErrorOperacion("El eje es perpendicular al plano del perfil: no se puede proyectar.")
+            if plano is not None:         # aristas de un cuerpo no tienen plano de perfil: no hay a dónde proyectar
+                n = np.asarray(plano.normal, float)
+                proyectado = np.asarray(d, float) - n * float(np.asarray(d, float) @ n)
+                if np.linalg.norm(proyectado) >= 1e-9:   # eje perpendicular: no se proyecta, queda donde está
+                    punto = np.asarray(punto, float) - n * float((np.asarray(punto, float) - plano.origen) @ n)
+                    d = proyectado
         if p["extension"] == "objeto":
             forma = _sf().revolver_superficie(aristas, punto, d, 0.0, hasta=self._objeto(estado))
         else:

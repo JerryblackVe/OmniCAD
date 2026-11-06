@@ -146,16 +146,19 @@ def revolucion_objeto_dos_lados():
 
 
 def proyectar_eje_por_defecto():
-    """Fusion: «Project Axis» (Proyectar eje). Sólido, superficie y la API tendrían que arrancar igual."""
+    """Fusion: «Project Axis», que en el panel en español dice «Eje de proyecto» y viene marcado
+    (captura: analisis/capturas_fusion/SUPERFICIE/Revolucion). Sólido y superficie tienen que arrancar igual."""
     vals = {}
     for clave in ("revolucion", "sup_revolucion"):
         p = A.abrir(v, clave)
         c = next(c for c in p.campos if c.clave == "proyectar_eje")
         vals[clave] = (bool(p.valores.get("proyectar_eje")), c.etiqueta)
         QTest.keyClick(p, Qt.Key_Escape); A.esperar(150)
-    A.reg(AR, "Proyectar eje arranca igual en sólido y superficie", vals["revolucion"][0] == vals["sup_revolucion"][0], str(vals))
-    A.reg(AR, "la casilla del sólido se llama «Proyectar eje» (Fusion: Project Axis)", vals["revolucion"][1] == "Proyectar eje",
-          f"dice «{vals['revolucion'][1]}»")
+    A.reg(AR, "Eje de proyecto arranca igual en sólido y superficie", vals["revolucion"][0] == vals["sup_revolucion"][0], str(vals))
+    A.reg(AR, "la casilla se llama «Eje de proyecto» en los dos paneles (Fusion: Project Axis)",
+          all(x[1] == "Eje de proyecto" for x in vals.values()),
+          " ".join(f"{k}: «{x[1]}»" for k, x in vals.items()))
+    A.reg(AR, "«Eje de proyecto» arranca marcado, como en el panel de Fusion", vals["revolucion"][0] is True, str(vals))
 
 
 def barrido_carril():

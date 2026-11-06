@@ -39,7 +39,7 @@ class Extruir(Comando):
             Seleccion("inicio_objeto", "Objeto de inicio", {"cara_plana", "plano"},
                       visible_si=lambda v: v.get("inicio") == "objeto"),
             Opciones("direccion", "Dirección", DIRECCIONES_UI),
-            Opciones("medida", "Medida", {"mitad": "Media longitud", "total": "Longitud total"},
+            Opciones("medida", "Medida", {"mitad": "Media longitud", "total": "Longitud total"}, defecto="total",
                      visible_si=lambda v: v.get("direccion") == "simetrica"),
             Opciones("extension", "Tipo de extensión", EXTENSIONES),
             Expresion("distancia", "Distancia", "10 mm", visible_si=lambda v: v.get("extension") == "distancia"),

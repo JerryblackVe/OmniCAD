@@ -337,7 +337,7 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
             direction: Literal["one_side", "two_sides", "symmetric"] = "one_side",
             angle2: Expr | None = None, target: Cuerpos | None = None, reverse: bool = False,
             faces: Cuerpos | None = None, body: str | None = None, to_object: str | dict | list[float] | None = None,
-            project_axis: bool = False):
+            project_axis: bool = True):
     """
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
     profile: perfil(es): índice, lista de índices, "all", "largest", "text", "text:<id>" o "sketch".
@@ -351,7 +351,7 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
     faces: caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch.
     body: cuerpo donde se evalúan los selectores de faces y de axis (arista o cara); vacío = el único cuerpo.
     to_object: vértice ([x, y, z] o selector), plano (XY/XZ/YZ o de construcción), cara plana (selector o id) o cuerpo (id o nombre) hasta donde gira el perfil; reemplaza a angle.
-    project_axis: true proyecta el eje al plano del perfil; false lo deja donde está.
+    project_axis: true proyecta el eje al plano del perfil (como el panel de Fusion, que lo trae encendido); false lo deja donde está.
     """
     if sketch is None and not faces:
         raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile) o faces (caras planas).")
@@ -376,8 +376,7 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
         from .herramientas_modificar import _refs
         p["caras"] = _refs(sesion, faces, "cara", body)[0]
     p.update(_eje_revolucion(sesion, sop, br, axis, body))
-    if project_axis:
-        p["proyectar_eje"] = True
+    p["proyectar_eje"] = project_axis
     if to_object is not None:
         if direction != "one_side":
             raise error("INVALID_ARGUMENTS", "to_object gira hacia un solo lado: usá direction=one_side.")

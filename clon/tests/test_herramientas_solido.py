@@ -169,6 +169,81 @@ def test_valores_por_defecto_del_panel_como_fusion(clave, campo, valor):
     assert not campos[campo].avanzado
 
 
+# Lo que Fusion trae al abrir el panel, igual en el panel y en la herramienta del MCP/CLI (H-92).
+# El PARAMS de la operación NO: es lo que calcula una receta guardada sin la clave (SUP-29 y CAP-12).
+DEFECTOS_FUSION = [
+    # comando, campo del panel, herramienta, parámetro de la API, valor, texto del campo (el de Fusion en español)
+    ("revolucion", "proyectar_eje", "revolve", "project_axis", True, "Eje de proyecto"),
+    ("sup_revolucion", "proyectar_eje", "create_surface_revolve", "project_axis", True, "Eje de proyecto"),
+    ("sup_revolucion", "cadena", "create_surface_revolve", "chain", True, "Selección de cadena"),
+    # H-86: «Simétrica» mide el largo total, mitad a cada lado, también al abrir el panel
+    ("extruir", "medida", "extrude", "symmetric_measure", "total", "Medida"),
+    ("sup_extruir", "medida", "create_surface_extrude", "symmetric_measure", "total", "Medida"),
+]
+
+
+def _defecto_api(herramienta, param):
+    h = next(x for x in api.catalogo() if x["nombre"] == herramienta)
+    return h["esquema"]["properties"][param]["default"]
+
+
+@pytest.mark.parametrize("clave, campo, herramienta, param, valor, etiqueta", DEFECTOS_FUSION)
+def test_el_defecto_del_panel_y_la_api_es_el_de_fusion(clave, campo, herramienta, param, valor, etiqueta):
+    """H-92: la captura de Fusion en español (analisis/capturas_fusion/SUPERFICIE/Revolucion) muestra el panel de
+    Revolución con «Eje de proyecto» y «Encadenando» marcados; ese nombre y ese defecto tienen que ser los mismos
+    tecleando en la ventana y llamando a la herramienta, y el paso creado por cualquiera de las dos los escribe."""
+    cmd = CATALOGO[clave]()
+    campo_panel = next(c for c in cmd.campos(ContextoComando(_doc())) if c.clave == campo)
+    assert campo_panel.etiqueta == etiqueta, f"{clave} › {campo}: dice «{campo_panel.etiqueta}»"
+    assert campo_panel.defecto == valor
+    assert _defecto_api(herramienta, param) == valor
+
+
+def test_el_paso_creado_desde_la_api_lleva_el_defecto_de_fusion_escrito():
+    """H-92: `revolve` y `create_surface_revolve` guardan el eje proyectado aunque no se pida, así que el paso que
+    abre la ventana trae la casilla marcada; el PARAMS sin la clave sigue calculando como una receta vieja."""
+    s = api.Sesion()
+    _llamar(s, "create_sketch", plane="XZ", name="Perfil")
+    _llamar(s, "draw_rectangle", x1=10, y1=0, x2=20, y2=5)
+    _llamar(s, "revolve", sketch="Perfil", axis="z", angle="90 deg")
+    op = s.doc.operaciones[-1]
+    assert op.p["proyectar_eje"] is True
+    assert type(op).PARAMS["proyectar_eje"] is False        # la receta vieja, sin la clave, calcula como antes
+    s2 = api.Sesion()
+    _llamar(s2, "create_sketch", plane="XZ", name="Perfil")
+    _llamar(s2, "draw_line", start_x=10, start_y=0, end_x=10, end_y=5)
+    curva = _llamar(s2, "get_sketch", sketch="Perfil")["entities"][0]["id"]
+    _llamar(s2, "create_surface_revolve", profiles={"sketch": "Perfil", "curve": curva}, axis="z", angle="90 deg")
+    op2 = s2.doc.operaciones[-1]
+    assert op2.p["proyectar_eje"] is True and op2.p["cadena"] is True
+
+
+def test_eje_perpendicular_al_perfil_no_estorba():
+    """H-92: con la casilla marcada por defecto, girar una recta de un boceto XY alrededor del eje Z tiene que dar
+    el cilindro de siempre (2·π·10·20 = 1256,64 mm²): un eje perpendicular no se proyecta y queda donde está."""
+    s = api.Sesion()
+    _llamar(s, "create_sketch", plane="XY", name="B")
+    _llamar(s, "draw_line", start_x=10, start_y=0, end_x=10, end_y=20)
+    curva = _llamar(s, "get_sketch", sketch="B")["entities"][0]["id"]
+    cid = _llamar(s, "create_surface_revolve", profiles={"sketch": "B", "curve": curva}, axis="z",
+                  angle="360 deg")["bodies_created"][0]["id"]
+    assert geo.area(s.cuerpo(cid).forma) == pytest.approx(2 * math.pi * 10 * 20, rel=1e-6)
+
+
+def test_eje_de_proyecto_con_aristas_de_un_cuerpo_no_estorba():
+    """Con el defecto nuevo (marcado), girar aristas de un cuerpo sigue andando: sin plano de perfil no hay nada
+    que proyectar, así que la casilla encendida por defecto no puede ser un error para el que no la tocó."""
+    areas = []
+    for extra in ({}, {"project_axis": False}):
+        s = api.Sesion()
+        _llamar(s, "create_surface_box", length=20, width=20, height=20)
+        arista = next(e["id"] for e in _llamar(s, "find_edges", selector=">Z")["edges"]
+                      if e["direction"] == [1.0, 0.0, 0.0])           # paralela al eje X: malla de revolución limpia
+        r = _llamar(s, "create_surface_revolve", profiles=arista, axis="x", angle="90 deg", **extra)
+        areas.append(geo.area(s.cuerpo(r["bodies_created"][0]["id"]).forma))
+    assert areas[0] == pytest.approx(areas[1], rel=1e-9)
+
+
 def test_el_orden_de_rosca_y_de_extruir_es_el_de_fusion():
     ctx = ContextoComando(_doc())
     orden = [c.clave for c in CATALOGO["rosca"]().campos(ctx)]

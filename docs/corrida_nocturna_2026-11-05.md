@@ -62,10 +62,16 @@ Corridas (tokens de `opencode stats` / sesiones de Qoder; «sin dato» si no se 
 | 01:10 | deepseek-v4.1-flash (CodeBuddy) | C3 (H-102) | 17 min | sin dato | commit `04bfa86` en `codebuddy-nocturna` (1505 + 787 verdes) |
 | 01:41 | hy3 (CodeBuddy) | C4 (H-93) | 11 min | sin dato | commit `dade722` en `codebuddy-nocturna` (1519 + 1007 verdes) |
 | 00:59 | Qwen3.8-Flash (Qoder) | tanda 2 (B-216, B-214) | 68 min | sin dato | commit `7e95678` en `main` (1105 + 444 verdes); nuevo B-219 |
+| 02:09 | Qwen3.8-Flash (Qoder) | tanda 3 (B-217, B-209) | 73 min | sin dato | commit `64a79f0` en `main` (1628 + 1095 verdes); nuevo B-220 |
 | 01:59 | deepseek-v4.1-flash (CodeBuddy) | C5 (H-74) | 8 min | sin dato | commit `75f541d` en `codebuddy-nocturna` (1280 + 268 verdes); la revisión halló una duplicación: fila H-103 |
 | 02:11 | hy3 (CodeBuddy) | C6 (H-103) | 8 min | sin dato | commit `2d4b769` en `codebuddy-nocturna` (1498 verdes) |
 | 02:22 | deepseek-v4.1-flash (CodeBuddy) | C7 (CF-11) | 14 min | sin dato | commit `23dd4c5` en `codebuddy-nocturna` (1402 + 763 verdes) |
 | 02:46 | hy3 (CodeBuddy) | C8 (H-71) | 15 min | sin dato | commit `7db9d93` en `codebuddy-nocturna` (867 + 524 verdes); el coordinador deshizo el cambio de finales de línea de 2 archivos |
+| 03:14 | deepseek-v4.1-flash (CodeBuddy) | C9 (H-85) | 20 min | sin dato | commit `af61543` en `codebuddy-nocturna` (1133 verdes); nuevo H-104 |
+| 03:37 | hy3 (CodeBuddy) | C10 (H-104) | 10 min | sin dato | commit `2518829` en `codebuddy-nocturna` (1069 verdes) |
+| 03:50 | deepseek-v4.1-flash (CodeBuddy) | C11 (CF-8, dos opciones) | 10 min | sin dato | revisión cortada por el reinicio de las 04:29; repetida a las 07:05: commit `7687fab` (283 + 362 + 347 + 603 verdes). CF-8 sigue Parcial |
+| 03:35 | Qwen3.8-Flash (Qoder) | tanda 4 (H-92, H-86) | 54 min hasta el reinicio | sin dato | cortada por el reinicio de la PC (04:29); retomada a las 07:03 con su sesión |
+| 07:03 | Qwen3.8-Flash (Qoder) | tanda 4 (retomada) | 60 min (tope) | sin dato | terminó el código y los tests sin escribir el informe; el coordinador revisó (2593 verdes), borró un bloque duplicado y commiteó |
 | 00:41 | GPT-6.1 Sol (OpenCode) | B-208 | 14 min | 204 k (+6,2 M caché) / 15 k (+5 k razonamiento) | commit `a8816d5` (605 + 331 verdes) |
 | 01:01 | GPT-6.1 Sol (OpenCode) | B-206 (resto) | 10 min | 242 k (+6,3 M caché) / 13 k (+5 k razonamiento) | Parcial: rectángulo inclinado con conicidad anda, círculo no (xfail estricto); commit `bd7e3e5` (2073 verdes). Fin de la línea B: 6 corridas de 6 |
 

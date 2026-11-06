@@ -2535,7 +2535,7 @@ Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketc
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces y de axis (arista o cara); vacío = el único cuerpo.
   - `to_object` (texto o objeto o lista de número o null; opcional, por defecto `null`): vértice ([x, y, z] o selector), plano (XY/XZ/YZ o de construcción), cara plana (selector o id) o cuerpo (id o nombre) hasta donde gira el perfil; reemplaza a angle.
-  - `project_axis` (true/false; opcional, por defecto `false`): true proyecta el eje al plano del perfil; false lo deja donde está.
+  - `project_axis` (true/false; opcional, por defecto `true`): true proyecta el eje al plano del perfil (como el panel de Fusion, que lo trae encendido); false lo deja donde está.
 - CLI: `omnicad call revolve --doc pieza.omnicad`
 
 ### `sweep`
@@ -3737,7 +3737,7 @@ Gira curvas alrededor de un eje para crear una superficie. direction: one_side, 
   - `direction` ("one_side" | "two_sides" | "symmetric"; opcional, por defecto `"one_side"`): one_side, two_sides (angle hacia un lado y angle2 hacia el otro) o symmetric (angle es el total, mitad a cada lado).
   - `angle2` (número o expresión; opcional, por defecto `null`): ángulo del segundo lado con direction=two_sides; vacío = igual a angle.
   - `to_object` (texto o objeto o lista de número o null; opcional, por defecto `null`): vértice ([x, y, z] o selector), plano, cara plana o cuerpo hasta donde gira el perfil; reemplaza a angle.
-  - `project_axis` (true/false; opcional, por defecto `false`): true proyecta el eje al plano del perfil (curvas de boceto); false lo deja donde está.
+  - `project_axis` (true/false; opcional, por defecto `true`): true proyecta el eje al plano del perfil (curvas de boceto); false lo deja donde está (el defecto es true, con el panel de Fusion).
   - `chain` (true/false; opcional, por defecto `true`): true toma la cadena tangente entera de cada arista o curva de boceto de profiles (Chaining de Fusion, encendido por defecto); false usa solo las elegidas.
 - CLI: `omnicad call create_surface_revolve --doc pieza.omnicad profiles=… axis=…`
 

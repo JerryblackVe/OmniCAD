@@ -159,9 +159,21 @@ def ventana_chica():
     QTest.keyClick(p, Qt.Key_Escape); A.esperar(150)
 
 
+def medida_por_defecto():
+    """H-86: con «Simétrica», «Medida» arranca en Longitud total — el mismo defecto que `extrude symmetric_measure`
+    y que la Revolución simétrica, que reparte el ángulo total a los dos lados."""
+    for clave in ("extruir", "sup_extruir"):
+        p = A.abrir(v, clave)
+        c = next(c for c in p.campos if c.clave == "medida")
+        A.reg(AR, f"{clave}: «Medida» arranca en Longitud total (como la API)",
+              p.valores.get("medida") == "total" and c.defecto == "total",
+              f"defecto {c.defecto!r}, valor {p.valores.get('medida')!r}")
+        QTest.keyClick(p, Qt.Key_Escape); A.esperar(150)
+
+
 for nombre, f in (("cinta", cinta), ("superficie con perfil y cara", superficie_con_perfil),
                   ("dos lados negativo", dos_lados_negativo), ("inicio inclinado", inicio_inclinado),
-                  ("ventana chica", ventana_chica)):
+                  ("medida por defecto", medida_por_defecto), ("ventana chica", ventana_chica)):
     A.correr(f"{AR} · {nombre}", f)
 A.reg(AR, "ninguna excepción escapó de un slot de Qt", not A.ERRORES, str(A.ERRORES[-1:])[-300:])
 

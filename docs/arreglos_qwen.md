@@ -779,6 +779,16 @@ La tabla de la tanda 3 lista `nucleo/solidos_crear.py` y `ui/comandos/crear.py`.
 - ⚠ **Proyectos `.omnicad` guardados con «Estirar»**: al abrir, el cuerpo cambia de forma (del tronco de 3364,59 al estirado de 1600 en el caso de la fila). En `ejemplos/` no hay recetas con `escala_carril` (`grep -rln "escala_carril" ejemplos/` → nada), pero una pieza del usuario puede tenerla. Con la cadena tangente pasa lo mismo a la inversa: el repujado pierde las copias de los costados.
 - ⚠ **B-220 queda abierto** y es el mismo síntoma por la otra puerta (cara elegida a mano): medido, con ficha, sin arreglo.
 
+## Informe tanda 4
+
+Lo escribe el coordinador: Qwen se cortó dos veces (reinicio de la PC a las 04:29 y tope de 60 min a las 08:03) sin escribir su informe.
+
+- **H-92 · «Eje de proyecto» encendido por defecto — Resuelto.** Panel (`ui/comandos/solido.py`, `superficie.py`) y API (`revolve`, `create_surface_revolve`) arrancan con el eje proyectado, con el nombre de Fusion. Los `PARAMS` siguen en `False` para que las recetas viejas den lo mismo. Un eje perpendicular al plano, o aristas de un cuerpo sin plano, ya no dan error: el eje queda donde está.
+- **H-86 · «Medida» arranca en «Longitud total» — Resuelto.** Panel y API de Extruir (sólido y superficie); `PARAMS` sigue en `mitad` por las recetas viejas.
+- Tests nuevos: `test_herramientas_solido.py`, `test_comandos.py`, `test_sol07_revolucion.py`; chequeo `medida_por_defecto` en `scripts/prueba_ui/revolucion_barrido_solevacion.py`.
+- Revisión del coordinador: ruff limpio; 894 + 866 + 833 verdes (45 archivos que usan el código tocado). `/ponytail-review` halló un bloque de proyección duplicado en `ops_superficie.py` (sin efecto, idempotente): borrado; 805 verdes después.
+- ⚠ Sin test propio: revolución de superficie desde aristas de un cuerpo con el eje proyectado (antes daba error, ahora no proyecta).
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

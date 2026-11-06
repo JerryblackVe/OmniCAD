@@ -70,8 +70,19 @@ def test_proyectar_eje_lleva_un_eje_inclinado_al_plano_del_perfil():
     eje = {"sketch": "Eje", "curve": 3}
     llamar(s, "revolve", sketch="Perfil", axis=eje, project_axis=True)
     assert geo.volumen(_cuerpo(s).forma) == pytest.approx(_sector(360), rel=1e-4)
-    llamar(s, "revolve", sketch="Perfil", axis=eje)
+    llamar(s, "revolve", sketch="Perfil", axis=eje, project_axis=False)
     assert abs(geo.volumen(_cuerpo(s).forma) - _sector(360)) > 0.005 * _sector(360)
+
+
+def test_eje_de_proyecto_arranca_encendido():
+    """H-92: Fusion abre el panel de Revolución con «Eje de proyecto» marcado (captura real en español,
+    analisis/capturas_fusion/SUPERFICIE/Revolucion), así que sin pedirlo el eje se proyecta al plano del perfil."""
+    s = _perfil()
+    llamar(s, "create_sketch", plane="YZ", name="Eje")
+    llamar(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=10)           # dirección (0, 20, 10): inclinada
+    eje = {"sketch": "Eje", "curve": 3}
+    llamar(s, "revolve", sketch="Perfil", axis=eje)                            # sin project_axis: el defecto
+    assert geo.volumen(_cuerpo(s).forma) == pytest.approx(_sector(360), rel=1e-4)
 
 
 def test_hasta_un_plano_que_no_contiene_el_eje_recorta_y_exige_que_todo_el_perfil_llegue():
