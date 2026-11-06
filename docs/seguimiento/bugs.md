@@ -2,7 +2,7 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 25: Abierto 21 · Parcial 4 (recontado 2026-11-05 por fila: se cerraron B-205, B-207 y B-197 de Extruir, B-206 quedó en Parcial, y sumaron B-208 a B-212 y B-213 a B-217).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 23: Abierto 19 · Parcial 4 (recontado 2026-11-05 por fila: se cerraron B-205, B-207 y B-197 de Extruir, B-206 quedó en Parcial, sumaron B-208 a B-212 y B-213 a B-217, y se cerraron B-210 y B-211 de la tanda 1).
 
 ## Abiertos y parciales
 
@@ -11,8 +11,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-206 | Extruir Inicio › Objeto con un plano inclinado: falta combinarlo con la conicidad | Parcial | Media | Resuelto: el perfil se proyecta sobre el plano a lo largo de la dirección con aristas analíticas (círculo r5 a 30° → 785,40 mm³ exactos), la delgada mide la pared en el plano del perfil (600 mm³ como la recta) y «Al objeto»/«Todo» llegan desde toda la base. Queda: conicidad + inicio inclinado da un error claro («La conicidad todavía no se combina con Inicio › Objeto en un plano inclinado…»); `_prisma` toma como plano neutro uno perpendicular a la dirección. | timeline/operaciones.py (`inclinado`), nucleo/solidos_crear.py (`extruir_avanzado`, `inicio_plano`); tests/test_api_opciones_solido1.py::test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el | 2026-11-05 |
 | B-208 | Barrido con carril guía deforma el perfil aunque el carril sea paralelo a la ruta (sólido y superficie) | Abierto | Alta | Cuadrado 4×4 barrido 50 mm con un carril paralelo y escala «Ninguna» da 784,03 mm³ en vez de 800 (caja ±2,31 en vez de ±2); la superficie da 797,57 mm² en vez de 800. Con «Escalar» y el carril de 2 a 6 da 3364,59 contra 3466,67. Los dos extremos quedan bien; el medio se tuerce. También en la ventana (pieza `revolucion_barrido_solevacion`). | nucleo/solidos_crear.py:819 | 2026-11-05 |
 | B-209 | Barrido sólido con escala «Estirar» hace «Escalar» sin avisar | Abierto | Media | `sweep rail_scale="stretch"` da 3364,59 mm³, lo mismo que `scale`; debería estirar en una sola dirección. La superficie sí estira (400 mm² exactos). La ventana del sólido ni ofrece Estirar. | nucleo/solidos_crear.py:877 | 2026-11-05 |
-| B-210 | Revolución «Dos lados» con un ángulo negativo da otra forma en sólido que en superficie | Abierto | Baja | Lado 1 = 90°, lado 2 = −45°: el sólido toma el signo y el lado 2 vuelve sobre el lado 1 (1570,80 mm³, como sin lado 2, sin aviso); la superficie toma el valor absoluto (235,62 mm², igual que +45°). Falta una sola regla para los dos. | timeline/operaciones.py:1305 (`OpRevolucion.ejecutar`) y nucleo/superficies.py:475 | 2026-11-05 |
-| B-211 | Barrido: la Distancia mayor que 1 se acepta y se recorta a 1 sin avisar | Abierto | Baja | En la ventana «1,5» deja la vista previa en verde y `edit_feature` con `distancia="2"` sale ok: el cuerpo es el de 1 (628,32 mm³). La API solo rechaza números sueltos (`path_distance=1.5`). Fusion: Range 0.00-1.00. | nucleo/solidos_crear.py:256 | 2026-11-05 |
 | B-212 | Solevación sólida con un carril recto falla: «el kernel produjo un sólido inválido» | Abierto | Media | Cuadros 10×10 en z 0 y 20×20 en z 10, carril recto del medio de un lado al medio del otro: el sólido da OPERATION_FAILED; la misma solevación de superficie sale bien (670,82 mm², el área lateral exacta del tronco). Fusion la hace. | nucleo/solidos_crear.py:1324 | 2026-11-05 |
 | B-213 | Nervio y Red se recortan contra la caja del cuerpo: rellenan hasta el borde o pierden la mitad | Abierto | Media | Escuadra con un nervio invertido (hacia afuera, sin cara): en vez de avisar como Fusion, rellena hasta la caja del cuerpo (+1950 mm³). Con el boceto en el borde del cuerpo, el simétrico pierde la mitad (600 en vez de 1200) y el de un lado da «la curva queda dentro del cuerpo»; la Red con el boceto delante de la caja da el mismo error falso. También en la ventana (pieza `nervio_red_repujado`). | nucleo/solidos_crear.py:1402 (`_hasta_el_cuerpo`) | 2026-11-05 |
 | B-214 | Nervio con dos curvas sueltas falla con un mensaje de «ruta» | Abierto | Baja | La ventana deja elegir varias curvas, pero dos líneas sueltas dan «La ruta debe ser una sola cadena continua de aristas». Fusion hace un nervio por curva en un solo paso (la ayuda muestra cuatro). La Red sí las acepta. | nucleo/solidos_crear.py:1439 (`nervio`: un solo `_alambre`) | 2026-11-05 |
@@ -88,21 +86,6 @@ de arriba manda sobre este texto.
 - **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py`.
 - **Esquive:** ninguno en sólido; superficie y después Engrosar o Coser.
 - **Prueba propuesta:** estirar ≠ escalar y da 1600 mm³ con el carril de 2 a 6; la ventana ofrece Estirar.
-
-### B-210 · Revolución «Dos lados» con ángulo negativo: sólido y superficie distintos
-
-- **Qué:** rectángulo x 10..20, y 0..10 en XY, eje Y; `revolve direction=two_sides angle=90 angle2=-45` y `create_surface_revolve` con la línea x=10 y los mismos ángulos. En la ventana: Dos lados, teclear «90 deg» y «-45 deg», Enter.
-- **Esperado:** el mismo criterio en los dos (Fusion no dice qué hace con un ángulo negativo en Dos lados: ⚠ sin abrir Fusion).
-- **Obtenido:** sólido 2356,19 mm³ (el lado 2 se pierde en la unión, sin aviso); superficie 235,62 mm² (toma −45 como +45, `abs` en `nucleo/superficies.py:475`).
-- **Reproducir:** `evidencias/ui_2026-11-05/sondas_rbs.py rev_dos_lados_90_menos45 srev_dos_lados_neg`.
-- **Prueba propuesta:** lado 2 negativo da lo mismo (o el mismo error) en sólido y en superficie.
-
-### B-211 · Barrido: Distancia mayor que 1 se recorta sin avisar
-
-- **Qué:** círculo r 2 en YZ y ruta de 50 en X; `sweep` y después `edit_feature feature=op3 params={"distancia": "2"}`; en la ventana, teclear «1,5» en Distancia.
-- **Esperado (Fusion):** «Value is measured in percentage of the total distance. Range: 0.00-1.00» (ayuda `Sweep reference`): un error claro, como «0».
-- **Obtenido:** `ok`, el cuerpo de la ruta entera (628,32 mm³) y la previa en verde; `_recortar_alambre` hace `min(fraccion, 1.0)` (`nucleo/solidos_crear.py:256`). La API rechaza solo `path_distance` numérico (`api/herramientas_solido.py:452`).
-- **Prueba propuesta:** distancia 1,5 da error en la ventana, en `edit_feature` y en la API.
 
 ### B-212 · Solevación sólida con un carril recto da un sólido inválido
 

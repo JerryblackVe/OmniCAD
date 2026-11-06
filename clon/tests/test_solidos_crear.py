@@ -15,6 +15,7 @@ from omnicad.nucleo import perfiles as pf
 from omnicad.nucleo import referencias as rf
 from omnicad.nucleo import solidos_crear as sc
 from omnicad.nucleo import solidos_modificar as sm
+from omnicad.nucleo import superficies as sf
 from omnicad.restricciones import Boceto
 
 from _tiempo import mejor_tiempo
@@ -180,6 +181,26 @@ def test_barrido_recto_distancia_e_inclinacion():
     valido(sc.barrer([anillo(0, 3, 1)], ruta), math.pi * 8 * 10)
     superficie = sc.barrer([c2], ruta, solido=False)
     assert g.area(superficie) == pytest.approx(2 * math.pi * 2 * 10, rel=1e-6)
+
+
+@pytest.mark.parametrize("valor", [1.5, 2.0])
+def test_barrido_distancia_mayor_que_una_da_error(valor):
+    """B-211: la Distancia es una fracción de la ruta (Fusion: «Range: 0.00-1.00»); pasar de 1 es un error, no la ruta entera."""
+    ruta = [linea((0, 0, 0), (0, 0, 10))]
+    c2 = circulo((0, 0, 0), 2)
+    hacer = (lambda: sc.barrer([c2], ruta, distancia=valor),
+             lambda: sc.barrer([c2], ruta, distancia=valor, solido=False),
+             lambda: sc.barrer_cuerpo(g.caja(4, 4, 4), ruta, distancia=valor),
+             lambda: sc.tuberia(ruta, tamano=2, distancia=valor),
+             lambda: sf.barrer_superficie([linea((0, 0, 0), (2, 0, 0))], ruta, distancia=valor))
+    for f in hacer:
+        with pytest.raises(g.ErrorGeometria, match="a 1"):
+            f()
+    valido(sc.barrer([c2], ruta, distancia=1.0), math.pi * 4 * 10)      # el borde 1 sigue siendo la ruta entera
+    for valor2 in (float("nan"), float("inf")):                         # y un valor loco tampoco se cuela
+        for f in hacer:
+            with pytest.raises(g.ErrorGeometria):
+                f()
 
 
 def test_barrido_con_torsion_gira_el_perfil():

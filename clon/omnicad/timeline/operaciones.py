@@ -1314,8 +1314,10 @@ class OpRevolucion(_OpConPerfiles):
             caras = [geo.rotar(c, punto, direccion, -a1 / 2) for c in caras]
             forma = geo.revolver(caras, punto, direccion, a1)
         elif modo == "dos_lados" and self.p.get("extension") != "completa":
-            forma = geo.unir_todos([geo.revolver(caras, punto, direccion, a1),
-                                    geo.revolver(caras, punto, -direccion, a2)])
+            # «Dos lados» elige el lado la dirección, no el signo: cada ángulo es una magnitud, como en
+            # `revolver_avanzado`, en la revolución de superficie y en la Extrusión de dos lados.
+            forma = geo.unir_todos([geo.revolver(caras, punto, direccion, abs(a1)),
+                                    geo.revolver(caras, punto, -direccion, abs(a2))])
         else:
             forma = geo.revolver(caras, punto, direccion, a1)
         self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo()))

@@ -53,6 +53,11 @@ def test_barrido_con_distancia_parcial_y_con_aristas_de_un_cuerpo_como_ruta():
     assert cuerpos(s)[0]["volume"] == pytest.approx(math.pi * 4 * 10, rel=1e-4)
     falla(s, "sweep", sketch="Perfil", path_sketch="Ruta", path_distance=0)
     falla(s, "sweep", sketch="Perfil", path_sketch="Ruta", path_distance=1.5)
+    # B-211: pasar de 1 también falla con una expresión y al editar el paso; antes se recortaba a 1 sin avisar.
+    falla(s, "sweep", esperado="OPERATION_FAILED", sketch="Perfil", path_sketch="Ruta", path_distance="1.5")
+    paso = ok(s, "sweep", sketch="Perfil", path_sketch="Ruta")["feature"]["id"]
+    r = api.llamar(s, "edit_feature", {"feature": paso, "params": {"distancia": "2"}})
+    assert not r["ok"] and "va de 0 a 1" in r["mensaje"], r
     s = api.Sesion()
     ok(s, "create_box", length=20, width=20, height=20, name="Caja")                     # arista vertical en (10, 10)
     ok(s, "create_sketch", plane="XY", name="Perfil")

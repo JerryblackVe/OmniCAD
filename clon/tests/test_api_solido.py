@@ -409,6 +409,11 @@ def test_revolucion(s):
     assert sim["bodies_created"][0]["volume"] == pytest.approx(aro["volume"] / 4, rel=1e-6)
     dos = llamar(s, "revolve", sketch="Boceto1", profile=0, axis="z", angle=90, angle2=45, direction="two_sides")
     assert dos["bodies_created"][0]["volume"] == pytest.approx(aro["volume"] * 135 / 360, rel=1e-6)
+    # B-210: con «Dos lados» el lado lo elige la dirección, no el signo: cada ángulo vale por su magnitud,
+    # como en la revolución de superficie y en la Extrusión. Antes el lado 2 volvía sobre el lado 1 y se perdía.
+    for ng in ({"angle": 90, "angle2": -45}, {"angle": -90, "angle2": 45}, {"angle": -90, "angle2": -45}):
+        r = llamar(s, "revolve", sketch="Boceto1", profile=0, axis="z", direction="two_sides", **ng)
+        assert r["bodies_created"][0]["volume"] == pytest.approx(aro["volume"] * 135 / 360, rel=1e-6), ng
     linea = llamar(s, "draw_line", start_x=0, start_y=0, end_x=0, end_y=20, construction=True)["entities"][0]["id"]
     eje = llamar(s, "revolve", sketch="Boceto1", profile=0, axis=linea)
     assert eje["bodies_created"][0]["volume"] == pytest.approx(aro["volume"], rel=1e-6)

@@ -81,6 +81,20 @@ def test_barrido_y_solevacion():
     assert g.volumen(_ultimo(doc).forma) == pytest.approx(100 * 20, rel=1e-4)
 
 
+def test_barrido_distancia_fuera_de_rango_error_en_el_dialogo():
+    """B-211: «Distancia» es la fracción de la ruta, de 0 a 1 (Fusion: Range 0.00-1.00); 1,5 da error, no la ruta entera."""
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.crear import Barrido
+    doc = Documento()
+    bp, _ = _boceto(doc, plano="XY", circulo=((0, 0), 2))
+    br, ids = _boceto(doc, plano="XZ", lineas=[((0, 0), (0, 10))])
+    cmd, ctx = Barrido(), ContextoComando(doc)
+    v = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in cmd.campos(ctx)}
+    v.update(perfiles=[_perfil(doc, bp)], ruta=_curvas(doc, br, ids), distancia="1.5")
+    res = doc.agregar(cmd.construir(v, ctx))
+    assert res.estado == "error" and "va de 0 a 1" in res.mensaje, res.mensaje
+
+
 def test_agujero_en_cara_y_desde_boceto_roscado():
     from omnicad.ui.comandos.crear import Agujero
     doc = Documento()

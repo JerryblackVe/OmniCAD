@@ -94,6 +94,11 @@ def test_revolucion_segmento_alrededor_de_z():
     perfil = linea(s, inicio=(5, 0), fin=(5, 10), plano="XZ")
     cid = creado(s, "create_surface_revolve", profiles=perfil, axis="Z", angle=180)
     area(s, cid, 50 * math.pi)
+    # B-210: «Dos lados» toma la magnitud de cada ángulo (el lado lo elige la dirección), igual que en el sólido.
+    for ang2 in (45, -45):
+        cid = creado(s, "create_surface_revolve", profiles=perfil, axis="Z", angle=90, angle2=ang2,
+                     direction="two_sides")
+        area(s, cid, 100 * math.pi * 135 / 360)
 
 
 @pytest.mark.parametrize("orientacion,giro", [("perpendicular", 90), ("parallel", 0)])

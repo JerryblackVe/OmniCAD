@@ -357,9 +357,12 @@ class Revolucion(Comando):
         radio = radio if radio > 1e-6 else None
         if v.get("direccion") == "simetrica":
             return [mp.Angulo("angulo", pie, d, centro - pie, radio, factor=0.5)]
-        salida = [mp.Angulo("angulo", pie, d, centro - pie, radio)]
-        if v.get("direccion") == "dos_lados":
-            salida.append(mp.Angulo("angulo2", pie, -d, centro - pie, radio))
+        # B-210: en «Dos lados» cada ángulo es una magnitud de su lado (el lado lo elige la dirección), como en
+        # Extruir (B-205): el asa no se arrastra por debajo de 0, donde ya no cambiaría nada.
+        dos = v.get("direccion") == "dos_lados"
+        salida = [mp.Angulo("angulo", pie, d, centro - pie, radio, minimo=0.0 if dos else -360.0)]
+        if dos:
+            salida.append(mp.Angulo("angulo2", pie, -d, centro - pie, radio, minimo=0.0))
         return salida
 
     def desde_op(self, op, ctx):

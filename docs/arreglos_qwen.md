@@ -32,6 +32,238 @@ Se corren de a una y en orden. El coordinador revisa y commitea cada tanda antes
 En cada tanda, además de esa lista: todos los archivos que da
 `grep -l "<cada función que tocaste>" clon/tests/test_*.py`.
 
+## Informe tanda 1
+
+Corrida del 2026-11-05 (pasó la medianoche al 11-06). OpenCode con Qwen3.8-Flash en Qoder. Bugs: B-211 y B-210, de a uno y en ese orden.
+
+### B-211 · Barrido: la Distancia mayor que 1 se recorta a 1 sin avisar — **Resuelto**
+
+**Qué dice la ayuda de Fusion** (`fusion_docs.py ver "Sweep reference" -s fusion-model`, desde `clon/`):
+
+> ### Distance
+> Specify the distance to sweep along the path.
+> Value is measured in percentage of the total distance.
+> Range: 0.00-1.00
+
+O sea: 1,5 no es «casi dos vueltas» ni «la ruta entera»: está fuera de rango y hay que rechazarlo. La regla ya estaba escrita en el gemelo de superficie (`nucleo/superficies.py:698`: `0 < valor <= 1`), pero no en el compartido.
+
+**Qué cambié** — `clon/omnicad/nucleo/solidos_crear.py:249` (`_recortar_alambre`), tres líneas:
+
+```python
+if not math.isfinite(fraccion) or fraccion > 1.0 + 1e-9:
+    raise geo.ErrorGeometria("La distancia sobre la ruta va de 0 a 1 (fracción del total); "
+                             f"recibió {fraccion:g}.")
+```
+
+Se eligió el compartido y no cada comando porque `_recortar_alambre` es el único que recorta la ruta: un punto cierra el recorte silencioso `min(fraccion, 1.0)` para las cuatro entradas. La tolerancia de 1e-9 deja pasar una expresión que da 1 por coma flotante, que es lo que ya aceptaba la línea siguiente.
+
+**Gemelos revisados** (regla 1; `grep -rn "_recortar_alambre" clon/omnicad`, `grep -rn "distancia"` por archivo y `grep -rn "min(fraccion"`):
+
+| Gemelo | Qué hice |
+|---|---|
+| `nucleo/solidos_crear.py:904` `barrer` (Barrido, y su superficie con `solido=False`) | pasa por el compartido → arreglado |
+| `nucleo/solidos_crear.py:938` `barrer_cuerpo` (Barrido sólido) | pasa por el compartido → arreglado |
+| `nucleo/solidos_crear.py:2899` `tuberia` (Tubería, con `distancia2`) | pasa por el compartido → arreglado; su validación previa solo mira NaN/∞ y el inicio, así que quedó |
+| `nucleo/superficies.py:582, 595, 710, 724` (corte del riel y de la espina) | ya llegaban con una fracción ≤ 1: `barrer_superficie` rechaza antes (`:698`) y `_recortar_perpendicular` usa `_primer_cruce`, que devuelve (0, 1]. Sin cambio |
+| `nucleo/solidos_crear.py:815` (ruta cerrada con torsión: `0.5` y `1.0` fijos) | constantes internas. Sin cambio |
+| `timeline/ops_solido.py:162, 181, 585` (`OpBarrido`, `OpTuberia`) | solo evalúan la expresión y la bajan al núcleo. Sin cambio |
+| `ui/comandos/crear.py:67` (Distancia del Barrido) y `:1019-1022` (Distancia inicial/final de la Tubería) | la ayuda de los tres campos ya dice «de 0 a 1» / «fracción entre 0 y 1»; con el error del núcleo la previa se pone roja sola. Sin cambio |
+| `api/herramientas_solido.py:452` (`sweep`, `path_distance`) | **lo dejé**, aunque el `ponytail-audit` decía «the check in the API can then go»: da `INVALID_ARGUMENTS` antes de calcular y es el patrón de la casa (el `twist_angle` de tres líneas más abajo hace exactamente eso con `TORSION_MAXIMA`); el test que lo exige sigue verde |
+| `api/herramientas_superficie.py:169` (`create_surface_sweep`) | sin chequeo propio: depende del núcleo, que ahora rechaza. Sin cambio |
+| `nucleo/omnikernel/solidos_crear.py` | no tiene barrido ni recorte de ruta (`grep -n "barrer\|recortar\|distancia"` → nada). Sin cambio |
+| la previa rápida (`ui/comando.py`) | `tramo_previa` es solo del prisma de Extruir; Barrido y Tubería calculan la previa con el núcleo. Sin cambio |
+| `edit_feature` (`api/herramientas_documento.py:709`) | recalcula y descarta el cambio con el error del paso → test nuevo |
+| MCP / CLI | mismo catálogo `api/`, nada que duplicar. No cambió ninguna firma: no se regenera `docs/agentes/herramientas.md` |
+
+**Test nuevo y su salida.** `tests/test_solidos_crear.py::test_barrido_distancia_mayor_que_una_da_error` (5 caminos × 2 valores, más NaN/∞), `tests/test_api_opciones_solido2.py` (con `path_distance="1.5"` y con `edit_feature {"distancia": "2"}`) y `tests/test_comandos_crear.py::test_barrido_distancia_fuera_de_rango_error_en_el_dialogo`.
+
+ROJO antes del arreglo (con el arreglo revertido un momento, para tomar la salida de cada capa):
+
+```
+$ pytest tests/test_solidos_crear.py -q -k "distancia_mayor_que_una"
+E   Failed: DID NOT RAISE ErrorGeometria
+FAILED tests/test_solidos_crear.py::test_barrido_distancia_mayor_que_una_da_error[1.5]
+FAILED tests/test_solidos_crear.py::test_barrido_distancia_mayor_que_una_da_error[2.0]
+FAILED tests/test_solidos_crear.py::test_barrido_distancia_mayor_que_una_da_error[nan]
+FAILED tests/test_solidos_crear.py::test_barrido_distancia_mayor_que_una_da_error[inf]
+4 failed, 63 deselected in 1.04s
+
+$ pytest tests/test_api_opciones_solido2.py -q -k "distancia_parcial"
+E   AssertionError: {'ok': True, 'result': {'feature': {'id': 'op4', 'name': 'Barrido2', 'type': 'barrido'},
+    'bodies_created': [{'id': 'op4.c1', 'name': 'Cuerpo2', 'volume': 251.3274}], ...}}
+1 failed, 6 deselected in 1.15s
+
+$ pytest tests/test_comandos_crear.py tests/test_api_opciones_solido2.py -q -k "sweep or distancia_fuera"
+E   AssertionError: La selección de cadena solo suma aristas de cuerpos: las curvas de boceto se usan tal cual.
+E     assert ('aviso' == 'error'  - error  + aviso)
+1 failed, 24 deselected in 1.77s
+```
+
+El de la API es el bug entero en una línea: `ok` con 251,33 mm³, que es π·4·20 — la ruta completa. (En la primera versión del test los cuatro valores se probaban juntos; al separar NaN/∞ se vio que `tuberia` ya los rechaza con su propio mensaje «Las distancias deben ser finitas…», así que el test quedó en dos parametrizaciones con la cuenta del rango y un bloque aparte que solo exige `ErrorGeometria`.)
+
+VERDE después: `2 passed, 63 deselected in 0.92s` en el núcleo, y los grupos completos de la tabla de abajo, todos verdes.
+
+### B-210 · Revolución «Dos lados» con un ángulo negativo: sólido contra superficie — **Resuelto**
+
+**Qué dice la ayuda de Fusion** («Revolve reference»): `Two Sides: Revolves profile on each side of the profile plane`, y nada sobre el signo del ángulo. ⚠ Fusion real no se abrió; la regla no sale de la ayuda sino de los tres gemelos que ya la tenían escrita, que es lo que pedía la fila («falta una sola regla para los dos»).
+
+**Estado del código antes de decidir** (medido, no supuesto — `evidencias/ui_2026-11-05/sondas_rbs.py dos_lados`):
+
+```
+rev_dos_lados_90_45      | ok | op2.c1:solid    V=3534.29  [-0.00,0.00,-20.00]..[20.00,10.00,14.14]
+rev_dos_lados_90_menos45 | ok | op2.c1:solid    V=2356.19  [0.00,0.00,-20.00]..[20.00,10.00,0.00]
+srev_dos_lados           | ok | op2.c1:surface  A=235.62
+srev_dos_lados_neg       | ok | op2.c1:surface  A=235.62
+```
+
+El sólido con −45 da lo mismo que sin lado 2 (la caja no pasa de z = 0) y la superficie con −45 da lo mismo que con +45: **la superficie ya tomaba la magnitud y el sólido no.** (El `1570,80` de la fila había envejecido; medido hoy, eran 2356,19.)
+
+**Qué cambié** — `clon/omnicad/timeline/operaciones.py:1316` (`OpRevolucion.ejecutar`):
+
+```python
+forma = geo.unir_todos([geo.revolver(caras, punto, direccion, abs(a1)),
+                        geo.revolver(caras, punto, -direccion, abs(a2))])
+```
+
+Antes `a1` y `a2` entraban con su signo, así que −45° sobre `-direccion` era +45° sobre `direccion`: el lado 2 caía adentro del lado 1 y se perdía en la unión. Va `abs` también en `a1` porque con −90 pasaba lo mismo al revés. El control de la línea 1311 ya sumaba `abs(a1) + abs(a2)`: la geometría estaba peleada con su propio control.
+
+Y su consecuencia en la ventana — `clon/omnicad/ui/comandos/solido.py:357-365` (`Revolucion.manipuladores`): con `abs`, arrastrar el asa del lado 2 por debajo de 0 no cambiaba nada, así que las dos asas de ángulo se frenan en 0 con «Dos lados» y siguen libres en «Un lado», donde el signo sí significa:
+
+```python
+dos = v.get("direccion") == "dos_lados"
+salida = [mp.Angulo("angulo", pie, d, centro - pie, radio, minimo=0.0 if dos else -360.0)]
+if dos:
+    salida.append(mp.Angulo("angulo2", pie, -d, centro - pie, radio, minimo=0.0))
+```
+
+**Gemelos revisados** (regla 1; `grep -rn "dos_lados" clon/omnicad` → 70 sitios; los que calculan una geometría con el lado 2 son estos):
+
+| Gemelo | Regla hoy | Qué hice |
+|---|---|---|
+| `nucleo/solidos_crear.py:676` `revolver_avanzado` | `[(0.0, abs(angulo1)), (0.0, -abs(angulo2 or 0.0))]` | ya era magnitud → de acá saqué la regla |
+| `nucleo/superficies.py:475` `revolver_superficie` | `[(0.0, abs(angulo))] + [(0.0, -abs(a2))]` | ya magnitud; sin cambio |
+| `timeline/operaciones.py:1316` `OpRevolucion` | usaba el signo | **arreglado** |
+| `timeline/operaciones.py:1242` `_extrusion_basica` (el hermano de B-205) | `unir_todos([extruir(..., abs(d1)), extruir(..., -n, abs(d2))])`, con el comentario «el número es una magnitud, su signo no invierte el lado» | precedente directo; sin cambio |
+| `nucleo/solidos_crear.py:604` `extruir_avanzado` | `[(abs(distancia1), …), (-abs(distancia2), …)]` | ya magnitud; sin cambio |
+| `nucleo/superficies.py:276` y `:389` (extrusión de superficie) | `abs(distancia), abs(distancia2)` | ya magnitud; sin cambio |
+| `ui/comando.py:719` `tramo_previa` (previa rápida de Extruir) | `a, b = -abs(d2), abs(d1)` | ya magnitud, y **no toca la Revolución** (es del prisma de Extruir): la previa de Revolución se calcula con el núcleo, así que el arreglo la cubre sola |
+| `ui/comandos/solido.py:357` (asas de Revolución) | el asa podía bajar de 0 sin efecto | **arreglado** (tope en 0) |
+| `ui/comandos/solido.py:102` (flechas de Extruir) | B-205 ya las frenaba en 0 | referencia del criterio; sin cambio |
+| `timeline/ops_superficie.py:202` (`OpSupRevolucion`) | pasa `angulo2` con signo al núcleo, que hace `abs` | sin cambio |
+| `ui/comandos/solido.py:307-309` y `ui/comandos/superficie.py:103-105` (campos «Ángulo del lado 1 / del lado 2») | los dos diálogos ya se llaman igual y no prometen signo | sin cambio |
+| `api/herramientas_solido.py:388` y `api/herramientas_superficie.py:150` (`revolve`, `create_surface_revolve`) | `angle2` vacío = `angle`; el docstring dice «angle hacia un lado y angle2 hacia el otro», que es la regla de magnitud | sin cambio de texto → no se regenera `docs/agentes/herramientas.md` |
+| `nucleo/chapa.py:1111` (pestaña de contorno de CHAPA: `(-distancia2, distancia)`) | con valores negativos tira «Dirección o distancias de la pestaña de contorno inválidas» (`:1112`): no hay forma muda | revisado y **no aplica** (otro comando, y ya avisa) |
+| `nucleo/omnikernel/geometria.py:170` (`revolver` del otro motor) | `abs(angulo)` por cara | coincide con la nueva regla; sin cambio |
+
+**Test nuevo y su salida.** `tests/test_api_solido.py::test_revolucion` (90/−45, −90/45 y −90/−45 dan 135/360), `tests/test_api_superficie.py::test_revolucion_segmento_alrededor_de_z` (45 y −45 dan la misma área) y `tests/test_manipuladores.py::test_dos_lados_de_la_revolucion_cada_asa_es_la_magnitud_de_su_lado` (la previa con −45 es igual a la de +45 y las asas no bajan de 0).
+
+ROJO antes del arreglo:
+
+```
+$ pytest tests/test_api_solido.py::test_revolucion tests/test_api_superficie.py::test_revolucion_segmento_alrededor_de_z -q
+E   AssertionError: {'angle': 90, 'angle2': -45}
+E     assert 9387.0788 == 14080.618274999999 ± 0.0140806
+1 failed, 1 passed in 1.46s        (falla el sólido; la superficie ya pasaba: el test es la comparación de los dos)
+
+$ pytest "tests/test_manipuladores.py::test_dos_lados_de_la_revolucion_cada_asa_es_la_magnitud_de_su_lado" -q
+E   assert (-360.0 == 0.0)
+1 failed in 1.69s
+```
+
+VERDE después:
+
+```
+2 passed in 1.30s      (los dos de revolución)
+6 passed in 2.06s      (los cinco tests nuevos de la tanda, corridos por nombre)
+```
+
+### `/ponytail-review` (salida completa, sobre el diff de los tres archivos)
+
+`What this change does:` dos reglas de una línea. El recorte de ruta del barrido y la tubería deja de tragarse los valores mayores que 1 (y NaN/∞) y avisa; y el «Dos lados» de la Revolución deja de mirar el signo de cada ángulo, como ya hacían su núcleo, su superficie y la Extrusión. Además las asas del diálogo de Revolución se frenan en 0 con «Dos lados». Carga esperada: una persona o un agente sobre un documento (el criterio del repo); nada de esto corre en un bucle.
+
+**Must fix:** nada.
+
+**Should fix:**
+
+1. **El asa del lado 2 queda inerte por debajo de cero** (`ui/comandos/solido.py:357-365`)
+   - **What this is:** Con «Dos lados» el diálogo muestra dos arcos con asa, uno por lado, girando sobre `d` y `-d`.
+   - **Problem:** Al tomar `abs` en el paso, un valor negativo tecleado o arrastrado sigue escribiéndose pero ya no cambia la forma: el usuario mueve el asa y el cuerpo no se mueve. Extruir tuvo exactamente esto y se cerró con un tope en 0 (B-205).
+   - **Fix:** `minimo=0.0` en las dos asas cuando `direccion == "dos_lados"`, dejando `-360.0` en «Un lado», donde el signo sí significa. Tres líneas, sin clase nueva.
+   - **If we skip it:** La ventana ofrece un arrastre que no hace nada, contra la regla de honestidad del repo.
+
+**Nice to have:**
+
+2. **`min(fraccion, 1.0)` sigue en `_recortar_alambre`** (`nucleo/solidos_crear.py:259`)
+   - **What this is:** El recorte que causaba el B-211.
+   - **Problem:** Después del rechazo solo se alcanza con un valor entre 1 y 1+1e-9 (la tolerancia): es código casi muerto.
+   - **Fix:** **no lo toqué** — con `inicio` distinto de 0 (Tubería) esa banda existe y el `min` es lo que la mantiene dentro de la ruta. Sacarlo cambia comportamiento para ganar dos caracteres.
+   - **If we skip it:** Nada.
+
+**Arreglé de la revisión:** el ítem 1 (el tope del asa), con su test y su salida ROJA tomada revirtiendo el cambio. El ítem 2 queda como está, con la razón arriba.
+
+**Verdict: Ship.**
+
+### Verificación
+
+`ruff check .` desde `clon/`: `All checks passed!`
+
+Tests: todos con `turno`, `-p no:cacheprovider`, en primer plano y de a un grupo (la lista es la obligatoria de la tanda más los archivos que da `grep -l` de cada función tocada: `barrer`, `barrer_cuerpo`, `tuberia`, `barrer_superficie`, `revolver`, `Revolucion`; `_recortar_alambre` y `OpRevolucion` no aparecen en ningún test). 48 archivos, 2505 comprobaciones, ninguna corrida cortada por tiempo:
+
+| Grupo | Archivos | Salida final |
+|---|---|---|
+| 1 · núcleo | test_solidos_crear, test_superficies, test_superficie_fusion, test_geometria, test_b52_espiral, test_bugs_solido, test_paridad_motor | `243 passed in 151.78s (0:02:31)` |
+| 2 · barrido y tubería | test_sol08_barrido, test_barrido_tipos, test_api_barrido, test_gizmo_barrido, test_superficie_guias, test_tuberia_cadena, test_topes, test_rosca_diametros_tabla, test_rosca_clases_tablas, test_boceto_fase8_3d, test_iconos_extra | `469 passed in 89.06s (0:01:29)` |
+| 3 · API sólido/superficie | test_sol07_revolucion, test_api_solido, test_api_solido_extra, test_api_superficie, test_api_opciones_solido1, test_api_opciones_solido2, test_herramientas_solido, test_sup29_encadenado_superficie, test_opciones_operaciones, test_resultados_vacios, test_referencias_mal_formadas, test_graficos_rendimiento | `704 passed in 123.43s (0:02:03)` |
+| 4a · diálogos y asas | test_comandos, test_comandos_superficie, test_comandos_crear, test_manipuladores, test_b105_panel_chico | `83 passed in 11.93s` |
+| 4b · previa, catálogo y cobertura UI | test_previa_prisma, test_previa_aislada_comandos, test_previa_trabajador, test_previa_vaciado_aislada, test_asas_superficie, test_busqueda_comandos, test_claves_comandos, test_cobertura_ui_api, test_manipuladores (otra vez, ya con el tope del asa) | `495 passed in 324.01s (0:05:24)` |
+| 5 · seguimiento y doc | test_seguimiento, test_doc_agentes, test_api_documento, test_api_catalogo, test_api_convenciones | `511 passed in 18.02s` |
+
+Suite completa y prueba de humo: no corridas (regla 10; las toma el coordinador).
+
+Después de editar `PROJECT_LOG.md`, `docs/seguimiento/bugs.md` y este informe, se volvieron a correr los tres archivos que leen esa documentación: `test_seguimiento.py`, `test_doc_agentes.py` y `test_claves_comandos.py` → `450 passed in 5.94s`, y `ruff check .` → `All checks passed!`.
+
+Ventana (regla 9, porque toqué `ui/comandos/solido.py` y cambió la previa del Barrido): la pieza `revolucion_barrido_solevacion` en minimizada. `todo.py` la corta a los 900 s de su `turno` interno (dos intentos), así que se corrió derecho con `../scripts/turno.py --plazo 2700 -- .venv/Scripts/python.exe ../scripts/prueba_ui/revolucion_barrido_solevacion.py` desde `clon/`, con `OMNICAD_PRUEBA_VENTANA=minimizada`:
+
+```
+=== 40 comprobaciones, 8 con ✗ ===
+```
+
+Los dos checks que hablan de estos bugs pasaron, y son justo los que estaban ✗ en la auditoría (10 ✗ → 8 ✗):
+
+```
+[OK ] · Enter acepta la revolución y crea UN paso
+[OK ] · Revolución dos lados 90 / −45°: o aviso o 2356,19 mm³ (como la superficie), no el lado 2 perdido — volumen 2356.19 sin aviso «»
+[OK ] · reabrir la revolución trae «Dos lados» y −45° — {'direccion': 'dos_lados', 'angulo2': '-45 deg'}
+[OK ] · Barrido › Distancia «0,5»: previa
+[OK ] · Barrido › Distancia «0»: aviso — ⚠ La distancia sobre la ruta debe ser mayor que cero.
+[OK ] · Barrido › Distancia «1,5»: aviso — ⚠ La distancia sobre la ruta va de 0 a 1 (fracción del total); recibió 1.5.
+[OK ] · Barrido › Distancia «»: aviso — ⚠ Expresión vacía.
+```
+
+O sea: en la ventana real, teclear «1,5» en Distancia ahora **avisa** (antes dejaba la previa en verde), y el lado 2 con −45° da el cuerpo de 135° en vez de perderse. Las 8 ✗ que quedan son todas ítems ya anotados, ninguno de esta tanda: H-88 (2: «A objeto» no muestra Dirección, en sólido y en superficie), H-92 (2: «Proyectar eje» con nombre y valor por defecto distintos), B-209 (Estirar no está en la lista), H-89 (sin Extensión con carril), B-208 (el carril paralelo da 784,02 en vez de 800) y H-90 (la fila del punto solo ofrece «Aguda»).
+
+Capturas miradas con Read: `capturas/barrido_carril.png` (la app entera, con el aviso flotante y el árbol de cuerpos; sin nada roto) y las de tamaño de panel `barrido_1024x640.png` / `barrido_800x520.png`, que la pieza pide en sus dos checks de «Aceptar se ve».
+
+Evidencia: `evidencias/ui_2026-11-05/revolucion_barrido_solevacion.json` y `.log` (la corrida de las 23:42, cortada por el plazo, dejó el `.log` de la auditoría en 63 bytes; se restauró con la salida completa de esta corrida, que es la que está arriba).
+
+### Seguimiento
+
+- `docs/seguimiento/bugs.md`: borradas la fila y la sección «Detalle» de B-211 y de B-210; recuento del encabezado 25 → 23 (Abierto 19 · Parcial 4).
+- `docs/seguimiento/README.md`: no tenía filas de esos dos IDs (`grep -n "B-210\|B-211"` → nada), así que no había qué borrar.
+- `README.md` y `README.en.md` (hoja de ruta): sin mención de estos dos bugs (`grep` → nada); no se tocó.
+- Dos viñetas en «## Registro» de `PROJECT_LOG.md` y una lección en «## Lecciones aprendidas».
+
+### Archivos fuera de mi tanda
+
+La tabla de la tanda 1 no lista `timeline/operaciones.py` (donde está `OpRevolucion.ejecutar`, que es justo la línea que nombra la fila de B-210) ni `ui/comandos/solido.py` (el tope del asa, consecuencia del `abs`). Los dos se tocaron por eso, y nada más. No se tocó `nucleo/superficies.py`, `timeline/ops_solido.py`, `timeline/ops_superficie.py`, `ui/comandos/crear.py` ni `ui/comandos/superficie.py`: los gemelos de esos archivos ya tenían la regla.
+
+### Lo que no pude verificar
+
+- ⚠ **Fusion real no se abrió** para B-210: la ayuda no dice qué hace un ángulo negativo en Two Sides. La regla elegida es la que ya estaba en `revolver_avanzado`, `revolver_superficie` y la Extrusión (B-205), no una observación de Fusion. Si al abrirlo resultara que Fusion rechaza el negativo, el cambio vuelve a ser una línea en cada lado (los tres están juntos).
+- ⚠ No verifiqué en la ventana el **arrastre** del asa con el tope nuevo: el test pytest mira el `minimo` del manipulador y el volumen de la previa, no el arrastre con el ratón, y la pieza `revolucion_barrido_solevacion` teclea los ángulos (el arrastre de la Revolución con valores positivos lo prueba `test_angulo_de_la_revolucion`, que quedó verde en el grupo 4b).
+- ⚠ El check de ventana de B-210 mide el **sólido** contra los 135° esperados; la igualdad con la superficie en la ventana no se volvió a medir ahí (sale del pytest `test_api_superficie.py::test_revolucion_segmento_alrededor_de_z` y de que la superficie nunca usó el signo).
+- ⚠ Proyectos `.omnicad` guardados con una Distancia de barrido mayor que 1 ahora dan error al abrir en vez del cuerpo recortado. En `ejemplos/` no hay ninguno (`grep -rln "barrido" ejemplos/` → nada), pero una pieza del usuario puede tenerlo.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

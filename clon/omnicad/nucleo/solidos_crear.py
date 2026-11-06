@@ -248,6 +248,9 @@ def _punto_en(alambre, fraccion):
 
 def _recortar_alambre(alambre, fraccion, inicio=0.0):
     """Tramo entre dos fracciones de longitud (opción Distancia de barrido y tubería)."""
+    if not math.isfinite(fraccion) or fraccion > 1.0 + 1e-9:
+        raise geo.ErrorGeometria("La distancia sobre la ruta va de 0 a 1 (fracción del total); "
+                                 f"recibió {fraccion:g}.")
     if fraccion >= 1.0 - 1e-9 and inicio == 0:
         return alambre
     if fraccion - inicio <= 1e-6:

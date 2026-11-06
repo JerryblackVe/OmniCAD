@@ -740,6 +740,32 @@ def test_angulo_de_la_revolucion(app_qt):
     panel.cancelar()
 
 
+def test_dos_lados_de_la_revolucion_cada_asa_es_la_magnitud_de_su_lado(app_qt):
+    """B-210: en «Dos lados» cada ángulo vale por su magnitud (el lado lo elige la dirección), como en el núcleo y
+    en la superficie: -45 deg da el mismo cuerpo que 45 deg y el asa no se puede bajar de 0."""
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos.solido import Revolucion
+
+    def panel_dos(valor2):
+        doc = Documento()
+        b = Boceto()
+        b.agregar_rectangulo((5, 0), (10, 10))
+        doc.agregar(OpBoceto(doc.nuevo_id(), "Boceto1", plano="XZ", boceto=b))
+        eje = hit_desde_ref({"tipo": "eje", "id": "Z"}, doc.estado_final)
+        return _panel(Revolucion(), doc, {"perfiles": [_perfil(doc)], "eje": [eje], "angulo": "90 deg",
+                                         "direccion": "dos_lados", "angulo2": valor2})
+
+    panel, visor, estados = panel_dos("45 deg")
+    assert _manip(panel, "angulo:angulo").minimo == 0.0 and _manip(panel, "angulo:angulo2").minimo == 0.0
+    panel._calcular_previa()
+    v_pos = g.volumen(_cuerpo(estados[-1]).forma)
+    panel.cancelar()
+    panel2, _, estados2 = panel_dos("-45 deg")
+    panel2._calcular_previa()
+    assert g.volumen(_cuerpo(estados2[-1]).forma) == pytest.approx(v_pos, rel=1e-6)
+    panel2.cancelar()
+
+
 # ---------------------------------------------------------------- H-60: asas bien definidas y sin nada encima
 def _camara(visor, atras):
     """Cámara que mira hacia -atras (R: derecha, arriba, atrás) y encuadra."""

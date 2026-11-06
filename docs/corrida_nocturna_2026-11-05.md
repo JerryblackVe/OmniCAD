@@ -41,6 +41,7 @@ Plan de Claude (coordinador nocturno, `get_usage`):
 | Hora | 5 horas | Semanal |
 |---|---|---|
 | 22:46 (inicio) | 58 % (se renueva 23:20) | 20 % |
+| 00:50 | 3 % (ventana nueva, se renueva 04:20) | 20 % |
 
 Corridas (tokens de `opencode stats` / sesiones de Qoder; «sin dato» si no se pudo sacar):
 
@@ -49,6 +50,12 @@ Corridas (tokens de `opencode stats` / sesiones de Qoder; «sin dato» si no se 
 | 22:34 | Qwen en Qoder con `-m Qwen3.8-Flash` | tanda 1 | 6 s | 0 | no corrió: «not available, using auto» (el modelo se llama `qfmodel` en la config; se corre sin `-m`) |
 | 22:35 | Qwen en OpenCode Go | tanda 1 | 8 s | 0 | no corrió: sin suscripción a OpenCode Go |
 | 22:36 | GLM-5.3-Flash free (OpenCode) | tanda 1 | 2 min | 0 | ⚠ lanzado por error del coordinador (cambio de modelo no autorizado); límite gratis alcanzado, cortado sin tocar archivos |
+| 22:34 | GPT-6.1 Sol (OpenCode) | B-212 | 17 min | 315 k (+12,9 M caché) / 17 k (+6 k razonamiento) | commit `32a9c4c` en `sol-geometria-nocturna` (938 + 601 tests verdes) |
+| 23:02 | GPT-6.1 Sol (OpenCode) | B-215 (2 corridas: la 1.ª cortada a los 25 min esperando turno) | 50 min | 288 k (+9,1 M caché) / 14 k (+8 k razonamiento) | commit `9eeb89f` en `sol-geometria-nocturna` (685 + 522 tests verdes; la 2.ª corrida también se cortó esperando turno y los tests finales los corrió el coordinador) |
+| 22:41 | Qwen3.8-Flash (Qoder, `qfmodel`) | tanda 1 (B-211, B-210) | 71 min | sin dato (las sesiones de Qoder no guardan tokens) | terminó sin informe: dejó los tests en cola y salió; se retomó la sesión |
+| 22:50 | deepseek-v4.1-flash (CodeBuddy) | C1 (B-189, H-87) | 45 min (tope) | sin dato (salida json vacía al cortar) | cortado con H-87 hecho y B-189 a medias; se retomó la sesión |
+| 23:35 | deepseek-v4.1-flash (CodeBuddy) | C1, continuación | 45 min (tope) | sin dato | otra vez cortado, sin informe; el coordinador revisó (550 + 728 verdes) y commiteó `64eb920` en `codebuddy-nocturna` (H-87; B-189 ya estaba resuelto en HEAD, queda su test; nuevos B-218 y H-102) |
+| 00:00 | GPT-6.1 Sol (OpenCode) | B-213 | 19 min | sin dato aún | Parcial: Nervio arreglado, Red pendiente (2 tests en xfail estricto); commit `95d19f2` (689 + 2 xfail y 522 verdes) |
 
 ## Prompt para el agente
 
