@@ -265,6 +265,34 @@ lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
     inspecciona el `QMenu` sin `exec`.
   - No se abrió Fusion: el comportamiento sale de la ayuda oficial de `fusion-render`.
 
+## Informe tanda C6
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C6 · **Bug:** H-103 (mejora). **Sin commitear** (lo commitea el coordinador).
+
+### H-103 — ASPECTO › «quitar el aspecto de sus usos» estaba escrito dos veces — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** no aplica una decisión de comportamiento: H-103 es una refactor de código duplicado, no un cambio de qué hace OmniCAD. El comportamiento de «Quitar» (sacar el aspecto de cuerpos y caras) y de «Quitar y suprimir» («Unassign and Delete») ya coincide con Fusion (`fusion-render/modify-the-appearance-of-the-design-2c3eb0b892c.md`); la mejora era unificar las dos copias para que un arreglo en una llegue a la otra.
+- **Qué cambié:**
+  - `clon/omnicad/timeline/aspectos_doc.py:140` — `quitar` ahora arma sus cambios llamando a `_limpiar_usos(doc, cambios, cuerpos, caras)` (el mismo helper que usa el «Quitar y suprimir» del panel, H-74) y solo suma el caso `quitar_caras` (H-73: un cuerpo pierde además los aspectos propios de sus caras) para los cuerpos que **no** estén en el parámetro `caras` — exactamente lo que hacía el código viejo. La refactor es neutra: analicé las 4 combinaciones (cuerpo solo / cara solo / cuerpo+cara solapados × `quitar_caras`) y dan los mismos `cambios` que el inline anterior. `_sin_caras` queda solo en `asignar` y `asignar_color` (no es código muerto).
+- **Gemelos revisados:**
+  - `_limpiar_usos` (`timeline/aspectos_doc.py:224`): ahora es el ÚNICO lugar que arma «saca el aspecto de cuerpos y caras»; `quitar` lo reusa. ✔
+  - API (`api/herramientas_aspecto.py` › `manage_appearance` › `suprimir` con `remove_users`, y `api/herramientas_material.py:306` › `set_appearance` que limpia vía `ad.quitar`): no cambian de firma ni de comportamiento; `suprimir` llama a `quitar` internamente, así que también se beneficia de la unificación. ✔
+  - Panel (`ui/aspectos_ui.py:736` › `quitar_y_suprimir`): usa `reemplazar_lista(..., quitar_usos=)` que ya llama a `_limpiar_usos`; el camino del panel y el de la API ahora comparten el mismo núcleo de limpieza. ✔
+  - El caso `quitar_caras` (H-73): se conservó en `quitar` (el «Quitar y suprimir» no lo necesita porque borra la entrada del diseño); se mantiene igual para `api/herramientas_material.py` (`clear_face_overrides`) y `ui/render.py:2110` (`quitar_aspecto` con `quitar_caras=True`). ✔
+  - **Fuera de alcance (no lo toqué):** `nucleo/solidos_modificar.py::quitar_caras` y `omnikernel/...::quitar_caras` son de geometría (quitan caras de una forma OCC), no de aspectos; no tienen nada que ver con H-103.
+- **Test nuevo** (`clon/tests/test_aspectos_api.py::test_quitar_saca_el_aspecto_del_cuerpo_y_de_la_cara_y_conserva_quitar_caras`): pinta un cuerpo y una de sus caras, saca el aspecto solo de la cara concreta (el cuerpo queda pintado y la cara desaparece) y luego con `quitar_caras=True` saca el aspecto del cuerpo y sus caras propias. Es un **cierre de contrato**, no un bug: H-103 no tiene «Prueba propuesta» porque no cambia el comportamiento.
+  - Salida **ROJA (antes del arreglo, test nuevo contra el código viejo):** `1 failed, 82 passed` — fallaba por un error mío en el test (pinté solo caras, no el cuerpo, y luego `props["caras"]` con `KeyError` cuando la lista quedaba vacía y `set_propiedades` borra la clave). Lo corregí y el contrato quedó verde en el código viejo y en el nuevo (la refactor no mueve la aguja).
+  - Salida **VERDE (con el arreglo):** `83 passed in 11.87s` (los 4 archivos obligatorios).
+- **ruff check .:** `All checks passed!` (sobre el repo entero).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_aspecto_panel.py`, `test_aspectos_api.py`, `test_render_aspecto.py`, `test_formulario_paneles.py` → **83 passed in 11.87s**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** el grep de las funciones tocadas (`_limpiar_usos`, `aspectos_doc.quitar`, `quitar_caras`, `quitar_usos`, `reemplazar_lista`, `propiedades_con`, `aplicar_panel`) devuelve solo los dos obligatorios (`test_aspectos_api.py`, `test_render_aspecto.py`), ya corridos. Por el token genérico `quitar_caras` (que es de `nucleo/solidos_modificar.py`, no de aspectos) aparecen además `test_paridad_motor.py`, `test_resultados_vacios.py` y `test_solidos_modificar.py`: no tocan `aspectos_doc` y no los corrí.
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff: (1) la refactor elimina ~4 líneas duplicadas y reusa `_limpiar_usos` ya existente y probado por H-74; (2) el caso `quitar_caras` se preserva exacto, incl. el solapamiento cuerpo+cara (la guarda `if cid not in por_caras` replica el antiguo «el filtrado de caras gana sobre el `caras=None`»); (3) `_limpiar_usos` solo lee `caras` del documento porque el bucle de cuerpos no las escribe, igual que el código viejo, así que ambos coinciden; (4) `_sin_caras` sigue usándose en `asignar`/`asignar_color`, sin código muerto. Nada quedó pendiente de arreglar.
+  - **Verdict:** `Ship.` **Lean:** `-4 lines possible.` (los bucles inline de `quitar`).
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador).
+  - No corrí los del `grep -l` (regla del coordinador: lista arriba, los corre él).
+  - No toqué la ventana ni la API (la firma de `quitar` no cambió), así que no regeneré `docs/agentes/herramientas.md` (ninguna herramienta cambió de firma ni de descripción).
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

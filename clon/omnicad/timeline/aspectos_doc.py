@@ -138,13 +138,16 @@ def asignar_color(doc, rgb, cuerpos=(), caras=(), quitar_caras=False):
 
 
 def quitar(doc, cuerpos=(), caras=(), quitar_caras=False):
-    """Saca el aspecto de los cuerpos (queda el color de su material) y de las caras (vuelven al del cuerpo)."""
+    """Saca el aspecto de los cuerpos (queda el color de su material) y de las caras (vuelven al del cuerpo).
+    Delega en `_limpiar_usos` para no duplicar la lógica de «Quitar y suprimir» (H-103): un arreglo en uno
+    llega al otro. `quitar_caras`: los cuerpos pierden además los aspectos propios de sus caras (H-73)."""
     cambios = {}
-    for cid in cuerpos:
-        cambios.setdefault(cid, {}).update({"apariencia": None, "acabado": None, "aspecto": None}, **_sin_caras(quitar_caras))
-    for cid, refs in _por_cuerpo(caras).items():
-        resto = [c for c in _cambios_de_cuerpo(doc, cid).get("caras", []) if c["ref"] not in refs]
-        cambios.setdefault(cid, {})["caras"] = resto or None
+    _limpiar_usos(doc, cambios, cuerpos, caras)
+    if quitar_caras:
+        por_caras = _por_cuerpo(caras)
+        for cid in cuerpos:
+            if cid not in por_caras:                                  # si el cuerpo está en `caras`, gana el filtrado
+                cambios.setdefault(cid, {})["caras"] = None
     if cambios:
         doc.set_propiedades(cambios)
 
