@@ -92,7 +92,6 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 | ANIMACIÓN | [brechas_animacion.md](../brechas_animacion.md) |
 | Plástico y extensiones | [brechas_extensiones.md](../brechas_extensiones.md) |
 | Escanear con el celular | [plan_escaneo_celular.md](../plan_escaneo_celular.md) |
-| Velocidad de pruebas (G) | [plan_velocidad.md](../plan_velocidad.md) |
 | Restricciones del boceto (auditoría) | [auditoria_restricciones.md](../auditoria_restricciones.md) |
 | Boceto: CREAR y MODIFICAR (auditoría) | [auditoria_boceto_crear_modificar.md](../auditoria_boceto_crear_modificar.md) |
 
