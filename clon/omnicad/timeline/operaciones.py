@@ -1152,13 +1152,19 @@ class OpExtrusion(_OpConPerfiles):
         d1 = ctx.evaluar(p["distancia"])
         d2 = ctx.evaluar(p.get("distancia2", "0")) if direccion == "dos_lados" else None
         desfase = 0.0
+        inclinado = None
         if p.get("inicio") == "desfase":
             desfase = ctx.evaluar(p.get("desfase_inicio", "0"))
         elif p.get("inicio") == "objeto":
             e = _resolver(p.get("inicio_objeto"), estado) if p.get("inicio_objeto") else None
             if e is None or e.plano is None:
                 raise ErrorOperacion("Elegí una cara plana o un plano como inicio de la extrusión.")
-            desfase = float((e.plano.origen - plano.origen) @ n)
+            if abs(float(e.plano.normal @ n)) < 1 - 1e-9:
+                # Fusion (Start = Object): con el objeto inclinado la base de la extrusión es el perfil proyectado
+                # sobre él a lo largo de la dirección; con un objeto paralelo basta el desfase, como siempre.
+                inclinado = e.plano
+            else:
+                desfase = float((e.plano.origen - plano.origen) @ n)
         hasta = hasta2 = caja = None
         if p.get("extension") == "objeto":
             if not p.get("hasta"):
@@ -1173,6 +1179,9 @@ class OpExtrusion(_OpConPerfiles):
             delgado = {"espesor": ctx.evaluar(p["espesor"]), "ubicacion": p.get("ubicacion", "lado1")}
         conicidad = ctx.evaluar(p.get("conicidad", "0"), ANGULO)
         conicidad2 = ctx.evaluar(p.get("conicidad2", "0"), ANGULO)
+        if inclinado is not None and (abs(conicidad) > 1e-9 or abs(conicidad2) > 1e-9):
+            raise ErrorOperacion("La conicidad todavía no se combina con Inicio › Objeto en un plano inclinado: "
+                                 "sacá la conicidad o usá «Desfase» como inicio.")
         kernel = _kernel_crear()
         avanzada = delgado or abs(conicidad) > 1e-9 or abs(conicidad2) > 1e-9 or hasta is not None \
             or hasta2 is not None or caja is not None
@@ -1184,10 +1193,13 @@ class OpExtrusion(_OpConPerfiles):
                                             medida_simetrica=medida, delgado=delgado,
                                             aristas=[e.forma for e in curvas] or None, hasta=hasta,
                                             hasta_modo=p.get("hasta_modo", "cara"),
-                                            hasta_desfase=ctx.evaluar(p.get("desfase_hasta", "0")), hasta_caja=caja)
+                                            hasta_desfase=ctx.evaluar(p.get("desfase_hasta", "0")), hasta_caja=caja,
+                                            inicio_plano=inclinado)
         elif avanzada:
             raise ErrorOperacion("Esta opción de extrusión todavía no está disponible.")
         else:
+            if inclinado is not None:
+                caras = [geo.proyectar_sobre_plano(c, n, inclinado) for c in caras]
             forma = _extrusion_basica(caras, n, d1, d2, direccion, medida, desfase)
         if not geo.esta_vacia(forma) and caras and all(cara_sin_area(c) for c in caras):
             raise ErrorOperacion("La extrusión no tiene volumen: el perfil elegido casi no tiene área.")
@@ -1226,7 +1238,9 @@ def _extrusion_basica(caras, n, d1, d2, direccion, medida, desfase):
     if direccion == "simetrica":
         return geo.extruir(caras, n, abs(d1) * (2 if medida == "mitad" else 1), simetrica=True)
     if direccion == "dos_lados":
-        return geo.unir_todos([geo.extruir(caras, n, d1), geo.extruir(caras, -n, d2)])
+        # Cada lado va al suyo (Fusion: «a unique extrusion on each side»): el número es una magnitud, su signo no
+        # invierte el lado. Sin esto, un lado 2 negativo se perdía en la unión y con conicidad no.
+        return geo.unir_todos([geo.extruir(caras, n, abs(d1)), geo.extruir(caras, -n, abs(d2))])
     return geo.extruir(caras, n, d1)
 
 

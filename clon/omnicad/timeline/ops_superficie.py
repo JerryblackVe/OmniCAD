@@ -127,8 +127,13 @@ class OpSupExtruir(_OpSuperficie):
             e = _resolver(p["inicio_objeto"], estado) if p["inicio_objeto"] else None
             if e is None or e.plano is None:
                 raise ErrorOperacion("Elegí una cara plana o un plano como inicio de la extrusión.")
-            caja = geo.caja_envolvente(aristas[0])
-            desfase = float((e.plano.origen - np.mean(caja, axis=0)) @ (d / np.linalg.norm(d)))
+            u = d / np.linalg.norm(d)
+            if abs(float(e.plano.normal @ u)) < 1 - 1e-9:
+                # Fusion (Start = Object): el objeto inclinado es la base; paralelo, alcanza con el desfase.
+                aristas = [geo.proyectar_sobre_plano(a, u, e.plano) for a in aristas]
+            else:
+                caja = geo.caja_envolvente(aristas[0])
+                desfase = float((e.plano.origen - np.mean(caja, axis=0)) @ u)
         hasta = caja_todo = None
         if p["extension"] == "objeto":
             if not p["hasta"]:

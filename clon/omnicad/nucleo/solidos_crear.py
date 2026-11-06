@@ -472,13 +472,10 @@ def _bandas_cerradas(caras, espesor, ubicacion):
 
 
 def _herramienta_extrusion(caras, abiertas, n, base, lados, delgado):
-    """Une los prismas de cada lado (lista de (distancia con signo, conicidad)). Con inclinación se le pasa a toda la
-    extrusión el largo entero, para que los dos lados de un perfil cerrado compartan el mismo plano neutro."""
+    """Une los prismas de cada lado (lista de (distancia con signo, conicidad)). Cada lado es una extrusión
+    independiente con su conicidad, como en Fusion («Two Sides: adjust the settings independently for each side»):
+    las dos comparten el plano neutro, que es el plano del perfil movido `base`."""
     solidos = []
-    inclinado = [(d, c) for d, c in lados if abs(c) > 1e-9]
-    if len(lados) > 1 and inclinado:
-        d, conicidad = max(inclinado, key=lambda x: abs(x[0]))
-        lados = [(min(v for v, _ in lados), 0.0), (max(v for v, _ in lados), conicidad)]
     for d, conicidad in lados:
         for cara in caras:
             solidos.append(_prisma(_trasladar(cara, n * base), n, d, conicidad))
@@ -511,10 +508,11 @@ def _distancia_a_plano(origen, n, cara_plana):
 
 def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, direccion="un_lado", distancia2=None,
                      conicidad1=0.0, conicidad2=0.0, medida_simetrica="mitad", delgado=None, aristas=None,
-                     hasta=None, hasta_modo="cara", hasta_desfase=0.0, hasta_caja=None):
+                     hasta=None, hasta_modo="cara", hasta_desfase=0.0, hasta_caja=None, inicio_plano=None):
     """Extrusión completa de Fusion [SLD-EXTRUDE-SOLID, SLD-REF-EXTRUDE]. Devuelve el sólido herramienta.
 
-    - Inicio: plano del perfil desplazado `inicio_desfase` según la normal (Start = Offset).
+    - Inicio: plano del perfil desplazado `inicio_desfase` según la normal (Start = Offset), o `inicio_plano`
+      (`geo.Plano` inclinado, Start = Object): el perfil se proyecta sobre él a lo largo de la normal.
     - Dirección: "un_lado" (distancia1 con signo), "dos_lados" (distancia1 hacia +n y distancia2 hacia -n,
       cada uno con su conicidad) o "simetrica" (`medida_simetrica` "mitad" = distancia1 a cada lado,
       "total" = distancia1 en total).
@@ -535,23 +533,30 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
         raise geo.ErrorGeometria("Los perfiles abiertos solo se extruyen como extrusión delgada.")
     if delgado and caras:
         caras = _bandas_cerradas(caras, float(delgado["espesor"]), delgado.get("ubicacion", "lado1"))
+    if inicio_plano is not None:      # después de las bandas: el espesor de la pared se mide en el plano del perfil
+        caras = [geo.proyectar_sobre_plano(c, n, inicio_plano) for c in caras]
+        abiertas = [geo.proyectar_sobre_plano(w, n, inicio_plano) for w in abiertas]
     if direccion not in ("un_lado", "dos_lados", "simetrica"):
         raise geo.ErrorGeometria(f"Dirección de extrusión desconocida: {direccion}")
     base = float(inicio_desfase)
     inicios = [_trasladar(f, n * base) for f in caras + abiertas]
     origen = np.mean([geo.centro_masa(f, superficie=True) if f.ShapeType() == TopAbs_FACE else
                       np.mean(_extremos(_aristas_de(f)[0]), axis=0) for f in inicios], axis=0)
+    holgura = _MARGEN
+    if inicio_plano is not None:   # la base inclinada no está toda a la altura de `origen`: pasar de largo desde toda
+        tramos = [_caja_proyectada(f, origen, n) for f in inicios]
+        holgura += max(h for _, h in tramos) - min(lo for lo, _ in tramos)
 
     if hasta_caja is not None:                       # extensión "Todo"
         lo, hi = _proyectar_caja(hasta_caja, origen, n)
         signo = -1.0 if (distancia1 is not None and distancia1 < 0) else 1.0
         if direccion == "un_lado":
-            alcance = (hi if signo > 0 else -lo) + _MARGEN
-            if alcance <= _MARGEN:
+            alcance = (hi if signo > 0 else -lo) + holgura
+            if alcance <= holgura:
                 raise geo.ErrorGeometria("No hay cuerpos en el sentido de la extrusión.")
             lados = [(signo * alcance, conicidad1)]
         else:
-            lados = [(max(hi, 0.0) + _MARGEN, conicidad1), (min(lo, 0.0) - _MARGEN, conicidad2)]
+            lados = [(max(hi, 0.0) + holgura, conicidad1), (min(lo, 0.0) - holgura, conicidad2)]
         return _validar(_herramienta_extrusion(caras, abiertas, n, base, lados, delgado), "Extrusión")
 
     if hasta is not None:                            # extensión "Al objeto" en el lado 1
@@ -559,7 +564,8 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
             geo.exigir_longitud(distancia2, "La distancia del lado 2")
         es_cara = hasta.ShapeType() == TopAbs_FACE
         plano_obj = geo.plano_de_cara(TopoDS.Face(hasta)) if es_cara else None
-        if plano_obj is not None and abs(float(n @ plano_obj.normal)) > 1 - 1e-9:
+        # plano paralelo al perfil: alcanza una distancia (con la base inclinada no: la tapa saldría inclinada)
+        if plano_obj is not None and inicio_plano is None and abs(float(n @ plano_obj.normal)) > 1 - 1e-9:
             d = _distancia_a_plano(origen, n, TopoDS.Face(hasta))
             d += math.copysign(hasta_desfase, d)
             lados1 = [(d, conicidad1)]
@@ -568,8 +574,8 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
             objeto = _trasladar(hasta, n * hasta_desfase) if hasta_desfase else hasta
             lo, hi = _caja_proyectada(objeto, origen, n)
             signo = -1.0 if (distancia1 is not None and distancia1 < 0) or (hi <= 0 < -lo) else 1.0
-            alcance = (hi if signo > 0 else -lo) + _MARGEN
-            if alcance <= _MARGEN:
+            alcance = (hi if signo > 0 else -lo) + holgura
+            if alcance <= holgura:
                 raise geo.ErrorGeometria("El objeto está del otro lado del perfil.")
             largo = _herramienta_extrusion(caras, abiertas, n, base, [(signo * alcance, conicidad1)], delgado)
             herr = _recortar_hasta(largo, inicios, objeto, hasta_modo, plano_obj, origen)

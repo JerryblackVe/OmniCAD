@@ -12,7 +12,7 @@ from omnicad import api
 from omnicad.nucleo import geometria as geo, render_cpu as rc
 from omnicad.timeline.documento import Documento
 from omnicad.timeline.operaciones import OpExtrusion
-from omnicad.ui.comando import hit_desde_ref
+from omnicad.ui.comando import hit_desde_ref, tramo_previa
 from omnicad.ui.comandos.solido import Extruir
 from omnicad.ui import visor3d as vis
 from omnicad.ui.preferencias import Preferencias
@@ -46,15 +46,7 @@ def test_veinte_distancias_con_huecos_coinciden_con_el_kernel(placa, caso):
                                   direccion=modo, medida=medida, invertir=invertida))
     e, _ = d.previsualizar(op, 1, en_vivo=True)
     forma = e.cuerpos["op2.c1"].forma
-    if modo == "un_lado":
-        a, b = 0, d1
-    elif modo == "simetrica":
-        b = abs(d1) * (0.5 if medida == "total" else 1)
-        a = -b
-    else:
-        a, b = min(0, d1, -d2), max(0, d1, -d2)
-    if invertida:
-        a, b = -a, -b
+    a, b = tramo_previa(modo, d1, d2, medida, invertida)   # la regla de la ventana, no una copia (B-205)
     v, n, _ = prisma.transformar(a, b)
     caja = np.array([v.min(0), v.max(0)])
     assert np.allclose(caja, geo.caja_envolvente(forma), atol=1e-6, rtol=0)

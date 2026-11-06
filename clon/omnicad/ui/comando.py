@@ -716,6 +716,19 @@ class _FilaSeleccion(QWidget):
         self.revisar.setVisible(n > 1 and bool(descripcion))
 
 
+def tramo_previa(modo, d1, d2, medida, invertir):
+    """(a, b): de dónde a dónde, sobre la normal del perfil, va el prisma de la previa rápida de Extruir. La misma regla
+    que el núcleo (`extruir_avanzado`, `_extrusion_basica`): en «Dos lados» cada distancia es una magnitud (B-205)."""
+    if modo == "simetrica":
+        b = abs(d1) * (1 if medida == "mitad" else 0.5)
+        a = -b
+    elif modo == "dos_lados":
+        a, b = -abs(d2), abs(d1)
+    else:
+        a, b = 0, d1
+    return (-a, -b) if invertir else (a, b)
+
+
 class PanelComando(QFrame):
     """Panel flotante de un comando. Emite `aceptado(op)` o `cancelado()`."""
     aceptado = Signal(object)
@@ -1625,15 +1638,7 @@ class PanelComando(QFrame):
         medida = "total" if p.get("simetrica") else p["medida"]
         d2 = self.ctx.evaluar(p["distancia2"]) if modo == "dos_lados" else None
         geo.exigir_distancias_extrusion(modo, d1, d2, medida)
-        if modo == "simetrica":
-            b = abs(d1) * (1 if medida == "mitad" else 0.5)
-            a = -b
-        elif modo == "dos_lados":
-            a, b = min(0, d1, -d2), max(0, d1, -d2)
-        else:
-            a, b = 0, d1
-        if p.get("invertir"):
-            a, b = -a, -b
+        a, b = tramo_previa(modo, d1, d2, medida, p.get("invertir"))
         _, estado, prismas = self._prisma_previa
         mallas = {cid: prisma.transformar(a, b) for cid, prisma in prismas.items()}
         estado._mallas_previa = mallas

@@ -118,6 +118,105 @@ def test_conicidad_del_lado_dos_caras_como_perfil():
     falla(s, "extrude")
 
 
+def test_dos_lados_con_distancia_negativa_da_lo_mismo_con_y_sin_conicidad():
+    """B-205: en «Dos lados» cada distancia es una magnitud hacia su lado (Fusion: “a unique extrusion on each
+    side of the profile plane”); el signo no pasa el lado a la otra margen. Antes el camino rápido perdía el
+    lado 2 en la unión (2000 mm³) y el del kernel lo conservaba (3000 mm³)."""
+    def medir(distance, distance2, **args):
+        s = api.Sesion()
+        rect(s)
+        ok(s, "extrude", sketch="B", distance=distance, direction="two_sides", distance2=distance2, **args)
+        c = cuerpo(s)
+        return c["volume"], c["bounding_box"]["min"][2], c["bounding_box"]["max"][2]
+
+    for d1, d2 in ((10, -5), (-10, 5)):
+        recto = medir(d1, d2)
+        assert recto == pytest.approx((3000, -5, 10), abs=1e-6)         # 20·10·(10+5): los dos lados presentes
+        inclinado = medir(d1, d2, taper_angle=0.001)                    # misma receta con un poco de conicidad
+        assert inclinado[1:] == pytest.approx(recto[1:], abs=1e-6)
+        assert inclinado[0] == pytest.approx(recto[0], rel=1e-3)
+    from omnicad.nucleo import geometria as geo
+    s = api.Sesion()
+    ok(s, "create_sketch", plane="XY", name="L")
+    ok(s, "draw_line", sketch="L", start_x=0, start_y=0, end_x=20, end_y=0)
+    curva = next(iter(s.doc.estado_final.bocetos[s.paso("L").id].boceto.curvas))
+    cid = ok(s, "create_surface_extrude", profiles={"sketch": "L", "curve": curva},
+             sides="two_sides", distance=10, distance2=-5)["bodies_created"][0]["id"]
+    lo, hi = geo.caja_envolvente(s.cuerpo(cid).forma)
+    assert (lo[2], hi[2]) == pytest.approx((-5, 10), abs=1e-6)          # la superficie, con la misma regla
+
+
+def test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el():
+    """B-206 · Inicio › Objeto con un plano inclinado (Fusion: “Starts extrusion from a face or plane that you
+    select”): la base del cuerpo queda sobre ese plano. Antes se usaba solo su altura y el cuerpo salía igual
+    que sin Inicio, sin avisar."""
+    from OCP.BRep import BRep_Tool
+    from OCP.TopAbs import TopAbs_VERTEX
+    from OCP.TopoDS import TopoDS
+    from omnicad.nucleo import geometria as geo
+    t30 = math.tan(math.radians(30))
+
+    def desvio_de_la_base(forma):
+        """El mayor desvío de los vértices de abajo respecto del plano z = y·tan30° (el plano de inicio)."""
+        puntos = (BRep_Tool.Pnt_s(TopoDS.Vertex(v)) for v in geo._explorar(forma, TopAbs_VERTEX))
+        return max(abs(p.Z() - p.Y() * t30) for p in puntos if p.Z() - p.Y() * t30 < 5)   # los de la tapa, a +10
+
+    s = api.Sesion()
+    rect(s)
+    ok(s, "create_construction_plane", type="angle", plane="XY", references=["X"], angle=30, name="PInc")
+    cid = ok(s, "extrude", sketch="B", distance=10, start="object", start_object="PInc")["bodies_created"][0]["id"]
+    assert desvio_de_la_base(s.cuerpo(cid).forma) < 1e-6
+    assert cuerpo(s)["bounding_box"]["max"][2] == pytest.approx(10 + 10 * t30, abs=1e-3)   # la caja viene redondeada
+    assert cuerpo(s)["volume"] == pytest.approx(2000, rel=1e-6)         # 20·10 de perfil, 10 mm a lo largo de Z
+    # delgada cerrada: la pared se mide en el plano del perfil (1 mm en X y en Y) y la base queda sobre el plano
+    cid = ok(s, "extrude", sketch="B", distance=10, start="object", start_object="PInc", thin=True, wall_thickness=1,
+             wall_location="center", operation="new_body")["bodies_created"][0]["id"]
+    assert geo.volumen_exacto(s.cuerpo(cid).forma) == pytest.approx(600, rel=1e-9)   # 60 de perímetro · 1 · 10
+    lo, hi = geo.caja_envolvente(s.cuerpo(cid).forma)
+    assert (lo[0], lo[1], hi[0], hi[1]) == pytest.approx((-0.5, -0.5, 20.5, 10.5), abs=1e-6)
+    assert desvio_de_la_base(s.cuerpo(cid).forma) < 1e-6
+    # «Al objeto» paralelo: la tapa queda plana en el objeto (no a una distancia desde el centro de la base)
+    ok(s, "create_construction_plane", plane="XY", offset=30, name="Tope")
+    cid = ok(s, "extrude", sketch="B", start="object", start_object="PInc", extent="to_object", to="Tope",
+             operation="new_body")["bodies_created"][0]["id"]
+    lo, hi = geo.caja_envolvente(s.cuerpo(cid).forma)
+    assert (lo[2], hi[2]) == pytest.approx((0, 30), abs=1e-6)
+    assert geo.volumen_exacto(s.cuerpo(cid).forma) == pytest.approx(200 * (30 - 5 * t30), rel=1e-9)
+    # «Todo» cortando: pasa de largo también desde el punto más bajo de la base inclinada
+    s = api.Sesion()
+    ok(s, "create_box", width=40, length=40, height=40, x=-10, y=-15, z=-5)      # x −30..10, y −35..5, z −5..35
+    rect(s)
+    ok(s, "create_construction_plane", type="angle", plane="XY", references=["X"], angle=30, name="PInc")
+    ok(s, "extrude", sketch="B", start="object", start_object="PInc", extent="all", operation="cut")
+    quitado = 10 * 5 * 35 - 10 * 5 * 2.5 * t30                       # x 0..10, y 0..5, de la base inclinada a z=35
+    assert geo.volumen_exacto(s.cuerpo(cuerpo(s)["id"]).forma) == pytest.approx(64000 - quitado, rel=1e-9)
+    # con curvas: el círculo proyectado es una elipse exacta (antes, una B-spline aproximada: 788,63 mm³)
+    s = api.Sesion()
+    ok(s, "create_sketch", plane="XY", name="C")
+    ok(s, "draw_circle", center_x=0, center_y=0, radius=5, sketch="C")
+    ok(s, "create_construction_plane", type="angle", plane="XY", references=["X"], angle=30, name="PInc")
+    cid = ok(s, "extrude", sketch="C", distance=10, start="object", start_object="PInc")["bodies_created"][0]["id"]
+    assert geo.volumen_exacto(s.cuerpo(cid).forma) == pytest.approx(250 * math.pi, rel=1e-9)
+    cid = ok(s, "extrude", sketch="C", distance=10, start="object", start_object="PInc", thin=True, wall_thickness=1,
+             wall_location="center", operation="new_body")["bodies_created"][0]["id"]
+    assert geo.volumen_exacto(s.cuerpo(cid).forma) == pytest.approx(100 * math.pi, rel=1e-9)   # π(5,5² − 4,5²)·10
+    falla(s, "extrude", sketch="C", distance=10, start="object", start_object="PInc", taper_angle=5,
+          esperado="OPERATION_FAILED")                                  # conicidad + inicio inclinado: aviso claro
+    s = api.Sesion()
+    rect(s)
+    ok(s, "create_construction_plane", plane="XY", offset=4, name="Par")
+    ok(s, "extrude", sketch="B", distance=2, start="object", start_object="Par")
+    assert cuerpo(s)["bounding_box"]["min"][2] == pytest.approx(4)      # paralelo: da lo mismo que antes
+    s = api.Sesion()
+    ok(s, "create_sketch", plane="XY", name="L")
+    ok(s, "draw_line", sketch="L", start_x=0, start_y=0, end_x=0, end_y=10)
+    ok(s, "create_construction_plane", type="angle", plane="XY", references=["X"], angle=30, name="PInc")
+    curva = next(iter(s.doc.estado_final.bocetos[s.paso("L").id].boceto.curvas))
+    cid = ok(s, "create_surface_extrude", profiles={"sketch": "L", "curve": curva}, start="object",
+             start_object="PInc", distance=10)["bodies_created"][0]["id"]
+    lo, hi = geo.caja_envolvente(s.cuerpo(cid).forma)
+    assert (lo[2], hi[2]) == pytest.approx((0.0, 10 + 10 * t30), abs=1e-6)   # lo mismo en SUPERFICIE
+
 # ---------------------------------------------------------------- MCP-57: revolve
 def test_revolucion_alrededor_de_una_linea_de_otro_boceto():
     s = api.Sesion()

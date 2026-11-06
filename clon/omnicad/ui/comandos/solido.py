@@ -98,19 +98,21 @@ class Extruir(Comando):
         if direccion == "simetrica":
             return antes + [mp.Flecha("distancia", centro, n, factor=1.0 if v.get("medida") != "total" else 0.5,
                                        minimo=0.0)]
-        salida = antes + [mp.Flecha("distancia", centro, n)]
-        if direccion == "dos_lados":
-            salida.append(mp.Flecha("distancia2", centro, -n, minimo=0.0))
         d = _evaluar(ctx, v.get("distancia"))
-        t = n * (-1.0 if d < 0 else 1.0)
-        salida.append(mp.Angulo("conicidad", borde, np.cross(t, lateral), t, minimo=-89.0, maximo=89.0,
-                                caja="arrastre"))
-        if direccion == "dos_lados":
-            d2 = _evaluar(ctx, v.get("distancia2"))
-            t2 = -n * (-1.0 if d2 < 0 else 1.0)
-            salida.append(mp.Angulo("conicidad2", borde, np.cross(t2, lateral), t2, minimo=-89.0, maximo=89.0,
-                                    caja="arrastre"))
-        return salida
+        if direccion != "dos_lados":
+            t = n * (-1.0 if d < 0 else 1.0)
+            return antes + [mp.Flecha("distancia", centro, n), mp.Angulo(
+                "conicidad", borde, np.cross(t, lateral), t, minimo=-89.0, maximo=89.0, caja="arrastre")]
+
+        def lado(clave, valor, sentido):
+            # B-205: en «Dos lados» cada número es una magnitud de su lado; la flecha queda a |valor| de ese lado
+            # y no cruza el cero (con un valor negativo, el eje se da vuelta y el tope pasa a ser el máximo)
+            if valor < 0:
+                return mp.Flecha(clave, centro, -sentido, maximo=0.0)
+            return mp.Flecha(clave, centro, sentido, minimo=0.0)
+        return antes + [lado("distancia", d, n), lado("distancia2", _evaluar(ctx, v.get("distancia2")), -n)] + [
+            mp.Angulo(clave, borde, np.cross(t, lateral), t, minimo=-89.0, maximo=89.0, caja="arrastre")
+            for clave, t in (("conicidad", n), ("conicidad2", -n))]
 
     @staticmethod
     def _herramienta(op):

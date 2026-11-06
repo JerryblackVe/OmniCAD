@@ -58,6 +58,7 @@ APUNTA_A_CAMARA = 0.35                # por debajo, la recta real casi no se mue
 CONTORNO = (0.07, 0.07, 0.09)          # contorno oscuro bajo toda línea del asa: la separa del fondo y del modelo
 GROSOR_CONTORNO = 3.0
 MARGEN_CAJA_PX = 3.0                   # aire entre una caja de valor y cualquier asa
+AIRE_CAJAS_PX = 6.0                    # aire entre dos cajas de valor: sin él quedan a 1 px o encima (B-207)
 
 
 # ---------------------------------------------------------------- geometría
@@ -1551,7 +1552,9 @@ class GestorManipuladores(QObject):
                 x = int(max(2, min(w - ancho - 2, s[0][0] + dx)))
                 y = int(max(2, min(h - alto - 2, s[0][1] + dy)))
                 rect = QRect(x, y, ancho, alto)
-                choques = _choques(rect, huella) + 1000 * sum(rect.intersects(o) for o in ocupadas)
+                choques = _choques(rect, huella) + 1000 * sum(
+                    rect.intersects(o.adjusted(-AIRE_CAJAS_PX, -AIRE_CAJAS_PX, AIRE_CAJAS_PX, AIRE_CAJAS_PX))
+                    for o in ocupadas)
                 if mejor is None or choques < mejor[0]:
                     mejor = (choques, rect)
                 if choques == 0:

@@ -2,26 +2,23 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 20: Abierto 14 · Parcial 5 · Bloqueado 1 (recontado 2026-11-05).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 25: Abierto 21 · Parcial 4 (recontado 2026-11-05 por fila: se cerraron B-205, B-207 y B-197 de Extruir, B-206 quedó en Parcial, y sumaron B-208 a B-212 y B-213 a B-217).
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-213 | Nervio y Red se recortan contra la caja del cuerpo: rellenan hasta el borde o pierden la mitad | Abierto | Media | Escuadra con un nervio invertido (hacia afuera, sin cara): en vez de avisar como Fusion, rellena hasta la caja del cuerpo (+1950 mm³). Con el boceto en el borde del cuerpo, el simétrico pierde la mitad (600 en vez de 1200) y el de un lado da «la curva queda dentro del cuerpo»; la Red con el boceto delante de la caja da el mismo error falso. También en la ventana (pieza `nervio_red_repujado`). | nucleo/solidos_crear.py:1402 (`_hasta_el_cuerpo`) | 2026-11-05 |
-| B-214 | Nervio con dos curvas sueltas falla con un mensaje de «ruta» | Abierto | Baja | La ventana deja elegir varias curvas, pero dos líneas sueltas dan «La ruta debe ser una sola cadena continua de aristas». Fusion hace un nervio por curva en un solo paso (la ayuda muestra cuatro). La Red sí las acepta. | nucleo/solidos_crear.py:1439 (`nervio`: un solo `_alambre`) | 2026-11-05 |
-| B-215 | Desmoldeo del Nervio: falla con ángulo negativo y con una dirección de extracción que no es la de crecimiento | Abierto | Media | Escuadra con la línea en diagonal: `draft_angle=-1` y `draft_angle=1, pull_direction="XY"` dan «El desmoldeo falló en el kernel (ángulo demasiado grande?)». La API acepta −45..45 y anuncia la dirección de extracción; solo anda cuando la extracción coincide con el crecimiento (el caso de `test_sol10_nervio_red.py`). | nucleo/solidos_crear.py:1412 (`_desmoldear_pared`) y 1457 | 2026-11-05 |
-| B-216 | Red › «Cambiar dirección» no invierte el sentido de la red | Abierto | Baja | Caja hueca con el boceto adentro: sin invertir y con invertir dan lo mismo (18280 mm³; invertida debería ir a la otra pared y dar 19000). Con la boca abierta del otro lado, Fusion avisaría; OmniCAD crea la misma red. Solo cambia el lado de «Un lado». | timeline/ops_solido.py:286 (`OpRed`: niega la normal, pero `red()` elige el lado más cercano de los dos) | 2026-11-05 |
-| B-217 | Repujado con «Cadena tangente» repuja también en los costados | Abierto | Media | Placa con las aristas de arriba empalmadas, cuadro 10×10 encima, relieve 1 mm con cadena tangente: +437,12 mm³ en vez de +100, caja 1 mm más ancha a cada lado. La cadena suma los costados (tangentes a los empalmes) y el cuadro se «adapta» y se repuja en cada uno. Se ve en la captura `repujado_cadena.png`. | nucleo/solidos_crear.py:1548 (cadena) y 1608 (`_perfiles_en_zona` con `adaptar`) | 2026-11-05 |
+| B-206 | Extruir Inicio › Objeto con un plano inclinado: falta combinarlo con la conicidad | Parcial | Media | Resuelto: el perfil se proyecta sobre el plano a lo largo de la dirección con aristas analíticas (círculo r5 a 30° → 785,40 mm³ exactos), la delgada mide la pared en el plano del perfil (600 mm³ como la recta) y «Al objeto»/«Todo» llegan desde toda la base. Queda: conicidad + inicio inclinado da un error claro («La conicidad todavía no se combina con Inicio › Objeto en un plano inclinado…»); `_prisma` toma como plano neutro uno perpendicular a la dirección. | timeline/operaciones.py (`inclinado`), nucleo/solidos_crear.py (`extruir_avanzado`, `inicio_plano`); tests/test_api_opciones_solido1.py::test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el | 2026-11-05 |
 | B-208 | Barrido con carril guía deforma el perfil aunque el carril sea paralelo a la ruta (sólido y superficie) | Abierto | Alta | Cuadrado 4×4 barrido 50 mm con un carril paralelo y escala «Ninguna» da 784,03 mm³ en vez de 800 (caja ±2,31 en vez de ±2); la superficie da 797,57 mm² en vez de 800. Con «Escalar» y el carril de 2 a 6 da 3364,59 contra 3466,67. Los dos extremos quedan bien; el medio se tuerce. También en la ventana (pieza `revolucion_barrido_solevacion`). | nucleo/solidos_crear.py:819 | 2026-11-05 |
 | B-209 | Barrido sólido con escala «Estirar» hace «Escalar» sin avisar | Abierto | Media | `sweep rail_scale="stretch"` da 3364,59 mm³, lo mismo que `scale`; debería estirar en una sola dirección. La superficie sí estira (400 mm² exactos). La ventana del sólido ni ofrece Estirar. | nucleo/solidos_crear.py:877 | 2026-11-05 |
 | B-210 | Revolución «Dos lados» con un ángulo negativo da otra forma en sólido que en superficie | Abierto | Baja | Lado 1 = 90°, lado 2 = −45°: el sólido toma el signo y el lado 2 vuelve sobre el lado 1 (1570,80 mm³, como sin lado 2, sin aviso); la superficie toma el valor absoluto (235,62 mm², igual que +45°). Falta una sola regla para los dos. | timeline/operaciones.py:1305 (`OpRevolucion.ejecutar`) y nucleo/superficies.py:475 | 2026-11-05 |
 | B-211 | Barrido: la Distancia mayor que 1 se acepta y se recorta a 1 sin avisar | Abierto | Baja | En la ventana «1,5» deja la vista previa en verde y `edit_feature` con `distancia="2"` sale ok: el cuerpo es el de 1 (628,32 mm³). La API solo rechaza números sueltos (`path_distance=1.5`). Fusion: Range 0.00-1.00. | nucleo/solidos_crear.py:256 | 2026-11-05 |
 | B-212 | Solevación sólida con un carril recto falla: «el kernel produjo un sólido inválido» | Abierto | Media | Cuadros 10×10 en z 0 y 20×20 en z 10, carril recto del medio de un lado al medio del otro: el sólido da OPERATION_FAILED; la misma solevación de superficie sale bien (670,82 mm², el área lateral exacta del tronco). Fusion la hace. | nucleo/solidos_crear.py:1324 | 2026-11-05 |
-| B-205 | Extruir «Dos lados» con una distancia negativa da dos resultados distintos según haya o no conicidad | Abierto | Baja | Rectángulo 20×10, lado 1 = 10 mm, lado 2 = −5 mm: sin conicidad sale 2000 mm³ (el lado 2 se pierde en silencio); con 0,001° de conicidad sale 3000 mm³. Pasa en la ventana, la API y la CLI. Decidir con Fusion si se rechaza o se toma el valor absoluto, y que los dos caminos hagan lo mismo. | timeline/operaciones.py:1229 (`_extrusion_basica` usa la distancia con signo) contra nucleo/solidos_crear.py:595 (`abs`); docs/auditoria_extruir.md | 2026-11-05 |
-| B-207 | Extruir «Dos lados» con Inicio › Desfase: las cajas de valor «10 mm» (distancia) y «0 mm» (desfase) quedan una encima de la otra junto a la flecha | Abierto | Baja | En 1024×640 se pisan y la de abajo no se lee ni se puede clicar. Separarlas como en Fusion: cada caja junto a su asa, sin solaparse. | evidencias/ui_2026-11-05/capturas/extruir_1024x640.png (pieza `extruir_espacios`, Extrusión delgada en PLÁSTICO) | 2026-11-05 |
-| B-206 | Extruir con Inicio › Objeto en un plano o cara inclinados arranca en el plano del boceto, sin aviso | Abierto | Media | Plano a 30° que pasa por el boceto: la extrusión sale igual que sin Inicio (caja z 0..10), en sólido y en superficie. Solo se toma la distancia del origen del plano. Fusion arranca la extrusión sobre la cara o el plano elegido. | timeline/operaciones.py:1161 y timeline/ops_superficie.py:131; docs/auditoria_extruir.md | 2026-11-05 |
-| B-197 | Extruir con inclinación: el tronco de pirámide y cono da otro volumen que el esperado | Abierto | Media | El test da 2185,18 contra 2020,41 esperado; falla igual en HEAD ca87869 (comprobado en un worktree limpio el 2026-11-05). Falta ver si el error es del test o de la extrusión cónica comparando con Fusion. | tests/test_solidos_crear.py::test_extrusion_con_inclinacion_tronco_de_piramide_y_cono | 2026-11-05 |
+| B-213 | Nervio y Red se recortan contra la caja del cuerpo: rellenan hasta el borde o pierden la mitad | Abierto | Media | Escuadra con un nervio invertido (hacia afuera, sin cara): en vez de avisar como Fusion, rellena hasta la caja del cuerpo (+1950 mm³). Con el boceto en el borde del cuerpo, el simétrico pierde la mitad (600 en vez de 1200) y el de un lado da «la curva queda dentro del cuerpo»; la Red con el boceto delante de la caja da el mismo error falso. También en la ventana (pieza `nervio_red_repujado`). | nucleo/solidos_crear.py:1402 (`_hasta_el_cuerpo`) | 2026-11-05 |
+| B-214 | Nervio con dos curvas sueltas falla con un mensaje de «ruta» | Abierto | Baja | La ventana deja elegir varias curvas, pero dos líneas sueltas dan «La ruta debe ser una sola cadena continua de aristas». Fusion hace un nervio por curva en un solo paso (la ayuda muestra cuatro). La Red sí las acepta. | nucleo/solidos_crear.py:1439 (`nervio`: un solo `_alambre`) | 2026-11-05 |
+| B-215 | Desmoldeo del Nervio: falla con ángulo negativo y con una dirección de extracción que no es la de crecimiento | Abierto | Media | Escuadra con la línea en diagonal: `draft_angle=-1` y `draft_angle=1, pull_direction="XY"` dan «El desmoldeo falló en el kernel (ángulo demasiado grande?)». La API acepta −45..45 y anuncia la dirección de extracción; solo anda cuando la extracción coincide con el crecimiento (el caso de `test_sol10_nervio_red.py`). | nucleo/solidos_crear.py:1412 (`_desmoldear_pared`) y 1457 | 2026-11-05 |
+| B-216 | Red › «Cambiar dirección» no invierte el sentido de la red | Abierto | Baja | Caja hueca con el boceto adentro: sin invertir y con invertir dan lo mismo (18280 mm³; invertida debería ir a la otra pared y dar 19000). Con la boca abierta del otro lado, Fusion avisaría; OmniCAD crea la misma red. Solo cambia el lado de «Un lado». | timeline/ops_solido.py:286 (`OpRed`: niega la normal, pero `red()` elige el lado más cercano de los dos) | 2026-11-05 |
+| B-217 | Repujado con «Cadena tangente» repuja también en los costados | Abierto | Media | Placa con las aristas de arriba empalmadas, cuadro 10×10 encima, relieve 1 mm con cadena tangente: +437,12 mm³ en vez de +100, caja 1 mm más ancha a cada lado. La cadena suma los costados (tangentes a los empalmes) y el cuadro se «adapta» y se repuja en cada uno. Se ve en la captura `repujado_cadena.png`. | nucleo/solidos_crear.py:1548 (cadena) y 1608 (`_perfiles_en_zona` con `adaptar`) | 2026-11-05 |
 | B-196 | Barrer y el sector del labio pierden la autointersección sin avisar | Abierto | Media | `barrer` (dos sitios) y `_sector_labio` no pasan por el aviso de autointersección que ya tienen Tubo y Patrón geométrico (B-167, B-168). Hallado en la revisión del 2026-11-05. | nucleo/solidos_crear.py | 2026-11-05 |
 | B-195 | Extruir el logo ZAI.svg entero falla: dos regiones salen con contorno autointersectado | Abierto | Alta | Pasa también sin transformar y sin Rust: el arreglo planar da 277 regiones y 2 son inválidas (8,35 mm² con 36 curvas y 0,0027 mm²; `BRepAlgoAPI_Check` falla y `ShapeAnalysis_Wire.CheckSelfIntersection` da verdadero en un alambre). La extrusión de `object:<id>` termina en «La operación 'unir' dio un resultado imposible». Revisar qué cruce casi tangente no se corta en `nucleo/perfiles.py` (`_detectar`) y validar las caras antes de entregarlas. | clon/omnicad/nucleo/perfiles.py (`_detectar`); evidencia local `evidencias/boceto_organizar_2026-11-05/zai_caras.py` y `zai_sonda.py` (necesita el `ZAI.svg` del Escritorio) | 2026-11-05 |
 | B-189 | OmniKernel no arranca: un argumento por defecto usa un enum de OCC sin inicializar | Abierto | Baja | `_trozos(..., tipo=TopAbs_SOLID)` evalúa el enum al importar `solidos_crear`, pero `_iniciar_opencascade` no corre al elegir OmniKernel. Reproducido en `test_motor` y los 68 casos de `test_paridad_motor`: todos fallan antes de modelar con `NameError: name 'TopAbs_SOLID' is not defined`. También está en HEAD (`solidos_crear.py:3868`), independiente del arreglo de perfiles. Integrar la corrección en ese módulo y repetir las pruebas de ambos motores. | clon/tests/test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado; clon/omnicad/nucleo/solidos_crear.py (`_trozos`) | 2026-11-04 |
@@ -72,6 +69,50 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
 
+### B-208 · Barrido con carril guía deforma el perfil
+
+- **Qué:** boceto en YZ con un cuadrado 4×4 centrado en el origen, ruta = línea de X 0 a 50 en XY, carril = línea en XZ de (0, 2) a (50, 2); `sweep rail_sketch=C rail_scale="none"` (y `"scale"`). Igual con `create_surface_sweep guide_rail=… profile_scaling="none"`. En la ventana: Barrido › Ruta + Rail guía, Escala Ninguna, Enter.
+- **Esperado (Fusion):** «None: do not scale profile along sweep; just use guide rail as a orientation guide» (ayuda `Sweep reference`): con el carril paralelo, un prisma de 800 mm³ (superficie: 800 mm²). Con «Escalar» y el carril de 2 a 6, el tronco de pirámide de 50/3·(16+144+48) = 3466,67 mm³.
+- **Obtenido:** 784,03 mm³ y caja y ±2,31 (sólido), 797,57 mm² (superficie); con Escalar, 3364,59 mm³ y caja y ±6,44. Las caras de los extremos están bien (área 16 y 144, normal X): el perfil gira en el medio de la ruta.
+- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py` (salida en `sonda_carril.txt`), o la pieza `revolucion_barrido_solevacion` («Barrido con carril paralelo y escala Ninguna»).
+- **Entorno:** OmniCAD 0.2.0, Windows 11, motor OCC. Sin ventana y en la ventana minimizada.
+- **Causa probable (leída):** el carril se pasa como espina auxiliar con `SetMode(carril, True, BRepFill_NoContact)` en `nucleo/solidos_crear.py:819`; no se comprobó qué triedro arma OCC ahí.
+- **Esquive:** sin carril (escala por conicidad) o con Solevación entre perfiles.
+- **Prueba propuesta:** carril paralelo con Ninguna = 800 mm³ y con Escalar de 2 a 6 = 3466,67 mm³ (sólido y superficie).
+
+### B-209 · Barrido sólido con «Estirar» hace «Escalar»
+
+- **Qué:** el mismo barrido de B-208 con el carril de (0, 2) a (50, 6): `sweep rail_scale="stretch"` y `rail_scale="scale"`.
+- **Esperado (Fusion):** «Stretch: use path - guide rail distance to scale profile in X» (ayuda `Sweep reference`): el perfil crece solo hacia el carril, 4·(4+12)/2·50 = 1600 mm³ (la superficie da sus 400 mm² exactos).
+- **Obtenido:** 3364,59 mm³ en los dos modos, sin aviso. El docstring de `barrer` dice que «estirar» no existe en OCC y se hace como «escalar» (`nucleo/solidos_crear.py:877`), pero `superficies._estirar` (`nucleo/superficies.py:617`) ya lo resuelve.
+- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py`.
+- **Esquive:** ninguno en sólido; superficie y después Engrosar o Coser.
+- **Prueba propuesta:** estirar ≠ escalar y da 1600 mm³ con el carril de 2 a 6; la ventana ofrece Estirar.
+
+### B-210 · Revolución «Dos lados» con ángulo negativo: sólido y superficie distintos
+
+- **Qué:** rectángulo x 10..20, y 0..10 en XY, eje Y; `revolve direction=two_sides angle=90 angle2=-45` y `create_surface_revolve` con la línea x=10 y los mismos ángulos. En la ventana: Dos lados, teclear «90 deg» y «-45 deg», Enter.
+- **Esperado:** el mismo criterio en los dos (Fusion no dice qué hace con un ángulo negativo en Dos lados: ⚠ sin abrir Fusion).
+- **Obtenido:** sólido 2356,19 mm³ (el lado 2 se pierde en la unión, sin aviso); superficie 235,62 mm² (toma −45 como +45, `abs` en `nucleo/superficies.py:475`).
+- **Reproducir:** `evidencias/ui_2026-11-05/sondas_rbs.py rev_dos_lados_90_menos45 srev_dos_lados_neg`.
+- **Prueba propuesta:** lado 2 negativo da lo mismo (o el mismo error) en sólido y en superficie.
+
+### B-211 · Barrido: Distancia mayor que 1 se recorta sin avisar
+
+- **Qué:** círculo r 2 en YZ y ruta de 50 en X; `sweep` y después `edit_feature feature=op3 params={"distancia": "2"}`; en la ventana, teclear «1,5» en Distancia.
+- **Esperado (Fusion):** «Value is measured in percentage of the total distance. Range: 0.00-1.00» (ayuda `Sweep reference`): un error claro, como «0».
+- **Obtenido:** `ok`, el cuerpo de la ruta entera (628,32 mm³) y la previa en verde; `_recortar_alambre` hace `min(fraccion, 1.0)` (`nucleo/solidos_crear.py:256`). La API rechaza solo `path_distance` numérico (`api/herramientas_solido.py:452`).
+- **Prueba propuesta:** distancia 1,5 da error en la ventana, en `edit_feature` y en la API.
+
+### B-212 · Solevación sólida con un carril recto da un sólido inválido
+
+- **Qué:** boceto XY con cuadro −5..5, plano a z 10 con cuadro −10..10, boceto XZ con la línea de (5, 0) a (10, 10) (carril que toca el medio del lado x=5 abajo y del lado x=10 arriba); `loft sketches=["S1","S2"] rails=[{"sketch":"C","curve":<id>}]`.
+- **Esperado (Fusion):** «Rails must intersect each section» (ayuda `Loft reference`): este carril los toca, y el resultado es el mismo tronco de 2333,33 mm³ que sin carril.
+- **Obtenido:** «Solevado: el kernel produjo un sólido inválido con estos valores». `create_surface_loft` con los mismos perfiles y carril sale bien (670,82 mm²).
+- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril_solevacion.py` (salida en `sonda_carril_solevacion.txt`).
+- **Causa probable:** no se leyó a fondo; el carril se pasa a `MakePipeShell` con `BRepFill_ContactOnBorder` (`nucleo/solidos_crear.py:1324`) y la superficie usa otro camino.
+- **Prueba propuesta:** este caso da 2333,33 mm³ y `geo.es_valida`.
+
 ### B-213 · Nervio y Red recortados contra la caja del cuerpo
 
 - **Qué:** escuadra (piso x 0..40, y −30..30, z 0..5 y pared x 0..5, z 0..50: 25500 mm³), boceto XZ con la línea (35, 5) → (5, 45); `create_rib thickness=2 reverse=true`. La misma escuadra en y 0..60 (el boceto queda en el borde) con `direction` symmetric y side1. Red: caja 40³ abierta en y = 0 y boceto en un plano delante de la boca. En la ventana: Nervio › Cambiar dirección, Enter.
@@ -117,67 +158,15 @@ de arriba manda sobre este texto.
 - **Causa probable (leída):** la cadena suma los costados planos (tangentes a los empalmes, `nucleo/solidos_crear.py:1548`) y cada grupo de caras paralelas pasa por `_perfiles_en_zona` con `adaptar`, que gira y achica el perfil para que entre.
 - **Prueba propuesta:** este caso da +100 y la caja no crece en x ni en y.
 
-### B-208 · Barrido con carril guía deforma el perfil
+### B-206 · Inicio › Objeto en un plano no paralelo (Parcial)
 
-- **Qué:** boceto en YZ con un cuadrado 4×4 centrado en el origen, ruta = línea de X 0 a 50 en XY, carril = línea en XZ de (0, 2) a (50, 2); `sweep rail_sketch=C rail_scale="none"` (y `"scale"`). Igual con `create_surface_sweep guide_rail=… profile_scaling="none"`. En la ventana: Barrido › Ruta + Rail guía, Escala Ninguna, Enter.
-- **Esperado (Fusion):** «None: do not scale profile along sweep; just use guide rail as a orientation guide» (ayuda `Sweep reference`): con el carril paralelo, un prisma de 800 mm³ (superficie: 800 mm²). Con «Escalar» y el carril de 2 a 6, el tronco de pirámide de 50/3·(16+144+48) = 3466,67 mm³.
-- **Obtenido:** 784,03 mm³ y caja y ±2,31 (sólido), 797,57 mm² (superficie); con Escalar, 3364,59 mm³ y caja y ±6,44. Las caras de los extremos están bien (área 16 y 144, normal X): el perfil gira en el medio de la ruta.
-- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py` (salida en `sonda_carril.txt`), o la pieza `revolucion_barrido_solevacion` («Barrido con carril paralelo y escala Ninguna»).
-- **Entorno:** OmniCAD 0.2.0, Windows 11, motor OCC. Sin ventana y en la ventana minimizada.
-- **Causa probable (leída):** el carril se pasa como espina auxiliar con `SetMode(carril, True, BRepFill_NoContact)` en `nucleo/solidos_crear.py:819`; no se comprobó qué triedro arma OCC ahí.
-- **Esquive:** sin carril (escala por conicidad) o con Solevación entre perfiles.
-- **Prueba propuesta:** carril paralelo con Ninguna = 800 mm³ y con Escalar de 2 a 6 = 3466,67 mm³ (sólido y superficie).
-
-### B-209 · Barrido sólido con «Estirar» hace «Escalar»
-
-- **Qué:** el mismo barrido de B-208 con el carril de (0, 2) a (50, 6): `sweep rail_scale="stretch"` y `rail_scale="scale"`.
-- **Esperado (Fusion):** «Stretch: use path - guide rail distance to scale profile in X» (ayuda `Sweep reference`): el perfil crece solo hacia el carril, 4·(4+12)/2·50 = 1600 mm³ (la superficie da sus 400 mm² exactos).
-- **Obtenido:** 3364,59 mm³ en los dos modos, sin aviso. El docstring de `barrer` dice que «estirar» no existe en OCC y se hace como «escalar» (`nucleo/solidos_crear.py:877`), pero `superficies._estirar` (`nucleo/superficies.py:617`) ya lo resuelve.
-- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py`.
-- **Esquive:** ninguno en sólido; superficie y después Engrosar o Coser.
-- **Prueba propuesta:** estirar ≠ escalar y da 1600 mm³ con el carril de 2 a 6; la ventana ofrece Estirar.
-
-### B-210 · Revolución «Dos lados» con ángulo negativo: sólido y superficie distintos
-
-- **Qué:** rectángulo x 10..20, y 0..10 en XY, eje Y; `revolve direction=two_sides angle=90 angle2=-45` y `create_surface_revolve` con la línea x=10 y los mismos ángulos. En la ventana: Dos lados, teclear «90 deg» y «-45 deg», Enter.
-- **Esperado:** el mismo criterio en los dos (Fusion no dice qué hace con un ángulo negativo en Dos lados: ⚠ sin abrir Fusion).
-- **Obtenido:** sólido 2356,19 mm³ (el lado 2 se pierde en la unión, sin aviso); superficie 235,62 mm² (toma −45 como +45, `abs` en `nucleo/superficies.py:475`).
-- **Reproducir:** `evidencias/ui_2026-11-05/sondas_rbs.py rev_dos_lados_90_menos45 srev_dos_lados_neg`.
-- **Prueba propuesta:** lado 2 negativo da lo mismo (o el mismo error) en sólido y en superficie.
-
-### B-211 · Barrido: Distancia mayor que 1 se recorta sin avisar
-
-- **Qué:** círculo r 2 en YZ y ruta de 50 en X; `sweep` y después `edit_feature feature=op3 params={"distancia": "2"}`; en la ventana, teclear «1,5» en Distancia.
-- **Esperado (Fusion):** «Value is measured in percentage of the total distance. Range: 0.00-1.00» (ayuda `Sweep reference`): un error claro, como «0».
-- **Obtenido:** `ok`, el cuerpo de la ruta entera (628,32 mm³) y la previa en verde; `_recortar_alambre` hace `min(fraccion, 1.0)` (`nucleo/solidos_crear.py:256`). La API rechaza solo `path_distance` numérico (`api/herramientas_solido.py:452`).
-- **Prueba propuesta:** distancia 1,5 da error en la ventana, en `edit_feature` y en la API.
-
-### B-212 · Solevación sólida con un carril recto da un sólido inválido
-
-- **Qué:** boceto XY con cuadro −5..5, plano a z 10 con cuadro −10..10, boceto XZ con la línea de (5, 0) a (10, 10) (carril que toca el medio del lado x=5 abajo y del lado x=10 arriba); `loft sketches=["S1","S2"] rails=[{"sketch":"C","curve":<id>}]`.
-- **Esperado (Fusion):** «Rails must intersect each section» (ayuda `Loft reference`): este carril los toca, y el resultado es el mismo tronco de 2333,33 mm³ que sin carril.
-- **Obtenido:** «Solevado: el kernel produjo un sólido inválido con estos valores». `create_surface_loft` con los mismos perfiles y carril sale bien (670,82 mm²).
-- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril_solevacion.py` (salida en `sonda_carril_solevacion.txt`).
-- **Causa probable:** no se leyó a fondo; el carril se pasa a `MakePipeShell` con `BRepFill_ContactOnBorder` (`nucleo/solidos_crear.py:1324`) y la superficie usa otro camino.
-- **Prueba propuesta:** este caso da 2333,33 mm³ y `geo.es_valida`.
-
-### B-205 · Extruir «Dos lados» con distancia negativa: el resultado depende de la conicidad
-
-- **Qué:** OmniCAD 2026-11-05, sin ventana. Boceto XY con rectángulo 0,0–20,10; `extrude` con `direction="two_sides"`, `distance=10`, `distance2=-5` (y lo mismo con `distance=-10`, `distance2=5`). En la ventana: Extruir, Dirección «Dos lados», teclear 10 mm y −5 mm.
-- **Esperado:** un error claro, o el valor absoluto (20·10·15 = 3000 mm³), pero lo mismo siempre.
-- **Obtenido:** sin conicidad, 2000 mm³ y caja z 0..10: el lado 2 va hacia el mismo lado que el 1 y se pierde en la unión. Con `taper_angle=0.001`, 3000 mm³ y caja z −5..10. Sin aviso en ningún caso.
-- **Cómo reproducir:** `evidencias/ui_2026-11-05/sondas_extruir.py dos_lados` y la pieza `extruir_espacios`.
-- **Causa probable (leída):** `_extrusion_basica` (timeline/operaciones.py:1229) extruye `-n` por `d2` con signo; `extruir_avanzado` (nucleo/solidos_crear.py:595) usa `abs(distancia2)`. `geo.exigir_distancias_extrusion` deja pasar el negativo.
-- **Prueba propuesta:** el mismo «Dos lados» con −5 da el mismo volumen (o el mismo error) con y sin conicidad.
-
-### B-206 · Inicio › Objeto en un plano no paralelo se ignora
-
-- **Qué:** plano de construcción a 30° sobre X (`create_construction_plane type=angle`), boceto en XY con rectángulo 20×10, `extrude start=object start_object=<plano>`, distancia 10. Igual con `create_surface_extrude` y en la ventana.
-- **Esperado (Fusion):** «Object: Starts extrusion from a face or plane that you select» (ayuda `Extrude reference`): la base de la extrusión queda sobre el plano inclinado.
-- **Obtenido:** caja z 0..10, idéntica a Inicio › Plano de perfil, sin aviso.
-- **Causa probable (leída):** `desfase = (plano_objeto.origen − plano_perfil.origen) · n` (timeline/operaciones.py:1161; en superficie, timeline/ops_superficie.py:131): solo una distancia sobre la normal; la orientación del objeto no se usa.
-- **Esquive:** usar Desfase con la distancia a mano (solo sirve para planos paralelos).
-- **Prueba propuesta:** con el plano a 30°, la cara de inicio del cuerpo está sobre ese plano; con un objeto paralelo sigue dando lo de hoy.
+- **Arreglado:** el perfil se proyecta sobre el plano elegido a lo largo de la dirección (`geo.proyectar_sobre_plano`,
+  con las aristas pasadas a recta, círculo o elipse por `GeomConvert_CurveToAnaCurve`); la delgada arma la pared en el
+  plano del perfil y recién después proyecta (`extruir_avanzado(inicio_plano=...)`); «Al objeto» y «Todo» pasan de largo
+  desde el punto más bajo de la base. Test:
+  `tests/test_api_opciones_solido1.py::test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el`.
+- **Queda — conicidad + inicio inclinado:** error claro en `timeline/operaciones.py` (`inclinado` con conicidad). Para
+  hacerlo, `_prisma` (`nucleo/solidos_crear.py`) tendría que usar la cara inclinada como plano neutro del desmoldeo.
 
 ### B-188 · Reproducción exacta pendiente de REMOVEDOR
 

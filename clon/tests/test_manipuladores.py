@@ -200,6 +200,25 @@ def test_extruir_dos_lados_y_conicidad(app_qt):
     panel.cancelar()
 
 
+@pytest.mark.parametrize("valor", ["10 mm", "-10 mm"])
+def test_dos_lados_la_flecha_de_distancia_no_cruza_el_cero_y_sigue_al_cuerpo(app_qt, valor):
+    """B-205: en «Dos lados» el número es una magnitud de su lado; la flecha (también con el valor tecleado negativo)
+    queda donde está el cuerpo, y arrastrarla hacia adentro se frena en 0 sin pasar al otro lado."""
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "direccion": "dos_lados",
+                                              "distancia": valor, "distancia2": "5 mm"})
+    gestor = panel.manipuladores
+    base, punta = _manip(panel, "flecha:distancia").puntos(gestor)
+    assert base[2] == pytest.approx(10) and punta[2] > base[2]          # sobre el perfil, apuntando hacia afuera
+    assert _manip(panel, "angulo:conicidad").u[2] > 0                 # el asa de la conicidad, del mismo lado
+    medio, d = _sobre_flecha(panel, "flecha:distancia")
+    _arrastrar(visor, medio, medio - d * 400)                          # muy hacia adentro: pasaría el cero
+    final = panel.ctx.evaluar(panel.valores["distancia"])
+    assert final * float(valor.split()[0]) >= 0 and abs(final) < 10   # achicó, sin cambiar de signo
+    panel.cancelar()
+
+
 def test_asas_de_conicidad2_y_desfase_inicio_en_extruir(app_qt):
     """FU-4: asas para la conicidad del lado 2 (solo en «Dos lados») y para el desfase de inicio
     (solo con Inicio=Desfase), como las que ya existen."""
@@ -842,6 +861,36 @@ def test_las_cajas_de_extruir_y_revolucion_no_tapan_sus_asas_en_4_vistas(app_qt)
         poner()
         panel.manipuladores.redibujar()
         _sin_nada_encima(panel.manipuladores)
+    panel.cancelar()
+
+
+def test_las_cajas_de_dos_lados_con_desfase_no_se_pisan(app_qt):
+    """B-207: con Inicio=Desfase y Dirección=Dos lados las tres cajas (desfase, lado 1 y lado 2) salen de puntas de
+    asa casi superpuestas. Cada par tiene que quedar separado, no pegado ni encima, como en Fusion. Se prueba con el
+    perfil chico dentro de una escena grande, que es como lo vio la auditoría (las puntas caían a 1 px)."""
+    from omnicad.ui import manipuladores as mp
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="400", largo="400", alto="10", x="-200", y="-450"))
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "inicio": "desfase", "direccion": "dos_lados",
+                                             "distancia": "10 mm", "distancia2": "10 mm"})
+    gestor = panel.manipuladores
+    vistas_con_tres = 0
+    for nombre, poner in _vistas(visor, np.array([0.0, 0.0, 1.0])).items():
+        poner()
+        visor.encuadrar()
+        gestor.redibujar()
+        rects = gestor.rectangulos_cajas()      # en alguna vista la punta de una flecha queda fuera y su caja se oculta
+        vistas_con_tres += len(rects) == 3
+        aire = {k: r.getRect() for k, r in rects.items()}
+        for a, ra in rects.items():
+            for b, rb in rects.items():
+                if a >= b:
+                    continue
+                dx = max(ra.left(), rb.left()) - min(ra.right(), rb.right())
+                dy = max(ra.top(), rb.top()) - min(ra.bottom(), rb.bottom())
+                assert max(dx, dy) >= mp.AIRE_CAJAS_PX, (nombre, aire, (a, b, dx, dy))
+    assert vistas_con_tres, {k: r.getRect() for k, r in gestor.rectangulos_cajas().items()}
     panel.cancelar()
 
 

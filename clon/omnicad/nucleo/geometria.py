@@ -32,7 +32,8 @@ def lista_occ(lista):
 def _iniciar_opencascade():
     global BRepAdaptor_Curve, BRepAdaptor_Surface, BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
     global ShapeFix_Shape
-    global BRepBndLib, BRepBuilderAPI_Copy, BRepBuilderAPI_NurbsConvert, BRepBuilderAPI_Transform, BRepCheck_Analyzer
+    global BRepBndLib, BRepBuilderAPI_Copy, BRepBuilderAPI_GTransform, BRepBuilderAPI_NurbsConvert
+    global BRepBuilderAPI_Transform, BRepCheck_Analyzer
     global BRepClass3d_SolidClassifier, BRepExtrema_DistShapeShape, BRepGProp, BRepMesh_IncrementalMesh
     global BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakePrism, BRepPrimAPI_MakeRevol
     global BRepPrimAPI_MakeSphere, BRepPrimAPI_MakeTorus, BRepTools, BRepTools_WireExplorer, BRep_Builder, BRep_Tool, Bnd_Box
@@ -44,13 +45,14 @@ def _iniciar_opencascade():
     global TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID
     global TopAbs_VERTEX, TopAbs_WIRE, TopExp, TopExp_Explorer, TopLoc_Location, TopoDS, TopoDS_Compound
     global TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid, _ANALITICAS, gp_Ax1, gp_Ax2, gp_Dir
-    global gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
+    global gp_GTrsf, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec, gp_XYZ
     from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
     from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
     from OCP.BRepBndLib import BRepBndLib
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_NurbsConvert, BRepBuilderAPI_Transform
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_GTransform, BRepBuilderAPI_NurbsConvert,
+                                    BRepBuilderAPI_Transform)
     from OCP.BRepCheck import BRepCheck_Analyzer
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
@@ -75,7 +77,7 @@ def _iniciar_opencascade():
     from OCP.TopLoc import TopLoc_Location
     from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Face, TopoDS_Iterator, TopoDS_Shell, TopoDS_Solid
     from OCP.BRep import BRep_Builder
-    from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
+    from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_GTrsf, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec, gp_XYZ
     _ANALITICAS = (GeomAbs_Plane, GeomAbs_Cylinder, GeomAbs_Cone, GeomAbs_Sphere, GeomAbs_Torus, GeomAbs_SurfaceOfExtrusion,
                    GeomAbs_SurfaceOfRevolution)
 
@@ -262,6 +264,81 @@ def cara_de_plano(plano, tam=1e4):
 
 
 LONGITUD_MINIMA = 1e-6   # mm: OCC no construye un prisma de 1e-7 mm (su Precision::Confusion); desde 2e-7 sí
+
+
+def _arista_analitica(arista, tol=1e-6):
+    """La misma arista con curva recta, circular o elíptica si su curva lo es dentro de `tol` mm (None si no):
+    `GeomConvert_CurveToAnaCurve`, con los vértices originales."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Ellipse, GeomAbs_Line
+    from OCP.GeomConvert import GeomConvert_ConvType, GeomConvert_CurveToAnaCurve
+    curva = BRep_Tool.Curve_s(arista, 0.0, 0.0)
+    if curva is None:
+        return None
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnCurve
+    f, l = curva.FirstParameter(), curva.LastParameter()
+    v1, v2 = TopExp.FirstVertex_s(arista), TopExp.LastVertex_s(arista)
+    inicio, tangente = curva.Value(f), curva.DN(f, 1)
+    for tipo in (GeomAbs_Line, GeomAbs_Circle, GeomAbs_Ellipse):
+        nueva = GeomConvert_CurveToAnaCurve.ComputeCurve_s(curva, tol, f, l, 0.0, 0.0, 0.0,
+                                                            GeomConvert_ConvType.GeomConvert_Target, tipo)
+        if nueva is None:
+            continue
+        u = GeomAPI_ProjectPointOnCurve(inicio, nueva).LowerDistanceParameter()
+        if nueva.DN(u, 1).Dot(tangente) < 0:                # la curva nueva puede venir con el sentido dado vuelta
+            nueva = nueva.Reversed()
+        # cerrada (círculo o elipse entera): la curva completa; abierta: entre los mismos vértices
+        hecha = BRepBuilderAPI_MakeEdge(nueva) if v1.IsSame(v2) else BRepBuilderAPI_MakeEdge(nueva, v1, v2)
+        if hecha.IsDone():
+            e = hecha.Edge()
+            e.Orientation(arista.Orientation())
+            return e
+    return None
+
+
+def proyectar_sobre_plano(forma, direccion, plano):
+    """Proyección oblicua de una forma (cara, alambre o compuesto) sobre un plano a lo largo de una dirección.
+    Es el «Inicio › Objeto» de Fusion (Start = Object): la base de la extrusión queda sobre la cara o el plano
+    elegido, no sobre el plano del perfil. `plano`: `geo.Plano`; `direccion`: la normal de extrusión."""
+    n = np.asarray(direccion, float)
+    n = n / np.linalg.norm(n)
+    m = np.asarray(plano.normal, float)
+    m = m / np.linalg.norm(m)
+    den = float(n @ m)
+    if abs(den) < 1e-9:
+        raise ErrorGeometria("El plano elegido como inicio es paralelo a la dirección de extrusión: la extrusión "
+                             "no arranca sobre él; elegí otro o usá «Desfase».")
+    a = np.eye(3) - np.outer(n, m) / den                     # p → p + n·((o − p)·m)/(n·m)
+    b = n * (float(np.asarray(plano.origen, float) @ m) / den)
+    g = gp_GTrsf()
+    for i in range(3):
+        for j in range(3):
+            g.SetValue(i + 1, j + 1, float(a[i, j]))
+    g.SetTranslationPart(gp_XYZ(*map(float, b)))
+    proyectada = BRepBuilderAPI_GTransform(forma, g, True).Shape()
+    if forma.ShapeType() == TopAbs_FACE:
+        # La superficie queda B-spline; el resto del programa reconoce las caras planas por su superficie
+        # (conicidad, «Al objeto», el desfase), así que la cara se rehace sobre el plano objetivo. Antes de cambiar
+        # las aristas: `OuterWire_s` elige el lazo exterior por sus curvas 2D, que las aristas nuevas no traen.
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+        from OCP.gp import gp_Pln
+        exterior = BRepTools.OuterWire_s(TopoDS.Face(proyectada))
+        mf = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(*map(float, plano.origen)), gp_Dir(*map(float, m))), exterior,
+                                     True)
+        for w in _explorar(proyectada, TopAbs_WIRE):
+            if not TopoDS.Wire(w).IsSame(exterior):
+                mf.Add(TopoDS.Wire(w))
+        proyectada = mf.Face()
+    # La transformación afín deja aristas B-spline aproximadas (el círculo r5 a 30° daba 0,4 % más de área): la
+    # imagen afín de recta, círculo y elipse es otra igual, así que se vuelven analíticas, con los mismos vértices
+    # para que los alambres sigan cerrados.
+    from OCP.BRepTools import BRepTools_ReShape
+    cambios = BRepTools_ReShape()
+    for e in _explorar(proyectada, TopAbs_EDGE):
+        nueva = _arista_analitica(TopoDS.Edge(e))
+        if nueva is not None:
+            cambios.Replace(e, nueva)
+    return cambios.Apply(proyectada)
 
 
 def exigir_longitud(valor, que, minimo=LONGITUD_MINIMA):
