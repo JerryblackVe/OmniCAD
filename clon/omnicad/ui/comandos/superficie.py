@@ -8,6 +8,7 @@ from ...timeline.ops_superficie import (AVISO_NADA_COSIDO, OpCoser, OpDescoser, 
                                         OpInvertirNormal, OpParche, OpRecortar, OpReglada, OpSupBarrido, OpSupBobina,
                                         OpSupDesfase, OpSupEmpalme, OpSupExtruir, OpSupPrimitiva, OpSupRevolucion,
                                         OpSupSolevacion, OpSupTuberia)
+from ...timeline.operaciones import espesor_plastico
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Botones, Casilla, Comando, ErrorComando, Expresion, Info, Opciones, Personalizado, Seleccion, Texto,
                        exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
@@ -17,6 +18,9 @@ from .crear import Bobina, Solevacion, Tuberia, _en_fila
 from .primitivas import Caja, Cilindro, Esfera, Toroide
 
 CURVAS = {"curva_boceto", "arista"}
+# Lo que Fusion deja elegir como perfil de una superficie: perfil cerrado, curva (un texto de una línea es una
+# curva), cara plana y arista (H-85).
+PERFILES_SUPERFICIE = CURVAS | {"perfil", "cara_plana"}
 
 
 def _h1(ref, estado):
@@ -33,14 +37,15 @@ def _h_lista(lista, estado):
 
 class SupExtruir(Comando):
     CLAVE, TITULO, ICONO = "sup_extruir", "Extruir superficie", "sup_extruir"
-    AYUDA = "Extruye curvas (abiertas o cerradas) o un texto de una línea y crea una superficie."
+    AYUDA = "Extruye curvas, perfiles cerrados, caras planas o un texto de una línea y crea una superficie."
     CLASE_OP = OpSupExtruir
 
     def campos(self, ctx):
         dos = lambda v: v.get("lados") == "dos_lados"  # noqa: E731
         objeto = lambda v: v.get("extension") == "objeto"  # noqa: E731
-        return [Seleccion("curvas", "Perfiles", CURVAS, maximo=None,
-                          ayuda="Curvas de boceto o aristas. Un texto de una sola línea extruye todos sus trazos."),
+        return [Seleccion("curvas", "Perfiles", PERFILES_SUPERFICIE, maximo=None,
+                          ayuda="Curvas de boceto, aristas, perfiles cerrados o caras planas. Un texto de una sola línea "
+                                "extruye todos sus trazos."),
                 Casilla("cadena", "Selección de cadena", True,
                         ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
                 Opciones("inicio", "Inicio", {"plano": "Plano de perfil", "desfase": "Plano de desfase", "objeto": "Desde objeto"}),
@@ -86,12 +91,13 @@ class SupExtruir(Comando):
 
 class SupRevolucion(Comando):
     CLAVE, TITULO, ICONO = "sup_revolucion", "Revolución de superficie", "sup_revolucion"
-    AYUDA = "Gira curvas alrededor de un eje y crea una superficie."
+    AYUDA = "Gira perfiles cerrados, curvas o caras planas alrededor de un eje y crea una superficie."
     CLASE_OP = OpSupRevolucion
 
     def campos(self, ctx):
         angulo = lambda v: v.get("extension") == "angulo"  # noqa: E731
-        return [Seleccion("curvas", "Perfil", CURVAS, maximo=None),
+        return [Seleccion("curvas", "Perfil", PERFILES_SUPERFICIE, maximo=None,
+                          ayuda="Perfiles cerrados, curvas de boceto, aristas o caras planas."),
                 Casilla("cadena", "Selección de cadena", True,
                         ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
                 Seleccion("eje", "Eje", {"eje"}),
@@ -134,7 +140,7 @@ class SupBarrido(Comando):
         perpendicular = lambda v: ruta(v) and v.get("orientacion") == "perpendicular"  # noqa: E731
         return [Opciones("tipo", "Tipo", {"ruta": ("Ruta individual", "bar_ruta"), "ruta_carril": ("Ruta + Rail guía", "bar_carril"),
                                           "ruta_superficie": ("Trayectoria + Superficie guía", "bar_superficie")}),
-                Seleccion("perfil", "Perfil", CURVAS | {"perfil", "cara_plana"}, maximo=None),
+                Seleccion("perfil", "Perfil", PERFILES_SUPERFICIE, maximo=None),
                 Seleccion("ruta", "Ruta", CURVAS, maximo=None),
                 Casilla("cadena", "Selección de cadena", True,
                         ayuda="Suma a cada arista o curva elegida las que le siguen tangentes."),
@@ -588,7 +594,7 @@ class Engrosar(Comando):
     def campos(self, ctx):
         return [Seleccion("caras", "Caras/cuerpos", {"cara", "cuerpo"}, maximo=None),
                 Casilla("cadena", "Selección de cadena", True),
-                Expresion("espesor", "Grosor", "2 mm"),
+                Expresion("espesor", "Grosor", espesor_plastico(ctx.estado, (), "2 mm")),
                 Opciones("direccion", "Dirección", {"un_lado": ("Un lado", "dir_un_lado"), "simetrica": ("Simétrico", "dir_simetrica")}),
                 Botones("tipo", "Tipo de engrosado",
                         {"agudo": ("Engrosado agudo", "eng_agudo"), "redondeado": ("Engrosado redondeado", "eng_redondo")}),

@@ -214,8 +214,9 @@ def test_disponibles_lista_los_incluidos_primero_y_los_del_usuario_marcados(tmp_
     escribir(tmp_path / "temas", "zeta.json", {"nombre": "Zeta"})
     lista, avisos = temas.disponibles()
     assert avisos == []
-    assert [c for c, _n, _u in lista[:5]] == INCLUIDOS and not any(u for _c, _n, u in lista[:5])
-    assert lista[5] == ("usuario:zeta", "Zeta", True)
+    assert lista[0] == ("sistema", "Tema del sistema", False)
+    assert [c for c, _n, _u in lista[1:6]] == INCLUIDOS and not any(u for _c, _n, u in lista[1:6])
+    assert lista[6] == ("usuario:zeta", "Zeta", True)
 
 
 def test_exportar_plantilla_es_un_json_con_todos_los_colores_que_se_vuelve_a_leer(tmp_path):
@@ -301,7 +302,7 @@ def test_dialogo_ofrece_todos_los_temas_y_avisa_la_vista_previa(qapp, prefs, tmp
     dlg = DialogoPreferencias(prefs)
     combo = dlg.controles["general/tema"]
     claves = [combo.itemData(i) for i in range(combo.count())]
-    assert claves == INCLUIDOS + ["usuario:mio"] and "(propio)" in combo.itemText(len(claves) - 1)
+    assert claves == ["sistema"] + INCLUIDOS + ["usuario:mio"] and "(propio)" in combo.itemText(len(claves) - 1)
     assert combo.currentData() == "oscuro_moderno"
     elegidos = []
     dlg.tema_elegido.connect(elegidos.append)

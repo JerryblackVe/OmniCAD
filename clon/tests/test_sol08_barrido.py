@@ -119,11 +119,35 @@ def test_cuerpo_chico_en_ruta_larga_falla_en_vez_de_dejar_cuentas_sueltas():
     assert not r["ok"] and "separadas" in r["mensaje"]
 
 
-def test_cadena_con_curvas_de_boceto_avisa_que_no_las_encadena():
-    s = _viga_y_ruta_recta()
+def test_cadena_con_curvas_de_boceto_no_avisa_y_sigue_toda_la_ruta():
+    """H-93: con chain=True una ruta de curvas de boceto no debe avisar «solo suma aristas de cuerpos»;
+    en Fusion la cadena también junta curvas de boceto tangentes (igual que el barrido de superficie)."""
+    s = _viga_y_ruta_recta()                         # caja 10³ y una recta de 40 mm en X como ruta
     r = api.llamar(s, "sweep", {"sweep_bodies": "Caja", "path_sketch": "Ruta", "orientation": "parallel",
                                 "operation": "new_body", "chain": True})
-    assert r["ok"] and any("solo suma aristas de cuerpos" in a for a in r["avisos"]), r
+    assert r["ok"], r
+    assert not any("solo suma aristas de cuerpos" in a for a in r["avisos"]), r
+    nuevo = [c for c in s.doc.estado_final.cuerpos.values() if c.nombre != "Caja"][0]
+    assert geo.es_valida(nuevo.forma)
+    assert geo.volumen(nuevo.forma) == pytest.approx(10 * 10 * (10 + 40), rel=1e-3)
+
+
+def test_cadena_de_barrido_expande_las_curvas_de_boceto_tangentes():
+    """H-93: chain=True sobre una sola curva de un boceto con curvas tangentes sigue toda la cadena."""
+    s = api.Sesion()
+    llamar(s, "create_box", length=10, width=10, height=10, name="Caja")
+    llamar(s, "create_sketch", plane="XY", name="Ruta")
+    llamar(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0, sketch="Ruta")
+    llamar(s, "draw_line", start_x=20, start_y=0, end_x=40, end_y=0, sketch="Ruta")
+    info = llamar(s, "get_sketch", sketch="Ruta")
+    primera = info["entities"][0]["id"]
+    r = api.llamar(s, "sweep", {"sweep_bodies": "Caja", "path_sketch": "Ruta", "path_curves": [primera],
+                                "orientation": "parallel", "operation": "new_body", "chain": True})
+    assert r["ok"], r
+    assert not any("solo suma aristas de cuerpos" in a for a in r["avisos"]), r
+    nuevo = [c for c in s.doc.estado_final.cuerpos.values() if c.nombre != "Caja"][0]
+    # Solo la primer curva mide 20 mm; encadenada sigue las dos (40 mm).
+    assert geo.volumen(nuevo.forma) == pytest.approx(10 * 10 * (10 + 40), rel=1e-3)
 
 
 def test_barrido_de_cuerpo_en_arco_se_acerca_al_volumen_exacto_y_la_via_por_caras_se_queda_corta():

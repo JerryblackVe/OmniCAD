@@ -56,6 +56,7 @@ DEFECTOS = {
     "general/auto_mirar_boceto": True,
     "general/animar_vistas": True,           # transición de ~250 ms al cambiar de vista (ViewCube, Ajustar, boceto)
     "general/tamano_viewcube": "automatico",
+    "general/espacio_repite": False,         # Fusion «Spacebar Repeats Last Command»: la barra espaciadora repite
     "general/info_herramientas": True,
     "general/autoguardado_min": 1,
     "general/puente_agentes": False,         # MCP en vivo: apagado por defecto (ui/puente.py)
@@ -471,6 +472,10 @@ PAGINAS = [
          "(solo resaltar en amarillo dónde está)", "check", None),
         ("general/raton", "Configuración del ratón (encuadre, zoom, órbita)", "combo",
          [("omnicad", "OmniCAD (izquierdo: órbita)"), ("fusion", "Fusion (Mayús + medio: órbita)"),
+          ("alias", "Alias (Mayús + Alt + izquierdo: órbita)"),
+          ("inventor", "Inventor (F2/F3/F4 + izquierdo: encuadre, zoom, órbita)"),
+          ("powermill", "PowerMill (medio: órbita, Mayús + medio: encuadre)"),
+          ("solidworks", "SOLIDWORKS (medio: órbita, Ctrl + medio: encuadre)"),
           ("tinkercad", "Tinkercad (derecho: órbita)")]),
         ("general/camara", "Tipo de cámara por defecto", "combo",
          [("perspectiva", "Perspectiva"), ("ortografica", "Ortográfica"),
@@ -481,7 +486,9 @@ PAGINAS = [
         ("general/animar_vistas", "Animar las transiciones de vista (ViewCube, Ajustar, mirar al boceto)", "check", None),
         ("general/invertir_zoom", "Invertir dirección de zoom", "check", None),
         ("general/tamano_viewcube", "Tamaño de ViewCube", "combo",
-         [("pequeno", "Pequeño"), ("automatico", "Automático"), ("grande", "Grande")]),
+         [("automatico", "Automático"), ("grande", "Grande"), ("normal", "Normal"), ("pequeno", "Pequeño"),
+          ("diminuto", "Diminuto")]),
+        ("general/espacio_repite", "La barra espaciadora repite el último comando", "check", None),
         ("general/puente_agentes", "Permitir que agentes IA controlen OmniCAD (MCP en vivo)", "check", None),
         ("general/puente_codigo", "Permitir también execute_code en vivo (congela la app mientras corre: como mucho 100 s)",
          "check", None),

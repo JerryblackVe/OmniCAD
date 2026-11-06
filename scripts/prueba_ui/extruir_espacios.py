@@ -10,7 +10,7 @@ import escena
 from omnicad import api
 from omnicad.ui import cinta as ci
 from omnicad.ui.comando import PanelComando
-from omnicad.ui.comandos.superficie import CURVAS
+from omnicad.ui.comandos.superficie import PERFILES_SUPERFICIE
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QToolButton
@@ -80,10 +80,10 @@ def superficie_con_perfil():
     con el filtro del campo Perfiles de Extruir superficie."""
     control = A._clic_en(v, (0, 400, 0), {"perfil"}) and A._clic_en(v, (0, -400, 10), {"cara_plana"})
     A.reg(AR, "control: con el filtro de Extruir sólido, esos dos clics sí eligen perfil y cara", bool(control))
-    hit = A._clic_en(v, (0, 400, 0), CURVAS)                          # centro del rectángulo «Grande»
+    hit = A._clic_en(v, (0, 400, 0), PERFILES_SUPERFICIE)             # centro del rectángulo «Grande»
     tipo = hit and hit["ref"]["tipo"]
     A.reg(AR, "SUPERFICIE: clic dentro de un perfil cerrado lo elige (Fusion sí)", tipo == "perfil", f"el visor devolvió {tipo}")
-    cara = A._clic_en(v, (0, -400, 10), CURVAS)                       # centro de la tapa de «Losa»
+    cara = A._clic_en(v, (0, -400, 10), PERFILES_SUPERFICIE)          # centro de la tapa de «Losa»
     tipo = cara and cara["ref"]["tipo"]
     A.reg(AR, "SUPERFICIE: clic en una cara plana la elige (Fusion sí)", tipo in ("cara", "cara_plana"), f"el visor devolvió {tipo}")
 

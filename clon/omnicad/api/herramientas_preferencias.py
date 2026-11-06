@@ -10,13 +10,14 @@ from .registro import herramienta
 # compartido cuando se autorice editar la UI. test_preferencias_coinciden_con_la_ventana detecta desvíos.
 _OPCIONES = {
     "medir/secundarias": ("ninguno", ["ninguno", "cm", "m", "pulg", "ft"]),
-    "general/raton": ("fusion", ["omnicad", "fusion", "tinkercad"]),
+    "general/raton": ("fusion", ["omnicad", "fusion", "alias", "inventor", "powermill", "solidworks", "tinkercad"]),
     "general/invertir_zoom": (False, [False, True]),
     "general/camara": ("perspectiva", ["perspectiva", "ortografica", "persp_orto_caras"]),
     "general/tipo_orbita": ("libre", ["libre", "restringida"]),
     "general/auto_mirar_boceto": (True, [False, True]),
     "general/animar_vistas": (True, [False, True]),
-    "general/tamano_viewcube": ("automatico", ["pequeno", "automatico", "grande"]),
+    "general/tamano_viewcube": ("automatico", ["automatico", "grande", "normal", "pequeno", "diminuto"]),
+    "general/espacio_repite": (False, [False, True]),
     "general/info_herramientas": (True, [False, True]),
     "navegador/no_desplegar_al_seleccionar": (False, [False, True]),
     "general/autoguardado_min": (1, list(range(1, 61))),

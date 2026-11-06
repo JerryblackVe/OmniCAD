@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-418 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+420 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 49 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 68 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 70 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 36 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -748,6 +748,8 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`add_dimension`](#add_dimension) | sí | Agrega una cota (dimensión) que maneja la geometría. |
 | [`get_sketch`](#get_sketch) | no | Informe de un boceto: plano y su marco 3D, entidades con ids estables (coordenadas ya resueltas por el solver), puntos, restricciones, cotas con su valor, perfiles (índice, área mm², centroide, caja [min/max en coordenadas del boceto] y curvas del borde) y estado del solver en la clave `status` (fully_constrained, under_constrained, over_constrained) con los grados de libertad en `dof`. Cada punto y curva trae state: free, determined o fixed. conflicts lista los ids de restricciones/cotas cuya retirada individual resuelve el conflicto (vacía sin conflicto o si hacen falta varias retiradas). origin=0 y axes={x:-1,y:-2} son ids reservados citables en add_constraint/add_dimension; las referencias se materializan como construcción fija al citarlas y no forman perfiles. dimensions incluye name (dN), el parámetro de cada cota, sincronizado con get_parameters/set_parameter, y reference: true indica una cota driven cuyo value es la medida actual y no aporta restricciones ni reduce dof. |
 | [`find_redundant_constraints`](#find_redundant_constraints) | no | Dice qué restricciones y cotas SOBRAN en un boceto: las que no quitan ningún grado de libertad porque otras ya fijan lo mismo (el boceto está sobre-definido pero se puede cumplir; no es un conflicto, para eso mirá `conflicts` de get_sketch). |
+| [`find_underconstrained`](#find_underconstrained) | no | Lista la geometría SUBRESTRINGIDA del boceto (Fusion: Find Under-Constrained, en la Paleta de boceto): las curvas y los puntos que todavía se pueden mover porque ninguna restricción ni cota los fija. |
+| [`compute_sketch`](#compute_sketch) | no | Vuelve a analizar el boceto entero y devuelve el estado de restricción de cada entidad (Fusion: Compute Sketch, en la Paleta de boceto): resuelve el boceto de nuevo desde sus restricciones y cotas actuales y cuenta qué quedó fijo. |
 | [`sketch_from_spec`](#sketch_from_spec) | sí | Crea un boceto COMPLETO en una sola llamada (un paso de deshacer): geometría, restricciones y cotas. entities: lista de {type, ...}: line{start,end}, rectangle{corner1,corner2 \| center,width,height \| origin,width,height}, circle{center,radius}, arc{center,start,sweep \| start,mid,end}, polygon{sides,radius,center,rotation,kind,fully_constrained}, ellipse{center,major_radius,minor_radius,angle}, slot{kind,points,width} (kind como en draw_slot), spline{points,spline_type,degree,closed}, point{at}, conic{start,end,vertex,rho}, text{text,...} (opciones de add_text, path_entity admite cita), midpoint_line{center,end}, polygon{kind:edge,start,end,sides,edge_points?} (sin edge_points crece a la izquierda de start→end; edge_points permite elegir el lado como create_polygon), tangent_circle{lines:[citas],x?,y?,radius?}, tangent_arc{from:cita de extremo de línea,end}. Boceto 3D (como draw_*_3d, coordenadas [x, y, z]): line_3d{start,end}, spline_3d{points,closed?}, point_3d{at}, arc_3d{start,through,end}, circle_3d{center,radius,normal?}, ellipse_3d{center,major_end,minor_radius,normal?}, rectangle_3d{corner,opposite,plane?} (citas 'id.l1..l4'), conic_3d{start,shoulder,end,rho?}, text_3d{text,origin,height?,plane?,font?}; normal vacía = [0, 0, 1], plane = xy, yz o zx (por defecto xy). |
 | [`draw_ellipse`](#draw_ellipse) | sí | Dibuja una elipse (Fusion: Elipse) por centro, radio mayor, radio menor y giro del eje mayor. |
 | [`draw_slot`](#draw_slot) | sí | Dibuja una ranura (Fusion: Ranura): dos lados y dos extremos redondos tangentes, más el eje de construcción. kind y points (cada uno [x, y] en mm): center_to_center = [centro de un extremo, centro del otro]; overall = [punta de un extremo, punta del otro] (largo total); center_point = [centro de la ranura, centro de un extremo]; arc_three_points = [centro de un extremo, centro del otro, un punto del arco del eje]; arc_center = [centro del arco, centro de un extremo, punto en la dirección del otro extremo] (antihorario). width es el ancho total. |
@@ -1013,6 +1015,24 @@ Dice qué restricciones y cotas SOBRAN en un boceto: las que no quitan ningún g
 - Parámetros:
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
 - CLI: `omnicad call find_redundant_constraints --doc pieza.omnicad`
+
+### `find_underconstrained`
+
+Lista la geometría SUBRESTRINGIDA del boceto (Fusion: Find Under-Constrained, en la Paleta de boceto): las curvas y los puntos que todavía se pueden mover porque ninguna restricción ni cota los fija. Los mismos ids de get_sketch (entities y points); su `state` es «free». Un boceto totalmente restringido devuelve las dos listas vacías y count=0. No cambia el boceto.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call find_underconstrained --doc pieza.omnicad`
+
+### `compute_sketch`
+
+Vuelve a analizar el boceto entero y devuelve el estado de restricción de cada entidad (Fusion: Compute Sketch, en la Paleta de boceto): resuelve el boceto de nuevo desde sus restricciones y cotas actuales y cuenta qué quedó fijo. `constrained` son las entidades que ya no se mueven, `free` las que sí, y `dof` los grados de libertad que sobran. No cambia el boceto.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call compute_sketch --doc pieza.omnicad`
 
 ### `sketch_from_spec`
 
@@ -2502,7 +2522,7 @@ Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text'
   - `reverse` (true/false; opcional, por defecto `null`): true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al material (sobre una cara, o con faces como único perfil, va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material, como Fusion).
   - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch; tienen que ser coplanares. Extruir solo una cara de un cuerpo: operation="join" la empuja hacia afuera (agrega material); operation="cut" la empuja hacia adentro (corta; ver reverse).
   - `thin` (true/false; opcional, por defecto `false`): true hace una extrusión delgada (pared de wall_thickness) en lugar de sólida.
-  - `wall_thickness` (número o expresión; opcional, por defecto `1`): espesor de la pared en mm (número o expresión); solo con thin.
+  - `wall_thickness` (número o expresión; opcional, por defecto `null`): espesor de la pared en mm (número o expresión); solo con thin. Vacío = el espesor de la regla de plástico del componente (1 mm si no hay regla asignada).
   - `wall_location` ("side1" | "side2" | "center"; opcional, por defecto `"side1"`): lado del contorno donde va la pared: "side1", "side2" o "center"; solo con thin.
   - `start` ("profile_plane" | "offset" | "object"; opcional, por defecto `"profile_plane"`): dónde empieza la extrusión: "profile_plane" (el plano del perfil), "offset" (a start_offset de él) o "object" (en la cara plana o plano start_object).
   - `start_offset` (número o expresión; opcional, por defecto `0`): desfase del inicio en mm según la dirección (número o expresión); con start=offset desde el perfil, con start=object desde el objeto; 0 por defecto.
@@ -2542,7 +2562,7 @@ Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketc
 
 ### `sweep`
 
-Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es una cadena continua de curvas: path_curves da sus ids (get_sketch) o, vacío, se usan todas las curvas no de construcción del boceto de la ruta. El perfil tiene que estar en el plano perpendicular al inicio de la ruta. Opciones: faces (una cara plana como perfil), path_edges (aristas de un cuerpo como ruta, en lugar de path_sketch), rail_sketch y rail_curves (ruta + carril guía; rail_scale elige cómo sigue el perfil al carril: scale, stretch o none) y path_distance (fracción de la ruta que se barre, de 0 a 1). orientation=aligned mantiene el perfil con el eje align_axis como binormal (eje, arista recta, plano o cara plana). guide_surface (caras sobre las que va la ruta) es el tipo Ruta + Superficie guía: el perfil sigue la normal de la superficie. sweep_bodies barre un cuerpo sólido (Solid Sweep) en lugar de un perfil: lo que recorre el cuerpo al moverse a lo largo de la ruta (aproximado con copias del cuerpo: el borde de un barrido curvo queda escalonado). chain=true suma a cada arista de path_edges las que le siguen tangentes (Chain Selection).
+Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es una cadena continua de curvas: path_curves da sus ids (get_sketch) o, vacío, se usan todas las curvas no de construcción del boceto de la ruta. El perfil tiene que estar en el plano perpendicular al inicio de la ruta. Opciones: faces (una cara plana como perfil), path_edges (aristas de un cuerpo como ruta, en lugar de path_sketch), rail_sketch y rail_curves (ruta + carril guía; rail_scale elige cómo sigue el perfil al carril: scale, stretch o none) y path_distance (fracción de la ruta que se barre, de 0 a 1). orientation=aligned mantiene el perfil con el eje align_axis como binormal (eje, arista recta, plano o cara plana). guide_surface (caras sobre las que va la ruta) es el tipo Ruta + Superficie guía: el perfil sigue la normal de la superficie. sweep_bodies barre un cuerpo sólido (Solid Sweep) en lugar de un perfil: lo que recorre el cuerpo al moverse a lo largo de la ruta (aproximado con copias del cuerpo: el borde de un barrido curvo queda escalonado). chain=true suma a cada arista de path_edges y a cada curva de path_sketch las que le siguen tangentemente (Chain Selection).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2565,7 +2585,7 @@ Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es 
   - `align_axis` (texto o objeto; opcional, por defecto `null`): con orientation=aligned, el eje: eje de construcción, arista recta, plano o cara plana (id o selector).
   - `guide_surface` (texto o lista de texto o null; opcional, por defecto `null`): caras (selector o ids) sobre las que va la ruta; el perfil sigue su normal; sin carril ni torsión.
   - `sweep_bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) (id o nombre) que se barren por la ruta (Solid Sweep) en vez de un perfil; sin carril, superficie guía, torsión ni conicidad.
-  - `chain` (true/false; opcional, por defecto `false`): true suma a path_edges las aristas tangentes que le siguen (Chain Selection); las curvas de boceto se usan tal cual y se avisa.
+  - `chain` (true/false; opcional, por defecto `false`): true suma a cada arista de path_edges y a cada curva de path_sketch las que le siguen tangentemente (Chain Selection).
 - CLI: `omnicad call sweep --doc pieza.omnicad`
 
 ### `loft`
@@ -2965,12 +2985,12 @@ Vacía un cuerpo dejando paredes de un espesor dado; las caras elegidas se quita
 - Parámetros:
   - `body` (texto; obligatorio): id o nombre del cuerpo a vaciar.
   - `faces` (texto o lista de texto; obligatorio): caras a quitar: selector (">Z" = la tapa), id de find_faces ("Cuerpo1/F6") o lista; [] = hueco cerrado.
-  - `thickness` (número o expresión; obligatorio): espesor de pared en mm (número o expresión con parámetros); es el interior, y también el exterior si no se da outside_thickness.
+  - `thickness` (número o expresión; opcional, por defecto `""`): espesor de pared en mm (número o expresión con parámetros); es el interior, y también el exterior si no se da outside_thickness; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Shell).
   - `direction` ("inside" | "outside" | "both"; opcional, por defecto `"inside"`): "inside", "outside" o "both".
   - `tangent_chain` (true/false; opcional, por defecto `true`): true (por defecto) quita también las caras tangentes encadenadas a las elegidas.
   - `outside_thickness` (número o expresión; opcional, por defecto `null`): espesor exterior en mm distinto del interior (con direction=both u outside); vacío = el mismo que thickness.
   - `corners` ("sharp" | "rounded"; opcional, por defecto `"sharp"`): "sharp" (desfase afilado, por defecto) o "rounded" (desfase redondeado en las esquinas).
-- CLI: `omnicad call shell --doc pieza.omnicad body=… faces=… thickness=…`
+- CLI: `omnicad call shell --doc pieza.omnicad body=… faces=…`
 
 ### `remove_fillets`
 
@@ -3409,13 +3429,13 @@ Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. di
 - Parámetros:
   - `sketch` (texto; obligatorio): nombre/id del boceto con curvas abiertas.
   - `curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas; vacío = todas las no constructivas.
-  - `thickness` (número o expresión; opcional, por defecto `2`): grosor en mm.
+  - `thickness` (número o expresión; opcional, por defecto `""`): grosor en mm; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Rib).
   - `extension` ("to_next" | "depth"; opcional, por defecto `"to_next"`): to_next (hasta el siguiente cuerpo) o depth (profundidad).
   - `depth` (número o expresión; opcional, por defecto `10`): profundidad en mm con extension=depth.
   - `direction` ("symmetric" | "side1" | "side2"; opcional, por defecto `"symmetric"`): grosor symmetric, side1 (un lado, empieza abajo) o side2 (un lado, empieza arriba).
   - `reverse` (true/false; opcional, por defecto `false`): true invierte la dirección de crecimiento.
   - `target` (texto; opcional, por defecto `null`): nombre/id del cuerpo objetivo; vacío = el más cercano.
-  - `draft_angle` (número o expresión; opcional, por defecto `0`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fino en el borde libre), número o expresión.
+  - `draft_angle` (número o expresión; opcional, por defecto `""`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fino en el borde libre), número o expresión; vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle y lo usa Rib).
   - `pull_direction` (texto o objeto; opcional, por defecto `null`): plano, cara o eje que da la dirección de extracción; vacío = del cuerpo hacia la curva del nervio.
 - CLI: `omnicad call create_rib --doc pieza.omnicad sketch=…`
 
@@ -3427,14 +3447,14 @@ Crea una red de nervios perpendicular al plano del boceto. draft_angle afina la 
 - Parámetros:
   - `sketch` (texto; obligatorio): nombre/id del boceto con curvas abiertas.
   - `curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas; vacío = todas las no constructivas.
-  - `thickness` (número o expresión; opcional, por defecto `2`): grosor en mm.
+  - `thickness` (número o expresión; opcional, por defecto `""`): grosor en mm; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Web).
   - `extension` ("to_next" | "depth"; opcional, por defecto `"to_next"`): to_next (hasta el siguiente cuerpo) o depth (profundidad).
   - `depth` (número o expresión; opcional, por defecto `10`): profundidad en mm con extension=depth.
   - `direction` ("symmetric" | "side1" | "side2"; opcional, por defecto `"symmetric"`): grosor symmetric, side1 o side2.
   - `reverse` (true/false; opcional, por defecto `false`): true invierte el sentido de extrusión de la red (va a la otra pared del cuerpo).
   - `target` (texto; opcional, por defecto `null`): nombre/id del cuerpo objetivo; vacío = el más cercano.
-  - `draft_angle` (número o expresión; opcional, por defecto `0`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fina en el borde libre), número o expresión.
-  - `fillet_radius` (número o expresión; opcional, por defecto `0`): radio en mm del empalme entre la red y el cuerpo (0 = sin empalme), número o expresión.
+  - `draft_angle` (número o expresión; opcional, por defecto `""`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fina en el borde libre), número o expresión; vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle y lo usa Web).
+  - `fillet_radius` (número o expresión; opcional, por defecto `""`): radio en mm del empalme entre la red y el cuerpo (0 = sin empalme), número o expresión; vacío = el radio nominal de la regla (Fusion: la regla da Nominal Radius y lo usa Web).
   - `extend_curves` (true/false; opcional, por defecto `true`): true prolonga las curvas hasta el cuerpo; false deja la red del largo de las curvas.
 - CLI: `omnicad call create_web --doc pieza.omnicad sketch=…`
 
@@ -3643,7 +3663,7 @@ Da espesor a caras o cuerpos de superficie y crea un sólido.
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `faces` (texto o lista de texto; obligatorio): selector/ids de caras o nombres/ids de cuerpos de superficie, solos o en lista.
-  - `thickness` (número o expresión; opcional, por defecto `2`): grosor firmado en mm; negativo invierte el lado.
+  - `thickness` (número o expresión; opcional, por defecto `""`): grosor firmado en mm; negativo invierte el lado; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Thicken).
   - `direction` ("one_side" | "symmetric"; opcional, por defecto `"one_side"`): one_side (un lado) o symmetric (mitad a cada lado).
   - `thicken_type` ("sharp" | "rounded"; opcional, por defecto `"sharp"`): sharp (afilado) o rounded (redondeado).
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): new_body, join, cut o intersect.

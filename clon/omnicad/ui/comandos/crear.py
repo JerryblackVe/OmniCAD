@@ -11,6 +11,7 @@ from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpN
                                     OpSolidoEnvolvente, OpTuberia, OpVolumenFluido)
 from ...timeline import entidades as ent
 from ...timeline.ops_solido import TIPOS_REPETIBLES
+from ...timeline.operaciones import angulo_desmoldeo_plastico, espesor_plastico, radio_nominal_plastico
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, ListaSeleccion, LONGITUD, Opciones, OpcionesVivas, Personalizado,
                        Seleccion, Texto, exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
@@ -61,7 +62,7 @@ class Barrido(Comando):
                 Seleccion("cuerpos", "Cuerpo", {"cuerpo"}, maximo=None, visible_si=cuerpo,
                           ayuda="El volumen que recorre el cuerpo a lo largo de la ruta (aproximado con copias)."),
                 Seleccion("ruta", "Ruta", CURVA, maximo=None),
-                Casilla("cadena", "Selección de cadena", True, ayuda="Suma a cada arista de un cuerpo las que le siguen tangentes (las curvas de boceto se usan tal cual)."),
+                Casilla("cadena", "Selección de cadena", True, ayuda="Suma a cada arista de un cuerpo o curva de boceto las que le siguen tangentes."),
                 Seleccion("carril", "Rail guía", CURVA, maximo=None, visible_si=carril),
                 Seleccion("superficie_guia", "Superficie guía", {"cara"}, maximo=None, visible_si=superficie),
                 Expresion("distancia", "Distancia", "1", ESCALAR,
@@ -307,16 +308,18 @@ class _NervioRed(Comando):
                 Botones("direccion", "Dirección del espesor", {"simetrica": ("Simétrico", "esp_simetrico"),
                                                                "lado1": ("Un lado, desde abajo", "esp_lado1"),
                                                                "lado2": ("Un lado, desde arriba", "esp_lado2")}),
-                Expresion("espesor", "Grosor", "2 mm"),
+                Expresion("espesor", "Grosor", espesor_plastico(ctx.estado, (), "2 mm")),
                 Opciones("extension", "Tipo de extensión", {"hasta_siguiente": ("Al siguiente", "ext_siguiente"),
                                                             "profundidad": ("Distancia", "ext_distancia")}),
                 Expresion("profundidad", "Distancia", "10 mm",
                           visible_si=lambda v: v.get("extension") == "profundidad"),
                 Alternar("invertir", "Cambiar dirección", "cambiar_direccion"),
-                Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", "0 deg", ANGULO, avanzado=True),
+                Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", angulo_desmoldeo_plastico(ctx.estado), ANGULO,
+                          avanzado=True),
                 Seleccion("direccion_desmoldeo", "Dirección de extracción", {"plano", "cara_plana", "eje", "arista_lineal"},
                           minimo=0, visible_si=lambda v: nervio),
-                Expresion("radio_empalme", "Radio del empalme", "0 mm", visible_si=lambda v: red, avanzado=True),
+                Expresion("radio_empalme", "Radio del empalme", radio_nominal_plastico(ctx.estado),
+                          visible_si=lambda v: red, avanzado=True),
                 Casilla("extender", "Alargar curvas", True, visible_si=lambda v: red),
                 Seleccion("objetivo", "Cuerpo", {"cuerpo"}, minimo=0, ayuda="Sin selección: el más cercano.")]
 

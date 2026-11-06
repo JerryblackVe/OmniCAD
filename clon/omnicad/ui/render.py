@@ -1972,7 +1972,8 @@ class VentanaRender(QMainWindow):
 
     def _vista(self):
         """El lienzo muestra el diseño más lo que el panel Aspecto tiene editado sin escribir (vista previa)."""
-        props = ad.propiedades_con(self.doc, self.panel_aspecto.aspectos.diseno)
+        props = ad.propiedades_con(self.doc, self.panel_aspecto.aspectos.diseno,
+                                   self.panel_aspecto.aspectos.quitar_usos)
         self.lienzo.cargar(self.doc.estado_final, props)
         self.lienzo.config.lienzos = [(i, d) for i, d in calcomanias_vigentes(self.doc, self.doc.estado_final)
                                       if d.get("calcomania")]        # las imágenes de referencia no se renderizan
@@ -2060,7 +2061,8 @@ class VentanaRender(QMainWindow):
         `set_appearance` y `edit_appearance` (`timeline/aspectos_doc.py`), lo editado de «En este diseño» y, si hay, el
         aspecto `elegido` en los cuerpos y las caras."""
         with api.Sesion(self.doc).transaccion():
-            mapa = ad.aplicar_panel(self.doc, self.panel_aspecto.aspectos.diseno, elegido, cuerpos, caras)
+            mapa = ad.aplicar_panel(self.doc, self.panel_aspecto.aspectos.diseno, elegido, cuerpos, caras,
+                                    quitar_usos=self.panel_aspecto.aspectos.quitar_usos)
         self.panel_aspecto.sincronizar(mapa)
 
     def _confirmar_aspectos(self):

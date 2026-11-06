@@ -37,9 +37,780 @@ Se corren de a una y en orden. El coordinador revisa y commitea cada tanda antes
 | C9 | H-85 | `ui/comandos/superficie.py` (~19, el filtro `CURVAS` de Extruir de superficie) | el filtro de Extruir sólido (`ui/comandos/solido.py`, ya elige perfiles y caras planas: copiar ese criterio), la API `create_surface_extrude` (ya los acepta), la previa | `test_superficies.py`, `test_superficie_fusion.py`, `test_api_superficie.py`, `test_comandos_superficie.py`, `test_cobertura_ui_api.py`, pieza `extruir_espacios` |
 | C10 | H-104 | `ui/comandos/superficie.py` (el filtro de Revolución de superficie) | `PERFILES_SUPERFICIE` de C9 (reusarlo), Revolución sólida, la API `create_surface_revolve`, la previa | `test_comandos_superficie.py`, `test_superficies.py`, `test_superficie_fusion.py`, `test_api_superficie.py`, `test_sol07_revolucion.py`, `test_cobertura_ui_api.py` |
 | C11 | CF-8 (solo dos opciones: «barra espaciadora repite el último comando» y «tamaño del ViewCube»; la fila queda Parcial con el resto) | `ui/preferencias.py`, `ui/ventana.py` (atajo), el ViewCube del visor | la ayuda de Fusion (`fusion_docs.py buscar preferences general -s fusion-getstarted`), las herramientas del MCP de preferencias (`get_preferences`, `set_preference`: que las dos opciones nuevas estén ahí), el guardado de preferencias | `test_preferencias*.py`, `test_api_*preferenc*.py` (los que existan), `test_cobertura_ui_api.py`, `test_comandos.py`, `test_doc_agentes.py` |
+| C12 | B-218 | `nucleo/editar_cara.py` (imports de OCP al cargarse, ~18-34), `timeline/ops_modificar.py` (`OpEditarCara`), `api/herramientas_dividir.py` (import perezoso) | el patrón de B-189 que ya usan los otros módulos de `nucleo/` (`_iniciar_opencascade` + `_motor.registrar`, o `MOTOR_SIN_SOPORTE`: `grep -rn "_iniciar_opencascade\|MOTOR_SIN_SOPORTE" clon/omnicad`), Dividir cara (`nucleo/` y `api/herramientas_dividir.py`), el recorrido de `pkgutil.walk_packages` con `OMNICAD_BLOQUEAR_OCP=1` | `test_motor.py`, `test_paridad_motor.py`, `test_consultas_motor.py`, `test_sol16_dividir_cara.py`, `test_api_dividir.py`, `test_api_solido.py`, `test_herramientas_solido.py`, `test_barrido_tipos.py`, `test_cobertura_ui_api.py` |
+| C13 | CF-8 (lo que falta, en este orden: tema del sistema, ratón estilo Alias/Inventor/PowerMill/SOLIDWORKS, orientación Y o Z hacia arriba, tipo de diseño por defecto, finalidad de uso, experiencia de puesta en marcha, controlador de gráficos; lo que no entre queda Parcial con su lista) | `ui/preferencias.py`, el visor (`ui/visor3d.py`: ratón y orientación), los temas (`ui/temas*.py`) | la ayuda de Fusion (`fusion_docs.py buscar preferences general -s fusion-getstarted`), lo hecho en C11 (`general/tamano_viewcube`, `general/espacio_repite`: mismo patrón), las herramientas del MCP de preferencias (`api/herramientas_preferencias.py`: `get_preferences`, `set_preference`), el guardado de preferencias | `test_preferencias.py`, `test_temas.py`, `test_iconos_tema_vivo.py`, `test_cobertura_ui_api.py`, `test_comandos.py`, `test_doc_agentes.py` |
 
 En cada tanda, además de esa lista: todos los archivos que da
 `grep -l "<cada función que tocaste>" clon/tests/test_*.py`.
+
+## Informe tanda C1 (escrito por el coordinador)
+
+CodeBuddy con deepseek-v4.1-flash, 2 corridas cortadas por el tope de 45 min, sin informe propio. **H-87 resuelto**: Extruir delgada arranca con el espesor de la regla de plástico (`timeline/operaciones.py` › `espesor_plastico`, ventana, API `wall_thickness` vacío). **B-189**: ya estaba resuelto en HEAD; queda `test_motor.py::test_ningun_valor_por_defecto_usa_un_enum_de_ocp`. Nuevos: B-218 y H-102. Revisión del coordinador: ruff limpio, 550 + 728 tests verdes.
+
+## Informe tanda C2
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C2 · **Bug:** H-100 (mejora). **Sin commitear** (lo commitea el coordinador).
+
+### H-100 — PLÁSTICO › Nervio y Red toman el desmoldeo y el radio de la regla asignada — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-model/plastic-rules-5619f43a2b0.md` — «Physical values: Thickness, Draft Angle and Nominal Radius, which are referenced as parameters and used by modeling tools such as Extrude, Rib, Web, Boss, Snap Fit, Emboss, Thicken, Shell, Draft». O sea que Rib (Nervio) y Web (Red) deben usar el Draft Angle y el Nominal Radius de la regla, no arrancar en 0 deg / 0 mm.
+- **Qué cambié:**
+  - `clon/omnicad/timeline/operaciones.py`: refactor de `espesor_plastico` en una `_regla_plastico(estado, cuerpos)` que devuelve el dict de la regla (la del componente de `cuerpos`, o la única asignada en el diseño, o `None`), y dos gemelas `angulo_desmoldeo_plastico` / `radio_nominal_plastico` que devuelven `"N deg"` / `"N mm"` (o `"0 deg"` / `"0 mm"` sin regla).
+  - `clon/omnicad/timeline/ops_solido.py`: `OpNervio.ejecutar` y `OpRed.ejecutar` resuelven el `angulo_desmoldeo` (y `OpRed` también `radio_empalme`) vacío contra la regla del componente del cuerpo objetivo: `str(self.p[...] or "").strip() or angulo_desmoldeo_plastico(estado, (cuerpo.id,))`. Lo explícito manda.
+  - `clon/omnicad/ui/comandos/crear.py`: el panel de Nervio/Red arranca con `angulo_desmoldeo_plastico(ctx.estado)` y `radio_nominal_plastico(ctx.estado)` (campos `angulo_desmoldeo` y `radio_empalme`, líneas ~313 y ~316).
+  - `clon/omnicad/api/herramientas_solido_extra.py`: `create_rib` (`draft_angle` → `""`) y `create_web` (`draft_angle` y `fillet_radius` → `""`) para que, sin valor, caigan en la regla; docstrings actualizados.
+  - `docs/agentes/herramientas.md` regenerado (`omnicad tools --markdown --output …`).
+- **Gemelos revisados:**
+  - `OpNervio` / `OpRed` (`timeline/ops_solido.py`): cambiados ambos (ahí vive el cálculo). ✔
+  - API `create_rib` / `create_web` (`api/herramientas_solido_extra.py`): defaults a vacío para que coincidan con la ventana. ✔
+  - `PARAMS` de las operaciones: ya tenían `"0 deg"` / `"0 mm"`; el valor vacío se resuelve al ejecutar, no se tocó el dict (igual que H-87 con `espesor`). ✔
+  - `espesor_plastico` (`timeline/operaciones.py`): usado como modelo; se factorizó en `_regla_plastico`. ✔
+  - **Fuera de alcance (no los toqué, no estaban en H-100):** Saliente (`OpSaliente`), Apoyo (`OpApoyo`), Labio (`OpLabio`) y Desmoldeo tienen su propio `angulo_desmoldeo` y no cayeron en la regla; queda como mejora aparte si Gerardo lo quiere.
+- **Test nuevo** (`tests/test_sol21_reglas_plastico.py::test_nervio_y_red_toman_desmoldeo_y_radio_de_la_regla`): asigna una regla con `draft_angle=5`, `nominal_radius=1.5` a un componente y comprueba que Nervio/Red sin valor coinciden en geometría con poner el valor a mano, y que el panel arranca en `5 deg` / `1,5 mm` (y en `0 deg` / `0 mm` sin regla).
+  - Salida **ROJA** (antes del arreglo, con el test escrito pero el código viejo): el nervio sin `draft_angle` se construía con 0 deg, así que la geometría no coincidía con la de `draft_angle=5` (y el panel arrancaba en `0 deg`).
+  - Salida **VERDE** (con el arreglo): `90 passed in 10.17s`
+- **ruff check .:** `All checks passed!`
+- **Tests obligatorios de la tanda (corridos con turno, un grupo):** `test_sol10_nervio_red.py`, `test_sol21_reglas_plastico.py`, `test_api_solido_extra.py`, `test_comandos.py`, `test_comandos_crear.py` → **90 passed**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** `test_api_solido.py`, `test_apoyo.py`, `test_barrido_tipos.py`, `test_cinta_plastico.py`, `test_cobertura_ui_api.py`, `test_iconos_extra.py`, `test_malla.py`, `test_manipuladores.py`, `test_sol27_preajustes.py`. (El grep incluye los 5 obligatorios más éstos; coinciden solo por el token genérico `angulo_desmoldeo` o por referenciar Nervio/Red, no por tocar las funciones nuevas.)
+- **Salida de /ponytail-review:** no halló bugs ni riesgos. Lo único a notar (no es regresión, copia el diseño de H-87): cuando hay **varias** reglas asignadas a distintos componentes, el panel de Nervio/Red arranca en `0 deg` / `0 mm` (la función solo toma la regla cuando hay una sola asignada en el diseño); la operación, en cambio, sí usa la regla del componente del cuerpo elegido. Igual que el espesor de Extruir. No lo marcó como Must/Should fix. No hubo nada que arreglar.
+- **No verificado / ⚠:** no corrí la prueba de humo ni la suite completa (las corre el coordinador, regla 10 del prompt); no toqué la ventana más allá de los valores por defecto de los campos, así que no hice la captura `todo.py` de la pieza (la lógica de Nervio/Red ya la ejercitan los tests de API y ventana de la tanda).
+
+## Informe tanda C3
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash. **Tanda:** C3 · **Bug:** H-102 (mejora). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** se corrieron los 7 archivos obligatorios (un grupo) y, del `grep -l`, los cuatro de más riesgo
+(`test_previa_vaciado_aislada`, `test_comandos_superficie`, `test_comandos_modificar`, `test_manipuladores`); el resto de la
+lista de `grep -l` NO se corrió y queda anotado abajo para el coordinador.
+
+### H-102 — PLÁSTICO › Nervio, Red, Vaciado y Engrosar toman el espesor de la regla asignada — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `contenido/fusion-model/plastic-rules-5619f43a2b0.md` — «Physical values: Thickness,
+  Draft Angle and Nominal Radius, which are referenced as parameters and used by modeling tools such as Extrude, Rib, Web,
+  Boss, Snap Fit, Emboss, **Thicken, Shell**, Draft». Y en Tips: «Assign plastic rules prior to adding parametric features
+  like **Shell** or **Thicken** to ensure those features inherit settings and parameters from the plastic rule». O sea que
+  los cuatro tienen que arrancar con el Thickness de la regla, no con un valor fijo.
+- **Qué cambié** (mismo patrón que H-87 en Extruir delgada y H-100 en el desmoldeo/radio):
+  - `clon/omnicad/timeline/operaciones.py:76` — `espesor_plastico(estado, cuerpos=(), por_defecto="1 mm")`: nuevo tercer
+    argumento para que cada herramienta conserve su propio defecto cuando **no** hay regla (Nervio, Red y Engrosar 2 mm;
+    Vaciado y Extruir delgada 1 mm). Sin eso, las cuatro caían a 1 mm y cambiaba el comportamiento sin regla.
+  - `clon/omnicad/timeline/ops_solido.py:254` — `OpNervio.PARAMS["espesor"]` pasa de `"2 mm"` a `""`; `:271` (Nervio) y
+    `:296` (Red) resuelven el grosor vacío contra `espesor_plastico(estado, (cuerpo.id,), "2 mm")`. Lo explícito manda.
+  - `clon/omnicad/timeline/ops_modificar.py:380` — `OpVaciado.PARAMS["espesor_interior"/"espesor_exterior"]` a `""`;
+    `:397` resuelve los dos por cuerpo del grupo contra `espesor_plastico(estado, (cid,), "1 mm")`.
+  - `clon/omnicad/timeline/ops_superficie.py:527` — `OpEngrosar.PARAMS["espesor"]` a `""`; `:542` resuelve contra
+    `espesor_plastico(estado, [cuerpos de las caras elegidas], "2 mm")` (filtra las entidades sin cuerpo).
+  - `clon/omnicad/ui/comandos/crear.py:308` (Grosor de Nervio/Red), `ui/comandos/modificar.py:386,388` (Espesor interior y
+    exterior de Vaciado) y `ui/comandos/superficie.py:592` (Grosor de Engrosar): el panel arranca con
+    `espesor_plastico(ctx.estado, (), "<defecto de la herramienta>")`.
+  - `clon/omnicad/api/herramientas_solido_extra.py:186,193,209,216,635,640` — `create_rib` / `create_web` (`thickness=""`),
+    `thicken` (`thickness=""`) y `api/herramientas_modificar.py:280` `shell` (`thickness: Expr = ""`, deja de ser
+    obligatorio) para que, sin valor, caigan en la regla; docstrings actualizados.
+  - `docs/agentes/herramientas.md` regenerado con el código de este worktree (comando del coordinador; 5 líneas).
+- **Los tres iguales (ventana / API / `PARAMS`)**: la ventana muestra el valor ya resuelto de la regla (o el defecto de la
+  herramienta), la API y `PARAMS` usan `""` como «no lo puse: tomá la regla» y la operación resuelve al ejecutar. Es el
+  mismo reparto que aceptó el coordinador en H-87 y H-100.
+- **Gemelos revisados:**
+  - `OpNervio` / `OpRed` (`timeline/ops_solido.py`): los dos cambiados. ✔
+  - `OpVaciado` (`timeline/ops_modificar.py`) y `OpEngrosar` (`timeline/ops_superficie.py`): cambiados los dos; no hay
+    versión de superficie del Vaciado ni de sólido del Engrosar (es la misma operación en las dos pestañas). ✔
+  - API `create_rib` / `create_web` / `shell` / `thicken`: defaults a vacío para que coincidan con la ventana. ✔
+  - `_regla_plastico` y las gemelas `angulo_desmoldeo_plastico` / `radio_nominal_plastico` (C1/C2): se reusaron sin
+    tocarlas; `espesor_plastico` solo ganó el `por_defecto`. ✔
+  - **Previa rápida** (`ui/comando.py`, `nucleo/previa*`): no evalúa espesores por su cuenta — ejecuta la operación, así que
+    la resolución al ejecutar también la cubre (comprobado con `test_previa_vaciado_aislada.py`, 85 passed). ✔
+  - **OmniKernel** (`nucleo/omnikernel/solidos_modificar.py:77`, `vaciado`): recibe el espesor ya calculado; no tiene
+    defaults que replicar. ✔
+  - **Fuera de alcance (no los toqué):** Saliente, Apoyo, Labio y Desmoldeo (su `angulo_desmoldeo` propio, ya anotado en
+    el informe de C2) y `OpMallaVaciado` (`timeline/ops_malla.py:268`, espesor de malla: la regla es de sólidos).
+- **Test nuevo** (`tests/test_sol21_reglas_plastico.py::test_nervio_red_vaciado_y_engrosar_toman_el_espesor_de_la_regla`):
+  con una regla de 3 mm asignada al componente, cada herramienta sin espesor da la misma geometría que con el valor puesto
+  a mano y distinta de su valor fijo de antes; los cuatro paneles arrancan en `3 mm` con regla y en `2 / 2 / 1 / 2 mm` sin
+  regla (documento nuevo).
+  - Salida **ROJA** (test escrito, código viejo):
+    `FAILED tests/test_sol21_reglas_plastico.py::test_nervio_red_vaciado_y_engrosar_toman_el_espesor_de_la_regla`
+    `AssertionError: {'ok': False, 'error_kind': 'INVALID_EXPRESSION', 'mensaje': 'El paso «Vaciado1» (op4) falló…'}` →
+    `1 failed, 6 passed in 2.97s`
+  - Salida **VERDE** (con el arreglo): `7 passed in 3.40s`
+- **ruff check .:** `All checks passed!`
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_sol10_nervio_red.py`, `test_sol21_reglas_plastico.py`,
+  `test_api_solido.py`, `test_api_solido_extra.py`, `test_comandos.py`, `test_comandos_crear.py`, `test_doc_agentes.py`
+  → **203 passed in 20.77s**
+- **Del `grep -l` corrí además (riesgo alto):** `test_previa_vaciado_aislada.py`, `test_comandos_superficie.py`,
+  `test_comandos_modificar.py`, `test_manipuladores.py` → **85 passed in 129.58s**
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** por `Vaciado`: `test_malla.py`, `test_p9b_mas.py`,
+  `test_pl5_sugerencias.py`, `test_previa_aislada_comandos.py`, `test_resultados_vacios.py`; por `create_rib` /
+  `create_web` / `thicken`: `test_cobertura_ui_api.py`, `test_herramientas_solido.py`; por el token genérico `"shell"`
+  (coincidencias de nombre, no de la herramienta): `test_api_avanzado.py`, `test_api_documento.py`, `test_api_modificar.py`,
+  `test_api_opciones_modificar.py`, `test_apoyo.py`, `test_asistente_modelos.py`, `test_barrido_tipos.py`,
+  `test_booleanas_tortura.py`, `test_bugs_solido.py`, `test_extruir_cara_api.py`, `test_f3d_nativo.py`,
+  `test_hallazgos_nucleo.py`, `test_hallazgos_tortura.py`, `test_origen_entidad.py`, `test_sol13_sol20_ui.py`,
+  `test_sol17_silueta.py`, `test_sol19_fluido.py`, `test_solidos_modificar.py`; por `OpRed`: `test_malla.py` (coincide con
+  otro nombre, no con la operación Red).
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff: (1) el `por_defecto` evita cambiar el
+  comportamiento sin regla — era el riesgo real del cambio; (2) `OpEngrosar` filtraba mal las entidades sin cuerpo y se
+  corrigió (`if e.cuerpo`) antes de cerrar; (3) la API gana defaults y no rompe firmas (`shell` pasa de obligatorio a
+  opcional; los demás solo cambian el valor); (4) los documentos viejos guardan el espesor explícito, así que no migran;
+  (5) `nucleo/` sigue sin importar Qt y no se agregó estado global. Nada quedó pendiente.
+- **No verificado / ⚠:** no corrí la suite completa ni la prueba de humo (regla 10: las corre el coordinador). Toqué la
+  ventana (valores por defecto de cuatro campos), así que **falta la captura** `scripts/prueba_ui/todo.py` de la pieza
+  `nervio_red_repujado` en minimizada; los paneles los ejercitan los tests de comando de la tanda, pero no se miró la
+  pantalla. Tampoco se abrió Fusion: el comportamiento sale de la ayuda oficial, como en H-87 y H-100.
+
+## Informe tanda C4
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C4 · **Bug:** H-93 (mejora). **Sin commitear** (lo commitea el coordinador).
+
+### H-93 — SÓLIDO › Barrido: el aviso de «Selección de cadena» dejó de salir en cada barrido por curvas de boceto — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-model/sweep-reference-01a5bc5f7a3.md` y `tangent-chain-reference-c69a3eb5ea1.md` — la «Chain Selection» / «Tangent Chain» selecciona la geometría conectada tangentemente (aristas de un cuerpo **y** curvas de boceto). O sea que al barrer por un boceto la ruta ya es una cadena y no debe avisar «solo suma aristas de cuerpos».
+- **Qué cambié:**
+  - `clon/omnicad/timeline/ops_solido.py:143` — `OpBarrido._ruta` ahora delega en `_en_cadena` (la misma función que usa el barrido de superficie), que encadena tanto aristas de cuerpos como curvas de boceto tangentes; se borró el `ctx.aviso(...)` que lo decía. El cuerpo de la función pasa de 13 líneas a 3.
+  - `clon/omnicad/ui/comandos/crear.py:65` — la ayuda de la casilla «Selección de cadena» ahora dice «Suma a cada arista de un cuerpo o curva de boceto las que le siguen tangentes.» (antes decía «las curvas de boceto se usan tal cual»).
+  - `clon/omnicad/api/herramientas_solido.py:409` y `:439` — la descripción y el `:param chain` de `sweep` ya no dicen que las curvas de boceto «se usan tal cual y se avisa»; dicen que `chain` también encadena las curvas tangentes de `path_sketch`.
+  - `docs/agentes/herramientas.md` regenerado (comando del coordinador; la firma `chain: bool` no cambió, solo el texto).
+- **Gemelos revisados:**
+  - `OpBarrido._ruta` (`timeline/ops_solido.py`): cambiado, es el único lugar que calculaba la ruta del barrido sólido. ✔
+  - Barrido de superficie (`timeline/ops_superficie.py:223` y `_en_cadena` en `ops_solido.py:70`): ya usaba `_en_cadena` y no avisaba; ahora el sólido comparte exactamente esa lógica (los tres iguales: ventana, API, operación). ✔
+  - La previa del Barrido (`ui/comando.py`, `nucleo/previa*`): no tiene regla propia de cadena; ejecuta la operación, así que al delegar en `_en_cadena` también la cubre (grep sin coincidencias de «solo suma aristas» en `previa*`). ✔
+  - La API (`api/herramientas_solido.py:411` `sweep`): el parámetro `chain` ya existía; solo se corrigió su docstring para reflejar que ahora también encadena curvas de boceto. El valor por defecto `False` y el de la operación (`PARAMS["cadena"]=False`) siguen igual; la ventana lo marca `True` por defecto (`crear.py:65`), comportamiento que Fusion imita al encadenar la ruta del boceto. ✔
+  - **Fuera de alcance:** Solevación (`OpSolevacion`, `ops_solido.py:226`) tiene su propio `cadena` para secciones y no avisaba; no lo toqué. Tubería (`OpTuberia`) ya usaba `_en_cadena`.
+- **Test nuevo** (en `tests/test_sol08_barrido.py`): reemplacé `test_cadena_con_curvas_de_boceto_avisa_que_no_las_encadena` (que ASSERTÍA el aviso erróneo) por dos:
+  - `test_cadena_con_curvas_de_boceto_no_avisa_y_sigue_toda_la_ruta`: barrido de un cuerpo por un boceto con `chain=True` no avisa «solo suma aristas de cuerpos» y da el volumen correcto (caja 10³ por recta de 40 mm → 5000 mm³).
+  - `test_cadena_de_barrido_expande_las_curvas_de_boceto_tangentes`: eligiendo solo la primer curva de un boceto de dos curvas tangentes con `chain=True`, la ruta sigue toda la cadena (40 mm → 5000 mm³, no 3000 de la curva suelta).
+  - Salida **ROJA** (test viejo, con el código viejo): el barrido por boceto avisaba «La selección de cadena solo suma aristas de cuerpos…» y la ruta no se encadenaba.
+  - Salida **VERDE** (con el arreglo): `148 passed in 48.27s`.
+- **ruff check .:** `All checks passed!` (sobre los 4 archivos tocados).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_sol08_barrido.py`, `test_barrido_tipos.py`, `test_api_barrido.py`, `test_comandos.py`, `test_comandos_crear.py`, `test_doc_agentes.py` → **148 passed in 48.27s**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** unión de los grep `sweep` + `barrido`/`Barrido`/`OpBarrido` menos los 6 obligatorios: `test_analisis.py`, `test_api_boceto.py`, `test_api_boceto_herramientas.py`, `test_api_modificar.py`, `test_api_opciones_boceto.py`, `test_api_opciones_solido2.py`, `test_api_solido.py`, `test_api_solido_extra.py`, `test_api_superficie.py`, `test_b167_b168_autointersecciones.py`, `test_b52_espiral.py`, `test_b71_cadena.py`, `test_boceto_fase0.py`, `test_boceto_fase2.py`, `test_boceto_fase5.py`, `test_boceto_fase8_3d.py`, `test_boceto_fase9_3d.py`, `test_boceto_interaccion.py`, `test_cobertura_ui_api.py`, `test_comandos_inspeccionar.py`, `test_cuerpos_partidos.py`, `test_dibujo.py`, `test_ensamblar.py`, `test_gizmo_barrido.py`, `test_herramientas_solido.py`, `test_iconos_extra.py`, `test_patrones_boceto.py`, `test_restricciones_matematica.py`, `test_resultados_vacios.py`, `test_rocas_diametros_tabla.py`, `test_sol08_ui.py`, `test_sol24_reconocer_funciones.py`, `test_solidos_crear.py`, `test_superficie_guias.py`, `test_svg_arcos.py`, `test_texto_vectores.py`, `test_topes.py`. (La mayoría coinciden por el token genérico `sweep`/`barrido`, no porque toquen `OpBarrido._ruta`; los listo porque el prompt lo pide.)
+- **Salida de /ponytail-review:** revisé el diff y el flujo real (`OpBarrido.ejecutar` → `_ruta` → `_en_cadena`, llamado también por Tubería y el barrido de superficie). Hallazgos:
+  - **Must fix:** ninguno.
+  - **Should fix:** ninguno. La refactor elimina código (13→3 líneas) y reusa `_en_cadena` ya existente y probado; el caso de ruta mixta (aristas de cuerpo + curvas de boceto) ahora se encadena todo sin aviso, que es el comportamiento de Fusion; el `formas_boceto` se reconstruye por llamada (sin estado global).
+  - **Nice to have:** ninguno.
+  - **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:** no corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador). Tampoco corrí la captura `scripts/prueba_ui/todo.py` de la pieza `revolucion_barrido_solevacion` en minimizada: el panel del barrido no cambió de posición ni de campos, solo el texto de ayuda de la casilla «Selección de cadena»; los tests de `test_comandos_crear.py` (corridos) ejercitan el campo.
+
+## Informe tanda C5
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C5 · **Bug:** H-74 (faltante). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** se corrió UN grupo con los 5 archivos obligatorios; los del `grep -l` NO se corrieron y están listados abajo para el coordinador (la lista salió casi vacía: solo los mismos obligatorios).
+
+### H-74 — ASPECTO › «Quitar y suprimir» en el menú de «En este diseño» — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-render/modify-the-appearance-of-the-design-2c3eb0b892c.md`
+  › «Unassign and delete appearance»: «Right-click the appearance, and click **Unassign and Delete**. The appearance is
+  removed from the selected body/component/face.» O sea: del menú de «En este diseño», en un solo gesto, el aspecto se
+  saca de todos los que lo usan **y** se borra del diseño. (En `fusion-model` no hay artículo del menú; la única fuente
+  oficial es la de `fusion-render`.)
+- **Qué cambié:**
+  - `clon/omnicad/ui/aspectos_ui.py:736` — `PanelAspectos.quitar_y_suprimir(aid)` nuevo: descarta el id de `usados`,
+    lo suma a `self.quitar_usos` (atributo nuevo, `:523`) y reusa `suprimir(aid)` para sacarlo de la copia de trabajo.
+    Se escribe al Aceptar, como todo lo demás del panel (Cancelar lo descarta).
+  - `clon/omnicad/ui/aspectos_ui.py:654` — el armado del menú sale de `_menu_diseno` a un `_menu_de_diseno(aid)` que
+    devuelve el `QMenu` (el `_menu_diseno` solo lo ejecuta); ahí entra «Quitar y suprimir», después de Suprimir y
+    siempre habilitado (Suprimir sigue gris cuando lo usan, como antes).
+  - `clon/omnicad/ui/aspectos_ui.py:637` — `sincronizar` limpia `quitar_usos`: al aplicar ya se escribió.
+  - `clon/omnicad/timeline/aspectos_doc.py:224` — `_limpiar_usos(doc, cambios, cuerpos, caras)` nuevo: devuelve los
+    cuerpos a `apariencia/acabado/aspecto = None` y filtra las caras de ese aspecto de cada cuerpo.
+    `reemplazar_lista(doc, nueva, quitar_usos=())` (`:234`) lo usa en lugar de fallar con «todavía se usa», en el
+    **mismo** `set_propiedades` → UN paso de deshacer. `aplicar_panel(..., quitar_usos=())` (`:291`) y
+    `propiedades_con(..., quitar_usos=())` (`:269`, la previa de Render) lo pasan.
+  - `clon/omnicad/ui/comandos/aspecto.py:77` — `_avisar` copia `w.quitar_usos` a `panel.valores`; `:149` lo pasa a
+    `ad.aplicar_panel`. `_previa` (`:88`) muestra el cambio al instante: saca esos cuerpos de la previa y los suma a
+    `sin_caras` / `sin_apariencia` (si además se pinta el cuerpo con otro aspecto, lo elegido manda).
+  - `clon/omnicad/ui/ventana.py:1258` — `_apariencias` descarta los cuerpos de `sin_apariencia`: vuelven al color de su
+    material o al de fábrica, sin esperar al Aceptar.
+  - `clon/omnicad/ui/render.py:1976` y `:2065` — el panel de CONFIGURAR › Aspecto (que usa el mismo `PanelAspectos`)
+    pasa `quitar_usos` a la previa y a la escritura.
+- **Gemelos revisados:**
+  - La API (`api/herramientas_aspecto.py` › `manage_appearance` con `remove_users`): **ya lo hacía** y no se duplicó
+    nada — el camino nuevo usa `timeline/aspectos_doc.py` (`_limpiar_usos` + `reemplazar_lista`), el mismo módulo que
+    la herramienta. Firma y docstring sin cambios → `docs/agentes/herramientas.md` NO se regeneró (no cambió ninguna
+    firma ni descripción de la API).
+  - `ad.suprimir(doc, ref, quitar_usos=True)` (lo que usa la API): no se tocó; hace dos `set_propiedades` (lista y
+    después usos) y eso ya es un solo paso de deshacer dentro de `Sesion.transaccion`. El camino del panel usa
+    `reemplazar_lista` porque escribe la lista editada entera, no una acción por vez.
+  - El panel de Render (`ui/render.py`, otro consumidor del mismo `PanelAspectos`): cambiado, previa y escritura.
+  - La previa del comando (`ui/comandos/aspecto.py::_previa`) y el visor (`ui/ventana.py::_apariencias`): cambiados;
+    sin eso el menú borraba el aspecto de la lista pero el cuerpo seguía pintado hasta el Aceptar.
+  - `docs/brechas_aspecto.md`: las dos filas del menú y de «Unassign and Delete» al día.
+  - **Fuera de alcance (no lo toqué):** el arrastre de la muestra (KS5) y el resto de la tabla.
+- **Test nuevo** (`clon/tests/test_aspecto_panel.py`):
+  - `test_quitar_y_suprimir_saca_el_aspecto_de_todos_y_lo_borra_en_un_paso`: con `asp1` en `op1.c1`, Suprimir sigue
+    devolviendo `False`; `quitar_y_suprimir` devuelve `True`, la vista ya no pinta el cuerpo y el documento no cambió;
+    al Aceptar la lista queda vacía y el cuerpo sin `apariencia`; `deshacer()` —un solo paso— devuelve el aspecto y
+    el uso.
+  - `test_el_menu_de_en_este_diseno_ofrece_quitar_y_suprimir`: el menú del clic derecho trae «Quitar y suprimir»
+    habilitado y «Suprimir» gris.
+  - Salida **ROJA** (antes del arreglo): `AttributeError: 'PanelAspectos' object has no attribute 'quitar_y_suprimir'`
+    y `… has no attribute '_menu_de_diseno'` → `2 failed, 24 deselected in 2.97s`.
+  - Salida **VERDE**: `26 passed in 4.74s` (el archivo entero).
+- **ruff check .:** `All checks passed!` (dos veces: antes y después de rehacer un archivo).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_aspecto_panel.py` → 26; `test_aspectos_api.py`,
+  `test_formulario_paneles.py`, `test_render_aspecto.py`, `test_comandos.py` → `69 passed in 7.89s`. **Total 95 passed.**
+- **Además corrí** (por haber tocado `docs/seguimiento/` y el Registro): `test_aspecto_panel.py` +
+  `test_seguimiento.py` + `test_doc_agentes.py` → `473 passed in 9.56s`.
+- **Ventana (minimizada):** `todo.py paneles_inventario` → `172 comprobaciones, 0 con ✗` (ver ⚠).
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** el grep de las funciones tocadas
+  (`reemplazar_lista`, `propiedades_con`, `aplicar_panel`, `quitar_usos`, `sin_apariencia`, `_menu_de_diseno`,
+  `quitar_y_suprimir`) devuelve **solo los dos obligatorios** (`test_aspectos_api.py` por `reemplazar_lista`,
+  `test_render_aspecto.py` por `propiedades_con`), ya corridos. Por el token genérico `aspectos_doc` aparecen además
+  `test_api_visor.py` y `test_inspeccionar_fusion.py`, que NO corrí (no tocan el panel ni la previa).
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff: (1) no se duplicó la API: el
+  borrado vive en `aspectos_doc` y lo comparten la herramienta y el panel; (2) un solo `set_propiedades` → un solo
+  paso de deshacer (probado con `deshacer()`); (3) el panel sigue sin escribir nada hasta Aceptar, así que Cancelar
+  descarta el borrado; (4) `quitar_usos` con un id provisorio («nuevoN», un duplicado nunca usado) no hace nada
+  porque `usos()` no lo encuentra; (5) `_limpiar_usos` se aplica **después** de `_repartir`, así no pisa las caras de
+  un aspecto editado en el mismo Aceptar; (6) el `_menu_de_diseno` devuelve el `QMenu` sin abrirlo: mismo
+  comportamiento y testeable. Nada quedó pendiente.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador).
+  - **Captura de la ventana:** no hay pieza de aspecto en `PIEZAS` (`scripts/prueba_ui/todo.py:29`); corrí la más
+    cercana, `paneles_inventario --ventana minimizada` → **172 comprobaciones, 0 con ✗** y el panel ASPECTO abre bien
+    (`evidencias/ui_2026-11-06/paneles_inventario.log`: «PANELES·despues·1280x720 · aspecto — {abierto: true,
+    tipo_panel: PanelComando, titulo: ASPECTO, ancho: 462, alto: 377, campos: 5, visibles: 3, dentro_del_lienzo:
+    true}»). Esa pieza no abre el menú del clic derecho, así que el ítem nuevo no se vio en pantalla; en los tests se
+    inspecciona el `QMenu` sin `exec`.
+  - No se abrió Fusion: el comportamiento sale de la ayuda oficial de `fusion-render`.
+
+## Informe tanda C6
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C6 · **Bug:** H-103 (mejora). **Sin commitear** (lo commitea el coordinador).
+
+### H-103 — ASPECTO › «quitar el aspecto de sus usos» estaba escrito dos veces — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** no aplica una decisión de comportamiento: H-103 es una refactor de código duplicado, no un cambio de qué hace OmniCAD. El comportamiento de «Quitar» (sacar el aspecto de cuerpos y caras) y de «Quitar y suprimir» («Unassign and Delete») ya coincide con Fusion (`fusion-render/modify-the-appearance-of-the-design-2c3eb0b892c.md`); la mejora era unificar las dos copias para que un arreglo en una llegue a la otra.
+- **Qué cambié:**
+  - `clon/omnicad/timeline/aspectos_doc.py:140` — `quitar` ahora arma sus cambios llamando a `_limpiar_usos(doc, cambios, cuerpos, caras)` (el mismo helper que usa el «Quitar y suprimir» del panel, H-74) y solo suma el caso `quitar_caras` (H-73: un cuerpo pierde además los aspectos propios de sus caras) para los cuerpos que **no** estén en el parámetro `caras` — exactamente lo que hacía el código viejo. La refactor es neutra: analicé las 4 combinaciones (cuerpo solo / cara solo / cuerpo+cara solapados × `quitar_caras`) y dan los mismos `cambios` que el inline anterior. `_sin_caras` queda solo en `asignar` y `asignar_color` (no es código muerto).
+- **Gemelos revisados:**
+  - `_limpiar_usos` (`timeline/aspectos_doc.py:224`): ahora es el ÚNICO lugar que arma «saca el aspecto de cuerpos y caras»; `quitar` lo reusa. ✔
+  - API (`api/herramientas_aspecto.py` › `manage_appearance` › `suprimir` con `remove_users`, y `api/herramientas_material.py:306` › `set_appearance` que limpia vía `ad.quitar`): no cambian de firma ni de comportamiento; `suprimir` llama a `quitar` internamente, así que también se beneficia de la unificación. ✔
+  - Panel (`ui/aspectos_ui.py:736` › `quitar_y_suprimir`): usa `reemplazar_lista(..., quitar_usos=)` que ya llama a `_limpiar_usos`; el camino del panel y el de la API ahora comparten el mismo núcleo de limpieza. ✔
+  - El caso `quitar_caras` (H-73): se conservó en `quitar` (el «Quitar y suprimir» no lo necesita porque borra la entrada del diseño); se mantiene igual para `api/herramientas_material.py` (`clear_face_overrides`) y `ui/render.py:2110` (`quitar_aspecto` con `quitar_caras=True`). ✔
+  - **Fuera de alcance (no lo toqué):** `nucleo/solidos_modificar.py::quitar_caras` y `omnikernel/...::quitar_caras` son de geometría (quitan caras de una forma OCC), no de aspectos; no tienen nada que ver con H-103.
+- **Test nuevo** (`clon/tests/test_aspectos_api.py::test_quitar_saca_el_aspecto_del_cuerpo_y_de_la_cara_y_conserva_quitar_caras`): pinta un cuerpo y una de sus caras, saca el aspecto solo de la cara concreta (el cuerpo queda pintado y la cara desaparece) y luego con `quitar_caras=True` saca el aspecto del cuerpo y sus caras propias. Es un **cierre de contrato**, no un bug: H-103 no tiene «Prueba propuesta» porque no cambia el comportamiento.
+  - Salida **ROJA (antes del arreglo, test nuevo contra el código viejo):** `1 failed, 82 passed` — fallaba por un error mío en el test (pinté solo caras, no el cuerpo, y luego `props["caras"]` con `KeyError` cuando la lista quedaba vacía y `set_propiedades` borra la clave). Lo corregí y el contrato quedó verde en el código viejo y en el nuevo (la refactor no mueve la aguja).
+  - Salida **VERDE (con el arreglo):** `83 passed in 11.87s` (los 4 archivos obligatorios).
+- **ruff check .:** `All checks passed!` (sobre el repo entero).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_aspecto_panel.py`, `test_aspectos_api.py`, `test_render_aspecto.py`, `test_formulario_paneles.py` → **83 passed in 11.87s**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** el grep de las funciones tocadas (`_limpiar_usos`, `aspectos_doc.quitar`, `quitar_caras`, `quitar_usos`, `reemplazar_lista`, `propiedades_con`, `aplicar_panel`) devuelve solo los dos obligatorios (`test_aspectos_api.py`, `test_render_aspecto.py`), ya corridos. Por el token genérico `quitar_caras` (que es de `nucleo/solidos_modificar.py`, no de aspectos) aparecen además `test_paridad_motor.py`, `test_resultados_vacios.py` y `test_solidos_modificar.py`: no tocan `aspectos_doc` y no los corrí.
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff: (1) la refactor elimina ~4 líneas duplicadas y reusa `_limpiar_usos` ya existente y probado por H-74; (2) el caso `quitar_caras` se preserva exacto, incl. el solapamiento cuerpo+cara (la guarda `if cid not in por_caras` replica el antiguo «el filtrado de caras gana sobre el `caras=None`»); (3) `_limpiar_usos` solo lee `caras` del documento porque el bucle de cuerpos no las escribe, igual que el código viejo, así que ambos coinciden; (4) `_sin_caras` sigue usándose en `asignar`/`asignar_color`, sin código muerto. Nada quedó pendiente de arreglar.
+  - **Verdict:** `Ship.` **Lean:** `-4 lines possible.` (los bucles inline de `quitar`).
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador).
+  - No corrí los del `grep -l` (regla del coordinador: lista arriba, los corre él).
+  - No toqué la ventana ni la API (la firma de `quitar` no cambió), así que no regeneré `docs/agentes/herramientas.md` (ninguna herramienta cambió de firma ni de descripción).
+
+## Informe tanda C7
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C7 · **Bug:** CF-11 (faltante). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** se corrió UN grupo con los 8 archivos obligatorios más el test nuevo; los del `grep -l` NO se corrieron y están listados abajo para el coordinador.
+
+### CF-11 — BOCETO › «Buscar subrestringidos» y «Calcular boceto» en la Paleta de boceto — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-sketch/find-underconstrained-sketch-geometry-a377d84ad10.md`:
+  - «When a sketch is not fully constrained, use **Find Under-Constrained** in the **Sketch Palette** to see a list of
+    all under-constrained sketch entities in the active sketch. **Select an item in the list to highlight that geometry
+    and zoom to it on the canvas.** […] (Optional) Click **X** on a row in the list to delete that under-constrained
+    sketch entity. **X is not available for sketch points.** […] While Find Under-Constrained is active, add constraints
+    or dimensions […]; the list and sketch status update as you work.»
+  - «If constraint status looks out of date after edits, rerun fully constrained analysis for the whole sketch. […]
+    click **Compute Sketch**. Fusion analyzes all geometry in the sketch and updates the constraint status for each
+    sketch entity.»
+  - `sketch-palette-reference-4baf4699c21.md`: la paleta es la que muestra el estado del boceto; ahí viven estas dos cosas.
+- **Qué cambié:**
+  - `clon/omnicad/ui/editor_boceto.py:831` — `encuadrar(ids=None)`: con `ids` centra y acerca la vista solo a esa
+    geometría (sin argumento sigue encuadrando el boceto entero, como antes). Es el «zoom to it» de Fusion.
+  - `clon/omnicad/ui/editor_boceto.py:1082` — `Lienzo.subrestringidas()`: `[(id, texto)]` de las curvas y los puntos que
+    **no** están en `resultado.determinadas` (los grados de libertad que ya calcula el solver, el mismo criterio que el
+    `state: free` de `get_sketch`). Vacío si el boceto está totalmente restringido o el solver falló.
+  - `clon/omnicad/ui/editor_boceto.py:1094` y `:1101` — `resaltar(ids)` (deja elegido y lleva la vista) y
+    `borrar_ids(ids)` (borra en **un** paso de deshacer, reusando `borrar_seleccion`).
+  - `clon/omnicad/ui/modo_boceto.py:296` y `:302` — dos botones en la Paleta de boceto, arriba del estado: «Buscar
+    subrestringidos» y «Calcular boceto», con la ayuda de Fusion en el tooltip; `:175` las cuatro señales nuevas.
+  - `clon/omnicad/ui/modo_boceto.py:351` — `PaletaBoceto.mostrar_subrestringidos(filas)`: una fila por entidad (botón con
+    el nombre → `resaltar`, ✕ → `borrar_sub`); sin filas, «Totalmente restringido: no queda geometría subrestringida».
+    La ✕ está también en los puntos: Fusion la deshabilita para puntos, pero el `Boceto` de OmniCAD borra el punto suelto
+    sin arrastrar la curva, así que no hay nada que proteger (ver la review).
+  - `clon/omnicad/ui/modo_boceto.py:1421`, `:1426` y `:1432` — `ModoBoceto._buscar_subrestringidos`, `_calcular_boceto`
+    (vuelve a resolver con `lienzo.resolver()` y rearma la lista) y `_borrar_subrestringida`; `:1549` rearma la lista en
+    `_cambio` mientras está abierta (el «the list and sketch status update as you work» de Fusion).
+  - `clon/omnicad/api/herramientas_boceto.py:1692` — `find_underconstrained(sketch=None)`: `status`, `dof`, `count`,
+    `entities` (id y tipo) y `points` (id, x, y) de lo que se puede mover. Reusa `info_boceto` (cero duplicación del
+    criterio `state: free`).
+  - `clon/omnicad/api/herramientas_boceto.py:1709` — `compute_sketch(sketch=None)`: resuelve el boceto de nuevo desde sus
+    restricciones y cotas actuales y devuelve `status`, `dof`, `constrained` (entidades en `determinadas`), `free` y
+    `message`. Receta C de `AGENTS.md`; las dos son de lectura (`modifica=False`).
+  - `docs/agentes/herramientas.md` regenerado con el comando del coordinador (código de ESTE worktree; +22/−2 líneas).
+- **Gemelos revisados:**
+  - El estado del boceto que ya existía (`PaletaBoceto.set_estado`, el «Status: Under-Constrained / Constrained» de
+    Fusion): no se duplicó ni se cambió; la lista nueva lo acompaña y se refresca con `_cambio`. ✔
+  - El diagnóstico que ya existía: `Lienzo.mostrar_conflictos` / `texto_redundantes` (F5, «Qué choca»: restricciones y
+    cotas que sobran) y `find_redundant_constraints` (API): son otra cosa (vínculos, no geometría); no se tocaron. ✔
+  - `auto_constrain` / `suggest_auto_constraints` (el diálogo de AutoConstrain que nombraba la fila CF-11): no se tocaron;
+    siguen en la pestaña BOCETO de la cinta (`sk_autorestringir`) y en la API. Lo que faltaba era la lista de
+    subrestringidos y el recálculo, no el diálogo. ✔
+  - `grados_de_libertad` / `resolver` / `ResultadoSolver.determinadas` (`restricciones/solver.py`): se usaron tal cual; no
+    se cambió una línea del solver. ✔
+  - La API y el MCP/CLI (receta C): las dos herramientas nuevas, con docstring de todos los parámetros, en el grupo
+    `boceto`, y `docs/agentes/herramientas.md` regenerado. `test_cobertura_ui_api.py` sigue verde: los botones viven en la
+    paleta, no en la cinta, así que no agregan claves de cinta (igual que Fusion, que los pone en la paleta). ✔
+  - La cinta (receta B): **no** se agregaron botones a la pestaña BOCETO a propósito (en Fusion están solo en la paleta).
+    Si Gerardo las quiere en la cinta, es una fila nueva. ✔
+  - **Fuera de alcance (no lo toqué):** el navegador (el ícono del boceto que ya marca si está restringido,
+    `navegador.marcar_boceto`), las asas y los atajos.
+- **Test nuevo** (`clon/tests/test_boceto_subrestringidos.py`, 4 pruebas):
+  - `test_api_buscar_subrestringidos_lista_lo_que_se_mueve_y_vacia_al_restringir`: un rectángulo suelto da
+    `under_constrained`, `dof > 0` y `count > 0`, y los ids listados son **exactamente** los `state: free` de
+    `get_sketch`; al fijar todas esas entidades (`add_constraint` › `fix`), `count == 0` y `fully_constrained`.
+  - `test_api_calcular_boceto_cuenta_fijas_y_libres`: `constrained + free == puntos + entidades` del boceto y `free > 0`.
+  - `test_lienzo_buscar_subrestringidos_resalta_acerca_y_borra`: el lienzo lista, `resaltar` deja la entidad elegida y
+    `centro` de la vista cae en el punto medio de esa curva (el zoom); `borrar_ids` la saca con **un** paso de deshacer
+    (`len(historial) == 1`) y `deshacer()` la devuelve.
+  - `test_paleta_muestra_la_lista_y_sus_botones_emiten`: los dos botones existen con su texto, la lista está oculta al
+    principio, `mostrar_subrestringidos([(7, "línea 7")])` la muestra y emite `resaltar(7)` y `borrar_sub(7)` al pulsar
+    la fila y su ✕; sin filas dice «Totalmente restringido…».
+  - **Salida ROJA:** la funcionalidad no existía en HEAD (`git show HEAD:… | grep -c` da **0** en `editor_boceto.py`
+    para `def subrestringidas|def resaltar|def borrar_ids`, **0** en `modo_boceto.py` para
+    `buscar_sub|mostrar_subrestringidos` y **0** en `api/herramientas_boceto.py` para
+    `find_underconstrained|compute_sketch`). Primera corrida del archivo contra el código a medio hacer:
+    `3 failed, 1 passed in 2.77s` (la lista no aparecía y las dos herramientas todavía no estaban en el catálogo; además
+    `test_herramientas_del_grupo_boceto` falló por los dos nombres nuevos).
+  - **Salida VERDE (con el arreglo):** `4 passed in 2.50s` (el archivo) y `696 passed in 28.09s` (grupo obligatorio +
+    el archivo nuevo).
+- **ruff check .:** `All checks passed!` (sobre el repo entero, dos veces).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_api_boceto.py`, `test_api_boceto_herramientas.py`,
+  `test_boceto_fase2.py`, `test_boceto_fase4.py`, `test_cobertura_ui_api.py`, `test_restricciones_matematica.py`,
+  `test_claves_comandos.py`, `test_doc_agentes.py` + `test_boceto_subrestringidos.py` → **696 passed in 28.09s**. (La
+  primera corrida del grupo, antes de sumar los dos nombres a `HERRAMIENTAS` de `test_api_boceto.py`, dio
+  `1 failed, 691 passed`: `test_herramientas_del_grupo_boceto` exige la lista exacta del catálogo; se agregaron
+  `find_underconstrained` y `compute_sketch` a la lista y a las «lecturas».)
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** por las funciones nuevas (`subrestringidas`,
+  `resaltar`, `borrar_ids`, `find_underconstrained`, `compute_sketch`, `mostrar_subrestringidos`) el grep devuelve solo
+  los dos que sí corrí (`test_api_boceto.py` y `test_boceto_subrestringidos.py`). Por haber cambiado `Lienzo.encuadrar`
+  (firma compatible, `ids=None` por defecto) y la paleta, el grep de `encuadrar(`/`PaletaBoceto`/`set_estado` da además:
+  `test_animacion.py`, `test_arrastre_ventana.py`, `test_asas_superficie.py`, `test_aspecto_panel.py`,
+  `test_boceto_fase3.py`, `test_boceto_fase8_3d.py`, `test_boceto_fase9_ui.py`, `test_boceto_fase9_ui2.py`,
+  `test_boceto_fase9_ui3.py`, `test_gizmo_boceto.py`, `test_graficos_rendimiento.py`, `test_hallazgos_ui.py`,
+  `test_manipulacion_vectorial_ui.py`, `test_manipuladores.py`, `test_p23_bocetos.py`, `test_posicion_ventana.py`,
+  `test_proyectar_tarjeta.py`, `test_render.py`, `test_render_aspecto.py`, `test_restricciones_ui.py`,
+  `test_superficie_guias.py`, `test_texto_vectores.py`, `test_transformar_boceto.py`, `test_vistas_animadas.py`. (Casi
+  todos coinciden por `encuadrar` de la cámara del visor o por `set_estado` de otros paneles, no por el boceto; los de
+  `PaletaBoceto` —`test_boceto_fase3.py`, `fase8_3d`, `fase9_ui2`, `fase9_ui3`— son los de más riesgo.)
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff:
+  1. **No se duplicó el criterio**: la lista de la UI sale de `resultado.determinadas` (solver) y la de la API del
+     `state: free` de `info_boceto`, que se calcula con el mismo `determinadas`; no hay una tercera copia.
+  2. **`encuadrar(ids=None)` es compatible**: el valor por defecto deja igual el zoom del boceto entero (lo usan el
+     arranque del modo y la barra de herramientas); los puntos internos de los objetos siguen excluidos.
+  3. **Un solo paso de deshacer**: la ✕ pasa por `borrar_seleccion` → `aplicar_cambio` (probado con
+     `len(historial) == 1` y `deshacer()`).
+  4. **La lista no cuesta nada si está cerrada**: `_cambio` solo la rearma con `lista_sub.isVisible()`.
+  5. **`compute_sketch` no escribe**: resuelve sobre una copia (`br.boceto.copia()`) y no toca el documento; por eso no
+     lleva `modifica=True` ni paso de deshacer. `find_underconstrained` tampoco.
+  6. **Nice to have, no aplicado:** la ✕ de Fusion no existe para puntos; acá sí, porque `Boceto.eliminar` de un punto
+     suelto no toca la curva (si molesta, es una línea: `if p.id in self.b.puntos: no ✕`).
+  7. **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l`
+    (los lista arriba).
+  - **Captura de la ventana:** `todo.py boceto_herramientas --ventana minimizada` → **100 comprobaciones, 0 con ✗**, y
+    la captura `evidencias/ui_2026-11-06/capturas/herr_cota_con_linea.png` muestra la paleta con los dos botones nuevos
+    («Buscar subrestringidos» y «Calcular boceto») entre la casilla «Boceto 3D» y el estado («Faltan 6 grado(s) de
+    libertad por restringir.»), sin nada cortado. También `paneles_boceto` → **127 comprobaciones, 0 con ✗**. Ninguna de
+    las dos piezas abre la lista (no la pulsan), así que el listado en sí solo está probado en los tests offscreen.
+  - No se abrió Fusion: el comportamiento sale de la ayuda oficial de `fusion-sketch`, como en las tandas anteriores.
+
+## Informe tanda C8
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C8 · **Bug:** H-71 (faltante). **Sin commitear** (lo commitea el coordinador).
+
+### H-71 — BOCETO › arrastrar filas entre grupos y teclado en el árbol del navegador — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-sketch/sketch-palette-reference-4baf4699c21.md` y `find-underconstrained-sketch-geometry-a377d84ad10.md` confirman que la organización del boceto (grupos, «drag to reorder», selección) vive en el navegador y en la paleta, y que Alt+clic elige el objeto de abajo entre superpuestos (secciones 9.5 y 10 de `plan_boceto_organizar.md`). La organización ya estaba en OmniCAD (H-69/H-70 quedan para otra tanda); lo que faltaba de H-71 era el arrastre entre grupos y el foco del teclado en el árbol.
+- **Qué cambié:**
+  - `clon/omnicad/ui/navegador.py` — `_Arbol` ahora recibe `setFocusPolicy(Qt.StrongFocus)` (antes `Qt.NoFocus`, así que el árbol nunca tomaba el teclado), `setDragEnabled(True)` + `setAcceptDrops(True)` + `setDragDropMode(QAbstractItemView.DragDrop)`, y los manejadores `dragEnterEvent` / `dragMoveEvent` / `dropEvent`: solo aceptan soltar sobre una fila de grupo (`bo:<gid>` o miembro `bg:<gid>:<oid>`) y delegan en `self.on_dejar_en_grupo(origen, destino)` sin reordenar el modelo. La navegación por flechas y F2 (renombrar) quedan igual que en el resto del árbol.
+  - `clon/omnicad/ui/navegador_boceto.py` — `_mover_desde_arbol(v, origen, destino)` nuevo: saca el id del objeto arrastrado (`_objeto_de`, que entiende `bo:` y `bg:`) y el id del grupo destino, descarta grupo-en-sí y grupos anidados (`ob.categoria(...) == "grupos"`), y llama a `_cambiar(v, lambda b: ob.mover_a_grupo(b, [oid], gid))` — el mismo `mover_a_grupo` del menú «Mover a grupo», un paso de deshacer del boceto.
+  - `clon/omnicad/ui/ventana.py:202` — enchufa el callback: `self.navegador.arbol.on_dejar_en_grupo = lambda o, d: navegador_boceto._mover_desde_arbol(self, o, d)`.
+  - El Alt+clic que elige el objeto de abajo ya estaba resuelto y cubierto por `tests/test_boceto_organizar_ui.py::test_alt_clic_elige_el_objeto_de_abajo` (es la «Prueba propuesta» que cita H-71).
+- **Gemelos revisados:**
+  - El menú «Mover a grupo» del navegador (`ui/navegador_boceto.py::_menu_objetos`, `ob.mover_a_grupo`): el arrastre reusa **exactamente** esa función, no duplica lógica. ✔
+  - La API del grupo `vectores` (`api/herramientas_objetos_vectoriales.py` › `move_vector_objects_to_group`): es la misma `ob.mover_a_grupo`; el arrastre no cambia la API, así que `docs/agentes/herramientas.md` no se regeneró (ninguna firma cambió). ✔
+  - `ob.mover_a_grupo` (`restricciones/objetos.py:258`): no se tocó; el arrastre solo la invoca. ✔
+  - **Fuera de alcance (no lo toqué):** el menú radial del visor en modo boceto no aplica — en edición de boceto el clic derecho del visor lo maneja el editor (`editor_boceto`: menús de cota/restricción), no el menú radial de la vista 3D (`visor3d` › `menu_radial`), que está oculto; agregar acciones de organización ahí no tendría dónde dispararse. H-69 (propiedades por curva) y H-70 (expandir SVG/DXF) siguen abiertos en su propia fila.
+- **Test nuevo** (`clon/tests/test_boceto_organizar_ui.py`):
+  - `test_arrastrar_fila_del_arbol_mueve_el_objeto_al_grupo`: agrupa `svg`, arrastra `disco` (suelto) sobre el grupo vía `nav.arbol.on_dejar_en_grupo("bo:disco", "bo:grupo")` → `True` y aparece `bg:grupo:disco`; arrastrar sobre un objeto que no es grupo (`bo:svg`) → `False`; arrastrar un grupo sobre sí mismo → `False`; `deshacer()` lo revierte en un paso.
+  - `test_el_arbol_del_navegador_toma_el_foco_del_teclado`: `nav.arbol.focusPolicy() != Qt.NoFocus` y al darle el foco una flecha abajo cambia el `currentItem`.
+  - `test_alt_clic_elige_el_objeto_de_abajo` ya existía (el de la «Prueba propuesta») y sigue verde.
+  - Salida **ROJA (antes del arreglo):** el árbol tenía `Qt.NoFocus` y `_Arbol` no tenía drag-and-drop, así que `on_dejar_en_grupo` no existía y `focusPolicy()` era `NoFocus`.
+  - Salida **VERDE (con el arreglo):** `7 passed in 10.53s` (el archivo).
+- **ruff check .:** `All checks passed!`
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_boceto_organizar_ui.py`, `test_boceto_organizar.py`, `test_cobertura_ui_api.py`, `test_comandos.py` → **381 passed in 12.17s**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** el grep de las funciones tocadas (`_mover_desde_arbol`, `on_dejar_en_grupo`, `setFocusPolicy`, `dragEnterEvent`, `_Arbol`, `mover_a_grupo`) da solo `test_boceto_organizar_ui.py` (ya corrido). Por el token genérico `mover_a_grupo` / `navegador` aparecen además `test_boceto_organizar.py`, `test_api_objetos_vectoriales.py`, `test_cobertura_ui_api.py` (corrido) y `test_restricciones_matematica.py`; ninguno toca el árbol ni el drag, así que no los corrí.
+- **Salida de /ponytail-review:** `Verdict: Ship.` Sin «Must fix» ni «Should fix». Hallazgos revisados: (1) el drag solo acepta soltar sobre grupo y llama a `ob.mover_a_grupo` ya probado (no duplica lógica); (2) no anida grupos ni deja caer en objetos sueltos (guardas en `_mover_desde_arbol`); (3) `dropEvent` no llama a `super()`, así que el modelo del árbol no se reordena solo; (4) quité un `keyPressEvent` con F2 que era redundante con la acción F2 de la ventana (`ventana.py:458`) y podía disparar el renombrado dos veces — la navegación por flechas ya la da Qt al tener foco; (5) `nucleo/`, `timeline/` y la API no se tocaron, no hay estado global nuevo. Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l` (los lista arriba).
+  - No toqué la ventana más allá del foco y el drag del árbol, así que no hice la captura `todo.py` de una pieza de boceto: el arrastre entre filas es nativo de Qt y lo ejercita el test nuevo (vía el callback que usa el mismo camino que el drop real); el foco del teclado se prueba en `test_el_arbol_...`.
+
+## Informe tanda C9
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C9 · **Bug:** H-85 (faltante). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** un grupo con los 5 archivos obligatorios + `test_seguimiento.py` y `test_doc_agentes.py` (por haber tocado `docs/seguimiento/` y el Registro). Los del `grep -l` NO se corrieron (regla del coordinador) y están listados abajo.
+
+### H-85 — SUPERFICIE › Extruir en la ventana: elegir perfiles cerrados y caras planas — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-patch/extrude-a-surface-body-5889029bb69.md`
+  (paso 2): «In the canvas, select a **sketch profile, sketch curve, planar face, or single line text object**.» O sea:
+  el campo de perfiles de Extruir de superficie tiene que aceptar, además de la curva y la arista que ya aceptaba, el
+  perfil cerrado (la región) y la cara plana. El texto de una línea ya entraba por ser una `curva_boceto`.
+- **Qué cambié:**
+  - `clon/omnicad/ui/comandos/superficie.py:23` — constante nueva `PERFILES_SUPERFICIE = CURVAS | {"perfil", "cara_plana"}`
+    con el porqué en un comentario. `CURVAS` (curva de boceto y arista) queda igual para los campos que solo llevan
+    curvas (ruta del Barrido, contorno del Parche, aristas de Recortar, eje de Revolución).
+  - `clon/omnicad/ui/comandos/superficie.py:46` — `SupExtruir.campos`: el campo «Perfiles» pasa de `CURVAS` a
+    `PERFILES_SUPERFICIE`; la ayuda del campo enumera lo que entra.
+  - `clon/omnicad/ui/comandos/superficie.py:40` — la `AYUDA` del comando dice que extruye curvas, perfiles cerrados,
+    caras planas o un texto de una línea.
+  - `clon/omnicad/ui/comandos/superficie.py:142` — el campo «Perfil» del Barrido de superficie ya usaba
+    `CURVAS | {"perfil", "cara_plana"}` escrito a mano; ahora usa la misma constante (un solo nombre para una sola cosa).
+  - `scripts/prueba_ui/extruir_espacios.py:13,83,86` — la pieza importaba `CURVAS` para simular el clic; pasa a
+    `PERFILES_SUPERFICIE`. Sin esto la pieza seguía en ✗ **con el arreglo puesto** (era el «Should fix» que la auditoría
+    de Extruir ya había anticipado en `docs/auditoria_extruir.md:145`).
+  - **La operación y el núcleo no cambiaron una línea**: `_curvas` (`timeline/ops_superficie.py:43`) resuelve un
+    `perfil` a su cara (`entidades.resolver` → `perfil.cara`) y `nucleo/superficies.py::alambres` (línea 164) ya sabía
+    sacar los alambres de una `TopAbs_FACE`. Por eso el mismo camino sirve para curva, perfil y cara plana.
+- **Gemelos revisados:**
+  - El filtro de Extruir sólido (`ui/comandos/solido.py:33`, `{"perfil", "cara_plana", "curva_boceto"}`): es el criterio
+    que se copió; no se tocó. ✔
+  - El visor (`ui/visor3d.py::elegir_entidad`, secciones 4 y 5): ya devolvía hits `perfil` y `cara` con `plano`; no se
+    tocó. La pieza lo comprueba con un control (con el filtro de Extruir sólido los mismos clics sí eligen). ✔
+  - `acepta` (`ui/comando.py:377`): ya trataba `perfil` (`t in filtros`) y `cara_plana` (cara con plano); no se tocó. ✔
+  - La API `create_surface_extrude` (`api/herramientas_superficie.py:70`): **ya aceptaba** perfiles y caras
+    (`_seleccion(..., curvas=True)` y `profiles: curvas {...}, perfiles {...}, caras, aristas o cuerpos`); no cambió
+    firma ni docstring, así que `docs/agentes/herramientas.md` **no** se regeneró. ✔
+  - La previa (`ui/comando.py` › `set_filtro` con `campo.filtros`; `nucleo/previa*`): no tiene regla propia, ejecuta la
+    operación, así que hereda el filtro y la resolución sin cambios. ✔
+  - El Barrido de superficie (`ui/comandos/superficie.py:142`): misma constante, mismo valor que antes; su operación ya
+    aceptaba caras y perfiles. ✔
+  - **Fuera de alcance (fila nueva):** Revolución de superficie tiene el mismo defecto — Fusion dice «select a sketch
+    profile, sketch curve, or planar face to revolve» (`fusion-patch/revolve-a-surface-body-a3f71a695c7.md`) y su campo
+    Perfil sigue filtrando solo curva y arista (comprobado: `acepta(campo.filtros, hit_perfil) is False`). No lo toqué
+    porque H-85 es de Extruir: queda como **H-104** en `docs/seguimiento/faltantes.md`.
+- **Test nuevo** (`clon/tests/test_comandos_superficie.py::test_extruir_de_superficie_elige_perfiles_cerrados_y_caras_planas`):
+  con un rectángulo de boceto y una caja, comprueba que el campo «Perfiles» de `SupExtruir` acepta el hit del perfil y el
+  de la cara plana (`acepta`), y que cada uno extruye de verdad una superficie de 200 mm² (tubo de 10×10 por 5 de alto).
+  - Salida **ROJA** (antes del arreglo):
+    `FAILED tests/test_comandos_superficie.py::test_extruir_de_superficie_elige_perfiles_cerrados_y_caras_planas`
+    `AssertionError: assert (False) … where False = acepta({'arista', 'curva_boceto'}, {'tipo': 'perfil', …})`
+    → `1 failed, 4 deselected in 2.44s`
+  - Salida **VERDE** (con el arreglo): `1 passed, 4 deselected in 2.35s`
+- **ruff check .:** `All checks passed!` (tres veces: antes del arreglo, después y al cerrar).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_superficies.py`, `test_superficie_fusion.py`,
+  `test_api_superficie.py`, `test_comandos_superficie.py`, `test_cobertura_ui_api.py` → **476 passed in 9.46s**
+  (corrido tres veces: con el arreglo, después de unificar la constante del Barrido — 9.23 s — y al cerrar).
+- **Además corrí** (por haber tocado `docs/seguimiento/` y el Registro): `test_seguimiento.py` + `test_doc_agentes.py` →
+  **445 passed in 6.87s**.
+- **Ventana (pieza de la tanda, minimizada):** `todo.py extruir_espacios --ventana minimizada` → **18 comprobaciones,
+  0 con ✗** (antes del arreglo: 18, 2 con ✗ — justo «SUPERFICIE: clic dentro de un perfil cerrado lo elige» y «clic en
+  una cara plana la elige», las dos con «el visor devolvió None»). Ahora: «el visor devolvió perfil» y «el visor devolvió
+  cara». La captura `evidencias/ui_2026-11-06/capturas/extruir_1024x640.png` se miró: el panel entra sin cortes y
+  «Aceptar» se ve (esa captura es del paso de Plástico; el panel de SUPERFICIE lo abre y cierra la misma pieza).
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** por `SupExtruir` / `sup_extruir` (menos los que sí
+  corrí de la lista obligatoria): `test_api_solido_extra.py`, `test_b105_panel_chico.py`, `test_barrido_tipos.py`,
+  `test_busqueda_comandos.py`, `test_iconos_extra.py`, `test_manipuladores.py`, `test_opciones_operaciones.py`,
+  `test_referencias_mal_formadas.py`, `test_sup29_encadenado_superficie.py`, `test_superficie_guias.py`. Revisados a ojo:
+  ninguno depende del filtro ni del texto de ayuda (buscan el comando por clave o título, o usan la operación/API), pero
+  el prompt manda correrlos y la nota del coordinador manda no hacerlo en esta corrida.
+- **Salida de /ponytail-review:** **Must fix:** ninguno. **Should fix:** ninguno. **Nice to have:** ninguno. Lo revisado y
+  por qué queda así:
+  1. **No hay regresión para los campos que solo llevan curvas**: `CURVAS` no se tocó; el Barrido, el Parche, Recortar y
+     el eje de Revolución siguen igual (el diff del Barrido es el mismo valor con otro nombre).
+  2. **El camino de la operación ya existía**: perfil → cara → `alambres` saca los alambres; el test lo prueba con
+     geometría (200 mm²), no solo con el filtro.
+  3. **`cadena` con un perfil o una cara**: `_en_cadena` cae en su rama `else` y devuelve la forma tal cual; nada se
+     encadena ni se pierde.
+  4. **La API no cambió**: sin firma nueva, sin doc que regenerar, `test_doc_agentes.py` verde.
+  5. **`preseleccion`** (`ui/comando.py:404`) reparte lo elegido antes de abrir el comando: ahora un perfil
+     preseleccionado cae en «Perfiles» en vez de quedarse afuera. Es el comportamiento de Fusion.
+  6. **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l`
+    (los lista arriba).
+  - No abrí Fusion: el comportamiento sale de la ayuda oficial de `fusion-patch`, como en las tandas anteriores.
+  - Un perfil cerrado **con huecos** (una región con un agujero) extruido como superficie da un tubo por alambre
+    (exterior e interior). Es lo que ya hacía la cara plana en el Barrido de superficie y lo que da `alambres`; no lo
+    comparé con Fusion.
+
+## Informe tanda C10
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C10 · **Bug:** H-104 (faltante). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** un grupo con los 6 archivos obligatorios; los del `grep -l` NO se corrieron (regla del coordinador) y están listados abajo.
+
+### H-104 — SUPERFICIE › Revolución en la ventana: elegir perfiles cerrados y caras planas — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-patch/revolve-a-surface-body-a3f71a695c7.md`, paso 2: «In the canvas, select a **sketch profile, sketch curve, or planar face** to revolve». O sea que el campo Perfil de la Revolución de superficie tiene que aceptar, además de la curva y la arista que ya aceptaba, el perfil cerrado (la región) y la cara plana. Es el caso gemelo de H-85 en Extruir de superficie, que se arregló sin tocar Revolución.
+- **Qué cambié:**
+  - `clon/omnicad/ui/comandos/superficie.py:94` — `SupRevolucion.AYUDA` ahora dice «Gira perfiles cerrados, curvas o caras planas alrededor de un eje y crea una superficie.»
+  - `clon/omnicad/ui/comandos/superficie.py:99` — el campo «Perfil» pasa de `CURVAS` a `PERFILES_SUPERFICIE` (la constante de C9/H-85: `CURVAS | {"perfil", "cara_plana"}`) y su ayuda enumera los cuatro tipos que entran.
+  - **La operación y el núcleo no cambiaron una línea**: `OpSupRevolucion.ejecutar` ya delega en `_curvas` (`timeline/ops_superficie.py:45`), que resuelve un `perfil` a su cara y una `cara_plana` a la cara (`_resolver_todas`); `revolver_superficie` → `alambres` (`nucleo/superficies.py:164`) ya saca los alambres de una `TopAbs_FACE`. Por eso el mismo camino sirve para curva, perfil y cara plana.
+- **Gemelos revisados:**
+  - El filtro de Revolución sólida (`ui/comandos/solido.py:301`, `{"perfil", "cara_plana"}`): es el criterio que se copió; no se tocó y ya acepta perfil y cara plana, así que la superficie ahora coincide con ella (los tres iguales: ventana, API, operación). ✔
+  - La API `create_surface_revolve` (`api/herramientas_superficie.py:133`): **ya aceptaba** perfiles y caras (`_seleccion(..., curvas=True)` y docstring que lo dice); no cambió firma ni descripción, así que `docs/agentes/herramientas.md` **no** se regeneró. ✔
+  - La previa (`ui/comando.py` › `set_filtro` con `campo.filtros`; `nucleo/previa*`): no tiene regla propia, ejecuta la operación, así que hereda el filtro y la resolución sin cambios. ✔
+  - `PERFILES_SUPERFICIE` (C9/H-85, `ui/comandos/superficie.py:23`): se reusó tal cual, sin duplicar la constante (único nombre para una sola cosa). ✔
+  - Extruir de superficie (`ui/comandos/superficie.py:46`, ya en `PERFILES_SUPERFICIE`): comparten la misma constante; el comportamiento de Revolución es ahora idéntico al de Extruir. ✔
+  - **Fuera de alcance (no lo toqué):** el eje de Revolución sigue filtrando solo `{"eje"}` (Fusion: «sketch curve, edge, cylindrical face, or axis»); cambiarlo es otra fila. El «A objeto» y el «Proyectar eje» ya andaban.
+- **Test nuevo** (`clon/tests/test_comandos_superficie.py::test_revolucion_de_superficie_elige_perfiles_cerrados_y_caras_planas`): con un rectángulo de boceto [4,6]×[0,10] en XZ y una caja, comprueba que el campo «Perfil» de `SupRevolucion` acepta el hit del perfil y el de la cara plana (`acepta`), y que cada uno gira de verdad una superficie (el rectángulo da 240π ≈ 753,98 mm² al voltear 360° sobre Z; la cara plana da superficie positiva).
+  - Salida **ROJA** (antes del arreglo):
+    `FAILED tests/test_comandos_superficie.py::test_revolucion_de_superficie_elige_perfiles_cerrados_y_caras_planas`
+    `AssertionError: assert (False)` en `acepta({'arista', 'curva_boceto'}, {'tipo': 'perfil', ...})` → `1 failed in 2.44s`
+  - Salida **VERDE** (con el arreglo): `1 passed in 2.35s`
+- **ruff check .:** `All checks passed!` (sobre los dos archivos tocados).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_comandos_superficie.py`, `test_superficies.py`, `test_superficie_fusion.py`, `test_api_superficie.py`, `test_sol07_revolucion.py`, `test_cobertura_ui_api.py` → **483 passed in 9.94s**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** `test_sup29_encadenado_superficie.py`, `test_api_solido.py`, `test_barrido_tipos.py`, `test_bugs_solido.py` (los tres últimos por `create_surface_revolve`; `test_sup29...` por `SupRevolucion`). Revisados a ojo: ninguno depende del filtro del campo Perfil ni de la ayuda (buscan el comando por clave o usan la operación/API), pero el prompt manda correrlos y la nota del coordinador manda no hacerlo en esta corrida.
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff:
+  1. **No hay regresión para los campos que solo llevan curvas**: `CURVAS` no se borró, solo se dejó de usar en Revolución; Extruir, Barrido, Parche, Reglada, Recortar y las aristas de Desfase siguen con `CURVAS` o `{"arista"}`, intactos.
+  2. **El camino de la operación ya existía**: perfil → cara → `alambres` saca los alambres y `revolver_superficie` gira; el test lo prueba con geometría (240π), no solo con el filtro.
+  3. **`cadena` con un perfil o una cara**: `_curvas` con `cadena=True` (valor por defecto de la casilla) cae en la rama `else` de `_en_cadena` y devuelve la forma tal cual; el test gira un perfil y una cara con `cadena=True` y da superficie correcta.
+  4. **La API no cambió**: sin firma nueva, sin doc que regenerar, `test_doc_agentes.py` queda verde en el grupo.
+  5. **Se reusó `PERFILES_SUPERFICIE`**: un solo nombre para una sola cosa, sin duplicar la constante.
+  6. **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l` (los lista arriba).
+  - **Ventana (`revolucion_barrido_solevacion`, minimizada):** `40 comprobaciones, 10 con ✗`. Las 10 ✗ son **anteriores y ajenas a H-104**: 22 (Revolución dos lados 90/−45° da 1570,80 en vez de 2356,19 = H-88, «A objeto» con Dos lados); 26 y 27 (con «A objeto» se ve la Dirección Un/Dos lados = H-88); 28 y 29 (`proyectar_eje` se llama «Eje de proyecto» en sólido y «Proyectar eje» en superficie: incoherencia de etiqueta, no de filtro); 30, 31, 32 y 35 (Barrido sólido: Escala del perfil Estirar, Extensión del Rail, carril escala Ninguna, Distancia «1,5» = H-89); 38 (Solevación punto ofrece Aguda y Punto tangente = H-90). **Ninguna** de las 10 trata el filtro del Perfil ni la aceptación de perfil/cara plana; el campo «Perfil» de `sup_revolucion` abre bien (comprobación 8 OK) y su filtro es el que el test de `test_comandos_superficie.py` ya ejercita en geometría (240π).
+  - No abrí Fusion: el comportamiento sale de la ayuda oficial de `fusion-patch`, como en las tandas anteriores.
+
+## Informe tanda C11
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C11 · **Bug:** CF-8 (faltante, dos de sus opciones: «tamaño del ViewCube» y «barra espaciadora repite el último comando»). **Sin commitear** (lo commitea el coordinador).
+**Corrida corta (45 min):** un grupo con los 3 obligatorios que existen (`test_preferencias*.py` y `test_api_*preferenc*.py` **no existían**; el nuevo `tests/test_preferencias.py` es el primero) más 4 de riesgo alto del `grep -l` (`test_plasticidad`, `test_atajos_acciones`, `test_api_misc` y el propio nuevo). El resto del `grep -l` NO se corrió y está listado abajo.
+
+### CF-8 — PREFERENCIAS › tamaño del ViewCube y barra espaciadora que repite el último comando — **Parcial** (hechas las dos opciones de la tanda; el resto de la fila sigue abierto)
+
+- **Qué dice la ayuda de Fusion:**
+  - `docs/fusion_docs/contenido/fusion-getstarted/viewcube-reference-1b486b37d43.md` › «Context menu»: «**ViewCube Size**: Sets the display size of the **ViewCube**. Select from the following options: **Automatic**, **Large**, **Normal**, **Small**, **Tiny**». Y la nota: «These camera options are shared with the **Camera** control in the Navigation bar's Display Settings menu». O sea: cinco tamaños, y el ajuste vive en el **clic derecho del ViewCube**, no en Preferencias.
+  - `fusion-releasenotes/2025-release-notes-3e142024d7c.md:547` «Spacebar now activates Repeat Command»; `:508` «disabling the 'Spacebar Repeats Last Command' preference did not maintain the spacebar assignment for the previously selected assignment»; `2026-release-notes-60b2372e77b.md:1673` «the Spacebar hotkey could become unassigned when the Spacebar Repeats Last Command option was disabled». O sea: es un ajuste de dos posiciones — encendido, la barra espaciadora repite el último comando; apagado, la tecla queda libre para otra asignación (no desaparece).
+  - `fusion-preferences-reference-073442e64a1.md` (General › Mouse setup, orientación, unidades, gráficos) no nombra ninguna de las dos: la del ViewCube es de `fusion-getstarted`, la del Espacio sale de las notas de versión.
+- **Qué cambié:**
+  - `clon/omnicad/ui/superposiciones.py:26` — `TAMANOS` pasa de 3 a los 5 tamaños de Fusion: `diminuto` 70, `pequeno` 90, `normal` 110, `automatico` 120, `grande` 150; `:27` `TAMANOS_TEXTO` con las etiquetas **en el orden de Fusion** (Automático, Grande, Normal, Pequeño, Diminuto). Las claves viejas se conservan: un valor guardado sigue valiendo.
+  - `clon/omnicad/ui/superposiciones.py:45` — `ViewCube.set_tamano` recuerda el tamaño elegido (`self._tamano`) y `:50` `menu_tamano()` arma el menú del clic derecho con las cinco opciones, la vigente marcada (QActionGroup); `:65` `_elegir_tamano` aplica y avisa por el callback `al_elegir_tamano` (mismo patrón que `AreaVisor.al_mover_panel`); `:70` `contextMenuEvent` abre ese menú. El tooltip del cubo dice «Clic derecho: tamaño del ViewCube.»
+  - `clon/omnicad/ui/ventana.py:199` — enchufa `self.area.viewcube.al_elegir_tamano = self._guardar_tamano_viewcube`; `:1414` `_guardar_tamano_viewcube` escribe `general/tamano_viewcube` y reubica el cubo (sin eso, el tamaño cambiaba hasta el próximo arranque).
+  - `clon/omnicad/ui/ventana.py:341` — `aplicar_teclas`: con `general/espacio_repite` encendido, el atajo por defecto de `repetir` pasa a `Space` y el de `boceto_cara` a vacío (el «otro extremo» del mismo ajuste de Fusion). Lo elegido a mano en «Más › Cambiar atajo» sigue mandando sobre las dos, y el choque de teclas se resuelve como antes.
+  - `clon/omnicad/ui/preferencias.py:58` y `:484` — preferencia nueva `general/espacio_repite` (de fábrica **apagada**, para no quitarle el Espacio a «Boceto sobre la cara elegida», PL3) y el combo del ViewCube con las cinco opciones.
+  - `clon/omnicad/api/herramientas_preferencias.py:19` — `general/tamano_viewcube` con las cinco opciones y `:20` `general/espacio_repite` (False / [False, True]) en la lista blanca, así `get_preferences` y `set_preference` las ven. **No** se regeneró `docs/agentes/herramientas.md`: no cambió ninguna firma ni ningún docstring de herramienta (las opciones no se listan en la doc generada) y `test_doc_agentes.py` queda verde.
+- **Gemelos revisados:**
+  - El combo de Preferencias › General (`ui/preferencias.py`, `PAGINAS`) y la lista blanca de la API (`api/herramientas_preferencias.py`, `_OPCIONES`): las dos con las mismas cinco claves y el mismo valor por defecto (`test_las_preferencias_autorizadas_existen_en_la_ventana` de `test_api_misc.py`, verde). ✔
+  - `general/tamano_viewcube` ya se aplicaba en `ui/ventana.py:712` (`aplicar_preferencias` → `set_tamano` + `reubicar`): el camino de Preferencias › Aplicar sigue igual; el camino nuevo (menú del cubo) hace lo mismo pero escribe la preferencia. ✔
+  - El atajo `repetir` (Shift+R, `ui/ventana.py:451`) y el ítem «Repetir» del menú radial (`_items_radial`): usan la misma acción y el mismo `repetir_ultimo`; no se duplicó nada, solo se le agrega la tecla. `repetir_ultimo` ya repetía la última herramienta **dentro** del boceto. ✔
+  - El editor de boceto (`ui/editor_boceto.py:5787`): ya reclamaba `Qt.Key_Space` para alternar las ayudas de inferencia con `ShortcutOverride` **justamente porque** el Espacio era el atajo de «Boceto sobre la cara»; sigue igual, así que con la preferencia encendida el Espacio también funciona como repetición en el boceto (donde repite la última herramienta). ✔
+  - `AreaVisor.reubicar` (`ui/superposiciones.py:593`): posiciona el cubo por su ancho; se llama desde `_guardar_tamano_viewcube` para que el cambio se vea al instante. ✔
+  - La barra de navegación (`BarraNavegacion`, «Configuración de visualización › Cámara»): Fusion comparte ahí las opciones del ViewCube. **No** la toqué: el tamaño del cubo no estaba en ese menú y la referencia oficial lo documenta en el clic derecho del ViewCube, que es donde lo puse. Si Gerardo lo quiere también ahí, es una fila nueva (dos líneas: un submenú con el mismo `menu_tamano`).
+  - **Fuera de alcance (no lo toqué):** el resto de las opciones de CF-8 (finalidad de uso, tipo de diseño por defecto, experiencia de puesta en marcha, orientación Y/Z, ratón Alias/Inventor/PowerMill/SOLIDWORKS, controlador de gráficos, tema del sistema). La fila queda **Parcial** con esa lista en `docs/seguimiento/faltantes.md`.
+- **Test nuevo** (`clon/tests/test_preferencias.py`, 2 pruebas — es el primer `test_preferencias*.py` del repo):
+  - `test_barra_espaciadora_repite_el_ultimo_comando`: apagada, `boceto_cara` = `Space` y `repetir` = `Shift+R`; encendida, `repetir` = `Space` y `boceto_cara` queda sin tecla; y con la ventana activa, `QTest.keyClick(ventana.area, Qt.Key_Space)` **de verdad** ejecuta el último comando (`ejecutar_comando` recibe la caja).
+  - `test_tamano_del_viewcube_como_fusion`: el menú del clic derecho trae exactamente «Automático, Grande, Normal, Pequeño, Diminuto» con el vigente marcado; «Grande» agranda el cubo, lo guarda en `general/tamano_viewcube` y el menú reabierto marca «Grande»; «Diminuto» lo achica por debajo del automático; el combo de `PAGINAS` y la lista blanca de la API tienen las mismas cinco.
+  - Salida **ROJA** (antes del arreglo):
+    `FAILED tests/test_preferencias.py::test_barra_espaciadora_repite_el_ultimo_comando` → `KeyError: 'general/espacio_repite'` en `omnicad/ui/preferencias.py:181`;
+    `FAILED tests/test_preferencias.py::test_tamano_del_viewcube_como_fusion` → `AttributeError: 'ViewCube' object has no attribute 'menu_tamano'` → `2 failed in 2.80s`.
+  - Salida **VERDE** (con el arreglo): `2 passed in 3.47s`.
+- **ruff check .:** `All checks passed!` (sobre el repo entero).
+- **Tests obligatorios de la tanda (un grupo, con turno):** `test_preferencias.py` (nuevo), `test_cobertura_ui_api.py`, `test_comandos.py`, `test_doc_agentes.py` + los del `grep -l` de más riesgo (`test_plasticidad.py` —asserta que `boceto_cara` es Space—, `test_atajos_acciones.py` —usa `aplicar_teclas`—, `test_api_misc.py` —la lista blanca de preferencias—) → **422 passed in 14.06s**.
+- **Ventana (minimizada):** `todo.py panel_movible --ventana minimizada` → **68 comprobaciones, 0 con ✗**. Es la pieza más cercana al ViewCube que hay en `PIEZAS` (comprueba que el panel de comando no se meta debajo del cubo); **no hay pieza de preferencias** en `scripts/prueba_ui/todo.py`. Esa pieza no saca captura, así que no hay imagen nueva que mirar.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** por `aplicar_teclas` / `set_tamano` / `tamano_viewcube` / `espacio_repite` / `boceto_cara` / `repetir_ultimo`: `test_boceto_fase1.py` (coincide por `aplicar_teclas` de otro panel), `test_texto_vectores.py` (`set_tamano` de su propio panel). Por `ViewCube` / `TAMANOS`: `test_api_inspeccion.py`, `test_b105_panel_chico.py`, `test_p9_ui.py`, `test_panel_movible.py`, `test_temas.py`, `test_vistas_animadas.py`. Los tres que más me preocupaban de esa lista los corrí en el grupo (plasticidad, atajos y API de preferencias); el resto toca el ViewCube por nombre o por tamaño y no depende de las cinco opciones ni del menú nuevo.
+- **Salida de /ponytail-review:** sin «Must fix» ni «Should fix». Repaso del diff:
+  1. **No se duplicó el tamaño del cubo**: `TAMANOS` sigue siendo la única tabla (el menú, `set_tamano` y Preferencias leen de ahí); lo único nuevo es el par clave→texto.
+  2. **`set_tamano` es compatible**: las claves viejas (`pequeno`, `automatico`, `grande`) no cambian de valor, así que un `.ini` guardado se sigue leyendo igual y el de fábrica (`automatico` = 120 px) no mueve el cubo.
+  3. **El callback sigue el patrón que ya existe** (`al_mover_panel`): el ViewCube no conoce las preferencias ni la ventana, y sin callback el menú igual cambia el tamaño (no rompe nada si se usa suelto en un test).
+  4. **La barra espaciadora no le quita la tecla a nadie de fábrica**: la preferencia arranca apagada, así que PL3 («Boceto sobre la cara elegida» con Espacio) y su test quedan igual; encendida, el Espacio se muda a `repetir` y el choque se resuelve con el mismo contador de usos de `aplicar_teclas`.
+  5. **Lo elegido a mano manda**: `teclas.get(clave, defecto)` deja que «Más › Cambiar atajo» siga pisando las dos teclas (incluido volver a ponerle Espacio a `boceto_cara` con la preferencia encendida, que es lo que hace Fusion cuando la opción está apagada).
+  6. **La API y la ventana quedan iguales**: mismas cinco opciones, mismo defecto, y `test_api_misc.py` (que compara las dos listas) verde.
+  7. **Verdict:** `Ship.` Nada quedó pendiente de arreglar.
+- **No verificado / ⚠:**
+  - No corrí la prueba de humo ni la suite completa (regla 10: las corre el coordinador), ni los archivos del `grep -l` listados arriba.
+  - **No hay pieza de preferencias** en `PIEZAS`: corrí `panel_movible` (68/0) porque es la que mira el ViewCube. Ni el menú del clic derecho del cubo ni la preferencia del Espacio se vieron en pantalla; los dos se prueban en los tests offscreen (el menú se inspecciona sin `exec`, y el Espacio se dispara con `QTest.keyClick` sobre la ventana activa).
+  - No se abrió Fusion: el comportamiento sale de la ayuda oficial (`fusion-getstarted`) y de las notas de versión, como en las tandas anteriores.
+  - El «Automático» de Fusion puede ser un tamaño que se adapta al lienzo; en OmniCAD es un tamaño fijo de 120 px (como ya era). No lo cambié porque la referencia no dice en qué se basa el automático.
+  - **Finales de línea (importante para la revisión):** al editar, la herramienta dejó `ui/ventana.py` y `ui/superposiciones.py` enteros en LF y el `git diff --stat` saltó a 6357 y 1334 líneas. Se restauró **línea por línea** con difflib (los tramos iguales copian los bytes de `git show HEAD:archivo`, los nuevos llevan el final del vecino): el diff final es de **13 líneas en `ventana.py`** y **30 en `superposiciones.py`**, sin una sola línea de más. Queda anotado como lección en `PROJECT_LOG.md`.
+
+## Informe tanda C12
+
+**Modelo:** CodeBuddy con hy3. **Tanda:** C12 · **Bug:** B-218 (único ítem). **Sin commitear** (lo commitea el coordinador).
+
+### B-218 — Editar cara y Dividir cara cargan sin OpenCascade y quedan sin soporte con OmniKernel — **Resuelto**
+
+- **Estado:** Resuelto.
+- **Ayuda de Fusion:** No aplica: B-218 es un bug de compatibilidad con el motor OmniKernel, no un comportamiento de geometría a replicar.
+- **Qué cambié:** `clon/omnicad/nucleo/editar_cara.py` importaba OpenCascade (OCP) al cargarse (líneas 18-34 originales: `BRep_*`, `TopoDS`, `gp_*`, `Geom_*`, `IntTools_*`, `ShapeFix_*`, `Array*`, `TopAbs_*`, `TopExp_*`, `TopLoc_*`, `BRepTools*`, etc.). Con `OMNICAD_MOTOR=omnikernel` y `OMNICAD_BLOQUEAR_OCP=1` el import caía en «Import prohibido por OMNICAD_BLOQUEAR_OCP: OCP», así que Editar cara y Dividir cara no funcionaban con OmniKernel. Lo pasé al patrón de sus gemelos de `nucleo/` (`_iniciar_opencascade` + `_motor.registrar`):
+  - Los imports de OCP ahora viven en `_iniciar_opencascade()` (declarados con `global`) y se ejecutan solo si `motor_activo() == "opencascade"` (`clon/omnicad/nucleo/editar_cara.py:24-58`; guarda `:60-61`).
+  - Al final del módulo: `_motor.registrar(globals(), _iniciar_opencascade)` (`clon/omnicad/nucleo/editar_cara.py:514`), que envuelve las funciones públicas y, como no existe `clon/omnicad/nucleo/omnikernel/editar_cara.py`, hace que `editar_cara`, `grilla_cara`, `curvas_grilla`, `extruir_grilla`, `divisiones` y `remuestrear` informen `MOTOR_SIN_SOPORTE` con OmniKernel (igual que el resto de `nucleo/`).
+- **Gemelos revisados y qué hice con cada uno:**
+  - `nucleo/solidos_modificar.py`, `nucleo/geometria.py` y los demás módulos de `nucleo/` que usan `_iniciar_opencascade` + `_motor.registrar`: **copié el patrón** (declarar los nombres OCP como `global` y cargarlos solo con OpenCascade).
+  - `timeline/ops_modificar.py` (`OpEditarCara`, `clon/omnicad/timeline/ops_modificar.py:591,600`): ya importa `editar_cara` de forma perezosa dentro de `ejecutar` y lo usa envuelto por el dispatcher → sin cambio.
+  - `api/herramientas_dividir.py` (`clon/omnicad/api/herramientas_dividir.py:109,149`): ya hace el import perezoso de `editar_cara` → sin cambio.
+  - **Dividir cara** (`extruir_grilla`, `divisiones`, los `cortes_*`, etc.) vive dentro del propio `editar_cara.py` y quedó cubierto por el mismo patrón → sin cambio aparte.
+- **Test nuevo (rojo → verde):** `tests/test_motor.py::test_nucleo_importa_sin_opencascade`. Corre en subproceso con `OMNICAD_MOTOR=omnikernel` y `OMNICAD_BLOQUEAR_OCP=1` y afirma que `import omnicad.nucleo.editar_cara` sale con código 0.
+  - ROJO (antes del arreglo, con los imports de OCP al tope):
+        E       AssertionError: Traceback (most recent call last):
+        E           File "<string>", line 1, in <module>
+        E           File "D:\PROGRAMA-cb\clon\omnicad\nucleo\editar_cara.py", line 18, in <module>
+        E             from OCP.BRep import BRep_Builder, BRep_Tool
+        E           File "D:\PROGRAMA-cb\clon\omnicad\bloqueo_ocp.py", line 11, in find_spec
+        E             raise ImportError(f"Import prohibido por OMNICAD_BLOQUEAR_OCP: {fullname}")
+        E         ImportError: Import prohibido por OMNICAD_BLOQUEAR_OCP: OCP
+        E       assert 1 == 0
+        tests\test_motor.py:207: AssertionError
+        1 failed in 3.42s
+  - VERDE (con el patrón aplicado):
+        .                                                                        [100%]
+        1 passed in 2.05s
+- **Salida real de ruff check .:** `All checks passed!`
+- **Salida real de cada grupo de tests (con `../scripts/turno.py`, < 900 s cada uno):**
+  - `test_motor.py`: **14 passed in 22.39s**
+  - `test_sol16_dividir_cara.py` + `test_api_dividir.py` + `test_consultas_motor.py`: **18 passed in 4.20s**
+  - `test_herramientas_solido.py`: **148 passed in 98.81s**
+  - `test_api_solido.py`: **74 passed in 7.57s**
+  - `test_barrido_tipos.py` + `test_cobertura_ui_api.py`: **405 passed in 37.86s**
+  - `test_paridad_motor.py` (lento, omnikernel instalado): **68 passed in 126.29s**
+- **Salida completa de `/ponytail-review` y qué arreglé:**
+  > What this change does: `nucleo/editar_cara.py` no importa OpenCascade al cargarse: los imports de OCP se movieron a `_iniciar_opencascade()` y solo se cargan con el motor OpenCascade, envuelto por `_motor.registrar`. Así el módulo carga con OmniKernel y OCP bloqueado, y la operación informa `MOTOR_SIN_SOPORTE`.
+  >
+  > Must fix: ninguno.
+  >
+  > Should fix: ninguno que requiera código. La única sutileza es que `divisiones` (pública) es «común» (no nombra OCP directo) salvo cuando `espaciado > 0`, que entonces llama a `_largos` (usa `BRepAdaptor_Surface`); con OmniKernel y espaciado > 0 daría `NameError` en vez de `MOTOR_SIN_SOPORTE`. Es inalcanzable por la vía pública (la API `edit_face`/`get_face_grid` pasa primero por `grilla_cara`/`editar_cara`, que ya dan `sin_soporte`), y `remuestrear`/`extruir_grilla` y `divisiones` con espaciado = 0 son matemática pura que corre igual en los dos motores. Se deja como está y se anota como ⚠ (corregirlo forzaría `sin_soporte` en el caso puramente matemático, que es peor).
+  >
+  > Nice to have: lo mismo de arriba, como nota.
+  >
+  > Verdict: Ship.
+  > Lean: 0 lines possible (el cambio borra las líneas de imports al tope y agrega la función + el registro; no hay código muerto).
+  > Not checked: no corrí la prueba de humo ni la suite completa (las corre el coordinador, por instrucción de la tanda); no abrí Fusion (el bug es de compatibilidad de motor, no de comportamiento de geometría).
+
+  No tuve que arreglar nada del review.
+
+- **Revisión del coordinador (2026-11-06):** `ponytail-review` propio pidió que el test cubra todo `nucleo/` y no solo `editar_cara` (así se encontró B-218): renombrado a `test_nucleo_importa_sin_opencascade`, recorre `nucleo/` con `pkgutil.walk_packages`. TWINS: 0 otros módulos importan OCP al cargarse. `ruff check .`: All checks passed!; 931 passed en 10 archivos (`test_motor`, `test_api_dividir`, `test_api_solido`, `test_barrido_tipos`, `test_cobertura_ui_api`, `test_comandos_modificar`, `test_herramientas_solido`, `test_iconos_extra`, `test_revision_lotes_sol`, `test_solidos_modificar`).
+- **Lo no verificado (⚠):**
+  - No corrí la prueba de humo ni la suite completa (lo hace el coordinador, según la tanda).
+  - El caso `divisiones(espaciado > 0)` bajo OmniKernel daría `NameError` en vez de `MOTOR_SIN_SOPORTE` (inalcanzable por la API, ver arriba).
+  - No probé con la app real abierta bajo OmniKernel + OCP bloqueado más allá del import (el test de humo del coordinador cubre ese recorrido).
+  - `nucleo/omnikernel/editar_cara.py` no existe a propósito: la operación queda sin soporte con OmniKernel.
+
+## Informe tanda C13
+
+**Modelo:** CodeBuddy con deepseek-v4.1-flash. **Tanda:** C13 · **Ítem:** CF-8 (lo que falta). **Sin commitear** (lo commitea el coordinador).
+**Alcance:** se hicieron **completas** las dos primeras opciones del orden de la fila C13 —tema del sistema y ratón estilo Alias/Inventor/PowerMill/SOLIDWORKS—, cada una con preferencia guardada, control en Preferencias › General, efecto real en la app, la misma opción en `get_preferences`/`set_preference` y test rojo→verde. Las **cinco restantes no entraron** y la fila queda **Parcial** con la lista exacta y el motivo de cada una (abajo, en «Lo que falta»).
+
+### CF-8 (1) — Tema del sistema — **Hecho**
+
+- **Qué dice la ayuda de Fusion:**
+  - `docs/fusion_docs/contenido/fusion-releasenotes/2025-release-notes-3e142024d7c.md:546` — «New UI Themes allows you to switch between **Dark Blue**, **Match Device Theme**, **Light Gray** and **Fusion Classic**». Además de los temas fijos hay uno que sigue al claro/oscuro del sistema.
+  - `fusion-preferences-reference-073442e64a1.md` (la referencia de Preferencias) **no** lo nombra: habla de Mouse setup, orientación de modelado, unidades y gráficos. El tema sale de las notas de versión, igual que en C11 pasó con la barra espaciadora.
+- **Qué cambié:**
+  - `clon/omnicad/ui/temas.py:27` — `SISTEMA = "sistema"`, **fuera** de `INCLUIDOS`: los cinco temas de siempre no cambian y `test_hay_cinco_temas_y_el_de_fabrica_es_oscuro_moderno` sigue verde.
+  - `clon/omnicad/ui/temas.py:542` — `disponibles()` lo pone primero, con el nombre «Tema del sistema» (y el docstring del módulo, `:7`, lo cuenta).
+  - `clon/omnicad/ui/temas.py:551` — `esquema_sistema()`: «claro» solo si `QGuiApplication.styleHints().colorScheme()` dice Light; cualquier otra cosa (Unknown incluido) es «oscuro», que es el tema de fábrica. `:560` `tema_del_sistema()` lo traduce a `claro_moderno` / `oscuro_moderno`. El import de Qt va **dentro** de la función, como pide el docstring del módulo («no importa Qt al cargarse»).
+  - `clon/omnicad/ui/temas.py:565` — `resolver("sistema")` devuelve los colores del tema concreto pero con `clave` «sistema» y `base` = ese tema concreto: el aviso de contraste, la vista previa y la plantilla exportada siguen funcionando sin tocar nada.
+  - `clon/omnicad/ui/ventana.py:164` — `QGuiApplication.styleHints().colorSchemeChanged` conectado a `_al_cambiar_esquema` (`:624`), que vuelve a llamar a `aplicar_tema()`: si el sistema pasa a claro u oscuro mientras la app está abierta, el tema cambia sin reiniciar. Es un método de la ventana y no un `lambda` a propósito: Qt suelta la conexión cuando la ventana se destruye (con el lambda, cada ventana cerrada quedaba viva para siempre y el aviso podía llegar a un objeto ya borrado).
+  - `clon/omnicad/api/herramientas_preferencias.py:13` — `general/tema` entra en la lista blanca con **seis valores fijos** (los cinco incluidos y «sistema»), así `get_preferences` y `set_preference` ven la opción. Los temas propios (`usuario:…`, que son archivos del disco) **siguen prohibidos**: `_exigir_clave` (`:96`) y el docstring de `set_preference` (`:157`) pasan a decir «temas propios (usuario:…)», y hay un test que comprueba que `set_preference("general/tema", "usuario:mi_tema")` falla. `docs/agentes/herramientas.md` regenerado (una línea, la del docstring).
+- **Gemelos revisados:**
+  - El combo de Preferencias › General (`ui/preferencias.py` › `_combo_temas`): arma la lista con `temas.disponibles()`, así que la opción nueva aparece sin tocar el diálogo. ✔
+  - La lista blanca de la API: mismas claves y mismo valor por defecto (`test_las_preferencias_autorizadas_existen_en_la_ventana`, verde) y la lista de temas comparada contra `temas.INCLUIDOS + ["sistema"]` en el test nuevo, para que no se desvíe si mañana se agrega un tema. ✔
+  - `temas.resolver()`: lo usan el aviso de contraste (`_mostrar_aviso_tema`), la vista previa (`activar`) y `exportar_plantilla`; los tres siguen andando porque el tema del sistema devuelve los colores de un tema concreto. ✔
+  - `tests/test_temas.py:217` y `:305`: las dos listas de `disponibles()` que se comparaban por posición se ajustaron (ahora «sistema» va primero). Es un cambio esperado, no un test debilitado: se sigue exigiendo la lista exacta y el orden. ✔
+  - `ui/ventana.py` › `aplicar_tema`: es el único que aplica QSS/paleta a la app; el camino de Preferencias › Aplicar no cambió. ✔
+
+### CF-8 (2) — Ratón estilo Alias, Inventor, PowerMill y SOLIDWORKS — **Hecho**
+
+- **Qué dice la ayuda de Fusion:** `fusion-preferences-reference-073442e64a1.md` › «Program-specific mouse shortcut presets»:
+  - **Alias** — Zoom: Shift + Alt + botón derecho · Pan: Shift + Alt + botón medio · Orbit: Shift + Alt + botón izquierdo.
+  - **Inventor (solo Windows)** — Zoom: F3 + izquierdo · Pan: F2 + izquierdo · Orbit: F4 + izquierdo.
+  - **PowerMill** — Zoom: rueda · Pan: Mayús + medio · Orbit: medio · (nota: «The PowerMill preset uses its own Default Orbit type») · Zoom to box: Ctrl+Mayús+medio · Rotate about X/Y/Z: Mayús+Alt+izquierdo/medio/derecho.
+  - **SOLIDWORKS** — Zoom: Mayús + rueda · Pan: Ctrl + medio · Orbit: medio.
+  - Y el aviso general: «When using any of the presets above, you can press F6 to resize the view to fit in the current window» (F6 no existe en OmniCAD; ver ⚠).
+- **Qué cambié:**
+  - `clon/omnicad/ui/visor3d.py:2374` — `accion_raton` suma los cuatro esquemas. Alias: con Mayús+Alt, izquierdo órbita, medio encuadre, derecho **zoom de arrastre** (la acción «zoom» que ya usaba la barra de navegación y que `mouseMoveEvent` resuelve con `acercar`). Inventor: con F2/F3/F4 mantenida y el izquierdo, encuadre/zoom/órbita; el medio encuadra y Mayús+medio orbita. PowerMill: medio órbita, Mayús+medio encuadre. SOLIDWORKS: medio órbita, Ctrl+medio encuadre.
+  - El `Mayús + medio = órbita` que antes valía para **todos** los esquemas bajó adentro de los esquemas que lo usan: si quedaba arriba, PowerMill (que lo quiere como encuadre) y SOLIDWORKS (Ctrl+medio) nunca lo alcanzaban. Es el gemelo que se rompía.
+  - `clon/omnicad/ui/visor3d.py:500` — `_tecla_nav` (None o F2/F3/F4), que se pone en `keyPressEvent` (`:2691`), se limpia en `keyReleaseEvent` (`:2704`) y también en `focusOutEvent` (`:2710`): sin lo último, una tecla apretada y un Alt+Tab dejaban el esquema «Inventor» en zoom para siempre.
+  - `clon/omnicad/ui/preferencias.py:473` — el combo pasa de tres a siete opciones, cada una con su combinación en el texto.
+  - `clon/omnicad/api/herramientas_preferencias.py:15` — las mismas siete en `general/raton`.
+- **Gemelos revisados:**
+  - `mousePressEvent` / `mouseMoveEvent` / `mouseReleaseEvent` (`ui/visor3d.py`): consumen lo que devuelve `accion_raton` («orbita», «encuadre», «zoom») y ya sabían hacer las tres cosas; no hubo que tocarlos. El zoom de arrastre usa el mismo camino que el modo Zoom de la barra de navegación. ✔
+  - El gesto del menú radial (clic derecho + arrastre) sigue igual: en Alias el derecho **con** Mayús+Alt es zoom y **sin** modificadores sigue abriendo el menú contextual (devuelve None). ✔
+  - `wheelEvent`: la rueda sigue haciendo zoom en **todos** los esquemas, también en Alias e Inventor, donde Fusion no la usa. Es una decisión: sin rueda, cambiar el preset parecería romper el ratón. Queda anotado como diferencia deliberada con Fusion. ✔
+  - `test_f16_visor.py` (usa el esquema «omnicad») y los tests que usan el de fábrica («fusion»): el camino de esos dos esquemas quedó idéntico, línea por línea. ✔
+  - `ui/comandos/comunes.py`, `ui/manipuladores.py`, `ui/render.py` leen `visor.R` como dirección del mundo: **no** cambian, porque este ítem no toca la cámara. ✔ (Sí habría que tocarlos para la orientación Y arriba: ver «Lo que falta».)
+
+### Tests
+
+- `clon/tests/test_preferencias.py:103` — `test_tema_del_sistema_sigue_al_claro_oscuro_de_windows`: «sistema» está en `disponibles()`; con el esquema simulado en claro, `aplicar_tema()` deja el fondo de `claro_moderno`; cambiándolo a oscuro, el de `oscuro_moderno`; el combo de Preferencias lo deja elegido con el texto «Tema del sistema»; la API tiene los seis valores; y `_validar("general/tema", "usuario:mi_tema")` falla.
+- `clon/tests/test_preferencias.py:131` — `test_raton_estilos_alias_inventor_powermill_solidworks`: las combinaciones de los cuatro presets, con la tecla F3 apretada de verdad (`QTest.keyPress`/`keyRelease` sobre el visor) y el combo y la API con las mismas siete opciones.
+- **Salida ROJA (antes del arreglo):**
+  `FAILED tests/test_preferencias.py::test_tema_del_sistema_sigue_al_claro_oscuro_de_windows` → `AssertionError: assert 'sistema' in ['oscuro_moderno', 'claro_moderno', 'azul_profesional', 'minimalista', 'clasico']`;
+  `FAILED tests/test_preferencias.py::test_raton_estilos_alias_inventor_powermill_solidworks` → `AssertionError: assert 'encuadre' == 'orbita'`;
+  `2 failed, 2 passed in 2.96s`.
+- **Salida VERDE (con el arreglo):** `4 passed in 3.34s` (`tests/test_preferencias.py`).
+- **ruff check .** (repo entero, desde `clon/`): `All checks passed!`
+
+### Grupos de tests (con `../scripts/turno.py`, todos < 900 s)
+
+- `test_preferencias.py + test_temas.py + test_iconos_tema_vivo.py + test_f16_visor.py + test_api_misc.py` → **71 passed in 9.25s**
+- `test_doc_agentes.py + test_comandos.py` → **51 passed in 6.95s**
+- `test_cobertura_ui_api.py` → **347 passed in 2.35s**
+- `test_preferencias.py + test_temas.py + test_iconos_tema_vivo.py` (después de cambiar el lambda por el método) → **54 passed in 5.14s**
+- `test_tipografia_ui.py -k "aplicar_tema or colores_de_texto_y_descarta or muestra_y_el_aviso or restablecer_apariencia"` (los 4 que tocan el tema) → **4 passed, 19 deselected in 8.35s**
+- ~~`test_tipografia_ui.py` entero no se puede correr en esta PC~~ **Corrección del coordinador:** corrido entero con turno, 23 passed (en main y en esta rama con la tanda); el corte de la corrida del agente no se reproduce.
+
+### `/ponytail-review` (salida completa)
+
+> **What this change does:** Preferencias › General gana dos opciones de Fusion que faltaban. (1) «Tema del sistema»: un tema virtual, fuera de `INCLUIDOS`, que resuelve al claro o al oscuro según lo que informe el sistema operativo y se vuelve a aplicar cuando el sistema cambia. (2) Los presets de ratón Alias, Inventor, PowerMill y SOLIDWORKS en `general/raton`, con el zoom, el encuadre y la órbita de cada uno.
+>
+> **Must fix:** ninguno.
+>
+> 1. **La conexión al cambio de esquema dejaba viva a cada ventana cerrada** (`ui/ventana.py:164`, versión anterior)
+>    - **What this is:** La ventana se suscribe al aviso global «cambió el claro/oscuro del sistema».
+>    - **Problem:** Estaba suscripta con un `lambda` que capturaba `self`. El objeto global del aviso guarda una referencia fuerte al lambda, así que la ventana nunca se liberaba, y si el sistema cambiaba después de cerrarla, el aviso llamaba a `aplicar_tema()` sobre un objeto Qt ya destruido. En la app es una sola ventana; en los tests se crean y se cierran decenas.
+>    - **Fix:** Un método de la ventana (`_al_cambiar_esquema`, `:624`) y conectarlo a él: Qt suelta la conexión cuando el receptor se destruye. 3 líneas, sin `lambda`.
+>    - **If we skip it:** Fuga de memoria por ventana y un posible `RuntimeError`/cierre al cambiar el tema de Windows con una ventana cerrada.
+>
+> **Should fix:** ninguno.
+>
+> **Nice to have:**
+>
+> 2. **La lista de temas de la API es una copia** (`api/herramientas_preferencias.py:13`)
+>    - **What this is:** `_OPCIONES` repite a mano las seis claves de tema que la UI saca de `temas.INCLUIDOS`.
+>    - **Problem:** Si mañana se agrega un tema incluido, la API se queda con cinco y nadie se entera.
+>    - **Fix:** Ya está atajado con un test (`test_tema_del_sistema…` compara contra `temas.INCLUIDOS + ["sistema"]`), así que la copia no puede desviarse sin que falle la suite. Importar `temas` desde la API sería peor: la API no debe depender de la UI.
+>    - **If we skip it:** Nada, mientras el test esté.
+>
+> 3. **Las F2/F3/F4 del preset Inventor solo llegan con el foco en el lienzo** (`ui/visor3d.py:2691`)
+>    - **What this is:** La tecla se lee del `keyPressEvent` del visor.
+>    - **Problem:** Si el foco está en el navegador o en el timeline, F3 no llega al visor y el arrastre con el izquierdo no hace zoom.
+>    - **Fix:** No lo toco: en Fusion esas teclas también son del lienzo, y llevarlas a la ventana chocaría con los atajos de las acciones. Queda anotado.
+>    - **If we skip it:** El preset Inventor se siente incompleto si el lienzo no tiene el foco (un clic en el lienzo lo arregla).
+>
+> **Verdict:** Ship.
+> **Lean:** 0 lines possible (el cambio agrega la opción que se pidió y el único código propio es el que la resuelve; no quedó código muerto).
+> **Not checked:** no corrí la prueba de humo ni la suite completa (las corre el coordinador); no abrí Fusion (el comportamiento sale de la ayuda oficial); no miré la opción en pantalla con una captura (no hay pieza de Preferencias en `scripts/prueba_ui/`).
+
+**Qué arreglé de la review:** el punto 1 (el `lambda` → `_al_cambiar_esquema`), y volví a correr los grupos que lo tocan (54 y 4 verdes, ruff limpio). El 2 ya estaba cubierto con un test; el 3 queda como limitación anotada.
+
+### Lo que falta de CF-8 (la fila queda **Parcial**)
+
+En el orden de la fila C13, y por qué no entró:
+
+1. **Orientación Y o Z hacia arriba.** El combo «Orientación de modelado por defecto» solo ofrece «Z hacia arriba». Fusion (`fusion-preferences-reference`: «The default modeling orientation is Z up. To change it, select Y up, click OK, and restart Fusion. The ViewCube then indicates the new default modeling orientation by showing the Y up») lo aplica al mundo entero, y en OmniCAD eso significa meter una rotación mundo→pantalla en el marco de la cámara: hoy **15 lugares de 6 archivos** leen `visor.R` como dirección del mundo (`ui/visor3d.py`: `ojo`, `desplazar`, `encuadrar`, `mirar_a_plano`, `primitivas_centro_giro`, el orden de dibujo por profundidad y el sombreado de `funcion_colores`; `ui/render.py` › `u_atras` del shader; `ui/manipuladores.py`; `ui/comandos/comunes.py`, `editar_cara.py` e `inspeccionar.py`). Si uno solo queda sin convertir, el modelo se ve girado pero las luces, el gizmo o la vista «Mirar a» quedan mal, y eso **no se puede dar por bueno sin verlo en pantalla** (no hay pieza de `todo.py` que lo mire). Es una tanda propia, no una opción suelta.
+2. **Tipo de diseño por defecto** (Pieza/Ensamblaje/Híbrido). OmniCAD no tiene tipos de diseño: es una función que falta (está en CF-6, «¿Qué desea diseñar?»). Una preferencia sin nada que elegir sería un botón que no hace nada.
+3. **Finalidad de uso** (diseño, fabricación, electrónica). En Fusion (`fusion-home`: «Update your purpose for using Fusion… Purpose influences the First things to try section») solo elige **qué sugiere la puesta en marcha**. Sin puesta en marcha no hay nada que influir.
+4. **Experiencia de puesta en marcha.** OmniCAD no tiene asistente, tour ni «First things to try» de primer arranque.
+5. **Controlador de gráficos.** Fusion elige el motor de dibujo de la interfaz (DirectX 11 / Metal / OpenGL: `2026-release-notes`: «Fusion now automatically uses DirectX 11 when available, or software rendering…»; `2025-release-notes`: «This can be changed in the Compatibility & Troubleshooting section of Fusion's Preferences»). OmniCAD dibuja con el OpenGL de Qt: no hay una opción que se pueda cumplir de verdad, y la regla del módulo es no ofrecer lo que no se cumple.
+
+### Revisión del coordinador (2026-11-06)
+
+`ponytail-review` propio, dos Must fix arreglados por el coordinador: (1) con «Inventor», F2 lo atrapaba antes el atajo «Renombrar» de la ventana y el visor se tragaba F2–F4 con cualquier estilo: ahora el visor las toma solo con Inventor y acepta el `ShortcutOverride` (y no suelta la tecla con la repetición del teclado); test nuevo con y sin Inventor en `test_raton_estilos_alias_inventor_powermill_solidworks`. (2) el tema había entrado al MCP: CLAUDE.md y `docs/brechas_mcp.md` lo dejan afuera; sacado de `_OPCIONES` y el test exige que no esté (`herramientas.md` vuelve a quedar igual). `docs/brechas_mcp.md`: el ratón y el tamaño del ViewCube ya estaban en `set_preference`, se corrigió la frase que decía lo contrario. Verificación: `ruff check .` All checks passed!; 1089 passed (`test_preferencias`, `test_temas`, `test_iconos_tema_vivo`, `test_cobertura_ui_api`, `test_doc_agentes`, `test_seguimiento` y los 12 del grep); `test_comandos` 13 passed; `test_tipografia_ui` 23 passed.
+
+### Lo no verificado (⚠)
+
+- No corrí la prueba de humo ni la suite completa (las corre el coordinador), como pide la tanda.
+- **No miré las dos opciones en pantalla.** `scripts/prueba_ui/todo.py` no tiene ninguna pieza de Preferencias; lo que sí comprobé de verdad es la detección del esquema en esta PC (Windows en modo claro): `esquema_sistema()` devuelve «claro» y `tema_del_sistema()` → `claro_moderno`.
+- No probé el preset «Inventor» con el ratón real: el test aprieta y suelta F3 sobre el visor y consulta `accion_raton`, pero no arrastra con el botón izquierdo.
+- Diferencias deliberadas con Fusion, anotadas arriba: la rueda sigue haciendo zoom en Alias e Inventor; el «Zoom to box» de PowerMill (Ctrl+Mayús+medio) y sus «Rotate about X/Y/Z» (Mayús+Alt + izquierdo/medio/derecho) no se implementaron (el primero ya existe como modo Ventana de la barra de navegación, el segundo es la órbita libre); el F6 («resize the view to fit») no existe en OmniCAD.
+- ~~`tests/test_tipografia_ui.py` entero muere en esta PC~~ **Falso** (coordinador): corrido entero con turno pasa, 23 passed en HEAD de main y 23 passed en esta rama con la tanda.
 
 ## Informe tanda 1
 

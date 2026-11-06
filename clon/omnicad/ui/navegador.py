@@ -102,6 +102,75 @@ class _Delegado(QStyledItemDelegate):
 
 
 class _Arbol(QTreeWidget):
+    """Árbol del navegador. En edición de boceto permite arrastrar una fila de objeto sobre un grupo para
+    moverla a ese grupo (un paso de deshacer del boceto) y recibe el foco del teclado para navegar con flechas
+    y renombrar con F2 (H-71)."""
+
+    on_dejar_en_grupo = None   # callable(origen_clave, destino_clave) -> bool; lo pone modo_boceto al editar
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.setFocusPolicy(Qt.StrongFocus)              # H-71: el árbol toma el foco del teclado
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QAbstractItemView.DragDrop)
+        self.setDefaultDropAction(Qt.CopyAction)        # el modelo no reordena solo: lo resuelve el callback
+        self._arrastre = None
+
+    @staticmethod
+    def _clave(it):
+        return it.data(0, ROL_CLAVE) if it is not None else None
+
+    @staticmethod
+    def _es_objeto(clave):
+        return isinstance(clave, str) and (clave.startswith("bo:") or clave.startswith("bg:"))
+
+    @staticmethod
+    def _grupo_de(clave):
+        """Id del grupo destino si `clave` es una fila de grupo (`bo:<gid>` o miembro `bg:<gid>:<oid>`); si no, None."""
+        if not isinstance(clave, str):
+            return None
+        if clave.startswith("bg:"):
+            return int(clave.split(":", 2)[1])
+        if clave.startswith("bo:"):
+            return int(clave[3:])
+        return None
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            c = self._clave(self.itemAt(e.position().toPoint()))
+            self._arrastre = c if self._es_objeto(c) else None
+        super().mousePressEvent(e)
+
+    def dragEnterEvent(self, e):
+        if self._arrastre is not None and self.on_dejar_en_grupo is not None:
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+    def dragMoveEvent(self, e):
+        if self._arrastre is None or self.on_dejar_en_grupo is None:
+            e.ignore()
+            return
+        dest = self._clave(self.itemAt(e.position().toPoint()))
+        if self._grupo_de(dest) is not None:
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+    def dropEvent(self, e):
+        origen = self._arrastre
+        dest = self._clave(self.itemAt(e.position().toPoint()))
+        hecho = False
+        if origen is not None and dest is not None and self.on_dejar_en_grupo is not None:
+            if self._grupo_de(dest) is not None:
+                hecho = bool(self.on_dejar_en_grupo(origen, dest))
+        if hecho:
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+        self._arrastre = None
+
     def drawBranches(self, p, rect, index):
         item = self.itemFromIndex(index)
         if item is None or not item.childCount():
@@ -178,7 +247,6 @@ class Navegador(QFrame):
         self.arbol.setRootIsDecorated(True)
         self.arbol.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.arbol.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.arbol.setFocusPolicy(Qt.NoFocus)
         self.arbol.viewport().setAutoFillBackground(False)
         self.delegado = _Delegado(self.arbol)
         self.delegado.ojo_clic.connect(self.ojo)

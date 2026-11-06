@@ -14,6 +14,7 @@ import numpy as np
 from ..nucleo import geometria as geo
 from . import entidades as ent
 from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo,
+                          angulo_desmoldeo_plastico, espesor_plastico, radio_nominal_plastico,
                           _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, atributos_copia,
                           poner_resultado, registrar_operacion)
 from .parametros import ESCALAR, ErrorExpresion
@@ -140,18 +141,12 @@ class OpBarrido(_OpCrear):
         return eje
 
     def _ruta(self, estado, ctx):
-        """Las aristas de la ruta; con `cadena` (Chain Selection), cada arista de un cuerpo suma las que siguen tangentes."""
+        """Las aristas de la ruta; con `cadena` (Chain Selection), cada arista de un cuerpo y cada curva de boceto
+        suma las que le siguen tangentes (`_en_cadena`, igual que en el barrido de superficie)."""
         ents, ruta = _aristas(self.p["ruta"], estado, "la ruta")
         if not self.p.get("cadena"):
             return ruta
-        sm, salida = _sm(), []
-        if any(not (e.tipo == "arista" and e.cuerpo) for e in ents):
-            ctx.aviso("La selección de cadena solo suma aristas de cuerpos: las curvas de boceto se usan tal cual.")
-        for e in ents:
-            tramo = sm._ampliar_tangentes(estado.cuerpo(e.cuerpo).forma, [e.forma], True) if (
-                e.tipo == "arista" and e.cuerpo) else [e.forma]
-            salida += [a for a in tramo if not any(a.IsSame(x) for x in salida)]
-        return salida
+        return _en_cadena(ents, ruta, estado)
 
     def _barrer_cuerpos(self, estado, ctx, ruta, eje):
         """Solid Sweep: el volumen que recorre cada cuerpo elegido a lo largo de la ruta."""
@@ -251,7 +246,7 @@ class OpNervio(_OpCrear):
     `angulo_desmoldeo` y `direccion_desmoldeo` (referencia a un plano, cara o eje) son Draft Angle y Draft Pull
     Direction; `radio_empalme` y `extender` (Fillet Radius y Extend Curves) solo valen en la Red."""
     TIPO, ETIQUETA, ICONO = "nervio", "Nervio", "⊥"
-    PARAMS = {"curvas": [], "espesor": "2 mm", "extension": "hasta_siguiente", "profundidad": "10 mm",
+    PARAMS = {"curvas": [], "espesor": "", "extension": "hasta_siguiente", "profundidad": "10 mm",
               "direccion": "simetrica", "invertir": False, "objetivo": "", "angulo_desmoldeo": "0 deg",
               "direccion_desmoldeo": None, "radio_empalme": "0 mm", "extender": True}
     EXPRESIONES = ("espesor", "profundidad", "angulo_desmoldeo", "radio_empalme")
@@ -266,9 +261,13 @@ class OpNervio(_OpCrear):
         cuerpo = _cuerpo_objetivo(estado, ents, self.p)
         prof = ctx.evaluar(self.p["profundidad"]) if self.p["extension"] == "profundidad" else None
         pull = ent.direccion(_resolver(self.p["direccion_desmoldeo"], estado)) if self.p.get("direccion_desmoldeo") else None
-        forma = _sc().nervio(cuerpo.forma, aristas, plano.normal, ctx.evaluar(self.p["espesor"]), profundidad=prof,
+        # Ángulo de desmoldeo vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle).
+        angulo = str(self.p["angulo_desmoldeo"] or "").strip() or angulo_desmoldeo_plastico(estado, (cuerpo.id,))
+        # Grosor vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y la usa Rib).
+        espesor = str(self.p["espesor"] or "").strip() or espesor_plastico(estado, (cuerpo.id,), "2 mm")
+        forma = _sc().nervio(cuerpo.forma, aristas, plano.normal, ctx.evaluar(espesor), profundidad=prof,
                              direccion=self.p["direccion"], invertir=self.p["invertir"], extender=self.p["extender"],
-                             angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO), direccion_desmoldeo=pull)
+                             angulo_desmoldeo=ctx.evaluar(angulo, ANGULO), direccion_desmoldeo=pull)
         cuerpo.forma = geo.booleano(cuerpo.forma, forma, "unir")
         self._registrar_usados([cuerpo.id])
 
@@ -284,10 +283,16 @@ class OpRed(OpNervio):
             raise ErrorOperacion("La red se dibuja con curvas de un boceto.")
         cuerpo = _cuerpo_objetivo(estado, ents, self.p)
         prof = ctx.evaluar(self.p["profundidad"]) if self.p["extension"] == "profundidad" else None
-        forma = _sc().red(cuerpo.forma, aristas, plano.normal, ctx.evaluar(self.p["espesor"]), prof,
+        # Ángulo de desmoldeo vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle).
+        angulo = str(self.p["angulo_desmoldeo"] or "").strip() or angulo_desmoldeo_plastico(estado, (cuerpo.id,))
+        # Radio del empalme vacío = el radio nominal de la regla (Fusion: la regla da Nominal Radius y lo usa Web).
+        radio = str(self.p["radio_empalme"] or "").strip() or radio_nominal_plastico(estado, (cuerpo.id,))
+        # Grosor vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y la usa Web).
+        espesor = str(self.p["espesor"] or "").strip() or espesor_plastico(estado, (cuerpo.id,), "2 mm")
+        forma = _sc().red(cuerpo.forma, aristas, plano.normal, ctx.evaluar(espesor), prof,
                           direccion=self.p["direccion"], invertir=self.p["invertir"], extender=self.p["extender"],
-                          angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO))
-        cuerpo.forma = _sc().unir_con_empalme(cuerpo.forma, forma, ctx.evaluar(self.p["radio_empalme"]))
+                          angulo_desmoldeo=ctx.evaluar(angulo, ANGULO))
+        cuerpo.forma = _sc().unir_con_empalme(cuerpo.forma, forma, ctx.evaluar(radio))
         self._registrar_usados([cuerpo.id])
 
 

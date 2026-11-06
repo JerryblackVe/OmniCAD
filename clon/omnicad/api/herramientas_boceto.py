@@ -1684,6 +1684,43 @@ def find_redundant_constraints(sesion, sketch: str | None = None):
             "redundant": [item(i) for i in sobran or []]}
 
 
+@herramienta("find_underconstrained", "boceto",
+             "Lista la geometría SUBRESTRINGIDA del boceto (Fusion: Find Under-Constrained, en la Paleta de boceto): "
+             "las curvas y los puntos que todavía se pueden mover porque ninguna restricción ni cota los fija. Los "
+             "mismos ids de get_sketch (entities y points); su `state` es «free». Un boceto totalmente restringido "
+             "devuelve las dos listas vacías y count=0. No cambia el boceto.")
+def find_underconstrained(sesion, sketch: str | None = None):
+    """
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    op, _br = boceto_activo(sesion, sketch, derivados=True)
+    info = info_boceto(sesion, op)
+    curvas = [{"id": e["id"], "type": e["type"]} for e in info["entities"] if e["state"] == "free"]
+    puntos = [{"id": p["id"], "x": p["x"], "y": p["y"]} for p in info["points"] if p["state"] == "free"]
+    return {"sketch": _paso(op), "status": info["status"], "dof": info["dof"],
+            "count": len(curvas) + len(puntos), "entities": curvas, "points": puntos}
+
+
+@herramienta("compute_sketch", "boceto",
+             "Vuelve a analizar el boceto entero y devuelve el estado de restricción de cada entidad (Fusion: Compute "
+             "Sketch, en la Paleta de boceto): resuelve el boceto de nuevo desde sus restricciones y cotas actuales y "
+             "cuenta qué quedó fijo. `constrained` son las entidades que ya no se mueven, `free` las que sí, y "
+             "`dof` los grados de libertad que sobran. No cambia el boceto.")
+def compute_sketch(sesion, sketch: str | None = None):
+    """
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    op, br = boceto_activo(sesion, sketch, derivados=True)
+    b = br.boceto.copia()
+    _sincronizar_con_solver(sesion, op, b)
+    r = resolver(b, valores_cotas(sesion, b))
+    total = len(b.puntos) + len(b.curvas)
+    fijas = len(r.determinadas)
+    estado = "over_constrained" if not r.ok else ("fully_constrained" if r.gdl == 0 else "under_constrained")
+    return {"sketch": _paso(op), "ok": r.ok, "status": estado, "dof": r.gdl,
+            "constrained": fijas, "free": total - fijas, "message": r.descripcion()}
+
+
 # ---------------------------------------------------------------- sketch_from_spec
 def _spec_error(i, tipo, texto):
     return error("INVALID_SPEC", f"Entidad {i} ({tipo}): {texto}")

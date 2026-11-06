@@ -828,16 +828,20 @@ class Lienzo(QWidget):
                 return m * e
         return 10 * e
 
-    def encuadrar(self):
+    def encuadrar(self, ids=None):
+        """Centra y acerca la vista al boceto entero, o solo a `ids` (Buscar subrestringidos lleva a la entidad
+        elegida)."""
         xs, ys = [], []
         from ..restricciones import objetos
         internos = {p for cid in objetos.indice(self.b) for p in self.b.curvas[cid].puntos()}
         for p in self.b.puntos.values():
-            if p.id in internos:
+            if p.id in internos or (ids is not None and p.id not in ids):
                 continue
             xs.append(p.x)
             ys.append(p.y)
         for c in self.b.curvas.values():
+            if ids is not None and c.id not in ids:
+                continue
             for poli in self._polilineas(c, 16):
                 xs += [q[0] for q in poli]
                 ys += [q[1] for q in poli]
@@ -1074,6 +1078,31 @@ class Lienzo(QWidget):
         self._notificar_seleccion()
         return (f"Sobra (no quita ningún grado de libertad): {', '.join(nombres)}. Quedó elegida: Supr la borra, "
                 "y el boceto se mantiene igual.")
+
+    def subrestringidas(self):
+        """Buscar subrestringidos (Fusion: Find Under-Constrained): [(id, texto)] de la geometría que todavía se puede
+        mover, o sea la que el solver no marca como determinada ni fija. Vacío si está todo restringido o el solver
+        no resolvió."""
+        r = self.resultado
+        if r is None or not r.ok:
+            return []
+        salida = [(c.id, f"{NOMBRES_ENTIDAD.get(c.tipo, c.tipo)} {c.id}")
+                  for c in self.b.curvas.values() if c.id not in r.determinadas]
+        salida += [(p.id, f"punto {p.id}") for p in self.b.puntos.values() if p.id not in r.determinadas]
+        return salida
+
+    def resaltar(self, ids):
+        """Deja elegido `ids` y lleva la vista ahí (una fila de Buscar subrestringidos)."""
+        self.seleccion = list(ids)
+        self._notificar_seleccion()
+        self.encuadrar(ids)
+        self.update()
+
+    def borrar_ids(self, ids):
+        """Borra `ids` en un solo paso de deshacer (la ✕ de una fila de Buscar subrestringidos)."""
+        self.seleccion = list(ids)
+        self.borrar_seleccion()
+        self.update()
 
     def aplicar_cambio(self, funcion, operacion=False, anclar=True):
         """Aplica una modificación. Si deja en conflicto un boceto que estaba bien, se deshace sola.

@@ -142,7 +142,7 @@ La operación existe y funciona por `run_operation`. Falta la herramienta con no
 | MCP-93 | Ampliar `select_bodies` | Opciones `invert`, `by_name` y `by_size` (claves de cinta `invertir_seleccion`, `seleccion_nombre`, `seleccion_tamano`). No es MCP-50 | `ui/ventana.py:420-421` | baja |
 
 Se descartan porque no le sirven a un agente: tema, paneles (también dónde se arrastró el panel de comando: `vista/posicion_panel_comando`, un gesto de la persona sobre la ventana, fuera de la lista blanca de `set_preference`), pantalla completa, atajos, caja de herramientas, menú
-radial, sugerencias, búsqueda de comandos, manipuladores, opciones del ratón y del ViewCube, ayuda.
+radial, sugerencias, búsqueda de comandos, manipuladores y ayuda. El esquema del ratón y el tamaño del ViewCube sí están (`set_preference`: `general/raton`, `general/tamano_viewcube`).
 
 Íconos (plan_iconos.md, 2026-10-26): los íconos del timeline, las insignias de operación y de estado, la gramática visual y el tema de los
 íconos quedan fuera, a propósito. Son dibujos para una persona: un agente lee el tipo, el nombre y el estado del paso con `get_timeline`, que ya

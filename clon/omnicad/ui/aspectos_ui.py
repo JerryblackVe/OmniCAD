@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 Panel ASPECTO de Fusion 360 (MODIFICAR › Aspecto): «Aplicar a» cuerpos o caras, «En este diseño» con miniaturas y su
-menú (Editar, Duplicar, Suprimir, Copiar en Mis aspectos, Añadir a Favoritos), la biblioteca con buscador, familias y
-pestañas (Aspectos de OmniCAD / Mis aspectos / Favoritos), el selector rápido de un aspecto y el Editor de materiales.
+menú (Editar, Duplicar, Suprimir, Quitar y suprimir, Copiar en Mis aspectos, Añadir a Favoritos), la biblioteca con
+buscador, familias y pestañas (Aspectos de OmniCAD / Mis aspectos / Favoritos), el selector rápido de un aspecto y el
+Editor de materiales.
 
 Los widgets solo muestran y editan una copia de trabajo de los aspectos: lo que se elige se ve en el modelo al instante
 (el comando lo pasa a la vista) y recién «Aceptar» lo escribe en el diseño (`timeline/aspectos_doc.py`, con las mismas
@@ -519,6 +520,7 @@ class PanelAspectos(QWidget):
         self.elegido = None                            # dict de aspecto (con "id" si es del diseño) o None
         self._proximo = 1
         self.usados = set()                            # ids con quien los usa (no se pueden suprimir)
+        self.quitar_usos = set()                       # ids de «Quitar y suprimir»: al aplicar se sacan de todos
         self.selector = None
         self.editor = None
         v = QVBoxLayout(self)
@@ -637,6 +639,7 @@ class PanelAspectos(QWidget):
         son los ids con quien los usa y `mapa` los ids definitivos de los aspectos nuevos ({provisorio: definitivo})."""
         self.diseno = copy.deepcopy(diseno)
         self.usados = set(usados)
+        self.quitar_usos.clear()                       # lo de «Quitar y suprimir» ya se escribió (o se descartó)
         if self.elegido is not None and self.elegido.get("id") in (mapa or {}):
             self.elegido["id"] = mapa[self.elegido["id"]]
         self.llenar_diseno()
@@ -646,7 +649,11 @@ class PanelAspectos(QWidget):
         it = self.lista.itemAt(pos)
         if it is None:
             return
-        aid = it.data(Qt.UserRole)
+        self._menu_de_diseno(it.data(Qt.UserRole)).exec(self.lista.mapToGlobal(pos))
+
+    def _menu_de_diseno(self, aid):
+        """El menú de «En este diseño» (clic derecho): Editar, Duplicar, Suprimir, Quitar y suprimir, Copiar en Mis
+        aspectos y Favoritos."""
         a = self.entrada(aid)
         m = QMenu(self.lista)
         m.addAction("Editar", lambda: self.editar(aid))
@@ -655,10 +662,11 @@ class PanelAspectos(QWidget):
         suprimir.setEnabled(aid not in self.usados)
         if aid in self.usados:
             suprimir.setToolTip("Lo usan cuerpos o caras del diseño: quitáselo antes.")
+        m.addAction("Quitar y suprimir", lambda: self.quitar_y_suprimir(aid))
         m.addAction("Copiar en Mis aspectos", lambda: self.copiar_en_mis(a))
         favorito = a["nombre"] in asp.cargar_usuario()["favoritos"]
         m.addAction("Quitar de Favoritos" if favorito else "Añadir a Favoritos", lambda: self.favorito(a, not favorito))
-        m.exec(self.lista.mapToGlobal(pos))
+        return m
 
     def editar(self, aid):
         """Abre el selector rápido sobre un aspecto del diseño: lo que se cambia se ve en el modelo al instante."""
@@ -724,6 +732,15 @@ class PanelAspectos(QWidget):
         self.llenar_diseno()
         self.cambiado.emit()
         return True
+
+    def quitar_y_suprimir(self, aid):
+        """«Unassign and Delete» de Fusion: saca el aspecto de todos los cuerpos y caras que lo usan y lo borra del
+        diseño. Se escribe al aplicar el panel, en el mismo paso de deshacer."""
+        if self.entrada(aid) is None:
+            return False
+        self.usados.discard(aid)
+        self.quitar_usos.add(aid)
+        return self.suprimir(aid)
 
     def copiar_en_mis(self, a):
         """«Copiar en Mis aspectos»: guarda una copia con un nombre libre y devuelve el nombre con que quedó."""

@@ -59,6 +59,43 @@ def id_cuerpo(valor):
                                      '{"tipo": "cuerpo", "cuerpo": "op1.c1"}')
 
 
+def _regla_plastico(estado, cuerpos=()):
+    """Dict de la regla de plástico aplicable: la del componente de `cuerpos` y, sin cuerpos (cuerpo nuevo), la única
+    regla asignada en el diseño (Fusion usa la del componente en el que se trabaja). None si no hay regla."""
+    for cid in cuerpos:
+        cuerpo = estado.cuerpos.get(id_cuerpo(cid))
+        regla = (estado.componentes.get((cuerpo.componente if cuerpo else "") or "") or {}).get("regla_plastico")
+        if regla:
+            return regla
+    if cuerpos:                    # el componente del cuerpo que se toca no tiene regla: no se toma la de otro
+        return None
+    asignadas = [c["regla_plastico"] for c in estado.componentes.values() if c.get("regla_plastico")]
+    return asignadas[0] if len(asignadas) == 1 else None
+
+
+def espesor_plastico(estado, cuerpos=(), por_defecto="1 mm"):
+    """Espesor de pared de las herramientas de plástico: el de la regla del componente de `cuerpos` y, sin cuerpos
+    (cuerpo nuevo), el de la única regla asignada en el diseño (Fusion usa la del componente en el que se trabaja).
+    `por_defecto` (el de cada herramienta) si no hay regla."""
+    regla = _regla_plastico(estado, cuerpos)
+    return f"{regla['espesor']:g} mm" if regla else por_defecto
+
+
+def angulo_desmoldeo_plastico(estado, cuerpos=()):
+    """Ángulo de desmoldeo (Draft Angle) de la regla de plástico: como `espesor_plastico`, pero devuelve el ángulo
+    en grados; 0 deg si no hay regla. Lo usan Nervio y Red al arrancar (Fusion: la regla da Draft Angle y lo usan
+    Rib y Web)."""
+    regla = _regla_plastico(estado, cuerpos)
+    return f"{regla['angulo_desmoldeo']:g} deg" if regla else "0 deg"
+
+
+def radio_nominal_plastico(estado, cuerpos=()):
+    """Radio nominal (Nominal Radius) de la regla de plástico: como `espesor_plastico`, pero devuelve el radio en mm;
+    0 mm si no hay regla. Lo usa la Red al arrancar (Fusion: la regla da Nominal Radius y lo usa Web)."""
+    regla = _regla_plastico(estado, cuerpos)
+    return f"{regla.get('radio_nominal', 0):g} mm" if regla else "0 mm"
+
+
 # ---------------------------------------------------------------- estado del modelo
 class Cuerpo:
     """Cuerpo del modelo. `tipo`: "solido" | "superficie" | "malla" (como los cuerpos de Fusion).
@@ -1116,10 +1153,11 @@ class OpExtrusion(_OpConPerfiles):
               # receta vieja sin la clave, que tiene que abrir igual (igual que en `proyectar_eje`, CAP-12).
               "inicio_objeto": None, "direccion": "un_lado", "medida": "mitad", "extension": "distancia",
               "distancia": "10 mm", "hasta": None, "extension2": "distancia", "distancia2": "10 mm", "hasta2": None,
-              "conicidad": "0 deg", "conicidad2": "0 deg", "espesor": "1 mm", "ubicacion": "lado1", "invertir": False,
+              "conicidad": "0 deg", "conicidad2": "0 deg", "espesor": "", "ubicacion": "lado1", "invertir": False,
               "hasta_modo": "cara", "desfase_hasta": "0 mm", "curvas": [],
               "simetrica": False, "operacion": "nuevo", "objetivo": "", "objetivos": []}
     EXPRESIONES = ("distancia", "distancia2", "desfase_inicio", "conicidad", "conicidad2", "espesor", "desfase_hasta")
+    # espesor "" = el de la regla de plástico asignada (1 mm sin regla)
     # Lo que no se usa con estas opciones no se lista: Fusion crea AlongDistance y TaperAngle, por lado.
     def claves_modelo(self):
         p = self.p
@@ -1198,7 +1236,8 @@ class OpExtrusion(_OpConPerfiles):
             caja = _caja_todo(estado)
         delgado = None
         if p.get("tipo") == "delgada":
-            delgado = {"espesor": ctx.evaluar(p["espesor"]), "ubicacion": p.get("ubicacion", "lado1")}
+            espesor = str(p.get("espesor") or "").strip() or espesor_plastico(estado, self._cuerpos_objetivo())
+            delgado = {"espesor": ctx.evaluar(espesor), "ubicacion": p.get("ubicacion", "lado1")}
         conicidad = ctx.evaluar(p.get("conicidad", "0"), ANGULO)
         conicidad2 = ctx.evaluar(p.get("conicidad2", "0"), ANGULO)
         kernel = _kernel_crear()
@@ -1222,6 +1261,11 @@ class OpExtrusion(_OpConPerfiles):
         if not geo.esta_vacia(forma) and caras and all(cara_sin_area(c) for c in caras):
             raise ErrorOperacion("La extrusión no tiene volumen: el perfil elegido casi no tiene área.")
         return forma
+
+    def _cuerpos_objetivo(self):
+        """Los cuerpos de «Objetos para cortar», siempre como lista (vacía = automático)."""
+        o = self._objetivo()
+        return list(o) if isinstance(o, (list, tuple)) else ([o] if o else [])
 
     @staticmethod
     def _forma_objeto(e):

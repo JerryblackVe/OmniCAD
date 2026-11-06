@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 
 from PySide6.QtCore import QEvent, QEventLoop, QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QSizePolicy, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
@@ -161,6 +161,7 @@ class VentanaPrincipal(QMainWindow):
         self.prefs = prefs or Preferencias()
         self._tema_aplicado = None          # tokens del tema que ya están en la aplicación
         self._avisos_tema = self.aplicar_tema()     # antes de crear los widgets: nacen con el estilo del tema
+        QGuiApplication.styleHints().colorSchemeChanged.connect(self._al_cambiar_esquema)
         self.doc = None
         self.dlg_parametros = None
         self.ocultos = set()
@@ -196,10 +197,12 @@ class VentanaPrincipal(QMainWindow):
         except ValueError:
             pass
         self.area.al_mover_panel = self._guardar_posicion_panel
+        self.area.viewcube.al_elegir_tamano = self._guardar_tamano_viewcube
         self.navegador = Navegador()
         from . import acciones_navegador
         self.navegador.menu_elemento = lambda item: acciones_navegador.menu(self, item)
         self.navegador.menu_boceto = lambda item: navegador_boceto.menu(self, item)
+        self.navegador.arbol.on_dejar_en_grupo = lambda o, d: navegador_boceto._mover_desde_arbol(self, o, d)
         self.area.anclar_arriba_izq(self.navegador)
         self.barra_nav = BarraNavegacion(self.visor, self)
         self.area.set_barra(self.barra_nav)
@@ -335,8 +338,13 @@ class VentanaPrincipal(QMainWindow):
         usa otro comando (preferencia editada a mano, o una versión nueva que le dio esa tecla a otro) no se aplica:
         dos comandos con la misma tecla hacen que Qt no dispare ninguno."""
         teclas = leer_teclas(self.prefs)
+        defectos = {c: a.property("atajo_defecto") for c, a in self.acciones.items()}
+        if self.prefs["general/espacio_repite"]:
+            # Fusion «Spacebar Repeats Last Command»: la barra espaciadora repite el último comando y deja de ser de
+            # «Boceto sobre la cara elegida» (apagado, la tecla queda libre para esa otra asignación, como en Fusion).
+            defectos["repetir"], defectos["boceto_cara"] = "Space", ""
         propias = {c: a for c, a in self.acciones.items() if a.property("atajo_defecto") is not None}
-        efectivos = {c: teclas.get(c, a.property("atajo_defecto")) for c, a in propias.items()}
+        efectivos = {c: teclas.get(c, defectos[c]) for c in propias}
         usos = Counter(_normal(s) for s in efectivos.values() if _normal(s))
         for clave, a in propias.items():
             efectivo = efectivos[clave]
@@ -612,6 +620,11 @@ class VentanaPrincipal(QMainWindow):
             c.rejilla_fija = None
         c.visibilidad = {k: p[f"vista/vis_{k}"] for k in CLAVES_VISIBILIDAD}
         self.barra_nav.set_estilo(c.estilo_visual)
+
+    def _al_cambiar_esquema(self, *_a):
+        """«Tema del sistema»: el sistema pasó a claro u oscuro. Método de la ventana (y no un lambda) para que Qt
+        suelte la conexión cuando la ventana se destruye."""
+        self.aplicar_tema()
 
     def aplicar_tema(self, clave=None):
         """Preferencias › General › Tema: activa `clave` (o el guardado) en la aplicación entera —QSS, paleta y fondo
@@ -1255,6 +1268,8 @@ class VentanaPrincipal(QMainWindow):
                 salida[cid] = TABLA_MATERIALES[props["material"]]["color"]
         salida.update({cid: tuple(rgb) for cid, rgb in self._previa_aspecto.get("cuerpos", {}).items()
                        if cid in estado.cuerpos})
+        for cid in self._previa_aspecto.get("sin_apariencia", ()):      # «Quitar y suprimir» (H-74)
+            salida.pop(cid, None)
         return salida
 
     def _caras_pintadas(self, estado, ocultos):
@@ -1406,6 +1421,11 @@ class VentanaPrincipal(QMainWindow):
     def _guardar_posicion_panel(self, pos):
         """Dónde dejó la persona los paneles de comando (None: vuelven al lugar de siempre)."""
         self.prefs["vista/posicion_panel_comando"] = ",".join(map(str, pos)) if pos else ""
+
+    def _guardar_tamano_viewcube(self, clave):
+        """Tamaño elegido en el menú del clic derecho del ViewCube: queda en las preferencias (como Fusion)."""
+        self.prefs["general/tamano_viewcube"] = clave
+        self.area.reubicar()
 
     def _guardar_espacio(self, clave, ventana):
         self.doc.espacios[clave] = ventana.a_dict()

@@ -277,13 +277,13 @@ _DIRECCION_VACIADO = {"inside": "interior", "outside": "exterior", "both": "ambo
              "En algunas caras B-spline el vaciado hacia afuera no se puede calcular: el error indica cómo armar "
              "dos solevaciones y restarlas. thickness acepta número (mm) o expresión.",
              modifica=True)
-def shell(sesion, body: str, faces: Elementos, thickness: Expr, direction: Literal["inside", "outside", "both"] = "inside",
+def shell(sesion, body: str, faces: Elementos, thickness: Expr = "", direction: Literal["inside", "outside", "both"] = "inside",
           tangent_chain: bool = True, outside_thickness: Expr | None = None,
           corners: Literal["sharp", "rounded"] = "sharp"):
     """
     body: id o nombre del cuerpo a vaciar.
     faces: caras a quitar: selector (">Z" = la tapa), id de find_faces ("Cuerpo1/F6") o lista; [] = hueco cerrado.
-    thickness: espesor de pared en mm (número o expresión con parámetros); es el interior, y también el exterior si no se da outside_thickness.
+    thickness: espesor de pared en mm (número o expresión con parámetros); es el interior, y también el exterior si no se da outside_thickness; vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y lo usa Shell).
     direction: "inside", "outside" o "both".
     tangent_chain: true (por defecto) quita también las caras tangentes encadenadas a las elegidas.
     outside_thickness: espesor exterior en mm distinto del interior (con direction=both u outside); vacío = el mismo que thickness.

@@ -154,6 +154,30 @@ def test_pintar_el_cuerpo_lo_deja_entero_y_clear_false_conserva_las_caras_con_av
     assert r["cleared"] and "op1.c1" not in s.doc.propiedades
 
 
+def test_quitar_saca_el_aspecto_del_cuerpo_y_de_la_cara_y_conserva_quitar_caras():
+    """H-103 (refactor sin cambio de comportamiento, código duplicado): `quitar` sigue sacando el aspecto del
+    cuerpo y de las caras elegidas, y `quitar_caras` sigue sacando los aspectos propios de todas las caras del
+    cuerpo (H-73). El test cierra que la refactor (delegar en `_limpiar_usos`) no mueve la aguja."""
+    s = _escena()
+    _ok(s, "set_appearance", bodies=["op1.c1"], appearance="Granito - Gris")  # pinta el cuerpo
+    _ok(s, "set_appearance", faces=">Z", body="op1.c1", color="#000000")     # y una cara encima
+    doc = s.doc
+    ref_alta = doc.propiedades["op1.c1"]["caras"][0]["ref"]
+
+    # sacar el aspecto solo de la cara concreta deja el cuerpo pintado y quita esa cara
+    ad.quitar(doc, [], [("op1.c1", ref_alta)])
+    props = doc.propiedades["op1.c1"]
+    assert props.get("aspecto") is not None                 # el cuerpo sigue pintado
+    assert all(c["ref"] != ref_alta for c in props.get("caras", []))
+    assert len(props.get("caras", [])) == 0                  # era la única cara
+
+    # quitar_caras en el cuerpo borra también el aspecto del cuerpo (y no quedan caras)
+    ad.quitar(doc, ["op1.c1"], quitar_caras=True)
+    props = doc.propiedades.get("op1.c1", {})
+    assert props.get("aspecto") is None                      # el cuerpo vuelve a su material
+    assert "caras" not in props                               # y sin aspectos propios de caras
+
+
 def test_el_color_suelto_no_crea_un_aspecto_del_diseno():
     s = _escena()
     _ok(s, "set_appearance", bodies=["op1.c1"], color="#336699")

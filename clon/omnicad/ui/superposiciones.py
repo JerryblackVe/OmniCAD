@@ -23,7 +23,10 @@ CARAS = [((0, 0, 1), (1, 0, 0), (0, 1, 0), "SUPERIOR", "arriba"),
          ((0, 1, 0), (-1, 0, 0), (0, 0, 1), "POSTERIOR", "atras"),
          ((1, 0, 0), (0, 1, 0), (0, 0, 1), "DERECHA", "derecha"),
          ((-1, 0, 0), (0, -1, 0), (0, 0, 1), "IZQUIERDA", "izquierda")]
-TAMANOS = {"pequeno": 90, "automatico": 120, "grande": 150}
+TAMANOS = {"diminuto": 70, "pequeno": 90, "normal": 110, "automatico": 120, "grande": 150}
+# Menú del clic derecho del ViewCube, como Fusion (ViewCube Size: Automatic, Large, Normal, Small, Tiny)
+TAMANOS_TEXTO = [("automatico", "Automático"), ("grande", "Grande"), ("normal", "Normal"), ("pequeno", "Pequeño"),
+                 ("diminuto", "Diminuto")]
 EJES = [((1, 0, 0), QColor("#d23c3c"), "X", ((0, -1, 0), (0, 0, -1))),
         ((0, 1, 0), QColor("#3fa34d"), "Y", ((-1, 0, 0), (0, 0, -1))),
         ((0, 0, 1), QColor("#2f5fd0"), "Z", ((-1, 0, 0), (0, -1, 0)))]
@@ -35,16 +38,39 @@ class ViewCube(QWidget):
         self.visor = visor
         self.setMouseTracking(True)
         self.setToolTip("ViewCube: clic en una cara para la vista estándar, arrastrar para orbitar.\n"
-                        "Atajos: 0 isométrica, 1 frente, 2 arriba, 3 derecha.")
+                        "Atajos: 0 isométrica, 1 frente, 2 arriba, 3 derecha. Clic derecho: tamaño del ViewCube.")
         self._poligonos = []          # [(QPolygonF, vista)] de las caras visibles, para el clic
         self._hover = None
         self._presionado, self._arrastrado = None, False
+        self._tamano = "automatico"
+        self.al_elegir_tamano = None  # función(clave): la ventana la guarda en las preferencias
         self.set_tamano("automatico")
         visor.camara_cambiada.connect(self.update)
 
     def set_tamano(self, clave):
+        self._tamano = clave
         lado = TAMANOS.get(clave, TAMANOS["automatico"])
         self.setFixedSize(lado, lado)
+
+    def menu_tamano(self):
+        """Menú «Tamaño de ViewCube» del clic derecho, con las cinco opciones de Fusion."""
+        m = QMenu(self)
+        grupo = QActionGroup(m)
+        for clave, texto in TAMANOS_TEXTO:
+            a = m.addAction(texto)
+            a.setCheckable(True)
+            a.setChecked(clave == self._tamano)
+            a.triggered.connect(lambda _=False, c=clave: self._elegir_tamano(c))
+            grupo.addAction(a)
+        return m
+
+    def _elegir_tamano(self, clave):
+        self.set_tamano(clave)
+        if self.al_elegir_tamano is not None:
+            self.al_elegir_tamano(clave)
+
+    def contextMenuEvent(self, e):
+        self.menu_tamano().exec(e.globalPos())
 
     def _proyectar(self, rot, p, centro, escala):
         v = rot @ np.asarray(p, float)

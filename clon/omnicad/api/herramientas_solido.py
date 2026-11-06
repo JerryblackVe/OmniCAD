@@ -183,7 +183,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
             operation: Literal["new_body", "join", "cut", "intersect", "auto"] = "new_body",
             direction: Literal["one_side", "two_sides", "symmetric"] = "one_side", taper_angle: Expr = 0,
             target: Cuerpos | None = None, distance2: Expr | None = None, reverse: bool | None = None,
-            faces: Cuerpos | None = None, thin: bool = False, wall_thickness: Expr = 1,
+            faces: Cuerpos | None = None, thin: bool = False, wall_thickness: Expr | None = None,
             wall_location: Literal["side1", "side2", "center"] = "side1",
             start: Literal["profile_plane", "offset", "object"] = "profile_plane", start_offset: Expr = 0,
             start_object: str | None = None, symmetric_measure: Literal["total", "half"] = "total",
@@ -205,7 +205,8 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         va hacia el lado que tiene material, como Fusion).
     faces: caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch; tienen que ser coplanares. Extruir solo una cara de un cuerpo: operation="join" la empuja hacia afuera (agrega material); operation="cut" la empuja hacia adentro (corta; ver reverse).
     thin: true hace una extrusión delgada (pared de wall_thickness) en lugar de sólida.
-    wall_thickness: espesor de la pared en mm (número o expresión); solo con thin.
+    wall_thickness: espesor de la pared en mm (número o expresión); solo con thin. Vacío = el espesor de la regla de
+        plástico del componente (1 mm si no hay regla asignada).
     wall_location: lado del contorno donde va la pared: "side1", "side2" o "center"; solo con thin.
     start: dónde empieza la extrusión: "profile_plane" (el plano del perfil), "offset" (a start_offset de él) o "object" (en la cara plana o plano start_object).
     start_offset: desfase del inicio en mm según la dirección (número o expresión); con start=offset desde el perfil, con start=object desde el objeto; 0 por defecto.
@@ -230,7 +231,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         raise error("INVALID_ARGUMENTS", "open_curves (curvas abiertas) necesita thin=true: una curva abierta solo se extruye con pared.")
     if open_curves and sketch is None:
         raise error("INVALID_ARGUMENTS", "open_curves necesita sketch: son curvas de ese boceto.")
-    if thin:
+    if thin and wall_thickness is not None:
         _numero_positivo(wall_thickness, "wall_thickness")
     sop = br = None
     perfiles = []
@@ -263,7 +264,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         from .herramientas_modificar import _refs
         p["caras"] = _refs(sesion, faces, "cara", body)[0]
     if thin:
-        p.update(tipo="delgada", espesor=texto_expr(wall_thickness),
+        p.update(tipo="delgada", espesor=texto_expr(wall_thickness) if wall_thickness is not None else "",
                  ubicacion={"side1": "lado1", "side2": "lado2", "center": "centro"}[wall_location])
         if open_curves:
             p["curvas"] = [{"tipo": "curva_boceto", "boceto": sop.id, "curva": int(c)} for c in dict.fromkeys(open_curves)]
@@ -415,7 +416,8 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
              "sobre las que va la ruta) es el tipo Ruta + Superficie guía: el perfil sigue la normal de la superficie. "
              "sweep_bodies barre un cuerpo sólido (Solid Sweep) en lugar de un perfil: lo que recorre el cuerpo al "
              "moverse a lo largo de la ruta (aproximado con copias del cuerpo: el borde de un barrido curvo queda "
-             "escalonado). chain=true suma a cada arista de path_edges las que le siguen tangentes (Chain Selection).",
+             "escalonado). chain=true suma a cada arista de path_edges y a cada curva de path_sketch las que le siguen "
+             "tangentemente (Chain Selection).",
              modifica=True)
 def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch: str | None = None,
           path_curves: list[int] | None = None,
@@ -445,7 +447,7 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
     path_distance: fracción de la ruta que se barre (>0 hasta 1); 1 = toda.
     body: cuerpo donde se evalúan los selectores de faces y path_edges; vacío = el único cuerpo.
     sweep_bodies: cuerpo(s) (id o nombre) que se barren por la ruta (Solid Sweep) en vez de un perfil; sin carril, superficie guía, torsión ni conicidad.
-    chain: true suma a path_edges las aristas tangentes que le siguen (Chain Selection); las curvas de boceto se usan tal cual y se avisa.
+    chain: true suma a cada arista de path_edges y a cada curva de path_sketch las que le siguen tangentemente (Chain Selection).
     """
     cuerpos_barrido = _ids_cuerpos(sesion, sweep_bodies)
     if cuerpos_barrido and (sketch is not None or faces or rail_sketch is not None or guide_surface
