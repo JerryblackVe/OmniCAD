@@ -398,6 +398,14 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 
 - Tandas 1 a 4 commiteadas en `main` (`799d6f6`, `7e95678`, `64a79f0`, `ba26cc0`). Cierre completo del 2026-11-06 sobre `ba26cc0`: ruff limpio, suite verde (`parte_04` rehecha en dos mitades por el tope de 900 s; un rojo por falta de memoria de OpenBLAS pasó solo), humo OK, piezas con foco OK. La pieza `solido_crear` daba ✗ en «extruir simétrico» por el defecto nuevo de H-86: la prueba ahora pide «mitad» explícito. Falta: la tanda 5 (H-99, H-94) y las cuatro piezas con `--ventana visible`.
 
+## 3t. Tarea nueva: velocidad de pruebas, paquetes A y D (2026-11-06)
+
+- **A (P-59):** el cierre ahora pasa `--durations=0 --junitxml` a cada tanda y corre `scripts/tiempos.py`. Falta: que el
+  cierre completo deje `evidencias/tiempos.json` con la suite entera (11 xml: 10 tandas + motor) y su ranking en
+  `tiempos.txt`; que ninguna tanda pase los 900 s por el `--durations=0`.
+- **D (P-60):** el humo corre con la ventana transparente y sin mover el cursor real; el cierre lo lanza sin esperar
+  ocio. Falta: el humo dentro del cierre completo con la PC en uso, y `test_motor` (abre el humo) en su corrida aparte.
+
 ## 4. Cosas que ninguna prueba cubre todavía
 
 | # | Qué falta | Dónde está anotado |
