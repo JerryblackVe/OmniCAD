@@ -4,6 +4,8 @@
 Mismo criterio que Fusion: lo que se escribe en un campo de medida se puede tirar con el ratón en la vista.
 Cada función `_asas_*` es el `Comando.manipuladores` de un comando y se engancha al final (`_enganchar`).
 """
+import math
+
 import numpy as np
 
 from ...nucleo import geometria as geo
@@ -314,7 +316,11 @@ def _asas_repujado(self, ctx, v):
         return []
     punto, n = mp.punto_normal_cara(cara)
     centro = base[0] + n * float((punto - base[0]) @ n)         # el centro del perfil, sobre la cara
-    return [mp.Flecha("profundidad", centro, n * (1.0 if v.get("tipo") != "grabado" else -1.0), minimo=0.0)]
+    # Fusion: profundidad negativa SIEMPRE graba; el asa baja de 0 (sin tope) y apunta al lado del material.
+    prof = evaluar_o_cero(ctx, v.get("profundidad"))
+    es_relieve = prof >= 0 and v.get("tipo") == "relieve"
+    signo = 1.0 if es_relieve else -math.copysign(1.0, prof)
+    return [mp.Flecha("profundidad", centro, n * signo, minimo=None)]
 
 
 def _asas_rosca(self, ctx, v):

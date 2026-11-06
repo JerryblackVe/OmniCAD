@@ -136,7 +136,7 @@ def test_nervio_y_red(nombre, plano, offset, altura, aumento, tipo):
 
 
 @pytest.mark.parametrize("modo,profundidad,signo", [("emboss", 1.5, 1), ("deboss", 1.5, -1),
-                                                 ("emboss", -1.5, -1)])
+                                                 ("emboss", -1.5, -1), ("deboss", -1.5, -1)])
 def test_create_emboss(modo, profundidad, signo):
     s = api.Sesion()
     cid = _caja(s)

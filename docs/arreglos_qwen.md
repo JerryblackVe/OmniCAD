@@ -487,7 +487,7 @@ En la auditoría eran 82 comprobaciones con 9 ✗. Pasaron los checks de esta ta
 
 (84 vs 82: el caso de las dos curvas ahora corre y suma sus checks de aceptar y deshacer, que antes se cortaban en la previa.)
 
-Las 6 ✗ que quedan son ítems ya anotados, ninguno de esta tanda: B-215 (2: desmoldeo −1° y 1° con extracción), H-95 (el Nervio no tiene Radio del empalme), B-217 (cadena tangente 437,12), H-99 (profundidad negativa no pasa el Efecto a Grabado) y H-97 (asas de alineación del Repujado).
+Las 6 ✗ que quedan son ítems ya anotados, ninguno de esta tanda: B-215 (2: desmoldeo −1° y 1° con extracción), H-95 (el Nervio no tiene Radio del empalme), B-217 (cadena tangente 437,12) y H-97 (asas de alineación del Repujado). (H-99 se resolvió aparte: ver «## Informe tanda 5».)
 
 Capturas miradas con Read: `capturas/red_invertida.png` (el panel RED con «Cambiar dirección» activo, el aviso visible y el cuerpo intacto) y `capturas/red_caja.png`. Evidencia: `evidencias/ui_2026-11-06/nervio_red_repujado.log` y `.json`, y la sonda `evidencias/ui_2026-11-06/sonda_asas_red.py`.
 
@@ -751,7 +751,7 @@ $ ../scripts/turno.py --plazo 2700 -- .venv/Scripts/python.exe ../scripts/prueba
 [OK ] · Repujado placa: resultado = 100 — obtenido 100.0; nuevos={} cambiados={'op9.c1': ('solido', 23724.071)}
 ```
 
-Cerró el check de B-217 en la ventana real (23724,071 = la placa de 23624,07 + los 100 exactos; en la tanda 2 daba 24061,186). Las 5 ✗ que quedan son ítems ya anotados: B-215 (2: desmoldeo −1° y 1° con extracción), H-95 (el Nervio no tiene Radio del empalme), H-99 (profundidad negativa no pasa el Efecto a Grabado) y H-97 (asas de alineación del Repujado).
+Cerró el check de B-217 en la ventana real (23724,071 = la placa de 23624,07 + los 100 exactos; en la tanda 2 daba 24061,186). Las 5 ✗ que quedan son ítems ya anotados: B-215 (2: desmoldeo −1° y 1° con extracción), H-95 (el Nervio no tiene Radio del empalme) y H-97 (asas de alineación del Repujado). (H-99 se resolvió aparte: ver «## Informe tanda 5».)
 
 Capturas miradas con Read: `capturas/barrido_carril.png` (la app entera con el aviso conocido de la selección de cadena; sin nada roto), las de tamaño de panel `barrido_1024x640.png` / `barrido_800x520.png` (los dos checks de «Aceptar se ve» de la primera pieza) y `capturas/repujado_cadena.png` (el panel REPUJADO con «Cadena tangente» activa: el relieve azul solo en la cara de arriba de la placa, los cuatro costados limpios — la imagen que la auditoría mostraba con cuatro cuadros achicados).
 
@@ -788,6 +788,90 @@ Lo escribe el coordinador: Qwen se cortó dos veces (reinicio de la PC a las 04:
 - Tests nuevos: `test_herramientas_solido.py`, `test_comandos.py`, `test_sol07_revolucion.py`; chequeo `medida_por_defecto` en `scripts/prueba_ui/revolucion_barrido_solevacion.py`.
 - Revisión del coordinador: ruff limpio; 894 + 866 + 833 verdes (45 archivos que usan el código tocado). `/ponytail-review` halló un bloque de proyección duplicado en `ops_superficie.py` (sin efecto, idempotente): borrado; 805 verdes después.
 - ⚠ Sin test propio: revolución de superficie desde aristas de un cuerpo con el eje proyectado (antes daba error, ahora no proyecta).
+
+## Informe tanda 5
+
+### H-99 · Repujado: profundidad negativa siempre graba (CodeBuddy con hy3)
+
+**Estado:** Resuelto. La profundidad negativa del Repujado ahora SIEMPRE graba (Deboss) como Fusion
+(«Negative values create a Deboss effect»), sin importar el «Tipo» elegido (antes se invertía dos veces y el
+panel se quedaba en Relieve). El panel pasa el Tipo a Grabado cuando la profundidad baja de 0 y el asa de
+Profundidad puede bajar de 0 sin tope.
+
+**Cambios (archivo:línea):**
+- `clon/omnicad/nucleo/solidos_crear.py:1569` — se borró el doble cambio de signo (`if profundidad < 0: profundidad, tipo = -profundidad, ...`); ahora `es_relieve = profundidad > 0 and tipo == "relieve"` y `profundidad = abs(profundidad)`.
+- `clon/omnicad/nucleo/solidos_crear.py:1602` — `sentido = (1.0 if es_relieve else -1.0) * (-1.0 if invertir else 1.0)`.
+- `clon/omnicad/nucleo/solidos_crear.py:1622` — `_envolver_en_cilindro(...)` recibe el tipo efectivo (`"relieve" if es_relieve else "grabado"`) en vez del tipo original.
+- `clon/omnicad/nucleo/solidos_crear.py:1631` — `operacion = "unir" if es_relieve else "cortar"`.
+- `clon/omnicad/ui/comandos/crear.py:378` (clase `Repujado`) — nuevo `al_cambiar`: al cambiar `profundidad` pone `tipo="grabado"` si es negativa (o `"relieve"` si es positiva), actualizando el widget con `blockSignals`. Import de `LONGITUD` en la línea 15.
+- `clon/omnicad/ui/comandos/asas_extra.py:308` (`_asas_repujado`) — el asa de Profundidad apunta al lado del material y baja de 0: `signo = 1.0 if es_relieve else -math.copysign(1.0, prof)` y `minimo=None` (antes `minimo=0.0`); `import math` arriba.
+- `clon/omnicad/api/herramientas_solido_extra.py:239` — docstring de `create_emboss` aclara que profundidad negativa siempre graba.
+
+**Gemelos (mismo constructo, buscados):** asa de Profundidad (`asas_extra.py::_asas_repujado`), previa del panel
+(`comando.py` / `Repujado.construir`), API `create_emboss` (`api/herramientas_solido_extra.py`), núcleo
+`repujado_en_cuerpos` / `_envolver_en_cilindro` (`nucleo/solidos_crear.py`), y `nucleo/omnikernel/` (no hay
+repujado ahí). `grep` del constructo viejo (`profundidad, tipo = -profundidad`, `"grabado" if tipo == "relieve"`)
+por todo el repo: 0 coincidencias → no quedan gemelos con el bug.
+
+**Salida real de ruff:**
+```
+$ .venv/Scripts/python.exe -m ruff check .
+All checks passed!
+```
+
+**Salida real de los tests (desde `clon/`, con `../scripts/turno.py`, en grupos < 900 s):**
+- Obligatorios de la fila 5 (5 tests, `test_create_emboss` parametrizado en 4):
+  ```
+  tests/test_comandos_crear.py::test_repujado_profundidad_negativa_pasa_el_tipo_a_grabado
+  tests/test_comandos_crear.py::test_repujado_grabado_con_profundidad_negativa_graba
+  tests/test_manipuladores.py::test_el_asa_de_profundidad_del_repujado_pasa_por_debajo_de_cero
+  tests/test_solidos_crear.py::test_repujado_plano_relieve_grabado_y_limite_de_cara
+  tests/test_api_solido_extra.py::test_create_emboss
+  ........                                                                 [100%]
+  8 passed in 10.90s
+  ```
+- Regresión, grupo 1 (`grep -l` de las funciones tocadas): `test_solidos_crear.py test_manipuladores.py test_repujado_alineacion.py test_texto_vectores.py` → `197 passed in 45.15s`.
+- Regresión, grupo 2: `test_comandos_crear.py test_api_solido_extra.py test_api_solido.py test_opciones_operaciones.py test_api_avanzado.py test_cobertura_ui_api.py test_iconos_extra.py test_barrido_tipos.py` → `1126 passed in 96.07s`.
+
+**Ventana (pieza `nervio_red_repujado`, `--ventana minimizada`):** 84 comprobaciones, 5 ✗.
+- `[OK] Repujado › con profundidad negativa el Tipo pasa a Grabado (Fusion: Effect cambia solo) — Tipo = grabado` ✓
+- `[OK] Repujado › Profundidad «-1 mm»: previa` ✓
+- Las otras 5 ✗: 3 son ítems ya anotados y ajenos a H-99 (B-215 desmoldeo −1°/1°, H-95 Radio del empalme del Nervio), 1 es H-97 (asas de alineación del Repujado). La 5ª es el asa de Profundidad del Repujado: `«profundidad» arrastrada más allá del cero: tope y sin excepción — 4 → -6`. **Es el comportamiento que H-99 pide** (el asa baja de 0); la aserción de la pieza todavía espera el viejo «tope» en 0, por eso marca ✗. No es regresión del arreglo.
+
+### ponytail-review (salida completa)
+
+**What this change does:** Hace que el Repujado de OmniCAD grabe siempre que la profundidad sea negativa, sin
+importar el Tipo elegido, igual que Fusion. También el panel cambia el Tipo a Grabado cuando la profundidad baja
+de 0, y el asa de Profundidad puede bajar de 0.
+
+**Must fix:** ninguno.
+- El núcleo ahora deriva el sentido de `es_relieve = profundidad > 0 and tipo == "relieve"` con magnitud
+  `abs(profundidad)`. Cubre los 4 casos de los tests (`+relieve`, `+grabado`, `-relieve`, `-grabado`) sin el
+  doble cambio de signo que antes dejaba relieve cuando `tipo="grabado"` y profundidad negativa.
+- El camino cilíndrico (`_envolver_en_cilindro`) recibe el tipo efectivo, coherente con el caso plano.
+
+**Should fix:** ninguno.
+- `Repujado.al_cambiar` solo actúa al editar `profundidad`; no toca el signo de `profundidad` al elegir el Tipo
+  (eso es coherente con Fusion, donde el Efecto sigue el signo de la profundidad). No rompe la carga desde una
+  receta guardada.
+
+**Nice to have:**
+1. **Carga desde receta con signo/tipo desparejos** (`ui/comandos/crear.py` `Repujado.desde_op`). Si una receta
+   guardada trae `profundidad="-1 mm"` y `tipo="relieve"`, el panel los muestra sin normalizar y el núcleo debossaría
+   mientras el panel dice Relieve. Caso de borde menor (la edición lo corrige al tocar Profundidad). Arreglo mínimo:
+   normalizar `tipo` en `desde_op` con la misma regla de `al_cambiar`. No lo hice: H-99 no lo pide y los tests no
+   lo cubren.
+
+**Verdict: Ship.**
+**Lean: 0 líneas de más** (el diff borra el doble cambio de signo y añade solo la regla nueva + el acoplamiento panel↔asa).
+**Not checked:** la pieza `nervio_red_repujado` corre en ventana minimizada con offscreen; la captura se generó pero
+no se inspeccionó píxel a píxel (los checks de texto del log confirman el Tipo y la previa).
+
+---
+
+### Revisión del coordinador (2026-11-06)
+
+Los tests eran el parche de Qwen (tanda 5, sin cupo); la ayuda de Fusion los confirma: «Negative values create a Deboss effect». `ponytail-review` propio: (1) **Must fix**, `Repujado.al_cambiar` volvía el Tipo a Relieve con cualquier profundidad positiva (Grabado con 1 mm → escribir 2 mm → Relieve): ahora cambia solo al cruzar el cero, al editar mide desde la profundidad guardada (`desde_op`) y usa `panel.set_valores`; caso sumado a `test_repujado_profundidad_negativa_pasa_el_tipo_a_grabado`. (2) **Must fix**, la pieza `nervio_red_repujado` exigía tope 0 a toda asa: ahora solo si el asa tiene tope. (3) con profundidad 0 en Relieve el asa apuntaba hacia adentro: `prof >= 0`. Verificación: `ruff check .` All checks passed!; 83 passed (`test_comandos*` + `test_b105_panel_chico`), 1308 passed (11 archivos del grep de repujado), 470 passed (`test_manipuladores`, `test_seguimiento`, `test_comandos_crear`); pieza `nervio_red_repujado` 84 comprobaciones, 4 ✗ ya anotadas (B-215 ×2, H-95, H-97). ⚠ Un `.omnicad` viejo con Grabado y profundidad negativa ahora graba (antes hacía relieve): es el arreglo.
 
 ## Prompt para el agente
 

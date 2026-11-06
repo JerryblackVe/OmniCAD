@@ -386,6 +386,8 @@ def test_repujado_plano_relieve_grabado_y_limite_de_cara():
     valido(sc.repujado(caja, [perfil], tapa, 1.5), 8000 + 150)
     valido(sc.repujado(caja, [perfil], tapa, 1.5, tipo="grabado"), 8000 - 150)
     valido(sc.repujado(caja, [perfil], tapa, -1.5), 8000 - 150)       # profundidad negativa = grabado
+    # Fusion («Emboss reference › Depth»): negativa SIEMPRE graba, no invierte lo elegido
+    valido(sc.repujado(caja, [perfil], tapa, -1.5, tipo="grabado"), 8000 - 150)
     # un perfil que cruza el borde se proyecta en su lugar y se limita a la cara (como Fusion)
     valido(sc.repujado(caja, [rect(35, 5, 45, 15, 20)], tapa, 1.0), 8000 + 50)
     with pytest.raises(g.ErrorGeometria, match="no caen sobre las caras"):        # no cae encima: no se mueve

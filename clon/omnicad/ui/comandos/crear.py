@@ -12,7 +12,7 @@ from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpN
 from ...timeline import entidades as ent
 from ...timeline.ops_solido import TIPOS_REPETIBLES
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, ListaSeleccion, Opciones, OpcionesVivas, Personalizado,
+from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, ListaSeleccion, LONGITUD, Opciones, OpcionesVivas, Personalizado,
                        Seleccion, Texto, exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
 from .comunes import campo_objetivos, campo_operacion, con_analisis, objetivos, simetria_total
@@ -377,7 +377,28 @@ class Repujado(Comando):
 
     def desde_op(self, op, ctx):
         caras = list(op.p.get("caras") or []) + ([op.p["cara"]] if op.p.get("cara") else [])
+        try:                                          # al editar, el cruce del cero se mide desde la profundidad guardada
+            self._prof_previa = ctx.evaluar(str(op.p.get("profundidad", "1")), LONGITUD)
+        except Exception:  # noqa: BLE001 — una expresión rota no impide abrir el panel
+            pass
         return dict(op.p, perfiles=hits(op.p["perfiles"], ctx.estado), caras=hits(caras, ctx.estado))
+
+    _prof_previa = 1.0
+
+    def al_cambiar(self, panel, clave):
+        """Fusion: al pasar la profundidad de positiva a negativa el panel cambia el «Tipo» a Grabado (y viceversa).
+        Solo al cruzar el cero: Grabado elegido con 1 mm sigue en Grabado si se escribe 2 mm."""
+        if clave != "profundidad":
+            return
+        try:
+            prof = panel.ctx.evaluar(str(panel.valores.get("profundidad", "0")), LONGITUD)
+        except Exception:  # noqa: BLE001 — una expresión inválida no cambia el tipo
+            return
+        cruzo = (prof < 0) != (self._prof_previa < 0)
+        self._prof_previa = prof
+        nuevo = "grabado" if prof < 0 else "relieve"
+        if cruzo and panel.valores.get("tipo") != nuevo:
+            panel.set_valores({"tipo": nuevo})
 
 
 # ---------------------------------------------------------------- roscas en los diálogos (Agujero y Rosca)

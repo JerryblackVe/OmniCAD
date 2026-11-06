@@ -115,6 +115,48 @@ def test_barrido_dialogo_estirar_hacia_el_carril():
     assert g.volumen(_ultimo(doc).forma) == pytest.approx(3364.59, rel=1e-3)
 
 
+def test_repujado_profundidad_negativa_pasa_el_tipo_a_grabado():
+    """H-99 (Fusion: «Negative values create a Deboss effect» y «the Effect will automatically change from Emboss
+    to Deboss, and vice versa»): el panel espeja el signo de la Profundidad en «Tipo» y la previa sigue grabando."""
+    from omnicad.ui.comando import ContextoComando, PanelComando
+    from omnicad.ui.comandos.crear import Repujado
+    from omnicad.ui.visor3d import Visor3D
+    doc, forma, arriba = _caja_y_cara_de_arriba()
+    bid, _ = _boceto(doc, plano="XY", rect=((15, 15), (25, 25)))
+    visor = Visor3D()
+    visor.set_modelo(doc.estado_final)
+    panel = PanelComando(Repujado(), ContextoComando(doc), visor,
+                         {"perfiles": [_perfil(doc, bid)], "caras": [_h(doc, refs.referencia("op1.c1", arriba, forma))]})
+    estados = []
+    panel.previa.connect(estados.append)
+    for texto, tipo, bulto in (("-1 mm", "grabado", 15900.0), ("1 mm", "relieve", 16100.0),
+                               ("-1 mm", "grabado", 15900.0)):
+        panel.set_valor("profundidad", texto)
+        panel._calcular_previa()
+        assert panel._previa_ok, (texto, panel.mensaje.text())
+        assert panel.valores["tipo"] == tipo, texto
+        assert g.volumen(next(iter(estados[-1].cuerpos.values())).forma) == pytest.approx(bulto, rel=1e-6), texto
+    panel.set_valor("profundidad", "1 mm")
+    panel.set_valor("tipo", "grabado")
+    panel.set_valor("profundidad", "2 mm")       # sin cruzar el cero, el Grabado elegido se queda
+    assert panel.valores["tipo"] == "grabado"
+    panel.cancelar()
+
+
+def test_repujado_grabado_con_profundidad_negativa_graba():
+    """H-99: «Grabado» con una profundidad negativa da el grabado (Fusion: «Negative values create a Deboss
+    effect»), no el doble negate que empalmaba y dejaba relieve."""
+    from omnicad.ui.comandos.crear import Repujado
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="40", largo="40", alto="10"))
+    bid, _ = _boceto(doc, plano="XY", rect=((15, 15), (25, 25)))
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    arriba = next(s for s in refs.subformas(forma, "cara") if np.allclose(refs.firma_cara(s)["centro"], (20, 20, 10)))
+    _ejecutar(doc, Repujado, perfiles=[_perfil(doc, bid)], caras=[_h(doc, refs.referencia("op1.c1", arriba, forma))],
+              profundidad="-1 mm", tipo="grabado")
+    assert g.volumen(_ultimo(doc).forma) == pytest.approx(15900.0, rel=1e-6)
+
+
 def test_agujero_en_cara_y_desde_boceto_roscado():
     from omnicad.ui.comandos.crear import Agujero
     doc = Documento()

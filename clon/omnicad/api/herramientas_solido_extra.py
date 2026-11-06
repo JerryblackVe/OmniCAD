@@ -236,7 +236,7 @@ def create_emboss(sesion, sketch: str, faces: Elementos, profile: Perfiles = 0, 
     sketch: nombre/id del boceto de perfiles o textos.
     faces: selector, ids de find_faces o lista de ambos.
     profile: índice, lista, all, largest, text o text:<id>, como extrude.
-    depth: profundidad firmada en mm; negativa invierte relieve/grabado.
+    depth: profundidad firmada en mm; negativa SIEMPRE graba (Deboss), sin importar emboss_type.
     emboss_type: emboss (relieve) o deboss (grabado).
     wrap: true envuelve sobre la cara.
     tangent_chain: true incluye las caras tangentes.

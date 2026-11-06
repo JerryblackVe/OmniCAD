@@ -1550,8 +1550,9 @@ def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve"
 
 def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve", envolver=False, adaptar=True,
                         cadena_tangente=False, desfase_h=0.0, desfase_v=0.0, giro=0.0, invertir=False):
-    """Repujado (Emboss) de Fusion [SLD-EMBOSS]: "relieve" agrega material, "grabado" lo quita (profundidad negativa
-    invierte el efecto, como en Fusion). `objetivos` = [(cuerpo, cara o lista de caras)]; devuelve los cuerpos
+    """Repujado (Emboss) de Fusion [SLD-EMBOSS]: "relieve" agrega material, "grabado" lo quita. La profundidad
+    negativa SIEMPRE graba (Deboss), sin importar el «tipo» elegido (Fusion: «Negative values create a Deboss
+    effect»; no se invierte dos veces). `objetivos` = [(cuerpo, cara o lista de caras)]; devuelve los cuerpos
     resultantes en el mismo orden (sin cambios el que no recibe nada).
 
     Caras planas: el texto se PROYECTA en su lugar sobre las caras elegidas y se REPARTE entre ellas, como en
@@ -1566,8 +1567,9 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     los empalmes de al lado. La alineación gira alrededor del centro de los perfiles y después desplaza en los ejes
     locales horizontal/vertical (mm); `giro` va en grados.
     `invertir` cambia la dirección normal sin cambiar el efecto elegido (unión o corte)."""
-    if profundidad < 0:
-        profundidad, tipo = -profundidad, ("grabado" if tipo == "relieve" else "relieve")
+    # Fusion (Emboss reference › Depth): profundidad negativa SIEMPRE graba, sin importar «tipo» (no se invierte dos veces).
+    es_relieve = profundidad > 0 and tipo == "relieve"
+    profundidad = abs(profundidad)
     geo.exigir_longitud(profundidad, "La profundidad del repujado")
     if tipo not in ("relieve", "grabado"):
         raise geo.ErrorGeometria(f"Efecto de repujado desconocido: {tipo}")
@@ -1597,7 +1599,7 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
                     caras.append((i, TopoDS.Face(cara)))
     if not caras:
         raise geo.ErrorGeometria("Elegí la cara sobre la que va el repujado.")
-    sentido = (1.0 if tipo == "relieve" else -1.0) * (-1.0 if invertir else 1.0)
+    sentido = (1.0 if es_relieve else -1.0) * (-1.0 if invertir else 1.0)
     herramientas = [[] for _ in objetivos]
     grupos = []                                       # caras planas con la misma normal: una sola zona
     for k, (i, cara) in enumerate(caras, 1):
@@ -1617,8 +1619,8 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
                                      + donde + ".")
         pl_perfil = geo.plano_de_cara(perfiles[0])
         alineados = _alinear_repujado(perfiles, pl_perfil, desfase_h, desfase_v, giro)
-        herramientas[i].append(_envolver_en_cilindro(alineados, cara, -profundidad if invertir else profundidad, tipo,
-                                                    recortar=cadena_tangente))
+        herramientas[i].append(_envolver_en_cilindro(alineados, cara, -profundidad if invertir else profundidad,
+                                                    "relieve" if es_relieve else "grabado", recortar=cadena_tangente))
     for grupo in grupos:
         for i, h in _repujado_en_grupo(perfiles, grupo, sentido * profundidad, adaptar, desfase_h, desfase_v, giro):
             herramientas[i].append(h)
@@ -1626,7 +1628,7 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     if not any(herramientas):
         raise geo.ErrorGeometria("Los perfiles no caen sobre las caras elegidas: se proyectan en su lugar, así que "
                                  "hay que moverlos en el boceto para que queden encima de ellas.")
-    operacion = "unir" if tipo == "relieve" else "cortar"
+    operacion = "unir" if es_relieve else "cortar"
     return [_validar(_unificar(_aplicar_a_cuerpo(cuerpo, hs, operacion)), "Repujado") if hs else cuerpo
             for (cuerpo, _), hs in zip(objetivos, herramientas, strict=True)]
 

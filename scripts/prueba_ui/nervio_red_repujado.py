@@ -267,8 +267,9 @@ def asas():
             n_err = len(A.ERRORES)
             ok = _arrastrar(p, g, (a + b) / 2, (a + b) / 2 - m.direccion * (abs(despues) + 6) * (m.factor or 1.0))
             final = p.manipuladores.valor(cl)
-            A.reg(AR, f"{clave} › «{cl}» arrastrada más allá del cero: tope y sin excepción",
-                  ok and final >= (m.minimo or 0) - 1e-9 and len(A.ERRORES) == n_err, f"{despues:g} → {final:g}")
+            A.reg(AR, f"{clave} › «{cl}» arrastrada más allá del cero: tope (si tiene) y sin excepción",
+                  ok and (m.minimo is None or final >= m.minimo - 1e-9) and len(A.ERRORES) == n_err,
+                  f"{despues:g} → {final:g}")      # el asa del Repujado no tiene tope: negativa graba (H-99)
             p.set_valor(cl, texto_antes)
             st = previa(p)
             A.reg(AR, f"{clave} › «{cl}»: al escribir de nuevo {texto_antes!r} la previa se recupera", st["previa_ok"], st["mensaje"])

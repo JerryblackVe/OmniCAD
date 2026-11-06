@@ -766,6 +766,35 @@ def test_dos_lados_de_la_revolucion_cada_asa_es_la_magnitud_de_su_lado(app_qt):
     panel2.cancelar()
 
 
+def test_el_asa_de_profundidad_del_repujado_pasa_por_debajo_de_cero(app_qt):
+    """H-99: el asa de Profundidad se puede arrastrar por debajo de 0 (sin tope) y la cola queda del lado que ocupa
+    el material: arriba en el relieve, hundida en el grabado, tanto con el signo como con «Grabado» elegido a mano."""
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos.crear import Repujado
+
+    doc = _doc_caja()
+    b = Boceto()
+    b.agregar_rectangulo((5, 5), (15, 15))
+    doc.agregar(OpBoceto(doc.nuevo_id(), "Boceto2", plano="XY", boceto=b))
+    est = doc.estado_final
+    perfil = est.bocetos["op2"].perfiles[0]
+    h_perfil = hit_desde_ref({"tipo": "perfil", "boceto": "op2", **OpExtrusion.referencia_perfil(perfil)}, est)
+
+    def asa(profundidad, tipo):
+        panel, _visor, _e = _panel(Repujado(), doc, {"perfiles": [h_perfil], "caras": [_cara_de_arriba(doc)],
+                                                    "profundidad": profundidad, "tipo": tipo})
+        m = _manip(panel, "flecha:profundidad")
+        z = m.puntos(panel.manipuladores)[0][2]          # la cola: 20 + profundidad con su signo
+        panel.cancelar()
+        return m, z
+
+    m, z = asa("1 mm", "relieve")
+    assert m.minimo is None and z == pytest.approx(21)
+    assert asa("-1 mm", "grabado")[1] == pytest.approx(19)
+    assert asa("1 mm", "grabado")[1] == pytest.approx(19)
+    assert asa("-1 mm", "relieve")[1] == pytest.approx(19)
+
+
 # ---------------------------------------------------------------- H-60: asas bien definidas y sin nada encima
 def _camara(visor, atras):
     """Cámara que mira hacia -atras (R: derecha, arriba, atrás) y encuadra."""
