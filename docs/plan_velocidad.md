@@ -36,6 +36,7 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
   `evidencias/tiempos.json` (segundos por test y por archivo) y lista los 30 más lentos.
 - Listo cuando: existe el ranking real de una suite entera y el tiempo por archivo queda guardado para el paquete B.
 - Ejecutor: CodeBuddy deepseek (mecánico), revisa el coordinador.
+- Hecho (2026-11-06, P-59): CodeBuddy deepseek-v4.1-flash; falta el ranking de una suite entera (lista nocturna §3t).
 
 ### B. La suite en paralelo
 - Qué: `pytest-xdist` (pide permiso para instalar) con 4 procesos (`-n 4 --dist loadfile`, un archivo entero por
@@ -61,6 +62,7 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
 - Listo cuando: el humo da «TODO OK» con `--ventana minimizada` mientras se usa la PC, y el cierre ya no espera ocio
   para el humo.
 - Ejecutor: CodeBuddy hy3.
+- Hecho (2026-11-06, P-60): lo empezó CodeBuddy hy3 (se quedó sin cupo) y lo terminó Sol en OpenCode (`openai/gpt-6.1-sol --variant high`); el coordinador sacó `setActiveWindow` en minimizada (robaba el foco).
 
 ### E. Piezas de ventana en paralelo
 - Qué: `todo.py --paralelo 3`: tres piezas a la vez, cada una en su ventana minimizada, las más largas primero.
@@ -97,32 +99,3 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
 - **La selección por impacto se puede saltear un test.** La suite entera sigue corriendo en cada cierre: es la red.
 - **Placa de video integrada** con varias ventanas OpenGL a la vez: se empieza con 2 piezas en paralelo.
 - **Acelerar un test sin cambiar qué prueba**: todo cambio de fixture lo revisa Opus contra el diff de aserciones.
-
-## Prompt para el agente
-
-Entregado el 2026-11-06. Modelo sugerido: CodeBuddy hy3, esfuerzo por defecto (el paquete A ya está en main; queda D, a medias en la rama `velocidad-D`). Corre con `codebuddy -p --permission-mode bypassPermissions`, en su worktree y con `timeout 1500`; revisa, commitea y fusiona el coordinador.
-
-```text
-=== PAQUETE D ===
-
-ANTES DE NADA: si tenés las skills `fable-method`, `ponytail`, `plan-then-do`, `tool-calling-guard`, `verify-before-commit` y `omnicad-test`, cargalas y seguilas; al terminar, `ponytail-review` sobre tu cambio y pegá su salida. Si no las tenés, seguí estas reglas igual: el cambio más chico que resuelve TODO lo pedido, sin opciones ni abstracciones que nadie pidió; leé cada archivo antes de editarlo; no digas "listo" sin pegar la salida real de los comandos de verificación.
-
-Paquete D de `docs/plan_velocidad.md` (OmniCAD, CAD en Python con PySide6): la prueba de humo sin mover el cursor real y con la ventana invisible, para que Gerardo pueda usar la PC mientras corre.
-
-DÓNDE: trabajás SOLO en el worktree `D:/PROGRAMA-velD` (rama `velocidad-D`). No toques `D:/PROGRAMA` ni otro worktree. Python: `/d/PROGRAMA/clon/.venv/Scripts/python.exe` (desde `D:/PROGRAMA-velD/clon` importa el código del worktree). No instales nada. No hagas commit ni push: commitea el coordinador. Todo en español.
-
-ARCHIVOS QUE PODÉS TOCAR: `clon/omnicad/prueba_humo.py` y, solo si hace falta para lo de abajo, lo mínimo de `clon/OmniCAD.py` y `clon/omnicad/ui/`. NO toques `scripts/` (el cierre lo cambia el coordinador) ni los tests de otros.
-
-QUÉ HACER:
-1. Cursor: `prueba_humo.py` mueve el cursor REAL de Windows con `QTest.mouseMove` (líneas ~116, 451, 452, 549 dentro de un bucle, 569, 781; buscá también `QCursor.setPos` y cualquier otro). Pasalos todos a `_mover(w, pos)` (ya existe en el mismo archivo, línea ~288: evento simulado al widget). Si un paso depende de que el código bajo prueba lea `QCursor.pos()` o reciba `enterEvent`/hover, hacé que el widget reciba el evento simulado que necesita; NUNCA borres un paso ni debilites una aserción (mismo chequeo, mismo umbral). Al final no tiene que quedar ninguna llamada que mueva el cursor real.
-2. Ventana: con la variable de entorno `OMNICAD_PRUEBA_VENTANA=minimizada`, la ventana del humo se abre como lo hace `scripts/prueba_ui/arnes.py` (`mostrar` y `activar`, líneas ~95-125: `WA_ShowWithoutActivating`, flags `Tool | WindowTransparentForInput | WindowDoesNotAcceptFocus`, opacidad 0, y `QApplication.setActiveWindow` en lugar de `activateWindow`). Leé esas funciones y replicá lo mínimo en el humo (sin la variable, el humo queda exactamente como hoy). Todo `activateWindow`/`raise_`/foco real dentro del humo pasa por la misma regla. Si un paso necesita sí o sí el foco real de Windows, NO lo saltees en silencio: dejalo andar en visible y en minimizada imprimí un aviso `⚠` con el nombre del paso, y decilo en el informe.
-
-VERIFICACIÓN (pegá la salida real):
-- Desde `D:/PROGRAMA-velD/clon`: `/d/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .`
-- `grep -n "mouseMove\|setPos" omnicad/prueba_humo.py` → nada que mueva el cursor real.
-- Humo minimizado, con la posición del cursor antes y después: escribí un script AFUERA del repo (en `%TEMP%`) que con `ctypes.windll.user32.GetCursorPos` imprima la posición, corra con `subprocess` (env `PYTHONIOENCODING=utf-8`, `OMNICAD_PRUEBA_VENTANA=minimizada`) `/d/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py --plazo 900 -- /d/PROGRAMA/clon/.venv/Scripts/python.exe OmniCAD.py --prueba-humo`, guarde su salida en `%TEMP%`, y vuelva a imprimir la posición (y cuántas veces cambió, mirando cada 100 ms en un hilo). Pegá las dos posiciones y las últimas líneas del humo: tiene que decir «Resultado: TODO OK». No muevas el ratón ni uses el teclado mientras corre.
-- Comparación paso por paso: `git diff` de `prueba_humo.py` y una tabla corta "paso original → cambio → misma aserción sí/no".
-- NO corras la suite completa ni las piezas de `scripts/prueba_ui`.
-
-INFORME FINAL (corto): archivos tocados, la tabla de pasos, las salidas de arriba y lo que no pudiste verificar (con ⚠).
-```

@@ -92,7 +92,6 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 | ANIMACIÓN | [brechas_animacion.md](../brechas_animacion.md) |
 | Plástico y extensiones | [brechas_extensiones.md](../brechas_extensiones.md) |
 | Escanear con el celular | [plan_escaneo_celular.md](../plan_escaneo_celular.md) |
-| Velocidad de pruebas (D) | [plan_velocidad.md](../plan_velocidad.md) |
 
 ## Otras listas que se siguen aparte
 

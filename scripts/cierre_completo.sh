@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cierre completo (lo corre el coordinador o la sesión nocturna, nunca dos a la vez): ruff, suite en 10 tandas con -W error, piezas de ventana minimizadas y, con la PC sin uso, humo y piezas con foco real. Resumen en evidencias/cierre_<fecha>/resumen.txt.
+# Cierre completo (lo corre el coordinador o la sesión nocturna, nunca dos a la vez): ruff, suite en 10 tandas con -W error, piezas de ventana minimizadas, humo minimizado y, con la PC sin uso, piezas con foco real. Resumen en evidencias/cierre_<fecha>/resumen.txt.
 cd /d/PROGRAMA/clon || exit 1
 S="/d/PROGRAMA/evidencias/cierre_$(date +%F)"
 rm -rf "$S"; mkdir -p "$S"
@@ -37,13 +37,14 @@ $PY ../scripts/tiempos.py "$S" > "$S/tiempos.txt" 2>&1
 echo "tiempos exit=$? | $(head -n 1 "$S/tiempos.txt")" >> "$R"
 $PY ../scripts/prueba_ui/todo.py > "$S/ui.txt" 2>&1
 echo "ui exit=$? | $(grep -cE '[1-9][0-9]* con ✗' "$S/ui.txt") piezas con ✗" >> "$R"
+# El humo corre con la ventana transparente y sin cursor real ni foco (P-60): no espera que la PC quede sin uso.
+PYTHONIOENCODING=utf-8 OMNICAD_PRUEBA_VENTANA=minimizada $PY ../scripts/turno.py --plazo 900 -- $PY OmniCAD.py --prueba-humo > "$S/humo.txt" 2>&1
+echo "humo exit=$? | $(tail -n 2 "$S/humo.txt" | tr '\n' ' ')" >> "$R"
 if espera_ocio 120 10800; then
   export PYTHONIOENCODING=utf-8
-  $PY ../scripts/turno.py --plazo 900 -- $PY OmniCAD.py --prueba-humo > "$S/humo.txt" 2>&1
-  echo "humo exit=$? | $(tail -n 2 "$S/humo.txt" | tr '\n' ' ')" >> "$R"
   $PY ../scripts/prueba_ui/todo.py --ventana visible registro_uso asistente > "$S/ui_foco.txt" 2>&1
   echo "ui_foco exit=$? | $(tail -n 4 "$S/ui_foco.txt" | tr '\n' ' ')" >> "$R"
 else
-  echo "humo y ui_foco: NO corrieron (la PC no quedo sin uso en 3 h)" >> "$R"
+  echo "ui_foco: NO corrio (la PC no quedo sin uso en 3 h)" >> "$R"
 fi
 echo "fin $(date '+%H:%M:%S') ($(( $(date +%s) - inicio )) s)" >> "$R"

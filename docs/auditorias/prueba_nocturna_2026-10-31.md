@@ -403,8 +403,10 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 - **A (P-59):** el cierre ahora pasa `--durations=0 --junitxml` a cada tanda y corre `scripts/tiempos.py`. Falta: que el
   cierre completo deje `evidencias/tiempos.json` con la suite entera (11 xml: 10 tandas + motor) y su ranking en
   `tiempos.txt`; que ninguna tanda pase los 900 s por el `--durations=0`.
-- **D (P-60):** el humo corre con la ventana transparente y sin mover el cursor real; el cierre lo lanza sin esperar
-  ocio. Falta: el humo dentro del cierre completo con la PC en uso, y `test_motor` (abre el humo) en su corrida aparte.
+- **D (P-60, en main):** el humo corre con la ventana transparente, sin mover el cursor real ni tomar el foco; el
+  cierre lo lanza sin esperar ocio. Verificado minimizado (5 corridas TODO OK, 0 robos de foco, con Gerardo usando la PC).
+  Falta: el humo en modo `visible` (`OmniCAD.py --prueba-humo` sin la variable, con la PC quieta) y `test_motor`
+  (abre el humo) en su corrida aparte. El atajo S del humo solo se ejercita en visible.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 
