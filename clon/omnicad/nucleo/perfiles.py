@@ -620,6 +620,75 @@ def _detectar_occ(geometria, plano, tolerancia=1e-4):
     aristas = aristas_boceto(geometria, plano)
     if not aristas:
         return []
+    perfiles, partidas = _perfiles_occ(geometria, plano, aristas, tolerancia)
+    malas = [p.cara for p in perfiles if not geo.es_valida(p.cara)]
+    if malas:
+        corregidas = _partir_cruces(malas, partidas)
+        if corregidas is not partidas:
+            # La primera pasada ya unió los extremos difusos; no volver a fundir los cruces recién partidos.
+            perfiles, _ = _perfiles_occ(geometria, plano, corregidas, min(tolerancia, 1e-7))
+        if any(not geo.es_valida(p.cara) for p in perfiles):
+            raise geo.ErrorGeometria("No se pudieron separar los cruces de las curvas del boceto: quedan perfiles "
+                                    "inválidos. Revisá las curvas superpuestas o casi tangentes.")
+    return perfiles
+
+
+def _partir_cruces(caras, aristas):
+    """Sketch.profiles: parte solo los cruces interiores que el arreglo planar dejó en caras inválidas."""
+    from OCP.GeomAPI import GeomAPI_ExtremaCurveCurve
+    from OCP.Standard import Standard_OutOfRange
+    from OCP.TopExp import TopExp
+    bordes = list({hash(a): a for c in caras for a in _aristas_de(c)}.values())
+    cajas = _cajas(bordes)
+    curvas = [BRep_Tool.Curve_s(a, 0., 0.) for a in bordes]
+    limites = [(BRepAdaptor_Curve(a).FirstParameter(), BRepAdaptor_Curve(a).LastParameter()) for a in bordes]
+    puntas = [[(BRep_Tool.Pnt_s(v), BRep_Tool.Tolerance_s(v) + 1e-7)
+               for v in (TopExp.FirstVertex_s(a), TopExp.LastVertex_s(a))] for a in bordes]
+    cortes = {}
+    for i, a in enumerate(bordes):
+        cerca = np.all((cajas[:, 0] <= cajas[i, 1] + 1e-7) & (cajas[i, 0] <= cajas[:, 1] + 1e-7), axis=1)
+        for j in np.flatnonzero(cerca):
+            if j <= i or curvas[i] == curvas[j]:
+                continue
+            extremos = GeomAPI_ExtremaCurveCurve(curvas[i], curvas[j], *limites[i], *limites[j])
+            for k in range(1, extremos.NbExtrema() + 1):
+                try:
+                    distancia = extremos.Distance(k)
+                    parametros = extremos.Parameters(k)
+                except Standard_OutOfRange:  # curvas coincidentes: OCC puede contar extremos sin puntos
+                    continue
+                if distancia > 1e-7:
+                    continue
+                # Los contactos con un extremo ya están unidos con su tolerancia en la primera pasada.
+                if any(not limites[indice][0] < t < limites[indice][1] or
+                       any(curvas[indice].Value(t).Distance(q) <= tol for q, tol in puntas[indice])
+                       for indice, t in zip((i, j), parametros, strict=True)):
+                    continue
+                for indice, t in zip((i, j), parametros, strict=True):
+                    cortes.setdefault(hash(bordes[indice]), set()).add(t)
+    if not cortes:
+        return aristas
+    salida = []
+    for cid, arista in aristas:
+        if hash(arista) not in cortes:
+            salida.append((cid, arista))
+            continue
+        curva = BRepAdaptor_Curve(arista)
+        ts = [curva.FirstParameter(), *sorted(cortes[hash(arista)]), curva.LastParameter()]
+        curva = BRep_Tool.Curve_s(arista, ts[0], ts[-1])
+        vertices = [TopExp.FirstVertex_s(arista),
+                    *(BRepBuilderAPI_MakeVertex(curva.Value(t)).Vertex() for t in ts[1:-1]),
+                    TopExp.LastVertex_s(arista)]
+        for k, (t0, t1) in enumerate(zip(ts[:-1], ts[1:], strict=True)):
+            creador = BRepBuilderAPI_MakeEdge(curva, vertices[k], vertices[k + 1], t0, t1)
+            if not creador.IsDone():
+                raise geo.ErrorGeometria("No se pudo partir una curva en el cruce de los perfiles del boceto.")
+            salida.append((cid, creador.Edge()))
+    return salida
+
+
+def _perfiles_occ(geometria, plano, aristas, tolerancia):
+    """Arreglo planar y sus aristas con origen, conservando los vértices unidos por el Splitter."""
     grande = BRepBuilderAPI_MakeFace(gp_Pln(plano.pnt(0, 0), gp_Dir(*plano.normal)),
                                      -_TAM_CARA, _TAM_CARA, -_TAM_CARA, _TAM_CARA).Face()
     args, herramientas = List_TopoDS_Shape(), List_TopoDS_Shape()
@@ -662,6 +731,7 @@ def _detectar_occ(geometria, plano, tolerancia=1e-4):
                     cid = mejor[1]
             if cid is not None:
                 firma.add(cid)
+                origen[h] = cid
         props = GProp_GProps()             # cara plana: integración exacta; área y centro en una sola pasada
         BRepGProp.SurfaceProperties_s(cara, props)
         c = props.CentreOfMass()
@@ -669,7 +739,8 @@ def _detectar_occ(geometria, plano, tolerancia=1e-4):
         perfiles.append(Perfil(cara, props.Mass(), (dx * ux + dy * uy + dz * uz, dx * vx + dy * vy + dz * vz),
                                frozenset(firma)))
     perfiles.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
-    return perfiles
+    partidas = {hash(a): a for grupo in por_cara for a in grupo if hash(a) not in borde}
+    return perfiles, [(origen.get(h), a) for h, a in partidas.items()]
 
 
 def buscar_por_firma(perfiles, firma, centroide=None):
