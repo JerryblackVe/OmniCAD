@@ -16,9 +16,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, QSettings, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, QSettings, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMenu, QMessageBox
+from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QWidget
 
 from .io_archivos import exportar as ex
 from .io_archivos import proyecto
@@ -112,9 +112,9 @@ def _interfaz(v, r):
     v.barra_nav.modos["encuadre"].trigger()
     objetivo = v.visor.objetivo.copy()
     centro = v.visor.rect().center()
-    QTest.mousePress(v.visor, Qt.LeftButton, Qt.NoModifier, centro)
-    QTest.mouseMove(v.visor, centro + QPoint(40, 0))
-    QTest.mouseRelease(v.visor, Qt.LeftButton, Qt.NoModifier, centro + QPoint(40, 0))
+    _presionar(v.visor, centro, Qt.LeftButton)
+    _mover(v.visor, centro + QPoint(40, 0), Qt.LeftButton)
+    _soltar(v.visor, centro + QPoint(40, 0), Qt.LeftButton)
     r.check(v.visor.modo == "encuadre" and (v.visor.objetivo != objetivo).any(), "Barra de navegación: modo encuadre")
     QTest.keyClick(v.visor, Qt.Key_Escape)
     r.check(v.visor.modo is None and not v.barra_nav.modos["encuadre"].isChecked(), "Esc sale del modo y destilda el botón")
@@ -156,11 +156,11 @@ def _interfaz(v, r):
     centro = v.visor.rect().center()
     QTest.qWait(50)
     quieta = v.visor.grabFramebuffer()
-    QTest.mousePress(v.visor, Qt.MiddleButton, Qt.ShiftModifier, centro)        # Mayús + medio = órbita (esquema Fusion)
+    _presionar(v.visor, centro, Qt.MiddleButton, Qt.ShiftModifier)        # Mayús + medio = órbita (esquema Fusion)
     QTest.qWait(50)
     r.check(v.visor.mostrando_centro_giro() and _pixeles_distintos(quieta, v.visor.grabFramebuffer(), 1) > 10,
             "F16: el centro de giro se dibuja mientras se orbita")
-    QTest.mouseRelease(v.visor, Qt.MiddleButton, Qt.ShiftModifier, centro)
+    _soltar(v.visor, centro, Qt.MiddleButton, Qt.ShiftModifier)
     QTest.qWait(50)
     r.check(not v.visor.mostrando_centro_giro() and _pixeles_distintos(quieta, v.visor.grabFramebuffer(), 1) == 0,
             "F16: el centro de giro se oculta al soltar")
@@ -278,22 +278,88 @@ def _punto_del_plano(visor, nombre):
 def _tecla_s(v, w):
     """Tecla S sobre `w`. El atajo es de la ventana y Qt solo lo dispara con la ventana ACTIVA: Windows le niega el foco
     a un proceso de fondo y la caja no abría (B-72: 1 de cada 3 corridas). Sin foco, se dispara la acción del atajo."""
-    v.activateWindow()
-    if QTest.qWaitForWindowActive(v, 2000):
+    if _activar_ventana(v):
         QTest.keyClick(w, Qt.Key_S)
     else:
+        if _modo_ventana() == "minimizada":
+            # Sin foco real de Windows el atajo de teclado no llega: se usa la acción directa (mismo camino que el
+            # fallback de visible). Se avisa para no silenciar la diferencia.
+            print("⚠ _tecla_s: ventana sin foco real de Windows en «minimizada»; el atajo de teclado S no se "
+                  "ejercita (se dispara la acción directa)", flush=True)
         v.acciones["caja_herramientas"].trigger()
 
 
-def _mover(w, pos):
-    """Movimiento del ratón SIMULADO, enviado al widget. QTest.mouseMove mueve el cursor REAL de Windows: si la persona
-    usa el ratón mientras corre la prueba gana el suyo, el boceto no ve el movimiento y «Entrada dinámica» fallaba
-    (2026-10-09: falló 3 de 5 corridas, con y sin la caja de herramientas)."""
+def _mover(w, pos, botones=Qt.NoButton, mods=Qt.NoModifier):
+    """Movimiento del ratón SIMULADO, enviado al widget (SIN mover el cursor REAL de Windows). QTest.mouseMove mueve
+    el cursor REAL: si la persona usa el ratón mientras corre la prueba gana el suyo, el boceto no ve el movimiento y
+    «Entrada dinámica» fallaba (2026-10-09: falló 3 de 5 corridas, con y sin la caja de herramientas). `botones`
+    lleva el estado de botones que el código bajo prueba espera durante un arrastre (el visor y el lienzo comprueban
+    `e.buttons()`)."""
     from PySide6.QtCore import QEvent, QPointF
     from PySide6.QtGui import QMouseEvent
     local = QPointF(pos)
-    QApplication.sendEvent(w, QMouseEvent(QEvent.MouseMove, local, w.mapToGlobal(local), Qt.NoButton, Qt.NoButton,
-                                          Qt.NoModifier))
+    QApplication.sendEvent(w, QMouseEvent(QEvent.MouseMove, local, w.mapToGlobal(local), Qt.NoButton, botones,
+                                          mods))
+
+
+def _presionar(w, pos, boton, mods=Qt.NoModifier):
+    """Presión del ratón SIMULADA, enviada al widget (SIN mover el cursor REAL de Windows)."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    local = QPointF(pos)
+    QApplication.sendEvent(w, QMouseEvent(QEvent.MouseButtonPress, local, w.mapToGlobal(local), boton, boton, mods))
+
+
+def _soltar(w, pos, boton, mods=Qt.NoModifier):
+    """Soltar el ratón SIMULADO, enviado al widget (SIN mover el cursor REAL de Windows)."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    local = QPointF(pos)
+    QApplication.sendEvent(w, QMouseEvent(QEvent.MouseButtonRelease, local, w.mapToGlobal(local), boton,
+                                          Qt.NoButton, mods))
+
+
+def _modo_ventana():
+    """«visible» (por defecto) o «minimizada», según OMNICAD_PRUEBA_VENTANA."""
+    modo = os.environ.get("OMNICAD_PRUEBA_VENTANA", "visible").strip().lower() or "visible"
+    if modo not in ("visible", "minimizada"):
+        raise ValueError(f"OMNICAD_PRUEBA_VENTANA debe ser «visible» o «minimizada», no «{modo}»")
+    return modo
+
+
+def _preparar_invisible(widget):
+    """Transparente y sin foco ni clics, pero con el GL activo (como arnes.py › mostrar)."""
+    widget.setAttribute(Qt.WA_ShowWithoutActivating)
+    widget.setWindowFlags(widget.windowFlags() | Qt.Tool | Qt.WindowTransparentForInput
+                          | Qt.WindowDoesNotAcceptFocus)
+    widget.setWindowOpacity(0.0)
+
+
+class _VentanasInvisibles(QObject):
+    """Incluye menús y espacios auxiliares antes de mostrarlos; la opacidad no se hereda del padre."""
+
+    def eventFilter(self, widget, evento):
+        if evento.type() == QEvent.Polish and isinstance(widget, QWidget) and widget.isWindow():
+            _preparar_invisible(widget)
+        return False
+
+
+def _mostrar_ventana(widget):
+    """Muestra la ventana del humo; en «minimizada» queda transparente, sin foco ni clics."""
+    if _modo_ventana() == "minimizada":
+        _preparar_invisible(widget)
+    widget.show()
+
+
+def _activar_ventana(widget):
+    """Activa la ventana con el foco real de Windows (hasta 2 s) y dice si quedó activa. En «minimizada» no lo pide:
+    hasta `QApplication.setActiveWindow` le pedía el foco a Windows (medido: 2 robos por corrida), y los pasos que lo
+    esperan usan su respaldo."""
+    if _modo_ventana() == "minimizada":
+        return False
+    widget.activateWindow()
+    widget.raise_()
+    return QTest.qWaitForWindowActive(widget, 2000)
 
 
 def _clic(lz, u, v):
@@ -326,7 +392,7 @@ def _gizmo_calcomania(v, r, carpeta):
         _mover(visor, a)
         QApplication.sendEvent(visor, QMouseEvent(QEvent.MouseButtonPress, a, visor.mapToGlobal(a),
                                                  Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
-        _mover(visor, b)
+        _mover(visor, b, Qt.LeftButton)
         QApplication.sendEvent(visor, QMouseEvent(QEvent.MouseButtonRelease, b, visor.mapToGlobal(b),
                                                  Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
         p._calcular_previa()
@@ -386,8 +452,7 @@ def _gizmo_calcomania(v, r, carpeta):
 def _boceto_en_3d(v, r):
     # Linux (WSLg): al cerrar los diálogos de las fases anteriores la ventana queda sin activar y los atajos de
     # teclado (la S de abajo) no le llegan; en Windows la activación vuelve sola.
-    v.activateWindow()
-    QTest.qWaitForWindowActive(v, 2000)
+    _activar_ventana(v)
     v.crear_boceto()
     r.check(v.visor.modo == "elegir_plano" and v.area.aviso.isVisible(),
             "Crear boceto pide elegir un plano o una cara plana (planos de origen visibles)")
@@ -447,10 +512,10 @@ def _boceto_en_3d(v, r):
     # Arco tangente arrastrando desde el último punto
     fin = lz.b.curvas[nueva].p2
     p_fin = lz.a_px(*lz.b.coords(fin)).toPoint()
-    QTest.mousePress(lz, Qt.LeftButton, Qt.NoModifier, p_fin)
-    QTest.mouseMove(lz, lz.a_px(35, -30).toPoint())
-    QTest.mouseMove(lz, lz.a_px(40, -25).toPoint())
-    QTest.mouseRelease(lz, Qt.LeftButton, Qt.NoModifier, lz.a_px(40, -25).toPoint())
+    _presionar(lz, p_fin, Qt.LeftButton)
+    _mover(lz, lz.a_px(35, -30).toPoint(), Qt.LeftButton)
+    _mover(lz, lz.a_px(40, -25).toPoint(), Qt.LeftButton)
+    _soltar(lz, lz.a_px(40, -25).toPoint(), Qt.LeftButton)
     arcos = [c for c in lz.b.curvas.values() if c.tipo == "arco"]
     tangente = any(rr.tipo == "tangente" and nueva in rr.entidades for rr in lz.b.restricciones.values())
     r.check(len(arcos) == 1 and tangente, "Arrastrar desde el final de la línea crea un arco tangente")
@@ -544,13 +609,13 @@ def _fase_interaccion(v, r):
     QTest.qWait(200)
     w, h = v.visor.width(), v.visor.height()
     v._seleccionar([])
-    QTest.mousePress(v.visor, Qt.LeftButton, Qt.NoModifier, QPoint(4, 4))
+    _presionar(v.visor, QPoint(4, 4), Qt.LeftButton)
     for k in range(1, 6):
-        QTest.mouseMove(v.visor, QPoint(4 + (w - 8) * k // 5, 4 + (h - 8) * k // 5))
+        _mover(v.visor, QPoint(4 + (w - 8) * k // 5, 4 + (h - 8) * k // 5), Qt.LeftButton)
     banda = v.visor._banda
     r.check(banda is not None and banda.isVisible() and not banda.cruce,
             "Arrastrar en la vista dibuja la ventana de selección (naranja, de izquierda a derecha)")
-    QTest.mouseRelease(v.visor, Qt.LeftButton, Qt.NoModifier, QPoint(w - 4, h - 4))
+    _soltar(v.visor, QPoint(w - 4, h - 4), Qt.LeftButton)
     r.check(len(v.seleccion) == len(v.doc.estado_final.cuerpos),
             "La ventana elige los cuerpos que quedan adentro, sin elegir antes la herramienta")
     r.check("Volumen:" in v.timeline.estado.toolTip(), "Abajo a la derecha se ven las medidas de lo elegido")
@@ -565,9 +630,9 @@ def _fase_interaccion(v, r):
     menu.close()
     n = len(v.doc.operaciones)
     centro = QPoint(w // 2, h // 2)
-    QTest.mousePress(v.visor, Qt.RightButton, Qt.NoModifier, centro)
-    QTest.mouseMove(v.visor, centro + QPoint(-90, 0))
-    QTest.mouseRelease(v.visor, Qt.RightButton, Qt.NoModifier, centro + QPoint(-90, 0))
+    _presionar(v.visor, centro, Qt.RightButton)
+    _mover(v.visor, centro + QPoint(-90, 0), Qt.RightButton)
+    _soltar(v.visor, centro + QPoint(-90, 0), Qt.RightButton)
     QTest.qWait(200)
     r.check(len(v.doc.operaciones) == n - 1, "Gesto: clic derecho y arrastrar a la izquierda = Deshacer")
     v.doc.rehacer()
@@ -576,7 +641,7 @@ def _fase_interaccion(v, r):
     import numpy as np
     caja = geo.caja_envolvente(v.doc.estado_final.cuerpos[cid].forma)
     punto = v.visor.proyectar((np.array(caja[0]) + np.array(caja[1])) / 2)
-    QTest.mousePress(v.visor, Qt.LeftButton, Qt.NoModifier, punto.toPoint())
+    _presionar(v.visor, punto.toPoint(), Qt.LeftButton)
     QTest.qWait(800)
     otro = getattr(v, "_menu_otro", None)
     r.check(otro is not None and otro.isVisible() and len(otro.actions()) >= 2,
@@ -587,7 +652,7 @@ def _fase_interaccion(v, r):
         otro.hide()
         QTest.qWait(100)
         r.check(len(v.seleccion) == 1, "Elegir una fila de «Seleccionar otro» la selecciona")
-    QTest.mouseRelease(v.visor, Qt.LeftButton, Qt.NoModifier, punto.toPoint())
+    _soltar(v.visor, punto.toPoint(), Qt.LeftButton)
     v._seleccionar([])
     v.aviso_flotante("Las restricciones o las cotas se han eliminado durante la operación.")
     QTest.qWait(100)
@@ -744,7 +809,13 @@ def ejecutar():
     for flujo in (sys.stdout, sys.stderr):
         if flujo is not None and hasattr(flujo, "reconfigure"):
             flujo.reconfigure(encoding="utf-8", errors="replace")
-    _app = QApplication.instance() or QApplication([])  # noqa: F841 — mantiene viva la app
+    _app = QApplication.instance() or QApplication([])  # mantiene viva la app
+    filtro = _VentanasInvisibles()
+    if _modo_ventana() == "minimizada":
+        # Qt anima los menús con otra ventana opaca, aunque el menú sea transparente.
+        for efecto in (Qt.UI_AnimateMenu, Qt.UI_FadeMenu):
+            _app.setEffectEnabled(efecto, False)
+        _app.installEventFilter(filtro)
     from .nucleo import motor
     if motor.motor_activo() == "omnikernel":
         # Los pasos que OmniKernel todavía no hace quedan con error y la ventana avisa con un cartel modal: acá se
@@ -755,7 +826,7 @@ def ejecutar():
     carpeta = Path(tempfile.mkdtemp(prefix="omnicad_humo_"))
     prefs = Preferencias(QSettings(str(carpeta / "preferencias.ini"), QSettings.IniFormat))
     v = VentanaPrincipal(prefs=prefs)
-    v.show()
+    _mostrar_ventana(v)
     QTest.qWait(300)
     r.check(v.isVisible(), "La ventana principal se muestra")
 
@@ -777,9 +848,9 @@ def ejecutar():
     # 2) Órbita / zoom / pan con el ratón (esquema de Fusion: Mayús + botón del medio orbita)
     az0, d0 = v.visor.azimut, v.visor.distancia
     centro = v.visor.rect().center()
-    QTest.mousePress(v.visor, Qt.MiddleButton, Qt.ShiftModifier, centro)
-    QTest.mouseMove(v.visor, centro + QPoint(60, 20))
-    QTest.mouseRelease(v.visor, Qt.MiddleButton, Qt.ShiftModifier, centro + QPoint(60, 20))
+    _presionar(v.visor, centro, Qt.MiddleButton, Qt.ShiftModifier)
+    _mover(v.visor, centro + QPoint(60, 20), Qt.MiddleButton, Qt.ShiftModifier)
+    _soltar(v.visor, centro + QPoint(60, 20), Qt.MiddleButton, Qt.ShiftModifier)
     r.check(v.visor.azimut != az0, "Órbita con Mayús + botón del medio (como Fusion)")
     v.visor.distancia = d0 * 0.5
     v.visor.encuadrar()
@@ -1097,5 +1168,6 @@ def ejecutar():
     proyecto.borrar_autoguardado(v.doc)
     v.doc.modificado = False
     v.close()
+    _app.removeEventFilter(filtro)
     print(f"\nResultado: {'TODO OK' if r.fallas == 0 else f'{r.fallas} FALLA(S)'} — archivos en {carpeta}")
     return 0 if r.fallas == 0 else 1
