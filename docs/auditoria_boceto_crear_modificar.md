@@ -7,8 +7,6 @@ los agentes (Sol, Qwen, DeepSeek, GLM 5.3), Claude solo como última instancia, 
 **Orden:** arranca cuando cierre la auditoría de restricciones. Las dos tocan el mismo código del boceto
 (`clon/omnicad/restricciones/`, `ui/boceto*`) y Recortar, Partir, Empalme y Desfase dependen de cómo quede el solver.
 
-⚠ El texto que pasó Gerardo llegó cortado en la sección 12 («Editar transforma…»). Falta el resto.
-
 ## Prompt para el agente
 
 Entregado el 2026-11-06. Modelo sugerido: coordina una sesión Claude Opus 5 con esfuerzo alto; ejecutan Sol (OpenCode),
@@ -147,5 +145,84 @@ no lo está matemáticamente. Corregir la causa de cada problema.
 12. OBJETOS VECTORIALES Y TEXTO
 OmniCAD utiliza SVG, DXF y textos como objetos lógicos para facilitar su manipulación. Las modificaciones a las
 herramientas de boceto no deben perjudicar este sistema. Auditar especialmente: selección de objetos completos, mover,
-rotar, escalar, copiar, agrupar, editar transforma[ciones]… (EL TEXTO ORIGINAL LLEGÓ CORTADO ACÁ)
+rotar, escalar, copiar, agrupar, editar transformaciones, preservar contornos, generar perfiles para sólidos, deshacer y
+rehacer. Respetar las diferencias entre editar una entidad geométrica de boceto y transformar un objeto vectorial
+completo. No convertir innecesariamente los objetos en cientos de entidades seleccionables.
+
+13. PERSISTENCIA Y PARAMETRIZACIÓN
+Probar el ciclo completo: 1. crear geometría; 2. modificarla; 3. aplicar restricciones y cotas; 4. crear una operación
+3D; 5. guardar el proyecto; 6. cerrar OmniCAD; 7. abrir nuevamente; 8. editar el boceto original; 9. modificar un
+parámetro; 10. recalcular el diseño. El resultado debe conservar las relaciones paramétricas y la geometría esperada.
+Incluir proyectos antiguos compatibles y documentos con varios pasos en el timeline.
+
+PARTE IV — DETECCIÓN Y CORRECCIÓN
+14. BUSCAR ERRORES SISTEMÁTICAMENTE
+Para CADA comando y variante, pruebas funcionales, geométricas, matemáticas, de interfaz, de integración, de regresión,
+de persistencia y de rendimiento cuando corresponda. No limitarse al caso más sencillo. Incluir combinaciones:
+Rectángulo → Empalme → Desfase → Recortar; Círculo → Patrón circular → Partir; Línea → Arco tangente → Alargar;
+Polígono → Escalar → Mover → Extruir; Texto → Mover/copiar → Escalar → Extruir; Spline → Desfase → Recortar → Extruir;
+Proyección de aristas → Modificación → Cambio del sólido original; Patrón rectangular → Editar patrón → Cambiar
+parámetros. Crear también casos adversariales y límites numéricos.
+
+15. CORREGIR TODOS LOS BUGS CONFIRMADOS (obligatorio)
+El agente no debe detenerse después de detectar los problemas: debe repararlos. Para cada defecto: 1. reproducirlo;
+2. registrar evidencia; 3. identificar la causa raíz; 4. crear un test que demuestre el error; 5. corregir el código;
+6. ejecutar nuevamente el test; 7. comprobar el resultado geométrico; 8. verificar el comportamiento desde la interfaz;
+9. ejecutar pruebas de regresión; 10. revisar con ponytail-review; 11. registrar el arreglo e integrarlo.
+Evitar soluciones temporales, parches frágiles o tratamientos especiales que solo funcionan para el ejemplo probado. Si
+dos herramientas comparten una causa raíz, corregirla en la capa apropiada sin duplicar código. Completar opciones y
+comportamientos faltantes del alcance auditado. Si una corrección no puede resolverse de forma segura, documentar la
+causa, las pruebas efectuadas y el bloqueo real; no declararla finalizada.
+
+16. RENDIMIENTO Y ESTABILIDAD
+Medir con bocetos pequeños, medianos y de cientos de entidades, geometría importada, patrones con muchas instancias,
+splines complejas, recorte y desfase, y bocetos con muchas restricciones. Investigar congelamientos de interfaz, cálculos
+redundantes y actualizaciones excesivas. Medir primero y optimizar después. Rust/PyO3 solo con un cuello de botella
+comprobado y una mejora medible. Evitar regresiones en memoria y tiempos de respuesta.
+
+17. PRUEBAS REALES OBLIGATORIAS
+Usar el sistema de pruebas existente, omnicad-test, pytest, scripts/prueba_ui/ y las herramientas MCP/CLI. Cada
+herramienta se prueba como la usaría una persona: clic en CREAR o MODIFICAR, apertura de submenús, selección del
+comando, clics en el visor, movimiento y arrastre, introducción de valores, confirmación, edición posterior,
+cancelación, deshacer y rehacer, guardar y recuperar. Las pruebas por Python o MCP no sustituyen las de interfaz.
+Verificar con valores numéricos y capturas. No mover el cursor físico del usuario.
+
+18. API, MCP Y CLI
+Todos los comandos y opciones relevantes disponibles de forma coherente en UI, API, MCP y CLI, con resultados
+equivalentes. Corregir diferencias de parámetros, valores predeterminados y resultados. Actualizar herramientas y
+documentación generada según las reglas de OmniCAD.
+
+PARTE V — GESTIÓN Y RESULTADOS
+19. PLAN DE EJECUCIÓN
+Fase 1 Inventario completo; Fase 2 Investigación (Fusion 360 y SOLIDWORKS); Fase 3 Auditoría; Fase 4 Reparación;
+Fase 5 Integración (solver, geometría, perfiles, UI, API, MCP, CLI, timeline y archivos); Fase 6 Validación; Fase 7
+Revisión final. No solicitar aprobación entre fases ordinarias. Cada problema se resuelve, prueba y cierra
+individualmente antes de avanzar. Mantener al día docs/seguimiento/, PROJECT_LOG.md, PROJECT_CONTEXT.md, documentación
+y tests afectados.
+
+20. MATRIZ DE VERIFICACIÓN FINAL
+| Herramienta | Variantes | Pruebas | Bugs encontrados | Bugs corregidos | Estado |, con TODAS las herramientas
+auditadas. Clasificar VERIFICADO, CORREGIDO, PARCIAL, PENDIENTE o NO VERIFICADO. No marcar como completamente funcional
+un comando que solo tenga pruebas unitarias y nunca se haya probado desde la interfaz.
+
+21. CRITERIOS PARA CONSIDERAR COMPLETADA LA TAREA
+1. Todos los comandos y variantes inventariados. 2. Cobertura de pruebas adecuada en cada herramienta. 3. Bugs
+corregidos o identificados explícitamente como pendientes. 4. Geometría válida. 5. Comandos funcionando desde la
+interfaz. 6. Las modificaciones no destruyen indebidamente restricciones o referencias. 7. Perfiles utilizables para
+modelado 3D. 8. Guardado y recálculo consistentes. 9. UI, API, MCP y CLI sincronizados. 10. Sin regresiones nuevas sin
+registrar. 11. Resultados contrastados con la referencia CAD. 12. Documentación y tests actualizados. No afirmar paridad
+completa con Fusion 360 o SOLIDWORKS si quedan diferencias.
+
+22. INFORME FINAL
+Cantidad total de comandos y variantes auditados; errores detectados y reparados; funciones completadas; mejoras;
+archivos modificados; resultados reales de las pruebas; cambios de rendimiento medidos; comparación con Fusion 360 y
+SOLIDWORKS; problemas pendientes; evidencias; estado final de CREAR y MODIFICAR.
+
+ORDEN FINAL
+Auditar y reparar integralmente las secciones CREAR y MODIFICAR de BOCETO de OmniCAD, con todos sus submenús, variantes,
+parámetros, interacciones y dependencias. Detectar, reproducir y corregir los bugs; implementar lo incompleto; mejorar lo
+que funcione mal o esté por debajo de un CAD profesional. El objetivo son herramientas de dibujo y edición precisas,
+robustas, fluidas, paramétricas y confiables, comparables con Fusion 360 y SOLIDWORKS. No dar la tarea por terminada por
+documentación, tests superficiales o ausencia de excepciones: verificar siempre el resultado geométrico y la
+experiencia real del usuario.
 ```
