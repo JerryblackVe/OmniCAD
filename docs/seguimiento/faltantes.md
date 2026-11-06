@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 160 · Parcial 48 · Bloqueado 30 · Sin verificar 3 (recontado 2026-11-05; después H-95 a H-97 de Nervio y Repujado; 2026-11-06: resuelto H-101).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 159 · Parcial 48 · Bloqueado 30 · Sin verificar 4 (recontado 2026-11-05; después H-95 a H-97 de Nervio y Repujado; 2026-11-06: resuelto H-101 y H-81, nuevo H-105).
 
 ## Pendientes generales
 
@@ -75,7 +75,7 @@ Abierto 18 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| H-81 | Extruir «Dos lados»: tipo de extensión propio del lado 2 (Al objeto, Todo) | Abierto | Media | Fusion ajusta cada lado por separado («Adjust the settings in step 6 independently for each side»). Hoy el lado 2 es solo una distancia: el panel no tiene el campo, `extrude` tampoco, «Al objeto» en el lado 2 da error y `run_operation` acepta `extension2=todo` u `objeto` sin `hasta2` y usa la distancia 2 en silencio. | timeline/operaciones.py:1133 y 1169; ui/comandos/solido.py:52; docs/auditoria_extruir.md | 2026-11-05 |
+| H-105 | Extruir superficie «Dos lados»: tipo de extensión propio del lado 2 (Al objeto, Todo) | Sin verificar | Media | Gemelo de H-81 (resuelto en el sólido el 2026-11-06). En superficie el lado 2 sigue siendo solo una distancia: `OpSupExtruir`, el panel y `create_surface_extrude` no tienen `extension2`/`hasta2`. La ayuda de Fusion para superficie dice «distances for each side independently» y no aclara si la extensión también va por lado: confirmarlo en Fusion antes de construir. | timeline/ops_superficie.py:100-151; ui/comandos/superficie.py:53-58; api/herramientas_superficie.py:75-125; docs/fusion_docs (Extrude a surface body) | 2026-11-06 |
 | H-82 | Extruir › Al objeto sobre una cara: «Hasta caras adyacentes» (sólido) y «Extend Faces / Chain Faces» (superficie) | Abierto | Media | Sólido: Extender tiene cara, cuerpo y a través; falta To Adjacent Faces. Superficie: no tiene ninguna opción de Extender. | timeline/operaciones.py:1133 (`hasta_modo`); ui/comandos/superficie.py:55; ayuda `Extrude reference` y `Extrude a surface body` | 2026-11-05 |
 | H-83 | Extruir, Revolución, Barrido y Solevación: operación «Componente nuevo» (sólido y superficie) | Abierto | Media | Fusion crea el cuerpo en un componente nuevo (diseño híbrido) en las cuatro herramientas (ayudas `Revolve reference`, `Sweep reference` y `Loft reference`, también en superficie). Hoy hay cuerpo nuevo, unir, cortar e intersecar; el componente se arma después con `create_component`. | timeline/operaciones.py:32 (`OPERACIONES_CUERPO`); api/herramientas_solido.py:183 | 2026-11-05 |
 | H-84 | Extrusión delgada: Cadena tangente y conicidad con perfil abierto | Abierto | Baja | Falta la casilla Tangent Chain (elegir de una vez las curvas tangentes). La conicidad con perfil abierto da error; la ayuda no la restringe al tipo: confirmarlo en Fusion antes de hacerla. | ui/comandos/solido.py:33-35; nucleo/solidos_crear.py:487 | 2026-11-05 |

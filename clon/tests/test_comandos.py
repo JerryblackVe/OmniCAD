@@ -125,6 +125,49 @@ def test_h101_panel_muestra_desfase_con_inicio_objeto(app_qt, superficie):
     visor.deleteLater()
 
 
+@pytest.mark.parametrize("extension", ["objeto", "todo"])
+def test_h81_panel_extension_lado2_y_previa(app_qt, extension):
+    from omnicad.ui.comando import ContextoComando, ErrorComando, PanelComando, hit_desde_ref
+    from omnicad.ui.comandos.solido import Extruir
+    from omnicad.ui.visor3d import Visor3D
+    doc = _doc_rectangulo()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="30", largo="20", alto="8", z="-20"))
+    doc.agregar(OpPlano(doc.nuevo_id(), base="XY", distancia="-12 mm"))
+    ctx, cmd, visor = ContextoComando(doc), Extruir(), Visor3D()
+    visor.set_modelo(ctx.estado)
+    panel = PanelComando(cmd, ctx, visor)
+    panel._t_previa.stop()
+    assert panel.widgets["extension2"].isHidden()
+    panel.set_valor("direccion", "dos_lados")
+    assert not panel.widgets["extension2"].isHidden()
+    panel.set_valor("distancia", "5 mm")
+    panel.set_valor("extension2", extension)
+    assert panel.widgets["distancia2"].isHidden()
+    assert panel.widgets["hasta2"].isHidden() == (extension != "objeto")
+    panel.valores["perfiles"] = [_perfil(doc)]
+    if extension == "objeto":
+        with pytest.raises(ErrorComando, match="lado 2"):
+            cmd.construir(panel.valores, ctx)
+        panel.valores["hasta2"] = [hit_desde_ref({"tipo": "plano", "id": "op3"}, ctx.estado)]
+    op = cmd.construir(panel.valores, ctx)
+    assert op.p["extension2"] == extension
+    assert [h["ref"] for h in cmd.desde_op(op, ctx)["hasta2"]] == [h["ref"] for h in panel.valores["hasta2"]]
+    previas = []
+    panel.previa.connect(previas.append)
+    panel._previa_aislada = True
+    panel._calcular_previa()
+    assert panel._previa_ok, panel.mensaje.text()
+    assert panel._prisma_previa is None
+    forma = previas[-1].cuerpos[f"{panel.ultima_op.id}.c1"].forma
+    assert g.es_valida(forma)
+    lo, hi = g.caja_envolvente(forma)
+    assert hi[2] == pytest.approx(5, abs=1e-6)
+    assert lo[2] == pytest.approx(-12, abs=1e-6) if extension == "objeto" else lo[2] < -20
+    panel._t_previa.stop()
+    panel.deleteLater()
+    visor.deleteLater()
+
+
 def test_editar_extrusion_sin_cambios_conserva_los_perfiles(app_qt):
     """Regresión (antes con el diálogo modal): editar y aceptar sin tocar nada no cambia los perfiles."""
     from omnicad.ui.comando import ContextoComando

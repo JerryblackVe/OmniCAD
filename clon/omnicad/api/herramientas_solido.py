@@ -189,7 +189,8 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
             start_object: str | None = None, symmetric_measure: Literal["total", "half"] = "total",
             extent: Literal["distance", "to_object", "all"] = "distance", to: str | None = None,
             to_mode: Literal["face", "body", "through"] = "face", to_offset: Expr = 0,
-            taper_angle2: Expr | None = None, open_curves: list[int] | None = None, body: str | None = None):
+            taper_angle2: Expr | None = None, open_curves: list[int] | None = None, body: str | None = None,
+            side2_extent: Literal["distance", "to_object", "all"] = "distance", side2_to: str | None = None):
     """
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
     profile: perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos), "text:<id>" o "sketch" (todos los perfiles sin esos huecos). Se ignora con open_curves.
@@ -215,8 +216,10 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     to_mode: con to_object: "face" (hasta la cara), "body" (hasta el cuerpo) o "through" (a través del cuerpo).
     to_offset: desfase en mm sobre el «hasta» (positivo = más lejos); con extent=to_object.
     taper_angle2: conicidad del lado 2 en grados con direction=two_sides; vacío = la misma que taper_angle.
+    side2_extent: extensión propia del lado 2 con direction=two_sides: distance (distance2), to_object (hasta side2_to) o all.
+    side2_to: cara (selector o id), plano o cuerpo límite del lado 2; obligatorio con side2_extent=to_object. Usa to_mode y to_offset.
     open_curves: ids de curvas ABIERTAS de sketch (get_sketch) para extruir con thin=true; reemplazan a profile.
-    body: cuerpo donde se evalúan los selectores de faces, start_object y to; vacío = el único cuerpo.
+    body: cuerpo donde se evalúan los selectores de faces, start_object, to y side2_to; vacío = el único cuerpo.
     """
     if sketch is None and not faces:
         raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile) o faces (caras planas).")
@@ -284,6 +287,13 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         p["extension"] = "todo"
     if direction == "two_sides":
         p.update(direccion="dos_lados", distancia2=texto_expr(distance if distance2 is None else distance2))
+        p["extension2"] = {"distance": "distancia", "to_object": "objeto", "all": "todo"}[side2_extent]
+        if side2_extent == "to_object":
+            if side2_to is None:
+                raise error("INVALID_ARGUMENTS", "side2_extent=to_object necesita side2_to (el objeto límite del lado 2).")
+            p.update(hasta2=_referencia(sesion, side2_to, {"cara", "plano", "cuerpo"}, body),
+                     hasta_modo={"face": "cara", "body": "cuerpo", "through": "a_traves"}[to_mode],
+                     desfase_hasta=texto_expr(to_offset))
     elif direction == "symmetric":
         if symmetric_measure == "half":
             p.update(direccion="simetrica", simetrica=False, medida="mitad")

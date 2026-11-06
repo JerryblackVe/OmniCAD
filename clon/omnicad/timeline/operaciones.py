@@ -1137,7 +1137,29 @@ class OpExtrusion(_OpConPerfiles):
         return [self.p[k] for k in self.EXPRESIONES if k in self.p]
 
     def ejecutar(self, estado, ctx):
+        forma = self._forma(estado, ctx)
+        afectados = aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo())
+        self._registrar_usados(afectados)
+        _exigir_cuerpo_con_volumen(estado, afectados)
+
+    def _forma(self, estado, ctx):
+        """Herramienta común a la previa y al resultado; los límites se calculan por lado."""
         p = self.p
+        if not p.get("simetrica") and p.get("direccion") == "dos_lados":
+            if p.get("extension2") == "objeto" and not p.get("hasta2"):
+                raise ErrorOperacion("Elegí la cara, el plano o el cuerpo hasta donde llega el lado 2 de la extrusión.")
+            if p.get("extension") != "distancia" or p.get("extension2") != "distancia":
+                if p.get("extension2") == "distancia":
+                    geo.exigir_longitud(ctx.evaluar(p["distancia2"]), "La distancia del lado 2")
+                formas = []
+                for sufijo, signo in (("", 1), ("2", -1)):
+                    extension = p.get("extension" + sufijo, "distancia")
+                    distancia = abs(ctx.evaluar(p["distancia" + sufijo])) if extension == "distancia" else 1.0
+                    lado = type(self)(self.id, self.nombre, **dict(
+                        p, direccion="un_lado", extension=extension, distancia=str(signo * distancia),
+                        hasta=p.get("hasta" + sufijo), conicidad=p.get("conicidad" + sufijo, "0 deg")))
+                    formas.append(lado._forma(estado, ctx))
+                return geo.unir_todos(formas)
         curvas = _resolver_todas(p.get("curvas"), estado) if p.get("tipo") == "delgada" else []
         if curvas and not p.get("perfiles") and not p.get("caras"):
             plano = next((e.plano for e in curvas if e.plano is not None), None)
@@ -1165,23 +1187,20 @@ class OpExtrusion(_OpConPerfiles):
                 inclinado = e.plano
             else:
                 desfase += float((e.plano.origen - plano.origen) @ n)
-        hasta = hasta2 = caja = None
+        hasta = caja = None
         if p.get("extension") == "objeto":
             if not p.get("hasta"):
                 raise ErrorOperacion("Elegí la cara, el plano o el cuerpo hasta donde llega la extrusión.")
             hasta = self._forma_objeto(_resolver(p["hasta"], estado))
         elif p.get("extension") == "todo":
             caja = _caja_todo(estado)
-        if direccion == "dos_lados" and p.get("extension2") == "objeto" and p.get("hasta2"):
-            raise ErrorOperacion("«Al objeto» en el lado 2 todavía no está disponible: usá una distancia.")
         delgado = None
         if p.get("tipo") == "delgada":
             delgado = {"espesor": ctx.evaluar(p["espesor"]), "ubicacion": p.get("ubicacion", "lado1")}
         conicidad = ctx.evaluar(p.get("conicidad", "0"), ANGULO)
         conicidad2 = ctx.evaluar(p.get("conicidad2", "0"), ANGULO)
         kernel = _kernel_crear()
-        avanzada = delgado or abs(conicidad) > 1e-9 or abs(conicidad2) > 1e-9 or hasta is not None \
-            or hasta2 is not None or caja is not None
+        avanzada = delgado or abs(conicidad) > 1e-9 or abs(conicidad2) > 1e-9 or hasta is not None or caja is not None
         if kernel is not None and hasattr(kernel, "extruir_avanzado") and avanzada:
             if hasta is not None and direccion == "simetrica":
                 raise ErrorOperacion("«Al objeto» no se combina con la dirección simétrica.")
@@ -1200,9 +1219,7 @@ class OpExtrusion(_OpConPerfiles):
             forma = _extrusion_basica(caras, n, d1, d2, direccion, medida, desfase)
         if not geo.esta_vacia(forma) and caras and all(cara_sin_area(c) for c in caras):
             raise ErrorOperacion("La extrusión no tiene volumen: el perfil elegido casi no tiene área.")
-        afectados = aplicar_resultado(estado, ctx, self.id, forma, p["operacion"], self._objetivo())
-        self._registrar_usados(afectados)
-        _exigir_cuerpo_con_volumen(estado, afectados)
+        return forma
 
     @staticmethod
     def _forma_objeto(e):
