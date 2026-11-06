@@ -116,6 +116,35 @@ def test_el_panel_crece_cuando_un_cambio_de_modo_muestra_campos(ventana, clave, 
     QTest.qWait(10)
 
 
+@pytest.mark.parametrize("ancho,alto", [(1900, 1000), (800, 520)])
+def test_el_aviso_flotante_no_tapa_el_panel_de_comando(ventana, ancho, alto):
+    """H-94: el aviso flotante abajo a la derecha de un comando anterior no debe superponerse al panel
+    del comando abierto (donde están Aceptar/Cancelar y los campos), como hace Fusion (lo muestra sin
+    tapar el diálogo)."""
+    from omnicad.ui.comandos.solido import Extruir
+    v = ventana
+    if not hasattr(v, "_perfil_b105"):
+        v._perfil_b105 = _perfil(v)
+    v.resize(ancho, alto)
+    QTest.qWait(30)
+    p = v.ejecutar_comando(Extruir(), valores={"perfiles": [v._perfil_b105]})
+    QTest.qWait(30)
+    # un comando anterior dejó el aviso flotante abierto
+    v.area.toast.mostrar("1 advertencia(s)")
+    QTest.qWait(10)
+    assert v.area.toast.isVisible(), "el aviso flotante debe estar visible"
+    assert not p.geometry().intersects(v.area.toast.geometry()), (
+        ancho, alto, p.geometry().getRect(), v.area.toast.geometry().getRect())
+    from PySide6.QtCore import QPoint
+    p.posicion_usuario = QPoint(8, 60)               # la persona arrastró el panel a la izquierda
+    v.area.reubicar()
+    assert p.x() < 100 and not p.geometry().intersects(v.area.toast.geometry()), (
+        ancho, alto, p.geometry().getRect(), v.area.toast.geometry().getRect())
+    p.posicion_usuario = None
+    p.cancelar()
+    QTest.qWait(10)
+
+
 def test_con_poco_lugar_el_panel_sigue_entrando_aunque_aparezcan_campos(ventana):
     """B-113 y B-105 juntos: en 800×520 el panel que crece por un cambio de modo y recibe un mensaje de error de varias
     líneas (su alto asienta recién al volver al bucle de eventos) sigue dentro del visor."""

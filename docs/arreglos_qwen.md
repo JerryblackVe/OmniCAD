@@ -873,6 +873,74 @@ no se inspeccionó píxel a píxel (los checks de texto del log confirman el Tip
 
 Los tests eran el parche de Qwen (tanda 5, sin cupo); la ayuda de Fusion los confirma: «Negative values create a Deboss effect». `ponytail-review` propio: (1) **Must fix**, `Repujado.al_cambiar` volvía el Tipo a Relieve con cualquier profundidad positiva (Grabado con 1 mm → escribir 2 mm → Relieve): ahora cambia solo al cruzar el cero, al editar mide desde la profundidad guardada (`desde_op`) y usa `panel.set_valores`; caso sumado a `test_repujado_profundidad_negativa_pasa_el_tipo_a_grabado`. (2) **Must fix**, la pieza `nervio_red_repujado` exigía tope 0 a toda asa: ahora solo si el asa tiene tope. (3) con profundidad 0 en Relieve el asa apuntaba hacia adentro: `prof >= 0`. Verificación: `ruff check .` All checks passed!; 83 passed (`test_comandos*` + `test_b105_panel_chico`), 1308 passed (11 archivos del grep de repujado), 470 passed (`test_manipuladores`, `test_seguimiento`, `test_comandos_crear`); pieza `nervio_red_repujado` 84 comprobaciones, 4 ✗ ya anotadas (B-215 ×2, H-95, H-97). ⚠ Un `.omnicad` viejo con Grabado y profundidad negativa ahora graba (antes hacía relieve): es el arreglo.
 
+### H-94
+
+**Estado:** Resuelto.
+
+**Qué dice la ayuda de Fusion:** el artículo «Compute parameters, features, and assembly relationships in a design» (Design: Solid › Compute) dice: «The warning or error message displays in the lower-right.» (buscar `warning` en `scripts/fusion_docs.py`: resultado 5). O sea Fusion también lo muestra abajo a la derecha, pero **sin tapar el diálogo** — que es justo lo que reportaba la fila.
+
+**Cambios (`archivo:línea`):**
+- `clon/omnicad/ui/superposiciones.py:668` (`AreaVisor.reubicar`): el bloque del `toast` ahora, cuando hay un panel de comando visible, lo coloca a la **izquierda del panel** (`x = max(g.left() + 4, self.panel.x() - self.toast.width() - 8)`, abajo a la derecha del área), en vez de siempre al borde derecho donde se superponía con Aceptar/Cancelar y los campos. Sin panel (o en boceto, al lado de la paleta) queda como antes.
+
+**Gemelos revisados:**
+- Avisos flotantes en `clon/omnicad/ui` (`grep -rn 'avisos'`): el único aviso flotante es `AreaVisor.toast` (`AvisoFlotante`, `ui/avisos.py`); su posición vive solo en `reubicar` (superposiciones.py:668). Los demás `avisos` son etiquetas de mensaje de panel (`comando.py:_mostrar`, `editor_boceto.py:mensaje`), validación de temas (`preferencias.py`/`ventana.py`/`temas.py`) y advertencias de perfil de boceto (`visor3d.py`) — ninguno es el toast flotante, ninguno tocado.
+- Posición del panel de comando: `ui/comando.py` (`PanelComando`) y `ui/superposiciones.py` (`set_panel`, `_posicion_fija_panel`, bloque del panel en `reubicar` líneas 605–621). Leída, no modificada; el panel sigue en su lugar y el toast se apoya en `self.panel.x()`.
+- Ventana chica: `clon/tests/test_b105_panel_chico.py` — se amplió con el test de H-94 (ventanas 800×520 y 1900×1000).
+
+**Test rojo → verde** (`clon/tests/test_b105_panel_chico.py::test_el_aviso_flotante_no_tapa_el_panel_de_comando`):
+
+ROJO (antes del arreglo):
+```
+E       AssertionError: (800, 520, (427, 8, 362, 311), (541, 249, 250, 68))
+E       assert not True
+...
+FAILED tests/test_b105_panel_chico.py::test_el_aviso_flotante_no_tapa_el_panel_de_comando[800-520]
+1 failed, 1 passed in 3.03s
+```
+VERDE (después del arreglo):
+```
+..                                                                       [100%]
+2 passed in 2.63s
+```
+
+**Salida de ruff** (`ruff check .` / sobre el archivo):
+```
+All checks passed!
+```
+
+**Salida de cada grupo de tests** (desde `clon/`, con `../scripts/turno.py`, < 900 s):
+- Grupo A — `test_b105_panel_chico.py` + `test_comandos*.py` (7 archivos): `85 passed in 12.44s`
+- Gemelos de `reubicar`/`AreaVisor`/`toast` — `test_proyectar_tarjeta.py test_panel_movible.py test_paneles_boceto_comunes.py test_pl5_sugerencias.py`: `97 passed in 38.14s`
+- `test_boceto_fase9_ui2.py test_boceto_fase9_ui3.py`: `19 passed in 2.99s`
+
+**Salida completa de `/ponytail-review`:**
+```
+What this change does:
+When a command panel is open, the floating warning toast is placed to the left of that
+panel (bottom area) instead of at the bottom-right corner where it covered Accept/Cancel
+and the fields. When no panel is open, it stays bottom-right as before (or beside the
+sketch palette in sketch mode).
+
+Findings: none.
+
+Verdict: Ship.
+Lean: 0 líneas de más (el diff solo cambia el bloque del toast en reubicar; se borró la
+rama de fallback especulativa que no se alcanza con los paneles reales de ~270–360 px).
+Not checked: nothing material. El cambio es solo de UI; no toca firmas de la API/MCP/CLI,
+así que no hace falta regenerar docs/agentes/herramientas.md (regla 8 de AGENTS.md no aplica).
+```
+⚠ No se corrió la suite completa ni la prueba de humo (lo hace el coordinador, regla del prompt); la verificación se limitó a los grupos de arriba.
+
+**Pieza de ventana** (`revolucion_barrido_solevacion --ventana minimizada`, evidencia en `evidencias/ui_2026-11-06`): 41 comprobaciones, 5 con ✗ (ya anotadas en la pieza, no son de H-94). Las capturas `solevacion_punta.png` y `barrido_800x520.png` (las citadas en la fila) confirman visualmente que el aviso flotante queda a la **izquierda** del panel y no tapa Aceptar/Cancelar ni Distancia/Escala.
+
+⚠ La pieza se corrió con `--ventana minimizada`/offscreen; no se inspeccionó píxel a píxel, pero las capturas (leídas con ViewImage) muestran el aviso desplazado a la izquierda del panel en ambas ventanas.
+
+---
+
+#### Revisión del coordinador de H-94 (2026-11-06)
+
+`ponytail-review` propio, **Must fix** arreglado: el agente ponía el aviso siempre a la izquierda del panel; con el panel arrastrado a la izquierda la x daba negativa, se recortaba al borde y el aviso volvía a taparlo. Ahora el aviso queda en su lugar (abajo a la derecha, al lado de la paleta en el boceto) y solo se corre si choca con el panel: a su izquierda, o a su derecha si no entra. El test suma el panel arrastrado a la izquierda (rojo con la versión del agente en 800×520). Además el agente había pasado todo `superposiciones.py` a LF (1314 líneas de diff): se restauraron los fines de línea, el diff es de +5 líneas. Y había pegado la fila H-98 a la de H-93 en `mejoras.md`: separada. Verificación: `ruff check .` All checks passed!; 608 passed (`test_b105_panel_chico`, `test_comandos*`, `test_seguimiento` y 6 archivos que usan `reubicar` o el aviso); pieza `revolucion_barrido_solevacion` 41 comprobaciones, 5 ✗ ya anotadas (H-88 ×2, H-89, B-208, H-90).
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

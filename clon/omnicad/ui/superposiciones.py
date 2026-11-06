@@ -669,4 +669,9 @@ class AreaVisor(QWidget):
             # en el boceto va al lado de la paleta: encima taparía Terminar boceto
             derecha = g.right() if self.paleta is None else self.paleta.x() - 2
             self.toast.move(max(g.left() + 4, derecha - self.toast.width() - 8), g.bottom() - self.toast.height() - 10)
+            p = self.panel
+            if p is not None and p.isVisible() and p.geometry().intersects(self.toast.geometry()):
+                # H-94: como Fusion, no tapa el panel de comando: a su izquierda, o a su derecha si no entra
+                x = p.x() - self.toast.width() - 8
+                self.toast.move(x if x >= g.left() + 4 else p.geometry().right() + 8, self.toast.y())
             self.toast.raise_()
