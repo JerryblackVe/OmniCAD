@@ -88,12 +88,13 @@ PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe OmniCAD.py --prueba-humo
 El criterio de ruff (F, B023, B905) vive en `clon/pyproject.toml` › `[tool.ruff.lint]`: `ruff check .` lo
 toma solo de ahí, sin `--select`.
 **Memoria:** la suite completa y la prueba de humo (abren ventanas OpenGL) usan mucha memoria: se corren de a
-UNA a la vez. Si sos uno de varios agentes en paralelo, corré solo tus archivos de test; la suite completa y la
+UNA a la vez. Para verificar tu cambio, desde `clon/` corré `../scripts/tests_afectados.py --correr`: elige por el
+grafo de imports los tests que tu cambio afecta y los corre con turno (no se eligen tests a ojo). La suite completa y la
 humo las corre el orquestador (cuatro corridas a la vez colgaron una PC de 13 GB). Con varios agentes, cada
 comando pesado va con turno (uno a la vez en toda la PC; corta a los 900 s; en Windows, tope de 3 GB de memoria):
 `.venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe -m pytest tests/test_x.py -q`
 (cada pytest reserva ~1 GB aunque use 350 MB de RAM).
-**Prueba de humo:** no uses el ratón sobre su ventana mientras corre: varios pasos mueven el cursor REAL con `QTest.mouseMove`. Para un paso nuevo que solo necesita que el widget vea el ratón, usá `_mover` (movimiento simulado, no depende del cursor real).
+**Prueba de humo:** no mueve el cursor real ni pide el foco (P-60): con `OMNICAD_PRUEBA_VENTANA=minimizada` corre transparente mientras se usa la PC. Todo paso nuevo usa `_mover` (movimiento simulado), nunca `QTest.mouseMove` ni `QCursor.setPos`.
 Una prueba suelta: `pytest tests/<archivo>.py -q`. Cada función del núcleo lleva al menos una prueba con
 un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)`; rápidas (< 3 s).
 

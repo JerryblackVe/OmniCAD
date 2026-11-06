@@ -193,7 +193,7 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 
 ## Regla: pruebas pesadas de noche y lista viva
 - Mientras haya sesiones o pedidos abiertos **no se lanza el cierre completo** (suite, piezas de ventana, humo):
-  queda vieja con el próximo cambio. Solo se integra y se verifica lo mínimo (git, `merge-tree`, tests de lo tocado).
+  queda vieja con el próximo cambio. Solo se integra y se verifica lo mínimo (git, `merge-tree`, `scripts/tests_afectados.py --correr`).
 - Todo lo que falta probar vive en **`docs/auditorias/prueba_nocturna_2026-10-31.md`** (la fecha del nombre es la
   del documento vivo; si se renombra, actualizar `docs/README.md`). **Cada vez que Gerardo pasa una tarea nueva,
   el coordinador actualiza esa lista en el mismo turno**: qué piezas y tests nuevos trae, qué quedó sin verificar.
