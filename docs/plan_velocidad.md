@@ -54,6 +54,7 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
 - Listo cuando: para los últimos 10 commits, la lista que da incluye todos los tests que esos commits cambiaron o
   que fallaron en su momento, y tarda menos de 5 s en armarse.
 - Ejecutor: CodeBuddy hy3.
+- Hecho (2026-11-06, P-62): Sol en OpenCode; el coordinador afinó las referencias a docs. Límite: lo que se usa sin import (el humo por `OmniCAD.py`, `importlib`) no se ve; el cierre completo sigue siendo la red.
 
 ### D. Humo sin cursor real
 - Qué: los 7 movimientos del cursor real de `prueba_humo.py` pasan a eventos simulados (`_mover`, como pide AGENTS.md
