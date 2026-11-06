@@ -186,7 +186,7 @@ def _nervio(sesion, clase, sketch, curves, thickness, extension, depth, directio
 def create_rib(sesion, sketch: str, curves: list[int] | None = None, thickness: Expr = 2,
                extension: Literal["to_next", "depth"] = "to_next", depth: Expr = 10,
                direction: Literal["symmetric", "side1", "side2"] = "symmetric", reverse: bool = False,
-               target: str | None = None, draft_angle: Expr = 0, pull_direction: Referencia | None = None):
+               target: str | None = None, draft_angle: Expr = "", pull_direction: Referencia | None = None):
     """
     sketch: nombre/id del boceto con curvas abiertas.
     curves: ids de curvas; vacío = todas las no constructivas.
@@ -196,7 +196,7 @@ def create_rib(sesion, sketch: str, curves: list[int] | None = None, thickness: 
     direction: grosor symmetric, side1 (un lado, empieza abajo) o side2 (un lado, empieza arriba).
     reverse: true invierte la dirección de crecimiento.
     target: nombre/id del cuerpo objetivo; vacío = el más cercano.
-    draft_angle: ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fino en el borde libre), número o expresión.
+    draft_angle: ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fino en el borde libre), número o expresión; vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle y lo usa Rib).
     pull_direction: plano, cara o eje que da la dirección de extracción; vacío = del cuerpo hacia la curva del nervio.
     """
     return _nervio(sesion, OpNervio, sketch, curves, thickness, extension, depth, direction, reverse, target,
@@ -209,7 +209,7 @@ def create_rib(sesion, sketch: str, curves: list[int] | None = None, thickness: 
 def create_web(sesion, sketch: str, curves: list[int] | None = None, thickness: Expr = 2,
                extension: Literal["to_next", "depth"] = "to_next", depth: Expr = 10,
                direction: Literal["symmetric", "side1", "side2"] = "symmetric", reverse: bool = False,
-               target: str | None = None, draft_angle: Expr = 0, fillet_radius: Expr = 0, extend_curves: bool = True):
+               target: str | None = None, draft_angle: Expr = "", fillet_radius: Expr = "", extend_curves: bool = True):
     """
     sketch: nombre/id del boceto con curvas abiertas.
     curves: ids de curvas; vacío = todas las no constructivas.
@@ -219,8 +219,8 @@ def create_web(sesion, sketch: str, curves: list[int] | None = None, thickness: 
     direction: grosor symmetric, side1 o side2.
     reverse: true invierte la normal usada por el comando Red.
     target: nombre/id del cuerpo objetivo; vacío = el más cercano.
-    draft_angle: ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fina en el borde libre), número o expresión.
-    fillet_radius: radio en mm del empalme entre la red y el cuerpo (0 = sin empalme), número o expresión.
+    draft_angle: ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fina en el borde libre), número o expresión; vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle y lo usa Web).
+    fillet_radius: radio en mm del empalme entre la red y el cuerpo (0 = sin empalme), número o expresión; vacío = el radio nominal de la regla (Fusion: la regla da Nominal Radius y lo usa Web).
     extend_curves: true prolonga las curvas hasta el cuerpo; false deja la red del largo de las curvas.
     """
     return _nervio(sesion, OpRed, sketch, curves, thickness, extension, depth, direction, reverse, target,

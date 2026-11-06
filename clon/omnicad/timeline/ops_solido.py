@@ -14,6 +14,7 @@ import numpy as np
 from ..nucleo import geometria as geo
 from . import entidades as ent
 from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo,
+                          angulo_desmoldeo_plastico, radio_nominal_plastico,
                           _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, atributos_copia,
                           poner_resultado, registrar_operacion)
 from .parametros import ESCALAR, ErrorExpresion
@@ -265,9 +266,11 @@ class OpNervio(_OpCrear):
         cuerpo = _cuerpo_objetivo(estado, ents, self.p)
         prof = ctx.evaluar(self.p["profundidad"]) if self.p["extension"] == "profundidad" else None
         pull = ent.direccion(_resolver(self.p["direccion_desmoldeo"], estado)) if self.p.get("direccion_desmoldeo") else None
+        # Ángulo de desmoldeo vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle).
+        angulo = str(self.p["angulo_desmoldeo"] or "").strip() or angulo_desmoldeo_plastico(estado, (cuerpo.id,))
         forma = _sc().nervio(cuerpo.forma, aristas, plano.normal, ctx.evaluar(self.p["espesor"]), profundidad=prof,
                              direccion=self.p["direccion"], invertir=self.p["invertir"], extender=self.p["extender"],
-                             angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO), direccion_desmoldeo=pull)
+                             angulo_desmoldeo=ctx.evaluar(angulo, ANGULO), direccion_desmoldeo=pull)
         cuerpo.forma = geo.booleano(cuerpo.forma, forma, "unir")
         self._registrar_usados([cuerpo.id])
 
@@ -284,9 +287,13 @@ class OpRed(OpNervio):
         cuerpo = _cuerpo_objetivo(estado, ents, self.p)
         prof = ctx.evaluar(self.p["profundidad"]) if self.p["extension"] == "profundidad" else None
         n = -plano.normal if self.p["invertir"] else plano.normal
+        # Ángulo de desmoldeo vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle).
+        angulo = str(self.p["angulo_desmoldeo"] or "").strip() or angulo_desmoldeo_plastico(estado, (cuerpo.id,))
+        # Radio del empalme vacío = el radio nominal de la regla (Fusion: la regla da Nominal Radius y lo usa Web).
+        radio = str(self.p["radio_empalme"] or "").strip() or radio_nominal_plastico(estado, (cuerpo.id,))
         forma = _sc().red(cuerpo.forma, aristas, n, ctx.evaluar(self.p["espesor"]), prof, direccion=self.p["direccion"],
-                          extender=self.p["extender"], angulo_desmoldeo=ctx.evaluar(self.p["angulo_desmoldeo"], ANGULO))
-        cuerpo.forma = _sc().unir_con_empalme(cuerpo.forma, forma, ctx.evaluar(self.p["radio_empalme"]))
+                          extender=self.p["extender"], angulo_desmoldeo=ctx.evaluar(angulo, ANGULO))
+        cuerpo.forma = _sc().unir_con_empalme(cuerpo.forma, forma, ctx.evaluar(radio))
         self._registrar_usados([cuerpo.id])
 
 

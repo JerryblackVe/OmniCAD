@@ -36,6 +36,34 @@ En cada tanda, además de esa lista: todos los archivos que da
 
 CodeBuddy con deepseek-v4.1-flash, 2 corridas cortadas por el tope de 45 min, sin informe propio. **H-87 resuelto**: Extruir delgada arranca con el espesor de la regla de plástico (`timeline/operaciones.py` › `espesor_plastico`, ventana, API `wall_thickness` vacío). **B-189**: ya estaba resuelto en HEAD; queda `test_motor.py::test_ningun_valor_por_defecto_usa_un_enum_de_ocp`. Nuevos: B-218 y H-102. Revisión del coordinador: ruff limpio, 550 + 728 tests verdes.
 
+## Informe tanda C2
+
+**Modelo:** CodeBuddy con hy3 (el prompt original decía «OpenCode con Qwen3.8-Flash»; lo escribo como pidió el coordinador). **Tanda:** C2 · **Bug:** H-100 (mejora). **Sin commitear** (lo commitea el coordinador).
+
+### H-100 — PLÁSTICO › Nervio y Red toman el desmoldeo y el radio de la regla asignada — **Resuelto**
+
+- **Qué dice la ayuda de Fusion:** `docs/fusion_docs/contenido/fusion-model/plastic-rules-5619f43a2b0.md` — «Physical values: Thickness, Draft Angle and Nominal Radius, which are referenced as parameters and used by modeling tools such as Extrude, Rib, Web, Boss, Snap Fit, Emboss, Thicken, Shell, Draft». O sea que Rib (Nervio) y Web (Red) deben usar el Draft Angle y el Nominal Radius de la regla, no arrancar en 0 deg / 0 mm.
+- **Qué cambié:**
+  - `clon/omnicad/timeline/operaciones.py`: refactor de `espesor_plastico` en una `_regla_plastico(estado, cuerpos)` que devuelve el dict de la regla (la del componente de `cuerpos`, o la única asignada en el diseño, o `None`), y dos gemelas `angulo_desmoldeo_plastico` / `radio_nominal_plastico` que devuelven `"N deg"` / `"N mm"` (o `"0 deg"` / `"0 mm"` sin regla).
+  - `clon/omnicad/timeline/ops_solido.py`: `OpNervio.ejecutar` y `OpRed.ejecutar` resuelven el `angulo_desmoldeo` (y `OpRed` también `radio_empalme`) vacío contra la regla del componente del cuerpo objetivo: `str(self.p[...] or "").strip() or angulo_desmoldeo_plastico(estado, (cuerpo.id,))`. Lo explícito manda.
+  - `clon/omnicad/ui/comandos/crear.py`: el panel de Nervio/Red arranca con `angulo_desmoldeo_plastico(ctx.estado)` y `radio_nominal_plastico(ctx.estado)` (campos `angulo_desmoldeo` y `radio_empalme`, líneas ~313 y ~316).
+  - `clon/omnicad/api/herramientas_solido_extra.py`: `create_rib` (`draft_angle` → `""`) y `create_web` (`draft_angle` y `fillet_radius` → `""`) para que, sin valor, caigan en la regla; docstrings actualizados.
+  - `docs/agentes/herramientas.md` regenerado (`omnicad tools --markdown --output …`).
+- **Gemelos revisados:**
+  - `OpNervio` / `OpRed` (`timeline/ops_solido.py`): cambiados ambos (ahí vive el cálculo). ✔
+  - API `create_rib` / `create_web` (`api/herramientas_solido_extra.py`): defaults a vacío para que coincidan con la ventana. ✔
+  - `PARAMS` de las operaciones: ya tenían `"0 deg"` / `"0 mm"`; el valor vacío se resuelve al ejecutar, no se tocó el dict (igual que H-87 con `espesor`). ✔
+  - `espesor_plastico` (`timeline/operaciones.py`): usado como modelo; se factorizó en `_regla_plastico`. ✔
+  - **Fuera de alcance (no los toqué, no estaban en H-100):** Saliente (`OpSaliente`), Apoyo (`OpApoyo`), Labio (`OpLabio`) y Desmoldeo tienen su propio `angulo_desmoldeo` y no cayeron en la regla; queda como mejora aparte si Gerardo lo quiere.
+- **Test nuevo** (`tests/test_sol21_reglas_plastico.py::test_nervio_y_red_toman_desmoldeo_y_radio_de_la_regla`): asigna una regla con `draft_angle=5`, `nominal_radius=1.5` a un componente y comprueba que Nervio/Red sin valor coinciden en geometría con poner el valor a mano, y que el panel arranca en `5 deg` / `1,5 mm` (y en `0 deg` / `0 mm` sin regla).
+  - Salida **ROJA** (antes del arreglo, con el test escrito pero el código viejo): el nervio sin `draft_angle` se construía con 0 deg, así que la geometría no coincidía con la de `draft_angle=5` (y el panel arrancaba en `0 deg`).
+  - Salida **VERDE** (con el arreglo): `90 passed in 10.17s`
+- **ruff check .:** `All checks passed!`
+- **Tests obligatorios de la tanda (corridos con turno, un grupo):** `test_sol10_nervio_red.py`, `test_sol21_reglas_plastico.py`, `test_api_solido_extra.py`, `test_comandos.py`, `test_comandos_crear.py` → **90 passed**.
+- **Archivos de `grep -l` NO corridos (los corre el coordinador):** `test_api_solido.py`, `test_apoyo.py`, `test_barrido_tipos.py`, `test_cinta_plastico.py`, `test_cobertura_ui_api.py`, `test_iconos_extra.py`, `test_malla.py`, `test_manipuladores.py`, `test_sol27_preajustes.py`. (El grep incluye los 5 obligatorios más éstos; coinciden solo por el token genérico `angulo_desmoldeo` o por referenciar Nervio/Red, no por tocar las funciones nuevas.)
+- **Salida de /ponytail-review:** no halló bugs ni riesgos. Lo único a notar (no es regresión, copia el diseño de H-87): cuando hay **varias** reglas asignadas a distintos componentes, el panel de Nervio/Red arranca en `0 deg` / `0 mm` (la función solo toma la regla cuando hay una sola asignada en el diseño); la operación, en cambio, sí usa la regla del componente del cuerpo elegido. Igual que el espesor de Extruir. No lo marcó como Must/Should fix. No hubo nada que arreglar.
+- **No verificado / ⚠:** no corrí la prueba de humo ni la suite completa (las corre el coordinador, regla 10 del prompt); no toqué la ventana más allá de los valores por defecto de los campos, así que no hice la captura `todo.py` de la pieza (la lógica de Nervio/Red ya la ejercitan los tests de API y ventana de la tanda).
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Qwen Flash en OpenCode, esfuerzo Extra High (1M de contexto). Versión: Qwen3.8-Flash. Se pega con el número de tanda.

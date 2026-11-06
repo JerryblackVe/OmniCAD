@@ -11,6 +11,7 @@ from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpN
                                     OpSolidoEnvolvente, OpTuberia, OpVolumenFluido)
 from ...timeline import entidades as ent
 from ...timeline.ops_solido import TIPOS_REPETIBLES
+from ...timeline.operaciones import angulo_desmoldeo_plastico, radio_nominal_plastico
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, ListaSeleccion, Opciones, OpcionesVivas, Personalizado,
                        Seleccion, Texto, exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
@@ -310,10 +311,12 @@ class _NervioRed(Comando):
                 Expresion("profundidad", "Distancia", "10 mm",
                           visible_si=lambda v: v.get("extension") == "profundidad"),
                 Alternar("invertir", "Cambiar dirección", "cambiar_direccion"),
-                Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", "0 deg", ANGULO, avanzado=True),
+                Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", angulo_desmoldeo_plastico(ctx.estado), ANGULO,
+                          avanzado=True),
                 Seleccion("direccion_desmoldeo", "Dirección de extracción", {"plano", "cara_plana", "eje", "arista_lineal"},
                           minimo=0, visible_si=lambda v: nervio),
-                Expresion("radio_empalme", "Radio del empalme", "0 mm", visible_si=lambda v: red, avanzado=True),
+                Expresion("radio_empalme", "Radio del empalme", radio_nominal_plastico(ctx.estado),
+                          visible_si=lambda v: red, avanzado=True),
                 Casilla("extender", "Alargar curvas", True, visible_si=lambda v: red),
                 Seleccion("objetivo", "Cuerpo", {"cuerpo"}, minimo=0, ayuda="Sin selección: el más cercano.")]
 

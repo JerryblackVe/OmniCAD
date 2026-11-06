@@ -59,19 +59,41 @@ def id_cuerpo(valor):
                                      '{"tipo": "cuerpo", "cuerpo": "op1.c1"}')
 
 
-def espesor_plastico(estado, cuerpos=()):
-    """Espesor de pared de las herramientas de plástico: el de la regla del componente de `cuerpos` y, sin cuerpos
-    (cuerpo nuevo), el de la única regla asignada en el diseño (Fusion usa la del componente en el que se trabaja).
-    1 mm si no hay regla."""
+def _regla_plastico(estado, cuerpos=()):
+    """Dict de la regla de plástico aplicable: la del componente de `cuerpos` y, sin cuerpos (cuerpo nuevo), la única
+    regla asignada en el diseño (Fusion usa la del componente en el que se trabaja). None si no hay regla."""
     for cid in cuerpos:
         cuerpo = estado.cuerpos.get(id_cuerpo(cid))
         regla = (estado.componentes.get((cuerpo.componente if cuerpo else "") or "") or {}).get("regla_plastico")
         if regla:
-            return f"{regla['espesor']:g} mm"
+            return regla
     if cuerpos:                    # el componente del cuerpo que se toca no tiene regla: no se toma la de otro
-        return "1 mm"
+        return None
     asignadas = [c["regla_plastico"] for c in estado.componentes.values() if c.get("regla_plastico")]
-    return f"{asignadas[0]['espesor']:g} mm" if len(asignadas) == 1 else "1 mm"
+    return asignadas[0] if len(asignadas) == 1 else None
+
+
+def espesor_plastico(estado, cuerpos=()):
+    """Espesor de pared de las herramientas de plástico: el de la regla del componente de `cuerpos` y, sin cuerpos
+    (cuerpo nuevo), el de la única regla asignada en el diseño (Fusion usa la del componente en el que se trabaja).
+    1 mm si no hay regla."""
+    regla = _regla_plastico(estado, cuerpos)
+    return f"{regla['espesor']:g} mm" if regla else "1 mm"
+
+
+def angulo_desmoldeo_plastico(estado, cuerpos=()):
+    """Ángulo de desmoldeo (Draft Angle) de la regla de plástico: como `espesor_plastico`, pero devuelve el ángulo
+    en grados; 0 deg si no hay regla. Lo usan Nervio y Red al arrancar (Fusion: la regla da Draft Angle y lo usan
+    Rib y Web)."""
+    regla = _regla_plastico(estado, cuerpos)
+    return f"{regla['angulo_desmoldeo']:g} deg" if regla else "0 deg"
+
+
+def radio_nominal_plastico(estado, cuerpos=()):
+    """Radio nominal (Nominal Radius) de la regla de plástico: como `espesor_plastico`, pero devuelve el radio en mm;
+    0 mm si no hay regla. Lo usa la Red al arrancar (Fusion: la regla da Nominal Radius y lo usa Web)."""
+    regla = _regla_plastico(estado, cuerpos)
+    return f"{regla.get('radio_nominal', 0):g} mm" if regla else "0 mm"
 
 
 # ---------------------------------------------------------------- estado del modelo

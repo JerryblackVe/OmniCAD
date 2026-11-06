@@ -90,7 +90,57 @@ def test_el_espesor_de_la_regla_no_se_toma_de_otro_componente():
     assert espesor_plastico(e) == "3 mm"               # sin cuerpos: la única regla asignada
 
 
-def test_errores_claros():
+def test_nervio_y_red_toman_desmoldeo_y_radio_de_la_regla():
+    """H-100: con una regla de plástico asignada, Nervio y Red arrancan con su ángulo de desmoldeo y su radio
+    nominal (Fusion: la regla da Draft Angle y Nominal Radius y los usan Rib, Web…). Sin regla siguen en 0."""
+    from omnicad.nucleo import geometria as geo
+    from omnicad.timeline.documento import Documento
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.crear import Nervio, Red
+
+    s = api.Sesion()
+    cid = llamar(s, "create_box", length=40, width=20, height=20, anchor="corner", name="Cuerpo")["bodies_created"][0]["id"]
+    llamar(s, "create_box", length=36, width=20, height=18, x=2, z=2, anchor="corner", operation="cut", target=cid)
+    llamar(s, "create_component", bodies=["Cuerpo"], name="Carcasa")
+    llamar(s, "create_plastic_rule", name="PP 5x1.5", thickness=2.5, draft_angle=5, nominal_radius=1.5)
+    llamar(s, "assign_plastic_rule", component="Carcasa", rule="PP 5x1.5")
+
+    llamar(s, "create_construction_plane", plane="XZ", offset=-10, name="Plano")
+    b = llamar(s, "create_sketch", plane="Plano")["sketch"]["id"]
+    llamar(s, "draw_line", sketch=b, start_x=10, start_y=8, end_x=30, end_y=8)
+
+    # Nervio sin draft_angle -> toma el de la regla (5 deg): misma geometría que ponerlo a mano.
+    llamar(s, "create_rib", sketch=b, thickness=2, target="Cuerpo")
+    vol_regla = geo.volumen(s.cuerpo(cid).forma)
+    llamar(s, "undo")
+    llamar(s, "create_rib", sketch=b, thickness=2, target="Cuerpo", draft_angle=5)
+    assert geo.volumen(s.cuerpo(cid).forma) == pytest.approx(vol_regla, rel=1e-6)
+    llamar(s, "undo")
+    llamar(s, "create_rib", sketch=b, thickness=2, target="Cuerpo", draft_angle=0)
+    assert geo.volumen(s.cuerpo(cid).forma) != pytest.approx(vol_regla, rel=1e-6)
+    llamar(s, "undo")
+
+    # Red sin fillet_radius -> toma el radio nominal de la regla (1.5 mm): igual que ponerlo a mano.
+    llamar(s, "create_construction_plane", plane="XY", offset=12, name="P2")
+    b2 = llamar(s, "create_sketch", plane="P2")["sketch"]["id"]
+    llamar(s, "draw_line", sketch=b2, start_x=10, start_y=10, end_x=30, end_y=10)
+    llamar(s, "create_web", sketch=b2, thickness=2, target="Cuerpo")
+    vol_web_regla = geo.volumen(s.cuerpo(cid).forma)
+    llamar(s, "undo")
+    llamar(s, "create_web", sketch=b2, thickness=2, target="Cuerpo", fillet_radius=1.5)
+    assert geo.volumen(s.cuerpo(cid).forma) == pytest.approx(vol_web_regla, rel=1e-6)
+
+    # Sin regla (documento nuevo) el panel arranca en 0.
+    nv = {c.clave: c.defecto for c in Nervio().campos(ContextoComando(Documento()))}
+    assert nv["angulo_desmoldeo"] == "0 deg"
+    rd = {c.clave: c.defecto for c in Red().campos(ContextoComando(Documento()))}
+    assert rd["radio_empalme"] == "0 mm"
+
+    # Con regla asignada, el panel arranca con los valores de la regla.
+    cn = {c.clave: c.defecto for c in Nervio().campos(ContextoComando(s.doc))}
+    assert cn["angulo_desmoldeo"] == "5 deg"
+    cr = {c.clave: c.defecto for c in Red().campos(ContextoComando(s.doc))}
+    assert cr["radio_empalme"] == "1.5 mm"
     s = _pieza()
     assert not api.llamar(s, "assign_plastic_rule", {"component": "Nada"})["ok"]
     assert not api.llamar(s, "assign_plastic_rule", {"component": "Carcasa", "rule": "no existe"})["ok"]

@@ -3413,7 +3413,7 @@ Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. di
   - `direction` ("symmetric" | "side1" | "side2"; opcional, por defecto `"symmetric"`): grosor symmetric, side1 (un lado, empieza abajo) o side2 (un lado, empieza arriba).
   - `reverse` (true/false; opcional, por defecto `false`): true invierte la dirección de crecimiento.
   - `target` (texto; opcional, por defecto `null`): nombre/id del cuerpo objetivo; vacío = el más cercano.
-  - `draft_angle` (número o expresión; opcional, por defecto `0`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fino en el borde libre), número o expresión.
+  - `draft_angle` (número o expresión; opcional, por defecto `""`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fino en el borde libre), número o expresión; vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle y lo usa Rib).
   - `pull_direction` (texto o objeto; opcional, por defecto `null`): plano, cara o eje que da la dirección de extracción; vacío = del cuerpo hacia la curva del nervio.
 - CLI: `omnicad call create_rib --doc pieza.omnicad sketch=…`
 
@@ -3431,8 +3431,8 @@ Crea una red de nervios perpendicular al plano del boceto. draft_angle afina la 
   - `direction` ("symmetric" | "side1" | "side2"; opcional, por defecto `"symmetric"`): grosor symmetric, side1 o side2.
   - `reverse` (true/false; opcional, por defecto `false`): true invierte la normal usada por el comando Red.
   - `target` (texto; opcional, por defecto `null`): nombre/id del cuerpo objetivo; vacío = el más cercano.
-  - `draft_angle` (número o expresión; opcional, por defecto `0`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fina en el borde libre), número o expresión.
-  - `fillet_radius` (número o expresión; opcional, por defecto `0`): radio en mm del empalme entre la red y el cuerpo (0 = sin empalme), número o expresión.
+  - `draft_angle` (número o expresión; opcional, por defecto `""`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fina en el borde libre), número o expresión; vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle y lo usa Web).
+  - `fillet_radius` (número o expresión; opcional, por defecto `""`): radio en mm del empalme entre la red y el cuerpo (0 = sin empalme), número o expresión; vacío = el radio nominal de la regla (Fusion: la regla da Nominal Radius y lo usa Web).
   - `extend_curves` (true/false; opcional, por defecto `true`): true prolonga las curvas hasta el cuerpo; false deja la red del largo de las curvas.
 - CLI: `omnicad call create_web --doc pieza.omnicad sketch=…`
 
