@@ -826,6 +826,20 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
             # El carril orienta el perfil (normal hacia el carril) y, salvo "ninguna", lo escala con la distancia
             # ruta→carril (ley propia: el modo ContactOnBorder de OCC solo funciona con perfiles suaves).
             ps.SetMode(carril, True, BRepFill_NoContact)
+            aristas_ruta = list(_explorar(tramo, TopAbs_EDGE))
+            aristas_carril = list(_explorar(carril, TopAbs_EDGE))
+            if len(aristas_ruta) == len(aristas_carril) == 1 and all(
+                    BRepAdaptor_Curve(TopoDS.Edge(a)).GetType() == GeomAbs_Line
+                    for a in (aristas_ruta[0], aristas_carril[0])):
+                p0, t0 = _punto_en(tramo, 0.0)
+                p1, _ = _punto_en(tramo, 1.0)
+                v0 = _punto_en(carril, 0.0)[0] - p0
+                v1 = _punto_en(carril, 1.0)[0] - p1
+                v0, v1 = v0 - t0 * float(v0 @ t0), v1 - t0 * float(v1 @ t0)
+                if np.linalg.norm(v0) > 1e-6 and np.linalg.norm(v1) > 1e-6 and float(
+                        _unit(v0) @ _unit(v1)) > 1 - 1e-12:
+                    # Marco constante exacto: el auxiliar de OCC deforma hasta un prisma recto.
+                    ps.SetMode(gp_Ax2(_pnt(p0), _gdir(t0), _gdir(v0)))
             if escala_carril != "ninguna":
                 ley = _ley_escala_carril(tramo, carril)
         elif abs(torsion) > 1e-9:       # True = curvilíneo, False = plano (ver _guia_plana_posible)

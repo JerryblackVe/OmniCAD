@@ -2,15 +2,14 @@
 
 Algo que falla, da un resultado malo o un mensaje engañoso. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 26: Abierto 18 · Parcial 7 · Bloqueado 1 (recontado 2026-11-05 tras el avance de B-213).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-23 (Superficie y Sólido, también en la ventana real: 2026-10-24; revisión de B-39 y regresiones de B-48: 2026-10-27). Tortura de operaciones y booleanas: 2026-11-01. Total 25: Abierto 17 · Parcial 7 · Bloqueado 1 (recontado 2026-11-05 tras resolver B-208).
 
 ## Abiertos y parciales
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | B-206 | Extruir Inicio › Objeto con un plano inclinado: falta combinarlo con la conicidad | Parcial | Media | Resuelto: el perfil se proyecta sobre el plano a lo largo de la dirección con aristas analíticas (círculo r5 a 30° → 785,40 mm³ exactos), la delgada mide la pared en el plano del perfil (600 mm³ como la recta) y «Al objeto»/«Todo» llegan desde toda la base. Queda: conicidad + inicio inclinado da un error claro («La conicidad todavía no se combina con Inicio › Objeto en un plano inclinado…»); `_prisma` toma como plano neutro uno perpendicular a la dirección. | timeline/operaciones.py (`inclinado`), nucleo/solidos_crear.py (`extruir_avanzado`, `inicio_plano`); tests/test_api_opciones_solido1.py::test_inicio_objeto_en_un_plano_inclinado_arranca_sobre_el | 2026-11-05 |
-| B-208 | Barrido con carril guía deforma el perfil aunque el carril sea paralelo a la ruta (sólido y superficie) | Abierto | Alta | Cuadrado 4×4 barrido 50 mm con un carril paralelo y escala «Ninguna» da 784,03 mm³ en vez de 800 (caja ±2,31 en vez de ±2); la superficie da 797,57 mm² en vez de 800. Con «Escalar» y el carril de 2 a 6 da 3364,59 contra 3466,67. Los dos extremos quedan bien; el medio se tuerce. También en la ventana (pieza `revolucion_barrido_solevacion`). | nucleo/solidos_crear.py:819 | 2026-11-05 |
-| B-209 | Barrido sólido con escala «Estirar» hace «Escalar» sin avisar | Abierto | Media | `sweep rail_scale="stretch"` da 3364,59 mm³, lo mismo que `scale`; debería estirar en una sola dirección. La superficie sí estira (400 mm² exactos). La ventana del sólido ni ofrece Estirar. | nucleo/solidos_crear.py:877 | 2026-11-05 |
+| B-209 | Barrido sólido con escala «Estirar» hace «Escalar» sin avisar | Abierto | Media | `sweep rail_scale="stretch"` usa la misma ley uniforme que `scale`; debería estirar en una sola dirección. La auditoría previa a B-208 midió 3364,59 mm³ en ambos; falta actualizar esa medida tras B-208 (sonda sin turno). La superficie sí estira (400 mm² exactos). La ventana del sólido ni ofrece Estirar. | nucleo/solidos_crear.py:877 | 2026-11-05 |
 | B-210 | Revolución «Dos lados» con un ángulo negativo da otra forma en sólido que en superficie | Abierto | Baja | Lado 1 = 90°, lado 2 = −45°: el sólido toma el signo y el lado 2 vuelve sobre el lado 1 (1570,80 mm³, como sin lado 2, sin aviso); la superficie toma el valor absoluto (235,62 mm², igual que +45°). Falta una sola regla para los dos. | timeline/operaciones.py:1305 (`OpRevolucion.ejecutar`) y nucleo/superficies.py:475 | 2026-11-05 |
 | B-211 | Barrido: la Distancia mayor que 1 se acepta y se recorta a 1 sin avisar | Abierto | Baja | En la ventana «1,5» deja la vista previa en verde y `edit_feature` con `distancia="2"` sale ok: el cuerpo es el de 1 (628,32 mm³). La API solo rechaza números sueltos (`path_distance=1.5`). Fusion: Range 0.00-1.00. | nucleo/solidos_crear.py:256 | 2026-11-05 |
 | B-213 | Nervio corregido en la escuadra; Red conserva el recorte contra la caja | Parcial | Media | Nervio invertido sin cara da error y los tres lados en el borde suman 1200 mm³. Queda Red exterior, con y sin Alargar curvas: se retiró su cambio porque rompía la cruz de dos curvas de test_red_hasta_el_piso. Dos intentos geométricos; Splitter lateral tampoco resolvió el exterior. Regresiones pendientes visibles, sin xfail. Revisar además caras de llegada oblicuas al espesor. | nucleo/solidos_crear.py (`_lamina_hasta_el_cuerpo`, `nervio`, `red`); tests/test_sol10_nervio_red.py::test_b213_red_delante_de_la_boca_conserva_el_inicio | 2026-11-05 |
@@ -67,22 +66,11 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
 
-### B-208 · Barrido con carril guía deforma el perfil
-
-- **Qué:** boceto en YZ con un cuadrado 4×4 centrado en el origen, ruta = línea de X 0 a 50 en XY, carril = línea en XZ de (0, 2) a (50, 2); `sweep rail_sketch=C rail_scale="none"` (y `"scale"`). Igual con `create_surface_sweep guide_rail=… profile_scaling="none"`. En la ventana: Barrido › Ruta + Rail guía, Escala Ninguna, Enter.
-- **Esperado (Fusion):** «None: do not scale profile along sweep; just use guide rail as a orientation guide» (ayuda `Sweep reference`): con el carril paralelo, un prisma de 800 mm³ (superficie: 800 mm²). Con «Escalar» y el carril de 2 a 6, el tronco de pirámide de 50/3·(16+144+48) = 3466,67 mm³.
-- **Obtenido:** 784,03 mm³ y caja y ±2,31 (sólido), 797,57 mm² (superficie); con Escalar, 3364,59 mm³ y caja y ±6,44. Las caras de los extremos están bien (área 16 y 144, normal X): el perfil gira en el medio de la ruta.
-- **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py` (salida en `sonda_carril.txt`), o la pieza `revolucion_barrido_solevacion` («Barrido con carril paralelo y escala Ninguna»).
-- **Entorno:** OmniCAD 0.2.0, Windows 11, motor OCC. Sin ventana y en la ventana minimizada.
-- **Causa probable (leída):** el carril se pasa como espina auxiliar con `SetMode(carril, True, BRepFill_NoContact)` en `nucleo/solidos_crear.py:819`; no se comprobó qué triedro arma OCC ahí.
-- **Esquive:** sin carril (escala por conicidad) o con Solevación entre perfiles.
-- **Prueba propuesta:** carril paralelo con Ninguna = 800 mm³ y con Escalar de 2 a 6 = 3466,67 mm³ (sólido y superficie).
-
 ### B-209 · Barrido sólido con «Estirar» hace «Escalar»
 
-- **Qué:** el mismo barrido de B-208 con el carril de (0, 2) a (50, 6): `sweep rail_scale="stretch"` y `rail_scale="scale"`.
+- **Qué:** cuadrado 4×4 centrado en YZ, ruta X de 0 a 50 y carril en XZ de (0, 2) a (50, 6): `sweep rail_scale="stretch"` y `rail_scale="scale"`.
 - **Esperado (Fusion):** «Stretch: use path - guide rail distance to scale profile in X» (ayuda `Sweep reference`): el perfil crece solo hacia el carril, 4·(4+12)/2·50 = 1600 mm³ (la superficie da sus 400 mm² exactos).
-- **Obtenido:** 3364,59 mm³ en los dos modos, sin aviso. El docstring de `barrer` dice que «estirar» no existe en OCC y se hace como «escalar» (`nucleo/solidos_crear.py:877`), pero `superficies._estirar` (`nucleo/superficies.py:617`) ya lo resuelve.
+- **Obtenido en la auditoría original, antes de B-208:** 3364,59 mm³ en los dos modos, sin aviso. El arreglo de B-208 corrige la deformación de las secciones, no la equivalencia incorrecta entre Estirar y Escalar; falta volver a medir Estirar (la sonda posterior esperó turno y agotó el plazo sin ejecutar). El docstring de `barrer` dice que «estirar» no existe en OCC y se hace como «escalar» (`nucleo/solidos_crear.py:877`), pero `superficies._estirar` (`nucleo/superficies.py:617`) ya lo resuelve.
 - **Reproducir:** `evidencias/ui_2026-11-05/sonda_carril.py`.
 - **Esquive:** ninguno en sólido; superficie y después Engrosar o Coser.
 - **Prueba propuesta:** estirar ≠ escalar y da 1600 mm³ con el carril de 2 a 6; la ventana ofrece Estirar.

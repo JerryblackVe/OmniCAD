@@ -708,6 +708,156 @@ and the broad grep groups. No new dependency, file input, network path or transa
 - No se configura type-check separado en `clon/pyproject.toml`; no se construyó instalador.
 - B-214 y B-216 siguen fuera del alcance de esta corrida. La revisión funcional amplia queda al coordinador.
 
+## Informe Sol · B-208
+
+### Estado y comportamiento comprobado
+
+**Resuelto el caso auditado, en sólido y superficie; sin commit.** Ruta recta de 50 mm, perfil cuadrado
+4×4 en YZ y carril paralelo a 2 mm: 800 mm³ y 800 mm², caja ±2 mm. Carril que se abre de 2 a 6 mm con
+Escalar: 3466,666667 mm³ y 1605,111834 mm²; caja ±6 mm. Ninguna con ese carril abierto conserva 800 mm³
+y 800 mm². Las pruebas exigen `geo.es_valida`, valores analíticos y cajas, no solo éxito de OCC.
+
+INTENT: el código deforma las secciones intermedias con el carril auxiliar; la prueba exige conservar el prisma o el tronco calculable; la ayuda de Fusion dice que el carril controla orientación y escala uniforme, sin esa deformación.
+
+### Ayuda de Fusion y decisión
+
+El comando desde este worktree indicó `Falta el índice: correr primero fusion_docs.py construir`.
+Se consultó la copia ya indexada desde `D:/PROGRAMA`, con el Python pedido, sin construir ni modificarla:
+
+- `scripts/fusion_docs.py buscar "Sweep" -s fusion-model` y `ver "Sweep reference" -s fusion-model`:
+  `contenido/fusion-model/sweep-reference-01a5bc5f7a3.md`. None solo orienta; Scale escala X e Y con la
+  distancia ruta-carril.
+- `scripts/fusion_docs.py ver "Sweep a surface body" -s fusion-patch`:
+  `contenido/fusion-patch/sweep-a-surface-body-e0d108c0f5c.md`. Confirma las tres escalas y que Full Extents
+  permite fracciones independientes de la ruta y del carril.
+- API OCP instalada, `BRepOffsetAPI_MakePipeShell.SetMode.__doc__`: modo auxiliar True empareja por longitud;
+  False exige intersección del carril con el plano normal. `gp_Ax2` fija un triedro y mantiene las secciones paralelas.
+
+### Cambios y gemelos
+
+- `clon/omnicad/nucleo/solidos_crear.py:829-842`, `_barrido_alambre`: si ruta y carril tienen una sola
+  arista analítica recta y los vectores hacia el carril proyectados en ambos extremos tienen la misma dirección,
+  el marco es constante y se entrega directamente con `gp_Ax2`. Conserva la escala existente; las curvas y los
+  carriles que giran siguen por el modo auxiliar original. No se agregaron dependencias ni firmas públicas.
+- Firma interna conservada: `_barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad,
+  escala_carril, solido, radio_guia, guia_plana=False)`: barre un contorno y cierra el sólido si corresponde.
+- `clon/tests/test_b208_barrido_carril.py:18-103`: 13 casos: prisma, tronco, Ninguna con carril divergente,
+  ruta curva con carril concéntrico, API de sólido/superficie con recálculo y Extensión completa con fracciones distintas.
+- `docs/seguimiento/bugs.md`: borradas fila y ficha B-208; cabecera 25 = 17 abiertos + 7 parciales + 1 bloqueado.
+  `docs/seguimiento/README.md` se leyó y buscó: no contenía B-208; no requirió edición.
+  La ficha B-209 conserva su reproducción completa sin depender de la ficha retirada; su medición se identifica
+  como la de la auditoría anterior al arreglo, no como resultado actual.
+- `PROJECT_LOG.md`: viñeta del Registro y lección del intento descartado.
+
+| Gemelo / consumidor | Comprobación |
+|---|---|
+| Previa | No existen archivos `nucleo/previa*` en este árbol. `ui/comando.py:1665-1670` pide `previa_visual`; `nucleo/aislado.py:168-172` delega a `timeline/calculo_aislado.py:220-228`, que llama `doc.previsualizar` con la misma operación. No hay barrido duplicado allí. |
+| Superficie | `nucleo/superficies.py:725-727` usa `_barrido_estirado` para Estirar y `sc.barrer(..., solido=False)` para Escalar/Ninguna; comparte la corrección. `timeline/ops_superficie.py:224-233` solo resuelve referencias y opciones. |
+| Timeline sólido | `timeline/ops_solido.py:170-184` llama `sc.barrer`; `_barrer` usa el helper para contorno y agujeros. |
+| OmniKernel | `nucleo/omnikernel/solidos_crear.py` no implementa barrido; `omnikernel/superficies.py` es el adaptador pendiente. No hay gemelo geométrico que editar. No ejecutado ese motor. |
+| API | `api/herramientas_solido.py:410-489` (`sweep`) y `api/herramientas_superficie.py:167-203` (`create_surface_sweep`) crean las operaciones anteriores; ambas probadas por la nueva regresión con recálculo. |
+| Otros usos | `_barrido_alambre` también sirve a Tubería y `_sector_labio`; no pasan carril, así que no entran en la rama nueva. Torsión conserva su guía propia. |
+
+TWINS: searched `BRepFill_NoContact` en `clon/omnicad` - found 1 other site: `nucleo/solidos_crear.py:846-847`, guía de torsión (distinta del carril; conservada).
+
+### Test rojo, intentos y verde
+
+Antes del cambio, el test propuesto (seis parametrizaciones iniciales) dio:
+
+```console
+FFFFFF                                                                   [100%]
+ninguna, sólido:    Obtained 784.0250898310871; Expected 800.0
+ninguna, superficie: Obtained 797.5746948381515; Expected 800.0
+escalar, paralelo, sólido: Obtained 784.0250898293461; Expected 800.0
+escalar, paralelo, superficie: Obtained 797.5746948379167; Expected 800.0
+escalar, de 2 a 6, sólido: Obtained 3364.588439823008; Expected 3466.666666666667
+escalar, de 2 a 6, superficie: Obtained 1667.8863847238795; Expected 1605.11183411001
+6 failed in 1.93s
+```
+
+**Intento 1, descartado:** `SetMode(carril, False, ...)` dio `6 passed in 1.24s` y después
+`55 passed, 137 deselected in 12.22s`. La ampliación API tuvo un error del propio test por suponer curva 1:
+`ENTITY_NOT_FOUND: el boceto Carril (op3) no tiene la curva 1` (`1 failed, 60 passed, 137 deselected in 12.16s`).
+Se corrigió consumiendo `draw_line.entities[].id`: `61 passed, 137 deselected in 12.10s`.
+La revisión probó además Full Extents con ruta al 100 % y carril al 50 %; el modo False falló:
+`ErrorGeometria: El kernel no pudo barrer el perfil por la ruta.` No se conservó ese cambio global.
+
+**Intento 2, final:** marco fijo solo en el caso recto de orientación constante, manteniendo el modo original
+para los demás. La regresión de Full Extents ya está incluida y verde. No hubo tercer intento geométrico.
+
+Comando final, desde `clon/`, con turno y caché desactivada (un grupo del área, no suite completa):
+
+```console
+D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .
+All checks passed!
+D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_b208_barrido_carril.py tests/test_solidos_crear.py tests/test_superficie_guias.py tests/test_sol08_barrido.py tests/test_api_opciones_solido2.py tests/test_superficies.py -k 'b208 or barrido or riel or extension_completa or extension_perpendicular' -q -p no:cacheprovider
+..............................................................           [100%]
+62 passed, 137 deselected in 12.28s
+```
+
+### Grupos amplios para el coordinador
+
+`git grep -l _barrido_alambre -- 'clon/tests/test_*.py'` no encuentra llamadas directas en los tests ya
+versionados. La búsqueda transitiva con `-e _barrido_alambre -e barrer_superficie -e 'barrer('` devuelve:
+
+```console
+clon/tests/test_rosca_diametros_tabla.py
+clon/tests/test_solidos_crear.py
+clon/tests/test_superficie_guias.py
+clon/tests/test_superficies.py
+clon/tests/test_topes.py
+```
+
+El nuevo `test_b208_barrido_carril.py` también llama a ambos barridos. Por la nota de tiempo del coordinador
+solo se corrieron los casos del área seleccionados arriba. Quedan los archivos completos de esa lista,
+en especial roscas y topes. `rg` no está instalado en esta shell; se usó `git grep` sin instalar paquetes.
+
+### Salida completa de /ponytail-review
+
+What this change does: It keeps a straight guided sweep from bending between its end sections.
+It uses a fixed frame only when both inputs are straight and their guide direction is constant.
+Assumed load: one user editing a local CAD document, with solid and surface previews sharing the kernel.
+
+**Must fix**
+
+1. **The first fix breaks Full Extents with different distances** (`solidos_crear.py::_barrido_alambre`, first attempt).
+   - **What this is:** Full Extents lets the path and guide stop at different fractions.
+   - **Problem:** Changing every guide to normal-plane intersections fails for a 100 mm path and a guide trimmed to 50 mm. The last path planes do not meet that guide. The probe raised `ErrorGeometria`.
+   - **Fix:** Applied in attempt 2: restore the original auxiliary mode and use a fixed frame only for straight inputs with a constant projected guide direction. Add the unequal-distance regression; it now passes.
+   - **If we skip it:** A valid surface option stops working even though the main regression turns green.
+
+**Should fix**
+
+2. **The new API test guessed a curve ID** (`tests/test_b208_barrido_carril.py`, first API test version).
+   - **What this is:** A curve reference must use the ID returned by sketch creation.
+   - **Problem:** The surface test assumed ID 1 and failed with `ENTITY_NOT_FOUND` before reaching the sweep.
+   - **Fix:** Applied: take the entity ID from each `draw_line` result. Both API cases now reach the geometry and pass after recalculation.
+   - **If we skip it:** The test measures a broken fixture, not the bug it is meant to catch.
+
+The final branch validates analytic line types and nonzero guide offsets before normalizing them.
+Positive parallel projected offsets cannot cross zero between two straight endpoints. Curved guides and torsion
+retain their existing paths. The change adds no global state, I/O, dependency or transaction bypass.
+The existing scale law stays shared; there is no second solid/surface implementation. The added work is two edge
+lists and endpoint queries per straight guided contour; no extra sweep or iterative fallback is added.
+
+Verdict: Ship. Findings 1 and 2 were fixed and the final area group is green.
+Not checked: live window, Fusion itself, OmniKernel, arbitrary spatial or multi-edge guide rails,
+the complete downstream test files, full suite, smoke test, separate type-check or installer build.
+
+### ⚠ Lo no verificado
+
+- No se abrió Fusion ni la ventana; no se ejecutaron suite completa ni humo, por pedido.
+- La previa comparte las operaciones según lectura del código; no se ensayó el transporte de la previa ni su imagen.
+- La corrección analítica se limita a una arista recta en cada entrada y orientación proyectada constante;
+  los carriles espaciales que giran o las cadenas de varias aristas conservan el algoritmo anterior. No se afirma
+  exactitud general de ese algoritmo a partir de estos tests. El arco concéntrico nuevo sí pasó.
+- B-209 (Estirar sólido) sigue abierto; este trabajo no demuestra su comportamiento correcto.
+- Una sonda adicional para actualizar la medida de B-209 agotó 180 s esperando el candado de turno:
+  `[turno] hay otro comando pesado corriendo: espero mi turno…`; no llegó a ejecutar geometría ni devolvió medida.
+  No se eludió el turno ni se repitió la espera. No afecta al grupo final de B-208, que sí terminó en verde.
+- No hay type-check separado configurado en `clon/pyproject.toml`; no se construyó instalador.
+- La verificación documental automatizada y los grupos amplios quedan para el coordinador.
+
 ## Prompt para el agente
 
 Entregado el 2026-11-05. Modelo sugerido: Opus 5, esfuerzo alto (coordinador nocturno; la geometría de Sol se revisa a fondo).
