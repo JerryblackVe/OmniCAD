@@ -19,7 +19,47 @@ fusiona el coordinador de día, con el «sí» de Gerardo.
 
 ```
 TANDA = <N>
-Leé docs/arreglos_qwen.md y seguí al pie de la letra la sección «## Prompt para el agente» (el bloque de texto completo) para esa tanda.
+Leé docs/arreglos_qwen.md y seguí al pie de la letra la sección «## Informe Sol · día
+
+Línea SOL del 2026-11-06, rama `sol-geometria-nocturna` (worktree `D:\PROGRAMA-sol`). Solo GPT-6.1 Sol (`openai/gpt-6.1-sol --variant high`);
+el cupo no se agotó. Un ítem cerrado (tests + commit) antes del siguiente. Sin merge a `main` ni push.
+
+| Ítem | Estado | Commit | Tests del coordinador (por `turno.py`) |
+|---|---|---|---|
+| B-213 Nervio/Red | Resuelto | `4e89932` | área Nervio/Red: 1356 passed; ruff limpio |
+| H-101 Desfase con Inicio › Objeto | Resuelto | `b52ad23` | 64 archivos de Extruir: 2938 passed, 1 xfailed (era B-206); ruff limpio |
+| B-195 logo ZAI.svg | Resuelto | `c8b053b` | 79 archivos de bocetos/perfiles: 3853 passed (el 1 rojo fue falta de memoria de la PC en `test_motor.py`; repetido solo: 12 passed); ruff limpio |
+| B-206 perfiles curvos con conicidad | Resuelto | `31ff308` | 25 archivos de conicidad/prisma/superficie: 1264 passed; ruff limpio |
+| H-81 extensión del lado 2 | Resuelto (sólido) | `ef5a078` | 64 archivos de Extruir + H-81: 2966 passed; `test_doc_agentes` + `test_seguimiento`: 444 passed; ruff limpio |
+
+Cada ítem: fila borrada de `docs/seguimiento/`, viñeta «2026-11-06 · <ID> (OpenCode con GPT-6.1 Sol)» en el Registro de `PROJECT_LOG.md`.
+
+### ponytail-review (veredictos)
+
+| Ítem | Veredicto | Hallazgos |
+|---|---|---|
+| B-213 | Ship | Nice to have: costo en cuerpos con muchas caras (prisma por cara que mira al boceto). |
+| H-101 | Ship | Nice to have: un `desfase_inicio` viejo que quedó oculto en un archivo ahora se aplica. |
+| B-195 | Ship | Should fix: si queda UNA región inválida tras partir cruces, falla el boceto entero (error claro, no sólido roto). No revisado: el camino Rust (`_detectar_rust`). |
+| B-206 | Ship | Nice to have: el volumen del caso curvo se comprueba por cota, no contra un valor analítico. |
+| H-81 | Looks good. Ship | No revisado: el gemelo de superficie (queda como H-105). |
+
+### Notas
+
+- ⚠ **H-105 nuevo** (faltantes, Sin verificar): el mismo tipo de extensión por lado en Extruir superficie. La ayuda de Fusion
+  para superficie no aclara si la extensión va por lado: confirmar antes de construir. El ID H-105 se tomó en la rama; si
+  `main` usó H-105 antes del merge, renumerar.
+- Sol alcanzó en los cinco. B-195 necesitó tres corridas: dos se colgaron en el arranque de OpenCode (log en 0 bytes).
+  Causa: dos `opencode` arrancando juntos. Se agregó un vigía que corta y relanza si el log sigue vacío a los 240 s.
+- Las corridas de 25 min terminan por tiempo antes de cerrar la documentación: seguimiento y Registro los cerró el coordinador.
+- La fila de `turno.py` estuvo muy disputada con la línea de `main` (`todo.py` desde las 10:52). Un pytest huérfano de una
+  corrida cortada retuvo la fila más de 1 h: se cortó su árbol de procesos.
+- Desliz propio corregido: un `sed` de espacios finales le quitó los CR a `nucleo/superficies.py` (CRLF); se restauró antes
+  de commitear (diff de 15 líneas).
+- B-195, B-206 y H-81 quedaron un rato juntos sin commitear; se separaron con parches
+  (`evidencias/nocturna_2026-11-05/parches/`) y se cerraron de a uno.
+
+## Prompt para el agente» (el bloque de texto completo) para esa tanda.
 ```
 
 ### Texto para Sol (línea B), una vez por bug
