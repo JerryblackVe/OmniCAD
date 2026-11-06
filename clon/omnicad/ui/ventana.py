@@ -196,6 +196,7 @@ class VentanaPrincipal(QMainWindow):
         except ValueError:
             pass
         self.area.al_mover_panel = self._guardar_posicion_panel
+        self.area.viewcube.al_elegir_tamano = self._guardar_tamano_viewcube
         self.navegador = Navegador()
         from . import acciones_navegador
         self.navegador.menu_elemento = lambda item: acciones_navegador.menu(self, item)
@@ -336,8 +337,13 @@ class VentanaPrincipal(QMainWindow):
         usa otro comando (preferencia editada a mano, o una versión nueva que le dio esa tecla a otro) no se aplica:
         dos comandos con la misma tecla hacen que Qt no dispare ninguno."""
         teclas = leer_teclas(self.prefs)
+        defectos = {c: a.property("atajo_defecto") for c, a in self.acciones.items()}
+        if self.prefs["general/espacio_repite"]:
+            # Fusion «Spacebar Repeats Last Command»: la barra espaciadora repite el último comando y deja de ser de
+            # «Boceto sobre la cara elegida» (apagado, la tecla queda libre para esa otra asignación, como en Fusion).
+            defectos["repetir"], defectos["boceto_cara"] = "Space", ""
         propias = {c: a for c, a in self.acciones.items() if a.property("atajo_defecto") is not None}
-        efectivos = {c: teclas.get(c, a.property("atajo_defecto")) for c, a in propias.items()}
+        efectivos = {c: teclas.get(c, defectos[c]) for c in propias}
         usos = Counter(_normal(s) for s in efectivos.values() if _normal(s))
         for clave, a in propias.items():
             efectivo = efectivos[clave]
@@ -1409,6 +1415,11 @@ class VentanaPrincipal(QMainWindow):
     def _guardar_posicion_panel(self, pos):
         """Dónde dejó la persona los paneles de comando (None: vuelven al lugar de siempre)."""
         self.prefs["vista/posicion_panel_comando"] = ",".join(map(str, pos)) if pos else ""
+
+    def _guardar_tamano_viewcube(self, clave):
+        """Tamaño elegido en el menú del clic derecho del ViewCube: queda en las preferencias (como Fusion)."""
+        self.prefs["general/tamano_viewcube"] = clave
+        self.area.reubicar()
 
     def _guardar_espacio(self, clave, ventana):
         self.doc.espacios[clave] = ventana.a_dict()
