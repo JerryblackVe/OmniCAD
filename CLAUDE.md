@@ -171,7 +171,9 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - **Un ítem cerrado antes del siguiente (Gerardo, 2026-11-06).** Con un agente que arregla varios ítems en la misma
   carpeta, cada ítem termina entero (arreglo → tests → commit) antes de lanzar la corrida del siguiente. Nunca quedan
   dos ítems sin commitear juntos: si un test falla no se sabe cuál lo rompió. Si la fila de tests está ocupada, la
-  corrida siguiente espera; si hay que paralelizar, cada ítem va en su propio worktree.
+  corrida siguiente espera; si hay que paralelizar, cada ítem va en su propio worktree: `bash scripts/worktree_item.sh
+  crear <ID>` crea la rama `item/<ID>` y la carpeta `<repo>-<ID>` (usa el `clon/.venv` del repo principal) y, ya
+  fusionada la rama, `bash scripts/worktree_item.sh borrar <ID>` borra las dos.
 
 ## Regla obligatoria: ponytail
 - **Se INVOCA con la herramienta Skill, no alcanza con leer la regla.** Toda sesión que vaya a tocar código
