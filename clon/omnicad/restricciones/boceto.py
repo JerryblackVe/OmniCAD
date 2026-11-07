@@ -3214,10 +3214,12 @@ class Boceto:
         self._depurar(viejos)
         return F, puntos_t[0], puntos_t[1]
 
-    def chaflan(self, l1, l2, distancia, distancia2=None, angulo=None, pick1=None, pick2=None, expresion=None):
+    def chaflan(self, l1, l2, distancia, distancia2=None, angulo=None, pick1=None, pick2=None, expresion=None,
+                expresion2=None):
         """Chaflán (SKT-ADD-CHAMFERS) entre dos líneas: de distancias iguales, de dos distancias
         (`distancia2`) o de distancia y ángulo (`angulo`, grados). Agrega la línea, el vértice virtual
-        y las cotas. Devuelve la línea del chaflán."""
+        y las cotas; `expresion` y `expresion2` son los textos del primer y del segundo valor, para que las
+        cotas sigan a sus parámetros. Devuelve la línea del chaflán."""
         for k in (l1, l2):
             if self.tipo_de(self._curva_modificable(k).id) != "linea":
                 raise ErrorBoceto("El chaflán se aplica entre dos líneas.")
@@ -3245,14 +3247,18 @@ class Boceto:
         expr = expresion or _numero(e1)
         primera = self.agregar_cota("distancia", [virtual, pt1], expr)
         if angulo is not None:
-            medido = self.medir_cota("angulo", [ln, l1])
-            self.agregar_cota("angulo", [ln, l1], _numero(angulo if abs(medido - angulo) < 1e-6 else 180 - angulo))
+            # La cota mide entre el chaflán y l1: según el lado puede ser el suplemento del ángulo pedido.
+            directo = abs(self.medir_cota("angulo", [ln, l1]) - angulo) < 1e-6
+            texto = _numero(angulo if directo else 180 - angulo)
+            if expresion2 and not _es_numero(expresion2):
+                texto = expresion2 if directo else f"180 deg - ({expresion2})"
+            self.agregar_cota("angulo", [ln, l1], texto)
         elif distancia2 is None:
             # Distancias iguales (BOC-25): al nombrarse las cotas, la 2.ª pasa a ser «dN» de la 1.ª
             # (Documento._tabla_cotas), así editar una arrastra a la otra. Con distancia2, cada una es independiente.
             self.agregar_cota("distancia", [virtual, pt2], expr, {"igual_a": primera})
         else:
-            self.agregar_cota("distancia", [virtual, pt2], _numero(e2))
+            self.agregar_cota("distancia", [virtual, pt2], expresion2 or _numero(e2))
         return ln
 
     # ------------------------------------------------------------ MODIFICAR: desfase
@@ -4512,6 +4518,14 @@ class Boceto:
 # ---------------------------------------------------------------- utilidades geométricas 2D
 def _numero(v):
     return f"{v:.6f}".rstrip("0").rstrip(".")
+
+
+def _es_numero(texto):
+    try:
+        float(texto)
+        return True
+    except ValueError:
+        return False
 
 
 def _antihorario_por(a, medio, b, centro):

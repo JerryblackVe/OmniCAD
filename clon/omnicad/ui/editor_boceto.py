@@ -2243,7 +2243,7 @@ class Lienzo(QWidget):
                 d2 = self.evaluar(v[1]) if h == "chaflan_dos_dist" else None
                 ang = self.evaluar(v[1], ANGULO) if h == "chaflan_dist_angulo" else None
                 return self._aplicar_y_limpiar(lambda: self.b.chaflan(picks[0], picks[1], d1, d2, ang, xys[0], xys[1],
-                                                                      v[0]))
+                                                                      v[0], v[1] if h != "chaflan" else None))
             from .asas_boceto import asas_chaflan
             self._abrir_entrada(etiquetas, textos, pos, aceptar, asas_chaflan(self, h, picks, xys))
         elif h == "desfase":

@@ -48,7 +48,7 @@ matriz pero con test propio (columna Test); ninguna fila está probada todavía 
 | Clave | MCP | Núcleo | Test | Estado |
 |---|---|---|---|---|
 | sk_empalme | `sketch_fillet` | NB `empalme` | matriz | VERIFICADO |
-| sk_chaflan / _dist_angulo / _dos_dist | `sketch_chamfer` (`distance`, `angle`, `distance2`) | NB `chaflan` | matriz | VERIFICADO (B-235) |
+| sk_chaflan / _dist_angulo / _dos_dist | `sketch_chamfer` (`distance`, `angle`, `distance2`) | NB `chaflan` | matriz | VERIFICADO |
 | sk_curva_fusion | `draw_blend_curve` | NB `curva_fusion` | matriz | VERIFICADO |
 | sk_desfase | `offset_sketch_curves` | NB `desfasar` / `desfase` | matriz | VERIFICADO |
 | sk_soltar_desfase | `release_offset` | NB `soltar_desfase` | matriz | VERIFICADO |
@@ -89,7 +89,7 @@ recortar, alargar, partir y escala. Diferencias:
 | 1 | Escalar ×2 un rectángulo de 40 × 20 con chaflán 2: área 2707,75 en vez de 3192. Moverlo +100 en x: área 282 en vez de 798 (se deforma). El vértice virtual del chaflán no entra en `puntos_de(ids)` (NB `escalar` y `transformar`) | `test_b232_…` (xfail estricto) | B-232 |
 | 2 | Recortar una línea cuyo extremo tenía «fijo»: la línea termina en un punto nuevo y el «fijo» queda en el punto viejo, suelto | `test_b233_…` | B-233 |
 | 3 | `puntos_espiral` acepta 5000 vueltas (40 001 puntos); el tope de 24,875 vueltas está solo en `draw_spiral`: desde la ventana se puede colgar | `test_b234_…` | CORREGIDO (B-234, 2026-11-07) |
-| 4 | `sketch_chamfer(angle="ang")` guarda la cota de ángulo como «30»: pierde el parámetro (la distancia sí conserva la expresión) | `test_b235_…` | B-235 |
+| 4 | `sketch_chamfer(angle="ang")` guarda la cota de ángulo como «30»: pierde el parámetro (la distancia sí conserva la expresión) | `test_b235_…` | CORREGIDO (B-235, 2026-11-07) |
 | 5 | El MCP borra restricciones y cotas sin decirlo (empalme, chaflán, recortar, mover con giro) y no revierte cuando la edición sobre-restringe (solo `extend_sketch_curve` y `split_sketch_curve` usan `_exigir_sin_conflicto`) | lectura: `herramientas_boceto.py:597-614`, `herramientas_boceto_extra.py:55` | P-68 |
 | 6 | Tres caminos del MCP para alargar y partir con validaciones distintas (`trim_sketch_curve mode=extend/break` no comprueba el punto ni el conflicto) | lectura: `herramientas_boceto_extra.py:40-55` | P-69 |
 | 7 | Lógica repetida entre la ventana y la API: polígono (ED:1659 / HB:445), arco tangente (ED:1635 / HB:380), círculo 2p/3p; tope de lados en dos lugares | lectura | P-70 |

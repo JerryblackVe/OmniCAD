@@ -2309,7 +2309,7 @@ def sketch_chamfer(sesion, line1: int, line2: int, distance: Expr, distance2: Ex
     expr2, d2 = (None, None) if distance2 is None else _valor_expr(sesion, distance2)
     if d2 is not None:
         _cota_valida("distancia", d2, "distance2")
-    ang = None if angle is None else _valor_expr(sesion, angle, ANGULO)[1]
+    expr_ang, ang = (None, None) if angle is None else _valor_expr(sesion, angle, ANGULO)
     if ang is not None and not 0 < ang < 180:
         raise error("INVALID_DIMENSION", f"angle tiene que estar entre 0 y 180 grados (llegó {ang:g}).")
     p1, p2 = _opcional_xy(point1, "point1"), _opcional_xy(point2, "point2")
@@ -2319,12 +2319,7 @@ def sketch_chamfer(sesion, line1: int, line2: int, distance: Expr, distance2: Ex
             _curva(b, k, ("linea",), que)
         if line1 == line2:
             raise ErrorBoceto("Elegí dos líneas distintas.")
-        previas = set(b.cotas)
-        b.chaflan(line1, line2, d1, d2, ang, p1, p2, expresion)
-        if expr2 is not None:              # la segunda distancia también guarda su expresión
-            nuevas = [k for kid, k in b.cotas.items() if kid not in previas and k.tipo == "distancia"]
-            if len(nuevas) == 2:
-                nuevas[1].expresion = expr2
+        b.chaflan(line1, line2, d1, d2, ang, p1, p2, expresion, expr2 or expr_ang)
     return _dibujar(sesion, sketch, chaflan, desde_solver=True)
 
 

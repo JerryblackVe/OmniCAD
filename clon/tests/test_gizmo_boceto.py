@@ -247,6 +247,26 @@ def test_chaflan_asas_en_los_extremos_del_corte(lienzo, herramienta, n):
     lz._cerrar_entrada()
 
 
+@pytest.mark.parametrize(("herramienta", "segundo", "tipo"), [("chaflan_dos_dist", "d2", "distancia"),
+                                                             ("chaflan_dist_angulo", "ang", "angulo")])
+def test_b235_el_segundo_valor_del_chaflan_sigue_a_su_parametro(app, herramienta, segundo, tipo):
+    from omnicad.timeline.parametros import ANGULO
+    tabla = TablaParametros()
+    tabla.agregar("d1", "6 mm")
+    tabla.agregar("d2", "8 mm")
+    tabla.agregar("ang", "30 deg", ANGULO)
+    lz = editor_boceto.Lienzo(Boceto(), tabla.evaluar)
+    lz.ajustar_grilla = False
+    _esquina(lz, herramienta)
+    lz.entrada.campos[0].setText("d1")                       # se teclean los nombres de los parámetros
+    lz.entrada.campos[1].setText(segundo)
+    QTest.keyClick(lz.entrada.campos[0], Qt.Key_Return)
+    textos_cotas = {(c.tipo, c.expresion) for c in lz.b.cotas.values()}
+    assert ("distancia", "d1") in textos_cotas
+    assert any(t == tipo and segundo in e for t, e in textos_cotas)     # antes: «8» o «30», sin el parámetro
+    lz.close()
+
+
 def test_texto_asa_de_giro_del_marco(lienzo):
     lz = lienzo
     lz.set_herramienta("texto")

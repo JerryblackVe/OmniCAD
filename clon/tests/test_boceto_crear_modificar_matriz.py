@@ -420,7 +420,6 @@ def test_b234_el_nucleo_pone_tope_a_las_vueltas_de_la_espiral():
         puntos_espiral((0, 0), (5, 0), 5000, 1)
 
 
-@pytest.mark.xfail(strict=True, reason="B-235: el chaflán guarda el ángulo como número y pierde el parámetro")
 def test_b235_el_angulo_del_chaflan_conserva_su_expresion():
     s = api.Sesion()
     _ok(api.llamar(s, "create_sketch", {"name": "B"}))
