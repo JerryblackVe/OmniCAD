@@ -408,6 +408,7 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 
 - Pedido: `docs/auditoria_boceto_crear_modificar.md`. El cierre del 2026-11-07 (HEAD 8cf46ca) cubrió la fase 1 y B-232 a B-236: suite verde y piezas `boceto_herramientas`, `auditoria_boceto`, `boceto_cotas`, `restricciones_boceto`, `simetria_boceto` e `inferencias` sin ✗.
 - **Falta:** B-237 (f5a8e13, después del cierre) en la suite; ver en la ventana copiar un chaflán (Mover con Copiar) y que Alargar un extremo fijo muestre «El extremo es fijo: quitale «Fijo» antes de alargarlo.» sin tocar nada; y la fase 6 de la auditoría (una pieza de ventana por comando de CREAR y MODIFICAR).
+- **P-71 (2026-11-07):** los tres casos de MODIFICAR se reprodujeron con Qt nativo y eventos al widget (`test_gizmo_boceto.py::test_p71_…`): aviso de empalme compartido con MCP, Soltar desfase sin conservar cota y Escala con base obligatoria. Ninguno necesitó foco real. Incluir estas regresiones y la doc regenerada en el próximo cierre integrado; no reemplazan las piezas de la fase 6.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 

@@ -49,7 +49,7 @@ from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflict
                                      restriccion_quita_grados)
 from ..restricciones.inferencia import Indice, TIPOS_INFERENCIA, inferencias, proyectar_bloqueo
 from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
-                                    aviso_tangencias_fuera,
+                                    aviso_radio_empalme, aviso_tangencias_fuera,
                                     agregar_arco_tangente, agregar_circulo_puntos, agregar_poligono,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     centro_poligono_arista, circunferencia_3_puntos, dominio,
@@ -2199,10 +2199,20 @@ class Lienzo(QWidget):
         elif h == "empalme":
             listo = False
             from .asas_boceto import asas_empalme
+
+            def aceptar(v):
+                radio, aviso = self.evaluar(v[0]), ""
+
+                def empalmar():
+                    nonlocal aviso
+                    arco = self.b.empalme(picks[0], picks[1], radio, xys[0], xys[1], v[0])
+                    aviso = aviso_radio_empalme(radio, self.b.radio(arco))
+                ok = self._aplicar_y_limpiar(empalmar)
+                if ok and aviso:
+                    self.aviso.emit(aviso)
+                return ok
             self._abrir_entrada(["Radio"], [formato.numero(self._radio_sugerido(picks))], pos,
-                                lambda v: self._aplicar_y_limpiar(
-                                    lambda: self.b.empalme(picks[0], picks[1], self.evaluar(v[0]), xys[0], xys[1], v[0])),
-                                asas_empalme(self, picks, xys))
+                                aceptar, asas_empalme(self, picks, xys))
         elif h in ("chaflan", "chaflan_dist_angulo", "chaflan_dos_dist"):
             listo = False
             d = formato.numero(self._radio_sugerido(picks))

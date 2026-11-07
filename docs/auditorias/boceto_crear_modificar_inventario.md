@@ -7,7 +7,8 @@ núcleo en `restricciones/boceto.py` (abajo, **NB**) y el MCP en `api/herramient
 clave, por la API, con números y guardar/abrir (`get_recipe` → `apply_recipe`). Resultado: `48 passed, 5 xfailed`.
 
 Estado de cada fila: **VERIFICADO** = tiene caso en la matriz y da los números pedidos; **CUBIERTO** = sin caso en la
-matriz pero con test propio (columna Test); ninguna fila está probada todavía desde la ventana como usuario (fase 6).
+matriz pero con test propio (columna Test). Los tres casos de P-71 (hallazgo 9) se probaron con Qt nativo y eventos
+simulados al editor, sin foco real; el resto de la prueba de ventana sigue en la fase 6.
 
 ## 1. CREAR (42 claves)
 
@@ -94,5 +95,5 @@ recortar, alargar, partir y escala. Diferencias:
 | 6 | Tres caminos del MCP para alargar y partir con validaciones distintas (`trim_sketch_curve mode=extend/break` no comprueba el punto ni el conflicto) | lectura: `herramientas_boceto_extra.py:40-55` | CORREGIDO (P-69, 2026-11-07): los dos modos llaman a `_editar_curva` |
 | 7 | Lógica repetida entre la ventana y la API: polígono (ED:1659 / HB:445), arco tangente (ED:1635 / HB:380), círculo 2p/3p; tope de lados en dos lugares | lectura | P-70 |
 | 8 | `tests/test_cobertura_ui_api.py` asocia `sk_proyectar_eje` a `project_spun_profile`, que exige un perfil; lo que hace el botón es `project_to_sketch(references=["Z"])` | lectura: `test_cobertura_ui_api.py:143` | P-70 |
-| 9 | Otros, sin verificar todavía: el editor ignora el radio en un empalme entre paralelas sin avisar (el MCP avisa); el editor no ofrece «conservar cota» al soltar un desfase (`release_offset keep_dimension`); escala sin punto base en el MCP usa el centro de la caja | lectura del lector de MODIFICAR | P-71 |
+| 9 | Empalme entre paralelas separadas 10 mm: teclear 3 crea radio 5; ahora la ventana y el MCP avisan con el mismo texto y tolerancia (`aviso_radio_empalme`), solo al aceptar. Soltar desfase borra asociación y cota sin diálogo: la ayuda de Fusion no ofrece conservarla, por lo que no se agrega la opción. Escala exige elegir punto base, como Fusion; el centro automático queda documentado como atajo de la API. | `tests/test_gizmo_boceto.py`: `test_p71_empalme_avisa_el_mismo_radio_que_el_mcp` (3 variantes, rojo→verde), `test_p71_soltar_desfase_borra_la_cota_sin_dialogo_como_fusion`, `test_p71_escala_exige_base_y_la_api_ofrece_el_centro_automatico`. Ayuda `fusion-sketch`: `add-fillets-to-sketch-geometry-89d2b427f79.md`, `sketch-modification-tools-a217fee171a.md`, `offset-sketch-geometry-c7750d70285.md`, `scale-sketch-geometry-07f04098012.md` (paso 4). | CORREGIDO / CONTRASTADO (P-71, 2026-11-07): Qt nativo, clics y tecleo sin foco; 5 casos verdes |
 | 10 | Etiqueta muerta en inglés `_i("Helix / Spiral", "sk_espiral")` en `cinta_boceto.py:35` (la cinta muestra «Espiral» de `modo_boceto.py`; `ui/cinta.py:423-426` ignora el texto cuando hay clave) | lectura | CORREGIDO en esta fase (texto «Espiral») |

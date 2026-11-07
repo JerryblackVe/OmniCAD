@@ -31,7 +31,7 @@ from ..restricciones import (TIPOS_AUTO, Boceto, ErrorBoceto, auto_restringir, r
 from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
                                     agregar_arco_tangente, agregar_circulo_puntos, agregar_linea_medio, agregar_poligono,
                                     agregar_rectangulo_3p, agregar_rectangulo_centro,
-                                    aviso_tangencias_fuera, expresion_sin_signo, _medidas_marco, centro_arco_tangente,
+                                    aviso_radio_empalme, aviso_tangencias_fuera, expresion_sin_signo, _medidas_marco, centro_arco_tangente,
                                     centro_poligono_arista, evaluar_primitiva, mas_cercano, peine_curvatura,
                                     validar_lados_poligono, validar_valor_cota)
 from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
@@ -2257,10 +2257,9 @@ def sketch_fillet(sesion, entity1: int, entity2: int, radius: Expr, point1: list
         if entity1 == entity2:
             raise ErrorBoceto("Elegí dos curvas distintas.")
         arco = b.empalme(entity1, entity2, valor, p1, p2, expresion)
-        radio_final = b.radio(arco)
-        if not math.isclose(radio_final, valor, rel_tol=1e-9, abs_tol=1e-9):
-            sesion.avisar(f"Entre líneas paralelas el radio es la mitad de su separación: {radio_final:g} mm; "
-                         "se ignoró el radio pedido.")
+        aviso = aviso_radio_empalme(valor, b.radio(arco))
+        if aviso:
+            sesion.avisar(aviso)
     return _dibujar(sesion, sketch, empalmar, desde_solver=True, sin_conflicto="El empalme")
 
 

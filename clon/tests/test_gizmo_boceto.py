@@ -284,3 +284,146 @@ def test_texto_asa_de_giro_del_marco(lienzo):
     lz.entrada.campos[2].setText("90")
     assert posicion(lz, 0) == pytest.approx((ancla[0], ancla[1] + 40.0), abs=1e-6)
     lz._cerrar_entrada()
+
+
+@pytest.fixture
+def ventana_p71(app):
+    """Editor real con eventos al widget: también puede correrse con Qt nativo sin tomar el foco de Windows."""
+    lz = editor_boceto.Lienzo(Boceto(), TablaParametros().evaluar)
+    lz.setWindowFlag(Qt.WindowDoesNotAcceptFocus)
+    lz.setAttribute(Qt.WA_ShowWithoutActivating)
+    lz.setAttribute(Qt.WA_TransparentForMouseEvents)
+    lz.setWindowOpacity(0)
+    lz.resize(800, 600)
+    lz.ajustar_grilla = False
+    lz.show()
+    yield lz
+    lz.close()
+    lz.deleteLater()
+    app.processEvents()
+
+
+def _clic_p71(lz, xy):
+    _raton(lz, QEvent.MouseMove, xy, Qt.NoButton)
+    _raton(lz, QEvent.MouseButtonPress, xy)
+    _raton(lz, QEvent.MouseButtonRelease, xy)
+
+
+def _teclear_p71(campo, texto):
+    QTest.keyClick(campo, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClicks(campo, texto)
+
+
+@pytest.mark.parametrize("paralelas,radio", [(True, "3"), (True, "5"), (False, "3")])
+def test_p71_empalme_avisa_el_mismo_radio_que_el_mcp(ventana_p71, paralelas, radio):
+    from omnicad import api
+
+    lz = ventana_p71
+    segmentos = [((0, 0), (30, 0)), ((0, 10), (30, 10)) if paralelas else ((0, 0), (0, 30))]
+    s = api.Sesion()
+    assert api.llamar(s, "create_sketch", {"name": "B"})["ok"]
+    ids = []
+    for inicio, fin in segmentos:
+        lz.b.agregar_linea(inicio, fin)
+        r = api.llamar(s, "draw_line", {"sketch": "B", "start_x": inicio[0], "start_y": inicio[1],
+                                        "end_x": fin[0], "end_y": fin[1]})
+        assert r["ok"], r
+        ids.append(r["result"]["entities"][0]["id"])
+    lz.resolver()
+    antes = lz.b.a_dict()
+    lz.encuadrar()
+    lz.set_herramienta("empalme")
+    puntos = [(15, 0), (15, 10) if paralelas else (0, 15)]
+    for xy in puntos:
+        _clic_p71(lz, xy)
+    assert lz.entrada is not None and len(lz.picks) == 2
+    avisos = []
+    lz.aviso.connect(avisos.append)
+    campo = lz.entrada.campos[0]
+    _teclear_p71(campo, radio)
+    assert campo.text() == radio
+    assert lz.b.a_dict() == antes                      # la previa no aplica ni avisa
+    assert not avisos
+    QTest.keyClick(campo, Qt.Key_Return)
+    arcos = [i for i in lz.b.curvas if lz.b.tipo_de(i) == "arco"]
+    assert len(arcos) == 1 and lz.resultado.ok
+    assert lz.b.radio(arcos[0]) == pytest.approx(5 if paralelas else float(radio))
+    r = api.llamar(s, "sketch_fillet", {"sketch": "B", "entity1": ids[0], "entity2": ids[1],
+                                         "radius": radio, "point1": puntos[0], "point2": puntos[1]})
+    assert r["ok"], r
+    esperado = (["Entre líneas paralelas el radio es la mitad de su separación: 5 mm; se ignoró el radio pedido."]
+                if paralelas and radio == "3" else [])
+    assert r.get("avisos", []) == esperado
+    assert avisos == esperado
+    lz.deshacer()
+    assert lz.b.a_dict() == antes
+
+
+def test_p71_soltar_desfase_borra_la_cota_sin_dialogo_como_fusion(ventana_p71):
+    from PySide6.QtWidgets import QToolButton
+    from omnicad.ui.modo_boceto import ModoBoceto
+
+    lz = ventana_p71
+    linea = lz.b.agregar_linea((0, 0), (30, 0))
+    lz.resolver()
+    lz.encuadrar()
+    lz.set_herramienta("desfase")
+    _clic_p71(lz, (15, 0))
+    campo = lz.entrada.campos[0]
+    _teclear_p71(campo, "10")
+    QTest.keyClick(campo, Qt.Key_Return)
+    copia = next(i for i in lz.b.curvas if i != linea)
+    assert len(lz.b.cotas) == 1 and any(r.tipo == "desfase" for r in lz.b.restricciones.values())
+    antes = lz.b.a_dict()
+    lz.set_herramienta("seleccionar")
+    lz.encuadrar()
+    a, b = lz.b._extremos_linea(copia)
+    _clic_p71(lz, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
+    assert copia in lz.seleccion
+    modo = ModoBoceto(lz)
+    modo.lienzo = lz
+    accion = modo.acciones["sk_soltar_desfase"]
+    accion.setEnabled(True)
+    boton = QToolButton(lz)
+    boton.setDefaultAction(accion)
+    boton.show()
+    QTest.mouseClick(boton, Qt.LeftButton)
+    assert len(lz.b.curvas) == 2 and not lz.b.cotas
+    assert not any(r.tipo in ("desfase", "paralela") for r in lz.b.restricciones.values())
+    assert QApplication.activeModalWidget() is None
+    lz.deshacer()
+    assert lz.b.a_dict() == antes
+
+
+def test_p71_escala_exige_base_y_la_api_ofrece_el_centro_automatico(ventana_p71):
+    from omnicad import api
+    from omnicad.ui.panel_transformar import PanelTransformar
+
+    lz = ventana_p71
+    linea = lz.b.agregar_linea((10, 10), (30, 10))
+    lz.resolver()
+    lz.encuadrar()
+    _clic_p71(lz, (20, 10))
+    assert linea in lz.seleccion
+    panel = PanelTransformar(lz)
+    ctl = lz.transformar
+    ctl.panel = panel
+    panel.cambio.connect(ctl.recibir)
+    panel.aceptado.connect(ctl.aceptar)
+    lz.set_herramienta("escala")
+    antes = lz.b.a_dict()
+    _teclear_p71(panel.campos["factor"], "2")
+    assert not panel.boton_ok.isEnabled() and "punto base" in panel.guia.text()
+    QTest.keyClick(panel.campos["factor"], Qt.Key_Return)
+    assert lz.b.a_dict() == antes and lz.herramienta == "escala"
+    _clic_p71(lz, (10, 10))
+    assert ctl.base == pytest.approx((10, 10)) and panel.boton_ok.isEnabled()
+    QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
+    assert lz.b._extremos_linea(linea) == (pytest.approx((10, 10)), pytest.approx((50, 10)))
+    s = api.Sesion()
+    assert api.llamar(s, "create_sketch", {"name": "B"})["ok"]
+    assert api.llamar(s, "draw_line", {"start_x": 10, "start_y": 10, "end_x": 30, "end_y": 10})["ok"]
+    r = api.llamar(s, "transform_sketch", {"scale": 2})
+    assert r["ok"], r
+    entidad = api.llamar(s, "get_sketch", {})["result"]["entities"][0]
+    assert entidad["start"] == pytest.approx((0, 10)) and entidad["end"] == pytest.approx((40, 10))

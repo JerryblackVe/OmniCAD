@@ -913,7 +913,7 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
     angle: giro en grados (antihorario) alrededor del centro.
     scale: factor de escala, número o expresión con parámetros ("ancho / 20"), entre 1e-6 y 1.000.000 (1 = igual); el resultado no puede pasar de 1 km del origen.
     mirror: horizontal (izquierda ↔ derecha), vertical (arriba ↔ abajo) o none.
-    center_x: x del centro de giro, escala y espejo; vacío = centro de la caja de la selección.
+    center_x: x del centro de giro, escala y espejo; vacío = centro de la caja (atajo de la API; Escala en la ventana exige punto base, como Fusion).
     center_y: y del centro; vacío = centro de la caja de la selección.
     copy: true para transformar una copia y dejar el original.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.

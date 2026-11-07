@@ -2370,7 +2370,7 @@ Mueve, gira, escala y/o espeja curvas de un boceto (un paso de deshacer): lo imp
   - `angle` (número; opcional, por defecto `0.0`): giro en grados (antihorario) alrededor del centro.
   - `scale` (número o expresión; opcional, por defecto `1.0`): factor de escala, número o expresión con parámetros ("ancho / 20"), entre 1e-6 y 1.000.000 (1 = igual); el resultado no puede pasar de 1 km del origen.
   - `mirror` ("none" | "horizontal" | "vertical"; opcional, por defecto `"none"`): horizontal (izquierda ↔ derecha), vertical (arriba ↔ abajo) o none.
-  - `center_x` (número; opcional, por defecto `null`): x del centro de giro, escala y espejo; vacío = centro de la caja de la selección.
+  - `center_x` (número; opcional, por defecto `null`): x del centro de giro, escala y espejo; vacío = centro de la caja (atajo de la API; Escala en la ventana exige punto base, como Fusion).
   - `center_y` (número; opcional, por defecto `null`): y del centro; vacío = centro de la caja de la selección.
   - `copy` (true/false; opcional, por defecto `false`): true para transformar una copia y dejar el original.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.

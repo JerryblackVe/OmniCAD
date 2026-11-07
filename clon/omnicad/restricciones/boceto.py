@@ -84,6 +84,14 @@ class ErrorBoceto(ValueError):
     pass
 
 
+def aviso_radio_empalme(pedido, final):
+    """Fusion: Empalme entre paralelas. Informa si la separación impuso otro radio."""
+    if math.isclose(final, pedido, rel_tol=1e-9, abs_tol=1e-9):
+        return ""
+    return (f"Entre líneas paralelas el radio es la mitad de su separación: {final:g} mm; "
+            "se ignoró el radio pedido.")
+
+
 def centro_arco_tangente(inicio, otro, fin):
     """(centro, antihorario) del arco tangente a la línea otro→inicio (Fusion: Arco tangente).
 
