@@ -151,7 +151,8 @@ def esperar(ms=350):
 
 
 def foto(v, nombre):
-    ruta = CAPTURAS / f"{nombre}.png"
+    # Prefijo de la pieza (el script que corre): con todo.py --paralelo dos piezas a la vez no pisan la misma captura.
+    ruta = CAPTURAS / f"{Path(sys.argv[0]).stem}_{nombre}.png"
     v.grab().save(str(ruta))
     return ruta
 
