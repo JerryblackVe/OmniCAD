@@ -36,13 +36,17 @@ def leer(carpeta):
     return tests, archivos, [x.name for x in fuentes]
 
 
+# Sin medición se estima prudente, igual que scripts/tests_afectados.py (P-66).
+SEGUNDOS_SIN_MEDIR = 30
+
+
 def repartir(archivos, tiempos, procesos=4):
-    """Arma tandas de unos 600 s por proceso, con archivos enteros y los más lentos primero; sin dato, 10 s."""
+    """Arma tandas de unos 600 s por proceso, con archivos enteros y los más lentos primero; sin dato, 30 s."""
     if procesos < 1:
         raise ValueError("La cantidad de procesos debe ser positiva")
     grupos, grupo, cargas = [], [], [0.0] * procesos
-    for archivo in sorted(archivos, key=lambda a: -float(tiempos.get(a, 10))):
-        segundos = float(tiempos.get(archivo, 10))
+    for archivo in sorted(archivos, key=lambda a: -float(tiempos.get(a, SEGUNDOS_SIN_MEDIR))):
+        segundos = float(tiempos.get(archivo, SEGUNDOS_SIN_MEDIR))
         if not math.isfinite(segundos) or segundos < 0:
             raise ValueError(f"Tiempo inválido para {archivo}: {segundos}")
         trabajador = min(range(procesos), key=cargas.__getitem__)

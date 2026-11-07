@@ -62,9 +62,9 @@ def test_tandas_por_tiempo_respetan_archivos_enteros_y_carga_por_proceso(proceso
     assert grupos == [archivos[:procesos], archivos[procesos:]]
 
 
-def test_sin_dato_cuenta_diez_segundos_y_lista_vacia_no_crea_tanda():
-    archivos = [f"tests/test_{i}.py" for i in range(61)]
-    assert repartir(archivos, {}, procesos=1) == [archivos[:60], archivos[60:]]
+def test_sin_dato_cuenta_treinta_segundos_y_lista_vacia_no_crea_tanda():
+    archivos = [f"tests/test_{i}.py" for i in range(21)]
+    assert repartir(archivos, {}, procesos=1) == [archivos[:20], archivos[20:]]
     assert repartir([], {}) == []
 
 
@@ -89,7 +89,7 @@ def test_cli_escribe_tandas_mas_lentas_primero_sin_modificar_el_json(tmp_path):
     lista = tmp_path / "lista.txt"
     lista.write_text("sin_dato\nrapido\nlento\nmediano\n", encoding="utf-8")
     mediciones = tmp_path / "tiempos.json"
-    original = json.dumps({"archivos": {"rapido": 20, "lento": 590, "mediano": 570}})
+    original = json.dumps({"archivos": {"rapido": 20, "lento": 590, "mediano": 540}})
     mediciones.write_text(original, encoding="utf-8")
     salida = tmp_path / "tandas"
     r = subprocess.run([sys.executable, str(SCRIPT), str(lista), "--tandas", str(salida),
@@ -99,5 +99,5 @@ def test_cli_escribe_tandas_mas_lentas_primero_sin_modificar_el_json(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "2 tandas, 1 procesos" in r.stdout
     assert [(p.name, p.read_text(encoding="utf-8")) for p in sorted(salida.iterdir())] == [
-        ("parte_00", "lento\n"), ("parte_01", "mediano\nrapido\nsin_dato\n")]
+        ("parte_00", "lento\n"), ("parte_01", "mediano\nsin_dato\nrapido\n")]
     assert mediciones.read_text(encoding="utf-8") == original
