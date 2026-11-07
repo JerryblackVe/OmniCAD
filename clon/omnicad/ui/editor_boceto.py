@@ -943,9 +943,10 @@ class Lienzo(QWidget):
         """`rapido` (arrastrar un punto): solo se resuelve la parte de ese punto y sin recontar grados de libertad;
         al soltar se resuelve todo."""
         try:
+            self.b.evaluar_patrones(self.evaluar)
             valores = self.valores_cotas()
-        except ErrorExpresion as e:
-            self.mensaje.emit(f"Hay una cota con expresión inválida: {e}")
+        except (ErrorExpresion, ErrorBoceto) as e:
+            self.mensaje.emit(f"Hay una cota o patrón con expresión inválida: {e}")
             valores = {}
         previo = self.resultado if rapido and arrastrado is not None else None
         self.resultado = resolver(self.b, valores, arrastrado, previo)

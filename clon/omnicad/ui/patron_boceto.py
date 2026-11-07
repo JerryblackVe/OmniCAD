@@ -128,6 +128,8 @@ class ControlPatron:
                            "simetrico" if p["simetrico"] else "parcial", "centro_x": "", "centro_y": ""}
             self._texto_centro()
             self.campo = "centro"
+        for clave, texto in p.get("expresiones", {}).items():
+            self.textos[clave] = texto
         l.fase = self.campo
         self._cache = None
         self._emitir()
@@ -410,6 +412,10 @@ class ControlPatron:
             return False
         r, perdidas = self.calcular(), []
         p, ids, pid = dict(r["params"]), l._seleccion_util(), self.editando
+        claves = ("distancia1", "angulo1") if self.tipo == "rectangular" else ("angulo_total",)
+        if self.tipo == "rectangular" and self.textos.get("dos"):
+            claves += ("distancia2", "angulo2")
+        p["expresiones"] = {k: str(self.textos[k]).strip() for k in claves}
         sup = sorted(i for i in self.suprimidos if i < r["copias"])          # las de una cantidad anterior ya no existen
 
         def hacer():
@@ -417,9 +423,10 @@ class ControlPatron:
                 perdidas.extend(l.b.editar_patron(pid, suprimidos=sup, **p))
             elif self.tipo == "rectangular":
                 l.b.patron_rectangular(ids, p["cantidad1"], p["distancia1"], p["cantidad2"], p["distancia2"], p["dir1"],
-                                       p["dir2"], p["modo"], p["simetrico"], p["linea1"], p["linea2"], sup, p["simetrico2"])
+                                       p["dir2"], p["modo"], p["simetrico"], p["linea1"], p["linea2"], sup, p["simetrico2"],
+                                       p["expresiones"])
             else:
-                l.b.patron_circular(ids, p["centro"], p["cantidad"], p["angulo_total"], p["simetrico"], sup)
+                l.b.patron_circular(ids, p["centro"], p["cantidad"], p["angulo_total"], p["simetrico"], sup, p["expresiones"])
         if not l.aplicar_cambio(hacer, anclar=False):
             return False
         if perdidas:

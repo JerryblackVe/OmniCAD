@@ -1274,14 +1274,14 @@ Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias
 - Parámetros:
   - `entities` (lista de entero; obligatorio): ids de las curvas o puntos a repetir (get_sketch).
   - `count1` (entero; obligatorio): cantidad en la dirección 1, contando el original.
-  - `distance1` (número; obligatorio): distancia en la dirección 1 (mm; total o por paso según spacing; negativa = sentido contrario).
+  - `distance1` (número o expresión; obligatorio): mm o expresión en la dirección 1 (total o por paso según spacing; negativa = sentido contrario).
   - `count2` (entero; opcional, por defecto `1`): cantidad en la dirección 2 (1 = una sola fila).
-  - `distance2` (número; opcional, por defecto `0.0`): distancia en la dirección 2 (mm).
-  - `angle` (número; opcional, por defecto `0.0`): dirección 1 en grados respecto del eje x del boceto.
+  - `distance2` (número o expresión; opcional, por defecto `0.0`): distancia en la dirección 2 (mm o expresión).
+  - `angle` (número o expresión; opcional, por defecto `0.0`): dirección 1 en grados o expresión respecto del eje x del boceto.
   - `spacing` ("extent" | "spacing"; opcional, por defecto `"extent"`): extent (distancia total) o spacing (distancia entre copias).
   - `symmetric` (true/false; opcional, por defecto `false`): true para repartir las copias a los dos lados del original (el original queda en el medio; con cantidad par, una copia más de un lado).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
-  - `angle2` (número; opcional, por defecto `null`): dirección 2 en grados respecto del eje x; vacío = angle + 90°.
+  - `angle2` (número o expresión; opcional, por defecto `null`): dirección 2 en grados o expresión respecto del eje x; vacío = angle + 90°.
   - `direction1_line` (entero; opcional, por defecto `null`): id de una línea del boceto que da la dirección 1 (de su inicio a su fin); pisa a angle.
   - `direction2_line` (entero; opcional, por defecto `null`): id de una línea del boceto que da la dirección 2; pisa a angle2.
   - `suppress` (lista de entero o null; opcional, por defecto `null`): índices de las copias que no se crean (get_sketch › patterns las lista).
@@ -1299,7 +1299,7 @@ Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de cu
   - `center_x` (número; opcional, por defecto `0.0`): x del centro (mm), si no se da center_point.
   - `center_y` (número; opcional, por defecto `0.0`): y del centro (mm).
   - `center_point` (entero; opcional, por defecto `null`): id de un punto del boceto que hace de centro (las copias lo siguen); pisa center_x/center_y.
-  - `total_angle` (número; opcional, por defecto `360.0`): ángulo total en grados (360 = vuelta entera; negativo = sentido horario).
+  - `total_angle` (número o expresión; opcional, por defecto `360.0`): ángulo total en grados o expresión (360 = vuelta entera; negativo = sentido horario).
   - `symmetric` (true/false; opcional, por defecto `false`): true para repartir las copias a los dos lados del original (si total_angle no es 360).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `suppress` (lista de entero o null; opcional, por defecto `null`): índices de las copias que no se crean (get_sketch › patterns las lista).
@@ -1313,17 +1313,17 @@ Edita un patrón de boceto ya hecho (Fusion: doble clic en el glifo del patrón)
 - Parámetros:
   - `pattern` (entero; obligatorio): id del patrón (lo devuelve la herramienta que lo creó; get_sketch › patterns lo lista).
   - `count1` (entero; opcional, por defecto `null`): cantidad en la dirección 1 (rectangular).
-  - `distance1` (número; opcional, por defecto `null`): distancia en la dirección 1 (rectangular).
+  - `distance1` (número o expresión; opcional, por defecto `null`): distancia en mm o expresión en la dirección 1 (rectangular).
   - `count2` (entero; opcional, por defecto `null`): cantidad en la dirección 2 (rectangular).
-  - `distance2` (número; opcional, por defecto `null`): distancia en la dirección 2 (rectangular).
-  - `angle` (número; opcional, por defecto `null`): dirección 1 en grados (rectangular); si no se da angle2, la dirección 2 pasa a angle + 90°.
-  - `angle2` (número; opcional, por defecto `null`): dirección 2 en grados (rectangular).
+  - `distance2` (número o expresión; opcional, por defecto `null`): distancia en mm o expresión en la dirección 2 (rectangular).
+  - `angle` (número o expresión; opcional, por defecto `null`): dirección 1 en grados o expresión (rectangular); sin angle2, la dirección 2 pasa a angle + 90°.
+  - `angle2` (número o expresión; opcional, por defecto `null`): dirección 2 en grados o expresión (rectangular).
   - `spacing` ("extent" | "spacing" o null; opcional, por defecto `null`): extent o spacing (rectangular).
   - `symmetric` (true/false; opcional, por defecto `null`): repartir las copias a los dos lados del original.
   - `direction1_line` (entero; opcional, por defecto `null`): id de una línea que da la dirección 1 (rectangular).
   - `direction2_line` (entero; opcional, por defecto `null`): id de una línea que da la dirección 2 (rectangular).
   - `count` (entero; opcional, por defecto `null`): cantidad total, contando el original (circular).
-  - `total_angle` (número; opcional, por defecto `null`): ángulo total en grados (circular).
+  - `total_angle` (número o expresión; opcional, por defecto `null`): ángulo total en grados o expresión (circular).
   - `suppress` (lista de entero o null; opcional, por defecto `null`): índices de copias suprimidas; reemplaza la lista actual ([] = ninguna).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `symmetric2` (true/false; opcional, por defecto `null`): lo mismo para la dirección 2 (rectangular); vacío = no cambia.

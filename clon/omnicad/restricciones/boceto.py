@@ -4182,17 +4182,20 @@ class Boceto:
 
     def patron_rectangular(self, ids, cantidad1, distancia1, cantidad2=1, distancia2=0.0, dir1=(1.0, 0.0),
                            dir2=(0.0, 1.0), modo="extension", simetrico=False, linea1=None, linea2=None,
-                           suprimir=(), simetrico2=None):
+                           suprimir=(), simetrico2=None, expresiones=None):
         """Patrón rectangular (SKT-CREATE-RECTANGULAR-PATTERN). La cantidad cuenta el original. modo "extension": la
         distancia es la total (de la primera a la última copia); "espaciado": la de cada paso. `linea1` / `linea2`
         toman la dirección de una línea del boceto; las direcciones pueden ser cualquiera, no solo X e Y.
         `simetrico2` (por defecto igual a `simetrico`) es el de la dirección 2. Las copias quedan atadas al original
-        (restricción de patrón); `suprimir` son índices de copia que no se crean."""
+        (restricción de patrón); `suprimir` son índices de copia que no se crean. `expresiones` guarda los textos
+        de distancia1/2 y angulo1/2 junto a sus valores evaluados, para el recálculo del boceto."""
         params = {"cantidad1": cantidad1, "distancia1": distancia1, "cantidad2": cantidad2, "distancia2": distancia2,
                   "dir1": list(dir1), "dir2": list(dir2), "modo": modo, "simetrico": simetrico,
                   "linea1": linea1, "linea2": linea2}
         if simetrico2 is not None:
             params["simetrico2"] = simetrico2
+        if expresiones:
+            params["expresiones"] = dict(expresiones)
         trans, _cp, ids = self.comprobar_patron("rectangular", params, ids)
         return self._patron(ids, trans, "rectangular", params, set(suprimir))
 
@@ -4297,13 +4300,16 @@ class Boceto:
                           math.degrees(a), [cp] if cp is not None else [], datos))
         return trans, cp
 
-    def patron_circular(self, ids, centro, cantidad, angulo_total=360.0, simetrico=False, suprimir=()):
+    def patron_circular(self, ids, centro, cantidad, angulo_total=360.0, simetrico=False, suprimir=(), expresiones=None):
         """Patrón circular (SKT-CREATE-CIRCULAR-PATTERN) alrededor de `centro` (id de punto o (u, v)). Con
         coordenadas NO se crea un punto en el centro (B-55): el giro queda atado a un centro fijo; con id de
-        punto, las copias lo siguen si se mueve. `suprimir`: índices de copia que no se crean."""
+        punto, las copias lo siguen si se mueve. `suprimir`: índices de copia que no se crean.
+        `expresiones` conserva el texto de angulo_total junto a su valor evaluado."""
         es_punto = isinstance(centro, (int, np.integer)) and not isinstance(centro, bool)
         params = {"centro": int(centro) if es_punto else list(centro), "cantidad": cantidad,
                   "angulo_total": angulo_total, "simetrico": simetrico}
+        if expresiones:
+            params["expresiones"] = dict(expresiones)
         trans, _cp, ids = self.comprobar_patron("circular", params, ids)
         return self._patron(ids, trans, "circular", params, set(suprimir))
 
@@ -4314,6 +4320,40 @@ class Boceto:
         if puntos and all(math.dist(self.coords(q), c) < MEDIDA_MINIMA for q in puntos):
             raise ErrorBoceto("El centro del patrón coincide con la geometría elegida: al girarla quedaría en el mismo "
                               "lugar y las copias saldrían encimadas. Elegí otro centro.")
+
+    def evaluar_patrones(self, evaluar):
+        """Reevalúa los valores de los patrones de Fusion sin reemplazar entidades ni sus referencias.
+
+        `evaluar(texto, tipo)` usa las mismas unidades y parámetros que las cotas del boceto.
+        """
+        for registro in self.patrones:
+            p = registro["params"]
+            if not p.get("expresiones"):
+                continue
+            nuevo = dict(p)
+            for clave, texto in p.get("expresiones", {}).items():
+                valor = evaluar(texto, "angulo" if clave.startswith("angulo") else "longitud")
+                if clave in ("angulo1", "angulo2"):
+                    a = math.radians(valor)
+                    nuevo["dir" + clave[-1]] = [math.cos(a), math.sin(a)]
+                else:
+                    nuevo[clave] = valor
+            if nuevo == p:
+                continue
+            trans, _cp, _ids = self.comprobar_patron(registro["tipo"], nuevo, registro["ids"])
+            for n, copia in registro["copias"].items():
+                f, angulo, _extra, datos = trans[int(n)]
+                puntos = set(copia) & self.puntos.keys()
+                for r in self.restricciones.values():
+                    if r.tipo == "patron" and r.entidades[1] in puntos:
+                        r.datos = {**datos, "grupo": r.datos["grupo"]}
+                        q = self.puntos[r.entidades[1]]
+                        q.x, q.y = f(self.coords(r.entidades[0]))
+                for original, cid in zip((i for i in registro["ids"] if i in self.curvas),
+                                         (i for i in copia if i in self.curvas), strict=False):
+                    if isinstance(self.curvas[cid], Texto):
+                        self.curvas[cid].angulo = self.curvas[original].angulo + angulo
+            registro["params"] = nuevo
 
     def editar_patron(self, pid, **cambios):
         """Edita un patrón ya hecho (cantidades, distancias, direcciones, `suprimidos`): borra sus copias y las

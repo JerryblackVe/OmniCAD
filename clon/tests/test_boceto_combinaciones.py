@@ -338,8 +338,6 @@ def test_combinacion_7_proyeccion_de_caja_sigue_el_parametro():
         _solido(documento, 12000, [0, 0, 0], [60, 20, 10])
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="cm-3b/8: distance1='paso' (10 mm) rechazado: INVALID_ARGUMENTS; solo acepta números")
 def test_combinacion_8_patron_rectangular_editable_con_separacion_parametrica():
     s = api.Sesion()
     _llamar(s, "create_parameter", name="paso", expression="10 mm")
@@ -367,6 +365,8 @@ def test_combinacion_8_patron_rectangular_editable_con_separacion_parametrica():
         assert patron["parameters"]["count1"] == columnas
         assert patron["parameters"]["count2"] == 2
         s = _reabrir(s)
+
+
 
 
 # ---------------------------------------------------------------- cm-3c: casos límite por herramienta
@@ -676,3 +676,125 @@ def test_b239_copias_de_texto_conservan_altura_al_escalar_original_y_reabrir(cam
         assert next(e for e in _de(documento, "text") if e["id"] == original["id"])["height"] == 2 * altura
         actuales = _llamar(documento, "get_sketch", sketch=destino)["entities"]
         assert [e for e in actuales if destino != "B" or e["id"] != original["id"]] == copias
+def test_h111_circular_sigue_el_angulo_y_conserva_expresion_en_la_receta():
+    s = api.Sesion()
+    _llamar(s, "create_parameter", name="ang", expression="90 deg", kind="angle")
+    _llamar(s, "create_sketch", name="B")
+    circulo, = _ids(_llamar(s, "draw_circle", sketch="B", center_x=30, center_y=0, radius=2))
+    resultado = _llamar(s, "sketch_circular_pattern", sketch="B", entities=[circulo], count=3, total_angle="ang")
+    patron = resultado["pattern"]
+    ids = {e["id"] for e in _ents(s)}
+    for angulo in (90, 180, 360, -90):
+        _llamar(s, "set_parameter", name="ang", expression=f"{angulo} deg")
+        for documento in (s, _reabrir(s)):
+            assert {e["id"] for e in _ents(documento)} == ids
+            paso = angulo / (3 if abs(angulo) == 360 else 2)
+            for i in range(3):
+                a = math.radians(i * paso)
+                assert any(e["center"] == pytest.approx([30 * math.cos(a), 30 * math.sin(a)], abs=2e-4)
+                           for e in _de(documento, "circle"))
+            receta = _llamar(documento, "get_recipe")["recipe"]
+            paso_boceto, = [op for op in receta["operaciones"] if "boceto" in op]
+            assert paso_boceto["boceto"]["patrones"][0]["params"]["expresiones"]["angulo_total"] == "ang"
+    _llamar(s, "edit_sketch_pattern", sketch="B", pattern=patron, total_angle="ang / 2")
+    _llamar(s, "set_parameter", name="ang", expression="180 deg")
+    copia = next(e for e in _de(s, "circle") if e["id"] != circulo)
+    assert math.degrees(math.atan2(*reversed(copia["center"]))) == pytest.approx(45, abs=2e-4)
+    _reabrir(s)
+
+
+@pytest.mark.parametrize("circular", [False, True])
+@pytest.mark.parametrize("editar", [False, True])
+def test_h111_expresion_invalida_rechazada_sin_cambiar_el_boceto(circular, editar):
+    s = api.Sesion()
+    _llamar(s, "create_sketch", name="B")
+    linea, = _ids(_llamar(s, "draw_line", sketch="B", start_x=10, start_y=0, end_x=12, end_y=0))
+    nombre = "sketch_circular_pattern" if circular else "sketch_rectangular_pattern"
+    args = {"entities": [linea], **({"count": 3} if circular else {"count1": 3, "distance1": 10})}
+    if editar:
+        patron = _llamar(s, nombre, sketch="B", **args)["pattern"]
+        nombre, args = "edit_sketch_pattern", {"pattern": patron}
+    args["total_angle" if circular else "distance1"] = "nada * 2"
+    antes, receta = _boceto(s), _llamar(s, "get_recipe")
+    resultado = api.llamar(s, nombre, {"sketch": "B", **args})
+    assert not resultado["ok"]
+    assert "nada" in resultado["mensaje"] and "no" in resultado["mensaje"].lower()
+    assert _boceto(s) == antes
+    assert _llamar(s, "get_recipe") == receta
+
+
+@pytest.mark.parametrize("editar", [False, True])
+@pytest.mark.parametrize("segunda_direccion", [False, True])
+def test_h111_rectangular_distancias_y_direcciones_parametricas(editar, segunda_direccion):
+    s = api.Sesion()
+    _llamar(s, "create_parameter", name="paso", expression="10 mm")
+    _llamar(s, "create_parameter", name="ang", expression="0 deg", kind="angle")
+    _llamar(s, "create_sketch", name="B")
+    linea, = _ids(_llamar(s, "draw_line", sketch="B", start_x=1, start_y=1, end_x=3, end_y=1))
+    campos = {"distance1": "paso", "distance2": "paso * 2", "angle": "ang"}
+    if segunda_direccion:
+        campos["angle2"] = "ang + 90 deg"
+    patron = _llamar(s, "sketch_rectangular_pattern", sketch="B", entities=[linea], count1=2, count2=2,
+                    **({"distance1": 10, "distance2": 20} if editar else campos))["pattern"]
+    if editar:
+        _llamar(s, "edit_sketch_pattern", sketch="B", pattern=patron, **campos)
+    ids = {e["id"] for e in _ents(s)}
+    _llamar(s, "set_parameter", name="paso", expression="15 mm")
+    _llamar(s, "set_parameter", name="ang", expression="90 deg")
+    for documento in (s, _reabrir(s)):
+        assert {e["id"] for e in _ents(documento)} == ids
+        for punto in ([1, 1], [1, 16], [-29, 1], [-29, 16]):
+            assert any(e["start"] == pytest.approx(punto, abs=2e-4) for e in _de(documento, "line"))
+    # Editar solo la cantidad conserva las expresiones y usa los valores actuales.
+    _llamar(s, "edit_sketch_pattern", sketch="B", pattern=patron, count1=3)
+    assert len(_de(s, "line")) == 6
+    receta = _llamar(s, "get_recipe")["recipe"]
+    paso_boceto, = [op for op in receta["operaciones"] if "boceto" in op]
+    assert paso_boceto["boceto"]["patrones"][0]["params"]["expresiones"]["distancia1"] == "paso"
+    _llamar(s, "set_parameter", name="paso", new_name="separacion")
+    _llamar(s, "set_parameter", name="separacion", expression="20 mm")
+    for punto in ([1, 21], [-39, 21]):
+        assert any(e["start"] == pytest.approx(punto, abs=2e-4) for e in _de(s, "line"))
+    _reabrir(s)
+
+
+@pytest.mark.parametrize("circular", [False, True])
+def test_h111_panel_conserva_el_texto_al_crear_y_editar(circular):
+    from PySide6.QtWidgets import QApplication
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+
+    app = QApplication.instance() or QApplication([])
+    tabla = TablaParametros()
+    tabla.agregar("paso", "10 mm")
+    tabla.agregar("ang", "90 deg", "angulo")
+    lienzo = Lienzo(Boceto(), tabla.evaluar)
+    try:
+        linea = lienzo.b.agregar_linea((10, 0), (12, 0))
+        lienzo.seleccion = [linea]
+        lienzo.set_herramienta("patron_circular" if circular else "patron_rectangular")
+        control = lienzo.patron
+        if circular:
+            control.centro = (0, 0)
+            control.recibir({**control.textos, "distribucion": "parcial", "angulo_total": "ang", "cantidad": "3"})
+        else:
+            control.recibir({**control.textos, "distancia1": "paso", "angulo1": "ang"})
+        assert control.aceptar()
+        registro, = lienzo.b.patrones
+        clave, texto = ("angulo_total", "ang") if circular else ("distancia1", "paso")
+        assert registro["params"]["expresiones"][clave] == texto
+        assert lienzo.editar_patron(registro["id"])
+        assert lienzo.patron.textos[clave] == texto
+        assert lienzo.patron.aceptar()
+        tabla.modificar("ang" if circular else "paso", "180 deg" if circular else "20 mm")
+        assert lienzo.resolver().ok
+        assert lienzo.b.patrones[0]["params"][clave] == (180 if circular else 20)
+        puntos = [lienzo.b.coords(c.p1) for c in lienzo.b.curvas.values()]
+        esperados = ((10, 0), (0, 10), (-10, 0)) if circular else ((10, 0), (10, 10), (10, 20))
+        for punto in esperados:
+            assert any(q == pytest.approx(punto, abs=2e-4) for q in puntos)
+    finally:
+        lienzo.close()
+        lienzo.deleteLater()
+        app.processEvents()

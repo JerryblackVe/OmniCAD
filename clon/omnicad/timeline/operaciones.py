@@ -743,7 +743,8 @@ class OpBoceto(Operacion):
         return (super().expresiones() + [e for c in self.boceto.cotas.values() if not c.referencia
                                        for e in (c.nombre, c.expresion)]
                 + en_textos + [c["expresion"] for c in self.boceto.geo3d.get("cotas", {}).values()]
-                + objetos.expresiones(self.boceto))
+                + objetos.expresiones(self.boceto)
+                + [e for r in self.boceto.patrones for e in r["params"].get("expresiones", {}).values()])
 
     def claves_modelo(self):
         return []                # los parámetros de un boceto son sus cotas
@@ -765,6 +766,12 @@ class OpBoceto(Operacion):
             expresion = renombrar_en(c["expresion"], viejo, nuevo)
             cambio = cambio or expresion != c["expresion"]
             c["expresion"] = expresion
+        for r in self.boceto.patrones:
+            expresiones = r["params"].get("expresiones", {})
+            for clave, texto in expresiones.items():
+                expresion = renombrar_en(texto, viejo, nuevo)
+                cambio = cambio or expresion != texto
+                expresiones[clave] = expresion
         for c in self.boceto.curvas.values():
             if isinstance(c, Texto):
                 antes = c.texto, c.parametro_texto, c.parametro_altura, c.altura_expr
@@ -917,6 +924,7 @@ class OpBoceto(Operacion):
             objetos.evaluar(boceto, lambda v, k: ctx.evaluar(v, ANGULO if k == "angulo" else
                                                             ESCALAR if k in ("sx", "sy") else LONGITUD))
         self._reproyectar(boceto, plano, estado, ctx)
+        boceto.evaluar_patrones(ctx.evaluar)
         if boceto.proyecciones:
             self._conservar_lado_cotas(boceto)
         self._textos_parametricos = {}
