@@ -196,7 +196,7 @@ auditoría, correcciones y verificaciones. Documentá con precisión todo lo que
 | restr-2 | Fase A: inventario + `test_restricciones_matriz.py` | DeepSeek v4.1 Flash (CodeBuddy): sin cupo a los 3 min (429); GLM 5.3 (CodeBuddy): créditos agotados (429); Qwen3.8-Flash (Qoder): «qfmodel unavailable»; DeepSeek v4.1 Flash free (OpenCode): colgado (sin CPU ni archivos a los 7 min), cortado; GLM 5.3 (OpenCode Go): sin suscripción; GLM 5.3 Flash free (OpenCode): colgado igual a los 7 min, cortado. Sigue el coordinador (Claude Opus) como última instancia | `D:/PROGRAMA-r2` / `restr-2` | Fusionada (inventario y matriz) |
 | restr-3 | B-224 | Coordinador Opus (Qwen y Sol sin cupo) | main | Commit c81bd8c |
 | restr-4 | B-226 y B-225 (elección de solución del solver) | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r4` / `restr-4` | Fusionada (cortada a los 25 min esperando turno; tests y revisión del coordinador) |
-| restr-5 | B-227 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r5` / `restr-5` | En curso (1.ª corrida cortada esperando turno) |
+| restr-5 | B-227 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r5` / `restr-5` | Fusionada (dos corridas cortadas a los 25 min) |
 
 ### Brief restr-1 (B-223)
 

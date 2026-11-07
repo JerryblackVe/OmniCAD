@@ -2115,8 +2115,6 @@ def _valor_expr(sesion, valor, tipo=LONGITUD):
 def _cota_valida(tipo, valor, que):
     try:
         validar_valor_cota(tipo, valor)
-        if tipo == "angulo" and not 0 < valor < 180:
-            raise ErrorBoceto(f"Una cota de ángulo va entre 0 y 180 grados (llegó {valor:g}).")
     except ErrorBoceto as e:
         raise error("INVALID_DIMENSION", f"{que}: {e}") from e
 

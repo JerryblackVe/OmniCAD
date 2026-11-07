@@ -7,7 +7,7 @@ import math
 
 import pytest
 
-from omnicad.restricciones.boceto import TIPOS_COTA, TIPOS_RESTRICCION, Boceto
+from omnicad.restricciones.boceto import TIPOS_COTA, TIPOS_RESTRICCION, Boceto, ErrorBoceto, validar_valor_cota
 from omnicad.restricciones.solver import grados_de_libertad, resolver
 
 
@@ -349,3 +349,82 @@ def test_la_alternativa_no_oculta_un_conflicto_real(caso):
             b.agregar_restriccion("fijo", [fijo])
             b.agregar_restriccion("coincidente", [esquinas[2], fijo])
     assert not resolver(b).ok
+
+
+@pytest.mark.parametrize("valor", [200, -30, float("nan"), float("inf"), -float("inf"), 0, 180])
+def test_b227_cota_de_angulo_fuera_de_rango_se_rechaza_en_el_modelo(valor):
+    b = Boceto()
+    lineas = list(_LL(b))
+    antes = b.a_dict()
+    mensaje = "La cota de ángulo tiene que ser mayor que 0 y menor que 180 grados"
+    with pytest.raises(ErrorBoceto, match=mensaje):
+        b.agregar_cota("angulo", lineas, str(valor))
+    assert b.a_dict() == antes
+    with pytest.raises(ErrorBoceto, match=mensaje):
+        validar_valor_cota("angulo", valor)  # también el valor evaluado al recalcular una expresión
+    cid = b.agregar_cota("angulo", lineas, "60")
+    assert resolver(b, {cid: 60.0}).ok
+    assert b.medir(b.cotas[cid]) == pytest.approx(60, abs=1e-6)
+
+
+@pytest.mark.parametrize("editar", [False, True], ids=["crear", "editar"])
+@pytest.mark.parametrize("texto", ["200", "-30", "0", "180"])
+def test_b227_la_ventana_rechaza_el_angulo_fuera_de_rango(editar, texto):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+
+    app = QApplication.instance() or QApplication([])
+    b = Boceto()
+    lineas = list(_LL(b))
+    lienzo = Lienzo(b, TablaParametros().evaluar)
+    mensajes = []
+    lienzo.mensaje.connect(mensajes.append)
+    try:
+        if editar:
+            cid = b.agregar_cota("angulo", lineas, "60")
+            lienzo.resolver()
+            lienzo.editar_cota(cid, QPoint(100, 100))
+        else:
+            lienzo._abrir_cota("angulo", lineas, QPoint(100, 100))
+        antes = b.a_dict()
+        pasos = len(lienzo.historial)
+        campo = lienzo.entrada.campos[0]
+        campo.selectAll()
+        QTest.keyClicks(campo, texto)
+        QTest.keyClick(campo, Qt.Key_Return)
+        assert mensajes and "mayor que 0 y menor que 180 grados" in mensajes[-1]
+        assert lienzo.entrada is not None
+        assert b.a_dict() == antes and len(lienzo.historial) == pasos
+        campo.selectAll()
+        QTest.keyClicks(campo, "60")
+        QTest.keyClick(campo, Qt.Key_Return)
+        assert lienzo.entrada is None and lienzo.resultado.ok
+        cota = next(iter(b.cotas.values()))
+        assert not cota.referencia and b.medir(cota) == pytest.approx(60, abs=1e-6)
+    finally:
+        lienzo.close()
+        lienzo.deleteLater()
+        app.processEvents()
+
+
+@pytest.mark.parametrize("texto", ["200", "-30", "0", "180", "100 + 100"])
+def test_b227_la_api_usa_el_mismo_error_del_modelo(texto):
+    from omnicad import api
+
+    s = api.Sesion()
+    assert api.llamar(s, "create_sketch", {"name": "P"})["ok"]
+    lineas = []
+    for y in (0, 5):
+        r = api.llamar(s, "draw_line", {"sketch": "P", "start_x": 0, "start_y": y,
+                                        "end_x": 10, "end_y": y + 3})
+        assert r["ok"], r
+        lineas.append(r["result"]["entities"][0]["id"])
+    antes = api.llamar(s, "get_sketch", {"sketch": "P"})["result"]
+    r = api.llamar(s, "add_dimension", {"sketch": "P", "type": "angle", "entities": lineas, "value": texto})
+    assert not r["ok"] and r["error_kind"] == "INVALID_DIMENSION", r
+    assert "La cota de ángulo tiene que ser mayor que 0 y menor que 180 grados" in r["mensaje"]
+    assert api.llamar(s, "get_sketch", {"sketch": "P"})["result"] == antes

@@ -188,7 +188,10 @@ def puntos_espiral(centro, inicio, vueltas, paso):
 def validar_valor_cota(tipo, valor):
     """Como Fusion, una cota de largo, radio o diámetro tiene que ser mayor que cero (el solver toma el valor absoluto
     del radio: −5 quedaba guardado y dibujaba 5) y de hasta MEDIDA_MAXIMA (1 km; frena valores absurdos como un radio
-    de 1e9 o infinito). La de desfase admite negativo: la copia pasa al otro lado. Los ángulos no se validan acá."""
+    de 1e9 o infinito). La de desfase admite negativo: la copia pasa al otro lado. Una cota de ángulo debe estar
+    estrictamente entre 0 y 180 grados (entre rectas no paralelas, como Sketch Dimension de Fusion)."""
+    if tipo == "angulo" and not 0 < valor < 180:          # también NaN e infinito
+        raise ErrorBoceto(f"La cota de ángulo tiene que ser mayor que 0 y menor que 180 grados (vale {valor:g}).")
     if tipo not in COTAS_POSITIVAS:
         return
     nombre = TIPOS_COTA[tipo].lower()
@@ -2051,6 +2054,13 @@ class Boceto:
         ("centro" o "tangente") vale en una distancia con un círculo o arco; ahí se guarda siempre (falta = centro)."""
         datos = dict(datos or {})
         self._validar_cota(tipo, entidades)
+        if tipo == "angulo" and not referencia:
+            try:
+                valor = float(expresion.replace(",", "."))
+            except ValueError:                          # las expresiones se validan al evaluarlas en el documento/editor
+                pass
+            else:
+                validar_valor_cota(tipo, valor)
         modo = datos.pop("modo", "centro")
         if modo not in ("centro", "tangente"):
             raise ErrorBoceto(f"Modo de cota desconocido: {modo} (centro o tangente).")

@@ -141,7 +141,6 @@ def test_la_cota_de_desfase_acepta_negativo_y_rechaza_cero():
         validar_valor_cota("desfase", 0)
     validar_valor_cota("desfase", -30)
     validar_valor_cota("desfase", 12)
-    validar_valor_cota("angulo", -30)                    # los ángulos no se validan acá
 
 
 def _cota_desfase(b):

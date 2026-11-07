@@ -526,11 +526,12 @@ def test_boceto_rechaza_numeros_no_finitos_y_spline_degenerada():
 
 def test_validar_valor_cota():
     for tipo, valor in (("radio", -5), ("radio", 0), ("diametro", -1), ("distancia", float("nan")),
-                        ("distancia_h", -2), ("desfase", 0), ("radio", 1e9), ("distancia", 1.5e6), ("diametro", math.inf)):
+                        ("distancia_h", -2), ("desfase", 0), ("radio", 1e9), ("distancia", 1.5e6), ("diametro", math.inf),
+                        ("angulo", -30)):
         with pytest.raises(ErrorBoceto):
             validar_valor_cota(tipo, valor)
     for tipo, valor in (("radio", 5), ("radio", 6e4), ("diametro", 1e6), ("distancia", 1.5e5), ("distancia_v", 1e6),
-                        ("desfase", 0.1), ("angulo", 120), ("angulo", -30)):
+                        ("desfase", 0.1), ("angulo", 120)):
         validar_valor_cota(tipo, valor)
 
 
