@@ -894,3 +894,97 @@ def test_p67_editor_arranca_con_grado_cinco_sin_mostrar_ventana():
         lienzo.close()
         lienzo.deleteLater()
         app.processEvents()
+
+
+@pytest.mark.parametrize("barrido", [90, -90, 270, -270])
+def test_p72_arco_tangente_con_radio_y_barrido_se_guarda(barrido, tmp_path):
+    from omnicad.restricciones.boceto import dominio
+
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    linea = _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0))[0]
+    L(s, "draw_arc", start_x=20, start_y=0, tangent_to=linea, radius=10, sweep_angle=barrido)
+    (arco,) = _de(s, "arc")
+    lado = 1 if barrido > 0 else -1
+    assert arco["radius"] == _ap(10)
+    assert arco["center"] == _ap([20, 10 * lado])
+    extremo = [30 if abs(barrido) == 90 else 10, 10 * lado]
+    b = s.doc.operaciones[0].boceto
+    curva = b.curvas[arco["id"]]
+    inicio, fin = (curva.inicio, curva.fin) if barrido > 0 else (curva.fin, curva.inicio)
+    assert b.coords(fin) == pytest.approx(extremo)
+    assert b.coords(inicio) == pytest.approx([20, 0])
+    assert inicio == b.curvas[linea].p2
+    t0, t1, _ = dominio(b.primitivas(arco["id"])[0])
+    assert math.degrees(t1 - t0) == pytest.approx(abs(barrido))
+    assert any(r.tipo == "tangente" and set(r.entidades) == {linea, arco["id"]}
+               for r in b.restricciones.values())
+    assert _dist_recta(arco["center"], _de(s, "line")[0]) == _ap(10)
+    assert s.doc.estado_final.bocetos[s.doc.operaciones[0].id].solver.ok
+    ruta = str(tmp_path / "arco_tangente.omnicad")
+    _ok(api.llamar(s, "save_document", {"path": ruta}))
+    otra = api.Sesion()
+    _ok(api.llamar(otra, "open_document", {"path": ruta}))
+    assert _ents(otra) == _ents(s)
+    assert otra.doc.operaciones[0].boceto.a_dict() == b.a_dict()
+
+
+@pytest.mark.parametrize("argumentos", [
+    {"radius": 10, "sweep_angle": 90, "end_x": 30},
+    {"radius": 10, "sweep_angle": 90, "end_y": 10},
+    {"radius": 10, "sweep_angle": 90, "end_x": 30, "end_y": 10},
+    {}, {"end_x": 30}, {"radius": 10},
+    {"radius": 10, "sweep_angle": 90, "center_x": 20},
+    {"radius": 10, "sweep_angle": 90, "mid_y": 5},
+    {"end_x": 30, "end_y": 10, "sweep_angle": 90},
+    {"radius": 0, "sweep_angle": 90}, {"radius": -10, "sweep_angle": 90},
+    {"radius": 10, "sweep_angle": 0}, {"radius": 10, "sweep_angle": 360},
+])
+def test_p72_arco_tangente_rechaza_entradas_sin_mutar(argumentos):
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    linea = _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0))[0]
+    antes = _ok(api.llamar(s, "get_recipe", {}))
+    resultado = api.llamar(s, "draw_arc", {"sketch": "B", "start_x": 20, "start_y": 0,
+                                          "tangent_to": linea, **argumentos})
+    assert not resultado["ok"], resultado
+    assert resultado["error_kind"] == ("INVALID_GEOMETRY" if argumentos.get("radius", 1) <= 0
+                                        or argumentos.get("sweep_angle", 1) in (0, 360) else "INVALID_ARGUMENTS")
+    assert _ok(api.llamar(s, "get_recipe", {})) == antes
+
+
+@pytest.mark.parametrize("barrido", [90, -90, 270, -270])
+def test_p72_ventana_y_api_crean_el_mismo_arco_con_radio(barrido):
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    linea = _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0))[0]
+    app = QApplication.instance() or QApplication([])
+    lienzo = Lienzo(s.doc.operaciones[0].boceto.copia(), TablaParametros().evaluar)
+    try:
+        pid = lienzo.b.curvas[linea].p2
+        lienzo.set_herramienta("arco_tangente")
+        lienzo.clics = [(pid, (20, 0))]
+        lienzo._bloqueos = {"radio": ("10 mm", 10)}
+        cursor = (30 if abs(barrido) == 90 else 10, 10 if barrido > 0 else -10)
+        fin = lienzo._aplicar_bloqueos(cursor)
+        aid, destino = lienzo._crear_arco_tangente(pid, linea, (None, fin))
+        L(s, "draw_arc", start_x=20, start_y=0, tangent_to=linea, radius=10, sweep_angle=barrido)
+        b = s.doc.operaciones[0].boceto
+        actual, ventana = b.primitivas(aid)[0], lienzo.b.primitivas(aid)[0]
+        assert actual[0] == ventana[0] == "arco"
+        assert actual[1] == ventana[1]
+        assert actual[2] == pytest.approx(ventana[2])
+        assert actual[3] == pytest.approx(ventana[3])
+        for angulo, esperado in zip(actual[4:], ventana[4:], strict=True):
+            assert math.remainder(angulo - esperado, 2 * math.pi) == pytest.approx(0, abs=1e-9)
+        assert b.coords(destino) == pytest.approx(cursor)
+        assert not lienzo.isVisible()
+    finally:
+        lienzo.close()
+        lienzo.deleteLater()
+        app.processEvents()

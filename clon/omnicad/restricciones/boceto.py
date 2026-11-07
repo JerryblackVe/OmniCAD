@@ -110,8 +110,26 @@ def centro_arco_tangente(inicio, otro, fin):
     return (inicio[0] + n[0] * r, inicio[1] + n[1] * r), izquierda
 
 
-def agregar_arco_tangente(b, curva, inicio, fin, geometria, construccion=False):
-    """Fusion: Arco tangente. Crea el arco con (centro, antihorario) y devuelve su id y el extremo final."""
+def agregar_arco_tangente(b, curva, inicio, fin=None, geometria=None, construccion=False, *,
+                         radio=None, barrido=None, direccion=None):
+    """Fusion: Arco tangente. Por final y (centro, antihorario), o radio, barrido y dirección de salida.
+
+    El barrido positivo elige el centro a la izquierda de la salida; negativo, a la derecha (el cursor
+    elige ese lado en la ventana). Devuelve el id del arco y el punto final, conservando el inicio compartido.
+    """
+    if radio is not None:
+        validar_valor_cota("radio", radio)
+        if barrido is None or not math.isfinite(barrido) or abs(barrido) < 1e-9 or abs(barrido) > 360 - 1e-6:
+            raise ErrorBoceto("El ángulo de barrido del arco tiene que estar entre 0 y 360 grados (sin incluirlos).")
+        p = b.coords(inicio)
+        if direccion is None:
+            _, direccion = b._salida_extremo(curva, inicio)
+        nx, ny = -direccion[1], direccion[0]
+        distancia = radio if barrido > 0 else -radio
+        centro = (p[0] + nx * distancia, p[1] + ny * distancia)
+        angulo = math.atan2(p[1] - centro[1], p[0] - centro[0]) + math.radians(barrido)
+        fin = (centro[0] + radio * math.cos(angulo), centro[1] + radio * math.sin(angulo))
+        geometria = centro, barrido > 0
     centro, izquierda = geometria
     ini, z = (inicio, fin) if izquierda else (fin, inicio)
     aid = b.agregar_arco_centro(centro, ini, z, construccion)

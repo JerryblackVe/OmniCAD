@@ -379,15 +379,18 @@ def _inicio_tangente(b, curva, inicio, extremo=None):
     return pid, (direccion[0] / n, direccion[1] / n)
 
 
-def _arco_tangente(b, curva, inicio, fin, construccion=False):
+def _arco_tangente(b, curva, inicio, fin, construccion=False, radio=None, barrido=None):
     """Arco tangente a otra curva; comparte el extremo y guarda la tangencia."""
     pid, direccion = _inicio_tangente(b, curva, inicio)
-    p = b.coords(pid)
-    otro = (p[0] - direccion[0], p[1] - direccion[1])
-    geometria = centro_arco_tangente(p, otro, fin)
-    if geometria is None:
-        raise ErrorBoceto("El final no puede coincidir con el inicio ni estar sobre la recta tangente.")
-    aid, destino = agregar_arco_tangente(b, curva, pid, fin, geometria, construccion)
+    geometria = None
+    if radio is None:
+        p = b.coords(pid)
+        otro = (p[0] - direccion[0], p[1] - direccion[1])
+        geometria = centro_arco_tangente(p, otro, fin)
+        if geometria is None:
+            raise ErrorBoceto("El final no puede coincidir con el inicio ni estar sobre la recta tangente.")
+    aid, destino = agregar_arco_tangente(b, curva, pid, fin, geometria, construccion,
+                                        radio=radio, barrido=barrido, direccion=direccion)
     arco = b.curvas[aid]
     return {"": aid, "center": arco.centro, "start": pid, "end": destino}
 
@@ -1270,13 +1273,14 @@ def draw_circle(sesion, radius: float | None = None, center_x: float = 0.0, cent
 @herramienta("draw_arc", "boceto",
              "Dibuja un arco. Tres formas: centro + punto inicial + ángulo de barrido (center_x, center_y, start_x, "
              "start_y, sweep_angle; positivo = antihorario) o tres puntos (start_x, start_y, mid_x, mid_y, end_x, "
-             "end_y), o tangente a una curva (tangent_to, start_x/start_y y end_x/end_y). "
+             "end_y), o tangente a una curva (tangent_to, inicio y final o radius + sweep_angle). "
              "La forma tangente comparte el extremo y agrega la restricción de tangencia. "
              "Un arco solo forma un perfil si se cierra con otras curvas.", modifica=True)
 def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = None, center_y: float | None = None,
              sweep_angle: float | None = None, mid_x: float | None = None, mid_y: float | None = None,
              end_x: float | None = None, end_y: float | None = None, sketch: str | None = None,
-             construction: bool = False, tangent_to: int | None = None, centerline: bool = False):
+             construction: bool = False, tangent_to: int | None = None, centerline: bool = False,
+             radius: float | None = None):
     """
     start_x: x del punto inicial (mm).
     start_y: y del punto inicial (mm).
@@ -1289,22 +1293,31 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
     end_y: y del punto final.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para un arco de construcción (no forma perfiles).
-    tangent_to: id de la línea, arco, arco de elipse, spline abierta o cónica de partida; start_x/start_y debe coincidir con uno de sus extremos. También acepta una elipse cerrada si el inicio está sobre ella. No se combina con centro, barrido ni punto intermedio.
+    tangent_to: id de la línea, arco, arco de elipse, spline abierta o cónica de partida; el inicio coincide con un extremo. También acepta una elipse cerrada si el inicio está sobre ella. Usá final o radius + sweep_angle, sin centro ni punto intermedio.
     centerline: true para geometría central (forma perfiles); incompatible con construction=true.
+    radius: radio positivo (mm), solo con tangent_to y sweep_angle; excluyente con end_x/end_y. El barrido positivo pone el centro a la izquierda de la salida tangente, negativo a la derecha; en la ventana ese lado lo elige el cursor.
     """
     _exigir_finitos(locals())
     if tangent_to is not None:
-        if end_x is None or end_y is None or any(v is not None for v in
-                                                (center_x, center_y, sweep_angle, mid_x, mid_y)):
-            raise error("INVALID_ARGUMENTS", "Con tangent_to indicá solo el inicio y end_x/end_y, sin centro, "
-                        "barrido ni punto intermedio.")
+        if any(v is not None for v in (center_x, center_y, mid_x, mid_y)):
+            raise error("INVALID_ARGUMENTS", "Con tangent_to no se usa centro ni punto intermedio.")
+        if radius is not None:
+            if end_x is not None or end_y is not None:
+                raise error("INVALID_ARGUMENTS", "Con tangent_to, radius y end_x/end_y son excluyentes.")
+            if sweep_angle is None:
+                raise error("INVALID_ARGUMENTS", "Con tangent_to y radius hace falta sweep_angle.")
+        elif end_x is None or end_y is None or sweep_angle is not None:
+            raise error("INVALID_ARGUMENTS", "Con tangent_to indicá end_x/end_y o radius y sweep_angle, "
+                        "sin combinar ambas formas.")
         op, previo = boceto_activo(sesion, sketch, derivados=False)
 
         informe = _dibujar(sesion, op.id, lambda b: _arco_tangente(
-            b, tangent_to, (start_x, start_y), (end_x, end_y), construction), desde_solver=True,
+            b, tangent_to, (start_x, start_y), (end_x, end_y), construction, radius, sweep_angle), desde_solver=True,
             construccion=construction, central=centerline)
         _exigir_sin_conflicto(sesion, op, previo.solver.ok, "El arco tangente")
         return informe
+    if radius is not None:
+        raise error("INVALID_ARGUMENTS", "radius solo se usa con tangent_to y sweep_angle.")
     if sweep_angle is not None:
         if center_x is None or center_y is None:
             raise error("INVALID_ARGUMENTS", "Con sweep_angle hacen falta center_x y center_y.")

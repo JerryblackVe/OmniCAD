@@ -902,7 +902,7 @@ Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por 
 
 ### `draw_arc`
 
-Dibuja un arco. Tres formas: centro + punto inicial + ángulo de barrido (center_x, center_y, start_x, start_y, sweep_angle; positivo = antihorario) o tres puntos (start_x, start_y, mid_x, mid_y, end_x, end_y), o tangente a una curva (tangent_to, start_x/start_y y end_x/end_y). La forma tangente comparte el extremo y agrega la restricción de tangencia. Un arco solo forma un perfil si se cierra con otras curvas.
+Dibuja un arco. Tres formas: centro + punto inicial + ángulo de barrido (center_x, center_y, start_x, start_y, sweep_angle; positivo = antihorario) o tres puntos (start_x, start_y, mid_x, mid_y, end_x, end_y), o tangente a una curva (tangent_to, inicio y final o radius + sweep_angle). La forma tangente comparte el extremo y agrega la restricción de tangencia. Un arco solo forma un perfil si se cierra con otras curvas.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -917,8 +917,9 @@ Dibuja un arco. Tres formas: centro + punto inicial + ángulo de barrido (center
   - `end_y` (número; opcional, por defecto `null`): y del punto final.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para un arco de construcción (no forma perfiles).
-  - `tangent_to` (entero; opcional, por defecto `null`): id de la línea, arco, arco de elipse, spline abierta o cónica de partida; start_x/start_y debe coincidir con uno de sus extremos. También acepta una elipse cerrada si el inicio está sobre ella. No se combina con centro, barrido ni punto intermedio.
+  - `tangent_to` (entero; opcional, por defecto `null`): id de la línea, arco, arco de elipse, spline abierta o cónica de partida; el inicio coincide con un extremo. También acepta una elipse cerrada si el inicio está sobre ella. Usá final o radius + sweep_angle, sin centro ni punto intermedio.
   - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
+  - `radius` (número; opcional, por defecto `null`): radio positivo (mm), solo con tangent_to y sweep_angle; excluyente con end_x/end_y. El barrido positivo pone el centro a la izquierda de la salida tangente, negativo a la derecha; en la ventana ese lado lo elige el cursor.
 - CLI: `omnicad call draw_arc --doc pieza.omnicad start_x=… start_y=…`
 
 ### `create_polygon`
