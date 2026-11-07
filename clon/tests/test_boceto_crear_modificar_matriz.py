@@ -446,6 +446,41 @@ def test_b233_recortar_no_deja_restricciones_en_un_punto_suelto():
     assert all(set(c["entities"]) <= usados | {e["id"] for e in g["entities"]} for c in g["constraints"])
 
 
+@pytest.mark.parametrize("herramienta", ["extend_sketch_curve", "trim_sketch_curve"])
+def test_b237_alargar_un_extremo_fijo_falla_sin_tocar_nada(herramienta):
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    r = L(s, "draw_line", start_x=0, start_y=0, end_x=5, end_y=0)
+    linea, fijo = r["entities"][0]["id"], r["points"][1]
+    L(s, "draw_line", start_x=10, start_y=-5, end_x=10, end_y=5)
+    L(s, "draw_line", start_x=-10, start_y=-5, end_x=-10, end_y=5)
+    L(s, "add_constraint", type="fix", entities=[fijo])
+
+    def alargar(x):
+        args = ({"curve": linea, "point": [x, 0]} if herramienta == "extend_sketch_curve"
+                else {"entity": linea, "x": x, "y": 0, "mode": "extend"})
+        return api.llamar(s, herramienta, {"sketch": "B", **args})
+    antes = L(s, "get_sketch")
+    r = alargar(4.5)
+    assert not r["ok"] and "fijo" in r["mensaje"].lower()
+    assert L(s, "get_sketch") == antes
+    _ok(alargar(0.5))                                   # el extremo libre sí se alarga
+    (ln,) = [e for e in _ents(s) if e["id"] == linea]
+    assert sorted([ln["start"][0], ln["end"][0]]) == [_ap(-10), _ap(5)]
+
+
+def test_b237_alargar_no_deja_una_cota_en_un_punto_suelto():
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    r = L(s, "draw_line", start_x=1, start_y=0, end_x=5, end_y=0)
+    L(s, "draw_line", start_x=10, start_y=-5, end_x=10, end_y=5)
+    L(s, "add_dimension", type="distance", entities=r["points"], value=4)
+    L(s, "extend_sketch_curve", curve=r["entities"][0]["id"], point=[4.5, 0])
+    g = L(s, "get_sketch")
+    usados = {p for e in g["entities"] for p in e["points"]} | {e["id"] for e in g["entities"]}
+    assert all(set(k["entities"]) <= usados for k in g["dimensions"] + g["constraints"])
+
+
 def test_b234_el_nucleo_pone_tope_a_las_vueltas_de_la_espiral():
     from omnicad.restricciones.boceto import ErrorBoceto, puntos_espiral
     with pytest.raises(ErrorBoceto):

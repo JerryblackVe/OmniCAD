@@ -52,7 +52,7 @@ matriz pero con test propio (columna Test); ninguna fila está probada todavía 
 | sk_curva_fusion | `draw_blend_curve` | NB `curva_fusion` | matriz | VERIFICADO |
 | sk_desfase | `offset_sketch_curves` | NB `desfasar` / `desfase` | matriz | VERIFICADO |
 | sk_soltar_desfase | `release_offset` | NB `soltar_desfase` | matriz | VERIFICADO |
-| sk_recortar | `trim_sketch_curve` | NB `recortar` | matriz | VERIFICADO (alargar: B-237) |
+| sk_recortar | `trim_sketch_curve` | NB `recortar` | matriz | VERIFICADO (alargar con «fijo» o cota: B-237 cerrado) |
 | sk_alargar | `extend_sketch_curve` y `trim_sketch_curve mode=extend` | NB `alargar` | matriz | VERIFICADO |
 | sk_partir | `split_sketch_curve` y `trim_sketch_curve mode=break` | NB `partir` | matriz | VERIFICADO |
 | sk_escala | `transform_sketch` `scale` | NB `escalar` | matriz | VERIFICADO |

@@ -2948,6 +2948,8 @@ class Boceto:
         ini, fin = c.extremos()
         lado_fin = math.dist(self.coords(fin), punto) <= math.dist(self.coords(ini), punto)
         extremo = fin if lado_fin else ini
+        if extremo in self.puntos_fijos():      # Fusion: lo fijo se suelta antes de editarlo (B-237)
+            raise ErrorBoceto("El extremo es fijo: quitale «Fijo» antes de alargarlo.")
         xs = [p.x for p in self.puntos.values()]
         ys = [p.y for p in self.puntos.values()]
         grande = 10 * (max(xs) - min(xs) + max(ys) - min(ys)) + 1000
@@ -3018,6 +3020,7 @@ class Boceto:
             nuevos.append((extremo, oid))
         self._sin_cotas_de_largo(cid)
         self._coincidencias_de_corte(nuevos)
+        self._soltar_puntos_viejos(viejos)      # el extremo viejo no queda suelto con sus cotas (B-237)
         self._depurar(viejos)
         return cid
 
