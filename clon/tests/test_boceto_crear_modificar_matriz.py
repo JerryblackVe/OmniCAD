@@ -414,7 +414,6 @@ def test_b233_recortar_no_deja_restricciones_en_un_punto_suelto():
     assert all(set(c["entities"]) <= usados | {e["id"] for e in g["entities"]} for c in g["constraints"])
 
 
-@pytest.mark.xfail(strict=True, reason="B-234: el tope de vueltas de la espiral está solo en la API")
 def test_b234_el_nucleo_pone_tope_a_las_vueltas_de_la_espiral():
     from omnicad.restricciones.boceto import ErrorBoceto, puntos_espiral
     with pytest.raises(ErrorBoceto):

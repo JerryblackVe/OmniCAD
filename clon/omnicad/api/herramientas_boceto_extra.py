@@ -3,7 +3,7 @@ import math
 
 from ..restricciones import ErrorBoceto
 from ..restricciones.boceto import (
-    MEDIDA_MAXIMA, MEDIDA_MINIMA, Arco, Circulo, cambiar_radio, mas_cercano, puntos_espiral,
+    MEDIDA_MAXIMA, MEDIDA_MINIMA, VUELTAS_MAX_ESPIRAL, Arco, Circulo, cambiar_radio, mas_cercano, puntos_espiral,
 )
 from .errores import error
 from .herramientas_boceto import (
@@ -26,9 +26,8 @@ def draw_spiral(sesion, sketch: str, center: list[float], start: list[float], tu
     """
     _exigir_finitos(locals())
     centro, inicio = _xy(center, "center"), _xy(start, "start")
-    # La interpolación y el solver trabajan con matrices densas: no aceptar listas ilimitadas desde la API.
-    if turns > 199 / 8:
-        raise error("INVALID_ARGUMENTS", "La espiral admite hasta 200 puntos de ajuste (turns ≤ 24.875).")
+    if turns > VUELTAS_MAX_ESPIRAL:                   # el mismo tope que el núcleo, con su tipo de error de la API
+        raise error("INVALID_ARGUMENTS", f"La espiral admite hasta 200 puntos de ajuste (turns ≤ {VUELTAS_MAX_ESPIRAL:g}).")
     return _dibujar(sesion, sketch, lambda b: b.agregar_spline(
         puntos_espiral(centro, inicio, turns, pitch), "ajuste", 3, False, construccion=construction))
 

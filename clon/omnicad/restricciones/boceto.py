@@ -166,6 +166,9 @@ def agregar_rectangulo_3p(b, a, bb, c, construccion=False):
     return ls
 
 
+VUELTAS_MAX_ESPIRAL = 199 / 8      # 200 puntos de ajuste (8 tramos por vuelta): el solver usa matrices densas
+
+
 def puntos_espiral(centro, inicio, vueltas, paso):
     """Puntos de ajuste de la espiral plana del editor, en mm (no una hélice 3D de Fusion)."""
     if not all(math.isfinite(v) for v in (*centro, *inicio, vueltas, paso)):
@@ -174,6 +177,8 @@ def puntos_espiral(centro, inicio, vueltas, paso):
     a0 = math.atan2(inicio[1] - centro[1], inicio[0] - centro[0])
     if vueltas <= 0:
         raise ErrorBoceto("La espiral necesita al menos una fracción de vuelta.")
+    if vueltas > VUELTAS_MAX_ESPIRAL:
+        raise ErrorBoceto(f"La espiral admite hasta {VUELTAS_MAX_ESPIRAL:g} vueltas (200 puntos de ajuste).")
     n = max(4, int(math.ceil(8 * vueltas)))
     pts = []
     for i in range(n + 1):

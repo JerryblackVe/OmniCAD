@@ -34,7 +34,7 @@ matriz pero con test propio (columna Test); ninguna fila está probada todavía 
 | sk_patron_circular / _rectangular | `sketch_circular_pattern` / `sketch_rectangular_pattern` | NB `patron_circular` / `patron_rectangular` | matriz | VERIFICADO |
 | sk_editar_patron | `edit_sketch_pattern` | NB `editar_patron` | matriz | VERIFICADO |
 | sk_cota | `add_dimension` | NB `agregar_cota` | matriz | VERIFICADO |
-| sk_espiral | `draw_spiral` | NB `puntos_espiral` + `agregar_spline` | matriz | VERIFICADO (B-234) |
+| sk_espiral | `draw_spiral` | NB `puntos_espiral` + `agregar_spline` | matriz | VERIFICADO |
 | sk_proyectar / sk_intersecar | `project_to_sketch` `mode` | NB `agregar_proyeccion` | `test_api_boceto_herramientas.py` | CUBIERTO |
 | sk_incluir_3d | `include_3d_geometry` | `boceto3d.agregar_desde_mundo` | `test_proyeccion_seccion.py` | CUBIERTO |
 | sk_perfil_giratorio | `project_spun_profile` | `nucleo/perfiles.proyectar_giro_forma` | `test_boceto_fase6.py` | CUBIERTO |
@@ -88,7 +88,7 @@ recortar, alargar, partir y escala. Diferencias:
 |---|---|---|---|
 | 1 | Escalar ×2 un rectángulo de 40 × 20 con chaflán 2: área 2707,75 en vez de 3192. Moverlo +100 en x: área 282 en vez de 798 (se deforma). El vértice virtual del chaflán no entra en `puntos_de(ids)` (NB `escalar` y `transformar`) | `test_b232_…` (xfail estricto) | B-232 |
 | 2 | Recortar una línea cuyo extremo tenía «fijo»: la línea termina en un punto nuevo y el «fijo» queda en el punto viejo, suelto | `test_b233_…` | B-233 |
-| 3 | `puntos_espiral` acepta 5000 vueltas (40 001 puntos); el tope de 24,875 vueltas está solo en `draw_spiral`: desde la ventana se puede colgar | `test_b234_…` | B-234 |
+| 3 | `puntos_espiral` acepta 5000 vueltas (40 001 puntos); el tope de 24,875 vueltas está solo en `draw_spiral`: desde la ventana se puede colgar | `test_b234_…` | CORREGIDO (B-234, 2026-11-07) |
 | 4 | `sketch_chamfer(angle="ang")` guarda la cota de ángulo como «30»: pierde el parámetro (la distancia sí conserva la expresión) | `test_b235_…` | B-235 |
 | 5 | El MCP borra restricciones y cotas sin decirlo (empalme, chaflán, recortar, mover con giro) y no revierte cuando la edición sobre-restringe (solo `extend_sketch_curve` y `split_sketch_curve` usan `_exigir_sin_conflicto`) | lectura: `herramientas_boceto.py:597-614`, `herramientas_boceto_extra.py:55` | P-68 |
 | 6 | Tres caminos del MCP para alargar y partir con validaciones distintas (`trim_sketch_curve mode=extend/break` no comprueba el punto ni el conflicto) | lectura: `herramientas_boceto_extra.py:40-55` | P-69 |

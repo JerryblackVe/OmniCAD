@@ -210,6 +210,14 @@ def test_simetria_patrones_y_espiral(app_qt):
     s = lz.b.primitivas(next(iter(lz.b.curvas)))[0]
     assert evaluar_primitiva(s, dominio(s)[1])[0] == pytest.approx((8, 0))   # r = 2 + 3 · 2 vueltas
 
+def test_b234_la_espiral_de_la_ventana_rechaza_demasiadas_vueltas(app_qt):
+    lz = _lienzo(app_qt)
+    mensajes = []
+    lz.mensaje.connect(mensajes.append)
+    _crear(lz, "espiral", (0, 0), (2, 0))
+    _aceptar(lz, "5000", "1")                            # antes: 40 001 puntos de ajuste y la ventana colgada
+    assert not lz.b.curvas and any("vueltas" in m for m in mensajes)
+
 
 # ---------------------------------------------------------------- MODIFICAR
 def _rect_restringido():
