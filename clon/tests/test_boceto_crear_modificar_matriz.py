@@ -509,3 +509,45 @@ def test_b233_el_empalme_no_deja_restricciones_en_un_punto_suelto():
     g = L(s, "get_sketch")
     assert extremo not in {p["id"] for p in g["points"]}
     assert not [c for c in g["constraints"] if extremo in c["entities"]]
+
+
+def test_p69_trim_extend_y_break_validan_como_las_otras_herramientas():
+    """P-69: trim_sketch_curve en extend y break tiene que validar como extend_sketch_curve y split_sketch_curve:
+    en break el punto cae sobre la curva (tolerancia 1e-7) y la edición no deja el boceto en conflicto."""
+    def partir(herramienta, punto):
+        s = api.Sesion()
+        _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+        L(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0)
+        a = _de(s, "line")[0]["id"]
+        L(s, "draw_line", start_x=8, start_y=-10, end_x=8, end_y=10)
+        args = ({"entity": a, "x": punto[0], "y": punto[1], "mode": "break"} if herramienta == "trim_sketch_curve"
+                else {"curve": a, "point": list(punto)})
+        return api.llamar(s, herramienta, {"sketch": "B", **args}), s
+
+    def alargar(herramienta):
+        s = api.Sesion()
+        _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+        L(s, "draw_line", start_x=0, start_y=0, end_x=5, end_y=0)
+        a = _de(s, "line")[0]["id"]
+        L(s, "draw_line", start_x=10, start_y=-10, end_x=10, end_y=10)
+        args = ({"entity": a, "x": 5, "y": 0, "mode": "extend"} if herramienta == "trim_sketch_curve"
+                else {"curve": a, "point": [5, 0]})
+        return api.llamar(s, herramienta, {"sketch": "B", **args}), s
+
+    # un punto lejos de la curva: los dos caminos la rechazan igual
+    trim, _ = partir("trim_sketch_curve", (50, 50))
+    split, _ = partir("split_sketch_curve", (50, 50))
+    assert not trim["ok"] and trim["error_kind"] == split["error_kind"] == "INVALID_GEOMETRY"
+    assert trim["mensaje"] == split["mensaje"]
+    # un punto sobre la curva: los dos caminos la parten en el mismo lugar y devuelven las piezas
+    r_trim, s_trim = partir("trim_sketch_curve", (4, 0))
+    r_split, s_split = partir("split_sketch_curve", (4, 0))
+    assert r_trim["ok"] and r_split["ok"]
+    assert r_trim["result"]["mode"] == "break" and r_trim["result"]["pieces"] == r_split["result"]["pieces"]
+    assert _ents(s_trim) == _ents(s_split)
+    # alargar que sí llega: los dos caminos dejan el mismo boceto
+    r_trim, s_trim = alargar("trim_sketch_curve")
+    r_ext, s_ext = alargar("extend_sketch_curve")
+    assert r_trim["ok"] and r_ext["ok"]
+    assert r_trim["result"]["mode"] == "extend"
+    assert _ents(s_trim) == _ents(s_ext)

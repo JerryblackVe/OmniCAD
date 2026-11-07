@@ -89,12 +89,12 @@ def set_circle_radius(sesion, sketch: str, curve: int, radius: float):
     return informe
 
 
-@herramienta("extend_sketch_curve", "boceto", "Alarga una línea o arco hasta la siguiente intersección, "
-             "desde el extremo más cercano al punto. Falla si no hay una curva que alcanzar.", modifica=True)
+@herramienta("extend_sketch_curve", "boceto", "Alarga una línea, un arco o una spline abierta hasta la siguiente "
+             "intersección, desde el extremo más cercano al punto. Falla si no hay una curva que alcanzar.", modifica=True)
 def extend_sketch_curve(sesion, sketch: str, curve: int, point: list[float]):
     """
     sketch: id o nombre del boceto.
-    curve: id de la línea o arco (get_sketch).
+    curve: id de la línea, el arco o la spline (get_sketch).
     point: [x, y] en mm del plano, cerca del extremo que se quiere alargar.
     """
     return _editar_curva(sesion, sketch, curve, point, False)

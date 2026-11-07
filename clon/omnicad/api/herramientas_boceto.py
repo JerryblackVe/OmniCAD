@@ -2327,7 +2327,9 @@ def sketch_chamfer(sesion, line1: int, line2: int, distance: Expr, distance2: Ex
              "Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Partir). (x, y) es el "
              "lugar del clic, sobre la curva o cerca: trim quita el tramo de la curva que contiene ese punto, hasta los "
              "cruces más cercanos (si no cruza nada, borra la curva entera); extend lleva el extremo más cercano de una "
-             "línea o un arco hasta la próxima curva; break la parte en los cruces más cercanos.", modifica=True)
+             "línea, un arco o una spline abierta hasta la próxima curva; break la parte en los cruces más cercanos "
+             "(el punto, sobre la curva).",
+             modifica=True)
 def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["trim", "extend", "break"] = "trim",
                       sketch: str | None = None):
     """
@@ -2338,22 +2340,21 @@ def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["tr
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
     _exigir_finitos(locals())
+    if mode != "trim":
+        # P-69: alargar y partir validan como extend_sketch_curve y split_sketch_curve (el punto sobre la curva y
+        # el conflicto del boceto). El import es local porque herramientas_boceto_extra importa de este módulo.
+        from .herramientas_boceto_extra import _editar_curva
+        r = _editar_curva(sesion, sketch, entity, (x, y), partir=mode == "break")
+        r["mode"] = mode
+        return r
     hecho = {}
 
     def modificar(b):
         _curva(b, entity)
-        if mode == "trim":
-            hecho["queda"] = b.recortar(entity, (x, y))
-        elif mode == "extend":
-            b.alargar(entity, (x, y))
-        else:
-            hecho["partes"] = b.partir(entity, (x, y))
+        hecho["queda"] = b.recortar(entity, (x, y))
     r = _dibujar(sesion, sketch, modificar, desde_solver=True)
     r["mode"] = mode
-    if mode == "trim":
-        r["deleted"] = hecho["queda"] is None
-    if mode == "break":
-        r["pieces"] = hecho["partes"]
+    r["deleted"] = hecho["queda"] is None
     return r
 
 

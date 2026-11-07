@@ -759,7 +759,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`draw_blend_curve`](#draw_blend_curve) | sí | Une los extremos de dos curvas abiertas con una spline suave (Fusion: Curva de fusión), tangente (G1) o con curvatura continua (G2) en las dos uniones. |
 | [`sketch_fillet`](#sketch_fillet) | sí | Empalme de boceto (Fusion: Empalme en el boceto): redondea la esquina entre dos curvas (líneas, arcos o círculos) con un arco tangente; recorta las curvas, agrega las tangencias y la cota de radio. radius puede ser una expresión con parámetros (queda en la cota). |
 | [`sketch_chamfer`](#sketch_chamfer) | sí | Chaflán de boceto (Fusion: Chaflán en el boceto) entre dos líneas: de distancias iguales (distance), de dos distancias (distance y distance2) o de distancia y ángulo (distance y angle). |
-| [`trim_sketch_curve`](#trim_sketch_curve) | sí | Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Partir). (x, y) es el lugar del clic, sobre la curva o cerca: trim quita el tramo de la curva que contiene ese punto, hasta los cruces más cercanos (si no cruza nada, borra la curva entera); extend lleva el extremo más cercano de una línea o un arco hasta la próxima curva; break la parte en los cruces más cercanos. |
+| [`trim_sketch_curve`](#trim_sketch_curve) | sí | Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Partir). (x, y) es el lugar del clic, sobre la curva o cerca: trim quita el tramo de la curva que contiene ese punto, hasta los cruces más cercanos (si no cruza nada, borra la curva entera); extend lleva el extremo más cercano de una línea, un arco o una spline abierta hasta la próxima curva; break la parte en los cruces más cercanos (el punto, sobre la curva). |
 | [`offset_sketch_curves`](#offset_sketch_curves) | sí | Desfase de boceto (Fusion: Desfase): copia paralela de la CADENA de líneas y arcos unida a entity (o de un círculo), con las esquinas resueltas, la restricción de desfase y su cota (paramétrico: si la cadena cambia, el desfase la sigue; si se borra la cota, la relación queda y la distancia se libera, también en splines y elipses). |
 | [`release_offset`](#release_offset) | sí | Suelta la asociación de un desfase (Fusion: borrar el glifo de desfase): la copia deja de seguir a la original, pero las curvas quedan. |
 | [`edit_sketch_spline`](#edit_sketch_spline) | sí | Edita una spline ya dibujada (Fusion: manijas, Open/Close Spline, Insert Fit/Control Point y Change Spline Degree). |
@@ -802,7 +802,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`infer_sketch_snap_3d`](#infer_sketch_snap_3d) | no | Boceto 3D: dice qué ayuda de dibujo propone la interfaz con el cursor en [x, y, z] (Fusion: 3D Sketch › ayudas de dibujo): punto medio, intersección, sobre la curva, tangente y perpendicular desde un punto base, alineación con otros puntos (misma coordenada en el plano) y horizontal/vertical (los ejes de la tríada). |
 | [`draw_spiral`](#draw_spiral) | sí | Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. |
 | [`set_circle_radius`](#set_circle_radius) | sí | Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo en el editor): el círculo toma el radio nuevo y en un arco se corren sus extremos libres. |
-| [`extend_sketch_curve`](#extend_sketch_curve) | sí | Alarga una línea o arco hasta la siguiente intersección, desde el extremo más cercano al punto. |
+| [`extend_sketch_curve`](#extend_sketch_curve) | sí | Alarga una línea, un arco o una spline abierta hasta la siguiente intersección, desde el extremo más cercano al punto. |
 | [`split_sketch_curve`](#split_sketch_curve) | sí | Parte una curva en las intersecciones más cercanas al punto, como el editor; el punto debe caer sobre la curva. |
 | [`redefine_sketch_plane`](#redefine_sketch_plane) | sí | Redefine el plano o la cara de un boceto existente conservando curvas, restricciones y cotas. |
 
@@ -1168,7 +1168,7 @@ Chaflán de boceto (Fusion: Chaflán en el boceto) entre dos líneas: de distanc
 
 ### `trim_sketch_curve`
 
-Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Partir). (x, y) es el lugar del clic, sobre la curva o cerca: trim quita el tramo de la curva que contiene ese punto, hasta los cruces más cercanos (si no cruza nada, borra la curva entera); extend lleva el extremo más cercano de una línea o un arco hasta la próxima curva; break la parte en los cruces más cercanos.
+Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Partir). (x, y) es el lugar del clic, sobre la curva o cerca: trim quita el tramo de la curva que contiene ese punto, hasta los cruces más cercanos (si no cruza nada, borra la curva entera); extend lleva el extremo más cercano de una línea, un arco o una spline abierta hasta la próxima curva; break la parte en los cruces más cercanos (el punto, sobre la curva).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1815,12 +1815,12 @@ Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo e
 
 ### `extend_sketch_curve`
 
-Alarga una línea o arco hasta la siguiente intersección, desde el extremo más cercano al punto. Falla si no hay una curva que alcanzar.
+Alarga una línea, un arco o una spline abierta hasta la siguiente intersección, desde el extremo más cercano al punto. Falla si no hay una curva que alcanzar.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
-  - `curve` (entero; obligatorio): id de la línea o arco (get_sketch).
+  - `curve` (entero; obligatorio): id de la línea, el arco o la spline (get_sketch).
   - `point` (lista de número; obligatorio): [x, y] en mm del plano, cerca del extremo que se quiere alargar.
 - CLI: `omnicad call extend_sketch_curve --doc pieza.omnicad sketch=… curve=… point=…`
 
