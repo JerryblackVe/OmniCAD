@@ -98,6 +98,7 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 | MODIFICAR: Pulsar/tirar a Lista de materiales (auditoría) | [auditoria_modificar.md](../auditoria_modificar.md) |
 | ENSAMBLAR: componentes, uniones y movimiento (auditoría) | [auditoria_ensamblar.md](../auditoria_ensamblar.md) |
 | INSERTAR: Calcomanía a Insertar derivación (auditoría) | [auditoria_insertar.md](../auditoria_insertar.md) |
+| CONSTRUIR: SCU, planos, ejes y puntos (auditoría) | [auditoria_construir.md](../auditoria_construir.md) |
 
 ## Otras listas que se siguen aparte
 
