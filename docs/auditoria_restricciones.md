@@ -201,7 +201,7 @@ auditoría, correcciones y verificaciones. Documentá con precisión todo lo que
 | restr-7 | B-229 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r7` / `restr-7` | Fusionada |
 | restr-8 | B-230 y S7 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r8` / `restr-8` | Fusionada |
 | restr-9 | Fase D: integración ventana / API / archivo (S8, S12, S13, guardar-abrir-deshacer, ventana = MCP) | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r9` / `restr-9` | Fusionada (S13 y S8 corregidos, S12 → H-106) |
-| restr-10 | Fase E: escenarios combinados de la sección 8 (`test_restricciones_escenarios.py`) | Sol (pendiente) | `D:/PROGRAMA-r10` / `restr-10` | Brief listo, sin lanzar |
+| restr-10 | Fase E: escenarios combinados de la sección 8 (`test_restricciones_escenarios.py`) | Sol: sin cupo al arrancar (23:36); Qwen, CodeBuddy y OpenCode gratis tampoco | — | PENDIENTE (worktree borrado sin cambios) |
 
 ### Brief restr-1 (B-223)
 
@@ -673,3 +673,69 @@ ruff; `pytest tests/test_restricciones_escenarios.py -q` sin turno (rápido: men
 `D:/PROGRAMA-r10/evidencias/restr10/informe.md`: escenario por escenario VERIFICADO / XFAIL (con caso mínimo y archivo:línea
 sospechado) / NO VERIFICADO; la salida REAL de ruff y pytest.
 ```
+
+## Informe final (fase F, 2026-11-06, coordinador Opus)
+
+Estado general: **PARCIAL**. Las fases A a D están cerradas y commiteadas en `main`. La fase E (escenarios combinados de la
+sección 8) quedó PENDIENTE: Sol se quedó sin cupo al arrancarla y no había otro agente disponible (Qwen «qfmodel
+unavailable», CodeBuddy sin créditos, OpenCode gratis colgado). Su brief está arriba («Brief restr-10»), listo para lanzar.
+
+1. **Restricciones auditadas:** 16 tipos de restricción y 7 de cota
+   ([inventario](auditorias/restricciones_inventario_2026-11-06.md)).
+2. **Inventario y cobertura:** `clon/tests/test_restricciones_matriz.py` prueba cada restricción y cota con números (la
+   relación se cumple, persiste con `desde_dict(a_dict())` y quita los GDL esperados). `test_restricciones_integracion.py`
+   cubre la ventana, el MCP y el archivo. Desfase y patrón quedan en sus tests propios.
+3. **Bugs encontrados, con causa raíz:**
+
+| Bug | Causa | Estado |
+|---|---|---|
+| B-223 | El clic no elegía el origen si ninguna restricción lo había citado | CORREGIDO (c63f2a4) |
+| B-224 | El modelo exigía un orden de entidades que la ventana reordenaba por su cuenta | CORREGIDO (c81bd8c) |
+| B-225 / B-226 | El solver se quedaba con la solución local que daba vuelta o aplastaba la figura | CORREGIDO (0021736) |
+| B-227 | La regla del ángulo (0…180) estaba solo en la API | CORREGIDO (b916fe5; regresión del mensaje en 5cab9d9) |
+| B-228 | Se aceptaba una distancia entre líneas no paralelas | CORREGIDO (e1d44de) |
+| B-229 | AutoConstrain creaba un punto suelto en (0,0) | CORREGIDO (eabeef6) |
+| B-230 | Un tipo desconocido daba `KeyError` | CORREGIDO (31ba132) |
+| S7 | Las descripciones de la API no decían todo lo que aceptan | CORREGIDO (31ba132) |
+| S8 / S13 | Desfijar dependía del orden; Simetría con el eje primero no orientaba | CORREGIDO (da20ddf) |
+
+4. **Archivos modificados:**
+   - `restricciones/boceto.py`: `ORDEN_RESTRICCION`, `agregar_restriccion`, `validar_valor_cota`, `agregar_cota` y las validaciones.
+   - `restricciones/solver.py`: `_preferir_traslacion` y `_cotas_auto`.
+   - `ui/editor_boceto.py`: `entidad_en`, `_ocultos`, `aplicar_restriccion` y el borrado de `_ordenar`.
+   - `api/herramientas_boceto.py`: descripciones y `_cota_valida`.
+   - `docs/agentes/herramientas.md`, regenerada.
+5. **Faltantes:** H-106 (cota horizontal o vertical de una línea sola en la ventana), con un test `xfail` estricto. No se
+   implementó: falta confirmar en Fusion cómo elige entre horizontal y vertical.
+6. **Mejoras de solver e interfaz:**
+   - Un solo orden canónico para la ventana, la API, el MCP y la CLI.
+   - El origen se puede elegir en todas las herramientas.
+   - El solver prefiere correr la figura entera antes que deformarla.
+   - Las reglas de las cotas viven en el modelo.
+7. **Pruebas, con salidas reales:** por ítem en el Registro de `PROJECT_LOG.md`. Algunas:
+   - B-224: 57 archivos de restricciones, `1016 + 1178 passed`.
+   - B-225/226: `192 passed`, más los 50 archivos del solver (`778 + 910 passed`).
+   - B-228: `1979 passed`.
+   - B-229: `858 passed`.
+   - Fase D: `228 passed, 2 xfailed`.
+   - Ruff limpio en cada commit.
+8. **Pruebas en la interfaz:**
+   - Tests con clics simulados para B-223 (33 casos) y para la fase D.
+   - NO VERIFICADO: la pieza `scripts/prueba_ui/todo.py restricciones_boceto`. El arnés pide el foco aun minimizado (P-61).
+9. **Comparación con Fusion:** tabla en el inventario, § 4. SOLIDWORKS: sin dato comprobado. No se afirma equivalencia completa.
+10. **Pendientes y limitaciones verificadas:**
+    - La fase E entera.
+    - S5: desfase libre y GDL, sin caso mínimo.
+    - H-106.
+    - La pieza de ventana (P-61).
+    - De noche:
+      - `tests_afectados.py` elige 363 de 385 archivos, así que corresponde la suite completa.
+      - La prueba de humo.
+      - Las piezas `restricciones_boceto`, `auditoria_boceto`, `simetria_boceto`, `inferencias`, `boceto_cotas` y
+        `boceto_herramientas`, en `prueba_nocturna_2026-10-31.md` § 3u.
+11. **Rendimiento:** 300 rectángulos con cota tardan 0,778 s en `main` y 0,769 s en la rama, igual que antes. En el peor
+    caso, con los 300 grupos moviéndose, pasa de 0,924 s a 1,108 s (+20 %), anotado con un comentario `shortcut:` en
+    `_preferir_traslacion`.
+12. **Estado final:** B-223 a B-230 están cerrados. En seguimiento queda solo H-106. Evidencias: los commits de la tabla
+    del punto 3 y los informes de cada corrida en `D:/PROGRAMA-r*/evidencias` (ya borrados con sus worktrees; el resumen
+    de cada uno está en el Registro).
