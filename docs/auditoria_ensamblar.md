@@ -14,6 +14,7 @@ Guardado el 2026-11-07. Modelo sugerido: coordina una sesión Claude Opus 5 con 
 
 ```text
 AJUSTE DEL COORDINADOR (2026-11-08; manda sobre todo lo que sigue)
+- PORTÓN DE CIERRE OBLIGATORIO: esta auditoría no se cierra hasta pasar los 5 puntos de docs/auditorias/porton_auditoria.md (matriz de combinaciones con invariantes, prueba en la ventana, pieza real, juez independiente con otro modelo y cerrar la clase de cada bug).
 - Orden de las seis auditorías (de a una; la siguiente arranca cuando la anterior quedó cerrada y commiteada): 1) CONSTRUIR (AG-7), 2) herramientas 3D (AG-2), 3) MODIFICAR (AG-4), 4) INSERTAR (AG-6), 5) ENSAMBLAR (AG-5), 6) RENDERIZAR (AG-3). Cada herramienta tiene UNA sola auditoría dueña. Las demás solo la usan en sus pruebas combinadas: si encuentran un bug en una herramienta ajena, cargan la fila en docs/seguimiento/ y la arreglan solo si la dueña ya pasó (está antes en el orden); si la dueña viene después, dejan la fila para ella.
 - Sos la dueña de todo ENSAMBLAR, incluidos Duplicar con uniones, Insertar componente y Lista de materiales (la sección 31 de auditoria_modificar.md te dice qué revisar de ella). Mover/copiar y Alinear ya los cerró MODIFICAR (AG-4): solo probalos sobre componentes. Incluí y cerrá los ítems ASM-17 a ASM-20 y SC6/P-25e2 de docs/brechas_ensamblar.md (su prompt viejo se borró: lo reemplaza este).
 
