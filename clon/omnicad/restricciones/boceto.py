@@ -2584,6 +2584,8 @@ class Boceto:
 
     # ------------------------------------------------------------ validación
     def _validar_restriccion(self, tipo, entidades):
+        if tipo not in TIPOS_RESTRICCION:
+            raise ErrorBoceto(f"Tipo de restricción desconocido: {tipo}")
         t = [self.tipo_de(e) for e in entidades]
         abiertas = ("linea", "arco", "arco_elipse", "spline", "conica")
         validas = {
@@ -2627,6 +2629,8 @@ class Boceto:
             self.vertices_cadena(entidades)
 
     def _validar_cota(self, tipo, entidades):
+        if tipo not in TIPOS_COTA:
+            raise ErrorBoceto(f"Tipo de cota desconocido: {tipo}")
         t = [self.tipo_de(e) for e in entidades]
         validas = {
             "distancia": lambda: (t in (["punto", "punto"], ["linea"], ["punto", "linea"], ["linea", "punto"],

@@ -199,7 +199,7 @@ auditoría, correcciones y verificaciones. Documentá con precisión todo lo que
 | restr-5 | B-227 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r5` / `restr-5` | Fusionada (dos corridas cortadas a los 25 min) |
 | restr-6 | B-228 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r6` / `restr-6` | Fusionada (vio la regresión de B-227) |
 | restr-7 | B-229 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r7` / `restr-7` | Fusionada |
-| restr-8 | B-230 y S7 | Sol (pendiente) | `D:/PROGRAMA-r8` / `restr-8` | Brief listo, sin lanzar |
+| restr-8 | B-230 y S7 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r8` / `restr-8` | Fusionada |
 
 ### Brief restr-1 (B-223)
 
@@ -544,7 +544,7 @@ de ~25 archivos. Prohibido `tests_afectados.py --correr`, la suite completa y `p
 después) y la salida REAL de ruff y de cada tanda (últimas líneas), lo que no pudiste verificar.
 ```
 
-### Brief restr-8 (B-230 y S7 (pendiente de lanzar))
+### Brief restr-8 (B-230 y S7)
 
 ```text
 Corrida restr-8 · B-230 y S7 · OmniCAD (CAD paramétrico en Python). Todo en español.

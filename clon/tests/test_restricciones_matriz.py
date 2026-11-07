@@ -585,3 +585,17 @@ def test_b229_api_sugerir_aplicar_y_excluir_usan_el_origen():
     aplicado = api.llamar(s, "auto_constrain", {})
     assert aplicado["ok"] and aplicado["result"]["dof"] == 0, aplicado
     assert not aplicado["result"]["points"]
+
+
+@pytest.mark.parametrize("cota", [False, True], ids=["restriccion", "cota"])
+def test_b230_tipo_desconocido_da_error_claro(cota):
+    b = Boceto()
+    p, q = b.agregar_punto(0, 0), b.agregar_punto(10, 5)
+    antes = b.a_dict()
+    mensaje = "Tipo de cota desconocido" if cota else "Tipo de restricción desconocido"
+    with pytest.raises(ErrorBoceto, match=f"^{mensaje}: inventada$"):
+        if cota:
+            b.agregar_cota("inventada", [p, q], "10")
+        else:
+            b.agregar_restriccion("inventada", [p, q])
+    assert b.a_dict() == antes
