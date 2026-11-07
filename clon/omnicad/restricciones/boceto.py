@@ -577,8 +577,8 @@ class Texto(_Curva):
 
     def remapear(self, mapa, nuevo_id=None):
         c = super().remapear(mapa, nuevo_id)
-        if nuevo_id is not None:                 # una copia sigue al parámetro, pero lo escrito en ella no lo cambia
-            c.parametro_altura = None
+        if nuevo_id is not None:                 # la copia conserva su altura, sin seguir al parámetro del original
+            c.parametro_altura = c.altura_expr = None
         if self.marco:
             c.marco = [mapa.get(p, p) for p in self.marco]
         return c

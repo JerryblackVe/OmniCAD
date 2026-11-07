@@ -653,7 +653,7 @@ def test_el_espaciado_sigue_a_text_height_y_un_texto_viejo_queda_igual():
 
 
 @hay_arial
-def test_la_copia_de_un_texto_escala_su_espaciado_con_text_height():
+def test_la_copia_de_un_texto_conserva_altura_y_espaciado_al_cambiar_text_height():
     s = api.Sesion()
     ok(api.llamar(s, "create_sketch", {"plane": "XY", "name": "b"}))
     t = ok(api.llamar(s, "add_text", {"sketch": "b", "text": "HH", "font": "Arial", "height": 10,
@@ -662,8 +662,9 @@ def test_la_copia_de_un_texto_escala_su_espaciado_con_text_height():
     copia = next(i for i in s.paso("b").boceto.curvas if i != t and s.paso("b").boceto.curvas[i].tipo == "texto")
     assert r and s.paso("b").boceto.curvas[copia].parametro_altura is None
     ok(api.llamar(s, "set_parameter", {"name": "Text_height", "expression": "20 mm"}))
-    resuelto = s.doc.estado_final.bocetos[s.paso("b").id].boceto.curvas[copia]
-    assert (resuelto.altura, resuelto.espaciado) == (pytest.approx(20), pytest.approx(3.0))
+    curvas = s.doc.estado_final.bocetos[s.paso("b").id].boceto.curvas
+    assert (curvas[t].altura, curvas[t].espaciado) == (pytest.approx(20), pytest.approx(3.0))
+    assert (curvas[copia].altura, curvas[copia].espaciado) == (pytest.approx(10), pytest.approx(1.5))
 
 
 def _alto(boceto, tid):

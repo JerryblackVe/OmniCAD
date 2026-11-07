@@ -2550,6 +2550,7 @@ def copy_sketch_entities(sesion, entities: list[int], source_sketch: str, sketch
     _exigir_finitos(locals())
     origen = op_boceto(sesion, source_sketch)
     fuente = origen.copia().boceto
+    actualizar_alturas_texto(fuente, boceto_resuelto(sesion, origen))
     _sincronizar_con_solver(sesion, origen, fuente)
     _exigir_seleccion(fuente, entities)
 

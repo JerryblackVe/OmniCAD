@@ -238,6 +238,7 @@ Una corrida por fase o por ítem, cada una en su worktree (`bash scripts/worktre
 | cm-2 | Fase 2: investigación Fusion (ayuda local) y SOLIDWORKS (help.solidworks.com) | Coordinador (Claude Opus) con dos lectores | sin worktree (solo docs) | Hecha ([referencia](auditorias/boceto_crear_modificar_referencia.md); filas H-109, H-110, P-72, P-73) |
 | cm-3 | Fase 3: auditoría por combinaciones (§ 14) y casos límite → `clon/tests/test_boceto_combinaciones.py` (briefs en `evidencias/cm_3/`) | MiniMax M3.1 Flash por NVIDIA: 25 min leyendo sin escribir, cortado. GLM 5.3 Flash por NVIDIA: 12 min y 4 lecturas, cortado. Sol (cupo de vuelta 16:20) en tres tandas: cm-3a combinaciones 1-4 (6 min), cm-3b 5-8 (11 min), cm-3c casos límite de 10 herramientas (70 casos) | `D:/PROGRAMA-cm3` / `item/cm3` | Fusionada (76 verdes, 2 xfail estrictos → B-239 y H-111) |
 | P-67 | Spline de control en grado 5 por defecto; con menos de 6 puntos baja a puntos − 1, como Fusion | Sol (`openai/gpt-6.1-sol`, high); sin cupo al final, verificó el coordinador | `D:/PROGRAMA-P-67` / `item/P-67` | Fusionada (tests afectados 20 grupos, 0 fallidos) |
+| B-239 | Escalar un texto también escalaba su copia | Sol | `D:/PROGRAMA-B-239` / `item/B-239` | Fusionada (tests afectados 20 grupos, 0 fallidos) |
 
 ### Brief cm-1 (fase 1, inventario)
 

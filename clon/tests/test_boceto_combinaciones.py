@@ -207,8 +207,6 @@ def test_combinacion_3_linea_arco_tangente_y_alargar():
     _reabrir(s)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="cm-3b/5: escalar el texto original cambia también la copia: A=13.2333 → 52.9332 mm²")
 def test_combinacion_5_texto_copiar_escalar_y_extruir():
     s = api.Sesion()
     _llamar(s, "create_sketch", name="B")
@@ -647,3 +645,34 @@ def test_limite_patron(cantidad, esperado):
             copia, = [e for e in lineas if e["start"] == pytest.approx([1 + 10 * i, 1])]
             assert copia["end"] == pytest.approx([3 + 10 * i, 1])
         assert _areas(documento) == []
+
+
+@pytest.mark.parametrize("camino", ["patron", "pegar"])
+@pytest.mark.parametrize("altura", [10, 15])
+def test_b239_copias_de_texto_conservan_altura_al_escalar_original_y_reabrir(camino, altura):
+    s = api.Sesion()
+    _llamar(s, "create_sketch", name="B")
+    _llamar(s, "add_text", sketch="B", text="I", height=10)
+    if altura != 10:
+        _llamar(s, "set_parameter", name="Text_height", expression=f"{altura} mm")
+    original, = _de(s, "text")
+    assert original["height"] == altura
+    if camino == "patron":
+        _llamar(s, "sketch_rectangular_pattern", sketch="B", entities=[original["id"]],
+                count1=3, distance1=40, spacing="spacing")
+        destino = "B"
+    else:
+        _llamar(s, "create_sketch", name="C")
+        _llamar(s, "copy_sketch_entities", source_sketch="B", sketch="C",
+                entities=[original["id"]], dx=40)
+        destino = "C"
+    copias = [e for e in _llamar(s, "get_sketch", sketch=destino)["entities"]
+              if destino != "B" or e["id"] != original["id"]]
+    assert len(copias) == (2 if camino == "patron" else 1)
+    assert all(e["height"] == altura for e in copias)
+    _llamar(s, "transform_sketch", sketch="B", entities=[original["id"]],
+            scale=2, center_x=0, center_y=0)
+    for documento in (s, _reabrir(s)):
+        assert next(e for e in _de(documento, "text") if e["id"] == original["id"])["height"] == 2 * altura
+        actuales = _llamar(documento, "get_sketch", sketch=destino)["entities"]
+        assert [e for e in actuales if destino != "B" or e["id"] != original["id"]] == copias
