@@ -202,7 +202,7 @@ def test_splines(s):
     e = entidades(s)
     assert e[ctl["entities"][0]["id"]]["spline_type"] == "control_points" and e[cerrada["entities"][0]["id"]]["closed"]
     assert api.llamar(s, "draw_spline", {"points": [[0, 0]]})["error_kind"] == "INVALID_GEOMETRY"
-    assert api.llamar(s, "draw_spline", {"points": [[0, 0], [1, 1]], "spline_type": "control_points"})["error_kind"] \
+    assert api.llamar(s, "draw_spline", {"points": [[0, 0]], "spline_type": "control_points"})["error_kind"] \
         == "INVALID_GEOMETRY"
     assert api.llamar(s, "draw_spline", {"points": [[0, 0], [1]]})["error_kind"] == "INVALID_GEOMETRY"
 

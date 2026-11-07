@@ -77,7 +77,7 @@ recortar, alargar, partir y escala. Diferencias:
 
 | Comando | Fusion | OmniCAD | Fila |
 |---|---|---|---|
-| Spline de puntos de control | Grado 5 por defecto (`spline-degree-control-reference-…md`) | Grado 3 por defecto (ED:647, `draw_spline degree=3`) | P-67 |
+| Spline de puntos de control | Grado 5 por defecto (`spline-degree-control-reference-…md`) | Grado 3 por defecto (ED:647, `draw_spline degree=3`) | CORREGIDO (P-67, 2026-11-07): grado 5 y baja a polos − 1 con menos de 6 |
 | Línea | Arco tangente arrastrando desde el extremo, dentro de la misma cadena | Ya implementado por BOC-12: arrastre a ambos lados y continuación con Línea verificados por eventos al widget en `tests/test_gizmo_boceto.py::test_h108_linea_arrastrar_desde_el_extremo_hace_arco_tangente_y_sigue` (2 casos, Qt nativo sin foco). MCP/CLI: `draw_arc tangent_to`, sin duplicarlo en `draw_line`. | CERRADO (H-108, 2026-11-07): faltaba el test de ventana |
 | Mover/Copiar | Puede sacar la geometría del plano (boceto 3D) | Solo en el plano (`transform_sketch`); 3D aparte en `transform_sketch_3d` | sin fila: Fusion no da más detalle |
 | SOLIDWORKS | — | — | sin dato comprobado |

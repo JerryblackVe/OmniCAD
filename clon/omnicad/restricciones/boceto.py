@@ -1592,6 +1592,8 @@ class Boceto:
             raise ErrorBoceto("Los puntos de la spline coinciden: no definen una curva.")
         if modo not in ("ajuste", "control"):
             raise ErrorBoceto(f"Tipo de spline desconocido: {modo}")
+        if modo == "control":
+            grado = min(grado, len(ids) - 1)
         return self._agregar_curva(Spline(self._nuevo_id(), ids, modo, grado, cerrada if modo == "ajuste" else False,
                                           pesos, nudos, construccion))
 

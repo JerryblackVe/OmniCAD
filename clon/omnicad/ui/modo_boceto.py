@@ -109,7 +109,7 @@ TIPOS_POR_FAMILIA = {
 }
 # Opciones de función (Feature Options de Fusion): herramienta → [(clave, etiqueta, [(valor, texto), ...])]
 OPCIONES_HERRAMIENTA = {
-    "spline_control": [("grado_spline", "Grado", [(3, "3"), (5, "5")])],
+    "spline_control": [("grado_spline", "Grado", [(5, "5"), (3, "3")])],
     "curva_fusion": [("continuidad", "Continuidad", [("G1", "Tangente (G1)"), ("G2", "Curvatura (G2)")])],
     "proyectar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],
     "intersecar": [("filtro_proyectar", "Filtro", [("entidades", "Entidades especificadas"), ("cuerpos", "Cuerpos")])],

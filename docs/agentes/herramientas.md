@@ -742,7 +742,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`draw_circle`](#draw_circle) | sí | Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por 2 puntos (los extremos de un diámetro) o por 3 puntos (points). |
 | [`draw_arc`](#draw_arc) | sí | Dibuja un arco. |
 | [`create_polygon`](#create_polygon) | sí | Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía de construcción, como la interfaz). |
-| [`draw_spline`](#draw_spline) | sí | Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5, necesita al menos grado+1 puntos). |
+| [`draw_spline`](#draw_spline) | sí | Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5; con menos de grado+1 puntos el grado baja a puntos−1, como Fusion). |
 | [`add_constraint`](#add_constraint) | sí | Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). |
 | [`replace_constraint`](#replace_constraint) | sí | Cambia una restricción por otra sobre las mismas entidades y con el mismo id, en un solo paso (en la ventana: clic derecho en su símbolo › Cambiar por; si la nueva no quita ningún grado de libertad —el boceto ya la cumple por otras—, falla con SKETCH_OVERCONSTRAINED y queda la anterior, igual que add_constraint). |
 | [`add_dimension`](#add_dimension) | sí | Agrega una cota (dimensión) que maneja la geometría. |
@@ -942,13 +942,13 @@ Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía 
 
 ### `draw_spline`
 
-Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5, necesita al menos grado+1 puntos). Con tangent_to, una spline de ajuste abierta comparte el extremo de otra curva y agrega tangencia; el solver ajusta los puntos libres.
+Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5; con menos de grado+1 puntos el grado baja a puntos−1, como Fusion). Con tangent_to, una spline de ajuste abierta comparte el extremo de otra curva y agrega tangencia; el solver ajusta los puntos libres.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `points` (lista de lista de número; obligatorio): lista de puntos [x, y] en mm sobre el plano del boceto.
   - `spline_type` ("fit_points" | "control_points"; opcional, por defecto `"fit_points"`): "fit_points" (pasa por los puntos) o "control_points" (los puntos son los polos).
-  - `degree` (entero; opcional, por defecto `3`): grado de la spline de puntos de control (3 o 5); se ignora en la de ajuste.
+  - `degree` (entero; opcional, por defecto `5`): grado de control (3 o 5, por defecto 5); baja a puntos−1 si faltan puntos. Se ignora en la de ajuste.
   - `closed` (true/false; opcional, por defecto `false`): true para cerrar la spline de ajuste (forma un perfil); no compatible con control_points (Fusion no lo permite: lanza INVALID_ARGUMENTS).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para una spline de construcción (no forma perfiles).

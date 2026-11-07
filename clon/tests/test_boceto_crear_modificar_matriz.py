@@ -822,3 +822,75 @@ def test_h107_vertice_valida_el_tipo_de_las_dos_curvas(tipo):
         assert not r["ok"] and r["error_kind"] == "INVALID_GEOMETRY", r
         assert "línea o arco" in r["mensaje"]
         assert _ok(api.llamar(s, "get_recipe", {})) == antes
+
+
+@pytest.mark.parametrize("cantidad", [2, 3, 4, 5, 6, 7])
+@pytest.mark.parametrize("herramienta", ["draw_spline", "sketch_from_spec"])
+def test_p67_spline_de_control_guarda_el_grado_efectivo_y_sobrevive_a_la_receta(cantidad, herramienta):
+    from omnicad.restricciones.boceto import dominio, evaluar_primitiva
+
+    s = api.Sesion()
+    puntos = [[0, 0], [5, 8], [12, -3], [18, 6], [25, 0], [30, 4], [35, -2]][:cantidad]
+    args = {"points": puntos, "spline_type": "control_points"}
+    if herramienta == "draw_spline":
+        _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+        L(s, herramienta, **args)
+    else:
+        _ok(api.llamar(s, herramienta, {"name": "B", "entities": [{"type": "spline", **args}]}))
+    (e,) = _de(s, "spline")
+    grado = min(5, cantidad - 1)
+    assert e["degree"] == grado
+    b = s.doc.operaciones[0].boceto
+    assert b.curvas[e["id"]].grado == grado
+    p = b.primitivas(e["id"])[0]
+    inicio, fin, _ = dominio(p)
+    assert evaluar_primitiva(p, inicio)[0] == pytest.approx(puntos[0])
+    assert evaluar_primitiva(p, fin)[0] == pytest.approx(puntos[-1])
+    receta = _ok(api.llamar(s, "get_recipe", {}))
+    otra = api.Sesion()
+    _ok(api.llamar(otra, "apply_recipe", {"recipe": receta}))
+    assert _ents(otra) == _ents(s)
+    assert otra.doc.operaciones[0].boceto.curvas[e["id"]].grado == grado
+
+
+@pytest.mark.parametrize("cantidad", [2, 3, 5])
+@pytest.mark.parametrize("grado", [3, 5])
+def test_p67_cambiar_grado_desde_un_grado_reducido(cantidad, grado):
+    from omnicad.restricciones.boceto import dominio, evaluar_primitiva
+
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    L(s, "draw_spline", points=[[0, 0], [5, 8], [12, -3], [18, 6], [25, 0]][:cantidad],
+      spline_type="control_points")
+    (e,) = _de(s, "spline")
+    assert e["degree"] == cantidad - 1
+    p = s.doc.operaciones[0].boceto.primitivas(e["id"])[0]
+    inicio, fin, _ = dominio(p)
+    ts = [inicio + (fin - inicio) * i / 20 for i in range(21)]
+    antes = [evaluar_primitiva(p, t)[0] for t in ts]
+    L(s, "edit_sketch_spline", entity=e["id"], action="set_degree", degree=grado)
+    assert _de(s, "spline")[0]["degree"] == grado
+    nueva = s.doc.operaciones[0].boceto.primitivas(e["id"])[0]
+    despues = [evaluar_primitiva(nueva, t)[0] for t in ts]
+    assert despues[0] == pytest.approx(antes[0])
+    assert despues[-1] == pytest.approx(antes[-1])
+    if grado > e["degree"]:
+        assert max(math.dist(a, b) for a, b in zip(antes, despues, strict=True)) < 1e-6
+
+
+def test_p67_editor_arranca_con_grado_cinco_sin_mostrar_ventana():
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+
+    app = QApplication.instance() or QApplication([])
+    lienzo = Lienzo(Boceto(), TablaParametros().evaluar)
+    try:
+        assert not lienzo.isVisible()
+        assert lienzo.opciones["grado_spline"] == 5
+    finally:
+        lienzo.close()
+        lienzo.deleteLater()
+        app.processEvents()

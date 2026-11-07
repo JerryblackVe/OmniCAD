@@ -235,6 +235,8 @@ Una corrida por fase o por ítem, cada una en su worktree (`bash scripts/worktre
 | Corrida | Fase o ítem | Agente | Worktree / rama | Estado |
 |---|---|---|---|---|
 | cm-1 | Fase 1: inventario + `test_boceto_crear_modificar_matriz.py` | Sol sin cupo (2026-11-07 00:0x); la hizo el coordinador (Claude Opus) con tres lectores en paralelo | `D:/PROGRAMA-cm1` / `item/cm1` | Fusionada ([inventario](auditorias/boceto_crear_modificar_inventario.md); 48 verdes, 5 xfail: B-232 a B-235) |
+| cm-2 | Fase 2: investigación Fusion (ayuda local) y SOLIDWORKS (help.solidworks.com) | Coordinador (Claude Opus) con dos lectores | sin worktree (solo docs) | Hecha ([referencia](auditorias/boceto_crear_modificar_referencia.md); filas H-109, H-110, P-72, P-73) |
+| P-67 | Spline de control en grado 5 por defecto; con menos de 6 puntos baja a puntos − 1, como Fusion | Sol (`openai/gpt-6.1-sol`, high); sin cupo al final, verificó el coordinador | `D:/PROGRAMA-P-67` / `item/P-67` | Fusionada (tests afectados 20 grupos, 0 fallidos) |
 
 ### Brief cm-1 (fase 1, inventario)
 

@@ -502,8 +502,6 @@ def _spline(b, puntos, tipo, grado, cerrada, construccion=False, tangente=None, 
     control = tipo == "control_points"
     if control and grado not in (3, 5):
         raise ErrorBoceto(f"Una spline de puntos de control tiene grado 3 o 5 (llegó {grado}).")
-    if control and len(pts) < grado + 1:
-        raise ErrorBoceto(f"Una spline de puntos de control de grado {grado} necesita al menos {grado + 1} puntos.")
     if tangente is not None:
         if len(pts) < 2:
             raise ErrorBoceto("La spline necesita al menos dos puntos.")
@@ -1365,16 +1363,17 @@ def create_polygon(sesion, sides: int, radius: Expr | None = None, center_x: flo
 
 
 @herramienta("draw_spline", "boceto", "Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control "
-             "(grado 3 o 5, necesita al menos grado+1 puntos). Con tangent_to, una spline de ajuste abierta "
+             "(grado 3 o 5; con menos de grado+1 puntos el grado baja a puntos−1, como Fusion). "
+             "Con tangent_to, una spline de ajuste abierta "
              "comparte el extremo de otra curva y agrega tangencia; el solver ajusta los puntos libres.", modifica=True)
 def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_points", "control_points"] = "fit_points",
-                degree: int = 3, closed: bool = False, sketch: str | None = None, construction: bool = False,
+                degree: int = 5, closed: bool = False, sketch: str | None = None, construction: bool = False,
                 centerline: bool = False, tangent_to: int | None = None,
                 tangent_end: Literal["start", "end"] = "end"):
     """
     points: lista de puntos [x, y] en mm sobre el plano del boceto.
     spline_type: "fit_points" (pasa por los puntos) o "control_points" (los puntos son los polos).
-    degree: grado de la spline de puntos de control (3 o 5); se ignora en la de ajuste.
+    degree: grado de control (3 o 5, por defecto 5); baja a puntos−1 si faltan puntos. Se ignora en la de ajuste.
     closed: true para cerrar la spline de ajuste (forma un perfil); no compatible con control_points (Fusion no lo permite: lanza INVALID_ARGUMENTS).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     construction: true para una spline de construcción (no forma perfiles).
@@ -1864,7 +1863,7 @@ def _construir_entidad(b, i, e, alias, sesion):
         tipo_spline = e.get("spline_type", "fit_points")
         if tipo_spline not in ("fit_points", "control_points"):
             raise _spec_error(i, tipo, "'spline_type' es fit_points o control_points.")
-        grado = e.get("degree", 3)
+        grado = e.get("degree", 5)
         if isinstance(grado, float) and grado.is_integer():
             grado = int(grado)
         if isinstance(grado, bool) or not isinstance(grado, int):

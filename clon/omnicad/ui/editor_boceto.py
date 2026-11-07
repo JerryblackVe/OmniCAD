@@ -644,7 +644,7 @@ class Lienzo(QWidget):
         self.opcion_cota = "auto"
         self.lados = 6
         # Opciones de la paleta (Opciones de función de Fusion) para las herramientas nuevas.
-        self.opciones = {"grado_spline": 3, "continuidad": "G1",
+        self.opciones = {"grado_spline": 5, "continuidad": "G1",
                          "filtro_proyectar": "entidades", "copiar": False, "fuente": "Arial",
                          "direccion_desfase": "un", "match_topology": False, "seleccion_cadena": True,
                          "vinculo_proyeccion": True, "eje_giro": "Z", "contorno_exterior": True, "proyectar_eje": False,
