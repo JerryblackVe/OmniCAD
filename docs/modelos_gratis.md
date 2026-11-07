@@ -40,7 +40,9 @@ y cuáles sirven para el proyecto. Las promos gratis cambian cada semana: **ante
 |---|---|---|
 | Gemini CLI | Desde el 18-06-2026 no atiende cuentas gratis: pasó a Antigravity CLI ([aviso oficial](https://github.com/google-gemini/gemini-cli/discussions/27274)) | **No** (el informe pegado estaba desactualizado) |
 | FreeInference (Harvard) | «New account onboarding is paused»: no se pueden crear cuentas | **No** por ahora |
-| OrcaRouter | Clave sin tarjeta, compatible con OpenAI (`https://api.orcarouter.ai/v1`), dice no entrenar con los prompts; la página no publica qué modelos ni cuántos pedidos gratis | Quizás: hace falta que Gerardo cree la cuenta y probarlo |
+| OrcaRouter | Cuenta creada por Gerardo (2026-11-07). Gratis: `z-ai/glm-5.3-flash-free`, `deepseek/deepseek-v4.1-flash-free`, `deepseek/deepseek-v4-flash-free`, `tencent/hy3-free`, `tencent/hy4-preview-free` y `orcarouter/free` (compatible con OpenAI, `https://api.orcarouter.ai/v1`; dice no entrenar con los prompts). Hoy responde «free_rate_limited»: los gratis exigen vincular una cuenta de GitHub con antigüedad, y `orcarouter/free` dice «allowance is used up» | **Sí, el más prometedor**: trae GLM, DeepSeek y hy3, los tres con buen historial acá. Falta que Gerardo vincule su GitHub en el perfil de OrcaRouter; después se carga como proveedor de OpenCode |
+| OpenCode Go (`crouton-alpha-free`, `beam-free`, `iceman-contributor-free`) | Piden la suscripción Go o permitir que entrenen con los pedidos | **No** sin pedido de Gerardo |
+| OpenRouter (de la lista de OpenCode) | `nemotron-3-nano-omni…:free` y `openrouter/free` responden; `xing4.0-29b-a4b` colgado; `deepseek-v4-flash-0731` ya no es gratis | **No**: 50 pedidos por día y modelos chicos |
 | Z.ai GLM 5.3 Flash | Es pago (muy barato), no gratis | **No** sin pedido de Gerardo |
 | OpenRouter `:free` | Ya hay clave; 50 pedidos por día sin créditos | **No** para agentes: una tarea usa decenas de pedidos |
 | Modelos locales (Ollama, Qwen 3.6 35B, gpt-oss-20b) con OpenHands, Aider, Goose | Piden 32 GB o más y placa de video | **No** en esta PC (13 GB, gráficos integrados) |
