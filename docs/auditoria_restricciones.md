@@ -193,6 +193,7 @@ auditoría, correcciones y verificaciones. Documentá con precisión todo lo que
 | Corrida | Ítem | Agente | Worktree / rama | Estado |
 |---|---|---|---|---|
 | restr-1 | B-223 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r1` / `restr-1` | Fusionada (B-223 cerrado; Sol sin cupo al terminar) |
+| restr-2 | Fase A: inventario + `test_restricciones_matriz.py` | DeepSeek v4.1 Flash (CodeBuddy): sin cupo a los 3 min (429); GLM 5.3 (CodeBuddy): créditos agotados (429); Qwen3.8-Flash (Qoder): «qfmodel unavailable»; DeepSeek v4.1 Flash free (OpenCode): colgado (sin CPU ni archivos a los 7 min), cortado; GLM 5.3 (OpenCode Go): sin suscripción; GLM 5.3 Flash free (OpenCode): colgado igual a los 7 min, cortado. Sigue el coordinador (Claude Opus) como última instancia | `D:/PROGRAMA-r2` / `restr-2` | Fusionada (inventario y matriz) |
 
 ### Brief restr-1 (B-223)
 
@@ -260,4 +261,51 @@ encuentres.
 `D:/PROGRAMA-r1/evidencias/restr1/informe.md`: causa raíz con archivo:línea y la traza; qué cambiaste (archivo y función);
 tests nuevos (nombre); salida REAL de ruff y de tests_afectados (las últimas líneas); qué dice la ayuda de Fusion del punto
 medio (ruta del artículo); lo que no pudiste hacer o verificar.
+```
+
+### Brief restr-2 (fase A, inventario)
+
+```text
+Corrida restr-2 · Fase A (inventario de restricciones) · OmniCAD (CAD paramétrico en Python). Todo en español.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-r2` (rama `restr-2`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no instales nada.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, desde `D:/PROGRAMA-r2/clon`, con `PYTHONPATH=D:/PROGRAMA-r2/clon`.
+- Leé `AGENTS.md` (reglas y cómo verificar). Leé el código real antes de afirmar algo; llamá las herramientas de verdad, no
+  narres; el cambio más chico que cumple; conservá los finales de línea de cada archivo.
+
+## Qué tenés que entregar (dos archivos nuevos, nada más)
+1. `docs/auditorias/restricciones_inventario.md`: inventario de TODAS las restricciones y cotas del boceto 2D de OmniCAD.
+   Fuentes a recorrer: `TIPOS_RESTRICCION`, `TIPOS_COTA`, `CAMBIABLES` y `_validar_restriccion` / `_validar_cota` en
+   `clon/omnicad/restricciones/boceto.py`; las ecuaciones en `clon/omnicad/restricciones/solver.py`; las inferencias
+   automáticas en `restricciones/inferencia.py` y `auto_candidatos.py`; la ventana en `clon/omnicad/ui/editor_boceto.py`
+   (`RESTRICCIONES_HERRAMIENTA`, `aplicar_restriccion`); la cinta en `ui/cinta.py`; el MCP/CLI en
+   `clon/omnicad/api/herramientas_boceto.py` (`add_constraint`, `add_dimension`, `replace_constraint`, `auto_constrain`,
+   `find_redundant_constraints`, `find_underconstrained`…). Una tabla con una fila por restricción o cota:
+   | Tipo (clave) | Nombre | Entidades que acepta (y en qué orden) | Ecuación del solver (función y línea) | GDL que quita |
+   Botón en la cinta (sí/no) | Herramienta MCP | Tests que la cubren (archivo) | Observaciones |
+   Después, una tabla «Fusion vs OmniCAD»: para cada restricción, qué dice la ayuda oficial de Fusion (buscá con
+   `D:/PROGRAMA/clon/.venv/Scripts/python.exe D:/PROGRAMA/scripts/fusion_docs.py buscar <palabras> -s fusion-sketch` y
+   `ver "<título>"`; anotá la ruta del artículo) y qué hace OmniCAD. Si la ayuda no lo dice, escribí «sin dato»: NO inventes
+   comportamientos de Fusion ni de SOLIDWORKS.
+2. `clon/tests/test_restricciones_matriz.py`: un test parametrizado por cada tipo de restricción y de cota, sin ventana
+   (solo `Boceto` + `solver.resolver`), que compruebe con números: (a) que con entidades válidas la relación se cumple
+   después de resolver (p. ej. paralela: producto vectorial ≈ 0; coincidente: distancia ≈ 0; cota de distancia: distancia =
+   valor); (b) que `Boceto.desde_dict(b.a_dict())` conserva la restricción y vuelve a resolver igual; (c) que
+   `solver.grados_de_libertad` baja lo que dice la tabla. Rápido (< 3 s el archivo entero).
+   Si un caso falla porque OmniCAD tiene un bug, NO lo arregles: marcá ese caso con
+   `pytest.param(..., marks=pytest.mark.xfail(strict=True, reason="B-nnn o hallazgo: <qué falla>"))` y anotalo en la sección
+   «Hallazgos» del inventario con el caso mínimo (código de 5-10 líneas y lo que da contra lo esperado). Bugs ya anotados:
+   B-223 (origen en Coincidente, ventana), B-224 (punto_medio y coincidente fallan con [curva, punto] por API),
+   B-225 (coincidente origen sobre diagonal deforma el rectángulo), B-226 (coincidente origen + esquina opuesta da ok=False).
+
+## Verificación (en primer plano, una cosa por vez)
+Desde `D:/PROGRAMA-r2/clon` con `PYTHONPATH=D:/PROGRAMA-r2/clon`:
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .`
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_restricciones_matriz.py -q`
+  (puede esperar en fila: dejalo esperar). Prohibido la suite completa y `pytest -n`.
+
+## Informe (escribilo apenas termines, aunque falte algo)
+`D:/PROGRAMA-r2/evidencias/restr2/informe.md`: cuántas restricciones y cotas inventariaste, cuántos casos de test y cuántos
+xfail (con su motivo), salida REAL de ruff y pytest (últimas líneas), lo que no pudiste verificar.
 ```

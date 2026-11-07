@@ -1,0 +1,276 @@
+"""Matriz de la auditoría de restricciones (fase A): cada restricción y cota del boceto 2D, sin ventana.
+
+Por caso: (a) la relación se cumple con números después de resolver; (b) `desde_dict(a_dict())` la conserva y vuelve a
+resolver igual; (c) `grados_de_libertad` baja lo que quita la ecuación. Inventario: docs/auditorias/restricciones_inventario_2026-11-06.md.
+"""
+import math
+
+import pytest
+
+from omnicad.restricciones.boceto import TIPOS_COTA, TIPOS_RESTRICCION, Boceto
+from omnicad.restricciones.solver import grados_de_libertad, resolver
+
+
+def _largo(b, linea):
+    return math.dist(*(b.coords(q) for q in b.curvas[linea].extremos()))
+
+
+def _dir(b, linea):
+    (x1, y1), (x2, y2) = (b.coords(q) for q in b.curvas[linea].extremos())
+    n = math.hypot(x2 - x1, y2 - y1)
+    return (x2 - x1) / n, (y2 - y1) / n
+
+
+def _cruz(b, l1, l2):
+    (a, c), (d, e) = _dir(b, l1), _dir(b, l2)
+    return a * e - c * d
+
+
+def _dist_punto_recta(b, p, linea):
+    return _dist_xy_recta(b, b.coords(p), linea)
+
+
+def _dist_xy_recta(b, xy, linea):
+    (x1, y1), (x2, y2) = (b.coords(q) for q in b.curvas[linea].extremos())
+    x, y = xy
+    return abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / math.hypot(x2 - x1, y2 - y1)
+
+
+def _simetria(b, p, q, eje):
+    """Cero si q es el reflejo de p respecto del eje (que también se mueve): el medio cae en el eje y p→q es normal a él."""
+    (x1, y1), (x2, y2) = b.coords(p), b.coords(q)
+    dx, dy = _dir(b, eje)
+    return _dist_xy_recta(b, ((x1 + x2) / 2, (y1 + y2) / 2), eje) + abs((x2 - x1) * dx + (y2 - y1) * dy)
+
+
+def _radio(b, c):
+    return b.curvas[c].radio
+
+
+def _centro(b, c):
+    return b.coords(b.curvas[c].centro)
+
+
+# Cada caso: armar(b, con) -> (ids, valores_cotas) y medir(b, ids) -> (medido, esperado); `quita` = GDL que saca.
+def _coincidente_pp(b, con):
+    p, q = b.agregar_punto(0, 0), b.agregar_punto(10, 5)
+    if con:
+        b.agregar_restriccion("coincidente", [p, q])
+    return (p, q), {}
+
+
+def _coincidente_pl(b, con):
+    p, ln = b.agregar_punto(5, 5), b.agregar_linea((0, 0), (10, 0))
+    if con:
+        b.agregar_restriccion("coincidente", [p, ln])
+    return (p, ln), {}
+
+
+def _coincidente_pc(b, con):
+    p, c = b.agregar_punto(15, 0), b.agregar_circulo((0, 0), 10)
+    if con:
+        b.agregar_restriccion("coincidente", [p, c])
+    return (p, c), {}
+
+
+def _una_linea(tipo):
+    def armar(b, con):
+        ln = b.agregar_linea((0, 0), (10, 3))
+        if con:
+            b.agregar_restriccion(tipo, [ln])
+        return (ln,), {}
+    return armar
+
+
+def _dos_lineas(tipo):
+    def armar(b, con):
+        l1, l2 = b.agregar_linea((0, 0), (10, 1)), b.agregar_linea((0, 5), (8, 9))
+        if con:
+            b.agregar_restriccion(tipo, [l1, l2])
+        return (l1, l2), {}
+    return armar
+
+
+def _horizontal_pp(b, con):
+    p, q = b.agregar_punto(0, 0), b.agregar_punto(10, 3)
+    if con:
+        b.agregar_restriccion("horizontal", [p, q])
+    return (p, q), {}
+
+
+def _igual_circulos(b, con):
+    c1, c2 = b.agregar_circulo((0, 0), 5), b.agregar_circulo((20, 0), 8)
+    if con:
+        b.agregar_restriccion("igual", [c1, c2])
+    return (c1, c2), {}
+
+
+def _tangente_lc(b, con):
+    ln, c = b.agregar_linea((0, 0), (10, 0)), b.agregar_circulo((5, 5), 3)
+    if con:
+        b.agregar_restriccion("tangente", [ln, c])
+    return (ln, c), {}
+
+
+def _concentrica(b, con):
+    c1, c2 = b.agregar_circulo((0, 0), 5), b.agregar_circulo((3, 2), 8)
+    if con:
+        b.agregar_restriccion("concentrica", [c1, c2])
+    return (c1, c2), {}
+
+
+def _punto_medio(b, con):
+    p, ln = b.agregar_punto(3, 4), b.agregar_linea((0, 0), (10, 0))
+    if con:
+        b.agregar_restriccion("punto_medio", [p, ln])
+    return (p, ln), {}
+
+
+def _fijo_linea(b, con):
+    ln = b.agregar_linea((0, 0), (10, 3))
+    if con:
+        b.agregar_restriccion("fijo", [ln])
+    return (ln,), {}
+
+
+def _simetrica_pp(b, con):
+    p, q, eje = b.agregar_punto(1, 3), b.agregar_punto(6, 5), b.agregar_linea((0, 0), (0, 10))
+    if con:
+        b.agregar_restriccion("simetrica", [p, q, eje])
+    return (p, q, eje), {}
+
+
+def _curvatura(b, con):
+    fin = b.agregar_punto(10, 5)
+    sp = b.agregar_spline([(0, 0), (5, 2), fin])
+    ar = b.agregar_arco_centro((20, 5), fin, (20, 15))
+    if con:
+        b.agregar_restriccion("curvatura", [sp, ar])
+    return (sp, ar), {}
+
+
+def _poligono(b, con):
+    ps = [b.agregar_punto(0, 0), b.agregar_punto(10, 0), b.agregar_punto(4, 7)]
+    ls = [b.agregar_linea(ps[i], ps[(i + 1) % 3]) for i in range(3)]
+    if con:
+        b.agregar_restriccion("poligono", ls)
+    return tuple(ls), {}
+
+
+def _cota(tipo, valor, armar_ents, datos=None):
+    def armar(b, con):
+        ids = armar_ents(b)
+        if not con:
+            return ids, {}
+        k = b.agregar_cota(tipo, list(ids), str(valor), datos)
+        return ids, {k: float(valor)}
+    return armar
+
+
+_PP = lambda b: (b.agregar_punto(0, 0), b.agregar_punto(6, 8))          # noqa: E731
+_L = lambda b: (b.agregar_linea((0, 0), (6, 8)),)                         # noqa: E731
+_PL = lambda b: (b.agregar_punto(3, 4), b.agregar_linea((0, 0), (10, 0)))  # noqa: E731
+_C = lambda b: (b.agregar_circulo((0, 0), 4),)                            # noqa: E731
+_LL = lambda b: (b.agregar_linea((0, 0), (10, 0)), b.agregar_linea((0, 1), (10, 5)))  # noqa: E731
+
+CASOS = [
+    ("coincidente punto-punto", _coincidente_pp, lambda b, i: (math.dist(b.coords(i[0]), b.coords(i[1])), 0), 2),
+    ("coincidente punto-línea", _coincidente_pl, lambda b, i: (_dist_punto_recta(b, *i), 0), 1),
+    ("coincidente punto-círculo", _coincidente_pc,
+     lambda b, i: (math.dist(b.coords(i[0]), _centro(b, i[1])), _radio(b, i[1])), 1),
+    ("horizontal línea", _una_linea("horizontal"), lambda b, i: (_dir(b, i[0])[1], 0), 1),
+    ("horizontal dos puntos", _horizontal_pp, lambda b, i: (b.coords(i[0])[1] - b.coords(i[1])[1], 0), 1),
+    ("vertical línea", _una_linea("vertical"), lambda b, i: (_dir(b, i[0])[0], 0), 1),
+    ("paralela", _dos_lineas("paralela"), lambda b, i: (_cruz(b, *i), 0), 1),
+    ("perpendicular", _dos_lineas("perpendicular"),
+     lambda b, i: (sum(a * c for a, c in zip(_dir(b, i[0]), _dir(b, i[1]), strict=True)), 0), 1),
+    ("igual líneas", _dos_lineas("igual"), lambda b, i: (_largo(b, i[0]) - _largo(b, i[1]), 0), 1),
+    ("igual círculos", _igual_circulos, lambda b, i: (_radio(b, i[0]) - _radio(b, i[1]), 0), 1),
+    ("tangente línea-círculo", _tangente_lc, lambda b, i: (_dist_punto_recta(b, b.curvas[i[1]].centro, i[0]),
+                                                           _radio(b, i[1])), 1),
+    ("concéntrica", _concentrica, lambda b, i: (math.dist(_centro(b, i[0]), _centro(b, i[1])), 0), 2),
+    ("punto medio", _punto_medio, lambda b, i: (math.dist(b.coords(i[0]), tuple(
+        (b.coords(b.curvas[i[1]].p1)[k] + b.coords(b.curvas[i[1]].p2)[k]) / 2 for k in (0, 1))), 0), 2),
+    ("fijo línea", _fijo_linea, lambda b, i: (_largo(b, i[0]), math.hypot(10, 3)), 4),
+    ("colineal", _dos_lineas("colineal"), lambda b, i: (abs(_cruz(b, *i)) + _dist_punto_recta(
+        b, b.curvas[i[1]].p1, i[0]), 0), 2),
+    ("simetría de dos puntos", _simetrica_pp, lambda b, i: (_simetria(b, *i), 0), 2),
+    ("curvatura spline-arco", _curvatura, lambda b, i: (0, 0), 2),     # solo GDL y persistencia: la G2 la mide fase7
+    ("polígono regular", _poligono, lambda b, i: (max(_largo(b, x) for x in i) - min(_largo(b, x) for x in i), 0), 2),
+    ("cota distancia punto-punto", _cota("distancia", 10, _PP), lambda b, i: (math.dist(*map(b.coords, i)), 10), 1),
+    ("cota largo de línea", _cota("distancia", 10, _L), lambda b, i: (_largo(b, i[0]), 10), 1),
+    ("cota distancia punto-línea", _cota("distancia", 7, _PL), lambda b, i: (_dist_punto_recta(b, *i), 7), 1),
+    ("cota distancia horizontal", _cota("distancia_h", 10, _PP),
+     lambda b, i: (abs(b.coords(i[1])[0] - b.coords(i[0])[0]), 10), 1),
+    ("cota distancia vertical", _cota("distancia_v", 10, _PP),
+     lambda b, i: (abs(b.coords(i[1])[1] - b.coords(i[0])[1]), 10), 1),
+    ("cota radio", _cota("radio", 10, _C), lambda b, i: (_radio(b, i[0]), 10), 1),
+    ("cota diámetro", _cota("diametro", 10, _C), lambda b, i: (2 * _radio(b, i[0]), 10), 1),
+    ("cota ángulo", _cota("angulo", 60, _LL), lambda b, i: (math.degrees(math.acos(abs(sum(
+        a * c for a, c in zip(_dir(b, i[0]), _dir(b, i[1]), strict=True))))), 60), 1),
+]
+
+
+@pytest.mark.parametrize(("nombre", "armar", "medir", "quita"), CASOS, ids=[c[0] for c in CASOS])
+def test_restriccion_se_cumple_persiste_y_quita_gdl(nombre, armar, medir, quita):
+    libre = Boceto()
+    armar(libre, False)
+    b = Boceto()
+    ids, valores = armar(b, True)
+    assert grados_de_libertad(libre) - grados_de_libertad(b, valores) == quita
+    assert resolver(b, valores).ok
+    medido, esperado = medir(b, ids)
+    assert medido == pytest.approx(esperado, abs=1e-6)
+    copia = Boceto.desde_dict(b.a_dict())
+    assert [r.a_dict() for r in copia.restricciones.values()] == [r.a_dict() for r in b.restricciones.values()]
+    assert resolver(copia, valores).ok
+    for pid in b.puntos:
+        assert copia.coords(pid) == pytest.approx(b.coords(pid), abs=1e-9)
+
+
+def test_la_matriz_cubre_cada_tipo():
+    """Si se suma un tipo de restricción o cota, tiene que entrar a la matriz (o a la lista de excluidos con su razón)."""
+    cubiertos = {n.split()[0] for n, *_ in CASOS}
+    nombres = {"coincidente", "horizontal", "vertical", "paralela", "perpendicular", "igual", "tangente", "concéntrica",
+               "punto", "fijo", "colineal", "simetría", "curvatura", "polígono", "cota"}
+    assert nombres <= cubiertos
+    # desfase y patrón se prueban con sus herramientas (tests/test_boceto_fase9_desfase.py, patrones); no son de a pares
+    assert set(TIPOS_RESTRICCION) - {"desfase", "patron"} == {
+        "coincidente", "horizontal", "vertical", "paralela", "perpendicular", "igual", "tangente", "concentrica",
+        "punto_medio", "fijo", "colineal", "simetrica", "curvatura", "poligono"}
+    assert set(TIPOS_COTA) == {"distancia", "distancia_h", "distancia_v", "radio", "diametro", "angulo", "desfase"}
+
+
+def _rectangulo_con_diagonal():
+    """Caso del video de B-223: rectángulo de 2 puntos (−120,0)–(−55,50) y su diagonal de construcción."""
+    b = Boceto()
+    lineas = b.agregar_rectangulo((-120, 0), (-55, 50))
+    esquinas = [b.curvas[ln].p1 for ln in lineas]
+    diagonal = b.agregar_linea(esquinas[0], esquinas[2], construccion=True)
+    b.asegurar_referencias([Boceto.ORIGEN])
+    return b, esquinas, diagonal
+
+
+@pytest.mark.xfail(strict=True, reason="B-224: punto_medio y coincidente exigen el punto primero por API")
+def test_b224_punto_medio_acepta_la_linea_primero():
+    b, esquinas, diagonal = _rectangulo_con_diagonal()
+    b.agregar_restriccion("punto_medio", [diagonal, Boceto.ORIGEN])
+    assert resolver(b).ok
+    assert b.coords(esquinas[0]) == pytest.approx((-32.5, -25.0), abs=1e-6)
+
+
+@pytest.mark.xfail(strict=True, reason="B-225: origen sobre la diagonal da vuelta el rectángulo en vez de correrlo")
+def test_b225_origen_sobre_la_diagonal_no_deforma_el_rectangulo():
+    b, esquinas, diagonal = _rectangulo_con_diagonal()
+    b.agregar_restriccion("coincidente", [Boceto.ORIGEN, diagonal])
+    assert resolver(b).ok
+    (x0, y0), (x2, y2) = b.coords(esquinas[0]), b.coords(esquinas[2])
+    assert (x2 - x0, y2 - y0) == pytest.approx((65.0, 50.0), abs=1.0)    # se corre: no cambia de tamaño ni se da vuelta
+
+
+@pytest.mark.xfail(strict=True, reason="B-226: origen + esquina opuesta deja el rectángulo con alto cero")
+def test_b226_origen_con_la_esquina_opuesta_resuelve():
+    b, esquinas, _ = _rectangulo_con_diagonal()
+    b.agregar_restriccion("coincidente", [Boceto.ORIGEN, esquinas[2]])
+    assert resolver(b).ok
+    assert b.coords(esquinas[2]) == pytest.approx((0.0, 0.0), abs=1e-6)
