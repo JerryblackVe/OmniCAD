@@ -10,3 +10,4 @@ avisa lo que vence ese día o ya venció.
 | ID | Tarea | Para cuándo | Pedido | Estado |
 |---|---|---|---|---|
 | AG-1 | Revisión y auditoría solo de la parte de Boceto (sketch) | A definir | 2026-11-05 | Programada |
+| AG-2 | Auditoría y reparación de las herramientas 3D (Agujero a Volumen de fluido) contra Fusion 360; prompt en `docs/auditoria_herramientas_3d.md` | A definir | 2026-11-07 | Programada |

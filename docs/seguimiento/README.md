@@ -93,6 +93,7 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 | Plástico y extensiones | [brechas_extensiones.md](../brechas_extensiones.md) |
 | Escanear con el celular | [plan_escaneo_celular.md](../plan_escaneo_celular.md) |
 | Boceto: CREAR y MODIFICAR (auditoría) | [auditoria_boceto_crear_modificar.md](../auditoria_boceto_crear_modificar.md) |
+| Herramientas 3D: Agujero a Volumen de fluido (auditoría) | [auditoria_herramientas_3d.md](../auditoria_herramientas_3d.md) |
 
 ## Otras listas que se siguen aparte
 
