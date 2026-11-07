@@ -226,3 +226,57 @@ robustas, fluidas, paramétricas y confiables, comparables con Fusion 360 y SOLI
 documentación, tests superficiales o ausencia de excepciones: verificar siempre el resultado geométrico y la
 experiencia real del usuario.
 ```
+
+## Corridas de agentes
+
+Una corrida por fase o por ítem, cada una en su worktree (`bash scripts/worktree_item.sh crear <ID>`), cerrada
+(arreglo → tests afectados → commit del coordinador) antes de lanzar la siguiente.
+
+### Brief cm-1 (fase 1, inventario)
+
+```text
+Corrida cm-1 · Fase 1 (inventario de CREAR y MODIFICAR del boceto) · OmniCAD (CAD paramétrico en Python). Todo en español.
+Antes de empezar aplicá ponytail: el cambio más chico que cumple la tarea completa; al terminar revisá tu propio diff.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-cm1` (rama `item/cm1`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no
+  instales nada. NO edites código del programa: solo escribís los dos archivos nuevos de abajo y el informe.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, desde `D:/PROGRAMA-cm1/clon`, con `PYTHONPATH=D:/PROGRAMA-cm1/clon`.
+- Leé `AGENTS.md`. Leé el código real antes de afirmar algo; llamá las herramientas de verdad, no narres.
+- A TODO pytest agregale `--basetemp=D:/PROGRAMA-cm1/evidencias/cm1/tmp`.
+
+## Qué tenés que entregar (dos archivos nuevos, nada más)
+1. `docs/auditorias/boceto_crear_modificar_inventario.md`: inventario de TODOS los comandos de los menús CREAR y
+   MODIFICAR de la pestaña BOCETO, con cada variante de cada submenú. Fuentes: los grupos «CREAR» y «MODIFICAR» de
+   `clon/omnicad/ui/cinta_boceto.py`; la tabla de acciones de `clon/omnicad/ui/modo_boceto.py` (clave, título,
+   herramienta del editor, atajo); `clon/omnicad/ui/editor_boceto.py` (cómo cada herramienta toma clics y valores);
+   el núcleo en `clon/omnicad/restricciones/` y `clon/omnicad/nucleo/`; el MCP/CLI en `clon/omnicad/api/herramientas_boceto*.py`.
+   Una tabla con una fila por comando o variante:
+   | Clave (`sk_…`) | Nombre en la cinta | Herramienta del editor | Función del núcleo (archivo:línea) | Herramienta MCP |
+   Opciones que tiene | Tests que la cubren (archivo) | Observaciones |
+   Marcá con «SIN MCP» la variante sin herramienta en `api/` y con «SIN TEST» la que ningún test ejercita.
+   Después, una tabla «Fusion vs OmniCAD»: para cada comando, las opciones que da la ayuda oficial de Fusion (buscá con
+   `D:/PROGRAMA/clon/.venv/Scripts/python.exe D:/PROGRAMA/scripts/fusion_docs.py buscar <palabras> -s fusion-sketch` y
+   `ver "<título>" -s fusion-sketch`; anotá la ruta del artículo) contra las que tiene OmniCAD, y la diferencia. Si la
+   ayuda no lo dice, escribí «sin dato»: NO inventes comportamientos de Fusion ni de SOLIDWORKS.
+   Al final, «Hallazgos»: cada sospecha de bug o faltante con su caso mínimo (código de 5-10 líneas y qué da contra lo
+   esperado) y archivo:línea.
+2. `clon/tests/test_boceto_crear_modificar_matriz.py`: un test parametrizado por comando o variante que tenga función
+   del núcleo o herramienta MCP, sin ventana (`Boceto` + `solver.resolver`, o `omnicad.api.llamar` con una `Sesion`;
+   mirá `tests/test_api_boceto*.py` para los nombres reales: no los inventes), que compruebe con números el resultado
+   (largos, radios, centros, cantidad de entidades, perfil cerrado), que `resolver(...).ok` y que
+   `Boceto.desde_dict(b.a_dict())` lo conserva. Rápido (menos de 10 s el archivo entero). Si un caso falla porque OmniCAD
+   tiene un bug, NO lo arregles: marcalo con `pytest.param(..., marks=pytest.mark.xfail(strict=True, reason="<qué falla>"))`
+   y anotalo en «Hallazgos».
+
+## Verificación (en primer plano, una cosa por vez)
+Desde `D:/PROGRAMA-cm1/clon` con `PYTHONPATH=D:/PROGRAMA-cm1/clon`:
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .`
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_boceto_crear_modificar_matriz.py -q --basetemp=D:/PROGRAMA-cm1/evidencias/cm1/tmp`
+  Prohibido la suite completa, `tests_afectados.py --correr` y `pytest -n`.
+
+## Informe (escribilo apenas termines, aunque falte algo)
+`D:/PROGRAMA-cm1/evidencias/cm1/informe.md`: cuántos comandos y variantes inventariaste, cuántos SIN MCP y SIN TEST,
+cuántos casos de test y cuántos xfail (con su motivo), la salida REAL de ruff y pytest (últimas líneas), lo que no
+pudiste verificar.
+```
