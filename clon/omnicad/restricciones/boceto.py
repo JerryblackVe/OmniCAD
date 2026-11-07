@@ -191,7 +191,7 @@ def validar_valor_cota(tipo, valor):
     de 1e9 o infinito). La de desfase admite negativo: la copia pasa al otro lado. Una cota de ángulo debe estar
     estrictamente entre 0 y 180 grados (entre rectas no paralelas, como Sketch Dimension de Fusion)."""
     if tipo == "angulo" and not 0 < valor < 180:          # también NaN e infinito
-        raise ErrorBoceto(f"La cota de ángulo tiene que ser mayor que 0 y menor que 180 grados (vale {valor:g}).")
+        raise ErrorBoceto(f"La cota de ángulo tiene que estar entre 0 y 180 grados, sin incluirlos (vale {valor:g}).")
     if tipo not in COTAS_POSITIVAS:
         return
     nombre = TIPOS_COTA[tipo].lower()

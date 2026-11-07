@@ -356,7 +356,7 @@ def test_b227_cota_de_angulo_fuera_de_rango_se_rechaza_en_el_modelo(valor):
     b = Boceto()
     lineas = list(_LL(b))
     antes = b.a_dict()
-    mensaje = "La cota de ángulo tiene que ser mayor que 0 y menor que 180 grados"
+    mensaje = "La cota de ángulo tiene que estar entre 0 y 180 grados"
     with pytest.raises(ErrorBoceto, match=mensaje):
         b.agregar_cota("angulo", lineas, str(valor))
     assert b.a_dict() == antes
@@ -396,7 +396,7 @@ def test_b227_la_ventana_rechaza_el_angulo_fuera_de_rango(editar, texto):
         campo.selectAll()
         QTest.keyClicks(campo, texto)
         QTest.keyClick(campo, Qt.Key_Return)
-        assert mensajes and "mayor que 0 y menor que 180 grados" in mensajes[-1]
+        assert mensajes and "entre 0 y 180 grados" in mensajes[-1]
         assert lienzo.entrada is not None
         assert b.a_dict() == antes and len(lienzo.historial) == pasos
         campo.selectAll()
@@ -426,5 +426,5 @@ def test_b227_la_api_usa_el_mismo_error_del_modelo(texto):
     antes = api.llamar(s, "get_sketch", {"sketch": "P"})["result"]
     r = api.llamar(s, "add_dimension", {"sketch": "P", "type": "angle", "entities": lineas, "value": texto})
     assert not r["ok"] and r["error_kind"] == "INVALID_DIMENSION", r
-    assert "La cota de ángulo tiene que ser mayor que 0 y menor que 180 grados" in r["mensaje"]
+    assert "La cota de ángulo tiene que estar entre 0 y 180 grados" in r["mensaje"]
     assert api.llamar(s, "get_sketch", {"sketch": "P"})["result"] == antes
