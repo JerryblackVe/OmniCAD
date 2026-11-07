@@ -1150,9 +1150,59 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
     err = float(np.max(np.abs(res))) if len(res) else 0.0
     if not con_rango:
         return x, err, None, None
+    if arrastrado is None:
+        x = _preferir_traslacion(sis, x)
+        err = float(np.max(np.abs(sis.residuos(x)), initial=0.0))
     J = _jacobiano(sis, x)
     rango = int(np.linalg.matrix_rank(J, tol=1e-6)) if J.size else 0
     return x, err, J, rango
+
+
+def _preferir_traslacion(sis, x):
+    """Si el mínimo local colapsa o invierte una curva, prueba mover el grupo sin deformarlo.
+
+    Solo dos incógnitas y una corrida acotada; si no cumple TODAS las restricciones, queda el resultado original.
+    No interviene en el arrastre ni impone dimensiones nuevas al boceto.
+    """
+    if np.allclose(x, sis.x0, rtol=0.0, atol=TOLERANCIA):
+        return x  # nada se movió: no hay nada que dar vuelta (el caso de cada recálculo)
+    invertida = False
+    # shortcut: recorre todas las curvas del boceto en cada grupo; con cientos de grupos y miles de curvas conviene un
+    # índice punto → curvas armado una vez por `resolver`.
+    for c in sis.b.curvas.values():
+        puntos = c.puntos()
+        if not any(p in sis.idx_p for p in puntos):
+            continue
+        if not all(p in sis.idx_p for p in puntos):
+            return x  # Una curva parcialmente fija no puede trasladarse entera.
+        a, q = sis.b.coords(puntos[0]), sis.P(x, puntos[0])
+        for p in puntos[1:]:
+            b, r = sis.b.coords(p), sis.P(x, p)
+            u, v = (b[0] - a[0], b[1] - a[1]), (r[0] - q[0], r[1] - q[1])
+            if math.hypot(*u) >= TOLERANCIA and (math.hypot(*v) < TOLERANCIA or u[0] * v[0] + u[1] * v[1] < 0):
+                invertida = True
+    if not invertida:
+        return x
+    # Una fusión que ya alteró la forma inicial no se puede deshacer trasladando sus incógnitas.
+    if any(math.dist(sis.P(sis.x0, p), sis.b.coords(p)) >= TOLERANCIA for p in sis.idx_p):
+        return x
+    movimiento = np.zeros((len(x), 2))
+    for i, j in sis.idx_p.values():
+        movimiento[i, 0] = movimiento[j, 1] = 1.0
+
+    def trasladar(delta):
+        return sis.x0 + movimiento @ delta
+
+    def residuos(delta):
+        return np.concatenate([sis.residuos(trasladar(delta)), _PESO_REGULARIZACION * delta])
+
+    from scipy.optimize import least_squares
+    r = least_squares(residuos, np.zeros(2), method="lm", max_nfev=TROZO_EVALUACIONES,
+                      xtol=1e-14, ftol=1e-14, gtol=1e-14)
+    candidata = trasladar(r.x)
+    if float(np.max(np.abs(sis.residuos(candidata)), initial=0.0)) < TOLERANCIA:
+        return candidata
+    return x
 
 
 def _libres(sis, J, rango, tol=1e-6):

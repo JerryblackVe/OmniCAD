@@ -194,6 +194,9 @@ auditoría, correcciones y verificaciones. Documentá con precisión todo lo que
 |---|---|---|---|---|
 | restr-1 | B-223 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r1` / `restr-1` | Fusionada (B-223 cerrado; Sol sin cupo al terminar) |
 | restr-2 | Fase A: inventario + `test_restricciones_matriz.py` | DeepSeek v4.1 Flash (CodeBuddy): sin cupo a los 3 min (429); GLM 5.3 (CodeBuddy): créditos agotados (429); Qwen3.8-Flash (Qoder): «qfmodel unavailable»; DeepSeek v4.1 Flash free (OpenCode): colgado (sin CPU ni archivos a los 7 min), cortado; GLM 5.3 (OpenCode Go): sin suscripción; GLM 5.3 Flash free (OpenCode): colgado igual a los 7 min, cortado. Sigue el coordinador (Claude Opus) como última instancia | `D:/PROGRAMA-r2` / `restr-2` | Fusionada (inventario y matriz) |
+| restr-3 | B-224 | Coordinador Opus (Qwen y Sol sin cupo) | main | Commit c81bd8c |
+| restr-4 | B-226 y B-225 (elección de solución del solver) | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r4` / `restr-4` | Fusionada (cortada a los 25 min esperando turno; tests y revisión del coordinador) |
+| restr-5 | B-227 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r5` / `restr-5` | En curso (1.ª corrida cortada esperando turno) |
 
 ### Brief restr-1 (B-223)
 
@@ -308,4 +311,120 @@ Desde `D:/PROGRAMA-r2/clon` con `PYTHONPATH=D:/PROGRAMA-r2/clon`:
 ## Informe (escribilo apenas termines, aunque falte algo)
 `D:/PROGRAMA-r2/evidencias/restr2/informe.md`: cuántas restricciones y cotas inventariaste, cuántos casos de test y cuántos
 xfail (con su motivo), salida REAL de ruff y pytest (últimas líneas), lo que no pudiste verificar.
+```
+
+### Brief restr-4 (B-226 y B-225)
+
+```text
+Corrida restr-4 · B-226 y B-225 (una sola causa: qué solución elige el solver) · OmniCAD (CAD paramétrico en Python). Todo en español.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-r4` (rama `restr-4`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no instales nada.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, desde `D:/PROGRAMA-r4/clon`, con `PYTHONPATH=D:/PROGRAMA-r4/clon`.
+- Leé `AGENTS.md` y `CLAUDE.md`. Leé el código real antes de editar y buscá todos los llamadores de lo que cambies; el cambio
+  más chico que resuelve la causa; sin abstracciones ni opciones nuevas; llamá las herramientas de verdad, no narres.
+- Conservá los finales de línea de cada archivo (`solver.py` y `boceto.py` son LF). NO edites `docs/seguimiento/` ni
+  `PROJECT_LOG.md` (lo hace el coordinador).
+
+## Los dos bugs (casos mínimos, sin ventana)
+Rectángulo de 2 puntos y su diagonal de construcción, como en el video de Gerardo:
+```python
+from omnicad.restricciones.boceto import Boceto
+from omnicad.restricciones.solver import resolver
+b = Boceto()
+lineas = b.agregar_rectangulo((-120, 0), (-55, 50))
+P = [b.curvas[l].p1 for l in lineas]            # P[0]=(-120,0) … P[2]=(-55,50)
+d = b.agregar_linea(P[0], P[2], construccion=True)
+b.asegurar_referencias([Boceto.ORIGEN])
+```
+- **B-226:** `b.agregar_restriccion("coincidente", [Boceto.ORIGEN, P[2]])` + `resolver(b)` → `ok=False`. P[2] va a (0,0) y P[0]
+  queda en (−120, 0): el alto pasa a 0 y `_curvas_colapsadas` lo rechaza (`clon/omnicad/restricciones/solver.py:937-942`).
+  Con `[P[0], ORIGEN]` anda (P[0] ya estaba en y=0).
+- **B-225:** `b.agregar_restriccion("coincidente", [Boceto.ORIGEN, d])` (origen sobre la diagonal) → `ok=True` pero
+  P[0]=(−122.76, 6.63) y P[2]=(−17.70, 0.96): el rectángulo se da vuelta y queda de 54×−5,7 en vez de 65×50.
+Los dos tienen un test `xfail(strict=True)` en `clon/tests/test_restricciones_matriz.py`
+(`test_b225_…` y `test_b226_…`): cuando los arregles, sacales el `xfail` (si no, quedan rojos por XPASS).
+
+Hipótesis del coordinador (comprobala, no la des por buena): `_resolver_grupo` (llamado en `solver.py:925`) busca la
+solución de menor movimiento desde la posición actual. Esa solución aplasta (B-226) o da vuelta (B-225) el rectángulo, aunque
+exista otra cercana que lo conserva: correrlo entero. La especificación pide: «Evitar soluciones matemáticamente válidas pero
+visualmente inesperadas cuando existe una solución cercana que mantiene la intención del usuario. No reemplazar
+indiscriminadamente el solver: primero identificar las causas reales y evaluar las correcciones mínimas suficientes.»
+Comportamiento esperado (Fusion, video de Gerardo `C:/Users/mosos/Videos/2026-11-06 19-31-01.mp4`, 0:54→1:02): al llevar el
+punto medio de la diagonal al origen, el rectángulo se corre entero sin cambiar de tamaño. Ayuda oficial:
+`D:/PROGRAMA/clon/.venv/Scripts/python.exe D:/PROGRAMA/scripts/fusion_docs.py buscar coincident -s fusion-sketch`. No inventes
+lo que la ayuda no dice.
+
+## Qué tenés que hacer
+1. Trazá el camino real (`resolver` → `_Sistema` → `_resolver_grupo`) con esos dos casos e imprimí qué solución sale y por qué.
+2. Corregí la CAUSA en el solver con el cambio más chico que haga que, cuando la solución de menor movimiento colapsa una curva
+   o da vuelta la orientación de una figura, el solver elija una solución cercana que no lo haga (si existe). Prohibido el
+   parche «si es el origen…» o «si es un rectángulo…».
+3. Criterios (tests): B-226 → `ok=True`, P[2] en (0,0) y ancho y alto ≠ 0 con el mismo signo que antes; B-225 → `ok=True`, el
+   origen sobre la diagonal y el rectángulo con ancho 65 y alto 50 (±1 mm), corrido, no dado vuelta.
+4. Sin regresiones: `clon/tests/test_restricciones_matematica.py` (invariantes y arrastre) y
+   `clon/tests/test_restricciones_matriz.py` tienen que seguir verdes. Si tu cambio toca el arrastre (`_resolver_arrastre`),
+   medí el tiempo antes y después con `scripts/medir_solver_boceto.py` o `scripts/bench_restricciones.py` (mirá cuál sirve).
+5. Si un caso no tiene arreglo sin rehacer el solver, pará y explicalo en el informe con la traza: no reescribas el solver.
+
+## Verificación (en primer plano, una cosa por vez, nunca en segundo plano)
+Desde `D:/PROGRAMA-r4/clon` con `PYTHONPATH=D:/PROGRAMA-r4/clon`:
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .`
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py --plazo 900 -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_restricciones_matriz.py tests/test_restricciones_matematica.py tests/test_restricciones_ui.py -q -W error -p no:cacheprovider`
+- Después, los tests que mencionan el solver: `grep -l "restricciones.solver\|resolver(" tests/test_*.py`, partidos en tandas
+  de ~25 archivos, cada tanda con el mismo `turno.py --plazo 900`. Prohibido `tests_afectados.py --correr` (elige casi la suite
+  completa), la suite completa y `pytest -n`. Si turno espera en fila, dejalo esperar.
+
+## Revisión antes de cerrar
+Releé tu diff como revisor: ¿qué pasa con un boceto sin solución cercana buena (sigue diciendo conflicto)? ¿con miles de
+curvas (no puede multiplicar el tiempo)? ¿con el arrastre? ¿cada línea hace falta? ¿hay un test por rama nueva?
+
+## Informe (escribilo apenas termines, aunque falte algo)
+`D:/PROGRAMA-r4/evidencias/restr4/informe.md`: la traza de la causa (archivo:línea), qué cambiaste (archivo y función), las
+coordenadas antes y después de los dos casos, tests (rojo antes, verde después) con la salida REAL de ruff y de cada tanda
+(últimas líneas), tiempos si tocaste el arrastre, lo que no pudiste verificar.
+```
+
+### Brief restr-5 (B-227)
+
+```text
+Corrida restr-5 · B-227 · OmniCAD (CAD paramétrico en Python). Todo en español.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-r5` (rama `restr-5`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no instales nada.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, desde `D:/PROGRAMA-r5/clon`, con `PYTHONPATH=D:/PROGRAMA-r5/clon`.
+- Leé `AGENTS.md`. Leé el código real y buscá todos los llamadores antes de editar; el cambio más chico que resuelve la causa;
+  conservá los finales de línea (`boceto.py` y `herramientas_boceto.py` son LF). NO edites `docs/seguimiento/` ni `PROJECT_LOG.md`.
+
+## El ítem: B-227
+Una cota de ángulo fuera de 0…180° entra sin error en el modelo y en la ventana, y el solver no la cumple:
+`b.agregar_cota("angulo", [l1, l2], "200")` (o `"-30"`) + `resolver(b, {k: 200.0})` → `ok=False`.
+La API ya lo frena (`clon/omnicad/api/herramientas_boceto.py › _cota_valida`, ~línea 2114: `0 < valor < 180`), pero el modelo
+no: `clon/omnicad/restricciones/boceto.py › validar_valor_cota` (~línea 188) dice «Los ángulos no se validan acá». La ventana
+(`clon/omnicad/ui/editor_boceto.py`, buscá `validar_valor_cota` y donde se escribe el valor de una cota de ángulo) y el
+recálculo (`clon/omnicad/timeline/operaciones.py:945`) usan la del modelo, así que la ventana acepta lo que la API rechaza.
+
+Arreglo pedido: que la regla viva en UN lugar, el modelo (`validar_valor_cota`), con un mensaje claro en español, y que la API
+use esa (borrá la copia de `_cota_valida` si queda duplicada). Antes de elegir los límites, mirá cómo mide el solver el ángulo
+(`clon/omnicad/restricciones/solver.py`, residuo de `angulo`, ~línea 464: `atan2(|cruz|, dot)` con cuadrantes) y la ayuda de
+Fusion (`D:/PROGRAMA/clon/.venv/Scripts/python.exe D:/PROGRAMA/scripts/fusion_docs.py buscar angular dimension -s fusion-sketch`):
+si 0 o 180 se pueden cumplir y Fusion los acepta, decidí con esa evidencia y anotala en el informe.
+
+## Tests (escribilos primero, mirá que fallen)
+En `clon/tests/test_restricciones_matriz.py`, al final:
+- `test_b227_cota_de_angulo_fuera_de_rango_se_rechaza_en_el_modelo`: 200, −30 y NaN con `agregar_cota` o al recalcular dan
+  `ErrorBoceto` con el mensaje; 60 sigue entrando y resolviendo.
+- `test_b227_la_ventana_rechaza_el_angulo_fuera_de_rango`: el mismo valor tecleado en la caja de la cota de ángulo de la ventana
+  (mirá cómo lo hacen los tests de `tests/test_restricciones_ui.py` o `tests/test_boceto_fase*_ui.py` que editan una cota con
+  QTest) muestra el error y no cambia el boceto. Eventos simulados, sin mover el cursor real.
+
+## Verificación (en primer plano, una cosa por vez)
+Desde `D:/PROGRAMA-r5/clon` con `PYTHONPATH=D:/PROGRAMA-r5/clon`:
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check .`
+- `D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py --plazo 900 -- D:/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_restricciones_matriz.py <los archivos de tests que usan validar_valor_cota, _cota_valida o "angulo"> -q -W error -p no:cacheprovider`
+  (buscalos con grep; en tandas de ~25 archivos). Prohibido `tests_afectados.py --correr`, la suite completa y `pytest -n`.
+
+## Informe (apenas termines)
+`D:/PROGRAMA-r5/evidencias/restr5/informe.md`: qué cambiaste (archivo y función), los límites elegidos y por qué, tests (rojo
+antes, verde después) y la salida REAL de ruff y de cada tanda (últimas líneas), lo que no pudiste verificar.
 ```

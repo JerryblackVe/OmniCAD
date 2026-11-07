@@ -289,18 +289,63 @@ def test_b224_el_mcp_acepta_la_curva_primero():
     assert r["ok"], r
 
 
-@pytest.mark.xfail(strict=True, reason="B-225: origen sobre la diagonal da vuelta el rectángulo en vez de correrlo")
 def test_b225_origen_sobre_la_diagonal_no_deforma_el_rectangulo():
     b, esquinas, diagonal = _rectangulo_con_diagonal()
     b.agregar_restriccion("coincidente", [Boceto.ORIGEN, diagonal])
     assert resolver(b).ok
+    assert _dist_punto_recta(b, Boceto.ORIGEN, diagonal) < 1e-6
     (x0, y0), (x2, y2) = b.coords(esquinas[0]), b.coords(esquinas[2])
     assert (x2 - x0, y2 - y0) == pytest.approx((65.0, 50.0), abs=1.0)    # se corre: no cambia de tamaño ni se da vuelta
 
 
-@pytest.mark.xfail(strict=True, reason="B-226: origen + esquina opuesta deja el rectángulo con alto cero")
 def test_b226_origen_con_la_esquina_opuesta_resuelve():
     b, esquinas, _ = _rectangulo_con_diagonal()
     b.agregar_restriccion("coincidente", [Boceto.ORIGEN, esquinas[2]])
     assert resolver(b).ok
     assert b.coords(esquinas[2]) == pytest.approx((0.0, 0.0), abs=1e-6)
+    (x0, y0), (x2, y2) = b.coords(esquinas[0]), b.coords(esquinas[2])
+    assert x2 - x0 > 1e-6 and y2 - y0 > 1e-6
+
+
+def test_coincidente_con_otro_punto_fijo_conserva_una_linea_oblicua(monkeypatch):
+    """Ni origen ni rectángulo; miles de curvas sueltas no entran a la búsqueda alternativa."""
+    import scipy.optimize
+    b = Boceto()
+    linea = b.agregar_linea((-120, 0), (-55, 50))
+    a, c = b.curvas[linea].p1, b.curvas[linea].p2
+    fijo = b.agregar_punto(-120, 0)
+    b.agregar_restriccion("fijo", [fijo])
+    direccion = b.agregar_linea((100, 100), (165, 150))
+    b.agregar_restriccion("fijo", [direccion])
+    b.agregar_restriccion("paralela", [linea, direccion])
+    b.agregar_restriccion("coincidente", [c, fijo])
+    for i in range(3000):
+        b.agregar_linea((i, 100), (i + 1, 101))
+    numerico, tamanos = scipy.optimize.least_squares, []
+
+    def contar(fun, inicio, **opciones):
+        tamanos.append(len(inicio))
+        return numerico(fun, inicio, **opciones)
+
+    monkeypatch.setattr(scipy.optimize, "least_squares", contar)
+    assert resolver(b).ok
+    assert b.coords(c) == pytest.approx((-120, 0), abs=1e-6)
+    assert b.coords(a) == pytest.approx((-185, -50), abs=1e-6)
+    assert tamanos == [4, 4, 2]  # dos corridas normales y una traslación, independientemente de las 3000 curvas
+
+
+@pytest.mark.parametrize("caso", ["esquina fija", "fusion", "coincidencias incompatibles"])
+def test_la_alternativa_no_oculta_un_conflicto_real(caso):
+    b, esquinas, _ = _rectangulo_con_diagonal()
+    b.agregar_restriccion("coincidente", [Boceto.ORIGEN, esquinas[2]])
+    if caso == "esquina fija":
+        b.agregar_restriccion("fijo", [esquinas[0]])
+    elif caso == "fusion":
+        # La altura cero exige el colapso: trasladar la figura no lo puede resolver.
+        b.agregar_restriccion("horizontal", [esquinas[0], esquinas[2]])
+    else:
+        for y in (-10, 10):
+            fijo = b.agregar_punto(0, y)
+            b.agregar_restriccion("fijo", [fijo])
+            b.agregar_restriccion("coincidente", [esquinas[2], fijo])
+    assert not resolver(b).ok
