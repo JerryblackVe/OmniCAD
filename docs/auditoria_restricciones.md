@@ -517,7 +517,7 @@ verdes y uno `xfail` estricto (B-231). Lo que queda abierto tiene su fila en `do
       - `tests_afectados.py` elige 363 de 385 archivos, así que corresponde la suite completa.
       - La prueba de humo.
       - Las piezas `restricciones_boceto`, `auditoria_boceto`, `simetria_boceto`, `inferencias`, `boceto_cotas` y
-        `boceto_herramientas`, en `prueba_nocturna_2026-10-31.md` § 3u.
+        `boceto_herramientas`: corrieron en el cierre del 2026-11-07, sin ✗ (`evidencias/cierre_2026-11-07/`).
 11. **Rendimiento:** 300 rectángulos con cota tardan 0,778 s en `main` y 0,769 s en la rama, igual que antes. En el peor
     caso, con los 300 grupos moviéndose, pasa de 0,924 s a 1,108 s (+20 %), anotado con un comentario `shortcut:` en
     `_preferir_traslacion`.

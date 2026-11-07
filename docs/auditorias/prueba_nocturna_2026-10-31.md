@@ -398,31 +398,16 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 
 - Tandas 1 a 4 commiteadas en `main` (`799d6f6`, `7e95678`, `64a79f0`, `ba26cc0`). Cierre completo del 2026-11-06 sobre `ba26cc0`: ruff limpio, suite verde (`parte_04` rehecha en dos mitades por el tope de 900 s; un rojo por falta de memoria de OpenBLAS pasó solo), humo OK, piezas con foco OK. La pieza `solido_crear` daba ✗ en «extruir simétrico» por el defecto nuevo de H-86: la prueba ahora pide «mitad» explícito. Falta: la tanda 5 (H-99, H-94) y las cuatro piezas con `--ventana visible`.
 
-## 3t. Tarea nueva: velocidad de pruebas, paquetes A y D (2026-11-06)
+## 3t. Velocidad de pruebas (2026-11-06): lo que queda
 
-- **A (P-59):** el cierre ahora pasa `--durations=0 --junitxml` a cada tanda y corre `scripts/tiempos.py`. Falta: que el
-  cierre completo deje `evidencias/tiempos.json` con la suite entera (11 xml: 10 tandas + motor) y su ranking en
-  `tiempos.txt`; que ninguna tanda pase los 900 s por el `--durations=0`.
-- **D (P-60, en main):** el humo corre con la ventana transparente, sin mover el cursor real ni tomar el foco; el
-  cierre lo lanza sin esperar ocio. Verificado minimizado (5 corridas TODO OK, 0 robos de foco, con Gerardo usando la PC).
-  Falta: el humo en modo `visible` (`OmniCAD.py --prueba-humo` sin la variable, con la PC quieta) y `test_motor`
-  (abre el humo) en su corrida aparte. El atajo S del humo solo se ejercita en visible.
+- **Cierre del 2026-11-07 (07:27–09:14, de día con la PC en uso, `-n 2`):** A listo (ranking de 9628 tests en `evidencias/tiempos.json`, ninguna tanda pasó los 900 s: la más larga 433 s); E listo (52 piezas con `--paralelo 2` en 34 min, contra 94 en serie; todas las ✗ tienen fila); humo minimizado y `test_motor` OK.
+- **D (P-60):** falta el humo en modo `visible` (`OmniCAD.py --prueba-humo` sin la variable, con la PC quieta); el atajo S del humo solo se ejercita ahí.
+- **B (P-63):** con `-n 2` la suite dio 1 rojo que pasa solo (B-238) y tardó ~62 min porque compartió la fila de `turno.py` con otra sesión; la memoria libre bajó a 291 MB con la PC en uso. Falta la primera noche con `-n 4` (solo con ≥6 GB libres y nada más corriendo) y medir el pico. Hasta dos noches seguidas en verde, la serie queda con `bash scripts/cierre_completo.sh --serie`.
 
-- **E (P-65):** las 51 piezas con `todo.py --paralelo 2` (y 3 si el pico y la placa aguantan): mismas ✗ que en serie y en menos de 40 min. Además, los tests afectados por `scripts/prueba_ui/arnes.py` y `todo.py` que no se corrieron de día (la fila de `turno.py` estaba ocupada por la auditoría de restricciones).
-- **B (P-63):** primera suite completa en paralelo (`-n 4 --dist loadfile`): comparar contra la serie de `cierre_2026-11-06` (mismos verdes) y medir el pico de memoria. Hasta dos noches seguidas en verde, la serie queda con `bash scripts/cierre_completo.sh --serie`.
+## 3v. Auditoría de CREAR y MODIFICAR del boceto (2026-11-06, arrancó el 2026-11-07)
 
-## 3u. Tarea nueva: auditoría y corrección de todas las restricciones del boceto (2026-11-06)
-
-- Pedido: `docs/auditoria_restricciones.md` (B-223, Coincidente con el origen). Trae tests del solver y de cada restricción, y piezas de ventana nuevas de restricciones.
-- Para esta noche: correr las piezas `restricciones_boceto`, `auditoria_boceto`, `simetria_boceto` e `inferencias` y las piezas nuevas que sume la auditoría; la suite completa cubre los tests nuevos.
-- **Hecho de día (2026-11-06), falta de noche:** B-223 a B-228 cambiaron `ui/editor_boceto.py` (origen elegible, sin `_ordenar`), `restricciones/boceto.py` (orden canónico, ángulo 0…180, distancia entre no paralelas) y `restricciones/solver.py` (`_preferir_traslacion`). De día corrieron solo los tests que tocan restricciones y solver (≈ 2000 verdes por ítem; detalle en el Registro de `PROJECT_LOG.md`). `scripts/tests_afectados.py` elige 363 de 385 archivos: la suite completa los cubre. Falta además la prueba de humo y las piezas `restricciones_boceto`, `auditoria_boceto`, `simetria_boceto`, `inferencias`, `boceto_cotas` y `boceto_herramientas` (la ventana nunca se probó entera con el origen elegible y la cota de ángulo nueva). Ojo con `tmp_path`: si algo falla por `FileNotFoundError` en la carpeta temporal, repetirlo solo.
-- **Fase E cerrada (2026-11-07):** `tests/test_restricciones_escenarios.py` (19 verdes y B-231 en `xfail` estricto) es solo tests, sin código del programa: de noche lo cubre la suite completa. La auditoría quedó COMPLETA; lo abierto vive en H-106 y B-231.
-
-## 3v. Tarea nueva: auditoría de CREAR y MODIFICAR del boceto (2026-11-06, arrancó el 2026-11-07)
-
-- Pedido: `docs/auditoria_boceto_crear_modificar.md`. Arrancó al cerrar la de restricciones (3u): fase 1, inventario (brief cm-1).
-- **Fase 1 cerrada (2026-11-07):** `tests/test_boceto_crear_modificar_matriz.py` (48 verdes, 5 xfail de B-232 a B-235) y una sola línea de la interfaz: el texto muerto «Helix / Spiral» → «Espiral» en `ui/cinta_boceto.py` (la cinta ya mostraba «Espiral»). De noche: la suite completa los cubre; nada de esta fase se probó todavía desde la ventana (fase 6: un comando por pieza de `scripts/prueba_ui/`).
-- **Arreglos de la noche del 2026-11-07 (B-232 a B-235):** tocaron `restricciones/boceto.py` (escalar, transformar, recortar, empalme, chaflán, espiral), `ui/editor_boceto.py` (chaflán) y `api/herramientas_boceto*.py`. De día pasaron `tests_afectados.py --correr` (20/20 grupos en cada ítem). Falta de noche: la prueba de humo y las piezas `boceto_herramientas`, `auditoria_boceto` y `boceto_cotas` (chaflán con parámetros, escalar y mover con chaflán, recortar con un «fijo»). B-236 y B-237 (también `tests_afectados` 20/20): falta ver en la ventana copiar un chaflán (Mover con Copiar) y que Alargar un extremo fijo muestre «El extremo es fijo: quitale «Fijo» antes de alargarlo.» sin tocar nada. Va a sumar piezas de ventana por comando de CREAR y MODIFICAR.
+- Pedido: `docs/auditoria_boceto_crear_modificar.md`. El cierre del 2026-11-07 (HEAD 8cf46ca) cubrió la fase 1 y B-232 a B-236: suite verde y piezas `boceto_herramientas`, `auditoria_boceto`, `boceto_cotas`, `restricciones_boceto`, `simetria_boceto` e `inferencias` sin ✗.
+- **Falta:** B-237 (f5a8e13, después del cierre) en la suite; ver en la ventana copiar un chaflán (Mover con Copiar) y que Alargar un extremo fijo muestre «El extremo es fijo: quitale «Fijo» antes de alargarlo.» sin tocar nada; y la fase 6 de la auditoría (una pieza de ventana por comando de CREAR y MODIFICAR).
 
 ## 4. Cosas que ninguna prueba cubre todavía
 

@@ -46,7 +46,7 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
   de memoria medido queda por debajo de 8 GB.
 - Ejecutor: CodeBuddy hy3; Opus revisa los tests que fallen solo en paralelo (son bugs de test: archivos o ajustes
   compartidos; se arreglan con `tmp_path`, nunca salteando el test).
-- Hecho (2026-11-06, P-63): Sol en OpenCode (se le acabaron los 25 min antes de medir; midió el coordinador). Medido de día con 22 archivos (1079 tests): serie 1167 s, 3 rojos por `MemoryError` del tope de 3000 MB de `turno.py`; `-n 2` 526 s, todo verde, pico de 3,5 GB en total. `-n 4` sin medir: de día había de 1 a 4 GB libres y la PC se colgó una vez (no durante esta prueba). Tope que aguanta esta PC: se mide la primera noche; si pasa 8 GB, `-n 3`.
+- Hecho (2026-11-06, P-63): Sol en OpenCode (se le acabaron los 25 min antes de medir; midió el coordinador). Medido de día con 22 archivos (1079 tests): serie 1167 s, 3 rojos por `MemoryError` del tope de 3000 MB de `turno.py`; `-n 2` 526 s, todo verde, pico de 3,5 GB en total. `-n 4` sin medir: de día había de 1 a 4 GB libres y la PC se colgó una vez (no durante esta prueba). Tope que aguanta esta PC: se mide la primera noche; si pasa 8 GB, `-n 3`. Cierre del 2026-11-07, de día y con `-n 2`: ~62 min compartiendo la fila de `turno.py` con otra sesión, 1 rojo por carga (B-238) y la memoria libre bajó a 291 MB: `-n 4` sigue sin medir, solo de noche con la PC libre.
 
 ### C. Correr solo lo afectado durante el día
 - Qué: `scripts/tests_afectados.py`: de `git diff` saca los módulos tocados, y por el grafo de imports (sin instalar
@@ -71,7 +71,7 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
   Empieza con 2 y sube a 3 si el pico de memoria y la placa de video integrada aguantan.
 - Listo cuando: las 51 piezas dan las mismas ✗ que en serie, en menos de 40 min.
 - Ejecutor: CodeBuddy hy3.
-- Hecho (2026-11-06, P-65): `todo.py --paralelo N`. Lo empezó GLM 5.3 (sin créditos) y lo terminó Sol. Medido de día con 4 piezas (auditoria_undo, paneles_inventario, booleana_unir, cinta_completa; 984 comprobaciones, 0 ✗ en los dos modos): serie 316 s, `--paralelo 2` 238 s (25 % menos), picos de 1,8 y 2,2 GB. Las 51 en paralelo van de noche.
+- Hecho (2026-11-06, P-65): `todo.py --paralelo N`. Lo empezó GLM 5.3 (sin créditos) y lo terminó Sol. Medido de día con 4 piezas (auditoria_undo, paneles_inventario, booleana_unir, cinta_completa; 984 comprobaciones, 0 ✗ en los dos modos): serie 316 s, `--paralelo 2` 238 s (25 % menos), picos de 1,8 y 2,2 GB. Cierre del 2026-11-07: las 52 piezas con `--paralelo 2` en 34 min (serie: 94 min), meta cumplida.
 
 ### F. Acelerar los tests más lentos
 - Qué: con el ranking de A, los 30 más lentos: la ventana y las piezas base se crean una vez por archivo
