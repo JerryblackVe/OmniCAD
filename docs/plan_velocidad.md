@@ -102,3 +102,30 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
 - **La selección por impacto se puede saltear un test.** La suite entera sigue corriendo en cada cierre: es la red.
 - **Placa de video integrada** con varias ventanas OpenGL a la vez: se empieza con 2 piezas en paralelo.
 - **Acelerar un test sin cambiar qué prueba**: todo cambio de fixture lo revisa Opus contra el diff de aserciones.
+
+## Prompt para el agente
+
+Entregado el 2026-11-06 (paquete E). Modelo sugerido: GLM en CodeBuddy, esfuerzo por defecto (`codebuddy -p --permission-mode bypassPermissions --model glm-5.3`), en el worktree `D:/PROGRAMA-velE` con `timeout 1500`; revisa, commitea y fusiona el coordinador.
+
+```text
+ANTES DE NADA: cargá y seguí las skills `fable-method` y `ponytail` (y `plan-then-do`, `tool-calling-guard`, `verify-before-commit`, `omnicad-test`). Al terminar, corré `ponytail-review` sobre el cambio y pegá su salida real. Si no tenés las skills, seguí estas reglas igual: el cambio más chico que resuelve TODO lo pedido, sin opciones ni abstracciones que nadie pidió; leé cada archivo antes de editarlo; nunca digas "listo" sin pegar la salida real de los comandos de verificación.
+
+Paquete E de `docs/plan_velocidad.md` (OmniCAD): las piezas de ventana de `scripts/prueba_ui` en paralelo. Leé esa sección del plan, `scripts/prueba_ui/todo.py` (81 líneas), `scripts/turno.py` (sobre todo `OMNICAD_TURNOS`, que da varios lugares a la vez) y cómo `scripts/prueba_ui/arnes.py` arma los nombres de las capturas y los registros.
+
+DÓNDE: SOLO en `D:/PROGRAMA-velE` (rama `velocidad-E`). Python: `/d/PROGRAMA/clon/.venv/Scripts/python.exe`; desde `D:/PROGRAMA-velE/clon` importa el código del worktree. No instales nada. No hagas commit ni push. Todo en español. Archivos: `scripts/prueba_ui/todo.py`, lo mínimo de `scripts/prueba_ui/arnes.py` si dos piezas a la vez pisan el mismo archivo, y un test nuevo `clon/tests/test_todo_paralelo.py`. NO toques `docs/`, `AGENTS.md` ni `CLAUDE.md`. Otra sesión corre tests con `turno.py` en esta PC: no cortes procesos que no lanzaste vos.
+
+QUÉ HACER:
+1. `todo.py --paralelo N` (por defecto 1, como hoy): corre hasta N piezas a la vez, cada una en su ventana minimizada (transparente y sin foco, el modo por defecto), con `turno.py` dándole N lugares (`OMNICAD_TURNOS=N` para los hijos). Sin `--paralelo`, todo queda exactamente como hoy.
+2. Las más largas primero: al terminar, `todo.py` guarda los segundos de cada pieza en `SALIDA/tiempos_piezas.json` y, si existe el de una corrida anterior (el más nuevo de `evidencias/ui_*/tiempos_piezas.json`), ordena las piezas de mayor a menor. Una pieza sin dato va al final.
+3. El resumen sale en el orden de `PIEZAS` (o el de los nombres pedidos), con las mismas líneas de hoy, aunque terminen desordenadas. Las piezas de `PIEZAS_CON_FOCO_REAL` siguen salteándose en minimizada con su ⚠.
+4. Que dos piezas a la vez no pisen el mismo archivo de `SALIDA` (logs, `*.json`, capturas). Si hoy pueden chocar, arreglalo con el nombre de la pieza en el archivo.
+5. `clon/tests/test_todo_paralelo.py`: sin abrir ventanas, con piezas falsas (scripts chicos en `tmp_path` que imprimen `=== N comprobaciones, M con` y duermen un poco), comprobá: con `--paralelo 2` corren dos a la vez, el resumen sale en orden, se escribe `tiempos_piezas.json` y la corrida siguiente arranca por la más larga. Si para eso hace falta pasarle a `todo.py` otra carpeta de piezas o de salida, usá variables de entorno que ya existan (`OMNICAD_PRUEBA_SALIDA`) o la mínima nueva. Tiene que pasar con `-W error`.
+
+VERIFICACIÓN (pegá la salida real):
+- Desde `D:/PROGRAMA-velE/clon`: `/d/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check . ../scripts/prueba_ui/todo.py` y `/d/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/tests_afectados.py --correr`.
+- ANTES de las piezas reales, mirá la memoria libre (`powershell -NoProfile -Command "[int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1024)"`). Con menos de 5000 MB, esperá hasta 10 min mirando cada minuto; si no sube, corré igual con `--paralelo 2` y decilo.
+- Elegí 4 piezas CORTAS de `PIEZAS` (mirá el tamaño de sus scripts) y corrélas desde `D:/PROGRAMA-velE/clon`: primero en serie (`../scripts/prueba_ui/todo.py a b c d`) y después con `--paralelo 2`, de a una corrida. Pegá el tiempo de pared de cada una, los dos resúmenes (tienen que dar las mismas ✗) y el pico de memoria de todos los python, muestreando cada 2 s (por ejemplo `(Get-Process python* | Measure-Object WorkingSet64 -Sum).Sum` en un bucle).
+- NO corras las 51 piezas: van a la corrida nocturna.
+
+INFORME FINAL (corto): qué cambiaste, las 4 piezas, los dos tiempos, los dos resúmenes, el pico de memoria, la salida de `ponytail-review` y lo que no pudiste verificar (con ⚠).
+```
