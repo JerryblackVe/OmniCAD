@@ -65,7 +65,7 @@ Qué hace MODIFICAR con las restricciones de la curva original (leído en el có
   extremo que se va queda en un punto suelto (B-233, reproducido).
 - **Empalme** línea-línea re-apunta las cotas de largo a un «vértice virtual»; en paralelas y en el caso general las borra.
 - **Desfase** no toca la original; **Soltar desfase** borra el desfase, la paralela y la cota del par.
-- El editor avisa «Las restricciones o las cotas se han eliminado…» si desaparece un id; el MCP no avisa (P-68).
+- El editor avisa «Las restricciones o las cotas se han eliminado…» si desaparece un id; el MCP informa los ids ordenados en `constraints_deleted` y `dimensions_deleted` cuando hay borrados (P-68 corregido).
 
 ## 3. Fusion contra OmniCAD (opciones del diálogo)
 
@@ -90,7 +90,7 @@ recortar, alargar, partir y escala. Diferencias:
 | 2 | Recortar una línea cuyo extremo tenía «fijo»: la línea termina en un punto nuevo y el «fijo» queda en el punto viejo, suelto | `test_b233_…` | CORREGIDO (B-233, 2026-11-07); gemelo en Alargar: B-237 |
 | 3 | `puntos_espiral` acepta 5000 vueltas (40 001 puntos); el tope de 24,875 vueltas está solo en `draw_spiral`: desde la ventana se puede colgar | `test_b234_…` | CORREGIDO (B-234, 2026-11-07) |
 | 4 | `sketch_chamfer(angle="ang")` guarda la cota de ángulo como «30»: pierde el parámetro (la distancia sí conserva la expresión) | `test_b235_…` | CORREGIDO (B-235, 2026-11-07) |
-| 5 | El MCP borra restricciones y cotas sin decirlo (empalme, chaflán, recortar, mover con giro) y no revierte cuando la edición sobre-restringe (solo `extend_sketch_curve` y `split_sketch_curve` usan `_exigir_sin_conflicto`) | lectura: `herramientas_boceto.py:597-614`, `herramientas_boceto_extra.py:55` | P-68 |
+| 5 | El MCP borra restricciones y cotas sin decirlo y no revierte cuando la edición sobre-restringe | `test_p68_modificar_informa_lo_borrado` y `test_p68_modificar_revierte_si_deja_el_boceto_en_conflicto`, en la matriz | CORREGIDO (P-68, 2026-11-07): informe de borrados y validación compartida en las siete herramientas de MODIFICAR |
 | 6 | Tres caminos del MCP para alargar y partir con validaciones distintas (`trim_sketch_curve mode=extend/break` no comprueba el punto ni el conflicto) | lectura: `herramientas_boceto_extra.py:40-55` | CORREGIDO (P-69, 2026-11-07): los dos modos llaman a `_editar_curva` |
 | 7 | Lógica repetida entre la ventana y la API: polígono (ED:1659 / HB:445), arco tangente (ED:1635 / HB:380), círculo 2p/3p; tope de lados en dos lugares | lectura | P-70 |
 | 8 | `tests/test_cobertura_ui_api.py` asocia `sk_proyectar_eje` a `project_spun_profile`, que exige un perfil; lo que hace el botón es `project_to_sketch(references=["Z"])` | lectura: `test_cobertura_ui_api.py:143` | P-70 |

@@ -608,9 +608,12 @@ def _informe_edicion(sesion, op, b, antes):
              for kid, k in b.cotas.items() if kid not in antes["cotas"]]
     if cotas:
         informe["dimensions"] = cotas
-    borradas = sorted(antes["curvas"] - set(b.curvas))
-    if borradas:
-        informe["entities_deleted"] = borradas
+    for clave, actuales, salida in (("curvas", b.curvas, "entities_deleted"),
+                                   ("restricciones", b.restricciones, "constraints_deleted"),
+                                   ("cotas", b.cotas, "dimensions_deleted")):
+        borradas = sorted(antes[clave] - set(actuales))
+        if borradas:
+            informe[salida] = borradas
     return informe
 
 
@@ -723,12 +726,17 @@ def soltar_parametros_texto(doc, antes, boceto):
         doc.aplicar_parametros(tabla)
 
 
-def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False, construccion=False, central=False):
+def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False, construccion=False, central=False,
+             sin_conflicto: str | None = None):
     """Edita el boceto con `constructor(boceto)` sobre una copia y la reemplaza en el timeline (un paso). Con
-    `desde_solver`, la copia parte de la geometría resuelta (ver `_sincronizar_con_solver`)."""
+    `desde_solver`, la copia parte de la geometría resuelta (ver `_sincronizar_con_solver`).
+    `sin_conflicto` nombra la edición que se rechaza si deja en conflicto un boceto antes válido."""
     if construccion and central:
         raise error("INVALID_ARGUMENTS", "construction y centerline no pueden ser true a la vez.")
     op = op_boceto(sesion, ref)
+    if sin_conflicto is not None:
+        previo = boceto_resuelto(sesion, op)
+        previo_ok = previo is not None and previo.solver.ok
     nueva = op.copia()
     b = nueva.boceto
     actualizar_alturas_texto(b, sesion.doc.estado_final.bocetos.get(op.id))
@@ -747,6 +755,8 @@ def _dibujar(sesion, ref, constructor, desde_solver=False, anclar=False, constru
         raise error("INVALID_GEOMETRY", str(e)) from e
     sincronizar_alturas_texto(sesion.doc, b)
     sesion.doc.reemplazar(op.id, nueva)
+    if sin_conflicto is not None:
+        _exigir_sin_conflicto(sesion, nueva, previo_ok, sin_conflicto)
     soltar_parametros_texto(sesion.doc, textos, b)
     return _informe_edicion(sesion, nueva, b, antes)
 
@@ -2248,7 +2258,7 @@ def draw_blend_curve(sesion, entity1: int, entity2: int, point1: list[float] | N
             raise ErrorBoceto("La curva de fusión une extremos de curvas abiertas (no círculos, elipses ni textos).")
         a, c = min(((a, c) for a in e1 for c in e2), key=lambda par: math.dist(b.coords(par[0]), b.coords(par[1])))
         b.curva_fusion(entity1, p1 or b.coords(a), entity2, p2 or b.coords(c), continuity)
-    return _dibujar(sesion, sketch, crear, desde_solver=True)
+    return _dibujar(sesion, sketch, crear, desde_solver=True, sin_conflicto="La curva de fusión")
 
 
 # ---------------------------------------------------------------- modificar: empalme, chaflán, recortar, desfase
@@ -2281,7 +2291,7 @@ def sketch_fillet(sesion, entity1: int, entity2: int, radius: Expr, point1: list
         if not math.isclose(radio_final, valor, rel_tol=1e-9, abs_tol=1e-9):
             sesion.avisar(f"Entre líneas paralelas el radio es la mitad de su separación: {radio_final:g} mm; "
                          "se ignoró el radio pedido.")
-    return _dibujar(sesion, sketch, empalmar, desde_solver=True)
+    return _dibujar(sesion, sketch, empalmar, desde_solver=True, sin_conflicto="El empalme")
 
 
 @herramienta("sketch_chamfer", "boceto",
@@ -2320,7 +2330,7 @@ def sketch_chamfer(sesion, line1: int, line2: int, distance: Expr, distance2: Ex
         if line1 == line2:
             raise ErrorBoceto("Elegí dos líneas distintas.")
         b.chaflan(line1, line2, d1, d2, ang, p1, p2, expresion, expr2 or expr_ang)
-    return _dibujar(sesion, sketch, chaflan, desde_solver=True)
+    return _dibujar(sesion, sketch, chaflan, desde_solver=True, sin_conflicto="El chaflán")
 
 
 @herramienta("trim_sketch_curve", "boceto",
@@ -2352,7 +2362,7 @@ def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["tr
     def modificar(b):
         _curva(b, entity)
         hecho["queda"] = b.recortar(entity, (x, y))
-    r = _dibujar(sesion, sketch, modificar, desde_solver=True)
+    r = _dibujar(sesion, sketch, modificar, desde_solver=True, sin_conflicto="El recorte")
     r["mode"] = mode
     r["deleted"] = hecho["queda"] is None
     return r
@@ -2440,7 +2450,7 @@ def offset_sketch_curves(sesion, distance: Expr, entity: int | None = None, side
                                          topologia=match_topology, cadena=chain, elipse=elipse)
         for aviso in avisos:
             sesion.avisar(aviso)
-    return _dibujar(sesion, sketch, desfasar, desde_solver=True)
+    return _dibujar(sesion, sketch, desfasar, desde_solver=True, sin_conflicto="El desfase")
 
 
 @herramienta("release_offset", "boceto",
@@ -2456,7 +2466,7 @@ def release_offset(sesion, entity: int, keep_dimension: bool = False, sketch: st
     def soltar(b):
         _curva(b, entity)
         b.soltar_desfase(entity, keep_dimension)
-    return _dibujar(sesion, sketch, soltar, desde_solver=True)
+    return _dibujar(sesion, sketch, soltar, desde_solver=True, sin_conflicto="Soltar el desfase")
 
 
 @herramienta("edit_sketch_spline", "boceto",

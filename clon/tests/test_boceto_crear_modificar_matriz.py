@@ -551,3 +551,45 @@ def test_p69_trim_extend_y_break_validan_como_las_otras_herramientas():
     assert r_trim["ok"] and r_ext["ok"]
     assert r_trim["result"]["mode"] == "extend"
     assert _ents(s_trim) == _ents(s_ext)
+
+
+@pytest.mark.parametrize("herramienta", ["trim_sketch_curve", "sketch_fillet"])
+def test_p68_modificar_informa_lo_borrado(herramienta):
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    r = L(s, "draw_line", start_x=1, start_y=0, end_x=21, end_y=0)
+    assert not {"entities_deleted", "constraints_deleted", "dimensions_deleted"} & r.keys()
+    linea_id, extremo = r["entities"][0]["id"], r["points"][1]
+    otra = _ids(L(s, "draw_line", start_x=11, start_y=-10, end_x=11, end_y=10))[0]
+    L(s, "add_constraint", type="fix", entities=[extremo])
+    L(s, "add_dimension", type="distance", entities=r["points"], value=20)
+    antes = L(s, "get_sketch")
+    if herramienta == "trim_sketch_curve":
+        r = L(s, herramienta, entity=linea_id, x=16, y=0)
+    else:
+        r = L(s, herramienta, entity1=linea_id, entity2=otra, radius=2, point1=[3, 0], point2=[11, 8])
+    despues = L(s, "get_sketch")
+    for clave in ("constraints", "dimensions"):
+        borradas = sorted({e["id"] for e in antes[clave]} - {e["id"] for e in despues[clave]})
+        assert borradas, (clave, antes, despues)
+        assert r[f"{clave}_deleted"] == borradas
+    assert "entities_deleted" not in r
+
+
+def test_p68_modificar_revierte_si_deja_el_boceto_en_conflicto():
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    lados = [_ids(L(s, "draw_line", start_x=x1, start_y=y1, end_x=x2, end_y=y2))[0]
+             for x1, y1, x2, y2 in ((1, 1, 4, 1), (4, 1, 4, 5), (4, 5, 1, 1))]
+    for lado, largo in zip(lados, (3, 4, 5), strict=True):
+        cota = L(s, "add_dimension", type="distance", entities=[lado], value=largo)
+        assert not cota["dimension"]["reference"]
+    antes = L(s, "get_sketch")
+    assert antes["status"] != "over_constrained"
+    receta = _ok(api.llamar(s, "get_recipe", {}))
+    r = api.llamar(s, "transform_sketch", {"sketch": "B", "entities": [lados[0]], "scale": 4,
+                                           "center_x": 1, "center_y": 1})
+    assert not r["ok"], r
+    assert r["error_kind"] == "SKETCH_OVERCONSTRAINED", r
+    assert L(s, "get_sketch") == antes
+    assert _ok(api.llamar(s, "get_recipe", {})) == receta

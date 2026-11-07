@@ -955,7 +955,7 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
         if angle or dx or dy:
             b.transformar(ids, dx=dx, dy=dy, angulo=angle, centro=(cx, cy))
         _exigir_tamano(b)
-    r = _dibujar(sesion, sketch, cambiar)
+    r = _dibujar(sesion, sketch, cambiar, sin_conflicto="Mover")
     for a in avisos:
         sesion.avisar(a)
     return r
