@@ -1426,14 +1426,12 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
              "vertical: una línea o dos puntos; parallel, perpendicular, collinear y equal: dos líneas (equal también "
              "dos círculos/arcos o dos elipses/arcos de elipse); coincident: un punto y otro punto o una curva; "
              "midpoint: un punto y una línea o arco; tangent: dos curvas geométricas, salvo dos líneas; "
-             "concentric: dos curvas con centro (círculo, arco, elipse o arco de elipse); "
-             "curvature: dos curvas encadenadas (línea, arco, arco de elipse, spline o cónica), al menos una spline o "
-             "cónica; fix: una o más entidades; symmetry: dos entidades y la línea eje; "
-             "polygon: al menos tres líneas que comparten vértices y forman una cadena cerrada, o un solo lado "
-             "para tomar automáticamente su cadena cerrada de líneas. Referencias reservadas: origen 0, eje X -1, "
-             "eje Y -2 (origin/axes de get_sketch). Repetir fix sobre las mismas entidades devuelve el fix existente. "
-             "Al agregar una tangente, el primer arco o círculo no se mueve y ningún radio de arco ni el largo de la "
-             "línea cambian; si la otra curva no puede moverse, se mueve el arco entero.",
+             "concentric: dos curvas con centro; curvature: dos curvas encadenadas, al menos una spline o cónica; "
+             "fix: una o más entidades; symmetry: dos entidades y la línea eje; polygon: tres o más líneas en cadena "
+             "cerrada, o un solo lado (toma su cadena). Referencias reservadas: origen 0, eje X -1, "
+             "eje Y -2 (origin/axes de get_sketch). Un fix repetido devuelve el existente. Con tangent, el primer arco o "
+             "círculo queda quieto y no cambian radios ni largos; si la otra curva no puede moverse, se mueve el arco "
+             "entero.",
              modifica=True)
 def add_constraint(sesion, sketch: str,
                    type: Literal["coincident", "horizontal", "vertical", "parallel", "perpendicular", "equal",  # noqa: A002
@@ -1552,8 +1550,8 @@ def _exigir_entidades(b, ids):
              "lineal (distance, horizontal o vertical de una línea o de dos puntos), `offset` y `text_offset` fijan "
              "dónde se dibuja: no cambian el valor ni la geometría; `position` [x, y] (mm) hace lo mismo que arrastrar la "
              "cota con el ratón y vale en todas: en las lineales fija offset y text_offset, en un ángulo el radio del "
-             "arco, en un radio o diámetro hacia dónde sale la línea y en las demás dónde va el texto. Referencias fijas reservadas: origen 0, eje X -1 "
-             "y eje Y -2 (origin/axes de get_sketch). Cada cota recibe un name dN único en el documento, "
+             "arco, en un radio o diámetro hacia dónde sale la línea y en las demás dónde va el texto. Origen 0, eje X -1, "
+             "eje Y -2. Cada cota recibe un name dN único en el documento, "
              "visible en get_parameters y citable en expresiones de otras cotas, parámetros y operaciones. "
              "reference=true crea una cota de referencia: mide sin restringir e ignora value. Una cota driving "
              "redundante o en conflicto se crea como referencia con aviso y converted_to_reference=true. En angle, "
