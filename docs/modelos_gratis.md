@@ -9,8 +9,8 @@ y cuáles sirven para el proyecto. Las promos gratis cambian cada semana: **ante
 
 | Modelo | Dónde | ¿Responde hoy? | Calidad medida en OmniCAD | ¿Sirve? |
 |---|---|---|---|---|
-| GLM 5.3 Flash | OpenCode `opencode/glm-5.3-flash-free` | No: se cuelga en la cabecera (cupo gratis agotado) | La mejor de los gratis: 1 corrección menor en 4 tareas difíciles (asas) | **Sí, para lógica y ventana**, cuando vuelva el cupo |
-| DeepSeek V4.1 Flash | OpenCode `opencode/deepseek-v4.1-flash-free` | No: se cuelga en la cabecera | 4 correcciones en 16 ítems; bien para lo mecánico y para confirmar reportes | **Sí, para lo mecánico**, cuando vuelva el cupo |
+| GLM 5.3 Flash | OpenCode `opencode/glm-5.3-flash-free` | **Sí en la ventana interactiva de OpenCode** (Gerardo, 2026-11-07); en `opencode run` (modo automático) devuelve «Free usage limit reached… Free models work in OpenCode» y se cuelga reintentando | La mejor de los gratis: 1 corrección menor en 4 tareas difíciles (asas) | **Sí, para lógica y ventana**, cuando vuelva el cupo |
+| DeepSeek V4.1 Flash | OpenCode `opencode/deepseek-v4.1-flash-free` | Igual que GLM: sí en la ventana, no en `opencode run` | 4 correcciones en 16 ítems; bien para lo mecánico y para confirmar reportes | **Sí, para lo mecánico**, cuando vuelva el cupo |
 | Nemotron 3.5 Super VL | Cline `cline-free/nemotron-3.5-super-vl` · Kilo `kilo/nvidia/nemotron-3.5-super-vl:free` | Sí (9 s y 17 s) | Tareas chicas con tests verdes, pero no corre `ponytail-review` de verdad, deja scripts sueltos y entregó roto B-171 | **Solo tareas de pocas líneas**, revisadas por el coordinador |
 | Dots3-Note Preview | Kilo `kilo/dots-studio/dots-3-note-preview:free` | Sí (15 s) | Sin tareas en el proyecto | Sin probar: preview, puede desaparecer |
 | Kilo Auto (free) | Kilo `kilo/kilo-auto/free` | Sí (16 s) | Elige el modelo solo: no se sabe cuál corre | **No**: sin saber el modelo no se puede medir ni repetir |
@@ -47,6 +47,8 @@ y cuáles sirven para el proyecto. Las promos gratis cambian cada semana: **ante
 | OpenRouter `:free` | Ya hay clave; 50 pedidos por día sin créditos | **No** para agentes: una tarea usa decenas de pedidos |
 | Modelos locales (Ollama, Qwen 3.6 35B, gpt-oss-20b) con OpenHands, Aider, Goose | Piden 32 GB o más y placa de video | **No** en esta PC (13 GB, gráficos integrados) |
 | Frameworks (ADK, LangGraph, CrewAI, smolagents…) | No traen modelos: son para armar agentes propios | **No** aportan modelos gratis |
+
+**Ojo con los gratis de OpenCode Zen:** en `opencode run` (lo que usan las sesiones para lanzar agentes) el cupo gratis aparece agotado aunque en la ventana interactiva anden. Sirven para que Gerardo trabaje a mano en la ventana, no para tandas automáticas. No se busca darle la vuelta: es una regla del proveedor.
 
 **En resumen, hoy:** el mejor gratis que responde es **MiniMax M3.1 Flash por NVIDIA en OpenCode**
 (`nvidia/minimaxai/minimax-m3.1-flash`). Después, **Nemotron 3.5 Super VL** (Cline o Kilo), solo para tareas chicas. Los buenos (GLM y DeepSeek en OpenCode, CodeBuddy, Qwen en
