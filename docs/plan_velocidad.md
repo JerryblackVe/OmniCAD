@@ -71,6 +71,7 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
   Empieza con 2 y sube a 3 si el pico de memoria y la placa de video integrada aguantan.
 - Listo cuando: las 51 piezas dan las mismas ✗ que en serie, en menos de 40 min.
 - Ejecutor: CodeBuddy hy3.
+- Hecho (2026-11-06, P-65): `todo.py --paralelo N`. Lo empezó GLM 5.3 (sin créditos) y lo terminó Sol. Medido de día con 4 piezas (auditoria_undo, paneles_inventario, booleana_unir, cinta_completa; 984 comprobaciones, 0 ✗ en los dos modos): serie 316 s, `--paralelo 2` 238 s (25 % menos), picos de 1,8 y 2,2 GB. Las 51 en paralelo van de noche.
 
 ### F. Acelerar los tests más lentos
 - Qué: con el ranking de A, los 30 más lentos: la ventana y las piezas base se crean una vez por archivo
@@ -102,28 +103,3 @@ Fuente: `evidencias/cierre_2026-11-06/resumen.txt` y la hora de cada archivo de 
 - **La selección por impacto se puede saltear un test.** La suite entera sigue corriendo en cada cierre: es la red.
 - **Placa de video integrada** con varias ventanas OpenGL a la vez: se empieza con 2 piezas en paralelo.
 - **Acelerar un test sin cambiar qué prueba**: todo cambio de fixture lo revisa Opus contra el diff de aserciones.
-
-## Prompt para el agente
-
-Entregado el 2026-11-06 (paquete E, segunda vuelta: GLM lo dejó a medias sin créditos). Modelo sugerido: DeepSeek gratis en OpenCode, esfuerzo por defecto (`opencode run -m opencode/deepseek-v4.1-flash-free`), en el worktree `D:/PROGRAMA-velE` con `timeout 1500`; revisa, commitea y fusiona el coordinador.
-
-```text
-ANTES DE NADA: cargá y seguí las skills `fable-method` y `ponytail` (y `plan-then-do`, `tool-calling-guard`, `verify-before-commit`, `omnicad-test`). Al terminar, corré `ponytail-review` sobre el cambio y pegá su salida real. Si no tenés las skills, seguí estas reglas igual: el cambio más chico que resuelve TODO lo pedido; leé cada archivo antes de editarlo; nunca digas "listo" sin pegar la salida real de los comandos de verificación.
-
-Paquete E de `docs/plan_velocidad.md` (OmniCAD): las piezas de ventana de `scripts/prueba_ui` en paralelo con `todo.py --paralelo N`. Lo empezó otro agente (GLM), que se quedó sin créditos. Vos lo terminás y lo verificás.
-
-DÓNDE: SOLO en `D:/PROGRAMA-velE` (rama `velocidad-E`, commit dac4344). Python: `/d/PROGRAMA/clon/.venv/Scripts/python.exe`; desde `D:/PROGRAMA-velE/clon` importa el código del worktree. No instales nada. No hagas commit ni push. Todo en español. Archivos: `scripts/prueba_ui/todo.py`, `scripts/prueba_ui/arnes.py` y `clon/tests/test_todo_paralelo.py`; ningún otro. NO toques `docs/`, `AGENTS.md` ni `CLAUDE.md`. Otra sesión corre tests con `turno.py` en esta PC: no cortes procesos que no lanzaste vos.
-
-LO QUE DEJÓ GLM (sin probar; ruff con la configuración del proyecto da limpio):
-- `todo.py --paralelo N`: con N>1 corre las piezas en hilos (`ThreadPoolExecutor`), le pasa `OMNICAD_TURNOS=N` a `turno.py`, ordena por `tiempos_piezas.json` (el más nuevo de `evidencias/ui_*/`, la más larga primero), escribe `SALIDA/tiempos_piezas.json` e imprime el resumen en el orden pedido. Sin `--paralelo` queda como antes. `OMNICAD_PRUEBA_PIEZAS` apunta a otra carpeta de piezas (para el test).
-- `arnes.foto` ahora antepone el nombre de la pieza a la captura, para que dos piezas a la vez no pisen el mismo archivo.
-- `clon/tests/test_todo_paralelo.py` (100 líneas, con piezas falsas).
-
-LO QUE FALTA (LISTO CUANDO):
-1. `tiempos_piezas.json` se escribe también sin `--paralelo`, y se combina con los tiempos previos (`{**previos, **nuevos}`): si no, una corrida de 4 piezas borra el dato de las otras 47.
-2. Corré el test desde `D:/PROGRAMA-velE/clon` y arreglá lo que falle, sin saltear ni debilitar aserciones: `/d/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/turno.py -- /d/PROGRAMA/clon/.venv/Scripts/python.exe -m pytest tests/test_todo_paralelo.py -q -W error -p no:cacheprovider`. Sumale un caso para el punto 1.
-3. Ruff con la configuración del proyecto, desde `clon/`: `/d/PROGRAMA/clon/.venv/Scripts/python.exe -m ruff check . ../scripts/prueba_ui/todo.py ../scripts/prueba_ui/arnes.py`. Ojo: desde la raíz del repo, ruff usa otra configuración y marca errores viejos que no importan.
-4. Piezas reales. ANTES, mirá la memoria libre: `powershell -NoProfile -Command "[int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1024)"`. Elegí 4 piezas CORTAS de `PIEZAS` (por el tamaño de sus scripts; no `registro_uso`). Desde `D:/PROGRAMA-velE/clon`, de a una corrida: primero en serie `../scripts/prueba_ui/todo.py a b c d` y después `../scripts/prueba_ui/todo.py --paralelo 2 a b c d`. Si hay menos de 3000 MB libres, esperá hasta 10 min mirando cada minuto; si no sube, frená y decilo en vez de correr. Muestreá cada 2 s la memoria de todos los python (`(Get-Process python* | Measure-Object WorkingSet64 -Sum).Sum`) y guardá el pico. Pegá: el tiempo de pared de cada corrida, los dos resúmenes (tienen que dar las mismas ✗) y los dos picos. NO corras las 51 piezas.
-
-INFORME FINAL (corto): qué cambiaste, las 4 piezas, los dos tiempos, los dos resúmenes, los dos picos, la salida de `ponytail-review` y lo que no pudiste verificar (con ⚠).
-```
