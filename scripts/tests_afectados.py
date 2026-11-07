@@ -16,6 +16,9 @@ import tokenize
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
+# Una estimación prudente deja margen al tope de turno.py cuando faltan mediciones.
+SEGUNDOS_SIN_MEDIR = 30
+
 
 def _git(raiz, *argumentos):
     proceso = subprocess.run(["git", *argumentos], cwd=raiz, capture_output=True)
@@ -163,10 +166,10 @@ def seleccionar(raiz, desde="HEAD", hasta=None):
 
 
 def agrupar(tests, tiempos):
-    """Agrupa archivos ordenados en menos de 600 s estimados; sin medición usa 10 s, uno indivisible va solo."""
+    """Agrupa archivos ordenados en menos de 600 s estimados; sin medición usa 30 s, uno indivisible va solo."""
     grupos, grupo, total = [], [], 0.0
     for test in sorted(tests):
-        segundos = float(tiempos.get(test, 10))
+        segundos = float(tiempos.get(test, SEGUNDOS_SIN_MEDIR))
         if not math.isfinite(segundos) or segundos < 0:
             raise ValueError(f"Tiempo inválido para {test}: {segundos}")
         if grupo and total + segundos >= 600:
@@ -206,7 +209,7 @@ def main(argumentos=None):
         grupos = agrupar(tests, tiempos)
         fallos = 0
         for i, grupo in enumerate(grupos, 1):
-            estimado = sum(float(tiempos.get(t, 10)) for t in grupo)
+            estimado = sum(float(tiempos.get(t, SEGUNDOS_SIN_MEDIR)) for t in grupo)
             print(f"Grupo {i}/{len(grupos)}: {len(grupo)} archivos, {estimado:.1f} s estimados", flush=True)
             if estimado >= 600:
                 print("Aviso: un archivo solo alcanza los 600 s; no se puede dividir por archivo.", flush=True)

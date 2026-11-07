@@ -180,13 +180,15 @@ def test_script_y_datos_se_eligen_por_referencia_textual(repo):
     assert list(selector.seleccionar(repo)[0]) == ["tests/test_dos.py"]
 
 
-def test_agrupacion_por_tiempos_y_defecto_de_diez_segundos():
+def test_agrupacion_por_tiempos_y_defecto_sin_medicion():
     tests = [f"tests/test_{i}.py" for i in range(5)]
     tiempos = dict(zip(tests[:4], [590, 10, 700, 1], strict=True))
     grupos = selector.agrupar(reversed(tests), tiempos)
     assert grupos == [[tests[0]], [tests[1]], [tests[2]], tests[3:]]
     assert selector.agrupar([], {}) == []
-    assert list(map(len, selector.agrupar([f"{i:03}.py" for i in range(60)], {}))) == [59, 1]
+    assert list(map(len, selector.agrupar([f"{i:03}.py" for i in range(60)], {}))) == [19, 19, 19, 3]
+    assert all(len(grupo) * selector.SEGUNDOS_SIN_MEDIR < 600
+               for grupo in selector.agrupar([f"{i:03}.py" for i in range(50)], {}))
 
 
 def test_correr_respeta_turno_tiempos_y_fallo_sin_ejecutar_piezas(repo, monkeypatch, capsys):
