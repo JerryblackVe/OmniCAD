@@ -50,10 +50,12 @@ from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflict
 from ..restricciones.inferencia import Indice, TIPOS_INFERENCIA, inferencias, proyectar_bloqueo
 from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
                                     aviso_tangencias_fuera,
+                                    agregar_arco_tangente, agregar_circulo_puntos, agregar_poligono,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
-                                    circunferencia_3_puntos, dominio,
+                                    centro_poligono_arista, circunferencia_3_puntos, dominio,
                                     evaluar_primitiva, expresion_sin_signo, fraccion_en_camino, lado_natural, mas_cercano, paradas_cursor,
-                                    primitivas_entidad, puntos_espiral, puntos_primitiva, validar_valor_cota,
+                                    primitivas_entidad, puntos_espiral, puntos_primitiva, validar_lados_poligono,
+                                    validar_valor_cota, vertices_poligono,
                                     _validar_opciones_texto)
 from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, nombres_usados, separar_nombre,
                                    validar_nombre)
@@ -318,12 +320,10 @@ def _vertices_poligono(centro, vertice, lados, tipo):
     cx, cy = centro
     r = math.dist(centro, vertice)
     a0 = math.atan2(vertice[1] - cy, vertice[0] - cx)
+    validar_lados_poligono(lados)
     if tipo == "circunscrito":       # el cursor marca el punto medio de una arista
-        rv, a0 = r / math.cos(math.pi / lados), a0 - math.pi / lados
-    else:
-        rv = r
-    return r, [(cx + rv * math.cos(a0 + 2 * math.pi * k / lados), cy + rv * math.sin(a0 + 2 * math.pi * k / lados))
-               for k in range(lados)]
+        a0 -= math.pi / lados
+    return r, vertices_poligono(centro, r, lados, a0, tipo == "circunscrito")
 
 
 def _segmento_en_rect(rect, a, b):
@@ -1639,42 +1639,27 @@ class Lienzo(QWidget):
         geometria = centro_arco_tangente(p, (p[0] - salida[0], p[1] - salida[1]), xyf)
         if geometria is None:
             return None
-        centro, izquierda = geometria
         nuevo = {}
 
         def crear():
             destino = pfin if pfin is not None else xyf
-            aid = (self.b.agregar_arco_centro(centro, pid, destino, self.construccion) if izquierda
-                   else self.b.agregar_arco_centro(centro, destino, pid, self.construccion))
-            self.b.agregar_restriccion("tangente", [linea, aid])
-            nuevo["id"] = aid
+            nuevo["arco"] = agregar_arco_tangente(self.b, linea, pid, destino, geometria, self.construccion)
         if self.aplicar_cambio(crear):
-            arco = self.b.curvas[nuevo["id"]]
-            return nuevo["id"], (arco.fin if izquierda else arco.inicio)
+            return nuevo["arco"]
         return None
 
     def _rectangulo_3p(self, a, b, c):
         return agregar_rectangulo_3p(self.b, a, b, c, self.construccion)
 
     def _poligono(self, centro, vertice, lados, tipo, centro_pid=None):
-        r, esquinas = _vertices_poligono(centro, vertice, lados, tipo)
+        validar_lados_poligono(lados)
+        r = math.dist(centro, vertice)
         if r < 1e-9:
             raise ErrorBoceto("El polígono necesita un tamaño.")
-        cid = self.b.agregar_circulo(centro_pid if centro_pid is not None else centro, r, True)
-        verts = [self.b.agregar_punto(*q) for q in esquinas]
-        ls = [self.b.agregar_linea(verts[k], verts[(k + 1) % lados], self.construccion) for k in range(lados)]
-        for k in range(1, lados):
-            self.b.agregar_restriccion("igual", [ls[0], ls[k]])
+        giro = math.atan2(vertice[1] - centro[1], vertice[0] - centro[0])
         if tipo == "circunscrito":
-            for ln in ls:
-                self.b.agregar_restriccion("tangente", [ln, cid])
-            # con lados pares, «igual» + «tangente» deja los tramos de tangencia alternar (un grado de libertad de
-            # más): la restricción de polígono regular lo cierra (igual que `create_polygon` de la API)
-            self.b.agregar_restriccion("poligono", list(ls))
-        else:
-            for v in verts:
-                self.b.agregar_restriccion("coincidente", [v, cid])
-        return ls, cid
+            giro -= math.pi / lados
+        return agregar_poligono(self.b, centro, r, lados, giro, tipo == "circunscrito", self.construccion, centro_pid)
 
     @staticmethod
     def _eje_ranura(h, pts):
@@ -1786,16 +1771,10 @@ class Lienzo(QWidget):
             if r < 1e-9:
                 c.pop()
                 return
-            self.aplicar_cambio(lambda: self.b.agregar_circulo(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), r,
-                                                               self.construccion))
+            self.aplicar_cambio(lambda: agregar_circulo_puntos(self.b, [a, b], self.construccion))
             self.clics = []
         elif h == "circulo_3p" and len(c) == 3:
-            def crear():
-                circ = circunferencia_3_puntos(c[0][1], c[1][1], c[2][1])
-                if circ is None:
-                    raise ErrorBoceto("Los tres puntos están alineados: no definen un círculo.")
-                self.b.agregar_circulo((circ[0], circ[1]), circ[2], self.construccion)
-            self.aplicar_cambio(crear)
+            self.aplicar_cambio(lambda: agregar_circulo_puntos(self.b, [p for _, p in c], self.construccion))
             self.clics = []
         elif h == "circulo_2t" and c:
             ubicacion = c[-1][1]
@@ -1846,12 +1825,8 @@ class Lienzo(QWidget):
             def crear():
                 if L < 1e-9:
                     raise ErrorBoceto("La arista no puede medir cero.")
-                mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
-                nx, ny = -(b[1] - a[1]) / L, (b[0] - a[0]) / L
-                if (lado[0] - mx) * nx + (lado[1] - my) * ny < 0:
-                    nx, ny = -nx, -ny
-                apotema = L / (2 * math.tan(math.pi / self.lados))
-                self._poligono((mx + nx * apotema, my + ny * apotema), a, self.lados, "inscrito")
+                centro = centro_poligono_arista(a, b, lado, self.lados)
+                self._poligono(centro, a, self.lados, "inscrito")
             self.aplicar_cambio(crear)
             self.clics = []
         elif h == "elipse" and len(c) == 3:
@@ -3787,10 +3762,7 @@ class Lienzo(QWidget):
 
     def _evaluar_campo(self, clave, texto):
         if clave == "lados":
-            n = int(round(_numero(texto)))
-            if not 3 <= n <= 64:
-                raise ErrorBoceto("El polígono necesita entre 3 y 64 lados.")
-            return n
+            return validar_lados_poligono(int(round(_numero(texto))))
         valor = self.evaluar(texto, ANGULO if clave in ANGULARES else LONGITUD)
         if clave not in ANGULARES:          # lo escrito se vuelve cota: mayor que cero y hasta 1 km, igual que al editarla
             validar_valor_cota(clave if clave in ("radio", "diametro") else "distancia", valor)

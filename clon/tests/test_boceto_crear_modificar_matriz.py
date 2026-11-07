@@ -593,3 +593,62 @@ def test_p68_modificar_revierte_si_deja_el_boceto_en_conflicto():
     assert r["error_kind"] == "SKETCH_OVERCONSTRAINED", r
     assert L(s, "get_sketch") == antes
     assert _ok(api.llamar(s, "get_recipe", {})) == receta
+
+
+@pytest.mark.parametrize("lados", [3, 6, 64])
+@pytest.mark.parametrize("circunscrito", [False, True])
+@pytest.mark.parametrize("construccion", [False, True])
+def test_p70_poligono_ventana_y_api_dan_la_misma_geometria(lados, circunscrito, construccion):
+    from types import SimpleNamespace
+
+    from omnicad.restricciones.boceto import Boceto, ErrorBoceto, agregar_poligono
+    from omnicad.api import herramientas_boceto as herramientas
+    from omnicad.ui import editor_boceto as editor
+
+    assert herramientas.agregar_poligono is editor.agregar_poligono is agregar_poligono
+    centro, radio, giro = (2, -3), 10, math.radians(30)
+    tipo = "circunscrito" if circunscrito else "inscrito"
+    cursor = giro + math.pi / lados if circunscrito else giro
+    vertice = (centro[0] + radio * math.cos(cursor), centro[1] + radio * math.sin(cursor))
+    ventana, por_api, nucleo = Boceto(), Boceto(), Boceto()
+    lienzo = SimpleNamespace(b=ventana, construccion=construccion)
+    ls, cid = editor.Lienzo._poligono(lienzo, centro, vertice, lados, tipo)
+    alias = herramientas._poligono(por_api, lados, radio, *centro, math.degrees(giro), circunscrito, construccion)
+    assert agregar_poligono(nucleo, centro, radio, lados, giro, circunscrito, construccion) == (ls, cid)
+    assert alias["circle"] == cid and alias["center"] == ventana.curvas[cid].centro
+    for k, lid in enumerate(ls, 1):
+        assert alias[f"side{k}"] == lid and alias[f"v{k}"] == ventana.curvas[lid].p1
+    radio_vertices = radio / math.cos(math.pi / lados) if circunscrito else radio
+    assert ventana.coords(alias["v1"]) == pytest.approx((centro[0] + radio_vertices * math.cos(giro),
+                                                        centro[1] + radio_vertices * math.sin(giro)))
+    r_previa, esquinas = editor._vertices_poligono(centro, vertice, lados, tipo)
+    assert r_previa == pytest.approx(radio)
+    for lid, esquina in zip(ls, esquinas, strict=True):
+        assert ventana.coords(ventana.curvas[lid].p1) == pytest.approx(esquina)
+    for b in (por_api, nucleo):
+        for k in b.curvas:
+            assert b.curvas[k].a_dict() == pytest.approx(ventana.curvas[k].a_dict())
+        assert b.a_dict()["restricciones"] == ventana.a_dict()["restricciones"]
+        assert len(b.restricciones) == 2 * lados - 1 + circunscrito
+        for pid in b.puntos:
+            assert b.coords(pid) == pytest.approx(ventana.coords(pid), abs=1e-12)
+        assert b.curvas[cid].radio == pytest.approx(radio)
+    # El centro enganchado de la ventana sigue siendo el mismo punto.
+    enganchado = Boceto()
+    pc = enganchado.agregar_punto(centro[0] + 1e-10, centro[1])
+    _, guia = editor.Lienzo._poligono(SimpleNamespace(b=enganchado, construccion=construccion),
+                                     centro, vertice, lados, tipo, pc)
+    assert enganchado.curvas[guia].centro == pc
+    for original, nuevo in zip(ls, list(enganchado.curvas)[1:], strict=True):
+        assert enganchado.coords(enganchado.curvas[nuevo].p1) == ventana.coords(ventana.curvas[original].p1)
+    for n in (2, 65):
+        antes = ventana.a_dict()
+        with pytest.raises(ErrorBoceto) as del_nucleo:
+            agregar_poligono(ventana, centro, radio, n, giro, circunscrito)
+        with pytest.raises(ErrorBoceto, match=str(del_nucleo.value)):
+            editor.Lienzo._poligono(lienzo, centro, vertice, n, tipo)
+        with pytest.raises(ErrorBoceto, match=str(del_nucleo.value)):
+            herramientas._poligono(ventana, n, radio, *centro, 30, circunscrito)
+        with pytest.raises(ErrorBoceto, match=str(del_nucleo.value)):
+            editor.Lienzo._evaluar_campo(lienzo, "lados", str(n))
+        assert ventana.a_dict() == antes

@@ -29,9 +29,11 @@ from ..nucleo import perfiles as perfiles_mod
 from ..restricciones import (TIPOS_AUTO, Boceto, ErrorBoceto, auto_restringir, resolver,
                              sugerir_auto_restricciones)
 from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
-                                    agregar_linea_medio, agregar_rectangulo_3p, agregar_rectangulo_centro,
-                                    aviso_tangencias_fuera, expresion_sin_signo, _medidas_marco, centro_arco_tangente, circunferencia_3_puntos,
-                                    evaluar_primitiva, mas_cercano, peine_curvatura, validar_valor_cota)
+                                    agregar_arco_tangente, agregar_circulo_puntos, agregar_linea_medio, agregar_poligono,
+                                    agregar_rectangulo_3p, agregar_rectangulo_centro,
+                                    aviso_tangencias_fuera, expresion_sin_signo, _medidas_marco, centro_arco_tangente,
+                                    centro_poligono_arista, evaluar_primitiva, mas_cercano, peine_curvatura,
+                                    validar_lados_poligono, validar_valor_cota)
 from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
                                      restriccion_quita_grados)
 from ..timeline import entidades as ent
@@ -385,12 +387,9 @@ def _arco_tangente(b, curva, inicio, fin, construccion=False):
     geometria = centro_arco_tangente(p, otro, fin)
     if geometria is None:
         raise ErrorBoceto("El final no puede coincidir con el inicio ni estar sobre la recta tangente.")
-    centro, izquierda = geometria
-    ini, z = (pid, fin) if izquierda else (fin, pid)
-    aid = b.agregar_arco_centro(centro, ini, z, construccion)
-    b.agregar_restriccion("tangente", [curva, aid])
+    aid, destino = agregar_arco_tangente(b, curva, pid, fin, geometria, construccion)
     arco = b.curvas[aid]
-    return {"": aid, "center": arco.centro, "start": pid, "end": arco.fin if izquierda else arco.inicio}
+    return {"": aid, "center": arco.centro, "start": pid, "end": destino}
 
 
 def _circulo_tangente(b, lineas, x=None, y=None, radio=None, construccion=False):
@@ -446,33 +445,16 @@ def _poligono(b, lados, radio, cx, cy, giro, circunscrito, construccion=False, a
     """Polígono regular como la interfaz. Con `acotar` queda TOTALMENTE restringido: cota de radio del círculo guía
     (con `expr_radio`, la expresión que se guarda), giro fijado (horizontal / vertical o cota de ángulo contra una
     línea de referencia horizontal) y centro acotado desde el origen fijo del boceto."""
-    if lados < 3:
-        raise ErrorBoceto("Un polígono necesita al menos 3 lados.")
-    if lados > 64:      # el mismo tope que la interfaz (ui/editor_boceto.py, _evaluar_campo)
-        raise ErrorBoceto(f"Un polígono admite como máximo 64 lados, como la interfaz (recibió {lados}).")
+    validar_lados_poligono(lados)
     if radio <= 1e-9:
         raise ErrorBoceto("El radio del polígono tiene que ser positivo.")
     if acotar:
         validar_valor_cota("radio", radio)
-    rv = radio / math.cos(math.pi / lados) if circunscrito else radio
-    a0 = math.radians(giro)
-    esquinas = [(cx + rv * math.cos(a0 + 2 * math.pi * k / lados), cy + rv * math.sin(a0 + 2 * math.pi * k / lados))
-                for k in range(lados)]
-    centro = (cx, cy)
+    centro_pid = None
     if acotar and math.hypot(cx, cy) < 1e-9:
-        centro = _origen_fijo(b)                            # el centro ES el origen fijo
-    cid = b.agregar_circulo(centro, radio, True)           # círculo de construcción guía, como en la interfaz
-    verts = [b.agregar_punto(*q) for q in esquinas]
-    ls = [b.agregar_linea(verts[k], verts[(k + 1) % lados], construccion) for k in range(lados)]
-    for k in range(1, lados):
-        b.agregar_restriccion("igual", [ls[0], ls[k]])
-    for v, ln in zip(verts, ls, strict=True):
-        b.agregar_restriccion("tangente" if circunscrito else "coincidente", [ln if circunscrito else v, cid])
-    if circunscrito:
-        # lados iguales y tangentes al círculo NO alcanzan con una cantidad par de lados: los tramos de tangencia
-        # pueden alternar (largo a + b, b + a…) y queda un grado de libertad de más (un hexágono daba dof 5). La
-        # restricción de polígono regular lo cierra.
-        b.agregar_restriccion("poligono", list(ls))
+        centro_pid = _origen_fijo(b)                            # el centro ES el origen fijo
+    ls, cid = agregar_poligono(b, (cx, cy), radio, lados, math.radians(giro), circunscrito, construccion, centro_pid)
+    verts = [b.curvas[ln].p1 for ln in ls]
     pc = b.curvas[cid].centro
     alias = {"": cid, "circle": cid, "center": pc}
     alias.update({f"side{k + 1}": ls[k] for k in range(lados)})
@@ -509,12 +491,7 @@ def _poligono_arista(b, lados, puntos, construccion=False, acotar=False):
     largo = math.dist(a, z)
     if largo < 1e-9:
         raise ErrorBoceto("El lado del polígono no puede medir cero.")
-    mx, my = (a[0] + z[0]) / 2, (a[1] + z[1]) / 2
-    nx, ny = -(z[1] - a[1]) / largo, (z[0] - a[0]) / largo
-    if (lado[0] - mx) * nx + (lado[1] - my) * ny < 0:
-        nx, ny = -nx, -ny
-    apotema = largo / (2 * math.tan(math.pi / lados)) if lados >= 3 else 0.0
-    cx, cy = mx + nx * apotema, my + ny * apotema
+    cx, cy = centro_poligono_arista(a, z, lado, lados)
     radio = math.dist((cx, cy), a)
     giro = math.degrees(math.atan2(a[1] - cy, a[0] - cx))
     return _poligono(b, lados, radio, cx, cy, giro, False, construccion, acotar)
@@ -1287,15 +1264,8 @@ def draw_circle(sesion, radius: float | None = None, center_x: float = 0.0, cent
     p = [_xy(q, "Cada punto de points") for q in points]
 
     def crear(b):
-        if kind == "two_points":
-            r = math.dist(p[0], p[1]) / 2
-            if r < 1e-9:
-                raise ErrorBoceto("Los dos puntos del diámetro coinciden.")
-            return _circulo(b, (p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2, r, construction)
-        circ = circunferencia_3_puntos(*p)
-        if circ is None:
-            raise ErrorBoceto("Los tres puntos están alineados: no definen un círculo.")
-        return _circulo(b, circ[0], circ[1], circ[2], construction)
+        cid = agregar_circulo_puntos(b, p, construction)
+        return {"": cid, "center": b.curvas[cid].centro}
     return _dibujar(sesion, sketch, crear, construccion=construction, central=centerline)
 
 

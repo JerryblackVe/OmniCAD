@@ -102,6 +102,76 @@ def centro_arco_tangente(inicio, otro, fin):
     return (inicio[0] + n[0] * r, inicio[1] + n[1] * r), izquierda
 
 
+def agregar_arco_tangente(b, curva, inicio, fin, geometria, construccion=False):
+    """Fusion: Arco tangente. Crea el arco con (centro, antihorario) y devuelve su id y el extremo final."""
+    centro, izquierda = geometria
+    ini, z = (inicio, fin) if izquierda else (fin, inicio)
+    aid = b.agregar_arco_centro(centro, ini, z, construccion)
+    b.agregar_restriccion("tangente", [curva, aid])
+    arco = b.curvas[aid]
+    return aid, arco.fin if izquierda else arco.inicio
+
+
+def agregar_circulo_puntos(b, puntos, construccion=False):
+    """Fusion: Círculo de 2 puntos (diámetro) o de 3 puntos. Devuelve el id del círculo."""
+    if len(puntos) == 2:
+        a, z = puntos
+        radio = math.dist(a, z) / 2
+        if radio < 1e-9:
+            raise ErrorBoceto("Los dos puntos del diámetro coinciden.")
+        centro = ((a[0] + z[0]) / 2, (a[1] + z[1]) / 2)
+    else:
+        circ = circunferencia_3_puntos(*puntos)
+        if circ is None:
+            raise ErrorBoceto("Los tres puntos están alineados: no definen un círculo.")
+        centro, radio = (circ[0], circ[1]), circ[2]
+    return b.agregar_circulo(centro, radio, construccion)
+
+
+def validar_lados_poligono(lados):
+    """Tope propio de Polígono (Fusion no publica un máximo), compartido por dibujo y entrada dinámica."""
+    if not 3 <= lados <= 64:
+        raise ErrorBoceto("El polígono necesita entre 3 y 64 lados.")
+    return lados
+
+
+def vertices_poligono(centro, radio, lados, giro, circunscrito=False):
+    """Fusion: Polígono inscrito/circunscrito; `giro` orienta el primer vértice, en radianes."""
+    validar_lados_poligono(lados)
+    cx, cy = centro
+    rv = radio / math.cos(math.pi / lados) if circunscrito else radio
+    return [(cx + rv * math.cos(giro + 2 * math.pi * k / lados), cy + rv * math.sin(giro + 2 * math.pi * k / lados))
+            for k in range(lados)]
+
+
+def agregar_poligono(b, centro, radio, lados, giro, circunscrito=False, construccion=False, centro_pid=None):
+    """Fusion: Polígono. Centro en coordenadas y punto guía opcional; devuelve (líneas, círculo guía)."""
+    esquinas = vertices_poligono(centro, radio, lados, giro, circunscrito)
+    cid = b.agregar_circulo(centro_pid if centro_pid is not None else centro, radio, True)
+    verts = [b.agregar_punto(*q) for q in esquinas]
+    ls = [b.agregar_linea(verts[k], verts[(k + 1) % lados], construccion) for k in range(lados)]
+    for k in range(1, lados):
+        b.agregar_restriccion("igual", [ls[0], ls[k]])
+    for v, ln in zip(verts, ls, strict=True):
+        b.agregar_restriccion("tangente" if circunscrito else "coincidente", [ln if circunscrito else v, cid])
+    if circunscrito:
+        # Con lados pares, «igual» + «tangente» deja alternar los tramos de tangencia: sobra un grado de libertad.
+        b.agregar_restriccion("poligono", list(ls))
+    return ls, cid
+
+
+def centro_poligono_arista(a, z, lado, lados):
+    """Fusion: Polígono por arista A→B; centro hacia el punto `lado` (A y B distintos)."""
+    validar_lados_poligono(lados)
+    largo = math.dist(a, z)
+    mx, my = (a[0] + z[0]) / 2, (a[1] + z[1]) / 2
+    nx, ny = -(z[1] - a[1]) / largo, (z[0] - a[0]) / largo
+    if (lado[0] - mx) * nx + (lado[1] - my) * ny < 0:
+        nx, ny = -nx, -ny
+    apotema = largo / (2 * math.tan(math.pi / lados))
+    return mx + nx * apotema, my + ny * apotema
+
+
 def cambiar_radio(b, cid, radio):
     """Cambia el radio de un círculo o un arco SIN cota (lo que hace arrastrarlo en el editor): el círculo guarda el
     radio nuevo; en un arco, sus extremos libres se corren sobre el radio nuevo. Devuelve el punto movido (o None)."""
