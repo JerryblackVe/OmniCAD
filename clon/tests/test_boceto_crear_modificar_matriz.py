@@ -404,6 +404,35 @@ def test_b232_escalar_o_mover_un_perfil_con_chaflan_no_lo_deforma(args, factor, 
     assert p["bounding_box"] == {"min": _ap(caja["min"]), "max": _ap(caja["max"])}
 
 
+def test_b236_copiar_un_perfil_con_chaflan_lleva_sus_cotas():
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    area = _rect_con_esquina(s, "chaflan")
+    antes = {k["id"] for k in L(s, "get_sketch")["dimensions"]}
+    L(s, "transform_sketch", dx=100, copy=True)
+    nuevas = [k for k in L(s, "get_sketch")["dimensions"] if k["id"] not in antes]
+    assert len(nuevas) == len(antes) == 2
+    L(s, "edit_dimension", dimension=nuevas[0]["id"], value=4)
+    valores = {k["id"]: k["value"] for k in L(s, "get_sketch")["dimensions"]}
+    assert [valores[k["id"]] for k in nuevas] == [4, 4]         # la gemela sigue a su par copiado...
+    assert [valores[k] for k in sorted(antes)] == [2, 2]         # ...y no al original
+    assert _ap(area) in _areas(s)                                # el original no se movió
+
+
+def test_b236_pegar_en_otro_boceto_un_perfil_con_chaflan_lleva_sus_cotas():
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    _rect_con_esquina(s, "chaflan")
+    lineas = [e["id"] for e in _de(s, "line")]
+    _ok(api.llamar(s, "create_sketch", {"name": "C"}))
+    _ok(api.llamar(s, "copy_sketch_entities", {"sketch": "C", "entities": lineas, "source_sketch": "B", "dx": 100}))
+    pegadas = _ok(api.llamar(s, "get_sketch", {"sketch": "C"}))["dimensions"]
+    assert len(pegadas) == 2
+    _ok(api.llamar(s, "edit_dimension", {"sketch": "C", "dimension": pegadas[0]["id"], "value": 4}))
+    assert [k["value"] for k in _ok(api.llamar(s, "get_sketch", {"sketch": "C"}))["dimensions"]] == [4, 4]
+    assert [k["value"] for k in L(s, "get_sketch")["dimensions"]] == [2, 2]
+
+
 def test_b233_recortar_no_deja_restricciones_en_un_punto_suelto():
     s = api.Sesion()
     _ok(api.llamar(s, "create_sketch", {"name": "B"}))

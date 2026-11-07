@@ -56,7 +56,7 @@ matriz pero con test propio (columna Test); ninguna fila está probada todavía 
 | sk_alargar | `extend_sketch_curve` y `trim_sketch_curve mode=extend` | NB `alargar` | matriz | VERIFICADO |
 | sk_partir | `split_sketch_curve` y `trim_sketch_curve mode=break` | NB `partir` | matriz | VERIFICADO |
 | sk_escala | `transform_sketch` `scale` | NB `escalar` | matriz | VERIFICADO |
-| sk_mover (y copiar) | `transform_sketch` `dx/dy/angle/copy` | NB `transformar` | matriz | VERIFICADO (copiar: B-236) |
+| sk_mover (y copiar) | `transform_sketch` `dx/dy/angle/copy` | NB `transformar` | matriz | VERIFICADO (copiar con chaflán: B-236 cerrado) |
 | parametros | `create_parameter` / `set_parameter` | `timeline/documento.aplicar_parametros` | matriz | VERIFICADO |
 
 Qué hace MODIFICAR con las restricciones de la curva original (leído en el código y reproducido donde dice):

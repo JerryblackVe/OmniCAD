@@ -3605,7 +3605,8 @@ class Boceto:
         ids = [i for i in ids if i > 0 and (i in origen.curvas or i in origen.puntos)]
         if not ids:
             raise ErrorBoceto("Seleccioná la geometría a copiar (el origen y los ejes no se copian).")
-        mapa = {p: self.agregar_punto(origen.puntos[p].x + dx, origen.puntos[p].y + dy) for p in origen.puntos_de(ids)}
+        mapa = {p: self.agregar_punto(origen.puntos[p].x + dx, origen.puntos[p].y + dy)
+                for p in origen._con_vertices_virtuales(ids, origen.puntos_de(ids))}
         mapa_c = {}
         for i in ids:
             if i in origen.curvas:
@@ -3620,11 +3621,19 @@ class Boceto:
         for r in origen.restricciones.values():
             if r.tipo not in ("fijo", "patron", "desfase") and set(r.entidades) <= set(todo):
                 self.agregar_restriccion(r.tipo, [todo[e] for e in r.entidades], copy.deepcopy(r.datos))
-        for k in origen.cotas.values():
-            if set(k.entidades) <= set(todo):
-                self.agregar_cota(k.tipo, [todo[e] for e in k.entidades], k.expresion, copy.deepcopy(k.datos),
-                                  k.referencia)
+        copias = {k.id: self.agregar_cota(k.tipo, [todo[e] for e in k.entidades], k.expresion, copy.deepcopy(k.datos),
+                                          k.referencia) for k in origen.cotas.values() if set(k.entidades) <= set(todo)}
+        self._ligar_cotas_copiadas(origen, copias)
         return list(mapa_c.values()) + [q for p, q in mapa.items() if p in ids]
+
+    def _ligar_cotas_copiadas(self, origen, copias):
+        """La copia de una cota que sigue a otra copiada («d1» o `igual_a`: el par de un chaflán) sigue a la copia
+        de su par, no al original; el documento la liga al nombrarla (B-236). `copias`: id en `origen` → id nuevo."""
+        por_nombre = {origen.cotas[k].nombre: k for k in copias if origen.cotas[k].nombre}
+        for k, nueva in copias.items():
+            par = por_nombre.get(origen.cotas[k].expresion.strip(), origen.cotas[k].datos.get("igual_a"))
+            if par in copias:
+                self.cotas[nueva].datos["igual_a"] = copias[par]
 
     # ------------------------------------------------------------ MODIFICAR: escala, mover/copiar
     def _transformar_puntos(self, pids, f):
@@ -3635,8 +3644,11 @@ class Boceto:
     def _copiar(self, ids, f, restricciones=True, angulo=0.0, compartidos=()):
         """Copia curvas y puntos sueltos aplicando `f` a las coordenadas (los `compartidos` no se
         duplican). Devuelve (mapa de puntos nuevos, mapa de curvas)."""
-        pts = [p for p in self.puntos_de(ids) if p not in compartidos]
-        mapa = {p: self.agregar_punto(*f(self.coords(p))) for p in pts}
+        pts = self.puntos_de(ids)
+        if restricciones:                       # el vértice virtual de un chaflán viaja con sus cotas (B-236)
+            pts = self._con_vertices_virtuales(ids, pts)
+        pts = [p for p in pts if p not in compartidos]
+        mapa ={p: self.agregar_punto(*f(self.coords(p))) for p in pts}
         mapa_c = {}
         for i in ids:
             if i in self.curvas:
@@ -3654,9 +3666,12 @@ class Boceto:
                 if r.tipo not in ("fijo", "patron", "desfase") and set(r.entidades) <= set(todo) and not (
                         gira and r.tipo in _ORIENTADAS):
                     self.agregar_restriccion(r.tipo, [todo[e] for e in r.entidades], r.datos)
+            copias = {}
             for k in list(self.cotas.values()):
                 if set(k.entidades) <= set(todo) and not (gira and k.tipo in _COTAS_ORIENTADAS):
-                    self.agregar_cota(k.tipo, [todo[e] for e in k.entidades], k.expresion, k.datos, k.referencia)
+                    copias[k.id] = self.agregar_cota(k.tipo, [todo[e] for e in k.entidades], k.expresion, k.datos,
+                                                     k.referencia)
+            self._ligar_cotas_copiadas(self, copias)
         return mapa, mapa_c
 
     def comprobar_mover(self, ids):
