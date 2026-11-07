@@ -30,7 +30,7 @@ y cuáles sirven para el proyecto. Las promos gratis cambian cada semana: **ante
 
 | Modelo | Dónde | ¿Responde hoy? | Calidad medida en OmniCAD | ¿Sirve? |
 |---|---|---|---|---|
-| MiniMax M3.1 Flash | OpenCode `nvidia/minimaxai/minimax-m3.1-flash` (NVIDIA NIM, gratis para desarrollo) | Sí (10 s) | B-185 bien hecho: test que fallaba antes y `ponytail-review` real con hallazgos (2026-11-03) | **Sí: el mejor gratis disponible hoy** para bugs chicos y medianos, de a un ítem |
+| MiniMax M3.1 Flash | OpenCode `nvidia/minimaxai/minimax-m3.1-flash` (NVIDIA NIM, gratis para desarrollo) | Sí (10 s) | B-185 bien hecho: test que fallaba antes y `ponytail-review` real con hallazgos (2026-11-03). P-69 (2026-11-07): arreglo, test, doc y seguimiento bien, pero se cortó a los 25 min sin correr `ponytail-review`; 2 correcciones menores del revisor (una descripción y un conteo) | **Sí: el mejor gratis disponible hoy** para bugs chicos y medianos, de a un ítem |
 | GLM 5.3 Flash y DeepSeek V4.1 Flash | OpenCode `nvidia/z-ai/glm-5.3-flash`, `nvidia/deepseek-ai/deepseek-v4.1-flash` | No: colgados en la cabecera | Los mismos modelos de arriba | Volver a probar otro día: en NVIDIA suelen tener cola |
 | GLM 5.3, DeepSeek, Kimi K2.7 Code, MiniMax M3 | OpenCode `ollama-cloud/*` | No: el plan gratis de Ollama Cloud solo incluye `gemma4:31b` | — | **No**: lo bueno es pago; Gemma 4 no tiene historial de código acá |
 
