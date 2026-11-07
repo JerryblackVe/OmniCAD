@@ -72,13 +72,12 @@ Qué hace MODIFICAR con las restricciones de la curva original (leído en el có
 
 Fuente: `docs/fusion_docs/contenido/fusion-sketch/` (`scripts/fusion_docs.py ver …`). Casi ningún artículo trae la
 lista del diálogo; se compararon los datos que pide cada comando. Sin diferencias en: rectángulos, círculos, arcos,
-polígonos, elipse, ranuras, cónica, punto, texto, simetría, patrones, proyecciones, cota, curva de fusión, desfase,
+polígonos, elipse, ranuras, cónica, punto, texto, simetría, patrones, proyecciones, cota, curva de fusión, empalme, chaflán, desfase,
 recortar, alargar, partir y escala. Diferencias:
 
 | Comando | Fusion | OmniCAD | Fila |
 |---|---|---|---|
 | Spline de puntos de control | Grado 5 por defecto (`spline-degree-control-reference-…md`) | Grado 3 por defecto (ED:647, `draw_spline degree=3`) | P-67 |
-| Empalme y chaflán | Se puede elegir el vértice (un punto en dos líneas) | Pide las dos curvas | H-107 |
 | Línea | Arco tangente arrastrando desde el extremo, dentro de la misma cadena | Arco tangente aparte (`draw_arc tangent_to`) | H-108 |
 | Mover/Copiar | Puede sacar la geometría del plano (boceto 3D) | Solo en el plano (`transform_sketch`); 3D aparte en `transform_sketch_3d` | sin fila: Fusion no da más detalle |
 | SOLIDWORKS | — | — | sin dato comprobado |

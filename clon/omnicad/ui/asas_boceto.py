@@ -350,12 +350,12 @@ def _polis_nuevas(copia, antes):
     return [list(puntos_primitiva(prim, 48)) for k in sorted(set(copia.curvas) - antes) for prim in copia.primitivas(k)]
 
 
-def asas_empalme(l, picks, xys):
+def asas_empalme(l, picks, xys, vertice=None):
     """(asas, tipos, previa) de la caja [Radio]: el asa está en el medio del arco del empalme."""
     def probar(v):
         copia = l.b.copia()
         antes = set(copia.curvas)
-        copia.empalme(picks[0], picks[1], v[0], xys[0], xys[1], repr(v[0]))
+        copia.empalme(picks[0], picks[1], v[0], xys[0], xys[1], repr(v[0]), vertice=vertice)
         polis = _polis_nuevas(copia, antes)
         return polis, [_medio(max(polis, key=len))]
     pr = _Probador(probar)

@@ -1138,33 +1138,35 @@ Une los extremos de dos curvas abiertas con una spline suave (Fusion: Curva de f
 
 ### `sketch_fillet`
 
-Empalme de boceto (Fusion: Empalme en el boceto): redondea la esquina entre dos curvas (líneas, arcos o círculos) con un arco tangente; recorta las curvas, agrega las tangencias y la cota de radio. radius puede ser una expresión con parámetros (queda en la cota). Con point1/point2 se elige qué parte de cada curva se conserva (útil si se cruzan); sin ellos, la parte más larga.
+Empalme de boceto (Fusion: Empalme en el boceto): redondea la esquina entre dos curvas (líneas, arcos o círculos) con un arco tangente; recorta las curvas, agrega las tangencias y la cota de radio. radius puede ser una expresión con parámetros (queda en la cota). Con point1/point2 se elige qué parte de cada curva se conserva; sin ellos, la parte más larga. Admite vertex en lugar de las curvas.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `entity1` (entero; obligatorio): id de la primera curva (get_sketch).
-  - `entity2` (entero; obligatorio): id de la segunda curva.
   - `radius` (número o expresión; obligatorio): radio del empalme en mm: número o expresión con parámetros.
+  - `entity1` (entero; opcional, por defecto `null`): id de la primera curva (get_sketch).
+  - `entity2` (entero; opcional, por defecto `null`): id de la segunda curva.
   - `point1` (lista de número o null; opcional, por defecto `null`): [x, y] sobre entity1, del lado que se conserva; vacío = automático.
   - `point2` (lista de número o null; opcional, por defecto `null`): [x, y] sobre entity2, del lado que se conserva; vacío = automático.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
-- CLI: `omnicad call sketch_fillet --doc pieza.omnicad entity1=… entity2=… radius=…`
+  - `vertex` (entero; opcional, por defecto `null`): id del punto extremo de exactamente dos curvas; excluye entity1/entity2.
+- CLI: `omnicad call sketch_fillet --doc pieza.omnicad radius=…`
 
 ### `sketch_chamfer`
 
-Chaflán de boceto (Fusion: Chaflán en el boceto) entre dos líneas: de distancias iguales (distance), de dos distancias (distance y distance2) o de distancia y ángulo (distance y angle). Recorta las líneas, agrega la línea del chaflán y sus cotas (las distancias pueden ser expresiones con parámetros).
+Chaflán de boceto (Fusion: Chaflán en el boceto) entre dos líneas: de distancias iguales (distance), de dos distancias (distance y distance2) o de distancia y ángulo (distance y angle). Recorta las líneas, agrega la línea y sus cotas paramétricas. Admite vertex en lugar de las líneas.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `line1` (entero; obligatorio): id de la primera línea.
-  - `line2` (entero; obligatorio): id de la segunda línea.
   - `distance` (número o expresión; obligatorio): distancia del chaflán sobre line1 (y sobre line2 si no hay distance2 ni angle), en mm o expresión.
+  - `line1` (entero; opcional, por defecto `null`): id de la primera línea.
+  - `line2` (entero; opcional, por defecto `null`): id de la segunda línea.
   - `distance2` (número o expresión; opcional, por defecto `null`): distancia sobre line2 (chaflán de dos distancias); vacío = igual a distance.
   - `angle` (número o expresión; opcional, por defecto `null`): ángulo en grados del chaflán respecto de line1 (chaflán de distancia y ángulo); no va con distance2.
   - `point1` (lista de número o null; opcional, por defecto `null`): [x, y] sobre line1, del lado que se conserva; vacío = automático.
   - `point2` (lista de número o null; opcional, por defecto `null`): [x, y] sobre line2, del lado que se conserva; vacío = automático.
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
-- CLI: `omnicad call sketch_chamfer --doc pieza.omnicad line1=… line2=… distance=…`
+  - `vertex` (entero; opcional, por defecto `null`): id del punto extremo de exactamente dos líneas; excluye line1/line2.
+- CLI: `omnicad call sketch_chamfer --doc pieza.omnicad distance=…`
 
 ### `trim_sketch_curve`
 

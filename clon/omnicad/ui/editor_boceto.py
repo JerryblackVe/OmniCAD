@@ -129,10 +129,10 @@ HERRAMIENTAS = {
                          "una arista recta como eje."),
     "cota": ("Cota de boceto", "Clic en una línea, círculo o arco (o en dos entidades) y clic para ubicar; "
              "escribí el valor o una expresión y Enter. Mayús + doble clic en una cota: de referencia ↔ driving."),
-    "empalme": ("Empalme", "Clic en dos curvas cerca de la esquina; escribí el radio y Enter."),
-    "chaflan": ("Chaflán de distancias iguales", "Clic en dos líneas; escribí la distancia y Enter."),
-    "chaflan_dist_angulo": ("Chaflán de distancia y ángulo", "Clic en dos líneas; escribí la distancia y el ángulo."),
-    "chaflan_dos_dist": ("Chaflán de dos distancias", "Clic en dos líneas; escribí las dos distancias."),
+    "empalme": ("Empalme", "Clic en un vértice o dos curvas; escribí el radio y Enter."),
+    "chaflan": ("Chaflán de distancias iguales", "Clic en un vértice o dos líneas; escribí la distancia y Enter."),
+    "chaflan_dist_angulo": ("Chaflán de distancia y ángulo", "Clic en un vértice o dos líneas; escribí distancia y ángulo."),
+    "chaflan_dos_dist": ("Chaflán de dos distancias", "Clic en un vértice o dos líneas; escribí las dos distancias."),
     "curva_fusion": ("Curva de fusión", "Clic cerca del extremo de una curva y cerca del extremo de otra "
                      "(G1 o G2 en la tarjeta)."),
     "desfase": ("Desfase", "Clic en una curva (se toma la cadena conectada), arrastrá el asa o escribí la distancia "
@@ -186,7 +186,7 @@ RELACION_ENTRE_DOS = ("paralela", "perpendicular", "igual", "colineal", "tangent
 NOMBRES_ENTIDAD = {"punto": "punto", "linea": "línea", "circulo": "círculo", "arco": "arco", "elipse": "elipse",
                    "arco_elipse": "arco de elipse", "spline": "spline", "conica": "cónica", "texto": "texto"}
 # Herramientas que piden curvas (clic sobre la geometría): cuántas y de qué tipos.
-PICKS = {"circulo_2t": (2, ("linea",)), "circulo_3t": (3, ("linea",)), "empalme": (2, None),
+PICKS = {"circulo_2t": (2, ("linea",)), "circulo_3t": (3, ("linea",)), "empalme": (2, ("linea", "arco", "circulo")),
          "chaflan": (2, ("linea",)), "chaflan_dist_angulo": (2, ("linea",)), "chaflan_dos_dist": (2, ("linea",)),
          "curva_fusion": (2, None), "desfase": (1, None), "recortar": (1, None), "alargar": (1, None),
          "partir": (1, None), "desglosar_texto": (1, ("texto",))}
@@ -2098,7 +2098,27 @@ class Lienzo(QWidget):
                 self._dibujar_polilinea(p, poli)
 
     # ------------------------------------------------------------ herramientas que eligen curvas
+    def _esquina_en_vertice(self, pos):
+        pid = self._punto_cercano(pos)
+        if pid is None or sum(pid in (c.extremos() or ()) for c in self.b.curvas.values()) < 2:
+            return None                        # una punta libre no es esquina: el clic elige la curva
+        tipos = ("linea", "arco") if self.herramienta == "empalme" else ("linea",)
+        curvas, lados = self.b._esquina_por_vertice(pid, tipos)
+        return (pid, curvas, lados) if all(self._visible(self.b.curvas[k]) for k in curvas) else None
+
     def _clic_pick(self, pos):
+        if self.herramienta in ("empalme", "chaflan", "chaflan_dist_angulo", "chaflan_dos_dist"):
+            try:
+                esquina = self._esquina_en_vertice(pos)
+            except ErrorBoceto as e:
+                self.mensaje.emit(str(e))
+                return True
+            if esquina is not None:
+                vertice, curvas, lados = esquina
+                self.picks, self.picks_xy = [], []
+                for cid, xy in zip(curvas, lados, strict=True):
+                    self.agregar_pick(cid, xy, pos, vertice=vertice)
+                return True
         tipos = ("linea",) if self.fase == "eje" else PICKS[self.herramienta][1]
         cid = self._curva_cercana(pos, tipos=tipos)
         if cid is None and self.fase == "eje" and (eje := self._eje_origen_cerca(pos)) is not None:
@@ -2156,7 +2176,7 @@ class Lienzo(QWidget):
                       key=lambda k: min(mas_cercano(p, xy)[1] for p in self.b.primitivas(k)), default=None)
         return None if cercana is None else (cercana, frozenset(firma))
 
-    def agregar_pick(self, cid, xy, pos=None, perfil=None):
+    def agregar_pick(self, cid, xy, pos=None, perfil=None, vertice=None):
         """Suma una curva elegida (con el lugar del clic, en mm) a la herramienta actual. `perfil`: en Desfase, el
         borde del perfil del que sale (se desfasan todos sus contornos)."""
         h = self.herramienta
@@ -2205,14 +2225,14 @@ class Lienzo(QWidget):
 
                 def empalmar():
                     nonlocal aviso
-                    arco = self.b.empalme(picks[0], picks[1], radio, xys[0], xys[1], v[0])
+                    arco = self.b.empalme(picks[0], picks[1], radio, xys[0], xys[1], v[0], vertice=vertice)
                     aviso = aviso_radio_empalme(radio, self.b.radio(arco))
                 ok = self._aplicar_y_limpiar(empalmar)
                 if ok and aviso:
                     self.aviso.emit(aviso)
                 return ok
             self._abrir_entrada(["Radio"], [formato.numero(self._radio_sugerido(picks))], pos,
-                                aceptar, asas_empalme(self, picks, xys))
+                                aceptar, asas_empalme(self, picks, xys, vertice=vertice))
         elif h in ("chaflan", "chaflan_dist_angulo", "chaflan_dos_dist"):
             listo = False
             d = formato.numero(self._radio_sugerido(picks))
@@ -6480,6 +6500,21 @@ class Lienzo(QWidget):
             self._dibujar_polilinea(p, self._previa_recorte)
         if self._asas is not None:
             self._asas.dibujar(p)
+        elif h in ("empalme", "chaflan", "chaflan_dist_angulo", "chaflan_dos_dist") and self.entrada is None:
+            from .asas_boceto import asas_chaflan, asas_empalme
+            try:
+                esquina = self._esquina_en_vertice(self._pos_cursor)
+                if esquina is not None:
+                    vertice, curvas, lados = esquina
+                    d = self._radio_sugerido(curvas)
+                    valores = [d, 45 if h == "chaflan_dist_angulo" else d]
+                    asas = (asas_empalme(self, curvas, lados, vertice=vertice) if h == "empalme" else
+                            asas_chaflan(self, h, curvas, lados))
+                    p.setPen(QPen(acento, 2.0))
+                    for poli in asas[2](valores):
+                        self._dibujar_polilinea(p, poli)
+            except (ErrorBoceto, ValueError, ZeroDivisionError):
+                pass                   # un vértice no válido no tiene vista previa
         if self.ayuda_3d is not None:
             self._dibujar_ayuda_3d(p, acento)
         if h == "desfase" and self.picks and self.entrada is not None:

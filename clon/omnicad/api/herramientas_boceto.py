@@ -2232,13 +2232,20 @@ def draw_blend_curve(sesion, entity1: int, entity2: int, point1: list[float] | N
 
 
 # ---------------------------------------------------------------- modificar: empalme, chaflán, recortar, desfase
+def _exigir_seleccion_esquina(vertice, primera, segunda, nombres):
+    if ((vertice is not None and (primera is not None or segunda is not None)) or
+            (vertice is None and (primera is None or segunda is None))):
+        raise error("INVALID_ARGUMENTS", f"Pasá vertex o {nombres}, nunca ambos ni ninguno.")
+
+
 @herramienta("sketch_fillet", "boceto",
              "Empalme de boceto (Fusion: Empalme en el boceto): redondea la esquina entre dos curvas (líneas, arcos o "
              "círculos) con un arco tangente; recorta las curvas, agrega las tangencias y la cota de radio. radius "
              "puede ser una expresión con parámetros (queda en la cota). Con point1/point2 se elige qué parte de cada "
-             "curva se conserva (útil si se cruzan); sin ellos, la parte más larga.", modifica=True)
-def sketch_fillet(sesion, entity1: int, entity2: int, radius: Expr, point1: list[float] | None = None,
-                  point2: list[float] | None = None, sketch: str | None = None):
+             "curva se conserva; sin ellos, la parte más larga. Admite vertex en lugar de las curvas.", modifica=True)
+def sketch_fillet(sesion, radius: Expr, entity1: int | None = None, entity2: int | None = None,
+                  point1: list[float] | None = None, point2: list[float] | None = None,
+                  sketch: str | None = None, vertex: int | None = None):
     """
     entity1: id de la primera curva (get_sketch).
     entity2: id de la segunda curva.
@@ -2246,17 +2253,22 @@ def sketch_fillet(sesion, entity1: int, entity2: int, radius: Expr, point1: list
     point1: [x, y] sobre entity1, del lado que se conserva; vacío = automático.
     point2: [x, y] sobre entity2, del lado que se conserva; vacío = automático.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    vertex: id del punto extremo de exactamente dos curvas; excluye entity1/entity2.
     """
+    _exigir_seleccion_esquina(vertex, entity1, entity2, "entity1 y entity2")
     expresion, valor = _valor_expr(sesion, radius)
     _cota_valida("radio", valor, "radius")
     p1, p2 = _opcional_xy(point1, "point1"), _opcional_xy(point2, "point2")
 
     def empalmar(b):
-        for k, que in ((entity1, "entity1"), (entity2, "entity2")):
+        a, c, xy1, xy2 = entity1, entity2, p1, p2
+        if vertex is not None:
+            (a, c), (xy1, xy2) = b._esquina_por_vertice(vertex, ("linea", "arco"))
+        for k, que in ((a, "entity1"), (c, "entity2")):
             _curva(b, k, ("linea", "arco", "circulo"), que)
-        if entity1 == entity2:
+        if a == c:
             raise ErrorBoceto("Elegí dos curvas distintas.")
-        arco = b.empalme(entity1, entity2, valor, p1, p2, expresion)
+        arco = b.empalme(a, c, valor, xy1, xy2, expresion, vertice=vertex)
         aviso = aviso_radio_empalme(valor, b.radio(arco))
         if aviso:
             sesion.avisar(aviso)
@@ -2266,11 +2278,11 @@ def sketch_fillet(sesion, entity1: int, entity2: int, radius: Expr, point1: list
 @herramienta("sketch_chamfer", "boceto",
              "Chaflán de boceto (Fusion: Chaflán en el boceto) entre dos líneas: de distancias iguales (distance), de "
              "dos distancias (distance y distance2) o de distancia y ángulo (distance y angle). Recorta las líneas, "
-             "agrega la línea del chaflán y sus cotas (las distancias pueden ser expresiones con parámetros).",
+             "agrega la línea y sus cotas paramétricas. Admite vertex en lugar de las líneas.",
              modifica=True)
-def sketch_chamfer(sesion, line1: int, line2: int, distance: Expr, distance2: Expr | None = None,
+def sketch_chamfer(sesion, distance: Expr, line1: int | None = None, line2: int | None = None, distance2: Expr | None = None,
                    angle: Expr | None = None, point1: list[float] | None = None, point2: list[float] | None = None,
-                   sketch: str | None = None):
+                   sketch: str | None = None, vertex: int | None = None):
     """
     line1: id de la primera línea.
     line2: id de la segunda línea.
@@ -2280,7 +2292,9 @@ def sketch_chamfer(sesion, line1: int, line2: int, distance: Expr, distance2: Ex
     point1: [x, y] sobre line1, del lado que se conserva; vacío = automático.
     point2: [x, y] sobre line2, del lado que se conserva; vacío = automático.
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    vertex: id del punto extremo de exactamente dos líneas; excluye line1/line2.
     """
+    _exigir_seleccion_esquina(vertex, line1, line2, "line1 y line2")
     if distance2 is not None and angle is not None:
         raise error("INVALID_ARGUMENTS", "Pasá distance2 (dos distancias) o angle (distancia y ángulo), no los dos.")
     expresion, d1 = _valor_expr(sesion, distance)
@@ -2294,11 +2308,14 @@ def sketch_chamfer(sesion, line1: int, line2: int, distance: Expr, distance2: Ex
     p1, p2 = _opcional_xy(point1, "point1"), _opcional_xy(point2, "point2")
 
     def chaflan(b):
-        for k, que in ((line1, "line1"), (line2, "line2")):
+        a, c, xy1, xy2 = line1, line2, p1, p2
+        if vertex is not None:
+            (a, c), (xy1, xy2) = b._esquina_por_vertice(vertex, ("linea",))
+        for k, que in ((a, "line1"), (c, "line2")):
             _curva(b, k, ("linea",), que)
-        if line1 == line2:
+        if a == c:
             raise ErrorBoceto("Elegí dos líneas distintas.")
-        b.chaflan(line1, line2, d1, d2, ang, p1, p2, expresion, expr2 or expr_ang)
+        b.chaflan(a, c, d1, d2, ang, xy1, xy2, expresion, expr2 or expr_ang)
     return _dibujar(sesion, sketch, chaflan, desde_solver=True, sin_conflicto="El chaflán")
 
 

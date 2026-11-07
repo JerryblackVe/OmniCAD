@@ -652,3 +652,173 @@ def test_p70_poligono_ventana_y_api_dan_la_misma_geometria(lados, circunscrito, 
         with pytest.raises(ErrorBoceto, match=str(del_nucleo.value)):
             editor.Lienzo._evaluar_campo(lienzo, "lados", str(n))
         assert ventana.a_dict() == antes
+
+
+@pytest.mark.parametrize(("herramienta", "opciones", "claves"), [
+    ("sketch_fillet", {"radius": 5}, ("entity1", "entity2")),
+    ("sketch_chamfer", {"distance": 5}, ("line1", "line2")),
+    ("sketch_chamfer", {"distance": 5, "distance2": 3}, ("line1", "line2")),
+    ("sketch_chamfer", {"distance": 5, "angle": 30}, ("line1", "line2")),
+])
+def test_h107_empalme_y_chaflan_por_vertice(herramienta, opciones, claves):
+    sesiones = [api.Sesion(), api.Sesion()]
+    for s in sesiones:
+        _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+        lados = _rect(s, 1, 1, 61, 41)
+    vertice = next(p["id"] for p in L(sesiones[0], "get_sketch")["points"] if (p["x"], p["y"]) == (61, 1))
+    por_vertice, por_curvas = sesiones
+    L(por_vertice, herramienta, vertex=vertice, **opciones)
+    L(por_curvas, herramienta, **dict(zip(claves, lados[:2], strict=True)),
+      point1=[60, 1], point2=[61, 2], **opciones)
+    assert por_vertice.doc.operaciones[0].boceto.a_dict() == por_curvas.doc.operaciones[0].boceto.a_dict()
+    assert _areas(por_vertice) == _areas(por_curvas)
+    # Cada edición es un solo paso y las selecciones inválidas no cambian la receta.
+    _ok(api.llamar(por_vertice, "undo", {}))
+    antes = _ok(api.llamar(por_vertice, "get_recipe", {}))
+    for seleccion in ({}, {claves[0]: lados[0]}, {claves[1]: lados[1]},
+                      {"vertex": vertice, claves[0]: lados[0]},
+                      {"vertex": vertice, **dict(zip(claves, lados[:2], strict=True))}):
+        r = api.llamar(por_vertice, herramienta, {"sketch": "B", **opciones, **seleccion})
+        assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r
+        assert _ok(api.llamar(por_vertice, "get_recipe", {})) == antes
+    suelto = L(por_vertice, "draw_point", x=100, y=100)["points"][0]
+    L(por_vertice, "draw_line", start_x=61, start_y=1, end_x=80, end_y=-10)
+    for pid in (suelto, vertice):
+        antes = _ok(api.llamar(por_vertice, "get_recipe", {}))
+        r = api.llamar(por_vertice, herramienta, {"sketch": "B", "vertex": pid, **opciones})
+        assert not r["ok"] and r["error_kind"] == "INVALID_GEOMETRY", r
+        assert "vértice" in r["mensaje"] and "exactamente dos" in r["mensaje"], r
+        assert _ok(api.llamar(por_vertice, "get_recipe", {})) == antes
+
+
+@pytest.mark.parametrize(("herramienta", "con_arco"), [("empalme", False), ("chaflan", False),
+    ("chaflan_dos_dist", False), ("chaflan_dist_angulo", False), ("empalme", True)])
+def test_h107_ventana_un_clic_en_el_vertice_crea_la_esquina(herramienta, con_arco, monkeypatch):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QMouseEvent, QPainter, QPixmap
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.restricciones import Boceto
+    from omnicad.timeline.parametros import TablaParametros
+    from omnicad.ui.editor_boceto import Lienzo
+
+    app = QApplication.instance() or QApplication([])
+    lz = Lienzo(Boceto(), TablaParametros().evaluar)
+    lz.resize(800, 600)
+    lz.setAttribute(Qt.WA_ShowWithoutActivating)
+    lz.setWindowFlag(Qt.WindowDoesNotAcceptFocus)
+    lz.setWindowOpacity(0)
+    lz.ajustar_grilla = False
+    if con_arco:
+        arco = lz.b.agregar_arco_centro((41, 1), (61, 1), (21, 1))
+        pid = lz.b.curvas[arco].inicio
+        lados = [arco, lz.b.agregar_linea(pid, (1, 11))]
+    else:
+        lados = lz.b.agregar_rectangulo((1, 1), (61, 41))
+        pid = lz.b.curvas[lados[0]].p2
+    antes = lz.b.a_dict()
+    lz.set_herramienta(herramienta)
+    lz.encuadrar()
+    lz.show()
+    app.processEvents()
+    pos = lz.a_px(61, 1)
+    try:
+        QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseMove, pos, lz.mapToGlobal(pos), Qt.NoButton,
+                                               Qt.NoButton, Qt.NoModifier))
+        # La previa se dibuja ya al pasar sobre el vértice, antes de elegirlo.
+        imagen = QPixmap(lz.size())
+        with monkeypatch.context() as m:
+            polis = []
+            m.setattr(lz, "_dibujar_polilinea", lambda p, poli: polis.append(poli))
+            pintor = QPainter(imagen)
+            try:
+                lz._dibujar_previa(pintor)
+                assert polis and lz.entrada is None and lz.b.a_dict() == antes
+                polis.clear()
+                lejos = lz.a_px(100, 100)
+                QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseMove, lejos, lz.mapToGlobal(lejos), Qt.NoButton,
+                                                       Qt.NoButton, Qt.NoModifier))
+                lz._dibujar_previa(pintor)
+                assert not polis
+            finally:
+                pintor.end()
+        for tipo, boton, botones in ((QEvent.MouseButtonPress, Qt.LeftButton, Qt.LeftButton),
+                                     (QEvent.MouseButtonRelease, Qt.LeftButton, Qt.NoButton)):
+            QApplication.sendEvent(lz, QMouseEvent(tipo, pos, lz.mapToGlobal(pos), boton, botones, Qt.NoModifier))
+        assert lz.entrada is not None, "Un clic en el vértice debe resolver las dos curvas y abrir los valores."
+        assert lz.b.a_dict() == antes                 # la previa no toca el boceto
+        assert lz._asas.previa(lz._asas.valores())
+        campo = lz.entrada.campos[0]
+        QTest.keyClick(campo, Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClicks(campo, "5 mm")
+        if len(lz.entrada.campos) == 2:
+            QTest.keyClick(campo, Qt.Key_Tab)
+            segundo = lz.entrada.campos[1]
+            QTest.keyClick(segundo, Qt.Key_A, Qt.ControlModifier)
+            QTest.keyClicks(segundo, "3 mm" if herramienta == "chaflan_dos_dist" else "30 deg")
+        previa = lz._asas.previa(lz._asas.valores())
+        assert previa and lz.b.a_dict() == antes
+        if con_arco:
+            assert min(x for poli in previa for x, y in poli) > 41       # el cruce del vértice, no el de la izquierda
+        QTest.keyClick(lz.entrada.campos[-1], Qt.Key_Return)
+        assert lz.entrada is None and len(lz.b.curvas) == len(lados) + 1
+        nuevo = next(c for k, c in lz.b.curvas.items() if k not in lados)
+        assert nuevo.tipo == ("arco" if herramienta == "empalme" else "linea")
+        if herramienta == "empalme":
+            assert lz.b.radio(nuevo.id) == pytest.approx(5)
+        else:
+            assert math.dist((61, 1), lz.b.coords(nuevo.p1)) == pytest.approx(5)
+        lz.deshacer()
+        assert lz.b.a_dict() == antes
+        # Un vértice ambiguo no elige dos curvas al azar ni deja una elección parcial.
+        lz.b.agregar_linea(pid, (80, -10))
+        ambiguo = lz.b.a_dict()
+        mensajes = []
+        lz.mensaje.connect(mensajes.append)
+        QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseButtonPress, pos, lz.mapToGlobal(pos), Qt.LeftButton,
+                                               Qt.LeftButton, Qt.NoModifier))
+        assert lz.entrada is None and not lz.picks and lz.b.a_dict() == ambiguo
+        assert "exactamente dos" in mensajes[-1]
+        # Una punta libre no es esquina: el clic cerca de ella elige la curva, como antes.
+        suelta = lz.b.agregar_linea((1, 60), (30, 60))
+        punta = lz.a_px(30, 60)
+        QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseButtonPress, punta, lz.mapToGlobal(punta), Qt.LeftButton,
+                                               Qt.LeftButton, Qt.NoModifier))
+        assert lz.picks == [suelta], lz.picks
+    finally:
+        lz._cerrar_entrada()
+        lz.close()
+        lz.deleteLater()
+        app.processEvents()
+
+
+@pytest.mark.parametrize("tipo", ["arco", "spline"])
+def test_h107_vertice_valida_el_tipo_de_las_dos_curvas(tipo):
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    if tipo == "arco":
+        L(s, "draw_arc", start_x=20, start_y=0, center_x=0, center_y=0, sweep_angle=180)
+    else:
+        L(s, "draw_spline", points=[[20, 0], [10, 10], [0, 20]])
+    # Las draw_* de curvas distintas no comparten puntos por sus coordenadas: modelamos una unión real.
+    op = s.doc.operaciones[0].copia()
+    curva = next(iter(op.boceto.curvas.values()))
+    pid = curva.extremos()[0]
+    op.boceto.agregar_linea(pid, (-40, 10))       # vuelve a cruzar el arco: el vértice elige la esquina, no ese cruce
+    s.doc.reemplazar(op.id, op)
+    antes = _ok(api.llamar(s, "get_recipe", {}))
+    r = api.llamar(s, "sketch_chamfer", {"vertex": pid, "distance": 3})
+    assert not r["ok"] and r["error_kind"] == "INVALID_GEOMETRY", r
+    assert "dos líneas" in r["mensaje"]
+    assert _ok(api.llamar(s, "get_recipe", {})) == antes
+    r = api.llamar(s, "sketch_fillet", {"vertex": pid, "radius": 3})
+    if tipo == "arco":
+        assert r["ok"], r
+        assert len(_de(s, "arc")) == 2
+        assert _de(s, "arc")[-1]["radius"] == pytest.approx(3)
+        assert _de(s, "arc")[-1]["center"][0] > 15
+    else:
+        assert not r["ok"] and r["error_kind"] == "INVALID_GEOMETRY", r
+        assert "línea o arco" in r["mensaje"]
+        assert _ok(api.llamar(s, "get_recipe", {})) == antes

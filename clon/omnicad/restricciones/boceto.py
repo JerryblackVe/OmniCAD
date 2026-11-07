@@ -3103,6 +3103,23 @@ class Boceto:
         return cid
 
     # ------------------------------------------------------------ MODIFICAR: empalme y chaflán
+    def _esquina_por_vertice(self, pid, tipos):
+        """Empalme/Chaflán de Fusion por vértice: dos curvas incidentes y sus lados a conservar."""
+        if pid not in self.puntos:
+            raise ErrorBoceto(f"No existe el vértice {pid} en el boceto.")
+        curvas = sorted(c.id for c in self.curvas.values() if pid in (c.extremos() or ()))
+        if len(curvas) != 2:
+            raise ErrorBoceto("El vértice debe ser extremo de exactamente dos curvas.")
+        if any(self.curvas[k].tipo not in tipos for k in curvas):
+            raise ErrorBoceto("El vértice debe unir dos líneas." if tipos == ("linea",) else
+                              "El vértice debe unir dos curvas de tipo línea o arco circular.")
+        for k in curvas:
+            self._curva_modificable(k)
+            if len(set(self.curvas[k].extremos())) != 2:
+                raise ErrorBoceto("El vértice debe unir dos curvas abiertas con extremos distintos.")
+        lados = [self.coords(next(p for p in self.curvas[k].extremos() if p != pid)) for k in curvas]
+        return curvas, lados
+
     def _esquina(self, l1, l2, pick1, pick2):
         """Datos de la esquina entre dos líneas: vértice X (cruce), direcciones desde X hacia lo que se
         conserva y, para cada línea, (punto cercano a X, punto lejano, largo disponible)."""
@@ -3158,10 +3175,11 @@ class Boceto:
         self._depurar(vertices - {virtual})
         return pt1, pt2, virtual
 
-    def empalme(self, c1, c2, radio, pick1=None, pick2=None, expresion=None):
+    def empalme(self, c1, c2, radio, pick1=None, pick2=None, expresion=None, vertice=None):
         """Empalme (SKT-ADD-FILLETS): redondea la esquina entre dos curvas con un arco tangente de
         radio dado; recorta las curvas, agrega las tangencias y la cota de radio. Entre paralelas,
-        crea un semicírculo de radio igual a la mitad de su separación. Devuelve el arco."""
+        crea un semicírculo de radio igual a la mitad de su separación. `vertice` identifica la unión
+        elegida si las curvas se cruzan otra vez. Devuelve el arco."""
         if radio <= 0:
             raise ErrorBoceto("El radio del empalme debe ser positivo.")
         for k in (c1, c2):
@@ -3191,7 +3209,7 @@ class Boceto:
             F = (X[0] + bis[0] / nb * h, X[1] + bis[1] / nb * h)
             pt1, pt2, _v = self._recortar_esquina(c1, c2, X, lados, t1, t2)
         else:
-            F, pt1, pt2 = self._empalme_general(c1, c2, radio, pick1, pick2)
+            F, pt1, pt2 = self._empalme_general(c1, c2, radio, pick1, pick2, vertice)
         a = (self.coords(pt1)[0] - F[0], self.coords(pt1)[1] - F[1])
         b = (self.coords(pt2)[0] - F[0], self.coords(pt2)[1] - F[1])
         ini, fin = (pt1, pt2) if paralelas or a[0] * b[1] - a[1] * b[0] > 0 else (pt2, pt1)
@@ -3249,7 +3267,7 @@ class Boceto:
             pts.reverse()
         return F, *pts, abs(distancia) / 2
 
-    def _empalme_general(self, c1, c2, r, pick1, pick2):
+    def _empalme_general(self, c1, c2, r, pick1, pick2, vertice=None):
         """Empalme con arcos o círculos: el centro sale de cruzar las curvas desfasadas en r."""
         def portadoras(cid):
             prim = self.primitivas(cid)[0]
@@ -3295,7 +3313,8 @@ class Boceto:
                 continue
             ref1 = pick1 or pies[0][0]
             ref2 = pick2 or pies[1][0]
-            puntaje = math.dist(pies[0][0], ref1) + math.dist(pies[1][0], ref2)
+            referencia = self.coords(vertice) if vertice is not None else None
+            puntaje = math.dist(pies[0][0], referencia or ref1) + math.dist(pies[1][0], referencia or ref2)
             if mejor is None or puntaje < mejor[0]:
                 mejor = (puntaje, F, pies)
         if mejor is None:
@@ -3311,7 +3330,9 @@ class Boceto:
                 continue
             tp = mas_cercano(prim, pick)[0] if pick is not None else None
             ini, fin = c.extremos()
-            if tp is None:
+            if vertice is not None:
+                reemplazo = vertice
+            elif tp is None:
                 reemplazo = ini if math.dist(self.coords(ini), q) < math.dist(self.coords(fin), q) else fin
             else:
                 reemplazo = ini if tp > t else fin
