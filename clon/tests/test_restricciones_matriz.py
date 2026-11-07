@@ -486,3 +486,102 @@ def test_b228_un_archivo_viejo_con_esa_cota_se_abre():
     assert copia.a_dict() == datos
     assert copia.cotas[k].entidades == [l1, l2]
     assert resolver(copia, {k: 7.0}).ok
+
+
+def test_b229_autorestringir_usa_el_origen_sin_crear_puntos():
+    from omnicad.restricciones.solver import auto_restringir
+
+    b = Boceto()
+    b.agregar_rectangulo((10, 10), (40, 30))
+    antes = {p: b.coords(p) for p in b.puntos}
+    restricciones_antes = len(b.restricciones)
+    agregado = auto_restringir(b)
+    assert set(b.puntos) - antes.keys() == {Boceto.ORIGEN}
+    assert not any(r.tipo == "fijo" for r in b.restricciones.values())
+    posicion = [k for k in b.cotas.values() if k.tipo in ("distancia_h", "distancia_v")]
+    assert {k.tipo for k in posicion} == {"distancia_h", "distancia_v"}
+    assert all(Boceto.ORIGEN in k.entidades for k in posicion)
+    assert len(agregado) == len(b.restricciones) - restricciones_antes + len(b.cotas)
+    valores = {k.id: float(k.expresion) for k in b.cotas.values()}
+    assert grados_de_libertad(b, valores) == 0
+    assert resolver(b, valores).ok
+    for p, xy in antes.items():
+        assert b.coords(p) == pytest.approx(xy, abs=1e-6)
+    copia = Boceto.desde_dict(b.a_dict())
+    assert grados_de_libertad(copia, valores) == 0 and resolver(copia, valores).ok
+
+
+@pytest.mark.parametrize("referencias", [[Boceto.ORIGEN], [Boceto.EJE_X, Boceto.EJE_Y]])
+def test_b229_origen_materializado_no_es_un_dato(referencias):
+    from omnicad.restricciones.solver import auto_restringir
+
+    b = Boceto()
+    b.agregar_rectangulo((10, 10), (40, 30))
+    b.asegurar_referencias(referencias)
+    assert Boceto.ORIGEN in b.puntos_fijos()
+    antes = set(b.puntos)
+    auto_restringir(b)
+    assert set(b.puntos) == antes
+    assert not any(r.tipo == "fijo" for r in b.restricciones.values())
+    posicion = [k for k in b.cotas.values() if k.tipo in ("distancia_h", "distancia_v")]
+    assert {k.tipo for k in posicion} == {"distancia_h", "distancia_v"}
+    assert all(Boceto.ORIGEN in k.entidades for k in posicion)
+    valores = {k.id: float(k.expresion) for k in b.cotas.values()}
+    assert grados_de_libertad(b, valores) == 0 and resolver(b, valores).ok
+
+
+def test_b229_con_un_punto_en_el_origen_lo_fija():
+    from omnicad.restricciones.solver import auto_restringir
+
+    b = Boceto()
+    lineas = b.agregar_rectangulo((0, 0), (40, 30))
+    punto = b.curvas[lineas[0]].p1
+    antes = set(b.puntos)
+    agregado = auto_restringir(b)
+    assert set(b.puntos) == antes
+    assert [r.entidades for r in b.restricciones.values() if r.tipo == "fijo"] == [[punto]]
+    assert any(s.tipo == "fijo" and s.entidades == (punto,) for s in agregado)
+    valores = {k.id: float(k.expresion) for k in b.cotas.values()}
+    assert grados_de_libertad(b, valores) == 0 and resolver(b, valores).ok
+
+
+@pytest.mark.parametrize("limite", [0, 1, 2])
+def test_b229_el_limite_no_agrega_un_fijo_oculto(limite):
+    from omnicad.restricciones.solver import auto_restringir
+
+    b = Boceto()
+    b.agregar_rectangulo((10, 10), (40, 30))
+    restricciones_antes = len(b.restricciones)
+    agregado = auto_restringir(b, limite=limite)
+    assert len(agregado) == limite == len(b.cotas)
+    assert len(b.restricciones) == restricciones_antes
+    assert not any(r.tipo == "fijo" for r in b.restricciones.values())
+
+
+def test_b229_api_sugerir_aplicar_y_excluir_usan_el_origen():
+    from omnicad import api
+
+    s = api.Sesion()
+    assert api.llamar(s, "create_sketch", {"name": "P"})["ok"]
+    assert api.llamar(s, "draw_rectangle", {"x1": 10, "y1": 10, "x2": 40, "y2": 30})["ok"]
+    antes = s.doc.a_dict()
+    sugerido = api.llamar(s, "suggest_auto_constraints", {})
+    assert sugerido["ok"], sugerido
+    assert s.doc.a_dict() == antes
+    completo = sugerido["result"]["results"][0]
+    assert completo["dof"] == 0
+    posicion = [i for i in completo["items"] if Boceto.ORIGEN in i["entities"]]
+    assert len(posicion) == 2 and all(i["kind"] == "dimension" for i in posicion)
+    opciones = {"exclude": [posicion[0]], "max_items": 1}
+    sugerido = api.llamar(s, "suggest_auto_constraints", opciones)
+    assert sugerido["ok"] and s.doc.a_dict() == antes
+    aplicado = api.llamar(s, "auto_constrain", opciones)
+    assert aplicado["ok"], aplicado
+    r = aplicado["result"]
+    assert r["points"] == [Boceto.ORIGEN]
+    assert r["items"] == sugerido["result"]["results"][0]["items"]
+    assert len(r["items"]) == len(r["dimensions"]) == 1 and not r["constraints"]
+    assert r["items"][0]["type"] != posicion[0]["type"] or r["items"][0]["entities"] != posicion[0]["entities"]
+    aplicado = api.llamar(s, "auto_constrain", {})
+    assert aplicado["ok"] and aplicado["result"]["dof"] == 0, aplicado
+    assert not aplicado["result"]["points"]

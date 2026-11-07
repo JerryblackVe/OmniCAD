@@ -198,6 +198,8 @@ auditoría, correcciones y verificaciones. Documentá con precisión todo lo que
 | restr-4 | B-226 y B-225 (elección de solución del solver) | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r4` / `restr-4` | Fusionada (cortada a los 25 min esperando turno; tests y revisión del coordinador) |
 | restr-5 | B-227 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r5` / `restr-5` | Fusionada (dos corridas cortadas a los 25 min) |
 | restr-6 | B-228 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r6` / `restr-6` | Fusionada (vio la regresión de B-227) |
+| restr-7 | B-229 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r7` / `restr-7` | Fusionada |
+| restr-8 | B-230 y S7 | Sol (pendiente) | `D:/PROGRAMA-r8` / `restr-8` | Brief listo, sin lanzar |
 
 ### Brief restr-1 (B-223)
 
@@ -485,4 +487,100 @@ tests/test_restricciones_matriz.py -q` sin turno; después, con turno, los tests
 ## Informe
 `D:/PROGRAMA-r6/evidencias/restr6/informe.md`: qué cambiaste, qué dice la ayuda de Fusion (ruta), la tolerancia elegida y por
 qué, tests (rojo antes, verde después) y la salida REAL de ruff y de cada tanda (últimas líneas), lo que no pudiste verificar.
+```
+
+### Brief restr-7 (B-229)
+
+```text
+Corrida restr-7 · B-229 · OmniCAD (CAD paramétrico en Python). Todo en español.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-r7` (rama `restr-7`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no instales nada.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, desde `D:/PROGRAMA-r7/clon`, con `PYTHONPATH=D:/PROGRAMA-r7/clon`.
+- Leé `AGENTS.md`. Leé el código real y buscá todos los llamadores antes de editar; el cambio más chico que resuelve la causa;
+  conservá los finales de línea (`solver.py` y `boceto.py` son LF). NO edites `docs/seguimiento/` ni `PROJECT_LOG.md`.
+- Tests: un archivo chico con `-k` se corre SIN turno. Las tandas de varios archivos van con `../scripts/turno.py --plazo 900 --
+  …` (puede esperar en fila). Escribí el informe ANTES de lanzar las tandas con turno.
+
+## El ítem: B-229
+AutoConstrain sin dato crea un punto SUELTO nuevo en (0,0) en vez de usar el origen del boceto:
+```python
+from omnicad.restricciones.boceto import Boceto
+from omnicad.restricciones.solver import auto_restringir
+b = Boceto(); b.agregar_rectangulo((10, 10), (40, 30))
+antes = set(b.puntos); auto_restringir(b); print(set(b.puntos) - antes)   # {19}: punto nuevo en (0,0) con «fijo»
+```
+Código: `clon/omnicad/restricciones/solver.py › _cotas_auto` (~línea 1453): `origen = b.agregar_punto(0.0, 0.0)` +
+`b.agregar_restriccion("fijo", [origen])`, fuera de `probar`: no cuenta para `limite`, no aparece en lo agregado e ignora
+`excluir`. El boceto ya tiene una referencia fija del origen, id `Boceto.ORIGEN` (0), que se materializa con
+`b.asegurar_referencias([Boceto.ORIGEN])` (`restricciones/boceto.py`, ~línea 2031) y no aporta GDL ni perfiles.
+
+Ojo con una interacción nueva: desde B-223 (commit c63f2a4) la ventana materializa el origen apenas el usuario hace clic cerca.
+Comprobá qué devuelve `b.puntos_fijos()` cuando el origen (id 0) ya está en `b.puntos`: si lo cuenta como fijo, `_cotas_auto`
+cree que el boceto ya tiene dato y no acota la posición de nada. Las dos cosas (usar el origen y no confundirlo con un dato
+del usuario) son el mismo arreglo.
+
+Ayuda de Fusion: `D:/PROGRAMA/clon/.venv/Scripts/python.exe D:/PROGRAMA/scripts/fusion_docs.py ver "Finish a sketch with
+AutoConstrain" -s fusion-sketch` (qué es el datum y qué pasa si está vacío). No inventes lo que la ayuda no dice.
+
+Arreglo pedido: cuando no hay dato, las cotas de posición se miden desde la referencia del origen (id 0), sin crear un punto
+nuevo ni un `fijo` extra; y el origen materializado no cuenta como «dato ya puesto» por el usuario. Revisá también la API
+(`clon/omnicad/api/herramientas_boceto.py › auto_constrain`, `suggest_auto_constraints`) por si lee los puntos nuevos.
+
+## Tests (escribilos primero, mirá que fallen)
+Al final de `clon/tests/test_restricciones_matriz.py`:
+- `test_b229_autorestringir_usa_el_origen_sin_crear_puntos`: tras `auto_restringir`, ningún punto nuevo además del 0, el
+  rectángulo queda con GDL 0 y las cotas de posición nombran el 0.
+- `test_b229_origen_materializado_no_es_un_dato`: con `b.asegurar_referencias([Boceto.ORIGEN])` antes, el resultado es el mismo.
+- `test_b229_con_un_punto_en_el_origen_lo_fija`: si un punto del usuario ya está en (0,0), se usa ese (como antes).
+
+## Verificación
+Desde `D:/PROGRAMA-r7/clon` con `PYTHONPATH=D:/PROGRAMA-r7/clon`: ruff; `pytest tests/test_restricciones_matriz.py -q` sin
+turno; después, con turno, los tests que mencionan `auto_restringir`, `auto_constrain` o `autorestringir` (`grep -l`), en tandas
+de ~25 archivos. Prohibido `tests_afectados.py --correr`, la suite completa y `pytest -n`.
+
+## Informe
+`D:/PROGRAMA-r7/evidencias/restr7/informe.md`: qué cambiaste, qué dice la ayuda de Fusion (ruta), tests (rojo antes, verde
+después) y la salida REAL de ruff y de cada tanda (últimas líneas), lo que no pudiste verificar.
+```
+
+### Brief restr-8 (B-230 y S7 (pendiente de lanzar))
+
+```text
+Corrida restr-8 · B-230 y S7 · OmniCAD (CAD paramétrico en Python). Todo en español.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-r8` (rama `restr-8`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no instales nada.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, desde `D:/PROGRAMA-r8/clon`, con `PYTHONPATH=D:/PROGRAMA-r8/clon`.
+- Leé `AGENTS.md`. Leé el código real antes de editar; el cambio más chico; conservá los finales de línea (LF). NO edites
+  `docs/seguimiento/` ni `PROJECT_LOG.md`.
+- Tests: un archivo chico con `-k` se corre SIN turno. Las tandas de varios archivos van con `../scripts/turno.py --plazo 900 --
+  …`. Escribí el informe ANTES de lanzar las tandas con turno.
+
+## Ítem 1: B-230
+`Boceto().agregar_restriccion("inventada", [p, q])` da `KeyError: 'inventada'` (`clon/omnicad/restricciones/boceto.py ›
+_validar_restriccion`, ~línea 2600: `validas[tipo]()` y `TIPOS_RESTRICCION[tipo]`). Llega por `execute_code` o por un
+`.omnicad` alterado. Lo mismo puede pasar con `agregar_cota` y un tipo de cota desconocido (`_validar_cota`): comprobalo.
+Arreglo: un `ErrorBoceto` claro en español («Tipo de restricción desconocido: …») en los dos, al principio de la validación.
+Test: `test_b230_tipo_desconocido_da_error_claro` al final de `clon/tests/test_restricciones_matriz.py` (restricción y cota).
+
+## Ítem 2: S7 (contradicción entre la doc de la API y lo que acepta)
+En `clon/omnicad/api/herramientas_boceto.py`:
+- `add_constraint` (descripción ~línea 1423-1437): no nombra `curvature` ni dice que `equal` acepta elipses; dice que
+  `tangent` y `concentric` son «dos curvas», pero `tangent` rechaza línea-línea.
+- `add_dimension` (~línea 1538-1543): dice «offset: dos líneas o dos círculos/arcos», pero también acepta spline con spline,
+  elipse con spline y elipse con elipse (`boceto.py › _validar_cota`, ~línea 2621).
+Corregí SOLO el texto para que diga lo que el código acepta de verdad (comprobalo leyendo `_validar_restriccion` y
+`_validar_cota`), en español, corto. Después regenerá la doc desde `D:/PROGRAMA-r8`: `PYTHONPATH=D:/PROGRAMA-r8/clon
+D:/PROGRAMA/clon/.venv/Scripts/omnicad.exe tools --markdown --output docs/agentes/herramientas.md`, y corré
+`tests/test_doc_agentes.py`.
+
+## Verificación
+Desde `D:/PROGRAMA-r8/clon` con `PYTHONPATH=D:/PROGRAMA-r8/clon`: ruff; `pytest tests/test_restricciones_matriz.py
+tests/test_doc_agentes.py -q` sin turno; con turno, `tests/test_api_boceto*.py` en una tanda. Prohibido
+`tests_afectados.py --correr`, la suite completa y `pytest -n`.
+
+## Informe
+`D:/PROGRAMA-r8/evidencias/restr8/informe.md`: qué cambiaste (archivo, función, texto viejo → nuevo), tests (rojo antes, verde
+después) y la salida REAL de ruff y pytest (últimas líneas), lo que no pudiste verificar.
 ```

@@ -1453,13 +1453,14 @@ def _auto(b, valores_cotas, tol_angulo, tol_distancia, tipos, limite, datum, exc
 def _cotas_auto(b, probar, tol_distancia, datum):
     """Dato (punto fijo en el origen) y cotas con las medidas actuales: largos, radios, ángulos y posiciones."""
     lineas = [c for c in b.curvas.values() if isinstance(c, Linea) and not c.proyectada]
-    if not b.puntos_fijos() and b.puntos:
-        dato = datum if datum is not None else min(b.puntos, key=lambda p: math.hypot(*b.coords(p)))
+    puntos = [p for p in b.puntos if p > 0]       # las referencias reservadas no son datos del usuario
+    if not b.puntos_fijos().intersection(puntos) and puntos:
+        dato = datum if datum is not None else min(puntos, key=lambda p: math.hypot(*b.coords(p)))
         if math.hypot(*b.coords(dato)) < tol_distancia:
             probar("fijo", [dato], f"fijo {dato}")
         else:
-            origen = b.agregar_punto(0.0, 0.0)
-            b.agregar_restriccion("fijo", [origen])
+            origen = b.ORIGEN
+            b.asegurar_referencias([origen])
             for tipo in ("distancia_h", "distancia_v"):
                 probar(tipo, [origen, dato], f"{tipo} origen-{dato}", round(b.medir_cota(tipo, [origen, dato]), 4))
     for ln in lineas:
@@ -1474,7 +1475,9 @@ def _cotas_auto(b, probar, tol_distancia, datum):
                 v = round(b.medir_cota("angulo", [l1.id, l2.id]), 4)
                 if 1e-3 < v < 180 - 1e-3:
                     probar("angulo", [l1.id, l2.id], f"ángulo {l1.id}-{l2.id}", v)
-    fijos = sorted(b.puntos_fijos())
+    fijos = sorted(b.puntos_fijos().intersection(puntos))
+    if not fijos and b.ORIGEN in b.puntos:
+        fijos = [b.ORIGEN]
     if fijos:
         referencia = fijos[0]
         if datum is not None and datum != referencia:       # el datum se ubica respecto del dato y ordena el resto
