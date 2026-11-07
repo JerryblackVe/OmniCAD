@@ -6,16 +6,17 @@ Duplicar con uniones, Insertar componente e Insertar derivación) en todos los e
 procedimiento que [auditoria_boceto_crear_modificar.md](auditoria_boceto_crear_modificar.md): ejecutan los agentes,
 Claude solo como última instancia, y al final todo verde.
 
-**Cuándo:** otro día, el que elija Gerardo (agenda AG-6). Se pisa con [auditoria_ensamblar.md](auditoria_ensamblar.md)
-(Duplicar con uniones, Insertar componente) y con [auditoria_renderizar.md](auditoria_renderizar.md) (Calcomanía,
-Lienzo): correrlas de a una y no repetir ítems ya cerrados. ⚠ El prompt nombra «la captura», pero no se guardó: la lista
-de la sección 4 alcanza.
+**Cuándo:** otro día, el que elija Gerardo. Va 4.ª de 6; orden y reparto en [agenda.md](seguimiento/agenda.md) (sección «Orden y reparto de las auditorías»).
 
 ## Prompt para el agente
 
 Guardado el 2026-11-07. Modelo sugerido: coordina una sesión Claude Opus 5 con esfuerzo alto; ejecutan Sol (OpenCode) y los agentes gratis aprobados, un ítem por corrida y cada uno en su worktree.
 
 ```text
+AJUSTE DEL COORDINADOR (2026-11-08; manda sobre todo lo que sigue)
+- Orden de las seis auditorías (de a una; la siguiente arranca cuando la anterior quedó cerrada y commiteada): 1) CONSTRUIR (AG-7), 2) herramientas 3D (AG-2), 3) MODIFICAR (AG-4), 4) INSERTAR (AG-6), 5) ENSAMBLAR (AG-5), 6) RENDERIZAR (AG-3). Cada herramienta tiene UNA sola auditoría dueña. Las demás solo la usan en sus pruebas combinadas: si encuentran un bug en una herramienta ajena, cargan la fila en docs/seguimiento/ y la arreglan solo si la dueña ya pasó (está antes en el orden); si la dueña viene después, dejan la fila para ella.
+- Sos la dueña de Calcomanía, Lienzo, Insertar SVG, Vectorizar imagen, DXF, malla, STEP, fijador y derivación. Duplicar con uniones e Insertar componente son de ENSAMBLAR (AG-5): salteá sus partes XII y XIII.
+
 # PROMPT MAESTRO — AUDITORÍA, REPARACIÓN Y PARIDAD FUNCIONAL DE TODA LA SECCIÓN INSERTAR DE OMNICAD
 
 ## 1. MISIÓN PRINCIPAL

@@ -79,7 +79,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [brechas_fusion.md](brechas_fusion.md) | Fusion 360 |
 | [brechas_texto_curva.md](brechas_texto_curva.md) | Texto en curva: B-132–B-137, TXT-8 y TXT-9, con prompt |
 | [brechas_superficie.md](brechas_superficie.md) | SUP-27–SUP-31: SUPERFICIE contra capturas de Fusion, con prompt |
-| [brechas_ensamblar.md](brechas_ensamblar.md) | ASM-17–ASM-20: ENSAMBLAR contra capturas de Fusion, con prompt |
+| [brechas_ensamblar.md](brechas_ensamblar.md) | ASM-17–ASM-20: ENSAMBLAR contra capturas de Fusion; los toma la [auditoría de ENSAMBLAR](auditoria_ensamblar.md) |
 | [brechas_animacion.md](brechas_animacion.md) | ANI-1–ANI-5: ANIMACIÓN contra capturas de Fusion, con prompt |
 | [brechas_extensiones.md](brechas_extensiones.md) | PLA-1–PLA-14 y EXT-1–EXT-4: plástico y extensiones contra capturas de Fusion, con prompt |
 | [brechas_parametros.md](brechas_parametros.md) | PAR-1–PAR-11: Parámetros contra Fusion |

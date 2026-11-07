@@ -6,14 +6,17 @@ de Fusion 360. Primera prioridad: la corrupción gráfica de la interfaz (elemen
 Mismo procedimiento que [auditoria_boceto_crear_modificar.md](auditoria_boceto_crear_modificar.md): ejecutan los
 agentes, Claude solo como última instancia, y al final todo verde.
 
-**Cuándo:** otro día, el que elija Gerardo (agenda AG-3). ⚠ El prompt nombra «la captura proporcionada», pero la
-captura no se guardó con el pedido: al arrancar, pedírsela a Gerardo (o reproducir el defecto entrando a RENDERIZAR).
+**Cuándo:** otro día, el que elija Gerardo. Va 6.ª de 6; orden y reparto en [agenda.md](seguimiento/agenda.md) (sección «Orden y reparto de las auditorías»).
 
 ## Prompt para el agente
 
 Guardado el 2026-11-07. Modelo sugerido: coordina una sesión Claude Opus 5 con esfuerzo alto; ejecutan Sol (OpenCode) y los agentes gratis aprobados, un ítem por corrida y cada uno en su worktree.
 
 ```text
+AJUSTE DEL COORDINADOR (2026-11-08; manda sobre todo lo que sigue)
+- Orden de las seis auditorías (de a una; la siguiente arranca cuando la anterior quedó cerrada y commiteada): 1) CONSTRUIR (AG-7), 2) herramientas 3D (AG-2), 3) MODIFICAR (AG-4), 4) INSERTAR (AG-6), 5) ENSAMBLAR (AG-5), 6) RENDERIZAR (AG-3). Cada herramienta tiene UNA sola auditoría dueña. Las demás solo la usan en sus pruebas combinadas: si encuentran un bug en una herramienta ajena, cargan la fila en docs/seguimiento/ y la arreglan solo si la dueña ya pasó (está antes en el orden); si la dueña viene después, dejan la fila para ella.
+- Sos la dueña de RENDERIZAR y de Aspecto (biblioteca, asignación y edición; la sección 27 de auditoria_modificar.md te dice qué revisar). Calcomanía y Lienzo ya los cerró INSERTAR (AG-6): solo verificá que se rendericen bien. Arrancá por el bug B-240 (interfaz corrupta).
+
 # PROMPT MAESTRO — AUDITORÍA, REPARACIÓN Y MEJORA INTEGRAL DEL ESPACIO RENDERIZAR DE OMNICAD
 
 ## 1. MISIÓN PRINCIPAL

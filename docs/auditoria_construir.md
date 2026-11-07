@@ -5,15 +5,17 @@ Pedido de Gerardo (2026-11-07): auditar, reparar y completar contra Fusion 360 l
 [auditoria_boceto_crear_modificar.md](auditoria_boceto_crear_modificar.md): ejecutan los agentes, Claude solo como
 última instancia, y al final todo verde.
 
-**Cuándo:** otro día, el que elija Gerardo (agenda AG-7). Toca la base de las referencias que usan las demás
-auditorías (AG-2 a AG-6): conviene correrla antes que ellas o sola. ⚠ El prompt nombra «la captura», pero no se
-guardó: la lista de la sección 5 alcanza.
+**Cuándo:** otro día, el que elija Gerardo. Va 1.ª de 6; orden y reparto en [agenda.md](seguimiento/agenda.md) (sección «Orden y reparto de las auditorías»).
 
 ## Prompt para el agente
 
 Guardado el 2026-11-07. Modelo sugerido: coordina una sesión Claude Opus 5 con esfuerzo alto; ejecutan Sol (OpenCode) y los agentes gratis aprobados, un ítem por corrida y cada uno en su worktree.
 
 ```text
+AJUSTE DEL COORDINADOR (2026-11-08; manda sobre todo lo que sigue)
+- Orden de las seis auditorías (de a una; la siguiente arranca cuando la anterior quedó cerrada y commiteada): 1) CONSTRUIR (AG-7), 2) herramientas 3D (AG-2), 3) MODIFICAR (AG-4), 4) INSERTAR (AG-6), 5) ENSAMBLAR (AG-5), 6) RENDERIZAR (AG-3). Cada herramienta tiene UNA sola auditoría dueña. Las demás solo la usan en sus pruebas combinadas: si encuentran un bug en una herramienta ajena, cargan la fila en docs/seguimiento/ y la arreglan solo si la dueña ya pasó (está antes en el orden); si la dueña viene después, dejan la fila para ella.
+- Sos la dueña de SCU, planos, ejes y puntos de construcción y del sistema de referencias persistentes (caras, aristas y vértices referenciados). Vas primera: las otras cinco se apoyan en lo que dejes.
+
 # PROMPT MAESTRO — AUDITORÍA, REPARACIÓN Y PARIDAD FUNCIONAL DEL SISTEMA CONSTRUIR DE OMNICAD CON FUSION 360
 
 ## 1. MISIÓN PRINCIPAL

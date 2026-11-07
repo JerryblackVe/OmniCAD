@@ -88,7 +88,6 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 | Caza automática de errores | [plan_caza_errores.md](../plan_caza_errores.md) |
 | INSPECCIONAR | [brechas_inspeccionar.md](../brechas_inspeccionar.md) |
 | SUPERFICIE | [brechas_superficie.md](../brechas_superficie.md) |
-| ENSAMBLAR | [brechas_ensamblar.md](../brechas_ensamblar.md) |
 | ANIMACIÓN | [brechas_animacion.md](../brechas_animacion.md) |
 | Plástico y extensiones | [brechas_extensiones.md](../brechas_extensiones.md) |
 | Escanear con el celular | [plan_escaneo_celular.md](../plan_escaneo_celular.md) |

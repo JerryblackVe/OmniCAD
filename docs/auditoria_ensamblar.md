@@ -6,15 +6,17 @@ todos los espacios donde se usan componentes. Mismo procedimiento que
 [auditoria_boceto_crear_modificar.md](auditoria_boceto_crear_modificar.md): ejecutan los agentes, Claude solo como
 última instancia, y al final todo verde.
 
-**Cuándo:** otro día, el que elija Gerardo (agenda AG-5). Antes de arrancar, cruzarla con
-[brechas_ensamblar.md](brechas_ensamblar.md), que ya tiene su prompt y sus faltantes de ENSAMBLAR: no duplicar ítems.
-Se pisa con [auditoria_modificar.md](auditoria_modificar.md) (Mover/copiar, Alinear, Lista de materiales): correrlas de a una.
+**Cuándo:** otro día, el que elija Gerardo. Va 5.ª de 6; orden y reparto en [agenda.md](seguimiento/agenda.md) (sección «Orden y reparto de las auditorías»). Absorbe los ítems de [brechas_ensamblar.md](brechas_ensamblar.md).
 
 ## Prompt para el agente
 
 Guardado el 2026-11-07. Modelo sugerido: coordina una sesión Claude Opus 5 con esfuerzo alto; ejecutan Sol (OpenCode) y los agentes gratis aprobados, un ítem por corrida y cada uno en su worktree.
 
 ```text
+AJUSTE DEL COORDINADOR (2026-11-08; manda sobre todo lo que sigue)
+- Orden de las seis auditorías (de a una; la siguiente arranca cuando la anterior quedó cerrada y commiteada): 1) CONSTRUIR (AG-7), 2) herramientas 3D (AG-2), 3) MODIFICAR (AG-4), 4) INSERTAR (AG-6), 5) ENSAMBLAR (AG-5), 6) RENDERIZAR (AG-3). Cada herramienta tiene UNA sola auditoría dueña. Las demás solo la usan en sus pruebas combinadas: si encuentran un bug en una herramienta ajena, cargan la fila en docs/seguimiento/ y la arreglan solo si la dueña ya pasó (está antes en el orden); si la dueña viene después, dejan la fila para ella.
+- Sos la dueña de todo ENSAMBLAR, incluidos Duplicar con uniones, Insertar componente y Lista de materiales (la sección 31 de auditoria_modificar.md te dice qué revisar de ella). Mover/copiar y Alinear ya los cerró MODIFICAR (AG-4): solo probalos sobre componentes. Incluí y cerrá los ítems ASM-17 a ASM-20 y SC6/P-25e2 de docs/brechas_ensamblar.md (su prompt viejo se borró: lo reemplaza este).
+
 # PROMPT MAESTRO — AUDITORÍA, REPARACIÓN Y PARIDAD FUNCIONAL DEL SISTEMA ENSAMBLAR DE OMNICAD CON FUSION 360
 
 ## 1. MISIÓN PRINCIPAL
