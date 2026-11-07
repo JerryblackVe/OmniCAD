@@ -2884,8 +2884,21 @@ class Boceto:
             else:
                 self._tramo(cid, prim, None, lo, False, nuevos, viejos)
         self._coincidencias_de_corte(nuevos)
+        self._soltar_puntos_viejos(viejos)
         self._depurar(viejos)
         return c.id
+
+    def _soltar_puntos_viejos(self, viejos, virtual=None, X=None):
+        """B-233: un punto viejo que ya no usa ninguna curva no queda suelto con lo que tenía puesto (fijo, cotas,
+        coincidencias). Si estaba en la esquina, eso pasa al vértice virtual; si era de un tramo que se fue, se va
+        con él, como en Fusion."""
+        for p in viejos:
+            if p == virtual or p not in self.puntos or self._punto_en_uso(p):
+                continue
+            if virtual is not None and math.dist(self.coords(p), X) < 1e-9:
+                self._fusionar_punto(virtual, p)
+            else:
+                del self.puntos[p]
 
     def partir(self, cid, punto):
         """Partir (SKT-BREAK): divide la curva en las intersecciones más cercanas al clic. Devuelve los ids."""
@@ -3060,6 +3073,7 @@ class Boceto:
                 lejos = f1 if k.entidades == [l1] else f2
                 ln = self.curvas[k.entidades[0]]
                 k.entidades = [virtual, lejos] if ln.p2 == lejos else [lejos, virtual]
+        self._soltar_puntos_viejos(vertices, virtual, X)
         self._depurar(vertices - {virtual})
         return pt1, pt2, virtual
 
@@ -3148,6 +3162,7 @@ class Boceto:
                 ln.p2 = pid
             viejos.append(ids[1])
             self._sin_cotas_de_largo(cid)
+        self._soltar_puntos_viejos(viejos)
         self._depurar(viejos)
         if (t1[0] - F[0]) * d[1] - (t1[1] - F[1]) * d[0] < 0:
             pts.reverse()
@@ -3224,6 +3239,7 @@ class Boceto:
                     setattr(c, a, pid)
             viejos.append(reemplazo)
             self._sin_cotas_de_largo(cid)
+        self._soltar_puntos_viejos(viejos)
         self._depurar(viejos)
         return F, puntos_t[0], puntos_t[1]
 

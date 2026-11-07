@@ -404,7 +404,6 @@ def test_b232_escalar_o_mover_un_perfil_con_chaflan_no_lo_deforma(args, factor, 
     assert p["bounding_box"] == {"min": _ap(caja["min"]), "max": _ap(caja["max"])}
 
 
-@pytest.mark.xfail(strict=True, reason="B-233: el «fijo» del extremo recortado queda en un punto suelto")
 def test_b233_recortar_no_deja_restricciones_en_un_punto_suelto():
     s = api.Sesion()
     _ok(api.llamar(s, "create_sketch", {"name": "B"}))
@@ -432,3 +431,17 @@ def test_b235_el_angulo_del_chaflan_conserva_su_expresion():
     L(s, "sketch_chamfer", line1=lados[0], line2=lados[1], distance=5, angle="ang")
     (angulo,) = [d for d in L(s, "get_sketch")["dimensions"] if d["type"] == "angle"]
     assert angulo["expression"] == "ang"
+
+
+def test_b233_el_empalme_no_deja_restricciones_en_un_punto_suelto():
+    """Gemelo de B-233: el empalme recorta el tramo de más allá de la esquina, y su «fijo» se va con él."""
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    r = L(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0)
+    a, extremo = r["entities"][0]["id"], r["points"][1]
+    b = L(s, "draw_line", start_x=10, start_y=-10, end_x=10, end_y=10)["entities"][0]["id"]
+    L(s, "add_constraint", type="fix", entities=[extremo])
+    L(s, "sketch_fillet", entity1=a, entity2=b, radius=2, point1=[3, 0], point2=[10, 8])
+    g = L(s, "get_sketch")
+    assert extremo not in {p["id"] for p in g["points"]}
+    assert not [c for c in g["constraints"] if extremo in c["entities"]]

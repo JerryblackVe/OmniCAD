@@ -52,7 +52,7 @@ matriz pero con test propio (columna Test); ninguna fila está probada todavía 
 | sk_curva_fusion | `draw_blend_curve` | NB `curva_fusion` | matriz | VERIFICADO |
 | sk_desfase | `offset_sketch_curves` | NB `desfasar` / `desfase` | matriz | VERIFICADO |
 | sk_soltar_desfase | `release_offset` | NB `soltar_desfase` | matriz | VERIFICADO |
-| sk_recortar | `trim_sketch_curve` | NB `recortar` | matriz | VERIFICADO (B-233) |
+| sk_recortar | `trim_sketch_curve` | NB `recortar` | matriz | VERIFICADO (alargar: B-237) |
 | sk_alargar | `extend_sketch_curve` y `trim_sketch_curve mode=extend` | NB `alargar` | matriz | VERIFICADO |
 | sk_partir | `split_sketch_curve` y `trim_sketch_curve mode=break` | NB `partir` | matriz | VERIFICADO |
 | sk_escala | `transform_sketch` `scale` | NB `escalar` | matriz | VERIFICADO |
@@ -87,7 +87,7 @@ recortar, alargar, partir y escala. Diferencias:
 | # | Hallazgo | Evidencia | Fila |
 |---|---|---|---|
 | 1 | Escalar ×2 un rectángulo de 40 × 20 con chaflán 2: área 2707,75 en vez de 3192. Moverlo +100 en x: área 282 en vez de 798 (se deforma). El vértice virtual del chaflán no entra en `puntos_de(ids)` (NB `escalar` y `transformar`) | `test_b232_…` | CORREGIDO (B-232, 2026-11-07); gemelo al copiar: B-236 |
-| 2 | Recortar una línea cuyo extremo tenía «fijo»: la línea termina en un punto nuevo y el «fijo» queda en el punto viejo, suelto | `test_b233_…` | B-233 |
+| 2 | Recortar una línea cuyo extremo tenía «fijo»: la línea termina en un punto nuevo y el «fijo» queda en el punto viejo, suelto | `test_b233_…` | CORREGIDO (B-233, 2026-11-07); gemelo en Alargar: B-237 |
 | 3 | `puntos_espiral` acepta 5000 vueltas (40 001 puntos); el tope de 24,875 vueltas está solo en `draw_spiral`: desde la ventana se puede colgar | `test_b234_…` | CORREGIDO (B-234, 2026-11-07) |
 | 4 | `sketch_chamfer(angle="ang")` guarda la cota de ángulo como «30»: pierde el parámetro (la distancia sí conserva la expresión) | `test_b235_…` | CORREGIDO (B-235, 2026-11-07) |
 | 5 | El MCP borra restricciones y cotas sin decirlo (empalme, chaflán, recortar, mover con giro) y no revierte cuando la edición sobre-restringe (solo `extend_sketch_curve` y `split_sketch_curve` usan `_exigir_sin_conflicto`) | lectura: `herramientas_boceto.py:597-614`, `herramientas_boceto_extra.py:55` | P-68 |
