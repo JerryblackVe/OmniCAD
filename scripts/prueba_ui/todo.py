@@ -7,12 +7,12 @@ Desde `clon/`:
 
 Sin nombres corre todas. Deja los registros (`*.json`), los logs y las capturas en `evidencias/ui_<hoy>/` (fuera de git)
 y al final imprime un resumen: comprobaciones y fallas por pieza.
+En ambos modos guarda SALIDA/tiempos_piezas.json, conservando los tiempos previos de las piezas no ejecutadas.
     --ventana minimizada|visible   (por defecto minimizada: la ventana no aparece ni roba el foco, se puede usar la PC;
                                     visible: se ve y toma el foco, no usar el mouse ni el teclado mientras corre).
     --paralelo N                    (por defecto 1: como siempre, de a una pieza y en orden). Con N > 1 corre hasta N
                                     piezas a la vez, cada una en su propia ventana, y `turno.py` les da N lugares
-                                    (OMNICAD_TURNOS=N para los hijos). Además guarda los segundos de cada pieza en
-                                    SALIDA/tiempos_piezas.json y, si hay uno de una corrida anterior (el más nuevo de
+                                    (OMNICAD_TURNOS=N para los hijos). Si hay tiempos de una corrida anterior (el más nuevo de
                                     `evidencias/ui_*/tiempos_piezas.json`), arranca por la más larga para achicar la
                                     cola final; una pieza sin dato va al final. El resumen sale siempre en el orden de
                                     PIEZAS (o el de los nombres pedidos), termine como termine cada pieza.
@@ -116,16 +116,19 @@ if __name__ == "__main__":
             sys.exit(f"Pieza desconocida: {nombre}. Opciones: {', '.join(PIEZAS)}")
     print(f"Evidencia en {SALIDA}\n")
     mal = 0
+    previos, tiempos = _tiempos_previos(), {}
     if paralelo == 1:
         for nombre in elegidas:                          # como siempre: de a una, en orden, imprimiendo a medida que corren
             if modo == "minimizada" and nombre in PIEZAS_CON_FOCO_REAL:
                 print(f"{nombre:18s} ⚠ saltada: necesita ventana visible (--ventana visible)")
                 continue
-            mal += _informe(nombre, *correr(nombre))
+            t0 = time.monotonic()
+            resultado = correr(nombre)
+            tiempos[nombre] = round(time.monotonic() - t0, 1)
+            mal += _informe(nombre, *resultado)
     else:
-        previos = _tiempos_previos()
         orden = sorted(elegidas, key=lambda n: -previos.get(n, -1.0))   # la más larga primero; sin dato, al final
-        resultados, tiempos = {}, {}
+        resultados = {}
 
         def _una(nombre):
             t0 = time.monotonic()
@@ -135,11 +138,12 @@ if __name__ == "__main__":
         a_correr = [n for n in orden if not (modo == "minimizada" and n in PIEZAS_CON_FOCO_REAL)]
         with ThreadPoolExecutor(max_workers=paralelo) as ex:
             list(ex.map(_una, a_correr))
-        (SALIDA / TIEMPOS).write_text(json.dumps(tiempos, ensure_ascii=False, indent=1), encoding="utf-8")
         for nombre in elegidas:                          # el resumen, siempre en el orden pedido
             if modo == "minimizada" and nombre in PIEZAS_CON_FOCO_REAL:
                 print(f"{nombre:18s} ⚠ saltada: necesita ventana visible (--ventana visible)")
                 continue
             mal += _informe(nombre, *resultados[nombre])
+    SALIDA.mkdir(parents=True, exist_ok=True)
+    (SALIDA / TIEMPOS).write_text(json.dumps({**previos, **tiempos}, ensure_ascii=False, indent=1), encoding="utf-8")
     print("\nLas ✗ no siempre son bugs: abrir el log, ver si es de la app o de la prueba (omnicad-test, sección 5).")
     sys.exit(1 if mal else 0)

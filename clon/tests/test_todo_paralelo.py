@@ -8,9 +8,12 @@ estar corriendo pruebas pesadas con su propio turno).
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 TODO = Path(__file__).resolve().parents[2] / "scripts" / "prueba_ui" / "todo.py"
 NOMBRES = ("corta", "lenta", "media")          # orden alfabético = orden de PIEZAS; lenta es la más larga
@@ -31,6 +34,12 @@ print("=== {comprobaciones} comprobaciones, 0 con")
 
 
 def _piezas_falsas(tmp_path):
+    # Copia mínima: el histórico y los candados tampoco leen las corridas reales de la PC.
+    scripts = tmp_path / "scripts" / "prueba_ui"
+    scripts.mkdir(parents=True)
+    shutil.copy2(TODO, scripts / "todo.py")
+    shutil.copy2(TODO.parents[1] / "turno.py", scripts.parent / "turno.py")
+    (tmp_path / "clon").mkdir()
     piezas = tmp_path / "piezas"
     piezas.mkdir()
     for nombre in NOMBRES:
@@ -46,8 +55,9 @@ def _correr(tmp_path, *argumentos):
                OMNICAD_PRUEBA_SALIDA=str(tmp_path / "salida"), OMNICAD_TURNO_MB="0",
                TMP=str(tmp_path / "tmp"), TEMP=str(tmp_path / "tmp"), TMPDIR=str(tmp_path / "tmp"))
     env.pop("OMNICAD_TURNOS", None)
-    r = subprocess.run([sys.executable, str(TODO), *argumentos], capture_output=True, text=True,
-                       encoding="utf-8", env=env, timeout=300, cwd=str(TODO.parents[2] / "clon"))
+    r = subprocess.run([sys.executable, str(tmp_path / "scripts" / "prueba_ui" / "todo.py"), *argumentos],
+                       capture_output=True, text=True, encoding="utf-8", env=env, timeout=300,
+                       cwd=str(tmp_path / "clon"))
     return r.returncode, r.stdout
 
 
@@ -62,7 +72,7 @@ def _en_orden(texto, nombres):
     return [texto.index(n) for n in nombres] == sorted(texto.index(n) for n in nombres)
 
 
-def test_sin_paralelo_corre_de_a_una_y_no_toca_los_tiempos(tmp_path):
+def test_sin_paralelo_corre_de_a_una_y_guarda_los_tiempos(tmp_path):
     _piezas_falsas(tmp_path)
     codigo, texto = _correr(tmp_path)
     assert codigo == 0, texto
@@ -72,7 +82,29 @@ def test_sin_paralelo_corre_de_a_una_y_no_toca_los_tiempos(tmp_path):
     ini_lenta, fin_lenta = _marcas(salida, "lenta")
     ini_media, _ = _marcas(salida, "media")
     assert fin_corta < ini_lenta < fin_lenta < ini_media      # de a una, en orden de PIEZAS
-    assert not (salida / "tiempos_piezas.json").exists()      # sin --paralelo queda exactamente como hoy
+    tiempos = json.loads((salida / "tiempos_piezas.json").read_text(encoding="utf-8"))
+    assert set(tiempos) == set(NOMBRES)
+    assert all(tiempos[n] >= DUERMEN[n] for n in NOMBRES)
+
+
+@pytest.mark.parametrize("argumentos", [(), ("--paralelo", "2")])
+@pytest.mark.parametrize("origen", ["salida", "evidencias/ui_previa"])
+def test_corrida_parcial_combina_tiempos_previos_y_nuevos(tmp_path, argumentos, origen):
+    _piezas_falsas(tmp_path)
+    anterior = tmp_path / origen / "tiempos_piezas.json"
+    anterior.parent.mkdir(parents=True, exist_ok=True)
+    previos = {"corta": 999.0, "lenta": 27.0, "otra": 51.0}
+    anterior.write_text(json.dumps(previos), encoding="utf-8")
+
+    codigo, texto = _correr(tmp_path, *argumentos, "corta")
+    assert codigo == 0, texto
+    tiempos = json.loads((tmp_path / "salida" / "tiempos_piezas.json").read_text(encoding="utf-8"))
+    assert set(tiempos) == set(previos)
+    assert tiempos["lenta"] == previos["lenta"] and tiempos["otra"] == previos["otra"]
+    assert DUERMEN["corta"] <= tiempos["corta"] < previos["corta"]
+    assert not (tmp_path / "salida" / "lenta.inicio").exists()
+    if origen != "salida":
+        assert json.loads(anterior.read_text(encoding="utf-8")) == previos
 
 
 def test_paralelo_corre_dos_a_la_vez_y_arranca_por_la_mas_larga(tmp_path):
