@@ -416,10 +416,11 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 - Pedido: `docs/auditoria_restricciones.md` (B-223, Coincidente con el origen). Trae tests del solver y de cada restricción, y piezas de ventana nuevas de restricciones.
 - Para esta noche: correr las piezas `restricciones_boceto`, `auditoria_boceto`, `simetria_boceto` e `inferencias` y las piezas nuevas que sume la auditoría; la suite completa cubre los tests nuevos.
 - **Hecho de día (2026-11-06), falta de noche:** B-223 a B-228 cambiaron `ui/editor_boceto.py` (origen elegible, sin `_ordenar`), `restricciones/boceto.py` (orden canónico, ángulo 0…180, distancia entre no paralelas) y `restricciones/solver.py` (`_preferir_traslacion`). De día corrieron solo los tests que tocan restricciones y solver (≈ 2000 verdes por ítem; detalle en el Registro de `PROJECT_LOG.md`). `scripts/tests_afectados.py` elige 363 de 385 archivos: la suite completa los cubre. Falta además la prueba de humo y las piezas `restricciones_boceto`, `auditoria_boceto`, `simetria_boceto`, `inferencias`, `boceto_cotas` y `boceto_herramientas` (la ventana nunca se probó entera con el origen elegible y la cota de ángulo nueva). Ojo con `tmp_path`: si algo falla por `FileNotFoundError` en la carpeta temporal, repetirlo solo.
+- **Fase E cerrada (2026-11-07):** `tests/test_restricciones_escenarios.py` (19 verdes y B-231 en `xfail` estricto) es solo tests, sin código del programa: de noche lo cubre la suite completa. La auditoría quedó COMPLETA; lo abierto vive en H-106 y B-231.
 
-## 3v. Tarea en espera: auditoría de CREAR y MODIFICAR del boceto (2026-11-06)
+## 3v. Tarea nueva: auditoría de CREAR y MODIFICAR del boceto (2026-11-06, arrancó el 2026-11-07)
 
-- Pedido: `docs/auditoria_boceto_crear_modificar.md`. Arranca cuando cierre la de restricciones (3u). Va a sumar piezas de ventana por comando de CREAR y MODIFICAR.
+- Pedido: `docs/auditoria_boceto_crear_modificar.md`. Arrancó al cerrar la de restricciones (3u): fase 1, inventario (brief cm-1). Va a sumar piezas de ventana por comando de CREAR y MODIFICAR.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 
