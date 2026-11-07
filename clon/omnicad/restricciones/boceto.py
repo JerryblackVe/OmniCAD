@@ -2054,6 +2054,11 @@ class Boceto:
         ("centro" o "tangente") vale en una distancia con un círculo o arco; ahí se guarda siempre (falta = centro)."""
         datos = dict(datos or {})
         self._validar_cota(tipo, entidades)
+        # Solo al crear: una cota guardada puede haber perdido el paralelismo (no se descarta al cargar).
+        if tipo == "distancia" and [self.tipo_de(e) for e in entidades] == ["linea", "linea"]:
+            d1, d2 = (self._direccion(e) for e in entidades)
+            if abs(d1[0] * d2[1] - d1[1] * d2[0]) >= 1e-6:  # mismo umbral que la herramienta Cota de la ventana
+                raise ErrorBoceto("Las líneas no son paralelas. Usá una cota de ángulo.")
         if tipo == "angulo" and not referencia:
             try:
                 valor = float(expresion.replace(",", "."))

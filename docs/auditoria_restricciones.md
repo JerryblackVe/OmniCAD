@@ -197,6 +197,7 @@ auditoría, correcciones y verificaciones. Documentá con precisión todo lo que
 | restr-3 | B-224 | Coordinador Opus (Qwen y Sol sin cupo) | main | Commit c81bd8c |
 | restr-4 | B-226 y B-225 (elección de solución del solver) | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r4` / `restr-4` | Fusionada (cortada a los 25 min esperando turno; tests y revisión del coordinador) |
 | restr-5 | B-227 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r5` / `restr-5` | Fusionada (dos corridas cortadas a los 25 min) |
+| restr-6 | B-228 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r6` / `restr-6` | Fusionada (vio la regresión de B-227) |
 
 ### Brief restr-1 (B-223)
 
@@ -427,4 +428,61 @@ Desde `D:/PROGRAMA-r5/clon` con `PYTHONPATH=D:/PROGRAMA-r5/clon`:
 ## Informe (apenas termines)
 `D:/PROGRAMA-r5/evidencias/restr5/informe.md`: qué cambiaste (archivo y función), los límites elegidos y por qué, tests (rojo
 antes, verde después) y la salida REAL de ruff y de cada tanda (últimas líneas), lo que no pudiste verificar.
+```
+
+### Brief restr-6 (B-228)
+
+```text
+Corrida restr-6 · B-228 · OmniCAD (CAD paramétrico en Python). Todo en español.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-r6` (rama `restr-6`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no instales nada.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, desde `D:/PROGRAMA-r6/clon`, con `PYTHONPATH=D:/PROGRAMA-r6/clon`.
+- Leé `AGENTS.md`. Leé el código real y buscá todos los llamadores antes de editar; el cambio más chico que resuelve la causa;
+  conservá los finales de línea (`boceto.py`, `solver.py` y `herramientas_boceto.py` son LF). NO edites `docs/seguimiento/` ni
+  `PROJECT_LOG.md`.
+- Tests: un archivo chico con `-k` se corre SIN turno, directo con pytest. Las tandas de varios archivos van con
+  `../scripts/turno.py --plazo 900 -- …` (puede esperar en fila). Escribí el informe ANTES de lanzar las tandas con turno.
+
+## El ítem: B-228
+Una cota de distancia entre dos líneas NO paralelas se acepta y mide solo un extremo de la segunda:
+```python
+from omnicad.restricciones.boceto import Boceto
+from omnicad.restricciones.solver import resolver
+b = Boceto()
+l1, l2 = b.agregar_linea((0, 0), (10, 0)), b.agregar_linea((0, 5), (10, 15))
+k = b.agregar_cota("distancia", [l1, l2], "7")
+resolver(b, {k: 7.0})   # ok=True, pero l2 queda en y=6,03 y 15: solo su p1 está a 7
+```
+Modelo: `clon/omnicad/restricciones/boceto.py › _validar_cota` (~línea 2612) acepta línea-línea sin mirar si son paralelas;
+la ecuación (`clon/omnicad/restricciones/solver.py`, ~línea 494) mide `p1` de la segunda contra la primera. La ventana ya
+convierte ese caso en cota de ángulo (`clon/omnicad/ui/editor_boceto.py`, buscá dónde elige «angulo» para dos líneas no
+paralelas, ~4755). La API (`clon/omnicad/api/herramientas_boceto.py › add_dimension`) usa el modelo.
+
+En Fusion: «Línea sola o paralelas: lineal; no paralelas: angular» (ayuda: `D:/PROGRAMA/clon/.venv/Scripts/python.exe
+D:/PROGRAMA/scripts/fusion_docs.py ver "Dimension sketch geometry" -s fusion-sketch`). Leela antes de decidir.
+
+Arreglo pedido: que el modelo rechace (con un `ErrorBoceto` claro que diga que use una cota de ángulo) una distancia entre
+dos líneas que NO son paralelas al crearla, con la misma tolerancia que usa la ventana para decidir. Ojo: una cota que YA
+existe entre líneas que eran paralelas y después dejan de serlo (por otra restricción) no se puede romper al abrir un archivo
+viejo: mirá cómo se cargan las cotas (`desde_dict`) y que la validación sea solo al crear. Si la descripción de `add_dimension`
+cambia, regenerá `docs/agentes/herramientas.md` desde `D:/PROGRAMA-r6` con `PYTHONPATH=D:/PROGRAMA-r6/clon
+D:/PROGRAMA/clon/.venv/Scripts/omnicad.exe tools --markdown --output docs/agentes/herramientas.md` y corré
+`tests/test_doc_agentes.py`.
+
+## Tests (escribilos primero, mirá que fallen)
+Al final de `clon/tests/test_restricciones_matriz.py`:
+- `test_b228_distancia_entre_lineas_no_paralelas_se_rechaza`: con `agregar_cota` da `ErrorBoceto`; por el MCP
+  (`api.llamar(s, "add_dimension", {...})`, mirá `tests/test_api_boceto.py` para armar la sesión) da `ok: false`.
+- `test_b228_distancia_entre_paralelas_sigue_andando`: dos paralelas a 5, cota 7 → quedan a 7 (las dos puntas).
+- `test_b228_un_archivo_viejo_con_esa_cota_se_abre`: `Boceto.desde_dict` de un dict con esa cota no falla.
+
+## Verificación
+Desde `D:/PROGRAMA-r6/clon` con `PYTHONPATH=D:/PROGRAMA-r6/clon`: ruff (`-m ruff check .`); `pytest
+tests/test_restricciones_matriz.py -q` sin turno; después, con turno, los tests que mencionan `agregar_cota` o `add_dimension`
+(`grep -l`), en tandas de ~25 archivos. Prohibido `tests_afectados.py --correr`, la suite completa y `pytest -n`.
+
+## Informe
+`D:/PROGRAMA-r6/evidencias/restr6/informe.md`: qué cambiaste, qué dice la ayuda de Fusion (ruta), la tolerancia elegida y por
+qué, tests (rojo antes, verde después) y la salida REAL de ruff y de cada tanda (últimas líneas), lo que no pudiste verificar.
 ```

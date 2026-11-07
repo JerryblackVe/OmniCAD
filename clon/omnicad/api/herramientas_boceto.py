@@ -1539,7 +1539,7 @@ def _exigir_entidades(b, ids):
              "Agrega una cota (dimensión) que maneja la geometría. El valor es un número (mm o grados) o una expresión "
              "con parámetros ('ancho / 2'); si se omite, usa la medida actual. Las cotas de largo, radio, diámetro y "
              "desfase tienen que ser mayores que cero y de hasta 1.000.000 mm (1 km). Entidades por tipo: distance: dos "
-             "puntos, una línea, un punto y una línea, o dos líneas; horizontal y vertical: dos puntos o una línea; "
+             "puntos, una línea, un punto y una línea, o dos líneas paralelas (si no son paralelas, usá angle); horizontal y vertical: dos puntos o una línea; "
              "radius y diameter: un círculo o arco (diameter también acepta un punto o una línea con una línea central: mide el doble de la distancia al eje, como Fusion); angle: dos líneas; offset: dos líneas o dos círculos/arcos. distance "
              "también acepta un círculo o arco con un punto, una línea u otro círculo o arco (`mode`: center mide al "
              "centro, tangent al borde más cercano; entre círculos, de borde a borde) y un punto con una spline (la "

@@ -428,3 +428,61 @@ def test_b227_la_api_usa_el_mismo_error_del_modelo(texto):
     assert not r["ok"] and r["error_kind"] == "INVALID_DIMENSION", r
     assert "La cota de ángulo tiene que estar entre 0 y 180 grados" in r["mensaje"]
     assert api.llamar(s, "get_sketch", {"sketch": "P"})["result"] == antes
+
+
+@pytest.mark.parametrize("canal", ["modelo", "mcp"])
+@pytest.mark.parametrize("referencia", [False, True])
+@pytest.mark.parametrize("desnivel", [10, 2e-5], ids=["oblicuas", "fuera_de_tolerancia"])
+def test_b228_distancia_entre_lineas_no_paralelas_se_rechaza(canal, referencia, desnivel):
+    mensaje = "Usá una cota de ángulo"
+    if canal == "modelo":
+        b = Boceto()
+        l1 = b.agregar_linea((0, 0), (10, 0))
+        l2 = b.agregar_linea((0, 5), (10, 5 + desnivel))
+        antes = b.a_dict()
+        with pytest.raises(ErrorBoceto, match=mensaje):
+            b.agregar_cota("distancia", [l1, l2], "7", referencia=referencia)
+        assert b.a_dict() == antes
+    else:
+        from omnicad import api
+
+        s = api.Sesion()
+        assert api.llamar(s, "create_sketch", {"name": "P"})["ok"]
+        lineas = []
+        for y, dy in ((0, 0), (5, desnivel)):
+            r = api.llamar(s, "draw_line", {"sketch": "P", "start_x": 0, "start_y": y,
+                                            "end_x": 10, "end_y": y + dy})
+            assert r["ok"], r
+            lineas.append(r["result"]["entities"][0]["id"])
+        antes = s.doc.a_dict()
+        r = api.llamar(s, "add_dimension", {"sketch": "P", "type": "distance", "entities": lineas,
+                                            "value": "7", "reference": referencia})
+        assert not r["ok"] and r["error_kind"] == "INVALID_DIMENSION", r
+        assert mensaje in r["mensaje"]
+        assert s.doc.a_dict() == antes
+
+
+@pytest.mark.parametrize("extremos", [((0, 5), (10, 5)), ((10, 5), (0, 5)), ((0, 5), (10, 5 + 5e-6))],
+                         ids=["paralelas", "sentidos_opuestos", "dentro_de_tolerancia"])
+def test_b228_distancia_entre_paralelas_sigue_andando(extremos):
+    b = Boceto()
+    l1, l2 = b.agregar_linea((0, 0), (10, 0)), b.agregar_linea(*extremos)
+    b.agregar_restriccion("fijo", [l1])
+    b.agregar_restriccion("paralela", [l1, l2])
+    k = b.agregar_cota("distancia", [l1, l2], "7")
+    assert resolver(b, {k: 7.0}).ok
+    for p in b.curvas[l2].extremos():
+        assert _dist_punto_recta(b, p, l1) == pytest.approx(7, abs=1e-6)
+
+
+def test_b228_un_archivo_viejo_con_esa_cota_se_abre():
+    b = Boceto()
+    l1, l2 = b.agregar_linea((0, 0), (10, 0)), b.agregar_linea((0, 5), (10, 5))
+    k = b.agregar_cota("distancia", [l1, l2], "7")
+    # La cota ya existía cuando las líneas dejaron de ser paralelas.
+    b.puntos[b.curvas[l2].p2].y = 15
+    datos = b.a_dict()
+    copia = Boceto.desde_dict(datos)
+    assert copia.a_dict() == datos
+    assert copia.cotas[k].entidades == [l1, l2]
+    assert resolver(copia, {k: 7.0}).ok
