@@ -411,6 +411,7 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 - **P-71 (2026-11-07):** los tres casos de MODIFICAR se reprodujeron con Qt nativo y eventos al widget (`test_gizmo_boceto.py::test_p71_…`): aviso de empalme compartido con MCP, Soltar desfase sin conservar cota y Escala con base obligatoria. Ninguno necesitó foco real. Incluir estas regresiones y la doc regenerada en el próximo cierre integrado; no reemplazan las piezas de la fase 6.
 - **Falta (2026-11-07, tarde):** suite completa y piezas de ventana del boceto (`boceto_herramientas`, `auditoria_boceto`, `boceto_cotas`) sobre P-69 (f356869), P-68 (1c826f8), P-70 (f088367), P-71 (c86ab4f), H-107 (fbae72b) y H-108 (064f8f0): cada uno cerró con `tests_afectados.py` verde, no con la suite. En la ventana real, con foco: Empalme y Chaflán por vértice (H-107: vista previa al pasar y clic en una punta libre que elige la curva) y la tecla S de Empalme.
 - **Falta (P-67, 2026-11-07):** suite completa con P-67 (spline de control en grado 5; corrieron sus 20 grupos de `tests_afectados`); en la ventana, dibujar una spline de control con 4 clics y Enter: el selector «Grado» muestra 5 y la curva queda en grado 3; con 6 clics, grado 5. Pieza: `boceto_herramientas`.
+- **Falta (fase 3, 2026-11-07):** `tests/test_boceto_combinaciones.py` (nuevo, por API) en la suite completa; sus combinaciones 1-8 siguen sin probarse desde la ventana (fase 6).
 
 ## 4. Cosas que ninguna prueba cubre todavía
 
