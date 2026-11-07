@@ -379,21 +379,25 @@ def test_comando_da_la_geometria_pedida_y_sobrevive_a_guardar(clave):
 
 
 # ---------------------------------------------------------------- hallazgos de la fase 1 (se arreglan de a uno)
-def _rect_con_chaflan(s):
+def _rect_con_esquina(s, comando):
+    """Rectángulo de 40 × 20 con un chaflán de 2 o un empalme de 3 en una esquina; devuelve su área."""
     lados = _rect(s, 1, 1, 41, 21)
-    L(s, "sketch_chamfer", line1=lados[0], line2=lados[1], distance=2)
-    return 40 * 20 - 2 * 2 / 2
+    if comando == "chaflan":
+        L(s, "sketch_chamfer", line1=lados[0], line2=lados[1], distance=2)
+        return 40 * 20 - 2 * 2 / 2
+    L(s, "sketch_fillet", entity1=lados[0], entity2=lados[1], radius=3)
+    return 40 * 20 - 9 * (1 - math.pi / 4)
 
 
-@pytest.mark.xfail(strict=True, reason="B-232: escalar o mover deja atrás el vértice virtual del chaflán")
+@pytest.mark.parametrize("comando", ["chaflan", "empalme"])
 @pytest.mark.parametrize(("args", "factor", "caja"), [
     ({"scale": 2, "center_x": 1, "center_y": 1}, 4, {"min": [1, 1], "max": [81, 41]}),
     ({"dx": 100}, 1, {"min": [101, 1], "max": [141, 21]}),
 ], ids=["escalar", "mover"])
-def test_b232_escalar_o_mover_un_perfil_con_chaflan_no_lo_deforma(args, factor, caja):
+def test_b232_escalar_o_mover_un_perfil_con_chaflan_no_lo_deforma(args, factor, caja, comando):
     s = api.Sesion()
     _ok(api.llamar(s, "create_sketch", {"name": "B"}))
-    area = _rect_con_chaflan(s)
+    area = _rect_con_esquina(s, comando)
     L(s, "transform_sketch", **args)
     (p,) = L(s, "get_sketch")["profiles"]
     assert p["area"] == _ap(area * factor, abs=1e-3)

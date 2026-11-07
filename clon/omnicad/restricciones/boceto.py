@@ -2270,6 +2270,19 @@ class Boceto:
                     salida.append(p)
         return salida
 
+    def _con_vertices_virtuales(self, ids, pts):
+        """`pts` más los puntos sueltos (de ninguna curva) atados solo a lo elegido, como el vértice virtual de un
+        chaflán o un empalme: si quedaran quietos, sus cotas tirarían de la figura al moverla o escalarla (B-232)."""
+        en_curvas = {p for c in self.curvas.values() for p in c.puntos()}
+        elegidos = set(ids) | set(pts)
+        otros = {}
+        for t in (self.restricciones, self.cotas):
+            for r in t.values():
+                for e in r.entidades:
+                    if e in self.puntos and e not in en_curvas and e not in elegidos:
+                        otros.setdefault(e, set()).update(set(r.entidades) - {e})
+        return list(pts) + [p for p, ents in otros.items() if ents and ents <= elegidos]
+
     def _extremos_cota(self, entidades):
         if len(entidades) == 2:
             return self.coords(entidades[0]), self.coords(entidades[1])
@@ -3659,7 +3672,7 @@ class Boceto:
             mapa, mapa_c = self._copiar(ids, f, True, angulo)
             return objetos_ids + list(mapa_c.values()) + [mapa[i] for i in ids if i in mapa]
         self.comprobar_mover(ids)
-        pts = self.puntos_de(ids)
+        pts = self._con_vertices_virtuales(ids, self.puntos_de(ids))
         self._transformar_puntos(pts, f)
         for i in ids:
             if isinstance(self.curvas.get(i), Texto):
@@ -3837,7 +3850,7 @@ class Boceto:
             objetos.transformar(self, objetos_ids, objetos.afin(sx=factor, sy=factor, pivote=base))
             ids = [i for i in ids if i not in self.objetos]
         self.comprobar_escalar(ids, base)
-        pts = self.puntos_de(ids)
+        pts = self._con_vertices_virtuales(ids, self.puntos_de(ids))
         self._transformar_puntos(pts, lambda q: (base[0] + factor * (q[0] - base[0]), base[1] + factor * (q[1] - base[1])))
         afectados = set(pts) | set(ids)
         for i in ids:
@@ -3863,15 +3876,21 @@ class Boceto:
                 c.desfase_base *= factor
                 c.grosor_decoracion *= factor
                 c.ajustes_kerning = [[i, x * factor] for i, x in c.ajustes_kerning]
-        for k in self.cotas.values():
-            if k.tipo != "angulo" and set(k.entidades) <= afectados:
-                for clave in ("desfase", "texto"):      # la ubicación de la cota crece con la figura
-                    if clave in k.datos:
-                        k.datos[clave] *= factor
-                try:
-                    k.expresion = _numero(float(k.expresion.replace(",", ".")) * factor)
-                except ValueError:
-                    k.expresion = f"({k.expresion}) * {_numero(factor)}"
+        escaladas = {kid for kid, k in self.cotas.items() if k.tipo != "angulo" and set(k.entidades) <= afectados}
+        nombres = {self.cotas[kid].nombre for kid in escaladas} - {None}
+        for kid in escaladas:
+            k = self.cotas[kid]
+            for clave in ("desfase", "texto"):          # la ubicación de la cota crece con la figura
+                if clave in k.datos:
+                    k.datos[clave] *= factor
+            # Una cota que copia a otra que también se escala («d1» o `igual_a`, el chaflán de distancias iguales)
+            # ya crece con ella: multiplicarla otra vez la duplicaba.
+            if k.datos.get("igual_a") in escaladas or k.expresion.strip() in nombres:
+                continue
+            try:
+                k.expresion = _numero(float(k.expresion.replace(",", ".")) * factor)
+            except ValueError:
+                k.expresion = f"({k.expresion}) * {_numero(factor)}"
         return objetos_ids + list(ids)
 
     # ------------------------------------------------------------ CREAR: simetría y patrones
