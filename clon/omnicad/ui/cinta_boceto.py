@@ -32,7 +32,7 @@ GRUPOS_BOCETO = [
                                    _i("", "sk_perfil_giratorio"), _i("", "sk_isoparametrica"), _i("Proyectar eje", "sk_proyectar_eje"),
                                    _i("", "sk_romper_vinculo"),
                                    _i("", "sk_proyecciones_perdidas")]), SEP,
-        _i("Cota de boceto", "sk_cota"), SEP, _i("Helix / Spiral", "sk_espiral")]),
+        _i("Cota de boceto", "sk_cota"), SEP, _i("Espiral", "sk_espiral")]),
     ("MODIFICAR", ["sk_empalme", "sk_recortar", "sk_desfase", "sk_curva_fusion"], [
         _i("Empalme", "sk_empalme"),
         _sub("Chaflán", [_i("", "sk_chaflan"), _i("", "sk_chaflan_dist_angulo"), _i("", "sk_chaflan_dos_dist")]),

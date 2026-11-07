@@ -1,0 +1,432 @@
+"""Matriz de la auditoría de CREAR y MODIFICAR del boceto (fase 1), sin ventana, por la API (la misma del MCP y la CLI).
+
+Un caso por comando o variante de la cinta: lo arma por la API y comprueba con números (largos, radios, centros, áreas
+de perfiles) que el resultado es el que dicen las entradas; después, que la receta guardada y vuelta a abrir
+(`get_recipe` → `apply_recipe`) da el mismo boceto. Inventario: docs/auditorias/boceto_crear_modificar_inventario.md.
+"""
+import math
+
+import pytest
+
+from omnicad import api
+
+
+def _ok(r):
+    assert r["ok"], r
+    return r["result"]
+
+
+def L(s, nombre, **args):
+    return _ok(api.llamar(s, nombre, {"sketch": "B", **args} if nombre not in _SIN_BOCETO else args))
+
+
+_SIN_BOCETO = {"create_parameter", "set_parameter"}
+
+
+def _ids(r):
+    return [e["id"] for e in r["entities"]]
+
+
+def _ents(s):
+    return L(s, "get_sketch")["entities"]
+
+
+def _de(s, tipo, construccion=False):
+    return [e for e in _ents(s) if e["type"] == tipo and e["construction"] == construccion]
+
+
+def _areas(s):
+    return sorted(p["area"] for p in L(s, "get_sketch")["profiles"])
+
+
+def _dist_recta(xy, linea):
+    (x1, y1), (x2, y2) = linea["start"], linea["end"]
+    return abs((x2 - x1) * (y1 - xy[1]) - (x1 - xy[0]) * (y2 - y1)) / math.hypot(x2 - x1, y2 - y1)
+
+
+def _rect(s, x1=0, y1=0, x2=60, y2=40):
+    """Ids de las 4 líneas: abajo, derecha, arriba, izquierda."""
+    return _ids(L(s, "draw_rectangle", x1=x1, y1=y1, x2=x2, y2=y2))
+
+
+def _ap(v, abs=2e-4):             # get_sketch redondea a 4 decimales
+    return pytest.approx(v, abs=abs)
+
+
+# ---------------------------------------------------------------- CREAR
+def linea(s):
+    L(s, "draw_line", start_x=0, start_y=0, end_x=30, end_y=40)
+    assert _de(s, "line")[0]["length"] == _ap(50)
+
+
+def linea_medio(s):
+    L(s, "draw_line", start_x=0, start_y=0, end_x=10, end_y=0, midpoint=True)
+    (e,) = _de(s, "line")
+    assert sorted([tuple(e["start"]), tuple(e["end"])]) == [(-10, 0), (10, 0)]
+
+
+def rectangulo(s):
+    _rect(s)
+    assert _areas(s) == [_ap(2400)]
+
+
+def rectangulo_3p(s):
+    L(s, "draw_rectangle", three_points=[[0, 0], [30, 30], [20, 40]])
+    lados = sorted(round(e["length"], 6) for e in _de(s, "line"))
+    assert lados == _ap([math.hypot(10, 10)] * 2 + [math.hypot(30, 30)] * 2)
+    assert _areas(s) == [_ap(math.hypot(30, 30) * math.hypot(10, 10))]
+
+
+def rectangulo_centro(s):
+    L(s, "draw_rectangle", center_x=5, center_y=-5, width=20, height=10, center_diagonals=True)   # como el editor
+    assert len(_de(s, "line", construccion=True)) == 2
+    p = L(s, "get_sketch")["profiles"][0]
+    assert p["bounding_box"] == {"min": _ap([-5, -10]), "max": _ap([15, 0])}
+
+
+def circulo(s):
+    L(s, "draw_circle", radius=5, center_x=2, center_y=3)
+    (c,) = _de(s, "circle")
+    assert (c["center"], c["radius"]) == (_ap([2, 3]), _ap(5))
+
+
+def circulo_2p(s):
+    L(s, "draw_circle", kind="two_points", points=[[0, 0], [10, 0]])
+    (c,) = _de(s, "circle")
+    assert (c["center"], c["radius"]) == (_ap([5, 0]), _ap(5))
+
+
+def circulo_3p(s):
+    L(s, "draw_circle", kind="three_points", points=[[5, 0], [0, 5], [-5, 0]])
+    (c,) = _de(s, "circle")
+    assert (c["center"], c["radius"]) == (_ap([0, 0]), _ap(5))
+
+
+def circulo_2t(s):
+    a = _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=40, end_y=0))[0]
+    b = _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=0, end_y=40))[0]
+    L(s, "draw_tangent_circle", lines=[a, b], radius=5, x=6, y=6)
+    (c,) = _de(s, "circle")
+    assert (c["center"], c["radius"]) == (_ap([5, 5]), _ap(5))
+
+
+def circulo_3t(s):
+    lados = [_ids(L(s, "draw_line", start_x=x1, start_y=y1, end_x=x2, end_y=y2))[0]
+             for x1, y1, x2, y2 in ((0, 0, 30, 0), (30, 0, 0, 40), (0, 40, 0, 0))]
+    L(s, "draw_tangent_circle", lines=lados, x=8, y=8)
+    (c,) = _de(s, "circle")
+    assert (c["center"], c["radius"]) == (_ap([10, 10]), _ap(10))           # triángulo 30-40-50: r = 10
+
+
+def arco_3p(s):
+    L(s, "draw_arc", start_x=10, start_y=0, mid_x=0, mid_y=10, end_x=-10, end_y=0)
+    (a,) = _de(s, "arc")
+    assert (a["center"], a["radius"]) == (_ap([0, 0]), _ap(10))
+
+
+def arco_centro(s):
+    L(s, "draw_arc", start_x=10, start_y=0, center_x=0, center_y=0, sweep_angle=90)
+    (a,) = _de(s, "arc")
+    assert (a["radius"], a["end"]) == (_ap(10), _ap([0, 10]))
+
+
+def arco_tangente(s):
+    ln = _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0))[0]
+    L(s, "draw_arc", start_x=20, start_y=0, end_x=20, end_y=10, tangent_to=ln)
+    (a,) = _de(s, "arc")
+    (linea_e,) = _de(s, "line")
+    assert _dist_recta(a["center"], linea_e) == _ap(a["radius"])
+    assert a["radius"] == _ap(5)
+
+
+def _poligono(kind, radio_vertice):
+    def caso(s):
+        L(s, "create_polygon", sides=6, radius=10, center_x=0, center_y=0, kind=kind)
+        lados = _de(s, "line")
+        assert len(lados) == 6
+        assert [math.hypot(*e["start"]) for e in lados] == _ap([radio_vertice] * 6)
+    return caso
+
+
+def poligono_arista(s):
+    L(s, "create_polygon", sides=4, kind="edge", edge_points=[[0, 0], [10, 0], [5, 5]], radius=1)
+    lados = _de(s, "line")
+    assert len(lados) == 4 and {round(e["length"], 6) for e in lados} == {10}
+    assert _areas(s) == [_ap(100)]
+
+
+def elipse(s):
+    L(s, "draw_ellipse", major_radius=8, minor_radius=3, center_x=1, center_y=2, angle=30)
+    (e,) = _de(s, "ellipse")
+    assert (e["center"], e["major_radius"], e["minor_radius"], e["angle"]) == (_ap([1, 2]), _ap(8), _ap(3), _ap(30))
+    assert _areas(s) == [_ap(math.pi * 8 * 3, abs=1e-3)]
+
+
+_AREA_RANURA = 30 * 10 + math.pi * 25
+_AREA_ARCO = math.pi * (15 ** 2 - 5 ** 2) / 2 + math.pi * 25     # media corona + los dos extremos
+
+
+def _ranura(kind, puntos, area):
+    def caso(s):
+        L(s, "draw_slot", kind=kind, points=puntos, width=10)
+        assert _areas(s) == [_ap(area, abs=1e-3)]
+    return caso
+
+
+def spline(tipo):
+    def caso(s):
+        L(s, "draw_spline", points=[[0, 0], [10, 8], [20, 0], [30, 5]], spline_type=tipo)
+        (e,) = _de(s, "spline")
+        assert e["spline_type"] == tipo and sum(e["vertices"], []) == _ap([0, 0, 10, 8, 20, 0, 30, 5])
+    return caso
+
+
+def conica(s):
+    L(s, "draw_conic", start_x=0, start_y=0, end_x=20, end_y=0, vertex_x=10, vertex_y=10, rho=0.3)
+    (e,) = _de(s, "conic")
+    assert (e["start"], e["vertex"], e["end"], e["rho"]) == (_ap([0, 0]), _ap([10, 10]), _ap([20, 0]), _ap(0.3))
+
+
+def punto(s):
+    p = L(s, "draw_point", x=3, y=4)["points"][0]
+    assert {q["id"]: (q["x"], q["y"]) for q in L(s, "get_sketch")["points"]}[p] == _ap((3, 4))
+
+
+def texto(s):
+    L(s, "add_text", text="OH", x=0, y=0, height=10)
+    (t,) = _de(s, "text")
+    assert t["text"] == "OH"
+    assert len(_areas(s)) >= 2                                   # la O tiene agujero; la H, un contorno
+
+
+def desglosar_texto(s):
+    t = _ids(L(s, "add_text", text="L", x=0, y=0, height=10))[0]
+    L(s, "explode_text", entity=t)
+    assert not _de(s, "text") and len(_ents(s)) >= 6              # la L queda como sus segmentos
+    assert len(_areas(s)) == 1
+
+
+def simetria(s):
+    eje = _ids(L(s, "draw_line", start_x=0, start_y=-10, end_x=0, end_y=10, construction=True))[0]
+    c = _ids(L(s, "draw_circle", radius=2, center_x=5, center_y=3))[0]
+    L(s, "mirror_sketch", entities=[c], axis=eje)
+    assert sorted(tuple(e["center"]) for e in _de(s, "circle")) == [_ap((-5, 3)), _ap((5, 3))]
+
+
+def patron_circular(s):
+    c = _ids(L(s, "draw_circle", radius=1, center_x=10, center_y=0))[0]
+    L(s, "sketch_circular_pattern", entities=[c], count=4)
+    assert sorted(tuple(round(v, 6) for v in e["center"]) for e in _de(s, "circle")) == \
+        [(-10, 0), (0, -10), (0, 10), (10, 0)]
+
+
+def patron_rectangular(s):
+    c = _ids(L(s, "draw_circle", radius=1, center_x=0, center_y=0))[0]
+    L(s, "sketch_rectangular_pattern", entities=[c], count1=3, distance1=20, count2=2, distance2=5)
+    assert sorted(tuple(round(v, 6) for v in e["center"]) for e in _de(s, "circle")) == \
+        [(0, 0), (0, 5), (10, 0), (10, 5), (20, 0), (20, 5)]
+
+
+def editar_patron(s):
+    c = _ids(L(s, "draw_circle", radius=1, center_x=10, center_y=0))[0]
+    r = L(s, "sketch_circular_pattern", entities=[c], count=4)
+    L(s, "edit_sketch_pattern", pattern=r["pattern"], count=6)
+    assert len(_de(s, "circle")) == 6
+
+
+def cota(s):
+    abajo = _rect(s)[0]
+    L(s, "add_dimension", type="distance", entities=[abajo], value=80)
+    assert _areas(s) == [_ap(80 * 40, abs=1e-3)]
+
+
+def espiral(s):
+    L(s, "draw_spiral", center=[0, 0], start=[5, 0], turns=3, pitch=2)
+    (e,) = _de(s, "spline")
+    assert len(e["vertices"]) == 25 and e["vertices"][0] == _ap([5, 0]) and e["vertices"][-1] == _ap([11, 0])
+
+
+# ---------------------------------------------------------------- MODIFICAR
+def empalme(s):
+    abajo, derecha, *_ = _rect(s)
+    L(s, "sketch_fillet", entity1=abajo, entity2=derecha, radius=5)
+    (a,) = _de(s, "arc")
+    assert a["radius"] == _ap(5) and a["center"] == _ap([55, 5])
+    assert _areas(s) == [_ap(2400 - 25 * (1 - math.pi / 4), abs=1e-3)]
+
+
+def _chaflan(**opciones):
+    def caso(s):
+        abajo, derecha, *_ = _rect(s)
+        L(s, "sketch_chamfer", line1=abajo, line2=derecha, **opciones)
+        d1 = opciones["distance"]
+        d2 = opciones.get("distance2") or (d1 * math.tan(math.radians(opciones["angle"])) if "angle" in opciones else d1)
+        assert len(_de(s, "line")) == 5
+        assert _areas(s) == [_ap(2400 - d1 * d2 / 2, abs=1e-3)]
+    return caso
+
+
+def curva_fusion(s):
+    a = _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=10, end_y=0))[0]
+    b = _ids(L(s, "draw_line", start_x=20, start_y=5, end_x=30, end_y=5))[0]
+    L(s, "draw_blend_curve", entity1=a, entity2=b, point1=[10, 0], point2=[20, 5])
+    (sp,) = _de(s, "spline")
+    assert (sp["vertices"][0], sp["vertices"][-1]) == (_ap([10, 0]), _ap([20, 5]))
+
+
+def desfase(s):
+    abajo = _rect(s)[0]
+    L(s, "offset_sketch_curves", entity=abajo, distance=2, side_x=-50, side_y=-50)
+    assert _areas(s) == [_ap(64 * 44 - 2400, abs=1e-3), _ap(2400)]            # el anillo y el original
+
+
+def soltar_desfase(s):
+    abajo = _rect(s)[0]
+    nuevos = _ids(L(s, "offset_sketch_curves", entity=abajo, distance=2, side_x=-50, side_y=-50))
+    L(s, "release_offset", entity=nuevos[0])
+    tipos = {c["type"] for c in L(s, "get_sketch")["constraints"]}
+    assert "offset" not in tipos and _areas(s) == [_ap(64 * 44 - 2400, abs=1e-3), _ap(2400)]
+
+
+def recortar(s):
+    _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0))
+    _ids(L(s, "draw_line", start_x=10, start_y=-10, end_x=10, end_y=10))
+    L(s, "trim_sketch_curve", entity=_de(s, "line")[0]["id"], x=15, y=0)
+    largos = sorted(round(e["length"], 6) for e in _de(s, "line"))
+    assert largos == [10, 20]
+
+
+def alargar(s):
+    a = _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=5, end_y=0))[0]
+    L(s, "draw_line", start_x=10, start_y=-10, end_x=10, end_y=10)
+    L(s, "extend_sketch_curve", curve=a, point=[5, 0])
+    assert next(e for e in _de(s, "line") if e["id"] == a)["length"] == _ap(10)
+
+
+def partir(s):
+    a = _ids(L(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0))[0]
+    L(s, "draw_line", start_x=8, start_y=-10, end_x=8, end_y=10)
+    L(s, "split_sketch_curve", curve=a, point=[4, 0])
+    largos = sorted(round(e["length"], 6) for e in _de(s, "line"))
+    assert largos == [8, 12, 20]
+
+
+def escala(s):
+    lados = _rect(s, 0, 0, 10, 5)
+    L(s, "transform_sketch", entities=lados, scale=2, center_x=0, center_y=0)
+    assert _areas(s) == [_ap(200, abs=1e-3)]
+
+
+def mover(s):
+    lados = _rect(s, 1, 1, 11, 6)                  # fuera del origen: lo anclado al origen no se mueve
+    L(s, "transform_sketch", entities=lados, dx=7, dy=-3)
+    p = L(s, "get_sketch")["profiles"][0]
+    assert p["bounding_box"] == {"min": _ap([8, -2]), "max": _ap([18, 3])}
+
+
+def copiar(s):
+    lados = _rect(s, 0, 0, 10, 5)
+    L(s, "transform_sketch", entities=lados, dx=20, copy=True)
+    assert _areas(s) == [_ap(50), _ap(50)]
+
+
+def cambiar_parametros(s):
+    abajo = _rect(s)[0]
+    L(s, "create_parameter", name="ancho", expression="70 mm")
+    L(s, "add_dimension", type="distance", entities=[abajo], value="ancho")
+    L(s, "set_parameter", name="ancho", expression="90 mm")
+    assert _areas(s) == [_ap(90 * 40, abs=1e-3)]
+
+
+CASOS = {
+    "sk_linea": linea, "sk_linea_medio": linea_medio,
+    "sk_rectangulo": rectangulo, "sk_rectangulo_3p": rectangulo_3p, "sk_rectangulo_centro": rectangulo_centro,
+    "sk_circulo": circulo, "sk_circulo_2p": circulo_2p, "sk_circulo_3p": circulo_3p,
+    "sk_circulo_2t": circulo_2t, "sk_circulo_3t": circulo_3t,
+    "sk_arco": arco_3p, "sk_arco_centro": arco_centro, "sk_arco_tangente": arco_tangente,
+    "sk_poligono_inscrito": _poligono("inscribed", 10),
+    "sk_poligono_circunscrito": _poligono("circumscribed", 10 / math.cos(math.radians(30))),
+    "sk_poligono_arista": poligono_arista,
+    "sk_elipse": elipse,
+    "sk_ranura_centro": _ranura("center_to_center", [[0, 0], [30, 0]], _AREA_RANURA),
+    "sk_ranura_total": _ranura("overall", [[-5, 0], [35, 0]], _AREA_RANURA),
+    "sk_ranura_punto": _ranura("center_point", [[15, 0], [30, 0]], _AREA_RANURA),
+    "sk_ranura_arco_3p": _ranura("arc_three_points", [[10, 0], [-10, 0], [0, 10]], _AREA_ARCO),
+    "sk_ranura_arco_centro": _ranura("arc_center", [[0, 0], [10, 0], [-10, 0]], _AREA_ARCO),
+    "sk_spline_ajuste": spline("fit_points"), "sk_spline_control": spline("control_points"),
+    "sk_conica": conica, "sk_punto": punto, "sk_texto": texto, "sk_desglosar_texto": desglosar_texto,
+    "sk_simetria": simetria, "sk_patron_circular": patron_circular, "sk_patron_rectangular": patron_rectangular,
+    "sk_editar_patron": editar_patron, "sk_cota": cota, "sk_espiral": espiral,
+    "sk_empalme": empalme,
+    "sk_chaflan": _chaflan(distance=5), "sk_chaflan_dist_angulo": _chaflan(distance=5, angle=30),
+    "sk_chaflan_dos_dist": _chaflan(distance=5, distance2=8),
+    "sk_curva_fusion": curva_fusion, "sk_desfase": desfase, "sk_soltar_desfase": soltar_desfase,
+    "sk_recortar": recortar, "sk_alargar": alargar, "sk_partir": partir, "sk_escala": escala,
+    "sk_mover": mover, "sk_mover_copiar": copiar, "parametros": cambiar_parametros,
+}
+
+
+@pytest.mark.parametrize("clave", list(CASOS))
+def test_comando_da_la_geometria_pedida_y_sobrevive_a_guardar(clave):
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    CASOS[clave](s)
+    assert L(s, "get_sketch")["status"] != "over_constrained"
+    receta = _ok(api.llamar(s, "get_recipe", {}))
+    otra = api.Sesion()
+    _ok(api.llamar(otra, "apply_recipe", {"recipe": receta}))
+    assert _ents(otra) == _ents(s)
+
+
+# ---------------------------------------------------------------- hallazgos de la fase 1 (se arreglan de a uno)
+def _rect_con_chaflan(s):
+    lados = _rect(s, 1, 1, 41, 21)
+    L(s, "sketch_chamfer", line1=lados[0], line2=lados[1], distance=2)
+    return 40 * 20 - 2 * 2 / 2
+
+
+@pytest.mark.xfail(strict=True, reason="B-232: escalar o mover deja atrás el vértice virtual del chaflán")
+@pytest.mark.parametrize(("args", "factor", "caja"), [
+    ({"scale": 2, "center_x": 1, "center_y": 1}, 4, {"min": [1, 1], "max": [81, 41]}),
+    ({"dx": 100}, 1, {"min": [101, 1], "max": [141, 21]}),
+], ids=["escalar", "mover"])
+def test_b232_escalar_o_mover_un_perfil_con_chaflan_no_lo_deforma(args, factor, caja):
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    area = _rect_con_chaflan(s)
+    L(s, "transform_sketch", **args)
+    (p,) = L(s, "get_sketch")["profiles"]
+    assert p["area"] == _ap(area * factor, abs=1e-3)
+    assert p["bounding_box"] == {"min": _ap(caja["min"]), "max": _ap(caja["max"])}
+
+
+@pytest.mark.xfail(strict=True, reason="B-233: el «fijo» del extremo recortado queda en un punto suelto")
+def test_b233_recortar_no_deja_restricciones_en_un_punto_suelto():
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    r = L(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0)
+    linea_id, extremo = r["entities"][0]["id"], r["points"][1]
+    L(s, "draw_line", start_x=10, start_y=-10, end_x=10, end_y=10)
+    L(s, "add_constraint", type="fix", entities=[extremo])
+    L(s, "trim_sketch_curve", entity=linea_id, x=15, y=0)
+    g = L(s, "get_sketch")
+    usados = {p for e in g["entities"] for p in e["points"]}
+    assert all(set(c["entities"]) <= usados | {e["id"] for e in g["entities"]} for c in g["constraints"])
+
+
+@pytest.mark.xfail(strict=True, reason="B-234: el tope de vueltas de la espiral está solo en la API")
+def test_b234_el_nucleo_pone_tope_a_las_vueltas_de_la_espiral():
+    from omnicad.restricciones.boceto import ErrorBoceto, puntos_espiral
+    with pytest.raises(ErrorBoceto):
+        puntos_espiral((0, 0), (5, 0), 5000, 1)
+
+
+@pytest.mark.xfail(strict=True, reason="B-235: el chaflán guarda el ángulo como número y pierde el parámetro")
+def test_b235_el_angulo_del_chaflan_conserva_su_expresion():
+    s = api.Sesion()
+    _ok(api.llamar(s, "create_sketch", {"name": "B"}))
+    lados = _rect(s, 1, 1, 41, 21)
+    L(s, "create_parameter", name="ang", expression="30 deg")
+    L(s, "sketch_chamfer", line1=lados[0], line2=lados[1], distance=5, angle="ang")
+    (angulo,) = [d for d in L(s, "get_sketch")["dimensions"] if d["type"] == "angle"]
+    assert angulo["expression"] == "ang"

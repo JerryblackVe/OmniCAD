@@ -232,6 +232,10 @@ experiencia real del usuario.
 Una corrida por fase o por ítem, cada una en su worktree (`bash scripts/worktree_item.sh crear <ID>`), cerrada
 (arreglo → tests afectados → commit del coordinador) antes de lanzar la siguiente.
 
+| Corrida | Fase o ítem | Agente | Worktree / rama | Estado |
+|---|---|---|---|---|
+| cm-1 | Fase 1: inventario + `test_boceto_crear_modificar_matriz.py` | Sol sin cupo (2026-11-07 00:0x); la hizo el coordinador (Claude Opus) con tres lectores en paralelo | `D:/PROGRAMA-cm1` / `item/cm1` | Fusionada ([inventario](auditorias/boceto_crear_modificar_inventario.md); 48 verdes, 5 xfail: B-232 a B-235) |
+
 ### Brief cm-1 (fase 1, inventario)
 
 ```text

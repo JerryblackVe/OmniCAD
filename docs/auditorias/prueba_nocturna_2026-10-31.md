@@ -420,7 +420,8 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 
 ## 3v. Tarea nueva: auditoría de CREAR y MODIFICAR del boceto (2026-11-06, arrancó el 2026-11-07)
 
-- Pedido: `docs/auditoria_boceto_crear_modificar.md`. Arrancó al cerrar la de restricciones (3u): fase 1, inventario (brief cm-1). Va a sumar piezas de ventana por comando de CREAR y MODIFICAR.
+- Pedido: `docs/auditoria_boceto_crear_modificar.md`. Arrancó al cerrar la de restricciones (3u): fase 1, inventario (brief cm-1).
+- **Fase 1 cerrada (2026-11-07):** `tests/test_boceto_crear_modificar_matriz.py` (48 verdes, 5 xfail de B-232 a B-235) y una sola línea de la interfaz: el texto muerto «Helix / Spiral» → «Espiral» en `ui/cinta_boceto.py` (la cinta ya mostraba «Espiral»). De noche: la suite completa los cubre; nada de esta fase se probó todavía desde la ventana (fase 6: un comando por pieza de `scripts/prueba_ui/`). Va a sumar piezas de ventana por comando de CREAR y MODIFICAR.
 
 ## 4. Cosas que ninguna prueba cubre todavía
 

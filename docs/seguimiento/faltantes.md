@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 237: Abierto 154 · Parcial 49 · Bloqueado 30 · Sin verificar 4 (recontado 2026-11-05; después H-95 a H-97 de Nervio y Repujado; 2026-11-06: resuelto H-101 y H-81, nuevo H-105).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 239: Abierto 156 · Parcial 49 · Bloqueado 30 · Sin verificar 4 (2026-11-07: H-107 y H-108 de la fase 1 de CREAR y MODIFICAR; recontado 2026-11-05; después H-95 a H-97 de Nervio y Repujado; 2026-11-06: resuelto H-101 y H-81, nuevo H-105).
 
 ## Pendientes generales
 
@@ -94,10 +94,12 @@ Abierto 17 · Parcial 1.
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 1 (BOC-36 y BOC-47 se resolvieron el 2026-10-31; H-106 de la auditoría de restricciones del 2026-11-06). Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada.
+Abierto 3 (BOC-36 y BOC-47 se resolvieron el 2026-10-31; H-106 de la auditoría de restricciones del 2026-11-06; H-107 y H-108 de la de CREAR y MODIFICAR del 2026-11-07). Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| H-107 | Boceto › Empalme y Chaflán no se pueden aplicar eligiendo el vértice | Abierto | Media | Fusion acepta «un punto en dos líneas que se cortan» (`add-fillets-to-sketch-geometry-89d2b427f79.md`, `add-chamfers-to-sketch-geometry-351424d05aa.md`); la ventana y el MCP piden las dos curvas (`sketch_fillet entity1/entity2`, `sketch_chamfer line1/line2`). Sumar el vértice en los dos, con herramienta y test. | [inventario](../auditorias/boceto_crear_modificar_inventario.md), § 3 | 2026-11-07 |
+| H-108 | Boceto › Línea: el arco tangente encadenado arrastrando desde el extremo | Abierto | Media | En Fusion, dentro de Línea, arrastrar desde el último extremo hace un arco tangente y se sigue la cadena (`create-lines-in-a-sketch-fbee81ecc15.md`); OmniCAD lo hace con otra herramienta (`draw_arc tangent_to`). Comprobar primero en la ventana (puede estar a medias) y sumar la opción a `draw_line`. | [inventario](../auditorias/boceto_crear_modificar_inventario.md), § 3 | 2026-11-07 |
 | H-106 | Boceto › la herramienta Cota de la ventana no crea una cota horizontal o vertical de una línea sola | Abierto | Media | Con una línea (20,20)-(50,60) elegida, ubicar la cota arriba o al costado y teclear 25 crea siempre `distancia` (largo alineado); la API ya acepta `distancia_h`/`distancia_v` con `[línea]`. La ayuda de Fusion dice «Single lines … create linear dimensions» pero no explica la elección horizontal/vertical: confirmarla en Fusion antes de implementar (`ui/editor_boceto.py:4716-4717`, `:4743-4745`) | `tests/test_restricciones_integracion.py::test_s12_ventana_acota_proyeccion_de_una_linea` (xfail estricto) | 2026-11-06 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
