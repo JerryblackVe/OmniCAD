@@ -4861,6 +4861,11 @@ class Lienzo(QWidget):
     def borrar_seleccion(self):
         ids = [i for i in self.seleccion if i in self.b.puntos or i in self.b.curvas
                or i in self.b.restricciones or i in self.b.cotas or i in self.b.objetos]
+        fijas = [i for i in ids if i <= 0]      # B-241: un recuadro que toma el origen o un eje no frena el resto
+        ids = [i for i in ids if i > 0]
+        if fijas:
+            self.mensaje.emit("El origen y los ejes del boceto son referencias fijas: no se borran."
+                              + (" Se borró el resto de la selección." if ids else ""))
         if not ids:
             return
 
