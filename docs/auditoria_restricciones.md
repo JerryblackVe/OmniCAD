@@ -200,6 +200,8 @@ auditoría, correcciones y verificaciones. Documentá con precisión todo lo que
 | restr-6 | B-228 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r6` / `restr-6` | Fusionada (vio la regresión de B-227) |
 | restr-7 | B-229 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r7` / `restr-7` | Fusionada |
 | restr-8 | B-230 y S7 | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r8` / `restr-8` | Fusionada |
+| restr-9 | Fase D: integración ventana / API / archivo (S8, S12, S13, guardar-abrir-deshacer, ventana = MCP) | Sol (gpt-6.1-sol high) | `D:/PROGRAMA-r9` / `restr-9` | Fusionada (S13 y S8 corregidos, S12 → H-106) |
+| restr-10 | Fase E: escenarios combinados de la sección 8 (`test_restricciones_escenarios.py`) | Sol (pendiente) | `D:/PROGRAMA-r10` / `restr-10` | Brief listo, sin lanzar |
 
 ### Brief restr-1 (B-223)
 
@@ -583,4 +585,91 @@ tests/test_doc_agentes.py -q` sin turno; con turno, `tests/test_api_boceto*.py` 
 ## Informe
 `D:/PROGRAMA-r8/evidencias/restr8/informe.md`: qué cambiaste (archivo, función, texto viejo → nuevo), tests (rojo antes, verde
 después) y la salida REAL de ruff y pytest (últimas líneas), lo que no pudiste verificar.
+```
+
+### Brief restr-9 (fase D)
+
+```text
+Corrida restr-9 · Fase D (integración ventana / API / archivo) de la auditoría de restricciones · OmniCAD. Todo en español.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-r9` (rama `restr-9`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no instales nada.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, desde `D:/PROGRAMA-r9/clon`, con `PYTHONPATH=D:/PROGRAMA-r9/clon`.
+- Leé `AGENTS.md` y `CLAUDE.md` (sección «toda prueba se hace como un usuario humano habitual»). Pruebas de ventana con eventos
+  simulados de Qt, `OMNICAD_PRUEBA_VENTANA=minimizada`, sin mover el cursor real ni pedir el foco.
+- Conservá los finales de línea (`ui/editor_boceto.py` es MIXTO: tus líneas nuevas copian el final de la línea vecina).
+  NO edites `docs/seguimiento/` ni `PROJECT_LOG.md`.
+- A TODO pytest agregale `--basetemp=D:/PROGRAMA-r9/evidencias/restr9/tmp`. Un archivo chico con `-k` va sin turno; las tandas
+  de varios archivos con `../scripts/turno.py --plazo 900 -- …`. Escribí el informe ANTES de lanzar tandas con turno.
+- Contexto: inventario y resultados en `docs/auditorias/restricciones_inventario_2026-11-06.md` (§5 sospechas, §6 fase B).
+
+## Qué tenés que verificar (y arreglar si falla), en este orden; cada uno con su test
+1. **S12** — la herramienta Cota de la ventana con UNA línea sola: ¿deja crear una cota horizontal o vertical (como la API,
+   `distancia_h`/`distancia_v` con `[línea]`)? Mirá qué hace Fusion: `D:/PROGRAMA/clon/.venv/Scripts/python.exe
+   D:/PROGRAMA/scripts/fusion_docs.py ver "Dimension sketch geometry" -s fusion-sketch`. Si Fusion lo hace y OmniCAD no, es un
+   faltante: NO lo implementes, anotalo en el informe con la evidencia.
+2. **S13** — Simetría en la ventana eligiendo el eje PRIMERO: ¿qué mensaje sale? Si no orienta («elegí los dos elementos y
+   después el eje»), mejorá solo el mensaje (`ui/editor_boceto.py`, flujo de `_clic_restriccion` / `aplicar_restriccion`).
+3. **S8** — Fijo en la ventana: elegir el mismo conjunto en otro orden ¿desfija? (`aplicar_restriccion`, la comparación
+   `r.entidades == ents` contra la del modelo, que usa conjuntos). Si no desfija, que compare conjuntos.
+4. **Guardar, cerrar, abrir, deshacer:** un boceto con una restricción de cada tipo de `TIPOS_RESTRICCION` y una cota de cada
+   tipo de `TIPOS_COTA` (armalo por la API o por `Boceto`), guardado en un `.omnicad` en tu `tmp`, abierto de nuevo: mismas
+   restricciones, mismas cotas y `resolver` igual. Después, por la API: `add_constraint` + `undo` + `redo` deja el boceto igual
+   que antes/después (compará `get_sketch`).
+5. **Mismo resultado por la ventana y por el MCP:** coincidente con el origen, punto medio con la línea primero y tangente con
+   el círculo primero, hechos con clics en la ventana y con `api.llamar(..., "add_constraint", ...)`: mismas coordenadas finales.
+
+Cada bug confirmado que arregles va con su test rojo antes y verde después. Lo que no arregles (faltante, o arreglo grande) lo
+anotás en el informe como «Para el seguimiento» con caso mínimo y archivo:línea.
+
+## Verificación
+ruff; tus tests nuevos; después con turno los archivos de tests que tocan `editor_boceto` o restricciones de la ventana
+(`grep -l "Lienzo\|editor_boceto" tests/test_*restric*.py tests/test_boceto_fase*_ui.py`), en tandas de ~20. Si tocaste
+`ui/editor_boceto.py`, corré también la pieza de ventana: desde `clon/`, `OMNICAD_PRUEBA_VENTANA=minimizada
+D:/PROGRAMA/clon/.venv/Scripts/python.exe ../scripts/prueba_ui/todo.py restricciones_boceto` (con PYTHONPATH del worktree;
+mirá en la primera línea del log que importe la copia del worktree). Prohibido `tests_afectados.py --correr`, la suite completa,
+el humo general y `pytest -n`.
+
+## Informe
+`D:/PROGRAMA-r9/evidencias/restr9/informe.md`: por cada punto 1-5: VERIFICADO / CORREGIDO / FALTANTE / NO VERIFICADO, con
+evidencia (test, salida real, archivo:línea); qué cambiaste; la salida REAL de ruff, de cada tanda y de la pieza.
+```
+
+### Brief restr-10 (fase E, pendiente de lanzar)
+
+```text
+Corrida restr-10 · Fase E (validación con escenarios combinados) de la auditoría de restricciones · OmniCAD. Todo en español.
+
+## Dónde trabajás
+- Worktree `D:/PROGRAMA-r10` (rama `restr-10`). Tocá SOLO archivos de este worktree. No commitees, no hagas push, no instales nada.
+- Python: `D:/PROGRAMA/clon/.venv/Scripts/python.exe`, desde `D:/PROGRAMA-r10/clon`, con `PYTHONPATH=D:/PROGRAMA-r10/clon`.
+- Leé `AGENTS.md`. NO edites código del programa en esta corrida: solo escribís tests y el informe. Si un escenario falla, lo
+  dejás como `pytest.param(..., marks=pytest.mark.xfail(strict=True, reason="<qué falla>"))` y lo anotás en el informe con caso
+  mínimo: el coordinador abre la fila y lo manda a arreglar.
+- A TODO pytest agregale `--basetemp=D:/PROGRAMA-r10/evidencias/restr10/tmp`. Un archivo con `-k` va sin turno.
+
+## Qué tenés que escribir
+`clon/tests/test_restricciones_escenarios.py`: escenarios combinados de la sección 8 de `docs/auditoria_restricciones.md`,
+sin ventana (`Boceto` + `solver.resolver`, o la API `omnicad.api.llamar` cuando el escenario sea de MCP/CLI o del timeline),
+cada uno comprobando con números (coordenadas, largos, ángulos, GDL de `solver.grados_de_libertad`) y que `resolver(...).ok`:
+1 rectángulo parcialmente restringido + coincidente con el origen; 2 rectángulo con cotas y H/V (GDL 0 con origen); 3 triángulo
+con largo, ángulo y coincidencias; 4 dos círculos concéntricos con radios; 5 arcos tangentes a líneas (ranura); 6 cadena de
+líneas con coincidencias; 7 perfil cerrado con varias restricciones (GDL 0); 8 geometría fija y libre (lo fijo no se mueve);
+9 simetría respecto de un eje; 10 restricción redundante (la ventana/API la rechaza o el GDL no baja: comprobá cuál y que no
+rompa nada); 11 restricciones contradictorias (`ok=False` y el boceto no se corrompe: los valores siguen finitos); 12 borrar
+una restricción intermedia (el resto se sigue cumpliendo); 13 cambiar una cota después de restringir; 14 spline con
+coincidente en sus extremos; 16 guardar y abrir (`a_dict`/`desde_dict`) da el mismo resultado; 18 boceto grande (200
+rectángulos con cotas) resuelve en menos de 5 s; 19 las mismas restricciones por MCP (`api.llamar`) que por `Boceto` dan las
+mismas coordenadas; 20 un boceto que alimenta una extrusión (por la API: `create_sketch`, `draw_rectangle`, `extrude`), cambiar
+una cota del boceto y que el volumen del cuerpo cambie en proporción sin errores en el timeline (mirá `tests/test_api_*.py` para
+los nombres reales de las herramientas y sus parámetros: no los inventes).
+Los escenarios 15 (proyecciones) y 17 (SVG/DXF importados) solo si encontrás en `clon/tests/` cómo armarlos sin ventana; si no,
+anotalos como NO VERIFICADO.
+
+## Verificación
+ruff; `pytest tests/test_restricciones_escenarios.py -q` sin turno (rápido: menos de 30 s el archivo entero).
+
+## Informe
+`D:/PROGRAMA-r10/evidencias/restr10/informe.md`: escenario por escenario VERIFICADO / XFAIL (con caso mínimo y archivo:línea
+sospechado) / NO VERIFICADO; la salida REAL de ruff y pytest.
 ```

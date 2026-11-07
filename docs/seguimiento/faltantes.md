@@ -94,7 +94,11 @@ Abierto 17 · Parcial 1.
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 0 (BOC-36 y BOC-47 se resolvieron el 2026-10-31). Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada.
+Abierto 1 (BOC-36 y BOC-47 se resolvieron el 2026-10-31; H-106 de la auditoría de restricciones del 2026-11-06). Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada.
+
+| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
+|---|---|---|---|---|---|---|
+| H-106 | Boceto › la herramienta Cota de la ventana no crea una cota horizontal o vertical de una línea sola | Abierto | Media | Con una línea (20,20)-(50,60) elegida, ubicar la cota arriba o al costado y teclear 25 crea siempre `distancia` (largo alineado); la API ya acepta `distancia_h`/`distancia_v` con `[línea]`. La ayuda de Fusion dice «Single lines … create linear dimensions» pero no explica la elección horizontal/vertical: confirmarla en Fusion antes de implementar (`ui/editor_boceto.py:4716-4717`, `:4743-4745`) | `tests/test_restricciones_integracion.py::test_s12_ventana_acota_proyeccion_de_una_linea` (xfail estricto) | 2026-11-06 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 

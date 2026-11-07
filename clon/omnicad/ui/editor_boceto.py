@@ -4786,8 +4786,11 @@ class Lienzo(QWidget):
                 tipos.append("horizontal" if abs(x2 - x1) >= abs(y2 - y1) else "vertical")
             tipo = tipos[0]
             ents = grupos[0]
+        elif tipo == "simetrica" and len(ents) == 3 and self.b.tipo_de(ents[-1]) != "linea":
+            self.mensaje.emit("Simetría: elegí los dos elementos y después el eje (una línea).")
+            return False
         elif tipo == "fijo":
-            existente = [r.id for r in self.b.restricciones.values() if r.tipo == "fijo" and r.entidades == ents]
+            existente = [r.id for r in self.b.restricciones.values() if r.tipo == "fijo" and set(r.entidades) == set(ents)]
             if existente:
                 return self.aplicar_cambio(lambda: self.b.eliminar(existente[0]))
         elif tipo == "poligono":
