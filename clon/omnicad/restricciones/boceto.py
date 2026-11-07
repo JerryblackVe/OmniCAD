@@ -39,6 +39,8 @@ TIPOS_RESTRICCION = {
 # vertical…). Las demás (fijo, simetría, curvatura, polígono…) piden otras entidades o tienen datos propios.
 CAMBIABLES = ("horizontal", "vertical", "coincidente", "paralela", "perpendicular", "igual", "tangente", "concentrica",
               "punto_medio", "colineal")
+# Qué tipo de entidad va primero al guardar la restricción, elija el usuario en el orden que elija.
+ORDEN_RESTRICCION = {"coincidente": "punto", "punto_medio": "punto", "tangente": "linea"}
 TIPOS_COTA = {
     "distancia": "Distancia", "distancia_h": "Distancia horizontal", "distancia_v": "Distancia vertical",
     "radio": "Radio", "diametro": "Diámetro", "angulo": "Ángulo", "desfase": "Desfase",
@@ -1986,6 +1988,9 @@ class Boceto:
         return antes - len(self.restricciones) - len(self.cotas)
 
     def agregar_restriccion(self, tipo, entidades, datos=None):
+        primero = ORDEN_RESTRICCION.get(tipo)
+        if primero:          # la ventana, la API y el MCP aceptan cualquier orden de selección (B-224)
+            entidades = sorted(entidades, key=lambda e: self.tipo_de(e) != primero)
         self._validar_restriccion(tipo, entidades)
         if tipo == "fijo":
             for r in self.restricciones.values():

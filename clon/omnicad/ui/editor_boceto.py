@@ -4767,11 +4767,8 @@ class Lienzo(QWidget):
             self.picks = []
 
     # ------------------------------------------------------------ restricciones con herramienta
-    def _ordenar(self, ids, primero):
-        return sorted(ids, key=lambda i: 0 if self.b.tipo_de(i) == primero else 1)
-
     def aplicar_restriccion(self, tipo, ents):
-        """Aplica una restricción a las entidades (en el orden que pide el modelo). Devuelve True si quedó."""
+        """Aplica una restricción a las entidades, en el orden en que se eligieron. Devuelve True si quedó."""
         grupos = None
         if tipo == "horizontal_vertical":
             lineas = [i for i in ents if self.b.tipo_de(i) == "linea"]
@@ -4800,10 +4797,6 @@ class Lienzo(QWidget):
                     self.mensaje.emit("Polígono: hacé clic en un lado de una cadena cerrada de líneas.")
                     return False
                 ents = [k for k, _ in cadena]
-        elif tipo in ("coincidente", "punto_medio"):
-            ents = self._ordenar(ents, "punto")
-        elif tipo == "tangente":
-            ents = self._ordenar(ents, "linea")
         pedidos = [(tipo, ents)] if grupos is None else list(zip(tipos, grupos, strict=True))
         # los GDL de ANTES se cuentan ahora (no con `self.resultado`, que puede estar viejo si el boceto se tocó directo)
         gdl = (grados_de_libertad(self.b, self._valores_para_diagnostico())

@@ -251,12 +251,42 @@ def _rectangulo_con_diagonal():
     return b, esquinas, diagonal
 
 
-@pytest.mark.xfail(strict=True, reason="B-224: punto_medio y coincidente exigen el punto primero por API")
-def test_b224_punto_medio_acepta_la_linea_primero():
+@pytest.mark.parametrize("linea_primero", [True, False])
+def test_b224_punto_medio_acepta_cualquier_orden(linea_primero):
     b, esquinas, diagonal = _rectangulo_con_diagonal()
-    b.agregar_restriccion("punto_medio", [diagonal, Boceto.ORIGEN])
+    pedido = [diagonal, Boceto.ORIGEN] if linea_primero else [Boceto.ORIGEN, diagonal]
+    rid = b.agregar_restriccion("punto_medio", pedido)
+    assert b.restricciones[rid].entidades == [Boceto.ORIGEN, diagonal]       # se guarda en el orden de siempre
     assert resolver(b).ok
     assert b.coords(esquinas[0]) == pytest.approx((-32.5, -25.0), abs=1e-6)
+    assert b.coords(esquinas[2]) == pytest.approx((32.5, 25.0), abs=1e-6)
+
+
+@pytest.mark.parametrize("curva_primero", [True, False])
+def test_b224_coincidente_acepta_curva_y_punto_en_cualquier_orden(curva_primero):
+    b = Boceto()
+    c, p = b.agregar_circulo((0, 0), 10), b.agregar_punto(30, 0)
+    b.agregar_restriccion("coincidente", [c, p] if curva_primero else [p, c])
+    assert resolver(b).ok
+    assert math.dist(b.coords(p), _centro(b, c)) == pytest.approx(_radio(b, c), abs=1e-6)
+
+
+def test_b224_tangente_guarda_la_linea_primero():
+    b = Boceto()
+    ln, c = b.agregar_linea((0, 0), (10, 0)), b.agregar_circulo((5, 5), 3)
+    rid = b.agregar_restriccion("tangente", [c, ln])
+    assert b.restricciones[rid].entidades == [ln, c]
+
+
+def test_b224_el_mcp_acepta_la_curva_primero():
+    from omnicad import api
+    s = api.Sesion()
+    assert api.llamar(s, "create_sketch", {"name": "P"})["ok"]
+    ln = api.llamar(s, "draw_line", {"sketch": "P", "start_x": 0, "start_y": 0, "end_x": 10, "end_y": 0})["result"]
+    p = api.llamar(s, "draw_point", {"sketch": "P", "x": 3, "y": 4})["result"]
+    r = api.llamar(s, "add_constraint", {"sketch": "P", "type": "midpoint",
+                                         "entities": [ln["entities"][0]["id"], p["points"][0]]})
+    assert r["ok"], r
 
 
 @pytest.mark.xfail(strict=True, reason="B-225: origen sobre la diagonal da vuelta el rectángulo en vez de correrlo")

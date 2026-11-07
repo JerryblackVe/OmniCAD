@@ -108,7 +108,7 @@ def test_boc31_circulo_tangente_al_pie_perpendicular(lienzo):
     assert lz.inf_actual.tipo == "perpendicular"
     _clic(lz, 23.2, 20.2)
     circulo = lz.b.curvas[max(lz.b.curvas)]
-    assert any(r.tipo == "tangente" and r.entidades == [circulo.id, objetivo]
+    assert any(r.tipo == "tangente" and set(r.entidades) == {circulo.id, objetivo}      # la línea se guarda primero (B-224)
                for r in lz.b.restricciones.values())
     assert not any(r.tipo == "coincidente" for r in lz.b.restricciones.values())
     assert len(lz.b.puntos) == 3

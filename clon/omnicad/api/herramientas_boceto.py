@@ -1439,7 +1439,7 @@ def add_constraint(sesion, sketch: str,
     """
     sketch: id o nombre del boceto.
     type: tipo de restricción.
-    entities: ids de las entidades (curvas o puntos), en el orden que pide el tipo; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
+    entities: ids de las entidades (curvas o puntos); en coincident, midpoint y tangent el orden no importa, en symmetry el eje va último; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
     """
     op = op_boceto(sesion, sketch)
     previo = boceto_resuelto(sesion, op)
