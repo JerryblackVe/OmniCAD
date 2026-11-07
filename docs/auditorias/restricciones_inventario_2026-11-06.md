@@ -101,3 +101,23 @@ SOLIDWORKS: sin dato comprobado en esta fase.
 
 Bugs ya confirmados (en `docs/seguimiento/bugs.md`): B-224, B-225, B-226. Los tres tienen un caso `xfail` estricto en
 `test_restricciones_matriz.py`, que se pone rojo cuando se arreglan.
+
+## 6. Resultado de la fase B (diagnóstico, 2026-11-06)
+
+Comprobado con casos mínimos sin ventana (`Boceto` + `solver`), sobre `main` en `049b9ab`.
+
+| Sospecha | Resultado | Fila |
+|---|---|---|
+| S1 ángulo fuera de rango | CONFIRMADA: 200° y −30° entran y `resolver` da `ok=False` | B-227 |
+| S2 distancia entre líneas no paralelas | CONFIRMADA: `ok=True`, solo el `p1` de la segunda línea queda a la distancia | B-228 |
+| S3 AutoConstrain y el origen | CONFIRMADA: crea un punto suelto nuevo en (0,0) con `fijo` | B-229 |
+| S4 simetría de splines con manijas | NO REPRODUCIDA (spline de ajuste contra spline de control: `ok=True`) | — |
+| S5 desfase libre y GDL | NO VERIFICADA (falta un caso mínimo de desfase de spline) | — |
+| S6 tipo desconocido | CONFIRMADA: `KeyError: 'inventada'`. Además, una `horizontal` repetida sobre la misma línea entra dos veces en el modelo (los GDL quedan bien; la ventana la rechaza por no quitar GDL) | B-230 |
+| S7 descripciones de la API | CONFIRMADA al leer: `add_constraint` no nombra `curvature` ni las elipses en `equal`; `add_dimension` no nombra spline ni elipse en `offset` | Se corrige en la fase C |
+| S8 desfijar con otro orden | NO VERIFICADA (es de la ventana) | — |
+| S9 GDL de perpendicular entre paralelas | NO REPRODUCIDA: baja de 8 a 7, `ok=True` | — |
+| S10 AutoConstrain sin cotas de elipse ni spline | Faltante, no bug: queda para la fase F | — |
+| S11 cobertura de la API | En parte cubierta por la matriz; los tests de API de `midpoint`, `symmetry`, `curvature` y `offset` se suman en la fase C | — |
+| S12 cota H/V de una línea sola en la ventana | NO VERIFICADA (es de la ventana) | — |
+| S13 mensaje de simetría con el eje primero | NO VERIFICADA (es de la ventana) | — |
