@@ -408,6 +408,19 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
   Falta: el humo en modo `visible` (`OmniCAD.py --prueba-humo` sin la variable, con la PC quieta) y `test_motor`
   (abre el humo) en su corrida aparte. El atajo S del humo solo se ejercita en visible.
 
+- **E (P-65):** las 51 piezas con `todo.py --paralelo 2` (y 3 si el pico y la placa aguantan): mismas ✗ que en serie y en menos de 40 min. Además, los tests afectados por `scripts/prueba_ui/arnes.py` y `todo.py` que no se corrieron de día (la fila de `turno.py` estaba ocupada por la auditoría de restricciones).
+- **B (P-63):** primera suite completa en paralelo (`-n 4 --dist loadfile`): comparar contra la serie de `cierre_2026-11-06` (mismos verdes) y medir el pico de memoria. Hasta dos noches seguidas en verde, la serie queda con `bash scripts/cierre_completo.sh --serie`.
+
+## 3u. Tarea nueva: auditoría y corrección de todas las restricciones del boceto (2026-11-06)
+
+- Pedido: `docs/auditoria_restricciones.md` (B-223, Coincidente con el origen). Trae tests del solver y de cada restricción, y piezas de ventana nuevas de restricciones.
+- Para esta noche: correr las piezas `restricciones_boceto`, `auditoria_boceto`, `simetria_boceto` e `inferencias` y las piezas nuevas que sume la auditoría; la suite completa cubre los tests nuevos.
+- **Hecho de día (2026-11-06), falta de noche:** B-223 a B-228 cambiaron `ui/editor_boceto.py` (origen elegible, sin `_ordenar`), `restricciones/boceto.py` (orden canónico, ángulo 0…180, distancia entre no paralelas) y `restricciones/solver.py` (`_preferir_traslacion`). De día corrieron solo los tests que tocan restricciones y solver (≈ 2000 verdes por ítem; detalle en el Registro de `PROJECT_LOG.md`). `scripts/tests_afectados.py` elige 363 de 385 archivos: la suite completa los cubre. Falta además la prueba de humo y las piezas `restricciones_boceto`, `auditoria_boceto`, `simetria_boceto`, `inferencias`, `boceto_cotas` y `boceto_herramientas` (la ventana nunca se probó entera con el origen elegible y la cota de ángulo nueva). Ojo con `tmp_path`: si algo falla por `FileNotFoundError` en la carpeta temporal, repetirlo solo.
+
+## 3v. Tarea en espera: auditoría de CREAR y MODIFICAR del boceto (2026-11-06)
+
+- Pedido: `docs/auditoria_boceto_crear_modificar.md`. Arranca cuando cierre la de restricciones (3u). Va a sumar piezas de ventana por comando de CREAR y MODIFICAR.
+
 ## 4. Cosas que ninguna prueba cubre todavía
 
 | # | Qué falta | Dónde está anotado |
