@@ -427,3 +427,40 @@ def test_p71_escala_exige_base_y_la_api_ofrece_el_centro_automatico(ventana_p71)
     assert r["ok"], r
     entidad = api.llamar(s, "get_sketch", {})["result"]["entities"][0]
     assert entidad["start"] == pytest.approx((0, 10)) and entidad["end"] == pytest.approx((40, 10))
+
+
+@pytest.mark.parametrize("y", [10, -10])
+def test_h108_linea_arrastrar_desde_el_extremo_hace_arco_tangente_y_sigue(ventana_p71, y):
+    """BOC-12 por eventos: Línea → arco tangente a cada lado → Línea, sin cortar la cadena."""
+    lz = ventana_p71
+    mensajes = []
+    lz.mensaje.connect(mensajes.append)
+    lz.set_herramienta("linea")
+    _clic_p71(lz, (0, 0))
+    _clic_p71(lz, (20, 0))
+    assert len(lz.b.curvas) == 1
+    linea = next(iter(lz.b.curvas.values()))
+    assert linea.tipo == "linea"
+    assert lz.b._extremos_linea(linea.id) == (pytest.approx((0, 0)), pytest.approx((20, 0)))
+
+    arrastrar(lz, (20, 0), (30, y))
+    assert len(lz.b.curvas) == 2
+    arco = next(c for c in lz.b.curvas.values() if c.tipo == "arco")
+    assert linea.p2 in arco.extremos()
+    fin = next(p for p in arco.extremos() if p != linea.p2)
+    assert lz.b.coords(linea.p2) == pytest.approx((20, 0))
+    assert lz.b.coords(fin) == pytest.approx((30, y))
+    assert lz.b.coords(arco.centro) == pytest.approx((20, y))  # radio perpendicular a la línea en la unión
+    assert lz.b.radio(arco.id) == pytest.approx(10)
+    assert any(r.tipo == "tangente" and set(r.entidades) == {linea.id, arco.id}
+               for r in lz.b.restricciones.values())
+    assert lz.resultado.ok and lz.herramienta == "linea"
+    assert lz.clics == [(fin, pytest.approx((30, y)))]
+    assert mensajes[-1] == "Arco tangente creado. Seguí con la línea o Esc."
+
+    _clic_p71(lz, (30, 30))
+    assert len(lz.b.curvas) == 3
+    siguiente = next(c for c in lz.b.curvas.values() if c.id not in (linea.id, arco.id))
+    assert siguiente.tipo == "linea" and siguiente.p1 == fin
+    assert lz.b._extremos_linea(siguiente.id) == (pytest.approx((30, y)), pytest.approx((30, 30)))
+    assert lz.resultado.ok and lz.herramienta == "linea"
