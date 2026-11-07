@@ -26,8 +26,28 @@ y cuáles sirven para el proyecto. Las promos gratis cambian cada semana: **ante
 | Qwen3.8-Flash | Qoder `qodercli` | No: «no models available for your account» | Buen diagnóstico; dejó una regresión y un «Should fix» propio sin arreglar | **Sí, con el prompt de `arreglos_qwen.md`**, si la cuenta vuelve a tener modelos |
 | qwen3-coder-next, deepseek-3.2, minimax-m2.5, glm-5 y otros | Kiro `kiro-cli` | No: «monthly usage limit has been reached» | Sin tareas en el proyecto | Sin probar; cobra créditos por modelo (de 0,05× a 1,3×) y el cupo del mes ya se usó |
 
-**En resumen, hoy:** de los gratis, solo responden los de **Cline y Kilo**, y entre ellos el único con historial
-aceptable es **Nemotron 3.5 Super VL, para tareas chicas**. Los buenos (GLM y DeepSeek en OpenCode, CodeBuddy, Qwen en
+### Proveedores con clave ya cargada en OpenCode
+
+| Modelo | Dónde | ¿Responde hoy? | Calidad medida en OmniCAD | ¿Sirve? |
+|---|---|---|---|---|
+| MiniMax M3.1 Flash | OpenCode `nvidia/minimaxai/minimax-m3.1-flash` (NVIDIA NIM, gratis para desarrollo) | Sí (10 s) | B-185 bien hecho: test que fallaba antes y `ponytail-review` real con hallazgos (2026-11-03) | **Sí: el mejor gratis disponible hoy** para bugs chicos y medianos, de a un ítem |
+| GLM 5.3 Flash y DeepSeek V4.1 Flash | OpenCode `nvidia/z-ai/glm-5.3-flash`, `nvidia/deepseek-ai/deepseek-v4.1-flash` | No: colgados en la cabecera | Los mismos modelos de arriba | Volver a probar otro día: en NVIDIA suelen tener cola |
+| GLM 5.3, DeepSeek, Kimi K2.7 Code, MiniMax M3 | OpenCode `ollama-cloud/*` | No: el plan gratis de Ollama Cloud solo incluye `gemma4:31b` | — | **No**: lo bueno es pago; Gemma 4 no tiene historial de código acá |
+
+### Revisados de la lista de Gerardo (33 harnesses y 27 proveedores), 2026-11-07
+
+| Opción | Qué se encontró | ¿Sirve? |
+|---|---|---|
+| Gemini CLI | Desde el 18-06-2026 no atiende cuentas gratis: pasó a Antigravity CLI ([aviso oficial](https://github.com/google-gemini/gemini-cli/discussions/27274)) | **No** (el informe pegado estaba desactualizado) |
+| FreeInference (Harvard) | «New account onboarding is paused»: no se pueden crear cuentas | **No** por ahora |
+| OrcaRouter | Clave sin tarjeta, compatible con OpenAI (`https://api.orcarouter.ai/v1`), dice no entrenar con los prompts; la página no publica qué modelos ni cuántos pedidos gratis | Quizás: hace falta que Gerardo cree la cuenta y probarlo |
+| Z.ai GLM 5.3 Flash | Es pago (muy barato), no gratis | **No** sin pedido de Gerardo |
+| OpenRouter `:free` | Ya hay clave; 50 pedidos por día sin créditos | **No** para agentes: una tarea usa decenas de pedidos |
+| Modelos locales (Ollama, Qwen 3.6 35B, gpt-oss-20b) con OpenHands, Aider, Goose | Piden 32 GB o más y placa de video | **No** en esta PC (13 GB, gráficos integrados) |
+| Frameworks (ADK, LangGraph, CrewAI, smolagents…) | No traen modelos: son para armar agentes propios | **No** aportan modelos gratis |
+
+**En resumen, hoy:** el mejor gratis que responde es **MiniMax M3.1 Flash por NVIDIA en OpenCode**
+(`nvidia/minimaxai/minimax-m3.1-flash`). Después, **Nemotron 3.5 Super VL** (Cline o Kilo), solo para tareas chicas. Los buenos (GLM y DeepSeek en OpenCode, CodeBuddy, Qwen en
 Qoder) están sin cupo. Para el trabajo de verdad siguen Sol (suscripción de ChatGPT) y, como última instancia, Claude.
 
 ## Cómo repetir la prueba
@@ -37,6 +57,7 @@ Desde una carpeta vacía (no el repo), con `</dev/null` y sin sandbox. Un modelo
 
 ```bash
 timeout 90 opencode run -m opencode/glm-5.3-flash-free "Respondé solo la palabra OK" </dev/null
+timeout 90 opencode run -m nvidia/minimaxai/minimax-m3.1-flash "Respondé solo la palabra OK" </dev/null
 timeout 90 kilo run -m kilo/nvidia/nemotron-3.5-super-vl:free "Respondé solo la palabra OK" </dev/null
 timeout 120 cline -P cline -m cline-free/nemotron-3.5-super-vl "Respondé solo la palabra OK" </dev/null
 timeout 90 codebuddy -p --model hy3 "Respondé solo la palabra OK" </dev/null
