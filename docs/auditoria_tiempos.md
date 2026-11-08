@@ -42,6 +42,7 @@ las herramientas, no solamente las de extrusión. Hay que optimizar los tiempos 
 
 Guardado el 2026-11-08. Modelo sugerido: una sesión Claude Opus 5 con esfuerzo alto (mide, perfila y arregla; la geometría y el hilo de la interfaz no se le dan a un modelo barato).
 
+```text
 ARRIBA DE TODO, invocá con la herramienta Skill: `fable-method` y `ponytail` al empezar; seguí `plan-then-do`,
 `tool-calling-guard`, `verify-before-commit` y `omnicad-test`; e invocá `ponytail-review` antes de cerrar cada ítem,
 pegando su salida REAL en el informe.
@@ -94,3 +95,4 @@ Reglas:
 
 Listo cuando: las 6 fases están hechas, o cargadas con su motivo en `docs/seguimiento/`; ninguna herramienta del ranking
 traba la ventana más de 100 ms en el modelo mediano, o tiene su fila con la causa medida y el plan.
+```
