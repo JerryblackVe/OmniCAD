@@ -2852,13 +2852,18 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
         basico, h = datos["diametro_menor" if info["interna"] else "diametro"], float(holgura)
         tol = 0.01 * datos["paso"]     # un Ø apenas distinto no se tornea: dejaría una lámina casi sin espesor
         if (2 * radio < basico - tol) if info["interna"] else (2 * radio > basico + tol):
-            perfil["cresta"] = basico + (2 * h if info["interna"] else -2 * h)
+            # agujero: Ø menor al centro de la tolerancia de la clase (6H: D1 + TD1/2), como el taladro del Agujero
+            perfil["cresta"] = diametro_taladro_rosca(datos["designacion"], clase, h) if info["interna"] else basico - 2 * h
     z0 = zmax - desfase - largo if invertir else zmin + desfase
     # B-248, como Fusion: un eje más fino que el núcleo (o un agujero más ancho que el Ø mayor) se rellena en el tramo
     # roscado hasta el Ø mayor (o el menor) antes de cortar; el anillo se mete un poco en el material para fundirse.
     D, d1, meter = datos["diametro"], datos["diametro_menor"], 0.1 * datos["paso"]
     if tabla and (2 * radio >= D if info["interna"] else 2 * radio <= d1):
-        r_a, r_b, radio = (d1 / 2, radio + meter, d1 / 2) if info["interna"] else (radio - meter, D / 2, D / 2)
+        if info["interna"]:      # hasta el Ø menor con la clase, como el taladro del Agujero (6H: D1 + TD1/2)
+            r_menor = diametro_taladro_rosca(datos["designacion"], clase, holgura) / 2
+            r_a, r_b, radio = r_menor, radio + meter, r_menor
+        else:
+            r_a, r_b, radio = radio - meter, D / 2, D / 2
         base = tuple(o + z * z0)
         anillo = geo.booleano(geo.cilindro(r_b, largo, base=base, eje=tuple(z)),
                               geo.cilindro(r_a, largo, base=base, eje=tuple(z)), "cortar")
@@ -2919,7 +2924,9 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
         t.SetRotation(eje_giro, math.radians(giro))
         tool = aplicar(herramienta, t) if giro else herramienta
         caras_herr = geo.caras(tool)
-        for difuso in (0.0, 1e-5, 1e-4):
+        # P-78: el difuso 1e-4 primero; donde el exacto falla tarda más y casi siempre falla (M3×20: 7,4 s fallado
+        # contra 1,9 s bien); el exacto queda de respaldo
+        for difuso in (1e-4, 0.0, 1e-5):
             op = BRepAlgoAPI_Cut()
             args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
             args.Append(cuerpo)
