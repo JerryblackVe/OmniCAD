@@ -222,7 +222,9 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - **Como mucho 2 sesiones de ejecución trabajando a la vez** (más el coordinador). Las sesiones terminadas o en
   pausa se archivan, porque cada proceso ocupa memoria aunque esté quieto.
 - **El coordinador mide la memoria en cada vigilancia**: última línea `process-memory` de
-  `%LOCALAPPDATA%/Claude/logs/main.log` (`tree_rss_sum`) más la libre de Windows. Si la app pasa de 8 GB o
+  `%LOCALAPPDATA%/Claude/logs/main.log` (`tree_rss_sum`) más la libre de Windows. Si esa línea tiene más de 30 min
+  (el log deja de escribirse a veces: 2026-11-08 quedó en las 18:03), sumar la memoria de los procesos `claude`,
+  `node` y `python` (`Get-Process`, columna WS). Si la app pasa de 8 GB o
   quedan menos de 2 GB libres, frena una sesión (`stop_session` y el mensaje «pausa por memoria») antes de lanzar nada.
 - Una sola corrida pesada por vez en toda la PC: `scripts/turno.py`, y nunca dos OpenCode.
 
