@@ -2938,11 +2938,10 @@ class Boceto:
         if cid not in self.curvas:
             return
         for p in viejos:
-            # El otro tramo del mismo corte (colineal o igual) ya está atado; junto a una tangencia el punto está en
-            # el único contacto y la coincidencia sería redundante (raíz doble). shortcut: la ranura sigue con el
-            # final del arco libre (dof 1), ver B-255.
+            # El otro tramo del mismo corte (colineal o igual) ya está atado. Junto a una tangencia sí se ata: el
+            # solver toma entonces la tangencia en ese punto (B-255), sin la raíz doble de «distancia = radio».
             atadas = {e for r in self.restricciones.values()
-                      if r.tipo in ("tangente", "colineal", "igual") and cid in r.entidades for e in r.entidades}
+                      if r.tipo in ("colineal", "igual") and cid in r.entidades for e in r.entidades}
             if (p in self.puntos and p not in self.curvas[cid].puntos() and self._punto_en_uso(p)
                     and not any(p in k.puntos() for k in self.curvas.values() if k.id in atadas - {cid})):
                 try:
@@ -3061,6 +3060,13 @@ class Boceto:
             ids.insert(0, cid)
             for otro in ids[1:]:
                 self._vincular_tramos(cid, otro)
+            # B-255: la tangencia sigue con el tramo que toca la otra curva (comparte su extremo), no con el que
+            # quedó lejos: si no, ese tramo pierde la tangencia y la unión queda libre.
+            for r in [r for r in self.restricciones.values() if r.tipo == "tangente" and cid in r.entidades]:
+                k = next(e for e in r.entidades if e != cid)
+                tramo = next((t for t in ids if self.extremo_comun(t, k) is not None), None)
+                if tramo is not None and tramo != cid and self.extremo_comun(cid, k) is None:
+                    r.entidades = [tramo if e == cid else e for e in r.entidades]
         self._coincidencias_de_corte(nuevos)
         self._depurar(viejos)
         return ids
