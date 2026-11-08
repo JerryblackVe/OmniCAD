@@ -927,7 +927,7 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
     if not MEDIDA_MINIMA <= scale <= 1 / MEDIDA_MINIMA:
         raise error("INVALID_ARGUMENTS", f"scale tiene que estar entre {MEDIDA_MINIMA:g} y {1 / MEDIDA_MINIMA:,.0f} "
                     f"(llegó {scale:g}): fuera de eso las cotas quedan en cero o más allá de 1 km.".replace(",", "."))
-    avisos = []
+    avisos, origen, pedido = [], {}, []
 
     def cambiar(b):
         ids = list(entities) if entities else list(b.curvas)
@@ -945,6 +945,8 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
             cy = (min(ys) + max(ys)) / 2 if cy is None else cy
         if copy:
             ids = b.transformar(ids, copiar=True)
+        else:
+            origen.update((q, b.coords(q)) for q in b.puntos_de(ids))
             ids = [i for i in ids if i in b.curvas or i in b.puntos]
         if mirror != "none":
             _hechos, textos = b.reflejar(ids, (cx, cy), horizontal=(mirror == "horizontal"))
@@ -955,7 +957,17 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
         if angle or dx or dy:
             b.transformar(ids, dx=dx, dy=dy, angulo=angle, centro=(cx, cy))
         _exigir_tamano(b)
+        pedido.append(any(math.dist(b.coords(q), xy) > 1e-6 for q, xy in origen.items()))
     r = _dibujar(sesion, sketch, cambiar, sin_conflicto="Mover")
+    # B-245: lo atado a algo que no se mueve (p. ej. coincidente con el origen) el solver lo devuelve a su lugar;
+    # «ok» sin cambio no vale: se rechaza y la transacción deja el boceto como estaba. Si se movió aunque sea en
+    # parte (el solver reparte con lo que está atado y libre, p. ej. las copias de un patrón), sigue siendo válido.
+    br = boceto_resuelto(sesion, op_boceto(sesion, r["sketch"]["id"]))
+    if br is not None and any(pedido) and all(math.dist(br.boceto.coords(q), xy) < 1e-6 for q, xy in origen.items()
+                                         if q in br.boceto.puntos):
+        raise error("SKETCH_OVERCONSTRAINED", "Las restricciones o cotas que atan la selección a lo que no se "
+                    "mueve (p. ej. una coincidencia con el origen) no la dejan llegar: el boceto quedó como estaba. "
+                    "Borrá ese anclaje (o incluí lo que la ata en la selección) y volvé a moverla.")
     for a in avisos:
         sesion.avisar(a)
     return r
