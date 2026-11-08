@@ -3,6 +3,9 @@
 Un módulo PyO3 opcional (`omnicad._rs`, fuentes en `src/`). Python conserva la escena y OpenCascade; Rust recibe y
 devuelve arrays. Sin módulo compilado se usa la referencia Python. `OMNICAD_SIN_RUST=1` la fuerza para comparar.
 
+- **Miniaturas del Explorador** (`miniatura/`, H-112): crate aparte, DLL `IThumbnailProvider` que lee `miniatura.png`
+  del `.omnicad` con topes. Se compila con `cargo build --release` dentro de `miniatura/` y se instala con
+  `omnicad miniaturas instalar` (HKCU).
 - **Render** (`src/lib.rs`): rasterización, sombras y oclusión ambiental para `get_viewport_image` y el render local.
 - **Perfiles de un boceto** (`src/perfiles.rs`, BOC-28): `arreglo_planar` calcula intersecciones, grafo planar, lazos y
   regiones de las curvas del boceto (líneas, círculos, arcos y B-splines) y devuelve, por perfil, área, centroide, caja,

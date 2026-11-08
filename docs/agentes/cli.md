@@ -362,6 +362,23 @@ Desde el paso 5 de rendimiento (arranque rápido, 2026-10-09), el arranque da `1
 - «cuadros/s posibles» es el tiempo de dibujo puro (`paintGL` + `glFinish`); «en pantalla» queda limitado por la sincronía vertical del monitor.
 - `--json` devuelve todos los números (también `ms_p95` y `mostrar_modelo_s`). Necesita pantalla con OpenGL.
 
+### miniaturas
+
+Hace que el Explorador de Windows muestre la vista del modelo en los `.omnicad` (como Fusion con los `.f3d`). Instala
+el lector de miniaturas (DLL en Rust de `clon/rust/miniatura/`, se compila con `cargo build --release`) en
+`%LOCALAPPDATA%/OmniCAD/miniaturas` y lo registra solo para el usuario (HKCU, sin administrador).
+
+```
+$ omnicad miniaturas instalar
+Instalado: C:\Users\yo\AppData\Local\OmniCAD\miniaturas\omnicad_miniatura.dll
+```
+
+- `instalar | quitar | estado`; `--dll RUTA` instala otra DLL; `--json` devuelve `{installed, dll, dll_exists}`.
+- La miniatura sale de `miniatura.png` dentro del proyecto: la escriben la ventana (captura del visor, también al
+  autoguardar) y la API o la CLI al guardar (render de 256 px; un documento sin cuerpos queda sin miniatura).
+- Comprobarla sin el Explorador: `powershell -File scripts/miniatura_windows.ps1 pieza.omnicad salida.png`.
+- No tiene herramienta en el MCP: configura Windows, no el documento (como `setup`).
+
 ### setup
 
 Registra el MCP y copia la skill `omnicad` en Claude Code, OpenCode y Cline CLI, e instala en Fusion 360 el complemento OmniCADPuente (opcional: los `.f3d`/`.f3z` se abren sin Fusion; el complemento es el respaldo y trae los parámetros). Detalle y rutas: [conectar.md](conectar.md).
