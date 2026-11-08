@@ -2854,6 +2854,15 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
         if (2 * radio < basico - tol) if info["interna"] else (2 * radio > basico + tol):
             perfil["cresta"] = basico + (2 * h if info["interna"] else -2 * h)
     z0 = zmax - desfase - largo if invertir else zmin + desfase
+    # B-248, como Fusion: un eje más fino que el núcleo (o un agujero más ancho que el Ø mayor) se rellena en el tramo
+    # roscado hasta el Ø mayor (o el menor) antes de cortar; el anillo se mete un poco en el material para fundirse.
+    D, d1, meter = datos["diametro"], datos["diametro_menor"], 0.1 * datos["paso"]
+    if tabla and (2 * radio >= D if info["interna"] else 2 * radio <= d1):
+        r_a, r_b, radio = (d1 / 2, radio + meter, d1 / 2) if info["interna"] else (radio - meter, D / 2, D / 2)
+        base = tuple(o + z * z0)
+        anillo = geo.booleano(geo.cilindro(r_b, largo, base=base, eje=tuple(z)),
+                              geo.cilindro(r_a, largo, base=base, eje=tuple(z)), "cortar")
+        cuerpo = geo.booleano(cuerpo, anillo, "unir")
 
     def cortar(extra):
         def armar_tramo(za, la):

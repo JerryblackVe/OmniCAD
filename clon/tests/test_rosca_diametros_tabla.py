@@ -153,3 +153,18 @@ def test_b247_un_agujero_mas_chico_que_la_rosca_se_agranda_al_menor():
 def test_b247_las_recetas_viejas_siguen_rechazando_el_cilindro_grueso():
     with pytest.raises(g.ErrorGeometria, match="más grueso"):
         sc.rosca(g.cilindro(10, 12), designacion="M9", tabla=False)
+
+
+@pytest.mark.parametrize("radio, designacion, desfase, longitud", [(10, "M30", 0.0, None), (10, "M30", 5.0, 10.0)])
+def test_b248_un_eje_mas_fino_que_el_nucleo_se_engrosa_al_mayor(radio, designacion, desfase, longitud):
+    """B-248 (video de Fusion del 2026-11-07: M22×3 sobre Ø20 deja r 10,882): el tramo roscado crece al Ø mayor."""
+    forma = sc.rosca(g.cilindro(radio, 30), designacion=designacion, desfase=desfase, longitud=longitud)
+    assert g.es_valida(forma) and len(g.solidos(forma)) == 1
+    assert d_max(forma) == pytest.approx(30.0, abs=2e-3)
+
+
+def test_b248_un_agujero_mas_ancho_que_el_mayor_se_rellena_al_menor():
+    bloque = g.booleano(g.caja(40, 40, 12, origen=(-20, -20, 0)), g.cilindro(7, 12), "cortar")
+    forma = sc.rosca(bloque, designacion="M10")
+    assert g.es_valida(forma) and len(g.solidos(forma)) == 1
+    assert d_min(forma) == pytest.approx(sc.datos_rosca("M10")["diametro_menor"], abs=2e-3)
