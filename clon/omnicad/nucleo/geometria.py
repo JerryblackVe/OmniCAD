@@ -1196,10 +1196,11 @@ def volumen(forma):
     return _propiedades(forma, BRepGProp.VolumeProperties_s)
 
 
-def volumen_exacto(forma):
+def volumen_exacto(forma, eps=None):
     """Volumen por integración exacta, sin malla (barato aun con B-spline): para comparar dos formas o descartar las
-    degeneradas. Para informar un volumen, `volumen`."""
-    return _integral(forma, BRepGProp.VolumeProperties_s)
+    degeneradas. Para informar un volumen, `volumen`. `eps`: integración adaptativa hasta ese error relativo (la de
+    por defecto erra un 15 % en un barrido helicoidal de 40 vueltas: B-249)."""
+    return _integral(forma, BRepGProp.VolumeProperties_s, eps)
 
 
 TAMANO_MINIMO = 1e-3    # mm: un sólido más chico no sirve (la tolerancia del kernel es 1e-7 mm)

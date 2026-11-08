@@ -179,10 +179,10 @@ def test_el_agujero_ajustado_queda_en_el_menor_de_la_clase(radio_agujero):
     assert d_min(forma) == pytest.approx(sc.diametro_taladro_rosca("M10", "6H"), abs=2e-3)
 
 
-@pytest.mark.parametrize("kw, rel", [(dict(designacion="M20"), 1e-6), (dict(familia="ansi_metrica"), 1e-6),
-                                     (dict(familia="afbma"), 1e-4)])   # AFBMA: B-249, también con el corte exacto
+@pytest.mark.parametrize("kw", [dict(designacion="M20"), dict(familia="ansi_metrica"),
+                                dict(familia="afbma")])   # AFBMA: 3·10⁻⁵ antes de B-249
 @pytest.mark.parametrize("operacion", ["chaflan", "empalme"])
-def test_p78_la_rosca_del_corte_difuso_admite_empalme_y_va_y_vuelve_por_step(kw, rel, operacion, tmp_path):
+def test_p78_la_rosca_del_corte_difuso_admite_empalme_y_va_y_vuelve_por_step(kw, operacion, tmp_path):
     """P-78: el corte difuso (1e-4) no deja tolerancias que rompan lo que sigue: un chaflán o un empalme en el borde de
     arriba y el STEP de ida y vuelta dan un sólido válido con el mismo volumen."""
     from omnicad.nucleo import intercambio, referencias as refs, solidos_modificar as sm
@@ -196,4 +196,15 @@ def test_p78_la_rosca_del_corte_difuso_admite_empalme_y_va_y_vuelve_por_step(kw,
     intercambio.escribir_step(forma, str(ruta))
     leida = intercambio.leer_step(str(ruta))
     assert g.es_valida(leida)
-    assert g.volumen(leida) == pytest.approx(g.volumen(forma), rel=rel)
+    assert g.volumen(leida) == pytest.approx(g.volumen(forma), rel=1e-6)
+
+
+def test_b249_la_helice_larga_se_barre_de_una_vez(monkeypatch):
+    """B-249: AFBMA N 04 × 30 mm (38 vueltas) se rechazaba por un volumen mal integrado (414 en vez de 484) y se barría
+    por mitades, con una unión de 3 s; con la integración adaptativa sale de un solo barrido."""
+    barridos = []
+    original = sc._barrido_helicoidal
+    monkeypatch.setattr(sc, "_barrido_helicoidal", lambda *a: barridos.append(1) or original(*a))
+    sc._surco_en_origen.cache_clear()
+    forma = sc.rosca(g.cilindro(10, 30), familia="afbma")
+    assert g.es_valida(forma) and len(barridos) == 1
