@@ -2578,7 +2578,7 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
         if radio_cara is not None and radio_cara >= r_fondo - 1e-6:
             raise geo.ErrorGeometria("El agujero es más grande que el diámetro mayor de la rosca.")
     else:
-        if radio_cara is not None and radio_cara > diametro / 2 + extra - 0.01 * paso:
+        if radio_cara is not None and cresta is None and radio_cara > diametro / 2 + extra - 0.01 * paso:
             raise geo.ErrorGeometria("El cilindro es más grueso que el diámetro mayor de la rosca.")
         if radio_cara is not None and radio_cara <= r_fondo:
             raise geo.ErrorGeometria("El cilindro es más fino que el núcleo de la rosca.")
@@ -2841,6 +2841,13 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
         raise geo.ErrorGeometria(f"{datos['designacion']} es una rosca cónica: sobre una cara cilíndrica solo va "
                                  "cosmética (o con Agujero › Roscado cónico).")
     perfil = _perfil_clase(datos, clase, info["interna"], holgura, tabla)
+    if tabla and perfil["cresta"] is None:
+        # B-247, como Fusion: una cara más gruesa que la rosca (o un agujero más chico) se tornea a su Ø de cresta.
+        # Dispara el Ø básico, no la holgura (una cara justa sigue como antes); las recetas viejas (sin `tabla`), igual.
+        basico, h = datos["diametro_menor" if info["interna"] else "diametro"], float(holgura)
+        tol = 0.01 * datos["paso"]     # un Ø apenas distinto no se tornea: dejaría una lámina casi sin espesor
+        if (2 * radio < basico - tol) if info["interna"] else (2 * radio > basico + tol):
+            perfil["cresta"] = basico + (2 * h if info["interna"] else -2 * h)
     z0 = zmax - desfase - largo if invertir else zmin + desfase
 
     def cortar(extra):
