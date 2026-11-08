@@ -242,6 +242,9 @@ Una corrida por fase o por ítem, cada una en su worktree (`bash scripts/worktre
 | P-72 | `draw_arc tangent_to` con radio y barrido | Sol | `D:/PROGRAMA-P-72` / `item/P-72` | Fusionada (tests afectados 20 grupos, 0 fallidos) |
 | H-111 | Patrones con expresiones y parámetros | Sol (cortó por cupo al final; verificó el coordinador) | `D:/PROGRAMA-H-111` / `item/H-111` | Fusionada (tests afectados en `main`: verde salvo el humo de `test_motor`, que pasa solo) |
 | H-109 | Botones de Proyectar a superficie y Curva de intersección | Sol (cortó por cupo; terminó el coordinador) | `D:/PROGRAMA-H-109` / `item/H-109` | Fusionada |
+| B-256 | La Curva de fusión con arista del modelo se deshace junto con su proyección (lo encontró `cm_ventana`) | Coordinador de ejecución (Claude Opus) | `D:/PROGRAMA-B-256` / `item/B-256` | Commiteada en la rama |
+| cm-5 | Fase 5: paridad ventana ↔ API/MCP/CLI (lector Sonnet: 58 claves, 15 diferencias) | Coordinador de ejecución (Claude Opus) | `D:/PROGRAMA-cm-5` / `item/cm-5` | Commiteada en la rama (P-94 queda para Gerardo) |
+| cm-6 | Fases 6 y 7, portones 2, 3 y 5: piezas `cm_ventana` y `cm_pieza_varilla`, caza, matriz e informe | Coordinador de ejecución (Claude Opus) | `D:/PROGRAMA-cm-6` / `item/cm-6` | Commiteada en la rama (P-95 y portón 4 pendientes) |
 
 ### Brief cm-1 (fase 1, inventario)
 
@@ -291,3 +294,67 @@ Desde `D:/PROGRAMA-cm1/clon` con `PYTHONPATH=D:/PROGRAMA-cm1/clon`:
 cuántos casos de test y cuántos xfail (con su motivo), la salida REAL de ruff y pytest (últimas líneas), lo que no
 pudiste verificar.
 ```
+
+## Matriz de verificación final (§ 20, 2026-11-08)
+
+Pruebas: **API** = `clon/tests/test_boceto_crear_modificar_matriz.py` (un caso por clave, con números y guardar/abrir);
+**Comb.** = `test_boceto_combinaciones.py` (§ 14); **cm-5** = `test_boceto_modificar_restringido.py` (portón 1, 41/41);
+**Qt** = tests con el Lienzo y eventos (`test_boceto_herramientas.py`, `test_boceto_interaccion.py`,
+`test_transformar_boceto.py`); **Ventana** = piezas de `scripts/prueba_ui/` en la ventana completa (clic real en la cinta o
+ítem del menú, clics al visor, valores tecleados, Enter, Esc, Ctrl+Z). Estado: VERIFICADO (probado y sin bugs), CORREGIDO
+(tuvo bugs, arreglados y probados desde la ventana), PARCIAL (falta la prueba desde la ventana completa).
+
+| Herramienta (claves `sk_…`) | Variantes | Pruebas | Bugs encontrados | Bugs corregidos | Estado |
+|---|---|---|---|---|---|
+| Línea (`linea`, `linea_medio`) | 2 | API, Qt, Ventana (`boceto_herramientas`, `inferencias`) | — | — | VERIFICADO |
+| Rectángulo (`rectangulo`, `_3p`, `_centro`) | 3 | API, Qt, Ventana (`boceto_herramientas`, `cm_pieza_varilla`, `cm_ventana`) | — | — | VERIFICADO |
+| Círculo (`circulo`, `_2p`, `_3p`, `_2t`, `_3t`) | 5 | API, Qt, Ventana (`cm_pieza_varilla`, `cm_ventana`) | — | — | VERIFICADO |
+| Arco (`arco`, `arco_centro`, `arco_tangente`) | 3 | API, Comb., Qt, Ventana (`boceto_herramientas`, `cm_ventana`) | P-72 | P-72 | CORREGIDO |
+| Polígono (`poligono_circunscrito`, `_inscrito`, `_arista`) | 3 | API, Comb., Ventana (`proyectar_boceto`, `cm_ventana`) | — (P-94 es de la API) | — | VERIFICADO |
+| Elipse (`elipse`) | 1 | API, Qt, Ventana (`boceto_herramientas`, `restricciones_boceto`) | — | — | VERIFICADO |
+| Ranura (`ranura_centro`, `_total`, `_punto`, `_arco_3p`, `_arco_centro`) | 5 | API, cm-5, Ventana (`cm_ventana`) | B-246, B-255 | B-246, B-255 | CORREGIDO |
+| Spline (`spline_ajuste`, `spline_control`) | 2 | API, Comb., Ventana (`boceto_cotas`, `cm_ventana`) | P-67 | P-67 | CORREGIDO |
+| Curva cónica (`conica`) | 1 | API, Ventana (`cm_ventana`) | — | — | VERIFICADO |
+| Punto (`punto`) | 1 | API, Ventana (`boceto_herramientas`) | — | — | VERIFICADO |
+| Texto (`texto`, `desglosar_texto`) | 2 | API, Comb., Ventana (`texto_curva`, `paneles_boceto`, `cm_ventana`) | B-239 | B-239 | CORREGIDO |
+| Simetría (`simetria`) | 1 | API, Ventana (`simetria_boceto`) | — | — | VERIFICADO |
+| Patrones (`patron_circular`, `patron_rectangular`, `editar_patron`) | 3 | API, Comb., Ventana (`patrones_boceto`) | H-111 | H-111 | CORREGIDO |
+| Proyectar/Incluir (`proyectar`, `intersecar`, `perfil_giratorio`, `isoparametrica`, `proyectar_eje`) | 5 | API, Qt, Ventana (`proyectar_boceto`, `boceto_herramientas`) | — | — | VERIFICADO |
+| Proyectar/Incluir (`incluir_3d`, `proyectar_superficie`, `curva_interseccion`, `romper_vinculo`, `proyecciones_perdidas`) | 5 | API, Qt (`test_proyectar_tarjeta`, `test_comandos`, `test_boceto_fase7_ui`) | H-109 | H-109 | PARCIAL (P-95: sin pieza de ventana) |
+| Cota de boceto (`cota`) | 1 | API, Ventana (`boceto_cotas`, `cm_pieza_varilla`) | — | — | VERIFICADO |
+| Espiral (`espiral`) | 1 | API, Ventana (`cm_ventana`) | B-234 | B-234 | CORREGIDO |
+| Empalme (`empalme`) | 1 | API, Comb., cm-5, Ventana (`cm_ventana`, `cm_pieza_varilla`) | B-233, B-242, P-75 | B-233, B-242, P-75 | CORREGIDO |
+| Chaflán (`chaflan`, `_dos_dist`, `_dist_angulo`) | 3 | API, Comb., cm-5, Ventana (`cm_ventana`) | B-232, B-233, B-235, B-236 | B-232, B-233, B-235, B-236 | CORREGIDO |
+| Curva de fusión (`curva_fusion`) | 1 | API, Qt, Ventana (`cm_ventana`) | P-73, B-256 | P-73, B-256 | CORREGIDO |
+| Desfase y Soltar desfase (`desfase`, `soltar_desfase`) | 2 | API, Comb., cm-5, Ventana (`desfase_boceto`, `cm_ventana`) | B-246 | B-246 | CORREGIDO |
+| Recortar (`recortar`) | 1 | API, Comb., cm-5, Qt, Ventana (`cm_ventana`) | B-233, H-110, P-77, B-255 | B-233, H-110, P-77, B-255 | CORREGIDO |
+| Alargar (`alargar`) | 1 | API, cm-5, Ventana (`cm_ventana`) | B-237, P-77, B-255 | B-237, P-77, B-255 | CORREGIDO |
+| Partir (`partir`) | 1 | API, cm-5, Ventana (`cm_ventana`) | P-77, B-255 | P-77, B-255 | CORREGIDO |
+| Escala del boceto (`escala`) | 1 | API, cm-5, Qt, Ventana (`boceto_herramientas`, `paneles_boceto`) | B-232 | B-232 | CORREGIDO |
+| Mover/copiar (`mover`) y marco de control | 1 | API, cm-5, Qt, Ventana (`boceto_herramientas`, `cm_ventana`) | B-232, B-236, B-244, B-245, B-253 | B-232, B-236, B-244, B-245, B-253 | CORREGIDO |
+
+Total: 26 filas y 55 claves de CREAR y MODIFICAR (más «Cambiar parámetros», que es el diálogo de parámetros y tiene su
+propia pieza `parametros`). 50 claves probadas desde la ventana completa; las 5 de la fila PARCIAL, no (P-95).
+
+## Informe final (§ 22, 2026-11-08)
+
+- **Auditado:** 55 claves de CREAR y MODIFICAR (inventario de la fase 1) con sus opciones, en 26 herramientas.
+- **Errores detectados y reparados:** B-232, B-233, B-234, B-235, B-236, B-237, B-239, B-242, B-244, B-245, B-246, B-253,
+  B-255 y B-256. Funciones completadas o mejoradas: P-67, P-72, P-73, P-75, P-77, H-109, H-110 y H-111. Cada uno con su
+  test en el Registro de `PROJECT_LOG.md`.
+- **Paridad ventana ↔ API/MCP/CLI (fase 5):** 58 claves comparadas, 15 diferencias. 4 arregladas (espiral con línea
+  central, `sketch` opcional en 4 herramientas, polígono de 6 lados); las de teclado y ratón, documentadas a propósito en
+  `docs/brechas_mcp.md`; el anclaje al origen, como P-94 (decisión de Gerardo: rompe 20 tests y el patrón «coincidente
+  con el origen»).
+- **Pruebas reales:** matriz de la API 48 casos y 5 xfail ya cerrados; combinaciones 76; cm-5 41/41; 9 piezas de boceto
+  en la ventana, 1233 comprobaciones, 0 ✗; `cm_ventana` 67/0 (H-110, P-73, B-245, B-253, P-75 y 23 comandos más);
+  `cm_pieza_varilla` 15/0 (portón 3: varilla de abanico, cota 180 → 160, volumen 7490,111 → 6650,111 mm³ igual al
+  calculado, capturas miradas); caza `tema boceto`, 0 hallazgos nuevos.
+- **Rendimiento:** no se midieron cambios de tiempo en esta auditoría (ningún arreglo tocó un camino caliente).
+- **Comparación con Fusion:** las 9 «Duda» de cm-5 se midieron en Fusion (`evidencias/fusion_2026-11-08/boceto/`). No se
+  afirma paridad completa: quedan las diferencias de `docs/brechas_mcp.md` y el ángulo 2 del patrón rectangular («sin
+  dato» en la ayuda de Fusion).
+- **Pendiente:** P-94 (anclaje al origen en la API), P-95 (pieza de ventana para 5 comandos de proyección) y el portón 4
+  (juez independiente: sesión aparte con otro modelo, 30 min, `fable-judge` y `omnicad-test`; la sesión de ejecución no
+  puede abrir otra sesión).
+- **Estado final de CREAR y MODIFICAR:** 25 de 26 herramientas VERIFICADO o CORREGIDO desde la ventana; 1 PARCIAL.

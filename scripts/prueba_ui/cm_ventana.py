@@ -60,7 +60,8 @@ L("create_sketch", name="G", plane="XY")                                        
 CELDA = {}                       # comando -> origen (x, y) de su celda de 70 mm
 _ORDEN = ["circulo_2p", "circulo_3p", "rectangulo_centro", "poligono_circunscrito", "poligono_arista", "arco_tangente",
           "ranura_centro", "ranura_total", "ranura_punto", "ranura_arco_3p", "ranura_arco_centro", "spline_control",
-          "conica", "espiral", "alargar", "partir", "circulo_2t", "circulo_3t", "desglosar_texto", "soltar_desfase"]
+          "conica", "espiral", "alargar", "partir", "circulo_2t", "circulo_3t", "desglosar_texto", "soltar_desfase",
+          "chaflan", "chaflan_dos_dist", "chaflan_dist_angulo"]
 for i, h in enumerate(_ORDEN):
     CELDA[h] = (-350 + 70 * (i % 10), 40 - 90 * (i // 10))
 
@@ -71,6 +72,8 @@ def _ln(h, a, b):
 
 
 _ln("arco_tangente", (0, 0), (15, 0))
+for _h in ("chaflan", "chaflan_dos_dist", "chaflan_dist_angulo"):
+    _ln(_h, (0, 0), (30, 0)), _ln(_h, (30, 0), (30, 20))
 _ln("alargar", (0, 0), (20, 0)), _ln("alargar", (40, -10), (40, 10))
 _ln("partir", (0, 0), (40, 0)), _ln("partir", (10, -10), (10, 10)), _ln("partir", (30, -10), (30, 10))
 _ln("circulo_2t", (0, 0), (30, 0)), _ln("circulo_2t", (0, 0), (0, 30))
@@ -336,6 +339,7 @@ ELEGIR = {   # comando: (clics relativos, qué tiene que pasar)
     "circulo_3t": ([(15, 0), (22.5, 13), (7.5, 13)], "nace el círculo inscrito"),
     "desglosar_texto": ([(6, 4)], "el texto pasa a curvas"),
 }
+CHAFLAN = {"chaflan": ("3",), "chaflan_dos_dist": ("3", "4"), "chaflan_dist_angulo": ("3", "45")}   # clic en la esquina y valores
 
 
 def encuadrar(x, y, span=90):
@@ -369,6 +373,17 @@ def _barrido_uno(h):
         nuevos = sorted(c.tipo for c in lz.b.curvas.values())
         ok = len(nuevos) > len(tipos_antes) and nuevos.count(tipo) > tipos_antes.count(tipo)
         que = f"crea {tipo}"
+    elif h in CHAFLAN:
+        clic(ox + 30, oy)
+        if lz.entrada is not None:
+            for campo, texto in zip(lz.entrada.campos, CHAFLAN[h], strict=False):
+                campo.setFocus()
+                campo.selectAll()
+                QTest.keyClicks(campo, texto)
+            QTest.keyClick(lz.entrada.campos[len(CHAFLAN[h]) - 1], Qt.Key_Return)
+            A.esperar(200)
+        que = "clic en la esquina, valores tecleados y Enter: nace el chaflán"
+        ok = sum(1 for c in lz.b.curvas.values() if c.tipo == "linea") == tipos_antes.count("linea") + 1
     else:
         clics, que = ELEGIR[h]
         for x, y in clics:
@@ -397,7 +412,7 @@ def _barrido_uno(h):
 
 def barrido():
     entrar("G", centro=(0, 0), span=820)
-    for h in DIBUJO | ELEGIR:
+    for h in list(DIBUJO) + list(ELEGIR) + list(CHAFLAN):
         A.correr(AR + " · barrido · " + h, lambda h=h: _barrido_uno(h))
     A.foto(v, "barrido")
     antes = _n_desfase()
