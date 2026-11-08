@@ -127,6 +127,24 @@ def test_condicion_libre_y_peso():
     assert _volumen(t) > math.pi * 100 * 30
 
 
+@pytest.mark.parametrize("peso, se_pliega", [(1, False), (5, True)])
+def test_b243_direccion_con_peso_alto_que_se_autointersecta_falla(peso, se_pliega):
+    # Círculo r30 → ranura 120x60 a 60 mm: con peso 1 la seta es válida; con peso 5 la pared se pliega.
+    s = api.Sesion()
+    llamar(s, "create_sketch", plane="XY", name="C")
+    llamar(s, "draw_circle", radius=30, sketch="C")
+    plano = llamar(s, "create_construction_plane", plane="XY", offset=60)["plane"]["id"]
+    llamar(s, "create_sketch", plane=plano, name="R")
+    llamar(s, "draw_slot", points=[[-60, 0], [60, 0]], width=60, sketch="R")
+    r = api.llamar(s, "loft", {"sketches": ["C", "R"],
+                               "start_condition": {"type": "direction", "angle": 90, "weight": peso}})
+    if se_pliega:
+        assert not r["ok"] and "autointersecta" in r["mensaje"]
+    else:
+        assert r["ok"], r
+        assert _volumen(s) == pytest.approx(265452.6, rel=1e-3)
+
+
 def test_errores():
     s = _dos_circulos()
     for args in ({"start_condition": {"type": "tangent"}}, {"start_condition": {"type": "direction", "angle": 200}},
