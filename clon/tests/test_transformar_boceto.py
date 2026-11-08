@@ -403,3 +403,19 @@ def test_borrar_los_dos_campos_de_la_base_quita_el_punto_base(ventana):
     assert ctl.base == (1.0, 2.0)                                          # con uno solo borrado todavía vale el último par
     panel.campos["base_y"].setText("")
     assert ctl.base is None and not panel.boton_ok.isEnabled()
+
+
+def test_b245_mover_lo_anclado_al_origen_no_acepta_en_silencio(ventana):
+    from test_boceto_modificar_restringido import _crear
+    lz, panel, ctl = ventana
+    s, curvas = _crear("ranura")                    # ranura acotada con el centro coincidente con el origen
+    lz._restaurar(next(o for o in s.doc.operaciones if hasattr(o, "boceto")).boceto.a_dict())
+    lz.resolver()
+    p = lz.b.curvas[curvas[0]].puntos()[0]
+    antes, pasos, mensajes = lz.b.coords(p), len(lz.historial), []
+    lz.mensaje.connect(mensajes.append)
+    abrir(lz, "mover", *curvas)
+    panel.campos["dx"].setText("200")
+    assert not ctl.aceptar()
+    assert lz.b.coords(p) == pytest.approx(antes) and len(lz.historial) == pasos
+    assert "origen" in mensajes[-1] and lz.herramienta == "mover"

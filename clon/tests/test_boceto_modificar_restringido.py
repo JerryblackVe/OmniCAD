@@ -295,7 +295,7 @@ def test_desfase_restringido(perfil):
 
 @pytest.mark.parametrize(("perfil", "herramienta"), [
     ("rectangulo", "mover"), ("circulo", "mover"),
-    pytest.param("ranura", "mover", marks=_xfail("Mover dx200 responde ok pero centro sigue x=0; cuerda 20 -> 0 mm")),
+    ("ranura", "mover"),
     pytest.param("rectangulo", "copiar", marks=_xfail("Duda: copia dx200 deja dof=2 en vez de 0")),
     pytest.param("circulo", "copiar", marks=_xfail("Duda: copia dx200 deja dof=2 en vez de 0")),
     pytest.param("ranura", "copiar", marks=_xfail("Duda: copia dx200 deja dof=2; cuerda 20 -> 0 mm")),
@@ -382,3 +382,13 @@ def test_repeticion_restringida(perfil, herramienta):
     fallos += _arrastrar(s, despues)
     if fallos:
         raise _FalloAuditoria("; ".join(fallos))
+
+
+def test_b245_mover_anclado_al_origen_se_rechaza_sin_cambios():
+    s, _ = _crear("ranura")
+    antes = L(s, "get_sketch")
+    r = api.llamar(s, "transform_sketch", {"sketch": "B", "dx": 200})
+    assert not r["ok"] and r["error_kind"] == "SKETCH_OVERCONSTRAINED" and "origen" in r["mensaje"]
+    assert L(s, "get_sketch") == antes
+    assert api.llamar(s, "transform_sketch", {"sketch": "B", "dx": 0})["ok"]          # nada pedido: no es un rechazo
+    assert api.llamar(s, "transform_sketch", {"sketch": "B", "dx": 200, "copy": True})["ok"]
