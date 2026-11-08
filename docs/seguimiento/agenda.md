@@ -9,7 +9,7 @@ avisa lo que vence ese día o ya venció.
 
 | ID | Tarea | Para cuándo | Pedido | Estado |
 |---|---|---|---|---|
-| AG-2 | [2.º] Auditoría y reparación de las herramientas 3D (Agujero a Volumen de fluido) contra Fusion 360; prompt en `docs/auditoria_herramientas_3d.md` | A definir | 2026-11-07 | Programada |
+| AG-2 | [2.º] Auditoría y reparación de las herramientas 3D (Agujero a Volumen de fluido) contra Fusion 360; prompt en `docs/auditoria_herramientas_3d.md` (con el anexo de ROSCAS primero) | A definir | 2026-11-07 | Programada |
 | AG-3 | [6.º] Auditoría, reparación y mejora del espacio RENDERIZAR contra Fusion 360 (primero la interfaz corrupta); prompt en `docs/auditoria_renderizar.md` | A definir | 2026-11-07 | Programada |
 | AG-4 | [3.º] Auditoría, reparación y paridad de las 27 herramientas de MODIFICAR (Pulsar/tirar a Lista de materiales) en todos los espacios contra Fusion 360; prompt en `docs/auditoria_modificar.md` | A definir | 2026-11-07 | Programada |
 | AG-5 | [5.º] Auditoría, reparación y paridad del sistema ENSAMBLAR (componentes, uniones, solver, movimiento, contactos) contra Fusion 360; prompt en `docs/auditoria_ensamblar.md` | A definir | 2026-11-07 | Programada |

@@ -16,7 +16,8 @@ Guardado el 2026-11-07. Modelo sugerido: coordina una sesión Claude Opus 5 con 
 AJUSTE DEL COORDINADOR (2026-11-08; manda sobre todo lo que sigue)
 - PORTÓN DE CIERRE OBLIGATORIO: esta auditoría no se cierra hasta pasar los 5 puntos de docs/auditorias/porton_auditoria.md (matriz de combinaciones con invariantes, prueba en la ventana, pieza real, juez independiente con otro modelo y cerrar la clase de cada bug).
 - Orden de las seis auditorías (de a una; la siguiente arranca cuando la anterior quedó cerrada y commiteada): 1) CONSTRUIR (AG-7), 2) herramientas 3D (AG-2), 3) MODIFICAR (AG-4), 4) INSERTAR (AG-6), 5) ENSAMBLAR (AG-5), 6) RENDERIZAR (AG-3). Cada herramienta tiene UNA sola auditoría dueña. Las demás solo la usan en sus pruebas combinadas: si encuentran un bug en una herramienta ajena, cargan la fila en docs/seguimiento/ y la arreglan solo si la dueña ya pasó (está antes en el orden); si la dueña viene después, dejan la fila para ella.
-- Sos la dueña de las herramientas de tu lista (Agujero a Volumen de fluido, con Patrón, Simetría y Engrosar). NO audites planos, ejes ni puntos de construcción: ya los cerró CONSTRUIR (AG-7).
+- Sos la dueña de las herramientas de tu lista (Agujero a Volumen de fluido, con Patrón, Simetría y Engrosar). NO audites planos, ejes ni puntos de construcción (son de CONSTRUIR, AG-7): si encontrás un bug ahí, cargá la fila y seguí.
+- ROSCAS (Gerardo, 2026-11-08): cuando le toque su turno, esta auditoría empieza por el ANEXO del final (Rosca, Agujero roscado, tablas y velocidad contra Fusion); después el resto de la lista.
 
 # PROMPT MAESTRO — AUDITORÍA, REPARACIÓN Y PARIDAD FUNCIONAL DE HERRAMIENTAS 3D DE OMNICAD CON FUSION 360
 
@@ -1182,4 +1183,429 @@ La prioridad es que OmniCAD ofrezca herramientas 3D profesionales, precisas, est
 No marques una función como terminada hasta demostrar que funciona correctamente.
 
 **El resultado esperado no es una lista de recomendaciones: es código corregido, funciones completadas, pruebas reales y una auditoría verificable de extremo a extremo.**
+
+======================================================================
+ANEXO — ROSCAS (pedido de Gerardo del 2026-11-08; se hace PRIMERO dentro de esta auditoría)
+Videos reales: C:/Users/mosos/Videos/2026-11-07 21-43-39.mp4 (OmniCAD) y C:/Users/mosos/Videos/2026-11-07 21-47-34.mp4 (Fusion 360).
+======================================================================
+
+# OMNICAD — AUDITORÍA PROFUNDA, CORRECCIÓN Y OPTIMIZACIÓN DEL SISTEMA DE ROSCAS
+
+## 1. ROL Y OBJETIVO
+
+Actuá como ingeniero senior especializado en:
+
+- Sistemas CAD paramétricos.
+- OpenCascade (OCP), geometría B-Rep y operaciones booleanas.
+- Algoritmos de generación de roscas helicoidales.
+- Python, PySide6, OpenGL y Rust/PyO3.
+- Profiling, optimización y concurrencia.
+- Normas de roscas ISO, ANSI, UNC, UNF y otras familias compatibles.
+- Pruebas automatizadas, precisión geométrica y calidad del software.
+
+**MISIÓN PRINCIPAL:**
+
+Auditar exhaustivamente la sección ROSCAS de OmniCAD, identificar y corregir sus problemas funcionales, geométricos y de rendimiento.
+
+La referencia de comportamiento es Autodesk Fusion 360.
+
+**Objetivo obligatorio: que OmniCAD ofrezca la misma funcionalidad, precisión, facilidad de uso y velocidad de respuesta que Fusion 360, o que lo supere cuando sea técnicamente posible.**
+
+No alcanza con mejorar superficialmente el diálogo. Debés revisar y optimizar todo el sistema, desde las tablas de roscas hasta la geometría final.
+
+## 2. INSTRUCCIONES DEL PROYECTO
+
+Antes de tocar código:
+
+1. Leer `AGENTS.md`, `CLAUDE.md`, `CLAUDE.local.md` y `PROJECT_CONTEXT.md`.
+2. Invocar mediante la herramienta Skill `fable-method` y `ponytail`, junto con `plan-then-do`, `tool-calling-guard` y `verify-before-commit`.
+3. Usar `omnicad-test` para las pruebas de interfaz.
+4. Invocar `ponytail-review` antes del cierre, incluyendo su resultado real.
+5. Consultar la documentación oficial descargada de Fusion en `docs/fusion_docs/`, utilizando `scripts/fusion_docs.py buscar` y `ver`.
+6. Respetar la arquitectura, el seguimiento, las pruebas y las restricciones de permisos del proyecto.
+
+No copiar código propietario de Autodesk.
+
+## 3. ANÁLISIS DE LOS VIDEOS
+
+El usuario proporcionó dos grabaciones:
+
+- `2026-11-07 21-43-39(1).mp4`: OmniCAD.
+- `2026-11-07 21-47-34(1).mp4`: Fusion 360.
+
+Si las grabaciones están disponibles, analizarlas detalladamente.
+
+### Observaciones que deben investigarse
+
+**A. Rendimiento y previsualización**
+
+OmniCAD muestra períodos de cálculo al modificar parámetros, durante los cuales el cilindro puede aparecer sin rosca. Fusion presenta una interacción visual más fluida al recorrer diferentes configuraciones.
+
+Investigar qué provoca las esperas, si los cálculos son redundantes y cómo evitar interrupciones innecesarias de la previsualización.
+
+**B. Selección automática de parámetros**
+
+Investigar cómo OmniCAD determina:
+
+- Tipo de rosca.
+- Tamaño.
+- Designación.
+- Paso.
+- Clase.
+- Compatibilidad con el diámetro seleccionado.
+
+En la grabación aparecen selecciones automáticas como M2.6 y advertencias de incompatibilidad con el cilindro.
+
+Determinar si corresponden a fallos de selección, tablas incompletas, problemas de validación o configuraciones deliberadamente incompatibles. No asumir una causa sin reproducirla.
+
+**C. Geometría**
+
+Comprobar que las formas de rosca generadas respetan el estándar seleccionado y que las diferencias visuales frente a Fusion responden a perfiles geométricos correctos.
+
+**D. Funcionamiento del diálogo**
+
+Verificar que todos los cambios de familia, tamaño, clase, sentido y opciones adicionales actualicen correctamente la vista previa sin bloquear la aplicación.
+
+**IMPORTANTE:** Las grabaciones son evidencia visual, no benchmarks científicos. No inventar tiempos ni diagnosticar errores exclusivamente por su apariencia.
+
+## 4. AUDITORÍA DEL CÓDIGO
+
+Localizar y analizar todos los módulos involucrados en:
+
+- Comando Rosca.
+- Agujero roscado.
+- Bibliotecas y tablas de roscas.
+- Generación de hélices.
+- Perfiles de rosca.
+- Barridos y operaciones booleanas.
+- Selección de caras cilíndricas.
+- Vista previa.
+- Timeline y reconstrucción paramétrica.
+- API, MCP y CLI.
+- Renderizado, teselado y exportación.
+
+Revisar especialmente las implementaciones existentes en `nucleo/`, `timeline/`, `ui/comandos/`, `api/`, `ui/visor3d.py`, `nucleo/tablas_rosca.py` y `scripts/generar_tablas_rosca.py`, verificando primero sus nombres y rutas reales.
+
+Detectar:
+
+1. Cálculos repetidos.
+2. Generación innecesaria de geometría.
+3. Booleanas demasiado costosas.
+4. Reconstrucciones completas del documento cuando solo cambia una rosca.
+5. Repetición innecesaria de operaciones OpenCascade.
+6. Conversiones y copias evitables de geometría.
+7. Teselado excesivo.
+8. Actualizaciones redundantes del visor.
+9. Bloqueos del hilo principal.
+10. Cachés inexistentes, incorrectas o mal invalidadas.
+11. Trabajadores que calculan resultados obsoletos.
+12. Pérdidas de precisión o geometrías inválidas.
+
+Identificar los cuellos de botella reales utilizando profiling, no suposiciones.
+
+## 5. COMPARACIÓN FUNCIONAL CON FUSION 360
+
+Auditar y corregir:
+
+### Selección y configuración
+
+- Selección automática de caras cilíndricas exteriores e interiores.
+- Identificación correcta de diámetros y orientación del eje.
+- Familia de rosca.
+- Tamaños compatibles.
+- Designación y paso.
+- Clases y tolerancias compatibles con interior/exterior.
+- Roscas derechas e izquierdas.
+- Longitud completa.
+- Longitud parcial.
+- Desfase inicial.
+- Opciones para recordar tamaño.
+- Rosca modelada y cosmética.
+- Edición posterior de parámetros.
+
+Las listas de tamaños, designaciones y clases deben actualizarse coherentemente al cambiar de familia.
+
+No ofrecer combinaciones inválidas como si fueran válidas, pero tampoco ocultar estándares compatibles.
+
+Comparar cada opción contra la documentación y el comportamiento verificable de Fusion.
+
+### Geometría
+
+Verificar:
+
+- Diámetros mayor, menor y de paso.
+- Ángulo y forma del perfil.
+- Altura y profundidad del filete.
+- Paso constante y orientación helicoidal.
+- Número de vueltas.
+- Inicio y final de rosca.
+- Truncamientos y transiciones.
+- Dirección izquierda/derecha.
+- Roscas interiores y exteriores.
+- Coaxialidad de tornillo y tuerca.
+- Tolerancias y holguras de impresión 3D.
+- Intersecciones, autointersecciones y caras degeneradas.
+- Estanqueidad y validez del sólido B-Rep.
+
+Usar verificaciones numéricas de diámetros, volumen, área, caja envolvente y validez topológica.
+
+Una rosca visualmente correcta pero geométricamente inválida se considera un fallo.
+
+## 6. OPTIMIZACIÓN DE VELOCIDAD — PRIORIDAD MÁXIMA
+
+**Meta medible: OmniCAD debe igualar o superar los tiempos de Fusion 360 en operaciones equivalentes, bajo condiciones comparables.**
+
+### Fase A — Benchmark inicial
+
+Construir un benchmark reproducible que mida:
+
+| Operación | Métrica |
+|---|---|
+| Seleccionar cilindro | Latencia de respuesta |
+| Abrir Rosca | Tiempo hasta diálogo utilizable |
+| Cambiar tipo de rosca | Tiempo de actualización |
+| Cambiar tamaño o designación | Tiempo de actualización |
+| Cambiar clase o sentido | Tiempo de actualización |
+| Activar Modelado | Tiempo hasta vista previa |
+| Modificar longitud/desfase | Tiempo hasta vista previa |
+| Aceptar operación | Tiempo de geometría definitiva |
+| Editar Rosca | Tiempo de recálculo |
+| Deshacer/rehacer | Tiempo de recuperación |
+
+Medir también memoria máxima, uso de CPU, bloqueos de UI y tiempo de teselado/render.
+
+Realizar pruebas en frío y en caliente, con repeticiones suficientes para informar mediana, P95 y variabilidad.
+
+### Fase B — Comparación directa
+
+Ejecutar escenarios equivalentes en OmniCAD y Fusion 360:
+
+- M6 × 1.
+- M10 × 1.5.
+- M20 × 2.5.
+- Rosca fina.
+- Rosca interior.
+- Rosca exterior.
+- Rosca corta y larga.
+- Rosca derecha e izquierda.
+- Varias roscas dentro de un documento complejo.
+
+Utilizar las mismas dimensiones, calidad de visualización, condiciones de hardware y modalidad geométrica.
+
+Registrar el tiempo de Fusion y OmniCAD en cada escenario.
+
+**Criterio objetivo:** tiempo mediano y P95 de OmniCAD igual o inferior al de Fusion para cada escenario comparable.
+
+Si un escenario todavía no alcanza la meta, continuar buscando mejoras justificadas y documentar la diferencia restante con evidencia.
+
+### Fase C — Optimización
+
+Evaluar e implementar las mejoras que correspondan según el profiling:
+
+**1. Previsualización progresiva**
+
+Separar claramente:
+
+- Respuesta inmediata del diálogo.
+- Previsualización visual ligera.
+- Generación geométrica exacta.
+- Confirmación final de la operación.
+
+La previsualización rápida puede usar una representación simplificada temporal, pero la geometría definitiva debe ser exacta.
+
+Nunca guardar una aproximación gráfica como si fuera una rosca física válida.
+
+**2. Cachés inteligentes**
+
+Reutilizar datos cuando no cambiaron:
+
+- Perfil.
+- Familia.
+- Tamaño.
+- Paso.
+- Clase.
+- Diámetro.
+- Geometría cilíndrica de base.
+- Segmentos de hélice.
+- Mallas de visualización, cuando corresponda.
+
+Invalidar exclusivamente los elementos afectados por cada modificación.
+
+**3. Optimización geométrica**
+
+Investigar alternativas más eficientes para construir la rosca:
+
+- Generación precisa de perfiles.
+- Construcción helicoidal eficiente.
+- Reducción de barridos redundantes.
+- Operaciones booleanas locales y optimizadas.
+- Reducción de reconstrucciones B-Rep.
+- Ajuste correcto de tolerancias numéricas.
+- Tratamiento adecuado de roscas largas.
+- Minimización de caras y aristas innecesarias.
+
+No sacrificar dimensiones, topología ni conformidad con el estándar para ganar velocidad.
+
+**4. Uso de Rust y código nativo**
+
+Perfilar las operaciones Python que consumen tiempo.
+
+Si existen cuellos de botella numéricos, transferir únicamente los componentes adecuados a Rust/PyO3, respetando la arquitectura existente.
+
+No reescribir OpenCascade en Rust ni duplicar funciones nativas que ya son eficientes.
+
+**5. UI asíncrona**
+
+Evaluar el trabajador persistente existente.
+
+Evitar que el cálculo pesado bloquee el hilo de PySide6.
+
+Una modificación de parámetros debe invalidar los resultados anteriores. Un resultado viejo nunca puede sobrescribir una selección más reciente.
+
+Las operaciones deben ser cancelables o descartables con seguridad, sin romper la coherencia del documento ni el estado del kernel.
+
+**Resultado esperado: interacción fluida, sin congelamientos y sin cálculos inútiles.**
+
+## 7. CORRECCIÓN DE BUGS Y PRUEBAS DE ESTRÉS
+
+Crear pruebas que cubran:
+
+- Cambiar repetidamente entre familias.
+- Seleccionar tamaños incompatibles.
+- Cambiar parámetros muy rápidamente.
+- Activar/desactivar Modelado.
+- Longitud y desfase en valores límite.
+- Roscas internas/externas con caras invertidas.
+- Diámetros muy pequeños y muy grandes.
+- Pasos finos y gruesos.
+- Roscas largas con muchas vueltas.
+- Cambios en el diámetro original del cilindro.
+- Roscas en caras de cuerpos transformados.
+- Edición de una rosca existente.
+- Operaciones posteriores sobre sólidos roscados.
+- Guardar, cerrar, abrir y recalcular.
+- Deshacer, rehacer y modificar el timeline.
+- Exportación STL, STEP, 3MF y BREP.
+- Roscas complementarias para piezas imprimibles.
+- Valores inválidos, NaN, infinitos y expresiones.
+- Múltiples roscas en documentos complejos.
+
+Agregar pruebas de regresión para cada problema confirmado.
+
+Revisar los bugs históricos relacionados con roscas, incluidos B-44, B-59, B-122 y el caso de tiempo B-222. No considerar resuelto un problema histórico únicamente porque figure así en la bitácora: comprobar el código y las pruebas actuales.
+
+## 8. AUDITORÍA DE LA INTERFAZ
+
+Probar Rosca como lo haría un usuario real:
+
+- Elegir una cara con el mouse.
+- Abrir y cerrar desplegables.
+- Cambiar todos los valores disponibles.
+- Usar teclas Tab, Enter y Esc.
+- Activar/desactivar casillas.
+- Arrastrar manipuladores de longitud/desfase.
+- Observar la actualización en el visor.
+- Editar la operación desde el timeline.
+- Cancelar sin modificar el documento.
+- Aceptar y comprobar el resultado definitivo.
+
+Verificar además:
+
+- Paneles pequeños de 1024 × 640 y 800 × 520.
+- Mensajes de error útiles.
+- Ausencia de selecciones obsoletas.
+- Estados de carga claros.
+- Interfaz siempre responsiva.
+
+La experiencia debe ser comparable con la de Fusion 360, sin copiar sus recursos propietarios.
+
+## 9. METODOLOGÍA DE EJECUCIÓN
+
+Trabajar en este orden:
+
+1. Auditar código y comportamiento.
+2. Reproducir los problemas detectados.
+3. Medir rendimiento inicial.
+4. Identificar causas raíz.
+5. Priorizar fallos de corrección y cuellos de botella.
+6. Implementar las correcciones necesarias.
+7. Optimizar los algoritmos.
+8. Comparar nuevamente con Fusion.
+9. Ejecutar regresiones y pruebas de usuario.
+10. Documentar resultados.
+
+Corregir y verificar un problema por vez, evitando introducir múltiples modificaciones sin pruebas intermedias.
+
+Respetar las reglas del proyecto sobre sesiones, commits del coordinador y recursos compartidos.
+
+No instalar dependencias nuevas sin autorización. No hacer `push`.
+
+No utilizar esperas artificiales para ocultar congelamientos ni modificar los benchmarks para obtener mejores resultados.
+
+## 10. CRITERIOS DE ACEPTACIÓN
+
+La tarea se considera terminada únicamente cuando:
+
+- Las operaciones de rosca de los escenarios de prueba producen geometría válida.
+- Las selecciones automáticas y las tablas funcionan correctamente.
+- Las roscas modeladas son físicamente correctas.
+- Las roscas cosméticas no generan geometría pesada innecesariamente.
+- El diálogo responde fluidamente durante la edición.
+- No aparecen resultados obsoletos al cambiar parámetros.
+- El timeline y los archivos conservan sus operaciones.
+- API, MCP, CLI e interfaz ofrecen las funciones correspondientes.
+- Los tests afectados, Ruff y las verificaciones de UI pasan.
+- La suite completa y el humo se ejecutan cuando lo indique el proceso de cierre del proyecto.
+- Existe una comparación cuantitativa antes/después y frente a Fusion.
+
+**No declarar que OmniCAD es más rápido que Fusion sin mediciones reproducibles que lo demuestren.**
+
+## 11. DOCUMENTACIÓN Y ENTREGA
+
+Actualizar:
+
+- `docs/seguimiento/bugs.md`
+- `docs/seguimiento/mejoras.md`
+- `docs/seguimiento/faltantes.md`, si corresponde.
+- `PROJECT_LOG.md`
+- `PROJECT_CONTEXT.md`
+- Documentación de herramientas MCP/CLI, si hubo cambios.
+- Lista de pruebas pendientes según las reglas existentes.
+
+Entregar un informe final que incluya:
+
+1. Problemas encontrados, con causa y evidencia.
+2. Correcciones realizadas.
+3. Algoritmos optimizados.
+4. Archivos y funciones modificados.
+5. Validaciones geométricas y resultados.
+6. Pruebas ejecutadas con su salida real.
+7. Benchmarks anteriores y posteriores.
+8. Comparación contra Fusion 360.
+9. Limitaciones y problemas que todavía persistan.
+
+Incluir obligatoriamente esta tabla:
+
+| Operación | Fusion 360 | OmniCAD antes | OmniCAD después | Mejora |
+|---|---|---|---|---|
+| Vista previa modelada | Medido | Medido | Medido | Calculada |
+| Cambio de tipo | Medido | Medido | Medido | Calculada |
+| Cambio de tamaño | Medido | Medido | Medido | Calculada |
+| Cambio de longitud | Medido | Medido | Medido | Calculada |
+| Generación definitiva | Medido | Medido | Medido | Calculada |
+| Edición paramétrica | Medido | Medido | Medido | Calculada |
+
+No inventar valores si alguna medición no puede realizarse.
+
+## INSTRUCCIÓN FINAL
+
+**No quiero solamente una auditoría ni una lista de recomendaciones. Quiero que investigues, reproduzcas, corrijas, optimices y verifiques los problemas que encuentres.**
+
+Priorizá tres resultados:
+
+1. **Precisión:** roscas físicamente correctas y compatibles con sus normas.
+2. **Funcionamiento:** experiencia equivalente a Fusion 360, sin errores ni limitaciones injustificadas.
+3. **Velocidad:** generación, edición y previsualización tan rápidas como Fusion 360 o superiores, demostradas con benchmarks.
+
+Trabajá sobre la implementación real de OmniCAD, respetá su arquitectura y entregá únicamente resultados comprobables.
 ```
