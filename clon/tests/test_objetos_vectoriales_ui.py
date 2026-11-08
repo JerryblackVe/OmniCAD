@@ -119,3 +119,32 @@ def test_panel_tecleo_medidas_invalidas_y_modo_perfiles(lienzo):
     clic(lz, (30, 20))
     assert lz.perfiles_sel and not lz.seleccion
     panel.close()
+
+
+def test_p74_panel_solo_con_objeto_o_texto_elegido(lienzo):
+    """P-74: curvas comunes no abren el panel (como Fusion); un objeto vectorial o un texto sí."""
+    lz, oid = lienzo
+    app = QApplication.instance()
+    panel = PanelObjetos(lz.objetos, lz)
+    panel.show()
+    linea = lz.b.agregar_linea((100, 100), (120, 100))
+    lz.seleccion = [linea]
+    lz._notificar_seleccion()
+    panel.sincronizar()
+    assert not panel.isVisible()                      # curva suelta: panel oculto
+    lz.seleccion = [oid]
+    lz._notificar_seleccion()
+    panel.sincronizar()
+    assert panel.isVisible()                          # objeto SVG/vectorial: visible
+    lz.seleccion = []
+    lz._notificar_seleccion()
+    panel.sincronizar()
+    assert not panel.isVisible()                      # nada elegido: oculto aunque haya objetos
+    texto = lz.b.agregar_texto((0, 60), "Hola")
+    lz.objetos.registrar_textos()
+    app.processEvents()
+    lz.seleccion = [texto]
+    lz._notificar_seleccion()
+    panel.sincronizar()
+    assert panel.isVisible()                          # texto: visible
+    panel.close()

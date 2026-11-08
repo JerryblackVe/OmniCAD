@@ -698,7 +698,8 @@ class PanelObjetos(QFrame):
             self.lista.blockSignals(False)
         ids = control.seleccion()
         libres = [i for i in control.l.seleccion if i in b.curvas and i not in ob.indice(b)]
-        self.setVisible(bool(roots or libres) and control.l.herramienta == "seleccionar" and not self._suspendido)
+        # P-74: como en Fusion, elegir curvas comunes no abre el panel; solo un objeto vectorial o un texto.
+        self.setVisible(bool(ids) and control.l.herramienta == "seleccionar" and not self._suspendido)
         bloqueo = any(b.objetos[i]["bloqueado"] for i in ids)
         self.principal.setVisible(bool(ids) or bool(libres))
         self.lista.setVisible(not ids or len(roots) > 1)
