@@ -235,7 +235,14 @@ def resolver(forma, ref, umbral=0.35):
     if distancias and distancias[0][0] != math.inf:
         mejor_d, _, mejor = distancias[0]
         segunda = distancias[1][0] if len(distancias) > 1 else math.inf
-        if mejor_d <= umbral or (mejor_d <= 1.2 and mejor_d < 0.5 * segunda):
+        if mejor_d <= umbral:
+            return mejor
+        # B-252: la «ventaja clara» sola no alcanza si la topología cambió y la candidata está en otro lugar de la
+        # caja: es otra cara que quedó sola (la referida desapareció), no la misma que se movió.
+        f, g = ref["firma"], firmas[distancias[0][1]]
+        misma_topologia = ref.get("de") is None or ref["de"] == len(subs)
+        cerca = "rel" not in f or "rel" not in g or math.dist(f["rel"], g["rel"]) <= 0.25
+        if mejor_d <= 1.2 and mejor_d < 0.5 * segunda and (misma_topologia or cerca):
             return mejor
     if "indice" in ref and ref.get("de") == len(subs) and 0 <= ref["indice"] < len(subs):
         # La topología no cambió (mismas subformas, mismo orden): la que ocupa la misma posición ES la misma, si
