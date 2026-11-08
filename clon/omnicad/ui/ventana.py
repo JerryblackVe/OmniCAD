@@ -3070,7 +3070,8 @@ class VentanaPrincipal(QMainWindow):
         if self.puente is not None and getattr(self.puente.sesion, "latido", None) is not None:
             return      # B-16: corre execute_code (su latido procesa eventos): no guardar un estado a medio aplicar
         try:
-            proyecto.autoguardar_en_hilo(self.doc, lambda destino, error: self._autoguardado_listo.emit(destino, error))
+            proyecto.autoguardar_en_hilo(self.doc, lambda destino, error: self._autoguardado_listo.emit(destino, error),
+                                         self.visor.captura_png())
         except (OSError, RuntimeError) as e:          # al leer la receta o crear la carpeta, antes del hilo
             self._al_autoguardar(None, e)
 

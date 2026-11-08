@@ -219,8 +219,8 @@ def _escribir(ruta, manifiesto, receta, miniatura_png=None, doc_cache=None):
             z.writestr("receta.json", receta)
             if doc_cache is not None:
                 _escribir_cache(z, doc_cache, receta)
-            if miniatura_png:
-                z.writestr("miniatura.png", miniatura_png)
+            if miniatura_png:      # sin comprimir: el PNG ya lo está, y el lector de miniaturas de Windows la lee directo
+                z.writestr("miniatura.png", miniatura_png, zipfile.ZIP_STORED)
         os.replace(temporal, ruta)
     except BaseException:
         if os.path.exists(temporal):
@@ -333,7 +333,7 @@ def esperar_autoguardado():
         _HILOS.pop().join()
 
 
-def autoguardar_en_hilo(doc, al_terminar):
+def autoguardar_en_hilo(doc, al_terminar, miniatura_png=None):
     """Como `autoguardar`, pero solo la receta se lee acá (rápido, y queda la foto de este momento); comprimir y
     escribir el ZIP va en un hilo, así la ventana no se traba con un proyecto grande. `al_terminar(destino, error)`
     se llama EN EL HILO (error es None o la excepción OSError/RuntimeError). Devuelve el hilo."""
@@ -343,7 +343,7 @@ def autoguardar_en_hilo(doc, al_terminar):
 
     def trabajar():
         try:
-            al_terminar(_escribir(ruta, manifiesto, receta), None)
+            al_terminar(_escribir(ruta, manifiesto, receta, miniatura_png), None)
         except (OSError, RuntimeError) as e:
             al_terminar(ruta, e)
 

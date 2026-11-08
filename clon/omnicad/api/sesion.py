@@ -15,12 +15,15 @@ en vivo). Las herramientas con `modifica=True` corren dentro de `transaccion()`:
 import copy
 import difflib
 import json
+import logging
 from contextlib import contextmanager
 from pathlib import Path
 
 from ..io_archivos import abrir_externo, proyecto
 from ..timeline.documento import _LIMITE_DESHACER, Documento
-from .errores import desde_mensaje, error
+from .errores import ErrorAPI, desde_mensaje, error
+
+log = logging.getLogger(__name__)
 
 
 class Sesion:
@@ -85,7 +88,7 @@ class Sesion:
         # guarde el mismo nombre que ve la sesión (si no, al reabrir con la API volvía el nombre viejo).
         nombre_anterior, self.doc.nombre = self.doc.nombre, ruta.stem
         try:
-            final = proyecto.guardar(self.doc, ruta)
+            final = proyecto.guardar(self.doc, ruta, self._miniatura())
         except BaseException:
             self.doc.nombre = nombre_anterior
             borrar_carpetas(nuevas)
@@ -95,6 +98,19 @@ class Sesion:
         if nuevas:
             self.avisar(f"Se creó la carpeta {ruta.parent}.")
         return final
+
+    def _miniatura(self):
+        """PNG de 256 px (vista guardada o iso) para `miniatura.png`: la que muestra el Explorador de Windows (H-112).
+        Sin cuerpos no hay miniatura; si el render falla se guarda igual, sin ella."""
+        from .herramientas_inspeccion import get_viewport_image
+        try:
+            return get_viewport_image(self, width=256, height=256)["image"].png
+        except ErrorAPI as e:
+            if e.error_kind != "NOTHING_TO_RENDER":
+                log.warning("No se pudo dibujar la miniatura del proyecto: %s", e)
+        except Exception:                      # la miniatura nunca impide guardar
+            log.exception("No se pudo dibujar la miniatura del proyecto")
+        return None
 
     # ------------------------------------------------------------ búsqueda por id o nombre
     def paso(self, ref):
