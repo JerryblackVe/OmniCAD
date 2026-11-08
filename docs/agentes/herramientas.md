@@ -36,7 +36,7 @@ Archivo, escena, timeline y deshacer.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`get_scene_info`](#get_scene_info) | no | Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente y, en las superficies, normal: un punto y la dirección del lado positivo), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y parámetros. |
+| [`get_scene_info`](#get_scene_info) | no | Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente y, en las superficies, normal: un punto y la dirección del lado positivo), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, construcción (planos, ejes y puntos), cantidad de pasos del timeline y parámetros. summary=true: solo nombres y cantidades (para modelos grandes). |
 | [`select_bodies`](#select_bodies) | no | Selecciona cuerpos en la ventana y los revela en el navegador. |
 | [`set_document_units`](#set_document_units) | sí | Elige las unidades con que la app MUESTRA las medidas del documento (el menú «Unidades» de la barra de abajo): longitud en mm, cm, m, in o ft y masa en g, kg o lb. |
 | [`recompute_all`](#recompute_all) | sí | Calcular todo (Ctrl+B; Compute All de Fusion): vuelve a ejecutar TODOS los pasos del timeline, sin reusar los resultados guardados de los pasos que no cambiaron. |
@@ -88,7 +88,7 @@ Archivo, escena, timeline y deshacer.
 
 ### `get_scene_info`
 
-Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente y, en las superficies, normal: un punto y la dirección del lado positivo), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, cantidad de pasos del timeline y parámetros. Con summary=true devuelve solo nombres y cantidades (corto, para modelos grandes).
+Resumen del documento: nombre, archivo, cambios sin guardar, unidades, cuerpos (id, nombre, tipo, volumen mm³, área mm², caja envolvente y, en las superficies, normal: un punto y la dirección del lado positivo), bocetos (plano y perfiles), componentes (id, nombre, fijo, cuerpos, matriz 4×4 en mm), uniones (tipo, componente 1 que se mueve y 2, valores: rotation en grados, slide en mm), grupos rígidos, construcción (planos, ejes y puntos), cantidad de pasos del timeline y parámetros. summary=true: solo nombres y cantidades (para modelos grandes).
 
 - Modifica el documento: no.
 - Parámetros:

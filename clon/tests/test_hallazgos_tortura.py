@@ -530,7 +530,7 @@ def test_t18_get_scene_info_y_open_document_tienen_modo_resumido(tmp_path):
     llamar(s, "create_box", length=10, width=10, height=10)
     llamar(s, "create_parameter", name="p", expression="3 mm")
     completo, corto = llamar(s, "get_scene_info"), llamar(s, "get_scene_info", summary=True)
-    assert corto["counts"] == {"bodies": 1, "sketches": 0, "components": 0, "joints": 0, "parameters": 1}
+    assert corto["counts"] == {"bodies": 1, "sketches": 0, "construction": 0, "components": 0, "joints": 0, "parameters": 1}
     assert [(c["name"], c["type"]) for c in corto["bodies"]] == [("Cuerpo1", "solid")]
     assert set(corto["bodies"][0]) == {"id", "name", "type"}
     assert len(json.dumps(corto)) < len(json.dumps(completo))

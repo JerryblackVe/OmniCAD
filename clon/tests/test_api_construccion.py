@@ -547,3 +547,22 @@ def test_b252_cara_perdida_no_salta_a_otra_cara():
     r = api.llamar(s, "set_parameter", {"name": "xb", "expression": "40 mm"})
     assert not r["ok"] and r["error_kind"] == "REFERENCE_LOST"
     assert s.doc.estado_final.planos[pid].origen[2] == pytest.approx(5)
+
+
+def test_p79_la_escena_informa_la_construccion():
+    """get_scene_info dice dónde quedaron planos, ejes, puntos y SCU, también después de cambiar una cota."""
+    s = api.Sesion()
+    llamar(s, "create_parameter", name="alto", expression="10 mm")
+    llamar(s, "create_box", length=20, width=20, height="alto", anchor="corner")
+    pid = llamar(s, "create_construction_plane", plane=">Z", offset=5)["plane"]["id"]
+    llamar(s, "create_construction_axis", type="dos_planos", references=[">Z", ">X"], name="E")
+    llamar(s, "create_ucs", origin=[20, 20, 10], name="S")
+    llamar(s, "set_parameter", name="alto", expression="25 mm")
+    c = llamar(s, "get_scene_info")["construction"]
+    plano = next(p for p in c["planes"] if p["id"] == pid)
+    assert plano["origin"][2] == pytest.approx(30) and plano["normal"] == pytest.approx([0, 0, 1])
+    eje = next(e for e in c["axes"] if e["name"] == "E")
+    assert eje["point"][2] == pytest.approx(25) and abs(eje["direction"][1]) == pytest.approx(1)
+    assert next(p for p in c["points"] if p["name"] == "S origen")["point"] == pytest.approx([20, 20, 25])
+    assert len(c["planes"]) == 4 and len(c["axes"]) == 4      # el plano y el eje, más los tres de la SCU
+    assert llamar(s, "get_scene_info", summary=True)["counts"]["construction"] == 4 + 4 + 1
