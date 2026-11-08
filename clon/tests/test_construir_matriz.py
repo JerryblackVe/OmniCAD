@@ -126,3 +126,15 @@ def test_construir_encadenada_y_scu_siguen_a_la_cota():
         assert np.allclose(e.puntos[f"{u['ucs']['id']}_o"][0], (20, 20, h), atol=1e-6)
         m = np.array([e.ejes[f"{u['ucs']['id']}_{k}"][1] for k in "xyz"])
         assert np.allclose(m @ m.T, np.eye(3), atol=1e-9) and np.linalg.det(m) == pytest.approx(1)
+
+
+def test_edit_feature_valida_el_plano_como_al_crearlo():
+    """B-261: editar no se saltea el filtro de la creación ni deja pasar una lista como expresión; null = por defecto."""
+    s = _armar()
+    pid = llamar(s, "create_construction_plane", plane=">Z", offset=2, body="Cuerpo1")["plane"]["id"]
+    for params, texto in (({"tipo": "angulo"}, "necesita un eje"), ({"distancia": [1]}, "no una lista"),
+                          ({"distancia": {"a": 1}}, "no un objeto")):
+        r = api.llamar(s, "edit_feature", {"feature": pid, "params": params})
+        assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and texto in r["mensaje"], r
+        _comprobar(s, "plano", pid, lambda h: ((0, 0, h + 2), (0, 0, 1)), H0)
+    assert llamar(s, "edit_feature", feature=pid, params={"distancia": None})["params"]["distancia"] == "10 mm"

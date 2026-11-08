@@ -131,6 +131,8 @@ def calcular_plano(p, entidades, ctx, estado):
              else ctx.evaluar(p.get("distancia", "0")))
         return cs.plano_desfase(base, d + extra)
     if t == "angulo":
+        if E[0].tipo not in ("eje", "arista", "curva_boceto"):     # B-261: el mismo filtro que la herramienta de creación
+            raise ErrorOperacion("El plano en el ángulo necesita un eje, una arista o una línea de boceto.")
         punto, direccion = ent.como_eje(E[0])
         return cs.plano_en_angulo(_plano_por_eje(E[0]), punto, direccion, ctx.evaluar(p.get("angulo", "0"), ANGULO), desfase=extra)
     if t == "tangente":
