@@ -529,3 +529,21 @@ def test_nombres_de_planos_en_visibilidad_de_objetos():
     assert r["nombres_planos_construccion"] is True and r["nombres_planos_origen"] is True
     r = llamar(s, "set_object_visibility", types=["nombres_planos_origen"], visible=False)["visibility"]
     assert r["nombres_planos_origen"] is False and r["planos_origen"] is True
+
+
+def test_b252_cara_perdida_no_salta_a_otra_cara():
+    """La cara del bolsillo desaparece cuando la herramienta deja de cortar: el plano no puede pegarse callado a la
+    cara de arriba (Fusion marca la referencia como perdida); la API rechaza el cambio y el documento queda igual."""
+    s = api.Sesion()
+    llamar(s, "create_parameter", name="xb", expression="5 mm")
+    llamar(s, "create_box", length=20, width=20, height=10, anchor="corner")
+    llamar(s, "create_box", length=6, width=6, height=10, x="xb", y=7, z=5, anchor="corner")
+    llamar(s, "boolean_operation", target="Cuerpo1", tools=["Cuerpo2"], operation="cut")
+    piso = next(f["id"] for f in llamar(s, "find_faces", body="Cuerpo1")["faces"]
+                if abs(f["center"][2] - 5) < 1e-6 and f["normal"][2] > 0.9)
+    pid = llamar(s, "create_construction_plane", plane=piso, offset=0)["plane"]["id"]
+    llamar(s, "set_parameter", name="xb", expression="7 mm")        # la cara sigue: el plano también
+    assert s.doc.estado_final.planos[pid].origen[2] == pytest.approx(5)
+    r = api.llamar(s, "set_parameter", {"name": "xb", "expression": "40 mm"})
+    assert not r["ok"] and r["error_kind"] == "REFERENCE_LOST"
+    assert s.doc.estado_final.planos[pid].origen[2] == pytest.approx(5)
