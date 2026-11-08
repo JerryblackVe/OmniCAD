@@ -3171,9 +3171,15 @@ class Boceto:
         (_d1, c1, f1, _L1), (_d2, c2, f2, _L2) = lados
         pt1, pt2 = self.agregar_punto(*t1), self.agregar_punto(*t2)
         cotas_largo = [k for k in self.cotas.values() if k.entidades in ([l1], [l2]) and k.tipo.startswith("distancia")]
-        for k in [k for k, v in self.restricciones.items()
-                  if (l1 in v.entidades or l2 in v.entidades) and v.tipo in ("igual", "punto_medio")]:
-            del self.restricciones[k]
+        # El punto medio y la igualdad siguen midiendo el lado completo, no el tramo recortado.
+        for lid in (l1, l2):
+            dependientes = [r for r in self.restricciones.values()
+                            if lid in r.entidades and r.tipo in ("igual", "punto_medio")]
+            if dependientes:
+                ln = self.curvas[lid]
+                guia = self.agregar_linea(ln.p1, ln.p2, construccion=True)
+                for r in dependientes:
+                    r.entidades = [guia if e == lid else e for e in r.entidades]
         for lid, cerca, nuevo in ((l1, c1, pt1), (l2, c2, pt2)):
             ln = self.curvas[lid]
             if ln.p1 == cerca:
@@ -3191,6 +3197,10 @@ class Boceto:
                 lejos = f1 if k.entidades == [l1] else f2
                 ln = self.curvas[k.entidades[0]]
                 k.entidades = [virtual, lejos] if ln.p2 == lejos else [lejos, virtual]
+            # También las guías que usan extremos distintos deben quedar atadas a la esquina virtual.
+            for p in vertices - {virtual}:
+                if math.dist(self.coords(p), X) < 1e-9:
+                    self._fusionar_punto(virtual, p)
         self._soltar_puntos_viejos(vertices, virtual, X)
         self._depurar(vertices - {virtual})
         return pt1, pt2, virtual
