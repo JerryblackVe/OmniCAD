@@ -48,8 +48,8 @@ def _forma_o_plano(e):
 
 def _plano_por_eje(e):
     """Plano de referencia que contiene un eje (el ángulo 0 del «Plano en el ángulo»): el plano del
-    boceto si es una línea de boceto, la cara plana vecina si viene de una cara, o el plano que contiene
-    al eje y es lo más vertical posible."""
+    boceto si es una línea de boceto; si no (arista de cuerpo, eje de construcción), el plano más horizontal
+    que contiene al eje, o el frontal si el eje es vertical (P-92: falta ver en Fusion si ahí usa la cara vecina)."""
     if e.tipo == "curva_boceto" and e.plano is not None:
         return e.plano
     p, d = ent.como_eje(e)
