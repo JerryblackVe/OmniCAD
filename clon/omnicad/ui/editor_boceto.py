@@ -727,6 +727,7 @@ class Lienzo(QWidget):
         self._t_diagnostico.timeout.connect(self._sondear_conflictos)
         self.previa_auto = []
         self.entrada = None
+        self._proy_fusion = 0                      # B-256: aristas proyectadas por la Curva de fusión en curso
         self._asas = None                          # asas de arrastre de la herramienta (ui/asas_boceto.py)
         self.patron = ControlPatron(self)          # Patrón rectangular y circular: estado, vista previa y panel
         self.transformar = ControlTransformar(self)    # Escala y Mover/copiar: estado, vista previa y panel
@@ -907,7 +908,16 @@ class Lienzo(QWidget):
         self._restaurar(self.pila_rehacer.pop())
         self._tras_deshacer()
 
+    def _quitar_proyecciones(self, n):
+        """B-256: saca las últimas `n` proyecciones de la Curva de fusión sin dejarlas para rehacer (no se completó)."""
+        for _ in range(n):
+            self._restaurar(self.historial.pop())
+        self._proy_fusion = 0
+        self.resolver()
+        self._emitir_proyeccion()
+
     def _tras_deshacer(self):
+        self._proy_fusion = 0
         self._recorte_arrastre = None
         elegidos = [i for i in self.objetos.seleccion() if i in self.b.objetos]
         self.objetos.cancelar()
@@ -1532,6 +1542,8 @@ class Lienzo(QWidget):
         self.inf_lista, self._inf_alt = [], 0
         if self._hay_operacion():
             self._cerrar_entrada()
+            if self._proy_fusion:
+                self._quitar_proyecciones(self._proy_fusion)
             self.clics, self.picks, self.picks_xy = [], [], []
             self._esperando_ubicacion = False
             self._opc_cota = {}
@@ -2143,8 +2155,10 @@ class Lienzo(QWidget):
                         nuevas = set(self.b.curvas) - antes
                         if len(nuevas) == 1 and self.b.curvas[next(iter(nuevas))].extremos():
                             cid = nuevas.pop()
+                            self._proy_fusion += 1
                         else:      # True = dejó un paso; p. ej. el borde de un agujero: la fusión no lo usa
-                            self.deshacer()
+                            self._quitar_proyecciones(self._proy_fusion + 1)
+                            self.picks, self.picks_xy = [], []
                             self.mensaje.emit("La arista debe proyectar exactamente una curva abierta "
                                               "(no un círculo ni un punto).")
                             return True
@@ -2239,8 +2253,13 @@ class Lienzo(QWidget):
             listo = False
             self.mensaje.emit("Clic para ubicar el círculo (o escribí el radio).")
         elif h == "curva_fusion":
-            self.aplicar_cambio(lambda: self.b.curva_fusion(picks[0], xys[0], picks[1], xys[1],
-                                                            self.opciones["continuidad"]), operacion=True)
+            n = self._proy_fusion
+            if self.aplicar_cambio(lambda: self.b.curva_fusion(picks[0], xys[0], picks[1], xys[1],
+                                                               self.opciones["continuidad"]), operacion=True):
+                del self.historial[len(self.historial) - n:]    # la fusión y sus proyecciones: un solo deshacer
+                self._proy_fusion = 0
+            elif n:
+                self._quitar_proyecciones(n)
         elif h == "empalme":
             listo = False
             from .asas_boceto import asas_empalme
@@ -2782,6 +2801,8 @@ class Lienzo(QWidget):
     def descartar_proyeccion(self):
         """Cambiar de herramienta o terminar el boceto con una selección sin aceptar: se descarta. Devuelve lo que hay que
         decirle a la persona ("" si no había nada), para que quien llama lo muestre en la barra de estado."""
+        if self._proy_fusion:                     # B-256: tampoco queda la arista de una Curva de fusión a medias
+            self._quitar_proyecciones(self._proy_fusion)
         if not self._elegidos_proy:
             return ""
         nota = f"{HERRAMIENTAS[self.herramienta][0]}: la selección sin aceptar se descartó."
