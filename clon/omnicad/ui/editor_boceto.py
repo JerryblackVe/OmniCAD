@@ -758,6 +758,7 @@ class Lienzo(QWidget):
         self._presion_inf_actual = None
         self._cache_cortes = {}
         self._previa_recorte = None
+        self._recorte_arrastre = None    # None: sin gesto; False: presionado; True: ya recortó
         # Cotas en vivo: lo escrito queda bloqueado (clave → (texto, valor)) hasta crear la geometría.
         self._bloqueos = {}
         self._activo = 0                 # caja activa (Tab pasa a la siguiente)
@@ -880,7 +881,8 @@ class Lienzo(QWidget):
     # ------------------------------------------------------------ deshacer
     def _instantanea(self):
         self.historial.append(self.b.a_dict())
-        del self.historial[:-(200 if len(self.b.puntos) < 3000 else 100)]    # un boceto enorme pesa MB por instantánea
+        if self._recorte_arrastre is not True:     # los recortes siguientes usan una foto temporal para revertir errores
+            del self.historial[:-(200 if len(self.b.puntos) < 3000 else 100)]    # un boceto enorme pesa MB por instantánea
 
     def _restaurar(self, datos):
         nuevo = Boceto.desde_dict(datos)
@@ -906,6 +908,7 @@ class Lienzo(QWidget):
         self._tras_deshacer()
 
     def _tras_deshacer(self):
+        self._recorte_arrastre = None
         elegidos = [i for i in self.objetos.seleccion() if i in self.b.objetos]
         self.objetos.cancelar()
         self.seleccion, self.clics, self.picks, self.picks_xy = elegidos, [], [], []
@@ -1461,6 +1464,7 @@ class Lienzo(QWidget):
         self._eje_simetria = self._previa_sim = self._firma_sim = self._estado_sim = None
         self._error_simetria = ""
         self._previa_recorte = None
+        self._recorte_arrastre = None
         self._esperando_ubicacion = False
         self._opc_cota = {}
         self._revincular = self._eje_giro = None
@@ -2202,7 +2206,11 @@ class Lienzo(QWidget):
         picks, xys = list(self.picks), list(self.picks_xy)
         listo = True
         if h == "recortar":
-            self.aplicar_cambio(lambda: self.b.recortar(cid, xy), operacion=True)
+            if self.aplicar_cambio(lambda: self.b.recortar(cid, xy), operacion=True):
+                if self._recorte_arrastre is True:
+                    self.historial.pop()          # conserva solo la foto anterior al primer recorte del gesto
+                elif self._recorte_arrastre is False:
+                    self._recorte_arrastre = True
         elif h == "alargar":
             self.aplicar_cambio(lambda: self.b.alargar(cid, xy), operacion=True)
         elif h == "partir":
@@ -5022,6 +5030,9 @@ class Lienzo(QWidget):
             self._presionar_seleccion(pos, e.modifiers())
         elif h == "cota":
             self._clic_cota(pos)
+        elif h == "recortar":
+            self._recorte_arrastre = False
+            self._clic_pick(pos)
         elif h in RESTRICCIONES_HERRAMIENTA:
             self._clic_restriccion(pos)
         elif h in PROYECCION:
@@ -5499,6 +5510,10 @@ class Lienzo(QWidget):
             self._mover_punto(self._arrastre, self.cursor)
             self._movio = True
         if self.herramienta == "recortar":
+            if not (e.buttons() & Qt.LeftButton):
+                self._recorte_arrastre = None     # también termina si se soltó fuera de la ventana
+            elif self._recorte_arrastre is not None and (cid := self._curva_cercana(pos)) is not None:
+                self.agregar_pick(cid, self.a_mm(pos), pos)    # el mismo recorte del clic, sobre la geometría actual
             self._previa_recorte = self._tramo_a_recortar(pos)
         elif self.herramienta == "isoparametrica":
             self.programar_previa_iso(pos)
@@ -5507,6 +5522,8 @@ class Lienzo(QWidget):
     def mouseReleaseEvent(self, e):
         pos = e.position()
         self._modificadores_raton = e.modifiers()
+        if e.button() == Qt.LeftButton:
+            self._recorte_arrastre = None
         if self.objetos.arrastre is not None:
             if e.button() == Qt.LeftButton:
                 self.objetos.mover(pos, e.modifiers())
