@@ -1343,12 +1343,12 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
              "de radio del círculo guía (guarda la expresión de radius, así sigue a un parámetro), giro fijado "
              "(restricción horizontal/vertical o cota de ángulo) y centro acotado desde un punto fijo en el origen "
              "del boceto (dof 0).", modifica=True)
-def create_polygon(sesion, sides: int, radius: Expr | None = None, center_x: float = 0.0, center_y: float = 0.0,
+def create_polygon(sesion, sides: int = 6, radius: Expr | None = None, center_x: float = 0.0, center_y: float = 0.0,
                    rotation: float = 0.0, kind: Literal["inscribed", "circumscribed", "edge"] = "inscribed",
                    sketch: str | None = None, construction: bool = False, fully_constrained: bool = False,
                    edge_points: list[list[float]] | None = None, centerline: bool = False):
     """
-    sides: cantidad de lados (3 a 64; tope propio igual al de la interfaz: la ayuda de Fusion no publica un máximo).
+    sides: cantidad de lados (3 a 64, 6 por defecto como la interfaz; tope propio igual al de la interfaz: la ayuda de Fusion no publica un máximo).
     radius: radio del círculo guía en mm (circunradio si es inscrito, apotema si es circunscrito); número o expresión con parámetros ("entrecaras / 2"). No se usa con kind=edge.
     center_x: x del centro (mm).
     center_y: y del centro (mm).

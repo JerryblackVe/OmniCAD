@@ -157,3 +157,15 @@ def test_parametros_documentados_y_registro():
         nombres = list(inspect.signature(h.funcion).parameters)[1:]
         assert len(nombres) == len(h.esquema["properties"])
         assert all(h.esquema["properties"][p].get("description") for p in nombres)
+
+
+def test_cm5_espiral_central_y_sketch_opcional(s):
+    """Fase 5 (paridad ventana/API): espiral con línea central, sketch opcional en todas y polígono de 6 lados."""
+    r = llamar(s, "draw_spiral", center=[0, 0], start=[5, 0], turns=1, pitch=2, centerline=True)
+    nuevas = {e["id"] for e in r["entities"]}
+    assert all(e.get("centerline") for e in llamar(s, "get_sketch")["entities"] if e["id"] in nuevas)
+    c = llamar(s, "draw_circle", radius=4, center_x=20, center_y=0)["entities"][0]["id"]
+    llamar(s, "set_circle_radius", curve=c, radius=6)                   # sin sketch: el último boceto
+    assert {e["id"]: e for e in llamar(s, "get_sketch")["entities"]}[c]["radius"] == pytest.approx(6)
+    lados = [e for e in llamar(s, "create_polygon", radius=5, center_x=-30)["entities"] if e["type"] == "line"]
+    assert len(lados) == 6                                              # 6 lados, como la interfaz
