@@ -56,6 +56,29 @@ for lado, (x, y), ej in ((LADOS[0], (0, -50), -2), (LADOS[1], (50, 0), -1)):
 L("add_constraint", sketch="E", type="equal", entities=LADOS[:2])
 L("add_dimension", sketch="E", type="distance", entities=[LADOS[0]], value=100)
 assert L("get_sketch", sketch="A")["dof"] == 0 and L("get_sketch", sketch="E")["dof"] == 0
+L("create_sketch", name="G", plane="XY")                                           # barrido de los comandos sin pieza
+CELDA = {}                       # comando -> origen (x, y) de su celda de 70 mm
+_ORDEN = ["circulo_2p", "circulo_3p", "rectangulo_centro", "poligono_circunscrito", "poligono_arista", "arco_tangente",
+          "ranura_centro", "ranura_total", "ranura_punto", "ranura_arco_3p", "ranura_arco_centro", "spline_control",
+          "conica", "espiral", "alargar", "partir", "circulo_2t", "circulo_3t", "desglosar_texto", "soltar_desfase"]
+for i, h in enumerate(_ORDEN):
+    CELDA[h] = (-350 + 70 * (i % 10), 40 - 90 * (i // 10))
+
+
+def _ln(h, a, b):
+    ox, oy = CELDA[h]
+    return ids(L("draw_line", sketch="G", start_x=ox + a[0], start_y=oy + a[1], end_x=ox + b[0], end_y=oy + b[1]))[0]
+
+
+_ln("arco_tangente", (0, 0), (15, 0))
+_ln("alargar", (0, 0), (20, 0)), _ln("alargar", (40, -10), (40, 10))
+_ln("partir", (0, 0), (40, 0)), _ln("partir", (10, -10), (10, 10)), _ln("partir", (30, -10), (30, 10))
+_ln("circulo_2t", (0, 0), (30, 0)), _ln("circulo_2t", (0, 0), (0, 30))
+_ln("circulo_3t", (0, 0), (30, 0)), _ln("circulo_3t", (30, 0), (15, 26)), _ln("circulo_3t", (15, 26), (0, 0))
+L("add_text", sketch="G", text="OK", x=CELDA["desglosar_texto"][0], y=CELDA["desglosar_texto"][1], height=12)
+_cd = CELDA["soltar_desfase"]
+_c = ids(L("draw_circle", sketch="G", center_x=_cd[0] + 15, center_y=_cd[1] + 10, radius=8))[0]
+L("offset_sketch_curves", sketch="G", distance=4, entity=_c, side_x=_cd[0] + 15, side_y=_cd[1] + 25)
 
 app, v = A.iniciar(s.doc)
 CAJA = next(iter(v.doc.estado_final.cuerpos))
@@ -288,7 +311,108 @@ def p75():
     salir()
 
 
-for nombre, f in (("H-110", h110), ("P-73", p73), ("B-245/B-253", anclado), ("P-75", p75)):
+# ---------------------------------------------------------------- barrido: cada comando de CREAR y MODIFICAR sin otra pieza
+# (clic, clic… como dice su ayuda; Enter donde corresponde; después Ctrl+Z vuelve al boceto de antes)
+DIBUJO = {   # comando: (clics relativos a su celda, fin, tipo de curva que tiene que aparecer)
+    "circulo_2p": ([(0, 0), (20, 0)], None, "circulo"),
+    "circulo_3p": ([(0, 0), (20, 0), (10, 12)], None, "circulo"),
+    "rectangulo_centro": ([(15, 10), (25, 16)], None, "linea"),
+    "poligono_circunscrito": ([(15, 10), (27, 10)], None, "linea"),
+    "poligono_arista": ([(0, 0), (15, 0), (7, 10)], None, "linea"),
+    "arco_tangente": ([(15, 0), (28, 12)], None, "arco"),
+    "ranura_centro": ([(0, 0), (30, 0), (15, 6)], None, "arco"),
+    "ranura_total": ([(0, 0), (40, 0), (20, 6)], None, "arco"),
+    "ranura_punto": ([(20, 0), (35, 0), (20, 6)], None, "arco"),
+    "ranura_arco_3p": ([(0, 0), (30, 0), (15, 10), (15, 16)], None, "arco"),
+    "ranura_arco_centro": ([(15, 0), (0, 0), (30, 0), (15, 20)], None, "arco"),
+    "spline_control": ([(0, 0), (10, 15), (20, 0), (30, 15)], "lienzo", "spline"),
+    "conica": ([(0, 0), (30, 0), (15, 18)], "caja", "conica"),
+    "espiral": ([(15, 10), (20, 10)], "caja", "spline"),
+}
+ELEGIR = {   # comando: (clics relativos, qué tiene que pasar)
+    "alargar": ([(18, 0)], "la línea llega hasta la vertical (x = 40)"),
+    "partir": ([(20, 0)], "la horizontal queda en 3 tramos"),
+    "circulo_2t": ([(15, 0), (0, 15), (12, 12)], "nace un círculo tangente a las dos"),
+    "circulo_3t": ([(15, 0), (22.5, 13), (7.5, 13)], "nace el círculo inscrito"),
+    "desglosar_texto": ([(6, 4)], "el texto pasa a curvas"),
+}
+
+
+def encuadrar(x, y, span=90):
+    """Acercar la vista a una zona (lo que hace la persona con la rueda antes de dibujar algo chico)."""
+    lz.visor.objetivo = lz.plano.a_3d(x, y)
+    lz.visor.distancia = span / 2 / math.sin(math.radians(lz.visor.fov) / 2) * 1.3
+    lz.visor.update()
+    lz.update()
+    A.esperar(150)
+
+
+def _n_desfase():
+    return sum(1 for k in list(lz.b.restricciones.values()) + list(lz.b.cotas.values()) if k.tipo == "desfase")
+
+
+def _barrido_uno(h):
+    ox, oy = CELDA[h]
+    encuadrar(ox + 18, oy + 8)
+    antes = lz.b.a_dict()
+    tipos_antes = sorted(c.tipo for c in lz.b.curvas.values())
+    pulsar_cinta("sk_" + h)
+    if h in DIBUJO:
+        clics, fin, tipo = DIBUJO[h]
+        for x, y in clics:
+            clic(ox + x, oy + y)
+        if fin == "lienzo":
+            tecla(Qt.Key_Return)
+        elif fin == "caja" and lz.entrada is not None:
+            QTest.keyClick(lz.entrada.campos[-1], Qt.Key_Return)
+            A.esperar(200)
+        nuevos = sorted(c.tipo for c in lz.b.curvas.values())
+        ok = len(nuevos) > len(tipos_antes) and nuevos.count(tipo) > tipos_antes.count(tipo)
+        que = f"crea {tipo}"
+    else:
+        clics, que = ELEGIR[h]
+        for x, y in clics:
+            clic(ox + x, oy + y)
+        b = lz.b
+        if h == "alargar":
+            ok = any(c.tipo == "linea" and sorted(round(p[0] - ox, 3) for p in b._extremos_linea(c.id)) == [0, 40]
+                     and all(abs(p[1] - oy) < 1e-6 for p in b._extremos_linea(c.id)) for c in b.curvas.values())
+        elif h == "partir":
+            ok = sum(1 for c in b.curvas.values() if c.tipo == "linea" and all(abs(p[1] - oy) < 1e-6 for p in
+                     b._extremos_linea(c.id)) and all(-1e-6 <= p[0] - ox <= 40 + 1e-6 for p in b._extremos_linea(c.id))) == 3
+        elif h in ("circulo_2t", "circulo_3t"):
+            ok = sum(1 for c in b.curvas.values() if c.tipo == "circulo") > tipos_antes.count("circulo")
+        else:
+            ok = not any(c.tipo == "texto" for c in b.curvas.values()) and len(b.curvas) > len(tipos_antes)
+    A.reg(AR + " · barrido", f"{h}: desde el menú, {que}", ok and lz.resultado.ok,
+          f"{len(tipos_antes)}->{len(lz.b.curvas)} curvas · {MENSAJES[-1:]}")
+    tecla(Qt.Key_Z, Qt.ControlModifier)
+    A.reg(AR + " · barrido", f"{h}: Ctrl+Z vuelve al boceto de antes", lz.b.a_dict() == antes, "")
+    if lz.b.a_dict() != antes:
+        lz._restaurar(antes)
+        lz.resolver()
+    tecla(Qt.Key_Escape)
+    tecla(Qt.Key_Escape)
+
+
+def barrido():
+    entrar("G", centro=(0, 0), span=820)
+    for h in DIBUJO | ELEGIR:
+        A.correr(AR + " · barrido · " + h, lambda h=h: _barrido_uno(h))
+    A.foto(v, "barrido")
+    antes = _n_desfase()
+    ox, oy = CELDA["soltar_desfase"]
+    encuadrar(ox + 15, oy + 10)
+    lz.set_herramienta("seleccionar")
+    clic(ox + 15, oy + 22)                                     # la copia desfasada (radio 12)
+    pulsar_cinta("sk_soltar_desfase")
+    despues = _n_desfase()
+    A.reg(AR + " · barrido", "soltar_desfase: elegir la copia y el ítem del menú suelta su restricción de desfase",
+          despues < antes, f"desfase {antes}->{despues} · {MENSAJES[-1:]}")
+    salir()
+
+
+for nombre, f in (("H-110", h110), ("P-73", p73), ("B-245/B-253", anclado), ("P-75", p75), ("barrido", barrido)):
     A.correr(AR + " · " + nombre, f)
     if v.modo_boceto.activo:
         salir()
