@@ -1407,7 +1407,12 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     forma = _canonizar(forma)
     if fusionar_tangentes:
         forma = geo.unificar_caras(forma)
-    return _validar(forma, "Solevado")
+    forma = _validar(forma, "Solevado")
+    # B-243: un peso alto en la condición de borde pliega la pared sobre sí misma; es_valida no lo ve y Fusion lo rechaza
+    if condiciones and solido and rv._autointersecciones_seguras(forma, 0, 10)[0]:
+        raise geo.ErrorGeometria("Solevado: el sólido se autointersecta; la dirección del flujo de la solevación no "
+                                 "es válida. Bajá el peso o cambiá el ángulo de la condición de borde.")
+    return forma
 
 
 def _centro_alambre(w):
