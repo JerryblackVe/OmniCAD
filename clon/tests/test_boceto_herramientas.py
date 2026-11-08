@@ -619,3 +619,85 @@ def test_proyectar_con_referencia_queda_asociado_al_modelo(app_qt):
     assert [(r["modo"], r["refs"]) for r in lz.b.proyecciones] == [("project", [ref])]
     assert lz.proyectar_forma(g.cilindro(4, 10, (30, 0, -5)), "intersecar")      # sin referencia: congelada
     assert len(lz.b.proyecciones) == 1
+
+
+@pytest.mark.parametrize("empieza_en_tramo", [False, True])
+@pytest.mark.parametrize("pasos_previos", [0, 200])
+def test_h110_recortar_arrastrando_tres_tramos_se_deshace_de_una_vez(app_qt, empieza_en_tramo, pasos_previos):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    lz = _lienzo(app_qt)
+    lz.resize(640, 480)
+    verticales = [lz.b.agregar_linea((x, -20), (x, 20)) for x in (10, 30, 50)]
+    horizontal = lz.b.agregar_linea((0, 0), (60, 0))
+    lz.set_herramienta("recortar")
+    original = lz.b.a_dict()
+    for _ in range(pasos_previos):
+        lz._instantanea()
+    historial_previo = list(lz.historial)
+    mensajes = []
+    lz.mensaje.connect(mensajes.append)
+
+    def enviar(tipo, x, boton, botones):
+        pos = lz.a_px(x, 10)
+        app_qt.sendEvent(lz, QMouseEvent(tipo, pos, pos, boton, botones, Qt.NoModifier))
+
+    try:
+        enviar(QEvent.MouseButtonPress, 10 if empieza_en_tramo else 0, Qt.LeftButton, Qt.LeftButton)
+        for x in (10, 30, 50, 30, 10, 50):  # volver por los tramos borrados no toca los que quedan abajo
+            enviar(QEvent.MouseMove, x, Qt.NoButton, Qt.LeftButton)
+        enviar(QEvent.MouseButtonRelease, 50, Qt.LeftButton, Qt.NoButton)
+        assert [lz.b._extremos_linea(cid) for cid in verticales] == [
+            ((x, -20), (x, 0)) for x in (10, 30, 50)
+        ]
+        assert lz.b._extremos_linea(horizontal) == ((0, 0), (60, 0))
+        assert mensajes == ([] if empieza_en_tramo else ["Hacé clic sobre una curva."])
+        assert lz.resultado.ok
+        assert len(lz.historial) == min(pasos_previos + 1, 200)
+        assert lz.historial[:-1] == historial_previo[-199:]
+        recortado = lz.b.a_dict()
+        lz.deshacer()
+        assert lz.b.a_dict() == original
+        lz.rehacer()
+        assert lz.b.a_dict() == recortado
+    finally:
+        lz.close()
+
+
+@pytest.mark.parametrize("soltar_fuera", [False, True])
+def test_h110_clic_sin_arrastre_y_movimiento_sin_boton(app_qt, soltar_fuera):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    lz = _lienzo(app_qt)
+    lz.resize(640, 480)
+    verticales = [lz.b.agregar_linea((x, -20), (x, 20)) for x in (10, 30)]
+    lz.b.agregar_linea((0, 0), (40, 0))
+    lz.set_herramienta("recortar")
+
+    def enviar(tipo, x, boton, botones):
+        pos = lz.a_px(x, 10)
+        app_qt.sendEvent(lz, QMouseEvent(tipo, pos, pos, boton, botones, Qt.NoModifier))
+
+    try:
+        original = lz.b.a_dict()
+        enviar(QEvent.MouseMove, 10, Qt.NoButton, Qt.NoButton)
+        assert lz.b.a_dict() == original and lz._previa_recorte
+        enviar(QEvent.MouseButtonPress, 10, Qt.LeftButton, Qt.LeftButton)
+        if not soltar_fuera:
+            enviar(QEvent.MouseButtonRelease, 10, Qt.LeftButton, Qt.NoButton)
+        enviar(QEvent.MouseMove, 30, Qt.NoButton, Qt.NoButton)
+        assert lz.b._extremos_linea(verticales[0]) == ((10, -20), (10, 0))
+        assert lz.b._extremos_linea(verticales[1]) == ((30, -20), (30, 20))
+        assert len(lz.historial) == 1
+        enviar(QEvent.MouseButtonPress, 30, Qt.LeftButton, Qt.LeftButton)
+        enviar(QEvent.MouseButtonRelease, 30, Qt.LeftButton, Qt.NoButton)
+        assert len(lz.historial) == 2
+        lz.deshacer()
+        assert lz.b._extremos_linea(verticales[0]) == ((10, -20), (10, 0))
+        assert lz.b._extremos_linea(verticales[1]) == ((30, -20), (30, 20))
+        lz.deshacer()
+        assert lz.b.a_dict() == original
+    finally:
+        lz.close()

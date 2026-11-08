@@ -99,7 +99,6 @@ Abierto 2 (H-106 de la auditoría de restricciones del 2026-11-06; H-110 de la f
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-106 | Boceto › la herramienta Cota de la ventana no crea una cota horizontal o vertical de una línea sola | Abierto | Media | Con una línea (20,20)-(50,60) elegida, ubicar la cota arriba o al costado y teclear 25 crea siempre `distancia` (largo alineado); la API ya acepta `distancia_h`/`distancia_v` con `[línea]`. La ayuda de Fusion dice «Single lines … create linear dimensions» pero no explica la elección horizontal/vertical: confirmarla en Fusion antes de implementar (`ui/editor_boceto.py:4716-4717`, `:4743-4745`) | `tests/test_restricciones_integracion.py::test_s12_ventana_acota_proyeccion_de_una_linea` (xfail estricto) | 2026-11-06 |
-| H-110 | Boceto › Recortar no recorta arrastrando sobre varios tramos | Abierto | Media | Fusion: «click and hold the mouse button, then drag the cursor to touch each segment you want to trim» (`trim-or-extend-sketch-geometry-9b1b49a62dd.md`). En OmniCAD, con Recortar activo, mover con el botón apretado solo actualiza la vista previa (`ui/editor_boceto.py:5495`): recorta de a un clic. Falta recortar cada tramo que toca el cursor durante el arrastre (un solo paso de deshacer) y su test con eventos al widget. | [referencia](../auditorias/boceto_crear_modificar_referencia.md), § 1 | 2026-11-07 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 
