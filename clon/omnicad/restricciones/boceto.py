@@ -2931,10 +2931,35 @@ class Boceto:
         except ErrorBoceto:
             pass
 
-    def _sin_cotas_de_largo(self, cid):
-        """Al cambiar el largo de una curva se quitan sus cotas y restricciones de largo (como Fusion)."""
+    def _atar_extremos_soltados(self, cid, viejos):
+        """P-77: el extremo que `cid` soltó al recortarse o alargarse y que sigue en otra curva (la esquina de un
+        rectángulo, el final del arco de una ranura) queda sobre `cid` (su recta o su círculo). Antes quedaba solo
+        ahí: la esquina se corría y el boceto perdía el «totalmente restringido» que Fusion conserva."""
+        if cid not in self.curvas:
+            return
+        for p in viejos:
+            # El otro tramo del mismo corte (colineal o igual) ya está atado; junto a una tangencia el punto está en
+            # el único contacto y la coincidencia sería redundante (raíz doble). shortcut: la ranura sigue con el
+            # final del arco libre (dof 1), ver B-255.
+            atadas = {e for r in self.restricciones.values()
+                      if r.tipo in ("tangente", "colineal", "igual") and cid in r.entidades for e in r.entidades}
+            if (p in self.puntos and p not in self.curvas[cid].puntos() and self._punto_en_uso(p)
+                    and not any(p in k.puntos() for k in self.curvas.values() if k.id in atadas - {cid})):
+                try:
+                    self.agregar_restriccion("coincidente", [p, cid])
+                except ErrorBoceto:
+                    pass
+
+    def _sin_cotas_de_largo(self, cid, extremos=None):
+        """Al cambiar el largo de una curva se quitan sus cotas y restricciones de largo (como Fusion). P-77: con
+        `extremos` (los dos puntos del lado entero, que siguen vivos en las esquinas) Recortar, Partir y Alargar no
+        borran la cota de largo: pasa a medir entre esos puntos, como Fusion (medido el 2026-11-08: el rectángulo y
+        la ranura acotados siguen totalmente restringidos y con su cota). Si un punto ya no existe, se borra."""
         for k in [k for k, v in self.cotas.items() if v.entidades == [cid] and v.tipo.startswith("distancia")]:
-            del self.cotas[k]
+            if extremos and extremos[0] != extremos[1] and all(p in self.puntos for p in extremos):
+                self.cotas[k].entidades = list(extremos)
+            else:
+                del self.cotas[k]
         for k in [k for k, v in self.restricciones.items()
                   if cid in v.entidades and ((v.tipo == "igual" and self.tipo_de(cid) == "linea") or v.tipo == "punto_medio")]:
             del self.restricciones[k]
@@ -2975,7 +3000,7 @@ class Boceto:
             if lo is None and hi is None:
                 self.eliminar(cid)
                 return None
-            self._sin_cotas_de_largo(cid)
+            self._sin_cotas_de_largo(cid, c.extremos())
             if lo is not None and hi is not None:
                 otro = self._tramo(cid, prim, hi, None, True, nuevos, viejos)
                 self._tramo(cid, prim, None, lo, False, nuevos, viejos)
@@ -2985,6 +3010,7 @@ class Boceto:
             else:
                 self._tramo(cid, prim, None, lo, False, nuevos, viejos)
         self._coincidencias_de_corte(nuevos)
+        self._atar_extremos_soltados(cid, viejos)
         self._soltar_puntos_viejos(viejos)
         self._depurar(viejos)
         return c.id
@@ -3023,7 +3049,7 @@ class Boceto:
             lo, hi = (antes[-1] if antes else None), (despues[0] if despues else None)
             if lo is None and hi is None:
                 raise ErrorBoceto("La curva no cruza con nada: no hay dónde partirla.")
-            self._sin_cotas_de_largo(cid)
+            self._sin_cotas_de_largo(cid, self.curvas[cid].extremos())
             ids = []
             if hi is not None:
                 ids.append(self._tramo(cid, prim, hi, None, True, nuevos, viejos))
@@ -3119,8 +3145,10 @@ class Boceto:
         else:
             self.puntos[extremo].x, self.puntos[extremo].y = xy
             nuevos.append((extremo, oid))
-        self._sin_cotas_de_largo(cid)
+        # el extremo viejo sigue en la esquina (otra curva lo usa): la cota mide el lado entero, como Fusion
+        self._sin_cotas_de_largo(cid, (ini, fin) if extremo not in c.puntos() else None)
         self._coincidencias_de_corte(nuevos)
+        self._atar_extremos_soltados(cid, viejos)
         self._soltar_puntos_viejos(viejos)      # el extremo viejo no queda suelto con sus cotas (B-237)
         self._depurar(viejos)
         return cid

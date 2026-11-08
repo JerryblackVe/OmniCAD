@@ -90,7 +90,7 @@ def _medidas(g):
     return medidas
 
 
-def _bajas(antes, despues, r, permitidas):
+def _bajas(antes, despues, r, permitidas, dof=0):
     fallos = []
     for clave, informe in (("constraints", "constraints_deleted"), ("dimensions", "dimensions_deleted")):
         bajas = {c["id"] for c in antes[clave]} - {c["id"] for c in despues[clave]}
@@ -99,8 +99,8 @@ def _bajas(antes, despues, r, permitidas):
         indebidas = bajas - permitidas
         if indebidas:
             fallos.append(f"{clave}: borrados ajenos={sorted(indebidas)}")
-    if despues["dof"] != 0 or despues["status"] != "fully_constrained":
-        fallos.append(f"dof={despues['dof']}, estado={despues['status']}; esperado=0/fully_constrained")
+    if despues["dof"] != dof or (dof == 0 and despues["status"] != "fully_constrained"):
+        fallos.append(f"dof={despues['dof']}, estado={despues['status']}; esperado={dof}")
     return fallos
 
 
@@ -213,14 +213,14 @@ def _guia(s, x1, y1, x2, y2):
 
 
 @pytest.mark.parametrize(("perfil", "herramienta"), [
-    pytest.param("rectangulo", "recortar", marks=_xfail("Duda: recortar deja dof=2; arrastre 50 -> 43 mm")),
+    ("rectangulo", "recortar"),
     ("circulo", "recortar"),
-    pytest.param("ranura", "recortar", marks=_xfail("Duda: recortar deja dof=1; arrastre 30 -> 28.2843 mm")),
-    pytest.param("rectangulo", "partir", marks=_xfail("Duda: partir deja dof=1; arrastre 50 -> 43 mm")),
+    pytest.param("ranura", "recortar", marks=_xfail("B-255: el final del arco queda libre (dof=1); Fusion: lleno, medido 2026-11-08")),
+    ("rectangulo", "partir"),
     ("circulo", "partir"),
-    pytest.param("ranura", "partir", marks=_xfail("Duda: partir deja dof=1; arrastre 30 -> 28.2843 mm")),
-    pytest.param("rectangulo", "alargar", marks=_xfail("Duda: alargar borra cota 18; dof=2; arrastre 130 -> 123 mm")),
-    pytest.param("ranura", "alargar", marks=_xfail("Duda: alargar deja dof=1; cuerda 20 -> 19.5907 mm")),
+    pytest.param("ranura", "partir", marks=_xfail("B-255: el tramo nuevo pierde la tangencia (dof=1); Fusion: lleno, medido 2026-11-08")),
+    ("rectangulo", "alargar"),
+    pytest.param("ranura", "alargar", marks=_xfail("B-255: el final del arco queda libre (dof=1); Fusion: lleno, medido 2026-11-08")),
 ])
 def test_editar_curva_restringida(perfil, herramienta):
     s, curvas = _crear(perfil)
@@ -296,9 +296,9 @@ def test_desfase_restringido(perfil):
 @pytest.mark.parametrize(("perfil", "herramienta"), [
     ("rectangulo", "mover"), ("circulo", "mover"),
     ("ranura", "mover"),
-    pytest.param("rectangulo", "copiar", marks=_xfail("Duda: copia dx200 deja dof=2 en vez de 0")),
-    pytest.param("circulo", "copiar", marks=_xfail("Duda: copia dx200 deja dof=2 en vez de 0")),
-    pytest.param("ranura", "copiar", marks=_xfail("Duda: copia dx200 deja dof=2; cuerda 20 -> 0 mm")),
+    ("rectangulo", "copiar"),
+    ("circulo", "copiar"),
+    ("ranura", "copiar"),
     ("rectangulo", "escalar"), ("circulo", "escalar"), ("ranura", "escalar"),
 ])
 def test_transformacion_restringida(perfil, herramienta):
@@ -319,7 +319,9 @@ def test_transformacion_restringida(perfil, herramienta):
         assert not _arrastrar(s, despues)
         return
     r = respuesta["result"]
-    fallos = _bajas(antes, despues, r, set())
+    # Fusion (medido el 2026-11-08, evidencias/fusion_2026-11-08/boceto/medir_cm5.txt): la copia conserva sus
+    # cotas y restricciones internas pero no su anclaje, así que su posición queda libre (2 grados).
+    fallos = _bajas(antes, despues, r, set(), dof=2 if herramienta == "copiar" else 0)
     copias = herramienta == "copiar"
     assert len(_contorno(despues)) == len(curvas) * (2 if copias else 1)
     nuevas = [e for e in _contorno(despues) if not copias or e["id"] not in curvas]
