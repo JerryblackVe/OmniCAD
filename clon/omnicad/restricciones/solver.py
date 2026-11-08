@@ -586,6 +586,14 @@ class _Sistema:
             return [q[0] - p[0], q[1] - p[1]]
         self.terminos.append(f)
 
+    def _extremo_sobre(self, c, l):
+        """Extremo de la curva `c` que una restricción «coincidente» deja sobre la línea `l`, o None."""
+        extremos = self.b.curvas[c].extremos() or ()
+        for r in self.b.restricciones.values():
+            if r.tipo == "coincidente" and len(r.entidades) == 2 and r.entidades[1] == l and r.entidades[0] in extremos:
+                return r.entidades[0]
+        return None
+
     def _tangencia(self, e, tipos):
         T, x0 = self.terminos, self.x0
         comun = self.b.extremo_comun(e[0], e[1])
@@ -599,6 +607,15 @@ class _Sistema:
             return
         if "linea" in tipos and (tipos[0] in CIRCULARES or tipos[1] in CIRCULARES):
             l, c = (e[0], e[1]) if tipos[0] == "linea" else (e[1], e[0])
+            sobre = self._extremo_sobre(c, l)
+            if sobre is not None:
+                # B-255: el extremo del arco está sobre la línea (Recortar soltó la esquina): misma forma G1 que con
+                # el extremo compartido; la de distancia al centro sería singular justo en el contacto.
+                def f(x, l=l, c=c, p=sobre):
+                    (a, bb) = self.L(x, l)
+                    return [_cruz(_unitario((bb[0] - a[0], bb[1] - a[1])), self.extremo(x, c, p)[0]) * _ESCALA_TANGENTE]
+                T.append(f)
+                return
             s = _signo(self.dist_signada(x0, self.C(x0, c), l))
             T.append(lambda x, l=l, c=c, s=s: [s * self.dist_signada(x, self.C(x, c), l) - self.R(x, c)])
             return

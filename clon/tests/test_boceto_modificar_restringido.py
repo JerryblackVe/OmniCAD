@@ -215,12 +215,12 @@ def _guia(s, x1, y1, x2, y2):
 @pytest.mark.parametrize(("perfil", "herramienta"), [
     ("rectangulo", "recortar"),
     ("circulo", "recortar"),
-    pytest.param("ranura", "recortar", marks=_xfail("B-255: el final del arco queda libre (dof=1); Fusion: lleno, medido 2026-11-08")),
+    ("ranura", "recortar"),
     ("rectangulo", "partir"),
     ("circulo", "partir"),
-    pytest.param("ranura", "partir", marks=_xfail("B-255: el tramo nuevo pierde la tangencia (dof=1); Fusion: lleno, medido 2026-11-08")),
+    ("ranura", "partir"),
     ("rectangulo", "alargar"),
-    pytest.param("ranura", "alargar", marks=_xfail("B-255: el final del arco queda libre (dof=1); Fusion: lleno, medido 2026-11-08")),
+    ("ranura", "alargar"),
 ])
 def test_editar_curva_restringida(perfil, herramienta):
     s, curvas = _crear(perfil)
