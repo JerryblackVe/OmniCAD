@@ -361,7 +361,10 @@ class _Sistema:
                     return [(u[0] * v[0] + u[1] * v[1]) / (nu * nv) * escala]
                 T.append(f)
             elif t == "igual":
-                if tipos == ["linea", "linea"]:
+                if tipos == ["punto"] * 4:
+                    T.append(lambda x, a=e[0], c=e[1], d=e[2], f=e[3]:
+                             [math.dist(self.P(x, a), self.P(x, c)) - math.dist(self.P(x, d), self.P(x, f))])
+                elif tipos == ["linea", "linea"]:
                     T.append(lambda x, l1=e[0], l2=e[1]: [math.dist(*self.L(x, l1)) - math.dist(*self.L(x, l2))])
                 elif tipos[0] in ELIPTICAS:
                     T.append(lambda x, c1=e[0], c2=e[1]: [self.elipse(x, c1)[1] - self.elipse(x, c2)[1],
@@ -387,8 +390,9 @@ class _Sistema:
                     return [q[0] - m[0], q[1] - m[1]]
                 T.append(f)
             elif t == "punto_medio":
-                def f(x, p=e[0], l=e[1]):
-                    (a, bb), q = self.L(x, l), self.P(x, p)
+                extremos = e[1:] if len(e) == 3 else self.b.curvas[e[1]].extremos()
+                def f(x, p=e[0], a=extremos[0], c=extremos[1]):
+                    (a, bb), q = (self.P(x, a), self.P(x, c)), self.P(x, p)
                     return [q[0] - (a[0] + bb[0]) / 2, q[1] - (a[1] + bb[1]) / 2]
                 T.append(f)
             elif t == "colineal":

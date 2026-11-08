@@ -2710,11 +2710,11 @@ class Boceto:
             "vertical": lambda: (t == ["linea"] or t == ["punto", "punto"]),
             "paralela": lambda: t == ["linea", "linea"],
             "perpendicular": lambda: t == ["linea", "linea"],
-            "igual": lambda: (t == ["linea", "linea"] or (len(t) == 2 and t[0] in CIRCULARES and t[1] in CIRCULARES)
+            "igual": lambda: (t in (["linea", "linea"], ["punto"] * 4) or (len(t) == 2 and t[0] in CIRCULARES and t[1] in CIRCULARES)
                               or (len(t) == 2 and t[0] in ELIPTICAS and t[1] in ELIPTICAS)),
             "tangente": lambda: (len(t) == 2 and t[0] in GEOMETRICAS and t[1] in GEOMETRICAS and t != ["linea", "linea"]),
             "concentrica": lambda: len(t) == 2 and t[0] in CON_CENTRO and t[1] in CON_CENTRO,
-            "punto_medio": lambda: t in (["punto", "linea"], ["punto", "arco"]),
+            "punto_medio": lambda: t in (["punto", "linea"], ["punto", "arco"], ["punto"] * 3),
             "fijo": lambda: len(t) >= 1,
             "colineal": lambda: t == ["linea", "linea"],
             # Simetría (como en Fusion): dos puntos, líneas, círculos/arcos, elipses, cónicas o splines
@@ -2737,7 +2737,10 @@ class Boceto:
         }
         if not validas[tipo]():
             raise ErrorBoceto(f"La restricción '{TIPOS_RESTRICCION[tipo]}' no aplica a: {', '.join(t) or 'nada'}.")
-        if len(set(entidades)) != len(entidades):
+        if tipo == "igual" and t == ["punto"] * 4:
+            if entidades[0] == entidades[1] or entidades[2] == entidades[3]:
+                raise ErrorBoceto("La igualdad necesita dos segmentos con extremos distintos.")
+        elif len(set(entidades)) != len(entidades):
             raise ErrorBoceto("Seleccioná entidades distintas.")
         if tipo == "curvatura" and self.extremo_comun(*entidades) is None:
             raise ErrorBoceto("La curvatura se aplica a dos curvas encadenadas (que compartan un extremo).")
@@ -3172,14 +3175,14 @@ class Boceto:
         pt1, pt2 = self.agregar_punto(*t1), self.agregar_punto(*t2)
         cotas_largo = [k for k in self.cotas.values() if k.entidades in ([l1], [l2]) and k.tipo.startswith("distancia")]
         # El punto medio y la igualdad siguen midiendo el lado completo, no el tramo recortado.
-        for lid in (l1, l2):
-            dependientes = [r for r in self.restricciones.values()
-                            if lid in r.entidades and r.tipo in ("igual", "punto_medio")]
-            if dependientes:
-                ln = self.curvas[lid]
-                guia = self.agregar_linea(ln.p1, ln.p2, construccion=True)
-                for r in dependientes:
-                    r.entidades = [guia if e == lid else e for e in r.entidades]
+        for r in self.restricciones.values():
+            if len(r.entidades) != 2 or not set(r.entidades) & {l1, l2}:
+                continue
+            if r.tipo == "punto_medio":
+                punto, lid = r.entidades
+                r.entidades = [punto, *self.curvas[lid].extremos()]
+            elif r.tipo == "igual":
+                r.entidades = [p for lid in r.entidades for p in self.curvas[lid].extremos()]
         for lid, cerca, nuevo in ((l1, c1, pt1), (l2, c2, pt2)):
             ln = self.curvas[lid]
             if ln.p1 == cerca:
@@ -3197,7 +3200,7 @@ class Boceto:
                 lejos = f1 if k.entidades == [l1] else f2
                 ln = self.curvas[k.entidades[0]]
                 k.entidades = [virtual, lejos] if ln.p2 == lejos else [lejos, virtual]
-            # También las guías que usan extremos distintos deben quedar atadas a la esquina virtual.
+            # Los extremos distintos de la misma esquina pasan al único vértice virtual.
             for p in vertices - {virtual}:
                 if math.dist(self.coords(p), X) < 1e-9:
                     self._fusionar_punto(virtual, p)
