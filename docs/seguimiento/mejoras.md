@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 134: Abierto 68 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (2026-11-08: P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 135: Abierto 69 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (2026-11-08: P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
 
 ## Pendientes generales
 
@@ -156,10 +156,11 @@ Sin pendientes.
 
 Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPECCIONAR, INSERTAR, SELECCIONAR) con los artículos de la ayuda de Fusion (carpeta `fusion-model`) y de probar unas 70 herramientas por API con valores normales, de borde e inválidos. Los bugs se reprodujeron; los scripts (`s*.py`) están en `evidencias/solido_2026-10-24/`, fuera de git. Lo que ya estaba cargado (SC12, SC3, P-25d, P-25f, P-25g2, P-25i, P-25j) no se repite.
 
-Sin pendientes.
+Abierto 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-93 | Construir › guardas que faltan respecto de Fusion y del propio programa | Abierto | Baja | Eje a través de una esfera se acepta (dirección Z arbitraria; Fusion: cilindro, cono o toroide); plano en el ángulo sobre arista circular se acepta (Fusion: arista lineal o eje); el tope de 1 km no se aplica a `position` proporcional, `location` del eje perpendicular ni `location` del plano perpendicular fuera de la cara; plano medio de dos planos coincidentes se acepta; nombres con NUL o de 5000 caracteres. (Juez de AG-7 (Sonnet, 2026-11-08)) | `evidencias/juez_construir_2026-11-08/a_valores.py`, `c_ataque2.py` | 2026-11-08 |
 
 ## Patrones de sólido (auditoría 2026-10-31)
 
