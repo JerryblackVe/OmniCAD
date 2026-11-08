@@ -798,3 +798,78 @@ def test_h111_panel_conserva_el_texto_al_crear_y_editar(circular):
         lienzo.close()
         lienzo.deleteLater()
         app.processEvents()
+
+
+@pytest.mark.parametrize("diagonales", [False, True])
+@pytest.mark.parametrize("igualdad", [False, True])
+def test_b242_empalmar_cuatro_esquinas_conserva_el_rectangulo_restringido(tmp_path, diagonales, igualdad):
+    s = api.Sesion()
+    _llamar(s, "create_sketch", name="B")
+    _llamar(s, "draw_rectangle", sketch="B", center_x=0, center_y=0,
+            width=100, height=100, center_diagonals=diagonales)
+    lados = [e["id"] for e in _de(s, "line")]
+    if not diagonales:
+        for lado, (x, y), eje in ((lados[0], (0, -50), -2), (lados[1], (50, 0), -1)):
+            punto, = _llamar(s, "draw_point", sketch="B", x=x, y=y)["points"]
+            _llamar(s, "add_constraint", sketch="B", type="midpoint", entities=[punto, lado])
+            _llamar(s, "add_constraint", sketch="B", type="coincident", entities=[punto, eje])
+    if igualdad:
+        _llamar(s, "add_constraint", sketch="B", type="equal", entities=lados[:2])
+    for lado in lados[:1 if igualdad else 2]:
+        _llamar(s, "add_dimension", sketch="B", type="distance", entities=[lado], value=100)
+    assert _boceto(s)["dof"] == 0
+    for i in range(4):
+        antes = _boceto(s)
+        resultado = _llamar(s, "sketch_fillet", sketch="B", entity1=lados[i],
+                            entity2=lados[(i + 1) % 4], radius=10)
+        despues = _boceto(s)
+        assert resultado["dof"] == despues["dof"] == 0, (i, resultado, despues)
+        borradas = {r["id"] for r in antes["constraints"]} - {r["id"] for r in despues["constraints"]}
+        assert borradas == set(resultado.get("constraints_deleted", []))
+        assert all(r["type"] == "coincident" for r in antes["constraints"] if r["id"] in borradas)
+        assert not resultado.get("dimensions_deleted")
+        assert {c["id"] for c in antes["dimensions"]} <= {c["id"] for c in despues["dimensions"]}
+        assert all(not c["reference"] for c in despues["dimensions"])
+        assert despues["profiles"][0]["bounding_box"] == {"min": [-50, -50], "max": [50, 50]}
+        assert _areas(s) == pytest.approx([10000 - (i + 1) * 100 * (1 - math.pi / 4)], abs=1e-3)
+    cota = _boceto(s)["dimensions"][0]["id"]
+    _llamar(s, "edit_dimension", sketch="B", dimension=cota, value=120)
+    alto = 120 if igualdad else 100
+    assert _boceto(s)["dof"] == 0
+    assert _boceto(s)["profiles"][0]["bounding_box"] == {
+        "min": [-60, -alto / 2], "max": [60, alto / 2]}
+    assert _areas(s) == pytest.approx([120 * alto - 400 * (1 - math.pi / 4)], abs=1e-3)
+    assert [e["radius"] for e in _de(s, "arc")] == pytest.approx([10] * 4)
+    ruta = str(tmp_path / "rectangulo_empalmado.omnicad")
+    _llamar(s, "save_document", path=ruta)
+    otra = api.Sesion()
+    _llamar(otra, "open_document", path=ruta)
+    assert _boceto(otra) == _boceto(s)
+    assert _boceto(otra)["dof"] == 0
+
+
+def test_b242_empalme_con_extremos_distintos_unidos_por_coincidencias():
+    from omnicad.restricciones import Boceto, resolver
+
+    b = Boceto()
+    b.asegurar_referencias([-1, -2])
+    lados = b.agregar_rectangulo((-50, -50), (50, 50))
+    coincidencias = []
+    for lado in lados:
+        linea = b.curvas[lado]
+        anterior = linea.p1
+        linea.p1 = b.agregar_punto(*b.coords(anterior))
+        coincidencias.append(b.agregar_restriccion("coincidente", [anterior, linea.p1]))
+    for lado, xy, eje in ((lados[0], (0, -50), -2), (lados[1], (50, 0), -1)):
+        punto = b.agregar_punto(*xy)
+        b.agregar_restriccion("punto_medio", [punto, lado])
+        b.agregar_restriccion("coincidente", [punto, eje])
+    for lado in lados[:2]:
+        b.agregar_cota("distancia", [lado], "100")
+    for i in range(5):
+        if i:
+            antes = set(b.restricciones)
+            b.empalme(lados[i - 1], lados[i % 4], 10)
+            assert antes - set(b.restricciones) == {coincidencias[i % 4]}
+        resultado = resolver(b, {k.id: float(k.expresion) for k in b.cotas.values()})
+        assert resultado.ok and resultado.gdl == 0, (i, resultado)
