@@ -368,3 +368,17 @@ def test_herramienta_replace_constraint():
     malo = llamar("replace_constraint", sketch="S", constraint=rid, type="coincident")
     assert not malo["ok"] and malo["error_kind"] == "INVALID_CONSTRAINT"
     assert not llamar("replace_constraint", sketch="S", constraint=9999, type="parallel")["ok"]
+
+
+def test_b241_borrar_un_recuadro_que_toma_el_origen_borra_el_resto(lz):
+    linea = _linea_inclinada(lz)
+    mensajes = []
+    lz.mensaje.connect(mensajes.append)
+    lz.b.asegurar_referencias([0, -1])              # el origen y el eje X existen (los cita una restricción)
+    lz.seleccion = [0, -1, linea]                   # el recuadro tomó el origen, el eje y la línea
+    lz.borrar_seleccion()
+    assert linea not in lz.b.curvas and 0 in lz.b.puntos
+    assert "referencias fijas" in mensajes[-1] and "resto" in mensajes[-1]
+    lz.seleccion = [0]                               # solo el origen: avisa y no toca nada
+    lz.borrar_seleccion()
+    assert 0 in lz.b.puntos and "resto" not in mensajes[-1]
