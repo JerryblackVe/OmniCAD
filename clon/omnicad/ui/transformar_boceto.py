@@ -288,17 +288,7 @@ class ControlTransformar:
             l.mensaje.emit(e["error"] or e["guia"])
             return False
         p, ids = self.calcular()["params"], l._seleccion_util()
-        f = _funcion(p)
-        origen = {} if p.get("copiar") else {q: l.b.coords(q) for q in l.b.puntos_de(ids)}
-        if not l.aplicar_cambio(lambda: aplicar(l.b, ids, p)):
-            return False
-        # B-245: si las restricciones (p. ej. una coincidencia con el origen) devolvieron todo a su lugar, no fue
-        # un «mover»: se deshace y se dice por qué, como hace transform_sketch.
-        if (any(math.dist(f(xy), xy) > 1e-6 for xy in origen.values())
-                and all(math.dist(l.b.coords(q), xy) < 1e-6 for q, xy in origen.items() if q in l.b.puntos)):
-            l.deshacer()
-            l.mensaje.emit("Las restricciones o cotas que atan la selección a lo que no se mueve (p. ej. una "
-                           "coincidencia con el origen) no la dejan llegar: borrá ese anclaje y volvé a moverla.")
+        if not l.aplicar_movimiento(lambda: aplicar(l.b, ids, p), [] if p.get("copiar") else ids, _funcion(p)):
             return False
         l.seleccion = []
         l.set_herramienta("seleccionar")
