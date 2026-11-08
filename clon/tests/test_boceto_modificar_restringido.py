@@ -147,7 +147,7 @@ def test_perfil_base_acotado(perfil):
 
 @pytest.mark.parametrize("perfil", [
     "rectangulo", "circulo",
-    pytest.param("ranura", marks=_xfail("Arrastrar centro izquierdo: cuerda del arco 20 -> 0 mm con dof=0")),
+    "ranura",
 ])
 def test_perfil_base_no_se_deforma(perfil):
     s, _ = _crear(perfil)
@@ -170,10 +170,10 @@ def test_b242_empalme_conserva_cotas_y_cero_grados_de_libertad():
 
 
 _ESQUINAS = [
-    pytest.param("empalme", marks=_xfail("Empalme r5: dof=0 pero arrastrar cambia lado 95 -> 105 mm")),
-    pytest.param("chaflan_igual", marks=_xfail("Chaflán 5/5: arrastrar cambia lado 95 -> 105 mm")),
-    pytest.param("chaflan_dos_distancias", marks=_xfail("Chaflán 5/8: arrastrar cambia lado 95 -> 105 mm")),
-    pytest.param("chaflan_angulo", marks=_xfail("Chaflán 5/30°: arrastrar cambia lado 97.1132 -> 102.8868 mm")),
+    "empalme",
+    "chaflan_igual",
+    "chaflan_dos_distancias",
+    "chaflan_angulo",
 ]
 
 
@@ -267,7 +267,7 @@ def test_editar_curva_restringida(perfil, herramienta):
 
 
 @pytest.mark.parametrize("perfil", [
-    pytest.param("rectangulo", marks=_xfail("Desfase: dof=0 pero arrastre cambia copia 110 -> 100 mm")),
+    "rectangulo",
     "circulo",
     pytest.param("ranura", marks=_xfail("Desfase: dof=4; arrastre cambia lado 60 -> 56.5685 mm")),
 ])
@@ -342,7 +342,7 @@ def test_transformacion_restringida(perfil, herramienta):
 
 @pytest.mark.parametrize("perfil", [
     "rectangulo", "circulo",
-    pytest.param("ranura", marks=_xfail("Repetición de ranura: dof=0 pero cuerda del arco 20 -> 0 mm al arrastrar")),
+    "ranura",
 ])
 @pytest.mark.parametrize("herramienta", ["simetria", "patron_rectangular", "patron_circular"])
 def test_repeticion_restringida(perfil, herramienta):
