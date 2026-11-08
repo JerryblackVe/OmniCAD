@@ -216,6 +216,16 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   en `docs/seguimiento/`, suma la firma a `scripts/caza/conocidos.json` y el caso mínimo a `clon/tests/corpus_caza/`.
   Lo que quedó «sin confirmar» se confirma solo en la corrida siguiente.
 
+## Regla estricta: memoria de la PC (Gerardo, 2026-11-08: «no puede volver a pasar»)
+- El 2026-11-07 a las 23:32 la app de Claude se cayó por memoria (9,8 GB de 13: 4 sesiones, OpenCode y varios pytest)
+  y la noche se perdió hasta las 06:40.
+- **Como mucho 2 sesiones de ejecución trabajando a la vez** (más el coordinador). Las sesiones terminadas o en
+  pausa se archivan, porque cada proceso ocupa memoria aunque esté quieto.
+- **El coordinador mide la memoria en cada vigilancia**: última línea `process-memory` de
+  `%LOCALAPPDATA%/Claude/logs/main.log` (`tree_rss_sum`) más la libre de Windows. Si la app pasa de 8 GB o
+  quedan menos de 2 GB libres, frena una sesión (`stop_session` y el mensaje «pausa por memoria») antes de lanzar nada.
+- Una sola corrida pesada por vez en toda la PC: `scripts/turno.py`, y nunca dos OpenCode.
+
 ## Regla estricta: aviso de contexto al 60 % (Gerardo, 2026-11-05)
 - El coordinador mira cuánto lleva lleno su contexto (`get_usage` con `session_id: "self"`) cada vez que cierra una
   tarea o una tanda, y antes de lanzar otra.
