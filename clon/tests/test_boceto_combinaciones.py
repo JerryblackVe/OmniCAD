@@ -873,3 +873,43 @@ def test_b242_empalme_con_extremos_distintos_unidos_por_coincidencias():
             assert antes - set(b.restricciones) == {coincidencias[i % 4]}
         resultado = resolver(b, {k.id: float(k.expresion) for k in b.cotas.values()})
         assert resultado.ok and resultado.gdl == 0, (i, resultado)
+
+
+@pytest.mark.parametrize("diagonales", [False, True])
+@pytest.mark.parametrize("igualdad", [False, True])
+def test_p75_empalme_sin_guias_conserva_restricciones_y_archivo(tmp_path, diagonales, igualdad):
+    s = api.Sesion()
+    _llamar(s, "create_sketch", name="B")
+    _llamar(s, "draw_rectangle", sketch="B", center_x=0, center_y=0,
+            width=100, height=100, center_diagonals=diagonales)
+    lados = [e["id"] for e in _de(s, "line")]
+    if not diagonales:
+        for lado, (x, y), eje in ((lados[0], (0, -50), -2), (lados[1], (50, 0), -1)):
+            punto, = _llamar(s, "draw_point", sketch="B", x=x, y=y)["points"]
+            _llamar(s, "add_constraint", sketch="B", type="midpoint", entities=[punto, lado])
+            _llamar(s, "add_constraint", sketch="B", type="coincident", entities=[punto, eje])
+    if igualdad:
+        _llamar(s, "add_constraint", sketch="B", type="equal", entities=lados[:2])
+    for lado in lados[:1 if igualdad else 2]:
+        _llamar(s, "add_dimension", sketch="B", type="distance", entities=[lado], value=100)
+    assert _boceto(s)["dof"] == 0
+    construccion = {e["id"] for e in _ents(s) if e["construction"]}
+    for i in range(4):
+        antes = _boceto(s)
+        resultado = _llamar(s, "sketch_fillet", sketch="B", entity1=lados[i],
+                            entity2=lados[(i + 1) % 4], radius=10)
+        despues = _boceto(s)
+        assert resultado["dof"] == despues["dof"] == 0
+        assert {e["id"] for e in _ents(s) if e["construction"]} == construccion
+        borradas = {r["id"] for r in antes["constraints"]} - {r["id"] for r in despues["constraints"]}
+        assert borradas == set(resultado.get("constraints_deleted", []))
+        assert all(r["type"] == "coincident" for r in antes["constraints"] if r["id"] in borradas)
+        assert not resultado.get("dimensions_deleted")
+        perfil, = despues["profiles"]
+        assert perfil["bounding_box"] == {"min": [-50, -50], "max": [50, 50]}
+        assert _areas(s) == pytest.approx([10000 - (i + 1) * 100 * (1 - math.pi / 4)], abs=1e-3)
+        ruta = str(tmp_path / f"esquina_{i}.omnicad")
+        _llamar(s, "save_document", path=ruta)
+        otra = api.Sesion()
+        _llamar(otra, "open_document", path=ruta)
+        assert _boceto(otra) == _boceto(s)
