@@ -25,6 +25,9 @@ CASOS = {
     "desfase": ("create_construction_plane", dict(plane=">Z", offset=5), "plano", lambda h: ((0, 0, h + 5), (0, 0, 1))),
     "angulo": ("create_construction_plane", dict(type="angle", references=["edges:>Z and >X"], angle=30), "plano",
                lambda h: ((20, 0, h), (0.5, 0, 3 ** 0.5 / 2))),
+    # P-92: con arista vertical el 0° es el plano frontal, como en Fusion (medido 2026-11-08)
+    "angulo_0_vertical": ("create_construction_plane", dict(type="angle", references=["edges:>X and >Y"], angle=0),
+                          "plano", lambda h: ((20, 20, h / 2), (0, 1, 0))),
     "medio": ("create_construction_plane", dict(type="middle", references=[">Z", "<Z"]), "plano",
               lambda h: ((0, 0, h / 2), (0, 0, 1))),
     "dos_aristas": ("create_construction_plane", dict(type="two_edges", references=["edges:>Z and >X", "edges:<Z and <X"]),
