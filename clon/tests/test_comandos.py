@@ -258,6 +258,130 @@ def test_primitiva_sigue_funcionando(app_qt):
     assert len(doc.estado_final.cuerpos) == 1
 
 
+@pytest.mark.parametrize("clave", ["sk_proyectar_superficie", "sk_curva_interseccion"])
+def test_h109_proyectar_incluir_tiene_dialogos(app_qt, clave):
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.cinta_boceto import GRUPOS_BOCETO
+    from omnicad.ui.iconos import DIBUJOS
+
+    assert clave in CATALOGO
+    cmd = CATALOGO[clave]()
+    campos = {c.clave: c for c in cmd.campos(None)}
+    assert campos["curvas"].filtros == {"curva_boceto"}
+    assert "cara" in campos["caras"].filtros
+    assert cmd.ICONO in DIBUJOS
+    assert clave in str(GRUPOS_BOCETO)
+
+
+@pytest.fixture
+def ventana_h109(app_qt, tmp_path):
+    from PySide6.QtCore import QSettings
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+
+    ajustes = QSettings(str(tmp_path / "preferencias.ini"), QSettings.IniFormat)
+    ventana = VentanaPrincipal(prefs=Preferencias(ajustes))
+    ventana.resize(1280, 720)
+    ventana.visor.resize(800, 600)
+    yield ventana
+    if ventana.panel is not None:
+        ventana.panel.cancelar()
+    if ventana.modo_boceto.activo:
+        ventana.modo_boceto.cancelar()
+    ventana.doc.modificado = False
+    ventana.close()
+    ventana.deleteLater()
+    app_qt.processEvents()
+
+
+@pytest.mark.parametrize("nuevo", [False, True])
+@pytest.mark.parametrize("clave,herramienta,modo", [
+    ("sk_proyectar_superficie", "project_to_surface", "closest"),
+    ("sk_proyectar_superficie", "project_to_surface", "vector"),
+    ("sk_curva_interseccion", "intersect_curves", None),
+])
+def test_h109_dialogo_igual_al_mcp_y_deshacer(ventana_h109, nuevo, clave, herramienta, modo):
+    from omnicad import api
+    from omnicad.api import selectores as sl
+    from omnicad.nucleo import curvas3d
+    from omnicad.restricciones import boceto3d as b3
+    from omnicad.ui.comando import hit_desde_ref
+
+    s = api.Sesion()
+
+    def llamar(nombre, **args):
+        r = api.llamar(s, nombre, args)
+        assert r["ok"], r
+        return r["result"]
+
+    llamar("create_parameter", name="altura", expression="10 mm")
+    llamar("create_box", length=20, width=20, height="altura")
+    sin_boceto = s.doc.a_dict()
+    llamar("create_sketch", plane="XY", name="Trabajo")
+    cid = llamar("draw_line", start_x=2, start_y=3, end_x=8, end_y=3)["entities"][0]["id"]
+    v = ventana_h109
+    v.set_documento(Documento.desde_dict(sin_boceto if nuevo else s.doc.a_dict()))
+    if nuevo:
+        v._iniciar_boceto(Boceto(), g.Plano("XY"), {"plano": "XY", "marco": None})
+        lz = v.modo_boceto.lienzo
+        assert lz.aplicar_cambio(lambda: lz.b.agregar_linea((2, 3), (8, 3)), anclar=False)
+    else:
+        v.editar_operacion(s.paso("Trabajo").id)
+        lz = v.modo_boceto.lienzo
+    lz.construccion = True
+    antes = lz.b.a_dict()
+    v.acciones[clave].trigger()
+    panel = v.panel
+    assert panel is not None and v.modo_boceto.activo and v.modo_boceto.lienzo is lz
+    bid = v.modo_boceto.datos["id"] if nuevo else s.paso("Trabajo").id
+    curva = next(iter(lz.b.curvas))
+    fuente = {"tipo": "curva_boceto", "boceto": bid, "curva": curva}
+    v.visor.encuadrar()
+    v.visor.vista("arriba")
+    elegida = v.visor.elegir_entidad(v.visor.proyectar((5, 3, 0)), {"curva_boceto"}, a_traves=True)
+    assert elegida is not None and elegida["ref"] == fuente
+    c, e = sl.elegir(s, ">Z", "cara")[0]
+    panel.valores.update(curvas=[elegida], caras=[hit_desde_ref(sl.referencia(c, e), panel.ctx.estado)])
+    args = {"faces": ">Z", "curves": [cid], "construction": True}
+    if modo is not None:
+        panel.set_valor("tipo", modo)
+        args["mode"] = modo
+    if modo == "vector":
+        panel.valores["direccion"] = [hit_desde_ref({"tipo": "eje", "id": "Z"}, panel.ctx.estado)]
+        args["direction"] = "Z"
+        assert not panel.widgets["direccion"].isHidden()
+    elif modo == "closest":
+        assert panel.widgets["direccion"].isHidden()
+    ids_api = llamar(herramienta, **args)["entities"]
+    b_api = s.doc.estado_final.bocetos[s.paso("Trabajo").id].boceto
+    panel.aceptar()
+    assert v.panel is None and v.modo_boceto.activo
+    ids_ui = list(b3.datos(lz.b)["curvas"])
+    assert len(ids_ui) == len(ids_api) == 1
+
+    def extremos(b, ids):
+        return [curvas3d.muestrear(b3.arista(b, i, g.Plano("XY")))[[0, -1]] for i in ids]
+
+    assert np.allclose(extremos(lz.b, ids_ui), extremos(b_api, ids_api), atol=1e-6)
+    esperados = [[8, 3, 10], [2, 3, 10]] if modo == "vector" else [[2, 3, 10], [8, 3, 10]]
+    assert np.allclose(extremos(lz.b, ids_ui)[0], esperados, atol=1e-6)
+    assert all(c["construccion"] for c in b3.datos(lz.b)["curvas"].values())
+    lz.deshacer()
+    assert lz.b.a_dict() == antes
+    lz.rehacer()
+    assert len(b3.datos(lz.b)["curvas"]) == 1
+    v.modo_boceto.terminar()
+    assert all(r.estado == "ok" for r in v.doc.resultados)
+    reabierto = Documento.desde_dict(v.doc.a_dict())
+    assert all(r.estado == "ok" for r in reabierto.resultados)
+    sesion_ui = api.Sesion(reabierto)
+    r = api.llamar(sesion_ui, "set_parameter", {"name": "altura", "expression": "15 mm"})
+    assert r["ok"], r
+    br = reabierto.estado_final.bocetos[bid]
+    esperados = [[x, y, 15] for x, y, _z in esperados]
+    assert np.allclose(extremos(br.boceto, ids_ui)[0], esperados, atol=1e-6)
+
+
 # ---------------------------------------------------------------- nivel 2: reglas propias en el diálogo (B-25)
 def test_reglas_de_chapa_del_dialogo_incluye_las_propias(app_qt, monkeypatch):
     """B-25: el diálogo de reglas de chapa lista también las reglas propias del usuario, no solo las de

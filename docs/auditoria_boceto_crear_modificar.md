@@ -241,6 +241,7 @@ Una corrida por fase o por ítem, cada una en su worktree (`bash scripts/worktre
 | B-239 | Escalar un texto también escalaba su copia | Sol | `D:/PROGRAMA-B-239` / `item/B-239` | Fusionada (tests afectados 20 grupos, 0 fallidos) |
 | P-72 | `draw_arc tangent_to` con radio y barrido | Sol | `D:/PROGRAMA-P-72` / `item/P-72` | Fusionada (tests afectados 20 grupos, 0 fallidos) |
 | H-111 | Patrones con expresiones y parámetros | Sol (cortó por cupo al final; verificó el coordinador) | `D:/PROGRAMA-H-111` / `item/H-111` | Fusionada (tests afectados en `main`: verde salvo el humo de `test_motor`, que pasa solo) |
+| H-109 | Botones de Proyectar a superficie y Curva de intersección | Sol (cortó por cupo; terminó el coordinador) | `D:/PROGRAMA-H-109` / `item/H-109` | Fusionada |
 
 ### Brief cm-1 (fase 1, inventario)
 

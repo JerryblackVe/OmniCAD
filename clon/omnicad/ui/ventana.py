@@ -2560,6 +2560,8 @@ class VentanaPrincipal(QMainWindow):
         if not self.arrastre.decidir(comando if op is None else None):
             return None
         if op is None and self.modo_boceto.activo:
+            if getattr(comando, "EN_BOCETO_ABIERTO", False):
+                return self._comando_en_boceto(comando, valores)
             from .comandos.insertar_en_boceto import InsertarEnBoceto, admite
             if admite(comando):                # Insertar SVG / DXF / imagen: al boceto abierto, sin cambiar de plano
                 return self._comando_en_boceto(InsertarEnBoceto(comando, self.modo_boceto.lienzo), valores)
@@ -2814,7 +2816,7 @@ class VentanaPrincipal(QMainWindow):
                 ligar_parametro_texto(self.doc, t, t.texto)
             sincronizar_alturas_texto(self.doc, boceto)
             if op is None:
-                self._agregar(OpBoceto(self.doc.nuevo_id(), self._nombre_nuevo(OpBoceto, "Boceto"), plano=datos["plano"],
+                self._agregar(OpBoceto(datos.get("id") or self.doc.nuevo_id(), self._nombre_nuevo(OpBoceto, "Boceto"), plano=datos["plano"],
                                        marco=datos["marco"], cara=datos.get("cara"), boceto=boceto))
             else:
                 self._reemplazar(OpBoceto(op.id, op.nombre, op.suprimida, boceto=boceto, **op.p))

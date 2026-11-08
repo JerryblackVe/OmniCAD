@@ -146,6 +146,8 @@ CLAVES = frozenset({
     "seccion_malla",
     "separar_malla",
     "simetria_3d",
+    "sk_curva_interseccion",
+    "sk_proyectar_superficie",
     "solevacion",
     "suavizar_malla",
     "sup_barrido",

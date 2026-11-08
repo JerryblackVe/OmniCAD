@@ -29,6 +29,7 @@ GRUPOS_BOCETO = [
         _i("Simetría", "sk_simetria"), _i("Patrón circular", "sk_patron_circular"),
         _i("Patrón rectangular", "sk_patron_rectangular"), _i("Editar patrón", "sk_editar_patron"), SEP,
         _sub("Proyectar/Incluir", [_i("", "sk_proyectar"), _i("", "sk_intersecar"), _i("", "sk_incluir_3d"),
+                                   _i("", "sk_proyectar_superficie"), _i("", "sk_curva_interseccion"),
                                    _i("", "sk_perfil_giratorio"), _i("", "sk_isoparametrica"), _i("Proyectar eje", "sk_proyectar_eje"),
                                    _i("", "sk_romper_vinculo"),
                                    _i("", "sk_proyecciones_perdidas")]), SEP,

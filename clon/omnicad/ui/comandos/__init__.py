@@ -26,6 +26,7 @@ from . import malla_seccion  # noqa: E402,F401  (MALLA › CREAR › Crear bocet
 from . import desviacion  # noqa: E402,F401  (INSPECCIONAR › Mapa de desviación)
 from . import plastico  # noqa: E402,F401  (PLÁSTICO › Asignar regla y Administrar reglas)
 from . import sustentabilidad  # noqa: E402,F401  (INSPECCIONAR › Sustainability Insights)
+from . import proyectar_boceto  # noqa: E402,F401  (BOCETO › Proyectar/Incluir: curvas 3D)
 from . import asas_extra  # noqa: E402,F401  (engancha asas en la vista a comandos ya registrados)
 
 

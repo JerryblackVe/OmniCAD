@@ -50,6 +50,7 @@ SECCIONES = {
     "ESPACIOS / VARIOS": ["dibujo", "render", "animacion", "configuracion_tabla", "parametros_exportar",
                           "parametros_importar", "parametro_usuario", "estrella", "estrella_vacia", "mas", "copiar",
                           "papelera", "info", "secuencias", "asistente", "clip", "reportar_problema"],
+    "BOCETO / PROYECTAR": ["proyectar_superficie", "curva_interseccion"],
     "PASOS SIN COMANDO": ["grafo", "insertar_diseno", "importar_iges", "borrar_caras", "calibracion_holguras"],
 }
 NOMBRES = [n for lista in SECCIONES.values() for n in lista]
@@ -94,7 +95,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 198
+    assert len(NOMBRES) == len(set(NOMBRES)) == 200
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

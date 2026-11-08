@@ -141,6 +141,7 @@ HERRAMIENTAS = {
     "sk_espiral": "draw_spiral", "sk_r_poligono": "add_constraint", "sk_terminar": "sketch_view", "sk_terminar_auto": "sketch_view",
     "sk_intersecar": "project_to_sketch", "sk_incluir_3d": "include_3d_geometry", "sk_isoparametrica": "isoparametric_curve", "sk_arco_tangente": "draw_arc",
     "sk_perfil_giratorio": "project_spun_profile", "sk_proyectar_eje": "project_to_sketch",
+    "sk_proyectar_superficie": "project_to_surface", "sk_curva_interseccion": "intersect_curves",
     "sk_romper_vinculo": "break_projection_link",
     "sk_proyecciones_perdidas": "manage_lost_projections", "sk_editar_patron": "edit_sketch_pattern",
     "sk_soltar_desfase": "release_offset",

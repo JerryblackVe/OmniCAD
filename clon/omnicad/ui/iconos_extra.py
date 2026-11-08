@@ -2584,7 +2584,22 @@ def _calibracion_holguras(p):
         p.drawEllipse(q(x, 4, 1.5), radio, radio * 0.58)
 
 
+def _proyectar_superficie(p):
+    _poli(p, [QPointF(4, 17), QPointF(23, 12), QPointF(28, 25), QPointF(9, 29)], SUP[0], BORDE_SUP)
+    _trazo(p, VIOLETA, 2.0)
+    p.drawLine(QPointF(9, 22), QPointF(24, 18))
+    _flecha(p, 16, 3, 16, 19, AZUL_BORDE, 1.5, 4.0)
+
+
+def _curva_interseccion(p):
+    _poli(p, [QPointF(4, 17), QPointF(23, 12), QPointF(28, 25), QPointF(9, 29)], SUP[0], BORDE_SUP)
+    _poli(p, [QPointF(9, 5), QPointF(24, 2), QPointF(24, 25), QPointF(9, 28)], None, AZUL_BORDE)
+    _trazo(p, VIOLETA, 2.5)
+    p.drawLine(QPointF(9, 22), QPointF(24, 18))
+
+
 DIBUJOS_EXTRA = {
+    "proyectar_superficie": _proyectar_superficie, "curva_interseccion": _curva_interseccion,
     # sólido / crear
     "barrido": _barrido, "solevacion": _solevacion, "nervio": _nervio, "red": _red, "labio": _labio,
     "repujado": _repujado, "saliente": _saliente, "encaje_presion": _encaje_presion, "apoyo": _apoyo,
