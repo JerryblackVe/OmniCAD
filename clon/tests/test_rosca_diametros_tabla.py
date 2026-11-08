@@ -168,3 +168,32 @@ def test_b248_un_agujero_mas_ancho_que_el_mayor_se_rellena_al_menor():
     forma = sc.rosca(bloque, designacion="M10")
     assert g.es_valida(forma) and len(g.solidos(forma)) == 1
     assert d_min(forma) == pytest.approx(sc.datos_rosca("M10")["diametro_menor"], abs=2e-3)
+
+
+@pytest.mark.parametrize("radio_agujero", [3, 7])      # más chico que el menor (B-247) y más ancho que el mayor (B-248)
+def test_el_agujero_ajustado_queda_en_el_menor_de_la_clase(radio_agujero):
+    """M10 6H: el Ø menor queda al centro de la tolerancia (D1 + TD1/2 = 8,526), como el taladro del Agujero."""
+    bloque = g.booleano(g.caja(40, 40, 12, origen=(-20, -20, 0)), g.cilindro(radio_agujero, 12), "cortar")
+    forma = sc.rosca(bloque, designacion="M10", clase="6H")
+    assert g.es_valida(forma)
+    assert d_min(forma) == pytest.approx(sc.diametro_taladro_rosca("M10", "6H"), abs=2e-3)
+
+
+@pytest.mark.parametrize("kw, rel", [(dict(designacion="M20"), 1e-6), (dict(familia="ansi_metrica"), 1e-6),
+                                     (dict(familia="afbma"), 1e-4)])   # AFBMA: B-249, también con el corte exacto
+@pytest.mark.parametrize("operacion", ["chaflan", "empalme"])
+def test_p78_la_rosca_del_corte_difuso_admite_empalme_y_va_y_vuelve_por_step(kw, rel, operacion, tmp_path):
+    """P-78: el corte difuso (1e-4) no deja tolerancias que rompan lo que sigue: un chaflán o un empalme en el borde de
+    arriba y el STEP de ida y vuelta dan un sólido válido con el mismo volumen."""
+    from omnicad.nucleo import intercambio, referencias as refs, solidos_modificar as sm
+    roscado = sc.rosca(g.cilindro(10, 30), longitud=10, desfase=5, **kw)
+    borde = min(refs.subformas(roscado, "arista"), key=lambda a: abs(refs.firma(a)["medio"][2] - 30))
+    grupo = ({"aristas": [borde], "tipo": "distancia_igual", "distancia": 1.0} if operacion == "chaflan"
+             else {"aristas": [borde], "tipo": "constante", "radio": 1.0})
+    forma = (sm.chaflan if operacion == "chaflan" else sm.empalme)(roscado, [grupo])
+    assert g.es_valida(forma) and g.volumen(forma) < g.volumen(roscado)
+    ruta = tmp_path / "rosca.step"
+    intercambio.escribir_step(forma, str(ruta))
+    leida = intercambio.leer_step(str(ruta))
+    assert g.es_valida(leida)
+    assert g.volumen(leida) == pytest.approx(g.volumen(forma), rel=rel)

@@ -6,10 +6,11 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 ## Pendientes generales
 
-Abierto 18 · Parcial 10 · Bloqueado 3 · Sin verificar 2.
+Abierto 18 · Parcial 11 · Bloqueado 3 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-78 | Rosca modelada lenta en algunos tipos (anexo ROSCAS de AG-2) | Parcial | Media | Hecho: el corte prueba primero con tolerancia difusa 1e-4 (M3×20: 17,0 → 2,1 s; M5×20: 7,1 → 1,1 s; ANSI y GB M20: 2,1 → 0,5 s; sin cambios en los que ya andaban). Queda AFBMA N 04 sobre Ø20 (9,2 s: los 3 cortes sin girar el surco dan sólido inválido) y tubería ISO (2,1 s, 4 cortes); falta medir Fusion con el mismo caso. | `nucleo/solidos_crear.py` › `_cortar_helicoidal`; encuesta de 21 casos en el Registro del 2026-11-08 | 2026-11-08 |
 | P-61 | Las ventanas «minimizadas» de prueba todavía pueden tomar el foco o verse un instante | Abierto | Media | Medir con el monitor de cursor y foco (`GetForegroundWindow` cada 100 ms) las piezas de `scripts/prueba_ui` en minimizada: `arnes.activar` llama `QApplication.setActiveWindow`, que en el humo tomaba el foco de Windows (2 veces por corrida, a los 27 y 29 s; sin esa llamada, 0 en 5 corridas). Cuidar las piezas que prueban atajos. Además, en 1 de 7 corridas del humo una ventana «OmniCAD» se vio opaca menos de 100 ms cerca de `_editar_boceto` (sin foco). | scripts/prueba_ui/arnes.py (`activar`); clon/omnicad/prueba_humo.py (`_editar_boceto`) | 2026-11-06 |
 | P-40 | Extruir arranca en 10 mm; Fusion arranca en 0 mm y se arrastra la flecha | Abierto | Baja | Video 2026-10-28 11-28-09: en Fusion la distancia empieza en 0,00 mm y el cuerpo aparece al arrastrar; en OmniCAD entra con 10 mm y ya se ve un cuerpo. Es una decisión de producto de Gerardo: replicar Fusion o dejar el cuerpo de entrada. | omnicad/ui/comandos/solido.py (`Extruir`, valor inicial de la distancia) | 2026-10-28 |
 | P-35 | `volumen_exacto` de un cuerpo con 500 caras B-spline cuesta 0,5 s por llamada | Abierto | Baja | `aplicar_resultado` lo llama tres veces en una unión (resultado, cuerpo y herramienta): 1,4 s de los 3 s de Unir en `bspline500`. Guardar el volumen por forma en el cuerpo (se invalida al cambiar `forma`) o no medirlo cuando no hay aviso posible. | omnicad/timeline/operaciones.py (`aplicar_resultado`), omnicad/nucleo/geometria.py (`_integral`); scripts/bench_booleana.py bspline500 | 2026-10-26 |
