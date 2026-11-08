@@ -269,7 +269,7 @@ def test_editar_curva_restringida(perfil, herramienta):
 @pytest.mark.parametrize("perfil", [
     "rectangulo",
     "circulo",
-    pytest.param("ranura", marks=_xfail("Desfase: dof=4; arrastre cambia lado 60 -> 56.5685 mm")),
+    "ranura",
 ])
 def test_desfase_restringido(perfil):
     s, curvas = _crear(perfil)

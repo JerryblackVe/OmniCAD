@@ -3615,6 +3615,11 @@ class Boceto:
                 nid = (self.agregar_arco_centro(c.centro, pb, pa, c.construccion) if inv
                        else self.agregar_arco_centro(c.centro, pa, pb, c.construccion))
             nuevos.append(nid)
+        # B-246: las tangencias entre curvas de la cadena (la ranura: línea con arco) pasan a la copia; sin ellas
+        # sus esquinas quedaban libres de correrse por las líneas (dof 4), como Fusion no deja.
+        nuevo_de = {k: nid for (k, *_r), nid in zip(elems, nuevos, strict=True)}
+        for r in [r for r in self.restricciones.values() if r.tipo == "tangente" and set(r.entidades) <= set(nuevo_de)]:
+            self.agregar_restriccion("tangente", [nuevo_de[e] for e in r.entidades])
         k0, n0 = elems[0][0], nuevos[0]
         for (k, *_r), nid in list(zip(elems, nuevos, strict=True))[1:]:
             self.agregar_restriccion("desfase", [k0, n0, k, nid], {"grupo": grupo})
