@@ -2668,8 +2668,10 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
     torno = r_torno = None
     material = radio_cara if radio_cara is not None else d1 / 2 if interna else diametro / 2
     # el torneado pasa de largo un pelo en las puntas: si terminara justo donde termina el surco, sus caras planas
-    # coincidirían con las del surco y el corte del surco falla (pasó con M3 y holgura 0,1)
-    eps = 0.02 * paso
+    # coincidirían con las del surco y el corte del surco falla (pasó con M3 y holgura 0,1). B-249: con 0,02 pasos la
+    # franja de cresta de la punta quedaba de 0,016 mm en AFBMA (paso 0,79), con aristas de tolerancia 0,01, y el STEP
+    # de ida y vuelta cambiaba el volumen 3·10⁻⁵; con 0,1 pasos, 3·10⁻⁹
+    eps = 0.1 * paso
     base_torno, largo_torno = tuple(z * -eps), largo + 2 * eps
     if interna and ancho(r_in) > _ANCHO_LIMITE * paso:
         r_in = radio_de_ancho(_ANCHO_TOPE)
@@ -2739,8 +2741,11 @@ def _volumen_surco(r_a, r_b, r_in, w_in, r_out, w_out, largo, paso):
     return largo / paso * (r_b - r_a) / 6 * (f(r_a) + 4 * f((r_a + r_b) / 2) + f(r_b))
 
 
+_EPS_ROSCA = 1e-6     # B-249: la integración por defecto erra en las hélices largas (AFBMA×30: 414 en vez de 484)
+
+
 def _exigir_volumen(forma, esperado, tolerancia=0.01):
-    if forma is None or geo.esta_vacia(forma) or abs(geo.volumen_exacto(forma) - esperado) > tolerancia * esperado:
+    if forma is None or geo.esta_vacia(forma) or abs(geo.volumen_exacto(forma, _EPS_ROSCA) - esperado) > tolerancia * esperado:
         raise geo.ErrorGeometria("El kernel armó mal el surco de la rosca.")
 
 
@@ -2917,7 +2922,7 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
     Según el largo, las puntas del surco caen sobre la costura del cilindro y el corte falla, no saca nada o saca de
     más (M8×1,25 de 15 mm, M12×1,75 de 12 mm): girar el surco sobre su eje solo corre la entrada de la rosca.
     Éxito = forma válida que sacó material sin pasarse del volumen del surco (hay que medirlo: sin esto el corte salía vacío)."""
-    base, surco = geo.volumen_exacto(cuerpo), geo.volumen_exacto(herramienta)
+    base, surco = geo.volumen_exacto(cuerpo, _EPS_ROSCA), geo.volumen_exacto(herramienta, _EPS_ROSCA)
     eje_giro = gp_Ax1(_pnt(origen), _gdir(eje))
     for giro in (0.0, 61.0, 137.0, 229.0):
         t = gp_Trsf()
@@ -2938,7 +2943,7 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
                 op.SetFuzzyValue(difuso)
             op.Build()
             if (op.IsDone() and any(not op.IsDeleted(f) for f in caras_herr) and geo.es_valida(op.Shape())
-                    and 0.2 * surco < base - geo.volumen_exacto(op.Shape()) <= 1.01 * surco):
+                    and 0.2 * surco < base - geo.volumen_exacto(op.Shape(), _EPS_ROSCA) <= 1.01 * surco):
                 return op.Shape()
     raise geo.ErrorGeometria("El kernel no pudo cortar la rosca en el cuerpo.")
 
