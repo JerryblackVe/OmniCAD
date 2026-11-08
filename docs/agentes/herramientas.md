@@ -756,7 +756,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`draw_point`](#draw_point) | sí | Agrega un punto suelto al boceto (Fusion: Punto): sirve de referencia para cotas, restricciones, agujeros o el centro de un patrón circular. |
 | [`draw_conic`](#draw_conic) | sí | Dibuja una curva cónica (Fusion: Curva cónica) entre dos extremos, con el vértice (donde se cruzan las tangentes de los extremos) y Rho: 0.5 = parábola, menos = elipse, más = hipérbola. |
 | [`draw_tangent_circle`](#draw_tangent_circle) | sí | Dibuja un círculo tangente a 2 o 3 líneas del boceto (Fusion: Círculo de 2 / 3 tangentes) y le agrega las restricciones de tangencia. |
-| [`draw_blend_curve`](#draw_blend_curve) | sí | Une los extremos de dos curvas abiertas con una spline suave (Fusion: Curva de fusión), tangente (G1) o con curvatura continua (G2) en las dos uniones. |
+| [`draw_blend_curve`](#draw_blend_curve) | sí | Une dos curvas abiertas o aristas con una spline tangente (G1) o de curvatura continua (G2) (Fusion: Curva de fusión). |
 | [`sketch_fillet`](#sketch_fillet) | sí | Empalme de boceto (Fusion: Empalme en el boceto): redondea la esquina entre dos curvas (líneas, arcos o círculos) con un arco tangente; recorta las curvas, agrega las tangencias y la cota de radio. radius puede ser una expresión con parámetros (queda en la cota). |
 | [`sketch_chamfer`](#sketch_chamfer) | sí | Chaflán de boceto (Fusion: Chaflán en el boceto) entre dos líneas: de distancias iguales (distance), de dos distancias (distance y distance2) o de distancia y ángulo (distance y angle). |
 | [`trim_sketch_curve`](#trim_sketch_curve) | sí | Recortar, alargar o partir una curva del boceto (Fusion: Recortar / Alargar / Partir). (x, y) es el lugar del clic, sobre la curva o cerca: trim quita el tramo de la curva que contiene ese punto, hasta los cruces más cercanos (si no cruza nada, borra la curva entera); extend lleva el extremo más cercano de una línea, un arco o una spline abierta hasta la próxima curva; break la parte en los cruces más cercanos (el punto, sobre la curva). |
@@ -1125,16 +1125,17 @@ Dibuja un círculo tangente a 2 o 3 líneas del boceto (Fusion: Círculo de 2 / 
 
 ### `draw_blend_curve`
 
-Une los extremos de dos curvas abiertas con una spline suave (Fusion: Curva de fusión), tangente (G1) o con curvatura continua (G2) en las dos uniones. Sin point1/point2 une los dos extremos más cercanos.
+Une dos curvas abiertas o aristas con una spline tangente (G1) o de curvatura continua (G2) (Fusion: Curva de fusión). Proyecta las aristas con vínculo, sin duplicarlas. Sin point1/point2 une los extremos más cercanos.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `entity1` (entero; obligatorio): id de la primera curva (línea, arco, spline o cónica; abierta).
-  - `entity2` (entero; obligatorio): id de la segunda curva.
+  - `entity1` (entero o texto; obligatorio): entero = id de curva abierta del boceto; texto = arista del modelo (id o selector de project_to_sketch), proyectada con vínculo; debe dar exactamente una curva abierta.
+  - `entity2` (entero o texto; obligatorio): segunda curva o arista, igual que entity1; se reutiliza si ya estaba proyectada.
   - `point1` (lista de número o null; opcional, por defecto `null`): [x, y] cerca del extremo de entity1 que se une; vacío = automático.
   - `point2` (lista de número o null; opcional, por defecto `null`): [x, y] cerca del extremo de entity2 que se une; vacío = automático.
   - `continuity` ("G1" | "G2"; opcional, por defecto `"G1"`): G1 (tangente) o G2 (curvatura continua).
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+  - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de aristas; vacío = el único cuerpo.
 - CLI: `omnicad call draw_blend_curve --doc pieza.omnicad entity1=… entity2=…`
 
 ### `sketch_fillet`

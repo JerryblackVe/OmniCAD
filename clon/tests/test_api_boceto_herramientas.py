@@ -564,3 +564,96 @@ def test_patron_circular_con_centro_punto_crea_punto_de_menos(s):
     assert len(sk["points"]) == 4                                    # 2 originales + 2 copias
     posiciones = sorted((round(q["x"], 3), round(q["y"], 3)) for q in sk["points"])
     assert posiciones == [(-5.0, -8.66), (-5.0, 8.66), (0.0, 0.0), (10.0, 0.0)]
+
+
+@pytest.mark.parametrize("reutilizar", [False, True])
+@pytest.mark.parametrize("por_selector", [False, True])
+def test_p73_fusion_proyecta_arista_vinculada_y_deshace_todo(reutilizar, por_selector):
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=10, height=5)
+    llamar(s, "create_construction_plane", plane="XY", offset=10, name="Arriba")
+    llamar(s, "create_sketch", plane="Arriba", name="B")
+    linea = llamar(s, "draw_line", start_x=30, start_y=20, end_x=40, end_y=20)["entities"][0]["id"]
+    # El selector y body también funcionan cuando hay más de un cuerpo.
+    llamar(s, "create_box", length=2, width=2, height=2, x=100)
+    selector = "|X and >Z and <Y"
+    arista = llamar(s, "find_edges", body="Cuerpo1", selector=selector)["edges"][0]["id"]
+    if reutilizar:
+        llamar(s, "project_to_sketch", edges=arista, body="Cuerpo1")
+        arista = llamar(s, "find_edges", body="Cuerpo1", selector=selector)["edges"][0]["id"]
+    antes = foto(s)
+
+    r = llamar(s, "draw_blend_curve", entity1=selector if por_selector else arista, entity2=linea, body="Cuerpo1")
+
+    entidades = por_id(s)
+    proyectada = next(e for e in entidades.values() if e.get("projected"))
+    assert sorted([proyectada["start"], proyectada["end"]]) == [[-10, -5], [10, -5]]
+    assert len(entidades) == 3
+    spline = next(e for e in r["entities"] if e["type"] == "spline")
+    extremos = min(((a, b) for a in (proyectada["start"], proyectada["end"])
+                   for b in (entidades[linea]["start"], entidades[linea]["end"])),
+                  key=lambda par: math.dist(*par))
+    assert entidades[spline["id"]]["vertices"][0] == pytest.approx(extremos[0])
+    assert entidades[spline["id"]]["vertices"][-1] == pytest.approx(extremos[1])
+    b = next(op.boceto for op in s.doc.operaciones if op.nombre == "B")
+    assert len(b.proyecciones) == 1
+    assert b.proyecciones[0]["modo"] == "project"
+    assert b.proyecciones[0]["refs"][0]["tipo"] == "arista"
+    assert proyectada["id"] in b.proyecciones[0]["ids"]
+    assert len(s.doc._deshacer) == antes[1] + 1
+    llamar(s, "undo")
+    assert foto(s) == antes
+
+
+def test_p73_fusion_rechaza_arista_circular_sin_cambiar_documento():
+    s = api.Sesion()
+    llamar(s, "create_cylinder", radius=5, height=5)
+    llamar(s, "create_sketch", plane="XY", name="B")
+    linea = llamar(s, "draw_line", start_x=20, start_y=10, end_x=30, end_y=10)["entities"][0]["id"]
+    arista = llamar(s, "find_edges", selector="%CIRCLE and >Z")["edges"][0]["id"]
+    antes = foto(s)
+
+    r = falla(s, "draw_blend_curve", entity1=arista, entity2=linea)
+
+    assert r["error_kind"] == "INVALID_GEOMETRY"
+    assert "una curva abierta" in r["mensaje"]
+    assert foto(s) == antes
+
+
+def test_p73_fusion_entre_dos_aristas_y_extremos_elegidos():
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=10, height=5)
+    llamar(s, "create_construction_plane", plane="XY", offset=10, name="Arriba")
+    llamar(s, "create_sketch", plane="Arriba", name="B")
+    aristas = [llamar(s, "find_edges", selector=f"|X and >Z and {lado}Y")["edges"][0]["id"]
+               for lado in ("<", ">")]
+    antes = foto(s)
+
+    r = llamar(s, "draw_blend_curve", entity1=aristas[0], entity2=aristas[1],
+               point1=[10, -5], point2=[10, 5], continuity="G2")
+
+    entidades = por_id(s)
+    spline = next(e for e in entidades.values() if e["type"] == "spline")
+    assert len(entidades) == 3 and sum(e.get("projected", False) for e in entidades.values()) == 2
+    assert spline["degree"] == 5
+    assert spline["vertices"][0] == pytest.approx([10, -5])
+    assert spline["vertices"][-1] == pytest.approx([10, 5])
+    assert [c["type"] for c in r["constraints"]] == ["curvature", "curvature"]
+    assert len(s.doc._deshacer) == antes[1] + 1
+    llamar(s, "undo")
+    assert foto(s) == antes
+
+
+@pytest.mark.parametrize("selector", ["|X and >Z", "|Z and >X and >Y"])
+def test_p73_fusion_rechaza_proyeccion_multiple_o_puntual_sin_cambios(selector):
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=10, height=5)
+    llamar(s, "create_sketch", plane="XY", name="B")
+    linea = llamar(s, "draw_line", start_x=30, start_y=20, end_x=40, end_y=20)["entities"][0]["id"]
+    antes = foto(s)
+
+    r = falla(s, "draw_blend_curve", entity1=linea, entity2=selector)
+
+    assert r["error_kind"] == "INVALID_GEOMETRY"
+    assert "una curva abierta" in r["mensaje"]
+    assert foto(s) == antes

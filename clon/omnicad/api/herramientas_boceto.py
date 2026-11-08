@@ -2215,31 +2215,44 @@ def draw_tangent_circle(sesion, lines: list[int], x: float | None = None, y: flo
 
 
 @herramienta("draw_blend_curve", "boceto",
-             "Une los extremos de dos curvas abiertas con una spline suave (Fusion: Curva de fusión), tangente (G1) o "
-             "con curvatura continua (G2) en las dos uniones. Sin point1/point2 une los dos extremos más cercanos.",
+             "Une dos curvas abiertas o aristas con una spline tangente (G1) o de curvatura continua (G2) "
+             "(Fusion: Curva de fusión). Proyecta las aristas con vínculo, sin duplicarlas. Sin point1/point2 une los extremos más cercanos.",
              modifica=True)
-def draw_blend_curve(sesion, entity1: int, entity2: int, point1: list[float] | None = None,
+def draw_blend_curve(sesion, entity1: int | str, entity2: int | str, point1: list[float] | None = None,
                      point2: list[float] | None = None, continuity: Literal["G1", "G2"] = "G1",
-                     sketch: str | None = None):
+                     sketch: str | None = None, body: str | None = None):
     """
-    entity1: id de la primera curva (línea, arco, spline o cónica; abierta).
-    entity2: id de la segunda curva.
+    entity1: entero = id de curva abierta del boceto; texto = arista del modelo (id o selector de project_to_sketch), proyectada con vínculo; debe dar exactamente una curva abierta.
+    entity2: segunda curva o arista, igual que entity1; se reutiliza si ya estaba proyectada.
     point1: [x, y] cerca del extremo de entity1 que se une; vacío = automático.
     point2: [x, y] cerca del extremo de entity2 que se une; vacío = automático.
     continuity: G1 (tangente) o G2 (curvatura continua).
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    body: cuerpo donde se evalúan los selectores de aristas; vacío = el único cuerpo.
     """
     p1, p2 = _opcional_xy(point1, "point1"), _opcional_xy(point2, "point2")
 
+    def resolver_curva(b, entidad):
+        if isinstance(entidad, str):
+            _op, br = boceto_activo(sesion, sketch, derivados=False)
+            prims, puntos, refs, infinitas = _proyectar_seleccion(
+                sesion, br.plano, "project", entidad, None, None, None, None, body)
+            ids = b.agregar_proyeccion(prims, puntos, origen={"modo": "project", "refs": refs, "infinitas": infinitas})
+            if len(ids) != 1 or ids[0] not in b.curvas or not b.curvas[ids[0]].extremos():
+                raise ErrorBoceto("La arista debe proyectar exactamente una curva abierta (no un círculo ni un punto).")
+            return ids[0]
+        return entidad
+
     def crear(b):
-        c1, c2 = _curva(b, entity1, que="entity1"), _curva(b, entity2, que="entity2")
-        if entity1 == entity2:
+        id1, id2 = resolver_curva(b, entity1), resolver_curva(b, entity2)
+        c1, c2 = _curva(b, id1, que="entity1"), _curva(b, id2, que="entity2")
+        if id1 == id2:
             raise ErrorBoceto("Elegí dos curvas distintas.")
         e1, e2 = c1.extremos(), c2.extremos()
         if not e1 or not e2 or isinstance(c1, Texto) or isinstance(c2, Texto):
             raise ErrorBoceto("La curva de fusión une extremos de curvas abiertas (no círculos, elipses ni textos).")
         a, c = min(((a, c) for a in e1 for c in e2), key=lambda par: math.dist(b.coords(par[0]), b.coords(par[1])))
-        b.curva_fusion(entity1, p1 or b.coords(a), entity2, p2 or b.coords(c), continuity)
+        b.curva_fusion(id1, p1 or b.coords(a), id2, p2 or b.coords(c), continuity)
     return _dibujar(sesion, sketch, crear, desde_solver=True, sin_conflicto="La curva de fusión")
 
 
