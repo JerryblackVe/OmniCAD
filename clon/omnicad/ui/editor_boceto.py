@@ -5184,9 +5184,24 @@ class Lienzo(QWidget):
         if not movio and not m["tipo"].startswith("espejo"):
             return
         self._marco = m
-        _texto, _f, accion = self._transformacion_marco()
+        _texto, f, accion = self._transformacion_marco()
         self._marco = None
-        self.aplicar_cambio(accion)
+        self.aplicar_movimiento(accion, self._ids_marco(), f)
+
+    def aplicar_movimiento(self, accion, ids, f):
+        """`aplicar_cambio` de un mover / girar / escalar de `ids` (f: punto → punto pedido). B-245/B-253: si las
+        restricciones (p. ej. una coincidencia con el origen) devolvieron todo a su lugar, no fue un movimiento: se
+        deshace y se dice por qué, como hace transform_sketch. Devuelve si quedó aplicado."""
+        origen = {q: self.b.coords(q) for q in self.b.puntos_de(ids)}
+        if not self.aplicar_cambio(accion):
+            return False
+        if (any(math.dist(f(xy), xy) > 1e-6 for xy in origen.values())
+                and all(math.dist(self.b.coords(q), xy) < 1e-6 for q, xy in origen.items() if q in self.b.puntos)):
+            self.deshacer()
+            self.mensaje.emit("Las restricciones o cotas que atan la selección a lo que no se mueve (p. ej. una "
+                              "coincidencia con el origen) no la dejan llegar: borrá ese anclaje y volvé a moverla.")
+            return False
+        return True
 
     def _dibujar_marco(self, p):
         if self.objetos.seleccion():

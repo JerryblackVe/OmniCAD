@@ -419,3 +419,40 @@ def test_b245_mover_lo_anclado_al_origen_no_acepta_en_silencio(ventana):
     assert not ctl.aceptar()
     assert lz.b.coords(p) == pytest.approx(antes) and len(lz.historial) == pasos
     assert "origen" in mensajes[-1] and lz.herramienta == "mover"
+
+
+def _arrastrar_marco(app, lz, dx_px):
+    q = lz._manijas_marco(lz._caja_marco())["mover"]
+    destino = QPointF(q.x() + dx_px, q.y())
+    for tipo, pos, boton, botones in ((QEvent.MouseButtonPress, q, Qt.LeftButton, Qt.LeftButton),
+                                      (QEvent.MouseMove, destino, Qt.NoButton, Qt.LeftButton),
+                                      (QEvent.MouseButtonRelease, destino, Qt.LeftButton, Qt.NoButton)):
+        app.sendEvent(lz, QMouseEvent(tipo, pos, pos, boton, botones, Qt.NoModifier))
+
+
+def test_b253_marco_de_control_no_mueve_en_silencio_lo_anclado(app, ventana):
+    from test_boceto_modificar_restringido import _crear
+    lz, _panel, _ctl = ventana
+    s, curvas = _crear("ranura")                    # ranura acotada con el centro coincidente con el origen
+    lz._restaurar(next(o for o in s.doc.operaciones if hasattr(o, "boceto")).boceto.a_dict())
+    lz.resolver()
+    lz.set_herramienta("seleccionar")
+    lz.seleccion = list(curvas)
+    lz.encuadrar()
+    p = lz.b.curvas[curvas[0]].puntos()[0]
+    antes, pasos, mensajes = lz.b.coords(p), len(lz.historial), []
+    lz.mensaje.connect(mensajes.append)
+    _arrastrar_marco(app, lz, 60)
+    assert lz.b.coords(p) == pytest.approx(antes) and len(lz.historial) == pasos
+    assert mensajes and "origen" in mensajes[-1]
+
+
+def test_b253_marco_de_control_mueve_lo_libre(app, ventana):
+    lz, _panel, _ctl = ventana
+    c = lz.b.agregar_circulo((0, 0), 5)
+    lz.set_herramienta("seleccionar")
+    lz.seleccion = [c, lz.b.agregar_circulo((20, 0), 5)]   # el marco pide dos curvas
+    lz.encuadrar()
+    pasos = len(lz.historial)
+    _arrastrar_marco(app, lz, 60)
+    assert lz.b.coords(lz.b.curvas[c].centro)[0] > 1 and len(lz.historial) == pasos + 1
