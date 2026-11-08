@@ -132,3 +132,24 @@ def test_receta_vieja_de_rosca_de_tabla_conserva_su_geometria():
     viejo = Documento.desde_dict(datos)
     assert viejo.operaciones[-1].p["version_rosca"] == 1
     assert d_max(forma(viejo)) == pytest.approx(12, abs=1e-3) and d_min(forma(viejo)) == pytest.approx(8.803, abs=1e-3)
+
+
+@pytest.mark.parametrize("familia, mayor", [("unificada", 19.05), ("metrica_plasticos", 10.0)])
+def test_b247_un_cilindro_mas_grueso_que_la_rosca_se_tornea_a_su_diametro(familia, mayor):
+    """B-247 (video de Fusion del 2026-11-07): Ø20 con un tipo cuyo tamaño mayor es más fino (3/4 UNC, plástico 10)
+    no falla: el cilindro queda en el Ø mayor de la rosca, como en Fusion."""
+    forma = sc.rosca(g.cilindro(10, 12), familia=familia)
+    assert g.es_valida(forma)
+    assert d_max(forma) == pytest.approx(mayor, abs=2e-3)
+
+
+def test_b247_un_agujero_mas_chico_que_la_rosca_se_agranda_al_menor():
+    bloque = g.booleano(g.caja(30, 30, 12, origen=(-15, -15, 0)), g.cilindro(3, 12), "cortar")
+    forma = sc.rosca(bloque, designacion="M10")
+    assert g.es_valida(forma)
+    assert d_min(forma) == pytest.approx(sc.datos_rosca("M10")["diametro_menor"], abs=2e-3)
+
+
+def test_b247_las_recetas_viejas_siguen_rechazando_el_cilindro_grueso():
+    with pytest.raises(g.ErrorGeometria, match="más grueso"):
+        sc.rosca(g.cilindro(10, 12), designacion="M9", tabla=False)
