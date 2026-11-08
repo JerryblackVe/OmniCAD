@@ -2132,6 +2132,22 @@ class Lienzo(QWidget):
         if cid is None and self.herramienta == "desfase" and (de_perfil := self._pick_de_perfil(pos)) is not None:
             self.agregar_pick(de_perfil[0], self.a_mm(pos), pos, perfil=de_perfil[1])
             return True
+        if cid is None and self.herramienta == "curva_fusion" and self.visor is not None:
+            elegir = getattr(self.visor, "elegir_entidad", None)
+            if elegir is not None:
+                q = self.visor.mapFromGlobal(self.mapToGlobal(QPoint(int(pos.x()), int(pos.y()))))
+                info = elegir(QPointF(q), {"arista"})
+                if info and info.get("forma") is not None:
+                    antes = set(self.b.curvas)
+                    if self.proyectar_forma(info["forma"], "proyectar", info.get("ref"), "arista"):
+                        nuevas = set(self.b.curvas) - antes
+                        if len(nuevas) == 1 and self.b.curvas[next(iter(nuevas))].extremos():
+                            cid = nuevas.pop()
+                        else:      # True = dejó un paso; p. ej. el borde de un agujero: la fusión no lo usa
+                            self.deshacer()
+                            self.mensaje.emit("La arista debe proyectar exactamente una curva abierta "
+                                              "(no un círculo ni un punto).")
+                            return True
         if cid is None:
             if self.herramienta == "circulo_2t" and len(self.picks) == 2:
                 return False          # el clic ubica el círculo (lo procesa la herramienta de puntos)

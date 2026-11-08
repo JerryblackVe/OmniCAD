@@ -701,3 +701,73 @@ def test_h110_clic_sin_arrastre_y_movimiento_sin_boton(app_qt, soltar_fuera):
         assert lz.b.a_dict() == original
     finally:
         lz.close()
+
+
+def test_p73_fusion_elige_arista_del_modelo_y_la_proyecta(app_qt):
+    import numpy as np
+    from PySide6.QtCore import QPointF
+    from PySide6.QtWidgets import QWidget
+    from omnicad.nucleo import referencias
+
+    arista = next(e for e in g._aristas_unicas(g.caja(20, 10, 5))
+                  if math.dist(*[p[:2] for p in referencias.firma_arista(e)["extremos"]]) > 1)
+    ref = {"tipo": "arista", "cuerpo": "op1.c1", "firma": referencias.firma_arista(arista)}
+
+    class VisorFalso(QWidget):
+        elegida = False
+        llamadas = 0
+        forma = arista
+
+        def matriz_mvp(self):
+            return np.diag([0.01, 0.01, 1.0, 1.0])
+
+        def proyectar(self, punto, matriz):
+            return QPointF((punto[0] / 100 + 1) / 2 * self.width(),
+                           (1 - punto[1] / 100) / 2 * self.height())
+
+        def interseccion_plano(self, pos, plano):
+            return plano.a_3d((2 * pos.x() / self.width() - 1) * 100,
+                             (1 - 2 * pos.y() / self.height()) * 100)
+
+        def px_por_mm(self):
+            return self.width() / 200
+
+        def elegir_entidad(self, pos, filtros):
+            self.llamadas += 1
+            assert filtros == {"arista"}
+            return {"tipo": "arista", "forma": self.forma, "ref": ref} if self.elegida else None
+
+    lz = _lienzo(app_qt)
+    lz.b.agregar_linea((30, 20), (40, 20))
+    visor = VisorFalso()
+    visor.resize(640, 640)
+    lz.visor = visor
+    lz.set_herramienta("curva_fusion")
+    mensajes = []
+    lz.mensaje.connect(mensajes.append)
+    try:
+        pos = lz.a_px(50, 50)
+        antes = lz.b.a_dict()
+        assert lz._clic_pick(pos)
+        assert lz.b.a_dict() == antes and lz.picks == []
+        assert mensajes == ["Hacé clic sobre una curva."]
+        visor.elegida = True
+        visor.forma = next(e for e in g._aristas_unicas(g.cilindro(4, 10))
+                           if referencias.firma_arista(e)["geom"] == "circulo")
+        assert lz._clic_pick(pos)          # el borde de un agujero: no sirve y no queda proyectado
+        assert lz.b.a_dict() == antes and lz.picks == [] and lz.b.proyecciones == []
+        assert mensajes[-1].startswith("La arista debe proyectar exactamente una curva abierta")
+        visor.forma = arista
+        assert lz._clic_pick(pos)
+        assert len(lz.picks) == 1
+        curva = lz.b.curvas[lz.picks[0]]
+        assert curva.proyectada and curva.extremos()
+        assert lz.picks_xy == [lz.a_mm(pos)]
+        assert [(r["modo"], r["refs"]) for r in lz.b.proyecciones] == [("project", [ref])]
+        assert lz._clic_pick(lz.a_px(35, 20))
+        assert visor.llamadas == 3  # la curva del boceto tiene prioridad: no vuelve a consultar el modelo
+        assert _tipos(lz.b) == ["linea", "linea", "spline"]
+        assert lz.resultado.ok
+    finally:
+        lz.close()
+        visor.close()
