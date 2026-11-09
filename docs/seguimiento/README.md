@@ -99,6 +99,7 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 | INSERTAR: Calcomanía a Insertar derivación (auditoría) | [auditoria_insertar.md](../auditoria_insertar.md) |
 | CONSTRUIR: SCU, planos, ejes y puntos (auditoría) | [auditoria_construir.md](../auditoria_construir.md) |
 | Tiempos de toda la app (auditoría AG-8) | [auditoria_tiempos.md](../auditoria_tiempos.md) |
+| Apariencia y materiales (rediseño AG-9) | [apariencia_materiales.md](../apariencia_materiales.md) |
 
 ## Otras listas que se siguen aparte
 
