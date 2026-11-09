@@ -89,7 +89,9 @@ PISTAS = {
     "SKETCH_NOT_FOUND": ["get_scene_info lista los bocetos con su id y nombre; create_sketch crea uno.",
                          "Usá el id (p. ej. 'op3') o el nombre exacto del boceto."],
     "PLANE_NOT_FOUND": ["Planos de origen: XY, XZ o YZ.",
-                        "Un plano de construcción se pasa por su id o nombre (create_construction_plane lo crea)."],
+                        "Un plano de construcción se pasa por su id o nombre (create_construction_plane lo crea).",
+                        "Los planos de un SCU se nombran '<id>_xy', '<id>_xz' o '<id>_yz' (p. ej. 'op2_xy'); los de "
+                        "una copia de patrón, '<id>_k<n>' (p. ej. 'op5_k1')."],
     "ENTITY_NOT_FOUND": ["get_sketch lista las curvas y los puntos del boceto con sus ids."],
     "INVALID_GEOMETRY": ["Revisá que las medidas sean positivas y que los puntos no coincidan.",
                          "Las coordenadas van en mm sobre el plano del boceto (get_sketch dice cómo se orientan)."],
