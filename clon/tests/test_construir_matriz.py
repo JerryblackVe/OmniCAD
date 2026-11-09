@@ -138,3 +138,12 @@ def test_edit_feature_valida_el_plano_como_al_crearlo():
         assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and texto in r["mensaje"], r
         _comprobar(s, "plano", pid, lambda h: ((0, 0, h + 2), (0, 0, 1)), H0)
     assert llamar(s, "edit_feature", feature=pid, params={"distancia": None})["params"]["distancia"] == "10 mm"
+
+
+def test_punto_por_dos_aristas_que_se_cruzan_sin_tocarse_da_error():
+    """B-258: aristas alabeadas no tienen intersección (ni prolongadas): error, no el punto medio entre las rectas."""
+    s = _armar()
+    r = api.llamar(s, "create_construction_point", {"type": "dos_aristas", "body": "Cuerpo1",
+                                                     "references": ["edges:>Z and >X", "edges:<Z and >Y"]})
+    assert not r["ok"] and "no se cortan" in r["mensaje"], r
+    assert not s.doc.estado_final.puntos
