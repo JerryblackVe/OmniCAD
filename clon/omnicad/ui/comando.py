@@ -83,12 +83,14 @@ class Campo:
 class Seleccion(Campo):
     """Fila "Seleccionar": `filtros` es un subconjunto de visor3d.FILTROS; maximo=None = sin límite. `texto_boton` fija el
     texto del botón vacío (sin él, dice qué tipos acepta). `oculta`: se elige en el lienzo sin fila en el panel (Medir).
-    `sin_resalte`: lo elegido no se pinta de azul (los análisis: el resalte taparía lo que pintan)."""
+    `sin_resalte`: lo elegido no se pinta de azul (los análisis: el resalte taparía lo que pintan). `filtros_si(valores)`:
+    lo que se puede elegir en la vista según el modo (Extruir sólida no toma curvas sueltas); sin él, `filtros`."""
 
-    def __init__(self, clave, etiqueta, filtros, minimo=1, maximo=1, texto_boton="", oculta=False, sin_resalte=False, **kw):
+    def __init__(self, clave, etiqueta, filtros, minimo=1, maximo=1, texto_boton="", oculta=False, sin_resalte=False,
+                 filtros_si=None, **kw):
         super().__init__(clave, etiqueta, [], **kw)
         self.filtros, self.minimo, self.maximo, self.texto_boton = set(filtros), minimo, maximo, texto_boton
-        self.oculta, self.sin_resalte = oculta, sin_resalte
+        self.oculta, self.sin_resalte, self.filtros_si = oculta, sin_resalte, filtros_si
 
 
 class ListaSeleccion(Seleccion):
@@ -398,10 +400,12 @@ def preseleccion(campos, seleccion):
     """Reparte lo que el usuario ya tenía elegido entre los campos de selección del comando, en orden
     (en Fusion, elegir primero y llamar al comando después llena sus selecciones)."""
     valores, restantes = {}, list(seleccion or [])
+    defectos = {c.clave: c.defecto for c in campos}
     for c in campos:
         if not isinstance(c, Seleccion) or not restantes:
             continue
-        compatibles = [h for h in restantes if acepta(c.filtros, h)]
+        filtros = set(c.filtros_si(defectos)) if c.filtros_si else c.filtros       # B-265: el modo de arranque manda
+        compatibles = [h for h in restantes if acepta(filtros, h)]
         if c.maximo is not None:
             compatibles = compatibles[:c.maximo]
         if compatibles:
@@ -1221,6 +1225,8 @@ class PanelComando(QFrame):
         if invalido is not None and invalido.avanzado and self.seccion is not None and not self.seccion.abierta:
             self.seccion.boton.setChecked(True)          # un valor inválido no se queda escondido en «Más opciones» cerrada
         self._revisar_selecciones_visibles()
+        if self.activa is not None and self.activa.filtros_si and self._filtros(self.activa) != self.visor.filtro:
+            self._activar(self.activa)              # B-265: el modo cambia qué se elige en la vista
         self._reubicar()          # B-113: si el cambio de modo mostró u ocultó campos, el panel crece o se achica
 
     def _revisar_selecciones_visibles(self):
@@ -1328,12 +1334,15 @@ class PanelComando(QFrame):
     def _activar(self, campo):
         self.activa = campo
         self._pintar_filas()
-        self.visor.set_filtro(campo.filtros if campo is not None else None)
+        self.visor.set_filtro(self._filtros(campo) if campo is not None else None)
         # H-72: en un campo de varias caras o cuerpos, arrastrar en la vista elige con una ventana (como Fusion)
         self.visor.ventana_en_comando = bool(campo is not None and campo.maximo != 1
                                              and set(campo.filtros) & {"cara", "cuerpo"})
         # en un campo de varios perfiles, tocar una letra elige el texto entero (como Fusion)
         self.visor.texto_entero = bool(campo is not None and campo.maximo is None and "perfil" in campo.filtros)
+
+    def _filtros(self, campo):
+        return set(campo.filtros_si(self.valores)) if campo.filtros_si else campo.filtros
 
     def _pintar_filas(self):
         """Cada fila de selección dice QUÉ tiene (nombre y rasgo de lo elegido) o qué espera (Elegir cara o arista)."""
@@ -1398,7 +1407,7 @@ class PanelComando(QFrame):
         if campo is None:
             return
         tiene = [h["ref"] for h in self.valores.get(campo.clave) or []]
-        nuevos = [h for h in hits if acepta(campo.filtros, h) and h["ref"] not in tiene]
+        nuevos = [h for h in hits if acepta(self._filtros(campo), h) and h["ref"] not in tiene]
         if campo.maximo is not None:                  # un campo de 1 o 2 no recibe más de lo que admite
             nuevos = nuevos[:max(0, campo.maximo - len(tiene))]
         if nuevos:
