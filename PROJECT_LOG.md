@@ -10,7 +10,7 @@ git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
 - **2026-11-09 · B-260: una construcción que se referencia a sí misma se rechaza.** `operaciones.py` › `exigir_sin_ciclo`
-  (nueva) la llaman `OpPlano.ejecutar` y `OpEje.ejecutar`: si `objeto`, `lugar`, `objeto_extension` o `refs` apuntan al
+  (nueva) la llaman `OpPlano.ejecutar`, `OpEje.ejecutar`, `OpPunto.ejecutar` y `OpSCU.ejecutar`: si `objeto`, `lugar`, `objeto_extension` o `refs` apuntan al
   propio paso, error claro «no puede usarse a sí mismo como referencia» (vía `edit_feature` o una receta). `OpPlano.dependencias`
   resta `self.id` de todas las referencias, así el paso se puede borrar. Prueba:
   `tests/test_construir_matriz.py::test_construccion_que_se_referencia_a_si_misma_se_rechaza` (plano y eje).

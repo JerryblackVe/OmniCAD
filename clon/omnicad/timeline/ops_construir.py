@@ -262,6 +262,7 @@ class OpPunto(Operacion):
         return ent.dependencias_de(self.p["refs"]) - {self.id}
 
     def ejecutar(self, estado, ctx):
+        exigir_sin_ciclo(self, self.p["refs"])
         cs, t = _cs(), self.p["tipo"]
         E = [_resolver(r, estado) for r in self.p["refs"]]
         faltan = {"vertice": 1, "dos_aristas": 2, "tres_planos": 3, "centro": 1, "arista_plano": 2, "ruta": 1}[t]
@@ -296,6 +297,7 @@ class OpSCU(Operacion):
         return ent.dependencias_de(self.p["origen"], self.p["eje_x"], self.p["eje_y"], self.p["eje_z"]) - {self.id}
 
     def ejecutar(self, estado, ctx):
+        exigir_sin_ciclo(self, self.p["origen"], self.p["eje_x"], self.p["eje_y"], self.p["eje_z"])
         p = self.p
         origen = ent.como_punto(_resolver(p["origen"], estado)) if p["origen"] else np.zeros(3)
         x = _eje(_resolver(p["eje_x"], estado)).direccion if p["eje_x"] else np.array([1.0, 0, 0])
