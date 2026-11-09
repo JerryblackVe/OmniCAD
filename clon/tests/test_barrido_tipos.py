@@ -47,7 +47,7 @@ def _params_heuristic(tipo, desc_result):
         elif "plano" in nm:
             params[p["name"]] = "XY"
         elif "eje" in nm and p["type"] != "string":
-            params[p["name"]] = "Z"
+            params[p["name"]] = "X" if nm == "eje_x" else "Z"     # SCU: X paralelo a Z es error (B-259)
     return params
 
 

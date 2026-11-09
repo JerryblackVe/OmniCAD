@@ -300,6 +300,8 @@ class OpSCU(Operacion):
         x = _eje(_resolver(p["eje_x"], estado)).direccion if p["eje_x"] else np.array([1.0, 0, 0])
         y = _eje(_resolver(p["eje_y"], estado)).direccion if p["eje_y"] else None
         z = _eje(_resolver(p["eje_z"], estado)).direccion if p["eje_z"] else None
+        if p["eje_x"] and z is not None and np.linalg.norm(np.cross(x, z)) < 1e-9:     # B-259: sin X elegido, uno solo
+            raise ErrorOperacion("Los ejes X y Z del SCU son paralelos.")
         A = lambda k: ctx.evaluar(p[k], ANGULO)  # noqa: E731
         L = lambda k: ctx.evaluar(p[k])  # noqa: E731
         m = _cs().scu(origen, x, y, eje_z=z, angulos=(A("rx"), A("ry"), A("rz")), desfase=(L("dx"), L("dy"), L("dz")))

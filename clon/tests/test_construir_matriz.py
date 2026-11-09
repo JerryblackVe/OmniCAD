@@ -147,3 +147,18 @@ def test_punto_por_dos_aristas_que_se_cruzan_sin_tocarse_da_error():
                                                      "references": ["edges:>Z and >X", "edges:<Z and >Y"]})
     assert not r["ok"] and "no se cortan" in r["mensaje"], r
     assert not s.doc.estado_final.puntos
+
+
+@pytest.mark.parametrize("x, z", [("Z", "Z"), ("X", "X")])
+def test_scu_con_x_paralelo_a_z_da_error(x, z):
+    """B-259: un X elegido paralelo a Z no se descarta callado; da el mismo error que X paralelo a Y."""
+    s = _armar()
+    r = api.llamar(s, "create_ucs", {"origin": [0, 0, 0], "x_axis": x, "z_axis": z})
+    assert not r["ok"] and "paralelos" in r["mensaje"], r
+
+
+def test_scu_sin_x_con_z_en_x_elige_su_x():
+    """Sin X elegido, el X por defecto (+X) paralelo a Z no es error: el SCU elige uno perpendicular."""
+    s = _armar()
+    u = llamar(s, "create_ucs", origin=[0, 0, 0], z_axis="X")["ucs"]["id"]
+    assert np.allclose(s.doc.estado_final.ejes[f"{u}_z"][1], (1, 0, 0), atol=1e-9)
