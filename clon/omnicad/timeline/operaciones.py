@@ -676,6 +676,12 @@ def _es_ref_operacion(ref):
     return bool(ref) and isinstance(ref, str) and ref not in geo.Plano.DEFINICIONES and ref != "cara"
 
 
+def exigir_sin_ciclo(op, *referencias):
+    """B-260: un paso no puede usarse a sí mismo como referencia (vía edit_feature o una receta)."""
+    if op.id in ent.dependencias_de(*referencias):
+        raise ErrorOperacion(f"«{op.nombre}» no puede usarse a sí mismo como referencia.")
+
+
 class OpPlano(Operacion):
     """Plano de construcción (CONSTRUIR de Fusion): de desfase, en ángulo, tangente, medio, por dos
     aristas, por tres puntos, perpendicular o en ruta (`tipo`, ver ops_construir.TIPOS_PLANO). Las
@@ -688,14 +694,14 @@ class OpPlano(Operacion):
     EXPRESIONES = ("distancia", "angulo", "posicion", "desfase", "medida")
 
     def dependencias(self):
-        deps = super().dependencias() | ent.dependencias_de(self.p["objeto"], self.p["lugar"], self.p["objeto_extension"])
-        if self.p.get("refs"):
-            return deps | ent.dependencias_de(self.p["refs"]) - {self.id}
-        if _es_ref_operacion(self.p["base"]):
+        deps = super().dependencias() | ent.dependencias_de(self.p["objeto"], self.p["lugar"], self.p["objeto_extension"],
+                                                            self.p.get("refs"))
+        if not self.p.get("refs") and _es_ref_operacion(self.p["base"]):
             deps |= ent.dependencias({"tipo": "plano", "id": self.p["base"]})      # B-263: «op2_xy» depende de «op2»
-        return deps
+        return deps - {self.id}       # B-260: una referencia a sí mismo no lo traba; ejecutar la rechaza
 
     def ejecutar(self, estado, ctx):
+        exigir_sin_ciclo(self, self.p["objeto"], self.p["lugar"], self.p["objeto_extension"], self.p.get("refs"))
         if self.p.get("refs"):
             from .ops_construir import calcular_plano, medida_plano
             entidades = [_resolver(r, estado) for r in self.p["refs"]]

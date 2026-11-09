@@ -206,3 +206,25 @@ def test_planos_del_scu_sirven_como_texto():
     assert np.isclose(s.doc.estado_final.planos[pl].origen[2], 10)
     scu = xy.split("_")[0]
     assert scu in s.paso(b["id"]).dependencias() and scu in s.paso(pl).dependencias()
+
+
+_EXT = lambda tipo: lambda i: {"objeto_extension": {"tipo": tipo, "id": i}, "tipo_extension": "objeto"}  # noqa: E731
+
+
+@pytest.mark.parametrize("herramienta, args, propia", [
+    ("create_construction_plane", dict(plane="XY", offset=3), _EXT("plano")),
+    ("create_construction_axis", dict(type="dos_planos", references=["XY", "XZ"]), _EXT("eje")),
+    ("create_construction_point", dict(type="tres_planos", references=["XY", "XZ", "YZ"]),
+     lambda i: {"refs": [{"tipo": "punto", "id": i}, {"tipo": "plano", "id": "XZ"}, {"tipo": "plano", "id": "YZ"}]}),
+    ("create_ucs", dict(origin="O"), lambda i: {"origen": {"tipo": "punto", "id": i}})])
+def test_construccion_que_se_referencia_a_si_misma_se_rechaza(herramienta, args, propia):
+    """B-260: un plano, eje, punto o SCU que se usa a sí mismo (vía edit_feature o receta) se rechaza con mensaje claro,
+    y su referencia propia no lo traba: se puede borrar."""
+    s = _armar()
+    i = next(v["id"] for v in llamar(s, herramienta, **args).values() if isinstance(v, dict) and "id" in v)
+    r = api.llamar(s, "edit_feature", {"feature": i, "params": propia(i)})
+    assert not r["ok"] and "a sí mismo" in r["mensaje"], r
+    op = s.paso(i).copia()
+    op.p.update(propia(i))
+    assert i not in op.dependencias()
+    llamar(s, "delete_feature", feature=i)
