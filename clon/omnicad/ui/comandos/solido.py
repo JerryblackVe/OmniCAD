@@ -32,7 +32,9 @@ class Extruir(Comando):
         return [
             Botones("tipo", "Tipo", {"solida": ("Extruir", "extruir"), "delgada": ("Extrusión delgada", "ext_delgada")}),
             Seleccion("perfiles", "Perfiles", {"perfil", "cara_plana", "curva_boceto"}, maximo=None,
-                      ayuda="Perfiles cerrados o caras planas; en la extrusión delgada también curvas abiertas."),
+                      ayuda="Perfiles cerrados o caras planas; en la extrusión delgada también curvas abiertas.",
+                      # B-265: en la sólida un clic sobre el borde elige el perfil, no la curva (Fusion: Extrude reference)
+                      filtros_si=lambda v: {"perfil", "cara_plana"} | ({"curva_boceto"} if v.get("tipo") == "delgada" else set())),
             Opciones("inicio", "Inicio", {"plano": ("Plano de perfil", "ini_plano"), "desfase": ("Desfase", "ini_desfase"),
                                           "objeto": ("Objeto", "ini_objeto")}),
             Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") in ("desfase", "objeto")),
