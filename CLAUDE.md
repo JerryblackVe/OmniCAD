@@ -238,6 +238,11 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
      revisión, lo que quedó sin commitear y de quién es, y el próximo paso;
   3. le dice a Gerardo en una línea que abra una sesión nueva de coordinación, que arranca leyendo esa nota.
 - Lo mismo vale para las sesiones de ejecución: al 60 % cierran su informe y lo dicen, en vez de seguir.
+- **Las sesiones que inició el coordinador se compactan al pasar del 50 % (Gerardo, 2026-11-09).** El coordinador
+  revisa su contexto con `get_usage` en cada vigilancia. Hay que esperar a que la sesión termine el ítem en curso
+  y no tenga nada sin guardar. Entonces la sesión escribe su nota de traspaso en el Registro de `PROJECT_LOG.md`.
+  Después el coordinador la vacía con `clear_session` y le manda con `SendMessage` un brief autocontenido que
+  empieza leyendo esa nota. No se compacta una sesión en medio de un ítem.
 
 ## Regla estricta: elegir modelo y esfuerzo por tarea (ahorrar tokens sin perder calidad)
 - **Cada tarea lleva su modelo y su esfuerzo elegidos a conciencia**, y se dicen en una línea ANTES de abrir la
