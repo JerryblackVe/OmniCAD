@@ -692,7 +692,7 @@ class OpPlano(Operacion):
         if self.p.get("refs"):
             return deps | ent.dependencias_de(self.p["refs"]) - {self.id}
         if _es_ref_operacion(self.p["base"]):
-            deps.add(self.p["base"])
+            deps |= ent.dependencias({"tipo": "plano", "id": self.p["base"]})      # B-263: «op2_xy» depende de «op2»
         return deps
 
     def ejecutar(self, estado, ctx):
@@ -785,7 +785,7 @@ class OpBoceto(Operacion):
     def dependencias(self):
         deps = super().dependencias()
         if _es_ref_operacion(self.p["plano"]):
-            deps.add(self.p["plano"])
+            deps |= ent.dependencias({"tipo": "plano", "id": self.p["plano"]})     # B-263: «op2_xy» depende de «op2»
         if self.p["plano"] == "cara":
             deps |= ent.dependencias_de(self.p.get("cara"))
         for registro in self.boceto.proyecciones:
