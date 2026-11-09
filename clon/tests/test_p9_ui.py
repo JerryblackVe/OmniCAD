@@ -77,3 +77,20 @@ def test_la_fila_de_grupos_de_la_cinta_tiene_aire(ventana):
     m = lay.contentsMargins()
     assert (m.left(), m.top(), m.right(), m.bottom()) == (4, 3, 4, 3)
     assert lay.spacing() >= 8
+
+
+def test_la_x_del_panel_de_datos_lo_cierra_y_lo_recuerda(ventana):
+    """B-289: la ✕ de «Mis datos recientes» ocultaba nada: solo desmarcaba la acción."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QToolButton
+    accion = ventana.acciones["panel_datos"]
+    if not ventana.panel_datos.isVisible():
+        accion.trigger()
+        QTest.qWait(10)
+    assert ventana.panel_datos.isVisible() and accion.isChecked()
+    x = next(b for b in ventana.panel_datos.findChildren(QToolButton) if b.text() == "✕")
+    QTest.mouseClick(x, Qt.LeftButton)
+    QTest.qWait(10)
+    assert not ventana.panel_datos.isVisible()
+    assert not accion.isChecked()
+    assert ventana.prefs["vista/panel_datos"] is False
