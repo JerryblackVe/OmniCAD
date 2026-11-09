@@ -1116,10 +1116,10 @@ class VentanaPrincipal(QMainWindow):
         if self.seleccion:
             self._resaltar_origen()         # lo elegido puede venir ahora de otro paso (o ya no existir)
 
-    def _estado_visible(self):
+    def _estado_visible(self, previa=True):
         """Mientras se edita un boceto, el modelo se ve como estaba en ese paso (como Fusion). Con un
         comando abierto se ve su vista previa."""
-        if self._estado_previa is not None:
+        if previa and self._estado_previa is not None:
             return self._estado_previa
         if self.modo_boceto.activo and self._indice_boceto is not None:
             return self.doc.estado_en(self._indice_boceto)
@@ -1153,6 +1153,7 @@ class VentanaPrincipal(QMainWindow):
             self._poner_patron_activo(None)     # lo borraron o se deshizo: vuelve el modelo plegado
             return
         estado, c = self._estado_visible(), self.visor.config
+        estado_nav = self._estado_visible(previa=False)     # B-269: la previa solo se muestra en el visor.
         base = self.vis["todo"] and self.vis["origen"]
         c.origen = {clave.strip("_"): base and clave not in self.ocultos for clave, _, _ in ORIGEN}
         construccion = self.vis["todo"] and self.vis["planos"]
@@ -1196,17 +1197,17 @@ class VentanaPrincipal(QMainWindow):
         titulo = self.doc.nombre if self.doc.ruta else "(Sin guardar)"
         self.navegador.analisis = [(f"analisis:{n}", n, a.get("visible", True), ICONOS_ANALISIS.get(a["tipo"], "seccion"))
                                    for n, a in self.doc.analisis.items()]
-        self.navegador.muestras = ({k: "#%02x%02x%02x" % rgb for k, rgb in muestras.items()}
+        self.navegador.muestras = ({k: "#%02x%02x%02x" % rgb for k, rgb in (muestras if estado_nav is estado else colores_componentes(self.doc, estado_nav)).items()}
                                    if self.prefs_colores_componente or self.timeline.color_componente else {})
         self.navegador.componentes = [
             (k, comp["nombre"], comp.get("fijo", False),
-             [(c.id, self.nombre_cuerpo(c)) for c in estado.cuerpos.values() if c.componente == k], comp.get("padre") or "")
-            for k, comp in estado.componentes.items()]
-        self.navegador.uniones = [(k, u["nombre"]) for k, u in estado.uniones.items()]
+             [(c.id, self.nombre_cuerpo(c)) for c in estado_nav.cuerpos.values() if c.componente == k], comp.get("padre") or "")
+            for k, comp in estado_nav.componentes.items()]
+        self.navegador.uniones = [(k, u["nombre"]) for k, u in estado_nav.uniones.items()]
         nombres = {o.id: o.nombre for o in self.doc.operaciones}     # el nombre vigente: renombrar no recalcula el estado
         self.navegador.lienzos = [(k, nombres.get(k, d["nombre"]), k not in self.ocultos)
-                                  for k, d in estado.lienzos.items() if not d.get("calcomania")]
-        self.navegador.calcomanias = [(k, nombres.get(k, d["nombre"])) for k, d in vigentes
+                                  for k, d in estado_nav.lienzos.items() if not d.get("calcomania")]
+        self.navegador.calcomanias = [(k, nombres.get(k, d["nombre"])) for k, d in (vigentes if estado_nav is estado else calcomanias_vigentes(self.doc, estado_nav))
                                       if "@" not in k and d.get("calcomania")]
         from ..api.herramientas_navegador import datos_navegador
         organizacion = datos_navegador(self.doc)
@@ -1215,9 +1216,9 @@ class VentanaPrincipal(QMainWindow):
         self.navegador.organizacion = organizacion
         por_paso = {o.id: r.estado for o, r in zip(self.doc.operaciones, self.doc.resultados, strict=True)
                     if r.estado in ("aviso", "error")}
-        self.navegador.estados = {**{k.id: por_paso[k.op_id] for k in estado.cuerpos.values() if k.op_id in por_paso},
-                                  **{b.op_id: por_paso[b.op_id] for b in estado.bocetos.values() if b.op_id in por_paso}}
-        bocetos_nav = dict(estado.bocetos)
+        self.navegador.estados = {**{k.id: por_paso[k.op_id] for k in estado_nav.cuerpos.values() if k.op_id in por_paso},
+                                  **{b.op_id: por_paso[b.op_id] for b in estado_nav.bocetos.values() if b.op_id in por_paso}}
+        bocetos_nav = dict(estado_nav.bocetos)
         en_edicion = {}                         # el boceto abierto muestra el estado del editor, no el guardado
         if self.modo_boceto.activo:
             op = self.modo_boceto.datos.get("op")
@@ -1225,15 +1226,15 @@ class VentanaPrincipal(QMainWindow):
                 bocetos_nav[op.id] = self.doc.estado_final.bocetos[op.id]
                 en_edicion[op.id] = (self.modo_boceto.lienzo.resultado if self.modo_boceto.boceto.curvas else None)
         from .navegador import estado_boceto
-        self.navegador.actualizar(titulo, [(k.id, self.nombre_cuerpo(k)) for k in estado.cuerpos.values()
+        self.navegador.actualizar(titulo, [(k.id, self.nombre_cuerpo(k)) for k in estado_nav.cuerpos.values()
                                            if not k.componente],
                                   [(b.op_id, b.nombre,
                                     *estado_boceto(en_edicion[b.op_id] if b.op_id in en_edicion
                                                    else b.solver if b.boceto.curvas else None))
                                    for b in bocetos_nav.values()], self.ocultos, self.vis,
-                                  [(i, pl.nombre, "plano_desfase") for i, pl in estado.planos.items()] +
-                                  [(i, n, "eje_arista") for i, (_p, _d, n) in estado.ejes.items()] +
-                                  [(i, n, "punto_vertice") for i, (_p, n) in estado.puntos.items()],
+                                  [(i, pl.nombre, "plano_desfase") for i, pl in estado_nav.planos.items()] +
+                                  [(i, n, "eje_arista") for i, (_p, _d, n) in estado_nav.ejes.items()] +
+                                  [(i, n, "punto_vertice") for i, (_p, n) in estado_nav.puntos.items()],
                                   list(self.doc.vistas))
 
     def aplicar_analisis(self, estado=None):
