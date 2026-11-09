@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 140: Abierto 74 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (2026-11-09: entraron P-98 del review de B-257 y P-130 de las fusiones; se cerró P-94; 2026-11-08: entraron P-94 y P-99; entró P-95 de la fase 6 de CREAR y MODIFICAR; P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 139: Abierto 73 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (2026-11-09: entraron P-98 del review de B-257 y P-130 de las fusiones; se cerró P-93; se cerró P-94; 2026-11-08: entraron P-94 y P-99; entró P-95 de la fase 6 de CREAR y MODIFICAR; P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
 
 ## Pendientes generales
 
@@ -163,7 +163,6 @@ Abierto 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| P-93 | Construir › guardas que faltan respecto de Fusion y del propio programa | Abierto | Baja | Eje a través de una esfera se acepta (dirección Z arbitraria; Fusion: cilindro, cono o toroide); plano en el ángulo sobre arista circular se acepta (Fusion: arista lineal o eje); el tope de 1 km no se aplica a `position` proporcional, `location` del eje perpendicular ni `location` del plano perpendicular fuera de la cara; plano medio de dos planos coincidentes se acepta; nombres con NUL o de 5000 caracteres. (Juez de AG-7 (Sonnet, 2026-11-08)) | `evidencias/juez_construir_2026-11-08/a_valores.py`, `c_ataque2.py` | 2026-11-08 |
 | P-98 | Construir › al cambiar la arista de un plano en el ángulo en la ventana, el eje de 0° (`eje_0`) queda el de la arista vieja | Abierto | Baja | B-257 guarda `eje_0` al crear el plano. Al editarlo en la ventana y elegir otra arista, `construir()` de `ui/comandos/construir.py` conserva el `eje_0` cargado por `desde_op`, así que no se recalcula para la arista nueva: si la nueva es paralela al eje guardado, `_plano_por_eje` cae al eje cero de la nueva, pero si no, el 0° queda distinto del que daría crearlo de cero. Recalcular `eje_0` cuando cambia la arista (no cuando solo cambia el ángulo) | ponytail-review de B-257 (hallazgo 3) | 2026-11-09 |
 
 ## Patrones de sólido (auditoría 2026-10-31)

@@ -320,6 +320,8 @@ def plano_medio(a, b):
     pa, pb = plano_de(a), plano_de(b)
     if abs(abs(float(pa.normal @ pb.normal)) - 1.0) < 1e-9:
         d = float((pb.origen - pa.origen) @ pa.normal)
+        if abs(d) < 1e-9:
+            raise geo.ErrorGeometria("Los dos planos coinciden: elegí dos caras o planos distintos.")
         return geo.Plano.desde_marco(pa.origen + pa.normal * d / 2, pa.normal, pa.u, "Plano medio")
     eje = eje_dos_planos(pa, pb)
     return geo.Plano.desde_marco(eje.punto, pa.normal - pb.normal, eje.direccion, "Plano medio")
@@ -403,9 +405,10 @@ def plano_en_ruta(aristas_ruta, distancia_rel, *, absoluta=False):
 
 
 # ---------------------------------------------------------------- ejes
-def eje_cilindro(cara):
+def eje_cilindro(cara, *, esfera=True):
     """Eje por cilindro/cono/toroide [SLD-CONSTRUCT-AXIS-THROUGH-CYLINDER-CONE-TORUS] (también esfera
-    y superficie de revolución). El punto es la proyección del centro de la cara sobre el eje."""
+    y superficie de revolución). El punto es la proyección del centro de la cara sobre el eje.
+    `esfera=False` (el comando, como Fusion) rechaza la esfera: su eje sería una dirección cualquiera."""
     sup = BRepAdaptor_Surface(_cara(cara))
     tipo = sup.GetType()
     if tipo == GeomAbs_Cylinder:
@@ -415,6 +418,8 @@ def eje_cilindro(cara):
     elif tipo == GeomAbs_Torus:
         ax = sup.Torus().Axis()
     elif tipo == GeomAbs_Sphere:
+        if not esfera:
+            raise geo.ErrorGeometria("Una esfera no tiene un eje propio: elegí un cilindro, un cono o un toroide.")
         ax = sup.Sphere().Position().Axis()
     elif tipo == GeomAbs_SurfaceOfRevolution:
         ax = sup.AxeOfRevolution()

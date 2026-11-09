@@ -253,3 +253,42 @@ def test_receta_con_ids_repetidos_o_nombre_sin_tope_se_rechaza():
     llamar(s, "rename", target=pl, new_name="y" * 255)
     r = api.llamar(s, "rename", {"target": "op1.c1", "new_name": "z" * 300, "kind": "body"})
     assert not r["ok"] and "255" in r["mensaje"], r
+
+def test_guardas_de_construir_como_fusion():
+    """P-93: eje por esfera, plano en ángulo sobre arista circular, plano medio de dos planos que coinciden, lo que cae a
+    más de 1 km del origen y nombres con NUL o enormes se rechazan sin tocar el documento. La ruta deja pasar del final."""
+    s = _armar()
+    llamar(s, "create_sphere", radius=5, x=-30, y=0, z=0)
+    antes = len(s.doc.operaciones)
+    malos = [("create_construction_axis", dict(type="cilindro", references=["faces:%SPHERE"], body="Cuerpo3")),
+             ("create_construction_plane", dict(type="angle", references=["edges:%CIRCLE and >Z"], angle=30, body="Cuerpo2")),
+             ("create_construction_plane", dict(type="middle", references=["<Z", "XY"], body="Cuerpo1")),
+             ("create_construction_plane", dict(type="path", references=["edges:>X and >Y"], position=1e9, body="Cuerpo1")),
+             ("create_construction_point", dict(type="ruta", references=["edges:>X and >Y"], position=1e9, body="Cuerpo1")),
+             ("create_construction_axis", dict(type="perpendicular_cara", references=[">Z"], location=[2e6, 0, 0], body="Cuerpo1")),
+             ("create_construction_plane", dict(type="perpendicular", references=[">Z"], location=[2e6, 0, 0], body="Cuerpo1")),
+             ("create_construction_plane", dict(plane="XY", offset=3, name="a\0b")),
+             ("create_construction_plane", dict(plane="XY", offset=3, name="x" * 5000))]
+    for herramienta, args in malos:
+        r = api.llamar(s, herramienta, args)
+        assert not r["ok"] and r["error_kind"] not in ("AMBIGUOUS_REFERENCE", "NO_MATCH"), (herramienta, args, r)
+        assert len(s.doc.operaciones) == antes
+    pl = llamar(s, "create_construction_plane", type="path", references=["edges:>X and >Y"], position=2,
+               body="Cuerpo1")["plane"]["id"]
+    assert np.isclose(s.doc.estado_final.planos[pl].origen[2], 2 * H0)       # pasar del final de la ruta, como Fusion
+
+
+def test_copia_de_patron_de_un_plano_sirve_como_texto():
+    """B-263: la copia de un plano por un patrón («op5_k1») sirve en create_sketch y create_construction_plane; un plano
+    que no existe da PLANE_NOT_FOUND con la pista de cómo se nombran los planos de un SCU y de una copia."""
+    s = _armar()
+    pl = llamar(s, "create_construction_plane", plane="XY", offset=3)["plane"]["id"]
+    patron = llamar(s, "rectangular_pattern", construction=[pl], x_count=2, axis1="z", x_spacing=4)
+    copia = f"{patron['feature']['id']}_k1"
+    assert np.isclose(s.doc.estado_final.planos[copia].origen[2], 7)
+    llamar(s, "create_sketch", plane=copia)
+    otro = llamar(s, "create_construction_plane", plane=copia, offset=1)["plane"]["id"]
+    assert np.isclose(s.doc.estado_final.planos[otro].origen[2], 8)
+    r = api.llamar(s, "create_sketch", {"plane": "op99_xy"})
+    assert not r["ok"] and r["error_kind"] == "PLANE_NOT_FOUND", r
+    assert any("_xy" in p and "_k" in p for p in r["pistas"]), r

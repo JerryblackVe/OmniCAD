@@ -13,6 +13,7 @@ from ..nucleo import referencias as refs
 from ..nucleo.perfiles import aristas_boceto
 from . import entidades as ent
 from .operaciones import ANGULO, ErrorOperacion, Operacion, OpPlano, _resolver, exigir_sin_ciclo, registrar_operacion
+from .parametros import LONGITUD_MAXIMA
 
 TIPOS_PLANO = {"desfase": "Plano de desfase", "angulo": "Plano en el ángulo", "tangente": "Plano tangente",
                "medio": "Plano medio", "dos_aristas": "Plano a través de dos aristas",
@@ -30,6 +31,14 @@ TIPOS_EJE = {"cilindro": "Eje a través de cilindro/cono/toroide", "perpendicula
 TIPOS_PUNTO = {"vertice": "Punto en vértice", "dos_aristas": "Punto a través de dos aristas",
                "tres_planos": "Punto a través de tres planos", "centro": "Punto en el centro de círculo/esfera/toroide",
                "arista_plano": "Punto en arista y plano", "ruta": "Punto a lo largo de la ruta"}
+
+
+def _a_tiro(punto):
+    """P-93: lo construido queda a menos de 1 km del origen, como las cotas: más lejos el núcleo ya no calcula bien
+    (una posición proporcional enorme o un lugar fuera de la cara llegaban a cualquier distancia)."""
+    if np.abs(punto).max() > LONGITUD_MAXIMA:
+        raise ErrorOperacion("Queda a más de 1.000.000 mm (1 km) del origen: acercalo (posición, distancia o lugar).")
+    return punto
 
 
 def _cs():
@@ -133,6 +142,12 @@ def _plano_perpendicular(p, E, ctx, estado):
 
 
 def calcular_plano(p, entidades, ctx, estado):
+    plano = _plano_de_tipo(p, entidades, ctx, estado)
+    _a_tiro(plano.origen)
+    return plano
+
+
+def _plano_de_tipo(p, entidades, ctx, estado):
     cs, t, E = _cs(), p.get("tipo", "desfase"), entidades
     faltan = {"desfase": 1, "angulo": 1, "tangente": 1, "medio": 2, "dos_aristas": 2, "tres_puntos": 3,
               "perpendicular": 1 if p.get("lugar") else 2, "ruta": 1}[t]
@@ -147,6 +162,8 @@ def calcular_plano(p, entidades, ctx, estado):
     if t == "angulo":
         if E[0].tipo not in ("eje", "arista", "curva_boceto"):     # B-261: el mismo filtro que la herramienta de creación
             raise ErrorOperacion("El plano en el ángulo necesita un eje, una arista o una línea de boceto.")
+        if E[0].tipo != "eje" and E[0].forma is not None:     # P-93: recta, como Fusion (una circular daba su eje)
+            cs.eje_arista(E[0].forma)
         punto, direccion = ent.como_eje(E[0])
         return cs.plano_en_angulo(_plano_por_eje(E[0], p.get("eje_0")), punto, direccion, ctx.evaluar(p.get("angulo", "0"), ANGULO), desfase=extra)
     if t == "tangente":
@@ -250,7 +267,7 @@ class OpEje(Operacion):
         if len(E) < faltan:
             raise ErrorOperacion("Faltan referencias para el eje.")
         if t == "cilindro":
-            eje = cs.eje_cilindro(E[0].forma)
+            eje = cs.eje_cilindro(E[0].forma, esfera=False)
         elif t == "perpendicular_cara":
             eje = cs.eje_perpendicular_cara(_forma_o_plano(E[0]), ent.como_punto(E[1]) if len(E) > 1 else _objeto(self.p, "lugar", estado))
         elif t == "dos_planos":
@@ -259,7 +276,7 @@ class OpEje(Operacion):
             eje = cs.eje_dos_puntos(ent.como_punto(E[0]), ent.como_punto(E[1]))
         else:
             eje = _eje(E[0])
-        punto, direccion = np.asarray(eje.punto, float), np.asarray(eje.direccion, float)
+        punto, direccion = _a_tiro(np.asarray(eje.punto, float)), np.asarray(eje.direccion, float)
         estado.ejes[self.id] = (punto, direccion, self.nombre)
         estado.medidas[self.id] = medida_eje(self.p, punto, direccion, E, ctx, estado)
 
@@ -296,7 +313,7 @@ class OpPunto(Operacion):
             aristas = _ruta(E, self.p, estado)
             distancia, absoluta = _distancia_ruta(self.p, aristas, ctx, estado)
             p = cs.punto_en_ruta(aristas, distancia, absoluta=absoluta)
-        estado.puntos[self.id] = (np.asarray(p, float), self.nombre)
+        estado.puntos[self.id] = (_a_tiro(np.asarray(p, float)), self.nombre)
 
 
 class OpSCU(Operacion):
@@ -323,6 +340,7 @@ class OpSCU(Operacion):
         L = lambda k: ctx.evaluar(p[k])  # noqa: E731
         m = _cs().scu(origen, x, y, eje_z=z, angulos=(A("rx"), A("ry"), A("rz")), desfase=(L("dx"), L("dy"), L("dz")))
         o, ex, ey, ez = (np.asarray(m[k], float) for k in ("origen", "x", "y", "z"))
+        _a_tiro(o)
         n = self.nombre
         estado.puntos[f"{self.id}_o"] = (o, f"{n} origen")
         for k, d in (("x", ex), ("y", ey), ("z", ez)):

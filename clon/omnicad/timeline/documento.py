@@ -402,6 +402,7 @@ class Documento:
 
     def agregar(self, op):
         """Inserta la operación en la posición del marcador (como Fusion) y la ejecuta."""
+        exigir_nombre(op.nombre)                       # P-93: el `name` de las herramientas de creación también
         self._fijar_ocultos(op)
         tabla, contador = self._tabla_cotas(self.operaciones[:self.marcador] + [op] + self.operaciones[self.marcador:])
         desde = min(self.marcador, self._primer_afectado(tabla))
