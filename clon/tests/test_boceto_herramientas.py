@@ -768,6 +768,23 @@ def test_p73_fusion_elige_arista_del_modelo_y_la_proyecta(app_qt):
         assert visor.llamadas == 3  # la curva del boceto tiene prioridad: no vuelve a consultar el modelo
         assert _tipos(lz.b) == ["linea", "linea", "spline"]
         assert lz.resultado.ok
+        lz.deshacer()                       # B-256: la arista proyectada es parte de la fusión: un solo deshacer
+        assert lz.b.a_dict() == antes and lz.b.proyecciones == []
+        lz.rehacer()
+        assert _tipos(lz.b) == ["linea", "linea", "spline"]
+        lz.deshacer()
+        assert lz.pila_rehacer
+        for salir in (lz.cancelar, lambda: lz.set_herramienta("linea"), lz.descartar_proyeccion):
+            lz.set_herramienta("curva_fusion")
+            assert lz._clic_pick(pos) and len(lz.picks) == 1
+            salir()                         # Esc, otra herramienta o Terminar boceto con la fusión a medias
+            assert lz.b.a_dict() == antes and lz.b.proyecciones == []
+        visor.forma = next(e for e in g._aristas_unicas(g.cilindro(4, 10))
+                           if referencias.firma_arista(e)["geom"] == "circulo")
+        lz.set_herramienta("curva_fusion")
+        n, m = len(lz.historial), len(lz.pila_rehacer)
+        assert lz._clic_pick(pos) and lz.b.a_dict() == antes
+        assert (len(lz.historial), len(lz.pila_rehacer)) == (n, m)   # el borde rechazado no deja nada para rehacer
     finally:
         lz.close()
         visor.close()
