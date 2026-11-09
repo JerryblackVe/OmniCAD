@@ -14,8 +14,8 @@ avisa lo que vence ese día o ya venció.
 | AG-4 | [4.º] Auditoría, reparación y paridad de las 27 herramientas de MODIFICAR (Pulsar/tirar a Lista de materiales) en todos los espacios contra Fusion 360; prompt en `docs/auditoria_modificar.md` | A definir | 2026-11-07 | Programada |
 | AG-5 | [6.º] Auditoría, reparación y paridad del sistema ENSAMBLAR (componentes, uniones, solver, movimiento, contactos) contra Fusion 360; prompt en `docs/auditoria_ensamblar.md` | A definir | 2026-11-07 | Programada |
 | AG-6 | [5.º] Auditoría, reparación y paridad de la sección INSERTAR (Calcomanía a Insertar derivación) en todos los espacios contra Fusion 360; prompt en `docs/auditoria_insertar.md` | A definir | 2026-11-07 | Programada |
-| AG-7 | [1.º] Auditoría, reparación y paridad del sistema CONSTRUIR (SCU, planos, ejes y puntos de construcción) en todos los espacios contra Fusion 360; prompt en `docs/auditoria_construir.md` | A definir | 2026-11-07 | Programada |
-| AG-8 | [2.º] Auditoría de tiempos de TODA la app: banco de tiempos de cada herramienta, latencia en la ventana, ranking y arreglos de la más lenta a la más rápida; prompt en `docs/auditoria_tiempos.md` | A definir | 2026-11-08 | Programada |
+| AG-7 | [2.º] Auditoría, reparación y paridad del sistema CONSTRUIR (SCU, planos, ejes y puntos de construcción) en todos los espacios contra Fusion 360; prompt en `docs/auditoria_construir.md` | A definir | 2026-11-07 | Programada |
+| AG-8 | [1.º] PRIORIDAD ALTA (Gerardo, 2026-11-09: «la app no es usable por la lentitud»). Auditoría de tiempos de TODA la app: banco de tiempos de cada herramienta, latencia en la ventana, ranking y arreglos de la más lenta a la más rápida; prompt en `docs/auditoria_tiempos.md` | A definir | 2026-11-08 | Programada |
 
 ## Orden y reparto de las auditorías
 
@@ -25,8 +25,8 @@ COORDINADOR» al principio de cada prompt).
 
 | Orden | Auditoría | Dueña además de su lista | Le saca a otra |
 |---|---|---|---|
-| 1 | CONSTRUIR (AG-7) | Referencias persistentes a caras, aristas y vértices | — |
-| 2 | Tiempos de toda la app (AG-8) | P-99 y las filas de rendimiento sin dueña | — |
+| 1 | Tiempos de toda la app (AG-8) | P-99 y las filas de rendimiento sin dueña | — |
+| 2 | CONSTRUIR (AG-7) | Referencias persistentes a caras, aristas y vértices | — |
 | 3 | Herramientas 3D (AG-2) | Patrón, Simetría, Engrosar | — |
 | 4 | MODIFICAR (AG-4) | Mover/copiar, Alinear, Apoyar en el plano | Aspecto → AG-3; Lista de materiales → AG-5 |
 | 5 | INSERTAR (AG-6) | Calcomanía, Lienzo | Duplicar con uniones e Insertar componente → AG-5 |
