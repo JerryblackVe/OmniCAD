@@ -738,6 +738,7 @@ def edit_feature(sesion, feature: str, params: dict):
         params["pivote"] = _pivote(params["pivote"])
     params, _ = traducir_referencias(sesion, type(op), params, actuales=op.p, elementos=False)
     _exigir_tipos(op, params)
+    params = {k: op.PARAMS[k] if v is None and k in op.EXPRESIONES else v for k, v in params.items()}   # null = por defecto (B-261)
     if not params:
         raise error("INVALID_ARGUMENTS", "No se indicó ningún parámetro para cambiar.",
                     f"Parámetros de '{op.TIPO}': {', '.join(op.PARAMS)}.")

@@ -486,6 +486,8 @@ def evaluar(expr, tipo=LONGITUD, nombres=None, estricto=False, unidad=None, con_
         return (str(expr), None) if con_dimension else str(expr)
     if isinstance(expr, (int, float)):
         return (float(expr), None) if con_dimension else float(expr)
+    if expr is not None and not isinstance(expr, str):      # B-261: una lista o un dict de una receta o de edit_feature
+        raise ErrorExpresion(f"Se esperaba un número o una expresión, no {'una lista' if isinstance(expr, (list, tuple)) else 'un objeto'}.")
     texto = (expr or "").strip()
     if not texto:
         raise ErrorExpresion("Expresión vacía.")
