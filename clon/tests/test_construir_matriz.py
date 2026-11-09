@@ -126,3 +126,12 @@ def test_construir_encadenada_y_scu_siguen_a_la_cota():
         assert np.allclose(e.puntos[f"{u['ucs']['id']}_o"][0], (20, 20, h), atol=1e-6)
         m = np.array([e.ejes[f"{u['ucs']['id']}_{k}"][1] for k in "xyz"])
         assert np.allclose(m @ m.T, np.eye(3), atol=1e-9) and np.linalg.det(m) == pytest.approx(1)
+
+
+def test_punto_por_dos_aristas_que_se_cruzan_sin_tocarse_da_error():
+    """B-258: aristas alabeadas no tienen intersección (ni prolongadas): error, no el punto medio entre las rectas."""
+    s = _armar()
+    r = api.llamar(s, "create_construction_point", {"type": "dos_aristas", "body": "Cuerpo1",
+                                                     "references": ["edges:>Z and >X", "edges:<Z and >Y"]})
+    assert not r["ok"] and "no se cortan" in r["mensaje"], r
+    assert not s.doc.estado_final.puntos

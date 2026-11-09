@@ -476,8 +476,8 @@ def punto_vertice(v):
 
 def punto_dos_aristas(e1, e2):
     """Punto por dos aristas [SLD-CONSTRUCT-POINT-THROUGH-TWO-EDGES]. Rectas o ejes: intersección de
-    sus prolongaciones (si se cruzan sin cortarse, el punto medio de la perpendicular común). Curvas:
-    punto medio entre los puntos más cercanos de ambas aristas (no se prolongan)."""
+    sus prolongaciones. Curvas: donde se tocan (no se prolongan). Si no se cortan, error, como en Fusion
+    («intersection or extended intersection», B-258)."""
     rectas = all(not isinstance(e, TopoDS_Shape) or BRepAdaptor_Curve(_arista(e)).GetType() == GeomAbs_Line
                  for e in (e1, e2))
     if rectas:
@@ -489,11 +489,16 @@ def punto_dos_aristas(e1, e2):
         d1, d2 = float(a.direccion @ w), float(b.direccion @ w)
         s = (c * d2 - d1) / (1 - c * c)
         t = (d2 - c * d1) / (1 - c * c)
-        return (a.punto + a.direccion * s + b.punto + b.direccion * t) / 2
-    dist = BRepExtrema_DistShapeShape(_arista(e1), _arista(e2))
-    if not dist.IsDone() or dist.NbSolution() == 0:
-        raise geo.ErrorGeometria("No se pudo calcular el punto entre las aristas.")
-    return (_np(dist.PointOnShape1(1)) + _np(dist.PointOnShape2(1))) / 2
+        p, q = a.punto + a.direccion * s, b.punto + b.direccion * t
+    else:
+        dist = BRepExtrema_DistShapeShape(_arista(e1), _arista(e2))
+        if not dist.IsDone() or dist.NbSolution() == 0:
+            raise geo.ErrorGeometria("No se pudo calcular el punto entre las aristas.")
+        p, q = _np(dist.PointOnShape1(1)), _np(dist.PointOnShape2(1))
+    if np.linalg.norm(p - q) > 1e-6:
+        raise geo.ErrorGeometria("Las aristas no se cortan, ni siquiera prolongadas: se cruzan a "
+                                 f"{np.linalg.norm(p - q):.4g} mm.")
+    return (p + q) / 2
 
 
 def punto_tres_planos(p1, p2, p3):

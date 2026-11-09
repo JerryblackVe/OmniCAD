@@ -207,8 +207,9 @@ def test_punto_tres_planos_y_arista_plano():
 
 def test_punto_dos_aristas():
     assert np.allclose(cn.punto_dos_aristas(seg((0, 0, 0), (1, 0, 0)), seg((5, 3, 0), (5, 4, 0))), (5, 0, 0))
-    # Rectas que se cruzan sin cortarse (z=0 y z=2): punto medio de la perpendicular común.
-    assert np.allclose(cn.punto_dos_aristas(seg((0, 0, 0), (1, 0, 0)), seg((0, 0, 2), (0, 1, 2))), (0, 0, 1))
+    # Rectas que se cruzan sin cortarse (z=0 y z=2): no hay intersección, como en Fusion (B-258).
+    with pytest.raises(g.ErrorGeometria, match="no se cortan"):
+        cn.punto_dos_aristas(seg((0, 0, 0), (1, 0, 0)), seg((0, 0, 2), (0, 1, 2)))
     p = cn.punto_dos_aristas(arco(10, 0, math.pi), seg((0, -5, 0), (0, 15, 0)))
     assert np.allclose(p, (0, 10, 0), atol=1e-6)
     with pytest.raises(g.ErrorGeometria):
