@@ -147,3 +147,33 @@ def test_punto_por_dos_aristas_que_se_cruzan_sin_tocarse_da_error():
                                                      "references": ["edges:>Z and >X", "edges:<Z and >Y"]})
     assert not r["ok"] and "no se cortan" in r["mensaje"], r
     assert not s.doc.estado_final.puntos
+
+
+@pytest.mark.parametrize("eje, giro0, esperada", [
+    ("Y", 0, lambda g: (0, 1, 0)), ("Y", 30, lambda g: (0, 1, 0)), ("X", 30, lambda g: (1, 0, 0)),
+    ("X", 0, lambda g: (0, np.cos(np.radians(g)), np.sin(np.radians(g))))])
+def test_plano_en_angulo_no_salta_al_girar_la_arista(eje, giro0, esperada):
+    """B-257: el 0° se elige al crear (eje del mundo más perpendicular a la arista) y un parámetro que gira la arista no
+    lo hace saltar 90°. Esperados medidos en Fusion el 2026-11-08 (caja girada por un parámetro con Mover)."""
+    s = api.Sesion()
+    llamar(s, "create_parameter", name="giro", expression=f"{giro0} deg")
+    llamar(s, "create_box", length=20, width=30, height=40, anchor="corner")
+    llamar(s, "move_body", body="Cuerpo1", rotate=[0, "giro", 0] if eje == "Y" else ["giro", 0, 0], pivot="origin")
+    arista = max((a for a in llamar(s, "find_edges", body="Cuerpo1")["edges"] if abs(a["length"] - 40) < 1e-6),
+                 key=lambda a: a["center"][0] + a["center"][1])
+    pid = llamar(s, "create_construction_plane", type="angle", references=[arista["id"]], angle=0, body="Cuerpo1")["plane"]["id"]
+    for g in (0, 10, 25, 26, 30, 60):
+        llamar(s, "set_parameter", name="giro", expression=f"{g} deg")
+        n = s.doc.estado_final.planos[pid].normal
+        assert abs(abs(float(np.dot(n, esperada(g)))) - 1) < 1e-6, (g, n)
+
+
+def test_plano_en_angulo_guarda_su_eje_0_y_se_edita():
+    """B-257: crear fija eje_0; edit_feature lo cambia; uno paralelo a la arista cae en el que elige eje_cero."""
+    s = _armar()
+    pid = llamar(s, "create_construction_plane", type="angle", references=["edges:>Z and >X"], angle=0,
+                 body="Cuerpo1")["plane"]["id"]
+    assert s.paso(pid).p["eje_0"] == "Z"                              # arista a lo largo de Y: horizontal
+    for eje, normal in (("X", (1, 0, 0)), ("Y", (0, 0, 1))):         # Y es paralelo a la arista
+        llamar(s, "edit_feature", feature=pid, params={"eje_0": eje})
+        assert np.allclose(np.abs(s.doc.estado_final.planos[pid].normal), normal, atol=1e-9)

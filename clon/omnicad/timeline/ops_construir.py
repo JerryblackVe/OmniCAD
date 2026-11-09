@@ -46,18 +46,32 @@ def _forma_o_plano(e):
     return e.forma if e.forma is not None else ent.como_plano(e)
 
 
-def _plano_por_eje(e):
-    """Plano de referencia que contiene un eje (el ángulo 0 del «Plano en el ángulo»): el plano del
-    boceto si es una línea de boceto; si no (arista de cuerpo, eje de construcción), el plano más horizontal
-    que contiene al eje, o el frontal si el eje es vertical; nunca la cara vecina. Igual que Fusion (P-92, medido el
-    2026-11-08: arista entre un chaflán y una cara vertical → 0° horizontal; arista vertical → plano frontal)."""
+_EJES_MUNDO = {"Z": (0.0, 0.0, 1.0), "Y": (0.0, 1.0, 0.0), "X": (1.0, 0.0, 0.0)}    # orden = preferencia en empate
+
+
+def eje_cero(direccion):
+    """Eje del mundo más perpendicular a `direccion` (empate: Z, luego Y, luego X): con él se arma el 0° del «Plano
+    en el ángulo». Medido en Fusion (P-92 y B-257, 2026-11-08): arista a lo largo de X → horizontal; vertical →
+    frontal; inclinada en XZ → normal Y; inclinada en YZ → normal X."""
+    d = np.abs(np.asarray(direccion, float)) / (np.linalg.norm(direccion) or 1.0)
+    return min(_EJES_MUNDO, key=lambda k: round(float(d["XYZ".index(k)]), 9))
+
+
+def _plano_por_eje(e, eje_0=""):
+    """Plano de referencia que contiene un eje (el ángulo 0 del «Plano en el ángulo»): el plano del boceto si es una
+    línea de boceto; si no, el que contiene al eje y al eje del mundo `eje_0`, elegido al crear (`eje_cero`) para que
+    un parámetro no lo haga saltar (B-257, como Fusion); nunca la cara vecina. Sin `eje_0` (pasos anteriores a B-257),
+    la regla vieja: el plano más horizontal, o el frontal si el eje está a menos de ~26° de la vertical."""
     if e.tipo == "curva_boceto" and e.plano is not None:
         return e.plano
     p, d = ent.como_eje(e)
     d = np.asarray(d, float) / (np.linalg.norm(d) or 1.0)
-    # Ángulo 0 = el plano horizontal que contiene al eje (normal = Z sin su componente sobre el eje);
-    # si el eje es vertical, el plano frontal.
-    ref = np.array([0.0, 0.0, 1.0]) if abs(d[2]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    if not eje_0:
+        ref =np.array([0.0, 0.0, 1.0]) if abs(d[2]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    else:
+        ref = np.array(_EJES_MUNDO[eje_0 if isinstance(eje_0, str) and eje_0 in _EJES_MUNDO else eje_cero(d)])
+        if np.linalg.norm(np.cross(d, ref)) < 1e-9:       # el eje quedó paralelo al elegido: se elige otro
+            ref = np.array(_EJES_MUNDO[eje_cero(d)])
     n = ref - d * float(ref @ d)
     return geo.Plano.desde_marco(p, n, d)
 
@@ -134,7 +148,7 @@ def calcular_plano(p, entidades, ctx, estado):
         if E[0].tipo not in ("eje", "arista", "curva_boceto"):     # B-261: el mismo filtro que la herramienta de creación
             raise ErrorOperacion("El plano en el ángulo necesita un eje, una arista o una línea de boceto.")
         punto, direccion = ent.como_eje(E[0])
-        return cs.plano_en_angulo(_plano_por_eje(E[0]), punto, direccion, ctx.evaluar(p.get("angulo", "0"), ANGULO), desfase=extra)
+        return cs.plano_en_angulo(_plano_por_eje(E[0], p.get("eje_0")), punto, direccion, ctx.evaluar(p.get("angulo", "0"), ANGULO), desfase=extra)
     if t == "tangente":
         ref = ent.como_plano(E[1]) if len(E) > 1 else None
         return cs.plano_tangente(E[0].forma, ctx.evaluar(p.get("angulo", "0"), ANGULO), ref, desfase=extra)

@@ -684,7 +684,7 @@ class OpPlano(Operacion):
     PARAMS = {"tipo": "desfase", "base": "XY", "marco": None, "distancia": "10 mm", "refs": [], "angulo": "0 deg",
               "posicion": "0.5", "desfase": "0 mm", "extension": "distancia", "objeto": None, "direccion": "U",
               "lugar": None, "tipo_distancia": "proporcional", "cadena_tangente": False, "redimensionar": "predeterminado",
-              "tipo_extension": "distancia", "medida": "0 mm", "objeto_extension": None}
+              "tipo_extension": "distancia", "medida": "0 mm", "objeto_extension": None, "eje_0": ""}
     EXPRESIONES = ("distancia", "angulo", "posicion", "desfase", "medida")
 
     def dependencias(self):

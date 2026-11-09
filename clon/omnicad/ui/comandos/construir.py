@@ -255,6 +255,8 @@ class GeometriaConstruccion(Comando):
             if hit["ref"]["tipo"] not in ("cara", "plano"):
                 raise ErrorComando("Seleccioná el punto.")
             params["lugar"] = lugar_en(hit["ref"], hit.get("punto"), ctx.estado)
+        if clase is OpPlano and tipo == "angulo":
+            params["eje_0"] = v.get("eje_0") or _eje_cero_de(ctx, lista[0])
         self.nombre_base = NOMBRES[TIPO_DE_CLASE[clase]][0]
         return self.crear_op(clase, v, ctx, **params)
 
@@ -341,16 +343,28 @@ def _asas_tangente(self, ctx, v):
     return [mp.Angulo("angulo", centro, eje, cero, radio)]
 
 
+def _eje_cero_de(ctx, ref):
+    """Eje del mundo del 0° del «Plano en el ángulo», fijado al crear (B-257); None si la referencia no es un eje."""
+    from ...timeline import entidades as ent
+    from ...timeline.ops_construir import eje_cero
+    from .. import manipuladores as mp
+    e = mp.entidad(ref, ctx.estado)
+    try:
+        return eje_cero(ent.como_eje(e)[1]) if e is not None else None
+    except ent.ErrorReferencia:
+        return None
+
+
 def _asas_angulo(self, ctx, v):
     from ...timeline import entidades as ent
-    from ...timeline.ops_construir import _plano_por_eje
+    from ...timeline.ops_construir import _plano_por_eje, eje_cero
     from .. import manipuladores as mp
     e = _entidad(ctx, v)
     if e is None:
         return []
     punto, d = ent.como_eje(e)
     a = mp.unitario(d)
-    n0 = np.asarray(_plano_por_eje(e).normal, float)
+    n0 = np.asarray(_plano_por_eje(e, v.get("eje_0") or eje_cero(d)).normal, float)
     n0 = n0 - a * float(n0 @ a)
     if np.linalg.norm(n0) < 1e-9:
         return []

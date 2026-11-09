@@ -1066,6 +1066,10 @@ def create_construction_plane(sesion, plane: str = "XY", offset: Expr = "10 mm",
             if type == "perpendicular" and len(refs) == 1:
                 filtros = filtros[:1]
             refs = _referencias(sesion, refs, filtros, body)
+            if type == "angle":       # B-257: el 0° se elige al crear y después no salta, como en Fusion
+                from ..timeline.operaciones import _resolver
+                from ..timeline.ops_construir import eje_cero
+                comunes["eje_0"] = eje_cero(ent.como_eje(_resolver(refs[0], doc.estado_final))[1])
             if type == "perpendicular" and len(refs) == 1:
                 lugar = referencia_lugar(sesion, refs[0], location)
         op = OpPlano(doc.nuevo_id(), nombre, tipo=_TIPOS_PLANO[type], refs=refs, distancia=texto_expr(distance if type == "path" else offset),
