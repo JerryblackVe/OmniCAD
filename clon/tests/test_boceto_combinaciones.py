@@ -138,6 +138,9 @@ def test_combinacion_4_hexagono_escalar_mover_extruir():
     _llamar(s, "create_sketch", name="B")
     _llamar(s, "create_polygon", sketch="B", sides=6, radius=10, kind="inscribed",
             center_x=0, center_y=0)
+    # P-94: el centro quedó anclado al origen (como en la ventana); para moverlo se le quita «Fijo», como en Fusion.
+    ancla, = [c["id"] for c in _boceto(s)["constraints"] if c["type"] == "fix"]
+    _llamar(s, "delete_sketch_entities", sketch="B", entities=[ancla])
     # Seis triángulos equiláteros de lado R: A = 6 × sqrt(3)R²/4.
     for radio, centro in ((10, [0, 0]), (15, [0, 0]), (15, [20, -5])):
         if radio == 15 and centro == [0, 0]:
@@ -172,6 +175,9 @@ def test_combinacion_3_linea_arco_tangente_y_alargar():
     s = api.Sesion()
     _llamar(s, "create_sketch", name="B")
     linea, = _ids(_llamar(s, "draw_line", sketch="B", start_x=0, start_y=0, end_x=20, end_y=0))
+    # P-94: el inicio quedó anclado al origen; para alargar ese extremo se le quita «Fijo», como en Fusion.
+    ancla, = [c["id"] for c in _boceto(s)["constraints"] if c["type"] == "fix"]
+    _llamar(s, "delete_sketch_entities", sketch="B", entities=[ancla])
     assert _de(s, "line")[0]["length"] == pytest.approx(20)
     _boceto(s)
     _llamar(s, "draw_arc", sketch="B", tangent_to=linea, start_x=20, start_y=0, end_x=30, end_y=10)

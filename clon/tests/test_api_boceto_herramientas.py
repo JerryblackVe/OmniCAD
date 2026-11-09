@@ -84,12 +84,29 @@ def test_poligono_totalmente_acotado(s, lados, kind, giro, cx, cy):
     assert centro == pytest.approx([cx, cy], abs=1e-6)
 
 
+def test_p94_lo_dibujado_en_el_origen_queda_anclado_y_coincidir_cambia_el_ancla(s):
+    """Como la ventana: el primer punto en (0, 0) queda fijo al origen; coincidirlo con el origen no sobre-define."""
+    r = llamar(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=5)
+    inicio = r["points"][0]
+    assert [k["entities"] for k in boceto(s)["constraints"] if k["type"] == "fix"] == [[inicio]]
+    assert boceto(s)["dof"] == 2
+    assert falla(s, "transform_sketch", dx=5)["error_kind"] == "INVALID_GEOMETRY"
+    c = llamar(s, "add_constraint", sketch="B", type="coincident", entities=[inicio, 0])
+    tipos = [k["type"] for k in boceto(s)["constraints"]]
+    assert (c["dof"], "fix" in tipos, "coincident" in tipos) == (2, False, True)
+    llamar(s, "draw_line", start_x=30, start_y=0, end_x=40, end_y=0)   # fuera del origen: libre
+    assert boceto(s)["dof"] == 6
+
+
 @pytest.mark.parametrize("lados, kind", [(6, "inscribed"), (6, "circumscribed"), (5, "circumscribed"),
                                          (8, "circumscribed")])
 def test_poligono_sin_acotar_sigue_con_4_grados(s, lados, kind):
-    """Centro, tamaño y giro. Circunscrito con lados pares daba 5: lados iguales y tangentes no lo hacían regular."""
-    r = llamar(s, "create_polygon", sides=lados, radius=10, kind=kind)
+    """Centro, tamaño y giro. Circunscrito con lados pares daba 5: lados iguales y tangentes no lo hacían regular.
+    P-94: con el centro en el origen, el centro queda anclado ahí, como en la ventana, y quedan 2 (tamaño y giro)."""
+    r = llamar(s, "create_polygon", sides=lados, radius=10, kind=kind, center_x=30)
     assert (r["status"], r["dof"]) == ("under_constrained", 4) and "dimensions" not in r
+    r = llamar(s, "create_polygon", sides=lados, radius=10, kind=kind)
+    assert (r["status"], r["dof"]) == ("under_constrained", 6) and "dimensions" not in r
 
 
 def test_poligono_acotado_sigue_a_un_parametro(s):

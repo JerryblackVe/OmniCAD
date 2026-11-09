@@ -450,7 +450,7 @@ def test_b233_recortar_no_deja_restricciones_en_un_punto_suelto():
 def test_b237_alargar_un_extremo_fijo_falla_sin_tocar_nada(herramienta):
     s = api.Sesion()
     _ok(api.llamar(s, "create_sketch", {"name": "B"}))
-    r = L(s, "draw_line", start_x=0, start_y=0, end_x=5, end_y=0)
+    r = L(s, "draw_line", start_x=1, start_y=0, end_x=5, end_y=0)  # fuera del origen: ahí quedaría anclado (P-94)
     linea, fijo = r["entities"][0]["id"], r["points"][1]
     L(s, "draw_line", start_x=10, start_y=-5, end_x=10, end_y=5)
     L(s, "draw_line", start_x=-10, start_y=-5, end_x=-10, end_y=5)

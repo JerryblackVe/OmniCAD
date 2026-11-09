@@ -310,7 +310,7 @@ Pruebas: **API** = `clon/tests/test_boceto_crear_modificar_matriz.py` (un caso p
 | Rectángulo (`rectangulo`, `_3p`, `_centro`) | 3 | API, Qt, Ventana (`boceto_herramientas`, `cm_pieza_varilla`, `cm_ventana`) | — | — | VERIFICADO |
 | Círculo (`circulo`, `_2p`, `_3p`, `_2t`, `_3t`) | 5 | API, Qt, Ventana (`cm_pieza_varilla`, `cm_ventana`) | — | — | VERIFICADO |
 | Arco (`arco`, `arco_centro`, `arco_tangente`) | 3 | API, Comb., Qt, Ventana (`boceto_herramientas`, `cm_ventana`) | P-72 | P-72 | CORREGIDO |
-| Polígono (`poligono_circunscrito`, `_inscrito`, `_arista`) | 3 | API, Comb., Ventana (`cm_ventana`) | — (P-94 es de la API) | — | VERIFICADO |
+| Polígono (`poligono_circunscrito`, `_inscrito`, `_arista`) | 3 | API, Comb., Ventana (`cm_ventana`) | P-94 | P-94 | CORREGIDO |
 | Elipse (`elipse`) | 1 | API, Qt, Ventana (`boceto_herramientas`, `restricciones_boceto`) | — | — | VERIFICADO |
 | Ranura (`ranura_centro`, `_total`, `_punto`, `_arco_3p`, `_arco_centro`) | 5 | API, cm-5, Ventana (`cm_ventana`) | B-246, B-255 | B-246, B-255 | CORREGIDO |
 | Spline (`spline_ajuste`, `spline_control`) | 2 | API, Comb., Ventana (`boceto_cotas`, `cm_ventana`) | P-67 | P-67 | CORREGIDO |
@@ -344,8 +344,8 @@ propia pieza `parametros`). 50 claves probadas desde la ventana completa; las 5 
   test en el Registro de `PROJECT_LOG.md`.
 - **Paridad ventana ↔ API/MCP/CLI (fase 5):** 58 claves comparadas, 15 diferencias. 4 arregladas (espiral con línea
   central, `sketch` opcional en 4 herramientas, polígono de 6 lados); las de teclado y ratón, documentadas a propósito en
-  `docs/brechas_mcp.md`; el anclaje al origen, como P-94 (decisión de Gerardo: rompe 20 tests y el patrón «coincidente
-  con el origen»).
+  `docs/brechas_mcp.md`; el anclaje al origen, como P-94, cerrado el 2026-11-09 (decisión de Gerardo, «Igualalo»: la API ancla como la ventana; el patrón «coincidente
+  con el origen» cambia el ancla y sigue andando).
 - **Pruebas reales:** matriz de la API 48 casos y 5 xfail ya cerrados; combinaciones 76; cm-5 41/41; 9 piezas de boceto
   en la ventana, 1233 comprobaciones, 0 ✗; `cm_ventana` 69/0 (H-110, P-73, B-245, B-253, P-75 y 24 comandos más);
   `cm_pieza_varilla` 15/0 (portón 3: varilla de abanico, cota 180 → 160, volumen 7490,111 → 6650,111 mm³ igual al
@@ -354,7 +354,7 @@ propia pieza `parametros`). 50 claves probadas desde la ventana completa; las 5 
 - **Comparación con Fusion:** las 9 «Duda» de cm-5 se midieron en Fusion (`evidencias/fusion_2026-11-08/boceto/`). No se
   afirma paridad completa: quedan las diferencias de `docs/brechas_mcp.md` y el ángulo 2 del patrón rectangular («sin
   dato» en la ayuda de Fusion).
-- **Pendiente:** P-94 (anclaje al origen en la API), P-95 (pieza de ventana para 5 comandos de proyección) y el portón 4
+- **Pendiente:** P-95 (pieza de ventana para 5 comandos de proyección) y el portón 4
   (juez independiente: sesión aparte con otro modelo, 30 min, `fable-judge` y `omnicad-test`; la sesión de ejecución no
   puede abrir otra sesión).
 - **Estado final de CREAR y MODIFICAR:** 25 de 26 herramientas VERIFICADO o CORREGIDO desde la ventana; 1 PARCIAL.

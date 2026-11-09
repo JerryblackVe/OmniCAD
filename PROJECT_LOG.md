@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-09 · P-94 cerrada: la API ancla al origen como la ventana (Gerardo: «Igualalo»).** Todas las `draw_*` (19 en `api/herramientas_boceto.py` y `draw_spiral` en `herramientas_boceto_extra.py`) pasan `anclar=True`: el primer punto nuevo en (0, 0) queda con `fix` (`Boceto.anclar_al_origen`). `add_constraint` coincident de ese punto con el origen cambia el ancla por la coincidencia (sin sobre-restringir). 14 tests ajustados al comportamiento nuevo (fase3, fase6, combinaciones, matriz, polígono) sin debilitarlos; test nuevo `test_p94_lo_dibujado_en_el_origen_queda_anclado_y_coincidir_cambia_el_ancla` (`tests/test_api_boceto_herramientas.py`). Doc `herramientas.md` regenerada; `brechas_mcp.md` y la auditoría al día. Verificación: ruff limpio; tests_afectados 18 grupos (un solo rojo: tope de tokens del asistente, se acortó la descripción de add_constraint); test_asistente_alcance + doc_agentes + api_boceto + topes 133 OK.
 - **2026-11-09 · B-260: una construcción que se referencia a sí misma se rechaza.** `operaciones.py` › `exigir_sin_ciclo`
   (nueva) la llaman `OpPlano.ejecutar`, `OpEje.ejecutar`, `OpPunto.ejecutar` y `OpSCU.ejecutar`: si `objeto`, `lugar`, `objeto_extension` o `refs` apuntan al
   propio paso, error claro «no puede usarse a sí mismo como referencia» (vía `edit_feature` o una receta). `OpPlano.dependencias`
