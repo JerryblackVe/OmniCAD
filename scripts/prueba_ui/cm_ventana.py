@@ -89,6 +89,15 @@ lz = None
 MENSAJES = []
 
 
+def encuadrar(x, y, span=90):
+    """Acercar la vista a una zona (lo que hace la persona con la rueda antes de dibujar algo chico)."""
+    lz.visor.objetivo = lz.plano.a_3d(x, y)
+    lz.visor.distancia = span / 2 / math.sin(math.radians(lz.visor.fov) / 2) * 1.3
+    lz.visor.update()
+    lz.update()
+    A.esperar(150)
+
+
 def entrar(nombre, centro=(0, 0), span=140):
     global lz
     v.editar_operacion(s.paso(nombre).id)
@@ -100,11 +109,7 @@ def entrar(nombre, centro=(0, 0), span=140):
     except (RuntimeError, TypeError):
         pass
     lz.mensaje.connect(MENSAJES.append)
-    lz.visor.objetivo = lz.plano.a_3d(*centro)
-    lz.visor.distancia = span / 2 / math.sin(math.radians(lz.visor.fov) / 2) * 1.3
-    lz.visor.update()
-    lz.update()
-    A.esperar(300)
+    encuadrar(*centro, span)
 
 
 def salir():
@@ -340,15 +345,6 @@ ELEGIR = {   # comando: (clics relativos, qué tiene que pasar)
     "desglosar_texto": ([(6, 4)], "el texto pasa a curvas"),
 }
 CHAFLAN = {"chaflan": ("3",), "chaflan_dos_dist": ("3", "4"), "chaflan_dist_angulo": ("3", "45")}   # clic en la esquina y valores
-
-
-def encuadrar(x, y, span=90):
-    """Acercar la vista a una zona (lo que hace la persona con la rueda antes de dibujar algo chico)."""
-    lz.visor.objetivo = lz.plano.a_3d(x, y)
-    lz.visor.distancia = span / 2 / math.sin(math.radians(lz.visor.fov) / 2) * 1.3
-    lz.visor.update()
-    lz.update()
-    A.esperar(150)
 
 
 def _n_desfase():
