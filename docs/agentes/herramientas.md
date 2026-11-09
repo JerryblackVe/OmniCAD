@@ -928,7 +928,7 @@ Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía 
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sides` (entero; obligatorio): cantidad de lados (3 a 64; tope propio igual al de la interfaz: la ayuda de Fusion no publica un máximo).
+  - `sides` (entero; opcional, por defecto `6`): cantidad de lados (3 a 64, 6 por defecto como la interfaz; tope propio igual al de la interfaz: la ayuda de Fusion no publica un máximo).
   - `radius` (número o expresión; opcional, por defecto `null`): radio del círculo guía en mm (circunradio si es inscrito, apotema si es circunscrito); número o expresión con parámetros ("entrecaras / 2"). No se usa con kind=edge.
   - `center_x` (número; opcional, por defecto `0.0`): x del centro (mm).
   - `center_y` (número; opcional, por defecto `0.0`): y del centro (mm).
@@ -939,7 +939,7 @@ Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía 
   - `fully_constrained` (true/false; opcional, por defecto `false`): true para dejarlo totalmente acotado (radio, giro y posición del centro): dof 0.
   - `edge_points` (lista de lista de número o null; opcional, por defecto `null`): kind=edge: [[x, y], [x, y], [x, y]] = extremos A y B del primer lado y un punto del lado hacia donde crece el polígono.
   - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
-- CLI: `omnicad call create_polygon --doc pieza.omnicad sides=…`
+- CLI: `omnicad call create_polygon --doc pieza.omnicad`
 
 ### `draw_spline`
 
@@ -1798,13 +1798,14 @@ Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. El rad
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sketch` (texto; obligatorio): id o nombre del boceto.
   - `center` (lista de número; obligatorio): centro [x, y] en mm sobre el plano del boceto.
   - `start` (lista de número; obligatorio): inicio [x, y] en mm; su distancia al centro es el radio inicial.
   - `turns` (número; obligatorio): cantidad positiva de vueltas, admite fracciones; hasta 200 puntos (8 tramos por vuelta).
   - `pitch` (número; obligatorio): incremento de radio por vuelta en mm, admite valores negativos como el editor.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
   - `construction` (true/false; opcional, por defecto `false`): true para una spline de construcción (no forma perfiles).
-- CLI: `omnicad call draw_spiral --doc pieza.omnicad sketch=… center=… start=… turns=… pitch=…`
+  - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
+- CLI: `omnicad call draw_spiral --doc pieza.omnicad center=… start=… turns=… pitch=…`
 
 ### `set_circle_radius`
 
@@ -1812,10 +1813,10 @@ Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo e
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sketch` (texto; obligatorio): id o nombre del boceto.
   - `curve` (entero; obligatorio): id del círculo o arco (get_sketch).
   - `radius` (número; obligatorio): radio nuevo en mm, entre 0,000001 y 1.000.000 (1 km).
-- CLI: `omnicad call set_circle_radius --doc pieza.omnicad sketch=… curve=… radius=…`
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call set_circle_radius --doc pieza.omnicad curve=… radius=…`
 
 ### `extend_sketch_curve`
 
@@ -1823,10 +1824,10 @@ Alarga una línea, un arco o una spline abierta hasta la siguiente intersección
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sketch` (texto; obligatorio): id o nombre del boceto.
   - `curve` (entero; obligatorio): id de la línea, el arco o la spline (get_sketch).
   - `point` (lista de número; obligatorio): [x, y] en mm del plano, cerca del extremo que se quiere alargar.
-- CLI: `omnicad call extend_sketch_curve --doc pieza.omnicad sketch=… curve=… point=…`
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call extend_sketch_curve --doc pieza.omnicad curve=… point=…`
 
 ### `split_sketch_curve`
 
@@ -1834,10 +1835,10 @@ Parte una curva en las intersecciones más cercanas al punto, como el editor; el
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sketch` (texto; obligatorio): id o nombre del boceto.
   - `curve` (entero; obligatorio): id de la curva (get_sketch); no admite textos ni geometría proyectada.
   - `point` (lista de número; obligatorio): [x, y] en mm sobre la curva (tolerancia 1e-7 mm); elige las intersecciones donde partir.
-- CLI: `omnicad call split_sketch_curve --doc pieza.omnicad sketch=… curve=… point=…`
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call split_sketch_curve --doc pieza.omnicad curve=… point=…`
 
 ### `redefine_sketch_plane`
 

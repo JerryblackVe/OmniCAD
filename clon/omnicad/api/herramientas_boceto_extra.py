@@ -14,22 +14,24 @@ from .registro import herramienta
 
 @herramienta("draw_spiral", "boceto", "Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. "
              "El radio crece pitch mm por vuelta antihoraria. Hasta 200 puntos de ajuste.", modifica=True)
-def draw_spiral(sesion, sketch: str, center: list[float], start: list[float], turns: float,
-                pitch: float, construction: bool = False):
+def draw_spiral(sesion, center: list[float], start: list[float], turns: float, pitch: float,
+                sketch: str | None = None, construction: bool = False, centerline: bool = False):
     """
-    sketch: id o nombre del boceto.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     center: centro [x, y] en mm sobre el plano del boceto.
     start: inicio [x, y] en mm; su distancia al centro es el radio inicial.
     turns: cantidad positiva de vueltas, admite fracciones; hasta 200 puntos (8 tramos por vuelta).
     pitch: incremento de radio por vuelta en mm, admite valores negativos como el editor.
     construction: true para una spline de construcción (no forma perfiles).
+    centerline: true para geometría central (forma perfiles); incompatible con construction=true.
     """
     _exigir_finitos(locals())
     centro, inicio = _xy(center, "center"), _xy(start, "start")
     if turns > VUELTAS_MAX_ESPIRAL:                   # el mismo tope que el núcleo, con su tipo de error de la API
         raise error("INVALID_ARGUMENTS", f"La espiral admite hasta 200 puntos de ajuste (turns ≤ {VUELTAS_MAX_ESPIRAL:g}).")
     return _dibujar(sesion, sketch, lambda b: b.agregar_spline(
-        puntos_espiral(centro, inicio, turns, pitch), "ajuste", 3, False, construccion=construction))
+        puntos_espiral(centro, inicio, turns, pitch), "ajuste", 3, False, construccion=construction),
+        construccion=construction, central=centerline)
 
 
 def _editar_curva(sesion, sketch, curve, point, partir):
@@ -61,9 +63,9 @@ def _editar_curva(sesion, sketch, curve, point, partir):
              "en el editor): el círculo toma el radio nuevo y en un arco se corren sus extremos libres. Si tiene una "
              "cota de radio o diámetro, o las demás restricciones lo impiden, falla (para eso, edit_dimension).",
              modifica=True)
-def set_circle_radius(sesion, sketch: str, curve: int, radius: float):
+def set_circle_radius(sesion, curve: int, radius: float, sketch: str | None = None):
     """
-    sketch: id o nombre del boceto.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     curve: id del círculo o arco (get_sketch).
     radius: radio nuevo en mm, entre 0,000001 y 1.000.000 (1 km).
     """
@@ -91,9 +93,9 @@ def set_circle_radius(sesion, sketch: str, curve: int, radius: float):
 
 @herramienta("extend_sketch_curve", "boceto", "Alarga una línea, un arco o una spline abierta hasta la siguiente "
              "intersección, desde el extremo más cercano al punto. Falla si no hay una curva que alcanzar.", modifica=True)
-def extend_sketch_curve(sesion, sketch: str, curve: int, point: list[float]):
+def extend_sketch_curve(sesion, curve: int, point: list[float], sketch: str | None = None):
     """
-    sketch: id o nombre del boceto.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     curve: id de la línea, el arco o la spline (get_sketch).
     point: [x, y] en mm del plano, cerca del extremo que se quiere alargar.
     """
@@ -102,9 +104,9 @@ def extend_sketch_curve(sesion, sketch: str, curve: int, point: list[float]):
 
 @herramienta("split_sketch_curve", "boceto", "Parte una curva en las intersecciones más cercanas al punto, "
              "como el editor; el punto debe caer sobre la curva. Devuelve los ids en pieces.", modifica=True)
-def split_sketch_curve(sesion, sketch: str, curve: int, point: list[float]):
+def split_sketch_curve(sesion, curve: int, point: list[float], sketch: str | None = None):
     """
-    sketch: id o nombre del boceto.
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     curve: id de la curva (get_sketch); no admite textos ni geometría proyectada.
     point: [x, y] en mm sobre la curva (tolerancia 1e-7 mm); elige las intersecciones donde partir.
     """
