@@ -1637,10 +1637,22 @@ def registrar_operacion(*clases):
     return clases
 
 
+TOPE_NOMBRE = 255
+
+
+def exigir_nombre(nombre):
+    """B-262: el nombre de un paso o cuerpo no puede tener NUL ni pasar de TOPE_NOMBRE caracteres (receta, archivo o rename)."""
+    if nombre is not None and (not isinstance(nombre, str) or "\0" in nombre or len(nombre) > TOPE_NOMBRE):
+        raise ErrorOperacion(f"El nombre no es válido: tiene que ser texto sin el carácter NUL y de hasta "
+                             f"{TOPE_NOMBRE} caracteres.")
+    return nombre
+
+
 def operacion_desde_dict(d):
     clase = TIPOS_OPERACION.get(d["tipo"])
     if clase is None:
         raise ErrorOperacion(f"Tipo de operación desconocido: {d['tipo']}")
+    exigir_nombre(d.get("nombre"))
     params = copy.deepcopy(d.get("params", {}))
     if clase is OpBoceto:
         params["boceto"] = Boceto.desde_dict(d.get("boceto", {}))

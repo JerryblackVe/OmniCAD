@@ -25,6 +25,7 @@ import logging
 import time
 import traceback
 import uuid
+from collections import Counter
 from .. import registro_uso
 from ..registro_uso.ganchos import calculo as registrar_calculo
 
@@ -34,7 +35,7 @@ from ..nucleo.geometria import ErrorGeometria
 from ..restricciones import ErrorBoceto
 from .entidades import ErrorReferencia
 from .operaciones import (HEREDABLES, TIPOS_OPERACION, TODAS, Contexto, Cuerpo, ErrorOperacion, EstadoModelo, OpBoceto,
-                          operacion_desde_dict, propiedades_cuerpo)
+                          exigir_nombre, operacion_desde_dict, propiedades_cuerpo)
 from .parametros import (ANGULO, LONGITUD, LONGITUDES, MASAS, ErrorExpresion, TablaParametros, evaluar,
                          nombres_usados, separar_nombre, tipo_de_clave, validar_nombre)
 
@@ -329,6 +330,11 @@ class Documento:
     def _cargar(self, datos, calculo=None):
         """Deshacer/rehacer: vuelve a la receta `datos` recalculando solo desde el primer paso que cambia (antes
         recalculaba desde el paso 0: con una rosca modelada de 30 s, cada deshacer tardaba ~35 s)."""
+        ids = Counter(d.get("id") for d in datos.get("operaciones", []))
+        if repetidos := sorted((i for i, n in ids.items() if n > 1), key=str):      # B-262: un paso taparía al otro
+            raise ErrorOperacion(f"La receta repite el id de paso {', '.join(map(str, repetidos))}: cada paso necesita uno propio.")
+        for props in (datos.get("propiedades") or {}).values():                   # B-262: nombres de cuerpos también
+            exigir_nombre(props.get("nombre") if isinstance(props, dict) else None)
         if calculo is None:
             calculo = self._prevuelo_receta(datos)
         antes_ops, antes_marcador, antes_props = self.operaciones, self.marcador, self.propiedades
@@ -448,6 +454,8 @@ class Documento:
 
     def set_propiedad(self, ids_cuerpos, clave, valor):
         """Aspecto, material, nombre u opacidad de uno o más cuerpos (None borra la sustitución)."""
+        if clave == "nombre":
+            exigir_nombre(valor)
         self._guardar_para_deshacer()
         for cid in ids_cuerpos:
             props = self.propiedades.setdefault(cid, {})
@@ -588,6 +596,7 @@ class Documento:
             self._notificar()
 
     def renombrar(self, op_id, nombre):
+        exigir_nombre(nombre)
         self._guardar_para_deshacer()
         self.operacion(op_id).nombre = nombre
         self.modificado = True

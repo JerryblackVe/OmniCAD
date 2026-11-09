@@ -5,6 +5,8 @@ Cada plano, eje, punto y SCU se arma sobre una caja de alto paramétrico (tambi�
 comprueba con números contra la geometría esperada en cada estado: recién creado, con la cota cambiada, deshacer,
 rehacer y guardar y reabrir. Una referencia perdida no se reasigna callada (B-252): ese caso vive en
 test_api_construccion.py."""
+import copy
+
 import numpy as np
 import pytest
 
@@ -206,3 +208,26 @@ def test_planos_del_scu_sirven_como_texto():
     assert np.isclose(s.doc.estado_final.planos[pl].origen[2], 10)
     scu = xy.split("_")[0]
     assert scu in s.paso(b["id"]).dependencias() and scu in s.paso(pl).dependencias()
+
+
+def test_receta_con_ids_repetidos_o_nombre_sin_tope_se_rechaza():
+    """B-262: apply_recipe rechaza dos pasos con el mismo id (uno tapaba al otro) y un nombre de paso de más de 255
+    caracteres o con NUL; rename aplica el mismo tope. El documento queda como estaba."""
+    s = _armar()
+    pl = llamar(s, "create_construction_plane", plane="XY", offset=3)["plane"]["id"]
+    receta = llamar(s, "get_recipe")["recipe"]
+    antes = len(s.doc.operaciones)
+    for cambio in (lambda r: r["operaciones"][-1].update(id=r["operaciones"][0]["id"]),
+                   lambda r: r["operaciones"][-1].update(nombre="x" * 300),
+                   lambda r: r["operaciones"][-1].update(nombre="a\0b"),
+                   lambda r: r.setdefault("propiedades", {}).setdefault("op1.c1", {}).update(nombre="z" * 300)):
+        mala = copy.deepcopy(receta)
+        cambio(mala)
+        r = api.llamar(s, "apply_recipe", {"recipe": mala})
+        assert not r["ok"] and r["error_kind"] == "INVALID_RECIPE", r
+        assert len(s.doc.operaciones) == antes
+    r = api.llamar(s, "rename", {"target": pl, "new_name": "y" * 300})
+    assert not r["ok"] and "255" in r["mensaje"], r
+    llamar(s, "rename", target=pl, new_name="y" * 255)
+    r = api.llamar(s, "rename", {"target": "op1.c1", "new_name": "z" * 300, "kind": "body"})
+    assert not r["ok"] and "255" in r["mensaje"], r
