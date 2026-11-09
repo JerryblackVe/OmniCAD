@@ -462,9 +462,9 @@ def test_boc1_cota_redundante_o_contradictoria_se_crea_como_referencia(sesion, t
     assert r["dimension"]["reference"] is True
     assert r["dimension"]["value"] == pytest.approx(40)
     assert r["dimension"]["name"] == "d2"
-    assert r["dof"] == primera["dof"] == 2
+    assert r["dof"] == primera["dof"] == 0          # P-94: el inicio en (0, 0) queda anclado al origen
     despues = llamar(sesion, "get_sketch")
-    assert despues["status"] == "under_constrained" and despues["conflicts"] == []
+    assert despues["status"] == "fully_constrained" and despues["conflicts"] == []
     assert despues["points"] == antes["points"]
     assert [k["reference"] for k in despues["dimensions"]] == [False, True]
 
@@ -474,13 +474,13 @@ def test_boc1_referencia_explicita_mide_sin_restringir_y_alterna(sesion):
     referencia = llamar(sesion, "add_dimension", sketch="Base", type="distance", entities=[linea],
                         value=99, reference=True)
     k = referencia["dimension"]
-    assert (k["reference"], k["value"], referencia["dof"]) == (True, 40, 3)
+    assert (k["reference"], k["value"], referencia["dof"]) == (True, 40, 1)  # P-94: inicio anclado
     driving = llamar(sesion, "edit_dimension", dimension=k["id"], reference=False)
-    assert (driving["dimension"]["reference"], driving["dimension"]["value"], driving["dof"]) == (False, 40, 2)
+    assert (driving["dimension"]["reference"], driving["dimension"]["value"], driving["dof"]) == (False, 40, 0)
     llamar(sesion, "edit_dimension", dimension=k["id"], value=60)
     antes = sesion.doc.a_dict()
     driven = llamar(sesion, "edit_dimension", dimension=k["id"], reference=True)
-    assert (driven["dimension"]["reference"], driven["dimension"]["value"], driven["dof"]) == (True, 60, 3)
+    assert (driven["dimension"]["reference"], driven["dimension"]["value"], driven["dof"]) == (True, 60, 1)
     assert float(driven["dimension"]["expression"]) == pytest.approx(60)
     llamar(sesion, "undo")
     assert sesion.doc.a_dict() == antes
@@ -630,7 +630,7 @@ def test_boc1_referencia_copiada_y_arrastrada_sigue_siendo_libre(sesion):
     info = llamar(sesion, "get_sketch")
     assert [c["reference"] for c in info["dimensions"]] == [True, True]
     assert [c["value"] for c in info["dimensions"]] == [70, 70]
-    assert info["dof"] == 6
+    assert info["dof"] == 4                          # P-94: el original quedó anclado al origen
 
 
 def _lienzo_boc1():

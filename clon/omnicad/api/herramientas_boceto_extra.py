@@ -31,7 +31,7 @@ def draw_spiral(sesion, center: list[float], start: list[float], turns: float, p
         raise error("INVALID_ARGUMENTS", f"La espiral admite hasta 200 puntos de ajuste (turns ≤ {VUELTAS_MAX_ESPIRAL:g}).")
     return _dibujar(sesion, sketch, lambda b: b.agregar_spline(
         puntos_espiral(centro, inicio, turns, pitch), "ajuste", 3, False, construccion=construction),
-        construccion=construction, central=centerline)
+        construccion=construction, central=centerline, anclar=True)
 
 
 def _editar_curva(sesion, sketch, curve, point, partir):

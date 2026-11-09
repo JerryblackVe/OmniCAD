@@ -1155,10 +1155,10 @@ def draw_line(sesion, start_x: float, start_y: float, end_x: float, end_y: float
             lid = agregar_linea_medio(b, (start_x, start_y), (end_x, end_y), construction)
             ln = b.curvas[lid]
             return {"": lid, "start": ln.p1, "end": ln.p2}
-        return _dibujar(sesion, sketch, crear, construccion=construction, central=centerline)
+        return _dibujar(sesion, sketch, crear, construccion=construction, central=centerline, anclar=True)
     # un extremo que cae sobre el de otra línea la une (como al dibujar en cadena); si no, la línea queda suelta
     return _dibujar(sesion, sketch, lambda b: _linea(b, start_x, start_y, end_x, end_y, construction, encadenar=True),
-                    construccion=construction, central=centerline)
+                    construccion=construction, central=centerline, anclar=True)
 
 
 @herramienta("draw_rectangle", "boceto",
@@ -1199,8 +1199,8 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
         if len(three_points) != 3:
             raise error("INVALID_ARGUMENTS", "three_points necesita tres puntos [x, y]: A, B y C.")
         a, b_, c = (_xy(p, "Cada punto de three_points") for p in three_points)
-        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_3p(b, a, b_, c, construction)[0]}, anclar=True,
-                        construccion=construction, central=centerline)
+        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_3p(b, a, b_, c, construction)[0]},
+                        construccion=construction, central=centerline, anclar=True)
     esquinas = (x1, y1, x2, y2)
     if any(v is not None for v in esquinas):
         if any(v is None for v in esquinas):
@@ -1226,10 +1226,10 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
         if center_x is None and center_y is None:
             raise error("INVALID_ARGUMENTS", "center_diagonals necesita la forma de centro y tamaño (center_x/center_y, width, height).")
         centro = ((a[0] + b_[0]) / 2, (a[1] + b_[1]) / 2)
-        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_centro(b, centro, b_, construction)[0]}, anclar=True,
-                        construccion=construction, central=centerline)
-    return _dibujar(sesion, sketch, lambda b: _rectangulo(b, a[0], a[1], b_[0], b_[1], construction), anclar=True,
-                    construccion=construction, central=centerline)
+        return _dibujar(sesion, sketch, lambda b: {"": agregar_rectangulo_centro(b, centro, b_, construction)[0]},
+                        construccion=construction, central=centerline, anclar=True)
+    return _dibujar(sesion, sketch, lambda b: _rectangulo(b, a[0], a[1], b_[0], b_[1], construction),
+                    construccion=construction, central=centerline, anclar=True)
 
 
 @herramienta("draw_circle", "boceto", "Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por "
@@ -1256,7 +1256,7 @@ def draw_circle(sesion, radius: float | None = None, center_x: float = 0.0, cent
         if points is not None:
             raise error("INVALID_ARGUMENTS", "points es de two_points y three_points; con center_radius usá radius.")
         return _dibujar(sesion, sketch, lambda b: _circulo(b, center_x, center_y, radius, construction),
-                        construccion=construction, central=centerline)
+                        construccion=construction, central=centerline, anclar=True)
     if radius is not None:
         raise error("INVALID_ARGUMENTS", f"kind={kind} no usa radius: el círculo sale de los puntos.")
     n = 2 if kind == "two_points" else 3
@@ -1267,7 +1267,7 @@ def draw_circle(sesion, radius: float | None = None, center_x: float = 0.0, cent
     def crear(b):
         cid = agregar_circulo_puntos(b, p, construction)
         return {"": cid, "center": b.curvas[cid].centro}
-    return _dibujar(sesion, sketch, crear, construccion=construction, central=centerline)
+    return _dibujar(sesion, sketch, crear, construccion=construction, central=centerline, anclar=True)
 
 
 @herramienta("draw_arc", "boceto",
@@ -1313,7 +1313,7 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
 
         informe = _dibujar(sesion, op.id, lambda b: _arco_tangente(
             b, tangent_to, (start_x, start_y), (end_x, end_y), construction, radius, sweep_angle), desde_solver=True,
-            construccion=construction, central=centerline)
+            construccion=construction, central=centerline, anclar=True)
         _exigir_sin_conflicto(sesion, op, previo.solver.ok, "El arco tangente")
         return informe
     if radius is not None:
@@ -1325,7 +1325,7 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
             raise error("INVALID_ARGUMENTS", "La forma centro + barrido no se combina con mid_x/mid_y ni "
                         "end_x/end_y (son de la forma de tres puntos).")
         return _dibujar(sesion, sketch, lambda b: _arco(b, center_x, center_y, start_x, start_y, sweep_angle,
-                                                         construction), construccion=construction, central=centerline)
+                                                         construction), construccion=construction, central=centerline, anclar=True)
     if None in (mid_x, mid_y, end_x, end_y):
         raise error("INVALID_ARGUMENTS", "Indicá center_x, center_y y sweep_angle, o los tres puntos: "
                     "start, mid_x/mid_y y end_x/end_y.")
@@ -1333,7 +1333,7 @@ def draw_arc(sesion, start_x: float, start_y: float, center_x: float | None = No
         raise error("INVALID_ARGUMENTS", "La forma de tres puntos no usa center_x/center_y (sí la de centro + "
                     "sweep_angle).")
     return _dibujar(sesion, sketch, lambda b: _arco_3_puntos(b, (start_x, start_y), (mid_x, mid_y), (end_x, end_y),
-                                                             construction), construccion=construction, central=centerline)
+                                                             construction), construccion=construction, central=centerline, anclar=True)
 
 
 @herramienta("create_polygon", "boceto", "Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía "
@@ -1365,14 +1365,14 @@ def create_polygon(sesion, sides: int = 6, radius: Expr | None = None, center_x:
         if edge_points is None or len(edge_points) != 3:
             raise error("INVALID_ARGUMENTS", "kind=edge necesita edge_points: los extremos A y B del lado y un punto del lado hacia donde crece.")
         return _dibujar(sesion, sketch, lambda b: _poligono_arista(b, sides, edge_points, construction, fully_constrained),
-                        construccion=construction, central=centerline)
+                        construccion=construction, central=centerline, anclar=True)
     if radius is None:
         raise error("INVALID_ARGUMENTS", "radius es obligatorio salvo con kind=edge.")
     expresion = texto_expr(radius)
     valor = evaluar(expresion, LONGITUD, sesion.doc.parametros.valores())
     return _dibujar(sesion, sketch, lambda b: _poligono(b, sides, valor, center_x, center_y, rotation,
                                                          kind == "circumscribed", construction, fully_constrained,
-                                                         expresion), construccion=construction, central=centerline)
+                                                         expresion), construccion=construction, central=centerline, anclar=True)
 
 
 @herramienta("draw_spline", "boceto", "Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control "
@@ -1401,7 +1401,7 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
         op, previo = boceto_activo(sesion, sketch, derivados=False)
         informe = _dibujar(sesion, op.id, lambda b: _spline(
             b, points, spline_type, degree, closed, construction, tangent_to, tangent_end), desde_solver=True,
-            construccion=construction, central=centerline)
+            construccion=construction, central=centerline, anclar=True)
         _exigir_sin_conflicto(sesion, op, previo.solver.ok, "La spline tangente")
         return informe
     if closed and spline_type == "control_points":
@@ -1409,21 +1409,21 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
                     "permite). Para un perfil cerrado usá fit_points con closed=true, o uní los extremos con "
                     "una línea o arco.")
     return _dibujar(sesion, sketch, lambda b: _spline(b, points, spline_type, degree, closed, construction),
-                    construccion=construction, central=centerline)
+                    construccion=construction, central=centerline, anclar=True)
 
 
 @herramienta("add_constraint", "boceto",
-             "Agrega una restricción geométrica entre entidades del boceto (ids de get_sketch: curvas y puntos). Si "
-             "choca con las que ya hay, falla y el boceto queda como estaba. Entidades por tipo: horizontal y "
+             "Restringe entidades del boceto (ids de get_sketch: curvas y puntos). Si "
+             "choca con las existentes, falla sin cambiar nada. Entidades por tipo: horizontal y "
              "vertical: una línea o dos puntos; parallel, perpendicular, collinear y equal: dos líneas (equal también "
              "dos círculos/arcos o dos elipses/arcos de elipse); coincident: un punto y otro punto o una curva; "
-             "midpoint: un punto y una línea o arco; tangent: dos curvas geométricas, salvo dos líneas; "
+             "midpoint: un punto y una línea o arco; tangent: dos curvas, no dos líneas; "
              "concentric: dos curvas con centro; curvature: dos curvas encadenadas, al menos una spline o cónica; "
              "fix: una o más entidades; symmetry: dos entidades y la línea eje; polygon: tres o más líneas en cadena "
-             "cerrada, o un solo lado (toma su cadena). Referencias reservadas: origen 0, eje X -1, "
-             "eje Y -2 (origin/axes de get_sketch). Un fix repetido devuelve el existente. Con tangent, el primer arco o "
-             "círculo queda quieto y no cambian radios ni largos; si la otra curva no puede moverse, se mueve el arco "
-             "entero.",
+             "cerrada, o un lado (toma su cadena). Referencias reservadas: origen 0, eje X -1, "
+             "eje Y -2 (origin/axes de get_sketch). Un fix repetido devuelve el existente. draw_* fija al origen un punto "
+             "nuevo en (0, 0); coincident con el origen lo reemplaza. Con tangent el primer arco o "
+             "círculo queda quieto, con radios y largos fijos (si el otro no puede moverse, se mueve el arco).",
              modifica=True)
 def add_constraint(sesion, sketch: str,
                    type: Literal["coincident", "horizontal", "vertical", "parallel", "perpendicular", "equal",  # noqa: A002
@@ -1443,6 +1443,13 @@ def add_constraint(sesion, sketch: str,
     b.asegurar_referencias(entities)
     _exigir_entidades(b, entities)
     antes = _claves(b)
+    # P-94: coincidir con el origen un punto ya anclado ahí cambia el ancla por la coincidencia (no sobre-define)
+    ancla = []
+    if type == "coincident" and b.ORIGEN in entities:
+        ancla = [k for k, r in b.restricciones.items()
+                 if r.tipo == "fijo" and r.datos.get("origen") and r.entidades[0] in entities]
+    for k in ancla:
+        del b.restricciones[k]
     try:
         if type == "tangent" and len(entities) == 2:
             b.deslizar_a_tangente(*entities)
@@ -1457,11 +1464,11 @@ def add_constraint(sesion, sketch: str,
             acomodar_tangente(b, entities, valores_cotas(sesion, b))
     except ErrorBoceto as e:
         raise error("INVALID_CONSTRAINT", str(e)) from e
-    if rid not in antes["restricciones"]:
+    if rid not in antes["restricciones"] or ancla:
         sesion.doc.reemplazar(op.id, nueva)
     _exigir_sin_conflicto(sesion, nueva, previo is None or previo.solver.ok, f"La restricción «{type}»")
     despues = boceto_resuelto(sesion, nueva)
-    if (type != "fix" and rid not in antes["restricciones"] and previo is not None and despues is not None
+    if (type != "fix" and not ancla and rid not in antes["restricciones"] and previo is not None and despues is not None
             and previo.solver.ok and despues.solver.ok and despues.solver.gdl >= previo.solver.gdl):
         raise error("SKETCH_OVERCONSTRAINED", f"La restricción «{type}» no quita ningún grado de libertad: el boceto "
                     f"«{op.nombre}» ya la cumple por otras restricciones o cotas (sobre-definiría). No se agregó.")
@@ -2132,7 +2139,7 @@ def draw_ellipse(sesion, major_radius: float, minor_radius: float, center_x: flo
     """
     _exigir_finitos(locals())
     return _dibujar(sesion, sketch, lambda b: _elipse(b, center_x, center_y, major_radius, minor_radius, angle,
-                                                      construction), construccion=construction, central=centerline)
+                                                      construction), construccion=construction, central=centerline, anclar=True)
 
 
 @herramienta("draw_slot", "boceto",
@@ -2156,7 +2163,7 @@ def draw_slot(sesion, points: list[list[float]], width: float,
     """
     _exigir_finitos(locals())
     return _dibujar(sesion, sketch, lambda b: _ranura(b, kind, points, width, construction),
-                    construccion=construction, central=centerline)
+                    construccion=construction, central=centerline, anclar=True)
 
 
 @herramienta("draw_point", "boceto", "Agrega un punto suelto al boceto (Fusion: Punto): sirve de referencia para cotas, "
@@ -2168,7 +2175,7 @@ def draw_point(sesion, x: float, y: float, sketch: str | None = None):
     sketch: id o nombre del boceto; vacío = el último boceto del timeline.
     """
     _exigir_finitos(locals())
-    return _dibujar(sesion, sketch, lambda b: b.agregar_punto(float(x), float(y)))
+    return _dibujar(sesion, sketch, lambda b: b.agregar_punto(float(x), float(y)), anclar=True)
 
 
 @herramienta("draw_conic", "boceto",
@@ -2191,7 +2198,7 @@ def draw_conic(sesion, start_x: float, start_y: float, end_x: float, end_y: floa
     _exigir_finitos(locals())
     return _dibujar(sesion, sketch, lambda b: b.agregar_conica((start_x, start_y), (vertex_x, vertex_y),
                                                                (end_x, end_y), rho, construction),
-                    construccion=construction, central=centerline)
+                    construccion=construction, central=centerline, anclar=True)
 
 
 @herramienta("draw_tangent_circle", "boceto",
@@ -2211,7 +2218,7 @@ def draw_tangent_circle(sesion, lines: list[int], x: float | None = None, y: flo
     construction: true para un círculo de construcción.
     """
     _exigir_finitos(locals())
-    return _dibujar(sesion, sketch, lambda b: _circulo_tangente(b, lines, x, y, radius, construction), desde_solver=True)
+    return _dibujar(sesion, sketch, lambda b: _circulo_tangente(b, lines, x, y, radius, construction), desde_solver=True, anclar=True)
 
 
 @herramienta("draw_blend_curve", "boceto",

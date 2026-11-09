@@ -168,6 +168,8 @@ def test_boc16_patron_circular_editado(s):
 
 def test_boc16_original_movido_arrastra_copias_tras_editar(s):
     c = _circulo(s)
+    ancla, = [k["id"] for k in boceto(s)["constraints"] if k["type"] == "fix"]   # P-94: centro anclado al origen
+    llamar(s, "delete_sketch_entities", entities=[ancla])                       # se le quita «Fijo», como en Fusion
     r = llamar(s, "sketch_rectangular_pattern", entities=[c], count1=2, distance1=10)
     llamar(s, "edit_sketch_pattern", pattern=r["pattern"], distance1=15)
     llamar(s, "transform_sketch", entities=[c], dx=5, dy=0)
