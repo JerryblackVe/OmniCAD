@@ -364,6 +364,8 @@ def extruir(caras, normal, distancia, simetrica=False):
     o SymmetricExtentDefinition). Distancia negativa = sentido contrario a la normal."""
     exigir_longitud(distancia, "La distancia de extrusión")
     n = np.asarray(normal, float) / np.linalg.norm(normal)
+    unidas = _unir_caras_coplanares(caras)
+    caras = unidas or caras
     solidos = []
     for cara in caras:
         base = cara
@@ -373,7 +375,48 @@ def extruir(caras, normal, distancia, simetrica=False):
         else:
             vec = n * distancia
         solidos.append(BRepPrimAPI_MakePrism(base, gp_Vec(*map(float, vec))).Shape())
+    if unidas is not None and len(solidos) > 1:
+        cajas = [_caja_occ(c, 1e-6, holgada=True) for c in unidas]
+        if all(a is not None and b is not None and a.IsOut(b) for i, a in enumerate(cajas) for b in cajas[i + 1:]):
+            return compuesto(solidos)       # regiones que ni se tocan: sus prismas no necesitan la booleana
     return unir_todos(solidos)
+
+
+def _unir_caras_coplanares(lista):
+    """Une en su plano varias caras coplanares (las regiones vecinas de un boceto). Extruir la región unida da el mismo
+    sólido que unir los prismas, sin la booleana 3D: 17 letras de un SVG con splines, 2,1 s → 0,13 s (P-120).
+    None si no son coplanares o la unión plana no sale creíble: entonces se unen los prismas como siempre."""
+    if len(lista) < 2 or any(c.ShapeType() != TopAbs_FACE for c in lista):
+        return None
+    lista = [TopoDS.Face(c) for c in lista]      # hay quien pasa la cara como TopoDS_Shape (las letras de calibración)
+    planos = [plano_de_cara(c) for c in lista]
+    if any(p is None for p in planos):
+        return None
+    n0, o0 = np.asarray(planos[0].normal, float), np.asarray(planos[0].origen, float)
+    if any(abs(abs(float(np.dot(p.normal, n0))) - 1.0) > 1e-9 or abs(float(np.dot(np.asarray(p.origen) - o0, n0))) > 1e-7
+           for p in planos):
+        return None
+    from OCP.collections import List_TopoDS_Shape
+    try:
+        args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
+        args.Append(lista[0])
+        for c in lista[1:]:
+            herr.Append(c)
+        op = BRepAlgoAPI_Fuse()
+        op.SetArguments(args)
+        op.SetTools(herr)
+        op.Build()
+        if not op.IsDone() or op.Shape().IsNull():
+            return None
+        unidas = caras(unificar_caras(op.Shape()))
+        areas = [area(c) for c in lista]
+        total = sum(area(c) for c in unidas)
+    except Exception:  # noqa: BLE001 — si la unión plana no puede, quedan los prismas de siempre
+        return None
+    tol = 1e-6 * sum(areas)
+    if not unidas or any(plano_de_cara(c) is None for c in unidas) or not max(areas) - tol <= total <= sum(areas) + tol:
+        return None
+    return unidas
 
 
 def revolver(caras, punto_eje, dir_eje, angulo_grados):
@@ -385,7 +428,8 @@ def revolver(caras, punto_eje, dir_eje, angulo_grados):
     ang = math.radians(max(-360.0, min(360.0, angulo_grados)))
     eje = gp_Ax1(gp_Pnt(*map(float, punto_eje)), _dir(dir_eje))
     solidos = []
-    for c in caras:
+    # Sin el atajo del compuesto de `extruir`: dos regiones separadas pueden barrer el mismo espacio al girar.
+    for c in _unir_caras_coplanares(caras) or caras:
         rev = BRepPrimAPI_MakeRevol(c, eje, ang)
         if not rev.IsDone():        # OCC lo marca así cuando el sólido se cortaría a sí mismo
             raise ErrorGeometria("El perfil cruza el eje de revolución: tiene que quedar de un solo lado del eje "
