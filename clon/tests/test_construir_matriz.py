@@ -192,3 +192,17 @@ def test_plano_en_angulo_guarda_su_eje_0_y_se_edita():
     for eje, normal in (("X", (1, 0, 0)), ("Y", (0, 0, 1))):         # Y es paralelo a la arista
         llamar(s, "edit_feature", feature=pid, params={"eje_0": eje})
         assert np.allclose(np.abs(s.doc.estado_final.planos[pid].normal), normal, atol=1e-9)
+
+
+def test_planos_del_scu_sirven_como_texto():
+    """B-263: los planos que anuncia create_ucs («op2_xy») sirven en create_sketch y create_construction_plane, y el
+    boceto depende del SCU (borrarlo no deja el boceto colgado sin aviso)."""
+    s = _armar()
+    planos = llamar(s, "create_ucs", origin="O", dz=7)["planes"]
+    xy = planos["xy"]
+    b = llamar(s, "create_sketch", plane=xy)["sketch"]
+    pl = next(v for v in llamar(s, "create_construction_plane", plane=xy.upper(), offset=3).values()
+              if isinstance(v, dict) and "id" in v)["id"]
+    assert np.isclose(s.doc.estado_final.planos[pl].origen[2], 10)
+    scu = xy.split("_")[0]
+    assert scu in s.paso(b["id"]).dependencias() and scu in s.paso(pl).dependencias()

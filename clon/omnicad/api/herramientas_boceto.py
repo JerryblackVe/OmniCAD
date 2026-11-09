@@ -89,7 +89,10 @@ def referencia_plano(sesion, plane):
     if hallados:
         raise error("AMBIGUOUS_REFERENCE", f"Hay {len(hallados)} planos llamados «{ref}»: "
                     + ", ".join(o.id for o in hallados) + ".")
-    opciones = list(PLANOS_ORIGEN) + [o.id for o in planos] + [o.nombre for o in planos]
+    derivados = [k for k in sesion.doc.estado_final.planos if "_" in k]      # B-263: «op2_xy» de un SCU, copias de patrón
+    if ref.casefold() in (d := {k.casefold(): k for k in derivados}):
+        return d[ref.casefold()]
+    opciones = list(PLANOS_ORIGEN) + [o.id for o in planos] + [o.nombre for o in planos] + derivados
     parecidos = difflib.get_close_matches(ref, opciones, n=3, cutoff=0.5)
     raise error("PLANE_NOT_FOUND", f"No existe el plano '{ref}'.",
                 *([f"¿Quisiste decir: {', '.join(parecidos)}?"] if parecidos else []))
