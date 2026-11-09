@@ -67,7 +67,7 @@ def _plano_por_eje(e, eje_0=""):
     p, d = ent.como_eje(e)
     d = np.asarray(d, float) / (np.linalg.norm(d) or 1.0)
     if not eje_0:
-        ref =np.array([0.0, 0.0, 1.0]) if abs(d[2]) < 0.9 else np.array([0.0, 1.0, 0.0])
+        ref = np.array([0.0, 0.0, 1.0]) if abs(d[2]) < 0.9 else np.array([0.0, 1.0, 0.0])
     else:
         ref = np.array(_EJES_MUNDO[eje_0 if isinstance(eje_0, str) and eje_0 in _EJES_MUNDO else eje_cero(d)])
         if np.linalg.norm(np.cross(d, ref)) < 1e-9:       # el eje quedó paralelo al elegido: se elige otro
