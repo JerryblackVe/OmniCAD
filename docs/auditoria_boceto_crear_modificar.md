@@ -310,7 +310,7 @@ Pruebas: **API** = `clon/tests/test_boceto_crear_modificar_matriz.py` (un caso p
 | Rectángulo (`rectangulo`, `_3p`, `_centro`) | 3 | API, Qt, Ventana (`boceto_herramientas`, `cm_pieza_varilla`, `cm_ventana`) | — | — | VERIFICADO |
 | Círculo (`circulo`, `_2p`, `_3p`, `_2t`, `_3t`) | 5 | API, Qt, Ventana (`cm_pieza_varilla`, `cm_ventana`) | — | — | VERIFICADO |
 | Arco (`arco`, `arco_centro`, `arco_tangente`) | 3 | API, Comb., Qt, Ventana (`boceto_herramientas`, `cm_ventana`) | P-72 | P-72 | CORREGIDO |
-| Polígono (`poligono_circunscrito`, `_inscrito`, `_arista`) | 3 | API, Comb., Ventana (`proyectar_boceto`, `cm_ventana`) | — (P-94 es de la API) | — | VERIFICADO |
+| Polígono (`poligono_circunscrito`, `_inscrito`, `_arista`) | 3 | API, Comb., Ventana (`cm_ventana`) | — (P-94 es de la API) | — | VERIFICADO |
 | Elipse (`elipse`) | 1 | API, Qt, Ventana (`boceto_herramientas`, `restricciones_boceto`) | — | — | VERIFICADO |
 | Ranura (`ranura_centro`, `_total`, `_punto`, `_arco_3p`, `_arco_centro`) | 5 | API, cm-5, Ventana (`cm_ventana`) | B-246, B-255 | B-246, B-255 | CORREGIDO |
 | Spline (`spline_ajuste`, `spline_control`) | 2 | API, Comb., Ventana (`boceto_cotas`, `cm_ventana`) | P-67 | P-67 | CORREGIDO |
@@ -347,7 +347,7 @@ propia pieza `parametros`). 50 claves probadas desde la ventana completa; las 5 
   `docs/brechas_mcp.md`; el anclaje al origen, como P-94 (decisión de Gerardo: rompe 20 tests y el patrón «coincidente
   con el origen»).
 - **Pruebas reales:** matriz de la API 48 casos y 5 xfail ya cerrados; combinaciones 76; cm-5 41/41; 9 piezas de boceto
-  en la ventana, 1233 comprobaciones, 0 ✗; `cm_ventana` 67/0 (H-110, P-73, B-245, B-253, P-75 y 23 comandos más);
+  en la ventana, 1233 comprobaciones, 0 ✗; `cm_ventana` 69/0 (H-110, P-73, B-245, B-253, P-75 y 24 comandos más);
   `cm_pieza_varilla` 15/0 (portón 3: varilla de abanico, cota 180 → 160, volumen 7490,111 → 6650,111 mm³ igual al
   calculado, capturas miradas); caza `tema boceto`, 0 hallazgos nuevos.
 - **Rendimiento:** no se midieron cambios de tiempo en esta auditoría (ningún arreglo tocó un camino caliente).

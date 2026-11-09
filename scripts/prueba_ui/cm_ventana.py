@@ -61,7 +61,7 @@ CELDA = {}                       # comando -> origen (x, y) de su celda de 70 mm
 _ORDEN = ["circulo_2p", "circulo_3p", "rectangulo_centro", "poligono_circunscrito", "poligono_arista", "arco_tangente",
           "ranura_centro", "ranura_total", "ranura_punto", "ranura_arco_3p", "ranura_arco_centro", "spline_control",
           "conica", "espiral", "alargar", "partir", "circulo_2t", "circulo_3t", "desglosar_texto", "soltar_desfase",
-          "chaflan", "chaflan_dos_dist", "chaflan_dist_angulo"]
+          "chaflan", "chaflan_dos_dist", "chaflan_dist_angulo", "poligono_inscrito"]
 for i, h in enumerate(_ORDEN):
     CELDA[h] = (-350 + 70 * (i % 10), 40 - 90 * (i // 10))
 
@@ -326,6 +326,7 @@ DIBUJO = {   # comando: (clics relativos a su celda, fin, tipo de curva que tien
     "circulo_3p": ([(0, 0), (20, 0), (10, 12)], None, "circulo"),
     "rectangulo_centro": ([(15, 10), (25, 16)], None, "linea"),
     "poligono_circunscrito": ([(15, 10), (27, 10)], None, "linea"),
+    "poligono_inscrito": ([(15, 10), (27, 10)], None, "linea"),
     "poligono_arista": ([(0, 0), (15, 0), (7, 10)], None, "linea"),
     "arco_tangente": ([(15, 0), (28, 12)], None, "arco"),
     "ranura_centro": ([(0, 0), (30, 0), (15, 6)], None, "arco"),
