@@ -1337,7 +1337,7 @@ class PanelComando(QFrame):
         self.visor.set_filtro(self._filtros(campo) if campo is not None else None)
         # H-72: en un campo de varias caras o cuerpos, arrastrar en la vista elige con una ventana (como Fusion)
         self.visor.ventana_en_comando = bool(campo is not None and campo.maximo != 1
-                                             and set(campo.filtros) & {"cara", "cuerpo"})
+                                             and set(campo.filtros) & {"cara", "cuerpo", "perfil"})   # B-268
         # en un campo de varios perfiles, tocar una letra elige el texto entero (como Fusion)
         self.visor.texto_entero = bool(campo is not None and campo.maximo is None and "perfil" in campo.filtros)
 

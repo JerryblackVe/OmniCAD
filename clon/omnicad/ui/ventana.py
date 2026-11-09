@@ -1697,6 +1697,8 @@ class VentanaPrincipal(QMainWindow):
                 nuevos.append(m["id"])
         if not caras:
             nuevos = self._hits_cuerpos(self._expandir_componentes(nuevos))
+        if "perfil" in (campo.filtros if campo is not None else self.visor.filtro or ()):
+            nuevos += self._perfiles_en_region(poligono, cruce, estado)     # B-268: la caja elige perfiles (Fusion)
         if self.panel is not None:
             self.panel.elegir_varias(nuevos)
             return
@@ -1704,6 +1706,24 @@ class VentanaPrincipal(QMainWindow):
         refs_previas = [h["ref"] for h in self.seleccion]
         self._seleccionar((self.seleccion if aditivo else []) +
                           [h for h in nuevos if not aditivo or h["ref"] not in refs_previas])
+
+    def _perfiles_en_region(self, poligono, cruce, estado):
+        """Perfiles de los bocetos visibles con todos sus puntos dentro de la ventana (o alguno, en la de cruce). Los huecos
+        de las letras no: son aire."""
+        from ..timeline.operaciones import OpExtrusion
+        from .comando import hit_desde_ref
+        hits = []
+        for br in self.visor._bocetos_visibles():
+            huecos = self.visor._huecos_texto(br)
+            for perfil in br.perfiles:
+                if id(perfil) in huecos:
+                    continue
+                s, ok = self.visor.puntos_pantalla(self.visor._tris_perfil(perfil.cara).reshape(-1, 3))
+                dentro = dentro_del_poligono(s[ok], poligono) if ok.any() else np.zeros(0, bool)
+                if len(dentro) and (dentro.any() if cruce else dentro.all()):
+                    hits.append(hit_desde_ref({"tipo": "perfil", "boceto": br.op_id,
+                                               **OpExtrusion.referencia_perfil(perfil)}, estado))
+        return hits
 
     def _expandir_componentes(self, ids):
         if getattr(self, "prioridad_seleccion", None) != "componente":
