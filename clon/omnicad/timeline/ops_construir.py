@@ -12,7 +12,7 @@ from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
 from ..nucleo.perfiles import aristas_boceto
 from . import entidades as ent
-from .operaciones import ANGULO, ErrorOperacion, Operacion, OpPlano, _resolver, registrar_operacion
+from .operaciones import ANGULO, ErrorOperacion, Operacion, OpPlano, _resolver, exigir_sin_ciclo, registrar_operacion
 
 TIPOS_PLANO = {"desfase": "Plano de desfase", "angulo": "Plano en el ángulo", "tangente": "Plano tangente",
                "medio": "Plano medio", "dos_aristas": "Plano a través de dos aristas",
@@ -229,6 +229,7 @@ class OpEje(Operacion):
         return ent.dependencias_de(self.p["refs"], self.p["lugar"], self.p["objeto_extension"]) - {self.id}
 
     def ejecutar(self, estado, ctx):
+        exigir_sin_ciclo(self, self.p["refs"], self.p["lugar"], self.p["objeto_extension"])
         cs, t = _cs(), self.p["tipo"]
         E = [_resolver(r, estado) for r in self.p["refs"]]
         faltan = {"cilindro": 1, "perpendicular_cara": 1 if self.p["lugar"] else 2, "dos_planos": 2, "dos_puntos": 2, "arista": 1}[t]

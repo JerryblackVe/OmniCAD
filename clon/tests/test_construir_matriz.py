@@ -147,3 +147,20 @@ def test_punto_por_dos_aristas_que_se_cruzan_sin_tocarse_da_error():
                                                      "references": ["edges:>Z and >X", "edges:<Z and >Y"]})
     assert not r["ok"] and "no se cortan" in r["mensaje"], r
     assert not s.doc.estado_final.puntos
+
+
+@pytest.mark.parametrize("herramienta, args, ref", [
+    ("create_construction_plane", dict(plane="XY", offset=3), "plano"),
+    ("create_construction_axis", dict(type="dos_planos", references=["XY", "XZ"]), "eje")])
+def test_construccion_que_se_referencia_a_si_misma_se_rechaza(herramienta, args, ref):
+    """B-260: un plano o eje que se usa a sí mismo (Tamaño al objeto, vía edit_feature o receta) se rechaza, y su
+    referencia propia no lo traba: se puede borrar."""
+    s = _armar()
+    i = next(v["id"] for v in llamar(s, herramienta, **args).values() if isinstance(v, dict) and "id" in v)
+    r = api.llamar(s, "edit_feature", {"feature": i, "params": {"objeto_extension": {"tipo": ref, "id": i},
+                                                                 "tipo_extension": "objeto"}})
+    assert not r["ok"] and "a sí mismo" in r["mensaje"], r
+    op = s.paso(i).copia()
+    op.p["objeto_extension"] = {"tipo": ref, "id": i}
+    assert i not in op.dependencias()
+    llamar(s, "delete_feature", feature=i)
