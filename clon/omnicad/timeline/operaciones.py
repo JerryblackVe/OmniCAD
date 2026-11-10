@@ -372,9 +372,10 @@ def poner_resultado(estado, ctx, op_id, c, nueva):
     return [c.id] + [estado.nuevo_cuerpo(op_id, s, c.tipo, **atributos_copia(c)) for s in partes[1:]]
 
 
-def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", tipo="solido"):
+def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", tipo="solido", apoyos=None):
     """Aplica una forma recién creada según FeatureOperations. `objetivo`: id de un cuerpo, lista de ids
-    ("Objetos para cortar" de Fusion) o vacío = automático (los cuerpos sólidos que toca).
+    ("Objetos para cortar" de Fusion) o vacío = automático (los cuerpos sólidos que toca). `apoyos`: función que da
+    puntos del perfil de partida; el cuerpo que los toca es la base (la cara o el boceto de donde nace la herramienta).
     Devuelve los ids de cuerpos afectados. La herramienta queda anotada en `estado.herramientas[op_id]` (el patrón
     de operaciones la repite)."""
     if geo.esta_vacia(herramienta):
@@ -403,7 +404,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
     if operacion == "unir":
         resultado = herramienta
         v_previa = None                # volumen de lo acumulado hasta acá (se mide una vez)
-        avisos = []
+        avisos, puntos = [], None
         for c in objetivos:
             nueva = geo.booleano(resultado, c.forma, "unir", avisos)
             # Integración exacta: barata. `geo.volumen` malla el cuerpo entero si tiene caras libres (20 s en 500 B-spline)
@@ -416,7 +417,11 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
                 # no se absorbe un cuerpo ajeno en silencio (el join sobre la cara es lo normal).
                 v_antes = v_previa + v_c
                 if v_nueva >= v_antes - max(v_antes, 1.0) * 1e-7:
-                    ctx.aviso(f"{c.nombre} se unió a la herramienta compartiendo solo una cara (sin solape).")
+                    if puntos is None:
+                        puntos = apoyos() if apoyos else []
+                    # B-281: el cuerpo de donde nace la herramienta siempre comparte esa cara; no es un cuerpo ajeno
+                    if not any(geo.punto_toca(c.forma, q) for q in puntos):
+                        ctx.aviso(f"{c.nombre} se unió a la herramienta compartiendo solo una cara (sin solape).")
             # Una unión no puede pesar menos que lo que ya había (B-52: unir una primitiva a un cuerpo
             # compuesto descartaba en silencio un sólido entero — la espiral, −3.194 mm³).
             v_menor = max(v_previa, v_c)
@@ -1192,7 +1197,10 @@ class OpExtrusion(_OpConPerfiles):
 
     def ejecutar(self, estado, ctx):
         forma = self._forma(estado, ctx)
-        afectados = aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo())
+        apoyos = None
+        if self.p.get("inicio", "plano") == "plano" and (self.p.get("perfiles") or self.p.get("caras")):
+            apoyos = lambda: [geo.punto_dentro(c) for c in self._caras(estado, None)[1]]  # noqa: E731
+        afectados = aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo(), apoyos=apoyos)
         self._registrar_usados(afectados)
         _exigir_cuerpo_con_volumen(estado, afectados)
 
@@ -1364,6 +1372,8 @@ class OpRevolucion(_OpConPerfiles):
     def ejecutar(self, estado, ctx):
         plano, caras = self._caras(estado, ctx)
         punto, direccion = self._eje(estado, plano)
+        caras0 = caras
+        apoyos = lambda: [geo.punto_dentro(c) for c in caras0]  # noqa: E731  (B-281: la cara de partida)
         if self.p.get("proyectar_eje"):         # «Eje de proyecto»: el eje se lleva al plano del perfil
             n = np.asarray(plano.normal, float)
             proyectado = np.asarray(direccion, float) - n * float(np.asarray(direccion, float) @ n)
@@ -1378,7 +1388,8 @@ class OpRevolucion(_OpConPerfiles):
             if kernel is None or not hasattr(kernel, "revolver_hasta"):
                 raise ErrorOperacion("«A objeto» todavía no está disponible con este motor geométrico.")
             forma = kernel.revolver_hasta(caras, punto, direccion, self._hasta(estado))
-            self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo()))
+            self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo(),
+                                                 apoyos=apoyos))
             return
         a1 = 360.0 if self.p.get("extension") == "completa" else ctx.evaluar(self.p["angulo"], ANGULO)
         modo = self.p.get("direccion", "un_lado")
@@ -1395,7 +1406,8 @@ class OpRevolucion(_OpConPerfiles):
                                     geo.revolver(caras, punto, -direccion, abs(a2))])
         else:
             forma = geo.revolver(caras, punto, direccion, a1)
-        self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo()))
+        self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo(),
+                                                 apoyos=apoyos))
 
 
 class OpPrimitiva(Operacion):

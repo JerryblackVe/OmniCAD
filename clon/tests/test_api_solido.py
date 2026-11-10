@@ -146,6 +146,37 @@ def test_union_que_comparte_solo_una_cara_avisa(s):
     assert len(cuerpos(s)) == 1      # se unió (se avisa, no se excluye)
 
 
+def test_extruir_desde_una_cara_no_avisa_la_cara_de_partida_pero_si_un_cuerpo_ajeno(s):
+    """B-281: extruir (o revolver) una cara, o un boceto sobre ella, uniendo comparte esa cara con su cuerpo: no es un aviso.
+    Un cuerpo ajeno que solo toca el costado de la herramienta sigue avisando (B-38)."""
+    llamar(s, "create_box", length=20, width=10, height=10, anchor="corner")
+
+    def arriba():
+        return next(c["id"] for c in llamar(s, "find_faces", body="Cuerpo1")["faces"] if c["normal"] == [0.0, 0.0, 1.0])
+
+    def ultimo_paso():
+        return llamar(s, "get_timeline", include_params=False)["steps"][-1]
+
+    llamar(s, "extrude", faces=[arriba()], distance=5, operation="join")
+    assert ultimo_paso()["status"] != "warning"
+    ok(api.llamar(s, "undo"))
+    llamar(s, "create_sketch", name="S", plane=arriba())
+    llamar(s, "draw_circle", sketch="S", center_x=10, center_y=5, radius=2)
+    llamar(s, "extrude", sketch="S", distance=5, operation="join")
+    assert ultimo_paso()["status"] != "warning"
+    ok(api.llamar(s, "undo"))
+    ok(api.llamar(s, "undo"))
+    costado = next(c["id"] for c in llamar(s, "find_faces", body="Cuerpo1")["faces"] if c["normal"] == [1.0, 0.0, 0.0])
+    eje = next(e["id"] for e in llamar(s, "find_edges", body="Cuerpo1")["edges"] if e["center"] == [20.0, 0.0, 5.0])
+    llamar(s, "revolve", faces=[costado], axis=eje, angle="90 deg", operation="join", reverse=True)   # gira hacia afuera
+    assert ultimo_paso()["status"] != "warning"
+    ok(api.llamar(s, "undo"))
+    llamar(s, "create_box", length=5, width=10, height=5, anchor="corner", x=20, z=10)   # pegada al costado
+    llamar(s, "extrude", faces=[arriba()], distance=5, operation="join")
+    paso = ultimo_paso()
+    assert paso["status"] == "warning" and "Cuerpo2" in paso["message"] and "Cuerpo1" not in paso["message"]
+
+
 def test_perfil_se_reenlaza_cuando_el_contorno_cambia(s):
     """Extrusión sobre media luna; al quedar la línea fuera, la firma del perfil cambia
     y la extrusión se re-vincula al disco entero con un aviso (regresión B-27)."""
