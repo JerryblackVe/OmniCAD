@@ -62,7 +62,7 @@ def _info_cuerpo(sesion, c):
 
 def _info_boceto(sesion, b):
     op = next((o for o in sesion.doc.operaciones if o.id == b.op_id), None)
-    return {"id": b.op_id, "name": b.nombre, "plane": op.p.get("plano") if op is not None else None,
+    return {"id": b.op_id, "name": op.nombre if op is not None else b.nombre, "plane": op.p.get("plano") if op is not None else None,
             "profiles": len(b.perfiles), "solved": bool(getattr(b.solver, "ok", True))}
 
 
@@ -95,14 +95,14 @@ def _info_uniones(estado):
             for k, u in estado.uniones.items()]
 
 
-def _info_construccion(estado):
+def _info_construccion(estado, nombres):
     """P-79: planos, ejes y puntos de construcción (también los de cada SCU) donde quedaron tras el último cálculo."""
     v = lambda x: [_r(c) for c in x]  # noqa: E731
-    return {"planes": [{"id": i, "name": p.nombre, "origin": v(p.origen), "normal": v(p.normal), "u_axis": v(p.u)}
+    return {"planes": [{"id": i, "name": nombres.get(i, p.nombre), "origin": v(p.origen), "normal": v(p.normal), "u_axis": v(p.u)}
                        for i, p in estado.planos.items()],
-            "axes": [{"id": i, "name": e[2] if len(e) > 2 else i, "point": v(e[0]), "direction": v(e[1])}
+            "axes": [{"id": i, "name": nombres.get(i, e[2] if len(e) > 2 else i), "point": v(e[0]), "direction": v(e[1])}
                      for i, e in estado.ejes.items()],
-            "points": [{"id": i, "name": p[1] if len(p) > 1 else i, "point": v(p[0])}
+            "points": [{"id": i, "name": nombres.get(i, p[1] if len(p) > 1 else i), "point": v(p[0])}
                        for i, p in estado.puntos.items()]}
 
 
@@ -111,6 +111,7 @@ def _resumen(sesion, resumido=False):
     from .herramientas_parametros import info_parametros   # import diferido: "documento" se registra primero
     doc = sesion.doc
     estado = doc.estado_final
+    nombres = {o.id: o.nombre for o in doc.operaciones}     # B-273: renombrar no recalcula el estado
     if resumido:         # solo nombres y cantidades: con decenas de cuerpos el resumen entero pasa de los 100 KB (T-18)
         tipos = {"solido": "solid", "superficie": "surface", "malla": "mesh"}
         return {"name": doc.nombre, "path": doc.ruta, "modified": doc.modificado,
@@ -118,7 +119,7 @@ def _resumen(sesion, resumido=False):
                 "display_units": {"length": doc.unidades["longitud"], "mass": doc.unidades["masa"]},
                 "bodies": [{"id": c.id, "name": sesion.nombre_cuerpo(c), "type": tipos.get(getattr(c, "tipo", "solido"))}
                            for c in estado.cuerpos.values()],
-                "sketches": [{"id": b.op_id, "name": b.nombre} for b in estado.bocetos.values()],
+                "sketches": [{"id": b.op_id, "name": nombres.get(b.op_id, b.nombre)} for b in estado.bocetos.values()],
                 "decals": [{"id": d["id"], "name": d["name"], "body": d["body"]} for d in info_calcomanias(sesion)],
                 "counts": {"bodies": len(estado.cuerpos), "sketches": len(estado.bocetos),
                            "construction": len(estado.planos) + len(estado.ejes) + len(estado.puntos),
@@ -133,7 +134,7 @@ def _resumen(sesion, resumido=False):
             "decals": info_calcomanias(sesion),
             "components": _info_componentes(sesion, estado), "joints": _info_uniones(estado),
             "rigid_groups": [list(g) for g in estado.grupos_rigidos],
-            "construction": _info_construccion(estado),
+            "construction": _info_construccion(estado, nombres),
             "timeline_steps": len(doc.operaciones), "marker": doc.marcador,
             "parameters": [p for p in info_parametros(doc) if p.get("source") != "feature"]}   # los de cada paso inflarían esto
 

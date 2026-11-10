@@ -198,6 +198,32 @@ def test_cambiar_nombre_cuerpo_en_linea_y_grupo(v, monkeypatch):
     assert v.navegador.item(r["result"]["id"]).text(0) == "Nuevo nombre"
 
 
+def test_renombrar_boceto_y_plano_tecleando_se_ve_en_navegador_y_api(v):
+    """B-273: menú › Cambiar nombre › teclear › Enter; renombrar no recalcula, el navegador y la API leían el viejo."""
+    from PySide6.QtWidgets import QLineEdit
+    s = api.Sesion(v.doc)
+    sk = api.llamar(s, "create_sketch", {"plane": "xy"})["result"]["sketch"]["id"]
+    assert api.llamar(s, "create_construction_plane", {"plane": "XY", "offset": 5})["ok"]
+    pl = v.doc.operaciones[-1].id
+    QApplication.processEvents()
+    for clave, nuevo in ((sk, "Mi boceto"), (pl, "Mi plano")):
+        accion(menu_de(v, clave), "Cambiar nombre").trigger()
+        QApplication.processEvents()
+        ed = next(e for e in v.navegador.arbol.findChildren(QLineEdit) if e.isVisible())
+        ed.selectAll()
+        QTest.keyClicks(ed, nuevo)
+        QTest.keyClick(ed, Qt.Key_Return)
+        QApplication.processEvents()
+        assert v.doc.operacion(clave).nombre == nuevo
+        assert v.navegador.item(clave).text(0) == nuevo
+    for resumen in (True, False):
+        info = api.llamar(s, "get_scene_info", {"summary": resumen})["result"]
+        assert {b["id"]: b["name"] for b in info["sketches"]}[sk] == "Mi boceto"
+    assert {p["id"]: p["name"] for p in info["construction"]["planes"]}[pl] == "Mi plano"
+    estado = api.llamar(s, "get_browser_state", {})["result"]
+    assert {b["id"]: b["name"] for b in estado["sketches"]}[sk] == "Mi boceto"
+
+
 @pytest.mark.parametrize("propiedades", [{}, {"organizacion": {}}])
 def test_ojo_y_mostrar_todo_tienen_efecto_en_vista(v, propiedades):
     v.doc.propiedades["__navegador__"] = dict(propiedades)

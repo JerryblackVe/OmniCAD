@@ -38,9 +38,10 @@ def get_browser_state(sesion):
     from .herramientas_boceto import estado_solver
     datos = datos_navegador(sesion.doc)
     bocetos = []
+    nombres = {o.id: o.nombre for o in sesion.doc.operaciones}     # B-273: renombrar no recalcula el estado
     for b in sesion.doc.estado_final.bocetos.values():
         status, dof = estado_solver(b)
-        bocetos.append({"id": b.op_id, "name": b.nombre, "status": status, "dof": dof})
+        bocetos.append({"id": b.op_id, "name": nombres.get(b.op_id, b.nombre), "status": status, "dof": dof})
     return {"groups": [{"id": k, "name": v["nombre"], "items": v["miembros"]}
                        for k, v in datos["grupos"].items()],
             "selection_sets": [{"id": k, "name": v["nombre"], "items": v["miembros"]}

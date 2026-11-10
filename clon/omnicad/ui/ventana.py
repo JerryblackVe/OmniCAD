@@ -1228,13 +1228,13 @@ class VentanaPrincipal(QMainWindow):
         from .navegador import estado_boceto
         self.navegador.actualizar(titulo, [(k.id, self.nombre_cuerpo(k)) for k in estado_nav.cuerpos.values()
                                            if not k.componente],
-                                  [(b.op_id, b.nombre,
+                                  [(b.op_id, nombres.get(b.op_id, b.nombre),
                                     *estado_boceto(en_edicion[b.op_id] if b.op_id in en_edicion
                                                    else b.solver if b.boceto.curvas else None))
                                    for b in bocetos_nav.values()], self.ocultos, self.vis,
-                                  [(i, pl.nombre, "plano_desfase") for i, pl in estado_nav.planos.items()] +
-                                  [(i, n, "eje_arista") for i, (_p, _d, n) in estado_nav.ejes.items()] +
-                                  [(i, n, "punto_vertice") for i, (_p, n) in estado_nav.puntos.items()],
+                                  [(i, nombres.get(i, pl.nombre), "plano_desfase") for i, pl in estado_nav.planos.items()] +
+                                  [(i, nombres.get(i, n), "eje_arista") for i, (_p, _d, n) in estado_nav.ejes.items()] +
+                                  [(i, nombres.get(i, n), "punto_vertice") for i, (_p, n) in estado_nav.puntos.items()],
                                   list(self.doc.vistas))
 
     def aplicar_analisis(self, estado=None):
@@ -2469,7 +2469,8 @@ class VentanaPrincipal(QMainWindow):
                          f"{'sólido válido' if geo.es_valida(cuerpo.forma) else '⚠ geometría inválida'}", 10000)
         elif ident in estado.bocetos:
             b = estado.bocetos[ident]
-            self.mensaje(f"{b.nombre}: {len(b.perfiles)} perfil(es) cerrado(s). Doble clic para editarlo.", 8000)
+            nombre = {o.id: o.nombre for o in self.doc.operaciones}.get(ident, b.nombre)     # B-273: el vigente
+            self.mensaje(f"{nombre}: {len(b.perfiles)} perfil(es) cerrado(s). Doble clic para editarlo.", 8000)
 
     def _intentar(self, funcion):
         try:
