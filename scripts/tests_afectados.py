@@ -18,6 +18,7 @@ from pathlib import Path
 
 # Una estimación prudente deja margen al tope de turno.py cuando faltan mediciones.
 SEGUNDOS_SIN_MEDIR = 30
+TOPE_GRUPO = 400
 
 
 def _git(raiz, *argumentos):
@@ -166,13 +167,13 @@ def seleccionar(raiz, desde="HEAD", hasta=None):
 
 
 def agrupar(tests, tiempos):
-    """Agrupa archivos ordenados en menos de 600 s estimados; sin medición usa 30 s, uno indivisible va solo."""
+    """Agrupa en menos de TOPE_GRUPO (400) s estimados; sin medición usa 30 s, uno indivisible va solo."""
     grupos, grupo, total = [], [], 0.0
     for test in sorted(tests):
         segundos = float(tiempos.get(test, SEGUNDOS_SIN_MEDIR))
         if not math.isfinite(segundos) or segundos < 0:
             raise ValueError(f"Tiempo inválido para {test}: {segundos}")
-        if grupo and total + segundos >= 600:
+        if grupo and total + segundos >= TOPE_GRUPO:
             grupos.append(grupo)
             grupo, total = [], 0.0
         grupo.append(test)
@@ -180,6 +181,20 @@ def agrupar(tests, tiempos):
     if grupo:
         grupos.append(grupo)
     return grupos
+
+
+def _correr_grupo(raiz, grupo, numero):
+    """Corre con turno.py y repite en mitades si vence el plazo, salvo que quede un solo archivo."""
+    comando = [sys.executable, "../scripts/turno.py", "--plazo", "900", "--", sys.executable,
+               "-m", "pytest", *grupo, "-q", "-W", "error", "-p", "no:cacheprovider"]
+    codigo = subprocess.run(comando, cwd=raiz / "clon").returncode
+    if codigo == 124 and len(grupo) > 1:
+        print(f"Grupo {numero}: cortado por el plazo de 900 s (124); lo repito en dos mitades", flush=True)
+        mitad = len(grupo) // 2
+        primera = _correr_grupo(raiz, grupo[:mitad], numero)
+        segunda = _correr_grupo(raiz, grupo[mitad:], numero)
+        return primera or segunda
+    return codigo
 
 
 def main(argumentos=None):
@@ -205,17 +220,18 @@ def main(argumentos=None):
         if not args.correr or not tests:
             return 0
         archivo_tiempos = args.raiz / "evidencias" / "tiempos.json"
+        if not archivo_tiempos.exists():
+            comun = Path(_git(args.raiz, "rev-parse", "--path-format=absolute", "--git-common-dir").strip())
+            archivo_tiempos = comun.parent / "evidencias" / "tiempos.json"
         tiempos = json.loads(archivo_tiempos.read_text(encoding="utf-8"))["archivos"] if archivo_tiempos.exists() else {}
         grupos = agrupar(tests, tiempos)
         fallos = 0
         for i, grupo in enumerate(grupos, 1):
             estimado = sum(float(tiempos.get(t, SEGUNDOS_SIN_MEDIR)) for t in grupo)
             print(f"Grupo {i}/{len(grupos)}: {len(grupo)} archivos, {estimado:.1f} s estimados", flush=True)
-            if estimado >= 600:
-                print("Aviso: un archivo solo alcanza los 600 s; no se puede dividir por archivo.", flush=True)
-            comando = [sys.executable, "../scripts/turno.py", "--plazo", "900", "--", sys.executable,
-                       "-m", "pytest", *grupo, "-q", "-W", "error", "-p", "no:cacheprovider"]
-            codigo = subprocess.run(comando, cwd=args.raiz / "clon").returncode
+            if estimado >= TOPE_GRUPO:
+                print(f"Aviso: un archivo solo alcanza los {TOPE_GRUPO} s; no se puede dividir por archivo.", flush=True)
+            codigo = _correr_grupo(args.raiz, grupo, i)
             fallos += codigo != 0
             print(f"Grupo {i}: salida {codigo}", flush=True)
         print(f"Resultado: {len(grupos)} grupos, {fallos} fallidos", flush=True)
