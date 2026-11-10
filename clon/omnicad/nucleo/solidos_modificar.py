@@ -290,22 +290,39 @@ def aristas_cadena_tangente(forma, arista, tol_ang=1.0):
     return cadena
 
 
-def caras_tangentes(forma, cara, tol_ang=1.0):
-    """Cara + todas las caras unidas a ella por aristas tangentes (cadena de caras tangentes)."""
+def _vecinas_tangentes(analisis, arista_caras, cara):
+    """Caras pegadas a `cara` por una arista tangente (puede incluir a `cara` misma)."""
+    for e in _unicos(cara, TopAbs_EDGE):
+        e = TopoDS.Edge(e)
+        if ChFiDS_Tangential in _tipos_arista(analisis, e):
+            for otra in _padres(arista_caras, e):
+                yield TopoDS.Face(otra)
+
+
+def caras_tangentes(forma, cara, tol_ang=1.0, *, coplanares=True):
+    """Cara + todas las caras unidas a ella por aristas tangentes (cadena de caras tangentes).
+    coplanares=False no pasa de una cara plana a otra (la otra mitad de una cara partida), como el desfase de Fusion,
+    que solo arrastra las vecinas tangentes curvas."""
     analisis = _analisis(forma, tol_ang)
     arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
     cadena, pendientes = [cara], [cara]
     while pendientes:
         f = pendientes.pop(0)
-        for e in _unicos(f, TopAbs_EDGE):
-            e = TopoDS.Edge(e)
-            if ChFiDS_Tangential not in _tipos_arista(analisis, e):
-                continue
-            for otra in _padres(arista_caras, e):
-                if not _contiene(cadena, otra):
-                    cadena.append(TopoDS.Face(otra))
-                    pendientes.append(TopoDS.Face(otra))
+        plana = not coplanares and _plano_de_cara(f) is not None
+        for otra in _vecinas_tangentes(analisis, arista_caras, f):
+            if not _contiene(cadena, otra) and not (plana and _plano_de_cara(otra) is not None):
+                cadena.append(otra)
+                pendientes.append(otra)
     return cadena
+
+
+def _vecina_coplanar_suelta(forma, caras):
+    """True si una cara plana de `caras` sigue, en el mismo plano, en una vecina que no está en `caras`."""
+    analisis = _analisis(forma, 1.0)
+    arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+    return any(_plano_de_cara(otra) is not None and not _contiene(caras, otra)
+               for f in caras if _plano_de_cara(f) is not None
+               for otra in _vecinas_tangentes(analisis, arista_caras, f))
 
 
 def caras_en_cadena(forma, caras):
@@ -1382,23 +1399,25 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
         raise geo.ErrorGeometria("La distancia de desfase no puede ser cero.")
     todas = []
     for c in caras:
-        for t in (caras_tangentes(forma, c) if tangente else [c]):
+        for t in (caras_tangentes(forma, c, coplanares=False) if tangente else [c]):
             if not _contiene(todas, t):
                 todas.append(t)
     resultado = None
-    try:
-        mo = BRepOffset_MakeOffset()
-        mo.Initialize(forma, 0.0, TOL, BRepOffset_Skin, False, False, GeomAbs_Intersection, False, False)
-        for c in todas:
-            mo.SetOffsetOnFace(c, dist)
-        mo.MakeOffsetShape()
-        if mo.IsDone() and not mo.Shape().IsNull() and geo.es_valida(mo.Shape()) and not geo.esta_vacia(mo.Shape()):
-            resultado = mo.Shape()
-            if resultado.ShapeType() == TopAbs_SHELL:       # con un agujero ciego el kernel devuelve la cáscara sola
-                resultado = BRepBuilderAPI_MakeSolid(TopoDS.Shell(resultado)).Solid()
-            dada_vuelta = _cara_dada_vuelta(mo, forma, todas, resultado, dist)
-    except Exception:  # noqa: BLE001 — se intenta la alternativa por extrusión
-        resultado = None
+    # B-280: con la otra mitad de una cara partida al lado, el kernel corre las dos; la extrusión deja el escalón
+    if not _vecina_coplanar_suelta(forma, todas):
+        try:
+            mo = BRepOffset_MakeOffset()
+            mo.Initialize(forma, 0.0, TOL, BRepOffset_Skin, False, False, GeomAbs_Intersection, False, False)
+            for c in todas:
+                mo.SetOffsetOnFace(c, dist)
+            mo.MakeOffsetShape()
+            if mo.IsDone() and not mo.Shape().IsNull() and geo.es_valida(mo.Shape()) and not geo.esta_vacia(mo.Shape()):
+                resultado = mo.Shape()
+                if resultado.ShapeType() == TopAbs_SHELL:       # con un agujero ciego el kernel devuelve la cáscara sola
+                    resultado = BRepBuilderAPI_MakeSolid(TopoDS.Shell(resultado)).Solid()
+                dada_vuelta = _cara_dada_vuelta(mo, forma, todas, resultado, dist)
+        except Exception:  # noqa: BLE001 — se intenta la alternativa por extrusión
+            resultado = None
     if resultado is not None:
         if dada_vuelta:
             raise geo.ErrorGeometria(f"Desfase de caras: con {abs(dist):g} mm la cara se da vuelta: la distancia es igual "
