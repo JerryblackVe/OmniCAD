@@ -309,6 +309,16 @@ def test_desfasar_caras_alternativa_por_extrusion(monkeypatch):
     chequear(sm.desfasar_caras(b, [tapa(b), cara_en(b, (5, 0, 5))], -1), 9 * 9 * 10)
 
 
+@pytest.mark.parametrize("tangente", [True, False])
+def test_desfase_de_media_cara_partida_no_mueve_la_otra_mitad(tangente):
+    """B-280: el frente de una caja partido a media altura; desfasar la mitad de abajo deja un escalón."""
+    b = g.caja(20, 10, 10)
+    partida = sm.dividir_cara(b, [cara_en(b, (10, 0, 5))], g.Plano("XY", 5))
+    abajo = cara_en(partida, (10, 0, 2.5))
+    chequear(sm.desfasar_caras(partida, [abajo], 5, tangente=tangente), 2000 + 20 * 5 * 5)
+    chequear(sm.desfasar_caras(partida, [abajo], -5, tangente=tangente), 2000 - 20 * 5 * 5)
+
+
 def test_desfase_cara_de_superficie_no_queda_invalido_silenciosamente():
     """B-166: un «Desfase de cara» sobre una superficie que la deja inválida no puede salir «ok» ocultándolo:
     o el kernel lo repara y deja el cuerpo válido, o lo rechaza con un error claro. Nunca devuelve ok con

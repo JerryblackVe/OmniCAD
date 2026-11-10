@@ -117,6 +117,25 @@ run("dividir_cara", lambda: (
     C.caso(v, AR, "dividir_cara", {"caras": cara(caja, normal=(1, 0, 0)), "herramienta": plano("PM")}, {}, esperado=0, foto="dividir_cara"),
     C.caso(v, AR, "dividir_cara", {"caras": cara(caja, normal=(0, 0, 1)), "herramienta": plano("YZ")}, {}, etiqueta="dividir cara con plano que NO la corta", rt=False, error="no corta"),
     C.negativos(v, AR, "dividir_cara")))
+def _media_cara_abajo():
+    """Clic en la mitad de abajo de la cara +X ya partida por el plano PM."""
+    from omnicad.nucleo import referencias as refs
+    forma = v.doc.estado_final.cuerpos[caja].forma
+    firmas = [refs.firma_cara(c) for c in refs.subformas(forma, "cara")]
+    abajo = min((f for f in firmas if f.get("normal") is not None and f["normal"][0] > 0.99), key=lambda f: f["centro"][2])
+    return [A.hit_cara(v, caja, cerca=abajo["centro"])]
+
+
+def media_cara():
+    """B-280: desfasar UNA mitad de una cara partida deja un escalón (la otra mitad no se mueve)."""
+    C.caso(v, AR, "dividir_cara", {"caras": cara(caja, normal=(1, 0, 0)), "herramienta": plano("PM")}, {}, esperado=0,
+           deshacer=False, rt=False, etiqueta="dividir la cara +X para desfasar media cara")
+    C.caso(v, AR, "desfase_cara", {"caras": _media_cara_abajo}, {"distancia": "3 mm"}, esperado=30 * 10 * 3,
+           etiqueta="desfase de media cara partida: solo la mitad (B-280)", rt=False, foto="desfase_media_cara")
+    A.deshacer(v)
+
+
+run("desfase_media_cara", media_cara)
 run("dividir_cuerpo", lambda: (
     C.caso(v, AR, "dividir_cuerpo", {"cuerpo": cuerpo(caja), "herramienta": plano("PM")}, {}, esperado=0, foto="dividir_cuerpo"),
     C.negativos(v, AR, "dividir_cuerpo")))
