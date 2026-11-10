@@ -179,9 +179,14 @@ def _solape_herramienta(receta, operacion, indice, cuerpos):
         return solape_herramienta(receta, operacion, indice, cuerpos)
 
 
+def _con_forma(tarea, ruta, **args):
+    """Una tarea de `_TAREAS` hecha en el trabajador: la forma llega en un BREP escrito por el padre."""
+    return {"resultado": _TAREAS[tarea](intercambio.leer_brep(Path(ruta)), **args)}    # el trabajador contesta dicts
+
+
 _TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros, "prevuelo_cambio": _prevuelo_cambio,
                 "prevuelo_abrir": _prevuelo_abrir, "recalcular_documento": _recalcular_documento,
-                "previa_visual": _previa_visual, "solape_herramienta": _solape_herramienta}
+                "previa_visual": _previa_visual, "solape_herramienta": _solape_herramienta, "con_forma": _con_forma}
 
 
 def _a_json(o):
@@ -291,7 +296,17 @@ def correr(tarea, forma, tope, **args):
     """Hace `tarea` sobre `forma` en un proceso aparte y devuelve su resultado. `tope`: segundos como máximo."""
     if tarea not in _TAREAS:
         raise ValueError(f"Tarea aislada desconocida: {tarea}")
-    return _correr(tarea, tope, args, forma)
+    if EN_HIJO or _motor.motor_activo() == "omnikernel":
+        return _correr(tarea, tope, args, forma)
+    # P-125: va al trabajador que ya está vivo. Un proceso nuevo por tarea costaba ~0,9 s solo en arrancar, y el chequeo
+    # de autointersección de cada empalme o chaflán con caras B-spline lo pagaba en cada clic.
+    with tempfile.TemporaryDirectory(prefix="omnicad_forma_", ignore_cleanup_errors=True) as tmp:
+        ruta = Path(tmp) / "forma.brep"
+        try:
+            intercambio.escribir_brep(forma, ruta)
+        except intercambio.ErrorGeometria as e:
+            raise TareaAislada(f"no pudo arrancar el proceso aparte ({e})") from e
+        return correr_json("con_forma", dict(args, tarea=tarea, ruta=str(ruta)), tope)["resultado"]
 
 
 def correr_json(tarea, datos, tope, esperar=None):
