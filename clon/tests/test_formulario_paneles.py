@@ -34,7 +34,7 @@ def _ctx():
 def test_describir_ref_dice_tipo_rasgo_y_a_que_pertenece():
     c = _ctx()
     cara = {"tipo": "cara", "cuerpo": "op1.c1", "firma": {"geom": "plano", "normal": [0, 0, 1]}}
-    assert F.describir_ref(cara, c) == "Cara plana +Z · Caja1"
+    assert F.describir_ref(cara, c) == "Cara +Z · Caja1"
     inclinada = {"tipo": "cara", "cuerpo": "op1.c1", "firma": {"geom": "plano", "normal": [0.6, 0, 0.8]}}
     assert F.describir_ref(inclinada, c) == "Cara plana · Caja1"
     cil = {"tipo": "cara", "cuerpo": "op1.c1", "firma": {"geom": "cilindro", "radio": 5.0}}
@@ -166,6 +166,16 @@ def test_la_fila_de_seleccion_vacia_dice_que_espera_y_la_llena_dice_que_hay(app_
     panel.set_valor("caras", [_hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})])
     assert "Cuerpo" in fila.boton.text() or "op1" in fila.boton.text()
     panel.cancelar()
+
+
+def test_un_nombre_largo_se_corta_al_final_y_deja_ver_que_cara_es(app_qt):  # noqa: F811
+    """B-282: el botón cortaba al medio («Cara pla… Cuerpo1») y se perdía qué cara estaba elegida."""
+    from omnicad.ui.comando import _BotonElidido
+    boton = _BotonElidido()
+    boton.resize(110, 24)
+    completo = "Cara +X · Cuerpo con un nombre bastante largo"
+    boton.poner(completo, True)
+    assert boton.text() != completo and boton.text().startswith("Cara +X")
 
 
 def test_el_menu_de_la_fila_quita_un_elemento_sin_borrar_los_demas(app_qt):  # noqa: F811

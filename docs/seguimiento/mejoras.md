@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 138: Abierto 72 · Parcial 51 · Bloqueado 4 · Sin verificar 11 (2026-11-09: entraron P-98 del review de B-257 y P-130 de las fusiones; se cerró P-130; se cerró P-93; se cerró P-94; 2026-11-08: entraron P-94 y P-99; entró P-95 de la fase 6 de CREAR y MODIFICAR; P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 139: Abierto 72 · Parcial 52 · Bloqueado 4 · Sin verificar 11 (2026-11-10: entró P-132 de B-282 (cara plana inclinada sin rasgo); 2026-11-09: entraron P-98 del review de B-257 y P-130 de las fusiones; se cerró P-130; se cerró P-93; se cerró P-94; 2026-11-08: entraron P-94 y P-99; entró P-95 de la fase 6 de CREAR y MODIFICAR; P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
 
 ## Pendientes generales
 
@@ -184,6 +184,7 @@ Sin verificar 2.
 |---|---|---|---|---|---|---|
 | UI-2 | El escalado real de Windows (125 % y 150 %) y los monitores nuevos no se probaron | Sin verificar | Baja | Se simuló con letra al 125/150 % y ventanas de 1024×640 y 800×520. Falta correr `paneles_inventario.py` y `paneles_temas.py` con la pantalla en 125 % y 150 % y moviendo la ventana de un monitor a otro | scripts/prueba_ui/paneles_temas.py | 2026-10-31 |
 | UI-6 | Las agrupaciones de opciones de cada comando no se compararon una por una con la ayuda de Fusion | Sin verificar | Media | Los agentes miraron la ayuda de Fusion cuando dudaron (p. ej. Bobina); no hay una matriz comando por comando de qué opciones agrupa Fusion y cuáles son «avanzadas» allá | docs/auditorias/ui_paneles_2026-10-31.md | 2026-10-31 |
+| P-132 | Selección › una cara plana inclinada (normal fuera de los ejes) se nombra «Cara plana · Cuerpo1», sin rasgo que la distinga de otra cara plana del mismo cuerpo | Abierto | Baja | Darle un rasgo corto en `ui/formulario.py` › `describir_ref` (p. ej. el ángulo o el área) que entre en el botón | Pendiente que dejó B-282 (la cara en eje ya dice «Cara +X · Cuerpo1»): informe de la sesión Construir, 2026-11-10 | 2026-11-10 |
 
 ## Menú del boceto (decisión del usuario)
 

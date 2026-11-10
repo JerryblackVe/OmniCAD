@@ -588,7 +588,8 @@ class _BotonElidido(QPushButton):
 
     def _pintar(self):
         if self._elidir and self.width() > 60:
-            self.setText(self.fontMetrics().elidedText(self._completo, Qt.ElideMiddle, self.width() - 34))
+            # B-282: se corta el final (el cuerpo), nunca el rasgo que distingue lo elegido; el nombre entero, en el tooltip
+            self.setText(self.fontMetrics().elidedText(self._completo, Qt.ElideRight, self.width() - 34))
         else:
             self.setText(self._completo)
 
@@ -661,7 +662,7 @@ class _FilaLista(QWidget):
 
 class _FilaSeleccion(QWidget):
     """Fila «Seleccionar». Sin descripción (paneles de boceto) dice «N seleccionados»; con ella (paneles de comando)
-    muestra qué es lo elegido («Cara plana +Z · Caja1», «3 aristas · Caja1»), con el detalle en el tooltip y, si hay
+    muestra qué es lo elegido («Cara +Z · Caja1», «3 aristas · Caja1»), con el detalle en el tooltip y, si hay
     varios, un menú ▾ para revisarlos y quitar uno a uno. ✕ limpia todo."""
     activar = Signal(object)
     limpiar = Signal(object)
