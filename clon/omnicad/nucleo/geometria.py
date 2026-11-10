@@ -266,6 +266,16 @@ def cara_de_plano(plano, tam=1e4):
 LONGITUD_MINIMA = 1e-6   # mm: OCC no construye un prisma de 1e-7 mm (su Precision::Confusion); desde 2e-7 sí
 
 
+def rechazar_radio_de_arco(arista, radio):
+    """B-290: empalmar un arco ABIERTO con su mismo radio hace caer el proceso (access violation en
+    `BRepFilletAPI_MakeFillet.Build`); un círculo cerrado (la tapa de un cilindro) sí anda y deja una cúpula."""
+    from OCP.GeomAbs import GeomAbs_Circle
+    c = BRepAdaptor_Curve(arista)
+    if c.GetType() == GeomAbs_Circle and not c.IsClosed() and abs(c.Circle().Radius() - radio) <= 1e-6 * radio:
+        raise ErrorGeometria(f"El empalme no se puede hacer con un radio igual al del arco elegido ({radio:g} mm): "
+                             "la superficie del empalme queda degenerada. Probá un radio menor.")
+
+
 def _arista_analitica(arista, tol=1e-6):
     """La misma arista con curva recta, circular o elíptica si su curva lo es dentro de `tol` mm (None si no):
     `GeomConvert_CurveToAnaCurve`, con los vértices originales."""

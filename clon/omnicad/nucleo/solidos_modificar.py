@@ -537,32 +537,34 @@ def empalme(forma, grupos, *, cadena_tangente=True):
         for e in aristas:
             if mf.Contour(e):           # ya está en un contorno (OpenCascade propaga por tangencia)
                 continue
-            if tipo == "constante" and esquinas:
+            if tipo == "constante":
                 r = float(grupo.get("radio", 0))
                 if r <= 0:
                     raise geo.ErrorGeometria("El radio del empalme debe ser positivo.")
+                geo.rechazar_radio_de_arco(e, r)
+            if tipo == "constante" and esquinas:
                 puntos = _radios_con_setback(e, r, float(grupo["setback"]), esquinas)
                 arr = Array1_gp_Pnt2d(1, len(puntos))
                 for i, (u, rr) in enumerate(puntos, 1):
                     arr.SetValue(i, gp_Pnt2d(u, rr))
                 mf.Add(arr, e)
             elif tipo == "constante":
-                r = float(grupo.get("radio", 0))
-                if r <= 0:
-                    raise geo.ErrorGeometria("El radio del empalme debe ser positivo.")
                 mf.Add(r, e)
             elif tipo == "cuerda":
                 c = float(grupo.get("cuerda", 0))
                 phi = _angulo_entre_caras(forma, e)
                 if c <= 0 or phi < 1e-6:
                     raise geo.ErrorGeometria("La cuerda debe ser positiva y la arista no puede ser tangente.")
-                mf.Add(c / (2 * math.sin(phi / 2)), e)
+                r = c / (2 * math.sin(phi / 2))
+                geo.rechazar_radio_de_arco(e, r)
+                mf.Add(r, e)
             elif tipo == "variable":
                 puntos = sorted((float(u), float(r)) for u, r in grupo.get("radios", []))
                 if len(puntos) < 2 or puntos[0][0] < 0 or puntos[-1][0] > 1 or min(r for _, r in puntos) <= 0:
                     raise geo.ErrorGeometria("El radio variable necesita ≥ 2 puntos con posición 0..1 y radio > 0.")
                 arr = Array1_gp_Pnt2d(1, len(puntos))
                 for i, (u, r) in enumerate(puntos, 1):
+                    geo.rechazar_radio_de_arco(e, r)
                     arr.SetValue(i, gp_Pnt2d(u, r))
                 mf.Add(arr, e)
             else:
