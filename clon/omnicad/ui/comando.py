@@ -1571,7 +1571,9 @@ class PanelComando(QFrame):
         try:
             if self._previsualizar_prisma(op):
                 return
-            estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=self._previa_aislada)
+            from ..nucleo import geometria as geo
+            with geo.en_serie():         # B-293
+                estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=self._previa_aislada)
             self._previa_aislada = True
         except Exception as e:  # noqa: BLE001 — se muestra el error del kernel como en Fusion
             self._mostrar(f"⚠ {e}", tipo="error")
@@ -1622,7 +1624,8 @@ class PanelComando(QFrame):
             plano, _ = op._caras(self.ctx.estado, Contexto(self.ctx.doc.parametros.valores()))
             unidad = type(op)(op.id, op.nombre, **dict(p, distancia="1 mm", direccion="un_lado", simetrica=False,
                                                       invertir=False))
-            exacto, _ = self.ctx.doc.previsualizar(unidad, self.ctx.indice, en_vivo=self._previa_aislada)
+            with geo.en_serie():         # B-293
+                exacto, _ = self.ctx.doc.previsualizar(unidad, self.ctx.indice, en_vivo=self._previa_aislada)
             self._previa_aislada = True
             estado, prismas = exacto.copia(), {}
             for cid, c in estado.cuerpos.items():
