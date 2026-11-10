@@ -4,7 +4,7 @@ Piezas comunes de los formularios de herramientas: lo que comparten los paneles 
 paneles de boceto (patrón, simetría…). Sin lógica geométrica: solo cómo se presentan las cosas.
 
   - `ANCHOS`: ancho fijo del panel según su complejidad (no depende de la etiqueta más larga ni cambia al teclear).
-  - `describir_ref` / `describir_seleccion`: qué se ve en una fila de selección («Cara plana +Z · Caja1», «3 aristas · Caja1»)
+  - `describir_ref` / `describir_seleccion`: qué se ve en una fila de selección («Cara +Z · Caja1», «3 aristas · Caja1»)
     sin tocar la referencia geométrica que se guarda.
   - `Seccion`: grupo plegable de opciones poco frecuentes, con resumen de lo que hay activo cuando está cerrada.
   - `TIPOS_MENSAJE`: los cinco estados que muestra el pie (instrucción, inválido, advertencia, calculando, error).
@@ -89,10 +89,11 @@ def describir_ref(ref, ctx):
         firma, cuerpo = ref.get("firma") or {}, _nombre_cuerpo(ctx, ref.get("cuerpo"))
         geom = firma.get("geom")
         if t == "cara":
-            rasgo = _GEOM_CARA.get(geom, "")
-            extra = _eje_cartesiano(firma["normal"]) if geom == "plano" and "normal" in firma else \
-                (f"Ø{2 * firma['radio']:.4g}" if "radio" in firma else "")
-            return f"Cara {rasgo} {extra}".replace("  ", " ").strip() + f" · {cuerpo}"
+            eje = _eje_cartesiano(firma["normal"]) if geom == "plano" and "normal" in firma else ""
+            if eje:     # B-282: el eje ya dice que es plana; corto, entra en el botón sin perder lo que la distingue
+                return f"Cara {eje} · {cuerpo}"
+            extra = f"Ø{2 * firma['radio']:.4g}" if "radio" in firma else ""
+            return f"Cara {_GEOM_CARA.get(geom, '')} {extra}".replace("  ", " ").strip() + f" · {cuerpo}"
         if t == "arista":
             medida = f"Ø{2 * firma['radio']:.4g}" if geom == "circulo" and "radio" in firma else \
                 (f"{firma['largo']:.4g} mm" if "largo" in firma else "")

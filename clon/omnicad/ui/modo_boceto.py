@@ -405,7 +405,7 @@ class _Referencia(QFrame):
         h.setContentsMargins(6, 1, 2, 1)
         h.setSpacing(2)
         nombre = QLabel()
-        nombre.setText(nombre.fontMetrics().elidedText(texto, Qt.ElideMiddle, self.ANCHO_MAXIMO - 34))
+        nombre.setText(nombre.fontMetrics().elidedText(texto, Qt.ElideRight, self.ANCHO_MAXIMO - 34))   # B-282: no cortar el rasgo
         nombre.setToolTip(texto)
         h.addWidget(nombre)
         b = QToolButton(text="✕", autoRaise=True)
