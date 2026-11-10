@@ -357,14 +357,22 @@ def muestrear_primitiva(prim):
 
 def polilineas_boceto(boceto_resuelto):
     """Curvas de un boceto resuelto en 3D (para dibujarlas sobre el modelo)."""
-    pl, salida = boceto_resuelto.plano, []
+    pl = boceto_resuelto.plano
     auto = boceto_resuelto.boceto.ocultos_por_proyeccion_auto()[0]     # la proyección de la cara no se dibuja
-    for prim in boceto_resuelto.boceto.geometria(incluir_construccion=False):
-        if prim[1] in auto:
-            continue
-        uv = muestrear_primitiva(prim)
-        if len(uv) >= 2:
-            salida.append(np.array([pl.a_3d(u, v) for u, v in uv], np.float32))
+    prims = tuple(p for p in boceto_resuelto.boceto.geometria(incluir_construccion=False) if p[1] not in auto)
+    # P-123: cada redibujo volvía a muestrear todas las splines (377 del texto de un SVG: ~65 ms por boceto). Las copias
+    # del estado comparten el boceto resuelto: se guarda en él, con las primitivas y el plano como clave.
+    clave = (prims, tuple(pl.origen), tuple(pl.u), tuple(pl.normal))
+    guardada = getattr(boceto_resuelto, "_polilineas", None)
+    if guardada is not None and guardada[0] == clave:
+        salida = list(guardada[1])
+    else:
+        salida = []
+        for prim in prims:
+            uv = muestrear_primitiva(prim)
+            if len(uv) >= 2:
+                salida.append(np.array([pl.a_3d(u, v) for u, v in uv], np.float32))
+        boceto_resuelto._polilineas = (clave, tuple(salida))
     if any(boceto_resuelto.boceto.geo3d.values()):          # Boceto 3D
         from ..restricciones import boceto3d
         salida.extend(boceto3d.polilineas(boceto_resuelto.boceto, pl))
