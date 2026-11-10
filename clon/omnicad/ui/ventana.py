@@ -2832,18 +2832,24 @@ class VentanaPrincipal(QMainWindow):
         sesion = api.Sesion(self.doc)
         antes = {} if op is None else parametros_de_textos(op.boceto)
         sueltos = [t for t in antes if t not in boceto.curvas] or alturas_sueltas(boceto)
-        with sesion.transaccion() if textos or sueltos else nullcontext():    # los parámetros y el boceto: un solo deshacer
-            sesion.tolerar_errores = True
-            for t in textos:
-                ligar_parametro_texto(self.doc, t, t.texto)
-            sincronizar_alturas_texto(self.doc, boceto)
-            if op is None:
-                self._agregar(OpBoceto(datos.get("id") or self.doc.nuevo_id(), self._nombre_nuevo(OpBoceto, "Boceto"), plano=datos["plano"],
-                                       marco=datos["marco"], cara=datos.get("cara"), boceto=boceto))
-            else:
-                self._reemplazar(OpBoceto(op.id, op.nombre, op.suprimida, boceto=boceto, **op.p))
-                soltar_parametros_texto(self.doc, antes, boceto)
-        self._refrescar_visibilidad()
+        cambio = []
+        self.doc.suscribir(oyente := lambda: cambio.append(True))
+        try:
+            with sesion.transaccion() if textos or sueltos else nullcontext():    # los parámetros y el boceto: un solo deshacer
+                sesion.tolerar_errores = True
+                for t in textos:
+                    ligar_parametro_texto(self.doc, t, t.texto)
+                sincronizar_alturas_texto(self.doc, boceto)
+                if op is None:
+                    self._agregar(OpBoceto(datos.get("id") or self.doc.nuevo_id(), self._nombre_nuevo(OpBoceto, "Boceto"), plano=datos["plano"],
+                                           marco=datos["marco"], cara=datos.get("cara"), boceto=boceto))
+                else:
+                    self._reemplazar(OpBoceto(op.id, op.nombre, op.suprimida, boceto=boceto, **op.p))
+                    soltar_parametros_texto(self.doc, antes, boceto)
+        finally:
+            self.doc.desuscribir(oyente)
+        if not cambio:          # P-124: si el documento avisó, `_actualizar` ya redibujó con el estado nuevo
+            self._refrescar_visibilidad()
 
 
     def crear_primitiva(self, forma):
