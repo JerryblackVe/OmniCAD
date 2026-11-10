@@ -768,6 +768,7 @@ class PanelComando(QFrame):
         self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
         self._hijo_previa = self._op_hijo = self._pendiente_hijo = None
         self._previa_cortada = False
+        self.cerrando = False           # True desde `_cerrar`: la ventana no redibuja el estado viejo antes de cerrar
         self._previa_aparte = False     # la última previa pedida se calcula en el hijo: aceptar no espera su malla
         self._t_hijo = QTimer(self, interval=16)
         self._t_hijo.timeout.connect(self._recibir_previa)
@@ -1801,6 +1802,7 @@ class PanelComando(QFrame):
         self.comando.info.ubicar_informacion()
 
     def _cerrar(self):
+        self.cerrando = True
         self._t_previa.stop()
         self._cancelar_previa_hijo()
         self._prisma_previa = None

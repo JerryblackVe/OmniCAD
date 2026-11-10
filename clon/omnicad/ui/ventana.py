@@ -2643,8 +2643,8 @@ class VentanaPrincipal(QMainWindow):
             self.panel.cancelar()
 
     def _previa_comando(self, estado):
-        if self.panel is None:
-            return
+        if self.panel is None or (estado is None and getattr(self.panel, "cerrando", False)):
+            return          # P-122: el panel se cierra y `_comando_cerrado` redibuja una sola vez, con el estado nuevo
         self._estado_previa = estado if estado is not None else self.panel.ctx.estado
         self._refrescar_visibilidad()
 
