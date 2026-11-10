@@ -136,7 +136,8 @@ class Extruir(Comando):
         return herramienta
 
     def _formas_herramienta(self, ctx, op, en_vivo=False):
-        estado, _avisos = ctx.doc.previsualizar(self._herramienta(op), ctx.indice, en_vivo=en_vivo)
+        with geo.en_serie():         # B-293: previa dentro de la ventana
+            estado, _avisos = ctx.doc.previsualizar(self._herramienta(op), ctx.indice, en_vivo=en_vivo)
         return [c.forma for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos]
 
     def previa_vista(self, ctx, v, op):

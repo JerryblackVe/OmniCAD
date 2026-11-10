@@ -10,6 +10,7 @@ Unidades: milímetros y grados (los grados se pasan a radianes solo acá).
 El resto de la aplicación no importa OCP directamente: todo pasa por este módulo y
 por `perfiles.py`, así la capa de kernel queda aislada.
 """
+import contextlib
 import itertools
 import math
 import os
@@ -21,6 +22,18 @@ from . import motor as _motor
 # B-48: el paralelismo de OpenCascade se apaga con OMNICAD_SIN_PARALELO=1 para medir/aislar caídas nativas
 # (reusa formas entre hilos). Queda como interruptor de diagnóstico; el valor por defecto no cambia.
 PARALELO = os.environ.get("OMNICAD_SIN_PARALELO", "").strip().lower() not in ("1", "si", "sí", "true", "on")
+
+
+@contextlib.contextmanager
+def en_serie():
+    """Booleanas sin el paralelismo de OpenCascade mientras dura el bloque (B-293: dentro de la ventana, la previa de
+    Extruir con muchos perfiles cerraba la app con la booleana en paralelo; en serie tarda lo mismo)."""
+    global PARALELO
+    anterior, PARALELO = PARALELO, False
+    try:
+        yield
+    finally:
+        PARALELO = anterior
 
 
 def lista_occ(lista):
