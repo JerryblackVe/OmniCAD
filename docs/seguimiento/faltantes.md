@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 239: Abierto 156 · Parcial 49 · Bloqueado 30 · Sin verificar 4 (2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 240: Abierto 157 · Parcial 49 · Bloqueado 30 · Sin verificar 4 (2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -71,7 +71,7 @@ Abierto 53 · Parcial 3 · Bloqueado 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 17 · Parcial 1.
+Abierto 16 · Parcial 1 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -91,6 +91,8 @@ Abierto 17 · Parcial 1.
 | H-69 | Organización del boceto: la geometría suelta no tiene nombre, ocultar, bloquear ni «en perfiles» propios | Abierto | Media | Hoy cada curva suelta se lista en Geometrías y su menú ofrece Seleccionar, Convertir en objeto (queda rígido, fuera del solver) y Eliminar. Falta guardar esas propiedades por curva sin sacarla del solver ni duplicar el modelo de objetos (plan_boceto_organizar.md, secciones 4 y 8). | clon/omnicad/ui/navegador_boceto.py (menú de `curva_boceto`); clon/tests/test_boceto_organizar.py::test_categorias_salen_del_dato_y_un_grupo_no_cambia_la_de_sus_miembros | 2026-11-05 |
 | H-70 | Organización del boceto: expandir el contenido interno de un SVG o DXF (capas y formas) en el navegador | Abierto | Media | El SVG/DXF se lista como una unidad y sus partes solo se cuentan. Falta listar capas y formas bajo demanda (sin crear miles de filas) y poder elegir una pieza interna sin romper el contorno ni el relleno (plan_boceto_organizar.md, secciones 2 y 7). | clon/omnicad/ui/navegador.py (`_ramas_boceto`); clon/omnicad/restricciones/objetos.py (`unidades`) | 2026-11-05 |
 | H-76 | Exportar STEP y OBJ con los colores (cuerpos y caras pintadas) | Abierto | Media | El STEP se escribe sin colores (`escribir_step` usa STEPControl, no la versión con XCAF) y el OBJ sin .mtl; el glTF sí los lleva. Comprobar en Fusion qué colores guarda su STEP antes de construir. El 3MF multicolor es P-27-11. Ver docs/brechas_aspecto.md. | clon/omnicad/nucleo/intercambio.py (`escribir_step`); clon/omnicad/io_archivos/exportar.py (`exportar_obj`) | 2026-11-05 |
+| H-113 | Rosca › flecha en el visor para cambiar el tamaño de la rosca (arrastrar cambia Tamaño, Designación y el cilindro) | Abierto | Media | Asa de arrastre sobre la cara, como Fusion (0:36–0:56). Gerardo (2:30): «DEBERÍA PODER VER LAS FLECHAS PARA ADAPTAR EL TAMAÑO» | Ayuda de Fusion «Thread reference» (`scripts/fusion_docs.py ver "Thread reference" -s fusion-model`); `evidencias/videos_roscas_2026-11-10/informe.md`; captura `Fusion_0m40_cara_elegida_flechas_y_vista_previa.png` | 2026-11-10 |
+| H-114 | Rosca › vista previa de la rosca cosmética (anillos sobre la cara) | Abierto | Media | Fusion dibuja los surcos aunque «Modelado» esté sin tildar; OmniCAD muestra el cilindro liso | `clon/omnicad/ui/comandos/crear.py` (Rosca); `evidencias/videos_roscas_2026-11-10/informe.md`; capturas `Fusion_0m33_dialogo_vacio_aceptar_gris.png`, `OmniCAD_0m30_dialogo_rosca_cosmetica_aviso.png` | 2026-11-10 |
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 

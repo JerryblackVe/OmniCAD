@@ -2,7 +2,7 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 139: Abierto 72 · Parcial 52 · Bloqueado 4 · Sin verificar 11 (2026-11-10: entró P-132 de B-282 (cara plana inclinada sin rasgo); 2026-11-09: entraron P-98 del review de B-257 y P-130 de las fusiones; se cerró P-130; se cerró P-93; se cerró P-94; 2026-11-08: entraron P-94 y P-99; entró P-95 de la fase 6 de CREAR y MODIFICAR; P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 142: Abierto 75 · Parcial 52 · Bloqueado 4 · Sin verificar 11 (2026-11-10: entraron P-133 a P-135 de los videos de roscas; entró P-132 de B-282 (cara plana inclinada sin rasgo); 2026-11-09: entraron P-98 del review de B-257 y P-130 de las fusiones; se cerró P-130; se cerró P-93; se cerró P-94; 2026-11-08: entraron P-94 y P-99; entró P-95 de la fase 6 de CREAR y MODIFICAR; P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
 
 ## Pendientes generales
 
@@ -48,7 +48,7 @@ Abierto 20 · Parcial 11 · Bloqueado 3 · Sin verificar 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 10 · Parcial 1.
+Abierto 8 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -58,6 +58,9 @@ Abierto 10 · Parcial 1.
 | H-55 | Sustainability Insights: la región y el país no cambian el cálculo | Abierto | Media | Sumar la energía de fabricación por región con un factor de red eléctrica con fuente. Hoy el resultado lo avisa. | nucleo/sustentabilidad.py | 2026-11-01 |
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
 | H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | 57 de 116 tipos con caso en tests/test_barrido_tipos.py (2026-11-05). Faltan casos para los otros 59 y cambiar la razón adivinada por nombre (`_razon_pendiente`) por una lista explícita por tipo. | tests/test_barrido_tipos.py; tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py | 2026-11-03 |
+| P-133 | Rosca › biblioteca de roscas como ventana completa (árbol, favoritos, filtros por tamaño, designación, Ø, género y clase, ficha con dibujo) | Abierto | Alta | Hoy es un diálogo chico con tabla. Gerardo (2:40–3:06): «¿POR QUÉ ESTÁ ESTE MENÚ?» | `clon/omnicad/ui/comandos/crear.py:535` (BibliotecaRoscas); `evidencias/videos_roscas_2026-11-10/informe.md`; capturas `OmniCAD_3m00_biblioteca_de_roscas_modal.png`, `Fusion_1m44_biblioteca_de_roscas_ventana_completa.png`, `Fusion_6m40_detalle_de_rosca_con_dibujo.png` | 2026-11-10 |
+| P-134 | Rosca › Aceptar gris y campos en «Automático» hasta elegir la cara; la lista de Tamaño dentro del panel | Abierto | Baja | Fusion (0:33) no deja aceptar sin cara; la lista Tamaño de OmniCAD sale a pantalla completa (3:12) | `clon/omnicad/ui/comandos/crear.py:893`; `evidencias/videos_roscas_2026-11-10/informe.md`; captura `Fusion_0m33_dialogo_vacio_aceptar_gris.png` | 2026-11-10 |
+| P-135 | Rosca parcial › tramo y cotas en el visor para arrastrar el largo y el desfase | Abierto | Media | Fusion (0:56–1:30) muestra el tramo azul con flechas y cota; en OmniCAD «Desfase de inicio» está dentro de «Más opciones» | `clon/omnicad/ui/comandos/crear.py` (Rosca); `evidencias/videos_roscas_2026-11-10/informe.md`; captura `Fusion_0m56_longitud_parcial_desfase_y_longitud.png` | 2026-11-10 |
 
 ## Fusion 360
 
