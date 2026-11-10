@@ -265,7 +265,7 @@ class VentanaPrincipal(QMainWindow):
 
         self.panel_datos = PanelDatos(self.prefs)
         self.panel_datos.abrir.connect(self._abrir_reciente)
-        self.panel_datos.cerrar.connect(lambda: self.acciones["panel_datos"].setChecked(False))
+        self.panel_datos.cerrar.connect(lambda: self.acciones["panel_datos"].trigger())   # trigger, no setChecked: solo trigger emite triggered (B-289)
         self.cinta = Cinta(self.acciones)
         self._espacios = {}                 # espacio de trabajo → su ventana (DIBUJO, RENDERIZAR, ANIMACIÓN)
         for nombre, clave in (("DIBUJO", "dibujo"), ("RENDERIZAR", "render"), ("ANIMACIÓN", "animacion")):
