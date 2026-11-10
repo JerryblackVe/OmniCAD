@@ -182,12 +182,13 @@ def test_script_y_datos_se_eligen_por_referencia_textual(repo):
 
 def test_agrupacion_por_tiempos_y_defecto_sin_medicion():
     tests = [f"tests/test_{i}.py" for i in range(5)]
-    tiempos = dict(zip(tests[:4], [590, 10, 700, 1], strict=True))
+    tiempos = dict(zip(tests[:4], [390, 10, 500, 1], strict=True))
     grupos = selector.agrupar(reversed(tests), tiempos)
     assert grupos == [[tests[0]], [tests[1]], [tests[2]], tests[3:]]
     assert selector.agrupar([], {}) == []
-    assert list(map(len, selector.agrupar([f"{i:03}.py" for i in range(60)], {}))) == [19, 19, 19, 3]
-    assert all(len(grupo) * selector.SEGUNDOS_SIN_MEDIR < 600
+    assert selector.TOPE_GRUPO == 400
+    assert list(map(len, selector.agrupar([f"{i:03}.py" for i in range(60)], {}))) == [13, 13, 13, 13, 8]
+    assert all(len(grupo) * selector.SEGUNDOS_SIN_MEDIR < selector.TOPE_GRUPO
                for grupo in selector.agrupar([f"{i:03}.py" for i in range(50)], {}))
 
 
@@ -214,7 +215,78 @@ def test_correr_respeta_turno_tiempos_y_fallo_sin_ejecutar_piezas(repo, monkeypa
                            "-m", "pytest", f"tests/{test}", "-q", "-W", "error", "-p", "no:cacheprovider"]
     salida = capsys.readouterr().out
     assert "../scripts/prueba_ui/todo.py pieza" in salida
+    assert salida.count("Aviso: un archivo solo alcanza los 400 s;") == 2
     assert "Resultado: 2 grupos, 1 fallidos" in salida
+
+
+@pytest.mark.parametrize("codigo_final", [0, 1, 124])
+def test_correr_repite_en_mitades_y_archivo_solo_cortado_falla(repo, monkeypatch, capsys, codigo_final):
+    tests = [f"tests/test_{i}.py" for i in range(7)]
+    monkeypatch.setattr(selector, "seleccionar", lambda *args: (dict.fromkeys(tests, "test tocado"), {}, []))
+    llamadas = []
+    ejecutar = subprocess.run
+    limite = 2
+
+    def simular_grupo(comando, **opciones):
+        if comando[0] == "git":
+            return ejecutar(comando, **opciones)
+        grupo = comando[8:-5]
+        assert opciones == {"cwd": repo / "clon"}
+        assert comando == [sys.executable, "../scripts/turno.py", "--plazo", "900", "--", sys.executable,
+                           "-m", "pytest", *grupo, "-q", "-W", "error", "-p", "no:cacheprovider"]
+        llamadas.append(grupo)
+        codigo = 124 if len(grupo) > limite else codigo_final if tests[0] in grupo else 0
+        return SimpleNamespace(returncode=codigo)
+
+    monkeypatch.setattr(selector.subprocess, "run", simular_grupo)
+    assert selector.main(["--raiz", str(repo), "--correr"]) == int(codigo_final != 0)
+    assert llamadas == [tests, tests[:3], tests[:1], tests[1:3], tests[3:], tests[3:5], tests[5:]]
+    salida = capsys.readouterr().out
+    aviso = "Grupo 1: cortado por el plazo de 900 s (124); lo repito en dos mitades"
+    assert salida.count(aviso) == 3
+    assert f"Grupo 1: salida {codigo_final}" in salida
+    assert f"Resultado: 1 grupos, {int(codigo_final != 0)} fallidos" in salida
+
+    tests = tests[:1]
+    limite = 0
+    llamadas.clear()
+    assert selector.main(["--raiz", str(repo), "--correr"]) == 1
+    assert llamadas == [tests]
+    salida = capsys.readouterr().out
+    assert aviso not in salida
+    assert "Grupo 1: salida 124" in salida
+    assert "Resultado: 1 grupos, 1 fallidos" in salida
+
+
+def test_correr_worktree_usa_tiempos_del_checkout_principal(repo, monkeypatch, capsys):
+    arbol = repo / "arbol"
+    _git(repo, "worktree", "add", "--detach", str(arbol), "HEAD")
+    _escribir(arbol, "clon/tests/conftest.py", "# Configuración común\n")
+    _escribir(repo, "evidencias/tiempos.json", json.dumps({"archivos": {
+        "tests/test_dos.py": 350, "tests/test_uno.py": 350}}))
+    assert not (arbol / "evidencias/tiempos.json").exists()
+    llamadas = []
+    ejecutar = subprocess.run
+
+    def simular_grupo(comando, **opciones):
+        if comando[0] == "git":
+            return ejecutar(comando, **opciones)
+        assert opciones == {"cwd": arbol / "clon"}
+        llamadas.append(comando[8:-5])
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(selector.subprocess, "run", simular_grupo)
+    assert selector.main(["--raiz", str(arbol), "--correr"]) == 0
+    assert llamadas == [["tests/test_dos.py"], ["tests/test_uno.py"]]
+    salida = capsys.readouterr().out
+    assert salida.count("1 archivos, 350.0 s estimados") == 2
+    assert "Resultado: 2 grupos, 0 fallidos" in salida
+
+    (repo / "evidencias/tiempos.json").unlink()
+    llamadas.clear()
+    assert selector.main(["--raiz", str(arbol), "--correr"]) == 0
+    assert llamadas == [["tests/test_dos.py", "tests/test_uno.py"]]
+    assert "2 archivos, 60.0 s estimados" in capsys.readouterr().out
 
 
 def test_cli_sin_correr_no_lanza_pytest_y_lista_ordenada(repo):
