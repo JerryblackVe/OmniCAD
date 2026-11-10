@@ -35,6 +35,26 @@ run("extruir", lambda: (
     C.caso(v, AR, "extruir", {"perfiles": per("Circ")}, {"extension": "todo"}, etiqueta="extruir a todo", rt=False),
     C.negativos(v, AR, "extruir", {"perfiles": per("Rect")}, "distancia", malos=("abc", "0 mm", "-5 mm", "1e7 mm"))))
 
+
+def extruir_cara():
+    """B-281: extruir una cara de un cuerpo uniendo no avisa «sin solape» por la cara de donde nace."""
+    A.MODALES.clear()
+    p = A.abrir(v, "extruir")
+    A.elegir(p, "perfiles", A.hit_cara(v, caja, normal=(0, 0, 1)))
+    p.set_valor("distancia", "5 mm")
+    p.set_valor("operacion", "unir")
+    p._t_previa.stop()
+    p._calcular_previa()
+    A.esperar(120)
+    st = A.estado_panel(p)
+    A.reg(AR, "extruir la cara de arriba uniendo: sin el aviso falso «sin solape» (B-281)",
+          st["previa_ok"] and "sin solape" not in st["mensaje"], f"mensaje=«{st['mensaje']}»")
+    p.cancelar()
+    A.esperar(100)
+
+
+run("extruir_cara_unir", extruir_cara)
+
 # Revolución --------------------------------------------------------------------------------------------------------
 run("revolucion", lambda: (
     C.caso(v, AR, "revolucion", {"perfiles": per("Rect"), "eje": eje("X")}, {}, esperado=pi * 100 * 20, foto="revolucion"),
