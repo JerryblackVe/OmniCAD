@@ -1281,15 +1281,32 @@ def centro_masa(forma, superficie=False):
     return (c.X(), c.Y(), c.Z())
 
 
+# forma → (hijos, caja). La caja exacta de un cuerpo de 400 caras cuesta ~50 ms y la ventana la pedía 10 a 16 veces
+# al aceptar un comando (P-121). La clave incluye la ubicación; `hijos` detecta un compuesto al que se le agregó algo.
+_CAJAS, _TOPE_CAJAS = {}, 16      # chico: cada entrada retiene una forma vieja con su malla (memoria de la PC)
+
+
 def caja_envolvente(forma):
     """Caja envolvente exacta. Add_s usaría la malla de visualización (si ya se teseló) y la agranda
     con la tolerancia: una placa de 80 mm medía 80,085. AddOptimal sin triangulación mide el sólido."""
+    hijos = forma.NbChildren()
+    guardada = _CAJAS.get(forma)
+    if guardada is not None and guardada[0] == hijos:
+        return guardada[1]
     b = Bnd_Box()
     BRepBndLib.AddOptimal_s(forma, b, False, False)
     if b.IsVoid():
-        return None
-    p0, p1 = b.CornerMin(), b.CornerMax()   # OCP 8: Bnd_Box.Get() ya no es convertible a Python
-    return (p0.X(), p0.Y(), p0.Z()), (p1.X(), p1.Y(), p1.Z())
+        caja = None
+    else:
+        p0, p1 = b.CornerMin(), b.CornerMax()   # OCP 8: Bnd_Box.Get() ya no es convertible a Python
+        caja = (p0.X(), p0.Y(), p0.Z()), (p1.X(), p1.Y(), p1.Z())
+    if len(_CAJAS) >= _TOPE_CAJAS:
+        try:
+            _CAJAS.pop(next(iter(_CAJAS)), None)    # la más vieja: el tope evita retener formas que ya no se usan
+        except (RuntimeError, StopIteration):       # otro hilo (MCP en vivo) la cambió a la vez: se empieza de nuevo
+            _CAJAS.clear()
+    _CAJAS[forma] = (hijos, caja)
+    return caja
 
 
 def punto_toca(forma, punto, tolerancia=1e-6):
