@@ -11,7 +11,8 @@ Opciones (antes de `--`):
     --plazo SEG     tiempo máximo del comando; al vencer se mata con todos sus hijos (por defecto 900).
     --lugares N     cuántos comandos a la vez (por defecto 1, o la variable OMNICAD_TURNOS).
 
-El candado vive en la carpeta temporal del sistema, así lo comparten todas las copias del repo. Con el turno
+El candado vive en la carpeta temporal del sistema, así lo comparten todas las copias del repo. Los pedidos entran
+por orden de llegada (un número por pedido en esa misma carpeta). Con el turno
 tomado, además espera a que queden 1200 MB para reservar (variable OMNICAD_TURNO_MB; RAM + paginación). En
 Windows el comando corre con un tope de memoria de 3000 MB entre todos sus procesos (OMNICAD_TURNO_TOPE_MB; 0 = sin
 tope): pasado el tope, sus reservas fallan (MemoryError) en vez de llenar la PC.
@@ -152,23 +153,58 @@ def _esperar_memoria(minimo_mb, plazo_s=900):
     print("[turno] sigue faltando memoria: arranco igual", file=sys.stderr)
 
 
+def _soy_el_primero(carpeta, mio):
+    """True si no hay un número vivo antes que `mio`. Los números sin candado (su dueño murió) se borran."""
+    for nombre in sorted(n for n in os.listdir(carpeta) if n.startswith("omnicad_turno_fila_")):
+        ruta = os.path.join(carpeta, nombre)
+        if ruta == mio:
+            return True
+        try:
+            with open(ruta, "a+") as otro:
+                vivo = not _tomar(otro)
+                if not vivo:
+                    _soltar(otro)
+        except OSError:          # Windows: se está borrando
+            continue
+        if vivo:
+            return False
+        try:
+            os.remove(ruta)
+        except OSError:          # otro lo está mirando o ya lo borró
+            pass
+    return True
+
+
 def _esperar_lugar(lugares):
+    """Fila por orden de llegada: cada pedido saca un número (archivo con candado mientras espera) y solo el número
+    vivo más bajo prueba los lugares; así quien llega último no le gana el lugar a quien ya esperaba (P-131)."""
     carpeta = tempfile.gettempdir()
     archivos = [open(os.path.join(carpeta, f"omnicad_turno_{i}.lock"), "a+") for i in range(lugares)]
+    numero = open(os.path.join(carpeta, f"omnicad_turno_fila_{time.time_ns():020d}_{os.getpid()}.lock"), "a+")
+    _tomar(numero)
     avisado, inicio = False, time.monotonic()
-    while True:
-        for f in archivos:
-            if _tomar(f):
-                for otro in archivos:
-                    if otro is not f:
-                        otro.close()
-                if avisado:
-                    print(f"[turno] arranca tras {time.monotonic() - inicio:.0f} s de espera", file=sys.stderr)
-                return f
-        if not avisado:
-            print("[turno] hay otro comando pesado corriendo: espero mi turno…", file=sys.stderr, flush=True)
-            avisado = True
-        time.sleep(1.5)
+    try:
+        while True:
+            if _soy_el_primero(carpeta, numero.name):
+                for f in archivos:
+                    if _tomar(f):
+                        for otro in archivos:
+                            if otro is not f:
+                                otro.close()
+                        if avisado:
+                            print(f"[turno] arranca tras {time.monotonic() - inicio:.0f} s de espera", file=sys.stderr)
+                        return f
+            if not avisado:
+                print("[turno] hay otro comando pesado corriendo: espero mi turno…", file=sys.stderr, flush=True)
+                avisado = True
+            time.sleep(1.5)
+    finally:
+        _soltar(numero)
+        numero.close()
+        try:
+            os.remove(numero.name)
+        except OSError:          # si otro lo tiene abierto, queda sin candado y lo borra el siguiente
+            pass
 
 
 def main(args):
