@@ -34,9 +34,9 @@
 - Capacidad medida (2026-11-11): un pytest pesado ocupa 1,5 GB y ~3 núcleos; la humo, 1,1 GB. El rendimiento tope llega
   con 3-4 corridas a la vez (8 a la vez no rinde más y rompe B-222). Cada sesión de Claude ocupa ~0,35 GB. La memoria
   no limita: el límite es el CPU.
-- **Tope en la VPS: 8 sesiones de ejecución a la vez (Gerardo, 2026-11-11).** Los tests van de a 3 con `scripts/turno.py`
+- **Tope en la VPS: 9 sesiones de ejecución a la vez (Gerardo, 2026-11-11).** Los tests van de a 3 con `scripts/turno.py`
   (`OMNICAD_TURNOS=3` en `~/.claude/settings.json` de la VPS, no en el repo: la PC sigue de a 1). El cupo lo maneja Gerardo.
-- **8 sesiones de ejecución fijas (2026-11-11)**, una por carril; el coordinador les manda ítems con `SendMessage`, las vacía
+- **9 sesiones de ejecución fijas (2026-11-11)**, una por carril; el coordinador les manda ítems con `SendMessage`, las vacía
   con `clear_session` al 65 % y no abre otras. Cada ítem va en su worktree (`scripts/worktree_item.sh`).
 
   | Sesión | Carril | Modelo |
@@ -49,6 +49,7 @@
   | E6 | Velocidad y Rust | Opus alto |
   | E7 | Pruebas como usuario (prueba_ui, caza) | Sonnet medio |
   | E8 | Linux y arreglos chicos (B-326, B-327, UI, docs) | Sonnet medio |
+  | E9 | OpenCode (orquesta corridas con `/orquestador-opencode`) | Sonnet medio |
 - El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; falta darle acceso).
 
 ## REGLA ESTRICTA (sin excepciones): MCP y CLI siempre completos
