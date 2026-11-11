@@ -124,7 +124,7 @@ def test_run_operation_traduce_ids_y_selectores():
     ok(api.llamar(s, "create_cylinder", {"radius": 5, "height": 20}))
     cara = ok(api.llamar(s, "find_faces", {"selector": "%CYLINDER"}))["faces"][0]["id"]
     r = ok(api.llamar(s, "run_operation", {"type": "rosca", "params": {"caras": [cara], "modelada": False}}))
-    assert r["status"] == "aviso" and r["translated_params"] == ["caras"]
+    assert r["status"] == "ok" and r["translated_params"] == ["caras"]     # B-295: la cosmética ya no avisa
     ref = s.paso(r["id"]).p["caras"][0]
     assert ref["tipo"] == "cara" and ref["cuerpo"] == "op1.c1" and ref["firma"]["geom"] == "cilindro"
 
