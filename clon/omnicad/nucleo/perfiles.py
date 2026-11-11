@@ -926,7 +926,7 @@ def contornos_texto(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=Fa
     try:
         return fuentes.contornos_texto(texto, fuente, altura, negrita, cursiva, **opciones)
     except fuentes.ErrorFuente as e:
-        if fuentes.buscar_fuente(fuente) is not None:       # la fuente existe: el error es de las opciones
+        if fuentes.resolver_fuente(fuente) is not None:       # la fuente existe: el error es de las opciones
             raise geo.ErrorGeometria(str(e)) from e
     return _contornos_occ(texto, fuente, altura, negrita, cursiva)
 

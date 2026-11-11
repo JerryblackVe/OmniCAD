@@ -410,6 +410,21 @@ def buscar_fuente(nombre, negrita=False, cursiva=False):
     return min(cand, key=costo)
 
 
+# Si falta una fuente muy común, se usa su equivalente (como los alias de fuentes de Linux). Liberation Sans tiene la
+# misma métrica que Arial. `buscar_fuente` no sustituye: sigue diciendo si la fuente pedida está instalada.
+_SUSTITUTAS = {"arial": ("Liberation Sans", "DejaVu Sans"), "times new roman": ("Liberation Serif", "DejaVu Serif")}
+
+
+def resolver_fuente(nombre, negrita=False, cursiva=False):
+    """Como `buscar_fuente`, pero si falta una fuente con equivalente conocido (Arial, Times New Roman) devuelve la equivalente."""
+    reg = buscar_fuente(nombre, negrita, cursiva)
+    for alt in _SUSTITUTAS.get(str(nombre or "").strip().casefold(), ()) if reg is None else ():
+        reg = buscar_fuente(alt, negrita, cursiva)
+        if reg is not None:
+            break
+    return reg
+
+
 # ---------------------------------------------------------------- contornos
 @lru_cache(maxsize=24)
 def _abrir(ruta, indice, peso_variable):
@@ -602,7 +617,7 @@ def _opciones(dadas):
 
 
 def _fuente_datos(fuente, negrita, cursiva):
-    reg = buscar_fuente(fuente, negrita, cursiva)
+    reg = resolver_fuente(fuente, negrita, cursiva)
     if reg is None:
         raise ErrorFuente(f"No se encontró la fuente «{fuente}».")
     if reg["ruta"].startswith(_RUTA_TRAZO):
