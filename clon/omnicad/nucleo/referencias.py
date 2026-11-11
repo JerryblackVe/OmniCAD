@@ -109,6 +109,15 @@ def firma_arista(arista):
     return f
 
 
+def direccion_curva(arista):
+    """Dirección unitaria de una arista recta según su curva (del primer al último parámetro). No depende de cómo se
+    llegó a la arista (su orientación en una cara o en el sólido) y gira con el cuerpo: los `extremos` de la firma, en
+    cambio, vienen ordenados y se dan vuelta cuando un giro hace cruzar la arista por un plano del mundo (B-283)."""
+    c = BRepAdaptor_Curve(arista)
+    d = np.asarray(_xyz(c.Value(c.LastParameter())), float) - np.asarray(_xyz(c.Value(c.FirstParameter())), float)
+    return d / (np.linalg.norm(d) or 1.0)
+
+
 def firma_vertice(vertice):
     return {"geom": "punto", "punto": _xyz(BRep_Tool.Pnt_s(vertice))}
 
@@ -140,6 +149,9 @@ def referencia(cuerpo_id, sub, forma=None, caja=None, mapa=None):
     if caja is None and forma is not None:
         caja = caja_envolvente(forma)
     ref = {"tipo": tipo_topologico(sub), "cuerpo": cuerpo_id, "firma": firma(sub, caja)}
+    if ref["firma"]["geom"] == "linea":     # B-283: el sentido de hoy (extremos ordenados), atado a la curva
+        a, b = (np.asarray(p, float) for p in ref["firma"]["extremos"])
+        ref["sentido"] = 1 if float(direccion_curva(sub) @ (b - a)) > 0 else -1
     if mapa is None and forma is not None:
         mapa = mapa_de_subformas(forma, ref["tipo"])
     if mapa is not None:
