@@ -292,3 +292,16 @@ def test_copia_de_patron_de_un_plano_sirve_como_texto():
     r = api.llamar(s, "create_sketch", {"plane": "op99_xy"})
     assert not r["ok"] and r["error_kind"] == "PLANE_NOT_FOUND", r
     assert any("_xy" in p and "_k" in p for p in r["pistas"]), r
+
+
+@pytest.mark.parametrize("malo", [None, 7, 1.5, "", "  ", ["a"]])
+def test_b285_receta_con_id_de_paso_que_no_es_texto_se_rechaza(malo):
+    """B-285: apply_recipe aceptaba ids None, 7, 1.5 o vacíos; después delete_feature daba INTERNAL_ERROR (TypeError)."""
+    s = _armar()
+    llamar(s, "create_construction_plane", plane="XY", offset=3)
+    receta = llamar(s, "get_recipe")["recipe"]
+    antes = len(s.doc.operaciones)
+    receta["operaciones"][-1]["id"] = malo
+    r = api.llamar(s, "apply_recipe", {"recipe": receta})
+    assert not r["ok"] and r["error_kind"] == "INVALID_RECIPE" and "id de texto" in r["mensaje"], r
+    assert len(s.doc.operaciones) == antes
