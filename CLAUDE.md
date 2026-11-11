@@ -1,5 +1,26 @@
 # OmniCAD
 
+## REGLA ESTRICTA: qué se trabaja primero (Gerardo, 2026-11-10)
+«Esto es lo que va a hacer funcional la app, aunque esté incompleta.» La meta es que estas herramientas anden al
+100 %, rápido y sin bugs, antes que cualquier otra cosa:
+- **Prioridad 1**, en este orden:
+  1. **Bocetos**: crear, modificar, restricciones y cotas. Es lo que más importa: sin fallas y rápido.
+  2. **Sólido**:
+     - Crear: extruir, revolución, barrido, solevación, nervio, red, repujado, agujero, rosca, primitivas, patrón,
+       simetría, engrosar.
+     - Modificar: pulsar/tirar, empalme, chaflán, vaciado, combinar (booleanas), dividir, mover/copiar.
+  3. **Superficie**: crear y modificar.
+  4. **Construir** (planos, ejes, puntos, SCU), **Inspeccionar** y **Ensamblar**.
+- **La velocidad es parte de la prioridad 1.** Un cuello de botella de esas herramientas entra acá, con Rust si hace
+  falta. Ejemplos: el solver del boceto (RS-R4), la selección bajo el cursor (RS-R9, RS-X3) y la rosca modelada (P-78).
+- **Prioridad 2**, después: render, animación, simulación, malla, plástico, chapa, dibujo y el resto. Se trabajan con
+  el tiempo.
+- **Al elegir el próximo ítem**:
+  1. Los bugs de la prioridad 1.
+  2. Su velocidad.
+  3. Lo que les falte.
+  - Un ítem de prioridad 2 entra solo si no queda nada de la prioridad 1, o si Gerardo lo pide.
+
 ## REGLA ESTRICTA (sin excepciones): MCP y CLI siempre completos
 - TODAS las herramientas de la app están en el MCP y en la CLI, siempre. Vale para todo: operaciones,
   comandos de la cinta, menús contextuales, opciones de cada diálogo y espacios de trabajo (DIBUJO,
