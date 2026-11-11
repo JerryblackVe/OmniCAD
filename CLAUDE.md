@@ -21,6 +21,18 @@
   3. Lo que les falte.
   - Un ítem de prioridad 2 entra solo si no queda nada de la prioridad 1, o si Gerardo lo pide.
 
+## Dónde se trabaja: main vive en la VPS de Google (Gerardo, 2026-11-11)
+- `main` vive en `omnicad-vps` (Google Cloud, Ubuntu 24.04, 8 núcleos AMD, 32 GB), en `/home/mosos/OmniCAD`. Las sesiones de
+  código se abren ahí: app de Claude › entorno SSH `mosos@34.66.139.76`, carpeta `/home/mosos/OmniCAD`. La PC de Gerardo
+  sigue `vps/main` (remoto `vps`) y sirve para abrir la app y probar a mano la ventana de Windows.
+- En Linux: `.venv/bin/python` en lugar de `.venv/Scripts/python.exe`; lo que abre ventanas va con `xvfb-run -a`. Los
+  worktrees quedan al lado (`~/OmniCAD-<ID>`, `scripts/worktree_item.sh`). Rust ya está instalado (`omnicad._rs`).
+- Gasto: tope de Gerardo USD 290/mes (presupuesto «OmniCAD VPS tope 290» con alertas). Cambiar la máquina o sumar algo
+  que suba el costo pide su OK. La VPS no suma cupo de Claude.
+- La regla de memoria de la PC (13 GB, `main.log`) no aplica en la VPS: ahí se mira `free -g`.
+- OpenCode no se usa (Gerardo, 2026-11-11).
+- El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; falta darle acceso).
+
 ## REGLA ESTRICTA (sin excepciones): MCP y CLI siempre completos
 - TODAS las herramientas de la app están en el MCP y en la CLI, siempre. Vale para todo: operaciones,
   comandos de la cinta, menús contextuales, opciones de cada diálogo y espacios de trabajo (DIBUJO,
