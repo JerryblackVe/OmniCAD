@@ -88,7 +88,8 @@ def _informe_geometria(sesion, c, informe):
 
 
 @herramienta("check_geometry", "inspeccion", "Revisa la geometría de un cuerpo (o de todos), como Check Geometry de "
-             "FreeCAD: si el kernel lo da por válido (y qué falla si no), si es estanco, aristas libres (abiertas) y no "
+             "FreeCAD: si es válido (el kernel lo acepta y no se autointersecta) y qué "
+             "falla si no, si es estanco, aristas libres (abiertas) y no "
              "manifold, autointersecciones, caras degeneradas, aristas diminutas y tolerancias máximas; en mallas, bordes "
              "abiertos, no manifold, normales invertidas y triángulos degenerados. Cada problema trae kind, severity "
              "(error o warning), un mensaje y su posición [x, y, z]; max_tolerance es la mayor tolerancia del kernel "
