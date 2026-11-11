@@ -1,6 +1,6 @@
 # Modelos de OpenCode en la VPS (prueba del 2026-11-11)
 
-Prueba de 38 modelos con las 3 pruebas chicas, desde una carpeta temporal vacía, `timeout 180`, sin gastar saldo
+Prueba de 40 modelos con las 3 pruebas chicas, desde una carpeta temporal vacía, `timeout 180`, sin gastar saldo
 pago (solo gratis y suscripciones ya conectadas). Cuentas conectadas: OpenCode, OpenCode Go, Nvidia, OpenRouter,
 TokenRouter, Ollama Cloud y OpenAI (ChatGPT, oauth).
 
@@ -26,6 +26,8 @@ TokenRouter, Ollama Cloud y OpenAI (ChatGPT, oauth).
 | `opencode/deepseek-v4.1-flash-free` | OpenCode (gratis) | 8 s ✓ | 14 s ✓ | 6 s ✓ | mecánico / código estándar (cero retención) |
 | `opencode/nemotron-3.5-super-vl-free` | OpenCode (gratis) | 14 s ✓ | 20 s ✓ | 21 s ✓ | imágenes / contexto grande; lento |
 | `opencode/nemotron-3.5-lightning-free` | OpenCode (gratis) | 5 s ✓ | 29 s ✓ | 6 s ✓ | mecánico; lento en código (28 s) |
+| `nvidia/minimaxai/minimax-m3.1-flash` | NVIDIA (API) | 5 s ✓ | 12 s ✓ | 12 s ✓ | código estándar y agentes; rápido y español limpio |
+| `nvidia/minimax-m3.1-flash` (alias) | NVIDIA (API) | 8 s ✓ | 22 s ✓ | 18 s ✗ | no usar el alias: mezcla caracteres chinos en el español; usar la ruta `minimaxai/` |
 | `nvidia/deepseek-ai/deepseek-v4.1-flash` | NVIDIA (API) | 78 s ✓ | 64 s ✓ | 132 s ✓ | no usar: 64-132 s por prueba |
 
 ## No anduvieron
@@ -56,10 +58,13 @@ TokenRouter, Ollama Cloud y OpenAI (ChatGPT, oauth).
 | `nvidia/gpt-oss-20b` | NVIDIA (API) | 180 s ✗ | — | — | Se colgó: 180 s sin respuesta |
 | `tokenrouter/z-ai/glm-5.3-free` | TokenRouter | 3 s ✗ | — | — | Token inválido (hay que renovarlo) |
 | `crowllm/agnes-2.5-flash:free` | CrowLLM (gratis) | 180 s ✗ | — | — | Se colgó: 180 s sin respuesta |
+| `nvidia/z-ai/glm-5.3-flash` | NVIDIA (API) | 180 s ✗ | — | — | Se colgó: 180 s sin respuesta |
+| `nvidia/glm-5.3-flash` (alias) | NVIDIA (API) | 180 s ✗ | — | — | Se colgó: 180 s sin respuesta |
 
 ## Conclusiones
 
 - Mejores: `nvidia/nemotron-3-ultra-550b` y `openai/gpt-6.1-sol` (lógica), `opencode/beam-free` (el más rápido de los gratis).
+- `nvidia/minimaxai/minimax-m3.1-flash` también quedó entre los buenos (código estándar y agentes, 5-12 s); `nvidia/z-ai/glm-5.3-flash` se colgó.
 - Gratis para código estándar y mecánico: `big-pickle`, `deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `mimo-v2.6-flash-free`.
 - OpenCode Go entero falla: falta la suscripción Go activa (y `deepseek-v4-pro` pide región Global).
 - Ollama Cloud entero falla: hace falta plan o créditos. Ninguna de las dos se probó con plata.
