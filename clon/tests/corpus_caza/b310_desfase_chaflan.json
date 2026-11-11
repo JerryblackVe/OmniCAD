@@ -1,0 +1,27 @@
+{
+ "id": "B-310",
+ "firma": "geometria|offset_faces|kernel",
+ "pasos": [
+  {
+   "tool": "create_cylinder",
+   "args": {
+    "height": 15,
+    "radius": 15.5
+   }
+  },
+  {
+   "tool": "chamfer",
+   "args": {
+    "edges": "<Z",
+    "distance": 1
+   }
+  },
+  {
+   "tool": "offset_faces",
+   "args": {
+    "faces": "%CYLINDER",
+    "distance": -1.24
+   }
+  }
+ ]
+}
