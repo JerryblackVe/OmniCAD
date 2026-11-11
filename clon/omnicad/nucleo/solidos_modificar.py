@@ -1462,6 +1462,66 @@ def _cara_dada_vuelta(mo, forma, caras, resultado, dist):
     return False
 
 
+def _desfase_kernel(forma, caras, dist):
+    """(resultado, dada_vuelta) del offset de OCC sobre `caras`, o (None, False) si el kernel no pudo."""
+    try:
+        mo = BRepOffset_MakeOffset()
+        mo.Initialize(forma, 0.0, TOL, BRepOffset_Skin, False, False, GeomAbs_Intersection, False, False)
+        for c in caras:
+            mo.SetOffsetOnFace(c, dist)
+        mo.MakeOffsetShape()
+        if not (mo.IsDone() and not mo.Shape().IsNull() and geo.es_valida(mo.Shape())
+                and not geo.esta_vacia(mo.Shape())):
+            return None, False
+        resultado = mo.Shape()
+        if resultado.ShapeType() == TopAbs_SHELL:       # con un agujero ciego el kernel devuelve la cáscara sola
+            resultado = BRepBuilderAPI_MakeSolid(TopoDS.Shell(resultado)).Solid()
+        return resultado, _cara_dada_vuelta(mo, forma, caras, resultado, dist)
+    except Exception:  # noqa: BLE001 — quien llama prueba otra alternativa
+        return None, False
+
+
+def _consumido(bisel, cara, dist):
+    """True si todo el `bisel` queda a no más de |dist| de la superficie de `cara`: el desfase lo traga entero. Un cono
+    más ancho (una pieza cónica de verdad, un avellanado grande) no se quita."""
+    sup = BRep_Tool.Surface_s(cara)
+    for v in geo._explorar(bisel, TopAbs_VERTEX):
+        proy = GeomAPI_ProjectPointOnSurf(BRep_Tool.Pnt_s(TopoDS.Vertex(v)), sup)
+        if proy.NbPoints() == 0 or proy.LowerDistance() > abs(dist) + TOL:
+            return False
+    return True
+
+
+def _sin_biseles_vecinos(forma, caras, dist):
+    """B-310: un chaflán pegado a las caras que el desfase consume entero (un cilindro achicado más que el chaflán de su
+    borde) deja al kernel sin dónde apoyar la cara movida. Fusion lo resuelve extendiendo las vecinas: acá se quita el
+    chaflán (defeaturing) para reintentar. Un empalme tangente no llega acá: va en la cadena tangente y se desfasa con la
+    cara. (forma sin biseles, caras a desfasar en ella) o (None, None)."""
+    mapa = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+    biseles = []
+    for c in caras:
+        for arista in geo._explorar(c, TopAbs_EDGE):
+            for v in _padres(mapa, arista):
+                if (not _contiene(caras, v) and not _contiene(biseles, v)
+                        and BRepAdaptor_Surface(TopoDS.Face(v)).GetType() == GeomAbs_Cone
+                        and _consumido(TopoDS.Face(v), c, dist)):
+                    biseles.append(v)
+    if not biseles:
+        return None, None
+    df = BRepAlgoAPI_Defeaturing()
+    df.SetShape(forma)
+    for b in biseles:
+        df.AddFaceToRemove(b)
+    df.SetRunParallel(False)
+    df.Build()
+    if not df.IsDone() or not all(df.IsDeleted(b) for b in biseles) or any(df.IsDeleted(c) for c in caras):
+        return None, None
+    nuevas = []
+    for c in caras:
+        nuevas += [TopoDS.Face(x) for x in geo.lista_occ(df.Modified(c))] or [c]
+    return df.Shape(), nuevas
+
+
 def desfasar_caras(forma, caras, distancia, *, tangente=True):
     """Offset Face / Press Pull sobre caras: mueve las caras a lo largo de su normal (positivo = hacia
     afuera, agrega material) y extiende las vecinas. tangente: arrastra las caras tangentes."""
@@ -1475,22 +1535,14 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
         for t in (caras_tangentes(forma, c, coplanares=False) if tangente else [c]):
             if not _contiene(todas, t):
                 todas.append(t)
-    resultado = None
+    resultado, dada_vuelta = None, False
     # B-280: con la otra mitad de una cara partida al lado, el kernel corre las dos; la extrusión deja el escalón
     if not _vecina_coplanar_suelta(forma, todas):
-        try:
-            mo = BRepOffset_MakeOffset()
-            mo.Initialize(forma, 0.0, TOL, BRepOffset_Skin, False, False, GeomAbs_Intersection, False, False)
-            for c in todas:
-                mo.SetOffsetOnFace(c, dist)
-            mo.MakeOffsetShape()
-            if mo.IsDone() and not mo.Shape().IsNull() and geo.es_valida(mo.Shape()) and not geo.esta_vacia(mo.Shape()):
-                resultado = mo.Shape()
-                if resultado.ShapeType() == TopAbs_SHELL:       # con un agujero ciego el kernel devuelve la cáscara sola
-                    resultado = BRepBuilderAPI_MakeSolid(TopoDS.Shell(resultado)).Solid()
-                dada_vuelta = _cara_dada_vuelta(mo, forma, todas, resultado, dist)
-        except Exception:  # noqa: BLE001 — se intenta la alternativa por extrusión
-            resultado = None
+        resultado, dada_vuelta = _desfase_kernel(forma, todas, dist)
+        if resultado is None and any(_plano_de_cara(c) is None for c in todas):     # las planas tienen su alternativa
+            sin_biseles, nuevas = _sin_biseles_vecinos(forma, todas, dist)
+            if sin_biseles is not None:
+                resultado, dada_vuelta = _desfase_kernel(sin_biseles, nuevas, dist)
     if resultado is not None:
         if dada_vuelta:
             raise geo.ErrorGeometria(f"Desfase de caras: con {abs(dist):g} mm la cara se da vuelta: la distancia es igual "

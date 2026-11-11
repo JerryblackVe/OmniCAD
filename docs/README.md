@@ -62,6 +62,9 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [plan_boceto_organizar.md](plan_boceto_organizar.md) | Organización, agrupación y manipulación de objetos en Boceto (prompt maestro de Gerardo); se borra al terminarla |
 | [plan_velocidad.md](plan_velocidad.md) | Pruebas y procesos más rápidos: medir, suite en paralelo, tests por impacto, humo sin cursor real (A–G) |
 | [plan_caza_errores.md](plan_caza_errores.md) | Programa que busca errores solo (`scripts/caza/`): capas, jueces automáticos, comandos y cómo quedó |
+| [trabajo_bugs_pieza_gerardo.md](trabajo_bugs_pieza_gerardo.md) | Prompt: bugs de la pieza de Gerardo (B-308, B-306, B-311, B-307, B-310) |
+| [trabajo_p137_flechas.md](trabajo_p137_flechas.md) | Prompt: cerrar P-136 y hacer P-137 (flechas del manipulador) |
+| [trabajo_probar_todo.md](trabajo_probar_todo.md) | Prompt: `scripts/probar_todo.py`, todas las pruebas automáticas en un comando |
 | [plan_reconstruir_solido.md](plan_reconstruir_solido.md) | De una malla a una pieza paramétrica (RI-1–RI-6, F10, F11) |
 | [plan_escaneo_celular.md](plan_escaneo_celular.md) | Escanear una pieza con el celular (ESC-1–ESC-7) |
 | [plan_texto_vectores.md](plan_texto_vectores.md) | Plan de texto y vectores |
