@@ -555,17 +555,18 @@ class _Sistema:
         """Offset de Fusion: cada punto de ajuste queda a distancia firmada sobre la normal de la madre. Con `jd`, la
         distancia es la incógnita de ese índice en vez de un número."""
         prim0 = self.prim(self.x0, madre)
-        for pid in self.b.curvas[copia].pts:
-            t, _, q = mas_cercano(prim0, self.P(self.x0, pid))
+        curva = self.b.curvas[copia]
+        # La misma correspondencia que Boceto._desfase_libre: el punto sigue a la madre sin deslizar sobre ella.
+        for pid, fraccion in zip(curva.pts, np.linspace(0, 1, len(curva.pts), endpoint=not curva.cerrada), strict=True):
             if lado is None:
+                t, _, q = mas_cercano(prim0, self.P(self.x0, pid))
                 _, d = evaluar_primitiva(prim0, t, 1)
                 lado = _signo(_cruz(d, np.subtract(self.P(self.x0, pid), q)))
-            j = self._parametro(t)
 
-            def f(x, pid=pid, j=j, lado=lado):
+            def f(x, pid=pid, fraccion=fraccion, lado=lado):
                 prim = self.prim(x, madre)
-                t0, t1, cerrada = dominio(prim)
-                t = x[j] if cerrada else min(t1, max(t0, x[j]))
+                t0, t1, _ = dominio(prim)
+                t = t0 + fraccion * (t1 - t0)
                 q, d = evaluar_primitiva(prim, t, 1)
                 ux, uy = _unitario(d)
                 p = self.P(x, pid)
