@@ -2503,11 +2503,18 @@ def _desfases_clase(datos, clase, interna):
                               datos["diametro_flancos"], datos["diametro_menor"])
 
 
+def _holgura_rosca(holgura):
+    holgura = float(holgura)
+    if holgura < 0:
+        raise geo.ErrorGeometria("La holgura de impresión 3D no puede ser negativa: usá 0 o un valor positivo.")
+    return holgura
+
+
 def diametro_taladro_rosca(designacion, clase="", holgura=0.0):
     """Diámetro del agujero de una rosca interior modelada: el menor básico, al centro de la tolerancia de la
     `clase` (6H: D1 + TD1/2) y agrandado por la `holgura` radial de impresión 3D. M10 sin clase: 8,376 mm."""
     datos = datos_rosca(designacion)
-    return datos["diametro_menor"] + 2 * (_desfases_clase(datos, clase, True)["menor"] + float(holgura))
+    return datos["diametro_menor"] + 2 * (_desfases_clase(datos, clase, True)["menor"] + _holgura_rosca(holgura))
 
 
 def _perfil_surco(datos, desfase=0.0, fondo=None, cresta=None):
@@ -2520,7 +2527,7 @@ def _perfil_clase(datos, clase, interna, holgura, tabla):
     """Perfil de `_surco_rosca` con la clase y la holgura de impresión. `tabla` (B-122, Fusion real): las clases de las
     tablas de Fusion modelan sus Ø mayor y menor (Tr12×3 7e: 8,3175 y 11,882; 7H: 9,1575 y 12,5); `False` deja esos
     diámetros como quedaban en las recetas viejas."""
-    a, holgura = _desfases_clase(datos, clase, interna), float(holgura)
+    a, holgura = _desfases_clase(datos, clase, interna), _holgura_rosca(holgura)
     corrido = lambda d: None if d is None or not tabla else d + 2 * (holgura if interna else -holgura)  # noqa: E731
     return _perfil_surco(datos, a["flancos"] + holgura, corrido(a["fondo"]), corrido(a["cresta"]))
 
