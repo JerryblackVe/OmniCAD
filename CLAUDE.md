@@ -51,7 +51,7 @@
   | E7 | Pruebas como usuario (prueba_ui, caza) | Sonnet medio |
   | E8 | Linux y arreglos chicos (B-326, B-327, UI, docs) | Sonnet medio |
   | E9 | OpenCode (orquesta corridas con `/orquestador-opencode`) | Sonnet medio |
-- El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; falta darle acceso).
+- El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; acceso con `gh` de la cuenta JerryblackVe desde el 2026-11-11, token en `~/.config/gh/hosts.yml`, nunca en el repo).
 
 ## REGLA ESTRICTA (sin excepciones): MCP y CLI siempre completos
 - TODAS las herramientas de la app están en el MCP y en la CLI, siempre. Vale para todo: operaciones,
