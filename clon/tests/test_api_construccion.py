@@ -566,3 +566,43 @@ def test_p79_la_escena_informa_la_construccion():
     assert next(p for p in c["points"] if p["name"] == "S origen")["point"] == pytest.approx([20, 20, 25])
     assert len(c["planes"]) == 4 and len(c["axes"]) == 4      # el plano y el eje, más los tres de la SCU
     assert llamar(s, "get_scene_info", summary=True)["counts"]["construction"] == 4 + 4 + 1
+
+
+def test_b283_el_eje_y_el_plano_en_angulo_siguen_el_sentido_de_la_arista_al_girar_el_cuerpo():
+    """B-283: girar el cuerpo con un parámetro hacía pasar la arista por un plano del mundo y el eje, el plano a 30° y
+    el SCU invertían el sentido (y el origen saltaba al otro extremo). La referencia guarda el sentido al crear; una
+    receta vieja, sin él, se calcula como antes."""
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=30, height=40, anchor="corner")
+    llamar(s, "create_parameter", name="a", expression="1")
+    llamar(s, "move_body", body="Cuerpo1", rotate=["0", "a", "0"], pivot="origin")
+
+    def larga():      # el id de find_edges vence con cada cambio
+        aristas = [e for e in llamar(s, "find_edges", body="Cuerpo1")["edges"] if e.get("type") == "line"]
+        return max(aristas, key=lambda e: e["length"])["id"]
+
+    eje = llamar(s, "create_construction_axis", type="arista", references=[larga()], body="Cuerpo1")["axis"]["id"]
+    plano = llamar(s, "create_construction_plane", type="angle", references=[larga()], angle=30, body="Cuerpo1")["plane"]["id"]
+    scu = llamar(s, "create_ucs", origin="O", x_axis=eje)["ucs"]["id"]
+    directo = llamar(s, "create_ucs", origin="O", x_axis=larga())["ucs"]["id"]      # X sobre la arista, sin eje
+
+    def estado():
+        e = s.doc.estado_final
+        return (np.asarray(e.ejes[eje][1], float), np.asarray(e.ejes[eje][0], float), np.asarray(e.planos[plano].normal, float),
+                np.asarray(e.ejes[scu + "_y"][1], float), np.asarray(e.ejes[directo + "_x"][1], float))
+
+    d0, p0, n0, y0, x0 = estado()
+    llamar(s, "set_parameter", name="a", expression="-1")
+    d1, p1, n1, y1, x1 = estado()
+    assert d0 @ d1 > 0.99 and n0 @ n1 > 0.99 and y0 @ y1 > 0.99 and x0 @ x1 > 0.99     # sin saltos de sentido
+    assert np.linalg.norm(p1 - p0) < 1.0                                    # el origen sigue en el mismo extremo
+    receta = llamar(s, "get_recipe")["recipe"]
+
+    def sin_sentido(x):          # receta guardada antes de B-283: las referencias no traen «sentido»
+        if isinstance(x, dict):
+            return {k: sin_sentido(v) for k, v in x.items() if k != "sentido"}
+        return [sin_sentido(v) for v in x] if isinstance(x, list) else x
+
+    vieja = api.Sesion()
+    llamar(vieja, "apply_recipe", recipe=sin_sentido(receta))
+    assert np.asarray(vieja.doc.estado_final.ejes[eje][1], float) @ d1 < -0.99      # se calcula como antes

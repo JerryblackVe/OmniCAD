@@ -39,6 +39,13 @@ firma_arista = firma_cara
 firma_vertice = firma_cara
 
 
+def direccion_curva(arista):
+    # shortcut: usa los extremos de la firma nativa en el orden en que vienen; si el kernel los da ordenados, el sentido
+    # no sigue un giro (B-283 queda como antes con OmniKernel). Cuando el kernel exponga su curva, tomar su dirección.
+    a, b = (np.asarray(p, float) for p in arista.firma()["extremos"])
+    return (b - a) / (np.linalg.norm(b - a) or 1.0)
+
+
 def punto_de_vertice(v):
     return np.array(v.firma()["punto"])
 

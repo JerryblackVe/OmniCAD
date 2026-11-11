@@ -238,7 +238,12 @@ def resolver(ref, estado):
             ent.punto = refs.punto_de_vertice(sub)
         elif t == "arista" and ref["firma"]["geom"] == "linea":
             a, b = (np.array(p) for p in refs.firma_arista(sub)["extremos"])
-            ent.eje = (a, geo_dir(b - a))
+            sentido = ref.get("sentido")
+            if type(sentido) is int and sentido in (1, -1):    # B-283: sigue a la curva; sin clave, como antes
+                d = refs.direccion_curva(sub) * sentido
+                ent.eje = (a, d) if float(d @ (b - a)) > 0 else (b, d)
+            else:
+                ent.eje = (a, geo_dir(b - a))
         return ent
     if t == "cuerpo":
         c = _cuerpo(estado, ref["cuerpo"])
