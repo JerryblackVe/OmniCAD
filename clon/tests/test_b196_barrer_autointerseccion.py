@@ -6,6 +6,9 @@ from omnicad import api
 from omnicad.nucleo import geometria as geo
 from omnicad.nucleo import revision as rev
 from omnicad.nucleo import solidos_crear as sc
+from omnicad.nucleo import aislado
+from omnicad.timeline.calculo_aislado import _leer_calculo
+from omnicad.timeline.operaciones import operacion_desde_dict
 
 
 def _r(s, nombre, **args):
@@ -134,3 +137,85 @@ def test_barrido_con_revision_agotada_tambien_avisa():
             None, [{"mensaje": "No se revisaron las autointersecciones: plazo agotado."}], False)):
         r = _barrer(s)
     _exigir_aviso(s, r, "autointersecciones", "plazo agotado")
+
+
+def test_recalcular_conserva_el_aviso_sin_repetir_el_analisis():
+    s = _preparar_barrido(True)
+    with patch.object(rev, "_autointersecciones_seguras", wraps=rev._autointersecciones_seguras) as analisis:
+        r = _barrer(s)
+        uid = r["result"]["feature"]["id"]
+        aviso = s.doc.resultado(uid).mensaje
+        assert analisis.call_count == 1
+        receta = s.doc.operacion(uid).a_dict()
+        for _ in range(2):
+            _r(s, "recompute_all")
+            assert analisis.call_count == 1
+            assert s.doc.resultado(uid).estado == "aviso"
+            assert s.doc.resultado(uid).mensaje == aviso
+        assert s.doc.operacion(uid).a_dict() == receta
+        assert s.doc.operacion(uid).copia()._avisos_autointersecciones
+        assert not operacion_desde_dict(receta)._avisos_autointersecciones
+        caja = _r(s, "create_box", length=2, width=2, height=2)["result"]["feature"]["id"]
+        _r(s, "edit_feature", feature=caja, params={"height": "3 mm"})
+        assert analisis.call_count == 1
+        assert s.doc.resultado(uid).mensaje == aviso
+        _r(s, "edit_feature", feature=uid, params={"distancia": "1"})
+        assert analisis.call_count == 2
+        assert s.doc.resultado(uid).mensaje == aviso
+        _r(s, "edit_feature", feature=uid, params={"distancia": "0.1"})
+        assert analisis.call_count == 3
+        assert s.doc.resultado(uid).estado == "ok"
+        assert not s.doc.operacion(uid)._avisos_autointersecciones
+
+
+def test_previa_no_analiza_y_aceptar_y_editar_si_aunque_haya_previa():
+    s = _preparar_barrido(True)
+    r = _barrer(s)
+    uid = r["result"]["feature"]["id"]
+    receta = s.doc.operacion(uid).a_dict()
+    s.doc.eliminar(uid)
+    op = operacion_desde_dict(receta)
+    with patch.object(rev, "_autointersecciones_seguras", wraps=rev._autointersecciones_seguras) as analisis:
+        s.doc.previsualizar(op)
+        assert analisis.call_count == 0
+        assert s.doc.agregar(op).estado == "aviso"
+        assert analisis.call_count == 1
+        nueva = op.copia()
+        nueva.p["distancia"] = "0.1"
+        s.doc.previsualizar(nueva, s.doc.indice(uid))
+        assert analisis.call_count == 1
+        assert s.doc.reemplazar(uid, nueva).estado == "ok"
+        assert analisis.call_count == 2
+        assert not nueva._avisos_autointersecciones
+
+
+def test_previa_aislada_no_analiza_y_aceptar_no_reusa_su_resultado_sin_revision():
+    """Ejecuta el protocolo real del hijo en el proceso actual para contar el análisis."""
+    s = _preparar_barrido(True)
+    r = _barrer(s)
+    uid = r["result"]["feature"]["id"]
+    op = s.doc.operacion(uid).copia()
+    s.doc.eliminar(uid)
+
+    def solicitar(tarea, datos):
+        with patch.object(aislado, "EN_HIJO", True), patch.object(aislado, "formas_enviadas", None):
+            return _leer_calculo(getattr(aislado, "_" + tarea)(**datos))
+
+    with (patch.object(s.doc, "_prevuelo_corresponde", return_value=True),
+          patch.object(s.doc, "_solicitar_calculo", side_effect=solicitar),
+          patch.object(rev, "_autointersecciones_seguras", wraps=rev._autointersecciones_seguras) as analisis):
+        s.doc.previsualizar(op)
+        assert analisis.call_count == 0
+        assert s.doc.agregar(op).estado == "aviso"
+        assert analisis.call_count == 1
+        aviso = s.doc.resultado(uid).mensaje
+        _r(s, "recompute_all")
+        assert analisis.call_count == 1
+        assert s.doc.resultado(uid).mensaje == aviso
+        nueva = op.copia()
+        nueva.p["distancia"] = "0.1"
+        s.doc.previsualizar(nueva, s.doc.indice(uid))
+        assert analisis.call_count == 1
+        assert s.doc.reemplazar(uid, nueva).estado == "ok"
+        assert analisis.call_count == 2
+        assert not nueva._avisos_autointersecciones
