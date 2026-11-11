@@ -36,6 +36,19 @@
   no limita: el límite es el CPU.
 - **Tope en la VPS: 8 sesiones de ejecución a la vez (Gerardo, 2026-11-11).** Los tests van de a 3 con `scripts/turno.py`
   (`OMNICAD_TURNOS=3` en `~/.claude/settings.json` de la VPS, no en el repo: la PC sigue de a 1). El cupo lo maneja Gerardo.
+- **8 sesiones de ejecución fijas (2026-11-11)**, una por carril; el coordinador les manda ítems con `SendMessage`, las vacía
+  con `clear_session` al 65 % y no abre otras. Cada ítem va en su worktree (`scripts/worktree_item.sh`).
+
+  | Sesión | Carril | Modelo |
+  |---|---|---|
+  | E1 | Bocetos (crear, modificar, restricciones, cotas, solver) | Opus alto |
+  | E2 | Sólido › Crear | Opus alto |
+  | E3 | Sólido › Modificar | Opus alto |
+  | E4 | Superficie | Opus alto |
+  | E5 | Construir, Inspeccionar, Ensamblar | Sonnet medio |
+  | E6 | Velocidad y Rust | Opus alto |
+  | E7 | Pruebas como usuario (prueba_ui, caza) | Sonnet medio |
+  | E8 | Linux y arreglos chicos (B-326, B-327, UI, docs) | Sonnet medio |
 - El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; falta darle acceso).
 
 ## REGLA ESTRICTA (sin excepciones): MCP y CLI siempre completos
@@ -266,17 +279,17 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   quedan menos de 2 GB libres, frena una sesión (`stop_session` y el mensaje «pausa por memoria») antes de lanzar nada.
 - Una sola corrida pesada por vez en toda la PC: `scripts/turno.py`, y nunca dos OpenCode.
 
-## Regla estricta: aviso de contexto al 60 % (Gerardo, 2026-11-05)
+## Regla estricta: aviso de contexto al 65 % (Gerardo, 2026-11-05; 65 % desde 2026-11-11)
 - El coordinador mira cuánto lleva lleno su contexto (`get_usage` con `session_id: "self"`) cada vez que cierra una
   tarea o una tanda, y antes de lanzar otra.
-- **Al llegar al 55 %, avisa en una línea que se acerca al límite.** **Al llegar al 60 %, no arranca nada nuevo:**
+- **Al llegar al 60 %, avisa en una línea que se acerca al límite.** **Al llegar al 65 %, no arranca nada nuevo:**
   1. guarda todo: commit de lo verificado; `docs/seguimiento/`, `PROJECT_LOG.md`, la lista nocturna y la página de
      seguimiento al día;
   2. escribe una nota de traspaso en `PROJECT_LOG.md` (Registro): sesiones abiertas y su estado, lo que espera
      revisión, lo que quedó sin commitear y de quién es, y el próximo paso;
   3. le dice a Gerardo en una línea que abra una sesión nueva de coordinación, que arranca leyendo esa nota.
-- Lo mismo vale para las sesiones de ejecución: al 60 % cierran su informe y lo dicen, en vez de seguir.
-- **Las sesiones que inició el coordinador se compactan al pasar del 50 % (Gerardo, 2026-11-09).** El coordinador
+- Lo mismo vale para las sesiones de ejecución: al 65 % cierran su informe y lo dicen, en vez de seguir.
+- **Las sesiones que inició el coordinador se compactan al llegar al 65 % (Gerardo, 2026-11-09; 65 % desde 2026-11-11).** El coordinador
   revisa su contexto con `get_usage` en cada vigilancia. Hay que esperar a que la sesión termine el ítem en curso
   y no tenga nada sin guardar. Entonces la sesión escribe su nota de traspaso en el Registro de `PROJECT_LOG.md`.
   Después el coordinador la vacía con `clear_session` y le manda con `SendMessage` un brief autocontenido que
