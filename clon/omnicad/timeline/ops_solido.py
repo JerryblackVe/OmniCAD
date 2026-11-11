@@ -160,6 +160,9 @@ class OpBarrido(_OpCrear):
             if getattr(c, "tipo", "solido") != "solido":
                 raise ErrorOperacion(f"«{c.nombre}» no es un cuerpo sólido: el barrido de un cuerpo lo necesita.")
             forma = _sc().barrer_cuerpo(c.forma, ruta, orientacion=orientacion, distancia=distancia, eje_alineado=eje)
+            _avisar_autointersecciones(
+                ctx, forma, "El barrido del cuerpo",
+                "el cuerpo se pisa al recorrer la ruta. Probá un cuerpo más chico o una ruta más abierta, sin cruces.")
             self._aplicar(estado, ctx, forma)
 
     def ejecutar(self, estado, ctx):
@@ -179,6 +182,9 @@ class OpBarrido(_OpCrear):
                              eje_alineado=eje, superficie_guia=superficie)
         if geo.sin_volumen(forma):
             raise ErrorOperacion("El barrido no encierra volumen: el plano del perfil no puede ser paralelo a la ruta.")
+        _avisar_autointersecciones(
+            ctx, forma, "El barrido",
+            "el perfil se pisa al recorrer la ruta. Probá un perfil más chico o una ruta más abierta, sin cruces.")
         self._aplicar(estado, ctx, forma)
 
 
@@ -1648,6 +1654,13 @@ class OpLabio(_OpCrear):
         if abs(dv) <= max(antes, 1.0) * 1e-9:   # un labio que quedó entero dentro no avisa solo (B-62)
             ctx.aviso(f"{cuerpo.nombre}: el {self.p['tipo']} no cambió el volumen "
                       "(¿la dirección o el lado lo dejaron dentro de la pared? Probá «Invertir»).")
+        for cid in usados:
+            revisado = estado.cuerpo(cid)
+            que = "La ranura" if cid != cuerpo.id or self.p["tipo"] == "ranura" else "El labio"
+            _avisar_autointersecciones(
+                ctx, revisado.forma, f"{que} de «{revisado.nombre}»",
+                "la sección se pisa al recorrer el borde. Reducí el ancho, el alto o la holgura, "
+                "o elegí un borde con curvas y esquinas más abiertas.")
         self._registrar_usados(usados)
 
 
