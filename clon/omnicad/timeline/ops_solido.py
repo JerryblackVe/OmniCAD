@@ -539,8 +539,6 @@ class OpRosca(_OpCrear):
                                     tabla=_version_de(p, "version_rosca") == 2)
             self.roscas.append({"cuerpo": cuerpo.id, "designacion": datos["designacion"], "clase": clase,
                                 "interna": info["interna"], "modelada": modelada})
-            if not modelada:
-                ctx.aviso("Rosca cosmética: la geometría no cambia (como la rosca no modelada de Fusion).")
 
 
 class OpBobina(_OpCrear):
@@ -963,7 +961,7 @@ class OpPatron(_OpCrear):
         if self.p["distribucion"] == "espaciado":
             return f"{campo} es la separación entre instancias consecutivas (distribucion = \"espaciado\")."
         return (f"{campo} es la distancia TOTAL entre la primera y la última instancia (distribucion = \"extension\", "
-                "como «Extensión» de Fusion); para dar la separación entre instancias usá distribucion = \"espaciado\".")
+                "como «Extensión»); para dar la separación entre instancias usá distribucion = \"espaciado\".")
 
     def _suprimidos(self):
         """Identificadores de instancia que pide suprimir `suprimir` (pares (i, j) en el rectangular, enteros en el resto)."""
