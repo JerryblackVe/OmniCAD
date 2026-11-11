@@ -1,4 +1,5 @@
 """Construcción, fijaciones, lienzos y cuerpos congelados, sin interfaz gráfica."""
+import difflib
 import base64
 import io
 import warnings
@@ -33,9 +34,10 @@ TipoExtension = Literal["distance", "to_object"]
 _REDIMENSIONAR = {"default": "predeterminado", "extended": "extendido"}
 
 
-def _referencia(sesion, valor, tipos, body=None, geometria=None):
+def _referencia(sesion, valor, tipos, body=None, geometria=None, campo=None):
     """Resuelve una selección abreviada y comprueba el filtro del diálogo. Un punto [x, y, z] elige el vértice que está
-    ahí (`sl.vertice_cercano`)."""
+    ahí (`sl.vertice_cercano`). `campo` es el argumento de la herramienta, para nombrarlo en los errores (B-287); sin él
+    dicen «referencia»."""
     if sl.es_punto3(valor):
         ref = sl.vertice_cercano(sesion, valor, body)[1]
     elif isinstance(valor, dict) and set(valor) == {"body", "vertex"}:
@@ -50,12 +52,15 @@ def _referencia(sesion, valor, tipos, body=None, geometria=None):
     elif isinstance(valor, str) and (sl.es_id(valor) or sl._separar_prefijo(valor)[0] or sl.parece_selector(valor)):
         ref = sl.referencia(*sl.elegir_uno(sesion, valor, body=body))
     else:
-        ref = _una(sesion, "refs", valor, True)
+        ref = _una(sesion, campo or "referencia", valor, True)
         if isinstance(ref, str) and "cuerpo" in tipos:
             ref = {"tipo": "cuerpo", "cuerpo": sesion.cuerpo(ref).id}
     try:
         ent.validar(ref)
-    except ent.ErrorReferencia as e:                  # un texto que no nombra nada conocido
+    except ent.ErrorReferencia as e:
+        if isinstance(valor, str):                    # B-287: está bien escrito; lo que no hay es algo con ese nombre
+            raise error("INVALID_ARGUMENTS", f"«{campo or 'referencia'}»: no existe ningún plano, eje, punto ni boceto {valor!r}.",
+                        *_parecidos(sesion, valor), "get_timeline lista los pasos con su id y nombre.") from None
         raise error("INVALID_ARGUMENTS", f"Referencia inválida: {valor!r}. {e}",
                     "Usá un id o nombre de construcción, un selector, un id de find_faces / find_edges, "
                     "un vértice [x, y, z], {body, vertex} o {sketch, point | curve}.") from None
@@ -78,6 +83,15 @@ def _referencia(sesion, valor, tipos, body=None, geometria=None):
     except ent.ErrorReferencia as e:                  # B-131: una spline donde va una línea, una cara curva donde va un plano
         raise error("INVALID_ARGUMENTS", f"Esa referencia no sirve acá: {e}") from None
     return ref
+
+
+def _parecidos(sesion, texto):
+    """«¿Quisiste decir …?» con los ids y nombres de la construcción y los bocetos que se le parecen."""
+    e = sesion.doc.estado_final
+    nombres = [*e.planos, *e.ejes, *e.puntos, *e.bocetos, *(getattr(p, "nombre", "") for p in e.planos.values()),
+               *(v[-1] for v in (*e.ejes.values(), *e.puntos.values())), *(b.nombre for b in e.bocetos.values())]
+    cerca = difflib.get_close_matches(texto, [str(n) for n in nombres if n], n=3, cutoff=0.5)
+    return [f"¿Quisiste decir {', '.join(repr(n) for n in cerca)}?"] if cerca else []
 
 
 def _crear(sesion, clase, name=None, **params):
@@ -104,7 +118,8 @@ def parametros_tamano(sesion, resize, size_type, size, size_object, body):
         raise error("INVALID_ARGUMENTS", "Con size_type=to_object falta size_object.")
     return {"redimensionar": _REDIMENSIONAR[resize], "tipo_extension": "objeto" if size_type == "to_object" else "distancia",
             "medida": texto_expr(size),
-            "objeto_extension": None if size_object is None else _referencia(sesion, size_object, _PUNTO | _PLANO | _EJE | {"cuerpo"}, body)}
+            "objeto_extension": None if size_object is None else _referencia(sesion, size_object, _PUNTO | _PLANO | _EJE | {"cuerpo"}, body,
+                                                                         campo="size_object")}
 
 
 def referencias_ruta(sesion, references, body, con_eje=False):
@@ -112,8 +127,8 @@ def referencias_ruta(sesion, references, body, con_eje=False):
     if not references:
         raise error("INVALID_ARGUMENTS", "Elegí la ruta: una arista, una curva de boceto o una cadena de ellas.")
     if con_eje and len(references) == 1:
-        return [_referencia(sesion, references[0], _CURVA | {"eje"}, body)]
-    return [_referencia(sesion, r, _CURVA, body) for r in references]
+        return [_referencia(sesion, references[0], _CURVA | {"eje"}, body, campo="references")]
+    return [_referencia(sesion, r, _CURVA, body, campo="references") for r in references]
 
 
 def referencia_lugar(sesion, ref, location):
@@ -161,7 +176,7 @@ def create_construction_axis(sesion, type: Literal["cilindro", "perpendicular_ca
 def _referencias(sesion, referencias, filtros, body):
     if len(referencias) != len(filtros):
         raise error("INVALID_ARGUMENTS", f"Esta variante necesita {len(filtros)} referencias en orden.")
-    return [_referencia(sesion, r, tipos, body, geometria)
+    return [_referencia(sesion, r, tipos, body, geometria, "references")
             for r, (tipos, geometria) in zip(referencias, filtros, strict=True)]
 
 
@@ -203,7 +218,7 @@ def find_snap_points(sesion, entity: Referencia, location: list[float] | None = 
     location: [x, y, z] opcional: agrega el punto de la cara o arista más cercano a ese lugar (lugar de cara, punto de arista).
     body: cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
     """
-    ref = _referencia(sesion, entity, _CURVA | {"cara"}, body)
+    ref = _referencia(sesion, entity, _CURVA | {"cara"}, body, campo="entity")
     forma = ent.resolver(ref, sesion.doc.estado_final).forma
     if ref["tipo"] == "cara":
         puntos = list(cs.puntos_forzado_cara(forma))
@@ -238,10 +253,10 @@ def create_ucs(sesion, origin: Referencia, x_axis: Referencia | None = None, y_a
     name: nombre del sistema; vacío = automático.
     z_axis: alinea Z con un eje, arista recta o cara (su normal); X se ortogonaliza contra Z.
     """
-    op = _crear(sesion, OpSCU, name, origen=_referencia(sesion, origin, _PUNTO, body),
-                eje_x=_referencia(sesion, x_axis, _EJE | _PLANO, body, "eje") if x_axis is not None else None,
-                eje_y=_referencia(sesion, y_axis, _EJE, body, "eje") if y_axis is not None else None,
-                eje_z=_referencia(sesion, z_axis, _EJE | _PLANO, body, "eje") if z_axis is not None else None,
+    op = _crear(sesion, OpSCU, name, origen=_referencia(sesion, origin, _PUNTO, body, campo="origin"),
+                eje_x=_referencia(sesion, x_axis, _EJE | _PLANO, body, "eje", "x_axis") if x_axis is not None else None,
+                eje_y=_referencia(sesion, y_axis, _EJE, body, "eje", "y_axis") if y_axis is not None else None,
+                eje_z=_referencia(sesion, z_axis, _EJE | _PLANO, body, "eje", "z_axis") if z_axis is not None else None,
                 **{k: texto_expr(v) for k, v in dict(dx=dx, dy=dy, dz=dz, rx=rx, ry=ry, rz=rz).items()})
     agregar_construccion(sesion, op)
     estado = sesion.doc.estado_final
@@ -291,10 +306,10 @@ def insert_fastener(sesion, positions: list[Referencia], family: Literal["screw"
             tipo = sl._separar_prefijo(posicion)[0] or ("arista" if sl.es_id(posicion) and "/E" in posicion.upper() else "cara")
             refs.extend(sl.referencia(c, e) for c, e in sl.elegir(sesion, posicion, tipo, body))
         else:
-            refs.append(_referencia(sesion, posicion, _PUNTO | {"arista", "cara", "eje"}, body))
+            refs.append(_referencia(sesion, posicion, _PUNTO | {"arista", "cara", "eje"}, body, campo="positions"))
     direccion = None
     if direction is not None:
-        direccion = _referencia(sesion, direction, _EJE | _PLANO, body, "direccion")
+        direccion = _referencia(sesion, direction, _EJE | _PLANO, body, "direccion", "direction")
     op = _crear(sesion, OpFijacion, posiciones=refs, familia=familia, norma=norma, tamano=size,
                 largo=str(length), rosca="modelada" if thread == "modeled" else "cosmetica",
                 similares=similar, direccion=direccion, voltear=flip, material=material)
@@ -329,7 +344,7 @@ def insert_canvas(sesion, path: str, plane: Referencia = "XY", width: Expr = 100
         _numero_positivo(height, "height")
     if not 0 <= opacity <= 100:
         raise error("INVALID_ARGUMENTS", "La opacidad debe estar entre 0 y 100.")
-    ref = _referencia(sesion, plane, _PLANO, body, "plano")
+    ref = _referencia(sesion, plane, _PLANO, body, "plano", "plane")
     ruta = Path(path)
     if not ruta.is_file():
         raise error("FILE_NOT_FOUND", "No encuentro la imagen del lienzo.")
