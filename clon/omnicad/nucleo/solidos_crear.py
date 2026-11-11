@@ -2557,7 +2557,8 @@ def _barrido_helicoidal(perfil, helice):
     ps.Add(perfil, False, False)
     ps.Build()
     if not ps.IsDone() or not ps.MakeSolid():
-        raise geo.ErrorGeometria("El kernel no pudo barrer el perfil por la hélice.")
+        raise geo.ErrorGeometria("El kernel no pudo barrer el perfil por la hélice: probá otro tamaño o menos largo; "
+                                 "si es una rosca, probá la cosmética.")
     return ps.Shape()
 
 
@@ -2753,7 +2754,8 @@ _EPS_ROSCA = 1e-6     # B-249: la integración por defecto erra en las hélices 
 
 def _exigir_volumen(forma, esperado, tolerancia=0.01):
     if forma is None or geo.esta_vacia(forma) or abs(geo.volumen_exacto(forma, _EPS_ROSCA) - esperado) > tolerancia * esperado:
-        raise geo.ErrorGeometria("El kernel armó mal el surco de la rosca.")
+        raise geo.ErrorGeometria("El kernel armó mal el surco de la rosca: probá otro tamaño, menos largo "
+                                 "o una rosca cosmética.")
 
 
 _EXTRAS = (0.1, 0.13, 0.07)     # cuánto sobresale el surco (en pasos): el primero es el de siempre; los otros, reintentos
@@ -2857,6 +2859,15 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
     if datos["conica"]:
         raise geo.ErrorGeometria(f"{datos['designacion']} es una rosca cónica: sobre una cara cilíndrica solo va "
                                  "cosmética (o con Agujero › Roscado cónico).")
+    paso, diametro, diametro_cara = datos["paso"], datos["diametro"], 2 * radio
+    vueltas = largo / paso
+    if vueltas > 300:     # mismo límite que fijaciones._filete
+        raise geo.ErrorGeometria(f"Demasiadas vueltas para una rosca modelada ({vueltas:g} vueltas): usá la rosca "
+                                 "cosmética o un tamaño más grande.")
+    if paso > largo + 1e-6:
+        raise geo.ErrorGeometria(f"El paso de la rosca ({paso:g} mm) supera el largo roscado ({largo:g} mm): "
+                                 f"Ø de la cara {diametro_cara:g} mm y Ø de la rosca {diametro:g} mm. "
+                                 "Elegí otro tamaño o «Tamaño automático», o aumentá el largo.")
     perfil = _perfil_clase(datos, clase, info["interna"], holgura, tabla)
     if tabla and perfil["cresta"] is None:
         # B-247, como Fusion: una cara más gruesa que la rosca (o un agujero más chico) se tornea a su Ø de cresta.
