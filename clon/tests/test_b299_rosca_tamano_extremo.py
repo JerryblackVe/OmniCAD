@@ -48,8 +48,8 @@ def test_m10_normal_conserva_el_volumen_modelado():
     assert resultado["ok"], resultado
     forma = next(iter(sesion.doc.estado_final.cuerpos.values())).forma
     assert geo.es_valida(forma) and len(geo.solidos(forma)) == 1
-    # Volumen medido por la API antes del arreglo, con la clase automática 6g.
-    assert geo.volumen_exacto(forma, 1e-6) == pytest.approx(639.1261063312793, abs=1e-3)
+    # Volumen medido por la API con la clase automática 6g (B-250: Ø mayor en el centro de la tolerancia).
+    assert geo.volumen_exacto(forma, 1e-6) == pytest.approx(636.4118285969515, abs=1e-3)
 
 
 def test_una_cara_mucho_mas_gruesa_se_sigue_torneando():

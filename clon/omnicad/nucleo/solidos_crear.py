@@ -2526,8 +2526,11 @@ def _perfil_surco(datos, desfase=0.0, fondo=None, cresta=None):
 def _perfil_clase(datos, clase, interna, holgura, tabla):
     """Perfil de `_surco_rosca` con la clase y la holgura de impresión. `tabla` (B-122, Fusion real): las clases de las
     tablas de Fusion modelan sus Ø mayor y menor (Tr12×3 7e: 8,3175 y 11,882; 7H: 9,1575 y 12,5); `False` deja esos
-    diámetros como quedaban en las recetas viejas."""
+    diámetros como quedaban en las recetas viejas. Sin tabla, la cresta exterior va al centro de tolerancia (B-250)."""
     a, holgura = _desfases_clase(datos, clase, interna), _holgura_rosca(holgura)
+    if not interna and a["cresta"] is None and a["limites"] is not None:
+        minimo, maximo = a["limites"]["diametro_mayor"]
+        a["cresta"] = (minimo + maximo) / 2
     corrido = lambda d: None if d is None or not tabla else d + 2 * (holgura if interna else -holgura)  # noqa: E731
     return _perfil_surco(datos, a["flancos"] + holgura, corrido(a["fondo"]), corrido(a["cresta"]))
 
