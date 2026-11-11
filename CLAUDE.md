@@ -31,6 +31,9 @@
   que suba el costo pide su OK. La VPS no suma cupo de Claude.
 - La regla de memoria de la PC (13 GB, `main.log`) no aplica en la VPS: ahí se mira `free -g`.
 - OpenCode no se usa (Gerardo, 2026-11-11).
+- Capacidad medida (2026-11-11): un pytest pesado ocupa 1,5 GB y ~3 núcleos; la humo, 1,1 GB. El rendimiento tope llega
+  con 3-4 corridas a la vez (8 a la vez no rinde más y rompe B-222). Cada sesión de Claude ocupa ~0,35 GB. La memoria
+  no limita: el límite es el CPU (`OMNICAD_TURNOS=3`) y, sobre todo, el cupo de Claude.
 - El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; falta darle acceso).
 
 ## REGLA ESTRICTA (sin excepciones): MCP y CLI siempre completos
