@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Diálogo Parámetros como una persona: doble clic en la celda, teclear, Enter, estrella, filtros, orden e importar."""
+import sys
 import pytest
+import shiboken6
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit
@@ -357,3 +359,29 @@ def test_contexto_rechaza_la_magnitud_al_teclear(s, app_qt):
     with pytest.raises(ValueError, match="mm\\^2"):
         ctx.evaluar("w * h")
     assert ctx.evaluar("alto=w * 2") == 20
+
+
+@pytest.mark.parametrize("origen", ["cambio", "editor", "error"])
+@pytest.mark.parametrize("cierre", ["close", "reject", "accept"])
+def test_borrar_el_dialogo_con_el_poblar_diferido_pendiente_no_escapa(s, app_qt, monkeypatch, origen, cierre):
+    """B-271: el `_poblar` diferido no puede llegar a un árbol ya borrado (PySide manda el error a sys.excepthook)."""
+    d = DialogoParametros(s.doc)
+    d.show()
+    QTest.qWait(20)
+    escapadas = []
+    monkeypatch.setattr(sys, "excepthook", lambda *e: escapadas.append(e))
+    if origen == "cambio":
+        d._cambio()                      # deja el `_poblar` en la cola y el recálculo armado
+        assert d._reloj.isActive()
+    elif origen == "editor":
+        d.arbol.itemDelegate().closeEditor.emit(None)
+    else:
+        fila(d, "w").setText(EXPRESION, "w *")
+        assert d._invalidas
+    getattr(d, cierre)()
+    assert not d._reloj.isActive()
+    assert d._doc_cambio not in s.doc._oyentes
+    shiboken6.delete(d)                  # como cuando su padre destruye el diálogo
+    s.doc._notificar()                   # ni el aviso del documento ni el `_poblar` llegan al árbol muerto
+    QTest.qWait(300)                     # procesa la llamada diferida y supera los 250 ms del reloj cancelado
+    assert escapadas == [], [(tipo.__name__, str(error)) for tipo, error, _ in escapadas]

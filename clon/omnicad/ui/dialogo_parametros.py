@@ -338,7 +338,7 @@ class DialogoParametros(QDialog):
 
     def _editor_cerrado(self, *_):
         self.editando = False
-        QTimer.singleShot(0, self._poblar)
+        QTimer.singleShot(0, self, self._poblar)
 
     def _editar(self, item, columna):
         nombre = item.data(0, ROL)
@@ -359,7 +359,7 @@ class DialogoParametros(QDialog):
         except (ErrorExpresion, ErrorDocumento) as e:
             self._invalidas[(nombre, columna)] = texto
             self._avisar(e)
-            QTimer.singleShot(0, self._poblar)
+            QTimer.singleShot(0, self, self._poblar)
             return
         for clave in [c for c in self._invalidas if c[1] == columna and c[0] == nombre]:
             del self._invalidas[clave]
@@ -389,7 +389,7 @@ class DialogoParametros(QDialog):
         self.b_aplicar.setEnabled(True)
         if self.automatico.isChecked():
             self._reloj.start()
-        QTimer.singleShot(0, self._poblar)
+        QTimer.singleShot(0, self, self._poblar)
 
     def _automatico_cambiado(self, encendido):
         self.b_aplicar.setVisible(not encendido)          # capturas de Fusion: encendida no hay Aplicar
