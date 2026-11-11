@@ -162,6 +162,9 @@ def _marco_resto(e, f, punto_clave):
     """Aristas no circulares, ejes y puntos (igual en las dos versiones del marco)."""
     if f is not None:
         a, b = (np.array(p) for p in f["extremos"])
+        if e.tipo == "arista" and f["geom"] == "linea" and e.eje is not None:
+            a, d = e.eje      # B-294: el sentido que ya resolvió B-283; sin él, conserva el de antes.
+            b = a + d * f["largo"]
         p = {"inicio": a, "fin": b}.get(punto_clave, np.array(f["medio"]))
         if f["geom"] == "linea":
             return marco_desde(p, b - a)
