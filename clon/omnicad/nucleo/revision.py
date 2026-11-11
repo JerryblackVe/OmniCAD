@@ -412,7 +412,7 @@ def _revisar_brep(forma, autointersecciones, tolerancia_maxima, max_problemas, p
         errores += sobran(len(topo["libres"]))
     else:
         avisos += sobran(len(topo["libres"]))
-    return _cerrar_informe({
+    informe = _cerrar_informe({
         "tipo_cuerpo": "brep", "valido": valido, "cerrado": topo["cerrado"], "solidos": len(solidos),
         "cascaras": len(topo["cascaras"]), "cascaras_abiertas": len(topo["abiertas"]), "caras": len(caras),
         "aristas": len(aristas), "vertices": len(vertices), "aristas_libres": len(topo["libres"]),
@@ -423,6 +423,9 @@ def _revisar_brep(forma, autointersecciones, tolerancia_maxima, max_problemas, p
                         "cara": max(tol_c, default=0.0)},
         "volumen": geo.volumen(forma) if solidos else None, "area": geo.area(forma), "caja": caja,
     }, problemas, max_problemas, errores, avisos)
+    # B-173: BRepCheck no ve autointersecciones. Las aristas no manifold de una tangencia siguen valiendo (B-107).
+    informe["valido"] = valido and not n_auto
+    return informe
 
 
 def _cerrar_informe(informe, problemas, max_problemas, errores_sin_armar=0, avisos_sin_armar=0):
@@ -510,7 +513,7 @@ def revisar(forma, *, autointersecciones=True, tolerancia_maxima=TOLERANCIA_ALTA
     """Revisar geometría (FreeCAD Part › Check Geometry; Rhino ShowEdges): diagnóstico de un cuerpo.
 
     `forma`: forma OCC (sólido, superficie, compuesto) o `nucleo.malla.Malla`. Devuelve un dict con:
-    "valido" (BRepCheck; en mallas: sin no manifold, degenerados ni normales invertidas), "cerrado" (estanco),
+    "valido" (BRepCheck y sin autointersecciones; en mallas: sin no manifold, degenerados ni normales invertidas), "cerrado" (estanco),
     conteos ("solidos", "cascaras", "cascaras_abiertas", "caras", "aristas", "vertices", "aristas_libres",
     "aristas_no_manifold", "autointersecciones" —None si no se revisaron o en mallas—, "caras_degeneradas",
     "aristas_diminutas", "tolerancias_altas"), "tolerancias" máximas {"vertice", "arista", "cara"} (None en

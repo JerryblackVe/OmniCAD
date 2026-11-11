@@ -132,11 +132,12 @@ def defectos(api, s, autointersecciones=True):
     r = api.llamar(s, "check_geometry", {"self_intersection": autointersecciones}).get("result") or {}
     salida = {}
     for c in r.get("bodies") or []:
-        salida[c["name"]] = {"invalido": int(not c.get("valid", True)),
-                             "abierto": int(c.get("type") == "solid" and not c.get("closed", True)),
+        # «invalido» va al final: el juez nombra el primero que crece, y desde B-173 `valid` también cae por autointersección.
+        salida[c["name"]] = {"abierto": int(c.get("type") == "solid" and not c.get("closed", True)),
                              "aristas_libres": c.get("free_edges") or 0 if c.get("type") == "solid" else 0,
                              "no_manifold": c.get("non_manifold_edges") or 0,
-                             "autointersecciones": c.get("self_intersections") or 0}
+                             "autointersecciones": c.get("self_intersections") or 0,
+                             "invalido": int(not c.get("valid", True))}
     return salida
 
 

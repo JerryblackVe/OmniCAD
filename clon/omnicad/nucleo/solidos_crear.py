@@ -1166,8 +1166,9 @@ def _canonizar(forma, tol=_TOL_CANONICA):
     return copia if geo.es_valida(copia) else forma
 
 
-def _loft(alambres, solido, reglada, cerrada):
+def _loft(alambres, solido, reglada, cerrada, compatibilizar=True):
     ts = BRepOffsetAPI_ThruSections(solido, reglada)
+    ts.CheckCompatibility(compatibilizar)
     for tipo, forma in alambres:
         (ts.AddVertex if tipo == "vertice" else ts.AddWire)(forma)
     if cerrada:
@@ -1175,7 +1176,26 @@ def _loft(alambres, solido, reglada, cerrada):
     ts.Build()
     if not ts.IsDone():
         raise geo.ErrorGeometria("El kernel no pudo solevar estas secciones.")
-    return ts.Shape()
+    forma = ts.Shape()
+    # Con distinta cantidad de aristas (rectángulo → círculo) el ajuste es imprescindible: no hay otra versión.
+    if not (compatibilizar and solido) or len({len(geo._aristas_unicas(f)) for t, f in alambres if t != "vertice"}) > 1:
+        return forma
+    # B-173: el ajuste de compatibilidad del kernel puede correr la costura de un spline cerrado y plegar la pared
+    # (3 splines de 86 puntos: 1,87 L en vez de 4 L, y el volumen cambia de signo según el orden). Sin el ajuste sale
+    # bien si las costuras ya vienen alineadas. Solo si las dos versiones difieren se paga la revisión del pliegue.
+    try:
+        otra = _loft(alambres, solido, reglada, cerrada, False)
+    except Exception:  # noqa: BLE001 — sin el ajuste el kernel puede fallar (Standard_Failure): queda la primera
+        return forma
+    v1, v2 = geo.volumen_exacto(forma), geo.volumen_exacto(otra)
+    if abs(v1 - v2) <= 1e-6 * max(abs(v1), abs(v2), 1.0):
+        return forma
+    return otra if _plegada(forma) and not _plegada(otra) else forma
+
+
+def _plegada(forma):
+    """True si la solevación se da vuelta (volumen ≤ 0) o se autointersecta (None, si la revisión no terminó, no cuenta)."""
+    return geo.volumen_exacto(forma) <= 0 or bool(rv._autointersecciones_seguras(forma, 0, 10)[0])
 
 
 def _auxiliar_direccion(w, normal, delta, angulo, signo=1.0):
