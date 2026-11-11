@@ -207,7 +207,7 @@ def test_h80_rosca_vista_desde_su_eje_tarda_menos_de_un_segundo():
         assert time.perf_counter() - inicio < 1.0, nombre
         assert len(_areas(prims, g.Plano(nombre))) == 1, nombre
     radios = [math.hypot(*q) for p in silueta_forma(rosca, g.Plano("XY"))[0] for q in puntos_primitiva(p, 200)]
-    assert max(radios) < 4.05 and min(radios) > 3.95
+    assert max(radios) < 3.98 and min(radios) > 3.88       # B-250: Ø mayor de la clase 6g (7,854), no el nominal
 
 
 def test_h78_la_misma_forma_no_repite_el_hlr(monkeypatch):

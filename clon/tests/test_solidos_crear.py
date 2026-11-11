@@ -702,7 +702,11 @@ def test_rosca_con_clase():
     # entre el núcleo y el cilindro, más una franja de δ de alto y P/4 de ancho en el fondo (por vuelta de 1,5 mm)
     delta = (0.032 + 0.132 / 2) / 2
     area = 2 * delta * math.tan(math.radians(30)) * (5 - d1 / 2) + delta * 1.5 / 4
-    assert con_6g - basica == pytest.approx(area * 2 * math.pi * (5 + d1 / 2) / 2 * 6 / 1.5, rel=0.05)
+    # B-250: además se tornea la cresta al Ø mayor de la clase (10 − 0,032 − 0,236/2 = 9,85): h = 0,075 de punta del
+    # filete, de P/8 de ancho más lo que abren los flancos
+    h = (10 - 9.85) / 2
+    cresta = h * (1.5 / 8 + h * math.tan(math.radians(30))) * 2 * math.pi * (5 - h / 2) * 6 / 1.5
+    assert con_6g - basica == pytest.approx(area * 2 * math.pi * (5 + d1 / 2) / 2 * 6 / 1.5 + cresta, rel=0.05)
     with pytest.raises(g.ErrorGeometria):
         sc.rosca(cil, designacion="M10", longitud=6, clase="6H")              # clase de agujero en un eje
 

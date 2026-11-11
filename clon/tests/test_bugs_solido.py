@@ -211,8 +211,9 @@ def test_sol32_patron_en_ruta_con_distancia_cero_y_circular_simetrico_fallan():
 
 
 def _toca_cresta(forma, z):
-    """Qué ángulos (cada 10°) tocan la cresta de la rosca a r = 4,9 en la altura z."""
-    return [geo.punto_toca(forma, (4.9 * math.cos(math.radians(t)), 4.9 * math.sin(math.radians(t)), z), 1e-6)
+    """Qué ángulos (cada 10°) tocan la cresta de la rosca a r = 4,85 en la altura z (B-250: con la cresta de la clase 6g,
+    r = 4,9 queda en el borde y da ruido)."""
+    return [geo.punto_toca(forma, (4.85 * math.cos(math.radians(t)), 4.85 * math.sin(math.radians(t)), z), 1e-6)
             for t in range(0, 360, 10)]
 
 
@@ -224,7 +225,7 @@ def test_sol1_la_cresta_avanza_a_derechas_o_a_izquierdas_segun_el_pedido():
         llamar(s, "create_thread", faces="%CYLINDER", thread="M10", left_hand=izquierda)
         forma = _cuerpos(s)[0].forma
         a, b = _toca_cresta(forma, 10.0), _toca_cresta(forma, 10.375)      # un cuarto de paso más arriba
-        assert sum(a) == 5                                                  # una cresta: 50° de arco
+        assert sum(a) == 7                                                  # una cresta: 70° de arco
         giro[izquierda] = [n for n in range(36) if a[n - 9] == b[n]].__len__() == 36 and 9 or (
             -9 if all(a[(n + 9) % 36] == b[n] for n in range(36)) else 0)
     assert giro == {False: 9, True: -9}
