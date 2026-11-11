@@ -379,15 +379,16 @@ def test_b71_accionar_la_corredera():
 
 
 def test_b71_accionar_la_biela_y_volver_a_la_manivela():
-    """Accionar J2 (ángulo de la biela −5°) resuelve la manivela y la corredera; después accionar J1 vuelve a
-    mandar la manivela."""
+    """Accionar J2 (la biela −5° respecto de la manivela, como en Fusion: B-177) resuelve la manivela y la
+    corredera; después accionar J1 vuelve a mandar la manivela."""
     s = _biela_manivela()
     llamar(s, "drive_joint", joint="J2", rotation=-5)
     pose = _pose(s)
     r_bie, t_bie = pose["Biela"]
     r_man, t_man = pose["Manivela"]
     _, t_cor = pose["Corredera"]
-    assert abs(math.degrees(math.atan2(r_bie[1, 0], r_bie[0, 0])) + 5.0) < 1e-3
+    relativo = math.degrees(math.atan2(r_bie[1, 0], r_bie[0, 0]) - math.atan2(r_man[1, 0], r_man[0, 0]))
+    assert abs((relativo + 180) % 360 - 180 + 5.0) < 1e-3, relativo
     assert np.linalg.norm(t_bie - (r_man @ np.array([20.0, 0, 0]) + t_man)) < 1e-3
     assert np.linalg.norm(t_cor - (r_bie @ np.array([60.0, 0, 0]) + t_bie)) < 1e-3
     assert abs(t_cor[1]) < 1e-3
