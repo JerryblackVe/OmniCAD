@@ -319,3 +319,16 @@ def test_b284_un_nombre_con_un_sustituto_suelto_se_rechaza_y_el_documento_se_gua
     s2 = api.Sesion()
     llamar(s2, "open_document", path=str(tmp_path / "b284.omnicad"))
     assert malo in [p.get("comentario") for p in s2.doc.a_dict()["parametros"]]
+
+
+@pytest.mark.parametrize("malo", [None, 7, 1.5, "", "  ", ["a"]])
+def test_b285_receta_con_id_de_paso_que_no_es_texto_se_rechaza(malo):
+    """B-285: apply_recipe aceptaba ids None, 7, 1.5 o vacíos; después delete_feature daba INTERNAL_ERROR (TypeError)."""
+    s = _armar()
+    llamar(s, "create_construction_plane", plane="XY", offset=3)
+    receta = llamar(s, "get_recipe")["recipe"]
+    antes = len(s.doc.operaciones)
+    receta["operaciones"][-1]["id"] = malo
+    r = api.llamar(s, "apply_recipe", {"recipe": receta})
+    assert not r["ok"] and r["error_kind"] == "INVALID_RECIPE" and "id de texto" in r["mensaje"], r
+    assert len(s.doc.operaciones) == antes
