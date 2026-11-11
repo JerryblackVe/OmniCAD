@@ -347,9 +347,10 @@ def _ampliar_tangentes(forma, aristas, activo):
 
 
 # ---------------------------------------------------------------- empalme
-def _angulo_entre_caras(forma, arista):
-    """Ángulo (rad) entre las normales de las dos caras de la arista, en su punto medio."""
-    caras = _padres(_ancestros(forma, TopAbs_EDGE, TopAbs_FACE), arista)
+def _angulo_entre_caras(forma, arista, mapa=None):
+    """Ángulo (rad) entre las normales de las dos caras de la arista, en su punto medio. `mapa`: el de
+    `_ancestros(forma, TopAbs_EDGE, TopAbs_FACE)` si ya está hecho (armarlo cuesta en un cuerpo grande)."""
+    caras = _padres(_ancestros(forma, TopAbs_EDGE, TopAbs_FACE) if mapa is None else mapa, arista)
     if len(caras) != 2:
         raise geo.ErrorGeometria("La arista no separa exactamente dos caras.")
     c = BRepAdaptor_Curve(arista)
@@ -357,6 +358,50 @@ def _angulo_entre_caras(forma, arista):
     n1 = _normal_en_arista(arista, TopoDS.Face(caras[0]), t)
     n2 = _normal_en_arista(arista, TopoDS.Face(caras[1]), t)
     return math.acos(max(-1.0, min(1.0, float(n1 @ n2))))
+
+
+def _aristas_con_caja(cara, cajas):
+    """[(arista, Bnd_Box, vértices)] de la cara, guardadas en `cajas` (hash → [(cara, lista)]) para no rehacerlas
+    cuando muchas aristas empalmadas comparten una cara grande (una placa con 100 agujeros)."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    clave = hash(cara)                  # el hash no distingue orientación; IsSame confirma
+    for otra_cara, lista in cajas.get(clave, ()):
+        if otra_cara.IsSame(cara):
+            return lista
+    lista = []
+    for e in _aristas(cara):
+        caja = Bnd_Box()
+        BRepBndLib.Add_s(e, caja, False)    # geometría exacta, no la malla de pantalla
+        lista.append((e, caja, _unicos(e, TopAbs_VERTEX)))
+    cajas.setdefault(clave, []).append((cara, lista))
+    return lista
+
+
+def _rechazar_cara_justa(forma, arista, radio, mapa=None, cajas=None):
+    """B-159: si el empalme se come JUSTO una cara vecina (la línea donde toca coincide con otra arista de esa cara,
+    p. ej. radio 1 en el borde de una pared vaciada de 1 mm), `BRepFilletAPI_MakeFillet.Build` hace caer el proceso
+    (access violation). Un poco más chico anda y un poco más grande da error: solo se frena la coincidencia.
+    `mapa` (el de `_ancestros(forma, TopAbs_EDGE, TopAbs_FACE)`) y `cajas` (un dict) se pasan para no rehacerlos
+    por arista."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    mapa = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE) if mapa is None else mapa
+    caras = _padres(mapa, arista)
+    if len(caras) != 2:
+        return
+    retiro = radio * math.tan(_angulo_entre_caras(forma, arista, mapa) / 2)   # del borde a la línea de contacto
+    propios = _unicos(arista, TopAbs_VERTEX)
+    zona = Bnd_Box()
+    BRepBndLib.Add_s(arista, zona, False)
+    zona.Enlarge(retiro + 1e-3)
+    for cara in caras:
+        for otra, caja, vertices in _aristas_con_caja(cara, {} if cajas is None else cajas):
+            if zona.IsOut(caja) or any(v.IsSame(w) for v in vertices for w in propios):
+                continue
+            if abs(BRepExtrema_DistShapeShape(arista, otra).Value() - retiro) <= 1e-6 * max(1.0, retiro):
+                raise geo.ErrorGeometria(f"El empalme de {radio:g} mm se come justo una cara vecina entera (la deja de "
+                                         "ancho cero) y el núcleo no lo resuelve. Probá un radio un poco menor.")
 
 
 def _perfil_de_empalme(c, p1, p2, continuidad):
@@ -519,6 +564,7 @@ def empalme(forma, grupos, *, cadena_tangente=True):
         if not grupos:
             return forma
     mf = BRepFilletAPI_MakeFillet(forma)
+    vecinas, cajas = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE), {}
     for grupo in grupos:
         tipo = grupo.get("tipo", "constante")
         aristas = _ampliar_tangentes(forma, grupo.get("aristas") or [], cadena_tangente)
@@ -542,6 +588,7 @@ def empalme(forma, grupos, *, cadena_tangente=True):
                 if r <= 0:
                     raise geo.ErrorGeometria("El radio del empalme debe ser positivo.")
                 geo.rechazar_radio_de_arco(e, r)
+                _rechazar_cara_justa(forma, e, r, vecinas, cajas)
             if tipo == "constante" and esquinas:
                 puntos = _radios_con_setback(e, r, float(grupo["setback"]), esquinas)
                 arr = Array1_gp_Pnt2d(1, len(puntos))
@@ -557,6 +604,7 @@ def empalme(forma, grupos, *, cadena_tangente=True):
                     raise geo.ErrorGeometria("La cuerda debe ser positiva y la arista no puede ser tangente.")
                 r = c / (2 * math.sin(phi / 2))
                 geo.rechazar_radio_de_arco(e, r)
+                _rechazar_cara_justa(forma, e, r, vecinas, cajas)
                 mf.Add(r, e)
             elif tipo == "variable":
                 puntos = sorted((float(u), float(r)) for u, r in grupo.get("radios", []))
@@ -565,6 +613,7 @@ def empalme(forma, grupos, *, cadena_tangente=True):
                 arr = Array1_gp_Pnt2d(1, len(puntos))
                 for i, (u, r) in enumerate(puntos, 1):
                     geo.rechazar_radio_de_arco(e, r)
+                    _rechazar_cara_justa(forma, e, r, vecinas, cajas)
                     arr.SetValue(i, gp_Pnt2d(u, r))
                 mf.Add(arr, e)
             else:
