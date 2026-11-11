@@ -1704,7 +1704,9 @@ def _filetear_cantos(forma, aristas, valor, clase_api, sustantivo, parametro):
             raise geo.ErrorGeometria(f"La arista es libre (la toca una sola cara): el {sustantivo} necesita una arista "
                                      "compartida por dos caras.")
         if clase_api is BRepFilletAPI_MakeFillet:
+            from .solidos_modificar import _rechazar_cara_justa
             geo.rechazar_radio_de_arco(TopoDS.Edge(e), float(valor))
+            _rechazar_cara_justa(forma, TopoDS.Edge(e), float(valor))
         op.Add(float(valor), TopoDS.Edge(e))
     # OCC lanza Standard_Failure con mensajes poco útiles
     try:
