@@ -161,6 +161,27 @@ def _cruza_mas_que(entrada, resultado):
     return bool(n) and n > (revision._autointersecciones_seguras(entrada, 1, 5.0)[0] or 0)
 
 
+def _volumen_al_reves(entrada, resultado, aristas, vecinas):
+    """B-301: True si el volumen cambió al revés de lo posible. Un empalme o chaflán en aristas solo convexas saca
+    material y en solo cóncavas lo agrega; el kernel a veces devuelve un sólido válido y sin cruces que rellena
+    la cavidad (radio 29 en la esquina de una caja vaciada a 1 mm: 11 424 → 112 781 mm³). `vecinas`: el mapa
+    `_ancestros(entrada, TopAbs_EDGE, TopAbs_FACE)`."""
+    from OCP.ChFi3d import ChFi3d
+    if not (geo.solidos(entrada) and geo.solidos(resultado)):
+        return False
+    antes = geo.volumen_exacto(entrada)
+    cambio = geo.volumen_exacto(resultado) - antes
+    if abs(cambio) <= 1e-4 * max(abs(antes), 1.0):     # la integración por defecto erra en B-spline (B-249)
+        return False
+    tipos = set()
+    for e in aristas:                   # solo las elegidas: analizar toda la pieza cuesta más que el chequeo
+        caras = _padres(vecinas, e)
+        tipos.add(ChFi3d.DefineConnectType_s(e, TopoDS.Face(caras[0]), TopoDS.Face(caras[1]),
+                                             math.sin(math.radians(1.0)), False) if len(caras) == 2 else None)
+    # Mezcladas, casi tangentes o desconocidas: no se puede juzgar el signo.
+    return (tipos == {ChFiDS_Convex} and cambio > 0) or (tipos == {ChFiDS_Concave} and cambio < 0)
+
+
 def _validar(forma, operacion):
     if forma is None or forma.IsNull() or geo.esta_vacia(forma):
         raise geo.ErrorGeometria(f"{operacion}: el kernel devolvió una forma vacía.")
@@ -564,12 +585,13 @@ def empalme(forma, grupos, *, cadena_tangente=True):
         if not grupos:
             return forma
     mf = BRepFilletAPI_MakeFillet(forma)
-    vecinas, cajas = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE), {}
+    vecinas, cajas, empalmadas = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE), {}, []
     for grupo in grupos:
         tipo = grupo.get("tipo", "constante")
         aristas = _ampliar_tangentes(forma, grupo.get("aristas") or [], cadena_tangente)
         if not aristas:
             raise geo.ErrorGeometria("Un conjunto de empalme no tiene aristas.")
+        empalmadas += aristas
         esquinas = []
         if grupo.get("esquina") == "setback":
             if tipo != "constante" or float(grupo.get("setback", 0)) <= 0:
@@ -634,7 +656,7 @@ def empalme(forma, grupos, *, cadena_tangente=True):
     resultado = _validar(mf.Shape(), "Empalme")
     # BRepCheck puede dar válido y estanco aunque el empalme atraviese la pared de una cavidad.
     if ((geo.solidos(resultado) and geo.volumen_exacto(resultado) <= 0)
-            or _cruza_mas_que(forma, resultado)):
+            or _cruza_mas_que(forma, resultado) or _volumen_al_reves(forma, resultado, empalmadas, vecinas)):
         raise geo.ErrorGeometria("El empalme falló: el radio supera el grosor de la pared o el espacio disponible. "
                                  "El resultado tiene caras cruzadas o un volumen inválido. Probá un radio menor.")
     return resultado
@@ -894,7 +916,7 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
             resultado = _mezclar(forma, resultado, alcance, min(float(g.get(k) or 0) for g in grupos
                                                                 for k in ("distancia", "distancia2") if g.get(k)))
     if ((geo.solidos(resultado) and geo.volumen_exacto(resultado) <= 0)
-            or _cruza_mas_que(forma, resultado)):
+            or _cruza_mas_que(forma, resultado) or _volumen_al_reves(forma, resultado, elegidas, arista_caras)):
         raise geo.ErrorGeometria("El chaflán falló: la distancia supera el grosor de la pared o el espacio disponible. "
                                  "El resultado tiene caras cruzadas o un volumen inválido. Probá una distancia menor.")
     return resultado
