@@ -32,8 +32,6 @@
 - La regla de memoria de la PC (13 GB, `main.log`) no aplica en la VPS: ahí se mira `free -g`.
 - OpenCode 1.19.5 instalado en la VPS (`~/.opencode/bin/opencode`, pedido de Gerardo 2026-11-11); cuentas y los 276 modelos de la PC ya copiados (`~/.config/opencode/opencode.json`, `auth.json`; MCP: remotos + `omnicad`).
 - Ver videos (skill `watch`, modo local): ffmpeg, yt-dlp (`~/.local/bin`, con pipx) y Deno (`~/.deno/bin`) instalados en la VPS (2026-11-11).
-- Freebuff (agente gratis con publicidad, de Codebuff) instalado en la VPS (`~/.local/bin/freebuff`, Node 18, 2026-11-11). Solo
-  modo interactivo (no tiene «run» como OpenCode); falta que Gerardo entre con `freebuff login`. Nada de secretos: guarda en su nube.
 - Capacidad medida (2026-11-11): un pytest pesado ocupa 1,5 GB y ~3 núcleos; la humo, 1,1 GB. El rendimiento tope llega
   con 3-4 corridas a la vez (8 a la vez no rinde más y rompe B-222). Cada sesión de Claude ocupa ~0,35 GB. La memoria
   no limita: el límite es el CPU.
