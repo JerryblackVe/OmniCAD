@@ -31,8 +31,6 @@
   que suba el costo pide su OK. La VPS no suma cupo de Claude.
 - La regla de memoria de la PC (13 GB, `main.log`) no aplica en la VPS: ahí se mira `free -g`.
 - OpenCode 1.19.5 instalado en la VPS (`~/.opencode/bin/opencode`, pedido de Gerardo 2026-11-11); cuentas y los 276 modelos de la PC ya copiados (`~/.config/opencode/opencode.json`, `auth.json`; MCP: remotos + `omnicad`).
-- Junie CLI 26.11.1 de JetBrains instalado en la VPS (`~/.local/bin/junie`, 2026-11-11); se entra con la cuenta de Gerardo
-  (token de <https://junie.jetbrains.com/cli>; nunca en el repo). Lo orquesta E9, igual que OpenCode.
 - Capacidad medida (2026-11-11): un pytest pesado ocupa 1,5 GB y ~3 núcleos; la humo, 1,1 GB. El rendimiento tope llega
   con 3-4 corridas a la vez (8 a la vez no rinde más y rompe B-222). Cada sesión de Claude ocupa ~0,35 GB. La memoria
   no limita: el límite es el CPU.
