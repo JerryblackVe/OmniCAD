@@ -4271,7 +4271,7 @@ class Boceto:
                 raise ErrorBoceto("El patrón necesita al menos dos ejemplares (cantidad 1 × cantidad 2 ≥ 2).")
             if n1 * n2 - 1 > MAX_COPIAS_PATRON:
                 raise ErrorBoceto(f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió {n1 * n2 - 1}): "
-                                  "para más, usá un patrón de cuerpos (rectangular_pattern).")
+                                  "para más, usá un patrón de cuerpos (Sólido › Crear › Patrón › Patrón rectangular; rectangular_pattern).")
             if p["modo"] not in ("extension", "espaciado"):
                 raise ErrorBoceto("La distancia es la total (extensión) o la de cada paso (espaciado).")
             for n, d, eje in ((n1, p["distancia1"], 1), (n2, p["distancia2"], 2)):
@@ -4295,7 +4295,7 @@ class Boceto:
             entero(n, "La cantidad", 2)
             if n - 1 > MAX_COPIAS_PATRON:
                 raise ErrorBoceto(f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió {n - 1}): para "
-                                  "más, usá un patrón de cuerpos (circular_pattern).")
+                                  "más, usá un patrón de cuerpos (Sólido › Crear › Patrón › Patrón circular; circular_pattern).")
             finito(total, "El ángulo total")
             if not 0 < abs(total) <= 360:
                 raise ErrorBoceto("El ángulo total va de -360 a 360 grados, distinto de cero.")

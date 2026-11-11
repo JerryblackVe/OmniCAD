@@ -165,18 +165,18 @@ def _kernel_que_pierde_material(monkeypatch):
     monkeypatch.setattr(ops.geo, "booleano", perder)
 
 
-def test_combinar_avisa_si_la_union_pierde_material(monkeypatch):
+def test_combinar_falla_si_la_union_pierde_material(monkeypatch):
     """B-52: una unión no puede pesar menos que el cuerpo al que une; si el kernel descarta
-    geometría (contacto degenerado), el paso avisa en vez de perderla en silencio."""
+    geometría (contacto degenerado), el paso falla en vez de perderla (B-308: antes avisaba y dejaba Aceptar)."""
     doc = Documento()
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="8"))
     _kernel_que_pierde_material(monkeypatch)
     r = doc.agregar(OpCombinar(doc.nuevo_id(), objetivo="op1.c1", herramientas=["op2.c1"], operacion="unir"))
-    assert r.estado == "aviso" and "perdió" in r.mensaje
+    assert r.estado == "error" and "perdió" in r.mensaje      # B-308: un resultado roto no se acepta
 
 
-def test_union_de_primitiva_avisa_si_pierde_material(monkeypatch):
+def test_union_de_primitiva_falla_si_pierde_material(monkeypatch):
     """B-52 (el caso real): la espiral se perdía al UNIR UNA PRIMITIVA (Cilindro11) al cuerpo
     compuesto; el chequeo de pérdida tiene que estar también en el camino de las primitivas."""
     doc = Documento()
@@ -184,7 +184,7 @@ def test_union_de_primitiva_avisa_si_pierde_material(monkeypatch):
     _kernel_que_pierde_material(monkeypatch)
     r = doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="5", largo="5", alto="5", x="8",
                                 operacion="unir", objetivo="op1.c1"))
-    assert r.estado == "aviso" and "perdió" in r.mensaje
+    assert r.estado == "error" and "perdió" in r.mensaje      # B-308: un resultado roto no se acepta
 
 
 # ------------------------------------------------------------ agrupar_deshacer (H-59)

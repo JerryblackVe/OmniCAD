@@ -861,6 +861,14 @@ def _sin_cambios(forma, avisos):
     return forma
 
 
+# B-308: «mové la pieza una milésima» no servía (Gerardo la subió 0,1 mm y la unión quedó peor). Lo que sí ayuda
+# es un solape franco en vez de caras o aristas que coinciden justo.
+CONSEJO_CONTACTO = ("Suele pasar cuando las piezas se tocan justo en una cara, una arista o un cilindro del mismo "
+                    "radio: hacé que una se meta en la otra al menos 0,1 mm (alargá la extrusión o agrandá el "
+                    "cuerpo) en vez de separarlas, y volvé a probar.")
+REVISAR = "revisalo con Inspeccionar › Revisar geometría (check_geometry)."
+
+
 def booleano(objetivo, herramienta, operacion, avisos=None):
     """'unir' | 'cortar' | 'intersecar' (FeatureOperations Join/Cut/Intersect de Fusion).
 
@@ -951,17 +959,17 @@ def _booleana_verificada(objetivo, herramienta, operacion, volumenes, avisos, **
             mejor, peor_problema = candidato, p
     if peor_problema[0] >= 2:
         raise ErrorGeometria(f"La operación '{operacion}' dio un resultado imposible ({peor_problema[1]}) y el kernel "
-                             "no logró corregirlo: probá mover la pieza una milésima de milímetro.")
+                             f"no logró corregirlo. {CONSEJO_CONTACTO}")
     libres, no_manifold = _aristas_defectuosas(mejor)
     (la, _), (lb, _) = _aristas_defectuosas(objetivo), _aristas_defectuosas(herramienta)
     if libres > la + lb or "sólido inválido" in peor_problema[1]:
         # No estanco o inválido: nunca sale en silencio (B-39). Solo-no-manifold SÍ se devuelve: el cuerpo sigue
         # estanco y puede ser la geometría real (un agujero tangente a una pared pellizca el material, B-126).
         raise ErrorGeometria(f"La operación '{operacion}' quedó sin un resultado estanco o válido ({peor_problema[1]}) "
-                             "y el kernel no logró corregirlo: probá mover la pieza una milésima de milímetro.")
+                             f"y el kernel no logró corregirlo. {CONSEJO_CONTACTO}")
     if avisos is not None:
         avisos.append(f"quedaron {no_manifold} aristas compartidas por más de dos caras (posible contacto tangente "
-                      "o en cuña); revisalo con check_geometry.")
+                      f"o en cuña); {REVISAR}")
     return mejor
 
 
