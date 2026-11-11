@@ -162,6 +162,9 @@ def _marco_resto(e, f, punto_clave):
     """Aristas no circulares, ejes y puntos (igual en las dos versiones del marco)."""
     if f is not None:
         a, b = (np.array(p) for p in f["extremos"])
+        if e.tipo == "arista" and f["geom"] == "linea" and e.eje is not None:
+            a, d = e.eje      # B-294: el sentido que ya resolvió B-283; sin él, conserva el de antes.
+            b = a + d * f["largo"]
         p = {"inicio": a, "fin": b}.get(punto_clave, np.array(f["medio"]))
         if f["geom"] == "linea":
             return marco_desde(p, b - a)
@@ -247,6 +250,11 @@ def _marco_modo(estado, origen, origen_b, modo, clave, version):
     e = _resolver(origen, estado)
     if modo in (None, "", "simple"):
         marco, eje = _marco(e, clave, version)
+        if eje and e.tipo != "plano":
+            # B-177: el eje canónico se elige en el sistema del componente, no del mundo: si un padre lo gira, no salta.
+            m = _matriz_de(estado, _componente_de(estado, e))
+            local = np.linalg.inv(m) @ marco
+            marco = m @ _marco_de_eje(local[:3, 3], local[:3, 2])
         return marco, eje, e
     if modo not in MODOS_POSICION:
         raise ErrorOperacion(f"Modo de posición desconocido: «{modo}». Modos: {', '.join(MODOS_POSICION)}.")
@@ -559,8 +567,10 @@ def _marco_local(estado, comp, marco, canonico):
 
 
 def _marco_en_pose(datos, matriz):
-    marco = matriz @ np.asarray(datos["local"], float)
-    return _marco_de_eje(marco[:3, 3], marco[:3, 2]) if datos["canonico"] else marco
+    local = np.asarray(datos["local"], float)
+    if datos["canonico"]:          # B-177: canónico en el sistema del componente, como `_marco_modo`
+        local = _marco_de_eje(local[:3, 3], local[:3, 2])
+    return matriz @ local
 
 
 def _resolver_lazo(estado, ctx, cierre, camino):

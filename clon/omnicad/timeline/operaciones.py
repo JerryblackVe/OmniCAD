@@ -1659,11 +1659,21 @@ TOPE_NOMBRE = 255
 
 
 def exigir_nombre(nombre):
-    """B-262: el nombre de un paso o cuerpo no puede tener NUL ni pasar de TOPE_NOMBRE caracteres (receta, archivo o rename)."""
-    if nombre is not None and (not isinstance(nombre, str) or "\0" in nombre or len(nombre) > TOPE_NOMBRE):
-        raise ErrorOperacion(f"El nombre no es válido: tiene que ser texto sin el carácter NUL y de hasta "
-                             f"{TOPE_NOMBRE} caracteres.")
+    """B-262: el nombre de un paso o cuerpo no puede tener NUL ni pasar de TOPE_NOMBRE caracteres (receta, archivo o rename).
+    B-284: tampoco un sustituto UTF-16 suelto (U+D800…U+DFFF): entraba y después el archivo no se podía guardar."""
+    if nombre is not None and (not isinstance(nombre, str) or "\0" in nombre or len(nombre) > TOPE_NOMBRE
+                               or not _codificable(nombre)):
+        raise ErrorOperacion(f"El nombre no es válido: tiene que ser texto sin el carácter NUL ni caracteres sueltos "
+                             f"que no se pueden guardar, y de hasta {TOPE_NOMBRE} caracteres.")
     return nombre
+
+
+def _codificable(texto):
+    try:
+        texto.encode("utf-8")
+        return True
+    except UnicodeEncodeError:
+        return False
 
 
 def operacion_desde_dict(d):

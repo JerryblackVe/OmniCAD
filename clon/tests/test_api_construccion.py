@@ -606,3 +606,24 @@ def test_b283_el_eje_y_el_plano_en_angulo_siguen_el_sentido_de_la_arista_al_gira
     vieja = api.Sesion()
     llamar(vieja, "apply_recipe", recipe=sin_sentido(receta))
     assert np.asarray(vieja.doc.estado_final.ejes[eje][1], float) @ d1 < -0.99      # se calcula como antes
+
+
+def test_b287_una_referencia_que_no_existe_lo_dice_y_nombra_el_argumento():
+    """B-287: un id o nombre que no existe decía «Referencia mal formada» (la referencia estaba bien escrita) y la
+    ambigüedad de create_ucs nombraba «refs» en vez del argumento que pasó el usuario (x_axis)."""
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=30, height=40, anchor="corner")
+    llamar(s, "create_construction_plane", type="offset", plane="XY", offset=5, name="P5")
+    for herramienta, args, campo in (("create_construction_plane", {"type": "middle", "references": ["op99", "XY"]}, "references"),
+                                     ("create_construction_axis", {"type": "dos_puntos", "references": ["op99", "O"]}, "references"),
+                                     ("create_ucs", {"origin": "op99"}, "origin"),
+                                     ("create_ucs", {"origin": "O", "x_axis": "op99"}, "x_axis")):
+        r = api.llamar(s, herramienta, args)
+        assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r          # el kind no cambia entre versiones
+        assert f"«{campo}»" in r["mensaje"] and "no existe" in r["mensaje"] and "mal formada" not in r["mensaje"], r
+    r = api.llamar(s, "create_construction_plane", {"type": "middle", "references": ["P6", "XY"]})
+    assert "P5" in " ".join(r["pistas"]), r                                   # sugiere el parecido
+    for nombre in ("EJ", "EJ"):
+        llamar(s, "create_construction_axis", type="dos_planos", references=["XY", "XZ"], name=nombre)
+    r = api.llamar(s, "create_ucs", {"origin": "O", "x_axis": "EJ"})
+    assert not r["ok"] and r["error_kind"] == "AMBIGUOUS_REFERENCE" and "«x_axis»" in r["mensaje"], r

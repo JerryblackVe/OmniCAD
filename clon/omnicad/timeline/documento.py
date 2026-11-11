@@ -330,6 +330,9 @@ class Documento:
     def _cargar(self, datos, calculo=None):
         """Deshacer/rehacer: vuelve a la receta `datos` recalculando solo desde el primer paso que cambia (antes
         recalculaba desde el paso 0: con una rosca modelada de 30 s, cada deshacer tardaba ~35 s)."""
+        for n, d in enumerate(datos.get("operaciones", []), 1):    # B-285: un id raro rompía después delete_feature
+            if not isinstance(d.get("id"), str) or not d["id"].strip():
+                raise ErrorOperacion(f"El paso {n} de la receta necesita un id de texto (llegó {d.get('id')!r}).")
         ids = Counter(d.get("id") for d in datos.get("operaciones", []))
         if repetidos := sorted((i for i, n in ids.items() if n > 1), key=str):      # B-262: un paso taparía al otro
             raise ErrorOperacion(f"La receta repite el id de paso {', '.join(map(str, repetidos))}: cada paso necesita uno propio.")

@@ -292,3 +292,43 @@ def test_copia_de_patron_de_un_plano_sirve_como_texto():
     r = api.llamar(s, "create_sketch", {"plane": "op99_xy"})
     assert not r["ok"] and r["error_kind"] == "PLANE_NOT_FOUND", r
     assert any("_xy" in p and "_k" in p for p in r["pistas"]), r
+
+
+def test_b284_un_nombre_con_un_sustituto_suelto_se_rechaza_y_el_documento_se_guarda(tmp_path):
+    """B-284: «\ud800x» entraba como nombre (plano, eje, punto, SCU, receta o rename) y después save_document fallaba
+    con UnicodeEncodeError. Se rechaza al crearlo, como un NUL, y el documento se sigue guardando."""
+    s = _armar()
+    malo = "\ud800x"
+    antes = len(s.doc.operaciones)
+    for herramienta, args in (("create_construction_plane", dict(type="offset", plane="XY", offset=1)),
+                              ("create_construction_axis", dict(type="dos_planos", references=["XY", "XZ"])),
+                              ("create_construction_point", dict(type="vertice", references=["O"])),
+                              ("create_ucs", dict(origin="O"))):
+        r = api.llamar(s, herramienta, {**args, "name": malo})
+        assert not r["ok"] and "no es válido" in r["mensaje"], (herramienta, r)
+    pl = llamar(s, "create_construction_plane", plane="XY", offset=3)["plane"]["id"]
+    r = api.llamar(s, "rename", {"target": pl, "new_name": malo})
+    assert not r["ok"], r
+    receta = llamar(s, "get_recipe")["recipe"]
+    receta["operaciones"][-1]["nombre"] = malo
+    r = api.llamar(s, "apply_recipe", {"recipe": receta})
+    assert not r["ok"] and r["error_kind"] == "INVALID_RECIPE", r
+    assert len(s.doc.operaciones) == antes + 1
+    llamar(s, "create_parameter", name="p284", expression="5", comment=malo)     # gemelo: otro texto que se guarda
+    llamar(s, "save_document", path=str(tmp_path / "b284.omnicad"))
+    s2 = api.Sesion()
+    llamar(s2, "open_document", path=str(tmp_path / "b284.omnicad"))
+    assert malo in [p.get("comentario") for p in s2.doc.a_dict()["parametros"]]
+
+
+@pytest.mark.parametrize("malo", [None, 7, 1.5, "", "  ", ["a"]])
+def test_b285_receta_con_id_de_paso_que_no_es_texto_se_rechaza(malo):
+    """B-285: apply_recipe aceptaba ids None, 7, 1.5 o vacíos; después delete_feature daba INTERNAL_ERROR (TypeError)."""
+    s = _armar()
+    llamar(s, "create_construction_plane", plane="XY", offset=3)
+    receta = llamar(s, "get_recipe")["recipe"]
+    antes = len(s.doc.operaciones)
+    receta["operaciones"][-1]["id"] = malo
+    r = api.llamar(s, "apply_recipe", {"recipe": receta})
+    assert not r["ok"] and r["error_kind"] == "INVALID_RECIPE" and "id de texto" in r["mensaje"], r
+    assert len(s.doc.operaciones) == antes

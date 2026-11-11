@@ -205,7 +205,11 @@ def _preparar(doc, ruta):
     manifiesto = {"formato": FORMATO, "version_formato": version, "aplicacion": NOMBRE_APP,
                   "version_aplicacion": VERSION, "guardado": _ahora(), "nombre": doc.nombre,
                   "unidades": {"longitud": "mm", "angulo": "deg"}}
-    return ruta, manifiesto, json.dumps(datos, indent=1, ensure_ascii=False).encode("utf-8")
+    try:
+        receta = json.dumps(datos, indent=1, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError:      # B-284: un texto con un sustituto suelto (comentario…) se guarda escapado, no aborta
+        receta = json.dumps(datos, indent=1).encode("ascii")
+    return ruta, manifiesto, receta
 
 
 def _escribir(ruta, manifiesto, receta, miniatura_png=None, doc_cache=None):
