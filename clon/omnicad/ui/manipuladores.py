@@ -248,6 +248,17 @@ def _desenvolver(angulo, previo):
 
 
 # ---------------------------------------------------------------- manipuladores
+def _tope(limite, paso, estricto, lado):
+    """Hasta dónde llega un asa con ese tope (`lado` 1 = mínimo, -1 = máximo). Un tope estricto da error justo ahí (0 en una
+    medida, la conicidad que cierra el perfil, ±89°): se frena un paso de lo que se escribe (`paso`) hacia adentro, así el
+    texto redondeado del campo nunca lo toca (B-267, B-343)."""
+    if not estricto:
+        return limite
+    if lado > 0:
+        return (math.floor(limite / paso + 1e-9) + 1) * paso
+    return (math.ceil(limite / paso - 1e-9) - 1) * paso
+
+
 class Manipulador:
     """Base. `ident` identifica al manipulador entre recálculos (hover, arrastre, cajas)."""
     ident = ""
@@ -296,10 +307,11 @@ class Flecha(Manipulador):
     sobre la recta (dividido por `factor`, p. ej. 0,5 en la extrusión simétrica de longitud total)."""
 
     def __init__(self, clave, origen, direccion, factor=1.0, minimo=None, maximo=None, caja=True, color=AMARILLO,
-                 hacia_afuera=False):
+                 hacia_afuera=False, estricto=False):
         self.clave, self.origen, self.direccion = clave, np.asarray(origen, float), unitario(direccion)
         self.factor, self.minimo, self.maximo, self.caja, self.color = factor, minimo, maximo, caja, color
         self.hacia_afuera = hacia_afuera   # cara movida: la flecha sigue la normal de la cara, también con valor negativo (P-137)
+        self.estricto = estricto           # los topes dan error justo ahí: ver `_tope`
         self.ident = f"flecha:{clave}"
 
     inclinable = True                  # si apunta a la cámara se dibuja (y se arrastra) inclinada hacia un costado
@@ -360,12 +372,12 @@ class Flecha(Manipulador):
         return {self.clave: self._acotar(estado["v0"] + (s - estado["s0"]) / self.factor, g)}
 
     def _acotar(self, v, g):
-        # B-267: un tope en 0 es «no cruza el cero», y 0 no es una medida válida: se frena en el menor valor que se escribe
+        # B-267: un tope en 0 es «no cruza el cero», y 0 no es una medida válida: también es estricto
         paso = 10.0 ** -g._decimales
         if self.minimo is not None:
-            v = max(paso if self.minimo == 0 else self.minimo, v)
+            v = max(_tope(self.minimo, paso, self.estricto or self.minimo == 0, 1), v)
         if self.maximo is not None:
-            v = min(-paso if self.maximo == 0 else self.maximo, v)
+            v = min(_tope(self.maximo, paso, self.estricto or self.maximo == 0, -1), v)
         return v
 
     def cajas(self, g, arrastre):
@@ -474,14 +486,14 @@ class Angulo(Manipulador):
     para un radio constante en pantalla."""
 
     def __init__(self, clave, centro, eje, inicio, radio=None, factor=1.0, minimo=-360.0, maximo=360.0,
-                 caja=True, color=AMARILLO):
+                 caja=True, color=AMARILLO, estricto=False):
         self.clave, self.centro, self.eje = clave, np.asarray(centro, float), unitario(eje)
         ini = np.asarray(inicio, float)
         ini = ini - self.eje * float(ini @ self.eje)
         self.u = unitario(ini) if np.linalg.norm(ini) > 1e-9 else perpendiculares(self.eje)[0]
         self.v = np.cross(self.eje, self.u)
         self.radio, self.factor, self.minimo, self.maximo = radio, factor, minimo, maximo
-        self.caja, self.color = caja, color
+        self.caja, self.color, self.estricto = caja, color, estricto
         self.ident = f"angulo:{clave}"
 
     def _r(self, g):
@@ -491,6 +503,9 @@ class Angulo(Manipulador):
 
     def _theta(self, g):
         return math.radians(g.valor(self.clave) * self.factor)
+
+    def _acotar(self, v):
+        return max(_tope(self.minimo, 0.1, self.estricto, 1), min(_tope(self.maximo, 0.1, self.estricto, -1), v))
 
     def asa(self, g):
         t = self._theta(g)
@@ -546,13 +561,13 @@ class Angulo(Manipulador):
             if abs(self.factor) < 1e-12:
                 return {}
             v = estado["v0"] + math.degrees(_mover_arco_pantalla(estado, pos)) / self.factor
-            return {self.clave: max(self.minimo, min(self.maximo, v))}
+            return {self.clave: self._acotar(v)}
         a = self._angulo_en(g, pos, estado["ultimo"])
         if a is None or abs(self.factor) < 1e-12:
             return {}
         estado["ultimo"] = a
         v = estado["v0"] + math.degrees(a - estado["a0"]) / self.factor
-        return {self.clave: max(self.minimo, min(self.maximo, v))}
+        return {self.clave: self._acotar(v)}
 
     def cajas(self, g, arrastre):
         if self.caja is True or (self.caja == "arrastre" and arrastre is not None):

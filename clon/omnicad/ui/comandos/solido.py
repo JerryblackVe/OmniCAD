@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Comandos de SÓLIDO › CREAR con diálogo al estilo Fusion: Extruir y Revolución."""
+import math
+
 import numpy as np
 
 from ...nucleo import geometria as geo
@@ -29,6 +31,41 @@ def _otro_plano(v, hit, ctx):
     if np.linalg.norm(np.cross(n, firma["normal"])) < 1e-4 and abs((np.asarray(firma["centro"]) - plano.origen) @ n) < 1e-4:
         return None
     return "hasta", {"extension": "objeto"}
+
+
+_ULTIMOS_RADIOS = [(), (math.inf, math.inf)]
+
+
+def _radios_conicidad(formas):
+    """(adentro, afuera) del perfil, que frenan las asas de la conicidad (B-343); sin tope si no se pueden medir. Se
+    guarda el del último perfil: las asas se rearman en cada cuadro del arrastre y medirlo lleva hasta ~50 ms."""
+    from ...nucleo.solidos_crear import radios_conicidad
+    previas, radios = _ULTIMOS_RADIOS
+    if len(previas) == len(formas) and all(a.IsSame(b) for a, b in zip(previas, formas, strict=True)):
+        return radios
+    try:
+        radios = radios_conicidad(formas)
+    except Exception:  # noqa: BLE001 — curvas sueltas (extrusión delgada) o un perfil raro: sin tope
+        radios = (math.inf, math.inf)
+    _ULTIMOS_RADIOS[:] = [tuple(formas), radios]
+    return radios
+
+
+def _distancia_maxima(radios, conicidad):
+    """Distancia a la que la conicidad cierra el perfil (Fusion frena ahí la flecha); None si no hay tope."""
+    r = radios[0] if conicidad < 0 else radios[1]
+    if abs(conicidad) < 1e-9 or math.isinf(r):
+        return None
+    return r / math.tan(math.radians(abs(conicidad)))
+
+
+def _angulos(radios, distancia):
+    """(mínimo, máximo) del asa de conicidad: ±89° o el ángulo que cierra el perfil a esa distancia."""
+    d = abs(distancia)
+    if d < 1e-9:
+        return {"minimo": -89.0, "maximo": 89.0}
+    return {"minimo": max(-89.0, -math.degrees(math.atan(radios[0] / d))),
+            "maximo": min(89.0, math.degrees(math.atan(radios[1] / d)))}
 
 
 class Extruir(Comando):
@@ -130,23 +167,31 @@ class Extruir(Comando):
             return antes + [mp.Flecha("distancia", centro, n, factor=1.0 if v.get("medida") != "total" else 0.5,
                                        minimo=0.0)]
         d = _evaluar(ctx, v.get("distancia"))
+        radios = _radios_conicidad(formas)
         if direccion != "dos_lados":
             t = n * (-1.0 if d < 0 else 1.0)
-            return antes + [mp.Flecha("distancia", centro, n), mp.Angulo(
-                "conicidad", borde, np.cross(t, lateral), t, minimo=-89.0, maximo=89.0, caja="arrastre")]
+            dmax = _distancia_maxima(radios, _evaluar(ctx, v.get("conicidad"), ANGULO))
+            menos = None if dmax is None else -dmax
+            return antes + [mp.Flecha("distancia", centro, n, minimo=menos, maximo=dmax, estricto=True),
+                            mp.Angulo("conicidad", borde, np.cross(t, lateral), t, **_angulos(radios, d),
+                                      caja="arrastre", estricto=True)]
 
-        def lado(clave, valor, sentido):
+        def lado(clave, valor, sentido, conicidad):
             # B-205: en «Dos lados» cada número es una magnitud de su lado; la flecha queda a |valor| de ese lado
             # y no cruza el cero (con un valor negativo, el eje se da vuelta y el tope pasa a ser el máximo)
+            dmax = _distancia_maxima(radios, _evaluar(ctx, v.get(conicidad), ANGULO))
             if valor < 0:
-                return mp.Flecha(clave, centro, -sentido, maximo=0.0)
-            return mp.Flecha(clave, centro, sentido, minimo=0.0)
-        flechas = [lado("distancia", d, n)]
+                return mp.Flecha(clave, centro, -sentido, minimo=None if dmax is None else -dmax, maximo=0.0,
+                                 estricto=True)
+            return mp.Flecha(clave, centro, sentido, minimo=0.0, maximo=dmax, estricto=True)
+        d2 = _evaluar(ctx, v.get("distancia2"))
+        flechas = [lado("distancia", d, n, "conicidad")]
         if v.get("extension2", "distancia") == "distancia":
-            flechas.append(lado("distancia2", _evaluar(ctx, v.get("distancia2")), -n))
+            flechas.append(lado("distancia2", d2, -n, "conicidad2"))
         return antes + flechas + [
-            mp.Angulo(clave, borde, np.cross(t, lateral), t, minimo=-89.0, maximo=89.0, caja="arrastre")
-            for clave, t in (("conicidad", n), ("conicidad2", -n))]
+            mp.Angulo(clave, borde, np.cross(t, lateral), t, **_angulos(radios, dist), caja="arrastre",
+                      estricto=True)
+            for clave, t, dist in (("conicidad", n, d), ("conicidad2", -n, d2))]
 
     @staticmethod
     def _herramienta(op):
