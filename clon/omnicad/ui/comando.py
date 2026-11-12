@@ -39,7 +39,7 @@ PREVIA_CUADRO_MS, PREVIA_ESPERA_MAX_MS = 12, 220
 # Operaciones cuya previa pasa de ~40 ms sobre un cuerpo de muchas caras (docs/auditorias/previa-comandos-*.md): se
 # calculan en un proceso aparte para que la ventana no se congele. Sobre cuerpos chicos siguen en el proceso (< 33 ms).
 TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "patron", "multitransformar",
-                                "desfase_cara"), 64
+                                "desfase_cara", "engrosar", "sup_desfase"), 64
 # Comandos cuya sección «Más opciones» quedó abierta (se recuerda mientras dure la sesión: no hace falta reabrirla cada vez).
 _SECCIONES_ABIERTAS = set()
 
@@ -1687,7 +1687,8 @@ class PanelComando(QFrame):
             return False
         from ..nucleo import geometria as geo
         cuerpos = [self.ctx.estado.cuerpos.get(cid) for cid in _ids_cuerpo(op.p)]   # un id que ya no existe lo informa el camino normal
-        if op.TIPO == "desfase_cara":       # B-306: desfasar una cara libre (el filete de una rosca) tarda minutos
+        # B-306/B-341: desfasar o engrosar una cara libre (el filete de una rosca) tarda de segundos a minutos
+        if op.TIPO in ("desfase_cara", "engrosar", "sup_desfase"):
             from ..nucleo.referencias import cara_libre
             if any(c is not None and any(map(cara_libre, geo.caras(c.forma))) for c in cuerpos):
                 return True
