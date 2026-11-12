@@ -34,6 +34,23 @@ def _otro_plano(v, hit, ctx):
     return "hasta", {"extension": "objeto"}
 
 
+def _otro_plano_revolucion(v, hit, ctx):
+    """B-339, como Fusion («a coplanar sketch profile or face»): lo de otro plano no se suma a «Perfil». Una cara de otro
+    plano pasa a ser el «Objeto límite» (como en Extruir, B-338); un perfil de otro plano reemplaza a los elegidos (los
+    coplanares no se mezclan con él)."""
+    from .. import manipuladores as mp
+    tipo = hit["ref"].get("tipo")
+    base = mp.base_perfiles(v.get("perfiles"), ctx.estado) if tipo in ("cara", "perfil") else None
+    entidad = mp.entidad(hit, ctx.estado) if base is not None else None
+    if entidad is None or entidad.plano is None:
+        return None
+    plano, n = base[1], mp.unitario(base[1].normal)
+    if (np.linalg.norm(np.cross(n, mp.unitario(entidad.plano.normal))) < 1e-4
+            and abs((np.asarray(entidad.plano.origen) - plano.origen) @ n) < 1e-4):
+        return None
+    return ("hasta", {"extension": "objeto"}) if tipo == "cara" else ("perfiles", {})
+
+
 _ULTIMOS_RADIOS = [(), (math.inf, math.inf)]
 
 
@@ -402,7 +419,7 @@ class Revolucion(Comando):
 
     def campos(self, ctx):
         return [
-            Seleccion("perfiles", "Perfil", {"perfil", "cara_plana"}, maximo=None),
+            Seleccion("perfiles", "Perfil", {"perfil", "cara_plana"}, maximo=None, desvio=_otro_plano_revolucion),
             Seleccion("eje", "Eje", {"eje"}),
             Opciones("extension", "Tipo de extensión", {"angulo": "Ángulo", "objeto": "A objeto", "completa": "Completo"}),
             Seleccion("hasta", "Objeto límite", {"vertice", "cara", "plano", "cuerpo"},
