@@ -183,6 +183,33 @@ def test_barrido_recto_distancia_e_inclinacion():
     assert g.area(superficie) == pytest.approx(2 * math.pi * 2 * 10, rel=1e-6)
 
 
+def _ruta_en_s(radio=15.0):
+    """Dos arcos de `radio` en el plano XZ: sube por Z, dobla hacia +X y vuelve a subir (una S)."""
+    k = radio * math.sqrt(0.5)
+
+    def arco(a, b, c):
+        return BRepBuilderAPI_MakeEdge(GC_MakeArcOfCircle(gp_Pnt(*a), gp_Pnt(*b), gp_Pnt(*c)).Value()).Edge()
+    return [arco((0, 0, 0), (radio - k, 0, k), (radio, 0, radio)),
+            arco((radio, 0, radio), (radio + k, 0, 2 * radio - k), (2 * radio, 0, 2 * radio))]
+
+
+def test_b372_la_conicidad_del_barrido_no_pasa_la_curvatura_de_la_ruta():
+    """B-372: con 30° sobre una S el perfil crecía más que el radio de las curvas y el barrido daba una forma gigante
+    «válida» con autointersecciones. Como Fusion, se rechaza con el máximo que admite la ruta: r = 5, curvas de radio
+    15 y largo 15π, así que (1 + 15π·tan a / 5)·5 < 15 da a < 12,0°."""
+    from omnicad.nucleo import revision
+    ruta, perfil = _ruta_en_s(), circulo((0, 0, 0), 5)
+    for a in (30, 50, 13):
+        with pytest.raises(g.ErrorGeometria, match=r"no entra en la curva.*como máximo 12\.0°"):
+            sc.barrer([perfil], ruta, conicidad=a)
+    for a in (0, 5, 11.5):
+        forma = valido(sc.barrer([perfil], ruta, conicidad=a))
+        assert revision._autointersecciones_seguras(forma, 1, 20.0)[0] == 0
+    valido(sc.barrer([perfil], [linea((0, 0, 0), (0, 0, 60))], conicidad=50))   # en una recta no hay curva que pisar
+    with pytest.raises(g.ErrorGeometria, match="no entra en la curva"):              # el de superficie, igual
+        sf.barrer_superficie([linea((-5, 0, 0), (5, 0, 0))], ruta, conicidad=30)
+
+
 @pytest.mark.parametrize("valor", [1.5, 2.0])
 def test_barrido_distancia_mayor_que_una_da_error(valor):
     """B-211: la Distancia es una fracción de la ruta (Fusion: «Range: 0.00-1.00»); pasar de 1 es un error, no la ruta entera."""

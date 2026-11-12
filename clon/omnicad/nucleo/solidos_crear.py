@@ -883,6 +883,57 @@ def _radio_referencia(alambre, punto):
     return math.sqrt(geo.area(cara) / math.pi)
 
 
+def _curvaturas(alambre, muestras=80):
+    """[(fracción 0..1 del largo, curvatura 1/mm)] dentro de cada arista del alambre: las esquinas entre aristas no
+    cuentan (el barrido las resuelve con la transición en ángulo)."""
+    from OCP.BRepLProp import BRepLProp_CLProps
+    aristas = _aristas_de(alambre)
+    largos = [_longitud(a) for a in aristas]
+    total = sum(largos) or 1.0
+    salida, hecho = [], 0.0
+    for arista, largo in zip(aristas, largos, strict=True):
+        c = BRepAdaptor_Curve(arista)
+        u0, u1 = c.FirstParameter(), c.LastParameter()
+        n = max(4, int(muestras * largo / total) + 1)
+        for k in range(n + 1):
+            props = BRepLProp_CLProps(c, u0 + (u1 - u0) * k / n, 2, 1e-7)
+            avance = k / n if arista.Orientation() != TopAbs_REVERSED else 1 - k / n
+            salida.append(((hecho + largo * avance) / total, props.Curvature() if props.IsTangentDefined() else 0.0))
+        hecho += largo
+    return salida
+
+
+def _exigir_conicidad_en_curvas(perfil, ruta, p0, conicidad, escala):
+    """B-372: con inclinación hacia afuera el perfil crece a lo largo de la ruta; si en una curva su borde pasa el radio
+    de curvatura, el barrido se pliega sobre sí mismo y arma una forma gigante. Fusion lo rechaza: acá también, con el
+    máximo que admite la ruta. `escala`: la del perfil al final de la ruta (la ley es lineal)."""
+    puntos = []
+    for arista in _aristas_de(perfil):
+        c = BRepAdaptor_Curve(arista)
+        for u in np.linspace(c.FirstParameter(), c.LastParameter(), 24):
+            puntos.append(_xyz(c.Value(float(u))))
+    # shortcut: el radio mayor del perfil en cualquier dirección, no solo hacia el centro de la curva: un perfil alargado
+    # de costado puede rechazarse de más; medir sobre la normal de la ruta si aparece ese caso
+    rmax = max(float(np.linalg.norm(q - p0)) for q in puntos)
+    peor, tope = None, math.inf
+    for f, k in _curvaturas(ruta):
+        if k < 1e-9:
+            continue
+        r = rmax * (1 + f * (escala - 1))
+        if f > 1e-9:       # la mayor escala que entra ahí, pasada a ángulo (la escala crece con la tangente)
+            tope = min(tope, (1 / (k * rmax) - 1) / f)
+        if r * k >= 1 and (peor is None or r * k > peor[0]):
+            peor = (r * k, r, 1 / k, f)
+    if peor is None:
+        return
+    _, r, radio, f = peor
+    maximo = math.degrees(math.atan(max(tope, 0.0) * math.tan(math.radians(conicidad)) / (escala - 1)))
+    raise geo.ErrorGeometria(
+        f"Con {conicidad:g}° de inclinación el perfil crece hasta {r:.3g} mm y no entra en la curva de la ruta (radio "
+        f"{radio:.3g} mm, al {f:.0%} del recorrido): el barrido se plegaría sobre sí mismo. En esta ruta la inclinación "
+        f"admite como máximo {maximo:.1f}°; probá un ángulo menor o una ruta más abierta.")
+
+
 def _punto_en_cara(cara, punto):
     """¿El punto (sobre el plano de la cara plana) cae dentro de la cara?"""
     sup = BRepAdaptor_Surface(cara)
@@ -973,6 +1024,8 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
             escala = 1.0 + _longitud(tramo) * math.tan(math.radians(conicidad)) / _radio_referencia(perfil, p0)
             if escala <= 0.01:
                 raise geo.ErrorGeometria("La inclinación del barrido hace desaparecer el perfil antes del final.")
+            if conicidad > 0:
+                _exigir_conicidad_en_curvas(perfil, tramo, p0, conicidad, escala)
             ley = Law_Linear()
             ley.Set(0.0, 1.0, 1.0, escala)
         if ley is not None:
