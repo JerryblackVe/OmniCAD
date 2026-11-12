@@ -384,6 +384,10 @@ class OpAgujero(_OpCrear):
             if e.plano is None:
                 raise ErrorOperacion("El agujero va sobre una cara plana.")
             p = np.asarray(d["punto"], float)
+            if d.get("pose") is not None:         # B-178: el punto se dio con el componente en esa pose; lo sigue
+                comp = estado.cuerpo(d["cara"]["cuerpo"]).componente
+                ahora = np.asarray(estado.componentes.get(comp, {}).get("matriz", np.identity(4).tolist()), float)
+                p = (ahora @ np.linalg.inv(np.asarray(d["pose"], float)) @ np.append(p, 1.0))[:3]
             salida.append((e.plano.origen + (p - e.plano.origen) - e.plano.normal * float((p - e.plano.origen) @
                                                                                           e.plano.normal),
                            -e.plano.normal))

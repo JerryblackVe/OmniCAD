@@ -464,6 +464,13 @@ def pose_de_reasignar(estado, cuerpos):
     return comun if all(np.allclose(m, comun, atol=1e-9) for m in matrices) else np.identity(4)
 
 
+def pose_de_componente(estado, padre):
+    """B-178: la matriz del componente en este momento (identidad en la raíz). Un paso creado después de una unión la
+    guarda (`pose_padre` del componente hijo, `pose` de un punto de agujero) para seguir al componente cuando
+    después se acciona la unión."""
+    return _matriz_de(estado, padre) if padre else np.identity(4)
+
+
 def _matriz_de_cuerpos(estado, cuerpos, nombre, ctx, pose=None):
     """La matriz con la que arranca un componente que recibe `cuerpos`. Cada cuerpo llega con el movimiento de su
     componente anterior ya aplicado a la forma: si todos traen el mismo, el nuevo lo hereda y nadie se mueve. Si traen
@@ -500,7 +507,7 @@ class OpComponente(Operacion):
     pose congelada del momento en que se reasignaron los cuerpos (`pose_de_reasignar`); sin ella (recetas viejas) la
     pose heredada se recalcula con la actual de sus componentes anteriores, como siempre."""
     TIPO, ETIQUETA, ICONO = "componente", "Componente", "▣"
-    PARAMS = {"cuerpos": [], "fijo": False, "version_pose": 2, "padre": "", "pose": None}
+    PARAMS = {"cuerpos": [], "fijo": False, "version_pose": 2, "padre": "", "pose": None, "pose_padre": None}
     migrar_receta = _migrador("version_pose")
 
     def dependencias(self):
@@ -525,8 +532,17 @@ class OpComponente(Operacion):
                     raise ParametroMalFormado(self.p["pose"], "se esperaba la matriz 4x4 de la pose congelada del "
                                               "momento de reasignar los cuerpos.") from None
             matriz = _matriz_de_cuerpos(estado, self.p["cuerpos"], self.nombre, ctx, pose)
+        base = matriz
+        if padre and self.p.get("pose_padre") is not None:
+            # B-178: los cuerpos se modelaron con el padre en `pose_padre`; si hoy está en otra pose (se accionó una
+            # unión suya antes de este paso), el hijo lo sigue.
+            delta = _matriz_de(estado, padre) @ np.linalg.inv(np.asarray(self.p["pose_padre"], float))
+            if not np.allclose(delta, np.identity(4), atol=1e-9):
+                for cid in self.p["cuerpos"]:
+                    _mover_cuerpo(estado.cuerpo(cid), delta)
+                matriz = delta @ matriz
         estado.componentes[self.id] = {"nombre": self.nombre, "padre": padre, "fijo": bool(self.p["fijo"]),
-                                       "matriz": matriz.tolist(), "base": matriz.tolist()}
+                                       "matriz": matriz.tolist(), "base": base.tolist()}
         viejos = {estado.cuerpo(cid).componente for cid in self.p["cuerpos"]} - {"", self.id}
         for cid in self.p["cuerpos"]:
             estado.cuerpo(cid).componente = self.id
