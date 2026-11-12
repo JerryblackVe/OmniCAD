@@ -263,7 +263,8 @@ def test_un_hijo_que_muere_apaga_la_previa_con_un_mensaje_y_la_app_sigue(ventana
     antes = ventana.doc.a_dict()      # construir la operación reserva ids: se mide después
     p._hijo_previa.proceso.kill()
     esperar(p)
-    assert not p._previa_ok and "vista previa" in p.mensaje.text() and "falló" in p.mensaje.text()
+    assert not p._previa_ok and "vista previa" in p.mensaje.text() and (
+        "falló" in p.mensaje.text() or "kernel cayó" in p.mensaje.text())     # kill(): Windows sale con 1, Linux con -9
     assert not any(es_malla(c.forma) for c in ventana.visor._estado.cuerpos.values())   # no queda nada estimado
     assert ventana.doc.a_dict() == antes and ventana.panel is p
     p._calcular_previa()           # la app sigue: el siguiente cálculo arranca otro hijo y termina

@@ -251,7 +251,7 @@ def test_boc21_fuente_de_un_trazo_en_la_lista_y_dibuja_solo_lineas(s):
 
 # ---------------------------------------------------------------- BOC-28: glifos faltantes y texto largo
 def test_boc28_glifo_faltante_avisa(s):
-    r = api.llamar(s, "add_text", {"text": "Hola \U0001F600"})
+    r = api.llamar(s, "add_text", {"text": "Hola \U0010FFFD"})   # ninguna fuente lo tiene (DejaVu sí trae el emoji)
     assert r["ok"] and any("glifo" in a for a in r["avisos"])
 
 

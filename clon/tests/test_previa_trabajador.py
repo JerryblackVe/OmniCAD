@@ -125,7 +125,7 @@ def test_si_cae_el_trabajador_avisa_y_la_siguiente_arranca_otro(placa):
     h = CalculoPendiente("previa_visual", _datos(doc, empalme))
     pid = _pid()
     h.proceso.kill()
-    with pytest.raises(TareaAislada, match=r"vista previa: el proceso aparte falló \(sin detalle\)"):
+    with pytest.raises(TareaAislada, match=r"vista previa: (el proceso aparte falló \(sin detalle\)|el kernel cayó)"):   # kill(): Windows sale con 1, Linux con -9
         _esperar(h)
     assert _esperar(CalculoPendiente("previa_visual", _datos(doc, empalme))) and _pid() != pid
 
