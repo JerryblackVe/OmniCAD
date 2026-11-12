@@ -496,3 +496,29 @@ def test_parametrica_de_una_arista():
     punto, derivada = f((t0 + t1) / 2)
     assert t1 - t0 == pytest.approx(math.pi)
     assert punto == pytest.approx([0, 10, 0], abs=TOL) and np.linalg.norm(derivada) == pytest.approx(10)
+
+
+def test_boc82_un_arrastre_resuelve_solo_su_grupo_y_el_resto_no_se_mueve():
+    """BOC-82: cada grupo independiente se resuelve aparte. Arrastrar la línea de una tangente no toca la otra, y los
+    grados de libertad son la suma de los de cada grupo."""
+    b = Boceto()
+    pares = []
+    for x in (0.0, 100.0):
+        k = b3.agregar_circulo(b, (x, 0, 0), 10, (0, 0, 1))
+        l = b3.agregar_linea(b, (x - 30, 14, 3), (x + 30, 12, 2))
+        b3.agregar_restriccion(b, "tangente", [l, k])
+        pares.append((l, k))
+    r = b3.resolver(b, {})
+    assert r.ok
+    solo = Boceto()
+    k = b3.agregar_circulo(solo, (0, 0, 0), 10, (0, 0, 1))
+    b3.agregar_restriccion(solo, "tangente", [b3.agregar_linea(solo, (-30, 14, 3), (30, 12, 2)), k])
+    assert r.gdl == 2 * b3.resolver(solo, {}).gdl
+    otro = {p: _p(b, p).copy() for c in pares[1] for p in b3.datos(b)["curvas"][c]["puntos"]}
+    g = b3.datos(b)
+    extremo = g["curvas"][pares[0][0]]["puntos"][1]
+    g["puntos"][extremo] = [g["puntos"][extremo][0] + 2, g["puntos"][extremo][1] + 1, g["puntos"][extremo][2]]
+    assert b3.resolver(b, {}).ok
+    assert all(np.array_equal(_p(b, p), v) for p, v in otro.items())
+    a, c = _extremos(b, pares[0][0])
+    assert _dist_recta(_p(b, g["curvas"][pares[0][1]]["puntos"][0]), a, c) == pytest.approx(10, abs=TOL)
