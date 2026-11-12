@@ -384,9 +384,11 @@ def buscar_misma(lista, hit, estado):
     `hit` se resuelve una vez; lo elegido ya trae su forma (resolver cada uno costaba ~3 ms)."""
     r = hit["ref"]
     igual = next((h for h in lista if h["ref"] == r), None)
+    if igual is not None or not isinstance(r, dict) or r.get("cuerpo") is None:   # una ref de texto («Destino A») no tiene subforma
+        return igual
     clave = (r.get("tipo"), r.get("cuerpo"))
-    candidatos = [h for h in lista if (h["ref"].get("tipo"), h["ref"].get("cuerpo")) == clave]
-    if igual is not None or r.get("cuerpo") is None or not candidatos:
+    candidatos = [h for h in lista if isinstance(h["ref"], dict) and (h["ref"].get("tipo"), h["ref"].get("cuerpo")) == clave]
+    if not candidatos:
         return igual
     from ..timeline import entidades as ent
     try:

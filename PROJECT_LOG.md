@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-12 · B-370 (E8): `buscar_misma` ya no revienta con referencias de texto.** `ui/comando.py` hacía `r.get("tipo")` sobre «Destino A» (`origen_union`) y daba `AttributeError` (venía de B-338/B-338b). Si `r` no es dict o no trae cuerpo devuelve la coincidencia exacta; los candidatos ignoran refs que no son dict. Prueba: `tests/test_formulario_paneles.py` (26 OK con `-W error`), ruff limpio.
 - **2026-11-12 · Traspaso del coordinador PRINCIPAL (VPS), contexto al 62 %.** Leer esto primero.
   - **Hoy:** ~70 fusiones a main (último verde: 695 tests cruzados + ruff, después de B-160/P-140/B-365/ASM-17g). Revisión previa a la versión con workflow (`docs/auditorias/revision_pre_version_2026-11-12.md`, B-349 a B-361, casi todo cerrado). Página de seguimiento refrescada a las 15:10 (refrescar al cerrar la próxima tanda).
   - **Push:** main listo salvo la suite y la humo en Windows de Gerardo (B-365, el último rojo, ya entró). Gerardo pidió que le avisemos cuando esté listo para push y versión nueva (memoria `avisar-listo-para-push-y-release`). Última versión: v0.2.0; `origin/main` está 479+ commits atrás.
