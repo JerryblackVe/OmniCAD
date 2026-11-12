@@ -2679,7 +2679,8 @@ def _barrido_helicoidal(perfil, helice):
 
 
 def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_cara=None, *, angulo=60.0,
-                 diametro_flancos=None, diametro_menor=None, desfase=0.0, partes=False, extra=0.1, fondo=None, cresta=None):
+                 diametro_flancos=None, diametro_menor=None, desfase=0.0, partes=False, extra=0.1, fondo=None, cresta=None,
+                 tramo_torno=None):
     """Sólido helicoidal con la forma del hueco entre filetes recortado al tramo [z0, z0 + largo] del eje. Rosca
     exterior: se le resta al cilindro; interior: al cuerpo agujereado. Perfil por defecto: el básico ISO/UN de
     60°; `angulo` (entre flancos), `diametro_flancos` y `diametro_menor` dan el de otras familias (55°, 30°,
@@ -2688,7 +2689,7 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
     anillo) y después el surco es más rápido que unirlos (M3 con holgura 0,1: 3,6 s → menos de la mitad).
     `extra` (en pasos) es cuánto sobresale el surco del material; ver `_cortar_rosca`. `fondo` y `cresta` (Ø, con la
     holgura incluida) fijan el fondo del surco y la cresta del filete; sin ellos, el fondo sale de `desfase` y la
-    cresta queda en la cara."""
+    cresta queda en la cara. `tramo_torno=(zmin, zmax)` ajusta el diámetro en ese tramo del eje sin alargar el surco."""
     z = _unit(eje)
     o = np.asarray(origen, float)
     h60 = math.sqrt(3) / 2
@@ -2717,9 +2718,10 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
     tabla = tuple(None if v is None else round(float(v), 9) for v in (fondo, cresta))
     perfil = (60.0, None, None, 0.0, None, None) if iso else (round(float(angulo), 9), round(d2, 9), round(d1, 9),
                                                               round(desfase, 9), *tabla)
+    tramo_torno = None if tramo_torno is None else tuple(round(float(v - z0), 9) for v in tramo_torno)
     base = _surco_en_origen(round(float(diametro), 9), round(float(paso), 9), round(float(largo), 9), bool(interna),
                             mano, None if radio_cara is None else round(float(radio_cara), 9), eje_r, *perfil,
-                            round(float(rel_extra), 9))
+                            round(float(rel_extra), 9), tramo_torno)
     trsf = gp_Trsf()
     trsf.SetTranslation(gp_Vec(*map(float, o + z * z0)))
     giro = _fase_rosca(z)
@@ -2749,7 +2751,7 @@ _ANCHO_LIMITE, _ANCHO_TOPE, _ANCHO_TORNO = 0.995, 0.97, 0.93     # anchos del su
 
 @functools.lru_cache(maxsize=16)
 def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angulo=60.0, d2=None, d1=None,
-                     desfase=0.0, fondo=None, cresta=None, rel_extra=0.1):
+                     desfase=0.0, fondo=None, cresta=None, rel_extra=0.1, tramo_torno=None):
     """Surco de `_surco_rosca` con el tramo empezando en el origen. Se guarda por (tamaño, largo, eje, mano,
     perfil): roscar varios agujeros iguales arma el barrido helicoidal UNA vez y lo copia trasladado (hallazgo
     L138: M3 en 4 agujeros tardaba 30 s).
@@ -2796,7 +2798,8 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
     # franja de cresta de la punta quedaba de 0,016 mm en AFBMA (paso 0,79), con aristas de tolerancia 0,01, y el STEP
     # de ida y vuelta cambiaba el volumen 3·10⁻⁵; con 0,1 pasos, 3·10⁻⁹
     eps = 0.1 * paso
-    base_torno, largo_torno = tuple(z * -eps), largo + 2 * eps
+    inicio_torno, fin_torno = (0.0, largo) if tramo_torno is None else tramo_torno
+    base_torno, largo_torno = tuple(z * (inicio_torno - eps)), fin_torno - inicio_torno + 2 * eps
     if interna and ancho(r_in) > _ANCHO_LIMITE * paso:
         r_in = radio_de_ancho(_ANCHO_TOPE)
         if r_in > material - 0.01 * paso:
@@ -2985,27 +2988,27 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
                                  f"Ø de la cara {diametro_cara:g} mm y Ø de la rosca {diametro:g} mm. "
                                  "Elegí otro tamaño o «Tamaño automático», o aumentá el largo.")
     perfil = _perfil_clase(datos, clase, info["interna"], holgura, tabla)
+    tol = 0.01 * datos["paso"]     # un Ø apenas distinto no se tornea ni se rellena: dejaría una lámina casi sin espesor
     if tabla and perfil["cresta"] is None:
         # B-247, como Fusion: una cara más gruesa que la rosca (o un agujero más chico) se tornea a su Ø de cresta.
         # Dispara el Ø básico, no la holgura (una cara justa sigue como antes); las recetas viejas (sin `tabla`), igual.
         basico, h = datos["diametro_menor" if info["interna"] else "diametro"], float(holgura)
-        tol = 0.01 * datos["paso"]     # un Ø apenas distinto no se tornea: dejaría una lámina casi sin espesor
         if (2 * radio < basico - tol) if info["interna"] else (2 * radio > basico + tol):
             # agujero: Ø menor al centro de la tolerancia de la clase (6H: D1 + TD1/2), como el taladro del Agujero
             perfil["cresta"] = diametro_taladro_rosca(datos["designacion"], clase, h) if info["interna"] else basico - 2 * h
     z0 = zmax - desfase - largo if invertir else zmin + desfase
-    # B-248, como Fusion: un eje más fino que el núcleo (o un agujero más ancho que el Ø mayor) se rellena en el tramo
-    # roscado hasta el Ø mayor (o el menor) antes de cortar; el anillo se mete un poco en el material para fundirse.
-    D, d1, meter = datos["diametro"], datos["diametro_menor"], 0.1 * datos["paso"]
-    if tabla and (2 * radio >= D if info["interna"] else 2 * radio <= d1):
+    # B-248/B-251/B-367, como Fusion: el tamaño pone el Ø de toda la cara, aunque la rosca sea parcial. Un eje más fino
+    # que el Ø mayor (o un agujero más ancho que el del taladro) se rellena; el anillo se mete un poco en el material.
+    D, meter = datos["diametro"], 0.1 * datos["paso"]
+    taladro = diametro_taladro_rosca(datos["designacion"], clase, holgura) if tabla and info["interna"] else None
+    if tabla and (2 * radio > taladro + tol if info["interna"] else 2 * radio < D - tol):
         if info["interna"]:      # hasta el Ø menor con la clase, como el taladro del Agujero (6H: D1 + TD1/2)
-            r_menor = diametro_taladro_rosca(datos["designacion"], clase, holgura) / 2
-            r_a, r_b, radio = r_menor, radio + meter, r_menor
+            r_a, r_b, radio = taladro / 2, radio + meter, taladro / 2
         else:
             r_a, r_b, radio = radio - meter, D / 2, D / 2
-        base = tuple(o + z * z0)
-        anillo = geo.booleano(geo.cilindro(r_b, largo, base=base, eje=tuple(z)),
-                              geo.cilindro(r_a, largo, base=base, eje=tuple(z)), "cortar")
+        base = tuple(o + z * zmin)
+        anillo = geo.booleano(geo.cilindro(r_b, zmax - zmin, base=base, eje=tuple(z)),
+                              geo.cilindro(r_a, zmax - zmin, base=base, eje=tuple(z)), "cortar")
         cuerpo = geo.booleano(cuerpo, anillo, "unir")
 
     def cortar(extra):
@@ -3013,7 +3016,8 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
             # a izquierdas en un eje el kernel falla (SOL-1): se barre a derechas y el surco se refleja en un plano del eje
             espejar = mano == "izquierda" and not info["interna"]
             surco, torno = _surco_rosca(o, z, datos["diametro"], datos["paso"], za, la, info["interna"],
-                                        "derecha" if espejar else mano, radio, partes=True, extra=extra, **perfil)
+                                        "derecha" if espejar else mano, radio, partes=True, extra=extra,
+                                        tramo_torno=(zmin, zmax) if tabla else None, **perfil)
             if espejar:
                 t = gp_Trsf()
                 t.SetMirror(gp_Ax2(_pnt(o), _gdir(_perpendicular(z))))
