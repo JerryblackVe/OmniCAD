@@ -914,7 +914,8 @@ class _Analisis(Comando):
     def mostrar(self, v, ctx):
         if ctx.ventana is None:
             return
-        datos = analisis_vista.calcular(self.TIPO_ANALISIS, self.params(v, ctx), ctx.estado, ctx.doc.propiedades)
+        datos = analisis_vista.calcular(self.TIPO_ANALISIS, self.params(v, ctx), ctx.estado,
+                                        ctx.ventana.propiedades_analisis(ctx.estado))
         analisis_vista.aplicar(ctx.ventana.visor, datos)
 
     def aplicar(self, v, ctx):

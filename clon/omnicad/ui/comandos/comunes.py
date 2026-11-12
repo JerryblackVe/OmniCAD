@@ -104,7 +104,8 @@ def con_analisis(clase):
                 aplicar_analisis(visor, {"mallas": {}, "colores": None, "capas": [], "cortes": []})
             return
         params = _PARAMS_ANALISIS[tipo](v, ctx, "ana_") | {"cuerpos": [h["ref"]["cuerpo"] for h in v.get("ana_cuerpos") or []]}
-        aplicar_analisis(visor, av.calcular(tipo, params, estado, ctx.doc.propiedades))
+        propiedades = ctx.ventana.propiedades_analisis(estado) if ctx.ventana is not None else ctx.doc.propiedades
+        aplicar_analisis(visor, av.calcular(tipo, params, estado, propiedades))
         self._analizado = True
 
     def cerrar(self, ctx):
