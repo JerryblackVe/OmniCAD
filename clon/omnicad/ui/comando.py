@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QC
 from ..timeline.documento import ErrorDocumento
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, con_unidad
 from .. import registro_uso
+from ..registro_uso.ganchos import aviso as registrar_aviso
 from ..registro_uso.ganchos import error as registrar_error
 from . import formato, preajustes_ui, temas
 from .campo_expresion import CampoExpresion
@@ -1758,8 +1759,11 @@ class PanelComando(QFrame):
         sin `tipo`, `aviso=True` es un aviso y lo demás un error. El símbolo acompaña al color."""
         tipo = tipo or ("aviso" if aviso else "error")
         if registro_uso.activo is not None and texto and texto != self._uso_error:
-            registrar_error(origen="comando", comando=self.comando.CLAVE, mensaje=texto)
-            registro_uso.activo.emitir("comando_resultado", {"comando": self.comando.CLAVE, "exito": False})
+            if tipo in ("error", "invalido"):
+                registrar_error(origen="comando", comando=self.comando.CLAVE, mensaje=texto)
+                registro_uso.activo.emitir("comando_resultado", {"comando": self.comando.CLAVE, "exito": False})
+            else:                           # aviso, calculando e instrucción no son fallas (B-332)
+                registrar_aviso(origen="comando", comando=self.comando.CLAVE, mensaje=texto)
         self._uso_error = texto
         poner_mensaje(self.icono_mensaje, self.mensaje, texto, tipo)
         self._reubicar()                       # el mensaje puede agrandar el panel: que siga entrando en el visor
