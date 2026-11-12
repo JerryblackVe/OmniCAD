@@ -2161,6 +2161,11 @@ def _envolver_en_cilindro(perfiles, cara, profundidad, tipo, *, recortar=False):
         c = np.array(geo.centro_masa(f, superficie=True))
         er = nf if float((c - o) @ nf) >= 0 else -nf
         et = np.cross(z, er)
+        # Evita que un perfil lejano dé otra vuelta al cilindro y repuje del otro lado.
+        minimo, maximo = np.asarray(geo.caja_envolvente(f))
+        alcance = abs(float(((minimo + maximo) / 2 - o) @ et)) + float((maximo - minimo) @ np.abs(et)) / 2
+        if alcance > math.pi / 2 * radio + 1e-6:
+            continue
         u0 = math.atan2(float(er @ y), float(er @ x))
 
         def a_uv(q, et=et, u0=u0):
