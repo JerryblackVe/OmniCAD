@@ -50,3 +50,44 @@ def test_barrido_de_superficie_tiene_el_asa_del_largo_y_el_arco_de_torsion(app_q
     p._calcular_previa()
     assert p._previa_ok or "perfil" in p.mensaje.text().lower()                       # sin perfil elegido no hay previa
     p.cancelar()
+
+
+def test_b372_teclear_una_conicidad_que_no_entra_en_la_s_da_error_y_aceptar_no_acepta(app_qt):  # noqa: F811
+    """B-372: en una ruta en S (curvas de radio 15) un perfil de r = 5 admite hasta 12° de conicidad. Tecleando 30 en el
+    campo, la previa queda en rojo con el máximo y Aceptar no crea nada; con 10 se acepta."""
+    import math
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from omnicad import api
+    from omnicad.timeline.operaciones import OpExtrusion
+    s, k = api.Sesion(), 15 * math.sqrt(0.5)
+    assert api.llamar(s, "sketch_from_spec", {"name": "P", "plane": "XY", "entities": [
+        {"type": "circle", "center": [0, 0], "radius": 5}]})["ok"]
+    assert api.llamar(s, "sketch_from_spec", {"name": "R", "plane": "XZ", "entities": [
+        {"type": "arc", "start": [0, 0], "mid": [15 - k, k], "end": [15, 15]},
+        {"type": "arc", "start": [15, 15], "mid": [15 + k, 30 - k], "end": [30, 30]}]})["ok"]
+    doc = s.doc
+    perfil, ruta = (doc.estado_final.bocetos[b] for b in list(doc.estado_final.bocetos)[:2])
+    hp = hit_desde_ref({"tipo": "perfil", "boceto": doc.operaciones[0].id,
+                        **OpExtrusion.referencia_perfil(perfil.perfiles[0])}, doc.estado_final)
+    curva = next(iter(ruta.boceto.curvas))
+    hr = hit_desde_ref({"tipo": "curva_boceto", "boceto": doc.operaciones[1].id, "curva": curva}, doc.estado_final)
+    p, *_ = _panel(CATALOGO["barrido"](), doc, {"perfiles": [hp], "ruta": [hr]})
+    p.seccion.boton.setChecked(True)                                   # «Más opciones», donde está la conicidad
+    campo = p.widgets["conicidad"]
+    for texto, sale in (("30", False), ("10", True)):
+        QTest.mouseClick(campo, Qt.LeftButton)
+        QTest.keyClick(campo, Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClicks(campo, texto)
+        QTest.keyClick(campo, Qt.Key_Tab)
+        p._t_previa.stop()
+        p._calcular_previa()
+        assert p._previa_ok is sale, p.mensaje.text()
+        if not sale:
+            assert "como máximo 12.0°" in p.mensaje.text()
+            pasos = len(doc.operaciones)
+            QTest.mouseClick(p.boton_ok, Qt.LeftButton)
+            assert len(doc.operaciones) == pasos                       # Aceptar no deja pasar la forma gigante
+    p.cancelar()

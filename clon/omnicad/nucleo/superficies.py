@@ -751,6 +751,8 @@ def barrer_superficie(aristas_perfil, ruta, *, orientacion="perpendicular", tors
         final = 1.0
         if abs(conicidad) > 1e-9:
             final = 1.0 + largo * math.tan(math.radians(conicidad)) / _radio_conicidad(perfil, sc._punto_en(espina, 0.0)[0])
+            if conicidad > 0:                  # B-372: el perfil que crece no puede pasar la curvatura de la ruta
+                sc._exigir_conicidad_en_curvas(perfil, espina, sc._punto_en(espina, 0.0)[0], conicidad, final)
             if final <= 0.01:
                 raise geo.ErrorGeometria("Con esa conicidad el perfil desaparece antes del final de la ruta: probá con "
                                          "un ángulo menor.")
