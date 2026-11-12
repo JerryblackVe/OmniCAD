@@ -16,6 +16,21 @@ EXTENSIONES = {"distancia": ("Distancia", "ext_distancia"), "objeto": ("Al objet
                "todo": ("Todo", "ext_todo")}
 
 
+def _otro_plano(v, hit, ctx):
+    """B-338, como Fusion («one or more coplanar … planar faces»): con algo ya elegido, una cara de otro plano no se
+    suma a los perfiles; pasa a ser el «Hasta objeto»."""
+    from .. import manipuladores as mp
+    firma = hit["ref"].get("firma") or {}
+    base = mp.base_perfiles(v.get("perfiles"), ctx.estado) if hit["ref"].get("tipo") == "cara" else None
+    if base is None or "normal" not in firma:
+        return None
+    plano = base[1]
+    n = mp.unitario(plano.normal)
+    if np.linalg.norm(np.cross(n, firma["normal"])) < 1e-4 and abs((np.asarray(firma["centro"]) - plano.origen) @ n) < 1e-4:
+        return None
+    return "hasta", {"extension": "objeto"}
+
+
 class Extruir(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "extruir", "Extruir", "extruir", "E"
     AYUDA = "Agrega profundidad a perfiles de boceto o caras planas: cuerpo nuevo, unir, cortar o intersecar."
@@ -34,7 +49,8 @@ class Extruir(Comando):
             Seleccion("perfiles", "Perfiles", {"perfil", "cara_plana", "curva_boceto"}, maximo=None,
                       ayuda="Perfiles cerrados o caras planas; en la extrusión delgada también curvas abiertas.",
                       # B-265: en la sólida un clic sobre el borde elige el perfil, no la curva (Fusion: Extrude reference)
-                      filtros_si=lambda v: {"perfil", "cara_plana"} | ({"curva_boceto"} if v.get("tipo") == "delgada" else set())),
+                      filtros_si=lambda v: {"perfil", "cara_plana"} | ({"curva_boceto"} if v.get("tipo") == "delgada" else set()),
+                      desvio=_otro_plano),
             Opciones("inicio", "Inicio", {"plano": ("Plano de perfil", "ini_plano"), "desfase": ("Desfase", "ini_desfase"),
                                           "objeto": ("Objeto", "ini_objeto")}),
             Expresion("desfase_inicio", "Desfase de inicio", "0 mm", visible_si=lambda v: v.get("inicio") in ("desfase", "objeto")),
@@ -154,7 +170,7 @@ class Extruir(Comando):
 
     def preparar_panel(self, panel):
         self._fija = panel.ctx.op is not None    # un paso reabierto no cambia solo de operación
-        self._antes_de_cortar = None             # la operación que había antes de pasar sola a Cortar
+        self._antes_auto = None                  # la operación que había antes de pasar sola a Cortar o Unir
         self._ajustando = False
         self._cajas = {}                         # id de cuerpo → caja envolvente: el estado no cambia con el panel abierto
         self._hijo, self._op_hijo = None, None
@@ -170,7 +186,8 @@ class Extruir(Comando):
 
     def previa_lista(self, panel, estado):
         """Como Fusion: si la persona no tocó Operación, la extrusión que se mete con volumen en un sólido visible pasa
-        a Cortar y, si deja de meterse, vuelve a lo que estaba. Primero las cajas envolventes (con la flecha agarrada,
+        a Cortar; la que sale de una cara de un sólido visible sin meterse, a Unir (B-338: rellenar un hueco); si deja
+        de hacerlo, vuelve a lo que estaba. Primero las cajas envolventes (con la flecha agarrada,
         sin tocar el kernel); con un cuerpo pesado, el común se calcula en un proceso aparte."""
         op = panel.ultima_op
         if self._fija or op is None:
@@ -184,7 +201,14 @@ class Extruir(Comando):
             return
         self._cancelar_hijo()
         formas = self._formas_herramienta(ctx, op, True) if solidos else []
-        self._ajustar(panel, any(geo.solapan(f, c.forma) for f in formas for c in solidos))
+        self._ajustar(panel, self._auto(ctx, op, any(geo.solapan(f, c.forma) for f in formas for c in solidos)))
+
+    def _auto(self, ctx, op, solapa):
+        """La operación automática: Cortar si se mete, Unir si nace de una cara de un sólido visible, None si ninguna."""
+        if solapa:
+            return "cortar"
+        visibles = {c.id for c in self._visibles(ctx)}
+        return "unir" if any(r.get("cuerpo") in visibles for r in op.p.get("caras") or []) else None
 
     @staticmethod
     def _visibles(ctx):
@@ -196,12 +220,15 @@ class Extruir(Comando):
             self._cajas[cuerpo.id] = geo.caja_envolvente(cuerpo.forma)
         return self._cajas[cuerpo.id]
 
-    def _ajustar(self, panel, cortar):
+    def _ajustar(self, panel, auto):
+        """`auto`: "cortar", "unir" o None (vuelve a la operación que había antes del cambio automático)."""
         actual = panel.valores.get("operacion")
-        if cortar and self._antes_de_cortar is None and actual != "cortar":
-            self._antes_de_cortar, nueva = actual, "cortar"
-        elif not cortar and self._antes_de_cortar is not None:
-            nueva, self._antes_de_cortar = self._antes_de_cortar, None
+        if auto is not None and actual != auto:
+            if self._antes_auto is None:
+                self._antes_auto = actual
+            nueva = auto
+        elif auto is None and self._antes_auto is not None:
+            nueva, self._antes_auto = self._antes_auto, None
         else:
             return
         self._ajustando = True
@@ -243,7 +270,7 @@ class Extruir(Comando):
         vigente = panel.ultima_op is not None and self._herramienta(panel.ultima_op).a_dict() == self._op_hijo
         self._cancelar_hijo()
         if vigente:
-            self._ajustar(panel, salida["solapa"])
+            self._ajustar(panel, self._auto(panel.ctx, panel.ultima_op, salida["solapa"]))
         else:
             panel._programar()
 

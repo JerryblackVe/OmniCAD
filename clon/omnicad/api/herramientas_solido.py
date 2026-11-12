@@ -59,15 +59,22 @@ def _objetivos(sesion, operation, target):
     return ids
 
 
+def _solidos_auto(sesion, op):
+    """Los cuerpos que mira operation="auto": `target` o los sólidos visibles."""
+    doc = sesion.doc
+    entrada = doc.estado_en(doc.marcador)
+    ocultos = set(doc.propiedad("__navegador__", "ocultos", []))
+    return ([entrada.cuerpo(c) for c in op.p["objetivos"]] or
+            [c for c in entrada.cuerpos.values() if c.tipo == "solido" and not es_patron_plano(c)
+             and c.id not in ocultos and c.componente not in ocultos])
+
+
 def _se_mete(sesion, op):
     """operation="auto": ¿la extrusión (cuerpo nuevo) comparte volumen con `target` o con un sólido visible? La misma
     regla que el panel Extruir. Lo que no se puede calcular da False: si el paso falla, el error lo informa `_agregar`."""
     doc = sesion.doc
     entrada = doc.estado_en(doc.marcador)
-    ocultos = set(doc.propiedad("__navegador__", "ocultos", []))
-    solidos = ([entrada.cuerpo(c) for c in op.p["objetivos"]] or
-               [c for c in entrada.cuerpos.values() if c.tipo == "solido" and not es_patron_plano(c)
-                and c.id not in ocultos and c.componente not in ocultos])
+    solidos = _solidos_auto(sesion, op)
     try:
         estado, _ = doc.previsualizar(op)
         formas = [c.forma for k, c in estado.cuerpos.items() if k not in entrada.cuerpos]
@@ -176,7 +183,7 @@ def _avisar_curvas_sin_perfil(sesion, br, sop):
              "one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada "
              "lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo "
              "lo estrecha). operation: new_body, join, cut, intersect o auto (cut si la extrusión se mete en un sólido "
-             "visible o en target, si no new_body, como el panel Extruir). También las opciones de Extruir de Fusion: "
+             "visible o en target; join si sale de una cara de ese sólido; si no new_body, como el panel Extruir). También las opciones de Extruir de Fusion: "
              "faces, thin, start, symmetric_measure, extent (distance, to_object o all) y taper_angle2.",
              modifica=True)
 def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: Expr = "10 mm",
@@ -195,7 +202,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
     profile: perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos), "text:<id>" o "sketch" (todos los perfiles sin esos huecos). Se ignora con open_curves.
     distance: distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
-    operation: "new_body", "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; si no, "new_body"; apoyarse en una cara no cuenta).
+    operation: "new_body", "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; "join" si no se mete y el perfil es una cara (faces) de ese sólido; si no, "new_body"; apoyarse en una cara no cuenta).
     direction: "one_side", "two_sides" o "symmetric".
     taper_angle: conicidad en grados (número o expresión): positivo ensancha hacia el final, negativo estrecha; 0 = recto.
     target: cuerpo(s) afectados por join, cut, intersect o auto (id o nombre); vacío = los sólidos visibles que toca.
@@ -304,6 +311,9 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     if auto and _se_mete(sesion, op):
         op.p["operacion"] = "cortar"
         operation = "cut"
+    elif auto and {r["cuerpo"] for r in op.p.get("caras") or []} & {c.id for c in _solidos_auto(sesion, op)}:
+        op.p["operacion"] = "unir"               # B-338: nace de una cara del sólido y sale (como Fusion)
+        operation = "join"
     resultado = _agregar(sesion, op, operation != "new_body")
     resultado["profiles_used"] = [br.perfiles.index(x) for x in perfiles] if br is not None else []
     if auto:

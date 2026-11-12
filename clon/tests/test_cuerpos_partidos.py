@@ -6,8 +6,9 @@ import math
 import time
 import zipfile
 
+import numpy as np
 import pytest
-from PySide6.QtCore import QPointF, QSettings
+from PySide6.QtCore import QPoint, QPointF, QSettings, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
@@ -474,3 +475,99 @@ def test_solapan_no_cuenta_apoyarse():
     assert not geo.solapan(a, geo.caja(4, 4, 4, (20, 0, 0)))
     assert geo.solapan(a, geo.caja(4, 4, 4, (8, 8, 8)))
     assert geo.solapan(a, geo.caja(1, 1, 1, (5, 5, 5)))           # adentro del todo
+
+
+@pytest.fixture
+def caja_con_hueco():
+    """B-338: caja de 50 (x, y, z 0..50) con un hueco de 20 × 20 × 10 en la cara frontal (y 0..10, x y z 15..35)."""
+    s = api.Sesion()
+    llamar(s, "extrude", sketch=rectangulo(s, 0, 0, 50, 50), distance=50)
+    llamar(s, "sketch_from_spec", plane="XZ", entities=[{"type": "rectangle", "corner1": [15, 15], "corner2": [35, 35]}])
+    boceto = s.doc.operaciones[-1].id
+    llamar(s, "extrude", sketch=boceto, distance=10, operation="cut", reverse=True)
+    assert volumenes(s) == [125000 - 4000]
+    return s, boceto
+
+
+def clic_en_cara(vis, y, xs, zs):
+    """Clic simulado en un punto de la cara del plano y = `y` que se ve desde la vista actual."""
+    for x in xs:
+        for z in zs:
+            q, _ok = vis._a_pantalla(np.array([[x, float(y), z]]), vis.matriz_mvp())
+            h = vis.elegir_entidad(QPointF(*q[0]))
+            if h is not None and h["tipo"] == "cara" and abs(h["punto"][1] - y) < 1e-6:
+                QTest.mouseClick(vis, Qt.LeftButton, Qt.NoModifier, QPoint(int(q[0][0]), int(q[0][1])))
+                return h
+    raise AssertionError(f"no se ve ninguna cara en y = {y}")
+
+
+@pytest.fixture
+def panel_hueco(caja_con_hueco, tmp_path):
+    """Panel de Extruir abierto sobre la caja con hueco, con el boceto del corte oculto (Fusion lo esconde)."""
+    s, boceto = caja_con_hueco
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    try:
+        v.ocultos.add(boceto)                      # Fusion esconde el boceto que ya se usó
+        v._refrescar_visibilidad()
+        v.resize(1280, 800)
+        v.show()
+        QTest.qWait(100)
+        yield s, v, v.ejecutar_comando(Extruir())
+    finally:
+        if v.panel is not None:
+            v.panel.cancelar()
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()
+        app.processEvents()
+
+
+def test_b338_clic_en_el_fondo_del_hueco_lo_elige_y_extruir_pasa_a_unir(panel_hueco):
+    """Como Fusion: un clic en el fondo de un hueco elige esa cara y, al sacarla hacia afuera, la operación pasa sola
+    a Unir; con la profundidad del hueco la caja queda maciza (antes quedaba «Cuerpo nuevo»: un tapón aparte)."""
+    s, v, p = panel_hueco
+    clic_en_cara(v.visor, 10, range(16, 35, 2), range(16, 35, 2))
+    previa(p)
+    (cara,) = [h["ref"] for h in p.valores["perfiles"]]
+    assert cara["firma"]["area"] == pytest.approx(400) and cara["firma"]["normal"] == pytest.approx([0, -1, 0])
+    assert p.valores["operacion"] == "unir"
+    p.set_valor("distancia", "-3")             # hacia adentro: se mete en la caja → Cortar
+    previa(p)
+    assert p.valores["operacion"] == "cortar"
+    p.set_valor("distancia", "10")
+    previa(p)
+    assert p.valores["operacion"] == "unir"
+    p.aceptar()
+    assert volumenes(s) == [pytest.approx(125000)]
+
+
+def test_b338_una_cara_de_otro_plano_pasa_a_ser_el_hasta_objeto(panel_hueco):
+    """Fusion («coplanar … planar faces», «To Object»): fondo del hueco y después la cara frontal → la frontal es el
+    destino, no otra cara a extruir (antes armaba un marco de 10 mm); la caja queda maciza. Tocarla otra vez la saca."""
+    s, v, p = panel_hueco
+    clic_en_cara(v.visor, 10, range(16, 35, 2), range(16, 35, 2))
+    previa(p)                                   # la previa ya une: el clic siguiente toca la cara de la previa
+    frontal = clic_en_cara(v.visor, 0, range(2, 14, 2), range(48, 38, -2))
+    previa(p)
+    assert len(p.valores["perfiles"]) == 1 and p.valores["extension"] == "objeto"
+    assert [h["ref"] for h in p.valores["hasta"]] == [frontal["ref"]]
+    assert p.valores["operacion"] == "unir"
+    fondo = p.valores["perfiles"][0]
+    assert solido._otro_plano(p.valores, fondo, p.ctx) is None          # una del mismo plano se suma
+    clic_en_cara(v.visor, 0, range(2, 14, 2), range(48, 38, -2))
+    assert p.valores["hasta"] == [] and len(p.valores["perfiles"]) == 1
+    previa(p)
+    clic_en_cara(v.visor, 0, range(2, 14, 2), range(48, 38, -2))
+    previa(p)
+    p.aceptar()
+    assert v.doc.operaciones[-1].p["extension"] == "objeto"
+    assert volumenes(s) == [pytest.approx(125000)]
+
+
+def test_b338_auto_en_la_api_une_la_cara_del_fondo(caja_con_hueco):
+    s, _ = caja_con_hueco
+    fondo = next(f["id"] for f in llamar(s, "find_faces")["faces"]
+                 if f["area"] == pytest.approx(400) and f["normal"] == pytest.approx([0, -1, 0]))
+    r = llamar(s, "extrude", faces=fondo, distance=10, operation="auto")
+    assert r["operation"] == "join" and volumenes(s) == [pytest.approx(125000)]

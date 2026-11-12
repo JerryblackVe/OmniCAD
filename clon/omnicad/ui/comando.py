@@ -86,13 +86,16 @@ class Seleccion(Campo):
     """Fila "Seleccionar": `filtros` es un subconjunto de visor3d.FILTROS; maximo=None = sin límite. `texto_boton` fija el
     texto del botón vacío (sin él, dice qué tipos acepta). `oculta`: se elige en el lienzo sin fila en el panel (Medir).
     `sin_resalte`: lo elegido no se pinta de azul (los análisis: el resalte taparía lo que pintan). `filtros_si(valores)`:
-    lo que se puede elegir en la vista según el modo (Extruir sólida no toma curvas sueltas); sin él, `filtros`."""
+    lo que se puede elegir en la vista según el modo (Extruir sólida no toma curvas sueltas); sin él, `filtros`.
+    `desvio(valores, hit, ctx)`: a qué campo pasa lo que se toca y no cumple la condición de este, como `(clave,
+    otros_valores)`, o None si entra acá (Extruir: una cara de otro plano es el «Hasta objeto», B-338). Entra sola en
+    ese campo, reemplazando lo que tenía; tocarla otra vez la saca."""
 
     def __init__(self, clave, etiqueta, filtros, minimo=1, maximo=1, texto_boton="", oculta=False, sin_resalte=False,
-                 filtros_si=None, **kw):
+                 filtros_si=None, desvio=None, **kw):
         super().__init__(clave, etiqueta, [], **kw)
         self.filtros, self.minimo, self.maximo, self.texto_boton = set(filtros), minimo, maximo, texto_boton
-        self.oculta, self.sin_resalte, self.filtros_si = oculta, sin_resalte, filtros_si
+        self.oculta, self.sin_resalte, self.filtros_si, self.desvio = oculta, sin_resalte, filtros_si, desvio
 
 
 class ListaSeleccion(Seleccion):
@@ -1427,6 +1430,14 @@ class PanelComando(QFrame):
             pass
         lista = list(self.valores.get(campo.clave) or [])
         repetida = next((h for h in lista if h["ref"] == hit["ref"]), None)
+        destino = campo.desvio(self.valores, hit, self.ctx) if campo.desvio and grupo is None and repetida is None else None
+        if destino is not None:
+            clave, otros = destino
+            tenia = self.valores.get(clave) or []
+            quedan = [h for h in tenia if h["ref"] != hit["ref"]]
+            self.set_valores(dict(otros, **{clave: [hit]}) if len(quedan) == len(tenia) else {clave: quedan})
+            self.comando.al_cambiar(self, clave)
+            return
         if grupo is None and "perfil" in campo.filtros:
             try:
                 if self.visor.es_hueco_texto(hit):     # el hueco de la «o» de un texto es aire: no se elige
