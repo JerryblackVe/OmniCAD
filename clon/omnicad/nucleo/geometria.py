@@ -1344,6 +1344,17 @@ def caja_envolvente(forma):
     return caja
 
 
+def caja_aproximada(forma):
+    """Caja barata, algo más grande que `caja_envolvente` (polos de las curvas o la malla ya hecha, más la
+    tolerancia): sirve para medir el tamaño de una pieza, no sus bordes. B-335: la exacta tardaba 90 ms por cuerpo de
+    un STEP pesado (33 s con 379 cuerpos) solo para elegir el detalle de la malla."""
+    b = _caja_occ(forma, 0.0, holgada=True)
+    if b is None:
+        return None
+    p0, p1 = b.CornerMin(), b.CornerMax()
+    return (p0.X(), p0.Y(), p0.Z()), (p1.X(), p1.Y(), p1.Z())
+
+
 def punto_toca(forma, punto, tolerancia=1e-6):
     """¿El punto está sobre la forma (o dentro de ella si es un sólido), con esa tolerancia?"""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex

@@ -46,6 +46,9 @@ def caja_envolvente(forma):
     return _caja(forma)
 
 
+caja_aproximada = caja_envolvente      # la caja del motor propio ya es barata
+
+
 @lru_cache(maxsize=32)
 def _caja(forma):
     return tuple(tuple(p) for p in forma.caja())

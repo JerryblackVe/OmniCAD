@@ -39,6 +39,17 @@ def test_deflexion_automatica_sigue_al_tamano_con_topes():
     assert visor3d.deflexion_automatica(media) == pytest.approx(173.205 * visor3d.FACTOR_DETALLE_AUTO, rel=1e-3)
 
 
+def test_deflexion_automatica_no_mide_la_caja_exacta(monkeypatch):
+    """B-335: la caja exacta tardaba 90 ms por cuerpo de un STEP pesado (33 s con 379) solo para elegir el detalle."""
+    c = geo.cilindro(10, 30, (0, 0, 0))
+    mn, mx = (np.asarray(p) for p in geo.caja_envolvente(c))
+    an, ax = (np.asarray(p) for p in geo.caja_aproximada(c))
+    assert (an <= mn + 1e-6).all() and (ax >= mx - 1e-6).all()        # más grande o igual, nunca más chica
+    monkeypatch.setattr(geo, "caja_envolvente", lambda *a: pytest.fail("midió la caja exacta"))
+    esperada = np.linalg.norm(mx - mn) * visor3d.FACTOR_DETALLE_AUTO        # 41,2 mm de diagonal: entre los topes
+    assert visor3d.deflexion_automatica(c) == pytest.approx(esperada, rel=0.05)
+
+
 def test_niveles_de_detalle_ordenados():
     c = geo.cilindro(10, 30, (0, 0, 0))
     cuentas = [_triangulos(c, *DETALLES[n], rehacer=True) for n in ("bajo", "medio", "alto")]
@@ -244,6 +255,26 @@ def test_de_lejos_se_dibuja_una_malla_mas_gruesa_y_de_cerca_la_fina(visor):
     visor.transformaciones = {}
     visor.encuadrar()
     assert visor.triangulos_dibujados() == fina
+
+
+def test_el_detalle_a_distancia_repinta_una_vez_al_terminar(visor, monkeypatch):
+    """B-335: cada vuelta del cálculo repintaba y, con 379 cuerpos a 0,3 s por cuadro, la ventana quedaba trabada ~45 s
+    después de abrir un STEP. Las mallas gruesas se muestran juntas al terminar."""
+    visor.resize(800, 600)
+    visor.set_modelo(_estado_cilindro())
+    visor.encuadrar()
+    visor.distancia *= 30
+    visor.triangulos_dibujados()
+    assert visor._lod_pendientes
+    repintes = []
+    monkeypatch.setattr(visor, "update", lambda *a: repintes.append(1))
+    monkeypatch.setattr(visor3d, "PRESUPUESTO_LOD_S", -1.0)      # una vuelta sin tiempo: queda todo pendiente
+    visor._calcular_lod()
+    assert visor._lod_pendientes and repintes == []
+    monkeypatch.setattr(visor3d, "PRESUPUESTO_LOD_S", 1.0)
+    visor._calcular_lod()
+    visor._t_lod.stop()
+    assert not visor._lod_pendientes and repintes == [1]
 
 
 def test_el_lienzo_de_render_sin_glsl_dibuja_como_el_visor(monkeypatch):
