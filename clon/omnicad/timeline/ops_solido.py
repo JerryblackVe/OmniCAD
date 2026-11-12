@@ -520,8 +520,13 @@ class OpAgujero(_OpCrear):
             if aviso:
                 ctx.aviso(aviso)
         antes = {cid: c.forma for cid, c in estado.cuerpos.items()}
+        nombres = {cid: c.nombre for cid, c in estado.cuerpos.items()}
         afectados = aplicar_resultado(estado, ctx, self.id, geo.unir_todos(herramientas), "cortar",
                                       p.get("objetivos") or "")
+        vacios = [nombres[c] for c in afectados if c in antes and c not in estado.cuerpos]
+        if vacios:       # B-346: un agujero no borra cuerpos (el corte general sí, con aviso): es un error, no un paso verde
+            raise ErrorOperacion(f"El agujero deja sin material a {', '.join(vacios)}: es más grande que el cuerpo. "
+                                 "Achicá el diámetro o la profundidad.")
         self._registrar_usados(afectados)
         _sc().exigir_agujero_sin_pellizco([antes[c] for c in afectados if c in antes],
                                           [estado.cuerpos[c].forma for c in afectados if c in estado.cuerpos])
