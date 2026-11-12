@@ -602,12 +602,13 @@ class CaraDesfase(Comando):
     verificar = staticmethod(_con_cuerpos)
 
     def campos(self, ctx):
-        return [Seleccion("caras", "Caras", {"cara"}, maximo=None), Expresion("distancia", "Distancia", "1 mm"),
+        return [Seleccion("caras", "Caras", {"cara"}, maximo=None), Expresion("distancia", "Distancia", "0 mm"),
                 Casilla("tangente", "Cadena tangente", True)]
 
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras.")
-        ctx.evaluar(v["distancia"])
+        if ctx.evaluar(v["distancia"]) == 0:
+            raise ErrorComando("La distancia de desfase no puede ser cero: arrastrá la flecha o escribí una distancia.")
         return self.crear_op(OpDesfaseCara, v, ctx, caras=refs(v, "caras"), distancia=v["distancia"],
                              tangente=v["tangente"])
 
@@ -632,14 +633,15 @@ class PulsarTirar(Comando):
         etiqueta = lambda v: {frozenset({"cara"}): "Distancia", frozenset({"arista"}): "Radio"}.get(  # noqa: E731
             frozenset(_tipos_elegidos(v)), "Distancia / radio")
         return [Seleccion("objetos", "Cara o arista", {"cara", "arista"}, maximo=None),
-                Expresion("distancia", "Distancia / radio", "1 mm", etiqueta_si=etiqueta)]
+                Expresion("distancia", "Distancia / radio", "0 mm", etiqueta_si=etiqueta)]
 
     def construir(self, v, ctx):
         sel = exigir(v, "objetos", "Seleccioná una cara o una arista.")
         tipos = {h["ref"]["tipo"] for h in sel}
         if len(tipos) > 1:
             raise ErrorComando("Elegí solo caras o solo aristas.")
-        ctx.evaluar(v["distancia"])
+        if ctx.evaluar(v["distancia"]) == 0:
+            raise ErrorComando("La distancia o el radio no puede ser cero: arrastrá la flecha o escribí un valor.")
         if tipos == {"cara"}:
             op = self.crear_op(OpDesfaseCara, v, ctx, caras=refs(v, "objetos"), distancia=v["distancia"],
                                origen="pulsar_tirar")
@@ -694,7 +696,7 @@ class Desfase(Comando):
         return [Seleccion("objetos", "Caras, aristas o curvas", {"cara", "arista", "curva_boceto"}, maximo=None),
                 Seleccion("plano", "Plano (opcional)", {"cara", "plano"}, minimo=0, visible_si=_con_aristas,
                           ayuda="Dónde se hace el desfase; sin elegir, el plano que contiene a todas las aristas."),
-                Expresion("distancia", "Distancia", "1 mm"),
+                Expresion("distancia", "Distancia", "0 mm"),
                 Casilla("tangente", "Cadena tangente", True, visible_si=_con_caras),
                 Casilla("simetrico", "Simétrico", False, visible_si=_con_aristas),
                 Opciones("esquinas", "Esquinas", {"redondas": "Redondas", "vivas": "Vivas"}, visible_si=_con_aristas),
@@ -712,7 +714,8 @@ class Desfase(Comando):
         exigir(v, "objetos", "Seleccioná caras, aristas o curvas.")
         if _con_caras(v) and _con_aristas(v):
             raise ErrorComando("Elegí solo caras (desfase de cara) o solo aristas y curvas (desfase de aristas).")
-        ctx.evaluar(v["distancia"])
+        if ctx.evaluar(v["distancia"]) == 0:
+            raise ErrorComando("La distancia de desfase no puede ser cero: arrastrá la flecha o escribí una distancia.")
         if _con_caras(v):
             op = self.crear_op(OpDesfaseCara, v, ctx, caras=refs(v, "objetos"), distancia=v["distancia"],
                                tangente=v["tangente"])
@@ -879,7 +882,7 @@ class MoverCopiar(Comando):
                       ayuda="Centro de giro. Sin selección: el centro de los cuerpos."),
             Seleccion("direccion", "Dirección", {"eje", "arista_lineal", "cara_plana", "plano"}, minimo=0,
                       visible_si=t("traslacion"), ayuda="Sin selección: ejes X, Y, Z del diseño."),
-            Expresion("distancia", "Distancia", "10 mm", visible_si=lambda v: v.get("tipo") == "traslacion"
+            Expresion("distancia", "Distancia", "0 mm", visible_si=lambda v: v.get("tipo") == "traslacion"
                       and bool(v.get("direccion"))),
             Expresion("dx", "Distancia X", "0 mm", grupo="Traslación", visible_si=lambda v: v.get("tipo") == "libre" or (
                 v.get("tipo") == "traslacion" and not v.get("direccion"))),
@@ -910,6 +913,14 @@ class MoverCopiar(Comando):
         exigir({"bocetos": enteros} if enteros else v, "caras" if por_caras else "bocetos" if por_bocetos else "cuerpos",
                "Seleccioná las caras a mover." if por_caras else "Seleccioná las curvas de los bocetos a mover."
                if por_bocetos else "Seleccioná los cuerpos a mover.")
+        if v.get("tipo") == "traslacion":
+            claves = ("distancia",) if v.get("direccion") else ("dx", "dy", "dz")
+            if all(ctx.evaluar(v.get(k) or "0") == 0 for k in claves):
+                raise ErrorComando("La traslación no puede ser cero: arrastrá una flecha o escribí una distancia.")
+        elif v.get("tipo") == "libre" and not v.get("copiar"):
+            if (all(ctx.evaluar(v.get(k) or "0") == 0 for k in ("dx", "dy", "dz"))
+                    and all(ctx.evaluar(v.get(k) or "0", ANGULO) == 0 for k in ("rx", "ry", "rz"))):
+                raise ErrorComando("Indicá una distancia o un ángulo distinto de cero para mover el objeto.")
         p = {k: v.get(k) for k in ("tipo", "dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z",
                                     "copiar", "ligera")}
         p.update(cuerpos=[] if por_caras or por_bocetos else _cuerpos(v), caras=refs(v, "caras") if por_caras else [],

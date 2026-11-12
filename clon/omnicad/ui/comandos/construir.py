@@ -181,7 +181,7 @@ class GeometriaConstruccion(Comando):
                 OpcionesVivas("tipo_distancia", "Tipo de extensión", _tipos_distancia, "proporcional", visible_si=_ve_tipo_distancia),
                 Seleccion("objeto", "Objeto", PUNTO, minimo=0, texto_boton="Seleccionar", visible_si=_ve_objeto,
                           etiqueta_si=lambda v: "Objeto" if v.get("metodo") == "plano_desfase" else "Objeto de referencia"),
-                Expresion("distancia", "Distancia", "10 mm", visible_si=_ve_distancia),
+                Expresion("distancia", "Distancia", "0 mm", visible_si=_ve_distancia),
                 Expresion("posicion", "Distancia (0 a 1)", "0.5", ESCALAR, visible_si=_ve_posicion),
                 Expresion("angulo", "Ángulo", "0 deg", ANGULO, visible_si=_ve_angulo),
                 Expresion("desfase", "Desfase", "0 mm", visible_si=_ve_desfase,
@@ -237,6 +237,8 @@ class GeometriaConstruccion(Comando):
             lista += refs(v, k)
         if _ruta_eje(v) and len(lista) > 1:
             raise ErrorComando("Un eje no se encadena: elegí solo el eje o solo aristas.")
+        if metodo == "plano_desfase" and v.get("extension") == "distancia" and ctx.evaluar(v["distancia"]) == 0:
+            raise ErrorComando("La distancia de desfase no puede ser cero: arrastrá la flecha o escribí una distancia.")
         params = {"tipo": tipo, "refs": lista}
         for k, t, ver in VALORES:
             if k in clase.PARAMS and ver(v):

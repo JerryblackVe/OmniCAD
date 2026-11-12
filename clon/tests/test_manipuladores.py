@@ -107,6 +107,7 @@ def test_arrastrar_la_flecha_de_extruir_cambia_la_distancia_y_la_previa(app_qt):
     from omnicad.ui.comandos.solido import Extruir
     doc = _doc_rectangulo()
     panel, visor, estados = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
+    assert panel.valores["distancia"] == "0 mm"
     assert [m.ident for m in panel.manipuladores.manips][:1] == ["flecha:distancia"]
     assert "manipuladores" in visor._capas
     medio, d = _sobre_flecha(panel, "flecha:distancia")
@@ -115,7 +116,7 @@ def test_arrastrar_la_flecha_de_extruir_cambia_la_distancia_y_la_previa(app_qt):
     assert panel.manipuladores._hover == ("flecha:distancia", "flecha")
     _arrastrar(visor, medio, medio + d * 120)
     nueva = panel.ctx.evaluar(panel.valores["distancia"])
-    assert nueva > 12 and panel.widgets["distancia"].text() == panel.valores["distancia"]
+    assert nueva > 2 and panel.widgets["distancia"].text() == panel.valores["distancia"]
     assert panel.valores["distancia"].endswith(" mm")
     panel._calcular_previa()
     forma = _cuerpo(estados[-1]).forma
@@ -152,7 +153,7 @@ def test_la_caja_de_valor_edita_el_campo_y_lo_sigue(app_qt):
     doc = _doc_rectangulo()
     panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
     caja = panel.manipuladores.cajas["distancia"]
-    assert caja.parent() is visor and caja.text() == "10 mm" and not caja.isHidden()
+    assert caja.parent() is visor and caja.text() == "0 mm" and not caja.isHidden()
     caja.setFocus()
     caja.selectAll()
     QTest.keyClicks(caja, "25 mm")
@@ -253,6 +254,7 @@ def test_al_cerrar_el_panel_no_quedan_capas_ni_cajas(app_qt, cerrar):
     doc = _doc_rectangulo()
     ventana = _Ventana()
     panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]}, ventana)
+    panel.set_valor("distancia", "10 mm")
     panel._calcular_previa()
     assert visor.findChildren(CajaValor)
     getattr(panel, cerrar)()
