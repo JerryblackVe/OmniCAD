@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Comandos de ENSAMBLAR: nuevo componente, unión, unión como está, origen de unión, grupo rígido,
 accionar uniones, vínculo de movimiento y fijar componente."""
-from PySide6.QtWidgets import QHBoxLayout, QListWidget, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QListWidget, QPushButton, QVBoxLayout, QWidget
 
 from ...timeline.operaciones import ErrorOperacion
 from ...timeline.ops_ensamblar import (CLAVES_MOVIMIENTO, MODOS_POSICION, MOVIMIENTOS, TIPOS_UNION, OpAnclar,
@@ -12,7 +12,7 @@ from ...timeline.ops_ensamblar import (CLAVES_MOVIMIENTO, MODOS_POSICION, MOVIMI
                                        siguiente_accion)
 from ...timeline.parametros import ANGULO
 from ..comando import (Casilla, Comando, ErrorComando, Expresion, ListaSeleccion, Opciones, OpcionesVivas, Personalizado,
-                       Seleccion, exigir, hit_desde_ref, hits_cuerpos as _hits_cuerpos, ref1, refs)
+                       Seleccion, Texto, exigir, hit_desde_ref, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
 
 SNAP = {"cara", "arista", "vertice", "plano", "eje", "punto", "curva_boceto"}
@@ -280,11 +280,12 @@ class RestriccionComponentes(Comando):
                 Casilla("todas_caras", "Todas las caras", True, visible_si=lambda v: v.get("tipo") == "tangente",
                         ayuda="Activo: la superficie entera de la cara. Apagado: las dos caras tienen que llegar a tocarse."),
                 Casilla("voltear", "Voltear", ayuda="Invierte la orientación que sale sola (al ras ↔ enfrentadas; en Ángulo, da vuelta la geometría 1)."),
+                Texto("nombre_fila", "Nombre de la restricción", ayuda="Cómo se llama esta fila en el conjunto (vacío = «Restricción n»)."),
                 Personalizado("filas", "Restricciones del conjunto", self._crear_filas, defecto=[], ancho_completo=True)]
 
     # La tabla de Fusion: «Agregar» guarda la restricción de los campos como una fila del conjunto y los deja vacíos para la
     # siguiente; la fila de los campos al aceptar es la última. Las filas se resuelven todas a la vez.
-    CAMPOS_FILA = ("tipo", "ref1", "ref2", "modo1", "modo2", "ref1b", "ref2b", "ref_angulo", "desfase", "angulo", "todas_caras", "voltear")
+    CAMPOS_FILA = ("tipo", "ref1", "ref2", "modo1", "modo2", "ref1b", "ref2b", "ref_angulo", "desfase", "angulo", "todas_caras", "voltear", "nombre_fila")
     NOMBRES = {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro", "tangente": "Tangente"}
 
     def _crear_filas(self, panel):
@@ -301,8 +302,16 @@ class RestriccionComponentes(Comando):
         quitar.clicked.connect(lambda: self._quitar_fila(panel))
         botones.addWidget(agregar)
         botones.addWidget(quitar)
+        panel._edit_nombre, panel._edit_desfase = QLineEdit(), QLineEdit()
+        panel._edit_nombre.setPlaceholderText("Nombre de la fila elegida")
+        panel._edit_desfase.setPlaceholderText("Desfase (mm) o ángulo (grados) de la fila elegida")
+        panel._edit_nombre.editingFinished.connect(lambda: self._editar_fila(panel, "nombre_fila", panel._edit_nombre.text()))
+        panel._edit_desfase.editingFinished.connect(lambda: self._editar_fila(panel, None, panel._edit_desfase.text()))
+        panel._lista_filas.currentRowChanged.connect(lambda i: self._cargar_editores(panel, i))
         lay.addWidget(panel._lista_filas)
         lay.addLayout(botones)
+        lay.addWidget(panel._edit_nombre)
+        lay.addWidget(panel._edit_desfase)
         return caja
 
     def preparar_panel(self, panel):
@@ -310,10 +319,39 @@ class RestriccionComponentes(Comando):
 
     def _pintar_filas(self, panel):
         lista = panel._lista_filas
+        elegida = lista.currentRow()
         lista.clear()
         for i, f in enumerate(panel.valores.get("filas") or [], 1):
             par = "–".join((f.get(k) or [{}])[0].get("tipo", "?") for k in ("ref1", "ref2"))
-            lista.addItem(f"{i}. {self.NOMBRES.get(f.get('tipo') or 'alinear', '?')} · {par}")
+            lista.addItem(f"{i}. {f.get('nombre_fila') or self.NOMBRES.get(f.get('tipo') or 'alinear', '?')} · {par}")
+        lista.setCurrentRow(min(elegida, lista.count() - 1))      # clear() suelta la fila elegida: se la vuelve a elegir
+        self._cargar_editores(panel, lista.currentRow())
+
+    @staticmethod
+    def _clave_desfase(fila):
+        """Dónde guarda su desfase la fila: «angulo» en Ángulo, «desfase» en Alinear, ninguna en Centro y Tangente."""
+        return {"alinear": "desfase", "angulo": "angulo"}.get(fila.get("tipo") or "alinear")
+
+    def _cargar_editores(self, panel, i):
+        filas = panel.valores.get("filas") or []
+        fila = filas[i] if 0 <= i < len(filas) else None
+        clave = self._clave_desfase(fila) if fila else None
+        panel._edit_nombre.setEnabled(fila is not None)
+        panel._edit_desfase.setEnabled(clave is not None)
+        panel._edit_nombre.setText(fila.get("nombre_fila") or "" if fila else "")
+        panel._edit_desfase.setText(str(fila.get(clave) or "") if clave else "")
+
+    def _editar_fila(self, panel, clave, texto):
+        """Guarda el nombre o el desfase escrito en la fila elegida de la lista."""
+        filas, i = [dict(f) for f in panel.valores.get("filas") or []], panel._lista_filas.currentRow()
+        if not 0 <= i < len(filas):
+            return
+        clave = clave or self._clave_desfase(filas[i])
+        if clave is None or filas[i].get(clave) == texto:
+            return
+        filas[i][clave] = texto
+        panel.set_valores({"filas": filas})
+        self._pintar_filas(panel)
 
     def _agregar_fila(self, panel):
         v = panel.valores
@@ -321,7 +359,7 @@ class RestriccionComponentes(Comando):
             panel._mostrar("Elegí la geometría de los dos componentes antes de agregar otra restricción.")
             return
         fila = {k: list(v[k]) if isinstance(v.get(k), list) else v.get(k) for k in self.CAMPOS_FILA if k in v}
-        panel.set_valores({"filas": list(v.get("filas") or []) + [fila], "ref1": [], "ref2": [], "ref1b": [], "ref2b": [], "ref_angulo": []})
+        panel.set_valores({"filas": list(v.get("filas") or []) + [fila], "nombre_fila": "", "ref1": [], "ref2": [], "ref1b": [], "ref2b": [], "ref_angulo": []})
         panel._refrescar_seleccion()
         self._pintar_filas(panel)
 
@@ -355,7 +393,7 @@ class RestriccionComponentes(Comando):
                 raise ErrorComando("Centro: poné al menos un componente en «Entre dos caras».")
         return dict(tipo=v.get("tipo", "alinear"), ref1=ref1(v, "ref1"), ref2=ref1(v, "ref2"),
                     desfase="0 mm" if centro or v.get("tipo") == "tangente" else valor, voltear=bool(v.get("voltear")),
-                    ref_angulo=ref1(v, "ref_angulo") if angulo else None, **extra)
+                    ref_angulo=ref1(v, "ref_angulo") if angulo else None, nombre_fila=(v.get("nombre_fila") or "").strip(), **extra)
 
     def desde_op(self, op, ctx):
         def cargar(p):

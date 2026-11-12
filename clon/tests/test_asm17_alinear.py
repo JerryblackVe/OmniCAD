@@ -554,6 +554,24 @@ def test_filas_que_se_contradicen_dan_error_claro_y_el_documento_no_cambia(dos):
     assert "mismo componente 1" in r["mensaje"]
 
 
+def test_cada_fila_lleva_su_nombre_y_su_desfase_y_un_parametro_de_una_fila_extra_recalcula_el_paso(dos):
+    s, a, b = dos
+    _ll(s, "create_parameter", name="hueco", expression="2 mm")
+    _ll(s, "constrain_components", geometry1=">Z", geometry2=">Z", body1=b, body2=a, row_name="tapa",
+        rows=[{"geometry1": "<X", "geometry2": ">X", "body1": b, "body2": a, "offset": "hueco", "name": "lado"}])
+    op = next(o for o in s.doc.operaciones if o.TIPO == "restriccion")
+    assert op.p["nombre_fila"] == "tapa" and op.p["filas"][0]["nombre_fila"] == "lado"
+    assert "hueco" in op.expresiones() and s.doc.parametros_usados()["hueco"] == {op.nombre}
+    assert _caja(s, b)[0] == 12                                           # a 2 mm de la cara +X de A (que llega a x = 10)
+    _ll(s, "set_parameter", name="hueco", expression="5 mm")              # el parámetro solo lo cita el desfase de la fila extra
+    assert _caja(s, b)[0] == 15
+    _ll(s, "set_parameter", name="hueco", new_name="aire")                # renombrar lo actualiza dentro de la fila
+    assert next(o for o in s.doc.operaciones if o.TIPO == "restriccion").p["filas"][0]["desfase"] == "aire"
+    r = _falla(s, "constrain_components", "OPERATION_FAILED", geometry1=">Z", geometry2=">Z", body1=b, body2=a, row_name="tapa",
+               rows=[{"geometry1": ">Z", "geometry2": ">Z", "body1": b, "body2": a, "offset": 5, "name": "alto"}])
+    assert "1 «tapa», 2 «alto»" in r["mensaje"]                           # el error nombra las filas
+
+
 def test_las_filas_validan_sus_claves(dos):
     s, a, b = dos
     _falla(s, "constrain_components", "INVALID_ARGUMENTS", geometry1=">Z", geometry2=">Z", body1=b, body2=a, rows=[{"geometry1": ">Z"}])
@@ -593,17 +611,24 @@ def test_el_comando_de_la_ventana_arma_el_conjunto_con_la_tabla_de_filas_y_se_ed
         elegir("ref2", ">Z", a)
         QTest.mouseClick(boton("+ Agregar"), Qt.LeftButton)
         assert len(p.valores["filas"]) == 1 and not p.valores["ref1"] and p._lista_filas.item(0).text() == "1. Alinear · cara–cara"
+        p._lista_filas.setCurrentRow(0)                                      # editar la fila guardada: su nombre y su desfase
+        p._edit_nombre.setText("tapa")
+        p._edit_nombre.editingFinished.emit()
+        p._edit_desfase.setText("1 mm")
+        p._edit_desfase.editingFinished.emit()
+        assert p.valores["filas"][0]["nombre_fila"] == "tapa" and p.valores["filas"][0]["desfase"] == "1 mm"
+        assert p._lista_filas.item(0).text() == "1. tapa · cara–cara"
         elegir("ref1", "<X", b)
         elegir("ref2", ">X", a)
         p.set_valor("desfase", "2 mm")
         p.aceptar()
         assert v.panel is None
-        assert _caja(api.Sesion(v.doc), b) == [12, 25, 0, 22, 35, 10]
+        assert _caja(api.Sesion(v.doc), b) == [12, 25, 1, 22, 35, 11]   # la primera fila quedó a 1 mm de la tapa
         op = next(o for o in v.doc.operaciones if o.TIPO == "restriccion")
         assert len(op.p["filas"]) == 1 and len([o for o in v.doc.operaciones if o.TIPO == "restriccion"]) == 1
         v.editar_operacion(op.id)
         p = v.panel
-        assert len(p.valores["filas"]) == 1 and p.valores["desfase"] == "0 mm" and p._lista_filas.count() == 1
+        assert len(p.valores["filas"]) == 1 and p.valores["desfase"] == "1 mm" and p._lista_filas.count() == 1
         p._lista_filas.setCurrentRow(0)
         QTest.mouseClick(boton("✕ Quitar"), Qt.LeftButton)
         assert not p.valores["filas"] and p._lista_filas.count() == 0

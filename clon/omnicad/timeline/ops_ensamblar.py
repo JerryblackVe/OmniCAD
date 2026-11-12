@@ -1462,13 +1462,13 @@ class OpRestriccion(Operacion):
     el segundo: «Component 2 moves to Component 1»). `desfase` es la distancia (Alinear) o el ángulo (Ángulo, con
     `ref_angulo` opcional: la arista o el eje que fija el sentido). Centro: `modo1`/`modo2` son «simple» (la cara `ref1`/`ref2`)
     o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos, cilindros, esferas, conos, toros, aristas rectas o circulares y vértices; `todas_caras` apagado exige que las caras se toquen). `filas` suma más restricciones entre los mismos
-    dos componentes (el conjunto de la tabla de Fusion, cada una con los campos de arriba): se aplican en orden y se repite
+    dos componentes (el conjunto de la tabla de Fusion, cada una con los campos de arriba y su `nombre_fila`): se aplican en orden y se repite
     hasta que todas se cumplen a la vez; si no convergen, error que nombra la fila en conflicto. Lo que falta de Fusion: límites de
     desfase y resolver todas a la vez con las uniones."""
     TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
     PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None,
-              "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None, "todas_caras": True, "filas": []}
-    EXPRESIONES = ("desfase",)   # shortcut: el desfase de las `filas` extra no se declara aquí; un parámetro que solo ellas usen no las recalcula solo
+              "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None, "todas_caras": True, "nombre_fila": "", "filas": []}
+    EXPRESIONES = ("desfase",)
     OPCIONES = {"tipo": {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro", "tangente": "Tangente"},
                 "modo1": {"simple": "Simple", "entre_caras": "Entre dos caras"},
                 "modo2": {"simple": "Simple", "entre_caras": "Entre dos caras"}}
@@ -1476,6 +1476,10 @@ class OpRestriccion(Operacion):
     def dependencias(self):
         refs_ = [r for f in self._filas() for k in ("ref1", "ref2", "ref_angulo", "ref1b", "ref2b") if (r := f.get(k))]
         return (super().dependencias() | ent.dependencias_de(*refs_)) - {self.id}
+
+    def expresiones(self):
+        """El desfase de la fila principal y el de cada fila extra (un parámetro que solo ellas usen también recalcula el paso)."""
+        return super().expresiones() + [f["desfase"] for f in self.p.get("filas") or [] if isinstance(f.get("desfase"), str)]
 
     def _filas(self):
         """La restricción principal y las `filas` extra, cada una con todos sus campos."""
@@ -1497,7 +1501,8 @@ class OpRestriccion(Operacion):
                     _mover_componentes(estado, comps, m)
             if not sueltas:
                 return
-        raise ErrorOperacion(f"Las restricciones del conjunto se contradicen: las filas {', '.join(map(str, sueltas))} no se pueden cumplir "
+        nombres = [f"{i}" + (f" «{filas[i - 1]['nombre_fila']}»" if filas[i - 1].get("nombre_fila") else "") for i in sueltas]
+        raise ErrorOperacion(f"Las restricciones del conjunto se contradicen: las filas {', '.join(nombres)} no se pueden cumplir "
                              "a la vez. Cambiá la geometría o el desfase de alguna, o sacala.")
 
     def _movimiento(self, estado, ctx, p, orden):
