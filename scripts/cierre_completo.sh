@@ -13,12 +13,17 @@ RAIZ=$(cd "$(dirname "$0")/.." && pwd) || exit 1
 cd "$RAIZ/clon" || exit 1
 S="$RAIZ/evidencias/cierre_$(date +%F)"
 rm -rf "$S"; mkdir -p "$S"
-PY=.venv/Scripts/python.exe
-[ -x "$PY" ] || PY=/d/PROGRAMA/clon/.venv/Scripts/python.exe  # el worktree comparte el venv de main
+# Un worktree no tiene venv propio: usa el del repo principal (como scripts/worktree_item.sh).
+PRINCIPAL=$(cd "$(git rev-parse --path-format=absolute --git-common-dir)/.." && pwd)
+for PY in .venv/Scripts/python.exe .venv/bin/python "$PRINCIPAL/clon/.venv/Scripts/python.exe" \
+          "$PRINCIPAL/clon/.venv/bin/python" /d/PROGRAMA/clon/.venv/Scripts/python.exe; do [ -x "$PY" ] && break; done
+# En Linux (la VPS, sin nadie frente a la pantalla) lo que abre ventanas va con xvfb-run y no se espera inactividad.
+VENT=(); [ "$(uname -s)" = Linux ] && VENT=(xvfb-run -a)
 R="$S/resumen.txt"; inicio=$(date +%s)
 echo "inicio $(date '+%H:%M:%S') HEAD $(git rev-parse --short HEAD)" > "$R"
 espera_ocio() {
   local necesita=$1 tope=$2 t0; t0=$(date +%s)
+  [ "$(uname -s)" = Linux ] && return 0
   while true; do
     idle=$($PY -c "
 import ctypes, ctypes.wintypes as w
@@ -43,23 +48,23 @@ for p in "$S"/parte_*; do
   [ -s "$p" ] || continue
   n=$(basename "$p")
   mapfile -t archivos < "$p"
-  "${MEMORIA[@]}" $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest "${archivos[@]}" "${PARALELO[@]}" -q -W error -p no:cacheprovider --deselect "$MOTOR" --durations=0 --junitxml="$S/$n.xml" > "$S/$n.txt" 2>&1
+  "${MEMORIA[@]}" "${VENT[@]}" $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest "${archivos[@]}" "${PARALELO[@]}" -q -W error -p no:cacheprovider --deselect "$MOTOR" --durations=0 --junitxml="$S/$n.xml" > "$S/$n.txt" 2>&1
   echo "$n exit=$? | $(tail -n 1 "$S/$n.txt")" >> "$R"
 done
 # Abre otra app entera dentro de pytest: junto a una tanda pasa el tope de memoria de turno.py (MemoryError, 2026-11-01).
-$PY ../scripts/turno.py --plazo 900 -- $PY -m pytest "$MOTOR" -q -W error -p no:cacheprovider --durations=0 --junitxml="$S/motor.xml" > "$S/motor.txt" 2>&1
+"${VENT[@]}" $PY ../scripts/turno.py --plazo 900 -- $PY -m pytest "$MOTOR" -q -W error -p no:cacheprovider --durations=0 --junitxml="$S/motor.xml" > "$S/motor.txt" 2>&1
 echo "motor exit=$? | $(tail -n 1 "$S/motor.txt")" >> "$R"
 # Ranking de los tests y archivos lentos de toda la suite (paquete A de docs/plan_velocidad.md).
 $PY ../scripts/tiempos.py "$S" > "$S/tiempos.txt" 2>&1
 echo "tiempos exit=$? | $(head -n 1 "$S/tiempos.txt")" >> "$R"
-$PY ../scripts/prueba_ui/todo.py > "$S/ui.txt" 2>&1
+"${VENT[@]}" $PY ../scripts/prueba_ui/todo.py > "$S/ui.txt" 2>&1
 echo "ui exit=$? | $(grep -cE '[1-9][0-9]* con ✗' "$S/ui.txt") piezas con ✗" >> "$R"
 # El humo corre con la ventana transparente y sin cursor real ni foco (P-60): no espera que la PC quede sin uso.
-PYTHONIOENCODING=utf-8 OMNICAD_PRUEBA_VENTANA=minimizada $PY ../scripts/turno.py --plazo 900 -- $PY OmniCAD.py --prueba-humo > "$S/humo.txt" 2>&1
+PYTHONIOENCODING=utf-8 OMNICAD_PRUEBA_VENTANA=minimizada "${VENT[@]}" $PY ../scripts/turno.py --plazo 900 -- $PY OmniCAD.py --prueba-humo > "$S/humo.txt" 2>&1
 echo "humo exit=$? | $(tail -n 2 "$S/humo.txt" | tr '\n' ' ')" >> "$R"
 if espera_ocio 120 10800; then
   export PYTHONIOENCODING=utf-8
-  $PY ../scripts/prueba_ui/todo.py --ventana visible registro_uso asistente > "$S/ui_foco.txt" 2>&1
+  "${VENT[@]}" $PY ../scripts/prueba_ui/todo.py --ventana visible registro_uso asistente > "$S/ui_foco.txt" 2>&1
   echo "ui_foco exit=$? | $(tail -n 4 "$S/ui_foco.txt" | tr '\n' ' ')" >> "$R"
 else
   echo "ui_foco: NO corrio (la PC no quedo sin uso en 3 h)" >> "$R"
