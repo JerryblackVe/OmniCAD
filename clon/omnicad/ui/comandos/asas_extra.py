@@ -368,19 +368,21 @@ def _asas_solevacion(self, ctx, v):
 
 
 def _asas_rosca(self, ctx, v):
-    from ...nucleo.consultas import inicio_rosca
+    """P-135, como Fusion: sin «Longitud completa», una flecha en cada borde del tramo roscado (Desfase y Longitud)
+    sobre la pared de la primera cara, del lado que se ve (antes iban por el eje, en el centro)."""
+    from ...nucleo.solidos_crear import analizar_rosca
     mp = _mp()
-    if v.get("largo_completo") or not v.get("caras"):
-        return []
-    forma = _forma_de(ctx, v["caras"][0])
+    forma = _forma_de(ctx, v["caras"][0]) if v.get("caras") and not v.get("largo_completo") else None
     if forma is None:
         return []
-    datos = inicio_rosca(forma, bool(v.get("invertir")))
-    if datos is None:
-        return []
-    inicio, d = datos
-    return [mp.Flecha("desfase", inicio, d),
-            mp.Flecha("longitud", inicio + d * evaluar_o_cero(ctx, v.get("desfase")), d, minimo=0.0)]
+    info = analizar_rosca(None, forma)          # con la cara dada no mira el cuerpo
+    sentido = -info["eje"] if v.get("invertir") else info["eje"]
+    inicio = info["origen"] + info["eje"] * (info["zmax"] if v.get("invertir") else info["zmin"])
+    alto, radio = info["zmax"] - info["zmin"], -info["radio"] if info["interna"] else info["radio"]
+    desfase, largo = (evaluar_o_cero(ctx, v.get(k)) for k in ("desfase", "longitud"))
+    return [mp.FlechaCilindro("desfase", inicio, sentido, radio, minimo=0.0, maximo=max(0.0, alto - largo), estricto=False),
+            mp.FlechaCilindro("longitud", inicio + sentido * desfase, sentido, radio, giro=25.0, minimo=0.0,
+                              maximo=alto - desfase)]
 
 
 def _asas_tuberia(self, ctx, v):

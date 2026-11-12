@@ -192,16 +192,6 @@ def punto_y_tangente(forma, fraccion=0.5):
     return None
 
 
-def inicio_rosca(cara, invertir=False):
-    sup = BRepAdaptor_Surface(cara)
-    if sup.GetType() != GeomAbs_Cylinder:
-        return None
-    eje = sup.Cylinder().Axis()
-    loc = np.array([eje.Location().X(), eje.Location().Y(), eje.Location().Z()], float)
-    d = np.array([eje.Direction().X(), eje.Direction().Y(), eje.Direction().Z()], float)
-    return (loc + d * sup.LastVParameter(), -d) if invertir else (loc + d * sup.FirstVParameter(), d)
-
-
 def puntos_enganche_cara(cara, maximo=60):
     salida = [(np.array(geo.centro_masa(cara, True), float), "centro")]
 

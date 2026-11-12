@@ -466,6 +466,7 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 - **2026-11-10 · Fusionados de noche solo con `tests_afectados`:** B-271 (Parámetros cancela sus `_poblar` diferidos, `ui/dialogo_parametros.py`) y B-283 (la referencia de una arista recta guarda su `sentido` atado a la curva; `nucleo/referencias.py`, `timeline/entidades.py`). Falta: abrir y cerrar Parámetros en la ventana editando valores; con B-283, Revolver y los patrones con eje en una arista de un cuerpo que un parámetro gira (sin test propio), y abrir un `.omnicad` viejo con ejes en aristas.
 - **2026-11-10 · B-298 (OpenCode Sol):** la holgura negativa en Rosca y Agujero roscado da «no puede ser negativa». Falta en la ventana: teclear -0,8 en «Holgura impresión 3D» del panel de Rosca y del Agujero roscado y ver el mensaje en rojo en el pie (antes la previa quedaba lisa y muda).
 - **2026-11-12 · P-145 (E1):** la previa de Rosca modelada pinta de azul los tramos de afuera y las crestas. Falta: la humo y mirar en la ventana una rosca interna (agujero roscado) y una larga (M7×50), que el azul no tape nada ni tarde.
+- **2026-11-12 · P-135 (E1):** flechas de Desfase y Longitud de Rosca sobre la pared (`FlechaCilindro`). Falta en la ventana: la prueba de humo, la pieza de Rosca de `prueba_ui` (arrastrar las dos flechas, pasar por 0, agujero roscado), y mirar que no se escondan detrás de la rosca modelada.
 
 ## Archivos de prueba de referencia (fuera de git)
 
