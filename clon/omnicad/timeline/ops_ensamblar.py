@@ -1323,6 +1323,25 @@ def _alinear(e1, e2, desfase, voltear):
     return _tras(paso + n2 * desfase) @ giro
 
 
+def _marco_plano(e, e_b, version=2):
+    """Marco del plano de referencia de Centro: el de la cara o plano `e` (modo simple) o el plano medio entre `e` y
+    `e_b` (modo «entre dos caras»)."""
+    if e_b is not None:
+        return _marco_entre_caras(e, e_b, version)
+    if _clase_de_alinear(e) != "plano":
+        raise ErrorOperacion("Centro: elegí caras planas o planos.")
+    return _marco(e, "centro", version)[0]
+
+
+def _centrar(F1, F2, voltear):
+    """Movimiento (4x4, mundo) que deja el plano de `F1` coplanar con el de `F2` (ASM-17 › Centro de Constrain Components:
+    una cara, o el plano medio de dos, queda a medio camino de las dos caras del otro componente). Como Alinear de dos
+    planos, con la orientación que menos gira; «Voltear» la invierte. No desliza en el plano."""
+    o1, o2, n2 = F1[:3, 3], F2[:3, 3], _unit(F2[:3, 2])
+    sentido = (-1.0 if float(F1[:3, 2] @ n2) < 0 else 1.0) * (-1.0 if voltear else 1.0)
+    return _tras(n2 * float((o2 - o1) @ n2)) @ _rotar_a(F1[:3, 2], sentido * n2, o1)
+
+
 def _direccion_de(e):
     """Dirección unitaria de la geometría para Ángulo: la normal de un plano o cara plana, o el eje de un cilindro, una
     arista o un eje de construcción."""
@@ -1354,22 +1373,27 @@ def _angular(e1, e2, grados, voltear, e_ref=None):
 
 class OpRestriccion(Operacion):
     """ENSAMBLAR › Restricción de componentes [ASM-17, Constrain Components]: de los cuatro tipos de Fusion hoy están
-    Alinear y Ángulo. Mueve el componente de `ref1` respecto de `ref2` (si el primero está fijo o es la raíz, se mueve
+    Alinear, Ángulo y Centro. Mueve el componente de `ref1` respecto de `ref2` (si el primero está fijo o es la raíz, se mueve
     el segundo: «Component 2 moves to Component 1»). `desfase` es la distancia (Alinear) o el ángulo (Ángulo, con
-    `ref_angulo` opcional: la arista o el eje que fija el sentido). Lo que falta de Fusion: Centro, Tangente, filas de
+    `ref_angulo` opcional: la arista o el eje que fija el sentido). Centro: `modo1`/`modo2` son «simple» (la cara `ref1`/`ref2`)
+    o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Lo que falta de Fusion: Tangente, filas de
     varias restricciones (conjuntos), límites de desfase y resolver todas a la vez."""
     TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
-    PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None}
+    PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None,
+              "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None}
     EXPRESIONES = ("desfase",)
-    OPCIONES = {"tipo": {"alinear": "Alinear", "angulo": "Ángulo"}}
+    OPCIONES = {"tipo": {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro"},
+                "modo1": {"simple": "Simple", "entre_caras": "Entre dos caras"},
+                "modo2": {"simple": "Simple", "entre_caras": "Entre dos caras"}}
 
     def dependencias(self):
-        return (super().dependencias() | ent.dependencias_de(self.p["ref1"], self.p["ref2"], self.p.get("ref_angulo"))) - {self.id}
+        return (super().dependencias() | ent.dependencias_de(self.p["ref1"], self.p["ref2"], self.p.get("ref_angulo"),
+                                                                 self.p.get("ref1b"), self.p.get("ref2b"))) - {self.id}
 
     def ejecutar(self, estado, ctx):
         p = self.p
-        if p["tipo"] not in ("alinear", "angulo"):
-            raise ErrorOperacion(f"La restricción «{p['tipo']}» todavía no está: hoy Alinear y Ángulo.")
+        if p["tipo"] not in ("alinear", "angulo", "centro"):
+            raise ErrorOperacion(f"La restricción «{p['tipo']}» todavía no está: hoy Alinear, Ángulo y Centro.")
         if not p["ref1"] or not p["ref2"]:
             raise ErrorOperacion("Elegí la geometría de los dos componentes.")
         exigir_numero(p["desfase"])
@@ -1378,10 +1402,13 @@ class OpRestriccion(Operacion):
         invertido = False
         if c1 == c2:
             raise ErrorOperacion("Las dos selecciones están en el mismo componente: elegí geometría de otro componente.")
+        e1b = e2b = None
+        if p["tipo"] == "centro":
+            e1b, e2b = self._segundas_caras(estado, e1, e2, c1, c2)
         if not c1 or es_fijo(estado, c1):                   # «Component 2 moves to Component 1»
             if not c2 or es_fijo(estado, c2):
                 raise ErrorOperacion("Los dos componentes están fijos o son la raíz: ninguno se puede mover.")
-            e1, e2, c1, c2 = e2, e1, c2, c1
+            e1, e2, c1, c2, e1b, e2b = e2, e1, c2, c1, e2b, e1b
             invertido = True
         comps = grupo_rigido(estado, c1)
         fijos = [c for c in comps if es_fijo(estado, c)]
@@ -1391,11 +1418,34 @@ class OpRestriccion(Operacion):
         self._usados = (comps | {c2}) - {"", self.id}
         if p["tipo"] == "alinear":
             m = _alinear(e1, e2, ctx.evaluar(p["desfase"]), bool(p["voltear"]))
+        elif p["tipo"] == "centro":
+            m = _centrar(_marco_plano(e1, e1b), _marco_plano(e2, e2b), bool(p["voltear"]))
         else:
             e_ref = _resolver(p["ref_angulo"], estado) if p.get("ref_angulo") else None
             grados = ctx.evaluar(p["desfase"], ANGULO)
             m = _angular(e1, e2, -grados if invertido and e_ref is not None else grados, bool(p["voltear"]), e_ref)
         _mover_componentes(estado, comps, m)
+
+    def _segundas_caras(self, estado, e1, e2, c1, c2):
+        """(e1b, e2b) de Centro: la segunda cara de cada componente que está en «entre_caras» (None si es «simple»).
+        Fusion exige «Entre dos caras» en al menos uno."""
+        p, salida = self.p, []
+        for n, e, c in (("1", e1, c1), ("2", e2, c2)):
+            modo = p.get("modo" + n) or "simple"
+            if modo not in ("simple", "entre_caras"):
+                raise ErrorOperacion(f"Centro: modo de posición desconocido «{modo}». Modos: simple, entre_caras.")
+            if modo == "simple":
+                salida.append(None)
+                continue
+            if not p.get("ref" + n + "b"):
+                raise ErrorOperacion(f"Centro: el componente {n} está en «Entre dos caras»: elegí su segunda cara.")
+            eb = _resolver(p["ref" + n + "b"], estado)
+            if (_componente_de(estado, eb) or "") != c:
+                raise ErrorOperacion(f"Centro: las dos caras del componente {n} tienen que ser del mismo componente.")
+            salida.append(eb)
+        if salida == [None, None]:
+            raise ErrorOperacion("Centro: al menos un componente tiene que estar en «Entre dos caras» (centra entre dos caras del otro).")
+        return salida
 
 
 registrar_operacion(OpComponente, OpUnion, OpOrigenUnion, OpGrupoRigido, OpVinculoMovimiento, OpAnclar,
