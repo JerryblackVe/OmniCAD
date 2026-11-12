@@ -1795,6 +1795,14 @@ def dividir_cuerpo(forma, herramienta, *, extender=True):
             piezas = geo.caras(resultado)
     if len(piezas) < 2:
         raise geo.ErrorGeometria("La herramienta no divide el cuerpo" + ("." if extender else " (probá extenderla)."))
+    if geo.solidos(resultado):
+        # B-184: una mitad de un cuerpo importado de STEP salía al revés (volumen negativo) y el paso daba ok
+        piezas = [TopoDS.Solid(s.Reversed()) if geo.volumen(s) < 0 else s for s in piezas]
+        total, partes = abs(geo.volumen(forma)), sum(geo.volumen(s) for s in piezas)
+        if abs(partes - total) > 1e-2 * max(total, 1.0):        # la integración por defecto erra poco, el signo no
+            raise geo.ErrorGeometria(f"Dividir cuerpo: las partes suman {partes:.6g} mm³ y el cuerpo tiene {total:.6g} mm³: "
+                                     "el cuerpo tiene la cáscara abierta o al revés. Revisalo con Inspeccionar › Revisar "
+                                     "geometría (check_geometry).")
 
     def clave(s):
         superficie = not geo.solidos(s)
