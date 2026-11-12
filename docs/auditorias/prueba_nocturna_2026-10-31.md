@@ -320,6 +320,7 @@ Hecha el 2026-11-01, sin commitear. Pieza nueva `texto_curva` en `todo.py`. Qued
 - Todas las piezas que cuentan perfiles: el texto se calcula aparte de las curvas (`perfiles.detectar_boceto`), así que sus perfiles ahora se pisan con los de abajo.
 - B-152: los textos nuevos son más grandes (la altura es el alto de la A). Abrir un documento viejo con texto y mirar que no cambie; todas las piezas que escriben texto.
 - ⚠ Rendimiento de `_arreglo_coherente` con 200 W sobre un círculo: lo mide `tests/test_boc28_rust.py`, sin correr con carga.
+- B-367/B-251 (2026-11-12, E1): Rosca rellena o tornea toda la cara al Ø del tamaño (`nucleo/solidos_crear.py` › `rosca`): correr todos los tests de rosca, agujero y fijaciones, y la caza `tema rosca`.
 
 ## 3g. Tarea nueva: parámetros (PAR-1 a PAR-11, B-138 a B-143)
 

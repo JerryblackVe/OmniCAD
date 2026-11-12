@@ -706,7 +706,9 @@ def test_rosca_con_clase():
     # filete, de P/8 de ancho más lo que abren los flancos
     h = (10 - 9.85) / 2
     cresta = h * (1.5 / 8 + h * math.tan(math.radians(30))) * 2 * math.pi * (5 - h / 2) * 6 / 1.5
-    assert con_6g - basica == pytest.approx(area * 2 * math.pi * (5 + d1 / 2) / 2 * 6 / 1.5 + cresta, rel=0.05)
+    # B-251, como Fusion: el tamaño pone el Ø de toda la cara, así que los 4 mm de afuera del tramo también se tornean a 9,85
+    afuera = math.pi * (5 ** 2 - (9.85 / 2) ** 2) * (10 - 6)
+    assert con_6g - basica == pytest.approx(area * 2 * math.pi * (5 + d1 / 2) / 2 * 6 / 1.5 + cresta + afuera, rel=0.05)
     with pytest.raises(g.ErrorGeometria):
         sc.rosca(cil, designacion="M10", longitud=6, clase="6H")              # clase de agujero en un eje
 
