@@ -326,6 +326,11 @@ class Comando:
         Se calcula junto con la vista previa del modelo (no en cada movimiento del ratón)."""
         return None
 
+    def oculta_seleccion(self, valores):
+        """True si, con estos valores, la vista previa reemplaza lo elegido (p. ej. la rosca modelada) y el resalte de
+        la selección taparía su material: el panel lo quita mientras dure la previa."""
+        return False
+
 
 def hit_desde_ref(ref, estado):
     """Selección (como la que arma el visor al hacer clic) a partir de una referencia guardada: sirve
@@ -937,6 +942,9 @@ class PanelComando(QFrame):
         self._t_previa = QTimer(self, singleShot=True, interval=0)
         self._t_reubicar = QTimer(self, singleShot=True, interval=0, timeout=self._reubicar_ahora)   # B-113: un mensaje de varias líneas asienta su alto recién al volver al bucle de eventos
         self._t_previa.timeout.connect(self._calcular_previa)
+        if type(comando).oculta_seleccion is not Comando.oculta_seleccion:     # B-297: la previa reemplaza lo elegido
+            self.previa.connect(lambda estado: self.visor.set_capa("seleccion", None)
+                if self.cerrando or estado is not None and comando.oculta_seleccion(self.valores) else self._refrescar_seleccion())
         self.manipuladores = None            # GestorManipuladores si el comando tiene asas en la vista
         if (type(comando).manipuladores is not Comando.manipuladores
                 or type(comando).previa_vista is not Comando.previa_vista):

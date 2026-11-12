@@ -933,6 +933,9 @@ class Rosca(Comando):
                 Expresion("holgura_3d", "Holgura impresión 3D", "0 mm", visible_si=modelada, avanzado=True,
                           ayuda="Desfase radial extra de los flancos, para que la rosca impresa enrosque.")]
 
+    def oculta_seleccion(self, valores):
+        return bool(valores.get("modelada"))      # B-297: la cara elegida no tiñe la rosca modelada
+
     def _fila_biblioteca(self, panel):
         w = QWidget()
         fila = QHBoxLayout(w)
