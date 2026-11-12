@@ -307,11 +307,11 @@ class Flecha(Manipulador):
     sobre la recta (dividido por `factor`, p. ej. 0,5 en la extrusión simétrica de longitud total)."""
 
     def __init__(self, clave, origen, direccion, factor=1.0, minimo=None, maximo=None, caja=True, color=AMARILLO,
-                 hacia_afuera=False, estricto=False):
+                 hacia_afuera=False, estricto=None):
         self.clave, self.origen, self.direccion = clave, np.asarray(origen, float), unitario(direccion)
         self.factor, self.minimo, self.maximo, self.caja, self.color = factor, minimo, maximo, caja, color
         self.hacia_afuera = hacia_afuera   # cara movida: la flecha sigue la normal de la cara, también con valor negativo (P-137)
-        self.estricto = estricto           # los topes dan error justo ahí: ver `_tope`
+        self.estricto = estricto           # los topes dan error justo ahí (`_tope`); None = solo un tope en 0 (B-267)
         self.ident = f"flecha:{clave}"
 
     inclinable = True                  # si apunta a la cámara se dibuja (y se arrastra) inclinada hacia un costado
@@ -375,9 +375,9 @@ class Flecha(Manipulador):
         # B-267: un tope en 0 es «no cruza el cero», y 0 no es una medida válida: también es estricto
         paso = 10.0 ** -g._decimales
         if self.minimo is not None:
-            v = max(_tope(self.minimo, paso, self.estricto or self.minimo == 0, 1), v)
+            v = max(_tope(self.minimo, paso, self.minimo == 0 if self.estricto is None else self.estricto, 1), v)
         if self.maximo is not None:
-            v = min(_tope(self.maximo, paso, self.estricto or self.maximo == 0, -1), v)
+            v = min(_tope(self.maximo, paso, self.maximo == 0 if self.estricto is None else self.estricto, -1), v)
         return v
 
     def cajas(self, g, arrastre):
@@ -406,6 +406,33 @@ class AsaRadial(Flecha):
         if not ok[0]:
             return math.inf, None
         return max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0), "asa"
+
+
+class FlechaCilindro(Flecha):
+    """Flecha que corre a lo largo de una cara cilíndrica, apoyada en la pared que se ve (las de Desfase y Longitud de
+    la Rosca, P-135, como Fusion). `origen` es un punto del eje; `radio` < 0 = agujero: se apoya en la pared de atrás.
+    `giro` (grados) la corre hacia la derecha de la pantalla, para que dos flechas del mismo eje no se pisen."""
+
+    def __init__(self, clave, origen, direccion, radio, giro=0.0, **kw):
+        super().__init__(clave, origen, direccion, **kw)
+        self.eje_punto, self.radio, self.giro = self.origen, float(radio), math.radians(giro)
+
+    def _apoyar(self, g):
+        hacia_ojo, derecha = (np.asarray(g.visor.R[i], float) for i in (2, 0))
+        lado = hacia_ojo * math.cos(self.giro) + derecha * math.sin(self.giro)
+        lado = lado - self.direccion * float(lado @ self.direccion)
+        if float(np.linalg.norm(lado)) < 1e-6:          # mirando a lo largo del eje: a la derecha de la pantalla
+            lado = derecha - self.direccion * float(derecha @ self.direccion)
+        n = float(np.linalg.norm(lado))
+        self.origen = self.eje_punto + (lado * (self.radio / n) if n > 1e-9 else 0.0)
+
+    def _geom(self, g):
+        self._apoyar(g)
+        return super()._geom(g)
+
+    def empezar(self, g, pos, sub):
+        self._apoyar(g)
+        return super().empezar(g, pos, sub)
 
 
 class Posicion(Manipulador):

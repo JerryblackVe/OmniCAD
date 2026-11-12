@@ -921,6 +921,7 @@ class Rosca(Comando):
         return [Seleccion("caras", "Caras", {"cara"}, maximo=None),
                 Casilla("modelada", "Modelado"),
                 Casilla("largo_completo", "Longitud completa", True),
+                Expresion("desfase", "Desfase", "0 mm", visible_si=lambda v: not v.get("largo_completo")),
                 Expresion("longitud", "Longitud", "10 mm", visible_si=lambda v: not v.get("largo_completo")),
                 Personalizado("biblioteca", "Biblioteca", self._fila_biblioteca),
                 *_campos_rosca("tipo_rosca", _familias(), lambda v: True, recuerdo, automatico=True,
@@ -929,8 +930,6 @@ class Rosca(Comando):
                 Opciones("mano", "Dirección", {"derecha": "Mano derecha", "izquierda": "Mano izquierda"}),
                 Casilla("recordar", "Recordar tamaño", bool(recuerdo)),
                 Casilla("invertir", "Invertir", avanzado=True),
-                Expresion("desfase", "Desfase de inicio", "0 mm", visible_si=lambda v: not v.get("largo_completo"),
-                          avanzado=True),
                 Expresion("holgura_3d", "Holgura impresión 3D", "0 mm", visible_si=modelada, avanzado=True,
                           ayuda="Desfase radial extra de los flancos, para que la rosca impresa enrosque.")]
 
