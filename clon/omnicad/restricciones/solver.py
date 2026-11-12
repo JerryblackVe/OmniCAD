@@ -110,9 +110,10 @@ def _contacto_exacto(pa, pb, ta, tb):
 class _Sistema:
     """Arma el vector de incógnitas y la función de residuos de un boceto."""
 
-    def __init__(self, boceto, valores_cotas, grupo=None, fusionar=False):
+    def __init__(self, boceto, valores_cotas, grupo=None, fusionar=False, quieto=None, derivar=False):
         """`grupo` (de `_grupos`) limita el sistema a una parte independiente del boceto: sus incógnitas y
-        sus términos. Sin grupo, el boceto entero (como siempre). `fusionar` (SC4): ver `_fusionar`."""
+        sus términos. Sin grupo, el boceto entero (como siempre). `fusionar` (SC4): ver `_fusionar`. `derivar`: las
+        copias de los patrones no son incógnitas (`_derivar`), salvo el punto `quieto` (el arrastrado)."""
         self.b = boceto
         self.valores = valores_cotas
         self._cache = {}
@@ -125,12 +126,14 @@ class _Sistema:
         if grupo is not None and "congelados" in grupo:      # ventana de un arrastre: lo que queda afuera es constante
             self.fijos_p = self.fijos_p | grupo["congelados"][0]
             self.fijos_r = self.fijos_r | grupo["congelados"][1]
+        self.deriva, mismo_radio = self._derivar(grupo, quieto) if derivar else ({}, {})
         raiz, self._cumplidas = self._fusionar() if fusionar else ((lambda k: k), set())
+        self._cumplidas |= {r.id for r in self.deriva.values()} | set(mismo_radio.values())
         # idx_p[pid] = (índice de x, índice de y). Fusionadas, varias coordenadas comparten una incógnita, que
         # arranca en su promedio; `cuenta` dice cuántas coordenadas representa cada incógnita.
         self.idx_p, self.idx_r, x0, cuenta, var = {}, {}, [], [], {}
         for pid, p in boceto.puntos.items():
-            if pid not in self.fijos_p and (grupo is None or pid in grupo["p"]):
+            if pid not in self.fijos_p and pid not in self.deriva and (grupo is None or pid in grupo["p"]):
                 ij = []
                 for k, v in ((0, p.x), (1, p.y)):
                     j = var.setdefault(raiz((pid, k)), len(x0))
@@ -144,9 +147,18 @@ class _Sistema:
         x0 = [s / k for s, k in zip(x0, cuenta, strict=True)]
         for cid, c in boceto.curvas.items():
             if isinstance(c, (Circulo, Elipse, ArcoElipse)) and cid not in self.fijos_r and (
-                    grupo is None or cid in grupo["r"]):
+                    grupo is None or cid in grupo["r"]) and cid not in mismo_radio:
                 self.idx_r[cid] = len(x0)
                 x0.append(c.radio if isinstance(c, Circulo) else c.radio_menor)
+        for cid in mismo_radio:              # la copia de un círculo usa el radio de su original (BOC-61)
+            raiz_r, vistos = cid, set()
+            while raiz_r in mismo_radio and raiz_r not in vistos:
+                vistos.add(raiz_r)
+                raiz_r = boceto.restricciones[mismo_radio[raiz_r]].entidades[0]
+            if raiz_r not in self.idx_r:
+                self.idx_r[raiz_r] = len(x0)
+                x0.append(boceto.curvas[raiz_r].radio)
+            self.idx_r[cid] = self.idx_r[raiz_r]
         self.n_base = len(x0)
         self.x0 = np.array(x0, dtype=float)
         self._extra = []
@@ -181,12 +193,47 @@ class _Sistema:
                 pares = [(a, c, 1 if r.tipo == "horizontal" else 0)]
             else:
                 continue
-            if any(p in self.fijos_p for a, c, _k in pares for p in (a, c)):
+            if any(p in self.fijos_p or p in self.deriva for a, c, _k in pares for p in (a, c)):
                 continue
             for a, c, k in pares:
                 padre[raiz((a, k))] = raiz((c, k))
             cumplidas.add(r.id)
         return raiz, cumplidas
+
+    def _derivar(self, grupo, quieto):
+        """BOC-61: la copia de un patrón no es incógnita: `P` la calcula desde su original (y el centro) con el giro o
+        la traslación de su restricción, que queda cumplida; la copia de un círculo comparte el radio del original
+        (su «igual»). Así 200 copias no arman un sistema de 600 incógnitas. No se deriva un punto fijo, el `quieto`
+        (arrastrar una copia mueve el patrón entero) ni el que cerraría un ciclo. Devuelve ({copia: restricción},
+        {círculo copia: id de su «igual»})."""
+        deriva, mismo_radio = {}, {}
+        for r in self._restricciones:
+            c = r.entidades[1] if r.tipo == "patron" else None
+            if c is None or c in deriva or c in self.fijos_p or c == quieto or (grupo is not None and c not in grupo["p"]):
+                continue
+            pendientes, ciclo = list(r.entidades[::2]), False
+            while pendientes and not ciclo:
+                q = pendientes.pop()
+                ciclo = q == c
+                pendientes += deriva[q].entidades[::2] if q in deriva else []
+            if not ciclo:
+                deriva[c] = r
+        for r in self._restricciones:
+            if r.tipo == "igual" and len(r.entidades) == 2:
+                a, k = (self.b.curvas.get(i) for i in r.entidades)
+                if (isinstance(a, Circulo) and isinstance(k, Circulo) and k.centro in deriva and k.id not in mismo_radio
+                        and not {a.id, k.id} & self.fijos_r and (grupo is None or {a.id, k.id} <= grupo["r"])):
+                    mismo_radio[k.id] = r.id
+        return deriva, mismo_radio
+
+    def _copia(self, x, r):
+        """Coordenadas de la copia de un patrón: las mismas cuentas que su residuo («patron» en `_armar`)."""
+        (px, py), d = self.P(x, r.entidades[0]), r.datos
+        if len(r.entidades) == 3 or d.get("centro") is not None:
+            ox, oy = self.P(x, r.entidades[2]) if len(r.entidades) == 3 else d["centro"]
+            ca, sa = math.cos(d.get("angulo", 0.0)), math.sin(d.get("angulo", 0.0))
+            return ox + ca * (px - ox) - sa * (py - oy), oy + sa * (px - ox) + ca * (py - oy)
+        return px + d.get("dx", 0.0), py + d.get("dy", 0.0)
 
     def _parametro(self, valor):
         """Agrega una incógnita auxiliar (parámetro de contacto) y devuelve su índice."""
@@ -197,6 +244,8 @@ class _Sistema:
     def P(self, x, pid):
         i = self.idx_p.get(pid)
         if i is None:
+            if pid in self.deriva:
+                return self._copia(x, self.deriva[pid])
             p = self.b.puntos[pid]
             return p.x, p.y
         return x[i[0]], x[i[1]]
@@ -729,6 +778,8 @@ class _Sistema:
     def escribir(self, x):
         for pid, (i, j) in self.idx_p.items():
             self.b.puntos[pid].x, self.b.puntos[pid].y = float(x[i]), float(x[j])
+        for pid in self.deriva:
+            self.b.puntos[pid].x, self.b.puntos[pid].y = map(float, self.P(x, pid))
         for cid, i in self.idx_r.items():
             c = self.b.curvas[cid]
             if isinstance(c, Circulo):
@@ -945,7 +996,7 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
     libres_p, libres_r = set(sueltos_p), set(sueltos_r)
     gdl, err_max, inconsistente = 2 * len(sueltos_p) + len(sueltos_r), 0.0, False
     for g in grupos:
-        sis = _Sistema(boceto, valores, g, fusionar=True)
+        sis = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True)
         x, err, J, rango = _resolver_grupo(sis, arrastrado)
         if x is not None:
             sis.escribir(x)   # también si es inconsistente: queda la mejor aproximación (el editor puede deshacer)
@@ -1105,7 +1156,7 @@ def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
             for sub in intentos:
                 antes = _foto(boceto, sub)
                 usada_parte_entera = sub is g and len(intentos) > 1
-                sis = _Sistema(boceto, valores, sub, fusionar=True)
+                sis = _Sistema(boceto, valores, sub, fusionar=True, quieto=arrastrado, derivar=True)
                 x, err, _J, _rango = _resolver_grupo(sis, arrastrado, con_rango=False)
                 if x is not None:
                     sis.escribir(x)
@@ -1146,8 +1197,9 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
     cumple = TOLERANCIA if con_rango else TOLERANCIA_ACEPTA_ARRASTRE
 
     def corrida(x_inicio, ancla, w, tol=1e-14):
-        fun = lambda x: np.concatenate([sis.residuos(x), w * (x - ancla)])  # noqa: E731
-        jac = lambda x: np.vstack([_jacobiano(sis, x), np.diag(w)])  # noqa: E731
+        reg = _QuietasCopias(sis, ancla)
+        fun = lambda x: np.concatenate([sis.residuos(x), w * (x - ancla), reg.residuos(x)])  # noqa: E731
+        jac = lambda x: np.vstack([_jacobiano(sis, x), np.diag(w)] + ([_jacobiano(reg, x)] if sis.deriva else []))  # noqa: E731
         from scipy.optimize import least_squares   # perezoso: importarlo cuesta ~0,8 s al arrancar la CLI y el MCP
         # Levenberg-Marquardt (MINPACK, QR): "trf" hacía una SVD por iteración y con los hilos de OpenBLAS cada
         # una costaba ~2,4 ms en matrices de 100×100; con "lm" el arrastre del polígono de 24 lados baja a ~15 ms.
@@ -1180,6 +1232,20 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
     J = _jacobiano(sis, x)
     rango = int(np.linalg.matrix_rank(J, tol=1e-6)) if J.size else 0
     return x, err, J, rango
+
+
+class _QuietasCopias:
+    """BOC-61: la regularización de las copias derivadas de un patrón (`_Sistema._derivar`), como si siguieran siendo
+    incógnitas: el solver sigue prefiriendo mover lo que menos arrastra (un patrón circular no corre su centro, que
+    movería todas las copias). Tiene `terminos` y `residuos` para que `_jacobiano` la derive igual que al sistema."""
+
+    def __init__(self, sis, ancla):
+        self.terminos = [lambda x, p=p, a=sis.P(ancla, p): [_PESO_REGULARIZACION * (v - c) for v, c in zip(sis.P(x, p), a,
+                                                                                                         strict=True)]
+                         for p in sis.deriva]
+
+    def residuos(self, x):
+        return np.array([v for f in self.terminos for v in f(x)], dtype=float)
 
 
 def _preferir_traslacion(sis, x):
@@ -1243,6 +1309,10 @@ def _libres(sis, J, rango, tol=1e-6):
     else:
         libres = np.ones(n, bool)
     puntos = {pid for pid, (i, j) in sis.idx_p.items() if libres[i] or libres[j]}
+    nuevos = True
+    while nuevos:                # la copia de un patrón queda libre si su original o su centro lo están
+        nuevos = {pid for pid, r in sis.deriva.items() if pid not in puntos and puntos.intersection(r.entidades[::2])}
+        puntos |= nuevos
     radios = {cid for cid, i in sis.idx_r.items() if libres[i]}
     return puntos, radios
 
@@ -1284,7 +1354,7 @@ def grados_de_libertad(boceto, valores_cotas=None):
     sueltos_p, sueltos_r = _sueltas(boceto, grupos, _fijos(boceto))
     gdl = 2 * len(sueltos_p) + len(sueltos_r)
     for g in grupos:
-        sis = _Sistema(boceto, valores, g)
+        sis = _Sistema(boceto, valores, g, derivar=True)
         if len(sis.x0) == 0:
             continue
         if not sis.terminos:

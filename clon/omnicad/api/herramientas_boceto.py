@@ -2670,8 +2670,8 @@ def _informar_patron(r, b):
              "siguen). La dirección 1 sale del ángulo angle (o de la línea direction1_line) y la 2 de angle2 (por "
              "defecto perpendicular, +90°) o de direction2_line. Con spacing=extent la distancia es la total (de la "
              "primera a la última copia); con spacing la de cada paso. suppress omite copias por índice (get_sketch › "
-             "patterns); después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la "
-             "selección; un rectángulo tiene 4) y 200 copias, para que el boceto no se vuelva lento: tope propio, la "
+             "patterns); después se edita con edit_sketch_pattern. Tope: 10 000 puntos copiados (copias × puntos de "
+             "la selección; un rectángulo tiene 4) y 1000 copias, para que el boceto no se vuelva lento: tope propio, la "
              "ayuda de Fusion no publica un máximo.",
              modifica=True)
 def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distance1: Expr, count2: int = 1,
@@ -2729,8 +2729,8 @@ def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distanc
              "Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de "
              "un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la "
              "vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. suppress omite copias por "
-             "índice; después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la "
-             "selección; un círculo tiene 1) y 200 copias: tope propio, la ayuda de Fusion no publica un máximo.",
+             "índice; después se edita con edit_sketch_pattern. Tope: 10 000 puntos copiados (copias × puntos de "
+             "la selección; un círculo tiene 1) y 1000 copias: tope propio, la ayuda de Fusion no publica un máximo.",
              modifica=True)
 def sketch_circular_pattern(sesion, entities: list[int], count: int, center_x: float = 0.0, center_y: float = 0.0,
                             center_point: int | None = None, total_angle: Expr = 360.0, symmetric: bool = False,

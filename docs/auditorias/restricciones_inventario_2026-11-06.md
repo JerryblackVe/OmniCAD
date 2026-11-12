@@ -31,7 +31,7 @@ cinta (`ui/cinta_boceto.py:45-47`) trae 12 botones de Fusion más `sk_r_poligono
 | `curvatura` | spline o cónica + curva abierta encadenada (`:2591`) | `[cruz·10, (k_a+k_b)·100]` (`:373`) | 2 (M) | sí | `curvature` | La matriz mide GDL y persistencia; la G2 la miden los tests de fase 7 |
 | `poligono` | ≥3 líneas en cadena cerrada (`:2593`) | vértices en círculo (`_poligono :640`) | `2m−4`; triángulo 2 (M) | sí | `polygon` | Un lado toma su cadena |
 | `desfase` | 4 geometrías, `[geom, punto, punto]` o 2 curvas libres (`:2594`) | `:410`, `:413`, `_desfase_libre :527` | 1 | herramienta Desfase | `offset_sketch_curves` | Tests: `test_boceto_fase9_desfase.py` |
-| `patron` | `[punto, punto]` o 3 puntos | traslación o giro (`:424`) | 2 | herramientas de patrón | `sketch_*_pattern` | Tope 200 copias (`boceto.py:53`) |
+| `patron` | `[punto, punto]` o 3 puntos | traslación o giro (`:424`) | 2 | herramientas de patrón | `sketch_*_pattern` | Tope 1000 copias (`boceto.py:55`; BOC-61: las copias no son incógnitas del solver) |
 
 ## 2. Cotas
 

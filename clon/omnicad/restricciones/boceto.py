@@ -52,8 +52,8 @@ MEDIDA_MAXIMA = 1e6
 MEDIDA_MINIMA = 1e-6      # mm (1 nm): por debajo el solver ya no distingue una medida de cero
 # Cada copia de un patrón queda atada al original y el solver resuelve todo junto: medido, 200 círculos copiados (200
 # puntos) tardan 3,6 s y 99 rectángulos (396 puntos) 7,5 s, y eso se repite en cada edición del boceto.
-MAX_COPIAS_PATRON = 200
-MAX_PUNTOS_PATRON = 200      # copias × puntos de la selección
+MAX_COPIAS_PATRON = 1000     # BOC-61: las copias no son incógnitas del solver; 1000 resuelven en ~15 ms
+MAX_PUNTOS_PATRON = 10000    # copias × puntos de la selección
 MAX_CARACTERES_TEXTO = 1000      # crear los perfiles de las letras cuesta ~10 ms por letra: 100.000 colgaban la ventana
 ALTURA_MAXIMA_TEXTO = 10_000.0   # mm (10 m)
 LARGO_EJE_VACIO = 100.0          # mm a cada lado de un eje o traza proyectados cuando no hay boceto ni modelo alrededor

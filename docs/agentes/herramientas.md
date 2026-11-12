@@ -1269,7 +1269,7 @@ Simetría de boceto (Fusion: Simetría / Mirror): CREA la copia espejada de curv
 
 ### `sketch_rectangular_pattern`
 
-Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo siguen). La dirección 1 sale del ángulo angle (o de la línea direction1_line) y la 2 de angle2 (por defecto perpendicular, +90°) o de direction2_line. Con spacing=extent la distancia es la total (de la primera a la última copia); con spacing la de cada paso. suppress omite copias por índice (get_sketch › patterns); después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la selección; un rectángulo tiene 4) y 200 copias, para que el boceto no se vuelva lento: tope propio, la ayuda de Fusion no publica un máximo.
+Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias de curvas y puntos en una o dos direcciones, atadas al original con la restricción de patrón (si el original cambia, las copias lo siguen). La dirección 1 sale del ángulo angle (o de la línea direction1_line) y la 2 de angle2 (por defecto perpendicular, +90°) o de direction2_line. Con spacing=extent la distancia es la total (de la primera a la última copia); con spacing la de cada paso. suppress omite copias por índice (get_sketch › patterns); después se edita con edit_sketch_pattern. Tope: 10 000 puntos copiados (copias × puntos de la selección; un rectángulo tiene 4) y 1000 copias, para que el boceto no se vuelva lento: tope propio, la ayuda de Fusion no publica un máximo.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -1291,7 +1291,7 @@ Patrón rectangular de boceto (Fusion: Patrón rectangular en el boceto): copias
 
 ### `sketch_circular_pattern`
 
-Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. suppress omite copias por índice; después se edita con edit_sketch_pattern. Tope: 200 puntos copiados (copias × puntos de la selección; un círculo tiene 1) y 200 copias: tope propio, la ayuda de Fusion no publica un máximo.
+Patrón circular de boceto (Fusion: Patrón circular en el boceto): copias de curvas y puntos alrededor de un centro, atadas al original con la restricción de patrón. total_angle = 360 reparte la cantidad en la vuelta entera; otro ángulo pone la primera y la última copia en sus extremos. suppress omite copias por índice; después se edita con edit_sketch_pattern. Tope: 10 000 puntos copiados (copias × puntos de la selección; un círculo tiene 1) y 1000 copias: tope propio, la ayuda de Fusion no publica un máximo.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:

@@ -264,10 +264,45 @@ def test_con_una_sola_copia_en_la_direccion_2_su_distancia_no_se_usa():
 
 
 def test_el_tope_de_copias_es_el_mismo_en_ventana_y_api():
-    with pytest.raises(ErrorBoceto, match="admite hasta 200"):
-        Boceto.validar_patron("circular", {"cantidad": 202, "angulo_total": 360})
+    with pytest.raises(ErrorBoceto, match="admite hasta 1000"):
+        Boceto.validar_patron("circular", {"cantidad": 1002, "angulo_total": 360})
     s = nuevo()
-    assert falla(s, "sketch_circular_pattern", entities=circulo(s), count=202)["error_kind"] == "INVALID_ARGUMENTS"
+    assert falla(s, "sketch_circular_pattern", entities=circulo(s), count=1002)["error_kind"] == "INVALID_ARGUMENTS"
+
+
+def test_boc61_las_copias_no_son_incognitas_del_solver_y_el_patron_admite_1000():
+    """BOC-61: cada copia la calcula el solver desde su original (antes eran incógnitas: 200 copias tardaban ~1 s y
+    1000, 104 s). La geometría no cambia: el centro de un patrón circular no se corre, la cota de una copia mueve al
+    original y arrastrar una copia arrastra el patrón."""
+    from omnicad.restricciones.solver import _grupos, _Sistema, resolver
+
+    b = Boceto()
+    c = b.agregar_circulo((0, 0), 2)
+    copias = b.patron_rectangular([c], 1001, 5.0, modo="espaciado")
+    k = b.agregar_cota("radio", [c], "3")
+    g, = _grupos(b)
+    assert len(_Sistema(b, {}, g, fusionar=True, derivar=True).x0) == 3       # centro y radio del original
+    r = resolver(b, {k: 3.0})
+    assert r.ok and r.gdl == 2
+    ultima = b.curvas[copias[-1]]
+    assert b.coords(ultima.centro) == pytest.approx((5000.0, 0.0)) and ultima.radio == pytest.approx(3.0)
+
+    b = Boceto()
+    c, o = b.agregar_circulo((10, 0), 2), b.agregar_punto(0, 0)
+    copias = b.patron_circular([c], o, 8)
+    k = b.agregar_cota("distancia", [o, b.curvas[copias[2]].centro], "12")
+    assert resolver(b, {k: 12.0}).ok
+    assert b.coords(o) == pytest.approx((0.0, 0.0), abs=1e-6)
+    assert b.coords(b.curvas[c].centro) == pytest.approx((12.0, 0.0), abs=1e-6)
+
+    b = Boceto()
+    c = b.agregar_circulo((0, 0), 2)
+    copias = b.patron_rectangular([c], 5, 20)
+    cen = b.curvas[copias[2]].centro
+    b.puntos[cen].x += 3
+    assert resolver(b, arrastrado=cen).ok
+    assert b.coords(b.curvas[c].centro) == pytest.approx((3.0, 0.0), abs=1e-6)
+    assert b.coords(cen) == pytest.approx((18.0, 0.0), abs=1e-6)
 
 
 def test_referencia_perdida_del_centro_se_dice_y_no_rompe():
