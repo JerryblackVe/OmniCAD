@@ -585,7 +585,7 @@ def _fase3d(v, r):
     w, h = v.visor.width(), v.visor.height()
     v._seleccion_region([(0, 0), (w, 0), (w, h), (0, h)], False)
     v.visor.set_modo(None)
-    r.check(len(v.seleccion) == len(v.doc.estado_final.cuerpos), "Selección en ventana: elige todos los cuerpos")
+    r.check(_cuerpos_elegidos(v) == len(v.doc.estado_final.cuerpos), "Selección en ventana: elige todos los cuerpos")
     v._seleccionar([])
     v.doc.agregar_analisis("seccion", {"plano": {"tipo": "plano", "id": "XZ"}, "desfase_mm": 0.0})
     QTest.qWait(200)
@@ -598,6 +598,12 @@ def _fase3d(v, r):
     r.check(dibujo is not None and dibujo.isVisible(), "DISEÑO ▾ › DIBUJO abre el espacio de dibujo")
     if dibujo is not None:
         dibujo.close()
+
+
+def _cuerpos_elegidos(v):
+    """Cuántos cuerpos tiene la selección: la ventana elige también los perfiles de los bocetos visibles (B-268, como
+    Fusion), así que el total de la selección no es el de cuerpos."""
+    return sum(1 for h in v.seleccion if h["ref"]["tipo"] == "cuerpo")
 
 
 def _fase_interaccion(v, r):
@@ -616,8 +622,9 @@ def _fase_interaccion(v, r):
     r.check(banda is not None and banda.isVisible() and not banda.cruce,
             "Arrastrar en la vista dibuja la ventana de selección (naranja, de izquierda a derecha)")
     _soltar(v.visor, QPoint(w - 4, h - 4), Qt.LeftButton)
-    r.check(len(v.seleccion) == len(v.doc.estado_final.cuerpos),
+    r.check(_cuerpos_elegidos(v) == len(v.doc.estado_final.cuerpos),
             "La ventana elige los cuerpos que quedan adentro, sin elegir antes la herramienta")
+    v._seleccionar([h for h in v.seleccion if h["ref"]["tipo"] == "cuerpo"])     # con perfiles mezclados solo cuenta objetos
     r.check("Volumen:" in v.timeline.estado.toolTip(), "Abajo a la derecha se ven las medidas de lo elegido")
     v._seleccionar([])
     hit = v.visor.elegir_entidad(v.visor.proyectar(__import__("numpy").array([2.0, 2.0, 0.0])), {"plano"})
