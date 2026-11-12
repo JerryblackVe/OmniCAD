@@ -337,6 +337,36 @@ def _asas_repujado(self, ctx, v):
             mp.Angulo("giro", corrido, n, pl.u)]
 
 
+def _asas_solevacion(self, ctx, v):
+    """P-147: la flecha del Peso de despegue de cada perfil en «Dirección», como Loft de Fusion. Sale del centro del
+    perfil por su normal, en el sentido de la solevación (del primer perfil al último), y se corre lo mismo que la
+    sección auxiliar del núcleo: peso × 0,15 × la distancia al perfil vecino (`superficies._auxiliares`). Con una fila
+    elegida, solo la de ese perfil (como sus campos); sin fila, las de los dos extremos.
+    shortcut: falta el anillo del Ángulo de despegue; se suma con el anillo nuevo de P-139."""
+    from .crear import _en_fila, _fila_media
+    mp = _mp()
+    secs = v.get("secciones") or []
+    bases = [mp.base_perfiles([h], ctx.estado) for h in secs]
+    filas = [(0, "inicio", 1), (len(secs) - 1, "fin", -1)]
+    if _fila_media(v) and self._de_fila(v):
+        filas.append((v["fila_secciones"], "medio", 1))
+    salida = []
+    for i, lado, paso in filas:
+        if lado != "medio" and (v.get(f"condicion_{lado}") != "direccion" or not _en_fila(lado)(v)):
+            continue
+        if not 0 <= i + paso < len(secs) or bases[i] is None or bases[i + paso] is None:
+            continue
+        centro, plano = bases[i][0], bases[i][1]
+        hacia = bases[i + paso][0] - centro
+        distancia = float(np.linalg.norm(hacia))
+        n = mp.unitario(plano.normal)
+        if distancia < 1e-9 or abs(float(n @ hacia)) < 1e-9:
+            continue
+        n = n * paso * (1.0 if float(n @ hacia) > 0 else -1.0)      # el sentido de la solevación: del primero al último
+        salida.append(mp.Flecha(f"peso_{lado}", centro, n, factor=0.15 * distancia, minimo=0.0, estricto=True))
+    return salida
+
+
 def _asas_rosca(self, ctx, v):
     from ...nucleo.consultas import inicio_rosca
     mp = _mp()
@@ -492,7 +522,7 @@ def _enganchar():
         "nervio": _asas_nervio, "red": _asas_nervio, "repujado": _asas_repujado, "rosca": _asas_rosca,
         "tuberia": _asas_tuberia, "dobladillo": _asas_dobladillo, "extender_sup": _asas_extender,
         "reglada": _asas_reglada, "sup_revolucion": _asas_sup_revolucion, "sup_empalme": _asas_empalme_superficie, "plegar": _asas_plegar,
-        "desmoldeo": _asas_desmoldeo,
+        "desmoldeo": _asas_desmoldeo, "solevacion": _asas_solevacion, "sup_solevacion": _asas_solevacion,
     }
     for clave, funcion in tabla.items():
         cls = CATALOGO.get(clave)
