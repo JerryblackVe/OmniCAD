@@ -284,9 +284,13 @@ def _detalle_validez(forma, caras, topo):
                                        _punto_en(cascara)))
     if not problemas:
         for solido in topo["solidos"]:
-            if not BRepCheck_Analyzer(solido).IsValid():
-                problemas.append(_problema("solido_invalido", "error", "Sólido inválido: las cáscaras están mal "
-                                           "armadas o anidadas.", _punto_en(solido)))
+            try:
+                if BRepCheck_Analyzer(solido).IsValid():
+                    continue
+                texto = "Sólido inválido: las cáscaras están mal armadas o anidadas."
+            except Exception as e:  # noqa: BLE001 — B-355 (B-323): BRepCheck también puede lanzar a nivel sólido
+                texto = f"BRepCheck falló al revisar este sólido ({e})."
+            problemas.append(_problema("solido_invalido", "error", texto, _punto_en(solido)))
     if not problemas:
         problemas.append(_problema("invalido", "error", "El kernel marca la forma como inválida (sin más detalle).",
                                    _punto_en(forma)))
