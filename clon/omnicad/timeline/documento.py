@@ -151,6 +151,11 @@ class ResultadoPaso:
         return f"ResultadoPaso({self.estado!r}, {self.mensaje!r})"
 
 
+def _copia_plana(objeto):
+    """Atributos de `objeto` con un nivel de copia en listas, dicts y sets (B-331: el cálculo los cambia en el lugar)."""
+    return {k: v.copy() if isinstance(v, (list, dict, set)) else v for k, v in vars(objeto).items()}
+
+
 class Documento:
     def __init__(self):
         self.nombre = "Sin título"
@@ -378,6 +383,32 @@ class Documento:
                 nuevas[k] = o
         self.operaciones = nuevas
         self._terminar_recalculo(desde, calculo)
+
+    def _foto(self):
+        """Receta y cálculo del documento tal como están, para volver sin recalcular (`_volver_a_foto`)."""
+        foto = _copia_plana(self)
+        foto["_memo"] = {k: dict(m) for k, m in self._memo.items()}     # `_de_memo` cambia las entradas en el lugar
+        # cada paso entero: `ejecutar` deja `_usados`, `_textos_parametricos`, `perdidas`... (y lo que se sume)
+        return foto, [(op, _copia_plana(op)) for op in self.operaciones], self._nombres_cuerpos()
+
+    def _volver_a_foto(self, foto, receta):
+        """B-331: vuelve a `foto` (de `_foto`) sin recalcular, si su receta es todavía `receta` (el JSON de
+        `a_dict` de cuando se tomó). Si algo se cambió en el lugar (un paso, un parámetro, un nombre de cuerpo), no
+        toca nada y devuelve False: ahí hay que volver con `_cargar`, que recalcula."""
+        valores, pasos, nombres = foto
+        if self._nombres_cuerpos() != nombres:       # `_poner_nombres` también renombra los estados ya calculados
+            return False
+        ahora = dict(vars(self))
+        self.__dict__.update(valores)
+        if json.dumps(self.a_dict()) != receta:
+            self.__dict__.clear()
+            self.__dict__.update(ahora)
+            return False
+        for op, atributos in pasos:
+            op.__dict__.clear()
+            op.__dict__.update(atributos)
+        self._notificar()
+        return True
 
     @staticmethod
     def _pasos_sin_partir(datos, operaciones):

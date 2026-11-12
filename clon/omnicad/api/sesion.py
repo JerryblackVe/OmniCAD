@@ -150,6 +150,7 @@ class Sesion:
         espacios = copy.deepcopy(doc.espacios)   # _cargar los restaura; sin paso de deshacer, a mano (MCP-0b)
         contador = doc._contador         # una llamada que falla no gasta números de id (la receta queda idéntica)
         previos = self._estados_pasos()
+        foto = doc._foto()
         try:
             yield
             if self.doc is not doc:          # la herramienta cambió de documento (nuevo / abrir)
@@ -178,7 +179,8 @@ class Sesion:
                     self.al_cambiar_espacios()
         except BaseException:
             if self.doc is doc and doc._deshacer != pila:
-                doc._cargar(json.loads(antes))
+                if not doc._volver_a_foto(foto, antes):      # B-331: sin recalcular todo de nuevo
+                    doc._cargar(json.loads(antes))
                 doc._deshacer[:], doc._rehacer[:] = pila, pila_rehacer
                 doc.modificado = modificado
             if self.doc is doc and doc.espacios != espacios:   # falló sin paso de deshacer: se restauran igual
