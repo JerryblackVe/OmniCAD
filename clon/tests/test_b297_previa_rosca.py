@@ -1,4 +1,4 @@
-"""B-297: la selección deja ver el material de la previa de Rosca modelada."""
+"""B-297: la selección deja ver el material de la previa de Rosca modelada; P-145: las crestas siguen en azul."""
 import time
 
 import numpy as np
@@ -53,7 +53,9 @@ def test_b297_previa_modelada_muestra_material_y_restaura_seleccion(tmp_path):
         _esperar_previa(panel)
         assert v.visor._estado.cuerpos[cid].forma is not original
         assert len(refs.subformas(v.visor._estado.cuerpos[cid].forma, "cara")) > 3
-        assert "seleccion" not in v.visor._capas, "la cara elegida tiñe de azul la previa modelada"
+        # P-145, como Fusion: sigue en azul solo lo que quedó de la cara (tramos de afuera y crestas), no los flancos
+        tris = np.concatenate([p[1] for p in v.visor._capas["seleccion"]])
+        assert len(tris) and np.hypot(tris[:, 0], tris[:, 1]).min() > 4.8, "la cara elegida tiñe los flancos de la rosca"
 
         QTest.mouseClick(casilla, Qt.LeftButton, pos=QPoint(8, casilla.height() // 2))
         _esperar_previa(panel)

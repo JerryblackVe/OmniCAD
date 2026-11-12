@@ -321,6 +321,11 @@ class Comando:
         El panel los recalcula cada vez que cambia un valor; [] = sin manipuladores."""
         return []
 
+    def seleccion_en_previa(self, valores, estado):
+        """Con `oculta_seleccion`: lo que se resalta de lo elegido sobre la previa ([primitivas]; None = nada).
+        P. ej. lo que quedó de la cara en la rosca modelada (P-145)."""
+        return None
+
     def previa_vista(self, ctx, v, op):
         """Dibujo extra de la vista previa ([primitivas] de `visor.set_capa`), p. ej. el agujero en rojo.
         Se calcula junto con la vista previa del modelo (no en cada movimiento del ratón)."""
@@ -945,7 +950,8 @@ class PanelComando(QFrame):
         self._t_reubicar = QTimer(self, singleShot=True, interval=0, timeout=self._reubicar_ahora)   # B-113: un mensaje de varias líneas asienta su alto recién al volver al bucle de eventos
         self._t_previa.timeout.connect(self._calcular_previa)
         if type(comando).oculta_seleccion is not Comando.oculta_seleccion:     # B-297: la previa reemplaza lo elegido
-            self.previa.connect(lambda estado: self.visor.set_capa("seleccion", None)
+            self.previa.connect(lambda estado: self.visor.set_capa("seleccion", None if self.cerrando else
+                                                                   comando.seleccion_en_previa(self.valores, estado))
                 if self.cerrando or estado is not None and comando.oculta_seleccion(self.valores) else self._refrescar_seleccion())
         self.manipuladores = None            # GestorManipuladores si el comando tiene asas en la vista
         if (type(comando).manipuladores is not Comando.manipuladores

@@ -2946,13 +2946,39 @@ def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna
         preferida = {"iso_metrica": "ISO métrica gruesa", "unificada": "Unificada UNC"}.get(familia or "iso_metrica")
         datos = min(_candidatas_auto(familia),
                     key=lambda dt: (round(abs(2 * radio - dt[clave_diam]), 6), dt["norma"] != preferida))
-    alturas = []           # tramo axial de la cara: se proyectan puntos de sus aristas sobre el eje
+    zmin, zmax = _tramo_axial(cara, o, z)
+    return {"cara": cara, "datos": datos, "interna": es_interna, "radio": radio, "origen": o, "eje": z,
+            "zmin": zmin, "zmax": zmax}
+
+
+def _tramo_axial(cara, o, z):
+    """(zmin, zmax) de la cara sobre el eje (o, z): se proyectan puntos de sus aristas."""
+    alturas = []
     for e in _aristas_de(cara):
         curva = BRepAdaptor_Curve(e)
         a, b = curva.FirstParameter(), curva.LastParameter()
         alturas += [float((_xyz(curva.Value(a + (b - a) * k / 8)) - o) @ z) for k in range(9)]
-    return {"cara": cara, "datos": datos, "interna": es_interna, "radio": radio, "origen": o, "eje": z,
-            "zmin": min(alturas), "zmax": max(alturas)}
+    return min(alturas), max(alturas)
+
+
+def caras_sobre_cilindro(cuerpo, cara, tol=1e-6):
+    """Caras cilíndricas de `cuerpo` con el eje de `cara` y dentro de su tramo axial: en un cuerpo ya roscado, lo
+    que quedó de la cara elegida (los tramos de afuera y las crestas, con cualquier Ø). Fusion las sigue resaltando
+    como la cara elegida, y las crestas en azul dejan ver la hélice (P-145)."""
+    sup = BRepAdaptor_Surface(TopoDS.Face(cara))
+    eje = sup.Cylinder().Axis()
+    o, z = _xyz(eje.Location()), _xyz(eje.Direction())
+    zmin, zmax = _tramo_axial(cara, o, z)
+    salida = []
+    for c in _caras_cilindricas(cuerpo):
+        e = BRepAdaptor_Surface(c).Cylinder().Axis()
+        oc, zc = _xyz(e.Location()) - o, _xyz(e.Direction())
+        if abs(abs(float(zc @ z)) - 1) > tol or np.linalg.norm(oc - z * float(oc @ z)) > tol:
+            continue
+        a, b = _tramo_axial(c, o, z)
+        if a >= zmin - tol and b <= zmax + tol:
+            salida.append(c)
+    return salida
 
 
 def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, modelada=True, mano="derecha",
