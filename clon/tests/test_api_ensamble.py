@@ -459,3 +459,46 @@ def test_union_con_deslizamiento_avisa_que_movio_el_componente():
     r = api.llamar(s, "create_as_built_joint", {"origin": ">Z", "body": bloque, "component2": "Base",
                                                 "joint_type": "slider"})
     assert r["ok"] and not any("se movió" in a for a in r["avisos"]), r
+
+
+# ---------------------------------------------------------------- B-178: lo creado después de una unión la sigue
+def _bloque_con_marca():
+    """Base fija y un componente «Bloque» (bloque 10×10×10 y una marca 2×2×6 corrida a x=103, escondida dentro) unidos por una
+    revolución sobre la cara de arriba del bloque, ya accionada a 30°. La marca es el testigo de lo que se mueve."""
+    s = api.Sesion()
+    base = llamar(s, "create_box", length=40, width=40, height=10)["bodies_created"][0]["id"]
+    bloque = llamar(s, "create_box", length=10, width=10, height=10, x=100, y=50)["bodies_created"][0]["id"]
+    marca = llamar(s, "create_box", length=2, width=2, height=6, x=103, y=50)["bodies_created"][0]["id"]
+    llamar(s, "create_component", bodies=[base], name="Base", grounded=True)
+    llamar(s, "create_component", bodies=[bloque, marca], name="Bloque")
+    jid = llamar(s, "create_as_built_joint", origin=">Z", body=bloque, component2="Base",
+                 joint_type="revolute")["joint"]["id"]
+    llamar(s, "drive_joint", joint=jid, rotation=30)
+    return s, bloque, marca, jid
+
+
+def _centro_xy(s, cid):
+    c = caja(s, cid)
+    return [(c[0] + c[3]) / 2, (c[1] + c[4]) / 2]
+
+
+def test_b178_un_componente_hijo_creado_despues_de_la_union_la_sigue():
+    s, bloque, marca, jid = _bloque_con_marca()
+    hijo = llamar(s, "create_box", length=2, width=2, height=2, x=_centro_xy(s, marca)[0], y=_centro_xy(s, marca)[1],
+                  z=10)["bodies_created"][0]["id"]
+    llamar(s, "create_component", bodies=[hijo], name="Hijo", parent="Bloque")
+    for giro in (60, 0, 90):
+        llamar(s, "drive_joint", joint=jid, rotation=giro)
+        assert _centro_xy(s, hijo) == pytest.approx(_centro_xy(s, marca), abs=1e-6), giro
+        assert all(p["status"] == "ok" for p in llamar(s, "get_timeline", include_params=False)["steps"])
+
+
+def test_b178_un_agujero_con_punto_absoluto_creado_despues_de_la_union_la_sigue():
+    s, bloque, marca, jid = _bloque_con_marca()
+    x, y = _centro_xy(s, marca)
+    llamar(s, "create_hole", diameter=1, face=">Z", body=bloque, points=[[x, y, 10]], depth=5)
+    for giro in (60, 0):
+        llamar(s, "drive_joint", joint=jid, rotation=giro)
+        (cil,) = llamar(s, "find_faces", body=bloque, selector="%CYLINDER")["faces"]
+        assert cil["center"][:2] == pytest.approx(_centro_xy(s, marca), abs=0.3), giro      # el testigo no es el centro exacto
+        assert all(p["status"] == "ok" for p in llamar(s, "get_timeline", include_params=False)["steps"])

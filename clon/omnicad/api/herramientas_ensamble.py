@@ -37,7 +37,7 @@ from ..timeline.operaciones import ErrorOperacion
 from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpAnclar, OpCapturarPosicion, OpComponente, OpCopiarComponente, ruta_componente,
                                       OpGrupoRigido, OpInsertarDiseno, OpOrigenUnion, OpPosicionInicial, OpRevertirPosicion,
                                       OpUnion, OpVinculoMovimiento, _mover_componentes, es_fijo, exigir_numero, grupo_rigido,
-                                      limites_expr, pose_de_reasignar, poses_de_estudio, principal_de, siguiente_accion)
+                                      limites_expr, pose_de_componente, pose_de_reasignar, poses_de_estudio, principal_de, siguiente_accion)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from ..timeline.posicion import Arrastre, pendiente_de
 from . import selectores as sl
@@ -416,7 +416,8 @@ def create_component(sesion, bodies: list[str], name: str | None = None, grounde
     doc = sesion.doc
     op = OpComponente(doc.nuevo_id(), nombre_paso(sesion, name, "Componente", OpComponente),
                       cuerpos=[c.id for c in cuerpos], fijo=grounded, padre=padre,
-                      pose=pose_de_reasignar(estado, [c.id for c in cuerpos]).tolist())
+                      pose=pose_de_reasignar(estado, [c.id for c in cuerpos]).tolist(),
+                      pose_padre=pose_de_componente(estado, padre).tolist())
     resultado = _agregar(sesion, op)
     resultado["component"] = info_componente(sesion, op.id)
     return resultado
