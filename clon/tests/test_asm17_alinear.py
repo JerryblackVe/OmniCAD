@@ -572,6 +572,35 @@ def test_cada_fila_lleva_su_nombre_y_su_desfase_y_un_parametro_de_una_fila_extra
     assert "1 «tapa», 2 «alto»" in r["mensaje"]                           # el error nombra las filas
 
 
+def test_limites_de_desfase_recortan_avisan_y_con_apoyo_fallan(dos):
+    s, a, b = dos
+    _ll(s, "create_parameter", name="tope", expression="5 mm")
+    args = dict(geometry1="<X", geometry2=">X", body1=b, body2=a)
+    r = api.llamar(s, "constrain_components", dict(offset=8, offset_max="tope", **args))   # a x = 10 llega la cara de A: 8 mm pasa del tope de 5
+    assert r["ok"] and _caja(s, b)[0] == 15 and any("fuera de los límites" in w for w in r["avisos"]), r
+    _ll(s, "set_parameter", name="tope", expression="6 mm")                         # el tope es una expresión: recalcula
+    assert _caja(s, b)[0] == 16
+    _ll(s, "undo")                                                                  # el parámetro
+    _ll(s, "undo")                                                                  # y la restricción
+    _ll(s, "constrain_components", offset=1, offset_min=3, **args)                  # por debajo del mínimo sube a 3
+    assert _caja(s, b)[0] == 13
+    _ll(s, "undo")
+    _ll(s, "constrain_components", offset=4, offset_min=3, offset_max=6, offset_as_rest=True, **args)   # dentro: sin cambios
+    assert _caja(s, b)[0] == 14
+    _ll(s, "undo")
+    r = _falla(s, "constrain_components", "OPERATION_FAILED", offset=8, offset_max=5, offset_as_rest=True, **args)
+    assert "apoyo" in r["mensaje"]
+    r = _falla(s, "constrain_components", "OPERATION_FAILED", offset=4, offset_min=6, offset_max=5, **args)
+    assert "mayor que el máximo" in r["mensaje"]
+    _falla(s, "constrain_components", "OPERATION_FAILED", type="angle", offset=30, offset_max=45, **args)      # el ángulo pide referencia
+    _falla(s, "constrain_components", "INVALID_ARGUMENTS", type="tangent", offset_max=5, **args)
+    _falla(s, "constrain_components", "INVALID_ARGUMENTS", offset_as_rest=True, **args)                         # sin límites
+    r = api.llamar(s, "constrain_components", dict(offset=0, geometry1=">Z", geometry2=">Z", body1=b, body2=a,
+                                                   rows=[dict(args, offset=9, offset_max=5)]))                               # los límites también valen en cada fila extra
+    assert _caja(s, b)[0] == 15
+    assert len([w for w in r["avisos"] if "fuera de los límites" in w]) == 1       # el aviso no se repite por cada pasada del conjunto
+
+
 def test_las_filas_validan_sus_claves(dos):
     s, a, b = dos
     _falla(s, "constrain_components", "INVALID_ARGUMENTS", geometry1=">Z", geometry2=">Z", body1=b, body2=a, rows=[{"geometry1": ">Z"}])

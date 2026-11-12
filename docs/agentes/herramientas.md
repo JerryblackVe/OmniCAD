@@ -4840,8 +4840,11 @@ Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17):
   - `body1b` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de geometry1b.
   - `body2b` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de geometry2b.
   - `all_faces` (true/false; opcional, por defecto `true`): solo con tangent («All Faces»): true usa la superficie entera de la cara; false pide que la cara del componente 1, ya movida, toque la del componente 2.
-  - `rows` (lista de objeto o null; opcional, por defecto `null`): más restricciones entre los mismos dos componentes (el conjunto de la tabla de Fusion). Cada una es un objeto con las claves de esta herramienta (geometry1 y geometry2 obligatorias; type, offset (su propio desfase), name (su nombre), flip, body1, body2, angle_reference, reference_body, geometry1b, geometry2b, body1b, body2b, all_faces). Se resuelven todas a la vez; si se contradicen, error.
+  - `rows` (lista de objeto o null; opcional, por defecto `null`): más restricciones entre los mismos dos componentes (el conjunto de la tabla de Fusion). Cada una es un objeto con las claves de esta herramienta (geometry1 y geometry2 obligatorias; type, offset (su propio desfase), name (su nombre), offset_min, offset_max, offset_as_rest (sus límites), flip, body1, body2, angle_reference, reference_body, geometry1b, geometry2b, body1b, body2b, all_faces). Se resuelven todas a la vez; si se contradicen, error.
   - `row_name` (texto; opcional, por defecto `""`): nombre de la restricción principal dentro del conjunto (lo usa el error de contradicción); vacío = sin nombre.
+  - `offset_min` (número o expresión; opcional, por defecto `null`): límite mínimo del desfase (mm, o grados con angle; angle pide angle_reference): con límites, un offset fuera del rango se recorta y avisa. Vacío = sin tope (Offset Limits › Min).
+  - `offset_max` (número o expresión; opcional, por defecto `null`): límite máximo del desfase, igual que offset_min (Offset Limits › Max).
+  - `offset_as_rest` (true/false; opcional, por defecto `false`): true («Use Offset as Rest»): el offset es la posición de reposo y tiene que estar dentro de los límites; si no, error en vez de recortar.
 - CLI: `omnicad call constrain_components --doc pieza.omnicad geometry1=… geometry2=…`
 
 ### `drive_joint`

@@ -890,11 +890,12 @@ def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | 
 
 
 _CLAVES_FILA = ("geometry1", "geometry2", "type", "offset", "flip", "body1", "body2", "angle_reference", "reference_body",
-                "geometry1b", "geometry2b", "body1b", "body2b", "all_faces", "name")
+                "geometry1b", "geometry2b", "body1b", "body2b", "all_faces", "name", "offset_min", "offset_max", "offset_as_rest")
 
 
 def _fila_restriccion(sesion, geometry1, geometry2, type="align", offset=0, flip=False, body1=None, body2=None, angle_reference=None,
-                      reference_body=None, geometry1b=None, geometry2b=None, body1b=None, body2b=None, all_faces=True, name=""):
+                      reference_body=None, geometry1b=None, geometry2b=None, body1b=None, body2b=None, all_faces=True, name="", offset_min=None,
+                      offset_max=None, offset_as_rest=False):
     """Los parámetros de una fila de OpRestriccion a partir de los argumentos de `constrain_components` (valida cada combinación)."""
     if type not in ("align", "angle", "center", "tangent"):
         raise error("INVALID_ARGUMENTS", f"La restricción «{type}» no existe: 'align', 'angle', 'center' o 'tangent'.")
@@ -904,6 +905,10 @@ def _fila_restriccion(sesion, geometry1, geometry2, type="align", offset=0, flip
         raise error("INVALID_ARGUMENTS", "all_faces solo se usa con type='tangent'.")
     if (geometry1b is not None or geometry2b is not None) and type != "center":
         raise error("INVALID_ARGUMENTS", "geometry1b y geometry2b solo se usan con type='center'.")
+    if (offset_min is not None or offset_max is not None or offset_as_rest) and type not in ("align", "angle"):
+        raise error("INVALID_ARGUMENTS", "offset_min, offset_max y offset_as_rest solo se usan con type='align' o 'angle'.")
+    if offset_as_rest and offset_min is None and offset_max is None:
+        raise error("INVALID_ARGUMENTS", "offset_as_rest necesita offset_min u offset_max.")
     ref1, _ = _origen(sesion, geometry1, body1)
     ref2, _ = _origen(sesion, geometry2, body2)
     ref_angulo = _origen(sesion, angle_reference, reference_body)[0] if angle_reference is not None else None
@@ -911,7 +916,9 @@ def _fila_restriccion(sesion, geometry1, geometry2, type="align", offset=0, flip
     ref2b = _origen(sesion, geometry2b, body2b)[0] if geometry2b is not None else None
     return dict(tipo={"align": "alinear", "angle": "angulo", "center": "centro", "tangent": "tangente"}[type], ref1=ref1, ref2=ref2,
                 desfase=_expr(offset), voltear=bool(flip), ref_angulo=ref_angulo, ref1b=ref1b, ref2b=ref2b,
-                modo1="entre_caras" if ref1b else "simple", modo2="entre_caras" if ref2b else "simple", todas_caras=bool(all_faces), nombre_fila=str(name or ""))
+                modo1="entre_caras" if ref1b else "simple", modo2="entre_caras" if ref2b else "simple", todas_caras=bool(all_faces), nombre_fila=str(name or ""),
+                minimo="" if offset_min is None else _expr(offset_min), maximo="" if offset_max is None else _expr(offset_max),
+                apoyo=bool(offset_as_rest))
 
 
 @herramienta("constrain_components", "ensamble", "Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17): "
@@ -934,7 +941,8 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
                          angle_reference: str | list[float] | dict | None = None, reference_body: str | None = None,
                          geometry1b: str | list[float] | dict | None = None, geometry2b: str | list[float] | dict | None = None,
                          body1b: str | None = None, body2b: str | None = None, all_faces: bool = True,
-                         rows: list[dict] | None = None, row_name: str = ""):
+                         rows: list[dict] | None = None, row_name: str = "", offset_min: Expr | None = None,
+                         offset_max: Expr | None = None, offset_as_rest: bool = False):
     """
     geometry1: la geometría del componente que se mueve: cara o arista (selector sobre body1 o id de find_faces / find_edges), vértice [x, y, z], plano, eje o punto de construcción.
     geometry2: la geometría del otro componente (o de la raíz) a la que se alinea la primera.
@@ -950,13 +958,16 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
     geometry2b: solo con center: la segunda cara del componente 2.
     body1b: cuerpo donde se evalúa el selector de geometry1b.
     body2b: cuerpo donde se evalúa el selector de geometry2b.
-    rows: más restricciones entre los mismos dos componentes (el conjunto de la tabla de Fusion). Cada una es un objeto con las claves de esta herramienta (geometry1 y geometry2 obligatorias; type, offset (su propio desfase), name (su nombre), flip, body1, body2, angle_reference, reference_body, geometry1b, geometry2b, body1b, body2b, all_faces). Se resuelven todas a la vez; si se contradicen, error.
+    rows: más restricciones entre los mismos dos componentes (el conjunto de la tabla de Fusion). Cada una es un objeto con las claves de esta herramienta (geometry1 y geometry2 obligatorias; type, offset (su propio desfase), name (su nombre), offset_min, offset_max, offset_as_rest (sus límites), flip, body1, body2, angle_reference, reference_body, geometry1b, geometry2b, body1b, body2b, all_faces). Se resuelven todas a la vez; si se contradicen, error.
+    offset_min: límite mínimo del desfase (mm, o grados con angle; angle pide angle_reference): con límites, un offset fuera del rango se recorta y avisa. Vacío = sin tope (Offset Limits › Min).
+    offset_max: límite máximo del desfase, igual que offset_min (Offset Limits › Max).
+    offset_as_rest: true («Use Offset as Rest»): el offset es la posición de reposo y tiene que estar dentro de los límites; si no, error en vez de recortar.
     row_name: nombre de la restricción principal dentro del conjunto (lo usa el error de contradicción); vacío = sin nombre.
     all_faces: solo con tangent («All Faces»): true usa la superficie entera de la cara; false pide que la cara del componente 1, ya movida, toque la del componente 2.
     """
     antes = _matrices(sesion)
     principal = _fila_restriccion(sesion, geometry1, geometry2, type, offset, flip, body1, body2, angle_reference, reference_body,
-                                  geometry1b, geometry2b, body1b, body2b, all_faces, row_name)
+                                  geometry1b, geometry2b, body1b, body2b, all_faces, row_name, offset_min, offset_max, offset_as_rest)
     extra = []
     for i, f in enumerate(rows or [], 2):
         sobran = set(f) - set(_CLAVES_FILA)

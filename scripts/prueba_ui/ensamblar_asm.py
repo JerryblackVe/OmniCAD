@@ -511,6 +511,16 @@ def restricciones():
     A.esperar(100)
     A.reg(AR, "conjunto: «+ Agregar restricción» guarda la fila y deja los campos vacíos",
           len(p.valores["filas"]) == 1 and not p.valores["ref1"] and p._lista_filas.count() == 1, p._lista_filas.item(0).text() if p._lista_filas.count() else "")
+    p._lista_filas.setCurrentRow(0)                              # editar la fila guardada tecleando: nombre y desfase
+    for caja_texto, texto in ((p._edit_nombre, "frente"), (p._edit_desfase, "0 mm")):
+        caja_texto.setFocus()
+        caja_texto.selectAll()
+        QTest.keyClicks(caja_texto, texto)
+        QTest.keyClick(caja_texto, Qt.Key_Tab)                   # Tab termina la edición (Enter aceptaría todo el panel)
+    A.esperar(100)
+    A.reg(AR, "conjunto: nombre y desfase de la fila guardada, tecleados en las cajas de la lista",
+          p._lista_filas.currentRow() == 0 and p._lista_filas.item(0).text().startswith("1. frente") and p.valores["filas"][0]["desfase"] == "0 mm",
+          p._lista_filas.item(0).text())
     A.elegir(p, "ref1", *cara(rcaja, (0, 0, 1)))
     A.elegir(p, "ref2", *cara(rfijo, (0, 0, 1)))
     p._t_previa.stop()
@@ -524,6 +534,12 @@ def restricciones():
     A.reg(AR, "conjunto: un solo paso deja la tapa al ras y la cara frontal alineada", caja(rcaja) == [140.0, 280.0, 10.0, 160.0, 300.0, 20.0], f"RCaja={caja(rcaja)}")
     A.reg(AR, "conjunto: el timeline tiene UN paso de restricción", len([o for o in v.doc.operaciones if o.TIPO == "restriccion"]) == 1, "")
     L("undo")
+    restriccion("Alinear con límite máximo (desfase de 8 mm recortado a 5 mm)",
+                [("ref1", cara(rcaja, (0, 0, 1))), ("ref2", cara(rfijo, (0, 0, 1)))], {"desfase": "8 mm", "maximo": "5 mm"}, "alinear_limite",
+                lambda: abs(abs(caja(rcaja)[5] - 20.0) - 5.0) < 0.01)
+    restriccion("Alinear con límite y «Usar desfase como apoyo» fuera del rango (error)",
+                [("ref1", cara(rcaja, (0, 0, 1))), ("ref2", cara(rfijo, (0, 0, 1)))],
+                {"desfase": "8 mm", "maximo": "5 mm", "apoyo": True}, "alinear_apoyo_fuera", None, rechaza="apoyo")
     restriccion("Tangente (esfera sobre la tapa del bloque)",
                 [("ref1", curva(resf, "esfera")), ("ref2", cara(rfijo, (0, 0, 1)))], {"tipo": "tangente"}, "tangente_esfera",
                 lambda: abs(caja(resf)[2] - 20.0) < 0.01)

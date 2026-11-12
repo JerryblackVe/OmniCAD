@@ -277,6 +277,12 @@ class RestriccionComponentes(Comando):
                           ayuda="Entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje."),
                 Expresion("angulo", "Ángulo", "0 deg", ANGULO, visible_si=angular,
                           ayuda="El ángulo entre las dos geometrías (entre caras, el de sus normales)."),
+                Expresion("minimo", "Límite mínimo", "", visible_si=lambda v: alinear(v) or angular(v), avanzado=True,
+                          ayuda="Offset Limits › Min: el desfase (o ángulo) no baja de acá. Vacío = sin tope. En Ángulo pide una referencia de ángulo."),
+                Expresion("maximo", "Límite máximo", "", visible_si=lambda v: alinear(v) or angular(v), avanzado=True,
+                          ayuda="Offset Limits › Max: el desfase (o ángulo) no pasa de acá. Vacío = sin tope."),
+                Casilla("apoyo", "Usar desfase como apoyo", visible_si=lambda v: alinear(v) or angular(v), avanzado=True,
+                        ayuda="Use Offset as Rest: el desfase es el reposo y tiene que estar dentro de los límites (si no, error en vez de recortar)."),
                 Casilla("todas_caras", "Todas las caras", True, visible_si=lambda v: v.get("tipo") == "tangente",
                         ayuda="Activo: la superficie entera de la cara. Apagado: las dos caras tienen que llegar a tocarse."),
                 Casilla("voltear", "Voltear", ayuda="Invierte la orientación que sale sola (al ras ↔ enfrentadas; en Ángulo, da vuelta la geometría 1)."),
@@ -285,7 +291,7 @@ class RestriccionComponentes(Comando):
 
     # La tabla de Fusion: «Agregar» guarda la restricción de los campos como una fila del conjunto y los deja vacíos para la
     # siguiente; la fila de los campos al aceptar es la última. Las filas se resuelven todas a la vez.
-    CAMPOS_FILA = ("tipo", "ref1", "ref2", "modo1", "modo2", "ref1b", "ref2b", "ref_angulo", "desfase", "angulo", "todas_caras", "voltear", "nombre_fila")
+    CAMPOS_FILA = ("tipo", "ref1", "ref2", "modo1", "modo2", "ref1b", "ref2b", "ref_angulo", "desfase", "angulo", "todas_caras", "voltear", "nombre_fila", "minimo", "maximo", "apoyo")
     NOMBRES = {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro", "tangente": "Tangente"}
 
     def _crear_filas(self, panel):
@@ -383,6 +389,12 @@ class RestriccionComponentes(Comando):
         valor = (v.get("angulo") if angulo else v.get("desfase")) or ("0 deg" if angulo else "0 mm")
         ctx.evaluar(valor, ANGULO) if angulo else ctx.evaluar(valor)
         extra = {"todas_caras": bool(v.get("todas_caras", True))} if v.get("tipo") == "tangente" else {}
+        if v.get("tipo", "alinear") in ("alinear", "angulo"):
+            for k in ("minimo", "maximo"):
+                extra[k] = (v.get(k) or "").strip()
+                if extra[k]:
+                    ctx.evaluar(extra[k], ANGULO) if angulo else ctx.evaluar(extra[k])
+            extra["apoyo"] = bool(v.get("apoyo"))
         if centro:
             for n in "12":
                 extra["modo" + n] = v.get("modo" + n) or "simple"
