@@ -90,7 +90,6 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 | SUPERFICIE | [brechas_superficie.md](../brechas_superficie.md) |
 | ANIMACIÓN | [brechas_animacion.md](../brechas_animacion.md) |
 | Plástico y extensiones | [brechas_extensiones.md](../brechas_extensiones.md) |
-| Bugs de la pieza de Gerardo | [trabajo_bugs_pieza_gerardo.md](../trabajo_bugs_pieza_gerardo.md) |
 | Escanear con el celular | [plan_escaneo_celular.md](../plan_escaneo_celular.md) |
 | Boceto: CREAR y MODIFICAR (auditoría) | [auditoria_boceto_crear_modificar.md](../auditoria_boceto_crear_modificar.md) |
 | Herramientas 3D: Agujero a Volumen de fluido (auditoría) | [auditoria_herramientas_3d.md](../auditoria_herramientas_3d.md) |

@@ -62,7 +62,6 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [plan_boceto_organizar.md](plan_boceto_organizar.md) | Organización, agrupación y manipulación de objetos en Boceto (prompt maestro de Gerardo); se borra al terminarla |
 | [plan_velocidad.md](plan_velocidad.md) | Pruebas y procesos más rápidos: medir, suite en paralelo, tests por impacto, humo sin cursor real (A–G) |
 | [plan_caza_errores.md](plan_caza_errores.md) | Programa que busca errores solo (`scripts/caza/`): capas, jueces automáticos, comandos y cómo quedó |
-| [trabajo_bugs_pieza_gerardo.md](trabajo_bugs_pieza_gerardo.md) | Prompt: bugs de la pieza de Gerardo (B-308, B-306, B-311, B-307, B-310) |
 | [plan_reconstruir_solido.md](plan_reconstruir_solido.md) | De una malla a una pieza paramétrica (RI-1–RI-6, F10, F11) |
 | [plan_escaneo_celular.md](plan_escaneo_celular.md) | Escanear una pieza con el celular (ESC-1–ESC-7) |
 | [plan_texto_vectores.md](plan_texto_vectores.md) | Plan de texto y vectores |
@@ -113,6 +112,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [auditorias/patrones-solidos-2026-10-31.md](auditorias/patrones-solidos-2026-10-31.md) | Patrón rectangular, circular, en trayectoria, en puntos y Multitransformación: qué dice la ayuda de Fusion, matriz por herramienta (problema, evidencia, causa, corrección, prueba, pendiente) y las filas PAT-1 a PAT-6 del seguimiento |
 | [auditorias/avance_seleccion_2026-11-12.md](auditorias/avance_seleccion_2026-11-12.md) | Cómo avanza la selección entre campos en cada comando de OmniCAD contra la ayuda de Fusion (qué clic se suma, cuál cambia de rol) y la prueba en la ventana; origen de B-339, B-340 y P-138 |
 | [auditorias/asas_y_paneles_2026-11-12.md](auditorias/asas_y_paneles_2026-11-12.md) | Si los problemas de Extruir (topes del asa, operación por defecto, forma del gizmo del ángulo, campos escondidos) pasan en otras 22 herramientas, con la prueba en la ventana; origen de B-345, B-346, P-141 y P-142 |
+| [auditorias/revision_pre_version_2026-11-12.md](auditorias/revision_pre_version_2026-11-12.md) | Revisión de las 31 fusiones del 2026-11-12 antes de la versión (workflow con juez por hallazgo); origen de B-349 a B-361 |
 | [auditorias/desfase_boceto_2026-10-31.md](auditorias/desfase_boceto_2026-10-31.md) | Matriz de equivalencia del Desfase del boceto contra Fusion (31 filas, con su evidencia: video, ayuda, código, pruebas) y lo que no se pudo verificar |
 | [auditorias/boceto_crear_modificar_inventario.md](auditorias/boceto_crear_modificar_inventario.md) | Inventario de los 55 comandos de CREAR y MODIFICAR del boceto, comparación con Fusion y hallazgos (fase 1 de la [auditoría de CREAR y MODIFICAR](auditoria_boceto_crear_modificar.md)) |
 | [auditorias/boceto_crear_modificar_referencia.md](auditorias/boceto_crear_modificar_referencia.md) | Diferencias reales de CREAR y MODIFICAR del boceto contra la ayuda de Fusion 360 y de SOLIDWORKS (fase 2 de la misma auditoría) |

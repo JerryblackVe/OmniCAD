@@ -244,7 +244,7 @@ Una corrida por fase o por ítem, cada una en su worktree (`bash scripts/worktre
 | H-109 | Botones de Proyectar a superficie y Curva de intersección | Sol (cortó por cupo; terminó el coordinador) | `D:/PROGRAMA-H-109` / `item/H-109` | Fusionada |
 | B-256 | La Curva de fusión con arista del modelo se deshace junto con su proyección (lo encontró `cm_ventana`) | Coordinador de ejecución (Claude Opus) | `D:/PROGRAMA-B-256` / `item/B-256` | Commiteada en la rama |
 | cm-5 | Fase 5: paridad ventana ↔ API/MCP/CLI (lector Sonnet: 58 claves, 15 diferencias) | Coordinador de ejecución (Claude Opus) | `D:/PROGRAMA-cm-5` / `item/cm-5` | Commiteada en la rama (P-94 queda para Gerardo) |
-| cm-6 | Fases 6 y 7, portones 2, 3 y 5: piezas `cm_ventana` y `cm_pieza_varilla`, caza, matriz e informe | Coordinador de ejecución (Claude Opus) | `D:/PROGRAMA-cm-6` / `item/cm-6` | Commiteada en la rama (P-95 y portón 4 pendientes) |
+| cm-6 | Fases 6 y 7, portones 2, 3 y 5: piezas `cm_ventana` y `cm_pieza_varilla`, caza, matriz e informe | Coordinador de ejecución (Claude Opus) | `D:/PROGRAMA-cm-6` / `item/cm-6` | Commiteada en la rama (portón 4 pendiente) |
 
 ### Brief cm-1 (fase 1, inventario)
 
@@ -320,7 +320,7 @@ Pruebas: **API** = `clon/tests/test_boceto_crear_modificar_matriz.py` (un caso p
 | Simetría (`simetria`) | 1 | API, Ventana (`simetria_boceto`) | — | — | VERIFICADO |
 | Patrones (`patron_circular`, `patron_rectangular`, `editar_patron`) | 3 | API, Comb., Ventana (`patrones_boceto`) | H-111 | H-111 | CORREGIDO |
 | Proyectar/Incluir (`proyectar`, `intersecar`, `perfil_giratorio`, `isoparametrica`, `proyectar_eje`) | 5 | API, Qt, Ventana (`proyectar_boceto`, `boceto_herramientas`) | — | — | VERIFICADO |
-| Proyectar/Incluir (`incluir_3d`, `proyectar_superficie`, `curva_interseccion`, `romper_vinculo`, `proyecciones_perdidas`) | 5 | API, Qt (`test_proyectar_tarjeta`, `test_comandos`, `test_boceto_fase7_ui`) | H-109 | H-109 | PARCIAL (P-95: sin pieza de ventana) |
+| Proyectar/Incluir (`incluir_3d`, `proyectar_superficie`, `curva_interseccion`, `romper_vinculo`, `proyecciones_perdidas`) | 5 | API, Qt (`test_proyectar_tarjeta`, `test_comandos`, `test_boceto_fase7_ui`) | H-109 | H-109 | VERIFICADO (pieza `proyecciones_boceto`, 2026-11-12; la proyección perdida, en `perdidas_atenuar`) |
 | Cota de boceto (`cota`) | 1 | API, Ventana (`boceto_cotas`, `cm_pieza_varilla`) | — | — | VERIFICADO |
 | Espiral (`espiral`) | 1 | API, Ventana (`cm_ventana`) | B-234 | B-234 | CORREGIDO |
 | Empalme (`empalme`) | 1 | API, Comb., cm-5, Ventana (`cm_ventana`, `cm_pieza_varilla`) | B-233, B-242, P-75 | B-233, B-242, P-75 | CORREGIDO |
@@ -334,7 +334,7 @@ Pruebas: **API** = `clon/tests/test_boceto_crear_modificar_matriz.py` (un caso p
 | Mover/copiar (`mover`) y marco de control | 1 | API, cm-5, Qt, Ventana (`boceto_herramientas`, `cm_ventana`) | B-232, B-236, B-244, B-245, B-253 | B-232, B-236, B-244, B-245, B-253 | CORREGIDO |
 
 Total: 26 filas y 55 claves de CREAR y MODIFICAR (más «Cambiar parámetros», que es el diálogo de parámetros y tiene su
-propia pieza `parametros`). 50 claves probadas desde la ventana completa; las 5 de la fila PARCIAL, no (P-95).
+propia pieza `parametros`). 55 claves probadas desde la ventana completa (las 5 de proyección, con la pieza `proyecciones_boceto` del 2026-11-12).
 
 ## Informe final (§ 22, 2026-11-08)
 
@@ -354,7 +354,7 @@ propia pieza `parametros`). 50 claves probadas desde la ventana completa; las 5 
 - **Comparación con Fusion:** las 9 «Duda» de cm-5 se midieron en Fusion (`evidencias/fusion_2026-11-08/boceto/`). No se
   afirma paridad completa: quedan las diferencias de `docs/brechas_mcp.md` y el ángulo 2 del patrón rectangular («sin
   dato» en la ayuda de Fusion).
-- **Pendiente:** P-95 (pieza de ventana para 5 comandos de proyección) y el portón 4
+- **Pendiente:** el portón 4
   (juez independiente: sesión aparte con otro modelo, 30 min, `fable-judge` y `omnicad-test`; la sesión de ejecución no
   puede abrir otra sesión).
-- **Estado final de CREAR y MODIFICAR:** 25 de 26 herramientas VERIFICADO o CORREGIDO desde la ventana; 1 PARCIAL.
+- **Estado final de CREAR y MODIFICAR:** 26 de 26 herramientas VERIFICADO o CORREGIDO desde la ventana.
