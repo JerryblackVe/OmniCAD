@@ -18,14 +18,14 @@ git (`git show dbef824:PROJECT_LOG.md`).
     - E2 (Opus): B-358 (tests largos) → P-139 (espera aprobación) → B-344 → P-141.
     - E3 (Opus): B-364 y P-143 (tests en curso; P-143 se cierra con captura).
     - E4 (Opus): P-138 → P-144.
-    - E5 (Sonnet): resto de ASM-17 (nombre y desfase por fila, límites, previa, conflictos con uniones).
+    - E5 (Sonnet): ASM-17h (nombre y desfase por fila, recálculo por parámetro de fila extra) → límites, previa, conflictos con uniones.
     - E6 (Opus, vaciado a las ~20:30 con brief): P-78 (rosca lenta, prioridad 1) → resto de B-337 (`~/OmniCAD-B-337b` tiene su nota) → B-363.
-    - E7 (Sonnet, segunda línea de Sol): B-188 sin archivo; libre para otra cola de Sol.
-    - E8 (Sonnet): libre (cerró B-365).
+    - E7 (Sonnet, segunda línea de Sol): rescatar `~/OmniCAD-registro` (registro_bugs.py) → `~/OmniCAD-caza-real`.
+    - E8 (Sonnet): B-370 (rojo en main: `buscar_misma` revienta con una ref de texto, `test_formulario_paneles`).
     - E9 (Sonnet, Sol): B-368 (tablas ISO 965-1 con los XML de `~/fusion_config/`, fuera del repo).
     - E10 (Sonnet): B-366 (eliminar varios pasos; tests_afectados en curso).
   - **Integrar:** scripts en `~/coordinador/` (fuera del repo): `tanda.sh "ID|mensaje" ...` commitea el worktree, fusiona, resuelve PROJECT_LOG y bugs.md (`resolver_seg.py` ya conserva las filas nuevas de la rama) y frena en choque de código; `resolver_mej.py ID nota` para mejoras.md. Después de cada tanda: tests cruzados en main con `scripts/turno.py` y `xvfb-run -a`, y buscar filas perdidas (ver lección del día).
-  - **Worktrees viejos sin dueño:** `~/OmniCAD-caza-real`, `~/OmniCAD-registro` (de 345d230) y `/tmp/base`: preguntar antes de borrar.
+  - **Worktrees viejos:** `~/OmniCAD-caza-real` y `~/OmniCAD-registro` pasaron a E7; `/tmp/base` sin dueño: preguntar antes de borrar.
   - **Sol:** cupo de sobra (Gerardo, 90 % / 75 % libre). Brief corto + `< /dev/null` + `--print-logs`; la 1.ª corrida larga se colgaba sin eso.
   - **Fila de tests:** 3 a la vez y la VPS usa ~3 de 8 núcleos; ofrecí subir a 5 (`OMNICAD_TURNOS`), Gerardo no contestó.
 - **2026-11-12 · B-300 (E9).** Confirmado con la API y la tabla de datos: el aviso «Sin datos verificados de tolerancia» (`nucleo/tolerancias.py › resolver_clase`) sale solo cuando el tamaño no tiene tabla; con el tamaño automático (según la cara) solo aparece en caras de Ø ≤ 3,5 mm. Lo que sí pasaba «con el valor por defecto»: el tamaño inicial del diálogo (`_TAMANO_INICIAL` en `ui/comandos/crear.py`) de `ansi_metrica` y `gb_metrica` arrancaba en 0,25 mm y el de `gost_autorroscante` en 1,5 mm (ST…), sin tabla; ahora arrancan en 6 mm, 6 mm y 4 mm. Los tamaños que de verdad no tienen tabla (p. ej. M0,25, GOST ST…) siguen avisando. Prueba: `tests/test_b300_rosca_tamano_inicial.py` (cada familia paralela, 19 casos; 3 fallan con el código anterior). Sin Sol: el cambio son 3 entradas de un diccionario. ⚠ No pude confirmar con Gerardo si su nota hablaba de este aviso o de la fila Biblioteca.
