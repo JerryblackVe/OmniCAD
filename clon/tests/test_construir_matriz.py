@@ -332,3 +332,19 @@ def test_b285_receta_con_id_de_paso_que_no_es_texto_se_rechaza(malo):
     r = api.llamar(s, "apply_recipe", {"recipe": receta})
     assert not r["ok"] and r["error_kind"] == "INVALID_RECIPE" and "id de texto" in r["mensaje"], r
     assert len(s.doc.operaciones) == antes
+
+
+def test_receta_con_params_no_dict_nombra_el_paso():
+    """B-288: params nulo o lista se rechaza nombrando el paso y sin cambiar el documento."""
+    s = _armar()
+    llamar(s, "create_construction_plane", plane="XY", offset=3)
+    receta = llamar(s, "get_recipe")["recipe"]
+    antes = len(s.doc.operaciones)
+    for params in (None, []):
+        mala = copy.deepcopy(receta)
+        paso = mala["operaciones"][-1]
+        paso["params"] = params
+        r = api.llamar(s, "apply_recipe", {"recipe": mala})
+        assert not r["ok"] and r["error_kind"] == "INVALID_RECIPE", r
+        assert paso["id"] in r["mensaje"], r
+        assert len(s.doc.operaciones) == antes
