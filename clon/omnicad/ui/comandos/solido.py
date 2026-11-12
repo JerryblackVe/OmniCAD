@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Comandos de SÓLIDO › CREAR con diálogo al estilo Fusion: Extruir y Revolución."""
+import json
 import math
 
 import numpy as np
@@ -73,6 +74,7 @@ class Extruir(Comando):
     AYUDA = "Agrega profundidad a perfiles de boceto o caras planas: cuerpo nuevo, unir, cortar o intersecar."
     CLASE_OP = OpExtrusion
     TITULOS_MODO = ("tipo", {"solida": ("Extruir", "extruir"), "delgada": ("Extrusión delgada", "extruir")})
+    _herramienta_previa = None      # (estado, índice, receta del paso) → formas de `_formas_herramienta` (P-99)
 
     def verificar(self, ctx):
         if not ctx.estado.bocetos and not ctx.estado.cuerpos:
@@ -202,9 +204,13 @@ class Extruir(Comando):
         return herramienta
 
     def _formas_herramienta(self, ctx, op, en_vivo=False):
-        with geo.en_serie():         # B-293: previa dentro de la ventana
-            estado, _avisos = ctx.doc.previsualizar(self._herramienta(op), ctx.indice, en_vivo=en_vivo)
-        return [c.forma for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos]
+        # P-99: el rojo de «Cortar» y el choque con los sólidos piden la misma herramienta en el mismo clic
+        clave = ctx.estado, ctx.indice, json.dumps(op.a_dict())
+        if self._herramienta_previa is None or self._herramienta_previa[0] != clave:
+            with geo.en_serie():         # B-293: previa dentro de la ventana
+                estado, _avisos = ctx.doc.previsualizar(self._herramienta(op), ctx.indice, en_vivo=en_vivo)
+            self._herramienta_previa = clave, [c.forma for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos]
+        return self._herramienta_previa[1]
 
     def previa_vista(self, ctx, v, op):
         """Con «Cortar», Fusion muestra en ROJO el volumen de la extrusión mientras el diálogo está abierto."""
@@ -219,6 +225,7 @@ class Extruir(Comando):
         self._ajustando = False
         self._cajas = {}                         # id de cuerpo → caja envolvente: el estado no cambia con el panel abierto
         self._hijo, self._op_hijo = None, None
+        self._herramienta_previa = None
         self._t_hijo = None
 
     def al_cambiar(self, panel, clave):
@@ -238,14 +245,21 @@ class Extruir(Comando):
         if self._fija or op is None:
             return
         ctx = panel.ctx
-        cajas = getattr(estado, "_cajas_previa", None)
-        cajas = list(cajas.values()) if cajas else [geo.caja_envolvente(f) for f in self._formas_herramienta(ctx, op, True)]
+        cajas, formas = getattr(estado, "_cajas_previa", None), None
+        if cajas:
+            cajas = list(cajas.values())
+        else:   # P-99: la herramienta se extruye una vez por clic, y con «Nuevo» la previa exacta ya es la herramienta
+            exacta = op.p.get("operacion") == "nuevo" and not hasattr(estado, "_mallas_previa")
+            formas = ([c.forma for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos] if exacta
+                      else self._formas_herramienta(ctx, op, True))
+            cajas = [geo.caja_envolvente(f) for f in formas]
         solidos = [c for c in self._visibles(ctx) if any(geo.cajas_solapan(self._caja(c), k) for k in cajas)]
         if any(len(geo.caras(c.forma)) >= CARAS_PESADAS for c in solidos):
             self._pedir_al_hijo(panel, op, solidos)
             return
         self._cancelar_hijo()
-        formas = self._formas_herramienta(ctx, op, True) if solidos else []
+        if formas is None:
+            formas = self._formas_herramienta(ctx, op, True) if solidos else []
         self._ajustar(panel, self._auto(ctx, op, any(geo.solapan(f, c.forma) for f in formas for c in solidos)))
 
     def _auto(self, ctx, op, solapa):

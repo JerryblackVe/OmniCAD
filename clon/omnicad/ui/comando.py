@@ -1631,6 +1631,9 @@ class PanelComando(QFrame):
         import numpy as np
 
         arrastrando = self.manipuladores is not None and self.manipuladores.arrastrando
+        if not arrastrando:
+            return False    # el valor tecleado y el asa al soltarse salen del kernel exacto; P-99: la plantilla (otra
+            # extrusión y su malla: 1 s con 29 perfiles) se arma al primer arrastre, no en cada clic que suma un perfil
         variables = {"distancia", "distancia2", "direccion", "medida", "simetrica", "invertir"}
         firma = (self.ctx.estado, repr({k: v for k, v in p.items() if k not in variables}),
                  self.visor.config.teselado, self.visor.config.angular)
@@ -1658,8 +1661,6 @@ class PanelComando(QFrame):
             self._prisma_previa = firma, estado, prismas
             if self.manipuladores is not None:
                 self.manipuladores.actualizar()  # prepara también el apoyo del asa antes del primer movimiento
-        if not arrastrando:
-            return False    # el valor tecleado, y el asa al soltarse, siempre salen del kernel exacto
         d1 = self.ctx.evaluar(p["distancia"])
         modo = "simetrica" if p.get("simetrica") else p["direccion"]
         medida = "total" if p.get("simetrica") else p["medida"]

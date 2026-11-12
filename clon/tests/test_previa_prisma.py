@@ -135,9 +135,26 @@ def test_valor_tecleado_sale_del_kernel_y_no_es_una_malla(ventana):
     p.set_valor("distancia", "20")
     p._t_previa.stop()
     p._calcular_previa()
-    assert p._previa_ok and p._prisma_previa is not None    # la plantilla queda lista para el primer arrastre
+    assert p._previa_ok and p._prisma_previa is None    # P-99: la plantilla se arma al primer arrastre
     forma = _forma_visor(v)
     assert not rc.es_malla(forma) and geo.volumen_exacto(forma) == pytest.approx(40 * 30 * 20, rel=1e-9)
+
+
+def test_cada_cambio_sin_arrastre_extruye_una_sola_vez(ventana, monkeypatch):
+    """P-99: sumar un perfil o teclear un valor extruía 3 veces (la previa, la plantilla del asa y la herramienta
+    para ver si choca con un sólido): con 29 perfiles, 2,5 s por clic."""
+    v, p = ventana
+    llamadas, original = [], v.doc.previsualizar
+    monkeypatch.setattr(v.doc, "previsualizar", lambda *a, **k: llamadas.append(a[0]) or original(*a, **k))
+    p.set_valor("distancia", "15")
+    p._t_previa.stop()
+    p._calcular_previa()
+    assert p._previa_ok and len(llamadas) == 1
+    for en_vivo in (False, True):       # el rojo de «Cortar» y el choque con los sólidos comparten la herramienta
+        p.comando._formas_herramienta(p.ctx, p.ultima_op, en_vivo)
+    assert len(llamadas) == 2
+    _arrastrar_a(p, 25)                 # la plantilla sale al agarrar el asa y el arrastre la usa
+    assert p._prisma_previa is not None and rc.es_malla(_forma_visor(v)) and len(llamadas) == 3
 
 
 def test_aceptar_un_milimetro_no_reutiliza_la_malla_de_la_plantilla(ventana):
