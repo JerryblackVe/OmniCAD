@@ -244,6 +244,37 @@ def test_execute_code_en_vivo_solo_con_su_preferencia(puente, ventana):
         c.cerrar()
 
 
+def test_b322_bloqueo_ui_identifica_la_api_despues_de_terminar(puente, ventana, tmp_path, monkeypatch):
+    from omnicad import registro_uso as ru
+    from test_registro_uso import eventos
+
+    monkeypatch.setenv("OMNICAD_REGISTRO_DIR", str(tmp_path / "registro"))
+    registro = ventana.registro_uso
+    anterior = ventana.prefs["general/puente_codigo"]
+    ventana.prefs["general/puente_codigo"] = True
+    monkeypatch.setattr(registro, "_ultima_accion", "Preferencias")
+    try:
+        assert registro.configurar(True)["enabled"]
+        registro.reloj.stop()  # El latido debe leer la demora después del finally del puente.
+        registro._latido()
+        respuesta = puente.ejecutar("execute_code", {"code": "import time; time.sleep(0.4)"})
+        assert respuesta["ok"], respuesta
+        registro._latido()
+        ru.activo.cola.join()
+        bloqueos = [e["datos"] for e in eventos(ru.carpeta()) if e["tipo"] == "bloqueo_ui"]
+        assert bloqueos[-1]["accion"] == "api.execute_code"
+
+        time.sleep(0.4)
+        registro._latido()
+        ru.activo.cola.join()
+        bloqueos = [e["datos"] for e in eventos(ru.carpeta()) if e["tipo"] == "bloqueo_ui"]
+        assert [b["accion"] for b in bloqueos[-2:]] == ["api.execute_code", "Preferencias"]
+    finally:
+        registro.configurar(False)
+        ru.ultimo = None
+        ventana.prefs["general/puente_codigo"] = anterior
+
+
 def test_drag_component_en_vivo_se_ve_en_la_ventana(puente, ventana):
     c = _cliente(puente)
     cuerpo = c.pedir("create_box", {"length": 10, "width": 10, "height": 10, "x": 700})["result"]["bodies_created"][0]["id"]
