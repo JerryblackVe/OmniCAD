@@ -248,31 +248,42 @@ class Union(Comando):
 
 class RestriccionComponentes(Comando):
     CLAVE, TITULO, ICONO = "restriccion_componentes", "Restricción de componentes", "restriccion_componentes"
-    AYUDA = ("Posiciona el componente 1 respecto del 2 (Constrain Components). Hoy: Alinear: caras coplanares, ejes "
-             "concéntricos o puntos coincidentes. Faltan Ángulo, Centro y Tangente.")
+    AYUDA = ("Posiciona el componente 1 respecto del 2 (Constrain Components). Alinear: caras coplanares, ejes "
+             "concéntricos o puntos coincidentes. Ángulo: gira el 1 hasta el ángulo pedido con el 2. Faltan Centro y Tangente.")
     CLASE_OP = OpRestriccion
 
     def verificar(self, ctx):
         return None if ctx.estado.componentes else "Primero creá componentes (ENSAMBLAR › Nuevo componente)."
 
     def campos(self, ctx):
-        return [Opciones("tipo", "Tipo", {"alinear": "Alinear"}),
+        alinear = lambda v: v.get("tipo", "alinear") == "alinear"  # noqa: E731
+        return [Opciones("tipo", "Tipo", {"alinear": "Alinear", "angulo": "Ángulo"}),
                 Seleccion("ref1", "Componente 1: geometría", SNAP, ayuda="La cara, arista, vértice, plano, eje o punto que se mueve."),
                 Seleccion("ref2", "Componente 2: geometría", SNAP, ayuda="A lo que se alinea; si el 1 está fijo, se mueve este."),
-                Expresion("desfase", "Desfase", "0 mm", ayuda="Entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje."),
-                Casilla("voltear", "Voltear", ayuda="Invierte la orientación que sale sola (al ras ↔ enfrentadas).")]
+                Seleccion("ref_angulo", "Referencia de ángulo", {"arista", "eje", "curva_boceto"}, minimo=0, visible_si=lambda v: not alinear(v),
+                          ayuda="Una arista recta o un eje: el ángulo se mide alrededor de él y queda con signo (sin él, de 0 a 180°)."),
+                Expresion("desfase", "Desfase", "0 mm", visible_si=alinear,
+                          ayuda="Entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje."),
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO, visible_si=lambda v: not alinear(v),
+                          ayuda="El ángulo entre las dos geometrías (entre caras, el de sus normales)."),
+                Casilla("voltear", "Voltear", ayuda="Invierte la orientación que sale sola (al ras ↔ enfrentadas; en Ángulo, da vuelta la geometría 1).")]
 
     def construir(self, v, ctx):
         exigir(v, "ref1", "Seleccioná la geometría del componente 1.")
         exigir(v, "ref2", "Seleccioná la geometría del componente 2.")
-        ctx.evaluar(v.get("desfase") or "0")
+        angulo = v.get("tipo") == "angulo"
+        valor = (v.get("angulo") if angulo else v.get("desfase")) or ("0 deg" if angulo else "0 mm")
+        ctx.evaluar(valor, ANGULO) if angulo else ctx.evaluar(valor)
         return self.crear_op(OpRestriccion, v, ctx, tipo=v.get("tipo", "alinear"), ref1=ref1(v, "ref1"), ref2=ref1(v, "ref2"),
-                             desfase=v.get("desfase") or "0 mm", voltear=bool(v.get("voltear")))
+                             desfase=valor, voltear=bool(v.get("voltear")),
+                             ref_angulo=ref1(v, "ref_angulo") if angulo else None)
 
     def desde_op(self, op, ctx):
         v = dict(op.p)
-        for k in ("ref1", "ref2"):
+        for k in ("ref1", "ref2", "ref_angulo"):
             v[k] = [hit_desde_ref(op.p[k], ctx.estado)] if op.p.get(k) else []
+        if op.p.get("tipo") == "angulo":
+            v["angulo"] = op.p["desfase"]
         return v
 
 

@@ -85,7 +85,7 @@ def test_si_el_componente_1_esta_fijo_se_mueve_el_2(dos):
 def test_errores_claros_y_el_documento_no_cambia(dos):
     s, a, b = dos
     _falla(s, "constrain_components", "OPERATION_FAILED", geometry1=">Z", geometry2="<Z", body1=a, body2=a)   # mismo componente
-    _falla(s, "constrain_components", "INVALID_ARGUMENTS", geometry1=">Z", geometry2=">Z", type="angle", body1=b, body2=a)
+    _falla(s, "constrain_components", "INVALID_ARGUMENTS", geometry1=">Z", geometry2=">Z", type="tangent", body1=b, body2=a)
     arista = _ll(s, "find_edges", body=a)["edges"][0]["id"]
     r = _falla(s, "constrain_components", "OPERATION_FAILED", geometry1=">Z", geometry2=arista, body1=b)       # cara con arista
     assert "combinación plano–eje" in r["mensaje"]
@@ -133,6 +133,111 @@ def test_el_comando_de_la_ventana_alinea_y_se_edita(dos, tmp_path):
         v.panel.set_valor("desfase", "0 mm")
         v.panel.aceptar()
         assert _caja(api.Sesion(v.doc), b)[5] == 10
+    finally:
+        if v.panel is not None:
+            v.panel.cancelar()
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()
+        app.processEvents()
+
+
+# ---------------------------------------------------------------- ASM-17 › Ángulo
+def _grados_con_z(n):
+    import math
+    return math.degrees(math.acos(max(-1.0, min(1.0, n[2]))))
+
+
+def _cara(s, cuerpo, etiqueta):
+    """La cara por su etiqueta («B/F6»), con el id vigente: los de find_faces caducan con cada cambio (el índice no cambia)."""
+    return next(f for f in _ll(s, "find_faces", body=cuerpo)["faces"] if f["id"] == etiqueta)
+
+
+def _arista_x_de_la_tapa(s, cuerpo):
+    return next(e["id"] for e in _ll(s, "find_edges", body=cuerpo)["edges"]
+                if abs(abs(e["direction"][0]) - 1) < 1e-9 and e["center"][2] == 10)
+
+
+def test_angulo_entre_dos_caras_es_el_de_sus_normales_y_gira_por_el_centro_de_la_cara(dos):
+    s, a, b = dos
+    tapa = _ll(s, "find_faces", body=b, selector=">Z")["faces"][0]["id"]
+    centro = _cara(s, b, tapa)["center"]
+    for grados in (30, 90):                                              # la segunda vez parte de donde quedó la primera
+        _ll(s, "constrain_components", type="angle", geometry1=_cara(s, b, tapa)["id"], geometry2=">Z", body2=a, offset=grados)
+        cara = _cara(s, b, tapa)
+        assert _grados_con_z(cara["normal"]) == pytest.approx(grados, abs=0.01)
+        assert cara["center"] == pytest.approx(centro, abs=1e-4)           # gira por el centro de la cara: ese punto no se mueve
+    assert g.volumen(s.cuerpo(b).forma) == pytest.approx(1000)
+
+
+def test_angulo_con_referencia_es_con_signo(dos):
+    s, a, b = dos
+    tapa = _ll(s, "find_faces", body=b, selector=">Z")["faces"][0]["id"]
+    ys = []
+    for grados in (30, -30):
+        _ll(s, "constrain_components", type="angle", geometry1=_cara(s, b, tapa)["id"], geometry2=">Z", body2=a, offset=grados,
+            angle_reference=_arista_x_de_la_tapa(s, a), reference_body=a)
+        n = _cara(s, b, tapa)["normal"]
+        assert _grados_con_z(n) == pytest.approx(30, abs=0.01) and n[0] == pytest.approx(0, abs=1e-4)
+        ys.append(n[1])
+    assert ys[0] == pytest.approx(-ys[1], abs=1e-4) and abs(ys[0]) == pytest.approx(0.5, abs=1e-3)       # los dos sentidos
+
+
+def test_angulo_si_el_componente_1_esta_fijo_gira_el_2(dos):
+    s, a, b = dos
+    tapa = _ll(s, "find_faces", body=b, selector=">Z")["faces"][0]["id"]
+    r = _ll(s, "constrain_components", type="angle", geometry1=">Z", geometry2=_cara(s, b, tapa)["id"], body1=a, offset=45)   # A está fija
+    assert [c["name"] for c in r["moved_components"]] == ["CB"] and _caja(s, a) == [-10, -10, 0, 10, 10, 10]
+    assert _grados_con_z(_cara(s, b, tapa)["normal"]) == pytest.approx(45, abs=0.01)
+
+
+def test_angulo_con_un_punto_o_con_referencia_en_alinear_es_un_error_claro(dos):
+    s, a, b = dos
+    r = _falla(s, "constrain_components", "OPERATION_FAILED", type="angle", geometry1=[45, 25, 7], geometry2=">Z", body2=a, offset=10)
+    assert "no tiene dirección" in r["mensaje"]
+    _falla(s, "constrain_components", "INVALID_ARGUMENTS", type="align", geometry1=">Z", geometry2=">Z", body1=b, body2=a,
+           angle_reference=">Z")
+
+
+def test_el_comando_de_la_ventana_arma_el_angulo_con_referencia_y_se_edita(dos, tmp_path):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.api import selectores as sl
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+
+    s, a, b = dos
+    tapa = _ll(s, "find_faces", body=b, selector=">Z")["faces"][0]["id"]
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    try:
+        v.resize(1280, 800)
+        v.show()
+        p = v.ejecutar_comando(CATALOGO["restriccion_componentes"]())
+        estado = v.doc.estado_final
+        p.set_valor("tipo", "angulo")
+        assert not p.widgets["angulo"].isHidden() and p.widgets["desfase"].isHidden()
+        c, cara = sl.elegir(s, ">Z", "cara", b)[0]
+        c2, cara2 = sl.elegir(s, ">Z", "cara", a)[0]
+        arista = next(e for e in _ll(s, "find_edges", body=a)["edges"] if abs(abs(e["direction"][0]) - 1) < 1e-9 and e["center"][2] == 10)
+        for campo, ref in (("ref1", sl.referencia(c, cara)), ("ref2", sl.referencia(c2, cara2)),
+                           ("ref_angulo", sl.referencia(*sl.elegir(s, arista["id"], "arista")[0]))):
+            p._activar(next(x for x in p.campos if x.clave == campo))
+            p._elegida(hit_desde_ref(ref, estado))
+        p.set_valor("angulo", "30 deg")
+        p.aceptar()
+        assert v.panel is None
+        s2 = api.Sesion(v.doc)
+        n = _cara(s2, b, tapa)["normal"]
+        assert _grados_con_z(n) == pytest.approx(30, abs=0.01) and abs(n[1]) == pytest.approx(0.5, abs=1e-3)
+        v.editar_operacion(next(o.id for o in v.doc.operaciones if o.TIPO == "restriccion"))
+        assert v.panel.valores["tipo"] == "angulo" and v.panel.valores["angulo"] == "30 deg" and len(v.panel.valores["ref_angulo"]) == 1
+        v.panel.set_valor("angulo", "10 deg")
+        v.panel.aceptar()
+        assert _grados_con_z(_cara(api.Sesion(v.doc), b, tapa)["normal"]) == pytest.approx(10, abs=0.01)
     finally:
         if v.panel is not None:
             v.panel.cancelar()

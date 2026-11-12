@@ -1272,10 +1272,14 @@ def _rotar_a(a, b, centro):
         if c > 0:
             return np.identity(4)
         eje, s, c = _unit(np.cross(a, (1.0, 0, 0) if abs(a[0]) < 0.9 else (0, 1.0, 0))), 0.0, -1.0
-    k = eje / (s or 1.0)
+    return _giro_eje(eje / (s or 1.0), math.atan2(s, c), centro)
+
+
+def _giro_eje(k, alfa, centro):
+    """Matriz 4x4 que gira `alfa` rad (regla de la mano derecha) alrededor del eje unitario `k` por `centro`."""
     K = np.array([[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]])
     r = np.identity(4)
-    r[:3, :3] = np.identity(3) + s * K + (1 - c) * (K @ K)
+    r[:3, :3] = np.identity(3) + math.sin(alfa) * K + (1 - math.cos(alfa)) * (K @ K)
     return _tras(centro) @ r @ _tras(-np.asarray(centro, float))
 
 
@@ -1319,41 +1323,79 @@ def _alinear(e1, e2, desfase, voltear):
     return _tras(paso + n2 * desfase) @ giro
 
 
+def _direccion_de(e):
+    """Dirección unitaria de la geometría para Ángulo: la normal de un plano o cara plana, o el eje de un cilindro, una
+    arista o un eje de construcción."""
+    if _clase_de_alinear(e) == "punto":
+        raise ErrorOperacion("Ángulo: un punto no tiene dirección; elegí una cara, una arista o un eje.")
+    return _unit(_marco(e, "centro", 2)[0][:3, 2])
+
+
+def _angular(e1, e2, grados, voltear, e_ref=None):
+    """Giro (4x4, mundo, por el centro de la geometría 1) que deja el ángulo entre las direcciones de `e1` y `e2` en
+    `grados` (ASM-17 › Ángulo de Constrain Components): entre planos, el de sus normales. Sin referencia gira por el
+    camino más corto y el ángulo va de 0 a 180°. Con `e_ref` (arista o eje, «Angle Reference») el ángulo es con signo,
+    medido alrededor de ese eje, y no queda ambiguo. «Voltear» da vuelta la geometría 1."""
+    d1, d2 = _direccion_de(e1) * (-1.0 if voltear else 1.0), _direccion_de(e2)
+    o1 = _marco(e1, "centro", 2)[0][:3, 3]
+    if e_ref is None:
+        phi = math.acos(max(-1.0, min(1.0, float(d1 @ d2))))
+        k = np.cross(d1, d2)
+        if np.linalg.norm(k) < 1e-9:
+            k = np.cross(d1, (1.0, 0, 0) if abs(d1[0]) < 0.9 else (0, 1.0, 0))
+        return _giro_eje(_unit(k), phi - math.radians(grados), o1)
+    a = _direccion_de(e_ref)
+    p1, p2 = d1 - a * float(d1 @ a), d2 - a * float(d2 @ a)
+    if np.linalg.norm(p1) < 1e-9 or np.linalg.norm(p2) < 1e-9:
+        raise ErrorOperacion("Ángulo: la referencia es paralela a una de las geometrías; elegí otra arista o eje de referencia.")
+    psi = math.atan2(float(a @ np.cross(p2, p1)), float(p2 @ p1))
+    return _giro_eje(a, math.radians(grados) - psi, o1)
+
+
 class OpRestriccion(Operacion):
-    """ENSAMBLAR › Restricción de componentes [ASM-17, Constrain Components]: de los cuatro tipos de Fusion (Alinear,
-    Ángulo, Centro y Tangente) hoy está Alinear. Mueve el componente de `ref1` hasta alinearlo con `ref2` (si el primero
-    está fijo o es la raíz, se mueve el segundo: «Component 2 moves to Component 1»). Lo que falta de Fusion: Ángulo,
-    Centro, Tangente, filas de varias restricciones (conjuntos), límites de desfase y resolver todas a la vez."""
+    """ENSAMBLAR › Restricción de componentes [ASM-17, Constrain Components]: de los cuatro tipos de Fusion hoy están
+    Alinear y Ángulo. Mueve el componente de `ref1` respecto de `ref2` (si el primero está fijo o es la raíz, se mueve
+    el segundo: «Component 2 moves to Component 1»). `desfase` es la distancia (Alinear) o el ángulo (Ángulo, con
+    `ref_angulo` opcional: la arista o el eje que fija el sentido). Lo que falta de Fusion: Centro, Tangente, filas de
+    varias restricciones (conjuntos), límites de desfase y resolver todas a la vez."""
     TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
-    PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False}
+    PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None}
     EXPRESIONES = ("desfase",)
-    OPCIONES = {"tipo": {"alinear": "Alinear"}}
+    OPCIONES = {"tipo": {"alinear": "Alinear", "angulo": "Ángulo"}}
 
     def dependencias(self):
-        return (super().dependencias() | ent.dependencias_de(self.p["ref1"], self.p["ref2"])) - {self.id}
+        return (super().dependencias() | ent.dependencias_de(self.p["ref1"], self.p["ref2"], self.p.get("ref_angulo"))) - {self.id}
 
     def ejecutar(self, estado, ctx):
         p = self.p
-        if p["tipo"] != "alinear":
-            raise ErrorOperacion(f"La restricción «{p['tipo']}» todavía no está: hoy solo Alinear.")
+        if p["tipo"] not in ("alinear", "angulo"):
+            raise ErrorOperacion(f"La restricción «{p['tipo']}» todavía no está: hoy Alinear y Ángulo.")
         if not p["ref1"] or not p["ref2"]:
             raise ErrorOperacion("Elegí la geometría de los dos componentes.")
         exigir_numero(p["desfase"])
         e1, e2 = _resolver(p["ref1"], estado), _resolver(p["ref2"], estado)
         c1, c2 = _componente_de(estado, e1) or "", _componente_de(estado, e2) or ""
+        invertido = False
         if c1 == c2:
             raise ErrorOperacion("Las dos selecciones están en el mismo componente: elegí geometría de otro componente.")
         if not c1 or es_fijo(estado, c1):                   # «Component 2 moves to Component 1»
             if not c2 or es_fijo(estado, c2):
                 raise ErrorOperacion("Los dos componentes están fijos o son la raíz: ninguno se puede mover.")
             e1, e2, c1, c2 = e2, e1, c2, c1
+            invertido = True
         comps = grupo_rigido(estado, c1)
         fijos = [c for c in comps if es_fijo(estado, c)]
         if fijos:
             nombre = estado.componentes[fijos[0]].get("nombre") or fijos[0]
             raise ErrorOperacion(f"El componente a mover está en un grupo rígido con «{nombre}», que está fijo.")
         self._usados = (comps | {c2}) - {"", self.id}
-        _mover_componentes(estado, comps, _alinear(e1, e2, ctx.evaluar(p["desfase"]), bool(p["voltear"])))
+        if p["tipo"] == "alinear":
+            m = _alinear(e1, e2, ctx.evaluar(p["desfase"]), bool(p["voltear"]))
+        else:
+            e_ref = _resolver(p["ref_angulo"], estado) if p.get("ref_angulo") else None
+            grados = ctx.evaluar(p["desfase"], ANGULO)
+            m = _angular(e1, e2, -grados if invertido and e_ref is not None else grados, bool(p["voltear"]), e_ref)
+        _mover_componentes(estado, comps, m)
 
 
 registrar_operacion(OpComponente, OpUnion, OpOrigenUnion, OpGrupoRigido, OpVinculoMovimiento, OpAnclar,
