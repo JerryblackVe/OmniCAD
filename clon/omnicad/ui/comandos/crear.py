@@ -456,7 +456,8 @@ def _clases_de_tablas():
 _CLASES.update(_clases_de_tablas())
 
 _TAMANO_INICIAL = {"iso_metrica": "M6", "unificada": "1/4", "trapezoidal": "Tr12", "acme": "1/2",
-                   "bsp_paralela": "1/2", "bsp_conica": "1/2", "npt": "1/2"}
+                   "bsp_paralela": "1/2", "bsp_conica": "1/2", "npt": "1/2",
+                   "ansi_metrica": "6 mm", "gb_metrica": "6 mm", "gost_autorroscante": "4 mm"}   # B-300: el primero de la lista no tiene tabla
 
 
 def _tamano_inicial(fam, tams):
