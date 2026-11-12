@@ -4840,7 +4840,8 @@ Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17):
   - `body1b` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de geometry1b.
   - `body2b` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de geometry2b.
   - `all_faces` (true/false; opcional, por defecto `true`): solo con tangent («All Faces»): true usa la superficie entera de la cara; false pide que la cara del componente 1, ya movida, toque la del componente 2.
-  - `rows` (lista de objeto o null; opcional, por defecto `null`): más restricciones entre los mismos dos componentes (el conjunto de la tabla de Fusion). Cada una es un objeto con las claves de esta herramienta (geometry1 y geometry2 obligatorias; type, offset, flip, body1, body2, angle_reference, reference_body, geometry1b, geometry2b, body1b, body2b, all_faces). Se resuelven todas a la vez; si se contradicen, error.
+  - `rows` (lista de objeto o null; opcional, por defecto `null`): más restricciones entre los mismos dos componentes (el conjunto de la tabla de Fusion). Cada una es un objeto con las claves de esta herramienta (geometry1 y geometry2 obligatorias; type, offset (su propio desfase), name (su nombre), flip, body1, body2, angle_reference, reference_body, geometry1b, geometry2b, body1b, body2b, all_faces). Se resuelven todas a la vez; si se contradicen, error.
+  - `row_name` (texto; opcional, por defecto `""`): nombre de la restricción principal dentro del conjunto (lo usa el error de contradicción); vacío = sin nombre.
 - CLI: `omnicad call constrain_components --doc pieza.omnicad geometry1=… geometry2=…`
 
 ### `drive_joint`
