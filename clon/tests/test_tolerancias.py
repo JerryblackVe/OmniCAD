@@ -76,7 +76,7 @@ def test_iso_965_clases_g_y_h_y_tamanos_sin_datos():
     assert tol.limites_rosca("iso_metrica", 10, 1.5, "6h")["diametro_mayor"] == pytest.approx([9.764, 10.0], abs=1e-4)
     assert tol.limites_rosca("iso_metrica", 10, 1.5, "6G")["diametro_flancos"][0] == pytest.approx(9.058, abs=6e-4)
     with pytest.raises(g.ErrorGeometria):
-        tol.limites_rosca("iso_metrica", 2, 0.4, "6g")           # M2: sin datos verificados
+        tol.limites_rosca("iso_metrica", 3.3, 0.5, "6g")         # un tamaño que no está en las tablas (M2 ya sí: B-368)
     with pytest.raises(g.ErrorGeometria):
         tol.limites_rosca("iso_metrica", 10, 1.5, "4H5H")
     with pytest.raises(g.ErrorGeometria):
@@ -105,7 +105,8 @@ def test_resolver_clase_y_desfases():
     assert tol.resolver_clase("iso_metrica", 10, 1.5, "auto", False) == ("6g", None)
     assert tol.resolver_clase("unificada", 6.35, 1.27, "auto", False) == ("2A", None)
     assert tol.resolver_clase("trapezoidal", 20, 4, "auto", True) == ("7H", None)       # CAP-14: la clase de Fusion
-    clase, aviso = tol.resolver_clase("iso_metrica", 2, 0.4, "auto", True)
+    assert tol.resolver_clase("iso_metrica", 2, 0.4, "auto", True) == ("6H", None)           # B-368: M2 sale de la tabla de Fusion
+    clase, aviso = tol.resolver_clase("iso_metrica", 3.3, 0.5, "auto", True)    # un tamaño que no está en las tablas
     assert clase == "" and "perfil básico" in aviso
     with pytest.raises(g.ErrorGeometria):
         tol.resolver_clase("iso_metrica", 10, 1.5, "6g", True)       # clase de eje en un agujero

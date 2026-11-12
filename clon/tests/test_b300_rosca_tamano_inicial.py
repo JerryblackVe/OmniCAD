@@ -16,6 +16,6 @@ def test_el_tamano_inicial_de_cada_familia_tiene_datos_de_tolerancia(familia):
 
 
 def test_el_aviso_sigue_saliendo_cuando_el_tamano_elegido_no_tiene_tabla():
-    datos = sc.datos_rosca("M0.25x0.075")
-    _, aviso = tol.resolver_clase(datos["familia"], datos["diametro"], datos["paso"], "auto", True)
+    datos = sc.datos_rosca("GOST ST1.5x0.5")          # B-368: M0.25 ya tiene tabla; las autorroscantes ST no traen clase h14
+    _, aviso = tol.resolver_clase(datos["familia"], datos["diametro"], datos["paso"], "auto", False)
     assert aviso and "Sin datos verificados" in aviso

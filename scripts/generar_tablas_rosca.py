@@ -1,20 +1,25 @@
 # -*- coding: utf-8 -*-
 """Genera clon/omnicad/nucleo/tablas_rosca.py: las tablas de rosca de OmniCAD en formato propio.
 
-Lee las medidas de los XML de la instalación de Fusion (`D:\\Autodesk`, solo lectura; los XML no se copian al repo) y
+Lee las medidas de los XML de la instalación de Fusion (solo lectura; los XML no se copian al repo) y
 escribe una fila por designación: (tamaño, designación, paso, Ø mayor, Ø flancos, Ø menor, broca) en mm. Las familias que
 OmniCAD ya tenía (solidos_crear.py) conservan sus filas: de esas solo se agregan los tamaños y pasos que faltan.
 
 Uso, desde la raíz del repo: clon/.venv/Scripts/python.exe scripts/generar_tablas_rosca.py
+OMNICAD_FUSION_CONFIG permite indicar la carpeta Configuration que contiene ThreadData/ y TaperThreadData/;
+sin esa variable se usa la instalación de D:\\Autodesk. Ejemplo en Linux:
+OMNICAD_FUSION_CONFIG=/ruta/Configuration clon/.venv/bin/python scripts/generar_tablas_rosca.py
 """
 import math
+import os
 import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
-CONFIG = Path(r"D:\Autodesk\webdeploy\production\9c5312dfff2e4569cd1d269973ddf11cb999f782\Fusion\Server\Fusion\Configuration")
+CONFIG = Path(os.environ.get("OMNICAD_FUSION_CONFIG",
+                            r"D:\Autodesk\webdeploy\production\9c5312dfff2e4569cd1d269973ddf11cb999f782\Fusion\Server\Fusion\Configuration"))
 SALIDA = RAIZ / "clon" / "omnicad" / "nucleo" / "tablas_rosca.py"
 H60 = math.sqrt(3) / 2
 
@@ -208,9 +213,10 @@ def _extras_cono(archivo, formato):
     return salida
 
 
-# Clases de tolerancia (CAP-14): las familias de arriba cuyos XML traen una clase por tipo de hilo. Las métricas M y la
-# unificada se calculan con las fórmulas de ISO 965-1 y ASME B1.1 (tolerancias.py) y no entran acá.
-CON_CLASES = {**{k: (v[0], v[1], v[3]) for k, v in NUEVAS.items() if k not in ("ansi_metrica", "gb_metrica")},
+# Clases de tolerancia (CAP-14): familias cuyos XML traen clases; las métricas M respaldan los tamaños y clases
+# sin intervalos ISO 965-1 verificados. La unificada sigue con las fórmulas de ASME B1.1 (tolerancias.py).
+CON_CLASES = {**{k: (v[0], v[1], v[3]) for k, v in NUEVAS.items()},
+              "iso_metrica": ("ThreadData", "ISOMetricprofile", ""),
               "trapezoidal": ("ThreadData", "ISOMetricTrapezoidalThreads", ""),
               "acme": ("ThreadData", "ACMEScrewThreads", ""), "bsp_paralela": ("ThreadData", "BSPPipeThreads", "")}
 

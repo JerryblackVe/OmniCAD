@@ -96,8 +96,8 @@ def test_los_diametros_de_toda_la_tabla_dejan_un_surco_que_se_puede_barrer():
             d = sc.datos_rosca(designacion)
             for clase, hilos in clases.items():
                 for interna, hilo in ((True, hilos[0]), (False, hilos[1])):
-                    if hilo is None:
-                        continue
+                    if hilo is None or not tol._usa_tabla(d["familia"], d["diametro"], d["paso"], clase):
+                        continue      # B-368: las métricas con intervalos ISO 965-1 no usan la tabla
                     a = tol.desfases_rosca(d["familia"], d["diametro"], d["paso"], clase, interna, d["diametro_flancos"],
                                            d["diametro_menor"])
                     t = math.tan(math.radians(d["angulo"] / 2))
