@@ -162,6 +162,8 @@ def test_boton_compacto_y_dialogo_entero_en_800x520(ventana):
     assert c.accion.text() == c.accion.toolTip() == "Reportar problema y sugerencia"
     assert not c.boton.icon().pixmap(16, 16).isNull()
     vecino = QPushButton("Vecino", v)
+    vecino.setIcon(c.boton.icon())               # B-327: con el mismo ícono de 16 px (en Linux el ícono sube el alto 2 px)
+    vecino.setIconSize(c.boton.iconSize())
     vecino.ensurePolished()
     assert c.boton.height() == vecino.sizeHint().height()
     assert c.boton.width() < 130

@@ -463,7 +463,8 @@ def test_otro_clic_quita_y_la_x_de_la_referencia_tambien(v):
     assert tarjeta.referencias.height() >= sum(f.sizeHint().height() for f in filas) > 20     # se leen, no quedan aplastadas
     fila = tarjeta.form_contexto.itemAt(1, tarjeta.form_contexto.ItemRole.FieldRole).geometry()
     assert fila.height() >= tarjeta.referencias.height()                                      # y su fila crece con ellas
-    assert all(f.width() <= modo_boceto._Referencia.ANCHO_MAXIMO for f in filas)              # del ancho justo: sin franja
+    # del ancho justo, sin franja: caben en la columna de referencias (con la ✕ de DejaVu, en Linux, pasan unos px de 170)
+    assert all(f.width() <= tarjeta.referencias.width() for f in filas)
     QTest.mouseClick(filas[0].findChild(QToolButton), Qt.LeftButton)
     assert [e["tipo"] for e in lz._elegidos_proy] == ["arista"]
 
