@@ -1298,7 +1298,8 @@ def primitivas_entidad(c, P, R=None, curvas=None):
             return [("spline", c.id, tuple(polos), tuple(nudos), p, None)]
         p = min(c.grado, len(pts) - 1)
         nudos = c.nudos if c.nudos is not None and len(c.nudos) == len(pts) + p + 1 else nudos_uniformes(len(pts), p)
-        return [("spline", c.id, tuple(pts), tuple(nudos), p, tuple(c.pesos) if c.pesos else None)]
+        pesos = tuple(c.pesos) if c.pesos and len(c.pesos) == len(pts) else None    # B-320: proyectos viejos descuadrados
+        return [("spline", c.id, tuple(pts), tuple(nudos), p, pesos)]
     if isinstance(c, Conica):
         w = c.rho / (1 - c.rho)
         return [("spline", c.id, (P(c.inicio), P(c.vertice), P(c.fin)), (0.0, 0.0, 0.0, 1.0, 1.0, 1.0), 2,
@@ -1597,9 +1598,10 @@ class Boceto:
                        construccion=False):
         """Spline de ajuste de puntos o de puntos de control (SKT-CREATE-SPLINES)."""
         ids = []
+        repetidos = modo == "control" and (pesos is not None or nudos is not None)   # B-320: polos atados a pesos y nudos
         for p in puntos:
             i = self._punto(p)
-            if not ids or i != ids[-1]:
+            if not ids or i != ids[-1] or repetidos:
                 ids.append(i)
         if cerrada and len(ids) > 1 and ids[-1] == ids[0]:
             ids.pop()
