@@ -937,6 +937,16 @@ class Rosca(Comando):
     def oculta_seleccion(self, valores):
         return bool(valores.get("modelada"))      # B-297: la cara elegida no tiñe la rosca modelada
 
+    def seleccion_en_previa(self, valores, estado):
+        """P-145, como Fusion: sigue en azul lo que quedó de la cara (tramos de afuera y crestas): se ve la hélice."""
+        from ...nucleo import geometria as geo
+        prims = []
+        for h in valores.get("caras") or []:
+            cuerpo = estado.cuerpos.get(h.get("cuerpo"))
+            if cuerpo is not None and h.get("forma") is not None:
+                prims += [("tris", geo.teselar(c)[0], None, 0.45) for c in _sc().caras_sobre_cilindro(cuerpo.forma, h["forma"])]
+        return prims
+
     def _fila_biblioteca(self, panel):
         w = QWidget()
         fila = QHBoxLayout(w)
