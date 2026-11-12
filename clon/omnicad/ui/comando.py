@@ -1750,6 +1750,8 @@ class PanelComando(QFrame):
         return True
 
     def _previa_pesada(self, op):
+        if self.ctx.doc.motor == "opencascade" and op.TIPO == "rosca" and op.p.get("modelada"):
+            return True     # P-78: cortar la hélice tarda segundos aunque el cuerpo sea chico (M20×100: 25-50 s)
         if op.TIPO not in TIPOS_PESADOS or self.ctx.doc.motor != "opencascade":
             return False
         from ..nucleo import geometria as geo

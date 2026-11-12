@@ -50,6 +50,10 @@ def caso(v, area, clave, sel, vals=None, esperado=None, deshacer=True, foto=None
         p._t_previa.stop()
         p._calcular_previa()
         A.esperar(120)
+        for _ in range(1200):            # P-78: la previa pesada (rosca modelada…) vuelve del proceso aparte
+            if p._hijo_previa is None:
+                break
+            A.esperar(50)
         st = A.estado_panel(p)
         if foto:
             A.foto(v, foto)
