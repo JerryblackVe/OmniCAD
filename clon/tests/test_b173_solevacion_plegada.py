@@ -58,3 +58,26 @@ def test_revisar_marca_invalida_una_autointerseccion():
 
     assert informe["autointersecciones"] and informe["errores"]
     assert not informe["valido"]
+
+
+def test_b172_propiedades_de_la_solevacion_sobre_malla_vacia_no_integran_la_malla(monkeypatch):
+    """B-172: pedir las propiedades de una solevación de splines cerró la app (violación de acceso en TKernel dentro de
+    `geometria._por_malla`, que integra sobre la malla). No se repite con solevaciones variadas (60 en bucle, procesos
+    aparte), así que el guardia es la defensa: una cara con malla vacía no se integra y vale la integración exacta."""
+    from omnicad.nucleo import geometria as geo
+    s = _secciones()
+    forma = s.cuerpo(_llamar(s, "loft", sketches=["Bc_ant_n", "Bc_ant_m", "Bc_ant_p"],
+                             operation="new_body")["bodies_created"][0]["id"]).forma
+    assert geo.es_forma_libre(forma)
+    esperado = geo.volumen(forma)
+    assert geo._por_malla(forma, geo.BRepGProp.VolumeProperties_s, 1e-3, True) == pytest.approx(esperado, rel=0.02)
+
+    class _Vacia:
+        def NbTriangles(self):
+            return 0
+
+        def NbNodes(self):
+            return 0
+    monkeypatch.setattr(geo.BRep_Tool, "Triangulation_s", staticmethod(lambda *a: _Vacia()))
+    assert geo._por_malla(forma, geo.BRepGProp.VolumeProperties_s, 1e-3, True) is None
+    assert geo.volumen(forma) == pytest.approx(esperado, rel=1e-9)     # sin malla, queda la integración exacta
