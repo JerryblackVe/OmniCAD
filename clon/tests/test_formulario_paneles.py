@@ -146,12 +146,15 @@ def test_un_paso_editado_con_algo_avanzado_abre_la_seccion_sola(app_qt):  # noqa
 
 
 def test_un_valor_invalido_dentro_de_mas_opciones_abre_la_seccion_y_lo_dice(app_qt):  # noqa: F811
-    from omnicad.ui.comandos import solido
-    doc = _doc_caja()
-    panel, *_ = _panel(solido.Extruir(), doc, {})
+    class _Prueba(Comando):
+        CLAVE, TITULO, ICONO = "prueba_invalido_avanzado", "Prueba", "caja"
+
+        def campos(self, ctx):
+            return [Expresion("a", "A", "1 mm"), Expresion("b", "B", "0 mm", avanzado=True)]
+
+    panel, *_ = _panel(_Prueba(), _doc_caja(), {})
     assert not panel.seccion.abierta
-    panel.set_valor("conicidad", "abc")
-    panel._calcular_previa()
+    panel.set_valor("b", "abc")
     assert panel.seccion.abierta                                     # el valor inválido no queda escondido
     panel.cancelar()
 

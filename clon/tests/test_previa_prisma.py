@@ -187,6 +187,25 @@ def test_conicidad_usa_el_camino_exacto(ventana):
     assert all(not rc.es_malla(c.forma) for c in v.visor._estado.cuerpos.values())
 
 
+def test_p140_la_conicidad_se_teclea_a_la_vista_debajo_de_la_distancia(ventana):
+    """P-140: como Fusion, «Ángulo de conicidad» va debajo de Distancia, sin «Más opciones»; teclearlo inclina el cuerpo."""
+    v, p = ventana
+    assert p.seccion is None                                          # Extruir ya no esconde nada
+    visibles = sorted((w.mapTo(p, w.rect().topLeft()).y(), clave) for clave, w in p.widgets.items() if w.isVisible())
+    claves = [c for _, c in visibles]
+    assert claves[claves.index("distancia") + 1] == "conicidad"
+    campo = p.widgets["conicidad"]
+    QTest.mouseClick(campo, Qt.LeftButton)
+    QTest.keyClick(campo, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClicks(campo, "-10 deg")
+    QTest.keyClick(campo, Qt.Key_Tab)
+    QTest.qWait(50)
+    QTest.mouseClick(p.boton_ok, Qt.LeftButton)
+    assert v.panel is None
+    assert v.doc.operaciones[-1].p["conicidad"] == "-10 deg"
+    assert _volumen_final(v) < 40 * 30 * 10 - 1                       # las paredes se cierran hacia adentro
+
+
 def test_un_perfil_que_no_arranca_en_su_plano_no_se_estima():
     v = np.array([[0, 0, 0.5], [1, 0, 0.5], [0, 1, 1.5]], float)    # base a 0,5 mm del plano: no es un prisma recto
     with pytest.raises(geo.ErrorGeometria, match="plano"):
