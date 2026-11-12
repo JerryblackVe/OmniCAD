@@ -25,9 +25,9 @@ def test_el_modo_rapido_pone_caza_rapida_y_tests_afectados_en_ese_orden():
     assert nombres == ["caza_rapida", "tests_afectados"]
 
 
-def test_el_modo_noche_pone_registro_caza_ventana_y_cierre_en_ese_orden():
+def test_el_modo_noche_pone_registro_caza_y_cierre_en_ese_orden():
     nombres = [nombre for nombre, _ in probar_todo.pasos("noche", 3)]
-    assert nombres == ["registro_bugs", "caza_noche", "prueba_ventana", "cierre_completo"]
+    assert nombres == ["registro_bugs", "caza_noche", "cierre_completo"]   # el cierre ya corre todo.py: la ventana no va dos veces
 
 
 def test_la_caza_de_noche_recibe_las_horas_pedidas():
