@@ -635,7 +635,7 @@ class AreaVisor(QWidget):
             self.panel.move(max(g.left() + 4, min(fija.x(), g.right() - self.panel.width() - 4)),
                             max(g.top() + 4, min(fija.y(), abajo - self.panel.height())))
             self.panel.raise_()
-        elif self.panel is not None and self.panel.isVisible():
+        elif self.panel is not None and self.panel.isVisible() and self.paleta is None:
             if hasattr(self.panel, "ajustar_alto"):
                 if g.bottom() - y - 8 < ALTO_UTIL_PANEL:         # ventana baja: el panel sube y tapa el ViewCube (si no, queda un cuerpo de pocas filas)
                     y = g.top() + 8
@@ -651,6 +651,14 @@ class AreaVisor(QWidget):
             self.paleta.move(g.right() - self.paleta.width() - 10,
                              max(g.top() + 4, min(y, g.bottom() - self.paleta.height() - 8)))
             self.paleta.raise_()
+            if fija is None and self.panel is not None and self.panel.isVisible():
+                # B-342: con el boceto abierto el panel de un comando va a la izquierda de la paleta, como las tarjetas
+                # (en columna la paleta, que es alta, lo tapaba junto con su Aceptar).
+                if hasattr(self.panel, "ajustar_alto"):
+                    self.panel.ajustar_alto(abajo - g.top() - 4)
+                self.panel.move(max(g.left() + 4, self.paleta.x() - self.panel.width() - 8),
+                                max(g.top() + 4, min(y, abajo - self.panel.height())))
+                self.panel.raise_()
             for lateral in self.laterales:
                 if lateral.isVisible():
                     if hasattr(lateral, "ajustar_alto"):
