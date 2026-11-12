@@ -531,6 +531,9 @@ def test_b338_clic_en_el_fondo_del_hueco_lo_elige_y_extruir_pasa_a_unir(panel_hu
     previa(p)
     (cara,) = [h["ref"] for h in p.valores["perfiles"]]
     assert cara["firma"]["area"] == pytest.approx(400) and cara["firma"]["normal"] == pytest.approx([0, -1, 0])
+    assert p.valores["operacion"] == "nuevo"   # P-136: arranca en 0 mm y Fusion ahí dice «Cuerpo nuevo» (video del reporte)
+    p.set_valor("distancia", "10")
+    previa(p)
     assert p.valores["operacion"] == "unir"
     p.set_valor("distancia", "-3")             # hacia adentro: se mete en la caja → Cortar
     previa(p)

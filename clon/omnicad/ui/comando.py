@@ -370,6 +370,24 @@ def _con_forma(hit, estado):
         return hit
 
 
+def buscar_misma(lista, hit, estado):
+    """Lo de `lista` que es lo mismo que `hit`, o None: la misma referencia o la misma subforma del cuerpo en `estado`.
+    Lo tocado sobre una previa que cambia el cuerpo (Unir) trae otra firma para la misma cara del modelo (B-338).
+    `hit` se resuelve una vez; lo elegido ya trae su forma (resolver cada uno costaba ~3 ms)."""
+    r = hit["ref"]
+    igual = next((h for h in lista if h["ref"] == r), None)
+    clave = (r.get("tipo"), r.get("cuerpo"))
+    candidatos = [h for h in lista if (h["ref"].get("tipo"), h["ref"].get("cuerpo")) == clave]
+    if igual is not None or r.get("cuerpo") is None or not candidatos:
+        return igual
+    from ..timeline import entidades as ent
+    try:
+        real = ent.resolver(r, estado).forma
+    except Exception:  # noqa: BLE001 — una referencia que no se resuelve es otra cosa
+        return None
+    return next((h for h in candidatos if (f := _con_forma(h, estado).get("forma")) is not None and f.IsSame(real)), None)
+
+
 def hits(refs_lista, estado):
     return [hit_desde_ref(r, estado) for r in (refs_lista or []) if r]
 
@@ -1413,8 +1431,8 @@ class PanelComando(QFrame):
         campo = self.activa
         if campo is None:
             return
-        tiene = [h["ref"] for h in self.valores.get(campo.clave) or []]
-        nuevos = [h for h in hits if acepta(self._filtros(campo), h) and h["ref"] not in tiene]
+        tiene = self.valores.get(campo.clave) or []
+        nuevos = [h for h in hits if acepta(self._filtros(campo), h) and buscar_misma(tiene, h, self.ctx.estado) is None]
         if campo.maximo is not None:                  # un campo de 1 o 2 no recibe más de lo que admite
             nuevos = nuevos[:max(0, campo.maximo - len(tiene))]
         if nuevos:
@@ -1429,12 +1447,13 @@ class PanelComando(QFrame):
         except Exception:  # noqa: BLE001 — sin el ajuste, vale lo que se tocó
             pass
         lista = list(self.valores.get(campo.clave) or [])
-        repetida = next((h for h in lista if h["ref"] == hit["ref"]), None)
+        repetida = buscar_misma(lista, hit, self.ctx.estado)
         destino = campo.desvio(self.valores, hit, self.ctx) if campo.desvio and grupo is None and repetida is None else None
         if destino is not None:
             clave, otros = destino
             tenia = self.valores.get(clave) or []
-            quedan = [h for h in tenia if h["ref"] != hit["ref"]]
+            misma = buscar_misma(tenia, hit, self.ctx.estado)
+            quedan = [h for h in tenia if h is not misma]
             self.set_valores(dict(otros, **{clave: [hit]}) if len(quedan) == len(tenia) else {clave: quedan})
             self.comando.al_cambiar(self, clave)
             return
