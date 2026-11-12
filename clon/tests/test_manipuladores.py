@@ -200,22 +200,27 @@ def test_extruir_dos_lados_y_conicidad(app_qt):
     panel.cancelar()
 
 
-@pytest.mark.parametrize("valor", ["10 mm", "-10 mm"])
-def test_dos_lados_la_flecha_de_distancia_no_cruza_el_cero_y_sigue_al_cuerpo(app_qt, valor):
+@pytest.mark.parametrize("direccion, valor", [("dos_lados", "10 mm"), ("dos_lados", "-10 mm"), ("simetrica", "10 mm")])
+def test_la_flecha_de_distancia_no_cruza_el_cero_ni_queda_en_cero(app_qt, direccion, valor):
     """B-205: en «Dos lados» el número es una magnitud de su lado; la flecha (también con el valor tecleado negativo)
-    queda donde está el cuerpo, y arrastrarla hacia adentro se frena en 0 sin pasar al otro lado."""
+    queda donde está el cuerpo, y arrastrarla hacia adentro se frena sin pasar al otro lado. B-267: se frena en el
+    menor valor que se escribe, no en 0 (que es inválido y dejaba el error en el panel); igual en «Simétrica»."""
     from omnicad.ui.comandos.solido import Extruir
     doc = _doc_rectangulo()
-    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "direccion": "dos_lados",
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "direccion": direccion,
                                               "distancia": valor, "distancia2": "5 mm"})
     gestor = panel.manipuladores
-    base, punta = _manip(panel, "flecha:distancia").puntos(gestor)
-    assert base[2] == pytest.approx(10) and punta[2] > base[2]          # sobre el perfil, apuntando hacia afuera
-    assert _manip(panel, "angulo:conicidad").u[2] > 0                 # el asa de la conicidad, del mismo lado
+    if direccion == "dos_lados":
+        base, punta = _manip(panel, "flecha:distancia").puntos(gestor)
+        assert base[2] == pytest.approx(10) and punta[2] > base[2]      # sobre el perfil, apuntando hacia afuera
+        assert _manip(panel, "angulo:conicidad").u[2] > 0             # el asa de la conicidad, del mismo lado
     medio, d = _sobre_flecha(panel, "flecha:distancia")
     _arrastrar(visor, medio, medio - d * 400)                          # muy hacia adentro: pasaría el cero
     final = panel.ctx.evaluar(panel.valores["distancia"])
-    assert final * float(valor.split()[0]) >= 0 and abs(final) < 10   # achicó, sin cambiar de signo
+    assert final * float(valor.split()[0]) > 0 and abs(final) < 10    # achicó, sin cambiar de signo ni llegar a 0
+    panel._t_previa.stop()
+    panel._calcular_previa()
+    assert panel._previa_ok, panel.mensaje.text()
     panel.cancelar()
 
 
