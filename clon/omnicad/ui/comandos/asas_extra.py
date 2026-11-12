@@ -341,8 +341,9 @@ def _asas_solevacion(self, ctx, v):
     """P-147: la flecha del Peso de despegue de cada perfil en «Dirección», como Loft de Fusion. Sale del centro del
     perfil por su normal, en el sentido de la solevación (del primer perfil al último), y se corre lo mismo que la
     sección auxiliar del núcleo: peso × 0,15 × la distancia al perfil vecino (`superficies._auxiliares`). Con una fila
-    elegida, solo la de ese perfil (como sus campos); sin fila, las de los dos extremos.
-    shortcut: falta el anillo del Ángulo de despegue; se suma con el anillo nuevo de P-139."""
+    elegida, solo la de ese perfil (como sus campos); sin fila, las de los dos extremos. Con la flecha va el anillo del
+    Ángulo de despegue (P-139), centrado en su pie y de canto al perfil: a 90° el asa queda sobre la flecha y a 0° acostada
+    en el plano del perfil."""
     from .crear import _en_fila, _fila_media
     mp = _mp()
     secs = v.get("secciones") or []
@@ -364,6 +365,9 @@ def _asas_solevacion(self, ctx, v):
             continue
         n = n * paso * (1.0 if float(n @ hacia) > 0 else -1.0)      # el sentido de la solevación: del primero al último
         salida.append(mp.Flecha(f"peso_{lado}", centro, n, factor=0.15 * distancia, minimo=0.0, estricto=True))
+        u = mp.unitario(plano.u)
+        salida.append(mp.AnilloAngulo(f"angulo_{lado}", centro, np.cross(u, n), u, minimo=0.0, maximo=180.0, estricto=True,
+                                      sigue=(f"peso_{lado}", n * 0.15 * distancia, False)))   # el núcleo pide 0 < ángulo < 180
     return salida
 
 

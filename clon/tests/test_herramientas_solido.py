@@ -708,8 +708,9 @@ def test_solevacion_lista_con_condicion_por_fila(app_qt):
 
 
 def test_p147_flechas_del_peso_de_despegue(app_qt):
-    """P-147: cada perfil en «Dirección» trae la flecha del Peso de despegue, como Loft de Fusion. Sale del centro del
-    perfil en el sentido de la solevación y se corre lo mismo que la sección auxiliar (peso × 0,15 × distancia)."""
+    """P-147: cada perfil en «Dirección» trae la flecha del Peso de despegue y el anillo del Ángulo, como Loft de Fusion.
+    La flecha sale del centro del perfil en el sentido de la solevación y se corre lo mismo que la sección auxiliar
+    (peso × 0,15 × distancia); el anillo va en su pie."""
     from omnicad.ui import manipuladores as mp
     s, hits = _tres_perfiles()
     p, _ = _panel(CATALOGO["solevacion"](), s.doc, {"secciones": hits})
@@ -717,10 +718,10 @@ def test_p147_flechas_del_peso_de_despegue(app_qt):
     p.set_valores({"condicion_inicio": "direccion", "condicion_fin": "direccion", "peso_fin": "2"})
     p.filas_sel["secciones"].tabla.cellWidget(1, 1).setCurrentIndex(1)       # el del medio también en «Dirección»
     p.filas_sel["secciones"].tabla.selectRow(1)
-    assert [m.clave for m in p.manipuladores.manips] == ["peso_medio"]     # como Fusion: las del perfil elegido
+    assert [m.clave for m in p.manipuladores.manips] == ["peso_medio", "angulo_medio"]     # como Fusion: las del elegido
     p.filas_sel["secciones"].tabla.setCurrentCell(-1, -1)                 # sin fila elegida: los dos extremos
     asas = {m.clave: m for m in p.manipuladores.manips}
-    assert set(asas) == {"peso_inicio", "peso_fin"}
+    assert set(asas) == {"peso_inicio", "angulo_inicio", "peso_fin", "angulo_fin"}
     p.filas_sel["secciones"].tabla.selectRow(1)
     asas["peso_medio"] = p.manipuladores.manips[0]
     for clave, z, factor in (("peso_inicio", 2, 4.5), ("peso_medio", 32, 4.5), ("peso_fin", 62, 4.5)):
@@ -728,6 +729,13 @@ def test_p147_flechas_del_peso_de_despegue(app_qt):
         assert isinstance(a, mp.Flecha) and a.origen == pytest.approx((0, 0, z)) and a.factor == pytest.approx(factor)
         assert a.direccion == pytest.approx((0, 0, 1))        # del primer perfil al último, también en el último
     assert asas["peso_fin"].puntos(p.manipuladores)[0] == pytest.approx((0, 0, 62 + 2 * 4.5))
+    anillo = asas["angulo_fin"]                               # P-147b: el anillo del Ángulo, en el pie de la flecha
+    assert isinstance(anillo, mp.AnilloAngulo) and (anillo.minimo, anillo.maximo) == (0.0, 180.0)
+    punto = anillo.asa(p.manipuladores)
+    assert anillo.centro == pytest.approx((0, 0, 62 + 2 * 4.5))
+    assert mp.unitario(punto - anillo.centro) == pytest.approx((0, 0, 1))      # a 90°, sobre la flecha
+    p.set_valor("angulo_fin", "0 deg")
+    assert float((anillo.asa(p.manipuladores) - anillo.centro)[2]) == pytest.approx(0, abs=1e-9)  # a 0°, acostada
     p.cancelar()
 
 
