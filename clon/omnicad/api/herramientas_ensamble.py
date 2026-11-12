@@ -644,13 +644,11 @@ def _crear_union(sesion, nombre, params):
     return resultado
 
 
-_DESC_MODOS = ("mode1 / mode2: simple (una cara, arista o punto), between_faces (centrado entre dos caras paralelas: la "
-               "segunda va en origin1b / origin2b) o edge_intersection (en el cruce prolongado de dos aristas rectas: la "
-               "segunda va en origin1b / origin2b). ")
-_DESC_EJES = ("rotation_axis_from / slide_axis_from: en vez de X, Y o Z del marco, una arista recta o circular, un eje "
-              "de construcción o una cara cilíndrica (selector o id; axis_body es el cuerpo donde se evalúa el selector). "
-              "motion_limits da los límites de cada movimiento: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, "
-              "'flip': false}}; rest y flip_limits son los del movimiento principal. ")
+_DESC_MODOS = ("mode1 / mode2: simple, between_faces (centro entre dos caras paralelas) o edge_intersection (cruce "
+               "de dos aristas rectas); la segunda va en origin1b / origin2b. ")
+_DESC_EJES = ("rotation_axis_from / slide_axis_from: arista recta o circular, eje de construcción o cara cilíndrica en "
+              "vez de X/Y/Z (axis_body: cuerpo del selector). motion_limits: {'rotation2': {'minimum': -30, "
+              "'maximum': 30, 'rest': 0, 'flip': false}}; rest y flip_limits son los del movimiento principal. ")
 
 
 def _modo(sesion, modo, spec_b, body, que):
@@ -697,18 +695,18 @@ def create_joint(sesion, origin1: str | list[float], origin2: str | list[float] 
     minimum: límite mínimo del movimiento principal (grados si gira, mm si solo desliza); vacío = sin límite.
     maximum: límite máximo del movimiento principal; vacío = sin límite.
     name: nombre del paso; vacío = «Unión<n>».
-    mode1: modo del origen 1: "simple", "between_faces" o "edge_intersection".
+    mode1: modo del origen 1 (ver mode1 / mode2 arriba).
     origin1b: segunda cara (between_faces) o segunda arista (edge_intersection) del origen 1, del cuerpo body1.
-    mode2: modo del origen 2: "simple", "between_faces" o "edge_intersection".
+    mode2: modo del origen 2.
     origin2b: segunda cara o arista del origen 2, del cuerpo body2.
     rotation_axis_from: eje de giro propio (arista, eje de construcción o cilindro) en lugar de rotation_axis.
     slide_axis_from: eje de deslizamiento propio en lugar de slide_axis (slider, pin_slot).
     axis_body: cuerpo donde se evalúan los selectores de los ejes propios.
     rest: reposo del movimiento principal: su valor inicial si no se pide otro (grados o mm).
-    flip_limits: true invierte los límites del movimiento principal (el mínimo pasa a ser −máximo y al revés).
+    flip_limits: true invierte los límites del movimiento principal.
     motion_limits: límites por movimiento ("rotation", "rotation2", "rotation3", "slide", "slide2"), cada uno con minimum, maximum, rest y flip.
-    pitch_axis: eje de cabeceo (Pitch, el lateral) de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
-    yaw_axis: eje de guiñada (Yaw, el perpendicular) de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él. El de balanceo (Roll, rotation) sale solo de los dos (guiñada × cabeceo; con Y y X, el Z del marco). Solo ball; si no se elige ninguno de los dos, el balanceo es rotation_axis_from o Z.
+    pitch_axis: eje de cabeceo de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
+    yaw_axis: eje de guiñada de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él. El balanceo (rotation) sale de los dos ejes (con Y y X, el Z del marco); sin ninguno, de rotation_axis_from o Z. Solo ball.
     pitch_axis_from: eje de cabeceo propio (arista, eje de construcción o cilindro) en lugar de pitch_axis. Solo ball.
     yaw_axis_from: eje de guiñada propio en lugar de yaw_axis. Solo ball.
     """
@@ -767,7 +765,7 @@ def create_as_built_joint(sesion, origin: str | list[float], component2: str | N
     minimum: límite mínimo del movimiento principal; vacío = sin límite.
     maximum: límite máximo del movimiento principal; vacío = sin límite.
     name: nombre del paso; vacío = «Unión<n>».
-    mode: modo del origen: "simple", "between_faces" o "edge_intersection".
+    mode: modo del origen: simple, between_faces o edge_intersection.
     origin_b: segunda cara (between_faces) o segunda arista (edge_intersection) del origen, del cuerpo body.
     rotation_axis_from: eje de giro propio (arista, eje de construcción o cilindro) en lugar de rotation_axis.
     slide_axis_from: eje de deslizamiento propio en lugar de slide_axis (slider, pin_slot).
@@ -775,8 +773,8 @@ def create_as_built_joint(sesion, origin: str | list[float], component2: str | N
     rest: reposo del movimiento principal: su valor inicial si no se pide otro (grados o mm).
     flip_limits: true invierte los límites del movimiento principal.
     motion_limits: límites por movimiento ("rotation", "rotation2", "rotation3", "slide", "slide2"), cada uno con minimum, maximum, rest y flip.
-    pitch_axis: eje de cabeceo (Pitch) de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
-    yaw_axis: eje de guiñada (Yaw) de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él; el balanceo (Roll, rotation) sale de los dos. Solo ball.
+    pitch_axis: eje de cabeceo de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
+    yaw_axis: eje de guiñada de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él; el balanceo (rotation) sale de los dos. Solo ball.
     pitch_axis_from: eje de cabeceo propio (arista, eje de construcción o cilindro) en lugar de pitch_axis. Solo ball.
     yaw_axis_from: eje de guiñada propio en lugar de yaw_axis. Solo ball.
     """
