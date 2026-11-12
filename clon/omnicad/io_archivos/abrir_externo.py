@@ -23,7 +23,7 @@ from pathlib import Path
 from ..nucleo import consultas
 from ..nucleo import geometria as geo
 from ..nucleo import intercambio
-from ..timeline.documento import Documento
+from ..timeline.documento import Documento, ErrorDocumento
 from ..timeline.operaciones import OpBoceto, OpImportarSTEP, OpOperacionBase
 from ..timeline.ops_insertar import OpImportarIGES
 from ..timeline.ops_malla import OpInsertarMalla
@@ -56,10 +56,11 @@ def pide_unidades(ruta):
 
 
 @_registrar_archivo("archivo_abrir")
-def documento_desde_archivo(ruta, unidades="mm", progreso=None):
+def documento_desde_archivo(ruta, unidades="mm", progreso=None, esperar=None):
     """Abre `ruta` como documento nuevo. Devuelve (documento, avisos). Lanza ErrorAbrir o
     puente_fusion.ErrorPuenteFusion (Fusion no disponible: el mensaje trae los pasos para hacerlo a mano).
-    `progreso(texto)`, si se pasa, se llama al empezar cada etapa de un .f3d/.f3z (la lenta)."""
+    `progreso(texto)`, si se pasa, se llama al empezar cada etapa de un .f3d/.f3z (la lenta). `esperar(segundos)`: la
+    ventana avisa y repinta mientras el cálculo corre en un proceso aparte (B-337)."""
     ruta = Path(ruta)
     ext = ruta.suffix.lower()
     if ext not in FORMATOS:
@@ -85,7 +86,18 @@ def documento_desde_archivo(ruta, unidades="mm", progreso=None):
         progreso("Armando el documento…")
     doc.operaciones = [op] + [_paso_boceto(doc.nuevo_id(), k, b) for k, b in enumerate(bocetos, 1)]
     doc.marcador = len(doc.operaciones)
-    doc.recalcular(0)
+    if esperar is not None and doc._prevuelo_corresponde(aparte=True):
+        # B-337: el lector de OpenCascade no suelta el GIL (un STEP de 95 MB, minutos): en otro hilo la ventana seguiría
+        # congelada. El proceso aparte de B-48 lo calcula y la ventana espera atendiendo con `esperar`.
+        doc.al_esperar = esperar
+        try:
+            doc._aplicar_calculo(doc._solicitar_calculo("recalcular_documento", {"receta": doc.a_dict()}))
+        except ErrorDocumento as e:
+            raise ErrorAbrir(f"No se pudo leer {ruta.name}: {e}") from e
+        finally:
+            doc.al_esperar = None
+    else:
+        doc.recalcular(0)
     r = doc.resultados[0]
     if r.estado == "error":
         raise ErrorAbrir(f"No se pudo leer {ruta.name}: {r.mensaje}")
