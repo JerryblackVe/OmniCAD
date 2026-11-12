@@ -34,22 +34,27 @@ def _otro_plano(v, hit, ctx):
     return "hasta", {"extension": "objeto"}
 
 
-_ULTIMOS_RADIOS = [(), (math.inf, math.inf)]
+_RADIOS_POR_CARA = []     # (cara, (adentro, afuera)) de los perfiles elegidos ahora
 
 
 def _radios_conicidad(formas):
-    """(adentro, afuera) del perfil, que frenan las asas de la conicidad (B-343); sin tope si no se pueden medir. Se
-    guarda el del último perfil: las asas se rearman en cada cuadro del arrastre y medirlo lleva hasta ~50 ms."""
+    """(adentro, afuera) de los perfiles, que frenan las asas de la conicidad (B-343); sin tope para lo que no se puede
+    medir (curvas sueltas de la extrusión delgada). Se guarda por cara: las asas se rearman en cada cuadro del arrastre y
+    en cada clic que suma un perfil, y así solo se mide el perfil nuevo (B-361)."""
     from ...nucleo.solidos_crear import radios_conicidad
-    previas, radios = _ULTIMOS_RADIOS
-    if len(previas) == len(formas) and all(a.IsSame(b) for a, b in zip(previas, formas, strict=True)):
-        return radios
-    try:
-        radios = radios_conicidad(formas)
-    except Exception:  # noqa: BLE001 — curvas sueltas (extrusión delgada) o un perfil raro: sin tope
-        radios = (math.inf, math.inf)
-    _ULTIMOS_RADIOS[:] = [tuple(formas), radios]
-    return radios
+    adentro = afuera = math.inf
+    vistos = []
+    for forma in formas:
+        radios = next((r for cara, r in _RADIOS_POR_CARA if cara.IsSame(forma)), None)
+        if radios is None:
+            try:
+                radios = radios_conicidad([forma])
+            except Exception:  # noqa: BLE001 — una curva o un perfil raro: sin tope
+                radios = (math.inf, math.inf)
+        vistos.append((forma, radios))
+        adentro, afuera = min(adentro, radios[0]), min(afuera, radios[1])
+    _RADIOS_POR_CARA[:] = vistos
+    return adentro, afuera
 
 
 def _distancia_maxima(radios, conicidad):

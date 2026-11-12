@@ -1409,7 +1409,10 @@ class GestorManipuladores(QObject):
         base = None
         if self.comando.CLAVE == "extruir" and getattr(self.panel, "_prisma_previa", None) is not None:
             datos = {k: v for k, v in self.panel.valores.items() if k not in ("distancia", "distancia2")}
-            base = self.ctx.estado, repr(datos), self.valor("distancia") < 0
+            # P-99: arrastrando la flecha no se rearman las asas; fuera del arrastre la distancia entra en la base, porque
+            # el tope del asa de conicidad depende de ella (B-360)
+            base = (self.ctx.estado, repr(datos), self.valor("distancia") < 0,
+                    None if self.arrastrando else (self.valor("distancia"), self.valor("distancia2")))
         elif self.comando.CLAVE == "vaciado":
             v = self.panel.valores
             base = (self.ctx.estado, repr([h["ref"] for h in v.get("caras") or []]), v.get("direccion"))
@@ -1659,7 +1662,7 @@ class GestorManipuladores(QObject):
         if self._arrastre is None:
             return
         self._arrastre = None
-        self.redibujar()
+        self.actualizar()          # B-360: rearma las asas con los topes del valor nuevo (el de la conicidad usa la distancia)
         if getattr(self.panel, "_prisma_previa", None) is not None:
             self.panel._t_previa.start(0)  # el B-rep exacto reemplaza al estimado incluso sin otro movimiento
 

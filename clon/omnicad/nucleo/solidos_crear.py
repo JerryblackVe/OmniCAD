@@ -31,7 +31,7 @@ def _iniciar_opencascade():
     global BRepPrimAPI_MakeRevol, BRepTools, BRepTools_WireExplorer, BRep_Builder, BRep_Tool, ElCLib
     global GCPnts_AbscissaPoint, GProp_GProps, Geom2dAPI_Interpolate, Geom2d_Line, Geom2d_TrimmedCurve
     global GeomAPI_Interpolate, GeomAbs_BSplineCurve, GeomAbs_BSplineSurface, GeomAbs_BezierCurve
-    global GeomAbs_BezierSurface, GeomAbs_Cylinder, GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane
+    global GeomAbs_Arc, GeomAbs_BezierSurface, GeomAbs_Cylinder, GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane
     global GeomLib_IsPlanarSurface, Geom_Circle, Geom_ConicalSurface, Geom_CylindricalSurface, Geom_Line
     global Geom_Plane, HArray1_gp_Pnt, HArray1_gp_Pnt2d, IntCurvesFace_ShapeIntersector, Law_Interpol
     global Law_Linear, List_TopoDS_Shape, ShapeAnalysis_CanonicalRecognition, ShapeAnalysis_Edge, ShapeFix_Face
@@ -63,7 +63,7 @@ def _iniciar_opencascade():
     from OCP.Geom import Geom_Circle, Geom_ConicalSurface, Geom_CylindricalSurface, Geom_Line, Geom_Plane
     from OCP.Geom2d import Geom2d_Line, Geom2d_TrimmedCurve
     from OCP.Geom2dAPI import Geom2dAPI_Interpolate
-    from OCP.GeomAbs import (GeomAbs_BezierCurve, GeomAbs_BezierSurface, GeomAbs_BSplineCurve, GeomAbs_BSplineSurface,
+    from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_BezierCurve, GeomAbs_BezierSurface, GeomAbs_BSplineCurve, GeomAbs_BSplineSurface,
                              GeomAbs_Cylinder, GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane)
     from OCP.GeomAPI import GeomAPI_Interpolate
     from OCP.GeomLib import GeomLib_IsPlanarSurface
@@ -446,56 +446,74 @@ def _prisma(cara, n, d, conicidad=0.0):
     return _validar(da.Shape(), "Extrusión con inclinación")
 
 
-def _radio_inscrito(cara):
-    """Radio del mayor círculo que entra en la cara plana (sin pisar sus huecos). Búsqueda en grilla refinada sobre el
-    contorno en polilíneas: nunca se pasa del radio real (todo punto probado está adentro)."""
+def _firma(forma, plano):
+    """(signos de las áreas de los lazos, cantidad de aristas): el contorno exterior suma y cada hueco resta. Si un
+    desfase cambia la firma, algo se cerró: una barra angosta, una ranura, un hueco o la pared entre el hueco y el borde
+    (ahí el kernel cambia el hueco por un pedazo suelto con la misma cantidad de lazos y aristas)."""
+    ejes = np.array([plano.u, plano.v], float).T
+    signos, aristas = [], 0
+    for w in _explorar(forma, TopAbs_WIRE):
+        tramos = []
+        ex = BRepTools_WireExplorer(TopoDS.Wire(w))
+        while ex.More():
+            q = (np.asarray(geo.polilinea_arista(ex.Current(), 0.05), float) - plano.origen) @ ejes
+            tramos.append(q[::-1] if ex.Orientation() == TopAbs_REVERSED else q)
+            aristas += 1
+            ex.Next()
+        p = np.concatenate(tramos) if tramos else np.zeros((0, 2))
+        signos.append(1 if np.sum(p[:, 0] * np.roll(p[:, 1], -1) - np.roll(p[:, 0], -1) * p[:, 1]) > 0 else -1)
+    return tuple(sorted(signos)), aristas
+
+
+def _desfasado(cara, plano, r):
+    """Firma del contorno de la cara desfasado `r` (negativo = hacia adentro); None si el kernel no lo arma."""
+    try:
+        mk = BRepOffsetAPI_MakeOffset(cara, GeomAbs_Arc)   # con Intersection no desfasa hacia adentro una cara con hueco
+        mk.Perform(r)
+        return _firma(mk.Shape(), plano) if mk.IsDone() else None
+    except Exception:  # noqa: BLE001 — un desfase que el kernel no arma cuenta como cerrado
+        return None
+
+
+def _cierre(cara, signo):
+    """Mayor desfase hacia `signo` (−1 adentro, +1 afuera) que deja la firma del contorno igual; inf si nunca cambia."""
     plano = geo.plano_de_cara(cara)
     if plano is None:
         raise geo.ErrorGeometria("La cara del perfil no es plana.")
-    ejes = np.array([plano.u, plano.v], float).T
     (x0, y0, z0), (x1, y1, z1) = geo.caja_envolvente(cara)
-    flecha = max(1e-4, 2e-4 * math.dist((x0, y0, z0), (x1, y1, z1)))   # ~100 tramos por círculo: rápido al arrastrar
-    tramos = [np.stack([q[:-1], q[1:]], axis=1) for pl in geo.polilineas_aristas(cara, flecha) if len(pl) > 1
-              for q in [(np.asarray(pl, float) - plano.origen) @ ejes]]
-    if not tramos:
+    lados = sorted(abs(float(np.dot(np.subtract((x1, y1, z1), (x0, y0, z0)), e))) for e in (plano.u, plano.v))
+    # hacia adentro todo se cierra antes de medio lado corto; hacia afuera, una ranura o un hueco antes de medio lado largo
+    alto = (lados[0] if signo < 0 else lados[1]) / 2 * 1.01
+    base = _desfasado(cara, plano, signo * alto * 1e-6)      # la junta en arco suma un arco en cada esquina convexa
+    if base is None:
         return 0.0
-    a, b = np.concatenate(tramos)[:, 0], np.concatenate(tramos)[:, 1]
-    ab = b - a
-    largo2 = np.maximum((ab ** 2).sum(1), 1e-30)
-    alto = np.where(b[:, 1] != a[:, 1], b[:, 1] - a[:, 1], 1.0)
-
-    def distancia_adentro(p):                  # distancia al contorno; 0 afuera (par-impar: vale con huecos)
-        t = np.clip(((p[:, None] - a) * ab).sum(-1) / largo2, 0.0, 1.0)
-        d = np.linalg.norm(p[:, None] - (a + t[..., None] * ab), axis=-1).min(1)
-        y = p[:, 1][:, None]
-        cruza = (a[:, 1] > y) != (b[:, 1] > y)
-        x = a[:, 0] + (y - a[:, 1]) * ab[:, 0] / alto
-        return np.where((cruza & (x > p[:, 0][:, None])).sum(1) % 2 == 1, d, 0.0)
-
-    puntos = np.concatenate([a, b])
-    mejor, mitad, radio = (puntos.min(0) + puntos.max(0)) / 2, (puntos.max(0) - puntos.min(0)) / 2, 0.0
-    malla = np.stack(np.meshgrid(*[np.linspace(-1.0, 1.0, 21)] * 2), -1).reshape(-1, 2)
-    for _ in range(7):                         # cada vuelta achica la ventana a la quinta parte: 0,2⁷ de la caja
-        p = mejor + malla * mitad
-        d = distancia_adentro(p)
-        if d.max() > radio:
-            radio, mejor = float(d.max()), p[int(d.argmax())]
-        mitad = mitad * 0.2
-    return radio
+    if _desfasado(cara, plano, signo * alto) == base:
+        return math.inf
+    bajo = 0.0
+    for _ in range(18):                          # 2⁻¹⁸ de medio lado: menos de 0,001 mm en una pieza de 400
+        medio = (bajo + alto) / 2
+        if _desfasado(cara, plano, signo * medio) == base:
+            bajo = medio
+        else:
+            alto = medio
+    return bajo
 
 
 def radios_conicidad(caras):
-    """(adentro, afuera): radios que limitan la conicidad de una extrusión de estas caras. Hacia adentro (ángulo negativo)
-    el perfil se cierra cuando el desfase d·tan|a| llega al radio del mayor círculo inscripto; hacia afuera se cierra el
-    hueco más chico (inf sin huecos). Fusion frena ahí las asas de distancia y de ángulo (B-343)."""
+    """(adentro, afuera): hasta dónde se puede achicar o agrandar el contorno de estas caras antes de que algo se cierre
+    (inf: sin tope; las caras con curvas no se miden).
+    Una extrusión con conicidad a desfasa su perfil d·tan|a| (hacia adentro si a < 0): con perfiles no convexos lo que
+    se cierra primero es lo más angosto (una barra, una ranura, un hueco), no el círculo más grande. Fusion frena ahí las
+    asas de distancia y de ángulo (B-343, B-360)."""
     adentro = afuera = math.inf
     for cara in caras:
         cara = TopoDS.Face(cara)
-        adentro = min(adentro, _radio_inscrito(cara))
-        exterior = BRepTools.OuterWire_s(cara)
-        for w in _explorar(cara, TopAbs_WIRE):
-            if not w.IsSame(exterior):
-                afuera = min(afuera, _radio_inscrito(_cara(TopoDS.Wire(w))))
+        # shortcut: solo perfiles de rectas. Con curvas, desfasar es lento (1 s por letra) y la firma no es monótona, y el
+        # kernel igual falla antes del cierre (B-362): ahí frena la red de B-345 (vuelve al último valor con previa sana).
+        if any(BRepAdaptor_Curve(e).GetType() != GeomAbs_Line for e in _aristas_de(cara)):
+            continue
+        adentro = min(adentro, _cierre(cara, -1))
+        afuera = min(afuera, _cierre(cara, 1))
     return adentro, afuera
 
 
