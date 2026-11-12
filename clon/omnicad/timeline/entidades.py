@@ -281,7 +281,7 @@ def resolver(ref, estado):
         return Entidad(t, punto=np.asarray(estado.puntos[i][0], float))
     if t == "perfil":
         br = _boceto(estado, ref["boceto"])
-        perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano)
+        perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano, br.boceto)
         if perfil is None:
             if es_de_texto(ref["firma"], br):
                 raise ErrorReferencia("Un perfil seleccionado era un pedazo de una letra y ya no existe como "
