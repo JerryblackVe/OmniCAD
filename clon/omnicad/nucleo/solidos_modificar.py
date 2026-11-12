@@ -1452,15 +1452,20 @@ def _cara_dada_vuelta(mo, forma, caras, resultado, dist):
     """True si el kernel desfasó una cara curva más que su radio y la «dio vuelta» por el eje: la cara nueva no queda
     a `dist` de la original (un cilindro de radio 10 achicado 12 mm salía de radio 2; un agujero de radio 5 llenado
     14,9 mm salía MÁS GRANDE, de radio 9,9) o el volumen cambia al revés de lo pedido (positivo agrega material)."""
+    from . import referencias as refs
     if geo.solidos(forma):          # en una superficie abierta el «volumen» no dice nada
         antes, despues = geo.volumen_exacto(forma), geo.volumen_exacto(resultado)
         if (dist > 0 and despues < antes) or (dist < 0 and despues > antes):
             return True
     for cara in caras:
         for nueva in geo.lista_occ(mo.Generated(cara)):
-            medida = BRepExtrema_DistShapeShape(nueva, cara)
-            medida.Perform()
-            if medida.IsDone() and abs(medida.Value() - abs(dist)) > 1e-3 * abs(dist) + 1e-6:
+            # B-356: desde un punto de adentro de la cara nueva hasta la superficie original. La distancia mínima entre
+            # las dos caras recortadas daba menos en el borde de una cara en onda (0,38 con 0,5 mm) y la rechazaba.
+            # En una cara libre el kernel aproxima el desfase (onda de 2 mm con −0,5: 0,483): 5 %; las analíticas son exactas.
+            p, _n = _punto_normal(TopoDS.Face(nueva))
+            proy = GeomAPI_ProjectPointOnSurf(gp_Pnt(*p), BRep_Tool.Surface_s(cara))
+            tolerancia = 5e-2 if refs.cara_libre(cara) else 1e-3
+            if proy.NbPoints() and abs(proy.LowerDistance() - abs(dist)) > tolerancia * abs(dist) + 1e-6:
                 return True
     return False
 
@@ -1490,8 +1495,9 @@ def _desfase_kernel(forma, caras, dist):
 
 
 def _es_filete(cara, n=400):
-    """True si la cara es de forma libre y da más de 1,5 vueltas por su iso más enroscada (giro total de la tangente):
-    el filete de una rosca modelada (M8 de 20 mm: 16 vueltas; M28 de 3 mm: 1,8). Una solevación da menos de 1."""
+    """True si la cara es de forma libre y da más de 1,5 vueltas netas por su iso más enroscada: el filete de una rosca
+    modelada (M8 de 20 mm: 16 vueltas; M28 de 3 mm: 1,8). Una solevación da menos de 1. B-356: el giro va con signo
+    (alrededor de la binormal media), así una onda, que dobla para un lado y para el otro, no suma vueltas."""
     from . import referencias as refs
     if not refs.cara_libre(cara):
         return False
@@ -1503,7 +1509,12 @@ def _es_filete(cara, n=400):
         d = np.diff([p.Coord() for p in pts], axis=0)
         d = d[np.linalg.norm(d, axis=1) > 1e-12]
         d /= np.linalg.norm(d, axis=1)[:, None]
-        vueltas = max(vueltas, np.arccos(np.clip((d[1:] * d[:-1]).sum(1), -1, 1)).sum() / (2 * math.pi))
+        giros = np.cross(d[:-1], d[1:])
+        eje = giros.sum(0)
+        if np.linalg.norm(eje) < 1e-12:
+            continue
+        neto = np.arctan2(giros @ (eje / np.linalg.norm(eje)), (d[1:] * d[:-1]).sum(1)).sum()
+        vueltas = max(vueltas, abs(neto) / (2 * math.pi))
     return vueltas > 1.5
 
 
