@@ -17,7 +17,7 @@ from ...timeline.parametros import ANGULO, ErrorExpresion, TEXTO, unidad_de
 from .. import analisis_vista, formato
 from ..formulario import armar_cabecera
 from ..iconos import icono
-from .comunes import campos_cebra, campos_iso, campos_mapa, params_cebra, params_iso, params_mapa
+from .comunes import ESCALA_PEINE_MAX, campos_cebra, campos_iso, campos_mapa, params_cebra, params_iso, params_mapa
 from ..comando import (Botones, Casilla, Comando, Deslizador, DosTopes, Entero, ErrorComando, Expresion, Info, Opciones,
                        Personalizado, Seleccion, hit_desde_ref, hits, ref1)
 from . import registrar
@@ -1103,7 +1103,7 @@ class PeineCurvatura(_Analisis):
 
     def campos(self, ctx):
         return [Seleccion("aristas", "Aristas", {"arista", "curva_boceto"}, maximo=None),
-                Deslizador("densidad", "Densidad", 50, 2, 100), Deslizador("escala", "Escala", 10.0, 0.0, 100.0, decimales=3)]
+                Deslizador("densidad", "Densidad", 50, 2, 100), Deslizador("escala", "Escala", 10.0, 0.0, ESCALA_PEINE_MAX, decimales=3)]
 
     def params(self, v, ctx):
         if not v.get("aristas"):
