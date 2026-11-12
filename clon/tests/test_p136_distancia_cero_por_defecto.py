@@ -201,3 +201,19 @@ def test_dos_lados_pide_las_dos_distancias_y_conserva_sus_asas(clave, direccion)
             panel.cancelar()
         panel.deleteLater()
         visor.deleteLater()
+
+
+def test_traslacion_con_crear_copia_acepta_distancia_cero():
+    doc, valores = _caso("mover_copiar")
+    panel, visor, _ = _panel(CATALOGO["mover_copiar"](), doc, valores)
+    aceptadas = []
+    panel.aceptado.connect(aceptadas.append)
+    try:
+        panel.set_valor("copiar", True)
+        panel.aceptar()
+        assert len(aceptadas) == 1 and aceptadas[0].p["copiar"] is True
+    finally:
+        if not panel.cerrando:
+            panel.cancelar()
+        panel.deleteLater()
+        visor.deleteLater()
