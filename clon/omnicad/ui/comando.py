@@ -1112,7 +1112,11 @@ class PanelComando(QFrame):
             numero.setValue(val)
             deslizador.setValue(round(val * escala))
             numero.valueChanged.connect(lambda n, d=deslizador: d.setValue(round(n * escala)))
-            deslizador.valueChanged.connect(lambda x, n=numero: n.setValue(x / escala if campo.decimales else x))
+            # Solo si cambia: setValue con el mismo valor reescribe el texto («5» → «5.000») y no deja teclear decimales (P-148).
+            def _al_deslizar(x, n=numero, dec=campo.decimales):
+                if n.value() != (x / escala if dec else x):
+                    n.setValue(x / escala if dec else x)
+            deslizador.valueChanged.connect(_al_deslizar)
             numero.valueChanged.connect(lambda n, c=campo: self._cambiar(c.clave, n))
             deslizador.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)   # no ensancha el panel: toma lo que sobra
             fila.addWidget(numero)

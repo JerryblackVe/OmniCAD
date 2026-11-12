@@ -16,6 +16,9 @@ POSICIONES_SECCION = {"interior": ("Interior", "pos_interior"), "centro": ("En e
 
 
 SIEMPRE = lambda v: True  # noqa: E731
+# Escala de los peines: es relativa al tamaño de lo analizado (10 = púa más larga del 20 % de su diagonal), así que 20 = 40 %.
+# Más arriba las púas pasan de la pieza y tapan la vista (P-148).
+ESCALA_PEINE_MAX = 20.0
 
 
 def campos_cebra(pre="", visible=SIEMPRE, **kw):
@@ -67,7 +70,7 @@ def campos_iso(pre="", visible=SIEMPRE, **kw):
             Deslizador(f"{pre}densidad", "Isocurvas", 5, 1, 50, visible_si=visible, **kw),
             Casilla(f"{pre}peines", "Curvatura en peines", visible_si=visible, **kw),
             Deslizador(f"{pre}densidad_peine", "Densidad", 50, 3, 200, visible_si=peines, **kw),
-            Deslizador(f"{pre}escala_peine", "Escala", 10.0, 0.0, 100.0, decimales=3, visible_si=peines, **kw)]
+            Deslizador(f"{pre}escala_peine", "Escala", 10.0, 0.0, ESCALA_PEINE_MAX, decimales=3, visible_si=peines, **kw)]
 
 
 def params_iso(v, ctx, pre=""):
