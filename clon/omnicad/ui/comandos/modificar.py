@@ -913,7 +913,7 @@ class MoverCopiar(Comando):
         exigir({"bocetos": enteros} if enteros else v, "caras" if por_caras else "bocetos" if por_bocetos else "cuerpos",
                "Seleccioná las caras a mover." if por_caras else "Seleccioná las curvas de los bocetos a mover."
                if por_bocetos else "Seleccioná los cuerpos a mover.")
-        if v.get("tipo") == "traslacion":
+        if v.get("tipo") == "traslacion" and not v.get("copiar"):     # una copia en el lugar es válida, como en Libre
             claves = ("distancia",) if v.get("direccion") else ("dx", "dy", "dz")
             if all(ctx.evaluar(v.get(k) or "0") == 0 for k in claves):
                 raise ErrorComando("La traslación no puede ser cero: arrastrá una flecha o escribí una distancia.")

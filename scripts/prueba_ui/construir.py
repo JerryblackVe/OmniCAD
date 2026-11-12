@@ -606,7 +606,9 @@ for entrada, ok_esperado in (("12,5 mm", 12.5), ("1 cm", 10), ("abc", None), (""
         anotar("plano_desfase", f"teclear {entrada!r}: rojo y sin aceptar", rojo and p.ultima_op is None, f"mensaje=«{p.mensaje.text()}»")
     else:
         val = p.ctx.evaluar(w.text())
-        anotar("plano_desfase", f"teclear {entrada!r} = {ok_esperado}", abs(val - ok_esperado) < 1e-6 and p._previa_ok, f"{val}; «{p.mensaje.text()}»")
+        # P-136: con 0 no hay previa (el comando pide una distancia); con cualquier otro valor sí
+        bien = p._previa_ok if ok_esperado != 0 else (not p._previa_ok and "cero" in p.mensaje.text())
+        anotar("plano_desfase", f"teclear {entrada!r} = {ok_esperado}", abs(val - ok_esperado) < 1e-6 and bien, f"{val}; «{p.mensaje.text()}»")
     p.cancelar()
 p = abrir_menu("plano_desfase")
 A.elegir(p, "r0", *pl("XY")())
