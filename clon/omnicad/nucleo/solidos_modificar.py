@@ -1098,7 +1098,7 @@ def _cascara(forma, caras, espesor, union):
             raise geo.ErrorGeometria(
                 f"El vaciado hacia afuera falló con {espesor:g} mm: el kernel no pudo construir una pared válida "
                 "sobre estas caras B-spline. No se modificó el cuerpo. Como alternativa, solevá los perfiles "
-                "exteriores e interiores por separado y restalos con boolean_operation(operation='cut').") from e
+                "exteriores e interiores por separado y restalos con Modificar › Combinar › Cortar (boolean_operation, operation='cut').") from e
         if not _demasiado_grueso(forma, espesor) and _borde_con_bisel(forma, caras, espesor):    # «muy grueso» manda
             raise geo.ErrorGeometria(
                 f"El vaciado falló: la cara quitada tiene un chaflán o un empalme en su borde más angosto que el "
