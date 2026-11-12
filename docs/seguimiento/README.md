@@ -92,7 +92,6 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 | Plástico y extensiones | [brechas_extensiones.md](../brechas_extensiones.md) |
 | Bugs de la pieza de Gerardo | [trabajo_bugs_pieza_gerardo.md](../trabajo_bugs_pieza_gerardo.md) |
 | P-137 flechas del manipulador | [trabajo_p137_flechas.md](../trabajo_p137_flechas.md) |
-| Todas las pruebas en un comando | [trabajo_probar_todo.md](../trabajo_probar_todo.md) |
 | Escanear con el celular | [plan_escaneo_celular.md](../plan_escaneo_celular.md) |
 | Boceto: CREAR y MODIFICAR (auditoría) | [auditoria_boceto_crear_modificar.md](../auditoria_boceto_crear_modificar.md) |
 | Herramientas 3D: Agujero a Volumen de fluido (auditoría) | [auditoria_herramientas_3d.md](../auditoria_herramientas_3d.md) |
