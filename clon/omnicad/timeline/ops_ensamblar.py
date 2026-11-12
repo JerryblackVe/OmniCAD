@@ -1263,5 +1263,98 @@ class OpInsertarDiseno(Operacion):
                                 material=c.material, componente=self.id)
 
 
+def _rotar_a(a, b, centro):
+    """Matriz 4x4 que gira alrededor de `centro` lo mínimo para llevar la dirección `a` a `b` (180° si son opuestas)."""
+    a, b = _unit(a), _unit(b)
+    eje = np.cross(a, b)
+    s, c = float(np.linalg.norm(eje)), float(a @ b)
+    if s < 1e-9:
+        if c > 0:
+            return np.identity(4)
+        eje, s, c = _unit(np.cross(a, (1.0, 0, 0) if abs(a[0]) < 0.9 else (0, 1.0, 0))), 0.0, -1.0
+    k = eje / (s or 1.0)
+    K = np.array([[0, -k[2], k[1]], [k[2], 0, -k[0]], [-k[1], k[0], 0]])
+    r = np.identity(4)
+    r[:3, :3] = np.identity(3) + s * K + (1 - c) * (K @ K)
+    return _tras(centro) @ r @ _tras(-np.asarray(centro, float))
+
+
+def _clase_de_alinear(e):
+    """«plano», «eje» o «punto»: qué geometría es para Alinear (cara plana o plano; cara cilíndrica o cónica, arista y eje;
+    vértice y punto)."""
+    if e.tipo == "plano" or (e.tipo == "cara" and e.plano is not None):
+        return "plano"
+    if e.tipo == "eje" or (e.tipo == "cara" and "eje" in refs.firma_cara(e.forma)) or e.tipo in ("arista", "curva_boceto"):
+        return "eje"
+    if e.tipo in ("vertice", "punto", "punto_boceto") and e.punto is not None:
+        return "punto"
+    raise ErrorOperacion("Alinear: elegí una cara, una arista, un vértice, un plano, un eje o un punto.")
+
+
+def _alinear(e1, e2, desfase, voltear):
+    """Movimiento (4x4, mundo) que lleva la geometría `e1` a estar alineada con `e2` (ASM-17 › Alinear de Constrain
+    Components): dos planos quedan coplanares a `desfase` mm, con la orientación que menos los gira (al ras si miran
+    hacia el mismo lado, enfrentados si miran opuesto: «la orientación sale de la combinación de geometrías»; «Voltear»
+    la invierte); dos ejes (cilindro, arista circular o recta, eje) quedan concéntricos o colineales, y dos aristas circulares
+    también centro con centro; dos puntos coinciden."""
+    c1, c2 = _clase_de_alinear(e1), _clase_de_alinear(e2)
+    F1, _ = _marco(e1, "centro", 2)
+    F2, _ = _marco(e2, "centro", 2)
+    o1, o2 = F1[:3, 3], F2[:3, 3]
+    if c1 == c2 == "punto":
+        if abs(desfase) > 1e-12:
+            raise ErrorOperacion("Alinear: el desfase no se aplica a dos puntos.")
+        return _tras(o2 - o1)
+    if c1 != c2 or c1 == "punto":
+        raise ErrorOperacion(f"Alinear: la combinación {c1}–{c2} todavía no está. Hoy: cara-cara, eje-eje y punto-punto.")
+    n2 = _unit(F2[:3, 2])
+    sentido = (-1.0 if float(F1[:3, 2] @ n2) < 0 else 1.0) * (-1.0 if voltear else 1.0)
+    giro = _rotar_a(F1[:3, 2], sentido * n2, o1)
+    if c1 == "plano":
+        return _tras(n2 * (float((o2 - o1) @ n2) + desfase)) @ giro
+    w = o2 - o1
+    ambas_circulares = all(e.tipo in ("arista", "curva_boceto") and refs.firma_arista(e.forma)["geom"] == "circulo"
+                           for e in (e1, e2))
+    paso = w if ambas_circulares else w - float(w @ n2) * n2
+    return _tras(paso + n2 * desfase) @ giro
+
+
+class OpRestriccion(Operacion):
+    """ENSAMBLAR › Restricción de componentes [ASM-17, Constrain Components]: de los cuatro tipos de Fusion (Alinear,
+    Ángulo, Centro y Tangente) hoy está Alinear. Mueve el componente de `ref1` hasta alinearlo con `ref2` (si el primero
+    está fijo o es la raíz, se mueve el segundo: «Component 2 moves to Component 1»). Lo que falta de Fusion: Ángulo,
+    Centro, Tangente, filas de varias restricciones (conjuntos), límites de desfase y resolver todas a la vez."""
+    TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
+    PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False}
+    EXPRESIONES = ("desfase",)
+    OPCIONES = {"tipo": {"alinear": "Alinear"}}
+
+    def dependencias(self):
+        return (super().dependencias() | ent.dependencias_de(self.p["ref1"], self.p["ref2"])) - {self.id}
+
+    def ejecutar(self, estado, ctx):
+        p = self.p
+        if p["tipo"] != "alinear":
+            raise ErrorOperacion(f"La restricción «{p['tipo']}» todavía no está: hoy solo Alinear.")
+        if not p["ref1"] or not p["ref2"]:
+            raise ErrorOperacion("Elegí la geometría de los dos componentes.")
+        exigir_numero(p["desfase"])
+        e1, e2 = _resolver(p["ref1"], estado), _resolver(p["ref2"], estado)
+        c1, c2 = _componente_de(estado, e1) or "", _componente_de(estado, e2) or ""
+        if c1 == c2:
+            raise ErrorOperacion("Las dos selecciones están en el mismo componente: elegí geometría de otro componente.")
+        if not c1 or es_fijo(estado, c1):                   # «Component 2 moves to Component 1»
+            if not c2 or es_fijo(estado, c2):
+                raise ErrorOperacion("Los dos componentes están fijos o son la raíz: ninguno se puede mover.")
+            e1, e2, c1, c2 = e2, e1, c2, c1
+        comps = grupo_rigido(estado, c1)
+        fijos = [c for c in comps if es_fijo(estado, c)]
+        if fijos:
+            nombre = estado.componentes[fijos[0]].get("nombre") or fijos[0]
+            raise ErrorOperacion(f"El componente a mover está en un grupo rígido con «{nombre}», que está fijo.")
+        self._usados = (comps | {c2}) - {"", self.id}
+        _mover_componentes(estado, comps, _alinear(e1, e2, ctx.evaluar(p["desfase"]), bool(p["voltear"])))
+
+
 registrar_operacion(OpComponente, OpUnion, OpOrigenUnion, OpGrupoRigido, OpVinculoMovimiento, OpAnclar,
-                    OpPosicionInicial, OpCapturarPosicion, OpRevertirPosicion, OpInsertarDiseno, OpCopiarComponente)
+                    OpPosicionInicial, OpCapturarPosicion, OpRevertirPosicion, OpInsertarDiseno, OpCopiarComponente, OpRestriccion)

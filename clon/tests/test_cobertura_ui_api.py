@@ -38,7 +38,7 @@ HERRAMIENTAS = {
     "vectorizar_imagen": "trace_image", "insertar_dxf": "insert_dxf", "insertar_malla": "insert_file",
     "importar_step": "insert_file", "insertar_diseno": "insert_file", "insertar_derivacion": "insert_derive",
     "nuevo_componente": "create_component",
-    "union": "create_joint", "union_construida": "create_as_built_joint", "duplicar_con_uniones": "duplicate_with_joints",
+    "union": "create_joint", "union_construida": "create_as_built_joint", "restriccion_componentes": "constrain_components", "duplicar_con_uniones": "duplicate_with_joints",
     "origen_union": "create_joint_origin",
     "grupo_rigido": "create_rigid_group", "accionar_uniones": "drive_joint",
     "vinculo_movimiento": "create_motion_link", "fijar_componente": "ground_component",

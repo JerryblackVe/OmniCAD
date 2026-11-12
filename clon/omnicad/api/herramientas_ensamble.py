@@ -36,7 +36,7 @@ from ..timeline.ops_chapa import cuerpos_del_modelo
 from ..timeline.operaciones import ErrorOperacion
 from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpAnclar, OpCapturarPosicion, OpComponente, OpCopiarComponente, ruta_componente,
                                       OpGrupoRigido, OpInsertarDiseno, OpOrigenUnion, OpPosicionInicial, OpRevertirPosicion,
-                                      OpUnion, OpVinculoMovimiento, _mover_componentes, es_fijo, exigir_numero, grupo_rigido,
+                                      OpRestriccion, OpUnion, OpVinculoMovimiento, _mover_componentes, es_fijo, exigir_numero, grupo_rigido,
                                       limites_expr, pose_de_componente, pose_de_reasignar, poses_de_estudio, principal_de, siguiente_accion)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from ..timeline.posicion import Arrastre, pendiente_de
@@ -888,6 +888,37 @@ def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | 
     if plano is not None:
         resultado["joint_origin"] = {"id": op.id, "name": op.nombre, "origin": [_r(v) for v in plano.origen],
                                      "x_axis": [_r(v) for v in plano.u], "z_axis": [_r(v) for v in plano.normal]}
+    return resultado
+
+
+@herramienta("constrain_components", "ensamble", "Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17): "
+             "posiciona el componente de geometry1 respecto del de geometry2. Hoy solo type='align' (Alinear): dos caras "
+             "planas o planos quedan coplanares (al ras si miran hacia el mismo lado, enfrentadas si miran opuesto; flip invierte), dos ejes "
+             "(cara cilíndrica o cónica, arista circular o recta, eje de construcción) concéntricos o colineales, y dos "
+             "puntos coincidentes. Si el componente 1 está fijo o es la raíz, se mueve el 2. Faltan Ángulo, Centro y "
+             "Tangente. " + _DESC_ORIGEN + "Devuelve el paso y los componentes que se movieron.", modifica=True)
+def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2: str | list[float] | dict,
+                         type: Literal["align"] = "align", offset: Expr = 0, flip: bool = False,
+                         body1: str | None = None, body2: str | None = None, name: str | None = None):
+    """
+    geometry1: la geometría del componente que se mueve: cara o arista (selector sobre body1 o id de find_faces / find_edges), vértice [x, y, z], plano, eje o punto de construcción.
+    geometry2: la geometría del otro componente (o de la raíz) a la que se alinea la primera.
+    type: tipo de restricción; hoy solo "align".
+    offset: desfase en mm (número o expresión): entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje.
+    flip: true invierte la orientación que sale sola (la que menos gira el componente): al ras pasa a enfrentadas y al revés.
+    body1: cuerpo donde se evalúa el selector de geometry1; con un id no hace falta.
+    body2: cuerpo donde se evalúa el selector de geometry2.
+    name: nombre del paso; vacío = «Restricción<n>».
+    """
+    if type != "align":
+        raise error("INVALID_ARGUMENTS", f"La restricción «{type}» todavía no está: hoy solo 'align'.")
+    ref1, _ = _origen(sesion, geometry1, body1)
+    ref2, _ = _origen(sesion, geometry2, body2)
+    antes = _matrices(sesion)
+    op = OpRestriccion(sesion.doc.nuevo_id(), nombre_paso(sesion, name, "Restricción", OpRestriccion), tipo="alinear",
+                       ref1=ref1, ref2=ref2, desfase=_expr(offset), voltear=bool(flip))
+    resultado = _agregar(sesion, op)
+    resultado["moved_components"] = _movidos(sesion, antes)
     return resultado
 
 
