@@ -271,6 +271,18 @@ class OpNervio(_OpCrear):
         cuerpo.forma = geo.booleano(cuerpo.forma, forma, "unir")
         self._registrar_usados([cuerpo.id])
 
+    def crecimiento(self, estado):
+        """(punto medio de la primera curva, sentido en que crece, normal del plano) con el mismo cuerpo y sentido que
+        el cálculo: lo usan las asas de la ventana (B-219)."""
+        ents, aristas = _aristas(self.p["curvas"], estado)
+        plano = next((e.plano for e in ents if e.plano is not None), None)
+        if plano is None:
+            raise ErrorOperacion("Elegí curvas de un boceto.")
+        cuerpo = _cuerpo_objetivo(estado, ents, self.p)
+        punto, d = _sc().sentido_crecimiento(cuerpo.forma, aristas, plano.normal, self.p["invertir"],
+                                             red=self.TIPO == "red")
+        return punto, d, plano.normal
+
 
 class OpRed(OpNervio):
     """Red de Fusion [SLD-WEB]: varias curvas abiertas extruidas perpendiculares al boceto hasta el cuerpo."""
