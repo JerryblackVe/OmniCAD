@@ -153,6 +153,18 @@ def test_gltf_con_bufer_embebido_y_un_nodo_por_cuerpo(tmp_path):
     assert len(js["materials"]) == 2
 
 
+@pytest.mark.parametrize("extension", ["gltf", "glb"])
+def test_b303_nombre_de_cuerpo_con_sustituto_suelto(tmp_path, extension):
+    """B-303: ambos formatos conservan el nombre escapado y siguen siendo legibles."""
+    cuerpo = _Cuerpo(geo.caja(1, 2, 3))
+    nombre = "c\ud800"
+    ruta = tmp_path / f"sustituto.{extension}"
+    assert ex.exportar_gltf([cuerpo], ruta, propiedades={cuerpo.id: {"nombre": nombre}}) == 12
+    js, _ = leer_glb(ruta) if extension == "glb" else leer_gltf(ruta)
+    assert js["nodes"][1]["name"] == nombre
+    assert js["meshes"][0]["name"] == nombre
+
+
 def test_malla_y_superficie(tmp_path):
     v = np.array([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]], float)
     malla = ml.Malla(v, [[0, 1, 2], [0, 2, 3]])
