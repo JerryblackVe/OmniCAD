@@ -367,9 +367,9 @@ class Repujado(Comando):
                 Expresion("profundidad", "Profundidad", "1 mm"), Casilla("envolver", "Envolver en la cara"),
                 Casilla("invertir", "Invertir normal"),
                 Casilla("cadena_tangente", "Cadena tangente", avanzado=True),
-                Expresion("desfase_h", "Desfase horizontal", "0 mm", avanzado=True),
-                Expresion("desfase_v", "Desfase vertical", "0 mm", avanzado=True),
-                Expresion("giro", "Ángulo de giro", "0 deg", ANGULO, avanzado=True)]
+                Expresion("desfase_h", "Desfase horizontal", "0 mm"),
+                Expresion("desfase_v", "Desfase vertical", "0 mm"),
+                Expresion("giro", "Ángulo de giro", "0 deg", ANGULO)]
 
     def construir(self, v, ctx):
         exigir(v, "perfiles", "Seleccioná los perfiles.")

@@ -323,11 +323,18 @@ def _asas_repujado(self, ctx, v):
         return []
     punto, n = mp.punto_normal_cara(cara)
     centro = base[0] + n * float((punto - base[0]) @ n)         # el centro del perfil, sobre la cara
+    # P-142: desfases y giro como en Emboss de Fusion, en los ejes que usa el núcleo (`_alinear_repujado`): los de la
+    # cara plana o, sobre un cilindro, los del boceto del perfil. Se gira alrededor del centro y después se corre.
+    pl = geo.plano_de_cara(cara) or base[1]
+    h, vv = evaluar_o_cero(ctx, v.get("desfase_h")), evaluar_o_cero(ctx, v.get("desfase_v"))
+    corrido = centro + pl.u * h + pl.v * vv
     # Fusion: profundidad negativa SIEMPRE graba; el asa baja de 0 (sin tope) y apunta al lado del material.
     prof = evaluar_o_cero(ctx, v.get("profundidad"))
     es_relieve = prof >= 0 and v.get("tipo") == "relieve"
     signo = 1.0 if es_relieve else -math.copysign(1.0, prof)
-    return [mp.Flecha("profundidad", centro, n * signo, minimo=None)]
+    return [mp.Flecha("profundidad", corrido, n * signo, minimo=None),
+            mp.Flecha("desfase_h", centro, pl.u), mp.Flecha("desfase_v", centro + pl.u * h, pl.v),
+            mp.Angulo("giro", corrido, n, pl.u)]
 
 
 def _asas_rosca(self, ctx, v):
