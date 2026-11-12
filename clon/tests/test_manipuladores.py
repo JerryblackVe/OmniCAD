@@ -1302,3 +1302,32 @@ def test_p143_asa_del_empalme_en_la_punta_libre_de_la_arista(app_qt):
     assert np.allclose(asa.origen, (-10, -70, 52))                 # la punta libre: y = −20 − 50
     assert np.allclose(asa.direccion, np.array([1, 0, -1]) / np.sqrt(2))     # hacia adentro, por la bisectriz
     panel.cancelar()
+
+
+def test_p144_la_caja_de_valor_tiene_el_menu_de_parametros(app_qt):
+    """P-144: el «⋮» de la caja junto a la flecha lista los parámetros (favoritos primero) y elegir uno lo
+    escribe en la caja; Enter lo aplica al campo como si se hubiera tecleado."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    doc.parametros.agregar("alto", "30 mm")
+    doc.parametros.agregar("lado", "8 mm", favorito=True)
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
+    caja = panel.manipuladores.cajas["distancia"]
+    menu = caja.menu()
+    assert [a.text() for a in menu.actions()] == ["lado", "alto"]
+    caja.setFocus()
+    caja.selectAll()
+    QTest.keyClicks(caja, "2*")
+    menu.actions()[1].trigger()
+    assert caja.text() == "2*alto"
+    QTest.keyClick(caja, Qt.Key_Return)
+    assert panel.valores["distancia"] == "2*alto"
+    # sin parámetros el menú lo dice, sin ítems que no hacen nada
+    doc2 = _doc_rectangulo()
+    panel2, _, _ = _panel(Extruir(), doc2, {"perfiles": [_perfil(doc2)]})
+    (unica,) = panel2.manipuladores.cajas["distancia"].menu().actions()
+    assert not unica.isEnabled() and "Cambiar parámetros" in unica.text()
+    panel.cancelar()
+    panel2.cancelar()
