@@ -2,6 +2,8 @@
 menos gira, ejes concéntricos, puntos coincidentes, el componente fijo no se mueve y los errores claros."""
 import json
 
+from PySide6.QtCore import Qt
+
 import pytest
 
 from omnicad import api
@@ -522,3 +524,94 @@ def test_tangente_toro_y_circulo_con_un_plano():
     _ll(s, "constrain_components", type="tangent", geometry1=arista, body1=c, geometry2=">Z", body2=a)
     assert _caja(s, c)[5] == pytest.approx(10)                           # la arista circular de arriba (eje ⟂ plano) queda en el plano de la tapa
     _falla(s, "constrain_components", "OPERATION_FAILED", type="tangent", geometry1="%TORUS", body1=t, geometry2="%CYLINDER", body2=c)
+
+
+# ---------------------------------------------------------------- tabla de filas (conjunto de restricciones)
+def test_un_conjunto_de_filas_se_cumple_a_la_vez(dos):
+    s, a, b = dos
+    r = _ll(s, "constrain_components", geometry1=">Z", geometry2=">Z", body1=b, body2=a,
+            rows=[{"geometry1": "<X", "geometry2": ">X", "body1": b, "body2": a, "offset": 2}])
+    assert _caja(s, b) == [12, 25, 0, 22, 35, 10]                        # tapa al ras en z y apoyada a 2 mm de la cara +X de A; y no se toca
+    assert len([o for o in s.doc.operaciones if o.TIPO == "restriccion"]) == 1 and [c["name"] for c in r["moved_components"]] == ["CB"]
+    _ll(s, "undo")
+    assert _caja(s, b) == [45, 25, 7, 55, 35, 17]                        # un solo paso de deshacer para todo el conjunto
+
+
+def test_un_conjunto_con_el_componente_1_fijo_mueve_el_2(dos):
+    s, a, b = dos
+    _ll(s, "constrain_components", geometry1=">Z", geometry2=">Z", body1=a, body2=b,
+        rows=[{"geometry1": ">X", "geometry2": "<X", "body1": a, "body2": b, "offset": 2}])
+    assert _caja(s, b) == [12, 25, 0, 22, 35, 10] and _caja(s, a) == [-10, -10, 0, 10, 10, 10]
+
+
+def test_filas_que_se_contradicen_dan_error_claro_y_el_documento_no_cambia(dos):
+    s, a, b = dos
+    r = _falla(s, "constrain_components", "OPERATION_FAILED", geometry1=">Z", geometry2=">Z", body1=b, body2=a,
+               rows=[{"geometry1": ">Z", "geometry2": ">Z", "body1": b, "body2": a, "offset": 5}])
+    assert "se contradicen" in r["mensaje"] and "filas 1, 2" in r["mensaje"]
+    r = _falla(s, "constrain_components", "OPERATION_FAILED", geometry1=">Z", geometry2=">Z", body1=b, body2=a,
+               rows=[{"geometry1": ">X", "geometry2": "<X", "body1": a, "body2": b}])               # del 2 al 1: otro orden
+    assert "mismo componente 1" in r["mensaje"]
+
+
+def test_las_filas_validan_sus_claves(dos):
+    s, a, b = dos
+    _falla(s, "constrain_components", "INVALID_ARGUMENTS", geometry1=">Z", geometry2=">Z", body1=b, body2=a, rows=[{"geometry1": ">Z"}])
+    _falla(s, "constrain_components", "INVALID_ARGUMENTS", geometry1=">Z", geometry2=">Z", body1=b, body2=a,
+           rows=[{"geometry1": ">Z", "geometry2": ">Z", "foo": 1}])
+
+
+def test_el_comando_de_la_ventana_arma_el_conjunto_con_la_tabla_de_filas_y_se_edita(dos, tmp_path):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QPushButton
+
+    from omnicad.api import selectores as sl
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+
+    s, a, b = dos
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    try:
+        v.resize(1280, 800)
+        v.show()
+        p = v.ejecutar_comando(CATALOGO["restriccion_componentes"]())
+        estado = v.doc.estado_final
+
+        def elegir(campo, sel, cuerpo):
+            c, cara = sl.elegir(s, sel, "cara", cuerpo)[0]
+            p._activar(next(x for x in p.campos if x.clave == campo))
+            p._elegida(hit_desde_ref(sl.referencia(c, cara), estado))
+
+        boton = lambda texto: next(x for x in p.findChildren(QPushButton) if x.text().startswith(texto))  # noqa: E731
+        QTest.mouseClick(boton("+ Agregar"), Qt.LeftButton)                  # sin geometría: avisa y no agrega
+        assert not p.valores["filas"]
+        elegir("ref1", ">Z", b)
+        elegir("ref2", ">Z", a)
+        QTest.mouseClick(boton("+ Agregar"), Qt.LeftButton)
+        assert len(p.valores["filas"]) == 1 and not p.valores["ref1"] and p._lista_filas.item(0).text() == "1. Alinear · cara–cara"
+        elegir("ref1", "<X", b)
+        elegir("ref2", ">X", a)
+        p.set_valor("desfase", "2 mm")
+        p.aceptar()
+        assert v.panel is None
+        assert _caja(api.Sesion(v.doc), b) == [12, 25, 0, 22, 35, 10]
+        op = next(o for o in v.doc.operaciones if o.TIPO == "restriccion")
+        assert len(op.p["filas"]) == 1 and len([o for o in v.doc.operaciones if o.TIPO == "restriccion"]) == 1
+        v.editar_operacion(op.id)
+        p = v.panel
+        assert len(p.valores["filas"]) == 1 and p.valores["desfase"] == "0 mm" and p._lista_filas.count() == 1
+        p._lista_filas.setCurrentRow(0)
+        QTest.mouseClick(boton("✕ Quitar"), Qt.LeftButton)
+        assert not p.valores["filas"] and p._lista_filas.count() == 0
+        p.cancelar()
+    finally:
+        if v.panel is not None:
+            v.panel.cancelar()
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()
+        app.processEvents()

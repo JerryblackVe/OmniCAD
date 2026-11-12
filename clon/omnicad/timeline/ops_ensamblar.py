@@ -1461,22 +1461,48 @@ class OpRestriccion(Operacion):
     Alinear, Ángulo, Centro y Tangente. Mueve el componente de `ref1` respecto de `ref2` (si el primero está fijo o es la raíz, se mueve
     el segundo: «Component 2 moves to Component 1»). `desfase` es la distancia (Alinear) o el ángulo (Ángulo, con
     `ref_angulo` opcional: la arista o el eje que fija el sentido). Centro: `modo1`/`modo2` son «simple» (la cara `ref1`/`ref2`)
-    o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos, cilindros, esferas, conos, toros, aristas rectas o circulares y vértices; `todas_caras` apagado exige que las caras se toquen). Lo que falta de Fusion: filas de
-    varias restricciones (conjuntos), límites de desfase y resolver todas a la vez."""
+    o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos, cilindros, esferas, conos, toros, aristas rectas o circulares y vértices; `todas_caras` apagado exige que las caras se toquen). `filas` suma más restricciones entre los mismos
+    dos componentes (el conjunto de la tabla de Fusion, cada una con los campos de arriba): se aplican en orden y se repite
+    hasta que todas se cumplen a la vez; si no convergen, error que nombra la fila en conflicto. Lo que falta de Fusion: límites de
+    desfase y resolver todas a la vez con las uniones."""
     TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
     PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None,
-              "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None, "todas_caras": True}
-    EXPRESIONES = ("desfase",)
+              "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None, "todas_caras": True, "filas": []}
+    EXPRESIONES = ("desfase",)   # shortcut: el desfase de las `filas` extra no se declara aquí; un parámetro que solo ellas usen no las recalcula solo
     OPCIONES = {"tipo": {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro", "tangente": "Tangente"},
                 "modo1": {"simple": "Simple", "entre_caras": "Entre dos caras"},
                 "modo2": {"simple": "Simple", "entre_caras": "Entre dos caras"}}
 
     def dependencias(self):
-        return (super().dependencias() | ent.dependencias_de(self.p["ref1"], self.p["ref2"], self.p.get("ref_angulo"),
-                                                                 self.p.get("ref1b"), self.p.get("ref2b"))) - {self.id}
+        refs_ = [r for f in self._filas() for k in ("ref1", "ref2", "ref_angulo", "ref1b", "ref2b") if (r := f.get(k))]
+        return (super().dependencias() | ent.dependencias_de(*refs_)) - {self.id}
+
+    def _filas(self):
+        """La restricción principal y las `filas` extra, cada una con todos sus campos."""
+        base = {k: v for k, v in self.PARAMS.items() if k != "filas"}
+        return [{k: self.p[k] for k in base}] + [dict(base, **f) for f in self.p.get("filas") or []]
 
     def ejecutar(self, estado, ctx):
-        p = self.p
+        filas = self._filas()
+        m, comps, orden = self._movimiento(estado, ctx, filas[0], None)
+        _mover_componentes(estado, comps, m)
+        if len(filas) == 1:
+            return
+        for _ in range(4):                       # cada fila mueve lo que las otras ya dejaron: se repite hasta que ninguna se mueve
+            sueltas = []
+            for i, f in enumerate(filas):
+                m, comps, _ = self._movimiento(estado, ctx, f, orden)
+                if not np.allclose(m, np.identity(4), atol=1e-6):
+                    sueltas.append(i + 1)
+                    _mover_componentes(estado, comps, m)
+            if not sueltas:
+                return
+        raise ErrorOperacion(f"Las restricciones del conjunto se contradicen: las filas {', '.join(map(str, sueltas))} no se pueden cumplir "
+                             "a la vez. Cambiá la geometría o el desfase de alguna, o sacala.")
+
+    def _movimiento(self, estado, ctx, p, orden):
+        """(movimiento 4x4, componentes que se mueven, orden) de la fila `p` con el estado actual. `orden` es (c1, c2) de la primera
+        fila ya con el cambio «Component 2 moves to Component 1»: las demás tienen que ir del mismo componente 1 al mismo 2."""
         if p["tipo"] not in ("alinear", "angulo", "centro", "tangente"):
             raise ErrorOperacion(f"La restricción «{p['tipo']}» no existe: Alinear, Ángulo, Centro o Tangente.")
         if not p["ref1"] or not p["ref2"]:
@@ -1489,12 +1515,20 @@ class OpRestriccion(Operacion):
             raise ErrorOperacion("Las dos selecciones están en el mismo componente: elegí geometría de otro componente.")
         e1b = e2b = None
         if p["tipo"] == "centro":
-            e1b, e2b = self._segundas_caras(estado, e1, e2, c1, c2)
-        if not c1 or es_fijo(estado, c1):                   # «Component 2 moves to Component 1»
-            if not c2 or es_fijo(estado, c2):
-                raise ErrorOperacion("Los dos componentes están fijos o son la raíz: ninguno se puede mover.")
-            e1, e2, c1, c2, e1b, e2b = e2, e1, c2, c1, e2b, e1b
-            invertido = True
+            e1b, e2b = self._segundas_caras(p, estado, e1, e2, c1, c2)
+        if orden is None:
+            if not c1 or es_fijo(estado, c1):               # «Component 2 moves to Component 1»
+                if not c2 or es_fijo(estado, c2):
+                    raise ErrorOperacion("Los dos componentes están fijos o son la raíz: ninguno se puede mover.")
+                e1, e2, c1, c2, e1b, e2b = e2, e1, c2, c1, e2b, e1b
+                invertido = True
+            orden = (c1, c2, invertido)
+        else:
+            invertido = orden[2]
+            if invertido:
+                e1, e2, c1, c2, e1b, e2b = e2, e1, c2, c1, e2b, e1b
+            if (c1, c2) != orden[:2]:
+                raise ErrorOperacion("Todas las filas del conjunto tienen que ir del mismo componente 1 al mismo componente 2.")
         comps = grupo_rigido(estado, c1)
         fijos = [c for c in comps if es_fijo(estado, c)]
         if fijos:
@@ -1515,7 +1549,7 @@ class OpRestriccion(Operacion):
             e_ref = _resolver(p["ref_angulo"], estado) if p.get("ref_angulo") else None
             grados = ctx.evaluar(p["desfase"], ANGULO)
             m = _angular(e1, e2, -grados if invertido and e_ref is not None else grados, bool(p["voltear"]), e_ref)
-        _mover_componentes(estado, comps, m)
+        return m, comps, orden
 
     @staticmethod
     def _tocan_las_caras(e1, e2, m):
@@ -1529,10 +1563,11 @@ class OpRestriccion(Operacion):
             raise ErrorOperacion(f"Tangente: con «Todas las caras» apagado las dos selecciones tienen que tocarse y quedan a "
                                  f"{lejos:.3f} mm. Activá «Todas las caras» o acercá los componentes.")
 
-    def _segundas_caras(self, estado, e1, e2, c1, c2):
+    @staticmethod
+    def _segundas_caras(p, estado, e1, e2, c1, c2):
         """(e1b, e2b) de Centro: la segunda cara de cada componente que está en «entre_caras» (None si es «simple»).
         Fusion exige «Entre dos caras» en al menos uno."""
-        p, salida = self.p, []
+        salida = []
         for n, e, c in (("1", e1, c1), ("2", e2, c2)):
             modo = p.get("modo" + n) or "simple"
             if modo not in ("simple", "entre_caras"):

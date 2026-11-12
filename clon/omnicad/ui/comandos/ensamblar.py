@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Comandos de ENSAMBLAR: nuevo componente, unión, unión como está, origen de unión, grupo rígido,
 accionar uniones, vínculo de movimiento y fijar componente."""
+from PySide6.QtWidgets import QHBoxLayout, QListWidget, QPushButton, QVBoxLayout, QWidget
+
 from ...timeline.operaciones import ErrorOperacion
 from ...timeline.ops_ensamblar import (CLAVES_MOVIMIENTO, MODOS_POSICION, MOVIMIENTOS, TIPOS_UNION, OpAnclar,
                                        OpCapturarPosicion, OpComponente, OpGrupoRigido, OpOrigenUnion,
@@ -277,9 +279,66 @@ class RestriccionComponentes(Comando):
                           ayuda="El ángulo entre las dos geometrías (entre caras, el de sus normales)."),
                 Casilla("todas_caras", "Todas las caras", True, visible_si=lambda v: v.get("tipo") == "tangente",
                         ayuda="Activo: la superficie entera de la cara. Apagado: las dos caras tienen que llegar a tocarse."),
-                Casilla("voltear", "Voltear", ayuda="Invierte la orientación que sale sola (al ras ↔ enfrentadas; en Ángulo, da vuelta la geometría 1).")]
+                Casilla("voltear", "Voltear", ayuda="Invierte la orientación que sale sola (al ras ↔ enfrentadas; en Ángulo, da vuelta la geometría 1)."),
+                Personalizado("filas", "Restricciones del conjunto", self._crear_filas, defecto=[], ancho_completo=True)]
+
+    # La tabla de Fusion: «Agregar» guarda la restricción de los campos como una fila del conjunto y los deja vacíos para la
+    # siguiente; la fila de los campos al aceptar es la última. Las filas se resuelven todas a la vez.
+    CAMPOS_FILA = ("tipo", "ref1", "ref2", "modo1", "modo2", "ref1b", "ref2b", "ref_angulo", "desfase", "angulo", "todas_caras", "voltear")
+    NOMBRES = {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro", "tangente": "Tangente"}
+
+    def _crear_filas(self, panel):
+        caja = QWidget()
+        lay = QVBoxLayout(caja)
+        lay.setContentsMargins(0, 0, 0, 0)
+        panel._lista_filas = QListWidget()
+        panel._lista_filas.setMaximumHeight(80)
+        botones = QHBoxLayout()
+        agregar, quitar = QPushButton("+ Agregar restricción"), QPushButton("✕ Quitar fila")
+        agregar.setToolTip("Guarda esta restricción en el conjunto y deja los campos para la siguiente.")
+        quitar.setToolTip("Saca del conjunto la fila elegida de la lista.")
+        agregar.clicked.connect(lambda: self._agregar_fila(panel))
+        quitar.clicked.connect(lambda: self._quitar_fila(panel))
+        botones.addWidget(agregar)
+        botones.addWidget(quitar)
+        lay.addWidget(panel._lista_filas)
+        lay.addLayout(botones)
+        return caja
+
+    def preparar_panel(self, panel):
+        self._pintar_filas(panel)
+
+    def _pintar_filas(self, panel):
+        lista = panel._lista_filas
+        lista.clear()
+        for i, f in enumerate(panel.valores.get("filas") or [], 1):
+            par = "–".join((f.get(k) or [{}])[0].get("tipo", "?") for k in ("ref1", "ref2"))
+            lista.addItem(f"{i}. {self.NOMBRES.get(f.get('tipo') or 'alinear', '?')} · {par}")
+
+    def _agregar_fila(self, panel):
+        v = panel.valores
+        if not (v.get("ref1") and v.get("ref2")):
+            panel._mostrar("Elegí la geometría de los dos componentes antes de agregar otra restricción.")
+            return
+        fila = {k: list(v[k]) if isinstance(v.get(k), list) else v.get(k) for k in self.CAMPOS_FILA if k in v}
+        panel.set_valores({"filas": list(v.get("filas") or []) + [fila], "ref1": [], "ref2": [], "ref1b": [], "ref2b": [], "ref_angulo": []})
+        panel._refrescar_seleccion()
+        self._pintar_filas(panel)
+
+    def _quitar_fila(self, panel):
+        filas, i = list(panel.valores.get("filas") or []), panel._lista_filas.currentRow()
+        if 0 <= i < len(filas):
+            del filas[i]
+            panel.set_valores({"filas": filas})
+            self._pintar_filas(panel)
 
     def construir(self, v, ctx):
+        previas = list(v.get("filas") or [])
+        todas = previas + ([v] if v.get("ref1") or v.get("ref2") or not previas else [])
+        return self.crear_op(OpRestriccion, v, ctx, filas=[self._fila(f, ctx) for f in todas[1:]], **self._fila(todas[0], ctx))
+
+    def _fila(self, v, ctx):
+        """Los parámetros de OpRestriccion de una fila (los campos del panel o una fila guardada)."""
         exigir(v, "ref1", "Seleccioná la geometría del componente 1.")
         exigir(v, "ref2", "Seleccioná la geometría del componente 2.")
         angulo, centro = v.get("tipo") == "angulo", v.get("tipo") == "centro"
@@ -294,16 +353,20 @@ class RestriccionComponentes(Comando):
                     extra[f"ref{n}b"] = ref1(v, f"ref{n}b")
             if extra["modo1"] == extra["modo2"] == "simple":
                 raise ErrorComando("Centro: poné al menos un componente en «Entre dos caras».")
-        return self.crear_op(OpRestriccion, v, ctx, tipo=v.get("tipo", "alinear"), ref1=ref1(v, "ref1"), ref2=ref1(v, "ref2"),
-                             desfase="0 mm" if centro or v.get("tipo") == "tangente" else valor, voltear=bool(v.get("voltear")),
-                             ref_angulo=ref1(v, "ref_angulo") if angulo else None, **extra)
+        return dict(tipo=v.get("tipo", "alinear"), ref1=ref1(v, "ref1"), ref2=ref1(v, "ref2"),
+                    desfase="0 mm" if centro or v.get("tipo") == "tangente" else valor, voltear=bool(v.get("voltear")),
+                    ref_angulo=ref1(v, "ref_angulo") if angulo else None, **extra)
 
     def desde_op(self, op, ctx):
-        v = dict(op.p)
-        for k in ("ref1", "ref2", "ref_angulo", "ref1b", "ref2b"):
-            v[k] = [hit_desde_ref(op.p[k], ctx.estado)] if op.p.get(k) else []
-        if op.p.get("tipo") == "angulo":
-            v["angulo"] = op.p["desfase"]
+        def cargar(p):
+            v = dict(p)
+            for k in ("ref1", "ref2", "ref_angulo", "ref1b", "ref2b"):
+                v[k] = [hit_desde_ref(p[k], ctx.estado)] if p.get(k) else []
+            if p.get("tipo") == "angulo":
+                v["angulo"] = p["desfase"]
+            return v
+        v = cargar(op.p)
+        v["filas"] = [cargar(dict(OpRestriccion.PARAMS, **f)) for f in op.p.get("filas") or []]
         return v
 
 
