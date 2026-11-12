@@ -45,6 +45,7 @@ PIEZAS.append("manipulacion_vectorial")
 PIEZAS.append("extruir_espacios")
 PIEZAS.append("revolucion_barrido_solevacion")
 PIEZAS.append("nervio_red_repujado")
+PIEZAS.append("proyecciones_boceto")
 # Carpeta de piezas propia (tests): una pieza por `.py`, sin tocar las de verdad.
 PIEZAS_DIR = Path(os.environ.get("OMNICAD_PRUEBA_PIEZAS") or AQUI)
 if PIEZAS_DIR != AQUI:
