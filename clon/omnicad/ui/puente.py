@@ -25,6 +25,7 @@ Decisiones:
 import json
 import os
 import secrets
+import time
 from collections import deque
 from pathlib import Path
 
@@ -336,6 +337,7 @@ class PuenteAgentes(QObject):
         try:
             respuesta = api.llamar(self.sesion, herramienta, args)
         finally:
+            v.registro_uso.api_terminada = (herramienta, time.perf_counter())
             v.registro_uso.herramienta_api = ""
             self.sesion.latido = None
             if dialogo is not None:

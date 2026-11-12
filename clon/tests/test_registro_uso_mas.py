@@ -87,8 +87,12 @@ def test_nombres_reales_en_lugar_de_sin_clave():
         ru.configurar(False)
 
 
-@pytest.mark.parametrize("herramienta,accion", [("extrude", "api.extrude"), ("", "Preferencias"), (None, "Preferencias")])
-def test_b322_bloqueo_ui_identifica_la_api_en_curso(monkeypatch, herramienta, accion):
+@pytest.mark.parametrize("herramienta,terminada,accion", [
+    ("extrude", None, "api.extrude"), ("", None, "Preferencias"), (None, None, "Preferencias"),
+    ("", ("extrude", 0.75), "api.extrude"), ("", ("extrude", 0.5), "Preferencias"),
+    ("", ("extrude", 0.25), "Preferencias"), ("extrude", ("revolve", 0.75), "api.extrude"),
+])
+def test_b322_bloqueo_ui_identifica_la_api_en_curso(monkeypatch, herramienta, terminada, accion):
     from types import SimpleNamespace
     from omnicad.ui import bench, registro_uso
     from omnicad.ui.registro_uso import RegistroVentana
@@ -99,6 +103,8 @@ def test_b322_bloqueo_ui_identifica_la_api_en_curso(monkeypatch, herramienta, ac
         ventana=SimpleNamespace(panel=None), _rss=2**20, _muestra=1.0)
     if herramienta is not None:
         doble.herramienta_api = herramienta
+    if terminada is not None:
+        doble.api_terminada = terminada
     monkeypatch.setattr(registro_uso, "time", SimpleNamespace(perf_counter=lambda: 1.0))
     monkeypatch.setattr(bench, "memoria_mb", lambda: (1, 0))
     monkeypatch.setattr(ru, "toca_podar", lambda: False)
@@ -110,6 +116,7 @@ def test_b322_bloqueo_ui_identifica_la_api_en_curso(monkeypatch, herramienta, ac
         assert len(bloqueos) == 1
         assert bloqueos[0]["duracion_ms"] == pytest.approx(450)
         assert bloqueos[0]["accion"] == accion
+        assert doble.api_terminada is None
     finally:
         ru.configurar(False)
 

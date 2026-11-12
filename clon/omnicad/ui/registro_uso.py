@@ -40,6 +40,7 @@ class RegistroVentana(QObject):
         self._encendido = False
         self._ultima_accion = ""
         self.herramienta_api = ""
+        self.api_terminada = None
         self._anterior_excepcion = None
         self._anterior_qt = None
         self._barra = None
@@ -228,10 +229,14 @@ class RegistroVentana(QObject):
             if pausado:
                 self.ventana.mensaje("El registro de uso está pausado: queda poco espacio libre en disco.", 10000)
         ahora = time.perf_counter()
+        herramienta = getattr(self, "herramienta_api", "")
+        terminada = getattr(self, "api_terminada", None)
+        if not herramienta and terminada is not None and terminada[1] > self._ultimo:
+            herramienta = terminada[0]
+        self.api_terminada = None  # El temporizador puede volver recién después del finally del puente.
         demora, self._ultimo = (ahora - self._ultimo - 0.05) * 1000, ahora
         comando = self._comando()
         if demora > 250:
-            herramienta = getattr(self, "herramienta_api", "")
             accion = f"api.{herramienta}" if herramienta else self._ultima_accion
             r.emitir("bloqueo_ui", {"duracion_ms": demora, "comando": comando, "accion": accion})
         p = self.ventana.panel
