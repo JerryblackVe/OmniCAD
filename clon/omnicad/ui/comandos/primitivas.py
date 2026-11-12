@@ -298,7 +298,7 @@ class _Primitiva(Comando):
 
 class Caja(_Primitiva):
     CLAVE, TITULO, ICONO, FORMA = "caja", "Prisma rectangular", "caja", "caja"
-    AYUDA = ("Prisma rectangular (Fusion: Box): clic en un plano o una cara para ubicar el centro de la base; ancho, "
+    AYUDA = ("Prisma rectangular: clic en un plano o una cara para ubicar el centro de la base; ancho, "
              "largo y alto con asas en la vista.")
     VARIANTE = ("forma", "caja")
     MEDIDAS = [("ancho", "Ancho (X)", "20 mm", "ancho", False), ("largo", "Largo (Y)", "20 mm", "largo", False),
@@ -321,7 +321,7 @@ class Caja(_Primitiva):
 
 class Cilindro(_Primitiva):
     CLAVE, TITULO, ICONO, FORMA = "cilindro", "Cilindro", "cilindro", "cilindro"
-    AYUDA = ("Cilindro (Fusion: Cylinder): clic en un plano o una cara para el centro de la base, Diámetro y Altura, "
+    AYUDA = ("Cilindro: clic en un plano o una cara para el centro de la base, Diámetro y Altura, "
              "con asas en la vista.")
     VARIANTE = ("forma", "cilindro")
     ETIQUETA_CENTRO = "Colocación"
@@ -335,7 +335,7 @@ class Cilindro(_Primitiva):
 
 class Esfera(_Primitiva):
     CLAVE, TITULO, ICONO, FORMA = "esfera", "Esfera", "esfera", "esfera"
-    AYUDA = "Esfera (Fusion: Sphere): clic en un plano, una cara o un punto para el centro y Diámetro, con asa en la vista."
+    AYUDA = "Esfera: clic en un plano, una cara o un punto para el centro y Diámetro, con asa en la vista."
     VARIANTE = ("forma", "esfera")
     ETIQUETA_CENTRO = "Punto"
     MEDIDAS = [("diametro", "Diámetro", "20 mm", "radio", True)]
@@ -348,7 +348,7 @@ class Esfera(_Primitiva):
 
 class Toroide(_Primitiva):
     CLAVE, TITULO, ICONO, FORMA = "toroide", "Toroide", "toroide", "toroide"
-    AYUDA = ("Toroide (Fusion: Torus): clic en un plano o una cara horizontal para el centro, diámetro interior (del "
+    AYUDA = ("Toroide: clic en un plano o una cara horizontal para el centro, diámetro interior (del "
              "círculo de referencia), diámetro del toroide (del tubo) y posición del tubo respecto de ese círculo.")
     VARIANTE = ("forma", "toroide")
     ETIQUETA_CENTRO = "Perfil"

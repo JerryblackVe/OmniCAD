@@ -468,7 +468,7 @@ class PanelTimeline(QWidget):
             None,
             # Fusion: Create Group sobre las operaciones elegidas; con un solo paso no hay nada que agrupar (SC9).
             *([E(f"Agrupar {len(ids)} pasos", emitir(self.agrupar, ids),
-                 ayuda="Los pasos elegidos pasan a una carpeta del timeline, como en Fusion.")] if len(ids) > 1 else []),
+                 ayuda="Los pasos elegidos pasan a una carpeta del timeline.")] if len(ids) > 1 else []),
             E("Mover a la izquierda", emitir(self.mover, op_id, i - 1), i > 0),
             E("Mover a la derecha", emitir(self.mover, op_id, i + 1), i < len(doc.operaciones) - 1),
             # «Rodar marcador aquí» de Fusion (antes «Retroceder hasta aquí»): el paso queda calculado
@@ -497,14 +497,14 @@ class PanelTimeline(QWidget):
         return [
             E(f"{'Expandir' if g['plegado'] else 'Contraer'} el grupo", lambda: self.plegar.emit(g["id"],
                                                                                                  not g["plegado"]),
-              ayuda="El +/− del bloque de Fusion: contraído esconde sus pasos en la barra (no cambia el modelo)."),
+              ayuda="El +/− del bloque: contraído esconde sus pasos en la barra (no cambia el modelo)."),
             E("Renombrar…", lambda: self._renombrar_grupo(g)),
             E(f"{'Desuprimir' if todas else 'Suprimir'} el grupo ({n} pasos)",
               lambda: self.suprimir_varios.emit(g["pasos"], not todas),
               ayuda="Suprime o reactiva de una vez todos los pasos de la carpeta (un solo paso de deshacer)."),
             None,
             E("Desagrupar", lambda: self.desagrupar.emit(g["id"]),
-              ayuda="Fusion: Edit Group › Expand: borra la carpeta y deja sus pasos sueltos, sin tocar el modelo."),
+              ayuda="Borra la carpeta y deja sus pasos sueltos, sin tocar el modelo."),
         ]
 
     def _menu(self, pos):

@@ -254,7 +254,7 @@ def _hilo_de_tabla(familia, diametro, paso, clase):
         por_clase = tablas_rosca.CLASES[familia].get(nombre)
         if por_clase and clase in por_clase:
             return por_clase[clase]
-    raise geo.ErrorGeometria(f"Las tablas de Fusion no traen la clase {clase} para este tamaño: usá la rosca sin clase "
+    raise geo.ErrorGeometria(f"No hay datos de la clase {clase} para este tamaño: usá la rosca sin clase "
                              "o la «auto».")
 
 

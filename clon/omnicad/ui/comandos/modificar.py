@@ -110,7 +110,7 @@ class Empalme(Comando):
             Expresion("cuerda", "Longitud de cuerda", "1 mm",
                       visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "cuerda"),
             Personalizado("conjuntos", "Otros conjuntos", self._crear_conjuntos, ancho_completo=True, visible_si=empalme,
-                          ayuda="Una fila por conjunto de aristas con su propio radio (la tabla de Fusion): «+» agrega, «−» quita la elegida."),
+                          ayuda="Una fila por conjunto de aristas con su propio radio: «+» agrega, «−» quita la elegida."),
             Seleccion("c_aristas", "Aristas del conjunto", {"arista"}, minimo=0, maximo=None,
                       visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos"))),
             Opciones("c_tipo_radio", "Tipo de radio", {"constante": "Constante", "cuerda": "Longitud de cuerda",

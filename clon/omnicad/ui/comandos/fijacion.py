@@ -79,7 +79,7 @@ class InsertarFijacion(Comando):
                            "norma se corrige al más cercano."),
             Info("propiedades", "Propiedades", _propiedades),
             Info("no_taladra", "", lambda _v, _c: "No taladra los cuerpos que atraviesa: el agujero de paso o "
-                                                  "roscado lo hace Agujero, como en Fusion."),
+                                                  "roscado lo hace Agujero."),
             # Más opciones: valores por defecto sensatos (sin grupo: ver el comentario de Engranaje.campos)
             Opciones("rosca", "Rosca", fj.TIPOS_ROSCA, visible_si=lambda v: v.get("familia") != "arandela",
                      avanzado=True, ayuda="Modelada: corta el filete helicoidal real (más lento)."),
