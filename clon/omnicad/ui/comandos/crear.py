@@ -360,6 +360,12 @@ def _pose_del_cuerpo(estado, ref):
     return {"pose": pose_de_componente(estado, cuerpo.componente).tolist()} if cuerpo is not None and cuerpo.componente else {}
 
 
+def _cara_a_caras(v, hit, ctx):
+    """B-340, como Fusion («Emboss a solid body»: perfiles de boceto y, aparte, las «Faces» del sólido): una cara del cuerpo
+    no es un perfil; va a «Caras» aunque esté activa la fila «Perfiles»."""
+    return ("caras", {}) if hit["ref"].get("tipo") == "cara" else None
+
+
 class Repujado(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "repujado", "Repujado", "repujado", "Shift+E"
     AYUDA = "Relieve o grabado de perfiles o texto sobre una cara (también envuelto en un cilindro)."
@@ -367,7 +373,7 @@ class Repujado(Comando):
 
     def campos(self, ctx):
         return [Opciones("tipo", "Tipo de repujado", {"relieve": "Relieve", "grabado": "Grabado"}),
-                Seleccion("perfiles", "Perfiles", PERFIL, maximo=None),
+                Seleccion("perfiles", "Perfiles", PERFIL, maximo=None, desvio=_cara_a_caras),
                 Seleccion("caras", "Caras", {"cara"}, maximo=None,
                           ayuda="Una o varias caras: el texto se proyecta en su lugar y se reparte entre ellas "
                                 "(cada una recibe solo lo que le cae encima)."),
