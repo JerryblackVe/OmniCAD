@@ -9,7 +9,7 @@ from omnicad.nucleo import geometria as geo, referencias as refs, superficies as
 from omnicad.restricciones import Boceto
 from omnicad.timeline.documento import Documento
 from omnicad.timeline.operaciones import OpBoceto, OpPrimitiva
-from omnicad.timeline.parametros import ErrorExpresion, con_unidad
+from omnicad.timeline.parametros import ErrorExpresion
 
 
 @pytest.fixture(scope="module")
@@ -121,5 +121,4 @@ def test_un_factor_no_lleva_unidad_pero_una_longitud_si(app_qt):
         with pytest.raises(ErrorExpresion, match="no lleva unidad"):
             ctx.evaluar(malo, "escalar")
     assert ctx.evaluar("2 mm") == 2.0 and ctx.evaluar("30 deg", "angulo") == 30.0
-    assert con_unidad("2 mm") and not con_unidad("2") and not con_unidad("ancho / 2")
     assert ctx.parametros.evaluar("2 mm", "escalar") == 2.0      # un archivo viejo con unidad sigue abriendo

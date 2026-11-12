@@ -267,3 +267,16 @@ def test_sol37_revolucion_de_curvas_y_de_geometria_pura_rechaza_mas_de_360():
     llamar(s, "create_surface_revolve", profiles={"sketch": "Perfil", "curve": curva}, axis="z", angle="360 deg")
     with pytest.raises(geo.ErrorGeometria, match="360"):
         geo.revolver([geo.caja(1, 1, 1)], (0, 0, 0), (0, 0, 1), 400.0)
+
+
+def test_b321_factor_adimensional_con_unidad_en_la_expresion():
+    s = api.Sesion()
+    llamar(s, "create_box", length=20, width=20, height=10, name="Caja")
+    volumen = geo.volumen(_cuerpos(s)[0].forma)
+    llamar(s, "create_parameter", name="largo", expression="2 mm")
+    llamar(s, "scale_body", bodies="Caja", factor="largo / (1 mm)")
+    forma = _cuerpos(s)[0].forma
+    assert geo.es_valida(forma)
+    assert geo.volumen(forma) == pytest.approx(volumen * 8)
+    r = falla(s, "scale_body", bodies="Caja", factor="2 mm")
+    assert "no lleva unidad" in r["mensaje"]

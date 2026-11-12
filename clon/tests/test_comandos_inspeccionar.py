@@ -274,3 +274,48 @@ def test_reparar_cuerpo_construye_y_edita_el_paso():
     assert [h["ref"]["cuerpo"] for h in valores["cuerpos"]] == [roto.id] and valores["refinar"] is False
     nueva = cmd.construir(dict(valores, tolerancia="0.002 mm"), editar)
     assert nueva.id == op.id and nueva.nombre == op.nombre and nueva.p["tolerancia"] == "0.002 mm"
+
+
+def test_b321_escala_acepta_factor_adimensional_tecleado_en_el_panel():
+    """Un cociente con unidades escala ×2; una longitud queda roja y no se acepta."""
+    from PySide6.QtTest import QTest
+
+    from omnicad.nucleo import geometria as geo
+    from omnicad.ui.comando import ContextoComando, PanelComando
+    from omnicad.ui.comandos.modificar import Escala
+    from omnicad.ui.visor3d import Visor3D
+
+    doc = Documento()
+    doc.parametros.agregar("largo", "2 mm")
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="20", alto="30"))
+    visor = Visor3D()
+    visor.set_modelo(doc.estado_final)
+    panel = PanelComando(Escala(), ContextoComando(doc), visor, {"entidades": [_cuerpo(doc, "op1.c1")]})
+    panel.aceptado.connect(doc.agregar)
+    panel.show()
+    campo = panel.widgets["factor"]
+
+    def teclear(texto):
+        campo.clear()
+        QTest.keyClicks(campo, texto)
+        panel._calcular_previa()
+
+    try:
+        teclear("largo / (1 mm)")
+        assert not campo.styleSheet() and panel._previa_ok, panel.mensaje.text()
+        assert campo.toolTip() == "= 2"
+        teclear("2 mm")
+        assert campo.styleSheet() and "no lleva unidad" in campo.toolTip()
+        assert "no lleva unidad" in panel.mensaje.text() and not panel._previa_ok
+        panel.boton_ok.click()
+        assert len(doc.operaciones) == 1 and panel.isVisible()
+        teclear("largo / (1 mm)")
+        assert not campo.styleSheet() and panel._previa_ok
+        panel.boton_ok.click()
+        assert len(doc.operaciones) == 2 and doc.operaciones[-1].TIPO == "escala"
+        forma = doc.estado_final.cuerpos["op1.c1"].forma
+        assert geo.volumen(forma) == pytest.approx(48000)  # 10 × 20 × 30 × 2³
+        assert geo.es_valida(forma)
+    finally:
+        if not panel.cerrando:
+            panel.cancelar()

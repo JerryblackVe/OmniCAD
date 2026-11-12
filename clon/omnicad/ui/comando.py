@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QC
                                QWidget)
 
 from ..timeline.documento import ErrorDocumento
-from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, con_unidad
+from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, SIN_DIMENSION, ErrorExpresion, evaluar
 from .. import registro_uso
 from ..registro_uso.ganchos import aviso as registrar_aviso
 from ..registro_uso.ganchos import error as registrar_error
@@ -215,8 +215,11 @@ class ContextoComando:
         self.parametros = doc.parametros
 
     def evaluar(self, expr, tipo=LONGITUD):
-        if tipo == ESCALAR and con_unidad(expr):         # lo teclea la persona: un factor o una relación no llevan unidad
-            raise ErrorExpresion("Este valor no lleva unidad: escribí solo el número.")
+        if tipo == ESCALAR:
+            valor, dimension = evaluar(expr, tipo, self.parametros.valores(), con_dimension=True)
+            if dimension not in (None, SIN_DIMENSION):
+                raise ErrorExpresion("Este valor no lleva unidad: escribí solo el número.")
+            return valor
         return self.parametros.evaluar(expr, tipo, estricto=tipo != ESCALAR)     # lo que se teclea, como en Fusion
 
     def nuevo_id(self):
