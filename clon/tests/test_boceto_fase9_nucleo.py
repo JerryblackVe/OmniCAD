@@ -198,6 +198,6 @@ def test_boc29_topes_de_poligono_y_patron(s):
     assert len(llamar(s, "create_polygon", sides=64, radius=50)["entities"]) == 65      # 64 lados + círculo guía
     assert falla(s, "create_polygon", sides=65, radius=50)["error_kind"] == "INVALID_GEOMETRY"
     p = llamar(s, "draw_point", x=0, y=0)["points"][0]
-    assert falla(s, "sketch_rectangular_pattern", entities=[p], count1=202, distance1=10)["error_kind"] == "INVALID_ARGUMENTS"
-    assert falla(s, "sketch_circular_pattern", entities=[p], count=202)["error_kind"] == "INVALID_ARGUMENTS"
-    assert len(llamar(s, "sketch_rectangular_pattern", entities=[p], count1=201, distance1=10)["instances"]) == 200
+    assert falla(s, "sketch_rectangular_pattern", entities=[p], count1=1002, distance1=10)["error_kind"] == "INVALID_ARGUMENTS"
+    assert falla(s, "sketch_circular_pattern", entities=[p], count=1002)["error_kind"] == "INVALID_ARGUMENTS"
+    assert len(llamar(s, "sketch_rectangular_pattern", entities=[p], count1=1001, distance1=10)["instances"]) == 1000

@@ -191,7 +191,7 @@ def test_boc16_errores(s):
     r = llamar(s, "sketch_rectangular_pattern", entities=[c], count1=2, distance1=10)
     assert falla(s, "edit_sketch_pattern", pattern=999, count1=3)["error_kind"] == "ENTITY_NOT_FOUND"
     assert falla(s, "edit_sketch_pattern", pattern=r["pattern"], count=3)["error_kind"] == "INVALID_ARGUMENTS"
-    assert falla(s, "edit_sketch_pattern", pattern=r["pattern"], count1=500)["error_kind"] == "INVALID_ARGUMENTS"
+    assert falla(s, "edit_sketch_pattern", pattern=r["pattern"], count1=1002)["error_kind"] == "INVALID_ARGUMENTS"
     assert falla(s, "sketch_rectangular_pattern", entities=[c], count1=2, distance1=10,
                  suppress=[-1])["error_kind"] == "INVALID_ARGUMENTS"
     assert falla(s, "sketch_rectangular_pattern", entities=[c], count1=2, distance1=10,

@@ -354,11 +354,11 @@ def test_patron_con_centro_en_un_punto_y_topes(s):
     c = llamar(s, "draw_circle", radius=1, center_x=60, center_y=50)["entities"][0]["id"]
     llamar(s, "sketch_circular_pattern", entities=[c], count=3, center_point=p, total_angle=180)
     assert sorted(tuple(e["center"]) for e in boceto(s)["entities"]) == [(40, 50), (50, 60), (60, 50)]
-    lineas = rectangulo(s, 100, 100, 102, 101)
+    lineas = [e for y in (100, 110, 120) for e in rectangulo(s, 100, y, 102, y + 1)]
     antes = foto(s)
-    assert falla(s, "sketch_circular_pattern", entities=[c], count=300)["error_kind"] == "INVALID_ARGUMENTS"
-    r = falla(s, "sketch_rectangular_pattern", entities=lineas, count1=60, distance1=100)   # 59 × 4 puntos
-    assert r["error_kind"] == "INVALID_ARGUMENTS" and "200" in r["mensaje"]
+    assert falla(s, "sketch_circular_pattern", entities=[c], count=1002)["error_kind"] == "INVALID_ARGUMENTS"
+    r = falla(s, "sketch_rectangular_pattern", entities=lineas, count1=900, distance1=100)   # 899 × 12 puntos
+    assert r["error_kind"] == "INVALID_ARGUMENTS" and "10000" in r["mensaje"]
     assert falla(s, "sketch_rectangular_pattern", entities=[c], count1=1, distance1=5)["error_kind"] == \
         "INVALID_ARGUMENTS"
     assert falla(s, "sketch_circular_pattern", entities=[c], count=4, center_point=c)["error_kind"] == \
