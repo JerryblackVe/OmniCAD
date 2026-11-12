@@ -446,6 +446,59 @@ def _prisma(cara, n, d, conicidad=0.0):
     return _validar(da.Shape(), "Extrusión con inclinación")
 
 
+def _radio_inscrito(cara):
+    """Radio del mayor círculo que entra en la cara plana (sin pisar sus huecos). Búsqueda en grilla refinada sobre el
+    contorno en polilíneas: nunca se pasa del radio real (todo punto probado está adentro)."""
+    plano = geo.plano_de_cara(cara)
+    if plano is None:
+        raise geo.ErrorGeometria("La cara del perfil no es plana.")
+    ejes = np.array([plano.u, plano.v], float).T
+    (x0, y0, z0), (x1, y1, z1) = geo.caja_envolvente(cara)
+    flecha = max(1e-4, 2e-4 * math.dist((x0, y0, z0), (x1, y1, z1)))   # ~100 tramos por círculo: rápido al arrastrar
+    tramos = [np.stack([q[:-1], q[1:]], axis=1) for pl in geo.polilineas_aristas(cara, flecha) if len(pl) > 1
+              for q in [(np.asarray(pl, float) - plano.origen) @ ejes]]
+    if not tramos:
+        return 0.0
+    a, b = np.concatenate(tramos)[:, 0], np.concatenate(tramos)[:, 1]
+    ab = b - a
+    largo2 = np.maximum((ab ** 2).sum(1), 1e-30)
+    alto = np.where(b[:, 1] != a[:, 1], b[:, 1] - a[:, 1], 1.0)
+
+    def distancia_adentro(p):                  # distancia al contorno; 0 afuera (par-impar: vale con huecos)
+        t = np.clip(((p[:, None] - a) * ab).sum(-1) / largo2, 0.0, 1.0)
+        d = np.linalg.norm(p[:, None] - (a + t[..., None] * ab), axis=-1).min(1)
+        y = p[:, 1][:, None]
+        cruza = (a[:, 1] > y) != (b[:, 1] > y)
+        x = a[:, 0] + (y - a[:, 1]) * ab[:, 0] / alto
+        return np.where((cruza & (x > p[:, 0][:, None])).sum(1) % 2 == 1, d, 0.0)
+
+    puntos = np.concatenate([a, b])
+    mejor, mitad, radio = (puntos.min(0) + puntos.max(0)) / 2, (puntos.max(0) - puntos.min(0)) / 2, 0.0
+    malla = np.stack(np.meshgrid(*[np.linspace(-1.0, 1.0, 21)] * 2), -1).reshape(-1, 2)
+    for _ in range(7):                         # cada vuelta achica la ventana a la quinta parte: 0,2⁷ de la caja
+        p = mejor + malla * mitad
+        d = distancia_adentro(p)
+        if d.max() > radio:
+            radio, mejor = float(d.max()), p[int(d.argmax())]
+        mitad = mitad * 0.2
+    return radio
+
+
+def radios_conicidad(caras):
+    """(adentro, afuera): radios que limitan la conicidad de una extrusión de estas caras. Hacia adentro (ángulo negativo)
+    el perfil se cierra cuando el desfase d·tan|a| llega al radio del mayor círculo inscripto; hacia afuera se cierra el
+    hueco más chico (inf sin huecos). Fusion frena ahí las asas de distancia y de ángulo (B-343)."""
+    adentro = afuera = math.inf
+    for cara in caras:
+        cara = TopoDS.Face(cara)
+        adentro = min(adentro, _radio_inscrito(cara))
+        exterior = BRepTools.OuterWire_s(cara)
+        for w in _explorar(cara, TopAbs_WIRE):
+            if not w.IsSame(exterior):
+                afuera = min(afuera, _radio_inscrito(_cara(TopoDS.Wire(w))))
+    return adentro, afuera
+
+
 def _prisma_curvo_inclinado(cara, n, d, conicidad):
     """Extruir › Inicio Objeto: lateral reglado entre la base curva y su desfase en el plano neutro.
 

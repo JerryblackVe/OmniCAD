@@ -931,3 +931,25 @@ def test_labio_y_acanalado_sobre_dos_cuerpos():
     r = sc.labio_y_ranura(abajo, arriba, borde, Z, ancho=1, alto=1.5, holgura=0.1)
     valido(r["labio"], 40 * 20 * 20 + 40 * 1 * 1.5)
     valido(r["ranura"], 40 * 20 * 20 - 40 * 1.1 * 1.6)
+
+
+def test_b343_radios_de_la_conicidad_y_el_limite_del_kernel():
+    """B-343: el rectángulo de Gerardo (24,492 de ancho) se cierra con −37° a 12,246/tan 37° = 16,251 mm, igual que el
+    tope de Fusion; justo antes el kernel extruye y justo después falla. El hueco de 10 × 6 limita la conicidad hacia
+    afuera con radio 3."""
+    def rect(x0, y0, w, h):
+        p = BRepBuilderAPI_MakePolygon()
+        for x, y in ((x0, y0), (x0 + w, y0), (x0 + w, y0 + h), (x0, y0 + h)):
+            p.Add(gp_Pnt(x, y, 0))
+        p.Close()
+        return BRepBuilderAPI_MakeFace(p.Wire(), True).Face()
+
+    adentro, afuera = sc.radios_conicidad([rect(0, 0, 189.3, 24.492)])
+    assert adentro == pytest.approx(12.246, abs=1e-4) and math.isinf(afuera)
+    limite = adentro / math.tan(math.radians(37))
+    assert limite == pytest.approx(16.251, abs=1e-3)
+    assert g.es_valida(sc._prisma(rect(0, 0, 189.3, 24.492), (0, 0, 1), limite - 1e-3, -37.0))
+    with pytest.raises(g.ErrorGeometria):
+        sc._prisma(rect(0, 0, 189.3, 24.492), (0, 0, 1), limite + 0.02, -37.0)
+    con_hueco = g.caras(g.booleano(rect(0, 0, 100, 60), rect(20, 20, 10, 6), "cortar"))[0]
+    assert sc.radios_conicidad([con_hueco]) == pytest.approx((30.0, 3.0), abs=1e-4)

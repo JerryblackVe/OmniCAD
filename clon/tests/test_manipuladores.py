@@ -1056,3 +1056,36 @@ def test_b219_la_flecha_de_profundidad_apunta_adonde_crece_la_pared(app_qt, clav
     if clave == "nervio":
         assert abs(flechas["espesor"].direccion[1]) == pytest.approx(1.0)
     panel.cancelar()
+
+
+def test_b343_las_asas_de_la_conicidad_frenan_donde_el_perfil_se_cierra(app_qt):
+    """B-343: con conicidad hacia adentro el perfil de 20 × 10 (radio inscripto 5) se cierra a 5/tan|a| de distancia.
+    Como Fusion, arrastrar la flecha o el asa del ángulo frena justo antes (−37° → 6,635 mm; 20 mm → −14,04°) y la
+    previa sigue sana, en vez de pasar el límite y dejar el error del kernel."""
+    import math
+
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "distancia": "3 mm", "conicidad": "-37 deg"})
+    medio, d = _sobre_flecha(panel, "flecha:distancia")
+    _arrastrar(visor, medio, medio + d * 800)                          # muy afuera: pasaría el cierre
+    limite = 5 / math.tan(math.radians(37))
+    assert limite - 0.1 < panel.ctx.evaluar(panel.valores["distancia"]) < limite
+    panel._t_previa.stop()
+    panel._calcular_previa()
+    assert panel._previa_ok, panel.mensaje.text()
+    panel.cancelar()
+
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "distancia": "20 mm"})
+    gestor = panel.manipuladores
+    angulo = _manip(panel, "angulo:conicidad")
+    asa = gestor.pantalla([angulo.asa(gestor)])[0][0]
+    centro = gestor.pantalla([angulo.centro])[0][0]
+    afuera = gestor.pantalla([angulo.centro + angulo.v * 30])[0][0]
+    _arrastrar(visor, asa, asa - (afuera - centro) * 3)                  # muy hacia adentro: pasaría el cierre
+    limite = -math.degrees(math.atan(5 / 20))
+    assert limite < panel.ctx.evaluar(panel.valores["conicidad"], "angulo") < limite + 0.5
+    panel._t_previa.stop()
+    panel._calcular_previa()
+    assert panel._previa_ok, panel.mensaje.text()
+    panel.cancelar()
