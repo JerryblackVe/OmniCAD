@@ -1410,8 +1410,11 @@ def punto_dentro(cara):
 
 def _brepcheck_estable(forma):
     """Confirma en serie los fallos del análisis paralelo, sin desactivar los controles geométricos."""
-    if BRepCheck_Analyzer(forma, GeomControls=True, theIsParallel=PARALELO).IsValid():
-        return True
+    try:
+        if BRepCheck_Analyzer(forma, GeomControls=True, theIsParallel=PARALELO).IsValid():
+            return True
+    except Exception:  # noqa: BLE001 — B-323: el análisis paralelo junta las fallas de sus hilos en un Standard_ProgramError
+        pass
     return BRepCheck_Analyzer(forma, GeomControls=True, theIsParallel=False).IsValid()
 
 

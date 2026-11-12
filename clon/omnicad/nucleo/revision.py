@@ -262,7 +262,12 @@ def _detalle_validez(forma, caras, topo):
     problemas = []
     for cara in caras:
         cara = TopoDS.Face(cara)
-        if BRepCheck_Analyzer(cara).IsValid():
+        try:
+            if BRepCheck_Analyzer(cara).IsValid():
+                continue
+        except Exception as e:  # noqa: BLE001 — B-323: BRepCheck puede lanzar; se dice en qué cara en vez de perder el informe
+            problemas.append(_problema("cara_invalida", "error", f"BRepCheck falló al revisar esta cara ({e}).",
+                                       _punto_en(cara)))
             continue
         textos = _textos_estados(_estados_cara(cara))
         detalle = ", ".join(textos) if textos else "aristas o vértices fuera de tolerancia (la curva no coincide " \
@@ -362,10 +367,16 @@ def _revisar_brep(forma, autointersecciones, tolerancia_maxima, max_problemas, p
     aristas = _unicas(forma, TopAbs_EDGE)
     vertices = _unicas(forma, TopAbs_VERTEX)
     topo = _topologia(forma)
-    valido = geo.es_valida(forma)
+    try:
+        valido, fallo = geo.es_valida(forma), None
+    except Exception as e:  # noqa: BLE001 — B-323: ni el reintento en serie pudo; el informe sigue, cara por cara
+        valido, fallo = False, e
     # Cada tipo de problema se arma (con su ubicación) hasta `max_problemas` veces: los demás no entrarían en la
     # lista final, que conserva el orden dentro de cada gravedad; los conteos son siempre completos.
     problemas = [] if valido else _detalle_validez(forma, caras, topo)
+    if fallo is not None:
+        problemas.insert(0, _problema("invalido", "error", f"BRepCheck falló al revisar la forma ({fallo}); sigue el "
+                                      "detalle cara por cara.", _punto_en(forma)))
     for arista in topo["libres"][:max_problemas]:
         problemas.append(_problema("arista_libre", "error" if topo["solidos"] else "aviso",
                                    "Arista libre (abierta): borde de una sola cara.", _medio_arista(arista),
