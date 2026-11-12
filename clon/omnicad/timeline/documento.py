@@ -403,13 +403,15 @@ class Documento:
             ocultos = self.propiedad("__navegador__", "ocultos", [])
             op.ocultos = sorted(i for i in ocultos if isinstance(i, str)) if isinstance(ocultos, list) else []
 
-    def agregar(self, op):
-        """Inserta la operación en la posición del marcador (como Fusion) y la ejecuta."""
+    def agregar(self, op, aparte=False):
+        """Inserta la operación en la posición del marcador (como Fusion) y la ejecuta. `aparte`: la calcula en un proceso
+        aparte aunque el documento sea chico (un paso pesado aceptado desde la ventana, B-306)."""
         exigir_nombre(op.nombre)                       # P-93: el `name` de las herramientas de creación también
         self._fijar_ocultos(op)
         tabla, contador = self._tabla_cotas(self.operaciones[:self.marcador] + [op] + self.operaciones[self.marcador:])
         desde = min(self.marcador, self._primer_afectado(tabla))
-        calculo = self._prevuelo_cambio({"tipo": "agregar", "indice": self.marcador, "operacion": op.a_dict()})
+        calculo = self._prevuelo_cambio({"tipo": "agregar", "indice": self.marcador, "operacion": op.a_dict()},
+                                        aparte=aparte)
         self._guardar_para_deshacer()
         i = self.marcador
         self.operaciones.insert(i, op)
@@ -419,14 +421,14 @@ class Documento:
         self._terminar_recalculo(desde, calculo)
         return self.resultados[i]
 
-    def reemplazar(self, op_id, nueva):
-        """Edita un paso: la nueva versión conserva el id (las referencias siguen valiendo)."""
+    def reemplazar(self, op_id, nueva, aparte=False):
+        """Edita un paso: la nueva versión conserva el id (las referencias siguen valiendo). `aparte`: como en `agregar`."""
         i = self.indice(op_id)
         nueva.id = op_id
         self._fijar_ocultos(nueva)
         tabla, contador = self._tabla_cotas(self.operaciones[:i] + [nueva] + self.operaciones[i + 1:])
         desde = min(i, self._primer_afectado(tabla))
-        calculo = self._prevuelo_cambio({"tipo": "reemplazar", "indice": i, "operacion": nueva.a_dict()})
+        calculo = self._prevuelo_cambio({"tipo": "reemplazar", "indice": i, "operacion": nueva.a_dict()}, aparte=aparte)
         self._guardar_para_deshacer()
         self.operaciones[i] = nueva
         self.parametros, self._contador_cotas = tabla, contador
@@ -949,13 +951,13 @@ class Documento:
         self.modificado = True
         self._terminar_recalculo(desde, calculo)
 
-    def _prevuelo_corresponde(self, reactivados=0):
-        """True si un cambio del historial tiene que ensayarse antes en un proceso aparte (B-48)."""
+    def _prevuelo_corresponde(self, reactivados=0, aparte=False):
+        """True si un cambio del historial tiene que ensayarse antes en un proceso aparte (B-48). `aparte`: siempre."""
         from ..nucleo import aislado
 
         return (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
-                and sum(not op.suprimida for op in self.operaciones[:self.marcador]) + reactivados
-                >= aislado.UMBRAL_PREVUELO_PARAMETROS)
+                and (aparte or sum(not op.suprimida for op in self.operaciones[:self.marcador]) + reactivados
+                     >= aislado.UMBRAL_PREVUELO_PARAMETROS))
 
     def _prevuelo_parametros(self, tabla):
         """Calcula sin modificar el documento ni deshacer; omite documentos chicos, OmniKernel y el propio hijo."""
@@ -976,7 +978,7 @@ class Documento:
         if self._prevuelo_corresponde(max(0, activos - anteriores)):
             return self._solicitar_calculo("recalcular_documento", {"receta": datos})
 
-    def _prevuelo_cambio(self, cambio, previa=False):
+    def _prevuelo_cambio(self, cambio, previa=False, aparte=False):
         """Calcula el cambio y, si se pide, su previa en un hijo. Si cae, el documento no se toca."""
         i = cambio["indice"]
         suprimida = (cambio["operacion"].get("suprimida", False) if cambio["tipo"] in ("reemplazar", "agregar")
@@ -984,7 +986,7 @@ class Documento:
         # Se protege también el documento que alcanza el umbral al agregar o reactivar un paso.
         reactivada = (not suprimida if cambio["tipo"] == "agregar" else
                       i < self.marcador and self.operaciones[i].suprimida and not suprimida)
-        if not self._prevuelo_corresponde(int(reactivada)):
+        if not self._prevuelo_corresponde(int(reactivada), aparte):
             return
         datos = {"receta": self.a_dict(), "cambio": cambio}
         firma = hashlib.sha256(json.dumps(datos, sort_keys=True).encode("utf-8")).digest()

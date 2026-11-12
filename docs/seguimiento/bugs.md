@@ -8,7 +8,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-306 | Desfase de caras sobre el filete de una rosca modelada: el kernel tarda minutos (M8 exterior: 97 s con 1 mm y 153 s con 0,2 mm, y falla; M8 interior: 110 s con 1 mm y sale, 243 s con 0,05 mm y falla) | Parcial | Alta | Ya no congela la previa (va al proceso aparte con caras libres) y Aceptar no repite un cálculo que falló. Falta: Aceptar con la previa todavía en curso calcula en la ventana (minutos), y que el kernel desfase la cara helicoidal rápido o que falle rápido. El aviso «se da vuelta… radio de curvatura» de Gerardo no se repitió acá | Registro de uso `sesion_2026-11-11_080900_a99c1539d1e4_0001.jsonl` (11:25–11:28 UTC); `tests/test_b306_desfase_cara_libre_previa.py` | 2026-11-11 |
 | B-307 | INSPECCIONAR › Análisis de sección cuelga la ventana 12–14 s en cada cambio de desfase al arrastrar la flecha (documento con roscas modeladas; el cuerpo roscado sale sin tapa ni rayado, con caras interiores y dos conos en «X») | Abierto | Alta | Al arrastrar, solo el plano de recorte del visor; tapa y rayado al soltar o tras una pausa, fuera del hilo o cancelables (mirar CPP-P21, RS-P6, CPP-C4). Revisar si el cuerpo roscado es un sólido cerrado | Registro de uso `sesion_2026-11-11_080900_a99c1539d1e4_0001.jsonl`, `bloqueo_ui` 12,3 / 14,1 / 14,0 s (11:54–11:55 UTC) | 2026-11-11 |
 | B-308 | Combinar › Unir de un cilindro con rosca modelada y una tapa coplanar: «sin resultado estanco (2 aristas libres)» o pierde 2386 mm³ con aviso amarillo, y la previa rota deja Aceptar | Abierto | Alta | Reproducir con el documento de Gerardo (en limpio, M8 y M20 de largo completo, une bien); probar `SetFuzzyValue` / `SetGlue`; no dejar Aceptar una previa con material perdido; cambiar «mové la pieza una milésima de milímetro» en todos lados y «check_geometry» por «Inspeccionar › Revisar geometría» en la ventana | Relato de Gerardo (coordinador principal, 2026-11-11) | 2026-11-11 |
 | B-310 | Desfase de cara del cilindro liso Ø31 de la pieza de Gerardo: con +0,1 mm la previa mueve solo algunas franjas del cilindro (el «falló en el kernel» con −1,24 y −6,13 mm quedó resuelto) | Parcial | Media | Probar en la ventana la previa con +0,1 mm sobre una copia de `soporte_papel_v1_cama` (por la API da 19 292,7 mm³ exacto: puede ser solo del dibujo de la previa) | Relato de Gerardo; `tests/test_b310_desfase_consume_chaflan.py` | 2026-11-11 |
@@ -92,15 +91,6 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
-
-### B-306 · Desfase de caras sobre el filete de una rosca modelada tarda minutos
-
-- **Qué:** MODIFICAR › Desfase (o Cara de desfase) sobre la cara helicoidal de una rosca modelada. Por la API: `create_cylinder` r 4, `create_thread thread="M8" modeled=true` y `offset_faces` sobre la cara B-spline.
-- **Esperado:** la ventana responde mientras calcula, y el resultado o un error claro en segundos.
-- **Obtenido:** la previa corría en la ventana: 54 s y 116 s congelada (Gerardo, 2026-11-11). `BRepOffset_MakeOffset` tarda 97–243 s en esas caras; con distancias chicas termina en «falló en el kernel».
-- **Hecho (2026-11-11):** la previa de un desfase de cara sobre un cuerpo con caras libres va al proceso aparte (`ui/comando.py` › `_previa_pesada`); si ese cálculo falla con los mismos valores, Aceptar no lo repite (`aislado.FalloDelCalculo`); el mensaje del kernel dice qué hacer con caras libres.
-- **Queda:** Aceptar con la previa en curso aplica el paso exacto en la ventana (el mismo contrato que Vaciado o Empalme pesados): con una rosca son minutos. Y el kernel: desfasar rápido la cara helicoidal (o rechazarla rápido).
-- **Fusion:** «Offset Face» desfasa también las caras tangentes curvas «cuando es geométricamente posible» (`docs/fusion_docs`, «Offset faces»); no dice nada de roscas.
 
 ### B-220 · Repujado con «Envolver» en un cilindro lejos del perfil repuja dando una vuelta de más
 

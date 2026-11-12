@@ -1182,6 +1182,9 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
     te = float(espesor_exterior) if direccion in ("exterior", "ambos") else 0.0
     if ti < 0 or te < 0 or (direccion != "exterior" and ti <= 0) or (direccion != "interior" and te <= 0):
         raise geo.ErrorGeometria("Los espesores del vaciado deben ser positivos.")
+    if any(map(_es_filete, geo.caras(forma))):   # B-306 (gemelo): el kernel también tarda minutos (M8: 124 s) y falla
+        raise geo.ErrorGeometria("Vaciado: un cuerpo con una rosca modelada no se puede vaciar (el kernel tarda minutos "
+                                 "y falla). Vaciá el cuerpo antes de hacer la rosca, o hacé la rosca cosmética.")
     caras = []
     for c in caras_quitar or []:
         for t in (caras_tangentes(forma, c) if tangente else [c]):
@@ -1481,6 +1484,24 @@ def _desfase_kernel(forma, caras, dist):
         return None, False
 
 
+def _es_filete(cara, n=400):
+    """True si la cara es de forma libre y da más de 1,5 vueltas por su iso más enroscada (giro total de la tangente):
+    el filete de una rosca modelada (M8 de 20 mm: 16 vueltas; M28 de 3 mm: 1,8). Una solevación da menos de 1."""
+    from . import referencias as refs
+    if not refs.cara_libre(cara):
+        return False
+    sup = BRepAdaptor_Surface(cara)
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
+    vueltas = 0.0
+    for pts in ([sup.Value((u0 + u1) / 2, t) for t in np.linspace(v0, v1, n)],
+                [sup.Value(t, (v0 + v1) / 2) for t in np.linspace(u0, u1, n)]):
+        d = np.diff([p.Coord() for p in pts], axis=0)
+        d = d[np.linalg.norm(d, axis=1) > 1e-12]
+        d /= np.linalg.norm(d, axis=1)[:, None]
+        vueltas = max(vueltas, np.arccos(np.clip((d[1:] * d[:-1]).sum(1), -1, 1)).sum() / (2 * math.pi))
+    return vueltas > 1.5
+
+
 def _consumido(bisel, cara, dist):
     """True si todo el `bisel` queda a no más de |dist| de la superficie de `cara`: el desfase lo traga entero. Un cono
     más ancho (una pieza cónica de verdad, un avellanado grande) no se quita."""
@@ -1535,9 +1556,19 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
         for t in (caras_tangentes(forma, c, coplanares=False) if tangente else [c]):
             if not _contiene(todas, t):
                 todas.append(t)
+    if any(map(_es_filete, todas)):     # B-306: el kernel tardaba minutos (M8: 89 s con 1 mm, 150 s con 0,2 mm) y fallaba
+        raise geo.ErrorGeometria("Desfase de caras: el filete helicoidal de una rosca modelada no se puede desfasar (el "
+                                 "kernel tarda minutos y falla). Para darle juego, editá la Rosca y usá «Holgura impresión "
+                                 "3D»; o desfasá la cara cilíndrica antes de hacer la rosca.")
+    # B-306: con un filete en el cuerpo, el kernel tarda lo mismo con cualquier cara (cilindro vecino: 95 s y falla;
+    # cara plana: 93 s y después sale por la extrusión): las planas van directo a la extrusión, las curvas fallan ya
+    con_filete = any(map(_es_filete, geo.caras(forma)))
+    if con_filete and any(_plano_de_cara(c) is None for c in todas):
+        raise geo.ErrorGeometria("Desfase de caras: en un cuerpo con una rosca modelada, el kernel tarda minutos y falla "
+                                 "con las caras curvas. Desfasá la cara antes de hacer la rosca, o hacé la rosca cosmética.")
     resultado, dada_vuelta = None, False
     # B-280: con la otra mitad de una cara partida al lado, el kernel corre las dos; la extrusión deja el escalón
-    if not _vecina_coplanar_suelta(forma, todas):
+    if not con_filete and not _vecina_coplanar_suelta(forma, todas):
         resultado, dada_vuelta = _desfase_kernel(forma, todas, dist)
         if resultado is None and any(_plano_de_cara(c) is None for c in todas):     # las planas tienen su alternativa
             sin_biseles, nuevas = _sin_biseles_vecinos(forma, todas, dist)
