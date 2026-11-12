@@ -458,9 +458,10 @@ def test_thread_info_y_fit_tolerance(s):
     # B-31: classes = las que tienen límites verificados para ESTE tamaño; antes listaba las de la
     # familia y el modo «auto» avisaba «sin la clase 6g» para M18x1.5 mientras el catálogo la ofrecía.
     fina = llamar(s, "thread_info", thread="M18x1.5")
-    assert fina["classes"] == [] and set(fina["classes_without_data"]) == {"6H", "6G", "6g", "6h"}
+    # B-368: M18x1.5 no tiene los intervalos ISO 965-1 verificados, pero la tabla de Fusion trae 6H, 6g y 4g6g.
+    assert fina["classes"] == ["6H", "6g", "4g6g"] and set(fina["classes_without_data"]) == {"6G", "6h"}
     gruesa = llamar(s, "thread_info", thread="M10")
-    assert gruesa["classes"] == ["6H", "6G", "6g", "6h"] and "classes_without_data" not in gruesa
+    assert gruesa["classes"] == ["6H", "6G", "6g", "6h", "4g6g"] and "classes_without_data" not in gruesa   # B-368: + 4g6g de la tabla
     unc = llamar(s, "thread_info", thread="1/4-20", thread_class="2B")["limits"][0]
     assert [round(x / 25.4, 4) for x in unc["pitch_diameter"]] == [0.2175, 0.2224]
     f = llamar(s, "fit_tolerance", nominal=25, hole="H7", shaft="g6")
