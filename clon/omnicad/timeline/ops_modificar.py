@@ -9,7 +9,7 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from . import entidades as ent
-from .parametros import _NUM_CON_UNIDAD, LONGITUD, acotar
+from .parametros import LONGITUD, SIN_DIMENSION, acotar, evaluar
 from .operaciones import (ANGULO, Boceto, BocetoResuelto, ErrorBoceto, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
                           _resolver_todas, atributos_copia, detectar_boceto, espesor_plastico, registrar_operacion,
                           resolver)
@@ -480,9 +480,10 @@ class OpEscala(Operacion):
             raise ErrorOperacion("Elegí los cuerpos o los bocetos a escalar.")
         punto = ent.como_punto(_resolver(p["punto"], estado)) if p["punto"] else np.zeros(3)
         def E(k):
-            if _NUM_CON_UNIDAD.search(str(p[k])):
+            valor, dimension = evaluar(p[k], "escalar", ctx.valores, con_dimension=True)
+            if dimension not in (None, SIN_DIMENSION):
                 raise ErrorOperacion(f"El factor de escala no lleva unidad: «{p[k]}». Escribí un número, p. ej. 2.")
-            return ctx.evaluar(p[k], "escalar")
+            return ctx.evaluar(valor, "escalar")
         if p.get("bocetos"):
             if p["tipo"] != "uniforme":
                 raise ErrorOperacion("Un boceto solo se escala de forma uniforme.")

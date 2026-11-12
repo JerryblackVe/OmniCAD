@@ -68,9 +68,6 @@ _COMPARA = {"<": operator.lt, ">": operator.gt, "<=": operator.le, ">=": operato
             "<>": operator.ne}
 _LETRAS_NOMBRE = r"[^\W\d][\w$\"°µ]*"            # Fusion además admite $ " ° y µ dentro del nombre
 
-_NUM_CON_UNIDAD = re.compile(
-    r"(?<![\w.])((?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*("
-    + "|".join(re.escape(u) for u in sorted(TABLA, key=len, reverse=True)) + r")(?![\w])")
 _TOKEN = re.compile(r"\s*(?:(?P<num>(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)|(?P<pal>" + _LETRAS_NOMBRE + r")|"
                     r"(?P<sim>\*\*|<=|>=|==|<>|[-+*/%^()<>;,\"'°˚$]))")
 
@@ -537,10 +534,6 @@ def _compilar(texto, tipo):
     except RecursionError:
         raise ErrorExpresion("La expresión es demasiado larga.") from None
 
-
-def con_unidad(expr):
-    """True si `expr` escribe un número con unidad («2 mm», «30°»)."""
-    return _NUM_CON_UNIDAD.search(str(expr)) is not None
 
 
 def _nombres_en(n, salida):
