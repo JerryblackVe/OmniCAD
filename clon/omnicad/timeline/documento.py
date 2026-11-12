@@ -341,6 +341,13 @@ class Documento:
         ids = Counter(d.get("id") for d in datos.get("operaciones", []))
         if repetidos := sorted((i for i, n in ids.items() if n > 1), key=str):      # B-262: un paso taparía al otro
             raise ErrorOperacion(f"La receta repite el id de paso {', '.join(map(str, repetidos))}: cada paso necesita uno propio.")
+        for d in datos.get("operaciones", []):
+            if d.get("tipo") == "scu":
+                for sufijo in ("_o", "_x", "_y", "_z", "_xy", "_xz", "_yz"):
+                    derivado = f"{d['id']}{sufijo}"
+                    if derivado in ids:
+                        raise ErrorOperacion(f"El id de paso {derivado} choca con un id derivado del SCU {d['id']} "
+                                             "(origen, ejes o planos): elegí otro id.")
         for props in (datos.get("propiedades") or {}).values():                   # B-262: nombres de cuerpos también
             exigir_nombre(props.get("nombre") if isinstance(props, dict) else None)
         if calculo is None:

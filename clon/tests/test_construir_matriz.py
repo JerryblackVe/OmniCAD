@@ -348,3 +348,19 @@ def test_receta_con_params_no_dict_nombra_el_paso():
         assert not r["ok"] and r["error_kind"] == "INVALID_RECIPE", r
         assert paso["id"] in r["mensaje"], r
         assert len(s.doc.operaciones) == antes
+
+
+def test_b286_id_de_paso_que_choca_con_un_derivado_del_scu_se_rechaza():
+    """B-286: un paso no puede pisar un id derivado del SCU ni cambiar el documento al rechazarse."""
+    s = _armar()
+    id_scu = llamar(s, "create_ucs", origin="O")["ucs"]["id"]
+    llamar(s, "create_construction_axis", type="dos_planos", references=["XY", "XZ"])
+    receta = llamar(s, "get_recipe")["recipe"]
+    antes = len(s.doc.operaciones)
+    mala = copy.deepcopy(receta)
+    id_paso = f"{id_scu}_x"
+    mala["operaciones"][-1]["id"] = id_paso
+    r = api.llamar(s, "apply_recipe", {"recipe": mala})
+    assert not r["ok"] and r["error_kind"] == "INVALID_RECIPE", r
+    assert id_paso in r["mensaje"] and id_scu in r["mensaje"], r
+    assert len(s.doc.operaciones) == antes
