@@ -1369,6 +1369,8 @@ class GestorManipuladores(QObject):
         self._cursor = None
         self.trazo = None               # `Trazo` en curso
         self._tragar_soltar = False
+        self._sano = None               # B-345: valores del asa agarrada con la última previa sana
+        self._freno = {}                # B-345: clave → (valor sano, sentido) que el asa no pasa en este arrastre
         self.visor.installEventFilter(self)
         self.visor.camara_cambiada.connect(self._camara)
 
@@ -1643,7 +1645,9 @@ class GestorManipuladores(QObject):
             return False
         o, r = self.rayo(pos)
         self._decimales = self._decimales_en(o + r * float(getattr(self.visor, "distancia", 100.0)))
-        self._arrastre = {"m": m, "sub": sub, "estado": estado}
+        self._arrastre = {"m": m, "sub": sub, "estado": estado, "claves": set()}
+        self._sano = None if not getattr(self.panel, "_previa_ok", False) else {}
+        self._freno = {}
         self.redibujar()
         return True
 
@@ -1656,7 +1660,52 @@ class GestorManipuladores(QObject):
         except Exception:  # noqa: BLE001
             log.debug("arrastre de manipulador", exc_info=True)
             return
+        for k, (sano, sentido) in self._freno.items():
+            if isinstance(nuevos.get(k), (int, float)) and (nuevos[k] - sano) * sentido > 0:
+                nuevos[k] = sano
+        for k, v in nuevos.items():
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and k not in a["claves"]:
+                a["claves"].add(k)
+                if self._sano is not None:
+                    self._sano[k] = self.valor(k)        # el valor con que se agarró el asa tenía la previa sana
         self.escribir(nuevos)
+
+    def previa_calculada(self, sana):
+        """B-345: el asa frena donde la pieza lo admite. Con el asa agarrada, una previa sana guarda los valores; una que
+        falla (rojo) los vuelve al último sano y el asa no pasa de ahí en ese sentido hasta soltarla. Lo tecleado no
+        pasa por acá: puede quedar en rojo. El tope exacto que conoce un comando va en el asa (`minimo`/`maximo`)."""
+        if self._arrastre is None or self._sano is None:
+            return
+        actuales = {k: self.valor(k) for k in self._arrastre["claves"]}
+        if sana:
+            self._sano.update(actuales)
+            return
+        malos = {k: v for k, v in actuales.items() if k in self._sano and abs(v - self._sano[k]) > 1e-9}
+        if not malos:
+            return
+        tope = self._buscar_tope(malos)
+        for k, v in tope.items():
+            self._freno[k] = (v, 1.0 if malos[k] > v else -1.0)
+        self.escribir(tope)
+
+    def _buscar_tope(self, malos, vueltas=8, segundos=0.3):
+        """El último valor sano entre el sano y el que falló, por bisección con previas que no se muestran (redondeado
+        como se escribe, así lo escrito es lo probado). Corre en la ventana: corta a los `segundos`. Si la previa no se
+        puede probar acá (pesada), el último sano."""
+        import time
+
+        def en(t):
+            return {k: self._sano[k] + (v - self._sano[k]) * t for k, v in malos.items()}
+        lo, hi, fin = 0.0, 1.0, time.monotonic() + segundos
+        for _ in range(vueltas):
+            if time.monotonic() > fin:
+                break
+            medio = (lo + hi) / 2
+            sana = self.panel.previa_sana({k: self.texto(k, v) for k, v in en(medio).items()})
+            if sana is None:
+                break
+            lo, hi = (medio, hi) if sana else (lo, medio)
+        return {k: float(self.ctx.evaluar(self.texto(k, v), self.tipo(k))) for k, v in en(lo).items()}
 
     def soltar(self):
         if self._arrastre is None:

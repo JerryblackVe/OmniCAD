@@ -1554,6 +1554,8 @@ class PanelComando(QFrame):
         finally:
             ms = (time.perf_counter() - inicio) * 1000
             self._t_previa.setInterval(0 if ms < PREVIA_CUADRO_MS else min(int(ms), PREVIA_ESPERA_MAX_MS))
+        if self.manipuladores is not None and not self._previa_aparte:      # la aparte avisa al volver
+            self.manipuladores.previa_calculada(self._previa_ok)
 
     def _calcular_previa_ahora(self):
         for c in self.campos:
@@ -1617,6 +1619,22 @@ class PanelComando(QFrame):
         self._mostrar(" ".join(avisos), tipo="aviso")
         self._previa_vista(op)
         self._previa_lista(estado)
+
+    def previa_sana(self, cambios):
+        """¿Sale sana la previa con `cambios` (textos de campos)? Sin mostrar nada; None si es pesada y no se prueba acá.
+        B-345: el asa busca así su tope."""
+        from ..nucleo import geometria as geo
+        try:
+            op = self.comando.construir(dict(self.valores, **cambios), self.ctx)
+            if op is None or not self.comando.PREVIA:
+                return True
+            if self._previa_pesada(op):
+                return None
+            with geo.en_serie():         # B-293
+                self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=True)
+            return True
+        except Exception:  # noqa: BLE001 — cualquier falla (dato o kernel) es «no sana»
+            return False
 
     def _previa_lista(self, estado):
         self.visor.cuerpos_de_previa = frozenset(estado.cuerpos) - frozenset(self.ctx.estado.cuerpos)
@@ -1739,6 +1757,8 @@ class PanelComando(QFrame):
             self._mostrar(" ".join(avisos), tipo="aviso")
             if self._previa_ok:
                 self._previa_vista(self._op_hijo)
+                if self.manipuladores is not None:
+                    self.manipuladores.previa_calculada(True)
             self._previa_lista(estado)
         except Exception as e:  # noqa: BLE001 — un hijo caído o vencido: la previa se apaga y el documento queda intacto
             self._previa_ok = False
@@ -1747,6 +1767,9 @@ class PanelComando(QFrame):
                 self._previa_aparte = self.ultima_op.a_dict() != self._op_hijo.a_dict()
             self._mostrar(f"⚠ {e}", tipo="error")
             self.previa.emit(None)
+            if self.manipuladores is not None and self.ultima_op is not None and \
+                    self.ultima_op.a_dict() == self._op_hijo.a_dict():
+                self.manipuladores.previa_calculada(False)
         self._t_hijo.stop()
         self._hijo_previa = None
         self._previa_cortada = False
