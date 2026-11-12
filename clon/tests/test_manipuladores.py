@@ -802,6 +802,31 @@ def test_el_asa_de_profundidad_del_repujado_pasa_por_debajo_de_cero(app_qt):
     assert asa("-1 mm", "relieve")[1] == pytest.approx(19)
 
 
+def test_repujado_tiene_asas_de_desfase_y_giro(app_qt):
+    """P-142: como Emboss de Fusion, Desfase horizontal, Desfase vertical y Ángulo de giro tienen asa en la vista; la de
+    Profundidad y la del giro siguen al texto corrido. Arrastrar la flecha horizontal cambia el valor del campo."""
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos.crear import Repujado
+
+    doc = _doc_caja()
+    b = Boceto()
+    b.agregar_rectangulo((5, 5), (15, 15))
+    doc.agregar(OpBoceto(doc.nuevo_id(), "Boceto2", plano="XY", boceto=b))
+    est = doc.estado_final
+    perfil = est.bocetos["op2"].perfiles[0]
+    h_perfil = hit_desde_ref({"tipo": "perfil", "boceto": "op2", **OpExtrusion.referencia_perfil(perfil)}, est)
+    panel, visor, _e = _panel(Repujado(), doc, {"perfiles": [h_perfil], "caras": [_cara_de_arriba(doc)],
+                                                "desfase_h": "3 mm", "desfase_v": "2 mm", "giro": "30 deg"})
+    assert {"flecha:desfase_h", "flecha:desfase_v", "angulo:giro"} <= {m.ident for m in panel.manipuladores.manips}
+    assert _manip(panel, "flecha:profundidad").puntos(panel.manipuladores)[0] == pytest.approx((13, 12, 21))
+    assert _manip(panel, "angulo:giro").centro == pytest.approx((13, 12, 20))
+    assert _manip(panel, "flecha:desfase_h").puntos(panel.manipuladores)[0] == pytest.approx((13, 10, 20))
+    medio, d = _sobre_flecha(panel, "flecha:desfase_h")
+    _arrastrar(visor, medio, medio + d * 40)
+    assert panel.ctx.evaluar(panel.valores["desfase_h"]) > 3
+    panel.cancelar()
+
+
 # ---------------------------------------------------------------- H-60: asas bien definidas y sin nada encima
 def _camara(visor, atras):
     """Cámara que mira hacia -atras (R: derecha, arriba, atrás) y encuadra."""
