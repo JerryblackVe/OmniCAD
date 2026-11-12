@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QC
 from ..timeline.documento import ErrorDocumento
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion, con_unidad
 from .. import registro_uso
+from ..registro_uso.ganchos import aviso as registrar_aviso
 from ..registro_uso.ganchos import error as registrar_error
 from . import formato, preajustes_ui, temas
 from .campo_expresion import CampoExpresion
@@ -37,7 +38,8 @@ from .iconos import icono
 PREVIA_CUADRO_MS, PREVIA_ESPERA_MAX_MS = 12, 220
 # Operaciones cuya previa pasa de ~40 ms sobre un cuerpo de muchas caras (docs/auditorias/previa-comandos-*.md): se
 # calculan en un proceso aparte para que la ventana no se congele. Sobre cuerpos chicos siguen en el proceso (< 33 ms).
-TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "patron", "multitransformar"), 64
+TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "patron", "multitransformar",
+                                "desfase_cara"), 64
 # Comandos cuya sección «Más opciones» quedó abierta (se recuerda mientras dure la sesión: no hace falta reabrirla cada vez).
 _SECCIONES_ABIERTAS = set()
 
@@ -1674,6 +1676,10 @@ class PanelComando(QFrame):
             return False
         from ..nucleo import geometria as geo
         cuerpos = [self.ctx.estado.cuerpos.get(cid) for cid in _ids_cuerpo(op.p)]   # un id que ya no existe lo informa el camino normal
+        if op.TIPO == "desfase_cara":       # B-306: desfasar una cara libre (el filete de una rosca) tarda minutos
+            from ..nucleo.referencias import cara_libre
+            if any(c is not None and any(map(cara_libre, geo.caras(c.forma))) for c in cuerpos):
+                return True
         return any(c is not None and len(geo.caras(c.forma)) >= CARAS_PESADAS for c in cuerpos)
 
     def _iniciar_previa(self, op):
@@ -1689,6 +1695,7 @@ class PanelComando(QFrame):
             self._mostrar(str(e), tipo="aviso")
 
     def _recibir_previa(self):
+        from ..nucleo.aislado import FalloDelCalculo
         from ..timeline.calculo_aislado import leer_previa_visual
         try:
             salida = self._hijo_previa.sondear()
@@ -1703,6 +1710,9 @@ class PanelComando(QFrame):
             self._previa_lista(estado)
         except Exception as e:  # noqa: BLE001 — un hijo caído o vencido: la previa se apaga y el documento queda intacto
             self._previa_ok = False
+            # B-306: si el cálculo ya falló con estos valores, Aceptar no lo repite en la ventana (tardaría lo mismo).
+            if isinstance(e, FalloDelCalculo) and self.ultima_op is not None:
+                self._previa_aparte = self.ultima_op.a_dict() != self._op_hijo.a_dict()
             self._mostrar(f"⚠ {e}", tipo="error")
             self.previa.emit(None)
         self._t_hijo.stop()
@@ -1749,8 +1759,11 @@ class PanelComando(QFrame):
         sin `tipo`, `aviso=True` es un aviso y lo demás un error. El símbolo acompaña al color."""
         tipo = tipo or ("aviso" if aviso else "error")
         if registro_uso.activo is not None and texto and texto != self._uso_error:
-            registrar_error(origen="comando", comando=self.comando.CLAVE, mensaje=texto)
-            registro_uso.activo.emitir("comando_resultado", {"comando": self.comando.CLAVE, "exito": False})
+            if tipo in ("error", "invalido"):
+                registrar_error(origen="comando", comando=self.comando.CLAVE, mensaje=texto)
+                registro_uso.activo.emitir("comando_resultado", {"comando": self.comando.CLAVE, "exito": False})
+            else:                           # aviso, calculando e instrucción no son fallas (B-332)
+                registrar_aviso(origen="comando", comando=self.comando.CLAVE, mensaje=texto)
         self._uso_error = texto
         poner_mensaje(self.icono_mensaje, self.mensaje, texto, tipo)
         self._reubicar()                       # el mensaje puede agrandar el panel: que siga entrando en el visor

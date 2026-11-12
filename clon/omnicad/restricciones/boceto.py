@@ -1298,7 +1298,8 @@ def primitivas_entidad(c, P, R=None, curvas=None):
             return [("spline", c.id, tuple(polos), tuple(nudos), p, None)]
         p = min(c.grado, len(pts) - 1)
         nudos = c.nudos if c.nudos is not None and len(c.nudos) == len(pts) + p + 1 else nudos_uniformes(len(pts), p)
-        return [("spline", c.id, tuple(pts), tuple(nudos), p, tuple(c.pesos) if c.pesos else None)]
+        pesos = tuple(c.pesos) if c.pesos and len(c.pesos) == len(pts) else None    # B-320: proyectos viejos descuadrados
+        return [("spline", c.id, tuple(pts), tuple(nudos), p, pesos)]
     if isinstance(c, Conica):
         w = c.rho / (1 - c.rho)
         return [("spline", c.id, (P(c.inicio), P(c.vertice), P(c.fin)), (0.0, 0.0, 0.0, 1.0, 1.0, 1.0), 2,
@@ -1597,9 +1598,10 @@ class Boceto:
                        construccion=False):
         """Spline de ajuste de puntos o de puntos de control (SKT-CREATE-SPLINES)."""
         ids = []
+        repetidos = modo == "control" and (pesos is not None or nudos is not None)   # B-320: polos atados a pesos y nudos
         for p in puntos:
             i = self._punto(p)
-            if not ids or i != ids[-1]:
+            if not ids or i != ids[-1] or repetidos:
                 ids.append(i)
         if cerrada and len(ids) > 1 and ids[-1] == ids[0]:
             ids.pop()
@@ -4271,7 +4273,7 @@ class Boceto:
                 raise ErrorBoceto("El patrón necesita al menos dos ejemplares (cantidad 1 × cantidad 2 ≥ 2).")
             if n1 * n2 - 1 > MAX_COPIAS_PATRON:
                 raise ErrorBoceto(f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió {n1 * n2 - 1}): "
-                                  "para más, usá un patrón de cuerpos (rectangular_pattern).")
+                                  "para más, usá un patrón de cuerpos (Sólido › Crear › Patrón › Patrón rectangular; rectangular_pattern).")
             if p["modo"] not in ("extension", "espaciado"):
                 raise ErrorBoceto("La distancia es la total (extensión) o la de cada paso (espaciado).")
             for n, d, eje in ((n1, p["distancia1"], 1), (n2, p["distancia2"], 2)):
@@ -4295,7 +4297,7 @@ class Boceto:
             entero(n, "La cantidad", 2)
             if n - 1 > MAX_COPIAS_PATRON:
                 raise ErrorBoceto(f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió {n - 1}): para "
-                                  "más, usá un patrón de cuerpos (circular_pattern).")
+                                  "más, usá un patrón de cuerpos (Sólido › Crear › Patrón › Patrón circular; circular_pattern).")
             finito(total, "El ángulo total")
             if not 0 < abs(total) <= 360:
                 raise ErrorBoceto("El ángulo total va de -360 a 360 grados, distinto de cero.")

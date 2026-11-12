@@ -62,6 +62,8 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [plan_boceto_organizar.md](plan_boceto_organizar.md) | Organización, agrupación y manipulación de objetos en Boceto (prompt maestro de Gerardo); se borra al terminarla |
 | [plan_velocidad.md](plan_velocidad.md) | Pruebas y procesos más rápidos: medir, suite en paralelo, tests por impacto, humo sin cursor real (A–G) |
 | [plan_caza_errores.md](plan_caza_errores.md) | Programa que busca errores solo (`scripts/caza/`): capas, jueces automáticos, comandos y cómo quedó |
+| [trabajo_bugs_pieza_gerardo.md](trabajo_bugs_pieza_gerardo.md) | Prompt: bugs de la pieza de Gerardo (B-308, B-306, B-311, B-307, B-310) |
+| [trabajo_p137_flechas.md](trabajo_p137_flechas.md) | Prompt: cerrar P-136 y hacer P-137 (flechas del manipulador) |
 | [plan_reconstruir_solido.md](plan_reconstruir_solido.md) | De una malla a una pieza paramétrica (RI-1–RI-6, F10, F11) |
 | [plan_escaneo_celular.md](plan_escaneo_celular.md) | Escanear una pieza con el celular (ESC-1–ESC-7) |
 | [plan_texto_vectores.md](plan_texto_vectores.md) | Plan de texto y vectores |
@@ -110,6 +112,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [auditorias/previa-asincrona-2026-10-29.md](auditorias/previa-asincrona-2026-10-29.md) | Previa en proceso aparte para Empalme, Chaflán, booleanas, patrones y Vaciado: cuadros, asas y latencia hasta el sólido exacto por comando, y la causa del «piso» del Vaciado (P-55). |
 | [auditorias/inspeccionar_2026-11-01.md](auditorias/inspeccionar_2026-11-01.md) | Las 15 herramientas de INSPECCIONAR probadas como persona: antes y después con mediciones, comparación con Fusion por panel y fuentes de los factores de CO₂ |
 | [auditorias/patrones-solidos-2026-10-31.md](auditorias/patrones-solidos-2026-10-31.md) | Patrón rectangular, circular, en trayectoria, en puntos y Multitransformación: qué dice la ayuda de Fusion, matriz por herramienta (problema, evidencia, causa, corrección, prueba, pendiente) y las filas PAT-1 a PAT-6 del seguimiento |
+| [auditorias/avance_seleccion_2026-11-12.md](auditorias/avance_seleccion_2026-11-12.md) | Cómo avanza la selección entre campos en cada comando de OmniCAD contra la ayuda de Fusion (qué clic se suma, cuál cambia de rol) y la prueba en la ventana; origen de B-339, B-340 y P-138 |
 | [auditorias/desfase_boceto_2026-10-31.md](auditorias/desfase_boceto_2026-10-31.md) | Matriz de equivalencia del Desfase del boceto contra Fusion (31 filas, con su evidencia: video, ayuda, código, pruebas) y lo que no se pudo verificar |
 | [auditorias/boceto_crear_modificar_inventario.md](auditorias/boceto_crear_modificar_inventario.md) | Inventario de los 55 comandos de CREAR y MODIFICAR del boceto, comparación con Fusion y hallazgos (fase 1 de la [auditoría de CREAR y MODIFICAR](auditoria_boceto_crear_modificar.md)) |
 | [auditorias/boceto_crear_modificar_referencia.md](auditorias/boceto_crear_modificar_referencia.md) | Diferencias reales de CREAR y MODIFICAR del boceto contra la ayuda de Fusion 360 y de SOLIDWORKS (fase 2 de la misma auditoría) |
@@ -132,6 +135,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [prompt_b271.md](prompt_b271.md) | Prompt para que un agente arregle B-271 (Parámetros toca un árbol ya borrado) y deje reporte en `evidencias/manual/`. |
 | [auditorias/porton_auditoria.md](auditorias/porton_auditoria.md) | Portón de cierre de toda auditoría: matriz de combinaciones, ventana, pieza real, juez independiente y cerrar la clase de cada bug |
 | [modelos_gratis.md](modelos_gratis.md) | Modelos gratis de Cline, OpenCode, Kiro, Qoder, Kilo y CodeBuddy: cuáles responden, cuáles sirven para OmniCAD y cómo repetir la prueba |
+| [modelos_opencode_vps.md](modelos_opencode_vps.md) | Prueba (2026-11-11) de 40 modelos de OpenCode en la VPS: cuáles responden, tiempos, código y para qué sirve cada uno |
 | [arreglos_qwen.md](arreglos_qwen.md) | Arreglos con Qwen3.8-Flash en OpenCode: por qué el prompt es así, tandas de dos bugs con gemelos y tests obligatorios, prompt e informes |
 | [corrida_nocturna_2026-11-05.md](corrida_nocturna_2026-11-05.md) | Corrida nocturna: Qwen (Qoder) en las tandas de `arreglos_qwen.md` y Sol (OpenCode, rama aparte) en la geometría difícil; plan, uso de tokens e informe de la mañana |
 | [auditorias/informe_tortura_2026-10-17.md](auditorias/informe_tortura_2026-10-17.md) | Prueba de tortura del reductor y bugs T-01 a T-18 |

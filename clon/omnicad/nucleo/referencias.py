@@ -72,6 +72,11 @@ def tipo_topologico(sub):
 
 
 # ---------------------------------------------------------------- firmas
+def cara_libre(cara):
+    """True si la superficie de la cara es de forma libre (B-spline u otra), como el filete de una rosca modelada."""
+    return _SUPERFICIES.get(BRepAdaptor_Surface(cara).GetType(), "otra") in _GEOM_LIBRE
+
+
 def firma_cara(cara):
     sup = BRepAdaptor_Surface(cara)
     tipo = _SUPERFICIES.get(sup.GetType(), "otra")

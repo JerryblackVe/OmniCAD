@@ -23,6 +23,7 @@ from ..nucleo import geometria as geo
 from ..timeline.operaciones import OpPlano
 from ..timeline.ops_modificar import (OpChaflan, OpDesfaseAristas, OpDesfaseCara, OpDesmoldeo, OpEliminarOperaciones,
                                       OpEmpalme, OpQuitarEmpalmes, OpVaciado)
+from ..timeline.ops_ensamblar import pose_de_componente
 from ..timeline.ops_solido import OpAgujero, OpRosca, OpSolidoEnvolvente
 from . import selectores as sl
 from .errores import ErrorAPI, error
@@ -609,7 +610,7 @@ def _referencias_agujero(sesion, edges, distances, body):
              "face es opcional (elige el cuerpo). (2) FIJA, sobre una cara plana: face con un selector (p. ej. '>Z') o "
              "un id de find_faces ('Cuerpo1/F6'; UNA cara plana) y points: [u, v] en mm en los ejes x,y de un boceto "
              "sobre esa cara (find_faces da el center_uv) o [x, y, z] del mundo (se proyecta sobre la cara); sin "
-             "points, el centro de la cara. Esos puntos quedan fijos en el espacio aunque la cara se mueva. (3) "
+             "points, el centro de la cara. Esos puntos quedan fijos en el espacio, pero si el cuerpo es de un componente que una unión mueve después, lo siguen. (3) "
              "REFERENCIAS: face + reference_edges y reference_distances ubican el agujero a esas distancias de dos "
              "aristas rectas (paramétrico). hole_tap: simple, clearance (agujero de paso ISO 273 para el tornillo "
              "thread='M8' con fit close/normal/loose), cosmetic (rosca solo informativa; diámetro = diameter o la broca "
@@ -716,7 +717,8 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
             if not _punto_en_cara(plano, elem.sub, p):
                 raise error("INVALID_ARGUMENTS", f"El punto {[round(float(c), 4) for c in p]} cae fuera de la cara "
                             f"«{face}»: el agujero no tendría dónde ir.", "Ponelo dentro de la cara (find_faces da su caja).")
-        ubicacion = {"puntos_cara": [{"cara": sl.referencia(cuerpo, elem), "punto": [float(c) for c in p]}
+        pose = {"pose": pose_de_componente(sesion.doc.estado_final, cuerpo.componente).tolist()} if cuerpo.componente else {}
+        ubicacion = {"puntos_cara": [{"cara": sl.referencia(cuerpo, elem), "punto": [float(c) for c in p], **pose}
                                      for p in puntos]}
         cantidad = len(puntos)
     doc = sesion.doc

@@ -380,6 +380,23 @@ def test_boc15_extender_spline_tangente_conserva_tramo_y_coincide(tipo, lado):
     assert s.doc.a_dict() == antes
 
 
+def test_b320_spline_de_control_con_polo_repetido_conserva_pesos_y_nudos():
+    """B-320: dos referencias seguidas al mismo punto (polo repetido, como trae un .f3d) no se funden: polos,
+    pesos y nudos siguen coherentes y la curva se muestrea."""
+    from omnicad.restricciones.boceto import Spline, primitivas_entidad, puntos_primitiva
+
+    b = Boceto()
+    a, c, d = b.agregar_punto(0, 0), b.agregar_punto(10, 0), b.agregar_punto(10, 10)
+    sid = b.agregar_spline([a, a, c, d], "control", 3, pesos=[1, 2, 1, 1], nudos=[0, 0, 0, 0, 1, 1, 1, 1])
+    polos, nudos, grado, pesos = b.primitivas(sid)[0][2:6]
+    assert (len(polos), len(pesos), grado, len(nudos)) == (4, 4, 3, 8)
+    assert len(puntos_primitiva(b.primitivas(sid)[0])) > 2
+    # Un proyecto ya guardado con más pesos que polos no rompe el visor: los pesos que no coinciden se ignoran.
+    rota = Spline(99, [a, c, d], "control", 2, pesos=[1, 1, 1, 1])
+    prim = primitivas_entidad(rota, b.coords)[0]
+    assert prim[5] is None and len(puntos_primitiva(prim)) > 2
+
+
 @pytest.mark.parametrize("lado", [0, 1])
 def test_boc15_extender_arco_elipse_continua_hasta_proxima_interseccion(lado):
     s = api.Sesion()

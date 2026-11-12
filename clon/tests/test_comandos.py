@@ -110,6 +110,7 @@ def test_h101_panel_muestra_desfase_con_inicio_objeto(app_qt, superficie):
     panel.set_valor("inicio", "objeto")
     assert not panel.widgets["desfase_inicio"].isHidden()
     panel.set_valor("desfase_inicio", "-3 mm")
+    panel.set_valor("distancia", "10 mm")
     panel.valores["inicio_objeto"] = [hit_desde_ref({"tipo": "plano", "id": "op2"}, ctx.estado)]
     if superficie:
         curva = next(iter(doc.operacion("op1").boceto.curvas))

@@ -74,6 +74,7 @@ def ventana(tmp_path):
     br = s.doc.estado_final.bocetos["op1"]
     ref = {"tipo": "perfil", "boceto": "op1", **OpExtrusion.referencia_perfil(br.perfiles[0])}
     p._elegida(hit_desde_ref(ref, p.ctx.estado))
+    p.set_valor("distancia", "10 mm")
     p._t_previa.stop()
     p._calcular_previa()
     assert p._previa_ok, p.mensaje.text()

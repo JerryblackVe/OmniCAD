@@ -6,6 +6,7 @@ Todo sin Qt: la imagen sale de `nucleo.render_cpu` (rasterizador por software) y
 """
 import io
 import math
+import threading
 import time
 from typing import Literal
 
@@ -267,12 +268,14 @@ def get_viewport_image(sesion, view: str | None = None,
     opciones = dict(z_suelo=z_suelo, res_sombras=res, mosaico=2048, n_luces=1 if lighting == "key_only" else 3,
                     calcomanias=calcomanias)
     if estilo == "shaded":
-        rgba = rc.renderizar(objetos, cam, escena, w, h, supermuestreo=1, cielo=cielo, **opciones)
+        rgba = _sin_congelar(sesion, lambda: rc.renderizar(objetos, cam, escena, w, h, supermuestreo=1, cielo=cielo,
+                                                           **opciones))
     else:
         aristas = rs.segmentos_de_polilineas([p for c in cuerpos if not _es_malla(c)
                                               for p in geo.polilineas_aristas(c.forma)])
-        rgba = rs.aplicar_estilo(estilo, objetos, rs.recortar_segmentos(aristas, cortes) if cortes else aristas, cam,
-                                 escena, w, h, cielo=cielo, **opciones)
+        segmentos = rs.recortar_segmentos(aristas, cortes) if cortes else aristas
+        rgba = _sin_congelar(sesion, lambda: rs.aplicar_estilo(estilo, objetos, segmentos, cam, escena, w, h,
+                                                               cielo=cielo, **opciones))
     from PIL import Image                            # Pillow: ya lo usa render_cpu.guardar_png
     imagen = Image.fromarray(np.ascontiguousarray(rgba[..., :3]), "RGB")
     if (w, h) != (width, height):
@@ -281,6 +284,30 @@ def get_viewport_image(sesion, view: str | None = None,
     imagen.save(buf, "PNG", compress_level=3)
     return {"image": Imagen(buf.getvalue(), width, height), "view": vista, "bodies": [c.id for c in cuerpos],
             "style": estilo, "analyses": aplicados, "seconds": round(time.perf_counter() - t0, 2)}
+
+
+def _sin_congelar(sesion, dibujar):
+    """B-331: en vivo, el render por CPU (solo numpy y Rust, sin OpenCascade: las mallas ya se sacaron) corre en otro
+    hilo y la ventana sigue repintando con `al_esperar` (el mismo de B-48), en vez de quedar congelada 1 o 2 s en cada
+    imagen que pide el agente. Sin ventana, directo."""
+    esperar = sesion.doc.al_esperar
+    if esperar is None:
+        return dibujar()
+    caja = {}
+
+    def correr():
+        try:
+            caja["imagen"] = dibujar()
+        except BaseException as e:  # noqa: BLE001 — se relanza en el hilo que llamó
+            caja["error"] = e
+    hilo = threading.Thread(target=correr, name="render_agente", daemon=True)
+    hilo.start()
+    while hilo.is_alive():
+        esperar(0)                  # 0 s: sin el aviso «Calculando en un proceso aparte…», que no es lo que pasa
+        hilo.join(0.03)
+    if "error" in caja:
+        raise caja["error"]
+    return caja["imagen"]
 
 
 def _rejilla(cam, suelo, alto):

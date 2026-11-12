@@ -40,6 +40,11 @@ else
     [[ -z $(git -C "$destino" status --porcelain --untracked-files=all) ]] ||
         fallar "El worktree tiene cambios sin commitear."
     git -C "$raiz" merge-base --is-ancestor "$rama" main || fallar "La rama $rama no está fusionada en main."
+    # evidencias/ no va a git: sin copiarla, worktree remove borra los informes (2026-11-12 se perdió una caza)
+    if [[ -d $destino/evidencias ]]; then
+        mkdir -p "$raiz/evidencias" && cp -an "$destino/evidencias/." "$raiz/evidencias/" &&
+            printf 'Evidencias copiadas a %s/evidencias.\n' "$raiz"
+    fi
     git -C "$raiz" worktree remove "$destino"
     git -C "$raiz" branch -d "$rama"
 fi

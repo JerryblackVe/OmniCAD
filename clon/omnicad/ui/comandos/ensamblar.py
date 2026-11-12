@@ -6,7 +6,7 @@ from ...timeline.ops_ensamblar import (CLAVES_MOVIMIENTO, MODOS_POSICION, MOVIMI
                                        OpCapturarPosicion, OpComponente, OpGrupoRigido, OpOrigenUnion,
                                        OpPosicionInicial, OpRevertirPosicion, OpUnion, OpVinculoMovimiento,
                                        _clave_movimiento, componente_por_ref, direccion_eje, eje_local, ejes_bola,
-                                       exigir_numero, marco_desde, pose_de_reasignar, principal_de, ruta_componente,
+                                       exigir_numero, marco_desde, pose_de_componente, pose_de_reasignar, principal_de, ruta_componente,
                                        siguiente_accion)
 from ...timeline.parametros import ANGULO
 from ..comando import (Casilla, Comando, ErrorComando, Expresion, ListaSeleccion, Opciones, OpcionesVivas, Personalizado,
@@ -164,7 +164,8 @@ class NuevoComponente(Comando):
         return self.crear_op(OpComponente, v, ctx, cuerpos=cuerpos,
                              fijo=v["fijo"], padre=v.get("padre") or "",
                              version_pose=_version(ctx, OpComponente, "version_pose"),
-                             pose=pose_de_reasignar(estado, cuerpos).tolist())
+                             pose=pose_de_reasignar(estado, cuerpos).tolist(),
+                             pose_padre=pose_de_componente(estado, v.get("padre") or "").tolist())
 
     def desde_op(self, op, ctx):
         try:

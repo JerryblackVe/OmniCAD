@@ -63,6 +63,10 @@ class TiempoAgotado(TareaAislada):
     """El hijo pasó el tope y se lo mató."""
 
 
+class FalloDelCalculo(TareaAislada):
+    """El hijo terminó bien y el cálculo dio error (un valor imposible): repetirlo con lo mismo da lo mismo."""
+
+
 # ---------------------------------------------------------------- lo que corre el hijo
 def _autointersecciones(forma, limite):
     from . import revision
@@ -546,7 +550,7 @@ class CalculoPendiente:
         finally:
             self.cancelar()
         if "_fallo" in resultado:
-            raise TareaAislada(resultado["_fallo"])
+            raise FalloDelCalculo(resultado["_fallo"])
         return resultado
 
     def cancelar(self, ya=False):

@@ -37,7 +37,7 @@ _IDENTIFICADORES = {"comando", "tipo_op", "accion", "origen", "formato", "excepc
                     "valor", "nombre"}
 # Texto útil que se guarda completo (saneado: «~», 500 caracteres) según el tipo de evento; `detallado` abre
 # los valores escritos en los diálogos. Nada de esto es texto libre del usuario salvo que él lo pida.
-_ABIERTOS = {"error": {"error.mensaje"},
+_ABIERTOS = {"error": {"error.mensaje"}, "aviso": {"aviso.mensaje"},
              "op_ejecutada": {"op_ejecutada.paso", "op_ejecutada.tipo_op", "op_ejecutada.mensaje",
                               "op_ejecutada.nombre", "op_ejecutada.cuerpos"},
              "comando_resultado": {"comando_resultado.comando"},

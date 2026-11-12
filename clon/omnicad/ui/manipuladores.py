@@ -350,18 +350,20 @@ class Flecha(Manipulador):
         if estado.get("pantalla"):
             s = estado["signo"] * _mover_en_pantalla(estado, pos)
             v = estado["v0"] + s / self.factor
-            return {self.clave: self._acotar(v)}
+            return {self.clave: self._acotar(v, g)}
         o, r = g.rayo(pos)
         s = self._sobre_eje(o, r, estado["origen"], estado["dir"])
         if s is None:
             return {}
-        return {self.clave: self._acotar(estado["v0"] + (s - estado["s0"]) / self.factor)}
+        return {self.clave: self._acotar(estado["v0"] + (s - estado["s0"]) / self.factor, g)}
 
-    def _acotar(self, v):
+    def _acotar(self, v, g):
+        # B-267: un tope en 0 es «no cruza el cero», y 0 no es una medida válida: se frena en el menor valor que se escribe
+        paso = 10.0 ** -g._decimales
         if self.minimo is not None:
-            v = max(self.minimo, v)
+            v = max(paso if self.minimo == 0 else self.minimo, v)
         if self.maximo is not None:
-            v = min(self.maximo, v)
+            v = min(-paso if self.maximo == 0 else self.maximo, v)
         return v
 
     def cajas(self, g, arrastre):

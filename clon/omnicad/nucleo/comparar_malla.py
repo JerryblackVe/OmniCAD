@@ -36,7 +36,7 @@ def exigir_malla(m, que="La malla"):
         raise geo.ErrorGeometria(f"{que} está vacía.")
     if len(m.caras) > TOPE_TRIANGULOS:
         raise geo.ErrorGeometria(f"{que} tiene {len(m.caras):,} triángulos y el máximo es {TOPE_TRIANGULOS:,}: reducila "
-                                 "antes con reduce_mesh.".replace(",", "."))
+                                 "antes con MALLA › Modificar › Reducir (reduce_mesh).".replace(",", "."))
     if not m.area() > 0:
         raise geo.ErrorGeometria(f"{que} no tiene área: todos sus triángulos están degenerados.")
 

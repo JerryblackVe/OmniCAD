@@ -284,6 +284,18 @@ class OpNervio(_OpCrear):
         cuerpo.forma = geo.booleano(cuerpo.forma, forma, "unir")
         self._registrar_usados([cuerpo.id])
 
+    def crecimiento(self, estado):
+        """(punto medio de la primera curva, sentido en que crece, normal del plano) con el mismo cuerpo y sentido que
+        el cálculo: lo usan las asas de la ventana (B-219)."""
+        ents, aristas = _aristas(self.p["curvas"], estado)
+        plano = next((e.plano for e in ents if e.plano is not None), None)
+        if plano is None:
+            raise ErrorOperacion("Elegí curvas de un boceto.")
+        cuerpo = _cuerpo_objetivo(estado, ents, self.p)
+        punto, d = _sc().sentido_crecimiento(cuerpo.forma, aristas, plano.normal, self.p["invertir"],
+                                             red=self.TIPO == "red")
+        return punto, d, plano.normal
+
 
 class OpRed(OpNervio):
     """Red de Fusion [SLD-WEB]: varias curvas abiertas extruidas perpendiculares al boceto hasta el cuerpo."""
@@ -397,6 +409,10 @@ class OpAgujero(_OpCrear):
             if e.plano is None:
                 raise ErrorOperacion("El agujero va sobre una cara plana.")
             p = np.asarray(d["punto"], float)
+            if d.get("pose") is not None:         # B-178: el punto se dio con el componente en esa pose; lo sigue
+                comp = estado.cuerpo(d["cara"]["cuerpo"]).componente
+                ahora = np.asarray(estado.componentes.get(comp, {}).get("matriz", np.identity(4).tolist()), float)
+                p = (ahora @ np.linalg.inv(np.asarray(d["pose"], float)) @ np.append(p, 1.0))[:3]
             salida.append((e.plano.origen + (p - e.plano.origen) - e.plano.normal * float((p - e.plano.origen) @
                                                                                           e.plano.normal),
                            -e.plano.normal))

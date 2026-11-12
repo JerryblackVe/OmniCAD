@@ -428,9 +428,9 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
             v_menor = max(v_previa, v_c)
             if v_nueva < v_menor - max(v_menor, 1.0) * 5e-4:
                 v_nueva, v_menor = geo.volumen(nueva), max(geo.volumen(resultado), geo.volumen(c.forma))
-                if v_nueva < v_menor - max(v_menor, 1.0) * 5e-4:
-                    ctx.aviso(f"{c.nombre}: la unión perdió {v_menor - v_nueva:.2f} mm³ de material (el kernel "
-                              "descartó geometría en un contacto degenerado); revisalo con check_geometry.")
+                if v_nueva < v_menor - max(v_menor, 1.0) * 5e-4:      # B-308: un resultado roto no se acepta
+                    raise ErrorOperacion(f"{c.nombre}: la unión perdió {v_menor - v_nueva:.2f} mm³ de material (el "
+                                         f"kernel descartó geometría en un contacto degenerado). {geo.CONSEJO_CONTACTO}")
             v_previa = v_nueva
             resultado = nueva
         principal = objetivos[0]
@@ -439,7 +439,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
             del estado.cuerpos[c.id]
         if len(geo.solidos(resultado)) > len(geo.solidos(herramienta)) or not rv.es_estanca(resultado):
             ctx.aviso(f"{principal.nombre}: la unión dejó el cuerpo partido, abierto o con aristas compartidas "
-                      "de más (posible contacto tangente o en cuña); revisalo con check_geometry.")
+                      f"de más (posible contacto tangente o en cuña); {geo.REVISAR}")
         else:
             for texto in avisos:
                 ctx.aviso(f"{principal.nombre}: {texto}")
@@ -1121,7 +1121,8 @@ class _OpConPerfiles(Operacion):
                 detalle = ent.problema_perfil(ref)
                 if detalle:
                     raise ParametroMalFormado(ref, detalle)
-                perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano)
+                perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano,
+                                                       br.boceto)
                 if perfil is None:
                     if ent.es_de_texto(ref["firma"], br):
                         raise ErrorOperacion("Un perfil seleccionado era un pedazo de una letra y ya no existe como "
@@ -1538,10 +1539,10 @@ class OpCombinar(Operacion):
                 if v_previa is None:
                     v_previa = geo.volumen(forma_objetivo)
                 v_nueva = geo.volumen(resultado)
-                if v_nueva < v_previa - max(v_previa, 1.0) * 5e-4:
-                    ctx.aviso(f"{objetivo.nombre}: la unión con {h.nombre} perdió {v_previa - v_nueva:.2f} mm³ "
-                              "de material (el kernel descartó geometría en un contacto degenerado); "
-                              "revisalo con check_geometry.")
+                if v_nueva < v_previa - max(v_previa, 1.0) * 5e-4:      # B-308: un resultado roto no se acepta
+                    raise ErrorOperacion(f"{objetivo.nombre}: la unión con {h.nombre} perdió {v_previa - v_nueva:.2f} "
+                                         "mm³ de material (el kernel descartó geometría en un contacto degenerado). "
+                                         f"{geo.CONSEJO_CONTACTO}")
                 v_previa = v_nueva
                 # Tampoco puede quedar peor que las entradas (B-37/B-52): más sólidos que la suma de
                 # las partes (explotó), partes que se tocaban y no se fusionaron (la espiral contra la
@@ -1552,8 +1553,7 @@ class OpCombinar(Operacion):
                 if (n_despues > n_antes or (geo.se_tocan(parcial, h.forma) and n_despues == n_antes)
                         or not rv.es_estanca(resultado)):
                     ctx.aviso(f"{objetivo.nombre}: la unión con {h.nombre} dejó el cuerpo partido, sin "
-                              "fusionar lo que se toca o abierto (posible contacto tangente o en cuña); "
-                              "revisalo con check_geometry.")
+                              f"fusionar lo que se toca o abierto (posible contacto tangente o en cuña); {geo.REVISAR}")
                     avisos = []             # ya lo cubre el aviso de arriba
             for texto in avisos:
                 ctx.aviso(f"{objetivo.nombre}: {texto}")

@@ -86,6 +86,30 @@ def test_step_conserva_nombres_colores_y_componentes(tmp_path):
     assert all(g.es_valida(c.forma) for c in cuerpos.values())
 
 
+def test_step_de_fusion_cada_ocurrencia_es_un_componente(tmp_path):
+    """B-336: en el STEP de Fusion cada componente es una ocurrencia «Nombre:N» aunque solo tenga cuerpos: salen como
+    componentes (no como cuerpos sueltos de su padre) y el volumen total no cambia."""
+    doc = TDocStd_Document(TCollection_ExtendedString("XmlXCAF"))
+    formas = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+
+    def nombre(etiqueta, texto):
+        TDataStd_Name.Set_s(etiqueta, TCollection_ExtendedString(texto))
+        return etiqueta
+    raiz = nombre(formas.NewShape(), "Conjunto")
+    for texto, caja in (("Base", BRepPrimAPI_MakeBox(10, 20, 30)), ("Tapa", BRepPrimAPI_MakeBox(5, 5, 5))):
+        pieza = nombre(formas.AddShape(caja.Shape(), False), texto)
+        nombre(formas.AddComponent(raiz, pieza, TopLoc_Location()), f"{texto}:1")
+    formas.UpdateAssemblies()
+    w = STEPCAFControl_Writer()
+    w.SetNameMode(True)
+    assert w.Transfer(doc, STEPControl_AsIs)
+    w.Write(str(tmp_path / "f.step"))
+    estado = documento_desde_archivo(tmp_path / "f.step")[0].estado_final
+    assert sorted(c["nombre"] for c in estado.componentes.values()) == ["Base:1", "Tapa:1"]
+    assert {estado.componentes[c.componente]["nombre"] for c in estado.cuerpos.values()} == {"Base:1", "Tapa:1"}
+    assert sum(g.volumen(c.forma) for c in estado.cuerpos.values()) == pytest.approx(6000 + 125, rel=1e-9)
+
+
 def test_insertar_step_viejo_sigue_igual(tmp_path):
     """Las recetas viejas (sin `estructura`) siguen cargando todo como cuerpos sueltos."""
     from omnicad.timeline.documento import Documento

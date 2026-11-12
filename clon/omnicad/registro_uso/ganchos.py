@@ -51,8 +51,14 @@ def error(excepcion=None, *, origen="operacion", comando="", mensaje=""):
     traza = _traza(excepcion) if excepcion is not None else []
     texto = str(excepcion) if excepcion is not None else mensaje
     registro.activo.emitir("error", {"origen": origen, "comando": comando,
-        "excepcion": type(excepcion).__name__ if excepcion is not None else "AvisoOperacion",
+        "excepcion": type(excepcion).__name__ if excepcion is not None else "ErrorComando",
         "mensaje": texto, "traza": traza})
+
+
+def aviso(*, origen="operacion", comando="", mensaje=""):
+    """Mensaje informativo (avisos, «calculando…», instrucciones): evento propio, no cuenta como error (B-332)."""
+    if registro.activo is not None:
+        registro.activo.emitir("aviso", {"origen": origen, "comando": comando, "mensaje": mensaje})
 
 
 def archivo(tipo):

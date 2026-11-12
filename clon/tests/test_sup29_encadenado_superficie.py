@@ -219,7 +219,7 @@ def test_tildar_y_destildar_la_casilla_cambia_lo_que_se_resalta_en_la_previa(app
     visor = Visor3D()
     visor.set_modelo(doc.estado_final)
     panel = PanelComando(CATALOGO["sup_extruir"](), ContextoComando(doc), visor,
-                         {"curvas": [hit_desde_ref(_arista_u(doc), doc.estado_final)]})
+                         {"curvas": [hit_desde_ref(_arista_u(doc), doc.estado_final)], "distancia": "10 mm"})
     panel.show()
     emitidos = []
     panel.previa.connect(emitidos.append)

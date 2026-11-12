@@ -230,7 +230,7 @@ def _avisos_texto(sesion, texto, font, bold, italic):
 
 
 def _verificar_fuente(font, bold, italic):
-    if fuentes.buscar_fuente(font, bold, italic) is None:
+    if fuentes.resolver_fuente(font, bold, italic) is None:
         cercanas = [f for f in fuentes.familias() if str(font).casefold() in f.casefold()][:5]
         raise error("INVALID_ARGUMENTS", f"No se encontró la fuente «{font}».",
                     *([f"Parecidas: {', '.join(cercanas)}."] if cercanas else []),

@@ -762,20 +762,27 @@ def _cara_contiene(cara, uv, plano):
     return BRepClass_FaceClassifier(cara, plano.pnt(*uv), 1e-7).State() in (TopAbs_IN, TopAbs_ON)
 
 
-def buscar_por_firma_tolerante(perfiles, firma, centroide=None, plano=None):
+def buscar_por_firma_tolerante(perfiles, firma, centroide=None, plano=None, boceto=None):
     """Busca por firma exacta; si no hay, re-enlaza al perfil que comparte más curvas de la firma
 
     (un cambio de parámetro degeneró una curva o una nueva curva parte la región), con el centroide
     guardado como desempate y ventaja clara. Si el empate sigue (B-154: una letra y su hueco quedan
     casi en el mismo lugar, y un pedazo viejo de letra no los distingue por el centroide), gana el más
     chico de los que contienen al centroide guardado; el parámetro plano es el del boceto, que ubica
-    ese punto sobre las caras. Devuelve (perfil, nota) con nota None en el caso exacto,
+    ese punto sobre las caras. Con el `boceto`, una región que solo partieron curvas nuevas vuelve entera y sin
+    aviso, como en Fusion (B-329). Devuelve (perfil, nota) con nota None en el caso exacto o entero,
     o (None, None) si no hay un único candidato claro.
     """
     exacto = buscar_por_firma(perfiles, firma, centroide)
     if exacto is not None:
         return exacto, None
     objetivo = frozenset(firma)
+    if boceto is not None and plano is not None:
+        # Las curvas que la partieron no son de su firma: sin ellas, el contorno de siempre vuelve a cerrar la región.
+        solas = [g for g in boceto.geometria() if g[1] in objetivo]
+        entera = buscar_por_firma(detectar_boceto(boceto, plano, solas), objetivo, centroide)
+        if entera is not None:
+            return entera, None
     candidatos = [p for p in perfiles if p.firma & objetivo]
     if not candidatos:
         return None, None
@@ -926,7 +933,7 @@ def contornos_texto(texto, fuente="Arial", altura=5.0, negrita=False, cursiva=Fa
     try:
         return fuentes.contornos_texto(texto, fuente, altura, negrita, cursiva, **opciones)
     except fuentes.ErrorFuente as e:
-        if fuentes.buscar_fuente(fuente) is not None:       # la fuente existe: el error es de las opciones
+        if fuentes.resolver_fuente(fuente) is not None:       # la fuente existe: el error es de las opciones
             raise geo.ErrorGeometria(str(e)) from e
     return _contornos_occ(texto, fuente, altura, negrita, cursiva)
 

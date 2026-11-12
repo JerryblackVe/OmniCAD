@@ -142,6 +142,7 @@ def _color_xcaf(etiqueta):
     return None
 
 
+_OCURRENCIA_FUSION = re.compile(r":\d+$")
 _ENTIDAD = re.compile(r"\s*#(\d+)\s*=\s*([A-Z0-9_]+)\s*\((.*)\)\s*$", re.S)
 _REF = re.compile(r"#(\d+)")
 _TEXTO = re.compile(r"'((?:[^']|'')*)'")
@@ -252,6 +253,10 @@ def leer_step_estructura(ruta):
         if forma.IsNull():
             return
         forma = forma.Moved(ubicacion)
+        if componente is not None and _OCURRENCIA_FUSION.search(nombre or ""):
+            # Fusion exporta cada componente como una ocurrencia «Nombre:N»: aunque solo tenga cuerpos, es un componente.
+            componentes.append({"id": f"k{len(componentes) + 1}", "nombre": nombre, "padre": componente})
+            componente = componentes[-1]["id"]
         # Un producto sin geometría (en Fusion, un componente cuyos cuerpos están ocultos) no crea un cuerpo vacío.
         partes = [(s, "solido") for s in solidos(forma)] or ([(forma, "superficie")] if caras(forma) else [])
         propios = nombres_cuerpos.get(_nombre_xcaf(etiqueta), [])

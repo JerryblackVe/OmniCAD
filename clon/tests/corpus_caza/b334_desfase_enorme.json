@@ -1,0 +1,51 @@
+{
+ "id": "B-334",
+ "firma": "geometria|offset_faces|abierto",
+ "pasos": [
+  {
+   "tool": "create_sketch",
+   "args": {
+    "plane": "YZ"
+   }
+  },
+  {
+   "tool": "draw_rectangle",
+   "args": {
+    "x1": 0,
+    "y1": 0,
+    "x2": 60,
+    "y2": 40
+   }
+  },
+  {
+   "tool": "extrude",
+   "args": {
+    "sketch": "Boceto1",
+    "profile": "all",
+    "distance": 20,
+    "taper_angle": 0
+   }
+  },
+  {
+   "tool": "create_geometric_pattern",
+   "args": {
+    "body": "op2.c1",
+    "faces": [
+     "Cuerpo1/F5"
+    ],
+    "distance": 22.0,
+    "target": "op2.c1"
+   }
+  },
+  {
+   "tool": "offset_faces",
+   "args": {
+    "body": "op2.c1",
+    "faces": [
+     "Cuerpo1/F4"
+    ],
+    "distance": 1000000.0
+   }
+  }
+ ]
+}

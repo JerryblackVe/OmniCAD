@@ -107,6 +107,7 @@ def test_arrastrar_la_flecha_de_extruir_cambia_la_distancia_y_la_previa(app_qt):
     from omnicad.ui.comandos.solido import Extruir
     doc = _doc_rectangulo()
     panel, visor, estados = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
+    assert panel.valores["distancia"] == "0 mm"
     assert [m.ident for m in panel.manipuladores.manips][:1] == ["flecha:distancia"]
     assert "manipuladores" in visor._capas
     medio, d = _sobre_flecha(panel, "flecha:distancia")
@@ -115,7 +116,7 @@ def test_arrastrar_la_flecha_de_extruir_cambia_la_distancia_y_la_previa(app_qt):
     assert panel.manipuladores._hover == ("flecha:distancia", "flecha")
     _arrastrar(visor, medio, medio + d * 120)
     nueva = panel.ctx.evaluar(panel.valores["distancia"])
-    assert nueva > 12 and panel.widgets["distancia"].text() == panel.valores["distancia"]
+    assert nueva > 2 and panel.widgets["distancia"].text() == panel.valores["distancia"]
     assert panel.valores["distancia"].endswith(" mm")
     panel._calcular_previa()
     forma = _cuerpo(estados[-1]).forma
@@ -152,7 +153,7 @@ def test_la_caja_de_valor_edita_el_campo_y_lo_sigue(app_qt):
     doc = _doc_rectangulo()
     panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
     caja = panel.manipuladores.cajas["distancia"]
-    assert caja.parent() is visor and caja.text() == "10 mm" and not caja.isHidden()
+    assert caja.parent() is visor and caja.text() == "0 mm" and not caja.isHidden()
     caja.setFocus()
     caja.selectAll()
     QTest.keyClicks(caja, "25 mm")
@@ -200,22 +201,27 @@ def test_extruir_dos_lados_y_conicidad(app_qt):
     panel.cancelar()
 
 
-@pytest.mark.parametrize("valor", ["10 mm", "-10 mm"])
-def test_dos_lados_la_flecha_de_distancia_no_cruza_el_cero_y_sigue_al_cuerpo(app_qt, valor):
+@pytest.mark.parametrize("direccion, valor", [("dos_lados", "10 mm"), ("dos_lados", "-10 mm"), ("simetrica", "10 mm")])
+def test_la_flecha_de_distancia_no_cruza_el_cero_ni_queda_en_cero(app_qt, direccion, valor):
     """B-205: en «Dos lados» el número es una magnitud de su lado; la flecha (también con el valor tecleado negativo)
-    queda donde está el cuerpo, y arrastrarla hacia adentro se frena en 0 sin pasar al otro lado."""
+    queda donde está el cuerpo, y arrastrarla hacia adentro se frena sin pasar al otro lado. B-267: se frena en el
+    menor valor que se escribe, no en 0 (que es inválido y dejaba el error en el panel); igual en «Simétrica»."""
     from omnicad.ui.comandos.solido import Extruir
     doc = _doc_rectangulo()
-    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "direccion": "dos_lados",
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "direccion": direccion,
                                               "distancia": valor, "distancia2": "5 mm"})
     gestor = panel.manipuladores
-    base, punta = _manip(panel, "flecha:distancia").puntos(gestor)
-    assert base[2] == pytest.approx(10) and punta[2] > base[2]          # sobre el perfil, apuntando hacia afuera
-    assert _manip(panel, "angulo:conicidad").u[2] > 0                 # el asa de la conicidad, del mismo lado
+    if direccion == "dos_lados":
+        base, punta = _manip(panel, "flecha:distancia").puntos(gestor)
+        assert base[2] == pytest.approx(10) and punta[2] > base[2]      # sobre el perfil, apuntando hacia afuera
+        assert _manip(panel, "angulo:conicidad").u[2] > 0             # el asa de la conicidad, del mismo lado
     medio, d = _sobre_flecha(panel, "flecha:distancia")
     _arrastrar(visor, medio, medio - d * 400)                          # muy hacia adentro: pasaría el cero
     final = panel.ctx.evaluar(panel.valores["distancia"])
-    assert final * float(valor.split()[0]) >= 0 and abs(final) < 10   # achicó, sin cambiar de signo
+    assert final * float(valor.split()[0]) > 0 and abs(final) < 10    # achicó, sin cambiar de signo ni llegar a 0
+    panel._t_previa.stop()
+    panel._calcular_previa()
+    assert panel._previa_ok, panel.mensaje.text()
     panel.cancelar()
 
 
@@ -253,6 +259,7 @@ def test_al_cerrar_el_panel_no_quedan_capas_ni_cajas(app_qt, cerrar):
     doc = _doc_rectangulo()
     ventana = _Ventana()
     panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]}, ventana)
+    panel.set_valor("distancia", "10 mm")
     panel._calcular_previa()
     assert visor.findChildren(CajaValor)
     getattr(panel, cerrar)()
@@ -1018,3 +1025,34 @@ def test_el_arco_visto_de_canto_se_arrastra_por_la_tangente(app_qt):
     subio3 = panel2.ctx.evaluar(panel2.valores["angulo"], "angulo")
     assert subio3 > 45, subio3                      # arrastró a favor: subió
     panel2.cancelar()
+
+
+@pytest.mark.parametrize("clave, invertir, crece", [("red", False, (0, 1, 0)), ("red", True, (0, -1, 0)),
+                                                    ("nervio", False, (0, 0, 1)), ("nervio", True, (0, 0, -1))])
+def test_b219_la_flecha_de_profundidad_apunta_adonde_crece_la_pared(app_qt, clave, invertir, crece):
+    """B-219: caja 40³ hueca (paredes de 2) y una línea a y = 30, z = 30. La Red crece por la normal hasta la pared más
+    cercana (+Y) y el Nervio dentro del plano (+Z); «Cambiar dirección» los manda al otro lado. La flecha de
+    Profundidad sigue ese sentido, y la del espesor del Nervio va por la normal del plano."""
+    from omnicad import api
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+
+    s = api.Sesion()
+    cid = api.llamar(s, "create_box", {"length": 40, "width": 40, "height": 40, "anchor": "corner"})["result"]
+    cid = cid["bodies_created"][0]["id"]
+    assert api.llamar(s, "shell", {"body": cid, "faces": [], "thickness": 2})["ok"]
+    assert api.llamar(s, "create_construction_plane", {"plane": "XZ", "offset": -30, "name": "P30"})["ok"]
+    bid = api.llamar(s, "create_sketch", {"plane": "P30"})["result"]["sketch"]["id"]
+    assert api.llamar(s, "draw_line", {"sketch": bid, "start_x": 10, "start_y": 30, "end_x": 30, "end_y": 30})["ok"]
+    doc = s.doc
+    est = doc.estado_final
+    curva = next(iter(est.bocetos[bid].boceto.curvas))
+    h_curva = hit_desde_ref({"tipo": "curva_boceto", "boceto": bid, "curva": curva}, est)
+    panel, _visor, _ = _panel(CATALOGO[clave](), doc, {"curvas": [h_curva], "extension": "profundidad",
+                                                       "profundidad": "5 mm", "invertir": invertir})
+    flechas = {m.clave: m for m in panel.manipuladores.manips}
+    assert np.allclose(flechas["profundidad"].direccion, crece, atol=1e-6)
+    assert np.allclose(flechas["profundidad"].origen, (20, 30, 30), atol=1e-6)
+    if clave == "nervio":
+        assert abs(flechas["espesor"].direccion[1]) == pytest.approx(1.0)
+    panel.cancelar()

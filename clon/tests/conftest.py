@@ -36,6 +36,14 @@ def _sin_trabajador_entre_pruebas():
         sys.modules["omnicad.nucleo.aislado"].cerrar_trabajador()
 
 
+@pytest.fixture(autouse=True)
+def _disco_libre_de_sobra(monkeypatch):
+    """B-312: el registro de uso se pausa con menos de 2 GB libres, y el disco de los temporales (C:) baja de eso cuando
+    crece el archivo de paginación: las pruebas no dependen del disco real. Las de la pausa lo vuelven a parchear."""
+    from omnicad.registro_uso import sistema
+    monkeypatch.setattr(sistema, "disco_libre", lambda ruta: 10**12)
+
+
 def pytest_sessionfinish(session, exitstatus):
     """Cierra y borra las ventanas que quedaron ANTES de que Python se apague: si las destruye el cierre del intérprete,
     Qt llama a métodos de objetos Python ya borrados y el proceso aborta («pure virtual method called») con todas las
