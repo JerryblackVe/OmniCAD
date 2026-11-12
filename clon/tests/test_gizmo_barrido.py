@@ -41,7 +41,7 @@ def test_barrido_asa_del_largo_por_la_ruta_y_arco_de_torsion(app_qt):  # noqa: F
 def test_barrido_de_superficie_tiene_el_asa_del_largo_y_el_arco_de_torsion(app_qt):  # noqa: F811
     p = _abrir("sup_barrido")
     gm = p.manipuladores
-    assert sorted(type(m).__name__ for m in gm.manips) == ["Angulo", "AsaRuta"]
+    assert sorted(type(m).__name__ for m in gm.manips) == ["AnilloAngulo", "AsaRuta"]      # P-139: la torsión es el anillo de Fusion
     asa = next(m for m in gm.manips if isinstance(m, mp.AsaRuta))
     xy, ok = gm.pantalla([asa.asa(gm), asa.puntos_ruta[40]])
     assert ok.all()

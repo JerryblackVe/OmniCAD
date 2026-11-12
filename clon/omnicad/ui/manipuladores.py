@@ -313,6 +313,7 @@ class Flecha(Manipulador):
         self.hacia_afuera = hacia_afuera   # cara movida: la flecha sigue la normal de la cara, también con valor negativo (P-137)
         self.estricto = estricto           # los topes dan error justo ahí: ver `_tope`
         self.ident = f"flecha:{clave}"
+        self.cede_a = None                 # P-139: ident del asa que, activa, deja esta flecha como un fantasma gris sin caja
 
     inclinable = True                  # si apunta a la cámara se dibuja (y se arrastra) inclinada hacia un costado
 
@@ -334,6 +335,10 @@ class Flecha(Manipulador):
 
     def dibujar(self, g, activo):
         base, sentido, k = self._geom(g)
+        if self.cede_a is not None and _activo(g) == self.cede_a:      # como Fusion: el anillo del ángulo manda
+            cuello = base + sentido * (LARGO_FLECHA - LARGO_PUNTA) * k
+            return [("lineas", np.array([base, cuello]), AnilloAngulo.FANTASMA, 1.0)] + [
+                p for p in _cono(cuello, sentido, LARGO_PUNTA * k, RADIO_PUNTA * k, AnilloAngulo.FANTASMA) if p[0] != "tris"]
         color = AMARILLO_ACTIVO if activo is not None else self.color
         cuello = base + sentido * (LARGO_FLECHA - LARGO_PUNTA) * k
         return [("lineas", np.array([base, cuello]), color, 3.0)] + _cono(
@@ -381,6 +386,8 @@ class Flecha(Manipulador):
         return v
 
     def cajas(self, g, arrastre):
+        if self.cede_a is not None and _activo(g) == self.cede_a:
+            return []
         if self.caja is True or (self.caja == "arrastre" and arrastre is not None):
             return [(self.clave, self.puntos(g)[1])]
         return []
@@ -573,6 +580,98 @@ class Angulo(Manipulador):
         if self.caja is True or (self.caja == "arrastre" and arrastre is not None):
             return [(self.clave, self.asa(g))]
         return []
+
+
+class AnilloAngulo(Angulo):
+    """P-139: el asa de la conicidad de Extruir dibujada como la de Fusion. Un anillo de 360° alrededor de `eje`, centrado
+    en el pie de la flecha de distancia (`sigue`: (clave, dirección, solo magnitud) que corre el centro con ese valor, también
+    mientras se arrastra la flecha). La mitad de adelante va llena y la de atrás punteada, con el eje punteado y marcas
+    cortas cada 90°. El asa es un punto sobre el anillo. En reposo se ve solo un arco corto junto al asa (por eso cerca
+    de −90° parece de canto); el anillo entero y la caja de valor salen al pasar el ratón o al arrastrar."""
+
+    ayuda = "Especificar la distancia y el ángulo de inclinación"      # el cartel de Fusion al pasar el ratón
+    ARCO_REPOSO = math.radians(28)
+    AZUL = _rgb("#2c4157")              # el anillo de Fusion (medido en su captura); sobre un fondo oscuro no se vería:
+    AZUL_EN_OSCURO = _rgb("#8fb3dc")    # ahí va el mismo azul, más claro
+    AZUL_ASA, BORDE_ASA, HALO_ASA = _rgb("#1e98c8"), _rgb("#e6f6fc"), _rgb("#9fd3e8")
+    FANTASMA = _rgb("#c8ced6")          # la flecha de distancia mientras se usa el anillo, y el eje
+    RADIO = LARGO_FLECHA + 8.0          # px: como Fusion, a 0° el asa queda más allá de la punta de la flecha, no encima
+
+    def _r(self, g):
+        return self.RADIO * g.escala(self.centro)
+
+    def __init__(self, clave, centro, eje, inicio, sigue=None, **kw):
+        super().__init__(clave, centro, eje, inicio, caja="arrastre", **kw)
+        self.base, self.sigue = self.centro.copy(), sigue
+
+    def _seguir(self, g):
+        if self.sigue is not None:
+            clave, direccion, magnitud = self.sigue
+            v = g.valor(clave)
+            self.centro = self.base + np.asarray(direccion, float) * (abs(v) if magnitud else v)
+
+    def asa(self, g):
+        self._seguir(g)
+        return super().asa(g)
+
+    def dibujar(self, g, activo):
+        self._seguir(g)
+        oscuro = getattr(getattr(g.visor, "config", None), "oscuro", lambda: False)()
+        color = self.AZUL_EN_OSCURO if oscuro else self.AZUL
+        r, t, c = self._r(g), self._theta(g), self.centro
+        if activo is None:
+            prims = [("lineas", _segs(_arco(c, self.u, self.v, r, t - self.ARCO_REPOSO, t + self.ARCO_REPOSO)), color, 2.0)]
+        else:
+            atras = np.asarray(getattr(g.visor, "R", np.identity(3))[2], float)     # hacia el ojo
+            pts = _arco(c, self.u, self.v, r, 0.0, 2 * math.pi, 120)
+            segs = list(zip(pts[:-1], pts[1:], strict=True))
+            delante = [s for s in segs if float(((s[0] + s[1]) / 2 - c) @ atras) >= 0]
+            detras = [s for i, s in enumerate(segs) if float(((s[0] + s[1]) / 2 - c) @ atras) < 0 and i % 2 == 0]
+            k = g.escala(c)
+            eje = [c + self.eje * r * a for a in np.linspace(-0.6, 0.6, 10)]          # punteado: un tramo sí y otro no
+            marcas = [c + (self.u * math.cos(a) + self.v * math.sin(a)) * (r + d * k)
+                      for a in np.arange(4) * math.pi / 2 for d in (6.0, 13.0)]
+            prims = [("lineas", np.array(delante).reshape(-1, 3), color, 2.0),
+                     ("lineas", np.array(detras).reshape(-1, 3), color, 1.4),
+                     ("lineas", np.array(eje), self.FANTASMA, 1.4),
+                     ("lineas", np.array(marcas), color, 2.5)]
+        asa = self.asa(g)
+        k = g.escala(asa)
+        # como en Fusion: un disco celeste acostado en el plano del anillo, con halo pálido y el centro claro
+        prims.append(("lineas", _segs(_arco(asa, self.u, self.v, 9.0 * k, 0.0, 2 * math.pi, 24)), self.HALO_ASA, 1.6))
+        for radio, tono in ((7.5, self.AZUL_ASA), (2.5, self.BORDE_ASA)):
+            y = radio * k * np.linspace(-1, 1, 15)
+            x = np.sqrt(np.maximum((radio * k) ** 2 - y * y, 0.0))
+            fila = asa + self.v * y[:, None]
+            prims.append(("lineas", np.stack([fila - self.u * x[:, None], fila + self.u * x[:, None]], axis=1).reshape(-1, 3),
+                          tono, 2.0))
+        return prims
+
+    def tocar(self, g, q):
+        self._seguir(g)
+        s, ok = g.pantalla([self.asa(g)])
+        return (float(np.linalg.norm(s[0] - q)) - TOL_PX * 0.6 if ok[0] else math.inf), "asa"
+
+    def empezar(self, g, pos, sub):
+        self._seguir(g)
+        return super().empezar(g, pos, sub)
+
+    def mover(self, g, estado, pos):
+        self._seguir(g)
+        return super().mover(g, estado, pos)
+
+    def cajas(self, g, arrastre):
+        return [(self.clave, self.asa(g))] if _activo(g) == self.ident else []
+
+
+_SIN_CONTORNO = {AnilloAngulo.AZUL, AnilloAngulo.AZUL_EN_OSCURO, AnilloAngulo.AZUL_ASA, AnilloAngulo.BORDE_ASA,
+                 AnilloAngulo.HALO_ASA, AnilloAngulo.FANTASMA}
+
+
+def _activo(g):
+    """Ident del asa que se arrastra o, si no, de la que tiene el ratón encima (None si ninguna)."""
+    arrastre, encima = getattr(g, "_arrastre", None), getattr(g, "_hover", None)
+    return arrastre["m"].ident if arrastre else (encima[0] if encima else None)
 
 
 AYUDA_CALCOMANIA = "Modificar el tamaño de la imagen o la colocación"
@@ -1275,8 +1374,10 @@ class Triada(Manipulador):
 
 # ---------------------------------------------------------------- contorno y huella
 def _contornos(prims):
-    """Contorno oscuro bajo cada línea de las asas (se dibuja antes que ellas): el asa se separa del fondo y del modelo."""
-    return [("lineas", p[1], CONTORNO, float(p[3]) + GROSOR_CONTORNO) for p in prims if p[0] == "lineas" and len(p[1]) > 1]
+    """Contorno oscuro bajo cada línea de las asas (se dibuja antes que ellas): el asa se separa del fondo y del modelo.
+    El anillo del ángulo (P-139) va sin él, fino como en Fusion."""
+    return [("lineas", p[1], CONTORNO, float(p[3]) + GROSOR_CONTORNO) for p in prims
+            if p[0] == "lineas" and len(p[1]) > 1 and p[2] not in _SIN_CONTORNO]
 
 
 def _huella(prims):
