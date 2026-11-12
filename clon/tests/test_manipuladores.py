@@ -123,9 +123,10 @@ def test_arrastrar_la_flecha_de_extruir_cambia_la_distancia_y_la_previa(app_qt):
     assert g.volumen(forma) == pytest.approx(200 * nueva, rel=1e-6)
     (_, _, z0), (_, _, z1) = g.caja_envolvente(forma)
     assert (z0, z1) == pytest.approx((0, nueva))
-    # La flecha queda en la punta nueva (cola sobre la cara de arriba de la extrusión).
-    cola, _ = _manip(panel, "flecha:distancia").puntos(panel.manipuladores)
-    assert cola == pytest.approx((10, 5, nueva))
+    # La flecha queda en la punta nueva (cola sobre la cara de arriba de la extrusión), en el borde del perfil (P-139).
+    flecha = _manip(panel, "flecha:distancia")
+    cola, _ = flecha.puntos(panel.manipuladores)
+    assert cola == pytest.approx(flecha.origen + (0, 0, nueva)) and flecha.origen[:2] == pytest.approx((0, 0))
     panel.cancelar()
 
 
@@ -135,7 +136,7 @@ def test_la_flecha_permite_extruir_hacia_el_otro_lado(app_qt):
     panel, visor, estados = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "distancia": "5 mm"})
     medio, d = _sobre_flecha(panel, "flecha:distancia")
     gestor = panel.manipuladores
-    base = gestor.pantalla([[10, 5, 0]])[0][0]
+    base = gestor.pantalla([_manip(panel, "flecha:distancia").origen])[0][0]
     # se arrastra hasta pasar bien al otro lado del perfil
     _arrastrar(visor, medio, base - d * 3 * np.linalg.norm(medio - base))
     valor = panel.ctx.evaluar(panel.valores["distancia"])
@@ -734,11 +735,12 @@ def test_angulo_de_la_revolucion(app_qt):
     eje = hit_desde_ref({"tipo": "eje", "id": "Z"}, doc.estado_final)
     panel, visor, estados = _panel(Revolucion(), doc, {"perfiles": [_perfil(doc)], "eje": [eje], "angulo": "90 deg"})
     angulo = _manip(panel, "angulo:angulo")
-    assert angulo.radio == pytest.approx(7.5) and angulo.eje == pytest.approx((0, 0, 1))
     gestor = panel.manipuladores
+    # P-139: el anillo de Fusion, en el borde del perfil más lejano al eje y a la altura de su centro
+    assert angulo.centro == pytest.approx((10, 0, 5)) and angulo.eje == pytest.approx((0, 0, 1))
     asa = gestor.pantalla([angulo.asa(gestor)])[0][0]
     # el asa está a 90° del perfil: arrastrarla un poco más allá agranda el ángulo
-    mas = gestor.pantalla([angulo.centro + (angulo.u * np.cos(2.0) + angulo.v * np.sin(2.0)) * 7.5])[0][0]
+    mas = gestor.pantalla([angulo.centro + (angulo.u * np.cos(2.0) + angulo.v * np.sin(2.0)) * angulo._r(gestor)])[0][0]
     _arrastrar(visor, asa, mas)
     valor = panel.ctx.evaluar(panel.valores["angulo"], "angulo")
     assert 100 < valor < 130
@@ -934,6 +936,7 @@ def test_las_cajas_de_extruir_y_revolucion_no_tapan_sus_asas_en_4_vistas(app_qt)
     total = 0
     for nombre, poner in _vistas(visor, np.array([0.0, 0.0, 1.0])).items():
         poner()
+        visor.distancia *= 2                   # P-139: la flecha sale de la esquina; encuadrado justo, su caja queda afuera
         gestor.redibujar()
         total += _sin_nada_encima(gestor)      # en alguna vista la punta queda fuera de pantalla y su caja se oculta
     assert total >= 2
@@ -1019,14 +1022,14 @@ def test_el_arco_visto_de_canto_se_arrastra_por_la_tangente(app_qt):
     gestor.redibujar()
     t = np.radians(panel.ctx.evaluar(panel.valores["angulo"], "angulo"))
     tangente = -angulo.u * np.sin(t) + angulo.v * np.cos(t)          # sentido del ángulo creciente
-    s, ok = gestor.pantalla(np.array([angulo.asa(gestor), angulo.asa(gestor) + tangente * angulo.radio]))
+    s, ok = gestor.pantalla(np.array([angulo.asa(gestor), angulo.asa(gestor) + tangente * angulo._r(gestor)]))
     assert ok.all()
     e = (s[1] - s[0]) / np.linalg.norm(s[1] - s[0])
-    _arrastrar(visor, s[0], s[0] + e * 50)
+    _arrastrar(visor, s[0], s[0] + e * 30)                            # P-139: el anillo (78 px) gira más por píxel
     subio = panel.ctx.evaluar(panel.valores["angulo"], "angulo")
     assert 50 < subio < 90, subio                                     # arrastró a favor: subió
     asa2 = gestor.pantalla([angulo.asa(gestor)])[0][0]
-    _arrastrar(visor, asa2, asa2 - e * 50)
+    _arrastrar(visor, asa2, asa2 - e * 30)
     bajo = panel.ctx.evaluar(panel.valores["angulo"], "angulo")
     assert bajo < subio, bajo                                         # en contra: bajó
     panel.cancelar()
@@ -1102,6 +1105,7 @@ def test_b343_las_asas_de_la_conicidad_frenan_donde_el_perfil_se_cierra(app_qt):
     panel.cancelar()
 
     panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "distancia": "20 mm"})
+    visor.distancia *= 3                                               # P-139: el anillo está a 20 mm, en el pie de la flecha
     gestor = panel.manipuladores
     angulo = _manip(panel, "angulo:conicidad")
     asa = gestor.pantalla([angulo.asa(gestor)])[0][0]
@@ -1218,4 +1222,59 @@ def test_b345_asas_de_los_demas_comandos_dejan_la_previa_sana(app_qt, clave, cam
         _arrastrar_con_previa(panel, visor, medio, medio + d * 300 * sentido)
     panel._calcular_previa()
     assert panel._previa_ok and estados[-1] is not None, (panel.valores[asa], panel.mensaje.text())
+    panel.cancelar()
+
+
+def test_p139_la_conicidad_de_extruir_es_un_anillo_en_el_pie_de_la_flecha(app_qt):
+    """P-139: como Fusion, la conicidad de Extruir es un anillo de 360° centrado en el pie de la flecha de distancia
+    (sobre el borde del perfil), sin la V de radios. En reposo se ve un arco corto junto al asa; con el ratón encima, el
+    anillo entero (atrás punteado) y la caja de valor. El anillo sigue a la flecha mientras se la arrastra, y arrastrar
+    el asa por el anillo inclina el cuerpo."""
+    from PySide6.QtCore import QEvent, Qt
+
+    from omnicad.ui import manipuladores as mp
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, visor, estados = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "distancia": "10 mm",
+                                                    "conicidad": "-20 deg"})
+    gestor = panel.manipuladores
+    anillo, flecha = _manip(panel, "angulo:conicidad"), _manip(panel, "flecha:distancia")
+    assert isinstance(anillo, mp.AnilloAngulo)
+    x, y, z = flecha.origen
+    assert z == pytest.approx(0) and (min(abs(x), abs(x - 20)) < 1e-6 or min(abs(y), abs(y - 10)) < 1e-6)   # en el borde
+    anillo.asa(gestor)
+    assert anillo.centro == pytest.approx(flecha.puntos(gestor)[0])                # el pie de la flecha
+    r = anillo._r(gestor)
+
+    def radios(prim):
+        return np.linalg.norm(prim[1] - anillo.centro, axis=1) / r
+
+    reposo = anillo.dibujar(gestor, None)
+    assert radios(reposo[0]) == pytest.approx(1.0, abs=1e-6) and len(reposo[0][1]) < 40        # arco corto, sin V
+    asa = gestor.pantalla([anillo.asa(gestor)])[0][0]
+    _raton(visor, QEvent.MouseMove, asa, Qt.NoButton, Qt.NoButton)                  # el ratón pasa por el asa
+    assert gestor._hover[0] == anillo.ident and "conicidad" in gestor.cajas
+    assert anillo.ayuda == "Especificar la distancia y el ángulo de inclinación"
+    delante, detras, *_ = anillo.dibujar(gestor, "asa")
+    assert radios(delante) == pytest.approx(1.0, abs=1e-6) and radios(detras) == pytest.approx(1.0, abs=1e-6)
+    assert len(delante[1]) == pytest.approx(2 * len(detras[1]), abs=8)              # atrás, un tramo sí y otro no
+    _raton(visor, QEvent.MouseMove, asa + 200, Qt.NoButton, Qt.NoButton)
+    assert "conicidad" not in gestor.cajas
+
+    medio, d = _sobre_flecha(panel, "flecha:distancia")
+    _arrastrar(visor, medio, medio + d * 15)
+    assert panel.ctx.evaluar(panel.valores["distancia"]) > 10
+    anillo.asa(gestor)
+    assert anillo.centro == pytest.approx(flecha.puntos(gestor)[0])                # siguió a la flecha
+    panel.set_valor("distancia", "10 mm")
+    panel._calcular_previa()
+    antes = g.volumen(_cuerpo(estados[-1]).forma)
+    anillo = _manip(panel, "angulo:conicidad")
+    asa = gestor.pantalla([anillo.asa(gestor)])[0][0]
+    centro = gestor.pantalla([anillo.centro])[0][0]
+    adentro = gestor.pantalla([anillo.centro - anillo.v * 30])[0][0]
+    _arrastrar(visor, asa, asa + (adentro - centro) * 0.15)
+    assert panel.ctx.evaluar(panel.valores["conicidad"], "angulo") < -20
+    panel._calcular_previa()
+    assert panel._previa_ok and g.volumen(_cuerpo(estados[-1]).forma) < antes
     panel.cancelar()

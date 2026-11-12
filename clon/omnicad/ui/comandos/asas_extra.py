@@ -97,7 +97,7 @@ def _asas_barrido(self, ctx, v):
             pass
     torsion = next(c for c in self.campos(ctx) if c.clave == "torsion")      # barrido sólido y de superficie: difieren
     if torsion.visible_si is None or torsion.visible_si(v):
-        salida.append(mp.Angulo("torsion", pt[0], pt[1], mp.perpendiculares(pt[1])[0]))
+        salida.append(mp.AnilloAngulo("torsion", pt[0], pt[1], mp.perpendiculares(pt[1])[0]))      # P-139: el anillo de Fusion
     return salida
 
 
@@ -423,9 +423,9 @@ def _asas_sup_revolucion(self, ctx, v):
     radio = float(np.linalg.norm(pt[0] - pie))
     if radio <= 1e-6:
         return []
-    salida = [mp.Angulo("angulo", pie, d, pt[0] - pie, radio)]
+    salida = [mp.AnilloAngulo("angulo", pt[0], d, pt[0] - pie)]      # P-139: el anillo de Fusion, en el perfil
     if v.get("lados") == "dos_lados":
-        salida.append(mp.Angulo("angulo2", pie, -d, pt[0] - pie, radio * 0.8))
+        salida.append(mp.AnilloAngulo("angulo2", pt[0], -d, pt[0] - pie))
     return salida
 
 

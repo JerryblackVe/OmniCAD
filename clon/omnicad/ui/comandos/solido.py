@@ -169,9 +169,9 @@ class Extruir(Comando):
         return self.crear_op(OpExtrusion, v, ctx, **params)
 
     def manipuladores(self, ctx, v):
-        """Flecha de distancia desde el centro del perfil a lo largo de la normal (la del lado 2 en «Dos
-        lados»), el asa de la conicidad en el borde del perfil y, como Fusion, la flecha del desfase de
-        inicio sobre el borde (solo con Inicio=Desfase) y la conicidad del lado 2 (solo en «Dos lados»)."""
+        """Como Fusion: la flecha de distancia sale del borde del perfil a lo largo de la normal (la del lado 2 en «Dos
+        lados»; la simétrica, del centro), con el anillo de la conicidad alrededor de su pie (P-139), la flecha del
+        desfase de inicio sobre el borde (solo con Inicio=Desfase) y la conicidad del lado 2 (solo en «Dos lados»)."""
         from .. import manipuladores as mp
         if v.get("extension") != "distancia":
             return []
@@ -180,8 +180,8 @@ class Extruir(Comando):
             return []
         centro, plano, formas = base
         n = mp.unitario(plano.normal) * (-1.0 if v.get("invertir") else 1.0)
-        lateral = mp.unitario(plano.u)
-        borde = mp.punto_borde(formas, centro, lateral)
+        lateral = -mp.unitario(plano.u)      # P-139: el borde de -u; en la vista inicial el asa queda adelante, como en Fusion
+        borde = mp.punto_borde(formas, centro, lateral - 0.01 * mp.unitario(plano.v))   # de dos esquinas, la de abajo
         antes = [mp.Flecha("desfase_inicio", borde, n)] if v.get("inicio") == "desfase" else []
         if v.get("inicio") == "desfase":
             centro = centro + n * _evaluar(ctx, v.get("desfase_inicio"))
@@ -196,26 +196,31 @@ class Extruir(Comando):
             t = n * (-1.0 if d < 0 else 1.0)
             dmax = _distancia_maxima(radios, _evaluar(ctx, v.get("conicidad"), ANGULO))
             menos = None if dmax is None else -dmax
-            return antes + [mp.Flecha("distancia", centro, n, minimo=menos, maximo=dmax, estricto=True),
-                            mp.Angulo("conicidad", borde, np.cross(t, lateral), t, **_angulos(radios, d),
-                                      caja="arrastre", estricto=True)]
+            # P-139: como Fusion, la flecha sale del borde del perfil y el anillo del ángulo rodea su pie
+            flecha = mp.Flecha("distancia", borde, n, minimo=menos, maximo=dmax, estricto=True)
+            flecha.cede_a = "angulo:conicidad"
+            return antes + [flecha, mp.AnilloAngulo("conicidad", borde, np.cross(t, lateral), t,
+                                                    sigue=("distancia", n, False), **_angulos(radios, d), estricto=True)]
 
         def lado(clave, valor, sentido, conicidad):
             # B-205: en «Dos lados» cada número es una magnitud de su lado; la flecha queda a |valor| de ese lado
             # y no cruza el cero (con un valor negativo, el eje se da vuelta y el tope pasa a ser el máximo)
             dmax = _distancia_maxima(radios, _evaluar(ctx, v.get(conicidad), ANGULO))
             if valor < 0:
-                return mp.Flecha(clave, centro, -sentido, minimo=None if dmax is None else -dmax, maximo=0.0,
-                                 estricto=True)
-            return mp.Flecha(clave, centro, sentido, minimo=0.0, maximo=dmax, estricto=True)
+                flecha = mp.Flecha(clave, borde, -sentido, minimo=None if dmax is None else -dmax, maximo=0.0,
+                                   estricto=True)
+            else:
+                flecha = mp.Flecha(clave, borde, sentido, minimo=0.0, maximo=dmax, estricto=True)
+            flecha.cede_a = f"angulo:{conicidad}"
+            return flecha
         d2 = _evaluar(ctx, v.get("distancia2"))
         flechas = [lado("distancia", d, n, "conicidad")]
         if v.get("extension2", "distancia") == "distancia":
             flechas.append(lado("distancia2", d2, -n, "conicidad2"))
         return antes + flechas + [
-            mp.Angulo(clave, borde, np.cross(t, lateral), t, **_angulos(radios, dist), caja="arrastre",
-                      estricto=True)
-            for clave, t, dist in (("conicidad", n, d), ("conicidad2", -n, d2))]
+            mp.AnilloAngulo(clave, borde, np.cross(t, lateral), t, sigue=(lado_d, t, True), **_angulos(radios, dist),
+                            estricto=True)
+            for clave, lado_d, t, dist in (("conicidad", "distancia", n, d), ("conicidad2", "distancia2", -n, d2))]
 
     @staticmethod
     def _herramienta(op):
@@ -462,8 +467,8 @@ class Revolucion(Comando):
         return self.crear_op(OpRevolucion, v, ctx, **params)
 
     def manipuladores(self, ctx, v):
-        """Arco con asa alrededor del eje, a la distancia del centro del perfil (el segundo lado en «Dos
-        lados»; en «Simétrica» el asa va a la mitad del ángulo, como el resultado)."""
+        """El anillo del ángulo alrededor del eje, como Fusion (P-139), en el borde del perfil más lejano al eje (el
+        segundo lado en «Dos lados»; en «Simétrica» el asa va a la mitad del ángulo, como el resultado)."""
         from .. import manipuladores as mp
         if v.get("extension") != "angulo":
             return []
@@ -480,16 +485,18 @@ class Revolucion(Comando):
             return []
         centro = base[0]
         pie = np.asarray(punto, float) + d * float((centro - punto) @ d)
-        radio = float(np.linalg.norm(centro - pie))
-        radio = radio if radio > 1e-6 else None
+        # P-139: como Fusion, el anillo (de tamaño fijo en pantalla, perpendicular al eje) va en el borde del perfil más
+        # lejano al eje, a la altura del centro
+        borde = mp.punto_borde(base[2], centro, centro - pie)
+        borde = borde + d * float((centro - borde) @ d)
         if v.get("direccion") == "simetrica":
-            return [mp.Angulo("angulo", pie, d, centro - pie, radio, factor=0.5)]
+            return [mp.AnilloAngulo("angulo", borde, d, centro - pie, factor=0.5)]
         # B-210: en «Dos lados» cada ángulo es una magnitud de su lado (el lado lo elige la dirección), como en
         # Extruir (B-205): el asa no se arrastra por debajo de 0, donde ya no cambiaría nada.
         dos = v.get("direccion") == "dos_lados"
-        salida = [mp.Angulo("angulo", pie, d, centro - pie, radio, minimo=0.0 if dos else -360.0)]
+        salida = [mp.AnilloAngulo("angulo", borde, d, centro - pie, minimo=0.0 if dos else -360.0)]
         if dos:
-            salida.append(mp.Angulo("angulo2", pie, -d, centro - pie, radio, minimo=0.0))
+            salida.append(mp.AnilloAngulo("angulo2", borde, -d, centro - pie, minimo=0.0))
         return salida
 
     def desde_op(self, op, ctx):
