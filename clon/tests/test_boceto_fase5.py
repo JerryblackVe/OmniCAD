@@ -397,6 +397,30 @@ def test_b320_spline_de_control_con_polo_repetido_conserva_pesos_y_nudos():
     assert prim[5] is None and len(puntos_primitiva(prim)) > 2
 
 
+@pytest.mark.parametrize("caso", ["insertar", "grado"])
+def test_b352_polo_repetido_no_deforma_al_insertar_punto_ni_al_subir_el_grado(caso):
+    """B-352: con el mismo punto en dos polos seguidos (B-320, como trae un .f3d), Insertar punto de control y
+    Cambiar grado escribían dos coordenadas en el mismo punto y la curva se corría hasta 4 mm."""
+    from omnicad.restricciones.boceto import dominio, evaluar_primitiva
+
+    b = Boceto()
+    p0, a, c, d = (b.agregar_punto(*q) for q in [(0, 0), (10, 10), (15, 0), (20, 0)])
+    if caso == "insertar":
+        sid = b.agregar_spline([p0, a, a, d], "control", 3, nudos=[0, 0, 0, 0, 1, 1, 1, 1])
+    else:
+        sid = b.agregar_spline([p0, a, a, c, d], "control", 3, nudos=[0, 0, 0, 0, 0.5, 1, 1, 1, 1])
+    original = b.primitivas(sid)[0]
+    t0, t1, _ = dominio(original)
+    if caso == "insertar":
+        b.insertar_punto_spline(sid, evaluar_primitiva(original, (t0 + t1) / 2)[0])
+    else:
+        b.cambiar_grado_spline(sid, 5)
+    nueva = b.primitivas(sid)[0]
+    for i in range(21):
+        t = t0 + (t1 - t0) * i / 20
+        assert evaluar_primitiva(nueva, t)[0] == pytest.approx(evaluar_primitiva(original, t)[0], abs=1e-6)
+
+
 @pytest.mark.parametrize("lado", [0, 1])
 def test_boc15_extender_arco_elipse_continua_hasta_proxima_interseccion(lado):
     s = api.Sesion()
