@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Union
 
-from .errores import error, traducir
+from .errores import ErrorAPI, error, traducir
 from ..registro_uso.ganchos import error as registrar_error
 
 Expr = float | str   # número (mm o grados) o expresión de texto con parámetros y unidades
@@ -314,8 +314,45 @@ def _a_json(x):
     return x
 
 
+_CITADO = re.compile(r"'([^']+)'|«([^»]+)»")
+
+
+def _textos(valor):
+    """Los textos de un argumento: él mismo, los de una lista o los valores de un dict (un nivel de anidado extra)."""
+    if isinstance(valor, str):
+        yield valor.strip()
+    elif isinstance(valor, dict):
+        for x in valor.values():
+            yield from _textos(x)
+    elif isinstance(valor, (list, tuple)):
+        for x in valor:
+            yield from _textos(x)
+
+
+def _nombrar_argumento(e, kwargs):
+    """B-304: «No existe el cuerpo 'Foo'» no decía de cuál argumento salió «Foo». Un error de «no existe» (o la
+    referencia sin nombre de la construcción) que cita un texto que vino en un solo argumento de la llamada lo nombra.
+    Lo hace acá, una vez, y no cada herramienta (`sesion.paso`, `sesion.cuerpo`, `_buscar` y `_referencia` no ven los
+    argumentos)."""
+    if not ((e.error_kind.endswith("_NOT_FOUND") and e.mensaje.startswith("No existe"))
+            or (e.error_kind == "INVALID_ARGUMENTS" and "«referencia»" in e.mensaje)):
+        return
+    for citado in (a or b for a, b in _CITADO.findall(e.mensaje)):
+        nombres = [k for k, v in kwargs.items() if citado in _textos(v)]
+        if any(f"«{n}»" in e.mensaje for n in nombres):
+            return
+        if len(nombres) == 1:
+            if "«referencia»" in e.mensaje:
+                e.mensaje = e.mensaje.replace("«referencia»", f"«{nombres[0]}»", 1)
+            else:
+                e.mensaje = e.mensaje.rstrip(".") + f" (argumento «{nombres[0]}»)."
+            e.args = (e.mensaje,)
+            return
+
+
 def llamar(sesion, nombre, args=None):
     """Ejecuta una herramienta del catálogo. Nunca lanza: los errores vuelven como dict con error_kind."""
+    kwargs = {}
     try:
         h = _CATALOGO.get(nombre) if isinstance(nombre, str) else None
         if h is None:
@@ -343,4 +380,6 @@ def llamar(sesion, nombre, args=None):
     except Exception as e:  # noqa: BLE001 — contrato: llamar nunca lanza
         # No se pasan args ni resultados: pueden ser chat, código o contenido de un archivo.
         registrar_error(e, origen="api", comando=nombre if isinstance(nombre, str) and nombre in _CATALOGO else "desconocido")
+        if isinstance(e, ErrorAPI):
+            _nombrar_argumento(e, kwargs)
         return traducir(e).a_dict()
