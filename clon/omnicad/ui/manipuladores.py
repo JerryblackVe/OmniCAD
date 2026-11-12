@@ -40,8 +40,8 @@ def _aclarar(color, k=0.45):
     return tuple(c + (1 - c) * k for c in color)
 
 
-AZUL = _rgb("#2b7de9")                 # flecha de Fusion
-AZUL_ACTIVO = _aclarar(AZUL)           # al pasar el ratón / arrastrando
+AMARILLO = _rgb("#ffb400")             # P-137: contrasta con la selección (celeste), el modelo (gris) y el fondo; con contorno oscuro
+AMARILLO_ACTIVO = _aclarar(AMARILLO)           # al pasar el ratón / arrastrando
 COLORES_EJE = (_rgb("#e0302a"), _rgb("#2fa335"), _rgb("#2b6fe0"))   # X rojo, Y verde, Z azul
 GRIS_ESFERA = (0.93, 0.93, 0.93)
 BORDE_ESFERA = (0.35, 0.35, 0.37)
@@ -295,9 +295,11 @@ class Flecha(Manipulador):
     (si el valor es negativo, hacia el otro lado). Arrastrarla corre el valor lo mismo que el cursor
     sobre la recta (dividido por `factor`, p. ej. 0,5 en la extrusión simétrica de longitud total)."""
 
-    def __init__(self, clave, origen, direccion, factor=1.0, minimo=None, maximo=None, caja=True, color=AZUL):
+    def __init__(self, clave, origen, direccion, factor=1.0, minimo=None, maximo=None, caja=True, color=AMARILLO,
+                 hacia_afuera=False):
         self.clave, self.origen, self.direccion = clave, np.asarray(origen, float), unitario(direccion)
         self.factor, self.minimo, self.maximo, self.caja, self.color = factor, minimo, maximo, caja, color
+        self.hacia_afuera = hacia_afuera   # cara movida: la flecha sigue la normal de la cara, también con valor negativo (P-137)
         self.ident = f"flecha:{clave}"
 
     inclinable = True                  # si apunta a la cámara se dibuja (y se arrastra) inclinada hacia un costado
@@ -305,7 +307,7 @@ class Flecha(Manipulador):
     def _geom(self, g):
         v = g.valor(self.clave) * self.factor
         base = self.origen + self.direccion * v
-        sentido = self.direccion * (-1.0 if v < 0 else 1.0)
+        sentido = self.direccion * (-1.0 if v < 0 and not self.hacia_afuera else 1.0)
         if self.inclinable:
             sentido = dir_visible(g.visor, sentido, base)
         k = g.escala(base)
@@ -320,7 +322,7 @@ class Flecha(Manipulador):
 
     def dibujar(self, g, activo):
         base, sentido, k = self._geom(g)
-        color = AZUL_ACTIVO if activo is not None else self.color
+        color = AMARILLO_ACTIVO if activo is not None else self.color
         cuello = base + sentido * (LARGO_FLECHA - LARGO_PUNTA) * k
         return [("lineas", np.array([base, cuello]), color, 3.0)] + _cono(
             cuello, sentido, LARGO_PUNTA * k, RADIO_PUNTA * k, color)
@@ -337,7 +339,7 @@ class Flecha(Manipulador):
         v0 = g.valor(self.clave)
         if self._de_frente(g):
             est = _empezar_en_pantalla(g, pos, self._geom(g)[0], self._geom(g)[1])
-            return None if est is None else {**est, "v0": v0, "signo": -1.0 if v0 < 0 else 1.0}
+            return None if est is None else {**est, "v0": v0, "signo": -1.0 if v0 < 0 and not self.hacia_afuera else 1.0}
         o, r = g.rayo(pos)
         s0 = self._sobre_eje(o, r, self.origen, self.direccion)
         if s0 is None:
@@ -383,7 +385,7 @@ class AsaRadial(Flecha):
 
     def dibujar(self, g, activo):
         base, _sentido, k = self._geom(g)
-        color = AZUL_ACTIVO if activo is not None else (1.0, 1.0, 1.0)
+        color = AMARILLO_ACTIVO if activo is not None else (1.0, 1.0, 1.0)
         return _disco(g.visor, base, 7.0 * k, color, borde=BORDE_ESFERA)
 
     def tocar(self, g, q):
@@ -399,7 +401,7 @@ class Posicion(Manipulador):
     desplazamiento de un dibujo insertado). Es un aro con cruz de ~15 px de radio de agarre.
     `al_mover(punto3d)` devuelve los valores a escribir en el diálogo ({clave: número o lista})."""
 
-    def __init__(self, ident, punto, normal, al_mover, radio_px=9.0, color=AZUL, candidatos=()):
+    def __init__(self, ident, punto, normal, al_mover, radio_px=9.0, color=AMARILLO, candidatos=()):
         self.punto, self.normal = np.asarray(punto, float), unitario(normal)
         self.al_mover, self.radio_px, self.color = al_mover, radio_px, color
         self.candidatos = [(np.asarray(p, float), t) for p, t in candidatos]   # puntos de enganche (snap)
@@ -414,13 +416,13 @@ class Posicion(Manipulador):
 
     def dibujar(self, g, activo):
         # como Fusion: punto blanco con borde oscuro y una cruz fina sobre el plano
-        color = AZUL_ACTIVO if activo is not None else self.color
+        color = AMARILLO_ACTIVO if activo is not None else self.color
         k = g.escala(self.punto)
         u, v = perpendiculares(self.normal)
         r = self.radio_px * k
         cruz = np.array([self.punto - u * r * 1.6, self.punto + u * r * 1.6,
                          self.punto - v * r * 1.6, self.punto + v * r * 1.6])
-        relleno = AZUL_ACTIVO if activo is not None else (1.0, 1.0, 1.0)
+        relleno = AMARILLO_ACTIVO if activo is not None else (1.0, 1.0, 1.0)
         prims = [("lineas", cruz, color, 1.8)]
         enganche = self._enganchado()
         for p, tipo in self.candidatos:          # marcas de enganche: el centro de la cara, esquinas, puntos medios
@@ -429,7 +431,7 @@ class Posicion(Manipulador):
             kp = g.escala(p)
             prims += _disco(g.visor, p, (4.5 if tipo == "centro" else 3.2) * kp, (1.0, 1.0, 1.0), borde=BORDE_ESFERA)
         if enganche is not None:                 # enganchado: la marca se pone azul y más grande
-            prims += _disco(g.visor, enganche, 6.5 * g.escala(enganche), AZUL_ACTIVO, borde=BORDE_ESFERA)
+            prims += _disco(g.visor, enganche, 6.5 * g.escala(enganche), AMARILLO_ACTIVO, borde=BORDE_ESFERA)
         return prims + _disco(g.visor, self.punto, 5.5 * k, relleno, borde=BORDE_ESFERA)
 
     def tocar(self, g, q):
@@ -472,7 +474,7 @@ class Angulo(Manipulador):
     para un radio constante en pantalla."""
 
     def __init__(self, clave, centro, eje, inicio, radio=None, factor=1.0, minimo=-360.0, maximo=360.0,
-                 caja=True, color=AZUL):
+                 caja=True, color=AMARILLO):
         self.clave, self.centro, self.eje = clave, np.asarray(centro, float), unitario(eje)
         ini = np.asarray(inicio, float)
         ini = ini - self.eje * float(ini @ self.eje)
@@ -495,7 +497,7 @@ class Angulo(Manipulador):
         return self.centro + (self.u * math.cos(t) + self.v * math.sin(t)) * self._r(g)
 
     def dibujar(self, g, activo):
-        color = AZUL_ACTIVO if activo is not None else self.color
+        color = AMARILLO_ACTIVO if activo is not None else self.color
         r, t = self._r(g), self._theta(g)
         asa = self.asa(g)
         k = g.escala(asa)
@@ -790,8 +792,8 @@ class FlechaNormal(Manipulador):
         k = g.escala(self.origen)
         d = dir_visible(g.visor, self.direccion, self.origen)
         cuello = self.origen + d * (LARGO_FLECHA - LARGO_PUNTA) * k
-        return [("lineas", np.array([self.origen, cuello]), AZUL, 3.0)] + _cono(
-            cuello, d, LARGO_PUNTA * k, RADIO_PUNTA * k, AZUL)
+        return [("lineas", np.array([self.origen, cuello]), AMARILLO, 3.0)] + _cono(
+            cuello, d, LARGO_PUNTA * k, RADIO_PUNTA * k, AMARILLO)
 
 
 class AsaCantidad(Manipulador):
@@ -812,7 +814,7 @@ class AsaCantidad(Manipulador):
 
     def dibujar(self, g, activo):
         asa, p, _t = self._asa(g)
-        color = AZUL_ACTIVO if activo is not None else AZUL
+        color = AMARILLO_ACTIVO if activo is not None else AMARILLO
         return ([("lineas", np.array([p, asa]), color, 1.4)]
                 + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
 
@@ -850,7 +852,7 @@ class AsaLista(Manipulador):
 
     def dibujar(self, g, activo):
         asa = self._asa()
-        color = AZUL_ACTIVO if activo is not None else AZUL
+        color = AMARILLO_ACTIVO if activo is not None else AMARILLO
         return ([("lineas", np.array([self.origen, asa]), color, 1.4)]
                 + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
 
@@ -889,7 +891,7 @@ class AsaRuta(Manipulador):
         return np.array([np.interp(t, self.ts, self.puntos_ruta[:, i]) for i in range(3)])
 
     def dibujar(self, g, activo):
-        color = AZUL_ACTIVO if activo is not None else AZUL
+        color = AMARILLO_ACTIVO if activo is not None else AMARILLO
         asa = self.asa(g)
         return ([("lineas", _segs(self.puntos_ruta), color, 1.4)]
                 + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
@@ -980,7 +982,7 @@ class AsaRecorrido(Manipulador):
         return self.recorrido.punto(self._fin(g))
 
     def dibujar(self, g, activo):
-        color = AZUL_ACTIVO if activo is not None else AZUL
+        color = AMARILLO_ACTIVO if activo is not None else AMARILLO
         fin = self._fin(g)
         tramo = np.array([self.recorrido.punto(s) for s in np.linspace(self.s0, fin, 48)])
         asa = self.asa(g)
@@ -1033,7 +1035,7 @@ class CasillasCopias(Manipulador):
         for i, (ident, p, estado) in enumerate(self.items):
             h = self.LADO_PX * g.escala(p)
             if estado == "ok":
-                color = AZUL_ACTIVO if activo == i else (AZUL if ident not in self.originales else (0.55, 0.55, 0.6))
+                color = AMARILLO_ACTIVO if activo == i else (AMARILLO if ident not in self.originales else (0.55, 0.55, 0.6))
             elif estado == "suprimida":
                 color = (0.95, 0.4, 0.35) if activo == i else (0.88, 0.18, 0.15)
             else:
@@ -1297,7 +1299,7 @@ def _choques(rect, huella):
 QSS_CAJA = f"""
 QLineEdit#caja_manipulador {{ background: #ffffff; color: #1d1d1d; border: 1px solid #a8a8a8;
                               padding: 1px 4px; selection-background-color: #2b7de9; }}
-QLineEdit#caja_manipulador:focus {{ border: 1px solid #{''.join(f'{int(c * 255):02x}' for c in AZUL)}; }}
+QLineEdit#caja_manipulador:focus {{ border: 1px solid #{''.join(f'{int(c * 255):02x}' for c in AMARILLO)}; }}
 """
 
 

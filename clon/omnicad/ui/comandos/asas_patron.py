@@ -103,7 +103,7 @@ def _rectangular(ctx, v, centro):
     if d2 is None or np.linalg.norm(d2) < 1e-9:
         return salida
     if _n(v, "n2") > 1:
-        salida.append(mp.Flecha("d2", centro, d2, color=(0.1, 0.62, 0.55) if derivada else mp.AZUL))
+        salida.append(mp.Flecha("d2", centro, d2, color=(0.1, 0.62, 0.55) if derivada else mp.AMARILLO))
     salida.append(_asa_cantidad("n2", centro, d2, _paso(v, "n2", "d2", ctx), _a_los_dos_lados(v, "n2", ctx)))
     return salida
 

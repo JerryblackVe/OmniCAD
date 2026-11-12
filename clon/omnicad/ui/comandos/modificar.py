@@ -615,7 +615,7 @@ class CaraDesfase(Comando):
     def manipuladores(self, ctx, v):
         from .. import manipuladores as mp
         base = _cara_y_normal(ctx, v.get("caras"))
-        return [mp.Flecha("distancia", base[0], base[1])] if base is not None else []
+        return [mp.Flecha("distancia", base[0], base[1], hacia_afuera=True)] if base is not None else []
 
     def desde_op(self, op, ctx):
         return dict(op.p, caras=hits(op.p["caras"], ctx.estado))
@@ -666,7 +666,7 @@ class PulsarTirar(Comando):
         if sel[0]["ref"].get("tipo") == "arista":
             return _flecha_arista(ctx, sel, "distancia")
         base = _cara_y_normal(ctx, sel)
-        return [mp.Flecha("distancia", base[0], base[1])] if base is not None else []
+        return [mp.Flecha("distancia", base[0], base[1], hacia_afuera=True)] if base is not None else []
 
 
 def _tipos_elegidos(v):

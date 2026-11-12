@@ -127,7 +127,7 @@ def _asas_corte(clave_valor):
 def _asas_desfase_superficie(self, ctx, v):
     from .modificar import _cara_y_normal
     base = _cara_y_normal(ctx, v.get("caras"))
-    return [_mp().Flecha("distancia", base[0], base[1])] if base is not None else []
+    return [_mp().Flecha("distancia", base[0], base[1], hacia_afuera=True)] if base is not None else []
 
 
 def _asas_engrosar(self, ctx, v):
