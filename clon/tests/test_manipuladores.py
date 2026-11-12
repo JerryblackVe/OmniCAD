@@ -1056,3 +1056,95 @@ def test_b219_la_flecha_de_profundidad_apunta_adonde_crece_la_pared(app_qt, clav
     if clave == "nervio":
         assert abs(flechas["espesor"].direccion[1]) == pytest.approx(1.0)
     panel.cancelar()
+
+
+def _arrastrar_con_previa(panel, visor, desde, hasta, pasos=12):
+    """Como `_arrastrar`, pero con la vista previa entre movimiento y movimiento (lo que hace el temporizador en la app)."""
+    from PySide6.QtCore import QEvent, Qt
+    desde, hasta = np.asarray(desde, float), np.asarray(hasta, float)
+    _raton(visor, QEvent.MouseButtonPress, desde, Qt.LeftButton, Qt.LeftButton)
+    for k in range(1, pasos + 1):
+        _raton(visor, QEvent.MouseMove, desde + (hasta - desde) * k / pasos, Qt.NoButton, Qt.LeftButton)
+        for _ in range(3):                     # una previa que falla vuelve el valor y pide otra
+            panel._t_previa.stop()
+            panel._calcular_previa()
+            if not panel._t_previa.isActive():
+                break
+    _raton(visor, QEvent.MouseButtonRelease, hasta, Qt.LeftButton, Qt.NoButton)
+
+
+@pytest.mark.parametrize("caso", ["empalme", "vaciado", "pulsar"])
+def test_b345_el_asa_frena_donde_la_pieza_lo_admite(app_qt, caso):
+    """B-345: arrastrada muy pasada del límite (radio de empalme enorme, vaciado más grueso que la caja, pulsar hacia
+    adentro más que la caja), el asa queda en el último valor con la previa sana; tecleado, el mismo valor sí da rojo."""
+    from omnicad.ui.comandos.modificar import Empalme, PulsarTirar, Vaciado
+    doc = _doc_caja()
+    comando, valores, clave, sentido = {
+        "empalme": (Empalme(), {"aristas": [_arista_de_arriba(doc)], "radio": "2 mm"}, "radio", 1),
+        "vaciado": (Vaciado(), {"caras": [_cara_de_arriba(doc)], "espesor_interior": "2 mm"}, "espesor_interior", 1),
+        "pulsar": (PulsarTirar(), {"objetos": [_cara_de_arriba(doc)], "distancia": "-2 mm"}, "distancia", -1),
+    }[caso]
+    panel, visor, estados = _panel(comando, doc, valores)
+    panel._calcular_previa()
+    assert panel._previa_ok
+    medio, d = _sobre_flecha(panel, f"flecha:{clave}")
+    _arrastrar_con_previa(panel, visor, medio, medio + d * 300)
+    valor = panel.ctx.evaluar(panel.valores[clave])
+    panel._calcular_previa()
+    assert panel._previa_ok and estados[-1] is not None, panel.mensaje.text()
+    assert abs(valor) > 2                      # avanzó hasta el límite, no quedó donde arrancó
+    panel.set_valor(clave, f"{sentido * 400} mm")    # tecleado no frena: queda en rojo
+    panel._calcular_previa()
+    assert not panel._previa_ok
+    panel.cancelar()
+
+
+def _cara_lateral(doc):
+    from omnicad.nucleo import referencias as refs
+    from omnicad.ui.comando import hit_desde_ref
+    forma = doc.estado_final.cuerpos["op1.c1"].forma
+    cara = next(c for c in refs.subformas(forma, "cara") if np.allclose(g.centro_masa(c, True), (10, 0, 10)))
+    return hit_desde_ref(refs.referencia("op1.c1", cara, caja=g.caja_envolvente(forma)), doc.estado_final)
+
+
+@pytest.mark.parametrize("clave,campos,asa", [
+    ("chaflan_3d", lambda d: {"aristas": [_arista_de_arriba(d)]}, "distancia"),
+    ("engrosar", lambda d: {"caras": [_cara_de_arriba(d)]}, "espesor"),
+    ("desfase_cara", lambda d: {"caras": [_cara_de_arriba(d)], "distancia": "2 mm"}, "distancia"),
+    ("sup_desfase", lambda d: {"caras": [_cara_de_arriba(d)], "distancia": "2 mm"}, "distancia"),
+    ("desmoldeo", lambda d: {"plano": [_cara_de_arriba(d)], "caras": [_cara_lateral(d)]}, "angulo"),
+])
+@pytest.mark.parametrize("sentido", [1, -1])
+def test_b345_asas_de_los_demas_comandos_dejan_la_previa_sana(app_qt, clave, campos, asa, sentido):
+    """B-345: las flechas y el arco de esos comandos, arrastrados muy lejos hacia los dos lados, terminan con la previa
+    sana (antes: rojo con radio, espesor o desfase de ±400 mm, o un desmoldeo de ±175°)."""
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui import manipuladores as mp
+    doc = _doc_caja()
+    panel, visor, estados = _panel(CATALOGO[clave](), doc, campos(doc))
+    panel._calcular_previa()
+    assert panel._previa_ok, panel.mensaje.text()
+    gestor = panel.manipuladores
+    m = next(x for x in gestor.manips if getattr(x, "clave", None) == asa)
+    if isinstance(m, mp.Angulo):                   # el asa da 17 pasos de 10° alrededor del arco
+        r, t0 = m._r(gestor), m._theta(gestor)
+        puntos = [m.centro + (m.u * np.cos(t0 + sentido * np.radians(10 * k)) + m.v * np.sin(t0 + sentido * np.radians(10 * k))) * r
+                  for k in range(18)]
+        s, ok = gestor.pantalla(puntos)
+        assert ok.all()
+        from PySide6.QtCore import QEvent, Qt
+        _raton(visor, QEvent.MouseButtonPress, s[0], Qt.LeftButton, Qt.LeftButton)
+        for q in s[1:]:
+            _raton(visor, QEvent.MouseMove, q, Qt.NoButton, Qt.LeftButton)
+            for _ in range(3):
+                panel._t_previa.stop()
+                panel._calcular_previa()
+                if not panel._t_previa.isActive():
+                    break
+        _raton(visor, QEvent.MouseButtonRelease, s[-1], Qt.LeftButton, Qt.NoButton)
+    else:
+        medio, d = _sobre_flecha(panel, f"flecha:{asa}")
+        _arrastrar_con_previa(panel, visor, medio, medio + d * 300 * sentido)
+    panel._calcular_previa()
+    assert panel._previa_ok and estados[-1] is not None, (panel.valores[asa], panel.mensaje.text())
+    panel.cancelar()
