@@ -89,7 +89,7 @@ class Seleccion(Campo):
     lo que se puede elegir en la vista según el modo (Extruir sólida no toma curvas sueltas); sin él, `filtros`.
     `desvio(valores, hit, ctx)`: a qué campo pasa lo que se toca y no cumple la condición de este, como `(clave,
     otros_valores)`, o None si entra acá (Extruir: una cara de otro plano es el «Hasta objeto», B-338). Entra sola en
-    ese campo, reemplazando lo que tenía; tocarla otra vez la saca."""
+    ese campo, reemplazando lo que tenía (si ese otro campo admite varios, se suma: B-340); tocarla otra vez la saca."""
 
     def __init__(self, clave, etiqueta, filtros, minimo=1, maximo=1, texto_boton="", oculta=False, sin_resalte=False,
                  filtros_si=None, desvio=None, **kw):
@@ -1454,7 +1454,11 @@ class PanelComando(QFrame):
             tenia = self.valores.get(clave) or []
             misma = buscar_misma(tenia, hit, self.ctx.estado)
             quedan = [h for h in tenia if h is not misma]
-            self.set_valores(dict(otros, **{clave: [hit]}) if len(quedan) == len(tenia) else {clave: quedan})
+            destino_campo = next((c for c in self.campos if c.clave == clave), None)
+            # B-340: un campo de varios que no es este (Repujado: las «Caras») suma lo desviado; si no, lo reemplaza (B-338)
+            suma = destino_campo is not None and destino_campo.maximo is None and clave != campo.clave
+            self.set_valores(dict(otros, **{clave: [*tenia, hit] if suma else [hit]}) if len(quedan) == len(tenia)
+                             else {clave: quedan})
             self.comando.al_cambiar(self, clave)
             return
         if grupo is None and "perfil" in campo.filtros:
