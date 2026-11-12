@@ -1342,6 +1342,44 @@ def _centrar(F1, F2, voltear):
     return _tras(n2 * float((o2 - o1) @ n2)) @ _rotar_a(F1[:3, 2], sentido * n2, o1)
 
 
+def _superficie_tg(e):
+    """Superficie de Tangente: ("plano", normal, punto) o ("cilindro", punto del eje, dirección, radio)."""
+    if e.tipo == "plano" or (e.tipo == "cara" and e.plano is not None):
+        return "plano", _unit(e.plano.normal), np.asarray(e.plano.origen, float)
+    if e.tipo == "cara" and refs.firma_cara(e.forma)["geom"] == "cilindro":
+        p, d = ent.como_eje(e)
+        return "cilindro", np.asarray(p, float), _unit(d), float(refs.firma_cara(e.forma)["radio"])
+    raise ErrorOperacion("Tangente: hoy sirven caras planas o cilíndricas (y planos). Aristas, vértices, esferas y conos todavía no.")
+
+
+def _tangente(e1, e2, voltear):
+    """Movimiento (4x4, mundo) que deja la superficie de `e1` tangente a la de `e2` (ASM-17 › Tangente de Constrain
+    Components, con «All Faces» activo: se usa la superficie entera, no solo la cara). Plano–plano: se apoyan
+    enfrentados; plano–cilindro: el plano roza el cilindro del lado en que ya está; cilindro–cilindro (ejes paralelos):
+    se tocan por fuera. «Voltear» pasa al otro lado (plano–plano al ras, cilindros por dentro). No desliza ni gira más."""
+    s1, s2 = _superficie_tg(e1), _superficie_tg(e2)
+    lado = lambda d: (-1.0 if voltear else 1.0) * (-1.0 if d < 0 else 1.0)  # noqa: E731
+    if s1[0] == s2[0] == "plano":
+        (_, n1, o1), (_, n2, o2) = s1, s2
+        return _tras(n2 * float((o2 - o1) @ n2)) @ _rotar_a(n1, (1.0 if voltear else -1.0) * n2, o1)
+    if s1[0] != s2[0]:
+        pl, cil = (s1, s2) if s1[0] == "plano" else (s2, s1)
+        if abs(float(pl[1] @ cil[2])) > 1e-6:
+            raise ErrorOperacion("Tangente: el eje del cilindro tiene que ser paralelo al plano.")
+        d = float((cil[1] - pl[2]) @ pl[1])                  # eje respecto del plano, con signo
+        t = pl[1] * (float(lado(d) * cil[3]) - d)
+        return _tras(t if s1[0] == "cilindro" else -t)
+    (_, p1, d1, r1), (_, p2, d2, r2) = s1, s2
+    if np.linalg.norm(np.cross(d1, d2)) > 1e-6:
+        raise ErrorOperacion("Tangente: los dos cilindros tienen que tener los ejes paralelos.")
+    w = p2 - p1
+    w = w - float(w @ d1) * d1
+    largo = float(np.linalg.norm(w))
+    if largo < 1e-9:
+        raise ErrorOperacion("Tangente: los cilindros ya son concéntricos; no hay lado desde el cual tocarse.")
+    return _tras(w / largo * (largo - (abs(r1 - r2) if voltear else r1 + r2)))
+
+
 def _direccion_de(e):
     """Dirección unitaria de la geometría para Ángulo: la normal de un plano o cara plana, o el eje de un cilindro, una
     arista o un eje de construcción."""
@@ -1373,16 +1411,16 @@ def _angular(e1, e2, grados, voltear, e_ref=None):
 
 class OpRestriccion(Operacion):
     """ENSAMBLAR › Restricción de componentes [ASM-17, Constrain Components]: de los cuatro tipos de Fusion hoy están
-    Alinear, Ángulo y Centro. Mueve el componente de `ref1` respecto de `ref2` (si el primero está fijo o es la raíz, se mueve
+    Alinear, Ángulo, Centro y Tangente. Mueve el componente de `ref1` respecto de `ref2` (si el primero está fijo o es la raíz, se mueve
     el segundo: «Component 2 moves to Component 1»). `desfase` es la distancia (Alinear) o el ángulo (Ángulo, con
     `ref_angulo` opcional: la arista o el eje que fija el sentido). Centro: `modo1`/`modo2` son «simple» (la cara `ref1`/`ref2`)
-    o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Lo que falta de Fusion: Tangente, filas de
+    o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos y cilindros, siempre «All Faces»). Lo que falta de Fusion: filas de
     varias restricciones (conjuntos), límites de desfase y resolver todas a la vez."""
     TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
     PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None,
               "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None}
     EXPRESIONES = ("desfase",)
-    OPCIONES = {"tipo": {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro"},
+    OPCIONES = {"tipo": {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro", "tangente": "Tangente"},
                 "modo1": {"simple": "Simple", "entre_caras": "Entre dos caras"},
                 "modo2": {"simple": "Simple", "entre_caras": "Entre dos caras"}}
 
@@ -1392,8 +1430,8 @@ class OpRestriccion(Operacion):
 
     def ejecutar(self, estado, ctx):
         p = self.p
-        if p["tipo"] not in ("alinear", "angulo", "centro"):
-            raise ErrorOperacion(f"La restricción «{p['tipo']}» todavía no está: hoy Alinear, Ángulo y Centro.")
+        if p["tipo"] not in ("alinear", "angulo", "centro", "tangente"):
+            raise ErrorOperacion(f"La restricción «{p['tipo']}» no existe: Alinear, Ángulo, Centro o Tangente.")
         if not p["ref1"] or not p["ref2"]:
             raise ErrorOperacion("Elegí la geometría de los dos componentes.")
         exigir_numero(p["desfase"])
@@ -1418,6 +1456,10 @@ class OpRestriccion(Operacion):
         self._usados = (comps | {c2}) - {"", self.id}
         if p["tipo"] == "alinear":
             m = _alinear(e1, e2, ctx.evaluar(p["desfase"]), bool(p["voltear"]))
+        elif p["tipo"] in ("tangente", "centro") and abs(ctx.evaluar(p["desfase"])) > 1e-12:
+            raise ErrorOperacion(f"La restricción «{p['tipo']}» no usa desfase: dejalo en 0.")
+        elif p["tipo"] == "tangente":
+            m = _tangente(e1, e2, bool(p["voltear"]))
         elif p["tipo"] == "centro":
             m = _centrar(_marco_plano(e1, e1b), _marco_plano(e2, e2b), bool(p["voltear"]))
         else:

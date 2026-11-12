@@ -249,7 +249,7 @@ class Union(Comando):
 class RestriccionComponentes(Comando):
     CLAVE, TITULO, ICONO = "restriccion_componentes", "Restricción de componentes", "restriccion_componentes"
     AYUDA = ("Posiciona el componente 1 respecto del 2 (Constrain Components). Alinear: caras coplanares, ejes "
-             "concéntricos o puntos coincidentes. Ángulo: gira el 1 hasta el ángulo pedido con el 2. Centro: deja una cara (o el plano medio de dos) a medio camino de las dos caras del otro. Falta Tangente.")
+             "concéntricos o puntos coincidentes. Ángulo: gira el 1 hasta el ángulo pedido con el 2. Centro: deja una cara (o el plano medio de dos) a medio camino de las dos caras del otro. Tangente: deja tangente la superficie de una cara plana o cilíndrica con la del otro componente.")
     CLASE_OP = OpRestriccion
 
     def verificar(self, ctx):
@@ -261,7 +261,7 @@ class RestriccionComponentes(Comando):
         centro = lambda v: v.get("tipo") == "centro"  # noqa: E731
         entre = lambda n: lambda v: centro(v) and v.get(f"modo{n}") == "entre_caras"  # noqa: E731
         modo = {"simple": "Simple", "entre_caras": "Entre dos caras"}
-        return [Opciones("tipo", "Tipo", {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro"}),
+        return [Opciones("tipo", "Tipo", {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro", "tangente": "Tangente"}),
                 Seleccion("ref1", "Componente 1: geometría", SNAP, ayuda="La cara, arista, vértice, plano, eje o punto que se mueve."),
                 Opciones("modo1", "Componente 1: modo", modo, visible_si=centro,
                          ayuda="Simple: una cara. Entre dos caras: su plano medio. Al menos un componente va «entre dos caras»."),
@@ -293,7 +293,7 @@ class RestriccionComponentes(Comando):
             if extra["modo1"] == extra["modo2"] == "simple":
                 raise ErrorComando("Centro: poné al menos un componente en «Entre dos caras».")
         return self.crear_op(OpRestriccion, v, ctx, tipo=v.get("tipo", "alinear"), ref1=ref1(v, "ref1"), ref2=ref1(v, "ref2"),
-                             desfase=valor if not centro else "0 mm", voltear=bool(v.get("voltear")),
+                             desfase="0 mm" if centro or v.get("tipo") == "tangente" else valor, voltear=bool(v.get("voltear")),
                              ref_angulo=ref1(v, "ref_angulo") if angulo else None, **extra)
 
     def desde_op(self, op, ctx):

@@ -900,10 +900,12 @@ def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | 
              "ángulo pedido en offset (grados): entre caras, el de sus normales; sin angle_reference va de 0 a 180° por el "
              "camino más corto, y con una arista o eje de referencia es con signo alrededor de él. Centro: deja una cara (o el plano medio "
              "de dos caras) del componente 1 a medio camino de las dos caras del componente 2 (o al revés), sin deslizarlo "
-             "en el plano; hace falta geometry1b o geometry2b (al menos un componente «entre dos caras»). Si el componente 1 "
-             "está fijo o es la raíz, se mueve el 2. Falta Tangente. " + _DESC_ORIGEN + "Devuelve el paso y los componentes que se movieron.", modifica=True)
+             "en el plano; hace falta geometry1b o geometry2b (al menos un componente «entre dos caras»). Tangente: deja tangente "
+             "la superficie de geometry1 a la de geometry2 (caras planas o cilíndricas, con la superficie entera: «All Faces»): "
+             "plano–plano enfrentados, plano–cilindro rozando del lado en que ya está, cilindro–cilindro por fuera; flip pasa "
+             "al otro lado. Si el componente 1 está fijo o es la raíz, se mueve el 2. " + _DESC_ORIGEN + "Devuelve el paso y los componentes que se movieron.", modifica=True)
 def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2: str | list[float] | dict,
-                         type: Literal["align", "angle", "center"] = "align", offset: Expr = 0, flip: bool = False,
+                         type: Literal["align", "angle", "center", "tangent"] = "align", offset: Expr = 0, flip: bool = False,
                          body1: str | None = None, body2: str | None = None, name: str | None = None,
                          angle_reference: str | list[float] | dict | None = None, reference_body: str | None = None,
                          geometry1b: str | list[float] | dict | None = None, geometry2b: str | list[float] | dict | None = None,
@@ -911,9 +913,9 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
     """
     geometry1: la geometría del componente que se mueve: cara o arista (selector sobre body1 o id de find_faces / find_edges), vértice [x, y, z], plano, eje o punto de construcción.
     geometry2: la geometría del otro componente (o de la raíz) a la que se alinea la primera.
-    type: tipo de restricción: "align", "angle" o "center".
+    type: tipo de restricción: "align", "angle", "center" o "tangent".
     offset: con align, el desfase en mm (número o expresión): entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje. Con angle, el ángulo en grados.
-    flip: true invierte la orientación que sale sola (la que menos gira el componente): al ras pasa a enfrentadas y al revés.
+    flip: true invierte la orientación que sale sola (la que menos gira el componente): al ras pasa a enfrentadas y al revés; con tangent, pasa al otro lado (planos al ras, cilindros por dentro).
     body1: cuerpo donde se evalúa el selector de geometry1; con un id no hace falta.
     body2: cuerpo donde se evalúa el selector de geometry2.
     name: nombre del paso; vacío = «Restricción<n>».
@@ -924,8 +926,8 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
     body1b: cuerpo donde se evalúa el selector de geometry1b.
     body2b: cuerpo donde se evalúa el selector de geometry2b.
     """
-    if type not in ("align", "angle", "center"):
-        raise error("INVALID_ARGUMENTS", f"La restricción «{type}» todavía no está: hoy 'align', 'angle' y 'center'.")
+    if type not in ("align", "angle", "center", "tangent"):
+        raise error("INVALID_ARGUMENTS", f"La restricción «{type}» no existe: 'align', 'angle', 'center' o 'tangent'.")
     if angle_reference is not None and type != "angle":
         raise error("INVALID_ARGUMENTS", "angle_reference solo se usa con type='angle'.")
     if (geometry1b is not None or geometry2b is not None) and type != "center":
@@ -937,7 +939,7 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
     ref2b = _origen(sesion, geometry2b, body2b)[0] if geometry2b is not None else None
     antes = _matrices(sesion)
     op = OpRestriccion(sesion.doc.nuevo_id(), nombre_paso(sesion, name, "Restricción", OpRestriccion),
-                       tipo={"align": "alinear", "angle": "angulo", "center": "centro"}[type], ref1=ref1, ref2=ref2,
+                       tipo={"align": "alinear", "angle": "angulo", "center": "centro", "tangent": "tangente"}[type], ref1=ref1, ref2=ref2,
                        desfase=_expr(offset), voltear=bool(flip), ref_angulo=ref_angulo, ref1b=ref1b, ref2b=ref2b,
                        modo1="entre_caras" if ref1b else "simple", modo2="entre_caras" if ref2b else "simple")
     resultado = _agregar(sesion, op)

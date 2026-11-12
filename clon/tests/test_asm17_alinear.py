@@ -85,7 +85,6 @@ def test_si_el_componente_1_esta_fijo_se_mueve_el_2(dos):
 def test_errores_claros_y_el_documento_no_cambia(dos):
     s, a, b = dos
     _falla(s, "constrain_components", "OPERATION_FAILED", geometry1=">Z", geometry2="<Z", body1=a, body2=a)   # mismo componente
-    _falla(s, "constrain_components", "INVALID_ARGUMENTS", geometry1=">Z", geometry2=">Z", type="tangent", body1=b, body2=a)
     arista = _ll(s, "find_edges", body=a)["edges"][0]["id"]
     r = _falla(s, "constrain_components", "OPERATION_FAILED", geometry1=">Z", geometry2=arista, body1=b)       # cara con arista
     assert "combinación plano–eje" in r["mensaje"]
@@ -326,3 +325,111 @@ def test_el_comando_de_la_ventana_arma_el_centro_y_se_edita(dos, tmp_path):
         v.close()
         v.deleteLater()
         app.processEvents()
+
+
+# ---------------------------------------------------------------- Tangente
+def _cilindro_y_caja(grounded_cil):
+    """Cilindro A (radio 10, alto 20, eje Z en el origen) y caja B (10×10×10 en 45..55, 25..35, 7..17)."""
+    s = api.Sesion()
+    a = _ll(s, "create_cylinder", radius=10, height=20, name="A")["bodies_created"][0]["id"]
+    b = _ll(s, "create_box", length=10, width=10, height=10, x=50, y=30, z=7, name="B")["bodies_created"][0]["id"]
+    _ll(s, "create_component", bodies=[a], name="CA", grounded=grounded_cil)
+    _ll(s, "create_component", bodies=[b], name="CB", grounded=not grounded_cil)
+    return s, a, b
+
+
+def test_tangente_dos_caras_planas_se_apoyan_enfrentadas_y_flip_las_deja_al_ras(dos):
+    s, a, b = dos
+    args = dict(type="tangent", geometry1="<X", body1=b, geometry2=">X", body2=a)
+    _ll(s, "constrain_components", **args)
+    assert _caja(s, b) == [10, 25, 7, 20, 35, 17]                        # la cara <X de B toca la >X de A, sin correrse en y ni z
+    _ll(s, "undo")
+    _ll(s, "constrain_components", flip=True, **args)
+    assert _caja(s, b)[0::3] == [0, 10]                                  # al ras: B se da vuelta y queda del lado de A
+
+
+@pytest.mark.parametrize("grounded_cil", [True, False])
+def test_tangente_plano_y_cilindro_el_plano_roza_del_lado_en_que_esta(grounded_cil):
+    s, a, b = _cilindro_y_caja(grounded_cil)
+    _ll(s, "constrain_components", type="tangent", geometry1="<X", body1=b, geometry2="%CYLINDER", body2=a)
+    (x0, y0, z0), (x1, y1, z1) = g.caja_envolvente(s.cuerpo(b).forma)
+    (a0, _, _), (a1, _, _) = g.caja_envolvente(s.cuerpo(a).forma)
+    assert (x0 - (a0 + a1) / 2) == pytest.approx(10, abs=1e-6)           # la cara <X de la caja a un radio del eje del cilindro
+    assert (y1 - y0, z1 - z0) == pytest.approx((10, 10), abs=1e-6)
+
+
+def test_tangente_plano_y_cilindro_flip_pasa_al_otro_lado():
+    s, a, b = _cilindro_y_caja(True)
+    _ll(s, "constrain_components", type="tangent", geometry1="<X", body1=b, geometry2="%CYLINDER", body2=a, flip=True)
+    assert _caja(s, b)[0] == pytest.approx(-10)                          # la cara de B en x=-10 con el cilindro del otro lado
+
+
+def test_tangente_dos_cilindros_se_tocan_por_fuera_y_flip_por_dentro():
+    s = api.Sesion()
+    a = _ll(s, "create_cylinder", radius=10, height=20, name="A")["bodies_created"][0]["id"]
+    b = _ll(s, "create_cylinder", radius=4, height=10, x=60, y=-30, name="B")["bodies_created"][0]["id"]
+    _ll(s, "create_component", bodies=[a], name="CA", grounded=True)
+    _ll(s, "create_component", bodies=[b], name="CB")
+    args = dict(type="tangent", geometry1="%CYLINDER", geometry2="%CYLINDER", body1=b, body2=a)
+
+    def centro_b():
+        (x0, y0, _), (x1, y1, _) = g.caja_envolvente(s.cuerpo(b).forma)
+        return ((x0 + x1) / 2, (y0 + y1) / 2)
+
+    u = (2 / 5 ** 0.5, -1 / 5 ** 0.5)
+    _ll(s, "constrain_components", **args)
+    assert centro_b() == pytest.approx((14 * u[0], 14 * u[1]), abs=1e-6)  # distancia entre ejes = 10 + 4, en la misma dirección
+    _ll(s, "undo")
+    _ll(s, "constrain_components", flip=True, **args)
+    assert centro_b() == pytest.approx((6 * u[0], 6 * u[1]), abs=1e-6)   # por dentro: 10 − 4
+
+
+def test_tangente_errores_claros_y_el_documento_no_cambia():
+    s, a, b = _cilindro_y_caja(True)
+    _falla(s, "constrain_components", "OPERATION_FAILED", type="tangent", geometry1=">Z", body1=b, geometry2="%CYLINDER", body2=a)  # plano ⟂ eje
+    arista = _ll(s, "find_edges", body=b)["edges"][0]["id"]
+    _falla(s, "constrain_components", "OPERATION_FAILED", type="tangent", geometry1=arista, geometry2="%CYLINDER", body2=a)         # arista: todavía no
+
+
+def test_el_comando_de_la_ventana_arma_la_tangente_y_se_edita(dos, tmp_path):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.api import selectores as sl
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+
+    s, a, b = dos
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    try:
+        v.resize(1280, 800)
+        v.show()
+        p = v.ejecutar_comando(CATALOGO["restriccion_componentes"]())
+        estado = v.doc.estado_final
+        p.set_valor("tipo", "tangente")
+        assert p.widgets["desfase"].isHidden() and p.widgets["angulo"].isHidden() and p.widgets["ref1b"].isHidden()
+        for campo, sel, cuerpo in (("ref1", "<X", b), ("ref2", ">X", a)):
+            c, cara = sl.elegir(s, sel, "cara", cuerpo)[0]
+            p._activar(next(x for x in p.campos if x.clave == campo))
+            p._elegida(hit_desde_ref(sl.referencia(c, cara), estado))
+        p.aceptar()
+        assert v.panel is None
+        assert _caja(api.Sesion(v.doc), b) == [10, 25, 7, 20, 35, 17]
+        v.editar_operacion(next(o.id for o in v.doc.operaciones if o.TIPO == "restriccion"))
+        assert v.panel.valores["tipo"] == "tangente" and len(v.panel.valores["ref2"]) == 1
+        v.panel.cancelar()
+    finally:
+        if v.panel is not None:
+            v.panel.cancelar()
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()
+        app.processEvents()
+
+
+def test_tangente_y_centro_rechazan_un_desfase_que_no_usan(dos):
+    s, a, b = dos
+    _falla(s, "constrain_components", "OPERATION_FAILED", type="tangent", geometry1="<X", body1=b, geometry2=">X", body2=a, offset=3)
