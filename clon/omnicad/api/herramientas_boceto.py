@@ -1412,8 +1412,8 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
         _exigir_sin_conflicto(sesion, op, previo.solver.ok, "La spline tangente")
         return informe
     if closed and spline_type == "control_points":
-        raise error("INVALID_ARGUMENTS", "Una spline de puntos de control no se puede cerrar (Fusion tampoco lo "
-                    "permite). Para un perfil cerrado usá fit_points con closed=true, o uní los extremos con "
+        raise error("INVALID_ARGUMENTS", "Una spline de puntos de control no se puede cerrar. "
+                    "Para un perfil cerrado usá fit_points con closed=true, o uní los extremos con "
                     "una línea o arco.")
     return _dibujar(sesion, sketch, lambda b: _spline(b, points, spline_type, degree, closed, construction),
                     construccion=construction, central=centerline, anclar=True)
@@ -2032,8 +2032,8 @@ def sketch_from_spec(sesion, plane: str = "XY", entities: list[dict] | None = No
                     and e.get("spline_type") == "control_points"
                     and _booleano(e, i, "closed")):
                 raise error("INVALID_ARGUMENTS",
-                            f"Entidad {i}: una spline de puntos de control no se puede cerrar (Fusion tampoco lo "
-                            "permite). Para un perfil cerrado usá fit_points con closed=true, o uní los extremos "
+                            f"Entidad {i}: una spline de puntos de control no se puede cerrar. "
+                            "Para un perfil cerrado usá fit_points con closed=true, o uní los extremos "
                             "con una línea o arco.")
             partes = _construir_entidad(b, i, e, alias, sesion)
             if central:

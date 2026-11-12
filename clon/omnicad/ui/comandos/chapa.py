@@ -418,7 +418,7 @@ class Replegar(Comando):
 # ---------------------------------------------------------------- patrón plano y DXF
 class PatronPlano(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "patron_plano", "Crear patrón plano", "patron_plano", None
-    AYUDA = ("Crea el patrón plano de la chapa (desarrollo exacto con el factor K). Como en Fusion, se ve en su "
+    AYUDA = ("Crea el patrón plano de la chapa (desarrollo exacto con el factor K). Se ve en su "
              "propio modo (Activar / Terminar patrón plano) y no ocupa lugar en el modelo plegado.")
     CLASE_OP = OpPatronPlano
     verificar = staticmethod(_con_chapa)

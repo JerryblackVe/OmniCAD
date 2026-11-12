@@ -74,7 +74,7 @@ def test_clase_que_ese_tamano_no_tiene_da_un_error_claro():
     d = _datos("1/2-10 ACME")
     with pytest.raises(geo.ErrorGeometria, match="desconocida"):
         tol.limites_rosca("acme", d["diametro"], d["paso"], "7e")
-    with pytest.raises(geo.ErrorGeometria, match="solo|no tiene datos|traen"):
+    with pytest.raises(geo.ErrorGeometria, match="No hay datos de la clase 2G para este tamaño"):
         tol.limites_rosca("acme", 1.0, 0.1, "2G")                         # un tamaño que no existe
 
 

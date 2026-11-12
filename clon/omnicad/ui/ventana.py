@@ -439,7 +439,7 @@ class VentanaPrincipal(QMainWindow):
         A("biblioteca_roscas", "Administrar biblioteca de roscas", self.biblioteca_roscas, None,
           "Consulta las roscas ISO y unificadas disponibles.", "rosca")
         A("operacion_base", "Crear operación base", self.operacion_base, None,
-          "Congela cuerpos elegidos (sin historial), como la operación base de Fusion.", "operacion_base")
+          "Congela cuerpos elegidos (sin historial).", "operacion_base")
         A("nuevo_dibujo", "Nuevo dibujo desde el diseño", lambda: self.abrir_espacio("dibujo"), None,
           "Abre el espacio DIBUJO: vistas 2D, cotas y exportación a PDF/DXF.", "dibujo")
         A("insertar_diseno", "Insertar componente…", self.insertar_diseno, None,
