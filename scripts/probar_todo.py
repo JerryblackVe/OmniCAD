@@ -58,13 +58,9 @@ def pasos(modo, horas):
             ("tests_afectados", [python, _rel(RAIZ / "scripts" / "tests_afectados.py"), "--correr"]),
         ]
     registro = RAIZ / "scripts" / "registro_bugs.py"
-    ventana = [python, _rel(RAIZ / "scripts" / "prueba_ui" / "todo.py")]
-    if sys.platform.startswith("linux"):
-        ventana = ["xvfb-run", "-a", *ventana]
     return [
         ("registro_bugs", [python, _rel(registro)] if registro.exists() else None),
         ("caza_noche", [python, caza, "noche", "--horas", str(horas)]),
-        ("prueba_ventana", ventana),
         ("cierre_completo", ["bash", _rel(RAIZ / "scripts" / "cierre_completo.sh")]),
     ]
 
@@ -123,8 +119,6 @@ def _escribir_informe(carpeta, estado, nombres):
 def _correr(nombre, comando, carpeta):
     log = carpeta / f"{nombre}.log"
     env = os.environ.copy()
-    if nombre == "prueba_ventana":
-        env["OMNICAD_PRUEBA_VENTANA"] = "minimizada"
     inicio = time.monotonic()
     codigo = 0
     with log.open("w", encoding="utf-8") as salida:
@@ -202,7 +196,7 @@ def main(argv=None):
     )
     grupo = analizador.add_mutually_exclusive_group(required=True)
     grupo.add_argument("--rapido", action="store_true", help="caza rápida y tests afectados")
-    grupo.add_argument("--noche", action="store_true", help="registro, caza de noche, ventana y cierre")
+    grupo.add_argument("--noche", action="store_true", help="registro, caza de noche y cierre (que ya corre la ventana)")
     analizador.add_argument("--horas", type=int, default=6, help="horas de la caza de noche (6)")
     analizador.add_argument("--seguir", action="store_true", help="retoma desde el primer paso sin terminar")
     args = analizador.parse_args(argv)
