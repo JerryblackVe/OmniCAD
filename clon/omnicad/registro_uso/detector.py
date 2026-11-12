@@ -162,7 +162,7 @@ def analizar(eventos, umbrales=None):
                 memoria = [(x, y, e) for x, y, e in memoria if t - x <= limite]
         elif tipo == "error":
             origen, categoria = d.get("origen"), d.get("excepcion") or d.get("categoria") or "error"
-            aviso = categoria.lower() == "aviso" or categoria == "AvisoOperacion"
+            aviso = categoria.lower() == "aviso" or categoria in ("AvisoOperacion", "EntradaInvalida")
             sev = "baja" if aviso else "alta"
             que = _que(evento, f"{'Aviso' if aviso else 'Error'} de {origen or 'la app'} ({categoria})")
             _agregar(salida, vistos, ("error", origen, categoria, d.get("comando"), int(t // 60)),

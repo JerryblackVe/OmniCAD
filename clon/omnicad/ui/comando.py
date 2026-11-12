@@ -1792,7 +1792,8 @@ class PanelComando(QFrame):
         tipo = tipo or ("aviso" if aviso else "error")
         if registro_uso.activo is not None and texto and texto != self._uso_error:
             if tipo in ("error", "invalido"):
-                registrar_error(origen="comando", comando=self.comando.CLAVE, mensaje=texto)
+                registrar_error(origen="comando", comando=self.comando.CLAVE, mensaje=texto,
+                                categoria="EntradaInvalida" if tipo == "invalido" else "ErrorComando")
                 registro_uso.activo.emitir("comando_resultado", {"comando": self.comando.CLAVE, "exito": False})
             else:                           # aviso, calculando e instrucción no son fallas (B-332)
                 registrar_aviso(origen="comando", comando=self.comando.CLAVE, mensaje=texto)

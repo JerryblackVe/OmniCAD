@@ -44,14 +44,14 @@ def calculo(funcion):
     return ejecutar
 
 
-def error(excepcion=None, *, origen="operacion", comando="", mensaje=""):
+def error(excepcion=None, *, origen="operacion", comando="", mensaje="", categoria="ErrorComando"):
     """Categoría, mensaje y traza del proyecto (archivo:línea); sin código fuente, rutas de la PC ni variables."""
     if registro.activo is None:
         return
     traza = _traza(excepcion) if excepcion is not None else []
     texto = str(excepcion) if excepcion is not None else mensaje
     registro.activo.emitir("error", {"origen": origen, "comando": comando,
-        "excepcion": type(excepcion).__name__ if excepcion is not None else "ErrorComando",
+        "excepcion": type(excepcion).__name__ if excepcion is not None else categoria,
         "mensaje": texto, "traza": traza})
 
 
