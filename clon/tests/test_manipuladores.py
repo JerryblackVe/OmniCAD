@@ -1089,3 +1089,15 @@ def test_b343_las_asas_de_la_conicidad_frenan_donde_el_perfil_se_cierra(app_qt):
     panel._calcular_previa()
     assert panel._previa_ok, panel.mensaje.text()
     panel.cancelar()
+
+
+def test_b361_los_radios_de_conicidad_se_miden_una_vez_por_perfil(monkeypatch):
+    """B-361: sumar un perfil mide solo el nuevo (con 29 perfiles, medirlos todos en cada clic sumaba 0,7 s)."""
+    from omnicad.nucleo import solidos_crear as sc
+    from omnicad.ui.comandos import solido
+    medidas, original = [], sc.radios_conicidad
+    monkeypatch.setattr(sc, "radios_conicidad", lambda caras: medidas.append(len(caras)) or original(caras))
+    a, b = (g.caras(g.caja(10, 10, 10, (x, 0, 0)))[0] for x in (0, 20))
+    assert solido._radios_conicidad([a]) == solido._radios_conicidad([a, b])
+    solido._radios_conicidad([a, b])
+    assert medidas == [1, 1]

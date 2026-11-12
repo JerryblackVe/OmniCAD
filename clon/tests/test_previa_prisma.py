@@ -261,3 +261,19 @@ def test_aceptar_editar_deshacer_y_rehacer_dan_el_solido_del_kernel(ventana):
     assert _volumen_final(v) == pytest.approx(area * 10, rel=1e-9)
     v.doc.rehacer()
     assert _volumen_final(v) == pytest.approx(area * 25, rel=1e-9)
+
+
+def test_b360_soltar_la_flecha_rearma_el_tope_del_angulo(ventana):
+    """B-360: con la plantilla de P-99 armada, soltar la flecha (o teclear la distancia) rearma las asas: el tope del
+    ángulo de conicidad es el de la distancia nueva, −atan(15/d) en el rectángulo de 40 × 30, y no el de la vieja."""
+    import math
+    v, p = ventana
+    _arrastrar_a(p, 60)
+    _arrastrar_a(p, 200)
+    assert p._prisma_previa is not None
+    p.manipuladores.soltar()
+    angulo = next(m for m in p.manipuladores.manips if getattr(m, "clave", None) == "conicidad")
+    assert angulo.minimo == pytest.approx(-math.degrees(math.atan(15 / 200)), rel=1e-4)
+    p.set_valor("distancia", "100 mm")             # teclear con la plantilla todavía armada
+    angulo = next(m for m in p.manipuladores.manips if getattr(m, "clave", None) == "conicidad")
+    assert angulo.minimo == pytest.approx(-math.degrees(math.atan(15 / 100)), rel=1e-4)

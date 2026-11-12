@@ -952,4 +952,29 @@ def test_b343_radios_de_la_conicidad_y_el_limite_del_kernel():
     with pytest.raises(g.ErrorGeometria):
         sc._prisma(rect(0, 0, 189.3, 24.492), (0, 0, 1), limite + 0.02, -37.0)
     con_hueco = g.caras(g.booleano(rect(0, 0, 100, 60), rect(20, 20, 10, 6), "cortar"))[0]
-    assert sc.radios_conicidad([con_hueco]) == pytest.approx((30.0, 3.0), abs=1e-4)
+    assert sc.radios_conicidad([con_hueco]) == pytest.approx((10.0, 3.0), abs=1e-3)   # la pared de 20 entre hueco y borde
+
+
+def _poligono(*puntos):
+    p = BRepBuilderAPI_MakePolygon()
+    for x, y in puntos:
+        p.Add(gp_Pnt(x, y, 0))
+    p.Close()
+    return BRepBuilderAPI_MakeFace(p.Wire(), True).Face()
+
+
+@pytest.mark.parametrize("nombre, puntos, angulo, radio", [
+    ("pesa: la barra de 2 se cierra", [(0, 0), (20, 0), (20, 9), (40, 9), (40, 0), (60, 0), (60, 20), (40, 20),
+                                       (40, 11), (20, 11), (20, 20), (0, 20)], -37.0, 1.0),
+    ("U: la ranura de 2 se cierra", [(0, 0), (16, 0), (16, 14), (9, 14), (9, 2), (7, 2), (7, 14), (0, 14)], 10.0, 1.0),
+])
+def test_b360_perfiles_no_convexos_frenan_donde_se_cierra_lo_mas_angosto(nombre, puntos, angulo, radio):
+    """B-360: con perfiles no convexos se cierra primero lo más angosto, no el mayor círculo: el kernel extruye justo
+    antes del tope y falla justo después."""
+    cara = _poligono(*puntos)
+    r = sc.radios_conicidad([cara])[0 if angulo < 0 else 1]
+    assert r == pytest.approx(radio, abs=1e-3), nombre
+    limite = r / math.tan(math.radians(abs(angulo)))
+    assert g.es_valida(sc._prisma(cara, (0, 0, 1), limite - 0.01, angulo))
+    with pytest.raises(g.ErrorGeometria):
+        sc._prisma(cara, (0, 0, 1), limite + 0.05, angulo)
