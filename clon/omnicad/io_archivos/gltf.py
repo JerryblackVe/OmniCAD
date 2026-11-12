@@ -171,9 +171,17 @@ def armar_gltf(cuerpos, *, propiedades=None, deflexion=0.02, nombre=NOMBRE_APP):
     return datos, bytes(buffer), total
 
 
+def _json_bytes(datos):
+    """JSON compacto en UTF-8, escapando los sustitutos sueltos si los hay."""
+    try:
+        return json.dumps(datos, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    except UnicodeEncodeError:
+        return json.dumps(datos, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+
+
 def a_glb(datos, buffer):
     """Bytes del contenedor GLB: cabecera de 12 bytes, chunk JSON (relleno con espacios) y chunk BIN (con ceros)."""
-    texto = json.dumps(datos, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    texto = _json_bytes(datos)
     texto += b" " * (-len(texto) % 4)
     buffer = bytes(buffer) + b"\0" * (-len(buffer) % 4)
     partes = [struct.pack("<II", len(texto), CHUNK_JSON), texto]
@@ -193,5 +201,5 @@ def escribir_gltf(cuerpos, ruta, *, propiedades=None, deflexion=0.02, nombre=Non
         ruta.write_bytes(a_glb(datos, buffer))
     else:
         datos["buffers"][0]["uri"] = "data:application/octet-stream;base64," + base64.b64encode(buffer).decode("ascii")
-        ruta.write_text(json.dumps(datos, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        ruta.write_bytes(_json_bytes(datos))
     return total

@@ -90,6 +90,16 @@ def test_proyecto_guardar_y_abrir(doc, tmp_path):
     assert proyecto.leer_miniatura(ruta) == b"\x89PNG fake"
 
 
+def test_b303_guardar_y_abrir_nombre_con_sustituto_suelto(tmp_path):
+    """B-303: el nombre del manifiesto se escapa sin perderlo al reabrir el proyecto."""
+    doc = Documento()
+    doc.nombre = "a\ud800b"
+    ruta = proyecto.guardar(doc, tmp_path / "sustituto.omnicad")
+    with zipfile.ZipFile(ruta) as z:
+        assert json.loads(z.read("manifiesto.json"))["nombre"] == doc.nombre
+    assert proyecto.abrir(ruta).nombre == doc.nombre
+
+
 def test_proyecto_del_nombre_anterior_se_abre_y_conserva_su_extension(doc, tmp_path):
     """Un .fclone guardado cuando el programa se llamaba FusionClone se abre, y al guardarlo no cambia de archivo."""
     nuevo = proyecto.guardar(doc, tmp_path / "pieza")
