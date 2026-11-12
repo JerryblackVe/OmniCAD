@@ -1463,12 +1463,11 @@ class OpRestriccion(Operacion):
     `ref_angulo` opcional: la arista o el eje que fija el sentido). Centro: `modo1`/`modo2` son «simple» (la cara `ref1`/`ref2`)
     o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos, cilindros, esferas, conos, toros, aristas rectas o circulares y vértices; `todas_caras` apagado exige que las caras se toquen). `filas` suma más restricciones entre los mismos
     dos componentes (el conjunto de la tabla de Fusion, cada una con los campos de arriba y su `nombre_fila`): se aplican en orden y se repite
-    hasta que todas se cumplen a la vez; si no convergen, error que nombra la fila en conflicto. Lo que falta de Fusion: límites de
-    desfase y resolver todas a la vez con las uniones."""
+    hasta que todas se cumplen a la vez; si no convergen, error que nombra la fila en conflicto. Límites de desfase (Alinear y Ángulo): `minimo`/`maximo` y `apoyo`. Lo que falta de Fusion: resolver todas a la vez con las uniones."""
     TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
     PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None,
-              "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None, "todas_caras": True, "nombre_fila": "", "filas": []}
-    EXPRESIONES = ("desfase",)
+              "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None, "todas_caras": True, "nombre_fila": "", "minimo": "", "maximo": "", "apoyo": False, "filas": []}
+    EXPRESIONES = ("desfase", "minimo", "maximo")
     OPCIONES = {"tipo": {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro", "tangente": "Tangente"},
                 "modo1": {"simple": "Simple", "entre_caras": "Entre dos caras"},
                 "modo2": {"simple": "Simple", "entre_caras": "Entre dos caras"}}
@@ -1479,7 +1478,7 @@ class OpRestriccion(Operacion):
 
     def expresiones(self):
         """El desfase de la fila principal y el de cada fila extra (un parámetro que solo ellas usen también recalcula el paso)."""
-        return super().expresiones() + [f["desfase"] for f in self.p.get("filas") or [] if isinstance(f.get("desfase"), str)]
+        return super().expresiones() + [f[k] for f in self.p.get("filas") or [] for k in self.EXPRESIONES if isinstance(f.get(k), str)]
 
     def _filas(self):
         """La restricción principal y las `filas` extra, cada una con todos sus campos."""
@@ -1541,9 +1540,9 @@ class OpRestriccion(Operacion):
             raise ErrorOperacion(f"El componente a mover está en un grupo rígido con «{nombre}», que está fijo.")
         self._usados = (comps | {c2}) - {"", self.id}
         if p["tipo"] == "alinear":
-            m = _alinear(e1, e2, ctx.evaluar(p["desfase"]), bool(p["voltear"]))
-        elif p["tipo"] in ("tangente", "centro") and abs(ctx.evaluar(p["desfase"])) > 1e-12:
-            raise ErrorOperacion(f"La restricción «{p['tipo']}» no usa desfase: dejalo en 0.")
+            m = _alinear(e1, e2, self._valor(ctx, p), bool(p["voltear"]))
+        elif p["tipo"] in ("tangente", "centro") and (abs(ctx.evaluar(p["desfase"])) > 1e-12 or str(p.get("minimo") or p.get("maximo") or "").strip()):
+            raise ErrorOperacion(f"La restricción «{p['tipo']}» no usa desfase ni límites: dejalos vacíos.")
         elif p["tipo"] == "tangente":
             m = _tangente(e1, e2, bool(p["voltear"]))
             if not p.get("todas_caras", True):
@@ -1552,9 +1551,34 @@ class OpRestriccion(Operacion):
             m = _centrar(_marco_plano(e1, e1b), _marco_plano(e2, e2b), bool(p["voltear"]))
         else:
             e_ref = _resolver(p["ref_angulo"], estado) if p.get("ref_angulo") else None
-            grados = ctx.evaluar(p["desfase"], ANGULO)
+            grados = self._valor(ctx, p, ANGULO)
             m = _angular(e1, e2, -grados if invertido and e_ref is not None else grados, bool(p["voltear"]), e_ref)
         return m, comps, orden
+
+    @staticmethod
+    def _valor(ctx, p, unidad=None):
+        """El desfase de la fila ya dentro de sus límites («Offset Limits»: `minimo` y `maximo`, vacío = sin tope). Fuera del rango
+        se recorta y avisa, como en las uniones; con `apoyo` («Use Offset as Rest») es un error: el reposo tiene que estar dentro."""
+        evaluar = (lambda t: ctx.evaluar(t, unidad)) if unidad else ctx.evaluar
+        valor = evaluar(p["desfase"])
+        topes = [evaluar(p[k]) if str(p.get(k) or "").strip() else None for k in ("minimo", "maximo")]
+        if topes == [None, None]:
+            return valor
+        if p["tipo"] == "angulo" and not p.get("ref_angulo"):
+            raise ErrorOperacion("Los límites de un ángulo piden primero una referencia de ángulo (una arista recta o un eje).")
+        lo, hi = topes
+        if lo is not None and hi is not None and lo > hi:
+            raise ErrorOperacion(f"El límite mínimo ({lo:g}) es mayor que el máximo ({hi:g}).")
+        acotado = valor if lo is None else max(valor, lo)
+        acotado = acotado if hi is None else min(acotado, hi)
+        if abs(acotado - valor) > 1e-9:
+            if p.get("apoyo"):
+                raise ErrorOperacion(f"«Usar desfase como apoyo»: el desfase ({valor:g}) tiene que estar dentro de los límites "
+                                     f"({'' if lo is None else f'{lo:g}'} a {'' if hi is None else f'{hi:g}'}).")
+            aviso = f"El desfase {valor:g} queda fuera de los límites: se usa {acotado:g}."
+            if aviso not in ctx.avisos:             # un conjunto de filas recalcula cada fila varias veces
+                ctx.aviso(aviso)
+        return acotado
 
     @staticmethod
     def _tocan_las_caras(e1, e2, m):
