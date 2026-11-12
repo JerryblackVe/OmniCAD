@@ -277,3 +277,46 @@ def test_b360_soltar_la_flecha_rearma_el_tope_del_angulo(ventana):
     p.set_valor("distancia", "100 mm")             # teclear con la plantilla todavía armada
     angulo = next(m for m in p.manipuladores.manips if getattr(m, "clave", None) == "conicidad")
     assert angulo.minimo == pytest.approx(-math.degrees(math.atan(15 / 100)), rel=1e-4)
+
+
+def test_extruir_una_cara_que_pasa_sola_a_unir_arrastra_el_prisma(tmp_path, monkeypatch):
+    """B-359: Extruir la cara de arriba de un sólido pasa sola a «Unir» (B-338), y eso apagaba el prisma: cada movimiento
+    de la flecha hacía la unión del kernel (0,8 s por cuadro con una placa de 231 caras). Ahora arrastra el prisma y al
+    soltar la unión sale del kernel."""
+    from omnicad.nucleo import referencias as refs
+    from omnicad.timeline.operaciones import OpPrimitiva
+    app = QApplication.instance() or QApplication([])
+    doc = Documento()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="40", largo="30", alto="10"))
+    cid = next(iter(doc.estado_final.cuerpos))
+    forma = doc.estado_final.cuerpos[cid].forma
+    arriba = geo.caja_envolvente(forma)[1][2]
+    v = VentanaPrincipal(doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    v.show()
+    try:
+        p = v.ejecutar_comando(Extruir())
+        cara = next(c for c in refs.subformas(forma, "cara") if abs(refs.firma(c)["centro"][2] - arriba) < 1e-6)
+        p._elegida(hit_desde_ref(refs.referencia(cid, cara, forma), p.ctx.estado))
+        p.set_valor("distancia", "5 mm")
+        p._t_previa.stop()
+        p._calcular_previa()
+        assert p._previa_ok and p.valores["operacion"] == "unir"
+        llamadas, original = [], v.doc.previsualizar
+        monkeypatch.setattr(v.doc, "previsualizar", lambda *a, **k: llamadas.append(a[0].p["operacion"]) or original(*a, **k))
+        for valor in (8, 12, 20):
+            _arrastrar_a(p, valor)
+            nuevos = [c for k, c in v.visor._estado.cuerpos.items() if k not in p.ctx.estado.cuerpos]
+            assert p._previa_ok and len(nuevos) == 1 and rc.es_malla(nuevos[0].forma)
+        assert p._prisma_previa is not None and llamadas == ["nuevo"]     # la plantilla, una vez; ninguna unión
+        p.manipuladores.soltar()
+        p._t_previa.stop()
+        p._calcular_previa()
+        assert p._previa_ok and p.valores["operacion"] == "unir"
+        unido = v.visor._estado.cuerpos[cid].forma
+        assert not rc.es_malla(unido) and geo.volumen_exacto(unido) == pytest.approx(40 * 30 * 30, rel=1e-6)
+        p.cancelar()
+    finally:
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()
+        app.processEvents()
