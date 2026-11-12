@@ -39,6 +39,7 @@ class RegistroVentana(QObject):
         self.preferencia = ventana.prefs["general/registro_uso"]
         self._encendido = False
         self._ultima_accion = ""
+        self.herramienta_api = ""
         self._anterior_excepcion = None
         self._anterior_qt = None
         self._barra = None
@@ -230,7 +231,9 @@ class RegistroVentana(QObject):
         demora, self._ultimo = (ahora - self._ultimo - 0.05) * 1000, ahora
         comando = self._comando()
         if demora > 250:
-            r.emitir("bloqueo_ui", {"duracion_ms": demora, "comando": comando, "accion": self._ultima_accion})
+            herramienta = getattr(self, "herramienta_api", "")
+            accion = f"api.{herramienta}" if herramienta else self._ultima_accion
+            r.emitir("bloqueo_ui", {"duracion_ms": demora, "comando": comando, "accion": accion})
         p = self.ventana.panel
         cambio = getattr(p, "_uso_cambio", None)
         if cambio is not None and ahora - cambio > 20 and self._duda != cambio:
