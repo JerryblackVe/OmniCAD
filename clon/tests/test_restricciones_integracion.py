@@ -59,8 +59,9 @@ def test_s12_api_acota_proyeccion_de_una_linea(tipo, delta):
     assert abs(q[delta] - p[delta]) == pytest.approx(25, abs=1e-6)
 
 
-@pytest.mark.parametrize(("tipo", "ubicacion"), [("distancia_h", (35, 80)), ("distancia_v", (80, 40))])
-@pytest.mark.xfail(strict=True, reason="S12: una línea sola en la ventana siempre crea distancia alineada")
+# H-106: frente a la línea, alineada; más allá de un extremo, arriba/abajo horizontal y al costado vertical.
+@pytest.mark.parametrize(("tipo", "ubicacion"), [("distancia_h", (35, 80)), ("distancia_v", (80, 40)),
+                                                 ("distancia", (20, 50))])
 def test_s12_ventana_acota_proyeccion_de_una_linea(lienzo, tipo, ubicacion):
     lz = lienzo
     linea = lz.b.agregar_linea((20, 20), (50, 60))
@@ -68,6 +69,9 @@ def test_s12_ventana_acota_proyeccion_de_una_linea(lienzo, tipo, ubicacion):
     lz.set_herramienta("cota")
     _clic(lz, (35, 40))
     assert lz.picks == [linea]
+    pos = lz.a_px(*ubicacion)
+    QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseMove, pos, pos, Qt.NoButton, Qt.NoButton, Qt.NoModifier))
+    assert lz._cota_viva().tipo == tipo                  # la vista previa muestra la misma que se crea
     _clic(lz, ubicacion)
     assert lz.entrada is not None
     campo = lz.entrada.campos[0]

@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 240: Abierto 157 · Parcial 49 · Bloqueado 30 · Sin verificar 4 (2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 239: Abierto 156 · Parcial 49 · Bloqueado 30 · Sin verificar 4 (2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -96,11 +96,10 @@ Abierto 16 · Parcial 1 · Sin verificar 1.
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
-Abierto 2 (H-106 de la auditoría de restricciones del 2026-11-06; H-110 de la fase 2 de CREAR y MODIFICAR). Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada.
+Abierto 1 (H-110 de la fase 2 de CREAR y MODIFICAR). Plan por fases: [plan_boceto.md](../plan_boceto.md). Cada ID incluye su herramienta MCP/CLI, su test y la doc regenerada.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| H-106 | Boceto › la herramienta Cota de la ventana no crea una cota horizontal o vertical de una línea sola | Abierto | Media | Con una línea (20,20)-(50,60) elegida, ubicar la cota arriba o al costado y teclear 25 crea siempre `distancia` (largo alineado); la API ya acepta `distancia_h`/`distancia_v` con `[línea]`. La ayuda de Fusion dice «Single lines … create linear dimensions» pero no explica la elección horizontal/vertical: confirmarla en Fusion antes de implementar (`ui/editor_boceto.py:4716-4717`, `:4743-4745`) | `tests/test_restricciones_integracion.py::test_s12_ventana_acota_proyeccion_de_una_linea` (xfail estricto) | 2026-11-06 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 

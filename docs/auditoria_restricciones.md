@@ -462,7 +462,7 @@ evidencia (test, salida real, archivo:línea); qué cambiaste; la salida REAL de
 
 Estado general: **COMPLETO**. Las fases A a E están cerradas y commiteadas en `main`. La fase E (escenarios combinados) la
 hizo el coordinador el 2026-11-07, porque Sol seguía sin cupo: `clon/tests/test_restricciones_escenarios.py`, 19 escenarios
-verdes y uno `xfail` estricto (B-231). Lo que queda abierto tiene su fila en `docs/seguimiento/` (H-106; B-231 se cerró el 2026-11-12).
+verdes y uno `xfail` estricto (B-231). Lo que queda abierto tiene su fila en `docs/seguimiento/` (ninguna: H-106 y B-231 se cerraron el 2026-11-12).
 
 1. **Restricciones auditadas:** 16 tipos de restricción y 7 de cota
    ([inventario](auditorias/restricciones_inventario_2026-11-06.md)).
@@ -490,7 +490,7 @@ verdes y uno `xfail` estricto (B-231). Lo que queda abierto tiene su fila en `do
    - `api/herramientas_boceto.py`: descripciones y `_cota_valida`.
    - `docs/agentes/herramientas.md`, regenerada.
 5. **Faltantes:** H-106 (cota horizontal o vertical de una línea sola en la ventana), con un test `xfail` estricto. No se
-   implementó: falta confirmar en Fusion cómo elige entre horizontal y vertical.
+   implementó: falta confirmar en Fusion cómo elige entre horizontal y vertical (se cerró el 2026-11-12: ver el Registro).
 6. **Mejoras de solver e interfaz:**
    - Un solo orden canónico para la ventana, la API, el MCP y la CLI.
    - El origen se puede elegir en todas las herramientas.
@@ -511,7 +511,7 @@ verdes y uno `xfail` estricto (B-231). Lo que queda abierto tiene su fila en `do
 9. **Comparación con Fusion:** tabla en el inventario, § 4. SOLIDWORKS: sin dato comprobado. No se afirma equivalencia completa.
 10. **Pendientes y limitaciones verificadas:**
     - B-231 (era S5): el desfase de una spline fija con su cota deja 48 GDL en vez de 0 (caso mínimo en su fila).
-    - H-106.
+    - H-106 (cerrado el 2026-11-12).
     - La pieza de ventana (P-61).
     - De noche:
       - `tests_afectados.py` elige 363 de 385 archivos, así que corresponde la suite completa.
@@ -521,6 +521,6 @@ verdes y uno `xfail` estricto (B-231). Lo que queda abierto tiene su fila en `do
 11. **Rendimiento:** 300 rectángulos con cota tardan 0,778 s en `main` y 0,769 s en la rama, igual que antes. En el peor
     caso, con los 300 grupos moviéndose, pasa de 0,924 s a 1,108 s (+20 %), anotado con un comentario `shortcut:` en
     `_preferir_traslacion`.
-12. **Estado final:** B-223 a B-230 están cerrados. En seguimiento quedan H-106 y B-231 (cerrado el 2026-11-12). Evidencias: los commits de la tabla
+12. **Estado final:** B-223 a B-230 están cerrados. En seguimiento quedaban H-106 y B-231 (los dos cerrados el 2026-11-12). Evidencias: los commits de la tabla
     del punto 3 y los informes de cada corrida en `D:/PROGRAMA-r*/evidencias` (ya borrados con sus worktrees; el resumen
     de cada uno está en el Registro).

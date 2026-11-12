@@ -4748,6 +4748,18 @@ class Lienzo(QWidget):
         medio = self.a_px((x1 + x2) / 2, (y1 + y2) / 2)
         return "distancia_h" if abs(pos.y() - medio.y()) > abs(pos.x() - medio.x()) else "distancia_v"
 
+    def _tipo_linea(self, pos):
+        """H-106: tipo de la cota de una línea sola según dónde esté `pos` (px). Con el cursor frente a la línea (su
+        proyección cae dentro del largo), alineada; más allá de un extremo, horizontal o vertical como con dos puntos."""
+        p1, p2 = (self.b.coords(p) for p in self.b.curvas[self.picks[0]].puntos())
+        dx, dy = p2[0] - p1[0], p2[1] - p1[1]
+        largo = math.hypot(dx, dy)
+        c = self.a_mm(pos)
+        if (self.opcion_cota == "alineada" or abs(dx) < 1e-6 or abs(dy) < 1e-6
+                or 0 <= ((c[0] - p1[0]) * dx + (c[1] - p1[1]) * dy) / largo <= largo):
+            return "distancia"
+        return "distancia_h" if abs(c[1] - (p1[1] + p2[1]) / 2) > abs(c[0] - (p1[0] + p2[0]) / 2) else "distancia_v"
+
     def _cota_viva(self):
         """Cota provisional que se dibuja: la que se está escribiendo o, con la herramienta Cota y una línea (o
         dos puntos) ya elegidos, la que sigue al cursor hasta el clic que la ubica."""
@@ -4762,7 +4774,7 @@ class Lienzo(QWidget):
         if self._esperando_ubicacion:
             tipo = self._tipo_dos_puntos(self._pos_cursor)
         elif len(self.picks) == 1 and self.b.tipo_de(self.picks[0]) == "linea":
-            tipo = "distancia"
+            tipo = self._tipo_linea(self._pos_cursor)
         else:
             return None
         previa = Cota(-1, tipo, list(self.picks), "", {})
@@ -4790,7 +4802,7 @@ class Lienzo(QWidget):
             return
         if ent is None or ent == primero:
             if t1 == "linea":
-                self._abrir_cota("distancia", [primero], pos)
+                self._abrir_cota(self._tipo_linea(pos), [primero], pos)
             return
         t2 = self.b.tipo_de(ent)
         if t1 == "punto" and t2 == "punto":
