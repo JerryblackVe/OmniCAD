@@ -66,8 +66,22 @@ def escribir_step(forma, ruta):
         raise ErrorGeometria(f"No se pudo escribir el archivo STEP: {ruta}")
 
 
+def _comprobar_lectura(ruta, formato):
+    """Ensaya la lectura completa en el hijo antes de exponer la app a un archivo ajeno (B-160)."""
+    from . import aislado     # perezoso: aislado importa intercambio
+
+    if aislado.EN_HIJO:
+        return
+    try:
+        aislado.correr_json("ensayar_lectura", {"ruta": os.path.abspath(ruta), "formato": formato},
+                           aislado.TOPE_ENSAYO_LECTURA)
+    except aislado.TareaAislada as e:
+        raise ErrorGeometria(f"El archivo {formato.split('_')[0]} está dañado o no se pudo leer con seguridad: {e}.") from e
+
+
 def _leer_control(ruta, clase, formato):
     """Lectura STEP/IGES con el lector de control de OpenCascade (misma mecánica, cambia la clase y el formato)."""
+    _comprobar_lectura(ruta, formato)
     r = clase()
     if r.ReadFile(str(ruta)) != IFSelect_RetDone:
         raise ErrorGeometria(f"No se pudo leer el archivo {formato}: {ruta}")
@@ -219,6 +233,7 @@ def leer_step_estructura(ruta):
     con las formas ya ubicadas en el mundo, en mm; `color` es (r, g, b) 0..1 o None y `componente` el id
     del componente que la contiene ("" = raíz). Si el archivo tiene un solo ensamblaje raíz, ese es el diseño:
     sus hijos quedan en la raíz (como en Fusion, el componente raíz no es un componente más)."""
+    _comprobar_lectura(ruta, "STEP_ESTRUCTURA")
     doc = TDocStd_Document(TCollection_ExtendedString("XmlXCAF"))
     r = STEPCAFControl_Reader()
     r.SetNameMode(True)

@@ -37,6 +37,7 @@ _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 UMBRAL_PREVUELO_PARAMETROS = 60       # pasos no suprimidos anteriores al marcador
 TOPE_PREVUELO_PARAMETROS = 900        # segundos, incluida la reconstrucción del documento
 TOPE_PREVUELO_ABRIR = 900             # segundos para el ensayo de apertura de un archivo grande (B-48)
+TOPE_ENSAYO_LECTURA = 900             # segundos para ensayar la importación STEP/IGES completa (B-160)
 TOPE_MEMORIA_TRABAJADOR = 2048        # MB: pasado esto se cierra el trabajador al contestar (su memoria se libera con él)
 PACIENCIA_PREVIA = 10                 # segundos para una previa vieja antes de cerrar al trabajador (rehacer el documento cuesta más)
 EN_HIJO = False
@@ -157,6 +158,14 @@ def _prevuelo_abrir(ruta):
         return _empaquetar(doc)
 
 
+def _ensayar_lectura(ruta, formato):
+    """B-160: ensaya también la transferencia; ReadFile puede aceptar un STEP que cae al construir la forma."""
+    with _motor.fijar_motor("opencascade"):
+        {"STEP": intercambio.leer_step, "STEP_ESTRUCTURA": intercambio.leer_step_estructura,
+         "IGES": intercambio.leer_iges}[formato](ruta)
+    return {"ok": True}
+
+
 def _recalcular_documento(receta, sin_memoria=False):
     """`sin_memoria`: «Calcular todo» ejecuta de verdad cada paso, también los que el trabajador tiene en memoria."""
     from ..timeline.calculo_aislado import _empaquetar
@@ -190,7 +199,8 @@ def _con_forma(tarea, ruta, **args):
 
 _TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros, "prevuelo_cambio": _prevuelo_cambio,
                 "prevuelo_abrir": _prevuelo_abrir, "recalcular_documento": _recalcular_documento,
-                "previa_visual": _previa_visual, "solape_herramienta": _solape_herramienta, "con_forma": _con_forma}
+                "previa_visual": _previa_visual, "solape_herramienta": _solape_herramienta, "con_forma": _con_forma,
+                "ensayar_lectura": _ensayar_lectura}
 
 
 def _a_json(o):
