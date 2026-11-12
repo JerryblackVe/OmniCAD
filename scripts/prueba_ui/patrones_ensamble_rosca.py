@@ -109,6 +109,8 @@ def mas_opciones(p):
 
 # ---------------------------------------------------------------- PAT-2 y PAT-3: trayectoria
 def trayectoria():
+    from omnicad.ui.comandos.asas_patron import AZUL_DESTINO, ROJO_FANTASMA
+
     n0, v0 = A.n_ops(v), vols()
     p = A.abrir(v, "patron_ruta")
     A.elegir(p, "cuerpos", A.hit_cuerpo(v, caja))
@@ -148,8 +150,11 @@ def trayectoria():
             clic_vista(xy[0])
         previa(p)
         prims = p.comando.previa_vista(p.ctx, p.valores, p.ultima_op) or []
+        colores = [primitiva[2] for primitiva in prims]
         A.reg(AR + " · trayectoria", "PAT-3: la copia suprimida se ve como una silueta roja en la vista",
-              p.valores.get("suprimir") == "1" and len(prims) == 1 and prims[0][2] == (0.88, 0.18, 0.15), str(p.valores.get("suprimir")))
+              p.valores.get("suprimir") == "1" and colores.count(ROJO_FANTASMA) == 1
+              and colores.count(AZUL_DESTINO) == len(colores) - 1,
+              f"suprimir={p.valores.get('suprimir')}, colores={colores}")
         A.foto(v, "patron_ruta_inicio_porcentaje")
     aceptar(p)
     nuevos = [k for k in vols() if k not in v0]
