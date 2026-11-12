@@ -17,6 +17,7 @@ avisa lo que vence ese día o ya venció.
 | AG-7 | [2.º] Auditoría, reparación y paridad del sistema CONSTRUIR (SCU, planos, ejes y puntos de construcción) en todos los espacios contra Fusion 360; prompt en `docs/auditoria_construir.md` | A definir | 2026-11-07 | Programada |
 | AG-8 | [1.º] PRIORIDAD ALTA (Gerardo, 2026-11-09: «la app no es usable por la lentitud»). Auditoría de tiempos de TODA la app: banco de tiempos de cada herramienta, latencia en la ventana, ranking y arreglos de la más lenta a la más rápida; prompt en `docs/auditoria_tiempos.md` | A definir | 2026-11-08 | Programada |
 | AG-9 | [8.º] Rediseño de «Apariencia y materiales» (color, aspecto, material físico, texturas PBR, colocación, «En uso»): primero una maqueta de la interfaz que Gerardo aprueba, después las fases; no es prioritario; prompt en `docs/apariencia_materiales.md` | A definir | 2026-11-09 | Programada |
+| AG-10 | Auditoría completa de Sólido › Crear con Fusion abierto, herramienta por herramienta (clics, asas, topes, campos, previa, velocidad). Insumo: los reportes de la PC del 2026-11-12 en `evidencias/reportes_pc/`, empezando por la Bobina (`2026-11-12_bobina/`: centro sin elegir y bobina corrida, valor y previa que no coinciden, eje con Plano XZ, congelamientos de 0,8–4 s, asas de Ángulo y círculo base, las 4 secciones) | A definir | 2026-11-12 | Programada |
 
 ## Orden y reparto de las auditorías
 
