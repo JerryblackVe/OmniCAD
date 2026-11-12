@@ -147,7 +147,7 @@ class MapaDesviacion(_Analisis):
         except ErrorComando:
             return
         p = self.params(v, ctx)
-        datos = analisis_vista.calcular(self.TIPO_ANALISIS, p, ctx.estado, ctx.doc.propiedades)
+        datos = analisis_vista.calcular(self.TIPO_ANALISIS, p, ctx.estado, ctx.ventana.propiedades_analisis(ctx.estado))
         analisis_vista.aplicar(ctx.ventana.visor, datos)
         cuerpo = p["cuerpos"][0]
         vertices, valores = datos["valores"][cuerpo]

@@ -1237,12 +1237,16 @@ class VentanaPrincipal(QMainWindow):
                                   [(i, nombres.get(i, n), "punto_vertice") for i, (_p, n) in estado_nav.puntos.items()],
                                   list(self.doc.vistas))
 
+    def propiedades_analisis(self, estado):
+        """Las propiedades del documento con lo que la vista no muestra (ojo, componente o carpeta Cuerpos ocultos), para
+        que un análisis no corte ni pinte lo oculto (B-311; B-357: también la previa de los comandos)."""
+        return dict(self.doc.propiedades, __navegador__={"ocultos": sorted(self._ocultos_efectivos(estado))})
+
     def aplicar_analisis(self, estado=None):
         """Dibuja los análisis visibles del navegador (sección, cebra, curvatura…) sobre el modelo."""
         from . import analisis_vista
         estado = estado or self._estado_visible()
-        # B-311: lo que la vista no muestra (ojo, componente o carpeta Cuerpos ocultos) tampoco se corta ni se pinta
-        propiedades = dict(self.doc.propiedades, __navegador__={"ocultos": sorted(self._ocultos_efectivos(estado))})
+        propiedades = self.propiedades_analisis(estado)
         resultados, centros = [], []
         for nombre, a in self.doc.analisis.items():
             if not a.get("visible", True):
