@@ -249,7 +249,7 @@ class Union(Comando):
 class RestriccionComponentes(Comando):
     CLAVE, TITULO, ICONO = "restriccion_componentes", "Restricción de componentes", "restriccion_componentes"
     AYUDA = ("Posiciona el componente 1 respecto del 2 (Constrain Components). Alinear: caras coplanares, ejes "
-             "concéntricos o puntos coincidentes. Ángulo: gira el 1 hasta el ángulo pedido con el 2. Centro: deja una cara (o el plano medio de dos) a medio camino de las dos caras del otro. Tangente: deja tangente la superficie de una cara plana o cilíndrica con la del otro componente.")
+             "concéntricos o puntos coincidentes. Ángulo: gira el 1 hasta el ángulo pedido con el 2. Centro: deja una cara (o el plano medio de dos) a medio camino de las dos caras del otro. Tangente: deja tangente una cara, arista o vértice con la superficie del otro componente.")
     CLASE_OP = OpRestriccion
 
     def verificar(self, ctx):
@@ -275,6 +275,8 @@ class RestriccionComponentes(Comando):
                           ayuda="Entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje."),
                 Expresion("angulo", "Ángulo", "0 deg", ANGULO, visible_si=angular,
                           ayuda="El ángulo entre las dos geometrías (entre caras, el de sus normales)."),
+                Casilla("todas_caras", "Todas las caras", True, visible_si=lambda v: v.get("tipo") == "tangente",
+                        ayuda="Activo: la superficie entera de la cara. Apagado: las dos caras tienen que llegar a tocarse."),
                 Casilla("voltear", "Voltear", ayuda="Invierte la orientación que sale sola (al ras ↔ enfrentadas; en Ángulo, da vuelta la geometría 1).")]
 
     def construir(self, v, ctx):
@@ -283,7 +285,7 @@ class RestriccionComponentes(Comando):
         angulo, centro = v.get("tipo") == "angulo", v.get("tipo") == "centro"
         valor = (v.get("angulo") if angulo else v.get("desfase")) or ("0 deg" if angulo else "0 mm")
         ctx.evaluar(valor, ANGULO) if angulo else ctx.evaluar(valor)
-        extra = {}
+        extra = {"todas_caras": bool(v.get("todas_caras", True))} if v.get("tipo") == "tangente" else {}
         if centro:
             for n in "12":
                 extra["modo" + n] = v.get("modo" + n) or "simple"

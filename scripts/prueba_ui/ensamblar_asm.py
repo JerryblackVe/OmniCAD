@@ -31,6 +31,15 @@ bloque = L("create_box", length=10, width=10, height=10, x=-300, y=200)["bodies_
 L("create_component", bodies=[base, poste], name="Base", grounded=True)
 L("create_component", bodies=[brazo], name="Brazo")
 L("create_component", bodies=[bloque], name="Bloque")
+# piezas de las restricciones de componentes (ASM-17): un bloque fijo, una caja libre, un cilindro y una esfera
+rfijo = L("create_box", length=40, width=40, height=20, x=150, y=300)["bodies_created"][0]["id"]
+rcaja = L("create_box", length=20, width=20, height=10, x=150, y=300, z=40)["bodies_created"][0]["id"]
+rcil = L("create_cylinder", radius=8, height=30, x=150, y=-100)["bodies_created"][0]["id"]
+resf = L("create_sphere", radius=8, x=250, y=0, z=40)["bodies_created"][0]["id"]
+L("create_component", bodies=[rfijo], name="RFijo", grounded=True)
+rtoca = L("create_box", length=40, width=20, height=10, x=160, y=-60, z=10)["bodies_created"][0]["id"]   # llega a tocar al cilindro
+for _cid, _n in ((rcaja, "RCaja"), (rcil, "RCil"), (resf, "REsf"), (rtoca, "RToca")):
+    L("create_component", bodies=[_cid], name=_n)
 app, v = A.iniciar(s.doc)
 
 
@@ -406,18 +415,129 @@ def posiciones():
 run("anclar, posición inicial, capturar y revertir", posiciones)
 
 
+# 6b. Restricción de componentes (ASM-17): Alinear, Ángulo, Centro y Tangente, con captura de cada una --------------------------
+def curva(cid, geom):
+    """Una cara curva (cilindro o esfera) del cuerpo elegida con un clic real: se prueban puntos de su superficie hasta que el visor
+    devuelve esa cara (el centro de masa de una cara curva cae adentro del cuerpo)."""
+    from omnicad.nucleo import consultas, referencias as refs
+    forma = v.doc.estado_final.cuerpos[cid].forma
+    for c in refs.subformas(forma, "cara"):
+        f = refs.firma_cara(c)
+        if f["geom"] != geom:
+            continue
+        if geom == "esfera":
+            o, r = consultas.centro_esfera(c), f["radio"]
+        else:
+            o, r = np.array(f["centro"]), f["radio"]
+        for d in ((1, -1, 0), (1, 0, 0), (0, -1, 0), (1, -1, 1), (-1, 0, 0), (0, 1, 0), (0, 0, 1)):
+            hit = A._clic_en(v, o + r * np.array(d) / np.linalg.norm(d), {"cara"})
+            if hit and hit["ref"].get("cuerpo") == cid and hit["ref"]["firma"]["geom"] == geom:      # no la tapa que tapa el clic
+                return [hit]
+    return [None]
+
+
+def restriccion(etiqueta, sel, vals, foto, comprueba, rechaza=None):
+    """Abre el panel, elige con el visor, pone los valores, saca la captura de la vista previa, acepta, mide y deshace."""
+    p = A.abrir(v, "restriccion_componentes")
+    if p is None:
+        A.reg(AR, f"restricción {etiqueta}: abre el panel", False, "no abrió")
+        return
+    for k, val in vals.items():
+        p.set_valor(k, val)
+    A.esperar(80)
+    for campo, hs in sel:
+        if not hs or any(h is None for h in hs):
+            A.reg(AR, f"restricción {etiqueta}: elegir «{campo}» con el visor", False, "el visor no devolvió la entidad")
+            p.cancelar()
+            return
+        A.elegir(p, campo, *hs)
+    p._t_previa.stop()
+    p._calcular_previa()
+    A.esperar(150)
+    texto = p.mensaje.text() if p.mensaje.isVisible() else ""
+    if rechaza:
+        A.reg(AR, f"restricción {etiqueta}: se rechaza con un aviso claro", not p._previa_ok and rechaza in texto, texto)
+        A.foto(v, f"restriccion_{foto}")
+        p.cancelar()
+        return
+    A.reg(AR, f"restricción {etiqueta}: vista previa", p._previa_ok, texto)
+    A.foto(v, f"restriccion_{foto}")
+    if not p._previa_ok:
+        p.cancelar()
+        return
+    aceptar(p)
+    A.reg(AR, f"restricción {etiqueta}: resultado", comprueba(), f"RCaja={caja(rcaja)} REsf={caja(resf)} RCil={caja(rcil)}")
+    L("undo")
+
+
+def restricciones():
+    cara = lambda cid, n: [A.hit_cara(v, cid, normal=n)]  # noqa: E731
+    restriccion("Alinear (tapa de la caja al ras de la del bloque)",
+                [("ref1", cara(rcaja, (0, 0, 1))), ("ref2", cara(rfijo, (0, 0, 1)))], {"tipo": "alinear"}, "alinear",
+                lambda: abs(caja(rcaja)[5] - 20.0) < 0.01)
+    restriccion("Ángulo (30° entre la tapa de la caja y la del bloque)",
+                [("ref1", cara(rcaja, (0, 0, 1))), ("ref2", cara(rfijo, (0, 0, 1)))], {"tipo": "angulo", "angulo": "30 deg"}, "angulo",
+                lambda: caja(rcaja)[5] - caja(rcaja)[2] > 10.5)
+    p = A.abrir(v, "restriccion_componentes")
+    p.set_valor("tipo", "centro")
+    p.set_valor("modo2", "entre_caras")
+    A.esperar(100)
+    et = {c[0]: c[3] for c in A.etiquetas(p)}
+    A.reg(AR, "restricción Centro: aparecen los modos y la segunda cara, no el desfase ni el ángulo",
+          et["modo1"] and et["modo2"] and et["ref2b"] and not et["ref1b"] and not et["desfase"] and not et["angulo"], str(et))
+    v.visor.vista("izquierda")                                   # las caras -X solo se ven desde ese lado; las +X, desde el otro
+    A.esperar(200)
+    A.elegir(p, "ref1", *cara(rcaja, (-1, 0, 0)))
+    A.elegir(p, "ref2", *cara(rfijo, (-1, 0, 0)))
+    v.visor.vista("derecha")
+    A.esperar(200)
+    A.elegir(p, "ref2b", *cara(rfijo, (1, 0, 0)))
+    v.visor.vista("iso")
+    A.esperar(200)
+    p._t_previa.stop()
+    p._calcular_previa()
+    A.esperar(150)
+    A.reg(AR, "restricción Centro: vista previa", p._previa_ok, p.mensaje.text() if p.mensaje.isVisible() else "")
+    A.foto(v, "restriccion_centro")
+    aceptar(p)
+    A.reg(AR, "restricción Centro: la cara de la caja queda en el plano medio del bloque (x=150)", abs(caja(rcaja)[0] - 150) < 0.01, f"RCaja={caja(rcaja)}")
+    L("undo")
+    restriccion("Tangente (esfera sobre la tapa del bloque)",
+                [("ref1", curva(resf, "esfera")), ("ref2", cara(rfijo, (0, 0, 1)))], {"tipo": "tangente"}, "tangente_esfera",
+                lambda: abs(caja(resf)[2] - 20.0) < 0.01)
+    restriccion("Tangente (caja contra el cilindro)",
+                [("ref1", cara(rcaja, (0, -1, 0))), ("ref2", curva(rcil, "cilindro"))], {"tipo": "tangente"}, "tangente_cilindro",
+                lambda: abs(caja(rcaja)[1] - (-100 + 8)) < 0.01 or abs(caja(rcaja)[1] - (-100 - 8)) < 0.01)
+    restriccion("Tangente con «Todas las caras» apagado (la caja no llega a tocar el cilindro)",
+                [("ref1", cara(rcaja, (0, -1, 0))), ("ref2", curva(rcil, "cilindro"))], {"tipo": "tangente", "todas_caras": False},
+                "tangente_una_cara_lejos", None, rechaza="Todas las caras")
+    restriccion("Tangente con «Todas las caras» apagado (la caja toca al cilindro)",
+                [("ref1", cara(rtoca, (0, -1, 0))), ("ref2", curva(rcil, "cilindro"))], {"tipo": "tangente", "todas_caras": False},
+                "tangente_una_cara", lambda: abs(caja(rtoca)[1] - (-100 + 8)) < 0.01 or abs(caja(rtoca)[1] - (-100 - 8)) < 0.01)
+
+
+run("restricción de componentes", restricciones)
+
+
 # 7. Ventana chica ---------------------------------------------------------------------------------------------------------
 def chica():
     for (w, h) in ((1024, 640), (821, 520)):
         v.resize(w, h)
         A.esperar(300)
-        for clave in ("union", "posicion_inicial", "vinculo_movimiento", "origen_union"):
+        for clave in ("union", "posicion_inicial", "vinculo_movimiento", "origen_union", "restriccion_componentes"):
             p = A.abrir(v, clave)
             if p is None:
                 continue
             A.esperar(100)
             r = p.geometry()
             A.reg(AR, f"ventana {w}x{h}: el panel «{clave}» entra en el visor (Aceptar/Cancelar a la vista)", v.area.rect().contains(r), f"panel={r} área={v.area.rect()}")
+            if clave == "restriccion_componentes":
+                p.set_valor("tipo", "centro")
+                p.set_valor("modo1", "entre_caras")
+                p.set_valor("modo2", "entre_caras")
+                A.esperar(100)
+                A.reg(AR, f"ventana {w}x{h}: Centro con las dos segundas caras sigue entrando", v.area.rect().contains(p.geometry()), f"panel={p.geometry()}")
+                A.foto(v, f"restriccion_chica_{w}x{h}")
             if clave == "union":
                 p.set_valor("tipo", "planar")
                 A.esperar(100)

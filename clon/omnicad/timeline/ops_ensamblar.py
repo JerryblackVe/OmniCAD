@@ -1343,41 +1343,74 @@ def _centrar(F1, F2, voltear):
 
 
 def _superficie_tg(e):
-    """Superficie de Tangente: ("plano", normal, punto) o ("cilindro", punto del eje, dirección, radio)."""
+    """Superficie de Tangente: ("plano", normal, punto), ("cil", punto del eje, dirección, radio), ("esf", centro, radio) o
+    ("cono", vértice, eje, semiángulo). Una arista recta es un cilindro de radio 0 y un vértice o punto una esfera de radio 0."""
     if e.tipo == "plano" or (e.tipo == "cara" and e.plano is not None):
         return "plano", _unit(e.plano.normal), np.asarray(e.plano.origen, float)
-    if e.tipo == "cara" and refs.firma_cara(e.forma)["geom"] == "cilindro":
+    if e.tipo == "cara" and e.forma is not None:
+        from ..nucleo import consultas
+        f = refs.firma_cara(e.forma)
+        if f["geom"] == "cilindro":
+            p, d = ent.como_eje(e)
+            return "cil", np.asarray(p, float), _unit(d), float(f["radio"])
+        if f["geom"] == "esfera":
+            return "esf", consultas.centro_esfera(e.forma), float(f["radio"])
+        if f["geom"] == "cono":
+            v, d, ang = consultas.cono_de(e.forma)
+            return "cono", v, _unit(d), ang
+    if e.tipo == "eje" or (e.tipo in ("arista", "curva_boceto") and e.forma is not None
+                           and refs.firma_arista(e.forma)["geom"] == "linea"):
         p, d = ent.como_eje(e)
-        return "cilindro", np.asarray(p, float), _unit(d), float(refs.firma_cara(e.forma)["radio"])
-    raise ErrorOperacion("Tangente: hoy sirven caras planas o cilíndricas (y planos). Aristas, vértices, esferas y conos todavía no.")
+        return "cil", np.asarray(p, float), _unit(d), 0.0
+    if e.tipo in ("vertice", "punto", "punto_boceto") and e.punto is not None:
+        return "esf", np.asarray(e.punto, float), 0.0
+    raise ErrorOperacion("Tangente: elegí una cara plana, cilíndrica, cónica o esférica, un plano, una arista recta, un eje o un vértice.")
 
 
 def _tangente(e1, e2, voltear):
     """Movimiento (4x4, mundo) que deja la superficie de `e1` tangente a la de `e2` (ASM-17 › Tangente de Constrain
-    Components, con «All Faces» activo: se usa la superficie entera, no solo la cara). Plano–plano: se apoyan
-    enfrentados; plano–cilindro: el plano roza el cilindro del lado en que ya está; cilindro–cilindro (ejes paralelos):
-    se tocan por fuera. «Voltear» pasa al otro lado (plano–plano al ras, cilindros por dentro). No desliza ni gira más."""
+    Components): se usa la superficie entera (la prueba de «Todas las caras» apagado la hace quien llama). Plano–plano:
+    enfrentados; plano–cilindro, –esfera o –cono: el plano roza del lado en que ya está (el cono, por su vértice y solo si
+    el plano ya tiene su inclinación); cilindro y esfera entre sí (ejes paralelos): por fuera. «Voltear» pasa al otro lado
+    (planos al ras, curvas por dentro). Una arista recta cuenta como cilindro de radio 0 y un vértice como esfera de radio 0.
+    No desliza ni gira más."""
     s1, s2 = _superficie_tg(e1), _superficie_tg(e2)
     lado = lambda d: (-1.0 if voltear else 1.0) * (-1.0 if d < 0 else 1.0)  # noqa: E731
     if s1[0] == s2[0] == "plano":
         (_, n1, o1), (_, n2, o2) = s1, s2
         return _tras(n2 * float((o2 - o1) @ n2)) @ _rotar_a(n1, (1.0 if voltear else -1.0) * n2, o1)
-    if s1[0] != s2[0]:
-        pl, cil = (s1, s2) if s1[0] == "plano" else (s2, s1)
-        if abs(float(pl[1] @ cil[2])) > 1e-6:
-            raise ErrorOperacion("Tangente: el eje del cilindro tiene que ser paralelo al plano.")
-        d = float((cil[1] - pl[2]) @ pl[1])                  # eje respecto del plano, con signo
-        t = pl[1] * (float(lado(d) * cil[3]) - d)
-        return _tras(t if s1[0] == "cilindro" else -t)
-    (_, p1, d1, r1), (_, p2, d2, r2) = s1, s2
-    if np.linalg.norm(np.cross(d1, d2)) > 1e-6:
-        raise ErrorOperacion("Tangente: los dos cilindros tienen que tener los ejes paralelos.")
-    w = p2 - p1
-    w = w - float(w @ d1) * d1
-    largo = float(np.linalg.norm(w))
+    if "plano" in (s1[0], s2[0]):
+        pl, cv = (s1, s2) if s1[0] == "plano" else (s2, s1)
+        n, o = pl[1], pl[2]
+        if cv[0] == "cono":
+            if abs(abs(float(n @ cv[2])) - math.sin(cv[3])) > 1e-4:
+                raise ErrorOperacion("Tangente: el plano no tiene la inclinación del cono (su normal forma con el eje 90° menos el "
+                                     "semiángulo). Giralo antes con Ángulo.")
+            centro, radio = cv[1], 0.0
+        elif cv[0] == "cil":
+            if abs(float(n @ cv[2])) > 1e-6:
+                raise ErrorOperacion("Tangente: el eje del cilindro (o la arista) tiene que ser paralelo al plano.")
+            centro, radio = cv[1], cv[3]
+        else:
+            centro, radio = cv[1], cv[2]
+        d = float((centro - o) @ n)                          # centro (o eje) respecto del plano, con signo
+        t = n * (float(lado(d) * radio) - d)
+        return _tras(t if s1[0] != "plano" else -t)
+    if "cono" in (s1[0], s2[0]):
+        raise ErrorOperacion("Tangente: un cono solo se apoya en un plano o en una cara plana.")
+    (c1, r1), (c2, r2) = ((s[1], s[3] if s[0] == "cil" else s[2]) for s in (s1, s2))
+    ejes = [s[2] for s in (s1, s2) if s[0] == "cil"]
+    if len(ejes) == 2 and np.linalg.norm(np.cross(ejes[0], ejes[1])) > 1e-6:
+        raise ErrorOperacion("Tangente: los dos cilindros (o aristas) tienen que tener los ejes paralelos.")
+    w = c2 - c1
+    if ejes:
+        w = w - float(w @ ejes[0]) * ejes[0]
+    largo, objetivo = float(np.linalg.norm(w)), (abs(r1 - r2) if voltear else r1 + r2)
     if largo < 1e-9:
-        raise ErrorOperacion("Tangente: los cilindros ya son concéntricos; no hay lado desde el cual tocarse.")
-    return _tras(w / largo * (largo - (abs(r1 - r2) if voltear else r1 + r2)))
+        if objetivo < 1e-9:
+            return np.identity(4)
+        raise ErrorOperacion("Tangente: las dos ya son concéntricas; no hay lado desde el cual tocarse.")
+    return _tras(w / largo * (largo - objetivo))
 
 
 def _direccion_de(e):
@@ -1414,11 +1447,11 @@ class OpRestriccion(Operacion):
     Alinear, Ángulo, Centro y Tangente. Mueve el componente de `ref1` respecto de `ref2` (si el primero está fijo o es la raíz, se mueve
     el segundo: «Component 2 moves to Component 1»). `desfase` es la distancia (Alinear) o el ángulo (Ángulo, con
     `ref_angulo` opcional: la arista o el eje que fija el sentido). Centro: `modo1`/`modo2` son «simple» (la cara `ref1`/`ref2`)
-    o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos y cilindros, siempre «All Faces»). Lo que falta de Fusion: filas de
+    o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos, cilindros, esferas, conos, aristas rectas y vértices; `todas_caras` apagado exige que las caras se toquen). Lo que falta de Fusion: filas de
     varias restricciones (conjuntos), límites de desfase y resolver todas a la vez."""
     TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
     PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None,
-              "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None}
+              "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None, "todas_caras": True}
     EXPRESIONES = ("desfase",)
     OPCIONES = {"tipo": {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro", "tangente": "Tangente"},
                 "modo1": {"simple": "Simple", "entre_caras": "Entre dos caras"},
@@ -1460,6 +1493,8 @@ class OpRestriccion(Operacion):
             raise ErrorOperacion(f"La restricción «{p['tipo']}» no usa desfase: dejalo en 0.")
         elif p["tipo"] == "tangente":
             m = _tangente(e1, e2, bool(p["voltear"]))
+            if not p.get("todas_caras", True):
+                self._tocan_las_caras(e1, e2, m)
         elif p["tipo"] == "centro":
             m = _centrar(_marco_plano(e1, e1b), _marco_plano(e2, e2b), bool(p["voltear"]))
         else:
@@ -1467,6 +1502,18 @@ class OpRestriccion(Operacion):
             grados = ctx.evaluar(p["desfase"], ANGULO)
             m = _angular(e1, e2, -grados if invertido and e_ref is not None else grados, bool(p["voltear"]), e_ref)
         _mover_componentes(estado, comps, m)
+
+    @staticmethod
+    def _tocan_las_caras(e1, e2, m):
+        """«Todas las caras» apagado: tangente solo con la cara elegida del componente 2, así que la 1, ya movida, tiene que
+        llegar a tocarla (los planos y ejes de construcción no tienen borde y siempre tocan)."""
+        if e1.forma is None or e2.forma is None:
+            return
+        from ..nucleo import consultas
+        lejos = consultas.distancia(geo.transformar(e1.forma, m), e2.forma)
+        if lejos > 1e-4:
+            raise ErrorOperacion(f"Tangente: con «Todas las caras» apagado las dos selecciones tienen que tocarse y quedan a "
+                                 f"{lejos:.3f} mm. Activá «Todas las caras» o acercá los componentes.")
 
     def _segundas_caras(self, estado, e1, e2, c1, c2):
         """(e1b, e2b) de Centro: la segunda cara de cada componente que está en «entre_caras» (None si es «simple»).
