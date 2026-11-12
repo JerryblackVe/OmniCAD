@@ -370,6 +370,13 @@ def _tol():
     return tolerancias
 
 
+def punto_a_la_pose_actual(estado, cuerpo_id, punto, pose):
+    """B-178: `punto` (mundo) se dio con el componente del cuerpo en `pose`; el mismo punto del componente hoy."""
+    comp = estado.cuerpo(cuerpo_id).componente
+    ahora = np.asarray(estado.componentes.get(comp, {}).get("matriz", np.identity(4).tolist()), float)
+    return (ahora @ np.linalg.inv(np.asarray(pose, float)) @ np.append(np.asarray(punto, float), 1.0))[:3]
+
+
 class OpAgujero(_OpCrear):
     """Agujero de Fusion [GUID-0DFCBD4F, GUID-3A76B269]: posición en puntos de boceto, vértices, puntos sobre una
     cara o por referencias (dos aristas y dos distancias); simple, abocardado o avellanado; extensión distancia,
@@ -410,9 +417,7 @@ class OpAgujero(_OpCrear):
                 raise ErrorOperacion("El agujero va sobre una cara plana.")
             p = np.asarray(d["punto"], float)
             if d.get("pose") is not None:         # B-178: el punto se dio con el componente en esa pose; lo sigue
-                comp = estado.cuerpo(d["cara"]["cuerpo"]).componente
-                ahora = np.asarray(estado.componentes.get(comp, {}).get("matriz", np.identity(4).tolist()), float)
-                p = (ahora @ np.linalg.inv(np.asarray(d["pose"], float)) @ np.append(p, 1.0))[:3]
+                p = punto_a_la_pose_actual(estado, d["cara"]["cuerpo"], p, d["pose"])
             salida.append((e.plano.origen + (p - e.plano.origen) - e.plano.normal * float((p - e.plano.origen) @
                                                                                           e.plano.normal),
                            -e.plano.normal))

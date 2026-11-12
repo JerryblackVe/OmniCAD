@@ -161,11 +161,19 @@ class NuevoComponente(Comando):
         # B-123: la pose se congela contra el estado en que se eligieron los cuerpos. Al editar, el de antes del
         # paso; un paso nuevo vale el actual (el estado del panel puede haber quedado viejo si cambió el documento).
         estado = ctx.estado if ctx.op is not None else ctx.doc.estado_final
+        pose_padre = pose_de_componente(estado, v.get("padre") or "").tolist()
+        if ctx.op is not None and v.get("pose_padre") is not None:
+            try:        # B-353: con el mismo padre, la pose guardada vale: recalcularla con el padre ya movido separaba al hijo
+                antes = componente_por_ref(estado, ctx.op.p["padre"]) if ctx.op.p.get("padre") else ""
+            except ErrorOperacion:
+                antes = None
+            if antes == (v.get("padre") or ""):
+                pose_padre = v["pose_padre"]
         return self.crear_op(OpComponente, v, ctx, cuerpos=cuerpos,
                              fijo=v["fijo"], padre=v.get("padre") or "",
                              version_pose=_version(ctx, OpComponente, "version_pose"),
                              pose=pose_de_reasignar(estado, cuerpos).tolist(),
-                             pose_padre=pose_de_componente(estado, v.get("padre") or "").tolist())
+                             pose_padre=pose_padre)
 
     def desde_op(self, op, ctx):
         try:
