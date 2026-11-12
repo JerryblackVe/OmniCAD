@@ -191,6 +191,7 @@ def test_ningun_valor_por_defecto_usa_un_enum_de_ocp():
     assert not malos, malos
 
 
+@requiere_omnikernel
 def test_nucleo_importa_sin_opencascade():
     """Todo `nucleo/` carga sin OpenCascade (B-218: `editar_cara` importaba OCP al cargarse): con OmniKernel y OCP
     bloqueado ningún módulo puede importar OCP al cargarse. El patrón es `_iniciar_opencascade` + `_motor.registrar`."""
