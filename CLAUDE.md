@@ -162,6 +162,12 @@
 - Instalar el toolchain de Rust/maturin requiere permiso del usuario.
 
 ## Recurso indispensable: documentación oficial de Fusion 360 (con imágenes)
+- **Fusion de verdad, desde la VPS (2026-11-12).** Fusion solo corre en la PC de Gerardo y se abre solo para comparar. Su MCP
+  (`fusion360`, `http://127.0.0.1:27182/mcp`) ya está en `~/.claude.json` de la VPS y llega por un túnel que corre EN LA PC:
+  `ssh -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -R 127.0.0.1:27182:127.0.0.1:27182 mosos@34.66.139.76`
+  (nunca abrir el puerto en el firewall de Google). Prueba: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:27182/mcp`
+  (000 = túnel caído o Fusion cerrado). Abrir Fusion y prender el túnel se pide al chat de la PC o a Gerardo; con la PC
+  apagada, la sesión anota el caso para comparar después y sigue. Para saber cómo funciona un comando alcanza la ayuda de abajo.
 - Está descargada completa en **`docs/fusion_docs/`** (3473 artículos distintos, 8659 imágenes; 4,4 GB; **no se sube
   a git**, está en `.gitignore`). Es la fuente de verdad de **cómo funciona Fusion**.
 - **Se consulta SIEMPRE antes de corregir un bug o agregar un faltante** que replique un comando de Fusion: qué
