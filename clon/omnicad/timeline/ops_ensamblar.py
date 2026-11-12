@@ -541,8 +541,11 @@ class OpComponente(Operacion):
                 for cid in self.p["cuerpos"]:
                     _mover_cuerpo(estado.cuerpo(cid), delta)
                 matriz = delta @ matriz
+            base = matriz        # B-353: lo que sigue al padre es heredado, no el movimiento de otra unión
         estado.componentes[self.id] = {"nombre": self.nombre, "padre": padre, "fijo": bool(self.p["fijo"]),
                                        "matriz": matriz.tolist(), "base": base.tolist()}
+        if padre and self.p.get("pose_padre") is not None:
+            estado.componentes[self.id]["pose_padre"] = self.p["pose_padre"]
         viejos = {estado.cuerpo(cid).componente for cid in self.p["cuerpos"]} - {"", self.id}
         for cid in self.p["cuerpos"]:
             estado.cuerpo(cid).componente = self.id
@@ -834,7 +837,11 @@ class OpUnion(Operacion):
                           "siga al componente 2, elegí como componente 1 la pieza que no tiene otra unión.")
             elif comp2 and not ya_movida:
                 # Posición modelada respecto del componente 2: lo que él se movió, el 1 también.
-                seguir = _matriz_de(estado, comp2) @ np.linalg.inv(_matriz_de(estado, comp1))
+                m1 = _matriz_de(estado, comp1)
+                datos1 = estado.componentes[comp1]
+                if datos1.get("padre") == comp2 and datos1.get("pose_padre") is not None:
+                    m1 = m1 @ np.asarray(datos1["pose_padre"], float)       # B-353: el hijo ya sigue a su padre
+                seguir = _matriz_de(estado, comp2) @ np.linalg.inv(m1)
             F2 = seguir @ F1
             ejes = self._ejes(estado, F2, seguir, comps)
             mov = movimiento(p["tipo"], valores, *ejes)

@@ -10,7 +10,7 @@ from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpN
                                     OpRellenoContorno, OpRepujado, OpRosca, OpSaliente, OpSimetria, OpSolevacion,
                                     OpSolidoEnvolvente, OpTuberia, OpVolumenFluido)
 from ...timeline import entidades as ent
-from ...timeline.ops_solido import TIPOS_REPETIBLES
+from ...timeline.ops_solido import TIPOS_REPETIBLES, punto_a_la_pose_actual
 from ...timeline.operaciones import angulo_desmoldeo_plastico, espesor_plastico, radio_nominal_plastico
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, ListaSeleccion, LONGITUD, Opciones, OpcionesVivas, Personalizado,
@@ -351,6 +351,13 @@ class Red(_NervioRed):
     CLAVE, TITULO, ICONO = "red", "Red", "red"
     AYUDA = "Red de nervios desde varias curvas abiertas, perpendicular al boceto."
     CLASE_OP = OpRed
+
+
+def _pose_del_cuerpo(estado, ref):
+    """B-178 / B-353: la pose del componente del cuerpo de `ref` ahora, para que un punto absoluto lo siga ({} en la raíz)."""
+    from ...timeline.ops_ensamblar import pose_de_componente
+    cuerpo = estado.cuerpos.get(ref.get("cuerpo"))
+    return {"pose": pose_de_componente(estado, cuerpo.componente).tolist()} if cuerpo is not None and cuerpo.componente else {}
 
 
 class Repujado(Comando):
@@ -754,7 +761,8 @@ class Agujero(Comando):
         else:
             sel = exigir(v, "colocacion", "Elegí puntos de boceto o hacé clic sobre una cara plana.")
             posiciones = [h["ref"] for h in sel if h["ref"]["tipo"] != "cara"]
-            puntos_cara = [{"cara": h["ref"], "punto": [float(c) for c in np.asarray(h.get("punto"), float)]}
+            puntos_cara = [{"cara": h["ref"], "punto": [float(c) for c in np.asarray(h.get("punto"), float)],
+                            **_pose_del_cuerpo(ctx.estado, h["ref"])}
                            for h in sel if h["ref"]["tipo"] == "cara" and h.get("punto") is not None]
         hasta = None
         if v.get("extension") == "hasta":
@@ -872,6 +880,8 @@ class Agujero(Comando):
         for d in p.get("puntos_cara") or []:
             h = hit_desde_ref(d["cara"], ctx.estado)
             h["punto"] = np.asarray(d["punto"], float)
+            if d.get("pose") is not None:          # B-353: se carga donde está hoy el componente; construir le da su pose
+                h["punto"] = punto_a_la_pose_actual(ctx.estado, d["cara"]["cuerpo"], h["punto"], d["pose"])
             sel.append(h)
         v["colocacion"] = sel
         v["ref_cara"] = _h1(p.get("ref_cara"), ctx.estado)
