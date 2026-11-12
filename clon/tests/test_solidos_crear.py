@@ -599,9 +599,8 @@ def test_rosca_en_varios_agujeros_iguales_reusa_el_surco(monkeypatch):
             quitados.append(v - g.volumen(p))
         return tiempo, p, quitados
 
-    # el tope es del tiempo de las roscas solas (tiempo), no del bucle con volúmenes y caras
-    segundos, (tiempo, placa, quitados) = mejor_tiempo(correr, 20)
-    assert tiempo < 10
+    # B-222: sin tope de tiempo (medía la máquina, no el arreglo); lo que prueba L138 es que el barrido se arma una sola vez
+    _, (_, placa, quitados) = mejor_tiempo(correr, 20)
     assert len(llamadas) == 1
     assert g.es_valida(placa) and len(g.solidos(placa)) == 1
     assert quitados == pytest.approx([quitados[0]] * 4, rel=1e-4)
