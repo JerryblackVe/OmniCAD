@@ -1,0 +1,42 @@
+{
+ "id": "B-348",
+ "firma": "geometria|boolean_operation|no_manifold",
+ "pasos": [
+  {
+   "tool": "create_sketch",
+   "args": {}
+  },
+  {
+   "tool": "draw_rectangle",
+   "args": {
+    "x1": 0,
+    "y1": 0,
+    "x2": 60,
+    "y2": 40
+   }
+  },
+  {
+   "tool": "draw_circle",
+   "args": {
+    "radius": 8
+   }
+  },
+  {
+   "tool": "extrude",
+   "args": {
+    "sketch": "Boceto1",
+    "profile": "all",
+    "taper_angle": -5
+   }
+  },
+  {
+   "tool": "boolean_operation",
+   "args": {
+    "target": "op2.c2",
+    "tools": [
+     "op2.c1"
+    ]
+   }
+  }
+ ]
+}
