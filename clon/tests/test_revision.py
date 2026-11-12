@@ -365,3 +365,28 @@ def test_b323_brepcheck_que_lanza_no_pierde_el_diagnostico(monkeypatch):
     assert any("BRepCheck falló al revisar la forma" in t for t in textos)
     assert sum("BRepCheck falló al revisar esta cara" in t for t in textos) == 6      # una por cara, con su punto
     assert all(p["punto"] is not None for p in informe["problemas"] if "cara" in p["mensaje"])
+
+
+def test_b355_brepcheck_que_lanza_solo_en_el_solido_tampoco_pierde_el_informe(monkeypatch):
+    """B-355: si BRepCheck lanza en el sólido y las caras dan bien, `revisar` se caía en el chequeo del sólido."""
+    from OCP.TopAbs import TopAbs_FACE
+    from omnicad.nucleo import geometria as geo
+    caja = geo.caja(10, 10, 10)
+    real = geo.BRepCheck_Analyzer
+
+    class _RotaEnElSolido:
+        def __init__(self, forma, *a, **k):
+            if forma.ShapeType() != TopAbs_FACE:
+                raise RuntimeError("falla en sólido")
+            self._ok = real(forma).IsValid()
+
+        def IsValid(self):
+            return self._ok
+    monkeypatch.setattr(geo, "BRepCheck_Analyzer", _RotaEnElSolido)
+    monkeypatch.setattr(rv, "BRepCheck_Analyzer", _RotaEnElSolido)
+    informe = rv.revisar(caja)
+    textos = [p["mensaje"] for p in informe["problemas"]]
+    assert not informe["valido"]
+    assert any("BRepCheck falló al revisar la forma" in t for t in textos)
+    assert any("BRepCheck falló al revisar este sólido" in t for t in textos)
+    assert not any("sin más detalle" in t for t in textos)
