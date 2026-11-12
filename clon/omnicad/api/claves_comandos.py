@@ -135,6 +135,7 @@ CLAVES = frozenset({
     "reparar_malla",
     "replegar",
     "repujado",
+    "restriccion_componentes",
     "reticula_volumetrica",
     "revertir_posicion",
     "revisar_geometria",

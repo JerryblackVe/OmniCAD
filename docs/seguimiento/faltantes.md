@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 239: Abierto 156 · Parcial 49 · Bloqueado 30 · Sin verificar 4 (2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 239: Abierto 155 · Parcial 50 · Bloqueado 30 · Sin verificar 4 (2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -163,7 +163,7 @@ Upgrade a futuro: no se empieza hasta que Gerardo lo pida. Plan y prompt: [plan_
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| ASM-17 | Restricción de componentes: Alinear, Ángulo, Centro y Tangente | Abierto | Muy alta | Comando, tabla, límites, paso del timeline, conflictos y herramienta. | docs/brechas_ensamblar.md § ASM-17; no hay herramienta en la API (probado por nombre) ni comando en ui/cinta.py:57 | 2026-11-01 |
+| ASM-17 | Restricción de componentes: Alinear, Ángulo, Centro y Tangente | Parcial | Muy alta | Hecho Alinear (2026-11-12): paso `restriccion` del timeline (`OpRestriccion`), herramienta `constrain_components`, comando y botón de ENSAMBLAR: caras coplanares, ejes concéntricos, puntos coincidentes, desfase y voltear. Falta: Ángulo (con referencia de ángulo), Centro (modos simple y entre dos caras), Tangente (todas las caras), la tabla con varias filas (conjuntos), los límites de desfase y «Utilizar desfase como apoyo», la vista previa al pasar el cursor, resolver todas las restricciones a la vez y avisar los conflictos con las uniones. | docs/brechas_ensamblar.md § ASM-17; `tests/test_asm17_alinear.py`; `clon/omnicad/timeline/ops_ensamblar.py` (`OpRestriccion`) | 2026-11-12 |
 | ASM-18 | Nuevo componente vacío y con opciones de Fusion | Abierto | Alta | Padre, Externo, tipos, nombre, A partir de cuerpos y Activar. | docs/brechas_ensamblar.md § ASM-18; `create_component` exige cuerpos, por API | 2026-11-01 |
 | ASM-19 | Menú ENSAMBLAR y paneles como Fusion | Abierto | Media | Orden, nombres, atajo Mayús+J, pestañas de Unión e Incluir hijos encendido. | docs/brechas_ensamblar.md § ASM-19; ui/cinta.py:57 | 2026-11-01 |
 

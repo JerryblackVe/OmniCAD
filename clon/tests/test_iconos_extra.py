@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""182 íconos extra (omnicad/ui/iconos_extra.py): están todos, cada uno pinta, no se repiten ni se salen
+"""201 íconos extra (omnicad/ui/iconos_extra.py): están todos, cada uno pinta, no se repiten ni se salen
 de la grilla, y no pisan a los de iconos.py.
 
 `python tests/test_iconos_extra.py` regenera la hoja de contacto en evidencias/capturas/iconos_extra.png.
@@ -34,7 +34,7 @@ SECCIONES = {
                      "colores_componente", "revisar_geometria", "reparar_cuerpo", "buscar_similares"],
     "PLÁSTICO": ["regla_plastico", "reglas_plastico", "consejos_diseno", "apoyo", "patron_geometrico"],
     "INSERTAR": ["calcomania", "insertar_svg", "insertar_dxf", "vectorizar_imagen", "insertar_malla", "insertar_componente", "fijacion"],
-    "ENSAMBLAR": ["nuevo_componente", "union", "union_construida", "duplicar_con_uniones", "origen_union", "grupo_rigido",
+    "ENSAMBLAR": ["nuevo_componente", "union", "union_construida", "restriccion_componentes", "duplicar_con_uniones", "origen_union", "grupo_rigido",
                   "accionar_uniones", "vinculo_movimiento", "conjunto_contacto", "estudio_movimiento",
                   "fijar_componente", "anclar_componente", "posicion_inicial", "capturar_posicion",
                   "revertir_posicion"],
@@ -95,7 +95,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 200
+    assert len(NOMBRES) == len(set(NOMBRES)) == 201
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 

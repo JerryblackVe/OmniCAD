@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-420 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+421 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -19,7 +19,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 22 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
-| [ensamble](#grupo-ensamble) | 19 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
+| [ensamble](#grupo-ensamble) | 20 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 12 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 31 | Ver y medir el resultado. |
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
@@ -4660,6 +4660,7 @@ Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y
 | [`create_as_built_joint`](#create_as_built_joint) | sí | Unión como está (ENSAMBLAR › Unión como está): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). |
 | [`duplicate_with_joints`](#duplicate_with_joints) | sí | Duplicar con uniones (ENSAMBLAR › Duplicar con uniones): repite el componente que mueve una unión en cada destino. |
 | [`create_joint_origin`](#create_joint_origin) | sí | Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco (punto con orientación) sobre una cara o arista, con giro y desfase, para usarlo después como origin2 de create_joint. |
+| [`constrain_components`](#constrain_components) | sí | Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17): posiciona el componente de geometry1 respecto del de geometry2. |
 | [`drive_joint`](#drive_joint) | sí | Acciona una unión (ENSAMBLAR › Accionar uniones): cambia su giro o deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). |
 | [`set_joint_limits`](#set_joint_limits) | sí | Límites de movimiento de una unión (Joint Limits de Fusion): los de un movimiento a elección (por defecto el principal: el giro en grados si gira, si no el deslizamiento en mm), su valor de reposo (rest) y si se invierten (flip). |
 | [`create_rigid_group`](#create_rigid_group) | sí | Grupo rígido (ENSAMBLAR › Grupo rígido): los componentes se mueven juntos; una unión que mueve a uno mueve a todos. |
@@ -4817,6 +4818,22 @@ Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco (punto con
   - `mode` ("simple" | "between_faces" | "edge_intersection"; opcional, por defecto `"simple"`): modo del origen: "simple", "between_faces" (centrado entre dos caras paralelas) o "edge_intersection" (en el cruce de dos aristas rectas).
   - `geometry_b` (texto o lista de número o null; opcional, por defecto `null`): la segunda cara o arista de los modos between_faces y edge_intersection.
 - CLI: `omnicad call create_joint_origin --doc pieza.omnicad geometry=…`
+
+### `constrain_components`
+
+Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17): posiciona el componente de geometry1 respecto del de geometry2. Hoy solo type='align' (Alinear): dos caras planas o planos quedan coplanares (al ras si miran hacia el mismo lado, enfrentadas si miran opuesto; flip invierte), dos ejes (cara cilíndrica o cónica, arista circular o recta, eje de construcción) concéntricos o colineales, y dos puntos coincidentes. Si el componente 1 está fijo o es la raíz, se mueve el 2. Faltan Ángulo, Centro y Tangente. Cada origen es una cara o arista (selector evaluado sobre body1 / body2, o id de find_faces / find_edges: 'Cuerpo1/F3', 'Cuerpo1/E5'; para aristas con selector, prefijo 'edges:'), un origen de unión (create_joint_origin), un plano, eje o punto de construcción (id o nombre) o XY, XZ, YZ. Devuelve el paso y los componentes que se movieron.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `geometry1` (texto o lista de número o objeto; obligatorio): la geometría del componente que se mueve: cara o arista (selector sobre body1 o id de find_faces / find_edges), vértice [x, y, z], plano, eje o punto de construcción.
+  - `geometry2` (texto o lista de número o objeto; obligatorio): la geometría del otro componente (o de la raíz) a la que se alinea la primera.
+  - `type` ("align"; opcional, por defecto `"align"`): tipo de restricción; hoy solo "align".
+  - `offset` (número o expresión; opcional, por defecto `0`): desfase en mm (número o expresión): entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje.
+  - `flip` (true/false; opcional, por defecto `false`): true invierte la orientación que sale sola (la que menos gira el componente): al ras pasa a enfrentadas y al revés.
+  - `body1` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de geometry1; con un id no hace falta.
+  - `body2` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de geometry2.
+  - `name` (texto; opcional, por defecto `null`): nombre del paso; vacío = «Restricción<n>».
+- CLI: `omnicad call constrain_components --doc pieza.omnicad geometry1=… geometry2=…`
 
 ### `drive_joint`
 

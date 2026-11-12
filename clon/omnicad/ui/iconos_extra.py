@@ -1652,6 +1652,14 @@ def _grupo_rigido(p):
     p.restore()
 
 
+def _restriccion_componentes(p):
+    """Dos cajas con sus caras de arriba al ras y una línea punteada que las une (Alinear)."""
+    _caja(p, 9, 9, 7, 8, 20, 1.0, BLANCOS, GRIS_OSCURO)
+    _caja(p, 9, 9, 7, 23, 12, 1.0, GRIS_COMP, GRIS_OSCURO)
+    p.setPen(QPen(AZUL_LADO, 1.6, Qt.DashLine))
+    p.drawLine(QPointF(3, 11.5), QPointF(29, 11.5))
+
+
 def _accionar_uniones(p):
     _caja(p, 10, 10, 6, 16, 16, 1.0, BLANCOS, GRIS_OSCURO)
     _glifo_union(p, 16, 16, 4.2)
@@ -2650,7 +2658,7 @@ DIBUJOS_EXTRA = {
     "parametro_usuario": _parametro_usuario, "estrella": _estrella, "estrella_vacia": lambda p: _estrella(p, False),
     "mas": _mas_grande, "copiar": _copiar, "papelera": _papelera, "info": _info,
     # ensamblar
-    "nuevo_componente": _nuevo_componente, "union": _union, "union_construida": _union_construida,
+    "nuevo_componente": _nuevo_componente, "union": _union, "union_construida": _union_construida, "restriccion_componentes": _restriccion_componentes,
     "duplicar_con_uniones": _duplicar_con_uniones,
     "origen_union": _origen_union, "grupo_rigido": _grupo_rigido, "accionar_uniones": _accionar_uniones,
     "vinculo_movimiento": _vinculo_movimiento, "conjunto_contacto": _conjunto_contacto,

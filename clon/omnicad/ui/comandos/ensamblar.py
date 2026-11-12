@@ -4,7 +4,7 @@ accionar uniones, vínculo de movimiento y fijar componente."""
 from ...timeline.operaciones import ErrorOperacion
 from ...timeline.ops_ensamblar import (CLAVES_MOVIMIENTO, MODOS_POSICION, MOVIMIENTOS, TIPOS_UNION, OpAnclar,
                                        OpCapturarPosicion, OpComponente, OpGrupoRigido, OpOrigenUnion,
-                                       OpPosicionInicial, OpRevertirPosicion, OpUnion, OpVinculoMovimiento,
+                                       OpPosicionInicial, OpRestriccion, OpRevertirPosicion, OpUnion, OpVinculoMovimiento,
                                        _clave_movimiento, componente_por_ref, direccion_eje, eje_local, ejes_bola,
                                        exigir_numero, marco_desde, pose_de_componente, pose_de_reasignar, principal_de, ruta_componente,
                                        siguiente_accion)
@@ -243,6 +243,36 @@ class Union(Comando):
                   "ref_eje_guinada"):
             v[k] = [hit_desde_ref(op.p[k], ctx.estado)] if op.p.get(k) else []
         v.update(_campos_de_limites(op.p))
+        return v
+
+
+class RestriccionComponentes(Comando):
+    CLAVE, TITULO, ICONO = "restriccion_componentes", "Restricción de componentes", "restriccion_componentes"
+    AYUDA = ("Posiciona el componente 1 respecto del 2 (Constrain Components). Hoy: Alinear: caras coplanares, ejes "
+             "concéntricos o puntos coincidentes. Faltan Ángulo, Centro y Tangente.")
+    CLASE_OP = OpRestriccion
+
+    def verificar(self, ctx):
+        return None if ctx.estado.componentes else "Primero creá componentes (ENSAMBLAR › Nuevo componente)."
+
+    def campos(self, ctx):
+        return [Opciones("tipo", "Tipo", {"alinear": "Alinear"}),
+                Seleccion("ref1", "Componente 1: geometría", SNAP, ayuda="La cara, arista, vértice, plano, eje o punto que se mueve."),
+                Seleccion("ref2", "Componente 2: geometría", SNAP, ayuda="A lo que se alinea; si el 1 está fijo, se mueve este."),
+                Expresion("desfase", "Desfase", "0 mm", ayuda="Entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje."),
+                Casilla("voltear", "Voltear", ayuda="Invierte la orientación que sale sola (al ras ↔ enfrentadas).")]
+
+    def construir(self, v, ctx):
+        exigir(v, "ref1", "Seleccioná la geometría del componente 1.")
+        exigir(v, "ref2", "Seleccioná la geometría del componente 2.")
+        ctx.evaluar(v.get("desfase") or "0")
+        return self.crear_op(OpRestriccion, v, ctx, tipo=v.get("tipo", "alinear"), ref1=ref1(v, "ref1"), ref2=ref1(v, "ref2"),
+                             desfase=v.get("desfase") or "0 mm", voltear=bool(v.get("voltear")))
+
+    def desde_op(self, op, ctx):
+        v = dict(op.p)
+        for k in ("ref1", "ref2"):
+            v[k] = [hit_desde_ref(op.p[k], ctx.estado)] if op.p.get(k) else []
         return v
 
 
@@ -630,5 +660,5 @@ def _hits_de_componentes(ids, ctx):
     return _hits_cuerpos(salida, ctx.estado)
 
 
-registrar(NuevoComponente, Union, UnionComoEsta, OrigenUnion, GrupoRigido, AccionarUniones, DuplicarConUniones,
+registrar(NuevoComponente, Union, UnionComoEsta, RestriccionComponentes, OrigenUnion, GrupoRigido, AccionarUniones, DuplicarConUniones,
           VinculoMovimiento, FijarComponente, AnclarComponente, PosicionInicial, CapturarPosicion, RevertirPosicion)
