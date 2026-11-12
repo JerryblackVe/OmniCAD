@@ -901,15 +901,16 @@ def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | 
              "camino más corto, y con una arista o eje de referencia es con signo alrededor de él. Centro: deja una cara (o el plano medio "
              "de dos caras) del componente 1 a medio camino de las dos caras del componente 2 (o al revés), sin deslizarlo "
              "en el plano; hace falta geometry1b o geometry2b (al menos un componente «entre dos caras»). Tangente: deja tangente "
-             "la superficie de geometry1 a la de geometry2 (caras planas o cilíndricas, con la superficie entera: «All Faces»): "
-             "plano–plano enfrentados, plano–cilindro rozando del lado en que ya está, cilindro–cilindro por fuera; flip pasa "
-             "al otro lado. Si el componente 1 está fijo o es la raíz, se mueve el 2. " + _DESC_ORIGEN + "Devuelve el paso y los componentes que se movieron.", modifica=True)
+             "la superficie de geometry1 a la de geometry2 (cara plana, cilíndrica, esférica o cónica, plano, arista recta, eje o "
+             "vértice): plano–plano enfrentados, plano–curva rozando del lado en que ya está (el cono, solo si el plano ya tiene "
+             "su inclinación), cilindro y esfera entre sí por fuera; flip pasa al otro lado. Con all_faces=false las caras elegidas "
+             "tienen que llegar a tocarse. Si el componente 1 está fijo o es la raíz, se mueve el 2. " + _DESC_ORIGEN + "Devuelve el paso y los componentes que se movieron.", modifica=True)
 def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2: str | list[float] | dict,
                          type: Literal["align", "angle", "center", "tangent"] = "align", offset: Expr = 0, flip: bool = False,
                          body1: str | None = None, body2: str | None = None, name: str | None = None,
                          angle_reference: str | list[float] | dict | None = None, reference_body: str | None = None,
                          geometry1b: str | list[float] | dict | None = None, geometry2b: str | list[float] | dict | None = None,
-                         body1b: str | None = None, body2b: str | None = None):
+                         body1b: str | None = None, body2b: str | None = None, all_faces: bool = True):
     """
     geometry1: la geometría del componente que se mueve: cara o arista (selector sobre body1 o id de find_faces / find_edges), vértice [x, y, z], plano, eje o punto de construcción.
     geometry2: la geometría del otro componente (o de la raíz) a la que se alinea la primera.
@@ -925,11 +926,14 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
     geometry2b: solo con center: la segunda cara del componente 2.
     body1b: cuerpo donde se evalúa el selector de geometry1b.
     body2b: cuerpo donde se evalúa el selector de geometry2b.
+    all_faces: solo con tangent («All Faces»): true usa la superficie entera de la cara; false pide que la cara del componente 1, ya movida, toque la del componente 2.
     """
     if type not in ("align", "angle", "center", "tangent"):
         raise error("INVALID_ARGUMENTS", f"La restricción «{type}» no existe: 'align', 'angle', 'center' o 'tangent'.")
     if angle_reference is not None and type != "angle":
         raise error("INVALID_ARGUMENTS", "angle_reference solo se usa con type='angle'.")
+    if not all_faces and type != "tangent":
+        raise error("INVALID_ARGUMENTS", "all_faces solo se usa con type='tangent'.")
     if (geometry1b is not None or geometry2b is not None) and type != "center":
         raise error("INVALID_ARGUMENTS", "geometry1b y geometry2b solo se usan con type='center'.")
     ref1, _ = _origen(sesion, geometry1, body1)
@@ -941,7 +945,7 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
     op = OpRestriccion(sesion.doc.nuevo_id(), nombre_paso(sesion, name, "Restricción", OpRestriccion),
                        tipo={"align": "alinear", "angle": "angulo", "center": "centro", "tangent": "tangente"}[type], ref1=ref1, ref2=ref2,
                        desfase=_expr(offset), voltear=bool(flip), ref_angulo=ref_angulo, ref1b=ref1b, ref2b=ref2b,
-                       modo1="entre_caras" if ref1b else "simple", modo2="entre_caras" if ref2b else "simple")
+                       modo1="entre_caras" if ref1b else "simple", modo2="entre_caras" if ref2b else "simple", todas_caras=bool(all_faces))
     resultado = _agregar(sesion, op)
     resultado["moved_components"] = _movidos(sesion, antes)
     return resultado

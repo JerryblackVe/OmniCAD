@@ -123,6 +123,19 @@ def eje_cara(cara, tipo):
     return np.array([p.X(), p.Y(), p.Z()]), np.array([d.X(), d.Y(), d.Z()])
 
 
+def centro_esfera(cara):
+    """Centro de una cara esférica."""
+    c = BRepAdaptor_Surface(cara).Sphere().Location()
+    return np.array([c.X(), c.Y(), c.Z()])
+
+
+def cono_de(cara):
+    """(vértice, eje unitario, semiángulo en radianes) de una cara cónica."""
+    k = BRepAdaptor_Surface(cara).Cone()
+    a, d = k.Apex(), k.Axis().Direction()
+    return np.array([a.X(), a.Y(), a.Z()]), np.array([d.X(), d.Y(), d.Z()]), abs(float(k.SemiAngle()))
+
+
 def eje_de_curva_circular(arista):
     """(centro, dirección del eje) de una arista circular o de un arco (el eje de un patrón circular); None si la
     arista no es un círculo."""
