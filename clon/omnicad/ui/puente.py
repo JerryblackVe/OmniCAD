@@ -332,9 +332,11 @@ class PuenteAgentes(QObject):
         habia_cambios = doc.modificado
         latido, dialogo = self._dialogo_codigo() if herramienta == "execute_code" else (None, None)
         self.sesion.latido = latido
+        v.registro_uso.herramienta_api = herramienta
         try:
             respuesta = api.llamar(self.sesion, herramienta, args)
         finally:
+            v.registro_uso.herramienta_api = ""
             self.sesion.latido = None
             if dialogo is not None:
                 dialogo.close()
