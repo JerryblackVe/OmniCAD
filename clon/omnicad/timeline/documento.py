@@ -456,7 +456,7 @@ class Documento:
         self.parametros, self._contador_cotas = tabla, contador
         self.marcador += 1
         self.modificado = True
-        self._terminar_recalculo(desde, calculo, op.id if revisar_autointersecciones and op.REVISA_AUTOINTERSECCIONES else None)
+        self._terminar_recalculo(desde, calculo, revisar_autointersecciones)
         return self.resultados[i]
 
     def reemplazar(self, op_id, nueva, revisar_autointersecciones=True, aparte=False):
@@ -471,7 +471,7 @@ class Documento:
         self.operaciones[i] = nueva
         self.parametros, self._contador_cotas = tabla, contador
         self.modificado = True
-        self._terminar_recalculo(desde, calculo, op_id if revisar_autointersecciones and nueva.REVISA_AUTOINTERSECCIONES else None)
+        self._terminar_recalculo(desde, calculo, revisar_autointersecciones)
         return self.resultados[i]
 
     def pegar(self, receta, usa=()):
@@ -1053,17 +1053,18 @@ class Documento:
         finally:
             self._esperando_hijo = False
 
-    def _terminar_recalculo(self, desde, calculo, revisar_autointersecciones=None):
+    def _terminar_recalculo(self, desde, calculo, revisar_autointersecciones=True):
+        """`revisar_autointersecciones` False: el recálculo de una vista previa (en un proceso aparte), que no analiza."""
         if calculo is None:
-            self._revisar_autointersecciones = revisar_autointersecciones
+            self._sin_revisar = not revisar_autointersecciones
             try:
                 self.recalcular(desde)
             finally:
-                self._revisar_autointersecciones = None
+                self._sin_revisar = False
         else:
-            self._aplicar_calculo(calculo, revisar_autointersecciones)
+            self._aplicar_calculo(calculo)
 
-    def _aplicar_calculo(self, calculo, revisar_autointersecciones=None):
+    def _aplicar_calculo(self, calculo):
         """Adopta el resultado ya calculado; no ejecuta operaciones del kernel en este proceso."""
         receta = calculo["receta"]
         self.parametros = TablaParametros.desde_lista(receta["parametros"])
@@ -1077,14 +1078,6 @@ class Documento:
         self._usados, self._valores, self._duraciones = calculo["usados"], calculo["valores"], calculo["duraciones"]
         for op, usados in zip(self.operaciones, calculo["dependencias"], strict=True):
             op._usados = set(usados)
-        for i, op in enumerate(self.operaciones):
-            if op.id == revisar_autointersecciones:
-                op._avisos_autointersecciones = list(calculo["avisos_autointersecciones"][i])
-            resultado = self.resultados[i]
-            if resultado.estado in ("ok", "aviso"):
-                textos = [t for t in op._avisos_autointersecciones if t not in resultado.mensaje]
-                if textos:
-                    self.resultados[i] = ResultadoPaso("aviso", " ".join([resultado.mensaje, *textos]).strip())
         self._memo.clear()
         self._previa = self._ultimo_prevuelo = None
         self._notificar()
@@ -1232,16 +1225,18 @@ class Documento:
         nombres = self._nombres_cuerpos()
         estado = self.estado_en(desde)
         repetidos = self._pasos_repetidos() if self._cache else set()
-        revisar_autointersecciones = getattr(self, "_revisar_autointersecciones", None)
+        sin_revisar = getattr(self, "_sin_revisar", False)
         for i in range(desde, len(self.operaciones)):
             op = self.operaciones[i]
-            revisar = op.id == revisar_autointersecciones and op.REVISA_AUTOINTERSECCIONES
+            # B-358: todo cálculo real del paso analiza sus autointersecciones (no la previa, que es para mirar rápido):
+            # así un cambio de parámetro, deshacer o rehacer vuelve a avisar, o reusa un resultado que ya traía el aviso
+            revisar = op.REVISA_AUTOINTERSECCIONES and not sin_revisar
             if registro is not None:
                 antes_registro = [(c.tipo, c.forma) for c in estado.cuerpos.values()]
                 inicio_paso = time.perf_counter()
             usados = frozenset()
             duracion = 0.0
-            guardado = self._de_cache(i, op, estado) if (not revisar and i < self.marcador and not op.suprimida
+            guardado = self._de_cache(i, op, estado) if (i < self.marcador and not op.suprimida
                                                           and op.id not in repetidos) else None
             if i >= self.marcador:
                 self.resultados.append(ResultadoPaso("retrocedida"))
@@ -1250,7 +1245,8 @@ class Documento:
             elif guardado is not None:
                 estado, resultado, usados, duracion = guardado
                 self.resultados.append(resultado)
-            elif not revisar and (memo := self._de_memo(op, estado, valores) or self._de_previa(op, estado, valores)) is not None:
+            elif (memo := self._de_memo(op, estado, valores, revisar)
+                          or (None if revisar else self._de_previa(op, estado, valores))) is not None:
                 estado, resultado, usados, duracion = memo
                 self.resultados.append(resultado)
             else:
@@ -1258,7 +1254,7 @@ class Documento:
                 nuevo = estado.copia()
                 nuevo.anotar_lecturas()
                 ctx = Contexto(valores, op.id not in self._sin_partir)
-                ctx.revisar_autointersecciones = revisar_autointersecciones
+                ctx.revisar_autointersecciones = revisar
                 usados = ctx.usados
                 if self.al_calcular is not None:
                     self.al_calcular(op)
@@ -1289,7 +1285,8 @@ class Documento:
                                          "salida": estado if estado is nuevo else None, "lecturas": lecturas,
                                          "resultado": self.resultados[-1], "usados": frozenset(usados),
                                          "valores": {n: valores.get(n, _FALTA) for n in usados},
-                                         "duracion": duracion, "op_usados": set(op._usados), "nombres": nombres}
+                                         "duracion": duracion, "op_usados": set(op._usados), "nombres": nombres,
+                                         "revisado": revisar}
             self._poner_nombres(estado, nombres)   # antes del paso siguiente: la copia de «Placa» sale «Placa (copia)»
             self._estados.append(estado)
             self._usados.append(usados)
@@ -1322,14 +1319,14 @@ class Documento:
         self._memo.clear()
         self._calcular_todo = True
 
-    def _de_memo(self, op, estado, valores):
+    def _de_memo(self, op, estado, valores, revisar=False):
         """El último resultado del paso, si con `estado` y `valores` daría lo mismo: misma operación (mismo objeto y
         receta), mismo motor, mismos parámetros leídos y lo que leyó del estado sin cambios. Así, editar un paso no
         recalcula los posteriores que no dependen de él. (estado, resultado, parámetros leídos, duración) o None."""
         m = self._memo.get(op.id)
         nombres = self._nombres_cuerpos()
         if (m is None or m["op"] is not op or m["motor"] != self.motor or not op.MEMORIZABLE
-                or self._renombre_le_importa(m, nombres)):
+                or (revisar and not m.get("revisado")) or self._renombre_le_importa(m, nombres)):
             return None
         if any(valores.get(n, _FALTA) != v for n, v in m["valores"].items()) or _receta(op) != m["receta"]:
             return None

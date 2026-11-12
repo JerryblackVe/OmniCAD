@@ -139,33 +139,24 @@ def test_barrido_con_revision_agotada_tambien_avisa():
     _exigir_aviso(s, r, "autointersecciones", "plazo agotado")
 
 
-def test_recalcular_conserva_el_aviso_sin_repetir_el_analisis():
+def test_recalcular_conserva_el_aviso_y_editar_otro_paso_no_vuelve_a_analizar():
     s = _preparar_barrido(True)
     with patch.object(rev, "_autointersecciones_seguras", wraps=rev._autointersecciones_seguras) as analisis:
         r = _barrer(s)
         uid = r["result"]["feature"]["id"]
         aviso = s.doc.resultado(uid).mensaje
         assert analisis.call_count == 1
-        receta = s.doc.operacion(uid).a_dict()
         for _ in range(2):
             _r(s, "recompute_all")
-            assert analisis.call_count == 1
             assert s.doc.resultado(uid).estado == "aviso"
             assert s.doc.resultado(uid).mensaje == aviso
-        assert s.doc.operacion(uid).a_dict() == receta
-        assert s.doc.operacion(uid).copia()._avisos_autointersecciones
-        assert not operacion_desde_dict(receta)._avisos_autointersecciones
+        hechos = analisis.call_count
         caja = _r(s, "create_box", length=2, width=2, height=2)["result"]["feature"]["id"]
         _r(s, "edit_feature", feature=caja, params={"height": "3 mm"})
-        assert analisis.call_count == 1
-        assert s.doc.resultado(uid).mensaje == aviso
-        _r(s, "edit_feature", feature=uid, params={"distancia": "1"})
-        assert analisis.call_count == 2
+        assert analisis.call_count == hechos                 # el barrido no se recalcula: su resultado ya traía el aviso
         assert s.doc.resultado(uid).mensaje == aviso
         _r(s, "edit_feature", feature=uid, params={"distancia": "0.1"})
-        assert analisis.call_count == 3
         assert s.doc.resultado(uid).estado == "ok"
-        assert not s.doc.operacion(uid)._avisos_autointersecciones
 
 
 def test_previa_no_analiza_y_aceptar_y_editar_si_aunque_haya_previa():
@@ -186,7 +177,6 @@ def test_previa_no_analiza_y_aceptar_y_editar_si_aunque_haya_previa():
         assert analisis.call_count == 1
         assert s.doc.reemplazar(uid, nueva).estado == "ok"
         assert analisis.call_count == 2
-        assert not nueva._avisos_autointersecciones
 
 
 def test_previa_aislada_no_analiza_y_aceptar_no_reusa_su_resultado_sin_revision():
@@ -210,12 +200,51 @@ def test_previa_aislada_no_analiza_y_aceptar_no_reusa_su_resultado_sin_revision(
         assert analisis.call_count == 1
         aviso = s.doc.resultado(uid).mensaje
         _r(s, "recompute_all")
-        assert analisis.call_count == 1
         assert s.doc.resultado(uid).mensaje == aviso
         nueva = op.copia()
         nueva.p["distancia"] = "0.1"
-        s.doc.previsualizar(nueva, s.doc.indice(uid))
-        assert analisis.call_count == 1
+        s.doc.previsualizar(nueva, s.doc.indice(uid))     # el hijo puede ponerse al día con la receta (cálculo real)
+        hechos = analisis.call_count
         assert s.doc.reemplazar(uid, nueva).estado == "ok"
-        assert analisis.call_count == 2
-        assert not nueva._avisos_autointersecciones
+        assert analisis.call_count > hechos                # aceptar analiza: no reusa la previa sin revisión
+
+
+def test_b358_deshacer_y_rehacer_conservan_el_aviso():
+    """B-358: el paso que vuelve con deshacer o rehacer se rearma de la receta; antes volvía en «ok» callado."""
+    s = _preparar_barrido(True)
+    uid = _barrer(s)["result"]["feature"]["id"]
+    aviso = s.doc.resultado(uid).mensaje
+    _r(s, "delete_feature", feature=uid)
+    _r(s, "undo")
+    assert (s.doc.resultado(uid).estado, s.doc.resultado(uid).mensaje) == ("aviso", aviso)
+    _r(s, "undo")                                      # deshace el barrido
+    _r(s, "redo")
+    assert (s.doc.resultado(uid).estado, s.doc.resultado(uid).mensaje) == ("aviso", aviso)
+
+
+def test_b358_un_cambio_de_parametro_vuelve_a_revisar():
+    """B-358: con t = 2 las copias del patrón no se pisan; con t = 6 sí (24 autointersecciones, B-167), y al volver a
+    2 el aviso se va."""
+    s = api.Sesion()
+    _r(s, "create_sketch")
+    _r(s, "draw_rectangle", sketch="Boceto1", x1=0, y1=0, x2=20, y2=15)
+    _r(s, "create_base_flange", sketch="Boceto1", thickness=0.8)
+    _r(s, "create_parameter", name="t", expression="2 mm")
+    uid = _r(s, "create_geometric_pattern", faces=["Cuerpo1/F6"], operation="join", distance=5, size1="t",
+             size2="t")["result"]["feature"]["id"]
+    assert "autointersec" not in s.doc.resultado(uid).mensaje
+    _r(s, "set_parameter", name="t", expression="6 mm")
+    assert "autointersecciones" in s.doc.resultado(uid).mensaje
+    _r(s, "set_parameter", name="t", expression="2 mm")
+    assert "autointersec" not in s.doc.resultado(uid).mensaje
+
+
+def test_b358_labio_no_culpa_al_labio_de_lo_que_el_cuerpo_ya_traia():
+    """B-358: el patrón unido con copias que se pisan deja la base cruzada (B-167); un labio sano en el borde de abajo
+    no la empeora y no avisa (antes: «El labio de «Base» quedó con 212 autointersecciones»)."""
+    s = _preparar_labio()
+    _r(s, "create_geometric_pattern", faces=[">Z"], body="Base", operation="join", distance=5, size1=6, size2=6)
+    assert rev._autointersecciones_seguras(s.cuerpo("Base").forma, 1, 5.0)[0] > 0
+    r = _r(s, "create_lip_groove", body="Base", edges="|X and <Z and <Y", lip_type="lip", width=1, height=1.5,
+           direction="Z", reverse=True)
+    assert not any("autointersec" in a for a in r["avisos"]), r["avisos"]

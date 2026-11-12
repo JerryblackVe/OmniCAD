@@ -37,22 +37,22 @@ def _pg():
     return patron_geometrico
 
 
-def _avisar_autointersecciones(op, ctx, forma, que, causa):
+def _avisar_autointersecciones(ctx, forma, que, causa, antes=None):
     """Un paso no puede quedar «ok» con una forma que se cruza consigo misma (B-168, B-167): se avisa con el mismo
     análisis BOPAlgo que usa el desfase de superficies (`nucleo/superficies.py`). `que` es lo que creó el paso y
-    `causa` cómo evitarlo. Solo analiza al aceptar o editar ese paso."""
-    if ctx.revisar_autointersecciones != op.id:
+    `causa` cómo evitarlo. `antes`: el cuerpo antes del paso, cuyas autointersecciones no son de este paso (Labio).
+    La vista previa no analiza."""
+    if not ctx.revisar_autointersecciones:
         return
     from ..nucleo import revision                  # local: revision carga medio núcleo
     n, problemas, _ = revision._autointersecciones_seguras(forma, 1, 5.0)
-    texto = ""
     if n is None:                                  # no se pudo contar (forma B-spline lenta): tampoco queda callado
-        texto = problemas[0]["mensaje"]
-    elif n:
-        texto = f"{que} quedó con {n} {'autointersección' if n == 1 else 'autointersecciones'}: {causa}"
-    if texto:
-        op._avisos_autointersecciones.append(texto)
-        ctx.aviso(texto)
+        ctx.aviso(problemas[0]["mensaje"])
+        return
+    if n and antes is not None:
+        n -= revision._autointersecciones_seguras(antes, 1, 5.0)[0] or 0
+    if n > 0:
+        ctx.aviso(f"{que} quedó con {n} {'autointersección' if n == 1 else 'autointersecciones'}: {causa}")
 
 
 def _caras(refs, estado, que="perfiles"):
@@ -168,7 +168,7 @@ class OpBarrido(_OpCrear):
                 raise ErrorOperacion(f"«{c.nombre}» no es un cuerpo sólido: el barrido de un cuerpo lo necesita.")
             forma = _sc().barrer_cuerpo(c.forma, ruta, orientacion=orientacion, distancia=distancia, eje_alineado=eje)
             _avisar_autointersecciones(
-                self, ctx, forma, "El barrido del cuerpo",
+                ctx, forma, "El barrido del cuerpo",
                 "el cuerpo se pisa al recorrer la ruta. Probá un cuerpo más chico o una ruta más abierta, sin cruces.")
             self._aplicar(estado, ctx, forma)
 
@@ -190,7 +190,7 @@ class OpBarrido(_OpCrear):
         if geo.sin_volumen(forma):
             raise ErrorOperacion("El barrido no encierra volumen: el plano del perfil no puede ser paralelo a la ruta.")
         _avisar_autointersecciones(
-            self, ctx, forma, "El barrido",
+            ctx, forma, "El barrido",
             "el perfil se pisa al recorrer la ruta. Probá un perfil más chico o una ruta más abierta, sin cruces.")
         self._aplicar(estado, ctx, forma)
 
@@ -632,7 +632,7 @@ class OpTuberia(_OpCrear):
         # forma B-spline se corre a un proceso aparte (~1 s). Se hace recién con dos tramos o más.
         if len(ruta) > 1:
             _avisar_autointersecciones(
-                self, ctx, forma, "El tubo",
+                ctx, forma, "El tubo",
                 "en las esquinas de la ruta la sección se pliega sobre sí misma y el kernel no logra "
                 "redondear esas esquinas. Probá una sección más chica o una ruta con esquinas menos cerradas.")
         self._aplicar(estado, ctx, forma)
@@ -1303,7 +1303,7 @@ class OpPatronGeometrico(_OpCrear):
                 raise ErrorOperacion(str(err)) from err
         herramienta = geo.compuesto(formas)
         _avisar_autointersecciones(
-            self, ctx, herramienta, "El patrón",
+            ctx, herramienta, "El patrón",
             "las copias son más grandes que la distancia que las separa, o caen en dos caras separadas menos que su "
             "tamaño. Aumentá la distancia, bajá el tamaño o elegí una sola cara.")
         self._aplicar(estado, ctx, herramienta)
@@ -1666,6 +1666,7 @@ class OpLabio(_OpCrear):
         d = ent.direccion(_resolver(self.p["direccion"], estado)) if self.p["direccion"] else np.array([0, 0, 1.0])
         ancho, alto, holgura = (ctx.evaluar(self.p[k]) for k in ("ancho", "alto", "holgura"))
         antes = geo.volumen(cuerpo.forma)
+        previas = {cuerpo.id: cuerpo.forma}          # B-358: lo que el cuerpo ya traía no es culpa del labio
         if self.p["tipo"] == "labio y acanalado":
             if not self.p.get("cuerpo_ranura"):
                 raise ErrorOperacion("Elegí el cuerpo de la ranura del labio y acanalado.")
@@ -1673,6 +1674,7 @@ class OpLabio(_OpCrear):
             if ranura.id == cuerpo.id:
                 raise ErrorOperacion("El cuerpo de la ranura tiene que ser distinto del cuerpo del labio.")
             antes_ranura = geo.volumen(ranura.forma)
+            previas[ranura.id] = ranura.forma
             r = _sc().labio_y_ranura(cuerpo.forma, ranura.forma, aristas, -d if self.p["invertir"] else d,
                                      ancho=ancho, alto=alto, holgura=holgura)
             cuerpo.forma, ranura.forma = r["labio"], r["ranura"]
@@ -1692,9 +1694,9 @@ class OpLabio(_OpCrear):
             revisado = estado.cuerpo(cid)
             que = "La ranura" if cid != cuerpo.id or self.p["tipo"] == "ranura" else "El labio"
             _avisar_autointersecciones(
-                self, ctx, revisado.forma, f"{que} de «{revisado.nombre}»",
+                ctx, revisado.forma, f"{que} de «{revisado.nombre}»",
                 "la sección se pisa al recorrer el borde. Reducí el ancho, el alto o la holgura, "
-                "o elegí un borde con curvas y esquinas más abiertas.")
+                "o elegí un borde con curvas y esquinas más abiertas.", antes=previas[cid])
         self._registrar_usados(usados)
 
 
