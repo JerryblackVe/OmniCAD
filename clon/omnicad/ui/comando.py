@@ -1636,7 +1636,7 @@ class PanelComando(QFrame):
     def _previsualizar_prisma(self, op):
         p = op.p
         if (op.TIPO != "extrusion" or self.ctx.doc.motor != "opencascade"
-                or p.get("operacion") != "nuevo" or p.get("tipo") != "solida"
+                or p.get("operacion") not in ("nuevo", "unir") or p.get("tipo") != "solida"
                 or p.get("inicio") != "plano" or p.get("extension") != "distancia"
                 or p.get("extension2") != "distancia"
                 or abs(self.ctx.evaluar(p["conicidad"], ANGULO)) > 1e-9
@@ -1658,8 +1658,10 @@ class PanelComando(QFrame):
                  self.visor.config.teselado, self.visor.config.angular)
         if self._prisma_previa is None or self._prisma_previa[0] != firma:
             plano, _ = op._caras(self.ctx.estado, Contexto(self.ctx.doc.parametros.valores()))
-            unidad = type(op)(op.id, op.nombre, **dict(p, distancia="1 mm", direccion="un_lado", simetrica=False,
-                                                      invertir=False))
+            # B-359: siempre cuerpo nuevo. Con «Unir» la unión reusaría el id del cuerpo y no quedaría prisma; mientras se
+            # arrastra se ven la pieza y el prisma juntos (igual que la unión) y al soltar la unión sale del kernel.
+            unidad = type(op)(op.id, op.nombre, **dict(p, operacion="nuevo", objetivos=[], distancia="1 mm",
+                                                      direccion="un_lado", simetrica=False, invertir=False))
             with geo.en_serie():         # B-293
                 exacto, _ = self.ctx.doc.previsualizar(unidad, self.ctx.indice, en_vivo=self._previa_aislada)
             self._previa_aislada = True
