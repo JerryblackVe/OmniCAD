@@ -1476,6 +1476,11 @@ def _desfase_kernel(forma, caras, dist):
         resultado = mo.Shape()
         if resultado.ShapeType() == TopAbs_SHELL:       # con un agujero ciego el kernel devuelve la cáscara sola
             resultado = BRepBuilderAPI_MakeSolid(TopoDS.Shell(resultado)).Solid()
+        # B-334: con hoyuelos en la cara (un patrón de esferas) el kernel la mueve y los deja atrás, sueltos: una cáscara
+        # abierta que salía ok. Se descarta y sigue la extrusión de las planas (o el error de las curvas)
+        if geo.solidos(forma) and (not geo.solidos(resultado)
+                                   or geo._aristas_defectuosas(resultado)[0] > geo._aristas_defectuosas(forma)[0]):
+            return None, False
         return resultado, _cara_dada_vuelta(mo, forma, caras, resultado, dist)
     except Exception:  # noqa: BLE001 — quien llama prueba otra alternativa
         return None, False
