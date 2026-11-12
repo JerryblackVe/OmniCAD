@@ -1371,6 +1371,7 @@ class GestorManipuladores(QObject):
         self._tragar_soltar = False
         self._sano = None               # B-345: valores del asa agarrada con la última previa sana
         self._freno = {}                # B-345: clave → (valor sano, sentido) que el asa no pasa en este arrastre
+        self._aviso_tope = ""          # B-364: por qué frenó el asa, se muestra mientras sigue agarrada
         self.visor.installEventFilter(self)
         self.visor.camara_cambiada.connect(self._camara)
 
@@ -1648,6 +1649,7 @@ class GestorManipuladores(QObject):
         self._arrastre = {"m": m, "sub": sub, "estado": estado, "claves": set()}
         self._sano = None if not getattr(self.panel, "_previa_ok", False) else {}
         self._freno = {}
+        self._aviso_tope = ""
         self.redibujar()
         return True
 
@@ -1679,11 +1681,17 @@ class GestorManipuladores(QObject):
         actuales = {k: self.valor(k) for k in self._arrastre["claves"]}
         if sana:
             self._sano.update(actuales)
+            previo = self.panel.mensaje.text()
+            if self._aviso_tope and self._aviso_tope not in previo:    # B-364: frenar callado parecía arbitrario (Fusion avisa)
+                self.panel._mostrar(" ".join(t for t in (previo, self._aviso_tope) if t), tipo="aviso")
             return
         malos = {k: v for k, v in actuales.items() if k in self._sano and abs(v - self._sano[k]) > 1e-9}
         if not malos:
             return
         tope = self._buscar_tope(malos)
+        error = self.panel.mensaje.text().removeprefix("⚠").strip()
+        self._aviso_tope = " ".join(f"{getattr(self.campo(k), 'etiqueta', k)}: el asa frena en {self.texto(k, v)}."
+                                    for k, v in tope.items()) + (f" Con más: {error}" if error else "")
         for k, v in tope.items():
             self._freno[k] = (v, 1.0 if malos[k] > v else -1.0)
         self.escribir(tope)

@@ -1144,7 +1144,8 @@ def _arrastrar_con_previa(panel, visor, desde, hasta, pasos=12):
 @pytest.mark.parametrize("caso", ["empalme", "vaciado", "pulsar"])
 def test_b345_el_asa_frena_donde_la_pieza_lo_admite(app_qt, caso):
     """B-345: arrastrada muy pasada del límite (radio de empalme enorme, vaciado más grueso que la caja, pulsar hacia
-    adentro más que la caja), el asa queda en el último valor con la previa sana; tecleado, el mismo valor sí da rojo."""
+    adentro más que la caja), el asa queda en el último valor con la previa sana y el panel dice dónde frenó y por qué
+    (B-364); tecleado, el mismo valor sí da rojo."""
     from omnicad.ui.comandos.modificar import Empalme, PulsarTirar, Vaciado
     doc = _doc_caja()
     comando, valores, clave, sentido = {
@@ -1157,6 +1158,8 @@ def test_b345_el_asa_frena_donde_la_pieza_lo_admite(app_qt, caso):
     assert panel._previa_ok
     medio, d = _sobre_flecha(panel, f"flecha:{clave}")
     _arrastrar_con_previa(panel, visor, medio, medio + d * 300)
+    if caso != "pulsar":                       # B-364: frenar callado parecía arbitrario (pulsar llega a +18 mm sin frenar)
+        assert "el asa frena en" in panel.mensaje.text(), panel.mensaje.text()
     valor = panel.ctx.evaluar(panel.valores[clave])
     panel._calcular_previa()
     assert panel._previa_ok and estados[-1] is not None, panel.mensaje.text()
