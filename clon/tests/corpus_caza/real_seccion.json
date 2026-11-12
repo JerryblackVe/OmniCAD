@@ -1,0 +1,11 @@
+{
+ "id": "B-307",
+ "firma": "proceso|section_view|colgado",
+ "pasos": [
+  {"tool": "create_cylinder", "args": {"radius": 10, "height": 20}, "exito": true},
+  {"tool": "create_cylinder", "args": {"radius": 15, "height": 2, "z": 20}, "exito": true},
+  {"tool": "boolean_operation", "args": {"target": "Cuerpo1", "tools": ["Cuerpo2"], "operation": "join"}, "exito": true},
+  {"tool": "create_thread", "args": {"body": "Cuerpo1", "faces": "%CYLINDER and <Z", "modeled": true, "length": 20}, "exito": true},
+  {"tool": "section_view", "args": {"bodies": ["Cuerpo1"], "plane": "XZ", "offset": 0}, "exito": true}
+ ]
+}

@@ -1,0 +1,10 @@
+{
+ "id": "B-309",
+ "firma": "esperado|extrude|rechaza_valido",
+ "pasos": [
+  {"tool": "create_cylinder", "args": {"radius": 10, "height": 20}, "exito": true},
+  {"tool": "create_cylinder", "args": {"radius": 15, "height": 2, "z": 20}, "exito": true},
+  {"tool": "boolean_operation", "args": {"target": "Cuerpo1", "tools": ["Cuerpo2"], "operation": "join"}, "exito": true},
+  {"tool": "extrude", "args": {"body": "Cuerpo1", "faces": ">Z", "direction": "two_sides", "distance": -5, "distance2": 10, "operation": "new_body"}, "exito": true}
+ ]
+}

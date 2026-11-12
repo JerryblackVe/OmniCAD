@@ -65,7 +65,7 @@ def refrescar(api, s):
     api.llamar(s, "find_edges", {})
 
 
-def juez_contrato(respuesta, invalido=None):
+def juez_contrato(respuesta, invalido=None, exito=False):
     """La respuesta cumple el contrato de `api.llamar`: dict, error con kind y mensaje en español, nada suelto."""
     if not isinstance(respuesta, dict) or "ok" not in respuesta:
         return fallo("contrato", "respuesta_rara", repr(respuesta)[:200])
@@ -80,6 +80,8 @@ def juez_contrato(respuesta, invalido=None):
         return fallo("contrato", "sin_mensaje", kind)
     if INGLES.search(mensaje) and not re.search(r"[áéíóúñ¿]| (el|la|de|no|un|una|que|en|con|se) ", mensaje):
         return fallo("contrato", "mensaje_en_ingles", mensaje)
+    if exito:
+        return fallo("esperado", "rechaza_valido", f"{kind}: {mensaje}")
     return None
 
 
@@ -127,8 +129,8 @@ def juez_numeros(f):
     return None
 
 
-def defectos(api, s, autointersecciones=True):
-    """Defectos de `check_geometry` por cuerpo: el juez cuenta solo los que aparecen en este paso."""
+def defectos(api, s, autointersecciones=True, solidos=False):
+    """Defectos de `check_geometry`; `solidos` exige conservar sólidos en las cadenas de pieza real."""
     r = api.llamar(s, "check_geometry", {"self_intersection": autointersecciones}).get("result") or {}
     salida = {}
     for c in r.get("bodies") or []:
@@ -138,6 +140,8 @@ def defectos(api, s, autointersecciones=True):
                              "no_manifold": c.get("non_manifold_edges") or 0,
                              "autointersecciones": c.get("self_intersections") or 0,
                              "invalido": int(not c.get("valid", True))}
+        if solidos:
+            salida[c["name"]]["no_solido"] = int(c.get("type") != "solid")
     return salida
 
 

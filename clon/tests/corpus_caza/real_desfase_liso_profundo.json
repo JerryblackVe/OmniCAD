@@ -1,0 +1,8 @@
+{
+ "id": "B-310",
+ "firma": "esperado|offset_faces|rechaza_valido",
+ "pasos": [
+  {"tool": "create_cylinder", "args": {"radius": 15.5, "height": 31}, "exito": true},
+  {"tool": "offset_faces", "args": {"body": "Cuerpo1", "faces": "%CYLINDER", "tangent": false, "distance": -6.13}, "exito": true}
+ ]
+}

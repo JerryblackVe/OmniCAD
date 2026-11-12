@@ -6,6 +6,7 @@ import json
 import random
 import sys
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -111,10 +112,85 @@ def test_el_contrato_marca_lo_suelto_y_acepta_lo_claro():
     assert j.juez_contrato({"ok": False, "error_kind": "INVALID_ARGUMENTS", "mensaje": "start=object necesita una cara."}) is None
 
 
+def test_la_pieza_real_exige_que_sus_pasos_validos_se_completen():
+    rechazo = {"ok": False, "error_kind": "OPERATION_FAILED", "mensaje": "La distancia debe ser positiva."}
+    assert j.juez_contrato(rechazo) is None
+    assert j.juez_contrato(rechazo, exito=True)["kind"] == "rechaza_valido"
+    assert j.juez_contrato({"ok": True}, exito=True) is None
+    for nombre, cadena in gen.CADENAS_REALES.items():
+        caso = json.loads((Path(__file__).parent / "corpus_caza" / f"real_{nombre}.json").read_text(encoding="utf-8"))
+        pasos = [{"tool": t, "args": a, "exito": True} for t, a in cadena(random.Random(1))]
+        assert caso["pasos"] == pasos
+
+
 def test_geometria_cuenta_solo_lo_que_aparece_en_el_paso():
     previo = {"C": {"autointersecciones": 2, "abierto": 0}}
     assert j.juez_geometria(previo, previo) is None
     assert j.juez_geometria(previo, {"C": {"autointersecciones": 3, "abierto": 0}})["kind"] == "autointersecciones"
+
+
+def test_la_pieza_real_conserva_solidos_cerrados_incluso_con_defectos_previos():
+    class ApiFalsa:
+        def llamar(self, _s, tool, _args):
+            assert tool == "check_geometry"
+            return {"ok": True, "result": {"bodies": [
+                {"name": "Sólido", "type": "solid", "valid": True, "closed": True},
+                {"name": "Abierto", "type": "solid", "valid": True, "closed": False},
+                {"name": "Superficie", "type": "surface", "valid": True},
+            ]}}
+
+    d = j.defectos(ApiFalsa(), None, False, solidos=True)
+    assert j.juez_geometria({}, {"Sólido": d["Sólido"]}) is None
+    assert j.juez_geometria({}, {"Abierto": d["Abierto"]})["kind"] == "abierto"
+    assert j.juez_geometria({}, {"Superficie": d["Superficie"]})["kind"] == "no_solido"
+    with patch.object(j, "foto", return_value={}), patch.object(j, "defectos", return_value=d) as leer:
+        f, _, _ = trabajador.juzgar(api.Sesion(), "section_view", {}, [], d, {}, ".", False, False, 0, exito=True)
+    assert f["kind"] == "abierto"
+    assert leer.call_args.kwargs["solidos"] is True
+
+
+def test_las_cadenas_reales_cubren_ambos_signos_y_los_dos_desfases_de_b310():
+    for semilla in range(5):
+        for signo, nombre in ((1, "desfase_unido_positivo"), (-1, "desfase_unido_negativo")):
+            pasos = gen.CADENAS_REALES[nombre](random.Random(semilla))
+            radio = pasos[0][1]["radius"]
+            assert pasos[1][1]["z"] == pasos[0][1]["height"]
+            assert pasos[-2][0] == "boolean_operation"
+            assert pasos[-1][1]["distance"] == signo * 0.05 * radio
+        for nombre, distancia in (("desfase_liso_leve", -1.24), ("desfase_liso_profundo", -6.13)):
+            ped = {"pieza": nombre, "plan": []}
+            pasos = list(trabajador.pasos_cadena(ped, random.Random(semilla))(None))
+            assert all(p["exito"] for p in pasos)
+            assert [p["tool"] for p in pasos] == ["create_cylinder", "offset_faces"]
+            assert pasos[0]["args"]["radius"] == 15.5
+            assert pasos[-1]["args"]["distance"] == distancia
+
+
+def test_un_paso_real_se_juzga_aunque_no_cambie_la_receta():
+    paso = {"tool": "section_view", "args": {}, "exito": True}
+    with patch.object(trabajador, "llamar", return_value={"ok": True}), \
+            patch.object(trabajador, "juzgar", return_value=(None, {}, {})) as juzgar:
+        resultado = trabajador.correr(lambda _s: iter([paso]), ".")
+        assert resultado["fallo"] is None
+        assert juzgar.call_count == 1
+        assert juzgar.call_args.args[-1] is True
+        juzgar.reset_mock()
+        trabajador.correr(lambda _s: iter([{**paso, "exito": False}]), ".")
+        juzgar.assert_not_called()
+
+
+def test_el_tema_pieza_real_reanuda_y_el_nombre_elige_solo_su_cadena():
+    for foco, desde, esperadas in (("pieza_real", 2, list(gen.CADENAS_REALES)[2:]), ("dos_lados", 0, ["dos_lados"])):
+        corrida = cazar.Corrida.__new__(cazar.Corrida)
+        corrida.foco, corrida.pesado, corrida.plazo = foco, False, 40
+        corrida.av = {"semilla": 1}
+        corrida.fuente = Mock()
+        corrida.fuente.pedir.return_value = {"avance": [], "fallo": None}
+        corrida.cob = Mock()
+        capa = {"reales": desde, "hechos": desde}
+        corrida.capa_b(capa, lambda: True)
+        assert [c.args[0]["pieza"] for c in corrida.fuente.pedir.call_args_list] == esperadas
+        assert capa["hechos"] == desde + len(esperadas)
 
 
 def test_numeros_y_fotos():

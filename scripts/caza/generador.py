@@ -264,6 +264,43 @@ PIEZAS = {"contrato": _contrato, "solido": _solido, "extruido": _extruido, "vaci
           "superficie": _superficie, "ensamble": _ensamble}
 
 
+def pieza_real(rng, caso):
+    """Perno con tapa apoyada sin solape: cada medida deriva del radio del cilindro.
+
+    Cada variante parte de cero: un desfase colgado no impide probar el otro signo ni la sección.
+    """
+    radio = 15.5 if caso.startswith("desfase_liso_") else rng.choice((10, 12, 15))
+    altura = 2 * radio
+    cilindro = ("create_cylinder", {"radius": radio, "height": altura})
+    tapa = ("create_cylinder", {"radius": 1.5 * radio, "height": 0.2 * radio, "z": altura})
+    unir = ("boolean_operation", {"target": "Cuerpo1", "tools": ["Cuerpo2"], "operation": "join"})
+    rosca = ("create_thread", {"body": "Cuerpo1", "faces": "%CYLINDER and <Z", "modeled": True,
+                               "length": altura})
+    if caso.startswith("desfase_liso_"):
+        factor = 0.08 if caso == "desfase_liso_leve" else 6.13 / 15.5
+        return [cilindro, ("offset_faces", {"body": "Cuerpo1", "faces": "%CYLINDER", "tangent": False,
+                                           "distance": round(-radio * factor, 6)})]
+    if caso == "rosca_tapa":
+        return [cilindro, rosca, tapa, unir]
+    pasos = [cilindro, tapa, unir]
+    if caso in ("tapa_rosca", "seccion"):
+        pasos.append(rosca)
+    if caso.startswith("desfase_"):
+        pasos.append(("offset_faces", {"body": "Cuerpo1", "faces": "%CYLINDER and <Z", "tangent": False,
+                                       "distance": radio * (0.05 if caso.endswith("positivo") else -0.05)}))
+    elif caso == "dos_lados":
+        pasos.append(("extrude", {"body": "Cuerpo1", "faces": ">Z", "direction": "two_sides",
+                                  "distance": -0.5 * radio, "distance2": radio, "operation": "new_body"}))
+    elif caso == "seccion":
+        pasos.append(("section_view", {"bodies": ["Cuerpo1"], "plane": "XZ", "offset": 0}))
+    return pasos
+
+
+CADENAS_REALES = {nombre: (lambda rng, caso=nombre: pieza_real(rng, caso)) for nombre in (
+    "tapa_coplanar", "tapa_rosca", "rosca_tapa", "desfase_unido_positivo", "desfase_unido_negativo",
+    "desfase_liso_leve", "desfase_liso_profundo", "dos_lados", "seccion")}
+
+
 def _extruido_con_empalmes():
     pasos = [("create_box", {"length": 120, "width": 80, "height": 12}), ("create_sketch", {"plane": "XY"})]
     pasos += [("draw_circle", {"center_x": -48 + 16 * i, "center_y": -24 + 16 * k, "radius": 4}) for i in range(7) for k in range(4)]
