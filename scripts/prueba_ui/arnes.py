@@ -3,7 +3,7 @@
 
 Abre VentanaPrincipal con un documento armado por la API, y deja ejecutar comandos como los ejecuta una persona:
 v.ejecutar_comando(...) → PanelComando → elegir con el visor → cambiar valores → aceptar / cancelar / editar / deshacer.
-Corre con QT_QPA_PLATFORM=windows (fuentes reales).
+Corre con QT_QPA_PLATFORM=windows en Windows y xcb en Linux (con xvfb-run); fuentes reales.
 
 Modo de ventana, variable de entorno OMNICAD_PRUEBA_VENTANA (la lee `modo_ventana()` en cada llamada):
   visible    (por defecto) la ventana se ve y toma el foco: no usar el ratón ni el teclado mientras corre.
@@ -24,7 +24,7 @@ import warnings
 from datetime import date
 from pathlib import Path
 
-os.environ.setdefault("QT_QPA_PLATFORM", "windows")
+os.environ.setdefault("QT_QPA_PLATFORM", "windows" if sys.platform == "win32" else "xcb")
 os.environ.setdefault("OMNICAD_SIN_ANIMACION", "1")      # las pruebas esperan cada vista al instante
 # Los chats del Asistente que guardan las piezas van a una carpeta temporal, nunca al historial del usuario.
 os.environ.setdefault("OMNICAD_ASISTENTE_DIR", tempfile.mkdtemp(prefix="omnicad_ui_chats_"))
