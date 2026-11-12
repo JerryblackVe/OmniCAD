@@ -132,9 +132,9 @@ def _prevuelo_cambio(receta, cambio, previa=False):
                 estado_previo = {"estado": estado, "avisos": avisos, "usados": set(nueva._usados)}
             if cambio["tipo"] == "agregar":
                 doc.mover_marcador(i)
-                doc.agregar(nueva)
+                doc.agregar(nueva, revisar_autointersecciones=not previa)
             else:
-                doc.reemplazar(doc.operaciones[i].id, nueva)
+                doc.reemplazar(doc.operaciones[i].id, nueva, revisar_autointersecciones=not previa)
         elif cambio["tipo"] == "suprimir":
             doc.suprimir(doc.operaciones[i].id, bool(cambio["suprimida"]))
         elif cambio["tipo"] == "eliminar":

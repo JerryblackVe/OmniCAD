@@ -37,16 +37,22 @@ def _pg():
     return patron_geometrico
 
 
-def _avisar_autointersecciones(ctx, forma, que, causa):
+def _avisar_autointersecciones(op, ctx, forma, que, causa):
     """Un paso no puede quedar «ok» con una forma que se cruza consigo misma (B-168, B-167): se avisa con el mismo
     análisis BOPAlgo que usa el desfase de superficies (`nucleo/superficies.py`). `que` es lo que creó el paso y
-    `causa` cómo evitarlo."""
+    `causa` cómo evitarlo. Solo analiza al aceptar o editar ese paso."""
+    if ctx.revisar_autointersecciones != op.id:
+        return
     from ..nucleo import revision                  # local: revision carga medio núcleo
     n, problemas, _ = revision._autointersecciones_seguras(forma, 1, 5.0)
+    texto = ""
     if n is None:                                  # no se pudo contar (forma B-spline lenta): tampoco queda callado
-        ctx.aviso(problemas[0]["mensaje"])
+        texto = problemas[0]["mensaje"]
     elif n:
-        ctx.aviso(f"{que} quedó con {n} {'autointersección' if n == 1 else 'autointersecciones'}: {causa}")
+        texto = f"{que} quedó con {n} {'autointersección' if n == 1 else 'autointersecciones'}: {causa}"
+    if texto:
+        op._avisos_autointersecciones.append(texto)
+        ctx.aviso(texto)
 
 
 def _caras(refs, estado, que="perfiles"):
@@ -123,6 +129,7 @@ class OpBarrido(_OpCrear):
     ángulo de torsión y de conicidad. `orientacion` "alineada" mantiene `eje_alineado` (eje, arista, plano o cara) como
     binormal; `superficie_guia` (caras sobre las que va la ruta) es el tipo Ruta + Superficie guía."""
     TIPO, ETIQUETA, ICONO = "barrido", "Barrido", "↝"
+    REVISA_AUTOINTERSECCIONES = True
     PARAMS = {"perfiles": [], "ruta": [], "carril": [], "orientacion": "perpendicular", "distancia": "1",
               "torsion": "0 deg", "conicidad": "0 deg", "escala_carril": "escalar", "operacion": "nuevo",
               "objetivos": [], "eje_alineado": None, "superficie_guia": [], "cuerpos": [], "cadena": False}
@@ -160,6 +167,9 @@ class OpBarrido(_OpCrear):
             if getattr(c, "tipo", "solido") != "solido":
                 raise ErrorOperacion(f"«{c.nombre}» no es un cuerpo sólido: el barrido de un cuerpo lo necesita.")
             forma = _sc().barrer_cuerpo(c.forma, ruta, orientacion=orientacion, distancia=distancia, eje_alineado=eje)
+            _avisar_autointersecciones(
+                self, ctx, forma, "El barrido del cuerpo",
+                "el cuerpo se pisa al recorrer la ruta. Probá un cuerpo más chico o una ruta más abierta, sin cruces.")
             self._aplicar(estado, ctx, forma)
 
     def ejecutar(self, estado, ctx):
@@ -179,6 +189,9 @@ class OpBarrido(_OpCrear):
                              eje_alineado=eje, superficie_guia=superficie)
         if geo.sin_volumen(forma):
             raise ErrorOperacion("El barrido no encierra volumen: el plano del perfil no puede ser paralelo a la ruta.")
+        _avisar_autointersecciones(
+            self, ctx, forma, "El barrido",
+            "el perfil se pisa al recorrer la ruta. Probá un perfil más chico o una ruta más abierta, sin cruces.")
         self._aplicar(estado, ctx, forma)
 
 
@@ -590,6 +603,7 @@ class OpTuberia(_OpCrear):
     """Tubería de Fusion [SLD-PIPE-SOLID]: cadena tangente, límites fraccionales distancia2 (inicio) y
     distancia (fin), sección y tamaño, hueca con espesor. Sin cadena se conserva solo la ruta elegida."""
     TIPO, ETIQUETA, ICONO = "tuberia", "Tubería", "⊃"
+    REVISA_AUTOINTERSECCIONES = True
     PARAMS = {"ruta": [], "distancia": "1", "seccion": "circular", "tamano": "5 mm", "hueca": False,
               "espesor": "0.5 mm", "operacion": "nuevo", "objetivos": [], "cadena": False, "distancia2": "0"}
     EXPRESIONES = ("distancia", "distancia2", "tamano", "espesor")
@@ -608,7 +622,7 @@ class OpTuberia(_OpCrear):
         # forma B-spline se corre a un proceso aparte (~1 s). Se hace recién con dos tramos o más.
         if len(ruta) > 1:
             _avisar_autointersecciones(
-                ctx, forma, "El tubo",
+                self, ctx, forma, "El tubo",
                 "en las esquinas de la ruta la sección se pliega sobre sí misma y el kernel no logra "
                 "redondear esas esquinas. Probá una sección más chica o una ruta con esquinas menos cerradas.")
         self._aplicar(estado, ctx, forma)
@@ -1240,6 +1254,7 @@ class OpPatronGeometrico(_OpCrear):
     repartidos sobre las caras planas `caras` con un gradiente de tamaño (`nucleo/patron_geometrico.py` explica cada
     opción). `operacion`: unir, cortar, intersecar o cuerpo nuevo."""
     TIPO, ETIQUETA, ICONO = "patron_geometrico", "Patrón geométrico", "⁘"
+    REVISA_AUTOINTERSECCIONES = True
     PARAMS = {"caras": [], "objeto": "esfera", "personalizado": None, "tamano1": "2 mm", "tamano2": "4 mm",
               "dispersion": "1", "distribucion": "rectangular", "separacion": "incremento", "distancia": "6 mm",
               "cantidad_u": 5, "cantidad_v": 5, "distancia_radial": "6 mm", "rayos": 8, "orientacion": "cara",
@@ -1278,7 +1293,7 @@ class OpPatronGeometrico(_OpCrear):
                 raise ErrorOperacion(str(err)) from err
         herramienta = geo.compuesto(formas)
         _avisar_autointersecciones(
-            ctx, herramienta, "El patrón",
+            self, ctx, herramienta, "El patrón",
             "las copias son más grandes que la distancia que las separa, o caen en dos caras separadas menos que su "
             "tamaño. Aumentá la distancia, bajá el tamaño o elegí una sola cara.")
         self._aplicar(estado, ctx, herramienta)
@@ -1628,6 +1643,7 @@ class OpLabio(_OpCrear):
     """Labio / ranura / labio y acanalado de PLÁSTICO [SLD-LIP], simplificado: sección rectangular a lo largo del
     borde. El tipo "labio y acanalado" une el labio a un cuerpo y le corta al otro la ranura del labio (con holgura)."""
     TIPO, ETIQUETA, ICONO = "labio", "Labio", "⊓"
+    REVISA_AUTOINTERSECCIONES = True
     PARAMS = {"aristas": [], "tipo": "labio", "ancho": "1 mm", "alto": "1.5 mm", "holgura": "0.1 mm",
               "direccion": None, "invertir": False, "cuerpo_ranura": None}
     EXPRESIONES = ("ancho", "alto", "holgura")
@@ -1662,6 +1678,13 @@ class OpLabio(_OpCrear):
         if abs(dv) <= max(antes, 1.0) * 1e-9:   # un labio que quedó entero dentro no avisa solo (B-62)
             ctx.aviso(f"{cuerpo.nombre}: el {self.p['tipo']} no cambió el volumen "
                       "(¿la dirección o el lado lo dejaron dentro de la pared? Probá «Invertir»).")
+        for cid in usados:
+            revisado = estado.cuerpo(cid)
+            que = "La ranura" if cid != cuerpo.id or self.p["tipo"] == "ranura" else "El labio"
+            _avisar_autointersecciones(
+                self, ctx, revisado.forma, f"{que} de «{revisado.nombre}»",
+                "la sección se pisa al recorrer el borde. Reducí el ancho, el alto o la holgura, "
+                "o elegí un borde con curvas y esquinas más abiertas.")
         self._registrar_usados(usados)
 
 

@@ -209,7 +209,8 @@ def _empaquetar(doc, previa=None):
     datos = {"estados": estados[iguales:], "iguales": iguales,
              "resultados": [(r.estado, r.mensaje) for r in doc.resultados], "usados": doc._usados,
              "valores": doc._valores, "duraciones": doc._duraciones,
-             "dependencias": [o._usados for o in doc.operaciones], "previa": previa}
+             "dependencias": [o._usados for o in doc.operaciones], "previa": previa,
+             "avisos_autointersecciones": [list(o._avisos_autointersecciones) for o in doc.operaciones]}
     salida = {"errores": sum(r.estado == "error" for r in doc.resultados), "pasos": len(doc.operaciones),
               "cuerpos": len(doc.estado_final.cuerpos), "receta": doc.a_dict(), "calculo": _codificar(datos, estados[:iguales])}
     if aislado.formas_enviadas is not None:

@@ -434,7 +434,7 @@ class Documento:
             ocultos = self.propiedad("__navegador__", "ocultos", [])
             op.ocultos = sorted(i for i in ocultos if isinstance(i, str)) if isinstance(ocultos, list) else []
 
-    def agregar(self, op, aparte=False):
+    def agregar(self, op, revisar_autointersecciones=True, aparte=False):
         """Inserta la operación en la posición del marcador (como Fusion) y la ejecuta. `aparte`: la calcula en un proceso
         aparte aunque el documento sea chico (un paso pesado aceptado desde la ventana, B-306)."""
         exigir_nombre(op.nombre)                       # P-93: el `name` de las herramientas de creación también
@@ -449,10 +449,10 @@ class Documento:
         self.parametros, self._contador_cotas = tabla, contador
         self.marcador += 1
         self.modificado = True
-        self._terminar_recalculo(desde, calculo)
+        self._terminar_recalculo(desde, calculo, op.id if revisar_autointersecciones and op.REVISA_AUTOINTERSECCIONES else None)
         return self.resultados[i]
 
-    def reemplazar(self, op_id, nueva, aparte=False):
+    def reemplazar(self, op_id, nueva, revisar_autointersecciones=True, aparte=False):
         """Edita un paso: la nueva versión conserva el id (las referencias siguen valiendo). `aparte`: como en `agregar`."""
         i = self.indice(op_id)
         nueva.id = op_id
@@ -464,7 +464,7 @@ class Documento:
         self.operaciones[i] = nueva
         self.parametros, self._contador_cotas = tabla, contador
         self.modificado = True
-        self._terminar_recalculo(desde, calculo)
+        self._terminar_recalculo(desde, calculo, op_id if revisar_autointersecciones and nueva.REVISA_AUTOINTERSECCIONES else None)
         return self.resultados[i]
 
     def pegar(self, receta, usa=()):
@@ -1023,7 +1023,9 @@ class Documento:
         firma = hashlib.sha256(json.dumps(datos, sort_keys=True).encode("utf-8")).digest()
         clase = TIPOS_OPERACION.get(cambio.get("operacion", {}).get("tipo"))
         memorizable = clase is not None and clase.MEMORIZABLE and all(op.MEMORIZABLE for op in self.operaciones)
-        if memorizable and self._ultimo_prevuelo is not None and firma == self._ultimo_prevuelo[0]:
+        # Una previa no revisó autointersecciones: Aceptar necesita ejecutar ese paso con el indicador prendido.
+        if (memorizable and (previa or not clase.REVISA_AUTOINTERSECCIONES)
+                and self._ultimo_prevuelo is not None and firma == self._ultimo_prevuelo[0]):
             return self._ultimo_prevuelo[1]
         calculo = self._solicitar_calculo("prevuelo_cambio", dict(datos, previa=previa))
         self._ultimo_prevuelo = (firma, calculo) if memorizable and previa else None
@@ -1044,13 +1046,17 @@ class Documento:
         finally:
             self._esperando_hijo = False
 
-    def _terminar_recalculo(self, desde, calculo):
+    def _terminar_recalculo(self, desde, calculo, revisar_autointersecciones=None):
         if calculo is None:
-            self.recalcular(desde)
+            self._revisar_autointersecciones = revisar_autointersecciones
+            try:
+                self.recalcular(desde)
+            finally:
+                self._revisar_autointersecciones = None
         else:
-            self._aplicar_calculo(calculo)
+            self._aplicar_calculo(calculo, revisar_autointersecciones)
 
-    def _aplicar_calculo(self, calculo):
+    def _aplicar_calculo(self, calculo, revisar_autointersecciones=None):
         """Adopta el resultado ya calculado; no ejecuta operaciones del kernel en este proceso."""
         receta = calculo["receta"]
         self.parametros = TablaParametros.desde_lista(receta["parametros"])
@@ -1064,6 +1070,14 @@ class Documento:
         self._usados, self._valores, self._duraciones = calculo["usados"], calculo["valores"], calculo["duraciones"]
         for op, usados in zip(self.operaciones, calculo["dependencias"], strict=True):
             op._usados = set(usados)
+        for i, op in enumerate(self.operaciones):
+            if op.id == revisar_autointersecciones:
+                op._avisos_autointersecciones = list(calculo["avisos_autointersecciones"][i])
+            resultado = self.resultados[i]
+            if resultado.estado in ("ok", "aviso"):
+                textos = [t for t in op._avisos_autointersecciones if t not in resultado.mensaje]
+                if textos:
+                    self.resultados[i] = ResultadoPaso("aviso", " ".join([resultado.mensaje, *textos]).strip())
         self._memo.clear()
         self._previa = self._ultimo_prevuelo = None
         self._notificar()
@@ -1211,14 +1225,16 @@ class Documento:
         nombres = self._nombres_cuerpos()
         estado = self.estado_en(desde)
         repetidos = self._pasos_repetidos() if self._cache else set()
+        revisar_autointersecciones = getattr(self, "_revisar_autointersecciones", None)
         for i in range(desde, len(self.operaciones)):
             op = self.operaciones[i]
+            revisar = op.id == revisar_autointersecciones and op.REVISA_AUTOINTERSECCIONES
             if registro is not None:
                 antes_registro = [(c.tipo, c.forma) for c in estado.cuerpos.values()]
                 inicio_paso = time.perf_counter()
             usados = frozenset()
             duracion = 0.0
-            guardado = self._de_cache(i, op, estado) if (i < self.marcador and not op.suprimida
+            guardado = self._de_cache(i, op, estado) if (not revisar and i < self.marcador and not op.suprimida
                                                           and op.id not in repetidos) else None
             if i >= self.marcador:
                 self.resultados.append(ResultadoPaso("retrocedida"))
@@ -1227,7 +1243,7 @@ class Documento:
             elif guardado is not None:
                 estado, resultado, usados, duracion = guardado
                 self.resultados.append(resultado)
-            elif (memo := self._de_memo(op, estado, valores) or self._de_previa(op, estado, valores)) is not None:
+            elif not revisar and (memo := self._de_memo(op, estado, valores) or self._de_previa(op, estado, valores)) is not None:
                 estado, resultado, usados, duracion = memo
                 self.resultados.append(resultado)
             else:
@@ -1235,6 +1251,7 @@ class Documento:
                 nuevo = estado.copia()
                 nuevo.anotar_lecturas()
                 ctx = Contexto(valores, op.id not in self._sin_partir)
+                ctx.revisar_autointersecciones = revisar_autointersecciones
                 usados = ctx.usados
                 if self.al_calcular is not None:
                     self.al_calcular(op)

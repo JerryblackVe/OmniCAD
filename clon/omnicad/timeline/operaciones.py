@@ -336,6 +336,7 @@ class Contexto:
         self.usados = set()       # nombres de parámetros que leyó la operación al ejecutarse
         self.valores = _Lecturas(valores_parametros, self.usados)
         self.avisos = []
+        self.revisar_autointersecciones = None    # id del único paso que se está aceptando o editando
         self.partir = partir      # False en un paso de receta vieja: el corte no divide el cuerpo (`Documento._sin_partir`)
         self.ocultos = ()         # lo oculto al crear el paso (`Operacion.calcular`): sin objetos elegidos no se toca
 
@@ -516,6 +517,7 @@ class Operacion:
     # False si el resultado depende de algo fuera del estado y de los parámetros (un archivo externo) o el paso cambia
     # el documento al calcularse: entonces la memoria por paso del documento nunca lo reusa (`Documento._de_memo`).
     MEMORIZABLE = True
+    REVISA_AUTOINTERSECCIONES = False
 
     def __init__(self, id, nombre=None, suprimida=False, **params):
         self.id = id
@@ -527,6 +529,7 @@ class Operacion:
         # Pasos cuyos cuerpos modificó la última ejecución con objetivo "Automático": también son
         # dependencias (si no, se podría mover o borrar el cuerpo que esta operación corta o une).
         self._usados = set()
+        self._avisos_autointersecciones = []    # solo memoria: no forma parte de la receta
 
     def dependencias(self):
         return set(self._usados)
@@ -601,6 +604,10 @@ class Operacion:
         self.revisar_parametros()
         self.validar_opciones()
         ctx.ocultos = self.ocultos
+        if ctx.revisar_autointersecciones == self.id:
+            self._avisos_autointersecciones = []
+        else:
+            ctx.avisos.extend(self._avisos_autointersecciones)
         try:
             self.ejecutar(estado, ctx)
         except (ParametroMalFormado, ent.ReferenciaMalFormada) as e:
@@ -611,7 +618,9 @@ class Operacion:
             raise ErrorOperacion(str(e)) from e
 
     def copia(self):
-        return operacion_desde_dict(self.a_dict())
+        nueva = operacion_desde_dict(self.a_dict())
+        nueva._avisos_autointersecciones = list(self._avisos_autointersecciones)
+        return nueva
 
     def a_dict(self):
         return {"tipo": self.TIPO, "id": self.id, "nombre": self.nombre, "suprimida": self.suprimida,
