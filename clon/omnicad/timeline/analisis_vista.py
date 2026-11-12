@@ -189,7 +189,7 @@ def calcular(tipo, params, estado, propiedades=None):
         salida["cortes"].append((plano.normal, plano.origen))
         for cid, forma in cuerpos.items():
             datos = _con_cache(("seccion", id(forma), tuple(plano.origen), tuple(plano.normal)),
-                               lambda f=forma: an.seccion(f, plano), forma)
+                               lambda f=forma: an.seccion_visual(f, plano), forma)
             tris = np.asarray(datos["triangulos"], np.float32).reshape(-1, 3)
             if len(tris):
                 salida["capas"].append(("tris", tris, _color_seccion(params, estado.cuerpos[cid], propiedades), 0.85))
