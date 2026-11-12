@@ -36,6 +36,7 @@ TIPOS_RESTRICCION = ("coincidente", "eje", "paralela", "perpendicular", "tangent
 CON_CENTRO = ("arco", "circulo", "elipse")
 _CON_EXTREMOS = ("linea", "arco", "conica", "spline")
 _TOL = 1e-6
+_YA_CUMPLE = 1e-10           # mm: un grupo con residuos así no se vuelve a resolver (BOC-82)
 _ESCALA_TANGENTE = 10.0     # mm: convierte el seno del ángulo en un residuo comparable a una distancia
 
 
@@ -127,7 +128,7 @@ def agregar_spline(b, pts, construccion=False, cerrada=False):
 def agregar_arco(b, inicio, paso, fin, construccion=False):
     """Arco de 3 puntos (3D Sketch › Arco): de `inicio` a `fin` pasando por `paso`."""
     a, m, c = (np.array(_xyz(p)) for p in (inicio, paso, fin))
-    if np.linalg.norm(np.cross(m - a, c - a)) < _TOL * max(1.0, np.linalg.norm(c - a)) ** 2:
+    if np.linalg.norm(_cruz(m - a, c - a)) < _TOL * max(1.0, np.linalg.norm(c - a)) ** 2:
         raise ErrorBoceto("Los tres puntos del arco están alineados (o repetidos): no definen un círculo.")
     return _curva(b, "arco", [a, m, c], construccion)
 
@@ -158,7 +159,7 @@ def agregar_conica(b, inicio, vertice, fin, rho=0.5, construccion=False):
     if not 0 < rho < 1:
         raise ErrorBoceto(f"rho tiene que estar entre 0 y 1, sin incluirlos (llegó {rho:g}).")
     a, v, c = (np.array(_xyz(p)) for p in (inicio, vertice, fin))
-    if np.linalg.norm(np.cross(v - a, c - a)) < _TOL:
+    if np.linalg.norm(_cruz(v - a, c - a)) < _TOL:
         raise ErrorBoceto("El vértice de la cónica no puede estar alineado con sus extremos.")
     return _curva(b, "conica", [a, v, c], construccion, rho=rho)
 
@@ -390,6 +391,57 @@ class Resultado3D:
         self.ok, self.gdl, self.mensaje = ok, gdl, mensaje
 
 
+class _Lectura(dict):
+    """P que anota qué puntos lee una ecuación y qué parámetros de contacto (`("aux", j)`): con eso el solver separa
+    los grupos que no se tocan (BOC-82). Las ecuaciones solo leen `P[clave]` y `P["aux"][j]`."""
+    def __init__(self, P):
+        super().__init__(P)
+        self.leidos = set()
+
+    def __getitem__(self, k):
+        self.leidos.add(k)
+        v = dict.__getitem__(self, k)
+        return _AuxLeido(v, self.leidos) if k == "aux" else v
+
+
+class _AuxLeido:
+    def __init__(self, v, leidos):
+        self.v, self.leidos = v, leidos
+
+    def __getitem__(self, j):
+        self.leidos.add(("aux", j))
+        return self.v[j]
+
+
+def _grupos(fs, P, libres):
+    """[(ecuaciones, columnas de x)] de los grupos independientes: dos ecuaciones van juntas si comparten una incógnita.
+    Las que no tocan ninguna (solo geometría fija) quedan en grupos sin columnas."""
+    indice = {p: i for i, p in enumerate(libres)}
+    padre = {}
+
+    def raiz(k):
+        while padre.setdefault(k, k) != k:
+            k = padre[k]
+        return k
+    columnas = []
+    for i, f in enumerate(fs):
+        L = _Lectura(P)
+        f(L)
+        cols = [c for k in L.leidos if k != "aux" for c in (
+            (3 * indice[k] + j for j in range(3)) if k in indice else
+            (3 * len(libres) + k[1],) if isinstance(k, tuple) else ())]
+        columnas.append(cols)
+        for c in cols:
+            padre[raiz(("c", c))] = raiz(("f", i))
+        raiz(("f", i))
+    grupos = {}
+    for i, cols in enumerate(columnas):
+        ecs, cs = grupos.setdefault(raiz(("f", i)), ([], set()))
+        ecs.append(fs[i])
+        cs.update(cols)
+    return [(ecs, sorted(cs)) for ecs, cs in grupos.values()]
+
+
 def puntos_fijos(b):
     g = datos(b)
     fijos = set()
@@ -402,8 +454,8 @@ def puntos_fijos(b):
 
 def _circuncentro(a, m, c):
     ab, ac = m - a, c - a
-    n = np.cross(ab, ac)
-    return a + (np.cross(n, ab) * (ac @ ac) + np.cross(ac, n) * (ab @ ab)) / (2 * max(n @ n, 1e-24))
+    n = _cruz(ab, ac)
+    return a + (_cruz(n, ab) * (ac @ ac) + _cruz(ac, n) * (ab @ ab)) / (2 * max(n @ n, 1e-24))
 
 
 def _centro(g, P, cid):
@@ -415,6 +467,11 @@ def _medida(g, P, cid):
     """Radio de un arco o largo de una línea."""
     pts = g["curvas"][cid]["puntos"]
     return float(np.linalg.norm(P[pts[0]] - (_centro(g, P, cid) if g["curvas"][cid]["tipo"] == "arco" else P[pts[-1]])))
+
+
+def _cruz(a, c):
+    """`np.cross` de dos vectores 3D, sin su sobrecosto (BOC-82: el solver la llama miles de veces por resolución)."""
+    return np.array([a[1] * c[2] - a[2] * c[1], a[2] * c[0] - a[0] * c[2], a[0] * c[1] - a[1] * c[0]])
 
 
 def _P(b):
@@ -451,12 +508,23 @@ def _sobre_marco(centro, e1, e2, a, b, barrido):
     return Curva(f, 0.0, barrido, (centro, e1, e2, a, b))
 
 
+_SPLINES = {}          # BOC-82: (puntos, tangentes, cerrada) → Curva; el jacobiano la pide igual en casi cada evaluación
+
+
 def _spline_parametrica(b, cid, c, P):
+    pts, tangentes, cerrada = [P[p] for p in c["puntos"]], _tangentes(b, cid, P), c.get("cerrada", False)
+    clave = (np.array(pts, float).tobytes(), tuple((i, tuple(v)) for i, v in sorted(tangentes.items())), cerrada)
+    if clave in _SPLINES:
+        _SPLINES[clave] = _SPLINES.pop(clave)          # la más usada queda al final
+        return _SPLINES[clave]
     try:
-        return Curva(*curvas3d.parametrica(curvas3d.arista_spline([P[p] for p in c["puntos"]], _tangentes(b, cid, P),
-                                                                  c.get("cerrada", False))))
+        curva = Curva(*curvas3d.parametrica(curvas3d.arista_spline(pts, tangentes, cerrada)))
     except geo.ErrorGeometria as e:
         raise ErrorBoceto(f"No se pudo construir la curva 3D {cid}: {e}") from e
+    if len(_SPLINES) >= 16:
+        _SPLINES.pop(next(iter(_SPLINES)))
+    _SPLINES[clave] = curva
+    return curva
 
 
 def curva_parametrica(b, cid, P=None):
@@ -470,23 +538,23 @@ def curva_parametrica(b, cid, P=None):
     if t == "arco":
         centro = _circuncentro(*q)
         r = float(np.linalg.norm(q[0] - centro))
-        n = np.cross(q[1] - q[0], q[2] - q[0])
+        n = _cruz(q[1] - q[0], q[2] - q[0])
         n = n / max(float(np.linalg.norm(n)), 1e-12)
         e1 = (q[0] - centro) / max(r, 1e-12)
-        e2 = np.cross(n, e1)
+        e2 = _cruz(n, e1)
         fin = q[2] - centro
         return _sobre_marco(centro, e1, e2, r, r, math.atan2(float(fin @ e2), float(fin @ e1)) % math.tau)
     if t == "circulo":
         n = np.array(c["normal"], float)
         e = np.zeros(3)
         e[int(np.argmin(np.abs(n)))] = 1.0
-        e1 = np.cross(n, e)
+        e1 = _cruz(n, e)
         e1 = e1 / np.linalg.norm(e1)
-        return _sobre_marco(q[0], e1, np.cross(n, e1), c["radio"], c["radio"], math.tau)
+        return _sobre_marco(q[0], e1, _cruz(n, e1), c["radio"], c["radio"], math.tau)
     if t == "elipse":
         e = np.array(c["eje_mayor"], float)
         a = float(np.linalg.norm(e))
-        return _sobre_marco(q[0], e / a, np.cross(np.array(c["normal"], float), e / a), a, c["radio_menor"], math.tau)
+        return _sobre_marco(q[0], e / a, _cruz(np.array(c["normal"], float), e / a), a, c["radio_menor"], math.tau)
     if t == "conica":
         w = c["rho"] / (1 - c["rho"])                  # Bézier racional de `curvas3d.arista_conica`
 
@@ -520,12 +588,29 @@ def _parametro_cercano(c, q):
 def _residuo_tangencia(ca, cc, s, t):
     (pa, da), (pc, dc) = ca.f(s), cc.f(t)
     u = lambda v: v / max(np.linalg.norm(v), 1e-12)  # noqa: E731
-    return np.concatenate([pa - pc, np.cross(u(da), u(dc)) * _ESCALA_TANGENTE])
+    return np.concatenate([pa - pc, _cruz(u(da), u(dc)) * _ESCALA_TANGENTE])
+
+
+_CONTACTOS = {}        # BOC-82: (curvas, puntos) → (s, t); un arrastre no mueve la mayoría de las tangentes
 
 
 def _contacto(b, a, c):
     """Parámetros (s, t) del contacto de dos curvas: el par de muestras más cercano y, sin mover ningún punto, lo más
     tangente que se pueda desde ahí (así, si ya son tangentes, los residuos arrancan en 0 y nada se mueve)."""
+    g = datos(b)
+    tipos = g["curvas"]
+    # Una spline depende también de sus vecinas (`_tangentes`): esa no se guarda.
+    if "spline" in (tipos[a]["tipo"], tipos[c]["tipo"]):
+        return _contacto_nuevo(b, a, c)
+    clave = repr([(tipos[k], [g["puntos"][p] for p in tipos[k]["puntos"]]) for k in (a, c)])
+    if clave not in _CONTACTOS:
+        if len(_CONTACTOS) >= 256:
+            _CONTACTOS.pop(next(iter(_CONTACTOS)))
+        _CONTACTOS[clave] = _contacto_nuevo(b, a, c)
+    return _CONTACTOS[clave]
+
+
+def _contacto_nuevo(b, a, c):
     from scipy.optimize import least_squares
     tipos = datos(b)["curvas"]
     ca, cc = curva_parametrica(b, a), curva_parametrica(b, c)
@@ -564,7 +649,7 @@ def _ecuaciones(b, valores, aux):
             if o in g["puntos"]:
                 fs.append(lambda P, p=p, o=o: P[p] - P[o])
             elif g["curvas"][o]["tipo"] == "linea":
-                fs.append(lambda P, p=p, o=o: np.cross(P[p] - P[ext(o)[0]], u(d(P, o))))
+                fs.append(lambda P, p=p, o=o: _cruz(P[p] - P[ext(o)[0]], u(d(P, o))))
             else:
                 aux.append(_parametro_cercano(curva_parametrica(b, o), np.array(g["puntos"][p], float)))
                 fs.append(lambda P, p=p, o=o, j=len(aux) - 1: P[p] - curva_parametrica(b, o, P).f(P["aux"][j])[0])
@@ -572,10 +657,10 @@ def _ecuaciones(b, valores, aux):
             otros = [i for i, n in enumerate("xyz") if n != r["eje"]]
             fs.append(lambda P, c=e[0], k=otros: d(P, c)[k])
         elif t == "paralela":
-            fs.append(lambda P, a=e[0], c=e[1]: np.cross(u(d(P, a)), u(d(P, c))))
+            fs.append(lambda P, a=e[0], c=e[1]: _cruz(u(d(P, a)), u(d(P, c))))
         elif t == "colineal":
-            fs.append(lambda P, a=e[0], c=e[1]: np.concatenate([np.cross(u(d(P, a)), u(d(P, c))),
-                                                                np.cross(u(d(P, a)), P[ext(c)[0]] - P[ext(a)[0]])]))
+            fs.append(lambda P, a=e[0], c=e[1]: np.concatenate([_cruz(u(d(P, a)), u(d(P, c))),
+                                                                _cruz(u(d(P, a)), P[ext(c)[0]] - P[ext(a)[0]])]))
         elif t == "perpendicular":
             fs.append(lambda P, a=e[0], c=e[1]: [float(u(d(P, a)) @ u(d(P, c)))])
         elif t == "igual":
@@ -592,13 +677,13 @@ def _ecuaciones(b, valores, aux):
                 fs.append(lambda P, a=e[0], c=e[1], j=len(aux) - 2: _residuo_tangencia(
                     curva_parametrica(b, a, P), curva_parametrica(b, c, P), P["aux"][j], P["aux"][j + 1]))
             elif "spline" not in (g["curvas"][e[0]]["tipo"], g["curvas"][e[1]]["tipo"]):
-                fs.append(lambda P, a=e[0], c=e[1], k=comun: np.cross(u(_llegada(b, a, k, P)), u(_llegada(b, c, k, P)))
+                fs.append(lambda P, a=e[0], c=e[1], k=comun: _cruz(u(_llegada(b, a, k, P)), u(_llegada(b, c, k, P)))
                           * _ESCALA_TANGENTE)                       # la spline la cumple al construirse (`_tangentes`)
     for k, cota in g["cotas"].items():
         e, v = cota["entidades"], float(valores[k])
         if cota.get("tipo") == "angulo":
             fs.append(lambda P, a=e[0], c=e[1], v=math.radians(v): [math.atan2(
-                np.linalg.norm(np.cross(u(d(P, a)), u(d(P, c)))), float(u(d(P, a)) @ u(d(P, c)))) - v])
+                np.linalg.norm(_cruz(u(d(P, a)), u(d(P, c)))), float(u(d(P, a)) @ u(d(P, c)))) - v])
             continue
         a, c = (ext(e[0])[0], ext(e[0])[1]) if len(e) == 1 else e
         fs.append(lambda P, a=a, c=c, v=v: [np.linalg.norm(P[c] - P[a]) - v])
@@ -643,16 +728,35 @@ def resolver(b, valores, quietas=(), medidas=None):
         ok = not len(r) or float(np.max(np.abs(r))) < _TOL
         return Resultado3D(ok, len(x0), "" if ok else "Restricciones 3D en conflicto (sobre geometría fija).")
     from scipy.optimize import least_squares
+    from scipy.optimize._numdiff import approx_derivative
+    # BOC-82: cada grupo independiente se resuelve aparte; junto, el jacobiano por diferencias finitas evaluaba todo el
+    # boceto una vez por incógnita.
+    x, gdl = x0.copy(), len(x0)
     try:
-        sol = least_squares(residuos, x0, method="trf", xtol=1e-14, ftol=1e-14, gtol=1e-14, max_nfev=2000)
+        for ecs, cols in _grupos(fs, puntos(x0), libres):
+            def r(xc, ecs=ecs, cols=cols):
+                y = x.copy()
+                y[cols] = xc
+                P = puntos(y)
+                return np.concatenate([np.ravel(f(P)) for f in ecs])
+            if not cols:
+                if float(np.max(np.abs(r(x[cols])))) > _TOL:
+                    return Resultado3D(False, None, "Restricciones o cotas 3D en conflicto: quitá alguna.")
+                continue
+            r0 = r(x[cols])
+            if float(np.max(np.abs(r0))) <= _YA_CUMPLE:      # un arrastre solo mueve su grupo: el resto ya cumple
+                jac = approx_derivative(r, x[cols], method="2-point", f0=r0)     # el mismo de `least_squares`
+            else:
+                sol = least_squares(r, x[cols], method="trf", xtol=1e-14, ftol=1e-14, gtol=1e-14, max_nfev=2000)
+                if float(np.max(np.abs(r(sol.x)))) > _TOL:
+                    return Resultado3D(False, None, "Restricciones o cotas 3D en conflicto: quitá alguna.")
+                x[cols], jac = sol.x, sol.jac
+            gdl -= int(np.linalg.matrix_rank(jac, tol=1e-8))
     except ErrorBoceto as e:
         return Resultado3D(False, None, str(e))
-    if float(np.max(np.abs(residuos(sol.x)))) > _TOL:
-        return Resultado3D(False, None, "Restricciones o cotas 3D en conflicto: quitá alguna.")
-    for p, v in puntos(sol.x).items():
+    for p, v in puntos(x).items():
         if p in libres:
             g["puntos"][p] = _lista(v)
-    gdl = len(x0) - int(np.linalg.matrix_rank(sol.jac, tol=1e-8))
     return Resultado3D(True, gdl)
 
 
