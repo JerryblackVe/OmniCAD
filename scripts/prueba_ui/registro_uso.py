@@ -59,6 +59,8 @@ A.esperar(250)
 p = v.panel
 escribir(p.widgets["alto"], "-1")
 A.reg("REG", "el error aparece en el panel", bool(p.mensaje.text()))
+escribir(p.widgets["alto"], "abc")     # valor mal tecleado: sale como «error» de entrada inválida
+A.reg("REG", "el valor mal escrito avisa en el panel", bool(p.mensaje.text()))
 QTest.keyClick(p, Qt.Key_Escape)
 A.esperar(150)
 v.editar_operacion(paso)
@@ -85,7 +87,7 @@ A.reg("REG", "get_usage_log lee la sesión viva mientras la app está abierta",
       vivo["ok"] and vivo["result"]["active"] and vivo["result"]["count"] >= 20)
 es = [json.loads(l) for p in sorted(ru.carpeta().glob("sesion_*.jsonl")) for l in p.read_text(encoding="utf-8").splitlines()]
 for tipo in ("comando_abierto", "comando_editado", "comando_aceptado", "comando_cancelado", "op_ejecutada",
-             "recalculo", "archivo_guardar", "archivo_abrir", "deshacer", "error", "marca", "atajo", "boton_cinta"):
+             "recalculo", "archivo_guardar", "archivo_abrir", "deshacer", "error", "aviso", "marca", "atajo", "boton_cinta"):
     A.reg("REG", f"archivo crece en vivo: {tipo}", any(e["tipo"] == tipo for e in es))
 v.registro_uso.configurar(False)
 A.reg("REG", "indicador desaparece y reloj se detiene", not v.registro_uso.indicador.isVisible() and not v.registro_uso.reloj.isActive())
