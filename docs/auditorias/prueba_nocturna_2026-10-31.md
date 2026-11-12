@@ -466,3 +466,4 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 ## Archivos de prueba de referencia (fuera de git)
 
 - `evidencias/archivos_prueba/prusa_core_one.step` (95 MB, 547 cuerpos; pedido de Gerardo 2026-11-12): importación STEP pesada. Se usa para medir el tiempo de importar y la ventana congelada (B-335, B-337), las colgadas y los ensamblajes con muchos cuerpos y componentes (B-336). En la noche: abrirlo con `xvfb-run` y anotar tiempo de lectura, segundos de ventana sin responder y cantidad de componentes y cuerpos.
+- `evidencias/archivos_prueba/prusa_core_one.f3d` (21 MB): el original de Fusion del mismo modelo. Sirve para comparar la importación `.f3d` contra la STEP (tiempo, cuerpos y componentes: B-335, B-336, B-337) y para medir el Zstandard del `.f3d` (RS-R1, `scripts/bench_nativo.py`).
