@@ -129,6 +129,13 @@ def centro_esfera(cara):
     return np.array([c.X(), c.Y(), c.Z()])
 
 
+def toro_de(cara):
+    """(centro, eje unitario, radio mayor, radio menor) de una cara toroidal."""
+    t = BRepAdaptor_Surface(cara).Torus()
+    c, d = t.Location(), t.Axis().Direction()
+    return np.array([c.X(), c.Y(), c.Z()]), np.array([d.X(), d.Y(), d.Z()]), float(t.MajorRadius()), float(t.MinorRadius())
+
+
 def cono_de(cara):
     """(vértice, eje unitario, semiángulo en radianes) de una cara cónica."""
     k = BRepAdaptor_Surface(cara).Cone()

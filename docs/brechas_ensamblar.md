@@ -14,7 +14,7 @@ por API. Se comparó el 2026-11-01.
 | Insertar componente | Existe | Pasarlo primero en el menú |
 | Nuevo componente | **A medias** | ASM-18 |
 | Duplicar con uniones | Existe | Comprobar en la ventana |
-| Restricción de componentes | **A medias** (Alinear, Ángulo, Centro y Tangente) | Tangente con aristas circulares, toros y cono–curva, y la tabla de filas: ASM-17 |
+| Restricción de componentes | **A medias** (Alinear, Ángulo, Centro y Tangente) | Tangente de cono, toro y círculo con algo que no sea un plano, y la tabla de filas: ASM-17 |
 | Unión · Unión conforme a obra | Casi | Pestañas y nombres: ASM-19 |
 | Grupo rígido | Casi | Incluir hijos encendido: ASM-19 |
 | Relación de tangente | **No existe** | ASM-17 |

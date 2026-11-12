@@ -1358,13 +1358,19 @@ def _superficie_tg(e):
         if f["geom"] == "cono":
             v, d, ang = consultas.cono_de(e.forma)
             return "cono", v, _unit(d), ang
+        if f["geom"] == "toro":
+            c, d, mayor, menor = consultas.toro_de(e.forma)
+            return "toro", c, _unit(d), mayor, menor
     if e.tipo == "eje" or (e.tipo in ("arista", "curva_boceto") and e.forma is not None
                            and refs.firma_arista(e.forma)["geom"] == "linea"):
         p, d = ent.como_eje(e)
         return "cil", np.asarray(p, float), _unit(d), 0.0
+    if e.tipo in ("arista", "curva_boceto") and e.forma is not None and refs.firma_arista(e.forma)["geom"] == "circulo":
+        c, d = ent.como_eje(e)                                 # un círculo es un toro de tubo 0
+        return "toro", np.asarray(c, float), _unit(d), float(refs.firma_arista(e.forma)["radio"]), 0.0
     if e.tipo in ("vertice", "punto", "punto_boceto") and e.punto is not None:
         return "esf", np.asarray(e.punto, float), 0.0
-    raise ErrorOperacion("Tangente: elegí una cara plana, cilíndrica, cónica o esférica, un plano, una arista recta, un eje o un vértice.")
+    raise ErrorOperacion("Tangente: elegí una cara plana, cilíndrica, cónica, esférica o toroidal, un plano, una arista recta o circular, un eje o un vértice.")
 
 
 def _tangente(e1, e2, voltear):
@@ -1387,6 +1393,14 @@ def _tangente(e1, e2, voltear):
                 raise ErrorOperacion("Tangente: el plano no tiene la inclinación del cono (su normal forma con el eje 90° menos el "
                                      "semiángulo). Giralo antes con Ángulo.")
             centro, radio = cv[1], 0.0
+        elif cv[0] == "toro":
+            paralelo = abs(float(n @ cv[2]))
+            if paralelo > 1 - 1e-6:                          # eje ⟂ plano: apoyado de plano, el tubo roza
+                centro, radio = cv[1], cv[4]
+            elif paralelo < 1e-6:                            # eje ∥ plano: roza el borde más lejano del aro
+                centro, radio = cv[1], cv[3] + cv[4]
+            else:
+                raise ErrorOperacion("Tangente: el eje del toro (o del círculo) tiene que ser perpendicular o paralelo al plano.")
         elif cv[0] == "cil":
             if abs(float(n @ cv[2])) > 1e-6:
                 raise ErrorOperacion("Tangente: el eje del cilindro (o la arista) tiene que ser paralelo al plano.")
@@ -1396,8 +1410,8 @@ def _tangente(e1, e2, voltear):
         d = float((centro - o) @ n)                          # centro (o eje) respecto del plano, con signo
         t = n * (float(lado(d) * radio) - d)
         return _tras(t if s1[0] != "plano" else -t)
-    if "cono" in (s1[0], s2[0]):
-        raise ErrorOperacion("Tangente: un cono solo se apoya en un plano o en una cara plana.")
+    if {"cono", "toro"} & {s1[0], s2[0]}:
+        raise ErrorOperacion("Tangente: un cono, un toro o una arista circular solo se apoyan en un plano o en una cara plana.")
     (c1, r1), (c2, r2) = ((s[1], s[3] if s[0] == "cil" else s[2]) for s in (s1, s2))
     ejes = [s[2] for s in (s1, s2) if s[0] == "cil"]
     if len(ejes) == 2 and np.linalg.norm(np.cross(ejes[0], ejes[1])) > 1e-6:
@@ -1447,7 +1461,7 @@ class OpRestriccion(Operacion):
     Alinear, Ángulo, Centro y Tangente. Mueve el componente de `ref1` respecto de `ref2` (si el primero está fijo o es la raíz, se mueve
     el segundo: «Component 2 moves to Component 1»). `desfase` es la distancia (Alinear) o el ángulo (Ángulo, con
     `ref_angulo` opcional: la arista o el eje que fija el sentido). Centro: `modo1`/`modo2` son «simple» (la cara `ref1`/`ref2`)
-    o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos, cilindros, esferas, conos, aristas rectas y vértices; `todas_caras` apagado exige que las caras se toquen). Lo que falta de Fusion: filas de
+    o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos, cilindros, esferas, conos, toros, aristas rectas o circulares y vértices; `todas_caras` apagado exige que las caras se toquen). Lo que falta de Fusion: filas de
     varias restricciones (conjuntos), límites de desfase y resolver todas a la vez."""
     TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
     PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None,

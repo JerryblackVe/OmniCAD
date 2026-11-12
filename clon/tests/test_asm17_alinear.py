@@ -387,8 +387,6 @@ def test_tangente_dos_cilindros_se_tocan_por_fuera_y_flip_por_dentro():
 def test_tangente_errores_claros_y_el_documento_no_cambia():
     s, a, b = _cilindro_y_caja(True)
     _falla(s, "constrain_components", "OPERATION_FAILED", type="tangent", geometry1=">Z", body1=b, geometry2="%CYLINDER", body2=a)  # plano ⟂ eje
-    circulo = next(e["id"] for e in _ll(s, "find_edges", body=a)["edges"] if e.get("type", e.get("geom")) in ("circle", "circulo"))
-    _falla(s, "constrain_components", "OPERATION_FAILED", type="tangent", geometry1=circulo, body1=a, geometry2="<X", body2=b)       # arista circular: todavía no
 
 
 def test_el_comando_de_la_ventana_arma_la_tangente_y_se_edita(dos, tmp_path):
@@ -506,3 +504,21 @@ def test_tangente_todas_las_caras_apagado_pide_que_las_caras_se_toquen(dos):
     _ll(s2, "constrain_components", all_faces=False, type="tangent", geometry1="<X", body1=b2, geometry2=">X", body2=a2)   # ahora se solapan en y
     assert _caja(s2, b2)[0] == 10
     _falla(s, "constrain_components", "INVALID_ARGUMENTS", all_faces=False, type="align", geometry1=">Z", geometry2=">Z", body1=b, body2=a)
+
+
+def test_tangente_toro_y_circulo_con_un_plano():
+    s = api.Sesion()
+    a = _ll(s, "create_box", length=20, width=20, height=10, name="A")["bodies_created"][0]["id"]
+    t = _ll(s, "create_torus", major_radius=10, minor_radius=3, x=50, y=30, z=40, name="T")["bodies_created"][0]["id"]
+    c = _ll(s, "create_cylinder", radius=4, height=10, x=-50, y=-30, z=30, name="C")["bodies_created"][0]["id"]
+    _ll(s, "create_component", bodies=[a], name="CA", grounded=True)
+    _ll(s, "create_component", bodies=[t], name="CT")
+    _ll(s, "create_component", bodies=[c], name="CC")
+    _ll(s, "constrain_components", type="tangent", geometry1="%TORUS", body1=t, geometry2=">Z", body2=a)
+    assert _caja(s, t)[2] == pytest.approx(10)                           # el toro apoyado sobre la tapa (eje ⟂ plano): su parte baja en z=10
+    _ll(s, "constrain_components", type="tangent", geometry1="%TORUS", body1=t, geometry2=">X", body2=a)
+    assert _caja(s, t)[0] == pytest.approx(10)                           # y de canto (eje ∥ plano): el aro roza a R + r = 13 del centro; 23 − 13 = 10
+    arista = next(e["id"] for e in _ll(s, "find_edges", body=c)["edges"] if e["center"][2] == 40 and "direction" not in e)   # el círculo de arriba (las rectas traen dirección)
+    _ll(s, "constrain_components", type="tangent", geometry1=arista, body1=c, geometry2=">Z", body2=a)
+    assert _caja(s, c)[5] == pytest.approx(10)                           # la arista circular de arriba (eje ⟂ plano) queda en el plano de la tapa
+    _falla(s, "constrain_components", "OPERATION_FAILED", type="tangent", geometry1="%TORUS", body1=t, geometry2="%CYLINDER", body2=c)

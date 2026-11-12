@@ -901,9 +901,9 @@ def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | 
              "camino más corto, y con una arista o eje de referencia es con signo alrededor de él. Centro: deja una cara (o el plano medio "
              "de dos caras) del componente 1 a medio camino de las dos caras del componente 2 (o al revés), sin deslizarlo "
              "en el plano; hace falta geometry1b o geometry2b (al menos un componente «entre dos caras»). Tangente: deja tangente "
-             "la superficie de geometry1 a la de geometry2 (cara plana, cilíndrica, esférica o cónica, plano, arista recta, eje o "
+             "la superficie de geometry1 a la de geometry2 (cara plana, cilíndrica, esférica, cónica o toroidal, plano, arista recta o circular, eje o "
              "vértice): plano–plano enfrentados, plano–curva rozando del lado en que ya está (el cono, solo si el plano ya tiene "
-             "su inclinación), cilindro y esfera entre sí por fuera; flip pasa al otro lado. Con all_faces=false las caras elegidas "
+             "su inclinación; el toro y el círculo, solo con el eje perpendicular o paralelo al plano), cilindro y esfera entre sí por fuera; flip pasa al otro lado. Con all_faces=false las caras elegidas "
              "tienen que llegar a tocarse. Si el componente 1 está fijo o es la raíz, se mueve el 2. " + _DESC_ORIGEN + "Devuelve el paso y los componentes que se movieron.", modifica=True)
 def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2: str | list[float] | dict,
                          type: Literal["align", "angle", "center", "tangent"] = "align", offset: Expr = 0, flip: bool = False,
