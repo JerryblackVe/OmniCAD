@@ -8,7 +8,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-306 | Desfase de caras sobre el filete de una rosca modelada: el kernel tarda minutos (M8 exterior: 97 s con 1 mm y 153 s con 0,2 mm, y falla; M8 interior: 110 s con 1 mm y sale, 243 s con 0,05 mm y falla) | Parcial | Alta | Ya no congela la previa (va al proceso aparte con caras libres) y Aceptar no repite un cálculo que falló. Falta: Aceptar con la previa todavía en curso calcula en la ventana (minutos), y que el kernel desfase la cara helicoidal rápido o que falle rápido. El aviso «se da vuelta… radio de curvatura» de Gerardo no se repitió acá | Registro de uso `sesion_2026-11-11_080900_a99c1539d1e4_0001.jsonl` (11:25–11:28 UTC); `tests/test_b306_desfase_cara_libre_previa.py` | 2026-11-11 |
 | B-307 | INSPECCIONAR › Análisis de sección cuelga la ventana 12–14 s en cada cambio de desfase al arrastrar la flecha (documento con roscas modeladas; el cuerpo roscado sale sin tapa ni rayado, con caras interiores y dos conos en «X») | Abierto | Alta | Al arrastrar, solo el plano de recorte del visor; tapa y rayado al soltar o tras una pausa, fuera del hilo o cancelables (mirar CPP-P21, RS-P6, CPP-C4). Revisar si el cuerpo roscado es un sólido cerrado | Registro de uso `sesion_2026-11-11_080900_a99c1539d1e4_0001.jsonl`, `bloqueo_ui` 12,3 / 14,1 / 14,0 s (11:54–11:55 UTC) | 2026-11-11 |
 | B-311 | Análisis de sección corta y raya cuerpos ocultos: en «soporte_papel_v1_cama» los 5 cuerpos tienen el ojo tachado en el navegador y Sección1 igual muestra la pieza gris en T y el soporte verde cortados | Abierto | Alta | Ver si la sección dibuja lo oculto o el navegador muestra mal la visibilidad (Fusion solo corta lo visible). En la misma imagen: dos franjas claras sin rayar entre el tapón y el soporte (falta tapa del corte o hay un hueco fino); Boceto3 con ícono de advertencia (leer qué dice); Cuerpo7 (el roscado) ya no está en la lista (¿lo absorbió la unión o se perdió?). Va con B-307 | Relato de Gerardo (coordinador principal, 2026-11-11) | 2026-11-11 |
 | B-272 | Prueba de humo con OmniKernel intermitente: `test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado` falla dentro de un grupo de `tests_afectados` (20 y 32 «OK», fallan los pasos «dibuja» del visor) y pasa sola (17 s) | Abierto | Media | Encontrar por qué los pasos de dibujo del visor fallan con carga (contexto OpenGL, ventana minimizada, tiempo) y dejar el test estable; no tocar el umbral de 50 | Fusiones de cm-5 (7f629c1) y B-259 (051e799), grupo 3 de 6 las dos veces; repetido solo, verde | 2026-11-09 |
@@ -86,15 +85,6 @@ Cada fila salió de comparar ENSAMBLAR (uniones, componentes, grupo rígido, ví
 
 Ficha original de cada bug abierto o parcial (del PROJECT_LOG al 2026-10-20); se borra junto con su fila. La tabla
 de arriba manda sobre este texto.
-
-### B-306 · Desfase de caras sobre el filete de una rosca modelada tarda minutos
-
-- **Qué:** MODIFICAR › Desfase (o Cara de desfase) sobre la cara helicoidal de una rosca modelada. Por la API: `create_cylinder` r 4, `create_thread thread="M8" modeled=true` y `offset_faces` sobre la cara B-spline.
-- **Esperado:** la ventana responde mientras calcula, y el resultado o un error claro en segundos.
-- **Obtenido:** la previa corría en la ventana: 54 s y 116 s congelada (Gerardo, 2026-11-11). `BRepOffset_MakeOffset` tarda 97–243 s en esas caras; con distancias chicas termina en «falló en el kernel».
-- **Hecho (2026-11-11):** la previa de un desfase de cara sobre un cuerpo con caras libres va al proceso aparte (`ui/comando.py` › `_previa_pesada`); si ese cálculo falla con los mismos valores, Aceptar no lo repite (`aislado.FalloDelCalculo`); el mensaje del kernel dice qué hacer con caras libres.
-- **Queda:** Aceptar con la previa en curso aplica el paso exacto en la ventana (el mismo contrato que Vaciado o Empalme pesados): con una rosca son minutos. Y el kernel: desfasar rápido la cara helicoidal (o rechazarla rápido).
-- **Fusion:** «Offset Face» desfasa también las caras tangentes curvas «cuando es geométricamente posible» (`docs/fusion_docs`, «Offset faces»); no dice nada de roscas.
 
 ### B-220 · Repujado con «Envolver» en un cilindro lejos del perfil repuja dando una vuelta de más
 
