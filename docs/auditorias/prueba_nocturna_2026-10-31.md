@@ -320,6 +320,7 @@ Hecha el 2026-11-01, sin commitear. Pieza nueva `texto_curva` en `todo.py`. Qued
 - Todas las piezas que cuentan perfiles: el texto se calcula aparte de las curvas (`perfiles.detectar_boceto`), así que sus perfiles ahora se pisan con los de abajo.
 - B-152: los textos nuevos son más grandes (la altura es el alto de la A). Abrir un documento viejo con texto y mirar que no cambie; todas las piezas que escriben texto.
 - ⚠ Rendimiento de `_arreglo_coherente` con 200 W sobre un círculo: lo mide `tests/test_boc28_rust.py`, sin correr con carga.
+- TXT-9 (2026-11-12, E1): el clic de un comando que pide perfil y cae en un trazo con el relleno debajo avisa con el aviso flotante (`ui/visor3d.py`, `ui/ventana.py`): falta la prueba de humo y la pieza `objetos_vectoriales`.
 
 ## 3g. Tarea nueva: parámetros (PAR-1 a PAR-11, B-138 a B-143)
 

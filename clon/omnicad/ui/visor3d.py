@@ -2528,6 +2528,9 @@ class Visor3D(QOpenGLWidget):
             if hit is None:
                 self.clic_vacio.emit()
             else:
+                if (hit["tipo"] == "curva_boceto" and "perfil" in self.filtro
+                        and self.elegir_entidad(e.position(), {"perfil"}) is not None):
+                    hit["perfil_debajo"] = True     # TXT-9: el trazo ganó (como Fusion), pero había un relleno debajo
                 self.entidad_elegida.emit(hit)
         elif e.button() == Qt.RightButton:
             filtros = self.filtro or {"cara", "arista", "cuerpo", "perfil", "boceto"}
