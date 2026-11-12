@@ -283,7 +283,7 @@ def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40):
 def deflexion_automatica(forma):
     """Deflexión (mm) para teselar `forma` con el detalle «Automático»: fina en piezas chicas, gruesa en grandes."""
     try:
-        mn, mx = geo.caja_envolvente(forma)
+        mn, mx = geo.caja_aproximada(forma)    # B-335: el tamaño alcanza; la exacta tarda
         diag = float(np.linalg.norm(np.asarray(mx, float) - np.asarray(mn, float)))
     except Exception:  # noqa: BLE001 — una forma rara no debe impedir dibujar: se usa el medio
         return 0.05
@@ -854,8 +854,9 @@ class Visor3D(QOpenGLWidget):
             # Solo vale si ahorra triángulos (en una pieza de caras planas sale igual: no gasta memoria de la placa).
             self._lod[clave] = (forma, v, n) if v is not None and fina and 0 < len(v) < len(fina[1]) else None
         if self._lod_pendientes:
-            self._t_lod.start()
-        self.update()
+            self._t_lod.start()     # B-335: se repinta al terminar; con 379 cuerpos cada cuadro cuesta 0,3 s y
+        else:                       # repintar en cada vuelta trababa la ventana ~45 s después de abrir un STEP
+            self.update()
 
     def triangulos_dibujados(self):
         """Triángulos de los cuerpos que se dibujan en el cuadro actual (con el detalle a la distancia)."""
