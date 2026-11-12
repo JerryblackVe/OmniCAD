@@ -22,6 +22,7 @@ from ..nucleo import geometria as geo
 from ..nucleo import intercambio
 from ..nucleo import referencias as refs
 from ..nucleo import revision as rv
+from ..nucleo.malla import Malla
 from . import entidades as ent
 from ..nucleo.perfiles import buscar_por_firma_tolerante, cara_sin_area, detectar_boceto
 from ..restricciones import Boceto, resolver
@@ -1523,6 +1524,9 @@ class OpCombinar(Operacion):
         herramientas = list({h.id: h for h in map(estado.cuerpo, self.p["herramientas"])}.values())   # B-127: sin repetidas
         if any(h.id == objetivo.id for h in herramientas):
             raise ErrorOperacion("El objetivo no puede ser también herramienta.")
+        if any(isinstance(c.forma, Malla) for c in (objetivo, *herramientas)):     # B-347: antes, TypeError del kernel
+            raise ErrorOperacion("Combinar es para sólidos y superficies: con cuerpos de malla usá MALLA › MODIFICAR › "
+                                 "Combinar mallas (combine_meshes) o convertilos a sólido.")
         forma_objetivo = objetivo.forma
         junto = self._cortar_junto(ctx, objetivo, herramientas)
         resultado = forma_objetivo if junto is None else junto

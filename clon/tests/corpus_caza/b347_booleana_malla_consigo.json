@@ -1,0 +1,29 @@
+{
+ "id": "B-347",
+ "firma": "contrato|boolean_operation|INTERNAL_ERROR@geometria.py:1426",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 40,
+    "width": 30,
+    "height": 40
+   }
+  },
+  {
+   "tool": "tessellate",
+   "args": {
+    "bodies": "Cuerpo1"
+   }
+  },
+  {
+   "tool": "boolean_operation",
+   "args": {
+    "target": "op2.c1",
+    "tools": [
+     "op2.c1"
+    ]
+   }
+  }
+ ]
+}

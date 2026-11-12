@@ -808,8 +808,10 @@ def boolean_operation(sesion, target: str, tools: list[str], operation: Literal[
     objetivo = sesion.cuerpo(target).id
     herramientas = list(dict.fromkeys(_ids_cuerpos(sesion, tools)))       # B-127: una herramienta repetida cuenta una vez
     doc = sesion.doc
-    if operation == "join":         # unir lo separado es válido (cuerpo de varios sólidos), pero casi siempre es un descuido
-        cuerpos = doc.estado_final.cuerpos
+    cuerpos = doc.estado_final.cuerpos
+    # B-347: el aviso mide con OCC; con una malla se caía (TypeError) y la operación no llegaba a dar su error
+    if operation == "join" and not any(isinstance(cuerpos[c].forma, Malla) for c in (objetivo, *herramientas)):
+        # unir lo separado es válido (cuerpo de varios sólidos), pero casi siempre es un descuido
         unidos, pendientes = [cuerpos[objetivo].forma], list(herramientas)
         while pendientes:        # una herramienta que toca a otra ya unida también queda unida (A-B-C en fila)
             h = next((x for x in pendientes if any(geo.se_tocan(u, cuerpos[x].forma) for u in unidos)), None)
