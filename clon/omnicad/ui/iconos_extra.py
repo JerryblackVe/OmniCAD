@@ -2481,6 +2481,13 @@ def _info(p):
     _letras(p, QRectF(5, 5, 22, 22), "i", AZUL_LADO, 15)
 
 
+def _mas_opciones(p):
+    p.setPen(Qt.NoPen)
+    p.setBrush(GRIS)
+    for y in (7, 16, 25):
+        p.drawEllipse(QPointF(16, y), 3.2, 3.2)
+
+
 def _secuencias(p):
     p.setPen(QPen(GRIS, 1.4))
     p.drawLine(QPointF(8, 7), QPointF(8, 25))
@@ -2656,7 +2663,7 @@ DIBUJOS_EXTRA = {
     "vectorizar_imagen": lambda p: _insertar_archivo(p, "PNG", AZUL_LADO, _glifo_svg),
     "insertar_malla": _insertar_malla, "insertar_componente": _insertar_componente, "fijacion": _fijacion,
     "parametro_usuario": _parametro_usuario, "estrella": _estrella, "estrella_vacia": lambda p: _estrella(p, False),
-    "mas": _mas_grande, "copiar": _copiar, "papelera": _papelera, "info": _info,
+    "mas": _mas_grande, "copiar": _copiar, "papelera": _papelera, "info": _info, "mas_opciones": _mas_opciones,
     # ensamblar
     "nuevo_componente": _nuevo_componente, "union": _union, "union_construida": _union_construida, "restriccion_componentes": _restriccion_componentes,
     "duplicar_con_uniones": _duplicar_con_uniones,

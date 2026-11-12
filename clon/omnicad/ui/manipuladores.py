@@ -24,9 +24,11 @@ import math
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPointF, QRect, Qt, QTimer
 from PySide6.QtGui import QPolygonF
-from PySide6.QtWidgets import QLineEdit, QToolTip
+from PySide6.QtWidgets import QLineEdit, QMenu, QToolTip
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD
+from .campo_expresion import autocompletar, nombres_sugeridos
+from .iconos import icono
 
 log = logging.getLogger(__name__)
 
@@ -1326,9 +1328,31 @@ class CajaValor(QLineEdit):
         self.gestor, self.clave = gestor, clave
         self.setObjectName("caja_manipulador")
         self.setStyleSheet(QSS_CAJA)
-        self.setFixedWidth(96)
+        self.setFixedWidth(112)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         self.punto = None
+        # P-144: como el «⋮» de Fusion y el campo del panel, ofrece los parámetros para usarlos en la expresión
+        self.lista = autocompletar(self, self.parametros)
+        self.accion_menu = self.addAction(icono("mas_opciones"), QLineEdit.ActionPosition.TrailingPosition)
+        self.accion_menu.setToolTip("Parámetros para usar en el valor")
+        self.accion_menu.triggered.connect(self.abrir_menu)
+
+    def parametros(self):
+        tabla = getattr(self.gestor.ctx, "parametros", None)          # el diálogo de Animación no tiene tabla
+        return nombres_sugeridos(tabla) if tabla is not None else []
+
+    def menu(self):
+        """Los parámetros (favoritos primero): elegir uno lo escribe donde está el cursor, como al teclearlo."""
+        menu = QMenu(self)
+        nombres = self.parametros()
+        for nombre in nombres:
+            menu.addAction(nombre, lambda n=nombre: (self.setFocus(), self.insert(n)))
+        if not nombres:
+            menu.addAction("Sin parámetros: se crean en Modificar › Cambiar parámetros").setEnabled(False)
+        return menu
+
+    def abrir_menu(self):
+        self.menu().exec(self.mapToGlobal(self.rect().bottomRight()))
 
     def keyPressEvent(self, e):
         if e.key() in (Qt.Key_Return, Qt.Key_Enter):

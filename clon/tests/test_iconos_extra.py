@@ -49,7 +49,7 @@ SECCIONES = {
               "desgarro", "unir_plegando", "plegar", "desplegar", "patron_plano", "convertir_chapa", "replegar", "exportar_dxf_chapa"],
     "ESPACIOS / VARIOS": ["dibujo", "render", "animacion", "configuracion_tabla", "parametros_exportar",
                           "parametros_importar", "parametro_usuario", "estrella", "estrella_vacia", "mas", "copiar",
-                          "papelera", "info", "secuencias", "asistente", "clip", "reportar_problema"],
+                          "papelera", "info", "secuencias", "asistente", "clip", "reportar_problema", "mas_opciones"],
     "BOCETO / PROYECTAR": ["proyectar_superficie", "curva_interseccion"],
     "PASOS SIN COMANDO": ["grafo", "insertar_diseno", "importar_iges", "borrar_caras", "calibracion_holguras"],
 }
@@ -95,7 +95,7 @@ def _alfas(img):
 
 def test_estan_todos_y_no_sobran(modulos):
     _, extra = modulos
-    assert len(NOMBRES) == len(set(NOMBRES)) == 201
+    assert len(NOMBRES) == len(set(NOMBRES)) == 202
     assert sorted(extra.DIBUJOS_EXTRA) == sorted(NOMBRES)
 
 
