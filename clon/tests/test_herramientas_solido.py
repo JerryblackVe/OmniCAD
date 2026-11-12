@@ -707,6 +707,30 @@ def test_solevacion_lista_con_condicion_por_fila(app_qt):
     p.cancelar()
 
 
+def test_p147_flechas_del_peso_de_despegue(app_qt):
+    """P-147: cada perfil en «Dirección» trae la flecha del Peso de despegue, como Loft de Fusion. Sale del centro del
+    perfil en el sentido de la solevación y se corre lo mismo que la sección auxiliar (peso × 0,15 × distancia)."""
+    from omnicad.ui import manipuladores as mp
+    s, hits = _tres_perfiles()
+    p, _ = _panel(CATALOGO["solevacion"](), s.doc, {"secciones": hits})
+    assert p.manipuladores.manips == []                       # todo en «Libre»: sin flechas
+    p.set_valores({"condicion_inicio": "direccion", "condicion_fin": "direccion", "peso_fin": "2"})
+    p.filas_sel["secciones"].tabla.cellWidget(1, 1).setCurrentIndex(1)       # el del medio también en «Dirección»
+    p.filas_sel["secciones"].tabla.selectRow(1)
+    assert [m.clave for m in p.manipuladores.manips] == ["peso_medio"]     # como Fusion: las del perfil elegido
+    p.filas_sel["secciones"].tabla.setCurrentCell(-1, -1)                 # sin fila elegida: los dos extremos
+    asas = {m.clave: m for m in p.manipuladores.manips}
+    assert set(asas) == {"peso_inicio", "peso_fin"}
+    p.filas_sel["secciones"].tabla.selectRow(1)
+    asas["peso_medio"] = p.manipuladores.manips[0]
+    for clave, z, factor in (("peso_inicio", 2, 4.5), ("peso_medio", 32, 4.5), ("peso_fin", 62, 4.5)):
+        a = asas[clave]
+        assert isinstance(a, mp.Flecha) and a.origen == pytest.approx((0, 0, z)) and a.factor == pytest.approx(factor)
+        assert a.direccion == pytest.approx((0, 0, 1))        # del primer perfil al último, también en el último
+    assert asas["peso_fin"].puntos(p.manipuladores)[0] == pytest.approx((0, 0, 62 + 2 * 4.5))
+    p.cancelar()
+
+
 def test_reabrir_solevacion_conserva_fila_y_aristas(app_qt):
     s, hits = _tres_perfiles()
     comando = CATALOGO["solevacion"]()
