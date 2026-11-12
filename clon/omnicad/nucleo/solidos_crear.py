@@ -1473,6 +1473,25 @@ def _sentido_hacia_cuerpo(cuerpo, alambre, candidatos, invertir, *, exigir_cara=
     return opuesto
 
 
+def _sentido_curva(cuerpo, w, n, invertir, red, exigir_cara):
+    """Sentido en que crece la pared desde la curva `w`: la red, por la normal del plano; el nervio, dentro del plano y
+    perpendicular a la cuerda. Hacia la cara más cercana del cuerpo (la contraria con `invertir`)."""
+    if red:
+        candidatos = (-n, n)
+    else:
+        m = _unit(np.cross(n, _punto_en(w, 1.0)[0] - _punto_en(w, 0.0)[0]), "cuerda de la curva")
+        candidatos = (m, -m)
+    return _sentido_hacia_cuerpo(cuerpo, w, candidatos, invertir, exigir_cara=exigir_cara)
+
+
+def sentido_crecimiento(cuerpo, aristas_curvas, normal_plano, invertir=False, *, red=False):
+    """(punto medio de la primera curva, sentido en que crece) del Nervio o la Red, el mismo que usan `nervio` y
+    `red`: para que el asa de la profundidad apunte adonde va la pared (B-219)."""
+    w = _cadenas(aristas_curvas)[0]
+    return _punto_en(w, 0.5)[0], _sentido_curva(cuerpo, w, _unit(normal_plano, "normal del plano del boceto"),
+                                                invertir, red, exigir_cara=False)
+
+
 def _diagonal(forma):
     bb = geo.caja_envolvente(forma)
     return float(np.linalg.norm(np.subtract(bb[1], bb[0])))
@@ -1594,9 +1613,7 @@ def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, di
     largo_max = 2 * _diagonal(cuerpo)
     nervios = []
     for w in cadenas:
-        cuerda = _punto_en(w, 1.0)[0] - _punto_en(w, 0.0)[0]
-        m = _unit(np.cross(n, cuerda), "cuerda de la curva")
-        m = _sentido_hacia_cuerpo(cuerpo, w, (m, -m), invertir, exigir_cara=profundidad is None)
+        m = _sentido_curva(cuerpo, w, n, invertir, False, exigir_cara=profundidad is None)
         w_ext = _extender_extremos(w, largo_max) if extender else w
         region = _unificar(BRepPrimAPI_MakePrism(w_ext, _gvec(m * (profundidad or largo_max))).Shape())
         recorte = _lamina_hasta_el_cuerpo(region, cuerpo, [w], [_trasladar(w_ext, m * largo_max)], "Nervio",
@@ -1627,7 +1644,7 @@ def red(cuerpo, aristas_curvas, normal_plano, espesor, profundidad=None, *, dire
         raise geo.ErrorGeometria("La red necesita curvas abiertas.")
     if espesor <= 0:
         raise geo.ErrorGeometria("El espesor de la red debe ser positivo.")
-    d = _sentido_hacia_cuerpo(cuerpo, cadenas[0], (-n, n), invertir, exigir_cara=profundidad is None)
+    d = _sentido_curva(cuerpo, cadenas[0], n, invertir, True, exigir_cara=profundidad is None)
     # Engrosar la lámina con +t va a la izquierda de la curva mirando desde el sentido de extrusión.
     s = 1.0 if float(d @ n) > 0 else -1.0
     espesores = {"simetrica": [espesor / 2, -espesor / 2], "lado1": [s * espesor],

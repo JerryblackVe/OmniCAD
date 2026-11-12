@@ -1025,3 +1025,34 @@ def test_el_arco_visto_de_canto_se_arrastra_por_la_tangente(app_qt):
     subio3 = panel2.ctx.evaluar(panel2.valores["angulo"], "angulo")
     assert subio3 > 45, subio3                      # arrastró a favor: subió
     panel2.cancelar()
+
+
+@pytest.mark.parametrize("clave, invertir, crece", [("red", False, (0, 1, 0)), ("red", True, (0, -1, 0)),
+                                                    ("nervio", False, (0, 0, 1)), ("nervio", True, (0, 0, -1))])
+def test_b219_la_flecha_de_profundidad_apunta_adonde_crece_la_pared(app_qt, clave, invertir, crece):
+    """B-219: caja 40³ hueca (paredes de 2) y una línea a y = 30, z = 30. La Red crece por la normal hasta la pared más
+    cercana (+Y) y el Nervio dentro del plano (+Z); «Cambiar dirección» los manda al otro lado. La flecha de
+    Profundidad sigue ese sentido, y la del espesor del Nervio va por la normal del plano."""
+    from omnicad import api
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+
+    s = api.Sesion()
+    cid = api.llamar(s, "create_box", {"length": 40, "width": 40, "height": 40, "anchor": "corner"})["result"]
+    cid = cid["bodies_created"][0]["id"]
+    assert api.llamar(s, "shell", {"body": cid, "faces": [], "thickness": 2})["ok"]
+    assert api.llamar(s, "create_construction_plane", {"plane": "XZ", "offset": -30, "name": "P30"})["ok"]
+    bid = api.llamar(s, "create_sketch", {"plane": "P30"})["result"]["sketch"]["id"]
+    assert api.llamar(s, "draw_line", {"sketch": bid, "start_x": 10, "start_y": 30, "end_x": 30, "end_y": 30})["ok"]
+    doc = s.doc
+    est = doc.estado_final
+    curva = next(iter(est.bocetos[bid].boceto.curvas))
+    h_curva = hit_desde_ref({"tipo": "curva_boceto", "boceto": bid, "curva": curva}, est)
+    panel, _visor, _ = _panel(CATALOGO[clave](), doc, {"curvas": [h_curva], "extension": "profundidad",
+                                                       "profundidad": "5 mm", "invertir": invertir})
+    flechas = {m.clave: m for m in panel.manipuladores.manips}
+    assert np.allclose(flechas["profundidad"].direccion, crece, atol=1e-6)
+    assert np.allclose(flechas["profundidad"].origen, (20, 30, 30), atol=1e-6)
+    if clave == "nervio":
+        assert abs(flechas["espesor"].direccion[1]) == pytest.approx(1.0)
+    panel.cancelar()

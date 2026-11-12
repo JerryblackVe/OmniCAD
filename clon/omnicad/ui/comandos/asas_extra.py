@@ -289,21 +289,28 @@ def _saliente_de_arista(ctx, hit):
 
 # ---------------------------------------------------------------- nervio, red, repujado, rosca, tubería
 def _asas_nervio(self, ctx, v):
+    """B-219: la Profundidad apunta adonde crece la pared, con el sentido que elige el núcleo (la cara más cercana del
+    cuerpo, o la contraria con «Cambiar dirección»). El espesor del Nervio se mide por la normal del plano; el de la
+    Red, dentro del plano."""
     mp = _mp()
     base = mp.base_perfiles(v.get("curvas"), ctx.estado)
     if base is None:
         return []
     _centro, plano, formas = base
-    n = mp.unitario(plano.normal) * (-1.0 if v.get("invertir") else 1.0)
+    n = mp.unitario(plano.normal)
     pt = _punto_y_tangente(formas[0]) if formas else None
     salida = []
     if pt is not None:
-        lateral = np.cross(mp.unitario(plano.normal), pt[1])
+        lateral = (np.cross(n, pt[1]) if self.CLAVE == "red" else n) * (-1.0 if v.get("direccion") == "lado2" else 1.0)
         if np.linalg.norm(lateral) > 1e-9:
             salida.append(mp.Flecha("espesor", pt[0], lateral, factor=0.5 if v.get("direccion") == "simetrica" else 1.0,
                                     minimo=0.0))
         if v.get("extension") == "profundidad":
-            salida.append(mp.Flecha("profundidad", pt[0], n, minimo=0.0))
+            try:
+                punto, d, _ = self.construir(v, ctx).crecimiento(ctx.estado)
+            except Exception:  # noqa: BLE001 — sin cuerpo al alcance de la curva no hay hacia dónde apuntar
+                return salida
+            salida.append(mp.Flecha("profundidad", punto, d, minimo=0.0))
     return salida
 
 
