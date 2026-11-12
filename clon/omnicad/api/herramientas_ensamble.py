@@ -891,6 +891,31 @@ def create_joint_origin(sesion, geometry: str | list[float] | dict, body: str | 
     return resultado
 
 
+_CLAVES_FILA = ("geometry1", "geometry2", "type", "offset", "flip", "body1", "body2", "angle_reference", "reference_body",
+                "geometry1b", "geometry2b", "body1b", "body2b", "all_faces")
+
+
+def _fila_restriccion(sesion, geometry1, geometry2, type="align", offset=0, flip=False, body1=None, body2=None, angle_reference=None,
+                      reference_body=None, geometry1b=None, geometry2b=None, body1b=None, body2b=None, all_faces=True):
+    """Los parámetros de una fila de OpRestriccion a partir de los argumentos de `constrain_components` (valida cada combinación)."""
+    if type not in ("align", "angle", "center", "tangent"):
+        raise error("INVALID_ARGUMENTS", f"La restricción «{type}» no existe: 'align', 'angle', 'center' o 'tangent'.")
+    if angle_reference is not None and type != "angle":
+        raise error("INVALID_ARGUMENTS", "angle_reference solo se usa con type='angle'.")
+    if not all_faces and type != "tangent":
+        raise error("INVALID_ARGUMENTS", "all_faces solo se usa con type='tangent'.")
+    if (geometry1b is not None or geometry2b is not None) and type != "center":
+        raise error("INVALID_ARGUMENTS", "geometry1b y geometry2b solo se usan con type='center'.")
+    ref1, _ = _origen(sesion, geometry1, body1)
+    ref2, _ = _origen(sesion, geometry2, body2)
+    ref_angulo = _origen(sesion, angle_reference, reference_body)[0] if angle_reference is not None else None
+    ref1b = _origen(sesion, geometry1b, body1b)[0] if geometry1b is not None else None
+    ref2b = _origen(sesion, geometry2b, body2b)[0] if geometry2b is not None else None
+    return dict(tipo={"align": "alinear", "angle": "angulo", "center": "centro", "tangent": "tangente"}[type], ref1=ref1, ref2=ref2,
+                desfase=_expr(offset), voltear=bool(flip), ref_angulo=ref_angulo, ref1b=ref1b, ref2b=ref2b,
+                modo1="entre_caras" if ref1b else "simple", modo2="entre_caras" if ref2b else "simple", todas_caras=bool(all_faces))
+
+
 @herramienta("constrain_components", "ensamble", "Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17): "
              "posiciona el componente de geometry1 respecto del de geometry2. Hoy type='align' (Alinear) y type='angle' (Ángulo). "
              "Alinear: dos caras "
@@ -910,7 +935,8 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
                          body1: str | None = None, body2: str | None = None, name: str | None = None,
                          angle_reference: str | list[float] | dict | None = None, reference_body: str | None = None,
                          geometry1b: str | list[float] | dict | None = None, geometry2b: str | list[float] | dict | None = None,
-                         body1b: str | None = None, body2b: str | None = None, all_faces: bool = True):
+                         body1b: str | None = None, body2b: str | None = None, all_faces: bool = True,
+                         rows: list[dict] | None = None):
     """
     geometry1: la geometría del componente que se mueve: cara o arista (selector sobre body1 o id de find_faces / find_edges), vértice [x, y, z], plano, eje o punto de construcción.
     geometry2: la geometría del otro componente (o de la raíz) a la que se alinea la primera.
@@ -926,26 +952,20 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
     geometry2b: solo con center: la segunda cara del componente 2.
     body1b: cuerpo donde se evalúa el selector de geometry1b.
     body2b: cuerpo donde se evalúa el selector de geometry2b.
+    rows: más restricciones entre los mismos dos componentes (el conjunto de la tabla de Fusion). Cada una es un objeto con las claves de esta herramienta (geometry1 y geometry2 obligatorias; type, offset, flip, body1, body2, angle_reference, reference_body, geometry1b, geometry2b, body1b, body2b, all_faces). Se resuelven todas a la vez; si se contradicen, error.
     all_faces: solo con tangent («All Faces»): true usa la superficie entera de la cara; false pide que la cara del componente 1, ya movida, toque la del componente 2.
     """
-    if type not in ("align", "angle", "center", "tangent"):
-        raise error("INVALID_ARGUMENTS", f"La restricción «{type}» no existe: 'align', 'angle', 'center' o 'tangent'.")
-    if angle_reference is not None and type != "angle":
-        raise error("INVALID_ARGUMENTS", "angle_reference solo se usa con type='angle'.")
-    if not all_faces and type != "tangent":
-        raise error("INVALID_ARGUMENTS", "all_faces solo se usa con type='tangent'.")
-    if (geometry1b is not None or geometry2b is not None) and type != "center":
-        raise error("INVALID_ARGUMENTS", "geometry1b y geometry2b solo se usan con type='center'.")
-    ref1, _ = _origen(sesion, geometry1, body1)
-    ref2, _ = _origen(sesion, geometry2, body2)
-    ref_angulo = _origen(sesion, angle_reference, reference_body)[0] if angle_reference is not None else None
-    ref1b = _origen(sesion, geometry1b, body1b)[0] if geometry1b is not None else None
-    ref2b = _origen(sesion, geometry2b, body2b)[0] if geometry2b is not None else None
     antes = _matrices(sesion)
-    op = OpRestriccion(sesion.doc.nuevo_id(), nombre_paso(sesion, name, "Restricción", OpRestriccion),
-                       tipo={"align": "alinear", "angle": "angulo", "center": "centro", "tangent": "tangente"}[type], ref1=ref1, ref2=ref2,
-                       desfase=_expr(offset), voltear=bool(flip), ref_angulo=ref_angulo, ref1b=ref1b, ref2b=ref2b,
-                       modo1="entre_caras" if ref1b else "simple", modo2="entre_caras" if ref2b else "simple", todas_caras=bool(all_faces))
+    principal = _fila_restriccion(sesion, geometry1, geometry2, type, offset, flip, body1, body2, angle_reference, reference_body,
+                                  geometry1b, geometry2b, body1b, body2b, all_faces)
+    extra = []
+    for i, f in enumerate(rows or [], 2):
+        sobran = set(f) - set(_CLAVES_FILA)
+        if sobran or "geometry1" not in f or "geometry2" not in f:
+            raise error("INVALID_ARGUMENTS", f"La fila {i} de rows necesita geometry1 y geometry2 y solo admite: {', '.join(_CLAVES_FILA)}."
+                        + (f" Sobra: {', '.join(sorted(sobran))}." if sobran else ""))
+        extra.append(_fila_restriccion(sesion, **f))
+    op = OpRestriccion(sesion.doc.nuevo_id(), nombre_paso(sesion, name, "Restricción", OpRestriccion), filas=extra, **principal)
     resultado = _agregar(sesion, op)
     resultado["moved_components"] = _movidos(sesion, antes)
     return resultado

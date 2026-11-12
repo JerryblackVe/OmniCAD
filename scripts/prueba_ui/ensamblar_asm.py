@@ -33,7 +33,7 @@ L("create_component", bodies=[brazo], name="Brazo")
 L("create_component", bodies=[bloque], name="Bloque")
 # piezas de las restricciones de componentes (ASM-17): un bloque fijo, una caja libre, un cilindro y una esfera
 rfijo = L("create_box", length=40, width=40, height=20, x=150, y=300)["bodies_created"][0]["id"]
-rcaja = L("create_box", length=20, width=20, height=10, x=150, y=300, z=40)["bodies_created"][0]["id"]
+rcaja = L("create_box", length=20, width=20, height=10, x=150, y=295, z=40)["bodies_created"][0]["id"]
 rcil = L("create_cylinder", radius=8, height=30, x=150, y=-100)["bodies_created"][0]["id"]
 resf = L("create_sphere", radius=8, x=250, y=0, z=40)["bodies_created"][0]["id"]
 L("create_component", bodies=[rfijo], name="RFijo", grounded=True)
@@ -501,6 +501,28 @@ def restricciones():
     A.foto(v, "restriccion_centro")
     aceptar(p)
     A.reg(AR, "restricción Centro: la cara de la caja queda en el plano medio del bloque (x=150)", abs(caja(rcaja)[0] - 150) < 0.01, f"RCaja={caja(rcaja)}")
+    L("undo")
+    from PySide6.QtWidgets import QPushButton
+    p = A.abrir(v, "restriccion_componentes")
+    boton = next(x for x in p.findChildren(QPushButton) if x.text().startswith("+ Agregar"))
+    A.elegir(p, "ref1", *cara(rcaja, (0, -1, 0)))
+    A.elegir(p, "ref2", *cara(rfijo, (0, -1, 0)))
+    QTest.mouseClick(boton, Qt.LeftButton)
+    A.esperar(100)
+    A.reg(AR, "conjunto: «+ Agregar restricción» guarda la fila y deja los campos vacíos",
+          len(p.valores["filas"]) == 1 and not p.valores["ref1"] and p._lista_filas.count() == 1, p._lista_filas.item(0).text() if p._lista_filas.count() else "")
+    A.elegir(p, "ref1", *cara(rcaja, (0, 0, 1)))
+    A.elegir(p, "ref2", *cara(rfijo, (0, 0, 1)))
+    p._t_previa.stop()
+    p._calcular_previa()
+    A.esperar(150)
+    det = [(x["ref"]["cuerpo"], x["ref"]["firma"].get("normal")) for k in ("ref1", "ref2") for x in p.valores[k]]
+    det += [(x["ref"]["cuerpo"], x["ref"]["firma"].get("normal")) for f in p.valores["filas"] for k in ("ref1", "ref2") for x in f[k]]
+    A.reg(AR, "conjunto: vista previa con las dos filas", p._previa_ok, (p.mensaje.text() if p.mensaje.isVisible() else "") + f" {det} rcaja={rcaja} rfijo={rfijo}")
+    A.foto(v, "restriccion_conjunto")
+    aceptar(p)
+    A.reg(AR, "conjunto: un solo paso deja la tapa al ras y la cara frontal alineada", caja(rcaja) == [140.0, 280.0, 10.0, 160.0, 300.0, 20.0], f"RCaja={caja(rcaja)}")
+    A.reg(AR, "conjunto: el timeline tiene UN paso de restricción", len([o for o in v.doc.operaciones if o.TIPO == "restriccion"]) == 1, "")
     L("undo")
     restriccion("Tangente (esfera sobre la tapa del bloque)",
                 [("ref1", curva(resf, "esfera")), ("ref2", cara(rfijo, (0, 0, 1)))], {"tipo": "tangente"}, "tangente_esfera",
