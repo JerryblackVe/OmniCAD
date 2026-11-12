@@ -2001,6 +2001,9 @@ class VentanaPrincipal(QMainWindow):
         self.area.reubicar()
 
     def _clic_en_vista(self, hit):
+        if self.panel is not None and hit is not None and hit.get("perfil_debajo"):
+            self.aviso_flotante("Ese clic fue a un trazo, no a la región rellena: acercá la vista o hacé clic más "
+                                "adentro del relleno.", "info")
         if self.panel is not None or self.modo_boceto.activo:
             return
         mods = QApplication.keyboardModifiers()
