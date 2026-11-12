@@ -4821,18 +4821,20 @@ Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco (punto con
 
 ### `constrain_components`
 
-Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17): posiciona el componente de geometry1 respecto del de geometry2. Hoy solo type='align' (Alinear): dos caras planas o planos quedan coplanares (al ras si miran hacia el mismo lado, enfrentadas si miran opuesto; flip invierte), dos ejes (cara cilíndrica o cónica, arista circular o recta, eje de construcción) concéntricos o colineales, y dos puntos coincidentes. Si el componente 1 está fijo o es la raíz, se mueve el 2. Faltan Ángulo, Centro y Tangente. Cada origen es una cara o arista (selector evaluado sobre body1 / body2, o id de find_faces / find_edges: 'Cuerpo1/F3', 'Cuerpo1/E5'; para aristas con selector, prefijo 'edges:'), un origen de unión (create_joint_origin), un plano, eje o punto de construcción (id o nombre) o XY, XZ, YZ. Devuelve el paso y los componentes que se movieron.
+Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17): posiciona el componente de geometry1 respecto del de geometry2. Hoy type='align' (Alinear) y type='angle' (Ángulo). Alinear: dos caras planas o planos quedan coplanares (al ras si miran hacia el mismo lado, enfrentadas si miran opuesto; flip invierte), dos ejes (cara cilíndrica o cónica, arista circular o recta, eje de construcción) concéntricos o colineales, y dos puntos coincidentes. Ángulo: gira el componente 1 (sin trasladarlo) hasta que la geometría 1 y la 2 forman el ángulo pedido en offset (grados): entre caras, el de sus normales; sin angle_reference va de 0 a 180° por el camino más corto, y con una arista o eje de referencia es con signo alrededor de él. Si el componente 1 está fijo o es la raíz, se mueve el 2. Faltan Centro y Tangente. Cada origen es una cara o arista (selector evaluado sobre body1 / body2, o id de find_faces / find_edges: 'Cuerpo1/F3', 'Cuerpo1/E5'; para aristas con selector, prefijo 'edges:'), un origen de unión (create_joint_origin), un plano, eje o punto de construcción (id o nombre) o XY, XZ, YZ. Devuelve el paso y los componentes que se movieron.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `geometry1` (texto o lista de número o objeto; obligatorio): la geometría del componente que se mueve: cara o arista (selector sobre body1 o id de find_faces / find_edges), vértice [x, y, z], plano, eje o punto de construcción.
   - `geometry2` (texto o lista de número o objeto; obligatorio): la geometría del otro componente (o de la raíz) a la que se alinea la primera.
-  - `type` ("align"; opcional, por defecto `"align"`): tipo de restricción; hoy solo "align".
-  - `offset` (número o expresión; opcional, por defecto `0`): desfase en mm (número o expresión): entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje.
+  - `type` ("align" | "angle"; opcional, por defecto `"align"`): tipo de restricción: "align" o "angle".
+  - `offset` (número o expresión; opcional, por defecto `0`): con align, el desfase en mm (número o expresión): entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje. Con angle, el ángulo en grados.
   - `flip` (true/false; opcional, por defecto `false`): true invierte la orientación que sale sola (la que menos gira el componente): al ras pasa a enfrentadas y al revés.
   - `body1` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de geometry1; con un id no hace falta.
   - `body2` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de geometry2.
   - `name` (texto; opcional, por defecto `null`): nombre del paso; vacío = «Restricción<n>».
+  - `angle_reference` (texto o lista de número o objeto o null; opcional, por defecto `null`): solo con angle: arista recta o eje que da el sentido del ángulo («Angle Reference»); con él el ángulo es con signo y no queda ambiguo.
+  - `reference_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de angle_reference.
 - CLI: `omnicad call constrain_components --doc pieza.omnicad geometry1=… geometry2=…`
 
 ### `drive_joint`
