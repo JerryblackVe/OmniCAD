@@ -409,7 +409,7 @@ class _Sistema:
             elif t == "desfase":
                 self.originales.update(e[:1] if len(e) < 4 else (e[0], e[2]))
                 if len(e) == 2:
-                    self._desfase_libre(e[0], e[1], r.datos.get("lado"))
+                    self._desfase_libre(e[0], e[1], r.datos.get("lado"), r.datos.get("parametros"))
                 elif len(e) == 4:
                     s = _signo(self.separacion(self.x0, e[0], e[1]) * self.separacion(self.x0, e[2], e[3]))
                     T.append(lambda x, e=tuple(e), s=s: [s * self.separacion(x, e[2], e[3]) - self.separacion(x, e[0], e[1])])
@@ -528,7 +528,7 @@ class _Sistema:
             return [math.hypot(*w) - v, (w[0] * d[0] + w[1] * d[1]) / (math.hypot(*d) or 1e-12)]
         self.terminos.append(f)
 
-    def _desfase_libre(self, madre, copia, lado):
+    def _desfase_libre(self, madre, copia, lado, parametros=None):
         """Restricción de desfase de una curva libre (BOC-72): lo mismo que `_desfase_normal` pero con la distancia como
         incógnita común a todos los puntos, así que sobrevive a la cota y, sin ella, la distancia queda libre. Si la
         copia es una elipse (Fusion: elegida cerca de un eje) tiene los mismos centro y giro que la madre y sus
@@ -549,23 +549,26 @@ class _Sistema:
         prim0 = self.prim(self.x0, madre)
         p0 = self.P(self.x0, self.b.curvas[copia].pts[0])
         j = self._dvar[madre, copia] = self._parametro(mas_cercano(prim0, p0)[1])
-        self._desfase_normal(madre, copia, None, lado, j)
+        self._desfase_normal(madre, copia, None, lado, j, parametros)
 
-    def _desfase_normal(self, madre, copia, distancia, lado, jd=None):
+    def _desfase_normal(self, madre, copia, distancia, lado, jd=None, parametros=None):
         """Offset de Fusion: cada punto de ajuste queda a distancia firmada sobre la normal de la madre. Con `jd`, la
-        distancia es la incógnita de ese índice en vez de un número."""
+        distancia es la incógnita de ese índice en vez de un número. Un punto con su t guardado (B-231) queda en ese
+        lugar de la madre; uno sin él (el de un recorte) desliza con su parámetro t libre."""
         prim0 = self.prim(self.x0, madre)
         for pid in self.b.curvas[copia].pts:
             t, _, q = mas_cercano(prim0, self.P(self.x0, pid))
             if lado is None:
                 _, d = evaluar_primitiva(prim0, t, 1)
                 lado = _signo(_cruz(d, np.subtract(self.P(self.x0, pid), q)))
-            j = self._parametro(t)
+            tg = (parametros or {}).get(str(pid))
+            j = None if tg is not None else self._parametro(t)
 
-            def f(x, pid=pid, j=j, lado=lado):
+            def f(x, pid=pid, j=j, lado=lado, tg=tg):
                 prim = self.prim(x, madre)
                 t0, t1, cerrada = dominio(prim)
-                t = x[j] if cerrada else min(t1, max(t0, x[j]))
+                t = x[j] if tg is None else tg
+                t = t if cerrada else min(t1, max(t0, t))
                 q, d = evaluar_primitiva(prim, t, 1)
                 ux, uy = _unitario(d)
                 p = self.P(x, pid)

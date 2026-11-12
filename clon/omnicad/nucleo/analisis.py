@@ -1287,6 +1287,31 @@ def seccion(forma, plano):
             "triangulos": np.concatenate(tris).astype(np.float32) if tris else np.zeros((0, 3, 3), np.float32)}
 
 
+def seccion_visual(forma, plano):
+    """La sección para DIBUJAR (visor y render): {"polilineas", "triangulos"} como `seccion`, pero cortando la malla de
+    visualización. B-307: el corte exacto de un filete de rosca M8 tarda 12–32 s en `BRepAlgoAPI_Section`; la malla,
+    0,3 s, con el área a 0,2 %. Las medidas exactas (área, largo) siguen saliendo de `seccion`."""
+    from . import malla as ml, malla_seccion as ms
+    v, _n = geo.teselar(forma)
+    vacia = {"polilineas": [], "triangulos": np.zeros((0, 3, 3), np.float32)}
+    if not len(v):
+        return vacia
+    unicos, indice = np.unique(np.round(v.astype(float), 6), axis=0, return_inverse=True)   # caras vecinas comparten aristas
+    try:
+        lazos = ms.seccion(ml.Malla(unicos, indice.reshape(-1, 3)), plano)
+    except geo.ErrorGeometria:          # el plano no corta el cuerpo
+        return vacia
+    a3 = lambda P: plano.origen + P[:, :1] * plano.u + P[:, 1:] * plano.v     # noqa: E731 — (u, v) → 3D
+    cerrados = [P for P, cerrada in lazos if cerrada and len(P) >= 3]
+    tris = np.zeros((0, 3, 3), np.float32)
+    if cerrados:
+        xy = np.concatenate(cerrados)
+        inicio = np.cumsum([0] + [len(P) for P in cerrados])
+        k = ml._triangular_2d(xy, [list(range(inicio[i], inicio[i + 1])) for i in range(len(cerrados))])
+        tris = a3(xy)[k].astype(np.float32)
+    return {"polilineas": [a3(np.vstack([P, P[:1]]) if cerrada else P) for P, cerrada in lazos], "triangulos": tris}
+
+
 def cortar_medio_espacio(forma, plano, *, invertir=False):
     """La parte de la forma "detrás" del plano (lado opuesto a la normal), para mostrar el corte como el
     Análisis de sección. `invertir=True` = "Voltear": conserva el lado de la normal."""

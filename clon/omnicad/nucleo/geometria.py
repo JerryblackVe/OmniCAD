@@ -1220,11 +1220,15 @@ def _apta_para_integral_fina(forma):
 
 
 def _por_malla(forma, funcion, deflexion, relativa):
-    """Volumen o área sobre la malla de una COPIA (la malla de la vista no se toca). None si una cara no se malló."""
+    """Volumen o área sobre la malla de una COPIA (la malla de la vista no se toca). None si una cara no se malló o
+    su malla quedó vacía (B-172: integrar una malla vacía o rota en GProp puede violar el acceso en TKernel y cerrar la
+    app; quien llama sigue con la integración exacta)."""
     copia = BRepBuilderAPI_Copy(forma).Shape()
     BRepMesh_IncrementalMesh(copia, deflexion, relativa, 0.2, True)
-    if any(BRep_Tool.Triangulation_s(c, TopLoc_Location()) is None for c in caras(copia)):
-        return None
+    for c in caras(copia):
+        malla = BRep_Tool.Triangulation_s(c, TopLoc_Location())
+        if malla is None or malla.NbTriangles() == 0 or malla.NbNodes() == 0:
+            return None
     p = GProp_GProps()
     funcion(copia, p, False, False, True) if funcion is BRepGProp.VolumeProperties_s else funcion(copia, p, False, True)
     return p.Mass()
@@ -1406,8 +1410,11 @@ def punto_dentro(cara):
 
 def _brepcheck_estable(forma):
     """Confirma en serie los fallos del análisis paralelo, sin desactivar los controles geométricos."""
-    if BRepCheck_Analyzer(forma, GeomControls=True, theIsParallel=PARALELO).IsValid():
-        return True
+    try:
+        if BRepCheck_Analyzer(forma, GeomControls=True, theIsParallel=PARALELO).IsValid():
+            return True
+    except Exception:  # noqa: BLE001 — B-323: el análisis paralelo junta las fallas de sus hilos en un Standard_ProgramError
+        pass
     return BRepCheck_Analyzer(forma, GeomControls=True, theIsParallel=False).IsValid()
 
 

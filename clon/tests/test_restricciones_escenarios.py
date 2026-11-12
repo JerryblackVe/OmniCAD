@@ -323,7 +323,6 @@ def test_20_cambiar_la_cota_cambia_el_volumen_de_la_extrusion():
     assert all(r.estado == "ok" for r in s.doc.resultados), [(r.estado, r.mensaje) for r in s.doc.resultados]
 
 
-@pytest.mark.xfail(strict=True, reason="B-231: cada punto de la copia guarda su parámetro t libre en el solver")
 def test_b231_desfase_de_una_spline_fija_queda_totalmente_restringido():
     b = Boceto()
     s = b.agregar_spline([(0, 0), (10, 5), (20, 0), (30, 4)])
@@ -332,4 +331,32 @@ def test_b231_desfase_de_una_spline_fija_queda_totalmente_restringido():
     b.desfase(s, 3)
     valores = {k: b.medir(c) for k, c in b.cotas.items()}
     assert resolver(b, valores).ok
-    assert grados_de_libertad(b, valores) == 0           # da 48: uno por punto de la copia
+    assert grados_de_libertad(b, valores) == 0           # antes daba 48: uno por punto de la copia
+
+
+def test_b231_desfase_de_spline_sigue_a_la_madre_girada_antes_de_resolver():
+    """Las fracciones guardadas no dependen de dónde quedó la copia: girar la madre 90° y resolver la deja a 3 mm."""
+    from omnicad.restricciones.boceto import mas_cercano
+    b = Boceto()
+    s = b.agregar_spline([(0, 0), (10, 5), (20, 0), (30, 4)])
+    copia, = b.desfase(s, 3)
+    cota, = [k for k in b.cotas.values() if k.tipo == "desfase"]
+    for p in b.curvas[s].pts:
+        q = b.puntos[p]
+        q.x, q.y = -q.y, q.x
+        b.agregar_restriccion("fijo", [p])
+    r = resolver(b, {cota.id: 3})
+    assert r.ok and r.gdl == 0
+    madre = b.primitivas(s)[0]
+    assert [mas_cercano(madre, b.coords(p))[1] for p in b.curvas[copia].pts] == pytest.approx([3] * 48, abs=1e-6)
+    assert math.dist(b.coords(b.curvas[copia].pts[0]), (0, 0)) == pytest.approx(3, abs=1e-6)
+
+
+def test_b231_desfase_de_una_elipse_fija_queda_totalmente_restringido():
+    b = Boceto()
+    e = b.agregar_elipse((20, 20), (30, 20), 6, ejes=False)
+    b.agregar_restriccion("fijo", [e])
+    (copia,), _ = b.desfasar(e, 2)                                        # lejos de los ejes: un óvalo (spline)
+    cota, = [k for k in b.cotas.values() if k.tipo == "desfase"]
+    r = resolver(b, {cota.id: 2})
+    assert b.curvas[copia].tipo == "spline" and r.ok and r.gdl == 0

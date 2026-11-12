@@ -3718,13 +3718,20 @@ class Boceto:
         if any(min(math.dist(q, C) for C in densos) < 0.9 * d for q in nuevos):
             raise ErrorBoceto("El desfase es mayor que el radio de curvatura de la curva: se pliega sobre sí mismo.")
         nuevo = self.agregar_spline(nuevos, "ajuste", 3, cerrada, construccion=c.construccion)
-        self._atar_desfase_libre(cid, nuevo, s, expresion or _numero(d), datos)
+        # B-231: cada punto de ajuste queda en su parámetro de la madre (clave texto: sobrevive al JSON). Absoluto y no
+        # fracción: recortar la madre conserva su parametrización.
+        ids = self.curvas[nuevo].pts
+        parametros = ({str(p): float(t) for p, t in zip(ids, np.linspace(t0, t1, muestras, endpoint=not cerrada),
+                                                        strict=True)} if len(ids) == muestras else None)
+        self._atar_desfase_libre(cid, nuevo, s, expresion or _numero(d), datos, parametros)
         return nuevo
 
-    def _atar_desfase_libre(self, madre, copia, lado, expresion, datos):
+    def _atar_desfase_libre(self, madre, copia, lado, expresion, datos, parametros=None):
         """BOC-72: la copia de una curva libre queda atada por una restricción de desfase (distancia común y libre) y
-        además por su cota; borrar la cota (Fusion) conserva la relación y libera la distancia."""
-        self.agregar_restriccion("desfase", [madre, copia], {"grupo": self._siguiente, "lado": lado})
+        además por su cota; borrar la cota (Fusion) conserva la relación y libera la distancia. `parametros`
+        ({id de punto como texto: t de la madre}) ata cada punto de la copia a su lugar (B-231)."""
+        self.agregar_restriccion("desfase", [madre, copia], {"grupo": self._siguiente, "lado": lado}
+                                 | ({"parametros": parametros} if parametros else {}))
         self.agregar_cota("desfase", [madre, copia], expresion, {"lado": lado, **(datos or {})})
 
     def _desfase_elipse(self, cid, d, punto_lado, invertir, expresion, datos):

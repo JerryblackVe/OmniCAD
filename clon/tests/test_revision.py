@@ -337,3 +337,31 @@ def test_paso_reparar_avisa_si_sigue_abierto_y_falla_sin_cuerpos():
     assert res.estado == "error" and "Elegí los cuerpos" in res.mensaje
     res = doc.agregar(OpReparar(doc.nuevo_id(), cuerpos=[cid], tolerancia="-1 mm"))
     assert res.estado == "error" and "negativa" in res.mensaje
+
+
+def test_b323_brepcheck_que_lanza_no_pierde_el_diagnostico(monkeypatch):
+    """B-323: BRepCheck_Analyzer lanzó `Standard_ProgramError: Multiple exceptions…` (análisis paralelo) y la revisión
+    perdía el diagnóstico. El paralelo se reintenta en serie; si ni así, el informe nombra el fallo y la cara."""
+    from omnicad.nucleo import geometria as geo
+    caja = geo.caja(10, 10, 10)
+    real = geo.BRepCheck_Analyzer
+
+    def sin_paralelo(forma, GeomControls=True, theIsParallel=False):
+        if theIsParallel:
+            raise RuntimeError("Standard_ProgramError: Multiple exceptions")
+        return real(forma, GeomControls=GeomControls, theIsParallel=theIsParallel)
+    monkeypatch.setattr(geo, "BRepCheck_Analyzer", sin_paralelo)
+    assert geo.es_valida(caja)                                   # el hilo falla, la serie confirma
+    assert rv.revisar(caja)["valido"]
+
+    class _Rota:
+        def __init__(self, *a, **k):
+            raise RuntimeError("Standard_ProgramError: Multiple exceptions")
+    monkeypatch.setattr(geo, "BRepCheck_Analyzer", _Rota)
+    monkeypatch.setattr(rv, "BRepCheck_Analyzer", _Rota)
+    informe = rv.revisar(caja)
+    assert not informe["valido"]
+    textos = [p["mensaje"] for p in informe["problemas"]]
+    assert any("BRepCheck falló al revisar la forma" in t for t in textos)
+    assert sum("BRepCheck falló al revisar esta cara" in t for t in textos) == 6      # una por cara, con su punto
+    assert all(p["punto"] is not None for p in informe["problemas"] if "cara" in p["mensaje"])

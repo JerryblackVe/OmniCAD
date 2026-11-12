@@ -1241,12 +1241,14 @@ class VentanaPrincipal(QMainWindow):
         """Dibuja los análisis visibles del navegador (sección, cebra, curvatura…) sobre el modelo."""
         from . import analisis_vista
         estado = estado or self._estado_visible()
+        # B-311: lo que la vista no muestra (ojo, componente o carpeta Cuerpos ocultos) tampoco se corta ni se pinta
+        propiedades = dict(self.doc.propiedades, __navegador__={"ocultos": sorted(self._ocultos_efectivos(estado))})
         resultados, centros = [], []
         for nombre, a in self.doc.analisis.items():
             if not a.get("visible", True):
                 continue
             try:
-                resultados.append(analisis_vista.calcular(a["tipo"], a["params"], estado, self.doc.propiedades))
+                resultados.append(analisis_vista.calcular(a["tipo"], a["params"], estado, propiedades))
                 if a["tipo"] == "centro_masa" and resultados[-1]["capas"]:
                     centros.append((nombre, np.asarray(resultados[-1]["capas"][0][1][0], float)))
             except Exception as e:  # noqa: BLE001 — un análisis cuya referencia se perdió no rompe la vista
@@ -2482,12 +2484,12 @@ class VentanaPrincipal(QMainWindow):
             QMessageBox.warning(self, NOMBRE_APP, str(e))
             return False
 
-    def _agregar(self, op):
-        res = self.doc.agregar(op)
+    def _agregar(self, op, aparte=False):
+        res = self.doc.agregar(op, aparte=aparte)
         self._informar(op, res)
 
-    def _reemplazar(self, op):
-        res = self.doc.reemplazar(op.id, op)
+    def _reemplazar(self, op, aparte=False):
+        res = self.doc.reemplazar(op.id, op, aparte=aparte)
         self._informar(op, res)
 
     def _informar(self, op, res):
@@ -2604,7 +2606,7 @@ class VentanaPrincipal(QMainWindow):
             self._estado_previa = ctx.estado
             self._refrescar_visibilidad()
         panel = PanelComando(comando, ctx, self.visor, valores, self.area)
-        panel.confirmar = lambda nueva: self._comando_aceptado(nueva, op is not None)
+        panel.confirmar = lambda nueva: self._comando_aceptado(nueva, op is not None, panel._previa_aparte)
         panel.previa.connect(self._previa_comando)
         panel.aceptado.connect(self._comando_cerrado)
         panel.cancelado.connect(self._comando_cerrado)
@@ -2665,11 +2667,12 @@ class VentanaPrincipal(QMainWindow):
             from ..restricciones import objetos
             self.vectores.seleccionar(aceptada.id, objetos.raices(aceptada.boceto))
 
-    def _comando_aceptado(self, op, edicion):
-        """Aplica el cambio; el panel se cierra solo cuando devuelve True."""
+    def _comando_aceptado(self, op, edicion, aparte=False):
+        """Aplica el cambio; el panel se cierra solo cuando devuelve True. `aparte`: su previa fue a un proceso aparte por
+        pesada; el paso también se calcula allá, con la ventana viva (B-306)."""
         if op is None:
             return True
-        if not self._intentar(lambda: (self._reemplazar if edicion else self._agregar)(op)):
+        if not self._intentar(lambda: (self._reemplazar if edicion else self._agregar)(op, aparte)):
             return False
         if not edicion and op.TIPO == "patron_plano":   # al crearlo, el patrón plano queda a la vista
             nuevo = [c.id for c in self.doc.estado_final.cuerpos.values()
