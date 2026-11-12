@@ -64,6 +64,20 @@ def test_imagen_direccion_propia_cuerpos_y_encuadre(s):
     assert fijo["image"].png != ajustado["image"].png      # fit=False deja el encuadre de toda la escena
 
 
+@pytest.mark.parametrize("estilo", ["shaded", "wireframe"])
+def test_imagen_en_vivo_no_congela_la_ventana(s, estilo):
+    """B-331: con ventana (`al_esperar` puesto), el render corre en otro hilo y la ventana atiende eventos mientras
+    tanto; la imagen es la misma que sin ventana."""
+    import threading
+    args = {"width": 160, "height": 120, "style": estilo}
+    sola = ok(api.llamar(s, "get_viewport_image", args))["image"].png
+    hilos = []
+    s.doc.al_esperar = lambda segundos: hilos.append((threading.current_thread(), segundos))
+    en_vivo = ok(api.llamar(s, "get_viewport_image", args))["image"].png
+    assert hilos and {h for h, _ in hilos} == {threading.current_thread()} and {seg for _, seg in hilos} == {0}
+    assert en_vivo == sola
+
+
 def test_imagen_no_es_toda_del_mismo_color(s):
     from io import BytesIO
 

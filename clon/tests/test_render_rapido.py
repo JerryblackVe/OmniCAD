@@ -41,7 +41,7 @@ def _sesion(cantidad):
         copia = BRepBuilderAPI_Copy(forma, False, False).Shape()
         copia = geo.trasladar(copia, ((i % 10) * 40, (i // 10) * 40, 0))
         estado.nuevo_cuerpo("alabes", copia)
-    doc = SimpleNamespace(estado_final=estado, propiedades={}, espacios={}, analisis={}, vistas={},
+    doc = SimpleNamespace(estado_final=estado, propiedades={}, espacios={}, analisis={}, vistas={}, al_esperar=None,
                           propiedad=lambda _cid, clave, defecto=None: 1.0 if clave == "opacidad" else defecto)
     return SimpleNamespace(doc=doc)
 

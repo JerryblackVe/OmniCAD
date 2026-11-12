@@ -65,6 +65,48 @@ def test_atomicidad_operacion_que_falla(s):
     assert foto(s) == antes
 
 
+def test_falla_se_deshace_sin_recalcular(s, monkeypatch):
+    """B-331: un agente que prueba empalmes que fallan congelaba la ventana: cada falla recalculaba dos veces (el cambio
+    y la vuelta atrás). La vuelta usa lo ya calculado: un solo recálculo, y los cuerpos son los mismos objetos."""
+    llamados = []
+    original = Documento.recalcular
+    monkeypatch.setattr(Documento, "recalcular", lambda d, desde=0: (llamados.append(desde), original(d, desde))[1])
+    antes, placa = foto(s), s.doc.estado_final.cuerpos["op2.c1"].forma
+    for herramienta, args in (("edit_feature", {"feature": "op2", "params": {"distancia": "0 mm"}}),
+                              ("set_parameter", {"name": "alto_placa", "expression": "0 mm"})):
+        llamados.clear()
+        assert api.llamar(s, herramienta, args)["ok"] is False
+        assert len(llamados) == 1 and foto(s) == antes
+        assert s.doc.estado_final.cuerpos["op2.c1"].forma is placa
+    ok(api.llamar(s, "set_parameter", {"name": "alto_placa", "expression": "10 mm"}))    # sigue editable y deshace bien
+    ok(api.llamar(s, "undo"))
+    assert foto(s)[:2] == antes[:2]
+
+
+def test_volver_a_foto_no_tapa_un_cambio_en_el_lugar(s):
+    """Si un paso se cambió sobre el mismo objeto, la foto ya no es la receta: no se usa (vuelve `_cargar`)."""
+    doc = s.doc
+    receta, f = json.dumps(doc.a_dict()), doc._foto()
+    doc.operacion("op2").p["distancia"] = "3 mm"
+    assert doc._volver_a_foto(f, receta) is False
+    assert doc.operacion("op2").p["distancia"] == "3 mm"
+
+
+
+def test_volver_a_foto_devuelve_lo_que_el_calculo_dejo_en_cada_paso(s):
+    """Lo que `ejecutar` deja en el paso (el texto paramétrico leído, `_usados` cambiado en el lugar, un atributo
+    nuevo) vuelve al de la foto: si no, el paso quedaría con lo del cálculo que falló."""
+    doc = s.doc
+    boceto = next(op for op in doc.operaciones if hasattr(op, "_textos_parametricos"))
+    textos, usados = dict(boceto._textos_parametricos), set(boceto._usados)
+    receta, f = json.dumps(doc.a_dict()), doc._foto()
+    boceto._textos_parametricos = {"t1": "{alto_placa} mm del cálculo que falló"}
+    boceto._usados.add("alto_placa")
+    boceto.atributo_nuevo = 1
+    assert doc._volver_a_foto(f, receta) is True
+    assert boceto._textos_parametricos == textos and boceto._usados == usados
+    assert not hasattr(boceto, "atributo_nuevo")
+
 def test_atomicidad_conserva_rehacer(s):
     ok(api.llamar(s, "rename", {"target": "op3", "new_name": "Columna"}))
     ok(api.llamar(s, "undo"))
