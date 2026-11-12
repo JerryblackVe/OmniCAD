@@ -333,8 +333,9 @@ def arrastrar(p, valor):
 
 def test_distancia_tecleada_pasa_a_cortar_y_vuelve_al_salir(ventana):
     _, p = ventana
+    p.set_valor("distancia", "10 mm")
     previa(p)
-    assert p.valores["operacion"] == "cortar"      # los 10 mm iniciales están adentro de la placa
+    assert p.valores["operacion"] == "cortar"      # los 10 mm escritos están adentro de la placa
     p.set_valor("distancia", "-5")
     previa(p)
     assert p.valores["operacion"] == "nuevo"       # z −5..0: solo apoya en la cara, no se mete

@@ -48,6 +48,7 @@ def test_b265_clic_en_el_borde_elige_el_perfil_en_la_solida(app_qt):
     panel._elegida(hit)
     panel._elegida(visor.elegir_entidad(visor.proyectar(np.array([40.0, 1.0, 0.0])), visor.filtro))    # el anillo
     assert [h["ref"]["tipo"] for h in panel.valores["perfiles"]] == ["perfil", "perfil"]
+    panel.set_valor("distancia", "10 mm")
     assert cmd_ok(panel, ctx)
     # B-266: con lo elegido a clics sobre los bordes, cambiar la distancia rehace la vista previa
     previas = []

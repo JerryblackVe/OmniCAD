@@ -44,7 +44,7 @@ class Extruir(Comando):
             Opciones("medida", "Medida", {"mitad": "Media longitud", "total": "Longitud total"}, defecto="total",
                      visible_si=lambda v: v.get("direccion") == "simetrica"),
             Opciones("extension", "Tipo de extensión", EXTENSIONES),
-            Expresion("distancia", "Distancia", "10 mm", visible_si=lambda v: v.get("extension") == "distancia"),
+            Expresion("distancia", "Distancia", "0 mm", visible_si=lambda v: v.get("extension") == "distancia"),
             Seleccion("hasta", "Objeto límite", {"cara", "plano", "cuerpo"}, visible_si=lambda v: v.get("extension") == "objeto"),
             Opciones("hasta_modo", "Extender", {"cara": "Hasta la cara seleccionada", "cuerpo": "Hasta el cuerpo",
                                                 "a_traves": "A través del cuerpo"},
@@ -52,7 +52,7 @@ class Extruir(Comando):
             Expresion("desfase_hasta", "Desfase del límite", "0 mm", visible_si=lambda v: v.get("extension") == "objeto"),
             Casilla("invertir", "Invertir dirección"),
             Opciones("extension2", "Tipo de extensión del lado 2", EXTENSIONES, visible_si=dos),
-            Expresion("distancia2", "Distancia del lado 2", "10 mm",
+            Expresion("distancia2", "Distancia del lado 2", "0 mm",
                       visible_si=lambda v: dos(v) and v.get("extension2") == "distancia"),
             Seleccion("hasta2", "Objeto límite del lado 2", {"cara", "plano", "cuerpo"},
                       visible_si=lambda v: dos(v) and v.get("extension2") == "objeto"),
@@ -74,6 +74,11 @@ class Extruir(Comando):
         boceto, perfiles, caras = perfiles_a_params(resto) if resto or not curvas else ("", [], [])
         for clave, tipo in (("distancia", None), ("desfase_inicio", None), ("conicidad", ANGULO)):
             ctx.evaluar(v.get(clave) or "0", tipo or LONGITUD)
+        if v.get("extension") == "distancia" and ctx.evaluar(v.get("distancia") or "0") == 0:
+            raise ErrorComando("La distancia de extrusión no puede ser cero: arrastrá la flecha o escribí una distancia.")
+        if (v.get("direccion") == "dos_lados" and v.get("extension2") == "distancia"
+                and ctx.evaluar(v.get("distancia2") or "0") == 0):
+            raise ErrorComando("La distancia del lado 2 no puede ser cero: arrastrá su flecha o escribí una distancia.")
         if v.get("extension") == "objeto" and not v.get("hasta"):
             raise ErrorComando("Elegí el objeto hasta donde llega la extrusión.")
         if v.get("direccion") == "dos_lados" and v.get("extension2") == "objeto" and not v.get("hasta2"):
@@ -276,7 +281,7 @@ class ExtruirCara(Comando):
         return [
             Seleccion("caras", "Cara plana", {"cara_plana"}, maximo=None),
             Opciones("sentido", "Sentido", {"afuera": "Hacia afuera (agrega)", "adentro": "Hacia adentro (corta)"}),
-            Expresion("distancia", "Distancia", "5 mm"),
+            Expresion("distancia", "Distancia", "0 mm"),
         ]
 
     def construir(self, v, ctx):

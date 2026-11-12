@@ -60,14 +60,14 @@ def test_aceptar_no_repite_un_calculo_aparte_que_ya_fallo(ventana, monkeypatch):
     p = ventana.ejecutar_comando(CaraDesfase())
     cara = geo.caras(caja.forma)[0]
     p._elegida(hit_desde_ref({"tipo": "cara", "cuerpo": caja.id, "firma": refs.firma_cara(cara)}, p.ctx.estado))
-    p.set_valor("distancia", "0 mm")              # el núcleo lo rechaza: «no puede ser cero»
+    p.set_valor("distancia", "-1000 mm")           # el núcleo lo rechaza (P-136: con 0 ya lo frena el comando, sin proceso aparte)
     p._t_previa.stop()
     p._calcular_previa()
     assert p._hijo_previa is not None
     fin = time.perf_counter() + 30
     while p._hijo_previa is not None and time.perf_counter() < fin:
         QTest.qWait(10)
-    assert p._hijo_previa is None and "cero" in p.mensaje.text()
+    assert p._hijo_previa is None and not p._previa_ok and p.mensaje.text()
     pasos = len(ventana.doc.operaciones)
     p.aceptar()
     assert ventana.panel is p and len(ventana.doc.operaciones) == pasos    # el panel sigue abierto con el error

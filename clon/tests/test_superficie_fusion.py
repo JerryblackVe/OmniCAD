@@ -576,7 +576,7 @@ def test_extruir_un_texto_de_una_linea_y_el_de_contornos_avisa_por_que_no():
     bid, ids = _boceto(otro, texto=("AB", "Arial"))
     cmd, ctx = SupExtruir(), ContextoComando(otro)
     valores = {c.clave: c.defecto for c in cmd.campos(ctx)}
-    res = otro.agregar(cmd.construir({**valores, "curvas": _curvas(otro, bid, ids)}, ctx))
+    res = otro.agregar(cmd.construir({**valores, "curvas": _curvas(otro, bid, ids), "distancia": "10 mm"}, ctx))
     assert res.estado == "error" and "fuente de una línea" in res.mensaje and "Arial" in res.mensaje
 
 

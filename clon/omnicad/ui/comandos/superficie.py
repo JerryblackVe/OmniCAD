@@ -56,11 +56,11 @@ class SupExtruir(Comando):
                 Opciones("medida", "Medida", {"mitad": "Media longitud", "total": "Longitud total"}, defecto="total",
                          visible_si=lambda v: v.get("lados") == "simetrica"),
                 Opciones("extension", "Tipo de extensión", {"distancia": "Distancia", "objeto": "A objeto", "todo": "Todo"}),
-                Expresion("distancia", "Distancia", "10 mm", visible_si=lambda v: v.get("extension") == "distancia"),
+                Expresion("distancia", "Distancia", "0 mm", visible_si=lambda v: v.get("extension") == "distancia"),
                 Seleccion("hasta", "Objeto límite", {"cara", "plano", "cuerpo"}, visible_si=objeto),
                 Expresion("desfase_hasta", "Desfase del límite", "0 mm", visible_si=objeto),
                 Casilla("invertir", "Invertir dirección", visible_si=lambda v: v.get("extension") != "distancia"),
-                Expresion("distancia2", "Distancia del lado 2", "10 mm", visible_si=dos),
+                Expresion("distancia2", "Distancia del lado 2", "0 mm", visible_si=dos),
                 Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, avanzado=True),
                 Seleccion("direccion", "Eje de dirección", {"plano", "cara_plana", "eje", "arista_lineal"}, minimo=0,
                           ayuda="Sin selección: perpendicular al plano del boceto.")]
@@ -75,6 +75,10 @@ class SupExtruir(Comando):
         for clave in ("desfase_inicio", "desfase_hasta", "distancia2"):
             ctx.evaluar(v.get(clave) or "0")
         lados = "simetrica" if v.get("simetrica") else v["lados"]      # `simetrica`: el campo de las recetas viejas
+        if v.get("extension") == "distancia" and ctx.evaluar(v["distancia"]) == 0:
+            raise ErrorComando("La distancia de extrusión no puede ser cero: arrastrá la flecha o escribí una distancia.")
+        if lados == "dos_lados" and ctx.evaluar(v.get("distancia2") or "0") == 0:
+            raise ErrorComando("La distancia del lado 2 no puede ser cero: arrastrá su flecha o escribí una distancia.")
         params = {k: v[k] for k in ("distancia", "conicidad", "medida", "inicio", "desfase_inicio", "extension",
                                     "desfase_hasta", "distancia2", "invertir", "cadena")}
         return self.crear_op(OpSupExtruir, v, ctx, curvas=refs(v, "curvas"), direccion=ref1(v, "direccion"),
@@ -351,11 +355,13 @@ class SupDesfase(Comando):
         return [Seleccion("caras", "Caras", {"cara", "cuerpo"}, maximo=None),
                 Casilla("cadena", "Selección de cadena", True,
                         ayuda="Suma a cada cara elegida las que le siguen tangentes."),
-                Expresion("distancia", "Distancia de desfase", "2 mm"),
+                Expresion("distancia", "Distancia de desfase", "0 mm"),
                 Opciones("tipo", "Tipo de desfase", {"agudo": "Desfase afilado", "redondeado": "Desfase redondeado"})]
 
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras.")
+        if ctx.evaluar(v["distancia"]) == 0:
+            raise ErrorComando("La distancia de desfase no puede ser cero: arrastrá la flecha o escribí una distancia.")
         return self.crear_op(OpSupDesfase, v, ctx, caras=refs(v, "caras"), distancia=v["distancia"], tipo=v["tipo"],
                              cadena=bool(v.get("cadena")))
 
