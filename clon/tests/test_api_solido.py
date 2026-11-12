@@ -196,6 +196,35 @@ def test_perfil_se_reenlaza_cuando_el_contorno_cambia(s):
     assert extrusion["status"] != "error" and "re-vinculó" in extrusion["message"]
 
 
+def test_lineas_nuevas_que_parten_regiones_extruidas_no_cambian_el_volumen(s):
+    """B-329: una línea nueva que parte dos regiones ya extruidas no les saca material, y sin aviso (como Fusion)."""
+    llamar(s, "create_sketch", name="B")
+    llamar(s, "draw_rectangle", x1=0, y1=0, x2=10, y2=10)
+    llamar(s, "draw_rectangle", x1=10, y1=0, x2=20, y2=10)
+    assert len(llamar(s, "get_sketch")["profiles"]) == 2
+    llamar(s, "extrude", sketch="B", profile=[0, 1], distance=5)
+    assert volumen(s) == pytest.approx(1000, rel=1e-6)
+    llamar(s, "draw_line", start_x=-5, start_y=4, end_x=25, end_y=4, sketch="B")   # parte las dos y sale afuera
+    assert len(llamar(s, "get_sketch", sketch="B")["profiles"]) == 4
+    assert volumen(s) == pytest.approx(1000, rel=1e-6)
+    extrusion = next(p for p in llamar(s, "get_timeline", include_params=False)["steps"] if p["type"] == "extrusion")
+    assert extrusion["status"] == "ok", extrusion
+
+
+def test_perfil_partido_que_ademas_cambia_de_contorno_sigue_avisando(s):
+    """B-329, el otro lado: si se borra una curva del contorno, la región no vuelve entera y se avisa."""
+    llamar(s, "create_sketch", name="B")
+    llamar(s, "draw_circle", center_x=0, center_y=0, radius=10)
+    llamar(s, "draw_line", start_x=0, start_y=-20, end_x=0, end_y=20)
+    derecha = next(i for i, p in enumerate(llamar(s, "get_sketch")["profiles"]) if p["centroid"][0] > 0)
+    llamar(s, "extrude", sketch="B", profile=derecha, distance=10)
+    linea = next(e["id"] for e in llamar(s, "get_sketch", sketch="B")["entities"] if e["type"] == "line")
+    llamar(s, "draw_line", start_x=-20, start_y=3, end_x=20, end_y=3, sketch="B")
+    llamar(s, "delete_sketch_entities", entities=[linea], sketch="B")
+    extrusion = next(p for p in llamar(s, "get_timeline", include_params=False)["steps"] if p["type"] == "extrusion")
+    assert extrusion["status"] == "warning" and "re-vinculó" in extrusion["message"]
+
+
 def test_el_corte_que_no_toca_avisa_en_el_timeline(s):
     """Si el perfil de corte queda en el aire (p. ej. un parámetro movió la pieza), el paso
     queda en warning con «no toca ningún cuerpo», no ok en silencio (B-09/B-30)."""

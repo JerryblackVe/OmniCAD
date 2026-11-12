@@ -1112,7 +1112,8 @@ class _OpConPerfiles(Operacion):
                 detalle = ent.problema_perfil(ref)
                 if detalle:
                     raise ParametroMalFormado(ref, detalle)
-                perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano)
+                perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano,
+                                                       br.boceto)
                 if perfil is None:
                     if ent.es_de_texto(ref["firma"], br):
                         raise ErrorOperacion("Un perfil seleccionado era un pedazo de una letra y ya no existe como "
