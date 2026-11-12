@@ -4604,6 +4604,7 @@ class Boceto:
             nuevo = self.agregar_punto(*sobre)
             c.pts.insert(i + 1, nuevo)
             return nuevo
+        self._polos_propios(c)
         polos, nudos, p, pesos = prim[2], list(prim[3]), prim[4], prim[5]
         w = pesos or [1.0] * len(polos)
         ctrl = [[x * wi, y * wi, wi] for (x, y), wi in zip(polos, w, strict=True)]
@@ -4615,6 +4616,16 @@ class Boceto:
         c.pts.insert(k, nuevo)
         c.pesos = [h[2] for h in ctrl] if pesos else None
         return nuevo
+
+    def _polos_propios(self, c):
+        """Un polo interior que repite un punto de la spline (B-320: polo doble de un .f3d, texto o proyección) pasa
+        a tener su propio punto en el mismo lugar (B-352): insertar un nudo o cambiar el grado los separa. Los
+        extremos quedan como están (una spline cerrada sigue cerrada)."""
+        vistos = {c.pts[0], c.pts[-1]}
+        for j in range(1, len(c.pts) - 1):
+            if c.pts[j] in vistos:
+                c.pts[j] = self.agregar_punto(*self.coords(c.pts[j]))
+            vistos.add(c.pts[j])
 
     def cambiar_grado_spline(self, sid, grado):
         """Change Spline Degree de Fusion (spline de puntos de control, 3 ↔ 5). Subir no cambia la forma (los nudos
@@ -4645,6 +4656,7 @@ class Boceto:
         B = B - np.outer(A[:, 0], ini) - np.outer(A[:, -1], fin)
         medio = np.linalg.lstsq(A[:, 1:-1], B, rcond=None)[0]
         coords = [tuple(ini)] + [tuple(r) for r in medio] + [tuple(fin)]
+        self._polos_propios(c)
         viejos = list(c.pts)
         ids = viejos[:min(n, len(viejos)) - 1]
         ids += [self.agregar_punto(0.0, 0.0) for _ in range(n - 1 - len(ids))] + [viejos[-1]]
