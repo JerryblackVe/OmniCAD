@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-12 · `scripts/registro_bugs.py` en main (E7, rama item/registro rebasada sobre main).** El script y su test estaban sin commitear en un worktree viejo, y `probar_todo.py --noche` lo saltaba. Rutas fijas de Windows reemplazadas: lee `OMNICAD_REGISTRO_DIR` o la carpeta de datos del sistema y escribe en `evidencias/` del repo. Probado con los 5 registros reales de `evidencias/reportes_pc/` (49 errores, 21 grupos). `tests/test_registro_bugs.py` OK, ruff limpio. Las evidencias de B-323, B-324 y B-325 ya nombran el script en main.
 - **2026-11-12 · Traspaso del coordinador PRINCIPAL (VPS), contexto al 62 %.** Leer esto primero.
   - **Hoy:** ~70 fusiones a main (último verde: 695 tests cruzados + ruff, después de B-160/P-140/B-365/ASM-17g). Revisión previa a la versión con workflow (`docs/auditorias/revision_pre_version_2026-11-12.md`, B-349 a B-361, casi todo cerrado). Página de seguimiento refrescada a las 15:10 (refrescar al cerrar la próxima tanda).
   - **Push:** main listo salvo la suite y la humo en Windows de Gerardo (B-365, el último rojo, ya entró). Gerardo pidió que le avisemos cuando esté listo para push y versión nueva (memoria `avisar-listo-para-push-y-release`). Última versión: v0.2.0; `origin/main` está 479+ commits atrás.
