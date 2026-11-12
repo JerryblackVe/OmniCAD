@@ -371,7 +371,7 @@ def test_flecha_del_empalme_sobre_la_arista(app_qt):
     doc = _doc_caja()
     panel, visor, estados = _panel(Empalme(), doc, {"aristas": [_arista_de_arriba(doc)], "radio": "2 mm"})
     flecha = _manip(panel, "flecha:radio")
-    assert flecha.origen == pytest.approx((10, 0, 20))
+    assert flecha.origen[1:] == pytest.approx((0, 20)) and flecha.origen[0] in (pytest.approx(0), pytest.approx(20))  # P-143: en una punta
     assert flecha.direccion == pytest.approx((0, np.sqrt(0.5), -np.sqrt(0.5)))     # hacia adentro del material
     medio, d = _sobre_flecha(panel, "flecha:radio")
     _arrastrar(visor, medio, medio + d * 40)
@@ -1215,4 +1215,29 @@ def test_b345_asas_de_los_demas_comandos_dejan_la_previa_sana(app_qt, clave, cam
         _arrastrar_con_previa(panel, visor, medio, medio + d * 300 * sentido)
     panel._calcular_previa()
     assert panel._previa_ok and estados[-1] is not None, (panel.valores[asa], panel.mensaje.text())
+    panel.cancelar()
+
+
+def test_p143_asa_del_empalme_en_la_punta_libre_de_la_arista(app_qt):
+    """P-143: como en Fusion, el asa del radio es una flecha-puntero azul en la punta LIBRE de la arista (sobre la cara
+    del extremo del saliente, no en el medio ni contra el bloque) y señala hacia adentro del material."""
+    from omnicad import api
+    from omnicad.nucleo import referencias as refs
+    from omnicad.ui import manipuladores as mp
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos.modificar import Empalme
+    s = api.Sesion()
+    assert api.llamar(s, "create_box", {"length": 60, "width": 40, "height": 80})["ok"]
+    assert api.llamar(s, "create_box", {"length": 20, "width": 50, "height": 24, "y": -45, "z": 28,
+                                        "operation": "join"})["ok"]
+    doc = s.doc
+    cid, cuerpo = next(iter(doc.estado_final.cuerpos.items()))
+    arista = next(e for e in refs.subformas(cuerpo.forma, "arista")
+                  if np.allclose(refs.firma_arista(e)["medio"], (-10, -45, 52)))     # arriba a la izquierda del saliente
+    hit = hit_desde_ref(refs.referencia(cid, arista, caja=g.caja_envolvente(cuerpo.forma)), doc.estado_final)
+    panel, _visor, _estados = _panel(Empalme(), doc, {"aristas": [hit], "radio": "2 mm"})
+    (asa,) = panel.manipuladores.manips
+    assert isinstance(asa, mp.FlechaPuntero) and asa.color == mp.AZUL_ASA
+    assert np.allclose(asa.origen, (-10, -70, 52))                 # la punta libre: y = −20 − 50
+    assert np.allclose(asa.direccion, np.array([1, 0, -1]) / np.sqrt(2))     # hacia adentro, por la bisectriz
     panel.cancelar()

@@ -42,6 +42,7 @@ def _aclarar(color, k=0.45):
 
 AMARILLO = _rgb("#ffb400")             # P-137: contrasta con la selección (celeste), el modelo (gris) y el fondo; con contorno oscuro
 AMARILLO_ACTIVO = _aclarar(AMARILLO)           # al pasar el ratón / arrastrando
+AZUL_ASA = _rgb("#1e8fe6")             # P-143: la flecha-puntero del empalme de Fusion
 COLORES_EJE = (_rgb("#e0302a"), _rgb("#2fa335"), _rgb("#2b6fe0"))   # X rojo, Y verde, Z azul
 GRIS_ESFERA = (0.93, 0.93, 0.93)
 BORDE_ESFERA = (0.35, 0.35, 0.37)
@@ -406,6 +407,52 @@ class AsaRadial(Flecha):
         if not ok[0]:
             return math.inf, None
         return max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0), "asa"
+
+
+class FlechaPuntero(Flecha):
+    """Asa del radio del empalme y del chaflán como la de Fusion (P-143): una flecha azul chata con forma de puntero,
+    de cara a la cámara, que con la punta señala el punto del empalme sobre la cara del extremo y apunta hacia donde
+    crece. Se arrastra como una `Flecha` (el valor corre sobre su eje)."""
+    TAMANO = 18.0                      # píxeles de la punta a la cola
+    # contorno en unidades de TAMANO: x = 0 en la punta y crece hacia la cola; y, a lo ancho
+    _CONTORNO = np.array([(0, 0), (0.5, 0.45), (0.45, 0.16), (0.85, 0.16), (0.85, -0.16), (0.45, -0.16), (0.5, -0.45), (0, 0)])
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **{"color": AZUL_ASA, **kw})
+
+    def _ejes(self, g):
+        """(punta, eje hacia la cola, eje a lo ancho, mm por unidad de contorno), en el plano de la pantalla."""
+        base, sentido, k = self._geom(g)
+        R = getattr(g.visor, "R", np.identity(3))
+        w = np.asarray(R[2], float)
+        x = -(sentido - w * float(sentido @ w))
+        x = unitario(x) if np.linalg.norm(x) > 1e-6 else np.asarray(R[0], float)
+        return base, x, np.cross(w, x), self.TAMANO * k
+
+    def puntos(self, g):
+        """De la cola a la punta, como `Flecha`: en el sentido en que crece el valor."""
+        base, x, _y, t = self._ejes(g)
+        return base + x * t * 0.85, base
+
+    def dibujar(self, g, activo):
+        base, x, y, t = self._ejes(g)
+        color = _aclarar(self.color) if activo is not None else self.color
+        borde = [base + (x * cx + y * cy) * t for cx, cy in self._CONTORNO]
+        # relleno con rayas a lo largo (las líneas se ven siempre, aunque el asa quede detrás de una cara)
+        rayas = []
+        for cy in np.linspace(-0.44, 0.44, 15):
+            ini = abs(cy) / 0.45 * 0.5                                   # el filo de la punta
+            fin = 0.85 if abs(cy) <= 0.16 else 0.45 + (abs(cy) - 0.16) / 0.29 * 0.05     # la cola o la barba
+            rayas += [base + (x * ini + y * cy) * t, base + (x * fin + y * cy) * t]
+        return [("lineas", np.array(rayas), color, 2.2), ("lineas", _segs(borde), (1.0, 1.0, 1.0), 1.6)]
+
+    def tocar(self, g, q):
+        a, b = self.puntos(g)
+        s, ok = g.pantalla([a, b])
+        return max(0.0, _dist_segmentos_px(q, s, ok) - 5.0), "flecha"
+
+    def cajas(self, g, arrastre):
+        return [(self.clave, self.puntos(g)[0])] if self.caja else []      # la caja junto a la cola
 
 
 class Posicion(Manipulador):
@@ -1870,11 +1917,11 @@ def punto_normal_cara(cara):
     return np.asarray(p, float), unitario(n)
 
 
-def datos_arista(arista, forma_cuerpo):
+def datos_arista(arista, forma_cuerpo, extremo=False):
     """(punto medio, dirección hacia donde avanza la superficie del empalme/chaflán al crecer, ángulo
     entre las normales de las caras en radianes) de una arista del cuerpo."""
     from ..nucleo.consultas import datos_arista as consultar
-    return consultar(arista, forma_cuerpo)
+    return consultar(arista, forma_cuerpo, extremo)
 
 
 def herramientas_rojas(formas, deflexion=0.1):
