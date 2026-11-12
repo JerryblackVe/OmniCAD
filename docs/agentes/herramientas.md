@@ -4715,7 +4715,7 @@ Fija o libera un componente (ENSAMBLAR › Fijar). Un componente fijo no se muev
 
 ### `create_joint`
 
-Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta que su marco coincide con el de origin2 (caras planas enfrentadas; dos ejes —perno en agujero— en el mismo sentido) y define cómo se mueve después. Cada origen es una cara o arista (selector evaluado sobre body1 / body2, o id de find_faces / find_edges: 'Cuerpo1/F3', 'Cuerpo1/E5'; para aristas con selector, prefijo 'edges:'), un origen de unión (create_joint_origin), un plano, eje o punto de construcción (id o nombre) o XY, XZ, YZ. mode1 / mode2: simple (una cara, arista o punto), between_faces (centrado entre dos caras paralelas: la segunda va en origin1b / origin2b) o edge_intersection (en el cruce prolongado de dos aristas rectas: la segunda va en origin1b / origin2b). joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). angle gira el componente 1 alrededor del Z del marco, offset lo corre [dx, dy, dz] y flip lo da vuelta. Los valores (rotation, slide…) y los límites aceptan número (grados o mm) o expresión. rotation_axis_from / slide_axis_from: en vez de X, Y o Z del marco, una arista recta o circular, un eje de construcción o una cara cilíndrica (selector o id; axis_body es el cuerpo donde se evalúa el selector). motion_limits da los límites de cada movimiento: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, 'flip': false}}; rest y flip_limits son los del movimiento principal. Devuelve la unión y los componentes que se movieron con su traslación y caja envolvente. En uniones con deslizamiento avisa si el componente se movió (snap al centro de cada cara).
+Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta que su marco coincide con el de origin2 (caras planas enfrentadas; dos ejes —perno en agujero— en el mismo sentido) y define cómo se mueve después. Cada origen es una cara o arista (selector evaluado sobre body1 / body2, o id de find_faces / find_edges: 'Cuerpo1/F3', 'Cuerpo1/E5'; para aristas con selector, prefijo 'edges:'), un origen de unión (create_joint_origin), un plano, eje o punto de construcción (id o nombre) o XY, XZ, YZ. mode1 / mode2: simple, between_faces (centro entre dos caras paralelas) o edge_intersection (cruce de dos aristas rectas); la segunda va en origin1b / origin2b. joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). angle gira el componente 1 alrededor del Z del marco, offset lo corre [dx, dy, dz] y flip lo da vuelta. Los valores (rotation, slide…) y los límites aceptan número (grados o mm) o expresión. rotation_axis_from / slide_axis_from: arista recta o circular, eje de construcción o cara cilíndrica en vez de X/Y/Z (axis_body: cuerpo del selector). motion_limits: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, 'flip': false}}; rest y flip_limits son los del movimiento principal. Devuelve la unión y los componentes que se movieron con su traslación y caja envolvente. En uniones con deslizamiento avisa si el componente se movió (snap al centro de cada cara).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -4739,25 +4739,25 @@ Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta
   - `minimum` (número o expresión; opcional, por defecto `null`): límite mínimo del movimiento principal (grados si gira, mm si solo desliza); vacío = sin límite.
   - `maximum` (número o expresión; opcional, por defecto `null`): límite máximo del movimiento principal; vacío = sin límite.
   - `name` (texto; opcional, por defecto `null`): nombre del paso; vacío = «Unión<n>».
-  - `mode1` ("simple" | "between_faces" | "edge_intersection"; opcional, por defecto `"simple"`): modo del origen 1: "simple", "between_faces" o "edge_intersection".
+  - `mode1` ("simple" | "between_faces" | "edge_intersection"; opcional, por defecto `"simple"`): modo del origen 1 (ver mode1 / mode2 arriba).
   - `origin1b` (texto o lista de número o null; opcional, por defecto `null`): segunda cara (between_faces) o segunda arista (edge_intersection) del origen 1, del cuerpo body1.
-  - `mode2` ("simple" | "between_faces" | "edge_intersection"; opcional, por defecto `"simple"`): modo del origen 2: "simple", "between_faces" o "edge_intersection".
+  - `mode2` ("simple" | "between_faces" | "edge_intersection"; opcional, por defecto `"simple"`): modo del origen 2.
   - `origin2b` (texto o lista de número o null; opcional, por defecto `null`): segunda cara o arista del origen 2, del cuerpo body2.
   - `rotation_axis_from` (texto; opcional, por defecto `null`): eje de giro propio (arista, eje de construcción o cilindro) en lugar de rotation_axis.
   - `slide_axis_from` (texto; opcional, por defecto `null`): eje de deslizamiento propio en lugar de slide_axis (slider, pin_slot).
   - `axis_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de los ejes propios.
   - `rest` (número o expresión; opcional, por defecto `null`): reposo del movimiento principal: su valor inicial si no se pide otro (grados o mm).
-  - `flip_limits` (true/false; opcional, por defecto `false`): true invierte los límites del movimiento principal (el mínimo pasa a ser −máximo y al revés).
+  - `flip_limits` (true/false; opcional, por defecto `false`): true invierte los límites del movimiento principal.
   - `motion_limits` (objeto; opcional, por defecto `null`): límites por movimiento ("rotation", "rotation2", "rotation3", "slide", "slide2"), cada uno con minimum, maximum, rest y flip.
-  - `pitch_axis` ("X" | "Y" | "Z" o null; opcional, por defecto `null`): eje de cabeceo (Pitch, el lateral) de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
-  - `yaw_axis` ("X" | "Y" | "Z" o null; opcional, por defecto `null`): eje de guiñada (Yaw, el perpendicular) de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él. El de balanceo (Roll, rotation) sale solo de los dos (guiñada × cabeceo; con Y y X, el Z del marco). Solo ball; si no se elige ninguno de los dos, el balanceo es rotation_axis_from o Z.
+  - `pitch_axis` ("X" | "Y" | "Z" o null; opcional, por defecto `null`): eje de cabeceo de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
+  - `yaw_axis` ("X" | "Y" | "Z" o null; opcional, por defecto `null`): eje de guiñada de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él. El balanceo (rotation) sale de los dos ejes (con Y y X, el Z del marco); sin ninguno, de rotation_axis_from o Z. Solo ball.
   - `pitch_axis_from` (texto; opcional, por defecto `null`): eje de cabeceo propio (arista, eje de construcción o cilindro) en lugar de pitch_axis. Solo ball.
   - `yaw_axis_from` (texto; opcional, por defecto `null`): eje de guiñada propio en lugar de yaw_axis. Solo ball.
 - CLI: `omnicad call create_joint --doc pieza.omnicad origin1=… origin2=…`
 
 ### `create_as_built_joint`
 
-Unión como está (ENSAMBLAR › Unión como está): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 lo sigue. Sin component2, la unión es contra la raíz. joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). mode1 / mode2: simple (una cara, arista o punto), between_faces (centrado entre dos caras paralelas: la segunda va en origin1b / origin2b) o edge_intersection (en el cruce prolongado de dos aristas rectas: la segunda va en origin1b / origin2b). rotation_axis_from / slide_axis_from: en vez de X, Y o Z del marco, una arista recta o circular, un eje de construcción o una cara cilíndrica (selector o id; axis_body es el cuerpo donde se evalúa el selector). motion_limits da los límites de cada movimiento: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, 'flip': false}}; rest y flip_limits son los del movimiento principal.
+Unión como está (ENSAMBLAR › Unión como está): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 lo sigue. Sin component2, la unión es contra la raíz. joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). mode1 / mode2: simple, between_faces (centro entre dos caras paralelas) o edge_intersection (cruce de dos aristas rectas); la segunda va en origin1b / origin2b. rotation_axis_from / slide_axis_from: arista recta o circular, eje de construcción o cara cilíndrica en vez de X/Y/Z (axis_body: cuerpo del selector). motion_limits: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, 'flip': false}}; rest y flip_limits son los del movimiento principal.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -4776,7 +4776,7 @@ Unión como está (ENSAMBLAR › Unión como está): liga el componente de `orig
   - `minimum` (número o expresión; opcional, por defecto `null`): límite mínimo del movimiento principal; vacío = sin límite.
   - `maximum` (número o expresión; opcional, por defecto `null`): límite máximo del movimiento principal; vacío = sin límite.
   - `name` (texto; opcional, por defecto `null`): nombre del paso; vacío = «Unión<n>».
-  - `mode` ("simple" | "between_faces" | "edge_intersection"; opcional, por defecto `"simple"`): modo del origen: "simple", "between_faces" o "edge_intersection".
+  - `mode` ("simple" | "between_faces" | "edge_intersection"; opcional, por defecto `"simple"`): modo del origen: simple, between_faces o edge_intersection.
   - `origin_b` (texto o lista de número o null; opcional, por defecto `null`): segunda cara (between_faces) o segunda arista (edge_intersection) del origen, del cuerpo body.
   - `rotation_axis_from` (texto; opcional, por defecto `null`): eje de giro propio (arista, eje de construcción o cilindro) en lugar de rotation_axis.
   - `slide_axis_from` (texto; opcional, por defecto `null`): eje de deslizamiento propio en lugar de slide_axis (slider, pin_slot).
@@ -4784,8 +4784,8 @@ Unión como está (ENSAMBLAR › Unión como está): liga el componente de `orig
   - `rest` (número o expresión; opcional, por defecto `null`): reposo del movimiento principal: su valor inicial si no se pide otro (grados o mm).
   - `flip_limits` (true/false; opcional, por defecto `false`): true invierte los límites del movimiento principal.
   - `motion_limits` (objeto; opcional, por defecto `null`): límites por movimiento ("rotation", "rotation2", "rotation3", "slide", "slide2"), cada uno con minimum, maximum, rest y flip.
-  - `pitch_axis` ("X" | "Y" | "Z" o null; opcional, por defecto `null`): eje de cabeceo (Pitch) de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
-  - `yaw_axis` ("X" | "Y" | "Z" o null; opcional, por defecto `null`): eje de guiñada (Yaw) de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él; el balanceo (Roll, rotation) sale de los dos. Solo ball.
+  - `pitch_axis` ("X" | "Y" | "Z" o null; opcional, por defecto `null`): eje de cabeceo de la bola: "X", "Y" o "Z" del marco; vacío = Y. rotation2 gira sobre él. Solo ball.
+  - `yaw_axis` ("X" | "Y" | "Z" o null; opcional, por defecto `null`): eje de guiñada de la bola: "X", "Y" o "Z"; vacío = X. rotation3 gira sobre él; el balanceo (rotation) sale de los dos. Solo ball.
   - `pitch_axis_from` (texto; opcional, por defecto `null`): eje de cabeceo propio (arista, eje de construcción o cilindro) en lugar de pitch_axis. Solo ball.
   - `yaw_axis_from` (texto; opcional, por defecto `null`): eje de guiñada propio en lugar de yaw_axis. Solo ball.
 - CLI: `omnicad call create_as_built_joint --doc pieza.omnicad origin=…`
@@ -4805,7 +4805,7 @@ Duplicar con uniones (ENSAMBLAR › Duplicar con uniones): repite el componente 
 
 ### `create_joint_origin`
 
-Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco (punto con orientación) sobre una cara o arista, con giro y desfase, para usarlo después como origin2 de create_joint. Sobre un cilindro o una arista circular sigue siendo un marco de eje. mode1 / mode2: simple (una cara, arista o punto), between_faces (centrado entre dos caras paralelas: la segunda va en origin1b / origin2b) o edge_intersection (en el cruce prolongado de dos aristas rectas: la segunda va en origin1b / origin2b).
+Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco (punto con orientación) sobre una cara o arista, con giro y desfase, para usarlo después como origin2 de create_joint. Sobre un cilindro o una arista circular sigue siendo un marco de eje. mode1 / mode2: simple, between_faces (centro entre dos caras paralelas) o edge_intersection (cruce de dos aristas rectas); la segunda va en origin1b / origin2b.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
