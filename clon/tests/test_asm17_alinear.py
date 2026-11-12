@@ -245,3 +245,84 @@ def test_el_comando_de_la_ventana_arma_el_angulo_con_referencia_y_se_edita(dos, 
         v.close()
         v.deleteLater()
         app.processEvents()
+
+
+# ---------------------------------------------------------------- Centro
+def test_centro_una_cara_queda_a_medio_camino_de_las_dos_del_otro(dos):
+    s, a, b = dos
+    r = _ll(s, "constrain_components", type="center", geometry1="<X", body1=b, geometry2="<X", body2=a, geometry2b=">X", body2b=a)
+    assert _caja(s, b) == [0, 25, 7, 10, 35, 17]                         # la cara <X de B en x=0, entre x=-10 y x=10; y, z iguales
+    assert [c["name"] for c in r["moved_components"]] == ["CB"] and _caja(s, a) == [-10, -10, 0, 10, 10, 10]
+
+
+def test_centro_entre_dos_caras_de_cada_lado_hace_coincidir_los_planos_medios(dos):
+    s, a, b = dos
+    _ll(s, "constrain_components", type="center", geometry1="<Z", geometry1b=">Z", body1=b, body1b=b,
+        geometry2="<Z", geometry2b=">Z", body2=a, body2b=a)
+    assert _caja(s, b) == [45, 25, 0, 55, 35, 10]                        # el plano medio de B (z=12) baja al de A (z=5)
+
+
+def test_centro_si_el_componente_1_esta_fijo_se_mueve_el_2(dos):
+    s, a, b = dos
+    _ll(s, "constrain_components", type="center", geometry1="<X", body1=a, geometry2="<X", body2=b, geometry2b=">X", body2b=b)
+    assert _caja(s, b) == [-15, 25, 7, -5, 35, 17] and _caja(s, a) == [-10, -10, 0, 10, 10, 10]
+
+
+def test_centro_flip_invierte_la_orientacion(dos):
+    s, a, b = dos
+    args = dict(type="center", geometry1=">Z", body1=b, geometry2="<Z", geometry2b=">Z", body2=a, body2b=a)
+    _ll(s, "constrain_components", **args)
+    assert _caja(s, b)[2::3] == [-5, 5]                                  # sin flip no gira (menos giro): la tapa de B en z=5
+    _ll(s, "undo")
+    _ll(s, "constrain_components", flip=True, **args)
+    assert _caja(s, b)[2::3] == [5, 15]                                  # con flip gira 180°: B queda encima del plano medio
+
+
+def test_centro_errores_claros_y_el_documento_no_cambia(dos):
+    s, a, b = dos
+    base = dict(type="center", geometry1="<X", body1=b, geometry2="<X", body2=a)
+    _falla(s, "constrain_components", "OPERATION_FAILED", **base)                                   # los dos «simple»
+    _falla(s, "constrain_components", "OPERATION_FAILED", geometry2b=">Y", body2b=a, **base)       # caras no paralelas
+    _falla(s, "constrain_components", "OPERATION_FAILED", geometry2b=">X", body2b=b, **base)       # la 2.ª cara es de otro componente
+    _falla(s, "constrain_components", "INVALID_ARGUMENTS", **dict(base, type="align"), geometry2b=">X", body2b=a)
+
+
+def test_el_comando_de_la_ventana_arma_el_centro_y_se_edita(dos, tmp_path):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.api import selectores as sl
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+
+    s, a, b = dos
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    try:
+        v.resize(1280, 800)
+        v.show()
+        p = v.ejecutar_comando(CATALOGO["restriccion_componentes"]())
+        estado = v.doc.estado_final
+        p.set_valor("tipo", "centro")
+        assert p.widgets["desfase"].isHidden() and p.widgets["angulo"].isHidden() and p.widgets["ref2b"].isHidden()
+        p.set_valor("modo2", "entre_caras")
+        assert not p.widgets["ref2b"].isHidden() and p.widgets["ref1b"].isHidden()
+        for campo, sel, cuerpo in (("ref1", "<X", b), ("ref2", "<X", a), ("ref2b", ">X", a)):
+            c, cara = sl.elegir(s, sel, "cara", cuerpo)[0]
+            p._activar(next(x for x in p.campos if x.clave == campo))
+            p._elegida(hit_desde_ref(sl.referencia(c, cara), estado))
+        p.aceptar()
+        assert v.panel is None
+        assert _caja(api.Sesion(v.doc), b) == [0, 25, 7, 10, 35, 17]
+        v.editar_operacion(next(o.id for o in v.doc.operaciones if o.TIPO == "restriccion"))
+        assert v.panel.valores["tipo"] == "centro" and v.panel.valores["modo2"] == "entre_caras" and len(v.panel.valores["ref2b"]) == 1
+        v.panel.cancelar()
+    finally:
+        if v.panel is not None:
+            v.panel.cancelar()
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()
+        app.processEvents()

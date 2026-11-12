@@ -249,7 +249,7 @@ class Union(Comando):
 class RestriccionComponentes(Comando):
     CLAVE, TITULO, ICONO = "restriccion_componentes", "Restricción de componentes", "restriccion_componentes"
     AYUDA = ("Posiciona el componente 1 respecto del 2 (Constrain Components). Alinear: caras coplanares, ejes "
-             "concéntricos o puntos coincidentes. Ángulo: gira el 1 hasta el ángulo pedido con el 2. Faltan Centro y Tangente.")
+             "concéntricos o puntos coincidentes. Ángulo: gira el 1 hasta el ángulo pedido con el 2. Centro: deja una cara (o el plano medio de dos) a medio camino de las dos caras del otro. Falta Tangente.")
     CLASE_OP = OpRestriccion
 
     def verificar(self, ctx):
@@ -257,30 +257,48 @@ class RestriccionComponentes(Comando):
 
     def campos(self, ctx):
         alinear = lambda v: v.get("tipo", "alinear") == "alinear"  # noqa: E731
-        return [Opciones("tipo", "Tipo", {"alinear": "Alinear", "angulo": "Ángulo"}),
+        angular = lambda v: v.get("tipo") == "angulo"  # noqa: E731
+        centro = lambda v: v.get("tipo") == "centro"  # noqa: E731
+        entre = lambda n: lambda v: centro(v) and v.get(f"modo{n}") == "entre_caras"  # noqa: E731
+        modo = {"simple": "Simple", "entre_caras": "Entre dos caras"}
+        return [Opciones("tipo", "Tipo", {"alinear": "Alinear", "angulo": "Ángulo", "centro": "Centro"}),
                 Seleccion("ref1", "Componente 1: geometría", SNAP, ayuda="La cara, arista, vértice, plano, eje o punto que se mueve."),
+                Opciones("modo1", "Componente 1: modo", modo, visible_si=centro,
+                         ayuda="Simple: una cara. Entre dos caras: su plano medio. Al menos un componente va «entre dos caras»."),
+                Seleccion("ref1b", "Componente 1: segunda cara", {"cara", "plano"}, visible_si=entre(1)),
                 Seleccion("ref2", "Componente 2: geometría", SNAP, ayuda="A lo que se alinea; si el 1 está fijo, se mueve este."),
-                Seleccion("ref_angulo", "Referencia de ángulo", {"arista", "eje", "curva_boceto"}, minimo=0, visible_si=lambda v: not alinear(v),
+                Opciones("modo2", "Componente 2: modo", modo, visible_si=centro),
+                Seleccion("ref2b", "Componente 2: segunda cara", {"cara", "plano"}, visible_si=entre(2)),
+                Seleccion("ref_angulo", "Referencia de ángulo", {"arista", "eje", "curva_boceto"}, minimo=0, visible_si=angular,
                           ayuda="Una arista recta o un eje: el ángulo se mide alrededor de él y queda con signo (sin él, de 0 a 180°)."),
                 Expresion("desfase", "Desfase", "0 mm", visible_si=alinear,
                           ayuda="Entre dos planos, la distancia; entre dos ejes, el corrimiento sobre el eje."),
-                Expresion("angulo", "Ángulo", "0 deg", ANGULO, visible_si=lambda v: not alinear(v),
+                Expresion("angulo", "Ángulo", "0 deg", ANGULO, visible_si=angular,
                           ayuda="El ángulo entre las dos geometrías (entre caras, el de sus normales)."),
                 Casilla("voltear", "Voltear", ayuda="Invierte la orientación que sale sola (al ras ↔ enfrentadas; en Ángulo, da vuelta la geometría 1).")]
 
     def construir(self, v, ctx):
         exigir(v, "ref1", "Seleccioná la geometría del componente 1.")
         exigir(v, "ref2", "Seleccioná la geometría del componente 2.")
-        angulo = v.get("tipo") == "angulo"
+        angulo, centro = v.get("tipo") == "angulo", v.get("tipo") == "centro"
         valor = (v.get("angulo") if angulo else v.get("desfase")) or ("0 deg" if angulo else "0 mm")
         ctx.evaluar(valor, ANGULO) if angulo else ctx.evaluar(valor)
+        extra = {}
+        if centro:
+            for n in "12":
+                extra["modo" + n] = v.get("modo" + n) or "simple"
+                if extra["modo" + n] == "entre_caras":
+                    exigir(v, f"ref{n}b", f"Seleccioná la segunda cara del componente {n}.")
+                    extra[f"ref{n}b"] = ref1(v, f"ref{n}b")
+            if extra["modo1"] == extra["modo2"] == "simple":
+                raise ErrorComando("Centro: poné al menos un componente en «Entre dos caras».")
         return self.crear_op(OpRestriccion, v, ctx, tipo=v.get("tipo", "alinear"), ref1=ref1(v, "ref1"), ref2=ref1(v, "ref2"),
-                             desfase=valor, voltear=bool(v.get("voltear")),
-                             ref_angulo=ref1(v, "ref_angulo") if angulo else None)
+                             desfase=valor if not centro else "0 mm", voltear=bool(v.get("voltear")),
+                             ref_angulo=ref1(v, "ref_angulo") if angulo else None, **extra)
 
     def desde_op(self, op, ctx):
         v = dict(op.p)
-        for k in ("ref1", "ref2", "ref_angulo"):
+        for k in ("ref1", "ref2", "ref_angulo", "ref1b", "ref2b"):
             v[k] = [hit_desde_ref(op.p[k], ctx.estado)] if op.p.get(k) else []
         if op.p.get("tipo") == "angulo":
             v["angulo"] = op.p["desfase"]
