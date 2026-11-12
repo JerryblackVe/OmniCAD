@@ -573,6 +573,9 @@ def _validar_receta(receta):
     for d in receta["operaciones"]:
         if d["tipo"] not in TIPOS_OPERACION:
             raise error("UNKNOWN_OPERATION_TYPE", f"La receta usa el tipo de operación desconocido '{d['tipo']}'.")
+        if "params" in d and not isinstance(d["params"], dict):
+            raise error("INVALID_RECIPE", f"El paso «{d.get('nombre') or d['id']}» ({d['id']}) tiene 'params' inválido: "
+                        f"tiene que ser un objeto (dict), no {type(d['params']).__name__}.")
 
 
 def _renumerar(doc, ops_nuevas, propiedades):
