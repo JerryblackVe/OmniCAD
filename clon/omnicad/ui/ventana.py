@@ -1241,12 +1241,14 @@ class VentanaPrincipal(QMainWindow):
         """Dibuja los análisis visibles del navegador (sección, cebra, curvatura…) sobre el modelo."""
         from . import analisis_vista
         estado = estado or self._estado_visible()
+        # B-311: lo que la vista no muestra (ojo, componente o carpeta Cuerpos ocultos) tampoco se corta ni se pinta
+        propiedades = dict(self.doc.propiedades, __navegador__={"ocultos": sorted(self._ocultos_efectivos(estado))})
         resultados, centros = [], []
         for nombre, a in self.doc.analisis.items():
             if not a.get("visible", True):
                 continue
             try:
-                resultados.append(analisis_vista.calcular(a["tipo"], a["params"], estado, self.doc.propiedades))
+                resultados.append(analisis_vista.calcular(a["tipo"], a["params"], estado, propiedades))
                 if a["tipo"] == "centro_masa" and resultados[-1]["capas"]:
                     centros.append((nombre, np.asarray(resultados[-1]["capas"][0][1][0], float)))
             except Exception as e:  # noqa: BLE001 — un análisis cuya referencia se perdió no rompe la vista

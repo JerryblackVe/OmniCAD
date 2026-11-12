@@ -24,9 +24,13 @@ from . import entidades as ent
 _cache = {}
 
 
-def _cuerpos(params, estado):
+def _cuerpos(params, estado, propiedades=None):
+    """Los cuerpos elegidos (sin ninguno, los sólidos y superficies) que están a la vista: como Fusion, un análisis no
+    corta ni pinta un cuerpo oculto en el navegador (B-311), ni los de un componente oculto."""
     ids = params.get("cuerpos") or [c for c, cu in estado.cuerpos.items() if getattr(cu, "tipo", "solido") != "malla"]
-    return {c: estado.cuerpos[c].forma for c in ids if c in estado.cuerpos}
+    ocultos = set(((propiedades or {}).get("__navegador__") or {}).get("ocultos") or [])
+    return {c: estado.cuerpos[c].forma for c in ids
+            if c in estado.cuerpos and c not in ocultos and getattr(estado.cuerpos[c], "componente", None) not in ocultos}
 
 
 def _direccion(params, estado, defecto=(0.0, 0.0, 1.0)):
@@ -157,7 +161,7 @@ def calcular(tipo, params, estado, propiedades=None):
         if params.get("cuerpos"):
             salida["solo"] = [c for c in params["cuerpos"] if c in estado.cuerpos]
         return salida
-    cuerpos = _cuerpos(params, estado)
+    cuerpos = _cuerpos(params, estado, propiedades)
     if tipo == "desviacion":
         return _desviacion(params, cuerpos, estado, salida)
     if tipo == "isocurva" and params.get("caras"):       # Cuerpos/Caras: las caras elegidas se suman a los cuerpos elegidos
