@@ -77,7 +77,7 @@ def _firma_interna(f, tool):
     return f
 
 
-def juzgar(s, tool, args, receta, antes, f_previa, carpeta, pesado, todos, t0, invalido=None):
+def juzgar(s, tool, args, receta, antes, f_previa, carpeta, pesado, todos, t0, invalido=None, exito=False):
     """Los jueces, del más grave al más caro, sobre un paso que dio ok. Devuelve (fallo, foto, defectos).
     Sin `todos`, los que rehacen la pieza corren en uno de cada tres pasos: la `rapida` prueba el doble de cadenas."""
     f = j.foto(api, s)
@@ -85,8 +85,8 @@ def juzgar(s, tool, args, receta, antes, f_previa, carpeta, pesado, todos, t0, i
     if falla:
         return falla, f, antes
     cubos = {c["type"] for c in (api.llamar(s, "find_faces", {}).get("result") or {}).get("faces") or []}
-    d = j.defectos(api, s, pesado or not cubos & {"bspline", "bezier", "other"})
-    falla = j.juez_geometria(antes, d) or j.juez_esperado(tool, args, f_previa, f)
+    d = j.defectos(api, s, pesado or not cubos & {"bspline", "bezier", "other"}, solidos=exito)
+    falla = j.juez_geometria({} if exito else antes, d) or j.juez_esperado(tool, args, f_previa, f)
     # Sobre una pieza ya rota, los jueces que la rehacen culpan al paso que venga después.
     rota = any(n for defectos in d.values() for n in defectos.values())
     if falla or invalido or rota or not (todos or len(receta) % 3 == 0):
@@ -134,16 +134,17 @@ def correr(pasos, carpeta, pesado=False, todos=True, ignorar=()):
         avance.append({"tool": tool, "ok": bool(r.get("ok")), "kind": r.get("error_kind"), "clase": paso.get("clase"),
                        "seg": round(time.monotonic() - t, 3)})
         invalido = paso.get("invalido")
-        falla = j.juez_memoria(tool, pico, memoria_pico()) or j.juez_contrato(r, invalido)
+        falla = j.juez_memoria(tool, pico, memoria_pico()) or j.juez_contrato(r, invalido, paso.get("exito", False))
         receta.append({k: v for k, v in paso.items() if k != "clase"})
         if falla and firma(_firma_interna(falla, tool)) not in ignorar:
             return {"fallo": falla, "receta": receta, "avance": avance}
         if not r.get("ok"):
             receta.pop()
             continue
-        if json.dumps((api.llamar(s, "get_recipe", {}).get("result") or {}), default=str) == receta_antes:
+        if not paso.get("exito") and json.dumps((api.llamar(s, "get_recipe", {}).get("result") or {}), default=str) == receta_antes:
             continue                                            # no cambió el documento: no hay nada que juzgar
-        falla, previa, defectos = juzgar(s, tool, args, receta, defectos, previa, carpeta, pesado, todos, t0, invalido)
+        falla, previa, defectos = juzgar(s, tool, args, receta, defectos, previa, carpeta, pesado, todos, t0,
+                                       invalido, paso.get("exito", False))
         if falla and firma(_firma_interna(falla, tool)) not in ignorar:
             return {"fallo": falla, "receta": receta, "avance": avance}
     return {"fallo": None, "receta": receta, "avance": avance}
@@ -152,8 +153,10 @@ def correr(pasos, carpeta, pesado=False, todos=True, ignorar=()):
 def pasos_cadena(ped, rng):
     """Generador: primero la pieza semilla, después el plan del coordinador, con argumentos medidos en la pieza."""
     def pasos(s):
-        for tool, args in gen.PIEZAS[ped["pieza"]](rng):
-            yield {"tool": tool, "args": args}
+        real = ped["pieza"] in gen.CADENAS_REALES
+        pieza = gen.CADENAS_REALES[ped["pieza"]] if real else gen.PIEZAS[ped["pieza"]]
+        for tool, args in pieza(rng):
+            yield {"tool": tool, "args": args, **({"exito": True} if real else {})}
         for tool, clase in ped["plan"]:
             ctx = gen.Contexto(s, api.llamar)
             args = gen.llenar(HERRAMIENTAS[tool], ctx, rng, clase)

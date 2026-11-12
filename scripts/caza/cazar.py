@@ -25,6 +25,8 @@ import unicodedata
 from datetime import date
 from pathlib import Path
 
+from generador import CADENAS_REALES
+
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parents[1]
 ESTADO = Path(os.environ.get("OMNICAD_CAZA_ESTADO") or RAIZ / "evidencias" / "caza")
@@ -305,6 +307,8 @@ class Corrida:
         if not self.foco:
             return None
         palabra = sin_acentos(self.foco)
+        if palabra == "pieza_real" or palabra in CADENAS_REALES:
+            return None
         por_nombre = {h["nombre"]: h for h in self.info["herramientas"]}
         lista = [n for n in (nombres or por_nombre) if palabra in sin_acentos(f"{n} {por_nombre[n]['descripcion']}")]
         if not lista:
@@ -312,6 +316,25 @@ class Corrida:
         return lista
 
     def capa_b(self, capa, queda):
+        palabra = sin_acentos(self.foco or "")
+        reales = [n for n in CADENAS_REALES if not palabra or palabra == "pieza_real" or palabra in n]
+        for i in range(capa.get("reales", 0), len(reales)):
+            if not queda():
+                return
+            nombre = reales[i]
+            ped = {"tipo": "cadena", "pieza": nombre, "semilla": f"{self.av['semilla']}-real-{i}",
+                   "plan": [], "pesado": self.pesado}
+            res = self.fuente.pedir(ped, self.plazo)
+            capa["reales"] = i + 1
+            capa["hechos"] += 1
+            self.cob.anotar(res["avance"])
+            if res["fallo"]:
+                self.anotar_fallo("B", res)
+            print(f"Cadena real {nombre}: " + (firma_de(res["fallo"]) if res["fallo"] else "sin hallazgos"), flush=True)
+            for paso in res["avance"]:
+                print(f"  {paso['tool']}: {'ok' if paso['ok'] else paso['kind']} · {paso['seg']:.3f} s", flush=True)
+        if palabra == "pieza_real" or palabra in CADENAS_REALES:
+            return
         nombres = self.nombres_cadena()
         foco = self.del_foco(nombres)
         nucleo = [h["nombre"] for h in self.info["herramientas"] if h["nucleo"] and h["nombre"] in nombres]
@@ -333,6 +356,8 @@ class Corrida:
                 self.anotar_fallo("B", res, ped["ignorar"])
 
     def capa_a(self, capa, queda):
+        if sin_acentos(self.foco or "") in ("pieza_real", *CADENAS_REALES):
+            return
         por_nombre = [h["nombre"] for h in self.info["herramientas"]]
         lista = self.del_foco(por_nombre) or por_nombre
         lista.sort(key=lambda n: self.cob.contratos.get(n, 0))

@@ -1,0 +1,10 @@
+{
+ "id": "pieza_real_desfase_unido_positivo",
+ "firma": "esperado|offset_faces|rechaza_valido",
+ "pasos": [
+  {"tool": "create_cylinder", "args": {"radius": 10, "height": 20}, "exito": true},
+  {"tool": "create_cylinder", "args": {"radius": 15, "height": 2, "z": 20}, "exito": true},
+  {"tool": "boolean_operation", "args": {"target": "Cuerpo1", "tools": ["Cuerpo2"], "operation": "join"}, "exito": true},
+  {"tool": "offset_faces", "args": {"body": "Cuerpo1", "faces": "%CYLINDER and <Z", "tangent": false, "distance": 0.5}, "exito": true}
+ ]
+}

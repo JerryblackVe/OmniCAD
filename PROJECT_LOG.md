@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-12 · Caza automática: cadenas de pieza real (E7, rama item/caza-real rebasada).** `scripts/caza/` suma 9 cadenas de un perno con tapa, rosca modelada, desfase, dos lados y sección (`generador.CADENAS_REALES`, tema `pieza_real`), un juez que exige que sus pasos válidos se completen (`rechaza_valido`) y que conserven sólidos cerrados, y sus casos en `clon/tests/corpus_caza/real_*.json`. Rebase: saqué las firmas de B-170 y B-306 a B-310 de `conocidos.json` (filas ya cerradas) y las cadenas rosca + desfase, que main rechaza a propósito desde B-306. `test_caza_regresion` 47 OK y 2 xfail previos; `cazar.py tema pieza_real` sin hallazgos nuevos; ruff limpio.
 - **2026-11-12 · Traspaso del coordinador PRINCIPAL (VPS), contexto al 62 %.** Leer esto primero.
   - **Hoy:** ~70 fusiones a main (último verde: 695 tests cruzados + ruff, después de B-160/P-140/B-365/ASM-17g). Revisión previa a la versión con workflow (`docs/auditorias/revision_pre_version_2026-11-12.md`, B-349 a B-361, casi todo cerrado). Página de seguimiento refrescada a las 15:10 (refrescar al cerrar la próxima tanda).
   - **Push:** main listo salvo la suite y la humo en Windows de Gerardo (B-365, el último rojo, ya entró). Gerardo pidió que le avisemos cuando esté listo para push y versión nueva (memoria `avisar-listo-para-push-y-release`). Última versión: v0.2.0; `origin/main` está 479+ commits atrás.
