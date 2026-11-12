@@ -20,10 +20,10 @@ def test_b48_un_crash_nativo_del_kernel_vuelve_como_error_y_no_mata_al_padre(mon
     `TareaAislada` con un mensaje claro y sigue corriendo."""
     monkeypatch.setattr(aislado._motor, "motor_activo", lambda: "opencascade")          # con omnikernel corre en proceso
     monkeypatch.setattr(aislado, "_comando", lambda tarea, carpeta: [sys.executable, "-c",
-                                                                      "import os; os._exit(-1073741819)"])
+                                                                      "import os; os._exit(-1073741819) if os.name == 'nt' else os.kill(os.getpid(), 11)"])
     forma = geo.caja(10, 20, 30)
     with pytest.raises(aislado.TareaAislada) as fallo:
         aislado.correr("autointersecciones", forma, 60)
     mensaje = str(fallo.value)
-    assert "error nativo" in mensaje and "0xc0000005" in mensaje and "sigue andando" in mensaje
+    assert "error nativo" in mensaje and ("0xc0000005" in mensaje or "-0xb" in mensaje) and "sigue andando" in mensaje
     assert geo.es_valida(forma)   # el proceso padre sigue vivo y trabajando

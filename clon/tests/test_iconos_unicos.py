@@ -14,7 +14,10 @@ EXCEPCIONES_COMANDOS = {}
 # Distancia = diferencia media de color (RGB) a 24 px sobre blanco (scripts/hoja_iconos.py › distancia). Par más cercano
 # hoy (2026-10-26): calcomania/empalme_3d 0.046, desplegar/plegar 0.053, convertir_malla/malla_teselar 0.054. Por debajo de
 # 0.04 dos íconos se confunden en el timeline.
-UMBRAL = 0.04
+# B-333: en Linux Qt rasteriza los mismos dibujos con ~25 % menos diferencia (los pares más cercanos, mirados a 24 px, se ven
+# distintos: eje_arista/punto_vertice, sup_caja/sup_esfera, cilindro/eje_cilindro, calcomania/empalme_3d, desplegar/plegar).
+# En Windows manda 0.04; en otros sistemas 0.025.
+UMBRAL = 0.04 if sys.platform == "win32" else 0.025
 
 
 @pytest.fixture(scope="module")

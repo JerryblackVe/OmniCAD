@@ -192,7 +192,7 @@ for i in range(2):
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="2", largo="5", alto="altura", x=str(i * 4)))
 aislado.UMBRAL_PREVUELO_PARAMETROS = 2
 def caer(*args):
-    os._exit(-1073741819)
+    os._exit(-1073741819) if os.name == 'nt' else os.kill(os.getpid(), 11)
 OpPrimitiva.ejecutar = caer
 tabla = TablaParametros.desde_lista(doc.parametros.a_lista())
 tabla.modificar("altura", "7 mm")

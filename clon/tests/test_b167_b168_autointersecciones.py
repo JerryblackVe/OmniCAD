@@ -48,7 +48,7 @@ def test_b168_tubo_con_esquina_avisa_en_vez_de_quedar_ok():
     r = _r(s, "create_pipe", edges=["Cuerpo1/E1", "Cuerpo1/E2"], section_size=8)
     forma = s.cuerpo(r["result"]["bodies_created"][0]["id"]).forma
     assert _autointersecciones(forma) == 5                       # el kernel sigue dejando la esquina plegada
-    assert geo.volumen(forma) == pytest.approx(6245.5355, abs=1e-3)
+    assert geo.volumen(forma) == pytest.approx(6245.5355, rel=1e-5)   # Linux da 6245.5387 (esquina plegada: el kernel no es idéntico entre sistemas)
     assert s.doc.resultado(r["result"]["feature"]["id"]).estado == "aviso"
     aviso = " ".join(r["avisos"]).lower()
     assert "autointerseccion" in aviso and "esquina" in aviso, r["avisos"]

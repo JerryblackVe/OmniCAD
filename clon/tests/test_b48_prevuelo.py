@@ -53,7 +53,7 @@ def test_crash_nativo_no_toca_documento_ni_deshacer(monkeypatch):
     antes, parametros, estados = _instantanea(doc), doc.parametros, list(doc._estados)
     monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
     monkeypatch.setattr(aislado, "_comando", lambda tarea, carpeta: [sys.executable, "-c",
-                                                                 "import os; os._exit(-1073741819)"])
+                                                                 "import os; os._exit(-1073741819) if os.name == 'nt' else os.kill(os.getpid(), 11)"])
     with pytest.raises(ErrorDocumento, match="error nativo"):
         doc.aplicar_parametros(_tabla(doc))
     assert doc.parametros is parametros
@@ -145,7 +145,7 @@ def test_costo_calculo_aislado_60_pasos():
 # ---------------------------------------------------------------- B-48: editar, suprimir, eliminar y abrir
 def _crash(monkeypatch):
     monkeypatch.setattr(aislado, "_comando", lambda tarea, carpeta: [sys.executable, "-c",
-                                                                 "import os; os._exit(-1073741819)"])
+                                                                 "import os; os._exit(-1073741819) if os.name == 'nt' else os.kill(os.getpid(), 11)"])
 
 
 def _caja_ancha(op):
