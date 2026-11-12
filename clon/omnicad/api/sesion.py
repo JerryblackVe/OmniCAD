@@ -53,14 +53,15 @@ class Sesion:
         ruta = Path(ruta)
         if not ruta.is_file():
             raise error("FILE_NOT_FOUND", f"No existe el archivo: {ruta}")
+        esperar = self.doc.al_esperar     # B-337: en vivo, la ventana sigue atendiendo mientras calcula el proceso aparte
         if abrir_externo.es_externo(ruta):
-            self.doc, avisos = abrir_externo.documento_desde_archivo(ruta, unidades)
+            self.doc, avisos = abrir_externo.documento_desde_archivo(ruta, unidades, esperar=esperar)
             for aviso in avisos:
                 self.avisar(aviso)
         elif ruta.suffix.lower() not in proyecto.EXTENSIONES:
             raise error("UNSUPPORTED_FILE_TYPE", f"Formato no soportado: {ruta.suffix or '(sin extensión)'}.")
         else:
-            self.doc = proyecto.abrir(ruta)
+            self.doc = proyecto.abrir(ruta, esperar)
         return self.doc
 
     def guardar(self, ruta=None, sobrescribir=False, crear_carpetas=False):

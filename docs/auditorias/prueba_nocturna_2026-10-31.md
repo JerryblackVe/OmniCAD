@@ -442,6 +442,7 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 | P-11k: comparar EXTRUSOR XOX.f3z contra Fusion | importarlo en Fusion crea diseños en la nube del usuario |
 | Escaneo de secretos del workflow de CI (`.github/workflows/instaladores.yml`, paso «Escaneo de secretos») | corre solo en CI; localmente hay que correr el mismo comando antes de cualquier `push` |
 | `git push` de `main` | solo con el «sí» de Gerardo; un push a `main` no dispara CI |
+| B-363 / B-337: el .f3d ya se comparó en Fusion (2026-11-12, ver B-363). Falta en la PC: abrir el .f3d por el puente (Fusion → STEP → OmniCAD) y medir cuánto tarda OmniCAD con esa STEP de 72,6 MB, y la STEP de SolidWorks en la ventana con el proceso aparte (en la VPS: congelada 91 s, abrir 698 s) | Fusion corre solo en la PC de Gerardo (puente y túnel prendidos) |
 
 ## 7. Orden de la noche
 

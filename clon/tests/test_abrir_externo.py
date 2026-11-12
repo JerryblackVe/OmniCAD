@@ -68,6 +68,27 @@ def _step_con_estructura(ruta):
 
 
 # ---------------------------------------------------------------- formatos de intercambio
+def test_con_ventana_el_step_se_lee_en_un_proceso_aparte(tmp_path, monkeypatch):
+    """B-337: OpenCascade no suelta el GIL al leer un STEP (un archivo de 95 MB, minutos): con `esperar` (la ventana) la
+    lectura va al proceso aparte de B-48 y este proceso no ejecuta la importación; el resultado es el mismo."""
+    from omnicad.nucleo import aislado
+    from omnicad.timeline.operaciones import OpImportarSTEP
+    ruta = _step_con_estructura(tmp_path / "conjunto.step")
+    local = documento_desde_archivo(ruta)[0].estado_final
+    esperas = []
+    monkeypatch.setattr(OpImportarSTEP, "ejecutar", lambda *a, **k: pytest.fail("leyó el STEP en la ventana"))
+    try:
+        doc, avisos = documento_desde_archivo(ruta, esperar=esperas.append)
+    finally:
+        aislado.cerrar_trabajador()
+    estado = doc.estado_final
+    assert avisos == [] and doc.al_esperar is None and not doc.modificado and doc.resultados[0].estado == "ok"
+    assert {c.nombre for c in estado.cuerpos.values()} == {"Placa", "Perno"}
+    assert sorted(g.volumen_exacto(c.forma) for c in estado.cuerpos.values()) == pytest.approx(
+        sorted(g.volumen_exacto(c.forma) for c in local.cuerpos.values()))
+    assert [c["nombre"] for c in estado.componentes.values()] == ["Soporte"]
+
+
 def test_step_conserva_nombres_colores_y_componentes(tmp_path):
     doc, avisos = documento_desde_archivo(_step_con_estructura(tmp_path / "conjunto.step"))
     assert avisos == [] and doc.nombre == "conjunto" and doc.ruta is None and not doc.modificado

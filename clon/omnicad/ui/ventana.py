@@ -3000,7 +3000,7 @@ class VentanaPrincipal(QMainWindow):
             else:
                 QApplication.setOverrideCursor(Qt.WaitCursor)
                 try:
-                    doc, avisos = abrir_externo.documento_desde_archivo(ruta, unidades)
+                    doc, avisos = abrir_externo.documento_desde_archivo(ruta, unidades, esperar=self._esperando_calculo)
                 finally:
                     QApplication.restoreOverrideCursor()
         except puente_fusion.ErrorPuenteFusion as e:
@@ -3235,7 +3235,9 @@ class VentanaPrincipal(QMainWindow):
         except (ex.ErrorExportacion, RuntimeError, OSError) as e:
             QMessageBox.critical(self, "No se pudo importar", str(e))
             return
-        self._agregar(OpImportarSTEP(self.doc.nuevo_id(), f"Importar {Path(ruta).name}", archivo=Path(ruta).name, contenido=texto))
+        # B-337: el lector de OpenCascade no suelta el GIL (minutos con un STEP grande): se calcula en el proceso aparte.
+        self._agregar(OpImportarSTEP(self.doc.nuevo_id(), f"Importar {Path(ruta).name}", archivo=Path(ruta).name, contenido=texto),
+                      aparte=True)
 
     def insertar_malla(self):
         from ..nucleo import malla
