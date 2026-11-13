@@ -3357,6 +3357,8 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
         raise geo.ErrorGeometria(f"Posición de sección desconocida: {posicion_seccion}")
     if r_c + min(radiales) <= 0:
         raise geo.ErrorGeometria("La sección no entra: cruza el eje de la bobina.")
+    if not espiral and r_c + altura * math.tan(math.radians(angulo)) + min(radiales) <= 0:   # el cono angosta el radio
+        raise geo.ErrorGeometria("Con ese ángulo la bobina llega al eje antes del final: bajá el ángulo o la altura.")
     ancho = max(radiales) - min(radiales) if espiral else max(axiales) - min(axiales)
     if paso <= ancho + 1e-6:
         raise geo.ErrorGeometria("El paso es menor que la sección: las espiras se superpondrían.")
@@ -3371,7 +3373,11 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
     forma = _barrido_helicoidal(perfil, helice)
     if girar:
         forma = _girar(forma, gp_Ax1(_pnt(o), _gdir(np.cross(z, x))), 90)
-    return _validar(forma, "Bobina")
+    forma = _validar(forma, "Bobina")
+    if geo.volumen(forma) <= 0:          # B-391: medidas extremas (altura 1e6 con 30°) dan el sólido dado vuelta
+        raise geo.ErrorGeometria("La bobina no se pudo construir con esas medidas: el sólido sale dado vuelta. "
+                                 "Probá con menos altura o menos ángulo.")
+    return forma
 
 
 # ================================================================ 10. tubería
