@@ -808,6 +808,74 @@ def buscar_por_firma_tolerante(perfiles, firma, centroide=None, plano=None, boce
                    "contorno (revisá la operación).")
 
 
+def buscar_perfiles(perfiles, refs, plano=None, boceto=None):
+    """Los perfiles de un paso, todos juntos: [(perfil o None, nota)] en el orden de `refs`. B-404: las letras de un
+    texto tienen todas la firma del texto; cada una iba a la región más cercana a su centroide viejo y, con el texto
+    movido, varias caían en la misma letra (de «Emilia» quedaban «Emi i») sin aviso. Ahora las referencias con la
+    misma firma se reparten de a una entre sus regiones, después de buscar el desplazamiento que mejor las lleva (el
+    de una referencia a una región; sin moverse gana). Una que no tiene región libre se pierde: (None, aviso)."""
+    salida, grupos = [None] * len(refs), {}
+    for i, ref in enumerate(refs):
+        grupos.setdefault(frozenset(ref["firma"]), []).append(i)
+    for firma, indices in grupos.items():
+        candidatos = [p for p in perfiles if p.firma == firma]
+        centroides = [refs[i].get("centroide") for i in indices]
+        if len(indices) == 1 or not candidatos or None in centroides:
+            for i in indices:
+                salida[i] = buscar_por_firma_tolerante(perfiles, refs[i]["firma"], refs[i].get("centroide"), plano,
+                                                       boceto)
+            continue
+        for i, perfil in zip(indices, _repartir(candidatos, centroides), strict=True):
+            salida[i] = (perfil, None) if perfil is not None else (
+                None, "Un perfil elegido ya no tiene región en el boceto (quedaron menos regiones que perfiles "
+                      "elegidos): el paso sigue sin él; revisá la operación.")
+    return salida
+
+
+def _movimientos(a, b):
+    """Movimientos rígidos (giro R, traslado t) que pueden llevar los centroides guardados `a` a las regiones `b`:
+    quieto; a[0] sobre cada región; y cada giro que lleva el par (a[0], el centroide más lejano) a un par de regiones
+    separadas lo mismo (el texto movido y girado con Mover)."""
+    yield np.identity(2), np.zeros(2)
+    for bj in b:
+        yield np.identity(2), bj - a[0]
+    k = int(np.argmax(np.linalg.norm(a - a[0], axis=1)))
+    largo = float(np.linalg.norm(a[k] - a[0]))
+    if largo < 1e-9:
+        return
+    pares = np.abs(np.linalg.norm(b[:, None] - b[None], axis=2) - largo) < 1e-4 * largo + 1e-6
+    for j, m in zip(*np.nonzero(pares), strict=True):
+        giro = math.atan2(*(b[m] - b[j])[::-1]) - math.atan2(*(a[k] - a[0])[::-1])
+        R = np.array([[math.cos(giro), -math.sin(giro)], [math.sin(giro), math.cos(giro)]])
+        yield R, b[j] - R @ a[0]
+
+
+def _repartir(candidatos, centroides):
+    """A cada centroide guardado, una región distinta: la más cercana después del movimiento que mejor los lleva."""
+    from scipy.spatial import cKDTree
+    a, b = np.asarray(centroides, float), np.array([p.centroide_uv for p in candidatos], float)
+    arbol = cKDTree(b)
+    mejor = None
+    for R, t in _movimientos(a, b):
+        costo = arbol.query(a @ R.T + t)[0].sum()
+        if mejor is None or costo < mejor[0]:                   # empate: el primero (quieto)
+            mejor = (costo, R, t)
+        if costo < 1e-9 * len(a):                               # ya calza (lo de siempre al recalcular)
+            break
+    _costo, R, t = mejor
+    cerca = arbol.query(a @ R.T + t)[1].tolist()
+    if len(set(cerca)) == len(cerca):                           # cada uno tiene su región más cercana, sin choques
+        return [candidatos[j] for j in cerca]
+    distancias = np.linalg.norm((a @ R.T + t)[:, None, :] - b[None, :, :], axis=2)
+    elegidos, usados = [None] * len(a), set()
+    for k in np.argsort(distancias, axis=None, kind="stable"):
+        i, j = divmod(int(k), len(b))
+        if elegidos[i] is None and j not in usados:
+            elegidos[i] = candidatos[j]
+            usados.add(j)
+    return elegidos
+
+
 # ---------------------------------------------------------------- aristas OCC → primitivas 2D
 def _aristas_unicas(forma):
     vistas, salida = set(), []

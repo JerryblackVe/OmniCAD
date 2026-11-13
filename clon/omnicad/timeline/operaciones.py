@@ -24,7 +24,7 @@ from ..nucleo import referencias as refs
 from ..nucleo import revision as rv
 from ..nucleo.malla import Malla
 from . import entidades as ent
-from ..nucleo.perfiles import buscar_por_firma_tolerante, cara_sin_area, detectar_boceto
+from ..nucleo.perfiles import buscar_perfiles, cara_sin_area, detectar_boceto
 from ..restricciones import Boceto, resolver
 from ..restricciones.boceto import ErrorBoceto, Texto, distancia_punto_recta, expresiones_de_texto, validar_valor_cota
 from .parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, ErrorMagnitud, acotar, evaluar, nombres_usados,
@@ -1115,8 +1115,15 @@ class _OpConPerfiles(Operacion):
                 detalle = ent.problema_perfil(ref)
                 if detalle:
                     raise ParametroMalFormado(ref, detalle)
-                perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano,
-                                                       br.boceto)
+            vistos = set()
+            for ref, (perfil, nota) in zip(self.p["perfiles"],
+                                           buscar_perfiles(br.perfiles, self.p["perfiles"], br.plano, br.boceto),
+                                           strict=True):
+                if perfil is not None and id(perfil) in vistos:     # B-404: dos referencias, una sola región
+                    perfil, nota = None, "Dos perfiles elegidos son ahora la misma región del boceto: revisá la operación."
+                if perfil is None and nota:
+                    ctx is not None and ctx.aviso(nota)
+                    continue
                 if perfil is None:
                     if ent.es_de_texto(ref["firma"], br):
                         raise ErrorOperacion("Un perfil seleccionado era un pedazo de una letra y ya no existe como "
@@ -1124,6 +1131,7 @@ class _OpConPerfiles(Operacion):
                     raise ErrorOperacion("Un perfil seleccionado ya no existe en el boceto (cambió su contorno).")
                 if nota and ctx is not None:
                     ctx.aviso(nota)
+                vistos.add(id(perfil))
                 caras.append(perfil.cara)
             plano = br.plano
         normal_cara = None

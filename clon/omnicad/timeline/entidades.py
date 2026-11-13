@@ -28,7 +28,8 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
-from ..nucleo.perfiles import (aristas_boceto, buscar_por_firma_tolerante, intersecar_forma, proyectar_forma,
+from ..nucleo.perfiles import (aristas_boceto, buscar_perfiles, buscar_por_firma_tolerante, intersecar_forma,
+                               proyectar_forma,
                                proyectar_giro_forma, silueta_forma)
 
 EJES_ORIGEN = {"X": (1.0, 0.0, 0.0), "Y": (0.0, 1.0, 0.0), "Z": (0.0, 0.0, 1.0)}
@@ -354,13 +355,36 @@ def geo_dir(v):
     return v / n
 
 
+def _perfiles_juntos(lista, estado):
+    """{posición: Entidad} de los perfiles de un mismo boceto que vienen juntos en la lista: se buscan todos a la vez
+    (`buscar_perfiles`, B-404) para que dos no caigan en la misma región. El resto lo resuelve `resolver`."""
+    por_boceto = {}
+    for i, ref in enumerate(lista):
+        if isinstance(ref, dict) and ref.get("tipo") == "perfil" and not problema_perfil(ref) and \
+                isinstance(ref.get("boceto"), str):
+            por_boceto.setdefault(ref["boceto"], []).append(i)
+    salida = {}
+    for bid, indices in por_boceto.items():
+        if len(indices) < 2:
+            continue
+        br = _boceto(estado, bid)
+        for i, (perfil, nota) in zip(indices, buscar_perfiles(br.perfiles, [lista[i] for i in indices], br.plano,
+                                                              br.boceto), strict=True):
+            if perfil is None:
+                raise ErrorReferencia(nota or "Un perfil seleccionado ya no existe en el boceto (cambió su contorno).")
+            if nota:
+                logging.getLogger("omnicad").warning(nota + " (boceto %s)", bid)
+            salida[i] = Entidad("perfil", forma=perfil.cara, plano=br.plano, boceto=br, perfil=perfil)
+    return salida
+
+
 def resolver_todas(lista, estado):
     """Resuelve una lista de referencias (None = vacía). Las subformas del mismo cuerpo no se repiten."""
     if lista is not None and not isinstance(lista, (list, tuple)):
         raise ReferenciaMalFormada(lista, "se esperaba una lista de referencias")
-    salida = []
-    for ref in lista or []:
-        ent = resolver(ref, estado)
+    salida, juntos = [], _perfiles_juntos(lista or [], estado)
+    for i, ref in enumerate(lista or []):
+        ent = juntos[i] if i in juntos else resolver(ref, estado)
         if ent.forma is not None and ent.tipo in ("cara", "arista", "vertice") and any(
                 e.forma is not None and e.forma.IsSame(ent.forma) for e in salida):
             continue
