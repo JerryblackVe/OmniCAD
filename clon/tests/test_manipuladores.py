@@ -298,6 +298,7 @@ def _hit_cuerpo(doc):
 
 
 def test_la_triada_mueve_un_cuerpo(app_qt):
+    from omnicad.ui import manipuladores as mp
     from omnicad.ui.comandos.modificar import MoverCopiar
     doc = _doc_caja()
     panel, visor, estados = _panel(MoverCopiar(), doc, {"cuerpos": [_hit_cuerpo(doc)]})
@@ -316,13 +317,16 @@ def test_la_triada_mueve_un_cuerpo(app_qt):
     assert (x0, x1, y0, z0) == pytest.approx((dx, 20 + dx, 0, 0), abs=1e-6)
     # la tríada acompaña al cuerpo
     assert _manip(panel, "triada").centro == pytest.approx((10 + dx, 10, 10))
-    # arco de giro alrededor de Z: cambia rz
-    triada = _manip(panel, "triada")
-    arco = dict(triada._partes(gestor)[0])[("giro", 2)]
-    s, _ = gestor.pantalla(arco)
-    medio = s[len(s) // 2]
-    tangente = s[len(s) // 2 + 1] - s[len(s) // 2 - 1]
-    _arrastrar(visor, medio, medio + tangente / np.linalg.norm(tangente) * 40)
+    # P-139m: los giros son el anillo de Fusion (uno por eje, en el centro de la tríada), no arcos de la tríada
+    assert [m.ident for m in panel.manipuladores.manips] == ["triada", "angulo:rx", "angulo:ry", "angulo:rz"]
+    assert not any(sub[0] == "giro" for sub, _ in _manip(panel, "triada")._partes(gestor)[0])
+    anillo = _manip(panel, "angulo:rz")
+    assert isinstance(anillo, mp.AnilloAngulo) and anillo.centro == pytest.approx((10 + dx, 10, 10))
+    assert mp.unitario(anillo.asa(gestor) - anillo.centro) == pytest.approx(np.array([1, 1, 0]) / np.sqrt(2))   # a 45°
+    # arrastrar el asa del anillo de Z a lo largo del anillo: cambia rz
+    p0, p1 = (anillo.centro + (anillo.u * np.cos(t) + anillo.v * np.sin(t)) * anillo._r(gestor) for t in (0.0, 0.2))
+    s, _ = gestor.pantalla([p0, p1])
+    _arrastrar(visor, s[0], s[0] + (s[1] - s[0]) / np.linalg.norm(s[1] - s[0]) * 40)
     assert abs(panel.ctx.evaluar(panel.valores["rz"], "angulo")) > 1
     # cuadradito del plano XY: mueve X e Y a la vez, Z queda
     triada = _manip(panel, "triada")

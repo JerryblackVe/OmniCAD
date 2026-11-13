@@ -930,7 +930,7 @@ class MoverCopiar(Comando):
         return self.crear_op(OpMover, v, ctx, **p)
 
     def manipuladores(self, ctx, v):
-        """La tríada de Fusion en el pivote (libre: flechas, arcos de giro, planos y esfera), la flecha de
+        """La tríada de Fusion en el pivote (libre: flechas, planos, esfera y un anillo de giro por eje), la flecha de
         «Trasladar» con dirección, el arco de «Girar» y la tríada de «Punto a posición»."""
         import numpy as np
 
@@ -954,7 +954,15 @@ class MoverCopiar(Comando):
         if tipo == "libre":
             e = mp.entidad(v["pivote"][0], ctx.estado) if v.get("pivote") else None
             pivote = ent.como_punto(e) if e is not None else centro
-            return [mp.Triada(np.asarray(pivote, float) + [L("dx"), L("dy"), L("dz")])]
+            c = np.asarray(pivote, float) + [L("dx"), L("dy"), L("dz")]
+            # P-139m: los giros son el anillo de Fusion (arco corto con asa oval; al agarrarlo, el anillo entero y la caja
+            # «326.0 deg»). En 0° el asa queda a 45° entre los otros dos ejes, donde estaba el arco de la tríada.
+            ejes = np.identity(3)
+            anillos = [mp.AnilloAngulo(clave, c, ejes[i], ejes[(i + 1) % 3] + ejes[(i + 2) % 3])
+                       for i, clave in enumerate(("rx", "ry", "rz"))]
+            for a in anillos:
+                a.ayuda = ""          # el cartel del anillo es el de la inclinación de Extruir
+            return [mp.Triada(c, giros=None), *anillos]
         if tipo == "traslacion":
             if v.get("direccion"):
                 try:
