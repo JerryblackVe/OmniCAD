@@ -436,7 +436,8 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
           faces: Cuerpos | None = None, path_edges: Cuerpos | None = None, rail_sketch: str | None = None,
           rail_curves: list[int] | None = None, rail_scale: Literal["scale", "stretch", "none"] = "scale",
           path_distance: Expr = 1, body: str | None = None, align_axis: str | dict | None = None,
-          guide_surface: Cuerpos | None = None, sweep_bodies: Cuerpos | None = None, chain: bool = False):
+          guide_surface: Cuerpos | None = None, sweep_bodies: Cuerpos | None = None, chain: bool = False,
+          extent: Literal["perpendicular", "full"] = "perpendicular", rail_distance: Expr = 1):
     """
     sketch: id o nombre del boceto con el perfil; vacío si el perfil es una cara (faces).
     profile: perfil(es): índice, lista de índices, "all", "largest", "text", "text:<id>" o "sketch".
@@ -454,6 +455,8 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
     rail_sketch: id o nombre del boceto del carril guía (tipo «ruta + carril»); vacío = sin carril.
     rail_curves: ids de las curvas del carril; vacío = todas las no de construcción.
     rail_scale: cómo sigue el perfil al carril: "scale", "stretch" o "none".
+    extent: con rail_sketch: perpendicular (termina en un plano perpendicular a la ruta) o full (path_distance sobre la ruta y rail_distance sobre el carril); sin carril se ignora.
+    rail_distance: con extent=full, fracción del carril que se usa, de 0 (sin incluir) a 1; sin carril se ignora.
     path_distance: fracción de la ruta que se barre (>0 hasta 1); 1 = toda.
     body: cuerpo donde se evalúan los selectores de faces y path_edges; vacío = el único cuerpo.
     sweep_bodies: cuerpo(s) (id o nombre) que se barren por la ruta (Solid Sweep) en vez de un perfil; sin carril, superficie guía, torsión ni conicidad.
@@ -473,6 +476,10 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
         raise error("INVALID_ARGUMENTS", "Pasá path_sketch o path_edges, no los dos.")
     if isinstance(path_distance, (int, float)) and not isinstance(path_distance, bool) and not 0 < path_distance <= 1:
         raise error("INVALID_ARGUMENTS", f"path_distance tiene que ser mayor que 0 y hasta 1 (recibió {path_distance}).")
+    if rail_sketch is not None:
+        distancia_carril = sesion.doc.parametros.evaluar(texto_expr(rail_distance), "escalar")
+        if not 0 < distancia_carril <= 1:
+            raise error("INVALID_ARGUMENTS", f"rail_distance tiene que ser mayor que 0 y hasta 1 (recibió {rail_distance}).")
     if isinstance(twist_angle, (int, float)) and not isinstance(twist_angle, bool):
         from ..nucleo.solidos_crear import TORSION_MAXIMA      # local: el núcleo se carga recién al calcular
         if not math.isfinite(twist_angle) or abs(twist_angle) > TORSION_MAXIMA:
@@ -503,6 +510,8 @@ def sweep(sesion, sketch: str | None = None, profile: Perfiles = 0, path_sketch:
     doc = sesion.doc
     op = OpBarrido(doc.nuevo_id(), nombre_nuevo(doc, "Barrido", OpBarrido), perfiles=perfiles_refs, ruta=ruta,
                    carril=carril, escala_carril={"scale": "escalar", "stretch": "estirar", "none": "ninguna"}[rail_scale],
+                   extension="completa" if extent == "full" else "perpendicular",
+                   distancia_carril=texto_expr(rail_distance) if carril else "1",
                    distancia=texto_expr(path_distance), **extra,
                    orientacion={"perpendicular": "perpendicular", "parallel": "paralela", "aligned": "alineada"}[orientation],
                    conicidad=texto_expr(taper_angle), torsion=texto_expr(twist_angle),
@@ -528,17 +537,18 @@ def _curvas_de_boceto(sesion, boceto, curvas, que):
 def _condicion_borde(cond, sesion=None, body=None):
     """{"type", "angle", "weight", "face"} de la API → la condición que guarda OpSolevacion."""
     if not isinstance(cond, dict) or set(cond) - {"type", "angle", "weight", "face"}:
-        raise error("INVALID_ARGUMENTS", 'La condición de borde es {"type": "free" | "direction" | "tangent" | "smooth", "angle": '
+        raise error("INVALID_ARGUMENTS", 'La condición de borde es {"type": "free" | "direction" | "tangent" | "smooth" | "point_tangent", "angle": '
                                          'grados, "weight": número, "face": cara (con tangent y smooth)}.')
     tipo = cond.get("type", "free")
-    if tipo not in ("free", "direction", "tangent", "smooth"):
-        raise error("INVALID_ARGUMENTS", "type es free, direction, tangent o smooth.")
+    if tipo not in ("free", "direction", "tangent", "smooth", "point_tangent"):
+        raise error("INVALID_ARGUMENTS", "type es free, direction, tangent, smooth o point_tangent.")
     angulo, peso = cond.get("angle", 0), cond.get("weight", 1)
     if isinstance(angulo, (int, float)) and not 0 < (90 - angulo) % 360 < 180:      # P-147d: desde la normal y da vueltas
         raise error("INVALID_ARGUMENTS", "angle se mide desde la normal de la sección y tiene que quedar entre −90 y 90 grados.")
     if isinstance(peso, (int, float)) and peso <= 0:
         raise error("INVALID_ARGUMENTS", "weight tiene que ser positivo.")
-    salida = {"tipo": {"free": "libre", "direction": "direccion", "tangent": "tangente", "smooth": "suave"}[tipo],
+    salida = {"tipo": {"free": "libre", "direction": "direccion", "tangent": "tangente", "smooth": "suave",
+                       "point_tangent": "punto_tangente"}[tipo],
               "angulo": texto_expr(angulo), "peso": texto_expr(peso)}
     if tipo in ("tangent", "smooth"):
         if cond.get("face") is None:
@@ -565,7 +575,8 @@ def _condicion_borde(cond, sesion=None, body=None):
              "grados desde la normal de la sección (0 = perpendicular, como Fusion; da vueltas), \"weight\": 1} o {\"type\": \"tangent\" | \"smooth\", "
              "\"face\": cara, \"weight\": 1} (tangente a esa cara, que tiene la sección en su borde); aproximado con una "
              "sección auxiliar, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. "
-             "merge_tangent_edges une las caras tangentes. smooth (G2) es como tangent y sigue también la curvatura de la cara.",
+             "merge_tangent_edges une las caras tangentes. smooth (G2) es como tangent y sigue también la curvatura de la cara. "
+             "point_tangent (con weight) crea una cúpula en un extremo que es un punto; sin condición queda agudo.",
              modifica=True)
 def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | None = None,
          operation: Operacion = "new_body", ruled: bool = False, closed: bool = False, target: Cuerpos | None = None,
@@ -584,7 +595,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
     rails: curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
     center_line: la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
     body: cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
-    start_condition: condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth", "angle": grados desde la normal de la sección (0 = perpendicular, por defecto, como Fusion), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
+    start_condition: condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth" | "point_tangent", "angle": grados desde la normal de la sección (0 = perpendicular, por defecto, como Fusion), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent y smooth)}; point_tangent solo en un punto (cúpula; sin condición queda agudo).
     end_condition: lo mismo para la última sección.
     section_conditions: condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición de la sección, 1 = la primera; no vale tangent).
     merge_tangent_edges: true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
@@ -619,9 +630,13 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
             secciones.append(_ref_perfil(sop, seleccionar_perfiles(br, sop, 0 if profiles is None else profiles[i])[0]))
     guias = {k: [_referencia(sesion, r, {"arista", "curva_boceto"}, body) for r in lista]
              for k, lista in (("carriles", rails), ("linea_central", center_line)) if lista}
-    for clave, cond in (("condicion_inicio", start_condition), ("condicion_fin", end_condition)):
+    for clave, cond, seccion in (("condicion_inicio", start_condition, secciones[0]),
+                                 ("condicion_fin", end_condition, secciones[-1])):
         if cond is not None:
-            guias[clave] = _condicion_borde(cond, sesion, body)
+            condicion = _condicion_borde(cond, sesion, body)
+            if condicion["tipo"] == "punto_tangente" and seccion["tipo"] not in ("punto", "punto_boceto", "vertice"):
+                raise error("INVALID_ARGUMENTS", "point_tangent solo vale si la sección de ese extremo es un punto.")
+            guias[clave] = condicion
     if section_conditions:
         n = len(secciones)
         medias = {}
@@ -629,7 +644,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
             if not str(k).isdigit() or not 1 < int(k) < n:
                 raise error("INVALID_ARGUMENTS", f"section_conditions: «{k}» no es una sección intermedia (de 2 a {n - 1}).")
             c = _condicion_borde(cond, sesion, body)
-            if c["tipo"] in ("tangente", "suave"):
+            if c["tipo"] not in ("libre", "direccion"):
                 raise error("INVALID_ARGUMENTS", "section_conditions solo admite free y direction.")
             medias[str(int(k) - 1)] = c
         guias["condiciones_medias"] = medias

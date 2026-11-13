@@ -159,7 +159,7 @@ def create_pipe(sesion, path_sketch: str | None = None, path_curves: list[int] |
 
 
 def _nervio(sesion, clase, sketch, curves, thickness, extension, depth, direction, reverse, target, draft_angle=0,
-            fillet_radius=0, extend_curves=True, pull_direction=None):
+            fillet_radius=0, extend_curves=True, pull_direction=None, flip_draft_direction=False):
     _numero_positivo(thickness, "thickness")
     if extension == "depth":
         _numero_positivo(depth, "depth")
@@ -168,6 +168,8 @@ def _nervio(sesion, clase, sketch, curves, thickness, extension, depth, directio
     if isinstance(draft_angle, (int, float)) and not -45 <= draft_angle <= 45:
         raise error("INVALID_ARGUMENTS", f"draft_angle tiene que estar entre -45 y 45 grados (recibió {draft_angle}).")
     extra = {}
+    if clase is OpNervio:
+        extra["invertir_desmoldeo"] = flip_draft_direction
     if pull_direction is not None:
         extra["direccion_desmoldeo"] = _referencia(sesion, pull_direction, {"plano", "cara", "eje", "arista"},
                                                    None, "direccion")
@@ -182,11 +184,13 @@ def _nervio(sesion, clase, sketch, curves, thickness, extension, depth, directio
 @herramienta("create_rib", "solido", "Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. "
              "direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). "
              "draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de "
-             "extracción del desmoldeo (por defecto, del cuerpo hacia la curva).", modifica=True)
+             "extracción del desmoldeo (por defecto, del cuerpo hacia la curva). flip_draft_direction invierte esa "
+             "extracción y fillet_radius redondea la unión del nervio con el cuerpo.", modifica=True)
 def create_rib(sesion, sketch: str, curves: list[int] | None = None, thickness: Expr = "",
                extension: Literal["to_next", "depth"] = "to_next", depth: Expr = 10,
                direction: Literal["symmetric", "side1", "side2"] = "symmetric", reverse: bool = False,
-               target: str | None = None, draft_angle: Expr = "", pull_direction: Referencia | None = None):
+               target: str | None = None, draft_angle: Expr = "", pull_direction: Referencia | None = None,
+               fillet_radius: Expr = 0, flip_draft_direction: bool = False):
     """
     sketch: nombre/id del boceto con curvas abiertas.
     curves: ids de curvas; vacío = todas las no constructivas.
@@ -198,9 +202,12 @@ def create_rib(sesion, sketch: str, curves: list[int] | None = None, thickness: 
     target: nombre/id del cuerpo objetivo; vacío = el más cercano.
     draft_angle: ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fino en el borde libre), número o expresión; vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle y lo usa Rib).
     pull_direction: plano, cara o eje que da la dirección de extracción; vacío = del cuerpo hacia la curva del nervio.
+    fillet_radius: radio en mm del empalme entre el nervio y el cuerpo (0 = sin empalme), número o expresión; vacío = el radio nominal de la regla de plástico.
+    flip_draft_direction: true invierte la dirección de extracción del desmoldeo; solo tiene efecto con draft_angle distinto de 0.
     """
     return _nervio(sesion, OpNervio, sketch, curves, thickness, extension, depth, direction, reverse, target,
-                   draft_angle=draft_angle, pull_direction=pull_direction)
+                   draft_angle=draft_angle, pull_direction=pull_direction, fillet_radius=fillet_radius,
+                   flip_draft_direction=flip_draft_direction)
 
 
 @herramienta("create_web", "solido", "Crea una red de nervios perpendicular al plano del boceto. draft_angle afina la "

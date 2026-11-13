@@ -2481,7 +2481,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`rebuild_features`](#rebuild_features) | sí | Find Features que rehace: reconoce los agujeros (también abocardados), empalmes y chaflanes de un cuerpo sin historial y los vuelve pasos paramétricos del timeline, uno por uno: borra las caras de la función (delete_faces, las vecinas cierran el hueco) y la crea de nuevo con create_hole, fillet o chamfer y las medidas reconocidas; después vuelve a reconocer sobre el cuerpo nuevo. |
 | [`create_coil`](#create_coil) | sí | Crea una bobina o espiral con las opciones del comando Bobina. |
 | [`create_pipe`](#create_pipe) | sí | Crea una tubería maciza o hueca sobre curvas de boceto o aristas. |
-| [`create_rib`](#create_rib) | sí | Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de extracción del desmoldeo (por defecto, del cuerpo hacia la curva). |
+| [`create_rib`](#create_rib) | sí | Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de extracción del desmoldeo (por defecto, del cuerpo hacia la curva). flip_draft_direction invierte esa extracción y fillet_radius redondea la unión del nervio con el cuerpo. |
 | [`create_web`](#create_web) | sí | Crea una red de nervios perpendicular al plano del boceto. draft_angle afina la red hacia su borde libre, fillet_radius redondea las aristas cóncavas donde se junta con el cuerpo y extend_curves=false la deja terminar donde terminan las curvas. |
 | [`create_emboss`](#create_emboss) | sí | Repuja o graba perfiles en una o varias caras, con envoltura opcional. |
 | [`create_boss`](#create_boss) | sí | Crea columnas para tornillo en puntos de boceto o vértices. |
@@ -2600,11 +2600,13 @@ Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es 
   - `guide_surface` (texto o lista de texto o null; opcional, por defecto `null`): caras (selector o ids) sobre las que va la ruta; el perfil sigue su normal; sin carril ni torsión.
   - `sweep_bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) (id o nombre) que se barren por la ruta (Solid Sweep) en vez de un perfil; sin carril, superficie guía, torsión ni conicidad.
   - `chain` (true/false; opcional, por defecto `false`): true suma a cada arista de path_edges y a cada curva de path_sketch las que le siguen tangentemente (Chain Selection).
+  - `extent` ("perpendicular" | "full"; opcional, por defecto `"perpendicular"`): con rail_sketch: perpendicular (termina en un plano perpendicular a la ruta) o full (path_distance sobre la ruta y rail_distance sobre el carril); sin carril se ignora.
+  - `rail_distance` (número o expresión; opcional, por defecto `1`): con extent=full, fracción del carril que se usa, de 0 (sin incluir) a 1; sin carril se ignora.
 - CLI: `omnicad call sweep --doc pieza.omnicad`
 
 ### `loft`
 
-Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de sketches: cada sección es un perfil {"sketch", "profile"}, una cara o arista (selector o id), un vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: {"sketch", "curve"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la superficie de la primera y la última sección: {"type": "free"} o {"type": "direction", "angle": grados desde la normal de la sección (0 = perpendicular, como Fusion; da vueltas), "weight": 1} o {"type": "tangent" | "smooth", "face": cara, "weight": 1} (tangente a esa cara, que tiene la sección en su borde); aproximado con una sección auxiliar, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. merge_tangent_edges une las caras tangentes. smooth (G2) es como tangent y sigue también la curvatura de la cara.
+Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de sketches: cada sección es un perfil {"sketch", "profile"}, una cara o arista (selector o id), un vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: {"sketch", "curve"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la superficie de la primera y la última sección: {"type": "free"} o {"type": "direction", "angle": grados desde la normal de la sección (0 = perpendicular, como Fusion; da vueltas), "weight": 1} o {"type": "tangent" | "smooth", "face": cara, "weight": 1} (tangente a esa cara, que tiene la sección en su borde); aproximado con una sección auxiliar, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. merge_tangent_edges une las caras tangentes. smooth (G2) es como tangent y sigue también la curvatura de la cara. point_tangent (con weight) crea una cúpula en un extremo que es un punto; sin condición queda agudo.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2618,7 +2620,7 @@ Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden
   - `rails` (lista de texto o objeto o null; opcional, por defecto `null`): curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
   - `center_line` (lista de texto o objeto o null; opcional, por defecto `null`): la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
-  - `start_condition` (objeto; opcional, por defecto `null`): condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth", "angle": grados desde la normal de la sección (0 = perpendicular, por defecto, como Fusion), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
+  - `start_condition` (objeto; opcional, por defecto `null`): condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth" | "point_tangent", "angle": grados desde la normal de la sección (0 = perpendicular, por defecto, como Fusion), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent y smooth)}; point_tangent solo en un punto (cúpula; sin condición queda agudo).
   - `end_condition` (objeto; opcional, por defecto `null`): lo mismo para la última sección.
   - `merge_tangent_edges` (true/false; opcional, por defecto `false`): true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
   - `section_conditions` (objeto; opcional, por defecto `null`): condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición de la sección, 1 = la primera; no vale tangent).
@@ -3437,7 +3439,7 @@ Crea una tubería maciza o hueca sobre curvas de boceto o aristas.
 
 ### `create_rib`
 
-Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de extracción del desmoldeo (por defecto, del cuerpo hacia la curva).
+Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de extracción del desmoldeo (por defecto, del cuerpo hacia la curva). flip_draft_direction invierte esa extracción y fillet_radius redondea la unión del nervio con el cuerpo.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -3451,6 +3453,8 @@ Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. di
   - `target` (texto; opcional, por defecto `null`): nombre/id del cuerpo objetivo; vacío = el más cercano.
   - `draft_angle` (número o expresión; opcional, por defecto `""`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fino en el borde libre), número o expresión; vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle y lo usa Rib).
   - `pull_direction` (texto o objeto; opcional, por defecto `null`): plano, cara o eje que da la dirección de extracción; vacío = del cuerpo hacia la curva del nervio.
+  - `fillet_radius` (número o expresión; opcional, por defecto `0`): radio en mm del empalme entre el nervio y el cuerpo (0 = sin empalme), número o expresión; vacío = el radio nominal de la regla de plástico.
+  - `flip_draft_direction` (true/false; opcional, por defecto `false`): true invierte la dirección de extracción del desmoldeo; solo tiene efecto con draft_angle distinto de 0.
 - CLI: `omnicad call create_rib --doc pieza.omnicad sketch=…`
 
 ### `create_web`

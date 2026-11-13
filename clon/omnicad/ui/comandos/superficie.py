@@ -2,7 +2,7 @@
 """Comandos de la pestaña SUPERFICIE (y Engrosar, que también está en SÓLIDO › CREAR)."""
 import numpy as np
 
-from PySide6.QtWidgets import QAbstractItemView, QComboBox, QHeaderView, QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTableWidgetItem
 
 from ...timeline.ops_superficie import (AVISO_NADA_COSIDO, OpCoser, OpDescoser, OpDestrimar, OpEngrosar, OpExtenderSup,
                                         OpInvertirNormal, OpParche, OpRecortar, OpReglada, OpSupBarrido, OpSupBobina,
@@ -204,7 +204,7 @@ ALINEACION = {"libre": "Bordes libres", "alinear": "Alinear bordes", "superficie
 @con_analisis
 class SupSolevacion(Solevacion):
     """El panel de la solevación sólida (filas de perfiles con su condición, rieles o línea central), sin Operación. Suma
-    lo que es de superficie: Punto tangente, alineación de bordes y la cara de Tangente, que sale sola del perfil."""
+    lo que es de superficie: alineación de bordes y la cara de Tangente, que sale sola del perfil."""
     CLAVE, TITULO, ICONO = "sup_solevacion", "Solevación de superficie", "sup_solevacion"
     AYUDA = "Crea una superficie que pasa por varias curvas (secciones) en orden."
     CLASE_OP = OpSupSolevacion
@@ -218,41 +218,15 @@ class SupSolevacion(Solevacion):
         for c in campos:
             if c.clave in ("cara_inicio", "cara_fin"):
                 c.ayuda = "Sin elegir: la cara de la que sale el perfil."
-            elif c.clave in ("peso_inicio", "peso_fin"):
-                lado = c.clave.removeprefix("peso_")
-                c.visible_si = lambda v, antes=c.visible_si, lado=lado: antes(v) or (
-                    _en_fila(lado)(v) and v.get(f"condicion_{lado}") == "punto_tangente")
         return campos
-
-    def _celda(self, panel, i, n):
-        """La celda de la solevación sólida, salvo en un punto del extremo: Aguda o Punto tangente."""
-        extremo = "inicio" if i == 0 else "fin" if i == n - 1 else None
-        if not extremo:
-            return super()._celda(panel, i, n)
-        punto = panel.valores["secciones"][i]["ref"]["tipo"] in ("vertice", "punto", "punto_boceto")
-        actual = panel.valores.get(f"condicion_{extremo}")
-        if actual not in ("libre", "punto_tangente") if punto else actual == "punto_tangente":
-            panel.valores[f"condicion_{extremo}"] = "libre"      # era del perfil que ocupaba esta fila antes
-        if not punto:
-            return super()._celda(panel, i, n)
-        w = QComboBox()
-        w.addItem("Aguda", "libre")
-        w.addItem("Tangente", "punto_tangente")            # Fusion: Point Tangent; la fila angosta corta el nombre largo
-        w.setCurrentIndex(max(w.findData(panel.valores.get(f"condicion_{extremo}")), 0))
-        w.currentIndexChanged.connect(lambda _=0: panel.set_valor(f"condicion_{extremo}", w.currentData()))
-        return w
 
     @staticmethod
     def _condicion(v, lado):
         tipo = v.get(f"condicion_{lado}")
-        if tipo == "direccion":
-            return {"tipo": "direccion", "angulo": v[f"angulo_{lado}"], "peso": v[f"peso_{lado}"]}
-        if tipo == "punto_tangente":
-            return {"tipo": tipo, "angulo": "0 deg", "peso": v[f"peso_{lado}"]}
         if tipo in ("tangente", "suave"):
             return {"tipo": tipo, "angulo": "0 deg", "peso": v[f"peso_{lado}"], "cara": ref1(v, f"cara_{lado}"),
                     "alineacion": v.get(f"alineacion_{lado}") or "libre"}
-        return None
+        return Solevacion._condicion(v, lado)
 
     def crear_op(self, clase, v, ctx, **params):
         for k in ("operacion", "objetivos"):
@@ -263,8 +237,6 @@ class SupSolevacion(Solevacion):
         v = dict(super().desde_op(op, ctx), operacion="nuevo")
         for lado in ("inicio", "fin"):
             c = op.p.get(f"condicion_{lado}") or {}
-            if c.get("tipo") == "punto_tangente":
-                v[f"condicion_{lado}"] = "punto_tangente"
             v[f"alineacion_{lado}"] = c.get("alineacion", "libre")
         return v
 
