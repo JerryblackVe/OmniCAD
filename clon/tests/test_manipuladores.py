@@ -1377,3 +1377,50 @@ def test_b375_conicidad_de_90_queda_en_rojo_en_la_caja_y_en_el_campo(app_qt):
     QTest.keyClick(campo, Qt.Key_Tab)
     assert "conicidad" in panel.invalidos and campo.styleSheet()
     panel.cancelar()
+
+
+def test_fu2_el_agujero_muestra_su_corte_con_las_cotas_editables(app_qt):
+    """FU-2: como el diálogo de Fusion, el Agujero dibuja el corte con sus cotas y las cajas van sobre el dibujo (sin fila
+    propia). Se teclea en ellas, el botón del tipo cambia qué cotas hay, un valor malo queda en rojo y la previa usa lo
+    escrito."""
+    import math
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from omnicad.ui.comandos.crear import Agujero
+    from omnicad.ui.esquema_agujero import EsquemaAgujero
+    doc = _doc_caja()
+    cara = _cara_de_arriba(doc)
+    cara["punto"] = np.array([10.0, 10.0, 20.0])
+    panel, visor, estados = _panel(Agujero(), doc, {"colocacion": [cara], "profundidad": "8 mm"})
+    panel.show()
+    esquema = panel.widgets["esquema"]
+    assert isinstance(esquema, EsquemaAgujero)
+
+    def caja(clave):
+        w = panel.widgets[clave]
+        assert w.parent() is esquema and not panel.etiquetas[clave].isVisible()   # en el dibujo, sin su fila
+        return w
+
+    def teclear(clave, texto):
+        w = caja(clave)
+        QTest.mouseClick(w, Qt.LeftButton)
+        QTest.keyClick(w, Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClicks(w, texto)
+        QTest.keyClick(w, Qt.Key_Tab)
+
+    assert caja("diametro").isVisible() and not caja("diam_abocardado").isVisible()
+    teclear("diametro", "5 mm")
+    panel._calcular_previa()
+    simple = g.volumen(_cuerpo(estados[-1]).forma)
+    QTest.mouseClick(panel.widgets["tipo"].grupo.buttons()[1], Qt.LeftButton)  # Escariado
+    assert panel.valores["tipo"] == "abocardado"
+    assert caja("diam_abocardado").isVisible() and caja("prof_abocardado").isVisible()
+    teclear("diam_abocardado", "9 mm")
+    teclear("prof_abocardado", "3 mm")
+    panel._calcular_previa()
+    assert panel._previa_ok and g.volumen(_cuerpo(estados[-1]).forma) < simple - 3 * math.pi * (4.5 ** 2 - 2.5 ** 2) + 1
+    teclear("profundidad", "abc")
+    assert "profundidad" in panel.invalidos and panel.widgets["profundidad"].styleSheet()
+    panel.cancelar()
