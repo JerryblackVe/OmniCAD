@@ -412,7 +412,7 @@ def cara_de_plano(plano, tamano=1e3):
 
 
 # ================================================================ 1. extrusión
-def _prisma(cara, n, d, conicidad=0.0):
+def _prisma(cara, n, d, conicidad=0.0, aristas_fijas=()):
     """Extrusión de una cara plana una distancia `d` (con signo) según `n`, con ángulo de inclinación en
     grados (positivo = se ensancha, como en Fusion)."""
     geo.exigir_longitud(d, "La distancia de extrusión")
@@ -430,16 +430,24 @@ def _prisma(cara, n, d, conicidad=0.0):
     # Prisma recto + desmoldeo de las caras laterales con el plano del perfil como plano neutro: las
     # esquinas quedan vivas (tronco de pirámide), como en Fusion. LocOpe_DPrism las redondea al ensanchar.
     tirar = n * math.copysign(1.0, d)
-    prisma = BRepPrimAPI_MakePrism(cara, _gvec(n * d)).Shape()
+    mk = BRepPrimAPI_MakePrism(cara, _gvec(n * d))
+    prisma = mk.Shape()
+    fijas = [f for e in aristas_fijas for f in mk.Generated(e)]
     neutro = gp_Pln(_pnt(plano.origen), _gdir(plano.normal))
     da = BRepOffsetAPI_DraftAngle(prisma)
+    inclinadas = 0
     for f in geo.caras(prisma):
+        if any(f.IsSame(fija) for fija in fijas):
+            continue
         pl = geo.plano_de_cara(f)
         if pl is not None and abs(abs(float(pl.normal @ plano.normal)) - 1) < 1e-9:
             continue   # tapas
         da.Add(f, _gdir(tirar), math.radians(-conicidad), neutro, True)
         if not da.AddDone():
             raise geo.ErrorGeometria("No se pudo inclinar una cara lateral de la extrusión.")
+        inclinadas += 1
+    if not inclinadas:
+        return prisma
     da.Build()
     if not da.IsDone():
         raise geo.ErrorGeometria("El kernel no pudo aplicar la inclinación a la extrusión.")
@@ -573,10 +581,60 @@ def _bandas_cerradas(caras, espesor, ubicacion):
     return bandas
 
 
+def _extruir_perfiles_vecinos(caras, n, base, lados):
+    """Extruir de Fusion: inclina el exterior común y conserva un sólido por perfil, en su orden."""
+    caras = _caras_de(_trasladar(geo.compuesto(caras), n * base))
+    aristas = [_aristas_de(c) for c in caras]
+    vecinos = [set() for _ in caras]
+    fijas = [[] for _ in caras]
+    for i, bordes in enumerate(aristas):
+        for j in range(i + 1, len(caras)):
+            comunes = [e for e in bordes if any(e.IsSame(f) for f in aristas[j])]
+            if comunes:
+                vecinos[i].add(j)
+                vecinos[j].add(i)
+                fijas[i].extend(comunes)
+                fijas[j].extend(comunes)
+    if not any(vecinos):
+        return None
+    pendientes = set(range(len(caras)))
+    por_perfil = [[] for _ in caras]
+    while pendientes:
+        grupo, cola = set(), [min(pendientes)]
+        while cola:
+            i = cola.pop()
+            if i not in pendientes:
+                continue
+            pendientes.remove(i)
+            grupo.add(i)
+            cola.extend(vecinos[i] & pendientes)
+        grupo = sorted(grupo)
+        region = _caras_de(_unir([caras[i] for i in grupo]))
+        if len(region) != 1:
+            raise geo.ErrorGeometria("No se pudieron unir los perfiles vecinos en una región plana.")
+        for d, conicidad in lados:
+            limite = _prisma(region[0], n, d, conicidad) if len(grupo) > 1 and abs(conicidad) >= 1e-9 else None
+            anteriores = []
+            for i in grupo:
+                forma = _prisma(caras[i], n, d, conicidad, aristas_fijas=fijas[i])
+                if limite is not None:
+                    forma = geo.booleano(forma, limite, "intersecar")
+                    # Al ensanchar, dos bordes exteriores pueden pisarse junto al fin de una pared compartida.
+                    for anterior in anteriores:
+                        forma = geo.booleano(forma, anterior, "cortar")
+                anteriores.append(forma)
+                por_perfil[i].append(_validar(forma, "Extrusión de perfiles vecinos"))
+    return geo.compuesto([_unir(partes) for partes in por_perfil])
+
+
 def _herramienta_extrusion(caras, abiertas, n, base, lados, delgado):
     """Une los prismas de cada lado (lista de (distancia con signo, conicidad)). Cada lado es una extrusión
     independiente con su conicidad, como en Fusion («Two Sides: adjust the settings independently for each side»):
     las dos comparten el plano neutro, que es el plano del perfil movido `base`."""
+    if len(caras) > 1 and not abiertas and any(abs(c) >= 1e-9 for _, c in lados):
+        vecinos = _extruir_perfiles_vecinos(caras, n, base, lados)
+        if vecinos is not None:
+            return vecinos
     solidos = []
     for d, conicidad in lados:
         for cara in caras:
