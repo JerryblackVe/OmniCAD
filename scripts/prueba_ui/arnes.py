@@ -45,6 +45,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QMenu, QMessag
 
 from omnicad.nucleo import geometria as geo  # noqa: E402
 from omnicad.nucleo import referencias as refs  # noqa: E402
+import sonda  # noqa: E402  (FL-0: mide cuánto deja la app sin responder cada acción)
 
 REGISTRO = []
 MODALES = []
@@ -66,6 +67,9 @@ def reg(area, que, ok, detalle=""):
 
 
 def guardar_registro(nombre):
+    if sonda._INSTALADA:                       # FL-0: toda pieza falla si la ventana se queda sin responder más de 1 s
+        texto, ok = sonda.resumen()
+        reg("FLUIDEZ", "ninguna acción dejó la ventana sin responder más de 1 s", ok, texto)
     (SALIDA / f"{nombre}.json").write_text(json.dumps(REGISTRO, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
@@ -132,6 +136,7 @@ def iniciar(doc, ancho=1900, alto=1000):
     QSurfaceFormat.setDefaultFormat(fmt)
     app = QApplication.instance() or QApplication([])
     parchar_modales()
+    sonda.instalar()
     from omnicad.ui.preferencias import Preferencias
     from omnicad.ui.ventana import VentanaPrincipal
     prefs = Preferencias(QSettings(str(Path(tempfile.mkdtemp(prefix="omnicad_ui_")) / "prefs.ini"), QSettings.IniFormat))

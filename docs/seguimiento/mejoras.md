@@ -6,7 +6,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 ## Pendientes generales
 
-Abierto 11 · Parcial 8 · Sin verificar 2.
+Abierto 10 · Parcial 9 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -188,7 +188,7 @@ Pedido de Gerardo: «tomá como prioridad mejorar el rendimiento, debe ir todo f
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| FL-0 | F0 banco de fluidez y detección de bloqueos UI mayores de 1 s | Abierto | Media | Crear banco y test con 11 escenarios, tabla hoy/meta y filtro de falsos bloqueos. | docs/plan_fluidez.md | 2026-11-13 |
+| FL-0 | F0 banco de fluidez: `scripts/bench_fluidez.py` (15 escenarios como usuario, 4 con las piezas reales) + `tests/test_fluidez.py`; prueba_ui falla con un `bloqueo_ui` de más de 1 s; filtro de falsos y de acciones viejas | Parcial | Media | Hecho: banco, presupuestos y tabla hoy/meta. Falta commit e integración (coordinador); los presupuestos bajan con cada paquete FL. | docs/plan_fluidez.md | 2026-11-13 |
 | FL-2 | F2 previa barata inmediata al teclear y arrastrar | Abierto | Alta | Tras FL-1, lograr previa < 50 ms en a/b y forma exacta al aceptar. | docs/plan_fluidez.md | 2026-11-13 |
 | FL-3 | F3 aceptar, editar, deshacer y abrir fuera de la ventana | Abierto | Alta | Aislar esas acciones con barra y Cancelar; g/h deben bloquear < 250 ms. | docs/plan_fluidez.md | 2026-11-13 |
 | FL-4 | F4 Unir y Cortar solo contra los cuerpos que tocan (filtro por caja envolvente) | Abierto | Media | Filtrar por caja: mismo resultado y tiempo con 1 u 11 cuerpos (±20 %). | docs/plan_fluidez.md | 2026-11-13 |

@@ -105,7 +105,7 @@ def test_b322_bloqueo_ui_identifica_la_api_en_curso(monkeypatch, herramienta, te
         doble.herramienta_api = herramienta
     if terminada is not None:
         doble.api_terminada = terminada
-    monkeypatch.setattr(registro_uso, "time", SimpleNamespace(perf_counter=lambda: 1.0))
+    monkeypatch.setattr(registro_uso, "time", SimpleNamespace(perf_counter=lambda: 1.0, process_time=lambda: 0.0))
     monkeypatch.setattr(bench, "memoria_mb", lambda: (1, 0))
     monkeypatch.setattr(ru, "toca_podar", lambda: False)
     ru.configurar(True)

@@ -86,7 +86,7 @@ def analizar(eventos, umbrales=None):
                                    "informe de sesión: aperturas lentas"))
         elif tipo == "bloqueo_ui":
             ms = float(d.get("duracion_ms") or 0)
-            if ms > u["bloqueo_ui_ms"]:
+            if ms > u["bloqueo_ui_ms"] and not d.get("suspension_probable"):     # FL-0: la PC suspendida no es un congelamiento
                 sev = "alta" if ms >= 1000 else "media"
                 que = _que(evento, f"Interfaz detenida {ms:.0f} ms")
                 _agregar(salida, vistos, ("bloqueo_ui", int(t // 2)),

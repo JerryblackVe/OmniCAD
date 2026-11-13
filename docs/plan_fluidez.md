@@ -104,6 +104,68 @@ Los tres primeros no dependen de lo rápido que sea OpenCascade. Son los que má
   `tests/test_fluidez.py` falla si un escenario pasa su presupuesto (arranca en el valor de hoy y baja con cada paquete).
   En `scripts/prueba_ui/`, toda pieza falla si hay un `bloqueo_ui` de más de 1 s. Bajar el umbral del evento a 100 ms.
   Comprobar si «abrir 554 s» y «preferencias» son reales o falsos (suspensión, diálogo nativo) y filtrarlos.
+- **Hecho en F0 (E7, 2026-11-13) · vigilante y filtro de falsos:**
+  - `bloqueo_ui` ahora se anota desde **100 ms** (`UMBRAL_BLOQUEO_MS` en `ui/registro_uso.py`; antes 250) y trae `cpu_ms` (CPU que gastó el proceso
+    durante la demora) y `dialogo` (la clase del diálogo modal propio abierto, si había).
+  - **Falsos:** una demora de más de 30 s (`SUSPENSION_MS`) en la que el proceso gastó menos del 2 % de CPU se marca `suspension_probable`:
+    es la PC suspendida o una espera de la persona en un diálogo nativo, no un congelamiento. El detector (`registro_uso/detector.py`) no la
+    cuenta como hallazgo; el evento queda en el registro para verlo. Una demora larga CON CPU (la ventana calculando) sigue contando.
+    Limitación: una espera real del proceso aparte (el kernel en otro proceso) también gasta poca CPU del lado de la ventana; por eso el filtro
+    solo vale para demoras de más de 30 s. «abrir 554 s» y la mayoría de «preferencias» de la tabla 1.1 son de este tipo si traen `cpu_ms` bajo;
+    los registros viejos no traen `cpu_ms`: hasta que haya registros nuevos de la PC de Gerardo no se pueden clasificar.
+  - **Piezas de `prueba_ui`:** `scripts/prueba_ui/sonda.py` se instala sola desde `arnes.iniciar` y mide cuánto tarda cada acción simulada
+    (`QTest.mouseClick`, `keyClicks`, `sendEvent`…; el manejador de la app corre adentro de la llamada) y cuánto se pasa cada `qWait`. Toda pieza
+    que termina con `guardar_registro` suma la comprobación «ninguna acción dejó la ventana sin responder más de 1 s» y falla si alguna lo hace
+    (`OMNICAD_FLUIDEZ=aviso` solo informa, `=apagado` no mide). Lo que el guion hace entre llamadas no se mide. Ejemplo hoy: `pieza_completa`, 16 acciones
+    de más de 100 ms, 0 de más de 1 s, la peor 250 ms.
+
+### F0 › Tabla hoy / meta (medido el 2026-11-13 en la VPS, 8 núcleos)
+
+Tiempos en **milisegundos**. HOY es la mediana de tres corridas aisladas por escenario; cada corrida toma
+el máximo de las acciones medidas (en e, el máximo entre barrido, bobina y solevación). «Primera previa»
+mide hasta la primera señal de previa válida de cada cambio, no hasta `frameSwapped`. «—» significa que
+la métrica no aplica; **error** significa que no se completó el escenario y no hay presupuesto válido.
+
+| Escenario | Bloqueo máx. HOY | Bloqueo máx. META | Primera previa HOY | Primera previa META | Aceptar HOY | Aceptar META |
+|---|---:|---|---:|---:|---:|---:|
+| a · Texto, 8 perfiles, Unir, 11 cuerpos | 333,00 | < 250 (tope 1000) | 524,70 | < 300 | 107,53 | < 1000 |
+| b · Rosca M20 × 60 modelada | 1824,00 | < 250 (tope 1000) | 3665,45 | < 300 | 1880,15 | < 1000 |
+| c · Empalme R2, 200 caras (estrella de 198 lados) | 196,00 | < 250 (tope 1000) | 2272,70 | < 300 | 231,41 | < 1000 |
+| d · Desfase de cara | 131,00 | < 250 (tope 1000) | 135,09 | < 300 | 70,26 | < 1000 |
+| e · Barrido / bobina / solevación | 1473,00 | < 250 (tope 1000) | 1582,30 | < 300 | 1249,17 | < 1000 |
+| f · Combinar dos cuerpos | 54,00 | < 250 (tope 1000) | 115,65 | < 300 | 89,45 | < 1000 |
+| g · Eliminar un paso de 20 | 50,00 | < 250 (tope 1000) | — | — | — | — |
+| h · Abrir proyecto pesado, sustituto² | 5689,00 | < 250 (tope 1000) | — | — | — | — |
+| i · Preferencias, deslizador y combo | 598,00 | < 250 (tope 1000) | — | — | — | — |
+| j · Arrastrar punto, 200 entidades | 71,00 | < 33 por evento | — | — | — | — |
+| k · Órbita, 300 000 triángulos | 107,96 | < 33 por evento | — | — | — | — |
+| l · Abrir `motor_impreso` (real, 292 pasos) | 57534,00 | < 250 (tope 1000) | — | — | — | — |
+| m · Abrir `motor_cohete` (real, 41 pasos) | 12492,00 | < 250 (tope 1000) | — | — | — | — |
+| n · Abrir `gatoRL` (real, 113 pasos) | 66583,00 | < 250 (tope 1000) | — | — | — | — |
+| o · Abrir `ABANICO EMILIA` (real, 3 pasos) | 3735,00 | < 250 (tope 1000) | — | — | — | — |
+
+¹ (2026-11-13, E7) b y c eran errores del guion, no de la app: en b el cuadrito de «Modelado» se marca con un clic
+en su esquina (con la barra espaciadora no se marca: B-420); en c un polígono de 198 lados casi liso no se puede
+empalmar y la app avisó bien en menos de 1 s («Las aristas elegidas no pertenecen al cuerpo»), por eso c usa una
+estrella de 198 lados. Los escenarios l a o abren las piezas reales de Gerardo (copias; se omiten con aviso si falta el archivo):
+abrir `motor_impreso` real tarda 57,5 s (el sustituto, 5,8 s), `gatoRL` 66,6 s y `motor_cohete` 12,5 s: son el peor cuello de la fila FL.
+
+² Sustituto de `motor_impreso` (h; el real es el escenario l) reproducible: 217 pasos, 72 uniones, 71 empalmes y
+una rosca modelada; archivo de unos 7,12 MB. **Abrir HOY: 5835,00 ms; META: < 1500 ms** (mediana de
+7602,65 / 5581,16 / 5835,00 ms). No equivale a medir el archivo original. Otras submedidas: eliminar
+el paso, 96,66 ms; abrir Preferencias, 405,50 ms. Los máximos por evento de j y k son 71,00 y 107,96 ms
+respectivamente (medianas de los máximos de 30 y 40 movimientos, incluido el repintado).
+
+**Repetir desde `clon/`:**
+```bash
+QT_QPA_PLATFORM=xcb OMNICAD_PRUEBA_VENTANA=minimizada xvfb-run -a /home/mosos/OmniCAD/clon/.venv/bin/python ../scripts/turno.py --plazo 1500 -- /home/mosos/OmniCAD/clon/.venv/bin/python ../scripts/bench_fluidez.py --rep 3 --json /tmp/fl0.json
+```
+
+La corrida completa se ejecutó una vez; el JSON conserva las 33 corridas, errores y submedidas.
+`clon/tests/fluidez_presupuestos.json` fija para las tres métricas principales
+`round(max(50, HOY × 1,5))` en ms; los `null` sin motivo de omisión son métricas no aplicables.
+Son presupuestos de regresión del estado actual, **no** las metas de fluidez de esta tabla.
+
 - **Listo cuando:** la tabla «hoy / meta» de los 11 escenarios está commiteada y el test corre con turno.
 - **Ejecutor:** E7 (Sonnet medio) arma el banco; E6 revisa la medición. Es mecánico y no decide geometría.
 

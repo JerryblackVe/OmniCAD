@@ -1,0 +1,77 @@
+{
+ "a": {
+  "bloqueo_max_ms": 1100,
+  "primera_previa_ms": 1300,
+  "aceptar_ms": 250
+ },
+ "b": {
+  "bloqueo_max_ms": 3000,
+  "primera_previa_ms": 5500,
+  "aceptar_ms": 3000
+ },
+ "c": {
+  "bloqueo_max_ms": 400,
+  "primera_previa_ms": 3500,
+  "aceptar_ms": 450
+ },
+ "d": {
+  "bloqueo_max_ms": 300,
+  "primera_previa_ms": 320,
+  "aceptar_ms": 160
+ },
+ "e": {
+  "bloqueo_max_ms": 3300,
+  "primera_previa_ms": 3600,
+  "aceptar_ms": 2800
+ },
+ "f": {
+  "bloqueo_max_ms": 200,
+  "primera_previa_ms": 260,
+  "aceptar_ms": 200
+ },
+ "g": {
+  "bloqueo_max_ms": 300,
+  "primera_previa_ms": null,
+  "aceptar_ms": null
+ },
+ "h": {
+  "bloqueo_max_ms": 12000,
+  "primera_previa_ms": null,
+  "aceptar_ms": null
+ },
+ "i": {
+  "bloqueo_max_ms": 1300,
+  "primera_previa_ms": null,
+  "aceptar_ms": null
+ },
+ "j": {
+  "bloqueo_max_ms": 160,
+  "primera_previa_ms": null,
+  "aceptar_ms": null
+ },
+ "k": {
+  "bloqueo_max_ms": 250,
+  "primera_previa_ms": null,
+  "aceptar_ms": null
+ },
+ "l": {
+  "bloqueo_max_ms": 72000,
+  "primera_previa_ms": null,
+  "aceptar_ms": null
+ },
+ "m": {
+  "bloqueo_max_ms": 16000,
+  "primera_previa_ms": null,
+  "aceptar_ms": null
+ },
+ "n": {
+  "bloqueo_max_ms": 84000,
+  "primera_previa_ms": null,
+  "aceptar_ms": null
+ },
+ "o": {
+  "bloqueo_max_ms": 5000,
+  "primera_previa_ms": null,
+  "aceptar_ms": null
+ }
+}
