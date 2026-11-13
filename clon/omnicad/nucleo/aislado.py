@@ -298,6 +298,14 @@ def principal(argv):
 
 
 # ---------------------------------------------------------------- lo que llama la app
+def _entorno_hijo():
+    """Limita los hilos antes de importar numpy en el hijo, salvo configuración del usuario."""
+    entorno = os.environ.copy()
+    entorno.setdefault("OPENBLAS_NUM_THREADS", "1")
+    entorno.setdefault("OMP_NUM_THREADS", "1")
+    return entorno
+
+
 def _comando(tarea, carpeta):
     if getattr(sys, "frozen", False):            # app instalada: no hay «python -m»; OmniCAD.py atiende el flag
         # También se llama desde omnicad-cli / omnicad-mcp, que no atienden ese flag.
@@ -351,7 +359,7 @@ class _Trabajador:
             self.errores = (self.carpeta / "errores.txt").open("wb")
             self.proceso = subprocess.Popen(_comando("trabajador", self.carpeta), bufsize=0, cwd=_RAIZ,
                                             stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=self.errores,
-                                            creationflags=_SIN_VENTANA)
+                                            creationflags=_SIN_VENTANA, env=_entorno_hijo())
         except (OSError, ValueError) as e:
             self.cerrar()
             raise TareaAislada(f"no pudo arrancar el proceso aparte ({e})") from e
@@ -528,7 +536,7 @@ class CalculoPendiente:
         self.errores = (self.carpeta / "errores.txt").open("wb")
         self.proceso = subprocess.Popen(_comando(self.tarea, self.carpeta), cwd=_RAIZ, stdout=subprocess.DEVNULL,
                                         stderr=self.errores, creationflags=_SIN_VENTANA |
-                                        getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
+                                        getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0), env=_entorno_hijo())
 
     def _termino(self):
         if self.proceso is None and not self._al_trabajador():
@@ -587,7 +595,7 @@ def _ejecutar(comando, tope, esperar):
     """`subprocess.run`; con `esperar` corre en un hilo y el que llama la invoca cada 50 ms (sin Qt acá)."""
     def correr():
         return subprocess.run(comando, cwd=_RAIZ, capture_output=True, timeout=tope,
-                              creationflags=_SIN_VENTANA, check=False)
+                              creationflags=_SIN_VENTANA, check=False, env=_entorno_hijo())
 
     if esperar is None:
         return correr()
