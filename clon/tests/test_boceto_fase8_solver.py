@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """SC4 + BOC-27: solver constructivo (coincidencias y horizontales/verticales por construcción) y boceto grande."""
-import time
+from unittest.mock import patch
 
 import numpy as np
 
@@ -90,15 +90,17 @@ def test_400_lineas_arrastre_y_soltado_rapidos():
     assert previo.ok and previo.gdl == 200
     p = b.puntos[fin]
     p.x, p.y = p.x + 1.0, p.y + 0.5
-    t = time.perf_counter()
-    r = S.resolver(b, valores, fin, previo)
-    arrastre = time.perf_counter() - t
-    t = time.perf_counter()
-    soltado = S.resolver(b, valores)
-    soltar = time.perf_counter() - t
+    with patch.object(S, "_jacobiano", wraps=S._jacobiano) as jacobiano:
+        r = S.resolver(b, valores, fin, previo)
+        arrastre = jacobiano.call_count
+    with patch.object(S, "_jacobiano", wraps=S._jacobiano) as jacobiano:
+        soltado = S.resolver(b, valores)
+        soltar = jacobiano.call_count
     assert r.ok and soltado.ok and soltado.gdl == 200
-    assert arrastre < 1.0, f"arrastre con 400 líneas: {arrastre:.2f} s"   # meta 0,3 s; holgado para no ser frágil
-    assert soltar < 2.0, f"soltar con 400 líneas: {soltar:.2f} s"
+    # Trabajo del solver (jacobianos), no segundos: no depende de la carga de la máquina (como B-388).
+    # Medido: arrastre 8 y soltar 3, más 25 % de margen; si el trabajo se duplica, falla.
+    assert arrastre <= 10, f"arrastre con 400 líneas: {arrastre} jacobianos"
+    assert soltar <= 4, f"soltar con 400 líneas: {soltar} jacobianos"
 
 
 def test_arrastrar_punto_fusionado_sin_otros_terminos_no_salta():
