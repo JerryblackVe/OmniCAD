@@ -13,6 +13,7 @@ timeline. Acá:
 Las selecciones se guardan como referencias serializables (`timeline.entidades`), así la
 operación sigue apuntando a "su" cara o arista al recalcular.
 """
+import re
 import time
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
@@ -196,12 +197,18 @@ class Personalizado(Campo):
         self.crear, self.ancho_completo = crear, ancho_completo
 
 
+def _resumen(texto):
+    """P-146: de un detalle largo, solo el primer tramo (antes de « · ») y sin lo que va entre paréntesis antes de los dos puntos."""
+    return re.sub(r" \(.*\)(?=:)", "", texto.split(" · ")[0])
+
+
 class Info(Campo):
     """Texto de solo lectura calculado con `funcion(valores, ctx) -> str` (resultados de medir…)."""
 
-    def __init__(self, clave, etiqueta, funcion, **kw):
+    def __init__(self, clave, etiqueta, funcion, compacta=False, **kw):
         super().__init__(clave, etiqueta, None, **kw)
         self.funcion = funcion
+        self.compacta = compacta        # P-146: en el panel solo el primer tramo (antes de « · »); el resto va al tooltip
         self.ancho_completo = not etiqueta          # sin etiqueta el texto ocupa las dos columnas
 
 
@@ -1595,7 +1602,9 @@ class PanelComando(QFrame):
         for c in self.campos:
             if isinstance(c, Info):
                 try:
-                    self.widgets[c.clave].setText(c.funcion(self.valores, self.ctx) or "")
+                    texto = c.funcion(self.valores, self.ctx) or ""
+                    self.widgets[c.clave].setText(_resumen(texto) if c.compacta else texto)
+                    self.widgets[c.clave].setToolTip(texto if c.compacta else "")
                 except Exception as e:  # noqa: BLE001 — un análisis que falla se informa en el panel
                     self.widgets[c.clave].setText(f"⚠ {e}")
         self._previa_ok = False
