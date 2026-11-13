@@ -21,6 +21,7 @@ se deja de esperar su respuesta y solo se lo cierra si no termina en `PACIENCIA_
 import atexit
 import json
 import os
+import queue
 import subprocess
 import sys
 import tempfile
@@ -259,12 +260,29 @@ def _atender(tarea, args):
             documento_vivo._rehacer.clear()
 
 
+def pedidos_del_padre():
+    """Las líneas de la entrada estándar. B-396: un hilo las lee y, cuando el padre la cierra o muere (el sistema la
+    cierra), termina el proceso aunque haya un cálculo en curso: antes un hijo huérfano seguía horas al 100 % de CPU.
+    Vale en Windows también: el python.exe del venv le pasa al hijo real la misma tubería.
+    shortcut: una sola llamada al kernel que no suelta el GIL demora la salida hasta que vuelve."""
+    cola = queue.SimpleQueue()
+
+    def leer():
+        for linea in os.fdopen(0, "rb"):
+            cola.put(linea)
+        os._exit(0)
+
+    threading.Thread(target=leer, name="omnicad_padre", daemon=True).start()
+    while True:
+        yield cola.get()
+
+
 def _trabajar(carpeta):
     """El bucle del trabajador: un pedido por línea de la entrada, hasta que el padre la cierra (también si muere).
     `args.json` trae el pedido; `listo` avisa que `salida.json` ya está completa."""
     global formas_enviadas
     formas_enviadas = {}
-    for linea in os.fdopen(0, "rb"):
+    for linea in pedidos_del_padre():
         args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
         tope = args.pop("_tope_mb")
         salida = _atender(linea.decode("ascii").strip(), args)
@@ -272,7 +290,6 @@ def _trabajar(carpeta):
             salida["_cerrar"] = True     # lo cierra el padre: si se fuera solo, el próximo pedido lo encontraría saliendo
         (carpeta / "salida.json").write_text(json.dumps(salida, default=_a_json), encoding="utf-8", newline="\n")
         (carpeta / "listo").touch()
-    return 0
 
 
 def principal(argv):
