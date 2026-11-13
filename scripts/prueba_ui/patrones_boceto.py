@@ -12,6 +12,7 @@ import tempfile
 
 import arnes as A
 from omnicad import api
+from omnicad.restricciones.boceto import MAX_COPIAS_PATRON
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtTest import QTest
@@ -378,7 +379,7 @@ def circular_invalidos():
     tecla(Qt.Key_Return)
     clic(0, 0)
     for texto, esperado in (("0", "entero de 2"), ("1", "entero de 2"), ("-3", "entero de 2"), ("2.5", "entero"), ("abc", "cantidad"),
-                            ("", "Falta"), ("500", "admite hasta"), ("8", "")):
+                            ("", "Falta"), (str(MAX_COPIAS_PATRON + 2), "admite hasta"), ("8", "")):   # B-381: una copia más que el tope
         escribir("cantidad", texto)
         ok = (panel.boton_ok.isEnabled() if not esperado else not panel.boton_ok.isEnabled()) and (
             esperado.lower() in panel.mensaje.text().lower() if esperado else not panel.mensaje.isVisible())
