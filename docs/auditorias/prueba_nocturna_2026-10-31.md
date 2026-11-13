@@ -4,6 +4,8 @@ Lista de TODO lo que hay que probar y todavía no se probó sobre el código fin
 sin correr nada pesado. La sesión nocturna la ejecuta en orden, de a una cosa a la vez (`scripts/turno.py`),
 y al terminar borra de acá lo que quedó verde y anota lo que falló en `docs/seguimiento/`.
 
+Lo ya verde está archivado en [../historial/prueba_nocturna_verde_2026-11.md](../historial/prueba_nocturna_verde_2026-11.md).
+
 Estado del código: `main` en `40a5fcf` (sin subir a origin) más lo que sigue sin commitear: Rust, paneles, SÓLIDO,
 SUPERFICIE y ENSAMBLAR. Con las tres últimas juntas corrieron ruff (limpio) y seis archivos cruzados (`test_seguimiento`,
 `test_doc_agentes`, `test_claves_comandos`, `test_cobertura_ui_api`, `test_iconos_extra`, `test_iconos_gramatica`,
@@ -68,18 +70,6 @@ Al terminar, en este orden:
 B-129 espera a que A libere `nucleo/geometria.py`: `Eps=1e-8` en `geo._integral` baja el error de +0,539 a +0,004 mm³.
 
 Cambio de orden (2026-11-01, 12:45): con 5,5 GB libres, Gerardo pidió sumar tareas. Corren en paralelo CONSTRUIR (A, en verificación final), Reconstruir sólido (B, Opus alto) y texto en curva (Tortura, Opus alto); B-134 queda para la pasada con Fusion. Al terminar CONSTRUIR entra INSPECCIONAR en A. Parámetros va después de la pasada con Fusion, que necesita un rato sin pruebas pesadas.
-
-## 1. Lo último que estuvo verde (referencia, no vale como cierre)
-
-Pasada sobre `3c7ad28`, 2026-10-31 (anterior a restricciones y patrones del boceto):
-
-| Qué | Resultado |
-|---|---|
-| ruff | limpio |
-| pytest `-W error`, 6 tandas | 1112 + 1148 + 1002 + 1188 + 1218 (1 salteado) + 719 = 6387 OK |
-| piezas de ventana `todo.py` (minimizada) | sin ✗ reales (el «23 líneas con ✗» era el texto «0 con ✗»: el conteo del script estaba mal, ya corregido) |
-| humo | TODO OK |
-| `registro_uso` + `asistente` (ventana visible) | 24 y 124 comprobaciones, 0 ✗ |
 
 ## 2. Nunca corrió sobre el código integrado (prioridad 1)
 
