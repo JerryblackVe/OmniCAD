@@ -56,7 +56,7 @@ Tiene que decir cuándo hay un conflicto. Va con herramienta en la API.
 | A partir de cuerpos | Casilla apagada |
 | Activar | Casilla encendida |
 
-Hoy no se puede crear un componente vacío: `create_component` exige cuerpos. Activar depende de ASM-9. Externo crea otro archivo:
+Hecho: componente vacío, nombre, Padre y «A partir de cuerpos» por API. Falta lo que el seguimiento (ASM-18) detalla. Activar depende de ASM-9. Externo crea otro archivo:
 decidir el alcance al programarlo.
 
 ## ASM-19 · Menú y paneles
