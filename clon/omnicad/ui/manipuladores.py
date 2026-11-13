@@ -1493,6 +1493,8 @@ QLineEdit#caja_manipulador {{ background: #ffffff; color: #1d1d1d; border: 1px s
                               padding: 1px 4px; selection-background-color: #2b7de9; }}
 QLineEdit#caja_manipulador:focus {{ border: 1px solid #{''.join(f'{int(c * 255):02x}' for c in AMARILLO)}; }}
 """
+# B-375: el valor fuera de rango (o que no se entiende), como Fusion: subrayado rojo
+QSS_CAJA_ROJA = "QLineEdit#caja_manipulador { background: #ffd9d9; border-bottom: 2px solid #e0302a; }"
 
 
 class CajaValor(QLineEdit):
@@ -1743,8 +1745,9 @@ class GestorManipuladores(QObject):
                 if caja.text() != texto:
                     caja.setText(texto)
                     caja.setCursorPosition(0)
-                if caja.styleSheet() != QSS_CAJA:      # setStyleSheet repule el widget: caro en cada movimiento
-                    caja.setStyleSheet(QSS_CAJA)
+                estilo = QSS_CAJA + (QSS_CAJA_ROJA if clave in getattr(self.panel, "invalidos", ()) else "")   # B-375
+                if caja.styleSheet() != estilo:        # setStyleSheet repule el widget: caro en cada movimiento
+                    caja.setStyleSheet(estilo)
         self._ubicar_cajas()
 
     def rectangulos_cajas(self):
@@ -1796,7 +1799,7 @@ class GestorManipuladores(QObject):
             if caja.clave == "escala" and self.comando.CLAVE in CON_ESCALA and valor <= 0:
                 raise ValueError("El factor de escala debe ser positivo.")
         except Exception as e:  # noqa: BLE001 — se marca la caja en rojo, como el panel
-            caja.setStyleSheet(QSS_CAJA + "QLineEdit#caja_manipulador { background: #ffd9d9; }")
+            caja.setStyleSheet(QSS_CAJA + QSS_CAJA_ROJA)
             caja.setToolTip(str(e))
             return False
         caja.setToolTip("")

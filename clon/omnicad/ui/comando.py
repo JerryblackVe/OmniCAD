@@ -109,9 +109,11 @@ class ListaSeleccion(Seleccion):
 
 
 class Expresion(Campo):
-    def __init__(self, clave, etiqueta, defecto="10 mm", tipo=LONGITUD, **kw):
+    """`rango`: (mínimo, máximo) abierto; afuera, el campo y la caja de su asa quedan en rojo, como Fusion (B-375)."""
+
+    def __init__(self, clave, etiqueta, defecto="10 mm", tipo=LONGITUD, rango=None, **kw):
         super().__init__(clave, etiqueta, defecto, **kw)
-        self.tipo = tipo
+        self.tipo, self.rango = tipo, rango
 
 
 class Opciones(Campo):
@@ -1292,18 +1294,23 @@ class PanelComando(QFrame):
 
     def _validar_expresiones(self):
         """Marca en rojo las expresiones inválidas (con el motivo en su tooltip). Devuelve la primera, para llevar a ella."""
-        primera = None
+        primera, self.invalidos = None, set()
         for c in self.campos:
             if isinstance(c, Expresion) and self._visible(c):
                 w = self.widgets[c.clave]
                 try:
                     val = self.ctx.evaluar(w.text(), c.tipo)
+                    if c.rango is not None and not c.rango[0] < val < c.rango[1]:
+                        unidad = "°" if c.tipo == ANGULO else ""
+                        raise ErrorExpresion(f"Tiene que estar entre {c.rango[0]:g}{unidad} y {c.rango[1]:g}{unidad}, "
+                                             f"sin incluirlos.")
                     w.setToolTip(formato.tooltip_valor(val, c.tipo == ANGULO, c.tipo == ESCALAR))
                     w.setStyleSheet("")
                 except ErrorExpresion as e:
                     w.setToolTip(str(e))
                     w.setStyleSheet(f"background: {temas.color('campo_error')};")
                     primera = primera or c
+                    self.invalidos.add(c.clave)
         return primera
 
     def _mostrar_campo_invalido(self):
