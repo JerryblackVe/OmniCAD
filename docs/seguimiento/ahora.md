@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | B-400 | Empalme con radio igual al alto de la cara vecina (hecho, tests en curso) |
 | E4 | B-392 | Superficie reglada con autointersecciones |
 | E5 | ASM-19 | Menú ENSAMBLAR y paneles como Fusion |
-| E6 | FL-1 | Toda previa que toca el kernel, al proceso aparte |
+| E6 | FL-3 | Aceptar, eliminar y abrir fuera de la ventana, con barra y Cancelar |
 | E7 | FL-0 | Banco de fluidez |
 | E8 | CAMBIO3 | Congelar la prioridad 2 en `despues.md` (cambio 3 de la reorganización) |
 | E9 | B-403 | Extruir texto con Unir congela la ventana (parte FL-4) |
@@ -26,10 +26,9 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 1 | FL-2 | Previa barata al teclear y con las flechas |
 | 2 | P-78 | Rosca modelada rápida (F6) |
 | 3 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 4 | FL-3 | Aceptar, eliminar y abrir fuera de la ventana (incluye los 4 s de abrir el STEP del abanico) |
-| 5 | B-48 | Crash nativo al recalcular un documento largo |
-| 6 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
-| 7 | B-335 | Abrir un STEP pesado congela la ventana |
-| 8 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
+| 4 | B-48 | Crash nativo al recalcular un documento largo |
+| 5 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
+| 6 | B-335 | Abrir un STEP pesado congela la ventana |
+| 7 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
 
 Hechos y esperando integrar (no ocupan cola): B-393, B-403, P-153 (después de B-384), PRUEBA9c, B-397.
