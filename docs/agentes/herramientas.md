@@ -53,7 +53,7 @@ Archivo, escena, timeline y deshacer.
 | [`get_timeline`](#get_timeline) | no | Pasos del timeline en orden: índice, id, tipo, nombre, carpeta (group, o null), suprimido, estado (ok, warning, error, suppressed, rolled_back), mensaje, params guardados (expresiones como «5 * placa»), values (en mm o grados) y, en primitivas y Mover, aliases de cada argumento (length → ancho = X…), que edit_feature también acepta. |
 | [`edit_feature`](#edit_feature) | sí | Cambia parámetros de un paso del timeline (conserva su id) y recalcula. |
 | [`suppress_feature`](#suppress_feature) | sí | Suprime o reactiva uno o varios pasos del timeline (suprimido = no se calcula). |
-| [`delete_feature`](#delete_feature) | sí | Borra un paso del timeline. |
+| [`delete_feature`](#delete_feature) | sí | Borra pasos del timeline (una lista va junta, en un solo deshacer). |
 | [`rename`](#rename) | sí | Renombra un paso del timeline o un cuerpo. |
 | [`list_recoverable_documents`](#list_recoverable_documents) | no | Lista los autoguardados pendientes de recuperar (cambios que no se llegaron a guardar): los de documentos «Sin título» y, si se pasan `recent`, el autoguardado más nuevo de cada uno de esos proyectos. |
 | [`recover_document`](#recover_document) | sí | Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. |
@@ -260,11 +260,11 @@ Suprime o reactiva uno o varios pasos del timeline (suprimido = no se calcula). 
 
 ### `delete_feature`
 
-Borra un paso del timeline. No se puede si otro paso lo usa.
+Borra pasos del timeline (una lista va junta, en un solo deshacer). No se puede si otro paso de fuera los usa.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `feature` (texto; obligatorio): id o nombre del paso.
+  - `feature` (texto o lista de texto; obligatorio): id, nombre o lista de ellos.
 - CLI: `omnicad call delete_feature --doc pieza.omnicad feature=…`
 
 ### `rename`

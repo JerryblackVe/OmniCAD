@@ -655,21 +655,30 @@ class Documento:
         self._terminar_recalculo(i, calculo)
 
     def eliminar(self, op_id):
-        i = self.indice(op_id)
-        tabla, contador = self._tabla_cotas(self.operaciones[:i] + self.operaciones[i + 1:])
-        desde = min(i, self._primer_afectado(tabla))
-        deps = self.dependientes(op_id)
+        self.eliminar_varios([op_id])
+
+    def eliminar_varios(self, ids):
+        """Fusion: elegir varios pasos del timeline y Delete. Borra toda la selección en UN paso de deshacer; un paso
+        que usa otro también elegido no cuenta como dependiente. Si queda uno fuera de la selección, rechaza y lo nombra."""
+        ids = list(dict.fromkeys(ids))
+        if not ids:
+            raise ErrorDocumento("Indicá al menos un paso para eliminar.")
+        idx = sorted(self.indice(x) for x in ids)
+        elegidos = set(ids)
+        deps = [d for x in ids for d in self.dependientes(x) if d.id not in elegidos]
         if deps:
-            raise ErrorDocumento("No se puede eliminar: la usan " + ", ".join(d.nombre for d in deps) + ".")
-        calculo = self._prevuelo_cambio({"tipo": "eliminar", "indice": i})
+            raise ErrorDocumento("No se puede eliminar: la usan " + ", ".join(dict.fromkeys(d.nombre for d in deps)) + ".")
+        quedan = [o for o in self.operaciones if o.id not in elegidos]
+        tabla, contador = self._tabla_cotas(quedan)
+        desde = min(idx[0], self._primer_afectado(tabla))
+        calculo = self._prevuelo_cambio({"tipo": "eliminar", "indice": idx[0], "ids": ids})
         self._guardar_para_deshacer()
-        del self.operaciones[i]
+        self.operaciones[:] = quedan
         for g in self.grupos:
-            g["pasos"] = [j for j in g["pasos"] if j != op_id]
+            g["pasos"] = [j for j in g["pasos"] if j not in elegidos]
         self.grupos = [g for g in self.grupos if g["pasos"]]
         self.parametros, self._contador_cotas = tabla, contador
-        if i < self.marcador:
-            self.marcador -= 1
+        self.marcador -= sum(1 for i in idx if i < self.marcador)
         self.modificado = True
         self._terminar_recalculo(desde, calculo)
 

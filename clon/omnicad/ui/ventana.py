@@ -249,6 +249,7 @@ class VentanaPrincipal(QMainWindow):
         self.timeline.buscar_ventana.connect(self._buscar_pasos_en_ventana)
         self.timeline.crear_conjunto.connect(self._crear_conjunto_de_pasos)
         self.timeline.eliminar.connect(lambda i: self._intentar(lambda: self.doc.eliminar(i)))
+        self.timeline.eliminar_varios.connect(self._eliminar_varios)
         self.timeline.mover.connect(lambda i, n: self._intentar(lambda: self.doc.mover(i, n)))
         self.timeline.marcador.connect(lambda n: self._intentar(lambda: self.doc.mover_marcador(n)))
         self.timeline.buscar_navegador.connect(self.buscar_en_navegador)
@@ -2023,6 +2024,8 @@ class VentanaPrincipal(QMainWindow):
         Dentro del boceto borra lo elegido del boceto, sin salir."""
         if self.modo_boceto.activo:
             self.modo_boceto.lienzo.borrar_seleccion()
+        elif self.panel is None and self.timeline.lista.hasFocus() and self.timeline.elegidos():
+            self._eliminar_varios(self.timeline.elegidos())          # B-366: Supr en el timeline borra los pasos elegidos
         elif self.seleccion and self.panel is None:
             self.suprimir_seleccion()
         else:
@@ -2524,6 +2527,11 @@ class VentanaPrincipal(QMainWindow):
         r = llamar(self, "suppress_feature", feature=list(ids), suppressed=suprimir)
         if r["ok"] and r["avisos"]:
             self.mensaje(" ".join(r["avisos"]), 10000)
+
+    def _eliminar_varios(self, ids):
+        """Timeline › «Eliminar N pasos» y Supr con pasos elegidos (B-366): un solo paso de deshacer."""
+        from .acciones_navegador import llamar
+        llamar(self, "delete_feature", feature=list(ids))
 
     def _configurar_paso(self, op_id):
         """Timeline › «Configurar» (Fusion: Configure › Suppression): suma la columna «Suprimir» del paso a la tabla."""
