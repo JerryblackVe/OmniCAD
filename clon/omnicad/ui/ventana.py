@@ -48,7 +48,7 @@ from ..timeline.operaciones import OpBoceto, OpImportarSTEP, propiedades_cuerpo
 from ..timeline.ops_chapa import es_patron_plano
 from ..timeline.ops_ensamblar import familia
 from ..timeline.ops_insertar import calcomanias_vigentes
-from . import formato, temas
+from . import estilo_asas, formato, temas
 from .medidas import NOMBRES as _NOMBRES_ENTIDAD
 from .arrastre_componente import ArrastreComponente
 from .cinta import Cinta
@@ -74,7 +74,6 @@ FILTRO_ABRIR = ";;".join([
     "IGES (*.iges *.igs)", "Mallas (*.stl *.obj *.3mf *.ply)", "DXF (*.dxf)", "BREP de OpenCascade (*.brep *.brp)"])
 VISIBILIDAD_INICIAL = {"todo": True, "origen": False, "planos": True, "cuerpos": True, "bocetos": True,
                        "calcomanias": True}
-COLOR_PREVIA_NUEVO = (0.62, 0.80, 1.00)     # azul acerado: así pinta Fusion el cuerpo nuevo de una vista previa
 CLAVES_VISIBILIDAD = ("planos_origen", "ejes_origen", "punto_origen", "planos_usuario", "bocetos",
                       "nombres_planos_construccion", "nombres_planos_origen")
 NOMBRES_TECLAS = (("Ctrl", "Control"), ("Shift", "Mayúsculas"), ("Del", "Suprimir"), ("Space", "Espacio"))
@@ -169,6 +168,7 @@ class VentanaPrincipal(QMainWindow):
         self.vis = dict(VISIBILIDAD_INICIAL)
         self._camara_aplicada = None
         self._preset_aplicado = None
+        self._asas_aplicadas = None         # P-149: las claves de estilo de asas ya aplicadas (para redibujar solo si cambian)
         self._perfil_aplicado = None        # «interfaz/perfil» que ya está en las preferencias
         self._eleccion = None               # "boceto" | "plano": qué se está eligiendo en la vista
         self.prefs_colores_componente = False   # INSPECCIONAR › Mostrar colores de componente (Mayús+N)
@@ -724,12 +724,25 @@ class VentanaPrincipal(QMainWindow):
                 self._refrescar_visibilidad()
         self.area.viewcube.set_tamano(p["general/tamano_viewcube"])
         self.area.reubicar()
+        if {k: p[k] for k in estilo_asas.CLAVES} != self._asas_aplicadas:     # también al arrancar y con «Restablecer»
+            self._aplicar_estilo_asas()
         self._info_herramientas(p["general/info_herramientas"])
         self.timeline.poner_color_componente(p["timeline/color_componente"])
         formato.configurar(p["unidades/precision"], p["unidades/precision_angular"], p["unidades/ocultar_ceros"])
         for v in self.area.visores:
             v.update()
         self._aplicar_puente()
+
+    def _aplicar_estilo_asas(self):
+        """P-149: color, tamaño y opacidad de asas y superposiciones; lo ya dibujado se rehace con el estilo nuevo."""
+        estilo_asas.aplicar(self.prefs)
+        self._asas_aplicadas = {k: self.prefs[k] for k in estilo_asas.CLAVES}
+        if self.panel is not None:
+            if self.panel.manipuladores is not None:
+                self.panel.manipuladores.redibujar()
+            self._refrescar_visibilidad()                  # el cuerpo nuevo de la vista previa
+        for v in self.area.visores:
+            v.update()
 
     # ------------------------------------------------------------ puente para agentes IA (MCP en vivo)
     def encender_puente(self):
@@ -864,6 +877,7 @@ class VentanaPrincipal(QMainWindow):
         dlg.tema_elegido.connect(self.aplicar_tema)         # vista previa al instante, antes de Aplicar
         dlg.apariencia_cambiada.connect(self.aplicar_tema)  # Apariencia: fuente y tamaño al instante
         dlg.graficos_cambiados.connect(self.aplicar_preferencias)   # Gráficos: al instante
+        dlg.asas_cambiadas.connect(self._aplicar_estilo_asas)       # Asas y superposiciones: al instante
         dlg.rejected.connect(lambda: self.aplicar_tema())   # Cancelar: vuelve al tema guardado
         dlg.exec()
 
@@ -1181,15 +1195,18 @@ class VentanaPrincipal(QMainWindow):
         elif self.prefs_colores_componente:
             apariencias = {**apariencias, **{cid: tuple(x / 255 for x in muestras[c.componente])
                                              for cid, c in estado.cuerpos.items() if c.componente in muestras}}
+        nuevos_previa = {}
         if self._estado_previa is not None and self.panel is not None:       # P-39: el cuerpo nuevo de la previa va azul
-            apariencias = {**apariencias, **{cid: COLOR_PREVIA_NUEVO for cid in estado.cuerpos
-                                             if cid not in self.panel.ctx.estado.cuerpos}}
+            nuevos_previa = {cid: estilo_asas.opacidad("previa") for cid in estado.cuerpos
+                             if cid not in self.panel.ctx.estado.cuerpos}      # P-149: su color y opacidad son preferencias
+            apariencias = {**apariencias, **{cid: estilo_asas.rgb("previa") for cid in nuevos_previa}}
         caras = self._caras_pintadas(estado, ocultos)
         # P-38: un boceto terminado que ningún paso usa muestra su perfil celeste y su construcción punteada
         usados = set().union(*(o.dependencias() for o in self.doc.operaciones))
         libres = frozenset(k for k in estado.bocetos if k not in usados)
         for v in self.area.visores:
             v.opacidad = {cid: props["opacidad"] for cid, props in self.doc.propiedades.items() if "opacidad" in props}
+            v.opacidad.update(nuevos_previa)
             v.bocetos_libres = libres
             v.set_modelo(estado, ocultos, excluir, apariencias)
             v.set_caras_pintadas(caras)
@@ -2212,11 +2229,10 @@ class VentanaPrincipal(QMainWindow):
     def _seleccion_otra(self, entidades, pos_global):
         """Lista de lo que hay bajo el cursor; al pasar por cada fila se resalta en la vista y el clic lo
         elige (vale también dentro de un comando, para tomar una cara o un plano tapados)."""
-        from .visor3d import AZUL_HOVER
         m = QMenu(self)
         m.addSection("Seleccionar otro")
         for h in entidades:
-            dibujo = [(prim[0], prim[1], AZUL_HOVER, prim[3]) for prim in (h.get("dibujo") or [])]
+            dibujo = [(prim[0], prim[1], estilo_asas.rgb("resaltado"), prim[3]) for prim in (h.get("dibujo") or [])]
             a = m.addAction(self.nombre_entidad(h))
             a.hovered.connect(lambda dib=dibujo: self.visor.set_capa("seleccion_otra", dib))
             a.triggered.connect(lambda _=False, h=h: self.visor.entidad_elegida.emit(h))

@@ -36,7 +36,7 @@ from .. import nativo
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
 from ..nucleo.render_cpu import ACERO, COLOR_MALLA, COLOR_SUPERFICIE, ENTORNOS, es_malla  # noqa: F401 — se re-exportan
-from . import temas
+from . import estilo_asas, temas
 
 
 class BandaSeleccion(QWidget):
@@ -122,8 +122,6 @@ LUCES_VISOR = {
 COLOR_EJE = ((0.86, 0.26, 0.26), (0.32, 0.72, 0.32), (0.30, 0.45, 0.95))
 NARANJA_PLANO = (0.95, 0.66, 0.30)
 AZUL_PERFIL = (0.55, 0.80, 1.0)       # celeste suave del perfil, como el de Fusion
-AZUL_HOVER = (0.45, 0.70, 1.0)
-AZUL_SELECCION = (0.15, 0.50, 1.0)
 # Etiqueta del valor de una cota guía (Medir): va sobre la vista 3D, así que lleva fondo y texto propios (se lee
 # igual con cualquier tema y cualquier fondo del visor).
 QSS_ETIQUETA = ("QLabel#etiqueta_cota { background: rgba(40, 40, 44, 225); color: #ffffff; padding: 2px 6px;"
@@ -1826,9 +1824,11 @@ class Visor3D(QOpenGLWidget):
             ref, p = {"tipo": "forzado", "modo": "en_arista", "base": a["ref"], "fraccion": f}, cs.punto_en_ruta(a["forma"], f)
         return _hit("forzado", ref, [("puntos", np.asarray(p, float).reshape(1, 3), None, 9)], float((p - o) @ d), p)
 
-    def _dibujar_primitivas(self, prims, color_defecto, alfa_defecto=None):
+    def _dibujar_primitivas(self, prims, color_defecto, alfa_defecto=None, opacidad=1.0):
+        """`opacidad` (P-149) multiplica el alfa de todo; un color de 4 valores (r, g, b, a) lleva el suyo propio."""
         for prim in prims:
             tipo, datos, color, extra = prim[0], prim[1], prim[2] or color_defecto, prim[3]
+            alfa = opacidad * (color[3] if len(color) > 3 else 1.0)
             if tipo == "tris" and self.resalte_contorno:
                 datos, extra = self._contorno(datos), 3.0          # solo el contorno, a la profundidad del modelo
                 tipo = "contorno"
@@ -1838,26 +1838,26 @@ class Visor3D(QOpenGLWidget):
             GL.glVertexPointer(3, GL.GL_FLOAT, 0, datos)
             if tipo == "contorno":
                 GL.glLineWidth(extra)
-                GL.glColor4f(*color[:3], 1.0)
+                GL.glColor4f(*color[:3], alfa)
                 GL.glDrawArrays(GL.GL_LINES, 0, len(datos))
             elif tipo == "tris":
                 GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
                 GL.glPolygonOffset(-2.0, -2.0)
                 GL.glDepthMask(GL.GL_FALSE)
-                GL.glColor4f(*color[:3], alfa_defecto if alfa_defecto is not None else extra)
+                GL.glColor4f(*color[:3], (alfa_defecto if alfa_defecto is not None else extra) * alfa)
                 GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(datos))
                 GL.glDepthMask(GL.GL_TRUE)
                 GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
             elif tipo == "lineas":
                 GL.glDisable(GL.GL_DEPTH_TEST)
                 GL.glLineWidth(float(extra))
-                GL.glColor4f(*color[:3], 1.0)
+                GL.glColor4f(*color[:3], alfa)
                 GL.glDrawArrays(GL.GL_LINES, 0, len(datos) - len(datos) % 2)
                 GL.glEnable(GL.GL_DEPTH_TEST)
             elif tipo == "puntos":
                 GL.glDisable(GL.GL_DEPTH_TEST)
                 GL.glPointSize(float(extra))
-                GL.glColor4f(*color[:3], 1.0)
+                GL.glColor4f(*color[:3], alfa)
                 GL.glDrawArrays(GL.GL_POINTS, 0, len(datos))
                 GL.glEnable(GL.GL_DEPTH_TEST)
 
@@ -2349,13 +2349,17 @@ class Visor3D(QOpenGLWidget):
             self._triangulos_planos(self._perfiles, AZUL_PERFIL, 0.30)
         self._triangulos_planos(self._resalte, (1.0, 0.55, 0.1), 0.55)
         if self._hover and self._hover[0] == "cara":
-            self._triangulos_planos(self._hover[1], (0.45, 0.70, 1.0), 0.45)
+            self._triangulos_planos(self._hover[1], estilo_asas.rgb("resaltado"), 0.45 * estilo_asas.opacidad("resaltado"))
         self._construccion_usuario()
         GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
         for nombre, prims in self._capas.items():
-            self._dibujar_primitivas(prims, AZUL_SELECCION if nombre == "seleccion" else NARANJA_PLANO)
+            if nombre == "seleccion":
+                self._dibujar_primitivas(prims, estilo_asas.rgb("seleccion"), opacidad=estilo_asas.opacidad("seleccion"))
+            else:
+                self._dibujar_primitivas(prims, NARANJA_PLANO)
         if self._hover_ent is not None:
-            self._dibujar_primitivas(self._hover_ent["dibujo"], AZUL_HOVER)
+            self._dibujar_primitivas(self._hover_ent["dibujo"], estilo_asas.rgb("resaltado"),
+                                     opacidad=estilo_asas.opacidad("resaltado"))
         if self.mostrando_centro_giro():
             self._dibujar_primitivas(self.primitivas_centro_giro(), NARANJA_PLANO)
         GL.glDisableClientState(GL.GL_VERTEX_ARRAY)

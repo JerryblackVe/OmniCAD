@@ -24,9 +24,10 @@ import math
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPointF, QRect, Qt, QTimer
 from PySide6.QtGui import QPolygonF
-from PySide6.QtWidgets import QLineEdit, QMenu, QToolTip
+from PySide6.QtWidgets import QApplication, QLineEdit, QMenu, QToolTip
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD
+from . import estilo_asas
 from .campo_expresion import autocompletar, nombres_sugeridos
 from .iconos import icono
 
@@ -42,13 +43,13 @@ def _aclarar(color, k=0.45):
     return tuple(c + (1 - c) * k for c in color)
 
 
-AMARILLO = _rgb("#ffb400")             # P-137: contrasta con la selección (celeste), el modelo (gris) y el fondo; con contorno oscuro
+AMARILLO = estilo_asas.fabrica("flechas")     # P-137: contrasta con la selección (celeste), el modelo (gris) y el fondo; con contorno oscuro
 AMARILLO_ACTIVO = _aclarar(AMARILLO)           # al pasar el ratón / arrastrando
 AZUL_ASA = _rgb("#1e8fe6")             # P-143: la flecha-puntero del empalme de Fusion
 COLORES_EJE = (_rgb("#e0302a"), _rgb("#2fa335"), _rgb("#2b6fe0"))   # X rojo, Y verde, Z azul
 GRIS_ESFERA = (0.93, 0.93, 0.93)
 BORDE_ESFERA = (0.35, 0.35, 0.37)
-ROJO_PREVIA = (0.88, 0.18, 0.15)       # vista previa de lo que se corta (agujero)
+ROJO_PREVIA = estilo_asas.fabrica("previa_corte")       # vista previa de lo que se corta (agujero), el de fábrica
 
 TOL_PX = 9.0                           # distancia del cursor a un asa para tomarla
 ENGANCHE_PX = 14.0                     # distancia del cursor a un punto de enganche (snap) para engancharse
@@ -265,6 +266,11 @@ def _tope(limite, paso, estricto, lado):
 class Manipulador:
     """Base. `ident` identifica al manipulador entre recálculos (hover, arrastre, cajas)."""
     ident = ""
+    GRUPO = "flechas"       # P-149: grupo de `estilo_asas` cuyo color, tamaño y opacidad lleva (flechas, anillo, puntos)
+
+    def esc(self, g, p):
+        """Milímetros por píxel en `p` con el tamaño que la persona eligió para el grupo del asa."""
+        return g.escala(p) * estilo_asas.tamano(self.GRUPO)
 
     def dibujar(self, g, activo):
         """Primitivas para `visor.set_capa`. `activo`: sub-asa resaltada (o None)."""
@@ -326,7 +332,7 @@ class Flecha(Manipulador):
         sentido = self.direccion * (-1.0 if v < 0 and not self.hacia_afuera else 1.0)
         if self.inclinable:
             sentido = dir_visible(g.visor, sentido, base)
-        k = g.escala(base)
+        k = self.esc(g, base)
         return base, sentido, k
 
     def _de_frente(self, g):
@@ -399,6 +405,7 @@ class Flecha(Manipulador):
 class AsaRadial(Flecha):
     """Asa redonda sobre el borde de algo (el diámetro de un agujero): se arrastra como una flecha de distancia,
     pero se ve como el círculo con flechitas de Fusion y no como una flecha larga."""
+    GRUPO = "puntos"
     inclinable = False
 
     def puntos(self, g):
@@ -512,7 +519,7 @@ class Posicion(Manipulador):
     def dibujar(self, g, activo):
         # como Fusion: punto blanco con borde oscuro y una cruz fina sobre el plano
         color = AMARILLO_ACTIVO if activo is not None else self.color
-        k = g.escala(self.punto)
+        k = self.esc(g, self.punto)
         u, v = perpendiculares(self.normal)
         r = self.radio_px * k
         cruz = np.array([self.punto - u * r * 1.6, self.punto + u * r * 1.6,
@@ -523,10 +530,10 @@ class Posicion(Manipulador):
         for p, tipo in self.candidatos:          # marcas de enganche: el centro de la cara, esquinas, puntos medios
             if enganche is not None and p is enganche:
                 continue
-            kp = g.escala(p)
+            kp = self.esc(g, p)
             prims += _disco(g.visor, p, (4.5 if tipo == "centro" else 3.2) * kp, (1.0, 1.0, 1.0), borde=BORDE_ESFERA)
         if enganche is not None:                 # enganchado: la marca se pone azul y más grande
-            prims += _disco(g.visor, enganche, 6.5 * g.escala(enganche), AMARILLO_ACTIVO, borde=BORDE_ESFERA)
+            prims += _disco(g.visor, enganche, 6.5 * self.esc(g, enganche), AMARILLO_ACTIVO, borde=BORDE_ESFERA)
         return prims + _disco(g.visor, self.punto, 5.5 * k, relleno, borde=BORDE_ESFERA)
 
     def tocar(self, g, q):
@@ -582,7 +589,7 @@ class Angulo(Manipulador):
     def _r(self, g):
         if self.radio and self.radio > 1e-6:
             return float(self.radio)
-        return RADIO_ANGULO * g.escala(self.centro)
+        return RADIO_ANGULO * self.esc(g, self.centro)
 
     def _theta(self, g):
         return math.radians(g.valor(self.clave) * self.factor)
@@ -598,7 +605,7 @@ class Angulo(Manipulador):
         color = AMARILLO_ACTIVO if activo is not None else self.color
         r, t = self._r(g), self._theta(g)
         asa = self.asa(g)
-        k = g.escala(asa)
+        k = self.esc(g, asa)
         prims = [("lineas", np.array([self.centro, self.centro + self.u * r, self.centro, asa]), color, 1.2)]
         if abs(t) > 1e-6:
             prims.append(("lineas", _segs(_arco(self.centro, self.u, self.v, r, 0.0, t)), color, 2.5))
@@ -667,14 +674,15 @@ class AnilloAngulo(Angulo):
 
     ayuda = "Especificar la distancia y el ángulo de inclinación"      # el cartel de Fusion al pasar el ratón
     ARCO_REPOSO = math.radians(28)
-    AZUL = _rgb("#2c4157")              # el anillo de Fusion (medido en su captura); sobre un fondo oscuro no se vería:
+    GRUPO = "anillo"
+    AZUL = estilo_asas.fabrica("anillo")     # el anillo de Fusion (medido en su captura); sobre un fondo oscuro no se vería:
     AZUL_EN_OSCURO = _rgb("#8fb3dc")    # ahí va el mismo azul, más claro
     AZUL_ASA, BORDE_ASA, HALO_ASA = _rgb("#1e98c8"), _rgb("#e6f6fc"), _rgb("#9fd3e8")
     FANTASMA = _rgb("#c8ced6")          # la flecha de distancia mientras se usa el anillo, y el eje
     RADIO = LARGO_FLECHA + 8.0          # px: como Fusion, a 0° el asa queda más allá de la punta de la flecha, no encima
 
     def _r(self, g):
-        return self.RADIO * g.escala(self.centro)
+        return self.RADIO * self.esc(g, self.centro)
 
     def __init__(self, clave, centro, eje, inicio, sigue=None, **kw):
         super().__init__(clave, centro, eje, inicio, caja="arrastre", **kw)
@@ -703,7 +711,7 @@ class AnilloAngulo(Angulo):
             segs = list(zip(pts[:-1], pts[1:], strict=True))
             delante = [s for s in segs if float(((s[0] + s[1]) / 2 - c) @ atras) >= 0]
             detras = [s for i, s in enumerate(segs) if float(((s[0] + s[1]) / 2 - c) @ atras) < 0 and i % 2 == 0]
-            k = g.escala(c)
+            k = self.esc(g, c)
             eje = [c + self.eje * r * a for a in np.linspace(-0.6, 0.6, 10)]          # punteado: un tramo sí y otro no
             marcas = [c + (self.u * math.cos(a) + self.v * math.sin(a)) * (r + d * k)
                       for a in np.arange(4) * math.pi / 2 for d in (6.0, 13.0)]
@@ -712,7 +720,7 @@ class AnilloAngulo(Angulo):
                      ("lineas", np.array(eje), self.FANTASMA, 1.4),
                      ("lineas", np.array(marcas), color, 2.5)]
         asa = self.asa(g)
-        k = g.escala(asa)
+        k = self.esc(g, asa)
         # como en Fusion: un disco celeste acostado en el plano del anillo, con halo pálido y el centro claro
         prims.append(("lineas", _segs(_arco(asa, self.u, self.v, 9.0 * k, 0.0, 2 * math.pi, 24)), self.HALO_ASA, 1.6))
         for radio, tono in ((7.5, self.AZUL_ASA), (2.5, self.BORDE_ASA)):
@@ -810,7 +818,7 @@ class FlechaCalcomania(Flecha):
 
     def puntos(self, g):
         u, v = self._ejes()
-        k = g.escala(self.origen)
+        k = self.esc(g, self.origen)
         return self.origen + (u * 22 - v * 28) * k, self.origen + (u * 54 - v * 28) * k
 
     def dibujar(self, g, activo):
@@ -843,10 +851,10 @@ class GiroCalcomania(Angulo):
     ayuda = "Girar la imagen sobre su centro"
 
     def _r(self, g):
-        return 96 * g.escala(self.centro)
+        return 96 * self.esc(g, self.centro)
 
     def _origen_arco(self, g):
-        return self.centro + (self.v * 28 - self.u * 10) * g.escala(self.centro)
+        return self.centro + (self.v * 28 - self.u * 10) * self.esc(g, self.centro)
 
     def asa(self, g):
         t = self._theta(g)
@@ -898,7 +906,7 @@ class EscalaCalcomania(AsaRadial):
         self.ident = "escala:calcomania"
 
     def puntos(self, g):
-        asa = self.origen + (self.u + self.v) * 24 * g.escala(self.origen)
+        asa = self.origen + (self.u + self.v) * 24 * self.esc(g, self.origen)
         return self.origen, asa
 
     def dibujar(self, g, activo):
@@ -907,7 +915,7 @@ class EscalaCalcomania(AsaRadial):
                                 (self._codo, AZUL_CALCOMANIA)):
             prims += _figura_calcomania(g, self.origen, self.u, self.v, contorno, color, activo is not None,
                                        (1.0, 1.0, 1.0) if contorno is self._codo else BORDE_CALCOMANIA)
-        k = g.escala(self.origen)
+        k = self.esc(g, self.origen)
         centro = self.origen + (self.u + self.v) * 12 * k
         prims.append(("lineas", _segs(_arco(centro, self.u, self.v, 16 * k, 0, math.pi / 2)), (1.0, 1.0, 1.0), 1.0))
         return prims
@@ -943,7 +951,7 @@ class Volteo(AsaRadial):
         self.horizontal = clave in ("voltear", "voltear_h")
 
     def _geom(self, g):
-        k = g.escala(self.origen)
+        k = self.esc(g, self.origen)
         x, y = (-58, -28) if self.horizontal else (-28, -58)
         return self.origen + (self.u * x + self.v * y) * k, self.direccion, k
 
@@ -979,7 +987,7 @@ class FlechaNormal(Manipulador):
         self.ident, self.origen, self.direccion = f"normal:{ident}", np.asarray(origen, float), unitario(direccion)
 
     def dibujar(self, g, activo):
-        k = g.escala(self.origen)
+        k = self.esc(g, self.origen)
         d = dir_visible(g.visor, self.direccion, self.origen)
         cuello = self.origen + d * (LARGO_FLECHA - LARGO_PUNTA) * k
         return [("lineas", np.array([self.origen, cuello]), AMARILLO, 3.0)] + _cono(
@@ -989,6 +997,7 @@ class FlechaNormal(Manipulador):
 class AsaCantidad(Manipulador):
     """Asa de cantidad de copias de un patrón: un disco junto a la última copia que se tira a lo largo del patrón y
     suma o quita copias de a una cada `paso` mm. `posicion(n)` da (punto, tangente) de la última copia si hay `n`."""
+    GRUPO = "puntos"
     ayuda = "Cantidad de copias"
 
     def __init__(self, clave, posicion, paso, minimo=1, maximo=500):
@@ -1000,13 +1009,13 @@ class AsaCantidad(Manipulador):
 
     def _asa(self, g):
         p, t = self.posicion(self._n(g))
-        return p + perpendiculares(t)[0] * 16 * g.escala(p), p, t
+        return p + perpendiculares(t)[0] * 16 * self.esc(g, p), p, t
 
     def dibujar(self, g, activo):
         asa, p, _t = self._asa(g)
         color = AMARILLO_ACTIVO if activo is not None else AMARILLO
         return ([("lineas", np.array([p, asa]), color, 1.4)]
-                + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
+                + _disco(g.visor, asa, 7.0 * self.esc(g, asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
 
     def tocar(self, g, q):
         s, ok = g.pantalla([self._asa(g)[0]])
@@ -1030,6 +1039,7 @@ class AsaCantidad(Manipulador):
 class AsaLista(Manipulador):
     """Asa de un campo de lista (tamaño o largo de una fijación): un disco que se tira a lo largo de una dirección y salta
     a la opción más cercana. `opciones`: [(texto, número)]; el disco está en `origen + direccion * número * factor`."""
+    GRUPO = "puntos"
     ayuda = "Valor de la lista"
 
     def __init__(self, clave, opciones, actual, origen, direccion, factor=1.0):
@@ -1044,7 +1054,7 @@ class AsaLista(Manipulador):
         asa = self._asa()
         color = AMARILLO_ACTIVO if activo is not None else AMARILLO
         return ([("lineas", np.array([self.origen, asa]), color, 1.4)]
-                + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
+                + _disco(g.visor, asa, 7.0 * self.esc(g, asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
 
     def tocar(self, g, q):
         s, ok = g.pantalla([self._asa()])
@@ -1069,6 +1079,7 @@ class AsaRuta(Manipulador):
     """Asa que se desliza por una ruta (Plano en ruta, Punto a lo largo de la ruta): el campo `clave` es la fracción
     del largo; se puede pasar de los extremos, donde la ruta sigue recta. `ts` y `puntos` (N, 3) son una muestra
     de la ruta; al arrastrar se toma el punto de la muestra más cercano al cursor en pantalla."""
+    GRUPO = "puntos"
     ayuda = "Deslizar por la ruta"
 
     def __init__(self, clave, ts, puntos, factor=1.0):
@@ -1084,7 +1095,7 @@ class AsaRuta(Manipulador):
         color = AMARILLO_ACTIVO if activo is not None else AMARILLO
         asa = self.asa(g)
         return ([("lineas", _segs(self.puntos_ruta), color, 1.4)]
-                + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
+                + _disco(g.visor, asa, 7.0 * self.esc(g, asa), color if activo is not None else (1.0, 1.0, 1.0), borde=BORDE_ESFERA))
 
     def tocar(self, g, q):
         s, ok = g.pantalla([self.asa(g)])
@@ -1159,6 +1170,7 @@ class AsaRecorrido(Manipulador):
     (de `s0` a `s0 + valor · factor` de longitud de arco, con signo) que se desliza por la ruta; arrastrarlo cambia la
     distancia por la longitud realmente recorrida. `factor` es n − 1 si el campo es la separación entre copias y 1 si
     es la extensión total. En una ruta abierta no pasa de sus extremos."""
+    GRUPO = "puntos"
     ayuda = "Distancia sobre la trayectoria"
 
     def __init__(self, clave, recorrido, s0, factor=1.0):
@@ -1177,7 +1189,7 @@ class AsaRecorrido(Manipulador):
         tramo = np.array([self.recorrido.punto(s) for s in np.linspace(self.s0, fin, 48)])
         asa = self.asa(g)
         return ([("lineas", _segs(tramo), color, 3.0)]
-                + _disco(g.visor, asa, 7.0 * g.escala(asa), color if activo is not None else (1.0, 1.0, 1.0),
+                + _disco(g.visor, asa, 7.0 * self.esc(g, asa), color if activo is not None else (1.0, 1.0, 1.0),
                          borde=BORDE_ESFERA))
 
     def tocar(self, g, q):
@@ -1223,7 +1235,7 @@ class CasillasCopias(Manipulador):
         u, v = np.asarray(R[0], float), np.asarray(R[1], float)
         prims = []
         for i, (ident, p, estado) in enumerate(self.items):
-            h = self.LADO_PX * g.escala(p)
+            h = self.LADO_PX * self.esc(g, p)
             if estado == "ok":
                 color = AMARILLO_ACTIVO if activo == i else (AMARILLO if ident not in self.originales else (0.55, 0.55, 0.6))
             elif estado == "suprimida":
@@ -1293,7 +1305,7 @@ class Triada(Manipulador):
 
     def _partes(self, g):
         """[(sub, polilínea 3D para tocar)] de cada asa."""
-        k = g.escala(self.centro)
+        k = self.esc(g, self.centro)
         L, c = LARGO_TRIADA * k, self.centro
         partes = []
         for i in () if self.solo_giros else range(3):
@@ -1396,7 +1408,7 @@ class Triada(Manipulador):
                 return {"sub": sub, "c": c, "a0": ang, "ultimo": ang, "v0": g.valor(self.giros[i])}
             # H-61: el plano del arco se ve de canto: se arrastra a lo largo de la tangente del asa en pantalla.
             m = math.radians(45.0)             # el punto del asa, en el medio del arco (de 15° a 75°)
-            radio = LARGO_TRIADA * g.escala(c) * 0.7
+            radio = LARGO_TRIADA * self.esc(g, c) * 0.7
             tangente = -a * math.sin(m) + b * math.cos(m)
             est = _arco_pantalla(g, c + (a * math.cos(m) + b * math.sin(m)) * radio, tangente, radio, pos)
             return None if est is None else {**est, "sub": sub, "c": c, "v0": g.valor(self.giros[i])}
@@ -1439,7 +1451,7 @@ class Triada(Manipulador):
         if arrastre is None:
             return []
         tipo, i = arrastre
-        k = g.escala(self.centro)
+        k = self.esc(g, self.centro)
         if tipo == "eje":
             return [(self.claves[i], self.centro + dir_visible(g.visor, self.ejes[i], self.centro) * LARGO_TRIADA * k)]
         if tipo == "giro" and self.giros:
@@ -1454,6 +1466,32 @@ def _contornos(prims):
     El anillo del ángulo (P-139) va sin él, fino como en Fusion."""
     return [("lineas", p[1], CONTORNO, float(p[3]) + GROSOR_CONTORNO) for p in prims
             if p[0] == "lineas" and len(p[1]) > 1 and p[2] not in _SIN_CONTORNO]
+
+
+def _con_estilo(prims, grupo):
+    """P-149: (contornos, dibujo) con el color y la opacidad que la persona eligió para el grupo. Con los de fábrica no
+    toca nada. Los contornos se sacan del dibujo original, antes de cambiar los colores que los excluyen."""
+    contornos = _contornos(prims)
+    op = estilo_asas.opacidad(grupo)
+    if estilo_asas.propio(grupo):
+        c = estilo_asas.rgb(grupo)
+        if grupo == "anillo":
+            cambia = {AnilloAngulo.AZUL: c, AnilloAngulo.AZUL_EN_OSCURO: c, AnilloAngulo.AZUL_ASA: c}
+        else:
+            cambia = {AMARILLO: c, AMARILLO_ACTIVO: _aclarar(c)}
+        prims = [p if p[2] is None else (p[0], p[1], cambia.get(tuple(p[2]), p[2]), *p[3:]) for p in prims]
+    if op < 1.0:
+        prims = [_con_alfa(p, op) for p in prims]
+        contornos = [_con_alfa(p, op) for p in contornos]
+    return contornos, prims
+
+
+def _con_alfa(prim, op):
+    """La primitiva con su alfa multiplicado por `op`: el cuarto valor del color, o el alfa propio de los triángulos."""
+    if prim[0] == "tris":
+        return (*prim[:3], prim[3] * op)
+    color = prim[2] if prim[2] is not None else (1.0, 1.0, 1.0)
+    return (prim[0], prim[1], (*color[:3], (color[3] if len(color) > 3 else 1.0) * op), *prim[3:])
 
 
 def _huella(prims):
@@ -1488,10 +1526,15 @@ def _choques(rect, huella):
 
 
 # ---------------------------------------------------------------- caja de valor
-QSS_CAJA = f"""
-QLineEdit#caja_manipulador {{ background: #ffffff; color: #1d1d1d; border: 1px solid #a8a8a8;
+def qss_caja():
+    """Estilo de la caja de valor con el color del borde y el tamaño de letra que eligió la persona (P-149)."""
+    borde = "".join(f"{round(c * 255):02x}" for c in estilo_asas.rgb("cajas"))
+    pt = QApplication.font().pointSizeF()
+    letra = f" font-size: {pt * estilo_asas.tamano('cajas'):.1f}pt;" if pt > 0 else ""
+    return f"""
+QLineEdit#caja_manipulador {{ background: #ffffff; color: #1d1d1d; border: 1px solid #a8a8a8;{letra}
                               padding: 1px 4px; selection-background-color: #2b7de9; }}
-QLineEdit#caja_manipulador:focus {{ border: 1px solid #{''.join(f'{int(c * 255):02x}' for c in AMARILLO)}; }}
+QLineEdit#caja_manipulador:focus {{ border: 1px solid #{borde}; }}
 """
 # B-375: el valor fuera de rango (o que no se entiende), como Fusion: subrayado rojo
 QSS_CAJA_ROJA = "QLineEdit#caja_manipulador { background: #ffd9d9; border-bottom: 2px solid #e0302a; }"
@@ -1504,8 +1547,8 @@ class CajaValor(QLineEdit):
         super().__init__(gestor.visor)
         self.gestor, self.clave = gestor, clave
         self.setObjectName("caja_manipulador")
-        self.setStyleSheet(QSS_CAJA)
-        self.setFixedWidth(112)
+        self.setStyleSheet(qss_caja())
+        self.setFixedWidth(round(112 * estilo_asas.tamano("cajas")))
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         self.punto = None
         # P-144: como el «⋮» de Fusion y el campo del panel, ofrece los parámetros para usarlos en la expresión
@@ -1640,7 +1683,7 @@ class GestorManipuladores(QObject):
     def redibujar(self):
         if self._cerrado:
             return
-        prims = []
+        prims, contornos, huella = [], [], []
         for m in self.manips:
             activo = None
             if self._arrastre is not None and self._arrastre["m"].ident == m.ident:
@@ -1648,12 +1691,17 @@ class GestorManipuladores(QObject):
             elif self._hover is not None and self._hover[0] == m.ident:
                 activo = self._hover[1]
             try:
-                prims += m.dibujar(self, activo)
+                propias = m.dibujar(self, activo)
             except Exception:  # noqa: BLE001
                 log.debug("dibujo de manipulador", exc_info=True)
+                continue
+            fondo, propias_estilo = _con_estilo(propias, m.GRUPO)
+            contornos += fondo
+            prims += propias_estilo
+            huella += propias
         self._firma = self._firma_camara()
-        self._huella = _huella(prims)
-        self.visor.set_capa(CAPA, (_contornos(prims) + prims) or None)
+        self._huella = _huella(huella)
+        self.visor.set_capa(CAPA, (contornos + prims) or None)
         self.sincronizar_cajas()
 
     def mostrar_previa(self, prims):
@@ -1745,9 +1793,10 @@ class GestorManipuladores(QObject):
                 if caja.text() != texto:
                     caja.setText(texto)
                     caja.setCursorPosition(0)
-                estilo = QSS_CAJA + (QSS_CAJA_ROJA if clave in getattr(self.panel, "invalidos", ()) else "")   # B-375
+                estilo = qss_caja() + (QSS_CAJA_ROJA if clave in getattr(self.panel, "invalidos", ()) else "")   # B-375
                 if caja.styleSheet() != estilo:        # setStyleSheet repule el widget: caro en cada movimiento
                     caja.setStyleSheet(estilo)
+                    caja.setFixedWidth(round(112 * estilo_asas.tamano("cajas")))
         self._ubicar_cajas()
 
     def rectangulos_cajas(self):
@@ -1799,7 +1848,7 @@ class GestorManipuladores(QObject):
             if caja.clave == "escala" and self.comando.CLAVE in CON_ESCALA and valor <= 0:
                 raise ValueError("El factor de escala debe ser positivo.")
         except Exception as e:  # noqa: BLE001 — se marca la caja en rojo, como el panel
-            caja.setStyleSheet(QSS_CAJA + QSS_CAJA_ROJA)
+            caja.setStyleSheet(qss_caja() + QSS_CAJA_ROJA)
             caja.setToolTip(str(e))
             return False
         caja.setToolTip("")
@@ -2094,4 +2143,4 @@ def herramientas_rojas(formas, deflexion=0.1):
     tris = [t for t in tris if len(t)]
     if not tris:
         return []
-    return [("tris", np.concatenate(tris), ROJO_PREVIA, 0.45)]
+    return [("tris", np.concatenate(tris), estilo_asas.rgb("previa_corte"), 0.45 * estilo_asas.opacidad("previa_corte"))]
