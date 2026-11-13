@@ -408,6 +408,21 @@ def test_flecha_del_empalme_sobre_la_arista(app_qt):
     panel.cancelar()
 
 
+@pytest.mark.parametrize("comando, clave", [("Empalme", "radio"), ("Chaflan", "distancia")])
+def test_p150_la_previa_se_come_las_aristas_elegidas(app_qt, comando, clave):
+    """P-150, como Fusion: mientras la previa redondea (o bisela), las aristas elegidas ya no existen y no se dibujan
+    (eran líneas gruesas encima de todo que quedaban flotando fuera del redondeo); sin previa vuelven."""
+    from omnicad.ui.comandos import modificar
+    doc = _doc_caja()
+    panel, visor, estados = _panel(getattr(modificar, comando)(), doc, {"aristas": [_arista_de_arriba(doc)], clave: "8 mm"})
+    panel._calcular_previa()
+    assert estados[-1] is not None and "seleccion" not in visor._capas
+    panel.set_valores({clave: "0 mm"})
+    panel._calcular_previa()
+    assert estados[-1] is None and visor._capas["seleccion"]
+    panel.cancelar()
+
+
 def test_manipuladores_de_chaflan_vaciado_pulsar_y_plano(app_qt):
     from omnicad.ui.comando import hit_desde_ref
     from omnicad.ui.comandos.construir import CATALOGO_LOCAL
