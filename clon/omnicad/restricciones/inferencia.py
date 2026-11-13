@@ -52,10 +52,14 @@ class Indice:
     medios de líneas y arcos, y el origen.
     """
 
-    def __init__(self, b: Boceto):
+    def __init__(self, b: Boceto, previo=None):
+        """`previo`: el índice anterior del mismo boceto (BOC-49): la caja y el punto medio de una curva cuyas
+        primitivas no cambiaron se reusan, así un cambio chico no rehace la geometría de las miles que siguen igual."""
         self.b = b
         self.cids, self.prims, cajas = [], {}, []
         self.duenos = duenos = {}
+        self._derivados = {}                  # cid → (caja, referencias «medio») para reusar en el índice siguiente
+        anterior = previo._derivados if previo is not None and previo.b is b else {}
         for cid, curva in b.curvas.items():
             if curva.tipo == "texto":
                 continue
@@ -64,8 +68,16 @@ class Indice:
                 continue
             self.cids.append(cid)
             self.prims[cid] = prims
-            cs = [caja_primitiva(p) for p in prims]
-            cajas.append((min(c[0] for c in cs), min(c[1] for c in cs), max(c[2] for c in cs), max(c[3] for c in cs)))
+            viejo = anterior.get(cid)
+            if viejo is not None and viejo[0] == prims:
+                caja, medios = viejo[1], viejo[2]
+            else:
+                cs = [caja_primitiva(p) for p in prims]
+                caja = (min(c[0] for c in cs), min(c[1] for c in cs), max(c[2] for c in cs), max(c[3] for c in cs))
+                medios = ([(*evaluar_primitiva(prim, dominio(prim)[1] / 2)[0], "medio", cid, frozenset((cid,)))
+                           for prim in prims] if curva.tipo in ("linea", "arco") else [])
+            self._derivados[cid] = (prims, caja, medios)
+            cajas.append(caja)
             for pid in curva.puntos():
                 duenos.setdefault(pid, set()).add(cid)
         self.cajas = np.array(cajas, dtype=float).reshape(-1, 4)
@@ -77,9 +89,7 @@ class Indice:
         for pid, p in b.puntos.items():
             refs.append((p.x, p.y, "centro" if pid in centros else "punto", pid, frozenset(duenos.get(pid, ()))))
         for cid in self.cids:
-            if b.curvas[cid].tipo in ("linea", "arco"):
-                for prim in self.prims[cid]:
-                    refs.append((*evaluar_primitiva(prim, dominio(prim)[1] / 2)[0], "medio", cid, frozenset((cid,))))
+            refs += self._derivados[cid][2]
         self.refs = refs
         self.rx = np.array([r[0] for r in refs])
         self.ry = np.array([r[1] for r in refs])

@@ -1396,7 +1396,7 @@ class Lienzo(QWidget):
             self.inf_lista = [proyectar_bloqueo(self._inf_bloqueo, xy)]
             return self.inf_lista[0]
         if self._indice_inf is None or self._indice_inf.b is not self.b or self._indice_clave != self._clave_geometria():
-            self._indice_inf, self._indice_clave = Indice(self.b), self._clave_geometria()
+            self._indice_inf, self._indice_clave = Indice(self.b, self._indice_inf), self._clave_geometria()
         # Paralela/perpendicular/colineal e igual mueven el punto sobre un rayo desde la base: valen para el segmento de
         # una Línea (BOC-48: también el de la línea de punto medio y el primer lado del rectángulo 3p, donde no
         # deforman nada). Igual compara el largo con otras líneas, o el radio de un círculo o arco con centro.
