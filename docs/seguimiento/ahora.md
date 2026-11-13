@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | P-78 | Rosca modelada rápida (F6) |
 | E4 | B-416 | Solevación plegada que da `ok` y Propiedades de 15 s |
 | E5 | ASM-17 | Restricción de componentes (B-412 y B-413 esperan fotos de Fusion de E11) |
-| E6 | FL-9 | Precalentar el trabajador en la portada, con B-418 (hecho, tests en curso) |
+| E6 | FL-9 | Integrado (d8d4b9f) con B-418; quedan sus tests_afectados (~2,5 h) y la prueba de E11 en Windows |
 | E7 | FL-0 | Banco de fluidez |
 | E8 | B-417 | Timeline › doble clic en un paso solo lo selecciona la primera vez |
 | E9 | Sol | Orquesta a Sol hasta el 15/11: B-344e, B-397, B-408, B-409, B-410 |
@@ -32,4 +32,4 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 7 | 8 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
 | 8 | B-401 | El cálculo aislado pierde atributos de boceto |
 
-Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384), PRUEBA9c. Integrados hoy: B-344e, B-408 (Sin verificar), B-412 y B-413 (notas), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
+Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384), PRUEBA9c. Integrados hoy: FL-9 + B-418 (d8d4b9f), B-344e, B-408 (Sin verificar), B-412 y B-413 (notas), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
