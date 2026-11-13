@@ -15,7 +15,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E5 | ASM-19 | Menú ENSAMBLAR y paneles como Fusion |
 | E6 | FL-1 | Toda previa que toca el kernel, al proceso aparte |
 | E7 | FL-0 | Banco de fluidez |
-| E8 | B-407 | Test de latidos que falla con la VPS cargada; después, cambio 3 (congelar la prioridad 2 en despues.md) |
+| E8 | CAMBIO3 | Congelar la prioridad 2 en `despues.md` (cambio 3 de la reorganización) |
 | E9 | B-403 | Extruir texto con Unir congela la ventana (parte FL-4) |
 | E10 | B-363 | El `.f3d` de la Prusa Core One se abre sin geometría |
 
