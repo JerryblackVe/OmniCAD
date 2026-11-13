@@ -6,7 +6,6 @@ la arista de costura) forma una esquina: el inglete del barrido pliega la secci�
 autointersecciones en un cuerpo que el kernel devuelve como válido. Con la transición redondeada de OCC
 (`BRepBuilderAPI_RoundCorner`) el kernel no construye el sólido, así que se avisa.
 
-B-167 — patrón geométrico sobre chapa. Copias más grandes que la distancia que las separa: se pisan entre sí y el
 cuerpo queda con autointersecciones.
 """
 import math
@@ -80,15 +79,29 @@ def test_b168_cuando_no_se_pudo_contar_tambien_se_avis(monkeypatch):
 
 # ---------------------------------------------------------------- B-167 · patrón sobre chapa
 
-def test_b167_patron_con_copias_que_se_pisan_avisa_la_causa():
+def test_b167_patron_con_copias_que_se_pisan_las_funde_sin_autointersecciones():
     s = api.Sesion()
     cid = _chapa(s, 20, 15)
     r = _r(s, "create_geometric_pattern", faces=["Cuerpo1/F6"], operation="join", distance=5, size1=6, size2=6)
     forma = s.cuerpo(cid).forma
-    assert _autointersecciones(forma) == 24                      # las copias de la rejilla se pisan
-    assert geo.volumen(forma) == pytest.approx(579.292, abs=1e-2)
-    aviso = " ".join(r["avisos"]).lower()
-    assert "autointerseccion" in aviso and "copias" in aviso and "distancia" in aviso, r["avisos"]
+    assert _autointersecciones(forma) == 0                       # antes 24: las copias de la rejilla se pisaban
+    assert geo.es_valida(forma)
+    assert geo.volumen(forma) == pytest.approx(507.354, abs=1e-2)
+    assert r["avisos"] == []
+
+
+def test_b167_patron_en_las_dos_caras_de_la_chapa_corta_rapido_y_sin_cruces():
+    """Caso del cazador: esferas por defecto en F5 y F6 (0,8 mm de chapa): las de una cara pisan a las de la otra.
+    Antes: 117 s y «resultado imposible»; ahora segundos y 0 autointersecciones."""
+    import time
+    s = api.Sesion()
+    cid = _chapa(s, 80, 50)
+    t = time.perf_counter()
+    r = _r(s, "create_geometric_pattern", faces=["Cuerpo1/F5", "Cuerpo1/F6"])
+    assert time.perf_counter() - t < 60
+    forma = s.cuerpo(cid).forma
+    assert _autointersecciones(forma) == 0 and geo.es_valida(forma) and r["avisos"] == []
+    assert geo.volumen(forma) == pytest.approx(2689.216, abs=1e-1)
 
 
 def test_b167_patron_plano_normal_sigue_ok_y_con_el_mismo_volumen():

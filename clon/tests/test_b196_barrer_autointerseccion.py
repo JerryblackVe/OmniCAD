@@ -223,28 +223,26 @@ def test_b358_deshacer_y_rehacer_conservan_el_aviso():
 
 
 def test_b358_un_cambio_de_parametro_vuelve_a_revisar():
-    """B-358: con t = 2 las copias del patrón no se pisan; con t = 6 sí (24 autointersecciones, B-167), y al volver a
-    2 el aviso se va."""
-    s = api.Sesion()
-    _r(s, "create_sketch")
-    _r(s, "draw_rectangle", sketch="Boceto1", x1=0, y1=0, x2=20, y2=15)
-    _r(s, "create_base_flange", sketch="Boceto1", thickness=0.8)
-    _r(s, "create_parameter", name="t", expression="2 mm")
-    uid = _r(s, "create_geometric_pattern", faces=["Cuerpo1/F6"], operation="join", distance=5, size1="t",
-             size2="t")["result"]["feature"]["id"]
-    assert "autointersec" not in s.doc.resultado(uid).mensaje
-    _r(s, "set_parameter", name="t", expression="6 mm")
-    assert "autointersecciones" in s.doc.resultado(uid).mensaje
-    _r(s, "set_parameter", name="t", expression="2 mm")
-    assert "autointersec" not in s.doc.resultado(uid).mensaje
+    """B-358: con t = 0 el barrido sale sano; con t = 30 el análisis lo encuentra cruzado (se simula la cuenta, que
+    depende del parámetro), y al volver a 0 el aviso se va."""
+    s = _preparar_barrido()
+    _r(s, "create_parameter", name="t", expression="0 deg")
+    cuenta = lambda forma, *a, **k: (24 if s.doc.parametros.valores()["t"] else 0, [], True)  # noqa: E731
+    with patch.object(rev, "_autointersecciones_seguras", side_effect=cuenta):
+        uid = _r(s, "sweep", sketch="Perfil", path_sketch="Ruta", operation="new_body",
+                 twist_angle="t")["result"]["feature"]["id"]
+        assert "autointersec" not in s.doc.resultado(uid).mensaje
+        _r(s, "set_parameter", name="t", expression="30 deg")
+        assert "autointersecciones" in s.doc.resultado(uid).mensaje
+        _r(s, "set_parameter", name="t", expression="0 deg")
+        assert "autointersec" not in s.doc.resultado(uid).mensaje
 
 
 def test_b358_labio_no_culpa_al_labio_de_lo_que_el_cuerpo_ya_traia():
-    """B-358: el patrón unido con copias que se pisan deja la base cruzada (B-167); un labio sano en el borde de abajo
-    no la empeora y no avisa (antes: «El labio de «Base» quedó con 212 autointersecciones»)."""
+    """B-358: un labio sano no avisa por las autointersecciones que el cuerpo ya traía (antes: «El labio de «Base»
+    quedó con 212 autointersecciones»). El análisis cuenta 212 antes y después: el labio no agregó ninguna."""
     s = _preparar_labio()
-    _r(s, "create_geometric_pattern", faces=[">Z"], body="Base", operation="join", distance=5, size1=6, size2=6)
-    assert rev._autointersecciones_seguras(s.cuerpo("Base").forma, 1, 5.0)[0] > 0
-    r = _r(s, "create_lip_groove", body="Base", edges="|X and <Z and <Y", lip_type="lip", width=1, height=1.5,
-           direction="Z", reverse=True)
+    with patch.object(rev, "_autointersecciones_seguras", return_value=(212, [], True)):
+        r = _r(s, "create_lip_groove", body="Base", edges="|X and <Z and <Y", lip_type="lip", width=1, height=1.5,
+               direction="Z", reverse=True)
     assert not any("autointersec" in a for a in r["avisos"]), r["avisos"]
