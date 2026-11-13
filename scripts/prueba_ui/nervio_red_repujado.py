@@ -167,13 +167,18 @@ def nervio_desmoldeo():
 
 
 def nervio_campos_fusion():
-    """Fusion Rib: Fillet Radius y Flip (pull direction). Se miran los campos del panel con «Más opciones» abierto."""
+    """Fusion Rib: Fillet Radius y Flip (pull direction), visibles en el panel; Red no ofrece invertir la extracción."""
     p = A.abrir(v, "nervio")
     if p.seccion is not None and not p.seccion.abierta:
         QTest.mouseClick(p.seccion.boton, Qt.LeftButton); A.esperar(120)
     vis = {c.clave for c in p.campos if p._visible(c)}
     A.reg(AR, "Nervio › tiene Radio del empalme (Fusion Rib: Fillet Radius)", "radio_empalme" in vis, f"campos {sorted(vis)}")
+    A.reg(AR, "Nervio › tiene Invertir extracción (Fusion Rib: Flip Direction)", "invertir_desmoldeo" in vis)
     A.foto(v, "nervio_panel")
+    QTest.keyClick(p, Qt.Key_Escape); A.esperar(150)
+    p = A.abrir(v, "red")
+    vis = {c.clave for c in p.campos if p._visible(c)}
+    A.reg(AR, "Red › mantiene Radio del empalme sin Invertir extracción", "radio_empalme" in vis and "invertir_desmoldeo" not in vis)
     QTest.keyClick(p, Qt.Key_Escape); A.esperar(150)
 
 

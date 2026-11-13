@@ -126,15 +126,18 @@ class _OpCrear(Operacion):
 
 class OpBarrido(_OpCrear):
     """Barrido de Fusion [SLD-SWEEP-SOLID]: tipo ruta única o ruta + carril guía; distancia, orientación,
-    ángulo de torsión y de conicidad. `orientacion` "alineada" mantiene `eje_alineado` (eje, arista, plano o cara) como
+    ángulo de torsión y de conicidad; con carril, `extension` (Extent: "perpendicular" a la ruta o "completa", con
+    `distancia_carril` como fracción del carril). `orientacion` "alineada" mantiene `eje_alineado` (eje, arista, plano o cara) como
     binormal; `superficie_guia` (caras sobre las que va la ruta) es el tipo Ruta + Superficie guía."""
     TIPO, ETIQUETA, ICONO = "barrido", "Barrido", "↝"
     REVISA_AUTOINTERSECCIONES = True
     PARAMS = {"perfiles": [], "ruta": [], "carril": [], "orientacion": "perpendicular", "distancia": "1",
               "torsion": "0 deg", "conicidad": "0 deg", "escala_carril": "escalar", "operacion": "nuevo",
-              "objetivos": [], "eje_alineado": None, "superficie_guia": [], "cuerpos": [], "cadena": False}
-    EXPRESIONES = ("distancia", "torsion", "conicidad")
+              "objetivos": [], "eje_alineado": None, "superficie_guia": [], "cuerpos": [], "cadena": False,
+              "extension": "completa", "distancia_carril": "1"}      # «completa» con 1 = los pasos de antes de H-89
+    EXPRESIONES = ("distancia", "torsion", "conicidad", "distancia_carril")
     OPCIONES = {"orientacion": ("perpendicular", "paralela", "alineada"), "escala_carril": ("escalar", "estirar", "ninguna"),
+                "extension": ("perpendicular", "completa"),
                 "operacion": OPERACIONES_CUERPO}
     REFS = ("perfiles", "ruta", "carril", "eje_alineado", "superficie_guia")
 
@@ -186,7 +189,8 @@ class OpBarrido(_OpCrear):
                              distancia=ctx.evaluar(self.p["distancia"], "escalar"),
                              torsion=ctx.evaluar(self.p["torsion"], ANGULO),
                              conicidad=ctx.evaluar(self.p["conicidad"], ANGULO), escala_carril=self.p["escala_carril"],
-                             eje_alineado=eje, superficie_guia=superficie)
+                             eje_alineado=eje, superficie_guia=superficie, extension=self.p["extension"],
+                             distancia_carril=ctx.evaluar(self.p["distancia_carril"], "escalar"))
         if geo.sin_volumen(forma):
             raise ErrorOperacion("El barrido no encierra volumen: el plano del perfil no puede ser paralelo a la ruta.")
         _avisar_autointersecciones(
@@ -281,11 +285,12 @@ class OpNervio(_OpCrear):
     por curva en un solo paso. `direccion` es la Direction y el Start de Fusion juntos: simétrica, o a un lado
     empezando abajo («lado1») o arriba («lado2»).
     `angulo_desmoldeo` y `direccion_desmoldeo` (referencia a un plano, cara o eje) son Draft Angle y Draft Pull
-    Direction; `radio_empalme` y `extender` (Fillet Radius y Extend Curves) solo valen en la Red."""
+    Direction, `invertir_desmoldeo` su Flip Direction; `radio_empalme` es Fillet Radius (redondea donde el nervio toca el
+    cuerpo; vacío = el radio nominal de la regla de plástico) y `extender` es Extend Curves."""
     TIPO, ETIQUETA, ICONO = "nervio", "Nervio", "⊥"
     PARAMS = {"curvas": [], "espesor": "", "extension": "hasta_siguiente", "profundidad": "10 mm",
               "direccion": "simetrica", "invertir": False, "objetivo": "", "angulo_desmoldeo": "0 deg",
-              "direccion_desmoldeo": None, "radio_empalme": "0 mm", "extender": True}
+              "direccion_desmoldeo": None, "invertir_desmoldeo": False, "radio_empalme": "0 mm", "extender": True}
     EXPRESIONES = ("espesor", "profundidad", "angulo_desmoldeo", "radio_empalme")
     OPCIONES = {"extension": ("hasta_siguiente", "profundidad"), "direccion": ESPESORES}
     REFS = ("curvas", "direccion_desmoldeo")
@@ -304,8 +309,11 @@ class OpNervio(_OpCrear):
         espesor = str(self.p["espesor"] or "").strip() or espesor_plastico(estado, (cuerpo.id,), "2 mm")
         forma = _sc().nervio(cuerpo.forma, aristas, plano.normal, ctx.evaluar(espesor), profundidad=prof,
                              direccion=self.p["direccion"], invertir=self.p["invertir"], extender=self.p["extender"],
-                             angulo_desmoldeo=ctx.evaluar(angulo, ANGULO), direccion_desmoldeo=pull)
-        cuerpo.forma = geo.booleano(cuerpo.forma, forma, "unir")
+                             angulo_desmoldeo=ctx.evaluar(angulo, ANGULO), direccion_desmoldeo=pull,
+                             invertir_desmoldeo=bool(self.p.get("invertir_desmoldeo")))
+        # Radio del empalme vacío = el radio nominal de la regla (Fusion: la regla da Nominal Radius).
+        radio = str(self.p["radio_empalme"] or "").strip() or radio_nominal_plastico(estado, (cuerpo.id,))
+        cuerpo.forma = _sc().unir_con_empalme(cuerpo.forma, forma, ctx.evaluar(radio))
         self._registrar_usados([cuerpo.id])
 
     def crecimiento(self, estado):

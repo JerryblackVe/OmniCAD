@@ -171,6 +171,15 @@ def barrido_carril():
           f"ofrece {list(c.opciones)}")
     A.reg(AR, "Barrido sólido › Ruta + Rail guía tiene Extensión (Fusion: Perpendicular to Path / Full Extents)",
           any(c.clave == "extension" for c in p.campos))
+    if "extension" in p.widgets:
+        w = p.widgets["extension"]
+        A.reg(AR, "Barrido con rail: Extensión visible, dos opciones y Perpendicular por defecto",
+              w.isVisible() and [w.itemData(i) for i in range(w.count())] == ["perpendicular", "completa"]
+              and w.currentData() == "perpendicular")
+        w.setFocus(); QTest.keyClick(w, Qt.Key_Down)
+        A.reg(AR, "Barrido › Extensión completa muestra Fracción del rail", p.widgets["distancia_carril"].isVisible())
+        QTest.keyClick(w, Qt.Key_Up)
+        A.reg(AR, "Barrido › Perpendicular oculta Fracción del rail", not p.widgets["distancia_carril"].isVisible())
     A.elegir(p, "perfiles", per("Cua"))
     A.elegir(p, "ruta", cur("RutaC"))
     A.elegir(p, "carril", cur("CarC"))
@@ -201,7 +210,7 @@ def barrido_teclear():
 
 
 def solevacion():
-    """Dos cuadros y una punta: tronco 2333,33 mm³ al aceptar; la fila de la punta ofrece Aguda y Punto tangente."""
+    """Dos cuadros y una punta: tronco 2333,33 mm³ al aceptar; la fila de la punta ofrece Aguda y Tangente."""
     n0, antes = A.n_ops(v), A.cuerpos_resumen(v)
     p = A.abrir(v, "solevacion")
     A.elegir(p, "secciones", per("LA"), per("LB"))
@@ -221,8 +230,8 @@ def solevacion():
     A.esperar(150)
     textos = [[c.itemText(i) for i in range(c.count())] for c in p.findChildren(QComboBox) if c.isVisible()]
     fila_punta = next((t for t in textos if "Aguda" in t), None)
-    A.reg(AR, "Solevación: la fila del punto ofrece Aguda y Punto tangente (Fusion: Sharp / Point Tangent)",
-          fila_punta is not None and any("tangente" in x.lower() for x in fila_punta), f"opciones {fila_punta}")
+    A.reg(AR, "Solevación: la fila del punto ofrece Aguda y Tangente (Fusion: Sharp / Point Tangent)",
+          fila_punta == ["Aguda", "Tangente"], f"opciones {fila_punta}")
     A.foto(v, "solevacion_punta")
     QTest.keyClick(p, Qt.Key_Escape); A.esperar(150)
 

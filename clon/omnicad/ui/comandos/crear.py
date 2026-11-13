@@ -70,8 +70,12 @@ class Barrido(Comando):
                 Casilla("cadena", "Selección de cadena", True, ayuda="Suma a cada arista de un cuerpo o curva de boceto las que le siguen tangentes."),
                 Seleccion("carril", "Rail guía", CURVA, maximo=None, visible_si=carril),
                 Seleccion("superficie_guia", "Superficie guía", {"cara"}, maximo=None, visible_si=superficie),
+                Opciones("extension", "Extensión", {"perpendicular": "Perpendicular a la ruta", "completa": "Extensión completa"},
+                         visible_si=carril),
                 Expresion("distancia", "Distancia", "1", ESCALAR,
                           ayuda="Parte de la ruta que recorre el barrido: de 0 a 1."),
+                Expresion("distancia_carril", "Fracción del rail", "1", ESCALAR, ayuda="Fracción del rail guía que se usa, entre 0 y 1.",
+                          visible_si=lambda v: carril(v) and v.get("extension") == "completa"),
                 # P-141: como el diálogo de Fusion (Distance, Taper Angle, Twist Angle), a la vista
                 Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v)),
                 Expresion("torsion", "Ángulo de torsión", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v)),
@@ -104,6 +108,8 @@ class Barrido(Comando):
                              ruta=refs(v, "ruta"), cuerpos=_cuerpos(v["cuerpos"]) if tipo == "cuerpo" else [],
                              cadena=bool(v.get("cadena")),
                              carril=refs(v, "carril") if tipo == "ruta_carril" else [],
+                             extension=v["extension"],
+                             distancia_carril=v["distancia_carril"] if tipo == "ruta_carril" and v["extension"] == "completa" else "1",
                              superficie_guia=refs(v, "superficie_guia") if tipo == "ruta_superficie" else [],
                              eje_alineado=ref1(v, "eje_alineado") if alineada else None,
                              orientacion=v["orientacion"] if tipo in ("ruta", "cuerpo") else "perpendicular",
@@ -151,10 +157,10 @@ def _fila_media(v):
 
 def _condiciones_de(hit, extremo):
     """Condiciones de una fila de perfiles según lo elegido (Loft reference): boceto → Libre o Dirección; arista o cara →
-    Libre, Tangente o Suave; punto → Aguda. Entre el primero y el último, Libre o Dirección."""
+    Libre, Tangente o Suave; punto extremo → Aguda o Tangente. Entre el primero y el último, Libre o Dirección."""
     tipo = hit["ref"]["tipo"]
-    if tipo in ("vertice", "punto"):
-        return {"libre": "Aguda"}
+    if tipo in ("vertice", "punto", "punto_boceto"):
+        return {"libre": "Aguda", "punto_tangente": "Tangente"} if extremo else {"libre": "Aguda"}
     if not extremo or tipo not in ("arista", "cara"):
         return {"libre": "Libre", "direccion": "Dirección"}
     return {"libre": "Libre", "tangente": "Tangente", "suave": "Suave (G2)"}
@@ -171,7 +177,8 @@ class Solevacion(Comando):
         return [ListaSeleccion("secciones", "Perfiles", PERFIL | CURVA | {"vertice", "punto"}, celda=self._celda),
                 Opciones("condicion_inicio", "Condición inicial", COND_BORDE, visible_si=lambda v: False),
                 Expresion("peso_inicio", "Peso de despegue", "1", ESCALAR, etiqueta_si=_peso("inicio"),
-                          visible_si=lambda v: _con_direccion("inicio")(v) or _con_tangente("inicio")(v)),
+                          visible_si=lambda v: _en_fila("inicio")(v) and v.get("condicion_inicio") in
+                          ("direccion", "tangente", "suave", "punto_tangente")),
                 Expresion("angulo_inicio", "Ángulo de despegue", "0 deg", ANGULO, visible_si=_con_direccion("inicio")),
                 Seleccion("cara_inicio", "Cara tangente inicial", {"cara"}, minimo=0, visible_si=_con_tangente("inicio"),
                           ayuda="La cara cuyo borde es el perfil: la superficie sale tangente a ella."),
@@ -179,7 +186,8 @@ class Solevacion(Comando):
                 Expresion("angulo_medio", "Ángulo de despegue", "0 deg", ANGULO, visible_si=lambda v: _fila_media(v) and self._de_fila(v)),
                 Opciones("condicion_fin", "Condición final", COND_BORDE, visible_si=lambda v: False),
                 Expresion("peso_fin", "Peso de despegue", "1", ESCALAR, etiqueta_si=_peso("fin"),
-                          visible_si=lambda v: _con_direccion("fin")(v) or _con_tangente("fin")(v)),
+                          visible_si=lambda v: _en_fila("fin")(v) and v.get("condicion_fin") in
+                          ("direccion", "tangente", "suave", "punto_tangente")),
                 Expresion("angulo_fin", "Ángulo de despegue", "0 deg", ANGULO, visible_si=_con_direccion("fin")),
                 Seleccion("cara_fin", "Cara tangente final", {"cara"}, minimo=0, visible_si=_con_tangente("fin"),
                           ayuda="La cara cuyo borde es el perfil: la superficie sale tangente a ella."),
@@ -216,6 +224,10 @@ class Solevacion(Comando):
         extremo = "inicio" if i == 0 else "fin" if i == n - 1 else None
         opciones = _condiciones_de(panel.valores["secciones"][i], extremo is not None)
         actual = panel.valores.get(f"condicion_{extremo}") if extremo else ("direccion" if str(i) in self._filas_medias(panel.valores) else "libre")
+        if extremo:
+            punto = panel.valores["secciones"][i]["ref"]["tipo"] in ("vertice", "punto", "punto_boceto")
+            if actual not in ("libre", "punto_tangente") if punto else actual == "punto_tangente":
+                actual = panel.valores[f"condicion_{extremo}"] = "libre"  # era del perfil que ocupaba esta fila antes
         w = QComboBox()
         for k, texto in (opciones | ({actual: COND_BORDE[actual]} if actual not in opciones else {})).items():
             w.addItem(texto, k)
@@ -253,6 +265,8 @@ class Solevacion(Comando):
         tipo = v.get(f"condicion_{lado}")
         if tipo == "direccion":
             return {"tipo": "direccion", "angulo": v[f"angulo_{lado}"], "peso": v[f"peso_{lado}"]}
+        if tipo == "punto_tangente":
+            return {"tipo": tipo, "angulo": "0 deg", "peso": v[f"peso_{lado}"]}
         if tipo in ("tangente", "suave"):
             if not v.get(f"cara_{lado}"):
                 raise ErrorComando(f"Seleccioná la cara a la que es tangente el {'primer' if lado == 'inicio' else 'último'} perfil.")
@@ -293,7 +307,7 @@ class Solevacion(Comando):
                  aristas_tangentes="fusionar" if op.p.get("fusionar_tangentes") else "mantener")
         for lado in ("inicio", "fin"):
             c = op.p.get(f"condicion_{lado}") or {}
-            v[f"condicion_{lado}"] = c["tipo"] if c.get("tipo") in ("direccion", "tangente", "suave") else "libre"
+            v[f"condicion_{lado}"] = c["tipo"] if c.get("tipo") in ("direccion", "tangente", "suave", "punto_tangente") else "libre"
             v[f"angulo_{lado}"], v[f"peso_{lado}"] = c.get("angulo", "0 deg"), c.get("peso", "1")
             v[f"cara_{lado}"] = _h1(c.get("cara"), ctx.estado)
         v["medias"] = "; ".join(f"{int(k) + 1}:{c.get('angulo', '0 deg')}:{c.get('peso', '1')}"
@@ -322,8 +336,8 @@ class _NervioRed(Comando):
                 Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", angulo_desmoldeo_plastico(ctx.estado), ANGULO),
                 Seleccion("direccion_desmoldeo", "Dirección de extracción", {"plano", "cara_plana", "eje", "arista_lineal"},
                           minimo=0, visible_si=lambda v: nervio),
-                Expresion("radio_empalme", "Radio del empalme", radio_nominal_plastico(ctx.estado),
-                          visible_si=lambda v: red),
+                Casilla("invertir_desmoldeo", "Invertir extracción", visible_si=lambda v: nervio),
+                Expresion("radio_empalme", "Radio del empalme", radio_nominal_plastico(ctx.estado)),
                 Casilla("extender", "Alargar curvas", True, visible_si=lambda v: red),
                 Seleccion("objetivo", "Cuerpo", {"cuerpo"}, minimo=0, ayuda="Sin selección: el más cercano.")]
 
@@ -333,7 +347,8 @@ class _NervioRed(Comando):
         obj = _cuerpos(v.get("objetivo"))
         return self.crear_op(self.CLASE_OP, v, ctx, curvas=refs(v, "curvas"), objetivo=obj[0] if obj else "",
                              direccion_desmoldeo=None if self.ES_RED else ref1(v, "direccion_desmoldeo"),
-                             radio_empalme=v["radio_empalme"] if self.ES_RED else "0 mm",
+                             radio_empalme=v["radio_empalme"],
+                             **({"invertir_desmoldeo": bool(v["invertir_desmoldeo"])} if not self.ES_RED else {}),
                              extender=bool(v["extender"]) if self.ES_RED else True,
                              **{k: v[k] for k in ("espesor", "extension", "profundidad", "direccion", "invertir",
                                                   "angulo_desmoldeo")})
