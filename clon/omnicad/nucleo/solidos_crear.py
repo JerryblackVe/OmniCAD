@@ -3454,6 +3454,7 @@ def unir_instancias(formas):
     op = BRepAlgoAPI_Fuse()
     op.SetArguments(argumentos)
     op.SetTools(herramientas)
+    op.SetRunParallel(geo.PARALELO)      # RS-X4: 1600 cubos 0,62 → 0,53 s
     try:
         op.Build()
         hecho = op.IsDone()
