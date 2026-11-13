@@ -109,7 +109,7 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 
 | Documento | Qué tiene |
 |---|---|
-| [auditorias/](auditorias/) | Auditoría total del 2026-10-14 (cuatro informes) y [fluidez del 2026-10-28](auditorias/fluidez-2026-10-28.md) (por qué la extrusión interactiva se ve a saltos; mediciones y plan) |
+| [auditorias/](auditorias/) | Auditoría total del 2026-10-14 (cuatro informes: [audit-report](auditorias/audit-report-2026-10-14.md), [pipeline-review](auditorias/pipeline-review-2026-10-14.md), [uar-loop](auditorias/uar-loop-2026-10-14.md), [ultimate-audit-review](auditorias/ultimate-audit-review-2026-10-14.md)) y [fluidez del 2026-10-28](auditorias/fluidez-2026-10-28.md) (por qué la extrusión interactiva se ve a saltos; mediciones y plan) |
 | [auditorias/previa-comandos-2026-10-28.md](auditorias/previa-comandos-2026-10-28.md) | Costo de las previas de Empalme, Chaflán, Cortar, Unir, Intersecar, Vaciado y patrones: 32 casos, 96 corridas, kernel/teselado/dibujo y límites; banco reproducible sin arreglos de producción |
 | [auditorias/previa-asincrona-2026-10-29.md](auditorias/previa-asincrona-2026-10-29.md) | Previa en proceso aparte para Empalme, Chaflán, booleanas, patrones y Vaciado: cuadros, asas y latencia hasta el sólido exacto por comando, y la causa del «piso» del Vaciado (P-55). |
 | [auditorias/inspeccionar_2026-11-01.md](auditorias/inspeccionar_2026-11-01.md) | Las 15 herramientas de INSPECCIONAR probadas como persona: antes y después con mediciones, comparación con Fusion por panel y fuentes de los factores de CO₂ |
