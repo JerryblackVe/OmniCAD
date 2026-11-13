@@ -16,7 +16,7 @@ operación sigue apuntando a "su" cara o arista al recalcular.
 import re
 import time
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QFrame, QGridLayout,
                                QHBoxLayout, QHeaderView, QLabel, QLayout, QLineEdit, QMenu, QPlainTextEdit, QPushButton, QScrollArea,
@@ -980,6 +980,9 @@ class PanelComando(QFrame):
         self._sobre_hit = None               # geometría bajo el cursor cuya previa se ve (Preview On Hover); None = la de lo elegido
         if comando.PREVIA_SOBRE:
             self.visor.entidad_sobre.connect(self._sobre)
+        self.visor.clic_vacio.connect(self._clic_de_otro_rol)
+        self._pos_clic = None
+        self.visor.installEventFilter(self)          # P-138: dónde se soltó el clic que el campo activo no tomó
         self._actualizar_visibles()
         self._refrescar_seleccion()
         primera = next((c for c in self.campos if isinstance(c, Seleccion) and self._a_la_vista(c)
@@ -1304,11 +1307,16 @@ class PanelComando(QFrame):
         """Al cambiar de modo, las selecciones de campos que dejan de verse dejan de resaltarse en la vista (se conservan
         por si se vuelve al modo anterior) y, si el campo activo se ocultó, la selección pasa al siguiente que falta."""
         visibles = tuple(c.clave for c in self.campos if isinstance(c, Seleccion) and self._visible(c))
-        if visibles == getattr(self, "_sel_visibles", visibles):
-            self._sel_visibles = visibles
-            return
+        anteriores = getattr(self, "_sel_visibles", visibles)
         self._sel_visibles = visibles
-        if self.activa is not None and self.activa.clave not in visibles:
+        if visibles == anteriores:
+            return
+        # P-138: un campo obligatorio que aparece vacío (Extensión «Hasta objeto», Inicio «Objeto») se activa, como Agujero
+        nuevo = next((self._por_clave[k] for k in visibles if k not in anteriores and self._por_clave[k].minimo > 0
+                      and not self.valores.get(k) and self._a_la_vista(self._por_clave[k])), None)
+        if nuevo is not None:
+            self._activar(nuevo)
+        elif self.activa is not None and self.activa.clave not in visibles:
             self._activar(next((self._por_clave[k] for k in visibles
                                 if not self.valores.get(k) and self._a_la_vista(self._por_clave[k])), None))
         self._refrescar_seleccion()
@@ -1570,6 +1578,26 @@ class PanelComando(QFrame):
         self.comando.al_cambiar(self, campo.clave)
         self.comando.al_elegir(self, campo.clave)
         self._programar()
+
+    def eventFilter(self, obj, e):
+        if obj is self.visor and e.type() == QEvent.MouseButtonRelease:
+            self._pos_clic = e.position()
+        return super().eventFilter(obj, e)
+
+    def _clic_de_otro_rol(self):
+        """P-138: un clic que el campo activo no acepta (el visor no eligió nada) va al primer campo de selección que
+        sigue, obligatorio, vacío y a la vista, que sí lo acepta: el eje de Revolución, la ruta del Barrido, el plano de
+        Simetría. A uno optativo (los «Objetos» de Cortar) no: tocar una cara curva no mete el cuerpo sin querer."""
+        campo, pos = self.activa, self._pos_clic
+        sels = [c for c in self.campos if isinstance(c, Seleccion) and self._a_la_vista(c)]
+        if campo not in sels or pos is None or not self.isVisible() or getattr(self.visor, "_sin_capturar", False):
+            return
+        for c in sels[sels.index(campo) + 1:]:
+            hit = None if self.valores.get(c.clave) or c.minimo < 1 else self.visor.elegir_entidad(pos, self._filtros(c))
+            if hit is not None:
+                self._activar(c)
+                self._elegida(hit)
+                return
 
     def _siguiente_seleccion(self, campo):
         sels = [c for c in self.campos if isinstance(c, Seleccion) and self._a_la_vista(c)]
@@ -1981,8 +2009,10 @@ class PanelComando(QFrame):
             self.visor.entidad_elegida.disconnect(self._elegida)
             if self.comando.PREVIA_SOBRE:
                 self.visor.entidad_sobre.disconnect(self._sobre)
+            self.visor.clic_vacio.disconnect(self._clic_de_otro_rol)
         except (RuntimeError, TypeError):
             pass
+        self.visor.removeEventFilter(self)
         self.visor.set_filtro(None)
         self.visor.set_capa("seleccion", None)
         if self.manipuladores is not None:

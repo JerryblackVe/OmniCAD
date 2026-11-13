@@ -1562,6 +1562,38 @@ class Visor3D(QOpenGLWidget):
         w = np.where(ok, w, 1.0)
         return np.c_[(h[:, 0] / w + 1) / 2 * self.width(), (1 - h[:, 1] / w) / 2 * self.height()], ok
 
+    def _clic_en_plano(self, o, d, tris, mvp):
+        """(t, punto, tolerancia en mm) del rayo en el plano de un perfil: TOL_PX_ARISTA píxeles pasados a mm ahí."""
+        v0, e = tris[0, 0], tris[0, 1] - tris[0, 0]
+        n = np.cross(e, tris[0, 2] - v0)
+        den = float(d @ n)
+        if abs(den) < 1e-12 * max(float(n @ n), 1e-30):
+            return None
+        t = float((v0 - o) @ n) / den
+        p = o + d * t
+        (s0, s1), ok = self._a_pantalla(np.array([p, p + e / np.linalg.norm(e)]), mvp)
+        px_mm = float(np.hypot(*(s1 - s0)))
+        return (t, p, TOL_PX_ARISTA / px_mm) if t > 0 and ok.all() and px_mm > 1e-9 else None
+
+    def _t_borde_perfil(self, plano, tris):
+        """t del clic si cae a menos de la tolerancia de los triángulos del perfil; inf si no. La teselación corta las
+        curvas con cuerdas: un clic sobre el círculo dibujado puede quedar afuera por poco (B-265)."""
+        if plano is None:
+            return math.inf
+        t, p, tol = plano
+        clave = ("caja_perfil", id(tris))
+        if clave not in self._pick:
+            self._pick[clave] = (tris.min(axis=(0, 1)), tris.max(axis=(0, 1)))
+        lo, hi = self._pick[clave]
+        if (p < lo - tol).any() or (p > hi + tol).any():
+            return math.inf
+        a = tris.reshape(-1, 3)
+        ab = np.roll(tris, -1, axis=1).reshape(-1, 3) - a
+        L2 = np.einsum("ij,ij->i", ab, ab)
+        s = np.clip(np.einsum("ij,ij->i", p - a, ab) / np.where(L2 > 0, L2, 1.0), 0.0, 1.0)
+        cerca = a + ab * s[:, None] - p
+        return t if float(np.min(np.einsum("ij,ij->i", cerca, cerca))) <= tol * tol else math.inf
+
     def _dist_polilinea(self, q, poli, mvp, rayo=None):
         """Distancia en píxeles del cursor a una polilínea 3D y el punto 3D más cercano."""
         if len(poli) < 2:
@@ -1758,14 +1790,27 @@ class Visor3D(QOpenGLWidget):
         # 4) perfiles de boceto (están sobre el plano del boceto; ganan a la cara que tengan detrás)
         if filtros & {"perfil", "boceto"}:
             mejor_t, mejor, mejor_area, hueco_t = math.inf, None, math.inf, math.inf
-            for br in self._bocetos_visibles():
-                huecos = self._huecos_texto(br)
-                for perfil in br.perfiles:
+            todos = [(br, h, p) for br in self._bocetos_visibles() for h in (self._huecos_texto(br),) for p in br.perfiles]
+            fuera, planos = [], {}         # planos: el clic en el plano de cada boceto, una vez
+            # B-265: el clic justo sobre un borde curvo cae en la cuerda de la teselación; esos bordes se miran solo si
+            # el rayo no tocó ningún perfil (el hover pasa por acá en cada movimiento)
+            for borde in (False, True):
+                if borde and (mejor is not None or hueco_t < math.inf):
+                    break
+                for br, huecos, perfil in (fuera if borde else todos):
                     tris = self._tris_perfil(perfil.cara)
                     if not len(tris):
                         continue
-                    ts = rayo_triangulos(o, d, tris)
-                    t = float(ts.min())
+                    if borde:
+                        if id(br) not in planos:
+                            planos[id(br)] = self._clic_en_plano(o, d, tris, mvp)
+                        t = self._t_borde_perfil(planos[id(br)], tris)
+                    else:
+                        t = float(rayo_triangulos(o, d, tris).min())
+                    if not math.isfinite(t):       # P-138: sin tocarlo, inf <= inf lo elegía igual sin cuerpos
+                        if not borde:
+                            fuera.append((br, huecos, perfil))
+                        continue
                     if id(perfil) in huecos:       # el hueco de la «o» de un texto no se elige: es aire
                         if t <= t_cara + tol_t:
                             hueco_t = min(hueco_t, t)
