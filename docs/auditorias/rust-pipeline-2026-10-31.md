@@ -212,7 +212,7 @@ Python. Dificultad y riesgo en la escala del seguimiento. Todas las pruebas de a
 ### Solver: RS-S1 primero, R4 después (y solo si hace falta)
 
 - **Medición:** § 3. Todo el costo grande es el QR denso de MINPACK (2,12 s de 2,18 s con 400 piezas).
-- **Primero (Python):** RS-S1, `least_squares(method="trf", jac_sparsity=...)` con el patrón que ya calcula `_patron`
+- **Primero (Python):** RS-S1 (hecho 2026-11-13: «trf» con el jacobiano disperso y LSMR desde 200 incógnitas; 400 piezas 3,5 s → 0,35 s), `least_squares(method="trf", jac_sparsity=...)` con el patrón que ya calcula `_patron`
   (`solver.py:675`). **Después (Rust):** una lista de términos tipada (16 tipos de restricción) con jacobiano analítico y
   Levenberg-Marquardt disperso: reescribe ~780 líneas; hace falta una biblioteca de álgebra (`nalgebra`/`faer`, **no están
   en caché: pide permiso y red**). **Riesgo alto** (paridad de las direcciones libres). **Aceptación:** 400 piezas ≤ 200 ms

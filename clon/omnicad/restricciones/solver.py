@@ -46,6 +46,9 @@ TOPE_TERMINAR_AUTO = 250      # «Terminar con AutoConstrain» de Fusion no corr
 TROZO_EVALUACIONES = 60     # evaluaciones por tramo de Levenberg-Marquardt (ver `_resolver_grupo`)
 UMBRAL_VENTANA = 40         # puntos de la parte arrastrada desde los que un movimiento resuelve solo una ventana (B-111)
 RADIO_VENTANA = 1           # pasos de vínculos alrededor del punto arrastrado que entran a la ventana; el resto se congela
+UMBRAL_TRF = 200            # RS-S1: incógnitas desde las que una resolución completa va con «trf» y el jacobiano disperso (LSMR)
+                            # en vez del QR denso de «lm»: 120 splines de 2,7 s a 0,5 s. Con pocas incógnitas «trf» llega a
+                            # otro punto de un boceto subdeterminado (40 mm con 5 splines); desde ~240, a menos de 1e-4 mm
 CACHE_SPLINES = True          # guardar la primitiva de cada spline por sus coordenadas (B-111); los tests lo apagan para comparar
 
 
@@ -1233,8 +1236,14 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
         tope = 200 * (n + 1) if con_rango else max(10, TROZO_EVALUACIONES * 100 // max(n, 100))
         hechas, x = 0, x_inicio
         while True:
-            r = least_squares(fun, x, jac=jac, method="lm", xtol=tol, ftol=tol, gtol=tol,
-                              max_nfev=min(TROZO_EVALUACIONES, tope - hechas))
+            if con_rango and n >= UMBRAL_TRF:     # un arrastre (tope chico de evaluaciones) sigue con «lm»: «trf» no
+                                                  # llegaba a cumplir la cadena rígida de 300 líneas (test_b101)
+                from scipy.sparse import csr_matrix
+                r = least_squares(fun, x, jac=lambda x: csr_matrix(jac(x)), method="trf", tr_solver="lsmr",
+                                  xtol=tol, ftol=tol, gtol=tol, max_nfev=min(TROZO_EVALUACIONES, tope - hechas))
+            else:
+                r = least_squares(fun, x, jac=jac, method="lm", xtol=tol, ftol=tol, gtol=tol,
+                                  max_nfev=min(TROZO_EVALUACIONES, tope - hechas))
             x, hechas = r.x, hechas + r.nfev
             if r.status != 0 or hechas >= tope or float(np.max(np.abs(sis.residuos(x)), initial=0.0)) < cumple:
                 return x
@@ -1326,8 +1335,10 @@ def _libres(sis, J, rango, tol=1e-6):
     if rango >= n:
         libres = np.zeros(n, bool)
     elif J.size:
-        _, _, vt = np.linalg.svd(J)
-        libres = np.linalg.norm(vt[rango:].T, axis=1) > tol
+        # RS-S1: SVD económica (sin la V entera de n × n, 0,9 s con 120 splines). La parte de cada incógnita en el núcleo
+        # es lo que le falta a su parte en el espacio de filas: |núcleo|² = 1 − |filas|².
+        _, _, vt = np.linalg.svd(J, full_matrices=False)
+        libres = 1 - np.linalg.norm(vt[:rango].T, axis=1) ** 2 > tol ** 2
     else:
         libres = np.ones(n, bool)
     puntos = {pid for pid, (i, j) in sis.idx_p.items() if libres[i] or libres[j]}

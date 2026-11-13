@@ -171,3 +171,35 @@ def test_resolver_con_rust_cumple_lo_mismo_que_python(nombre, monkeypatch):
     py, b_py = _resolver(CORPUS[nombre], True, monkeypatch)
     rs_, b_rs = _resolver(CORPUS[nombre], True, monkeypatch, rust=True)
     _comparar(py, b_py, rs_, b_rs, None)
+
+
+def test_rs_s1_un_sistema_grande_va_con_trf_y_da_lo_mismo_que_lm(monkeypatch):
+    """RS-S1: desde UMBRAL_TRF incógnitas se resuelve con «trf» y el jacobiano disperso; da lo mismo que «lm» (a 1e-4 mm),
+    los mismos grados de libertad y las mismas entidades determinadas (`_libres` con la SVD económica)."""
+    import scipy.optimize as so
+    base, v = contorno_splines(60)
+    metodos, original = [], so.least_squares
+    monkeypatch.setattr(so, "least_squares", lambda *a, **k: (metodos.append(k.get("method")), original(*a, **k))[1])
+    con_trf = base.copia()
+    r_trf = S.resolver(con_trf, v)
+    assert set(metodos) == {"trf"}
+    metodos.clear()
+    monkeypatch.setattr(S, "UMBRAL_TRF", 10**9)
+    con_lm = base.copia()
+    r_lm = S.resolver(con_lm, v)
+    assert set(metodos) == {"lm"}
+    assert r_trf.ok and r_trf.residuo_max < S.TOLERANCIA
+    assert (r_trf.gdl, r_trf.determinadas) == (r_lm.gdl, r_lm.determinadas)
+    assert max(np.hypot(*np.subtract(con_trf.coords(p), con_lm.coords(p))) for p in base.puntos) < 1e-4
+
+
+def test_rs_s1_libres_con_la_svd_economica_da_lo_mismo_que_con_la_completa():
+    rng = np.random.default_rng(3)
+    J = np.hstack([rng.normal(size=(6, 9)), np.zeros((6, 3))])     # 3 incógnitas que ningún vínculo toca
+    J[5] = J[4]                                                     # una fila repetida: rango 5
+    rango = int(np.linalg.matrix_rank(J, tol=1e-6))
+    sis = type("Sis", (), {"x0": np.zeros(12), "idx_p": {k: (2 * k, 2 * k + 1) for k in range(6)}, "idx_r": {}, "deriva": {}})()
+    _, _, vt = np.linalg.svd(J)
+    completa = np.linalg.norm(vt[rango:].T, axis=1) > 1e-6
+    puntos, _ = S._libres(sis, J, rango)
+    assert puntos == {pid for pid, (i, j) in sis.idx_p.items() if completa[i] or completa[j]}
