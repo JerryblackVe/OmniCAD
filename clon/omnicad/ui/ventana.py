@@ -24,8 +24,8 @@ from pathlib import Path
 
 import numpy as np
 
-from PySide6.QtCore import QEvent, QEventLoop, QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QInputEvent, QKeySequence
 from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QSizePolicy, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
@@ -127,6 +127,24 @@ class _FiltroInfoHerramientas(QObject):
 PIE_AYUDA = "<br><br><span style='color:#9a9a9a'>Pulse Ctrl+/ para obtener más ayuda.</span>"
 
 
+class _FiltroEspera(QObject):
+    """Mientras un hijo calcula por la ventana (B-48), el teclado y el mouse no tocan el documento; Esc o el «Cancelar»
+    del panel dejan de esperar (B-418: un cálculo que no contesta no deja la ventana tomada)."""
+
+    def __init__(self, ventana):
+        super().__init__(ventana)
+        self.ventana, self.cancelado = ventana, False
+
+    def eventFilter(self, obj, evento):
+        if not isinstance(evento, QInputEvent):
+            return False
+        panel = self.ventana.panel
+        if (evento.type() == QEvent.KeyPress and evento.key() == Qt.Key_Escape
+                or evento.type() == QEvent.MouseButtonRelease and panel is not None and obj is panel.boton_cancelar):
+            self.cancelado = True
+        return True
+
+
 def imagen_ayuda(clave):
     """HTML de la imagen «antes → después» del comando (`scripts/ayuda_imagenes.py`), o "" si no tiene."""
     ruta = RECURSOS / "ayuda" / f"{clave}.png"
@@ -189,6 +207,7 @@ class VentanaPrincipal(QMainWindow):
         self.prefs_colores_componente = False   # INSPECCIONAR › Mostrar colores de componente (Mayús+N)
         self.prefs_grupos_caras = False         # INSPECCIONAR › Mostrar grupos de caras de malla (Mayús+F)
         self.panel = None                   # diálogo de comando abierto (PanelComando)
+        self._espera = _FiltroEspera(self)
         self._autoguardado_fallo = None     # último error del autoguardado ya avisado en la barra
         self._previa_aspecto = {}           # lo que el panel Aspecto muestra sin haberlo aplicado: {"cuerpos": {id: rgb},
         self._malla_caras = {}              # "caras": [(id de cuerpo, referencia, rgb)]}; mallas de caras con aspecto propio
@@ -1101,10 +1120,18 @@ class VentanaPrincipal(QMainWindow):
 
     def _esperando_calculo(self, segundos):
         """Un hijo calcula por la ventana (B-48): pasado 1 s lo dice con los segundos y la deja repintar y atender
-        al sistema (sin teclado ni mouse, para no tocar el documento a mitad de un cambio)."""
+        al sistema (sin teclado ni mouse, para no tocar el documento a mitad de un cambio). Esc o Cancelar lo cortan."""
         if segundos >= 1:
-            self.mensaje(f"Calculando en un proceso aparte… {int(segundos)} s", 1500)
-        QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
+            self.mensaje(f"Calculando en un proceso aparte… {int(segundos)} s (Esc cancela)", 1500)
+        app = QApplication.instance()
+        app.installEventFilter(self._espera)
+        try:
+            app.processEvents()
+        finally:
+            app.removeEventFilter(self._espera)
+        if self._espera.cancelado:
+            self._espera.cancelado = False
+            raise aislado.Cancelado("lo cancelaste")
 
     def set_documento(self, doc):
         if self.dlg_parametros is not None:
@@ -1114,7 +1141,10 @@ class VentanaPrincipal(QMainWindow):
             self.modo_boceto.cancelar()
         self._cancelar_eleccion()
         self.doc = doc
-        if not doc._prevuelo_corresponde():          # un documento chico no necesita el trabajador: su memoria se libera
+        from . import comando
+        if comando.PREVIA_APARTE:       # FL-9: las previas van al trabajador: que tenga el documento armado antes de la primera
+            aislado.precalentar(doc.a_dict())
+        elif not doc._prevuelo_corresponde():        # un documento chico no necesita el trabajador: su memoria se libera
             aislado.cerrar_trabajador()
         doc.al_calcular = self._calculando
         doc.al_esperar = self._esperando_calculo
@@ -2559,6 +2589,12 @@ class VentanaPrincipal(QMainWindow):
             funcion()
             return True
         except (ErrorDocumento, ValueError) as e:
+            if isinstance(e.__cause__, aislado.Cancelado):      # Esc o Cancelar en plena espera: el comando también se cierra
+                self.mensaje("Cálculo cancelado: el documento quedó como estaba.", 5000)
+                panel = self.panel
+                if panel is not None:
+                    QTimer.singleShot(0, panel, lambda: panel.cerrando or panel.cancelar())
+                return False
             from ..registro_uso.ganchos import error
             error(e, origen="ui")
             QMessageBox.warning(self, NOMBRE_APP, str(e))

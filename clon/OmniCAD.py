@@ -129,6 +129,10 @@ def main(argv=None):
     informes_error.instalar(avisar=_avisar_error)   # el cartel con «Abrir carpeta de errores», solo en la app
 
     portada = arranque.mostrar_portada(app)      # mientras se importa lo pesado (OCP, OpenGL…), como Fusion
+    from omnicad.ui import comando
+    if comando.PREVIA_APARTE:                    # FL-9: el trabajador de las previas importa a la par de la ventana
+        from omnicad.nucleo import aislado
+        aislado.precalentar()
     from omnicad.ui.ventana import VentanaPrincipal
     ventana = VentanaPrincipal()
     ventana._proyecto_registro = args.proyecto

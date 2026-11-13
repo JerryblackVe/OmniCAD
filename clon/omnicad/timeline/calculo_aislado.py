@@ -236,7 +236,9 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
             continue
         if anterior is None:       # un patrón o una copia: el padre arma el cuerpo con sus datos y esta malla
             nuevos[cid] = [c.nombre, c.op_id, c.tipo, c.apariencia, c.material, c.componente, list(c.origen)]
-        v, n = render_cpu.malla_suave(c.forma, deflexion, angular)
+        # FL-9: con el detalle «Automático» (None) malla como el visor; 0,05 mm fijos tardaban 5 s en un barrido con guía
+        d = render_cpu.deflexion_automatica(c.forma) if deflexion is None else deflexion
+        v, n = render_cpu.malla_suave(c.forma, d, angular)
         pares = [np.repeat(p, 2, axis=0)[1:-1] for p in geo.polilineas_aristas(c.forma) if len(p) >= 2]
         seg = np.concatenate(pares).astype(np.float32) if pares else np.zeros((0, 3), np.float32)
         mallas[cid] = v, n, seg

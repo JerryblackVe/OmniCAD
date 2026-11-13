@@ -31,6 +31,18 @@ from . import motor as _motor
 
 
 _DEFLEXION_MIN, _DEFLEXION_MAX = 0.02, 0.5
+# Detalle «Automático» del visor; vive acá para que el proceso aparte malle la previa igual que la ventana (FL-9)
+FACTOR_DETALLE_AUTO, DEFLEXION_MIN, DEFLEXION_MAX = 3e-4, 0.01, 0.5
+
+
+def deflexion_automatica(forma):
+    """Deflexión (mm) para teselar `forma` con el detalle «Automático»: fina en piezas chicas, gruesa en grandes."""
+    try:
+        mn, mx = geo.caja_aproximada(forma)    # B-335: el tamaño alcanza; la exacta tarda
+        diag = float(np.linalg.norm(np.asarray(mx, float) - np.asarray(mn, float)))
+    except Exception:  # noqa: BLE001 — una forma rara no debe impedir dibujar: se usa el medio
+        return 0.05
+    return min(max(diag * FACTOR_DETALLE_AUTO, DEFLEXION_MIN), DEFLEXION_MAX)
 
 
 def deflexion_para(forma, deflexion=None, *, cam=None, alto=600, caja=None):
