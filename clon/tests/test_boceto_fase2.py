@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 
 from omnicad.nucleo import geometria as g
@@ -353,7 +355,7 @@ def test_b103_auto_restringir_conserva_candidatos_del_calculo_completo(monkeypat
 
 
 def test_b103_auto_restringir_440_lineas_aisladas():
-    from omnicad.restricciones import auto_restringir
+    from omnicad.restricciones import auto_restringir, solver
 
     def correr():
         b = Boceto()
@@ -362,9 +364,11 @@ def test_b103_auto_restringir_440_lineas_aisladas():
             b.agregar_linea((x, y), (x + 10, y))
         return auto_restringir(b), b
 
-    segundos, (agregado, b) = mejor_tiempo(correr, 30)
-    print(f"B-103 aisladas 440 entidades: {segundos:.3f} s; {len(agregado)} agregados", flush=True)
-    assert segundos < 30
+    with patch.object(solver, "_jacobiano", wraps=solver._jacobiano) as jacobiano:
+        agregado, b = correr()
+    print(f"B-103 aisladas 440 entidades: {jacobiano.call_count} jacobianos; {len(agregado)} agregados", flush=True)
+    # B-388: trabajo del solver, independiente de la carga; base 3493 + 25 % de margen.
+    assert jacobiano.call_count <= 4370
     assert len(agregado) == 1759
     assert grados_de_libertad(b, {k.id: float(k.expresion) for k in b.cotas.values()}) == 0
 
