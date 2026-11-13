@@ -13,6 +13,7 @@ from ...timeline import entidades as ent
 from ...timeline.ops_solido import TIPOS_REPETIBLES, punto_a_la_pose_actual
 from ...timeline.operaciones import angulo_desmoldeo_plastico, espesor_plastico, radio_nominal_plastico
 from ...timeline.parametros import ANGULO, ESCALAR
+from ..esquema_agujero import EsquemaAgujero
 from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, ListaSeleccion, LONGITUD, Opciones, OpcionesVivas, Personalizado,
                        Seleccion, Texto, exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
@@ -679,7 +680,8 @@ class Agujero(Comando):
             Expresion("ref_distancia2", "Distancia 2", "10 mm", visible_si=pos("referencias")),
             Opciones("extension", "Tipo de extensión", {"distancia": ("Distancia", "ext_distancia"), "hasta": ("A", "ext_objeto"),
                                                         "todo": ("Todo", "ext_todo")}, seccion=fo),
-            Expresion("profundidad", "Distancia", "10 mm", visible_si=lambda v: v.get("extension") == "distancia", seccion=fo),
+            Expresion("profundidad", "Distancia", "10 mm", visible_si=lambda v: v.get("extension") == "distancia", seccion=fo,
+                      en_esquema=True),
             Seleccion("hasta", "A", {"cara", "plano", "cuerpo"}, visible_si=hasta, seccion=fo,
                       ayuda="Cara (si es plana, su plano extendido), plano de construcción o cuerpo donde termina."),
             Casilla("invertir", "Invertir dirección", seccion=fo),
@@ -692,13 +694,19 @@ class Agujero(Comando):
             Botones("punta", "Punto de taladro", {"plana": ("Plano", "ag_punta_plana"), "angulo": ("Ángulo", "ag_punta_angulo")},
                     defecto="angulo", seccion=fo),
             Expresion("angulo_punta", "Ángulo de la punta", "118 deg", ANGULO, visible_si=lambda v: v.get("punta") == "angulo",
-                      seccion=fo),
+                      seccion=fo, en_esquema=True),
             Expresion("diametro", "Diámetro", "6 mm", visible_si=lambda v: v.get("rosca") == "simple" or (
-                v.get("rosca") == "cosmetica" and not v.get("rosca_modelada")), seccion=fo),
-            Expresion("diam_abocardado", "Diámetro de escariado", "10 mm", visible_si=t("abocardado"), seccion=fo),
-            Expresion("prof_abocardado", "Profundidad de escariado", "4 mm", visible_si=t("abocardado"), seccion=fo),
-            Expresion("diam_avellanado", "Diámetro de avellanado", "12 mm", visible_si=t("avellanado"), seccion=fo),
-            Expresion("angulo_avellanado", "Ángulo de avellanado", "90 deg", ANGULO, visible_si=t("avellanado"), seccion=fo),
+                v.get("rosca") == "cosmetica" and not v.get("rosca_modelada")), seccion=fo, en_esquema=True),
+            Expresion("diam_abocardado", "Diámetro de escariado", "10 mm", visible_si=t("abocardado"), seccion=fo,
+                      en_esquema=True),
+            Expresion("prof_abocardado", "Profundidad de escariado", "4 mm", visible_si=t("abocardado"), seccion=fo,
+                      en_esquema=True),
+            Expresion("diam_avellanado", "Diámetro de avellanado", "12 mm", visible_si=t("avellanado"), seccion=fo,
+                      en_esquema=True),
+            Expresion("angulo_avellanado", "Ángulo de avellanado", "90 deg", ANGULO, visible_si=t("avellanado"), seccion=fo,
+                      en_esquema=True),
+            # FU-2: el corte del agujero con esas cotas editables encima, como el diálogo de Fusion
+            Personalizado("esquema", "", EsquemaAgujero, ancho_completo=True, seccion=fo),
             Opciones("tam_holgura", "Tamaño", {k: k for k in sc.PASO_LIBRE_ISO273}, defecto="M6", visible_si=r("holgura"),
                      seccion=fo),
             Opciones("ajuste", "Ajuste", {"fino": "Cercano (serie fina)", "normal": "Normal (serie media)",

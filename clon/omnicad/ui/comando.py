@@ -111,9 +111,10 @@ class ListaSeleccion(Seleccion):
 class Expresion(Campo):
     """`rango`: (mínimo, máximo) abierto; afuera, el campo y la caja de su asa quedan en rojo, como Fusion (B-375)."""
 
-    def __init__(self, clave, etiqueta, defecto="10 mm", tipo=LONGITUD, rango=None, **kw):
+    def __init__(self, clave, etiqueta, defecto="10 mm", tipo=LONGITUD, rango=None, en_esquema=False, **kw):
         super().__init__(clave, etiqueta, defecto, **kw)
         self.tipo, self.rango = tipo, rango
+        self.en_esquema = en_esquema       # FU-2: su caja va sobre el dibujo de un `Personalizado` posterior (sin fila propia)
 
 
 class Opciones(Campo):
@@ -859,6 +860,9 @@ class PanelComando(QFrame):
         self.rotulos = []                  # (rótulo del grupo, [claves]) → se ve si algún campo del grupo se ve
         ultimo = {}                        # por grilla (principal / «Más opciones»): (grupo, claves del rótulo vigente)
         for campo in self.campos:
+            if getattr(campo, "en_esquema", False):        # FU-2: la caja la adopta el dibujo que viene después
+                self.etiquetas[campo.clave], self.widgets[campo.clave] = QLabel(campo.etiqueta), self._widget(campo)
+                continue
             p = campo.pestana
             if p is not None and p not in self.paginas:
                 self.paginas[p] = QWidget()
@@ -1257,8 +1261,10 @@ class PanelComando(QFrame):
         for c in self.campos:
             vis = self._visible(c) and not getattr(c, "oculta", False)
             self.widgets[c.clave].setVisible(vis)
-            if not getattr(c, "ancho_completo", False):
+            if not getattr(c, "ancho_completo", False) and not getattr(c, "en_esquema", False):
                 self.etiquetas[c.clave].setVisible(vis)
+            if isinstance(c, Personalizado):
+                self.widgets[c.clave].update()             # un dibujo que depende de otros valores (FU-2)
             if c.etiqueta_si is not None:
                 texto = c.etiqueta_si(self.valores)
                 if texto != self.etiquetas[c.clave].text():
