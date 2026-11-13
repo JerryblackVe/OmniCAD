@@ -1,0 +1,55 @@
+{
+ "id": "B-376",
+ "firma": "geometria|shell|autointersecciones",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 40,
+    "width": 30,
+    "height": 20
+   }
+  },
+  {
+   "tool": "shell",
+   "args": {
+    "body": "Cuerpo1",
+    "thickness": 1,
+    "faces": "<Z"
+   }
+  },
+  {
+   "tool": "offset_faces",
+   "args": {
+    "body": "op1.c1",
+    "faces": [
+     "Cuerpo1/F2",
+     "Cuerpo1/F3",
+     "Cuerpo1/F4"
+    ],
+    "distance": 22.0
+   }
+  },
+  {
+   "tool": "offset_faces",
+   "args": {
+    "body": "op1.c1",
+    "faces": [
+     "Cuerpo1/F6"
+    ],
+    "distance": 41.8
+   }
+  },
+  {
+   "tool": "shell",
+   "args": {
+    "body": "op1.c1",
+    "faces": [
+     "Cuerpo1/F1",
+     "Cuerpo1/F2"
+    ],
+    "thickness": 23.0
+   }
+  }
+ ]
+}
