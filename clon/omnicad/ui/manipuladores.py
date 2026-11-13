@@ -1665,7 +1665,8 @@ class GestorManipuladores(QObject):
             base = (self.ctx.estado, repr([h["ref"] for h in v.get("caras") or []]), v.get("direccion"))
         elif self.comando.CLAVE in ("empalme_3d", "chaflan_3d"):     # el asa nace de la arista; el valor solo mueve su punta
             v = self.panel.valores
-            base = (self.ctx.estado, repr([h["ref"] for h in v.get("aristas") or []]), v.get("tipo"), v.get("tipo_radio"))
+            base = (self.ctx.estado, repr([(h["ref"], h.get("punto")) for h in v.get("aristas") or []]), v.get("tipo"),
+                    v.get("tipo_radio"))    # P-143: la flecha va donde se hizo clic
         if base is not None and base == self._base_apoyo:
             self.redibujar()  # el valor solo mueve la flecha; no cambia su cara de apoyo ni su normal
             return
@@ -2129,11 +2130,11 @@ def punto_normal_cara(cara):
     return np.asarray(p, float), unitario(n)
 
 
-def datos_arista(arista, forma_cuerpo, extremo=False):
+def datos_arista(arista, forma_cuerpo, punto=None):
     """(punto medio, dirección hacia donde avanza la superficie del empalme/chaflán al crecer, ángulo
     entre las normales de las caras en radianes) de una arista del cuerpo."""
     from ..nucleo.consultas import datos_arista as consultar
-    return consultar(arista, forma_cuerpo, extremo)
+    return consultar(arista, forma_cuerpo, punto)
 
 
 def herramientas_rojas(formas, deflexion=0.1):

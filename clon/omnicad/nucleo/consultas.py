@@ -237,10 +237,10 @@ def saliente_de_arista(arista, cuerpo):
     return medio, d
 
 
-def datos_arista(arista, forma_cuerpo, extremo=False):
-    """(punto, hacia dónde avanza el empalme al crecer, ángulo entre normales) en el medio de la arista o, con
-    `extremo`, en su punta más lejos del centro del cuerpo: la cara libre de un saliente, donde Fusion pone el asa del
-    empalme (P-143). El lado de adentro se mide siempre en el medio, lejos de las caras de los extremos."""
+def datos_arista(arista, forma_cuerpo, punto=None):
+    """(punto, hacia dónde avanza el empalme al crecer, ángulo entre normales) en el medio de la arista o, con `punto`
+    (donde se hizo clic), en el punto de la arista más cercano: ahí pone Fusion el asa del empalme (P-143). El lado de
+    adentro se mide siempre en el medio, lejos de las caras de los extremos."""
     from .solidos_modificar import _ancestros, _normal_en_arista, _padres
     c = BRepAdaptor_Curve(arista)
     t = (c.FirstParameter() + c.LastParameter()) / 2
@@ -261,10 +261,9 @@ def datos_arista(arista, forma_cuerpo, extremo=False):
     paso = max(1e-3, 1e-3 * float(np.linalg.norm(medio)))
     q = medio - bis * paso
     hacia = -bis if dentro_solidos([forma_cuerpo], q) else bis
-    if extremo:
-        centro = np.asarray(geo.centro_masa(forma_cuerpo, True), float)     # de superficie: vale también sin volumen
-        puntas = [(u, c.Value(u)) for u in (c.FirstParameter(), c.LastParameter())]
-        t, p = max(puntas, key=lambda x: float(np.linalg.norm(np.array([x[1].X(), x[1].Y(), x[1].Z()]) - centro)))
+    if punto is not None:
+        t = _parametro_cercano(arista, c, punto)
+        p = c.Value(t)
         medio = np.array([p.X(), p.Y(), p.Z()])
         n1 = _normal_en_arista(arista, TopoDS.Face(caras[0]), t)
         n2 = _normal_en_arista(arista, TopoDS.Face(caras[1]), t)
@@ -273,6 +272,20 @@ def datos_arista(arista, forma_cuerpo, extremo=False):
             hacia = bis if bis @ hacia >= 0 else -bis
             fi = math.acos(max(-1.0, min(1.0, float(n1 @ n2))))
     return medio, hacia, fi
+
+
+
+def _parametro_cercano(arista, c, punto):
+    """Parámetro del punto de la arista más cercano a `punto` (con la ubicación del cuerpo); en un vértice, su punta."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape, BRepExtrema_SupportType
+    from OCP.gp import gp_Pnt
+    d = BRepExtrema_DistShapeShape(BRepBuilderAPI_MakeVertex(gp_Pnt(*map(float, punto))).Vertex(), arista)
+    if d.IsDone() and d.NbSolution() and d.SupportTypeShape2(1) == BRepExtrema_SupportType.BRepExtrema_IsOnEdge:
+        return d.ParOnEdgeS2(1)[0]          # OCP lo devuelve en una tupla
+    q = np.asarray(punto, float)
+    return min((c.FirstParameter(), c.LastParameter()),
+               key=lambda u: float(np.linalg.norm(np.array([c.Value(u).X(), c.Value(u).Y(), c.Value(u).Z()]) - q)))
 
 
 _motor.registrar(globals(), _iniciar_opencascade)

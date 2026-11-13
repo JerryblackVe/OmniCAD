@@ -40,18 +40,19 @@ def _con_cuerpos(ctx):
 
 # ---------------------------------------------------------------- manipuladores en la vista
 def _flecha_arista(ctx, seleccion, clave, chaflan=False):
-    """Asa de radio/distancia como la de Fusion (P-143): en la punta libre de la primera arista, sobre la cara del
-    extremo, señala dónde queda la superficie del empalme (o del chaflán) y apunta hacia donde crece."""
+    """Asa de radio/distancia como la de Fusion (P-143): en la última arista elegida (salta a cada una nueva), en el
+    punto donde se hizo clic (sin clic, en el medio); señala dónde queda la superficie del empalme (o del chaflán) y
+    apunta hacia donde crece."""
     import math
 
     from .. import manipuladores as mp
-    arista = next((h for h in seleccion or [] if h["ref"].get("tipo") == "arista"), None)
+    arista = next((h for h in reversed(seleccion or []) if h["ref"].get("tipo") == "arista"), None)   # la última, como Fusion
     e = mp.entidad(arista, ctx.estado) if arista is not None else None
     if e is None or e.cuerpo not in ctx.estado.cuerpos:
         return []
-    punta, hacia, fi = mp.datos_arista(e.forma, ctx.estado.cuerpos[e.cuerpo].forma, extremo=True)
+    punto, hacia, fi = mp.datos_arista(e.forma, ctx.estado.cuerpos[e.cuerpo].forma, punto=arista.get("punto"))
     factor = math.sin(fi / 2) if chaflan else 1 / max(math.cos(fi / 2), 1e-3) - 1
-    return [mp.FlechaPuntero(clave, punta, hacia, factor=max(factor, 0.15), minimo=0.0)]
+    return [mp.FlechaPuntero(clave, punto, hacia, factor=max(factor, 0.15), minimo=0.0)]
 
 
 def _cara_y_normal(ctx, seleccion):
