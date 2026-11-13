@@ -1,4 +1,6 @@
 """Sección Proyectar/Incluir del boceto: B-119 (Proyectar un cuerpo da su silueta cerrada) y lo que arregló la revisión."""
+import json
+
 import pytest
 
 from omnicad import api
@@ -47,7 +49,8 @@ def test_forma_libre_tambien_cierra():
 
 
 def ok(r):
-    assert r["ok"], r
+    if not r["ok"]:                    # el error entero: pytest recorta el dict y en el CI no se veía el mensaje del kernel
+        pytest.fail(json.dumps(r, ensure_ascii=False, indent=1), pytrace=False)
     return r["result"]
 
 
