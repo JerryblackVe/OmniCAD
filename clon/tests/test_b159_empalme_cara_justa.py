@@ -27,12 +27,16 @@ def _borde(forma):
     raise AssertionError("no está el borde x = −30 del canto")
 
 
-def test_radio_igual_al_canto_da_error_claro():
+def test_radio_igual_al_canto_se_come_el_canto_como_fusion():
+    """B-400: la arista es recta entre caras planas y no comparte vértice con otra elegida: se hace con el prisma de la
+    esquina (el kernel no la resuelve) y el canto de 1 mm desaparece."""
     s = _caja_vaciada()
 
     r = api.llamar(s, "fillet", {"body": "op1.c1", "edges": ["Cuerpo1/E10"], "radius": 1.0})   # antes: moría acá
 
-    assert not r["ok"] and "se come justo una cara vecina" in r["mensaje"]
+    assert r["ok"], r
+    assert r["result"]["bodies_modified"][0]["volume"] == pytest.approx(11413.2699, abs=1e-3)
+    assert geo.es_valida(s.cuerpo("Cuerpo1").forma)
 
 
 def test_un_poco_menos_que_el_canto_sigue_andando():

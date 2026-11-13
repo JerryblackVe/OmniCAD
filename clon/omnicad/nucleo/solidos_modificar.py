@@ -402,6 +402,13 @@ def _aristas_con_caja(cara, cajas):
 
 
 def _rechazar_cara_justa(forma, arista, radio, mapa=None, cajas=None):
+    """Lanza el error de B-159 si el empalme se come justo una cara vecina (ver `_come_cara_justa`)."""
+    if _come_cara_justa(forma, arista, radio, mapa, cajas):
+        raise geo.ErrorGeometria(f"El empalme de {radio:g} mm se come justo una cara vecina entera (la deja de "
+                                 "ancho cero) y el núcleo no lo resuelve. Probá un radio un poco menor.")
+
+
+def _come_cara_justa(forma, arista, radio, mapa=None, cajas=None):
     """B-159: si el empalme se come JUSTO una cara vecina (la línea donde toca coincide con otra arista de esa cara,
     p. ej. radio 1 en el borde de una pared vaciada de 1 mm), `BRepFilletAPI_MakeFillet.Build` hace caer el proceso
     (access violation). Un poco más chico anda y un poco más grande da error: solo se frena la coincidencia.
@@ -412,7 +419,7 @@ def _rechazar_cara_justa(forma, arista, radio, mapa=None, cajas=None):
     mapa = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE) if mapa is None else mapa
     caras = _padres(mapa, arista)
     if len(caras) != 2:
-        return
+        return False
     retiro = radio * math.tan(_angulo_entre_caras(forma, arista, mapa) / 2)   # del borde a la línea de contacto
     propios = _unicos(arista, TopAbs_VERTEX)
     zona = Bnd_Box()
@@ -423,8 +430,8 @@ def _rechazar_cara_justa(forma, arista, radio, mapa=None, cajas=None):
             if zona.IsOut(caja) or any(v.IsSame(w) for v in vertices for w in propios):
                 continue
             if abs(BRepExtrema_DistShapeShape(arista, otra).Value() - retiro) <= 1e-6 * max(1.0, retiro):
-                raise geo.ErrorGeometria(f"El empalme de {radio:g} mm se come justo una cara vecina entera (la deja de "
-                                         "ancho cero) y el núcleo no lo resuelve. Probá un radio un poco menor.")
+                return True
+    return False
 
 
 def _perfil_de_empalme(c, p1, p2, continuidad):
@@ -509,7 +516,7 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad):
     for cara, u, d in ((caras[0], u1, d1), (caras[1], u2, d2)):      # el radio no puede pasar del ancho de la cara
         ancho = max(float((np.array([q.X(), q.Y(), q.Z()]) - a) @ u)
                     for q in (BRep_Tool.Pnt_s(TopoDS.Vertex(v)) for v in _unicos(cara, TopAbs_VERTEX)))
-        if d > ancho * (1 - 1e-9):
+        if d > ancho * (1 + 1e-9):           # B-400: igual al ancho se come la cara entera, como Fusion
             raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
                                      "Achicalo.")
     # el prisma recto de la esquina sobraría (o dejaría una astilla) si las caras de los extremos no fueran perpendiculares
@@ -556,6 +563,40 @@ def _radios_con_setback(arista, radio, setback, esquinas):
     return inicio + medio + final
 
 
+def _empalmar_caras_justas(forma, grupos, cadena_tangente):
+    """B-400: un radio constante que se come JUSTO una cara vecina (caja de 20 de alto, radio 20) Fusion lo hace y el
+    kernel no. Si la arista es recta entre caras planas y no comparte vértice con otra arista elegida, se hace con
+    `_empalme_por_perfil` (el prisma de la esquina) y sale de los grupos; si no, sigue al kernel y al error de B-159.
+    Devuelve (forma, grupos sin esas aristas ni grupos vacíos, True si ninguna arista de radio constante se come una
+    cara justa: así `empalme` no la vuelve a revisar)."""
+    vecinas, cajas = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE), {}
+    elegidas = [(g, e) for g in grupos for e in _ampliar_tangentes(forma, g.get("aristas") or [], cadena_tangente)]
+    candidatas, justas = [], 0
+    for g, e in elegidas:
+        r = float(g.get("radio", 0))
+        if g.get("tipo", "constante") != "constante" or g.get("esquina") == "setback" or r <= 0:
+            continue
+        if not _come_cara_justa(forma, e, r, vecinas, cajas):
+            continue
+        justas += 1
+        propios = _unicos(e, TopAbs_VERTEX)
+        if not any(o is not e and any(v.IsSame(w) for v in propios for w in _unicos(o, TopAbs_VERTEX))
+                   for _, o in elegidas):
+            candidatas.append((e, r))
+    hechas = []
+    for e, r in candidatas:
+        try:
+            forma = _empalme_por_perfil(forma, _reubicar_arista(forma, e), r, r, "g1")
+        except geo.ErrorGeometria:
+            continue                # no es recta entre planos (o los extremos no son perpendiculares): error de siempre
+        hechas.append(e)
+    if not hechas:
+        return forma, grupos, justas == 0
+    grupos = [dict(g, aristas=[_reubicar_arista(forma, x) for x in g.get("aristas") or []
+                               if not any(x.IsSame(h) for h in hechas)]) for g in grupos]
+    return forma, [g for g in grupos if g["aristas"]], False
+
+
 def empalme(forma, grupos, *, cadena_tangente=True):
     """Empalme (Fillet, tipo Fillet) por conjuntos de selección, cada uno con su tipo de radio.
 
@@ -586,6 +627,9 @@ def empalme(forma, grupos, *, cadena_tangente=True):
                   for g in grupos if all(g is not x for x in por_perfil)]
         if not grupos:
             return forma
+    forma, grupos, sin_justas = _empalmar_caras_justas(forma, grupos, cadena_tangente)
+    if not grupos:
+        return forma
     mf = BRepFilletAPI_MakeFillet(forma)
     vecinas, cajas, empalmadas = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE), {}, []
     for grupo in grupos:
@@ -612,7 +656,8 @@ def empalme(forma, grupos, *, cadena_tangente=True):
                 if r <= 0:
                     raise geo.ErrorGeometria("El radio del empalme debe ser positivo.")
                 geo.rechazar_radio_de_arco(e, r)
-                _rechazar_cara_justa(forma, e, r, vecinas, cajas)
+                if not sin_justas:
+                    _rechazar_cara_justa(forma, e, r, vecinas, cajas)
             if tipo == "constante" and esquinas:
                 puntos = _radios_con_setback(e, r, float(grupo["setback"]), esquinas)
                 arr = Array1_gp_Pnt2d(1, len(puntos))
