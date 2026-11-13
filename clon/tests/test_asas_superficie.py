@@ -92,7 +92,10 @@ def test_la_reglada_normal_y_tangente_muestran_flecha_y_arco(app_qt):
     panel.cancelar()
 
 
-def test_la_revolucion_de_superficie_muestra_el_arco_de_angulo(app_qt):
+def test_la_revolucion_de_superficie_muestra_el_anillo_de_angulo(app_qt):
+    """P-139: el anillo de Fusion (tamaño fijo en pantalla, perpendicular al eje) en el punto medio del perfil."""
+    from test_manipuladores import _arrastrar
+
     from omnicad.ui.comando import hit_desde_ref
     doc = Documento()
     b = Boceto()
@@ -103,10 +106,15 @@ def test_la_revolucion_de_superficie_muestra_el_arco_de_angulo(app_qt):
     eje = hit_desde_ref({"tipo": "eje", "id": "Z"}, doc.estado_final)
     panel, _visor = _panel("sup_revolucion", doc, {"curvas": [curva], "eje": [eje], "angulo": "90 deg"})
     manips = panel.manipuladores.manips
-    assert [type(m).__name__ for m in manips] == ["Angulo"] and manips[0].clave == "angulo"
-    asa = manips[0].asa(panel.manipuladores)
-    assert math.hypot(asa[0], asa[1]) == pytest.approx(10.0, abs=1e-6)       # a la distancia del perfil al eje
-    assert math.degrees(math.atan2(asa[1], asa[0])) == pytest.approx(90.0, abs=1e-6)
+    assert [type(m).__name__ for m in manips] == ["AnilloAngulo"] and manips[0].clave == "angulo"
+    anillo, gestor = manips[0], panel.manipuladores
+    asa = anillo.asa(gestor)
+    assert anillo.centro == pytest.approx((10, 0, 10)) and anillo.eje == pytest.approx((0, 0, 1))  # en el perfil
+    assert asa[0] == pytest.approx(10.0) and asa[1] > 0 and asa[2] == pytest.approx(10.0)          # a 90° del perfil
+    a = math.radians(120)
+    destino = anillo.centro + (anillo.u * math.cos(a) + anillo.v * math.sin(a)) * anillo._r(gestor)
+    _arrastrar(_visor, *gestor.pantalla([asa, destino])[0])           # arrastrar el asa por el anillo cambia el ángulo
+    assert 110 < panel.ctx.evaluar(panel.valores["angulo"], "angulo") < 130
     panel.cancelar()
     panel, _visor = _panel("sup_revolucion", doc, {"curvas": [], "eje": [eje], "angulo": "90 deg"})
     assert not panel.manipuladores.manips          # sin perfil elegido todavía no hay asa
