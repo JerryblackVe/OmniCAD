@@ -1768,7 +1768,8 @@ class PanelComando(QFrame):
         try:
             self._hijo_previa = CalculoPendiente("previa_visual", {
                 "receta": self.ctx.doc.a_dict(), "operacion": op.a_dict(), "indice": self.ctx.indice,
-                "deflexion": self.visor.config.teselado or 0.05, "angular": self.visor.config.angular})
+                "deflexion": self.visor.config.teselado or 0.05, "angular": self.visor.config.angular,
+                "formas": type(self.comando).seleccion_en_previa is not Comando.seleccion_en_previa})   # P-145
             self._op_hijo = op
             self._t_hijo.start()
             self._mostrar("Calculando vista previa en un proceso aparte…", tipo="calculando")
