@@ -36,7 +36,7 @@ Reglas de la noche:
 
 Quedan afuera:
 - Fusion real (no conecta): BOC-50, BOC-76, BOC-79, BOC-80, PAT-1, SUP-23, B-118, B-122.
-- Rust y rendimiento (después de las herramientas): BOC-38, BOC-49 y las filas RS.
+- Rust y rendimiento (después de las herramientas): BOC-49 y las filas RS (BOC-38 se cerró el 2026-11-12).
 - Instalar o comprar algo: AUD-1, AUD-2, AUD-8, AUD-9, FU-12.
 - Monitor real: UI-2.
 - Límite de OpenCascade o de recetas: SUP-14, SUP-17.
