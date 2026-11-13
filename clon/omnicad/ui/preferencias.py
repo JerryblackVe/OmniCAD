@@ -26,7 +26,7 @@ from ..asistente.proveedores.agente_local import AGENTES, AgenteLocal, ejecutabl
 from ..asistente.proveedores.base import ErrorProveedor
 from ..nucleo import motor
 from ..timeline.documento import TOPE_INSTRUCCIONES
-from . import temas
+from . import estilo_asas, temas
 
 NOMBRE_ANTERIOR = "FusionClone"      # nombre del programa hasta el 2026-10-09: sus preferencias se migran una vez
 
@@ -86,6 +86,7 @@ DEFECTOS = {
     "graficos/limite_fps": 0,                # 0 = sin límite; 30 o 15 ahorran batería
     "graficos/luces": "una",                 # iluminación del visor: una (la de siempre) o tres (tres puntos)
     "graficos/indicador_giro": True,         # cruz en el centro de giro mientras se orbita (como Fusion)
+    **estilo_asas.DEFECTOS,                  # P-149: color, tamaño y opacidad de asas y superposiciones del visor
     "unidades/precision": 3,
     "unidades/precision_angular": 1,
     "unidades/ocultar_ceros": True,
@@ -399,15 +400,16 @@ class CampoColor(QWidget):
     «Quitar» vuelve al del tema. Nunca muestra el código del color."""
     cambiado = Signal()
 
-    def __init__(self, token, valor, titulo="Color"):
+    def __init__(self, token, valor, titulo="Color", fabrica=None):
         super().__init__()
         self.token = token
         self.titulo = titulo
+        self.fabrica = fabrica               # (r, g, b) de 0 a 1 si el vacío es un color propio del programa y no el del tema
         self._valor = temas.normalizar_color(valor) or ""
         self._rechazado = False              # el color elegido no se pudo aplicar: se lee mal sobre el tema
         self.boton = _Muestra()
         self.quitar = QPushButton("Quitar", objectName="quitar_color")
-        self.quitar.setToolTip("Vuelve al color del tema.")
+        self.quitar.setToolTip("Vuelve al color de fábrica." if fabrica else "Vuelve al color del tema.")
         self.boton.clicked.connect(self._elegir)
         self.quitar.clicked.connect(lambda: self.setValue(""))
         fila = QHBoxLayout(self)
@@ -418,11 +420,12 @@ class CampoColor(QWidget):
 
     def _pintar(self):
         propio = bool(self._valor)
-        self.boton.poner(self._valor or temas.color(self.token), "Personalizado" if propio else "Del tema",
-                         self._rechazado)
+        vacio = "De fábrica" if self.fabrica else "Del tema"
+        base = QColor.fromRgbF(*self.fabrica) if self.fabrica else temas.color(self.token)
+        self.boton.poner(self._valor or base, "Personalizado" if propio else vacio, self._rechazado)
         self.boton.setToolTip("Este color no se aplicó: se lee mal sobre el fondo del tema." if self._rechazado
                               else "Clic para elegir otro color.")
-        self.boton.setAccessibleName(f"{self.titulo}: {'personalizado' if propio else 'del tema'}")
+        self.boton.setAccessibleName(f"{self.titulo}: {'personalizado' if propio else vacio.lower()}")
         self.quitar.setEnabled(propio)
 
     def marcar_rechazado(self, rechazado):
@@ -436,7 +439,8 @@ class CampoColor(QWidget):
 
     def _elegir(self):
         from PySide6.QtWidgets import QColorDialog
-        color = QColorDialog.getColor(QColor(self._valor or temas.color(self.token)), self, self.titulo)
+        inicial = QColor.fromRgbF(*self.fabrica) if self.fabrica else QColor(temas.color(self.token))
+        color = QColorDialog.getColor(QColor(self._valor) if self._valor else inicial, self, self.titulo)
         if color.isValid():
             self.setValue(color.name())
 
@@ -452,6 +456,20 @@ class CampoColor(QWidget):
         self._rechazado = False              # el color nuevo todavía no se evaluó
         self._pintar()
         self.cambiado.emit()
+
+
+def _filas_asas():
+    """Preferencias › Asas y superposiciones: por cada grupo de `estilo_asas.GRUPOS`, su encabezado y las filas de color,
+    tamaño y opacidad que le aplican."""
+    filas = []
+    for grupo, (titulo, _hex, tam, op, que) in estilo_asas.GRUPOS.items():
+        filas.append((None, titulo, "encabezado", que))
+        filas.append((estilo_asas.clave(grupo, "color"), "Color", "color_asas", grupo))
+        if tam:
+            filas.append((estilo_asas.clave(grupo, "tamano_pct"), "Tamaño", "porcentaje", estilo_asas.TAMANO))
+        if op:
+            filas.append((estilo_asas.clave(grupo, "opacidad_pct"), "Opacidad", "porcentaje", estilo_asas.OPACIDAD))
+    return filas + [(None, "Asas y superposiciones", "acciones_asas", None)]
 
 
 # (página, padre, título en el árbol, descripción, [(clave, etiqueta, tipo, opciones)])
@@ -564,6 +582,8 @@ PAGINAS = [
         ("vista/efecto_reflejo", "Reflejo en el suelo", "check", None),
         ("vista/efecto_aa", "Anti-aliasing", "check", None),
     ]),
+    ("asas", None, "Asas y superposiciones", "Color, tamaño y opacidad de lo que se dibuja sobre el visor: asas, "
+     "cajas de valor, vista previa, selección y resaltado. Se ve al instante; un color vacío usa el de fábrica", _filas_asas()),
     ("valores", None, "Visualización de unidad y valor", "Preferencias que controlan cómo se muestran las unidades y los valores", [
         ("unidades/precision", "Precisión general", "combo",
          [(n, "0" if n == 0 else "0." + "123456"[:n]) for n in range(6)]),
@@ -622,6 +642,7 @@ AYUDAS_REGISTRO = {
 }
 _OPCION_REGISTRO = {clave: opcion for opcion, clave in registro_uso.CLAVES_PREFS.items()}
 CLAVES_REGISTRO = tuple(["general/registro_uso"] + list(registro_uso.CLAVES_PREFS.values()))
+CLAVES_ASAS = estilo_asas.CLAVES      # Asas y superposiciones: al instante, como Gráficos y Apariencia
 # Apariencia al instante (como Gráficos): cada cambio se escribe y se ve; Cancelar vuelve a lo que había.
 CLAVES_APARIENCIA = ("interfaz/perfil", "interfaz/fuente", "interfaz/tamano_pct", "interfaz/color_texto",
                      "interfaz/color_texto_tenue", "interfaz/color_acento", "boceto/fuente_cotas",
@@ -643,6 +664,7 @@ class DialogoPreferencias(QDialog):
     tema_elegido = Signal(str)         # vista previa: la clave del tema que se acaba de elegir en el combo
     apariencia_cambiada = Signal()     # vista previa: fuente o tamaño de la interfaz ya escritos en prefs
     graficos_cambiados = Signal()      # vista previa: Preferencias › Gráficos ya escritas en prefs (al instante)
+    asas_cambiadas = Signal()          # vista previa: Preferencias › Asas y superposiciones ya escritas en prefs
     conexion_probada = Signal(str)     # Asistente IA › Probar conexión: el resultado, desde el hilo de la prueba
     modelos_listos = Signal(object, object)   # Asistente IA › Modelo: (pedido, resultado), desde el hilo que los lista
 
@@ -695,6 +717,10 @@ class DialogoPreferencias(QDialog):
                     c.currentIndexChanged.connect(lambda *_a, k=k: self._apariencia_cambiada(k))
             elif isinstance(c, QSlider):
                 c.valueChanged.connect(lambda *_a, k=k: self._apariencia_cambiada(k))
+        self._asas_originales = {k: prefs[k] for k in CLAVES_ASAS}
+        for k in CLAVES_ASAS:
+            c = self.controles[k]
+            (c.cambiado if isinstance(c, CampoColor) else c.valueChanged).connect(self._asas_cambiado)
         self._mostrar_aviso_apariencia()          # un color guardado que se lee mal se marca desde que se abre
         self.arbol.currentItemChanged.connect(self._ir)
         self.arbol.setCurrentItem(items.get(inicial, items["general"]))    # p. ej. "valores" desde la barra de unidades
@@ -818,6 +844,25 @@ class DialogoPreferencias(QDialog):
                 c.cambiado.connect(lambda *_a, k=clave: self._apariencia_cambiada(k))
                 form.addRow(texto, c)
                 self.controles[clave] = c
+                continue
+            if tipo == "encabezado":                  # P-149: el nombre de un grupo y qué dibuja
+                form.addRow(QLabel(f"<b>{etiqueta}</b>", objectName="encabezado_pref"))
+                que = QLabel(opciones, wordWrap=True)
+                temas.poner_rol(que, "tenue")
+                form.addRow(que)
+                continue
+            if tipo == "color_asas":
+                c = CampoColor(clave, actual, f"{etiqueta} ({estilo_asas.GRUPOS[opciones][0]})",
+                               fabrica=estilo_asas.fabrica(opciones))
+                c.cambiado.connect(self._cambio)
+                form.addRow(texto, c)
+                self.controles[clave] = c
+                continue
+            if tipo == "acciones_asas":
+                b = QPushButton("Restablecer", objectName="restablecer_asas")
+                b.setToolTip("Vuelve todas las asas y superposiciones al color, tamaño y opacidad de fábrica.")
+                b.clicked.connect(self._restablecer_asas)
+                form.addRow(texto, b)
                 continue
             if tipo == "aviso_apariencia":
                 self.aviso_apariencia = QLabel(objectName="aviso_apariencia", wordWrap=True)
@@ -1308,7 +1353,30 @@ class DialogoPreferencias(QDialog):
             self.prefs[k] = valores[k]
         self.graficos_cambiados.emit()
 
+    def _asas_cambiado(self, *_):
+        """Asas y superposiciones al instante: se escribe lo de la página y el visor lo muestra en el acto."""
+        if self._sincronizando:
+            return
+        valores = self.valores()
+        for k in CLAVES_ASAS:
+            self.prefs[k] = valores[k]
+        self.asas_cambiadas.emit()
+
+    def _restablecer_asas(self):
+        self._sincronizando = True
+        try:
+            for k in CLAVES_ASAS:
+                self._poner(k, DEFECTOS[k])
+        finally:
+            self._sincronizando = False
+        self._asas_cambiado()
+        self.b_aplicar.setEnabled(True)
+
     def reject(self):
+        if {k: self.prefs[k] for k in CLAVES_ASAS} != self._asas_originales:
+            for k, v in self._asas_originales.items():
+                self.prefs[k] = v
+            self.asas_cambiadas.emit()
         actuales = {k: self.prefs[k] for k in CLAVES_GRAFICOS}
         if actuales != self._graficos_originales:
             for k, v in self._graficos_originales.items():

@@ -3,8 +3,18 @@ import os
 import re
 
 from .. import NOMBRE_APP
+from ..ui import estilo_asas
 from .errores import error
 from .registro import herramienta
+
+def _opciones_asas(clave):
+    """Opciones válidas de una clave de `estilo_asas`: el color es libre («#rrggbb» o vacío); el tamaño y la opacidad,
+    enteros dentro de su rango."""
+    if clave.endswith("_color"):
+        return []
+    minimo, maximo = estilo_asas.TAMANO if clave.endswith("_tamano_pct") else estilo_asas.OPACIDAD
+    return list(range(minimo, maximo + 1))
+
 
 # shortcut: catálogo de la UI replicado porque ui/preferencias importa QtWidgets; extraerlo a un módulo
 # compartido cuando se autorice editar la UI. test_preferencias_coinciden_con_la_ventana detecta desvíos.
@@ -61,9 +71,12 @@ _OPCIONES = {
     "vista/efecto_reflejo": (False, [False, True]),
     "vista/efecto_aa": (True, [False, True]),
     "timeline/color_componente": (False, [False, True]),
+    # P-149: color, tamaño y opacidad de asas y superposiciones (la tabla y los valores de fábrica viven en ui/estilo_asas.py)
+    **{k: (v, _opciones_asas(k)) for k, v in estilo_asas.DEFECTOS.items()},
 }
 _FUENTES = {"interfaz/fuente", "boceto/fuente_cotas"}          # texto libre: un nombre de fuente (o "" en cotas)
-_COLORES = {"interfaz/color_texto", "interfaz/color_texto_tenue", "interfaz/color_acento"}
+_COLORES = {"interfaz/color_texto", "interfaz/color_texto_tenue", "interfaz/color_acento"} | {
+    k for k in estilo_asas.DEFECTOS if k.endswith("_color")}
 _HEX = re.compile(r"#[0-9a-fA-F]{6}")
 # Perfiles de apariencia (los mismos de ui/preferencias.py › PERFILES): fijan tipografía y colores juntos.
 _APARIENCIA_BASE = {"interfaz/fuente": "Segoe UI", "interfaz/color_texto": "", "interfaz/color_texto_tenue": "",
@@ -147,6 +160,19 @@ def get_preferences(sesion, keys: list[str] | None = None):
     ajustes = _ajustes()
     return {"preferences": [{"key": k, "value": _valor(ajustes, k), "default": _OPCIONES[k][0],
                              "options": list(_OPCIONES[k][1])} for k in claves]}
+
+
+@herramienta("reset_overlay_style", "documento", "Devuelve al color, tamaño y opacidad de fábrica todas las asas y "
+             "superposiciones del visor (Preferencias › Asas y superposiciones). No modifica el documento ni entra en "
+             "deshacer.", modifica=True, transaccion=False)
+def reset_overlay_style(sesion):
+    ajustes = _ajustes()
+    for clave in estilo_asas.CLAVES:
+        ajustes.remove(clave)
+    ajustes.sync()
+    if ajustes.status() != ajustes.Status.NoError:
+        raise error("FILE_ERROR", "No se pudieron guardar las preferencias.")
+    return {"reset": list(estilo_asas.CLAVES)}
 
 
 @herramienta("set_preference", "documento", "Valida y guarda una preferencia autorizada. No modifica el documento "

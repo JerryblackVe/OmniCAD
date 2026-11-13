@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-421 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+422 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 49 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 50 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 70 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 36 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -59,6 +59,7 @@ Archivo, escena, timeline y deshacer.
 | [`recover_document`](#recover_document) | sí | Recupera una copia de autoguardado y la deja como documento activo, como el botón Abrir de «Documentos recuperados»: huérfanos entran como «Recuperado» sin ruta; con project, guardar a mano pisa el proyecto original. |
 | [`discard_recoverable_document`](#discard_recoverable_document) | no | Suprime una copia de autoguardado de la lista de documentos recuperables (el botón Suprimir de «Documentos recuperados»). |
 | [`get_preferences`](#get_preferences) | no | Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas. |
+| [`reset_overlay_style`](#reset_overlay_style) | sí | Devuelve al color, tamaño y opacidad de fábrica todas las asas y superposiciones del visor (Preferencias › Asas y superposiciones). |
 | [`set_preference`](#set_preference) | sí | Valida y guarda una preferencia autorizada. |
 | [`set_decal`](#set_decal) | sí | Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. |
 | [`decal_view`](#decal_view) | no | Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. |
@@ -315,6 +316,14 @@ Consulta las preferencias autorizadas, sus valores por defecto y opciones válid
 - Parámetros:
   - `keys` (lista de texto o null; opcional, por defecto `null`): claves a consultar; omitido devuelve toda la lista blanca de preferencias. Las de fuente devuelven una lista de opciones vacía: aceptan el nombre de cualquier fuente instalada (en «boceto/fuente_cotas», vacío = la de la interfaz). Las de color aceptan «#rrggbb» o vacío (el color del tema).
 - CLI: `omnicad call get_preferences --doc pieza.omnicad`
+
+### `reset_overlay_style`
+
+Devuelve al color, tamaño y opacidad de fábrica todas las asas y superposiciones del visor (Preferencias › Asas y superposiciones). No modifica el documento ni entra en deshacer.
+
+- Modifica el documento: sí, pero no entra en deshacer.
+- Parámetros: ninguno.
+- CLI: `omnicad call reset_overlay_style --doc pieza.omnicad`
 
 ### `set_preference`
 

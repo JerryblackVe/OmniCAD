@@ -49,7 +49,7 @@ from ..nucleo.geometria import ErrorGeometria
 from ..timeline import aspectos_doc as ad
 from ..timeline.ops_insertar import calcomanias_vigentes
 from ..timeline.operaciones import propiedades_cuerpo
-from . import temas
+from . import estilo_asas, temas
 from .aspectos_ui import PanelAspectos, RadiosAplicarA
 from .formulario import NumeroDecimal     # B-202: acepta «0.25» y «0,25»
 from .cinta import ESPACIOS, accion_secundaria, grupo_secundario
@@ -993,9 +993,13 @@ class LienzoRender(Visor3D):
         GL.glEnable(GL.GL_BLEND)
         GL.glBlendFuncSeparate(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA, GL.GL_ONE, GL.GL_ONE_MINUS_SRC_ALPHA)
         for nombre, prims in self._capas.items():
-            self._dibujar_primitivas(prims, (0.15, 0.50, 1.0) if nombre == "seleccion" else (0.95, 0.66, 0.30))
+            if nombre == "seleccion":
+                self._dibujar_primitivas(prims, estilo_asas.rgb("seleccion"), opacidad=estilo_asas.opacidad("seleccion"))
+            else:
+                self._dibujar_primitivas(prims, (0.95, 0.66, 0.30))
         if self._hover_ent is not None:
-            self._dibujar_primitivas(self._hover_ent["dibujo"], (0.45, 0.70, 1.0))
+            self._dibujar_primitivas(self._hover_ent["dibujo"], estilo_asas.rgb("resaltado"),
+                                     opacidad=estilo_asas.opacidad("resaltado"))
         GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
         self._avisar_camara()
 
