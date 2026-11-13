@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 156 · Parcial 51 · Bloqueado 30 · Sin verificar 4 (2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 155 · Parcial 52 · Bloqueado 30 · Sin verificar 4 (2026-11-13: BOC-84 pasó a Parcial (Estrella hecha; faltan el campo vivo del giro, la previa redondeada y rehacerla ya terminada); 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -101,7 +101,7 @@ Abierto 1 (H-110 de la fase 2 de CREAR y MODIFICAR). Plan por fases: [plan_bocet
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| BOC-84 | Herramienta «Estrella» del boceto (pedido de Gerardo, propia de OmniCAD: Fusion no la tiene): puntas 3–64, redondeo de puntas y de valles, proporción interior, giro, modo {n/m}, restricciones y `draw_star` | Abierto | Media | Sin empezar; especificación en [plan_boceto.md](../plan_boceto.md), sección BOC-84. Conviene hacerla junto con P-154 (editar el número de lados después de dibujar) | omnicad/ui/modo_boceto.py; omnicad/ui/editor_boceto.py | 2026-11-13 |
+| BOC-84 | Herramienta «Estrella» del boceto (pedido de Gerardo, propia de OmniCAD: Fusion no la tiene): puntas 3–64, redondeo de puntas y de valles, proporción interior, giro, modo {n/m}, restricciones y `draw_star` | Parcial | Media | Hecho (E1, 2026-11-13): CREAR › Polígono › Estrella con ícono; dos clics y previa; tarjeta con Puntas, Interior (0 = regular), Salto {n/m}, redondeo de puntas y de valles y Círculos de construcción; campos vivos radio y puntas; puntas y valles sobre círculos de construcción, lados iguales (5 grados de libertad) y arcos iguales con una cota por tipo (`restricciones/boceto.py` › `agregar_estrella`, `redondear_estrella`, `proporcion_estrella`); `draw_star` en la API; rehacer la recién dibujada (P-154). Queda: campo vivo del giro, la previa con los redondeos y rehacerla ya terminada | `clon/tests/test_boc84_estrella.py`; pieza `boceto_herramientas` | 2026-11-13 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 

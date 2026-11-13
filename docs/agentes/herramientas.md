@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-423 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+424 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 50 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 70 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 71 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 36 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -751,6 +751,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`draw_circle`](#draw_circle) | sí | Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por 2 puntos (los extremos de un diámetro) o por 3 puntos (points). |
 | [`draw_arc`](#draw_arc) | sí | Dibuja un arco. |
 | [`create_polygon`](#create_polygon) | sí | Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía de construcción, como la interfaz). |
+| [`draw_star`](#draw_star) | sí | Dibuja una estrella (herramienta propia de OmniCAD: Fusion no la tiene): puntas sobre un círculo exterior y valles sobre uno interior, con lados iguales. |
 | [`draw_spline`](#draw_spline) | sí | Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5; con menos de grado+1 puntos el grado baja a puntos−1, como Fusion). |
 | [`add_constraint`](#add_constraint) | sí | Restringe entidades del boceto (ids de get_sketch: curvas y puntos). |
 | [`replace_constraint`](#replace_constraint) | sí | Cambia una restricción por otra sobre las mismas entidades y con el mismo id, en un solo paso (en la ventana: clic derecho en su símbolo › Cambiar por; si la nueva no quita ningún grado de libertad —el boceto ya la cumple por otras—, falla con SKETCH_OVERCONSTRAINED y queda la anterior, igual que add_constraint). |
@@ -949,6 +950,27 @@ Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía 
   - `edge_points` (lista de lista de número o null; opcional, por defecto `null`): kind=edge: [[x, y], [x, y], [x, y]] = extremos A y B del primer lado y un punto del lado hacia donde crece el polígono.
   - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call create_polygon --doc pieza.omnicad`
+
+### `draw_star`
+
+Dibuja una estrella (herramienta propia de OmniCAD: Fusion no la tiene): puntas sobre un círculo exterior y valles sobre uno interior, con lados iguales. El radio interior se da escrito (inner_radius), como proporción del exterior (inner_ratio) o como estrella regular {points/skip} (por defecto skip 2: la de 5 puntas es la del pentagrama). tip_fillet y valley_fillet redondean puntas y valles (arcos iguales con una cota de radio cada tipo). Con los círculos de construcción le quedan 5 grados de libertad: centro, los dos radios y el giro.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `points` (entero; opcional, por defecto `5`): cantidad de puntas (3 a 64).
+  - `outer_radius` (número o expresión; opcional, por defecto `10.0`): radio del círculo de las puntas en mm; número o expresión con parámetros.
+  - `inner_radius` (número o expresión; opcional, por defecto `null`): radio del círculo de los valles en mm (menor que outer_radius); vacío = según inner_ratio o skip.
+  - `inner_ratio` (número; opcional, por defecto `null`): radio interior como fracción del exterior (0 a 1, sin incluir); vacío = según skip.
+  - `skip` (entero; opcional, por defecto `null`): estrella regular {points/skip}: los lados siguen las líneas del polígono estrellado (5/2, 7/2, 7/3); de 2 a la mitad de points. Con 3 o 4 puntas no hay estrella regular y se usa la mitad del radio.
+  - `rotation` (número; opcional, por defecto `90.0`): ángulo en grados de la primera punta respecto del eje x del boceto (90 = una punta hacia arriba).
+  - `tip_fillet` (número o expresión; opcional, por defecto `0.0`): radio de redondeo de las puntas en mm (0 = filosas).
+  - `valley_fillet` (número o expresión; opcional, por defecto `0.0`): radio de redondeo de los valles en mm (0 = filosos).
+  - `center_x` (número; opcional, por defecto `0.0`): x del centro (mm).
+  - `center_y` (número; opcional, por defecto `0.0`): y del centro (mm).
+  - `construction_circles` (true/false; opcional, por defecto `true`): true para los dos círculos de construcción que definen la estrella; false la deja solo con los lados iguales.
+  - `construction` (true/false; opcional, por defecto `false`): true para una estrella de construcción (no forma perfiles).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call draw_star --doc pieza.omnicad`
 
 ### `draw_spline`
 

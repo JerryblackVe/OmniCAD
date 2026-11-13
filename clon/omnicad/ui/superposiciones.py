@@ -867,7 +867,7 @@ class AreaVisor(QWidget):
         quedaba bajo la barra de vista. Un solo reacomodo por tanda de cambios."""
         if e.type() == QEvent.Resize and obj in self.laterales and obj.isVisible() and not self._reacomodo:
             self._reacomodo = True
-            QTimer.singleShot(0, self._reacomodar)
+            QTimer.singleShot(0, self, self._reacomodar)      # con contexto: no corre si la vista ya se borró
         return False
 
     def _reacomodar(self):

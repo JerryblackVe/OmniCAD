@@ -62,7 +62,7 @@ HERRAMIENTAS = {
     "sk_linea": "draw_line", "sk_rectangulo": "draw_rectangle", "sk_circulo": "draw_circle",
     "sk_circulo_2t": "draw_tangent_circle", "sk_circulo_3t": "draw_tangent_circle", "sk_arco": "draw_arc",
     "sk_arco_centro": "draw_arc", "sk_poligono_circunscrito": "create_polygon",
-    "sk_poligono_inscrito": "create_polygon", "sk_elipse": "draw_ellipse", "sk_ranura_centro": "draw_slot",
+    "sk_poligono_inscrito": "create_polygon", "sk_estrella": "draw_star", "sk_elipse": "draw_ellipse", "sk_ranura_centro": "draw_slot",
     "sk_ranura_total": "draw_slot", "sk_ranura_punto": "draw_slot", "sk_ranura_arco_3p": "draw_slot",
     "sk_ranura_arco_centro": "draw_slot", "sk_spline_ajuste": "draw_spline", "sk_spline_control": "draw_spline",
     "sk_conica": "draw_conic", "sk_punto": "draw_point", "sk_texto": "add_text",

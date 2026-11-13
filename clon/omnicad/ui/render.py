@@ -1990,7 +1990,7 @@ class VentanaRender(QMainWindow):
             return
         if not self._programado:
             self._programado = True
-            QTimer.singleShot(0, self.actualizar)
+            QTimer.singleShot(0, self, self.actualizar)
 
     def showEvent(self, e):
         super().showEvent(e)

@@ -29,11 +29,11 @@ from ..nucleo import perfiles as perfiles_mod
 from ..restricciones import (TIPOS_AUTO, Boceto, ErrorBoceto, auto_restringir, resolver,
                              sugerir_auto_restricciones)
 from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Circulo, Elipse, Texto,
-                                    agregar_arco_tangente, agregar_circulo_puntos, agregar_linea_medio, agregar_poligono,
+                                    agregar_arco_tangente, agregar_circulo_puntos, agregar_estrella, agregar_linea_medio, agregar_poligono,
                                     agregar_rectangulo_3p, agregar_rectangulo_centro,
                                     aviso_radio_empalme, aviso_tangencias_fuera, expresion_sin_signo, _medidas_marco, centro_arco_tangente,
                                     centro_poligono_arista, evaluar_primitiva, mas_cercano, peine_curvatura,
-                                    validar_lados_poligono, validar_valor_cota)
+                                    proporcion_estrella, redondear_estrella, validar_lados_poligono, validar_valor_cota)
 from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
                                      restriccion_quita_grados)
 from ..timeline import entidades as ent
@@ -1380,6 +1380,60 @@ def create_polygon(sesion, sides: int = 6, radius: Expr | None = None, center_x:
     return _dibujar(sesion, sketch, lambda b: _poligono(b, sides, valor, center_x, center_y, rotation,
                                                          kind == "circumscribed", construction, fully_constrained,
                                                          expresion), construccion=construction, central=centerline, anclar=True)
+
+
+def _estrella(b, puntas, radio, cx, cy, giro, interior, proporcion, salto, r_punta, r_valle, circulos, construccion):
+    """Estrella (BOC-84) como la interfaz: el radio interior escrito, o la proporción, o el de la estrella regular
+    {puntas/salto}."""
+    if radio <= 1e-9:
+        raise ErrorBoceto("El radio exterior de la estrella tiene que ser positivo.")
+    if sum(x is not None for x in (interior, proporcion, salto)) > 1:
+        raise ErrorBoceto("Pasá solo uno de inner_radius, inner_ratio o skip.")
+    if r_punta < 0 or r_valle < 0:
+        raise ErrorBoceto("Los redondeos de la estrella no pueden ser negativos (0 = filosa).")
+    if interior is None:
+        interior = radio * (proporcion if proporcion is not None else proporcion_estrella(puntas, salto or 2))
+    ls, _ce, _ci = agregar_estrella(b, (cx, cy), radio, puntas, math.radians(giro), interior, construccion,
+                                    circulos=circulos)
+    redondear_estrella(b, ls, r_punta, r_valle)
+
+
+@herramienta("draw_star", "boceto", "Dibuja una estrella (herramienta propia de OmniCAD: Fusion no la tiene): puntas "
+             "sobre un círculo exterior y valles sobre uno interior, con lados iguales. El radio interior se da escrito "
+             "(inner_radius), como proporción del exterior (inner_ratio) o como estrella regular {points/skip} (por "
+             "defecto skip 2: la de 5 puntas es la del pentagrama). tip_fillet y valley_fillet redondean puntas y "
+             "valles (arcos iguales con una cota de radio cada tipo). Con los círculos de construcción le quedan 5 "
+             "grados de libertad: centro, los dos radios y el giro.", modifica=True)
+def draw_star(sesion, points: int = 5, outer_radius: Expr = 10.0, inner_radius: Expr | None = None,
+              inner_ratio: float | None = None, skip: int | None = None, rotation: float = 90.0,
+              tip_fillet: Expr = 0.0, valley_fillet: Expr = 0.0, center_x: float = 0.0, center_y: float = 0.0,
+              construction_circles: bool = True, construction: bool = False, sketch: str | None = None):
+    """
+    points: cantidad de puntas (3 a 64).
+    outer_radius: radio del círculo de las puntas en mm; número o expresión con parámetros.
+    inner_radius: radio del círculo de los valles en mm (menor que outer_radius); vacío = según inner_ratio o skip.
+    inner_ratio: radio interior como fracción del exterior (0 a 1, sin incluir); vacío = según skip.
+    skip: estrella regular {points/skip}: los lados siguen las líneas del polígono estrellado (5/2, 7/2, 7/3); de 2 a la mitad de points. Con 3 o 4 puntas no hay estrella regular y se usa la mitad del radio.
+    rotation: ángulo en grados de la primera punta respecto del eje x del boceto (90 = una punta hacia arriba).
+    tip_fillet: radio de redondeo de las puntas en mm (0 = filosas).
+    valley_fillet: radio de redondeo de los valles en mm (0 = filosos).
+    center_x: x del centro (mm).
+    center_y: y del centro (mm).
+    construction_circles: true para los dos círculos de construcción que definen la estrella; false la deja solo con los lados iguales.
+    construction: true para una estrella de construcción (no forma perfiles).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    _exigir_finitos(locals())
+    valores = sesion.doc.parametros.valores()
+    medida = lambda x: None if x is None else evaluar(texto_expr(x), LONGITUD, valores)  # noqa: E731
+    if skip is not None:
+        proporcion_estrella(points, skip)                     # valida puntas y salto antes de tocar el boceto
+    if inner_ratio is not None and not 0 < inner_ratio < 1:
+        raise error("INVALID_ARGUMENTS", "inner_ratio va entre 0 y 1 (sin incluirlos).")
+    return _dibujar(sesion, sketch, lambda b: _estrella(b, points, medida(outer_radius), center_x, center_y, rotation,
+                                                         medida(inner_radius), inner_ratio, skip, medida(tip_fillet),
+                                                         medida(valley_fillet), construction_circles, construction),
+                    construccion=construction, anclar=True)
 
 
 @herramienta("draw_spline", "boceto", "Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control "

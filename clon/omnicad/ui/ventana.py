@@ -314,7 +314,7 @@ class VentanaPrincipal(QMainWindow):
         self.asistente = None               # panel del Asistente IA (ui/asistente.py), se crea al abrirlo
         self._vista_inicial()
         self.aplicar_preferencias()
-        QTimer.singleShot(1000, lambda: threading.Thread(target=_precargar_scipy, daemon=True).start())
+        QTimer.singleShot(1000, self, lambda: threading.Thread(target=_precargar_scipy, daemon=True).start())
         from .comentarios import PanelComentarios
         self.comentarios = PanelComentarios()
         self.area.anclar_abajo_izq(self.comentarios)
