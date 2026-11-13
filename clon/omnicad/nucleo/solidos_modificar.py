@@ -1204,7 +1204,19 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
         exterior = _desfase_cuerpo(forma, te, union) if te else forma
         interior = _desfase_cuerpo(forma, -ti, union) if ti else forma
         resultado = geo.booleano(exterior, interior, "cortar")
-    return _validar(resultado, "Vaciado")
+    resultado = _validar(resultado, "Vaciado")
+    _exigir_pared_sin_cruces(forma, resultado)
+    return resultado
+
+
+def _exigir_pared_sin_cruces(forma, resultado):
+    """B-376: un espesor que no cabe (más que la pared de un cuerpo ya hueco) hacía que el kernel devolviera «ok» con la
+    pared cruzada sobre sí misma, un sólido que BRepCheck da por válido. Error claro en vez de un cuerpo roto."""
+    from . import revision          # local: revision carga medio núcleo
+    n = revision._autointersecciones_seguras(resultado, 1, 5.0)[0]
+    if n and n > (revision._autointersecciones_seguras(forma, 1, 5.0)[0] or 0):
+        raise geo.ErrorGeometria(f"Vaciado: el espesor no cabe en la pieza: la pared se cruza consigo misma "
+                                 f"({n} autointersecciones). Probá un espesor menor o quitá más caras.")
 
 
 # ---------------------------------------------------------------- desmoldeo
