@@ -288,7 +288,10 @@ class Interaccion3D(QObject):
 
     def presionar(self, pos, doble=False):
         if doble:
-            return self._terminar_spline() or True
+            cid = self.curva_en(pos) if self.herramienta == "seleccionar" else None
+            if cid is None or not self.editar_isoparametrica(cid):
+                self._terminar_spline()
+            return True
         asa, inicio = self.asa_en(pos), None
         tri = self.triada
         if asa is not None and asa[0] != "plano":
@@ -449,6 +452,39 @@ class Interaccion3D(QObject):
         self.modo._cambio()
         return True
 
+    def editar_isoparametrica(self, cid):
+        """BOC-76: doble clic en una curva isoparamétrica con vínculo abre su dirección y su reparto; al aceptar se rehacen
+        todas las curvas de esa llamada sobre la misma cara y el mismo punto (Ctrl+Z las vuelve). False si `cid` no es
+        una."""
+        b = self.modo.boceto
+        origen = b3.datos(b)["curvas"][cid].get("origen", {})
+        if origen.get("tool") != "isoparametric_curve":
+            return False
+        nuevo = _dialogo_iso(self.modo.lienzo, origen)
+        if nuevo is None:
+            return True
+        from ..nucleo import geometria as geo
+        from ..timeline import entidades as ent
+        from ..timeline.operaciones import aristas_de_origen
+        origen = {**b3.sin_indice(origen), **nuevo}
+        try:
+            curvas = aristas_de_origen(origen, self.modo.lienzo.estado_referencias())
+        except geo.ErrorGeometria as e:
+            curvas, motivo = [], str(e)
+        except (ent.ErrorReferencia, ent.ReferenciaMalFormada):
+            curvas, motivo = [], "la cara de las curvas ya no está en el modelo"
+        else:
+            motivo = "no queda ninguna curva sobre la cara"
+        if not curvas:
+            self.modo.v.mensaje(f"Curva isoparamétrica: {motivo}; queda como estaba.", 7000)
+            return True
+        ids = b3.grupo_de(b, cid)
+        if self._aplicar(lambda b: b3.reemplazar_grupo(b, ids, curvas, self.modo.plano, origen)):
+            self.seleccion = []
+            self.modo.v.mensaje(f"Curva isoparamétrica: {len(curvas)} curva(s).", 4000)
+        self.dibujar()
+        return True
+
     def _crear(self):
         h, p = self.herramienta, self.picks
         if h == "spline" or len(p) < PUNTOS_HERRAMIENTA.get(h, 99):
@@ -532,3 +568,51 @@ class Interaccion3D(QObject):
             prims.append(("puntos", np.array(marcados, np.float32), (1.0, 0.85, 0.1), 10))
         visor.set_capa("triada3d", prims)
 
+
+def _dialogo_iso(padre, origen):
+    """Diálogo «Editar curva isoparamétrica» (las opciones de la paleta, cargadas con las de `origen`): {"direction",
+    "type", "distance", "quantity"} para el «origen» al aceptar, None al cancelar."""
+    from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QSpinBox
+
+    from .formulario import NumeroDecimal
+    from .modo_boceto import ENTEROS_HERRAMIENTA, NUMEROS_HERRAMIENTA, OPCIONES_HERRAMIENTA
+    d = QDialog(padre, objectName="editar_isoparametrica", windowTitle="Editar curva isoparamétrica")
+    form = QFormLayout(d)
+    combos = []
+    for clave, etiqueta, opciones in OPCIONES_HERRAMIENTA["isoparametrica"]:
+        combo = QComboBox(objectName=clave)
+        for valor, texto in opciones:
+            combo.addItem(texto, valor)
+        form.addRow(etiqueta, combo)
+        combos.append(combo)
+    direccion, tipo = combos
+    ((clave, etiqueta, minimo, maximo, paso, sufijo),) = NUMEROS_HERRAMIENTA["isoparametrica"]
+    distancia = NumeroDecimal(objectName=clave, decimals=3, minimum=minimo, maximum=maximo, singleStep=paso, suffix=sufijo)
+    form.addRow(etiqueta, distancia)
+    ((clave, etiqueta, minimo, maximo),) = ENTEROS_HERRAMIENTA["isoparametrica"]
+    cantidad = QSpinBox(objectName=clave, minimum=minimo, maximum=maximo)
+    form.addRow(etiqueta, cantidad)
+    botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    botones.button(QDialogButtonBox.Ok).setText("Aceptar")
+    botones.button(QDialogButtonBox.Cancel).setText("Cancelar")
+    botones.accepted.connect(d.accept)
+    botones.rejected.connect(d.reject)
+    form.addRow(botones)
+    opciones = getattr(padre, "opciones", {})
+    direccion.setCurrentIndex(direccion.findData(origen["direction"]))
+    tipo.setCurrentIndex(tipo.findData("unica" if origen["type"] == "single" else
+                                       "distancia" if origen.get("distance") is not None else "cantidad"))
+    distancia.setValue(float(origen.get("distance") or opciones.get("iso_distancia", 10.0)))
+    cantidad.setValue(int(origen.get("quantity") or opciones.get("iso_cantidad", 5)))
+
+    def mostrar():
+        form.setRowVisible(distancia, tipo.currentData() == "distancia")
+        form.setRowVisible(cantidad, tipo.currentData() == "cantidad")
+    tipo.currentIndexChanged.connect(mostrar)
+    mostrar()
+    aceptado, t = d.exec() == QDialog.Accepted, tipo.currentData()
+    valores = {"direction": direccion.currentData(), "type": "single" if t == "unica" else "distributed",
+               "distance": float(distancia.value()) if t == "distancia" else None,
+               "quantity": int(cantidad.value()) if t == "cantidad" else None}
+    d.deleteLater()                                   # uno nuevo por doble clic: no se acumulan en el lienzo
+    return valores if aceptado else None

@@ -907,6 +907,31 @@ def agregar_desde_mundo(b, desc, plano, construccion=False, origen=None):
     return cid
 
 
+def sin_indice(origen):
+    return {k: v for k, v in origen.items() if k != "index"}
+
+
+def grupo_de(b, cid):
+    """Las curvas 3D que dejó la misma llamada que `cid` (mismo «origen» salvo el índice), en orden de índice; [] si
+    `cid` no tiene origen (curva dibujada o sin vínculo)."""
+    g = datos(b)
+    origen = g["curvas"].get(cid, {}).get("origen")
+    if origen is None:
+        return []
+    clave = sin_indice(origen)
+    ids = [k for k, c in g["curvas"].items() if "origen" in c and sin_indice(c["origen"]) == clave]
+    return sorted(ids, key=lambda k: g["curvas"][k]["origen"].get("index", 0))
+
+
+def reemplazar_grupo(b, ids, curvas, plano, origen):
+    """Edita una curva derivada ya creada (BOC-76, Isoparametric Curve): borra las curvas `ids` (un `grupo_de`), con sus
+    restricciones y cotas, y agrega `curvas` (`curvas3d.describir`, mundo) con el `origen` nuevo, como construcción
+    si lo eran. Devuelve los ids nuevos."""
+    construccion = datos(b)["curvas"][ids[0]]["construccion"]
+    borrar(b, ids)
+    return [agregar_desde_mundo(b, d, plano, construccion, {**origen, "index": i}) for i, d in enumerate(curvas)]
+
+
 # ---------------------------------------------------------------- serialización (claves enteras ↔ listas JSON)
 def a_dict(g):
     return {"puntos": [[k, *v] for k, v in g.get("puntos", {}).items()],
