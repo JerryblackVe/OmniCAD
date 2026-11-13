@@ -348,7 +348,7 @@ def create_ruled_surface(sesion, edges: Seleccion, distance: Expr = "10 mm",
     direction: eje, plano, cara plana o arista lineal; obligatorio con surface_type=direction.
     angle: giro de la dirección en grados o expresión.
     body: cuerpo sobre el que evaluar selectores.
-    mitered_corners: true corta en ángulo vivo las esquinas entre aristas rectas, arcos o curvas (Mitered Corners); donde dos curvas siguen tangentes no hay esquina; una esquina que no se puede cortar (curvas 3D que no se cruzan, tres aristas en un punto) queda como estaba y el resultado trae un aviso.
+    mitered_corners: true corta en ángulo vivo las esquinas entre aristas rectas, arcos o curvas (Mitered Corners); donde dos curvas siguen tangentes no hay esquina; una esquina que no se puede cortar (curvas 3D que no se cruzan, tres aristas en un punto) queda como estaba y el resultado trae un aviso; si las caras se cruzan entre sí, la superficie se rechaza.
     alternate_faces: true usa la otra cara cuando una arista comparte dos (Alternate Faces).
     chain: true toma la cadena tangente entera de cada arista o curva de boceto de edges (Tangent Chain de Fusion, encendido por defecto); false usa solo las elegidas.
     """
