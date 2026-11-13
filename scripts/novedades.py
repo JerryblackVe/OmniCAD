@@ -161,6 +161,7 @@ def anotar_en_brechas(ruta_brechas, clave, titulares, mes):
         contenido = contenido.rstrip("\n") + "\n" + seccion
     for titulo in nuevos:
         contenido += f"- [AUTO {mes}] {titulo} — pendiente de clasificar (fuente: {FUENTES[clave][1]})\n"
+    ruta.parent.mkdir(parents=True, exist_ok=True)       # --brechas <carpeta> sin «referencia/»
     ruta.write_text(contenido, encoding="utf-8", newline="\n")
     return len(nuevos)
 
