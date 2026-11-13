@@ -1,11 +1,11 @@
 # Brechas frente a Rhino 8
 
-> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](../seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Fecha: 2026-10-09.
 Fuentes (leídas ese día): [lista oficial de comandos de Rhino](https://wiki.mcneel.com/rhino/commandlist) (McNeel Wiki,
 revisión del 2025-03-31: ~1000 nombres), [novedades de Rhino 8](https://www.rhino3d.com/8/new/),
-[soporte de Rhino](https://www.rhino3d.com/support/). Grasshopper va en su propio archivo: `docs/brechas_grasshopper.md`.
+[soporte de Rhino](https://www.rhino3d.com/support/). Grasshopper va en su propio archivo: `docs/referencia/brechas_grasshopper.md`.
 
 **Regla:** Rhino es propietario. Se replican las FUNCIONES y opciones, nunca código, textos ni recursos.
 Excepción a verificar: leer y escribir `.3dm` con `rhino3dm`/openNURBS de McNeel (licencia MIT).

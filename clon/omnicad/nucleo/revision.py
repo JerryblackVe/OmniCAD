@@ -5,8 +5,8 @@ Revisar geometría e impresión 3D (INSPECCIONAR › Revisar geometría) y Repar
 Replica las FUNCIONES de (escritas desde cero sobre OpenCascade y numpy, sin copiar código):
   - FreeCAD Part › Check Geometry, Set Tolerance y Refine Shape (F2 de `docs/brechas_freecad.md`);
   - la caja de herramientas de impresión 3D de Blender (3D Print Toolbox: sólido cerrado, intersecciones,
-    espesor, voladizos, aristas filosas y «Hacer manifold»; B2 de `docs/brechas_blender.md`);
-  - ShowEdges y ThicknessAnalysis de Rhino (aristas abiertas y no manifold, espesor; RH13 de `docs/brechas_rhino.md`).
+    espesor, voladizos, aristas filosas y «Hacer manifold»; B2 de `docs/referencia/brechas_blender.md`);
+  - ShowEdges y ThicknessAnalysis de Rhino (aristas abiertas y no manifold, espesor; RH13 de `docs/referencia/brechas_rhino.md`).
 Fusion 360 no tiene un comando equivalente para sólidos (lo más cercano es MALLA › Reparar, que acá se reusa).
 
 Funciones puras, sin Qt ni timeline. Reciben una forma OCC o una `nucleo.malla.Malla`:

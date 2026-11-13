@@ -1,4 +1,4 @@
-"""Las listas de docs/seguimiento/ (bugs, faltantes, mejoras) tienen solo lo que falta resolver y no se contradicen.
+"""Las listas de docs/seguimiento/ (bugs, faltantes, mejoras y despues, la prioridad 2 congelada) tienen solo lo que falta resolver y no se contradicen.
 
 Reglas en docs/seguimiento/README.md: lo resuelto se borra (no hay estados de cerrado), IDs únicos, estados y
 dificultades de la lista cerrada, y si la evidencia nombra un test, el test existe. Las tablas del README solo
@@ -12,7 +12,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 CARPETA = REPO / "docs" / "seguimiento"
-LISTAS = ("bugs.md", "faltantes.md", "mejoras.md")
+LISTAS = ("bugs.md", "faltantes.md", "mejoras.md", "despues.md")
 SEPARADOR = re.compile(r"(?<!\\)\|")      # una barra vertical escapada (\|) no separa celdas
 ESTADOS = {"Abierto", "Parcial", "Bloqueado", "Sin verificar"}
 DIFICULTADES = {"Baja", "Media", "Alta", "Muy alta"}

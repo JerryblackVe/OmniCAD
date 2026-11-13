@@ -1,6 +1,6 @@
 # Brechas frente a KeyShot
 
-> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](../seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Fecha: 2026-10-09.
 Fuentes (leídas ese día): [keyshot.com](https://www.keyshot.com/), manual de KeyShot
@@ -16,7 +16,7 @@ KeyShot es lo que se mira cuando se quiere «imagen de producto en minutos»: ar
 el resultado ya trazado en el lienzo, tocar pocos controles. Esa idea de uso es la misma que la del espacio
 RENDERIZAR de Fusion, así que acá la experiencia de Fusion y la de KeyShot casi coinciden.
 Esta lista alimenta el **pendiente 4** (motor de render, materiales, colores e iluminación). V-Ray va en
-`docs/brechas_vray.md`; lo que se repite entre los dos queda en un solo lugar.
+`docs/referencia/brechas_vray.md`; lo que se repite entre los dos queda en un solo lugar.
 
 ## Qué tiene hoy OmniCAD (verificado en `ui/render.py`)
 

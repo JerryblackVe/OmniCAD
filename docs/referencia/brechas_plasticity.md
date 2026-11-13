@@ -1,6 +1,6 @@
 # Brechas frente a Plasticity
 
-> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](../seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Fecha: 2026-10-09.
 Fuentes (leídas ese día): [manual de Plasticity](https://doc.plasticity.xyz/) — comandos de sólidos y hojas, de bocetos y
@@ -10,7 +10,7 @@ primitivas, comunes, esenciales de la interfaz y notas de la versión 2026.1.
 
 Plasticity es un modelador de NURBS «directo» (sin historial), con pocos comandos que cambian según lo elegido y
 mucha atención al detalle de uso. Por eso esta lista tiene MÁS ideas de uso que funciones nuevas: lo geométrico
-que comparte con Rhino está en `docs/brechas_rhino.md` y acá solo se apunta.
+que comparte con Rhino está en `docs/referencia/brechas_rhino.md` y acá solo se apunta.
 
 ## Ideas de uso que vale copiar
 

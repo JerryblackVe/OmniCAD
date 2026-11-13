@@ -2,11 +2,11 @@
 
 Lo que ya existe y se puede hacer mejor: rendimiento, interfaz, calidad del código, instalador, documentación. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 149: Abierto 74 · Parcial 61 · Bloqueado 4 · Sin verificar 10 (2026-11-12: fusión de P-144b; 2026-11-13: cerró P-151, aprobado por Gerardo; 2026-11-13: plan de fluidez, FL-0 a FL-11; 2026-11-12: fusión de P-152; 2026-11-12: fusión de P-150; 2026-11-13: cerró P-149, aprobado por Gerardo; 2026-11-12: fusión de P-138; 2026-11-12: fusión de P-149b; 2026-11-13: sumó P-152 de Gerardo (temas con vista previa); 2026-11-12: fusión de P-78; 2026-11-12: fusión de P-139p; 2026-11-12: fusión de FU-2; 2026-11-13: RS-X3 pasó a Parcial (hover del boceto en lote: 2000 curvas de 153 a 3,9 ms, sin el tope de 400; falta el repintado); la sección Rust decía Abierto 15 y eran 14 (recontado por fila); 2026-11-12: fusión de RS-S1; 2026-11-12: fusión de P-139m; 2026-11-12: fusión de FU-3; 2026-11-12: fusión de P-147c; 2026-11-12: fusión de P-143b; 2026-11-12: fusión de BOC-38; 2026-11-13: se cerró FU-5 (el relleno azul del perfil ya existe, igual que Fusion); 2026-11-13: se cerró P-146 (detalle de rosca en una línea); 2026-11-12: fusión de P-141; 2026-11-12: fusión de P-149; 2026-11-12: fusión de P-144; 2026-11-12: se cerró P-145 (Gerardo aprobó la previa de la Rosca); fusión de P-135; 2026-11-12: fusión de P-145; 2026-11-12: fusión de P-147; 2026-11-12: fusión de P-143; 2026-11-12: fusión de P-148; 2026-11-12: sumó P-149 de Gerardo (colores, tamaño y opacidad de asas y superposiciones en Preferencias); se cerró TXT-9 (el clic en un trazo con relleno debajo avisa); sumaron P-147 y P-148 de la PC (asas de Dirección de la Solevación, escala de los peines); se cerró P-140 (ángulo de conicidad a la vista); se cerró BOC-61 (patrón de boceto: 1000 copias en 16 ms); se cerró P-142 (asas de los desfases y el giro de Repujado); se cerró BOC-82 (tangentes del boceto 3D en 11,5 ms); recontado por fila (P-95 y P-136 se habían borrado sin bajar el total; revisión previa a la versión); sumaron P-141 y P-142 de la auditoría de asas y paneles; 2026-11-11: sumó P-136 (distancias en 0 mm) y P-137 (flechas que se ven); 2026-11-10: P-78 al día con la medición contra Fusion de los videos de roscas; entraron P-133 a P-135 de los videos de roscas; entró P-132 de B-282 (cara plana inclinada sin rasgo); 2026-11-09: entraron P-98 del review de B-257 y P-130 de las fusiones; se cerró P-130; se cerró P-93; se cerró P-94; 2026-11-08: entraron P-94 y P-99; entró P-95 de la fase 6 de CREAR y MODIFICAR; P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (sección Boceto: 2026-10-23; Hallazgos de pruebas de uso, Superficie y Sólido: 2026-10-24; teselado y previas: 2026-10-28; Texto y vectores: 2026-11-04). Total 96: Abierto 45 · Parcial 42 · Bloqueado 1 · Sin verificar 8 (2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de P-144b; 2026-11-13: cerró P-151, aprobado por Gerardo; 2026-11-13: plan de fluidez, FL-0 a FL-11; 2026-11-12: fusión de P-152; 2026-11-12: fusión de P-150; 2026-11-13: cerró P-149, aprobado por Gerardo; 2026-11-12: fusión de P-138; 2026-11-12: fusión de P-149b; 2026-11-13: sumó P-152 de Gerardo (temas con vista previa); 2026-11-12: fusión de P-78; 2026-11-12: fusión de P-139p; 2026-11-12: fusión de FU-2; 2026-11-13: RS-X3 pasó a Parcial (hover del boceto en lote: 2000 curvas de 153 a 3,9 ms, sin el tope de 400; falta el repintado); la sección Rust decía Abierto 15 y eran 14 (recontado por fila); 2026-11-12: fusión de RS-S1; 2026-11-12: fusión de P-139m; 2026-11-12: fusión de FU-3; 2026-11-12: fusión de P-147c; 2026-11-12: fusión de P-143b; 2026-11-12: fusión de BOC-38; 2026-11-13: se cerró FU-5 (el relleno azul del perfil ya existe, igual que Fusion); 2026-11-13: se cerró P-146 (detalle de rosca en una línea); 2026-11-12: fusión de P-141; 2026-11-12: fusión de P-149; 2026-11-12: fusión de P-144; 2026-11-12: se cerró P-145 (Gerardo aprobó la previa de la Rosca); fusión de P-135; 2026-11-12: fusión de P-145; 2026-11-12: fusión de P-147; 2026-11-12: fusión de P-143; 2026-11-12: fusión de P-148; 2026-11-12: sumó P-149 de Gerardo (colores, tamaño y opacidad de asas y superposiciones en Preferencias); se cerró TXT-9 (el clic en un trazo con relleno debajo avisa); sumaron P-147 y P-148 de la PC (asas de Dirección de la Solevación, escala de los peines); se cerró P-140 (ángulo de conicidad a la vista); se cerró BOC-61 (patrón de boceto: 1000 copias en 16 ms); se cerró P-142 (asas de los desfases y el giro de Repujado); se cerró BOC-82 (tangentes del boceto 3D en 11,5 ms); recontado por fila (P-95 y P-136 se habían borrado sin bajar el total; revisión previa a la versión); sumaron P-141 y P-142 de la auditoría de asas y paneles; 2026-11-11: sumó P-136 (distancias en 0 mm) y P-137 (flechas que se ven); 2026-11-10: P-78 al día con la medición contra Fusion de los videos de roscas; entraron P-133 a P-135 de los videos de roscas; entró P-132 de B-282 (cara plana inclinada sin rasgo); 2026-11-09: entraron P-98 del review de B-257 y P-130 de las fusiones; se cerró P-130; se cerró P-93; se cerró P-94; 2026-11-08: entraron P-94 y P-99; entró P-95 de la fase 6 de CREAR y MODIFICAR; P-92 entró y se cerró, igual que Fusion; 2026-11-07: se cerraron P-67 y P-72; entró P-73 de la fase 2 de CREAR y MODIFICAR).
 
 ## Pendientes generales
 
-Abierto 18 · Parcial 12 · Bloqueado 3 · Sin verificar 2.
+Abierto 11 · Parcial 8 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -17,44 +17,29 @@ Abierto 18 · Parcial 12 · Bloqueado 3 · Sin verificar 2.
 | P-35 | `volumen_exacto` de un cuerpo con 500 caras B-spline cuesta 0,5 s por llamada | Abierto | Baja | `aplicar_resultado` lo llama tres veces en una unión (resultado, cuerpo y herramienta): 1,4 s de los 3 s de Unir en `bspline500`. Guardar el volumen por forma en el cuerpo (se invalida al cambiar `forma`) o no medirlo cuando no hay aviso posible. | omnicad/timeline/operaciones.py (`aplicar_resultado`), omnicad/nucleo/geometria.py (`_integral`); scripts/bench_booleana.py bspline500 | 2026-10-26 |
 | P-36 | B-39 no revisa con BRepCheck las caras cambiadas con más de 200 contornos | Parcial | Baja | `_es_valida_tras_booleana` las salta porque BRepCheck clasifica los contornos de a pares (3000 agujeros: 11 s); el volumen y las aristas libres siguen vigentes. Revisar solo los contornos nuevos de esa cara (hoy la booleana rearma todos los contornos y no se distinguen por forma). | omnicad/nucleo/geometria.py (`_es_valida_tras_booleana`, `_MAX_CONTORNOS_REVISADOS`) | 2026-10-26 |
 | P-33 | CI en GitHub para main: ruff y pytest rápido en cada push (sin la prueba de humo, que pide ventana) | Abierto | Media | Todo. AGENTS.md (Seguridad) ya exige «subir solo con la CI verde» pero no hay workflow: solo `instaladores.yml`, por tag. Puede pedir ajustar tests que necesitan OpenGL en la máquina de GitHub. Pendiente por decisión de Gerardo (2026-10-25). | .github/workflows/ (solo instaladores.yml); AGENTS.md:50 | 2026-10-25 |
-| P-12b | Registrar la tarea programada de Windows para el informe mensual | Abierto | Baja | La tarea no se registra sola; el comando está en el docstring del script. | scripts/novedades.py | 2026-10-20 |
-| P-26a | CI en macOS (ruff + pytest + humo) para ver qué falla | Abierto | Baja | El workflow solo tiene jobs de Windows y Ubuntu. | .github/workflows/instaladores.yml | 2026-10-20 |
-| P-8d | Paquetes .deb o Flatpak para Linux (dicho como «quizás») | Abierto | Media | Sin empezar; hoy solo AppImage. | instalador/linux/ solo tiene armar_appimage.sh | 2026-10-20 |
 | P-10b-d | Fase 1: andamiaje Rust + R1 (Zstandard) de punta a punta con el instalador | Abierto | Media | Mover el descompresor zstd_puro a Rust y probar empaquetado .pyd en PyInstaller e instalador. | omnicad/io_archivos/zstd_puro.py sigue en Python puro; clon/rust/src/lib.rs sin zstd | 2026-10-20 |
 | P-10b-j | Bajar el dibujo Qt del boceto (11 ms con 10 000 puntos al mover la cámara) | Abierto | Media | La meta < 5 ms del repintado completo no se cumple. | PROJECT_LOG.md:341 (proyectar 64,6 a 13,9 ms; Qt suma 11,5 ms) | 2026-10-20 |
-| P-12d | Cada mes elegir 3 funciones útiles, programarlas y sacar versión nueva | Abierto | Media | Proceso recurrente sin ejecutar; anotar y subir cada versión a GitHub. | docs/novedades/ solo tiene 2026-10.md | 2026-10-20 |
 | P-22c | Casos límite y tolerancias explícitas en solver e intersecciones | Abierto | Media | Esferas anidadas y banda de tangencia sin tratar. | omnicad/restricciones/solver.py sin tratamiento de tangencia | 2026-10-20 |
 | P-32 | Probar el motor omnikernel (Rust) como segunda opinión en uniones casi tangentes | Abierto | Media | Tras reparar la revisión de B-39, una nueva corrida de 4 000 casos con controles geométricos completos deja 1 caso señalado (0,025 %): b39-1414, con una arista no manifold nueva, cuerpo estanco y válido. La cifra previa de 0,05 % usaba un validador que omitía controles geométricos y no sirve como comparación de validez. Plan: (1) comparar el caso 1414 y el fuzzer con omnikernel, sin cambiar los chequeos ni las semillas; (2) si resuelve el resto sin perder material, usarlo solo como último reintento de `geo.booleano`, convirtiendo la salida a B-rep OpenCascade; (3) si no lo resuelve, anotarlo en `docs/comparacion_motores.md` y mantener el error claro. Un contacto tangente exacto puede no tener cura en ningún kernel. | nucleo/geometria.py (`booleano`, `_REINTENTOS_BOOLEANA`); scripts/fuzz_b39.py; tests/test_b39_revision.py; nucleo/omnikernel/; docs/comparacion_motores.md | 2026-10-27 |
-| P-26b | OpenGL 4.1 core en macOS (shaders GLSL 410, contexto core) | Abierto | Media | Los shaders usan #version 120. | omnicad/ui/render.py:124,133,221 | 2026-10-20 |
-| P-26c | Compilar el módulo Rust para arm64 y x86_64 | Abierto | Media | Solo hay .pyd de Windows. | omnicad/_rs.cp312-win_amd64.pyd | 2026-10-20 |
 | P-10b-e | Fase 2: malla en Rust (R7, R2, R8, R10) con BVH R3 | Abierto | Alta | Reducir malla, half-edge, soldado y E/S de texto siguen en Python. | clon/rust/src/lib.rs solo tiene 3 funciones de render | 2026-10-20 |
 | P-10b-g | Fase 4: remallado R6 en Rust y subir los topes | Abierto | Alta | Remallar sigue en Python con topes de 100 000 triángulos. | omnicad/nucleo/malla.py (TRIANGULOS_MAXIMOS_REMALLADO) | 2026-10-20 |
 | P-10b-f | Fase 3: boceto en Rust (R5, solver R4, R9) | Abierto | Muy alta | El solver sigue en scipy; con la colocación constructiva (SC4) 400 líneas arrastran en 258 ms, medir antes de pasar a Rust. | omnicad/restricciones/solver.py (least_squares method=lm); clon/rust sin módulo de boceto | 2026-10-20 |
-| P-2c | Documentación y README en inglés | Parcial | Media | Traducir docs/ y docs/agentes; solo el README tiene versión inglesa. | README.en.md existe; docs/*.md solo en español | 2026-10-20 |
 | P-9j | Revisión crítica de cada pantalla (estados vacíos y de error, textos) con capturas | Parcial | Media | Solo 13 pantallas auditadas; faltan estados vacíos/errores y el objetivo de identidad visual propia. | scripts/capturas_ui.py; evidencias/capturas/p9b_antes y p9b_despues (13 pantallas cada una) | 2026-10-20 |
 | P-22d | Verificar tablas ISO 965/273 y reglas de chapa contra la norma | Parcial | Media | ISO 965-1 solo verificada para M3-M39; falta ISO 273 y K-factor de chapa. | omnicad/nucleo/tolerancias.py:10,163-200; commit 992b93c | 2026-10-20 |
-| P-5b | Resto de mejoras de vectores, SVG, edición y texto según el manual de Blender | Parcial | Alta | Sigue la lista priorizada de docs/brechas_blender.md (vista previa de trazos, esquinas, texto avanzado). | tests/test_texto_vectores.py (64 pruebas); B4 queda con vista previa y esquinas pendientes | 2026-10-20 |
-| P-6d | Revisar ensamblaje, animación, mallado, historial y movimiento de piezas | Parcial | Alta | Revisión general sin cerrar: faltan conjuntos de contacto, uniones leva/tornillo y gráficos del estudio de movimiento. | omnicad/api/herramientas_animacion.py (15 herramientas); herramientas_ensamble.py:621,703 (create_rigid_group, motion_study); tests/test_api_animacion.py; tests/test_ensamblar.py | 2026-10-20 |
 | P-10b-c | Fase 5: P6, P7, P8, P9, P13 (previa asíncrona, memo por paso, firmas) | Parcial | Alta | P6 completo (vista previa en un proceso aparte) y deshacer serializado en un hilo siguen abiertos. | omnicad/timeline/documento.py (_de_memo, _aplicar_memo); omnicad/nucleo/referencias.py:198 _firmas; omnicad/io_archivos/proyecto.py autoguardar_en_hilo | 2026-10-20 |
 | P-10b-h | Proceso trabajador en Python: teselado y HLR en paralelo, cancelables | Parcial | Alta | Solo autointersecciones y HLR exacto corren aisladas con tope; falta el pool para teselado y vistas. | omnicad/nucleo/aislado.py (subproceso con tope de tiempo); tests/test_b48_crash.py | 2026-10-20 |
-| P-4a | Revisar entero el motor de render, materiales, colores e iluminación | Parcial | Muy alta | Hoy solo hay motor local OpenGL (GLSL 120) y CPU (con Rust); falta revisión completa y las listas KeyShot/V-Ray. | omnicad/ui/render.py:1589-1590 (combo Motor: GL y CPU); omnicad/nucleo/render_cpu.py; tests/test_render.py; tests/test_render_aspecto.py | 2026-10-20 |
 | P-10f | Paso 6: Rust con PyO3 solo si los números lo justifican | Parcial | Muy alta | Hecho R11; el resto de R1-R13 sin empezar (ver filas RS-). | clon/rust/src/lib.rs (rasterizar, visibilidad, oclusion); omnicad/nativo.py | 2026-10-20 |
-| P-8b | Validar el .exe armado por GitHub en una PC limpia | Bloqueado | Baja | Hace falta una máquina limpia (el armado local sí se probó). | README.md:74 avisa de SmartScreen; sin registro de prueba en PC limpia | 2026-10-20 |
-| P-30-dec | Decidir FreeCAD como oráculo externo de SC1 y los paquetes hidapi y mutmut | Bloqueado | Baja | Decisiones del usuario; no instalar sin permiso. | PROJECT_LOG.md:112 | 2026-10-20 |
-| P-1b | Probar en Linux nativo (GNOME/KDE, GPU real, atajos, diálogos de archivo) | Bloqueado | Media | Falta una PC con Linux nativo para probar a mano atajos y diálogos de archivo. | Solo hay corridas en WSL2 (Registro); el CI de Linux arma AppImage pero no prueba la interfaz | 2026-10-20 |
 | P-11k | Comparar EXTRUSOR XOX.f3z contra Fusion y probar mallas convertidas | Sin verificar | Baja | Importarlo en Fusion puede crear diseños en la nube del usuario; sin ejemplo BINCHA a mano. | PROJECT_LOG.md:32 | 2026-10-20 |
 | P-31-lic | Respetar licencias AGPL-3.0 (PartMode, QymCAD, Chili3D): solo ideas, nunca código | Sin verificar | Media | Regla de proceso, no tarea; no se puede comprobar contra el código. | PROJECT_LOG.md:117 | 2026-10-20 |
 
 ## Hallazgos de pruebas de uso
 
-Abierto 15 · Parcial 1.
+Abierto 5 · Parcial 7.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-98 | Repujado sobre un cilindro exige marcar «Envolver en la cara» | Abierto | Baja | Fusion no tiene esa casilla: envuelve solo sobre una cara curva. OmniCAD da «Sobre una cara cilíndrica el repujado se hace envolviendo (envolver=True)» si no se marca; marcado anda (cuadro 6×6 en un cilindro r 10: +37,80 mm³, la cuenta). | nucleo/solidos_crear.py:1573 | 2026-11-05 |
-| H-75 | Un cuerpo negro se ve plano en el visor: arriba y costados del mismo negro, y una letra negra sobre una placa negra desaparece | Abierto | Media | El visor ilumina con luces fijas (difuso × color, brillo chico); con color 0 solo queda el brillo especular en ángulos justos. Fusion ilumina con el entorno y el negro brillante refleja. Probar un reflejo de entorno simple o un mínimo de luz en el visor, y compararlo con Fusion. Visto en el video de Gerardo del 2026-11-05 (docs/brechas_aspecto.md). | clon/omnicad/ui/visor3d.py (LUZ_AMBIENTE, LUZ_BRILLO, GL_SPECULAR) | 2026-11-05 |
 | H-68 | Parámetros automáticos (a futuro): al dibujar un boceto y al aplicar una operación, crear solos los parámetros de sus cotas y valores, con una preferencia para activarlo o desactivarlo | Abierto | Media | Pedido de Gerardo con «Reportar problema» (registro de uso, sesión 2026-11-03_210154, seq 112). Hoy los parámetros se crean a mano. Copiar cómo nombra Fusion los parámetros de modelo (d1, d2…) antes de construir. | timeline/parametros.py | 2026-11-03 |
-| H-55 | Sustainability Insights: la región y el país no cambian el cálculo | Abierto | Media | Sumar la energía de fabricación por región con un factor de red eléctrica con fuente. Hoy el resultado lo avisa. | nucleo/sustentabilidad.py | 2026-11-01 |
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
 | H-37 | Barrido sin cubrir: interfaz, 51 tipos de operación, .fclone y .f3d | Parcial | Media | 57 de 116 tipos con caso en tests/test_barrido_tipos.py (2026-11-05). Faltan casos para los otros 59 y cambiar la razón adivinada por nombre (`_razon_pendiente`) por una lista explícita por tipo. | tests/test_barrido_tipos.py; tests/test_io.py:93 (.fclone); tests/test_f3d_nativo.py | 2026-11-03 |
 | P-133 | Rosca › biblioteca de roscas como ventana completa (árbol, favoritos, filtros por tamaño, designación, Ø, género y clase, ficha con dibujo) | Abierto | Alta | Hoy es un diálogo chico con tabla. Gerardo (2:40–3:06): «¿POR QUÉ ESTÁ ESTE MENÚ?» | `clon/omnicad/ui/comandos/crear.py:535` (BibliotecaRoscas); `evidencias/videos_roscas_2026-11-10/informe.md`; capturas `OmniCAD_3m00_biblioteca_de_roscas_modal.png`, `Fusion_1m44_biblioteca_de_roscas_ventana_completa.png`, `Fusion_6m40_detalle_de_rosca_con_dibujo.png` | 2026-11-10 |
@@ -77,64 +62,40 @@ Abierto 2 · Parcial 1. Especificación: [brechas_fusion.md](../brechas_fusion.m
 
 ## FreeCAD
 
-Parcial 4. Especificación: [brechas_freecad.md](../brechas_freecad.md).
+Parcial 3. Especificación: [brechas_freecad.md](../brechas_freecad.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | F4 | Referencias perdidas: reparar al editar un paso temprano | Parcial | Media | Reelegir en el acto la referencia perdida desde el panel del paso | nucleo/referencias.py (firmas geométricas); timeline/entidades.py:196; api/errores.py:208 REFERENCE_LOST; tests/test_comandos.py::test_referencias_de_aristas_sobreviven_a_un_cambio_de_cota; tests/test_hallazgos_tortura.py::test_t03_el_chaflan_del_borde_tras_un_vaciado_sobrevive_a_un_cambio_de_cota_del_29_por_ciento | 2026-10-20 |
 | F5 | Diagnóstico del boceto: restricciones en conflicto y redundantes | Parcial | Media | Hecho (2026-10-31): `aplicar_restriccion` rechaza la que no quita ningún grado de libertad, F5 «Qué choca» dice cuáles sobran y las deja elegidas (Supr las borra) y `find_redundant_constraints` las lista. Queda: mostrarlas sin pedir F5 (borde naranja en el símbolo y aviso en la paleta); cuesta un cálculo de rango por vínculo (4,7 ms con 8 restricciones, 240 ms con 83: no se corre en cada cambio) y tiene tope de 150 vínculos (`TOPE_REDUNDANTES`). | restricciones/solver.py (`restricciones_redundantes`); ui/editor_boceto.py (`texto_redundantes`); tests/test_restricciones_ui.py::test_f5_dice_que_sobra_y_lo_deja_elegido | 2026-10-31 |
 | F12 | Herramientas de B-spline | Parcial | Media | Insertar nudo, subir/bajar grado, unir curvas y convertir a B-spline como herramientas | restricciones/boceto.py:198-207 (spline por control, grado 3 o 5, pesos y nudos), :486 _insertar_nudo interno; ui/editor_boceto.py:2654 (marco de control); ui/modo_boceto.py:90 | 2026-10-20 |
-| F14 | Piezas estándar ampliadas (rodamientos, pasadores, insertos) | Parcial | Media | Rodamientos, pasadores e insertos roscados (hay tornillos, tuercas, arandelas, varilla y espárragos) | nucleo/fijaciones.py:52 FAMILIAS; tests/test_fijaciones.py | 2026-10-20 |
 
 ## Plasticity
 
-Parcial 3. Especificación: [brechas_plasticity.md](../brechas_plasticity.md).
+Parcial 2. Especificación: [brechas_plasticity.md](../referencia/brechas_plasticity.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | PL3 | Plano de trabajo con una tecla (Espacio) | Parcial | Baja | Mayús+Espacio desde la cámara y que primitivas y Mover arranquen en ese plano | fdc9366; ui/ventana.py:395,2088; tests/test_plasticidad.py::test_espacio_arranca_el_boceto_sobre_la_cara_ya_elegida | 2026-10-20 |
 | PL1 | Un comando contextual según lo elegido (Desfase, Unir, Extender…) | Parcial | Media | Unir, Invertir, Extender, Reconstruir, Alinear e Imprimir siguen como botones propios | 22c252d; ui/comandos/modificar.py:757 (Desfase); api offset_faces, offset_edges; tests/test_pl1_desfase.py | 2026-10-20 |
-| PL13 | Modo Render en el visor con HDRI integrados | Parcial | Media | HDRI integrados (hoy los entornos son degradés de cielo) | ui/render.py:399 (visor con aspectos, entorno y sombras); nucleo/render_cpu.py ENTORNOS; sin HDRI (grep) | 2026-10-20 |
 
 ## Blender
 
-Parcial 3. Especificación: [brechas_blender.md](../brechas_blender.md).
+Parcial 1. Especificación: [brechas_blender.md](../referencia/brechas_blender.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B19 | Normales y sombreado al exportar mallas | Parcial | Baja | Elegir suavizado por ángulo y normales ponderadas al exportar mallas | io_archivos/gltf.py:10,46 (normales por vértice con ángulo de pliegue) | 2026-10-20 |
 | B8 | Orientaciones y pivotes (global, local, normal, vista, cursor 3D) | Parcial | Media | Selector de orientación y pivote (mediana, caja, activo) y cursor 3D | ui/comandos/modificar.py:462-500 (Mover/copiar con pivote elegible y tríada); ui/manipuladores.py Triada | 2026-10-20 |
-| B9 | Limpieza de malla ampliada | Parcial | Media | Disolver por ángulo, hacer plano y simetrizar (triángulos a cuadriláteros no cabe) | c1c40f2; nucleo/malla.py:2403-2420; api clean_mesh; timeline OpLimpiarMalla; tests/test_api_malla.py::test_limpiar_deja_una_malla_cerrada_y_es_editable | 2026-10-20 |
 
 ## Rhino 8
 
-Abierto 1 · Parcial 5. Especificación: [brechas_rhino.md](../brechas_rhino.md).
+Parcial 3. Especificación: [brechas_rhino.md](../referencia/brechas_rhino.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| RH14 | Dibujo: cotas de curva, área y volumen; estilos; plantillas de hoja | Abierto | Media | Cotas de longitud de curva, área y volumen; estilos importables; plantillas de hoja | nucleo/dibujo.py: sin esas cotas, estilos ni plantillas (grep) | 2026-10-20 |
 | RH13 | Análisis ampliado: continuidad, desviación, normales visibles | Parcial | Media | Continuidad por borde G0/G1/G2, desviación entre curvas o puntos y normales visibles | 4fca4c7 (aristas abiertas, no manifold y espesor); nucleo/revision.py; api check_geometry, check_printability; tests/test_revision.py | 2026-10-20 |
-| RH16 | Modos de pantalla por objeto y poses guardadas | Parcial | Media | Modos de pantalla por objeto (Pluma, Técnico, Fantasma), selecciones con nombre y disposición de ventana | ui/visor3d.py:70 ESTILOS (global); ui/navegador.py:221 y ui/ventana.py:2031 (vistas guardadas); api set_body_opacity | 2026-10-20 |
-| RH17 | Bloques vinculados a un archivo que se recarga | Parcial | Media | Vínculo a un archivo externo que se recarga si cambió («Actualizar si cambió el archivo») | 4b50c6f; api realize_copies («Hacer única»); timeline/ops_ensamblar.py:499 OpInsertarDiseno; tests/test_pl8_instancias.py | 2026-10-20 |
 | RH18 | Curvas desde superficies y cuerpos (isocurvas, contorno, silueta) | Parcial | Media | Hechas la curva isoparamétrica (`isoparametric_curve`) y la silueta (Proyectar un cuerpo, B-119, 2026-11-05). Queda el contorno por cortes paralelos (`Contour`) y tirar (`Pull`) como curvas de boceto | api/herramientas_boceto.py:1581 project_to_sketch (proyectar e intersecar aristas, caras y cuerpos; un cuerpo da su silueta); sin Contour | 2026-10-20 |
 | RH12 | Gumball al elegir e imanes en el visor | Parcial | Alta | Manipulador contextual al elegir (flechas de mover/extruir/escalar) y barra de imanes con seguimiento | ui/manipuladores.py (manipuladores dentro de cada comando); ui/comandos/modificar.py PulsarTirar; ui/sugerencias.py:30 (tira de comandos); mismo trabajo que B7 | 2026-10-20 |
-
-## KeyShot
-
-Parcial 2. Especificación: [brechas_keyshot.md](../brechas_keyshot.md).
-
-| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
-|---|---|---|---|---|---|---|
-| KS3 | Material completo: refracción, subsuperficie, anisotropía, emisivo, mapas | Parcial | Alta | El render ignora translucidez, emisividad, relieve y resalte; faltan IOR, subsuperficie y mapas. | omnicad/nucleo/aspectos.py:5-11,35-43 (el modelo los guarda, el render usa solo color, metálico, aspereza, transparencia, barniz, patrón) | 2026-10-20 |
-| KS11 | Salida con alfa y por pases (EXR, TIFF, PSD) | Parcial | Alta | Faltan EXR/TIFF/PSD y pases (difuso, reflejo, sombra, ID); el PNG con alfa ya existe. | omnicad/ui/render.py:1595 (Fondo transparente), :1647 (solo PNG); nucleo/render_cpu.py:993 (fondo_transparente) | 2026-10-20 |
-
-## V-Ray
-
-Parcial 1. Especificación: [brechas_vray.md](../brechas_vray.md).
-
-| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
-|---|---|---|---|---|---|---|
-| VR13 | Render por mosaicos en varios procesos, cancelable y pausable | Parcial | Alta | Faltan varios procesos, pausa y no bloquear la ventana. | render_cpu.py:736,992-1030 (mosaicos, RenderCancelado); ui/render.py:2131 (QProgressDialog con Cancelar) | 2026-10-20 |
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
 
@@ -196,45 +157,30 @@ Bloqueado 1. Las herramientas export_sketch y clean_sketch ya existen: lo que fa
 |---|---|---|---|---|---|---|
 | MCP-HAL3 | Menú del boceto sin «Guardar como SVG» ni «Limpiar geometría» | Bloqueado | Baja | Espera decisión del usuario: agregarlos rompe la lista exacta de Fusion. | omnicad/ui/ventana.py:1258 (manejador SVG sigue); export_sketch y clean_sketch existen | 2026-10-20 |
 
-## Capa para agentes (paquetes del plan)
-
-Parcial 1. Especificación: [plan_mcp_cli.md](../plan_mcp_cli.md).
-
-| ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
-|---|---|---|---|---|---|---|
-| PAQ-K | Paquete K: prueba real con agentes (Claude Code, OpenCode, solo CLI, modo en vivo) | Parcial | Media | Según el log solo Claude Code pasó; faltan OpenCode, solo CLI y modo en vivo (no verificable desde el código). | PROJECT_LOG.md:11; tests/test_setup.py | 2026-10-20 |
-
 ## SolidCraft
 
-Abierto 2. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
+Abierto 1. Especificación: [brechas_solidcraft.md](../brechas_solidcraft.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| SC19 | Un error de operación abre un borrador de reporte (issue de GitHub) con el contexto y una captura | Abierto | Baja | SolidCraft arma, desde un error o la Ayuda, un borrador editable con versión, paso que falló, parámetros y una captura opcional que la persona revisa; abrir GitHub no lo envía. Acá hay informes de error (herramienta de revisión) pero ningún borrador listo para publicar. Nunca se envía solo (regla de salida hacia afuera). | grep issue/borrador en clon/omnicad/ui sin resultados | 2026-10-26 |
 | SC20 | Abrir un proyecto mostrando enseguida una imagen provisional desde una caché de mallas, mientras se recalcula | Abierto | Media | SolidCraft guarda mallas ya teseladas en una caché del archivo y las muestra al abrir mientras reconstruye; la caché nunca reemplaza el diseño. Acá solo se guarda `cache/pasos.json` (`io_archivos/proyecto.py:85`): al abrir hay que esperar el recálculo (BINCHA.f3d tarda 23 s). Atar al tamaño del archivo y a la versión del núcleo para que no muestre algo viejo. | omnicad/io_archivos/proyecto.py:85 (la caché no guarda mallas) | 2026-10-26 |
 
 ## Otros CAD libres
 
-Abierto 2 · Parcial 4. Especificación: [brechas_cad_libres.md](../brechas_cad_libres.md).
+Abierto 1 · Parcial 1. Especificación: [brechas_cad_libres.md](../referencia/brechas_cad_libres.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| CL2 | Resultado con efecto observado en cada herramienta | Abierto | Media | Campo applied/moved/revisión final en la respuesta de llamar(). | omnicad/api/registro.py:310 (devuelve solo ok, result, avisos) | 2026-10-20 |
-| CL4 | Elegir caras por descripción con candidatos y motivo | Parcial | Media | Faltan selectores por intención, propiedades devueltas y aviso de ambigüedad. | omnicad/api/herramientas_inspeccion.py:367-382 (find_faces, find_edges con selectores) | 2026-10-20 |
-| CL5 | Diagnóstico para el agente: registro de operaciones y fallos | Parcial | Media | Registro de operaciones y contexto de restricciones y kernel. | omnicad/api/herramientas_dev.py:201-209 (list_error_reports, read_error_report) | 2026-10-20 |
-| CL8 | Importar declarando qué se reconstruyó y qué quedó fijo | Parcial | Alta | El .f3d ya declara al abrir su historial sin traducir y los bocetos que reconstruyó; falta el mismo informe en STEP, IGES, mallas y DXF. | omnicad/io_archivos/f3d_historial.py; tests/test_f3d_historial.py::test_abrir_un_f3d_con_historial_avisa_lo_que_no_se_tradujo | 2026-10-26 |
 | P-11n | .f3d: lector SAB y escena en Rust (Zstandard ya está) | Parcial | Alta | Hecho 2026-10-31: Zstandard en Rust (`rust/src/zstd.rs`, crate `ruzstd`; RS-R1, `tests/test_zstd_rust.py`): el bloque de BINCHA baja de 6,9 s a 0,09 s y el archivo de 21,7 s a 9,6 s (PC compartida). Falta: el lector SAB (3,0 s) y la escena (≈ 3 s) como datos puros en un módulo PyO3 (obliga a adaptar `acis_occ.convertir` a columnas). Objetivo: BINCHA ≤ 6 s. | omnicad/io_archivos/sab.py; omnicad/io_archivos/f3d_escena.py; docs/f3d_formato.md; docs/auditorias/rust-pipeline-2026-10-31.md | 2026-10-31 |
 | P-11o | .f3d: mallas convertidas grandes entran sin reparar | Abierto | Media | Un cuerpo abierto de más de 2000 caras no pasa por ShapeFix (con 18 716 caras tardaba 247 s): entra como superficie y una parte queda con caras inválidas (338 de 3 516 en BINCHA). Habría que repararlo por partes o en Rust, solo si el usuario lo muestra. | omnicad/nucleo/acis_occ.py (CARAS_SIN_ARREGLO); tests/test_f3d_nativo.py::test_una_malla_abierta_enorme_no_pasa_por_shapefix | 2026-10-26 |
 
 ## Texto y vectores
 
-Parcial 3 · Abierto 1. Especificación: [plan_texto_vectores.md](../plan_texto_vectores.md).
+Abierto 1. Especificación: [plan_texto_vectores.md](../plan_texto_vectores.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | P-96 | SVG › los rellenos casi transparentes que deja Affinity (opacidad 4–13 %) entran como geometría y dejan pestañas sobre el borde | Abierto | Baja | «LAS VALIENTES 1.svg» trae 24 recortes de `fill-opacity` 0,04–0,13 pegados al contorno exterior: en Affinity no se ven, en OmniCAD salen como pestañas y ondas. Ignorar al importar los rellenos con opacidad menor a un umbral (p. ej. 0,15), con aviso que diga cuántos se saltearon y una opción para traerlos. Mirar qué hace Fusion con `fill-opacity` en Insertar SVG | `evidencias/svg_valientes_2026-11-08/` (`valientes.svg`, `repro.py`) | 2026-11-08 |
-| TXT-7 | Fase 7 velocidad (SVG de 5000 nodos en menos de 1 s) | Parcial | Media | Bajar de 2,5 s a menos de 1 s el SVG de 5000 nodos. | El log midió 2,5 s; la meta < 1 s no se cumple. tests/test_texto_vectores.py | 2026-10-20 |
-| TXT-8 | Los vectores importados (SVG/DXF) y el texto se manejan como un objeto: mover, escalar, rotar, alinear, agrupar, pivotear, desfasear, unir y separar | Parcial | Media | Hecho 2026-11-04: el objeto es una matriz afín sobre las curvas (los ids y las firmas no cambian), con panel de tiradores y medidas exactas, API/MCP/CLI de 15 herramientas y formato de proyecto 2. Queda: editar el trazado nodo a nodo (decidido no hacerlo), más de 5000 curvas por objeto (ver TXT-7), deshacer/rehacer de un objeto dentro de un grupo desde la API (hoy se deshace el grupo entero) y «Unir perfiles» deja los originales ocultos pero con su geometría (sus regiones siguen existiendo: hay que elegir la región combinada al extruir). | clon/omnicad/restricciones/objetos.py; clon/omnicad/ui/objetos_vectoriales.py; clon/omnicad/api/herramientas_objetos_vectoriales.py; tests/test_objetos_vectoriales.py::test_api_transformacion_parametrica_extruye_y_sobrevive_guardar_undo; scripts/bench_objetos_vectoriales.py | 2026-11-04 |
 
 ## Fluidez (plan 2026-11-13)
 
@@ -255,20 +201,14 @@ Pedido de Gerardo: «tomá como prioridad mejorar el rendimiento, debe ir todo f
 
 ## Rust
 
-Abierto 13 · Parcial 5 · Sin verificar 2. Especificación: [plan_rust.md](../plan_rust.md). Orden de ejecución y mediciones: [rust-pipeline-2026-10-31.md](../auditorias/rust-pipeline-2026-10-31.md) (filas RS-X*).
+Abierto 7 · Parcial 5 · Sin verificar 2. Especificación: [plan_rust.md](../plan_rust.md). Orden de ejecución y mediciones: [rust-pipeline-2026-10-31.md](../auditorias/rust-pipeline-2026-10-31.md) (filas RS-X*).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | RS-R13 | R13 menores (RDP, DXF/SVG, recortes, generar_grupos) | Abierto | Baja | Ganancia absoluta chica. | omnicad/io_archivos/vectorizar.py; dxf.py | 2026-10-20 |
-| RS-R8 | R8 dedupe de filas, soldado y normales suaves | Abierto | Media | Sin empezar. | omnicad/nucleo/malla.py | 2026-10-20 |
 | RS-R9 | R9 hit-testing del boceto | Abierto | Media | Primero en numpy (RS-X3, hecho el hover el 2026-11-13: 2000 curvas en 3,9 ms con la VPS cargada); Rust solo si con miles de curvas el lote pasa de 2 ms en una máquina sin carga. | omnicad/ui/editor_boceto.py | 2026-10-31 |
-| RS-R10 | R10 lectura y escritura de mallas en texto | Abierto | Media | Sin empezar. | omnicad/nucleo/malla.py | 2026-10-20 |
-| RS-R12 | R12 quitar aristas ocultas superpuestas (dibujo) | Abierto | Media | Sin empezar. | omnicad/nucleo/dibujo.py:269 | 2026-10-20 |
-| RS-R2 | R2 reducir malla (QEM) en Rust | Abierto | Alta | Depende de R7. Medido 2026-10-31: reducir 50 % a 50 k triángulos 4,4 s. | omnicad/nucleo/malla.py _Editor; clon/rust/src/lib.rs sin malla | 2026-10-20 |
 | RS-R3 | R3 BVH de triángulos (resto: accesibilidad, vaciar, proyección de reducir/remallar, punto más cercano) | Parcial | Media | Hecho 2026-10-31: `rust/src/bvh.rs` (clase `Bvh`, primer choque por lote, hojas de 4 y partición por la mediana) detrás de `revision.primer_choque` (`espesores`), del hover/elegir del visor (`Visor3D._primer_rayo_cuerpo`) y de `elegir_entidad` de `ui/render.py` (BVH cacheado por cuerpo), con respaldo numpy. Medido (esfera, `scripts/bench_nativo.py rayos`): 2000 rayos a 50 k triángulos 352 → 11,5 ms y a 251 k 2 874 → 51 ms (incluye construir: ≈ 45 ms), un rayo de hover a 251 k 43 → 0,008 ms. Falta: `analisis._rayos_chocan` (accesibilidad; usa otro convenio de bordes, u ≥ 0 sin tolerancia, y cambiaría la salida), `malla.vaciar`, la proyección de `reducir`/`remallar`, punto más cercano, SAH y multihilo con `rayon` (no se agregó: 1 hilo ya está bajo el criterio, 2000 rayos en < 5 ms). | omnicad/nucleo/revision.py primer_choque; omnicad/ui/visor3d.py primer_rayo_triangulos; clon/rust/src/bvh.rs; tests/test_bvh_rust.py; docs/auditorias/rust-pipeline-2026-10-31.md | 2026-10-31 |
 | RS-R5 | R5 geometría de boceto (de Boor, intersecciones) en Rust | Parcial | Alta | Hecho (B-111): `spline_extremos` (tangente y curvatura en los extremos de una spline de ajuste abierta; el solver la usa con respaldo Python). Falta: splines cerradas o con manijas, `mas_cercano`, intersecciones y cajas. | clon/rust/src/spline.rs; omnicad/restricciones/solver.py (`_extremo_spline`) | 2026-10-29 |
-| RS-R6 | R6 remallar isótropo en Rust | Abierto | Alta | Sin empezar. Medido 2026-10-31: remallar a 50 k triángulos 8,2 s. | omnicad/nucleo/malla.py | 2026-10-20 |
-| RS-R7 | R7 núcleo half-edge / topología de malla | Abierto | Alta | Base de R2 y R6. | omnicad/nucleo/malla.py _Topo | 2026-10-20 |
 | RS-R4 | R4 kernel del solver (jacobiano analítico) en Rust | Abierto | Muy alta | Solver sigue en scipy. Rebajado 2026-10-31: el polígono de 24 lados resuelve en 75 ms (el plan decía 5 s) y arrastrar cuesta 8–13 ms; solo pesaba con ≥ 200 piezas (400 piezas 2,1 s); RS-S1 (hecho 2026-11-13, «trf» disperso) lo bajó a 0,35 s. | omnicad/restricciones/solver.py | 2026-10-20 |
 | RS-P3 | P3 repintado del boceto proyectando en bloque | Parcial | Media | Proyección 64,6 a 13,9 ms con 10 000 puntos; la meta < 5 ms del repintado completo no se cumple (Qt suma 11,5 ms). | omnicad/ui/editor_boceto.py _poli_px; PROJECT_LOG.md:341 | 2026-10-20 |
 | RS-P6 | P6 vista previa de comandos fuera del hilo de la interfaz | Parcial | Alta | La previa se reusa al aceptar; sigue en el hilo de la ventana (haría falta un proceso). | tests/test_rendimiento_arreglos.py:147; omnicad/ui/comando.py | 2026-10-20 |
@@ -300,38 +240,24 @@ Abierto 5 · Parcial 5 · Sin verificar 1. Especificación: [plan_cpp.md](../pla
 
 ## Auditoría del 2026-10-14
 
-Abierto 9 · Sin verificar 2. Especificación: [auditorias/](../auditorias/).
+Abierto 1. Especificación: [auditorias/](../auditorias/).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| AUD-1 | Sin medición de cobertura de tests (pytest-cov) | Abierto | Baja | Agregar pytest-cov como dependencia de desarrollo y medir sin umbral. | grep de pytest-cov/--cov en clon/requirements*.txt, pyproject.toml y .github: sin resultados | 2026-10-20 |
-| AUD-2 | Sin lockfile (requirements pineado con == pero sin lock) | Abierto | Baja | Generar un lock (uv pip compile) y usarlo en CI e instaladores. | clon/ no tiene lockfile; clon/requirements.txt pineado con == | 2026-10-20 |
-| AUD-3 | Sin verificador de tipos (mypy o pyright) | Abierto | Media | Empezar mypy no estricto sobre nucleo/. | Sin mypy/pyright en clon/pyproject.toml, requirements*.txt ni .github; sin mypy.ini | 2026-10-20 |
-| AUD-5 | Seis funciones con complejidad mayor a 20 | Abierto | Media | Reemplazar los if/elif por tablas tipo→función en las funciones señaladas. | Conteo propio por ast (aprox.): registro._convertir 40, svg._recorrer 46, solver.auto_restringir 39, entidades.resolver 29, boceto_desde_primitivas 33, fuentes._tabla_kern 24 | 2026-10-20 |
-| AUD-7 | add_text/edit_text con 33 y 34 parámetros | Abierto | Media | Agrupar las opciones de texto en un dict de opciones documentado. | api/herramientas_vectores.py:185 (conteo por ast: add_text 33, edit_text 34) | 2026-10-20 |
-| AUD-8 | Instalador de Windows sin firma de código | Abierto | Media | Comprar certificado y firmar el .exe; hoy solo se documenta el aviso de SmartScreen. | README.md:74 (aviso «Windows protegió su PC») | 2026-10-20 |
-| AUD-11 | La CI corre ruff y pytest pero no la prueba de humo | Abierto | Media | Agregar paso de humo offscreen al job test, si corre estable en windows-latest. | .github/workflows/instaladores.yml: job test con escaneo de secretos, ruff y pytest; sin --prueba-humo | 2026-10-20 |
-| AUD-4 | Archivos gigantes: 20 módulos pasan las 1000 líneas | Abierto | Alta | Partir de a poco al tocar cada uno (editor_boceto, solidos_crear, boceto, malla, ventana). | wc -l sobre clon/omnicad: 20 archivos >1000 líneas; editor_boceto.py 3800 líneas | 2026-10-20 |
-| AUD-9 | Dependencias sin escaneo de CVE (pip-audit nunca corrido) | Sin verificar | Baja | Correr pip-audit una vez cuando el usuario autorice instalarlo. | Sin rastro de pip-audit en .github ni en PROJECT_LOG | 2026-10-20 |
 | AUD-6 | Cuellos O(n²) en la máscara de aristas cóncavas y en el empalme de muchas aristas | Abierto | Media | Medido 2026-11-01 en una placa 400×200×20 con N agujeros pasantes (`evidencias/tortura_2026-11-01/aud6*.py`). (1) Máscara del radio mínimo: 0,30 / 2,74 / 11,6 s con N = 300 / 1000 / 2000 (×9 al triplicar, ×4 al duplicar); casi todo (6,17 de 6,26 s con 1500) está en `_es_concava`; el candidato es el bucle que recorre con `TopExp_Explorer` TODAS las aristas de la cara para ubicar la orientación de cada arista (las caras de arriba y abajo tienen N aristas): leído, sin confirmar con un perfil. (2) Empalme de los N bordes superiores: 0,69 / 3,47 / 13,7 / 82,3 s en `_ampliar_tangentes` con N = 500 / 1000 / 2000 / 4000 (un tercio del total, 254,7 s con 4000), porque `aristas_cadena_tangente` rearma el mapa vértice→aristas en cada arista; el resto es el kernel (`Add` 27,7 s y `Build` 148 s con 4000, también ~N²), que no se arregla acá. (3) El radio mínimo con 1,4 millones de vértices (1000 agujeros) llega a 2,1 GB de RAM y con 2 millones a 2,7 GB. Aceptación: ubicar la orientación una vez por cara y armar el mapa una vez por empalme; la máscara de 2000 agujeros en menos de 1 s. | nucleo/analisis.py:873 (`_es_concava`, bucle del explorador); nucleo/solidos_modificar.py:266 (`aristas_cadena_tangente`) | 2026-11-01 |
-| AUD-10 | El .exe publicado sin probar en una máquina limpia sin Python | Sin verificar | Media | Instalar la Release en una VM limpia y abrir un proyecto. | uar-loop-2026-10-14.md:28 lo deja «pendiente de usuario» | 2026-10-20 |
 
 ## Prueba de tortura
 
-Parcial 2. Especificación: [informe_tortura_2026-10-17.md](../auditorias/informe_tortura_2026-10-17.md).
+Parcial 1. Especificación: [informe_tortura_2026-10-17.md](../auditorias/informe_tortura_2026-10-17.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | T-21 | `check_geometry` espera el tope entero (10 s) por cada cilindro con rosca modelada distinto | Parcial | Media | Medido 2026-11-01: el análisis de autointersecciones de un cilindro M10 modelado tarda 303 s (resultado 0) y todo el resto de la revisión 0,32 s, así que los 10,3 s son `PLAZO_AUTOINTERSECCION` y no trabajo útil. Hecho: la misma forma que ya pasó el tope no se vuelve a esperar (0,3 s la segunda vez, también tras crear otro cuerpo; se vuelve a intentar a los 5 minutos). Queda: cada rosca distinta paga 10 s la primera vez (con 3 se agota el presupuesto de 30 s). Ideas sin probar: detectar la hélice antes de lanzar el proceso o revisar por pares de caras vecinas. | clon/omnicad/nucleo/revision.py (`_autointersecciones_seguras`); tests/test_tortura_menores.py::test_t21_la_misma_forma_no_se_vuelve_a_esperar_con_el_mismo_tope | 2026-11-01 |
-| T-18 | Render y respuestas grandes lentas en la API | Parcial | Media | HLR en un proceso persistente: medido y diferido | tests/test_hallazgos_tortura.py::test_t18_get_scene_info_y_open_document_tienen_modo_resumido | 2026-10-20 |
 
 ## Tipografía de la interfaz (2026-10-28)
 
-Abierto 4.
+Abierto 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | NOV-tip-1 | Con letra grande (120–150 %) los títulos de grupo de la cinta se eliden y la ventana no baja de ~1038 px | Abierto | Media | `ajustar_textos` compacta los botones pero no los títulos `#titulo_grupo` ni el botón de espacio de trabajo (108 px fijo); con 150 % el mínimo de la ventana es 1038 px. Medido en 1024×640 y 800×520. | omnicad/ui/cinta.py (`_fila_grupos`, `_estilo_boton`, `espacio.setFixedSize(108, 62)`); evidencias/tipografia_ui/f3_ventana_150.py | 2026-10-28 |
-| NOV-tip-2 | Fuente de la interfaz: la lista no tiene buscador ni grupo de recomendadas, y el combo cerrado no muestra la forma de la letra elegida | Abierto | Media | Hecho el 2026-10-29: cada familia de la lista se escribe con su propia letra y la lista abre acotada (14 filas con barra). Falta: caja de búsqueda dentro de la lista, grupo «Recomendadas» arriba (hoy solo van primero las de lectura fácil) y la fuente elegida mostrada con su letra en el combo cerrado. Pedido de Gerardo del 2026-10-29 (captura de Preferencias a 109 % y video 09-38-04), para una sesión nocturna. | omnicad/ui/preferencias.py (`_combo_fuentes`, `_agregar_familia`) | 2026-10-29 |
-| NOV-tip-3 | Colores de texto: el selector es el de Qt, sin el tema de la app, y un color rechazado solo avisa «probá uno más claro» | Abierto | Media | Hecho el 2026-10-29: cada fila muestra el color real (nunca el código), marca en rojo el rechazado y el aviso va en criollo. Falta: selector de color con el tema de la app, proponer con un clic un color parecido que sí se lea, y mostrar «elegido» frente a «aplicado» cuando se rechaza. | omnicad/ui/preferencias.py (`CampoColor`, `_Muestra`, `_mostrar_aviso_apariencia`) | 2026-10-29 |
-| NOV-tip-4 | Preferencias › Apariencia no tiene vista previa propia, y los espacios y tamaños de la interfaz no están en un solo lugar | Abierto | Alta | Un panel de muestras (botón, campo, texto normal y secundario, acento y una cota del boceto) que cambie al instante con fuente, tamaño y colores; y valores comunes (espacios, radios, alturas) en un solo lugar para que todo escale parejo con letra grande. Validar a 100, 125 y 150 % y en 1024×640 y 800×520, con capturas antes y después. Pedido de Gerardo del 2026-10-29, para una sesión nocturna. | omnicad/ui/preferencias.py, omnicad/ui/temas.py, omnicad/ui/cinta.py | 2026-10-29 |
