@@ -91,6 +91,16 @@ def _angulos(radios, distancia):
             "maximo": min(89.0, math.degrees(math.atan(radios[1] / d)))}
 
 
+def _cajas_tocan(a, b):
+    """¿Dos cajas envolventes se tocan o se solapan? (Apoyarse en una cara sí cuenta, a diferencia de `cajas_solapan`.)"""
+    return all(min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) >= -1e-6 for i in range(3))
+
+
+def _area_comun(cara, solido):
+    comun = geo.booleano(cara, solido, "intersecar")
+    return 0.0 if geo.esta_vacia(comun) else geo.area(comun)
+
+
 class Extruir(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "extruir", "Extruir", "extruir", "E"
     AYUDA = "Agrega profundidad a perfiles de boceto o caras planas: cuerpo nuevo, unir, cortar o intersecar."
@@ -251,6 +261,7 @@ class Extruir(Comando):
         self._antes_auto = None                  # la operación que había antes de pasar sola a Cortar o Unir
         self._ajustando = False
         self._cajas = {}                         # id de cuerpo → caja envolvente: el estado no cambia con el panel abierto
+        self._apoyos = {}                        # B-344: selección de perfiles → ¿se apoya en un sólido visible?
         self._hijo, self._op_hijo = None, None
         self._herramienta_previa = None
         self._t_hijo = None
@@ -287,14 +298,31 @@ class Extruir(Comando):
         self._cancelar_hijo()
         if formas is None:
             formas = self._formas_herramienta(ctx, op, True) if solidos else []
-        self._ajustar(panel, self._auto(ctx, op, any(geo.solapan(f, c.forma) for f in formas for c in solidos)))
+        self._ajustar(panel, self._auto(ctx, op, any(geo.solapan(f, c.forma) for f in formas for c in solidos),
+                                        self._perfil_apoyado(ctx, panel.valores)))
 
-    def _auto(self, ctx, op, solapa):
-        """La operación automática: Cortar si se mete, Unir si nace de una cara de un sólido visible, None si ninguna."""
+    def _auto(self, ctx, op, solapa, apoyado=False):
+        """La operación automática: Cortar si se mete, Unir si nace de una cara de un sólido visible o el perfil está
+        dibujado sobre uno (B-344), None si ninguna."""
         if solapa:
             return "cortar"
         visibles = {c.id for c in self._visibles(ctx)}
-        return "unir" if any(r.get("cuerpo") in visibles for r in op.p.get("caras") or []) else None
+        return "unir" if apoyado or any(r.get("cuerpo") in visibles for r in op.p.get("caras") or []) else None
+
+    def _perfil_apoyado(self, ctx, v):
+        """B-344: ¿el perfil (desde su plano) se apoya en un sólido visible? Como Fusion, extruirlo hacia afuera abre en
+        Unir. Se mide el perfil, no la extrusión: una vez por selección y sin kernel mientras se arrastra la flecha (P-99)."""
+        if v.get("inicio", "plano") != "plano":
+            return False
+        clave = repr([h["ref"] for h in v.get("perfiles") or []])
+        if clave not in self._apoyos:
+            from .. import manipuladores as mp
+            base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
+            formas = base[2] if base else []
+            self._apoyos[clave] = any(       # con área: tocar solo por una arista no es estar dibujado sobre la cara
+                _area_comun(f, c.forma) > 1e-6 for f in formas for c in self._visibles(ctx)
+                if _cajas_tocan(geo.caja_envolvente(f), self._caja(c)))
+        return self._apoyos[clave]
 
     @staticmethod
     def _visibles(ctx):
@@ -356,7 +384,8 @@ class Extruir(Comando):
         vigente = panel.ultima_op is not None and self._herramienta(panel.ultima_op).a_dict() == self._op_hijo
         self._cancelar_hijo()
         if vigente:
-            self._ajustar(panel, self._auto(panel.ctx, panel.ultima_op, salida["solapa"]))
+            self._ajustar(panel, self._auto(panel.ctx, panel.ultima_op, salida["solapa"],
+                                                self._perfil_apoyado(panel.ctx, panel.valores)))
         else:
             panel._programar()
 
