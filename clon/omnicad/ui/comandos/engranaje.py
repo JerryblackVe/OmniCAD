@@ -166,7 +166,7 @@ class Engranaje(Comando):
         aviso = getattr(ctx.ventana, "mensaje", None)
         if aviso is not None:
             aviso("Par de engranajes: se crearon los componentes, las uniones de revolución y el vínculo de "
-                  "movimiento (ENSAMBLAR › Accionar uniones los mueve).", 8000)
+                  "movimiento (ENSAMBLAR › Uniones de animación los mueve).", 8000)
         return pasos
 
 

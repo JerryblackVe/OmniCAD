@@ -4666,11 +4666,11 @@ Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y
 | [`cycle_component_color`](#cycle_component_color) | sí | Color del componente de ciclo: pasa el componente al siguiente color de la paleta, el de component_colors de get_viewport_image y de Mostrar colores de componente. |
 | [`ground_component`](#ground_component) | sí | Fija o libera un componente (ENSAMBLAR › Fijar). |
 | [`create_joint`](#create_joint) | sí | Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta que su marco coincide con el de origin2 (caras planas enfrentadas; dos ejes —perno en agujero— en el mismo sentido) y define cómo se mueve después. |
-| [`create_as_built_joint`](#create_as_built_joint) | sí | Unión como está (ENSAMBLAR › Unión como está): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). |
+| [`create_as_built_joint`](#create_as_built_joint) | sí | Unión conforme a obra (ENSAMBLAR › Unión conforme a obra): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). |
 | [`duplicate_with_joints`](#duplicate_with_joints) | sí | Duplicar con uniones (ENSAMBLAR › Duplicar con uniones): repite el componente que mueve una unión en cada destino. |
 | [`create_joint_origin`](#create_joint_origin) | sí | Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco (punto con orientación) sobre una cara o arista, con giro y desfase, para usarlo después como origin2 de create_joint. |
 | [`constrain_components`](#constrain_components) | sí | Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17): posiciona el componente de geometry1 respecto del de geometry2. |
-| [`drive_joint`](#drive_joint) | sí | Acciona una unión (ENSAMBLAR › Accionar uniones): cambia su giro o deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). |
+| [`drive_joint`](#drive_joint) | sí | Acciona una unión (ENSAMBLAR › Uniones de animación): cambia su giro o deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). |
 | [`set_joint_limits`](#set_joint_limits) | sí | Límites de movimiento de una unión (Joint Limits de Fusion): los de un movimiento a elección (por defecto el principal: el giro en grados si gira, si no el deslizamiento en mm), su valor de reposo (rest) y si se invierten (flip). |
 | [`create_rigid_group`](#create_rigid_group) | sí | Grupo rígido (ENSAMBLAR › Grupo rígido): los componentes se mueven juntos; una unión que mueve a uno mueve a todos. |
 | [`create_motion_link`](#create_motion_link) | sí | Vínculo de movimiento (ENSAMBLAR › Vínculo de movimiento): la unión 2 se mueve en proporción a la 1 (engranajes, cremallera y piñón). |
@@ -4767,7 +4767,7 @@ Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta
 
 ### `create_as_built_joint`
 
-Unión como está (ENSAMBLAR › Unión como está): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 lo sigue. Sin component2, la unión es contra la raíz. joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). mode1 / mode2: simple, between_faces (centro entre dos caras paralelas) o edge_intersection (cruce de dos aristas rectas); la segunda va en origin1b / origin2b. rotation_axis_from / slide_axis_from: arista recta o circular, eje de construcción o cara cilíndrica en vez de X/Y/Z (axis_body: cuerpo del selector). motion_limits: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, 'flip': false}}; rest y flip_limits son los del movimiento principal.
+Unión conforme a obra (ENSAMBLAR › Unión conforme a obra): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 lo sigue. Sin component2, la unión es contra la raíz. joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). mode1 / mode2: simple, between_faces (centro entre dos caras paralelas) o edge_intersection (cruce de dos aristas rectas); la segunda va en origin1b / origin2b. rotation_axis_from / slide_axis_from: arista recta o circular, eje de construcción o cara cilíndrica en vez de X/Y/Z (axis_body: cuerpo del selector). motion_limits: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, 'flip': false}}; rest y flip_limits son los del movimiento principal.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -4859,7 +4859,7 @@ Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17):
 
 ### `drive_joint`
 
-Acciona una unión (ENSAMBLAR › Accionar uniones): cambia su giro o deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). Los límites recortan el valor y avisan. Cada valor acepta número (grados o mm) o expresión.
+Acciona una unión (ENSAMBLAR › Uniones de animación): cambia su giro o deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). Los límites recortan el valor y avisan. Cada valor acepta número (grados o mm) o expresión.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -4894,7 +4894,7 @@ Grupo rígido (ENSAMBLAR › Grupo rígido): los componentes se mueven juntos; u
 - Parámetros:
   - `components` (lista de texto; obligatorio): componentes del grupo (id, nombre o uno de sus cuerpos); al menos dos distintos.
   - `name` (texto; opcional, por defecto `null`): nombre del paso; vacío = «Grupo rígido<n>».
-  - `include_children` (true/false; opcional, por defecto `false`): true suma al grupo los subcomponentes de cada uno («Incluir componentes secundarios»); false los deja libres dentro de su padre.
+  - `include_children` (true/false; opcional, por defecto `true`): true suma al grupo los subcomponentes de cada uno («Incluir componentes secundarios»); false los deja libres dentro de su padre.
 - CLI: `omnicad call create_rigid_group --doc pieza.omnicad components=…`
 
 ### `create_motion_link`

@@ -57,16 +57,17 @@ INSERTAR = ("INSERTAR", ["insertar_diseno", "lienzo", "fijacion"], [
     _i("Duplicar con uniones", "duplicar_con_uniones"),
     _i("Insertar componente", "insertar_diseno"), _i("Insertar derivación", "insertar_derivacion")])
 ENSAMBLAR = ("ENSAMBLAR", ["union"], [
-    _i("Nuevo componente", "nuevo_componente"), _i("Unión", "union"), _i("Unión como está", "union_construida"),
-    _i("Restricción de componentes", "restriccion_componentes"),
-    _i("Duplicar con uniones", "duplicar_con_uniones"),
-    _i("Origen de la unión", "origen_union"), _i("Grupo rígido", "grupo_rigido"), SEP,
-    _i("Accionar uniones", "accionar_uniones"), _i("Vínculo de movimiento", "vinculo_movimiento"),
+    _i("Insertar componente", "insertar_diseno"), _i("Nuevo componente", "nuevo_componente"),
+    _i("Duplicar con uniones", "duplicar_con_uniones"), _i("Restricción de componentes", "restriccion_componentes"), SEP,
+    _i("Unión", "union"), _i("Unión conforme a obra", "union_construida"), _i("Grupo rígido", "grupo_rigido"),
+    _i("Origen de la unión", "origen_union"), SEP,
+    _i("Uniones de animación", "accionar_uniones"), _i("Vínculo de movimiento", "vinculo_movimiento"),
+    _i("Estudio de movimiento", "estudio_movimiento"), SEP,
+    _i("Activar conjuntos de contactos", ico="conjunto_contacto"),
+    _i("Activar todos los contactos", ico="conjunto_contacto"), SEP,
     _i("Fijar / liberar componente", "fijar_componente"),
     _i("Anclar / desanclar componente", "anclar_componente"), _i("Editar posición inicial", "posicion_inicial"),
-    _i("Capturar posición", "capturar_posicion"), _i("Revertir posición", "revertir_posicion"), SEP,
-    _i("Habilitar todos los conjuntos de contacto", ico="conjunto_contacto"), _i("Estudio de movimiento", "estudio_movimiento"), SEP,
-    _i("Insertar componente…", "insertar_diseno")])
+    _i("Capturar posición", "capturar_posicion"), _i("Revertir posición", "revertir_posicion")])
 SELECCIONAR = ("SELECCIONAR", ["seleccionar"], [
     _i("Seleccionar", "seleccionar"), _i("Selección en ventana", "sel_ventana"),
     _i("Selección de forma libre", "sel_libre"), _i("Selección de pintura", "sel_pintura"), SEP,

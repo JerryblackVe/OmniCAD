@@ -21,8 +21,8 @@ from . import entidades as ent
 from .operaciones import (ANGULO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo, _migrador,
                           _resolver, _version_de, registrar_operacion)
 
-TIPOS_UNION = {"rigida": "Rígida", "revolucion": "Revolución", "deslizante": "Deslizante", "cilindrica": "Cilíndrica",
-               "pasador_ranura": "Pasador-ranura", "planar": "Planar", "bola": "Bola"}
+TIPOS_UNION = {"rigida": "Rígida", "revolucion": "Revolución", "deslizante": "Corredera", "cilindrica": "Cilíndrica",
+               "pasador_ranura": "Polo-ranura", "planar": "Planar", "bola": "Bola"}
 # grados de libertad: (giros, desplazamientos) por tipo
 MOVIMIENTOS = {"rigida": ([], []), "revolucion": (["giro"], []), "deslizante": ([], ["desliz"]),
                "cilindrica": (["giro"], ["desliz"]), "pasador_ranura": (["giro"], ["desliz"]),
@@ -721,7 +721,7 @@ def _resolver_lazo(estado, ctx, cierre, camino):
 
 
 class OpUnion(Operacion):
-    """ENSAMBLAR › Unión [ASM-CREATE-JOINT] y Unión como está [ASM-CREATE-AS-BUILT-JOINT].
+    """ENSAMBLAR › Unión [ASM-CREATE-JOINT] y Unión conforme a obra [ASM-CREATE-AS-BUILT-JOINT].
 
     `version_marco` (2 en las uniones nuevas; 1 en las recetas viejas, ver `_migrador`): con 2
     el marco es el de `_marco` y dos marcos de eje (perno en agujero, rueda en eje, también a través de un
@@ -949,7 +949,7 @@ class OpGrupoRigido(Operacion):
     componentes secundarios» (ASM-9): también entran al grupo los subcomponentes de cada uno; sin marcar, un
     subcomponente sigue a su padre pero puede moverse solo."""
     TIPO, ETIQUETA, ICONO = "grupo_rigido", "Grupo rígido", "⛓"
-    PARAMS = {"componentes": [], "incluir_hijos": False}
+    PARAMS = {"componentes": [], "incluir_hijos": False}      # False: una receta vieja sin la clave sigue igual; el panel y la API lo encienden
 
     def dependencias(self):
         lista = self.p["componentes"] if isinstance(self.p["componentes"], (list, tuple)) else []

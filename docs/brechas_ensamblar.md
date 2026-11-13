@@ -73,6 +73,10 @@ movimiento · Activar conjuntos de contactos · Activar todos los contactos.
 
 **Grupo rígido:** Incluir componentes hijo encendido.
 
+Hecho (2026-11-13): orden y nombres del menú, atajo Mayús+J, pestañas Posición y Movimiento (Unión conforme a obra: Componentes y
+Movimiento), Componente 1, Componente 2 y Alineación plegables, nombres Corredera y Polo-ranura, Incluir hijos encendido. Falta: Relación de
+tangente como comando propio, Modo de origen en tres botones y los dos ítems de contactos (SC6, grisados).
+
 ## ASM-20 · Estado de los paneles
 
 `create_joint` y los paneles de unión tienen muchos campos sueltos. Revisar que respeten el orden de la captura y el `visible_si`.

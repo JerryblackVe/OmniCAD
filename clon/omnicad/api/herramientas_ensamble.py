@@ -744,7 +744,7 @@ def create_joint(sesion, origin1: str | list[float], origin2: str | list[float] 
     return _crear_union(sesion, name, params)
 
 
-@herramienta("create_as_built_joint", "ensamble", "Unión como está (ENSAMBLAR › Unión como está): liga el componente "
+@herramienta("create_as_built_joint", "ensamble", "Unión conforme a obra (ENSAMBLAR › Unión conforme a obra): liga el componente "
              "de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del "
              "marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 "
              "lo sigue. Sin component2, la unión es contra la raíz. " + _DESC_TIPOS + _DESC_MODOS + _DESC_EJES,
@@ -993,7 +993,7 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
     return resultado
 
 
-@herramienta("drive_joint", "ensamble", "Acciona una unión (ENSAMBLAR › Accionar uniones): cambia su giro o "
+@herramienta("drive_joint", "ensamble", "Acciona una unión (ENSAMBLAR › Uniones de animación): cambia su giro o "
              "deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). Los "
              "límites recortan el valor y avisan. Cada valor acepta número (grados o mm) o expresión.", modifica=True)
 def drive_joint(sesion, joint: str, rotation: Expr | None = None, slide: Expr | None = None,
@@ -1083,7 +1083,7 @@ def set_joint_limits(sesion, joint: str, minimum: Expr | None = None, maximum: E
 # ---------------------------------------------------------------- grupos y vínculos
 @herramienta("create_rigid_group", "ensamble", "Grupo rígido (ENSAMBLAR › Grupo rígido): los componentes se mueven "
              "juntos; una unión que mueve a uno mueve a todos.", modifica=True)
-def create_rigid_group(sesion, components: list[str], name: str | None = None, include_children: bool = False):
+def create_rigid_group(sesion, components: list[str], name: str | None = None, include_children: bool = True):
     """
     components: componentes del grupo (id, nombre o uno de sus cuerpos); al menos dos distintos.
     name: nombre del paso; vacío = «Grupo rígido<n>».

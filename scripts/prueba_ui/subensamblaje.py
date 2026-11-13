@@ -164,10 +164,7 @@ def grupo_rigido():
     et = {c[0]: (c[1], c[2]) for c in A.etiquetas(p)}
     A.reg(AR, "el panel tiene la casilla «Incluir componentes secundarios»",
           et.get("incluir_hijos") == ("Casilla", "Incluir componentes secundarios"), str(et))
-    QTest.mouseClick(p.widgets["incluir_hijos"], Qt.LeftButton, Qt.NoModifier, QPoint(8, 7))     # el cuadradito
-    A.esperar(60)
-    A.reg(AR, "clic en el cuadradito marca la casilla", p.valores.get("incluir_hijos") is True, str(p.valores.get("incluir_hijos")))
-    A.esperar(60)
+    A.reg(AR, "la casilla arranca encendida (como Fusion)", p.valores.get("incluir_hijos") is True, str(p.valores.get("incluir_hijos")))
     A.elegir(p, "cuerpos", A.hit_cuerpo(v, brazo), A.hit_cuerpo(v, base))
     pasos = A.n_ops(v)
     aceptar(p)
@@ -175,6 +172,9 @@ def grupo_rigido():
     A.reg(AR, "Aceptar: el grupo incluye a CMano", A.n_ops(v) == pasos + 1 and g and set(g[-1]) == {kb, km, "op5"}, str(g))
     A.deshacer(v)
     p = A.abrir(v, "grupo_rigido")
+    QTest.mouseClick(p.widgets["incluir_hijos"], Qt.LeftButton, Qt.NoModifier, QPoint(8, 7))     # el cuadradito
+    A.esperar(60)
+    A.reg(AR, "clic en el cuadradito apaga la casilla", p.valores.get("incluir_hijos") is False, str(p.valores.get("incluir_hijos")))
     A.elegir(p, "cuerpos", A.hit_cuerpo(v, brazo), A.hit_cuerpo(v, base))
     aceptar(p)
     g = v.doc.estado_final.grupos_rigidos
