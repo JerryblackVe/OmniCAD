@@ -534,8 +534,8 @@ def _condicion_borde(cond, sesion=None, body=None):
     if tipo not in ("free", "direction", "tangent", "smooth"):
         raise error("INVALID_ARGUMENTS", "type es free, direction, tangent o smooth.")
     angulo, peso = cond.get("angle", 90), cond.get("weight", 1)
-    if isinstance(angulo, (int, float)) and not 0 < angulo < 180:
-        raise error("INVALID_ARGUMENTS", "angle está entre 0 y 180 grados.")
+    if isinstance(angulo, (int, float)) and not 0 < angulo % 360 < 180:      # da vueltas, como Fusion (−330 = 30)
+        raise error("INVALID_ARGUMENTS", "angle (módulo 360) está entre 0 y 180 grados.")
     if isinstance(peso, (int, float)) and peso <= 0:
         raise error("INVALID_ARGUMENTS", "weight tiene que ser positivo.")
     salida = {"tipo": {"free": "libre", "direction": "direccion", "tangent": "tangente", "smooth": "suave"}[tipo],

@@ -967,7 +967,7 @@ def _auxiliares(sec, otra, cond, signo, exacta=False):
     hacia = centro(otra) - c
     delta = peso * 0.15 * float(np.linalg.norm(hacia))
     if tipo == "direccion":
-        angulo = float(cond.get("angulo", 90.0))
+        angulo = float(cond.get("angulo", 90.0)) % 360.0         # P-147c: el anillo da vueltas (−330 = 30), como Fusion
         if not 0 < angulo < 180:
             raise geo.ErrorGeometria("El ángulo de la condición de borde está entre 0 y 180 grados.")
         n = _normal_seccion(w, hacia)
