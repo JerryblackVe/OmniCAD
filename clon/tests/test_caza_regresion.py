@@ -239,3 +239,17 @@ def test_mutar_cambia_los_bytes_y_se_repite():
     datos = bytes(range(256)) * 8
     assert trabajador.mutar(datos, random.Random(3)) == trabajador.mutar(datos, random.Random(3))
     assert any(trabajador.mutar(datos, random.Random(i)) != datos for i in range(5))
+
+
+def test_repetir_confirma_tambien_los_pendientes_sin_confirmar(tmp_path, capsys):
+    firma = "proceso|herramienta_de_prueba|colgado"            # una firma que no esté en el corpus
+    receta = [{"tool": "create_box", "args": {"length": 80}}, {"tool": "herramienta_de_prueba", "args": {}}]
+    (tmp_path / "pendientes.json").write_text(json.dumps(
+        {firma: {"fallo": {}, "receta": receta, "veces": 1, "capa": "B", "ignorar": []}}), encoding="utf-8")
+    fuente = Mock()
+    fuente.pedir.return_value = {"fallo": {"juez": "proceso", "kind": "colgado", "op": "herramienta_de_prueba"}}
+    with patch.object(cazar, "ESTADO", tmp_path), patch.object(cazar, "Fuente", return_value=fuente):
+        assert cazar.repetir_firma(firma) == 1
+        assert "Sigue fallando" in capsys.readouterr().out
+        assert fuente.pedir.call_args.args[0]["pasos"] == receta
+        assert cazar.repetir_firma("proceso|no_existe|colgado") == 2

@@ -547,11 +547,13 @@ Cada caso: `receta.json`, `repro.py` y `render.png` en su carpeta. Lee este info
 
 
 def repetir_firma(firma):
-    """¿Sigue fallando? Busca la receta en los casos y en el corpus y la corre dos veces en procesos limpios."""
+    """¿Sigue fallando? Busca la receta en los casos, en el corpus y en los pendientes sin confirmar y la corre dos veces en procesos limpios."""
     casos = leer_json(ESTADO / "casos.json", {})
     for archivo in sorted(CORPUS.glob("*.json")):
         d = leer_json(archivo, {})
         casos.setdefault(d.get("firma"), d)
+    for f, d in leer_json(ESTADO / "pendientes.json", {}).items():       # guardan la receta como «receta», no como «pasos»
+        casos.setdefault(f, {**d, "pasos": d.get("receta")})      # la capa D guarda `ped`, sin receta
     if firma not in casos:
         print(f"No hay receta para «{firma}». Firmas: {', '.join(sorted(k for k in casos if k))}")
         return 2
