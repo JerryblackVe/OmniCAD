@@ -6,6 +6,8 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
 ## [No publicada]
 
 ### Agregado
+- **Ensamblar**: la restricción de componentes muestra su vista previa al pasar el cursor sobre la cara, el eje o el plano, antes de elegir, y avisa los conflictos con las uniones.
+- **Campos a la vista**: Barrido (conicidad y torsión), Nervio, Red, Desmoldeo y Empalme muestran en el diálogo opciones que antes estaban escondidas en «Más opciones», en el orden de Fusion.
 - **Preferencias › «Asas y superposiciones»**: color, tamaño y opacidad de lo que se dibuja sobre el visor (asas, flechas
   y superposiciones), también por MCP/CLI.
 - **Anillo de ángulo como el de Fusion** para el ángulo de Extruir, la torsión del Barrido, el giro de la Revolución y el
@@ -41,6 +43,9 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
 - Los `.omnicad` muestran la vista del modelo en el Explorador de Windows.
 
 ### Cambiado
+- **Rosca**: el «Detalle de rosca» del panel es una línea corta; la norma y las tolerancias van al tooltip.
+- **Boceto**: las ayudas de dibujo se rearman un 40 % más rápido con miles de líneas (2000 líneas: de ~18 a ~11 ms por cambio).
+- **Sólido**: la conicidad de Extruir con muchos perfiles vecinos es mucho más rápida (una grilla de 10×10 pasa de 28 s a 1,8 s).
 - **Velocidad**: el solver del boceto 3D resuelve tangentes en 11,5 ms (antes 214 a 371 ms); un patrón de 1000 copias en
   un boceto pasa de 104 s a 16 ms; Extruir con muchos perfiles arma la previa una sola vez y no se traba; el análisis de
   sección de una rosca modelada pasa de 32 s a 0,3 s; la hélice larga de la rosca se barre de una vez; Aceptar o Cancelar
@@ -57,6 +62,9 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
 - Los análisis de INSPECCIONAR no cortan, rayan ni pintan cuerpos ocultos.
 
 ### Corregido
+- **Sólido**: un patrón de esferas sobre las dos caras de una chapa fina ya no da «resultado imposible» ni tarda minutos (de 117 s a 7 s).
+- **Sólido**: el Vaciado con un espesor que no cabe en la pared avisa en vez de dar una pieza con superficies cruzadas.
+- **Rosca**: el agujero con rosca modelada ACME (por ejemplo 1/2-10) ya no falla con «tangente a una pared».
 - **Boceto**: arrastrar un punto totalmente restringido ya no deforma el perfil; el desfase de splines, elipses y
   ranuras queda totalmente restringido; Escala, Mover, Copiar/Pegar y Recortar ya no rompen un perfil con chaflán ni
   dejan restricciones sueltas; las cotas de ángulo y de distancia entre líneas no paralelas se rechazan como en Fusion;
