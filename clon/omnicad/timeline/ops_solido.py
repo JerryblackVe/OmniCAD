@@ -1282,7 +1282,6 @@ class OpPatronGeometrico(_OpCrear):
     repartidos sobre las caras planas `caras` con un gradiente de tamaño (`nucleo/patron_geometrico.py` explica cada
     opción). `operacion`: unir, cortar, intersecar o cuerpo nuevo."""
     TIPO, ETIQUETA, ICONO = "patron_geometrico", "Patrón geométrico", "⁘"
-    REVISA_AUTOINTERSECCIONES = True
     PARAMS = {"caras": [], "objeto": "esfera", "personalizado": None, "tamano1": "2 mm", "tamano2": "4 mm",
               "dispersion": "1", "distribucion": "rectangular", "separacion": "incremento", "distancia": "6 mm",
               "cantidad_u": 5, "cantidad_v": 5, "distancia_radial": "6 mm", "rayos": 8, "orientacion": "cara",
@@ -1319,11 +1318,9 @@ class OpPatronGeometrico(_OpCrear):
                     limpiar_perimetro=bool(p["limpiar_perimetro"]), desfase_perimetro=L("desfase_perimetro")))
             except geo.ErrorGeometria as err:
                 raise ErrorOperacion(str(err)) from err
-        herramienta = geo.compuesto(formas)
-        _avisar_autointersecciones(
-            ctx, herramienta, "El patrón",
-            "las copias son más grandes que la distancia que las separa, o caen en dos caras separadas menos que su "
-            "tamaño. Aumentá la distancia, bajá el tamaño o elegí una sola cara.")
+        # B-167: las copias que se pisan (o las de dos caras cercanas) se funden en una sola herramienta; como compuesto
+        # eran cientos de autointersecciones, una booleana de minutos y un resultado «imposible»
+        herramienta = geo.unir_todos([sol for f in formas for sol in geo.solidos(f)])
         self._aplicar(estado, ctx, herramienta)
 
 
