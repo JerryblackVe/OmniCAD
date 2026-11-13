@@ -1036,7 +1036,8 @@ def test_sin_la_casilla_no_hay_lineas_y_los_puntos_laten_mientras_corre(panel, v
     assert b.isVisible() and b.reloj.isActive() and not b.texto.isVisible()
     cuadro, puntos = b.cuadro, b.puntos.text()
     QTest.qWait(_Pensando.PASO_MS * 3)                       # el reloj de verdad avanza los puntos
-    assert b.cuadro > cuadro and b.puntos.text() != puntos
+    assert b.cuadro > cuadro
+    assert (b.cuadro - cuadro) % 3 == 0 or b.puntos.text() != puntos   # con la máquina cargada pueden pasar 3 cuadros y volver al mismo punto
     while b.cuadro * _Pensando.PASO_MS < _Pensando.ESPERA_MS:
         b.latir()
     assert b.texto.isVisible() and b.texto.text() == "pensando…"   # tarda: dice qué hace, en palabras
