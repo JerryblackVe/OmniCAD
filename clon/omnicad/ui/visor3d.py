@@ -36,6 +36,8 @@ from .. import nativo
 from ..nucleo import geometria as geo
 from ..nucleo import referencias as refs
 from ..nucleo.render_cpu import ACERO, COLOR_MALLA, COLOR_SUPERFICIE, ENTORNOS, es_malla  # noqa: F401 — se re-exportan
+from ..nucleo.render_cpu import (DEFLEXION_MAX, DEFLEXION_MIN, FACTOR_DETALLE_AUTO,  # noqa: F401 — se re-exportan
+                                deflexion_automatica)
 from . import estilo_asas, temas
 
 
@@ -233,7 +235,6 @@ def teselar_cuerpo(forma, deflexion, angular=0.3, rehacer=True, *, _previa=False
 
 
 # Detalle «Automático»: la deflexión sigue al tamaño de cada pieza (diagonal de su caja × factor), entre estos topes.
-FACTOR_DETALLE_AUTO, DEFLEXION_MIN, DEFLEXION_MAX = 3e-4, 0.01, 0.5
 # Orden en que «Dinámico» apaga cosas al navegar (Fusion: «reduced or toggled off in priority order»).
 DEGRADACION = (("reflejo",), ("suelo", "sombra_suelo"), ("aa",))
 
@@ -276,16 +277,6 @@ def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40):
     colores[:, :3] = rgb
     colores[:, 3] = np.repeat(alfa.reshape(-1), 2)
     return vertices.astype(np.float32), colores.astype(np.float32)
-
-
-def deflexion_automatica(forma):
-    """Deflexión (mm) para teselar `forma` con el detalle «Automático»: fina en piezas chicas, gruesa en grandes."""
-    try:
-        mn, mx = geo.caja_aproximada(forma)    # B-335: el tamaño alcanza; la exacta tarda
-        diag = float(np.linalg.norm(np.asarray(mx, float) - np.asarray(mn, float)))
-    except Exception:  # noqa: BLE001 — una forma rara no debe impedir dibujar: se usa el medio
-        return 0.05
-    return min(max(diag * FACTOR_DETALLE_AUTO, DEFLEXION_MIN), DEFLEXION_MAX)
 
 
 def aristas_cuerpo(forma):

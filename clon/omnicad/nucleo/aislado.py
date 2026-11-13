@@ -42,6 +42,8 @@ TOPE_PREVUELO_PARAMETROS = 900        # segundos, incluida la reconstrucción de
 TOPE_PREVUELO_ABRIR = 900             # segundos para el ensayo de apertura de un archivo grande (B-48)
 TOPE_ENSAYO_LECTURA = 900             # segundos para ensayar la importación STEP/IGES completa (B-160)
 TOPE_MEMORIA_TRABAJADOR = 2048        # MB: pasado esto se cierra el trabajador al contestar (su memoria se libera con él)
+# B-418: el pedido se da por perdido si el trabajador, ya despierto, no lo toma en esto; o si no despierta en lo otro.
+PLAZO_RECIBIR, PLAZO_DESPERTAR = 3, 60
 PACIENCIA_PREVIA = 10                 # segundos para una previa vieja antes de cerrar al trabajador (rehacer el documento cuesta más)
 EN_HIJO = False
 # En el trabajador: el documento al día y lo que el padre ya tiene (id(objeto) → (número, huella, objeto); huella → número),
@@ -69,6 +71,14 @@ class TiempoAgotado(TareaAislada):
 
 class FalloDelCalculo(TareaAislada):
     """El hijo terminó bien y el cálculo dio error (un valor imposible): repetirlo con lo mismo da lo mismo."""
+
+
+class PedidoPerdido(TareaAislada):
+    """B-418: el trabajador no tomó el pedido. Otro trabajador sí lo toma."""
+
+
+class Cancelado(TareaAislada):
+    """La persona dejó de esperar el cálculo (Esc o Cancelar): el documento queda como estaba."""
 
 
 # ---------------------------------------------------------------- lo que corre el hijo
@@ -169,6 +179,13 @@ def _ensayar_lectura(ruta, formato):
     return {"ok": True}
 
 
+def _calentar(receta):
+    """FL-9: arma el documento en el trabajador antes de la primera previa (ver `precalentar`)."""
+    with _motor.fijar_motor("opencascade"):
+        _documento(receta)
+    return {}
+
+
 def _recalcular_documento(receta, sin_memoria=False):
     """`sin_memoria`: «Calcular todo» ejecuta de verdad cada paso, también los que el trabajador tiene en memoria."""
     from ..timeline.calculo_aislado import _empaquetar
@@ -201,7 +218,7 @@ def _con_forma(tarea, ruta, **args):
 
 
 _TAREAS_JSON = {"prevuelo_parametros": _prevuelo_parametros, "prevuelo_cambio": _prevuelo_cambio,
-                "prevuelo_abrir": _prevuelo_abrir, "recalcular_documento": _recalcular_documento,
+                "prevuelo_abrir": _prevuelo_abrir, "recalcular_documento": _recalcular_documento, "calentar": _calentar,
                 "previa_visual": _previa_visual, "solape_herramienta": _solape_herramienta, "con_forma": _con_forma,
                 "ensayar_lectura": _ensayar_lectura}
 
@@ -270,8 +287,13 @@ def pedidos_del_padre():
     cola = queue.SimpleQueue()
 
     def leer():
-        for linea in os.fdopen(0, "rb"):
-            cola.put(linea)
+        try:
+            for linea in os.fdopen(0, "rb"):
+                cola.put(linea)
+        except BaseException:       # B-418: sin este hilo el trabajador esperaba para siempre; el padre ve la caída y el motivo
+            traceback.print_exc()
+            sys.stderr.flush()
+            os._exit(3)
         os._exit(0)
 
     threading.Thread(target=leer, name="omnicad_padre", daemon=True).start()
@@ -284,7 +306,10 @@ def _trabajar(carpeta):
     `args.json` trae el pedido; `listo` avisa que `salida.json` ya está completa."""
     global formas_enviadas
     formas_enviadas = {}
+    from ..timeline import calculo_aislado  # noqa: F401 — FL-9: OCP y el timeline (~1,5 s) antes del primer pedido
+    (carpeta / "despierto").touch()
     for linea in pedidos_del_padre():
+        (carpeta / "recibido").touch()      # B-418: el padre sabe que el pedido llegó (si no, lo reintenta)
         args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
         tope = args.pop("_tope_mb")
         salida = _atender(linea.decode("ascii").strip(), args)
@@ -361,6 +386,8 @@ def correr_json(tarea, datos, tope, esperar=None):
             _esperar_previa_cancelada(esperar)
             if _previa_en_curso is None:
                 return _pedir(tarea, dict(datos, _marca=marca_recibida, _tope_mb=TOPE_MEMORIA_TRABAJADOR), tope, esperar)
+        except PedidoPerdido:
+            pass                    # B-418: dos trabajadores no lo tomaron; el hijo de una sola tarea lo lee de un archivo
         finally:
             _ocupado.release()
     return _correr(tarea, tope, datos, esperar=esperar)     # otro hilo, documento o previa lo usa: un hijo de una sola tarea
@@ -374,7 +401,8 @@ class _Trabajador:
         self.temporal = tempfile.TemporaryDirectory(prefix="omnicad_trabajador_", ignore_cleanup_errors=True)
         self.carpeta = Path(self.temporal.name)
         self.proceso = None
-        self.creado, self.arranque = time.monotonic(), None
+        self.creado, self.primer_pedido, self.arranque = time.time(), None, None
+        self.enviado = self.creado
         try:
             self.errores = (self.carpeta / "errores.txt").open("wb")
             self.proceso = subprocess.Popen(_comando("trabajador", self.carpeta), bufsize=0, cwd=_RAIZ,
@@ -391,20 +419,51 @@ class _Trabajador:
             pass
 
     def enviar(self, tarea, datos):
+        if self.primer_pedido is None:
+            self.primer_pedido = time.time()
+        (self.carpeta / "recibido").unlink(missing_ok=True)
+        self.enviado = time.time()
         (self.carpeta / "args.json").write_text(json.dumps(datos, default=_a_json), encoding="utf-8", newline="\n")
         self._avisar(tarea)
 
     def termino(self):
         return (self.carpeta / "listo").is_file() or self.proceso.poll() is not None
 
+    def perdido(self):
+        """B-418: ¿el pedido no llegó? Despierto, no lo tomó en `PLAZO_RECIBIR` s; o no despertó en `PLAZO_DESPERTAR`.
+        En Windows la primera previa quedaba «Calculando…» para siempre con el trabajador quieto."""
+        if (self.carpeta / "recibido").exists() or self.termino():
+            return False
+        despierto = self.carpeta / "despierto"
+        if despierto.exists():
+            return time.time() - max(despierto.stat().st_mtime, self.enviado) > PLAZO_RECIBIR
+        return time.time() - self.creado > PLAZO_DESPERTAR
+
+    def motivo_perdido(self):
+        """El aviso de un pedido que no tomó, con lo último de su salida de errores. Queda en el registro de uso: con él
+        se busca la causa en Windows (B-418), aunque el pedido siga por otro camino."""
+        try:
+            ultima = (self.carpeta / "errores.txt").read_bytes().decode("utf-8", "replace").strip().splitlines()
+        except OSError:
+            ultima = []
+        texto = "el proceso aparte no tomó el pedido" + (f": {ultima[-1]}" if ultima else "")
+        from ..registro_uso.ganchos import aviso
+        aviso(origen="aislado", mensaje=texto)
+        return texto
+
     def pedir(self, tarea, datos, tope, esperar):
         self.enviar(tarea, datos)
-        inicio = aviso = time.monotonic()
+        inicio = aviso = mirado = time.monotonic()
         while not self.termino():
             ahora = time.monotonic()
             if ahora - inicio > tope:
                 self.cerrar()
                 raise TiempoAgotado(f"pasó de {tope:.3g} s y se cortó".replace(".", ","))
+            if ahora - mirado >= 0.1 and self.perdido():       # cada décima: mira hasta tres archivos
+                motivo = self.motivo_perdido()
+                self.cerrar()
+                raise PedidoPerdido(motivo)
+            mirado = mirado if ahora - mirado < 0.1 else ahora
             if esperar is not None and ahora - aviso >= 0.05:
                 aviso = ahora
                 esperar(ahora - inicio)
@@ -426,14 +485,17 @@ class _Trabajador:
             self.cerrar()
             raise _caida(codigo, ultima)
         try:
+            terminado = listo.stat().st_mtime if listo.is_file() else time.time()
             resultado = json.loads(salida.read_text(encoding="utf-8"))
             salida.unlink()
             listo.unlink(missing_ok=True)
         except (OSError, ValueError) as e:
             self.cerrar()
             raise TareaAislada(f"el proceso aparte dejó un resultado ilegible ({e})") from e
-        if self.arranque is None:
-            self.arranque = time.monotonic() - self.creado
+        if self.arranque is None:       # lo que cuesta uno nuevo: de abrirlo a su primera respuesta, sin lo que esperó quieto
+            despierto = self.carpeta / "despierto"
+            quieto = max(0.0, self.primer_pedido - despierto.stat().st_mtime) if despierto.exists() else 0.0
+            self.arranque = terminado - self.creado - quieto
         if resultado.get("_cerrar"):
             self.cerrar()
         return resultado
@@ -467,6 +529,35 @@ def cerrar_trabajador():
 atexit.register(cerrar_trabajador)
 
 
+def precalentar(receta=None):
+    """FL-9: el trabajador arranca y arma `receta` ya, para que la primera previa no espere abrir el proceso, importar OCP
+    y rehacer el documento (2,3 s con un barrido sencillo). Sin `receta`, solo lo abre (en la portada). No espera nada: el
+    pedido que llegue atrás espera su turno, y si el trabajador está ocupado no se abre otro proceso para esto."""
+    if _motor.motor_activo() == "omnikernel" or _previa_en_curso is not None or not _ocupado.acquire(blocking=False):
+        return
+    try:
+        _trabajador_vivo()
+    except TareaAislada:
+        return                          # la primera previa lo vuelve a intentar e informa
+    finally:
+        _ocupado.release()
+    if receta is None:
+        return
+    try:
+        calculo = CalculoPendiente("calentar", {"receta": receta})
+    except TareaAislada:
+        return                          # la primera previa lo vuelve a intentar e informa
+    if calculo.trabajador is None:
+        calculo.cancelar()
+        return
+    # Cancelada de entrada: su respuesta se tira y el pedido que llegue espera su turno. El plazo es el de una previa, no
+    # PACIENCIA_PREVIA: armar un documento grande tarda más de 10 s y sirve igual; uno que se cuelga se cierra a los 900 s.
+    calculo.limite = time.monotonic() + TOPE_PREVUELO_PARAMETROS
+    reloj = threading.Timer(TOPE_PREVUELO_PARAMETROS, _vencio_previa, (calculo,))
+    reloj.daemon = True
+    reloj.start()
+
+
 def costo_reinicio():
     """Segundos que tardó el trabajador vivo en dar su primera respuesta (arrancar, rehacer el documento y calcular): lo
     que cuesta cerrarlo y empezar otro. Infinito si todavía no contestó: cortarlo no adelanta nada (FL-1)."""
@@ -483,13 +574,19 @@ def _trabajador_vivo():
 
 
 def _pedir(tarea, datos, tope, esperar):
-    try:
-        return _trabajador_vivo().pedir(tarea, datos, tope, esperar)
-    except TareaAislada:
-        raise
-    except BaseException:            # quedó con un pedido a medias: no sirve para el próximo
-        cerrar_trabajador()
-        raise
+    for intento in range(2):
+        try:
+            return _trabajador_vivo().pedir(tarea, datos, tope, esperar)
+        except PedidoPerdido:        # B-418: `pedir` ya lo cerró; una vez más con otro trabajador
+            if intento:
+                raise
+        except TareaAislada as e:
+            if isinstance(e, Cancelado):
+                cerrar_trabajador()  # sigue calculando lo cancelado: su respuesta se tomaría por la del próximo
+            raise
+        except BaseException:        # quedó con un pedido a medias: no sirve para el próximo
+            cerrar_trabajador()
+            raise
 
 
 def _soltar_previa(matar=False):
@@ -505,7 +602,7 @@ def _soltar_previa(matar=False):
             previa.trabajador.recoger()
         except (TareaAislada, OSError):        # el error de una previa cancelada no le importa a nadie
             pass
-    elif matar:
+    elif matar or previa.trabajador.perdido():     # B-418: un precalentado o una previa cancelada cuyo pedido no llegó
         cerrar_trabajador()
 
 
@@ -535,6 +632,7 @@ class CalculoPendiente:
         self.tarea, self.datos = tarea, dict(datos, _cwd=os.getcwd())
         self.inicio, self.tope = time.monotonic(), tope
         self.proceso = self.trabajador = self.temporal = self.limite = None
+        self.reintentada = False
         try:
             previa = _previa_en_curso
             if not self._al_trabajador() and (previa is None or previa.limite is None):
@@ -576,6 +674,14 @@ class CalculoPendiente:
         """None mientras calcula; devuelve el JSON terminado o informa el fallo sin tocar el documento."""
         global _previa_en_curso
         if not self._termino():
+            if self.trabajador is not None and _previa_en_curso is self and self.trabajador.perdido():
+                self.trabajador.motivo_perdido()
+                cerrar_trabajador()
+                self.trabajador = self.proceso = None
+                if self.reintentada:             # tampoco el segundo: un hijo de una sola tarea, que lee el pedido de un archivo
+                    self._arrancar_hijo()
+                self.reintentada = True          # B-418: una vez más con un trabajador nuevo (lo arranca `_termino`)
+                return None
             if time.monotonic() - self.inicio > self.tope:
                 self.cancelar(ya=True)
                 raise TiempoAgotado("La vista previa pasó su plazo y se cortó.")
@@ -636,6 +742,8 @@ def _ejecutar(comando, tope, esperar):
         except BaseException as e:      # se relanza en el hilo que espera
             salida.append(e)
 
+    # shortcut: si `esperar` corta (Cancelado), el hijo sigue hasta terminar o `tope`; hoy casi no pasa por acá (el
+    # cálculo de Aceptar va al trabajador): si se vuelve común, guardar el Popen y matarlo.
     hilo, inicio = threading.Thread(target=trabajo, daemon=True), time.monotonic()
     hilo.start()
     while hilo.is_alive():

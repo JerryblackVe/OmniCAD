@@ -1881,7 +1881,7 @@ class PanelComando(QFrame):
         try:
             self._hijo_previa = CalculoPendiente("previa_visual", {
                 "receta": self.ctx.doc.a_dict(), "operacion": op.a_dict(), "indice": self.ctx.indice,
-                "deflexion": self.visor.config.teselado or 0.05, "angular": self.visor.config.angular,
+                "deflexion": None if self.visor.config.teselado is None else self.visor.config.teselado or 0.05, "angular": self.visor.config.angular,
                 # FL-1: siempre el B-Rep, como la previa de la ventana: se eligen aristas sobre ella (Empalme), se
                 # resaltan caras (P-145) y Extruir mira si se mete en otro cuerpo
                 "formas": True})
@@ -2010,9 +2010,14 @@ class PanelComando(QFrame):
             return
         if self.comando.PREVIA and not self._previa_ok and not self._previa_aparte:
             return                           # la operación falla: el mensaje rojo ya lo dice
-        # Con la previa aparte en vuelo, caída o vencida, aceptar no espera: la operación se calcula exacta al aplicarla.
+        # Con la previa aparte en vuelo, caída o vencida, la operación se calcula exacta al aplicarla. La previa se suelta
+        # antes (B-418): el cálculo va al trabajador, que la cierra si su pedido se perdió y reintenta el suyo.
+        en_vuelo = self._hijo_previa is not None
+        self._cancelar_previa_hijo()
         op = self.ultima_op
         if self.confirmar is not None and not self.confirmar(op):
+            if en_vuelo:                 # no fue: la previa soltada se pide de nuevo, nunca un «Calculando…» quieto
+                self._t_previa.start()
             return
         try:
             preajustes_ui.recordar_ultimo(self)
