@@ -704,6 +704,7 @@ class Lienzo(QWidget):
         self._indice_clave = None
         self._puntos_np = None           # (clave, ids, coordenadas) de todos los puntos, para capturarlos en bloque
         self._cache_splines = {}         # id → (lo que define la spline de ajuste, sus primitivas): ver `_polilineas`
+        self._capa_clave = self._capa_img = None    # imagen de las curvas y lo que dibuja: ver `_dibujar_capa_curvas`
         self._inf_alt = 0
         self._inf_claves = []            # qué ayudas había en el movimiento anterior: si cambian, Espacio vuelve a la primera
         self._inf_bloqueo = None         # ayuda bloqueada con Flecha arriba: el cursor sigue su guía
@@ -1206,15 +1207,18 @@ class Lienzo(QWidget):
             for c, texto in ligados:
                 c.texto = texto
 
+    def _firma_camara(self):
+        """Lo que define el paso de coordenadas del boceto a píxeles: si no cambia, lo proyectado sigue valiendo."""
+        if self.visor is None:
+            return (self.escala, self.centro[0], self.centro[1], self.width(), self.height())
+        if self._mvp is None:
+            self._camara()
+        return (self._mvp.tobytes(), self.visor.width(), self.visor.height())
+
     def _poli_px(self, puntos):
         # Con la cámara quieta (repintar por el hover, una selección…) se reusa lo proyectado. Solo se guardan las
         # tuplas (las muestras cacheadas de `_muestras`, que no cambian); la entrada retiene la tupla: su id no se recicla.
-        if self.visor is None:
-            firma = (self.escala, self.centro[0], self.centro[1], self.width(), self.height())
-        else:
-            if self._mvp is None:
-                self._camara()
-            firma = (self._mvp.tobytes(), self.visor.width(), self.visor.height())
+        firma = self._firma_camara()
         if firma != getattr(self, "_firma_px", None):
             self._firma_px, self._cache_px = firma, {}
         hecho = self._cache_px.get(id(puntos))
@@ -6020,6 +6024,36 @@ class Lienzo(QWidget):
         return QColor(90, 160, 255) if self._oscuro() else QColor(25, 90, 200), 2.0
 
     # ------------------------------------------------------------ dibujo
+    def _dibujar_capa_curvas(self, p, capa, cuadros):
+        """RS-X3: las curvas y los puntos se dibujan en una imagen guardada y después se pegan: el cursor y el hover repintan
+        sin volver a trazarlos. La clave es exactamente lo que se dibuja (cada curva con su color, grosor, estilo, polilíneas y
+        guías; cada punto con su lugar y sus colores; la cámara y el tamaño), así que cualquier cambio de geometría,
+        selección, hover, conflictos, tema o capas visibles cambia algún elemento y rearma la imagen."""
+        dpr = self.devicePixelRatioF()
+        clave = (self._firma_camara(), self.width(), self.height(), dpr, tuple(capa), tuple(cuadros))
+        if clave != self._capa_clave:
+            img = QPixmap(max(1, round(self.width() * dpr)), max(1, round(self.height() * dpr)))
+            img.setDevicePixelRatio(dpr)
+            img.fill(Qt.transparent)
+            q = QPainter(img)
+            q.setRenderHint(QPainter.Antialiasing)
+            for _cid, rgba, ancho, estilo, polis, extra in capa:
+                q.setPen(QPen(QColor.fromRgba(rgba), ancho, estilo))
+                for poli in polis:
+                    self._dibujar_polilinea(q, poli)
+                if extra is not None and extra[0] == "marco":
+                    q.setPen(QPen(QColor(150, 150, 160), 1, Qt.DotLine))      # marco de control, como Fusion
+                    self._dibujar_polilinea(q, list(extra[1]))
+                elif extra is not None:
+                    self._dibujar_guias_conica(q, *extra[1:])
+            for x, y, borde, relleno in cuadros:
+                q.setPen(QPen(QColor.fromRgba(borde), 1))
+                q.setBrush(QColor.fromRgba(relleno))
+                q.drawRect(QRectF(x - 3, y - 3, 6, 6))
+            q.end()
+            self._capa_clave, self._capa_img = clave, img
+        p.drawPixmap(0, 0, self._capa_img)
+
     def _dibujar_polilinea(self, p, puntos):
         poli = self._poli_px(puntos)
         if poli:
@@ -6102,6 +6136,7 @@ class Lienzo(QWidget):
         puntos_internos = {p for cid in internas for p in self.b.curvas[cid].puntos()}
         solo_auto, puntos_auto = self.b.ocultos_por_proyeccion_auto()    # no se dibujan (como Fusion)
         quietas = determinadas | en_origen        # RS-X3: una vez (por curva era cuadrático con miles de curvas)
+        capa = []                                 # lo que se dibuja de cada curva: ver `_dibujar_capa_curvas`
         for c in self.b.curvas.values():
             if c.id in internas:
                 continue
@@ -6114,24 +6149,24 @@ class Lienzo(QWidget):
             if self._brillantes is not None and c.id not in self._brillantes:
                 color = QColor(color)
                 color.setAlphaF(0.2)
-            pluma = QPen(color, ancho)
-            if c.construccion:
-                pluma.setStyle(Qt.DashLine)
-            elif c.eje:
-                pluma.setStyle(Qt.DashDotLine)
-            p.setPen(pluma)
-            for poli in self._polilineas(c):
-                self._dibujar_polilinea(p, poli)
+            estilo = Qt.DashLine if c.construccion else Qt.DashDotLine if c.eje else Qt.SolidLine
+            extra = None
             if isinstance(c, Spline) and c.modo == "control" and not c.proyectada:
-                p.setPen(QPen(QColor(150, 150, 160), 1, Qt.DotLine))      # marco de control, como Fusion
-                self._dibujar_polilinea(p, [self.b.coords(q) for q in c.pts])
-            if isinstance(c, Conica) and c.id in self.seleccion:
-                self._dibujar_guias_conica(p, self.b.coords(c.inicio), self.b.coords(c.vertice), self.b.coords(c.fin))
+                extra = ("marco", tuple(self.b.coords(q) for q in c.pts))
+            elif isinstance(c, Conica) and c.id in self.seleccion:
+                extra = ("guias", self.b.coords(c.inicio), self.b.coords(c.vertice), self.b.coords(c.fin))
+            capa.append((c.id, color.rgba(), ancho, estilo, tuple(self._polilineas(c)), extra))
+        cuadros = []                              # los puntos: (x, y, borde, relleno), en la misma imagen que las curvas
         if self.mostrar["puntos"]:
             visibles = {q for c in self.b.curvas.values() if self._visible(c) for q in c.puntos()}
             vivos = None if self._brillantes is None else self._brillantes | {
                 q for c in self.b.curvas.values() if c.id in self._brillantes for q in c.puntos()}
             ancho, alto = self.width() + 8, self.height() + 8
+            oscuro = self._oscuro()                # los colores, una vez (RS-X3: crearlos por punto costaba más que dibujar)
+            celeste, verde = QColor(0, 180, 255).rgba(), QColor(70, 200, 100).rgba()
+            quieto = (QColor(245, 245, 245) if oscuro else QColor(20, 20, 20)).rgba()
+            libre = (QColor(90, 160, 255) if oscuro else QColor(25, 90, 200)).rgba()
+            blanco, tenue = QColor(255, 255, 255).rgba(), round(0.2 * 255) << 24
             for pt in self.b.puntos.values():
                 if pt.id in puntos_internos:
                     continue
@@ -6142,27 +6177,21 @@ class Lienzo(QWidget):
                 if not (-8 <= q.x() <= ancho and -8 <= q.y() <= alto):
                     continue                          # fuera de la pantalla: no se dibuja
                 if pt.id in self.seleccion or pt.id in self.picks:
-                    color, relleno = QColor(0, 180, 255), QColor(0, 180, 255)
+                    color = relleno = celeste
                 elif pt.proyectado:
-                    color, relleno = VIOLETA, VIOLETA
+                    color = relleno = VIOLETA.rgba()
                 elif pt.id in en_conflicto:
-                    color, relleno = CONFLICTO, CONFLICTO
+                    color = relleno = CONFLICTO.rgba()
                 elif pt.id in fijos_verdes:
-                    color, relleno = QColor(70, 200, 100), QColor(70, 200, 100)
+                    color = relleno = verde
                 elif pt.id in determinadas or pt.id in en_origen:
-                    color = QColor(245, 245, 245) if self._oscuro() else QColor(20, 20, 20)
-                    relleno = color
+                    color = relleno = quieto
                 else:
-                    color = QColor(90, 160, 255) if self._oscuro() else QColor(25, 90, 200)
-                    relleno = QColor(255, 255, 255)
-                if vivos is not None and pt.id not in vivos:
-                    color, relleno = QColor(color), QColor(relleno)
-                    color.setAlphaF(0.2)
-                    relleno.setAlphaF(0.2)
-                p.setPen(QPen(color, 1))
-                p.setBrush(relleno)
-                p.drawRect(QRectF(q.x() - 3, q.y() - 3, 6, 6))
-            p.setBrush(Qt.NoBrush)
+                    color, relleno = libre, blanco
+                if vivos is not None and pt.id not in vivos:          # el alfa de setAlphaF(0.2)
+                    color, relleno = color & 0xFFFFFF | tenue, relleno & 0xFFFFFF | tenue
+                cuadros.append((q.x(), q.y(), color, relleno))
+        self._dibujar_capa_curvas(p, capa, cuadros)
         self._zonas_glifos = self._dibujar_glifos(p) if self.mostrar["restricciones"] else {}
         if not self.mostrar["restricciones"]:
             self._zonas_glifos_extra = []
