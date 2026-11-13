@@ -17,6 +17,10 @@ from ..registro_uso.ganchos import error
 from .iconos import icono
 
 
+UMBRAL_BLOQUEO_MS = 100.0       # FL-0: lo que se anota como `bloqueo_ui` (antes 250 ms)
+SUSPENSION_MS = 30000.0          # más de 30 s sin gastar CPU: probablemente la PC suspendida o un diálogo nativo (se marca, no se cuenta)
+
+
 class _DialogoReporte(QDialog):
     def eventFilter(self, obj, evento):
         # QDialogButtonBox vuelve a elegir un botón por defecto al mostrarse.
@@ -130,6 +134,7 @@ class RegistroVentana(QObject):
         QApplication.instance().installEventFilter(self)
         v.visor._cuadros_uso = deque(maxlen=6000)
         self._ultimo = self._muestra = time.perf_counter()
+        self._cpu_ultimo = time.process_time()
         self._rss, self._pausado = None, False
         self._duda = None
         self.reloj.start()
@@ -189,7 +194,7 @@ class RegistroVentana(QObject):
         tipo = evento.type()
         if tipo == QEvent.Shortcut and isinstance(obj, QAction):
             clave = _nombre_accion(obj) or "sin_clave"
-            self._ultima_accion = clave
+            self._ultima_accion, self._t_accion = clave, time.perf_counter()
             r.emitir("atajo", {"accion": clave})
         elif tipo == QEvent.MouseButtonPress:
             # Solo visor y botones: nunca se observa el teclado ni los campos de texto (chat incluido).
@@ -201,13 +206,13 @@ class RegistroVentana(QObject):
             if isinstance(obj, QToolButton) and obj.defaultAction():
                 clave = _nombre_accion(obj.defaultAction(), con_texto=False)
                 if clave:
-                    self._ultima_accion = clave
+                    self._ultima_accion, self._t_accion = clave, time.perf_counter()
                     r.emitir("boton_cinta", {"accion": clave})
         elif tipo == QEvent.MouseButtonRelease and isinstance(obj, QMenu):
             a = obj.activeAction()
             if a is not None:
                 clave = _nombre_accion(a) or obj.objectName() or "sin_clave"
-                self._ultima_accion = clave
+                self._ultima_accion, self._t_accion = clave, time.perf_counter()
                 r.emitir("menu_item", {"accion": clave, "etiqueta": a.text().replace("&", "")[:64]})
         return False
 
@@ -236,9 +241,22 @@ class RegistroVentana(QObject):
         self.api_terminada = None  # El temporizador puede volver recién después del finally del puente.
         demora, self._ultimo = (ahora - self._ultimo - 0.05) * 1000, ahora
         comando = self._comando()
-        if demora > 250:
+        cpu = time.process_time()
+        cpu_ms = (cpu - getattr(self, "_cpu_ultimo", cpu)) * 1000
+        self._cpu_ultimo = cpu
+        if demora > UMBRAL_BLOQUEO_MS:
             accion = f"api.{herramienta}" if herramienta else self._ultima_accion
-            r.emitir("bloqueo_ui", {"duracion_ms": demora, "comando": comando, "accion": accion})
+            datos = {"duracion_ms": demora, "comando": comando, "accion": accion, "cpu_ms": round(cpu_ms)}
+            # La última acción puede ser vieja (tocó un panel y 2 s después abrió un archivo): no se la atribuye al bloqueo.
+            hace = ahora - demora / 1000 - getattr(self, "_t_accion", ahora)
+            if not herramienta and accion and hace > 1.0:
+                datos.update(accion="", despues_de=accion, hace_s=round(hace))
+            modal = QApplication.activeModalWidget()
+            if modal is not None:
+                datos["dialogo"] = type(modal).__name__          # un diálogo propio abierto: la espera puede ser de la persona
+            if demora > SUSPENSION_MS and cpu_ms < 0.02 * demora:
+                datos["suspension_probable"] = True            # tanto rato sin gastar CPU: la PC suspendida o un diálogo nativo
+            r.emitir("bloqueo_ui", datos)
         p = self.ventana.panel
         cambio = getattr(p, "_uso_cambio", None)
         if cambio is not None and ahora - cambio > 20 and self._duda != cambio:

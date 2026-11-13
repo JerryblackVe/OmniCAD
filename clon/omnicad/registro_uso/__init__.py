@@ -34,7 +34,7 @@ ultimo = None
 _CLAVE = re.compile(r"[A-Za-z_][A-Za-z_0-9.-]{0,95}\Z")
 _IDENTIFICADORES = {"comando", "tipo_op", "accion", "origen", "formato", "excepcion", "categoria", "paso", "label",
                     "tipo", "herramienta", "estado", "funcion", "archivo", "clase", "objetivo", "resultado",
-                    "valor", "nombre"}
+                    "valor", "nombre", "despues_de"}
 # Texto útil que se guarda completo (saneado: «~», 500 caracteres) según el tipo de evento; `detallado` abre
 # los valores escritos en los diálogos. Nada de esto es texto libre del usuario salvo que él lo pida.
 _ABIERTOS = {"error": {"error.mensaje"}, "aviso": {"aviso.mensaje"},
