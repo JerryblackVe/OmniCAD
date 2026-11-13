@@ -1,5 +1,6 @@
 """BOC-4 y BOC-5: AutoConstrain completo (tipos inferidos, opciones, proponer sin aplicar, Finish)."""
 import math
+from unittest.mock import patch
 
 import pytest
 
@@ -330,6 +331,8 @@ def test_boc4_rendimiento_boceto_de_250_entidades():
 
 
 def test_boc4_rendimiento_440_lineas_inclinadas_aisladas():
+    from omnicad.restricciones import solver
+
     def correr():
         b = Boceto()
         c, s = math.cos(math.radians(33)), math.sin(math.radians(33))
@@ -339,9 +342,11 @@ def test_boc4_rendimiento_440_lineas_inclinadas_aisladas():
         auto_restringir(b)
         return b
 
-    segundos, b = mejor_tiempo(correr, 30)
-    print(f"BOC-4 440 inclinadas: {segundos:.2f} s; {len(b.restricciones)} restr.", flush=True)
-    assert segundos < 30
+    with patch.object(solver, "_jacobiano", wraps=solver._jacobiano) as jacobiano:
+        b = correr()
+    print(f"BOC-4 440 inclinadas: {jacobiano.call_count} jacobianos; {len(b.restricciones)} restr.", flush=True)
+    # B-388: trabajo del solver, independiente de la carga; base 3075 + 25 % de margen.
+    assert jacobiano.call_count <= 3850
     assert "paralela" in _tipos(b)
     assert grados_de_libertad(b, _valores(b)) == 0
 
