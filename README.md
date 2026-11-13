@@ -73,18 +73,18 @@ omnicad setup --cliente todos --aplicar  # lo hace (con copia .bak de cada archi
 Todo está en [docs/agentes/](docs/agentes/README.md): cómo conectar cada cliente, la CLI, el modo en vivo y la lista
 completa de herramientas.
 
-## Novedades de la 0.2.0
+## Novedades de la 0.3.0
 
-- **Reconstruir sólido desde una malla, sin IA:** una malla de extrusiones, revoluciones, agujeros, empalmes y chaflanes pasa a ser una pieza con historial.
-- **Parámetros más fieles:** lector propio de expresiones (sin `eval`), 35 familias de unidades y renombrar un parámetro en todo el documento.
-- **CONSTRUIR e INSPECCIONAR completos:** planos, ejes y puntos con todos sus modos; 15 herramientas de inspección y huella de carbono de la pieza.
-- **Texto sobre una curva:** cada letra forma sus perfiles, con espaciado y altura por fuente, y se extruye sin agujeros de menos.
-- **Boceto más inteligente:** ayudas de dibujo con guías, Simetría, Desfase con signo, patrones y escala con vista previa viva.
-- **Más sólido, superficie y ensamblaje:** Editar cara por el contorno, patrones de sólido revisados, barrido con guías y subensamblajes.
-- **Más rápido:** un trabajador persistente edita con muchos pasos sin rehacer todo, y la vista previa de piezas pesadas responde en 0,05 a 0,22 s después de la primera.
-- **Booleanas honestas:** Unir, Cortar e Intersecar avisan cuando el resultado no cierra en vez de dar un volumen malo en silencio.
-- **Asas de arrastre más claras** y paneles de herramienta con un sistema común.
-- **Para agentes:** 386 herramientas MCP/CLI en 17 grupos (eran 349) y un registro de uso local, apagado de fábrica y sin envío a la red.
+- **Asas como las de Fusion:** anillo de ángulo para Extruir, Barrido, Revolución y Solevación; flecha del Peso de despegue, puntero azul del Empalme, caja de valor con los parámetros y asas que frenan en el límite de la pieza.
+- **Preferencias › Asas y superposiciones:** color, tamaño y opacidad de lo que se dibuja sobre el visor, también por MCP/CLI.
+- **Boceto más completo:** cota de una línea sola, Recortar arrastrando, Empalme y Chaflán por vértice, spline hasta grado 5 y patrones que siguen a los parámetros.
+- **Sólido más fiel a Fusion:** Extruir «Dos lados», conicidad desde planos inclinados, Nervio y Red con la regla de plástico, y campos que antes estaban escondidos ahora a la vista.
+- **Ensamblar con restricciones:** Alinear, Ángulo, Centro y Tangente entre componentes, con vista previa al pasar el cursor.
+- **Rosca mejorada:** tolerancias con las tablas de Fusion, tamaños ANSI, GB y GOST, y un panel más corto.
+- **Mucho más rápido:** patrón de 1000 copias de 104 s a 16 ms, tangentes del boceto 3D en 11,5 ms, Extruir con muchos perfiles sin trabarse y la conicidad con perfiles vecinos de 28 s a 1,8 s.
+- **Ventana más fluida:** abrir un STEP pesado ya no la congela y las previas pesadas van a un proceso aparte.
+- **Más robusto:** un STEP o IGES alterado da un error claro en vez de cerrar la app, y un caza-errores automático busca fallos solo.
+- **Para agentes:** 423 herramientas MCP/CLI en 17 grupos (eran 386) y funciona también en Linux.
 
 Detalle completo en el [CHANGELOG](CHANGELOG.md).
 

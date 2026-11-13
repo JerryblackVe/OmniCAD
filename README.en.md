@@ -74,18 +74,18 @@ omnicad setup --cliente todos --aplicar  # does it (backing up each file as .bak
 Tool names and parameters are in English (`create_box`, `fillet`, `radius`); descriptions and messages are in Spanish
 for now. Docs: [docs/agentes/](docs/agentes/README.md).
 
-## What's new in 0.2.0
+## What's new in 0.3.0
 
-- **Rebuild a solid from a mesh, without AI:** a mesh of extrusions, revolves, holes, fillets and chamfers becomes a part with history.
-- **More faithful parameters:** own expression reader (no `eval`), 35 unit families, and renaming a parameter across the whole document.
-- **Full CONSTRUCT and INSPECT:** planes, axes and points with all their modes; 15 inspection tools and a carbon footprint for the part.
-- **Text on a curve:** each letter forms its own profiles, with per-font spacing and height, and extrudes without missing holes.
-- **Smarter sketching:** drawing guides, Mirror, signed Offset, patterns and scale with live preview.
-- **More solid, surface and assembly tools:** Edit face by contour, reviewed solid patterns, sweep with guides and subassemblies.
-- **Faster:** a persistent worker edits with many steps without rebuilding everything, and the preview of heavy parts answers in 0.05 to 0.22 s after the first one.
-- **Honest booleans:** Join, Cut and Intersect warn when the result does not add up instead of silently returning a bad volume.
-- **Clearer drag handles** and tool panels built on a common system.
-- **For agents:** 386 MCP/CLI tools in 17 groups (up from 349) and a local usage log, off by default and never sent over the network.
+- **Drag handles like Fusion's:** angle ring for Extrude, Sweep, Revolve and Loft; the Loft end-weight arrow, the blue Fillet pointer, a value box with parameters, and handles that stop at the part's limit.
+- **Preferences › Handles and overlays:** color, size and opacity of what is drawn over the viewport, also through MCP/CLI.
+- **More complete sketching:** single-line dimension, drag-to-trim, Fillet and Chamfer by vertex, splines up to degree 5 and patterns that follow parameters.
+- **Solid closer to Fusion:** two-sided Extrude, taper from tilted planes, Rib and Web using the plastic rule, and fields that used to be hidden now in plain view.
+- **Assemble with constraints:** Align, Angle, Center and Tangent between components, with a preview when you hover.
+- **Better threads:** tolerances from Fusion's tables, ANSI, GB and GOST sizes, and a shorter panel.
+- **Much faster:** a 1000-copy pattern from 104 s to 16 ms, 3D-sketch tangents in 11.5 ms, Extrude with many profiles without stalling, and taper with neighbouring profiles from 28 s to 1.8 s.
+- **Smoother window:** opening a heavy STEP no longer freezes it, and heavy previews run in a separate process.
+- **More robust:** a tampered STEP or IGES gives a clear error instead of closing the app, and an automatic bug hunter looks for failures on its own.
+- **For agents:** 423 MCP/CLI tools in 17 groups (up from 386), and it also runs on Linux.
 
 Full detail in the [CHANGELOG](CHANGELOG.md) (Spanish).
 

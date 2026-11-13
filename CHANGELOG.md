@@ -5,6 +5,8 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
 
 ## [No publicada]
 
+## [0.3.0] — 2026-11-13
+
 ### Agregado
 - **Ensamblar**: la restricción de componentes muestra su vista previa al pasar el cursor sobre la cara, el eje o el plano, antes de elegir, y avisa los conflictos con las uniones.
 - **Campos a la vista**: Barrido (conicidad y torsión), Nervio, Red, Desmoldeo y Empalme muestran en el diálogo opciones que antes estaban escondidas en «Más opciones», en el orden de Fusion.
