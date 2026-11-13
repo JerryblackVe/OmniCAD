@@ -2225,6 +2225,12 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
         raise geo.ErrorGeometria(f"No se pudo engrosar: {abs(espesor):g} mm es igual o mayor que el radio de "
                                  "curvatura de la superficie de ese lado. Probá un espesor menor o engrosar hacia el "
                                  "otro lado.")
+    from . import revision                  # local: revision carga medio núcleo
+    # B-394: tres caras de una caja abierta (borde + dos paredes) daban «ok» con 6 autointersecciones en las esquinas
+    if revision._autointersecciones_seguras(resultado, 1, 5.0)[0]:
+        raise geo.ErrorGeometria("No se pudo engrosar: el sólido se cruza consigo mismo (las caras elegidas se "
+                                 "tocan en una esquina o el espesor es mayor que lo que deja la pieza). Probá un "
+                                 "espesor menor, otras caras o engrosar hacia el otro lado.")
     return resultado
 
 
