@@ -418,6 +418,57 @@ class AsaRadial(Flecha):
         return max(0.0, float(np.linalg.norm(s[0] - q)) - 6.0), "asa"
 
 
+class AsaTamanoRosca(AsaRadial):
+    """Radio de Rosca: salta entre los tamaños de la familia, como Thread de Fusion."""
+
+    def __init__(self, familia, origen, eje, radio_auto, radio_de=None):
+        """`radio_de(designacion)` = radio que se muestra de ese tamaño (sin él, el diámetro mayor nominal / 2)."""
+        from ..nucleo import solidos_crear as sc
+        super().__init__(f"tam_{familia}", origen, perpendiculares(eje)[0])
+        self.eje, self.radio_auto = unitario(eje), radio_auto
+        radio_de = radio_de or (lambda des: sc.datos_rosca(des)["diametro"] / 2)
+        self.radios = {tam: radio_de(sc.designaciones_rosca(familia, tam)[0]) for tam in sc.tamanos_rosca(familia)}
+
+    def _radio(self, g):
+        return self.radios.get(g.panel.valores.get(self.clave), self.radio_auto)
+
+    def _geom(self, g):
+        # Hacia un costado de la pantalla: no queda detrás de las flechas axiales ni alineada con el rayo.
+        radial = np.asarray(g.visor.R[0], float)
+        radial = radial - self.eje * float(radial @ self.eje)
+        if np.linalg.norm(radial) < 1e-6:
+            radial = np.asarray(g.visor.R[1], float)
+            radial = radial - self.eje * float(radial @ self.eje)
+        self.direccion = unitario(radial)
+        base = self.origen + self.direccion * self._radio(g)
+        return base, self.direccion, g.escala(base)
+
+    def empezar(self, g, pos, sub):
+        self._geom(g)
+        estado = super().empezar(g, pos, sub)
+        if estado is not None:
+            estado["v0"] = self._radio(g)
+        return estado
+
+    def _tamano_cercano(self, radio):
+        return {self.clave: min(self.radios, key=lambda tam: abs(self.radios[tam] - radio))}
+
+    def mover(self, g, estado, pos):
+        nuevos = super().mover(g, estado, pos)
+        return self._tamano_cercano(nuevos[self.clave]) if nuevos else {}
+
+    def texto_caja(self, g):
+        """Radio en mm del tamaño actual; la caja no muestra el nombre del desplegable."""
+        return f"{self._radio(g):.3f}".rstrip("0").rstrip(".").replace(".", ",")
+
+    def aplicar_caja(self, g, texto):
+        """Convierte el radio tecleado al tamaño más cercano, sin agregar campos al panel."""
+        radio = float(g.ctx.evaluar(texto, LONGITUD))
+        if not math.isfinite(radio) or radio <= 0:
+            raise ValueError("El radio debe ser positivo y finito.")
+        return self._tamano_cercano(radio)
+
+
 class FlechaPuntero(Flecha):
     """Asa del radio del empalme y del chaflán como la de Fusion (P-143): una flecha azul chata con forma de puntero,
     de cara a la cámara, que con la punta señala el punto del empalme sobre la cara del extremo y apunta hacia donde
@@ -1537,7 +1588,7 @@ class CajaValor(QLineEdit):
             e.accept()
             return
         if e.key() == Qt.Key_Escape:
-            self.setText(str(self.gestor.panel.valores.get(self.clave, "")))
+            self.setText(self.gestor.texto_caja(self))
             self.gestor.visor.setFocus()
             e.accept()
             return
@@ -1726,22 +1777,21 @@ class GestorManipuladores(QObject):
             arr = sub if self._arrastre is not None and self._arrastre["m"].ident == m.ident else None
             try:
                 for clave, punto in m.cajas(self, arr):
-                    pedidas[clave] = punto
+                    pedidas[clave] = (punto, m)
             except Exception:  # noqa: BLE001
                 log.debug("cajas de manipulador", exc_info=True)
         for clave in [c for c in self.cajas if c not in pedidas]:
             self._quitar_caja(self.cajas.pop(clave))
-        for clave, punto in pedidas.items():
+        for clave, (punto, manipulador) in pedidas.items():
             caja = self.cajas.get(clave)
             if caja is None:
                 caja = self.cajas[clave] = CajaValor(self, clave)
                 if clave == "escala" and self.comando.CLAVE in CON_ESCALA:
                     caja.setAlignment(Qt.AlignCenter)
             caja.punto = np.asarray(punto, float)
+            caja.manipulador = manipulador
             if not caja.hasFocus():
-                texto = str(self.panel.valores.get(clave, ""))
-                if clave == "escala" and self.comando.CLAVE in CON_ESCALA:
-                    texto = f"{self.valor(clave):.2f}"
+                texto = self.texto_caja(caja)
                 if caja.text() != texto:
                     caja.setText(texto)
                     caja.setCursorPosition(0)
@@ -1792,18 +1842,36 @@ class GestorManipuladores(QObject):
                 caja.show()
             caja.raise_()
 
+    def texto_caja(self, caja):
+        """Texto del campo o del gancho opcional del manipulador (p. ej. radio de Rosca)."""
+        gancho = getattr(getattr(caja, "manipulador", None), "texto_caja", None)
+        if gancho is not None:
+            return gancho(self)
+        if caja.clave == "escala" and self.comando.CLAVE in CON_ESCALA:
+            return f"{self.valor(caja.clave):.2f}"
+        return str(self.panel.valores.get(caja.clave, ""))
+
     def aplicar_caja(self, caja):
         texto = caja.text().strip()
+        gancho = getattr(getattr(caja, "manipulador", None), "aplicar_caja", None)
         try:
-            valor = self.ctx.evaluar(texto, self.tipo(caja.clave))
-            if caja.clave == "escala" and self.comando.CLAVE in CON_ESCALA and valor <= 0:
-                raise ValueError("El factor de escala debe ser positivo.")
+            if gancho is not None:
+                nuevos = gancho(self, texto)
+            else:
+                valor = self.ctx.evaluar(texto, self.tipo(caja.clave))
+                if caja.clave == "escala" and self.comando.CLAVE in CON_ESCALA and valor <= 0:
+                    raise ValueError("El factor de escala debe ser positivo.")
         except Exception as e:  # noqa: BLE001 — se marca la caja en rojo, como el panel
             caja.setStyleSheet(QSS_CAJA + QSS_CAJA_ROJA)
             caja.setToolTip(str(e))
             return False
         caja.setToolTip("")
-        self.panel.set_valor(caja.clave, texto)
+        if gancho is not None:
+            self.escribir(nuevos)
+            caja.setText(self.texto_caja(caja))
+            caja.setStyleSheet(QSS_CAJA)
+        else:
+            self.panel.set_valor(caja.clave, texto)
         caja.selectAll()
         return True
 

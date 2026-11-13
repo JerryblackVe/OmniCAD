@@ -42,14 +42,16 @@ def test_p135_flechas_de_desfase_y_longitud_sobre_la_pared(tmp_path):
         cara = next(c for c in refs.subformas(forma, "cara") if refs.firma_cara(c).get("geom") == "cilindro")
         QTest.mouseClick(v.visor, Qt.LeftButton, pos=v.visor.proyectar(np.array(refs.firma_cara(cara)["centro"])).toPoint())
         assert panel.valores["caras"]
-        assert panel.manipuladores.manips == []             # con largo completo no hay flechas
+        assert len(panel.manipuladores.manips) == 1
+        assert isinstance(panel.manipuladores.manips[0], mp.AsaTamanoRosca)  # sin flechas axiales
 
         casilla = panel.widgets["largo_completo"]
         QTest.mouseClick(casilla, Qt.LeftButton, pos=QPoint(8, casilla.height() // 2))
         QTest.qWait(100)
         assert not panel.valores["largo_completo"] and panel.widgets["desfase"].isVisible()
         gestor = panel.manipuladores
-        desfase, largo = gestor.manips
+        desfase, largo, tamano = gestor.manips
+        assert isinstance(tamano, mp.AsaTamanoRosca)
         assert isinstance(desfase, mp.FlechaCilindro) and (desfase.clave, largo.clave) == ("desfase", "longitud")
 
         ojo = np.asarray(v.visor.R[2], float)

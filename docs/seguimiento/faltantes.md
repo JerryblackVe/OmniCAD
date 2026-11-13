@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 157 · Parcial 50 · Bloqueado 30 · Sin verificar 4 (2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 240: Abierto 156 · Parcial 50 · Bloqueado 30 · Sin verificar 4 (2026-11-13: se cerró GZ-26 (flecha de radio de la Rosca: salta entre tamaños, se teclea y muestra 9,895 con M20 como Fusion); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -244,7 +244,6 @@ Se recorrieron los 148 comandos del catálogo y las cintas: 44 tienen asas (`Com
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| GZ-26 | Rosca › falta la flecha de radio en el visor: en Fusion, arrastrarla cambia el Tamaño (y con él el Ø de toda la cara) | Abierto | Media | Asa radial sobre la cara elegida que muestra el radio (9,895 con M20 en Ø20) y salta entre los tamaños de la familia; tecleable en su caja. Con `ui/manipuladores.py` › AsaRadial | `evidencias/reportes_pc/2026-11-12_rosca_modelada/fusion_vs_omnicad_rosca.mp4` (Fusion 0-40 s: radios 9,895 / 24,051 / 22,344); ayuda `thread-reference` | 2026-11-12 |
 
 ## Fusion 360
 
