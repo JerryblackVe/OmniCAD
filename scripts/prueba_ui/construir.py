@@ -165,7 +165,7 @@ def caso(clave, sel, vals, mide, filas=None, ctx=""):
         else:
             p.set_valor(k, val)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(100)
     st = A.estado_panel(p)
     anotar(nombre, "vista previa", st["op"] and st["previa_ok"], f"mensaje=«{st['mensaje']}»")
@@ -197,7 +197,7 @@ def caso(clave, sel, vals, mide, filas=None, ctx=""):
         malos += [f"{c}: vuelve vacío" for c in sel if not p2.valores.get(c)]
         anotar(nombre, "al reabrir vuelven valores y selección", not malos, "; ".join(malos))
         p2._t_previa.stop()
-        p2._calcular_previa()
+        A.previa(p2)
         p2.aceptar()
         A.esperar(350)
         h1 = huella(resultado(v.doc.operaciones[-1]))
@@ -216,7 +216,7 @@ def esc_y_tab(clave):
     if p is None:
         return
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     msg = p.mensaje.text()
     QTest.keyClick(p, Qt.Key_Return)
     A.esperar(80)
@@ -265,7 +265,7 @@ def arrastrar(panel, desde, hasta, pasos=6):
     QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonRelease, b, vis.mapToGlobal(b), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
     A.esperar(100)
     panel._t_previa.stop()
-    panel._calcular_previa()
+    A.previa(panel)
     return True
 
 
@@ -307,7 +307,7 @@ def rechazo(clave, sel, texto):
     for c, fn in sel.items():
         A.elegir(p, c, *fn())
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     st = A.estado_panel(p)
     anotar(clave, f"no calculable: {texto}", not st["previa_ok"] and bool(st["mensaje"]) and "No existe" not in st["mensaje"], f"«{st['mensaje']}»")
     p.cancelar()
@@ -424,7 +424,7 @@ def tamano(clave, sel, vals, mide, ctx):
     for k, val in vals.items():
         p.set_valor(k, val)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     QTest.keyClick(p, Qt.Key_Return)
     A.esperar(300)
     m = _medida() if A.n_ops(v) == n0 + 1 else None
@@ -552,7 +552,7 @@ anotar("panel", "clic en Tipo Punto cambia las entradas", p.valores["metodo"] ==
 n0 = A.n_ops(v)
 A.elegir(p, "r0", *vert("a")())
 p._t_previa.stop()
-p._calcular_previa()
+A.previa(p)
 QTest.keyClick(p, Qt.Key_Return)
 A.esperar(300)
 op = v.doc.operaciones[-1]
@@ -600,7 +600,7 @@ for entrada, ok_esperado in (("12,5 mm", 12.5), ("1 cm", 10), ("abc", None), (""
     A.elegir(p, "r0", *pl("XY")())
     w = teclear(p, "distancia", entrada)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     rojo = "background" in w.styleSheet()
     if ok_esperado is None:
         anotar("plano_desfase", f"teclear {entrada!r}: rojo y sin aceptar", rojo and p.ultima_op is None, f"mensaje=«{p.mensaje.text()}»")
@@ -657,7 +657,7 @@ p = abrir_menu("plano_angulo")
 A.elegir(p, "r0", A.hit_eje(v, "X"))
 teclear(p, "angulo", "30 deg")
 p._t_previa.stop()
-p._calcular_previa()
+A.previa(p)
 QTest.keyClick(p, Qt.Key_Return)
 A.esperar(300)
 inclinado = v.doc.operaciones[-1]
@@ -682,7 +682,7 @@ p = abrir_menu("plano_desfase")
 A.elegir(p, "r0", hit_tapa)
 teclear(p, "distancia", "5 mm")
 p._t_previa.stop()
-p._calcular_previa()
+A.previa(p)
 QTest.keyClick(p, Qt.Key_Return)
 A.esperar(300)
 sigue = v.doc.operaciones[-1]

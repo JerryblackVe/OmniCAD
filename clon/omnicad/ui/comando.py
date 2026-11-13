@@ -13,6 +13,7 @@ timeline. Acá:
 Las selecciones se guardan como referencias serializables (`timeline.entidades`), así la
 operación sigue apuntando a "su" cara o arista al recalcular.
 """
+import os
 import re
 import time
 
@@ -41,8 +42,17 @@ PREVIA_CUADRO_MS, PREVIA_ESPERA_MAX_MS = 12, 220
 # calculan en un proceso aparte para que la ventana no se congele. Sobre cuerpos chicos siguen en el proceso (< 33 ms).
 TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "patron", "multitransformar",
                                 "desfase_cara", "engrosar", "sup_desfase"), 64
+# FL-1: toda otra previa que toca el kernel también va aparte, salvo la que con los mismos datos (sin contar los valores
+# tecleados) tardó menos de esto la última vez. Las pruebas la piden en la ventana con OMNICAD_PREVIA_EN_VENTANA=1.
+PREVIA_EN_VENTANA_MS = 30
+PREVIA_APARTE = os.environ.get("OMNICAD_PREVIA_EN_VENTANA") != "1"
 # Comandos cuya sección «Más opciones» quedó abierta (se recuerda mientras dure la sesión: no hace falta reabrirla cada vez).
 _SECCIONES_ABIERTAS = set()
+
+
+def _firma_previa(op):
+    """Lo que decide cuánto cuesta la previa de `op`, salvo los valores tecleados (FL-1)."""
+    return op.TIPO, repr({k: v for k, v in op.p.items() if k not in op.EXPRESIONES})
 
 
 def _ids_cuerpo(p):
@@ -822,6 +832,7 @@ class PanelComando(QFrame):
         self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
         self._hijo_previa = self._op_hijo = self._pendiente_hijo = None
         self._previa_cortada = False
+        self._ms_previa = None          # FL-1: (firma, ms) de la última previa calculada, en la ventana o aparte
         self.cerrando = False           # True desde `_cerrar`: la ventana no redibuja el estado viejo antes de cerrar
         self._previa_aparte = False     # la última previa pedida se calcula en el hijo: aceptar no espera su malla
         self._t_hijo = QTimer(self, interval=16)
@@ -1725,8 +1736,12 @@ class PanelComando(QFrame):
             if self._previsualizar_prisma(op):
                 return
             from ..nucleo import geometria as geo
-            with geo.en_serie():         # B-293
-                estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=self._previa_aislada)
+            inicio = time.perf_counter()
+            try:
+                with geo.en_serie():         # B-293
+                    estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=self._previa_aislada)
+            finally:
+                self._ms_previa = _firma_previa(op), (time.perf_counter() - inicio) * 1000
             self._previa_aislada = True
         except Exception as e:  # noqa: BLE001 — se muestra el error del kernel como en Fusion
             self._mostrar(f"⚠ {e}", tipo="error")
@@ -1841,10 +1856,15 @@ class PanelComando(QFrame):
         return True
 
     def _previa_pesada(self, op):
-        if self.ctx.doc.motor == "opencascade" and op.TIPO == "rosca" and op.p.get("modelada"):
-            return True     # P-78: cortar la hélice tarda segundos aunque el cuerpo sea chico (M20×100: 25-50 s)
-        if op.TIPO not in TIPOS_PESADOS or self.ctx.doc.motor != "opencascade":
+        if self.ctx.doc.motor != "opencascade":
             return False
+        if op.TIPO == "rosca" and op.p.get("modelada"):
+            return True     # P-78: cortar la hélice tarda segundos aunque el cuerpo sea chico (M20×100: 25-50 s)
+        medida = self._ms_previa
+        rapida = medida is not None and medida[0] == _firma_previa(op) and medida[1] < PREVIA_EN_VENTANA_MS
+        aparte = PREVIA_APARTE and not rapida    # FL-1: extruir el texto «EMILIA» con Unir trababa la ventana 4 s por tecla
+        if aparte or op.TIPO not in TIPOS_PESADOS:
+            return aparte
         from ..nucleo import geometria as geo
         cuerpos = [self.ctx.estado.cuerpos.get(cid) for cid in _ids_cuerpo(op.p)]   # un id que ya no existe lo informa el camino normal
         # B-306/B-341: desfasar o engrosar una cara libre (el filete de una rosca) tarda de segundos a minutos
@@ -1860,7 +1880,9 @@ class PanelComando(QFrame):
             self._hijo_previa = CalculoPendiente("previa_visual", {
                 "receta": self.ctx.doc.a_dict(), "operacion": op.a_dict(), "indice": self.ctx.indice,
                 "deflexion": self.visor.config.teselado or 0.05, "angular": self.visor.config.angular,
-                "formas": type(self.comando).seleccion_en_previa is not Comando.seleccion_en_previa})   # P-145
+                # FL-1: siempre el B-Rep, como la previa de la ventana: se eligen aristas sobre ella (Empalme), se
+                # resaltan caras (P-145) y Extruir mira si se mete en otro cuerpo
+                "formas": True})
             self._op_hijo = op
             self._t_hijo.start()
             self._mostrar("Calculando vista previa en un proceso aparte…", tipo="calculando")
@@ -1872,27 +1894,38 @@ class PanelComando(QFrame):
         from ..timeline.calculo_aislado import leer_previa_visual
         try:
             salida = self._hijo_previa.sondear()
-            if salida is None:
-                self._cortar_previa_vieja()
-                return
-            estado, avisos = leer_previa_visual(salida, self.ctx.estado)
-            self._previa_ok = self.ultima_op is not None and self.ultima_op.a_dict() == self._op_hijo.a_dict()
-            self._mostrar(" ".join(avisos), tipo="aviso")
-            if self._previa_ok:
-                self._previa_vista(self._op_hijo)
-                if self.manipuladores is not None:
-                    self.manipuladores.previa_calculada(True)
-            self._previa_lista(estado)
+        except Exception as e:  # noqa: BLE001 — se informa abajo, si no hay un valor más nuevo esperando
+            salida = e
+        if salida is None:
+            self._cortar_previa_vieja()
+            return
+        pendiente = self._pendiente_hijo
+        vieja = pendiente is not None and pendiente.a_dict() != self._op_hijo.a_dict()
+        try:
+            if isinstance(salida, Exception):
+                raise salida
+            if not vieja:       # FL-1: con un valor más nuevo esperando, esta respuesta no se muestra: solo se ve la última
+                estado, avisos = leer_previa_visual(salida, self.ctx.estado)
+                self._ms_previa = _firma_previa(self._op_hijo), estado._ms_previa
+                self._previa_aislada = True     # pasó aislada (B-48): si la próxima va en la ventana, no se ensaya de nuevo
+                self._previa_ok = self.ultima_op is not None and self.ultima_op.a_dict() == self._op_hijo.a_dict()
+                self._mostrar(" ".join(avisos), tipo="aviso")
+                if self._previa_ok:
+                    self._previa_vista(self._op_hijo)
+                    if self.manipuladores is not None:
+                        self.manipuladores.previa_calculada(True)
+                self._previa_lista(estado)
         except Exception as e:  # noqa: BLE001 — un hijo caído o vencido: la previa se apaga y el documento queda intacto
-            self._previa_ok = False
-            # B-306: si el cálculo ya falló con estos valores, Aceptar no lo repite en la ventana (tardaría lo mismo).
-            if isinstance(e, FalloDelCalculo) and self.ultima_op is not None:
-                self._previa_aparte = self.ultima_op.a_dict() != self._op_hijo.a_dict()
-            self._mostrar(f"⚠ {e}", tipo="error")
-            self.previa.emit(None)
-            if self.manipuladores is not None and self.ultima_op is not None and \
-                    self.ultima_op.a_dict() == self._op_hijo.a_dict():
-                self.manipuladores.previa_calculada(False)
+            if not vieja:       # el error de un valor viejo tampoco se muestra
+                self._previa_ok = False
+                # B-306: si el cálculo ya falló con estos valores, Aceptar no lo repite en la ventana (tardaría lo mismo).
+                if isinstance(e, FalloDelCalculo) and self.ultima_op is not None:
+                    self._previa_aparte = self.ultima_op.a_dict() != self._op_hijo.a_dict()
+                self._mostrar(f"⚠ {e}", tipo="error")
+                self.previa.emit(None)
+                if self.manipuladores is not None and self.ultima_op is not None and \
+                        self.ultima_op.a_dict() == self._op_hijo.a_dict():
+                    self.manipuladores.previa_calculada(False)
         self._t_hijo.stop()
         self._hijo_previa = None
         self._previa_cortada = False
@@ -1901,11 +1934,13 @@ class PanelComando(QFrame):
             self._iniciar_previa(pendiente)
 
     def _cortar_previa_vieja(self):
-        """Un valor nuevo no espera a un cálculo que se alarga. Un corte por respuesta: rehacer el documento también tarda."""
+        """Un valor nuevo no espera a un cálculo que se alarga. Un corte por respuesta: rehacer el documento también tarda.
+        FL-1: se corta cuando lo que ya esperó iguala lo que cuesta un trabajador nuevo; así nunca se espera más del doble
+        de lo justo. Cortar uno que todavía arranca no adelanta nada (el texto «EMILIA»: 2,4 s cortado, 5,6 s el nuevo)."""
         from ..nucleo import aislado
         pendiente = self._pendiente_hijo
         if (pendiente is None or self._previa_cortada
-                or time.monotonic() - self._hijo_previa.inicio < aislado.PACIENCIA_PREVIA):
+                or time.monotonic() - self._hijo_previa.inicio < aislado.costo_reinicio()):
             return
         self._hijo_previa.cancelar(ya=True)
         self._hijo_previa = None

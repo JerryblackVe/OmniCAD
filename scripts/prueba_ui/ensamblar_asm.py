@@ -139,11 +139,11 @@ def origen_entre_caras():
     A.reg(AR, "origen: en «Entre dos caras» aparece el segundo ajuste y se oculta el punto de ajuste", et["origen_b"] is True and et["clave"] is False, str(et))
     A.elegir(p, "origen", *arriba(base))
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR, "origen: con una sola cara no hay vista previa", not p._previa_ok, p.mensaje.text() if p.mensaje.isVisible() else "")
     A.elegir(p, "origen_b", *arriba(tapa))
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR, "origen: la vista previa anda con las dos caras", p._previa_ok, p.mensaje.text())
     aceptar(p)
     o = ens()["joint_origins"]
@@ -177,12 +177,12 @@ def union_eje_propio():
     for texto, esperado in (("nan", False), ("inf", False), ("abc", False)):
         T.teclear(p, "giro", texto, Qt.Key_Tab)
         p._t_previa.stop()
-        p._calcular_previa()
+        A.previa(p)
         A.reg(AR, f"unión: ángulo {texto!r} no se acepta y el mensaje lo dice", p._previa_ok is esperado and ("número" in p.mensaje.text() or "desconocido" in p.mensaje.text().lower() or p.mensaje.text() != ""), p.mensaje.text())
     T.teclear(p, "giro", "0", Qt.Key_Tab)
     T.teclear(p, "reposo_giro", "25 deg", Qt.Key_Tab)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR, "unión: con el reposo 25° la vista previa anda", p._previa_ok, p.mensaje.text())
     aceptar(p)
     j = ens()["joints"][0]
@@ -204,7 +204,7 @@ def union_eje_propio():
     g = pa.manipuladores
     A.esperar(150)
     pa._t_previa.stop()
-    pa._calcular_previa()
+    A.previa(pa)
     from omnicad.ui import manipuladores as mp
     arco = next((m for m in (g.manips if g else []) if isinstance(m, mp.Angulo)), None)
     A.reg(AR, "accionar: el arco de giro se dibuja en el eje propio (pasa por el poste)", arco is not None and abs(arco.centro[0] - 30) < 0.5 and abs(arco.centro[1]) < 0.5, str(None if arco is None else arco.centro))
@@ -227,7 +227,7 @@ def union_limites():
     T.teclear(p, "max_desliz2", "8,5 mm", Qt.Key_Tab)
     T.teclear(p, "desliz2", "20", Qt.Key_Tab)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR, "planar: coma decimal y valor fuera de límite: la vista previa anda", p._previa_ok, p.mensaje.text())
     aceptar(p)
     j = ens()["joints"][-1]
@@ -263,11 +263,11 @@ def vinculo_asm():
     A.reg(AR, "vínculo: un segundo clic en «Animar» la detiene y el dibujo vuelve", not v._t_vinculo.isActive() and not v.visor.transformaciones, "")
     T.teclear(p, "factor", "nan", Qt.Key_Tab)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR, "vínculo: relación «nan» no se acepta (dice que no es un número)", not p._previa_ok and "número" in p.mensaje.text(), p.mensaje.text())
     T.teclear(p, "factor", "0,5", Qt.Key_Tab)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     aceptar(p)
     vin = ens()["motion_links"]
     A.reg(AR, "vínculo creado con el movimiento «slide» de la unión 2", len(vin) == 1 and vin[0]["motion2"] == "slide" and vin[0]["ratio"].replace(",", ".") in ("0.5", "0,5"), str(vin))
@@ -360,7 +360,7 @@ def posiciones():
     A.elegir(p, "origen1", *arriba(bloque))
     A.elegir(p, "origen2", *arriba(base))
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR, "anclar: una unión que mueve el componente anclado se rechaza con el motivo", not p._previa_ok and "fijo" in p.mensaje.text(), p.mensaje.text())
     p.cancelar()
     p = A.abrir(v, "anclar_componente")
@@ -376,11 +376,11 @@ def posiciones():
     T.teclear(p, "rz", "90 deg", Qt.Key_Tab)
     T.teclear(p, "y", "nan", Qt.Key_Tab)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR, "posición inicial: «nan» en una distancia se rechaza con «No es un número»", not p._previa_ok and "número" in p.mensaje.text(), p.mensaje.text())
     T.teclear(p, "y", "-10", Qt.Key_Tab)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR, "posición inicial: con valores buenos la vista previa anda", p._previa_ok, p.mensaje.text())
     aceptar(p)
     c1 = caja(bloque)
@@ -452,7 +452,7 @@ def restriccion(etiqueta, sel, vals, foto, comprueba, rechaza=None):
             return
         A.elegir(p, campo, *hs)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     texto = p.mensaje.text() if p.mensaje.isVisible() else ""
     if rechaza:
@@ -495,7 +495,7 @@ def restricciones():
     v.visor.vista("iso")
     A.esperar(200)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     A.reg(AR, "restricción Centro: vista previa", p._previa_ok, p.mensaje.text() if p.mensaje.isVisible() else "")
     A.foto(v, "restriccion_centro")
@@ -524,7 +524,7 @@ def restricciones():
     A.elegir(p, "ref1", *cara(rcaja, (0, 0, 1)))
     A.elegir(p, "ref2", *cara(rfijo, (0, 0, 1)))
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     det = [(x["ref"]["cuerpo"], x["ref"]["firma"].get("normal")) for k in ("ref1", "ref2") for x in p.valores[k]]
     det += [(x["ref"]["cuerpo"], x["ref"]["firma"].get("normal")) for f in p.valores["filas"] for k in ("ref1", "ref2") for x in f[k]]

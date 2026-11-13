@@ -40,7 +40,7 @@ def revisar(tema, pct):
     if p.seccion is not None:                     # P-140: Extruir ya no tiene «Más opciones»
         p.seccion.boton.setChecked(True)
     p.set_valor("conicidad", "xx")
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(100)
     p.grab().save(str(carpeta / "extruir_invalido.png"))
     A.reg(AR, f"{tema} {pct} % · Extruir con valor inválido: sin desborde y dentro del lienzo",

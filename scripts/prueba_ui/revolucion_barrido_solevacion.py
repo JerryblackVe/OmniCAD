@@ -108,7 +108,7 @@ def revolucion_dos_lados_negativo():
     p.set_valor("direccion", "dos_lados")
     teclear(p, "angulo", "90 deg", Qt.Key_Tab)
     teclear(p, "angulo2", "-45 deg", Qt.Key_Tab)
-    p._t_previa.stop(); p._calcular_previa(); A.esperar(150)
+    p._t_previa.stop(); A.previa(p); A.esperar(150)
     st = A.estado_panel(p)
     if not st["previa_ok"]:
         A.reg(AR, "Revolución dos lados 90 / −45°: se rechaza con aviso", bool(st["mensaje"]), st["mensaje"])
@@ -184,7 +184,7 @@ def barrido_carril():
     A.elegir(p, "ruta", cur("RutaC"))
     A.elegir(p, "carril", cur("CarC"))
     p.set_valor("escala_carril", "ninguna")
-    p._t_previa.stop(); p._calcular_previa(); A.esperar(150)
+    p._t_previa.stop(); A.previa(p); A.esperar(150)
     st = A.estado_panel(p)
     QTest.keyClick(p, Qt.Key_Return); A.esperar(450)
     vol = sum(x[1] for x in nuevos_desde(antes).values())
@@ -202,7 +202,7 @@ def barrido_teclear():
     A.elegir(p, "ruta", cur("RutaC"))
     for texto, valido in (("0,5", True), ("0", False), ("1,5", False), ("", False)):
         teclear(p, "distancia", texto, Qt.Key_Tab)
-        p._t_previa.stop(); p._calcular_previa(); A.esperar(150)
+        p._t_previa.stop(); A.previa(p); A.esperar(150)
         st = A.estado_panel(p)
         A.reg(AR, f"Barrido › Distancia «{texto}»: {'previa' if valido else 'aviso'}",
               st["previa_ok"] if valido else (not st["previa_ok"] and bool(st["mensaje"])), st["mensaje"])
@@ -214,7 +214,7 @@ def solevacion():
     n0, antes = A.n_ops(v), A.cuerpos_resumen(v)
     p = A.abrir(v, "solevacion")
     A.elegir(p, "secciones", per("LA"), per("LB"))
-    p._t_previa.stop(); p._calcular_previa(); A.esperar(150)
+    p._t_previa.stop(); A.previa(p); A.esperar(150)
     st = A.estado_panel(p)
     QTest.keyClick(p, Qt.Key_Return); A.esperar(450)
     vol = sum(x[1] for x in nuevos_desde(antes).values())

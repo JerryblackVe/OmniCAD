@@ -18,6 +18,9 @@ if sys.platform == "win32":
     os.environ.setdefault("QT_QPA_FONTDIR", os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"))
 # Las vistas animadas (P-45) no corren en pruebas: cada prueba espera la cámara al instante.
 os.environ.setdefault("OMNICAD_SIN_ANIMACION", "1")
+# FL-1: la app calcula las previas en el proceso aparte; las pruebas de cada comando las piden en la ventana para leer el
+# resultado al volver de `_calcular_previa`. Lo aparte lo prueban test_fl1_previa_aparte.py y scripts/prueba_ui.
+os.environ.setdefault("OMNICAD_PREVIA_EN_VENTANA", "1")
 # El historial del Asistente (asistente/historial.py) nunca se escribe en la carpeta del usuario durante las pruebas.
 os.environ.setdefault("OMNICAD_ASISTENTE_DIR", tempfile.mkdtemp(prefix="omnicad_chats_"))
 os.environ.setdefault("OMNICAD_PREAJUSTES", os.path.join(tempfile.mkdtemp(prefix="omnicad_preajustes_"), "preajustes.json"))

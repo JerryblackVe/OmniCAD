@@ -89,7 +89,7 @@ for clave, sel, campos in COMANDOS:
         teclear(p, cm, "5 mm" if clave != "escala_3d" else "2")
         n0 = A.n_ops(v)
         p._t_previa.stop()
-        p._calcular_previa()
+        A.previa(p)
         previa = bool(p._previa_ok and p.ultima_op is not None)
         QTest.keyClick(p.widgets[cm], Qt.Key_Return)
         A.esperar(250)

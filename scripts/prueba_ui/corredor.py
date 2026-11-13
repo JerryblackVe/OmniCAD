@@ -48,7 +48,7 @@ def caso(v, area, clave, sel, vals=None, esperado=None, deshacer=True, foto=None
                 continue
             p.set_valor(k, val)
         p._t_previa.stop()
-        p._calcular_previa()
+        A.previa(p)
         A.esperar(120)
         for _ in range(1200):            # P-78: la previa pesada (rosca modelada…) vuelve del proceso aparte
             if p._hijo_previa is None:
@@ -106,7 +106,7 @@ def caso(v, area, clave, sel, vals=None, esperado=None, deshacer=True, foto=None
                         malos.append(f"{campo}: la selección vuelve vacía")
                 A.reg(area, f"{nombre}: al reabrir vuelven los valores", not malos, "; ".join(malos))
                 p2._t_previa.stop()
-                p2._calcular_previa()
+                A.previa(p2)
                 st2 = A.estado_panel(p2)
                 A.reg(area, f"{nombre}: la vista previa al editar", st2["op"] and st2["previa_ok"], st2["mensaje"])
                 p2.aceptar()
@@ -139,7 +139,7 @@ def negativos(v, area, clave, sel_ok=None, expr=None, malos=("abc", "0", "-5"), 
         A.reg(area, f"{clave}: negativos", False, f"no abre: {A.MODALES[-1:]}")
         return
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     msg = p.mensaje.text()
     p.aceptar()
     A.esperar(120)
@@ -168,7 +168,7 @@ def negativos(v, area, clave, sel_ok=None, expr=None, malos=("abc", "0", "-5"), 
                     p.set_valor(k, val)
                 p.set_valor(expr, malo)
                 p._t_previa.stop()
-                p._calcular_previa()
+                A.previa(p)
                 st = A.estado_panel(p)
                 creado = False
                 if st["op"] and st["previa_ok"]:

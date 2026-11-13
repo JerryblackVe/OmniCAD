@@ -20,6 +20,7 @@ se deja de esperar su respuesta y solo se lo cierra si no termina en `PACIENCIA_
 """
 import atexit
 import json
+import math
 import os
 import queue
 import subprocess
@@ -373,6 +374,7 @@ class _Trabajador:
         self.temporal = tempfile.TemporaryDirectory(prefix="omnicad_trabajador_", ignore_cleanup_errors=True)
         self.carpeta = Path(self.temporal.name)
         self.proceso = None
+        self.creado, self.arranque = time.monotonic(), None
         try:
             self.errores = (self.carpeta / "errores.txt").open("wb")
             self.proceso = subprocess.Popen(_comando("trabajador", self.carpeta), bufsize=0, cwd=_RAIZ,
@@ -430,6 +432,8 @@ class _Trabajador:
         except (OSError, ValueError) as e:
             self.cerrar()
             raise TareaAislada(f"el proceso aparte dejó un resultado ilegible ({e})") from e
+        if self.arranque is None:
+            self.arranque = time.monotonic() - self.creado
         if resultado.get("_cerrar"):
             self.cerrar()
         return resultado
@@ -461,6 +465,13 @@ def cerrar_trabajador():
 
 
 atexit.register(cerrar_trabajador)
+
+
+def costo_reinicio():
+    """Segundos que tardó el trabajador vivo en dar su primera respuesta (arrancar, rehacer el documento y calcular): lo
+    que cuesta cerrarlo y empezar otro. Infinito si todavía no contestó: cortarlo no adelanta nada (FL-1)."""
+    t = _trabajador
+    return math.inf if t is None or t.arranque is None else t.arranque
 
 
 def _trabajador_vivo():

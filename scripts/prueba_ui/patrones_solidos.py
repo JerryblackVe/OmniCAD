@@ -119,7 +119,7 @@ def rectangular():
     teclear(p.widgets["n2"], "2")
     teclear(p.widgets["d2"], "25 mm")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     A.reg(AR + " · rectangular", "Cantidad 2 > 1 sin Dirección 2: se deriva la perpendicular, se dice en el panel y hay flecha",
           "derivada" in p.widgets["info_dir2"].text() and manip(p, "Flecha", "d2") is not None, p.widgets["info_dir2"].text())
@@ -138,13 +138,13 @@ def rectangular():
     A.foto(v, "patron_rectangular_casillas")
     teclear(p.widgets["n1"], "4")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     A.reg(AR + " · rectangular", "subir la cantidad a 4 mantiene la exclusión en SU copia (7 instancias, falta la (2, 1))",
           p._previa_ok and p.ultima_op.p["suprimir"] == [[2, 1]], str(p.ultima_op.p["suprimir"] if p.ultima_op else p.mensaje.text()))
     teclear(p.widgets["n1"], "2")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     A.reg(AR + " · rectangular", "bajar la cantidad a 2 deja la exclusión fuera: se avisa y se conserva", "ya no existen" in p.mensaje.text()
           and p.valores.get("suprimir") == "2:1", p.mensaje.text()[:80])
@@ -152,7 +152,7 @@ def rectangular():
     marcar(p.widgets["simetrico"])
     A.esperar(100)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     op = p.ultima_op
     A.reg(AR + " · rectangular", "simetría solo en la dirección 1: 3 × 2 instancias menos la suprimida",
@@ -171,7 +171,7 @@ def rectangular():
     teclear(p.widgets["d2"], "25 mm")
     teclear(p.widgets["suprimir"], "2:1")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     aceptar(p)
     nuevos = [k for k in vols() if k not in v0]
     A.reg(AR + " · rectangular", "Aceptar crea un paso con 4 copias nuevas (3 × 2 − original − la suprimida) de 1000 mm³",
@@ -205,13 +205,13 @@ def circular():
     A.elegir(p, "eje", A.hit_eje(v, "Z"))
     teclear(p.widgets["n"], "3")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR + " · circular", "Completo oculta el ángulo y reparte 360° sin repetir el cierre (0°, 120°, 240°)",
           not p.widgets["angulo"].isVisible() and "0°, 120°, 240°" in p.widgets["info_circular"].text(), p.widgets["info_circular"].text())
     elegir_combo(p.widgets["modo"], "parcial")
     teclear(p.widgets["angulo"], "120 deg")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     A.foto(v, "patron_circular_parcial")
     asa = manip(p, "AsaCantidad", "n")
@@ -228,7 +228,7 @@ def circular():
     elegir_combo(p.widgets["modo"], "simetrico")
     teclear(p.widgets["angulo"], "90 deg")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR + " · circular", "Simétrico con 5: 5 instancias a los dos lados del original",
           p._previa_ok and p.ultima_op.p["distribucion"] == "simetrico", p.mensaje.text()[:80])
     p.cancelar()
@@ -246,7 +246,7 @@ def trayectoria():
     teclear(p.widgets["rn"], "3")
     teclear(p.widgets["rd"], "40 mm")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(200)
     tramo = manip(p, "AsaRecorrido", "rd")
     A.reg(AR + " · trayectoria", "las asas recorren la cadena de las DOS aristas (80 mm), no solo la primera",
@@ -259,7 +259,7 @@ def trayectoria():
         d = p.ctx.evaluar(p.valores["rd"])
         A.reg(AR + " · trayectoria", "arrastrar el asa hasta el final de la segunda arista da distancia ≈ 80 mm", abs(d - 80.0) < 2.5, f"{d:.2f} mm")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     A.foto(v, "patron_trayectoria")
     A.reg(AR + " · trayectoria", "la vista previa coincide con el asa: última copia en el final de la ruta (40, 70)",
@@ -268,7 +268,7 @@ def trayectoria():
     teclear(p.widgets["rd"], "20 mm")
     elegir_combo(p.widgets["distribucion"], "espaciado")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     A.reg(AR + " · trayectoria", "6 copias cada 20 mm sobre 80 mm: caben 5 y se avisa la que no (no se extrapola)",
           "La ruta no alcanza" in p.mensaje.text(), p.mensaje.text()[:100])
@@ -287,7 +287,7 @@ def puntos():
     from omnicad.ui.comando import hit_desde_ref
     A.elegir(p, "puntos", *[hit_desde_ref(r, v.doc.estado_final) for r in refs])
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(200)
     A.reg(AR + " · puntos", "el panel explica que la referencia vacía es el origen y que un boceto aporta solo puntos sueltos",
           "origen" in p.widgets["info_puntos"].text() and "puntos sueltos" in p.widgets["info_puntos"].text(), p.widgets["info_puntos"].text()[:90])
@@ -314,12 +314,12 @@ def multi():
     lista.agregar.menu().actions()[4].trigger()                # Simetría
     A.esperar(150)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR + " · multi", "con la simetría sin plano no hay vista previa y el panel dice cuál falta",
           p.ultima_op is None and "Transformación 2" in p.mensaje.text(), p.mensaje.text()[:100])
     A.elegir(p, "t_plano", A.hit_plano(v, "YZ"))
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     A.foto(v, "patron_multitransformacion")
     A.reg(AR + " · multi", "con las dos completas hay vista previa válida (3 + simetría = 6 instancias)", p._previa_ok, p.mensaje.text()[:80])
@@ -330,7 +330,7 @@ def multi():
     QTest.mouseClick(lista.bajar, Qt.LeftButton)
     A.esperar(120)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     aceptar(p)
     op = v.doc.operaciones[-1]
     A.reg(AR + " · multi", "Aceptar crea el paso con las dos transformaciones y 5 copias",
@@ -341,7 +341,7 @@ def multi():
     pe = v.panel
     if pe is not None:
         pe._t_previa.stop()
-        pe._calcular_previa()
+        A.previa(pe)
         A.reg(AR + " · multi", "editar y aceptar sin tocar conserva las dos transformaciones", pe._previa_ok and pe.ultima_op is not None
               and [t["tipo"] for t in pe.ultima_op.p["transformaciones"]] == ["rectangular", "simetria"], pe.mensaje.text()[:80])
         pe.cancelar()

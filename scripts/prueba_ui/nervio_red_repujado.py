@@ -78,7 +78,7 @@ def boton_de(clave):
 
 
 def previa(p):
-    p._t_previa.stop(); p._calcular_previa(); A.esperar(150)
+    p._t_previa.stop(); A.previa(p); A.esperar(150)
     return A.estado_panel(p)
 
 

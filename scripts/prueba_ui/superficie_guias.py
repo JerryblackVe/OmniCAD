@@ -62,7 +62,7 @@ def cur(nombre, i=0):
 
 def calcular(p):
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(120)
     return A.estado_panel(p)
 
