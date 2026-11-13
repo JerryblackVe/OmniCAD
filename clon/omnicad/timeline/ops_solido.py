@@ -484,7 +484,7 @@ class OpAgujero(_OpCrear):
             opciones.update(diam_avellanado=L("diam_avellanado"), angulo_avellanado=A("angulo_avellanado"))
         return opciones
 
-    def herramientas(self, estado, ctx, rapido=False):
+    def herramientas(self, estado, ctx, rapido=False, variante=0):
         """Sólidos a restar, uno por agujero."""
         p, sc = self.p, _sc()
         if p["objetivos"]:
@@ -496,6 +496,8 @@ class OpAgujero(_OpCrear):
         if not solidos:
             raise ErrorOperacion("No hay cuerpos sólidos para agujerear.")
         opciones = self.opciones_herramienta(ctx, rapido)
+        if variante:
+            opciones["variante_surco"] = variante
         todo = geo.compuesto(solidos) if p["extension"] == "todo" else None
         hasta = self._objetivo_hasta(estado) if p["extension"] == "hasta" else None
         herramientas = []
@@ -526,15 +528,31 @@ class OpAgujero(_OpCrear):
                 ctx.aviso(aviso)
         antes = {cid: c.forma for cid, c in estado.cuerpos.items()}
         nombres = {cid: c.nombre for cid, c in estado.cuerpos.items()}
-        afectados = aplicar_resultado(estado, ctx, self.id, geo.unir_todos(herramientas), "cortar",
-                                      p.get("objetivos") or "")
-        vacios = [nombres[c] for c in afectados if c in antes and c not in estado.cuerpos]
-        if vacios:       # B-346: un agujero no borra cuerpos (el corte general sí, con aviso): es un error, no un paso verde
-            raise ErrorOperacion(f"El agujero deja sin material a {', '.join(vacios)}: es más grande que el cuerpo. "
-                                 "Achicá el diámetro o la profundidad.")
+        sc = _sc()
+        # B-373: con rosca modelada el filete puede caer justo sobre una tapa y dejar una arista de más de dos caras
+        # (1/2-10 ACME de 10 mm en Linux); armar el surco con otro margen (`_EXTRAS`) la evita.
+        ultimo = len(sc._EXTRAS) - 1 if p["rosca"] == "modelada" else 0
+        for variante in range(ultimo + 1):
+            if variante:
+                herramientas = self.herramientas(estado, ctx, variante=variante)
+            afectados = aplicar_resultado(estado, ctx, self.id, geo.unir_todos(herramientas), "cortar",
+                                          p.get("objetivos") or "")
+            vacios = [nombres[c] for c in afectados if c in antes and c not in estado.cuerpos]
+            if vacios:       # B-346: un agujero no borra cuerpos (el corte general sí, con aviso): es un error, no un paso verde
+                raise ErrorOperacion(f"El agujero deja sin material a {', '.join(vacios)}: es más grande que el cuerpo. "
+                                     "Achicá el diámetro o la profundidad.")
+            ant = [antes[c] for c in afectados if c in antes]
+            desp = [estado.cuerpos[c].forma for c in afectados if c in estado.cuerpos]
+            if variante == ultimo or sc.agujero_sin_pellizco(ant, desp):
+                break
+            for cid in afectados:             # este margen dejó una arista de más: se deshace y se prueba otro
+                if cid in antes:
+                    estado.cuerpos[cid].forma = antes[cid]
+                else:
+                    estado.cuerpos.pop(cid, None)
+            estado.herramientas[self.id] = estado.herramientas[self.id][:-1]
         self._registrar_usados(afectados)
-        _sc().exigir_agujero_sin_pellizco([antes[c] for c in afectados if c in antes],
-                                          [estado.cuerpos[c].forma for c in afectados if c in estado.cuerpos])
+        sc.exigir_agujero_sin_pellizco(ant, desp)
 
 
 class OpRosca(_OpCrear):
