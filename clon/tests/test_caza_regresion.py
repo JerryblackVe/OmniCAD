@@ -149,6 +149,20 @@ def test_la_pieza_real_conserva_solidos_cerrados_incluso_con_defectos_previos():
     assert leer.call_args.kwargs["solidos"] is True
 
 
+def test_b395_recalcular_no_culpa_un_paso_que_ya_estaba_en_rojo():
+    """B-395: duplicate_feature deja en rojo (y avisa) la copia de un paso que consumió su cuerpo; recalcular solo
+    falla por un paso que se rompe al recalcular."""
+    def api_falsa(antes, despues):
+        respuestas = {"get_timeline": {"ok": True, "result": {"steps": [{"id": i, "status": e} for i, e in antes]}},
+                      "recompute_all": {"ok": True, "result": {"failed_steps": [{"id": i} for i in despues]}}}
+        return Mock(llamar=lambda s, nombre, args: respuestas[nombre])
+
+    with patch.object(j, "foto", return_value={}):
+        assert j.juez_recalcular(api_falsa([("op2", "ok"), ("op3", "error")], ["op3"]), None, {}) is None
+        assert j.juez_recalcular(api_falsa([("op2", "ok"), ("op3", "error")], ["op2", "op3"]), None, {})["kind"] \
+            == "paso_falla"
+
+
 def test_las_cadenas_reales_cubren_ambos_signos_y_los_dos_desfases_de_b310():
     for semilla in range(5):
         for signo, nombre in ((1, "desfase_unido_positivo"), (-1, "desfase_unido_negativo")):
