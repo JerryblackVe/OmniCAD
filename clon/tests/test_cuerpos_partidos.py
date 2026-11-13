@@ -20,7 +20,8 @@ from omnicad.timeline.documento import Documento
 from omnicad.timeline.operaciones import OpExtrusion, propiedades_cuerpo
 from omnicad.ui.comando import hit_desde_ref
 from omnicad.ui.comandos import solido
-from omnicad.ui.comandos.solido import Extruir
+from omnicad.ui.comandos.crear import Barrido, Solevacion
+from omnicad.ui.comandos.solido import Extruir, Revolucion
 from omnicad.ui.manipuladores import CAPA_PREVIA
 from omnicad.ui.preferencias import Preferencias
 from omnicad.ui.ventana import VentanaPrincipal
@@ -415,6 +416,121 @@ def test_elegir_operacion_a_mano_queda_fija_hasta_cerrar(ventana):
     p.set_valor("operacion", "cortar")
     previa(p)
     assert p.valores["operacion"] == "cortar"      # tampoco vuelve solo
+
+
+@pytest.fixture(params=["visible", "sin_solido", "oculto", "lejos", "solo_por_una_arista"])
+def escena_b344(request, tmp_path):
+    """Perfil de 10 × 10 sobre la base de una placa; los comandos agregan su eje, ruta o segunda sección."""
+    app = QApplication.instance() or QApplication([])
+    s = api.Sesion()
+    if request.param != "sin_solido":
+        llamar(s, "extrude", sketch=rectangulo(s, 0, -20, 100, 20), distance=10)
+    x = {"lejos": 200, "solo_por_una_arista": 100}.get(request.param, 40)
+    perfil = rectangulo(s, x, -5, x + 10, 5)
+    ventanas = []
+
+    def abrir(clase):
+        v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+        ventanas.append(v)
+        if request.param == "oculto":
+            v.ocultos.update(s.doc.estado_final.cuerpos)
+        v.show()
+        return v, v.ejecutar_comando(clase())
+
+    yield s, perfil, x, "unir" if request.param == "visible" else "nuevo", abrir
+    for v in ventanas:
+        if v.panel is not None:
+            v.panel.cancelar()
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()
+    app.processEvents()
+
+
+def _perfil_b344(s, boceto):
+    br = s.doc.estado_final.bocetos[boceto]
+    return hit_desde_ref({"tipo": "perfil", "boceto": boceto, **OpExtrusion.referencia_perfil(br.perfiles[0])},
+                         s.doc.estado_final)
+
+
+def _comprobar_b344(v, p, esperada, volumen, cambios_adentro):
+    previa(p)
+    assert p._previa_ok, p.mensaje.text()
+    assert p.valores["operacion"] == esperada
+    assert p.widgets["operacion"].currentText() == ("Unir" if esperada == "unir" else "Cuerpo nuevo")
+    afuera = {k: p.valores[k] for k in cambios_adentro}
+    if esperada == "unir":
+        p.set_valores(cambios_adentro)
+        previa(p)
+        assert p._previa_ok and p.valores["operacion"] == "cortar", p.mensaje.text()
+        p.set_valores(afuera)
+        previa(p)
+        assert p.valores["operacion"] == "unir"
+    cantidad = len(p.ctx.estado.cuerpos) + (esperada == "nuevo")
+    anterior = sum(geo.volumen(c.forma) for c in p.ctx.estado.cuerpos.values())
+    QTest.mouseClick(p.boton_ok, Qt.LeftButton)
+    assert v.panel is None and v.doc.operaciones[-1].p["operacion"] == esperada
+    cs = list(v.doc.estado_final.cuerpos.values())
+    assert len(cs) == cantidad and all(geo.es_valida(c.forma) for c in cs)
+    assert sum(geo.volumen(c.forma) for c in cs) == pytest.approx(anterior + volumen)
+
+    v.editar_operacion(v.doc.operaciones[-1].id)
+    p = v.panel
+    p.set_valores(cambios_adentro)
+    previa(p)
+    assert p.valores["operacion"] == esperada       # editar no cambia sola la operación guardada
+    combo = p.widgets["operacion"]
+    QTest.keyClick(combo, Qt.Key_End)              # elegir «Cuerpo nuevo» a mano lo deja fijo
+    assert p.valores["operacion"] == "nuevo"
+    p.set_valores(afuera)
+    previa(p)
+    assert p.valores["operacion"] == "nuevo"
+
+
+def test_b344_revolucion_abre_en_unir_solo_con_el_perfil_apoyado(escena_b344):
+    s, perfil, x, esperada, abrir = escena_b344
+    v, p = abrir(Revolucion)
+    p._elegida(_perfil_b344(s, perfil))
+    assert p.valores["operacion"] == esperada       # aun antes de elegir el eje
+    p.set_valor("eje", [hit_desde_ref({"tipo": "eje", "id": "Y"}, p.ctx.estado)])
+    campo = p.widgets["angulo"]
+    QTest.mouseClick(campo, Qt.LeftButton)
+    QTest.keyClick(campo, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClicks(campo, "10")
+    QTest.keyClick(campo, Qt.Key_Tab)
+    volumen = math.pi * ((x + 10) ** 2 - x ** 2) * 10 * 10 / 360
+    _comprobar_b344(v, p, esperada, volumen, {"invertir": True})
+
+
+def test_b344_barrido_abre_en_unir_solo_con_el_perfil_apoyado(escena_b344):
+    s, perfil, x, esperada, abrir = escena_b344
+    rutas = []
+    for z in (-5, 5):
+        llamar(s, "sketch_from_spec", plane="XZ", entities=[{"type": "line", "start": [x + 5, 0], "end": [x + 5, z]}])
+        bid = s.doc.operaciones[-1].id
+        curva = next(iter(s.doc.estado_final.bocetos[bid].boceto.curvas))
+        rutas.append([hit_desde_ref({"tipo": "curva_boceto", "boceto": bid, "curva": curva}, s.doc.estado_final)])
+    v, p = abrir(Barrido)
+    p._elegida(_perfil_b344(s, perfil))
+    assert p.valores["operacion"] == esperada       # aun antes de elegir la ruta
+    p.set_valor("ruta", rutas[0])
+    _comprobar_b344(v, p, esperada, 10 * 10 * 5, {"ruta": rutas[1]})
+
+
+def test_b344_solevacion_abre_en_unir_solo_con_el_primer_perfil_apoyado(escena_b344):
+    s, perfil, x, esperada, abrir = escena_b344
+    extremos = []
+    for z in (-5, 5):
+        plano = llamar(s, "create_construction_plane", offset=z)["plane"]["id"]
+        llamar(s, "sketch_from_spec", plane=plano,
+               entities=[{"type": "rectangle", "corner1": [x, -5], "corner2": [x + 10, 5]}])
+        extremos.append(_perfil_b344(s, s.doc.operaciones[-1].id))
+    v, p = abrir(Solevacion)
+    inicio = _perfil_b344(s, perfil)
+    p._elegida(inicio)
+    assert p.valores["operacion"] == esperada       # basta con el primero, sin una solevación calculable todavía
+    p.set_valor("secciones", [inicio, extremos[0]])
+    _comprobar_b344(v, p, esperada, 10 * 10 * 5, {"secciones": [inicio, extremos[1]]})
 
 
 def test_aceptar_enseguida_de_teclear_ya_corta(ventana):
