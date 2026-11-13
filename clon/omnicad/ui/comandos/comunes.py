@@ -147,15 +147,15 @@ def _area_comun(cara, solido):
 
 
 def perfil_apoyado(ctx, v, apoyos, cajas):
-    """B-344: perfil sobre un sólido visible, con área (una arista sola no cuenta). Se mide una vez por selección,
+    """B-344: perfil, cara o superficie sobre un sólido visible, con área (una arista sola no cuenta). Se mide una vez por selección,
     no en cada cuadro del arrastre (P-99)."""
     if v.get("inicio", "plano") != "plano":
         return False
     clave = repr([h["ref"] for h in v.get("perfiles") or []])
     if clave not in apoyos:
         from .. import manipuladores as mp
-        base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
-        formas = base[2] if base else []
+        entidades = [mp.entidad(h, ctx.estado) for h in v.get("perfiles") or []]
+        formas = [e.forma for e in entidades if e is not None and e.forma is not None]
         apoyos[clave] = any(
             _area_comun(f, c.forma) > 1e-6 for f in formas for c in solidos_visibles(ctx)
             if _cajas_tocan(geo.caja_envolvente(f), caja_cuerpo(c, cajas)))
@@ -181,13 +181,13 @@ def ajustar_operacion(comando, panel, auto):
 
 
 def con_operacion_automatica(clase):
-    """Revolución, Barrido y Solevación: Unir desde un perfil apoyado; Cortar si el volumen entra en un sólido visible.
+    """Revolución, Barrido, Solevación y Engrosar: Unir desde una selección apoyada; Cortar si entra en un sólido visible.
     La operación elegida a mano o reabierta para editar queda fija, como en Extruir."""
     preparar, cambiar, previa = clase.preparar_panel, clase.al_cambiar, clase.previa_lista
 
     def apoyo(self, panel):
         v = panel.valores
-        seleccion = [] if v.get("tipo") == "cuerpo" else v.get("perfiles", (v.get("secciones") or [])[:1])
+        seleccion = [] if v.get("tipo") == "cuerpo" else v.get("caras", v.get("perfiles", (v.get("secciones") or [])[:1]))
         return perfil_apoyado(panel.ctx, {"perfiles": seleccion}, self._apoyos, self._cajas)
 
     def preparar_auto(self, panel):
@@ -201,7 +201,7 @@ def con_operacion_automatica(clase):
         if clave == "operacion" and not self._ajustando:
             self._fija = True
         cambiar(self, panel, clave)
-        if not self._fija and clave in ("perfiles", "secciones", "tipo"):
+        if not self._fija and clave in ("perfiles", "secciones", "caras", "tipo"):
             try:
                 ajustar_operacion(self, panel, "unir" if apoyo(self, panel) else None)
             except Exception as e:  # noqa: BLE001 — un apoyo que no se puede medir se informa sin romper la selección

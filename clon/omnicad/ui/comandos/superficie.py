@@ -13,7 +13,7 @@ from ...timeline.parametros import ANGULO, ESCALAR
 from ..comando import (Botones, Casilla, Comando, ErrorComando, Expresion, Info, Opciones, Personalizado, Seleccion, Texto,
                        exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
-from .comunes import DIRECCIONES_UI, OPCIONES_OPERACION, campo_objetivos, con_analisis, objetivos
+from .comunes import DIRECCIONES_UI, OPCIONES_OPERACION, campo_objetivos, con_analisis, con_operacion_automatica, objetivos
 from .crear import Bobina, Solevacion, Tuberia, _en_fila
 from .primitivas import Caja, Cilindro, Esfera, Toroide
 
@@ -564,6 +564,7 @@ class InvertirNormal(Comando):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado))
 
 
+@con_operacion_automatica
 class Engrosar(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "engrosar", "Engrosar", "engrosar", "Shift+C"
     AYUDA = "Da espesor a caras o superficies para hacer un sólido."

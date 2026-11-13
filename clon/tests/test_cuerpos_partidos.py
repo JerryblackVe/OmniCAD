@@ -16,12 +16,14 @@ from omnicad import api
 from omnicad.api.herramientas_ensamble import _simular
 from omnicad.io_archivos import proyecto
 from omnicad.nucleo import geometria as geo
+from omnicad.nucleo import referencias
 from omnicad.timeline.documento import Documento
 from omnicad.timeline.operaciones import OpExtrusion, propiedades_cuerpo
 from omnicad.ui.comando import hit_desde_ref
 from omnicad.ui.comandos import solido
 from omnicad.ui.comandos.crear import Barrido, Solevacion
 from omnicad.ui.comandos.solido import Extruir, Revolucion
+from omnicad.ui.comandos.superficie import Engrosar
 from omnicad.ui.manipuladores import CAPA_PREVIA
 from omnicad.ui.preferencias import Preferencias
 from omnicad.ui.ventana import VentanaPrincipal
@@ -531,6 +533,24 @@ def test_b344_solevacion_abre_en_unir_solo_con_el_primer_perfil_apoyado(escena_b
     assert p.valores["operacion"] == esperada       # basta con el primero, sin una solevación calculable todavía
     p.set_valor("secciones", [inicio, extremos[0]])
     _comprobar_b344(v, p, esperada, 10 * 10 * 5, {"secciones": [inicio, extremos[1]]})
+
+
+@pytest.mark.parametrize("seleccion", ["cuerpo", "cara"])
+def test_b344_engrosar_abre_en_unir_solo_con_la_superficie_apoyada(escena_b344, seleccion):
+    s, perfil, _x, esperada, abrir = escena_b344
+    cid = llamar(s, "create_patch", boundary={"sketch": perfil, "profile": 0})["bodies_created"][0]["id"]
+    forma = s.doc.estado_final.cuerpos[cid].forma
+    ref = ({"tipo": "cuerpo", "cuerpo": cid} if seleccion == "cuerpo" else
+           referencias.referencia(cid, geo.caras(forma)[0], forma))
+    v, p = abrir(Engrosar)
+    p._elegida(hit_desde_ref(ref, p.ctx.estado))
+    assert p.valores["operacion"] == esperada       # al seleccionar, sin esperar la previa
+    campo = p.widgets["espesor"]
+    QTest.mouseClick(campo, Qt.LeftButton)
+    QTest.keyClick(campo, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClicks(campo, "-5")
+    QTest.keyClick(campo, Qt.Key_Tab)
+    _comprobar_b344(v, p, esperada, 10 * 10 * 5, {"espesor": "5"})
 
 
 def test_aceptar_enseguida_de_teclear_ya_corta(ventana):
