@@ -8,7 +8,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | BOC-84 | Herramienta Estrella, junto con P-154 (lados después de dibujar) |
+| E1 | BOC-76 | Curva isoparamétrica: editar las curvas ya creadas (BOC-84 integrado: falta la captura para Gerardo) |
 | E2 | B-384 | Revolución › Dirección con «A objeto» |
 | E3 | B-400 | Empalme con radio igual al alto de la cara vecina (hecho, tests en curso) |
 | E4 | B-392 | Superficie reglada con autointersecciones |
@@ -32,4 +32,4 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 7 | B-335 | Abrir un STEP pesado congela la ventana |
 | 8 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
 
-Hechos y esperando integrar (no ocupan cola): B-393, B-403, P-153 (después de B-384), PRUEBA9c, B-397, BOC-84.
+Hechos y esperando integrar (no ocupan cola): B-393, B-403, P-153 (después de B-384), PRUEBA9c, B-397.
