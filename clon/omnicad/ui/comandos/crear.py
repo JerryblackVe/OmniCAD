@@ -17,7 +17,10 @@ from ..esquema_agujero import EsquemaAgujero
 from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando, Expresion, Info, ListaSeleccion, LONGITUD, Opciones, OpcionesVivas, Personalizado,
                        Seleccion, Texto, exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
-from .comunes import campo_objetivos, campo_operacion, con_analisis, objetivos, simetria_total
+from .comunes import campo_objetivos, campo_operacion, con_analisis, con_operacion_automatica, objetivos, simetria_total
+from .solido import Revolucion
+
+con_operacion_automatica(Revolucion)
 
 PERFIL = {"perfil", "cara_plana"}
 CURVA = {"curva_boceto", "arista"}
@@ -47,6 +50,7 @@ def _en(grupo, *campos):
 
 
 @con_analisis
+@con_operacion_automatica
 class Barrido(Comando):
     CLAVE, TITULO, ICONO = "barrido", "Barrido", "barrido"
     AYUDA = "Lleva un perfil a lo largo de una ruta (y opcionalmente un rail guía)."
@@ -157,6 +161,7 @@ def _condiciones_de(hit, extremo):
 
 
 @con_analisis
+@con_operacion_automatica
 class Solevacion(Comando):
     CLAVE, TITULO, ICONO = "solevacion", "Solevación", "solevacion"
     AYUDA = "Crea un sólido que pasa por varios perfiles en orden (opcional: carril o línea central)."
