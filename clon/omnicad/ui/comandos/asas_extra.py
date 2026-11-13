@@ -533,9 +533,11 @@ def _asas_desmoldeo(self, ctx, v):
     if abs(den) < 1e-9:
         return []
     punto = c_f + w * (-float(n_p @ (c_f - np.asarray(plano.origen, float))) / den)
-    salida = [mp.Angulo("angulo", punto, eje, w, 25.0)]
+    salida = [mp.AnilloAngulo("angulo", punto, eje, w)]      # P-139: el anillo de Fusion, en la línea neutra
     if v.get("lados") == "dos":
-        salida.append(mp.Angulo("angulo2", punto, -eje, w, 25.0))
+        salida.append(mp.AnilloAngulo("angulo2", punto, -eje, w))
+    for a in salida:
+        a.ayuda = ""                  # el cartel del anillo es el de la inclinación de Extruir (habla de la distancia)
     return salida
 
 

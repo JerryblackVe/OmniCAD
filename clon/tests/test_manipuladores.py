@@ -1444,3 +1444,26 @@ def test_p139_el_angulo_del_plano_en_angulo_es_un_anillo_centrado_en_la_arista(a
     pts = np.asarray(g.polilinea_arista(arista["forma"]), float)
     assert anillo.centro == pytest.approx((pts[0] + pts[-1]) / 2) and np.linalg.norm(anillo.centro - pts[0]) > 1.0
     panel.cancelar()
+
+
+def test_p139_la_inclinacion_es_un_anillo_sobre_la_linea_neutra(app_qt):
+    """P-139: como Fusion (Modificar › Draft), el ángulo de Inclinación (desmoldeo) es un anillo con su arco corto y el punto
+    sobre la línea neutra, la que une el plano de dirección con la cara; antes era un `Angulo` suelto."""
+    from omnicad.nucleo import geometria as g
+    from omnicad.nucleo import referencias as refs
+    from omnicad.ui import manipuladores as mp
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    doc = _doc_caja()
+    est = doc.estado_final
+    forma = est.cuerpos["op1.c1"].forma
+    lateral = next(c for c in refs.subformas(forma, "cara") if np.allclose(g.centro_masa(c, True), (0, 10, 10)))
+    h_lateral = hit_desde_ref(refs.referencia("op1.c1", lateral, caja=g.caja_envolvente(forma)), est)
+    plano_xy = hit_desde_ref({"tipo": "plano", "id": "XY"}, est)
+    panel, _visor, _e = _panel(CATALOGO["desmoldeo"](), doc, {"plano": [plano_xy], "caras": [h_lateral], "angulo": "5 deg"})
+    anillo = _manip(panel, "angulo:angulo")
+    assert isinstance(anillo, mp.AnilloAngulo) and anillo.GRUPO == "anillo" and anillo.ayuda == ""
+    assert anillo.centro[2] == pytest.approx(0) and anillo.centro[1] == pytest.approx(10)        # donde la cara corta el plano XY
+    normal_cara = mp.punto_normal_cara(lateral)[1]
+    assert abs(float(anillo.eje @ [0, 0, 1])) < 1e-6 and abs(float(anillo.eje @ normal_cara)) < 1e-6   # gira alrededor de la línea neutra: ⟂ al plano y a la cara
+    panel.cancelar()
