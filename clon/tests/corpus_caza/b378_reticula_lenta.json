@@ -1,0 +1,20 @@
+{
+ "id": "B-378",
+ "firma": "proceso|create_volumetric_lattice|colgado",
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 80,
+    "width": 50,
+    "height": 20
+   }
+  },
+  {
+   "tool": "create_volumetric_lattice",
+   "args": {
+    "body": "Cuerpo1"
+   }
+  }
+ ]
+}
