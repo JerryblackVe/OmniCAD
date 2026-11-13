@@ -105,7 +105,7 @@ def test_giro_por_asa_y_por_caja(panel):
     QTest.keyClicks(caja, "-45")
     QTest.keyClick(caja, Qt.Key_Return)
     panel._calcular_previa()
-    assert g.valor("angulo") == -45 and panel.widgets["angulo"].text() == "-45"
+    assert g.valor("angulo") == -45 and panel.widgets["angulo"].text() == "-45 deg"
     assert np.allclose(caja.punto, control(panel, "angulo").asa(g))
 
 
