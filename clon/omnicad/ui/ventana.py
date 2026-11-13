@@ -461,7 +461,7 @@ class VentanaPrincipal(QMainWindow):
           "Congela cuerpos elegidos (sin historial).", "operacion_base")
         A("nuevo_dibujo", "Nuevo dibujo desde el diseño", lambda: self.abrir_espacio("dibujo"), None,
           "Abre el espacio DIBUJO: vistas 2D, cotas y exportación a PDF/DXF.", "dibujo")
-        A("insertar_diseno", "Insertar componente…", self.insertar_diseno, None,
+        A("insertar_diseno", "Insertar componente", self.insertar_diseno, None,
           "Inserta otro diseño de OmniCAD (.omnicad) como componente.", "insertar_componente")
         A("estudio_movimiento", "Estudio de movimiento", self._estudio_movimiento, None,
           "Anima una unión en todo su recorrido.", "estudio_movimiento")

@@ -106,14 +106,14 @@ def test_grupo_rigido_con_y_sin_componentes_secundarios():
     carro = llamar(s, "create_box", length=20, width=20, height=20, y=150)["bodies_created"][0]["id"]
     kc = llamar(s, "create_component", bodies=[carro], name="Carro")["component"]["id"]
     estado = s.doc.estado_final
-    # sin la casilla: el grupo liga Carro y Brazo; Mano sigue a Brazo pero puede moverse sola
-    r = llamar(s, "create_rigid_group", components=["Carro", "Brazo"], name="G1")
+    # con la casilla apagada: el grupo liga Carro y Brazo; Mano sigue a Brazo pero puede moverse sola
+    r = llamar(s, "create_rigid_group", components=["Carro", "Brazo"], name="G1", include_children=False)
     assert [c["id"] for c in r["rigid_group"]["components"]] == [kc, kb]
     estado = s.doc.estado_final
     assert grupo_rigido(estado, kb) == {kb, km, kc} and grupo_rigido(estado, km) == {km}
     assert grupo_rigido(estado, kc) == {kc, kb, km}
     llamar(s, "undo")
-    # con «Incluir componentes secundarios»: la Mano entra al grupo y mover la Mano mueve a todos
+    # con «Incluir componentes secundarios» (lo encendido por defecto, como Fusion): la Mano entra al grupo y mover la Mano mueve a todos
     r = llamar(s, "create_rigid_group", components=["Carro", "Brazo"], name="G2", include_children=True)
     assert [c["id"] for c in r["rigid_group"]["components"]] == [kc, kb, km]
     estado = s.doc.estado_final

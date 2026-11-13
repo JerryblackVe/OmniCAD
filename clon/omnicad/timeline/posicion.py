@@ -81,7 +81,7 @@ def que_arrastra(estado, comp):
         if any(u.get("cierra_lazo") for u in estado.uniones.values()):
             # shortcut: frena con cualquier lazo del documento; alcanza hasta que el arrastre resuelva lazos cerrados
             raise ErrorOperacion("El ensamble tiene un lazo cerrado de uniones: arrastrar todavía no lo resuelve. "
-                                 "Usá ENSAMBLAR › Accionar uniones.")
+                                 "Usá ENSAMBLAR › Uniones de animación.")
         variables = _variables(estado, uid)
         if variables:
             return variables, []
