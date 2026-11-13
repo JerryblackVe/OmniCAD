@@ -88,16 +88,19 @@ def esperar(p):
 def test_el_hijo_real_no_bloquea_y_cancelar_no_toca_documento(ventana, monkeypatch):
     p = panel(ventana, monkeypatch)
     antes = ventana.doc.a_dict()
-    latidos = []
-    reloj = QTimer()
-    reloj.timeout.connect(lambda: latidos.append(time.perf_counter()))
-    reloj.start(10)
+    atendidos = []  # eventos que la ventana atiende mientras el hijo corre (sin depender del reloj)
+
+    def latir():
+        if p._hijo_previa is not None:
+            atendidos.append(1)
+            QTimer.singleShot(0, latir)
+
     p._calcular_previa()
     antes["contador"] = ventana.doc.a_dict()["contador"]  # construir reserva ids aun si se cancela
     assert p._hijo_previa is not None and not p._previa_ok
+    QTimer.singleShot(0, latir)
     esperar(p)
-    reloj.stop()
-    assert len(latidos) >= 3 and p._previa_ok, p.mensaje.text()
+    assert len(atendidos) >= 3 and p._previa_ok, p.mensaje.text()
     assert es_malla(ventana.visor._estado.cuerpo("op1.c1").forma)
     assert ventana.doc.a_dict() == antes
     QTest.keyClick(p, Qt.Key_Escape)
