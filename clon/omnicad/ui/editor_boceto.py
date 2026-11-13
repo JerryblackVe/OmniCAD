@@ -50,12 +50,13 @@ from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflict
 from ..restricciones.inferencia import Indice, TIPOS_INFERENCIA, inferencias, proyectar_bloqueo
 from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
                                     aviso_radio_empalme, aviso_tangencias_fuera,
-                                    agregar_arco_tangente, agregar_circulo_puntos, agregar_poligono,
+                                    agregar_arco_tangente, agregar_circulo_puntos, agregar_estrella, agregar_poligono,
                                     agregar_rectangulo_centro, cambiar_radio, centro_arco_tangente,
                                     centro_poligono_arista, circunferencia_3_puntos, dominio,
                                     evaluar_primitiva, expresion_sin_signo, fraccion_en_camino, lado_natural, mas_cercano, paradas_cursor,
-                                    primitivas_entidad, puntos_espiral, puntos_primitiva, validar_lados_poligono,
-                                    validar_valor_cota, vertices_poligono,
+                                    primitivas_entidad, proporcion_estrella, puntos_espiral, puntos_primitiva,
+                                    redondear_estrella, validar_lados_poligono, validar_puntas_estrella,
+                                    validar_valor_cota, vertices_estrella, vertices_poligono,
                                     _validar_opciones_texto)
 from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, nombres_usados, separar_nombre,
                                    validar_nombre)
@@ -89,6 +90,8 @@ HERRAMIENTAS = {
     "poligono_inscrito": ("Polígono inscrito", "Clic en el centro y clic en un vértice (o escribí el radio, "
                           "Tab, la cantidad de lados)."),
     "poligono_arista": ("Polígono de aristas", "Clic, clic para una arista y clic del lado donde va el polígono."),
+    "estrella": ("Estrella", "Clic en el centro y clic en una punta (o escribí el radio, Tab, la cantidad de "
+                 "puntas). Interior y redondeos, en la tarjeta."),
     "elipse": ("Elipse", "Clic en el centro, clic en el extremo del eje mayor y clic en un punto de la elipse."),
     "ranura_centro": ("Ranura de centro a centro", "Clic en el centro de un extremo, clic en el del otro y clic "
                       "para el ancho."),
@@ -227,7 +230,7 @@ def ajustes_inferencia(prefs):
 RANURAS_RECTAS = ("ranura_centro", "ranura_total", "ranura_punto")
 VIVAS = ("linea", "rectangulo", "rectangulo_3p", "rectangulo_centro", "circulo", "arco", "arco_centro",
          "poligono_inscrito", "poligono_circunscrito", "circulo_2p", "linea_medio", "elipse", "arco_tangente",
-         "poligono_arista") + RANURAS_RECTAS + ("ranura_arco_3p", "ranura_arco_centro")
+         "poligono_arista", "estrella") + RANURAS_RECTAS + ("ranura_arco_3p", "ranura_arco_centro")
 ANGULARES = ("angulo", "barrido")
 # Colores de Fusion: cotas verde oliva sobre el fondo oscuro (#2d323f); gris oscuro sobre fondo claro.
 COTA_OSCURO, COTA_CLARO = QColor(0xa9, 0xc4, 0x6c), QColor(70, 72, 78)
@@ -528,8 +531,8 @@ class EntradaValor(QFrame):
 
     def showEvent(self, e):
         super().showEvent(e)
-        QTimer.singleShot(0, self._remedir)
-        QTimer.singleShot(60, self._remedir)
+        QTimer.singleShot(0, self, self._remedir)
+        QTimer.singleShot(60, self, self._remedir)
 
     def _remedir(self):
         """El estilo de la app recién se aplica al mostrarse: la barra, medida antes, quedaba más angosta que su
@@ -643,8 +646,11 @@ class Lienzo(QWidget):
                         "proyectadas": True}
         self.opcion_cota = "auto"
         self.lados = 6
+        self._ultima_figura = None       # P-154: el polígono o la estrella recién dibujados (Lados los rehace)
         # Opciones de la paleta (Opciones de función de Fusion) para las herramientas nuevas.
-        self.opciones = {"grado_spline": 5, "continuidad": "G1",
+        self.opciones = {"grado_spline": 5, "continuidad": "G1", "puntas_estrella": 5, "interior_estrella": 0.0,
+                         "salto_estrella": 2, "circulos_estrella": True,
+                         "redondeo_puntas": 0.0, "redondeo_valles": 0.0,
                          "filtro_proyectar": "entidades", "copiar": False, "fuente": "Arial",
                          "direccion_desfase": "un", "match_topology": False, "seleccion_cadena": True,
                          "vinculo_proyeccion": True, "eje_giro": "Z", "contorno_exterior": True, "proyectar_eje": False,
@@ -1507,6 +1513,8 @@ class Lienzo(QWidget):
         self._borrar_previa_iso()
         if h == "texto":
             self.opciones.update(pivote_texto=None, marco_texto=False, parametro_texto=None, valor_parametro_texto="")
+        if self._ultima_figura is not None and self._ultima_figura["h"] != h:
+            self._ultima_figura = None            # P-154: Lados rehace solo lo recién dibujado con esta herramienta
         self.herramienta = h
         if h != "seleccionar":
             self.ultima_herramienta = h           # para «Repetir» del menú radial
@@ -1719,7 +1727,82 @@ class Lienzo(QWidget):
         giro = math.atan2(vertice[1] - centro[1], vertice[0] - centro[0])
         if tipo == "circunscrito":
             giro -= math.pi / lados
-        return agregar_poligono(self.b, centro, r, lados, giro, tipo == "circunscrito", self.construccion, centro_pid)
+        antes = set(self.b.puntos)
+        ls, cid = agregar_poligono(self.b, centro, r, lados, giro, tipo == "circunscrito", self.construccion, centro_pid)
+        self._ultima_figura = {"h": "poligono_" + tipo, "lineas": ls, "circulos": [cid], "arcos": [],
+                               "puntos": set(self.b.puntos) - antes}
+        return ls, cid
+
+    def _estrella(self, centro, punta, centro_pid=None, existentes=None):
+        """Estrella (BOC-84) con las opciones de la tarjeta: puntas, interior (0 = la regular) y redondeos."""
+        o = self.opciones
+        puntas = validar_puntas_estrella(int(o["puntas_estrella"]))
+        r = math.dist(centro, punta)
+        if r < 1e-9:
+            raise ErrorBoceto("La estrella necesita un tamaño.")
+        interior = self.b.radio(existentes[1]) if existentes is not None else self._interior_estrella(r)
+        giro = math.atan2(punta[1] - centro[1], punta[0] - centro[0])
+        antes = set(self.b.puntos)
+        ls, ce, ci = agregar_estrella(self.b, centro, r, puntas, giro, interior, self.construccion, centro_pid,
+                                      bool(o["circulos_estrella"]), existentes)
+        arcos = redondear_estrella(self.b, ls, o["redondeo_puntas"], o["redondeo_valles"])
+        # sin círculos guía no hay centro ni radio que conservar: no se rehace
+        self._ultima_figura = None if ce is None else {"h": "estrella", "lineas": ls, "circulos": [ce, ci],
+                                                         "arcos": arcos[0] + arcos[1], "giro": giro,
+                                                         "puntos": set(self.b.puntos) - antes}
+        return ls
+
+    def _interior_estrella(self, r):
+        """Radio de los valles: el % escrito o, con 0, el de la estrella regular {puntas/salto}."""
+        o = self.opciones
+        if o["interior_estrella"]:
+            return r * o["interior_estrella"] / 100
+        return r * proporcion_estrella(int(o["puntas_estrella"]), int(o["salto_estrella"]))
+
+    def cambiar_lados(self, n):
+        """Lados desde la tarjeta: valen para el polígono que se va a dibujar y, si recién se dibujó uno, lo rehacen
+        (P-154)."""
+        self.lados = n
+        self.rehacer_figura()
+
+    def rehacer_figura(self):
+        """P-154: el polígono o la estrella recién dibujados, con la cantidad de lados (o las opciones de la estrella)
+        de ahora. Mismo centro, radio, giro y tipo; los círculos guía no se tocan, así sus cotas siguen. Un paso de
+        deshacer. False si no hay figura que rehacer (otra herramienta, un dibujo en curso o ya se borró)."""
+        f = self._ultima_figura
+        if f is None or self.clics or self.herramienta != f["h"] or \
+                not all(k in self.b.curvas for k in f["lineas"] + f["circulos"]):
+            self.update()
+            return False
+        b = self.b
+        ce = f["circulos"][0]
+        centro_pid = b.curvas[ce].centro
+        centro, radio = b.coords(centro_pid), b.radio(ce)
+        if f["h"] == "estrella":
+            giro = f["giro"]
+        else:
+            v0 = b.coords(b.curvas[f["lineas"][0]].p1)
+            giro = math.atan2(v0[1] - centro[1], v0[0] - centro[0])
+        punta = (centro[0] + radio * math.cos(giro), centro[1] + radio * math.sin(giro))
+
+        def rehacer():
+            for k in f["lineas"] + f["arcos"]:
+                if k in b.curvas:
+                    b.eliminar(k)
+            # solo los puntos que creó la figura (vértices, extremos recortados, vértices virtuales) y que ya nadie usa:
+            # un punto de otra curva donde se enganchó un clic se queda
+            for p in f["puntos"] - {centro_pid}:
+                if p in b.puntos and not b._punto_en_uso(p):
+                    b.eliminar(p)
+            antes = set(b.puntos)
+            if f["h"] == "estrella":
+                self._estrella(centro, punta, existentes=tuple(f["circulos"]))
+            else:
+                tipo = "circunscrito" if f["h"] == "poligono_circunscrito" else "inscrito"
+                ls, _cid = agregar_poligono(b, centro, radio, self.lados, giro, tipo == "circunscrito",
+                                            self.construccion, circulo=ce)
+                self._ultima_figura = dict(f, lineas=ls, puntos=set(b.puntos) - antes)
+        return self.aplicar_cambio(rehacer, anclar=False)
 
     @staticmethod
     def _eje_ranura(h, pts):
@@ -1877,6 +1960,10 @@ class Lienzo(QWidget):
             (pc, ce), (_, v) = c
             tipo = "inscrito" if h == "poligono_inscrito" else "circunscrito"
             self.aplicar_cambio(lambda: self._poligono(ce, v, self.lados, tipo, pc))
+            self.clics = []
+        elif h == "estrella" and len(c) == 2:
+            (pc, ce), (_, v) = c
+            self.aplicar_cambio(lambda: self._estrella(ce, v, pc))
             self.clics = []
         elif h == "poligono_arista" and len(c) == 3:
             (_, a), (_, b), (_, lado) = c
@@ -3870,6 +3957,8 @@ class Lienzo(QWidget):
             return ["largo", "angulo", "lados"] if n == 1 else []
         if h.startswith("poligono_"):
             return ["radio", "lados"] if n == 1 else []
+        if h == "estrella":
+            return ["radio", "puntas"] if n == 1 else []
         if h in RANURAS_RECTAS:
             return {1: ["largo", "angulo"], 2: ["ancho"]}.get(n, [])
         return ["ancho"] if n == 3 else []                 # ranuras de arco: el ancho en el último paso
@@ -3882,6 +3971,8 @@ class Lienzo(QWidget):
     def _evaluar_campo(self, clave, texto):
         if clave == "lados":
             return validar_lados_poligono(int(round(_numero(texto))))
+        if clave == "puntas":
+            return validar_puntas_estrella(int(round(_numero(texto))))
         valor = self.evaluar(texto, ANGULO if clave in ANGULARES else LONGITUD)
         if clave not in ANGULARES:          # lo escrito se vuelve cota: mayor que cero y hasta 1 km, igual que al editarla
             validar_valor_cota(clave if clave in ("radio", "diametro") else "distancia", valor)
@@ -3899,8 +3990,11 @@ class Lienzo(QWidget):
 
     def _bloquear(self, clave, texto, valor):
         self._bloqueos[clave] = (texto.strip(), valor)
-        if clave == "lados":
-            self.lados = int(valor)
+        if clave in ("lados", "puntas"):
+            if clave == "lados":
+                self.lados = int(valor)
+            else:
+                self.opciones["puntas_estrella"] = int(valor)
             self.herramienta_cambiada.emit(self.herramienta)      # la paleta muestra los lados nuevos
 
     def _linea_previa(self):
@@ -4025,7 +4119,7 @@ class Lienzo(QWidget):
             if vals.keys() & {"largo", "angulo"}:
                 return desde(a, d, vals["largo"] if "largo" in vals else libre())
             return cur
-        if h.startswith("poligono_"):
+        if h.startswith("poligono_") or h == "estrella":
             return desde(a, u, vals["radio"]) if "radio" in vals else cur
         if h in RANURAS_RECTAS:
             if len(pts) == 1:
@@ -4127,6 +4221,9 @@ class Lienzo(QWidget):
         elif h.startswith("poligono_"):
             campos += [CampoVivo("radio", math.dist(a, cur), ("radial", a, cur)),
                        CampoVivo("lados", self.lados, None, entero=True)]
+        elif h == "estrella":
+            campos += [CampoVivo("radio", math.dist(a, cur), ("radial", a, cur)),
+                       CampoVivo("puntas", self.opciones["puntas_estrella"], None, entero=True)]
         elif h in RANURAS_RECTAS:
             if len(pts) == 1:
                 ini = (2 * a[0] - cur[0], 2 * a[1] - cur[1]) if h == "ranura_punto" else a
@@ -4336,7 +4433,7 @@ class Lienzo(QWidget):
                 cota("radio", [arcos[0]], texto["radio"])
         elif h in ("arco_centro", "arco_tangente") and arcos and "radio" in texto:
             cota("radio", [arcos[0]], texto["radio"])
-        elif h.startswith("poligono_") and circulos and "radio" in texto:
+        elif (h.startswith("poligono_") or h == "estrella") and circulos and "radio" in texto:
             cota("radio", [circulos[0]], texto["radio"])
         elif h.startswith("ranura_") and arcos:
             self._horizontal_o_vertical(lineas[-1:], bloqueos)
@@ -6723,6 +6820,17 @@ class Lienzo(QWidget):
                 p.setPen(QPen(acento, 1, Qt.DotLine))           # el círculo de construcción
                 self._dibujar_polilinea(p, [(a[0] + r * math.cos(2 * math.pi * i / 64), a[1] + r * math.sin(2 * math.pi * i / 64))
                                             for i in range(65)])
+            elif h == "estrella" and math.dist(a, cur) > 1e-9:
+                r = math.dist(a, cur)
+                try:
+                    esquinas = vertices_estrella(a, r, int(self.opciones["puntas_estrella"]),
+                                                 math.atan2(cur[1] - a[1], cur[0] - a[0]), self._interior_estrella(r))
+                except ErrorBoceto:
+                    esquinas = []                       # un salto que no entra: el clic lo dice; acá no hay previa
+                self._dibujar_polilinea(p, esquinas + esquinas[:1])
+                p.setPen(QPen(acento, 1, Qt.DotLine))           # el círculo de las puntas
+                self._dibujar_polilinea(p, [(a[0] + r * math.cos(2 * math.pi * i / 64), a[1] + r * math.sin(2 * math.pi * i / 64))
+                                            for i in range(65)])
             elif h == "arco" and len(pts) == 2:
                 polis = self._temporal(lambda t: t.agregar_arco_3_puntos(pts[0], cur, pts[1]))
             elif h == "arco_centro" and len(pts) == 2 and math.dist(a, pts[1]) > 1e-9:
@@ -6733,7 +6841,7 @@ class Lienzo(QWidget):
                     polis = self._temporal(lambda t: t.agregar_arco_centro(a, pts[1], fin))
                 else:
                     polis = self._temporal(lambda t: t.agregar_arco_centro(a, fin, pts[1]))
-            elif h in ("circulo", "circulo_2p", "poligono_inscrito", "poligono_circunscrito", "espiral"):
+            elif h in ("circulo", "circulo_2p", "poligono_inscrito", "poligono_circunscrito", "estrella", "espiral"):
                 if h == "circulo_2p":
                     centro, r = ((a[0] + cur[0]) / 2, (a[1] + cur[1]) / 2), math.dist(a, cur) / 2
                 else:

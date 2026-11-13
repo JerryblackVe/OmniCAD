@@ -1848,7 +1848,7 @@ class GestorManipuladores(QObject):
             return
         if self._firma_camara() != self._firma and not self._redibujo_pendiente:
             self._redibujo_pendiente = True
-            QTimer.singleShot(0, self._redibujar_por_camara)
+            QTimer.singleShot(0, self, self._redibujar_por_camara)
         else:
             self._ubicar_cajas()
 

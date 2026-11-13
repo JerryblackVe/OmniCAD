@@ -55,7 +55,8 @@ def test_la_ventana_precarga_en_un_hilo_aparte(tmp_path, monkeypatch):
         QTimer.singleShot(1500, bucle.quit)
         bucle.exec()                                  # como app.exec: suelta el GIL (QTest.qWait no)
         assert listo.wait(10)                         # el hilo ya arrancó; con la máquina cargada puede tardar en correr
-        assert len(hilos) == 1 and hilos[0] is not threading.main_thread()
+        # ventanas de pruebas anteriores todavía vivas también precargan: lo que importa es que nunca sea este hilo
+        assert hilos and all(h is not threading.main_thread() for h in hilos)
     finally:
         v.doc.modificado = False
         v.close()

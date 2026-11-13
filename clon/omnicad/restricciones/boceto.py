@@ -170,10 +170,13 @@ def vertices_poligono(centro, radio, lados, giro, circunscrito=False):
             for k in range(lados)]
 
 
-def agregar_poligono(b, centro, radio, lados, giro, circunscrito=False, construccion=False, centro_pid=None):
-    """Fusion: Polígono. Centro en coordenadas y punto guía opcional; devuelve (líneas, círculo guía)."""
+def agregar_poligono(b, centro, radio, lados, giro, circunscrito=False, construccion=False, centro_pid=None,
+                     circulo=None):
+    """Fusion: Polígono. Centro en coordenadas y punto guía opcional; devuelve (líneas, círculo guía). Con `circulo`
+    usa ese círculo guía en vez de crear otro (P-154: rehacer con otra cantidad de lados conserva sus cotas)."""
     esquinas = vertices_poligono(centro, radio, lados, giro, circunscrito)
-    cid = b.agregar_circulo(centro_pid if centro_pid is not None else centro, radio, True)
+    cid = circulo if circulo is not None else b.agregar_circulo(centro_pid if centro_pid is not None else centro,
+                                                                 radio, True)
     verts = [b.agregar_punto(*q) for q in esquinas]
     ls = [b.agregar_linea(verts[k], verts[(k + 1) % lados], construccion) for k in range(lados)]
     for k in range(1, lados):
@@ -184,6 +187,80 @@ def agregar_poligono(b, centro, radio, lados, giro, circunscrito=False, construc
         # Con lados pares, «igual» + «tangente» deja alternar los tramos de tangencia: sobra un grado de libertad.
         b.agregar_restriccion("poligono", list(ls))
     return ls, cid
+
+
+def validar_puntas_estrella(puntas):
+    """Tope de Estrella (BOC-84, herramienta propia: Fusion no la tiene), el mismo que el de Polígono."""
+    if not 3 <= puntas <= 64:
+        raise ErrorBoceto("La estrella necesita entre 3 y 64 puntas.")
+    return puntas
+
+
+def proporcion_estrella(puntas, salto=2):
+    """Radio interior / exterior de la estrella regular {puntas/salto}: sus lados siguen las líneas del polígono
+    estrellado (5/2 da 38,2 %). Con 3 o 4 puntas no hay estrella regular: la mitad."""
+    validar_puntas_estrella(puntas)
+    if puntas < 5:
+        return 0.5
+    if not 2 <= salto < puntas / 2:
+        raise ErrorBoceto(f"Con {puntas} puntas el salto va de 2 a {math.ceil(puntas / 2) - 1}.")
+    return math.cos(math.pi * salto / puntas) / math.cos(math.pi * (salto - 1) / puntas)
+
+
+def vertices_estrella(centro, radio, puntas, giro, interior):
+    """Puntas (radio `radio`) y valles (radio `interior`) alternados; `giro` orienta la primera punta, en radianes."""
+    validar_puntas_estrella(puntas)
+    if not 0 < interior < radio:
+        raise ErrorBoceto("El radio interior de la estrella tiene que ser positivo y menor que el exterior.")
+    cx, cy = centro
+    return [(cx + (radio if k % 2 == 0 else interior) * math.cos(giro + math.pi * k / puntas),
+             cy + (radio if k % 2 == 0 else interior) * math.sin(giro + math.pi * k / puntas))
+            for k in range(2 * puntas)]
+
+
+def agregar_estrella(b, centro, radio, puntas, giro, interior, construccion=False, centro_pid=None, circulos=True,
+                     existentes=None):
+    """Estrella (BOC-84): 2·puntas líneas iguales. Con `circulos`, las puntas van sobre un círculo de construcción y los
+    valles sobre otro concéntrico: queda definida por centro, los dos radios y el giro. Devuelve (líneas, círculo
+    exterior, círculo interior); sin círculos, los dos son None. `existentes` = (exterior, interior) ya dibujados
+    (P-154: rehacer la estrella conserva sus cotas)."""
+    esquinas = vertices_estrella(centro, radio, puntas, giro, interior)
+    verts = [b.agregar_punto(*q) for q in esquinas]
+    n = len(verts)
+    ls = [b.agregar_linea(verts[k], verts[(k + 1) % n], construccion) for k in range(n)]
+    for k in range(1, n):
+        b.agregar_restriccion("igual", [ls[0], ls[k]])
+    if not circulos:
+        return ls, None, None
+    if existentes is not None:
+        ce, ci = existentes
+    else:
+        ce = b.agregar_circulo(centro_pid if centro_pid is not None else centro, radio, True)
+        ci = b.agregar_circulo(b.curvas[ce].centro, interior, True)
+    for k, v in enumerate(verts):
+        b.agregar_restriccion("coincidente", [v, ce if k % 2 == 0 else ci])
+    return ls, ce, ci
+
+
+def redondear_estrella(b, ls, r_punta=0.0, r_valle=0.0):
+    """Redondea las puntas y/o los valles de una estrella (`ls` de `agregar_estrella`). Los arcos de cada tipo son
+    iguales y llevan una sola cota de radio; los vértices quedan virtuales sobre sus círculos, así la estrella sigue
+    definida igual que filosa. Devuelve (arcos de las puntas, arcos de los valles)."""
+    arcos = ([], [])
+    for k in range(len(ls)):
+        radio = r_punta if k % 2 == 0 else r_valle
+        if radio:
+            try:
+                arcos[k % 2].append(b.empalme(ls[k - 1], ls[k], radio))
+            except ErrorBoceto as e:
+                que = "las puntas" if k % 2 == 0 else "los valles"
+                raise ErrorBoceto(f"El redondeo de {que} ({_numero(radio)} mm) no entra en la estrella: {e}") from e
+    for grupo in arcos:
+        for a in grupo[1:]:
+            for cid in [k for k, c in b.cotas.items() if c.entidades == [a]]:
+                b.eliminar(cid)
+            b.agregar_restriccion("igual", [grupo[0], a])
+    return arcos
 
 
 def centro_poligono_arista(a, z, lado, lados):

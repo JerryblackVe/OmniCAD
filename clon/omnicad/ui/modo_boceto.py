@@ -56,6 +56,7 @@ ACCIONES_BOCETO = [
     ("sk_poligono_circunscrito", "Polígono circunscrito", "poligono_circunscrito", None, "poligono_circunscrito"),
     ("sk_poligono_inscrito", "Polígono inscrito", "poligono_inscrito", None, "poligono_inscrito"),
     ("sk_poligono_arista", "Polígono de aristas", "poligono_arista", None, "poligono_arista"),
+    ("sk_estrella", "Estrella", "estrella", None, "estrella"),
     ("sk_elipse", "Elipse", "elipse", None, "elipse"),
     ("sk_ranura_centro", "Ranura de centro a centro", "ranura_centro", None, "ranura"),
     ("sk_ranura_total", "Ranura total", "ranura_total", None, "ranura"),
@@ -122,9 +123,13 @@ OPCIONES_HERRAMIENTA = {
 }
 # Opciones numéricas: herramienta → [(clave, etiqueta, mínimo, máximo, paso, sufijo)]
 NUMEROS_HERRAMIENTA = {"perfil_giratorio": [("tolerancia_giro", "Tolerancia", 0.001, 10.0, 0.05, " mm")],
+                       "estrella": [("interior_estrella", "Interior (0 = regular)", 0.0, 99.0, 1.0, " %"),
+                                    ("redondeo_puntas", "Redondeo de puntas", 0.0, 10000.0, 0.5, " mm"),
+                                    ("redondeo_valles", "Redondeo de valles", 0.0, 10000.0, 0.5, " mm")],
                        "isoparametrica": [("iso_distancia", "Distancia", 0.001, 100000.0, 1.0, " mm")]}
 # Opciones enteras: herramienta → [(clave, etiqueta, mínimo, máximo)]
-ENTEROS_HERRAMIENTA = {"isoparametrica": [("iso_cantidad", "Cantidad", 1, 200)]}
+ENTEROS_HERRAMIENTA = {"isoparametrica": [("iso_cantidad", "Cantidad", 1, 200)],
+                       "estrella": [("puntas_estrella", "Puntas", 3, 64), ("salto_estrella", "Salto {n/m}", 2, 31)]}
 # Casillas: herramienta → [(clave, etiqueta)]
 _VINCULO = ("vinculo_proyeccion", "Vínculo de proyección")
 CASILLAS_HERRAMIENTA = {"proyectar": [_VINCULO], "intersecar": [_VINCULO],
@@ -132,7 +137,7 @@ CASILLAS_HERRAMIENTA = {"proyectar": [_VINCULO], "intersecar": [_VINCULO],
                         "perfil_giratorio": [("invertir_giro", "Invertir"), _VINCULO,
                                               ("contorno_exterior", "Solo contorno exterior"),
                                               ("proyectar_eje", "Proyectar eje")],
-                        "isoparametrica": [_VINCULO]}
+                        "isoparametrica": [_VINCULO], "estrella": [("circulos_estrella", "Círculos de construcción")]}
 # Opciones del texto: viven en el panel «Carácter» (PanelCaracter), no en la paleta de boceto
 ALINEACIONES_TEXTO = [("izq", "Izquierda"), ("centro", "Centro"), ("der", "Derecha")]
 ANCLAJES_TEXTO = [("base", "Línea base"), ("arriba", "Arriba"), ("medio", "Medio"), ("abajo", "Abajo")]
@@ -555,7 +560,7 @@ class TarjetaHerramienta(QFrame):
             self.form_contexto.addRow(etiqueta, sp)
         for clave, etiqueta in CASILLAS_HERRAMIENTA.get(h, []):
             ch = self._sin_foco(QCheckBox())
-            ch.setChecked(bool(opciones.get(clave, clave == "contorno_exterior")))
+            ch.setChecked(bool(opciones.get(clave, clave in ("contorno_exterior", "circulos_estrella"))))
             ch.toggled.connect(lambda valor, k=clave: self.ajuste.emit(k, valor))
             self.form_contexto.addRow(etiqueta, ch)
         self._comando(h in COMANDO_PROYECCION)
@@ -1173,7 +1178,7 @@ class ModoBoceto(QObject):
         self.paleta.borrar_sub.connect(self._borrar_subrestringida)
         self.tarjeta = TarjetaHerramienta(area)     # opciones de la herramienta activa; en Proyectar, también su selección
         self.tarjeta.herramienta.connect(self.herramienta)
-        self.tarjeta.lados.connect(lambda n: setattr(self.lienzo, "lados", n))
+        self.tarjeta.lados.connect(lambda n: self.lienzo.cambiar_lados(n))
         self.tarjeta.opcion_cota.connect(lambda o: setattr(self.lienzo, "opcion_cota", o))
         self.tarjeta.ajuste.connect(self._ajuste)
         self.tarjeta.quitar.connect(self.lienzo.quitar_proyeccion)
@@ -1468,6 +1473,8 @@ class ModoBoceto(QObject):
                 self.lienzo.opciones[clave] = valor
                 if clave.startswith("iso_"):
                     self.lienzo.programar_previa_iso()       # la isoparamétrica se ve con el valor nuevo
+                elif clave.endswith("_estrella") or clave in ("redondeo_puntas", "redondeo_valles"):
+                    self.lienzo.rehacer_figura()             # la previa o la estrella recién dibujada (P-154)
                 elif clave in ("filtro_proyectar", "vinculo_proyeccion"):
                     self.lienzo.cambiar_opcion_proyeccion()  # la tarjeta revisa la selección y el resultado
             self.lienzo.refrescar_previa_texto()          # fuente, estilo y alineación se ven en vivo
