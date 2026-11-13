@@ -2,6 +2,5 @@
   "geometria|create_geometric_pattern|autointersecciones": "B-167",
   "proceso|create_geometric_pattern|colgado": "B-167",
   "proceso||cierre_fffffffa": "B-327",
-  "geometria|boolean_operation|no_manifold": "B-348",
-  "geometria|shell|autointersecciones": "B-376"
+  "geometria|boolean_operation|no_manifold": "B-348"
 }
