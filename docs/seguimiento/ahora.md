@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | B-400 | Empalme con radio igual al alto de la cara vecina (hecho, tests en curso) |
 | E4 | B-392 | Superficie reglada con autointersecciones |
 | E5 | ASM-19 | Menú ENSAMBLAR y paneles como Fusion |
-| E6 | FL-3 | Aceptar, eliminar y abrir fuera de la ventana, con barra y Cancelar |
+| E6 | FL-9 | Precalentar el trabajador en la portada (la primera previa en frío tarda 2,2–5,3 s) |
 | E7 | FL-0 | Banco de fluidez |
 | E8 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
 | E9 | Sol | Orquesta a Sol hasta el 15/11: B-344 (Engrosar) y B-397 |
@@ -23,10 +23,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | P-78 | Rosca modelada rápida (F6) |
-| 2 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 3 | B-48 | Crash nativo al recalcular un documento largo |
-| 4 | B-335 | Abrir un STEP pesado congela la ventana |
-| 5 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
+| 1 | FL-3 | Aceptar, eliminar y abrir fuera de la ventana, con barra y Cancelar (E6, después de FL-9) |
+| 2 | P-78 | Rosca modelada rápida (F6) |
+| 3 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 4 | B-48 | Crash nativo al recalcular un documento largo |
+| 5 | B-335 | Abrir un STEP pesado congela la ventana |
+| 6 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
 
 Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384), PRUEBA9c. Con Sol (E9): B-344 Engrosar, B-397.
