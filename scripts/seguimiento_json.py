@@ -26,7 +26,7 @@ def limpiar(texto):
 
 def tema(seccion):
     """Nombre de la sección sin el paréntesis con la fecha de la auditoría (y sin «Tipo ›» en despues.md)."""
-    nombre = re.sub(r"\s*\(.*$", "", seccion.rpartition("›")[2]).strip()
+    nombre = re.sub(r"\s*\(.*$", "", re.sub(r"^(?:Bugs|Faltantes|Mejoras) › ", "", seccion)).strip()
     return RENOMBRES.get(nombre, nombre or "Generales")
 
 
