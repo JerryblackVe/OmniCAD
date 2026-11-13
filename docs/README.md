@@ -15,6 +15,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [seguimiento/despues.md](seguimiento/despues.md) | Prioridad 2 congelada (render, animación, simulación, malla, plástico, chapa, dibujo, IA, escaneo, extensiones…): no se toma sin que Gerardo la descongele |
 | Página de seguimiento (Artifact) | Vista web de bugs, faltantes, mejoras, lo último resuelto y los prompts para agentes; se refresca con `scripts/seguimiento_json.py` (pasos en `CLAUDE.md`). No es fuente de verdad |
 | [../PROJECT_LOG.md](../PROJECT_LOG.md) | Bitácora: estado en una tabla, registro de cada tarea y lecciones aprendidas |
+| [historial/](historial/) | Registro histórico de tareas de PROJECT_LOG.md, archivado por mes |
 | [../CHANGELOG.md](../CHANGELOG.md) | Cambios de cada versión publicada |
 
 ## Para programar
