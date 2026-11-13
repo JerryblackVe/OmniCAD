@@ -735,11 +735,16 @@ class AnilloAngulo(Angulo):
     def _r(self, g):
         return self.RADIO * self.esc(g, self.centro)
 
-    def __init__(self, clave, centro, eje, inicio, sigue=None, **kw):
+    def __init__(self, clave, centro, eje, inicio, sigue=None, hacia_camara=False, **kw):
         super().__init__(clave, centro, eje, inicio, caja="arrastre", **kw)
         self.base, self.sigue = self.centro.copy(), sigue
+        self.u0 = self.u if hacia_camara else None    # P-151: el 0° del lado de la cámara, como la flecha de la tríada
 
     def _seguir(self, g):
+        R = getattr(g.visor, "R", None)
+        if self.u0 is not None and R is not None:
+            self.u = -self.u0 if float(self.u0 @ np.asarray(R[2], float)) < 0 else self.u0
+            self.v = np.cross(self.eje, self.u)
         if self.sigue is not None:
             clave, direccion, magnitud = self.sigue
             v = g.valor(clave)
@@ -1342,13 +1347,29 @@ def asas_imagen(pl, dx, dy, escala=True, volteo=("voltear", "voltear_v")):
 
 class Triada(Manipulador):
     """Tríada de Mover/copiar en `centro`, alineada con los ejes del diseño. `claves`: campos de
-    traslación X/Y/Z; `giros`: campos de giro alrededor de X/Y/Z (None = sin arcos)."""
+    traslación X/Y/Z; `giros`: campos de giro alrededor de X/Y/Z (None = sin arcos). `compacta`: la de Mover/copiar de
+    Fusion (P-151): flechas chicas y grises, para que los anillos de giro queden por afuera."""
     ident = "triada"
+    GRIS = (0.84, 0.85, 0.87)
 
-    def __init__(self, centro, claves=("dx", "dy", "dz"), giros=("rx", "ry", "rz"), planos=True, esfera=True, ejes=None, solo_giros=False):
+    def __init__(self, centro, claves=("dx", "dy", "dz"), giros=("rx", "ry", "rz"), planos=True, esfera=True, ejes=None, solo_giros=False,
+                 compacta=False):
         self.centro, self.claves, self.giros = np.asarray(centro, float), tuple(claves), giros
+        self.compacta = compacta
+        # largo, desde dónde arranca la flecha y dónde van los cuadraditos (fracciones del largo), punta, radio de la esfera
+        self.largo, self.desde, self.cuadro, self.punta, self.r_esfera = (
+            (55.0, 0.55, (0.22, 0.48), (11.0, 5.0), 4.0) if compacta else
+            (LARGO_TRIADA, 0.2, (0.24, 0.40), (LARGO_PUNTA, RADIO_PUNTA), 7.0))
         self.planos, self.esfera, self.solo_giros = planos and not solo_giros, esfera, solo_giros
         self.ejes = np.identity(3) if ejes is None else np.asarray(ejes, float)      # filas: X, Y, Z de la tríada
+
+    def _signo(self, g, i):
+        """La compacta apunta cada flecha hacia la cámara, como Fusion (la Y de la vista isométrica sale hacia adelante)."""
+        R = getattr(g.visor, "R", None)
+        return -1.0 if self.compacta and R is not None and float(self.ejes[i] @ np.asarray(R[2], float)) < 0 else 1.0
+
+    def _dir(self, g, i):
+        return dir_visible(g.visor, self.ejes[i] * self._signo(g, i), self.centro)
 
     def _base(self, i):
         e = self.ejes
@@ -1357,13 +1378,13 @@ class Triada(Manipulador):
     def _partes(self, g):
         """[(sub, polilínea 3D para tocar)] de cada asa."""
         k = self.esc(g, self.centro)
-        L, c = LARGO_TRIADA * k, self.centro
+        L, c = self.largo * k, self.centro
         partes = []
         for i in () if self.solo_giros else range(3):
             if self.claves[i] is None:
                 continue
-            e = dir_visible(g.visor, self.ejes[i], c)
-            partes.append((("eje", i), np.array([c + e * L * 0.2, c + e * L])))
+            e = self._dir(g, i)
+            partes.append((("eje", i), np.array([c + e * L * self.desde, c + e * L])))
         if self.giros:
             for i in range(3):
                 if self.giros[i] is None:
@@ -1373,25 +1394,27 @@ class Triada(Manipulador):
         if self.planos:
             for i in range(3):
                 _, a, b = self._base(i)
-                lo, hi = L * 0.24, L * 0.40
+                a, b = a * self._signo(g, (i + 1) % 3), b * self._signo(g, (i + 2) % 3)     # entre las flechas dibujadas
+                lo, hi = L * self.cuadro[0], L * self.cuadro[1]
                 partes.append((("plano", i), np.array([c + a * lo + b * lo, c + a * hi + b * lo, c + a * hi + b * hi,
                                                        c + a * lo + b * hi, c + a * lo + b * lo])))
         return partes, k
 
     def dibujar(self, g, activo):
         partes, k = self._partes(g)
-        c, L = self.centro, LARGO_TRIADA * k
+        c, L = self.centro, self.largo * k
+        largo_punta, radio_punta = self.punta
         prims = []
         for sub, poli in partes:
             tipo, i = sub
-            color = COLORES_EJE[i]
+            color = self.GRIS if self.compacta else COLORES_EJE[i]
             if activo == sub:
-                color = _aclarar(color, 0.5)
+                color = AnilloAngulo.AZUL_ASA if self.compacta else _aclarar(color, 0.5)
             if tipo == "eje":
-                e = dir_visible(g.visor, self.ejes[i], c)
-                cuello = c + e * (L - LARGO_PUNTA * k)
+                e = self._dir(g, i)
+                cuello = c + e * (L - largo_punta * k)
                 prims.append(("lineas", np.array([poli[0], cuello]), color, 3.0))
-                prims += _cono(cuello, e, LARGO_PUNTA * k, RADIO_PUNTA * k, color)
+                prims += _cono(cuello, e, largo_punta * k, radio_punta * k, color)
             elif tipo == "giro":
                 prims.append(("lineas", _segs(poli), color, 3.5))
                 prims += _disco(g.visor, poli[len(poli) // 2], 4.0 * k, color)
@@ -1403,10 +1426,10 @@ class Triada(Manipulador):
                     lineas += [p0, p0 + (poli[1] - poli[0])]
                 prims.append(("tris", np.array([poli[0], poli[1], poli[2], poli[0], poli[2], poli[3]]), color, 0.55))
                 prims.append(("lineas", np.array(lineas), _aclarar(color, 0.35), 2.0))
-                prims.append(("lineas", _segs(poli), color, 1.5))
+                prims.append(("lineas", _segs(poli), BORDE_ESFERA if self.compacta else color, 1.5))
         if self.esfera:
             color = _aclarar(GRIS_ESFERA, 0.5) if activo == ("esfera", 0) else GRIS_ESFERA
-            prims += _disco(g.visor, c, 7.0 * k, color, BORDE_ESFERA)
+            prims += _disco(g.visor, c, self.r_esfera * k, color, BORDE_ESFERA)
         return prims
 
     def tocar(self, g, q):
@@ -1431,7 +1454,7 @@ class Triada(Manipulador):
         if self.esfera:
             s, ok = g.pantalla([self.centro])
             if ok[0]:
-                d = float(np.linalg.norm(s[0] - q)) - 7.0
+                d = float(np.linalg.norm(s[0] - q)) - self.r_esfera
                 if d < mejor[0] or d <= 0:
                     mejor = (max(d, 0.0), ("esfera", 0))
         return mejor
@@ -1446,8 +1469,8 @@ class Triada(Manipulador):
         if tipo == "eje":
             v0 = g.valor(self.claves[i])
             if fraccion_visible(g.visor, self.ejes[i]) < APUNTA_A_CAMARA:       # apunta a la cámara: se sigue la flecha dibujada
-                est = _empezar_en_pantalla(g, pos, c, dir_visible(g.visor, self.ejes[i], c))
-                return None if est is None else {**est, "sub": sub, "c": c, "v0": v0}
+                est = _empezar_en_pantalla(g, pos, c, self._dir(g, i))
+                return None if est is None else {**est, "sub": sub, "c": c, "v0": v0, "signo": self._signo(g, i)}
             s0 = recta_rayo(o, r, c, self.ejes[i])
             return None if s0 is None else {"sub": sub, "c": c, "s0": s0, "v0": v0}
         if tipo == "giro":
@@ -1459,7 +1482,7 @@ class Triada(Manipulador):
                 return {"sub": sub, "c": c, "a0": ang, "ultimo": ang, "v0": g.valor(self.giros[i])}
             # H-61: el plano del arco se ve de canto: se arrastra a lo largo de la tangente del asa en pantalla.
             m = math.radians(45.0)             # el punto del asa, en el medio del arco (de 15° a 75°)
-            radio = LARGO_TRIADA * self.esc(g, c) * 0.7
+            radio = self.largo * self.esc(g, c) * 0.7
             tangente = -a * math.sin(m) + b * math.cos(m)
             est = _arco_pantalla(g, c + (a * math.cos(m) + b * math.sin(m)) * radio, tangente, radio, pos)
             return None if est is None else {**est, "sub": sub, "c": c, "v0": g.valor(self.giros[i])}
@@ -1475,7 +1498,7 @@ class Triada(Manipulador):
         c = estado["c"]
         if tipo == "eje":
             if estado.get("pantalla"):
-                return {self.claves[i]: estado["v0"] + _mover_en_pantalla(estado, pos)}
+                return {self.claves[i]: estado["v0"] + estado["signo"] * _mover_en_pantalla(estado, pos)}
             s = recta_rayo(o, r, c, self.ejes[i])
             return {} if s is None else {self.claves[i]: estado["v0"] + s - estado["s0"]}
         if tipo == "giro":
@@ -1504,10 +1527,10 @@ class Triada(Manipulador):
         tipo, i = arrastre
         k = self.esc(g, self.centro)
         if tipo == "eje":
-            return [(self.claves[i], self.centro + dir_visible(g.visor, self.ejes[i], self.centro) * LARGO_TRIADA * k)]
+            return [(self.claves[i], self.centro + self._dir(g, i) * self.largo * k)]
         if tipo == "giro" and self.giros:
             _, a, b = self._base(i)
-            return [(self.giros[i], self.centro + (a + b) * LARGO_TRIADA * k * 0.7 / math.sqrt(2))]
+            return [(self.giros[i], self.centro + (a + b) * self.largo * k * 0.7 / math.sqrt(2))]
         return []
 
 

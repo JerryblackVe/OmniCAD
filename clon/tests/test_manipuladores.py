@@ -306,8 +306,11 @@ def test_la_triada_mueve_un_cuerpo(app_qt):
     assert triada.centro == pytest.approx((10, 10, 10))           # pivote: centro del cuerpo
     gestor = panel.manipuladores
     k = gestor.escala(triada.centro)
+    # P-151: como Fusion, las flechas son chicas y grises y los anillos de giro quedan por afuera
+    assert triada.compacta and triada.largo * 1.2 < mp.AnilloAngulo.RADIO
+    assert all(p[2] == triada.GRIS for p in triada.dibujar(gestor, None) if p[0] == "tris")
     # flecha X: se arrastra a lo largo de su dirección en pantalla
-    a, b = gestor.pantalla([triada.centro + [60 * k, 0, 0], triada.centro + [90 * k, 0, 0]])[0]
+    a, b = gestor.pantalla([triada.centro + [30 * k, 0, 0], triada.centro + [40 * k, 0, 0]])[0]
     d = (b - a) / np.linalg.norm(b - a)
     _arrastrar(visor, a, a + d * 80)
     dx = panel.ctx.evaluar(panel.valores["dx"])
@@ -322,7 +325,7 @@ def test_la_triada_mueve_un_cuerpo(app_qt):
     assert not any(sub[0] == "giro" for sub, _ in _manip(panel, "triada")._partes(gestor)[0])
     anillo = _manip(panel, "angulo:rz")
     assert isinstance(anillo, mp.AnilloAngulo) and anillo.centro == pytest.approx((10 + dx, 10, 10))
-    assert mp.unitario(anillo.asa(gestor) - anillo.centro) == pytest.approx(np.array([1, 1, 0]) / np.sqrt(2))   # a 45°
+    assert mp.unitario(anillo.asa(gestor) - anillo.centro) == pytest.approx([1, 0, 0])   # P-151: sobre la flecha X
     # arrastrar el asa del anillo de Z a lo largo del anillo: cambia rz
     p0, p1 = (anillo.centro + (anillo.u * np.cos(t) + anillo.v * np.sin(t)) * anillo._r(gestor) for t in (0.0, 0.2))
     s, _ = gestor.pantalla([p0, p1])
@@ -337,6 +340,25 @@ def test_la_triada_mueve_un_cuerpo(app_qt):
     assert panel.valores["dx"] != dx_antes and panel.valores["dy"] != "0 mm" and panel.valores["dz"] == "0 mm"
     panel.cancelar()
     assert "manipuladores" not in visor._capas
+
+
+def test_p151_triada_compacta_apunta_a_la_camara(app_qt):
+    """Como Fusion, cada flecha de la tríada de Mover/copiar sale hacia la cámara; arrastrar la flecha dada vuelta
+    hacia afuera mueve el cuerpo hacia ese lado (valor negativo)."""
+    from omnicad.ui.comandos.modificar import MoverCopiar
+    doc = _doc_caja()
+    panel, visor, _ = _panel(MoverCopiar(), doc, {"cuerpos": [_hit_cuerpo(doc)]})
+    gestor, triada = panel.manipuladores, _manip(panel, "triada")
+    assert all(float(triada._dir(gestor, i) @ np.asarray(visor.R[2])) > 0 for i in range(3))
+    visor.vista("abajo")                    # Z se aleja de la cámara y casi no se ve: se arrastra en pantalla
+    gestor.redibujar()
+    triada = _manip(panel, "triada")
+    assert triada._signo(gestor, 2) == -1
+    s, _ = gestor.pantalla(dict(triada._partes(gestor)[0])[("eje", 2)])
+    medio, d = (s[0] + s[1]) / 2, (s[1] - s[0]) / np.linalg.norm(s[1] - s[0])
+    _arrastrar(visor, medio, medio + d * 40)
+    assert panel.ctx.evaluar(panel.valores["dz"]) < -1
+    panel.cancelar()
 
 
 def test_mover_trasladar_con_direccion_y_girar(app_qt):
