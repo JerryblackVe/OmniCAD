@@ -444,14 +444,30 @@ def _prisma(cara, n, d, conicidad=0.0, aristas_fijas=()):
             continue   # tapas
         da.Add(f, _gdir(tirar), math.radians(-conicidad), neutro, True)
         if not da.AddDone():
-            raise geo.ErrorGeometria("No se pudo inclinar una cara lateral de la extrusión.")
+            _error_conicidad(cara, d, conicidad, "No se pudo inclinar una cara lateral de la extrusión.")
         inclinadas += 1
     if not inclinadas:
         return prisma
     da.Build()
     if not da.IsDone():
-        raise geo.ErrorGeometria("El kernel no pudo aplicar la inclinación a la extrusión.")
-    return _validar(da.Shape(), "Extrusión con inclinación")
+        _error_conicidad(cara, d, conicidad, "El kernel no pudo aplicar la inclinación a la extrusión.")
+    try:
+        return _validar(da.Shape(), "Extrusión con inclinación")
+    except geo.ErrorGeometria as error:
+        _error_conicidad(cara, d, conicidad, str(error))
+
+
+def _error_conicidad(cara, distancia, conicidad, mensaje):
+    """Con curvas, distingue el cierre geométrico del fallo anterior de DraftAngle (B-362)."""
+    if any(BRepAdaptor_Curve(e).GetType() != GeomAbs_Line for e in _aristas_de(cara)):
+        radios = radios_conicidad([cara])
+        radio = radios[0 if conicidad < 0 else 1]
+        if math.isfinite(radio) and radio > 0:
+            cierre = radio / abs(math.tan(math.radians(conicidad)))
+            motivo = ("La distancia alcanza o supera ese cierre." if abs(distancia) >= cierre else
+                      "El kernel falla antes de ese cierre; probá una distancia o un ángulo menor.")
+            mensaje = f"{mensaje} El perfil se cierra aproximadamente a {cierre:.3f} mm. {motivo}"
+    raise geo.ErrorGeometria(mensaje)
 
 
 def _firma(forma, plano):
@@ -507,19 +523,50 @@ def _cierre(cara, signo):
     return bajo
 
 
+def _cara_poligonal_conicidad(cara):
+    """Contorno aproximado solo para medir el cierre; conserva el exterior y los huecos."""
+    # shortcut: hasta 16 aristas originales y 96 segmentos; letras complejas quedan sin tope hasta medirlas sin
+    # bloquear el arrastre (objetivo: menos de 0,3 s por perfil típico).
+    if len(_aristas_de(cara)) > 16:
+        return None
+    exterior = BRepTools.OuterWire_s(cara)
+    alambres = [exterior] + [TopoDS.Wire(w) for w in _explorar(cara, TopAbs_WIRE) if not w.IsSame(exterior)]
+    tolerancia = max(1e-7, math.sqrt(geo.area(cara)) * 0.001)
+    contornos, segmentos = [], 0
+    for alambre in alambres:
+        puntos = []
+        ex = BRepTools_WireExplorer(alambre)
+        while ex.More():
+            tramo = geo.polilinea_arista(ex.Current(), tolerancia)
+            if len(tramo) < 2:
+                return None
+            if ex.Current().Orientation() == TopAbs_REVERSED:
+                tramo = tramo[::-1]
+            puntos.extend(tramo[:-1])
+            segmentos += len(tramo) - 1
+            if segmentos > 96:
+                return None
+            ex.Next()
+        contornos.append(_poligono(puntos))
+    mk = BRepBuilderAPI_MakeFace(contornos[0], True)
+    for hueco in contornos[1:]:
+        mk.Add(hueco)
+    return mk.Face() if mk.IsDone() else None
+
+
 def radios_conicidad(caras):
     """(adentro, afuera): hasta dónde se puede achicar o agrandar el contorno de estas caras antes de que algo se cierre
-    (inf: sin tope; las caras con curvas no se miden).
+    (inf: sin tope). Las curvas se aproximan con segmentos solo para esta medición.
     Una extrusión con conicidad a desfasa su perfil d·tan|a| (hacia adentro si a < 0): con perfiles no convexos lo que
     se cierra primero es lo más angosto (una barra, una ranura, un hueco), no el círculo más grande. Fusion frena ahí las
     asas de distancia y de ángulo (B-343, B-360)."""
     adentro = afuera = math.inf
     for cara in caras:
         cara = TopoDS.Face(cara)
-        # shortcut: solo perfiles de rectas. Con curvas, desfasar es lento (1 s por letra) y la firma no es monótona, y el
-        # kernel igual falla antes del cierre (B-362): ahí frena la red de B-345 (vuelve al último valor con previa sana).
         if any(BRepAdaptor_Curve(e).GetType() != GeomAbs_Line for e in _aristas_de(cara)):
-            continue
+            cara = _cara_poligonal_conicidad(cara)
+            if cara is None:
+                continue
         adentro = min(adentro, _cierre(cara, -1))
         afuera = min(afuera, _cierre(cara, 1))
     return adentro, afuera
