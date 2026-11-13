@@ -211,3 +211,25 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - No se cambia el modelo de una sesión en marcha (corta y pierde contexto) salvo que se quede corta.
 - Al integrar una sesión, anotar si el modelo elegido alcanzó; si falló por quedarse corto, subir un escalón la
   próxima vez, y si sobró, bajarlo.
+
+## Límites de intentos: cómo se cuenta y qué se informa
+- Iteración = un ciclo cambio → prueba → mirar el resultado. Intento de prueba = una hipótesis distinta sobre el mismo problema (otro valor, otra pieza, otro camino). Repetir el mismo comando sin cambiar nada no cuenta como intento nuevo: no se hace.
+- Mensaje al coordinador al tocar el tope (SendMessage, 5 líneas como mucho): ID; «tope de iteraciones» o «tope de intentos»; qué se probó (comandos y resultado, archivo:línea); hipótesis que quedan; próximo paso propuesto (otro modelo, otro carril, Fusion abierto, preguntarle a Gerardo).
+- El coordinador decide: reasignar, subir modelo un escalón (regla de modelos), partir el ítem o dejarlo Parcial en docs/seguimiento/.
+
+## Avisos de recursos: formato
+- Una línea al empezar el ítem: «Recurso: <Opus alto | ultracode | Fusion abierto | túnel 27182> — porque <qué de la tarea lo exige> — alternativa probada: <cuál y por qué no alcanzó>».
+- Ultracode (workflows multi-agente) solo en auditorías y jueces, como ya dice la memoria del coordinador; los arreglos siguen en Opus alto.
+- Fusion: primero `scripts/fusion_docs.py buscar/ver`. Fusion abierto solo para comparar comportamiento que la ayuda no aclara. Chequeo del túnel: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:27182/mcp` (000 = caído o Fusion cerrado). Abrir Fusion y el túnel se pide al chat de la PC o a Gerardo.
+
+## E11 · Computer Use en la PC
+- Dónde: sesión de Claude en la PC de Gerardo, checkout D:/PROGRAMA-noche (o D:/PROGRAMA al día con vps/main). Herramientas: mcp__computer-use (request_access a OmniCAD y Fusion 360), MCP fusion360 local, capturas y grabación.
+- Cuándo: solo con la PC libre (Gerardo avisa) o con su OK explícito en el momento. Antes de arrancar, avisa al coordinador; al terminar, devuelve la PC (cierra Fusion si lo abrió, como pide la regla de Fusion).
+- Cómo prueba: sigue los 10 puntos de «toda prueba como usuario humano» y la sección 4b de la skill omnicad-test, pero con mouse y teclado reales. Modela una pieza real de principio a fin, cambia una cota, guarda y reabre. Hace lo mismo en Fusion y compara resultado, opciones y mensajes.
+- Evidencia por falla en evidencias/reportes_pc/AAAA-MM-DD_<tema>/: capturas (antes/después), video si la falla es de movimiento o tiempo, pasos numerados reproducibles, versión (git rev-parse --short HEAD), qué hace Fusion en el mismo caso. Respeta los límites de intentos (3 por problema).
+- Informe al coordinador: un mensaje con la carpeta y una línea por falla. El coordinador asigna ID, carga la fila en docs/seguimiento/ y la ubica en ahora.md (lotes de 13:00 y 19:00; solo un bloqueante entra en el momento).
+- No toca código, no commitea, no edita docs/seguimiento/.
+## Consumo de tokens: informe de los viernes
+- El coordinador junta get_usage de cada sesión E1–E11 y el suyo propio: contexto usado, modelo/esfuerzo, ítems cerrados en la semana.
+- Mensaje al chat de la PC, 5 filas como mucho: sesión, modelo, ítems cerrados, gasto, si el modelo alcanzó o sobró (y el ajuste propuesto: subir o bajar un escalón).
+- Señales de desperdicio a cortar: archivos leídos enteros sin necesidad, pruebas repetidas sin cambio, mensajes largos entre sesiones, Opus en tareas mecánicas.

@@ -51,6 +51,7 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
   | E8 | Linux, arreglos chicos, UI, docs | Sonnet medio |
   | E9 | Arreglos de prioridad 1, orquestando OpenCode (Sol) para las piezas acotadas | Sonnet medio |
   | E10 | Arreglos de prioridad 1 (archivos `.f3d`, sólidos, GitHub) | según la tarea |
+  | E11 | Pruebas con Computer Use en la PC (OmniCAD y Fusion); reporta al chat maestro | Sonnet medio |
 
 - El `push` a GitHub es solo con el pedido de Gerardo (remoto `origin`, `gh` de JerryblackVe; el token nunca en el repo).
 - Detalle (OpenCode, herramientas de video, capacidad medida): [docs/coordinacion.md](docs/coordinacion.md).
@@ -94,7 +95,7 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
 - Al probar la app se simula a una persona que la usa todos los días: mouse (elegir en el visor, arrastrar asas,
   hover, doble clic), botones, Enter, Esc, Tab y **teclear en los campos** (unidades, expresiones, vacío, 0, negativo,
   enormes), mirando dónde aparece lo escrito y qué mensaje sale. Llamar a la API no reemplaza esto.
-- Eventos simulados al widget, nunca el cursor real (skill `omnicad-test`, sección 4b).
+- Eventos simulados al widget, nunca el cursor real (skill `omnicad-test`, sección 4b); la única excepción es E11 (ver «Agente de Computer Use»).
 - Una prueba de la app está completa solo si cubre los 10 puntos de la lista (cinta, comandos, campos, asas,
   timeline y visor, atajos, guardar/deshacer, ventana chica, pieza real con capturas, sin excepciones en slots de Qt).
   Lo que no se pudo se dice con ⚠. Lista completa y `scripts/prueba_ui/`: [docs/coordinacion.md](docs/coordinacion.md).
@@ -157,5 +158,38 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
 - **Fable no se usa salvo que Gerardo lo pida por nombre (2026-11-01).** El tope es Opus alto.
 - **La calidad del código manda**: si la tarea toca solver, geometría o núcleo, no se baja el esfuerzo para ahorrar.
 - No se cambia el modelo de una sesión en marcha salvo que se quede corta. Tabla completa: [docs/coordinacion.md](docs/coordinacion.md).
+
+## Límites de intentos (Gerardo, 2026-11-13)
+- Por tarea, como mucho **6 iteraciones** (cambio → prueba → mirar). Por problema, **3 intentos de prueba**, cada uno
+  distinto: no se repite una prueba que no aporta nada nuevo.
+- Al llegar al tope: parar, anotar en el Registro de `PROJECT_LOG.md` qué se probó y qué salió, y avisar al
+  coordinador (bloqueo, evidencia, próximo paso propuesto).
+- El tope corta el trabajo, no lo cierra: sin ruff, tests y `ponytail-review` la fila sigue abierta como Parcial.
+
+## Avisos de recursos (Gerardo, 2026-11-13)
+- Antes de empezar, la sesión avisa al coordinador en una línea si necesita Opus alto o ultracode (y qué de la tarea
+  lo justifica), Fusion abierto o el túnel VPS↔PC (`127.0.0.1:27182`).
+- Primero lo barato: la ayuda local (`scripts/fusion_docs.py buscar`) antes que Fusion abierto; el modelo de la
+  tabla de «elegir modelo y esfuerzo» antes que uno más caro.
+- Sin el recurso, sigue con lo que puede y anota el caso para después.
+
+## Agente de Computer Use: E11 en la PC (Gerardo, 2026-11-13)
+- **E11** corre en la PC (Fusion, la ventana de Windows y `mcp__computer-use`). Sonnet medio por defecto.
+- Usa OmniCAD y Fusion como un usuario real: mouse, teclado, menús, diálogos y asas. Modela de verdad, captura
+  imágenes, graba video si hace falta y compara contra Fusion.
+- Cada falla va a `evidencias/reportes_pc/<fecha>_<tema>/` con capturas y pasos reproducibles. Avisa al coordinador,
+  que asigna, recibe y decide. Si se bloquea, pide ayuda en vez de insistir.
+- Complementa `scripts/prueba_ui` y la skill `omnicad-test`, no los reemplaza. Mueve el cursor real (única excepción a
+  «eventos simulados»): corre solo con la PC libre o con el OK de Gerardo. No toca código.
+- Detalle: [docs/coordinacion.md](docs/coordinacion.md).
+
+## Consumo de tokens (Gerardo, 2026-11-13)
+- Modelo y esfuerzo: los de «elegir modelo y esfuerzo»; lo caro solo donde la complejidad lo justifica.
+- Leer la sección que hace falta, no el archivo entero. No releer lo que no cambió. Reusar la evidencia válida; no
+  repetir análisis ni pruebas sin motivo.
+- Cada sesión carga solo el contexto de su ítem. Lo mecánico va a un script o a un modelo barato; las operaciones
+  se agrupan.
+- Mensajes entre sesiones: cortos y verificables (ID, archivo:línea, comando y resultado).
+- El coordinador mide el gasto con `get_usage` y lo informa al chat de la PC los viernes.
 
 @AGENTS.md
