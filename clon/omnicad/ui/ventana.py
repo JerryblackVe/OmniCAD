@@ -15,8 +15,8 @@ se muestra el modelo como estaba en ese punto del timeline.
 Esta capa no hace geometría: arma operaciones con los diálogos y se las pasa al Documento.
 """
 import logging
-import os
 import tempfile
+import threading
 import time
 from collections import Counter
 from contextlib import nullcontext
@@ -147,6 +147,15 @@ class _FiltroAyuda(QObject):
             self.ventana.ayuda_comando(obj.activeAction())
             return True
         return False
+
+
+def _precargar_scipy():
+    """FL-8b: scipy se carga en un hilo aparte al abrir la ventana. Si no, la paga el hilo de la ventana la primera vez
+    que se usa: el solver del primer boceto que se cierra (`least_squares`, 2,3 a 3,3 s en Windows) y la primera vista
+    animada (`slerp`)."""
+    import scipy.optimize  # noqa: F401
+    import scipy.sparse.csgraph  # noqa: F401
+    import scipy.spatial.transform  # noqa: F401
 
 
 class VentanaPrincipal(QMainWindow):
@@ -305,6 +314,7 @@ class VentanaPrincipal(QMainWindow):
         self.asistente = None               # panel del Asistente IA (ui/asistente.py), se crea al abrirlo
         self._vista_inicial()
         self.aplicar_preferencias()
+        QTimer.singleShot(1000, lambda: threading.Thread(target=_precargar_scipy, daemon=True).start())
         from .comentarios import PanelComentarios
         self.comentarios = PanelComentarios()
         self.area.anclar_abajo_izq(self.comentarios)
@@ -694,9 +704,6 @@ class VentanaPrincipal(QMainWindow):
             from .editor_boceto import ajustes_inferencia
             modo.lienzo.ajustes_inf = ajustes_inferencia(p)
             modo.lienzo.update()
-        if c.animar_vistas and not os.environ.get("OMNICAD_SIN_ANIMACION"):
-            from ..nucleo import animacion
-            QTimer.singleShot(2000, animacion.precalentar)      # idempotente: scipy se carga una sola vez
         c.aspecto, c.tipo_orbita = p["material/aspecto"], p["general/tipo_orbita"]
         if p["general/camara"] != self._camara_aplicada:     # solo si cambió: no pisa la cámara elegida a mano
             self._camara_aplicada = p["general/camara"]
@@ -3063,7 +3070,6 @@ class VentanaPrincipal(QMainWindow):
         """Corre `funcion` en otro hilo mostrando un aviso de espera (la ventana no se congela). Devuelve su
         resultado o relanza su excepción. Con `con_avance`, `funcion(avance)` recibe una función de un texto que
         cambia el aviso mientras corre (la etapa en que va)."""
-        import threading
 
         from PySide6.QtCore import QEventLoop
         from PySide6.QtWidgets import QProgressDialog
