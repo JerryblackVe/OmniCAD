@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-424 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+425 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 50 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 71 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 72 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 36 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -809,6 +809,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`project_to_surface`](#project_to_surface) | sí | Boceto 3D: Project To Surface de Fusion: proyecta curvas de boceto sobre caras. mode=closest (Closest Point): cada punto de la curva va al punto más cercano de las caras (spline por 49 puntos); mode=vector (Along Vector): proyecta a lo largo de direction (vector [x, y, z] del mundo o un eje: 'X', 'Y', 'Z', id de un eje o una arista recta), hacia donde apunta. |
 | [`include_3d_geometry`](#include_3d_geometry) | sí | Boceto 3D: Include 3D Geometry de Fusion: incluye aristas (o el borde de caras) y vértices del modelo en el boceto DONDE ESTÁN, como curvas y puntos 3D (no se llevan al plano: para eso, project_to_sketch). |
 | [`isoparametric_curve`](#isoparametric_curve) | sí | Boceto 3D: Isoparametric Curve de Fusion (Proyectar/Incluir): saca de una cara las curvas de parámetro constante, recortadas a su contorno, y las deja como curvas 3D del boceto. direction=u: las que siguen el parámetro U (V constante), v: las que siguen V, both: las dos. type=single: la que pasa por point (un punto de la cara, se proyecta a ella); type=distributed: las de toda la cara, a lo ancho, una cada distance mm (medidos sobre la curva perpendicular por point; una pasa por el punto) o quantity curvas parejas sin tocar los bordes. |
+| [`edit_isoparametric_curve`](#edit_isoparametric_curve) | sí | Boceto 3D: edita una Isoparametric Curve ya creada con vínculo (BOC-76): cambia direction, type, distance o quantity de TODAS las curvas que dejó esa llamada, sobre la misma cara y el mismo punto. |
 | [`infer_sketch_snap_3d`](#infer_sketch_snap_3d) | no | Boceto 3D: dice qué ayuda de dibujo propone la interfaz con el cursor en [x, y, z] (Fusion: 3D Sketch › ayudas de dibujo): punto medio, intersección, sobre la curva, tangente y perpendicular desde un punto base, alineación con otros puntos (misma coordenada en el plano) y horizontal/vertical (los ejes de la tríada). |
 | [`draw_spiral`](#draw_spiral) | sí | Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. |
 | [`set_circle_radius`](#set_circle_radius) | sí | Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo en el editor): el círculo toma el radio nuevo y en un arco se corren sus extremos libres. |
@@ -1805,6 +1806,20 @@ Boceto 3D: Isoparametric Curve de Fusion (Proyectar/Incluir): saca de una cara l
   - `construction` (true/false; opcional, por defecto `false`): true deja las curvas como construcción.
   - `link` (true/false; opcional, por defecto `true`): true = las curvas siguen a la cara si el modelo cambia (Projection Link); false = congeladas.
 - CLI: `omnicad call isoparametric_curve --doc pieza.omnicad face=… point=…`
+
+### `edit_isoparametric_curve`
+
+Boceto 3D: edita una Isoparametric Curve ya creada con vínculo (BOC-76): cambia direction, type, distance o quantity de TODAS las curvas que dejó esa llamada, sobre la misma cara y el mismo punto. Lo que no se pasa queda como estaba; pasar distance o quantity sola cambia a distributed con esa. Las curvas se rehacen (ids nuevos en entities) y sus restricciones y cotas 3D se borran. Una curva sin vínculo (link=false) ya no recuerda su cara: no se edita.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `curve` (entero; obligatorio): id de cualquiera de las curvas 3D de la isoparamétrica (get_sketch: entities_3d con source.tool = isoparametric_curve).
+  - `direction` ("both" | "u" | "v" o null; opcional, por defecto `null`): u, v o both; vacío = la de antes.
+  - `type` ("single" | "distributed" o null; opcional, por defecto `null`): single o distributed; vacío = la de antes (o distributed si llega distance o quantity).
+  - `distance` (número; opcional, por defecto `null`): con distributed, separación entre curvas en mm (reemplaza a quantity).
+  - `quantity` (entero; opcional, por defecto `null`): con distributed, cantidad de curvas parejas, hasta 200 (reemplaza a distance).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call edit_isoparametric_curve --doc pieza.omnicad curve=…`
 
 ### `infer_sketch_snap_3d`
 

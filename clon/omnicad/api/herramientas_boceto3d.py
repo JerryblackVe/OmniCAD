@@ -450,16 +450,24 @@ def _curvas(sesion, op, curves):
     return salida
 
 
-def _agregar_curvas(sesion, sketch, origen, construction, vinculo=True):
-    """Calcula las curvas del «origen» (`aristas_de_origen`, lo mismo que el recálculo) y las agrega al boceto; con
-    `vinculo`, cada una guarda su índice en el resultado para seguir al modelo (sin él quedan congeladas)."""
+def _aristas(sesion, origen):
+    """Las curvas del «origen» con el modelo de ahora (`aristas_de_origen`, lo mismo que el recálculo)."""
     from ..timeline.operaciones import aristas_de_origen
     try:
         aristas = aristas_de_origen(origen, sesion.doc.estado_final)
     except geo.ErrorGeometria as e:
         raise error("INVALID_GEOMETRY", str(e)) from e
+    except (ent.ErrorReferencia, ent.ReferenciaMalFormada) as e:
+        raise error("REFERENCE_LOST", f"La cara de las curvas ya no está en el modelo: {e}") from e
     if not aristas:
         raise error("INVALID_GEOMETRY", "La selección no deja ninguna curva (no se cortan / no cae sobre la cara).")
+    return aristas
+
+
+def _agregar_curvas(sesion, sketch, origen, construction, vinculo=True):
+    """Calcula las curvas del «origen» y las agrega al boceto; con `vinculo`, cada una guarda su índice en el
+    resultado para seguir al modelo (sin él quedan congeladas)."""
+    aristas = _aristas(sesion, origen)
 
     def crear(b):
         plano = boceto_resuelto(sesion, op_boceto(sesion, sketch)).plano
@@ -607,6 +615,13 @@ def isoparametric_curve(sesion, face: str, point: list[float], direction: Litera
     if len(elegidas) != 1:
         raise error("INVALID_ARGUMENTS", f"face tiene que ser UNA cara (el selector dio {len(elegidas)}).")
     p = _punto(point, "point")
+    origen = {"tool": "isoparametric_curve", "refs": [sl.referencia(*elegidas[0])], "point": p, "direction": direction,
+              **_reparto_iso(type, distance, quantity)}
+    return _agregar_curvas(sesion, sketch, origen, construction, link)
+
+
+def _reparto_iso(type, distance, quantity):
+    """{"type", "distance", "quantity"} validados de una isoparamétrica, o INVALID_ARGUMENTS."""
     if type == "single" and (distance is not None or quantity is not None):
         raise error("INVALID_ARGUMENTS", "distance y quantity son de type=distributed.")
     if type == "distributed" and (distance is None) == (quantity is None):
@@ -616,9 +631,42 @@ def isoparametric_curve(sesion, face: str, point: list[float], direction: Litera
         raise error("INVALID_ARGUMENTS", f"distance tiene que ser un número mayor que 0 (llegó {distance!r}).")
     if quantity is not None and (isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1):
         raise error("INVALID_ARGUMENTS", f"quantity es un entero de 1 o más (llegó {quantity!r}).")
-    origen = {"tool": "isoparametric_curve", "refs": [sl.referencia(*elegidas[0])], "point": p, "direction": direction,
-              "type": type, "distance": None if distance is None else float(distance), "quantity": quantity}
-    return _agregar_curvas(sesion, sketch, origen, construction, link)
+    return {"type": type, "distance": None if distance is None else float(distance), "quantity": quantity}
+
+
+@herramienta("edit_isoparametric_curve", "boceto",
+             "Boceto 3D: edita una Isoparametric Curve ya creada con vínculo (BOC-76): cambia direction, type, distance "
+             "o quantity de TODAS las curvas que dejó esa llamada, sobre la misma cara y el mismo punto. Lo que no se "
+             "pasa queda como estaba; pasar distance o quantity sola cambia a distributed con esa. Las curvas se "
+             "rehacen (ids nuevos en entities) y sus restricciones y cotas 3D se borran. Una curva sin vínculo "
+             "(link=false) ya no recuerda su cara: no se edita.", modifica=True)
+def edit_isoparametric_curve(sesion, curve: int, direction: Literal["u", "v", "both"] | None = None,
+                             type: Literal["single", "distributed"] | None = None, distance: float | None = None,
+                             quantity: int | None = None, sketch: str | None = None):
+    """
+    curve: id de cualquiera de las curvas 3D de la isoparamétrica (get_sketch: entities_3d con source.tool = isoparametric_curve).
+    direction: u, v o both; vacío = la de antes.
+    type: single o distributed; vacío = la de antes (o distributed si llega distance o quantity).
+    distance: con distributed, separación entre curvas en mm (reemplaza a quantity).
+    quantity: con distributed, cantidad de curvas parejas, hasta 200 (reemplaza a distance).
+    sketch: id o nombre del boceto; vacío = el último boceto del timeline.
+    """
+    b = op_boceto(sesion, sketch).boceto
+    ids = b3.grupo_de(b, curve)
+    viejo = b3.datos(b)["curvas"][ids[0]]["origen"] if ids else {}
+    if viejo.get("tool") != "isoparametric_curve":
+        raise error("ENTITY_NOT_FOUND", f"La curva 3D {curve!r} no es una curva isoparamétrica con vínculo.")
+    nuevo = type or ("distributed" if distance is not None or quantity is not None else viejo["type"])
+    if nuevo == "distributed" and distance is None and quantity is None:
+        distance, quantity = viejo.get("distance"), viejo.get("quantity")
+    origen = {**b3.sin_indice(viejo), "direction": direction or viejo["direction"],
+              **_reparto_iso(nuevo, distance, quantity)}
+    aristas = _aristas(sesion, origen)
+
+    def rehacer(b):
+        return b3.reemplazar_grupo(b, ids, aristas, boceto_resuelto(sesion, op_boceto(sesion, sketch)).plano, origen)
+    nuevas, op, br = _editar(sesion, sketch, rehacer)
+    return _informe(sesion, op, br, entities=nuevas, replaced=ids)
 
 
 # ---------------------------------------------------------------- informe (get_sketch)

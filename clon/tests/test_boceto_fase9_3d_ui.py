@@ -387,3 +387,101 @@ def test_un_clic_sin_ayuda_no_hereda_la_union_de_un_clic_anterior_en_ese_lugar(b
     assert len(it.uniones) == 1
     _clic(m.lienzo, it.a_pantalla((20, 0, 0)))                            # cae sobre el punto ya creado: no hay ayuda
     assert not it.uniones
+
+
+# ---------------------------------------------------------------- BOC-76: editar una curva isoparamétrica
+@pytest.fixture
+def iso(v, tmp_path):
+    """Cilindro r=10 h=40 en x=-40 y un boceto con 4 isoparamétricas U repartidas por cantidad, abierto en edición."""
+    from omnicad.ui.puente import PuenteAgentes
+    pu = PuenteAgentes(v, archivo=tmp_path / "puente.json")
+    r = pu.ejecutar("create_cylinder", {"radius": 10, "height": 40, "x": -40, "name": "Cil"})   # lejos de las 3 cajas
+    assert r["ok"], r
+    for nombre, args in (("create_sketch", {"plane": "XY", "name": "Iso"}),
+                         ("isoparametric_curve", {"face": "%CYLINDER", "body": "Cil", "point": [-30, 0, 20],
+                                                  "direction": "u", "type": "distributed", "quantity": 4}),
+                         ("sketch_view", {"sketch": "Iso", "action": "edit"})):
+        r = pu.ejecutar(nombre, args)
+        assert r["ok"], (nombre, r)
+    m = v.modo_boceto
+    m.paleta.checks["boceto3d"].setChecked(True)
+    v.visor.vista("iso")
+    v.visor.objetivo, v.visor.distancia = np.zeros(3), 200.0
+    QApplication.processEvents()
+    _herramienta(m, "seleccionar")
+    return m
+
+
+def _alturas(m):
+    g = b3.datos(m.boceto)
+    return sorted(round(float(np.mean([g["puntos"][p][2] for p in c["puntos"]])), 3) for c in g["curvas"].values())
+
+
+def _doble_clic_y(m, punto, en_dialogo):
+    """Doble clic como una persona (presionar, soltar, doble, soltar) en `punto`; `en_dialogo(d)` maneja el diálogo."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QDialog
+    vistos, fallas, intentos = [], [], []
+
+    def atender():
+        d = next((x for x in m.lienzo.findChildren(QDialog, "editar_isoparametrica") if x.isVisible()), None)
+        if d is None:
+            intentos.append(1)
+            if len(intentos) < 100:                  # todavía no se abrió (el timer puede correr antes del doble clic)
+                QTimer.singleShot(20, atender)
+            return
+        vistos.append(d)
+        try:
+            en_dialogo(d)
+        except Exception as e:  # noqa: BLE001 — un assert fallido no deja el diálogo modal colgando el test
+            fallas.append(e)
+            d.reject()
+    QTimer.singleShot(0, atender)
+    pos = m.interaccion3d.a_pantalla(punto)
+    for tipo in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease, QEvent.MouseButtonDblClick,
+                 QEvent.MouseButtonRelease):
+        _evento(m.lienzo, tipo, pos)
+    if fallas:
+        raise fallas[0]
+    assert vistos, "el doble clic no abrió el diálogo"
+
+
+def test_doble_clic_en_una_isoparametrica_y_teclear_la_cantidad_la_rehace(iso):
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QComboBox, QDialogButtonBox, QSpinBox
+    m = iso
+    assert _alturas(m) == [8, 16, 24, 32]
+    c = 10 * math.sqrt(0.5)
+
+    def teclear(d):
+        assert d.findChild(QComboBox, "iso_tipo").currentData() == "cantidad"          # cargado con lo de antes
+        sp = d.findChild(QSpinBox, "iso_cantidad")
+        assert sp.value() == 4
+        sp.lineEdit().selectAll()
+        QTest.keyClicks(sp.lineEdit(), "2")
+        QTest.mouseClick(d.findChild(QDialogButtonBox).button(QDialogButtonBox.Ok), Qt.LeftButton)
+    _doble_clic_y(m, (c - 40, c, 16), teclear)
+    assert _alturas(m) == pytest.approx([40 / 3, 80 / 3], abs=1e-3)
+    m.lienzo.deshacer()                                              # Ctrl+Z vuelve las 4 de antes
+    assert _alturas(m) == [8, 16, 24, 32]
+
+
+def test_cambiar_a_distancia_y_cancelar_con_esc_no_toca_nada(iso):
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QComboBox, QDialogButtonBox
+    from omnicad.ui.formulario import NumeroDecimal
+    m = iso
+    c = 10 * math.sqrt(0.5)
+    _doble_clic_y(m, (c - 40, c, 16), lambda d: QTest.keyClick(d, Qt.Key_Escape))
+    assert _alturas(m) == [8, 16, 24, 32]
+
+    def a_distancia(d):
+        tipo = d.findChild(QComboBox, "iso_tipo")
+        tipo.setCurrentIndex(tipo.findData("distancia"))
+        campo = d.findChild(NumeroDecimal, "iso_distancia")
+        assert campo.isVisible() or not d.isVisible()
+        campo.lineEdit().selectAll()
+        QTest.keyClicks(campo.lineEdit(), "10")
+        QTest.mouseClick(d.findChild(QDialogButtonBox).button(QDialogButtonBox.Ok), Qt.LeftButton)
+    _doble_clic_y(m, (c - 40, c, 16), a_distancia)
+    assert _alturas(m) == [10, 20, 30]                               # una pasa por el punto (z=20), sin los bordes
