@@ -1486,11 +1486,29 @@ class OpRestriccion(Operacion):
         return [{k: self.p[k] for k in base}] + [dict(base, **f) for f in self.p.get("filas") or []]
 
     def ejecutar(self, estado, ctx):
+        self._avisar_uniones(estado, ctx, self._resolver_filas(estado, ctx))
+
+    @staticmethod
+    def _avisar_uniones(estado, ctx, movidos):
+        """Una restricción mueve el componente sin respetar las uniones: si una unión ata un componente movido con otro que
+        no se movió, esa unión deja de cumplirse. No se prohíbe (una unión con movimiento libre puede seguir valiendo), pero se
+        avisa con el nombre de cada una."""
+        for u in estado.uniones.values():
+            a, b = u.get("comp1"), u.get("comp2")
+            if (a in movidos) != (b in movidos) and a and b:
+                dentro, fuera = (a, b) if a in movidos else (b, a)
+                nombre = lambda k: estado.componentes.get(k, {}).get("nombre") or k   # noqa: E731
+                ctx.aviso(f"La restricción mueve «{nombre(dentro)}», que está unido a «{nombre(fuera)}» por «{u.get('nombre')}»: "
+                          "esa unión puede dejar de cumplirse. Suprimí la unión o la restricción si se contradicen.")
+
+    def _resolver_filas(self, estado, ctx):
+        """Aplica todas las filas y devuelve los componentes que movieron."""
         filas = self._filas()
         m, comps, orden = self._movimiento(estado, ctx, filas[0], None)
         _mover_componentes(estado, comps, m)
+        movidos = set(comps)
         if len(filas) == 1:
-            return
+            return movidos
         for _ in range(4):                       # cada fila mueve lo que las otras ya dejaron: se repite hasta que ninguna se mueve
             sueltas = []
             for i, f in enumerate(filas):
@@ -1498,8 +1516,9 @@ class OpRestriccion(Operacion):
                 if not np.allclose(m, np.identity(4), atol=1e-6):
                     sueltas.append(i + 1)
                     _mover_componentes(estado, comps, m)
+                    movidos |= comps
             if not sueltas:
-                return
+                return movidos
         nombres = [f"{i}" + (f" «{filas[i - 1]['nombre_fila']}»" if filas[i - 1].get("nombre_fila") else "") for i in sueltas]
         raise ErrorOperacion(f"Las restricciones del conjunto se contradicen: las filas {', '.join(nombres)} no se pueden cumplir "
                              "a la vez. Cambiá la geometría o el desfase de alguna, o sacala.")
