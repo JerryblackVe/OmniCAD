@@ -1423,4 +1423,24 @@ def test_fu2_el_agujero_muestra_su_corte_con_las_cotas_editables(app_qt):
     assert panel._previa_ok and g.volumen(_cuerpo(estados[-1]).forma) < simple - 3 * math.pi * (4.5 ** 2 - 2.5 ** 2) + 1
     teclear("profundidad", "abc")
     assert "profundidad" in panel.invalidos and panel.widgets["profundidad"].styleSheet()
+
+
+def test_p139_el_angulo_del_plano_en_angulo_es_un_anillo_centrado_en_la_arista(app_qt):
+    """P-139: como Fusion, el ángulo de Construir › Plano en ángulo es un anillo punteado centrado en la arista elegida
+    (antes, un arco suelto de `Angulo`), con el asa sobre el anillo y la caja de valor al arrastrar."""
+    from omnicad.ui import manipuladores as mp
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    doc = _doc_caja()
+    eje_x = hit_desde_ref({"tipo": "eje", "id": "X"}, doc.estado_final)
+    panel, _visor, _e = _panel(CATALOGO["plano_angulo"](), doc, {"r0": [eje_x], "angulo": "-24.9 deg"})
+    anillo = _manip(panel, "angulo:angulo")
+    assert isinstance(anillo, mp.AnilloAngulo) and anillo.GRUPO == "anillo"
+    assert anillo.centro == pytest.approx([0, 0, 0]) and abs(float(anillo.eje @ [1, 0, 0])) == pytest.approx(1)   # centrado en el eje X, girando alrededor de él
+    panel.cancelar()
+    arista = _arista_de_arriba(doc)                                                  # una arista real: el anillo va en su MEDIO
+    panel, _visor, _e = _panel(CATALOGO["plano_angulo"](), doc, {"r0": [arista], "angulo": "30 deg"})
+    anillo = _manip(panel, "angulo:angulo")
+    pts = np.asarray(g.polilinea_arista(arista["forma"]), float)
+    assert anillo.centro == pytest.approx((pts[0] + pts[-1]) / 2) and np.linalg.norm(anillo.centro - pts[0]) > 1.0
     panel.cancelar()

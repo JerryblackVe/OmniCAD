@@ -370,7 +370,12 @@ def _asas_angulo(self, ctx, v):
     n0 = n0 - a * float(n0 @ a)
     if np.linalg.norm(n0) < 1e-9:
         return []
-    return [mp.Angulo("angulo", np.asarray(punto, float), a, np.cross(a, mp.unitario(n0)), 25.0)]
+    punto = np.asarray(punto, float)
+    if e.tipo == "arista" and e.forma is not None:           # Fusion centra el anillo en el medio de la arista, no en un extremo
+        from ...nucleo import geometria as geo
+        pts = np.asarray(geo.polilinea_arista(e.forma), float)
+        punto = punto + a * float(((pts[0] + pts[-1]) / 2 - punto) @ a)
+    return [mp.AnilloAngulo("angulo", punto, a, np.cross(a, mp.unitario(n0)))]      # P-139: el anillo de Fusion, centrado en la arista
 
 
 def _asas_perpendicular(self, ctx, v):
