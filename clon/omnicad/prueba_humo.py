@@ -421,7 +421,7 @@ def _gizmo_calcomania(v, r, carpeta):
     p._calcular_previa()
     m = manip("angulo")
     esperado = m._origen_arco(g) + (m.u + m.v) * m._r(g) / math.sqrt(2)
-    r.check(g.valor("angulo") == 45 and p.widgets["angulo"].text() == "45" and grados.isVisible()
+    r.check(g.valor("angulo") == 45 and p.widgets["angulo"].text() == "45 deg" and grados.isVisible()
             and np.allclose(m.asa(g), esperado), "Calcomanía: caja permanente de grados gira imagen y manija a 45")
     m = manip("ancho")
     _, asa = m.puntos(g)
