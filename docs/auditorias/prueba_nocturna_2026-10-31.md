@@ -91,6 +91,7 @@ Pasada sobre `3c7ad28`, 2026-10-31 (anterior a restricciones y patrones del boce
 | 4 | Tests que tocan los dos archivos que chocaron al juntar (`editor_boceto.py`, `herramientas_boceto.py`) | incluidos en las tandas del #1 | Resolución sin conflicto de código, pero sin suite completa encima |
 | 5 | `docs/agentes/herramientas.md` regenerado tras el merge | `tests/test_doc_agentes.py` en el #1 | El merge de la rama de patrones lo regeneró; falta confirmarlo con el test |
 | 6 | Seguimiento al día | `tests/test_seguimiento.py`, `tests/test_claves_comandos.py` en el #1 | Idem |
+| 7 | Tests afectados por lo integrado el 2026-11-13 (P-138 a B-405, FL-8b, B-331, B-396; 30 fusiones) | `scripts/tests_afectados.py --desde d205b96 --correr` desde `clon/` | Se cortó a mitad por la fila cargada (la tenían las sesiones); solo corrieron las tandas dirigidas de cada ítem |
 
 ## 3. Lo que van a dejar las dos sesiones abiertas (completar cuando terminen)
 
