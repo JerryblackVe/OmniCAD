@@ -16,7 +16,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | FL-3 | Aceptar, eliminar y abrir fuera de la ventana, con barra y Cancelar |
 | E7 | FL-0 | Banco de fluidez |
 | E8 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
-| E9 | B-403 | Extruir texto con Unir congela la ventana (parte FL-4) |
+| E9 | Sol | Orquesta a Sol hasta el 15/11: B-344 (Engrosar) y B-397 |
 | E10 | B-363 | El `.f3d` de la Prusa Core One se abre sin geometría |
 
 ## Sigue (en orden)
