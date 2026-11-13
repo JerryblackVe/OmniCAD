@@ -27,6 +27,7 @@ from ..asistente.proveedores.base import ErrorProveedor
 from ..nucleo import motor
 from ..timeline.documento import TOPE_INSTRUCCIONES
 from . import estilo_asas, temas
+from .selector_temas import SelectorTemas
 
 NOMBRE_ANTERIOR = "FusionClone"      # nombre del programa hasta el 2026-10-09: sus preferencias se migran una vez
 
@@ -685,7 +686,7 @@ def _combo_temas(actual):
 
 class DialogoPreferencias(QDialog):
     aplicado = Signal()
-    tema_elegido = Signal(str)         # vista previa: la clave del tema que se acaba de elegir en el combo
+    tema_elegido = Signal(str)         # vista previa: tema elegido o bajo el ratón
     apariencia_cambiada = Signal()     # vista previa: fuente o tamaño de la interfaz ya escritos en prefs
     graficos_cambiados = Signal()      # vista previa: Preferencias › Gráficos ya escritas en prefs (al instante)
     asas_cambiadas = Signal()          # vista previa: Preferencias › Asas y superposiciones ya escritas en prefs
@@ -703,7 +704,7 @@ class DialogoPreferencias(QDialog):
         self._modelos = {"modelos": [], "fabrica": "", "variantes": {}, "motivo": ""}   # la última lista que llegó
         self.modelos_listos.connect(self._modelos_listos)
         self.controles = {}            # clave → widget
-        self.aviso_tema = None         # QLabel bajo el combo de temas: contraste, avisos y confirmaciones
+        self.aviso_tema = None         # QLabel bajo las tarjetas de temas: contraste, avisos y confirmaciones
         self.aviso_apariencia = None   # QLabel de Apariencia: colores de texto rechazados por contraste
 
         self.arbol = QTreeWidget()
@@ -885,12 +886,16 @@ class DialogoPreferencias(QDialog):
                 c = _combo_temas(actual)
                 c.currentIndexChanged.connect(self._cambio)
                 c.currentIndexChanged.connect(self._tema_cambiado)
+                self.selector_temas = SelectorTemas(c)
+                self.selector_temas.tema_pasando.connect(self.tema_elegido.emit)
+                self.selector_temas.tema_salio.connect(lambda combo=c: self.tema_elegido.emit(combo.currentData()))
                 self.aviso_tema = QLabel(objectName="aviso_tema", wordWrap=True)
                 temas.poner_rol(self.aviso_tema, "tenue")
                 caja = QVBoxLayout()
-                caja.addWidget(c)
+                caja.addWidget(self.selector_temas)
                 caja.addWidget(self.aviso_tema)
-                form.addRow(texto, caja)
+                form.addRow(QLabel(texto))              # solo, a la izquierda: las tarjetas ocupan todo el ancho
+                form.addRow(caja)
                 self.controles[clave] = c
                 self._mostrar_aviso_tema(c.currentData())
                 continue
@@ -1267,7 +1272,7 @@ class DialogoPreferencias(QDialog):
         self._mostrar_aviso_apariencia()
 
     def _mostrar_aviso_tema(self, clave, extra=""):
-        """Texto bajo el combo: lo que no cierra del tema elegido (contraste, archivos ignorados) y `extra`."""
+        """Texto bajo las tarjetas: lo que no cierra del tema elegido (contraste, archivos ignorados) y `extra`."""
         tema, avisos = temas.resolver(clave)
         partes = [extra] if extra else ["Se aplica al instante, sin reiniciar."]
         bajos = temas.contraste_bajo(tema["colores"])
@@ -1299,6 +1304,7 @@ class DialogoPreferencias(QDialog):
             combo.addItem(nuevo.itemText(i), nuevo.itemData(i))
         combo.setCurrentIndex(max(combo.findData(clave), 0))
         combo.blockSignals(False)
+        self.selector_temas.recargar()
         self._mostrar_aviso_tema(clave, f"Plantilla guardada: {ruta}. Editala y reabrí Preferencias para elegirla.")
         return ruta
 
