@@ -12,7 +12,7 @@ from ...timeline.parametros import ANGULO, LONGITUD
 from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir,
                        hit_desde_ref, hits, ref1)
 from . import registrar
-from .comunes import (DIRECCIONES_UI, ajustar_operacion, caja_cuerpo, campo_objetivos, campo_operacion,
+from .comunes import (DIRECCIONES_UI, ajustar_operacion, caja_cuerpo, caja_nueva, campo_objetivos, campo_operacion,
                       evaluar_o_cero as _evaluar, objetivos, objetivos_desde_op, perfil_apoyado,
                       perfiles_a_params, perfiles_desde_op, solidos_visibles)
 
@@ -290,9 +290,10 @@ class Extruir(Comando):
             # FL-1: la previa aparte trae el B-Rep (`formas`); la malla del arrastre (P-44) no sirve para ver si solapa
             exacta = op.p.get("operacion") == "nuevo" and not any(
                 isinstance(c.forma, Malla) for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos)
-            formas = ([c.forma for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos] if exacta
-                      else self._formas_herramienta(ctx, op, True))
-            cajas = [geo.caja_envolvente(f) for f in formas]
+            nuevos = [(k, c.forma) for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos]
+            formas = [f for _, f in nuevos] if exacta else self._formas_herramienta(ctx, op, True)
+            cajas = ([caja_nueva(estado, k, f) for k, f in nuevos] if exacta     # FL-1b: de la malla, sin kernel
+                     else [geo.caja_envolvente(f) for f in formas])
         solidos = [c for c in self._visibles(ctx) if any(geo.cajas_solapan(self._caja(c), k) for k in cajas)]
         if any(len(geo.caras(c.forma)) >= CARAS_PESADAS for c in solidos):
             self._pedir_al_hijo(panel, op, solidos)

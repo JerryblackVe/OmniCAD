@@ -229,7 +229,6 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
     op = operacion_desde_dict(operacion)
     inicio = time.perf_counter()
     estado, avisos = doc.previsualizar(op, indice, en_vivo=True)
-    ms = (time.perf_counter() - inicio) * 1000          # FL-1: lo que cuesta en el kernel, sin rehacer el documento
     mallas, nuevos, enviar = {}, {}, {}
     for cid, c in estado.cuerpos.items():
         anterior = entrada.cuerpos.get(cid)
@@ -243,6 +242,8 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
         mallas[cid] = v, n, seg
         if formas:
             enviar[cid] = c.forma
+    # FL-1: lo que costaría en la ventana (kernel y malla), sin rehacer el documento. FL-1b: mallar un barrido tarda 0,4 s
+    ms = (time.perf_counter() - inicio) * 1000
     return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos),
                        "formas": enviar, "ms": ms}, transporte=False)
 
