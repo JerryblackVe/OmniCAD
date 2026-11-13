@@ -91,3 +91,53 @@ def test_un_trabajador_que_todavia_no_contesto_no_se_corta(monkeypatch):
     """Cortar un trabajador que arranca no adelanta nada: el nuevo tarda lo mismo o más (texto «EMILIA»: 2,4 s y 5,6 s)."""
     monkeypatch.setattr(aislado, "_trabajador", None)
     assert aislado.costo_reinicio() == math.inf
+
+
+def test_lo_que_tarda_en_dibujarse_cuenta_para_volver_aparte(tmp_path, monkeypatch):
+    """FL-1b: el barrido tarda 20 ms en el kernel y 0,4 s en mallarse en el visor; medir solo el kernel lo dejaba en la
+    ventana y la trababa medio segundo por tecla."""
+    monkeypatch.setattr(comando, "PREVIA_APARTE", True)
+    app = QApplication.instance() or QApplication([])
+    s = api.Sesion()
+    assert api.llamar(s, "sketch_from_spec", {"entities": [{"type": "rectangle", "corner1": [0, 0], "corner2": [20, 10]}]})["ok"]
+    boceto = s.doc.operaciones[-1].id
+    v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    v.show()
+    try:
+        p = v.ejecutar_comando(Extruir())
+        perfil = s.doc.estado_final.bocetos[boceto].perfiles[0]
+        p._elegida(hit_desde_ref({"tipo": "perfil", "boceto": boceto, **OpExtrusion.referencia_perfil(perfil)}, p.ctx.estado))
+        p.set_valor("distancia", "5 mm")
+        p._t_previa.stop()
+        op = p.comando.construir(p.valores, p.ctx)
+        p._ms_previa = comando._firma_previa(op), 1.0          # la última fue rápida: esta va en la ventana
+        assert not p._previa_pesada(op)
+        mostrar = p._previa_lista
+        monkeypatch.setattr(p, "_previa_lista", lambda estado: time.sleep(0.06) or mostrar(estado))   # mallar tarda
+        p._calcular_previa()
+        assert p._previa_ok and not p._previa_aparte
+        assert p._ms_previa[1] >= 60 and p._previa_pesada(op)    # la próxima vuelve al proceso aparte
+        p.cancelar()
+    finally:
+        if v.panel is not None:
+            v.panel.cancelar()
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()
+        app.processEvents()
+
+
+def test_la_caja_de_la_previa_aparte_sale_de_su_malla_sin_el_kernel(monkeypatch):
+    """FL-1b: la caja exacta de un barrido con guía tardaba 0,15 s por previa solo para descartar cuerpos lejanos."""
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from omnicad.nucleo import geometria as geo
+    from omnicad.ui.comandos.comunes import caja_nueva
+    malla = np.array([[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]])
+    estado = SimpleNamespace(_mallas_previa={"c1": (malla, None, None)})
+    monkeypatch.setattr(geo, "caja_envolvente", lambda forma: (_ for _ in ()).throw(AssertionError("usó el kernel")))
+    assert caja_nueva(estado, "c1", object()) == ((-1.0, -1.0, -1.0), (2.0, 3.0, 4.0))
+    monkeypatch.setattr(geo, "caja_envolvente", lambda forma: "exacta")
+    assert caja_nueva(SimpleNamespace(), "c1", object()) == "exacta"      # previa de la ventana: la exacta

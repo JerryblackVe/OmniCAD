@@ -1752,6 +1752,8 @@ class PanelComando(QFrame):
         self._mostrar(" ".join(avisos), tipo="aviso")
         self._previa_vista(op)
         self._previa_lista(estado)
+        # FL-1b: también cuenta mallarla en el visor (un barrido: 20 ms de kernel y 0,4 s de malla)
+        self._ms_previa = _firma_previa(op), (time.perf_counter() - inicio) * 1000
 
     def previa_sana(self, cambios):
         """¿Sale sana la previa con `cambios` (textos de campos)? Sin mostrar nada; None si es pesada y no se prueba acá.

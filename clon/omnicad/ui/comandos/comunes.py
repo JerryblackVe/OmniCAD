@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Campos y conversiones que comparten varios comandos (operación booleana, perfiles, objetivos)."""
 from ...nucleo import geometria as geo
+from ...nucleo.malla import Malla
 from ...timeline.operaciones import OPERACIONES_CUERPO
 from ...timeline import analisis_vista as av
 from ...timeline.parametros import ESCALAR, LONGITUD
@@ -136,6 +137,15 @@ def caja_cuerpo(cuerpo, cajas):
     return cajas[cuerpo.id]
 
 
+def caja_nueva(estado, cid, forma):
+    """Caja de un cuerpo de la previa para descartar lo lejano: la de su malla si vino del proceso aparte (sin kernel; la
+    exacta de un barrido con guía tardaba 0,15 s), con 1 mm de holgura; si no, la exacta. El solape lo decide `solapan`."""
+    malla = getattr(estado, "_mallas_previa", {}).get(cid)
+    if malla is None or not len(malla[0]):
+        return geo.caja_envolvente(forma)
+    return tuple((malla[0].min(0) - 1.0).tolist()), tuple((malla[0].max(0) + 1.0).tolist())
+
+
 def _cajas_tocan(a, b):
     """¿Dos cajas se tocan o solapan? Apoyarse en una cara sí cuenta."""
     return all(min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) >= -1e-6 for i in range(3))
@@ -218,15 +228,18 @@ def con_operacion_automatica(clase):
             params = dict(op.p, operacion="nuevo", objetivos=[])
             clave = repr(params)
             if self._herramienta_previa is None or self._herramienta_previa[0] != clave:
-                if op.p.get("operacion") == "nuevo" and not hasattr(estado, "_mallas_previa"):
+                # FL-1b: la previa aparte trae el B-Rep; sin esto el barrido se volvía a calcular en la ventana (0,3 s)
+                if op.p.get("operacion") == "nuevo" and not any(
+                        isinstance(c.forma, Malla) for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos):
                     herramienta = estado
                 else:
                     with geo.en_serie():
                         herramienta, _avisos = ctx.doc.previsualizar(type(op)(op.id, op.nombre, **params), ctx.indice,
                                                                    en_vivo=True)
-                self._herramienta_previa = clave, [c.forma for k, c in herramienta.cuerpos.items() if k not in ctx.estado.cuerpos]
-            if any(geo.solapan(f, c.forma) for f in self._herramienta_previa[1] for c in solidos
-                   if geo.cajas_solapan(geo.caja_envolvente(f), caja_cuerpo(c, self._cajas))):
+                self._herramienta_previa = clave, [(c.forma, caja_nueva(herramienta, k, c.forma))
+                                                   for k, c in herramienta.cuerpos.items() if k not in ctx.estado.cuerpos]
+            if any(geo.solapan(f, c.forma) for f, caja in self._herramienta_previa[1] for c in solidos
+                   if geo.cajas_solapan(caja, caja_cuerpo(c, self._cajas))):
                 auto = "cortar"
         ajustar_operacion(self, panel, auto)
 
