@@ -15,7 +15,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E5 | ASM-19 | Menú ENSAMBLAR y paneles como Fusion |
 | E6 | FL-3 | Aceptar, eliminar y abrir fuera de la ventana, con barra y Cancelar |
 | E7 | FL-0 | Banco de fluidez |
-| E8 | CAMBIO3 | Congelar la prioridad 2 en `despues.md` (cambio 3 de la reorganización) |
+| E8 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
 | E9 | B-403 | Extruir texto con Unir congela la ventana (parte FL-4) |
 | E10 | B-363 | El `.f3d` de la Prusa Core One se abre sin geometría |
 
@@ -26,8 +26,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 1 | P-78 | Rosca modelada rápida (F6) |
 | 2 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
 | 3 | B-48 | Crash nativo al recalcular un documento largo |
-| 4 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
-| 5 | B-335 | Abrir un STEP pesado congela la ventana |
-| 6 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
+| 4 | B-335 | Abrir un STEP pesado congela la ventana |
+| 5 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
 
-Hechos y esperando integrar (no ocupan cola): B-393, B-403, P-153 (después de B-384), PRUEBA9c, B-397.
+Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384), PRUEBA9c. Con Sol (E9): B-344 Engrosar, B-397.
