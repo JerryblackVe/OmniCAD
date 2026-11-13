@@ -37,7 +37,8 @@ def revisar(tema, pct):
         razon = temas.razon_contraste(temas.color(token), temas.color("flotante"))
         A.reg(AR, f"{tema} {pct} % · contraste de «{tipo}» sobre el panel", razon >= temas.MIN_CONTRASTE, f"{razon:.2f}")
     p = abrir("extruir")
-    p.seccion.boton.setChecked(True)
+    if p.seccion is not None:                     # P-140: Extruir ya no tiene «Más opciones»
+        p.seccion.boton.setChecked(True)
     p.set_valor("conicidad", "xx")
     p._calcular_previa()
     A.esperar(100)

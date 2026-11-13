@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 241: Abierto 157 · Parcial 50 · Bloqueado 30 · Sin verificar 4 (2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 242: Abierto 158 · Parcial 50 · Bloqueado 30 · Sin verificar 4 (2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -71,10 +71,11 @@ Abierto 53 · Parcial 3 · Bloqueado 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 16 · Parcial 1 · Sin verificar 1.
+Abierto 17 · Parcial 1 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| H-115 | Empalme sólido › falta «Grosor de tangencia» (Tangency Weight): Fusion lo trae en el diálogo del Fillet (ayuda «Fillet reference» › Tangency Weight), OmniCAD no tiene el parámetro | Abierto | Media | Sumar el peso de tangencia al empalme (núcleo, operación, campo a la vista y herramienta del MCP) | `clon/omnicad/ui/comandos/modificar.py:75` | 2026-11-13 |
 | H-105 | Extruir superficie «Dos lados»: tipo de extensión propio del lado 2 (Al objeto, Todo) | Sin verificar | Media | Gemelo de H-81 (resuelto en el sólido el 2026-11-06). En superficie el lado 2 sigue siendo solo una distancia: `OpSupExtruir`, el panel y `create_surface_extrude` no tienen `extension2`/`hasta2`. La ayuda de Fusion para superficie dice «distances for each side independently» y no aclara si la extensión también va por lado: confirmarlo en Fusion antes de construir. | timeline/ops_superficie.py:100-151; ui/comandos/superficie.py:53-58; api/herramientas_superficie.py:75-125; docs/fusion_docs (Extrude a surface body) | 2026-11-06 |
 | H-82 | Extruir › Al objeto sobre una cara: «Hasta caras adyacentes» (sólido) y «Extend Faces / Chain Faces» (superficie) | Abierto | Media | Sólido: Extender tiene cara, cuerpo y a través; falta To Adjacent Faces. Superficie: no tiene ninguna opción de Extender. | timeline/operaciones.py:1133 (`hasta_modo`); ui/comandos/superficie.py:55; ayuda `Extrude reference` y `Extrude a surface body` | 2026-11-05 |
 | H-83 | Extruir, Revolución, Barrido y Solevación: operación «Componente nuevo» (sólido y superficie) | Abierto | Media | Fusion crea el cuerpo en un componente nuevo (diseño híbrido) en las cuatro herramientas (ayudas `Revolve reference`, `Sweep reference` y `Loft reference`, también en superficie). Hoy hay cuerpo nuevo, unir, cortar e intersecar; el componente se arma después con `create_component`. | timeline/operaciones.py:32 (`OPERACIONES_CUERPO`); api/herramientas_solido.py:183 | 2026-11-05 |

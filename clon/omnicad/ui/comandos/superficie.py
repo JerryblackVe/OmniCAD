@@ -61,7 +61,7 @@ class SupExtruir(Comando):
                 Expresion("desfase_hasta", "Desfase del límite", "0 mm", visible_si=objeto),
                 Casilla("invertir", "Invertir dirección", visible_si=lambda v: v.get("extension") != "distancia"),
                 Expresion("distancia2", "Distancia del lado 2", "0 mm", visible_si=dos),
-                Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, avanzado=True),
+                Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO),       # P-141: a la vista, como Fusion
                 Seleccion("direccion", "Eje de dirección", {"plano", "cara_plana", "eje", "arista_lineal"}, minimo=0,
                           ayuda="Sin selección: perpendicular al plano del boceto.")]
 

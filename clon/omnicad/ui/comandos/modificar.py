@@ -122,17 +122,17 @@ class Empalme(Comando):
                       visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") == "variable"),
             Expresion("c_cuerda", "Longitud de cuerda", "1 mm",
                       visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") == "cuerda"),
-            Texto("puntos_radio", "Puntos intermedios", "", avanzado=True,
+            Texto("puntos_radio", "Puntos intermedios", "",
                   visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable",
                   ayuda="Posición (0 a 1) y radio separados por «:», uno por punto y separados por «;», p. ej. 0.5:3 mm; 0.8:2 mm."),
-            Opciones("continuidad", "Continuidad", {"g1": "Tangente (G1)", "g2": "Curvatura (G2)"}, avanzado=True,
+            Opciones("continuidad", "Continuidad", {"g1": "Tangente (G1)", "g2": "Curvatura (G2)"},
                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") in ("constante", "asimetrico"),
                      ayuda="G2 y el radio asimétrico solo se hacen en aristas rectas entre dos caras planas."),
-            Casilla("cadena_tangente", "Cadena tangente", True, visible_si=empalme, avanzado=True),
-            Opciones("esquina", "Esquina", {"bola": "Bola rodante", "setback": "Setback"}, avanzado=True,
+            Casilla("cadena_tangente", "Cadena tangente", True, visible_si=empalme),
+            Opciones("esquina", "Esquina", {"bola": "Bola rodante", "setback": "Setback"},
                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante",
                      ayuda="Setback: el radio crece hacia las esquinas donde se juntan tres aristas (aproximado)."),
-            Expresion("setback", "Distancia de setback", "2 mm", avanzado=True,
+            Expresion("setback", "Distancia de setback", "2 mm",
                       visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante" and v.get("esquina") == "setback"),
         ]
 
@@ -351,8 +351,8 @@ class Chaflan(Comando):
             Expresion("distancia2", "Distancia 2", "1 mm", visible_si=lambda v: v.get("tipo") == "dos_distancias"),
             Expresion("angulo", "Ángulo", "45 deg", ANGULO, visible_si=lambda v: v.get("tipo") == "distancia_angulo"),
             Casilla("voltear", "Voltear", visible_si=lambda v: v.get("tipo") != "distancia_igual"),
-            Casilla("cadena_tangente", "Cadena tangente", True, avanzado=True),
-            Opciones("esquina", "Esquina", {"chaflan": "Chaflán", "inglete": "Inglete", "mezcla": "Mezcla"}, avanzado=True),
+            Casilla("cadena_tangente", "Cadena tangente", True),
+            Opciones("esquina", "Esquina", {"chaflan": "Chaflán", "inglete": "Inglete", "mezcla": "Mezcla"}),
         ]
 
     def construir(self, v, ctx):
@@ -426,10 +426,14 @@ class Desmoldeo(Comando):
             Botones("tipo", "Tipo", {"plano_fijo": ("Plano fijo", "des_plano"), "linea_particion": ("Línea de partición", "des_particion")}),
             Seleccion("plano", "Dirección de desmoldeo", {"cara_plana", "plano", "eje", "arista_lineal"},
                       ayuda="Plano fijo o dirección de extracción. Con «Línea de partición» define la dirección de extracción."),
+            # P-141: el orden del diálogo de Fusion (Pull Direction, Angle Mode, Faces, Tangent Chain, Flip Pull Direction)
+            Opciones("modo_angulo", "Modo de ángulo", {"relativo": "Relativo", "absoluto": "Absoluto"}, "relativo",
+                     ayuda="Relativo suma el ángulo al desmoldeo que la cara ya tiene; absoluto lo mide desde la dirección."),
             Seleccion("herramienta_particion", "Herramienta de partición", {"cara_plana", "plano", "arista", "curva_boceto"},
                       visible_si=particion, ayuda="Plano, cara plana o curva plana por donde pasa la línea de partición."),
             Seleccion("caras", "Caras", {"cara"}, maximo=None),
             Casilla("cadena_tangente", "Cadena tangente", True),
+            Casilla("voltear", "Invertir dirección de extracción"),
             Opciones("linea", "Tipo de línea de partición", {"fija": "Fijar línea de partición", "mover": "Mover línea de partición"},
                      visible_si=particion, grupo="Línea de partición",
                      ayuda="Mover: cada cara gira entera alrededor de su borde del lado contrario."),
@@ -442,10 +446,6 @@ class Desmoldeo(Comando):
                                                    "simetrico": ("Simétrico", "lado_simetrico")}, grupo="Ángulo"),
             Expresion("angulo", "Ángulo", "3 deg", ANGULO, grupo="Ángulo"),
             Expresion("angulo2", "Ángulo 2", "3 deg", ANGULO, visible_si=lambda v: v.get("lados") == "dos", grupo="Ángulo"),
-            Opciones("modo_angulo", "Modo de ángulo", {"relativo": "Relativo", "absoluto": "Absoluto"}, "relativo",
-                     avanzado=True,
-                     ayuda="Relativo suma el ángulo al desmoldeo que la cara ya tiene; absoluto lo mide desde la dirección."),
-            Casilla("voltear", "Invertir dirección de extracción", avanzado=True),
         ]
 
     def construir(self, v, ctx):
