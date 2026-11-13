@@ -339,7 +339,7 @@ def test_distancia_tecleada_pasa_a_cortar_y_vuelve_al_salir(ventana):
     assert p.valores["operacion"] == "cortar"      # los 10 mm escritos están adentro de la placa
     p.set_valor("distancia", "-5")
     previa(p)
-    assert p.valores["operacion"] == "nuevo"       # z −5..0: solo apoya en la cara, no se mete
+    assert p.valores["operacion"] == "unir"        # z −5..0: se apoya en la cara sin meterse: Unir, como Fusion (B-344)
     p.set_valor("distancia", "5")
     previa(p)
     assert p.valores["operacion"] == "cortar"
@@ -353,16 +353,55 @@ def test_arrastrar_la_flecha_pasa_a_cortar_y_vuelve_sin_kernel_mientras_no_se_me
     llamadas, original = [], v.doc.previsualizar
     monkeypatch.setattr(v.doc, "previsualizar", lambda *a, **k: llamadas.append(a) or original(*a, **k))
     arrastrar(p, -12)
-    assert p.valores["operacion"] == "nuevo" and llamadas == []       # afuera de la caja: solo el prisma
+    assert p.valores["operacion"] == "unir" and llamadas == []        # afuera de la caja: solo el prisma (B-344: apoyado)
     arrastrar(p, 5)
     assert p.valores["operacion"] == "cortar" and p.manipuladores.arrastrando
     assert p._previa_ok and CAPA_PREVIA in v.visor._capas       # la herramienta en rojo
     arrastrar(p, -5)
-    assert p.valores["operacion"] == "nuevo"
+    assert p.valores["operacion"] == "unir"
     arrastrar(p, 7)
     p.manipuladores.soltar()
     previa(p)
     assert p.valores["operacion"] == "cortar"
+
+
+def test_b344_el_perfil_dibujado_sobre_una_cara_abre_en_unir_y_suma_al_cuerpo(ventana):
+    """B-344: como Fusion, el perfil dibujado sobre una cara de un cuerpo extruido hacia afuera queda en «Unir» (antes
+    «Cuerpo nuevo»): se teclea la distancia, se acepta y queda UN cuerpo con los dos volúmenes."""
+    v, p = ventana
+    campo = p.widgets["distancia"]
+    QTest.mouseClick(campo, Qt.LeftButton)
+    QTest.keyClick(campo, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClicks(campo, "-5")
+    QTest.keyClick(campo, Qt.Key_Tab)
+    previa(p)
+    assert p.valores["operacion"] == "unir" and p.widgets["operacion"].currentText() == "Unir"
+    QTest.mouseClick(p.boton_ok, Qt.LeftButton)
+    assert v.panel is None and v.doc.operaciones[-1].p["operacion"] == "unir"
+    cuerpos = list(v.doc.estado_final.cuerpos.values())
+    assert len(cuerpos) == 1 and geo.volumen(cuerpos[0].forma) == pytest.approx(100 * 40 * 10 + 10 * 10 * 5)
+
+
+@pytest.mark.parametrize("x0", [200, 100], ids=["lejos", "solo_por_una_arista"])
+def test_b344_un_perfil_que_no_se_apoya_en_una_cara_sigue_en_cuerpo_nuevo(tmp_path, x0):
+    app = QApplication.instance() or QApplication([])
+    s = api.Sesion()
+    llamar(s, "extrude", sketch=rectangulo(s, 0, -20, 100, 20), distance=10)
+    perfil = rectangulo(s, x0, -5, x0 + 10, 5)                       # x0 = 100: toca la placa solo por la arista x = 100
+    v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    v.show()
+    p = v.ejecutar_comando(Extruir())
+    br = s.doc.estado_final.bocetos[perfil]
+    p._elegida(hit_desde_ref({"tipo": "perfil", "boceto": perfil, **OpExtrusion.referencia_perfil(br.perfiles[0])},
+                             p.ctx.estado))
+    p.set_valor("distancia", "5")
+    previa(p)
+    assert p.valores["operacion"] == "nuevo"
+    p.cancelar()
+    v.doc.modificado = False
+    v.close()
+    v.deleteLater()
+    app.processEvents()
 
 
 def test_elegir_operacion_a_mano_queda_fija_hasta_cerrar(ventana):
@@ -428,7 +467,7 @@ def test_con_cuerpo_pesado_el_comun_va_al_proceso_aparte(ventana, monkeypatch):
     p.set_valor("distancia", "5")
     previa(p)
     assert comunes == []                           # un fallo dentro de la previa lo tragaría el panel
-    assert c._hijo is not None and p.valores["operacion"] == "nuevo"
+    assert c._hijo is not None and p.valores["operacion"] == "unir"     # B-344: el perfil se apoya en la placa
     fin = time.monotonic() + 60
     while c._hijo is not None and time.monotonic() < fin:
         QTest.qWait(50)
