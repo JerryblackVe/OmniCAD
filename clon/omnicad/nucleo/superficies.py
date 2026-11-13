@@ -967,9 +967,11 @@ def _auxiliares(sec, otra, cond, signo, exacta=False):
     hacia = centro(otra) - c
     delta = peso * 0.15 * float(np.linalg.norm(hacia))
     if tipo == "direccion":
-        angulo = float(cond.get("angulo", 90.0)) % 360.0         # P-147c: el anillo da vueltas (−330 = 30), como Fusion
+        # P-147d: como Fusion, se mide desde la normal (0 = perpendicular) y da vueltas; acá, desde el plano del perfil
+        angulo = (90.0 - float(cond.get("angulo", 0.0))) % 360.0
         if not 0 < angulo < 180:
-            raise geo.ErrorGeometria("El ángulo de la condición de borde está entre 0 y 180 grados.")
+            raise geo.ErrorGeometria("El ángulo de la condición de borde, medido desde la normal, tiene que quedar entre "
+                                     "−90 y 90 grados.")
         n = _normal_seccion(w, hacia)
         if BRep_Tool.IsClosed_s(w) and not exacta:
             return [sc._auxiliar_direccion(w, n, delta, angulo, signo)]
@@ -1271,7 +1273,7 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
     `reglada` usa tramos rectos entre secciones.
 
     `condicion_inicio`, `condicion_fin` (End Condition): {"tipo": "libre"}; {"tipo": "direccion", "angulo": grados desde
-    el plano del perfil (90 = perpendicular), "peso": 1} (Direction, Takeoff Angle y Takeoff Weight); {"tipo": "tangente"
+    la normal del perfil (0 = perpendicular, como Fusion; da vueltas), "peso": 1} (Direction, Takeoff Angle y Takeoff Weight); {"tipo": "tangente"
     o "suave", "cara": cara cuyo borde es el perfil, "peso": 1, "alineacion": "libre", "alinear" o "superficie"} (Tangent
     G1 o Smooth G2, Tangency Weight y Free Edges, Align Edges o Align to Surface, que son de los perfiles abiertos);
     {"tipo": "punto_tangente", "peso": 1} en un perfil que es un punto (Point Tangent: cúpula; sin condición es Sharp).

@@ -248,9 +248,9 @@ class SupSolevacion(Solevacion):
         if tipo == "direccion":
             return {"tipo": "direccion", "angulo": v[f"angulo_{lado}"], "peso": v[f"peso_{lado}"]}
         if tipo == "punto_tangente":
-            return {"tipo": tipo, "angulo": "90 deg", "peso": v[f"peso_{lado}"]}
+            return {"tipo": tipo, "angulo": "0 deg", "peso": v[f"peso_{lado}"]}
         if tipo in ("tangente", "suave"):
-            return {"tipo": tipo, "angulo": "90 deg", "peso": v[f"peso_{lado}"], "cara": ref1(v, f"cara_{lado}"),
+            return {"tipo": tipo, "angulo": "0 deg", "peso": v[f"peso_{lado}"], "cara": ref1(v, f"cara_{lado}"),
                     "alineacion": v.get(f"alineacion_{lado}") or "libre"}
         return None
 

@@ -177,16 +177,16 @@ def test_direccion_en_un_perfil_abierto_recto_o_curvo():
                                   condicion_inicio={"tipo": "direccion", "angulo": 45.0})
     assert caja(recta)[0][1] < -3 and caja(recta)[1][0] == pytest.approx(10, abs=1e-3) and g.es_valida(recta)
     otro_lado = sf.solevar_superficie([seg((0, 0, 0), (10, 0, 0)), seg((0, 0, 30), (10, 0, 30))],
-                                      condicion_inicio={"tipo": "direccion", "angulo": 135.0})
+                                      condicion_inicio={"tipo": "direccion", "angulo": -45.0})
     assert caja(otro_lado)[1][1] > 3
     curva = sf.solevar_superficie([arco((0, 0, 0), (5, 5, 0), (10, 0, 0)), arco((0, 0, 30), (5, 5, 30), (10, 0, 30))],
-                                  condicion_fin={"tipo": "direccion", "angulo": 60.0})
+                                  condicion_fin={"tipo": "direccion", "angulo": 30.0})
     assert g.es_valida(curva) and caja(curva)[1][2] == pytest.approx(30, abs=1e-3)
 
 
 def test_direccion_en_un_perfil_de_en_medio():
     secciones = [circulo(10), circulo(10, (0, 0, 20)), circulo(10, (0, 0, 40))]
-    f = sf.solevar_superficie(secciones, condiciones_medias={1: {"tipo": "direccion", "angulo": 60.0}})
+    f = sf.solevar_superficie(secciones, condiciones_medias={1: {"tipo": "direccion", "angulo": 30.0}})
     assert g.es_valida(f) and g.area(f) != pytest.approx(2 * math.pi * 10 * 40, rel=1e-3)
     with pytest.raises(g.ErrorGeometria, match="Dirección"):
         sf.solevar_superficie(secciones, condiciones_medias={1: {"tipo": "tangente", "cara": g.caras(g.caja(1, 1, 1))[0]}})
@@ -265,7 +265,7 @@ def test_alineacion_y_condiciones_que_no_valen_dicen_por_que():
     with pytest.raises(g.ErrorGeometria, match="peso"):
         sf.solevar_superficie([borde, lejos], condicion_inicio={"tipo": "direccion", "peso": 0.0})
     with pytest.raises(g.ErrorGeometria, match="ángulo"):
-        sf.solevar_superficie([borde, lejos], condicion_inicio={"tipo": "direccion", "angulo": 0.0})
+        sf.solevar_superficie([borde, lejos], condicion_inicio={"tipo": "direccion", "angulo": 90.0})
     with pytest.raises(g.ErrorGeometria, match="punto"):
         sf.solevar_superficie([borde, lejos], condicion_inicio={"tipo": "punto_tangente"})
     with pytest.raises(g.ErrorGeometria, match="desconocida"):
@@ -274,7 +274,7 @@ def test_alineacion_y_condiciones_que_no_valen_dicen_por_que():
 
 def test_una_condicion_no_se_combina_con_cerrada_ni_tramos_rectos():
     a, b, c = circulo(10), circulo(10, (0, 0, 30)), circulo(10, (0, 30, 15))
-    cond = {"tipo": "direccion", "angulo": 60.0}
+    cond = {"tipo": "direccion", "angulo": 30.0}
     with pytest.raises(g.ErrorGeometria, match="tramos rectos"):
         sf.solevar_superficie([a, b], reglada=True, condicion_inicio=cond)
     with pytest.raises(g.ErrorGeometria, match="no tiene perfiles extremos"):
@@ -318,7 +318,7 @@ def test_tangente_con_rieles_sigue_a_la_cara_entre_ellos():
 def test_condicion_con_un_riel_en_un_contorno_cerrado():
     riel = arco((10, 0, 0), (14, 0, 25), (10, 0, 50))
     libre = sf.solevar_superficie([circulo(10), circulo(10, (0, 0, 50))], rieles=[riel])
-    f = sf.solevar_superficie([circulo(10), circulo(10, (0, 0, 50))], rieles=[riel], condicion_inicio={"tipo": "direccion", "angulo": 60.0})
+    f = sf.solevar_superficie([circulo(10), circulo(10, (0, 0, 50))], rieles=[riel], condicion_inicio={"tipo": "direccion", "angulo": 30.0})
     assert g.es_valida(f) and toca(f, (14, 0, 25)) and caja(f)[1][1] > caja(libre)[1][1] + 1
 
 
@@ -394,10 +394,10 @@ def test_direccion_exacta_y_el_peso_es_la_velocidad_de_salida():
 
 
 def test_condicion_exacta_conserva_esquinas_y_vuelve_a_auxiliares_si_no_se_puede():
-    f = sf.solevar_superficie([rectangulo(10), rectangulo(10, 30)], condicion_inicio={"tipo": "direccion", "angulo": 60.0}, condicion_exacta=True)
+    f = sf.solevar_superficie([rectangulo(10), rectangulo(10, 30)], condicion_inicio={"tipo": "direccion", "angulo": 30.0}, condicion_exacta=True)
     assert g.es_valida(f) and len(g.caras(f)) == 4 and caja(f)[1][0] > 11
     distintos = [rectangulo(10), circulo(10, (0, 0, 30))]
-    cond = {"tipo": "direccion", "angulo": 60.0}
+    cond = {"tipo": "direccion", "angulo": 30.0}
     assert g.area(sf.solevar_superficie(distintos, condicion_inicio=cond, condicion_exacta=True)) == pytest.approx(
         g.area(sf.solevar_superficie(distintos, condicion_inicio=cond)))
     punto = sf.solevar_superficie([circulo(10), (0.0, 0.0, 10.0)], condicion_fin={"tipo": "punto_tangente"}, condicion_exacta=True)
@@ -407,7 +407,7 @@ def test_condicion_exacta_conserva_esquinas_y_vuelve_a_auxiliares_si_no_se_puede
 def test_condicion_exacta_empareja_esquinas_aunque_el_perfil_arranque_en_otra():
     girado = g.transformar(sf._alambre_unico(rectangulo(10, 30), "x"), np.array(
         [[math.cos(0.5), -math.sin(0.5), 0, 0], [math.sin(0.5), math.cos(0.5), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]))
-    f = sf.solevar_superficie([rectangulo(10), girado], condicion_inicio={"tipo": "direccion", "angulo": 60.0}, condicion_exacta=True)
+    f = sf.solevar_superficie([rectangulo(10), girado], condicion_inicio={"tipo": "direccion", "angulo": 30.0}, condicion_exacta=True)
     assert g.es_valida(f) and len(g.caras(f)) == 4
 
 
@@ -607,7 +607,7 @@ def test_paso_de_solevacion_saca_la_cara_del_perfil_y_reabre():
     lejos = _sketch_con(doc, "XY", [((0, 15), (10, 15))])
     op, _ = _ejecutar(doc, SupSolevacion, secciones=[hit, *lejos], condicion_inicio="tangente", peso_inicio="1.5",
                       alineacion_inicio="alinear", cadena=False)
-    assert op.p["condicion_inicio"] == {"tipo": "tangente", "angulo": "90 deg", "peso": "1.5", "cara": None, "alineacion": "alinear"}
+    assert op.p["condicion_inicio"] == {"tipo": "tangente", "angulo": "0 deg", "peso": "1.5", "cara": None, "alineacion": "alinear"}
     assert "operacion" not in op.p and g.es_valida(_ultimo(doc).forma)
     assert _ultimo(doc).tipo == "superficie" and caja(_ultimo(doc).forma)[1][2] > 10.5
     _roundtrip(SupSolevacion, op, doc)
@@ -845,7 +845,7 @@ def test_api_solevacion_con_condiciones_y_rieles():
     assert g.es_valida(f) and g.area(f) > 520 and s.doc.operaciones[-1].p["carriles"]
     assert falla(s, "create_surface_loft", profiles=[abajo, arriba], rails=[riel], center_line=[riel2])
     assert falla(s, "create_surface_loft", profiles=[abajo, arriba], start_condition={"type": "xx"})
-    assert falla(s, "create_surface_loft", profiles=[abajo, arriba], start_condition={"type": "direction", "angle": 200})
+    assert falla(s, "create_surface_loft", profiles=[abajo, arriba], start_condition={"type": "direction", "angle": 120})
     assert falla(s, "create_surface_loft", profiles=[abajo, arriba], start_condition={"type": "direction", "weight": 0})
     assert falla(s, "create_surface_loft", profiles=[abajo, arriba], section_conditions={"1": {"type": "direction"}})
 

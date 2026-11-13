@@ -13,7 +13,7 @@ from . import entidades as ent
 from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, OpPrimitiva, _caja_todo, _deps_objetivo,
                           _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, espesor_plastico,
                           registrar_operacion)
-from .ops_solido import OpBobina, OpTuberia, _en_cadena
+from .ops_solido import OpBobina, OpTuberia, _en_cadena, _migrar_angulo_despegue
 
 LADOS = {"un_lado": "Un lado", "dos_lados": "Dos lados", "simetrica": "Simétrica"}
 
@@ -243,8 +243,9 @@ class OpSupSolevacion(_OpSuperficie):
     TIPO, ETIQUETA, ICONO = "sup_solevacion", "Solevación de superficie", "⌓"
     PARAMS = {"secciones": [], "cerrada": False, "reglada": False, "carriles": [], "linea_central": [],
               "condicion_inicio": None, "condicion_fin": None, "condiciones_medias": {}, "fusionar_tangentes": False,
-              "cadena": False, "condicion_exacta": False}
+              "cadena": False, "condicion_exacta": False, "version_angulo": 2}
     REFS = ("secciones", "carriles", "linea_central")
+    migrar_receta = staticmethod(_migrar_angulo_despegue)       # P-147d: el ángulo de despegue, desde la normal
 
     def dependencias(self):
         caras = [c.get("cara") for c in (self.p["condicion_inicio"], self.p["condicion_fin"]) if c]
@@ -255,7 +256,7 @@ class OpSupSolevacion(_OpSuperficie):
         sección)."""
         if not cond:
             return None
-        salida = {"tipo": cond.get("tipo", "libre"), "angulo": ctx.evaluar(str(cond.get("angulo", "90 deg")), ANGULO),
+        salida = {"tipo": cond.get("tipo", "libre"), "angulo": ctx.evaluar(str(cond.get("angulo", "0 deg")), ANGULO),
                   "peso": ctx.evaluar(str(cond.get("peso", "1")), "escalar"), "alineacion": cond.get("alineacion", "libre")}
         if salida["tipo"] in ("tangente", "suave"):
             e = _resolver(cond["cara"], estado) if cond.get("cara") else ents[i] if -len(ents) <= i < len(ents) else None

@@ -1543,9 +1543,11 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
         tipo, w = exteriores[pos]
         if tipo != "alambre":
             raise geo.ErrorGeometria("La condición de borde necesita secciones con contorno, no puntos.")
-        angulo, peso = float(cond.get("angulo", 90.0)) % 360.0, float(cond.get("peso", 1.0))   # P-147c: da vueltas, como Fusion
+        # P-147d: como Fusion, se mide desde la normal (0 = perpendicular) y da vueltas; acá, desde el plano de la sección
+        angulo, peso = (90.0 - float(cond.get("angulo", 0.0))) % 360.0, float(cond.get("peso", 1.0))
         if not 0 < angulo < 180 or peso <= 0:
-            raise geo.ErrorGeometria("El ángulo de la condición de borde está entre 0 y 180 grados y el peso es positivo.")
+            raise geo.ErrorGeometria("El ángulo de la condición de borde, medido desde la normal, tiene que quedar entre "
+                                     "−90 y 90 grados, y el peso es positivo.")
         es_extremo = pos in (0, len(exteriores) - 1)
         if cond["tipo"] in ("tangente", "suave") and not es_extremo:
             raise geo.ErrorGeometria(f"La condición {'Tangente' if cond['tipo'] == 'tangente' else 'Suave'} solo vale en "
@@ -1588,7 +1590,7 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     """Solevado (Loft) de Fusion [SLD-LOFT-SOLID].
 
     `condicion_inicio` / `condicion_fin` (End Conditions de la primera y la última sección): {"tipo": "libre"},
-    {"tipo": "direccion", "angulo": grados desde el plano de la sección (90 = perpendicular), "peso": 1} o
+    {"tipo": "direccion", "angulo": grados desde la normal de la sección (0 = perpendicular, como Fusion; da vueltas), "peso": 1} o
     {"tipo": "tangente", "cara": TopoDS_Face (la que la superficie sigue; la sección está sobre su borde), "peso": 1}.
     `condiciones_medias`: {posición de una sección intermedia: {"tipo": "direccion", ...}}. Solo en el solevado liso
     (sin carriles, línea central, cerrada ni reglada). `fusionar_tangentes` (Tangent Edges › Merge) une

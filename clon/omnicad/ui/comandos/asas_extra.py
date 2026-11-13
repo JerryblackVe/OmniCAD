@@ -343,8 +343,8 @@ def _asas_solevacion(self, ctx, v):
     peso la corre lo mismo que a la sección auxiliar del núcleo, 0,15 × la distancia al perfil vecino
     (`superficies._auxiliares`). Con una fila
     elegida, solo la de ese perfil (como sus campos); sin fila, las de los dos extremos. Con la flecha va el anillo del
-    Ángulo de despegue (P-139), centrado en el perfil y de canto a él, como en Fusion: a 90° el asa queda justo encima de
-    la flecha y a 0°, acostada. No tiene tope: da vueltas (−330° = 30°, el núcleo lo toma módulo 360)."""
+    Ángulo de despegue (P-139), centrado en el perfil y de canto a él, como en Fusion: el ángulo se mide desde la normal
+    (P-147d), así que a 0° el asa queda justo encima de la flecha y a 90°, acostada. No tiene tope: da vueltas."""
     from .crear import _en_fila, _fila_media
     mp = _mp()
     secs = v.get("secciones") or []
@@ -369,7 +369,7 @@ def _asas_solevacion(self, ctx, v):
         # como Fusion: con el peso por defecto (1) la flecha nace en el centro del perfil y el asa del ángulo queda encima
         salida.append(mp.Flecha(f"peso_{lado}", centro - n * k, n, factor=k, minimo=0.0, estricto=True))
         u = mp.unitario(plano.u)
-        salida.append(mp.AnilloAngulo(f"angulo_{lado}", centro, np.cross(u, n), u))   # como Fusion: en el centro, sin tope
+        salida.append(mp.AnilloAngulo(f"angulo_{lado}", centro, np.cross(n, u), n))   # como Fusion: 0° sobre la normal, sin tope
     return salida
 
 

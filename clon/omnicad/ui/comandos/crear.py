@@ -166,15 +166,15 @@ class Solevacion(Comando):
                 Opciones("condicion_inicio", "Condición inicial", COND_BORDE, visible_si=lambda v: False),
                 Expresion("peso_inicio", "Peso de despegue", "1", ESCALAR, etiqueta_si=_peso("inicio"),
                           visible_si=lambda v: _con_direccion("inicio")(v) or _con_tangente("inicio")(v)),
-                Expresion("angulo_inicio", "Ángulo de despegue", "90 deg", ANGULO, visible_si=_con_direccion("inicio")),
+                Expresion("angulo_inicio", "Ángulo de despegue", "0 deg", ANGULO, visible_si=_con_direccion("inicio")),
                 Seleccion("cara_inicio", "Cara tangente inicial", {"cara"}, minimo=0, visible_si=_con_tangente("inicio"),
                           ayuda="La cara cuyo borde es el perfil: la superficie sale tangente a ella."),
                 Expresion("peso_medio", "Peso de despegue", "1", ESCALAR, visible_si=lambda v: _fila_media(v) and self._de_fila(v)),
-                Expresion("angulo_medio", "Ángulo de despegue", "90 deg", ANGULO, visible_si=lambda v: _fila_media(v) and self._de_fila(v)),
+                Expresion("angulo_medio", "Ángulo de despegue", "0 deg", ANGULO, visible_si=lambda v: _fila_media(v) and self._de_fila(v)),
                 Opciones("condicion_fin", "Condición final", COND_BORDE, visible_si=lambda v: False),
                 Expresion("peso_fin", "Peso de despegue", "1", ESCALAR, etiqueta_si=_peso("fin"),
                           visible_si=lambda v: _con_direccion("fin")(v) or _con_tangente("fin")(v)),
-                Expresion("angulo_fin", "Ángulo de despegue", "90 deg", ANGULO, visible_si=_con_direccion("fin")),
+                Expresion("angulo_fin", "Ángulo de despegue", "0 deg", ANGULO, visible_si=_con_direccion("fin")),
                 Seleccion("cara_fin", "Cara tangente final", {"cara"}, minimo=0, visible_si=_con_tangente("fin"),
                           ayuda="La cara cuyo borde es el perfil: la superficie sale tangente a ella."),
                 Botones("guia", "Tipo de guía", {"carriles": ("Raíles", "guia_carriles"), "linea_central": ("Línea central", "guia_central")}),
@@ -222,7 +222,7 @@ class Solevacion(Comando):
             filas = self._filas_medias(panel.valores)
             filas.pop(str(i), None)
             if w.currentData() == "direccion":
-                filas[str(i)] = ["90 deg", "1"]
+                filas[str(i)] = ["0 deg", "1"]
             self._poner_medias(panel, filas)
         w.currentIndexChanged.connect(cambio)
         return w
@@ -250,7 +250,7 @@ class Solevacion(Comando):
         if tipo in ("tangente", "suave"):
             if not v.get(f"cara_{lado}"):
                 raise ErrorComando(f"Seleccioná la cara a la que es tangente el {'primer' if lado == 'inicio' else 'último'} perfil.")
-            return {"tipo": tipo, "angulo": "90 deg", "peso": v[f"peso_{lado}"], "cara": ref1(v, f"cara_{lado}")}
+            return {"tipo": tipo, "angulo": "0 deg", "peso": v[f"peso_{lado}"], "cara": ref1(v, f"cara_{lado}")}
         return None
 
     @staticmethod
@@ -288,9 +288,9 @@ class Solevacion(Comando):
         for lado in ("inicio", "fin"):
             c = op.p.get(f"condicion_{lado}") or {}
             v[f"condicion_{lado}"] = c["tipo"] if c.get("tipo") in ("direccion", "tangente", "suave") else "libre"
-            v[f"angulo_{lado}"], v[f"peso_{lado}"] = c.get("angulo", "90 deg"), c.get("peso", "1")
+            v[f"angulo_{lado}"], v[f"peso_{lado}"] = c.get("angulo", "0 deg"), c.get("peso", "1")
             v[f"cara_{lado}"] = _h1(c.get("cara"), ctx.estado)
-        v["medias"] = "; ".join(f"{int(k) + 1}:{c.get('angulo', '90 deg')}:{c.get('peso', '1')}"
+        v["medias"] = "; ".join(f"{int(k) + 1}:{c.get('angulo', '0 deg')}:{c.get('peso', '1')}"
                                 for k, c in sorted((op.p.get("condiciones_medias") or {}).items(), key=lambda kv: int(kv[0])))
         for k in ("secciones", "carriles", "linea_central"):
             v[k] = hits(op.p[k], ctx.estado)

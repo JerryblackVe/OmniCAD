@@ -214,9 +214,9 @@ def _condicion(cond, sesion, body):
         raise error("INVALID_ARGUMENTS", 'La condición de borde es {"type": "free" | "direction" | "tangent" | "smooth" | '
                                          '"point_tangent", "angle": grados, "weight": número, "face": cara, '
                                          '"edge_alignment": "free" | "align" | "surface"}.')
-    angulo, peso = cond.get("angle", 90), cond.get("weight", 1)
-    if isinstance(angulo, (int, float)) and not 0 < angulo < 180:
-        raise error("INVALID_ARGUMENTS", "angle está entre 0 y 180 grados.")
+    angulo, peso = cond.get("angle", 0), cond.get("weight", 1)
+    if isinstance(angulo, (int, float)) and not 0 < (90 - angulo) % 360 < 180:      # P-147d: desde la normal y da vueltas
+        raise error("INVALID_ARGUMENTS", "angle se mide desde la normal de la sección y tiene que quedar entre −90 y 90 grados.")
     if isinstance(peso, (int, float)) and peso <= 0:
         raise error("INVALID_ARGUMENTS", "weight tiene que ser positivo.")
     salida = {"tipo": tipos[cond.get("type", "free")], "angulo": texto_expr(angulo), "peso": texto_expr(peso),
@@ -244,7 +244,7 @@ def create_surface_loft(sesion, profiles: list[str | dict], closed: bool = False
     body: cuerpo sobre el que evaluar selectores.
     rails: rieles, uno por elemento (con chain, los tramos tangentes de un mismo riel cuentan como uno): curvas de boceto {"sketch": "Boceto1", "curve": 1} o aristas; cada uno toca todas las secciones.
     center_line: línea central: curvas de boceto o aristas; las secciones se mantienen normales a ella; no se combina con rails.
-    start_condition: condición de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth" | "point_tangent", "angle": grados desde el plano del perfil (90 = perpendicular; con direction), "weight": peso de despegue o de tangencia (1 por defecto), "face": cara (con tangent y smooth; vacío = la de la arista elegida como sección), "edge_alignment": "free" | "align" | "surface" (con tangent y smooth en un perfil abierto)}.
+    start_condition: condición de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth" | "point_tangent", "angle": grados desde la normal del perfil (0 = perpendicular, por defecto, como Fusion; da vueltas; con direction), "weight": peso de despegue o de tangencia (1 por defecto), "face": cara (con tangent y smooth; vacío = la de la arista elegida como sección), "edge_alignment": "free" | "align" | "surface" (con tangent y smooth en un perfil abierto)}.
     end_condition: lo mismo para la última sección.
     section_conditions: condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición, 1 = la primera).
     merge_tangent_edges: true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).

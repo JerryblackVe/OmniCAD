@@ -113,7 +113,7 @@ def test_b212_nucleo_no_mezcla_carril_y_linea_central():
 def test_condicion_de_direccion_abre_o_cierra_la_superficie():
     abierta, cerrada = _dos_circulos(), _dos_circulos()
     llamar(abierta, "loft", sketches=["Base", "Tapa"], start_condition={"type": "direction", "angle": 45})
-    llamar(cerrada, "loft", sketches=["Base", "Tapa"], start_condition={"type": "direction", "angle": 135})
+    llamar(cerrada, "loft", sketches=["Base", "Tapa"], start_condition={"type": "direction", "angle": -45})
     cilindro = math.pi * 100 * 30
     assert _volumen(abierta) > cilindro > _volumen(cerrada) > 0                 # <90: se ensancha; >90: se angosta
 
@@ -122,7 +122,7 @@ def test_condicion_libre_y_peso():
     s, t = _dos_circulos(), _dos_circulos()
     llamar(s, "loft", sketches=["Base", "Tapa"], end_condition={"type": "free"})
     assert _volumen(s) == pytest.approx(math.pi * 100 * 30, rel=1e-3)
-    llamar(t, "loft", sketches=["Base", "Tapa"], end_condition={"type": "direction", "angle": 60, "weight": 2},
+    llamar(t, "loft", sketches=["Base", "Tapa"], end_condition={"type": "direction", "angle": 30, "weight": 2},
            merge_tangent_edges=True)
     assert _volumen(t) > math.pi * 100 * 30
 
@@ -137,7 +137,7 @@ def test_b243_direccion_con_peso_alto_que_se_autointersecta_falla(peso, se_plieg
     llamar(s, "create_sketch", plane=plano, name="R")
     llamar(s, "draw_slot", points=[[-60, 0], [60, 0]], width=60, sketch="R")
     r = api.llamar(s, "loft", {"sketches": ["C", "R"],
-                               "start_condition": {"type": "direction", "angle": 90, "weight": peso}})
+                               "start_condition": {"type": "direction", "angle": 0, "weight": peso}})
     if se_pliega:
         assert not r["ok"] and "autointersecta" in r["mensaje"]
     else:
@@ -147,7 +147,7 @@ def test_b243_direccion_con_peso_alto_que_se_autointersecta_falla(peso, se_plieg
 
 def test_errores():
     s = _dos_circulos()
-    for args in ({"start_condition": {"type": "tangent"}}, {"start_condition": {"type": "direction", "angle": 200}},
+    for args in ({"start_condition": {"type": "tangent"}}, {"start_condition": {"type": "direction", "angle": 120}},
                  {"start_condition": {"type": "direction", "weight": 0}}, {"start_condition": {"clase": "x"}},
                  {"start_condition": {"type": "direction"}, "ruled": True}):
         r = api.llamar(s, "loft", {"sketches": ["Base", "Tapa"], **args})
@@ -231,7 +231,7 @@ def test_condicion_suave_sigue_la_curvatura_de_la_cara_mejor_que_la_tangente():
 
     def errores(tipo):
         f = sc.solevar([sc._alambre(borde), sc._alambre([tapa])],
-                       condicion_inicio={"tipo": tipo, "cara": cara, "peso": 1.0, "angulo": 90.0})
+                       condicion_inicio={"tipo": tipo, "cara": cara, "peso": 1.0, "angulo": 0.0})
         assert geo.es_valida(f)
         salida = []
         for z in (-6.0, -8.0):
