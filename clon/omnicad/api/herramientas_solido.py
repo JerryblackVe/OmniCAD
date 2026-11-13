@@ -352,14 +352,15 @@ def _eje_revolucion(sesion, sop, br, axis, body=None):
              "({\"sketch\": id, \"curve\": n}). El perfil no debe cruzar el eje; puede ser una cara plana (faces). angle "
              "acepta número (grados) o expresión. direction: one_side, two_sides (angle y angle2) o symmetric. to_object "
              "(Extent Type › To Object) gira el perfil hasta un vértice, un plano, una cara plana o un cuerpo en lugar "
-             "de un ángulo (solo con one_side). project_axis lleva el eje al plano del perfil (Project Axis).",
+             "de un ángulo (con two_sides, to_object2 es el del otro lado; no con symmetric). project_axis lleva el eje al "
+             "plano del perfil (Project Axis).",
              modifica=True)
 def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int | str | dict | None = None,
             angle: Expr = "360 deg", operation: Operacion = "new_body",
             direction: Literal["one_side", "two_sides", "symmetric"] = "one_side",
             angle2: Expr | None = None, target: Cuerpos | None = None, reverse: bool = False,
             faces: Cuerpos | None = None, body: str | None = None, to_object: str | dict | list[float] | None = None,
-            project_axis: bool = True):
+            project_axis: bool = True, to_object2: str | dict | list[float] | None = None):
     """
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
     profile: perfil(es): índice, lista de índices, "all", "largest", "text", "text:<id>" o "sketch".
@@ -374,6 +375,7 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
     body: cuerpo donde se evalúan los selectores de faces y de axis (arista o cara); vacío = el único cuerpo.
     to_object: vértice ([x, y, z] o selector), plano (XY/XZ/YZ o de construcción), cara plana (selector o id) o cuerpo (id o nombre) hasta donde gira el perfil; reemplaza a angle.
     project_axis: true proyecta el eje al plano del perfil (como el panel de Fusion, que lo trae encendido); false lo deja donde está.
+    to_object2: con to_object y direction=two_sides, el objeto hasta donde gira el otro lado (mismos tipos que to_object).
     """
     if sketch is None and not faces:
         raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile) o faces (caras planas).")
@@ -400,11 +402,15 @@ def revolve(sesion, sketch: str | None = None, profile: Perfiles = 0, axis: int 
     p.update(_eje_revolucion(sesion, sop, br, axis, body))
     p["proyectar_eje"] = project_axis
     if to_object is not None:
-        if direction != "one_side":
-            raise error("INVALID_ARGUMENTS", "to_object gira hacia un solo lado: usá direction=one_side.")
+        if direction == "symmetric":
+            raise error("INVALID_ARGUMENTS", "to_object gira hasta el objeto de cada lado: usá one_side o two_sides.")
+        if direction == "two_sides" and to_object2 is None:
+            raise error("INVALID_ARGUMENTS", "Con to_object y direction=two_sides falta to_object2 (el objeto del otro lado).")
         from .herramientas_construccion import _referencia
-        p.update(extension="objeto", hasta=_referencia(
-            sesion, to_object, {"vertice", "punto", "punto_boceto", "plano", "cara", "cuerpo"}, body))
+        tipos = {"vertice", "punto", "punto_boceto", "plano", "cara", "cuerpo"}
+        p.update(extension="objeto", hasta=_referencia(sesion, to_object, tipos, body))
+        if direction == "two_sides":
+            p["hasta2"] = _referencia(sesion, to_object2, tipos, body)
     if direction == "two_sides":
         p.update(direccion="dos_lados", angulo2=texto_expr(angle if angle2 is None else angle2))
     elif direction == "symmetric":

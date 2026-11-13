@@ -129,13 +129,15 @@ def create_surface_extrude(sesion, profiles: Seleccion, distance: Expr = "10 mm"
 @herramienta("create_surface_revolve", "solido",
              "Gira curvas alrededor de un eje para crear una superficie. direction: one_side, two_sides (angle y angle2) "
              "o symmetric. to_object (Extent Type › To Object) gira hasta un vértice, un plano, una cara plana o un "
-             "cuerpo en lugar de un ángulo (solo con one_side). project_axis lleva el eje al plano del perfil.",
+             "cuerpo en lugar de un ángulo (con two_sides, to_object2 es el del otro lado; no con symmetric). project_axis "
+             "lleva el eje al plano del perfil.",
              modifica=True)
 def create_surface_revolve(sesion, profiles: Seleccion, axis: Referencia, angle: Expr = "360 deg",
                            body: str | None = None,
                            direction: Literal["one_side", "two_sides", "symmetric"] = "one_side",
                            angle2: Expr | None = None, to_object: Referencia | list[float] | None = None,
-                           project_axis: bool = True, chain: bool = True):
+                           project_axis: bool = True, chain: bool = True,
+                           to_object2: Referencia | list[float] | None = None):
     """
     profiles: curvas o perfiles de boceto ({"sketch": "Boceto1", "curve": 1} o "profile": 0), caras, aristas o cuerpos; admite listas, ids y selectores.
     axis: eje X, Y, Z, eje de construcción o referencia a una línea de boceto/arista lineal.
@@ -146,16 +148,21 @@ def create_surface_revolve(sesion, profiles: Seleccion, axis: Referencia, angle:
     to_object: vértice ([x, y, z] o selector), plano, cara plana o cuerpo hasta donde gira el perfil; reemplaza a angle.
     project_axis: true proyecta el eje al plano del perfil (curvas de boceto); false lo deja donde está (el defecto es true, con el panel de Fusion).
     chain: true toma la cadena tangente entera de cada arista o curva de boceto de profiles (Chaining de Fusion, encendido por defecto); false usa solo las elegidas.
+    to_object2: con to_object y direction=two_sides, el objeto hasta donde gira el otro lado (mismos tipos que to_object).
     """
     clase = ops.OpSupRevolucion
     params = {"lados": {"one_side": "un_lado", "two_sides": "dos_lados", "symmetric": "simetrica"}[direction],
               "angulo2": texto_expr(angle if angle2 is None else angle2), "proyectar_eje": project_axis,
               "cadena": chain}
     if to_object is not None:
-        if direction != "one_side":
-            raise error("INVALID_ARGUMENTS", "to_object gira hacia un solo lado: usá direction=one_side.")
-        params.update(extension="objeto", hasta=_referencia(
-            sesion, to_object, {"vertice", "punto", "punto_boceto", "plano", "cara", "cuerpo"}, body))
+        if direction == "symmetric":
+            raise error("INVALID_ARGUMENTS", "to_object gira hasta el objeto de cada lado: usá one_side o two_sides.")
+        if direction == "two_sides" and to_object2 is None:
+            raise error("INVALID_ARGUMENTS", "Con to_object y direction=two_sides falta to_object2 (el objeto del otro lado).")
+        tipos = {"vertice", "punto", "punto_boceto", "plano", "cara", "cuerpo"}
+        params.update(extension="objeto", hasta=_referencia(sesion, to_object, tipos, body))
+        if direction == "two_sides":
+            params["hasta2"] = _referencia(sesion, to_object2, tipos, body)
     return _crear(sesion, clase, curvas=_seleccion(sesion, clase, "curvas", profiles, body, curvas=True),
                   eje=_una(sesion, clase, "eje", axis, body), angulo=texto_expr(angle), **params)
 

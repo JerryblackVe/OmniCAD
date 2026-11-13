@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 240: Abierto 156 · Parcial 50 · Bloqueado 30 · Sin verificar 4 (2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 239: Abierto 155 · Parcial 50 · Bloqueado 30 · Sin verificar 4 (2026-11-13: se cerró H-88 (Revolución «A objeto» con «Dos lados», con B-384); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -71,7 +71,7 @@ Abierto 53 · Parcial 3 · Bloqueado 2.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 17 · Parcial 1 · Sin verificar 1.
+Abierto 16 · Parcial 1 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -80,7 +80,6 @@ Abierto 17 · Parcial 1 · Sin verificar 1.
 | H-82 | Extruir › Al objeto sobre una cara: «Hasta caras adyacentes» (sólido) y «Extend Faces / Chain Faces» (superficie) | Abierto | Media | Sólido: Extender tiene cara, cuerpo y a través; falta To Adjacent Faces. Superficie: no tiene ninguna opción de Extender. | timeline/operaciones.py:1133 (`hasta_modo`); ui/comandos/superficie.py:55; ayuda `Extrude reference` y `Extrude a surface body` | 2026-11-05 |
 | H-83 | Extruir, Revolución, Barrido y Solevación: operación «Componente nuevo» (sólido y superficie) | Abierto | Media | Fusion crea el cuerpo en un componente nuevo (diseño híbrido) en las cuatro herramientas (ayudas `Revolve reference`, `Sweep reference` y `Loft reference`, también en superficie). Hoy hay cuerpo nuevo, unir, cortar e intersecar; el componente se arma después con `create_component`. | timeline/operaciones.py:32 (`OPERACIONES_CUERPO`); api/herramientas_solido.py:183 | 2026-11-05 |
 | H-84 | Extrusión delgada: Cadena tangente y conicidad con perfil abierto | Abierto | Baja | Falta la casilla Tangent Chain (elegir de una vez las curvas tangentes). La conicidad con perfil abierto da error; la ayuda no la restringe al tipo: confirmarlo en Fusion antes de hacerla. | ui/comandos/solido.py:33-35; nucleo/solidos_crear.py:487 | 2026-11-05 |
-| H-88 | Revolución «A objeto» con «Dos lados» (sólido y superficie) | Abierto | Media | Fusion: con Tipo de extensión «To Object» la Dirección ofrece One Side y Two Sides. En OmniCAD la ventana esconde la Dirección y `revolve` / `create_surface_revolve` con `to_object` y `direction="two_sides"` dan INVALID_ARGUMENTS («to_object gira hacia un solo lado»). | timeline/operaciones.py:1294 (`OpRevolucion.ejecutar`); timeline/ops_superficie.py:195 | 2026-11-05 |
 | H-89 | Barrido sólido › Ruta + Rail guía: Extensión «Perpendicular a la ruta» o «Extensión completa» con la fracción del rail | Abierto | Media | La ayuda de Fusion (`Sweep reference`) la tiene en el sólido; OmniCAD solo la tiene en el barrido de superficie (`extent`, `rail_distance`). Falta en `OpBarrido`, en `sweep` y en la ventana. | timeline/ops_solido.py:125 (`PARAMS` sin `extension`) | 2026-11-05 |
 | H-90 | Solevación sólida: condición «Punto tangente» en un perfil punto | Abierto | Baja | Fusion ofrece Sharp y Point Tangent (cúpula). La ventana del sólido solo ofrece «Aguda» y `loft end_condition={"type": "point_tangent"}` da «type es free, direction, tangent o smooth». La superficie ya lo hace (157,12 mm² contra la media esfera de 157,08). | ui/comandos/crear.py:144 (`_condiciones_de`) | 2026-11-05 |
 | H-91 | Solevación sólida: condiciones de borde junto con carriles, línea central, cerrada o reglada, y exactas | Abierto | Alta | En el sólido, Dirección, Tangente y Suave son aproximadas con una sección auxiliar y dan «no se combinan con carriles, línea central, solevado cerrado ni reglado». Fusion las combina, y la superficie ya lo hace con la derivada exacta (SUP-13). | nucleo/solidos_crear.py:1307 | 2026-11-05 |

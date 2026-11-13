@@ -158,19 +158,20 @@ class OpSupRevolucion(_OpSuperficie):
     tangente entera de cada arista o curva elegida)."""
     TIPO, ETIQUETA, ICONO = "sup_revolucion", "Revolución de superficie", "↻"
     PARAMS = {"curvas": [], "eje": None, "angulo": "360 deg", "extension": "angulo", "lados": "un_lado",
-              "angulo2": "90 deg", "hasta": None,
+              "angulo2": "90 deg", "hasta": None, "hasta2": None,
               # El panel y la API arrancan con «Eje de proyecto» y «Selección de cadena» encendidos (captura de
               # Fusion); los dos PARAMS quedan False: es lo que calcula una receta guardada sin la clave (SUP-29).
               "proyectar_eje": False, "cadena": False}
     EXPRESIONES = ("angulo", "angulo2")
     OPCIONES = {"extension": ("angulo", "completa", "objeto"), "lados": LADOS}
-    REFS = ("curvas", "eje", "hasta")
+    REFS = ("curvas", "eje", "hasta", "hasta2")
 
-    def _objeto(self, estado):
-        """El límite de «A objeto» como lo entiende `superficies.revolver_superficie`."""
-        if not self.p["hasta"]:
-            raise ErrorOperacion("Elegí el vértice, el plano, la cara plana o el cuerpo hasta donde gira el perfil.")
-        e = _resolver(self.p["hasta"], estado)
+    def _objeto(self, estado, clave="hasta"):
+        """El límite de «A objeto» (`hasta2`: el del lado 2) como lo entiende `superficies.revolver_superficie`."""
+        if not self.p.get(clave):
+            raise ErrorOperacion("Elegí el vértice, el plano, la cara plana o el cuerpo hasta donde gira el perfil"
+                                 + (" en el lado 2." if clave == "hasta2" else "."))
+        e = _resolver(self.p[clave], estado)
         if e.tipo in ("vertice", "punto", "punto_boceto"):
             return "punto", ent.como_punto(e)
         if e.plano is not None:
@@ -194,7 +195,9 @@ class OpSupRevolucion(_OpSuperficie):
                     punto = np.asarray(punto, float) - n * float((np.asarray(punto, float) - plano.origen) @ n)
                     d = proyectado
         if p["extension"] == "objeto":
-            forma = _sf().revolver_superficie(aristas, punto, d, 0.0, hasta=self._objeto(estado))
+            lados = p.get("lados", "un_lado")
+            forma = _sf().revolver_superficie(aristas, punto, d, 0.0, direccion=lados, hasta=self._objeto(estado),
+                                              hasta2=self._objeto(estado, "hasta2") if lados == "dos_lados" else None)
         else:
             completa = p["extension"] == "completa"
             lados = "un_lado" if completa else p["lados"]
