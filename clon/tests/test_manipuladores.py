@@ -372,7 +372,7 @@ def test_flecha_del_empalme_sobre_la_arista(app_qt):
     doc = _doc_caja()
     panel, visor, estados = _panel(Empalme(), doc, {"aristas": [_arista_de_arriba(doc)], "radio": "2 mm"})
     flecha = _manip(panel, "flecha:radio")
-    assert flecha.origen[1:] == pytest.approx((0, 20)) and flecha.origen[0] in (pytest.approx(0), pytest.approx(20))  # P-143: en una punta
+    assert flecha.origen == pytest.approx((10, 0, 20))           # sin clic (al editar, la API): en el medio
     assert flecha.direccion == pytest.approx((0, np.sqrt(0.5), -np.sqrt(0.5)))     # hacia adentro del material
     medio, d = _sobre_flecha(panel, "flecha:radio")
     _arrastrar(visor, medio, medio + d * 40)
@@ -1280,8 +1280,8 @@ def test_p139_la_conicidad_de_extruir_es_un_anillo_en_el_pie_de_la_flecha(app_qt
 
 
 def test_p143_asa_del_empalme_en_la_punta_libre_de_la_arista(app_qt):
-    """P-143: como en Fusion, el asa del radio es una flecha-puntero azul en la punta LIBRE de la arista (sobre la cara
-    del extremo del saliente, no en el medio ni contra el bloque) y señala hacia adentro del material."""
+    """P-143: como en Fusion, el asa del radio es una flecha-puntero azul en la última arista elegida, en el punto donde
+    se hizo clic (sin clic, en el medio), y señala hacia adentro del material."""
     from omnicad import api
     from omnicad.nucleo import referencias as refs
     from omnicad.ui import manipuladores as mp
@@ -1296,9 +1296,16 @@ def test_p143_asa_del_empalme_en_la_punta_libre_de_la_arista(app_qt):
     arista = next(e for e in refs.subformas(cuerpo.forma, "arista")
                   if np.allclose(refs.firma_arista(e)["medio"], (-10, -45, 52)))     # arriba a la izquierda del saliente
     hit = hit_desde_ref(refs.referencia(cid, arista, caja=g.caja_envolvente(cuerpo.forma)), doc.estado_final)
+    hit["punto"] = np.array([-9.8, -62.0, 52.1])               # el clic, cerca de la punta libre
     panel, _visor, _estados = _panel(Empalme(), doc, {"aristas": [hit], "radio": "2 mm"})
     (asa,) = panel.manipuladores.manips
     assert isinstance(asa, mp.FlechaPuntero) and asa.color == mp.AZUL_ASA
-    assert np.allclose(asa.origen, (-10, -70, 52))                 # la punta libre: y = −20 − 50
+    assert np.allclose(asa.origen, (-10, -62, 52))                 # el punto de la arista más cercano al clic
     assert np.allclose(asa.direccion, np.array([1, 0, -1]) / np.sqrt(2))     # hacia adentro, por la bisectriz
+    otra = next(e for e in refs.subformas(cuerpo.forma, "arista")
+                if np.allclose(refs.firma_arista(e)["medio"], (10, -45, 28)))       # abajo a la derecha
+    panel.set_valor("aristas", [hit, hit_desde_ref(refs.referencia(cid, otra, caja=g.caja_envolvente(cuerpo.forma)),
+                                                   doc.estado_final)])
+    (asa,) = panel.manipuladores.manips
+    assert np.allclose(asa.origen, (10, -45, 28))       # salta a la última arista elegida; sin clic, en su medio
     panel.cancelar()
