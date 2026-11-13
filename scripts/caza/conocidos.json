@@ -7,6 +7,5 @@
   "geometria|create_ruled_surface|autointersecciones": "B-392",
   "geometria|project_to_sketch|autointersecciones": "B-393",
   "geometria|thicken|autointersecciones": "B-394",
-  "recalcular|duplicate_feature|paso_falla": "B-395",
   "numeros|create_coil|volumen_no_positivo": "B-391"
 }
