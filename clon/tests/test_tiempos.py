@@ -62,9 +62,24 @@ def test_tandas_por_tiempo_respetan_archivos_enteros_y_carga_por_proceso(proceso
     assert grupos == [archivos[:procesos], archivos[procesos:]]
 
 
+@pytest.mark.parametrize("procesos, cantidad", [(1, 368), (4, 368), (4, 4 * 368)])
+def test_tandas_de_archivos_chicos_incluyen_costo_fijo_por_proceso(procesos, cantidad):
+    archivos = [f"tests/test_{i}.py" for i in range(cantidad)]
+    grupos = repartir(archivos, dict.fromkeys(archivos, 0.5), procesos)
+    assert [archivo for grupo in grupos for archivo in grupo] == archivos
+    for grupo in grupos:
+        carga = ((len(grupo) + procesos - 1) // procesos) * (0.5 + 3)
+        assert carga <= 700
+    if cantidad == 368 * procesos:
+        assert len(grupos) > 1
+    else:
+        assert len(grupos) == 1
+
+
 def test_sin_dato_cuenta_treinta_segundos_y_lista_vacia_no_crea_tanda():
     archivos = [f"tests/test_{i}.py" for i in range(21)]
-    assert repartir(archivos, {}, procesos=1) == [archivos[:20], archivos[20:]]
+    assert repartir(archivos, {}, procesos=1) == repartir(archivos, dict.fromkeys(archivos, 30), procesos=1)
+    assert repartir(archivos, {}, procesos=1) == [archivos[:18], archivos[18:]]
     assert repartir([], {}) == []
 
 
@@ -80,9 +95,10 @@ def test_reparto_rechaza_cantidad_de_procesos_no_positiva(procesos):
         repartir([], {}, procesos)
 
 
-def test_archivo_mayor_de_600_va_solo_y_avisa(capsys):
-    assert repartir(["pesado", "otro"], {"pesado": 950}) == [["pesado"], ["otro"]]
-    assert "pesado tarda 950.0 s; va solo" in capsys.readouterr().out
+@pytest.mark.parametrize("segundos", [598, 950])
+def test_archivo_mayor_de_600_con_costo_fijo_va_solo_y_avisa(capsys, segundos):
+    assert repartir(["pesado", "otro"], {"pesado": segundos}) == [["pesado"], ["otro"]]
+    assert f"Aviso: pesado tarda {segundos + 3:.1f} s; va solo" in capsys.readouterr().out
 
 
 def test_cli_escribe_tandas_mas_lentas_primero_sin_modificar_el_json(tmp_path):
