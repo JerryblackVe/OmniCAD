@@ -2968,7 +2968,10 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
         else:
             r_in, w_in = diametro / 2 - prof, paso / 4
             r_out, w_out = diametro / 2 + extra, 7 * paso / 8 + pend * extra
-        return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out)
+        # B-371: el barrido largo también sale incompleto en el perfil básico (M20x2.5×100: 57 %); verificado, cae al
+        # corte por mitades de `rosca`
+        return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out,
+                             verificar=True)
     t = math.tan(math.radians(angulo / 2))
 
     def ancho(rho):
