@@ -5,6 +5,80 @@ Cambios destacados de cada versión publicada de OmniCAD, en español. Formato b
 
 ## [No publicada]
 
+### Agregado
+- **Preferencias › «Asas y superposiciones»**: color, tamaño y opacidad de lo que se dibuja sobre el visor (asas, flechas
+  y superposiciones), también por MCP/CLI.
+- **Anillo de ángulo como el de Fusion** para el ángulo de Extruir, la torsión del Barrido, el giro de la Revolución y el
+  ángulo de despegue de la Solevación (anillo de 360° con marcas cada 90° y caja de valor al pasar el ratón).
+- **Asas nuevas y más parecidas a Fusion**: flecha del Peso de despegue en cada perfil de la Solevación, asa-puntero azul
+  para el radio del Empalme, asas para los desfases y el giro del Repujado, y flechas del manipulador ámbar con contorno
+  oscuro que salen hacia afuera de la cara. La caja de valor de las asas tiene el «⋮» de parámetros y los sugiere al
+  teclear.
+- **Timeline**: elegir varios pasos y borrarlos de una vez (menú «Eliminar N pasos» o Supr), en un solo paso de
+  deshacer; `delete_feature` acepta una lista.
+- **Boceto**: Cota de una línea sola horizontal, vertical o alineada según dónde se ubique; Recortar arrastrando sobre
+  varios tramos; Empalme y Chaflán por vértice; botones para Proyectar a superficie y Curva de intersección;
+  Buscar subrestringidos y Calcular boceto en la Paleta; arrastrar filas del árbol a un grupo; patrones con
+  expresiones que siguen a los parámetros; spline de control hasta grado 5 y arco tangente con radio y barrido.
+- **Sólido**: Extruir «Dos lados» con tipo de extensión propio en el lado 2, «Desfase de inicio» con Inicio › Objeto,
+  conicidad desde planos inclinados, «Ángulo de conicidad» a la vista; Nervio y Red toman el desmoldeo y el espesor de
+  la regla de plástico; el Barrido sólido ofrece Estirar.
+- **Superficie**: Extruir y Revolución de superficie eligen perfiles cerrados y caras planas en la ventana; Tubo sigue
+  curvas de Boceto 3D.
+- **Ensamblar**: restricciones de componentes Alinear, Ángulo, Centro y Tangente (planos, cilindros, esferas, conos,
+  toros, aristas y «Todas las caras»), con tabla de filas, nombre y desfase por fila, límites de desfase y «Usar desfase
+  como apoyo».
+- **Construir**: `get_scene_info` informa planos, ejes, puntos y SCU; la curva de fusión toma aristas del modelo.
+- **Rosca**: tolerancias con las tablas de Fusion (incluidas las métricas poco comunes), tamaño inicial con tabla para
+  ANSI, GB y GOST, y previa que deja en azul la cara elegida y las crestas, con la hélice como en Fusion.
+- **Linux**: la app y las pruebas andan en Linux (tipografías sustitutas para Arial y Times New Roman, cierre completo
+  con `xvfb-run`).
+- **Importar**: un STEP o IGES se lee en un proceso aparte; un archivo alterado da un error claro en vez de cerrar la
+  app, y cada ocurrencia «Nombre:N» de un STEP de Fusion es un componente.
+- **Caza automática de errores**, con temas nuevos como «pieza real», y `probar_todo` para correr todas las pruebas
+  automáticas con un solo comando.
+- MCP/CLI: 421 herramientas en 17 grupos (eran 386).
+- Los `.omnicad` muestran la vista del modelo en el Explorador de Windows.
+
+### Cambiado
+- **Velocidad**: el solver del boceto 3D resuelve tangentes en 11,5 ms (antes 214 a 371 ms); un patrón de 1000 copias en
+  un boceto pasa de 104 s a 16 ms; Extruir con muchos perfiles arma la previa una sola vez y no se traba; el análisis de
+  sección de una rosca modelada pasa de 32 s a 0,3 s; la hélice larga de la rosca se barre de una vez; Aceptar o Cancelar
+  un comando redibuja el visor una sola vez.
+- **Ventana más fluida**: abrir un STEP pesado deja de congelarla (de 616 s a 91 s en una impresora completa); las
+  previas de Engrosar, Desfase de superficie y desfase de caras con rosca modelada van a un proceso aparte.
+- Extruir con el perfil dibujado sobre la cara de un cuerpo arranca en «Unir», como Fusion; el tamaño de la Rosca pone
+  el diámetro de toda la cara, también fuera del tramo roscado.
+- Las asas de Empalme, Chaflán, Vaciado, Engrosar, Pulsar/tirar, Desfases, Inclinación y Extruir frenan en el límite de
+  la pieza y avisan dónde y por qué.
+- Con el boceto abierto, el panel del comando va a la izquierda de la paleta y no tapa el Aceptar.
+- Los deslizadores de Isocurva y Curvatura en peine topan en 20 y aceptan decimales tecleados.
+- Los textos que ve el usuario (errores, ayudas y sugerencias) ya no nombran a Fusion.
+- Los análisis de INSPECCIONAR no cortan, rayan ni pintan cuerpos ocultos.
+
+### Corregido
+- **Boceto**: arrastrar un punto totalmente restringido ya no deforma el perfil; el desfase de splines, elipses y
+  ranuras queda totalmente restringido; Escala, Mover, Copiar/Pegar y Recortar ya no rompen un perfil con chaflán ni
+  dejan restricciones sueltas; las cotas de ángulo y de distancia entre líneas no paralelas se rechazan como en Fusion;
+  Supr borra el resto cuando el recuadro toma el origen.
+- **Sólido**: Vaciado con un espesor que cruza la pared, Barrido con una conicidad que hace crecer el perfil, un agujero
+  que vacía el cuerpo y empalmes o chaflanes que rellenan la cavidad dan un error claro en vez de un resultado malo o un
+  cierre de la app; Repujado con Envolver ya no da otra vuelta; el desfase de cara ya no mueve la otra mitad de una cara
+  partida.
+- **Extruir**: la caja de selección elige todos los perfiles; un clic sobre el borde elige el perfil, no la curva; una
+  extrusión ya no pierde perfiles al agregar líneas al boceto; una cara de otro plano pasa a ser «Hasta objeto».
+- **Superficie**: la solevación de splines cerrados ya no sale plegada, Nervio y Red llegan a caras oblicuas, y el
+  desmoldeo con ángulo negativo inclina la pared ya recortada.
+- **Ensamblar**: las uniones en arista circular y las de inicio/fin de una arista recta siguen al cuerpo al girar el
+  padre; el componente hijo y el agujero creados después de una unión la siguen al accionarla.
+- **Rosca**: sobre un eje más fino que el núcleo o una cara más gruesa que la rosca se comporta como Fusion; la clase sin
+  tabla modela el diámetro mayor en el centro de la tolerancia; un tamaño extremo o una holgura negativa dan un mensaje
+  claro.
+- **Construir**: un plano en ángulo no salta al girar la arista, un SCU con X paralelo a Z y un punto entre aristas que
+  no se cortan dan error, y una construcción que se referencia a sí misma se rechaza.
+- **Archivos y MCP**: un nombre con carácter inválido ya no aborta el guardado ni la exportación glTF; una receta con ids
+  repetidos o mal formados se rechaza al cargarla; una referencia que no existe nombra el argumento y sugiere parecidos.
+
 ## [0.2.0] — 2026-11-02
 
 ### Agregado
