@@ -1,0 +1,32 @@
+{
+ "id": "B-394",
+ "firma": "geometria|thicken|autointersecciones",
+ "pesado": true,
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 40,
+    "width": 50,
+    "height": 20
+   }
+  },
+  {
+   "tool": "shell",
+   "args": {
+    "body": "Cuerpo1",
+    "faces": ">Z"
+   }
+  },
+  {
+   "tool": "thicken",
+   "args": {
+    "faces": [
+     "Cuerpo1/F6",
+     "Cuerpo1/F4",
+     "Cuerpo1/F9"
+    ]
+   }
+  }
+ ]
+}

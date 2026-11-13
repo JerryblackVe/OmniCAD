@@ -1,0 +1,12 @@
+{
+ "id": "B-390",
+ "firma": "contrato|inspect_f3d|INTERNAL_ERROR@f3d_nativo.py:99",
+ "pasos": [
+  {
+   "tool": "inspect_f3d",
+   "args": {
+    "path": "{CORPUS}/b390_f3d_zip_version.f3d"
+   }
+  }
+ ]
+}

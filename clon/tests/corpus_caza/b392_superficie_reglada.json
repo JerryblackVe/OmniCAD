@@ -1,0 +1,34 @@
+{
+ "id": "B-392",
+ "firma": "geometria|create_ruled_surface|autointersecciones",
+ "pesado": true,
+ "pasos": [
+  {
+   "tool": "create_sketch",
+   "args": {}
+  },
+  {
+   "tool": "draw_rectangle",
+   "args": {
+    "x1": 0,
+    "y1": 0,
+    "x2": 60,
+    "y2": 40
+   }
+  },
+  {
+   "tool": "extrude",
+   "args": {
+    "sketch": "Boceto1"
+   }
+  },
+  {
+   "tool": "create_ruled_surface",
+   "args": {
+    "edges": [
+     "Cuerpo1/E4"
+    ]
+   }
+  }
+ ]
+}

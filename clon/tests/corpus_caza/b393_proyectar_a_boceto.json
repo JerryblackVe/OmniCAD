@@ -1,0 +1,34 @@
+{
+ "id": "B-393",
+ "firma": "geometria|project_to_sketch|autointersecciones",
+ "pesado": true,
+ "pasos": [
+  {
+   "tool": "create_sketch",
+   "args": {}
+  },
+  {
+   "tool": "draw_circle",
+   "args": {
+    "radius": 20
+   }
+  },
+  {
+   "tool": "create_surface_extrude",
+   "args": {
+    "profiles": {
+     "sketch": "Boceto1",
+     "curve": 1
+    }
+   }
+  },
+  {
+   "tool": "project_to_sketch",
+   "args": {
+    "bodies": [
+     "op2.c1"
+    ]
+   }
+  }
+ ]
+}

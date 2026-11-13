@@ -39,7 +39,7 @@ def proceso(tmp_path_factory):
 @pytest.mark.parametrize("ruta", CASOS, ids=lambda r: r.stem)
 def test_caso_del_corpus(ruta, proceso):
     caso = json.loads(ruta.read_text(encoding="utf-8"))
-    fallo = proceso.pedir({"tipo": "repetir", "pasos": caso["pasos"]}, 40)["fallo"]
+    fallo = proceso.pedir({"tipo": "repetir", "pasos": caso["pasos"], "pesado": caso.get("pesado", False)}, 40)["fallo"]   # `pesado`: autointersecciones también en caras curvas
     if fallo and abierto(caso["id"]):
         pytest.xfail(f"{caso['id']} sigue abierto: {cazar.firma_de(fallo)}")
     assert fallo is None, f"{caso['id']} volvió a fallar: {fallo}"

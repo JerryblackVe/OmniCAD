@@ -1,0 +1,28 @@
+{
+ "id": "B-395",
+ "firma": "recalcular|duplicate_feature|paso_falla",
+ "pesado": true,
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 40,
+    "width": 30,
+    "height": 20
+   }
+  },
+  {
+   "tool": "tessellate",
+   "args": {
+    "bodies": "Cuerpo1",
+    "keep_original": false
+   }
+  },
+  {
+   "tool": "duplicate_feature",
+   "args": {
+    "feature": "op2"
+   }
+  }
+ ]
+}
