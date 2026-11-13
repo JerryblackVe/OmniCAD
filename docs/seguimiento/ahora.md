@@ -8,7 +8,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | BOC-76 | Curva isoparamétrica: editar las curvas ya creadas (BOC-84 integrado: falta la captura para Gerardo) |
+| E1 | FL-2 | Previa barata inmediata al teclear y con las flechas (prisma, Cortar, Revolución) |
 | E2 | B-384 | Revolución › Dirección con «A objeto» |
 | E3 | B-400 | Empalme con radio igual al alto de la cara vecina (hecho, tests en curso) |
 | E4 | B-392 | Superficie reglada con autointersecciones |
@@ -23,12 +23,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | FL-2 | Previa barata al teclear y con las flechas |
-| 2 | P-78 | Rosca modelada rápida (F6) |
-| 3 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 4 | B-48 | Crash nativo al recalcular un documento largo |
-| 5 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
-| 6 | B-335 | Abrir un STEP pesado congela la ventana |
-| 7 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
+| 1 | P-78 | Rosca modelada rápida (F6) |
+| 2 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 3 | B-48 | Crash nativo al recalcular un documento largo |
+| 4 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
+| 5 | B-335 | Abrir un STEP pesado congela la ventana |
+| 6 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
 
 Hechos y esperando integrar (no ocupan cola): B-393, B-403, P-153 (después de B-384), PRUEBA9c, B-397.
