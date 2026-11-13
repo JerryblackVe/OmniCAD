@@ -144,7 +144,7 @@
   10. Que no se escape ninguna excepción dentro de un slot de Qt.
 - **Está automatizado** en `scripts/prueba_ui/` (arnés, escena, un script por pieza): desde `clon/`,
   `.venv/Scripts/python.exe ../scripts/prueba_ui/todo.py [pieza ...]` corre todo de a uno con `turno.py` y deja
-  registros y capturas en `evidencias/ui_<hoy>/`. Cubre 1 a 8 y 10; falta automatizar el 9 (pieza completa).
+  registros y capturas en `evidencias/ui_<hoy>/`. Cubre 1 a 10: el 9 (pieza completa) es la pieza `pieza_completa` (boceto con cotas, extruir, empalme, agujero, cambiar una cota dos veces, guardar y reabrir, deshacer y rehacer en cadena).
   Piezas: la lista vive solo en `PIEZAS` de `scripts/prueba_ui/todo.py`.
   `todo.py` corre por defecto con la ventana **transparente y sin foco** (`--ventana minimizada`, variable
   `OMNICAD_PRUEBA_VENTANA`): no aparece nada ni se roba el foco, así que Gerardo puede usar la PC. Con
