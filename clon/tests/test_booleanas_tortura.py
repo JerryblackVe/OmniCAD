@@ -159,6 +159,31 @@ def test_b125_las_muestras_no_se_confunden_con_una_entrada_invertida():
     assert geo._parte_afuera(adentro, grande.Reversed()) == 0
 
 
+def test_rsx4_la_malla_da_las_mismas_muestras_que_el_clasificador_exacto(monkeypatch):
+    """RS-X4: con muchas caras las muestras se clasifican con la malla lejos de la superficie; tienen que salir
+    idénticas a las del clasificador exacto (mismo veredicto de `_parte_afuera`), también con la entrada invertida."""
+    rueda = geo.booleano(geo.cilindro(30, 6), geo.cilindro(8, 6), "cortar")
+    for i in range(12):
+        a = math.radians(30 * i)
+        rueda = geo.booleano(rueda, geo.cilindro(2.5, 6, (19 * math.cos(a), 19 * math.sin(a), 0)), "cortar")
+    tapa = geo.caja(80, 80, 20, (0, -40, -5))
+    assert len(geo.caras(rueda)) > geo._CARAS_MUESTREO_EXACTO
+    caja = geo._caja_occ(rueda, 1e-5, holgada=True)
+    malla = geo._malla_para_muestrear(rueda, caja)
+    assert malla is not None and geo._malla_para_muestrear(rueda.Reversed(), caja) is None
+    import numpy as np
+    puntos = np.random.default_rng(1).uniform(-30, 30, (400, 3)) * (1, 1, 0.1) + (0, 0, 3)
+    assert sum(v is not None for v in geo._adentro_por_malla(malla, puntos)) > 100     # la malla decide de verdad
+    for forma in (rueda, rueda.Reversed()):
+        rapidas = [p.Coord() for p in geo._muestras_adentro(forma, 500, 10000)]
+        rapido = geo._parte_afuera(forma, tapa, 500, al_menos=500)
+        monkeypatch.setattr(geo, "_CARAS_MUESTREO_EXACTO", 10**9)
+        assert [p.Coord() for p in geo._muestras_adentro(forma, 500, 10000)] == rapidas
+        assert geo._parte_afuera(forma, tapa, 500, al_menos=500) == rapido
+        monkeypatch.undo()
+    assert 0.3 < rapido < 0.7
+
+
 def test_b125_por_la_api_avisa_que_quedaron_partidos():
     s = api.Sesion()
     ok(api.llamar(s, "create_torus", {"major_radius": R, "minor_radius": r, "x": 0, "z": 10, "name": "A"}))

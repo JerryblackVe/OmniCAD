@@ -1555,7 +1555,8 @@ class OpCombinar(Operacion):
                 # es legítimo (cuerpo multi-sólido): eso no avisa.
                 n_antes = len(geo.solidos(parcial)) + len(geo.solidos(h.forma))
                 n_despues = len(geo.solidos(resultado))
-                if (n_despues > n_antes or (geo.se_tocan(parcial, h.forma) and n_despues == n_antes)
+                # RS-X4: se_tocan va último (era el 30 % de combinar en motor_impreso); con menos sólidos ya se fusionó
+                if (n_despues > n_antes or (n_despues == n_antes and geo.se_tocan(parcial, h.forma))
                         or not rv.es_estanca(resultado)):
                     ctx.aviso(f"{objetivo.nombre}: la unión con {h.nombre} dejó el cuerpo partido, sin "
                               f"fusionar lo que se toca o abierto (posible contacto tangente o en cuña); {geo.REVISAR}")
