@@ -36,6 +36,8 @@ ampliar("draw_rectangle", sketch="Chapa", x1=300, y1=0, x2=340, y2=30)
 chapa = ampliar("create_base_flange", sketch="Chapa")
 if chapa["ok"]:
     ampliar("create_edge_flange", body=chapa["result"]["bodies_created"][0]["id"], edges=">Y and >Z", height=15)
+ampliar("create_sketch", name="Trabajo", plane="XY")          # los comandos de boceto exigen un boceto abierto (B-382)
+ampliar("draw_line", sketch="Trabajo", start_x=2, start_y=3, end_x=8, end_y=3)
 ampliar("create_component", bodies=[ids["cil"]], name="CompA")
 ampliar("create_component", bodies=[ids["caja"]], name="CompB")
 for tipo in ("revolute", "slider"):
@@ -45,10 +47,19 @@ A.esperar(300)
 filas = []
 
 
+EN_BOCETO = {"sk_curva_interseccion", "sk_proyectar_superficie"}       # los que dicen «Abrí un boceto para usar este comando»
+
+
 def medir(clave):
     if v.panel is not None:
         v.panel.cancelar()
         A.esperar(60)
+    if clave in EN_BOCETO and not v.modo_boceto.activo:       # como la persona: doble clic en el boceto del timeline
+        v.editar_operacion(s.paso("Trabajo").id)
+        A.esperar(400)
+    elif clave not in EN_BOCETO and v.modo_boceto.activo:
+        v.modo_boceto.terminar()
+        A.esperar(200)
     comando = CATALOGO[clave]()
     modales = len(A.MODALES)
     panel = v.ejecutar_comando(comando)
