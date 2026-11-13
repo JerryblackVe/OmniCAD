@@ -153,6 +153,11 @@ class Empalme(Comando):
             puntos.append({"posicion": pos, "radio": rad})
         return puntos
 
+    def oculta_seleccion(self, valores):
+        """P-150, como Fusion: la previa se come las aristas elegidas (eran líneas gruesas encima de todo que quedaban
+        flotando fuera del redondeo); sin previa vuelven. Las caras de los modos por reglas y completo siguen."""
+        return valores.get("tipo", "empalme") == "empalme"
+
     def construir(self, v, ctx):
         if v.get("tipo") == "completo":
             exigir(v, "central", "Seleccioná la cara central.")
@@ -355,6 +360,9 @@ class Chaflan(Comando):
             Casilla("cadena_tangente", "Cadena tangente", True),
             Opciones("esquina", "Esquina", {"chaflan": "Chaflán", "inglete": "Inglete", "mezcla": "Mezcla"}),
         ]
+
+    def oculta_seleccion(self, valores):
+        return True      # P-150: la previa se come las aristas elegidas (como Fusion); sin previa vuelven
 
     def construir(self, v, ctx):
         exigir(v, "aristas", "Seleccioná las aristas.")
