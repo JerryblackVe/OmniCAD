@@ -67,6 +67,9 @@ class Barrido(Comando):
                 Seleccion("superficie_guia", "Superficie guía", {"cara"}, maximo=None, visible_si=superficie),
                 Expresion("distancia", "Distancia", "1", ESCALAR,
                           ayuda="Parte de la ruta que recorre el barrido: de 0 a 1."),
+                # P-141: como el diálogo de Fusion (Distance, Taper Angle, Twist Angle), a la vista
+                Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v)),
+                Expresion("torsion", "Ángulo de torsión", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v)),
                 Opciones("orientacion", "Orientación", {"perpendicular": ("Perpendicular", "ori_perpendicular"),
                                                         "paralela": ("Paralelo", "ori_paralela"),
                                                         "alineada": ("Alineada", "ori_alineada")},
@@ -78,10 +81,6 @@ class Barrido(Comando):
                          visible_si=carril,
                          ayuda="Escalar: el perfil crece en las dos direcciones con la distancia entre la ruta y el "
                                "rail. Estirar: solo hacia el rail. Ninguna: el rail solo lo orienta."),
-                Expresion("conicidad", "Ángulo de conicidad", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v),
-                          avanzado=True),
-                Expresion("torsion", "Ángulo de torsión", "0 deg", ANGULO, visible_si=lambda v: not cuerpo(v),
-                          avanzado=True),
                 campo_operacion(), campo_objetivos()]
 
     def construir(self, v, ctx):
@@ -314,12 +313,11 @@ class _NervioRed(Comando):
                 Expresion("profundidad", "Distancia", "10 mm",
                           visible_si=lambda v: v.get("extension") == "profundidad"),
                 Alternar("invertir", "Cambiar dirección", "cambiar_direccion"),
-                Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", angulo_desmoldeo_plastico(ctx.estado), ANGULO,
-                          avanzado=True),
+                Expresion("angulo_desmoldeo", "Ángulo de desmoldeo", angulo_desmoldeo_plastico(ctx.estado), ANGULO),
                 Seleccion("direccion_desmoldeo", "Dirección de extracción", {"plano", "cara_plana", "eje", "arista_lineal"},
                           minimo=0, visible_si=lambda v: nervio),
                 Expresion("radio_empalme", "Radio del empalme", radio_nominal_plastico(ctx.estado),
-                          visible_si=lambda v: red, avanzado=True),
+                          visible_si=lambda v: red),
                 Casilla("extender", "Alargar curvas", True, visible_si=lambda v: red),
                 Seleccion("objetivo", "Cuerpo", {"cuerpo"}, minimo=0, ayuda="Sin selección: el más cercano.")]
 

@@ -344,3 +344,24 @@ def test_la_seleccion_no_salta_a_un_campo_escondido_en_mas_opciones(app_qt):  # 
     panel._activar(panel._por_clave["b"])
     assert panel.activa.clave == "b"
     panel.cancelar()
+
+
+@pytest.mark.parametrize("clave, valores, claves", [
+    ("barrido", {}, ["conicidad", "torsion"]),
+    ("nervio", {}, ["angulo_desmoldeo"]),
+    ("red", {}, ["angulo_desmoldeo", "radio_empalme"]),
+    ("desmoldeo", {}, ["modo_angulo", "voltear"]),
+    ("empalme_3d", {"tipo_radio": "constante"}, ["continuidad", "cadena_tangente", "esquina"]),
+    ("empalme_3d", {"tipo_radio": "variable"}, ["puntos_radio"]),
+    ("chaflan_3d", {}, ["cadena_tangente", "esquina"]),
+    ("sup_extruir", {}, ["conicidad"]),
+])
+def test_p141_lo_que_fusion_trae_en_el_dialogo_no_queda_en_mas_opciones(app_qt, clave, valores, claves):  # noqa: F811
+    """P-141: como en el diálogo de Fusion (ayuda «Sweep/Rib/Web/Draft/Fillet/Chamfer reference» y Extrude de superficie),
+    estos campos se ven al abrir el panel, sin desplegar «Más opciones»."""
+    panel, *_ = _panel(CATALOGO[clave](), _doc_caja(), valores)
+    for k in claves:
+        w = panel.widgets[k]
+        assert w.isVisibleTo(panel), k
+        assert panel.seccion is None or not panel.seccion.isAncestorOf(w), k
+    panel.cancelar()

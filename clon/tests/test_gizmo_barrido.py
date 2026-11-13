@@ -75,7 +75,7 @@ def test_b372_teclear_una_conicidad_que_no_entra_en_la_s_da_error_y_aceptar_no_a
     curva = next(iter(ruta.boceto.curvas))
     hr = hit_desde_ref({"tipo": "curva_boceto", "boceto": doc.operaciones[1].id, "curva": curva}, doc.estado_final)
     p, *_ = _panel(CATALOGO["barrido"](), doc, {"perfiles": [hp], "ruta": [hr]})
-    p.seccion.boton.setChecked(True)                                   # «Más opciones», donde está la conicidad
+    assert p.seccion is None                                          # P-141: la conicidad está a la vista, como Fusion
     campo = p.widgets["conicidad"]
     for texto, sale in (("30", False), ("10", True)):
         QTest.mouseClick(campo, Qt.LeftButton)
