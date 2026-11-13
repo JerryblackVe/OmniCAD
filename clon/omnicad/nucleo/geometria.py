@@ -1533,6 +1533,12 @@ def cajas_solapan(a, b):
     return all(min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) > 1e-6 for i in range(3))
 
 
+def cajas_se_tocan(a, b, tolerancia=1e-6):
+    """¿Dos cajas envolventes (mínimo, máximo) se tocan o se superponen? A diferencia de `cajas_solapan`, apoyarse en
+    una cara cuenta. Si es False, las formas no se tocan: descarta cuerpos lejanos sin llamar a `se_tocan` (~30 ms)."""
+    return a is None or b is None or all(min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) >= -tolerancia for i in range(3))
+
+
 def solapan(a, b):
     """¿Dos sólidos comparten volumen? Apoyarse en una cara no cuenta. La caja envolvente descarta casi todo sin booleana."""
     if not cajas_solapan(caja_envolvente(a), caja_envolvente(b)):
