@@ -195,6 +195,29 @@ class OpBarrido(_OpCrear):
         self._aplicar(estado, ctx, forma)
 
 
+def _angulo_desde_la_normal(texto):
+    """P-147d: un ángulo de despegue viejo (desde el plano del perfil, 90 = perpendicular) en la convención de Fusion
+    (desde la normal, 0 = perpendicular): 90 − ángulo. Un número queda número; una expresión, envuelta."""
+    m = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?)\s*(?:deg)?\s*", str(texto))
+    return f"{90 - float(m.group(1)):g} deg" if m else f"90 deg - ({texto})"
+
+
+def _migrar_angulo_despegue(d):
+    """`migrar_receta` de la Solevación (sólida y de superficie): una receta sin `version_angulo` guarda el Ángulo de
+    despegue desde el plano; se pasa al de Fusion para que abra con el mismo sólido (P-147d)."""
+    params = d.get("params", {})
+    if not isinstance(params, dict) or "version_angulo" in params:
+        return d
+
+    def pasar(c):
+        return dict(c, angulo=_angulo_desde_la_normal(c.get("angulo", "90 deg"))) if isinstance(c, dict) else c
+    params = dict(params, version_angulo=2, condicion_inicio=pasar(params.get("condicion_inicio")),
+                  condicion_fin=pasar(params.get("condicion_fin")))
+    if isinstance(params.get("condiciones_medias"), dict):
+        params["condiciones_medias"] = {k: pasar(v) for k, v in params["condiciones_medias"].items()}
+    return dict(d, params=params)
+
+
 class OpSolevacion(_OpCrear):
     """Solevación de Fusion [SLD-LOFT-SOLID]: perfiles en orden (o un punto en los extremos), carril o
     línea central, cerrada y tramos rectos. `cadena` (Chain Selection): una arista de un cuerpo elegida como sección
@@ -202,9 +225,10 @@ class OpSolevacion(_OpCrear):
     TIPO, ETIQUETA, ICONO = "solevacion", "Solevación", "⌓"
     PARAMS = {"secciones": [], "carriles": [], "linea_central": [], "cerrada": False, "reglada": False,
               "operacion": "nuevo", "objetivos": [], "condicion_inicio": None, "condicion_fin": None,
-              "fusionar_tangentes": False, "condiciones_medias": {}, "cadena": False}
+              "fusionar_tangentes": False, "condiciones_medias": {}, "cadena": False, "version_angulo": 2}
     OPCIONES = {"operacion": OPERACIONES_CUERPO}
     REFS = ("secciones", "carriles", "linea_central")
+    migrar_receta = staticmethod(_migrar_angulo_despegue)       # P-147d: el ángulo de despegue, desde la normal
 
     def dependencias(self):
         caras = [c.get("cara") for c in (self.p.get("condicion_inicio"), self.p.get("condicion_fin")) if c]
@@ -216,7 +240,7 @@ class OpSolevacion(_OpCrear):
         c = cond if cond is not None else self.p.get(clave)
         if not c:
             return None
-        salida = {"tipo": c.get("tipo", "libre"), "angulo": ctx.evaluar(str(c.get("angulo", "90 deg")), ANGULO),
+        salida = {"tipo": c.get("tipo", "libre"), "angulo": ctx.evaluar(str(c.get("angulo", "0 deg")), ANGULO),
                   "peso": ctx.evaluar(str(c.get("peso", "1")), "escalar")}
         if salida["tipo"] in ("tangente", "suave"):
             if not c.get("cara"):

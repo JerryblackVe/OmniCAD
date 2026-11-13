@@ -694,7 +694,7 @@ def test_solevacion_lista_con_condicion_por_fila(app_qt):
     media = fila.tabla.cellWidget(1, 1)
     assert [media.itemData(i) for i in range(media.count())] == ["libre", "direccion"]
     media.setCurrentIndex(1)
-    assert p.valores["medias"] == "2:90 deg:1"
+    assert p.valores["medias"] == "2:0 deg:1"
     fila.tabla.selectRow(1)
     assert p._visible(p._por_clave["angulo_medio"]) and not p._visible(p._por_clave["angulo_fin"])
     p.set_valor("angulo_medio", "80 deg")
@@ -733,10 +733,10 @@ def test_p147_flechas_del_peso_de_despegue(app_qt):
     assert isinstance(anillo, mp.AnilloAngulo) and (anillo.minimo, anillo.maximo) == (-360.0, 360.0)   # sin tope
     punto = anillo.asa(p.manipuladores)
     assert anillo.centro == pytest.approx((0, 0, 62))         # en el centro del perfil
-    assert mp.unitario(punto - anillo.centro) == pytest.approx((0, 0, 1))      # a 90°, justo encima de la flecha
-    p.set_valor("angulo_fin", "0 deg")
-    assert float((anillo.asa(p.manipuladores) - anillo.centro)[2]) == pytest.approx(0, abs=1e-9)  # a 0°, acostada
-    p.set_valor("angulo_fin", "-270 deg")                    # da vueltas: −270 es lo mismo que 90
+    assert mp.unitario(punto - anillo.centro) == pytest.approx((0, 0, 1))      # a 0° (P-147d), justo encima de la flecha
+    p.set_valor("angulo_fin", "90 deg")
+    assert float((anillo.asa(p.manipuladores) - anillo.centro)[2]) == pytest.approx(0, abs=1e-9)  # a 90°, acostada
+    p.set_valor("angulo_fin", "-360 deg")                    # da vueltas: −360 es lo mismo que 0
     assert mp.unitario(anillo.asa(p.manipuladores) - anillo.centro) == pytest.approx((0, 0, 1))
     p.cancelar()
 
@@ -763,6 +763,37 @@ def test_p147c_el_angulo_de_despegue_da_vueltas():
     _llamar(s, "loft", sections=tapas, body="Cuerpo1", start_condition={"type": "direction", "angle": -330})
 
 
+def test_p147d_receta_vieja_abre_con_el_mismo_solido():
+    """P-147d: el Ángulo de despegue se mide desde la normal, como Fusion (0 = perpendicular). Una receta vieja (sin
+    `version_angulo`) lo guardaba desde el plano: al abrirla se pasa a 90 − ángulo y da el mismo sólido."""
+    import copy
+
+    from omnicad.timeline.documento import Documento
+    from omnicad.timeline.ops_solido import _angulo_desde_la_normal
+    s = Sesion()
+    for z in (0, 30):
+        _llamar(s, "create_box", length=20, width=20, height=2, z=z)
+    tapas = [f["id"] for c in ("Cuerpo1", "Cuerpo2") for f in _llamar(s, "find_faces", body=c, selector=">Z")["faces"]]
+    _llamar(s, "loft", sections=tapas, body="Cuerpo1", start_condition={"type": "direction", "angle": 30, "weight": 2},
+            section_conditions={})
+    nuevo = s.doc.a_dict()
+    op = next(o for o in nuevo["operaciones"] if o["tipo"] == "solevacion")
+    assert op["params"]["version_angulo"] == 2 and float(op["params"]["condicion_inicio"]["angulo"]) == 30
+    viejo = copy.deepcopy(nuevo)
+    paso = next(o for o in viejo["operaciones"] if o["tipo"] == "solevacion")
+    del paso["params"]["version_angulo"]
+    paso["params"]["condicion_inicio"]["angulo"] = "60 deg"           # lo mismo, medido desde el plano
+    def volumen(datos):
+        doc = Documento.desde_dict(datos)
+        return sum(geo.volumen(c.forma) for c in doc.estado_final.cuerpos.values()), doc
+    v_nuevo, _ = volumen(nuevo)
+    v_viejo, doc = volumen(viejo)
+    assert v_viejo == pytest.approx(v_nuevo)
+    abierto = next(o for o in doc.operaciones if o.TIPO == "solevacion").p
+    assert abierto["condicion_inicio"]["angulo"] == "30 deg" and abierto["version_angulo"] == 2
+    assert _angulo_desde_la_normal("2*ang") == "90 deg - (2*ang)"     # una expresión queda envuelta
+
+
 def test_reabrir_solevacion_conserva_fila_y_aristas(app_qt):
     s, hits = _tres_perfiles()
     comando = CATALOGO["solevacion"]()
@@ -774,7 +805,7 @@ def test_reabrir_solevacion_conserva_fila_y_aristas(app_qt):
     p.cancelar()
     s.doc.agregar(op)
     v = comando.desde_op(op, ContextoComando(s.doc))
-    assert v["aristas_tangentes"] == "mantener" and v["medias"] == "2:90 deg:1" and len(v["secciones"]) == 3
+    assert v["aristas_tangentes"] == "mantener" and v["medias"] == "2:0 deg:1" and len(v["secciones"]) == 3
 
 
 @pytest.mark.parametrize("clave", ["barrido", "solevacion", "sup_barrido", "sup_solevacion", "parche", "reglada", "extender_sup"])

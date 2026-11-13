@@ -533,9 +533,9 @@ def _condicion_borde(cond, sesion=None, body=None):
     tipo = cond.get("type", "free")
     if tipo not in ("free", "direction", "tangent", "smooth"):
         raise error("INVALID_ARGUMENTS", "type es free, direction, tangent o smooth.")
-    angulo, peso = cond.get("angle", 90), cond.get("weight", 1)
-    if isinstance(angulo, (int, float)) and not 0 < angulo % 360 < 180:      # da vueltas, como Fusion (−330 = 30)
-        raise error("INVALID_ARGUMENTS", "angle (módulo 360) está entre 0 y 180 grados.")
+    angulo, peso = cond.get("angle", 0), cond.get("weight", 1)
+    if isinstance(angulo, (int, float)) and not 0 < (90 - angulo) % 360 < 180:      # P-147d: desde la normal y da vueltas
+        raise error("INVALID_ARGUMENTS", "angle se mide desde la normal de la sección y tiene que quedar entre −90 y 90 grados.")
     if isinstance(peso, (int, float)) and peso <= 0:
         raise error("INVALID_ARGUMENTS", "weight tiene que ser positivo.")
     salida = {"tipo": {"free": "libre", "direction": "direccion", "tangent": "tangente", "smooth": "suave"}[tipo],
@@ -562,7 +562,7 @@ def _condicion_borde(cond, sesion=None, body=None):
              "vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: "
              "{\"sketch\", \"curve\"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la "
              "superficie de la primera y la última sección: {\"type\": \"free\"} o {\"type\": \"direction\", \"angle\": "
-             "grados desde el plano de la sección (90 = perpendicular), \"weight\": 1} o {\"type\": \"tangent\" | \"smooth\", "
+             "grados desde la normal de la sección (0 = perpendicular, como Fusion; da vueltas), \"weight\": 1} o {\"type\": \"tangent\" | \"smooth\", "
              "\"face\": cara, \"weight\": 1} (tangente a esa cara, que tiene la sección en su borde); aproximado con una "
              "sección auxiliar, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. "
              "merge_tangent_edges une las caras tangentes. smooth (G2) es como tangent y sigue también la curvatura de la cara.",
@@ -584,7 +584,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
     rails: curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
     center_line: la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
     body: cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
-    start_condition: condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth", "angle": grados (90 por defecto), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
+    start_condition: condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth", "angle": grados desde la normal de la sección (0 = perpendicular, por defecto, como Fusion), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
     end_condition: lo mismo para la última sección.
     section_conditions: condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición de la sección, 1 = la primera; no vale tangent).
     merge_tangent_edges: true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
