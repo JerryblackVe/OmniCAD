@@ -197,6 +197,28 @@ def test_reglada_opciones(tipo, direccion, angulo):
     area(s, cid, 50)
 
 
+def _revision(s, cid):
+    cuerpos = llamar(s, "check_geometry", self_intersection=True)["bodies"]
+    return next(c for c in cuerpos if c["id"] == cid)
+
+
+def test_b392_reglada_desde_aristas_de_un_prisma_extruido():
+    """B-392: las aristas de una extrusión traen su ubicación y la cara salía corrida (tolerancias de 10,5 mm y 3
+    autointersecciones); las caras de un lazo sin inglete que se tocan en una esquina contaban como autointersección,
+    y las que se cruzan se rechazan con un mensaje claro."""
+    s = api.Sesion()
+    llamar(s, "create_sketch")
+    llamar(s, "draw_rectangle", x1=0, y1=0, x2=60, y2=40)
+    llamar(s, "extrude", sketch="Boceto1")
+    for args, caras, superficie in (({"edges": ["Cuerpo1/E4"]}, 1, 600), ({"edges": ">Z", "body": "Cuerpo1"}, 4, 2000),
+                                    ({"edges": ">Z", "body": "Cuerpo1", "surface_type": "tangent", "angle": 30}, 4, 2000)):
+        r = _revision(s, creado(s, "create_ruled_surface", **args))
+        assert (r["valid"], r["self_intersections"], r["faces"], r["high_tolerances"]) == (True, 0, caras, 0), args
+        assert r["area"] == pytest.approx(superficie)
+    malo = api.llamar(s, "create_ruled_surface", {"edges": ">Z", "body": "Cuerpo1", "surface_type": "tangent", "angle": -30})
+    assert malo["ok"] is False and "se cruzan entre sí. Activá Esquinas en inglete" in malo["mensaje"]
+
+
 def dos_superficies(s):
     base = parche(s)
     pared = parche(s, nombre="Pared", plano="XZ")

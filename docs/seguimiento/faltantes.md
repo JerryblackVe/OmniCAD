@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 74: Abierto 46 · Parcial 25 · Bloqueado 2 · Sin verificar 1 (2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 75: Abierto 47 · Parcial 25 · Bloqueado 2 · Sin verificar 1 (2026-11-12: fusión de B-392; 2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -70,6 +70,7 @@ Parcial 3.
 | SUP-13 | Solevación de superficie: condiciones, guías y pesos | Parcial | Alta | Exactitud, combinaciones y equivalencia de pesos con Fusion (ver ficha). | omnicad/nucleo/superficies.py; tests/test_superficie_guias.py | 2026-11-01 |
 | SUP-14 | Parche: peso de tangencia por arista | Parcial | Media | Implementar peso real G1/G2 por arista, con relleno parametrizado por el borde. | omnicad/nucleo/superficies.py; tests/test_superficie_fusion.py | 2026-10-31 |
 | SUP-17 | Extender: valor por defecto de Fusion | Parcial | Baja | Usar Free Edges por defecto sin alterar recetas viejas. | omnicad/nucleo/superficies.py; tests/test_superficie_fusion.py | 2026-10-31 |
+| SUP-32 | Superficie reglada sin Esquinas en inglete: Fusion redondea las esquinas entre las caras de aristas vecinas («Check Mitered Corners if you want to create sharp corners instead of rounded corners») | Abierto | Media | OmniCAD deja cada cara con su borde: en un lazo las caras solo se tocan en la esquina (desde B-392 comparten el vértice) y, si se cruzan, se rechaza. Falta la cara de esquina redondeada | `nucleo/superficies.reglada`; `scripts/fusion_docs.py ver "Create a ruled surface body" -s fusion-patch` | 2026-11-13 |
 
 ## Sólido (auditoría contra Fusion, 2026-10-24)
 

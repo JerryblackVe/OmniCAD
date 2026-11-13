@@ -215,7 +215,8 @@ def test_reglada_ingleteada_entre_recta_y_arco():
     assert any(np.allclose(p, (x, -5, 0), atol=1e-4) for p in puntos) and any(np.allclose(p, (-x, -5, 0), atol=1e-4) for p in puntos)
     adentro = sf.reglada(media_luna(), -3, tipo="tangente", referencia=plano, ingletear=True)       # se recorta en vez de prolongar
     assert g.area(adentro) == pytest.approx(_esperado_media_luna(20, -3), rel=5e-3) and g.es_valida(adentro)
-    assert g.area(adentro) < g.area(sf.reglada(media_luna(), -3, tipo="tangente", referencia=plano))
+    with pytest.raises(g.ErrorGeometria, match="se cruzan entre sí. Activá Esquinas en inglete"):    # B-392: sin inglete se pisan
+        sf.reglada(media_luna(), -3, tipo="tangente", referencia=plano)
     with pytest.raises(g.ErrorGeometria, match="recortan una arista"):
         sf.reglada([seg((0, 0, 0), (1, 0, 0)), seg((1, 0, 0), (1, 1, 0)), seg((1, 1, 0), (0, 1, 0)), seg((0, 1, 0), (0, 0, 0))],
                    -5, tipo="tangente", referencia=plano, ingletear=True)
@@ -494,14 +495,14 @@ def _h(doc, ref):
     return hit_desde_ref(ref, doc.estado_final)
 
 
-def _ejecutar(doc, clase, **valores):
+def _ejecutar(doc, clase, estados=("ok", "aviso"), **valores):
     from omnicad.ui.comando import ContextoComando
     cmd, ctx = clase(), ContextoComando(doc)
     v = {c.clave: (list(c.defecto) if isinstance(c.defecto, list) else c.defecto) for c in cmd.campos(ctx)}
     v.update(valores)
     op = cmd.construir(v, ctx)
     res = doc.agregar(op)
-    assert res.estado in ("ok", "aviso"), res.mensaje
+    assert res.estado in estados, res.mensaje
     return op, res
 
 
@@ -643,10 +644,10 @@ def test_paso_de_reglada_ingleteada():
     assert g.area(_ultimo(doc).forma) == pytest.approx(14 * 14 - 100) and g.es_valida(_ultimo(doc).forma)
     assert res.estado == "ok"                                      # las esquinas cortaron: ningún aviso
     _roundtrip(Reglada, op, doc)
-    t = Documento()                                                # tres aristas se juntan en un punto: esa esquina no se corta
+    t = Documento()                          # tres aristas se juntan en un punto: esa esquina no se corta y sus caras se pisan
     bid, ids = _boceto(t, lineas=[((0, 0), (10, 0)), ((10, 0), (10, 10)), ((10, 0), (10, -10))])
-    _, res = _ejecutar(t, Reglada, aristas=_curvas(t, bid, ids), tipo="tangente", distancia="2 mm", ingletear=True)
-    assert res.estado == "aviso" and "sin cortar" in res.mensaje and g.es_valida(_ultimo(t).forma)
+    _, res = _ejecutar(t, Reglada, ("error",), aristas=_curvas(t, bid, ids), tipo="tangente", distancia="2 mm", ingletear=True)
+    assert res.mensaje.startswith("Las caras de la superficie reglada se cruzan entre sí. Cambiá")
     vieja = Documento()                          # sin ingletear: una cara por arista, como siempre
     bid, ids = _boceto(vieja, rect=((0, 0), (10, 10)))
     _ejecutar(vieja, Reglada, aristas=_curvas(vieja, bid, ids), tipo="tangente", distancia="2 mm")

@@ -3911,7 +3911,7 @@ Crea superficies rectas desde aristas, con dirección y ángulo.
   - `direction` (texto o objeto; opcional, por defecto `null`): eje, plano, cara plana o arista lineal; obligatorio con surface_type=direction.
   - `angle` (número o expresión; opcional, por defecto `0`): giro de la dirección en grados o expresión.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
-  - `mitered_corners` (true/false; opcional, por defecto `false`): true corta en ángulo vivo las esquinas entre aristas rectas, arcos o curvas (Mitered Corners); donde dos curvas siguen tangentes no hay esquina; una esquina que no se puede cortar (curvas 3D que no se cruzan, tres aristas en un punto) queda como estaba y el resultado trae un aviso.
+  - `mitered_corners` (true/false; opcional, por defecto `false`): true corta en ángulo vivo las esquinas entre aristas rectas, arcos o curvas (Mitered Corners); donde dos curvas siguen tangentes no hay esquina; una esquina que no se puede cortar (curvas 3D que no se cruzan, tres aristas en un punto) queda como estaba y el resultado trae un aviso; si las caras se cruzan entre sí, la superficie se rechaza.
   - `alternate_faces` (true/false; opcional, por defecto `false`): true usa la otra cara cuando una arista comparte dos (Alternate Faces).
   - `chain` (true/false; opcional, por defecto `true`): true toma la cadena tangente entera de cada arista o curva de boceto de edges (Tangent Chain de Fusion, encendido por defecto); false usa solo las elegidas.
 - CLI: `omnicad call create_ruled_surface --doc pieza.omnicad edges=…`
