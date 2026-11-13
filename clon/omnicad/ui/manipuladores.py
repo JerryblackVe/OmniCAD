@@ -1919,7 +1919,7 @@ class GestorManipuladores(QObject):
         if gancho is not None:
             self.escribir(nuevos)
             caja.setText(self.texto_caja(caja))
-            caja.setStyleSheet(QSS_CAJA)
+            caja.setStyleSheet(qss_caja())
         else:
             self.panel.set_valor(caja.clave, texto)
         caja.selectAll()
