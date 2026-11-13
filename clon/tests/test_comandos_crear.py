@@ -394,7 +394,8 @@ def test_paneles_de_agujero_y_rosca_cambian_campos_y_calculan_la_vista_previa():
     panel.set_valor("tipo_rosca", "iso_metrica")
     panel.set_valor("tam_iso_metrica", "M10")
     panel._calcular_previa()
-    assert "M10x1.5" in panel.widgets["info_rosca"].text() and "6g" in panel.widgets["info_rosca"].text()
+    assert "M10x1.5" in panel.widgets["info_rosca"].text() and "6g" not in panel.widgets["info_rosca"].text()
+    assert "6g" in panel.widgets["info_rosca"].toolTip()          # P-146: el detalle va al tooltip
     assert "des_tipo_rosca" in visibles()                       # M10 tiene tres pasos: hay que elegir
     panel.cancelar()
 

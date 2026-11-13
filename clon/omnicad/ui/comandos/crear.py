@@ -706,7 +706,8 @@ class Agujero(Comando):
                      visible_si=r("holgura"), ayuda="Diámetro del agujero de paso según ISO 273."),
             *_campos_rosca("tipo_rosca", _familias(conicas=False, interior=True), r("cosmetica"), {}, clases=modelada, seccion=fo),
             *_campos_rosca("tipo_conica", _familias(conicas=True), r("conico"), {}, clases=False, seccion=fo),
-            Info("info_rosca", "Detalle de rosca", self._info, visible_si=r("holgura", "cosmetica", "conico"), seccion=fo),
+            Info("info_rosca", "Detalle de rosca", self._info, visible_si=r("holgura", "cosmetica", "conico"), seccion=fo,
+                 compacta=True),
             Expresion("desfase_hasta", "Desfase del límite", "0 mm", visible_si=hasta, avanzado=True),
             Expresion("holgura_3d", "Holgura impresión 3D", "0 mm", visible_si=modelada, avanzado=True,
                       ayuda="Desfase radial extra de los flancos y del agujero, para que el tornillo entre en una "
@@ -924,7 +925,7 @@ class Rosca(Comando):
                 Personalizado("biblioteca", "Biblioteca", self._fila_biblioteca),
                 *_campos_rosca("tipo_rosca", _familias(), lambda v: True, recuerdo, automatico=True,
                                tipos=lambda v: _tipos_rosca(v, ctx)),
-                Info("info_rosca", "Detalle de rosca", self._info),
+                Info("info_rosca", "Detalle de rosca", self._info, compacta=True),
                 Opciones("mano", "Dirección", {"derecha": "Mano derecha", "izquierda": "Mano izquierda"}),
                 Casilla("recordar", "Recordar tamaño", bool(recuerdo)),
                 Casilla("invertir", "Invertir", avanzado=True),
