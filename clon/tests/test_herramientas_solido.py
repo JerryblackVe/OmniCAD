@@ -726,17 +726,41 @@ def test_p147_flechas_del_peso_de_despegue(app_qt):
     asas["peso_medio"] = p.manipuladores.manips[0]
     for clave, z, factor in (("peso_inicio", 2, 4.5), ("peso_medio", 32, 4.5), ("peso_fin", 62, 4.5)):
         a = asas[clave]
-        assert isinstance(a, mp.Flecha) and a.origen == pytest.approx((0, 0, z)) and a.factor == pytest.approx(factor)
+        assert isinstance(a, mp.Flecha) and a.origen == pytest.approx((0, 0, z - factor)) and a.factor == pytest.approx(factor)
         assert a.direccion == pytest.approx((0, 0, 1))        # del primer perfil al último, también en el último
-    assert asas["peso_fin"].puntos(p.manipuladores)[0] == pytest.approx((0, 0, 62 + 2 * 4.5))
-    anillo = asas["angulo_fin"]                               # P-147b: el anillo del Ángulo, en el pie de la flecha
-    assert isinstance(anillo, mp.AnilloAngulo) and (anillo.minimo, anillo.maximo) == (0.0, 180.0)
+    assert asas["peso_fin"].puntos(p.manipuladores)[0] == pytest.approx((0, 0, 62 + (2 - 1) * 4.5))   # peso 1: en el centro
+    anillo = asas["angulo_fin"]                               # P-147c: el anillo del Ángulo, como Fusion (3a y 3b)
+    assert isinstance(anillo, mp.AnilloAngulo) and (anillo.minimo, anillo.maximo) == (-360.0, 360.0)   # sin tope
     punto = anillo.asa(p.manipuladores)
-    assert anillo.centro == pytest.approx((0, 0, 62 + 2 * 4.5))
-    assert mp.unitario(punto - anillo.centro) == pytest.approx((0, 0, 1))      # a 90°, sobre la flecha
+    assert anillo.centro == pytest.approx((0, 0, 62))         # en el centro del perfil
+    assert mp.unitario(punto - anillo.centro) == pytest.approx((0, 0, 1))      # a 90°, justo encima de la flecha
     p.set_valor("angulo_fin", "0 deg")
     assert float((anillo.asa(p.manipuladores) - anillo.centro)[2]) == pytest.approx(0, abs=1e-9)  # a 0°, acostada
+    p.set_valor("angulo_fin", "-270 deg")                    # da vueltas: −270 es lo mismo que 90
+    assert mp.unitario(anillo.asa(p.manipuladores) - anillo.centro) == pytest.approx((0, 0, 1))
     p.cancelar()
+
+
+def test_p147c_el_angulo_de_despegue_da_vueltas():
+    """P-147c: como en Fusion, el Ángulo de despegue no tiene tope: −330° y 390° dan la misma solevación que 30°, también
+    desde la API (antes: «angle está entre 0 y 180 grados»)."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeWire
+    from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Pnt
+    from omnicad.nucleo import solidos_crear as sc
+    circulo = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), 20)).Edge()).Wire()
+    poligono = BRepBuilderAPI_MakePolygon()
+    for x, y in ((-40, -25), (40, -25), (40, 25), (-40, 25)):
+        poligono.Add(gp_Pnt(x, y, 60))
+    poligono.Close()
+    volumen = {a: geo.volumen(sc.solevar([circulo, poligono.Wire()], condicion_inicio={"tipo": "direccion", "angulo": a}))
+               for a in (30.0, -330.0, 390.0)}
+    assert volumen[-330.0] == pytest.approx(volumen[30.0]) and volumen[390.0] == pytest.approx(volumen[30.0])
+    s = Sesion()
+    for z in (0, 30):
+        _llamar(s, "create_box", length=20, width=20, height=2, z=z)
+    tapas = [f["id"] for c in ("Cuerpo1", "Cuerpo2")
+             for f in _llamar(s, "find_faces", body=c, selector=">Z")["faces"]]
+    _llamar(s, "loft", sections=tapas, body="Cuerpo1", start_condition={"type": "direction", "angle": -330})
 
 
 def test_reabrir_solevacion_conserva_fila_y_aristas(app_qt):

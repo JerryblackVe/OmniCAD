@@ -1436,7 +1436,7 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
         tipo, w = exteriores[pos]
         if tipo != "alambre":
             raise geo.ErrorGeometria("La condición de borde necesita secciones con contorno, no puntos.")
-        angulo, peso = float(cond.get("angulo", 90.0)), float(cond.get("peso", 1.0))
+        angulo, peso = float(cond.get("angulo", 90.0)) % 360.0, float(cond.get("peso", 1.0))   # P-147c: da vueltas, como Fusion
         if not 0 < angulo < 180 or peso <= 0:
             raise geo.ErrorGeometria("El ángulo de la condición de borde está entre 0 y 180 grados y el peso es positivo.")
         es_extremo = pos in (0, len(exteriores) - 1)
