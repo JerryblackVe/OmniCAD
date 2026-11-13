@@ -280,6 +280,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 
 ### Procesos, worktrees, git y verificación
 
+- [2026-11-13] Para esperar un proceso no usar `until ! pgrep -f "texto"`: `pgrep -f` encuentra al propio shell que lleva ese texto y el bucle no termina nunca; usar `run_in_background` o `pgrep -f "[t]exto"`. · Evidencia: E7 quedó 6 h esperando un pytest de FL-0 que ya había terminado (`/tmp/fl0pytest.log`).
 - [2026-11-13] Al reproducir, medir o generar documentación en un worktree, fijá explícitamente su `clon/` en la ruta de importación y comprobá `omnicad.__file__`; el directorio de ejecución y `--rootdir` no garantizan que se pruebe esa copia. · Evidencia: `scripts/prueba_ui/inferencias.py` imprime la ruta importada; B-404 solo probó el arreglo al corregir `PYTHONPATH`.
 
 - [2026-11-12] Conservá la codificación y los finales de cada línea al editar: leé y escribí bytes en archivos mixtos, evitá reescrituras de PowerShell y verificá `git ls-files --eol` y `git diff --stat` antes de continuar. · Evidencia: L622 documenta 145 líneas de diff por tres cambios en `clon/omnicad/ui/ventana.py`; `scripts/restaurar_finales_de_linea.py` sigue existiendo.
