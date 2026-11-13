@@ -20,6 +20,7 @@ Todo el dibujo es en coordenadas del mundo, recalculado para que el tamaño en p
 """
 import logging
 import math
+import re
 
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, Qt, QTimer
@@ -2013,6 +2014,8 @@ class GestorManipuladores(QObject):
             caja.setToolTip(str(e))
             return False
         caja.setToolTip("")
+        if re.fullmatch(r"[+-]?\d+(?:[.,]\d+)?", texto) and self.tipo(caja.clave) in (LONGITUD, ANGULO):
+            texto += " deg" if self.tipo(caja.clave) == ANGULO else " mm"      # B-405: «0» y el «0 mm» del campo se ven igual
         recordar_valor(self.tipo(caja.clave), texto)
         if gancho is not None:
             self.escribir(nuevos)
