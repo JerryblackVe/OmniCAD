@@ -374,6 +374,12 @@ def poner_resultado(estado, ctx, op_id, c, nueva):
     return [c.id] + [estado.nuevo_cuerpo(op_id, s, c.tipo, **atributos_copia(c)) for s in partes[1:]]
 
 
+def _toca(c, herramienta):
+    """¿El cuerpo toca a la herramienta? B-403: la caja envolvente (cacheada) descarta a los lejanos sin pagar `se_tocan`."""
+    return (geo.cajas_se_tocan(geo.caja_envolvente(c.forma), geo.caja_envolvente(herramienta))
+            and geo.se_tocan(c.forma, herramienta))
+
+
 def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", tipo="solido", apoyos=None):
     """Aplica una forma recién creada según FeatureOperations. `objetivo`: id de un cuerpo, lista de ids
     ("Objetos para cortar" de Fusion) o vacío = automático (los cuerpos sólidos que toca). `apoyos`: función que da
@@ -396,7 +402,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
         objetivos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"
                      and c.id not in ctx.ocultos and c.componente not in ctx.ocultos]
         if operacion == "unir":
-            objetivos = [c for c in objetivos if geo.se_tocan(c.forma, herramienta)]
+            objetivos = [c for c in objetivos if _toca(c, herramienta)]
     if not objetivos:
         if operacion == "unir":
             ctx.aviso("No tocó ningún cuerpo: se creó un cuerpo nuevo.")
@@ -448,7 +454,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
 
     afectados = []
     for c in objetivos:
-        if not lista and not geo.se_tocan(c.forma, herramienta):
+        if not lista and not _toca(c, herramienta):
             continue
         if lista and operacion == "cortar" and not geo.se_tocan(c.forma, herramienta):
             ctx.aviso(f"La herramienta no toca a {c.nombre}: no le cortó nada.")
