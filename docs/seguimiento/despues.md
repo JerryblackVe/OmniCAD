@@ -4,7 +4,7 @@ Prioridad 2, **congelada** (Gerardo, 2026-11-13): render, animación, simulació
 
 Mismas columnas que las otras listas ([README](README.md)); no ordena nada: la cola es [ahora.md](ahora.md). Al resolverse, la fila se borra.
 
-Total 221: Abierto 136 · Parcial 47 · Bloqueado 32 · Sin verificar 6 (2026-11-13: creado por el cambio 3 de la reorganización).
+Total 224: Abierto 138 · Parcial 47 · Bloqueado 32 · Sin verificar 7 (2026-11-13: lote de E11, B-414, B-415 y P-155; 2026-11-13: creado por el cambio 3 de la reorganización).
 
 ## Bugs › Abiertos y parciales
 
@@ -12,6 +12,9 @@ Abierto 1 · Bloqueado 1 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-414 | Registro de uso › con poco disco se pausa sin ningún aviso en pantalla (la PC de Gerardo ya pasó de 0,26 a 7,96 GB libres) | Abierto | Baja | Avisar en pantalla cuando se pausa | evidencias/reportes_pc/2026-11-13_tanda1/06 (E11) | 2026-11-13 |
+| B-415 | Arranque › OmniCAD arrancó minimizado las 2 veces que E11 lo lanzó desde su shell; con doble clic no pasa | Sin verificar | Baja | Solo anotado; confirmar | evidencias/reportes_pc/2026-11-13_tanda1 (E11) | 2026-11-13 |
+| P-155 | Proceso aparte › si el trabajador no puede escribir (disco lleno), mostrar un error en vez de «Calculando…» para siempre (la rosca quedó colgada) | Abierto | Baja | Error claro y salida del estado «Calculando» | evidencias/reportes_pc/2026-11-13_tanda1/01, tanda2/03 (E11) | 2026-11-13 |
 | B-240 | RENDERIZAR › interfaz corrupta, controles invertidos y visor negro | Sin verificar | Media | Reproducir y hallar la causa en AG-3. | `docs/auditoria_renderizar.md` | 2026-11-08 |
 | P-1c | Wayland nativo: menús emergentes se cierran solos | Bloqueado | Alta | Reproducir y probar el arreglo en Linux nativo (P-1b). | omnicad/ui/__init__.py:11-19 | 2026-10-20 |
 | B-378 | Retícula volumétrica lenta con valores por defecto | Abierto | Media | Perfilar y acelerar o estimar el tiempo antes de calcular. | `clon/tests/corpus_caza/b378_reticula_lenta.json`; `omnicad/api/herramientas_solido_extra.py:412` | 2026-11-13 |

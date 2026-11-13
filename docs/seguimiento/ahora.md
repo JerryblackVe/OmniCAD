@@ -25,9 +25,13 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 1 | FL-3 | Aceptar, eliminar y abrir fuera de la ventana, con barra y Cancelar (E6, después de FL-9) |
 | 2 | P-78 | Rosca modelada rápida (F6) |
-| 3 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 4 | B-48 | Crash nativo al recalcular un documento largo |
-| 5 | B-335 | Abrir un STEP pesado congela la ventana |
-| 6 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
+| 3 | B-172 | Propiedades de un cuerpo recién solevado cerró la app (E8 ya lo está reproduciendo) |
+| 4 | B-408 | Triple clic en un campo de valor no selecciona todo |
+| 5 | B-409 | Esc no cancela Extruir si el foco no está en un campo |
+| 6 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 7 | B-410 | Doble clic en un boceto del navegador abre renombrar |
+| 8 | B-48 | Crash nativo al recalcular un documento largo |
+| 9 | B-335 | Abrir un STEP pesado congela la ventana |
+| 10 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
 
 Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384), PRUEBA9c. Con Sol (E9): B-344 Engrosar, B-397.
