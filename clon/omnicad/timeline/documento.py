@@ -998,13 +998,24 @@ class Documento:
         self.modificado = True
         self._terminar_recalculo(desde, calculo)
 
-    def _prevuelo_corresponde(self, reactivados=0, aparte=False):
-        """True si un cambio del historial tiene que ensayarse antes en un proceso aparte (B-48). `aparte`: siempre."""
+    def _prevuelo_corresponde(self, reactivados=0, aparte=False, desde=0):
+        """True si un cambio del historial tiene que ensayarse antes en un proceso aparte (B-48). `aparte`: siempre.
+        También si es un documento chico pero lo que hay que recalcular desde `desde` tarda (B-331): en el hilo de la
+        ventana congelaba 4-11 s; en el proceso aparte la ventana sigue repintando."""
         from ..nucleo import aislado
 
         return (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
                 and (aparte or sum(not op.suprimida for op in self.operaciones[:self.marcador]) + reactivados
-                     >= aislado.UMBRAL_PREVUELO_PARAMETROS))
+                     >= aislado.UMBRAL_PREVUELO_PARAMETROS
+                     or (sum(self._duraciones[desde:]) >= aislado.UMBRAL_COSTO_AISLAR_S
+                         and not self._pasos_con_efectos_propios())))
+
+    def _pasos_con_efectos_propios(self):
+        """Hay un boceto con proyecciones o textos paramétricos: al calcular deja en el propio paso (`rehechas`, `perdidas`,
+        `_textos_parametricos`) lo que el proceso aparte no trae de vuelta (la silueta rehecha perdía sus ids). Con 60 pasos o
+        más el hueco ya existía; el criterio de costo no lo agranda."""
+        return any(getattr(getattr(op, "boceto", None), "proyecciones", None) or getattr(op, "_textos_parametricos", None)
+                   for op in self.operaciones)
 
     def _prevuelo_parametros(self, tabla):
         """Calcula sin modificar el documento ni deshacer; omite documentos chicos, OmniKernel y el propio hijo."""
@@ -1033,7 +1044,7 @@ class Documento:
         # Se protege también el documento que alcanza el umbral al agregar o reactivar un paso.
         reactivada = (not suprimida if cambio["tipo"] == "agregar" else
                       i < self.marcador and self.operaciones[i].suprimida and not suprimida)
-        if not self._prevuelo_corresponde(int(reactivada), aparte):
+        if not self._prevuelo_corresponde(int(reactivada), aparte, i):
             return
         datos = {"receta": self.a_dict(), "cambio": cambio}
         firma = hashlib.sha256(json.dumps(datos, sort_keys=True).encode("utf-8")).digest()
@@ -1210,7 +1221,7 @@ class Documento:
     @motor.recalculo
     @registrar_calculo
     def recalcular(self, desde=0):
-        if self._prevuelo_corresponde():
+        if self._prevuelo_corresponde(desde=desde):
             self._aplicar_calculo(self._solicitar_calculo("recalcular_documento", {
                 "receta": self.a_dict(), "sin_memoria": self._calcular_todo}))
             self._calcular_todo = False

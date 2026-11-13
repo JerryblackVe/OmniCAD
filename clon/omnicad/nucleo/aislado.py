@@ -36,6 +36,7 @@ from . import motor as _motor
 _RAIZ = Path(__file__).resolve().parents[2]      # la carpeta que contiene el paquete `omnicad`
 _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 UMBRAL_PREVUELO_PARAMETROS = 60       # pasos no suprimidos anteriores al marcador
+UMBRAL_COSTO_AISLAR_S = 0.5           # B-331: aunque haya menos pasos, si recalcular desde el cambio tarda más de esto (suma de lo que tardó cada paso)
 TOPE_PREVUELO_PARAMETROS = 900        # segundos, incluida la reconstrucción del documento
 TOPE_PREVUELO_ABRIR = 900             # segundos para el ensayo de apertura de un archivo grande (B-48)
 TOPE_ENSAYO_LECTURA = 900             # segundos para ensayar la importación STEP/IGES completa (B-160)
