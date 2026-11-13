@@ -12,7 +12,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E2 | B-384 | Revolución › Dirección con «A objeto» (hecho; choca con main en comunes.py y solido.py) |
 | E3 | P-78 | Rosca modelada rápida (F6) |
 | E4 | B-416 | Solevación plegada que da `ok` y Propiedades de 15 s |
-| E5 | B-412 | Rosca › con «Longitud completa» desmarcada propone 10 mm (B-413 espera la foto de Fusion de E11) |
+| E5 | ASM-17 | Restricción de componentes (B-412 y B-413 esperan fotos de Fusion de E11) |
 | E6 | FL-9 | Precalentar el trabajador en la portada, con B-418 (hecho, tests en curso) |
 | E7 | FL-0 | Banco de fluidez |
 | E8 | B-417 | Timeline › doble clic en un paso solo lo selecciona la primera vez |
@@ -32,4 +32,4 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 7 | 8 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
 | 8 | B-401 | El cálculo aislado pierde atributos de boceto |
 
-Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384), PRUEBA9c. Integrados hoy: B-344e, B-408 (Sin verificar), B-413 (nota), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
+Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384), PRUEBA9c. Integrados hoy: B-344e, B-408 (Sin verificar), B-412 y B-413 (notas), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
