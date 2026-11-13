@@ -8,7 +8,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-404 | La extrusión pierde perfiles al mover el boceto, sin avisar |
+| E1 | BOC-84 | Herramienta Estrella, junto con P-154 (lados después de dibujar) |
 | E2 | B-384 | Revolución › Dirección con «A objeto» |
 | E3 | RS-X4 | Combinar más rápido (F7 del plan de fluidez) |
 | E4 | B-392 | Superficie reglada con autointersecciones |
@@ -30,8 +30,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 5 | P-78 | Rosca modelada rápida (F6) |
 | 6 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
 | 7 | B-391 | Bobina con autointersección y volumen negativo |
-| 8 | BOC-84 | Herramienta Estrella, junto con P-154 (lados después de dibujar) |
-| 9 | B-48 | Crash nativo al recalcular un documento largo |
-| 10 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
+| 8 | B-48 | Crash nativo al recalcular un documento largo |
+| 9 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
+| 10 | B-335 | Abrir un STEP pesado congela la ventana |
 
 Hechos y esperando integrar (no ocupan cola): B-393, P-153, PRUEBA9c, B-397.
