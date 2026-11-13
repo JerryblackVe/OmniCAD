@@ -217,8 +217,9 @@ def _empaquetar(doc, previa=None):
     return salida
 
 
-def previa_visual(receta, operacion, indice, deflexion, angular):
-    """Previa exacta y su malla dentro del hijo; al padre viajan solo arrays de los cuerpos cambiados."""
+def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
+    """Previa exacta y su malla dentro del hijo; al padre viajan solo arrays de los cuerpos cambiados. `formas`: también
+    su B-Rep, para el comando que resalta caras sobre la previa (P-78 con P-145: las crestas de la rosca)."""
     from ..nucleo import render_cpu
     from .operaciones import operacion_desde_dict
 
@@ -226,7 +227,7 @@ def previa_visual(receta, operacion, indice, deflexion, angular):
     entrada = doc.estado_en(doc.marcador if indice is None else indice)
     op = operacion_desde_dict(operacion)
     estado, avisos = doc.previsualizar(op, indice, en_vivo=True)
-    mallas, nuevos = {}, {}
+    mallas, nuevos, enviar = {}, {}, {}
     for cid, c in estado.cuerpos.items():
         anterior = entrada.cuerpos.get(cid)
         if anterior is not None and c.forma is anterior.forma:
@@ -237,8 +238,10 @@ def previa_visual(receta, operacion, indice, deflexion, angular):
         pares = [np.repeat(p, 2, axis=0)[1:-1] for p in geo.polilineas_aristas(c.forma) if len(p) >= 2]
         seg = np.concatenate(pares).astype(np.float32) if pares else np.zeros((0, 3), np.float32)
         mallas[cid] = v, n, seg
-    return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos)},
-                      transporte=False)
+        if formas:
+            enviar[cid] = c.forma
+    return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos),
+                       "formas": enviar}, transporte=False)
 
 
 def solape_herramienta(receta, operacion, indice, cuerpos):
@@ -261,10 +264,10 @@ def leer_previa_visual(salida, entrada):
     for cid, (nombre, op_id, tipo, apariencia, material, componente, origen) in datos["nuevos"].items():
         estado.cuerpos[cid] = Cuerpo(cid, nombre, None, op_id, tipo, apariencia, material, componente, origen)
     estado.cuerpos = {cid: estado.cuerpos[cid] for cid in datos["cuerpos"]}
-    preparadas = {}
+    preparadas, formas = {}, datos.get("formas") or {}
     for cid, (v, n, seg) in datos["mallas"].items():
         c = estado.cuerpos[cid]
-        c.forma = Malla(v, np.arange(len(v)).reshape(-1, 3))
+        c.forma = formas[cid] if cid in formas else Malla(v, np.arange(len(v)).reshape(-1, 3))
         preparadas[cid] = v, n, seg
     estado._mallas_previa = preparadas
     estado._origen_previa = entrada

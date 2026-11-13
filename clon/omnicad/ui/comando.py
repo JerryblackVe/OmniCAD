@@ -1813,6 +1813,8 @@ class PanelComando(QFrame):
         return True
 
     def _previa_pesada(self, op):
+        if self.ctx.doc.motor == "opencascade" and op.TIPO == "rosca" and op.p.get("modelada"):
+            return True     # P-78: cortar la hélice tarda segundos aunque el cuerpo sea chico (M20×100: 25-50 s)
         if op.TIPO not in TIPOS_PESADOS or self.ctx.doc.motor != "opencascade":
             return False
         from ..nucleo import geometria as geo
@@ -1829,7 +1831,8 @@ class PanelComando(QFrame):
         try:
             self._hijo_previa = CalculoPendiente("previa_visual", {
                 "receta": self.ctx.doc.a_dict(), "operacion": op.a_dict(), "indice": self.ctx.indice,
-                "deflexion": self.visor.config.teselado or 0.05, "angular": self.visor.config.angular})
+                "deflexion": self.visor.config.teselado or 0.05, "angular": self.visor.config.angular,
+                "formas": type(self.comando).seleccion_en_previa is not Comando.seleccion_en_previa})   # P-145
             self._op_hijo = op
             self._t_hijo.start()
             self._mostrar("Calculando vista previa en un proceso aparte…", tipo="calculando")

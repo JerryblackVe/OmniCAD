@@ -178,11 +178,11 @@ def _recalcular_documento(receta, sin_memoria=False):
         return _empaquetar(doc)
 
 
-def _previa_visual(receta, operacion, indice, deflexion, angular):
+def _previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
     from ..timeline.calculo_aislado import previa_visual
 
     with _motor.fijar_motor("opencascade"):
-        return previa_visual(receta, operacion, indice, deflexion, angular)
+        return previa_visual(receta, operacion, indice, deflexion, angular, formas)
 
 
 def _solape_herramienta(receta, operacion, indice, cuerpos):

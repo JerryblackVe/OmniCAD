@@ -1,4 +1,5 @@
-"""B-297: la selección deja ver el material de la previa de Rosca modelada; P-145: las crestas siguen en azul."""
+"""B-297: la selección deja ver el material de la previa de Rosca modelada; P-145: las crestas siguen en azul.
+P-78: esa previa va al proceso aparte."""
 import time
 
 import numpy as np
@@ -46,11 +47,15 @@ def test_b297_previa_modelada_muestra_material_y_restaura_seleccion(tmp_path):
         QTest.mouseClick(v.visor, Qt.LeftButton, pos=punto.toPoint())
         assert panel.valores["caras"]
         _esperar_previa(panel)
+        assert not panel._previa_pesada(panel.ultima_op)     # la cosmética no corta nada: sigue en la ventana
 
         casilla = panel.widgets["modelada"]
         QTest.mouseClick(casilla, Qt.LeftButton, pos=QPoint(8, casilla.height() // 2))
         assert panel.valores["modelada"]
+        # P-78: cortar la hélice congelaba la ventana (M20×100: 25 s); su previa sale del proceso aparte
+        assert panel._previa_pesada(panel.comando.construir(panel.valores, panel.ctx))
         _esperar_previa(panel)
+        assert cid in v.visor._estado._mallas_previa           # la malla que dibuja el visor vino del proceso aparte
         assert v.visor._estado.cuerpos[cid].forma is not original
         assert len(refs.subformas(v.visor._estado.cuerpos[cid].forma, "cara")) > 3
         # P-145, como Fusion: sigue en azul solo lo que quedó de la cara (tramos de afuera y crestas), no los flancos
