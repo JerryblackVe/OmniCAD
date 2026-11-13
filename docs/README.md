@@ -61,6 +61,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [plan_cpp.md](plan_cpp.md) | Qué pasa a C++ (C1–C5) |
 | [plan_boceto_organizar.md](plan_boceto_organizar.md) | Organización, agrupación y manipulación de objetos en Boceto (prompt maestro de Gerardo); se borra al terminarla |
 | [plan_velocidad.md](plan_velocidad.md) | Pruebas y procesos más rápidos: medir, suite en paralelo, tests por impacto, humo sin cursor real (A–G) |
+| [viewcube.md](viewcube.md) | ViewCube: tabla «zona → qué hace» (26 vistas, triángulos, flechas de rodar, casita, menú ▽, animación) y su API |
 | [plan_caza_errores.md](plan_caza_errores.md) | Programa que busca errores solo (`scripts/caza/`): capas, jueces automáticos, comandos y cómo quedó |
 | [plan_reconstruir_solido.md](plan_reconstruir_solido.md) | De una malla a una pieza paramétrica (RI-1–RI-6, F10, F11) |
 | [plan_escaneo_celular.md](plan_escaneo_celular.md) | Escanear una pieza con el celular (ESC-1–ESC-7) |

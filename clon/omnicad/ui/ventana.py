@@ -198,6 +198,8 @@ class VentanaPrincipal(QMainWindow):
             pass
         self.area.al_mover_panel = self._guardar_posicion_panel
         self.area.viewcube.al_elegir_tamano = self._guardar_tamano_viewcube
+        self.area.viewcube.al_elegir_camara = lambda clave: self.cambiar_vista("camara", clave)
+        self.area.viewcube.al_guardar_vistas = self._guardar_vistas_viewcube
         self.navegador = Navegador()
         from . import acciones_navegador
         self.navegador.menu_elemento = lambda item: acciones_navegador.menu(self, item)
@@ -1429,6 +1431,17 @@ class VentanaPrincipal(QMainWindow):
         """Dónde dejó la persona los paneles de comando (None: vuelven al lugar de siempre)."""
         self.prefs["vista/posicion_panel_comando"] = ",".join(map(str, pos)) if pos else ""
 
+    def _guardar_vistas_viewcube(self):
+        """El Inicio y las vistas de cara que se eligieron en el menú del ViewCube viven en el documento, como las de la API."""
+        datos = dict(self.doc.espacios.get("visor") or {})
+        for clave, valor in (("home", self.visor.home), ("vistas_cara", dict(self.visor.vistas_cara))):
+            if valor:
+                datos[clave] = valor
+            else:
+                datos.pop(clave, None)
+        self.doc.espacios["visor"] = datos
+        self.doc.modificado = True
+
     def _guardar_tamano_viewcube(self, clave):
         """Tamaño elegido en el menú del clic derecho del ViewCube: queda en las preferencias (como Fusion)."""
         self.prefs["general/tamano_viewcube"] = clave
@@ -1474,6 +1487,7 @@ class VentanaPrincipal(QMainWindow):
         rejilla = datos.get("rejilla") or {}
         if rejilla != (previo.get("rejilla") or {}):
             c.rejilla = bool(rejilla["mostrar"]) if "mostrar" in rejilla else p["vista/rejilla"]
+        self.visor.home, self.visor.vistas_cara = datos.get("home"), dict(datos.get("vistas_cara") or {})
         cam = datos.get("camara")
         if cam and cam != previo.get("camara"):
             self.visor.R = np.asarray(cam["R"], float)

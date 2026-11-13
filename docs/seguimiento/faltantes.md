@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 240: Abierto 156 · Parcial 50 · Bloqueado 30 · Sin verificar 4 (2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 240: Abierto 155 · Parcial 51 · Bloqueado 30 · Sin verificar 4 (2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -202,7 +202,7 @@ Salen de las 674 capturas del escritorio, ya ordenadas en `analisis/capturas_fus
 | CF-10 | MATERIALES: Explorador de materiales y propiedades | Abierto | Media | Propiedades térmicas y mecánicas, favoritos, materiales nuevos y bibliotecas personales. P-25d cubre solo Administrar. | capturas `MATERIALES/` | 2026-11-02 |
 | CF-13 | SÓLIDO: Modelado automatizado | Bloqueado | Muy alta | Genera alternativas entre geometrías a conectar y a evitar; emparentado con EXT-3 (diseño generativo). Espera el alcance. | sin herramienta; capturas `SOLIDO/Modelado_automatizado` | 2026-11-02 |
 | CF-14 | ELECTRÓNICA: esquemas, placas y biblioteca de componentes | Bloqueado | Muy alta | Diseño de electrónica 2D y 3D, biblioteca de componentes y leyenda de taladro. P-25i solo nombra la placa. Espera el alcance. | sin código; capturas `ELECTRONICA/` | 2026-11-02 |
-| CF-15 | ViewCube como el de Fusion: aristas y vértices clicables (26 vistas, resaltado azul al pasar), 4 triángulos ◁ ▷ △ ▽ que giran 90° a la cara vecina en una vista de cara, 2 flechas curvas que rotan 90° sobre el eje de la pantalla, ▽ abajo a la derecha con el menú del ViewCube y ejes X/Y/Z con letra pegados al cubo | Abierto | Media | Hoy `ui/superposiciones.py` › `ViewCube` solo tiene las 6 caras, el arrastre, la casita y el tamaño por clic derecho. Se cierra con una captura al lado de `fusion_viewcube_cuadros.jpg` que Gerardo apruebe y tests de clic en cada zona. Ayuda: `scripts/fusion_docs.py buscar viewcube` | Pedido de Gerardo (PC): `evidencias/reportes_pc/2026-11-12_viewcube/` (2 videos de Fusion y `fusion_viewcube_cuadros.jpg`) | 2026-11-12 |
+| CF-15 | ViewCube como el de Fusion: aristas y vértices clicables (26 vistas, resaltado azul al pasar), 4 triángulos ◁ ▷ △ ▽ que giran 90° a la cara vecina en una vista de cara, 2 flechas curvas que rotan 90° sobre el eje de la pantalla, ▽ abajo a la derecha con el menú del ViewCube y ejes X/Y/Z con letra pegados al cubo | Parcial | Media | Queda: aprobación visual de Gerardo (captura `omnicad_vs_fusion_vs_propuesta1.png`). Hecho: 26 zonas, triángulos, flechas de rodar, menú ▽ con Inicio y vistas de cara, ejes, diseño de la propuesta 1, `set_home_view` y `roll` en la API, tabla en `docs/viewcube.md`, `tests/test_viewcube.py` | Pedido de Gerardo (PC): `evidencias/reportes_pc/2026-11-12_viewcube/` (2 videos de Fusion y `fusion_viewcube_cuadros.jpg`) | 2026-11-12 |
 
 ## Plástico y extensiones contra capturas de Fusion (2026-11-01)
 
