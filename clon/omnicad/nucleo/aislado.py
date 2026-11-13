@@ -138,7 +138,7 @@ def _prevuelo_cambio(receta, cambio, previa=False):
         elif cambio["tipo"] == "suprimir":
             doc.suprimir(doc.operaciones[i].id, bool(cambio["suprimida"]))
         elif cambio["tipo"] == "eliminar":
-            doc.eliminar(doc.operaciones[i].id)
+            doc.eliminar_varios(cambio.get("ids") or [doc.operaciones[i].id])
         else:
             raise ValueError(f"Cambio desconocido: {cambio['tipo']}")
         return _empaquetar(doc, estado_previo)

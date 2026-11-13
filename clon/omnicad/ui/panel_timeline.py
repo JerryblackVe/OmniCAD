@@ -128,6 +128,7 @@ class PanelTimeline(QWidget):
     renombrar = Signal(str)
     suprimir = Signal(str, bool)
     eliminar = Signal(str)
+    eliminar_varios = Signal(list)         # «Eliminar N pasos» con varios elegidos (y Supr): ids, en UN paso de deshacer
     mover = Signal(str, int)
     marcador = Signal(int)
     buscar_navegador = Signal(str)      # «Buscar en navegador»: elige el elemento del paso en el navegador
@@ -486,7 +487,9 @@ class PanelTimeline(QWidget):
               "Guarda los cuerpos que crea el paso como un conjunto de selección." if crea else
               "Este paso no creó ningún cuerpo que siga vivo."),
             None,
-            E("Eliminar", emitir(self.eliminar, op_id)),
+            (E(f"Eliminar {len(ids)} pasos", emitir(self.eliminar_varios, ids),
+               ayuda="Borra todos los pasos elegidos juntos (un solo paso de deshacer).") if len(ids) > 1 else
+             E("Eliminar", emitir(self.eliminar, op_id))),
         ]
 
     def entradas_grupo(self, g):

@@ -806,12 +806,19 @@ def suppress_feature(sesion, feature: str | list[str], suppressed: bool = True):
     return dict(_paso_info(op), suppressed=suppressed)
 
 
-@herramienta("delete_feature", "documento", "Borra un paso del timeline. No se puede si otro paso lo usa.",
-             modifica=True)
-def delete_feature(sesion, feature: str):
+@herramienta("delete_feature", "documento", "Borra pasos del timeline (una lista va junta, en un solo deshacer). "
+             "No se puede si otro paso de fuera los usa.", modifica=True)
+def delete_feature(sesion, feature: str | list[str]):
     """
-    feature: id o nombre del paso.
+    feature: id, nombre o lista de ellos.
     """
+    if isinstance(feature, list):
+        if not feature:
+            raise error("INVALID_ARGUMENTS", "Indicá al menos un paso.")
+        ops = list(dict.fromkeys(sesion.paso(f).id for f in feature))
+        infos = [_paso_info(sesion.paso(i)) for i in ops]
+        sesion.doc.eliminar_varios(ops)
+        return {"features": infos, "deleted": True}
     op = sesion.paso(feature)
     sesion.doc.eliminar(op.id)
     return dict(_paso_info(op), deleted=True)
