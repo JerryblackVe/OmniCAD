@@ -44,7 +44,9 @@ def test_la_rosca_completa_conserva_los_valores_anteriores():
     forma = _crear_rosca()
     # Las medidas de main antes de B-251 (2026-11-12). Solo la integración adaptativa: la de `geo.volumen` (sin ella) no es
     # exacta en esta hélice y cambia con la plataforma (B-379: 8950,29 en Linux y 8714,02 en Windows, con el mismo OCP).
-    assert geo.volumen_exacto(forma, 1e-6) == pytest.approx(8774.158769, abs=1e-2)
+    # Relativa: el kernel arma una hélice apenas distinta en cada plataforma (adaptativa: 8774,16 en Linux, 8771,73 en
+    # Windows, 0,03 %); 0,1 % sigue atrapando un cambio real de la rosca.
+    assert geo.volumen_exacto(forma, 1e-6) == pytest.approx(8774.158769, rel=1e-3)
     assert d_max(forma) == pytest.approx(19.769, abs=1e-3)
 
 
