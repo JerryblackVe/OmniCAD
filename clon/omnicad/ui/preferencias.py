@@ -395,6 +395,10 @@ class _Muestra(QPushButton):
         p.drawText(marco.adjusted(10, 0, -10, 0), Qt.AlignVCenter | Qt.AlignLeft, self._texto)
 
 
+PALETA_ASAS = ("#ffb400", "#ff6a00", "#e0245e", "#e02e26", "#b44cf0", "#7a3ff2", "#2680ff", "#1fa8e0", "#1fa84f",
+               "#9acd32", "#ffffff", "#9aa3ad", "#2c4157", "#101418")      # amarillo, naranja, rosa, rojo, violetas, azules, verdes, grises
+
+
 class CampoColor(QWidget):
     """Color de texto de la interfaz: una muestra del color (el del tema o el elegido) que abre el selector;
     «Quitar» vuelve al del tema. Nunca muestra el código del color."""
@@ -405,11 +409,13 @@ class CampoColor(QWidget):
         self.token = token
         self.titulo = titulo
         self.fabrica = fabrica               # (r, g, b) de 0 a 1 si el vacío es un color propio del programa y no el del tema
+        self.paleta = bool(fabrica)          # P-149: con color de fábrica propio se elige en una paleta de muestras
         self._valor = temas.normalizar_color(valor) or ""
         self._rechazado = False              # el color elegido no se pudo aplicar: se lee mal sobre el tema
         self.boton = _Muestra()
         self.quitar = QPushButton("Quitar", objectName="quitar_color")
         self.quitar.setToolTip("Vuelve al color de fábrica." if fabrica else "Vuelve al color del tema.")
+        self.quitar.setVisible(not fabrica)        # la paleta ya trae el color de fábrica como primera muestra
         self.boton.clicked.connect(self._elegir)
         self.quitar.clicked.connect(lambda: self.setValue(""))
         fila = QHBoxLayout(self)
@@ -420,12 +426,12 @@ class CampoColor(QWidget):
 
     def _pintar(self):
         propio = bool(self._valor)
-        vacio = "De fábrica" if self.fabrica else "Del tema"
+        vacio = "" if self.fabrica else "Del tema"            # la muestra de una paleta no lleva texto: es el color
         base = QColor.fromRgbF(*self.fabrica) if self.fabrica else temas.color(self.token)
-        self.boton.poner(self._valor or base, "Personalizado" if propio else vacio, self._rechazado)
+        self.boton.poner(self._valor or base, "" if self.fabrica else "Personalizado" if propio else vacio, self._rechazado)
         self.boton.setToolTip("Este color no se aplicó: se lee mal sobre el fondo del tema." if self._rechazado
                               else "Clic para elegir otro color.")
-        self.boton.setAccessibleName(f"{self.titulo}: {'personalizado' if propio else vacio.lower()}")
+        self.boton.setAccessibleName(f"{self.titulo}: {'personalizado' if propio else vacio.lower() or 'de fábrica'}")
         self.quitar.setEnabled(propio)
 
     def marcar_rechazado(self, rechazado):
@@ -438,6 +444,37 @@ class CampoColor(QWidget):
         self._pintar()
 
     def _elegir(self):
+        if self.paleta:
+            self._elegir_de_paleta()
+            return
+        self._elegir_otro()
+
+    def _elegir_de_paleta(self):
+        """P-149: una paleta de muestras para tocar (y «Otro color…» para el selector completo)."""
+        from PySide6.QtWidgets import QGridLayout, QMenu, QWidgetAction
+        menu = QMenu(self)
+        panel = QWidget()
+        grilla = QGridLayout(panel)
+        grilla.setSpacing(4)
+        colores = [QColor.fromRgbF(*self.fabrica).name()] + [c for c in PALETA_ASAS if c != QColor.fromRgbF(*self.fabrica).name()]
+        for i, hexa in enumerate(colores):
+            m = QPushButton(objectName="muestra_paleta")
+            m.setFixedSize(26, 26)
+            m.setCursor(Qt.PointingHandCursor)
+            m.setToolTip("Color de fábrica" if i == 0 else "")
+            m.setStyleSheet(f"QPushButton {{ background: {hexa}; border: 2px solid {'#ffffff' if hexa == self._valor else '#00000055'};"
+                            " border-radius: 4px; }")
+            m.clicked.connect(lambda _=False, h=hexa, fab=(i == 0): (self.setValue("" if fab else h), menu.close()))
+            grilla.addWidget(m, i // 6, i % 6)
+        otro = QPushButton("Otro color…")
+        otro.clicked.connect(lambda: (menu.close(), self._elegir_otro()))
+        grilla.addWidget(otro, (len(colores) + 5) // 6, 0, 1, 6)
+        accion = QWidgetAction(menu)
+        accion.setDefaultWidget(panel)
+        menu.addAction(accion)
+        menu.exec(self.boton.mapToGlobal(self.boton.rect().bottomLeft()))
+
+    def _elegir_otro(self):
         from PySide6.QtWidgets import QColorDialog
         inicial = QColor.fromRgbF(*self.fabrica) if self.fabrica else QColor(temas.color(self.token))
         color = QColorDialog.getColor(QColor(self._valor) if self._valor else inicial, self, self.titulo)
@@ -456,20 +493,6 @@ class CampoColor(QWidget):
         self._rechazado = False              # el color nuevo todavía no se evaluó
         self._pintar()
         self.cambiado.emit()
-
-
-def _filas_asas():
-    """Preferencias › Asas y superposiciones: por cada grupo de `estilo_asas.GRUPOS`, su encabezado y las filas de color,
-    tamaño y opacidad que le aplican."""
-    filas = []
-    for grupo, (titulo, _hex, tam, op, que) in estilo_asas.GRUPOS.items():
-        filas.append((None, titulo, "encabezado", que))
-        filas.append((estilo_asas.clave(grupo, "color"), "Color", "color_asas", grupo))
-        if tam:
-            filas.append((estilo_asas.clave(grupo, "tamano_pct"), "Tamaño", "porcentaje", estilo_asas.TAMANO))
-        if op:
-            filas.append((estilo_asas.clave(grupo, "opacidad_pct"), "Opacidad", "porcentaje", estilo_asas.OPACIDAD))
-    return filas + [(None, "Asas y superposiciones", "acciones_asas", None)]
 
 
 # (página, padre, título en el árbol, descripción, [(clave, etiqueta, tipo, opciones)])
@@ -583,7 +606,8 @@ PAGINAS = [
         ("vista/efecto_aa", "Anti-aliasing", "check", None),
     ]),
     ("asas", None, "Asas y superposiciones", "Color, tamaño y opacidad de lo que se dibuja sobre el visor: asas, "
-     "cajas de valor, vista previa, selección y resaltado. Se ve al instante; un color vacío usa el de fábrica", _filas_asas()),
+     "cajas de valor, vista previa, selección y resaltado. Se ve al instante en la vista previa, antes de Aceptar", [
+        (None, "", "pagina_asas", None)]),
     ("valores", None, "Visualización de unidad y valor", "Preferencias que controlan cómo se muestran las unidades y los valores", [
         ("unidades/precision", "Precisión general", "combo",
          [(n, "0" if n == 0 else "0." + "123456"[:n]) for n in range(6)]),
@@ -845,24 +869,12 @@ class DialogoPreferencias(QDialog):
                 form.addRow(texto, c)
                 self.controles[clave] = c
                 continue
-            if tipo == "encabezado":                  # P-149: el nombre de un grupo y qué dibuja
-                form.addRow(QLabel(f"<b>{etiqueta}</b>", objectName="encabezado_pref"))
-                que = QLabel(opciones, wordWrap=True)
-                temas.poner_rol(que, "tenue")
-                form.addRow(que)
-                continue
-            if tipo == "color_asas":
-                c = CampoColor(clave, actual, f"{etiqueta} ({estilo_asas.GRUPOS[opciones][0]})",
-                               fabrica=estilo_asas.fabrica(opciones))
-                c.cambiado.connect(self._cambio)
-                form.addRow(texto, c)
-                self.controles[clave] = c
-                continue
-            if tipo == "acciones_asas":
-                b = QPushButton("Restablecer", objectName="restablecer_asas")
-                b.setToolTip("Vuelve todas las asas y superposiciones al color, tamaño y opacidad de fábrica.")
-                b.clicked.connect(self._restablecer_asas)
-                form.addRow(texto, b)
+            if tipo == "pagina_asas":                 # P-149: vista previa, ajustes globales y «Avanzado» (ui/pagina_asas.py)
+                from .pagina_asas import PaginaAsas
+                self.pagina_asas = PaginaAsas(self.prefs)
+                self.pagina_asas.restablecer.clicked.connect(self._restablecer_asas)
+                self.controles.update(self.pagina_asas.controles)
+                form.addRow(self.pagina_asas)
                 continue
             if tipo == "aviso_apariencia":
                 self.aviso_apariencia = QLabel(objectName="aviso_apariencia", wordWrap=True)
@@ -1360,6 +1372,8 @@ class DialogoPreferencias(QDialog):
         valores = self.valores()
         for k in CLAVES_ASAS:
             self.prefs[k] = valores[k]
+        estilo_asas.aplicar(self.prefs)
+        self.pagina_asas.refrescar()                 # la vista previa de la página, al instante
         self.asas_cambiadas.emit()
 
     def _restablecer_asas(self):
@@ -1369,6 +1383,7 @@ class DialogoPreferencias(QDialog):
                 self._poner(k, DEFECTOS[k])
         finally:
             self._sincronizando = False
+        self.pagina_asas.sincronizar_globales()
         self._asas_cambiado()
         self.b_aplicar.setEnabled(True)
 

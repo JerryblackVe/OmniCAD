@@ -13,7 +13,7 @@ from PySide6.QtGui import (QAction, QActionGroup, QColor, QFontMetricsF, QKeySeq
                            QPen, QPolygonF, QRadialGradient, QTransform)
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QWidget
 
-from . import temas
+from . import estilo_asas, temas
 from .iconos import icono
 
 # cara: (normal, derecha del texto, arriba del texto, etiqueta, vista del visor)
@@ -275,11 +275,18 @@ class ViewCube(QWidget):
         p.setBrush(Qt.NoBrush)
         p.drawPolygon(zona)
 
+    @staticmethod
+    def _cian(alfa):
+        """El color de la cara resaltada (Preferencias › Asas y superposiciones › ViewCube), con su opacidad."""
+        c = QColor.fromRgbF(*estilo_asas.rgb("viewcube"))
+        c.setAlpha(round(alfa * estilo_asas.opacidad("viewcube")))
+        return c
+
     def _brillo(self, p, rot, zona, d, centro, escala):
         """Resalta la zona bajo el cursor: una arista brilla en cian a lo largo de la arista, un vértice como un punto
         luminoso y una cara con su cuadro central marcado."""
         pesos = sum(map(abs, d))
-        p.setBrush(QColor(53, 208, 238, 55))
+        p.setBrush(self._cian(55))
         p.setPen(Qt.NoPen)
         p.drawPolygon(zona)
         k = self._k()
@@ -287,20 +294,20 @@ class ViewCube(QWidget):
             e = d.index(0)
             ext = [self._proyectar(rot, [(sg if q == e else d[q]) for q in range(3)], centro, escala)[0] for sg in (-1, 1)]
             for ancho, alfa in ((7 * k, 55), (4 * k, 110), (1.8 * k, 255)):
-                p.setPen(QPen(QColor(53, 208, 238, alfa), ancho, Qt.SolidLine, Qt.RoundCap))
+                p.setPen(QPen(self._cian(alfa), ancho, Qt.SolidLine, Qt.RoundCap))
                 p.drawLine(ext[0], ext[1])
         elif pesos == 3:
             c = self._proyectar(rot, d, centro, escala)[0]
             g = QRadialGradient(c, 8 * k)
             g.setColorAt(0.0, QColor(255, 255, 255, 255))
-            g.setColorAt(0.35, QColor(53, 208, 238, 230))
-            g.setColorAt(1.0, QColor(53, 208, 238, 0))
+            g.setColorAt(0.35, self._cian(230))
+            g.setColorAt(1.0, self._cian(0))
             p.setPen(Qt.NoPen)
             p.setBrush(g)
             p.drawEllipse(c, 8 * k, 8 * k)
         else:
             for ancho, alfa in ((5 * k, 60), (1.6 * k, 255)):
-                p.setPen(QPen(QColor(53, 208, 238, alfa), ancho, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                p.setPen(QPen(self._cian(alfa), ancho, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
                 p.setBrush(Qt.NoBrush)
                 p.drawPolygon(zona)
 

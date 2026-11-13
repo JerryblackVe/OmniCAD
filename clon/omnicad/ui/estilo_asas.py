@@ -27,8 +27,7 @@ GRUPOS = {
     "seleccion": ("Selección", "#2680ff", False, True, "Lo que está elegido en el visor."),
     "resaltado": ("Resaltado al pasar el cursor", "#73b3ff", False, True,
                   "Lo que se ilumina bajo el cursor antes de elegirlo."),
-    "viewcube": ("ViewCube (cara resaltada)", "#8fc3ee", False, True,
-                 "La cara del cubo bajo el cursor. Se conecta cuando entre el ViewCube nuevo (CF-15)."),
+    "viewcube": ("ViewCube (cara resaltada)", "#35d0ee", False, True, "La cara, arista o esquina del cubo bajo el cursor."),
 }
 TAMANO = (50, 200)
 OPACIDAD = (10, 100)
