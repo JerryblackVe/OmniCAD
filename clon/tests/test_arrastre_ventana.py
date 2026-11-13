@@ -149,3 +149,25 @@ def test_si_el_punto_no_queda_donde_lo_puso_el_raton_no_vale_la_ventana(monkeypa
     b.puntos[punto].x, b.puntos[punto].y = destino
     r = S.resolver(b, {cota: 10}, arrastrado=punto, previo=previo)
     assert r.ok and r.sin_ventana and b.coords(punto) == pytest.approx(destino, abs=1e-3)
+
+
+@pytest.mark.parametrize("k", range(4))
+def test_boc38_el_punto_que_solo_desliza_se_queda_en_la_ventana(k, monkeypatch):
+    """Un punto atado por una cota a uno fijo solo desliza sobre un círculo: nunca llega al cursor, pero la parte entera
+    tampoco lo acercaría. Antes caía a la parte entera (0,9 s por movimiento con 60 splines); ahora se queda en ventanas."""
+    base, v = contorno_splines(20)
+    p0, p1 = list(base.puntos)[:2]
+    d = math.dist(base.coords(p0), base.coords(p1))
+    v[base.agregar_cota("distancia", [p0, p1], f"{d}")] = d
+    previo = S.resolver(base, v)
+    entera = len(S._Sistema(base, v, next(g for g in S._grupos(base) if p1 in g["p"]), fusionar=True, quieto=p1, derivar=True).x0)
+    b, (x0, y0), tamanos, original = base.copia(), base.coords(p1), [], S._resolver_grupo
+    monkeypatch.setattr(S, "_resolver_grupo", lambda sis, *a, **kw: (tamanos.append(len(sis.x0)), original(sis, *a, **kw))[1])
+    for i in range(1, 9):
+        b.puntos[p1].x, b.puntos[p1].y = x0 + 0.5 * i * math.cos(k * math.pi / 2), y0 + 0.5 * i * math.sin(k * math.pi / 2)
+        previo = S.resolver(b, v, p1, previo)
+        assert previo.ok and not previo.sin_ventana
+        assert math.dist(b.coords(p0), b.coords(p1)) == pytest.approx(d, abs=1e-3)
+    assert max(tamanos) < entera
+    monkeypatch.setattr(S, "_resolver_grupo", original)
+    assert S.resolver(b, v).ok

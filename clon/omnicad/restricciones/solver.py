@@ -1143,9 +1143,10 @@ def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
     """`resolver` para un evento de arrastre: solo la parte del punto arrastrado y sin el rango ni el núcleo del
     jacobiano (se conservan los de `previo`). Si esa parte es grande (`UMBRAL_VENTANA`), primero se resuelve solo una
     ventana alrededor del punto y el resto se congela. La ventana vale si cumple todo Y el punto queda donde lo puso el
-    ratón: si no (una cadena rígida que tiene que moverse entera, un punto que solo puede deslizar), se vuelve atrás y
-    se resuelve la parte entera, y los demás movimientos de ese arrastre ya van directo a la parte entera
-    (`sin_ventana`, que pasa de un resultado al siguiente). Soltar resuelve todo (sin `previo`)."""
+    ratón o la parte entera tampoco lo acercaría (un punto que solo puede deslizar, BOC-38). Si no (una cadena rígida
+    que tiene que moverse entera), se vuelve atrás y se resuelve la parte entera, y los demás movimientos de ese arrastre
+    ya van directo a la parte entera (`sin_ventana`, que pasa de un resultado al siguiente). Soltar resuelve todo (sin
+    `previo`)."""
     err, sin_ventana, usada_parte_entera = 0.0, getattr(previo, "sin_ventana", False), False
     for g in grupos:
         if arrastrado in g["p"]:
@@ -1161,7 +1162,8 @@ def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
                 if x is not None:
                     sis.escribir(x)
                 if sub is g or (err < TOLERANCIA_ACEPTA_ARRASTRE
-                                and math.dist(boceto.coords(arrastrado), objetivo) < TOLERANCIA_ACEPTA_ARRASTRE):
+                                and (math.dist(boceto.coords(arrastrado), objetivo) < TOLERANCIA_ACEPTA_ARRASTRE
+                                     or not _la_parte_entera_lo_acerca(boceto, valores, g, arrastrado, objetivo))):
                     break
                 _volver(boceto, antes)
             break
@@ -1172,6 +1174,26 @@ def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
         r = ResultadoSolver("ok", previo.gdl, err, determinadas=previo.determinadas)
     r.sin_ventana = sin_ventana or (usada_parte_entera and err < TOLERANCIA_ACEPTA_ARRASTRE)   # solo si la parte entera cumplió
     return r
+
+
+def _la_parte_entera_lo_acerca(boceto, valores, g, arrastrado, objetivo):
+    """BOC-38: ¿la parte entera podría acercar el punto arrastrado al cursor, cuando su ventana ya no puede? A primer
+    orden: el movimiento de las incógnitas que no rompe ningún vínculo (J·dx = 0) y lleva el punto hacia el cursor. Un
+    punto que solo puede deslizar ya quedó lo más cerca que puede: no avanza (y no se resuelve la parte entera, que
+    tarda ~0,9 s con 60 splines). Una cadena rígida que tiene que moverse entera, sí avanza."""
+    sis = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True)
+    ij = list(sis.idx_p.get(arrastrado, ()))
+    falta = np.subtract(objetivo, boceto.coords(arrastrado))
+    if len(ij) != 2 or not sis.terminos:
+        return True
+    hacia = falta / np.linalg.norm(falta)
+    J = _jacobiano(sis, sis.x0)
+    punto = np.zeros((2, len(sis.x0)))
+    punto[[0, 1], ij] = 1.0
+    dx = np.linalg.lstsq(np.vstack([1e3 * J, punto]), np.concatenate([np.zeros(len(J)), hacia]), rcond=None)[0]
+    # dx·hacia = (t·hacia)² con t lo que el punto puede moverse: 0,2 = ganar al menos ~10 % de lo que falta (un punto que
+    # desliza da ~0,02 y ganaría centésimas; una cadena rígida, ~1)
+    return float(dx[ij] @ hacia) > 0.2
 
 
 def _resolver_grupo(sis, arrastrado, con_rango=True):
