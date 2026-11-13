@@ -1,5 +1,5 @@
 """scripts/tiempos.py: junta los JUnit XML del cierre y arma el ranking de tests y archivos lentos (paquete A de
-docs/plan_velocidad.md)."""
+docs/plan_velocidad_tests.md)."""
 import json
 import os
 import runpy

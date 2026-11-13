@@ -57,11 +57,12 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | Documento | Qué tiene |
 |---|---|
 | [plan_mcp_cli.md](plan_mcp_cli.md) | Plan de la capa para agentes (paquetes A–L) |
+| [seguimiento/ahora.md](seguimiento/ahora.md) | La única cola de trabajo: «Ahora» (uno por sesión) y «Sigue» (los próximos 10) |
 | [plan_fluidez.md](plan_fluidez.md) | Plan de fluidez (2026-11-13): que la ventana nunca se congele; paquetes F0–F11 (filas FL-*) |
 | [plan_rust.md](plan_rust.md) | Qué pasa a Rust (R1–R13) y arreglos de Python (P1–P24) |
 | [plan_cpp.md](plan_cpp.md) | Qué pasa a C++ (C1–C5) |
 | [plan_boceto_organizar.md](plan_boceto_organizar.md) | Organización, agrupación y manipulación de objetos en Boceto (prompt maestro de Gerardo); se borra al terminarla |
-| [plan_velocidad.md](plan_velocidad.md) | Pruebas y procesos más rápidos: medir, suite en paralelo, tests por impacto, humo sin cursor real (A–G) |
+| [plan_velocidad_tests.md](plan_velocidad_tests.md) | Pruebas y procesos más rápidos: medir, suite en paralelo, tests por impacto, humo sin cursor real (A–G) |
 | [viewcube.md](viewcube.md) | ViewCube: tabla «zona → qué hace» (26 vistas, triángulos, flechas de rodar, casita, menú ▽, animación) y su API |
 | [plan_caza_errores.md](plan_caza_errores.md) | Programa que busca errores solo (`scripts/caza/`): capas, jueces automáticos, comandos y cómo quedó |
 | [plan_reconstruir_solido.md](plan_reconstruir_solido.md) | De una malla a una pieza paramétrica (RI-1–RI-6, F10, F11) |

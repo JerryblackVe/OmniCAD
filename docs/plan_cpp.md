@@ -1,5 +1,7 @@
 # Plan de C++ para OmniCAD (Python + Rust + C++)
 
+> El orden de trabajo de la velocidad lo da [plan_fluidez.md](plan_fluidez.md) (2026-11-13); este documento es especificación.
+
 > Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Segunda pasada de la auditoría de rendimiento del 2026-10-12. La primera (`docs/plan_rust.md`) buscó lo que pasa a

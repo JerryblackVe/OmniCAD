@@ -3,7 +3,7 @@
 Lee todos los `*.xml` de la carpeta (los que escribe pytest con `--junitxml`, sueltos o envueltos en
 `testsuites`) y escribe en `--salida` un JSON con los segundos de cada test («archivo::nombre»), la suma por
 archivo, el total y los XML leídos; además imprime los 30 tests y los 20 archivos más lentos. Paquete A de
-docs/plan_velocidad.md; lo llama scripts/cierre_completo.sh. Los segundos son el `time` de JUnit (preparación,
+docs/plan_velocidad_tests.md; lo llama scripts/cierre_completo.sh. Los segundos son el `time` de JUnit (preparación,
 llamada y cierre del test): sin colección ni arranque del intérprete, así que el total queda por debajo del `pytest -q`.
 
 Uso: python scripts/tiempos.py <carpeta_con_xml> [--salida evidencias/tiempos.json]
