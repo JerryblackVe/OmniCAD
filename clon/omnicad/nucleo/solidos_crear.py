@@ -619,10 +619,12 @@ def _extruir_perfiles_vecinos(caras, n, base, lados):
                 forma = _prisma(caras[i], n, d, conicidad, aristas_fijas=fijas[i])
                 if limite is not None:
                     forma = geo.booleano(forma, limite, "intersecar")
+                    caja = geo.caja_envolvente(forma)
                     # Al ensanchar, dos bordes exteriores pueden pisarse junto al fin de una pared compartida.
-                    for anterior in anteriores:
-                        forma = geo.booleano(forma, anterior, "cortar")
-                anteriores.append(forma)
+                    for anterior, caja_anterior in anteriores:
+                        if caja is not None and geo.cajas_solapan(caja, caja_anterior):
+                            forma = geo.booleano(forma, anterior, "cortar")
+                    anteriores.append((forma, caja))
                 por_perfil[i].append(_validar(forma, "Extrusión de perfiles vecinos"))
     return geo.compuesto([_unir(partes) for partes in por_perfil])
 
