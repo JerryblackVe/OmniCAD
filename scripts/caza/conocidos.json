@@ -1,8 +1,6 @@
 {
   "proceso||cierre_fffffffa": "B-327",
   "proceso|create_volumetric_lattice|colgado": "B-378",
-  "geometria|create_coil|autointersecciones": "B-391",
   "geometria|create_ruled_surface|autointersecciones": "B-392",
-  "geometria|project_to_sketch|autointersecciones": "B-393",
-  "numeros|create_coil|volumen_no_positivo": "B-391"
+  "geometria|project_to_sketch|autointersecciones": "B-393"
 }
