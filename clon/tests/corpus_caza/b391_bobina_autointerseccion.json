@@ -1,0 +1,45 @@
+{
+ "id": "B-391",
+ "firma": "geometria|create_coil|autointersecciones",
+ "pesado": true,
+ "pasos": [
+  {
+   "tool": "create_box",
+   "args": {
+    "length": 60,
+    "width": 50,
+    "height": 20
+   }
+  },
+  {
+   "tool": "shell",
+   "args": {
+    "body": "Cuerpo1",
+    "thickness": 2,
+    "faces": ">X"
+   }
+  },
+  {
+   "tool": "offset_faces",
+   "args": {
+    "body": "op1.c1",
+    "faces": [
+     "Cuerpo1/F3",
+     "Cuerpo1/F1",
+     "Cuerpo1/F2"
+    ],
+    "distance": 20.02
+   }
+  },
+  {
+   "tool": "create_coil",
+   "args": {
+    "body": "op1.c1",
+    "diameter": 19.3078,
+    "height": 40.0,
+    "angle": -30,
+    "target": "op1.c1"
+   }
+  }
+ ]
+}

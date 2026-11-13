@@ -1,4 +1,12 @@
 {
   "proceso||cierre_fffffffa": "B-327",
-  "proceso|create_volumetric_lattice|colgado": "B-378"
+  "proceso|create_volumetric_lattice|colgado": "B-378",
+  "contrato|inspect_f3d|INTERNAL_ERROR@f3d_nativo.py:322": "B-390",
+  "contrato|inspect_f3d|INTERNAL_ERROR@f3d_nativo.py:99": "B-390",
+  "geometria|create_coil|autointersecciones": "B-391",
+  "geometria|create_ruled_surface|autointersecciones": "B-392",
+  "geometria|project_to_sketch|autointersecciones": "B-393",
+  "geometria|thicken|autointersecciones": "B-394",
+  "recalcular|duplicate_feature|paso_falla": "B-395",
+  "numeros|create_coil|volumen_no_positivo": "B-391"
 }
