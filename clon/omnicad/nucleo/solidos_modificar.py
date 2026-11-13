@@ -294,6 +294,8 @@ def _tipos_arista(analisis, arista):
 # ---------------------------------------------------------------- selección (cadenas tangentes)
 def aristas_cadena_tangente(forma, arista, tol_ang=1.0):
     """Aristas unidas a `arista` con continuidad tangente en sus vértices (opción "Tangent Chain")."""
+    if BRep_Tool.IsClosed_s(arista):       # La costura de una curva cerrada no es un extremo libre.
+        return [arista]
     vert_aristas = _ancestros(forma, TopAbs_VERTEX, TopAbs_EDGE)
     cadena, pendientes = [arista], [arista]
     sen_tol = math.sin(math.radians(tol_ang))
@@ -303,7 +305,7 @@ def aristas_cadena_tangente(forma, arista, tol_ang=1.0):
             te = _tangente_en_vertice(e, v)
             for otra in _padres(vert_aristas, v):
                 otra = TopoDS.Edge(otra)
-                if _contiene(cadena, otra) or BRep_Tool.Degenerated_s(otra):
+                if _contiene(cadena, otra) or BRep_Tool.Degenerated_s(otra) or BRep_Tool.IsClosed_s(otra):
                     continue
                 if np.linalg.norm(np.cross(te, _tangente_en_vertice(otra, v))) < sen_tol:
                     cadena.append(otra)
