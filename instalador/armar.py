@@ -47,7 +47,8 @@ def imagenes_asistente():
     QGuiApplication.instance() or QGuiApplication(["armar"])
     carpeta = BUILD / "asistente"
     carpeta.mkdir(parents=True, exist_ok=True)
-    portada = QImage(str(RECURSOS / "portada.jpg"))
+    from omnicad.ui.arranque import imagen_portada
+    portada = imagen_portada(VERSION)           # la versión se dibuja: no está en el .jpg
     icono = QImage(str(RECURSOS / "omnicad_512.png"))
     for escala, (ancho, alto) in GRANDE.items():
         ancho_recorte = round(portada.height() * ancho / alto)
