@@ -4258,6 +4258,12 @@ class Lienzo(QWidget):
                         self.b.agregar_restriccion("horizontal", [lid])
                     elif abs(math.cos(ang)) < 1e-9:
                         self.b.agregar_restriccion("vertical", [lid])
+                    else:                       # FU-3, como Fusion: la primera línea se acota contra el eje X
+                        self.b.asegurar_referencias([Boceto.EJE_X])
+                        medida, t = self.b.medir_cota("angulo", [lid, Boceto.EJE_X]), texto["angulo"]
+                        if abs(medida - bloqueos["angulo"][1]) > 1e-6:      # 150° mide 150, pero 210° mide 150
+                            t = formato.numero(medida, True)
+                        cota("angulo", [lid, Boceto.EJE_X], t)
         elif h in ("rectangulo", "rectangulo_centro", "rectangulo_3p") and len(lineas) >= 2:
             if "ancho" in texto:
                 cota("distancia", [lineas[0]], texto["ancho"])
