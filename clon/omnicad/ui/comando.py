@@ -234,6 +234,7 @@ class Comando:
     ICONO = ""
     CLASE_OP = None          # para editar: la ventana busca el comando por el TIPO de la operación
     PREVIA = True            # mostrar la vista previa del resultado
+    PREVIA_SOBRE = ()        # claves de campos de selección que muestran la previa al pasar el cursor (Preview On Hover)
     TEXTO_ACEPTAR = "Aceptar"
     SIN_OP = False           # comandos que no agregan un paso al timeline (aspecto, medir…): usan `aplicar`
     # PL2 (Plasticity: teclas de opción a la vista): lo que hace cada tecla MIENTRAS el comando está
@@ -312,6 +313,10 @@ class Comando:
 
     def mostrar(self, v, ctx):
         """Para los comandos SIN_OP: lo que se ve en la vista mientras el diálogo está abierto."""
+
+    def sobre_listo(self, valores):
+        """¿Alcanza lo elegido para mostrar la previa de lo que está bajo el cursor? (solo con `PREVIA_SOBRE`)."""
+        return True
 
     def ajustar_hit(self, campo, hit, ctx, visor):
         """Gancho al elegir algo en la vista: puede devolver el hit corregido (p. ej. enganchado al centro de la
@@ -961,6 +966,9 @@ class PanelComando(QFrame):
             from .manipuladores import GestorManipuladores
             self.manipuladores = GestorManipuladores(self)
         self.visor.entidad_elegida.connect(self._elegida)
+        self._sobre_hit = None               # geometría bajo el cursor cuya previa se ve (Preview On Hover); None = la de lo elegido
+        if comando.PREVIA_SOBRE:
+            self.visor.entidad_sobre.connect(self._sobre)
         self._actualizar_visibles()
         self._refrescar_seleccion()
         primera = next((c for c in self.campos if isinstance(c, Seleccion) and self._a_la_vista(c)
@@ -1388,6 +1396,9 @@ class PanelComando(QFrame):
     # ------------------------------------------------------------ selección en la vista
     def _activar(self, campo):
         self.activa = campo
+        if self._sobre_hit is not None:     # otro campo: la previa del cursor ya no corresponde
+            self._sobre_hit = None
+            self._programar()
         self._pintar_filas()
         self.visor.set_filtro(self._filtros(campo) if campo is not None else None)
         # H-72: en un campo de varias caras o cuerpos, arrastrar en la vista elige con una ventana (como Fusion)
@@ -1395,6 +1406,29 @@ class PanelComando(QFrame):
                                              and set(campo.filtros) & {"cara", "cuerpo", "perfil"})   # B-268
         # en un campo de varios perfiles, tocar una letra elige el texto entero (como Fusion)
         self.visor.texto_entero = bool(campo is not None and campo.maximo is None and "perfil" in campo.filtros)
+
+    @property
+    def _sobre_activo(self):
+        return self._sobre_hit is not None
+
+    def _sobre(self, hit):
+        """Preview On Hover (Fusion): con el cursor sobre una geometría válida del campo activo se ve el resultado como si
+        se la hubiera elegido, sin elegirla. Mientras dure, todo recálculo de la previa usa esa geometría (`_calcular_previa`).
+        Si esa previa falla (geometría que no sirve) no se muestra nada de ella."""
+        campo = self.activa
+        if self.cerrando or campo is None or campo.clave not in self.comando.PREVIA_SOBRE:
+            return
+        if hit is None or not self.comando.sobre_listo(self.valores):
+            if self._sobre_hit is not None:
+                self._sobre_hit = None
+                self._calcular_previa()
+            return
+        self._sobre_hit = hit
+        self._t_previa.stop()
+        self._calcular_previa()
+        if not (self._previa_ok or self._previa_aparte):
+            self._sobre_hit = None
+            self._calcular_previa()
 
     def _filtros(self, campo):
         return set(campo.filtros_si(self.valores)) if campo.filtros_si else campo.filtros
@@ -1469,6 +1503,7 @@ class PanelComando(QFrame):
             self._elegida(nuevos[0], grupo=nuevos)
 
     def _elegida(self, hit, grupo=None):
+        self._sobre_hit = None              # el clic elige de verdad: la previa pasa a ser la de lo elegido
         campo = self.activa
         if campo is None or not self.isVisible():
             return
@@ -1583,9 +1618,15 @@ class PanelComando(QFrame):
 
     def _calcular_previa(self):
         inicio = time.perf_counter()
+        clave = self.activa.clave if self._sobre_hit is not None and self.activa is not None else None
+        elegido = self.valores.get(clave) if clave else None
+        if clave:
+            self.valores[clave] = [self._sobre_hit]
         try:
             self._calcular_previa_ahora()
         finally:
+            if clave:
+                self.valores[clave] = elegido
             ms = (time.perf_counter() - inicio) * 1000
             self._t_previa.setInterval(0 if ms < PREVIA_CUADRO_MS else min(int(ms), PREVIA_ESPERA_MAX_MS))
         if self.manipuladores is not None and not self._previa_aparte:      # la aparte avisa al volver
@@ -1862,6 +1903,9 @@ class PanelComando(QFrame):
 
     # ------------------------------------------------------------ cierre
     def aceptar(self):
+        if self._sobre_hit is not None:         # con el cursor aún sobre algo, lo que se acepta es lo elegido, no su previa
+            self._sobre_hit = None
+            self._calcular_previa()
         for _ in range(3):              # la previa puede ajustar un valor (Extruir pasa a Cortar) y pedir otra
             if not self._t_previa.isActive():
                 break
@@ -1917,6 +1961,8 @@ class PanelComando(QFrame):
         self._prisma_previa = None
         try:
             self.visor.entidad_elegida.disconnect(self._elegida)
+            if self.comando.PREVIA_SOBRE:
+                self.visor.entidad_sobre.disconnect(self._sobre)
         except (RuntimeError, TypeError):
             pass
         self.visor.set_filtro(None)

@@ -253,6 +253,10 @@ class RestriccionComponentes(Comando):
     AYUDA = ("Posiciona el componente 1 respecto del 2 (Constrain Components). Alinear: caras coplanares, ejes "
              "concéntricos o puntos coincidentes. Ángulo: gira el 1 hasta el ángulo pedido con el 2. Centro: deja una cara (o el plano medio de dos) a medio camino de las dos caras del otro. Tangente: deja tangente una cara, arista o vértice con la superficie del otro componente.")
     CLASE_OP = OpRestriccion
+    PREVIA_SOBRE = ("ref2",)        # Preview On Hover: el componente 2 elegido con el cursor, antes del clic
+
+    def sobre_listo(self, valores):
+        return bool(valores.get("ref1"))        # Fusion: no está disponible si el componente 1 no está definido
 
     def verificar(self, ctx):
         return None if ctx.estado.componentes else "Primero creá componentes (ENSAMBLAR › Nuevo componente)."

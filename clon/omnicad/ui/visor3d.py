@@ -517,6 +517,7 @@ class Visor3D(QOpenGLWidget):
         self.cuerpos_de_previa = frozenset()  # cuerpos que solo existen en la vista previa del comando abierto
         self.texto_entero = False          # con un campo de perfiles activo: una letra resalta y elige todo su texto
         self._hover_ent = None             # entidad bajo el cursor con el filtro activo
+        self._sobre_avisado = None         # lo último que se avisó por `entidad_sobre` (sobrevive al reinicio de `_hover_ent`)
         self._capas = {}                   # nombre → [primitivas a dibujar encima: ("tris"|"lineas"|"puntos", …)]
         self._nombres_planos = EtiquetasPlanos(self)
         self._marcas_forzado = None        # puntos de forzado de la cara bajo el cursor
@@ -1299,7 +1300,7 @@ class Visor3D(QOpenGLWidget):
         self.texto_entero = bool(self.filtro and "perfil" in self.filtro)
         if self.filtro is None:
             self.cuerpos_de_previa = frozenset()
-        self._hover_ent = None
+        self._hover_ent = self._sobre_avisado = None
         self._marcas_forzado = None
         self._capas.pop("forzado", None)
         self.update()
@@ -2623,6 +2624,7 @@ class Visor3D(QOpenGLWidget):
             if (pos.toPoint() - self._banda_pendiente).manhattanLength() > 6:
                 if self.arrastre is not None and self.arrastre.empezar(QPointF(self._banda_pendiente)):
                     self._banda_pendiente, self._arrastrando, self._hover_ent = None, True, None
+                    self._sobre_avisado = None
                     self.entidad_sobre.emit(None)
                     self.arrastre.mover(pos)
                     return
@@ -2659,14 +2661,18 @@ class Visor3D(QOpenGLWidget):
             if "forzado" in self.filtro:
                 m = self._marcas_forzado
                 self.set_capa("forzado", None if m is None else [("puntos", m, NARANJA_PLANO, 6)])
-            anterior = self._hover_ent
+            anterior, avisado = self._hover_ent, self._sobre_avisado
             if (hit is None) != (anterior is None) or (hit and anterior and hit["ref"] != anterior["ref"]):
                 grupo = self.hits_texto(hit) if self.texto_entero else None
                 if grupo:                          # una letra: se resalta el texto entero
                     hit = dict(hit, dibujo=[d for h in grupo for d in h["dibujo"]])
                 self._hover_ent = hit
-                self.entidad_sobre.emit(hit)       # Medir: valor en vivo de lo que está bajo el cursor
                 self.update()
+            # Se avisa contra lo último AVISADO, no contra el resaltado: una vista previa nueva reinicia `_hover_ent` sin avisar
+            # y, comparando con él, salir del objeto no avisaba nunca (la previa del cursor quedaba pegada).
+            if (hit is None) != (avisado is None) or (hit and avisado and hit["ref"] != avisado["ref"]):
+                self._sobre_avisado = hit
+                self.entidad_sobre.emit(hit)       # Medir: valor en vivo de lo que está bajo el cursor
             return
         if self._ultimo is None or self._accion is None:
             return
@@ -2698,8 +2704,8 @@ class Visor3D(QOpenGLWidget):
         return self._a_pantalla(np.asarray(puntos, float), self.matriz_mvp())
 
     def leaveEvent(self, e):
-        if self._hover_ent is not None:
-            self._hover_ent = None
+        if self._hover_ent is not None or self._sobre_avisado is not None:
+            self._hover_ent = self._sobre_avisado = None
             self.entidad_sobre.emit(None)
             self.update()
         super().leaveEvent(e)

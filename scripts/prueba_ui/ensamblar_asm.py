@@ -534,6 +534,35 @@ def restricciones():
     A.reg(AR, "conjunto: un solo paso deja la tapa al ras y la cara frontal alineada", caja(rcaja) == [140.0, 280.0, 10.0, 160.0, 300.0, 20.0], f"RCaja={caja(rcaja)}")
     A.reg(AR, "conjunto: el timeline tiene UN paso de restricción", len([o for o in v.doc.operaciones if o.TIPO == "restriccion"]) == 1, "")
     L("undo")
+    # Preview On Hover: el cursor (simulado en el visor, nunca el real) sobre la cara del componente 2 muestra la previa sin elegirla
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+    p = A.abrir(v, "restriccion_componentes")
+    A.elegir(p, "ref1", *cara(rcaja, (0, 0, 1)))
+    destino = cara(rfijo, (0, 0, 1))[0]
+    p._activar(next(c for c in p.campos if c.clave == "ref2"))
+    q = v.visor.proyectar(np.array(destino["ref"]["firma"]["centro"], float))
+
+    def cursor(x, y):
+        pos = QPointF(float(x), float(y))
+        QApplication.sendEvent(v.visor, QMouseEvent(QEvent.MouseMove, pos, v.visor.mapToGlobal(pos), Qt.NoButton, Qt.NoButton, Qt.NoModifier))
+        A.esperar(200)
+    qx, qy = q if isinstance(q, (tuple, list, np.ndarray)) else (q.x(), q.y())
+    vistos = []
+    v.visor.entidad_sobre.connect(lambda h: vistos.append(None if h is None else (h["ref"].get("cuerpo"), h["ref"].get("tipo"))))
+    for dx in (6, 3, 0):                                                      # como la persona: se acerca y se posa; el visor solo avisa al cambiar
+        cursor(qx + dx, qy + dx)
+        if p._sobre_activo:
+            break
+    A.reg(AR, "restricción: vista previa al pasar el cursor por la cara del componente 2 (sin elegirla)",
+          p._sobre_activo and not p.valores["ref2"] and p._previa_ok and p.ultima_op is not None,
+          f"{A.estado_panel(p)} sobre_activo={p._sobre_activo} filtro={v.visor.filtro} modo={v.visor.modo} vistos={vistos} destino={destino['ref'].get('cuerpo')} q=({qx:.0f},{qy:.0f}) visor={v.visor.width()}x{v.visor.height()}")
+    QApplication.sendEvent(v.visor, QEvent(QEvent.Leave))                    # el cursor sale del visor (hacia el panel)
+    A.esperar(200)
+    A.reg(AR, "restricción: al sacar el cursor la previa vuelve a la de lo elegido (sin componente 2, no hay)",
+          not p._sobre_activo and not p.valores["ref2"] and p.ultima_op is None, f"{A.estado_panel(p)} sobre_activo={p._sobre_activo} ref2={p.valores['ref2']} vistos={vistos}")
+    p.cancelar()
     restriccion("Alinear con límite máximo (desfase de 8 mm recortado a 5 mm)",
                 [("ref1", cara(rcaja, (0, 0, 1))), ("ref2", cara(rfijo, (0, 0, 1)))], {"desfase": "8 mm", "maximo": "5 mm"}, "alinear_limite",
                 lambda: abs(abs(caja(rcaja)[5] - 20.0) - 5.0) < 0.01)
