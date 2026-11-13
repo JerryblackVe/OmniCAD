@@ -148,7 +148,7 @@ run("division_silueta", lambda: (
 
 # Mover/copiar, Alinear, Apoyar --------------------------------------------------------------------------------------------------------
 run("mover_copiar", lambda: (
-    C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja)}, {"tipo": "traslacion", "distancia": "10 mm"}, etiqueta="mover traslación sin dirección", rt=False),
+    C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja)}, {"tipo": "traslacion", "dx": "10 mm"}, etiqueta="mover traslación sin dirección", rt=False),   # B-380: sin dirección son X, Y, Z (Fusion)
     C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja), "direccion": eje("X")}, {"tipo": "traslacion", "distancia": "10 mm"}, foto="mover_copiar"),
     C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja)}, {"tipo": "libre", "dx": "10 mm", "dy": "5 mm", "dz": "0 mm", "copiar": True}, esperado=V_CAJA, etiqueta="mover libre + copiar", rt=False),
     C.caso(v, AR, "mover_copiar", {"cuerpos": cuerpo(caja), "eje": eje("Z")}, {"tipo": "rotacion", "angulo": "45 deg"}, etiqueta="mover rotación 45° Z", rt=False),
