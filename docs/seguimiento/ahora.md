@@ -23,15 +23,15 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | FL-2 | Previa barata al teclear y con las flechas |
-| 2 | B-385 | Campos de Fusion que faltan en Barrido, Solevación, Nervio, Red y Repujado |
-| 3 | B-371 | Rosca básica larga que corta solo el 57 % del filete |
-| 4 | B-400 | Empalme con radio igual al alto de la cara vecina |
-| 5 | P-78 | Rosca modelada rápida (F6) |
-| 6 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 7 | B-391 | Bobina con autointersección y volumen negativo |
-| 8 | B-48 | Crash nativo al recalcular un documento largo |
-| 9 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
-| 10 | B-335 | Abrir un STEP pesado congela la ventana |
+| 1 | B-407 | Test de latidos que falla con la VPS cargada (rojo falso en todas las sesiones; E8) |
+| 2 | FL-2 | Previa barata al teclear y con las flechas |
+| 3 | B-400 | Empalme con radio igual al alto de la cara vecina (hecho por E3, esperando sus tests) |
+| 4 | P-78 | Rosca modelada rápida (F6) |
+| 5 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 6 | FL-3 | Aceptar, eliminar y abrir fuera de la ventana (incluye los 4 s de abrir el STEP del abanico) |
+| 7 | B-48 | Crash nativo al recalcular un documento largo |
+| 8 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
+| 9 | B-335 | Abrir un STEP pesado congela la ventana |
+| 10 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
 
-Hechos y esperando integrar (no ocupan cola): B-393, P-153, PRUEBA9c, B-397.
+Hechos y esperando integrar (no ocupan cola): B-393, B-403, P-153 (después de B-384), PRUEBA9c, B-397, FL-8a, BOC-84.
