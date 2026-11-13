@@ -636,7 +636,8 @@ def chica(ancho, alto, herr):
     libre = not panel.geometry().intersects(barra.geometry()) if barra is not None and barra.isVisible() else True
     A.reg(AR + f" · {ancho}x{alto}", f"{herr}: el panel con Aceptar y Cancelar entra en la ventana (el cuerpo se desplaza si hace falta)", entra,
           f"panel={panel.geometry().getRect()} área={area.getRect()}")
-    A.reg(AR + f" · {ancho}x{alto}", f"{herr}: y la barra de vista no lo tapa", libre, "")
+    A.reg(AR + f" · {ancho}x{alto}", f"{herr}: y la barra de vista no lo tapa", libre,
+          f"panel={panel.geometry().getRect()} barra={barra.geometry().getRect() if barra is not None else None}")
     A.foto(v, f"patrones_chica_{herr}_{ancho}x{alto}")
     tecla(Qt.Key_Escape)
 

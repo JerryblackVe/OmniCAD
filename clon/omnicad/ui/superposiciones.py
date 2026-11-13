@@ -8,7 +8,7 @@ Elementos que flotan sobre el lienzo 3D, como en Fusion 360:
 Todo está dibujado con QPainter; QOpenGLWidget admite widgets hijos transparentes encima.
 """
 import numpy as np
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFontMetricsF, QKeySequence, QPainter, QPen, QPolygonF,
                            QTransform)
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QWidget
@@ -499,6 +499,7 @@ class AreaVisor(QWidget):
         self.tira = None                  # comandos sugeridos según lo elegido (ui/sugerencias.py), sobre la barra
         self.capa = None
         self.paleta = None
+        self._reacomodo = False
         self.laterales = []               # paneles del boceto a la izquierda de la paleta: «Carácter» (texto) y SIMETRÍA
         self.panel = None                 # diálogo de comando abierto (a la derecha, debajo del ViewCube)
         self.barra_posicion = None        # panel «Posición»: componentes movidos sin capturar (arriba al centro)
@@ -541,7 +542,23 @@ class AreaVisor(QWidget):
     def set_capa_boceto(self, capa, paleta, *laterales):
         self.capa, self.paleta = capa, paleta
         self.laterales = [w for w in laterales if w is not None]
+        for w in self.laterales:
+            w.installEventFilter(self)
         self.reubicar()
+
+    def eventFilter(self, obj, e):
+        """B-387: un panel lateral que cambia de alto (otra casilla le suma filas) se vuelve a acomodar: si no, su pie
+        quedaba bajo la barra de vista. Un solo reacomodo por tanda de cambios."""
+        if e.type() == QEvent.Resize and obj in self.laterales and obj.isVisible() and not self._reacomodo:
+            self._reacomodo = True
+            QTimer.singleShot(0, self._reacomodar)
+        return False
+
+    def _reacomodar(self):
+        try:
+            self.reubicar()                 # sus propios cambios de tamaño no vuelven a disparar el reacomodo
+        finally:
+            self._reacomodo = False
 
     def mostrar_aviso(self, texto):
         if texto:
