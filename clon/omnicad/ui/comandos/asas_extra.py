@@ -4,6 +4,7 @@
 Mismo criterio que Fusion: lo que se escribe en un campo de medida se puede tirar con el ratón en la vista.
 Cada función `_asas_*` es el `Comando.manipuladores` de un comando y se engancha al final (`_enganchar`).
 """
+import functools
 import math
 
 import numpy as np
@@ -373,12 +374,26 @@ def _asas_solevacion(self, ctx, v):
     return salida
 
 
+@functools.lru_cache(maxsize=None)          # las 150 designaciones de la métrica cuestan 30 ms y el asa se rearma en cada valor
+def _radio_con_clase(fam, designacion, clase, interna):
+    """Radio que Fusion muestra en el asa de Tamaño: la mitad del Ø mayor medio de la clase de tolerancia (M20 6g: 9,895);
+    sin clase o sin límites en la norma, el nominal."""
+    from ...nucleo import tolerancias as tol
+    from ...nucleo.solidos_crear import datos_rosca
+    d = datos_rosca(designacion)
+    clase = tol.CLASE_AUTOMATICA.get(fam, (None, None))[0 if interna else 1] if clase in (None, "auto") else clase
+    try:
+        a, b = tol.limites_rosca(fam, d["diametro"], d["paso"], clase, interna)["diametro_mayor"] if clase else (None, None)
+    except Exception:  # noqa: BLE001 — sin tabla para ese tamaño: se muestra el nominal
+        a = b = None
+    return (a + b) / 4 if a is not None and b is not None else d["diametro"] / 2
+
+
 def _asas_rosca(self, ctx, v):
-    """P-135, como Fusion: sin «Longitud completa», una flecha en cada borde del tramo roscado (Desfase y Longitud)
-    sobre la pared de la primera cara, del lado que se ve (antes iban por el eje, en el centro)."""
+    """Como Fusion: Tamaño siempre; sin «Longitud completa», también Desfase y Longitud sobre la pared."""
     from ...nucleo.solidos_crear import analizar_rosca
     mp = _mp()
-    forma = _forma_de(ctx, v["caras"][0]) if v.get("caras") and not v.get("largo_completo") else None
+    forma = _forma_de(ctx, v["caras"][0]) if v.get("caras") else None
     if forma is None:
         return []
     info = analizar_rosca(None, forma)          # con la cara dada no mira el cuerpo
@@ -386,9 +401,14 @@ def _asas_rosca(self, ctx, v):
     inicio = info["origen"] + info["eje"] * (info["zmax"] if v.get("invertir") else info["zmin"])
     alto, radio = info["zmax"] - info["zmin"], -info["radio"] if info["interna"] else info["radio"]
     desfase, largo = (evaluar_o_cero(ctx, v.get(k)) for k in ("desfase", "longitud"))
+    fam = v.get("tipo_rosca") or "iso_metrica"
+    tamano = mp.AsaTamanoRosca(fam, inicio if v.get("largo_completo") else inicio + sentido * desfase, info["eje"],
+                               info["radio"], lambda des: _radio_con_clase(fam, des, v.get("clase_" + fam), info["interna"]))
+    if v.get("largo_completo"):
+        return [tamano]
     return [mp.FlechaCilindro("desfase", inicio, sentido, radio, minimo=0.0, maximo=max(0.0, alto - largo), estricto=False),
             mp.FlechaCilindro("longitud", inicio + sentido * desfase, sentido, radio, giro=25.0, minimo=0.0,
-                              maximo=alto - desfase)]
+                              maximo=alto - desfase), tamano]
 
 
 def _asas_tuberia(self, ctx, v):
