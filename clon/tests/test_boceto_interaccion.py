@@ -161,6 +161,26 @@ def test_linea_encadenada_angulo_con_la_anterior(app_qt):
     assert ("angulo", "60") in _cotas(lz) and ("distancia", "10") in _cotas(lz) and lz.resultado.ok
 
 
+@pytest.mark.parametrize("escrito, cota", [("30", "30"), ("210", "150")])
+def test_fu3_primera_linea_con_angulo_escrito_se_acota_contra_el_eje_x(app_qt, escrito, cota):
+    """FU-3, como Fusion: el ángulo escrito de la primera línea (sin anterior) queda como cota contra el eje X."""
+    lz = _lienzo(app_qt)
+    lz.set_herramienta("linea")
+    _clic(lz, 0, 0)
+    _mover(lz, 30, 40)
+    QTest.keyClick(lz, Qt.Key_Tab)                              # a la caja del ángulo
+    _escribir(lz, escrito)
+    _tecla_campo(lz, Qt.Key_Tab)
+    _escribir(lz, "50")
+    _tecla_campo(lz, Qt.Key_Return)
+    linea = next(c for c in lz.b.curvas.values() if c.tipo == "linea" and c.id > 0)
+    (x1, y1), (x2, y2) = lz.b._extremos_linea(linea.id)
+    assert math.degrees(math.atan2(y2 - y1, x2 - x1)) % 360 == pytest.approx(float(escrito), abs=1e-6)
+    angulo = next(k for k in lz.b.cotas.values() if k.tipo == "angulo")
+    assert (angulo.expresion, sorted(angulo.entidades)) == (cota, sorted([linea.id, Boceto.EJE_X]))
+    assert ("distancia", "50") in _cotas(lz) and lz.resultado.ok
+
+
 def test_rectangulo_ancho_y_alto_escritos(app_qt):
     lz = _lienzo(app_qt)
     lz.set_herramienta("rectangulo")

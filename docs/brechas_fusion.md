@@ -41,7 +41,7 @@ Este documento solo lista lo que **falta** o lo que **se hizo distinto**. El res
 |---|---|
 | **Boceto 3D** con la tríada de boceto 3D: girar el plano de dibujo y dibujar fuera del plano, como el círculo inclinado 8,5° del video | Hoy el boceto es 2D sobre un plano. Hace falta curvas con su propio marco 3D, solver y perfiles por plano. Es una fase propia. |
 | Imagen del agujero con cotas editables dentro del diálogo de Agujero | Hoy los campos son de texto. |
-| Cota de ángulo de la primera línea contra el eje X y barrido del arco de centro escrito | El modelo de cotas no tiene ángulo contra un eje; con 0° o 90° se pone horizontal o vertical. |
+| Cota del barrido escrito en el arco de punto central (la de la primera línea contra el eje X ya está) | No se sabe qué cota deja Fusion: su API no tiene cota de ángulo de arco. Hay que mirarlo en Fusion. |
 | Relleno azul del perfil en la vista previa mientras se dibuja | La geometría aparece rellena recién al crearse. |
 | Tabla de grupos de aristas en Empalme (radios distintos por grupo) | Hoy hay un solo radio por operación. |
 | Engranaje del timeline: «Ocultar pasos inactivos» y «Cambiar a modelado directo» (FU-14; la «Muestra de color por componente» ya está) | Sin componente activo que filtre el timeline ni modo sin historial. |
