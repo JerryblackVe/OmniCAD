@@ -190,3 +190,56 @@ Crítico
 - **Entorno:** VPS Ubuntu 24.04, 8 núcleos; otras corridas pesadas en turno pueden sumar tiempo.
 - **Causa probable:** sin perfilar todavía.
 - **Esquive:** celda de 10 mm o más, o resolución menor.
+
+### B-390 · `inspect_f3d` con un `.f3d` corrupto deja salir una excepción interna (`ValueError: negati
+
+- **Qué hice (caza de la noche del 2026-11-13 sobre 4e2da92; repetido contra main 004caf5, 2 de 2):** los pasos de `clon/tests/corpus_caza/b390_f3d_seek_negativo.json`.
+- **Obtenido / esperado:** `inspect_f3d` con un `.f3d` corrupto deja salir una excepción interna (`ValueError: negative seek value` en `f3d_nativo.py:322`, `NotImplementedError: zip file version 8.4` en `:99`) en vez de un error claro. Dos archivos de 564 bytes de la caza dan `INTERNAL_ERROR`; tiene que dar `INVALID_FILE` (o el kind que corresponda) con un mensaje en español, como B-161 con el `.omnicad` roto. Validar el ZIP antes de leerlo.
+- **Cómo reproducir:** `tests/test_caza_regresion.py` (caso del corpus, xfail mientras la fila siga abierta) o el `repro.py` de `evidencias/noche_vps_2026-11-13/caza_2026-11-13/`.
+- **Entorno:** VPS Ubuntu 24.04, kernel OpenCascade.
+- **Causa probable:** sin leer el código todavía.
+
+
+### B-391 · Bobina › `create_coil` deja el cuerpo con autointersección (cuerpo vaciado y desfasado, án
+
+- **Qué hice (caza de la noche del 2026-11-13 sobre 4e2da92; repetido contra main 004caf5, 2 de 2):** los pasos de `clon/tests/corpus_caza/b391_bobina_autointerseccion.json`.
+- **Obtenido / esperado:** Bobina › `create_coil` deja el cuerpo con autointersección (cuerpo vaciado y desfasado, ángulo −30°) y, con altura 1e6 y ángulo 30°, un volumen negativo (−17797 mm³), ambos con `ok`. Medido 2 de 2 en main (4e2da92 y 004caf5): la caza marca `autointersecciones` 0 → 1 y `volumen_no_positivo`. Tiene que rechazar con un mensaje o dar un sólido válido; el caso de altura 1e6 no se guardó en el corpus (tarda 154 s, la caza corta a los 40 s).
+- **Cómo reproducir:** `tests/test_caza_regresion.py` (caso del corpus, xfail mientras la fila siga abierta) o el `repro.py` de `evidencias/noche_vps_2026-11-13/caza_2026-11-13/`.
+- **Entorno:** VPS Ubuntu 24.04, kernel OpenCascade.
+- **Causa probable:** sin leer el código todavía.
+
+
+### B-392 · Superficie reglada › `create_ruled_surface` sobre una arista de un prisma 60×40 da `ok` y
+
+- **Qué hice (caza de la noche del 2026-11-13 sobre 4e2da92; repetido contra main 004caf5, 2 de 2):** los pasos de `clon/tests/corpus_caza/b392_superficie_reglada.json`.
+- **Obtenido / esperado:** Superficie reglada › `create_ruled_surface` sobre una arista de un prisma 60×40 da `ok` y deja 3 autointersecciones; los casos de `extend_surface` y `duplicate_feature` de la caza arrancan de esa misma superficie. Medido 2 de 2 en main; con esta superficie delante, `extend_surface` (3 → 4) y `duplicate_feature` ya fallan por B-392 y no por sí mismos. Ver cómo arma la superficie reglada con una sola arista.
+- **Cómo reproducir:** `tests/test_caza_regresion.py` (caso del corpus, xfail mientras la fila siga abierta) o el `repro.py` de `evidencias/noche_vps_2026-11-13/caza_2026-11-13/`.
+- **Entorno:** VPS Ubuntu 24.04, kernel OpenCascade.
+- **Causa probable:** sin leer el código todavía.
+
+
+### B-393 · Proyectar a boceto › `project_to_sketch` de una superficie extruida de un círculo R20 da `
+
+- **Qué hice (caza de la noche del 2026-11-13 sobre 4e2da92; repetido contra main 004caf5, 2 de 2):** los pasos de `clon/tests/corpus_caza/b393_proyectar_a_boceto.json`.
+- **Obtenido / esperado:** Proyectar a boceto › `project_to_sketch` de una superficie extruida de un círculo R20 da `ok` y deja 3 autointersecciones en el cuerpo. Medido 2 de 2 en main: la caza marca `autointersecciones` 0 → 1+ en Cuerpo1 tras la proyección. Ver si el juez se confunde con las curvas proyectadas o si el paso modifica el cuerpo.
+- **Cómo reproducir:** `tests/test_caza_regresion.py` (caso del corpus, xfail mientras la fila siga abierta) o el `repro.py` de `evidencias/noche_vps_2026-11-13/caza_2026-11-13/`.
+- **Entorno:** VPS Ubuntu 24.04, kernel OpenCascade.
+- **Causa probable:** sin leer el código todavía.
+
+
+### B-394 · Engrosar › `thicken` de tres caras de una caja abierta (`shell` en `>Z`) da `ok` y deja 6
+
+- **Qué hice (caza de la noche del 2026-11-13 sobre 4e2da92; repetido contra main 004caf5, 2 de 2):** los pasos de `clon/tests/corpus_caza/b394_engrosar.json`.
+- **Obtenido / esperado:** Engrosar › `thicken` de tres caras de una caja abierta (`shell` en `>Z`) da `ok` y deja 6 autointersecciones. Medido 2 de 2 en main. Tiene que rechazar el engrosado que se cruza consigo mismo (como Desfase de superficie, B-166) o dar un sólido válido. El otro caso de la caza (`thicken` con cierre del proceso (cierre_fffffff7), un cierre del proceso) no se repite y no se cargó.
+- **Cómo reproducir:** `tests/test_caza_regresion.py` (caso del corpus, xfail mientras la fila siga abierta) o el `repro.py` de `evidencias/noche_vps_2026-11-13/caza_2026-11-13/`.
+- **Entorno:** VPS Ubuntu 24.04, kernel OpenCascade.
+- **Causa probable:** sin leer el código todavía.
+
+
+### B-395 · Duplicar operación › `duplicate_feature` de un paso que consumió su cuerpo (Teselar con `k
+
+- **Qué hice (caza de la noche del 2026-11-13 sobre 4e2da92; repetido contra main 004caf5, 2 de 2):** los pasos de `clon/tests/corpus_caza/b395_duplicar_operacion.json`.
+- **Obtenido / esperado:** Duplicar operación › `duplicate_feature` de un paso que consumió su cuerpo (Teselar con `keep_original=false`) da `ok` y deja el paso copiado fallando al recalcular («El cuerpo 'op1.c1' no existe en este punto del timeline»). Medido 3 de 3 en la caza y 2 de 2 en main: el documento queda con un paso en error. Tiene que avisar al duplicar, o duplicar el paso con el cuerpo que corresponde.
+- **Cómo reproducir:** `tests/test_caza_regresion.py` (caso del corpus, xfail mientras la fila siga abierta) o el `repro.py` de `evidencias/noche_vps_2026-11-13/caza_2026-11-13/`.
+- **Entorno:** VPS Ubuntu 24.04, kernel OpenCascade.
+- **Causa probable:** sin leer el código todavía.
