@@ -28,10 +28,10 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 3 | B-371 | Rosca básica larga que corta solo el 57 % del filete |
 | 4 | B-400 | Empalme con radio igual al alto de la cara vecina |
 | 5 | P-78 | Rosca modelada rápida (F6) |
-| 6 | B-391 | Bobina con autointersección y volumen negativo |
-| 7 | BOC-84 | Herramienta Estrella, junto con P-154 (lados después de dibujar) |
-| 8 | B-48 | Crash nativo al recalcular un documento largo |
-| 9 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
-| 10 | B-335 | Abrir un STEP pesado congela la ventana |
+| 6 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 7 | B-391 | Bobina con autointersección y volumen negativo |
+| 8 | BOC-84 | Herramienta Estrella, junto con P-154 (lados después de dibujar) |
+| 9 | B-48 | Crash nativo al recalcular un documento largo |
+| 10 | B-172 | Propiedades de un cuerpo recién solevado cerró la app |
 
 Hechos y esperando integrar (no ocupan cola): B-393, P-153, PRUEBA9c, B-397.
