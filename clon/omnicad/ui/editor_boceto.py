@@ -703,6 +703,7 @@ class Lienzo(QWidget):
         self._indice_inf = None          # geometría derivada para consultar rápido; se descarta al cambiar el boceto
         self._indice_clave = None
         self._puntos_np = None           # (clave, ids, coordenadas) de todos los puntos, para capturarlos en bloque
+        self._cache_splines = {}         # id → (lo que define la spline de ajuste, sus primitivas): ver `_polilineas`
         self._inf_alt = 0
         self._inf_claves = []            # qué ayudas había en el movimiento anterior: si cambian, Espacio vuelve a la primera
         self._inf_bloqueo = None         # ayuda bloqueada con Flecha arriba: el cursor sigue su guía
@@ -1178,6 +1179,15 @@ class Lienzo(QWidget):
                 from ..restricciones import objetos
                 prims = primitivas_entidad(c, self.b.coords, curvas=self.b.curvas)
                 return [_muestras(p, pasos) for p in objetos.aplicar_a_primitivas(self.b, c.id, prims)]
+        if isinstance(c, Spline) and c.modo == "ajuste" and not self.b.objetos:
+            # RS-X3: interpolar una spline de ajuste cuesta ~25 µs y se hacía en cada cuadro; la clave es todo lo que la
+            # define (`primitivas_entidad`): sus puntos, grado, cierre y manijas (punta y curvatura)
+            P = self.b.coords
+            clave = (c.grado, c.cerrada, tuple(P(q) for q in c.pts), tuple((a, P(b), k) for a, b, k in c.manijas))
+            hecho = self._cache_splines.get(c.id)
+            if hecho is None or hecho[0] != clave:
+                hecho = self._cache_splines[c.id] = (clave, self.b.primitivas(c.id))
+            return [_muestras(p, pasos) for p in hecho[1]]
         return [_muestras(p, pasos) for p in self.b.primitivas(c.id)]
 
     def geometria_real(self):
@@ -1197,31 +1207,26 @@ class Lienzo(QWidget):
                 c.texto = texto
 
     def _poli_px(self, puntos):
-        if self.visor is None:               # boceto 2D: la cuenta de a_px en línea (se hace miles de veces)
-            s, cx, cy = self.escala, self.centro[0], self.centro[1]
-            w2, h2 = self.width() / 2, self.height() / 2
-            return [QPointF((x - cx) * s + w2, h2 - (y - cy) * s) for x, y in puntos]
-        if self._mvp is None:
-            self._camara()
         # Con la cámara quieta (repintar por el hover, una selección…) se reusa lo proyectado. Solo se guardan las
         # tuplas (las muestras cacheadas de `_muestras`, que no cambian); la entrada retiene la tupla: su id no se recicla.
-        firma = (self._mvp.tobytes(), self.visor.width(), self.visor.height())
+        if self.visor is None:
+            firma = (self.escala, self.centro[0], self.centro[1], self.width(), self.height())
+        else:
+            if self._mvp is None:
+                self._camara()
+            firma = (self._mvp.tobytes(), self.visor.width(), self.visor.height())
         if firma != getattr(self, "_firma_px", None):
             self._firma_px, self._cache_px = firma, {}
         hecho = self._cache_px.get(id(puntos))
         if hecho is not None and hecho[0] is puntos:
             return hecho[1]
-        # En bloque, como a_px pero con un solo producto de matrices (punto a punto: 5 µs por punto).
-        uv = np.asarray(puntos, dtype=float).reshape(-1, 2)
-        pl = self.plano
-        p3 = pl.origen + uv[:, :1] * pl.u + uv[:, 1:] * pl.v
-        c = np.hstack([p3, np.ones((len(uv), 1))]) @ self._mvp.T
-        w = c[:, 3]
-        delante = w > 1e-9
-        w = np.where(delante, w, 1.0)
-        x = np.where(delante, (c[:, 0] / w + 1) / 2 * self.visor.width(), -1e5)
-        y = np.where(delante, (1 - c[:, 1] / w) / 2 * self.visor.height(), -1e5)
-        poli = [QPointF(a, b) for a, b in zip(x.tolist(), y.tolist(), strict=True)]
+        if self.visor is None:               # boceto 2D: la cuenta de a_px en línea (se hace miles de veces)
+            s, cx, cy = self.escala, self.centro[0], self.centro[1]
+            w2, h2 = self.width() / 2, self.height() / 2
+            poli = [QPointF((x - cx) * s + w2, h2 - (y - cy) * s) for x, y in puntos]
+        else:
+            x, y = self._uv_px(np.asarray(puntos, dtype=float).reshape(-1, 2))
+            poli = [QPointF(a, b) for a, b in zip(x.tolist(), y.tolist(), strict=True)]
         if isinstance(puntos, tuple):
             if len(self._cache_px) > 20000:
                 self._cache_px.clear()
@@ -1260,10 +1265,16 @@ class Lienzo(QWidget):
         clave = self._clave_geometria()
         if self._puntos_np is None or self._puntos_np[0] != clave:
             xy = np.array([(p.x, p.y) for p in self.b.puntos.values()], dtype=float).reshape(-1, 2)
-            self._puntos_np = (clave, np.array(list(self.b.puntos), dtype=int), xy)
-        _, ids, uv = self._puntos_np
+            # se guarda también el resultado: mientras viva, su id no lo puede reusar otro (la clave lo usa)
+            self._puntos_np = (clave, np.array(list(self.b.puntos), dtype=int), xy, self.resultado)
+        _, ids, uv, _resultado = self._puntos_np
+        return (ids, *self._uv_px(uv))
+
+    def _uv_px(self, uv):
+        """(x, y) en píxeles de un array (n, 2) de coordenadas del boceto, en bloque: como `a_px` con un solo producto de
+        matrices (punto a punto: 5 µs por punto). Lo que queda detrás de la cámara va a -1e5."""
         if self.visor is None:
-            return (ids, (uv[:, 0] - self.centro[0]) * self.escala + self.width() / 2,
+            return ((uv[:, 0] - self.centro[0]) * self.escala + self.width() / 2,
                     self.height() / 2 - (uv[:, 1] - self.centro[1]) * self.escala)
         if self._mvp is None:
             self._camara()
@@ -1272,8 +1283,25 @@ class Lienzo(QWidget):
         w = c[:, 3]
         delante = w > 1e-9
         w = np.where(delante, w, 1.0)
-        return (ids, np.where(delante, (c[:, 0] / w + 1) / 2 * self.visor.width(), -1e5),
+        return (np.where(delante, (c[:, 0] / w + 1) / 2 * self.visor.width(), -1e5),
                 np.where(delante, (1 - c[:, 1] / w) / 2 * self.visor.height(), -1e5))
+
+    def _segmentos_uv(self):
+        """(ids de curva, a, b): los segmentos de las polilíneas de todas las curvas menos los textos, en coordenadas del
+        boceto, con caché por geometría (RS-X3: el hover los mide todos juntos con numpy)."""
+        clave = self._clave_geometria()
+        if getattr(self, "_segs_uv", None) is None or self._segs_uv[0] != clave:
+            ids, a, b = [np.zeros(0, int)], [np.zeros((0, 2))], [np.zeros((0, 2))]
+            for c in self.b.curvas.values():
+                if isinstance(c, Texto):
+                    continue
+                for poli in self._polilineas(c, 48):
+                    q = np.asarray(poli, dtype=float).reshape(-1, 2)
+                    ids.append(np.full(max(len(q) - 1, 0), c.id))
+                    a.append(q[:-1])
+                    b.append(q[1:])
+            self._segs_uv = (clave, np.concatenate(ids), np.concatenate(a), np.concatenate(b), self.resultado)  # ver _puntos_np
+        return self._segs_uv[1:4]
 
     def _punto_cercano(self, pos, excluir=None, radio_px=TOL_PUNTO):
         ids, x, y = self._puntos_en_px()
@@ -1290,31 +1318,42 @@ class Lienzo(QWidget):
 
     def _curva_cercana(self, pos, radio_px=6.0, tipos=None, interior=False):
         mejor, dmin = None, radio_px
-        for c in self.b.curvas.values():
-            if not self._visible(c) or (tipos and c.tipo not in tipos):
-                continue
-            if self.b.objetos and tipos != ("texto",) and not isinstance(c, Texto):
-                from ..restricciones import objetos
-                if c.id in objetos.indice(self.b):
-                    continue
+        validas = [c for c in self.b.curvas.values() if self._visible(c) and not (tipos and c.tipo not in tipos)]
+        if self.b.objetos and tipos != ("texto",):
+            from ..restricciones import objetos
+            dentro = objetos.indice(self.b)
+            validas = [c for c in validas if isinstance(c, Texto) or c.id not in dentro]
+        ids, a, b = self._segmentos_uv()        # RS-X3: la distancia a todos los segmentos de una vez (no los textos)
+        if len(ids):
+            (ax, ay), (bx, by) = self._uv_px(a), self._uv_px(b)
+            dx, dy, px, py = bx - ax, by - ay, pos.x(), pos.y()
+            L2 = np.maximum(dx * dx + dy * dy, 1e-18)
+            t = np.clip(((px - ax) * dx + (py - ay) * dy) / L2, 0.0, 1.0)
+            d = np.hypot(px - ax - t * dx, py - ay - t * dy)
+            d[~np.isin(ids, [c.id for c in validas if not isinstance(c, Texto)])] = np.inf
+            i = int(np.argmin(d))
+            if d[i] < dmin:
+                mejor, dmin = int(ids[i]), float(d[i])
+        for c in validas:
             if interior and isinstance(c, Circulo) and radio_px * 0.8 < dmin:
                 # círculo chico (un agujero): también se agarra desde adentro, cediendo ante lo que esté más cerca
                 centro = self.a_px(*self.b.coords(c.centro))
                 r_px = self.b.radio(c.id) * self.px_por_mm()
                 if r_px <= RADIO_INTERIOR_PX and math.hypot(pos.x() - centro.x(), pos.y() - centro.y()) <= r_px:
                     mejor, dmin = c.id, radio_px * 0.8
+            if not isinstance(c, Texto):
+                continue
             xs, ys = [], []
             for poli in self._polilineas(c, 48):
                 px = self._poli_px(poli)
                 d = min(_dist_px(pos, a, b) for a, b in zip(px, px[1:], strict=False))
                 if d < dmin:
                     mejor, dmin = c.id, d
-                if isinstance(c, Texto):
-                    xs += [q.x() for q in px]
-                    ys += [q.y() for q in px]
+                xs += [q.x() for q in px]
+                ys += [q.y() for q in px]
             if xs and min(xs) - radio_px <= pos.x() <= max(xs) + radio_px                     and min(ys) - radio_px <= pos.y() <= max(ys) + radio_px and radio_px * 0.9 < dmin:
                 mejor, dmin = c.id, radio_px * 0.9      # dentro de la caja del texto: cede ante lo que esté más cerca
-            if isinstance(c, Texto) and min(xs) <= pos.x() <= max(xs) and min(ys) <= pos.y() <= max(ys):
+            if xs and min(xs) <= pos.x() <= max(xs) and min(ys) <= pos.y() <= max(ys):
                 # clic sobre la tinta de una letra: el texto gana (B-187), aunque la curva de abajo cruce la letra
                 cruces = 0
                 for poli in self._polilineas(c, 48):
@@ -5459,7 +5498,7 @@ class Lienzo(QWidget):
         ent = None
         if manija is None and zona is None:
             ent = self.objetos.en(pos)
-        if manija is None and zona is None and ent is None and len(self.b.curvas) <= 400:
+        if manija is None and zona is None and ent is None:      # RS-X3: sin tope (2000 curvas: ~4 ms)
             ent = self.entidad_en(pos)
             if ent is not None and ent not in self.b.curvas and ent not in self.b.puntos and ent not in self.b.objetos:
                 ent = None
@@ -6062,6 +6101,7 @@ class Lienzo(QWidget):
         internas = objetos.indice(self.b) if self.b.objetos else {}
         puntos_internos = {p for cid in internas for p in self.b.curvas[cid].puntos()}
         solo_auto, puntos_auto = self.b.ocultos_por_proyeccion_auto()    # no se dibujan (como Fusion)
+        quietas = determinadas | en_origen        # RS-X3: una vez (por curva era cuadrático con miles de curvas)
         for c in self.b.curvas.values():
             if c.id in internas:
                 continue
@@ -6070,7 +6110,7 @@ class Lienzo(QWidget):
             if not self._visible(c):
                 ocultos.update(c.puntos())
                 continue
-            color, ancho = self._color_curva(c, determinadas | en_origen, fijos_verdes, en_conflicto)
+            color, ancho = self._color_curva(c, quietas, fijos_verdes, en_conflicto)
             if self._brillantes is not None and c.id not in self._brillantes:
                 color = QColor(color)
                 color.setAlphaF(0.2)
