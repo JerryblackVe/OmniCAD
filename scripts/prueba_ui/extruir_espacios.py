@@ -96,7 +96,7 @@ def dos_lados_negativo():
     p.set_valor("direccion", "dos_lados")
     teclear(p, "distancia", "10 mm", Qt.Key_Tab)
     teclear(p, "distancia2", "-5 mm", Qt.Key_Tab)
-    p._t_previa.stop(); p._calcular_previa(); A.esperar(150)
+    p._t_previa.stop(); A.previa(p); A.esperar(150)
     st = A.estado_panel(p)
     if not st["previa_ok"]:
         A.reg(AR, "Dos lados con lado 2 = -5 mm: se rechaza con aviso", bool(st["mensaje"]), st["mensaje"])
@@ -128,7 +128,7 @@ def inicio_inclinado():
     p.set_valor("inicio", "objeto")
     A.elegir(p, "inicio_objeto", A.hit_plano(v, "PInc"))
     teclear(p, "distancia", "10 mm", Qt.Key_Tab)
-    p._t_previa.stop(); p._calcular_previa(); A.esperar(150)
+    p._t_previa.stop(); A.previa(p); A.esperar(150)
     st = A.estado_panel(p)
     if not st["previa_ok"]:
         A.reg(AR, "Inicio en plano inclinado: rechazado con aviso", bool(st["mensaje"]), st["mensaje"]); p.cancelar(); return

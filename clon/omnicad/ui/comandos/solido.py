@@ -6,6 +6,7 @@ import math
 import numpy as np
 
 from ...nucleo import geometria as geo
+from ...nucleo.malla import Malla
 from ...timeline.operaciones import OpExtrusion, OpRevolucion, espesor_plastico
 from ...timeline.parametros import ANGULO, LONGITUD
 from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir,
@@ -107,6 +108,7 @@ class Extruir(Comando):
     CLASE_OP = OpExtrusion
     TITULOS_MODO = ("tipo", {"solida": ("Extruir", "extruir"), "delgada": ("Extrusión delgada", "extruir")})
     _herramienta_previa = None      # (estado, índice, receta del paso) → formas de `_formas_herramienta` (P-99)
+    _base_asas = None               # (estado, perfiles, base, borde): las asas se rearman en cada tecla (FL-1)
 
     def verificar(self, ctx):
         if not ctx.estado.bocetos and not ctx.estado.cuerpos:
@@ -185,13 +187,20 @@ class Extruir(Comando):
         from .. import manipuladores as mp
         if v.get("extension") != "distancia":
             return []
-        base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
+        texto = repr([h.get("ref", h) if isinstance(h, dict) else h for h in v.get("perfiles") or []])   # sin sus mallas
+        if self._base_asas is None or self._base_asas[0] is not ctx.estado or self._base_asas[1] != texto:
+            # FL-1: resolver y teselar el texto «EMILIA» tardaba 350 ms en cada tecla de la distancia
+            base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
+            # P-139: el borde de -u (de dos esquinas, la de abajo); en la vista inicial el asa queda adelante, como en Fusion
+            borde = None if base is None else mp.punto_borde(
+                base[2], base[0], -mp.unitario(base[1].u) - 0.01 * mp.unitario(base[1].v))
+            self._base_asas = ctx.estado, texto, base, borde
+        _, _, base, borde = self._base_asas
         if base is None:
             return []
         centro, plano, formas = base
         n = mp.unitario(plano.normal) * (-1.0 if v.get("invertir") else 1.0)
-        lateral = -mp.unitario(plano.u)      # P-139: el borde de -u; en la vista inicial el asa queda adelante, como en Fusion
-        borde = mp.punto_borde(formas, centro, lateral - 0.01 * mp.unitario(plano.v))   # de dos esquinas, la de abajo
+        lateral = -mp.unitario(plano.u)
         antes = [mp.Flecha("desfase_inicio", borde, n)] if v.get("inicio") == "desfase" else []
         if v.get("inicio") == "desfase":
             centro = centro + n * _evaluar(ctx, v.get("desfase_inicio"))
@@ -287,7 +296,9 @@ class Extruir(Comando):
         if cajas:
             cajas = list(cajas.values())
         else:   # P-99: la herramienta se extruye una vez por clic, y con «Nuevo» la previa exacta ya es la herramienta
-            exacta = op.p.get("operacion") == "nuevo" and not hasattr(estado, "_mallas_previa")
+            # FL-1: la previa aparte trae el B-Rep (`formas`); la malla del arrastre (P-44) no sirve para ver si solapa
+            exacta = op.p.get("operacion") == "nuevo" and not any(
+                isinstance(c.forma, Malla) for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos)
             formas = ([c.forma for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos] if exacta
                       else self._formas_herramienta(ctx, op, True))
             cajas = [geo.caja_envolvente(f) for f in formas]

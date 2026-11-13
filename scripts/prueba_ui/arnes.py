@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import traceback
 import warnings
 from datetime import date
@@ -317,3 +318,11 @@ def clic_derecho(widget, pos):
     QTest.mouseClick(widget, Qt.RightButton, Qt.NoModifier, pos)
     QApplication.sendEvent(widget, QContextMenuEvent(QContextMenuEvent.Mouse, pos, widget.mapToGlobal(pos)))
     QTest.qWait(80)
+
+
+def previa(p, tope=60):
+    """La previa como la pide el temporizador del panel, esperando la del proceso aparte (FL-1: es la de casi todo)."""
+    p._calcular_previa()
+    limite = time.monotonic() + tope
+    while getattr(p, "_hijo_previa", None) is not None and time.monotonic() < limite:     # algunas piezas pasan un panel falso
+        QTest.qWait(20)

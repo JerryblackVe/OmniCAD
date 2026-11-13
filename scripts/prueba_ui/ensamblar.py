@@ -136,7 +136,7 @@ def arrastrar(p, desde, hasta):
     QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonRelease, b, vis.mapToGlobal(b), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
     A.esperar(100)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
 
 
 def gizmo_union():
@@ -146,7 +146,7 @@ def gizmo_union():
     p = A.abrir(v, "origen_union")
     A.elegir(p, "origen", *alguna_cara(tapa)())
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     g = p.manipuladores
     claves = [getattr(m, "clave", None) for m in g.manips]
@@ -232,7 +232,7 @@ def gizmo_accionar():
     p = A.abrir(v, "accionar_uniones")
     p.set_valor("union", IDS[js[0]])
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     g = p.manipuladores
     arco = next((m for m in g.manips if isinstance(m, mp.Angulo)), None)
@@ -257,7 +257,7 @@ def vinculo():
     p.set_valor("union1", IDS[js[0]])
     p.set_valor("union2", IDS[js[0]])
     p._t_previa.stop()
-    p._calcular_previa()                  # sin esto aceptaría la operación vieja: el temporizador ya no está
+    A.previa(p)                  # sin esto aceptaría la operación vieja: el temporizador ya no está
     p.aceptar()
     A.esperar(200)
     A.reg(AR, "vínculo: la misma unión dos veces se rechaza", C._vivo(p), f"mensaje=«{p.mensaje.text() if C._vivo(p) else ''}»")
@@ -269,7 +269,7 @@ def vinculo():
         p.set_valor("union2", IDS[js[1]])
         p.set_valor("factor", malo)
         p._t_previa.stop()
-        p._calcular_previa()
+        A.previa(p)
         st = A.estado_panel(p)
         n0 = A.n_ops(v)
         if st["op"] and st["previa_ok"]:
