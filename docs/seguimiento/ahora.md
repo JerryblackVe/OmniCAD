@@ -14,7 +14,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E4 | B-416 | Solevación plegada que da `ok` y Propiedades de 15 s |
 | E5 | ASM-17 | Restricción de componentes (B-412 y B-413 esperan fotos de Fusion de E11) |
 | E6 | FL-9 | Integrado (d8d4b9f) con B-418; quedan sus tests_afectados (~2,5 h) y la prueba de E11 en Windows |
-| E7 | FL-0 | Banco de fluidez |
+| E7 | PRUEBA9c | Pieza real de prueba como usuario (FL-0 integrado) |
 | E8 | B-417 | Timeline › doble clic en un paso solo lo selecciona la primera vez |
 | E9 | Sol | Orquesta a Sol hasta el 15/11: B-344e, B-397, B-408, B-409, B-410 |
 | E10 | B-363 | El `.f3d` de la Prusa Core One se abre sin geometría |
@@ -25,11 +25,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 1 | FL-3 | Aceptar, eliminar y abrir fuera de la ventana, con barra y Cancelar (E6, después de FL-9) |
 | 2 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 3 | B-48 | Crash nativo al recalcular un documento largo |
-| 4 | B-335 | Abrir un STEP pesado congela la ventana |
-| 5 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
-| 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 7 | 8 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
-| 8 | B-401 | El cálculo aislado pierde atributos de boceto |
+| 3 | B-420 | La barra espaciadora no marca casillas: la toma el atajo global `Space` (`ui/ventana.py:463`) |
+| 4 | B-48 | Crash nativo al recalcular un documento largo |
+| 5 | B-335 | Abrir un STEP pesado congela la ventana |
+| 6 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
+| 7 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 8 | 8 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
+| 9 | B-401 | El cálculo aislado pierde atributos de boceto |
 
-Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384), PRUEBA9c. Integrados hoy: FL-9 + B-418 (d8d4b9f), B-344e, B-408 (Sin verificar), B-412 y B-413 (notas), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
+Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384). Integrados hoy: FL-0, FL-9 + B-418 (d8d4b9f), B-344e, B-408 (Sin verificar), B-412 y B-413 (notas), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
