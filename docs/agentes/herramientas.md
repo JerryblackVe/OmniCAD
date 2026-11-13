@@ -4662,7 +4662,7 @@ Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y
 | Herramienta | Modifica | Resumen |
 |---|---|---|
 | [`get_assembly`](#get_assembly) | no | Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: traslación y rotación respecto de donde se modelaron, caja envolvente), si hay algo arrastrado sin capturar (uncaptured_position; los componentes se informan sin ese arrastre), uniones (tipo, componentes, valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz. |
-| [`create_component`](#create_component) | sí | Crea un componente con los cuerpos dados (ENSAMBLAR › Nuevo componente desde cuerpos). |
+| [`create_component`](#create_component) | sí | Crea un componente (ENSAMBLAR › Nuevo componente). |
 | [`cycle_component_color`](#cycle_component_color) | sí | Color del componente de ciclo: pasa el componente al siguiente color de la paleta, el de component_colors de get_viewport_image y de Mostrar colores de componente. |
 | [`ground_component`](#ground_component) | sí | Fija o libera un componente (ENSAMBLAR › Fijar). |
 | [`create_joint`](#create_joint) | sí | Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta que su marco coincide con el de origin2 (caras planas enfrentadas; dos ejes —perno en agujero— en el mismo sentido) y define cómo se mueve después. |
@@ -4693,15 +4693,16 @@ Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: trasl
 
 ### `create_component`
 
-Crea un componente con los cuerpos dados (ENSAMBLAR › Nuevo componente desde cuerpos). Las uniones mueven componentes, no cuerpos sueltos. grounded=true lo fija en su lugar (ninguna unión puede moverlo; suele ser la base). Un cuerpo que ya estaba en otro componente pasa al nuevo. parent lo cuelga de otro componente (subensamblaje): mover o unir al padre lo mueve con él.
+Crea un componente (ENSAMBLAR › Nuevo componente). Sin bodies queda vacío, como en Fusion; con bodies lleva esos cuerpos y, con from_bodies=true, crea un componente por cada cuerpo («A partir de cuerpos»; se llama como el cuerpo, o name seguido del número). Las uniones mueven componentes, no cuerpos sueltos. grounded=true lo fija en su lugar (ninguna unión puede moverlo; suele ser la base). Un cuerpo que ya estaba en otro componente pasa al nuevo. parent lo cuelga de otro componente (subensamblaje): mover o unir al padre lo mueve con él.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `bodies` (lista de texto; obligatorio): ids o nombres de los cuerpos del componente (al menos uno).
-  - `name` (texto; opcional, por defecto `null`): nombre del componente; vacío = «Componente<n>».
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos del componente; vacío = componente vacío (sin from_bodies).
+  - `name` (texto; opcional, por defecto `null`): nombre del componente; vacío = «Componente<n>». Con from_bodies, el prefijo de cada uno (name1, name2…); vacío = el nombre de cada cuerpo.
   - `grounded` (true/false; opcional, por defecto `false`): true para fijarlo (Ground): ninguna unión lo mueve.
   - `parent` (texto; opcional, por defecto `null`): componente padre (id, nombre o uno de sus cuerpos); vacío = la raíz (Parent de Fusion).
-- CLI: `omnicad call create_component --doc pieza.omnicad bodies=…`
+  - `from_bodies` (true/false; opcional, por defecto `false`): true crea un componente separado por cada cuerpo de bodies («From Bodies» de Fusion); pide al menos un cuerpo.
+- CLI: `omnicad call create_component --doc pieza.omnicad`
 
 ### `cycle_component_color`
 
