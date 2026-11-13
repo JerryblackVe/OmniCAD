@@ -2288,8 +2288,8 @@ def punto_por_referencias(cara, aristas, distancias):
 def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profundidad=10.0, punta="angulo",
                         angulo_punta=118.0, diam_abocardado=None, prof_abocardado=None, diam_avellanado=None,
                         angulo_avellanado=90.0, roscado=None, mano="derecha", clase="", holgura=0.0,
-                        conicidad=0.0, tabla=True):
-    """Sólido a restar de un agujero de Fusion (revolución del medio perfil). `direccion` apunta hacia el
+                        conicidad=0.0, tabla=True, variante_surco=0):
+    """Sólido a restar de un agujero de Fusion (revolución del medio perfil). `variante_surco`: ver `_armar_surco`. `direccion` apunta hacia el
     material; `profundidad` llega hasta el hombro (sin la punta, como en Fusion). `roscado` = designación de
     TABLA_ROSCAS: el agujero se hace al diámetro menor y se le suma el surco helicoidal de la rosca; `clase`
     ("6H", "2B", "auto"…: ver `tolerancias`) lleva el diámetro menor y los flancos al centro de su tolerancia y
@@ -2306,7 +2306,7 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
         datos = a["rosca"]
         surco, torno = _armar_surco(lambda extra: _surco_rosca(
             p, d, datos["diametro"], datos["paso"], 0.0, profundidad, True, mano, radio_cara=a["radio"], partes=True,
-            extra=extra, **a["perfil"]))
+            extra=extra, **a["perfil"]), variante_surco)
         if torno is not None:                         # la holgura deja sin espesor la cresta: se agranda el agujero
             herramienta = geo.booleano(herramienta, torno, "unir")
         herramienta = geo.booleano(herramienta, surco, "unir")
@@ -2384,12 +2384,18 @@ def agujero(cuerpo, punto, direccion, *, profundidad=None, **opciones):
     return herramienta_agujero(punto, d, profundidad=profundidad, **opciones)
 
 
+def agujero_sin_pellizco(antes, despues):
+    """True si el corte del agujero NO sumó aristas compartidas por más de dos caras (`antes`: las formas de los cuerpos
+    cortados; `despues`: lo que quedó)."""
+    contar = lambda formas: sum(geo._aristas_defectuosas(f)[1] for f in formas)  # noqa: E731
+    return contar(despues) <= contar(antes)
+
+
 def exigir_agujero_sin_pellizco(antes, despues):
     """B-165: error si el corte del agujero sumó aristas compartidas por más de dos caras (`antes`: las formas de los
     cuerpos cortados; `despues`: lo que quedó). Un agujero tangente a una pared deja el material con espesor cero,
     algo que no se puede fabricar; la booleana suelta (Combinar) lo deja pasar con un aviso (B-126)."""
-    contar = lambda formas: sum(geo._aristas_defectuosas(f)[1] for f in formas)  # noqa: E731
-    if contar(despues) > contar(antes):
+    if not agujero_sin_pellizco(antes, despues):
         raise geo.ErrorGeometria("El agujero queda tangente a una pared y deja el material con espesor cero: cambiá "
                                  "el diámetro o la posición unas décimas de milímetro.")
 
@@ -2880,10 +2886,12 @@ def _exigir_volumen(forma, esperado, tolerancia=0.01):
 _EXTRAS = (0.1, 0.13, 0.07)     # cuánto sobresale el surco (en pasos): el primero es el de siempre; los otros, reintentos
 
 
-def _armar_surco(armar):
-    """`armar(extra)` con cada margen de `_EXTRAS` hasta que el kernel no falle (ver `_barrer_surco`)."""
+def _armar_surco(armar, variante=0):
+    """`armar(extra)` con cada margen de `_EXTRAS` hasta que el kernel no falle (ver `_barrer_surco`). `variante` empieza
+    por otro margen: el agujero roscado lo usa cuando el corte con el primero deja una arista de más (B-373)."""
     error = None
-    for extra in _EXTRAS:
+    k = variante % len(_EXTRAS)
+    for extra in _EXTRAS[k:] + _EXTRAS[:k]:
         try:
             return armar(extra)
         except geo.ErrorGeometria as e:
