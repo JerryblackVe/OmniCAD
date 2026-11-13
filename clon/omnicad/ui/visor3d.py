@@ -1084,7 +1084,15 @@ class Visor3D(QOpenGLWidget):
         self.update()
 
     def orbitar(self, dx, dy):
+        """Gira la cámara alrededor del centro de giro: ese punto no se mueve en la pantalla (B-398)."""
         self._cancelar_animacion()
+        centro, R0 = self.centro_giro(), self.R.copy()
+        desde_centro = R0 @ (self.objetivo - centro)          # el objetivo, visto desde el centro en el marco de la cámara
+        self._girar(dx, dy)
+        self.objetivo = centro + self.R.T @ desde_centro
+        self.update()
+
+    def _girar(self, dx, dy):
         k = math.radians(0.4)
         self._orto_cara = False
         if self.config.tipo_orbita == "restringida":
@@ -1096,7 +1104,6 @@ class Visor3D(QOpenGLWidget):
             u, b = self.R[1], _normalizar(self.R[2])
             d = _normalizar(np.cross(u, b))
             self.R = np.array([d, np.cross(b, d), b])
-        self.update()
 
     def px_por_mm(self):
         return max(self.height(), 1) / (2 * self.distancia * math.tan(math.radians(self.fov) / 2))
@@ -2419,9 +2426,18 @@ class Visor3D(QOpenGLWidget):
         """El indicador del centro de giro se ve solo mientras el arrastre en curso es una órbita."""
         return self.config.indicador_giro and self._accion == "orbita"
 
+    def centro_giro(self):
+        """Alrededor de qué punto gira la órbita (B-398): el centro de la caja de lo que se ve, o el origen si no hay
+        nada. No es el objetivo de la cámara: desplazar o acercar hacia el cursor lo corren, y la órbita giraba
+        alrededor de un punto vacío."""
+        caja = self._caja_escena()
+        return np.zeros(3) if caja is None else (caja[0] + caja[1]) / 2
+
     def primitivas_centro_giro(self):
-        """Cruz y punto en el centro de giro (el objetivo de la cámara), de tamaño fijo en píxeles."""
-        c, r = self.objetivo, 9.0 / self.px_por_mm()
+        """Cruz y punto en el centro de giro, de tamaño fijo en píxeles."""
+        c = self.centro_giro()
+        prof = self.distancia if self.ortografica else max(self.distancia + float((self.objetivo - c) @ self.R[2]), 1e-3)
+        r = 9.0 * prof / self.distancia / self.px_por_mm()          # 9 px a la profundidad del centro, no a la del objetivo
         cruz = np.array([c - self.R[0] * r, c + self.R[0] * r, c - self.R[1] * r, c + self.R[1] * r], np.float32)
         return [("lineas", cruz, NARANJA_PLANO, 2.5), ("puntos", c.reshape(1, 3), (1.0, 1.0, 1.0), 6.0)]
 

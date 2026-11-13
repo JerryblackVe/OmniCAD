@@ -49,13 +49,13 @@ def test_el_indicador_no_sale_al_desplazar_ni_con_la_opcion_apagada(visor):
     QTest.mouseRelease(visor, Qt.LeftButton, Qt.NoModifier, QPoint(400, 300))
 
 
-def test_la_cruz_esta_en_el_centro_de_giro_y_mide_9_px(visor):
-    visor.objetivo = np.array([12.0, -7.0, 30.0])
+def test_la_cruz_esta_en_el_centro_de_giro_y_mide_9_px(visor, monkeypatch):
+    monkeypatch.setattr(visor, "centro_giro", lambda: np.array([12.0, -7.0, 30.0]))     # B-398: el centro de giro no es el objetivo
     visor.distancia = 400.0
     (_, cruz, _, _), (_, punto, _, _) = visor.primitivas_centro_giro()
     pts, delante = visor.puntos_pantalla(np.vstack([cruz, punto]))
     assert delante.all()
-    assert np.allclose(pts[4], visor.puntos_pantalla([visor.objetivo])[0][0], atol=1e-3)
+    assert np.allclose(pts[4], visor.puntos_pantalla([visor.centro_giro()])[0][0], atol=1e-3)
     assert np.allclose(np.abs(pts[0] - pts[1]), [18, 0], atol=0.1)       # brazo horizontal: 9 px a cada lado
     assert np.allclose(np.abs(pts[2] - pts[3]), [0, 18], atol=0.1)       # brazo vertical
 
