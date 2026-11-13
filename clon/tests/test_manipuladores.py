@@ -1331,3 +1331,38 @@ def test_p144_la_caja_de_valor_tiene_el_menu_de_parametros(app_qt):
     assert not unica.isEnabled() and "Cambiar parámetros" in unica.text()
     panel.cancelar()
     panel2.cancelar()
+
+
+def test_b375_conicidad_de_90_queda_en_rojo_en_la_caja_y_en_el_campo(app_qt):
+    """B-375: como Fusion, una inclinación fuera de -89°..89° (90°) queda en rojo en la caja del anillo y en el campo del
+    panel, con el motivo, y la previa no sale; con 45° todo vuelve a la normalidad."""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtTest import QTest
+
+    from omnicad.ui import manipuladores as mp
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "distancia": "10 mm"})
+    gestor = panel.manipuladores
+    anillo = _manip(panel, "angulo:conicidad")
+    _raton(visor, QEvent.MouseMove, gestor.pantalla([anillo.asa(gestor)])[0][0], Qt.NoButton, Qt.NoButton)
+    caja = gestor.cajas["conicidad"]                                   # la caja sale con el ratón sobre el asa
+    for texto, rojo in (("90", True), ("45", False)):
+        caja.setFocus()
+        QTest.keyClick(caja, Qt.Key_A, Qt.ControlModifier)
+        QTest.keyClicks(caja, texto)
+        QTest.keyClick(caja, Qt.Key_Return)
+        panel._t_previa.stop()
+        panel._calcular_previa()
+        campo = panel.widgets["conicidad"]
+        assert ("conicidad" in panel.invalidos) is rojo and bool(campo.styleSheet()) is rojo
+        assert (mp.QSS_CAJA_ROJA in caja.styleSheet()) is rojo and panel._previa_ok is not rojo
+        if rojo:
+            assert "-89° y 89°" in campo.toolTip()
+    campo = panel.widgets["conicidad"]                                 # también tecleando en el campo del panel
+    QTest.mouseClick(campo, Qt.LeftButton)
+    QTest.keyClick(campo, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClicks(campo, "-90 deg")
+    QTest.keyClick(campo, Qt.Key_Tab)
+    assert "conicidad" in panel.invalidos and campo.styleSheet()
+    panel.cancelar()
