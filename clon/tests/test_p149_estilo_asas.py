@@ -112,14 +112,13 @@ def test_la_flecha_dibujada_lleva_el_color_elegido(app_qt):  # noqa: F811
 
 def test_la_pagina_cambia_las_preferencias_al_instante_y_restablece(ventana):
     from PySide6.QtTest import QSignalSpy
-    from PySide6.QtWidgets import QPushButton
     from omnicad.ui.preferencias import CampoColor, DialogoPreferencias
     dlg = DialogoPreferencias(ventana.prefs, ventana, "asas")
     dlg.asas_cambiadas.connect(ventana._aplicar_estilo_asas)
     try:
-        assert dlg.pila.currentIndex() == dlg.arbol.currentItem().data(0, 0x100)[0]
+        pagina = dlg.pagina_asas
         color, tam, op = (dlg.controles[f"asas/flechas_{p}"] for p in ("color", "tamano_pct", "opacidad_pct"))
-        assert isinstance(color, CampoColor) and color.boton._texto == "De fábrica"      # una muestra, nunca un código
+        assert isinstance(color, CampoColor) and color.boton._texto == ""      # una muestra que se toca: sin texto ni código
         aviso = QSignalSpy(dlg.asas_cambiadas)
         color.setValue("#112233")
         tam.setValue(150)
@@ -128,13 +127,42 @@ def test_la_pagina_cambia_las_preferencias_al_instante_y_restablece(ventana):
         assert ventana.prefs["asas/flechas_color"] == "#112233" and ventana.prefs["asas/flechas_tamano_pct"] == 150
         assert estilo_asas.rgb("flechas") == pytest.approx(estilo_asas.hex_a_rgb("#112233"))
         assert estilo_asas.tamano("flechas") == 1.5 and estilo_asas.opacidad("flechas") == 0.6
-        assert color.boton._texto == "Personalizado"
-        dlg.findChild(QPushButton, "restablecer_asas").click()
+        pagina.restablecer.click()
         assert ventana.prefs["asas/flechas_color"] == "" and ventana.prefs["asas/flechas_opacidad_pct"] == 100
-        assert estilo_asas.rgb("flechas") == mp.AMARILLO and tam.value() == 100
+        assert estilo_asas.rgb("flechas") == mp.AMARILLO and tam.value() == 100 and pagina.tam_global.value() == 100
     finally:
         dlg.reject()
         dlg.deleteLater()
+
+
+def test_los_ajustes_globales_mueven_las_asas_y_la_vista_previa_cambia(ventana):
+    from omnicad.ui.preferencias import DialogoPreferencias
+    dlg = DialogoPreferencias(ventana.prefs, ventana, "asas")
+    dlg.asas_cambiadas.connect(ventana._aplicar_estilo_asas)
+    try:
+        pagina = dlg.pagina_asas
+        pagina.tam_global.setValue(170)
+        pagina.color_global.setValue("#e0245e")
+        for g in ("flechas", "anillo", "puntos", "cajas"):
+            assert ventana.prefs[f"asas/{g}_tamano_pct"] == 170 and ventana.prefs[f"asas/{g}_color"] == "#e0245e"
+        assert ventana.prefs["asas/seleccion_color"] == ""                  # lo que no es asa no se toca
+        gestor = pagina.vista.gestor                                        # la vista previa usa las asas reales
+        assert {type(m).__name__ for m in gestor.manips} == {"Flecha", "AnilloAngulo", "AsaRadial"}
+        colores = {tuple(p[2]) for p in pagina.vista.visor._capas["manipuladores"] if p[2] is not None}
+        assert any(c[:3] == pytest.approx(estilo_asas.hex_a_rgb("#e0245e")) for c in colores if len(c) >= 3)
+        pagina.vista.resaltar("anillo")
+        assert gestor._hover == ("angulo:angulo", "asa")                   # pasar por la fila resalta ese elemento
+    finally:
+        dlg.reject()
+        dlg.deleteLater()
+
+
+def test_el_viewcube_toma_el_color_y_la_opacidad_elegidos():
+    from omnicad.ui.superposiciones import ViewCube
+    assert ViewCube._cian(255).name() == "#35d0ee"
+    _estilo(viewcube_color="#ff0000", viewcube_opacidad_pct=50)
+    c = ViewCube._cian(200)
+    assert c.name() == "#ff0000" and c.alpha() == 100
 
 
 def test_cancelar_vuelve_al_estilo_que_habia(ventana):
@@ -158,7 +186,6 @@ def test_la_pagina_tiene_cada_grupo_con_lo_que_le_aplica(ventana):
             assert estilo_asas.clave(grupo, "color") in dlg.controles
             assert (estilo_asas.clave(grupo, "tamano_pct") in dlg.controles) == tam
             assert (estilo_asas.clave(grupo, "opacidad_pct") in dlg.controles) == op
-        assert "asas/viewcube_color" in dlg.controles          # la clave del ViewCube queda lista para CF-15
     finally:
         dlg.deleteLater()
 
