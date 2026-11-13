@@ -98,7 +98,8 @@ comando pesado va con turno (uno a la vez en toda la PC; corta a los 900 s; en W
 Una prueba suelta: `pytest tests/<archivo>.py -q`. Cada función del núcleo lleva al menos una prueba con
 un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)`; rápidas (< 3 s).
 
-**Definición de terminado**: ruff limpio, pytest verde, prueba de humo OK (la UI se toca → obligatoria),
+**Definición de terminado** (de la sesión: `tests_afectados.py --correr` verde; la suite completa y la humo las corre el
+coordinador al cerrar): ruff limpio, pytest verde, prueba de humo OK (la UI se toca → obligatoria),
 entrada nueva en `PROJECT_LOG.md`, `docs/seguimiento/` al día (lo resuelto, borrado; lo nuevo, agregado) y lección
 anotada si hubo un error verificable. Sin archivos sueltos: nada de informes, capturas o temporales en la raíz.
 
@@ -113,7 +114,7 @@ Modelo: `OpFijacion` en `clon/omnicad/timeline/ops_fijacion.py`; base `Operacion
 3. Si depende de otros pasos, sobrescribir `dependencias()` (ver `OpPlano`).
 4. Al final del módulo: `registrar_operacion(MiOp)`.
 5. Archivo `ops_*.py` nuevo: agregarlo al `from . import (ops_chapa, ...)` al pie de `operaciones.py`
-   (línea ~649), o la receta no lo carga.
+   (cerca del final del archivo), o la receta no lo carga.
 6. Prueba en `clon/tests/` (patrón de `tests/test_fijaciones.py`) y, si tiene diálogo, receta B.
 
 ## Receta B: agregar un comando a la interfaz

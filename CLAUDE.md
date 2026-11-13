@@ -17,13 +17,13 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
 - **La velocidad es parte de la prioridad 1.** Un cuello de botella de esas herramientas entra acá, con Rust si hace
   falta. El orden de la velocidad lo da [docs/plan_fluidez.md](docs/plan_fluidez.md).
 - **Prioridad 2**, después: render, animación, simulación, malla, plástico, chapa, dibujo y el resto.
-- **Al elegir el próximo ítem**: 1) los bugs de la prioridad 1; 2) su velocidad; 3) lo que les falte. Un ítem de
-  prioridad 2 entra solo si no queda nada de la prioridad 1, o si Gerardo lo pide.
+- **Criterio para armar `ahora.md`** (lo que se ejecuta es `ahora.md`): 1) los bugs de la prioridad 1; 2) su
+  velocidad; 3) lo que les falte. Un ítem de prioridad 2 entra solo si no queda nada de la 1, o si Gerardo lo pide.
 
 ## Cola única y bandeja de entrada (reorganización, Gerardo 2026-11-13)
 - **La cola es [docs/seguimiento/ahora.md](docs/seguimiento/ahora.md)**: «Ahora» (un ítem por sesión) y «Sigue» (los
-  próximos 10). Lo que no está ahí no se toma. Una sesión toma el siguiente recién cuando cerró el suyo; un worktree
-  por sesión. La columna «Prioridad» de las listas no ordena: ordena `ahora.md`.
+  próximos 10). Lo que no está ahí no se toma. Una sesión tiene un ítem a la vez (cada ítem en su worktree) y toma el
+  siguiente recién cuando cerró el suyo. La columna «Prioridad» de las listas no ordena: ordena `ahora.md`.
 - **Los reportes de Gerardo llegan del chat de la PC en dos lotes por día (13:00 y 19:00, hora de Argentina)**, un
   mensaje cada uno. Con cada lote el coordinador da todos los ID en un commit, los ubica en la cola y **no saca a
   ninguna sesión de lo que está haciendo**. Solo un **bloqueante** (no puede trabajar, pierde trabajo o la app se
@@ -36,8 +36,8 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
   `scripts/worktree_item.sh`).
 - Gasto: tope USD 290/mes. Cambiar la máquina o sumar algo que suba el costo pide su OK.
 - Tests de a 3 con `scripts/turno.py` (`OMNICAD_TURNOS=3` en `~/.claude/settings.json` de la VPS).
-- **Sesiones de ejecución fijas**, una por carril. El coordinador les manda ítems con `SendMessage` y las vacía con
-  `clear_session` al 65 %:
+- **Sesiones de ejecución fijas**, una por carril. El coordinador les manda ítems con `SendMessage` (vaciado al 65 %: ver
+  la regla de contexto):
 
   | Sesión | Carril | Modelo |
   |---|---|---|
@@ -79,12 +79,8 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
 - **El `push` sigue siendo solo con el pedido de Gerardo.** Las sesiones de ejecución no commitean.
 
 ## Regla estricta: bugs, faltantes y mejoras en un solo lugar
-- Todo lo que falta resolver vive SOLO en `docs/seguimiento/`: `bugs.md`, `faltantes.md`, `mejoras.md`. Método y
-  columnas: `docs/seguimiento/README.md`. Índice de toda la doc: `docs/README.md`.
-- Lo que se encuentra se agrega ahí al momento, con el siguiente ID libre (mirando todos los worktrees).
-- **Al resolverse, la fila se BORRA** en el mismo commit que el arreglo y va al Registro de `PROJECT_LOG.md` con el
-  ID y la prueba que lo cubre.
-- Antes de informar qué está hecho o qué falta, se verifica contra el código y los tests.
+- Método completo en AGENTS.md › «Registrar el trabajo» (`docs/seguimiento/`, la fila se borra al resolverse).
+- El siguiente ID libre se busca mirando **todos los worktrees**, no solo `main`.
 - Cada tarea deja el proyecto limpio: sin archivos sueltos ni contradicciones entre documentos.
 
 ## Página de seguimiento (Artifact de claude.ai)
@@ -127,14 +123,14 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
 - **Se INVOCA con la herramienta Skill, no alcanza con leer la regla.** Toda sesión que vaya a tocar código
   (también las sub-sesiones y las que orquestan OpenCode) arranca con `ponytail`, termina con `ponytail-review`, y
   usa `ponytail-audit` / `ponytail-debt` cuando haga falta. Un hook de `.claude/settings.json` lo recuerda.
-- `/ponytail`: el cambio más chico que resuelve la tarea completa, sin sobre-ingeniería. `/ponytail-review` antes de
-  dar por terminado un cambio: lógica, seguridad, carga real, tests y que cada línea sea necesaria.
 - **OBLIGATORIO para TODAS las sesiones de código**: el brief lleva ARRIBA DE TODO, en el `prompt` (nunca solo en
   `background`): «invocá con la herramienta Skill `fable-method` y `ponytail` al empezar, `plan-then-do`,
   `tool-calling-guard`, `verify-before-commit` (y `omnicad-test` si prueba la ventana), y `ponytail-review` antes de
   cerrar». El coordinador comprueba en el informe que la sesión pegó la salida real de `ponytail-review`.
 
 ## Regla: pruebas pesadas de noche y lista viva
+- **Quién verifica qué:** la sesión termina su ítem con `tests_afectados.py --correr` verde (y la humo si tocó la UI,
+  cuando la fila lo permite); el coordinador integra y corre la suite completa y la humo en el cierre.
 - Mientras haya sesiones o pedidos abiertos **no se lanza el cierre completo** (suite, piezas de ventana, humo). Solo se
   integra y se verifica lo mínimo (git, `merge-tree`, `scripts/tests_afectados.py --correr`).
 - Todo lo que falta probar vive en **`docs/auditorias/prueba_nocturna_2026-10-31.md`**. Cada tarea nueva de Gerardo

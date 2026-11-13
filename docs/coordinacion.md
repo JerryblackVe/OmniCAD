@@ -16,22 +16,8 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
 - Capacidad medida (2026-11-11): un pytest pesado ocupa 1,5 GB y ~3 núcleos; la humo, 1,1 GB. El rendimiento tope llega
   con 3-4 corridas a la vez (8 a la vez no rinde más y rompe B-222). Cada sesión de Claude ocupa ~0,35 GB. La memoria
   no limita: el límite es el CPU.
-- **Tope en la VPS: 9 sesiones de ejecución a la vez (Gerardo, 2026-11-11).** Los tests van de a 3 con `scripts/turno.py`
-  (`OMNICAD_TURNOS=3` en `~/.claude/settings.json` de la VPS, no en el repo: la PC sigue de a 1). El cupo lo maneja Gerardo.
-- **9 sesiones de ejecución fijas (2026-11-11)**, una por carril; el coordinador les manda ítems con `SendMessage`, las vacía
-  con `clear_session` al 65 % y no abre otras. Cada ítem va en su worktree (`scripts/worktree_item.sh`).
-
-  | Sesión | Carril | Modelo |
-  |---|---|---|
-  | E1 | Bocetos (crear, modificar, restricciones, cotas, solver) | Opus alto |
-  | E2 | Sólido › Crear | Opus alto |
-  | E3 | Sólido › Modificar | Opus alto |
-  | E4 | Superficie | Opus alto |
-  | E5 | Construir, Inspeccionar, Ensamblar | Sonnet medio |
-  | E6 | Velocidad y Rust | Opus alto |
-  | E7 | Pruebas como usuario (prueba_ui, caza) | Sonnet medio |
-  | E8 | Linux y arreglos chicos (B-326, B-327, UI, docs) | Sonnet medio |
-  | E9 | OpenCode (orquesta corridas con `/orquestador-opencode`) | Sonnet medio |
+- Tests de a 3 con `scripts/turno.py` (`OMNICAD_TURNOS=3` en `~/.claude/settings.json` de la VPS, no en el repo: la PC
+  sigue de a 1). El cupo lo maneja Gerardo. La tabla de sesiones vive solo en `CLAUDE.md`.
 - El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; acceso con `gh` de la cuenta JerryblackVe desde el 2026-11-11, token en `~/.config/gh/hosts.yml`, nunca en el repo).
 
 ## Página de seguimiento (Artifact de claude.ai)
@@ -101,7 +87,7 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
   a git**, está en `.gitignore`). Es la fuente de verdad de **cómo funciona Fusion**.
 - **Se consulta SIEMPRE antes de corregir un bug o agregar un faltante** que replique un comando de Fusion: qué
   opciones tiene, cómo se comporta, qué muestra. No se programa de memoria ni se adivina.
-- **Cómo encontrar un artículo (no recorrer carpetas a ojo)**, con `clon/.venv/Scripts/python.exe scripts/fusion_docs.py`:
+- **Cómo encontrar un artículo (no recorrer carpetas a ojo)**, con `clon/.venv/bin/python scripts/fusion_docs.py` (en Windows, `clon/.venv/Scripts/python.exe`):
   - `buscar <palabras> [-s carpeta]`: texto completo, todas las palabras (prefijos valen); devuelve título, miga de
     pan oficial (libro › capítulo), ruta y fragmento. Ej.: `buscar split body`, `buscar mitered -s fusion-patch`.
   - `ver "<título o parte del nombre>" [-s carpeta]`: el artículo sin la cabecera de «Share» y con las rutas absolutas
@@ -225,6 +211,3 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - No se cambia el modelo de una sesión en marcha (corta y pierde contexto) salvo que se quede corta.
 - Al integrar una sesión, anotar si el modelo elegido alcanzó; si falló por quedarse corto, subir un escalón la
   próxima vez, y si sobró, bajarlo.
-
-@AGENTS.md
-
