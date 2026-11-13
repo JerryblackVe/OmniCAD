@@ -22,9 +22,9 @@ import logging
 import math
 
 import numpy as np
-from PySide6.QtCore import QEvent, QObject, QPointF, QRect, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, Qt, QTimer
 from PySide6.QtGui import QPolygonF
-from PySide6.QtWidgets import QApplication, QLineEdit, QMenu, QToolTip
+from PySide6.QtWidgets import QApplication, QLineEdit, QMenu, QToolTip, QWidget
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD
 from . import estilo_asas
@@ -1628,7 +1628,7 @@ class CajaValor(QLineEdit):
         # P-144: como el «⋮» de Fusion y el campo del panel, ofrece los parámetros para usarlos en la expresión
         self.lista = autocompletar(self, self.parametros)
         self.accion_menu = self.addAction(icono("mas_opciones"), QLineEdit.ActionPosition.TrailingPosition)
-        self.accion_menu.setToolTip("Parámetros para usar en el valor")
+        self.accion_menu.setToolTip("Valores recientes, parámetros y Medir")
         self.accion_menu.triggered.connect(self.abrir_menu)
 
     def parametros(self):
@@ -1636,17 +1636,28 @@ class CajaValor(QLineEdit):
         return nombres_sugeridos(tabla) if tabla is not None else []
 
     def menu(self):
-        """Los parámetros (favoritos primero): elegir uno lo escribe donde está el cursor, como al teclearlo."""
+        """Como el «⋮» de Fusion (P-144): los últimos valores tecleados de este tipo (elegir uno lo aplica), los
+        parámetros (favoritos primero: se escriben donde está el cursor) y, en una longitud, Medir."""
         menu = QMenu(self)
+        tipo = self.gestor.tipo(self.clave)
+        for texto in [x for x in RECIENTES.get(tipo, []) if x != self.text().strip()]:     # el que ya está no
+            menu.addAction(texto, lambda x=texto: (self.setText(x), self.gestor.aplicar_caja(self)))
         nombres = self.parametros()
+        if nombres and menu.actions():
+            menu.addSeparator()
         for nombre in nombres:
             menu.addAction(nombre, lambda n=nombre: (self.setFocus(), self.insert(n)))
-        if not nombres:
-            menu.addAction("Sin parámetros: se crean en Modificar › Cambiar parámetros").setEnabled(False)
+        if tipo == LONGITUD and isinstance(self.gestor.panel, QWidget):    # Animación y la vista previa no se atenúan
+            if menu.actions():
+                menu.addSeparator()
+            menu.addAction(icono("medir"), "Medir", lambda: self.gestor.medir_en_caja(self.clave))
+        if not menu.actions():
+            menu.addAction("Sin valores recientes ni parámetros").setEnabled(False)
         return menu
 
     def abrir_menu(self):
-        self.menu().exec(self.mapToGlobal(self.rect().bottomRight()))
+        menu = self.menu()                  # como Fusion: debajo de la caja, alineado a su borde derecho
+        menu.exec(self.mapToGlobal(self.rect().bottomRight()) - QPoint(menu.sizeHint().width() - 1, -1))
 
     def keyPressEvent(self, e):
         if e.key() in (Qt.Key_Return, Qt.Key_Enter):
@@ -1663,6 +1674,16 @@ class CajaValor(QLineEdit):
     def focusOutEvent(self, e):
         super().focusOutEvent(e)
         self.gestor.sincronizar_cajas()
+
+
+RECIENTES = {}              # tipo de valor → últimos textos aplicados en una caja (P-144), el más nuevo primero
+MAX_RECIENTES = 5
+CAPA_MEDIR = "medir_caja"
+
+
+def recordar_valor(tipo, texto):
+    lista = [texto] + [x for x in RECIENTES.get(tipo, []) if x != texto]
+    RECIENTES[tipo] = lista[:MAX_RECIENTES]
 
 
 # ---------------------------------------------------------------- gestor
@@ -1690,6 +1711,7 @@ class GestorManipuladores(QObject):
         self._sano = None               # B-345: valores del asa agarrada con la última previa sana
         self._freno = {}                # B-345: clave → (valor sano, sentido) que el asa no pasa en este arrastre
         self._aviso_tope = ""          # B-364: por qué frenó el asa, se muestra mientras sigue agarrada
+        self._midiendo = None           # P-144: {"clave", "hits"} mientras el «⋮» › Medir espera dos clics
         self.visor.installEventFilter(self)
         self.visor.camara_cambiada.connect(self._camara)
 
@@ -1787,6 +1809,7 @@ class GestorManipuladores(QObject):
     def cerrar(self):
         if self._cerrado:
             return
+        self._terminar_medir()
         self._cerrado = True
         self._arrastre = self._hover = self.trazo = None
         try:
@@ -1924,6 +1947,57 @@ class GestorManipuladores(QObject):
             return f"{self.valor(caja.clave):.2f}"
         return str(self.panel.valores.get(caja.clave, ""))
 
+    # ------------------------------------------------------------ «⋮» › Medir (P-144)
+    def medir_en_caja(self, clave):
+        """Como Fusion: el panel se atenúa, dos clics en la vista miden la distancia (la herramienta Medir) y el
+        valor va a la caja; Esc vuelve sin cambiar nada."""
+        self._midiendo = {"clave": clave, "hits": []}
+        self.panel.setEnabled(False)
+        self.visor.setFocus()
+
+    def _filtrar_medir(self, e, t):
+        if t == QEvent.KeyPress and e.key() == Qt.Key_Escape:
+            self._terminar_medir()
+            return True
+        if t not in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease, QEvent.MouseButtonDblClick) \
+                or e.button() != Qt.LeftButton:
+            return False                    # girar, desplazar y acercar siguen andando
+        if t == QEvent.MouseButtonRelease:
+            from .comandos.inspeccionar import GEOMETRIA
+            hit = self.visor.elegir_entidad(e.position(), GEOMETRIA)
+            if hit is not None:
+                hits = self._midiendo["hits"]
+                hits.append(hit)
+                self.visor.set_capa(CAPA_MEDIR, [p for h in hits for p in h.get("dibujo") or []])
+                if len(hits) == 2:
+                    self._medida_a_caja()
+        return True
+
+    def _medida_a_caja(self):
+        from ..nucleo import analisis as an
+        from . import formato
+        from .comandos.inspeccionar import _entrada
+        clave, (a, b) = self._midiendo["clave"], self._midiendo["hits"]
+        self._terminar_medir()
+        caja = self.cajas.get(clave)
+        try:
+            d = an.medir(_entrada(a, self.ctx.estado), _entrada(b, self.ctx.estado))["distancia"]
+        except Exception as e:  # noqa: BLE001 — lo que no se puede medir se avisa en la caja, como un valor inválido
+            if caja is not None:
+                caja.setStyleSheet(qss_caja() + QSS_CAJA_ROJA)
+                caja.setToolTip(str(e))
+            return
+        if caja is not None:
+            caja.setText(f"{formato.longitud(d):.2f} {formato.sufijo()}")
+            self.aplicar_caja(caja)
+
+    def _terminar_medir(self):
+        if self._midiendo is None:
+            return
+        self._midiendo = None
+        self.visor.set_capa(CAPA_MEDIR, None)
+        self.panel.setEnabled(True)
+
     def aplicar_caja(self, caja):
         texto = caja.text().strip()
         gancho = getattr(getattr(caja, "manipulador", None), "aplicar_caja", None)
@@ -1939,6 +2013,7 @@ class GestorManipuladores(QObject):
             caja.setToolTip(str(e))
             return False
         caja.setToolTip("")
+        recordar_valor(self.tipo(caja.clave), texto)
         if gancho is not None:
             self.escribir(nuevos)
             caja.setText(self.texto_caja(caja))
@@ -2114,6 +2189,8 @@ class GestorManipuladores(QObject):
         if obj is not self.visor or self._cerrado:
             return False
         t = e.type()
+        if self._midiendo is not None:
+            return self._filtrar_medir(e, t)
         if self._tragar_soltar and t == QEvent.MouseButtonRelease:
             self._tragar_soltar = False
             return True

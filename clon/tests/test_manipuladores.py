@@ -1352,33 +1352,84 @@ def test_p143_asa_del_empalme_en_la_punta_libre_de_la_arista(app_qt):
     panel.cancelar()
 
 
-def test_p144_la_caja_de_valor_tiene_el_menu_de_parametros(app_qt):
-    """P-144: el «⋮» de la caja junto a la flecha lista los parámetros (favoritos primero) y elegir uno lo
-    escribe en la caja; Enter lo aplica al campo como si se hubiera tecleado."""
-    from PySide6.QtCore import Qt
+def _textos_menu(caja):
+    return [a.text() for a in caja.menu().actions() if not a.isSeparator()]
+
+
+def test_p144_la_caja_de_valor_tiene_el_menu_de_parametros(app_qt, monkeypatch):
+    """P-144: el «⋮» de la caja junto a la flecha lista los últimos valores tecleados (elegir uno lo aplica), los
+    parámetros (favoritos primero; elegir uno lo escribe en la caja) y Medir, como Fusion."""
+    from PySide6.QtCore import QEvent, Qt
     from PySide6.QtTest import QTest
+    from omnicad.ui import manipuladores
     from omnicad.ui.comandos.solido import Extruir
+    monkeypatch.setattr(manipuladores, "RECIENTES", {})
     doc = _doc_rectangulo()
     doc.parametros.agregar("alto", "30 mm")
     doc.parametros.agregar("lado", "8 mm", favorito=True)
     panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
     caja = panel.manipuladores.cajas["distancia"]
-    menu = caja.menu()
-    assert [a.text() for a in menu.actions()] == ["lado", "alto"]
+    assert _textos_menu(caja) == ["lado", "alto", "Medir"]
     caja.setFocus()
     caja.selectAll()
     QTest.keyClicks(caja, "2*")
-    menu.actions()[1].trigger()
+    next(a for a in caja.menu().actions() if a.text() == "alto").trigger()
     assert caja.text() == "2*alto"
     QTest.keyClick(caja, Qt.Key_Return)
     assert panel.valores["distancia"] == "2*alto"
-    # sin parámetros el menú lo dice, sin ítems que no hacen nada
+    caja.selectAll()
+    QTest.keyClicks(caja, "15.5 mm")
+    QTest.keyClick(caja, Qt.Key_Return)
+    # lo tecleado queda arriba de todo, el más nuevo primero y sin el que ya está en la caja; elegirlo lo aplica
+    assert _textos_menu(caja) == ["2*alto", "lado", "alto", "Medir"]
+    next(a for a in caja.menu().actions() if a.text() == "2*alto").trigger()
+    assert panel.valores["distancia"] == "2*alto"
+    assert _textos_menu(caja) == ["15.5 mm", "lado", "alto", "Medir"]
+    # sin parámetros ni valores queda Medir; una caja de ángulo no ofrece longitudes ni Medir
+    monkeypatch.setattr(manipuladores, "RECIENTES", {})
     doc2 = _doc_rectangulo()
     panel2, _, _ = _panel(Extruir(), doc2, {"perfiles": [_perfil(doc2)]})
-    (unica,) = panel2.manipuladores.cajas["distancia"].menu().actions()
-    assert not unica.isEnabled() and "Cambiar parámetros" in unica.text()
+    assert _textos_menu(panel2.manipuladores.cajas["distancia"]) == ["Medir"]
+    manipuladores.recordar_valor("longitud", "3 mm")
+    gestor = panel2.manipuladores
+    anillo = _manip(panel2, "angulo:conicidad")
+    _raton(gestor.visor, QEvent.MouseMove, gestor.pantalla([anillo.asa(gestor)])[0][0], Qt.NoButton, Qt.NoButton)
+    assert _textos_menu(gestor.cajas["conicidad"]) == ["Sin valores recientes ni parámetros"]
+    # sin un panel de comando que se pueda atenuar (vista previa de Preferencias, Animación) no hay Medir
+    from omnicad.ui.vista_previa_asas import VistaPreviaAsas
+    previa = VistaPreviaAsas()
+    assert _textos_menu(previa.gestor.cajas["distancia"]) == ["3 mm"]
     panel.cancelar()
     panel2.cancelar()
+
+
+def test_p144_medir_desde_el_menu_pone_la_distancia_en_la_caja(app_qt):
+    """P-144: «⋮» › Medir atenúa el panel, dos clics en la vista miden (como la herramienta Medir) y la distancia va a
+    la caja; Esc vuelve sin tocar el valor. Girar con el botón del medio sigue andando mientras se mide."""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtTest import QTest
+    from omnicad.ui.comandos.modificar import Empalme
+    doc = _doc_caja()
+    panel, visor, _ = _panel(Empalme(), doc, {"aristas": [_arista_de_arriba(doc)], "radio": "2 mm"})
+    caja = panel.manipuladores.cajas["radio"]
+
+    def clic(p):
+        q = visor.proyectar(np.array(p, float))
+        _raton(visor, QEvent.MouseButtonPress, (q.x(), q.y()), Qt.LeftButton, Qt.LeftButton)
+        _raton(visor, QEvent.MouseButtonRelease, (q.x(), q.y()), Qt.LeftButton, Qt.NoButton)
+
+    next(a for a in caja.menu().actions() if a.text() == "Medir").trigger()
+    assert not panel.isEnabled()
+    clic((0, 0, 20))
+    assert panel.valores["aristas"] and not panel.isEnabled()      # el clic mide: no cambia la selección del comando
+    QTest.keyClick(visor, Qt.Key_Escape)
+    assert panel.isEnabled() and panel.valores["radio"] == "2 mm"
+    next(a for a in caja.menu().actions() if a.text() == "Medir").trigger()
+    clic((0, 0, 20))
+    clic((20, 0, 20))
+    assert panel.isEnabled() and caja.text() == "20.00 mm" and panel.valores["radio"] == "20.00 mm"
+    assert len(panel.valores["aristas"]) == 1
+    panel.cancelar()
 
 
 def test_b375_conicidad_de_90_queda_en_rojo_en_la_caja_y_en_el_campo(app_qt):
