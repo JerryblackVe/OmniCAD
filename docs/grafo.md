@@ -1,6 +1,6 @@
 # Grafo de nodos: programación visual sin ventana
 
-Primera parte de la programación visual tipo Grasshopper de [brechas_grasshopper.md](brechas_grasshopper.md): GH1
+Primera parte de la programación visual tipo Grasshopper de [brechas_grasshopper.md](referencia/brechas_grasshopper.md): GH1
 (árboles de datos), GH2 (motor), GH3 (catálogo de nodos), GH5 (hornear en el timeline) y GH8 (correr sin ventana).
 El lienzo de nodos (GH4) todavía no existe: por ahora el grafo se escribe en JSON y lo usan los agentes y la CLI.
 Se replicaron las FUNCIONES de Grasshopper (árboles, emparejado, hornear), escritas desde cero.

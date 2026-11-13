@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Programación visual sin ventana (tipo Grasshopper, ver `docs/brechas_grasshopper.md` y `docs/grafo.md`).
+Programación visual sin ventana (tipo Grasshopper, ver `docs/referencia/brechas_grasshopper.md` y `docs/grafo.md`).
 
 Un grafo de nodos se evalúa como flujo de datos puro y produce valores y cuerpos; «Hornear» lo pasa al timeline
 (`timeline/ops_grafo.py`, operación «grafo»). Piezas:

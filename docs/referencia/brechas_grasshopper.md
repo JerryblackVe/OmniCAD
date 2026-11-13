@@ -1,13 +1,13 @@
 # Brechas frente a Grasshopper (programación visual)
 
-> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](../seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Fecha: 2026-10-09.
 Fuentes (leídas ese día): [Grasshopper 2 — documentación](https://www.rhino3d.com/docs/grasshopper2/) (glosario, temas y
 los **1385 componentes** de [specs](https://www.rhino3d.com/docs/grasshopper2/specs/)),
 [guías de Grasshopper para desarrolladores](https://developer.rhino3d.com/guides/grasshopper/),
 [guías de Compute y Hops](https://developer.rhino3d.com/guides/compute/), lista de comandos de Rhino
-(`GrasshopperPlayer` figura ahí). Rhino va en `docs/brechas_rhino.md`.
+(`GrasshopperPlayer` figura ahí). Rhino va en `docs/referencia/brechas_rhino.md`.
 
 **Regla:** Grasshopper es propietario. Se replican los CONCEPTOS y las funciones, no su pantalla, código ni textos.
 ⚠ Si Grasshopper 2 ya salió o sigue en desarrollo: no verificado. Por las dudas, tomar de ahí el modelo de datos, no la interfaz.

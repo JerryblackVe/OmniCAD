@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Herramientas del grupo «grafo» (GH5 y GH8 de docs/brechas_grasshopper.md): list_graph_nodes, run_graph (sin tocar el
+"""Herramientas del grupo «grafo» (GH5 y GH8 de docs/referencia/brechas_grasshopper.md): list_graph_nodes, run_graph (sin tocar el
 documento, con export a STEP/STL) y bake_graph (paso «Grafo» paramétrico del timeline), más el ejemplo para agentes."""
 import copy
 import json

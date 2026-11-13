@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Paso «Grafo» del timeline (GH5 de `docs/brechas_grasshopper.md`): «Hornear» un grafo de programación visual.
+Paso «Grafo» del timeline (GH5 de `docs/referencia/brechas_grasshopper.md`): «Hornear» un grafo de programación visual.
 
 El paso guarda el grafo entero (su JSON, ver `grafo/motor.py`) y los valores de sus entradas en sus parámetros, y lo
 vuelve a evaluar en cada recálculo: el resultado sigue siendo paramétrico. Las entradas pueden ser expresiones con los

@@ -1,6 +1,6 @@
 """Datos de la página «Seguimiento OmniCAD» (Artifact de claude.ai).
 
-Lee docs/seguimiento/{bugs,faltantes,mejoras}.md y la sección «Registro» de PROJECT_LOG.md y escribe, en la
+Lee docs/seguimiento/{bugs,faltantes,mejoras,despues}.md y la sección «Registro» de PROJECT_LOG.md y escribe, en la
 carpeta que se pase (por defecto, la actual), `seguimiento.json` (una fila por pendiente), `resueltos.json` (las
 últimas 25 entradas del Registro) `prompts.json` (los prompts de la tabla «Prompts guardados» del README de
 seguimiento) y `agenda.json` (las tareas programadas de docs/seguimiento/agenda.md). Cómo subirlos a la página: sección «Página de seguimiento» de CLAUDE.md.
@@ -14,7 +14,7 @@ from collections import Counter
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
-TIPOS = {"bugs.md": "Bug", "faltantes.md": "Faltante", "mejoras.md": "Mejora"}
+TIPOS = {"bugs.md": "Bug", "faltantes.md": "Faltante", "mejoras.md": "Mejora", "despues.md": "Después"}
 RENOMBRES = {"Abiertos y parciales": "Bugs generales", "Pendientes generales": "Generales",
              "Hallazgos de pruebas de uso": "Pruebas de uso"}
 MAX_RESUELTOS = 25
@@ -25,8 +25,8 @@ def limpiar(texto):
 
 
 def tema(seccion):
-    """Nombre de la sección sin el paréntesis con la fecha de la auditoría."""
-    nombre = re.sub(r"\s*\(.*$", "", seccion).strip()
+    """Nombre de la sección sin el paréntesis con la fecha de la auditoría (y sin «Tipo ›» en despues.md)."""
+    nombre = re.sub(r"\s*\(.*$", "", seccion.rpartition("›")[2]).strip()
     return RENOMBRES.get(nombre, nombre or "Generales")
 
 

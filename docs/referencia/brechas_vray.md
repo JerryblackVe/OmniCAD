@@ -1,6 +1,6 @@
 # Brechas frente a V-Ray
 
-> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
+> Este archivo es la especificación. Lo que falta de cada ID está en [docs/seguimiento/](../seguimiento/README.md); si un ID no figura allá, ya está resuelto. Si algo de acá no coincide con el seguimiento, vale el seguimiento.
 
 Fecha: 2026-10-09.
 Fuentes (leídas ese día): [V-Ray para Blender — funciones](https://www.chaos.com/vray/blender/features) y
@@ -12,7 +12,7 @@ página de [V-Ray](https://www.chaos.com/vray). La página de funciones de V-Ray
 V-Ray es un motor de trazado de rayos de producción: más profundo y técnico que KeyShot, con mucho control. Lo que
 vale tomar para OmniCAD no es su complejidad, sino sus **herramientas de control después del render** (mezcla de
 luces, ventana de postproceso) y la **calidad física** (cámara, cielo, materiales). La decisión del motor
-(Cycles, trazador propio o rasterizado mejorado) está en `docs/brechas_keyshot.md`: acá se da por tomada.
+(Cycles, trazador propio o rasterizado mejorado) está en `docs/referencia/brechas_keyshot.md`: acá se da por tomada.
 Alimenta el **pendiente 4**.
 
 ## Qué hace V-Ray (verificado)

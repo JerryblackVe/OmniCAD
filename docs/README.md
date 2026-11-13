@@ -12,6 +12,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [seguimiento/agenda.md](seguimiento/agenda.md) | Tareas que Gerardo programa para una fecha (AG-n) |
 | [seguimiento/faltantes.md](seguimiento/faltantes.md) | Funciones pendientes (todavía no existen) |
 | [seguimiento/mejoras.md](seguimiento/mejoras.md) | Mejoras pendientes de lo que ya existe: rendimiento, interfaz, instalador |
+| [seguimiento/despues.md](seguimiento/despues.md) | Prioridad 2 congelada (render, animación, simulación, malla, plástico, chapa, dibujo, IA, escaneo, extensiones…): no se toma sin que Gerardo la descongele |
 | Página de seguimiento (Artifact) | Vista web de bugs, faltantes, mejoras, lo último resuelto y los prompts para agentes; se refresca con `scripts/seguimiento_json.py` (pasos en `CLAUDE.md`). No es fuente de verdad |
 | [../PROJECT_LOG.md](../PROJECT_LOG.md) | Bitácora: estado en una tabla, registro de cada tarea y lecciones aprendidas |
 | [../CHANGELOG.md](../CHANGELOG.md) | Cambios de cada versión publicada |
@@ -95,15 +96,22 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [brechas_proyeccion.md](brechas_proyeccion.md) | Proyectar/Incluir del boceto contra la ayuda de Fusion (B-119, B-203, B-204, H-77 a H-80) |
 | [brechas_herramientas_solido.md](brechas_herramientas_solido.md) | CAP-1–CAP-14: herramientas de SÓLIDO contra capturas de Fusion |
 | [brechas_freecad.md](brechas_freecad.md) | F1–F23 |
-| [brechas_plasticity.md](brechas_plasticity.md) | PL1–PL13 |
-| [brechas_blender.md](brechas_blender.md) | B1–B19 (no confundir con los bugs B-n) |
-| [brechas_rhino.md](brechas_rhino.md) | RH1–RH22 |
-| [brechas_grasshopper.md](brechas_grasshopper.md) | GH1–GH12 |
-| [brechas_keyshot.md](brechas_keyshot.md) | KS1–KS15 |
-| [brechas_vray.md](brechas_vray.md) | VR1–VR13 |
 | [brechas_mcp.md](brechas_mcp.md) | MCP-0a–MCP-94: especificación de las herramientas para agentes (todas hechas; B-80 cerrado) |
 | [brechas_solidcraft.md](brechas_solidcraft.md) | SC1–SC17 |
-| [brechas_cad_libres.md](brechas_cad_libres.md) | CL1–CL8 |
+
+## Referencia (sin tocar desde el 2026-10-20)
+
+Brechas de programas que se usan solo de inspiración, hoy en `docs/referencia/`. Las filas pendientes están en [seguimiento/despues.md](seguimiento/despues.md) o en las listas activas.
+
+| Documento | Qué tiene |
+|---|---|
+| [brechas_plasticity.md](referencia/brechas_plasticity.md) | PL1–PL13 |
+| [brechas_blender.md](referencia/brechas_blender.md) | B1–B19 (no confundir con los bugs B-n) |
+| [brechas_rhino.md](referencia/brechas_rhino.md) | RH1–RH22 |
+| [brechas_grasshopper.md](referencia/brechas_grasshopper.md) | GH1–GH12 |
+| [brechas_keyshot.md](referencia/brechas_keyshot.md) | KS1–KS15 |
+| [brechas_vray.md](referencia/brechas_vray.md) | VR1–VR13 |
+| [brechas_cad_libres.md](referencia/brechas_cad_libres.md) | CL1–CL8 |
 
 ## Informes (fotos de un momento: no se actualizan)
 
