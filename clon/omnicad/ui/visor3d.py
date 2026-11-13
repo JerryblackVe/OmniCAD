@@ -497,6 +497,8 @@ class Visor3D(QOpenGLWidget):
         self.distancia = 250.0
         self.R = np.identity(3)            # filas: derecha, arriba, atrás (hacia el ojo)
         self._orto_cara = False
+        self.home = None                   # vista Inicio elegida: {"R", "objetivo", "distancia", "modo"}; None = la isométrica
+        self.vistas_cara = {}              # cara del ViewCube -> {"R": ...}: la vista que se eligió para esa cara
         self._animacion = None             # (cámara inicial, cámara final, _orto_cara final, instante) mientras una vista se anima
         self._t_animacion = QTimer(self, interval=8)
         self._t_animacion.timeout.connect(self._paso_animacion)
@@ -942,9 +944,48 @@ class Visor3D(QOpenGLWidget):
 
     def vista(self, nombre):
         self._cancelar_animacion()
-        self._fijar_direccion(*VISTAS[nombre])
+        propia = self.vistas_cara.get(nombre)
+        if propia:
+            self.R = np.array(propia["R"], float)
+        else:
+            self._fijar_direccion(*VISTAS[nombre])
         self._orto_cara = nombre in VISTAS_CARAS
         self.encuadrar()
+
+    def vista_inicio(self):
+        """La casita del ViewCube: la vista Inicio elegida (ajustada a la escena o a distancia fija) o la isométrica."""
+        h = self.home
+        if not h:
+            return self.vista("iso")
+        self._cancelar_animacion()
+        self.R = np.array(h["R"], float)
+        self._orto_cara = False
+        if h.get("modo") == "distancia_fija":
+            self.objetivo, self.distancia = np.array(h["objetivo"], float), float(h["distancia"])
+            self.update()
+        else:
+            self.encuadrar()
+
+    def vista_actual(self, modo="ajustar"):
+        """La cámara de ahora, para guardarla como Inicio."""
+        return {"R": self.R.tolist(), "objetivo": self.objetivo.tolist(), "distancia": float(self.distancia), "modo": modo}
+
+    def vista_direccion(self, direccion):
+        """Vista desde una arista o un vértice del ViewCube: `direccion` = hacia dónde está el ojo, con Z arriba
+        (p. ej. (1, -1, 1) es la isométrica)."""
+        self._cancelar_animacion()
+        x, y, z = (float(c) for c in direccion)
+        self._fijar_direccion(math.degrees(math.atan2(y, x)), math.degrees(math.atan2(z, math.hypot(x, y))))
+        self._orto_cara = False
+        self.encuadrar()
+
+    def poner_rotacion(self, R):
+        """Pone el marco de la cámara (filas: derecha, arriba, atrás) sin mover el encuadre: los giros de 90° del
+        ViewCube. Queda mirando una cara, como una vista estándar."""
+        self._cancelar_animacion()
+        self.R = np.array(R, float)
+        self._orto_cara = True
+        self.update()
 
     # ------------------------------------------------------------ vistas animadas
     DURACION_VISTA_S = 0.25

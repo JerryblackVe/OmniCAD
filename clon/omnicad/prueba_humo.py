@@ -100,12 +100,12 @@ def _interfaz(v, r):
     QTest.qWait(50)
     cubo = v.area.viewcube
     cubo.repaint()
-    cara = next(((poli, vista) for poli, vista in cubo._poligonos if vista == "arriba"), None)
+    cara = next(((poli, d) for poli, d in cubo._zonas if d == (0, 0, 1)), None)      # el centro de la cara SUPERIOR
     if cara:
         c = cara[0].boundingRect().center()
         QTest.mouseClick(cubo, Qt.LeftButton, Qt.NoModifier, QPoint(int(c.x()), int(c.y())))
     r.check(cara is not None and v.visor.elevacion > 89, "ViewCube: clic en SUPERIOR pone la vista de arriba")
-    QTest.mouseClick(cubo, Qt.LeftButton, Qt.NoModifier, QPoint(cubo.width() - 8, 8))
+    QTest.mouseClick(cubo, Qt.LeftButton, Qt.NoModifier, QPoint(8, 8))
     r.check(abs(v.visor.elevacion - 35.264) < 0.01, "ViewCube: la casita vuelve a la vista inicial")
 
     # Barra de navegación: modo órbita con el botón izquierdo y Esc para salir

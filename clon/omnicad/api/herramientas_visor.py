@@ -39,12 +39,21 @@ def _encuadrar(sesion, view="iso", direction=None, bodies=None, aspecto=4 / 3):
     return _camara(atras, _esquinas([c for c in cajas if c]), aspecto, 40.0)[0]
 
 
+def _con_roll(cam, roll):
+    """Gira la escena `roll` grados sobre el eje de la pantalla, contra el reloj (las flechas curvas del ViewCube)."""
+    if roll:
+        r, u, b = np.asarray(cam["R"], float)
+        c, s = math.cos(math.radians(roll)), math.sin(math.radians(roll))
+        cam["R"] = [(c * r - s * u).tolist(), (s * r + c * u).tolist(), b.tolist()]
+
+
 @herramienta("set_view", "inspeccion", "Guarda la cámara del visor: vista, órbita, proyección, zoom y objetivo. "
              "Admite deshacer y clear vuelve al encuadre automático.", modifica=True)
 def set_view(sesion, view: str = "iso", direction: list[float] | None = None,
              projection: Literal["perspective", "orthographic"] = "perspective",
              azimuth: float = 0, elevation: float = 0, zoom: float = 1,
-             look_at: list[float] | None = None, bodies: list[str] | None = None, clear: bool = False):
+             look_at: list[float] | None = None, bodies: list[str] | None = None, clear: bool = False,
+             roll: float = 0):
     """
     view: vista estándar o nombre de una vista guardada.
     direction: vector [x, y, z] hacia la cámara; reemplaza a view.
@@ -55,12 +64,13 @@ def set_view(sesion, view: str = "iso", direction: list[float] | None = None,
     look_at: objetivo [x, y, z] en mm; vacío usa el centro de los cuerpos.
     bodies: cuerpos a encuadrar por nombre o id; vacío encuadra todos.
     clear: borra la cámara guardada y vuelve al encuadre automático.
+    roll: giro de la escena sobre el eje de la pantalla, en grados y contra el reloj (90 = las flechas curvas del ViewCube).
     """
     datos = _datos(sesion)
     cam = None
     if not clear:
-        if not all(math.isfinite(x) for x in (azimuth, elevation, zoom)) or zoom <= 0:
-            raise error("INVALID_ARGUMENTS", "La órbita necesita ángulos finitos y zoom debe ser finito y positivo.")
+        if not all(math.isfinite(x) for x in (azimuth, elevation, zoom, roll)) or zoom <= 0:
+            raise error("INVALID_ARGUMENTS", "La órbita y el giro necesitan ángulos finitos y zoom debe ser finito y positivo.")
         if look_at and (len(look_at) != 3 or not all(math.isfinite(x) for x in look_at)):
             raise error("INVALID_ARGUMENTS", "look_at necesita tres números finitos [x, y, z].")
         cam = _encuadrar(sesion, view, direction, bodies)
@@ -70,6 +80,7 @@ def set_view(sesion, view: str = "iso", direction: list[float] | None = None,
             e = max(-math.pi / 2, min(math.pi / 2, math.asin(float(np.clip(b[2], -1, 1))) + math.radians(elevation)))
             cam = _encuadrar(sesion, direction=[math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e)],
                              bodies=bodies)
+        _con_roll(cam, roll)
         cam["distancia"] /= zoom
         if not math.isfinite(cam["distancia"]) or cam["distancia"] <= 0:
             raise error("INVALID_ARGUMENTS", "El zoom deja una distancia de cámara fuera de rango.")
@@ -152,3 +163,48 @@ def set_flat_pattern_view(sesion, active: bool = True, body: str | None = None):
     datos["patron_activo"] = elegido
     sesion.doc.espacios["visor"] = datos
     return {"active": elegido is not None, "body": elegido}
+
+
+_CARAS_VIEWCUBE = {"front": "frente", "back": "atras", "right": "derecha", "left": "izquierda", "top": "arriba",
+                   "bottom": "abajo"}
+
+
+@herramienta("set_home_view", "inspeccion", "Fija o restablece la vista Inicio del ViewCube (la casita) o la vista de una "
+             "de sus caras: «Establecer la vista actual como Inicio / como Frontal» y «Restablecer» de su menú. La ventana "
+             "la usa al pulsar la casita o la cara; se guarda en el documento y admite deshacer.", modifica=True)
+def set_home_view(sesion, view: str | None = None, direction: list[float] | None = None, roll: float = 0,
+                  mode: Literal["fit", "fixed_distance"] = "fit",
+                  face: Literal["front", "back", "right", "left", "top", "bottom"] | None = None, reset: bool = False,
+                  bodies: list[str] | None = None):
+    """
+    view: vista estándar o guardada que pasa a ser el Inicio; vacía = "iso", o la propia cara si se indica face.
+    direction: vector [x, y, z] hacia la cámara, también de una arista o un vértice del cubo; reemplaza a view.
+    roll: giro de la escena sobre el eje de la pantalla, en grados y contra el reloj.
+    mode: fit encuadra los cuerpos al volver; fixed_distance vuelve al mismo objetivo y distancia (solo el Inicio).
+    face: cara del ViewCube cuya vista se cambia en lugar del Inicio.
+    reset: borra el Inicio (o la vista de esa cara) y vuelve a la de fábrica.
+    bodies: cuerpos que se encuadran para calcular el Inicio; vacío = todos.
+    """
+    if not math.isfinite(roll):
+        raise error("INVALID_ARGUMENTS", "roll necesita un ángulo finito.")
+    datos = _datos(sesion)
+    caras = datos.get("vistas_cara") or {}
+    if reset:
+        if face:
+            caras.pop(_CARAS_VIEWCUBE[face], None)
+        else:
+            datos.pop("home", None)
+    else:
+        cam = _encuadrar(sesion, view or (face or "iso"), direction, bodies)
+        _con_roll(cam, roll)
+        if face:
+            caras[_CARAS_VIEWCUBE[face]] = {"R": np.asarray(cam["R"], float).tolist()}
+        else:
+            datos["home"] = {"R": np.asarray(cam["R"], float).tolist(), "objetivo": np.asarray(cam["objetivo"], float).tolist(),
+                             "distancia": float(cam["distancia"]), "modo": "distancia_fija" if mode == "fixed_distance" else "ajustar"}
+    if caras:
+        datos["vistas_cara"] = caras
+    else:
+        datos.pop("vistas_cara", None)
+    sesion.doc.espacios["visor"] = datos
+    return {"home": copy.deepcopy(datos.get("home")), "face_views": sorted(caras)}

@@ -9,8 +9,8 @@ Todo está dibujado con QPainter; QOpenGLWidget admite widgets hijos transparent
 """
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import (QAction, QActionGroup, QColor, QFontMetricsF, QKeySequence, QPainter, QPen, QPolygonF,
-                           QTransform)
+from PySide6.QtGui import (QAction, QActionGroup, QColor, QFontMetricsF, QKeySequence, QLinearGradient, QPainter, QPainterPath,
+                           QPen, QPolygonF, QRadialGradient, QTransform)
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QToolButton, QWidget
 
 from . import temas
@@ -32,18 +32,38 @@ EJES = [((1, 0, 0), QColor("#d23c3c"), "X", ((0, -1, 0), (0, 0, -1))),
         ((0, 0, 1), QColor("#2f5fd0"), "Z", ((-1, 0, 0), (0, -1, 0)))]
 
 
+LARGO_EJE = 2.12             # el eje sobresale del cubo hasta aquí (el cubo mide 2)
+CIAN_CUBO = QColor("#35d0ee")       # lo que está bajo el cursor
+COLOR_BOTON = QColor("#c3c8d0")      # triángulos, flechas y ▽, claros sobre el fondo oscuro del visor
+COLOR_CARA, COLOR_BISEL, COLOR_VERTICE = (238, 240, 244), (216, 220, 227), (198, 203, 212)   # gris claro mate; aristas y vértices biselados
+BANDAS = ((-1, -1.0, -0.74), (0, -0.74, 0.74), (1, 0.74, 1.0))   # franjas de cada cara: vértice, arista o centro
+# Giros de 90° del marco de la cámara (derecha r, arriba u, atrás b): triángulos y flechas curvas de una vista de cara.
+GIROS = {"der": lambda r, u, b: (-b, u, r),          # ◁ del borde derecho: la cara de la derecha pasa al frente
+         "izq": lambda r, u, b: (b, u, -r),          # ▷ del borde izquierdo
+         "arriba": lambda r, u, b: (r, -b, u),       # ▽ del borde de arriba: la cara de arriba pasa al frente
+         "abajo": lambda r, u, b: (r, b, -u),        # △ del borde de abajo
+         "antihorario": lambda r, u, b: (-u, r, b),  # flecha curva de arriba: la escena gira 90° contra el reloj
+         "horario": lambda r, u, b: (u, -r, b)}      # flecha curva de la derecha: la escena gira 90° con el reloj
+
+
 class ViewCube(QWidget):
+    """Cubo de navegación como el de Fusion: 26 zonas (6 caras, 12 aristas, 8 vértices) que llevan a su vista; en una
+    vista de cara, 4 triángulos y 2 flechas curvas que giran 90°; la casita, el menú ▽ y los ejes."""
+
     def __init__(self, visor, parent=None):
         super().__init__(parent)
         self.visor = visor
         self.setMouseTracking(True)
-        self.setToolTip("ViewCube: clic en una cara para la vista estándar, arrastrar para orbitar.\n"
-                        "Atajos: 0 isométrica, 1 frente, 2 arriba, 3 derecha. Clic derecho: tamaño del ViewCube.")
-        self._poligonos = []          # [(QPolygonF, vista)] de las caras visibles, para el clic
-        self._hover = None
-        self._presionado, self._arrastrado = None, False
+        self.setToolTip("ViewCube: clic en una cara, arista o vértice para esa vista, arrastrar para orbitar.\n"
+                        "Atajos: 0 isométrica, 1 frente, 2 arriba, 3 derecha. Clic derecho o ▽: menú del ViewCube.")
+        self._zonas = []              # [(QPolygonF, dirección)] de las zonas visibles de las caras, para el clic
+        self._hover = None            # ("zona", dirección) | ("giro", clave) | ("casa",) | ("menu",)
+        self._presionado, self._arrastrado, self._objetivo = None, False, None
         self._tamano = "automatico"
         self.al_elegir_tamano = None  # función(clave): la ventana la guarda en las preferencias
+        self.al_elegir_camara = None  # función(clave): la ventana la aplica a todas las vistas
+        self.al_guardar_vistas = None  # función(): la ventana guarda el Inicio y las vistas de cara en el documento
+        self.menu_abierto = None
         self.set_tamano("automatico")
         visor.camara_cambiada.connect(self.update)
 
@@ -52,9 +72,10 @@ class ViewCube(QWidget):
         lado = TAMANOS.get(clave, TAMANOS["automatico"])
         self.setFixedSize(lado, lado)
 
+    # ------------------------------------------------------------ menú
     def menu_tamano(self):
-        """Menú «Tamaño de ViewCube» del clic derecho, con las cinco opciones de Fusion."""
-        m = QMenu(self)
+        """Menú «Tamaño de ViewCube», con las cinco opciones de Fusion."""
+        m = QMenu("Tamaño de ViewCube", self)
         grupo = QActionGroup(m)
         for clave, texto in TAMANOS_TEXTO:
             a = m.addAction(texto)
@@ -64,57 +85,304 @@ class ViewCube(QWidget):
             grupo.addAction(a)
         return m
 
+    def menu(self):
+        """Menú del ViewCube (clic derecho o ▽): ir al inicio, cámara y tamaño."""
+        m = QMenu(self)
+        m.addAction("Ir al inicio").triggered.connect(self._ir_al_inicio)
+        sub = m.addMenu("Cámara")
+        grupo = QActionGroup(sub)
+        for clave, texto in (("ortografica", "Ortográfica"), ("perspectiva", "Perspectiva"),
+                             ("persp_orto_caras", "Perspectiva con caras ortográficas")):
+            a = sub.addAction(texto)
+            a.setCheckable(True)
+            a.setChecked(self.visor.config.camara == clave)
+            a.triggered.connect(lambda _=False, c=clave: self._elegir_camara(c))
+            grupo.addAction(a)
+        self._acciones_vistas(m)
+        m.addSeparator()
+        m.addMenu(self.menu_tamano())
+        return m
+
+    def _acciones_vistas(self, m):
+        """«Establecer la vista actual como Inicio» (ajustada o a distancia fija), «Restablecer Inicio» y, mirando una cara, las
+        dos de esa cara, como el menú de Fusion."""
+        m.addSeparator()
+        sub = m.addMenu("Establecer la vista actual como Inicio")
+        sub.addAction("Ajustar a la vista").triggered.connect(lambda: self._fijar_inicio("ajustar"))
+        sub.addAction("Distancia fija").triggered.connect(lambda: self._fijar_inicio("distancia_fija"))
+        reset = m.addAction("Restablecer Inicio")
+        reset.triggered.connect(lambda: self._fijar_inicio(None))
+        reset.setEnabled(bool(self.visor.home))
+        cara = self._cara_actual()
+        nombre = cara[1].capitalize() if cara else "cara"
+        a = m.addAction(f"Establecer la vista actual como {nombre}")
+        b = m.addAction(f"Restablecer {nombre}")
+        a.setEnabled(cara is not None)
+        b.setEnabled(cara is not None and cara[0] in self.visor.vistas_cara)
+        if cara:
+            a.triggered.connect(lambda: self._fijar_cara(cara[0], True))
+            b.triggered.connect(lambda: self._fijar_cara(cara[0], False))
+
+    def _ir_al_inicio(self):
+        self.visor.animar_vista(self.visor.vista_inicio)
+
+    def _cara_actual(self):
+        """(vista, etiqueta) de la cara que mira la cámara, o None."""
+        i = self._cara_alineada()
+        if i is None:
+            return None
+        n = [0, 0, 0]
+        n[i] = 1 if self.visor.R[2][i] > 0 else -1
+        return next((v, t) for nn, _u, _w, t, v in CARAS if tuple(nn) == tuple(n))
+
+    def _fijar_inicio(self, modo):
+        self.visor.home = None if modo is None else self.visor.vista_actual(modo)
+        self._guardar_vistas()
+
+    def _fijar_cara(self, vista, fijar):
+        if fijar:
+            self.visor.vistas_cara[vista] = {"R": self.visor.R.tolist()}
+        else:
+            self.visor.vistas_cara.pop(vista, None)
+        self._guardar_vistas()
+
+    def _guardar_vistas(self):
+        if self.al_guardar_vistas is not None:
+            self.al_guardar_vistas()
+
+    def _elegir_camara(self, clave):
+        if self.al_elegir_camara is not None:
+            self.al_elegir_camara(clave)
+        else:
+            self.visor.set_camara(clave)
+
     def _elegir_tamano(self, clave):
         self.set_tamano(clave)
         if self.al_elegir_tamano is not None:
             self.al_elegir_tamano(clave)
 
     def contextMenuEvent(self, e):
-        self.menu_tamano().exec(e.globalPos())
+        self.menu().exec(e.globalPos())
 
+    def abrir_menu(self):
+        """El ▽ de abajo a la derecha: el mismo menú, que se abre debajo del botón."""
+        self.menu_abierto = self.menu()
+        self.menu_abierto.popup(self.mapToGlobal(self._rect_menu().bottomLeft().toPoint()))
+
+    # ------------------------------------------------------------ geometría de los botones (en píxeles del widget)
+    def _k(self):
+        return self.width() / 120.0
+
+    def _rect_casa(self):
+        """Botón «vista inicial» arriba a la izquierda, como Fusion."""
+        k = self._k()
+        return QRectF(0, 0, 20 * k, 20 * k)
+
+    def _rect_menu(self):
+        k = self._k()
+        return QRectF(self.width() - 20 * k, self.height() - 20 * k, 18 * k, 18 * k)
+
+    def _rects_giro(self):
+        """Cuatro triángulos (en una vista de cara) y dos flechas curvas, por clave de GIROS."""
+        w, h, k = self.width(), self.height(), self._k()
+        t = 9 * k
+        cx, cy = w * 0.52, h * 0.5
+        return {"izq": QRectF(w * 0.10 - t / 2, cy - t / 2, t, t), "der": QRectF(w * 0.94 - t / 2 - 2 * k, cy - t / 2, t, t),
+                "arriba": QRectF(cx - t / 2, h * 0.09 - t / 2, t, t), "abajo": QRectF(cx - t / 2, h * 0.91 - t / 2, t, t),
+                "antihorario": QRectF(w * 0.66, 2 * k, 22 * k, 16 * k), "horario": QRectF(w - 22 * k, 20 * k, 20 * k, 24 * k)}
+
+    def _cara_alineada(self):
+        """El índice del eje (0 X, 1 Y, 2 Z) de la cara que mira la cámara si mira de frente a una, o None (arista o vértice)."""
+        atras = self.visor.R[2]
+        i = int(np.argmax(np.abs(atras)))
+        return i if abs(atras[i]) > 0.9995 else None
+
+    # ------------------------------------------------------------ dibujo
     def _proyectar(self, rot, p, centro, escala):
         v = rot @ np.asarray(p, float)
         return QPointF(centro.x() + v[0] * escala, centro.y() - v[1] * escala), v[2]
+
+    def _punto_cara(self, rot, n, u, w, s, t, centro, escala):
+        return self._proyectar(rot, n + s * u + t * w, centro, escala)[0]
 
     def paintEvent(self, _e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         rot = self.visor.matriz_vista()[:3, :3]
-        centro = QPointF(self.width() * 0.52, self.height() * 0.5)
-        escala = self.width() * 0.27
-        self._poligonos = []
+        centro = QPointF(self.width() * 0.52, self.height() * 0.48)
+        escala = self.width() * 0.255
+        self._zonas = []
         luz = np.array([0.35, 0.55, 0.75])
-        for normal, der, arr, texto, vista in CARAS:
+        resaltada = self._hover[1] if self._hover and self._hover[0] == "zona" else None
+        brillantes = []
+        self._dibujar_ejes(p, rot, centro, escala, False)
+        for normal, der, arr, texto, _vista in CARAS:
             n, u, w = (np.array(x, float) for x in (normal, der, arr))
             if (rot @ n)[2] <= 1e-6:
                 continue
+            brillo = 0.86 + 0.14 * max(0.0, float((rot @ n) @ luz))
             esquinas = [n - u + w, n + u + w, n + u - w, n - u - w]
             poli = QPolygonF([self._proyectar(rot, c, centro, escala)[0] for c in esquinas])
-            brillo = 0.80 + 0.20 * max(0.0, float((rot @ n) @ luz))
-            base = QColor("#8fc3ee") if vista == self._hover else QColor(int(196 * brillo), int(199 * brillo), int(204 * brillo))
-            p.setPen(QPen(QColor("#7d838b"), 1))
-            p.setBrush(base)
-            p.drawPolygon(poli)
+            for i, s0, s1 in BANDAS:
+                for j, t0, t1 in BANDAS:
+                    d = tuple(int(round(c)) for c in n + i * u + j * w)
+                    zona = QPolygonF([self._punto_cara(rot, n, u, w, s, t, centro, escala)
+                                      for s, t in ((s0, t1), (s1, t1), (s1, t0), (s0, t0))])
+                    self._zonas.append((zona, d))
+                    self._pintar_zona(p, rot, n, u, w, i, j, (s0, s1), (t0, t1), zona, brillo, centro, escala)
+                    if d == resaltada:
+                        brillantes.append((zona, d))
+            p.setPen(QPen(QColor(96, 104, 116, 190), 1.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            p.setBrush(Qt.NoBrush)
+            p.drawPolygon(poli)                                # el contorno redondeado del cubo
             self._etiqueta(p, poli, texto)
-            self._poligonos.append((poli, vista))
+        for zona, d in brillantes:                              # el cian va encima: una línea luminosa en la arista
+            self._brillo(p, rot, zona, d, centro, escala)
+        self._letras_ejes(p, rot, centro, escala)
+        if self._cara_alineada() is not None:
+            self._dibujar_giros(p)
+        self._dibujar_botones(p)
+        p.end()
+
+    @staticmethod
+    def _gris(base, brillo):
+        return QColor(min(255, int(base[0] * brillo)), min(255, int(base[1] * brillo)), min(255, int(base[2] * brillo)))
+
+    def _pintar_zona(self, p, rot, n, u, w, i, j, s, t, zona, brillo, centro, escala):
+        """Una zona del cubo: el centro de la cara lisa; la arista como un redondeo (el degradé se oscurece hacia el borde
+        y tiene un filo claro); el vértice como una esquina redonda (degradé radial)."""
+        p.setPen(Qt.NoPen)
+        if i == j == 0:
+            p.setBrush(self._gris(COLOR_CARA, brillo))
+            p.drawPolygon(zona)
+            return
+        if i != 0 and j != 0:                                   # vértice
+            c = zona.boundingRect().center()
+            g = QRadialGradient(c, max(zona.boundingRect().width(), zona.boundingRect().height()) * 0.75)
+            g.setColorAt(0.0, self._gris(COLOR_CARA, brillo * 1.02))
+            g.setColorAt(1.0, self._gris(COLOR_VERTICE, brillo))
+        else:                                                   # arista: de la cara hacia el borde
+            adentro, afuera = (0.74 * i, 1.0 * i) if i else (0.74 * j, 1.0 * j)
+            a = self._punto_cara(rot, n, u, w, adentro if i else 0, adentro if j else 0, centro, escala)
+            b = self._punto_cara(rot, n, u, w, afuera if i else 0, afuera if j else 0, centro, escala)
+            g = QLinearGradient(a, b)
+            g.setColorAt(0.0, self._gris(COLOR_CARA, brillo))
+            g.setColorAt(0.7, self._gris(COLOR_BISEL, brillo))
+            g.setColorAt(1.0, self._gris(COLOR_VERTICE, brillo * 0.85))
+        p.setBrush(g)
+        p.drawPolygon(zona)
+        p.setPen(QPen(QColor(255, 255, 255, 70), 1))            # el filo de la zona, para que se vea aparte
+        p.setBrush(Qt.NoBrush)
+        p.drawPolygon(zona)
+
+    def _brillo(self, p, rot, zona, d, centro, escala):
+        """Resalta la zona bajo el cursor: una arista brilla en cian a lo largo de la arista, un vértice como un punto
+        luminoso y una cara con su cuadro central marcado."""
+        pesos = sum(map(abs, d))
+        p.setBrush(QColor(53, 208, 238, 55))
+        p.setPen(Qt.NoPen)
+        p.drawPolygon(zona)
+        k = self._k()
+        if pesos == 2:
+            e = d.index(0)
+            ext = [self._proyectar(rot, [(sg if q == e else d[q]) for q in range(3)], centro, escala)[0] for sg in (-1, 1)]
+            for ancho, alfa in ((7 * k, 55), (4 * k, 110), (1.8 * k, 255)):
+                p.setPen(QPen(QColor(53, 208, 238, alfa), ancho, Qt.SolidLine, Qt.RoundCap))
+                p.drawLine(ext[0], ext[1])
+        elif pesos == 3:
+            c = self._proyectar(rot, d, centro, escala)[0]
+            g = QRadialGradient(c, 8 * k)
+            g.setColorAt(0.0, QColor(255, 255, 255, 255))
+            g.setColorAt(0.35, QColor(53, 208, 238, 230))
+            g.setColorAt(1.0, QColor(53, 208, 238, 0))
+            p.setPen(Qt.NoPen)
+            p.setBrush(g)
+            p.drawEllipse(c, 8 * k, 8 * k)
+        else:
+            for ancho, alfa in ((5 * k, 60), (1.6 * k, 255)):
+                p.setPen(QPen(QColor(53, 208, 238, alfa), ancho, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                p.setBrush(Qt.NoBrush)
+                p.drawPolygon(zona)
+
+    def _dibujar_ejes(self, p, rot, centro, escala, delante):
+        """Los tres ejes desde la esquina (−1, −1, −1). Los que corren por una arista de atrás se dibujan antes del
+        cubo (queda a la vista solo lo que sobresale, como Fusion); las letras van siempre encima, un poco hacia afuera."""
         origen = np.array([-1.0, -1.0, -1.0])
         f = temas.qfont_cotas(max(7, int(self.width() / 13)))
         f.setBold(True)
         p.setFont(f)
         for eje, color, letra, caras_vecinas in EJES:
-            if not any((rot @ np.array(c, float))[2] > 1e-6 for c in caras_vecinas):
-                continue                     # la arista queda detrás del cubo
+            enfrente = any((rot @ np.array(c, float))[2] > 1e-6 for c in caras_vecinas)
+            if enfrente != delante:
+                continue
             a = self._proyectar(rot, origen, centro, escala)[0]
-            b = self._proyectar(rot, origen + np.array(eje) * 2.55, centro, escala)[0]
+            b = self._proyectar(rot, origen + np.array(eje) * LARGO_EJE, centro, escala)[0]
             p.setPen(QPen(color, 2))
             p.drawLine(a, b)
-            p.drawText(QRectF(b.x() - 10, b.y() - 10, 20, 20), Qt.AlignCenter, letra)
-        p.drawPixmap(self._rect_casa().adjusted(2, 2, -2, -2), icono("casa").pixmap(32, 32), QRectF(0, 0, 32, 32))
-        p.end()
 
-    def _rect_casa(self):
-        """Botón "vista inicial" arriba a la derecha (a la izquierda tapaba la letra Z del eje)."""
-        return QRectF(self.width() - 20, 0, 20, 20)
+    def _letras_ejes(self, p, rot, centro, escala):
+        origen = np.array([-1.0, -1.0, -1.0])
+        for eje, color, letra, vecinas in EJES:
+            b = self._proyectar(rot, origen + np.array(eje) * LARGO_EJE, centro, escala)[0]
+            if not any((rot @ np.array(c, float))[2] > 1e-6 for c in vecinas) and \
+                    any(poli.containsPoint(b, Qt.OddEvenFill) for poli, _d in self._zonas):
+                continue                      # el eje corre por detrás y su punta queda tapada por el cubo
+            fuera = np.array([b.x() - centro.x(), b.y() - centro.y()])
+            fuera = fuera / (np.linalg.norm(fuera) or 1.0) * 7
+            p.setPen(color)
+            p.drawText(QRectF(b.x() + fuera[0] - 10, b.y() + fuera[1] - 10, 20, 20), Qt.AlignCenter, letra)
+
+    def _color_boton(self, clave):
+        return CIAN_CUBO if self._hover == ("giro", clave) else COLOR_BOTON
+
+    def _dibujar_giros(self, p):
+        """Los cuatro triángulos del borde y las dos flechas curvas, llenos y cian al pasar el cursor."""
+        for clave, r in self._rects_giro().items():
+            color = self._color_boton(clave)
+            if clave in ("horario", "antihorario"):
+                p.setPen(QPen(color, 2.4, Qt.SolidLine, Qt.RoundCap))
+                p.setBrush(Qt.NoBrush)
+                if clave == "antihorario":              # de la derecha hacia la izquierda, por arriba
+                    marco, ini, barrido, sentido = QRectF(r.adjusted(0, 0, 0, r.height())), 20, 130, QPointF(-0.5, 0.85)
+                else:                                   # de arriba hacia abajo, por la derecha
+                    marco, ini, barrido, sentido = QRectF(r.adjusted(-r.width(), 0, 0, 0)), 80, -140, QPointF(-0.6, 0.8)
+                camino = QPainterPath()
+                camino.arcMoveTo(marco, ini)
+                camino.arcTo(marco, ini, barrido)
+                p.drawPath(camino)
+                self._cabeza(p, camino.currentPosition(), sentido, color)
+                continue
+            c, m = r.center(), r.width() / 2
+            punta = {"izq": ((-m, -m), (-m, m), (m, 0)), "der": ((m, -m), (m, m), (-m, 0)),
+                     "arriba": ((-m, -m), (m, -m), (0, m)), "abajo": ((-m, m), (m, m), (0, -m))}[clave]
+            p.setPen(QPen(color, 1.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            p.setBrush(color)
+            p.drawPolygon(QPolygonF([QPointF(c.x() + dx, c.y() + dy) for dx, dy in punta]))
+
+    @staticmethod
+    def _cabeza(p, punta, sentido, color):
+        """Cabeza de flecha en `punta`, apuntando hacia `sentido`."""
+        d = np.array([sentido.x(), sentido.y()], float)
+        d /= np.linalg.norm(d)
+        o = np.array([-d[1], d[0]])
+        base = np.array([punta.x(), punta.y()]) - d * 6
+        p.setPen(Qt.NoPen)
+        p.setBrush(color)
+        p.drawPolygon(QPolygonF([punta] + [QPointF(*(base + o * s * 4)) for s in (1, -1)]))
+
+    def _dibujar_botones(self, p):
+        casa = self._rect_casa()
+        if self._hover == ("casa",):
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(53, 208, 238, 70))
+            p.drawRoundedRect(casa, 3, 3)
+        p.drawPixmap(casa.adjusted(2, 2, -2, -2), icono("casa").pixmap(32, 32), QRectF(0, 0, 32, 32))
+        r = self._rect_menu()
+        c, m = r.center(), r.width() * 0.32
+        color = CIAN_CUBO if self._hover == ("menu",) else COLOR_BOTON
+        p.setPen(QPen(color, 1.4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        p.setBrush(color)
+        p.drawPolygon(QPolygonF([QPointF(c.x() - m, c.y() - m * 0.5), QPointF(c.x() + m, c.y() - m * 0.5), QPointF(c.x(), c.y() + m * 0.9)]))
 
     def _etiqueta(self, p, poli, texto):
         ancho, alto = 100.0, 100.0
@@ -129,14 +397,24 @@ class ViewCube(QWidget):
         p.save()
         p.setTransform(t, True)
         p.setFont(f)
-        p.setPen(QColor("#5f656d"))
+        p.setPen(QColor("#4a515b"))
         p.drawText(QRectF(0, 0, ancho, alto), Qt.AlignCenter, texto)
         p.restore()
 
-    def _cara_en(self, pos):
-        for poli, vista in self._poligonos:
+    # ------------------------------------------------------------ ratón
+    def _objetivo_en(self, pos):
+        """Qué hay bajo `pos`: ("casa",), ("menu",), ("giro", clave) o ("zona", dirección); None si nada."""
+        if self._rect_casa().contains(pos):
+            return ("casa",)
+        if self._rect_menu().contains(pos):
+            return ("menu",)
+        if self._cara_alineada() is not None:
+            for clave, r in self._rects_giro().items():
+                if r.adjusted(-3, -3, 3, 3).contains(pos):
+                    return ("giro", clave)
+        for poli, d in self._zonas:
             if poli.containsPoint(pos, Qt.OddEvenFill):
-                return vista
+                return ("zona", d)
         return None
 
     def mouseMoveEvent(self, e):
@@ -147,9 +425,9 @@ class ViewCube(QWidget):
                 self._presionado = e.position()
                 self._arrastrado = True
             return
-        cara = self._cara_en(e.position())
-        if cara != self._hover:
-            self._hover = cara
+        objetivo = self._objetivo_en(e.position())
+        if objetivo != self._hover:
+            self._hover = objetivo
             self.update()
 
     def mousePressEvent(self, e):
@@ -160,14 +438,27 @@ class ViewCube(QWidget):
         if e.button() != Qt.LeftButton or self._presionado is None:
             return
         arrastrado, self._presionado = self._arrastrado, None
-        if arrastrado:
+        if not arrastrado:
+            self._activar(self._objetivo_en(e.position()))
+
+    def _activar(self, objetivo):
+        if objetivo is None:
             return
-        if self._rect_casa().contains(e.position()):
-            self.visor.animar_vista(lambda: self.visor.vista("iso"))
-            return
-        cara = self._cara_en(e.position())
-        if cara:
-            self.visor.animar_vista(lambda: self.visor.vista(cara))
+        if objetivo == ("casa",):
+            self._ir_al_inicio()
+        elif objetivo == ("menu",):
+            self.abrir_menu()
+        elif objetivo[0] == "giro":
+            r, u, b = self.visor.R
+            nueva = GIROS[objetivo[1]](r, u, b)
+            self.visor.animar_vista(lambda: self.visor.poner_rotacion(nueva))
+        else:
+            d = objetivo[1]
+            if sum(map(abs, d)) == 1:                      # una cara: su vista estándar
+                vista = next(v for n, _a, _b, _t, v in CARAS if tuple(n) == d)
+                self.visor.animar_vista(lambda: self.visor.vista(vista))
+            else:                                          # una arista (45°) o un vértice (isométrica)
+                self.visor.animar_vista(lambda: self.visor.vista_direccion(d))
 
     def leaveEvent(self, _e):
         self._hover = None

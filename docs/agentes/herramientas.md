@@ -21,7 +21,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [malla](#grupo-malla) | 22 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 20 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 12 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
-| [inspeccion](#grupo-inspeccion) | 31 | Ver y medir el resultado. |
+| [inspeccion](#grupo-inspeccion) | 32 | Ver y medir el resultado. |
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
 | [dibujo](#grupo-dibujo) | 18 | Espacio DIBUJO: hoja y cajetín, vistas (base, proyectada, sección, detalle), cotas, notas y exportación. |
 | [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
@@ -5204,6 +5204,7 @@ Ver y medir el resultado.
 | [`set_view`](#set_view) | sí | Guarda la cámara del visor: vista, órbita, proyección, zoom y objetivo. |
 | [`manage_named_views`](#manage_named_views) | sí | Lista, guarda, aplica, renombra o elimina vistas con nombre compatibles con el navegador de la ventana. |
 | [`set_grid`](#set_grid) | sí | Guarda mostrar rejilla, forzar a la rejilla y cuatro vistas. |
+| [`set_home_view`](#set_home_view) | sí | Fija o restablece la vista Inicio del ViewCube (la casita) o la vista de una de sus caras: «Establecer la vista actual como Inicio / como Frontal» y «Restablecer» de su menú. |
 | [`capture_viewport`](#capture_viewport) | no | Captura la vista 3D REAL de la ventana de OmniCAD tal como la ve la persona: cámara, estilo visual, entorno, selección y análisis mostrados. |
 
 ### `thread_info`
@@ -5611,6 +5612,7 @@ Guarda la cámara del visor: vista, órbita, proyección, zoom y objetivo. Admit
   - `look_at` (lista de número o null; opcional, por defecto `null`): objetivo [x, y, z] en mm; vacío usa el centro de los cuerpos.
   - `bodies` (lista de texto o null; opcional, por defecto `null`): cuerpos a encuadrar por nombre o id; vacío encuadra todos.
   - `clear` (true/false; opcional, por defecto `false`): borra la cámara guardada y vuelve al encuadre automático.
+  - `roll` (número; opcional, por defecto `0`): giro de la escena sobre el eje de la pantalla, en grados y contra el reloj (90 = las flechas curvas del ViewCube).
 - CLI: `omnicad call set_view --doc pieza.omnicad`
 
 ### `manage_named_views`
@@ -5634,6 +5636,21 @@ Guarda mostrar rejilla, forzar a la rejilla y cuatro vistas. La imagen dibuja la
   - `snap` (true/false; opcional, por defecto `null`): activa o desactiva forzar a la rejilla.
   - `four_views` (true/false; opcional, por defecto `null`): activa o desactiva la opción de cuatro vistas.
 - CLI: `omnicad call set_grid --doc pieza.omnicad`
+
+### `set_home_view`
+
+Fija o restablece la vista Inicio del ViewCube (la casita) o la vista de una de sus caras: «Establecer la vista actual como Inicio / como Frontal» y «Restablecer» de su menú. La ventana la usa al pulsar la casita o la cara; se guarda en el documento y admite deshacer.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `view` (texto; opcional, por defecto `null`): vista estándar o guardada que pasa a ser el Inicio; vacía = "iso", o la propia cara si se indica face.
+  - `direction` (lista de número o null; opcional, por defecto `null`): vector [x, y, z] hacia la cámara, también de una arista o un vértice del cubo; reemplaza a view.
+  - `roll` (número; opcional, por defecto `0`): giro de la escena sobre el eje de la pantalla, en grados y contra el reloj.
+  - `mode` ("fit" | "fixed_distance"; opcional, por defecto `"fit"`): fit encuadra los cuerpos al volver; fixed_distance vuelve al mismo objetivo y distancia (solo el Inicio).
+  - `face` ("front" | "back" | "right" | "left" | "top" | "bottom" o null; opcional, por defecto `null`): cara del ViewCube cuya vista se cambia en lugar del Inicio.
+  - `reset` (true/false; opcional, por defecto `false`): borra el Inicio (o la vista de esa cara) y vuelve a la de fábrica.
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): cuerpos que se encuadran para calcular el Inicio; vacío = todos.
+- CLI: `omnicad call set_home_view --doc pieza.omnicad`
 
 ### `capture_viewport`
 
