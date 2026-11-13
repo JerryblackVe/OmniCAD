@@ -1193,6 +1193,7 @@ _CARAS_FINAS = 300                # caras de la forma hasta las que se integra f
 # EXTRUSOR XOX.f3z: con ≤ 170 polos coincide con Eps 1e-12; con 244 o más tarda de 0,2 a 2 s y puede errar 1 % a 10 %
 # (más que la de siempre), y el cuerpo de la cartera del .f3d subió 0,4 % y tardó 3 veces más.
 _POLOS_FINOS = 170
+_POLOS_REGLADOS = 1700            # B-386: rosca completa (1160) y surco de 40 vueltas (hasta 1688)
 
 
 def es_forma_libre(forma):
@@ -1200,9 +1201,10 @@ def es_forma_libre(forma):
     return any(BRepAdaptor_Surface(c).GetType() not in _ANALITICAS for c in caras(forma))
 
 
-def _apta_para_integral_fina(forma):
+def _apta_para_integral_fina(forma, polos_reglados=0):
     """True si la forma tiene hasta `_CARAS_FINAS` caras y sus caras libres son todas B-spline de hasta `_POLOS_FINOS`
-    polos (B-129: lentes de esferas, agujeros roscados chicos). Las libres grandes siguen con la integración de siempre."""
+    polos (B-129: lentes de esferas, agujeros roscados chicos). `polos_reglados` admite además superficies con solo dos
+    polos en una dirección, para integrar hélices con una tolerancia intermedia (B-386)."""
     from OCP.GeomAbs import GeomAbs_BSplineSurface
     lista = caras(forma)
     if len(lista) > _CARAS_FINAS:
@@ -1214,7 +1216,8 @@ def _apta_para_integral_fina(forma):
         if sup.GetType() != GeomAbs_BSplineSurface:
             return False
         bs = sup.BSpline()
-        if bs.NbUPoles() * bs.NbVPoles() > _POLOS_FINOS:
+        polos = bs.NbUPoles() * bs.NbVPoles()
+        if polos > _POLOS_FINOS and (min(bs.NbUPoles(), bs.NbVPoles()) != 2 or polos > polos_reglados):
             return False
     return True
 
@@ -1262,6 +1265,10 @@ def _propiedades(forma, funcion):
         # B-129: la lente de dos esferas erraba hasta 0,5 mm³. Sin malla de control: los errores groseros que ella
         # atrapa son de caras libres grandes, y acá no hay ninguna.
         return _integral(forma, funcion, _EPS_VOLUMEN)
+    if funcion is BRepGProp.VolumeProperties_s and _apta_para_integral_fina(forma, _POLOS_REGLADOS):
+        # shortcut: solo regladas de hasta 1700 polos y 300 caras; medir antes de ampliar a superficies más complejas.
+        # B-386: 1e-6 corrige el 2 % de la rosca sin la malla; la solevación libre grande conserva su control (B-129).
+        return _integral(forma, funcion, 1e-6)
     exacto = _integral(forma, funcion)
     control = _por_malla(forma, funcion, _CONTROL_RELATIVO, True)
     if control is None or abs(exacto - control) <= _ERROR_GROSERO * abs(control):

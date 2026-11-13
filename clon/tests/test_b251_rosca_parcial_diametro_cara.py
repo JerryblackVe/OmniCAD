@@ -1,5 +1,6 @@
 """B-251: una rosca parcial ajusta el diámetro de toda la cara, como lo medido en Fusion el 2026-11-08."""
 import math
+from time import perf_counter
 
 import pytest
 
@@ -42,11 +43,13 @@ def test_afbma_parcial_tornea_toda_la_cara_y_da_el_volumen_medido_en_fusion():
 
 def test_la_rosca_completa_conserva_los_valores_anteriores():
     forma = _crear_rosca()
-    # Las medidas de main antes de B-251 (2026-11-12). Solo la integración adaptativa: la de `geo.volumen` (sin ella) no es
-    # exacta en esta hélice y cambia con la plataforma (B-379: 8950,29 en Linux y 8714,02 en Windows, con el mismo OCP).
-    # Relativa: el kernel arma una hélice apenas distinta en cada plataforma (adaptativa: 8774,16 en Linux, 8771,73 en
-    # Windows, 0,03 %); 0,1 % sigue atrapando un cambio real de la rosca.
-    assert geo.volumen_exacto(forma, 1e-6) == pytest.approx(8774.158769, rel=1e-3)
+    # B-386: medir por la API pública, sin el error del 2 % ni la malla de control de ~1,5 s.
+    # El kernel arma una hélice apenas distinta en Windows (8771,73): la tolerancia relativa cubre ese 0,03 %.
+    inicio = perf_counter()
+    volumen = geo.volumen(forma)
+    segundos = perf_counter() - inicio
+    assert volumen == pytest.approx(8774.16, rel=1e-3)
+    assert segundos < 1
     assert d_max(forma) == pytest.approx(19.769, abs=1e-3)
 
 
