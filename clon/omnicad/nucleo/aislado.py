@@ -44,6 +44,7 @@ TOPE_ENSAYO_LECTURA = 900             # segundos para ensayar la importación ST
 TOPE_MEMORIA_TRABAJADOR = 2048        # MB: pasado esto se cierra el trabajador al contestar (su memoria se libera con él)
 # B-418: el pedido se da por perdido si el trabajador, ya despierto, no lo toma en esto; o si no despierta en lo otro.
 PLAZO_RECIBIR, PLAZO_DESPERTAR = 3, 60
+PLAZO_PILA = 20                       # B-418: un pedido que pasa de esto deja las pilas de los hilos del trabajador en pila.txt
 # B-418: en Windows el trabajador toma el pedido y nunca devuelve la respuesta (E11, tanda 12, causa sin hallar): ahí todo
 # cálculo aparte va a un hijo de una sola tarea, que lee y deja su resultado en archivos. OMNICAD_PREVIA_EN_VENTANA=0 lo
 # vuelve a usar (para diagnosticarlo).
@@ -311,9 +312,12 @@ def _trabajar(carpeta):
     global formas_enviadas
     formas_enviadas = {}
     from ..timeline import calculo_aislado  # noqa: F401 — FL-9: OCP y el timeline (~1,5 s) antes del primer pedido
+    import faulthandler
+    pila = (carpeta / "pila.txt").open("w", encoding="utf-8")     # B-418: dónde se traba en Windows (lo escribe un hilo de C)
     (carpeta / "despierto").touch()
     for linea in pedidos_del_padre():
         (carpeta / "recibido").touch()      # B-418: el padre sabe que el pedido llegó (si no, lo reintenta)
+        faulthandler.dump_traceback_later(PLAZO_PILA, file=pila)
         args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
         tope = args.pop("_tope_mb")
         salida = _atender(linea.decode("ascii").strip(), args)
@@ -321,6 +325,7 @@ def _trabajar(carpeta):
             salida["_cerrar"] = True     # lo cierra el padre: si se fuera solo, el próximo pedido lo encontraría saliendo
         (carpeta / "salida.json").write_text(json.dumps(salida, default=_a_json), encoding="utf-8", newline="\n")
         (carpeta / "listo").touch()
+        faulthandler.cancel_dump_traceback_later()
 
 
 def principal(argv):

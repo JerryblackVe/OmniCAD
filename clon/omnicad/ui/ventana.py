@@ -139,8 +139,10 @@ class _FiltroEspera(QObject):
         if not isinstance(evento, QInputEvent):
             return False
         panel = self.ventana.panel
+        # el clic llega antes a la QWindow que al botón (y ahí se descarta): se mira qué hay bajo el puntero
         if (evento.type() == QEvent.KeyPress and evento.key() == Qt.Key_Escape
-                or evento.type() == QEvent.MouseButtonRelease and panel is not None and obj is panel.boton_cancelar):
+                or evento.type() == QEvent.MouseButtonRelease and panel is not None
+                and self.ventana.childAt(self.ventana.mapFromGlobal(evento.globalPosition().toPoint())) is panel.boton_cancelar):
             self.cancelado = True
         return True
 
