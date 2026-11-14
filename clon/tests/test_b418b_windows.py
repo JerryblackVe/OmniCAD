@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""B-418 (E11, tanda 12): en Windows el trabajador toma el pedido y nunca devuelve la respuesta. Ahí la previa va en la
-ventana y todo cálculo aparte (la previa pesada, el Aceptar de un documento grande) va a un hijo de una sola tarea, salvo
-OMNICAD_PREVIA_EN_VENTANA=0."""
+"""B-418: en Windows el trabajador tomaba el pedido y no contestaba (se trababa cargando la DLL de OpenBLAS con un ReadFile
+de la entrada estándar pendiente en otro hilo). Ya lee sin bloquear (`aislado._lineas_sin_bloquear`); hasta confirmarlo en
+la PC, en Windows sigue apagado (previa en la ventana, lo demás en hijos de una sola tarea) salvo OMNICAD_PREVIA_EN_VENTANA=0."""
 import os
 import subprocess
 import sys
@@ -65,3 +65,17 @@ def test_sin_trabajador_aceptar_crea_el_paso_con_un_hijo_de_una_sola_tarea(tmp_p
         v.close()
         v.deleteLater()
         app.processEvents()
+
+
+def test_el_lector_sin_bloquear_arma_las_lineas_y_sale_cuando_el_padre_cierra():
+    """Con trozos que cortan las líneas en cualquier lado, momentos sin nada y la tubería rota al final (el padre murió)."""
+    llegadas = [0, 3, 0, 9, 4]
+    datos = iter([b"pre", b"via\ncalen", b"tar\nfi"])
+
+    def mirar():
+        if not llegadas:
+            raise BrokenPipeError
+        return llegadas.pop(0)
+
+    lineas = list(aislado._lineas_sin_bloquear(mirar, lambda n: next(datos), esperar=0))
+    assert lineas == [b"previa\n", b"calentar\n", b"fi"]

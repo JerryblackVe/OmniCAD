@@ -45,9 +45,9 @@ TOPE_MEMORIA_TRABAJADOR = 2048        # MB: pasado esto se cierra el trabajador 
 # B-418: el pedido se da por perdido si el trabajador, ya despierto, no lo toma en esto; o si no despierta en lo otro.
 PLAZO_RECIBIR, PLAZO_DESPERTAR = 3, 60
 PLAZO_PILA = 20                       # B-418: un pedido que pasa de esto deja las pilas de los hilos del trabajador en pila.txt
-# B-418: en Windows el trabajador toma el pedido y nunca devuelve la respuesta (E11, tanda 12, causa sin hallar): ahí todo
-# cálculo aparte va a un hijo de una sola tarea, que lee y deja su resultado en archivos. OMNICAD_PREVIA_EN_VENTANA=0 lo
-# vuelve a usar (para diagnosticarlo).
+# B-418: en Windows el trabajador tomaba el pedido y no contestaba (se trababa cargando una DLL; ver `_lineas_sin_bloquear`).
+# Hasta confirmar el arreglo en la PC, ahí todo cálculo aparte va a un hijo de una sola tarea, que lee y deja su resultado
+# en archivos. OMNICAD_PREVIA_EN_VENTANA=0 vuelve a usar el trabajador.
 TRABAJADOR = sys.platform != "win32" or os.environ.get("OMNICAD_PREVIA_EN_VENTANA") == "0"
 PACIENCIA_PREVIA = 10                 # segundos para una previa vieja antes de cerrar al trabajador (rehacer el documento cuesta más)
 EN_HIJO = False
@@ -284,6 +284,26 @@ def _atender(tarea, args):
             documento_vivo._rehacer.clear()
 
 
+def _lineas_sin_bloquear(mirar, leer, esperar=0.01):     # 10 ms: lo que puede sumar a una previa
+    """B-418: las líneas de una tubería de Windows sin dejar un ReadFile esperando. Con uno pendiente sobre la entrada
+    estándar, cargar una DLL en otro hilo se trababa para siempre (scipy cargando OpenBLAS en la previa: el trabajador
+    tomaba el pedido y no contestaba). `mirar()` dice cuántos bytes llegaron (PeekNamedPipe) y lanza OSError cuando el padre
+    cierra la tubería o muere; `leer(n)` lee solo eso."""
+    resto = b""
+    while True:
+        try:
+            hay = mirar()
+        except OSError:
+            break
+        if not hay:
+            time.sleep(esperar)
+            continue
+        *lineas, resto = (resto + leer(hay)).split(b"\n")
+        yield from (linea + b"\n" for linea in lineas)
+    if resto:
+        yield resto
+
+
 def pedidos_del_padre():
     """Las líneas de la entrada estándar. B-396: un hilo las lee y, cuando el padre la cierra o muere (el sistema la
     cierra), termina el proceso aunque haya un cálculo en curso: antes un hijo huérfano seguía horas al 100 % de CPU.
@@ -293,7 +313,14 @@ def pedidos_del_padre():
 
     def leer():
         try:
-            for linea in os.fdopen(0, "rb"):
+            if sys.platform == "win32":
+                import _winapi
+                import msvcrt
+                manija = msvcrt.get_osfhandle(0)
+                lineas = _lineas_sin_bloquear(lambda: _winapi.PeekNamedPipe(manija)[0], lambda n: os.read(0, n))
+            else:
+                lineas = os.fdopen(0, "rb")
+            for linea in lineas:
                 cola.put(linea)
         except BaseException:       # B-418: sin este hilo el trabajador esperaba para siempre; el padre ve la caída y el motivo
             traceback.print_exc()
