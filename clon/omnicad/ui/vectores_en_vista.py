@@ -119,6 +119,7 @@ class VectoresEnVista(QObject):
     def __init__(self, ventana):
         super().__init__(ventana)
         self.v, self.activo, self.capas = ventana, None, {}
+        self.dormidas = {}      # capas de bocetos ocultos o en edición: fuera de `capas`, no reciben clics (B-440)
         self.aplicando = False
         self.doc = None
         ventana.visor.installEventFilter(self)
@@ -133,15 +134,16 @@ class VectoresEnVista(QObject):
         if self.doc is not self.v.doc:
             self.doc = self.v.doc
             self.activo = None
-            for lz in self.capas.values():
+            for lz in [*self.capas.values(), *self.dormidas.values()]:
                 lz.hide()
                 lz.objetos.panel.hide()
                 lz.objetos.panel.deleteLater()
                 lz.deleteLater()
             self.capas.clear()
+            self.dormidas.clear()
             self.v.area.panel_objetos = None
-        vivos = {k: br for k, br in estado.bocetos.items() if br.boceto.objetos and k not in ocultos
-                 and any(o.id == k and hasattr(o, "boceto") for o in self.v.doc.operaciones)}
+        con_boceto = {o.id for o in self.v.doc.operaciones if hasattr(o, "boceto")}
+        vivos = {k: br for k, br in estado.bocetos.items() if br.boceto.objetos and k not in ocultos and k in con_boceto}
         for k in list(self.capas):
             if k not in vivos:
                 lz = self.capas.pop(k)
@@ -150,12 +152,16 @@ class VectoresEnVista(QObject):
                     self.v.area.panel_objetos = None
                 lz.objetos.panel.hide()
                 lz.hide()
-                lz.objetos.panel.deleteLater()
-                lz.deleteLater()
+                # B-440: al salir de editar el boceto se rearmaba con otro solver y su panel (~70 ms por texto)
+                self.dormidas[k] = lz
+        for k in [k for k in self.dormidas if k not in con_boceto]:     # se borró el paso
+            lz = self.dormidas.pop(k)
+            lz.objetos.panel.deleteLater()
+            lz.deleteLater()
         if self.disponible():
             for k, br in vivos.items():
                 if k not in self.capas:
-                    self.capas[k] = LienzoVectorial(self, br)
+                    self.capas[k] = self.dormidas.pop(k, None) or LienzoVectorial(self, br)
                 self.capas[k].cargar(br)
         for lz in self.capas.values():
             mostrar = self.disponible() and lz is self.activo

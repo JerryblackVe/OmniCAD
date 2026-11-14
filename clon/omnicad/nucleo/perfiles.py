@@ -118,7 +118,11 @@ def _capas_de_texto(del_texto):
     cajas = _cajas(llenas)
     letras, huecos = [], []
     for i, p in enumerate(del_texto):
-        profundidad = sum(1 for j in _caras_con(_punto_adentro(p.cara), cajas, llenas) if j != i)
+        # B-440: mallar la letra para hallar su punto costaba ~4 ms; `detectar` devuelve los mismos perfiles de su caché
+        # y el relleno del boceto los vuelve a clasificar en cada cota y al terminar (cada texto, dos veces)
+        if getattr(p, "_punto", None) is None:
+            p._punto = _punto_adentro(p.cara)
+        profundidad = sum(1 for j in _caras_con(p._punto, cajas, llenas) if j != i)
         (huecos if profundidad % 2 else letras).append(p)
     return letras, huecos
 
