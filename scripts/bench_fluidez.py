@@ -80,6 +80,12 @@ def _esperar(condicion, motivo, segundos=90):
         if time.perf_counter() >= fin:
             raise RuntimeError(f"Sin respuesta en {segundos} s: {motivo}")
         QTest.qWait(1)
+        # QTest.qWait no suelta el GIL y frena los hilos de la app (FL-3b: mallar 23 cuerpos, 1,7 s → 24 s); la app real
+        # espera en exec(), que sí lo suelta. Lo que tarda en volver es la ventana esperando el GIL: cuenta como bloqueo.
+        antes = time.perf_counter()
+        time.sleep(0.002)
+        if (ms := (time.perf_counter() - antes) * 1000 - 2) > 50:
+            sonda.BLOQUEOS.append(("GIL", round(ms), time.time()))
 
 
 def _responde():
@@ -405,6 +411,41 @@ def _eliminar(r):
         r["detalle"]["eliminar_ms"] = round((time.perf_counter() - inicio) * 1000, 2)
 
 
+def _aceptar_deshacer(v, cid, r):
+    """FL-3b: Mover/copiar un cuerpo, Aceptar, Deshacer y Rehacer, cada uno con su tiempo (incluye el cálculo aparte)."""
+    p = A.abrir(v, "mover_copiar")
+    A.elegir(p, "cuerpos", A.hit_cuerpo(v, cid))
+    _teclear(_campo(p, "dz"), "5")
+    _esperar(lambda: not p._t_previa.isActive() and p._hijo_previa is None, "previa de Mover")
+    sonda.BLOQUEOS.clear()
+    medidas = r["detalle"]["submedidas"] = {"aceptar_ms": _aceptar(v, p)}
+    pasos = len(v.doc.operaciones)
+    for nombre, accion, quedan in (("deshacer_ms", "deshacer", pasos - 1), ("rehacer_ms", "rehacer", pasos)):
+        # la acción del menú y no Ctrl+Z: con la ventana minimizada el atajo no siempre llega; la sonda no mide trigger()
+        inicio = time.perf_counter()
+        v.acciones[accion].trigger()
+        if (ms := (time.perf_counter() - inicio) * 1000) > sonda.UMBRAL_MS:
+            sonda.BLOQUEOS.append((f"{accion}.trigger", round(ms), time.time()))
+        _esperar(lambda q=quedan: len(v.doc.operaciones) == q and not v.doc._esperando_hijo, f"{nombre} no terminó")
+        _responde()
+        medidas[nombre] = round((time.perf_counter() - inicio) * 1000, 2)
+    r["aceptar_ms"] = medidas["aceptar_ms"]
+
+
+def _aceptar_20(r):
+    s = api.Sesion()
+    for i in range(20):
+        cid = _cuerpo(s, length=10, width=10, height=10, x=i * 14)
+    with _ventana(s) as v:
+        _aceptar_deshacer(v, cid, r)
+
+
+def _aceptar_motor(r):
+    def despues(v):
+        _aceptar_deshacer(v, next(iter(v.doc.estado_final.cuerpos)), r)
+    _pieza_real("l", despues)(r)
+
+
 def _abrir(r):
     s = api.Sesion()
     base = _cuerpo(s, length=300, width=180, height=8)
@@ -520,7 +561,7 @@ def _orbita(r):
                                 evento_max_ms=max(tiempos), cuadros_s=round(1000 / statistics.mean(tiempos), 2))
 
 
-def _pieza_real(letra):
+def _pieza_real(letra, despues=None):
     def correr(r):
         ruta = next((c for c in (RAIZ / Path(x).expanduser() if not x.startswith("~") else Path(x).expanduser()
                                  for x in PIEZAS_REALES[letra]) if c.is_file()), None)
@@ -541,6 +582,8 @@ def _pieza_real(letra):
                 _responde()
                 r["detalle"]["abrir_ms"] = round((time.perf_counter() - inicio) * 1000, 2)
                 r["detalle"]["pasos"] = len(v.doc.operaciones)
+                if despues is not None:
+                    despues(v)
     return correr
 
 
@@ -622,6 +665,10 @@ ESCENARIOS = dict(zip("abcdefghijk", (escenario_a, escenario_b, escenario_c, esc
                                      escenario_k), strict=True))
 for _letra in PIEZAS_REALES:
     ESCENARIOS[_letra] = (lambda letra: lambda: _escenario(letra, _pieza_real(letra)))(_letra)
+# FL-3b (s, t): letras aparte de las que suma B-337 (p a r)
+TITULOS.update(s="Aceptar, deshacer y rehacer · 20 pasos", t="Aceptar, deshacer y rehacer en motor_impreso (pieza real)")
+ESCENARIOS["s"] = lambda: _escenario("s", _aceptar_20)
+ESCENARIOS["t"] = lambda: _escenario("t", _aceptar_motor)
 
 
 def correr_aislado(letra):
@@ -671,7 +718,7 @@ def resumir(corridas):
 def main():
     """CLI del banco, serial por escenario y repetición."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("letras", nargs="*", help="escenarios a–o (l–o: piezas reales); por defecto todos")
+    parser.add_argument("letras", nargs="*", help="escenarios a–o, s y t (l–o y t: piezas reales); por defecto todos")
     parser.add_argument("--json", type=Path, help="archivo de resultados y corridas originales")
     parser.add_argument("--rep", type=int, default=3, help="repeticiones por escenario (mediana; predeterminado: 3)")
     parser.add_argument("--hijo", choices=ESCENARIOS, help=argparse.SUPPRESS)
@@ -681,7 +728,7 @@ def main():
         return 0
     letras = opciones.letras or list(ESCENARIOS)
     if opciones.rep < 1 or any(letra not in ESCENARIOS for letra in letras):
-        parser.error("usar letras a–o y --rep mayor que cero")
+        parser.error("usar letras a–o, s o t y --rep mayor que cero")
     if sys.platform != "win32" and (os.environ.get("QT_QPA_PLATFORM") != "xcb" or not os.environ.get("DISPLAY")):
         parser.error("El visor exige QT_QPA_PLATFORM=xcb + xvfb-run -a (o DISPLAY real); offscreen no sirve")
     (RAIZ / "evidencias").mkdir(exist_ok=True)

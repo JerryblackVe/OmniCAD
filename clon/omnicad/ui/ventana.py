@@ -43,7 +43,7 @@ from ..nucleo.analisis import colores_grupos_malla
 from ..restricciones import Boceto
 from ..timeline import entidades as ent
 from ..timeline.aspectos_doc import colores_componentes
-from ..timeline.documento import Documento, ErrorDocumento
+from ..timeline.documento import CalculoDiferido, Documento, ErrorDocumento
 from ..timeline.operaciones import OpBoceto, OpImportarSTEP, propiedades_cuerpo
 from ..timeline.ops_chapa import es_patron_plano
 from ..timeline.ops_ensamblar import familia
@@ -63,7 +63,7 @@ from .panel_datos import PanelDatos
 from .panel_timeline import PanelTimeline
 from .preferencias import DETALLES, EFECTOS, PERFILES, PRESETS, DialogoPreferencias, Preferencias
 from .superposiciones import AreaVisor, BarraNavegacion
-from .visor3d import ENTORNOS, ESTILOS, Visor3D
+from .visor3d import ENTORNOS, ESTILOS, Visor3D, es_malla
 
 log = logging.getLogger(__name__)
 FILTRO_PROYECTO = "Proyectos OmniCAD (*.omnicad *.fclone)"     # .fclone: proyectos del nombre anterior
@@ -220,6 +220,7 @@ class VentanaPrincipal(QMainWindow):
         self.prefs_colores_componente = False   # INSPECCIONAR › Mostrar colores de componente (Mayús+N)
         self.prefs_grupos_caras = False         # INSPECCIONAR › Mostrar grupos de caras de malla (Mayús+F)
         self.panel = None                   # diálogo de comando abierto (PanelComando)
+        self._mallas_aparte = None          # FL-3b: mallas hechas en el hilo de `_cambio_aparte`, mientras se aplican
         self._espera = _FiltroEspera(self)
         self._espacio_en_botones = _EspacioEnBotones(self)
         QApplication.instance().focusChanged.connect(self._foco_en_boton)
@@ -2709,15 +2710,92 @@ class VentanaPrincipal(QMainWindow):
         if self.modo_boceto.activo:
             self.modo_boceto.lienzo.deshacer()
         elif not self.arrastre.deshacer():
-            self._intentar(self.doc.deshacer)
-            self.releer_espacios()      # deshacer también revierte doc.espacios (guiones de animación)
+            # deshacer también revierte doc.espacios (guiones de animación)
+            self._cambio_aparte(lambda: (self.doc.deshacer(), self.releer_espacios()))
 
     def _rehacer(self):
         if self.modo_boceto.activo:
             self.modo_boceto.lienzo.rehacer()
             return
-        self._intentar(self.doc.rehacer)
-        self.releer_espacios()
+        self._cambio_aparte(lambda: (self.doc.rehacer(), self.releer_espacios()))
+
+    def _cambio_aparte(self, funcion, al_terminar=None, mallas_previa=None):
+        """FL-3b: hace `funcion` (Aceptar, editar, deshacer, rehacer) como `_intentar`. Si su cálculo va al proceso aparte,
+        lo hace en otro hilo con una barra modal y Cancelar (o Esc), que deja el documento como estaba, y al terminar
+        repite `funcion` (o llama a `al_terminar`), que adopta lo calculado. Devuelve None mientras el cálculo sigue.
+        `mallas_previa` ({id de cuerpo: (v, n, seg)}): las de la previa de esta misma operación, ya hechas."""
+        from PySide6.QtWidgets import QProgressDialog
+        doc = self.doc
+        doc.diferir_calculo = doc._precalculo is None     # al repetir no se difiere: si no coincide, espera como antes
+        try:
+            hecho = self._intentar(funcion)
+        except CalculoDiferido as d:
+            pendiente = d
+        else:
+            if hecho and self._mallas_aparte:       # la previa del panel, aún a la vista, las sacó de la caché del visor
+                self.visor.precargar(self._mallas_aparte)
+            return hecho
+        finally:
+            doc.diferir_calculo = False
+        resultado = {}
+
+        def trabajo():
+            try:
+                calculo = doc.calcular_aparte(pendiente.tarea, pendiente.datos)
+                # también en este hilo: reconocer los cuerpos que no cambiaron y mallar los demás (20 cubos: 140 ms)
+                if not calculo["parcial"]:
+                    Documento._conservar_formas(doc._estados, calculo["estados"])
+                    calculo["conservadas"] = True
+                marcador = calculo["receta"]["marcador"]
+                cuerpos = calculo["estados"][marcador - 1].cuerpos.values() if marcador else ()
+                # mallar acá retiene el GIL: el filete de una M20 × 60 trababa la ventana 1,5 s; la previa ya trajo su malla
+                resultado["mallas"] = {id(c.forma): self.visor.datos_cuerpo(c.forma, (mallas_previa or {}).get(c.id))
+                                       for c in cuerpos if id(c.forma) not in self.visor._cache}
+                resultado["calculo"] = calculo
+            except Exception as e:  # noqa: BLE001 — se informa en el hilo de la ventana
+                resultado["error"] = e
+
+        espera = QProgressDialog("Calculando en un proceso aparte…", "Cancelar", 0, 0, self)
+        espera.setWindowTitle(NOMBRE_APP)
+        espera.setWindowModality(Qt.WindowModal)
+        espera.setMinimumDuration(0)
+        hilo, reloj = threading.Thread(target=trabajo, daemon=True), QTimer(espera, interval=20)
+
+        def mirar():
+            if hilo.is_alive():
+                return
+            reloj.stop()
+            cancelada = espera.wasCanceled()
+            espera.canceled.disconnect(cancelar)     # close() también emite canceled: cerraba el trabajador vivo
+            espera.close()
+            espera.deleteLater()
+            if cancelada or doc is not self.doc or not self.isVisible():     # cerrar la ventana también descarta
+                if self.panel is not None:      # como Esc en la espera (B-418c): el comando también se cierra
+                    self.panel.cancelar()
+                return
+            if "error" in resultado:
+                def fallar():
+                    raise resultado["error"]
+                self._intentar(fallar)
+                return
+            self._mallas_aparte = resultado["mallas"]
+            self.visor.precargar(self._mallas_aparte)
+            doc._precalculo = (pendiente.tarea, pendiente.datos, resultado["calculo"])
+            try:
+                (al_terminar or (lambda: self._cambio_aparte(funcion)))()
+            finally:
+                doc._precalculo = self._mallas_aparte = None
+
+        def cancelar():
+            aislado.cerrar_trabajador()            # corta el cálculo aparte; lo que traiga el hilo se descarta
+            self.mensaje("Cálculo cancelado: el documento quedó como estaba.", 5000)
+
+        espera.canceled.connect(cancelar)
+        reloj.timeout.connect(mirar)
+        hilo.start()
+        reloj.start()
+        espera.show()
+        return None
 
     def _salir_de_boceto(self):
         """Antes de otro comando: termina el boceto activo (como Fusion), cancela la elección de plano y
@@ -2821,8 +2899,18 @@ class VentanaPrincipal(QMainWindow):
         pesada; el paso también se calcula allá, con la ventana viva (B-306)."""
         if op is None:
             return True
-        if not self._intentar(lambda: (self._reemplazar if edicion else self._agregar)(op, aparte)):
-            return False
+        panel, previa, mallas = self.panel, self._estado_previa, None
+        # solo un paso nuevo al final: al editar o con el marcador atrás, la previa no es el estado final (pasos posteriores)
+        if (not edicion and self.doc.marcador == len(self.doc.operaciones) and panel is not None and previa is not None
+                and panel._previa_ok and panel.ultima_op is not None and panel.ultima_op.a_dict() == op.a_dict()):
+            # la previa al día de esta operación ya está mallada (en la ventana o aparte); no la gruesa ni la de prismas
+            cache, gruesas = self.visor._cache, self.visor._previa_gruesa
+            mallas = {cid: datos[1:4] for cid, c in previa.cuerpos.items()
+                      if not es_malla(c.forma) and id(c.forma) not in gruesas and (datos := cache.get(id(c.forma)))}
+        hecho = self._cambio_aparte(lambda: (self._reemplazar if edicion else self._agregar)(op, aparte),
+                                    None if panel is None else lambda: panel.cerrando or panel.aceptar(), mallas)
+        if not hecho:
+            return hecho                # None: se calcula aparte y el panel vuelve a Aceptar al terminar (FL-3b)
         if not edicion and op.TIPO == "patron_plano":   # al crearlo, el patrón plano queda a la vista
             nuevo = [c.id for c in self.doc.estado_final.cuerpos.values()
                      if c.op_id == op.id and es_patron_plano(c)]
@@ -3167,6 +3255,7 @@ class VentanaPrincipal(QMainWindow):
                 return
             reloj.stop()
             cancelada = espera.wasCanceled()
+            espera.canceled.disconnect(cancelar)     # close() también emite canceled: cerraba el trabajador vivo
             espera.close()
             espera.deleteLater()
             if cancelada:

@@ -6,6 +6,7 @@ import math
 import time
 
 import pytest
+from _calculo_aparte import esperar_barra
 from PySide6.QtCore import QSettings
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
@@ -78,8 +79,8 @@ def test_aceptar_con_la_previa_aparte_calcula_el_paso_aparte(ventana, monkeypatc
     """Aceptar en plena previa aparte no calcula el paso en la ventana (con una rosca eran minutos congelada)."""
     from omnicad.timeline.documento import Documento
     monkeypatch.setattr(PanelComando, "_previa_pesada", lambda *a: True)
-    pedidos, real = [], Documento._solicitar_calculo
-    monkeypatch.setattr(Documento, "_solicitar_calculo", lambda doc, t, d: pedidos.append(t) or real(doc, t, d))
+    pedidos, real = [], Documento.calcular_aparte
+    monkeypatch.setattr(Documento, "calcular_aparte", lambda doc, t, d, esperar=None: pedidos.append(t) or real(doc, t, d, esperar))
     caja = _cuerpo(ventana, "Caja")
     antes = geo.volumen_exacto(caja.forma)
     p = ventana.ejecutar_comando(CaraDesfase())
@@ -90,6 +91,7 @@ def test_aceptar_con_la_previa_aparte_calcula_el_paso_aparte(ventana, monkeypatc
     p._calcular_previa()
     assert p._hijo_previa is not None             # la previa sigue en vuelo
     p.aceptar()
+    esperar_barra(ventana)                        # FL-3b: el paso se calcula en otro hilo y el panel se cierra al terminar
     assert ventana.panel is None and pedidos == ["prevuelo_cambio"]
     assert ventana.doc.resultados[-1].estado == "ok"
     assert geo.volumen_exacto(_cuerpo(ventana, "Caja").forma) == pytest.approx(antes + 40 * 40 * 2)

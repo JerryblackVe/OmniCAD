@@ -3,6 +3,7 @@
 import sys
 
 import pytest
+from _calculo_aparte import esperar_barra
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -89,6 +90,7 @@ def test_aceptar_sin_previa_conserva_panel_valores_y_deshacer_si_el_ensayo_falla
     _escribir(panel, "6 mm")
     antes, deshacer = v.doc.a_dict(), list(v.doc._deshacer)
     QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
+    esperar_barra(v)                                        # FL-3b: el ensayo corre en otro hilo
     assert excepciones == []
     assert avisos and "error nativo simulado" in avisos[-1]
     assert v.panel is panel and panel.isVisible()
@@ -96,6 +98,7 @@ def test_aceptar_sin_previa_conserva_panel_valores_y_deshacer_si_el_ensayo_falla
     assert v.doc.a_dict() == antes and v.doc._deshacer == deshacer
     monkeypatch.setattr(aislado, "correr_json", _aprobar(monkeypatch))
     QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
+    esperar_barra(v)                                        # FL-3b: el ensayo corre en otro hilo
     assert v.panel is None and excepciones == []
     assert len(v.doc._deshacer) == len(deshacer) + 1
     assert geo.volumen(v.doc.estado_final.cuerpos["op2.c1"].forma) == pytest.approx(90)
@@ -208,6 +211,7 @@ def test_previa_en_vivo_corre_en_este_proceso_y_aceptar_sigue_aislado(ventana, m
     _escribir(panel, "8 mm")                                 # un valor que ninguna previa aislada ensayó
     assert len(llamadas) == 2
     QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
+    esperar_barra(v)                                        # FL-3b: el ensayo corre en otro hilo
     assert v.panel is None and len(llamadas) == 3           # aceptar ensaya el cambio real, aislado
     assert geo.volumen(v.doc.estado_final.cuerpos["op2.c1"].forma) == pytest.approx(120)
 

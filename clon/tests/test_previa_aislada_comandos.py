@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from _calculo_aparte import esperar_barra
 from PySide6.QtCore import QSettings
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
@@ -158,6 +159,7 @@ def test_el_patron_sobre_la_placa_se_calcula_aparte_y_aceptar_da_el_solido_exact
     assert len(estado._mallas_previa) == 2          # solo las copias vienen del proceso aparte (FL-1: con su B-Rep)
     assert len(ventana_placa.doc.estado_final.cuerpos) == 1
     p.aceptar()
+    esperar_barra(ventana_placa)                    # FL-3b: el paso se calcula en otro hilo
     assert ventana_placa.panel is None
     finales = ventana_placa.doc.estado_final.cuerpos
     assert len(finales) == 3 and all(not es_malla(c.forma) and geo.es_valida(c.forma) for c in finales.values())

@@ -2100,7 +2100,10 @@ class PanelComando(QFrame):
         en_vuelo = self._hijo_previa is not None
         self._cancelar_previa_hijo()
         op = self.ultima_op
-        if self.confirmar is not None and not self.confirmar(op):
+        confirmado = True if self.confirmar is None else self.confirmar(op)
+        if confirmado is None:          # FL-3b: se calcula aparte; la ventana vuelve a llamar a `aceptar` al terminar
+            return
+        if not confirmado:
             if en_vuelo:                 # no fue: la previa soltada se pide de nuevo, nunca un «Calculando…» quieto
                 self._t_previa.start()
             return

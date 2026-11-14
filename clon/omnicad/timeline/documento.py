@@ -143,6 +143,16 @@ def _grupos_de(datos, ids):
     return salida
 
 
+class CalculoDiferido(Exception):
+    """FL-3b: con `Documento.diferir_calculo`, un cambio que necesita el proceso aparte no espera en la ventana: se lanza
+    antes de tocar el documento, con lo que hay que calcular. La ventana lo calcula en otro hilo (`calcular_aparte`), lo
+    deja en `_precalculo` y repite el cambio, que adopta el resultado sin volver a calcular."""
+
+    def __init__(self, tarea, datos):
+        super().__init__(tarea)
+        self.tarea, self.datos = tarea, datos
+
+
 class ResultadoPaso:
     def __init__(self, estado, mensaje=""):
         self.estado, self.mensaje = estado, mensaje
@@ -179,6 +189,8 @@ class Documento:
         self._previa = None       # la última vista previa calculada (ver `previsualizar` y `_de_previa`)
         self.posicion_pendiente = None    # componentes arrastrados sin capturar (`timeline/posicion.py`); no se guarda
         self._ultimo_prevuelo = None    # (huella, cálculo) de la última previa; se comparte con Aceptar
+        self.diferir_calculo = False    # FL-3b: la ventana calcula en otro hilo (ver `CalculoDiferido`)
+        self._precalculo = None         # (tarea, datos, cálculo) que la ventana ya hizo aparte para el próximo cambio
         self.motor = motor.motor_activo()
         self._contador = 0
         self._contador_cotas = 0
@@ -1059,6 +1071,15 @@ class Documento:
         return calculo
 
     def _solicitar_calculo(self, tarea, datos):
+        hecho, self._precalculo = self._precalculo, None
+        if hecho is not None and hecho[:2] == (tarea, datos):
+            return hecho[2]
+        if self.diferir_calculo:
+            raise CalculoDiferido(tarea, datos)
+        return self.calcular_aparte(tarea, datos, self.al_esperar)
+
+    def calcular_aparte(self, tarea, datos, esperar=None):
+        """Calcula en el proceso aparte; la ventana lo llama desde otro hilo con lo que trajo `CalculoDiferido` (FL-3b)."""
         from ..nucleo import aislado
         from .calculo_aislado import _leer_calculo
 
@@ -1066,7 +1087,7 @@ class Documento:
             raise ErrorDocumento("Ya hay un cálculo en un proceso aparte: esperá a que termine.")
         self._esperando_hijo = True
         try:
-            salida = aislado.correr_json(tarea, datos, aislado.TOPE_PREVUELO_PARAMETROS, self.al_esperar)
+            salida = aislado.correr_json(tarea, datos, aislado.TOPE_PREVUELO_PARAMETROS, esperar)
             return _leer_calculo(salida)
         except (aislado.TareaAislada, ValueError, ErrorGeometria, OSError) as e:
             raise ErrorDocumento(f"El cálculo aislado falló: {e}. No se aplicó el resultado y OmniCAD sigue andando.") from e
@@ -1091,7 +1112,8 @@ class Documento:
         self._contador_cotas = receta.get("contador_cotas", 0)
         self._contador = receta["contador"]
         self.marcador = receta["marcador"]
-        if not calculo["parcial"]:      # en un envío parcial, lo que no cambió ya llega como el mismo objeto
+        # en un envío parcial, lo que no cambió ya llega como el mismo objeto; «conservadas»: la ventana lo hizo en otro hilo
+        if not (calculo["parcial"] or calculo.get("conservadas")):
             self._conservar_formas(self._estados, calculo["estados"])
         self._estados = calculo["estados"]
         self.resultados = [ResultadoPaso(estado, mensaje) for estado, mensaje in calculo["resultados"]]
