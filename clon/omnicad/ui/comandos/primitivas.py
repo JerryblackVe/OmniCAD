@@ -192,7 +192,7 @@ class _Primitiva(Comando):
             lado = {"interior": -1, "centro": 0, "exterior": 1}[params["posicion_toroide"]]
             menor = ctx.evaluar(params["radio_menor"])
             if not menor < ctx.evaluar(params["radio_mayor"]) + lado * menor:
-                raise ErrorComando("El diámetro del toroide tiene que ser menor que el diámetro interior.")
+                raise ErrorComando("El diámetro del tubo tiene que ser menor que el diámetro del toroide (con la posición elegida).")
         x, y, z, centrada = self.posicion(v, ctx)
         objetivo = [h["ref"]["cuerpo"] for h in v.get("objetivo") or [] if h["ref"].get("tipo") == "cuerpo"]
         inclinado = self._plano_inclinado(v, ctx)
@@ -348,12 +348,14 @@ class Esfera(_Primitiva):
 
 class Toroide(_Primitiva):
     CLAVE, TITULO, ICONO, FORMA = "toroide", "Toroide", "toroide", "toroide"
-    AYUDA = ("Toroide: clic en un plano o una cara horizontal para el centro, diámetro interior (del "
-             "círculo de referencia), diámetro del toroide (del tubo) y posición del tubo respecto de ese círculo.")
+    AYUDA = ("Toroide: clic en un plano o una cara para el centro. Diámetro del toroide: círculo de referencia; "
+             "con Posición centrada pasa por la línea central del tubo, no por el borde del agujero. "
+             "Diámetro del tubo: grosor de la sección circular. Con diámetros de 40 y 10 mm y Posición centrada, "
+             "el agujero mide 30 mm. Posición coloca el tubo adentro, centrado o afuera del círculo de referencia.")
     VARIANTE = ("forma", "toroide")
     ETIQUETA_CENTRO = "Perfil"
-    MEDIDAS = [("diametro", "Diámetro interior", "40 mm", "radio_mayor", True),
-               ("diametro_tubo", "Diámetro del toroide", "10 mm", "radio_menor", True)]
+    MEDIDAS = [("diametro", "Diámetro del toroide", "40 mm", "radio_mayor", True),
+               ("diametro_tubo", "Diámetro del tubo", "10 mm", "radio_menor", True)]
     CRECE_EN_Z = False
 
     def campos_forma(self):
