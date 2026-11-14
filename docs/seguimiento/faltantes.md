@@ -94,7 +94,7 @@ Parcial 3.
 |---|---|---|---|---|---|---|
 | ASM-17 | Restricción de componentes | Parcial | Muy alta | Ampliar Tangente, animar/editar límites, resolver todas y comprobar uniones (ficha). | `tests/test_asm17_alinear.py`; `clon/omnicad/timeline/ops_ensamblar.py` | 2026-11-12 |
 | ASM-18 | Nuevo componente con opciones de Fusion | Parcial | Alta | A partir de cuerpos en comando, Tipo, Externo/diseño y Activar (ASM-9). | docs/brechas_ensamblar.md § ASM-18; `tests/test_asm18_nuevo_componente.py` | 2026-11-13 |
-| ASM-19 | Menú ENSAMBLAR y paneles como Fusion | Parcial | Media | Hecho (2026-11-13): orden y nombres del menú (Uniones de animación, Unión conforme a obra con Mayús+J), movimientos Corredera y Polo-ranura, panel de Unión en pestañas Posición y Movimiento con Componente 1, Componente 2 y Alineación plegables, y «Incluir componentes secundarios» encendido (panel y API; una receta vieja sin la clave sigue apagada). Falta: Relación de tangente como comando propio (hoy es el tipo Tangente de Restricción de componentes), «Activar conjuntos de contactos» y «Activar todos los contactos» grisados hasta SC6 y Modo de origen en tres botones (hoy es una lista). Unión conforme a obra ya tiene sus pestañas Componentes y Movimiento. | tests/test_ensamblar_asm20.py; docs/brechas_ensamblar.md § ASM-19 | 2026-11-13 |
+| ASM-19 | Menú ENSAMBLAR y paneles como Fusion | Parcial | Media | Falta Relación de tangente como comando propio, activar contactos (SC6) y Modo de origen en tres botones (ver ficha). | tests/test_ensamblar_asm20.py; docs/brechas_ensamblar.md § ASM-19 | 2026-11-13 |
 
 ## Capturas de Fusion sin clasificar (2026-11-02)
 
@@ -298,6 +298,10 @@ Bloqueado 1. Especificación: [plan_cpp.md](../plan_cpp.md).
 ### ASM-18 · Nuevo componente con opciones de Fusion
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Nuevo componente vacío y con opciones de Fusion **Queda:** Hecho (2026-11-13): componente vacío (sin cuerpos, por API y por el comando), nombre del componente (campo del comando, `name`), Padre (ya estaba) y «A partir de cuerpos» por API (`from_bodies`: un componente por cuerpo, en un solo deshacer). Falta: «A partir de cuerpos» en el comando (un paso por cuerpo: el comando devuelve un solo paso), Tipo de componente (Estándar o Chapa: OmniCAD no tiene componentes de chapa, la chapa es de cada cuerpo), Externo con Tipo de diseño (crea otro archivo: decidir el alcance) y Activar (no hay componente activo; depende de ASM-9). **Evidencia:** docs/brechas_ensamblar.md § ASM-18; `tests/test_asm18_nuevo_componente.py`
+
+### ASM-19 · Menú ENSAMBLAR y paneles como Fusion
+
+- **Historia (movida de la fila, 2026-11-14):** Hecho (2026-11-13): orden y nombres del menú (Uniones de animación, Unión conforme a obra con Mayús+J), movimientos Corredera y Polo-ranura, panel de Unión en pestañas Posición y Movimiento con Componente 1, Componente 2 y Alineación plegables, y «Incluir componentes secundarios» encendido (panel y API; una receta vieja sin la clave sigue apagada). Falta: Relación de tangente como comando propio (hoy es el tipo Tangente de Restricción de componentes), «Activar conjuntos de contactos» y «Activar todos los contactos» grisados hasta SC6 y Modo de origen en tres botones (hoy es una lista). Unión conforme a obra ya tiene sus pestañas Componentes y Movimiento.
 
 ### CF-6 · Diálogo al crear un diseño
 
