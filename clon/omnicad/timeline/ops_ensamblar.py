@@ -592,6 +592,20 @@ def _marco_en_pose(datos, matriz):
     return matriz @ local
 
 
+def _desvio_union(estado, u):
+    """(mm, grados) que la unión `u` dejó de cumplirse con las poses actuales, o None si no guarda cómo re-aplicarse. Compara el
+    marco del componente 1 con el del 2 llevado por el movimiento guardado de la unión (como el cierre de lazo)."""
+    datos = u.get("reaplicar")
+    if not datos or u.get("cierra_lazo"):
+        return None
+    from scipy.spatial.transform import Rotation
+    f1 = _marco_en_pose(datos["marco1"], _matriz_de(estado, u["comp1"]))
+    f2 = _marco_en_pose(datos["marco2"], _matriz_de(estado, u["comp2"]))
+    objetivo = f2 @ movimiento(u["tipo"], u["valores"], u["eje_giro"], u["eje_desliz"]) @ np.asarray(datos["alinear"], float)
+    giro = Rotation.from_matrix(objetivo[:3, :3].T @ f1[:3, :3]).magnitude()
+    return float(np.linalg.norm(f1[:3, 3] - objetivo[:3, 3])), math.degrees(float(giro))
+
+
 def _resolver_lazo(estado, ctx, cierre, camino):
     """Resuelve en matrices, sin transformar OCC durante las iteraciones."""
     from scipy.optimize import least_squares
@@ -1463,7 +1477,7 @@ class OpRestriccion(Operacion):
     `ref_angulo` opcional: la arista o el eje que fija el sentido). Centro: `modo1`/`modo2` son «simple» (la cara `ref1`/`ref2`)
     o «entre_caras» (con la segunda cara `ref1b`/`ref2b`); al menos uno es «entre_caras». Tangente (planos, cilindros, esferas, conos, toros, aristas rectas o circulares y vértices; `todas_caras` apagado exige que las caras se toquen). `filas` suma más restricciones entre los mismos
     dos componentes (el conjunto de la tabla de Fusion, cada una con los campos de arriba y su `nombre_fila`): se aplican en orden y se repite
-    hasta que todas se cumplen a la vez; si no convergen, error que nombra la fila en conflicto. Límites de desfase (Alinear y Ángulo): `minimo`/`maximo` y `apoyo`. Lo que falta de Fusion: resolver todas a la vez con las uniones."""
+    hasta que todas se cumplen a la vez; si no convergen, error que nombra la fila en conflicto. Límites de desfase (Alinear y Ángulo): `minimo`/`maximo` y `apoyo`. Las uniones tocadas se comprueban en la geometría (`_desvio_union`). Lo que falta de Fusion: resolver todas a la vez con las anteriores del timeline."""
     TIPO, ETIQUETA, ICONO = "restriccion", "Restricción", "⛓"
     PARAMS = {"tipo": "alinear", "ref1": None, "ref2": None, "desfase": "0 mm", "voltear": False, "ref_angulo": None,
               "modo1": "simple", "modo2": "simple", "ref1b": None, "ref2b": None, "todas_caras": True, "nombre_fila": "", "minimo": "", "maximo": "", "apoyo": False, "filas": []}
@@ -1490,16 +1504,26 @@ class OpRestriccion(Operacion):
 
     @staticmethod
     def _avisar_uniones(estado, ctx, movidos):
-        """Una restricción mueve el componente sin respetar las uniones: si una unión ata un componente movido con otro que
-        no se movió, esa unión deja de cumplirse. No se prohíbe (una unión con movimiento libre puede seguir valiendo), pero se
-        avisa con el nombre de cada una."""
+        """Comprueba en la geometría cada unión que toca un componente movido: si ya no se cumple avisa con su nombre y
+        cuánto se separó (mm y grados). No se prohíbe (una unión con movimiento libre puede seguir valiendo). Una unión que
+        sigue cumpliéndose no avisa. Sin datos para re-aplicarla (`reaplicar`), se avisa si ata un movido con uno que no."""
+        nombre = lambda k: estado.componentes.get(k, {}).get("nombre") or k   # noqa: E731
         for u in estado.uniones.values():
             a, b = u.get("comp1"), u.get("comp2")
-            if (a in movidos) != (b in movidos) and a and b:
-                dentro, fuera = (a, b) if a in movidos else (b, a)
-                nombre = lambda k: estado.componentes.get(k, {}).get("nombre") or k   # noqa: E731
-                ctx.aviso(f"La restricción mueve «{nombre(dentro)}», que está unido a «{nombre(fuera)}» por «{u.get('nombre')}»: "
-                          "esa unión puede dejar de cumplirse. Suprimí la unión o la restricción si se contradicen.")
+            if not (a and b) or not ({a, b} & movidos):
+                continue
+            medida = _desvio_union(estado, u)
+            if medida is None:
+                if (a in movidos) == (b in movidos):
+                    continue
+                detalle = ""
+            elif medida[0] <= 1e-4 and medida[1] <= 1e-4:
+                continue
+            else:
+                detalle = f" (separada {medida[0]:.3f} mm y {medida[1]:.2f}°)"
+            dentro, fuera = (a, b) if a in movidos else (b, a)
+            ctx.aviso(f"La restricción mueve «{nombre(dentro)}», que está unido a «{nombre(fuera)}» por «{u.get('nombre')}»: "
+                      f"esa unión puede dejar de cumplirse{detalle}. Suprimí la unión o la restricción si se contradicen.")
 
     def _resolver_filas(self, estado, ctx):
         """Aplica todas las filas y devuelve los componentes que movieron."""

@@ -307,7 +307,10 @@ def test_el_comando_de_la_ventana_arma_el_centro_y_se_edita(dos, tmp_path):
         p = v.ejecutar_comando(CATALOGO["restriccion_componentes"]())
         estado = v.doc.estado_final
         p.set_valor("tipo", "centro")
-        assert p.widgets["desfase"].isHidden() and p.widgets["angulo"].isHidden() and p.widgets["ref2b"].isHidden()
+        assert p.widgets["desfase"].isHidden() and p.widgets["angulo"].isHidden() and p.widgets["ref1b"].isHidden()
+        assert not p.widgets["ref2b"].isHidden()                   # el componente 2 arranca «Entre dos caras» (E11, 2026-11-14)
+        p.set_valor("modo2", "simple")
+        assert p.widgets["ref2b"].isHidden()
         p.set_valor("modo2", "entre_caras")
         assert not p.widgets["ref2b"].isHidden() and p.widgets["ref1b"].isHidden()
         for campo, sel, cuerpo in (("ref1", "<X", b), ("ref2", "<X", a), ("ref2b", ">X", a)):
@@ -681,6 +684,86 @@ def test_una_restriccion_que_mueve_un_componente_unido_avisa_con_el_nombre_de_la
     r = api.llamar(s, "constrain_components", dict(geometry1="<X", geometry2=">X", body1=b, body2=a, offset=30))
     texto = " ".join(r["avisos"])
     assert r["ok"] and f"«{union}»" in texto and "«CB»" in texto and "«CA»" in texto and "dejar de cumplirse" in texto, r
+
+
+def test_una_restriccion_que_deja_cumplida_la_union_no_avisa_y_la_que_la_rompe_dice_cuanto(dos):
+    """ASM-17: la unión se comprueba en la geometría (poses reales), no solo por nombrar a los componentes."""
+    s, a, b = dos
+    _ll(s, "create_joint", origin1="<Z", body1=b, origin2=">Z", body2=a)
+    r = api.llamar(s, "constrain_components", dict(geometry1="<Z", geometry2=">Z", body1=b, body2=a))
+    assert r["ok"] and not any("unido" in w for w in r["avisos"]), r         # B ya está donde la restricción la pone
+    _ll(s, "undo")
+    r = api.llamar(s, "constrain_components", dict(geometry1="<X", geometry2=">X", body1=b, body2=a, offset=30))
+    assert r["ok"] and any("separada 45.000 mm y 0.00°" in w for w in r["avisos"]), r
+    _ll(s, "undo")
+    r = api.llamar(s, "constrain_components", dict(geometry1="<Z", geometry2=">Z", body1=b, body2=a, flip=True))
+    assert r["ok"] and any("180.00°" in w for w in r["avisos"]), r
+
+
+def _panel_restriccion(dos, tmp_path):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication
+
+    from omnicad.api import selectores as sl
+    from omnicad.ui.comando import hit_desde_ref
+    from omnicad.ui.comandos import CATALOGO
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+
+    s, a, b = dos
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    v.resize(1280, 800)
+    v.show()
+    p = v.ejecutar_comando(CATALOGO["restriccion_componentes"]())
+
+    def elegir(clave, sel, cuerpo):
+        c, cara = sl.elegir(s, sel, "cara", cuerpo)[0]
+        p._activar(next(x for x in p.campos if x.clave == clave))
+        p._elegida(hit_desde_ref(sl.referencia(c, cara), v.doc.estado_final))
+    return app, v, p, elegir
+
+
+def _cerrar_ventana(app, v):
+    if v.panel is not None:
+        v.panel.cancelar()
+    v.doc.modificado = False
+    v.close()
+    v.deleteLater()
+    app.processEvents()
+
+
+def test_centro_con_el_modo_por_defecto_cierra_con_aceptar_sin_tocar_el_modo(dos, tmp_path):
+    """E11 (2026-11-14): con Centro y las dos geometrías en «Simple» Aceptar no hacía nada; el componente 2 arranca «Entre dos caras»."""
+    s, a, b = dos
+    app, v, p, elegir = _panel_restriccion(dos, tmp_path)
+    try:
+        p.set_valor("tipo", "centro")
+        elegir("ref1", "<X", b)
+        elegir("ref2", "<X", a)
+        elegir("ref2b", ">X", a)
+        app.processEvents()
+        p.aceptar()
+        assert v.panel is None
+        assert _caja(api.Sesion(v.doc), b)[0] == pytest.approx(0, abs=1e-6)             # la cara <X de B en el plano medio de A (x de -10 a 10)
+    finally:
+        _cerrar_ventana(app, v)
+
+
+def test_angulo_en_la_ventana_gira_el_componente_y_cierra_con_aceptar(dos, tmp_path):
+    s, a, b = dos
+    app, v, p, elegir = _panel_restriccion(dos, tmp_path)
+    try:
+        p.set_valor("tipo", "angulo")
+        p.set_valor("angulo", "45 deg")
+        elegir("ref1", ">X", b)
+        elegir("ref2", ">Z", a)
+        app.processEvents()
+        p.aceptar()
+        assert v.panel is None
+        assert g.volumen(s.cuerpo(b).forma) == pytest.approx(1000) and _caja(api.Sesion(v.doc), b) != [45, 25, 7, 55, 35, 17]
+    finally:
+        _cerrar_ventana(app, v)
 
 
 def test_la_vista_previa_al_pasar_el_cursor_muestra_el_componente_2_sin_elegirlo(dos, tmp_path):
