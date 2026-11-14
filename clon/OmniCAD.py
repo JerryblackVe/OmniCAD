@@ -85,6 +85,13 @@ def _verificar_dependencias():
                  "\nInstalalas con:  python -m pip install -r requirements.txt")
 
 
+def _booleanas_en_serie():
+    """B-48: las dos caídas nativas reproducidas (AG-8, B-293) fueron booleanas en paralelo de OpenCascade dentro de la
+    ventana. Lo pesado se calcula en procesos aparte, que siguen en paralelo; en la ventana, en serie (~8 % más lento)."""
+    from omnicad.nucleo import geometria as geo
+    geo.PARALELO = False
+
+
 def main(argv=None):
     if (sys.argv[1:] if argv is None else argv)[:1] == ["--tarea-aislada"]:
         from omnicad.nucleo import aislado      # hijo de `aislado.correr` en la app instalada (sin ventana ni Qt)
@@ -124,11 +131,13 @@ def main(argv=None):
 
     if args.prueba_humo:
         os.environ.setdefault("OMNICAD_SIN_ANIMACION", "1")      # la humo espera cada vista al instante
+        _booleanas_en_serie()
         from omnicad.prueba_humo import ejecutar
         return ejecutar()
     informes_error.instalar(avisar=_avisar_error)   # el cartel con «Abrir carpeta de errores», solo en la app
 
     portada = arranque.mostrar_portada(app)      # mientras se importa lo pesado (OCP, OpenGL…), como Fusion
+    _booleanas_en_serie()
     from omnicad.ui import comando
     if comando.PREVIA_APARTE:                    # FL-9: el trabajador de las previas importa a la par de la ventana
         from omnicad.nucleo import aislado
