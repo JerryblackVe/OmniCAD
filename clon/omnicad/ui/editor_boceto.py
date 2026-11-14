@@ -5963,6 +5963,9 @@ class Lienzo(QWidget):
             self._seleccionar_palabra(e.position())          # doble clic en el texto: elige la palabra
             return
         if e.button() == Qt.LeftButton:
+            if self.herramienta in SPLINES:
+                self._terminar_spline()          # el primer clic ya agregó el punto; el segundo solo termina
+                return
             zona = self._zona_en(e.position())
             glifo = self.b.restricciones.get(zona) if zona not in self.b.cotas else None
             pid = self.patron_de(glifo.entidades) if glifo is not None and glifo.tipo == "patron" else None
@@ -5972,8 +5975,6 @@ class Lienzo(QWidget):
                 self.alternar_referencia(zona)
             elif zona in self.b.cotas:
                 self.editar_cota(zona, e.position())
-            elif self.herramienta in SPLINES:
-                self._terminar_spline()
             elif self.herramienta == "linea":
                 self.cancelar()
             elif self.herramienta == "seleccionar":
