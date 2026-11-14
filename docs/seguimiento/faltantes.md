@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 48: Abierto 30 · Parcial 17 · Sin verificar 1 (2026-11-14: se cerró H-69 (nombre, ocultar, bloquear y «en perfiles» por curva suelta); 2026-11-13: se cerraron H-88 (Revolución «A objeto» con Dos lados, con B-384) y H-90 (Punto tangente de la Solevación sólida, ya hecho en B-385); 2026-11-12: fusión de ASM-19; 2026-11-12: fusión de B-392; 2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 70: Abierto 40 · Parcial 27 · Bloqueado 2 · Sin verificar 1 (2026-11-12: fusión de H-97; 2026-11-14: se cerró H-69 (nombre, ocultar, bloquear y «en perfiles» por curva suelta); 2026-11-13: se cerraron H-88 (Revolución «A objeto» con Dos lados, con B-384) y H-90 (Punto tangente de la Solevación sólida, ya hecho en B-385); 2026-11-12: fusión de ASM-19; 2026-11-12: fusión de B-392; 2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -40,7 +40,6 @@ Abierto 13 · Parcial 1 · Sin verificar 1.
 | H-84 | Extrusión delgada: cadena tangente y conicidad abierta | Parcial | Baja | Confirmar en Fusion real la conicidad de curvas abiertas (la Cadena tangente ya está) | `clon/tests/test_h84_cadena_tangente.py` | 2026-11-05 |
 | H-91 | Solevación sólida: condiciones de borde exactas y combinables | Abierto | Alta | Combinarlas con carriles, línea central, cerrada y reglada. | nucleo/solidos_crear.py:1307 | 2026-11-05 |
 | H-96 | Repujado sobre caras que no son planas ni cilíndricas (esfera, cono, forma libre) | Abierto | Alta | Admitir repujado sobre esas caras. | nucleo/solidos_crear.py:1571 | 2026-11-05 |
-| H-97 | Repujado: asas de alineación horizontal, vertical y giro | Abierto | Media | Agregar las tres asas en la vista. | ui/comandos/asas_extra.py:308 (`_asas_repujado`) | 2026-11-05 |
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: catálogo local y Duplicar con uniones | Parcial | Media | Definir piezas y medidas; ampliar duplicado, asociación y destinos (ver ficha). | tests/test_derivacion.py; tests/test_duplicar_con_uniones.py | 2026-10-31 |
 | H-70 | Boceto: capas y formas internas de SVG/DXF en el navegador | Abierto | Media | Listarlas bajo demanda y elegirlas sin romper contorno ni relleno. | clon/omnicad/ui/navegador.py; clon/omnicad/restricciones/objetos.py | 2026-11-05 |
@@ -242,10 +241,6 @@ Bloqueado 1. Especificación: [plan_cpp.md](../plan_cpp.md).
 ### H-96 · Repujado en esfera, cono y forma libre
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Repujado sobre caras que no son planas ni cilíndricas (esfera, cono, forma libre) **Queda:** Fusion repuja sobre cualquier cara del cuerpo. OmniCAD da «El repujado admite caras planas o cilíndricas (envolviendo)»: cuadro 6×6 sobre el polo de una esfera r 20 (`sondas_nrr.py rep_esfera`). **Evidencia:** nucleo/solidos_crear.py:1571
-
-### H-97 · Repujado: asas de alineación
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Repujado: asas de alineación (desplazamiento horizontal, vertical y giro) en la vista **Queda:** Fusion: «Use the distance manipulator… / angle manipulator in the canvas» para Horizontal Distance, Vertical Distance y Rotation Angle. OmniCAD tiene los tres campos (en Más opciones) pero solo el asa de Profundidad. Pieza `nervio_red_repujado` («asas de alineación»). **Evidencia:** ui/comandos/asas_extra.py:308 (`_asas_repujado`)
 
 ### H-4 · Insertar: catálogo local y Duplicar con uniones
 
