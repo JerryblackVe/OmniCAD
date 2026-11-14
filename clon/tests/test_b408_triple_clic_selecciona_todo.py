@@ -88,3 +88,16 @@ def test_triple_clic_selecciona_todo_y_teclear_reemplaza(campo_panel, ya_enfocad
     QApplication.processEvents()
     assert campo.text() == reemplazo
     assert panel.valores[clave] == reemplazo and clave not in panel.invalidos
+
+
+def test_triple_clic_con_pausas_de_100_ms_entre_los_eventos(campo_panel):
+    """Un triple clic humano tiene pausas entre los clics (el temporizador de triple clic de Qt dura el intervalo de doble clic)."""
+    ventana, panel, campo, clave, texto, reemplazo = campo_panel
+    ventana.visor.setFocus()
+    punto = _punto(campo)
+    QTest.mouseClick(campo, Qt.LeftButton, pos=punto)
+    QTest.qWait(100)
+    QTest.mouseDClick(campo, Qt.LeftButton, pos=punto)
+    QTest.qWait(100)
+    QTest.mouseClick(campo, Qt.LeftButton, pos=punto)
+    assert campo.selectedText() == texto
