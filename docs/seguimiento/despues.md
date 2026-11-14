@@ -18,6 +18,8 @@ Abierto 1 · Bloqueado 1 · Sin verificar 1.
 | B-240 | RENDERIZAR › interfaz corrupta, controles invertidos y visor negro | Sin verificar | Media | Reproducir y hallar la causa en AG-3. | `docs/auditoria_renderizar.md` | 2026-11-08 |
 | P-1c | Wayland nativo: menús emergentes se cierran solos | Bloqueado | Alta | Reproducir y probar el arreglo en Linux nativo (P-1b). | omnicad/ui/__init__.py:11-19 | 2026-10-20 |
 | B-378 | Retícula volumétrica lenta con valores por defecto | Abierto | Media | Perfilar y acelerar o estimar el tiempo antes de calcular. | `clon/tests/corpus_caza/b378_reticula_lenta.json`; `omnicad/api/herramientas_solido_extra.py:412` | 2026-11-13 |
+| B-482 | Plástico (P2, prioridad 2): Saliente D100 en una pared de 60 y h1000 sin aviso; Nervio de grosor 100 sin aviso; desmoldeo de nervio −3° falla con «¿ángulo demasiado grande?» (con flip entra: signo inconsistente); la regla creada como «R1» aparece como «ABS 2 mm» | Abierto | Media | Validar y nombrar como Fusion | E11, `evidencias/reportes_pc/2026-11-14_e11_esfuerzo_empalme_chaflan/resumen.md` | 2026-11-14 |
+| B-483 | Chapa (P2, prioridad 2): la regla acepta radio de plegado 0 pero la Pestaña base lo rechaza; relieve de 100 mm en una placa de 60 sin aviso; profundidad de relieve 0 entra; espesor 1000 y separación 100 sin aviso | Abierto | Baja | Validar como Fusion | E11, `evidencias/reportes_pc/2026-11-14_e11_esfuerzo_empalme_chaflan/resumen.md` (Tanda 3) | 2026-11-14 |
 
 ## Faltantes › Pendientes generales
 

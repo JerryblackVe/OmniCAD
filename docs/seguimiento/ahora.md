@@ -23,12 +23,19 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-467 | Empalme sobre aristas tangentes: Fusion toma la cadena tangente y entra (resto de B-454) |
-| 2 | B-464 | Solevación con punto tangente da error con peso 1 (Fusion 15708,3) |
-| 3 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
-| 4 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 5 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 6 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
-| 7 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
+| 1 | B-469 | Texto de boceto: el clic en «Contenido» cierra el boceto (P1, Bocetos) |
+| 2 | B-468 | Caja de valor junto al asa como en Fusion, en todas las asas: Enter acepta, Esc cancela, teclear sin clic (P1 de uso) |
+| 3 | B-470 | Vaciado da «ok» con una cáscara abierta en un cuerpo modificado (va con la guarda de B-462) |
+| 4 | B-467 | Empalme sobre aristas tangentes: Fusion toma la cadena tangente y entra (resto de B-454) |
+| 5 | B-464 | Solevación con punto tangente da error con peso 1 (Fusion 15708,3) |
+| 6 | H-118 | Desfase de caras de una rosca modelada, como Fusion (holgura para imprimir) |
+| 7 | B-480 | Girar el boceto 90° pierde restricciones y cotas sin aviso |
+| 8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
+| 9 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 10 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 11 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
+| 12 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
+
+Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) quedan en bugs.md sin cola.
 
 Hechos y esperando integrar (no ocupan cola): ninguno. Integrados 13-14/11: B-445, ASM-17, B-455, B-419, B-454, FL-3b, B-440 (parte), B-48 (parte), B-453 (parte), B-458, B-432, B-448, H-97, B-421, B-425 (parte), B-457, DIETA-1114, REV-1114, H-69, B-431 y B-441 (Sol), B-434, P-78 (parte), B-417, B-433, PRUEBA-1114, B-426 revertido (no era bug), B-363 (parte), B-420, B-429, B-424, B-423 (parte), B-428, B-426, B-427, B-422 (parte), H-84 (parte), FL-3 Abrir, B-397, H-113, B-48 y FL-2 (partes), B-409, B-410, B-418f, B-418g, B-408 cerrado, B-384, P-153, B-416, PRUEBA9c, B-418b, B-418c, B-418d, B-418e, FL-0, FL-9 + B-418 (d8d4b9f), B-344e, B-412 (cerrado: Fusion hace lo mismo), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
