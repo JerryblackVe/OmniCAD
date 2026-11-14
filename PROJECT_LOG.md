@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-14 · B-437 cerrado.** El gancho de excepciones (`informes_error._gancho_principal`) avisa y anota UNA vez por (tipo, mensaje): un error de GL en cada repintado ya no abre un cuadro por cuadro; el registro de uso sigue anotando cada uno. Prueba: `tests/test_informes_error.py::test_un_error_repetido_avisa_una_sola_vez`.
 - **2026-11-14 · B-446 cerrado: no es bug.** E11 en Fusion a mano: un clic justo en el centro de un círculo también toma el punto de origen en Fusion (evidencias/reportes_pc/2026-11-14_superficie/RESUMEN.md).
 - **2026-11-14 · B-433 cerrado (E-prueba).** `scripts/prueba_ui/teclear.py` sabe de B-422: tabla `RECHAZOS` (Agujero › profundidad «-5 mm» y «0 mm», Revolución › ángulo «0 deg» se entienden pero deben quedar en rojo). Repetida la pieza: 359 comprobaciones, 1 ✗ (solo FLUIDEZ). El `qWait` de 2 s es de la app, no de la pieza: dos corridas, siempre tras teclear «15mm» en `sup_desfase.distancia` (la previa de «1e3 mm» corre en la ventana) → fila B-438. Evidencia en evidencias/b433/. Verificación: ver abajo.
 - **2026-11-14 · B-422 cerrado.** E11 en Windows sobre 37fc185, con mouse real: Agujero −5 y Revolución en 0 se ponen rojos al teclear y Aceptar no crea nada; Fusion también da error en los dos casos (evidencias/reportes_pc/2026-11-14_verificacion_main_37fc185b/ y 2026-11-14_fusion_b422_b429/).
