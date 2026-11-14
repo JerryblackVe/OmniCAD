@@ -340,6 +340,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-14] Una sesión que lanza `tests_afectados` desacoplado (nohup, `&`) no se entera cuando termina y queda quieta: correrlo con `run_in_background` del Bash (avisa al terminar) o con un Monitor, nunca suelto. · Evidencia: B-445 de E8 terminó verde a las 17:31 y nadie lo vio hasta las 21:13; ASM-17 de E5, igual (ta3.out).
 - [2026-11-14] Los tests fijan `OMNICAD_PREVIA_EN_VENTANA=1` (`tests/conftest.py:23`): todo lo que dependa de la previa aparte (Windows) se prueba poniendo `PREVIA_APARTE=True` y un `_ms_previa` lento con monkeypatch. · Evidencia: B-454, el asa frenaba en 1 mm solo en Windows y `test_b345_el_asa_frena_donde_la_pieza_lo_admite` pasaba.
 - [2026-11-14] Después de revertir una fusión, comparar las filas de `docs/seguimiento/` contra el commit anterior: el revert puede devolver filas ya cerradas. · Evidencia: el revert 37fc185 (B-426) dejó vivas B-426 (no era bug), B-427 (resuelto en 0dfa14f) y el texto viejo de B-429, y Sol gastó una corrida en B-427 sin diff.
 - [2026-11-14] Un archivo con finales CRLF (`ui/comando.py`, 16 líneas LF dentro) se edita en bytes: `open(..., 'w')` de Python lo pasa entero a LF y el diff sale de 4287 líneas. Mirar `git diff --stat` tras cada edición. · Evidencia: B-453, `git diff --stat` de `comando.py` (4287 → 27 líneas al rehacerlo en bytes).
