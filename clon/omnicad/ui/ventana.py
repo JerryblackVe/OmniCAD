@@ -2703,6 +2703,9 @@ class VentanaPrincipal(QMainWindow):
             self.doc.renombrar(op_id, nombre.strip())
 
     def _deshacer(self):
+        if self.panel is not None:          # B-429: con un comando abierto el primer Ctrl+Z lo cancela y no toca el timeline
+            self.panel.cancelar()
+            return
         if self.modo_boceto.activo:
             self.modo_boceto.lienzo.deshacer()
         elif not self.arrastre.deshacer():
