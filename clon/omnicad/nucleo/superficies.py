@@ -29,7 +29,7 @@ def _iniciar_opencascade():
     global BRepOffsetAPI_ThruSections, BRepOffset_MakeOffset, BRepOffset_Skin, BRepPrimAPI_MakePrism
     global BRepPrimAPI_MakeRevol, BRepTools, BRep_Tool, GCPnts_AbscissaPoint, GeomAPI_PointsToBSpline
     global GCPnts_UniformAbscissa, GeomAPI_ProjectPointOnSurf, Law_Linear
-    global GeomAbs_Arc, GeomAbs_C0, GeomAbs_C1, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1, GeomAbs_Intersection
+    global GeomAbs_Arc, GeomAbs_BezierSurface, GeomAbs_BSplineSurface, GeomAbs_C0, GeomAbs_C1, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1, GeomAbs_Intersection
     global GeomAbs_Line, GeomAbs_Plane, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
     global GC_MakeCircle, List_TopoDS_Shape, ShapeAnalysis_Surface, ShapeFix_Edge, ShapeFix_Face, TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD
     global TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE, TopExp
@@ -57,7 +57,8 @@ def _iniciar_opencascade():
     from OCP.BRepTools import BRepTools
     from OCP.GC import GC_MakeCircle
     from OCP.GCPnts import GCPnts_AbscissaPoint, GCPnts_UniformAbscissa
-    from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_C0, GeomAbs_C1, GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1,
+    from OCP.GeomAbs import (GeomAbs_Arc, GeomAbs_BezierSurface, GeomAbs_BSplineSurface, GeomAbs_C0, GeomAbs_C1,
+                             GeomAbs_C2, GeomAbs_Cylinder, GeomAbs_G1,
                              GeomAbs_Intersection, GeomAbs_Line, GeomAbs_Plane)
     from OCP.GeomAPI import GeomAPI_PointsToBSpline, GeomAPI_ProjectPointOnSurf
     from OCP.Law import Law_Linear
@@ -1566,10 +1567,7 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
             e = TopoDS.Edge(e)
             if BRep_Tool.Degenerated_s(e):
                 continue
-            # B-392: la arista de un cuerpo extruido trae su ubicación (TopLoc) y BRepFill.Face_s la aplica dos veces:
-            # se hornea en la geometría. Es además la copia que pide SUP-24 (no tocar la arista del documento).
-            ef = TopoDS.Edge(BRepBuilderAPI_Transform(e.Located(TopLoc_Location()).Oriented(TopAbs_FORWARD),
-                                                      e.Location().Transformation(), True).Shape())
+            ef = _copia_adelante(e)
             cara = None
             if tipo != "direccion" and plano is None:
                 vecinas = _caras_de(mapa, e) if mapa is not None else []
@@ -1920,6 +1918,30 @@ def destrimar(cara, *, contornos="exteriores", aristas=(), extension=0.0, origin
     return TopoDS.Face(nueva.Reversed()) if cara.Orientation() == TopAbs_REVERSED else TopoDS.Face(nueva)
 
 
+def _copia_adelante(e):
+    """Copia FORWARD de una arista con su ubicación horneada en la geometría, para BRepFill.Face_s: la ubicación
+    (TopLoc) la aplicaba dos veces (B-392), una arista REVERSED le da vuelta el recorrido (B-448) y SUP-24 pide no tocar
+    la arista del documento."""
+    return TopoDS.Edge(BRepBuilderAPI_Transform(e.Located(TopLoc_Location()).Oriented(TopAbs_FORWARD),
+                                               e.Location().Transformation(), True).Shape())
+
+
+def _franja_de_reglas(cara, e, lado, distancia, muestras=41):
+    """B-448: extensión natural de una cara reglada (grado 1 en la dirección que se extiende): sus reglas siguen en
+    línea recta, la continuación exacta. BRepLib.ExtendFace la curvaba (un anillo r5→r15 extendido 5 mm daba
+    1160 mm² en vez de 1178,1). Franja entre el borde y sus puntos corridos `distancia` a lo largo de la regla."""
+    sup, curva, c2d = BRepAdaptor_Surface(cara), BRepAdaptor_Curve(e), BRepAdaptor_Curve2d(e, cara)
+    u0, u1 = curva.FirstParameter(), curva.LastParameter()
+    params = [u0 + (u1 - u0) * i / (muestras - 1) for i in range(muestras)]
+    lejos = []
+    for u in params:
+        uv, p, du, dv = c2d.Value(u), gp_Pnt(), gp_Vec(), gp_Vec()
+        sup.D1(uv.X(), uv.Y(), p, du, dv)
+        regla = _np(dv if lado[0] == "v" else du) * (1.0 if lado[1] == "max" else -1.0)
+        lejos.append(_np(p) + distancia * _unitario(regla, "La dirección de la regla"))
+    return BRepFill.Face_s(_copia_adelante(e), _borde_por_puntos(np.array(lejos), params))
+
+
 def _lado_iso(cara, arista, limites):
     """Qué borde iso-paramétrico de la cara es la arista: ("u"|"v", "min"|"max") o None."""
     u0, u1, v0, v1 = limites
@@ -2005,8 +2027,8 @@ def _extension_libre(cara, arista, distancia, pasos=8, muestras=41):
 def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear"):
     """Extensión de bordes libres de una superficie [SFC-EXTEND].
 
-    "natural": agranda la misma cara (plano y cilindro exactos; otras superficies con
-    BRepLib.ExtendFace). Solo bordes iso-paramétricos de caras rectangulares en UV.
+    "natural": agranda la misma cara (plano y cilindro exactos; una cara reglada sigue sus reglas en línea recta con una
+    franja aparte; otras superficies con BRepLib.ExtendFace). Solo bordes iso-paramétricos de caras rectangulares en UV.
     "tangente": agrega caras planas tangentes a la cara (como reglada tangente).
     "perpendicular": agrega caras perpendiculares a la cara (como reglada normal).
     `alineacion` (Edge Alignment, solo "natural"): "alinear" (Align Edges, G1) exige que la extensión siga los lados de
@@ -2049,10 +2071,18 @@ def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear")
                 "La cara no es rectangular en su parametrización: no se puede extender en forma natural; probá con "
                 "alineación libre, o con extensión tangente o perpendicular.")
         k = next(i for i, c in enumerate(caras) if c.IsSame(cara))
-        pedidos.setdefault(k, (cara, set()))[1].add(lado)
-    reemplazos = {}
-    for k, (cara, lados) in pedidos.items():
+        pedidos.setdefault(k, (cara, []))[1].append((e, lado))
+    reemplazos, extra = {}, []
+    for k, (cara, bordes) in pedidos.items():
         sup = BRepAdaptor_Surface(cara)
+        lados = {lado for _e, lado in bordes}
+        direcciones = {d for d, _ in lados}
+        # B-448: ExtendFace curva las reglas si la otra dirección es curva; con una sola dirección no quedan esquinas
+        if sup.GetType() in (GeomAbs_BSplineSurface, GeomAbs_BezierSurface) and len(direcciones) == 1:
+            grado, d = {"u": sup.UDegree(), "v": sup.VDegree()}, next(iter(direcciones))
+            if grado[d] == 1 and grado["v" if d == "u" else "u"] > 1:
+                extra += [_franja_de_reglas(cara, e, lado, distancia) for e, lado in bordes]
+                continue
         u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
         if sup.GetType() in (GeomAbs_Plane, GeomAbs_Cylinder):
             du = distancia if sup.GetType() == GeomAbs_Plane else distancia / sup.Cylinder().Radius()
@@ -2073,7 +2103,7 @@ def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear")
         if cara.Orientation() == TopAbs_REVERSED:
             nueva = TopoDS.Face(nueva.Reversed())
         reemplazos[k] = nueva
-    extra = geo.caras(reglada(sueltas, distancia, tipo="tangente", referencia=forma)) if sueltas else []
+    extra += geo.caras(reglada(sueltas, distancia, tipo="tangente", referencia=forma)) if sueltas else []
     for cara, e in curvas:
         try:
             extra += geo.caras(_extension_libre(cara, e, distancia))

@@ -219,6 +219,32 @@ def test_b392_reglada_desde_aristas_de_un_prisma_extruido():
     assert malo["ok"] is False and "se cruzan entre sí. Activá Esquinas en inglete" in malo["mensaje"]
 
 
+@pytest.mark.parametrize("alineacion", ["align", "free"])
+def test_b448_extender_natural_un_anillo_reglado_sigue_sus_reglas(alineacion):
+    """B-448: el anillo r5→r15 (Reglada tangente de un círculo r5) extendido «Natural» 5 mm en su borde exterior daba
+    1160,14 mm² (BRepLib.ExtendFace curvaba las reglas); Fusion da 1178,097, el anillo ideal r5→r20."""
+    s = api.Sesion()
+    llamar(s, "create_sketch")
+    llamar(s, "draw_circle", radius=5)
+    cid = creado(s, "create_ruled_surface", edges=[{"sketch": "Boceto1", "curve": 1}], distance=10, surface_type="tangent")
+    borde = next(e["id"] for e in llamar(s, "find_edges", body=cid)["edges"] if e["length"] == pytest.approx(30 * math.pi))
+    llamar(s, "extend_surface", edges=[borde], distance=5, edge_alignment=alineacion)
+    r = llamar(s, "check_geometry", body=cid)["bodies"][0]
+    assert r["area"] == pytest.approx(math.pi * (20 ** 2 - 5 ** 2), rel=1e-6)
+    assert r["valid"] and r["bounding_box"]["size"][:2] == pytest.approx([40, 40], abs=1e-4)
+
+
+def test_b448_una_reglada_recta_extendida_en_dos_bordes_vecinos_conserva_la_esquina():
+    s = api.Sesion()
+    llamar(s, "create_sketch")
+    curva = llamar(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0)["entities"][0]["id"]
+    cid = creado(s, "create_ruled_surface", edges=[{"sketch": "Boceto1", "curve": curva}], distance=10, surface_type="tangent")
+    bordes = [e["id"] for e in llamar(s, "find_edges", body=cid)["edges"]][:2]          # uno de 20 y uno de 10
+    llamar(s, "extend_surface", edges=bordes, distance=5, chain=False)
+    r = llamar(s, "check_geometry", body=cid)["bodies"][0]
+    assert (r["area"], r["faces"]) == (pytest.approx(25 * 15), 1)
+
+
 def dos_superficies(s):
     base = parche(s)
     pared = parche(s, nombre="Pared", plano="XZ")
