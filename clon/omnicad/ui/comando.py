@@ -956,6 +956,7 @@ class PanelComando(QFrame):
         # Estado: una línea reservada (no salta el panel al aparecer o desaparecer un mensaje); el símbolo y el color dicen
         # de qué clase es: instrucción pendiente, valor inválido, advertencia, cálculo en curso o error.
         zona, self.icono_mensaje, self.mensaje = fila_mensaje(self.ancho_panel, self.fontMetrics().height() + 8)
+        self._zona_mensaje = zona
         v.addWidget(zona)
         pie = QHBoxLayout()
         pie.setContentsMargins(10, 4, 10, 8)
@@ -1221,6 +1222,10 @@ class PanelComando(QFrame):
         self._t_reubicar.start()          # y otra vez cuando el layout ya asentó las alturas que dependen del ancho
 
     def _reubicar_ahora(self):
+        # La zona del mensaje no se achica mientras el panel está abierto: si al irse un mensaje de dos líneas subía
+        # Aceptar, un clic en su lugar de antes caía en el vacío (E11, tanda 13: el primer Aceptar «no hizo nada»).
+        if self._zona_mensaje.isVisible():           # sin mostrar todavía, su alto no es el real
+            self._zona_mensaje.setMinimumHeight(self._zona_mensaje.height())
         self.adjustSize()
         if hasattr(self.parent(), "reubicar"):
             self.parent().reubicar()
