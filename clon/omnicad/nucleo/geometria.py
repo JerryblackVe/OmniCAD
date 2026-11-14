@@ -20,7 +20,8 @@ import numpy as np
 from . import motor as _motor
 
 # B-48: el paralelismo de OpenCascade se apaga con OMNICAD_SIN_PARALELO=1 para medir/aislar caídas nativas
-# (reusa formas entre hilos). Queda como interruptor de diagnóstico; el valor por defecto no cambia.
+# (reusa formas entre hilos). La ventana lo apaga al arrancar (`OmniCAD._booleanas_en_serie`); los procesos aparte
+# leen solo esta variable y siguen en paralelo.
 PARALELO = os.environ.get("OMNICAD_SIN_PARALELO", "").strip().lower() not in ("1", "si", "sí", "true", "on")
 
 
