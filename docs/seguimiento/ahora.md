@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | P-78 | Rosca modelada rápida (F6) |
 | E4 | B-419 | Solevación de superficie con autointersección que da `ok` (gemelo de B-416) |
 | E5 | ASM-17 | Restricción de componentes |
-| E6 | B-418f | Arreglo de raíz de B-418 (PeekNamedPipe), con Windows todavía en la ventana; el revert va en B-418g tras el 10 de 10. B-430 espera la PC reiniciada. FL-3 en pausa |
+| E6 | FL-3 | Abrir fuera de la ventana (tests en curso); B-418 arreglado (35ff5f8 + 6697cce), falta E11 tras el reinicio; B-430 espera la PC reiniciada |
 | E7 | B-420 | La barra espaciadora no marca casillas (atajo global `Space`) |
 | E8 | B-417 | Timeline › doble clic en un paso solo lo selecciona la primera vez |
 | E9 | Sol | B-397, B-409, B-410 (tests en curso); después B-421 (el panel que crece con un campo) |
