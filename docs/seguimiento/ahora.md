@@ -9,14 +9,14 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | FL-2 | Previa barata inmediata al teclear y con las flechas (prisma, Cortar, Revolución) |
-| E2 | B-384 | Revolución › Dirección con «A objeto» (hecho; choca con main en comunes.py y solido.py) |
+| E2 | B-48 | Caída nativa de OCCT al recalcular un documento largo |
 | E3 | P-78 | Rosca modelada rápida (F6) |
-| E4 | B-416 | Solevación plegada que da `ok` y Propiedades de 15 s |
+| E4 | B-419 | Solevación de superficie con autointersección que da `ok` (gemelo de B-416) |
 | E5 | ASM-17 | Restricción de componentes |
-| E6 | B-418c | Causa de B-418 en Windows (el trabajador recibe y no devuelve), plazo para un pedido «recibido» y Cancelar mientras Aceptar espera. En Windows ya va en la ventana (1484d4f). FL-3 en pausa |
-| E7 | PRUEBA9c | Pieza real de prueba como usuario (FL-0 integrado) |
+| E6 | FL-3 | Abrir fuera de la ventana hecho (motor_impreso 57,5 s → 0,2 s), tests en curso; B-418 Parcial (diagnóstico --qt en la PC) |
+| E7 | B-420 | La barra espaciadora no marca casillas (atajo global `Space`) |
 | E8 | B-417 | Timeline › doble clic en un paso solo lo selecciona la primera vez |
-| E9 | Sol | Orquesta a Sol hasta el 15/11: B-344e, B-397, B-408, B-409, B-410 |
+| E9 | Sol | B-397, B-409, B-410 (tests en curso); después B-408 |
 | E10 | B-363 | El `.f3d` de la Prusa Core One se abre sin geometría |
 
 ## Sigue (en orden)
@@ -25,13 +25,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 1 | B-421 | El panel de comando cambia de alto con un mensaje o la Operación y Aceptar/Cancelar se mueven: el clic se pierde (E11, tanda 13) |
 | 2 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 3 | B-420 | La barra espaciadora no marca casillas: la toma el atajo global `Space` (`ui/ventana.py:463`) |
-| 4 | B-413 | Boceto › al cambiar la cota de un rectángulo sin restringir debe quedar fija la primera esquina, como Fusion (E1, después de FL-2) |
-| 5 | B-408 | Triple clic en un campo de valor sigue roto en Windows con 9657d4d9 (probablemente la previa traba el bucle; ver después de B-418) |
-| 6 | B-48 | Crash nativo al recalcular un documento largo |
-| 7 | B-335 | Abrir un STEP pesado congela la ventana |
-| 8 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
-| 9 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 10 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
+| 3 | B-413 | Boceto › al cambiar la cota de un rectángulo sin restringir debe quedar fija la primera esquina, como Fusion (E1, después de FL-2) |
+| 4 | B-408 | Triple clic en un campo de valor sigue roto en Windows con 9657d4d9 (probablemente la previa traba el bucle; ver después de B-418) |
+| 5 | B-335 | Abrir un STEP pesado congela la ventana |
+| 6 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
+| 7 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 8 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
+| 9 | B-401 | El cálculo aislado pierde atributos de boceto |
 
-Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384). Integrados hoy: FL-0, FL-9 + B-418 (d8d4b9f), B-344e, B-412 (cerrado: Fusion hace lo mismo), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
+Hechos y esperando integrar (no ocupan cola): ninguno. Integrados 13-14/11: B-384, P-153, B-416, PRUEBA9c, B-418b, B-418c, B-418d, B-418e, FL-0, FL-9 + B-418 (d8d4b9f), B-344e, B-412 (cerrado: Fusion hace lo mismo), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
