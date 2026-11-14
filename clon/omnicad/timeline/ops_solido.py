@@ -614,6 +614,12 @@ class OpRosca(_OpCrear):
             info = sc.analizar_rosca(cuerpo.forma, e.forma, designacion=p["designacion"] or None,
                                      familia=p.get("familia") or None)
             datos, modelada = info["datos"], p["modelada"]
+            # P-153: un agujero se compara con el Ø menor (el del taladro); un eje, con el nominal
+            diametro_cara, propio = 2 * info["radio"], datos["diametro_menor" if info["interna"] else "diametro"]
+            if abs(propio - diametro_cara) > 0.05 * diametro_cara:
+                origen, nominal = (f"{d:.4g}".replace(".", ",") for d in (diametro_cara, propio))
+                ctx.aviso(f"{datos['designacion']} va en una cara de Ø{nominal} mm y esta mide Ø{origen}"
+                          + (": la rosca modelada cambia el Ø de la cara." if modelada else "."))
             if modelada and datos["conica"]:
                 ctx.aviso(f"{datos['designacion']} es una rosca cónica: sobre una cara cilíndrica queda cosmética.")
                 modelada = False
