@@ -26,7 +26,7 @@ import numpy as np
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QInputEvent, QKeySequence
-from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
+from PySide6.QtWidgets import (QAbstractButton, QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QSizePolicy, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, RECURSOS, VERSION
@@ -147,6 +147,17 @@ class _FiltroEspera(QObject):
         return True
 
 
+class _EspacioEnBotones(QObject):
+    """B-420: con el foco en un botón o una casilla, la barra espaciadora es del botón (marcar, pulsar) y no del atajo global
+    «Boceto sobre la cara elegida» / «Repetir». Un botón no acepta solo ese `ShortcutOverride`; se instala solo en el botón que
+    recibe el foco (un filtro sobre toda la aplicación rompió el GL, ver `_FiltroInfoHerramientas`)."""
+
+    def eventFilter(self, obj, evento):
+        if evento.type() == QEvent.ShortcutOverride and evento.key() == Qt.Key_Space and not evento.modifiers():
+            evento.accept()
+        return False
+
+
 def imagen_ayuda(clave):
     """HTML de la imagen «antes → después» del comando (`scripts/ayuda_imagenes.py`), o "" si no tiene."""
     ruta = RECURSOS / "ayuda" / f"{clave}.png"
@@ -210,6 +221,8 @@ class VentanaPrincipal(QMainWindow):
         self.prefs_grupos_caras = False         # INSPECCIONAR › Mostrar grupos de caras de malla (Mayús+F)
         self.panel = None                   # diálogo de comando abierto (PanelComando)
         self._espera = _FiltroEspera(self)
+        self._espacio_en_botones = _EspacioEnBotones(self)
+        QApplication.instance().focusChanged.connect(self._foco_en_boton)
         self._autoguardado_fallo = None     # último error del autoguardado ya avisado en la barra
         self._previa_aspecto = {}           # lo que el panel Aspecto muestra sin haberlo aplicado: {"cuerpos": {id: rgb},
         self._malla_caras = {}              # "caras": [(id de cuerpo, referencia, rgb)]}; mallas de caras con aspecto propio
@@ -1100,6 +1113,11 @@ class VentanaPrincipal(QMainWindow):
             texto = texto.replace("cuerpo(s)", "cuerpo" if len(self.doc.estado_final.cuerpos) == 1 else "cuerpos")
             texto = texto.replace("paso(s)", "paso" if len(self.doc.operaciones) == 1 else "pasos")
         etiqueta.setText(medidas.elidedText(texto, Qt.ElideRight, ancho))
+
+    def _foco_en_boton(self, _antes, ahora):
+        if isinstance(ahora, QAbstractButton) and not ahora.property("espacio_propio"):
+            ahora.installEventFilter(self._espacio_en_botones)
+            ahora.setProperty("espacio_propio", True)
 
     def eventFilter(self, objeto, evento):
         if objeto is self.timeline.estado and evento.type() == QEvent.Resize:
