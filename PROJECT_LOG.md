@@ -290,6 +290,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-14] `tanda.sh` ahora se niega a integrar un worktree con pytest, turno o tests_afectados corriendo adentro: mirar el conteo a ojo no alcanzó. · Evidencia: B-418g, integrado con 4 procesos de tests de E6 adentro, que murieron al borrarse el worktree (la misma falla que B-394).
 - [2026-11-14] En pruebas con Computer Use (E11), seleccionar el texto de un campo con Ctrl+A, no con triple clic: los clics sintéticos no respetan el ritmo del triple clic de Qt y dan selecciones parciales que parecen bugs. · Evidencia: B-408, «20 7» con E11 y «7 mm» con el mouse de Gerardo (evidencias/reportes_pc/2026-11-13_b408_gerardo/).
 - [2026-11-14] En Windows, nunca dejar un ReadFile síncrono esperando sobre stdin en un hilo: traba la carga de cualquier DLL en otro hilo (scipy/OpenBLAS). Mirar con PeekNamedPipe y leer solo lo que llegó. · Evidencia: `evidencias/reportes_pc/2026-11-13_b418_diagnostico2/` (pila.txt), `aislado._lineas_sin_bloquear`.
 - [2026-11-13] Toda espera que bloquea teclado y mouse lleva su salida (Esc o Cancelar) y su prueba: sin ella, un proceso aparte que no contesta deja la ventana tomada y se pierde el trabajo. · Evidencia: E11 tanda 10 (Prisma, Aceptar colgado > 120 s); `tests/test_fl9_precalentar.py::test_b418_esc_o_cancelar_salen_aunque_el_proceso_aparte_no_conteste` se colgaba sin el arreglo.
