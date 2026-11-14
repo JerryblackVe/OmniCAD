@@ -224,6 +224,6 @@ def test_la_espera_de_la_previa_sigue_a_lo_que_costo_la_ultima(ventana, monkeypa
 
     panel = ventana.ejecutar_comando(Caja(), ventana.doc.operacion("op2"))
     for demora, esperado in ((0.0, 0), (0.06, 60), (0.9, modulo.PREVIA_ESPERA_MAX_MS), (0.0, 0)):
-        monkeypatch.setattr(panel, "_calcular_previa_ahora", lambda d=demora: time.sleep(d))
+        monkeypatch.setattr(panel, "_calcular_previa_ahora", lambda *_, d=demora: time.sleep(d))
         panel._calcular_previa()
         assert panel._t_previa.interval() == pytest.approx(esperado, abs=15)

@@ -1721,14 +1721,14 @@ class PanelComando(QFrame):
         return {c.clave: self.valores.get(c.clave) for c in self.campos if self._visible(c)} | {
             k: v for k, v in self.valores.items() if k not in {c.clave for c in self.campos}}
 
-    def _calcular_previa(self):
+    def _calcular_previa(self, en_ventana=False):
         inicio = time.perf_counter()
         clave = self.activa.clave if self._sobre_hit is not None and self.activa is not None else None
         elegido = self.valores.get(clave) if clave else None
         if clave:
             self.valores[clave] = [self._sobre_hit]
         try:
-            self._calcular_previa_ahora()
+            self._calcular_previa_ahora(en_ventana)
         finally:
             if clave:
                 self.valores[clave] = elegido
@@ -1737,7 +1737,7 @@ class PanelComando(QFrame):
         if self.manipuladores is not None and not self._previa_aparte:      # la aparte avisa al volver
             self.manipuladores.previa_calculada(self._previa_ok)
 
-    def _calcular_previa_ahora(self):
+    def _calcular_previa_ahora(self, en_ventana=False):
         for c in self.campos:
             if isinstance(c, Info):
                 try:
@@ -1781,7 +1781,7 @@ class PanelComando(QFrame):
             self._previa_ok = True
             return
         arrastrando = self.manipuladores is not None and self.manipuladores.arrastrando
-        aparte = self._hijo_previa is not None or self._previa_pesada(op)
+        aparte = not en_ventana and (self._hijo_previa is not None or self._previa_pesada(op))
         # FL-2: el prisma se ve al instante al arrastrar y mientras la forma exacta se calcula aparte, que lo reemplaza
         if arrastrando or aparte:
             try:
@@ -1978,7 +1978,7 @@ class PanelComando(QFrame):
             self._mostrar(str(e), tipo="aviso")
 
     def _recibir_previa(self):
-        from ..nucleo.aislado import FalloDelCalculo
+        from ..nucleo.aislado import FalloDelCalculo, FalloInterno
         from ..timeline.calculo_aislado import leer_previa_visual
         try:
             salida = self._hijo_previa.sondear()
@@ -1989,6 +1989,7 @@ class PanelComando(QFrame):
             return
         pendiente = self._pendiente_hijo
         vieja = pendiente is not None and pendiente.a_dict() != self._op_hijo.a_dict()
+        rehacer = False
         try:
             if isinstance(salida, Exception):
                 raise salida
@@ -2003,6 +2004,8 @@ class PanelComando(QFrame):
                     if self.manipuladores is not None:
                         self.manipuladores.previa_calculada(True)
                 self._previa_lista(estado)
+        except FalloInterno:
+            rehacer = not vieja     # B-455: un bug de la vía aparte no se muestra: la misma previa se rehace en la ventana
         except Exception as e:  # noqa: BLE001 — un hijo caído o vencido: la previa se apaga y el documento queda intacto
             if not vieja:       # el error de un valor viejo tampoco se muestra
                 self._previa_ok = False
@@ -2020,6 +2023,9 @@ class PanelComando(QFrame):
         pendiente, self._pendiente_hijo = self._pendiente_hijo, None
         if pendiente is not None and pendiente.a_dict() != self._op_hijo.a_dict():
             self._iniciar_previa(pendiente)
+        elif rehacer:
+            self._previa_aislada = True     # en la ventana y en vivo: sin volver a mandarla a un proceso aparte
+            self._calcular_previa(en_ventana=True)
 
     def _cortar_previa_vieja(self):
         """Un valor nuevo no espera a un cálculo que se alarga. Un corte por respuesta: rehacer el documento también tarda.

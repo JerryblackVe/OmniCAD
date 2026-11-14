@@ -141,6 +141,67 @@ def test_mover_muchas_veces_lanza_solo_el_ultimo_pendiente(ventana, monkeypatch)
     assert p._previa_ok and p._hijo_previa is None
 
 
+def test_b455_un_error_interno_del_hijo_rehace_la_previa_en_la_ventana(tmp_path, monkeypatch):
+    """B-455: un error del hijo que no es de los valores (un TypeError, como B-432) salía en rojo y Aceptar no reintentaba.
+    Ahora la misma previa se rehace en la ventana sin mostrarlo. El cuerpo ya lo modificó un paso anterior (movido y
+    girado; Vaciado sin caras falla sobre uno unido o cortado: B-459)."""
+    from omnicad.timeline.ops_modificar import OpMover
+    d = documento()
+    d.agregar(OpMover(d.nuevo_id(), cuerpos=["op1.c1"], dz="15 mm", rz="30 deg"))
+    assert geo.caja_envolvente(d.estado_final.cuerpo("op1.c1").forma)[0][2] == pytest.approx(15)
+    app = QApplication.instance() or QApplication([])
+    v = VentanaPrincipal(d, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
+    v.show()
+    try:
+        class Hijo:
+            def __init__(self, tarea, datos):
+                pass
+
+            def sondear(self):
+                raise aislado.FalloInterno("'NoneType' object is not subscriptable")
+
+            def cancelar(self):
+                pass
+
+        monkeypatch.setattr(aislado, "CalculoPendiente", Hijo)
+        p = panel(v, monkeypatch)
+        p._calcular_previa()
+        assert p._hijo_previa is not None and not p._previa_ok
+        p._recibir_previa()
+        assert p._previa_ok and p._hijo_previa is None, p.mensaje.text()
+        assert "NoneType" not in p.mensaje.text() and "⚠" not in p.mensaje.text()
+        hueco = v.visor._estado.cuerpo("op1.c1").forma
+        assert not es_malla(hueco) and geo.volumen(hueco) == pytest.approx(17688, rel=1e-3)    # exacta, vaciada en la ventana
+
+        class Imposible(Hijo):
+            def sondear(self):
+                raise aislado.FalloDelCalculo("El espesor es demasiado grande.")
+
+        monkeypatch.setattr(aislado, "CalculoPendiente", Imposible)
+        p._calcular_previa()
+        p._recibir_previa()
+        assert not p._previa_ok and "⚠ El espesor es demasiado grande." in p.mensaje.text()     # un valor imposible sí
+    finally:
+        if v.panel is not None:
+            v.panel.cancelar()
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()
+        app.processEvents()
+
+
+def test_b455_el_hijo_distingue_un_error_interno_de_uno_de_los_valores():
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    try:
+        BRepPrimAPI_MakeBox(0, 0, 0).Shape()
+    except Exception as e:  # noqa: BLE001 — el kernel lanza su propia clase
+        del_kernel = e
+    assert aislado._fallo(TypeError("x"))["_interno"] is True
+    assert aislado._fallo(geo.ErrorGeometria("y")) == {"_fallo": "y", "_interno": False}
+    assert aislado._fallo(del_kernel)["_interno"] is False
+    assert aislado._fallo(MemoryError())["_interno"] is False       # en la ventana la tumbaría
+
+
 def test_cancelar_deja_de_esperar_y_no_mata_al_trabajador(ventana, monkeypatch):
     p = panel(ventana, monkeypatch)
     p._calcular_previa()
