@@ -14,7 +14,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E4 | B-448 | Extender «Natural» −1,5 % contra Fusion (B-447 pasa a Sol) (B-419 en tests) |
 | E5 | ASM-17 | Restricción de componentes |
 | E6 | FL-3b | Aceptar, editar y deshacer fuera de la ventana, y la Rosca sin mallar en la ventana (FL-3 Abrir integrado: 572e69c) |
-| E7 | B-432 | (B-433 integrado: 6beffa9) |
+| E7 | REV-1114 | Revisión de las vías rápidas y cachés integradas desde el 12/11 (respaldo, invalidación, test sobre cuerpo modificado), pedida por Gerardo por B-453; B-432 espera sus tests |
 | E8 | B-445 | La cara gana al plano de origen al elegir (B-437 integrado: ad02acb) |
 | E9 | Sol | Sol siempre corriendo (Gerardo 14/11): H-115, B-442, B-435, B-436, B-428, B-423, dieta, B-451, B-447; E9 con B-421 y H-97 |
 | E10 | B-337 | Abrir e importar un STEP pesado sin congelar (B-335 + B-337; B-363 parte integrado: 8cf5219) |
