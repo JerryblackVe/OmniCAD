@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | P-78 | Rosca modelada rápida (F6) |
 | E4 | B-416 | Solevación plegada que da `ok` y Propiedades de 15 s |
 | E5 | ASM-17 | Restricción de componentes |
-| E6 | B-418 | BLOQUEANTE: sigue roto en Windows (el trabajador recibe y no devuelve); primero previa y Aceptar en la ventana por defecto en Windows. FL-3 en pausa |
+| E6 | B-418c | Causa de B-418 en Windows (el trabajador recibe y no devuelve), plazo para un pedido «recibido» y Cancelar mientras Aceptar espera. En Windows ya va en la ventana (1484d4f). FL-3 en pausa |
 | E7 | PRUEBA9c | Pieza real de prueba como usuario (FL-0 integrado) |
 | E8 | B-417 | Timeline › doble clic en un paso solo lo selecciona la primera vez |
 | E9 | Sol | Orquesta a Sol hasta el 15/11: B-344e, B-397, B-408, B-409, B-410 |
