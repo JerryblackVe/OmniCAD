@@ -1094,7 +1094,12 @@ class VentanaPrincipal(QMainWindow):
     def _mostrar_estado(self, texto):
         etiqueta = self.timeline.estado
         etiqueta.setToolTip(texto)
-        etiqueta.setText(etiqueta.fontMetrics().elidedText(texto, Qt.ElideMiddle, min(560, etiqueta.width())))
+        medidas = etiqueta.fontMetrics()
+        ancho = min(560, etiqueta.contentsRect().width())
+        if medidas.horizontalAdvance(texto) > ancho and texto == self._texto_estado:
+            texto = texto.replace("cuerpo(s)", "cuerpo" if len(self.doc.estado_final.cuerpos) == 1 else "cuerpos")
+            texto = texto.replace("paso(s)", "paso" if len(self.doc.operaciones) == 1 else "pasos")
+        etiqueta.setText(medidas.elidedText(texto, Qt.ElideRight, ancho))
 
     def eventFilter(self, objeto, evento):
         if objeto is self.timeline.estado and evento.type() == QEvent.Resize:
