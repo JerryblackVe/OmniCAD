@@ -10,6 +10,7 @@ git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
 
+- **2026-11-14 · B-418b (E6): en Windows, previa en la ventana y sin trabajador.** E11 (tanda 12, 9657d4d): el trabajador toma el pedido (deja `recibido`) y nunca devuelve la respuesta; causa sin hallar. Mientras tanto, en Windows `comando.PREVIA_APARTE` y `aislado.TRABAJADOR` quedan apagados por defecto: la previa va en la ventana y lo que igual va aparte (previa pesada, Aceptar de un documento grande) usa un hijo de una sola tarea, que en Windows sí anduvo. `OMNICAD_PREVIA_EN_VENTANA=0` vuelve al trabajador (para diagnosticarlo). Pruebas: `tests/test_b418b_windows.py` (4: las constantes fingiendo Windows en un proceso aparte, y Aceptar sin trabajador crea el paso). Más 61 de previa y trabajador; ruff limpio. Queda: en Windows se pierde lo de FL-1 (previas aparte) hasta hallar la causa.
 Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `registro_2026-11.md`).
 
 - **2026-11-13 · B-412 cerrado, B-413 y B-408 confirmados.** E11 comparó con Fusion: al desmarcar «Longitud completa», Fusion propone Desfase 0 y Longitud 10 mm, igual que OmniCAD, así que B-412 no era un bug (evidencias/reportes_pc/2026-11-13_b412_fusion/). En B-413, Fusion deja fija la esquina izquierda y crece solo hacia la derecha; OmniCAD crece hacia los dos lados (Abierto). B-408 sigue en Windows con 9657d4d9.

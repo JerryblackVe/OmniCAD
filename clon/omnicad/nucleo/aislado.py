@@ -44,6 +44,10 @@ TOPE_ENSAYO_LECTURA = 900             # segundos para ensayar la importación ST
 TOPE_MEMORIA_TRABAJADOR = 2048        # MB: pasado esto se cierra el trabajador al contestar (su memoria se libera con él)
 # B-418: el pedido se da por perdido si el trabajador, ya despierto, no lo toma en esto; o si no despierta en lo otro.
 PLAZO_RECIBIR, PLAZO_DESPERTAR = 3, 60
+# B-418: en Windows el trabajador toma el pedido y nunca devuelve la respuesta (E11, tanda 12, causa sin hallar): ahí todo
+# cálculo aparte va a un hijo de una sola tarea, que lee y deja su resultado en archivos. OMNICAD_PREVIA_EN_VENTANA=0 lo
+# vuelve a usar (para diagnosticarlo).
+TRABAJADOR = sys.platform != "win32" or os.environ.get("OMNICAD_PREVIA_EN_VENTANA") == "0"
 PACIENCIA_PREVIA = 10                 # segundos para una previa vieja antes de cerrar al trabajador (rehacer el documento cuesta más)
 EN_HIJO = False
 # En el trabajador: el documento al día y lo que el padre ya tiene (id(objeto) → (número, huella, objeto); huella → número),
@@ -381,7 +385,7 @@ def correr_json(tarea, datos, tope, esperar=None):
     if tarea not in _TAREAS_JSON:
         raise ValueError(f"Tarea aislada desconocida: {tarea}")
     datos = dict(datos, _cwd=os.getcwd())
-    if _ocupado.acquire(blocking=False):
+    if TRABAJADOR and _ocupado.acquire(blocking=False):
         try:
             _esperar_previa_cancelada(esperar)
             if _previa_en_curso is None:
@@ -533,7 +537,8 @@ def precalentar(receta=None):
     """FL-9: el trabajador arranca y arma `receta` ya, para que la primera previa no espere abrir el proceso, importar OCP
     y rehacer el documento (2,3 s con un barrido sencillo). Sin `receta`, solo lo abre (en la portada). No espera nada: el
     pedido que llegue atrás espera su turno, y si el trabajador está ocupado no se abre otro proceso para esto."""
-    if _motor.motor_activo() == "omnikernel" or _previa_en_curso is not None or not _ocupado.acquire(blocking=False):
+    if (not TRABAJADOR or _motor.motor_activo() == "omnikernel" or _previa_en_curso is not None
+            or not _ocupado.acquire(blocking=False)):
         return
     try:
         _trabajador_vivo()
@@ -643,7 +648,7 @@ class CalculoPendiente:
 
     def _al_trabajador(self):
         global _previa_en_curso
-        if not _ocupado.acquire(blocking=False):
+        if not TRABAJADOR or not _ocupado.acquire(blocking=False):
             return False
         try:
             _soltar_previa()
