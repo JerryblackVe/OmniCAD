@@ -109,6 +109,15 @@ class _Lista(QListWidget):
             return                      # en el timeline Ctrl+C copia el paso, no lo elegido de la lista
         super().keyPressEvent(e)
 
+    def mouseDoubleClickEvent(self, e):
+        # B-417: si la lista se rearmó entre los dos clics (recálculo, marcador), Qt tira el doble clic porque el
+        # ítem apretado ya no existe; se resuelve por lo que hay bajo el cursor.
+        item = self.itemAt(e.position().toPoint())
+        if e.button() == Qt.LeftButton and item is not None:
+            self.itemDoubleClicked.emit(item)
+            return
+        super().mouseDoubleClickEvent(e)
+
     def dropEvent(self, e):
         item = self.currentItem()
         pos = e.position().toPoint()
