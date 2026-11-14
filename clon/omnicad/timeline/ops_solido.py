@@ -896,7 +896,7 @@ def copiar_construccion(op, estado, trsfs):
     entidades = _resolver_todas(op.p.get("construccion"), estado, ("plano", "eje", "punto"))
     if not entidades:
         raise ErrorOperacion("Elegí los planos, ejes o puntos de construcción.")
-    n = 0
+    n, nombrar = 0, estado.nombres_de_copia()
     for ref, e in zip(op.p["construccion"], entidades, strict=True):
         for t in trsfs:
             n += 1
@@ -905,14 +905,14 @@ def copiar_construccion(op, estado, trsfs):
             nuevo = f"{op.id}_k{n}"
             if e.tipo == "plano":
                 estado.planos[nuevo] = geo.Plano.desde_marco(r @ e.plano.origen + v, r @ e.plano.normal, r @ e.plano.u,
-                                                              estado.nombre_de_copia(e.plano.nombre or "Plano"))
+                                                              nombrar(e.plano.nombre or "Plano"))
             elif e.tipo == "eje":
                 d = r @ np.asarray(e.eje[1], float)
                 nombre = estado.ejes.get(ref["id"], (None, None, f"Eje {ref['id']}"))[2]
-                estado.ejes[nuevo] = (r @ np.asarray(e.eje[0], float) + v, d / np.linalg.norm(d), estado.nombre_de_copia(nombre))
+                estado.ejes[nuevo] = (r @ np.asarray(e.eje[0], float) + v, d / np.linalg.norm(d), nombrar(nombre))
             else:
                 nombre = estado.puntos.get(ref["id"], (None, f"Punto {ref['id']}"))[1]
-                estado.puntos[nuevo] = (r @ np.asarray(e.punto, float) + v, estado.nombre_de_copia(nombre))
+                estado.puntos[nuevo] = (r @ np.asarray(e.punto, float) + v, nombrar(nombre))
 
 
 def copiar_componentes(op, estado, trsfs):
@@ -963,6 +963,7 @@ def copiar_cuerpos(op, estado, trsfs):
     material y nombre, con « (copia)») o, con `combinar`, unidas al original. Con `ligeras` las copias son instancias
     (`solidos_crear.instanciar`: comparten la geometría del original); al combinar se unen de verdad."""
     copiar = _sc().instanciar if op.p.get("ligeras") and not op.p["combinar"] else _sc().aplicar
+    nombrar, k = estado.nombres_de_copia(), None
     for cid in op.p["cuerpos"]:
         c = estado.cuerpo(cid)
         copias = [copiar(c.forma, t) for t in trsfs]
@@ -970,7 +971,8 @@ def copiar_cuerpos(op, estado, trsfs):
             c.forma = geo.unir_todos([c.forma] + copias)
         else:
             for forma in copias:
-                estado.nuevo_cuerpo(op.id, forma, c.tipo, nombre=estado.nombre_de_copia(c.nombre), **atributos_copia(c))
+                nuevo = estado.nuevo_cuerpo(op.id, forma, c.tipo, nombre=nombrar(c.nombre), k=k, **atributos_copia(c))
+                k = int(nuevo.rsplit(".c", 1)[1]) + 1
 
 
 class OpPatron(_OpCrear):

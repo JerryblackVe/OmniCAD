@@ -283,11 +283,14 @@ class EstadoModelo:
                 lecturas[nombre] = TODAS
         return lecturas
 
-    def nuevo_cuerpo(self, op_id, forma, tipo="solido", nombre=None, **atributos):
+    def nuevo_cuerpo(self, op_id, forma, tipo="solido", nombre=None, k=None, **atributos):
+        """`k`: desde qué número buscar el id libre; lo pasa quien crea muchos seguidos (el número del último + 1) para
+        no contar en cada uno los cuerpos del paso (B-425: 5000 copias tardaban 2 s solo en contar)."""
         self.contador_cuerpos += 1
         # Solo cuentan los cuerpos de este mismo paso (sin anotar que se leyeron todos: así un paso que crea un cuerpo
         # no depende de los cuerpos ajenos y la memoria del documento puede reusarlo).
-        k = sum(1 for c in dict.values(self.cuerpos) if c.op_id == op_id) + 1
+        if k is None:
+            k = sum(1 for c in dict.values(self.cuerpos) if c.op_id == op_id) + 1
         cid = f"{op_id}.c{k}"
         while cid in self.cuerpos:
             k += 1
@@ -299,14 +302,26 @@ class EstadoModelo:
         """«X (copia)» para la copia de «X»; si ya existe, «X (copia 2)», «X (copia 3)»… La copia de una copia sale de
         la original («Banco (copia)» → «Banco (copia 2)», no «Banco (copia) (copia)»): nombres repetidos obligaban a
         usar el id (T-16 de la prueba de tortura)."""
-        base = re.sub(r" \(copia(?: \d+)?\)$", "", nombre)
+        return self.nombres_de_copia()(nombre)
+
+    def nombres_de_copia(self):
+        """`nombre_de_copia` para muchas copias seguidas (un patrón): junta los nombres usados una sola vez y sigue
+        contando desde la última copia de cada base. Da los mismos nombres si entre una copia y otra no se borra nada
+        (B-425: 5000 copias tardaban 3 s solo en nombrarse)."""
         usados = {c.nombre for c in self.cuerpos.values()} | {pl.nombre for pl in self.planos.values()}
         usados |= {e[2] for e in self.ejes.values()} | {pt[1] for pt in self.puntos.values()}
         usados |= {c.get("nombre") for c in self.componentes.values()}
-        candidato, n = f"{base} (copia)", 2
-        while candidato in usados:
-            candidato, n = f"{base} (copia {n})", n + 1
-        return candidato
+        ultimo = {}
+
+        def nombrar(nombre):
+            base = re.sub(r" \(copia(?: \d+)?\)$", "", nombre)
+            n = ultimo.get(base, 1)
+            while (candidato := f"{base} (copia)" if n == 1 else f"{base} (copia {n})") in usados:
+                n += 1
+            ultimo[base] = n
+            usados.add(candidato)
+            return candidato
+        return nombrar
 
     def cuerpo(self, cid):
         cid = id_cuerpo(cid)
