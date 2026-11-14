@@ -45,10 +45,9 @@ TOPE_MEMORIA_TRABAJADOR = 2048        # MB: pasado esto se cierra el trabajador 
 # B-418: el pedido se da por perdido si el trabajador, ya despierto, no lo toma en esto; o si no despierta en lo otro.
 PLAZO_RECIBIR, PLAZO_DESPERTAR = 3, 60
 PLAZO_PILA = 20                       # B-418: un pedido que pasa de esto deja las pilas de los hilos del trabajador en pila.txt
-# B-418: en Windows el trabajador tomaba el pedido y no contestaba (se trababa cargando una DLL; ver `_lineas_sin_bloquear`).
-# Hasta confirmar el arreglo en la PC, ahí todo cálculo aparte va a un hijo de una sola tarea, que lee y deja su resultado
-# en archivos. OMNICAD_PREVIA_EN_VENTANA=0 vuelve a usar el trabajador.
-TRABAJADOR = sys.platform != "win32" or os.environ.get("OMNICAD_PREVIA_EN_VENTANA") == "0"
+# Sin el trabajador, todo cálculo aparte va a un hijo de una sola tarea. En Windows lo apaga OMNICAD_PREVIA_EN_VENTANA=1:
+# la salida de escape de B-418 (el trabajador se trababa cargando una DLL; ver `_lineas_sin_bloquear`).
+TRABAJADOR = sys.platform != "win32" or os.environ.get("OMNICAD_PREVIA_EN_VENTANA") != "1"
 PACIENCIA_PREVIA = 10                 # segundos para una previa vieja antes de cerrar al trabajador (rehacer el documento cuesta más)
 EN_HIJO = False
 # En el trabajador: el documento al día y lo que el padre ya tiene (id(objeto) → (número, huella, objeto); huella → número),
