@@ -1618,14 +1618,57 @@ def _sin_biseles_vecinos(forma, caras, dist):
     return df.Shape(), nuevas
 
 
+def _empalmes_del_borde(forma, caras):
+    """B-434: si todas las `caras` son planas con la misma normal n y sus vecinas tangentes curvas (los empalmes del
+    borde) terminan solo en paredes perpendiculares a n, devuelve (n, empalmes); si no, (None, []). Fusion traslada esos
+    empalmes con la cara: conservan el radio y la pared se estira (la caja no crece de costado)."""
+    planos = [_plano_de_cara(c) for c in caras]
+    if any(p is None for p in planos) or any(float(p.normal @ planos[0].normal) < 1 - 1e-9 for p in planos):
+        return None, []
+    n = planos[0].normal
+    analisis = _analisis(forma, 1.0)
+    arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+    empalmes, pendientes, hay_pared = [], list(caras), False
+    while pendientes:
+        f = pendientes.pop()
+        curva = _plano_de_cara(f) is None
+        for otra in _vecinas_tangentes(analisis, arista_caras, f):
+            plano = _plano_de_cara(otra)
+            if plano is None:
+                if not _contiene(empalmes, otra):
+                    empalmes.append(otra)
+                    pendientes.append(otra)
+            elif curva and not _contiene(caras, otra):
+                if abs(float(plano.normal @ n)) > 1e-6:     # p. ej. el otro lado de una ranura: se desfasa todo junto
+                    return None, []
+                hay_pared = True
+    return (n, empalmes) if hay_pared and not any(map(_es_filete, empalmes)) else (None, [])
+
+
+def _trasladar_caras(forma, caras, n, dist):
+    """Mueve `caras` dist·n sumando (o restando) el prisma que barre cada una: las paredes paralelas a n se estiran."""
+    prismas = [BRepPrimAPI_MakePrism(c, gp_Vec(*(n * dist))).Shape() for c in caras]
+    resultado = geo.unir_todos([forma] + prismas) if dist > 0 else forma
+    for prisma in prismas if dist < 0 else ():
+        resultado = geo.booleano(resultado, prisma, "cortar")
+    if geo.esta_vacia(resultado) or not geo.solidos(resultado):
+        raise geo.ErrorGeometria("Desfase de caras: no queda material: la cara entra hasta atravesar todo el cuerpo. "
+                                 "Probá una distancia menor.")
+    return _validar(_unificar(resultado), "Desfase de caras")
+
+
 def desfasar_caras(forma, caras, distancia, *, tangente=True):
     """Offset Face / Press Pull sobre caras: mueve las caras a lo largo de su normal (positivo = hacia
-    afuera, agrega material) y extiende las vecinas. tangente: arrastra las caras tangentes."""
+    afuera, agrega material) y extiende las vecinas. tangente: arrastra las caras tangentes; una cara plana
+    con empalmes en el borde se traslada con ellos, como Fusion (B-434)."""
     if not caras:
         raise geo.ErrorGeometria("Elegí las caras a desfasar.")
     dist = float(distancia)
     if abs(dist) < 1e-9:
         raise geo.ErrorGeometria("La distancia de desfase no puede ser cero.")
+    n, empalmes = _empalmes_del_borde(forma, caras) if tangente else (None, [])
+    if empalmes:
+        return _trasladar_caras(forma, list(caras) + empalmes, n, dist)
     todas = []
     for c in caras:
         for t in (caras_tangentes(forma, c, coplanares=False) if tangente else [c]):
