@@ -1297,7 +1297,7 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
     secciones = list(secciones)
     if len(secciones) < 2:
         raise geo.ErrorGeometria("El solevado necesita al menos dos secciones.")
-    secs, primera = [], None
+    secs = []
     for i, s in enumerate(secciones):
         es_punto = isinstance(s, gp_Pnt) or (isinstance(s, TopoDS_Shape) and s.ShapeType() == TopAbs_VERTEX) \
             or (not isinstance(s, (TopoDS_Shape, list, tuple)) or
@@ -1311,9 +1311,7 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
                 v = BRepBuilderAPI_MakeVertex(s if isinstance(s, gp_Pnt) else _pnt(s)).Vertex()
             secs.append(("vertice", v))
         else:
-            w = _alambre_unico(s, f"La sección {i + 1}")
-            primera = primera or w
-            secs.append(("alambre", w))
+            secs.append(("alambre", _alambre_unico(s, f"La sección {i + 1}")))
     if cerrada and len(secciones) < 3:
         raise geo.ErrorGeometria("Un solevado cerrado necesita al menos tres secciones.")
     rieles = list(rieles)
@@ -1342,20 +1340,15 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
     else:
         if condiciones:
             secs = _con_condiciones(secs, condicion_inicio, condicion_fin, condiciones_medias)
-        ts = BRepOffsetAPI_ThruSections(False, bool(reglada))
-        for tipo, forma in secs:
-            (ts.AddVertex if tipo == "vertice" else ts.AddWire)(forma)
-        if cerrada:
-            ts.AddWire(primera)
-        # SUP-4: con secciones de distinto tipo (rectángulo + círculos) hay que dejar que OCC las haga
-        # compatibles; desactivarlo hacía fallar RCC, CCR, RRC, CRC y RCR.
-        ts.CheckCompatibility(True)
-        ts.Build()
-        if not ts.IsDone():
+        from . import solidos_crear as sc
+        # SUP-4: con secciones de distinto tipo (rectángulo + círculos) el ajuste de compatibilidad es imprescindible;
+        # B-419: con la misma cantidad de aristas puede correr la costura y plegarla: _loft prueba sin el ajuste.
+        try:
+            forma = sc._loft(secs, False, bool(reglada), cerrada)
+        except geo.ErrorGeometria:
             raise geo.ErrorGeometria("No se pudo crear la superficie entre las secciones: revisá que estén en el orden "
                                      "en que se recorren, que no se crucen y que tengan una forma parecida (o probá con "
-                                     "«Tramos rectos»).")
-        forma = ts.Shape()
+                                     "«Tramos rectos»).") from None
     forma = _simplificar(forma)
     return _simplificar(geo.unificar_caras(forma)) if fusionar_tangentes else forma
 

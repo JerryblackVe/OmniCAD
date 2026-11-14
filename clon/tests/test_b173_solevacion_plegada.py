@@ -55,6 +55,17 @@ def test_b416_la_solevacion_de_superficie_tambien_rechaza_secciones_que_van_y_vu
     assert not r["ok"] and "las secciones van y vuelven" in r["mensaje"], r
 
 
+@pytest.mark.parametrize("orden", [("Bc_ant_n", "Bc_ant_m", "Bc_ant_p"), ("Bc_ant_p", "Bc_ant_m", "Bc_ant_n")])
+def test_b419_la_solevacion_de_superficie_tampoco_se_pliega(orden):
+    """B-419: el ajuste de compatibilidad corría la costura también en la superficie (232 781 mm² y 1
+    autointersección). Sin él, la superficie es la pared del sólido sano (~105 000 mm², sin las tapas)."""
+    s = _secciones()
+    cid = _llamar(s, "create_surface_loft", profiles=[{"sketch": b, "profile": 0} for b in orden])["bodies_created"][0]["id"]
+    g = _llamar(s, "check_geometry", body=cid)["bodies"][0]
+    assert g["valid"] and g["self_intersections"] == 0
+    assert g["area"] == pytest.approx(105375, rel=0.02)
+
+
 def test_b416_un_arco_sigue_valiendo():
     """La del medio 100 mm más alta: el camino gira más de 90° pero las secciones siguen avanzando."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon
