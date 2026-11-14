@@ -9,11 +9,11 @@ from ...nucleo import geometria as geo
 from ...nucleo.malla import Malla
 from ...timeline.operaciones import OpExtrusion, OpRevolucion, espesor_plastico
 from ...timeline.parametros import ANGULO, LONGITUD
-from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, Seleccion, exigir,
+from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, OpcionesVivas, Seleccion, exigir,
                        hit_desde_ref, hits, ref1)
 from . import registrar
 from .comunes import (DIRECCIONES_UI, ajustar_operacion, caja_cuerpo, caja_nueva, campo_objetivos, campo_operacion,
-                      evaluar_o_cero as _evaluar, objetivos, objetivos_desde_op, perfil_apoyado,
+                      direcciones_revolucion, evaluar_o_cero as _evaluar, objetivos, objetivos_desde_op, perfil_apoyado,
                       perfiles_a_params, perfiles_desde_op, solidos_visibles)
 
 
@@ -437,7 +437,10 @@ class Revolucion(Comando):
             Opciones("extension", "Tipo de extensión", {"angulo": "Ángulo", "objeto": "A objeto", "completa": "Completo"}),
             Seleccion("hasta", "Objeto límite", {"vertice", "cara", "plano", "cuerpo"},
                       visible_si=lambda v: v.get("extension") == "objeto"),
-            Opciones("direccion", "Dirección", DIRECCIONES_UI, visible_si=lambda v: v.get("extension") == "angulo"),
+            OpcionesVivas("direccion", "Dirección", direcciones_revolucion, "un_lado",
+                          visible_si=lambda v: v.get("extension") in ("angulo", "objeto")),
+            Seleccion("hasta2", "Objeto límite del lado 2", {"vertice", "cara", "plano", "cuerpo"},
+                      visible_si=lambda v: v.get("extension") == "objeto" and v.get("direccion") == "dos_lados"),
             Expresion("angulo", "Ángulo", "360 deg", ANGULO, visible_si=lambda v: v.get("extension") == "angulo",
                       etiqueta_si=lambda v: "Ángulo del lado 1" if v.get("direccion") == "dos_lados" else "Ángulo"),
             Expresion("angulo2", "Ángulo del lado 2", "90 deg", ANGULO,
@@ -463,10 +466,13 @@ class Revolucion(Comando):
         ctx.evaluar(v.get("angulo") or "0", ANGULO)
         if v.get("extension") == "objeto":
             exigir(v, "hasta", "Seleccioná el objeto hasta donde gira el perfil.")
+            if v.get("direccion") == "dos_lados":
+                exigir(v, "hasta2", "Seleccioná el objeto hasta donde gira el perfil en el lado 2.")
         params = {k: v.get(k) for k in ("extension", "direccion", "angulo", "angulo2", "invertir", "operacion")}
         params.update(boceto=boceto, perfiles=perfiles, caras=caras, eje_ref=eje, eje="v",
                       objetivos=objetivos(v), objetivo="", proyectar_eje=bool(v.get("proyectar_eje")),
-                      hasta=ref1(v, "hasta") if v.get("extension") == "objeto" else None)
+                      hasta=ref1(v, "hasta") if v.get("extension") == "objeto" else None,
+                      hasta2=ref1(v, "hasta2") if v.get("extension") == "objeto" and v.get("direccion") == "dos_lados" else None)
         return self.crear_op(OpRevolucion, v, ctx, **params)
 
     def manipuladores(self, ctx, v):
@@ -507,6 +513,7 @@ class Revolucion(Comando):
         v["perfiles"] = perfiles_desde_op(op, ctx.estado)
         v["objetivos"] = objetivos_desde_op(op, ctx.estado)
         v["hasta"] = [hit_desde_ref(op.p["hasta"], ctx.estado)] if op.p.get("hasta") else []
+        v["hasta2"] = [hit_desde_ref(op.p["hasta2"], ctx.estado)] if op.p.get("hasta2") else []
         if op.p.get("eje_ref"):
             v["eje"] = [hit_desde_ref(op.p["eje_ref"], ctx.estado)]
         elif op.p.get("eje") not in ("u", "v", None):

@@ -2535,7 +2535,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`move_faces`](#move_faces) | sí | Mueve o copia caras planas de un cuerpo (SÓLIDO › MODIFICAR › Mover/copiar › Caras): las caras vecinas se extienden o se recortan para seguirlas. type=translate con direction (eje, arista recta, cara plana o plano) y distance, o con translate [dx, dy, dz]; type=rotate alrededor de axis un angle. |
 | [`scale_body`](#scale_body) | sí | Escala sólidos, superficies o componentes (con todos sus cuerpos) respecto de un punto, uniforme o con un factor por eje. sketches escala bocetos enteros (solo uniforme). |
 | [`create_surface_extrude`](#create_surface_extrude) | sí | Extruye curvas abiertas o cerradas (o un texto de una línea) en una superficie. |
-| [`create_surface_revolve`](#create_surface_revolve) | sí | Gira curvas alrededor de un eje para crear una superficie. direction: one_side, two_sides (angle y angle2) o symmetric. to_object (Extent Type › To Object) gira hasta un vértice, un plano, una cara plana o un cuerpo en lugar de un ángulo (solo con one_side). project_axis lleva el eje al plano del perfil. |
+| [`create_surface_revolve`](#create_surface_revolve) | sí | Gira curvas alrededor de un eje para crear una superficie. direction: one_side, two_sides (angle y angle2) o symmetric. to_object (Extent Type › To Object) gira hasta un vértice, un plano, una cara plana o un cuerpo en lugar de un ángulo (con two_sides, to_object2 es el del otro lado; no con symmetric). project_axis lleva el eje al plano del perfil. |
 | [`create_surface_sweep`](#create_surface_sweep) | sí | Barre curvas por una ruta. |
 | [`create_surface_loft`](#create_surface_loft) | sí | Crea una superficie entre secciones ordenadas, abiertas o cerradas. start_condition y end_condition fijan cómo sale de la primera y la última: free, direction (ángulo y peso), tangent y smooth (G1 y G2 contra una cara, con alineación de bordes), o point_tangent (cúpula en un punto; sin condición un punto queda agudo). rails (cualquier cantidad, tocan cada sección; con closed, lazos cerrados) y center_line guían la forma y se combinan con las condiciones: entre rieles manda la condición y sobre cada riel, el riel. |
 | [`offset_surface`](#offset_surface) | sí | Crea una superficie paralela a caras o cuerpos. |
@@ -2592,7 +2592,7 @@ Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text'
 
 ### `revolve`
 
-Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción); también un eje de construcción (id o nombre), una arista recta o una cara cilíndrica (selector o id de find_edges / find_faces) o una línea de OTRO boceto ({"sketch": id, "curve": n}). El perfil no debe cruzar el eje; puede ser una cara plana (faces). angle acepta número (grados) o expresión. direction: one_side, two_sides (angle y angle2) o symmetric. to_object (Extent Type › To Object) gira el perfil hasta un vértice, un plano, una cara plana o un cuerpo en lugar de un ángulo (solo con one_side). project_axis lleva el eje al plano del perfil (Project Axis).
+Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción); también un eje de construcción (id o nombre), una arista recta o una cara cilíndrica (selector o id de find_edges / find_faces) o una línea de OTRO boceto ({"sketch": id, "curve": n}). El perfil no debe cruzar el eje; puede ser una cara plana (faces). angle acepta número (grados) o expresión. direction: one_side, two_sides (angle y angle2) o symmetric. to_object (Extent Type › To Object) gira el perfil hasta un vértice, un plano, una cara plana o un cuerpo en lugar de un ángulo (con two_sides, to_object2 es el del otro lado; no con symmetric). project_axis lleva el eje al plano del perfil (Project Axis).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2609,6 +2609,7 @@ Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketc
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces y de axis (arista o cara); vacío = el único cuerpo.
   - `to_object` (texto o objeto o lista de número o null; opcional, por defecto `null`): vértice ([x, y, z] o selector), plano (XY/XZ/YZ o de construcción), cara plana (selector o id) o cuerpo (id o nombre) hasta donde gira el perfil; reemplaza a angle.
   - `project_axis` (true/false; opcional, por defecto `true`): true proyecta el eje al plano del perfil (como el panel de Fusion, que lo trae encendido); false lo deja donde está.
+  - `to_object2` (texto o objeto o lista de número o null; opcional, por defecto `null`): con to_object y direction=two_sides, el objeto hasta donde gira el otro lado (mismos tipos que to_object).
 - CLI: `omnicad call revolve --doc pieza.omnicad`
 
 ### `sweep`
@@ -3803,7 +3804,7 @@ Extruye curvas abiertas o cerradas (o un texto de una línea) en una superficie.
 
 ### `create_surface_revolve`
 
-Gira curvas alrededor de un eje para crear una superficie. direction: one_side, two_sides (angle y angle2) o symmetric. to_object (Extent Type › To Object) gira hasta un vértice, un plano, una cara plana o un cuerpo en lugar de un ángulo (solo con one_side). project_axis lleva el eje al plano del perfil.
+Gira curvas alrededor de un eje para crear una superficie. direction: one_side, two_sides (angle y angle2) o symmetric. to_object (Extent Type › To Object) gira hasta un vértice, un plano, una cara plana o un cuerpo en lugar de un ángulo (con two_sides, to_object2 es el del otro lado; no con symmetric). project_axis lleva el eje al plano del perfil.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -3816,6 +3817,7 @@ Gira curvas alrededor de un eje para crear una superficie. direction: one_side, 
   - `to_object` (texto o objeto o lista de número o null; opcional, por defecto `null`): vértice ([x, y, z] o selector), plano, cara plana o cuerpo hasta donde gira el perfil; reemplaza a angle.
   - `project_axis` (true/false; opcional, por defecto `true`): true proyecta el eje al plano del perfil (curvas de boceto); false lo deja donde está (el defecto es true, con el panel de Fusion).
   - `chain` (true/false; opcional, por defecto `true`): true toma la cadena tangente entera de cada arista o curva de boceto de profiles (Chaining de Fusion, encendido por defecto); false usa solo las elegidas.
+  - `to_object2` (texto o objeto o lista de número o null; opcional, por defecto `null`): con to_object y direction=two_sides, el objeto hasta donde gira el otro lado (mismos tipos que to_object).
 - CLI: `omnicad call create_surface_revolve --doc pieza.omnicad profiles=… axis=…`
 
 ### `create_surface_sweep`

@@ -468,20 +468,30 @@ def _revolver_hasta(ws, punto, d, objeto):
     return _simplificar(girado(alto))
 
 
-def revolver_superficie(aristas, punto_eje, dir_eje, angulo, *, direccion="un_lado", angulo2=None, hasta=None):
+def revolver_superficie(aristas, punto_eje, dir_eje, angulo, *, direccion="un_lado", angulo2=None, hasta=None,
+                        hasta2=None):
     """Revolución de curvas en superficie [SFC-REVOLVE] (Partial; ±360 = Full).
 
     `direccion`: "un_lado" (`angulo` con signo), "dos_lados" (`angulo` hacia un lado y `angulo2` hacia el otro) o
     "simetrica" (`angulo` es el total, mitad para cada lado). `hasta`: Extent = To Object, `("punto", xyz)`,
-    `("plano", geo.Plano)` o `("forma", cuerpo)`; gira hacia un solo lado."""
+    `("plano", geo.Plano)` o `("forma", cuerpo)`; con "dos_lados", `hasta2` es el objeto del otro lado (B-384, H-88)."""
     if direccion not in LADOS_EXTRUSION:
         raise geo.ErrorGeometria(f"Dirección de revolución desconocida: {direccion}")
     d = _unitario(dir_eje, "La dirección del eje")
     ws = alambres(aristas)
     if hasta is not None:
-        if direccion != "un_lado":
-            raise geo.ErrorGeometria("«A objeto» gira hacia un solo lado: usá la dirección «Un lado».")
-        return _revolver_hasta(ws, punto_eje, d, hasta)
+        if direccion == "simetrica":
+            raise geo.ErrorGeometria("«A objeto» gira hasta el objeto de cada lado: usá «Un lado» o «Dos lados».")
+        if direccion == "un_lado":
+            return _revolver_hasta(ws, punto_eje, d, hasta)
+        if hasta2 is None:
+            raise geo.ErrorGeometria("Elegí el objeto hasta donde gira el perfil en el lado 2.")
+        piezas = [_revolver_hasta(ws, punto_eje, d, hasta), _revolver_hasta(ws, punto_eje, -d, hasta2)]
+        eje = gp_Ax1(_pnt(punto_eje), gp_Dir(*map(float, d)))
+        vuelta = geo.area(_juntar([BRepPrimAPI_MakeRevol(w, eje, 2 * math.pi).Shape() for w in ws]))
+        if sum(geo.area(pieza) for pieza in piezas) > vuelta * (1 + 1e-6):     # el área crece con el ángulo (Pappus)
+            raise geo.ErrorGeometria("Los dos lados juntos pasan de una vuelta (360°): elegí objetos que no se crucen.")
+        return _coser_caras([c for pieza in piezas for c in geo.caras(pieza)])
     a2 = (angulo2 or 0.0) if direccion == "dos_lados" else 0.0
     if abs(angulo) < 1e-9:
         raise geo.ErrorGeometria("El ángulo de revolución no puede ser cero.")

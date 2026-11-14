@@ -145,7 +145,7 @@ def test_revolucion_dos_lados_simetrica_y_hasta_un_objeto():
         sf.revolver_superficie(seg((-5, 0, 5), (5, 0, 5)), origen, Z, 90)       # SUP-22: el perfil cruza el eje
     with pytest.raises(g.ErrorGeometria, match="360"):
         sf.revolver_superficie(perfil, origen, Z, 270, direccion="dos_lados", angulo2=180)
-    with pytest.raises(g.ErrorGeometria, match="un solo lado"):
+    with pytest.raises(g.ErrorGeometria, match="Dos lados"):
         sf.revolver_superficie(perfil, origen, Z, 0, direccion="simetrica", hasta=("punto", (0, 10, 5)))
 
 

@@ -10,10 +10,11 @@ from ...timeline.ops_superficie import (AVISO_NADA_COSIDO, OpCoser, OpDescoser, 
                                         OpSupSolevacion, OpSupTuberia)
 from ...timeline.operaciones import espesor_plastico
 from ...timeline.parametros import ANGULO, ESCALAR
-from ..comando import (Botones, Casilla, Comando, ErrorComando, Expresion, Info, Opciones, Personalizado, Seleccion, Texto,
+from ..comando import (Botones, Casilla, Comando, ErrorComando, Expresion, Info, Opciones, OpcionesVivas, Personalizado, Seleccion, Texto,
                        exigir, hit_desde_ref, hits, hits_cuerpos as _hits_cuerpos, ref1, refs)
 from . import registrar
-from .comunes import DIRECCIONES_UI, OPCIONES_OPERACION, campo_objetivos, con_analisis, con_operacion_automatica, objetivos
+from .comunes import (DIRECCIONES_UI, OPCIONES_OPERACION, campo_objetivos, con_analisis, con_operacion_automatica,
+                      direcciones_revolucion, objetivos)
 from .crear import Bobina, Solevacion, Tuberia, _en_fila
 from .primitivas import Caja, Cilindro, Esfera, Toroide
 
@@ -108,7 +109,10 @@ class SupRevolucion(Comando):
                 Opciones("extension", "Tipo de extensión", {"angulo": "Ángulo", "objeto": "A objeto", "completa": "Completo"}),
                 Seleccion("hasta", "Objeto límite", {"vertice", "cara", "plano", "cuerpo"},
                           visible_si=lambda v: v.get("extension") == "objeto"),
-                Opciones("lados", "Dirección", DIRECCIONES_UI, visible_si=angulo),
+                OpcionesVivas("lados", "Dirección", direcciones_revolucion, "un_lado",
+                              visible_si=lambda v: v.get("extension") in ("angulo", "objeto")),
+                Seleccion("hasta2", "Objeto límite del lado 2", {"vertice", "cara", "plano", "cuerpo"},
+                          visible_si=lambda v: v.get("extension") == "objeto" and v.get("lados") == "dos_lados"),
                 Expresion("angulo", "Ángulo", "360 deg", ANGULO, visible_si=angulo,
                           etiqueta_si=lambda v: "Ángulo del lado 1" if v.get("lados") == "dos_lados" else "Ángulo"),
                 Expresion("angulo2", "Ángulo del lado 2", "90 deg", ANGULO,
@@ -121,15 +125,17 @@ class SupRevolucion(Comando):
         exigir(v, "eje", "Seleccioná el eje.")
         if v.get("extension") == "objeto" and not v.get("hasta"):
             raise ErrorComando("Elegí el objeto hasta donde gira el perfil.")
+        if v.get("extension") == "objeto" and v.get("lados") == "dos_lados" and not v.get("hasta2"):
+            raise ErrorComando("Elegí el objeto hasta donde gira el perfil en el lado 2.")
         ctx.evaluar(v["angulo"], ANGULO)
         ctx.evaluar(v.get("angulo2") or "0", ANGULO)
         return self.crear_op(OpSupRevolucion, v, ctx, curvas=refs(v, "curvas"), eje=ref1(v, "eje"),
-                             hasta=ref1(v, "hasta"), **{k: v[k] for k in ("angulo", "angulo2", "extension", "lados",
+                             hasta=ref1(v, "hasta"), hasta2=ref1(v, "hasta2"), **{k: v[k] for k in ("angulo", "angulo2", "extension", "lados",
                                                                           "proyectar_eje", "cadena")})
 
     def desde_op(self, op, ctx):
         return dict(op.p, curvas=hits(op.p["curvas"], ctx.estado), eje=_h1(op.p["eje"], ctx.estado),
-                    hasta=_h1(op.p["hasta"], ctx.estado))
+                    hasta=_h1(op.p["hasta"], ctx.estado), hasta2=_h1(op.p.get("hasta2"), ctx.estado))
 
 
 @con_analisis

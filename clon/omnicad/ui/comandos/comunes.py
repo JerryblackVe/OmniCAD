@@ -13,6 +13,11 @@ OPCIONES_OPERACION = {"unir": ("Unir", "op_unir"), "cortar": ("Cortar", "op_cort
 assert set(OPCIONES_OPERACION) == set(OPERACIONES_CUERPO)
 DIRECCIONES_UI = {"un_lado": ("Un lado", "dir_un_lado"), "dos_lados": ("Dos lados", "dir_dos_lados"),
                   "simetrica": ("Simétrico", "dir_simetrica")}
+def direcciones_revolucion(v):
+    """B-384: con «A objeto» Fusion ofrece Un lado y Dos lados (cada lado gira hasta su objeto); Simétrica, solo con ángulo."""
+    return {k: t for k, t in DIRECCIONES_UI.items() if k != "simetrica" or v.get("extension") != "objeto"}
+
+
 POSICIONES_SECCION = {"interior": ("Interior", "pos_interior"), "centro": ("En el centro", "pos_centro"),
                       "exterior": ("Exterior", "pos_exterior")}
 

@@ -1350,7 +1350,7 @@ class OpRevolucion(_OpConPerfiles):
     TIPO, ETIQUETA, ICONO = "revolucion", "Revolución", "↻"
     PARAMS = {"boceto": "", "perfiles": [], "caras": [], "eje": "v", "eje_ref": None, "extension": "angulo",
               "angulo": "360 deg", "direccion": "un_lado", "angulo2": "90 deg", "invertir": False,
-              "operacion": "nuevo", "objetivo": "", "objetivos": [], "hasta": None,
+              "operacion": "nuevo", "objetivo": "", "objetivos": [], "hasta": None, "hasta2": None,
               # El panel y la API arrancan con el eje proyectado (Fusion lo trae marcado); acá queda False: es lo
               # que calcula una receta guardada sin la clave, que tiene que abrir igual (docs/brechas_herramientas_solido.md › CAP-12).
               "proyectar_eje": False}
@@ -1374,11 +1374,12 @@ class OpRevolucion(_OpConPerfiles):
         punto = plano.a_3d(u1, v1)
         return punto, plano.a_3d(u2, v2) - punto
 
-    def _hasta(self, estado):
-        """El objeto de «A objeto» como lo entiende `solidos_crear.revolver_hasta`."""
-        if not self.p.get("hasta"):
-            raise ErrorOperacion("Elegí el vértice, el plano, la cara plana o el cuerpo hasta donde gira el perfil.")
-        e = _resolver(self.p["hasta"], estado)
+    def _hasta(self, estado, clave="hasta"):
+        """El objeto de «A objeto» (`hasta2`: el del lado 2) como lo entiende `solidos_crear.revolver_hasta`."""
+        if not self.p.get(clave):
+            raise ErrorOperacion("Elegí el vértice, el plano, la cara plana o el cuerpo hasta donde gira el perfil"
+                                 + (" en el lado 2." if clave == "hasta2" else "."))
+        e = _resolver(self.p[clave], estado)
         if e.tipo in ("vertice", "punto", "punto_boceto"):
             return "punto", ent.como_punto(e)
         if e.plano is not None:
@@ -1400,12 +1401,18 @@ class OpRevolucion(_OpConPerfiles):
                 direccion = proyectado
         direccion = np.asarray(direccion, float) * (-1 if self.p.get("invertir") else 1)
         if self.p.get("extension") == "objeto":
-            if self.p.get("direccion", "un_lado") != "un_lado":
-                raise ErrorOperacion("«A objeto» gira hacia un solo lado: usá la dirección «Un lado».")
+            modo = self.p.get("direccion", "un_lado")
+            if modo == "simetrica":
+                raise ErrorOperacion("«A objeto» gira hasta el objeto de cada lado: usá «Un lado» o «Dos lados».")
             kernel = _kernel_crear()
             if kernel is None or not hasattr(kernel, "revolver_hasta"):
                 raise ErrorOperacion("«A objeto» todavía no está disponible con este motor geométrico.")
             forma = kernel.revolver_hasta(caras, punto, direccion, self._hasta(estado))
+            if modo == "dos_lados":         # B-384/H-88: como Fusion, cada lado gira hasta su propio objeto
+                lado2 = kernel.revolver_hasta(caras, punto, -direccion, self._hasta(estado, "hasta2"))
+                if geo.volumen(forma) + geo.volumen(lado2) > geo.volumen(geo.revolver(caras, punto, direccion, 360)) * (1 + 1e-6):
+                    raise ErrorOperacion("Los dos lados juntos pasan de una vuelta (360°): elegí objetos que no se crucen.")
+                forma = geo.unir_todos([forma, lado2])
             self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo(),
                                                  apoyos=apoyos))
             return
