@@ -20,7 +20,7 @@ Abierto 10 · Parcial 9 · Sin verificar 2.
 | P-10b-d | Fase 1: Rust y Zstandard con instalador | Abierto | Media | Migrar zstd_puro a Rust y probar .pyd, PyInstaller e instalador. | omnicad/io_archivos/zstd_puro.py; clon/rust/src/lib.rs | 2026-10-20 |
 | P-10b-j | Bajar el dibujo Qt del boceto (11 ms con 10 000 puntos al mover la cámara) | Abierto | Media | Bajar de 5 ms el repintado completo del boceto. | PROJECT_LOG.md:341 | 2026-10-20 |
 | P-22c | Casos límite y tolerancias explícitas en solver e intersecciones | Abierto | Media | Esferas anidadas y banda de tangencia sin tratar. | omnicad/restricciones/solver.py sin tratamiento de tangencia | 2026-10-20 |
-| P-32 | Probar omnikernel ante uniones casi tangentes | Abierto | Media | Comparar b39-1414 y el fuzzer; integrar solo si resuelve sin perder material. | scripts/fuzz_b39.py; tests/test_b39_revision.py | 2026-10-27 |
+| P-32 | Probar omnikernel ante uniones casi tangentes | Bloqueado | Media | Suspendido: OmniKernel en pausa (Gerardo, 2026-11-14). Comparar b39-1414 y el fuzzer; integrar solo si resuelve sin perder material. | scripts/fuzz_b39.py; tests/test_b39_revision.py | 2026-10-27 |
 | P-10b-e | Fase 2: malla en Rust (R7, R2, R8, R10) con BVH R3 | Abierto | Alta | Reducir malla, half-edge, soldado y E/S de texto siguen en Python. | clon/rust/src/lib.rs solo tiene 3 funciones de render | 2026-10-20 |
 | P-10b-g | Fase 4: remallado R6 en Rust y subir los topes | Abierto | Alta | Remallar sigue en Python con topes de 100 000 triángulos. | omnicad/nucleo/malla.py (TRIANGULOS_MAXIMOS_REMALLADO) | 2026-10-20 |
 | P-10b-f | Fase 3: boceto en Rust (R5, solver R4, R9) | Abierto | Muy alta | Medir el solver antes de migrarlo a Rust. | omnicad/restricciones/solver.py; clon/rust/ | 2026-10-20 |
