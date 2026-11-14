@@ -362,6 +362,7 @@ def principal(argv):
     tarea, carpeta = argv[0], Path(argv[1])
     if tarea == "trabajador":
         return aislado._trabajar(carpeta)
+    next(pedidos_del_padre())     # B-397: vigila la tubería también durante una sola tarea
     args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
     if tarea in _TAREAS_JSON:
         os.chdir(args.pop("_cwd"))     # las rutas relativas del documento (derivaciones) valen desde el padre
@@ -697,9 +698,11 @@ class CalculoPendiente:
         self.carpeta = Path(self.temporal.name)
         (self.carpeta / "args.json").write_text(json.dumps(self.datos, default=_a_json), encoding="utf-8", newline="\n")
         self.errores = (self.carpeta / "errores.txt").open("wb")
-        self.proceso = subprocess.Popen(_comando(self.tarea, self.carpeta), cwd=_RAIZ, stdout=subprocess.DEVNULL,
+        self.proceso = subprocess.Popen(_comando(self.tarea, self.carpeta), cwd=_RAIZ, bufsize=0,
+                                        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                                         stderr=self.errores, creationflags=_SIN_VENTANA |
                                         getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0), env=_entorno_hijo())
+        self.proceso.stdin.write(b"\n")
 
     def _termino(self):
         if self.proceso is None and not self._al_trabajador():
@@ -756,6 +759,8 @@ class CalculoPendiente:
         if self.proceso is not None and self.proceso.poll() is None:
             self.proceso.kill()
             self.proceso.wait()
+        if self.proceso is not None:
+            self.proceso.stdin.close()
         if hasattr(self, "errores"):
             self.errores.close()
         if self.temporal is not None:
@@ -765,8 +770,12 @@ class CalculoPendiente:
 def _ejecutar(comando, tope, esperar):
     """`subprocess.run`; con `esperar` corre en un hilo y el que llama la invoca cada 50 ms (sin Qt acá)."""
     def correr():
-        return subprocess.run(comando, cwd=_RAIZ, capture_output=True, timeout=tope,
-                              creationflags=_SIN_VENTANA, check=False, env=_entorno_hijo())
+        lectura, escritura = os.pipe()
+        # run() cerraría stdin=PIPE al comunicar: esta tubería vive hasta que termina la espera.
+        with os.fdopen(lectura, "rb") as entrada, os.fdopen(escritura, "wb", buffering=0) as aviso:
+            aviso.write(b"\n")
+            return subprocess.run(comando, cwd=_RAIZ, stdin=entrada, capture_output=True, timeout=tope,
+                                  creationflags=_SIN_VENTANA, check=False, env=_entorno_hijo())
 
     if esperar is None:
         return correr()
