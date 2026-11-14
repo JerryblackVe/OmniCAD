@@ -8,7 +8,7 @@ ejemplos de `~/Desktop/f3z` (BINCHA, abanicos, cartera, extrusor). Lo que falta 
 
 | Miembro | Qué es | Qué hace OmniCAD |
 |---|---|---|
-| `Breps.BlobParts/BREP.*.smbh` | B-rep actual de un componente (SAB de ShapeManager) | cuerpos: `f3d_nativo`, `sab`, `acis_occ` |
+| `Breps.BlobParts/BREP.*.smbh` | B-rep actual de un componente (SAB de ShapeManager). El Fusion nuevo (ASM 231, 2025) ya no los escribe: los cuerpos van en los `.smb` (B-363) | cuerpos: `f3d_nativo`, `sab`, `acis_occ` |
 | `Breps.BlobParts/BREP.*.smb` | perfiles de los bocetos + cuerpos auxiliares de las herramientas | bocetos: `f3d_bocetos` |
 | `OGS.BlobFolder/OGS/DefaultScene/world` + `Fusion_mesh_000` | escena de dibujo: matriz de cada componente y la malla de los cuerpos VISIBLES | ubicar componentes y copias: `f3d_escena` |
 | `FusionDesignSegmentType1/BulkStream.dat` (viejos: `Design1/`) | flujo de diseño propietario: nombres, historial, parámetros | nombres de componentes y tabla de operaciones: `f3d_historial` |

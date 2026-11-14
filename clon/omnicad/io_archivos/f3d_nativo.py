@@ -94,12 +94,19 @@ def _etapa(progreso, texto):
         progreso(texto)
 
 
+def _bloques_brep(z):
+    """Los bloques B-rep de un .f3d: los `.smbh`; el Fusion nuevo (ASM 231, B-363) ya no los escribe y deja los cuerpos
+    en los `.smb` (los que nombra el diseño), así que sin `.smbh` se usan esos."""
+    infos = [i for i in z.infolist() if CARPETA_BREPS in i.filename]
+    return [i for i in infos if i.filename.lower().endswith(".smbh")] or [i for i in infos if i.filename.lower().endswith(".smb")]
+
+
 def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None, bocetos=None):
     try:
         z = zipfile.ZipFile(io.BytesIO(datos))
     except (zipfile.BadZipFile, ValueError, NotImplementedError, struct.error, OverflowError):
         raise ErrorF3D(f"{nombre} no es un archivo de Fusion válido (no es un ZIP).") from None
-    bloques = [i for i in z.infolist() if CARPETA_BREPS in i.filename and i.filename.lower().endswith(".smbh")]
+    bloques = _bloques_brep(z)
     if not bloques:
         raise ErrorF3D(f"{nombre} no trae geometría 3D (el diseño está vacío o solo tiene bocetos).")
     leidos, archivos, avisos = [], [], []
