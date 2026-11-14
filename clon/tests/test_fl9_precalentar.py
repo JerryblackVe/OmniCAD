@@ -289,8 +289,10 @@ def test_b418_esc_o_cancelar_salen_aunque_el_proceso_aparte_no_conteste(tmp_path
     def salir(p):
         if como == "esc":
             QTest.keyClick(p, Qt.Key_Escape)
-        else:
-            QTest.mouseClick(p.boton_cancelar, Qt.LeftButton)
+        else:       # por la QWindow, como un clic de verdad (al botón directo no pasaba por donde se perdía)
+            ventana = p.window()
+            QTest.mouseClick(ventana.windowHandle(), Qt.LeftButton, Qt.NoModifier,
+                             p.boton_cancelar.mapTo(ventana, p.boton_cancelar.rect().center()))
 
     app, v = _ventana(tmp_path, monkeypatch)
     _pedido_perdido(monkeypatch, 10 ** 6)
