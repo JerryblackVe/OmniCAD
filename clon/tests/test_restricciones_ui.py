@@ -9,6 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, Qt  # noqa: E402
 from PySide6.QtGui import QMouseEvent  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from omnicad import api  # noqa: E402
@@ -382,3 +383,22 @@ def test_b241_borrar_un_recuadro_que_toma_el_origen_borra_el_resto(lz):
     lz.seleccion = [0]                               # solo el origen: avisa y no toca nada
     lz.borrar_seleccion()
     assert 0 in lz.b.puntos and "resto" not in mensajes[-1]
+
+
+@pytest.mark.parametrize("arco, tipo, valor", [(False, "diametro", "20"), (True, "radio", "10")])
+def test_b439_cota_de_circulo_y_arco_clic_en_el_borde_y_clic_para_ubicar(lz, arco, tipo, valor):
+    """B-439: como Fusion, clic en el borde del círculo (o arco) y clic para ubicar deja la caja del valor abierta ahí
+    (antes el segundo clic la cerraba y no quedaba cota); diámetro en el círculo, radio en el arco."""
+    c = lz.b.agregar_arco_centro((60, 0), (70, 0), (50, 0)) if arco else lz.b.agregar_circulo((60, 0), 10)
+    lz.resolver()
+    lz.set_herramienta("cota")
+    _clic(lz, 60, 10)                                  # el borde, arriba
+    assert lz.entrada.campos[0].text() == valor        # lo que mide: diámetro del círculo, radio del arco
+    lz.entrada.campos[0].setText("")
+    QTest.keyClicks(lz.entrada.campos[0], "3")          # lo escrito antes de ubicar no se pierde
+    _clic(lz, 90, 25)                                  # clic para ubicar, lejos de la geometría
+    assert lz.entrada is not None and lz.entrada.isVisible() and lz.entrada.campos[0].text() == "3"
+    QTest.keyClicks(lz.entrada.campos[0], "0")
+    QTest.keyClick(lz.entrada.campos[0], Qt.Key_Return)
+    cota, = lz.b.cotas.values()
+    assert (cota.tipo, cota.entidades, cota.expresion) == (tipo, [c], "30")
