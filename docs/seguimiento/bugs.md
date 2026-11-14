@@ -77,6 +77,7 @@ Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPEC
 | B-449 | Test intermitente › `tests/test_previa_vaciado_aislada.py::test_el_hijo_real_no_bloquea_y_cancelar_no_toca_documento` falla dentro de un grupo de tests_afectados con la VPS cargada y pasa solo (23/23); ya lo vieron E2, E5 y E1 | Abierto | Media | Que el test no dependa de la carga de la máquina (B-407 ya pasó a contar eventos atendidos; ver qué más cuenta tiempo real) | Informes de E2 (B-384), E5 (ASM-19) y E1 (B-413), 2026-11-13/14 | 2026-11-14 |
 | B-450 | Sólido › Mover cara (`mover_caras`) de la cara de arriba de una caja con un empalme en su borde deja un escalón; Pulsar/tirar ya lo resuelve (B-434) | Abierto | Media | Reusar `_empalmes_del_borde` / `_trasladar_caras` de B-434 en `mover_caras` y comparar con Fusion | gemelo anotado por E3 al cerrar B-434 (PROJECT_LOG 2026-11-14) | 2026-11-14 |
 | B-451 | Solevación › un clic cerca del centro de un círculo toma el punto del centro y no la curva, y el perfil queda «Aguda» | Abierto | Baja | Que el clic dentro del círculo elija la curva o la región, como Fusion; test con el clic simulado | E11, `evidencias/reportes_pc/2026-11-14_superficie/` (lote 19 h) | 2026-11-14 |
+| B-452 | Boceto › fuera del boceto, la vista 3D sigue mostrando las curvas y los objetos de boceto ocultos | Sin verificar | Baja | Ver en `docs/fusion_docs` qué muestra Fusion fuera del boceto y respetar la marca de ocultar | E1 al cerrar H-69 (PROJECT_LOG 2026-11-14) | 2026-11-14 |
 
 ## Ensamblar (auditoría contra Fusion, 2026-10-25)
 
