@@ -123,6 +123,8 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, Sol y el
 - Todo cuello de botella que se pueda pasar a Rust (malla, solver de bocetos, teselado, visor, recálculo) se pasa,
   como módulo puntual vía PyO3. Medir primero, después optimizar. La geometría ya es OpenCascade (C++).
 - Instalar el toolchain de Rust/maturin requiere permiso del usuario.
+- **Toda vía rápida o caché (Gerardo, 2026-11-14, por B-453):** si falla, cae sola al camino normal sin mostrarle
+  su error al usuario, y lleva un test sobre un cuerpo YA modificado por un paso anterior. Sin eso no se integra.
 
 ## Recurso indispensable: documentación oficial de Fusion 360
 - Está completa en **`docs/fusion_docs/`** (no se sube a git) y es la fuente de verdad de **cómo funciona Fusion**.
