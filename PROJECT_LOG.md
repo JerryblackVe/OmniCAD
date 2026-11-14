@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-13 · B-416 cerrado (E4, Solevación).** Con los 3 perfiles del antebrazo, 4 de los 6 órdenes van y vuelven (n, p, m · p, n, m: 6 044 386 mm³ plegado; m, n, p · m, p, n: ±862 235 mm³) y daban `ok`; tardaban hasta 17 s en solevar y «Propiedades» 5-15 s. `nucleo/solidos_crear._exigir_ida` rechaza al instante si el centro de una sección queda detrás del anterior en el camino de la primera a la última (un arco con la del medio alta sigue valiendo; solevación lisa abierta: sin carriles, línea central ni cerrada; Fusion une en el orden elegido, botón Reorder) con «las secciones van y vuelven (la 3 queda detrás de la 2…)… Ordenalas de una punta a la otra». El gemelo en `superficies.solevar_superficie` también lo llama. Los 2 órdenes sanos siguen en 3 986 376 mm³, válidos, y «Propiedades» tarda 0,26 s. Test: `test_b173_solevacion_plegada.py` parametrizado en los 6 órdenes (en main fallan los 4 cruzados) y `::test_b416_la_solevacion_de_superficie_tambien_rechaza_secciones_que_van_y_vuelven`. Visto: B-419 (la solevación de superficie sana deja 1 autointersección, gemelo de B-173).
 
 Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `registro_2026-11.md`).
 

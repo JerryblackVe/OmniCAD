@@ -1641,6 +1641,8 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         raise geo.ErrorGeometria("OpenCascade no admite solevado con varios carriles: usá uno solo o una "
                                  "línea central.")
     exteriores = [(s[0], s[1]) for s in secs]
+    if not (carriles or linea_central is not None or cerrada):
+        _exigir_ida(exteriores)
     condiciones = any(c and c.get("tipo", "libre") != "libre"
                       for c in (condicion_inicio, condicion_fin, *(condiciones_medias or {}).values()))
     if condiciones:
@@ -1689,6 +1691,21 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         raise geo.ErrorGeometria("Solevado: el sólido se autointersecta; la dirección del flujo de la solevación no "
                                  "es válida. Bajá el peso o cambiá el ángulo de la condición de borde.")
     return forma
+
+
+def _exigir_ida(secciones):
+    """B-416: secciones que van y vuelven (un centro queda detrás del anterior en el camino de la primera a la última,
+    como n, p, m en el antebrazo) pliegan la solevación sobre sí misma; el kernel la arma igual, a veces con volumen
+    negativo. Fusion las une en el orden elegido (Reorder): se rechaza y se pide ordenarlas. Un arco (la del medio más
+    alta) sigue avanzando: vale."""
+    c = [_xyz(BRep_Tool.Pnt_s(f)) if t == "vertice" else _centro_alambre(f) for t, f in secciones]
+    eje = c[-1] - c[0]
+    avance = [float(np.dot(x - c[0], eje)) for x in c]
+    for i in range(len(c) - 1):
+        if avance[i + 1] < avance[i] - 1e-9 * float(np.dot(eje, eje)):
+            raise geo.ErrorGeometria(f"Solevado: las secciones van y vuelven (la {i + 2} queda detrás de la {i + 1} en el "
+                                     "camino de la primera a la última) y la solevación se plegaría sobre sí misma. "
+                                     "Ordenalas de una punta a la otra.")
 
 
 def _centro_alambre(w):
