@@ -110,8 +110,21 @@ def _cambiar(v, funcion):
 
 
 def alternar_visible(v, clave):
-    oid = id_de(clave)
-    _cambiar(v, lambda b: b.objetos[oid].update(visible=not b.objetos[oid]["visible"]))
+    i = id_de(clave)
+    if clave.startswith("bc:"):                    # H-69: curva suelta
+        _cambiar(v, lambda b: ob.poner_props_curva(b, i, visible=not b.props_curvas.get(i, {}).get("visible", True)))
+        return
+    _cambiar(v, lambda b: b.objetos[i].update(visible=not b.objetos[i]["visible"]))
+
+
+def _props_curva(v, cid, **props):
+    _cambiar(v, lambda b: ob.poner_props_curva(b, cid, **props))
+
+
+def _renombrar_curva(v, cid):
+    nombre, ok = QInputDialog.getText(v, "Renombrar", "Nombre:", text=ob.nombre_curva(_lienzo(v).b, cid))
+    if ok and nombre.strip():
+        _props_curva(v, cid, nombre=nombre.strip())
 
 
 def renombrar(v, clave, nombre):
@@ -312,9 +325,24 @@ def menu(v, item):
         _menu_objetos(v, m, [i for i in ids if i in lz.b.objetos])
     elif tipo == "curva_boceto":
         cid = id_de(clave)
+        props = lz.b.props_curvas.get(cid, {})
+        visible, bloqueada, en_perfiles = (props.get("visible", True), props.get("bloqueado", False),
+                                           props.get("perfiles", True))
         _accion(m, "Seleccionar", lambda: seleccionar(v, [clave]))
-        _accion(m, "Convertir en objeto", lambda: _cambiar(v, lambda b: ob.crear(b, [cid], ob.nombre_curva(b, cid))),
-                ayuda="Pasa a ser un objeto rígido: se puede renombrar, ocultar, bloquear y sacar de los perfiles.")
+        _accion(m, "Renombrar…", lambda: _renombrar_curva(v, cid))
         m.addSeparator()
-        _accion(m, "Eliminar", lambda: _cambiar(v, lambda b: b.eliminar(cid)))
+        _accion(m, "Ocultar" if visible else "Mostrar", lambda: _props_curva(v, cid, visible=not visible),
+                ayuda="Oculta solo se deja de ver: sigue en el solver y en los perfiles.")
+        _accion(m, "Desbloquear" if bloqueada else "Bloquear", lambda: _props_curva(v, cid, bloqueado=not bloqueada),
+                ayuda="Bloqueada no se arrastra, mueve, escala, espeja ni borra; sus restricciones la siguen moviendo.")
+        a = _accion(m, "Participar en perfiles", lambda: _props_curva(v, cid, perfiles=not en_perfiles),
+                    ayuda="Apagado, la curva no forma perfiles CAD aunque se vea.")
+        a.setCheckable(True)
+        a.setChecked(en_perfiles)
+        m.addSeparator()
+        _accion(m, "Convertir en objeto", lambda: _cambiar(v, lambda b: ob.crear(b, [cid], ob.nombre_curva(b, cid))),
+                ayuda="Pasa a ser un objeto rígido (fuera del solver), con su nombre y sus propiedades.")
+        m.addSeparator()
+        _accion(m, "Eliminar", lambda: _cambiar(v, lambda b: b.eliminar(cid)), not bloqueada,
+                "Desbloqueá la curva para borrarla.")
     return m

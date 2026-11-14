@@ -136,7 +136,8 @@ def raices(b):
 
 def curvas_visibles(b):
     """Curvas que se dibujan; mientras haya un aislamiento, la geometría suelta tampoco se ve."""
-    salida = set() if aislamiento_activo(b) else {i for i in b.curvas if i not in indice(b)}
+    salida = set() if aislamiento_activo(b) else {i for i in b.curvas if i not in indice(b)
+                                                   and b.props_curvas.get(i, {}).get("visible", True)}
     def visitar(i):
         if i in b.objetos:
             if b.objetos[i]["visible"]:
@@ -189,7 +190,29 @@ def unidades(b):
 
 def nombre_curva(b, cid):
     c = b.curvas[cid]
-    return f"{NOMBRES_CURVA.get(c.tipo, 'Curva')} {cid}"
+    return b.props_curvas.get(cid, {}).get("nombre") or f"{NOMBRES_CURVA.get(c.tipo, 'Curva')} {cid}"
+
+
+PROPS_CURVA = {"nombre": str, "visible": bool, "bloqueado": bool, "perfiles": bool}
+
+
+def poner_props_curva(b, cid, **props):
+    """H-69: nombre, visible, bloqueado y perfiles de una curva suelta, independientes como en los objetos; la curva
+    sigue en el solver. Se guarda solo lo que no es el valor por defecto (sin nombre, visible, libre, en perfiles)."""
+    if cid not in b.curvas or cid in indice(b):
+        raise _error(f"La curva {cid} no es geometría suelta del boceto: usá las propiedades de su objeto.")
+    actual = b.props_curvas.setdefault(cid, {})
+    for k, v in props.items():
+        if v is None:
+            continue
+        if not isinstance(v, PROPS_CURVA[k]) or (k == "nombre" and not v.strip()):
+            raise _error("El nombre es un texto no vacío; visible, bloqueado y en perfiles, verdadero o falso.")
+        actual[k] = v.strip() if k == "nombre" else v
+    for k, defecto in (("visible", True), ("bloqueado", False), ("perfiles", True)):
+        if actual.get(k, defecto) == defecto:
+            actual.pop(k, None)
+    if not actual:
+        del b.props_curvas[cid]
 
 
 def geometria_suelta(b):
@@ -212,7 +235,8 @@ def curvas_sin_perfil(b):
     if any(o.get("perfiles", True) is False for o in b.objetos.values()):
         for i in raices(b):
             visitar(i, False)
-    return salida
+    return salida | {i for i, p in b.props_curvas.items() if p.get("perfiles", True) is False and i in b.curvas
+                     and i not in indice(b)}
 
 
 def aislamiento_activo(b):
@@ -363,6 +387,9 @@ def crear(b, entidades, nombre="Objeto vectorial"):
     oid = b._nuevo_id()
     b.objetos[oid] = {"id": oid, "nombre": str(nombre), "entidades": ids, "matriz": [list(f) for f in IDENTIDAD],
                       "pivote": None, "visible": True, "bloqueado": False, "proporciones": True}
+    props = [b.props_curvas.pop(i) for i in ids if i in b.props_curvas]
+    if len(ids) == 1 and props:             # H-69: una curva sola pasa sus propiedades al objeto
+        b.objetos[oid].update({k: v for k, v in props[0].items() if k != "nombre"})
     invalidar(b)
     return oid
 

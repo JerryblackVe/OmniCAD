@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 49: Abierto 31 · Parcial 17 · Sin verificar 1 (2026-11-13: se cerraron H-88 (Revolución «A objeto» con Dos lados, con B-384) y H-90 (Punto tangente de la Solevación sólida, ya hecho en B-385); 2026-11-12: fusión de ASM-19; 2026-11-12: fusión de B-392; 2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 48: Abierto 30 · Parcial 17 · Sin verificar 1 (2026-11-14: se cerró H-69 (nombre, ocultar, bloquear y «en perfiles» por curva suelta); 2026-11-13: se cerraron H-88 (Revolución «A objeto» con Dos lados, con B-384) y H-90 (Punto tangente de la Solevación sólida, ya hecho en B-385); 2026-11-12: fusión de ASM-19; 2026-11-12: fusión de B-392; 2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -29,7 +29,7 @@ Abierto 13 · Parcial 3.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 14 · Parcial 1 · Sin verificar 1.
+Abierto 13 · Parcial 1 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -43,7 +43,6 @@ Abierto 14 · Parcial 1 · Sin verificar 1.
 | H-97 | Repujado: asas de alineación horizontal, vertical y giro | Abierto | Media | Agregar las tres asas en la vista. | ui/comandos/asas_extra.py:308 (`_asas_repujado`) | 2026-11-05 |
 | H-19 | Vínculo de movimiento solo lineal | Abierto | Alta | Vínculo no lineal para biela-manivela; depende de resolver los lazos cerrados (H-18). | api/herramientas_ensamble.py:642-659 (valor unión 2 = ratio × unión 1) | 2026-10-20 |
 | H-4 | Insertar: catálogo local y Duplicar con uniones | Parcial | Media | Definir piezas y medidas; ampliar duplicado, asociación y destinos (ver ficha). | tests/test_derivacion.py; tests/test_duplicar_con_uniones.py | 2026-10-31 |
-| H-69 | Boceto: nombre, ocultar, bloquear y «en perfiles» por curva | Abierto | Media | Guardar propiedades sin salir del solver ni duplicar objetos. | clon/omnicad/ui/navegador_boceto.py; clon/tests/test_boceto_organizar.py | 2026-11-05 |
 | H-70 | Boceto: capas y formas internas de SVG/DXF en el navegador | Abierto | Media | Listarlas bajo demanda y elegirlas sin romper contorno ni relleno. | clon/omnicad/ui/navegador.py; clon/omnicad/restricciones/objetos.py | 2026-11-05 |
 | H-76 | Exportar STEP y OBJ con colores de cuerpos y caras | Abierto | Media | Confirmar STEP en Fusion y exportar colores en ambos formatos. | clon/omnicad/nucleo/intercambio.py; clon/omnicad/io_archivos/exportar.py | 2026-11-05 |
 | H-114 | Rosca: vista previa cosmética con anillos sobre la cara | Abierto | Media | Dibujar surcos con Modelado sin tildar. | `clon/omnicad/ui/comandos/crear.py`; `evidencias/videos_roscas_2026-11-10/informe.md` | 2026-11-10 |
@@ -251,10 +250,6 @@ Bloqueado 1. Especificación: [plan_cpp.md](../plan_cpp.md).
 ### H-4 · Insertar: catálogo local y Duplicar con uniones
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Insertar: derivación y Duplicar con uniones hechos; falta el catálogo de piezas **Queda:** Falta un catálogo local de piezas estándar más allá de las fijaciones (rodamientos, perfiles, pasadores…; sin servicios en línea): hay que decidir qué piezas y sus medidas. Duplicar con uniones copia un componente por vez, las copias son independientes (sin instancias asociativas) y no tiene los modos de destino «Entre dos caras» e «Intersección de dos aristas» ni «Borrar último duplicado». **Evidencia:** ui/cinta.py:59 (Duplicar con uniones); api/herramientas_ensamble.py (duplicate_with_joints); ui/comandos/derivacion.py:16; api/herramientas_documento.py:322 (insert_derive); tests/test_derivacion.py; tests/test_duplicar_con_uniones.py; nucleo/fijaciones.py (solo fijaciones)
-
-### H-69 · Boceto: propiedades por curva
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Organización del boceto: la geometría suelta no tiene nombre, ocultar, bloquear ni «en perfiles» propios **Queda:** Hoy cada curva suelta se lista en Geometrías y su menú ofrece Seleccionar, Convertir en objeto (queda rígido, fuera del solver) y Eliminar. Falta guardar esas propiedades por curva sin sacarla del solver ni duplicar el modelo de objetos (plan_boceto_organizar.md, secciones 4 y 8). **Evidencia:** clon/omnicad/ui/navegador_boceto.py (menú de `curva_boceto`); clon/tests/test_boceto_organizar.py::test_categorias_salen_del_dato_y_un_grupo_no_cambia_la_de_sus_miembros
 
 ### H-70 · Boceto: capas y formas internas de SVG/DXF
 

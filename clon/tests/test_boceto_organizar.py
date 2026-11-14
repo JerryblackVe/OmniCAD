@@ -278,3 +278,61 @@ def test_borrar_lo_aislado_deja_restaurar_el_resto():
     assert ob.aislamiento_activo(b)
     ob.restaurar_aislamiento(b)
     assert b.objetos[c]["visible"] and not ob.aislamiento_activo(b)
+
+
+def test_h69_curva_suelta_con_nombre_oculta_bloqueada_y_fuera_de_perfiles():
+    """H-69: las cuatro propiedades de una curva suelta son independientes y la curva sigue en el solver."""
+    from omnicad.restricciones.solver import resolver
+    b = Boceto()
+    lineas = b.agregar_rectangulo((0, 0), (40, 20))
+    areas = lambda: sorted(round(p.area, 6) for p in detectar_boceto(b, PLANO))  # noqa: E731
+    assert areas() == [800.0]
+    ob.poner_props_curva(b, lineas[0], nombre="Base", visible=False)
+    assert ob.nombre_curva(b, lineas[0]) == "Base" and lineas[0] not in ob.curvas_visibles(b)
+    assert areas() == [800.0]                                    # oculta sigue formando el perfil
+    ob.poner_props_curva(b, lineas[0], perfiles=False)
+    assert areas() == []                                         # fuera de los perfiles, aunque siga el boceto
+    ob.poner_props_curva(b, lineas[0], visible=True, perfiles=True, bloqueado=True)
+    assert areas() == [800.0] and b.props_curvas == {lineas[0]: {"nombre": "Base", "bloqueado": True}}
+    p1 = b.curvas[lineas[0]].p1
+    for intento in (lambda: b.eliminar(lineas[0]), lambda: b.eliminar(p1), lambda: b.transformar([lineas[0]], dx=5),
+                    lambda: b.escalar([lineas[0]], (0, 0), 2), lambda: b.reflejar([lineas[0]], (0, 0))):
+        with pytest.raises(ErrorBoceto, match="bloqueada"):
+            intento()
+    k = b.agregar_cota("distancia", [lineas[0]], "40")
+    assert resolver(b, {k: 60}).ok and b.medir(b.cotas[k]) == pytest.approx(60)   # el solver la sigue moviendo
+    b2 = Boceto.desde_dict(b.a_dict())                           # se guarda y vuelve igual
+    assert b2.props_curvas == b.props_curvas and "props_curvas" not in Boceto().a_dict()
+    ob.poner_props_curva(b, lineas[0], bloqueado=False)
+    oid = ob.crear(b, [lineas[1]], "Lado")                       # otra curva hecha objeto: no hereda nada ajeno
+    assert b.objetos[oid]["bloqueado"] is False
+    with pytest.raises(ErrorBoceto, match="no es geometría suelta"):
+        ob.poner_props_curva(b, lineas[1], visible=False)
+    b.eliminar(lineas[0])
+    assert b.props_curvas == {}                                  # se va con su curva
+
+
+def test_h69_convertir_en_objeto_pasa_las_propiedades_de_la_curva():
+    b = Boceto()
+    c = b.agregar_circulo((0, 0), 5)
+    ob.poner_props_curva(b, c, visible=False, perfiles=False, bloqueado=True)
+    oid = ob.crear(b, [c], ob.nombre_curva(b, c))
+    assert (b.objetos[oid]["visible"], b.objetos[oid]["perfiles"], b.objetos[oid]["bloqueado"]) == (False, False, True)
+    assert b.props_curvas == {}
+
+
+def test_h69_api_set_sketch_curve(sesion):
+    s, sk = sesion
+    _, org = _ids(s, sk)
+    curva = org["categories"]["geometrias"]["curves"][0]["id"]
+    total = _perfiles(s, sk)
+    _llamar(s, "set_sketch_curve", curve=curva, name="Borde", in_profiles=False, locked=True, sketch=sk)
+    fila = next(c for c in _ids(s, sk)[1]["categories"]["geometrias"]["curves"] if c["id"] == curva)
+    assert (fila["name"], fila["visible"], fila["locked"], fila["in_profiles"]) == ("Borde", True, True, False)
+    assert _perfiles(s, sk) < total
+    from omnicad import api
+    r = api.llamar(s, "set_sketch_curve", {"curve": curva, "visible": "no", "sketch": sk})
+    assert not r["ok"]
+    _llamar(s, "undo")                                           # un solo paso de deshacer
+    fila = next(c for c in _ids(s, sk)[1]["categories"]["geometrias"]["curves"] if c["id"] == curva)
+    assert (fila["locked"], fila["in_profiles"]) == (False, True) and _perfiles(s, sk) == total

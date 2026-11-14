@@ -418,9 +418,11 @@ class Navegador(QFrame):
             for o in datos["objects"]:
                 objeto(carpeta, o, f"bo:{o['id']}")
             for c in datos["curves"][:TOPE_SUELTAS]:     # un boceto viejo puede tener miles de curvas sueltas
-                self._item(carpeta, f"bc:{c['id']}", c["name"] + ("  [construcción]" if c["construction"] else ""),
+                marcas = ((["construcción"] if c["construction"] else []) + (["bloqueado"] if c["locked"] else [])
+                          + ([] if c["in_profiles"] else ["sin perfiles"]))
+                self._item(carpeta, f"bc:{c['id']}", c["name"] + "".join(f"  [{m}]" for m in marcas),
                            c["type"] if c["type"] in ("linea", "circulo", "arco", "spline", "texto") else "spline",
-                           "curva_boceto")
+                           "curva_boceto", c["visible"])
             if len(datos["curves"]) > TOPE_SUELTAS:
                 self._item(carpeta, f"bk:{cat}:mas", f"… y {len(datos['curves']) - TOPE_SUELTAS} curvas más "
                            "(elegilas en el visor)", "spline", "info")

@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-425 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+426 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -15,7 +15,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [documento](#grupo-documento) | 50 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 72 | Bocetos 2D: geometría, restricciones y cotas. |
-| [vectores](#grupo-vectores) | 36 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
+| [vectores](#grupo-vectores) | 37 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 22 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
@@ -1909,6 +1909,7 @@ Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas.
 | [`ungroup_vector_object`](#ungroup_vector_object) | sí | Desagrupa un nivel conservando las matrices, los ids de las curvas y los grupos interiores. |
 | [`transform_vector_objects`](#transform_vector_objects) | sí | Mueve, rota, escala y refleja (escala -1) objetos completos en un solo deshacer. |
 | [`set_vector_object`](#set_vector_object) | sí | Cambia nombre, visibilidad, bloqueo, participación en perfiles, proporciones o pivote; las tres primeras son independientes y cambiar el pivote no mueve el objeto. |
+| [`set_sketch_curve`](#set_sketch_curve) | sí | Cambia nombre, visibilidad, bloqueo o participación en perfiles de una curva suelta del boceto (la de Geometrías en el navegador); son independientes y la curva sigue en el solver. |
 | [`align_vector_objects`](#align_vector_objects) | sí | Alinea o distribuye objetos por sus cajas exactas, respecto de selección, origen u objeto de referencia. |
 | [`duplicate_vector_objects`](#duplicate_vector_objects) | sí | Duplica objetos con nuevos ids, sus textos editables y sus grupos interiores, en un solo deshacer. |
 | [`get_vector_regions`](#get_vector_regions) | no | Lista las regiones cerradas utilizables del objeto, excluidos los agujeros; extrude acepta profile='object:<id>'. |
@@ -2013,6 +2014,20 @@ Cambia nombre, visibilidad, bloqueo, participación en perfiles, proporciones o 
   - `reset_transform` (true/false; opcional, por defecto `false`): true restablece matriz y pivote a la importación, sin cambiar los ids ni reabrir el archivo.
   - `in_profiles` (true/false; opcional, por defecto `null`): false saca sus curvas (y las de lo que contiene) de los perfiles CAD sin ocultarlo; true las devuelve.
 - CLI: `omnicad call set_vector_object --doc pieza.omnicad object=…`
+
+### `set_sketch_curve`
+
+Cambia nombre, visibilidad, bloqueo o participación en perfiles de una curva suelta del boceto (la de Geometrías en el navegador); son independientes y la curva sigue en el solver.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `curve` (entero; obligatorio): id de la curva suelta.
+  - `name` (texto; opcional, por defecto `null`): nombre propio en el navegador; vacío conserva el actual.
+  - `visible` (true/false; opcional, por defecto `null`): false la oculta en el editor del boceto; sigue en los perfiles CAD.
+  - `locked` (true/false; opcional, por defecto `null`): true impide arrastrarla, moverla, escalarla, espejarla o borrarla; el solver la sigue moviendo.
+  - `in_profiles` (true/false; opcional, por defecto `null`): false la saca de los perfiles CAD sin ocultarla; true la devuelve.
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto.
+- CLI: `omnicad call set_sketch_curve --doc pieza.omnicad curve=…`
 
 ### `align_vector_objects`
 
