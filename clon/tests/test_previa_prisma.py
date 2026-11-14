@@ -153,8 +153,8 @@ def test_cada_cambio_sin_arrastre_extruye_una_sola_vez(ventana, monkeypatch):
     for en_vivo in (False, True):       # el rojo de «Cortar» y el choque con los sólidos comparten la herramienta
         p.comando._formas_herramienta(p.ctx, p.ultima_op, en_vivo)
     assert len(llamadas) == 2
-    _arrastrar_a(p, 25)                 # la plantilla sale al agarrar el asa y el arrastre la usa
-    assert p._prisma_previa is not None and rc.es_malla(_forma_visor(v)) and len(llamadas) == 3
+    _arrastrar_a(p, 25)                 # FL-2: la plantilla sale de la malla del perfil, sin otra extrusión
+    assert p._prisma_previa is not None and rc.es_malla(_forma_visor(v)) and len(llamadas) == 2
 
 
 def test_aceptar_un_milimetro_no_reutiliza_la_malla_de_la_plantilla(ventana):
@@ -326,7 +326,7 @@ def test_extruir_una_cara_que_pasa_sola_a_unir_arrastra_el_prisma(tmp_path, monk
             _arrastrar_a(p, valor)
             nuevos = [c for k, c in v.visor._estado.cuerpos.items() if k not in p.ctx.estado.cuerpos]
             assert p._previa_ok and len(nuevos) == 1 and rc.es_malla(nuevos[0].forma)
-        assert p._prisma_previa is not None and llamadas == ["nuevo"]     # la plantilla, una vez; ninguna unión
+        assert p._prisma_previa is not None and llamadas == []     # FL-2: la plantilla sale de la malla de la cara; ninguna unión
         p.manipuladores.soltar()
         p._t_previa.stop()
         p._calcular_previa()

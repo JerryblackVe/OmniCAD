@@ -797,6 +797,19 @@ def tramo_previa(modo, d1, d2, medida, invertir):
     return (-a, -b) if invertir else (a, b)
 
 
+def tramo_revolucion(p, a1, a2):
+    """(inicio, fin) en grados de la previa barata de Revolución, con la regla de `OpRevolucion.ejecutar`: «Dos lados»
+    toma cada ángulo como magnitud y «Simétrica» reparte el ángulo a cada lado."""
+    if p.get("extension") == "completa":
+        return 0.0, 360.0
+    modo = p.get("direccion", "un_lado")
+    a, b = (-a1 / 2, a1 / 2) if modo == "simetrica" else (-abs(a2), abs(a1)) if modo == "dos_lados" else (0.0, a1)
+    if abs(b - a) <= 1e-9 or abs(b - a) > 360.0 + 1e-9:
+        from ..nucleo import geometria as geo
+        raise geo.ErrorGeometria("El ángulo de revolución tiene que estar entre 0° y 360° (en total).")
+    return a, b
+
+
 class PanelComando(QFrame):
     """Panel flotante de un comando. Emite `aceptado(op)` o `cancelado()`."""
     aceptado = Signal(object)
@@ -1724,17 +1737,30 @@ class PanelComando(QFrame):
             self._mostrar("")
             self._previa_ok = True
             return
+        arrastrando = self.manipuladores is not None and self.manipuladores.arrastrando
+        aparte = self._hijo_previa is not None or self._previa_pesada(op)
+        # FL-2: el prisma se ve al instante al arrastrar y mientras la forma exacta se calcula aparte, que lo reemplaza
+        if arrastrando or aparte:
+            try:
+                if self._previsualizar_prisma(op, arrastrando) and arrastrando:
+                    if self._hijo_previa is not None:
+                        self._pendiente_hijo = op     # la respuesta vieja del proceso aparte no tapa el prisma
+                    return
+            except Exception as e:  # noqa: BLE001 — fuera del arrastre, el error lo dice la forma exacta
+                if arrastrando:
+                    self._mostrar(f"⚠ {e}", tipo="error")
+                    self._previa_vista(None)
+                    self.previa.emit(None)
+                    return
         if self._hijo_previa is not None:
             self._pendiente_hijo = op     # un solo cálculo activo; nunca se encolan los movimientos intermedios
             self._previa_aparte = True
             return
-        if self._previa_pesada(op):
+        if aparte:
             self._previa_aparte = True
             self._iniciar_previa(op)
             return
         try:
-            if self._previsualizar_prisma(op):
-                return
             from ..nucleo import geometria as geo
             inicio = time.perf_counter()
             try:
@@ -1786,72 +1812,82 @@ class PanelComando(QFrame):
         except Exception as e:  # noqa: BLE001 — si el ajuste falla, la previa sigue sirviendo
             self._mostrar(f"⚠ {e}", tipo="aviso")
 
-    def _previsualizar_prisma(self, op):
+    def _previsualizar_prisma(self, op, arrastrando=True):
+        """Previa barata de Extruir (P-44) y Revolución (FL-2): la malla del perfil estirada o girada, sin tocar el
+        kernel. Con «Cortar» se ve la herramienta en rojo translúcido, como Fusion. `arrastrando`: con el asa agarrada;
+        si no, la forma exacta llega enseguida del proceso aparte y la reemplaza (y es ella la que ajusta la operación y
+        avisa). False si este paso no tiene previa barata."""
         p = op.p
-        if (op.TIPO != "extrusion" or self.ctx.doc.motor != "opencascade"
-                or p.get("operacion") not in ("nuevo", "unir") or p.get("tipo") != "solida"
-                or p.get("inicio") != "plano" or p.get("extension") != "distancia"
-                or p.get("extension2") != "distancia"
-                or abs(self.ctx.evaluar(p["conicidad"], ANGULO)) > 1e-9
-                or abs(self.ctx.evaluar(p["conicidad2"], ANGULO)) > 1e-9):
+        if (op.TIPO not in ("extrusion", "revolucion") or self.ctx.doc.motor != "opencascade"
+                or p.get("operacion") not in ("nuevo", "unir", "cortar")
+                or (op.TIPO == "extrusion" and (
+                    p.get("tipo") != "solida" or p.get("inicio") != "plano" or p.get("extension") != "distancia"
+                    or p.get("extension2") != "distancia" or abs(self.ctx.evaluar(p["conicidad"], ANGULO)) > 1e-9
+                    or abs(self.ctx.evaluar(p["conicidad2"], ANGULO)) > 1e-9))
+                or (op.TIPO == "revolucion" and p.get("extension") not in ("angulo", "completa"))):
             self._prisma_previa = None
             return False
         from ..nucleo import geometria as geo, render_cpu as rc
         from ..nucleo.malla import Malla
         from ..timeline.operaciones import Contexto
-        from .visor3d import aristas_cuerpo
         import numpy as np
 
-        arrastrando = self.manipuladores is not None and self.manipuladores.arrastrando
-        if not arrastrando:
-            return False    # el valor tecleado y el asa al soltarse salen del kernel exacto; P-99: la plantilla (otra
-            # extrusión y su malla: 1 s con 29 perfiles) se arma al primer arrastre, no en cada clic que suma un perfil
-        variables = {"distancia", "distancia2", "direccion", "medida", "simetrica", "invertir"}
-        firma = (self.ctx.estado, repr({k: v for k, v in p.items() if k not in variables}),
-                 self.visor.config.teselado, self.visor.config.angular)
+        variables = {"distancia", "distancia2", "direccion", "medida", "simetrica", "invertir", "operacion", "objetivos",
+                     "angulo", "angulo2", "extension"}
+        firma = (self.ctx.estado, op.TIPO, repr({k: v for k, v in p.items() if k not in variables}),
+                 p.get("invertir") if op.TIPO == "revolucion" else None)
         if self._prisma_previa is None or self._prisma_previa[0] != firma:
-            plano, _ = op._caras(self.ctx.estado, Contexto(self.ctx.doc.parametros.valores()))
-            # B-359: siempre cuerpo nuevo. Con «Unir» la unión reusaría el id del cuerpo y no quedaría prisma; mientras se
-            # arrastra se ven la pieza y el prisma juntos (igual que la unión) y al soltar la unión sale del kernel.
-            unidad = type(op)(op.id, op.nombre, **dict(p, operacion="nuevo", objetivos=[], distancia="1 mm",
-                                                      direccion="un_lado", simetrica=False, invertir=False))
-            with geo.en_serie():         # B-293
-                exacto, _ = self.ctx.doc.previsualizar(unidad, self.ctx.indice, en_vivo=self._previa_aislada)
-            self._previa_aislada = True
-            estado, prismas = exacto.copia(), {}
-            for cid, c in estado.cuerpos.items():
-                if cid in self.ctx.estado.cuerpos:
-                    continue
-                partes = rc._mallas_por_cara(c.forma, self.visor._deflexion(c.forma), self.visor.config.angular)
-                v = np.concatenate([dato[1] for dato in partes])
-                n = np.concatenate([dato[2] for dato in partes])
-                seg = aristas_cuerpo(c.forma)
-                try:
-                    prismas[cid] = rc.PrismaVisual(v, n, seg, plano.origen, plano.normal)
-                except geo.ErrorGeometria:   # no es un prisma recto desde su plano: lo muestra el camino exacto
-                    self._prisma_previa = None
-                    return False
-                c.forma = Malla(v, np.arange(len(v)).reshape(-1, 3))
-            self._prisma_previa = firma, estado, prismas
+            plano, caras = op._caras(self.ctx.estado, Contexto(self.ctx.doc.parametros.valores()))
+            # FL-2: la malla sale de la triangulación de los perfiles que ya tiene el visor, sin kernel.
+            # B-359: siempre cuerpo nuevo; con «Unir» se ven la pieza y la malla juntas y la unión sale del kernel.
+            tris = np.concatenate([self.visor._tris_perfil(c) for c in caras])
+            if op.TIPO == "extrusion":
+                v, n, seg = rc.prisma_unidad(tris, plano.normal)
+                datos = rc.PrismaVisual(v, n, seg, plano.origen, plano.normal)
+            else:
+                datos = (tris, plano.normal, *op.eje_de_giro(self.ctx.estado, plano))
+                v = rc.revolucion_visual(*datos, 0, 1)[0]
+            estado = self.ctx.estado.copia()
+            cid = estado.nuevo_cuerpo(op.id, Malla(v, np.arange(len(v)).reshape(-1, 3)))
+            self._prisma_previa = firma, estado, {cid: datos}, self.ctx.estado.copia()
             if self.manipuladores is not None:
                 self.manipuladores.actualizar()  # prepara también el apoyo del asa antes del primer movimiento
-        d1 = self.ctx.evaluar(p["distancia"])
-        modo = "simetrica" if p.get("simetrica") else p["direccion"]
-        medida = "total" if p.get("simetrica") else p["medida"]
-        d2 = self.ctx.evaluar(p["distancia2"]) if modo == "dos_lados" else None
-        geo.exigir_distancias_extrusion(modo, d1, d2, medida)
-        a, b = tramo_previa(modo, d1, d2, medida, p.get("invertir"))
-        _, estado, prismas = self._prisma_previa
-        mallas = {cid: prisma.transformar(a, b) for cid, prisma in prismas.items()}
+        _, estado, plantillas, sin_cuerpo = self._prisma_previa
+        if op.TIPO == "extrusion":
+            d1 = self.ctx.evaluar(p["distancia"])
+            modo = "simetrica" if p.get("simetrica") else p["direccion"]
+            medida = "total" if p.get("simetrica") else p["medida"]
+            d2 = self.ctx.evaluar(p["distancia2"]) if modo == "dos_lados" else None
+            geo.exigir_distancias_extrusion(modo, d1, d2, medida)
+            a, b = tramo_previa(modo, d1, d2, medida, p.get("invertir"))
+            mallas = {cid: prisma.transformar(a, b) for cid, prisma in plantillas.items()}
+            cajas = {cid: prisma.caja(a, b) for cid, prisma in plantillas.items()}
+        else:
+            a2 = self.ctx.evaluar(p["angulo2"], ANGULO) if p.get("direccion") == "dos_lados" else 0.0
+            a, b = tramo_revolucion(p, self.ctx.evaluar(p["angulo"], ANGULO), a2)
+            mallas = {cid: rc.revolucion_visual(*datos, a, b) for cid, datos in plantillas.items()}
+            cajas = {cid: (m[0].min(0), m[0].max(0)) for cid, m in mallas.items()}
+        rojo = None
+        if p["operacion"] == "cortar":       # la pieza queda como está y encima va la herramienta en rojo
+            from .manipuladores import tris_rojos
+            rojo = tris_rojos(np.concatenate([v for v, _, _ in mallas.values()]))
+            estado, mallas = sin_cuerpo, {}
         estado._mallas_previa = mallas
-        estado._cajas_previa = {cid: prisma.caja(a, b) for cid, prisma in prismas.items()}
+        estado._cajas_previa = cajas
         for cid, (v, _, _) in mallas.items():
             estado.cuerpos[cid].forma.vertices = v
+        if self.manipuladores is not None:
+            self.manipuladores.mostrar_previa(rojo)
         if self.visor._estado is not estado:
-            self._previa_lista(estado)
+            if arrastrando:
+                self._previa_lista(estado)
+            else:
+                self.visor.cuerpos_de_previa = frozenset(estado.cuerpos) - frozenset(self.ctx.estado.cuerpos)
+                self.previa.emit(estado)
         else:
             self.visor.actualizar_prismas(estado, mallas)
-            self._avisar_previa(estado)
+            if arrastrando:
+                self._avisar_previa(estado)
         self._previa_ok = True
         if self.mensaje.text():
             self._mostrar("")

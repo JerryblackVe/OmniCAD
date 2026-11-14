@@ -414,6 +414,63 @@ def es_malla(forma):
     return hasattr(forma, "vertices") and hasattr(forma, "caras") and not callable(getattr(forma, "caras"))
 
 
+def _borde_perfil(tris, n):
+    """(triángulos antihorarios vistos desde `n`, p, q): los lados del borde de un perfil plano triangulado (los que usa
+    un solo triángulo: el contorno y los huecos), cada uno de p a q en el sentido del contorno."""
+    tris = np.asarray(tris, float).reshape(-1, 3, 3)
+    giro = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]) @ n
+    tris = np.where((giro < 0)[:, None, None], tris[:, [0, 2, 1]], tris)
+    puntos = tris.reshape(-1, 3)
+    escala = max(float(np.ptp(puntos, axis=0).max()), 1e-9)
+    _, ids = np.unique(np.round(puntos / (escala * 1e-9)).astype(np.int64), axis=0, return_inverse=True)
+    ids = ids.reshape(-1, 3)
+    pares = np.sort(np.c_[ids.reshape(-1), np.roll(ids, -1, axis=1).reshape(-1)], axis=1)
+    _, cual, cuenta = np.unique(pares, axis=0, return_inverse=True, return_counts=True)
+    borde = cuenta[cual.reshape(-1)] == 1
+    return tris, puntos[borde], np.roll(tris, -1, axis=1).reshape(-1, 3)[borde]
+
+
+def _malla_barrida(inicio, fin, paredes, seg):
+    """(vértices, normales, segmentos) de las dos tapas y las paredes: tapas planas, paredes curvas suaves y esquinas vivas."""
+    todos = np.concatenate([inicio[:, [0, 2, 1]], fin, paredes])
+    grupos = np.r_[np.zeros(len(inicio)), np.ones(len(fin)), np.full(len(paredes), 2)]
+    return todos.reshape(-1, 3), normales_suaves(todos, grupos, 45.0)[1].astype(float), seg.reshape(-1, 3)
+
+
+def prisma_unidad(tris, normal):
+    """(vértices, normales, segmentos) del prisma de 1 mm de un perfil plano ya triangulado (Tx3x3) a lo largo de
+    `normal`: la plantilla de `PrismaVisual` sin pasar por el kernel (FL-2, unos ms contra 50-120 ms de extruir y teselar
+    un texto)."""
+    n = np.asarray(normal, float) / np.linalg.norm(normal)
+    tris, p, q = _borde_perfil(tris, n)
+    paredes = np.concatenate([np.stack([p, q, q + n], 1), np.stack([p, q + n, p + n], 1)])
+    return _malla_barrida(tris, tris + n, paredes, np.stack([p, q, p + n, q + n], 1))
+
+
+def revolucion_visual(tris, normal, punto, eje, inicio, fin, pasos=64):
+    """Previa barata de Revolución (FL-2): el perfil plano triangulado (Tx3x3) girado de `inicio` a `fin` grados
+    alrededor del eje (`punto`, `eje`), en `pasos` tramos fijos (la malla no cambia de tamaño con el ángulo). Devuelve
+    (vértices, normales, segmentos) como `prisma_unidad`; jamás crea el sólido aceptado."""
+    n = np.asarray(normal, float) / np.linalg.norm(normal)
+    e = np.asarray(eje, float) / np.linalg.norm(eje)
+    punto = np.asarray(punto, float)
+    tris, p, q = _borde_perfil(tris, n)
+
+    def girar(x, angulos):          # Rodrigues: (ángulos, puntos, 3)
+        r = x - punto
+        c, s = np.cos(angulos)[:, None, None], np.sin(angulos)[:, None, None]
+        return punto + r * c + np.cross(e, r) * s + np.outer(r @ e, e) * (1 - c)
+
+    angulos = np.radians(np.linspace(inicio, fin, pasos + 1))
+    P, Q = girar(p, angulos), girar(q, angulos)
+    paredes = np.concatenate([np.stack([P[:-1], Q[:-1], Q[1:]], 2), np.stack([P[:-1], Q[1:], P[1:]], 2)]).reshape(-1, 3, 3)
+    tapas = girar(tris.reshape(-1, 3), angulos[[0, -1]]).reshape(2, -1, 3, 3)
+    seg = np.stack([P[0], Q[0], P[-1], Q[-1]], 1)
+    if (np.cross(e, tris.reshape(-1, 3).mean(0) - punto) @ n) * (fin - inicio) < 0:   # gira hacia -n: todo al revés
+        tapas, paredes = tapas[:, :, [0, 2, 1]], paredes[:, [0, 2, 1]]
+    return _malla_barrida(tapas[0], tapas[1], paredes, seg)
+
+
 class PrismaVisual:
     """Previa de Extruir de Fusion: transforma una malla unitaria; jamás crea el sólido aceptado."""
 
