@@ -23,15 +23,15 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 2 | B-420 | La barra espaciadora no marca casillas: la toma el atajo global `Space` (`ui/ventana.py:463`) |
-| 3 | B-413 | Boceto › al cambiar la cota de un rectángulo sin restringir debe quedar fija la primera esquina, como Fusion (E1, después de FL-2) |
-| 4 | B-408 | Triple clic en un campo de valor sigue roto en Windows con 9657d4d9 (probablemente la previa traba el bucle; ver después de B-418) |
-| 5 | B-48 | Crash nativo al recalcular un documento largo |
-| 6 | B-335 | Abrir un STEP pesado congela la ventana |
-| 7 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
-| 8 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 9 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
-| 10 | B-401 | El cálculo aislado pierde atributos de boceto |
+| 1 | B-421 | El panel de comando cambia de alto con un mensaje o la Operación y Aceptar/Cancelar se mueven: el clic se pierde (E11, tanda 13) |
+| 2 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 3 | B-420 | La barra espaciadora no marca casillas: la toma el atajo global `Space` (`ui/ventana.py:463`) |
+| 4 | B-413 | Boceto › al cambiar la cota de un rectángulo sin restringir debe quedar fija la primera esquina, como Fusion (E1, después de FL-2) |
+| 5 | B-408 | Triple clic en un campo de valor sigue roto en Windows con 9657d4d9 (probablemente la previa traba el bucle; ver después de B-418) |
+| 6 | B-48 | Crash nativo al recalcular un documento largo |
+| 7 | B-335 | Abrir un STEP pesado congela la ventana |
+| 8 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
+| 9 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 10 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
 
 Hechos y esperando integrar (no ocupan cola): P-153 (después de B-384). Integrados hoy: FL-0, FL-9 + B-418 (d8d4b9f), B-344e, B-412 (cerrado: Fusion hace lo mismo), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
