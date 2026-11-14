@@ -11,12 +11,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E1 | H-69 | (B-439 y B-413 integrados: 5ffd591, 8eeb232) |
 | E2 | B-425 | Patrón de 5000 copias: modelo 5,4 → 0,5 s; reuso de malla en `set_modelo` (sin tope, como Fusion) |
 | E3 | B-440 | Salir del boceto traba la ventana 3 s; cota o desfase ~0,5 s (B-434 integrado: 830b0a8) |
-| E4 | B-448 | Extender «Natural» −1,5 % contra Fusion; después B-447 (B-419 en tests) |
+| E4 | B-448 | Extender «Natural» −1,5 % contra Fusion (B-447 pasa a Sol) (B-419 en tests) |
 | E5 | ASM-17 | Restricción de componentes |
 | E6 | FL-3b | Aceptar, editar y deshacer fuera de la ventana, y la Rosca sin mallar en la ventana (FL-3 Abrir integrado: 572e69c) |
 | E7 | B-432 | (B-433 integrado: 6beffa9) |
 | E8 | B-445 | La cara gana al plano de origen al elegir (B-437 integrado: ad02acb) |
-| E9 | Sol | Sol con cupo: B-431, H-115, B-441, B-442, B-435, B-436, B-428, B-423, dieta; E9 con B-421 y H-97 |
+| E9 | Sol | Sol siempre corriendo (Gerardo 14/11): B-431, H-115, B-441, B-442, B-435, B-436, B-428, B-423, dieta, B-451, B-447; E9 con B-421 y H-97 |
 | E10 | B-337 | Abrir e importar un STEP pesado sin congelar (B-335 + B-337; B-363 parte integrado: 8cf5219) |
 
 ## Sigue (en orden)
