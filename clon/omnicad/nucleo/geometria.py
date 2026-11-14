@@ -443,10 +443,15 @@ def _unir_caras_coplanares(lista):
     return unidas
 
 
-def revolver(caras, punto_eje, dir_eje, angulo_grados):
-    """Revolución de caras alrededor de un eje (equivalente a RevolveFeature con AngleExtentDefinition)."""
+def exigir_angulo_revolucion(angulo_grados):
+    """Rechaza un ángulo nulo de Revolución de Fusion, antes de construir geometría."""
     if abs(angulo_grados) < 1e-9:
         raise ErrorGeometria("El ángulo de revolución no puede ser cero.")
+
+
+def revolver(caras, punto_eje, dir_eje, angulo_grados):
+    """Revolución de caras alrededor de un eje (equivalente a RevolveFeature con AngleExtentDefinition)."""
+    exigir_angulo_revolucion(angulo_grados)
     if abs(angulo_grados) > 360.0 + 1e-6:
         raise ErrorGeometria("El ángulo de revolución no puede pasar de 360°: más de una vuelta se pisa a sí misma.")
     ang = math.radians(max(-360.0, min(360.0, angulo_grados)))

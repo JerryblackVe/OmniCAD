@@ -2517,6 +2517,12 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
     return _validar(herramienta, "Agujero")
 
 
+def exigir_profundidad_agujero(profundidad):
+    """Rechaza una profundidad no positiva de Agujero de Fusion; el sentido se elige con Invertir."""
+    if profundidad is None or profundidad <= 0:
+        raise geo.ErrorGeometria("La profundidad del agujero debe ser positiva.")
+
+
 def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo_punta, diam_abocardado,
                     prof_abocardado, diam_avellanado, angulo_avellanado, roscado, clase, holgura, conicidad, tabla=True):
     """Valida un agujero y da su medio perfil [(radio, profundidad)…] desde el eje (común a los dos motores)."""
@@ -2535,8 +2541,7 @@ def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo
         diametro = diametro_taladro_rosca(roscado, clase, holgura)
     if diametro is None or diametro <= 0:
         raise geo.ErrorGeometria("El diámetro del agujero debe ser positivo.")
-    if profundidad is None or profundidad <= 0:
-        raise geo.ErrorGeometria("La profundidad del agujero debe ser positiva.")
+    exigir_profundidad_agujero(profundidad)
     if conicidad < 0 or conicidad * profundidad >= diametro:
         raise geo.ErrorGeometria("La conicidad cierra el agujero antes del fondo.")
     r = diametro / 2

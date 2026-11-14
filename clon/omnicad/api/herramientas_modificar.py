@@ -742,8 +742,6 @@ def _opciones_agujero(sesion, diameter, depth, through_all, hole_type, counterbo
         raise error("INVALID_ARGUMENTS", "Falta diameter (con hole_tap='simple' es obligatorio).")
     if not through_all and depth is None and to is None:
         raise error("INVALID_ARGUMENTS", "Falta la profundidad: pasá depth (mm), through_all=true o to (una cara).")
-    if depth is not None:
-        _numero_positivo(depth, "depth")
     extra = {}
     if hole_type == "counterbore":
         if counterbore_diameter is None or counterbore_depth is None:
