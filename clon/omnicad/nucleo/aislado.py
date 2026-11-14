@@ -77,6 +77,11 @@ class FalloDelCalculo(TareaAislada):
     """El hijo terminó bien y el cálculo dio error (un valor imposible): repetirlo con lo mismo da lo mismo."""
 
 
+class FalloInterno(TareaAislada):
+    """B-455: el cálculo del hijo dio un error que no es de los valores (un TypeError, como B-432): es un bug de esa vía,
+    no un valor imposible. La ventana rehace el cálculo en su proceso en vez de mostrarlo."""
+
+
 class PedidoPerdido(TareaAislada):
     """B-418: el trabajador no tomó el pedido. Otro trabajador sí lo toma."""
 
@@ -262,6 +267,21 @@ def _motivo(e):
     return str(e) or traceback.format_exception_only(e)[-1].strip()
 
 
+def _fallo(e):
+    """La respuesta de un pedido que falló. B-455: `_interno` si el error no es de los valores (geometría, operación,
+    expresión, referencia o el kernel de OCC) sino de esta vía, para que el padre lo rehaga en vez de mostrarlo."""
+    from ..timeline.documento import ErrorDocumento
+    from ..timeline.entidades import ErrorReferencia
+    from ..timeline.operaciones import ErrorOperacion
+    from ..timeline.parametros import ErrorExpresion
+    from .geometria import ErrorGeometria
+    # Sin memoria o sin pila: rehacerlo en la ventana la tumbaría, que es de lo que la protege el proceso aparte
+    del_valor = isinstance(e, (ErrorGeometria, ErrorOperacion, ErrorDocumento, ErrorExpresion, ErrorReferencia,
+                               MemoryError, RecursionError)) \
+        or type(e).__module__.startswith("OCP")
+    return {"_fallo": _motivo(e), "_interno": not del_valor}
+
+
 def _atender(tarea, args):
     """Un pedido del trabajador. Un error (una previa con un valor imposible) no lo mata: vuelve como texto, y solo si
     el documento quedó a medias se descarta (el próximo pedido lo arma de la receta)."""
@@ -275,7 +295,7 @@ def _atender(tarea, args):
         doc = documento_vivo
         if doc is not None and (doc.a_dict() != args.get("receta") or len(doc._estados) != len(doc.operaciones)):
             documento_vivo = None
-        return {"_fallo": _motivo(e)}
+        return _fallo(e)
     finally:
         os.chdir(_RAIZ)         # una carpeta tomada de directorio actual no se puede mover ni borrar en Windows
         if documento_vivo is not None:
@@ -369,7 +389,7 @@ def principal(argv):
         try:
             salida = _TAREAS_JSON[tarea](**args)
         except Exception as e:  # noqa: BLE001 — como en el trabajador: el motivo vuelve como texto
-            salida = {"_fallo": _motivo(e)}
+            salida = _fallo(e)
     else:
         forma = intercambio.leer_brep(carpeta / "forma.brep")
         salida = _TAREAS[tarea](forma, **args)
@@ -742,7 +762,7 @@ class CalculoPendiente:
         finally:
             self.cancelar()
         if "_fallo" in resultado:
-            raise FalloDelCalculo(resultado["_fallo"])
+            raise (FalloInterno if resultado.get("_interno") else FalloDelCalculo)(resultado["_fallo"])
         return resultado
 
     def cancelar(self, ya=False):

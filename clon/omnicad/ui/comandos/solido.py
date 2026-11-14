@@ -370,8 +370,10 @@ class Extruir(Comando):
             if salida is None:
                 return
         except Exception as e:  # noqa: BLE001 — un hijo caído o vencido deja la operación que estaba
+            from ...nucleo.aislado import FalloInterno
             self._cancelar_hijo()
-            panel._mostrar(f"⚠ {e}", tipo="aviso")
+            if not isinstance(e, FalloInterno):        # B-455: un bug de esta vía no se le muestra a la persona
+                panel._mostrar(f"⚠ {e}", tipo="aviso")
             return
         vigente = panel.ultima_op is not None and self._herramienta(panel.ultima_op).a_dict() == self._op_hijo
         self._cancelar_hijo()
