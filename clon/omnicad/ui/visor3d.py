@@ -1837,6 +1837,13 @@ class Visor3D(QOpenGLWidget):
         planos = []
         if "plano" in filtros:
             todos = self.eligiendo_planos()
+            # B-445: con una cara de cuerpo bajo el cursor gana la cara; el plano solo con su borde o su etiqueta
+            cara_gana = cara_hit is not None and bool(filtros & {"cara", "cara_plana"}) and not a_traves
+            etiquetas = [p for _n, p in self.etiquetas_planos()] if cara_gana else []
+            cerca_etiqueta = False
+            for p in etiquetas:
+                s, ok = self._a_pantalla(p, mvp)
+                cerca_etiqueta = cerca_etiqueta or bool(ok[0] and np.linalg.norm(s[0] - q) < 40)
             for ref, pl, (u0, v0, u1, v1) in self.planos_elegibles():
                 if not (todos or self.plano_visible(ref)):
                     continue                       # un plano oculto no se elige con un clic suelto
@@ -1845,6 +1852,8 @@ class Visor3D(QOpenGLWidget):
                     continue
                 t = float((pl.origen - o) @ pl.normal) / den
                 u, v = pl.a_uv(o + d * t)
+                if cara_gana and not cerca_etiqueta and min(u - u0, u1 - u, v - v0, v1 - v) > self.distancia * 0.02:
+                    continue
                 if u0 <= u <= u1 and v0 <= v <= v1 and 0 < t < t_cara - tol_t:
                     esquinas = [pl.a_3d(u0, v0), pl.a_3d(u1, v0), pl.a_3d(u1, v1), pl.a_3d(u0, v1)]
                     tris = np.array([esquinas[0], esquinas[1], esquinas[2], esquinas[0], esquinas[2], esquinas[3]])
