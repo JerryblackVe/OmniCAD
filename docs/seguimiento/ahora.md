@@ -23,7 +23,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-459 | Empalme más estricto que Fusion: falla desde r41 donde Fusion acepta r55 y r59 (Sólido › Modificar, E3 al liberarse) |
+| 1 | B-460 | Empalme más estricto que Fusion: falla desde r41 donde Fusion acepta r55 y r59 (Sólido › Modificar, E3 al liberarse) |
 | 2 | B-456 | Abrir fuera de la ventana: con el trabajador caído un proyecto chico no abre; test sobre proyecto real (REV-1114) |
 | 3 | B-443 | «Propiedades» no abre desde el cuerpo ni el componente, y falta en la cinta |
 | 4 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
