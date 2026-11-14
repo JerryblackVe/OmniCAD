@@ -176,6 +176,8 @@ de arriba manda sobre este texto.
 
 ### B-48 · Crash nativo OCCT (0xc0000005) al recalcular parámetros a 148 pasos
 
+**Investigación a fondo aprobada (Gerardo, 2026-11-14; Opus alto, tope 6 iteraciones, sin OmniKernel).** 1) Web con fuentes reales (`deep-search`): seguridad de hilos en OCCT 8.0.x (dev.opencascade.org, issues de Open-Cascade-SAS/OCCT, cadquery/OCP); 0xc0000005 en TKernel con hilos; un TopoDS_Shape compartido entre hilos mientras BRepMesh_IncrementalMesh le escribe la triangulación; BOPAlgo SetRunParallel; OSD_ThreadPool. 2) Código: cada lugar donde una forma OCC pasa a otro hilo (hilos de Qt, ThreadPool, trabajador de previas, teselado del visor, find_edges/find_faces de B-331), con archivo:línea, marcando dónde dos hilos tocan la misma forma. 3) Entregar causa probable con evidencia, arreglo (copia por hilo con BRepBuilderAPI_Copy, mallar antes de compartir, o candado) y un test que lo pruebe.
+
 **Mitigado 2026-10-20** (`agente/b48`): no se reprodujo en 18 min; la caída de un hijo aislado vuelve como `TareaAislada`. Sigue Parcial. **Crash nativo durante la tortura de parámetros** (±30 % a 148 pasos): APPCRASH de `pythonw.exe`, excepción 0xc0000005 en `TKernel-….dll` (OCCT 8.0.1) offset 0x78bed, 09:11:23; el puente murió a mitad de llamada (`BRIDGE_ERROR WinError 10054`). El autoguardado (receta sin caché, 18 s antes) permitió recuperar todo. Evento completo en `crash2_evento_completo.txt`.
 
 kernel OCCT vía cadquery_ocp; recálculo
