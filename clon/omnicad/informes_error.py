@@ -106,7 +106,13 @@ def escribir_error(tipo, valor, traza, titulo="Error"):
 
 
 def _gancho_principal(avisar):
+    vistos = set()                     # un error que se repite en cada repintado (GL) avisa UNA vez (B-437)
+
     def gancho(tipo, valor, traza):
+        clave = (tipo, str(valor))
+        if clave in vistos:
+            return
+        vistos.add(clave)
         ruta = escribir_error(tipo, valor, traza)
         if avisar is not None:
             try:
