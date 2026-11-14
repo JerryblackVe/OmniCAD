@@ -19,6 +19,9 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
 - **Prioridad 2**, después: render, animación, simulación, malla, plástico, chapa, dibujo y el resto.
 - **Criterio para armar `ahora.md`** (lo que se ejecuta es `ahora.md`): 1) los bugs de la prioridad 1; 2) su
   velocidad; 3) lo que les falte. Un ítem de prioridad 2 entra solo si no queda nada de la 1, o si Gerardo lo pide.
+- **OmniKernel suspendido (Gerardo, 2026-11-14):** hasta nuevo aviso no se trabaja nada del kernel propio (rama
+  `motor-omnikernel`, OmniKernel). Solo el kernel principal (OpenCascade). Los ítems de OmniKernel no entran en
+  `ahora.md` ni en Sigue.
 
 ## Cola única y bandeja de entrada (reorganización, Gerardo 2026-11-13)
 - **La cola es [docs/seguimiento/ahora.md](docs/seguimiento/ahora.md)**: «Ahora» (un ítem por sesión) y «Sigue» (los
