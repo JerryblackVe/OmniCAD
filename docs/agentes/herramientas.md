@@ -2725,7 +2725,7 @@ Crea una esfera. (x, y, z) es su centro. La medida va como radius o como diamete
 
 ### `create_torus`
 
-Crea un toroide con el eje en Z (con plane, sobre la normal de un plano o una cara cualquiera). (x, y, z) es su centro. Medidas como radios (major_radius, minor_radius) o diámetros (major_diameter, minor_diameter), uno de cada par. major_diameter es el diámetro del toroide (círculo de referencia); minor_diameter, el diámetro del tubo. Con position=center, el círculo pasa por la línea central del tubo: 40 y 10 mm dan un agujero de 30 mm. position pone el tubo adentro, centrado o afuera de ese círculo.
+Crea un toroide con el eje en Z (con plane, sobre la normal de un plano o una cara cualquiera). (x, y, z) es su centro. Medidas como radios (major_radius, minor_radius) o diámetros (major_diameter, minor_diameter), uno de cada par. position pone el tubo adentro, centrado o afuera de ese círculo.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2736,8 +2736,8 @@ Crea un toroide con el eje en Z (con plane, sobre la normal de un plano o una ca
   - `z` (número o expresión; opcional, por defecto `0`): z del centro (mm).
   - `operation` ("new_body" | "join" | "cut" | "intersect"; opcional, por defecto `"new_body"`): "new_body", "join", "cut" o "intersect".
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo afectado por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
-  - `major_diameter` (número o expresión; opcional, por defecto `null`): diámetro del toroide (círculo de referencia), en vez de major_radius; con position=center pasa por la línea central del tubo, no por el borde del agujero.
-  - `minor_diameter` (número o expresión; opcional, por defecto `null`): diámetro del tubo (sección circular), en vez de minor_radius; con position=center, el agujero mide major_diameter - minor_diameter.
+  - `major_diameter` (número o expresión; opcional, por defecto `null`): diámetro del círculo que recorre el centro del tubo, en vez de major_radius (panel Toroide).
+  - `minor_diameter` (número o expresión; opcional, por defecto `null`): diámetro del tubo, en vez de minor_radius.
   - `name` (texto; opcional, por defecto `null`): nombre del cuerpo creado (vacío = el automático «CuerpoN»); solo con operation "new_body".
   - `plane` (texto o objeto; opcional, por defecto `null`): plano (XY/XZ/YZ o de construcción) o cara plana (selector o id) sobre el que se crea; vacío = el mundo. Con plane, x e y son coordenadas en el plano, z la distancia sobre su normal y el eje va por la normal.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúa el selector de plane; vacío = el único cuerpo.

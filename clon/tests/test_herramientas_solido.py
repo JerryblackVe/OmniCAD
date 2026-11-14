@@ -372,7 +372,7 @@ def test_el_panel_del_toroide_reabre_la_posicion_y_avisa_si_no_entra(app_qt):
     cmd = CATALOGO["toroide"]()
     ctx = ContextoComando(doc)
     v = {c.clave: c.defecto for c in cmd.campos(ctx)}
-    assert cmd.campos(ctx)[1].etiqueta == "Diámetro del toroide"
+    assert cmd.campos(ctx)[1].etiqueta == "Diámetro interior"
     v.update(posicion_toroide="exterior")
     op = cmd.construir(v, ctx)
     assert op.p["posicion_toroide"] == "exterior"

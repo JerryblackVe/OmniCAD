@@ -647,6 +647,7 @@ class SupEsfera(_PrimitivaSup, Esfera):
 
 class SupToroide(_PrimitivaSup, Toroide):
     CLAVE, TITULO, ICONO, CLASE_OP = "sup_toroide", "Toroide de superficie", "sup_toroide", OpSupPrimitiva
+    AYUDA = "Superficie con forma de toroide: clic en un plano o una cara para el centro, diámetro interior y del tubo."
 
 
 class SupBobina(_PrimitivaSup, Bobina):
