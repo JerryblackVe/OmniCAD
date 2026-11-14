@@ -85,7 +85,10 @@ def test_asa_tamano_con_y_sin_longitud_completa(perno, completa):
     assert np.linalg.norm(asa.puntos(gestor)[0] - asa.origen) == pytest.approx(9.895, abs=1e-3)   # como Fusion: 6g, no el nominal
     panel.set_valor("tam_iso_metrica", "M24")
     assert np.linalg.norm(_asa(panel).puntos(gestor)[0] - asa.origen) == pytest.approx(11.882, abs=1e-3)
-    assert gestor.cajas["tam_iso_metrica"].text() == "11,882"
+    if completa:
+        assert not gestor.cajas
+    else:
+        assert gestor.cajas["tam_iso_metrica"].text() == "11,882"
     _previa_sana(panel)
 
 
@@ -125,6 +128,7 @@ def test_arrastre_real_del_radio_cambia_tamano_y_conserva_previa(perno, completa
 
 def test_teclear_radio_en_caja_elige_tamano_y_rechaza_errores(perno):
     ventana, panel = perno
+    panel.set_valor("largo_completo", False)
     panel.set_valor("tam_iso_metrica", "M20")
     panel.set_valor("des_tipo_rosca", "M20x2.5")
     gestor = panel.manipuladores
