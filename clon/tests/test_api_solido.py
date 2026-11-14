@@ -523,9 +523,41 @@ def test_chaflan_demasiado_grande_indica_distancia_maxima(s):
     antes = foto(s)
     r = api.llamar(s, "chamfer", {"edges": "|Z", "distance": 30})
     assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
-    assert "Probá una distancia menor que 10 mm" in r["mensaje"]
-    assert any("Probá una distancia menor que 10 mm" in p for p in r["pistas"])
+    assert "Achicala" in r["mensaje"] and "menor que" not in r["mensaje"], r   # B-454: como Fusion, sin un número
     assert foto(s) == antes
+
+
+def test_b454_chaflan_sin_tope_inventado(s):
+    """B-454: el texto pedía «menos que 25,92» (la mitad de la arista vecina) donde 51 entra. El camino de Gerardo:
+    Boceto1 (rectángulo) → Extruir 62,2 → Extruir la cara lateral 69,93 con Unir. El único número es el tope del asa."""
+    llamar(s, "create_sketch", plane="YZ")
+    llamar(s, "draw_rectangle", origin_x=0, origin_y=0, width=92.18, height=51.84)
+    llamar(s, "extrude", sketch="Boceto1", distance=62.2)
+    llamar(s, "extrude", faces=">X", distance=69.93, operation="join")
+    r = api.llamar(s, "chamfer", {"edges": ">Z and >Y", "distance": 52})
+    assert not r["ok"] and "menor que" not in r["mensaje"], r
+    assert llamar(s, "chamfer", edges=">Z and >Y", distance=51)["edges_used"] == 1
+
+
+def test_b454_empalme_en_arista_tangente_lo_dice(s):
+    """B-454 (repro de E11): caja 100×60×40 → Empalme r20 en la arista de arriba de 100 mm → Chaflán d10 en la vecina
+    → Empalme r1 en las 4 diagonales del chaflán. Las 2 que unen el chaflán recto con el del tramo curvo son lisas (0°):
+    el kernel no las redondea y el mensaje decía «no pertenecen al cuerpo». Las otras 2 entran."""
+    llamar(s, "create_box", length=100, width=60, height=40, anchor="corner")
+    def arista(centro, largo):
+        aristas = llamar(s, "find_edges")["edges"]
+        return next(e["id"] for e in aristas
+                    if abs(e["length"] - largo) < 0.01 and all(abs(a - b) < 0.01 for a, b in zip(e["center"], centro, strict=True)))
+    llamar(s, "fillet", edges=arista((50, 0, 40), 100), radius=20)
+    llamar(s, "chamfer", edges=arista((0, 40, 40), 40), distance=10)
+    diagonal = 10 * 2 ** 0.5
+    for centro, lisa in (((5, 5, 20), True), ((5, 20, 35), True), ((5, 5, 0), False), ((5, 60, 35), False)):
+        r = api.llamar(s, "fillet", {"edges": arista(centro, diagonal), "radius": 1})
+        if lisa:
+            assert not r["ok"] and "tangente" in r["mensaje"] and "no pertenecen" not in r["mensaje"], r
+        else:
+            assert r["ok"], r
+            llamar(s, "undo")
 
 
 def test_primitivas_y_su_posicion(s):

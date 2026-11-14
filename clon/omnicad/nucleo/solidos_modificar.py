@@ -688,7 +688,7 @@ def empalme(forma, grupos, *, cadena_tangente=True):
             else:
                 raise geo.ErrorGeometria(f"Tipo de radio desconocido: {tipo}")
     if mf.NbContours() == 0:
-        raise geo.ErrorGeometria("Las aristas elegidas no pertenecen al cuerpo.")
+        raise _sin_contorno(forma, empalmadas, "redondear")
     try:
         mf.Build()
     except Exception:  # noqa: BLE001 — StdFail_NotDone
@@ -868,22 +868,19 @@ def _mezclar(original, chaflanado, alcance, distancia):
                              "una distancia menor.")
 
 
-def _pista_chaflan(arista_caras, elegidas):
-    """Estima un límite de distancia razonable: mitad de la arista vecina más corta."""
-    longitudes = []
-    for e in elegidas:
-        vertices = _unicos(e, TopAbs_VERTEX)
-        for cara in _padres(arista_caras, e):
-            for vecina in _aristas(cara):
-                if not vecina.IsSame(e) and any(_contiene(vertices, v) for v in _unicos(vecina, TopAbs_VERTEX)):
-                    longitud = geo.longitud(vecina)
-                    if longitud > TOL:
-                        longitudes.append(longitud)
-    if not longitudes:
-        return ""
-    # shortcut: estimación local, usar búsqueda geométrica si se necesita un límite exacto.
-    return (f" Probá una distancia menor que {min(longitudes) / 2:g} mm "
-            "(mitad de la arista vecina más corta; no garantiza que el chaflán sea realizable).")
+def _sin_contorno(forma, aristas, que):
+    """B-454: el kernel no arma contorno sobre una arista tangente (lisa); decir eso y no «no pertenecen al cuerpo»."""
+    mapa = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+
+    def lisa(e):
+        try:
+            return _angulo_entre_caras(forma, e, mapa) < 1e-3
+        except geo.ErrorGeometria:           # no separa dos caras de este cuerpo
+            return False
+    if aristas and all(map(lisa, aristas)):
+        return geo.ErrorGeometria(f"La arista elegida es tangente (lisa): sus dos caras ya se unen sin esquina y no "
+                                  f"hay nada que {que}. Elegí una arista con esquina.")
+    return geo.ErrorGeometria("Las aristas elegidas no pertenecen al cuerpo.")
 
 
 def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
@@ -942,19 +939,18 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
             else:
                 raise geo.ErrorGeometria(f"Tipo de chaflán desconocido: {tipo}")
     if mc.NbContours() == 0:
-        raise geo.ErrorGeometria("Las aristas elegidas no pertenecen al cuerpo.")
+        raise _sin_contorno(forma, elegidas, "achaflanar")
     try:
         mc.Build()
     except Exception:  # noqa: BLE001 — StdFail_NotDone
         pass
     if not mc.IsDone():
-        raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas."
-                                 + _pista_chaflan(arista_caras, elegidas))
+        raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas. Achicala.")
     resultado = _validar(mc.Shape(), "Chaflán")
     # B-162: un chaflán que abre un sólido estanco es un error, no un «ok».
     if estanco_antes and geo._aristas_defectuosas(resultado)[0] > 0:
-        raise geo.ErrorGeometria("El chaflán abrió el sólido: la distancia es demasiado grande para las caras vecinas."
-                                 + _pista_chaflan(arista_caras, elegidas))
+        raise geo.ErrorGeometria("El chaflán abrió el sólido: la distancia es demasiado grande para las caras vecinas. "
+                                 "Achicala.")
     if esquina != "chaflan":
         alcance = 1.5 * max(float(g.get(k, 0) or 0) for g in grupos for k in ("distancia", "distancia2"))
         if esquina == "inglete":
