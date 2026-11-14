@@ -3401,6 +3401,15 @@ class VentanaPrincipal(QMainWindow):
         from PySide6.QtGui import QDesktopServices
         QDesktopServices.openUrl(QUrl(informes_error.url_issue()))
 
+    def keyPressEvent(self, e):
+        """B-409: Esc descarta el comando abierto aunque el teclado esté en el visor o el navegador (lo que el visor y los
+        controles no usan sube hasta acá; un campo, un modal o una lista abierta ya lo atendieron antes)."""
+        if e.key() == Qt.Key_Escape and self.panel is not None:
+            self.panel.cancelar()
+            e.accept()
+            return
+        super().keyPressEvent(e)
+
     def closeEvent(self, e):
         if self._salir_de_boceto() and self._confirmar_descartar():
             proyecto.esperar_autoguardado()   # no cortar un ZIP a medio escribir (quedaría el temporal)
