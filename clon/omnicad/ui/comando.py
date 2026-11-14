@@ -995,6 +995,10 @@ class PanelComando(QFrame):
         if self.boton_preajustes is not None:       # Tab empieza en los campos: «⋯» queda después de Cancelar
             QWidget.setTabOrder(self.boton_cancelar, self.boton_preajustes)
 
+        # B-421: Aceptar y Cancelar quedan donde estaban cuando el panel crece o se achica (un campo que aparece según la
+        # Operación): `pie_y` es el borde de abajo asentado, y la ventana lo respeta al ubicar el panel.
+        self.pie_y = self._tam_padre = None
+        self._t_pie = QTimer(self, singleShot=True, interval=250, timeout=self._fijar_pie)
         self._t_previa = QTimer(self, singleShot=True, interval=0)
         self._t_reubicar = QTimer(self, singleShot=True, interval=0, timeout=self._reubicar_ahora)   # B-113: un mensaje de varias líneas asienta su alto recién al volver al bucle de eventos
         self._t_previa.timeout.connect(self._calcular_previa)
@@ -1232,6 +1236,14 @@ class PanelComando(QFrame):
                             if self.titulo.fontMetrics().horizontalAdvance(completo) * 1.15 > sitio else completo)
         self.titulo.setToolTip(completo)
         self.icono_titulo.setPixmap(icono(ico).pixmap(18, 18))
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self._t_pie.start()
+
+    def _fijar_pie(self):
+        if self.isVisible() and self.parent() is not None:
+            self.pie_y, self._tam_padre = self.y() + self.height(), self.parent().size()
 
     def _reubicar(self):
         """El panel cambió de alto (mensaje, ayuda, sección): que siga entrando en el visor."""
