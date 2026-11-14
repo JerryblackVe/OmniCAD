@@ -4609,7 +4609,8 @@ class Lienzo(QWidget):
         self._abrir_entrada([TIPOS_COTA[tipo] + (f" ({unidad})" if unidad else "")],
                             [f"{actual:.3f}".rstrip("0").rstrip(".")], pos, aceptar)
         self._cota_abierta = original
-        if self.b.ejes_cota(previa) is not None:        # cota lineal: se dibuja con sus líneas mientras se escribe
+        # cota lineal, de radio o de diámetro (B-439, como Fusion): se dibuja con sus líneas mientras se escribe
+        if self.b.ejes_cota(previa) is not None or tipo in ("radio", "diametro"):
             self._cota_previa, self._cota_editada = previa, -1
 
     def _opciones_cota_mantenido(self):
@@ -5190,6 +5191,13 @@ class Lienzo(QWidget):
                 texto = self.entrada.campos[0].text()
                 if not self._fin_edicion_viva(texto):
                     self._cerrar_entrada()
+            elif (self._cota_abierta is not None and self._cota_abierta[0] in ("radio", "diametro")
+                  and self.entidad_en(pos) in (None, self._cota_abierta[1][0])):
+                # B-439: como Fusion, el clic ubica la cota del círculo o arco ahí, con su caja y lo ya escrito
+                texto = self.entrada.campos[0].text()
+                self._abrir_cota(*self._cota_abierta[:2], pos)
+                self.entrada.campos[0].setText(texto)
+                return
             else:
                 self._cerrar_entrada()
         zona = self._zona_en(pos) if e.button() == Qt.RightButton and not self.clics else None

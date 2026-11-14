@@ -112,6 +112,9 @@ def tipos():
     lz.deshacer()
     c = acotar([(60, 15)], None, "10", "círculo, un clic y teclear → diámetro")
     A.reg(AR, "círculo → diámetro", c is not None and c.tipo == "diametro", str(c and c.tipo))
+    c = acotar([(60, 15)], (78, 25), "12", "B-439: círculo, clic en el borde y clic para ubicar → diámetro con su caja")
+    A.reg(AR, "B-439: clic en el borde y clic para ubicar acota el círculo (diámetro 12)",
+          c is not None and (c.tipo, c.expresion) == ("diametro", "12"), str(c and (c.tipo, c.expresion)))
     c = acotar([(112.5, 0), (106, 9)], (118, 10), "40", "dos líneas no paralelas → ángulo")
     A.reg(AR, "dos líneas no paralelas → ángulo", c is not None and c.tipo == "angulo", str(c and c.tipo))
     c = acotar([(150, 0), (170, 12)], (160, 24), "20", "dos puntos, ubicar arriba → horizontal")
