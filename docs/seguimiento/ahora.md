@@ -16,22 +16,19 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | FL-3b | Aceptar, editar y deshacer fuera de la ventana, y la Rosca sin mallar en la ventana (FL-3 Abrir integrado: 572e69c) |
 | E7 | PRUEBA-1114 | Prueba como usuario de lo integrado el 13-14/11 (B-418, FL-3, B-409, B-420, B-422, B-429, B-421 parte) |
 | E8 | B-417 | Timeline › doble clic en un paso solo lo selecciona la primera vez |
-| E9 | B-421 | El panel que crece con un campo; H-97 en tests. Sol sin cupo desde las 04:16 UTC |
-| E10 | B-363 | El `.f3d` de la Prusa Core One se abre sin geometría |
+| E9 | Sol | Sol al 100 % todo el día: B-431, H-115, H-82, B-401, dieta de filas largas, tests faltantes; E9 con B-421 |
+| E10 | B-337 | Abrir e importar un STEP pesado sin congelar (B-335 + B-337; B-363 parte integrado: 8cf5219) |
 
 ## Sigue (en orden)
 
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 2 | B-335 | Abrir un STEP pesado congela la ventana |
-| 3 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
-| 4 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 5 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
-| 6 | B-401 | El cálculo aislado pierde atributos de boceto |
-| 7 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
-| 8 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
-| 9 | H-96 | Repujado sobre caras que no son planas ni cilíndricas |
-| 10 | ASM-16 | Arrastrar componentes: lazos, giro libre y multiselección |
+| 2 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 3 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
+| 4 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
+| 5 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
+| 6 | H-96 | Repujado sobre caras que no son planas ni cilíndricas |
+| 7 | ASM-16 | Arrastrar componentes: lazos, giro libre y multiselección |
 
-Hechos y esperando integrar (no ocupan cola): ninguno. Integrados 13-14/11: B-420, B-429, B-424, B-423 (parte), B-428, B-426, B-427, B-422 (parte), H-84 (parte), FL-3 Abrir, B-397, H-113, B-48 y FL-2 (partes), B-409, B-410, B-418f, B-418g, B-408 cerrado, B-384, P-153, B-416, PRUEBA9c, B-418b, B-418c, B-418d, B-418e, FL-0, FL-9 + B-418 (d8d4b9f), B-344e, B-412 (cerrado: Fusion hace lo mismo), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
+Hechos y esperando integrar (no ocupan cola): ninguno. Integrados 13-14/11: B-363 (parte), B-420, B-429, B-424, B-423 (parte), B-428, B-426, B-427, B-422 (parte), H-84 (parte), FL-3 Abrir, B-397, H-113, B-48 y FL-2 (partes), B-409, B-410, B-418f, B-418g, B-408 cerrado, B-384, P-153, B-416, PRUEBA9c, B-418b, B-418c, B-418d, B-418e, FL-0, FL-9 + B-418 (d8d4b9f), B-344e, B-412 (cerrado: Fusion hace lo mismo), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
