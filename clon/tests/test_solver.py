@@ -146,3 +146,27 @@ def test_tangencia_con_extremo_compartido_no_cuenta_grados_de_libertad_de_mas():
     r = resolver(b, {k: 5})
     assert r.ok and r.gdl == 0
     assert b.coords(b.curvas[arco].centro) == pytest.approx((10, 5))
+
+
+@pytest.mark.parametrize("linea, valor, esperado", [
+    (0, 100, [(-50, 20), (50, 20), (50, -10), (-50, -10)]),    # ancho por la línea de arriba
+    (1, 50, [(-50, 20), (30, 20), (30, -30), (-50, -30)]),     # alto por la derecha: la línea de arriba queda quieta
+])
+def test_b413_rectangulo_sin_restringir_crece_desde_la_primera_esquina(linea, valor, esperado):
+    """B-413: como en Fusion, al cambiar una cota de un rectángulo de 2 esquinas sin restringir queda quieta la
+    primera esquina y se mueve la opuesta (antes crecía ±10 mm a los dos lados). La cota que cambia deja quieto su
+    punto más viejo."""
+    b = Boceto()
+    lineas = b.agregar_rectangulo((-50, 20), (30, -10))
+    k = b.agregar_cota("distancia", [lineas[linea]], "1")
+    assert resolver(b, {k: valor}).ok
+    assert [b.coords(b.curvas[ln].p1) for ln in lineas] == [pytest.approx(p, abs=1e-6) for p in esperado]
+
+
+def test_b413_linea_suelta_acotada_mueve_el_segundo_extremo():
+    b = Boceto()
+    ln = b.agregar_linea((0, 0), (30, 40))
+    k = b.agregar_cota("distancia", [ln], "50")
+    assert resolver(b, {k: 100}).ok
+    assert b.coords(b.curvas[ln].p1) == pytest.approx((0, 0), abs=1e-6)
+    assert b.coords(b.curvas[ln].p2) == pytest.approx((60, 80), abs=1e-5)

@@ -174,6 +174,9 @@ def editar_y_menu():
     if abierta:
         escribir("30")
         A.reg(AR, "editar la cota a 30 la cambia", lz.b.cotas[c.id].expresion == "30", lz.b.cotas[c.id].expresion)
+        xs = sorted({round(lz.b.coords(p)[0], 6) for p in lz.b.puntos})[:2]
+        A.reg(AR, "B-413: el rectángulo crece desde la primera esquina (izquierda quieta en 0, derecha en 30)",
+              xs == [0.0, 30.0], str(xs))
     A.MENUS.clear()
     A.clic_derecho(lz, centro)
     textos = [a.text() for a in A.MENUS[-1].actions() if a.text()] if A.MENUS else None
