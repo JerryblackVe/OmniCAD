@@ -279,6 +279,17 @@ def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40):
     return vertices.astype(np.float32), colores.astype(np.float32)
 
 
+def _datos_movidos(forma, ubicacion, datos):
+    """Datos de dibujo de `forma` a partir de los de otro cuerpo con la MISMA geometría (TShape) en `ubicacion`: su
+    malla, sus aristas y su caja movidas, sin teselar de nuevo (B-425: un patrón de 5000 copias teselaba 5000 veces)."""
+    t = forma.Location().Transformation().Multiplied(ubicacion.Transformation().Inverted())
+    m = np.array([[t.Value(i, j) for j in range(1, 5)] for i in range(1, 4)])
+    r, d = m[:, :3], m[:, 3]
+    _forma, v, n, seg, centro, radio, defl = datos
+    return (forma, (v @ r.T + d).astype(np.float32), (n @ r.T).astype(np.float32), (seg @ r.T + d).astype(np.float32),
+            r @ centro + d, radio, defl)
+
+
 def aristas_cuerpo(forma):
     if es_malla(forma):
         caras = np.asarray(forma.caras, int)
@@ -646,13 +657,17 @@ class Visor3D(QOpenGLWidget):
         reusar_bocetos = ((arrastrando or hasattr(estado, "_origen_previa")) and ver == self._ver_bocetos and len(bocetos) == len(self._bocetos_de)
                           and all(a is b for a, b in zip(bocetos, self._bocetos_de, strict=True)))
         self._estado, self._ocultos, self._excluir_bocetos = estado, frozenset(ocultos), tuple(excluir_bocetos)
+        mallas_de = {}       # B-425: (TShape, orientación) → (ubicación, datos) de un cuerpo ya teselado
         for i, c in enumerate(estado.cuerpos.values()):
             clave = id(c.forma)
+            geometria = None if es_malla(c.forma) else (c.forma.TShape(), c.forma.Orientation())
+            preparada = None if clave in self._cache else getattr(estado, "_mallas_previa", {}).get(c.id)
             if clave in self._cache:
                 datos = self._cache[clave]
+            elif preparada is None and geometria in mallas_de:    # copia que solo cambia de lugar: su malla, movida
+                datos = _datos_movidos(c.forma, *mallas_de[geometria])
             else:
                 defl = self._deflexion(c.forma)
-                preparada = getattr(estado, "_mallas_previa", {}).get(c.id)
                 gruesa = preparada is None and arrastrando and not es_malla(c.forma) and len(geo.caras(c.forma)) >= 64
                 v, n = (preparada[:2] if preparada is not None else
                         teselar_cuerpo(c.forma, defl, self.config.angular, self._limpiar_malla, _previa=gruesa))
@@ -662,6 +677,8 @@ class Visor3D(QOpenGLWidget):
                 datos = (c.forma, v, n, preparada[2] if preparada is not None else aristas_cuerpo(c.forma),
                          (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2,
                          defl)
+            if geometria is not None and clave not in self._previa_gruesa:
+                mallas_de.setdefault(geometria, (c.forma.Location(), datos))
             cache[clave] = datos
             if c.id not in ocultos:
                 tipo = getattr(c, "tipo", "solido")
