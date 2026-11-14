@@ -30,12 +30,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 5 | B-467 | Empalme sobre aristas tangentes: Fusion toma la cadena tangente y entra (resto de B-454) |
 | 6 | B-464 | Solevación con punto tangente da error con peso 1 (Fusion 15708,3) |
 | 7 | H-118 | Desfase de caras de una rosca modelada, como Fusion (holgura para imprimir) |
-| 8 | B-480 | Girar el boceto 90° pierde restricciones y cotas sin aviso |
-| 9 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
-| 10 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 11 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 12 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
-| 13 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
+| 8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
+| 9 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 10 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 11 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
+| 12 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) quedan en bugs.md sin cola.
 
