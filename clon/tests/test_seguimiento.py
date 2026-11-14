@@ -35,6 +35,13 @@ def _filas(nombre):
 TODAS = [f for nombre in LISTAS for f in _filas(nombre)]
 
 
+def test_sin_marcas_de_conflicto():
+    """Una fusión mal resuelta dejó «<<<<<<< ours» en faltantes.md y PROJECT_LOG.md (2026-11-14, 35e3553)."""
+    for ruta in [*CARPETA.glob("*.md"), REPO / "PROJECT_LOG.md"]:
+        texto = ruta.read_text(encoding="utf-8")
+        assert not re.search(r"^(<<<<<<<|>>>>>>>)( |$)", texto, re.M), f"{ruta.name}: quedaron marcas de conflicto"
+
+
 def test_hay_filas_en_cada_archivo():
     for nombre in LISTAS:
         assert _filas(nombre), f"{nombre} no tiene ninguna fila de 7 columnas"
