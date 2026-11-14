@@ -19,7 +19,7 @@ GRUPOS_BOCETO = [
                          _i("", "sk_circulo_2t"), _i("", "sk_circulo_3t")]),
         _sub("Arco", [_i("", "sk_arco"), _i("", "sk_arco_centro"), _i("", "sk_arco_tangente")]),
         _sub("Polígono", [_i("", "sk_poligono_circunscrito"), _i("", "sk_poligono_inscrito"),
-                          _i("", "sk_poligono_arista")]),
+                          _i("", "sk_poligono_arista"), _i("", "sk_estrella")]),
         _i("Elipse", "sk_elipse"),
         _sub("Ranura", [_i("", "sk_ranura_centro"), _i("", "sk_ranura_total"), _i("", "sk_ranura_punto"),
                         _i("", "sk_ranura_arco_3p"), _i("", "sk_ranura_arco_centro")]),

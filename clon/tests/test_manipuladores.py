@@ -306,8 +306,11 @@ def test_la_triada_mueve_un_cuerpo(app_qt):
     assert triada.centro == pytest.approx((10, 10, 10))           # pivote: centro del cuerpo
     gestor = panel.manipuladores
     k = gestor.escala(triada.centro)
+    # P-151: como Fusion, las flechas son chicas y grises y los anillos de giro quedan por afuera
+    assert triada.compacta and triada.largo * 1.2 < mp.AnilloAngulo.RADIO
+    assert all(p[2] == triada.GRIS for p in triada.dibujar(gestor, None) if p[0] == "tris")
     # flecha X: se arrastra a lo largo de su dirección en pantalla
-    a, b = gestor.pantalla([triada.centro + [60 * k, 0, 0], triada.centro + [90 * k, 0, 0]])[0]
+    a, b = gestor.pantalla([triada.centro + [30 * k, 0, 0], triada.centro + [40 * k, 0, 0]])[0]
     d = (b - a) / np.linalg.norm(b - a)
     _arrastrar(visor, a, a + d * 80)
     dx = panel.ctx.evaluar(panel.valores["dx"])
@@ -322,7 +325,7 @@ def test_la_triada_mueve_un_cuerpo(app_qt):
     assert not any(sub[0] == "giro" for sub, _ in _manip(panel, "triada")._partes(gestor)[0])
     anillo = _manip(panel, "angulo:rz")
     assert isinstance(anillo, mp.AnilloAngulo) and anillo.centro == pytest.approx((10 + dx, 10, 10))
-    assert mp.unitario(anillo.asa(gestor) - anillo.centro) == pytest.approx(np.array([1, 1, 0]) / np.sqrt(2))   # a 45°
+    assert mp.unitario(anillo.asa(gestor) - anillo.centro) == pytest.approx([1, 0, 0])   # P-151: sobre la flecha X
     # arrastrar el asa del anillo de Z a lo largo del anillo: cambia rz
     p0, p1 = (anillo.centro + (anillo.u * np.cos(t) + anillo.v * np.sin(t)) * anillo._r(gestor) for t in (0.0, 0.2))
     s, _ = gestor.pantalla([p0, p1])
@@ -337,6 +340,25 @@ def test_la_triada_mueve_un_cuerpo(app_qt):
     assert panel.valores["dx"] != dx_antes and panel.valores["dy"] != "0 mm" and panel.valores["dz"] == "0 mm"
     panel.cancelar()
     assert "manipuladores" not in visor._capas
+
+
+def test_p151_triada_compacta_apunta_a_la_camara(app_qt):
+    """Como Fusion, cada flecha de la tríada de Mover/copiar sale hacia la cámara; arrastrar la flecha dada vuelta
+    hacia afuera mueve el cuerpo hacia ese lado (valor negativo)."""
+    from omnicad.ui.comandos.modificar import MoverCopiar
+    doc = _doc_caja()
+    panel, visor, _ = _panel(MoverCopiar(), doc, {"cuerpos": [_hit_cuerpo(doc)]})
+    gestor, triada = panel.manipuladores, _manip(panel, "triada")
+    assert all(float(triada._dir(gestor, i) @ np.asarray(visor.R[2])) > 0 for i in range(3))
+    visor.vista("abajo")                    # Z se aleja de la cámara y casi no se ve: se arrastra en pantalla
+    gestor.redibujar()
+    triada = _manip(panel, "triada")
+    assert triada._signo(gestor, 2) == -1
+    s, _ = gestor.pantalla(dict(triada._partes(gestor)[0])[("eje", 2)])
+    medio, d = (s[0] + s[1]) / 2, (s[1] - s[0]) / np.linalg.norm(s[1] - s[0])
+    _arrastrar(visor, medio, medio + d * 40)
+    assert panel.ctx.evaluar(panel.valores["dz"]) < -1
+    panel.cancelar()
 
 
 def test_mover_trasladar_con_direccion_y_girar(app_qt):
@@ -383,6 +405,21 @@ def test_flecha_del_empalme_sobre_la_arista(app_qt):
     assert panel.ctx.evaluar(panel.valores["radio"]) > 2
     panel._calcular_previa()
     assert g.volumen(_cuerpo(estados[-1]).forma) < 8000
+    panel.cancelar()
+
+
+@pytest.mark.parametrize("comando, clave", [("Empalme", "radio"), ("Chaflan", "distancia")])
+def test_p150_la_previa_se_come_las_aristas_elegidas(app_qt, comando, clave):
+    """P-150, como Fusion: mientras la previa redondea (o bisela), las aristas elegidas ya no existen y no se dibujan
+    (eran líneas gruesas encima de todo que quedaban flotando fuera del redondeo); sin previa vuelven."""
+    from omnicad.ui.comandos import modificar
+    doc = _doc_caja()
+    panel, visor, estados = _panel(getattr(modificar, comando)(), doc, {"aristas": [_arista_de_arriba(doc)], clave: "8 mm"})
+    panel._calcular_previa()
+    assert estados[-1] is not None and "seleccion" not in visor._capas
+    panel.set_valores({clave: "0 mm"})
+    panel._calcular_previa()
+    assert estados[-1] is None and visor._capas["seleccion"]
     panel.cancelar()
 
 
@@ -1315,33 +1352,84 @@ def test_p143_asa_del_empalme_en_la_punta_libre_de_la_arista(app_qt):
     panel.cancelar()
 
 
-def test_p144_la_caja_de_valor_tiene_el_menu_de_parametros(app_qt):
-    """P-144: el «⋮» de la caja junto a la flecha lista los parámetros (favoritos primero) y elegir uno lo
-    escribe en la caja; Enter lo aplica al campo como si se hubiera tecleado."""
-    from PySide6.QtCore import Qt
+def _textos_menu(caja):
+    return [a.text() for a in caja.menu().actions() if not a.isSeparator()]
+
+
+def test_p144_la_caja_de_valor_tiene_el_menu_de_parametros(app_qt, monkeypatch):
+    """P-144: el «⋮» de la caja junto a la flecha lista los últimos valores tecleados (elegir uno lo aplica), los
+    parámetros (favoritos primero; elegir uno lo escribe en la caja) y Medir, como Fusion."""
+    from PySide6.QtCore import QEvent, Qt
     from PySide6.QtTest import QTest
+    from omnicad.ui import manipuladores
     from omnicad.ui.comandos.solido import Extruir
+    monkeypatch.setattr(manipuladores, "RECIENTES", {})
     doc = _doc_rectangulo()
     doc.parametros.agregar("alto", "30 mm")
     doc.parametros.agregar("lado", "8 mm", favorito=True)
     panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
     caja = panel.manipuladores.cajas["distancia"]
-    menu = caja.menu()
-    assert [a.text() for a in menu.actions()] == ["lado", "alto"]
+    assert _textos_menu(caja) == ["lado", "alto", "Medir"]
     caja.setFocus()
     caja.selectAll()
     QTest.keyClicks(caja, "2*")
-    menu.actions()[1].trigger()
+    next(a for a in caja.menu().actions() if a.text() == "alto").trigger()
     assert caja.text() == "2*alto"
     QTest.keyClick(caja, Qt.Key_Return)
     assert panel.valores["distancia"] == "2*alto"
-    # sin parámetros el menú lo dice, sin ítems que no hacen nada
+    caja.selectAll()
+    QTest.keyClicks(caja, "15.5 mm")
+    QTest.keyClick(caja, Qt.Key_Return)
+    # lo tecleado queda arriba de todo, el más nuevo primero y sin el que ya está en la caja; elegirlo lo aplica
+    assert _textos_menu(caja) == ["2*alto", "lado", "alto", "Medir"]
+    next(a for a in caja.menu().actions() if a.text() == "2*alto").trigger()
+    assert panel.valores["distancia"] == "2*alto"
+    assert _textos_menu(caja) == ["15.5 mm", "lado", "alto", "Medir"]
+    # sin parámetros ni valores queda Medir; una caja de ángulo no ofrece longitudes ni Medir
+    monkeypatch.setattr(manipuladores, "RECIENTES", {})
     doc2 = _doc_rectangulo()
     panel2, _, _ = _panel(Extruir(), doc2, {"perfiles": [_perfil(doc2)]})
-    (unica,) = panel2.manipuladores.cajas["distancia"].menu().actions()
-    assert not unica.isEnabled() and "Cambiar parámetros" in unica.text()
+    assert _textos_menu(panel2.manipuladores.cajas["distancia"]) == ["Medir"]
+    manipuladores.recordar_valor("longitud", "3 mm")
+    gestor = panel2.manipuladores
+    anillo = _manip(panel2, "angulo:conicidad")
+    _raton(gestor.visor, QEvent.MouseMove, gestor.pantalla([anillo.asa(gestor)])[0][0], Qt.NoButton, Qt.NoButton)
+    assert _textos_menu(gestor.cajas["conicidad"]) == ["Sin valores recientes ni parámetros"]
+    # sin un panel de comando que se pueda atenuar (vista previa de Preferencias, Animación) no hay Medir
+    from omnicad.ui.vista_previa_asas import VistaPreviaAsas
+    previa = VistaPreviaAsas()
+    assert _textos_menu(previa.gestor.cajas["distancia"]) == ["3 mm"]
     panel.cancelar()
     panel2.cancelar()
+
+
+def test_p144_medir_desde_el_menu_pone_la_distancia_en_la_caja(app_qt):
+    """P-144: «⋮» › Medir atenúa el panel, dos clics en la vista miden (como la herramienta Medir) y la distancia va a
+    la caja; Esc vuelve sin tocar el valor. Girar con el botón del medio sigue andando mientras se mide."""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtTest import QTest
+    from omnicad.ui.comandos.modificar import Empalme
+    doc = _doc_caja()
+    panel, visor, _ = _panel(Empalme(), doc, {"aristas": [_arista_de_arriba(doc)], "radio": "2 mm"})
+    caja = panel.manipuladores.cajas["radio"]
+
+    def clic(p):
+        q = visor.proyectar(np.array(p, float))
+        _raton(visor, QEvent.MouseButtonPress, (q.x(), q.y()), Qt.LeftButton, Qt.LeftButton)
+        _raton(visor, QEvent.MouseButtonRelease, (q.x(), q.y()), Qt.LeftButton, Qt.NoButton)
+
+    next(a for a in caja.menu().actions() if a.text() == "Medir").trigger()
+    assert not panel.isEnabled()
+    clic((0, 0, 20))
+    assert panel.valores["aristas"] and not panel.isEnabled()      # el clic mide: no cambia la selección del comando
+    QTest.keyClick(visor, Qt.Key_Escape)
+    assert panel.isEnabled() and panel.valores["radio"] == "2 mm"
+    next(a for a in caja.menu().actions() if a.text() == "Medir").trigger()
+    clic((0, 0, 20))
+    clic((20, 0, 20))
+    assert panel.isEnabled() and caja.text() == "20.00 mm" and panel.valores["radio"] == "20.00 mm"
+    assert len(panel.valores["aristas"]) == 1
+    panel.cancelar()
 
 
 def test_b375_conicidad_de_90_queda_en_rojo_en_la_caja_y_en_el_campo(app_qt):

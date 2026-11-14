@@ -75,6 +75,7 @@ CZ = L("draw_circle_3d", sketch="Z", center=[60, 0, 0], radius=15, normal=[0, 0,
 sketch("Y")                                                           # tangente con un arco (BOC-52)
 AY = ids(L("draw_arc", sketch="Y", center_x=0, center_y=0, start_x=12, start_y=0, sweep_angle=90))[0]
 LY = ids(L("draw_line", sketch="Y", start_x=-30, start_y=-14, end_x=30, end_y=-16))[0]
+sketch("S")                                                           # estrella y polígono rehecho (BOC-84, P-154)
 L("create_cylinder", radius=15, height=30, x=300, y=300, z=0)               # una cara para la curva isoparamétrica
 sketch("Iso")
 app, v = A.iniciar(s.doc)
@@ -815,6 +816,84 @@ A.reg(AR + " · isoparamétrica", "y con dos Ctrl+Z más no queda ninguna curva 
 clic(300 + 30, 300 + 20)                                            # dentro de la vista pero fuera del cilindro
 A.reg(AR + " · isoparamétrica", "un clic fuera del modelo no crea nada y lo dice", not lz.b.geo3d.get("curvas"), "")
 tecla(Qt.Key_Escape)
+lz.set_herramienta("seleccionar")
+salir()
+
+# ============================================================ Estrella (BOC-84) y Lados después de dibujar (P-154)
+AR = "Estrella y Lados"
+entrar("S")
+form = v.modo_boceto.tarjeta.form_contexto
+avisos = []
+lz.mensaje.connect(avisos.append)
+
+
+def dibujadas():
+    return sum(1 for c in lz.b.curvas.values() if c.tipo == "linea" and not c.construccion)
+
+
+def en_foco(texto):
+    """Tecla a tecla a lo que tiene el foco: el lienzo abre su caja con la primera y sigue en ella."""
+    for ch in texto:
+        QTest.keyClicks(lz.entrada.campos[0] if lz.entrada is not None else lz, ch)
+        A.esperar(30)
+
+
+def teclear_fila(etiqueta, texto):
+    w = fila(etiqueta)
+    w.setFocus()
+    QTest.keyClick(w, Qt.Key_A, Qt.ControlModifier)
+    QTest.keyClicks(w, texto)
+    A.esperar(120)
+
+
+herramienta("estrella", por_menu=True)
+A.reg(AR, "Estrella está en CREAR › Polígono y su tarjeta trae Puntas, Interior, redondeos y círculos",
+      all(fila(e) is not None for e in ("Puntas", "Interior (0 = regular)", "Redondeo de puntas", "Redondeo de valles",
+                                        "Círculos de construcción")), "")
+mover(3, 3)
+clic(0, 0)
+mover(0, 18)
+lz.setFocus()
+en_foco("20")
+QTest.keyClick(lz.entrada.campos[0], Qt.Key_Tab)
+A.esperar(60)
+en_foco("6")
+QTest.keyClick(lz.entrada.campos[0], Qt.Key_Return)
+A.esperar(150)
+radios = sorted(round(lz.b.radio(c.id), 6) for c in lz.b.curvas.values() if c.tipo == "circulo")
+A.reg(AR, "radio 20, Tab, 6 puntas y Enter: 12 lados y la cota de radio 20 en el círculo de las puntas",
+      dibujadas() == 12 and radios[-1] == 20 and any(k.tipo == "radio" for k in lz.b.cotas.values()),
+      f"{dibujadas()} lados, radios {radios}")
+A.foto(v, "herr_estrella_6_puntas")
+teclear_fila("Puntas", "8")
+A.reg(AR, "con la estrella recién dibujada, Puntas = 8 en la tarjeta la rehace (P-154) y sigue sin conflicto",
+      dibujadas() == 16 and lz.resultado.ok, f"{dibujadas()}")
+tecla(Qt.Key_Z, Qt.ControlModifier)
+A.reg(AR, "Ctrl+Z vuelve a la de 6 puntas", dibujadas() == 12, f"{dibujadas()}")
+clic(60, 0)
+tecla(Qt.Key_Escape)
+A.reg(AR, "Esc a mitad de una estrella no deja nada", not lz.clics and dibujadas() == 12, f"{lz.clics}")
+teclear_fila("Redondeo de puntas", "50")
+clic(60, 0)
+clic(60, 10)
+A.reg(AR, "un redondeo que no entra no crea nada y lo dice", dibujadas() == 12 and any("no entra" in t for t in avisos),
+      f"{avisos[-1:]}")
+teclear_fila("Redondeo de puntas", "1")
+clic(60, 0)
+clic(60, 10)
+arcos = [c for c in lz.b.curvas.values() if c.tipo == "arco"]
+A.reg(AR, "con redondeo 1 mm: otra estrella de 8 puntas (la tarjeta quedó en 8) y un arco igual en cada punta",
+      dibujadas() == 28 and len(arcos) == 8 and lz.resultado.ok, f"{dibujadas()} lados, {len(arcos)} arcos")
+A.foto(v, "herr_estrella_redondeada")
+teclear_fila("Redondeo de puntas", "0")
+herramienta("poligono_inscrito", por_menu=True)
+clic(-60, 0)
+clic(-48, 0)
+antes_pol = dibujadas()
+teclear_fila("Lados", "8")
+A.reg(AR, "polígono de 6 recién dibujado: Lados = 8 en la tarjeta lo rehace con 8 (P-154)", dibujadas() == antes_pol + 2,
+      f"{antes_pol} → {dibujadas()}")
+A.foto(v, "herr_poligono_rehecho_8")
 lz.set_herramienta("seleccionar")
 salir()
 

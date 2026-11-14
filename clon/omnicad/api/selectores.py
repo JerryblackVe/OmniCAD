@@ -76,6 +76,10 @@ class Elemento:
     def __init__(self, tipo, i, sub, firma):
         self.tipo, self.i, self.sub, self.firma = tipo, i, sub, firma
         self.geom = (TIPOS_CARA if tipo == "cara" else TIPOS_ARISTA).get(firma["geom"], "OTHER")
+        if tipo == "arista" and firma.get("largo", 0) < 1e-6:
+            # CI-H77: la punta de un giro trae una arista degenerada (largo 0) con curva de círculo de radio 0: no es un
+            # círculo (%CIRCLE no la elige: no se puede empalmar) y la numeración de OCC la pone en lugares distintos
+            self.geom = "OTHER"
         self.normal = self.direccion = self.eje = None
         if tipo == "cara":
             self.centro = np.array(firma["centro"], float)

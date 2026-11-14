@@ -71,3 +71,14 @@ de los propios faltantes.
 Fases 0 a 8 ejecutadas el 2026-10-24 (commits `33058e8` a la Fase 8). Lo que queda de cada ítem vive en `docs/seguimiento/` (filas `Parcial` con su «Queda»).
 
 Fase 9 (cierre) ejecutada el 2026-10-24: cerró BOC-5, 9, 14, 16, 17, 18, 19, 20, 21, 23, 29 y FU-1; BOC-31 y BOC-32 se cerraron después (2026-10-25); BOC-28 se cerró después (2026-10-24) con el módulo Rust de perfiles.
+
+## BOC-84 · Herramienta «Estrella» del boceto (pedido de Gerardo, 2026-11-13)
+
+Fusion no la tiene: es propia de OmniCAD. Lo de Gerardo: varias puntas + redondear las puntas. El resto es propuesta (E1 puede ajustarla).
+
+1. Dónde: menú CREAR del boceto, junto a Polígono. Ícono propio; tarjeta de contexto como la del polígono.
+2. Dibujo: clic en el centro y clic en una punta (fija radio exterior y giro). Previa desde el primer movimiento.
+3. Opciones: Puntas 3–64 (5 por defecto); radio interior o proporción interior/exterior en % (por defecto la regular: 38,2 % para 5 puntas); giro (una punta hacia arriba); redondeo de puntas (0 = filosas); redondeo de valles aparte (0 = filosos).
+4. Extras: modo «estrella regular {n/m}» (5/2, 7/2, 7/3) como contorno exterior cerrado sin cruces; casilla «Círculos de construcción»; restricciones automáticas como el polígono (puntas en el círculo exterior, valles en el interior, longitudes iguales; totalmente definida con radio exterior y giro, más el interior si no es regular); campos vivos (radio, puntas, giro); editable después de dibujar (mismo criterio que P-154: conviene hacerlas juntas).
+5. MCP/CLI: `draw_star` en `clon/omnicad/api/` (points, outer_radius, inner_radius o inner_ratio, rotation, tip_fillet, valley_fillet, skip, construction_circles), con test y doc regenerada.
+6. Listo cuando: estrella de 5 puntas con redondeo 1 mm se extruye sin error y el área coincide con la fórmula (0,1 %); 3 y 64 puntas andan; un redondeo que no entra da mensaje claro en rojo; prueba como usuario en prueba_ui (teclear, flechas, Esc, deshacer).

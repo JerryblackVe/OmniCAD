@@ -154,12 +154,14 @@ class NuevoComponente(Comando):
         # «Parent» de Fusion (ASM-9): la raíz o cualquier componente anterior en el timeline, con su camino en un
         # subensamblaje (`ctx.estado` es el estado ANTES del paso: ni él ni sus hijos pueden ser su padre).
         padres = {"": "(raíz)", **{k: ruta_componente(ctx.estado, k) for k in ctx.estado.componentes}}
-        return [Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, maximo=None), Opciones("padre", "Padre", padres, ""),
-                Casilla("fijo", "Fijo")]
+        return [Texto("nombre", "Nombre del componente", "", visible_si=lambda v: ctx.op is None,
+                      ayuda="Vacío = Componente1, Componente2… Al editar se cambia el nombre desde el timeline."),
+                Seleccion("cuerpos", "Cuerpos", {"cuerpo"}, minimo=0, maximo=None,
+                          ayuda="Sin cuerpos, el componente queda vacío (como Nuevo componente de Fusion)."),
+                Opciones("padre", "Padre", padres, ""), Casilla("fijo", "Fijo")]
 
     def construir(self, v, ctx):
-        exigir(v, "cuerpos", "Seleccioná los cuerpos del componente.")
-        cuerpos = [h["ref"]["cuerpo"] for h in v["cuerpos"]]
+        cuerpos = [h["ref"]["cuerpo"] for h in v.get("cuerpos") or []]
         # B-123: la pose se congela contra el estado en que se eligieron los cuerpos. Al editar, el de antes del
         # paso; un paso nuevo vale el actual (el estado del panel puede haber quedado viejo si cambió el documento).
         estado = ctx.estado if ctx.op is not None else ctx.doc.estado_final
@@ -171,11 +173,17 @@ class NuevoComponente(Comando):
                 antes = None
             if antes == (v.get("padre") or ""):
                 pose_padre = v["pose_padre"]
-        return self.crear_op(OpComponente, v, ctx, cuerpos=cuerpos,
-                             fijo=v["fijo"], padre=v.get("padre") or "",
-                             version_pose=_version(ctx, OpComponente, "version_pose"),
-                             pose=pose_de_reasignar(estado, cuerpos).tolist(),
-                             pose_padre=pose_padre)
+        op = self.crear_op(OpComponente, v, ctx, cuerpos=cuerpos,
+                           fijo=v["fijo"], padre=v.get("padre") or "",
+                           version_pose=_version(ctx, OpComponente, "version_pose"),
+                           pose=pose_de_reasignar(estado, cuerpos).tolist(),
+                           pose_padre=pose_padre)
+        nombre = (v.get("nombre") or "").strip()
+        if nombre and ctx.op is None:                 # «Component Name» de Fusion: el nombre del componente es el del paso
+            if any(o.nombre == nombre for o in ctx.doc.operaciones):
+                raise ErrorComando(f"Ya hay un paso llamado «{nombre}»: elegí otro nombre.")
+            op.nombre = nombre
+        return op
 
     def desde_op(self, op, ctx):
         try:
@@ -190,6 +198,7 @@ class Union(Comando):
     AYUDA = "Pone el componente 1 sobre el componente 2 y define cómo se mueven."
     CLASE_OP = OpUnion
     COMO_ESTA = False
+    PESTANA_PRINCIPAL = "Posición"
 
     def verificar(self, ctx):
         return None if ctx.estado.componentes else "Primero creá componentes (ENSAMBLAR › Nuevo componente)."
@@ -214,7 +223,16 @@ class Union(Comando):
                        Expresion("dx", "Desfase X", "0 mm", avanzado=True),
                        Expresion("dy", "Desfase Y", "0 mm", avanzado=True),
                        Expresion("dz", "Desfase Z", "0 mm", avanzado=True), Casilla("voltear", "Voltear", avanzado=True)]
-        return campos + _campos_movimiento()      # la pestaña Position de Fusion primero; Motion (con el Tipo) después
+        # Pestañas de Fusion: Posición (Componente 1, Componente 2, Alineación) y Movimiento (con el Tipo).
+        secciones = {"modo1": "Componente 1", "origen1": "Componente 1", "origen1b": "Componente 1",
+                     "clave1": "Componente 1", "modo2": "Componente 2", "origen2": "Componente 2",
+                     "origen2b": "Componente 2", "clave2": "Componente 2", "angulo": "Alineación"}
+        for c in campos:
+            c.seccion = secciones.get(c.clave)
+        movimiento = _campos_movimiento()
+        for c in movimiento:
+            c.pestana = "Movimiento"
+        return campos + movimiento
 
     def construir(self, v, ctx):
         exigir(v, "origen1", "Seleccioná el origen en el componente 1.")
@@ -425,7 +443,8 @@ class RestriccionComponentes(Comando):
 
 
 class UnionComoEsta(Union):
-    CLAVE, TITULO, ICONO, ATAJO = "union_construida", "Unión como está", "union_construida", "Shift+J"
+    PESTANA_PRINCIPAL = "Componentes"
+    CLAVE, TITULO, ICONO, ATAJO = "union_construida", "Unión conforme a obra", "union_construida", "Shift+J"
     AYUDA = ("Une dos componentes en la posición en que están y define su movimiento. El componente 1 es "
              "la pieza que sigue al componente 2 cuando este se mueve.")
     COMO_ESTA = True
@@ -479,14 +498,14 @@ class GrupoRigido(Comando):
     def campos(self, ctx):
         return [Seleccion("cuerpos", "Componentes", {"cuerpo"}, maximo=None,
                           ayuda="Elegí un cuerpo de cada componente."),
-                Casilla("incluir_hijos", "Incluir componentes secundarios",
+                Casilla("incluir_hijos", "Incluir componentes secundarios", True,
                         ayuda="También entran al grupo los subcomponentes de cada componente elegido.")]
 
     def construir(self, v, ctx):
         comps = _componentes_de(v, ctx)
         if len(comps) < 2:
             raise ErrorComando("Elegí cuerpos de al menos dos componentes distintos.")
-        return self.crear_op(OpGrupoRigido, v, ctx, componentes=comps, incluir_hijos=bool(v.get("incluir_hijos")))
+        return self.crear_op(OpGrupoRigido, v, ctx, componentes=comps, incluir_hijos=bool(v.get("incluir_hijos", True)))
 
     def desde_op(self, op, ctx):
         comps = []
@@ -510,7 +529,7 @@ def _vinculo_que_la_mueve(ctx, id_union):
 
 
 class AccionarUniones(Comando):
-    CLAVE, TITULO, ICONO = "accionar_uniones", "Accionar uniones", "accionar_uniones"
+    CLAVE, TITULO, ICONO = "accionar_uniones", "Uniones de animación", "accionar_uniones"
     AYUDA = "Cambia el ángulo o la distancia de una unión (mueve el mecanismo)."
     SIN_OP, PREVIA = True, False
 

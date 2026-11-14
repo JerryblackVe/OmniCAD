@@ -237,8 +237,6 @@ class GeometriaConstruccion(Comando):
             lista += refs(v, k)
         if _ruta_eje(v) and len(lista) > 1:
             raise ErrorComando("Un eje no se encadena: elegí solo el eje o solo aristas.")
-        if metodo == "plano_desfase" and v.get("extension") == "distancia" and ctx.evaluar(v["distancia"]) == 0:
-            raise ErrorComando("La distancia de desfase no puede ser cero: arrastrá la flecha o escribí una distancia.")
         params = {"tipo": tipo, "refs": lista}
         for k, t, ver in VALORES:
             if k in clase.PARAMS and ver(v):

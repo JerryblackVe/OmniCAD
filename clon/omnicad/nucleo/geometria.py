@@ -624,17 +624,86 @@ def _muestras_adentro(forma, cuantas, intentos):
     c0, c1 = caja.CornerMin(), caja.CornerMax()
     clasificadores = [_clasificador(s) for s in solidos(forma)]
     rng = random.Random("b39-enterrada")
-    dados = 0
-    for _ in range(intentos):
-        p = gp_Pnt(rng.uniform(c0.X(), c1.X()), rng.uniform(c0.Y(), c1.Y()), rng.uniform(c0.Z(), c1.Z()))
-        for c in clasificadores:
-            c.Perform(p, 1e-7)
-            if c.State() == TopAbs_IN:
+    malla = _malla_para_muestrear(forma, caja) if len(caras(forma)) > _CARAS_MUESTREO_EXACTO else None
+    dados = hechos = 0
+    while hechos < intentos:
+        tanda = [(rng.uniform(c0.X(), c1.X()), rng.uniform(c0.Y(), c1.Y()), rng.uniform(c0.Z(), c1.Z()))
+                 for _ in range(min(intentos - hechos, 2 * cuantas))]
+        hechos += len(tanda)
+        por_malla = _adentro_por_malla(malla, np.array(tanda)) if malla else [None] * len(tanda)
+        for xyz, veredicto in zip(tanda, por_malla, strict=True):
+            p = gp_Pnt(*xyz)
+            if veredicto is None:
+                veredicto = False
+                for c in clasificadores:
+                    c.Perform(p, 1e-7)
+                    if c.State() == TopAbs_IN:
+                        veredicto = True
+                        break
+            if veredicto:
                 yield p
                 dados += 1
-                break
-        if dados == cuantas:
-            return
+                if dados == cuantas:
+                    return
+
+
+_CARAS_MUESTREO_EXACTO = 12     # hasta acá el clasificador exacto cuesta ~0,02 ms por punto: la malla no ahorra
+_CELDAS_MUESTREO = 128          # celdas por lado de la grilla que marca la banda cercana a la superficie
+
+
+def _malla_para_muestrear(forma, caja):
+    """RS-X4: malla de `forma` para clasificar al vuelo los puntos lejos de la superficie (el clasificador exacto
+    cuesta 0,4–1 ms por punto en piezas de 100 caras y era el 50 % de combinar en motor_impreso). Devuelve
+    (triángulos, normales, origen, celda, marca de celdas cerca de la superficie) o None si la malla no es fiel: su
+    volumen tiene que dar el exacto (una cara sin mallar o invertida cambiaría el veredicto lejos de la superficie)."""
+    c0, c1 = np.array(caja.CornerMin().Coord()), np.array(caja.CornerMax().Coord())
+    deflexion = float(np.linalg.norm(c1 - c0)) * 5e-4
+    try:
+        vertices, _ = teselar_aparte(forma, deflexion, 0.2)
+    except Exception:  # noqa: BLE001 — sin malla rige el clasificador exacto
+        return None
+    T = vertices.reshape(-1, 3, 3).astype(float)
+    normales = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
+    if not len(T):
+        return None
+    v_malla = float(np.einsum("ij,ij->", T[:, 0], normales)) / 6
+    v_exacto = abs(_integral(forma, BRepGProp.VolumeProperties_s))
+    area_malla = float(np.linalg.norm(normales, axis=1).sum()) / 2
+    if abs(v_malla - v_exacto) > 2 * deflexion * area_malla + 1e-6 * v_exacto:
+        return None
+    # La malla queda a menos de `deflexion` de la superficie: un punto a más de `banda` de todo triángulo está del
+    # mismo lado de las dos. Las celdas que tocan la caja agrandada de algún triángulo van al clasificador exacto.
+    banda = 4 * deflexion + 1e-3
+    celda = np.maximum((c1 - c0) / _CELDAS_MUESTREO, 1e-9)
+    tope = _CELDAS_MUESTREO - 1
+    desde = np.floor((T.min(axis=1) - banda - c0) / celda).astype(int).clip(0, tope)
+    hasta = np.floor((T.max(axis=1) + banda - c0) / celda).astype(int).clip(0, tope)
+    marca = np.zeros((_CELDAS_MUESTREO,) * 3, bool)
+    for a, b in zip(desde, hasta, strict=True):
+        marca[a[0]:b[0] + 1, a[1]:b[1] + 1, a[2]:b[2] + 1] = True
+    return T, normales, c0, celda, marca
+
+
+def _adentro_por_malla(malla, puntos):
+    """Por punto: True/False si la malla lo decide (lejos de la superficie, rayo que no roza), None si va al exacto."""
+    from . import revision as rv
+    T, normales, c0, celda, marca = malla
+    i = np.floor((puntos - c0) / celda).astype(int).clip(0, marca.shape[0] - 1)
+    lejos = np.flatnonzero(~marca[i[:, 0], i[:, 1], i[:, 2]])
+    veredictos = [None] * len(puntos)
+    if not len(lejos):
+        return veredictos
+    d = np.array([0.5773, 0.5774, 0.5775]) / np.linalg.norm([0.5773, 0.5774, 0.5775])  # sin alinear con los ejes
+    _, tri = rv.primer_choque(puntos[lejos], d, T, 0.0)
+    for k, t in zip(lejos, tri, strict=True):
+        if t < 0:
+            veredictos[k] = False                       # ningún choque: afuera
+            continue
+        n = normales[t]
+        coseno = float(n @ d) / (float(np.linalg.norm(n)) or 1.0)
+        if abs(coseno) > 1e-3:                          # rozar el borde de una silueta queda para el exacto
+            veredictos[k] = coseno > 0                  # la primera cara que cruza mira hacia afuera: estaba adentro
+    return veredictos
 
 
 def _parte_afuera(chica, grande, cuantas=_MUESTRAS_AFUERA, al_menos=1):
@@ -1462,6 +1531,12 @@ def esta_vacia(forma):
 def cajas_solapan(a, b):
     """¿Dos cajas envolventes (mínimo, máximo) comparten volumen? Apoyarse en una cara no cuenta."""
     return all(min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) > 1e-6 for i in range(3))
+
+
+def cajas_se_tocan(a, b, tolerancia=1e-6):
+    """¿Dos cajas envolventes (mínimo, máximo) se tocan o se superponen? A diferencia de `cajas_solapan`, apoyarse en
+    una cara cuenta. Si es False, las formas no se tocan: descarta cuerpos lejanos sin llamar a `se_tocan` (~30 ms)."""
+    return a is None or b is None or all(min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) >= -tolerancia for i in range(3))
 
 
 def solapan(a, b):

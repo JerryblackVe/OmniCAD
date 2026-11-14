@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Grafo de nodos y su motor de evaluación (GH2 de `docs/brechas_grasshopper.md`).
+Grafo de nodos y su motor de evaluación (GH2 de `docs/referencia/brechas_grasshopper.md`).
 
 El grafo es flujo de datos puro: cada nodo toma árboles de datos por sus entradas, corre su función y entrega árboles
 por sus salidas. No toca el documento; «Hornear» (`timeline/ops_grafo.py`) lo pasa al timeline.

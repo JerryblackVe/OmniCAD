@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Árboles de datos del grafo (GH1 de `docs/brechas_grasshopper.md`): el modelo de datos de la programación visual.
+Árboles de datos del grafo (GH1 de `docs/referencia/brechas_grasshopper.md`): el modelo de datos de la programación visual.
 
 Los datos viajan entre nodos como un `Arbol`: ramas con una `Ruta` (tupla de enteros, se escribe `{0;1}`) y una lista
 de ítems cada una. Un valor suelto es un árbol de una rama `{0}` con un ítem; `None` es un ítem nulo. Las ramas se

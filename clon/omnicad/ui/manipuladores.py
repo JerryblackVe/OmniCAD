@@ -20,11 +20,12 @@ Todo el dibujo es en coordenadas del mundo, recalculado para que el tamaño en p
 """
 import logging
 import math
+import re
 
 import numpy as np
-from PySide6.QtCore import QEvent, QObject, QPointF, QRect, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, Qt, QTimer
 from PySide6.QtGui import QPolygonF
-from PySide6.QtWidgets import QApplication, QLineEdit, QMenu, QToolTip
+from PySide6.QtWidgets import QApplication, QLineEdit, QMenu, QToolTip, QWidget
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD
 from . import estilo_asas
@@ -735,11 +736,16 @@ class AnilloAngulo(Angulo):
     def _r(self, g):
         return self.RADIO * self.esc(g, self.centro)
 
-    def __init__(self, clave, centro, eje, inicio, sigue=None, **kw):
+    def __init__(self, clave, centro, eje, inicio, sigue=None, hacia_camara=False, **kw):
         super().__init__(clave, centro, eje, inicio, caja="arrastre", **kw)
         self.base, self.sigue = self.centro.copy(), sigue
+        self.u0 = self.u if hacia_camara else None    # P-151: el 0° del lado de la cámara, como la flecha de la tríada
 
     def _seguir(self, g):
+        R = getattr(g.visor, "R", None)
+        if self.u0 is not None and R is not None:
+            self.u = -self.u0 if float(self.u0 @ np.asarray(R[2], float)) < 0 else self.u0
+            self.v = np.cross(self.eje, self.u)
         if self.sigue is not None:
             clave, direccion, magnitud = self.sigue
             v = g.valor(clave)
@@ -1342,13 +1348,29 @@ def asas_imagen(pl, dx, dy, escala=True, volteo=("voltear", "voltear_v")):
 
 class Triada(Manipulador):
     """Tríada de Mover/copiar en `centro`, alineada con los ejes del diseño. `claves`: campos de
-    traslación X/Y/Z; `giros`: campos de giro alrededor de X/Y/Z (None = sin arcos)."""
+    traslación X/Y/Z; `giros`: campos de giro alrededor de X/Y/Z (None = sin arcos). `compacta`: la de Mover/copiar de
+    Fusion (P-151): flechas chicas y grises, para que los anillos de giro queden por afuera."""
     ident = "triada"
+    GRIS = (0.84, 0.85, 0.87)
 
-    def __init__(self, centro, claves=("dx", "dy", "dz"), giros=("rx", "ry", "rz"), planos=True, esfera=True, ejes=None, solo_giros=False):
+    def __init__(self, centro, claves=("dx", "dy", "dz"), giros=("rx", "ry", "rz"), planos=True, esfera=True, ejes=None, solo_giros=False,
+                 compacta=False):
         self.centro, self.claves, self.giros = np.asarray(centro, float), tuple(claves), giros
+        self.compacta = compacta
+        # largo, desde dónde arranca la flecha y dónde van los cuadraditos (fracciones del largo), punta, radio de la esfera
+        self.largo, self.desde, self.cuadro, self.punta, self.r_esfera = (
+            (55.0, 0.55, (0.22, 0.48), (11.0, 5.0), 4.0) if compacta else
+            (LARGO_TRIADA, 0.2, (0.24, 0.40), (LARGO_PUNTA, RADIO_PUNTA), 7.0))
         self.planos, self.esfera, self.solo_giros = planos and not solo_giros, esfera, solo_giros
         self.ejes = np.identity(3) if ejes is None else np.asarray(ejes, float)      # filas: X, Y, Z de la tríada
+
+    def _signo(self, g, i):
+        """La compacta apunta cada flecha hacia la cámara, como Fusion (la Y de la vista isométrica sale hacia adelante)."""
+        R = getattr(g.visor, "R", None)
+        return -1.0 if self.compacta and R is not None and float(self.ejes[i] @ np.asarray(R[2], float)) < 0 else 1.0
+
+    def _dir(self, g, i):
+        return dir_visible(g.visor, self.ejes[i] * self._signo(g, i), self.centro)
 
     def _base(self, i):
         e = self.ejes
@@ -1357,13 +1379,13 @@ class Triada(Manipulador):
     def _partes(self, g):
         """[(sub, polilínea 3D para tocar)] de cada asa."""
         k = self.esc(g, self.centro)
-        L, c = LARGO_TRIADA * k, self.centro
+        L, c = self.largo * k, self.centro
         partes = []
         for i in () if self.solo_giros else range(3):
             if self.claves[i] is None:
                 continue
-            e = dir_visible(g.visor, self.ejes[i], c)
-            partes.append((("eje", i), np.array([c + e * L * 0.2, c + e * L])))
+            e = self._dir(g, i)
+            partes.append((("eje", i), np.array([c + e * L * self.desde, c + e * L])))
         if self.giros:
             for i in range(3):
                 if self.giros[i] is None:
@@ -1373,25 +1395,27 @@ class Triada(Manipulador):
         if self.planos:
             for i in range(3):
                 _, a, b = self._base(i)
-                lo, hi = L * 0.24, L * 0.40
+                a, b = a * self._signo(g, (i + 1) % 3), b * self._signo(g, (i + 2) % 3)     # entre las flechas dibujadas
+                lo, hi = L * self.cuadro[0], L * self.cuadro[1]
                 partes.append((("plano", i), np.array([c + a * lo + b * lo, c + a * hi + b * lo, c + a * hi + b * hi,
                                                        c + a * lo + b * hi, c + a * lo + b * lo])))
         return partes, k
 
     def dibujar(self, g, activo):
         partes, k = self._partes(g)
-        c, L = self.centro, LARGO_TRIADA * k
+        c, L = self.centro, self.largo * k
+        largo_punta, radio_punta = self.punta
         prims = []
         for sub, poli in partes:
             tipo, i = sub
-            color = COLORES_EJE[i]
+            color = self.GRIS if self.compacta else COLORES_EJE[i]
             if activo == sub:
-                color = _aclarar(color, 0.5)
+                color = AnilloAngulo.AZUL_ASA if self.compacta else _aclarar(color, 0.5)
             if tipo == "eje":
-                e = dir_visible(g.visor, self.ejes[i], c)
-                cuello = c + e * (L - LARGO_PUNTA * k)
+                e = self._dir(g, i)
+                cuello = c + e * (L - largo_punta * k)
                 prims.append(("lineas", np.array([poli[0], cuello]), color, 3.0))
-                prims += _cono(cuello, e, LARGO_PUNTA * k, RADIO_PUNTA * k, color)
+                prims += _cono(cuello, e, largo_punta * k, radio_punta * k, color)
             elif tipo == "giro":
                 prims.append(("lineas", _segs(poli), color, 3.5))
                 prims += _disco(g.visor, poli[len(poli) // 2], 4.0 * k, color)
@@ -1403,10 +1427,10 @@ class Triada(Manipulador):
                     lineas += [p0, p0 + (poli[1] - poli[0])]
                 prims.append(("tris", np.array([poli[0], poli[1], poli[2], poli[0], poli[2], poli[3]]), color, 0.55))
                 prims.append(("lineas", np.array(lineas), _aclarar(color, 0.35), 2.0))
-                prims.append(("lineas", _segs(poli), color, 1.5))
+                prims.append(("lineas", _segs(poli), BORDE_ESFERA if self.compacta else color, 1.5))
         if self.esfera:
             color = _aclarar(GRIS_ESFERA, 0.5) if activo == ("esfera", 0) else GRIS_ESFERA
-            prims += _disco(g.visor, c, 7.0 * k, color, BORDE_ESFERA)
+            prims += _disco(g.visor, c, self.r_esfera * k, color, BORDE_ESFERA)
         return prims
 
     def tocar(self, g, q):
@@ -1431,7 +1455,7 @@ class Triada(Manipulador):
         if self.esfera:
             s, ok = g.pantalla([self.centro])
             if ok[0]:
-                d = float(np.linalg.norm(s[0] - q)) - 7.0
+                d = float(np.linalg.norm(s[0] - q)) - self.r_esfera
                 if d < mejor[0] or d <= 0:
                     mejor = (max(d, 0.0), ("esfera", 0))
         return mejor
@@ -1446,8 +1470,8 @@ class Triada(Manipulador):
         if tipo == "eje":
             v0 = g.valor(self.claves[i])
             if fraccion_visible(g.visor, self.ejes[i]) < APUNTA_A_CAMARA:       # apunta a la cámara: se sigue la flecha dibujada
-                est = _empezar_en_pantalla(g, pos, c, dir_visible(g.visor, self.ejes[i], c))
-                return None if est is None else {**est, "sub": sub, "c": c, "v0": v0}
+                est = _empezar_en_pantalla(g, pos, c, self._dir(g, i))
+                return None if est is None else {**est, "sub": sub, "c": c, "v0": v0, "signo": self._signo(g, i)}
             s0 = recta_rayo(o, r, c, self.ejes[i])
             return None if s0 is None else {"sub": sub, "c": c, "s0": s0, "v0": v0}
         if tipo == "giro":
@@ -1459,7 +1483,7 @@ class Triada(Manipulador):
                 return {"sub": sub, "c": c, "a0": ang, "ultimo": ang, "v0": g.valor(self.giros[i])}
             # H-61: el plano del arco se ve de canto: se arrastra a lo largo de la tangente del asa en pantalla.
             m = math.radians(45.0)             # el punto del asa, en el medio del arco (de 15° a 75°)
-            radio = LARGO_TRIADA * self.esc(g, c) * 0.7
+            radio = self.largo * self.esc(g, c) * 0.7
             tangente = -a * math.sin(m) + b * math.cos(m)
             est = _arco_pantalla(g, c + (a * math.cos(m) + b * math.sin(m)) * radio, tangente, radio, pos)
             return None if est is None else {**est, "sub": sub, "c": c, "v0": g.valor(self.giros[i])}
@@ -1475,7 +1499,7 @@ class Triada(Manipulador):
         c = estado["c"]
         if tipo == "eje":
             if estado.get("pantalla"):
-                return {self.claves[i]: estado["v0"] + _mover_en_pantalla(estado, pos)}
+                return {self.claves[i]: estado["v0"] + estado["signo"] * _mover_en_pantalla(estado, pos)}
             s = recta_rayo(o, r, c, self.ejes[i])
             return {} if s is None else {self.claves[i]: estado["v0"] + s - estado["s0"]}
         if tipo == "giro":
@@ -1504,10 +1528,10 @@ class Triada(Manipulador):
         tipo, i = arrastre
         k = self.esc(g, self.centro)
         if tipo == "eje":
-            return [(self.claves[i], self.centro + dir_visible(g.visor, self.ejes[i], self.centro) * LARGO_TRIADA * k)]
+            return [(self.claves[i], self.centro + self._dir(g, i) * self.largo * k)]
         if tipo == "giro" and self.giros:
             _, a, b = self._base(i)
-            return [(self.giros[i], self.centro + (a + b) * LARGO_TRIADA * k * 0.7 / math.sqrt(2))]
+            return [(self.giros[i], self.centro + (a + b) * self.largo * k * 0.7 / math.sqrt(2))]
         return []
 
 
@@ -1605,7 +1629,7 @@ class CajaValor(QLineEdit):
         # P-144: como el «⋮» de Fusion y el campo del panel, ofrece los parámetros para usarlos en la expresión
         self.lista = autocompletar(self, self.parametros)
         self.accion_menu = self.addAction(icono("mas_opciones"), QLineEdit.ActionPosition.TrailingPosition)
-        self.accion_menu.setToolTip("Parámetros para usar en el valor")
+        self.accion_menu.setToolTip("Valores recientes, parámetros y Medir")
         self.accion_menu.triggered.connect(self.abrir_menu)
 
     def parametros(self):
@@ -1613,17 +1637,28 @@ class CajaValor(QLineEdit):
         return nombres_sugeridos(tabla) if tabla is not None else []
 
     def menu(self):
-        """Los parámetros (favoritos primero): elegir uno lo escribe donde está el cursor, como al teclearlo."""
+        """Como el «⋮» de Fusion (P-144): los últimos valores tecleados de este tipo (elegir uno lo aplica), los
+        parámetros (favoritos primero: se escriben donde está el cursor) y, en una longitud, Medir."""
         menu = QMenu(self)
+        tipo = self.gestor.tipo(self.clave)
+        for texto in [x for x in RECIENTES.get(tipo, []) if x != self.text().strip()]:     # el que ya está no
+            menu.addAction(texto, lambda x=texto: (self.setText(x), self.gestor.aplicar_caja(self)))
         nombres = self.parametros()
+        if nombres and menu.actions():
+            menu.addSeparator()
         for nombre in nombres:
             menu.addAction(nombre, lambda n=nombre: (self.setFocus(), self.insert(n)))
-        if not nombres:
-            menu.addAction("Sin parámetros: se crean en Modificar › Cambiar parámetros").setEnabled(False)
+        if tipo == LONGITUD and isinstance(self.gestor.panel, QWidget):    # Animación y la vista previa no se atenúan
+            if menu.actions():
+                menu.addSeparator()
+            menu.addAction(icono("medir"), "Medir", lambda: self.gestor.medir_en_caja(self.clave))
+        if not menu.actions():
+            menu.addAction("Sin valores recientes ni parámetros").setEnabled(False)
         return menu
 
     def abrir_menu(self):
-        self.menu().exec(self.mapToGlobal(self.rect().bottomRight()))
+        menu = self.menu()                  # como Fusion: debajo de la caja, alineado a su borde derecho
+        menu.exec(self.mapToGlobal(self.rect().bottomRight()) - QPoint(menu.sizeHint().width() - 1, -1))
 
     def keyPressEvent(self, e):
         if e.key() in (Qt.Key_Return, Qt.Key_Enter):
@@ -1640,6 +1675,16 @@ class CajaValor(QLineEdit):
     def focusOutEvent(self, e):
         super().focusOutEvent(e)
         self.gestor.sincronizar_cajas()
+
+
+RECIENTES = {}              # tipo de valor → últimos textos aplicados en una caja (P-144), el más nuevo primero
+MAX_RECIENTES = 5
+CAPA_MEDIR = "medir_caja"
+
+
+def recordar_valor(tipo, texto):
+    lista = [texto] + [x for x in RECIENTES.get(tipo, []) if x != texto]
+    RECIENTES[tipo] = lista[:MAX_RECIENTES]
 
 
 # ---------------------------------------------------------------- gestor
@@ -1667,6 +1712,7 @@ class GestorManipuladores(QObject):
         self._sano = None               # B-345: valores del asa agarrada con la última previa sana
         self._freno = {}                # B-345: clave → (valor sano, sentido) que el asa no pasa en este arrastre
         self._aviso_tope = ""          # B-364: por qué frenó el asa, se muestra mientras sigue agarrada
+        self._midiendo = None           # P-144: {"clave", "hits"} mientras el «⋮» › Medir espera dos clics
         self.visor.installEventFilter(self)
         self.visor.camara_cambiada.connect(self._camara)
 
@@ -1764,6 +1810,7 @@ class GestorManipuladores(QObject):
     def cerrar(self):
         if self._cerrado:
             return
+        self._terminar_medir()
         self._cerrado = True
         self._arrastre = self._hover = self.trazo = None
         try:
@@ -1801,7 +1848,7 @@ class GestorManipuladores(QObject):
             return
         if self._firma_camara() != self._firma and not self._redibujo_pendiente:
             self._redibujo_pendiente = True
-            QTimer.singleShot(0, self._redibujar_por_camara)
+            QTimer.singleShot(0, self, self._redibujar_por_camara)
         else:
             self._ubicar_cajas()
 
@@ -1901,6 +1948,57 @@ class GestorManipuladores(QObject):
             return f"{self.valor(caja.clave):.2f}"
         return str(self.panel.valores.get(caja.clave, ""))
 
+    # ------------------------------------------------------------ «⋮» › Medir (P-144)
+    def medir_en_caja(self, clave):
+        """Como Fusion: el panel se atenúa, dos clics en la vista miden la distancia (la herramienta Medir) y el
+        valor va a la caja; Esc vuelve sin cambiar nada."""
+        self._midiendo = {"clave": clave, "hits": []}
+        self.panel.setEnabled(False)
+        self.visor.setFocus()
+
+    def _filtrar_medir(self, e, t):
+        if t == QEvent.KeyPress and e.key() == Qt.Key_Escape:
+            self._terminar_medir()
+            return True
+        if t not in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease, QEvent.MouseButtonDblClick) \
+                or e.button() != Qt.LeftButton:
+            return False                    # girar, desplazar y acercar siguen andando
+        if t == QEvent.MouseButtonRelease:
+            from .comandos.inspeccionar import GEOMETRIA
+            hit = self.visor.elegir_entidad(e.position(), GEOMETRIA)
+            if hit is not None:
+                hits = self._midiendo["hits"]
+                hits.append(hit)
+                self.visor.set_capa(CAPA_MEDIR, [p for h in hits for p in h.get("dibujo") or []])
+                if len(hits) == 2:
+                    self._medida_a_caja()
+        return True
+
+    def _medida_a_caja(self):
+        from ..nucleo import analisis as an
+        from . import formato
+        from .comandos.inspeccionar import _entrada
+        clave, (a, b) = self._midiendo["clave"], self._midiendo["hits"]
+        self._terminar_medir()
+        caja = self.cajas.get(clave)
+        try:
+            d = an.medir(_entrada(a, self.ctx.estado), _entrada(b, self.ctx.estado))["distancia"]
+        except Exception as e:  # noqa: BLE001 — lo que no se puede medir se avisa en la caja, como un valor inválido
+            if caja is not None:
+                caja.setStyleSheet(qss_caja() + QSS_CAJA_ROJA)
+                caja.setToolTip(str(e))
+            return
+        if caja is not None:
+            caja.setText(f"{formato.longitud(d):.2f} {formato.sufijo()}")
+            self.aplicar_caja(caja)
+
+    def _terminar_medir(self):
+        if self._midiendo is None:
+            return
+        self._midiendo = None
+        self.visor.set_capa(CAPA_MEDIR, None)
+        self.panel.setEnabled(True)
+
     def aplicar_caja(self, caja):
         texto = caja.text().strip()
         gancho = getattr(getattr(caja, "manipulador", None), "aplicar_caja", None)
@@ -1916,6 +2014,9 @@ class GestorManipuladores(QObject):
             caja.setToolTip(str(e))
             return False
         caja.setToolTip("")
+        if re.fullmatch(r"[+-]?\d+(?:[.,]\d+)?", texto) and self.tipo(caja.clave) in (LONGITUD, ANGULO):
+            texto += " deg" if self.tipo(caja.clave) == ANGULO else " mm"      # B-405: «0» y el «0 mm» del campo se ven igual
+        recordar_valor(self.tipo(caja.clave), texto)
         if gancho is not None:
             self.escribir(nuevos)
             caja.setText(self.texto_caja(caja))
@@ -2091,6 +2192,8 @@ class GestorManipuladores(QObject):
         if obj is not self.visor or self._cerrado:
             return False
         t = e.type()
+        if self._midiendo is not None:
+            return self._filtrar_medir(e, t)
         if self._tragar_soltar and t == QEvent.MouseButtonRelease:
             self._tragar_soltar = False
             return True

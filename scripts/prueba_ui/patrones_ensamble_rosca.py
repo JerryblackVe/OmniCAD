@@ -97,7 +97,7 @@ def deshacer_todo(n0):
 
 def previa(p):
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(120)
 
 

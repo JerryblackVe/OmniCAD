@@ -23,7 +23,8 @@ CARAS = [((0, 0, 1), (1, 0, 0), (0, 1, 0), "SUPERIOR", "arriba"),
          ((0, 1, 0), (-1, 0, 0), (0, 0, 1), "POSTERIOR", "atras"),
          ((1, 0, 0), (0, 1, 0), (0, 0, 1), "DERECHA", "derecha"),
          ((-1, 0, 0), (0, -1, 0), (0, 0, 1), "IZQUIERDA", "izquierda")]
-TAMANOS = {"diminuto": 70, "pequeno": 90, "normal": 110, "automatico": 120, "grande": 150}
+TAMANOS = {"diminuto": 80, "pequeno": 100, "normal": 120, "automatico": 120, "grande": 160}
+AUTOMATICO = (120, 180, 0.2)    # Automático: el lado crece con el alto del visor (20 %), entre 120 y 180 px, como Fusion
 # Menú del clic derecho del ViewCube, como Fusion (ViewCube Size: Automatic, Large, Normal, Small, Tiny)
 TAMANOS_TEXTO = [("automatico", "Automático"), ("grande", "Grande"), ("normal", "Normal"), ("pequeno", "Pequeño"),
                  ("diminuto", "Diminuto")]
@@ -64,18 +65,29 @@ class ViewCube(QWidget):
         self.al_elegir_camara = None  # función(clave): la ventana la aplica a todas las vistas
         self.al_guardar_vistas = None  # función(): la ventana guarda el Inicio y las vistas de cara en el documento
         self.menu_abierto = None
+        self._alto_visor = None       # Automático escala con él (`ajustar_a`)
         self.set_tamano("automatico")
         visor.camara_cambiada.connect(self.update)
 
     def set_tamano(self, clave):
         self._tamano = clave
         lado = TAMANOS.get(clave, TAMANOS["automatico"])
-        self.setFixedSize(lado, lado)
+        if clave == "automatico" and self._alto_visor:
+            minimo, maximo, parte = AUTOMATICO
+            lado = max(minimo, min(maximo, round(self._alto_visor * parte)))
+        if lado != self.width() or lado != self.height():          # se llama en cada reacomodo: solo si cambió
+            self.setFixedSize(lado, lado)
+
+    def ajustar_a(self, alto_visor):
+        """Automático: el cubo crece con el alto del visor. Los tamaños fijos no cambian."""
+        self._alto_visor = alto_visor
+        if self._tamano == "automatico":
+            self.set_tamano("automatico")
 
     # ------------------------------------------------------------ menú
     def menu_tamano(self):
         """Menú «Tamaño de ViewCube», con las cinco opciones de Fusion."""
-        m = QMenu("Tamaño de ViewCube", self)
+        m = QMenu("Tamaño del ViewCube", self)
         grupo = QActionGroup(m)
         for clave, texto in TAMANOS_TEXTO:
             a = m.addAction(texto)
@@ -89,6 +101,7 @@ class ViewCube(QWidget):
         """Menú del ViewCube (clic derecho o ▽): ir al inicio, cámara y tamaño."""
         m = QMenu(self)
         m.addAction("Ir al inicio").triggered.connect(self._ir_al_inicio)
+        m.addMenu(self.menu_tamano())                  # B-399: el tamaño a la vista, arriba, no al final
         sub = m.addMenu("Cámara")
         grupo = QActionGroup(sub)
         for clave, texto in (("ortografica", "Ortográfica"), ("perspectiva", "Perspectiva"),
@@ -99,8 +112,6 @@ class ViewCube(QWidget):
             a.triggered.connect(lambda _=False, c=clave: self._elegir_camara(c))
             grupo.addAction(a)
         self._acciones_vistas(m)
-        m.addSeparator()
-        m.addMenu(self.menu_tamano())
         return m
 
     def _acciones_vistas(self, m):
@@ -180,15 +191,15 @@ class ViewCube(QWidget):
 
     def _rect_menu(self):
         k = self._k()
-        return QRectF(self.width() - 20 * k, self.height() - 20 * k, 18 * k, 18 * k)
+        return QRectF(self.width() - 18 * k, self.height() - 17 * k, 16 * k, 15 * k)
 
     def _rects_giro(self):
         """Cuatro triángulos (en una vista de cara) y dos flechas curvas, por clave de GIROS."""
         w, h, k = self.width(), self.height(), self._k()
         t = 9 * k
-        cx, cy = w * 0.52, h * 0.5
-        return {"izq": QRectF(w * 0.10 - t / 2, cy - t / 2, t, t), "der": QRectF(w * 0.94 - t / 2 - 2 * k, cy - t / 2, t, t),
-                "arriba": QRectF(cx - t / 2, h * 0.09 - t / 2, t, t), "abajo": QRectF(cx - t / 2, h * 0.91 - t / 2, t, t),
+        cx, cy = w * 0.5, h * 0.47
+        return {"izq": QRectF(w * 0.07 - t / 2, cy - t / 2, t, t), "der": QRectF(w * 0.93 - t / 2, cy - t / 2, t, t),
+                "arriba": QRectF(cx - t / 2, h * 0.07 - t / 2, t, t), "abajo": QRectF(cx - t / 2, h * 0.93 - t / 2, t, t),
                 "antihorario": QRectF(w * 0.66, 2 * k, 22 * k, 16 * k), "horario": QRectF(w - 22 * k, 20 * k, 20 * k, 24 * k)}
 
     def _cara_alineada(self):
@@ -209,8 +220,12 @@ class ViewCube(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         rot = self.visor.matriz_vista()[:3, :3]
-        centro = QPointF(self.width() * 0.52, self.height() * 0.48)
-        escala = self.width() * 0.255
+        centro = QPointF(self.width() * 0.5, self.height() * 0.47)       # un poco arriba: abajo van las letras del eje y el ▽
+        # B-399: el cubo llena su recuadro. De frente ocupa 0.34 del ancho a cada lado (quedan los triángulos); girado, su silueta
+        # es más ancha y alta, así que se achica lo justo para no salirse (0.455 del lado como mucho).
+        esquinas = np.array([(x, y, z) for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float)
+        extension = float(np.abs((rot @ esquinas.T)[:2]).max())
+        escala = self.width() * min(0.32, 0.45 / extension)
         self._zonas = []
         luz = np.array([0.35, 0.55, 0.75])
         resaltada = self._hover[1] if self._hover and self._hover[0] == "zona" else None
@@ -385,8 +400,11 @@ class ViewCube(QWidget):
             p.drawRoundedRect(casa, 3, 3)
         p.drawPixmap(casa.adjusted(2, 2, -2, -2), icono("casa").pixmap(32, 32), QRectF(0, 0, 32, 32))
         r = self._rect_menu()
-        c, m = r.center(), r.width() * 0.32
+        c, m = r.center(), r.width() * 0.42
         color = CIAN_CUBO if self._hover == ("menu",) else COLOR_BOTON
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(255, 255, 255, 46 if self._hover != ("menu",) else 80))      # un botón, no un adorno
+        p.drawRoundedRect(r, 4, 4)
         p.setPen(QPen(color, 1.4, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         p.setBrush(color)
         p.drawPolygon(QPolygonF([QPointF(c.x() - m, c.y() - m * 0.5), QPointF(c.x() + m, c.y() - m * 0.5), QPointF(c.x(), c.y() + m * 0.9)]))
@@ -849,7 +867,7 @@ class AreaVisor(QWidget):
         quedaba bajo la barra de vista. Un solo reacomodo por tanda de cambios."""
         if e.type() == QEvent.Resize and obj in self.laterales and obj.isVisible() and not self._reacomodo:
             self._reacomodo = True
-            QTimer.singleShot(0, self._reacomodar)
+            QTimer.singleShot(0, self, self._reacomodar)      # con contexto: no corre si la vista ya se borró
         return False
 
     def _reacomodar(self):
@@ -931,6 +949,7 @@ class AreaVisor(QWidget):
             wid.adjustSize()
             wid.move(g.left() + 2, g.bottom() - wid.height() - 2)
             wid.raise_()
+        self.viewcube.ajustar_a(g.height())
         self.viewcube.move(g.right() - self.viewcube.width() - 14, g.top() + 12)
         self.viewcube.raise_()
         for hijo in self.findChildren(QFrame, options=Qt.FindDirectChildrenOnly):

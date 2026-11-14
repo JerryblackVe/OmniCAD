@@ -45,7 +45,7 @@ def arrastrar(panel, g, desde, hasta, pasos=6):
     QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonRelease, b, vis.mapToGlobal(b), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
     A.esperar(120)
     panel._t_previa.stop()
-    panel._calcular_previa()
+    A.previa(panel)
     return True
 
 
@@ -250,7 +250,7 @@ def fijar_trazo(p, vals, nombre):
     for k, x in vals.items():                                        # y se vuelven a escribir los valores de la prueba
         p.set_valor(k, x)
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(150)
     return True
 
@@ -268,7 +268,7 @@ def probar(clave, sel, vals, foto=None):
         for k, x in vals.items():
             p.set_valor(k, x)
         p._t_previa.stop()
-        p._calcular_previa()
+        A.previa(p)
         A.esperar(150)
         g = p.manipuladores
         if g is None or not g.manips:
@@ -318,7 +318,7 @@ def probar(clave, sel, vals, foto=None):
                     # el tope puede dejar un valor sin sentido (cero); se escribe de nuevo el de antes y la previa se recupera
                     p.set_valor(cl, texto_antes)
                     p._t_previa.stop()
-                    p._calcular_previa()
+                    A.previa(p)
                     A.esperar(150)
                     A.reg(nombre, f"flecha «{cl}»: al escribir de nuevo {texto_antes!r} la previa se recupera", p._previa_ok,
                           f"{final:g} → {g.valor(cl):g}; previa_ok={p._previa_ok}; «{p.mensaje.text()}»")
@@ -361,6 +361,7 @@ def probar(clave, sel, vals, foto=None):
             except Exception as e:  # noqa: BLE001
                 A.reg(nombre, f"asa {tn} «{cl}»: EXCEPCIÓN", False, f"{type(e).__name__}: {e}")
         # la vista previa tras los arrastres
+        A.previa(p)
         A.reg(nombre, "la vista previa sigue andando tras arrastrar", p._previa_ok, p.mensaje.text())
         # lo arrastrado se acepta y queda en el paso
         n0 = A.n_ops(v)
@@ -468,7 +469,7 @@ def probar_gizmo_lienzo(clave="lienzo"):
         A.elegir(p, "plano", *(cara(caja, normal=(0, 0, 1))() if clave == "calcomania" else pl()))
         p.set_valor("archivo", str(ruta))
         p._t_previa.stop()
-        p._calcular_previa()
+        A.previa(p)
         A.esperar(150)
         g = p.manipuladores
         asa = lambda cl: next(m for m in g.manips if getattr(m, "clave", None) == cl)  # noqa: E731
@@ -506,7 +507,7 @@ def probar_gizmo_lienzo(clave="lienzo"):
             QApplication.sendEvent(vis, QMouseEvent(QEvent.MouseButtonRelease, q, vis.mapToGlobal(q), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
             A.esperar(60)
             A.reg(nombre, f"clic en {cl}", p.valores.get(cl) is True, str(p.valores.get(cl)))
-        p._calcular_previa()
+        A.previa(p)
         A.reg(nombre, "la vista previa sigue andando", p._previa_ok, p.mensaje.text())
         # lo tecleado mueve el gizmo
         antes = libre.punto.copy()

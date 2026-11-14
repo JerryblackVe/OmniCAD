@@ -12,8 +12,10 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [seguimiento/agenda.md](seguimiento/agenda.md) | Tareas que Gerardo programa para una fecha (AG-n) |
 | [seguimiento/faltantes.md](seguimiento/faltantes.md) | Funciones pendientes (todavía no existen) |
 | [seguimiento/mejoras.md](seguimiento/mejoras.md) | Mejoras pendientes de lo que ya existe: rendimiento, interfaz, instalador |
+| [seguimiento/despues.md](seguimiento/despues.md) | Prioridad 2 congelada (render, animación, simulación, malla, plástico, chapa, dibujo, IA, escaneo, extensiones…): no se toma sin que Gerardo la descongele |
 | Página de seguimiento (Artifact) | Vista web de bugs, faltantes, mejoras, lo último resuelto y los prompts para agentes; se refresca con `scripts/seguimiento_json.py` (pasos en `CLAUDE.md`). No es fuente de verdad |
 | [../PROJECT_LOG.md](../PROJECT_LOG.md) | Bitácora: estado en una tabla, registro de cada tarea y lecciones aprendidas |
+| [historial/](historial/) | Registro histórico de tareas de PROJECT_LOG.md, archivado por mes, [lecciones archivadas](historial/lecciones_archivo.md) y [pruebas nocturnas ya verdes](historial/prueba_nocturna_verde_2026-11.md) |
 | [../CHANGELOG.md](../CHANGELOG.md) | Cambios de cada versión publicada |
 
 ## Para programar
@@ -57,10 +59,13 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | Documento | Qué tiene |
 |---|---|
 | [plan_mcp_cli.md](plan_mcp_cli.md) | Plan de la capa para agentes (paquetes A–L) |
+| [coordinacion.md](coordinacion.md) | Procedimientos de coordinación movidos de `CLAUDE.md` (VPS, página de seguimiento, prueba como usuario, ayuda de Fusion, loop por fases, caza, contexto, modelos, memoria de la PC) |
+| [seguimiento/ahora.md](seguimiento/ahora.md) | La única cola de trabajo: «Ahora» (uno por sesión) y «Sigue» (los próximos 10) |
+| [plan_fluidez.md](plan_fluidez.md) | Plan de fluidez (2026-11-13): que la ventana nunca se congele; paquetes F0–F11 (filas FL-*) |
 | [plan_rust.md](plan_rust.md) | Qué pasa a Rust (R1–R13) y arreglos de Python (P1–P24) |
 | [plan_cpp.md](plan_cpp.md) | Qué pasa a C++ (C1–C5) |
 | [plan_boceto_organizar.md](plan_boceto_organizar.md) | Organización, agrupación y manipulación de objetos en Boceto (prompt maestro de Gerardo); se borra al terminarla |
-| [plan_velocidad.md](plan_velocidad.md) | Pruebas y procesos más rápidos: medir, suite en paralelo, tests por impacto, humo sin cursor real (A–G) |
+| [plan_velocidad_tests.md](plan_velocidad_tests.md) | Pruebas y procesos más rápidos: medir, suite en paralelo, tests por impacto, humo sin cursor real (A–G) |
 | [viewcube.md](viewcube.md) | ViewCube: tabla «zona → qué hace» (26 vistas, triángulos, flechas de rodar, casita, menú ▽, animación) y su API |
 | [plan_caza_errores.md](plan_caza_errores.md) | Programa que busca errores solo (`scripts/caza/`): capas, jueces automáticos, comandos y cómo quedó |
 | [plan_reconstruir_solido.md](plan_reconstruir_solido.md) | De una malla a una pieza paramétrica (RI-1–RI-6, F10, F11) |
@@ -92,21 +97,28 @@ Describen cada función de otro programa que queremos tener. Lo que falta de cad
 | [brechas_proyeccion.md](brechas_proyeccion.md) | Proyectar/Incluir del boceto contra la ayuda de Fusion (B-119, B-203, B-204, H-77 a H-80) |
 | [brechas_herramientas_solido.md](brechas_herramientas_solido.md) | CAP-1–CAP-14: herramientas de SÓLIDO contra capturas de Fusion |
 | [brechas_freecad.md](brechas_freecad.md) | F1–F23 |
-| [brechas_plasticity.md](brechas_plasticity.md) | PL1–PL13 |
-| [brechas_blender.md](brechas_blender.md) | B1–B19 (no confundir con los bugs B-n) |
-| [brechas_rhino.md](brechas_rhino.md) | RH1–RH22 |
-| [brechas_grasshopper.md](brechas_grasshopper.md) | GH1–GH12 |
-| [brechas_keyshot.md](brechas_keyshot.md) | KS1–KS15 |
-| [brechas_vray.md](brechas_vray.md) | VR1–VR13 |
 | [brechas_mcp.md](brechas_mcp.md) | MCP-0a–MCP-94: especificación de las herramientas para agentes (todas hechas; B-80 cerrado) |
 | [brechas_solidcraft.md](brechas_solidcraft.md) | SC1–SC17 |
-| [brechas_cad_libres.md](brechas_cad_libres.md) | CL1–CL8 |
+
+## Referencia (sin tocar desde el 2026-10-20)
+
+Brechas de programas que se usan solo de inspiración, hoy en `docs/referencia/`. Las filas pendientes están en [seguimiento/despues.md](seguimiento/despues.md) o en las listas activas.
+
+| Documento | Qué tiene |
+|---|---|
+| [brechas_plasticity.md](referencia/brechas_plasticity.md) | PL1–PL13 |
+| [brechas_blender.md](referencia/brechas_blender.md) | B1–B19 (no confundir con los bugs B-n) |
+| [brechas_rhino.md](referencia/brechas_rhino.md) | RH1–RH22 |
+| [brechas_grasshopper.md](referencia/brechas_grasshopper.md) | GH1–GH12 |
+| [brechas_keyshot.md](referencia/brechas_keyshot.md) | KS1–KS15 |
+| [brechas_vray.md](referencia/brechas_vray.md) | VR1–VR13 |
+| [brechas_cad_libres.md](referencia/brechas_cad_libres.md) | CL1–CL8 |
 
 ## Informes (fotos de un momento: no se actualizan)
 
 | Documento | Qué tiene |
 |---|---|
-| [auditorias/](auditorias/) | Auditoría total del 2026-10-14 (cuatro informes) y [fluidez del 2026-10-28](auditorias/fluidez-2026-10-28.md) (por qué la extrusión interactiva se ve a saltos; mediciones y plan) |
+| [auditorias/](auditorias/) | Auditoría total del 2026-10-14 (cuatro informes: [audit-report](auditorias/audit-report-2026-10-14.md), [pipeline-review](auditorias/pipeline-review-2026-10-14.md), [uar-loop](auditorias/uar-loop-2026-10-14.md), [ultimate-audit-review](auditorias/ultimate-audit-review-2026-10-14.md)) y [fluidez del 2026-10-28](auditorias/fluidez-2026-10-28.md) (por qué la extrusión interactiva se ve a saltos; mediciones y plan) |
 | [auditorias/previa-comandos-2026-10-28.md](auditorias/previa-comandos-2026-10-28.md) | Costo de las previas de Empalme, Chaflán, Cortar, Unir, Intersecar, Vaciado y patrones: 32 casos, 96 corridas, kernel/teselado/dibujo y límites; banco reproducible sin arreglos de producción |
 | [auditorias/previa-asincrona-2026-10-29.md](auditorias/previa-asincrona-2026-10-29.md) | Previa en proceso aparte para Empalme, Chaflán, booleanas, patrones y Vaciado: cuadros, asas y latencia hasta el sólido exacto por comando, y la causa del «piso» del Vaciado (P-55). |
 | [auditorias/inspeccionar_2026-11-01.md](auditorias/inspeccionar_2026-11-01.md) | Las 15 herramientas de INSPECCIONAR probadas como persona: antes y después con mediciones, comparación con Fusion por panel y fuentes de los factores de CO₂ |

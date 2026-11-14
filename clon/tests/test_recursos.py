@@ -46,3 +46,24 @@ def test_la_version_de_pyproject_es_la_de_omnicad():
     from omnicad import VERSION
     datos = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8"))
     assert datos["project"]["version"] == VERSION
+
+
+def _caja_version(img):
+    x, y, ancho, alto = arranque.VERSION_X, arranque.VERSION_BASE - 36, arranque.VERSION_ANCHO_MAX, 44
+    return img.copy(x, y, ancho, alto)
+
+
+def test_b402_la_portada_dibuja_omnicad_version_y_el_jpg_no_la_trae(monkeypatch):
+    """B-402: la imagen decía «0.1.0» quemado; ahora la versión se dibuja y el .jpg queda sin número."""
+    import omnicad
+
+    _app()
+    sin_numero = QImage(str(RECURSOS / "portada.jpg"))
+    caja = _caja_version(sin_numero)
+    assert max(caja.pixelColor(i, j).lightness() for i in range(caja.width()) for j in range(caja.height())) < 60
+    assert _caja_version(arranque.imagen_portada(omnicad.VERSION)) != caja            # el número se ve
+    assert _caja_version(arranque.imagen_portada("9.9.9")) != _caja_version(arranque.imagen_portada(omnicad.VERSION))
+    pedidas = []
+    monkeypatch.setattr(arranque, "imagen_portada", lambda v=omnicad.VERSION: pedidas.append(v) or sin_numero)
+    arranque.mostrar_portada(_app()).close()
+    assert pedidas == [omnicad.VERSION]                                               # la pantalla de carga usa VERSION

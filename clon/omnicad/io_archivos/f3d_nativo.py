@@ -97,7 +97,7 @@ def _etapa(progreso, texto):
 def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None, bocetos=None):
     try:
         z = zipfile.ZipFile(io.BytesIO(datos))
-    except zipfile.BadZipFile:
+    except (zipfile.BadZipFile, ValueError, NotImplementedError, struct.error, OverflowError):
         raise ErrorF3D(f"{nombre} no es un archivo de Fusion válido (no es un ZIP).") from None
     bloques = [i for i in z.infolist() if CARPETA_BREPS in i.filename and i.filename.lower().endswith(".smbh")]
     if not bloques:
@@ -204,7 +204,7 @@ def _flujo_de_diseno(datos):
         for carpeta in ("FusionDesignSegmentType1", "Design1"):
             if carpeta in info:
                 return miembro(datos, info[carpeta]), carpeta != "Design1"
-    except (ErrorF3D, zstd_puro.ErrorZstd, zipfile.BadZipFile):
+    except (ErrorF3D, zstd_puro.ErrorZstd, zipfile.BadZipFile, ValueError, NotImplementedError, struct.error, OverflowError):
         pass
     return None, False
 
@@ -316,18 +316,24 @@ def miembro(datos, info):
     if info.file_size > TOPE_MIEMBRO_F3D:
         raise ErrorF3D(f"El miembro «{info.filename}» del archivo pesa {info.file_size} bytes descomprimidos, "
                        f"más que el tope de {TOPE_MIEMBRO_F3D}: parece dañado o hostil (zip bomb).")
-    if info.compress_type != zstd_puro.METODO_ZIP_ZSTD:
-        try:
+    h = info.header_offset
+    if not 0 <= h <= len(datos) - 30:
+        raise ErrorF3D("ZIP dañado (cabecera local inválida).")
+    try:
+        if info.compress_type != zstd_puro.METODO_ZIP_ZSTD:
             with zipfile.ZipFile(io.BytesIO(datos)) as z:
                 return z.read(info)
-        except (zipfile.BadZipFile, zlib.error, NotImplementedError):
-            raise ErrorF3D(f"El archivo está dañado: no se pudo leer «{info.filename}».") from None
-    h = info.header_offset
-    if datos[h:h + 4] != b"PK\x03\x04":
-        raise ErrorF3D("ZIP dañado (cabecera local inválida).")
-    largo_nombre, largo_extra = struct.unpack_from("<HH", datos, h + 26)
-    inicio = h + 30 + largo_nombre + largo_extra
-    salida = zstd_puro.descomprimir(datos[inicio:inicio + info.compress_size], tope=info.file_size)
+        if datos[h:h + 4] != b"PK\x03\x04":
+            raise ErrorF3D("ZIP dañado (cabecera local inválida).")
+        largo_nombre, largo_extra = struct.unpack_from("<HH", datos, h + 26)
+        inicio = h + 30 + largo_nombre + largo_extra
+        if not 0 <= info.compress_size <= len(datos) - inicio:
+            raise ErrorF3D("ZIP dañado (cabecera local inválida).")
+        salida = zstd_puro.descomprimir(datos[inicio:inicio + info.compress_size], tope=info.file_size)
+    except (ErrorF3D, zstd_puro.ErrorZstd):
+        raise
+    except (zipfile.BadZipFile, zlib.error, ValueError, NotImplementedError, struct.error, OverflowError):
+        raise ErrorF3D(f"El archivo está dañado: no se pudo leer «{info.filename}».") from None
     if len(salida) != info.file_size:
         raise ErrorF3D(f"{info.filename}: el tamaño descomprimido no coincide.")
     return salida
@@ -338,7 +344,7 @@ def _f3d_principal(datos, nombre):
     el .f3d que ningún otro referencia (el ensamblaje de arriba); si hay varios, el más grande."""
     try:
         z = zipfile.ZipFile(io.BytesIO(datos))
-    except zipfile.BadZipFile:
+    except (zipfile.BadZipFile, ValueError, NotImplementedError, struct.error, OverflowError):
         raise ErrorF3D(f"{nombre} no es un paquete .f3z válido.") from None
     nombres = [i for i in z.infolist() if i.filename.lower().endswith(".f3d") and "/" not in i.filename.strip("/")]
     if not nombres:

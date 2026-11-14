@@ -63,14 +63,15 @@ A.reg(AR, "al editar la extrusión se abre el panel", p is not None and p.isVisi
 t = time.perf_counter()
 p.set_valor("operacion", "unir")
 p._t_previa.stop()
-p._calcular_previa()
+A.previa(p)
 previa = time.perf_counter() - t
 A.esperar(120)
 st = A.estado_panel(p)
 A.reg(AR, "vista previa de Unir", st["op"] and st["previa_ok"], f"{previa:.2f} s; mensaje=«{st['mensaje']}»")
 A.reg(AR, f"la vista previa de Unir tarda menos de {TOPE_S:.0f} s", previa < TOPE_S, f"{previa:.2f} s")
-A.reg(AR, "el timeline mostró «Calculando <paso>…» mientras calculaba la vista previa",
-      any(x.startswith("Calculando") and "Extrusi" in x for x in vistos), f"{vistos[:3]}")
+# FL-1: si la previa fue al proceso aparte, el aviso lo da el panel y la ventana no se traba
+A.reg(AR, "el timeline mostró «Calculando <paso>…» mientras calculaba la vista previa (o fue al proceso aparte)",
+      p._previa_aparte or any(x.startswith("Calculando") and "Extrusi" in x for x in vistos), f"{vistos[:3]}")
 vistos.clear()
 t = time.perf_counter()
 p.aceptar()
@@ -94,7 +95,7 @@ p = v.panel
 t = time.perf_counter()
 p.set_valor("operacion", "nuevo")
 p._t_previa.stop()
-p._calcular_previa()
+A.previa(p)
 p.aceptar()
 nuevo = time.perf_counter() - t
 A.esperar(450)

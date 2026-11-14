@@ -44,7 +44,7 @@ def extruir_cara():
     p.set_valor("distancia", "5 mm")
     p.set_valor("operacion", "unir")
     p._t_previa.stop()
-    p._calcular_previa()
+    A.previa(p)
     A.esperar(120)
     st = A.estado_panel(p)
     A.reg(AR, "extruir la cara de arriba uniendo: sin el aviso falso «sin solape» (B-281)",

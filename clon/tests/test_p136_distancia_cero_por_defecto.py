@@ -13,7 +13,7 @@ from omnicad.ui.comando import ContextoComando, PanelComando, hit_desde_ref
 from omnicad.ui.comandos import CATALOGO
 
 
-CLAVES = ("extruir", "sup_extruir", "plano_desfase", "mover_copiar", "sup_desfase", "pulsar_tirar",
+CLAVES = ("extruir", "sup_extruir", "mover_copiar", "sup_desfase", "pulsar_tirar",
           "desfase_cara", "extruir_cara", "desfase")
 pytestmark = pytest.mark.usefixtures("app_qt")
 
@@ -95,20 +95,17 @@ def test_dialogo_arranca_en_cero_rechaza_aceptar_y_diez_crea_la_geometria(monkey
         assert len(doc.operaciones) == len(receta["operaciones"]) + 1
         op = aceptadas[0]
         assert doc.resultado(op.id).estado in ("ok", "aviso")
-        if clave == "plano_desfase":
-            assert doc.estado_final.planos[op.id].origen == pytest.approx((0, 0, 10))
+        cuerpo = list(doc.estado_final.cuerpos.values())[-1]
+        assert geo.es_valida(cuerpo.forma)
+        if clave in ("sup_extruir", "sup_desfase"):
+            assert geo.area(cuerpo.forma) == pytest.approx(200 if clave == "sup_extruir" else 400)
         else:
-            cuerpo = list(doc.estado_final.cuerpos.values())[-1]
-            assert geo.es_valida(cuerpo.forma)
-            if clave in ("sup_extruir", "sup_desfase"):
-                assert geo.area(cuerpo.forma) == pytest.approx(200 if clave == "sup_extruir" else 400)
-            else:
-                esperado = 2000 if clave == "extruir" else 8000 if clave == "mover_copiar" else 12000
-                assert geo.volumen(cuerpo.forma) == pytest.approx(esperado)
-            if clave == "mover_copiar":
-                assert np.array(geo.caja_envolvente(cuerpo.forma))[:, 2] == pytest.approx((10, 30), abs=1e-6)
-            elif clave == "sup_desfase":
-                assert np.array(geo.caja_envolvente(cuerpo.forma))[:, 2] == pytest.approx((30, 30), abs=1e-6)
+            esperado = 2000 if clave == "extruir" else 8000 if clave == "mover_copiar" else 12000
+            assert geo.volumen(cuerpo.forma) == pytest.approx(esperado)
+        if clave == "mover_copiar":
+            assert np.array(geo.caja_envolvente(cuerpo.forma))[:, 2] == pytest.approx((10, 30), abs=1e-6)
+        elif clave == "sup_desfase":
+            assert np.array(geo.caja_envolvente(cuerpo.forma))[:, 2] == pytest.approx((30, 30), abs=1e-6)
         # Editar conserva lo escrito: el defecto nuevo no pisa pasos existentes.
         comando = CATALOGO[clave]()
         if comando.CLASE_OP is not None:
@@ -118,6 +115,41 @@ def test_dialogo_arranca_en_cero_rechaza_aceptar_y_diez_crea_la_geometria(monkey
             editado.deleteLater()
     finally:
         if not panel.cerrando:          # tras Aceptar el panel ya se cerró: cancelar de nuevo desconecta dos veces
+            panel.cancelar()
+        panel.deleteLater()
+        visor.deleteLater()
+
+
+@pytest.mark.parametrize("base", ["plano", "cara"])
+@pytest.mark.parametrize("texto", ["0", "0 mm", "-3"])
+def test_b405_plano_de_desfase_acepta_cero_y_negativos_como_fusion(base, texto):
+    """B-405: en Fusion el plano de desfase vale con 0 (queda sobre la cara o el plano) y con negativos."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    if base == "plano":
+        doc = Documento()
+        sel = hit_desde_ref({"tipo": "plano", "id": "XY"}, doc.estado_final)
+        z0 = 0.0
+    else:
+        doc = _doc_caja()
+        sel = _cara_de_arriba(doc)
+        z0 = geo.caja_envolvente(list(doc.estado_final.cuerpos.values())[0].forma)[1][2]
+    panel, visor, _previas = _panel(CATALOGO["plano_desfase"](), doc, {"r0": [sel]})
+    aceptadas = []
+
+    def aplicar(op):
+        aceptadas.append(op)
+        assert doc.agregar(op).estado in ("ok", "aviso")
+
+    panel.aceptado.connect(aplicar)
+    try:
+        _teclear(panel, "distancia", texto)
+        QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
+        assert len(aceptadas) == 1, panel.mensaje.text()
+        esperado = z0 + (-3 if texto == "-3" else 0)
+        assert doc.estado_final.planos[aceptadas[0].id].origen[2] == pytest.approx(esperado)
+    finally:
+        if not panel.cerrando:
             panel.cancelar()
         panel.deleteLater()
         visor.deleteLater()

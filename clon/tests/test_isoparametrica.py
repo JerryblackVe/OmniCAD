@@ -162,3 +162,52 @@ def test_isoparametric_curve_rechaza_lo_que_no_sirve_y_no_cambia_el_boceto(cilin
         assert e["error_kind"] == tipo, (args, e)
     assert falla(s, "isoparametric_curve", face="%PLANE", point=[10, 0, 15])["error_kind"] == "INVALID_ARGUMENTS"   # dos caras
     assert llamar(s, "get_sketch", sketch="Iso") == antes
+
+
+# ---------------------------------------------------------------- BOC-76: editar las curvas ya creadas
+def test_edit_isoparametric_curve_cambia_la_cantidad_y_la_distancia_y_sigue_vinculada(cilindro):
+    s = cilindro
+    ids = llamar(s, "isoparametric_curve", face="Cuerpo1/F1", point=[10, 0, 20], direction="u", type="distributed",
+                 quantity=4)["entities"]
+    r = llamar(s, "edit_isoparametric_curve", curve=ids[2], quantity=2)
+    assert r["replaced"] == ids and len(r["entities"]) == 2
+    e = _entidades(s, "Iso")
+    assert set(e) == set(r["entities"])                                        # las 4 de antes ya no están
+    assert sorted(e[i]["center"][2] for i in r["entities"]) == pytest.approx([40 / 3, 80 / 3], abs=1e-4)     # get_sketch redondea
+    r = llamar(s, "edit_isoparametric_curve", curve=r["entities"][0], distance=10)       # de cantidad a distancia
+    assert sorted(_entidades(s, "Iso")[i]["center"][2] for i in r["entities"]) == pytest.approx([10, 20, 30])
+    assert _entidades(s, "Iso")[r["entities"][0]]["source"]["distance"] == 10
+    llamar(s, "set_parameter", name="r", expression="15 mm")                  # sigue a la cara, como antes de editar
+    assert all(e["radius"] == pytest.approx(15) for e in _entidades(s, "Iso").values())
+
+
+def test_edit_isoparametric_curve_cambia_la_direccion_y_el_tipo_y_se_deshace_en_un_paso(cilindro):
+    s = cilindro
+    (cid,) = llamar(s, "isoparametric_curve", face="Cuerpo1/F1", point=[10, 0, 15], direction="u")["entities"]
+    antes = llamar(s, "get_sketch", sketch="Iso")
+    (linea,) = llamar(s, "edit_isoparametric_curve", curve=cid, direction="v")["entities"]
+    assert _entidades(s, "Iso")[linea]["type"] == "line"
+    ids = llamar(s, "edit_isoparametric_curve", curve=linea, direction="u", type="distributed", quantity=3)["entities"]
+    assert sorted(_entidades(s, "Iso")[i]["center"][2] for i in ids) == pytest.approx([10, 20, 30])
+    (una,) = llamar(s, "edit_isoparametric_curve", curve=ids[0], type="single")["entities"]
+    assert _entidades(s, "Iso")[una]["center"][2] == pytest.approx(15)       # vuelve a la del punto
+    for _ in range(3):
+        llamar(s, "undo")
+    assert llamar(s, "get_sketch", sketch="Iso") == antes
+
+
+def test_edit_isoparametric_curve_rechaza_lo_que_no_sirve_y_no_cambia_el_boceto(cilindro):
+    s = cilindro
+    (cid,) = llamar(s, "isoparametric_curve", face="Cuerpo1/F1", point=[10, 0, 15], direction="u")["entities"]
+    (libre,) = llamar(s, "isoparametric_curve", face="Cuerpo1/F1", point=[10, 0, 25], link=False)["entities"]
+    antes = llamar(s, "get_sketch", sketch="Iso")
+    for args, tipo in (({"curve": libre, "quantity": 2}, "ENTITY_NOT_FOUND"),
+                       ({"curve": 9999, "quantity": 2}, "ENTITY_NOT_FOUND"),
+                       ({"curve": cid, "type": "distributed"}, "INVALID_ARGUMENTS"),     # era single: falta el reparto
+                       ({"curve": cid, "type": "single", "quantity": 2}, "INVALID_ARGUMENTS"),
+                       ({"curve": cid, "distance": 5, "quantity": 2}, "INVALID_ARGUMENTS"),
+                       ({"curve": cid, "quantity": 0}, "INVALID_ARGUMENTS"),
+                       ({"curve": cid, "distance": 0.01}, "INVALID_GEOMETRY")):
+        e = falla(s, "edit_isoparametric_curve", **args)
+        assert e["error_kind"] == tipo, (args, e)
+    assert llamar(s, "get_sketch", sketch="Iso") == antes

@@ -20,7 +20,9 @@ se deja de esperar su respuesta y solo se lo cierra si no termina en `PACIENCIA_
 """
 import atexit
 import json
+import math
 import os
+import queue
 import subprocess
 import sys
 import tempfile
@@ -35,6 +37,7 @@ from . import motor as _motor
 _RAIZ = Path(__file__).resolve().parents[2]      # la carpeta que contiene el paquete `omnicad`
 _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 UMBRAL_PREVUELO_PARAMETROS = 60       # pasos no suprimidos anteriores al marcador
+UMBRAL_COSTO_AISLAR_S = 0.5           # B-331: aunque haya menos pasos, si recalcular desde el cambio tarda más de esto (suma de lo que tardó cada paso)
 TOPE_PREVUELO_PARAMETROS = 900        # segundos, incluida la reconstrucción del documento
 TOPE_PREVUELO_ABRIR = 900             # segundos para el ensayo de apertura de un archivo grande (B-48)
 TOPE_ENSAYO_LECTURA = 900             # segundos para ensayar la importación STEP/IGES completa (B-160)
@@ -259,12 +262,29 @@ def _atender(tarea, args):
             documento_vivo._rehacer.clear()
 
 
+def pedidos_del_padre():
+    """Las líneas de la entrada estándar. B-396: un hilo las lee y, cuando el padre la cierra o muere (el sistema la
+    cierra), termina el proceso aunque haya un cálculo en curso: antes un hijo huérfano seguía horas al 100 % de CPU.
+    Vale en Windows también: el python.exe del venv le pasa al hijo real la misma tubería.
+    shortcut: una sola llamada al kernel que no suelta el GIL demora la salida hasta que vuelve."""
+    cola = queue.SimpleQueue()
+
+    def leer():
+        for linea in os.fdopen(0, "rb"):
+            cola.put(linea)
+        os._exit(0)
+
+    threading.Thread(target=leer, name="omnicad_padre", daemon=True).start()
+    while True:
+        yield cola.get()
+
+
 def _trabajar(carpeta):
     """El bucle del trabajador: un pedido por línea de la entrada, hasta que el padre la cierra (también si muere).
     `args.json` trae el pedido; `listo` avisa que `salida.json` ya está completa."""
     global formas_enviadas
     formas_enviadas = {}
-    for linea in os.fdopen(0, "rb"):
+    for linea in pedidos_del_padre():
         args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
         tope = args.pop("_tope_mb")
         salida = _atender(linea.decode("ascii").strip(), args)
@@ -272,7 +292,6 @@ def _trabajar(carpeta):
             salida["_cerrar"] = True     # lo cierra el padre: si se fuera solo, el próximo pedido lo encontraría saliendo
         (carpeta / "salida.json").write_text(json.dumps(salida, default=_a_json), encoding="utf-8", newline="\n")
         (carpeta / "listo").touch()
-    return 0
 
 
 def principal(argv):
@@ -355,6 +374,7 @@ class _Trabajador:
         self.temporal = tempfile.TemporaryDirectory(prefix="omnicad_trabajador_", ignore_cleanup_errors=True)
         self.carpeta = Path(self.temporal.name)
         self.proceso = None
+        self.creado, self.arranque = time.monotonic(), None
         try:
             self.errores = (self.carpeta / "errores.txt").open("wb")
             self.proceso = subprocess.Popen(_comando("trabajador", self.carpeta), bufsize=0, cwd=_RAIZ,
@@ -412,6 +432,8 @@ class _Trabajador:
         except (OSError, ValueError) as e:
             self.cerrar()
             raise TareaAislada(f"el proceso aparte dejó un resultado ilegible ({e})") from e
+        if self.arranque is None:
+            self.arranque = time.monotonic() - self.creado
         if resultado.get("_cerrar"):
             self.cerrar()
         return resultado
@@ -443,6 +465,13 @@ def cerrar_trabajador():
 
 
 atexit.register(cerrar_trabajador)
+
+
+def costo_reinicio():
+    """Segundos que tardó el trabajador vivo en dar su primera respuesta (arrancar, rehacer el documento y calcular): lo
+    que cuesta cerrarlo y empezar otro. Infinito si todavía no contestó: cortarlo no adelanta nada (FL-1)."""
+    t = _trabajador
+    return math.inf if t is None or t.arranque is None else t.arranque
 
 
 def _trabajador_vivo():

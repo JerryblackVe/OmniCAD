@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Campos y conversiones que comparten varios comandos (operación booleana, perfiles, objetivos)."""
+from ...nucleo import geometria as geo
+from ...nucleo.malla import Malla
 from ...timeline.operaciones import OPERACIONES_CUERPO
 from ...timeline import analisis_vista as av
 from ...timeline.parametros import ESCALAR, LONGITUD
@@ -127,6 +129,127 @@ def con_analisis(clase):
 
 def campo_operacion(defecto="nuevo"):
     return Opciones("operacion", "Operación", OPCIONES_OPERACION, defecto)
+
+
+def solidos_visibles(ctx):
+    ocultos = getattr(ctx.ventana, "_ocultos_efectivos", lambda _estado: ())(ctx.estado)
+    return [c for c in ctx.estado.cuerpos.values() if c.tipo == "solido" and c.id not in ocultos]
+
+
+def caja_cuerpo(cuerpo, cajas):
+    if cuerpo.id not in cajas:
+        cajas[cuerpo.id] = geo.caja_envolvente(cuerpo.forma)
+    return cajas[cuerpo.id]
+
+
+def caja_nueva(estado, cid, forma):
+    """Caja de un cuerpo de la previa para descartar lo lejano: la de su malla si vino del proceso aparte (sin kernel; la
+    exacta de un barrido con guía tardaba 0,15 s), con 1 mm de holgura; si no, la exacta. El solape lo decide `solapan`."""
+    malla = getattr(estado, "_mallas_previa", {}).get(cid)
+    if malla is None or not len(malla[0]):
+        return geo.caja_envolvente(forma)
+    return tuple((malla[0].min(0) - 1.0).tolist()), tuple((malla[0].max(0) + 1.0).tolist())
+
+
+def _cajas_tocan(a, b):
+    """¿Dos cajas se tocan o solapan? Apoyarse en una cara sí cuenta."""
+    return all(min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) >= -1e-6 for i in range(3))
+
+
+def _area_comun(cara, solido):
+    comun = geo.booleano(cara, solido, "intersecar")
+    return 0.0 if geo.esta_vacia(comun) else geo.area(comun)
+
+
+def perfil_apoyado(ctx, v, apoyos, cajas):
+    """B-344: perfil, cara o superficie sobre un sólido visible, con área (una arista sola no cuenta). Se mide una vez por selección,
+    no en cada cuadro del arrastre (P-99)."""
+    if v.get("inicio", "plano") != "plano":
+        return False
+    clave = repr([h["ref"] for h in v.get("perfiles") or []])
+    if clave not in apoyos:
+        from .. import manipuladores as mp
+        entidades = [mp.entidad(h, ctx.estado) for h in v.get("perfiles") or []]
+        formas = [e.forma for e in entidades if e is not None and e.forma is not None]
+        apoyos[clave] = any(
+            _area_comun(f, c.forma) > 1e-6 for f in formas for c in solidos_visibles(ctx)
+            if _cajas_tocan(geo.caja_envolvente(f), caja_cuerpo(c, cajas)))
+    return apoyos[clave]
+
+
+def ajustar_operacion(comando, panel, auto):
+    """Cortar/Unir automáticos; None restaura la operación anterior sin fijarla como elección manual."""
+    actual = panel.valores.get("operacion")
+    if auto is not None and actual != auto:
+        if comando._antes_auto is None:
+            comando._antes_auto = actual
+        nueva = auto
+    elif auto is None and comando._antes_auto is not None:
+        nueva, comando._antes_auto = comando._antes_auto, None
+    else:
+        return
+    comando._ajustando = True
+    try:
+        panel.set_valor("operacion", nueva)
+    finally:
+        comando._ajustando = False
+
+
+def con_operacion_automatica(clase):
+    """Revolución, Barrido, Solevación y Engrosar: Unir desde una selección apoyada; Cortar si entra en un sólido visible.
+    La operación elegida a mano o reabierta para editar queda fija, como en Extruir."""
+    preparar, cambiar, previa = clase.preparar_panel, clase.al_cambiar, clase.previa_lista
+
+    def apoyo(self, panel):
+        v = panel.valores
+        seleccion = [] if v.get("tipo") == "cuerpo" else v.get("caras", v.get("perfiles", (v.get("secciones") or [])[:1]))
+        return perfil_apoyado(panel.ctx, {"perfiles": seleccion}, self._apoyos, self._cajas)
+
+    def preparar_auto(self, panel):
+        self._fija = panel.ctx.op is not None
+        self._antes_auto, self._ajustando = None, False
+        self._apoyos, self._cajas = {}, {}
+        self._herramienta_previa = None
+        preparar(self, panel)
+
+    def cambiar_auto(self, panel, clave):
+        if clave == "operacion" and not self._ajustando:
+            self._fija = True
+        cambiar(self, panel, clave)
+        if not self._fija and clave in ("perfiles", "secciones", "caras", "tipo"):
+            try:
+                ajustar_operacion(self, panel, "unir" if apoyo(self, panel) else None)
+            except Exception as e:  # noqa: BLE001 — un apoyo que no se puede medir se informa sin romper la selección
+                panel._mostrar(f"⚠ {e}", tipo="aviso")
+
+    def previa_auto(self, panel, estado):
+        previa(self, panel, estado)
+        op, ctx = panel.ultima_op, panel.ctx
+        if self._fija or op is None:
+            return
+        solidos = solidos_visibles(ctx)
+        auto = "unir" if apoyo(self, panel) else None
+        if solidos:
+            params = dict(op.p, operacion="nuevo", objetivos=[])
+            clave = repr(params)
+            if self._herramienta_previa is None or self._herramienta_previa[0] != clave:
+                # FL-1b: la previa aparte trae el B-Rep; sin esto el barrido se volvía a calcular en la ventana (0,3 s)
+                if op.p.get("operacion") == "nuevo" and not any(
+                        isinstance(c.forma, Malla) for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos):
+                    herramienta = estado
+                else:
+                    with geo.en_serie():
+                        herramienta, _avisos = ctx.doc.previsualizar(type(op)(op.id, op.nombre, **params), ctx.indice,
+                                                                   en_vivo=True)
+                self._herramienta_previa = clave, [(c.forma, caja_nueva(herramienta, k, c.forma))
+                                                   for k, c in herramienta.cuerpos.items() if k not in ctx.estado.cuerpos]
+            if any(geo.solapan(f, c.forma) for f, caja in self._herramienta_previa[1] for c in solidos
+                   if geo.cajas_solapan(caja, caja_cuerpo(c, self._cajas))):
+                auto = "cortar"
+        ajustar_operacion(self, panel, auto)
+
+    clase.preparar_panel, clase.al_cambiar, clase.previa_lista = preparar_auto, cambiar_auto, previa_auto
+    return clase
 
 
 def campo_objetivos():

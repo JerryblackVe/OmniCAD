@@ -387,37 +387,49 @@ def get_assembly(sesion, summary: bool = False):
 
 
 # ---------------------------------------------------------------- componentes
-@herramienta("create_component", "ensamble", "Crea un componente con los cuerpos dados (ENSAMBLAR › Nuevo componente "
-             "desde cuerpos). Las uniones mueven componentes, no cuerpos sueltos. grounded=true lo fija en su lugar "
-             "(ninguna unión puede moverlo; suele ser la base). Un cuerpo que ya estaba en otro componente pasa al "
-             "nuevo. parent lo cuelga de otro componente (subensamblaje): mover o unir al padre lo mueve con él.",
+@herramienta("create_component", "ensamble", "Crea un componente (ENSAMBLAR › Nuevo componente). Sin bodies queda vacío, como "
+             "en Fusion; con bodies lleva esos cuerpos y, con from_bodies=true, crea un componente por cada cuerpo («A partir de "
+             "cuerpos»; se llama como el cuerpo, o name seguido del número). Las uniones mueven componentes, no cuerpos sueltos. "
+             "grounded=true lo fija en su lugar (ninguna unión puede moverlo; suele ser la base). Un cuerpo que ya estaba en otro "
+             "componente pasa al nuevo. parent lo cuelga de otro componente (subensamblaje): mover o unir al padre lo mueve con él.",
              modifica=True)
-def create_component(sesion, bodies: list[str], name: str | None = None, grounded: bool = False,
-                     parent: str | None = None):
+def create_component(sesion, bodies: list[str] | None = None, name: str | None = None, grounded: bool = False,
+                     parent: str | None = None, from_bodies: bool = False):
     """
-    bodies: ids o nombres de los cuerpos del componente (al menos uno).
-    name: nombre del componente; vacío = «Componente<n>».
+    bodies: ids o nombres de los cuerpos del componente; vacío = componente vacío (sin from_bodies).
+    name: nombre del componente; vacío = «Componente<n>». Con from_bodies, el prefijo de cada uno (name1, name2…); vacío = el nombre de cada cuerpo.
     grounded: true para fijarlo (Ground): ninguna unión lo mueve.
     parent: componente padre (id, nombre o uno de sus cuerpos); vacío = la raíz (Parent de Fusion).
+    from_bodies: true crea un componente separado por cada cuerpo de bodies («From Bodies» de Fusion); pide al menos un cuerpo.
     """
-    if not bodies:
-        raise error("INVALID_ARGUMENTS", "Falta elegir los cuerpos del componente.")
     padre = componente(sesion, parent) if parent else ""
     cuerpos = []
-    for b in bodies:
+    for b in bodies or []:
         c = sesion.cuerpo(b)
         if c not in cuerpos:
             cuerpos.append(c)
+    if from_bodies and not cuerpos:
+        raise error("INVALID_ARGUMENTS", "from_bodies crea un componente por cuerpo: falta elegir los cuerpos.")
+    grupos = [[c] for c in cuerpos] if from_bodies else [cuerpos]
+    creados = []
+    for i, grupo in enumerate(grupos, 1):
+        nombre = (f"{name}{i}" if name else sesion.nombre_cuerpo(grupo[0])) if from_bodies else name
+        resultado = _nuevo_componente(sesion, grupo, nombre, grounded, padre)
+        creados.append(resultado["component"])
+    resultado["components"] = creados
+    return resultado
+
+
+def _nuevo_componente(sesion, cuerpos, name, grounded, padre):
+    """Agrega un paso Nuevo componente con `cuerpos` (puede ser ninguno) y devuelve su resultado con `component`."""
     estado = sesion.doc.estado_final
     for c in cuerpos:
         if c.componente:
             sesion.avisar(f"«{sesion.nombre_cuerpo(c)}» pasa del componente «{_nombre_comp(estado, c.componente)}» "
                           "al nuevo.")
-    doc = sesion.doc
-    op = OpComponente(doc.nuevo_id(), nombre_paso(sesion, name, "Componente", OpComponente),
-                      cuerpos=[c.id for c in cuerpos], fijo=grounded, padre=padre,
-                      pose=pose_de_reasignar(estado, [c.id for c in cuerpos]).tolist(),
-                      pose_padre=pose_de_componente(estado, padre).tolist())
+    ids = [c.id for c in cuerpos]
+    op = OpComponente(sesion.doc.nuevo_id(), nombre_paso(sesion, name, "Componente", OpComponente), cuerpos=ids, fijo=grounded,
+                      padre=padre, pose=pose_de_reasignar(estado, ids).tolist(), pose_padre=pose_de_componente(estado, padre).tolist())
     resultado = _agregar(sesion, op)
     resultado["component"] = info_componente(sesion, op.id)
     return resultado
@@ -732,7 +744,7 @@ def create_joint(sesion, origin1: str | list[float], origin2: str | list[float] 
     return _crear_union(sesion, name, params)
 
 
-@herramienta("create_as_built_joint", "ensamble", "Unión como está (ENSAMBLAR › Unión como está): liga el componente "
+@herramienta("create_as_built_joint", "ensamble", "Unión conforme a obra (ENSAMBLAR › Unión conforme a obra): liga el componente "
              "de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del "
              "marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 "
              "lo sigue. Sin component2, la unión es contra la raíz. " + _DESC_TIPOS + _DESC_MODOS + _DESC_EJES,
@@ -981,7 +993,7 @@ def constrain_components(sesion, geometry1: str | list[float] | dict, geometry2:
     return resultado
 
 
-@herramienta("drive_joint", "ensamble", "Acciona una unión (ENSAMBLAR › Accionar uniones): cambia su giro o "
+@herramienta("drive_joint", "ensamble", "Acciona una unión (ENSAMBLAR › Uniones de animación): cambia su giro o "
              "deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). Los "
              "límites recortan el valor y avisan. Cada valor acepta número (grados o mm) o expresión.", modifica=True)
 def drive_joint(sesion, joint: str, rotation: Expr | None = None, slide: Expr | None = None,
@@ -1071,7 +1083,7 @@ def set_joint_limits(sesion, joint: str, minimum: Expr | None = None, maximum: E
 # ---------------------------------------------------------------- grupos y vínculos
 @herramienta("create_rigid_group", "ensamble", "Grupo rígido (ENSAMBLAR › Grupo rígido): los componentes se mueven "
              "juntos; una unión que mueve a uno mueve a todos.", modifica=True)
-def create_rigid_group(sesion, components: list[str], name: str | None = None, include_children: bool = False):
+def create_rigid_group(sesion, components: list[str], name: str | None = None, include_children: bool = True):
     """
     components: componentes del grupo (id, nombre o uno de sus cuerpos); al menos dos distintos.
     name: nombre del paso; vacío = «Grupo rígido<n>».

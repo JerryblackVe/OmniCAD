@@ -162,9 +162,9 @@ def test_la_casita_y_el_menu(cubo):
 
 def test_clic_derecho_abre_el_mismo_menu_con_el_tamano(cubo):
     textos = [a.text() for a in cubo.menu().actions() if a.text()]
-    assert textos == ["Ir al inicio", "Cámara", "Establecer la vista actual como Inicio", "Restablecer Inicio",
-                      "Establecer la vista actual como cara", "Restablecer cara", "Tamaño de ViewCube"]
-    tam = next(a for a in cubo.menu().actions() if a.text() == "Tamaño de ViewCube").menu()
+    assert textos == ["Ir al inicio", "Tamaño del ViewCube", "Cámara", "Establecer la vista actual como Inicio",
+                      "Restablecer Inicio", "Establecer la vista actual como cara", "Restablecer cara"]
+    tam = next(a for a in cubo.menu().actions() if a.text() == "Tamaño del ViewCube").menu()
     assert [a.text() for a in tam.actions()] == ["Automático", "Grande", "Normal", "Pequeño", "Diminuto"]
 
 
@@ -249,3 +249,51 @@ def test_set_home_view_y_set_view_con_aristas_y_vertices():
     r = api.llamar(sesion, "set_home_view", {"reset": True})
     assert r["ok"] and r["result"]["home"] is None
     assert not api.llamar(sesion, "set_home_view", {"direction": [0, 0, 0]})["ok"]
+
+
+def _ocupa(c):
+    """El rectángulo que cubren las zonas dibujadas del cubo."""
+    _pintar(c)
+    r = None
+    for poli, _d in c._zonas:
+        r = poli.boundingRect() if r is None else r.united(poli.boundingRect())
+    return r
+
+
+def test_el_cubo_llena_su_recuadro_y_no_se_sale(cubo):
+    """B-399: a 120 px el cubo de frente ocupa más de la mitad del lado, y girado entra entero."""
+    cubo.set_tamano("normal")
+    assert cubo.width() == 120
+    cubo.visor.vista("frente")
+    r = _ocupa(cubo)
+    assert r.width() >= 0.6 * 120 and r.height() >= 0.6 * 120, r
+    for vista in ("iso", "derecha", "arriba"):
+        cubo.visor.vista(vista)
+        r = _ocupa(cubo)
+        assert r.left() >= 0 and r.top() >= 0 and r.right() <= 120 and r.bottom() <= 120, (vista, r)
+    for d in ((1, -1, 1), (-1, 1, 1), (1, 1, -1)):             # los vértices también entran
+        cubo.visor.vista_direccion(d)
+        r = _ocupa(cubo)
+        assert r.left() >= 0 and r.top() >= 0 and r.right() <= 120 and r.bottom() <= 120, (d, r)
+
+
+def test_automatico_crece_con_el_alto_del_visor_y_los_tamanos_fijos_no(cubo):
+    cubo.set_tamano("automatico")
+    cubo.ajustar_a(400)
+    assert cubo.width() == 120                                  # el mínimo
+    cubo.ajustar_a(700)
+    assert cubo.width() == 140
+    cubo.ajustar_a(2000)
+    assert cubo.width() == 180                                  # el máximo
+    cubo.set_tamano("grande")
+    cubo.ajustar_a(400)
+    assert cubo.width() == 160                                  # un tamaño fijo no sigue al visor
+    cubo.set_tamano("diminuto")
+    assert cubo.width() == 80
+
+
+def test_el_boton_del_menu_se_ve_y_es_clicable(cubo):
+    r = cubo._rect_menu()
+    assert r.width() >= 14 and r.height() >= 14 and cubo.rect().contains(r.toRect())
+    _mover(cubo, r.center())
+    assert cubo._hover == ("menu",)

@@ -31,8 +31,8 @@ RAIZ = Path(__file__).resolve().parent.parent          # raíz del repo (docs/ v
 FUENTES = {
     "fusion": ("Fusion 360", "https://www.autodesk.com/products/fusion-360/blog/category/whatsnew/",
                "brechas_fusion.md"),
-    "blender": ("Blender", "https://www.blender.org/news/", "brechas_blender.md"),
-    "rhino": ("Rhino", "https://www.rhino3d.com/news/", "brechas_rhino.md"),
+    "blender": ("Blender", "https://www.blender.org/news/", "referencia/brechas_blender.md"),
+    "rhino": ("Rhino", "https://www.rhino3d.com/news/", "referencia/brechas_rhino.md"),
 }
 UA = "Mozilla/5.0 (OmniCAD novedades; +https://github.com/JerryblackVe/OmniCAD)"
 TOPE_TITULARES = 20            # por fuente, en el informe
@@ -161,6 +161,7 @@ def anotar_en_brechas(ruta_brechas, clave, titulares, mes):
         contenido = contenido.rstrip("\n") + "\n" + seccion
     for titulo in nuevos:
         contenido += f"- [AUTO {mes}] {titulo} — pendiente de clasificar (fuente: {FUENTES[clave][1]})\n"
+    ruta.parent.mkdir(parents=True, exist_ok=True)       # --brechas <carpeta> sin «referencia/»
     ruta.write_text(contenido, encoding="utf-8", newline="\n")
     return len(nuevos)
 

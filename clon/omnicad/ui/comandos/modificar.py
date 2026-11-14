@@ -153,6 +153,11 @@ class Empalme(Comando):
             puntos.append({"posicion": pos, "radio": rad})
         return puntos
 
+    def oculta_seleccion(self, valores):
+        """P-150, como Fusion: la previa se come las aristas elegidas (eran líneas gruesas encima de todo que quedaban
+        flotando fuera del redondeo); sin previa vuelven. Las caras de los modos por reglas y completo siguen."""
+        return valores.get("tipo", "empalme") == "empalme"
+
     def construir(self, v, ctx):
         if v.get("tipo") == "completo":
             exigir(v, "central", "Seleccioná la cara central.")
@@ -355,6 +360,9 @@ class Chaflan(Comando):
             Casilla("cadena_tangente", "Cadena tangente", True),
             Opciones("esquina", "Esquina", {"chaflan": "Chaflán", "inglete": "Inglete", "mezcla": "Mezcla"}),
         ]
+
+    def oculta_seleccion(self, valores):
+        return True      # P-150: la previa se come las aristas elegidas (como Fusion); sin previa vuelven
 
     def construir(self, v, ctx):
         exigir(v, "aristas", "Seleccioná las aristas.")
@@ -957,13 +965,14 @@ class MoverCopiar(Comando):
             pivote = ent.como_punto(e) if e is not None else centro
             c = np.asarray(pivote, float) + [L("dx"), L("dy"), L("dz")]
             # P-139m: los giros son el anillo de Fusion (arco corto con asa oval; al agarrarlo, el anillo entero y la caja
-            # «326.0 deg»). En 0° el asa queda a 45° entre los otros dos ejes, donde estaba el arco de la tríada.
+            # «326.0 deg»). P-151: en 0° el asa del giro en X queda sobre la flecha Y, la de Y sobre Z y la de Z sobre X,
+            # del lado de la cámara, como en Fusion: los tres arcos rodean la tríada.
             ejes = np.identity(3)
-            anillos = [mp.AnilloAngulo(clave, c, ejes[i], ejes[(i + 1) % 3] + ejes[(i + 2) % 3])
+            anillos = [mp.AnilloAngulo(clave, c, ejes[i], ejes[(i + 1) % 3], hacia_camara=True)
                        for i, clave in enumerate(("rx", "ry", "rz"))]
             for a in anillos:
                 a.ayuda = ""          # el cartel del anillo es el de la inclinación de Extruir
-            return [mp.Triada(c, giros=None), *anillos]
+            return [mp.Triada(c, giros=None, compacta=True), *anillos]      # P-151: flechas chicas y grises, anillos afuera
         if tipo == "traslacion":
             if v.get("direccion"):
                 try:

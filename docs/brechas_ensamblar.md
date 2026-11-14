@@ -56,7 +56,7 @@ Tiene que decir cuándo hay un conflicto. Va con herramienta en la API.
 | A partir de cuerpos | Casilla apagada |
 | Activar | Casilla encendida |
 
-Hoy no se puede crear un componente vacío: `create_component` exige cuerpos. Activar depende de ASM-9. Externo crea otro archivo:
+Hecho: componente vacío, nombre, Padre y «A partir de cuerpos» por API. Falta lo que el seguimiento (ASM-18) detalla. Activar depende de ASM-9. Externo crea otro archivo:
 decidir el alcance al programarlo.
 
 ## ASM-19 · Menú y paneles
@@ -72,6 +72,10 @@ movimiento · Activar conjuntos de contactos · Activar todos los contactos.
 **Unión conforme a obra:** Componentes y Movimiento › Tipo.
 
 **Grupo rígido:** Incluir componentes hijo encendido.
+
+Hecho (2026-11-13): orden y nombres del menú, atajo Mayús+J, pestañas Posición y Movimiento (Unión conforme a obra: Componentes y
+Movimiento), Componente 1, Componente 2 y Alineación plegables, nombres Corredera y Polo-ranura, Incluir hijos encendido. Falta: Relación de
+tangente como comando propio, Modo de origen en tres botones y los dos ítems de contactos (SC6, grisados).
 
 ## ASM-20 · Estado de los paneles
 

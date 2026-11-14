@@ -7,6 +7,7 @@ Solo se reconstruyen clases conocidas del modelo. No admite pickle, nombres de m
 import base64
 import math
 import os
+import time
 import zlib
 
 import numpy as np
@@ -226,6 +227,7 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
     doc = aislado._documento(receta)
     entrada = doc.estado_en(doc.marcador if indice is None else indice)
     op = operacion_desde_dict(operacion)
+    inicio = time.perf_counter()
     estado, avisos = doc.previsualizar(op, indice, en_vivo=True)
     mallas, nuevos, enviar = {}, {}, {}
     for cid, c in estado.cuerpos.items():
@@ -240,8 +242,10 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
         mallas[cid] = v, n, seg
         if formas:
             enviar[cid] = c.forma
+    # FL-1: lo que costaría en la ventana (kernel y malla), sin rehacer el documento. FL-1b: mallar un barrido tarda 0,4 s
+    ms = (time.perf_counter() - inicio) * 1000
     return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos),
-                       "formas": enviar}, transporte=False)
+                       "formas": enviar, "ms": ms}, transporte=False)
 
 
 def solape_herramienta(receta, operacion, indice, cuerpos):
@@ -271,6 +275,7 @@ def leer_previa_visual(salida, entrada):
         preparadas[cid] = v, n, seg
     estado._mallas_previa = preparadas
     estado._origen_previa = entrada
+    estado._ms_previa = datos.get("ms", math.inf)
     return estado, datos["avisos"]
 
 

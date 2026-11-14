@@ -123,7 +123,7 @@ def test_escribir_45_en_caja_gira_imagen_manija_y_campo_z(panel):
     QTest.keyClicks(caja, "45")
     QTest.keyClick(caja, Qt.Key_Return)
     p._calcular_previa()
-    assert g.valor("angulo") == 45 and p.widgets["angulo"].text() == "45"
+    assert g.valor("angulo") == 45 and p.widgets["angulo"].text() == "45 deg"
     assert estado_previo(p)["angulo"] == 45
     assert not np.allclose(uv, estado_previo(p)["malla"]["uv"])
     m = control(p, "angulo")

@@ -766,6 +766,14 @@ def _b_poligono_circunscrito(p):
     p.drawPolygon(QPolygonF(_regular(16, 16, 12, 6)))
 
 
+def _b_estrella(p):
+    """Estrella de 5 puntas (BOC-84) con el círculo de las puntas."""
+    _disco_guia(p, 16, 16, 12.5)
+    _trazo(p)
+    afuera, adentro = _regular(16, 16, 12.5, 5, -90), _regular(16, 16, 12.5 * 0.382, 5, -54)
+    p.drawPolygon(QPolygonF([q for par in zip(afuera, adentro, strict=True) for q in par]))
+
+
 def _b_poligono_arista(p):
     pts = _regular(16, 16, 11.5, 6)
     _trazo(p)
@@ -1181,7 +1189,7 @@ DIBUJOS = {
     "rectangulo_3p": _b_rectangulo_3p, "rectangulo_centro": _b_rectangulo_centro, "circulo": _b_circulo,
     "circulo_2p": _b_circulo_2p, "circulo_3p": _b_circulo_3p, "arco": _b_arco, "arco_centro": _b_arco_centro,
     "arco_tangente": _b_arco_tangente, "poligono": _b_poligono, "poligono_inscrito": _b_poligono_inscrito,
-    "poligono_circunscrito": _b_poligono_circunscrito, "poligono_arista": _b_poligono_arista, "punto": _b_punto,
+    "poligono_circunscrito": _b_poligono_circunscrito, "poligono_arista": _b_poligono_arista, "estrella": _b_estrella, "punto": _b_punto,
     "elipse": _b_elipse, "ranura": _b_ranura, "spline": _b_spline, "conica": _b_conica, "texto": _b_texto,
     "simetria_boceto": _b_simetria, "patron_circular": _b_patron_circular,
     "patron_rectangular": _b_patron_rectangular, "proyectar": _b_proyectar, "cota": _b_cota, "helice": _b_helice,

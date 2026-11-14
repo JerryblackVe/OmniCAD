@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-423 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+425 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -14,7 +14,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 |---|---|---|
 | [documento](#grupo-documento) | 50 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
-| [boceto](#grupo-boceto) | 70 | Bocetos 2D: geometría, restricciones y cotas. |
+| [boceto](#grupo-boceto) | 72 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 36 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
@@ -751,6 +751,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`draw_circle`](#draw_circle) | sí | Dibuja un círculo (un paso de deshacer): por centro y radio (por defecto), por 2 puntos (los extremos de un diámetro) o por 3 puntos (points). |
 | [`draw_arc`](#draw_arc) | sí | Dibuja un arco. |
 | [`create_polygon`](#create_polygon) | sí | Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía de construcción, como la interfaz). |
+| [`draw_star`](#draw_star) | sí | Dibuja una estrella (herramienta propia de OmniCAD: Fusion no la tiene): puntas sobre un círculo exterior y valles sobre uno interior, con lados iguales. |
 | [`draw_spline`](#draw_spline) | sí | Dibuja una spline: de ajuste (pasa por los puntos) o de puntos de control (grado 3 o 5; con menos de grado+1 puntos el grado baja a puntos−1, como Fusion). |
 | [`add_constraint`](#add_constraint) | sí | Restringe entidades del boceto (ids de get_sketch: curvas y puntos). |
 | [`replace_constraint`](#replace_constraint) | sí | Cambia una restricción por otra sobre las mismas entidades y con el mismo id, en un solo paso (en la ventana: clic derecho en su símbolo › Cambiar por; si la nueva no quita ningún grado de libertad —el boceto ya la cumple por otras—, falla con SKETCH_OVERCONSTRAINED y queda la anterior, igual que add_constraint). |
@@ -808,6 +809,7 @@ Bocetos 2D: geometría, restricciones y cotas.
 | [`project_to_surface`](#project_to_surface) | sí | Boceto 3D: Project To Surface de Fusion: proyecta curvas de boceto sobre caras. mode=closest (Closest Point): cada punto de la curva va al punto más cercano de las caras (spline por 49 puntos); mode=vector (Along Vector): proyecta a lo largo de direction (vector [x, y, z] del mundo o un eje: 'X', 'Y', 'Z', id de un eje o una arista recta), hacia donde apunta. |
 | [`include_3d_geometry`](#include_3d_geometry) | sí | Boceto 3D: Include 3D Geometry de Fusion: incluye aristas (o el borde de caras) y vértices del modelo en el boceto DONDE ESTÁN, como curvas y puntos 3D (no se llevan al plano: para eso, project_to_sketch). |
 | [`isoparametric_curve`](#isoparametric_curve) | sí | Boceto 3D: Isoparametric Curve de Fusion (Proyectar/Incluir): saca de una cara las curvas de parámetro constante, recortadas a su contorno, y las deja como curvas 3D del boceto. direction=u: las que siguen el parámetro U (V constante), v: las que siguen V, both: las dos. type=single: la que pasa por point (un punto de la cara, se proyecta a ella); type=distributed: las de toda la cara, a lo ancho, una cada distance mm (medidos sobre la curva perpendicular por point; una pasa por el punto) o quantity curvas parejas sin tocar los bordes. |
+| [`edit_isoparametric_curve`](#edit_isoparametric_curve) | sí | Boceto 3D: edita una Isoparametric Curve ya creada con vínculo (BOC-76): cambia direction, type, distance o quantity de TODAS las curvas que dejó esa llamada, sobre la misma cara y el mismo punto. |
 | [`infer_sketch_snap_3d`](#infer_sketch_snap_3d) | no | Boceto 3D: dice qué ayuda de dibujo propone la interfaz con el cursor en [x, y, z] (Fusion: 3D Sketch › ayudas de dibujo): punto medio, intersección, sobre la curva, tangente y perpendicular desde un punto base, alineación con otros puntos (misma coordenada en el plano) y horizontal/vertical (los ejes de la tríada). |
 | [`draw_spiral`](#draw_spiral) | sí | Dibuja la espiral plana del editor como spline cúbica de ajuste abierta. |
 | [`set_circle_radius`](#set_circle_radius) | sí | Cambia el radio de un círculo o arco libre, sin cota (lo que hace arrastrarlo en el editor): el círculo toma el radio nuevo y en un arco se corren sus extremos libres. |
@@ -949,6 +951,27 @@ Dibuja un polígono regular de n lados (líneas iguales sobre un círculo guía 
   - `edge_points` (lista de lista de número o null; opcional, por defecto `null`): kind=edge: [[x, y], [x, y], [x, y]] = extremos A y B del primer lado y un punto del lado hacia donde crece el polígono.
   - `centerline` (true/false; opcional, por defecto `false`): true para geometría central (forma perfiles); incompatible con construction=true.
 - CLI: `omnicad call create_polygon --doc pieza.omnicad`
+
+### `draw_star`
+
+Dibuja una estrella (herramienta propia de OmniCAD: Fusion no la tiene): puntas sobre un círculo exterior y valles sobre uno interior, con lados iguales. El radio interior se da escrito (inner_radius), como proporción del exterior (inner_ratio) o como estrella regular {points/skip} (por defecto skip 2: la de 5 puntas es la del pentagrama). tip_fillet y valley_fillet redondean puntas y valles (arcos iguales con una cota de radio cada tipo). Con los círculos de construcción le quedan 5 grados de libertad: centro, los dos radios y el giro.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `points` (entero; opcional, por defecto `5`): cantidad de puntas (3 a 64).
+  - `outer_radius` (número o expresión; opcional, por defecto `10.0`): radio del círculo de las puntas en mm; número o expresión con parámetros.
+  - `inner_radius` (número o expresión; opcional, por defecto `null`): radio del círculo de los valles en mm (menor que outer_radius); vacío = según inner_ratio o skip.
+  - `inner_ratio` (número; opcional, por defecto `null`): radio interior como fracción del exterior (0 a 1, sin incluir); vacío = según skip.
+  - `skip` (entero; opcional, por defecto `null`): estrella regular {points/skip}: los lados siguen las líneas del polígono estrellado (5/2, 7/2, 7/3); de 2 a la mitad de points. Con 3 o 4 puntas no hay estrella regular y se usa la mitad del radio.
+  - `rotation` (número; opcional, por defecto `90.0`): ángulo en grados de la primera punta respecto del eje x del boceto (90 = una punta hacia arriba).
+  - `tip_fillet` (número o expresión; opcional, por defecto `0.0`): radio de redondeo de las puntas en mm (0 = filosas).
+  - `valley_fillet` (número o expresión; opcional, por defecto `0.0`): radio de redondeo de los valles en mm (0 = filosos).
+  - `center_x` (número; opcional, por defecto `0.0`): x del centro (mm).
+  - `center_y` (número; opcional, por defecto `0.0`): y del centro (mm).
+  - `construction_circles` (true/false; opcional, por defecto `true`): true para los dos círculos de construcción que definen la estrella; false la deja solo con los lados iguales.
+  - `construction` (true/false; opcional, por defecto `false`): true para una estrella de construcción (no forma perfiles).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call draw_star --doc pieza.omnicad`
 
 ### `draw_spline`
 
@@ -1784,6 +1807,20 @@ Boceto 3D: Isoparametric Curve de Fusion (Proyectar/Incluir): saca de una cara l
   - `link` (true/false; opcional, por defecto `true`): true = las curvas siguen a la cara si el modelo cambia (Projection Link); false = congeladas.
 - CLI: `omnicad call isoparametric_curve --doc pieza.omnicad face=… point=…`
 
+### `edit_isoparametric_curve`
+
+Boceto 3D: edita una Isoparametric Curve ya creada con vínculo (BOC-76): cambia direction, type, distance o quantity de TODAS las curvas que dejó esa llamada, sobre la misma cara y el mismo punto. Lo que no se pasa queda como estaba; pasar distance o quantity sola cambia a distributed con esa. Las curvas se rehacen (ids nuevos en entities) y sus restricciones y cotas 3D se borran. Una curva sin vínculo (link=false) ya no recuerda su cara: no se edita.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `curve` (entero; obligatorio): id de cualquiera de las curvas 3D de la isoparamétrica (get_sketch: entities_3d con source.tool = isoparametric_curve).
+  - `direction` ("both" | "u" | "v" o null; opcional, por defecto `null`): u, v o both; vacío = la de antes.
+  - `type` ("single" | "distributed" o null; opcional, por defecto `null`): single o distributed; vacío = la de antes (o distributed si llega distance o quantity).
+  - `distance` (número; opcional, por defecto `null`): con distributed, separación entre curvas en mm (reemplaza a quantity).
+  - `quantity` (entero; opcional, por defecto `null`): con distributed, cantidad de curvas parejas, hasta 200 (reemplaza a distance).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto; vacío = el último boceto del timeline.
+- CLI: `omnicad call edit_isoparametric_curve --doc pieza.omnicad curve=…`
+
 ### `infer_sketch_snap_3d`
 
 Boceto 3D: dice qué ayuda de dibujo propone la interfaz con el cursor en [x, y, z] (Fusion: 3D Sketch › ayudas de dibujo): punto medio, intersección, sobre la curva, tangente y perpendicular desde un punto base, alineación con otros puntos (misma coordenada en el plano) y horizontal/vertical (los ejes de la tríada). El cursor se proyecta al plano de la tríada (plane por origin) y mira a lo largo de view_direction. Lo que es de la geometría engancha EN EL ESPACIO: el medio de una línea fuera del plano es ese punto 3D, no su proyección. Lo que es del plano (alineaciones, horizontal/vertical, intersección de lo que solo se cruza visto desde él) vuelve como un punto de él. Devuelve las candidatas ordenadas (la primera es la que se activa; alternative elige otra). Cada una trae en constraints las restricciones 3D que dejaría un clic ahí (la interfaz las agrega sola si la geometría ya las cumple): del punto del clic con una curva (midpoint, coincident, también con arcos, círculos, elipses, cónicas y splines) o de la línea que sale de base (perpendicular, tangent, axis, con el eje x, y o z en axis). No modifica el boceto.
@@ -2481,7 +2518,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`rebuild_features`](#rebuild_features) | sí | Find Features que rehace: reconoce los agujeros (también abocardados), empalmes y chaflanes de un cuerpo sin historial y los vuelve pasos paramétricos del timeline, uno por uno: borra las caras de la función (delete_faces, las vecinas cierran el hueco) y la crea de nuevo con create_hole, fillet o chamfer y las medidas reconocidas; después vuelve a reconocer sobre el cuerpo nuevo. |
 | [`create_coil`](#create_coil) | sí | Crea una bobina o espiral con las opciones del comando Bobina. |
 | [`create_pipe`](#create_pipe) | sí | Crea una tubería maciza o hueca sobre curvas de boceto o aristas. |
-| [`create_rib`](#create_rib) | sí | Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de extracción del desmoldeo (por defecto, del cuerpo hacia la curva). |
+| [`create_rib`](#create_rib) | sí | Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de extracción del desmoldeo (por defecto, del cuerpo hacia la curva). flip_draft_direction invierte esa extracción y fillet_radius redondea la unión del nervio con el cuerpo. |
 | [`create_web`](#create_web) | sí | Crea una red de nervios perpendicular al plano del boceto. draft_angle afina la red hacia su borde libre, fillet_radius redondea las aristas cóncavas donde se junta con el cuerpo y extend_curves=false la deja terminar donde terminan las curvas. |
 | [`create_emboss`](#create_emboss) | sí | Repuja o graba perfiles en una o varias caras, con envoltura opcional. |
 | [`create_boss`](#create_boss) | sí | Crea columnas para tornillo en puntos de boceto o vértices. |
@@ -2601,11 +2638,13 @@ Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). La ruta es 
   - `guide_surface` (texto o lista de texto o null; opcional, por defecto `null`): caras (selector o ids) sobre las que va la ruta; el perfil sigue su normal; sin carril ni torsión.
   - `sweep_bodies` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) (id o nombre) que se barren por la ruta (Solid Sweep) en vez de un perfil; sin carril, superficie guía, torsión ni conicidad.
   - `chain` (true/false; opcional, por defecto `false`): true suma a cada arista de path_edges y a cada curva de path_sketch las que le siguen tangentemente (Chain Selection).
+  - `extent` ("perpendicular" | "full"; opcional, por defecto `"perpendicular"`): con rail_sketch: perpendicular (termina en un plano perpendicular a la ruta) o full (path_distance sobre la ruta y rail_distance sobre el carril); sin carril se ignora.
+  - `rail_distance` (número o expresión; opcional, por defecto `1`): con extent=full, fracción del carril que se usa, de 0 (sin incluir) a 1; sin carril se ignora.
 - CLI: `omnicad call sweep --doc pieza.omnicad`
 
 ### `loft`
 
-Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de sketches: cada sección es un perfil {"sketch", "profile"}, una cara o arista (selector o id), un vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: {"sketch", "curve"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la superficie de la primera y la última sección: {"type": "free"} o {"type": "direction", "angle": grados desde la normal de la sección (0 = perpendicular, como Fusion; da vueltas), "weight": 1} o {"type": "tangent" | "smooth", "face": cara, "weight": 1} (tangente a esa cara, que tiene la sección en su borde); aproximado con una sección auxiliar, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. merge_tangent_edges une las caras tangentes. smooth (G2) es como tangent y sigue también la curvatura de la cara.
+Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. Opciones: sections (en lugar de sketches: cada sección es un perfil {"sketch", "profile"}, una cara o arista (selector o id), un vértice [x, y, z] o un punto de construcción: sirve para terminar en punta), rails (curvas guía: {"sketch", "curve"} o aristas) o center_line (una línea central), sin combinar las dos. start_condition y end_condition fijan cómo sale la superficie de la primera y la última sección: {"type": "free"} o {"type": "direction", "angle": grados desde la normal de la sección (0 = perpendicular, como Fusion; da vueltas), "weight": 1} o {"type": "tangent" | "smooth", "face": cara, "weight": 1} (tangente a esa cara, que tiene la sección en su borde); aproximado con una sección auxiliar, solo en la solevación lisa (sin rails, center_line, ruled ni closed). section_conditions pone una condición direction en secciones intermedias. merge_tangent_edges une las caras tangentes. smooth (G2) es como tangent y sigue también la curvatura de la cara. point_tangent (con weight) crea una cúpula en un extremo que es un punto; sin condición queda agudo.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2619,7 +2658,7 @@ Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden
   - `rails` (lista de texto o objeto o null; opcional, por defecto `null`): curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
   - `center_line` (lista de texto o objeto o null; opcional, por defecto `null`): la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
-  - `start_condition` (objeto; opcional, por defecto `null`): condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth", "angle": grados desde la normal de la sección (0 = perpendicular, por defecto, como Fusion), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent)}.
+  - `start_condition` (objeto; opcional, por defecto `null`): condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth" | "point_tangent", "angle": grados desde la normal de la sección (0 = perpendicular, por defecto, como Fusion), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent y smooth)}; point_tangent solo en un punto (cúpula; sin condición queda agudo).
   - `end_condition` (objeto; opcional, por defecto `null`): lo mismo para la última sección.
   - `merge_tangent_edges` (true/false; opcional, por defecto `false`): true une las caras que quedan tangentes entre sí (Tangent Edges › Merge).
   - `section_conditions` (objeto; opcional, por defecto `null`): condiciones direction en secciones intermedias: {"2": {"type": "direction", "angle": 60}} (el número es la posición de la sección, 1 = la primera; no vale tangent).
@@ -3438,7 +3477,7 @@ Crea una tubería maciza o hueca sobre curvas de boceto o aristas.
 
 ### `create_rib`
 
-Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de extracción del desmoldeo (por defecto, del cuerpo hacia la curva).
+Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. direction: symmetric, o un solo lado empezando abajo (side1, Start: Bottom) o arriba (side2, Start: Top). draft_angle afina el nervio hacia su borde libre; pull_direction (plano, cara o eje) es la dirección de extracción del desmoldeo (por defecto, del cuerpo hacia la curva). flip_draft_direction invierte esa extracción y fillet_radius redondea la unión del nervio con el cuerpo.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -3452,6 +3491,8 @@ Crea un nervio paralelo al plano del boceto, hasta el cuerpo o a profundidad. di
   - `target` (texto; opcional, por defecto `null`): nombre/id del cuerpo objetivo; vacío = el más cercano.
   - `draft_angle` (número o expresión; opcional, por defecto `""`): ángulo de desmoldeo en grados (entre -45 y 45; positivo = más fino en el borde libre), número o expresión; vacío = el de la regla de plástico del componente (Fusion: la regla da Draft Angle y lo usa Rib).
   - `pull_direction` (texto o objeto; opcional, por defecto `null`): plano, cara o eje que da la dirección de extracción; vacío = del cuerpo hacia la curva del nervio.
+  - `fillet_radius` (número o expresión; opcional, por defecto `0`): radio en mm del empalme entre el nervio y el cuerpo (0 = sin empalme), número o expresión; vacío = el radio nominal de la regla de plástico.
+  - `flip_draft_direction` (true/false; opcional, por defecto `false`): true invierte la dirección de extracción del desmoldeo; solo tiene efecto con draft_angle distinto de 0.
 - CLI: `omnicad call create_rib --doc pieza.omnicad sketch=…`
 
 ### `create_web`
@@ -3872,7 +3913,7 @@ Crea superficies rectas desde aristas, con dirección y ángulo.
   - `direction` (texto o objeto; opcional, por defecto `null`): eje, plano, cara plana o arista lineal; obligatorio con surface_type=direction.
   - `angle` (número o expresión; opcional, por defecto `0`): giro de la dirección en grados o expresión.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
-  - `mitered_corners` (true/false; opcional, por defecto `false`): true corta en ángulo vivo las esquinas entre aristas rectas, arcos o curvas (Mitered Corners); donde dos curvas siguen tangentes no hay esquina; una esquina que no se puede cortar (curvas 3D que no se cruzan, tres aristas en un punto) queda como estaba y el resultado trae un aviso.
+  - `mitered_corners` (true/false; opcional, por defecto `false`): true corta en ángulo vivo las esquinas entre aristas rectas, arcos o curvas (Mitered Corners); donde dos curvas siguen tangentes no hay esquina; una esquina que no se puede cortar (curvas 3D que no se cruzan, tres aristas en un punto) queda como estaba y el resultado trae un aviso; si las caras se cruzan entre sí, la superficie se rechaza.
   - `alternate_faces` (true/false; opcional, por defecto `false`): true usa la otra cara cuando una arista comparte dos (Alternate Faces).
   - `chain` (true/false; opcional, por defecto `true`): true toma la cadena tangente entera de cada arista o curva de boceto de edges (Tangent Chain de Fusion, encendido por defecto); false usa solo las elegidas.
 - CLI: `omnicad call create_ruled_surface --doc pieza.omnicad edges=…`
@@ -4664,15 +4705,15 @@ Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y
 | Herramienta | Modifica | Resumen |
 |---|---|---|
 | [`get_assembly`](#get_assembly) | no | Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: traslación y rotación respecto de donde se modelaron, caja envolvente), si hay algo arrastrado sin capturar (uncaptured_position; los componentes se informan sin ese arrastre), uniones (tipo, componentes, valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz. |
-| [`create_component`](#create_component) | sí | Crea un componente con los cuerpos dados (ENSAMBLAR › Nuevo componente desde cuerpos). |
+| [`create_component`](#create_component) | sí | Crea un componente (ENSAMBLAR › Nuevo componente). |
 | [`cycle_component_color`](#cycle_component_color) | sí | Color del componente de ciclo: pasa el componente al siguiente color de la paleta, el de component_colors de get_viewport_image y de Mostrar colores de componente. |
 | [`ground_component`](#ground_component) | sí | Fija o libera un componente (ENSAMBLAR › Fijar). |
 | [`create_joint`](#create_joint) | sí | Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta que su marco coincide con el de origin2 (caras planas enfrentadas; dos ejes —perno en agujero— en el mismo sentido) y define cómo se mueve después. |
-| [`create_as_built_joint`](#create_as_built_joint) | sí | Unión como está (ENSAMBLAR › Unión como está): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). |
+| [`create_as_built_joint`](#create_as_built_joint) | sí | Unión conforme a obra (ENSAMBLAR › Unión conforme a obra): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). |
 | [`duplicate_with_joints`](#duplicate_with_joints) | sí | Duplicar con uniones (ENSAMBLAR › Duplicar con uniones): repite el componente que mueve una unión en cada destino. |
 | [`create_joint_origin`](#create_joint_origin) | sí | Origen de unión (ENSAMBLAR › Origen de la unión): guarda un marco (punto con orientación) sobre una cara o arista, con giro y desfase, para usarlo después como origin2 de create_joint. |
 | [`constrain_components`](#constrain_components) | sí | Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17): posiciona el componente de geometry1 respecto del de geometry2. |
-| [`drive_joint`](#drive_joint) | sí | Acciona una unión (ENSAMBLAR › Accionar uniones): cambia su giro o deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). |
+| [`drive_joint`](#drive_joint) | sí | Acciona una unión (ENSAMBLAR › Uniones de animación): cambia su giro o deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). |
 | [`set_joint_limits`](#set_joint_limits) | sí | Límites de movimiento de una unión (Joint Limits de Fusion): los de un movimiento a elección (por defecto el principal: el giro en grados si gira, si no el deslizamiento en mm), su valor de reposo (rest) y si se invierten (flip). |
 | [`create_rigid_group`](#create_rigid_group) | sí | Grupo rígido (ENSAMBLAR › Grupo rígido): los componentes se mueven juntos; una unión que mueve a uno mueve a todos. |
 | [`create_motion_link`](#create_motion_link) | sí | Vínculo de movimiento (ENSAMBLAR › Vínculo de movimiento): la unión 2 se mueve en proporción a la 1 (engranajes, cremallera y piñón). |
@@ -4695,15 +4736,16 @@ Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: trasl
 
 ### `create_component`
 
-Crea un componente con los cuerpos dados (ENSAMBLAR › Nuevo componente desde cuerpos). Las uniones mueven componentes, no cuerpos sueltos. grounded=true lo fija en su lugar (ninguna unión puede moverlo; suele ser la base). Un cuerpo que ya estaba en otro componente pasa al nuevo. parent lo cuelga de otro componente (subensamblaje): mover o unir al padre lo mueve con él.
+Crea un componente (ENSAMBLAR › Nuevo componente). Sin bodies queda vacío, como en Fusion; con bodies lleva esos cuerpos y, con from_bodies=true, crea un componente por cada cuerpo («A partir de cuerpos»; se llama como el cuerpo, o name seguido del número). Las uniones mueven componentes, no cuerpos sueltos. grounded=true lo fija en su lugar (ninguna unión puede moverlo; suele ser la base). Un cuerpo que ya estaba en otro componente pasa al nuevo. parent lo cuelga de otro componente (subensamblaje): mover o unir al padre lo mueve con él.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `bodies` (lista de texto; obligatorio): ids o nombres de los cuerpos del componente (al menos uno).
-  - `name` (texto; opcional, por defecto `null`): nombre del componente; vacío = «Componente<n>».
+  - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos del componente; vacío = componente vacío (sin from_bodies).
+  - `name` (texto; opcional, por defecto `null`): nombre del componente; vacío = «Componente<n>». Con from_bodies, el prefijo de cada uno (name1, name2…); vacío = el nombre de cada cuerpo.
   - `grounded` (true/false; opcional, por defecto `false`): true para fijarlo (Ground): ninguna unión lo mueve.
   - `parent` (texto; opcional, por defecto `null`): componente padre (id, nombre o uno de sus cuerpos); vacío = la raíz (Parent de Fusion).
-- CLI: `omnicad call create_component --doc pieza.omnicad bodies=…`
+  - `from_bodies` (true/false; opcional, por defecto `false`): true crea un componente separado por cada cuerpo de bodies («From Bodies» de Fusion); pide al menos un cuerpo.
+- CLI: `omnicad call create_component --doc pieza.omnicad`
 
 ### `cycle_component_color`
 
@@ -4768,7 +4810,7 @@ Une dos componentes (ENSAMBLAR › Unión): mueve el componente de origin1 hasta
 
 ### `create_as_built_joint`
 
-Unión como está (ENSAMBLAR › Unión como está): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 lo sigue. Sin component2, la unión es contra la raíz. joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). mode1 / mode2: simple, between_faces (centro entre dos caras paralelas) o edge_intersection (cruce de dos aristas rectas); la segunda va en origin1b / origin2b. rotation_axis_from / slide_axis_from: arista recta o circular, eje de construcción o cara cilíndrica en vez de X/Y/Z (axis_body: cuerpo del selector). motion_limits: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, 'flip': false}}; rest y flip_limits son los del movimiento principal.
+Unión conforme a obra (ENSAMBLAR › Unión conforme a obra): liga el componente de `origin` al componente `component2` SIN moverlo de donde está y define su movimiento alrededor del marco de `origin` (p. ej. el eje de un agujero para una bisagra). Cuando el componente 2 se mueve, el 1 lo sigue. Sin component2, la unión es contra la raíz. joint_type: rigid (sin movimiento), revolute (gira alrededor de rotation_axis), slider (desliza sobre slide_axis), cylindrical (gira y desliza sobre rotation_axis), pin_slot (gira sobre rotation_axis y desliza sobre slide_axis), planar (desliza en el plano normal a rotation_axis y gira alrededor de él) o ball (tres giros). mode1 / mode2: simple, between_faces (centro entre dos caras paralelas) o edge_intersection (cruce de dos aristas rectas); la segunda va en origin1b / origin2b. rotation_axis_from / slide_axis_from: arista recta o circular, eje de construcción o cara cilíndrica en vez de X/Y/Z (axis_body: cuerpo del selector). motion_limits: {'rotation2': {'minimum': -30, 'maximum': 30, 'rest': 0, 'flip': false}}; rest y flip_limits son los del movimiento principal.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -4860,7 +4902,7 @@ Restricción de componentes (ENSAMBLAR › Restricción de componentes, ASM-17):
 
 ### `drive_joint`
 
-Acciona una unión (ENSAMBLAR › Accionar uniones): cambia su giro o deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). Los límites recortan el valor y avisan. Cada valor acepta número (grados o mm) o expresión.
+Acciona una unión (ENSAMBLAR › Uniones de animación): cambia su giro o deslizamiento y el mecanismo se recalcula (las uniones y vínculos que dependen de ella la siguen). Los límites recortan el valor y avisan. Cada valor acepta número (grados o mm) o expresión.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -4895,7 +4937,7 @@ Grupo rígido (ENSAMBLAR › Grupo rígido): los componentes se mueven juntos; u
 - Parámetros:
   - `components` (lista de texto; obligatorio): componentes del grupo (id, nombre o uno de sus cuerpos); al menos dos distintos.
   - `name` (texto; opcional, por defecto `null`): nombre del paso; vacío = «Grupo rígido<n>».
-  - `include_children` (true/false; opcional, por defecto `false`): true suma al grupo los subcomponentes de cada uno («Incluir componentes secundarios»); false los deja libres dentro de su padre.
+  - `include_children` (true/false; opcional, por defecto `true`): true suma al grupo los subcomponentes de cada uno («Incluir componentes secundarios»); false los deja libres dentro de su padre.
 - CLI: `omnicad call create_rigid_group --doc pieza.omnicad components=…`
 
 ### `create_motion_link`

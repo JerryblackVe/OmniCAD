@@ -24,6 +24,7 @@ import generador as gen  # noqa: E402
 import jueces as j  # noqa: E402
 from omnicad import api  # noqa: E402
 from omnicad.api import registro  # noqa: E402
+from omnicad.nucleo.aislado import pedidos_del_padre  # noqa: E402
 
 PRESUPUESTO = 25.0          # s por caso: pasado esto, los jueces que rehacen la pieza se saltean
 HERRAMIENTAS = {h["nombre"]: h for h in api.catalogo()}
@@ -351,7 +352,7 @@ def principal():
     salida = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
     os.dup2(2, 1)                 # lo que imprima el núcleo no ensucia el canal de respuestas
     preparar_proceso()
-    for linea in sys.stdin:
+    for linea in pedidos_del_padre():     # B-396: si el padre muere, este proceso termina
         ped = json.loads(linea)
         try:
             res = ATENDER[ped["tipo"]](ped)

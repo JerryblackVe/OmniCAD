@@ -155,7 +155,7 @@ def test_el_patron_sobre_la_placa_se_calcula_aparte_y_aceptar_da_el_solido_exact
     assert p._previa_ok, p.mensaje.text()
     estado = ventana_placa.visor._estado
     assert len(estado.cuerpos) == 3 and vistas == ["patron"]
-    assert sum(es_malla(c.forma) for c in estado.cuerpos.values()) == 2          # solo las copias son malla
+    assert len(estado._mallas_previa) == 2          # solo las copias vienen del proceso aparte (FL-1: con su B-Rep)
     assert len(ventana_placa.doc.estado_final.cuerpos) == 1
     p.aceptar()
     assert ventana_placa.panel is None

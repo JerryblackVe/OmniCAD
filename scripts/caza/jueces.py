@@ -202,8 +202,11 @@ def juez_esperado(tool, args, antes, ahora):
 
 
 def juez_recalcular(api, s, f):
+    # B-395: un paso que la herramienta ya dejó en rojo y avisó (duplicate_feature) no es una falla de recalcular
+    rojos = {p["id"] for p in (api.llamar(s, "get_timeline", {}).get("result") or {}).get("steps") or []
+             if p.get("status") == "error"}
     r = api.llamar(s, "recompute_all", {})
-    if not r.get("ok") or (r.get("result") or {}).get("failed_steps"):
+    if not r.get("ok") or {p["id"] for p in (r.get("result") or {}).get("failed_steps") or []} - rojos:
         return fallo("recalcular", "paso_falla", r.get("mensaje") or r.get("result"))
     d = distintas(f, foto(api, s))
     return fallo("recalcular", "cambia", d) if d else None

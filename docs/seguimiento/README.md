@@ -8,6 +8,7 @@ corrige. Lo que se resuelve **se borra** de la lista: la historia queda en el Re
 | [bugs.md](bugs.md) | Algo que falla, da un resultado malo o un mensaje engañoso |
 | [faltantes.md](faltantes.md) | Una función que todavía no existe |
 | [mejoras.md](mejoras.md) | Algo que existe y se puede hacer mejor: rendimiento, interfaz, mensajes, instalador |
+| [despues.md](despues.md) | Prioridad 2 congelada (bugs, faltantes y mejoras de render, animación, simulación, malla, plástico, chapa, dibujo, IA, escaneo, extensiones y parecidos); mismo formato, sin ordenar nada; solo Gerardo descongela |
 
 La especificación de cada faltante (qué hace en el programa de referencia y cómo tiene que sentirse) está en
 los `docs/brechas_*.md`. Esos archivos describen; **el estado vive solo acá**.
@@ -98,7 +99,6 @@ Al sumar un prompt nuevo, se agrega acá en el mismo turno.
 | ENSAMBLAR: componentes, uniones y movimiento (auditoría) | [auditoria_ensamblar.md](../auditoria_ensamblar.md) |
 | INSERTAR: Calcomanía a Insertar derivación (auditoría) | [auditoria_insertar.md](../auditoria_insertar.md) |
 | CONSTRUIR: SCU, planos, ejes y puntos (auditoría) | [auditoria_construir.md](../auditoria_construir.md) |
-| Tiempos de toda la app (auditoría AG-8) | [auditoria_tiempos.md](../auditoria_tiempos.md) |
 | Apariencia y materiales (rediseño AG-9) | [apariencia_materiales.md](../apariencia_materiales.md) |
 | B-271: Parámetros toca un árbol ya borrado | [prompt_b271.md](../prompt_b271.md) |
 

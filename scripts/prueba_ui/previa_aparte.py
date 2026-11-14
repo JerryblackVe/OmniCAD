@@ -40,7 +40,8 @@ def esperar_previa(p, plazo=60):
 
 
 def hay_malla():
-    return any(es_malla(c.forma) for c in v.visor._estado.cuerpos.values())
+    """La previa vino del proceso aparte: el visor dibuja su malla (FL-1: el cuerpo trae también su B-Rep)."""
+    return bool(getattr(v.visor._estado, "_mallas_previa", None))
 
 
 def mover_sim(w, pos):

@@ -311,7 +311,7 @@ def editar_cara_contorno():
     A.reg(AR, "un espaciado malo no rompe la grilla", p.manipuladores.manips[0].puntos.shape[:2] == (4, 4), p.mensaje.text())
     teclear(campo, "5000 mm")
     A.esperar(400)
-    p._calcular_previa()
+    A.previa(p)
     A.reg(AR, "un espaciado enorme avisa", not p._previa_ok and "espaciado" in p.mensaje.text().lower(), p.mensaje.text())
     QTest.keyClick(p, Qt.Key_Escape)
     A.esperar(200)

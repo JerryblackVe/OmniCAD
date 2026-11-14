@@ -88,17 +88,20 @@ def esperar(p):
 def test_el_hijo_real_no_bloquea_y_cancelar_no_toca_documento(ventana, monkeypatch):
     p = panel(ventana, monkeypatch)
     antes = ventana.doc.a_dict()
-    latidos = []
-    reloj = QTimer()
-    reloj.timeout.connect(lambda: latidos.append(time.perf_counter()))
-    reloj.start(10)
+    atendidos = []  # eventos que la ventana atiende mientras el hijo corre (sin depender del reloj)
+
+    def latir():
+        if p._hijo_previa is not None:
+            atendidos.append(1)
+            QTimer.singleShot(0, latir)
+
     p._calcular_previa()
     antes["contador"] = ventana.doc.a_dict()["contador"]  # construir reserva ids aun si se cancela
     assert p._hijo_previa is not None and not p._previa_ok
+    QTimer.singleShot(0, latir)
     esperar(p)
-    reloj.stop()
-    assert len(latidos) >= 3 and p._previa_ok, p.mensaje.text()
-    assert es_malla(ventana.visor._estado.cuerpo("op1.c1").forma)
+    assert len(atendidos) >= 3 and p._previa_ok, p.mensaje.text()
+    assert "op1.c1" in ventana.visor._estado._mallas_previa      # la dibuja la malla del proceso aparte
     assert ventana.doc.a_dict() == antes
     QTest.keyClick(p, Qt.Key_Escape)
     assert ventana.panel is None and ventana.doc.a_dict() == antes
@@ -172,6 +175,7 @@ def test_un_valor_nuevo_corta_una_vez_el_calculo_que_se_alarga(ventana, monkeypa
             cortes.append(ya)
 
     monkeypatch.setattr(aislado, "CalculoPendiente", Hijo)
+    monkeypatch.setattr(aislado, "costo_reinicio", lambda: 1.0)     # FL-1: un trabajador que ya contestó
     p._calcular_previa()
     p._recibir_previa()                         # sin valor nuevo no se corta nada
     assert not cortes
@@ -256,7 +260,7 @@ def test_un_hijo_que_muere_apaga_la_previa_con_un_mensaje_y_la_app_sigue(ventana
     p = panel(ventana, monkeypatch)
     p._calcular_previa()
     esperar(p)
-    assert es_malla(ventana.visor._estado.cuerpo("op1.c1").forma)   # hay una previa estimada a la vista
+    assert "op1.c1" in ventana.visor._estado._mallas_previa   # hay una previa estimada a la vista
     p.set_valor("espesor_interior", "0.4")
     p._t_previa.stop()
     p._calcular_previa()
@@ -265,11 +269,11 @@ def test_un_hijo_que_muere_apaga_la_previa_con_un_mensaje_y_la_app_sigue(ventana
     esperar(p)
     assert not p._previa_ok and "vista previa" in p.mensaje.text() and (
         "falló" in p.mensaje.text() or "kernel cayó" in p.mensaje.text())     # kill(): Windows sale con 1, Linux con -9
-    assert not any(es_malla(c.forma) for c in ventana.visor._estado.cuerpos.values())   # no queda nada estimado
+    assert not getattr(ventana.visor._estado, "_mallas_previa", None)   # no queda nada estimado
     assert ventana.doc.a_dict() == antes and ventana.panel is p
     p._calcular_previa()           # la app sigue: el siguiente cálculo arranca otro hijo y termina
     esperar(p)
-    assert p._previa_ok and es_malla(ventana.visor._estado.cuerpo("op1.c1").forma)
+    assert p._previa_ok and "op1.c1" in ventana.visor._estado._mallas_previa
 
 
 def test_un_hijo_que_pasa_su_plazo_se_corta_y_avisa(ventana, monkeypatch):

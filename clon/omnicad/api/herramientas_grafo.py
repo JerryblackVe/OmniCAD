@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Herramientas del grupo "grafo": programación visual SIN ventana (tipo Grasshopper; GH8 de
-`docs/brechas_grasshopper.md`, formato en `docs/grafo.md`).
+`docs/referencia/brechas_grasshopper.md`, formato en `docs/grafo.md`).
 
 Un grafo es un JSON con nodos (entradas, matemática, listas, árboles, vectores, curvas, sólidos y salidas) unidos por
 cables. `run_graph` lo evalúa sin tocar el documento (y exporta los cuerpos a STEP/STL si se pide); `bake_graph` lo

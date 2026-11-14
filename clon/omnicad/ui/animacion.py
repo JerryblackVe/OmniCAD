@@ -896,7 +896,7 @@ class VentanaAnimacion(QMainWindow):
             return
         if not self._programado:
             self._programado = True
-            QTimer.singleShot(0, self.actualizar)
+            QTimer.singleShot(0, self, self.actualizar)
 
     def showEvent(self, e):
         super().showEvent(e)
@@ -1184,7 +1184,7 @@ class VentanaAnimacion(QMainWindow):
                 self.editar_llamada(ident, e.position())
                 return True
         if obj is self.area.viewcube and e.type() == QEvent.MouseButtonRelease:
-            QTimer.singleShot(0, self._navegacion_terminada)
+            QTimer.singleShot(0, self, self._navegacion_terminada)
         return super().eventFilter(obj, e)
 
     def editar_llamada(self, ident, pos=None):

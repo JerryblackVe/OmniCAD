@@ -33,10 +33,12 @@ def _iniciar_opencascade():
     global GeomAbs_Line, GeomAbs_Plane, IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher
     global GC_MakeCircle, List_TopoDS_Shape, ShapeAnalysis_Surface, ShapeFix_Edge, ShapeFix_Face, TopAbs_COMPOUND, TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD
     global TopAbs_IN, TopAbs_ON, TopAbs_REVERSED, TopAbs_SHELL, TopAbs_SOLID, TopAbs_VERTEX, TopAbs_WIRE, TopExp
-    global TopoDS, TopoDS_Face
+    global BOPAlgo_Builder, TopLoc_Location, TopoDS, TopoDS_Face
     global TopoDS_Iterator, TopoDS_Shape, TopoDS_Vertex, _CAST, _CONTINUIDAD, gp_Ax1, gp_Ax2, gp_Dir, gp_Pln
     global gp_GTrsf, gp_Pnt, gp_Pnt2d, gp_Trsf, gp_Vec
+    from OCP.BOPAlgo import BOPAlgo_Builder
     from OCP.BRep import BRep_Tool
+    from OCP.TopLoc import TopLoc_Location
     from OCP.BRepAdaptor import BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Splitter
     from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_FindPlane, BRepBuilderAPI_GTransform,
@@ -1561,7 +1563,10 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
             e = TopoDS.Edge(e)
             if BRep_Tool.Degenerated_s(e):
                 continue
-            ef = TopoDS.Edge(e.Oriented(TopAbs_FORWARD))
+            # B-392: la arista de un cuerpo extruido trae su ubicación (TopLoc) y BRepFill.Face_s la aplica dos veces:
+            # se hornea en la geometría. Es además la copia que pide SUP-24 (no tocar la arista del documento).
+            ef = TopoDS.Edge(BRepBuilderAPI_Transform(e.Located(TopLoc_Location()).Oriented(TopAbs_FORWARD),
+                                                      e.Location().Transformation(), True).Shape())
             cara = None
             if tipo != "direccion" and plano is None:
                 vecinas = _caras_de(mapa, e) if mapa is not None else []
@@ -1615,9 +1620,21 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
             otra = TopoDS.Edge(geo.trasladar(ef, dirs[0] * distancia))
         else:
             otra = _borde_por_puntos(puntos + distancia * dirs, params)
-        # SUP-24: BRepFill sube la tolerancia de la arista de entrada (de 1e-7 a 21 mm en un tubo r5).
-        # La arista es la del cuerpo de origen y la comparte el documento: se le da una copia.
-        caras.append(BRepFill.Face_s(TopoDS.Edge(BRepBuilderAPI_Copy(ef).Shape()), otra))
+        caras.append(BRepFill.Face_s(ef, otra))
+    if len(caras) > 1:
+        # B-392: la fusión general hace compartir el vértice a las caras que solo se tocan en una esquina (sin él,
+        # cada esquina contaba como autointersección); si además parte alguna cara, es que se cruzan.
+        gf = BOPAlgo_Builder()
+        for c in caras:
+            gf.AddArgument(c)
+        gf.Perform()
+        if not gf.HasErrors():
+            unidas = geo.caras(gf.Shape())
+            if len(unidas) != len(caras):
+                raise geo.ErrorGeometria("Las caras de la superficie reglada se cruzan entre sí. "
+                                         + ("C" if ingletear else "Activá Esquinas en inglete, c")
+                                         + "ambiá el ángulo o la distancia, o hacé cada arista en una superficie aparte.")
+            caras = unidas
     return _coser_caras(caras)
 
 
@@ -2235,6 +2252,12 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
         raise geo.ErrorGeometria(f"No se pudo engrosar: {abs(espesor):g} mm es igual o mayor que el radio de "
                                  "curvatura de la superficie de ese lado. Probá un espesor menor o engrosar hacia el "
                                  "otro lado.")
+    from . import revision                  # local: revision carga medio núcleo
+    # B-394: tres caras de una caja abierta (borde + dos paredes) daban «ok» con 6 autointersecciones en las esquinas
+    if revision._autointersecciones_seguras(resultado, 1, 5.0)[0]:
+        raise geo.ErrorGeometria("No se pudo engrosar: el sólido se cruza consigo mismo (las caras elegidas se "
+                                 "tocan en una esquina o el espesor es mayor que lo que deja la pieza). Probá un "
+                                 "espesor menor, otras caras o engrosar hacia el otro lado.")
     return resultado
 
 

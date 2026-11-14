@@ -111,7 +111,7 @@ for i in range(3):                       # pasos hechos DESDE la ventana (así h
     pc = A.abrir(v, "caja")
     pc.set_valor("x", f"{400 + 60 * i} mm")
     pc._t_previa.stop()
-    pc._calcular_previa()
+    A.previa(pc)
     pc.aceptar()
     A.esperar(250)
 antes = A.cuerpos_resumen(v)

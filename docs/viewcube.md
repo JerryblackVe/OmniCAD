@@ -28,12 +28,12 @@ Tomamos el eje Z hacia arriba; «ojo» es de dónde mira la cámara.
 | Opción | Qué hace |
 |---|---|
 | Ir al inicio | Igual que la casita |
+| Tamaño del ViewCube › Automático / Grande / Normal / Pequeño / Diminuto | Cambia el tamaño (preferencia `general/tamano_viewcube`). Va arriba, a la vista. Automático crece con el alto del visor (20 %, entre 120 y 180 px); Grande 160, Normal 120, Pequeño 100, Diminuto 80 px |
 | Cámara › Ortográfica / Perspectiva / Perspectiva con caras ortográficas | Cambia la proyección (la misma opción de la barra de navegación) |
 | Establecer la vista actual como Inicio › Ajustar a la vista / Distancia fija | Guarda la cámara actual como Inicio. «Ajustar» encuadra la escena al volver; «Distancia fija» vuelve al mismo objetivo y zoom. Se guarda en el documento |
 | Restablecer Inicio | Vuelve al Inicio de fábrica (activo solo si se eligió otro) |
 | Establecer la vista actual como [Cara] | Mirando de frente una cara, esa pasa a ser la vista de la cara (p. ej. con el giro de la pantalla que tiene ahora). El nombre cambia con la cara; grisada si no se mira una |
 | Restablecer [Cara] | Devuelve la cara a su vista de fábrica |
-| Tamaño de ViewCube › Automático / Grande / Normal / Pequeño / Diminuto | Cambia el tamaño (preferencia `general/tamano_viewcube`) |
 
 ## Animación
 

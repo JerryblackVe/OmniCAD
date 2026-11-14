@@ -24,7 +24,7 @@ from ..nucleo import referencias as refs
 from ..nucleo import revision as rv
 from ..nucleo.malla import Malla
 from . import entidades as ent
-from ..nucleo.perfiles import buscar_por_firma_tolerante, cara_sin_area, detectar_boceto
+from ..nucleo.perfiles import buscar_perfiles, cara_sin_area, detectar_boceto
 from ..restricciones import Boceto, resolver
 from ..restricciones.boceto import ErrorBoceto, Texto, distancia_punto_recta, expresiones_de_texto, validar_valor_cota
 from .parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, ErrorMagnitud, acotar, evaluar, nombres_usados,
@@ -374,6 +374,12 @@ def poner_resultado(estado, ctx, op_id, c, nueva):
     return [c.id] + [estado.nuevo_cuerpo(op_id, s, c.tipo, **atributos_copia(c)) for s in partes[1:]]
 
 
+def _toca(c, herramienta):
+    """¿El cuerpo toca a la herramienta? B-403: la caja envolvente (cacheada) descarta a los lejanos sin pagar `se_tocan`."""
+    return (geo.cajas_se_tocan(geo.caja_envolvente(c.forma), geo.caja_envolvente(herramienta))
+            and geo.se_tocan(c.forma, herramienta))
+
+
 def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", tipo="solido", apoyos=None):
     """Aplica una forma recién creada según FeatureOperations. `objetivo`: id de un cuerpo, lista de ids
     ("Objetos para cortar" de Fusion) o vacío = automático (los cuerpos sólidos que toca). `apoyos`: función que da
@@ -396,7 +402,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
         objetivos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"
                      and c.id not in ctx.ocultos and c.componente not in ctx.ocultos]
         if operacion == "unir":
-            objetivos = [c for c in objetivos if geo.se_tocan(c.forma, herramienta)]
+            objetivos = [c for c in objetivos if _toca(c, herramienta)]
     if not objetivos:
         if operacion == "unir":
             ctx.aviso("No tocó ningún cuerpo: se creó un cuerpo nuevo.")
@@ -448,7 +454,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
 
     afectados = []
     for c in objetivos:
-        if not lista and not geo.se_tocan(c.forma, herramienta):
+        if not lista and not _toca(c, herramienta):
             continue
         if lista and operacion == "cortar" and not geo.se_tocan(c.forma, herramienta):
             ctx.aviso(f"La herramienta no toca a {c.nombre}: no le cortó nada.")
@@ -1115,8 +1121,15 @@ class _OpConPerfiles(Operacion):
                 detalle = ent.problema_perfil(ref)
                 if detalle:
                     raise ParametroMalFormado(ref, detalle)
-                perfil, nota = buscar_por_firma_tolerante(br.perfiles, ref["firma"], ref.get("centroide"), br.plano,
-                                                       br.boceto)
+            vistos = set()
+            for ref, (perfil, nota) in zip(self.p["perfiles"],
+                                           buscar_perfiles(br.perfiles, self.p["perfiles"], br.plano, br.boceto),
+                                           strict=True):
+                if perfil is not None and id(perfil) in vistos:     # B-404: dos referencias, una sola región
+                    perfil, nota = None, "Dos perfiles elegidos son ahora la misma región del boceto: revisá la operación."
+                if perfil is None and nota:
+                    ctx is not None and ctx.aviso(nota)
+                    continue
                 if perfil is None:
                     if ent.es_de_texto(ref["firma"], br):
                         raise ErrorOperacion("Un perfil seleccionado era un pedazo de una letra y ya no existe como "
@@ -1124,6 +1137,7 @@ class _OpConPerfiles(Operacion):
                     raise ErrorOperacion("Un perfil seleccionado ya no existe en el boceto (cambió su contorno).")
                 if nota and ctx is not None:
                     ctx.aviso(nota)
+                vistos.add(id(perfil))
                 caras.append(perfil.cara)
             plano = br.plano
         normal_cara = None
@@ -1554,7 +1568,8 @@ class OpCombinar(Operacion):
                 # es legítimo (cuerpo multi-sólido): eso no avisa.
                 n_antes = len(geo.solidos(parcial)) + len(geo.solidos(h.forma))
                 n_despues = len(geo.solidos(resultado))
-                if (n_despues > n_antes or (geo.se_tocan(parcial, h.forma) and n_despues == n_antes)
+                # RS-X4: se_tocan va último (era el 30 % de combinar en motor_impreso); con menos sólidos ya se fusionó
+                if (n_despues > n_antes or (n_despues == n_antes and geo.se_tocan(parcial, h.forma))
                         or not rv.es_estanca(resultado)):
                     ctx.aviso(f"{objetivo.nombre}: la unión con {h.nombre} dejó el cuerpo partido, sin "
                               f"fusionar lo que se toca o abierto (posible contacto tangente o en cuña); {geo.REVISAR}")

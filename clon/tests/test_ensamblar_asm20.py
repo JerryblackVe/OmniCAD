@@ -126,10 +126,27 @@ def test_panel_union_en_ventana_chica_muestra_lo_que_aplica(ventana, tipo):
     assert p is not None
     QTest.qWait(30)
     try:
+        visibles = lambda: [c.clave for c in p.campos if not c.avanzado and p.widgets[c.clave].isVisible()]  # noqa: E731
+        assert visibles() == POSICION["union"]                    # pestaña Posición (la primera)
+        p.barra_pestanas.setCurrentIndex(1)                       # clic en «Movimiento»
+        QTest.qWait(30)
         _cambiar_tipo(p, tipo)
         assert v.area.rect().contains(p.boton_ok.mapTo(v.area, p.boton_ok.rect().bottomRight())), tipo
-        visibles = [c.clave for c in p.campos if not c.avanzado and p.widgets[c.clave].isVisible()]
-        assert visibles == POSICION["union"] + ["tipo"] + MOVIMIENTO[tipo]
+        assert visibles() == ["tipo"] + MOVIMIENTO[tipo]
     finally:
         p.cancelar()
         QTest.qWait(10)
+
+
+def test_asm19_nombres_pestanas_y_hijos_encendidos():
+    """ASM-19: nombres de movimiento como Fusion, pestañas Posición/Movimiento, atajo Mayús+J e Incluir hijos encendido."""
+    from omnicad.timeline.ops_ensamblar import TIPOS_UNION, OpGrupoRigido
+    from omnicad.ui.comandos.ensamblar import GrupoRigido
+    assert list(TIPOS_UNION.values()) == ["Rígida", "Revolución", "Corredera", "Cilíndrica", "Polo-ranura", "Planar", "Bola"]
+    assert UnionComoEsta.TITULO == "Unión conforme a obra" and UnionComoEsta.ATAJO == "Shift+J" and Union.ATAJO == "J"
+    for cmd in (Union(), UnionComoEsta()):
+        pestanas = {c.pestana for c in cmd.campos(None)}
+        assert pestanas == {None, "Movimiento"}, pestanas
+    assert {c.seccion for c in Union().campos(None)} >= {"Componente 1", "Componente 2", "Alineación"}
+    casilla = next(c for c in GrupoRigido().campos(None) if c.clave == "incluir_hijos")
+    assert casilla.defecto is True and OpGrupoRigido.PARAMS["incluir_hijos"] is False

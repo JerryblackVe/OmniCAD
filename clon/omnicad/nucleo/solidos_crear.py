@@ -1159,7 +1159,8 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
 
 
 def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distancia=1.0, torsion=0.0,
-           conicidad=0.0, escala_carril="escalar", solido=True, eje_alineado=None, superficie_guia=None):
+           conicidad=0.0, escala_carril="escalar", solido=True, eje_alineado=None, superficie_guia=None,
+           extension="completa", distancia_carril=1.0):
     """Barrido de Fusion [SLD-SWEEP-SOLID, SLD-REF-SWEEP] con BRepOffsetAPI_MakePipeShell.
 
     perfiles: caras planas (con agujeros) o alambres; ruta: aristas encadenadas o alambre. `distancia` =
@@ -1167,7 +1168,9 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
     se aplica como escala lineal de cada lazo: los agujeros se achican). `carril` = Path + Guide Rail:
     `escala_carril` "escalar" (el perfil se agranda con la distancia ruta→carril), "ninguna" (el carril solo
     orienta) y "estirar" (crece solo hacia el carril y conserva la altura; lo resuelven las secciones deformadas
-    del barrido de superficie).
+    del barrido de superficie). `extension` (Extent, con carril): "perpendicular" (Perpendicular To Path: termina en el
+    plano perpendicular a la ruta en su final) o "completa" (Full Extents: la ruta hasta `distancia` y el carril hasta
+    `distancia_carril`, cada uno en su fracción 0..1).
     `orientacion` "perpendicular" | "paralela" | "alineada" (Aligned: `eje_alineado` = dirección que el perfil mantiene
     como binormal, para el barrido de un cuerpo que no debe girar sobre su eje). `superficie_guia` (Path + Guide
     Surface): una cara o compuesto sobre el que va la ruta; el perfil sigue la normal de la superficie.
@@ -1187,7 +1190,17 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
         orientacion = ("superficie", superficie_guia)
     ruta = _recortar_alambre(_alambre(ruta), float(distancia))
     carril = _alambre(carril) if carril is not None else None
-    datos = (_lista(perfiles), ruta, carril, orientacion, torsion, conicidad, escala_carril, solido)
+    if carril is not None:
+        if extension == "perpendicular":
+            from .superficies import _recortar_perpendicular
+            ruta, carril = _recortar_perpendicular(ruta, carril)
+        elif extension != "completa":
+            raise geo.ErrorGeometria(f"Extensión del barrido desconocida: {extension}")
+        elif not 0 < float(distancia_carril) <= 1:
+            raise geo.ErrorGeometria(f"La fracción del carril va de 0 (sin incluir) a 1; recibió {distancia_carril:g}.")
+        elif distancia_carril < 1:
+            carril = _recortar_alambre(carril, float(distancia_carril))
+    datos =(_lista(perfiles), ruta, carril, orientacion, torsion, conicidad, escala_carril, solido)
     if abs(torsion) > 1e-9 and carril is None:
         _exigir_ruta_para_torsion(ruta, torsion)
         if _guia_plana_posible(ruta):
@@ -1538,9 +1551,19 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
             continue
         if not 0 <= pos < len(exteriores):
             raise geo.ErrorGeometria(f"No hay una sección en la posición {pos + 1} para la condición de borde.")
-        if cond["tipo"] not in ("direccion", "tangente", "suave"):
+        if cond["tipo"] not in ("direccion", "tangente", "suave", "punto_tangente"):
             raise geo.ErrorGeometria(f"Condición de borde desconocida: {cond['tipo']}")
         tipo, w = exteriores[pos]
+        if cond["tipo"] == "punto_tangente":         # Point Tangent: cúpula, con las secciones de la superficie
+            vecino = exteriores[1] if pos == 0 else exteriores[-2]
+            if tipo != "vertice" or pos not in (0, len(exteriores) - 1) or vecino[0] != "alambre":
+                raise geo.ErrorGeometria("La condición «Punto tangente» es de un perfil que es un punto, junto a un "
+                                         "contorno.")
+            if float(cond.get("peso", 1.0)) <= 0:
+                raise geo.ErrorGeometria("El peso de la condición de borde tiene que ser positivo.")
+            from .superficies import _domo
+            (delante if pos == 0 else detras)[pos] = _domo(_xyz(BRep_Tool.Pnt_s(w)), vecino[1], float(cond.get("peso", 1.0)))
+            continue
         if tipo != "alambre":
             raise geo.ErrorGeometria("La condición de borde necesita secciones con contorno, no puntos.")
         # P-147d: como Fusion, se mide desde la normal (0 = perpendicular) y da vueltas; acá, desde el plano de la sección
@@ -1823,7 +1846,7 @@ def _desmoldear_pared(bruto, direccion, angulo, origen, *, recortado):
 
 
 def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, direccion="simetrica",
-           invertir=False, extender=True, angulo_desmoldeo=0.0, direccion_desmoldeo=None):
+           invertir=False, extender=True, angulo_desmoldeo=0.0, direccion_desmoldeo=None, invertir_desmoldeo=False):
     """Nervio (Rib) de Fusion [SLD-RIB]: pared delgada que crece desde una o varias curvas abiertas, PARALELA al
     plano del boceto y perpendicular a la cuerda de cada curva, hasta las caras más cercanas del cuerpo ("To Next")
     o una `profundidad` — un nervio por curva, unidos en un solo paso, como en Fusion. El espesor se mide
@@ -1858,6 +1881,8 @@ def nervio(cuerpo, aristas_curva, normal_plano, espesor, *, profundidad=None, di
                            for f in _caras_de(region)])
             pull = -m if direccion_desmoldeo is None else _unit(direccion_desmoldeo, "dirección de desmoldeo")
             if float(pull @ m) > 0:             # la extracción va del cuerpo hacia el borde libre (la curva)
+                pull = -pull
+            if invertir_desmoldeo:              # Flip Direction de Draft Pull Direction
                 pull = -pull
             recortado = _desmoldear_pared(bruto, pull, angulo_desmoldeo, _punto_en(w, 0.5)[0], recortado=recortado)
         nervios.append(recortado)
@@ -2943,7 +2968,10 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
         else:
             r_in, w_in = diametro / 2 - prof, paso / 4
             r_out, w_out = diametro / 2 + extra, 7 * paso / 8 + pend * extra
-        return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out)
+        # B-371: el barrido largo también sale incompleto en el perfil básico (M20x2.5×100: 57 %); verificado, cae al
+        # corte por mitades de `rosca`
+        return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out,
+                             verificar=True)
     t = math.tan(math.radians(angulo / 2))
 
     def ancho(rho):
@@ -3357,6 +3385,8 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
         raise geo.ErrorGeometria(f"Posición de sección desconocida: {posicion_seccion}")
     if r_c + min(radiales) <= 0:
         raise geo.ErrorGeometria("La sección no entra: cruza el eje de la bobina.")
+    if not espiral and r_c + altura * math.tan(math.radians(angulo)) + min(radiales) <= 0:   # el cono angosta el radio
+        raise geo.ErrorGeometria("Con ese ángulo la bobina llega al eje antes del final: bajá el ángulo o la altura.")
     ancho = max(radiales) - min(radiales) if espiral else max(axiales) - min(axiales)
     if paso <= ancho + 1e-6:
         raise geo.ErrorGeometria("El paso es menor que la sección: las espiras se superpondrían.")
@@ -3371,7 +3401,11 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
     forma = _barrido_helicoidal(perfil, helice)
     if girar:
         forma = _girar(forma, gp_Ax1(_pnt(o), _gdir(np.cross(z, x))), 90)
-    return _validar(forma, "Bobina")
+    forma = _validar(forma, "Bobina")
+    if geo.volumen(forma) <= 0:          # B-391: medidas extremas (altura 1e6 con 30°) dan el sólido dado vuelta
+        raise geo.ErrorGeometria("La bobina no se pudo construir con esas medidas: el sólido sale dado vuelta. "
+                                 "Probá con menos altura o menos ángulo.")
+    return forma
 
 
 # ================================================================ 10. tubería
@@ -3454,6 +3488,7 @@ def unir_instancias(formas):
     op = BRepAlgoAPI_Fuse()
     op.SetArguments(argumentos)
     op.SetTools(herramientas)
+    op.SetRunParallel(geo.PARALELO)      # RS-X4: 1600 cubos 0,62 → 0,53 s
     try:
         op.Build()
         hecho = op.IsDone()

@@ -6,13 +6,15 @@ import math
 import numpy as np
 
 from ...nucleo import geometria as geo
+from ...nucleo.malla import Malla
 from ...timeline.operaciones import OpExtrusion, OpRevolucion, espesor_plastico
 from ...timeline.parametros import ANGULO, LONGITUD
 from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, OpcionesVivas, Seleccion, exigir,
                        hit_desde_ref, hits, ref1)
 from . import registrar
-from .comunes import (DIRECCIONES_UI, campo_objetivos, direcciones_revolucion, campo_operacion, evaluar_o_cero as _evaluar, objetivos,
-                      objetivos_desde_op, perfiles_a_params, perfiles_desde_op)
+from .comunes import (DIRECCIONES_UI, ajustar_operacion, caja_cuerpo, caja_nueva, campo_objetivos, campo_operacion,
+                      direcciones_revolucion, evaluar_o_cero as _evaluar, objetivos, objetivos_desde_op, perfil_apoyado,
+                      perfiles_a_params, perfiles_desde_op, solidos_visibles)
 
 
 EXTENSIONES = {"distancia": ("Distancia", "ext_distancia"), "objeto": ("Al objeto", "ext_objeto"),
@@ -91,22 +93,13 @@ def _angulos(radios, distancia):
             "maximo": min(89.0, math.degrees(math.atan(radios[1] / d)))}
 
 
-def _cajas_tocan(a, b):
-    """¿Dos cajas envolventes se tocan o se solapan? (Apoyarse en una cara sí cuenta, a diferencia de `cajas_solapan`.)"""
-    return all(min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) >= -1e-6 for i in range(3))
-
-
-def _area_comun(cara, solido):
-    comun = geo.booleano(cara, solido, "intersecar")
-    return 0.0 if geo.esta_vacia(comun) else geo.area(comun)
-
-
 class Extruir(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "extruir", "Extruir", "extruir", "E"
     AYUDA = "Agrega profundidad a perfiles de boceto o caras planas: cuerpo nuevo, unir, cortar o intersecar."
     CLASE_OP = OpExtrusion
     TITULOS_MODO = ("tipo", {"solida": ("Extruir", "extruir"), "delgada": ("Extrusión delgada", "extruir")})
     _herramienta_previa = None      # (estado, índice, receta del paso) → formas de `_formas_herramienta` (P-99)
+    _base_asas = None               # (estado, perfiles, base, borde): las asas se rearman en cada tecla (FL-1)
 
     def verificar(self, ctx):
         if not ctx.estado.bocetos and not ctx.estado.cuerpos:
@@ -185,13 +178,20 @@ class Extruir(Comando):
         from .. import manipuladores as mp
         if v.get("extension") != "distancia":
             return []
-        base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
+        texto = repr([h.get("ref", h) if isinstance(h, dict) else h for h in v.get("perfiles") or []])   # sin sus mallas
+        if self._base_asas is None or self._base_asas[0] is not ctx.estado or self._base_asas[1] != texto:
+            # FL-1: resolver y teselar el texto «EMILIA» tardaba 350 ms en cada tecla de la distancia
+            base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
+            # P-139: el borde de -u (de dos esquinas, la de abajo); en la vista inicial el asa queda adelante, como en Fusion
+            borde = None if base is None else mp.punto_borde(
+                base[2], base[0], -mp.unitario(base[1].u) - 0.01 * mp.unitario(base[1].v))
+            self._base_asas = ctx.estado, texto, base, borde
+        _, _, base, borde = self._base_asas
         if base is None:
             return []
         centro, plano, formas = base
         n = mp.unitario(plano.normal) * (-1.0 if v.get("invertir") else 1.0)
-        lateral = -mp.unitario(plano.u)      # P-139: el borde de -u; en la vista inicial el asa queda adelante, como en Fusion
-        borde = mp.punto_borde(formas, centro, lateral - 0.01 * mp.unitario(plano.v))   # de dos esquinas, la de abajo
+        lateral = -mp.unitario(plano.u)
         antes = [mp.Flecha("desfase_inicio", borde, n)] if v.get("inicio") == "desfase" else []
         if v.get("inicio") == "desfase":
             centro = centro + n * _evaluar(ctx, v.get("desfase_inicio"))
@@ -287,10 +287,13 @@ class Extruir(Comando):
         if cajas:
             cajas = list(cajas.values())
         else:   # P-99: la herramienta se extruye una vez por clic, y con «Nuevo» la previa exacta ya es la herramienta
-            exacta = op.p.get("operacion") == "nuevo" and not hasattr(estado, "_mallas_previa")
-            formas = ([c.forma for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos] if exacta
-                      else self._formas_herramienta(ctx, op, True))
-            cajas = [geo.caja_envolvente(f) for f in formas]
+            # FL-1: la previa aparte trae el B-Rep (`formas`); la malla del arrastre (P-44) no sirve para ver si solapa
+            exacta = op.p.get("operacion") == "nuevo" and not any(
+                isinstance(c.forma, Malla) for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos)
+            nuevos = [(k, c.forma) for k, c in estado.cuerpos.items() if k not in ctx.estado.cuerpos]
+            formas = [f for _, f in nuevos] if exacta else self._formas_herramienta(ctx, op, True)
+            cajas = ([caja_nueva(estado, k, f) for k, f in nuevos] if exacta     # FL-1b: de la malla, sin kernel
+                     else [geo.caja_envolvente(f) for f in formas])
         solidos = [c for c in self._visibles(ctx) if any(geo.cajas_solapan(self._caja(c), k) for k in cajas)]
         if any(len(geo.caras(c.forma)) >= CARAS_PESADAS for c in solidos):
             self._pedir_al_hijo(panel, op, solidos)
@@ -310,46 +313,17 @@ class Extruir(Comando):
         return "unir" if apoyado or any(r.get("cuerpo") in visibles for r in op.p.get("caras") or []) else None
 
     def _perfil_apoyado(self, ctx, v):
-        """B-344: ¿el perfil (desde su plano) se apoya en un sólido visible? Como Fusion, extruirlo hacia afuera abre en
-        Unir. Se mide el perfil, no la extrusión: una vez por selección y sin kernel mientras se arrastra la flecha (P-99)."""
-        if v.get("inicio", "plano") != "plano":
-            return False
-        clave = repr([h["ref"] for h in v.get("perfiles") or []])
-        if clave not in self._apoyos:
-            from .. import manipuladores as mp
-            base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
-            formas = base[2] if base else []
-            self._apoyos[clave] = any(       # con área: tocar solo por una arista no es estar dibujado sobre la cara
-                _area_comun(f, c.forma) > 1e-6 for f in formas for c in self._visibles(ctx)
-                if _cajas_tocan(geo.caja_envolvente(f), self._caja(c)))
-        return self._apoyos[clave]
+        return perfil_apoyado(ctx, v, self._apoyos, self._cajas)
 
     @staticmethod
     def _visibles(ctx):
-        ocultos = getattr(ctx.ventana, "_ocultos_efectivos", lambda _estado: ())(ctx.estado)
-        return [c for c in ctx.estado.cuerpos.values() if c.tipo == "solido" and c.id not in ocultos]
+        return solidos_visibles(ctx)
 
     def _caja(self, cuerpo):
-        if cuerpo.id not in self._cajas:
-            self._cajas[cuerpo.id] = geo.caja_envolvente(cuerpo.forma)
-        return self._cajas[cuerpo.id]
+        return caja_cuerpo(cuerpo, self._cajas)
 
     def _ajustar(self, panel, auto):
-        """`auto`: "cortar", "unir" o None (vuelve a la operación que había antes del cambio automático)."""
-        actual = panel.valores.get("operacion")
-        if auto is not None and actual != auto:
-            if self._antes_auto is None:
-                self._antes_auto = actual
-            nueva = auto
-        elif auto is None and self._antes_auto is not None:
-            nueva, self._antes_auto = self._antes_auto, None
-        else:
-            return
-        self._ajustando = True
-        try:
-            panel.set_valor("operacion", nueva)
-        finally:
-            self._ajustando = False
+        ajustar_operacion(self, panel, auto)
 
     def _pedir_al_hijo(self, panel, op, solidos):
         """Un solo cálculo a la vez: el que termina con una extrusión vieja pide otra vuelta de la previa."""

@@ -15,8 +15,8 @@ se muestra el modelo como estaba en ese punto del timeline.
 Esta capa no hace geometría: arma operaciones con los diálogos y se las pasa al Documento.
 """
 import logging
-import os
 import tempfile
+import threading
 import time
 from collections import Counter
 from contextlib import nullcontext
@@ -149,6 +149,18 @@ class _FiltroAyuda(QObject):
         return False
 
 
+def _precargar_scipy():
+    """FL-8b: scipy se carga en un hilo aparte al abrir la ventana. Si no, la paga el hilo de la ventana la primera vez
+    que se usa: el solver del primer boceto que se cierra (`least_squares`, 2,3 a 3,3 s en Windows) y la primera vista
+    animada (`slerp`)."""
+    import scipy.optimize  # noqa: F401
+    import scipy.sparse.csgraph  # noqa: F401
+    import scipy.spatial.transform  # noqa: F401
+
+
+PLAZO_PREVIA_PREFERENCIAS_MS = 150     # FL-8: espera al último cambio de Preferencias antes de repintar la vista previa
+
+
 class VentanaPrincipal(QMainWindow):
     _autoguardado_listo = Signal(object, object)    # (destino, error) desde el hilo del autoguardado
 
@@ -159,6 +171,9 @@ class VentanaPrincipal(QMainWindow):
         self._filtro_info = _FiltroInfoHerramientas(self)
         self.prefs = prefs or Preferencias()
         self._tema_aplicado = None          # tokens del tema que ya están en la aplicación
+        self._previa_pendiente = []         # FL-8: cambios de Preferencias por aplicar [(clave, función, args)]
+        self._t_previa = QTimer(self, singleShot=True, interval=PLAZO_PREVIA_PREFERENCIAS_MS)
+        self._t_previa.timeout.connect(self._aplicar_previa)
         self._avisos_tema = self.aplicar_tema()     # antes de crear los widgets: nacen con el estilo del tema
         QGuiApplication.styleHints().colorSchemeChanged.connect(self._al_cambiar_esquema)
         self.doc = None
@@ -305,6 +320,7 @@ class VentanaPrincipal(QMainWindow):
         self.asistente = None               # panel del Asistente IA (ui/asistente.py), se crea al abrirlo
         self._vista_inicial()
         self.aplicar_preferencias()
+        QTimer.singleShot(1000, self, lambda: threading.Thread(target=_precargar_scipy, daemon=True).start())
         from .comentarios import PanelComentarios
         self.comentarios = PanelComentarios()
         self.area.anclar_abajo_izq(self.comentarios)
@@ -445,7 +461,7 @@ class VentanaPrincipal(QMainWindow):
           "Congela cuerpos elegidos (sin historial).", "operacion_base")
         A("nuevo_dibujo", "Nuevo dibujo desde el diseño", lambda: self.abrir_espacio("dibujo"), None,
           "Abre el espacio DIBUJO: vistas 2D, cotas y exportación a PDF/DXF.", "dibujo")
-        A("insertar_diseno", "Insertar componente…", self.insertar_diseno, None,
+        A("insertar_diseno", "Insertar componente", self.insertar_diseno, None,
           "Inserta otro diseño de OmniCAD (.omnicad) como componente.", "insertar_componente")
         A("estudio_movimiento", "Estudio de movimiento", self._estudio_movimiento, None,
           "Anima una unión en todo su recorrido.", "estudio_movimiento")
@@ -645,7 +661,11 @@ class VentanaPrincipal(QMainWindow):
         aplicado = (dict(temas.activo()), temas.tipografia())
         if aplicado != self._tema_aplicado:
             self._tema_aplicado = aplicado
-            temas.aplicar_a_app(QApplication.instance())
+            self.setUpdatesEnabled(False)                  # repintar una sola vez al final: la mitad de tiempo (FL-8)
+            try:
+                temas.aplicar_a_app(QApplication.instance())
+            finally:
+                self.setUpdatesEnabled(True)
             if hasattr(self, "area"):                      # ya hay ventana armada: repintar lo que pinta a mano
                 for v in self.area.visores:
                     v.update()
@@ -694,9 +714,6 @@ class VentanaPrincipal(QMainWindow):
             from .editor_boceto import ajustes_inferencia
             modo.lienzo.ajustes_inf = ajustes_inferencia(p)
             modo.lienzo.update()
-        if c.animar_vistas and not os.environ.get("OMNICAD_SIN_ANIMACION"):
-            from ..nucleo import animacion
-            QTimer.singleShot(2000, animacion.precalentar)      # idempotente: scipy se carga una sola vez
         c.aspecto, c.tipo_orbita = p["material/aspecto"], p["general/tipo_orbita"]
         if p["general/camara"] != self._camara_aplicada:     # solo si cambió: no pisa la cámara elegida a mano
             self._camara_aplicada = p["general/camara"]
@@ -875,13 +892,36 @@ class VentanaPrincipal(QMainWindow):
 
     def preferencias(self, _marcado=False, pagina="general"):
         dlg = DialogoPreferencias(self.prefs, self, pagina)
-        dlg.aplicado.connect(self.aplicar_preferencias)
-        dlg.tema_elegido.connect(self.aplicar_tema)         # vista previa al instante, antes de Aplicar
-        dlg.apariencia_cambiada.connect(self.aplicar_tema)  # Apariencia: fuente y tamaño al instante
-        dlg.graficos_cambiados.connect(self.aplicar_preferencias)   # Gráficos: al instante
-        dlg.asas_cambiadas.connect(self._aplicar_estilo_asas)       # Asas y superposiciones: al instante
-        dlg.rejected.connect(lambda: self.aplicar_tema())   # Cancelar: vuelve al tema guardado
+        dlg.aplicado.connect(self._aplicar_ahora)           # Aplicar: en el acto
+        # Vista previa antes de Aplicar: una sola vez por tanda de cambios (FL-8): arrastrar un control o pasar por las
+        # tarjetas de temas repintaba toda la aplicación en cada paso (0,3-1 s cada uno).
+        dlg.tema_elegido.connect(lambda clave: self._pedir_previa("tema", self.aplicar_tema, clave))
+        dlg.apariencia_cambiada.connect(lambda: self._pedir_previa("tema", self.aplicar_tema))
+        dlg.graficos_cambiados.connect(lambda: self._pedir_previa("preferencias", self.aplicar_preferencias))
+        dlg.asas_cambiadas.connect(lambda: self._pedir_previa("asas", self._aplicar_estilo_asas))
+        dlg.rejected.connect(self._cancelar_previa)         # Cancelar: vuelve al tema guardado
         dlg.exec()
+
+    def _pedir_previa(self, clave, funcion, *args):
+        """El control ya se movió; lo pesado (repintar con el tema y la tipografía nuevos) se hace al terminar la tanda."""
+        self._previa_pendiente = [p for p in self._previa_pendiente if p[0] != clave] + [(clave, funcion, args)]
+        self._t_previa.start()
+
+    def _aplicar_previa(self):
+        pendientes, self._previa_pendiente = self._previa_pendiente, []
+        for _clave, funcion, args in pendientes:
+            funcion(*args)
+
+    def _aplicar_ahora(self):
+        """Aplicar: lo pendiente (p. ej. el estilo de las asas) se aplica ahora, y después todo lo guardado."""
+        self._t_previa.stop()
+        self._aplicar_previa()
+        self.aplicar_preferencias()
+
+    def _cancelar_previa(self):
+        self._t_previa.stop()
+        self._previa_pendiente = []
+        self.aplicar_tema()
 
     def ayuda_comando(self, accion=None):
         """Ctrl+/ como en Fusion: la ayuda del comando que está bajo el ratón (botón de la cinta o fila de un
@@ -3063,7 +3103,6 @@ class VentanaPrincipal(QMainWindow):
         """Corre `funcion` en otro hilo mostrando un aviso de espera (la ventana no se congela). Devuelve su
         resultado o relanza su excepción. Con `con_avance`, `funcion(avance)` recibe una función de un texto que
         cambia el aviso mientras corre (la etapa en que va)."""
-        import threading
 
         from PySide6.QtCore import QEventLoop
         from PySide6.QtWidgets import QProgressDialog
