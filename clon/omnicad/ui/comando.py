@@ -342,6 +342,11 @@ class Comando:
         cara). None = sin cambios."""
         return None
 
+    def grupo_de(self, campo, hit, valores, ctx):
+        """Gancho al elegir algo: si el clic debe elegir (o quitar) varios a la vez, devuelve sus selecciones
+        (p. ej. la cadena tangente de una curva). None = solo lo tocado."""
+        return None
+
     def manipuladores(self, ctx, v):
         """Manipuladores en la vista (`ui/manipuladores.py`: Flecha, Angulo, Triada…) para los valores `v`.
         El panel los recalcula cada vez que cambia un valor; [] = sin manipuladores."""
@@ -1595,6 +1600,11 @@ class PanelComando(QFrame):
                 if campo.maximo is None:
                     grupo = self.visor.hits_texto(hit)
             except Exception:  # noqa: BLE001 — sin el grupo, se elige la letra sola
+                grupo = None
+        if grupo is None:
+            try:
+                grupo = self.comando.grupo_de(campo, hit, self.valores, self.ctx)
+            except Exception:  # noqa: BLE001 — sin el grupo, se elige lo tocado
                 grupo = None
         if grupo:                           # una letra de un texto: entra (o sale) el texto entero
             refs = [h["ref"] for h in grupo]

@@ -179,6 +179,39 @@ def _encadenadas(b, tol_angulo):
                 yield a, c
 
 
+def cadena_tangente_de(b, curva, tol_angulo=1.0, tol=1e-6):
+    """Ids de las curvas unidas a `curva` por extremos con la misma tangente (la «Tangent Chain» de Fusion, que elige
+    de una vez toda la cadena). La primera es `curva`. Se unen por el mismo punto, por una restricción coincidente o
+    por estar en el mismo lugar (`tol`: lo que se dibuja con herramientas que no comparten puntos).
+    shortcut: solo curvas con tangente definida en sus extremos (GEOMETRICAS)."""
+    seno = math.sin(math.radians(tol_angulo))
+    extremos = []                           # (id de curva, id de punto, x, y)
+    for c in b.curvas.values():
+        if c.tipo in GEOMETRICAS and c.extremos():
+            for pid in c.extremos():
+                extremos.append((c.id, pid, b.puntos[pid].x, b.puntos[pid].y))
+    coincidentes = {frozenset(r.entidades) for r in b.restricciones.values()
+                    if r.tipo == "coincidente" and len(r.entidades) == 2}
+
+    def unidos(e, f):
+        return e[0] != f[0] and (e[1] == f[1] or frozenset((e[1], f[1])) in coincidentes
+                                 or math.hypot(e[2] - f[2], e[3] - f[3]) <= tol)
+
+    def sigue(e, f):
+        u, v = _tangente_en(b, e[0], e[1]), _tangente_en(b, f[0], f[1])
+        return abs(u[0] * v[1] - u[1] * v[0]) < seno
+
+    cadena, pendientes = [curva], [curva]
+    while pendientes:
+        actual = pendientes.pop()
+        for e in (x for x in extremos if x[0] == actual):
+            for f in extremos:
+                if f[0] not in cadena and unidos(e, f) and sigue(e, f):
+                    cadena.append(f[0])
+                    pendientes.append(f[0])
+    return cadena
+
+
 def tangentes(b, tol_angulo, tol_distancia, tipos):
     """Tangencias: encadenadas por un extremo, línea con círculo/arco/elipse y círculos/arcos entre sí.
     shortcut: spline y cónica solo se detectan encadenadas; elipse con elipse no se detecta."""

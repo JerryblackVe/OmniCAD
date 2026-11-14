@@ -2586,6 +2586,7 @@ Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text'
   - `taper_angle2` (número o expresión; opcional, por defecto `null`): conicidad del lado 2 en grados con direction=two_sides; vacío = la misma que taper_angle.
   - `open_curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas ABIERTAS de sketch (get_sketch) para extruir con thin=true; reemplazan a profile.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de faces, start_object, to y side2_to; vacío = el único cuerpo.
+  - `tangent_chain` (true/false; opcional, por defecto `false`): con open_curves, suma las curvas tangentes a cada una.
   - `side2_extent` ("distance" | "to_object" | "all"; opcional, por defecto `"distance"`): extensión propia del lado 2 con direction=two_sides: distance (distance2), to_object (hasta side2_to) o all.
   - `side2_to` (texto; opcional, por defecto `null`): cara (selector o id), plano o cuerpo límite del lado 2; obligatorio con side2_extent=to_object. Usa to_mode y to_offset.
 - CLI: `omnicad call extrude --doc pieza.omnicad`

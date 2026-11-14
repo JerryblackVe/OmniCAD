@@ -197,6 +197,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
             extent: Literal["distance", "to_object", "all"] = "distance", to: str | None = None,
             to_mode: Literal["face", "body", "through"] = "face", to_offset: Expr = 0,
             taper_angle2: Expr | None = None, open_curves: list[int] | None = None, body: str | None = None,
+            tangent_chain: bool = False,
             side2_extent: Literal["distance", "to_object", "all"] = "distance", side2_to: str | None = None):
     """
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
@@ -227,6 +228,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     side2_extent: extensión propia del lado 2 con direction=two_sides: distance (distance2), to_object (hasta side2_to) o all.
     side2_to: cara (selector o id), plano o cuerpo límite del lado 2; obligatorio con side2_extent=to_object. Usa to_mode y to_offset.
     open_curves: ids de curvas ABIERTAS de sketch (get_sketch) para extruir con thin=true; reemplazan a profile.
+    tangent_chain: con open_curves, suma las curvas tangentes a cada una.
     body: cuerpo donde se evalúan los selectores de faces, start_object, to y side2_to; vacío = el único cuerpo.
     """
     if sketch is None and not faces:
@@ -274,10 +276,13 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         p.update(tipo="delgada", espesor=texto_expr(wall_thickness) if wall_thickness is not None else "",
                  ubicacion={"side1": "lado1", "side2": "lado2", "center": "centro"}[wall_location])
         if open_curves:
-            p["curvas"] = [{"tipo": "curva_boceto", "boceto": sop.id, "curva": int(c)} for c in dict.fromkeys(open_curves)]
             for c in open_curves:
                 if c not in br.boceto.curvas:
                     raise error("ENTITY_NOT_FOUND", f"El boceto «{sop.nombre}» no tiene la curva {c} (get_sketch las lista).")
+            if tangent_chain:
+                from ..restricciones.auto_candidatos import cadena_tangente_de
+                open_curves = [x for c in open_curves for x in cadena_tangente_de(br.boceto, c)]
+            p["curvas"] = [{"tipo": "curva_boceto", "boceto": sop.id, "curva": int(c)} for c in dict.fromkeys(open_curves)]
     if start == "offset":
         p.update(inicio="desfase", desfase_inicio=texto_expr(start_offset))
     elif start == "object":
