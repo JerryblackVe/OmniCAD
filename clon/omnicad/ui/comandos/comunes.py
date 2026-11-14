@@ -207,9 +207,12 @@ def con_operacion_automatica(clase):
 
     def preparar_auto(self, panel):
         self._fija = panel.ctx.op is not None
-        self._antes_auto, self._ajustando = None, False
+        self._antes_auto, self._ajustando = None, True
         self._apoyos, self._cajas = {}, {}
         self._herramienta_previa = None
+        if not self._fija:
+            panel.set_valor("operacion", "nuevo")  # B-431: el objetivo de un preajuste no viaja con él.
+        self._ajustando = False
         preparar(self, panel)
 
     def cambiar_auto(self, panel, clave):

@@ -274,6 +274,9 @@ class Extruir(Comando):
     def preparar_panel(self, panel):
         self._fija = panel.ctx.op is not None    # un paso reabierto no cambia solo de operación
         self._antes_auto = None                  # la operación que había antes de pasar sola a Cortar o Unir
+        self._ajustando = True
+        if not self._fija:
+            panel.set_valor("operacion", "nuevo")   # B-431: el objetivo de un preajuste o del último uso no viaja con él
         self._ajustando = False
         self._cajas = {}                         # id de cuerpo → caja envolvente: el estado no cambia con el panel abierto
         self._apoyos = {}                        # B-344: selección de perfiles → ¿se apoya en un sólido visible?
