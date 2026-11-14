@@ -700,6 +700,7 @@ def _perfiles_occ(geometria, plano, aristas, tolerancia):
     sp.SetTools(herramientas)
     sp.SetFuzzyValue(tolerancia)
     sp.SetRunParallel(geo.PARALELO)        # BOC-28: con miles de letras, partir en paralelo tarda ~1/2
+    sp.SetNonDestructive(True)   # B-48: no escribir en las entradas
     sp.Build()
     if not sp.IsDone():
         raise geo.ErrorGeometria("No se pudieron calcular los perfiles del boceto.")

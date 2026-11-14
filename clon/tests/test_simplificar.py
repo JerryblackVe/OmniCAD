@@ -47,7 +47,8 @@ def _pieza():
     """La caja con un empalme R2 en una arista vertical, un chaflán 1 en otra esquina y un agujero
     Ø4 pasante en el centro de arriba."""
     base = _chaflanada()
-    forma = empalme(base, [{"aristas": _aristas(base, 20)[:1], "tipo": "constante", "radio": 2.0}])
+    esquina = [e for e in _aristas(base, 20) if refs.firma_arista(e)["medio"] == [0.0, 30.0, 10.0]]   # no la del chaflán
+    forma = empalme(base, [{"aristas": esquina, "tipo": "constante", "radio": 2.0}])
     return _con_agujero(forma, 10, 7)
 
 
