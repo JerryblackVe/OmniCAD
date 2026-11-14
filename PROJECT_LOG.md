@@ -320,6 +320,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-14] Nunca `pkill -f 'tests_afectados…'` ni `pkill -f pytest` a secas en la VPS: mata los tests de las 10 sesiones. Se corta solo lo propio filtrando por `readlink /proc/$p/cwd` == el worktree. · Evidencia: E6 lo corrió a las 13:56 y 15:54 UTC; E2, E3, E4, E5, E7 y E8 vieron sus tests_afectados morir con código 144 y relanzaron.
 - [2026-11-14] Antes de commitear, no encadenar `pytest … | tail -1 && git commit`: la tubería devuelve el código de `tail` y el commit sale aunque el test falle. Guardar la salida y mirar el código de pytest. · Evidencia: f794adc entró con `test_ids_unicos` en rojo (B-428 dos veces); arreglado en acd03d5.
 - [2026-11-14] Para cambiar qué mueve el solver, acomodar el punto de arranque (`ancla`) de la cota que cambió, no subir pesos de regularización: un peso de 1e-3 en muchos puntos traba Levenberg-Marquardt (cadena de 400 líneas: 1,1 s → 707 s) y anclar un punto de toda la parte cambia patrones y tangencias. · Evidencia: B-413, `tests/test_boceto_fase8_solver.py` › `test_400_lineas_*`, `tests/test_patrones_boceto.py` › `test_boc61_*`.
 - [2026-11-14] `tanda.sh` ahora se niega a integrar un worktree con pytest, turno o tests_afectados corriendo adentro: mirar el conteo a ojo no alcanzó. · Evidencia: B-418g, integrado con 4 procesos de tests de E6 adentro, que murieron al borrarse el worktree (la misma falla que B-394).
