@@ -16,7 +16,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | FL-3b | Aceptar, editar y deshacer fuera de la ventana, y la Rosca sin mallar en la ventana (FL-3 Abrir integrado: 572e69c) |
 | E7 | B-453 + B-458 | Regresión de la previa de Extruir tras unir: caer a la previa normal sin el mensaje rojo, asa sobre la cara y test FL-2 sobre cuerpo modificado (REV-1114 integrada: 33d1716; B-432 espera sus tests) |
 | E8 | B-445 | La cara gana al plano de origen al elegir (B-437 integrado: ad02acb) |
-| E9 | Sol | Sol siempre corriendo (Gerardo 14/11): H-115, B-442, B-435, B-436, B-428, B-423, B-451, B-447, B-401, H-82, B-457, B-427, B-444, P-134, P-98, B-450; E9 con B-421 y H-97 |
+| E9 | Sol | Sol siempre corriendo (Gerardo 14/11): H-115, B-442, B-435, B-436, B-428, B-423, B-451, B-447, B-401, H-82, B-457, B-444, P-134, P-98, B-450; E9 con B-421 y H-97 |
 | E10 | B-337 | Abrir e importar un STEP pesado sin congelar (B-335 + B-337; B-363 parte integrado: 8cf5219) |
 
 ## Sigue (en orden)
