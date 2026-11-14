@@ -1,6 +1,7 @@
 """B-173: la solevación de 3 splines cerrados (antebrazo del brazo robótico, 86 puntos cada uno) salía `ok` plegada
 (1,87 L en vez de ~4 L; con el orden invertido, volumen negativo) y `check_geometry` la daba por válida con una
 autointersección de severidad error. Los puntos son los de los bocetos del documento original."""
+import itertools
 import json
 from pathlib import Path
 
@@ -28,16 +29,48 @@ def _secciones():
     return s
 
 
-@pytest.mark.parametrize("orden", [["Bc_ant_n", "Bc_ant_m", "Bc_ant_p"], ["Bc_ant_p", "Bc_ant_m", "Bc_ant_n"]])
+@pytest.mark.parametrize("orden", list(itertools.permutations(["Bc_ant_n", "Bc_ant_m", "Bc_ant_p"])))
 def test_la_solevacion_no_se_pliega_y_no_depende_del_orden(orden):
+    """B-416: en los 4 órdenes cruzados las secciones van y vuelven; antes daban `ok` plegado (6 044 386 mm³, o
+    −862 235 mm³) y «Propiedades» tardaba 15 s. Ahora se rechazan al instante."""
     s = _secciones()
+    if orden[1] != "Bc_ant_m":
+        r = api.llamar(s, "loft", {"sketches": list(orden), "operation": "new_body"})
+        assert not r["ok"] and "las secciones van y vuelven" in r["mensaje"], r
+        assert not s.doc.estado_final.cuerpos             # el paso se deshizo: no queda ningún cuerpo
+        return
 
-    r = _llamar(s, "loft", sketches=orden, operation="new_body")
+    r = _llamar(s, "loft", sketches=list(orden), operation="new_body")
 
     volumen = r["bodies_created"][0]["volume"]
     assert volumen == pytest.approx(3.986e6, rel=0.01)          # antes: 1,87e6 en un orden y negativo en el otro
     g = _llamar(s, "check_geometry", body=r["bodies_created"][0]["id"])["bodies"][0]
     assert g["valid"] and g["self_intersections"] == 0
+
+
+def test_b416_la_solevacion_de_superficie_tambien_rechaza_secciones_que_van_y_vuelven():
+    s = _secciones()
+    r = api.llamar(s, "create_surface_loft", {"profiles": [{"sketch": b, "profile": 0}
+                                                         for b in ("Bc_ant_n", "Bc_ant_p", "Bc_ant_m")]})
+    assert not r["ok"] and "las secciones van y vuelven" in r["mensaje"], r
+
+
+def test_b416_un_arco_sigue_valiendo():
+    """La del medio 100 mm más alta: el camino gira más de 90° pero las secciones siguen avanzando."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon
+    from OCP.gp import gp_Pnt
+
+    from omnicad.nucleo import geometria as geo
+    from omnicad.nucleo import solidos_crear as sc
+
+    def cuadrado(x, z):
+        p = BRepBuilderAPI_MakePolygon()
+        for y, dz in ((-5, -5), (5, -5), (5, 5), (-5, 5)):
+            p.Add(gp_Pnt(x, y, z + dz))
+        p.Close()
+        return p.Wire()
+    forma = sc.solevar([cuadrado(0, 0), cuadrado(50, 100), cuadrado(100, 0)])
+    assert geo.volumen(forma) == pytest.approx(10000) and geo.es_valida(forma)
 
 
 def test_revisar_marca_invalida_una_autointerseccion():

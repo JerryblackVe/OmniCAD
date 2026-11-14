@@ -1320,6 +1320,9 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
     if rieles and linea_central is not None:
         raise geo.ErrorGeometria("Elegí rieles o una línea central, no los dos.")
     guiada = bool(rieles) or linea_central is not None
+    if not (guiada or cerrada):
+        from .solidos_crear import _exigir_ida
+        _exigir_ida(secs)
     condiciones = any(c and c.get("tipo", "libre") != "libre"
                       for c in (condicion_inicio, condicion_fin, *(condiciones_medias or {}).values()))
     if (guiada or condiciones) and reglada:
