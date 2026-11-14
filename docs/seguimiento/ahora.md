@@ -25,11 +25,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 1 | B-460 | Empalme más estricto que Fusion: falla desde r41 donde Fusion acepta r55 y r59 (Sólido › Modificar, E3 al liberarse) |
 | 2 | B-456 | Abrir fuera de la ventana: con el trabajador caído un proyecto chico no abre; test sobre proyecto real (REV-1114) |
-| 3 | B-443 | «Propiedades» no abre desde el cuerpo ni el componente, y falta en la cinta |
-| 4 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 5 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 6 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
-| 7 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
-| 8 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
+| 3 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
+| 4 | B-443 | «Propiedades» no abre desde el cuerpo ni el componente, y falta en la cinta |
+| 5 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 7 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
+| 8 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
+| 9 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
 
 Hechos y esperando integrar (no ocupan cola): ninguno. Integrados 13-14/11: B-432, B-448, H-97, B-421, B-425 (parte), B-457, DIETA-1114, REV-1114, H-69, B-431 y B-441 (Sol), B-434, P-78 (parte), B-417, B-433, PRUEBA-1114, B-426 revertido (no era bug), B-363 (parte), B-420, B-429, B-424, B-423 (parte), B-428, B-426, B-427, B-422 (parte), H-84 (parte), FL-3 Abrir, B-397, H-113, B-48 y FL-2 (partes), B-409, B-410, B-418f, B-418g, B-408 cerrado, B-384, P-153, B-416, PRUEBA9c, B-418b, B-418c, B-418d, B-418e, FL-0, FL-9 + B-418 (d8d4b9f), B-344e, B-412 (cerrado: Fusion hace lo mismo), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
