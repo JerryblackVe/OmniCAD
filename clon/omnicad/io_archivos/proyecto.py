@@ -281,8 +281,10 @@ def abrir(ruta, esperar=None, aparte=False):
                                         esperar)
                     calculo = _leer_calculo(salida)
                 except (aislado.TareaAislada, ValueError, geo.ErrorGeometria) as e:
-                    raise ErrorProyecto(f"El proyecto es grande y el ensayo de apertura falló: {e}. No se abrió y OmniCAD "
-                                        "sigue andando; guardá una copia y probá de nuevo.") from e
+                    if pasos >= aislado.UMBRAL_PREVUELO_PARAMETROS:
+                        raise ErrorProyecto(f"El proyecto es grande y el ensayo de apertura falló: {e}. No se abrió y OmniCAD "
+                                            "sigue andando; guardá una copia y probá de nuevo.") from e
+                    calculo = None       # B-456: uno chico iba aparte solo por la fluidez (FL-3): si el hijo cae, se abre en la ventana
     except zipfile.BadZipFile:
         raise ErrorProyecto("El archivo está dañado o no es un ZIP.") from None
     except (zlib.error, NotImplementedError):
