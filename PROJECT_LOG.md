@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-13 · B-397 (E9, con Sol): los hijos de una sola tarea salen cuando muere el padre.** Mismo mecanismo que B-396: `aislado.principal` hace `next(pedidos_del_padre())` también en las tareas de una vez (el hilo lector sigue y termina con `os._exit(0)` al cerrarse la tubería); `CalculoPendiente._arrancar_hijo` lanza con `stdin=PIPE` y escribe una línea sin cerrarla hasta terminar; `_ejecutar` usa una `os.pipe` propia que vive durante la espera (conserva timeout, captura y env). Los tres lanzadores de main (trabajador, `_arrancar_hijo` —también el hijo por archivo de FL-9—, `_ejecutar`) escriben su línea. Prueba: `tests/test_b397_hijo_huerfano.py` (previa, sin_espera, con_espera). Con FL-9: `test_fl9_precalentar`, `test_fl1_previa_aparte`, `test_previa_trabajador`, `test_b396_trabajador_huerfano` 35 passed, 1 skipped. No probado en Windows (el test se omite sin /proc).
 
 Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `registro_2026-11.md`).
 
