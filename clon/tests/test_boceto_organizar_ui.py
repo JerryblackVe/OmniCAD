@@ -255,3 +255,33 @@ def test_el_arbol_del_navegador_toma_el_foco_del_teclado(ventana):
     QTest.keyClick(nav.arbol, Qt.Key_Down)
     QApplication.processEvents()
     assert nav.arbol.currentItem() is not None and nav.arbol.currentItem() != nav.item("bk:geometrias")
+
+
+def test_h69_curva_suelta_desde_el_navegador(ventana, monkeypatch):
+    """H-69: clic derecho en una curva de Geometrías: renombrar, ocultar (también con el ojo), bloquear y sacar de los
+    perfiles; bloqueada no se arrastra ni se borra; todo con deshacer."""
+    v, _svg, _disco = ventana
+    nav = v.navegador
+    v.editar_operacion("sk")
+    QApplication.processEvents()
+    lz = v.modo_boceto.lienzo
+    cid = ob.geometria_suelta(lz.b)[0]
+    clave = f"bc:{cid}"
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("Base", True))
+    textos = _menu(v, clave, "Renombrar…")
+    assert {"Seleccionar", "Renombrar…", "Ocultar", "Bloquear", "Participar en perfiles", "Convertir en objeto",
+            "Eliminar"} <= set(textos)
+    assert nav.item(clave).text(0).startswith("Base")
+    _menu(v, clave, "Bloquear")
+    assert lz.b.curva_bloqueada(cid) and "[bloqueado]" in nav.item(clave).text(0)
+    textos = _menu(v, clave, "Eliminar")
+    assert not textos["Eliminar"].isEnabled() and cid in lz.b.curvas
+    lz._empezar_arrastre(cid, lz.a_px(*lz.b.coords(lz.b.curvas[cid].p1)))
+    assert lz._arrastre is None                                       # bloqueada no se arrastra
+    _menu(v, clave, "Participar en perfiles")
+    assert "[sin perfiles]" in nav.item(clave).text(0) and cid in ob.curvas_sin_perfil(lz.b)
+    _clic(nav, clave, ojo=True)                                       # el ojo la oculta y nada más
+    assert not lz._visible(lz.b.curvas[cid]) and lz.b.curva_bloqueada(cid)
+    lz.deshacer()
+    QApplication.processEvents()
+    assert lz._visible(lz.b.curvas[cid]) and "[sin perfiles]" in nav.item(clave).text(0)

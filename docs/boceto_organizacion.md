@@ -1,7 +1,7 @@
 # Organización de objetos en el boceto
 
 Cómo se organizan geometrías, textos, SVG/DXF y grupos dentro de un boceto, y cómo seguirlo. Pendientes: solo en
-`docs/seguimiento/` (H-69, H-70, H-71). Pedido original: [plan_boceto_organizar.md](plan_boceto_organizar.md).
+`docs/seguimiento/` (H-70, H-71). Pedido original: [plan_boceto_organizar.md](plan_boceto_organizar.md).
 
 ## Modelo de datos (sin Qt)
 
@@ -34,7 +34,9 @@ Cómo se organizan geometrías, textos, SVG/DXF y grupos dentro de un boceto, y 
 ## Solver, perfiles y timeline
 
 - Las curvas de un objeto que no es texto quedan fijas para el solver (`Boceto`, puntos fijos por objeto): un objeto
-  es rígido. Por eso la geometría suelta no se convierte sola en objeto (H-69).
+  es rígido. Por eso la geometría suelta no se convierte sola en objeto: tiene sus propias propiedades (nombre,
+  visible, bloqueado y en perfiles, `Boceto.props_curvas`, `objetos.poner_props_curva`, `set_sketch_curve`) y sigue en
+  el solver; bloqueada no se arrastra, mueve, escala, espeja ni borra.
 - Los perfiles de un objeto transformado se calculan una vez en sus coordenadas locales y se les aplica la matriz
   (`detectar_boceto`, B-194): transformar no cambia cuántas regiones hay ni su área.
 - Cada cambio es un paso de deshacer: en la API por `Sesion.transaccion` (`modifica=True`), en el editor por

@@ -337,6 +337,25 @@ def set_vector_object(sesion, object: int, name: str | None = None, visible: boo
     return _editar(sesion, sketch, cambiar)
 
 
+@herramienta("set_sketch_curve", "vectores", "Cambia nombre, visibilidad, bloqueo o participación en perfiles de una curva "
+             "suelta del boceto (la de Geometrías en el navegador); son independientes y la curva sigue en el solver.",
+             modifica=True)
+def set_sketch_curve(sesion, curve: int, name: str | None = None, visible: bool | None = None,
+                     locked: bool | None = None, in_profiles: bool | None = None, sketch: str | None = None):
+    """
+    curve: id de la curva suelta.
+    name: nombre propio en el navegador; vacío conserva el actual.
+    visible: false la oculta en el editor del boceto; sigue en los perfiles CAD.
+    locked: true impide arrastrarla, moverla, escalarla, espejarla o borrarla; el solver la sigue moviendo.
+    in_profiles: false la saca de los perfiles CAD sin ocultarla; true la devuelve.
+    sketch: id o nombre del boceto.
+    """
+    def cambiar(b):
+        ob.poner_props_curva(b, curve, nombre=name, visible=visible, bloqueado=locked, perfiles=in_profiles)
+        return {"curve_id": curve}
+    return _editar(sesion, sketch, cambiar)
+
+
 @herramienta("align_vector_objects", "vectores", "Alinea o distribuye objetos por sus cajas exactas, respecto de selección, origen u objeto de referencia.", modifica=True)
 def align_vector_objects(sesion, objects: list[int], mode: Literal["left", "right", "top", "bottom", "horizontal_center", "vertical_center", "origin", "distribute_horizontal", "distribute_vertical"],
                          reference: Literal["selection", "origin", "object"] = "selection",
@@ -500,7 +519,9 @@ def organizacion(b):
                 "parts": len(hijos) if ob.categoria(b, oid) != "grupos" else 0, "curves": len(ob.curvas(b, [oid]))}
     unidades = ob.unidades(b)
     sueltas = [{"id": i, "name": ob.nombre_curva(b, i), "type": b.curvas[i].tipo,
-                "construction": b.curvas[i].construccion} for i in ob.geometria_suelta(b)]
+                "construction": b.curvas[i].construccion, "visible": b.props_curvas.get(i, {}).get("visible", True),
+                "locked": b.curva_bloqueada(i), "in_profiles": b.props_curvas.get(i, {}).get("perfiles", True)}
+               for i in ob.geometria_suelta(b)]
     categorias = {}
     for clave, titulo in CATEGORIAS.items():
         filas = [fila(i) for i in unidades[clave]]

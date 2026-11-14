@@ -1246,12 +1246,14 @@ class Lienzo(QWidget):
     def _visible(self, c):
         return not ((c.construccion and not self.mostrar["construccion"])
                     or (c.proyectada and not self.mostrar["proyectadas"]) or c.id in self.copias_en_edicion
-                    or self.b.objetos and _suelta_aislada(self.b, c.id))
+                    or self.b.objetos and _suelta_aislada(self.b, c.id)
+                    or self.b.props_curvas.get(c.id, {}).get("visible", True) is False)     # H-69: curva oculta
 
     def _ocultos(self):
         """(curvas, puntos) que no se ven —construcción o proyectadas apagadas, o las copias de un patrón que se
         edita (BOC-60)—: tampoco se pueden capturar."""
-        if self.mostrar["construccion"] and self.mostrar["proyectadas"] and not self.copias_en_edicion and not self.b.objetos:
+        if self.mostrar["construccion"] and self.mostrar["proyectadas"] and not self.copias_en_edicion and not self.b.objetos \
+                and not self.b.props_curvas:
             return frozenset(), frozenset()
         curvas = {c.id: c for c in self.b.curvas.values() if not self._visible(c)}
         vistos = {p for c in self.b.curvas.values() if c.id not in curvas for p in c.puntos()}
@@ -5482,6 +5484,11 @@ class Lienzo(QWidget):
         """Arrastre en Seleccionar: puntos, líneas (sus dos extremos juntos), círculos y arcos. Lo fijo o
         totalmente restringido no se mueve (como en Fusion)."""
         fijos = self.b.puntos_fijos()
+        try:
+            self.b.exigir_desbloqueadas([ent] if ent in self.b.puntos or ent in self.b.curvas else [], "moverla")
+        except ErrorBoceto as e:                     # H-69: una curva bloqueada (o su punto) no se arrastra
+            self.mensaje.emit(str(e))
+            return
         if ent in self.b.puntos:
             if ent in fijos:
                 self.mensaje.emit("Ese punto está fijo (o es proyectado): quitá la restricción «Fijo» para moverlo.")

@@ -1550,6 +1550,7 @@ class Boceto:
         self.puntos = {}
         self.curvas = {}
         self.objetos = {}              # jerarquía vectorial; curvas originales + matrices, sin duplicar geometría
+        self.props_curvas = {}         # H-69: nombre, visible, bloqueado o perfiles de una curva (solo lo cambiado)
         self.restricciones = {}
         self.cotas = {}
         self.proyecciones = []
@@ -2307,6 +2308,7 @@ class Boceto:
         """Borra una entidad, restricción o cota, y en cascada lo que dependa de ella."""
         if id <= 0:
             raise ErrorBoceto("El origen y los ejes del boceto son referencias fijas: no se pueden borrar.")
+        self.exigir_desbloqueadas([id], "borrarla")
         if id in self.restricciones:
             del self.restricciones[id]
             return
@@ -2353,6 +2355,8 @@ class Boceto:
         return [l.id for l in self.curvas.values() if isinstance(l, Linea) and {l.p1, l.p2} in pares]
 
     def _quitar_huerfanas(self):
+        for cid in [k for k in self.props_curvas if k not in self.curvas]:
+            del self.props_curvas[cid]
         if self.objetos:
             from . import objetos
             cambio = True
@@ -2437,6 +2441,19 @@ class Boceto:
                 for e in r.entidades:
                     fijos.update([e] if e in self.puntos else self.curvas[e].puntos())
         return fijos
+
+    def curva_bloqueada(self, cid):
+        return self.props_curvas.get(cid, {}).get("bloqueado", False)
+
+    def exigir_desbloqueadas(self, ids, verbo):
+        """H-69: ErrorBoceto si `ids` tiene una curva bloqueada, o un punto de una (borrarlo se llevaría la curva)."""
+        if not any(c.get("bloqueado") for c in self.props_curvas.values()):
+            return
+        for i in ids:
+            curvas = [i] if i in self.curvas else [c.id for c in self.curvas.values() if i in c.puntos()]
+            for cid in curvas:
+                if self.curva_bloqueada(cid):
+                    raise ErrorBoceto(f"La curva {cid} está bloqueada: desbloqueala antes de {verbo}.")
 
     def puntos_de(self, ids):
         """Puntos usados por las curvas de `ids` más los puntos sueltos de `ids`."""
@@ -3940,6 +3957,7 @@ class Boceto:
         fijos = self.puntos_fijos()
         if any(self.objetos[i]["bloqueado"] for i in ids if i in self.objetos):
             raise ErrorBoceto("Desbloqueá el objeto antes de moverlo.")
+        self.exigir_desbloqueadas(ids, "moverla")
         if any(p in fijos for p in self.puntos_de(ids)):
             raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección: no se puede mover.")
 
@@ -4105,6 +4123,7 @@ class Boceto:
         cx, cy = centro
         textos = [i for i in ids if isinstance(self.curvas.get(i), Texto) and self.curvas[i].camino is None]
         ids = [i for i in ids if i not in textos]
+        self.exigir_desbloqueadas(ids, "espejarla")
         pts = self.puntos_de(ids)
         if any(p in self.puntos_fijos() for p in pts):
             raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección: no se puede espejar.")
@@ -4126,6 +4145,7 @@ class Boceto:
         fijos = self.puntos_fijos()
         if any(self.objetos[i]["bloqueado"] for i in ids if i in self.objetos):
             raise ErrorBoceto("Desbloqueá el objeto antes de escalarlo.")
+        self.exigir_desbloqueadas(ids, "escalarla")
         if any(p in fijos and math.dist(self.coords(p), base) > 1e-9 for p in self.puntos_de(ids)):
             raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección que no está en la base: no se puede escalar.")
 
@@ -4838,6 +4858,8 @@ class Boceto:
             d["patrones"] = copy.deepcopy(self.patrones)
         if self.objetos:
             d["objetos"] = copy.deepcopy(list(self.objetos.values()))
+        if self.props_curvas:
+            d["props_curvas"] = [{"id": k, **v} for k, v in self.props_curvas.items()]
         if any(self.geo3d.values()):
             from . import boceto3d
             d["geo3d"] = boceto3d.a_dict(self.geo3d)
@@ -4854,6 +4876,7 @@ class Boceto:
         b.objetos = {o["id"]: copy.deepcopy(o) for o in d.get("objetos", [])}
         if len(b.objetos) != len(d.get("objetos", [])):
             raise ErrorBoceto("Hay identificadores de objetos repetidos en el proyecto.")
+        b.props_curvas = {p["id"]: {k: v for k, v in p.items() if k != "id"} for p in d.get("props_curvas", [])}
         for p in d.get("puntos", []):
             b.puntos[p["id"]] = Punto(p["id"], p["x"], p["y"], p.get("proyectado", False))
         for c in d.get("curvas", []):

@@ -330,7 +330,7 @@ def detectar_boceto(boceto, plano, geometria=None):
     textos = {c.id for c in boceto.curvas.values() if c.tipo == "texto"}
     from ..restricciones import objetos
     indice = objetos.indice(boceto) if boceto.objetos else {}
-    fuera = objetos.curvas_sin_perfil(boceto) if boceto.objetos else ()
+    fuera = objetos.curvas_sin_perfil(boceto) if boceto.objetos or boceto.props_curvas else ()
     grupos = {}
     for g in boceto.geometria() if geometria is None else geometria:
         if g[1] in fuera:

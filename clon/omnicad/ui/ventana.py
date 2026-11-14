@@ -1729,7 +1729,7 @@ class VentanaPrincipal(QMainWindow):
         self._refrescar_visibilidad()
 
     def _ojo(self, clave):
-        if clave.startswith(("bo:", "bg:")):              # objeto del boceto en edición
+        if clave.startswith(("bo:", "bg:", "bc:")):       # objeto o curva suelta del boceto en edición
             navegador_boceto.alternar_visible(self, clave)
             return
         if clave.startswith("analisis:"):
