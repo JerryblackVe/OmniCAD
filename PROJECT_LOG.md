@@ -310,6 +310,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-14] Antes de commitear, no encadenar `pytest … | tail -1 && git commit`: la tubería devuelve el código de `tail` y el commit sale aunque el test falle. Guardar la salida y mirar el código de pytest. · Evidencia: f794adc entró con `test_ids_unicos` en rojo (B-428 dos veces); arreglado en acd03d5.
 - [2026-11-14] `tanda.sh` ahora se niega a integrar un worktree con pytest, turno o tests_afectados corriendo adentro: mirar el conteo a ojo no alcanzó. · Evidencia: B-418g, integrado con 4 procesos de tests de E6 adentro, que murieron al borrarse el worktree (la misma falla que B-394).
 - [2026-11-14] En pruebas con Computer Use (E11), seleccionar el texto de un campo con Ctrl+A, no con triple clic: los clics sintéticos no respetan el ritmo del triple clic de Qt y dan selecciones parciales que parecen bugs. · Evidencia: B-408, «20 7» con E11 y «7 mm» con el mouse de Gerardo (evidencias/reportes_pc/2026-11-13_b408_gerardo/).
 - [2026-11-14] En Windows, nunca dejar un ReadFile síncrono esperando sobre stdin en un hilo: traba la carga de cualquier DLL en otro hilo (scipy/OpenBLAS). Mirar con PeekNamedPipe y leer solo lo que llegó. · Evidencia: `evidencias/reportes_pc/2026-11-13_b418_diagnostico2/` (pila.txt), `aislado._lineas_sin_bloquear`.
