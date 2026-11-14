@@ -1752,7 +1752,9 @@ class GestorManipuladores(QObject):
             return
         base = None
         if self.comando.CLAVE == "extruir" and getattr(self.panel, "_prisma_previa", None) is not None:
-            datos = {k: v for k, v in self.panel.valores.items() if k not in ("distancia", "distancia2")}
+            # FL-2: de los elegidos solo su referencia; el `repr` de sus mallas costaba 120 ms por tecla
+            datos = {k: [h.get("ref", h) if isinstance(h, dict) else h for h in v] if isinstance(v, list) else v
+                     for k, v in self.panel.valores.items() if k not in ("distancia", "distancia2")}
             # P-99: arrastrando la flecha no se rearman las asas; fuera del arrastre la distancia entra en la base, porque
             # el tope del asa de conicidad depende de ella (B-360)
             base = (self.ctx.estado, repr(datos), self.valor("distancia") < 0,
@@ -2313,6 +2315,9 @@ def herramientas_rojas(formas, deflexion=0.1):
     from ..nucleo import geometria as geo
     tris = [geo.teselar(f, deflexion)[0] for f in formas if f is not None]
     tris = [t for t in tris if len(t)]
-    if not tris:
-        return []
-    return [("tris", np.concatenate(tris), estilo_asas.rgb("previa_corte"), 0.45 * estilo_asas.opacidad("previa_corte"))]
+    return tris_rojos(np.concatenate(tris)) if tris else []
+
+
+def tris_rojos(tris):
+    """Primitiva de triángulos sueltos (N×3) en el rojo translúcido de «Cortar»."""
+    return [("tris", tris, estilo_asas.rgb("previa_corte"), 0.45 * estilo_asas.opacidad("previa_corte"))]

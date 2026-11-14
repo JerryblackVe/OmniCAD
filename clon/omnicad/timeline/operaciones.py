@@ -1388,18 +1388,23 @@ class OpRevolucion(_OpConPerfiles):
             return "forma", e.forma
         raise ErrorOperacion("El objeto de la revolución tiene que ser un vértice, un plano, una cara plana o un cuerpo.")
 
-    def ejecutar(self, estado, ctx):
-        plano, caras = self._caras(estado, ctx)
+    def eje_de_giro(self, estado, plano):
+        """(punto, dirección) del eje alrededor del que gira el perfil: proyectado al plano con «Eje de proyecto» y
+        dado vuelta con «Invertir». Lo usa también la previa barata de la ventana (FL-2)."""
         punto, direccion = self._eje(estado, plano)
-        caras0 = caras
-        apoyos = lambda: [geo.punto_dentro(c) for c in caras0]  # noqa: E731  (B-281: la cara de partida)
         if self.p.get("proyectar_eje"):         # «Eje de proyecto»: el eje se lleva al plano del perfil
             n = np.asarray(plano.normal, float)
             proyectado = np.asarray(direccion, float) - n * float(np.asarray(direccion, float) @ n)
             if np.linalg.norm(proyectado) >= 1e-9:   # eje perpendicular: no se proyecta, queda donde está
                 punto = np.asarray(punto, float) - n * float((np.asarray(punto, float) - plano.origen) @ n)
                 direccion = proyectado
-        direccion = np.asarray(direccion, float) * (-1 if self.p.get("invertir") else 1)
+        return punto, np.asarray(direccion, float) * (-1 if self.p.get("invertir") else 1)
+
+    def ejecutar(self, estado, ctx):
+        plano, caras = self._caras(estado, ctx)
+        punto, direccion = self.eje_de_giro(estado, plano)
+        caras0 = caras
+        apoyos = lambda: [geo.punto_dentro(c) for c in caras0]  # noqa: E731  (B-281: la cara de partida)
         if self.p.get("extension") == "objeto":
             modo = self.p.get("direccion", "un_lado")
             if modo == "simetrica":
