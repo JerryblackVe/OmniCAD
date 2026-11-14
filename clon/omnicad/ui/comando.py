@@ -121,11 +121,11 @@ class ListaSeleccion(Seleccion):
 
 
 class Expresion(Campo):
-    """`rango`: (mínimo, máximo) abierto; afuera, el campo y la caja de su asa quedan en rojo, como Fusion (B-375)."""
+    """`rango`: intervalo abierto; `validar(valor)`: regla numérica del núcleo. Ambos marcan el campo en rojo."""
 
-    def __init__(self, clave, etiqueta, defecto="10 mm", tipo=LONGITUD, rango=None, en_esquema=False, **kw):
+    def __init__(self, clave, etiqueta, defecto="10 mm", tipo=LONGITUD, rango=None, en_esquema=False, validar=None, **kw):
         super().__init__(clave, etiqueta, defecto, **kw)
-        self.tipo, self.rango = tipo, rango
+        self.tipo, self.rango, self.validar = tipo, rango, validar
         self.en_esquema = en_esquema       # FU-2: su caja va sobre el dibujo de un `Personalizado` posterior (sin fila propia)
 
 
@@ -1351,21 +1351,32 @@ class PanelComando(QFrame):
                                 if not self.valores.get(k) and self._a_la_vista(self._por_clave[k])), None))
         self._refrescar_seleccion()
 
-    def _validar_expresiones(self):
-        """Marca en rojo las expresiones inválidas (con el motivo en su tooltip). Devuelve la primera, para llevar a ella."""
-        primera, self.invalidos = None, set()
+    def _validar_expresiones(self, solo_reglas=False):
+        """Marca en rojo las expresiones inválidas (con el motivo en su tooltip). Devuelve la primera, para llevar a ella.
+        `solo_reglas`: al teclear (previa), solo los campos con regla del núcleo (`Expresion.validar`): los opcionales
+        vacíos, como «Límite mínimo», no son un error hasta Aceptar."""
+        from ..nucleo import geometria as geo
+        primera = None
+        if not solo_reglas:
+            self.invalidos = set()
         for c in self.campos:
+            if solo_reglas and (not isinstance(c, Expresion) or c.validar is None):
+                continue
+            if solo_reglas:
+                self.invalidos.discard(c.clave)
             if isinstance(c, Expresion) and self._visible(c):
                 w = self.widgets[c.clave]
                 try:
                     val = self.ctx.evaluar(w.text(), c.tipo)
+                    if c.validar is not None:
+                        c.validar(val)
                     if c.rango is not None and not c.rango[0] < val < c.rango[1]:
                         unidad = "°" if c.tipo == ANGULO else ""
                         raise ErrorExpresion(f"Tiene que estar entre {c.rango[0]:g}{unidad} y {c.rango[1]:g}{unidad}, "
                                              f"sin incluirlos.")
                     w.setToolTip(formato.tooltip_valor(val, c.tipo == ANGULO, c.tipo == ESCALAR))
                     w.setStyleSheet("")
-                except ErrorExpresion as e:
+                except (ErrorExpresion, geo.ErrorGeometria) as e:
                     w.setToolTip(str(e))
                     w.setStyleSheet(f"background: {temas.color('campo_error')};")
                     primera = primera or c
@@ -1728,6 +1739,9 @@ class PanelComando(QFrame):
             self._previa_ok = True
             return
         try:
+            invalido = self._validar_expresiones(solo_reglas=True)
+            if invalido is not None:
+                raise ErrorExpresion(self.widgets[invalido.clave].toolTip())
             op = self.comando.construir(self.valores, self.ctx)
         except (ErrorComando, ErrorExpresion) as e:
             self._cancelar_previa_hijo()
