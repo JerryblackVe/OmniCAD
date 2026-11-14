@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """B-418: en Windows el trabajador tomaba el pedido y no contestaba (se trababa cargando la DLL de OpenBLAS con un ReadFile
 de la entrada estándar pendiente en otro hilo). Ya lee sin bloquear (`aislado._lineas_sin_bloquear`); hasta confirmarlo en
-la PC, en Windows sigue apagado (previa en la ventana, lo demás en hijos de una sola tarea) salvo OMNICAD_PREVIA_EN_VENTANA=0."""
+la PC (10 de 10 con `diagnostico_b418.py --qt`), vuelve a estar prendido en Windows; OMNICAD_PREVIA_EN_VENTANA=1 es la
+salida de escape: previa en la ventana y lo demás en hijos de una sola tarea."""
 import os
 import subprocess
 import sys
@@ -29,8 +30,8 @@ print(comando.PREVIA_APARTE, aislado.TRABAJADOR)
 """
 
 
-@pytest.mark.parametrize("valor, esperado", [(None, "False False"), ("1", "False False"), ("0", "True True")])
-def test_en_windows_la_previa_va_en_la_ventana_y_sin_trabajador_salvo_que_se_pida(valor, esperado):
+@pytest.mark.parametrize("valor, esperado", [(None, "True True"), ("0", "True True"), ("1", "False False")])
+def test_en_windows_el_trabajador_esta_prendido_salvo_con_el_escape(valor, esperado):
     entorno = {k: v for k, v in os.environ.items() if k != "OMNICAD_PREVIA_EN_VENTANA"}
     if valor is not None:
         entorno["OMNICAD_PREVIA_EN_VENTANA"] = valor

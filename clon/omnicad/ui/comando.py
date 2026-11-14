@@ -14,7 +14,6 @@ Las selecciones se guardan como referencias serializables (`timeline.entidades`)
 operación sigue apuntando a "su" cara o arista al recalcular.
 """
 import os
-import sys
 import re
 import time
 
@@ -44,10 +43,10 @@ PREVIA_CUADRO_MS, PREVIA_ESPERA_MAX_MS = 12, 220
 TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "patron", "multitransformar",
                                 "desfase_cara", "engrosar", "sup_desfase"), 64
 # FL-1: toda otra previa que toca el kernel también va aparte, salvo la que con los mismos datos (sin contar los valores
-# tecleados) tardó menos de esto la última vez. Las pruebas la piden en la ventana con OMNICAD_PREVIA_EN_VENTANA=1. En
-# Windows van en la ventana salvo con OMNICAD_PREVIA_EN_VENTANA=0 (B-418: el trabajador no devuelve la respuesta).
+# tecleados) tardó menos de esto la última vez. Las pruebas (y quien quiera, como escape) la piden en la ventana con
+# OMNICAD_PREVIA_EN_VENTANA=1.
 PREVIA_EN_VENTANA_MS = 30
-PREVIA_APARTE = os.environ.get("OMNICAD_PREVIA_EN_VENTANA", "1" if sys.platform == "win32" else "0") != "1"
+PREVIA_APARTE = os.environ.get("OMNICAD_PREVIA_EN_VENTANA") != "1"
 # Comandos cuya sección «Más opciones» quedó abierta (se recuerda mientras dure la sesión: no hace falta reabrirla cada vez).
 _SECCIONES_ABIERTAS = set()
 
