@@ -2120,6 +2120,7 @@ def _booleana_caras(piezas, herramientas, clase):
         op.SetArguments(_lista_de_formas(piezas))
         op.SetTools(_lista_de_formas(herramientas))
         op.SetRunParallel(geo.PARALELO)
+        op.SetNonDestructive(True)   # B-48: no escribir en las entradas
         op.Build()
         if op.IsDone() and not op.Shape().IsNull():
             return op.Shape()
@@ -2137,6 +2138,7 @@ def _comun_rapido(piezas, limite):
         op.SetArguments(_lista_de_formas(piezas))
         op.SetTools(_lista_de_formas([limite]))
         op.SetRunParallel(geo.PARALELO)                       # OpenCascade reparte el trabajo en varios núcleos
+        op.SetNonDestructive(True)   # B-48: no escribir en las entradas
         op.Build()
         if op.IsDone() and not op.Shape().IsNull():
             return op.Shape()
@@ -2154,6 +2156,7 @@ def _aplicar_a_cuerpo(cuerpo, herramientas, operacion):
             op.SetArguments(_lista_de_formas([cuerpo]))
             op.SetTools(_lista_de_formas(solidos))
             op.SetRunParallel(geo.PARALELO)
+            op.SetNonDestructive(True)   # B-48: no escribir en las entradas
             op.Build()
             if op.IsDone() and not op.Shape().IsNull():
                 return geo.unificar_caras(op.Shape())
@@ -3328,6 +3331,7 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
             op.SetArguments(args)
             op.SetTools(herr)
             op.SetRunParallel(geo.PARALELO)
+            op.SetNonDestructive(True)   # B-48: no escribir en las entradas
             if difuso:
                 op.SetFuzzyValue(difuso)
             op.Build()
@@ -3518,6 +3522,7 @@ def unir_instancias(formas):
     op.SetArguments(argumentos)
     op.SetTools(herramientas)
     op.SetRunParallel(geo.PARALELO)      # RS-X4: 1600 cubos 0,62 → 0,53 s
+    op.SetNonDestructive(True)   # B-48: no escribir en las entradas
     try:
         op.Build()
         hecho = op.IsDone()

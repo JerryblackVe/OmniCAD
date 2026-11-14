@@ -530,6 +530,7 @@ def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, inv
     op.SetArguments(args)
     op.SetTools(herr)
     op.SetRunParallel(paralelo and PARALELO)   # OpenCascade reparte el trabajo en varios núcleos (1,9–2× medido)
+    op.SetNonDestructive(True)   # B-48: si no, el kernel escribe en las entradas (formas del documento), en paralelo
     if fuzzy:
         op.SetFuzzyValue(fuzzy)
     if pegar:
@@ -1234,6 +1235,7 @@ def unir_todos(formas):
             op.SetArguments(args)
             op.SetTools(herr)
             op.SetRunParallel(PARALELO)
+            op.SetNonDestructive(True)   # B-48: no escribir en las entradas
             op.Build()
             if op.IsDone() and not op.Shape().IsNull():
                 unida = _quitar_cables_colgados(unificar_caras(op.Shape()))
