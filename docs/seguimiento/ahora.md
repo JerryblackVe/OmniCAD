@@ -24,12 +24,14 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-421 | El panel de comando cambia de alto con un mensaje o la Operación y Aceptar/Cancelar se mueven: el clic se pierde (E11, tanda 13) |
-| 2 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 3 | B-413 | Boceto › al cambiar la cota de un rectángulo sin restringir debe quedar fija la primera esquina, como Fusion (E1, después de FL-2) |
-| 4 | B-335 | Abrir un STEP pesado congela la ventana |
-| 5 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
-| 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 7 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
-| 8 | B-401 | El cálculo aislado pierde atributos de boceto |
+| 2 | B-425 | Patrón circular sin tope: 5000 copias congelan 30 s sin aviso |
+| 3 | B-422 | Campos que no validan al teclear (Agujero profundidad negativa, Revolución ángulo 0) |
+| 4 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 5 | B-413 | Boceto › al cambiar la cota de un rectángulo sin restringir debe quedar fija la primera esquina, como Fusion (E1, después de FL-2) |
+| 6 | B-335 | Abrir un STEP pesado congela la ventana |
+| 7 | B-337 | Importar un STEP grande corre en el hilo de la ventana |
+| 8 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 9 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
+| 10 | B-401 | El cálculo aislado pierde atributos de boceto |
 
 Hechos y esperando integrar (no ocupan cola): ninguno. Integrados 13-14/11: B-384, P-153, B-416, PRUEBA9c, B-418b, B-418c, B-418d, B-418e, FL-0, FL-9 + B-418 (d8d4b9f), B-344e, B-412 (cerrado: Fusion hace lo mismo), B-400, B-392, ASM-19, B-172 (Parcial, no se reproduce; entró B-416).
