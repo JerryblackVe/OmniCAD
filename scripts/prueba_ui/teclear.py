@@ -21,6 +21,8 @@ LONG = [("15", 15), ("15 mm", 15), ("15.5 mm", 15.5), ("15,5 mm", 15.5), ("15,5"
 ANG = [("45", 45), ("45 deg", 45), ("45°", 45), ("1,5 deg", 1.5), ("1.5 deg", 1.5), ("-30 deg", -30), ("1e1 deg", 10),
        ("abc", None), ("", None), ("45 mm", None), ("45 deg deg", None)]
 ESC = [("2", 2), ("2,5", 2.5), ("2.5", 2.5), ("1/2", 0.5), ("abc", None), ("", None), ("2 mm", None)]
+# B-422: el valor se entiende pero la regla del núcleo lo rechaza (rojo + motivo): (comando.campo) → entradas inválidas
+RECHAZOS = {"agujero.profundidad": {"-5 mm", "0 mm"}, "revolucion.angulo": {"0 deg"}}
 TABLAS = {"LONGITUD": LONG, "ANGULO": ANG, "ESCALAR": ESC}
 
 per = lambda n, i=0: (lambda: [A.hit_perfil(v, s, n, i)])  # noqa: E731
@@ -63,7 +65,9 @@ for clave, sel, campos in COMANDOS:
                 A.reg(AR, f"{clave}.{cm}", False, "el campo no está visible")
                 continue
             tipo = {"angulo": "ANGULO", "escalar": "ESCALAR"}.get(str(getattr(c, "tipo", "")).lower(), "LONGITUD")
-            for entrada, esperado in TABLAS[tipo]:
+            extra = [(x, None) for x in sorted(RECHAZOS.get(f"{clave}.{cm}", ())) if x not in dict(TABLAS[tipo])]
+            for entrada, esperado in TABLAS[tipo] + extra:
+                rechazo = entrada in RECHAZOS.get(f"{clave}.{cm}", ())
                 w = teclear(p, cm, entrada)
                 valor, msg = None, ""
                 try:
@@ -73,7 +77,9 @@ for clave, sel, campos in COMANDOS:
                 rojo = bool(w.styleSheet())
                 guardado = p.valores.get(cm)
                 ok_texto = guardado == entrada.strip()
-                if esperado is None:
+                if rechazo:
+                    bien = rojo and ok_texto
+                elif esperado is None:
                     bien = valor is None and rojo and ok_texto
                 else:
                     bien = valor is not None and abs(valor - esperado) < 1e-6 * max(1, abs(esperado)) and not rojo and ok_texto
