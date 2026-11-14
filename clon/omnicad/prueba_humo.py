@@ -14,6 +14,7 @@ Devuelve 0 si todo pasa. Uso:  python OmniCAD.py --prueba-humo
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QSettings, Qt
@@ -578,7 +579,9 @@ def _fase3d(v, r):
     if panel is not None:
         panel.set_valor("radio", "1 mm")
         panel.aceptar()
-        QTest.qWait(200)
+        fin = time.monotonic() + 60     # FL-3b: con el cálculo aparte, el paso se aplica al cerrarse la barra
+        while v.panel is not None and time.monotonic() < fin:
+            QTest.qWait(50)
     r.check(len(v.doc.operaciones) == n + 1 and v.doc.resultados[-1].estado == "ok" and v.panel is None,
             "Aceptar el diálogo agrega el empalme al timeline (OK)")
     v.acciones["sel_ventana"].trigger()

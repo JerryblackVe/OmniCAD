@@ -3,8 +3,9 @@
 import time
 
 import pytest
-from PySide6.QtCore import QSettings, Qt, QTimer
-from PySide6.QtWidgets import QApplication
+from _calculo_aparte import barra, esperar_barra
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtWidgets import QApplication, QPushButton
 
 from omnicad.nucleo import aislado
 from omnicad.timeline.documento import Documento
@@ -269,6 +270,7 @@ def test_b418_aceptar_con_los_pedidos_perdidos_crea_el_paso_y_el_cuerpo(tmp_path
             p.set_valor("distancia", "15 mm")
         inicio = time.monotonic()
         p.aceptar()
+        esperar_barra(v)                                # FL-3b: el paso se calcula en otro hilo, con su barra
         assert v.panel is None, p.mensaje.text()
         assert len(perdidos) == 2 and not sueltos, sueltos
         nuevo = v.doc.operaciones[-1]
@@ -307,10 +309,16 @@ def test_b418_esc_o_cancelar_salen_aunque_el_proceso_aparte_no_conteste(tmp_path
         assert v.panel is None
         p = v.ejecutar_comando(CATALOGO["caja"]())       # con Aceptar esperando al proceso aparte
         _prisma_e11(p)
-        QTimer.singleShot(1500, lambda: salir(p))
         inicio = time.monotonic()
-        p.aceptar()
-        assert time.monotonic() - inicio < 8
+        p.aceptar()                                      # FL-3b: espera en otro hilo; Esc y Cancelar son los de su barra
+        QTest.qWait(1500)
+        espera = barra(v)
+        if como == "esc":
+            QTest.keyClick(espera, Qt.Key_Escape)
+        else:
+            QTest.mouseClick(espera.findChild(QPushButton), Qt.LeftButton)
+        esperar_barra(v, 8)
+        assert time.monotonic() - inicio < 10
         QTest.qWait(50)
         assert v.panel is None and len(v.doc.operaciones) == pasos and not v.doc.estado_final.cuerpos
     finally:
@@ -341,6 +349,7 @@ def test_b418_cerrar_el_panel_con_la_previa_perdida_no_traba_deshacer_ni_el_coma
         p.cancelar()
         inicio = time.monotonic()
         v._deshacer()
+        esperar_barra(v, 30)                            # FL-3b: deshacer calcula en otro hilo, con su barra
         assert not v.doc.estado_final.cuerpos and len(perdidos) == 3
         assert time.monotonic() - inicio < 30 and not v.doc._esperando_hijo
         p = v.ejecutar_comando(CATALOGO["cilindro"]())

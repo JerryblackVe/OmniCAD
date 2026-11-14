@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from _calculo_aparte import esperar_barra
 from PySide6.QtCore import QSettings, QTimer, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
@@ -299,6 +300,7 @@ def test_aceptar_con_la_previa_aparte_en_vuelo_aplica_el_vaciado_exacto(ventana,
     p._calcular_previa()
     assert p._hijo_previa is not None and not p._previa_ok       # la malla aún no llegó
     p.aceptar()                                                   # no espera al hijo
+    esperar_barra(ventana)                                        # FL-3b: el paso se calcula en otro hilo
     assert ventana.panel is None
     assert any(o.TIPO == "vaciado" for o in ventana.doc.operaciones)
     forma = ventana.doc.estado_final.cuerpo("op1.c1").forma
@@ -312,4 +314,5 @@ def test_aceptar_tras_caer_el_hijo_sigue_funcionando(ventana, monkeypatch):
     esperar(p)
     assert not p._previa_ok
     p.aceptar()
+    esperar_barra(ventana)                                        # FL-3b: el paso se calcula en otro hilo
     assert ventana.panel is None and any(o.TIPO == "vaciado" for o in ventana.doc.operaciones)

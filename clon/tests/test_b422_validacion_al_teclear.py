@@ -2,6 +2,7 @@
 import math
 
 import pytest
+from _calculo_aparte import esperar_barra
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
@@ -113,6 +114,7 @@ def test_teclear_marca_rojo_muestra_el_motivo_y_aceptar_no_crea_el_paso(
         _teclear(widget, sano)
         assert not widget.styleSheet() and campo not in panel.invalidos
         QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
+        esperar_barra(ventana)                  # FL-3b: con el cálculo aparte, el paso se calcula en otro hilo
         assert ventana.panel is None
         assert len(sesion.doc.operaciones) == len(antes["operaciones"]) + 1
         forma = next(iter(sesion.doc.estado_final.cuerpos.values())).forma
