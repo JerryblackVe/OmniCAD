@@ -333,9 +333,12 @@ def _asas_repujado(self, ctx, v):
     prof = evaluar_o_cero(ctx, v.get("profundidad"))
     es_relieve = prof >= 0 and v.get("tipo") == "relieve"
     signo = 1.0 if es_relieve else -math.copysign(1.0, prof)
+    # El anillo deja el asa de giro fuera de las flechas, también a 0° y 90°.
+    giro = mp.AnilloAngulo("giro", corrido, n, pl.u)
+    giro.ayuda = "Especificar el ángulo de giro"
     return [mp.Flecha("profundidad", corrido, n * signo, minimo=None),
             mp.Flecha("desfase_h", centro, pl.u), mp.Flecha("desfase_v", centro + pl.u * h, pl.v),
-            mp.Angulo("giro", corrido, n, pl.u)]
+            giro]
 
 
 def _asas_solevacion(self, ctx, v):
