@@ -459,6 +459,7 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 - **2026-11-13 · FU-3 (E1):** la primera línea con ángulo escrito se acota contra el eje X. Falta en la ventana: dibujarla con el mouse y el teclado en la pieza de boceto de `prueba_ui`, y editar la cota con doble clic.
 - **2026-11-12 · P-145 (E1):** la previa de Rosca modelada pinta de azul los tramos de afuera y las crestas. Falta: la humo y mirar en la ventana una rosca interna (agujero roscado) y una larga (M7×50), que el azul no tape nada ni tarde.
 - **2026-11-12 · P-135 (E1):** flechas de Desfase y Longitud de Rosca sobre la pared (`FlechaCilindro`). Falta en la ventana: la prueba de humo, la pieza de Rosca de `prueba_ui` (arrastrar las dos flechas, pasar por 0, agujero roscado), y mirar que no se escondan detrás de la rosca modelada.
+- **2026-11-14 · B-440 (E3):** salir del boceto y cota con menos trabajo repetido (`nucleo/perfiles.py`, `ui/vectores_en_vista.py`). Falta: la humo y que E11 repita en la PC su caso (boceto de 42 geometrías, escribir «HOLA» en un texto, H abre Agujero; una cota «13») mirando `bloqueo_ui` en el registro de uso.
 
 ## Archivos de prueba de referencia (fuera de git)
 
