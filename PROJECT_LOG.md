@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-14 · B-369 no era un error** (E11, Windows, ac58cd89): la rosca modelada M2 completa sobre Ø2×30 sí entra, pero tarda 34 s. Pasa a B-461 (velocidad de la rosca modelada).
 - **2026-11-14 · B-457, pruebas de P-78 sobre cuerpos modificados (E9, con Sol; queda Parcial).** Nuevo `tests/test_b457_rosca_cuerpo_modificado.py`: cilindro chaflanado y cilindro unido a una base, forzando los giros 0°, 229°, 61° y 137° y comparando el volumen contra el corte normal. El chaflanado coincide en los cuatro giros; el unido a la base da 2394,488 mm³ rápido frente a 2323,094 normal (quitan 258,7 y 330,1; en un cilindro solo la rápida quita 249,6), anotado como 4 `xfail` estrictos. Sin cambios del programa; falta decidir cuál camino es el correcto.
 - **2026-11-14 · B-426: fila borrada, no era bug** (ver la entrada del revert 37fc185). Había vuelto a la lista con la fusión del revert, junto con B-427 (resuelto en 0dfa14f) y el texto viejo de B-429.
 - **2026-11-14 · Dieta de las listas (E9, con Sol).** Las filas con «Queda» de más de ~300 caracteres pasaron su detalle a la ficha y dejan una línea corta: B-438, ASM-19 y FL-9 (B-421 se cierra aparte). Sin cambiar estados ni IDs; `tests/test_seguimiento.py` verde (443).

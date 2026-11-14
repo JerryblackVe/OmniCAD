@@ -24,11 +24,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-460 | Empalme más estricto que Fusion: falla desde r41 donde Fusion acepta r55 y r59 (Sólido › Modificar, E3 al liberarse) |
-| 2 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
-| 3 | B-443 | «Propiedades» no abre desde el cuerpo ni el componente, y falta en la cinta |
-| 4 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 5 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 6 | B-369 | Rosca modelada M2 completa falla sobre un cilindro Ø2 × 30 |
+| 2 | B-461 | Rosca modelada lenta: M10×30 6 s, M2 34 s (Fusion 0,2 s); velocidad, E6 |
+| 3 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
+| 4 | B-443 | «Propiedades» no abre desde el cuerpo ni el componente, y falta en la cinta |
+| 5 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
 | 7 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
 | 8 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
 
