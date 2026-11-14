@@ -42,6 +42,7 @@ SALIDA = Path(os.environ.get("OMNICAD_PRUEBA_SALIDA") or RAIZ / "evidencias" / f
 PIEZAS = ["cinta_completa", "superficie", "superficie_fusion", "superficie_guias", "solido_crear", "solido_modificar", "asas", "teclear", "herramientas_solido", "ventana_uso", "ensamblar", "ensamblar_asm", "posicion_asm", "boceto_cotas", "asistente", "iconos", "boton_asistente", "abrir_f3d", "booleana_unir", "origen_cara", "auditoria_boceto", "simetria_boceto", "auditoria_undo", "seccion_color", "perdidas_atenuar", "registro_uso", "inferencias", "desfase_boceto", "patrones_boceto", "restricciones_boceto", "patrones_solidos", "paneles_inventario", "dialogos_inventario", "paneles_temas", "patrones_ensamble_rosca", "boceto_herramientas", "proyectar_boceto", "panel_movible", "paneles_boceto", "timeline_menu", "subensamblaje", "pasos_largos", "construir", "mapa_desviacion", "texto_curva", "inspeccionar", "parametros", "previa_aparte", "cm_ventana", "cm_pieza_varilla"]
 PIEZAS.append("objetos_vectoriales")
 PIEZAS.append("pieza_revolucion")
+PIEZAS.append("pieza_barrido_solevacion")
 PIEZAS.append("manipulacion_vectorial")
 PIEZAS.append("extruir_espacios")
 PIEZAS.append("revolucion_barrido_solevacion")
