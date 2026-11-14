@@ -3069,16 +3069,18 @@ class VentanaPrincipal(QMainWindow):
             return
         ruta, _ = QFileDialog.getOpenFileName(self, "Abrir", "", FILTRO_ABRIR)
         if ruta:
-            self.abrir_ruta(ruta)
+            self.abrir_ruta(ruta, aparte=True)
 
     def _abrir_reciente(self, ruta):
         if self._salir_de_boceto() and self._confirmar_descartar():
-            self.abrir_ruta(ruta)
+            self.abrir_ruta(ruta, aparte=True)
 
-    def abrir_ruta(self, ruta, preguntar=True):
+    def abrir_ruta(self, ruta, preguntar=True, aparte=False):
         """Abre un proyecto o un archivo de otro programa. Con un autoguardado más nuevo pregunta cuál abrir; con
         `preguntar=False` (la app arrancó con el puente para agentes: un diálogo modal lo dejaría en APP_BUSY) abre
-        el guardado, deja la copia donde está y avisa en la barra."""
+        el guardado, deja la copia donde está y avisa en la barra. `aparte` (lo que abre la persona): un proyecto se arma
+        en otro hilo, con su recálculo en el proceso aparte; la ventana sigue viva con una barra y Cancelar y el documento
+        llega después (FL-3). Sin `aparte` (pruebas, guiones), vuelve con el documento ya abierto."""
         if abrir_externo.es_externo(ruta):
             self._abrir_externo(ruta)
             return
@@ -3096,15 +3098,71 @@ class VentanaPrincipal(QMainWindow):
                 if r == 2:
                     return
                 origen, descartar = (pendiente, False) if r == 0 else (ruta, True)
-            doc = proyecto.abrir(origen, self._esperando_calculo)
-            if descartar:                              # eligió el guardado: recién ahora, con el guardado ya abierto,
-                proyecto.suprimir_copia(pendiente)     # se descarta la copia (si no abría, la copia era lo único que quedaba)
-            doc.ruta, doc.nombre = str(ruta), Path(ruta).stem
-            doc.modificado = origen != ruta
-            self.set_documento(doc)
-            self._recordar(ruta)
+            copia = pendiente if descartar else None
+            if aparte:
+                self._abrir_en_hilo(origen, ruta, copia)
+                return
+            self._abierto(proyecto.abrir(origen, self._esperando_calculo), origen, ruta, copia)
         except (proyecto.ErrorProyecto, OSError, ValueError, KeyError) as e:
             QMessageBox.critical(self, "No se pudo abrir", str(e))
+
+    def _abierto(self, doc, origen, ruta, copia):
+        if copia:                                  # eligió el guardado: recién ahora, con el guardado ya abierto,
+            proyecto.suprimir_copia(copia)         # se descarta la copia (si no abría, la copia era lo único que quedaba)
+        doc.ruta, doc.nombre = str(ruta), Path(ruta).stem
+        doc.modificado = origen != ruta
+        self.set_documento(doc)
+        self._recordar(ruta)
+
+    def _abrir_en_hilo(self, origen, ruta, copia):
+        """FL-3: arma el proyecto en otro hilo (el recálculo va al proceso aparte, que no toma el GIL) mientras la ventana
+        repinta; la barra es modal (sin tocar el documento a medio abrir) y Cancelar o Esc dejan el documento de antes."""
+        from PySide6.QtWidgets import QProgressDialog
+        resultado = {}
+
+        def trabajo():
+            try:
+                doc = proyecto.abrir(origen, aparte=True)
+                # mallar en el hilo de la ventana tardaba más de 1 s con el sustituto de motor_impreso
+                resultado["mallas"] = {id(c.forma): self.visor.datos_cuerpo(c.forma)
+                                       for c in doc.estado_final.cuerpos.values()}
+                resultado["doc"] = doc
+            except Exception as e:  # noqa: BLE001 — se informa en el hilo de la ventana
+                resultado["error"] = e
+
+        espera = QProgressDialog(f"Abriendo «{Path(ruta).stem}»…", "Cancelar", 0, 0, self)
+        espera.setWindowTitle(NOMBRE_APP)
+        espera.setWindowModality(Qt.WindowModal)
+        espera.setMinimumDuration(0)
+        hilo, reloj = threading.Thread(target=trabajo, daemon=True), QTimer(espera, interval=50)
+
+        def mirar():
+            if hilo.is_alive():
+                return
+            reloj.stop()
+            cancelada = espera.wasCanceled()
+            espera.close()
+            espera.deleteLater()
+            if cancelada:
+                return
+            if "error" in resultado:
+                QMessageBox.critical(self, "No se pudo abrir", str(resultado["error"]))
+                return
+            try:
+                self.visor.precargar(resultado["mallas"])
+                self._abierto(resultado["doc"], origen, ruta, copia)
+            except (proyecto.ErrorProyecto, OSError, ValueError, KeyError) as e:
+                QMessageBox.critical(self, "No se pudo abrir", str(e))
+
+        def cancelar():
+            aislado.cerrar_trabajador()            # corta el recálculo aparte; lo que traiga el hilo se descarta
+            self.mensaje(f"Apertura de «{Path(ruta).stem}» cancelada: sigue el documento de antes.", 5000)
+
+        espera.canceled.connect(cancelar)
+        reloj.timeout.connect(mirar)
+        hilo.start()
+        reloj.start()
+        espera.show()
 
     def _abrir_externo(self, ruta):
         """STEP, IGES, mallas, DXF o .f3d/.f3z como documento nuevo (sin ruta: Guardar pide dónde)."""
