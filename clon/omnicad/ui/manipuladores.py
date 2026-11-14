@@ -2121,18 +2121,19 @@ class GestorManipuladores(QObject):
 
     def _buscar_tope(self, malos, vueltas=8, segundos=0.3):
         """El último valor sano entre el sano y el que falló, por bisección con previas que no se muestran (redondeado
-        como se escribe, así lo escrito es lo probado). Corre en la ventana: corta a los `segundos`. Si la previa no se
-        puede probar acá (pesada), el último sano."""
+        como se escribe, así lo escrito es lo probado). Corre en la ventana: corta a los `segundos`, tras 4 pruebas. Si
+        la previa no se puede probar acá (pesada), el último sano."""
         import time
 
         def en(t):
             return {k: self._sano[k] + (v - self._sano[k]) * t for k, v in malos.items()}
         lo, hi, fin = 0.0, 1.0, time.monotonic() + segundos
-        for _ in range(vueltas):
-            if time.monotonic() > fin:
+        for vuelta in range(vueltas):
+            if vuelta >= 4 and time.monotonic() > fin:      # B-454: con menos pruebas un arrastre largo frena donde arrancó
                 break
             medio = (lo + hi) / 2
-            sana = self.panel.previa_sana({k: self.texto(k, v) for k, v in en(medio).items()})
+            # B-454: una previa de 30 ms a `segundos` va al proceso aparte al teclear, pero la bisección sí la prueba acá
+            sana = self.panel.previa_sana({k: self.texto(k, v) for k, v in en(medio).items()}, segundos * 1000)
             if sana is None:
                 break
             lo, hi = (medio, hi) if sana else (lo, medio)

@@ -1811,15 +1811,15 @@ class PanelComando(QFrame):
         # FL-1b: también cuenta mallarla en el visor (un barrido: 20 ms de kernel y 0,4 s de malla)
         self._ms_previa = _firma_previa(op), (time.perf_counter() - inicio) * 1000
 
-    def previa_sana(self, cambios):
+    def previa_sana(self, cambios, tope_ms=None):
         """¿Sale sana la previa con `cambios` (textos de campos)? Sin mostrar nada; None si es pesada y no se prueba acá.
-        B-345: el asa busca así su tope."""
+        B-345: el asa busca así su tope; `tope_ms`: lo que puede tardar una previa medida para probarla en la ventana."""
         from ..nucleo import geometria as geo
         try:
             op = self.comando.construir(dict(self.valores, **cambios), self.ctx)
             if op is None or not self.comando.PREVIA:
                 return True
-            if self._previa_pesada(op):
+            if self._previa_pesada(op, tope_ms):
                 return None
             with geo.en_serie():         # B-293
                 self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=True)
@@ -1923,13 +1923,14 @@ class PanelComando(QFrame):
             self._mostrar("")
         return True
 
-    def _previa_pesada(self, op):
+    def _previa_pesada(self, op, tope_ms=None):
         if self.ctx.doc.motor != "opencascade":
             return False
         if op.TIPO == "rosca" and op.p.get("modelada"):
             return True     # P-78: cortar la hélice tarda segundos aunque el cuerpo sea chico (M20×100: 25-50 s)
         medida = self._ms_previa
-        rapida = medida is not None and medida[0] == _firma_previa(op) and medida[1] < PREVIA_EN_VENTANA_MS
+        tope_ms = PREVIA_EN_VENTANA_MS if tope_ms is None else tope_ms
+        rapida = medida is not None and medida[0] == _firma_previa(op) and medida[1] < tope_ms
         aparte = PREVIA_APARTE and not rapida    # FL-1: extruir el texto «EMILIA» con Unir trababa la ventana 4 s por tecla
         if aparte or op.TIPO not in TIPOS_PESADOS:
             return aparte
