@@ -153,7 +153,7 @@ def main(argv=None):
     if args.puente and not ventana.encender_puente():
         logging.getLogger("omnicad").warning("No se pudo encender el puente para agentes IA.")
     if args.proyecto:
-        ventana.abrir_ruta(args.proyecto, preguntar=not args.puente)   # con el puente, un diálogo modal lo bloquearía
+        ventana.abrir_ruta(args.proyecto, preguntar=not args.puente, aparte=not args.puente)   # con el puente, un diálogo modal lo bloquearía
     elif args.ejemplo:
         ventana.cargar_ejemplo()
     else:

@@ -192,6 +192,7 @@ Son presupuestos de regresión del estado actual, **no** las metas de fluidez de
   progreso y botón Cancelar. Lo mismo para eliminar o editar un paso, deshacer y rehacer que recalculan, y abrir un
   proyecto (la ventana aparece enseguida y los cuerpos llegan después). Cubre CPP-F1, CPP-C4 y RS-X2.
 - **Listo cuando:** g y h con bloqueo máximo menor a 250 ms; Cancelar deja el documento como estaba (test).
+- **También (E11, tanda 13, 2026-11-14):** con Rosca modelada la ventana se traba de 350 a 670 ms aunque la previa va aparte: lee el B-Rep del filete y lo malla en el hilo de la ventana (`leer_previa_visual`). Una traba de 1430 ms (2375 ms de CPU), 25 s después de cerrar el comando, coincide con el autoguardado, que guarda la caché B-Rep del cuerpo roscado (sin comprobar). Candidatos: mallar la previa en el hijo y guardar en otro hilo.
 - **Ejecutor:** E6 (Opus alto).
 
 ### F4. Unir y Cortar solo contra lo que se toca

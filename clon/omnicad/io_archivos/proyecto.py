@@ -250,8 +250,10 @@ def _json(texto):
 
 
 @_registrar_archivo("archivo_abrir")
-def abrir(ruta, esperar=None):
-    """`esperar(segundos)`: la ventana avisa y repinta mientras el hijo ensaya un proyecto grande (B-48)."""
+def abrir(ruta, esperar=None, aparte=False):
+    """`esperar(segundos)`: la ventana avisa y repinta mientras el hijo ensaya un proyecto grande (B-48). `aparte`: también
+    un proyecto chico sin caché válida (guardado con otra versión) se recalcula en el proceso aparte (FL-3: `motor_cohete`,
+    41 pasos, recalculaba 5,5 s en el hilo de la ventana)."""
     ruta = Path(ruta)
     calculo, cache = None, None
     try:
@@ -269,8 +271,10 @@ def abrir(ruta, esperar=None):
             if not isinstance(receta, dict) or not isinstance(receta.get("operaciones", []), list):
                 raise ErrorProyecto("La receta del proyecto está dañada: las operaciones deben ser una lista.")
             from ..nucleo import aislado
-            if (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
-                    and len(receta.get("operaciones", [])) >= aislado.UMBRAL_PREVUELO_PARAMETROS):
+            aislable, pasos = not aislado.EN_HIJO and motor.motor_activo() == "opencascade", len(receta.get("operaciones", []))
+            if not (aislable and pasos >= aislado.UMBRAL_PREVUELO_PARAMETROS):
+                cache = _leer_cache(z, texto_receta)
+            if aislable and cache is None and (pasos >= aislado.UMBRAL_PREVUELO_PARAMETROS or aparte and pasos):
                 try:
                     from ..timeline.calculo_aislado import _leer_calculo
                     salida = aislado.correr_json("prevuelo_abrir", {"ruta": str(ruta.resolve())}, aislado.TOPE_PREVUELO_ABRIR,
@@ -279,8 +283,6 @@ def abrir(ruta, esperar=None):
                 except (aislado.TareaAislada, ValueError, geo.ErrorGeometria) as e:
                     raise ErrorProyecto(f"El proyecto es grande y el ensayo de apertura falló: {e}. No se abrió y OmniCAD "
                                         "sigue andando; guardá una copia y probá de nuevo.") from e
-            else:
-                cache = _leer_cache(z, texto_receta)
     except zipfile.BadZipFile:
         raise ErrorProyecto("El archivo está dañado o no es un ZIP.") from None
     except (zlib.error, NotImplementedError):
