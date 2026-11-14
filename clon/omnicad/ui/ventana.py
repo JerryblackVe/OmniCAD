@@ -2552,7 +2552,7 @@ class VentanaPrincipal(QMainWindow):
         elif ident in estado.bocetos:
             b = estado.bocetos[ident]
             nombre = {o.id: o.nombre for o in self.doc.operaciones}.get(ident, b.nombre)     # B-273: el vigente
-            self.mensaje(f"{nombre}: {len(b.perfiles)} perfil(es) cerrado(s). Doble clic para editarlo.", 8000)
+            self.mensaje(f"{nombre}: {len(b.perfiles)} perfil(es) cerrado(s). Doble clic para renombrarlo; clic derecho › Editar boceto.", 8000)
 
     def _intentar(self, funcion):
         try:
