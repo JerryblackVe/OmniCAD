@@ -857,6 +857,7 @@ class PanelComando(QFrame):
         self._t_hijo = QTimer(self, interval=16)
         self._t_hijo.timeout.connect(self._recibir_previa)
         self._prisma_previa = None
+        self._prisma_fallo = None       # B-453: firma cuya plantilla barata no se pudo armar (va la previa normal)
         self.confirmar = None       # función(op) de la ventana: aplica y devuelve False si el editor debe seguir abierto
 
         v = QVBoxLayout(self)
@@ -1879,16 +1880,22 @@ class PanelComando(QFrame):
         firma = (self.ctx.estado, op.TIPO, repr({k: v for k, v in p.items() if k not in variables}),
                  p.get("invertir") if op.TIPO == "revolucion" else None)
         if self._prisma_previa is None or self._prisma_previa[0] != firma:
-            plano, caras = op._caras(self.ctx.estado, Contexto(self.ctx.doc.parametros.valores()))
-            # FL-2: la malla sale de la triangulación de los perfiles que ya tiene el visor, sin kernel.
-            # B-359: siempre cuerpo nuevo; con «Unir» se ven la pieza y la malla juntas y la unión sale del kernel.
-            tris = np.concatenate([self.visor._tris_perfil(c) for c in caras])
-            if op.TIPO == "extrusion":
-                v, n, seg = rc.prisma_unidad(tris, plano.normal)
-                datos = rc.PrismaVisual(v, n, seg, plano.origen, plano.normal)
-            else:
-                datos = (tris, plano.normal, *op.eje_de_giro(self.ctx.estado, plano))
-                v = rc.revolucion_visual(*datos, 0, 1)[0]
+            if self._prisma_fallo == firma:
+                return False
+            try:
+                plano, caras = op._caras(self.ctx.estado, Contexto(self.ctx.doc.parametros.valores()))
+                # FL-2: la malla sale de la triangulación de los perfiles que ya tiene el visor, sin kernel.
+                # B-359: siempre cuerpo nuevo; con «Unir» se ven la pieza y la malla juntas y la unión sale del kernel.
+                tris = np.concatenate([self.visor._tris_perfil(c) for c in caras])
+                if op.TIPO == "extrusion":
+                    v, n, seg = rc.prisma_unidad(tris, plano.normal)
+                    datos = rc.PrismaVisual(v, n, seg, plano.origen, plano.normal)
+                else:
+                    datos = (tris, plano.normal, *op.eje_de_giro(self.ctx.estado, plano))
+                    v = rc.revolucion_visual(*datos, 0, 1)[0]
+            except Exception:  # noqa: BLE001 — B-453/B-458: la previa barata es un atajo; si no puede, va la normal sin su error
+                self._prisma_previa, self._prisma_fallo = None, firma
+                return False
             estado = self.ctx.estado.copia()
             cid = estado.nuevo_cuerpo(op.id, Malla(v, np.arange(len(v)).reshape(-1, 3)))
             self._prisma_previa = firma, estado, {cid: datos}, self.ctx.estado.copia()
