@@ -3,6 +3,22 @@
 Procedimientos largos (VPS, página de seguimiento, prueba como usuario, ayuda de Fusion, loop por fases, caza,
 contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.md). Acá queda la regla corta.
 
+## REGLAS DE NIVEL 1 (mandatorias, Gerardo 2026-11-14)
+Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, Sol y el chat maestro.
+1. **Orden de trabajo**: bocetos → sólido → superficie → construir/inspeccionar/ensamblar; la velocidad es prioridad 1; lo demás después.
+2. **Cola única**: solo `ahora.md`; reportes en lotes de 13 y 19 h; solo un bloqueante entra en el momento.
+3. **Sin desvíos**: un ítem por sesión, cerrado antes del siguiente; tope de 6 iteraciones por tarea y 3 intentos por problema.
+4. **Eficiencia**: modelo y esfuerzo justos; solo `tests_afectados.py --correr`, de a 5 (`OMNICAD_TURNOS=5`), sin repetir; mensajes cortos; leer solo la sección necesaria.
+5. **Nada es «listo» sin verificar**: ruff, tests y humo en verde con la salida real, y `ponytail-review`.
+6. **Copiar Fusion**: leer `docs/fusion_docs` antes de arreglar; comparar contra Fusion.
+7. **Probar como una persona**: mouse, teclado, valores raros; E11 con mouse real solo con la PC libre o el OK de Gerardo.
+8. **Seguridad**: sin push, gasto, borrado ni archivos privados sin el OK de Gerardo; credenciales nunca a la vista; MCP solo en 127.0.0.1.
+9. **Solo OpenCascade**: OmniKernel suspendido.
+10. **Todo en MCP y CLI**: cada herramienta nueva con su versión para agentes, test y doc.
+11. **Avisos**: contexto al 65 %, cupo de Claude al 95 %, Sol siempre con trabajo.
+12. **Hablarle corto a Gerardo**: 3–5 líneas, resultado primero, ⚠ para riesgos, una sola pregunta.
+13. **Máximo rendimiento**: todo lo más rápido posible, ordenado y sin perder calidad. Usar al máximo el cupo de 5 h y el semanal de Claude, y el de Sol: nunca capacidad ociosa (sesiones quietas, Sol sin corrida, ventana de 5 h sin usar), y nunca desperdicio (pruebas repetidas, lecturas de más, modelo más caro de lo necesario).
+
 ## REGLA ESTRICTA: qué se trabaja primero (Gerardo, 2026-11-10)
 «Esto es lo que va a hacer funcional la app, aunque esté incompleta.» La meta es que estas herramientas anden al
 100 %, rápido y sin bugs, antes que cualquier otra cosa:
