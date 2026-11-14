@@ -701,7 +701,7 @@ class Agujero(Comando):
             Opciones("extension", "Tipo de extensión", {"distancia": ("Distancia", "ext_distancia"), "hasta": ("A", "ext_objeto"),
                                                         "todo": ("Todo", "ext_todo")}, seccion=fo),
             Expresion("profundidad", "Distancia", "10 mm", visible_si=lambda v: v.get("extension") == "distancia", seccion=fo,
-                      en_esquema=True),
+                      en_esquema=True, validar=sc.exigir_profundidad_agujero),
             Seleccion("hasta", "A", {"cara", "plano", "cuerpo"}, visible_si=hasta, seccion=fo,
                       ayuda="Cara (si es plana, su plano extendido), plano de construcción o cuerpo donde termina."),
             Casilla("invertir", "Invertir dirección", seccion=fo),

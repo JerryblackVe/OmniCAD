@@ -26,7 +26,7 @@ import numpy as np
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QInputEvent, QKeySequence
-from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
+from PySide6.QtWidgets import (QAbstractButton, QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QSizePolicy, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, RECURSOS, VERSION
@@ -147,6 +147,17 @@ class _FiltroEspera(QObject):
         return True
 
 
+class _EspacioEnBotones(QObject):
+    """B-420: con el foco en un botón o una casilla, la barra espaciadora es del botón (marcar, pulsar) y no del atajo global
+    «Boceto sobre la cara elegida» / «Repetir». Un botón no acepta solo ese `ShortcutOverride`; se instala solo en el botón que
+    recibe el foco (un filtro sobre toda la aplicación rompió el GL, ver `_FiltroInfoHerramientas`)."""
+
+    def eventFilter(self, obj, evento):
+        if evento.type() == QEvent.ShortcutOverride and evento.key() == Qt.Key_Space and not evento.modifiers():
+            evento.accept()
+        return False
+
+
 def imagen_ayuda(clave):
     """HTML de la imagen «antes → después» del comando (`scripts/ayuda_imagenes.py`), o "" si no tiene."""
     ruta = RECURSOS / "ayuda" / f"{clave}.png"
@@ -210,6 +221,8 @@ class VentanaPrincipal(QMainWindow):
         self.prefs_grupos_caras = False         # INSPECCIONAR › Mostrar grupos de caras de malla (Mayús+F)
         self.panel = None                   # diálogo de comando abierto (PanelComando)
         self._espera = _FiltroEspera(self)
+        self._espacio_en_botones = _EspacioEnBotones(self)
+        QApplication.instance().focusChanged.connect(self._foco_en_boton)
         self._autoguardado_fallo = None     # último error del autoguardado ya avisado en la barra
         self._previa_aspecto = {}           # lo que el panel Aspecto muestra sin haberlo aplicado: {"cuerpos": {id: rgb},
         self._malla_caras = {}              # "caras": [(id de cuerpo, referencia, rgb)]}; mallas de caras con aspecto propio
@@ -1094,7 +1107,17 @@ class VentanaPrincipal(QMainWindow):
     def _mostrar_estado(self, texto):
         etiqueta = self.timeline.estado
         etiqueta.setToolTip(texto)
-        etiqueta.setText(etiqueta.fontMetrics().elidedText(texto, Qt.ElideMiddle, min(560, etiqueta.width())))
+        medidas = etiqueta.fontMetrics()
+        ancho = min(560, etiqueta.contentsRect().width())
+        if medidas.horizontalAdvance(texto) > ancho and texto == self._texto_estado:
+            texto = texto.replace("cuerpo(s)", "cuerpo" if len(self.doc.estado_final.cuerpos) == 1 else "cuerpos")
+            texto = texto.replace("paso(s)", "paso" if len(self.doc.operaciones) == 1 else "pasos")
+        etiqueta.setText(medidas.elidedText(texto, Qt.ElideRight, ancho))
+
+    def _foco_en_boton(self, _antes, ahora):
+        if isinstance(ahora, QAbstractButton) and not ahora.property("espacio_propio"):
+            ahora.installEventFilter(self._espacio_en_botones)
+            ahora.setProperty("espacio_propio", True)
 
     def eventFilter(self, objeto, evento):
         if objeto is self.timeline.estado and evento.type() == QEvent.Resize:
@@ -2680,6 +2703,9 @@ class VentanaPrincipal(QMainWindow):
             self.doc.renombrar(op_id, nombre.strip())
 
     def _deshacer(self):
+        if self.panel is not None:          # B-429: con un comando abierto el primer Ctrl+Z lo cancela y no toca el timeline
+            self.panel.cancelar()
+            return
         if self.modo_boceto.activo:
             self.modo_boceto.lienzo.deshacer()
         elif not self.arrastre.deshacer():
@@ -3069,16 +3095,18 @@ class VentanaPrincipal(QMainWindow):
             return
         ruta, _ = QFileDialog.getOpenFileName(self, "Abrir", "", FILTRO_ABRIR)
         if ruta:
-            self.abrir_ruta(ruta)
+            self.abrir_ruta(ruta, aparte=True)
 
     def _abrir_reciente(self, ruta):
         if self._salir_de_boceto() and self._confirmar_descartar():
-            self.abrir_ruta(ruta)
+            self.abrir_ruta(ruta, aparte=True)
 
-    def abrir_ruta(self, ruta, preguntar=True):
+    def abrir_ruta(self, ruta, preguntar=True, aparte=False):
         """Abre un proyecto o un archivo de otro programa. Con un autoguardado más nuevo pregunta cuál abrir; con
         `preguntar=False` (la app arrancó con el puente para agentes: un diálogo modal lo dejaría en APP_BUSY) abre
-        el guardado, deja la copia donde está y avisa en la barra."""
+        el guardado, deja la copia donde está y avisa en la barra. `aparte` (lo que abre la persona): un proyecto se arma
+        en otro hilo, con su recálculo en el proceso aparte; la ventana sigue viva con una barra y Cancelar y el documento
+        llega después (FL-3). Sin `aparte` (pruebas, guiones), vuelve con el documento ya abierto."""
         if abrir_externo.es_externo(ruta):
             self._abrir_externo(ruta)
             return
@@ -3096,15 +3124,71 @@ class VentanaPrincipal(QMainWindow):
                 if r == 2:
                     return
                 origen, descartar = (pendiente, False) if r == 0 else (ruta, True)
-            doc = proyecto.abrir(origen, self._esperando_calculo)
-            if descartar:                              # eligió el guardado: recién ahora, con el guardado ya abierto,
-                proyecto.suprimir_copia(pendiente)     # se descarta la copia (si no abría, la copia era lo único que quedaba)
-            doc.ruta, doc.nombre = str(ruta), Path(ruta).stem
-            doc.modificado = origen != ruta
-            self.set_documento(doc)
-            self._recordar(ruta)
+            copia = pendiente if descartar else None
+            if aparte:
+                self._abrir_en_hilo(origen, ruta, copia)
+                return
+            self._abierto(proyecto.abrir(origen, self._esperando_calculo), origen, ruta, copia)
         except (proyecto.ErrorProyecto, OSError, ValueError, KeyError) as e:
             QMessageBox.critical(self, "No se pudo abrir", str(e))
+
+    def _abierto(self, doc, origen, ruta, copia):
+        if copia:                                  # eligió el guardado: recién ahora, con el guardado ya abierto,
+            proyecto.suprimir_copia(copia)         # se descarta la copia (si no abría, la copia era lo único que quedaba)
+        doc.ruta, doc.nombre = str(ruta), Path(ruta).stem
+        doc.modificado = origen != ruta
+        self.set_documento(doc)
+        self._recordar(ruta)
+
+    def _abrir_en_hilo(self, origen, ruta, copia):
+        """FL-3: arma el proyecto en otro hilo (el recálculo va al proceso aparte, que no toma el GIL) mientras la ventana
+        repinta; la barra es modal (sin tocar el documento a medio abrir) y Cancelar o Esc dejan el documento de antes."""
+        from PySide6.QtWidgets import QProgressDialog
+        resultado = {}
+
+        def trabajo():
+            try:
+                doc = proyecto.abrir(origen, aparte=True)
+                # mallar en el hilo de la ventana tardaba más de 1 s con el sustituto de motor_impreso
+                resultado["mallas"] = {id(c.forma): self.visor.datos_cuerpo(c.forma)
+                                       for c in doc.estado_final.cuerpos.values()}
+                resultado["doc"] = doc
+            except Exception as e:  # noqa: BLE001 — se informa en el hilo de la ventana
+                resultado["error"] = e
+
+        espera = QProgressDialog(f"Abriendo «{Path(ruta).stem}»…", "Cancelar", 0, 0, self)
+        espera.setWindowTitle(NOMBRE_APP)
+        espera.setWindowModality(Qt.WindowModal)
+        espera.setMinimumDuration(0)
+        hilo, reloj = threading.Thread(target=trabajo, daemon=True), QTimer(espera, interval=50)
+
+        def mirar():
+            if hilo.is_alive():
+                return
+            reloj.stop()
+            cancelada = espera.wasCanceled()
+            espera.close()
+            espera.deleteLater()
+            if cancelada:
+                return
+            if "error" in resultado:
+                QMessageBox.critical(self, "No se pudo abrir", str(resultado["error"]))
+                return
+            try:
+                self.visor.precargar(resultado["mallas"])
+                self._abierto(resultado["doc"], origen, ruta, copia)
+            except (proyecto.ErrorProyecto, OSError, ValueError, KeyError) as e:
+                QMessageBox.critical(self, "No se pudo abrir", str(e))
+
+        def cancelar():
+            aislado.cerrar_trabajador()            # corta el recálculo aparte; lo que traiga el hilo se descarta
+            self.mensaje(f"Apertura de «{Path(ruta).stem}» cancelada: sigue el documento de antes.", 5000)
+
+        espera.canceled.connect(cancelar)
+        reloj.timeout.connect(mirar)
+        hilo.start()
+        reloj.start()
+        espera.show()
 
     def _abrir_externo(self, ruta):
         """STEP, IGES, mallas, DXF o .f3d/.f3z como documento nuevo (sin ruta: Guardar pide dónde)."""

@@ -1,7 +1,7 @@
 """GZ-26: el radio de Rosca cambia el Tamaño desde el visor y desde su caja flotante."""
 import numpy as np
 import pytest
-from PySide6.QtCore import QEvent, QPointF, QSettings, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, QSettings, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
@@ -85,7 +85,10 @@ def test_asa_tamano_con_y_sin_longitud_completa(perno, completa):
     assert np.linalg.norm(asa.puntos(gestor)[0] - asa.origen) == pytest.approx(9.895, abs=1e-3)   # como Fusion: 6g, no el nominal
     panel.set_valor("tam_iso_metrica", "M24")
     assert np.linalg.norm(_asa(panel).puntos(gestor)[0] - asa.origen) == pytest.approx(11.882, abs=1e-3)
-    assert gestor.cajas["tam_iso_metrica"].text() == "11,882"
+    if completa:
+        assert not gestor.cajas
+    else:
+        assert gestor.cajas["tam_iso_metrica"].text() == "11,882"
     _previa_sana(panel)
 
 
@@ -125,6 +128,7 @@ def test_arrastre_real_del_radio_cambia_tamano_y_conserva_previa(perno, completa
 
 def test_teclear_radio_en_caja_elige_tamano_y_rechaza_errores(perno):
     ventana, panel = perno
+    panel.set_valor("largo_completo", False)
     panel.set_valor("tam_iso_metrica", "M20")
     panel.set_valor("des_tipo_rosca", "M20x2.5")
     gestor = panel.manipuladores
@@ -160,3 +164,49 @@ def test_teclear_radio_en_caja_elige_tamano_y_rechaza_errores(perno):
     assert panel.valores["tam_unificada"] == "1/4"
     assert caja.text() == "3,11"
     _previa_sana(panel)
+
+
+@pytest.mark.parametrize("completa", [True, False])
+def test_h113_arrastrar_actualiza_designacion_y_cilindro_en_el_visor(perno, completa):
+    ventana, panel = perno
+    panel.set_valor("largo_completo", completa)
+    panel.set_valor("desfase", "3 mm")
+    panel.set_valor("tam_iso_metrica", "M20")
+    panel.set_valor("des_tipo_rosca", "M20x2.5")
+    casilla = panel.widgets["modelada"]
+    QTest.mouseClick(casilla, Qt.LeftButton, pos=QPoint(8, casilla.height() // 2))
+    assert panel.valores["modelada"]
+
+    def esperar_previa():
+        for _ in range(1500):
+            if not panel._t_previa.isActive() and panel._hijo_previa is None:
+                break
+            QTest.qWait(20)
+        assert panel._hijo_previa is None and not panel._t_previa.isActive()
+        assert panel._previa_ok, panel.mensaje.text()
+        forma = next(iter(ventana.visor._estado.cuerpos.values())).forma
+        assert geo.es_valida(forma)
+        caja = geo.caja_envolvente(forma)
+        return caja[1][0] - caja[0][0]
+
+    anterior = esperar_previa()
+    gestor, asa = panel.manipuladores, _asa(panel)
+    desde = asa.puntos(gestor)[0]
+    puntos, visibles = gestor.pantalla([desde, desde + asa.direccion * 4])
+    assert visibles.all()
+    QTest.mousePress(ventana.visor, Qt.LeftButton, pos=QPointF(*puntos[0]).toPoint())
+    assert gestor.arrastrando and gestor._arrastre["m"] is asa
+    for k in range(1, 7):
+        QTest.mouseMove(ventana.visor, QPointF(*(puntos[0] + (puntos[1] - puntos[0]) * k / 6)).toPoint())
+        QTest.qWait(15)
+    QTest.mouseRelease(ventana.visor, Qt.LeftButton, pos=QPointF(*puntos[1]).toPoint())
+    assert not gestor.arrastrando
+    assert panel.widgets["tam_iso_metrica"].currentData() == panel.valores["tam_iso_metrica"] == "M28"
+    diametro = esperar_previa()
+    assert diametro == pytest.approx(28, abs=0.5) and diametro > anterior + 7
+    assert panel.ultima_op.p["designacion"] == "M28x2"
+    # La designación elegida (M20x2.5) ya no existe para M28: el campo vuelve a «Automático» (= el paso normal, M28x2)
+    # y la operación guarda la designación efectiva.
+    assert panel.widgets["des_tipo_rosca"].currentData() == panel.valores["des_tipo_rosca"] in ("auto", "M28x2")
+    original = next(iter(ventana.doc.estado_final.cuerpos.values())).forma
+    assert geo.caja_envolvente(original)[1][0] - geo.caja_envolvente(original)[0][0] == pytest.approx(20)

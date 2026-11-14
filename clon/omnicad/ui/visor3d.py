@@ -667,16 +667,10 @@ class Visor3D(QOpenGLWidget):
             elif preparada is None and geometria in mallas_de:    # copia que solo cambia de lugar: su malla, movida
                 datos = _datos_movidos(c.forma, *mallas_de[geometria])
             else:
-                defl = self._deflexion(c.forma)
                 gruesa = preparada is None and arrastrando and not es_malla(c.forma) and len(geo.caras(c.forma)) >= 64
-                v, n = (preparada[:2] if preparada is not None else
-                        teselar_cuerpo(c.forma, defl, self.config.angular, self._limpiar_malla, _previa=gruesa))
+                datos = self.datos_cuerpo(c.forma, preparada, gruesa)
                 if gruesa:
                     self._previa_gruesa.add(clave)
-                mn, mx = (v.min(axis=0), v.max(axis=0)) if len(v) else (np.zeros(3), np.zeros(3))
-                datos = (c.forma, v, n, preparada[2] if preparada is not None else aristas_cuerpo(c.forma),
-                         (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2,
-                         defl)
             if geometria is not None and clave not in self._previa_gruesa:
                 mallas_de.setdefault(geometria, (c.forma.Location(), datos))
             cache[clave] = datos
@@ -718,6 +712,20 @@ class Visor3D(QOpenGLWidget):
                                      else np.zeros((0, 3), np.float32))
             self._bocetos_de, self._ver_bocetos = bocetos, ver
         self.update()
+
+    def datos_cuerpo(self, forma, preparada=None, gruesa=False):
+        """Lo que el visor guarda de un cuerpo: malla, aristas, centro, radio y deflexión. Sin Qt ni OpenGL: al abrir un
+        proyecto se calcula en otro hilo y entra en la caché con `precargar` (FL-3)."""
+        defl = self._deflexion(forma)
+        v, n = (preparada[:2] if preparada is not None else
+                teselar_cuerpo(forma, defl, self.config.angular, self._limpiar_malla, _previa=gruesa))
+        mn, mx = (v.min(axis=0), v.max(axis=0)) if len(v) else (np.zeros(3), np.zeros(3))
+        return (forma, v, n, preparada[2] if preparada is not None else aristas_cuerpo(forma),
+                (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2, defl)
+
+    def precargar(self, datos):
+        """FL-3: suma a la caché las mallas que `datos_cuerpo` hizo en otro hilo ({id de la forma: datos})."""
+        self._cache.update(datos)
 
     def actualizar_prismas(self, estado, mallas):
         """Actualiza únicamente los arrays de la previa lineal; no reconstruye cuerpos ni bocetos."""

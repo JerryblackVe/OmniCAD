@@ -112,6 +112,9 @@ def tipos():
     lz.deshacer()
     c = acotar([(60, 15)], None, "10", "círculo, un clic y teclear → diámetro")
     A.reg(AR, "círculo → diámetro", c is not None and c.tipo == "diametro", str(c and c.tipo))
+    c = acotar([(60, 15)], (78, 25), "12", "B-439: círculo, clic en el borde y clic para ubicar → diámetro con su caja")
+    A.reg(AR, "B-439: clic en el borde y clic para ubicar acota el círculo (diámetro 12)",
+          c is not None and (c.tipo, c.expresion) == ("diametro", "12"), str(c and (c.tipo, c.expresion)))
     c = acotar([(112.5, 0), (106, 9)], (118, 10), "40", "dos líneas no paralelas → ángulo")
     A.reg(AR, "dos líneas no paralelas → ángulo", c is not None and c.tipo == "angulo", str(c and c.tipo))
     c = acotar([(150, 0), (170, 12)], (160, 24), "20", "dos puntos, ubicar arriba → horizontal")
@@ -174,6 +177,9 @@ def editar_y_menu():
     if abierta:
         escribir("30")
         A.reg(AR, "editar la cota a 30 la cambia", lz.b.cotas[c.id].expresion == "30", lz.b.cotas[c.id].expresion)
+        xs = sorted({round(lz.b.coords(p)[0], 6) for p in lz.b.puntos})[:2]
+        A.reg(AR, "B-413: el rectángulo crece desde la primera esquina (izquierda quieta en 0, derecha en 30)",
+              xs == [0.0, 30.0], str(xs))
     A.MENUS.clear()
     A.clic_derecho(lz, centro)
     textos = [a.text() for a in A.MENUS[-1].actions() if a.text()] if A.MENUS else None

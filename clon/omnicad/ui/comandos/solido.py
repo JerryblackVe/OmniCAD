@@ -142,9 +142,24 @@ class Extruir(Comando):
                       visible_si=lambda v: v.get("tipo") == "delgada"),
             Opciones("ubicacion", "Ubicación de pared", {"lado1": "Lado 1", "lado2": "Lado 2", "centro": "Centro"},
                      visible_si=lambda v: v.get("tipo") == "delgada"),
+            Casilla("cadena_tangente", "Cadena tangente", False, visible_si=lambda v: v.get("tipo") == "delgada",
+                    ayuda="Al elegir una curva abierta se eligen también las que siguen por tangencia."),
             campo_operacion(),
             campo_objetivos(),
         ]
+
+    def grupo_de(self, campo, hit, valores, ctx):
+        """«Cadena tangente» (Extrusión delgada): una curva abierta entra, o sale, con las que siguen por tangencia."""
+        ref = hit.get("ref") or {}
+        if campo.clave != "perfiles" or ref.get("tipo") != "curva_boceto" or valores.get("tipo") != "delgada" \
+                or not valores.get("cadena_tangente"):
+            return None
+        from ...restricciones.auto_candidatos import cadena_tangente_de
+        boceto = ctx.estado.bocetos[ref["boceto"]].boceto
+        cadena = cadena_tangente_de(boceto, ref["curva"])
+        if len(cadena) < 2:
+            return None
+        return hits([{"tipo": "curva_boceto", "boceto": ref["boceto"], "curva": c} for c in cadena], ctx.estado)
 
     def construir(self, v, ctx):
         curvas = [h["ref"] for h in v.get("perfiles") or [] if h["ref"]["tipo"] == "curva_boceto"]
@@ -442,8 +457,10 @@ class Revolucion(Comando):
             Seleccion("hasta2", "Objeto límite del lado 2", {"vertice", "cara", "plano", "cuerpo"},
                       visible_si=lambda v: v.get("extension") == "objeto" and v.get("direccion") == "dos_lados"),
             Expresion("angulo", "Ángulo", "360 deg", ANGULO, visible_si=lambda v: v.get("extension") == "angulo",
+                      validar=geo.exigir_angulo_revolucion,
                       etiqueta_si=lambda v: "Ángulo del lado 1" if v.get("direccion") == "dos_lados" else "Ángulo"),
             Expresion("angulo2", "Ángulo del lado 2", "90 deg", ANGULO,
+                      validar=geo.exigir_angulo_revolucion,
                       visible_si=lambda v: v.get("extension") == "angulo" and v.get("direccion") == "dos_lados"),
             Casilla("proyectar_eje", "Eje de proyecto", True, ayuda="Proyecta el eje sobre el plano del perfil antes de girar."),
             Casilla("invertir", "Invertir dirección"),

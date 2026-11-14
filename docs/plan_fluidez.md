@@ -67,7 +67,7 @@ kernel: es cómo se lo llama.**
 
 - OCP retiene el GIL: un hilo de Python no libera la ventana (`docs/plan_cpp.md` sección 2). Solo sirve un proceso.
 - El trabajador persistente ya existe (RS-X1, `omnicad/nucleo/aislado.py`, `omnicad/timeline/calculo_aislado.py`).
-- P-78: la rosca crece con el documento (M20 sola 1,1 s; después de tres M8, 8,2 s).
+- P-78: la rosca crece con el documento (M20 sola 1,1 s; después de tres M8, 8,2 s). Ya no se reproduce (2026-11-13, por API: M20×60 sola 1,67 s y después de tres M8 1,45 s; M40x3 igual con 0 y 20 pasos antes).
 - RS-X4: 72 pasos «combinar» son el 66,7 % del recálculo de `motor_impreso` (16,2 s). Medido el 2026-11-13: el kernel es solo el 10 % de combinar; el resto era la verificación (`_parte_afuera` y `se_tocan`). OBB y modo paralelo no ganan y Glue da volúmenes equivocados con piezas que se cruzan.
 - RS-X2, RS-X6, CPP-P20, CPP-C3, CPP-C4, CPP-F1: abiertos o parciales.
 
@@ -192,6 +192,7 @@ Son presupuestos de regresión del estado actual, **no** las metas de fluidez de
   progreso y botón Cancelar. Lo mismo para eliminar o editar un paso, deshacer y rehacer que recalculan, y abrir un
   proyecto (la ventana aparece enseguida y los cuerpos llegan después). Cubre CPP-F1, CPP-C4 y RS-X2.
 - **Listo cuando:** g y h con bloqueo máximo menor a 250 ms; Cancelar deja el documento como estaba (test).
+- **También (E11, tanda 13, 2026-11-14):** con Rosca modelada la ventana se traba de 350 a 670 ms aunque la previa va aparte: lee el B-Rep del filete y lo malla en el hilo de la ventana (`leer_previa_visual`). Una traba de 1430 ms (2375 ms de CPU), 25 s después de cerrar el comando, coincide con el autoguardado, que guarda la caché B-Rep del cuerpo roscado (sin comprobar). Candidatos: mallar la previa en el hijo y guardar en otro hilo.
 - **Ejecutor:** E6 (Opus alto).
 
 ### F4. Unir y Cortar solo contra lo que se toca

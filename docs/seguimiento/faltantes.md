@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 73: Abierto 44 · Parcial 26 · Bloqueado 2 · Sin verificar 1 (2026-11-13: se cerraron H-88 (Revolución «A objeto» con Dos lados, con B-384) y H-90 (Punto tangente de la Solevación sólida, ya hecho en B-385); 2026-11-12: fusión de ASM-19; 2026-11-12: fusión de B-392; 2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 49: Abierto 31 · Parcial 17 · Sin verificar 1 (2026-11-13: se cerraron H-88 (Revolución «A objeto» con Dos lados, con B-384) y H-90 (Punto tangente de la Solevación sólida, ya hecho en B-385); 2026-11-12: fusión de ASM-19; 2026-11-12: fusión de B-392; 2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -29,7 +29,7 @@ Abierto 13 · Parcial 3.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 15 · Parcial 1 · Sin verificar 1.
+Abierto 14 · Parcial 1 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -37,7 +37,7 @@ Abierto 15 · Parcial 1 · Sin verificar 1.
 | H-105 | Extruir superficie: extensión propia del lado 2 | Sin verificar | Media | Confirmar en Fusion Al objeto y Todo por lado antes de construir. | timeline/ops_superficie.py:100-151; ui/comandos/superficie.py:53-58 | 2026-11-06 |
 | H-82 | Extruir Al objeto: extensión de caras | Abierto | Media | Sólido: Hasta caras adyacentes; superficie: Extend Faces / Chain Faces. | timeline/operaciones.py:1133; ui/comandos/superficie.py:55 | 2026-11-05 |
 | H-83 | Componente nuevo al Extruir, Revolucionar, Barrer y Solevar | Abierto | Media | Ofrecerlo en sólido y superficie. | timeline/operaciones.py:32 (`OPERACIONES_CUERPO`); api/herramientas_solido.py:183 | 2026-11-05 |
-| H-84 | Extrusión delgada: cadena tangente y conicidad abierta | Abierto | Baja | Agregar Cadena tangente y confirmar en Fusion la conicidad abierta. | ui/comandos/solido.py:33-35; nucleo/solidos_crear.py:487 | 2026-11-05 |
+| H-84 | Extrusión delgada: cadena tangente y conicidad abierta | Parcial | Baja | Confirmar en Fusion real la conicidad de curvas abiertas (la Cadena tangente ya está) | `clon/tests/test_h84_cadena_tangente.py` | 2026-11-05 |
 | H-91 | Solevación sólida: condiciones de borde exactas y combinables | Abierto | Alta | Combinarlas con carriles, línea central, cerrada y reglada. | nucleo/solidos_crear.py:1307 | 2026-11-05 |
 | H-96 | Repujado sobre caras que no son planas ni cilíndricas (esfera, cono, forma libre) | Abierto | Alta | Admitir repujado sobre esas caras. | nucleo/solidos_crear.py:1571 | 2026-11-05 |
 | H-97 | Repujado: asas de alineación horizontal, vertical y giro | Abierto | Media | Agregar las tres asas en la vista. | ui/comandos/asas_extra.py:308 (`_asas_repujado`) | 2026-11-05 |
@@ -46,7 +46,6 @@ Abierto 15 · Parcial 1 · Sin verificar 1.
 | H-69 | Boceto: nombre, ocultar, bloquear y «en perfiles» por curva | Abierto | Media | Guardar propiedades sin salir del solver ni duplicar objetos. | clon/omnicad/ui/navegador_boceto.py; clon/tests/test_boceto_organizar.py | 2026-11-05 |
 | H-70 | Boceto: capas y formas internas de SVG/DXF en el navegador | Abierto | Media | Listarlas bajo demanda y elegirlas sin romper contorno ni relleno. | clon/omnicad/ui/navegador.py; clon/omnicad/restricciones/objetos.py | 2026-11-05 |
 | H-76 | Exportar STEP y OBJ con colores de cuerpos y caras | Abierto | Media | Confirmar STEP en Fusion y exportar colores en ambos formatos. | clon/omnicad/nucleo/intercambio.py; clon/omnicad/io_archivos/exportar.py | 2026-11-05 |
-| H-113 | Rosca: flecha para cambiar Tamaño, Designación y cilindro | Abierto | Media | Agregar el asa de tamaño sobre la cara. | `scripts/fusion_docs.py` (Thread reference); `evidencias/videos_roscas_2026-11-10/informe.md` | 2026-11-10 |
 | H-114 | Rosca: vista previa cosmética con anillos sobre la cara | Abierto | Media | Dibujar surcos con Modelado sin tildar. | `clon/omnicad/ui/comandos/crear.py`; `evidencias/videos_roscas_2026-11-10/informe.md` | 2026-11-10 |
 
 ## Boceto (auditoría contra la ayuda de Fusion, 2026-10-23)
@@ -264,10 +263,6 @@ Bloqueado 1. Especificación: [plan_cpp.md](../plan_cpp.md).
 ### H-76 · Colores en STEP y OBJ
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Exportar STEP y OBJ con los colores (cuerpos y caras pintadas) **Queda:** El STEP se escribe sin colores (`escribir_step` usa STEPControl, no la versión con XCAF) y el OBJ sin .mtl; el glTF sí los lleva. Comprobar en Fusion qué colores guarda su STEP antes de construir. El 3MF multicolor es P-27-11. Ver docs/brechas_aspecto.md. **Evidencia:** clon/omnicad/nucleo/intercambio.py (`escribir_step`); clon/omnicad/io_archivos/exportar.py (`exportar_obj`)
-
-### H-113 · Rosca: flecha de tamaño
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Rosca › flecha en el visor para cambiar el tamaño de la rosca (arrastrar cambia Tamaño, Designación y el cilindro) **Queda:** Asa de arrastre sobre la cara, como Fusion (0:36–0:56). Gerardo (2:30): «DEBERÍA PODER VER LAS FLECHAS PARA ADAPTAR EL TAMAÑO» **Evidencia:** Ayuda de Fusion «Thread reference» (`scripts/fusion_docs.py ver "Thread reference" -s fusion-model`); `evidencias/videos_roscas_2026-11-10/informe.md`; captura `Fusion_0m40_cara_elegida_flechas_y_vista_previa.png`
 
 ### H-114 · Rosca: vista previa cosmética
 

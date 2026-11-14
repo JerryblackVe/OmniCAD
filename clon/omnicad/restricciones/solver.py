@@ -1199,6 +1199,31 @@ def _la_parte_entera_lo_acerca(boceto, valores, g, arrastrado, objetivo):
     return float(dx[ij] @ hacia) > 0.2
 
 
+def _acomodar_cotas(sis, ancla):
+    """B-413: como en Fusion, la cota de distancia que cambió (de una línea o entre dos puntos) arranca con su punto más
+    nuevo ya corrido a la medida y el más viejo en su lugar: el mínimo movimiento parte de ahí (antes repartía el cambio y
+    un rectángulo crecía a los dos lados). Si el más nuevo no es incógnita (fijo o copia de un patrón), queda el reparto
+    de siempre. En orden de creación, así una cadena de cotas cambiadas se acomoda entera."""
+    for c in sorted(sis._cotas, key=lambda c: c.id):
+        v, tipos = sis.valores.get(c.id), [sis.b.tipo_de(e) for e in c.entidades]
+        if c.tipo not in ("distancia", "distancia_h", "distancia_v") or v is None or tipos not in (["linea"], ["punto", "punto"]):
+            continue
+        viejo, nuevo = sorted(sis.b.curvas[c.entidades[0]].puntos() if tipos == ["linea"] else c.entidades)
+        if nuevo not in sis.idx_p:
+            continue
+        (ax, ay), (bx, by) = sis.P(ancla, viejo), sis.P(ancla, nuevo)
+        i, j = sis.idx_p[nuevo]
+        d = {"distancia_h": abs(bx - ax), "distancia_v": abs(by - ay)}.get(c.tipo, math.hypot(bx - ax, by - ay))
+        if abs(d - v) < TOLERANCIA_ACEPTA_ARRASTRE:      # se cumple (o la dejó así un arrastre): nada que acomodar
+            continue
+        if c.tipo == "distancia_h":
+            ancla[i] = ax + math.copysign(v, bx - ax)
+        elif c.tipo == "distancia_v":
+            ancla[j] = ay + math.copysign(v, by - ay)
+        elif d > TOLERANCIA:
+            ancla[i], ancla[j] = ax + (bx - ax) * v / d, ay + (by - ay) * v / d
+
+
 def _resolver_grupo(sis, arrastrado, con_rango=True):
     """(x resuelto o None, error máximo, jacobiano, rango) de un grupo. Sin `con_rango`, el jacobiano y el rango
     quedan en None (un evento de arrastre no los usa)."""
@@ -1207,6 +1232,7 @@ def _resolver_grupo(sis, arrastrado, con_rango=True):
     base = _PESO_REGULARIZACION * np.sqrt(sis.cuenta)
     pesos, ancla = base.copy(), sis.x0.copy()
     if arrastrado is None:
+        _acomodar_cotas(sis, ancla)
         for cid in sis.originales:
             ij = [j for pid in sis.b.curvas[cid].puntos() for j in sis.idx_p.get(pid, ())]
             pesos[ij + ([sis.idx_r[cid]] if cid in sis.idx_r else [])] = _PESO_ORIGINAL

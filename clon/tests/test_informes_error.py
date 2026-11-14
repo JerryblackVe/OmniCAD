@@ -135,3 +135,13 @@ def test_api_lista_y_lee_los_informes(tmp_path, monkeypatch):
     assert not r["ok"] and r["error_kind"] == "FILE_NOT_FOUND"
     r = api.llamar(api.Sesion(), "read_error_report", {})      # vacío = el más reciente
     assert r["ok"] and r["result"]["name"] == "sesion-20260101-000000-1.txt"
+
+
+def test_un_error_repetido_avisa_una_sola_vez(sesion_limpia):
+    """B-437: un error de GL en cada repintado no abre un cuadro por cuadro dibujado."""
+    avisados = []
+    informes_error.instalar(avisar=avisados.append, carpeta=sesion_limpia)
+    for _ in range(2):
+        _disparar(sys.excepthook, mensaje="GLError igual")
+    _disparar(sys.excepthook, mensaje="GLError distinto")
+    assert len(avisados) == 2

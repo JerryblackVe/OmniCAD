@@ -35,7 +35,7 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
 - En Linux: `.venv/bin/python`; lo que abre ventanas va con `xvfb-run -a`. Un worktree por ítem (`~/OmniCAD-<ID>`,
   `scripts/worktree_item.sh`).
 - Gasto: tope USD 290/mes. Cambiar la máquina o sumar algo que suba el costo pide su OK.
-- Tests de a 3 con `scripts/turno.py` (`OMNICAD_TURNOS=3` en `~/.claude/settings.json` de la VPS).
+- Tests de a 5 con `scripts/turno.py` (`OMNICAD_TURNOS=5` en `~/.claude/settings.json` de la VPS; Gerardo, 2026-11-14).
 - **Sesiones de ejecución fijas**, una por carril. El coordinador les manda ítems con `SendMessage` (vaciado al 65 %: ver
   la regla de contexto):
 

@@ -35,7 +35,13 @@ def texto_medidas(hits, estado=None):
     if any(f is None for f in formas):
         return cabecera
     try:
-        if tipo in ("cara", "perfil"):
+        if tipo == "cuerpo" and estado is not None:
+            tipos_cuerpos = {estado.cuerpos[h["ref"]["cuerpo"]].tipo for h in hits}
+            if "superficie" in tipos_cuerpos:
+                if len(tipos_cuerpos) > 1:
+                    return cabecera
+                tipo = "superficie"
+        if tipo in ("cara", "perfil", "superficie"):
             return f"{cabecera} | Área: {formato.longitud(sum(geo.area(f) for f in formas), 2):.3f} {formato.sufijo(2, True)}"
         if tipo in ("arista", "curva_boceto"):
             return f"{cabecera} | Longitud: {formato.longitud(sum(geo.longitud(f) for f in formas)):.3f} {formato.sufijo()}"

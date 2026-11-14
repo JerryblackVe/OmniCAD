@@ -2517,6 +2517,12 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
     return _validar(herramienta, "Agujero")
 
 
+def exigir_profundidad_agujero(profundidad):
+    """Rechaza una profundidad no positiva de Agujero de Fusion; el sentido se elige con Invertir."""
+    if profundidad is None or profundidad <= 0:
+        raise geo.ErrorGeometria("La profundidad del agujero debe ser positiva.")
+
+
 def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo_punta, diam_abocardado,
                     prof_abocardado, diam_avellanado, angulo_avellanado, roscado, clase, holgura, conicidad, tabla=True):
     """Valida un agujero y da su medio perfil [(radio, profundidad)…] desde el eje (común a los dos motores)."""
@@ -2535,8 +2541,7 @@ def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo
         diametro = diametro_taladro_rosca(roscado, clase, holgura)
     if diametro is None or diametro <= 0:
         raise geo.ErrorGeometria("El diámetro del agujero debe ser positivo.")
-    if profundidad is None or profundidad <= 0:
-        raise geo.ErrorGeometria("La profundidad del agujero debe ser positiva.")
+    exigir_profundidad_agujero(profundidad)
     if conicidad < 0 or conicidad * profundidad >= diametro:
         raise geo.ErrorGeometria("La conicidad cierra el agujero antes del fondo.")
     r = diametro / 2
@@ -3272,24 +3277,28 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
             torno_d = None
             if t1 is not None and t2 is not None:
                 torno_d = geo.booleano(t1, t2, "unir")
-            return geo.booleano(s1, s2, "unir"), torno_d
+            return (s1, s2), torno_d
+
+        def tornear_y_cortar(surcos, torno):
+            resultado = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")   # cresta sin espesor: se tornea
+            for surco in surcos:     # P-78: un corte por mitad; unir las mitades antes tardaba 5,7 s (M20x2.5×100)
+                resultado = _cortar_helicoidal(resultado, surco, o, z)   # sale validado y con el surco cortado
+            return resultado
 
         partido = False
         try:
             surco, torno = armar_tramo(z0, largo)
+            surcos = (surco,)
         except geo.ErrorGeometria:
             # Una rosca larga puede superar la tolerancia del kernel en un barrido (M5 6g×50 no salía): se barre a
-            # la mitad y se une antes de cortar; el torno con el largo total conduce con sus caras a las puntas.
-            surco, torno = por_mitades()
+            # la mitad; el torno con el largo total conduce con sus caras a las puntas.
+            surcos, torno = por_mitades()
             partido = True
-        base = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")   # cresta sin espesor: se tornea
-        resultado = _cortar_helicoidal(base, surco, o, z)   # sale validado y con el surco cortado
+        resultado = tornear_y_cortar(surcos, torno)
         if not partido and rv._topologia(resultado)["no_manifold"]:
             # Un barrido chico y corrido puede dejar la arista de contacto entre la cresta torneada y el surco
             # compartida por 3 caras (M5×0,8 con holgura): el corte por mitades reubica esa arista.
-            surco, torno = por_mitades()
-            base = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")
-            resultado = _cortar_helicoidal(base, surco, o, z)
+            resultado = tornear_y_cortar(*por_mitades())
         return resultado
 
     return _armar_surco(cortar)
@@ -3299,31 +3308,34 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
     """Corte con una herramienta helicoidal. El corte exacto a veces no hace nada sin avisar (las caras del
     surco rozan el cilindro del agujero: pasó con M10 y M20 interiores); con tolerancia difusa sale bien.
     Según el largo, las puntas del surco caen sobre la costura del cilindro y el corte falla, no saca nada o saca de
-    más (M8×1,25 de 15 mm, M12×1,75 de 12 mm): girar el surco sobre su eje solo corre la entrada de la rosca.
+    más (M8×1,25 de 15 mm, M12×1,75 de 12 mm): se gira el CUERPO sobre el eje (sin copiarlo) y el resultado vuelve a
+    su lugar, así la rosca conserva su fase (B-79). P-78: el difuso 1e-4 va en todos los giros antes que el exacto,
+    que donde falla tarda más (M3×20: 7,4 s fallado contra 1,9 s bien); después de 0°, 229° acertó en los 21 casos
+    medidos (M40x3×30 y M12×1,75×12 tiraban 3 y 4 cortes de ~0,4 s; ahora 2). 229° primero ahorraría otro corte,
+    pero mueve la costura del eje y B-308 (cortar la tapa con ese eje y partirla) pierde la tapa.
     Éxito = forma válida que sacó material sin pasarse del volumen del surco (hay que medirlo: sin esto el corte salía vacío)."""
     base, surco = geo.volumen_exacto(cuerpo, _EPS_ROSCA), geo.volumen_exacto(herramienta, _EPS_ROSCA)
     eje_giro = gp_Ax1(_pnt(origen), _gdir(eje))
-    for giro in (0.0, 61.0, 137.0, 229.0):
-        t = gp_Trsf()
-        t.SetRotation(eje_giro, math.radians(giro))
-        tool = aplicar(herramienta, t) if giro else herramienta
-        caras_herr = geo.caras(tool)
-        # P-78: el difuso 1e-4 primero; donde el exacto falla tarda más y casi siempre falla (M3×20: 7,4 s fallado
-        # contra 1,9 s bien); el exacto queda de respaldo
-        for difuso in (1e-4, 0.0, 1e-5):
+    caras_herr = geo.caras(herramienta)
+    for difuso in (1e-4, 0.0, 1e-5):
+        for giro in (0.0, 229.0, 61.0, 137.0):
+            t = gp_Trsf()
+            t.SetRotation(eje_giro, math.radians(-giro))
             op = BRepAlgoAPI_Cut()
             args, herr = List_TopoDS_Shape(), List_TopoDS_Shape()
-            args.Append(cuerpo)
-            herr.Append(tool)
+            args.Append(cuerpo.Moved(TopLoc_Location(t)) if giro else cuerpo)
+            herr.Append(herramienta)
             op.SetArguments(args)
             op.SetTools(herr)
             op.SetRunParallel(geo.PARALELO)
             if difuso:
                 op.SetFuzzyValue(difuso)
             op.Build()
-            if (op.IsDone() and any(not op.IsDeleted(f) for f in caras_herr) and geo.es_valida(op.Shape())
-                    and 0.2 * surco < base - geo.volumen_exacto(op.Shape(), _EPS_ROSCA) <= 1.01 * surco):
-                return op.Shape()
+            if not op.IsDone() or all(op.IsDeleted(f) for f in caras_herr):
+                continue
+            hecho = op.Shape().Moved(TopLoc_Location(t.Inverted())) if giro else op.Shape()
+            if geo.es_valida(hecho) and 0.2 * surco < base - geo.volumen_exacto(hecho, _EPS_ROSCA) <= 1.01 * surco:
+                return hecho
     raise geo.ErrorGeometria("El kernel no pudo cortar la rosca en el cuerpo.")
 
 

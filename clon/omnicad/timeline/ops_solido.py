@@ -1314,6 +1314,12 @@ class OpSimetria(_OpCrear):
             if self.p["combinar"]:
                 c.forma = geo.booleano(c.forma, reflejo, "unir")
             else:
+                # shortcut: estas medidas son una heurística; comparar geometría si aparecen falsos positivos.
+                if (np.allclose(geo.caja_envolvente(c.forma), geo.caja_envolvente(reflejo), rtol=0, atol=1e-6)
+                        and math.isclose(geo.volumen_exacto(c.forma), geo.volumen_exacto(reflejo), rel_tol=1e-6, abs_tol=1e-9)
+                        and np.allclose(geo.centro_masa(c.forma), geo.centro_masa(reflejo), rtol=0, atol=1e-6)):
+                    ctx.aviso(f"La copia de «{c.nombre}» coincide con el cuerpo original: queda superpuesta. "
+                              "Elegí otro plano de simetría o activá «Unir al original».")
                 estado.nuevo_cuerpo(self.id, reflejo, c.tipo, nombre=estado.nombre_de_copia(c.nombre), **atributos_copia(c))
 
 

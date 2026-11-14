@@ -13,8 +13,8 @@ reales son QAction compartidas que crea la ventana y se buscan por clave.
 """
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QMenu, QSizePolicy, QStackedWidget, QToolButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QMenu, QSizePolicy, QStackedWidget, QStyle,
+                               QStyleOptionToolButton, QToolButton, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, VERSION
 from .cinta_boceto import GRUPOS_BOCETO
@@ -267,6 +267,26 @@ PESTANAS = [("SÓLIDO", SOLIDO), ("SUPERFICIE", SUPERFICIE), ("MALLA", MALLA), (
 ESPACIOS = ["DISEÑO", "DISEÑO GENERATIVO", "RENDERIZAR", "ANIMACIÓN", "SIMULACIÓN", "FABRICACIÓN", "DIBUJO", "ELECTRÓNICA"]
 
 
+class _Pestana(QToolButton):
+    """Conserva al menos cuatro letras y recorta solo el final; el tooltip guarda el nombre entero."""
+
+    def __init__(self, nombre):
+        super().__init__(objectName="pestana", text=nombre, checkable=True, autoExclusive=True)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.setToolTip(nombre)
+        self.setAccessibleName(nombre)
+
+    def resizeEvent(self, evento):
+        super().resizeEvent(evento)
+        opcion = QStyleOptionToolButton()
+        self.initStyleOption(opcion)
+        opcion.text = ""
+        margen = self.style().sizeFromContents(QStyle.CT_ToolButton, opcion, QSize(0, 0), self).width()
+        medidas = self.fontMetrics()
+        self.setMinimumWidth(margen + medidas.horizontalAdvance(self.toolTip()[:4] + "…") + 2)
+        self.setText(medidas.elidedText(self.toolTip(), Qt.ElideRight, max(0, self.width() - margen)))
+
+
 class Cinta(QWidget):
     """Barra de comandos con pestañas. `acciones`: dict clave → QAction de la ventana."""
 
@@ -313,9 +333,7 @@ class Cinta(QWidget):
         self.pila.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.pestanas = []
         for i, (nombre, grupos) in enumerate(PESTANAS):
-            b = QToolButton(objectName="pestana", text=nombre, checkable=True, autoExclusive=True)
-            b.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
-            b.setToolTip(nombre)
+            b = _Pestana(nombre)
             b.clicked.connect(lambda _=False, i=i: self.pila.setCurrentIndex(i))
             fila.addWidget(b, 1)
             self.pestanas.append(b)
@@ -324,9 +342,7 @@ class Cinta(QWidget):
         self.pila.currentChanged.connect(lambda _i: self.ajustar_textos())
         self.contextuales = {}
         for nombre, grupos in CONTEXTUALES:     # pestañas que aparecen solo en su entorno (BOCETO)
-            b = QToolButton(objectName="pestana", text=nombre, checkable=True, autoExclusive=True)
-            b.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
-            b.setToolTip(nombre)
+            b = _Pestana(nombre)
             indice = self.pila.count()
             b.clicked.connect(lambda _=False, i=indice: self.pila.setCurrentIndex(i))
             b.hide()
@@ -398,6 +414,7 @@ class Cinta(QWidget):
         v.addLayout(botones)
         t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾" if titulo else " ")
         if titulo:
+            t.setToolTip(titulo)
             t.setPopupMode(QToolButton.InstantPopup)
             t.setMenu(self._menu(items, t))
         else:
