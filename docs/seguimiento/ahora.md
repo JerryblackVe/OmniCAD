@@ -16,7 +16,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | FL-3d | Extruir join en el llavero: `_queda_enterrada` clasifica miles de vértices (82 s en la VPS) (FL-3c parte integrado: bbcba02) |
 | E7 | Caza | Sin ítem P1 libre para E7: caza automática (`scripts/caza/cazar.py tema` bocetos, sólido, superficie, construir) y `scripts/prueba_ui`; lo rojo entra con su ID (B-468 integrado: e0273ac) |
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
-| E9 | Sol | Sol siempre corriendo (Gerardo 14/11): H-115, B-442, B-435, B-436, B-428, B-451, B-401, H-82, B-457, B-444, P-134, P-98, B-450 |
+| E9 | Sol | Sol siempre corriendo (Gerardo 14/11): H-115, B-442, B-435, B-436, B-428, B-451, B-401, H-82, B-457, P-134, P-98, B-450 |
 | E10 | H-91 | Solevación sólida: condiciones de borde exactas y combinables (B-337/B-335 parte integrado: 8bf27a3) |
 
 ## Sigue (en orden)
