@@ -8,13 +8,13 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-492 | 1000 círculos encimados: la vía Rust tarda ~18 s y 1,5 GB antes de rendirse; después B-510 (B-487 integrado: 1f2d8be) |
+| E1 | B-519 **BLOQUEANTE** | Editar el boceto rompe los cuerpos y Deshacer no vuelve todo (repro de E7); B-492 en pausa en su worktree, sigue después; luego B-510 (B-487 integrado: 1f2d8be) |
 | E2 | B-497 | Rosca: tamaño automático como Fusion y 2 asas (hecho, en tests reducidos); después B-508 (B-461 sin booleana: al tope, queda en ~/OmniCAD-B-461 y vuelve a Sigue) |
 | E3 | B-503 (parte 2) | Desfase que falla en cuerpos con letras B-spline: renglón en el panel, sin cuadro (parche en `evidencias/parches/b503_ui.patch`, estudio de E11 en `evidencias/reportes_pc/2026-11-15_desfase_estudio/`); también cilindro −radio sin jerga (B-507 integrado: 9f29f78) |
 | E4 | B-517 | **BLOQUEANTE** offset_profiles −0,5 sobre texto cierra la app (segfault OCC, familia de B-493); B-496 integrado: 66b8433 |
 | E5 | B-505 | `drag_component` da «ok» sin mover; después B-500 y B-501 (H-119 integrado: 96c1cd1) |
 | E6 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él; después FL-12 y FL-14 (FL-8 sección integrado: 06882d8) |
-| E7 | Caza | Sin ítem P1 libre para E7: caza automática (`scripts/caza/cazar.py tema` bocetos, sólido, superficie, construir) y `scripts/prueba_ui`; lo rojo entra con su ID (B-468 integrado: e0273ac) |
+| E7 | B-519 (repro) | Reproducir con `scripts/prueba_ui` el boceto que rompe los cuerpos y el Ctrl+Z; repro y paso que falla a E1 por el buzón; después vuelve a la caza (B-468 integrado: e0273ac) |
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043) |
 | E9 | B-495 | **Regresión de su B-423 (cinta), primero**; Sol con token vencido (17:25 UTC), sigue con Claude; después: Sol siempre corriendo (Gerardo 14/11): H-115, B-435, B-436, B-401, B-457, P-134, B-450, B-438, B-474 |
