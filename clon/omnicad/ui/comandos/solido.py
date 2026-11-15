@@ -514,7 +514,7 @@ class Revolucion(Comando):
         return self.crear_op(OpRevolucion, v, ctx, **params)
 
     def manipuladores(self, ctx, v):
-        """El anillo del ángulo alrededor del eje, como Fusion (P-139), en el borde del perfil más lejano al eje (el
+        """El anillo del ángulo alrededor del eje, como Fusion (P-139, B-471), sobre el eje a media altura del perfil (el
         segundo lado en «Dos lados»; en «Simétrica» el asa va a la mitad del ángulo, como el resultado)."""
         from .. import manipuladores as mp
         if v.get("extension") != "angulo":
@@ -532,10 +532,9 @@ class Revolucion(Comando):
             return []
         centro = base[0]
         pie = np.asarray(punto, float) + d * float((centro - punto) @ d)
-        # P-139: como Fusion, el anillo (de tamaño fijo en pantalla, perpendicular al eje) va en el borde del perfil más
-        # lejano al eje, a la altura del centro
-        borde = mp.punto_borde(base[2], centro, centro - pie)
-        borde = borde + d * float((centro - borde) @ d)
+        # B-471: como Fusion, el anillo (de tamaño fijo en pantalla, perpendicular al eje) va SOBRE el eje, a media altura
+        # del perfil, separado del cuerpo; el asa queda hacia el perfil
+        borde = pie
         if v.get("direccion") == "simetrica":
             return [mp.AnilloAngulo("angulo", borde, d, centro - pie, factor=0.5, caja_siempre=True)]
         # B-210: en «Dos lados» cada ángulo es una magnitud de su lado (el lado lo elige la dirección), como en
