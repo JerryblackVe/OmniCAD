@@ -1206,8 +1206,10 @@ class OpExtrusion(_OpConPerfiles):
               "inicio_objeto": None, "direccion": "un_lado", "medida": "mitad", "extension": "distancia",
               "distancia": "10 mm", "hasta": None, "extension2": "distancia", "distancia2": "10 mm", "hasta2": None,
               "conicidad": "0 deg", "conicidad2": "0 deg", "espesor": "", "ubicacion": "lado1", "invertir": False,
-              "hasta_modo": "cara", "desfase_hasta": "0 mm", "curvas": [],
+              "hasta_modo": "cara", "desfase_hasta": "0 mm", "curvas": [], "cadena": True,
               "simetrica": False, "operacion": "nuevo", "objetivo": "", "objetivos": []}
+    # cadena: «Tangent Chain» de Fusion (solo delgada, marcada por defecto): suma a las curvas elegidas las que les siguen
+    # tangentes. B-519: redondear las esquinas del boceto después deja las placas unidas por los arcos nuevos.
     EXPRESIONES = ("distancia", "distancia2", "desfase_inicio", "conicidad", "conicidad2", "espesor", "desfase_hasta")
     # espesor "" = el de la regla de plástico asignada (1 mm sin regla)
     # Lo que no se usa con estas opciones no se lista: Fusion crea AlongDistance y TaperAngle, por lado.
@@ -1256,6 +1258,10 @@ class OpExtrusion(_OpConPerfiles):
                     formas.append(lado._forma(estado, ctx))
                 return geo.unir_todos(formas)
         curvas = _resolver_todas(p.get("curvas"), estado) if p.get("tipo") == "delgada" else []
+        aristas = [e.forma for e in curvas]
+        if aristas and p.get("cadena", True):
+            from .ops_solido import _en_cadena
+            aristas = _en_cadena(curvas, aristas, estado)
         if curvas and not p.get("perfiles") and not p.get("caras"):
             plano = next((e.plano for e in curvas if e.plano is not None), None)
             if plano is None:
@@ -1306,7 +1312,7 @@ class OpExtrusion(_OpConPerfiles):
             forma = kernel.extruir_avanzado(caras, n, inicio_desfase=desfase, direccion=direccion, distancia1=d1,
                                             distancia2=d2, conicidad1=conicidad, conicidad2=conicidad2,
                                             medida_simetrica=medida, delgado=delgado,
-                                            aristas=[e.forma for e in curvas] or None, hasta=hasta,
+                                            aristas=aristas or None, hasta=hasta,
                                             hasta_modo=p.get("hasta_modo", "cara"),
                                             hasta_desfase=ctx.evaluar(p.get("desfase_hasta", "0")), hasta_caja=caja,
                                             inicio_plano=inclinado, hasta_dueno=dueno)
