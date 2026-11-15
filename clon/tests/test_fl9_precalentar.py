@@ -333,6 +333,8 @@ def test_b418_cerrar_el_panel_con_la_previa_perdida_no_traba_deshacer_ni_el_coma
     from omnicad import api
     from omnicad.ui.comandos import CATALOGO
     monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 1)     # deshacer va al proceso aparte, como un documento grande
+    monkeypatch.setattr(Documento, "_receta_barata", lambda self, datos: False)   # FL-5 apagado: deshacer la única
+    monkeypatch.setattr(Documento, "_solo_primitivas", lambda self, desde: False)  # caja ya no calcula nada
     s = api.Sesion()
     assert api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10})["ok"]
     monkeypatch.setattr(comando, "PREVIA_APARTE", True)
