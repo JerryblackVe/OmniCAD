@@ -69,7 +69,7 @@ Leyenda: ✔ igual que Fusion · ✘ falla o falta · ≈ parecido. «CLI» es e
 | SOL · punta (Aguda) | ✔ | ✔ | ✔ | pirámide 333,33 |
 | SOL · Punto tangente | ✘ | ✘ | Falta | H-90 (la superficie lo hace: 157,12 mm²) |
 | SOL · Dirección con ángulo y peso; peso 0 o negativo | ✔ | ✔ | ✔ | 1674,31; peso ≤ 0: error claro |
-| SOL · Tangente / Suave contra una cara | ≈ | ≈ | Falta | H-91: aproximadas y no se combinan con carriles, línea central, cerrada ni reglada (la superficie sí: SUP-13) |
+| SOL · Tangente / Suave contra una cara | ≈ | ≈ | Parcial | H-91: exactas en los pasos nuevos y combinadas con carril y línea central (2026-11-15); cerrada y reglada no las admiten |
 | SOL · condición en un perfil del medio | ✔ | ✔ | ✔ | 7012,52 |
 | SOL · Raíles | ✘ | ✘ | Bug | B-212: carril recto da «sólido inválido»; la superficie sale bien (670,82 mm²) |
 | SOL · Línea central | ✔ | ✔ | ✔ | 2333,33 |

@@ -661,6 +661,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
         guias["condiciones_medias"] = medias
     guias["fusionar_tangentes"] = bool(merge_tangent_edges)
     guias["cadena"] = bool(chain)
+    guias["condicion_exacta"] = True        # H-91: las condiciones fijan la derivada de salida, como la superficie
     doc = sesion.doc
     op = OpSolevacion(doc.nuevo_id(), nombre_nuevo(doc, "Solevación", OpSolevacion), secciones=secciones,
                       cerrada=closed, reglada=ruled, operacion=OPERACIONES[operation],
