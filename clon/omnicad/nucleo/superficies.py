@@ -1542,6 +1542,7 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
             alternas=False, avisos=None):
     """Superficie reglada desde aristas [SFC-RULED].
 
+    `distancia` negativa invierte el lado en todos los tipos; se rechaza si la inversión se cruza.
     `tipo`: "normal" (sale perpendicular a la cara de la arista), "tangente" (sigue a la cara, hacia
     afuera del material) o "direccion" (hacia `direccion`). `angulo` (grados) gira la dirección
     alrededor de la arista. `referencia`: el cuerpo que contiene las aristas (para hallar su cara) o
@@ -1638,7 +1639,19 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
                                          + ("C" if ingletear else "Activá Esquinas en inglete, c")
                                          + "ambiá el ángulo o la distancia, o hacé cada arista en una superficie aparte.")
             caras = unidas
-    return _coser_caras(caras)
+    resultado = _coser_caras(caras)
+    if resultado.IsNull() or not geo.es_valida(resultado):
+        raise geo.ErrorGeometria("No se pudo crear una superficie reglada válida: cambiá la distancia o el ángulo.")
+    if distancia < 0:
+        from . import revision
+        cantidad, _, completo = revision._autointersecciones_seguras(resultado, 1, 5.0)
+        if cantidad:
+            raise geo.ErrorGeometria("La superficie reglada se cruza consigo misma: la extensión puede superar el radio "
+                                     "de curvatura de ese lado. Reducí la distancia o cambiá el ángulo o el lado.")
+        if not completo:
+            raise geo.ErrorGeometria("No se pudo comprobar si la superficie reglada se cruza consigo misma. "
+                                     "Probá con menos aristas o una distancia menor.")
+    return resultado
 
 
 def direccion_reglada(arista, referencia, tipo, angulo=0.0):
