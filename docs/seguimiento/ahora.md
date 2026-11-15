@@ -17,8 +17,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
-| E9 | B-435 | (H-115 integrado: 72d563c); piezas acotadas a OpenCode: GLM para un archivo, MiniMax M3.1 (minimaxai/) para varios: B-435, B-436, B-401, B-457, B-450, B-474 |
-| E10 | B-521 | Lo que dejó B-506: patrón con copias tangentes (verificar) y agujeros tangentes con rosca modelada (chequeo barato) (B-506 integrado: 45b4719) |
+| E9 | B-435 | (H-115 integrado: 72d563c); piezas acotadas a OpenCode: GLM para un archivo, MiniMax M3.1 (minimaxai/) para varios: B-435, B-436, B-401, B-457, B-450 |
+| E10 | B-474 | MCP `new_document` con cambios sin guardar: la herramienta siguiente corre sobre el documento viejo (worktree con arreglo previo); Sonnet medio desde 19:20 UTC (B-521 integrado: a182d81) |
 
 ## Sigue (en orden)
 
