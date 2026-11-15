@@ -2596,7 +2596,7 @@ Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text'
   - `symmetric_measure` ("total" | "half"; opcional, por defecto `"total"`): con direction=symmetric, "total" (distance es el largo total) o "half" (distance es la mitad, a cada lado).
   - `extent` ("distance" | "to_object" | "all"; opcional, por defecto `"distance"`): hasta dónde llega: "distance" (distance, por defecto), "to_object" (hasta to) o "all" (atraviesa todos los cuerpos).
   - `to` (texto; opcional, por defecto `null`): con extent=to_object: cara (selector o id), plano o cuerpo hasta donde llega.
-  - `to_mode` ("face" | "body" | "through"; opcional, por defecto `"face"`): con to_object: "face" (hasta la cara), "body" (hasta el cuerpo) o "through" (a través del cuerpo).
+  - `to_mode` ("face" | "adjacent" | "body" | "through"; opcional, por defecto `"face"`): "face" (cara), "adjacent" (cara y vecinas), "body" (cuerpo) o "through" (atravesarlo).
   - `to_offset` (número o expresión; opcional, por defecto `0`): desfase en mm sobre el «hasta» (positivo = más lejos); con extent=to_object.
   - `taper_angle2` (número o expresión; opcional, por defecto `null`): conicidad del lado 2 en grados con direction=two_sides; vacío = la misma que taper_angle.
   - `open_curves` (lista de entero o null; opcional, por defecto `null`): ids de curvas ABIERTAS de sketch (get_sketch) para extruir con thin=true; reemplazan a profile.

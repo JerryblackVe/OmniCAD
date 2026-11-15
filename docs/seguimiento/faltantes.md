@@ -29,13 +29,13 @@ Abierto 13 · Parcial 3.
 
 ## Hallazgos de pruebas de uso
 
-Abierto 13 · Parcial 1 · Sin verificar 1.
+Abierto 12 · Parcial 2 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | H-115 | Empalme sólido: Grosor de tangencia (Tangency Weight) | Abierto | Media | Sumar el peso al núcleo, operación, panel y MCP. | `clon/omnicad/ui/comandos/modificar.py:75` | 2026-11-13 |
 | H-105 | Extruir superficie: extensión propia del lado 2 | Sin verificar | Media | Confirmar en Fusion Al objeto y Todo por lado antes de construir. | timeline/ops_superficie.py:100-151; ui/comandos/superficie.py:53-58 | 2026-11-06 |
-| H-82 | Extruir Al objeto: extensión de caras | Abierto | Media | Sólido: Hasta caras adyacentes; superficie: Extend Faces / Chain Faces. | timeline/operaciones.py:1133; ui/comandos/superficie.py:55 | 2026-11-05 |
+| H-82 | Extruir Al objeto: extensión de caras | Parcial | Media | Hecho el sólido: «Hasta caras adyacentes» en Extruir › Al objeto (`tests/test_h82_extrusion_caras_adyacentes.py`). Falta superficie: Extend Faces / Chain Faces | timeline/operaciones.py:1133; ui/comandos/superficie.py:55 | 2026-11-05 |
 | H-83 | Componente nuevo al Extruir, Revolucionar, Barrer y Solevar | Abierto | Media | Ofrecerlo en sólido y superficie. | timeline/operaciones.py:32 (`OPERACIONES_CUERPO`); api/herramientas_solido.py:183 | 2026-11-05 |
 | H-84 | Extrusión delgada: cadena tangente y conicidad abierta | Parcial | Baja | Confirmar en Fusion real la conicidad de curvas abiertas (la Cadena tangente ya está) | `clon/tests/test_h84_cadena_tangente.py` | 2026-11-05 |
 | H-91 | Solevación sólida: condiciones de borde exactas y combinables | Abierto | Alta | Combinarlas con carriles, línea central, cerrada y reglada. | nucleo/solidos_crear.py:1307 | 2026-11-05 |

@@ -1222,7 +1222,7 @@ class OpExtrusion(_OpConPerfiles):
 
     OPCIONES = {"tipo": ("solida", "delgada"), "inicio": ("plano", "desfase", "objeto"), "direccion": DIRECCIONES,
                 "medida": ("mitad", "total"), "extension": ("distancia", "objeto", "todo"),
-                "extension2": ("distancia", "objeto", "todo"), "hasta_modo": ("cara", "cuerpo", "a_traves"),
+                "extension2": ("distancia", "objeto", "todo"), "hasta_modo": ("cara", "adyacentes", "cuerpo", "a_traves"),
                 "ubicacion": ("lado1", "lado2", "centro"), "operacion": OPERACIONES_CUERPO}
 
     def expresiones(self):
@@ -1282,11 +1282,14 @@ class OpExtrusion(_OpConPerfiles):
                 inclinado = e.plano
             else:
                 desfase += float((e.plano.origen - plano.origen) @ n)
-        hasta = caja = None
+        hasta = caja = dueno = None
         if p.get("extension") == "objeto":
             if not p.get("hasta"):
                 raise ErrorOperacion("Elegí la cara, el plano o el cuerpo hasta donde llega la extrusión.")
-            hasta = self._forma_objeto(_resolver(p["hasta"], estado))
+            limite = _resolver(p["hasta"], estado)
+            hasta = self._forma_objeto(limite)
+            if p.get("hasta_modo") == "adyacentes" and limite.tipo == "cara" and limite.cuerpo:
+                dueno = estado.cuerpos[limite.cuerpo].forma
         elif p.get("extension") == "todo":
             caja = _caja_todo(estado)
         delgado = None
@@ -1306,7 +1309,7 @@ class OpExtrusion(_OpConPerfiles):
                                             aristas=[e.forma for e in curvas] or None, hasta=hasta,
                                             hasta_modo=p.get("hasta_modo", "cara"),
                                             hasta_desfase=ctx.evaluar(p.get("desfase_hasta", "0")), hasta_caja=caja,
-                                            inicio_plano=inclinado)
+                                            inicio_plano=inclinado, hasta_dueno=dueno)
         elif avanzada:
             raise ErrorOperacion("Esta opción de extrusión todavía no está disponible.")
         else:
