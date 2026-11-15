@@ -1832,16 +1832,19 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
             sin_biseles, nuevas = _sin_biseles_vecinos(forma, todas, dist)
             if sin_biseles is not None:
                 resultado, dada_vuelta = _desfase_kernel(sin_biseles, nuevas, dist)
-    if resultado is not None:
-        if dada_vuelta:
-            raise geo.ErrorGeometria(f"Desfase de {abs(dist):g} mm: da vuelta la cara.")
-        return _validar(resultado, "Desfase de caras")
-    planos = [_plano_de_cara(c) for c in todas]
-    if any(p is None for p in planos):      # B-503: la rosca ya salió arriba; acá, letras o curvas sin rosca (regla 14)
-        raise geo.ErrorGeometria(f"No se pudo desfasar estas caras {abs(dist):g} mm. Probá otra distancia, o desfasá "
-                                 "el boceto y volvé a extruir.")
-    return _validar(_reemplazar(forma, [(c, p.desplazado(dist)) for c, p in zip(todas, planos, strict=True)],
-                                operacion="Desfase de caras"), "Desfase de caras")
+    if dada_vuelta:
+        raise geo.ErrorGeometria(f"Desfase de {abs(dist):g} mm: da vuelta la cara.")
+    if resultado is None:
+        planos = [_plano_de_cara(c) for c in todas]
+        if any(p is None for p in planos):      # B-503: la rosca ya salió arriba; acá, letras o curvas sin rosca (regla 14)
+            raise geo.ErrorGeometria(f"No se pudo desfasar estas caras {abs(dist):g} mm. Probá otra distancia, o "
+                                     "desfasá el boceto y volvé a extruir.")
+        resultado = _reemplazar(forma, [(c, p.desplazado(dist)) for c, p in zip(todas, planos, strict=True)],
+                                operacion="Desfase de caras")
+    resultado = _validar(resultado, "Desfase de caras")
+    if _cruza_mas_que(forma, resultado):    # B-525: el kernel daba «ok» con caras aplastadas que se cruzan
+        raise geo.ErrorGeometria("⚠ Las caras se chocan: probá menos distancia")
+    return resultado
 
 
 def _largo_extension(cara, destino, d, diag):
