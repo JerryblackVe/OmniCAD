@@ -12,10 +12,12 @@ en vivo). Las herramientas con `modifica=True` corren dentro de `transaccion()`:
     en vivo para que la ventana relea su copia);
   - los pasos que quedan con "aviso" nuevo se informan en `avisos` sin deshacer nada.
 """
+import atexit
 import copy
 import difflib
 import json
 import logging
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -24,15 +26,37 @@ from ..timeline.documento import _LIMITE_DESHACER, Documento
 from .errores import ErrorAPI, desde_mensaje, error
 
 log = logging.getLogger(__name__)
+atexit.register(proyecto.esperar_autoguardado)    # B-509: un CLI que termina no corta la copia que se está escribiendo
 
 
 class Sesion:
-    def __init__(self, documento=None):
+    def __init__(self, documento=None, autoguardado=False):
         self.doc = documento if documento is not None else Documento()
         self.avisos = []
         self._llamadas = 0       # llamadas en curso de registro.llamar (más de una: anidadas, p. ej. execute_code)
         self.al_cambiar_espacios = None   # lo arma el puente en vivo: la ventana vuelve a leer doc.espacios
         self.tolerar_errores = False      # ver `transaccion`
+        # B-509: copia de recuperación como la ventana. La prenden el servidor MCP y el CLI; apagada en las sesiones
+        # que la ventana arma sobre su propio documento (ella ya autoguarda) y en las de vista previa.
+        self.autoguardado = autoguardado
+        self._ultimo_autoguardado = None
+
+    def autoguardar_si_toca(self):
+        """Autoguardado (B-509): misma carpeta e intervalo (`general/autoguardado_min`) que la ventana. Lo llama
+        `registro.llamar` después de cada transacción, fuera de ella: el primer cambio se copia enseguida y después
+        como mucho una vez por intervalo. El ZIP se escribe en un hilo; un error se anota y no hace fallar la llamada."""
+        # shortcut: copia solo al terminar una llamada; si el agente queda quieto, lo hecho tras la última copia espera
+        # a la próxima llamada (pierde hasta un intervalo). Un temporizador leería el documento a mitad de una llamada (B-16).
+        if not self.autoguardado or not self.doc.modificado:
+            return
+        ahora = time.monotonic()
+        if self._ultimo_autoguardado is not None and ahora - self._ultimo_autoguardado < _intervalo_autoguardado():
+            return
+        self._ultimo_autoguardado = ahora
+        try:
+            proyecto.autoguardar_en_hilo(self.doc, _al_autoguardar)
+        except Exception as e:  # noqa: BLE001 — una copia de seguridad nunca hace fallar la herramienta que salió bien
+            log.warning("No se pudo autoguardar: %s", e)
 
     @property
     def ruta(self):
@@ -88,6 +112,7 @@ class Sesion:
         # Como en Fusion, el documento toma el nombre del archivo. Se pone ANTES de escribir para que el manifiesto
         # guarde el mismo nombre que ve la sesión (si no, al reabrir con la API volvía el nombre viejo).
         nombre_anterior, self.doc.nombre = self.doc.nombre, ruta.stem
+        copia_anterior = proyecto.ruta_autoguardado(self.doc) if self.autoguardado else None
         try:
             final = proyecto.guardar(self.doc, ruta, self._miniatura())
         except BaseException:
@@ -96,6 +121,13 @@ class Sesion:
             raise
         self.doc.ruta = str(final)
         self.doc.modificado = False
+        if copia_anterior is not None:     # B-509: guardado, las copias (la de antes y la de la ruta nueva) ya no valen
+            proyecto.borrar_autoguardado(self.doc)        # espera la que se está escribiendo
+            try:
+                copia_anterior.unlink(missing_ok=True)
+            except OSError as e:                          # bloqueada: no hace fallar un guardado que salió bien
+                log.warning("No se pudo borrar el autoguardado %s: %s", copia_anterior, e)
+            self._ultimo_autoguardado = None              # el próximo cambio se copia enseguida
         if nuevas:
             self.avisar(f"Se creó la carpeta {ruta.parent}.")
         return final
@@ -195,6 +227,18 @@ class Sesion:
             if self.doc is doc:
                 doc._contador = contador
             raise
+
+
+def _intervalo_autoguardado():
+    """Segundos entre copias: la preferencia de la ventana (Preferencias › General), leída en cada uso."""
+    from .herramientas_preferencias import _ajustes, _valor
+    return _valor(_ajustes(), "general/autoguardado_min") * 60
+
+
+def _al_autoguardar(destino, error):
+    """Corre en el hilo del autoguardado: no hay a quién avisar en la llamada (ya terminó), queda en el registro."""
+    if error is not None:
+        log.warning("No se pudo autoguardar %s: %s", destino, error)
 
 
 def crear_carpeta(carpeta):

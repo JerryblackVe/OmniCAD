@@ -246,6 +246,7 @@ guardado: …\pieza.omnicad
 - Si un paso falla, el batch **se detiene y no guarda nada** (salida 1). Con `--continue-on-error` sigue con los siguientes. Con `--no-save` no guarda.
 - Una herramienta que no existe o una línea que no es JSON es un error de uso (salida 2) y no se ejecuta nada.
 - Con `--json`, la salida es la lista de resultados de los pasos ejecutados.
+- Entre pasos deja una copia de autoguardado junto al `--doc` (como la ventana): si el proceso se corta, se recupera con `list_recoverable_documents` y `recover_document`. Al guardar o al detenerse por un error se borra.
 - Sin `--doc` corre sobre un documento vacío y no guarda. Ejemplo completo: [`soporte_l.jsonl`](../../ejemplos/agentes/soporte_l.jsonl).
 
 Un paso que falla:

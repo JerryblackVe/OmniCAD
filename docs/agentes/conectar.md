@@ -64,6 +64,8 @@ Se agregan a `args` (o al comando). Todas son opcionales.
 | `--http` y `--port N` | sirve por HTTP en `127.0.0.1` (puerto por defecto 27190, ruta `/mcp`) en vez de stdio. EXIGE token: cada arranque genera uno y lo escribe en `mcp_http.json` (carpeta de datos; OMNICAD_PUENTE_DIR la redirige); todo pedido lleva `Authorization: Bearer <token>` o recibe 401 |
 | `--log-level NIVEL` | `DEBUG`, `INFO`, `WARNING` (por defecto) o `ERROR`, siempre a stderr |
 
+Sin ventana, el servidor autoguarda como la ventana (misma carpeta e intervalo de Preferencias › General): si el agente se cae, `list_recoverable_documents` y `recover_document` recuperan lo que no guardó.
+
 Ejemplo de `args` con opciones: `["-m", "omnicad.servidor_mcp", "--toolsets", "documento,boceto,solido,inspeccion"]`.
 
 ## Cómo saber que anda
