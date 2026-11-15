@@ -6,6 +6,7 @@ from PySide6.QtCore import QPointF
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton
 
 from .. import NOMBRE_APP
+from ..timeline import contactos
 from ..timeline.operaciones import ErrorOperacion
 from ..timeline.posicion import Arrastre, deshacer_arrastre, pendiente_de
 
@@ -49,6 +50,8 @@ class ArrastreComponente:
         hit = None if ocupado else v.visor.cuerpo_bajo_cursor(pos)
         if hit is None or not v.doc.estado_final.cuerpo(hit[0]).componente:
             return False
+        previa = pendiente_de(v.doc)
+        self.en_contacto = contactos.superposiciones(v.doc, previa.poses() if previa is not None else None)
         try:
             self.actual = Arrastre(v.doc, *hit)
         except ErrorOperacion as e:
@@ -64,6 +67,13 @@ class ArrastreComponente:
         self.sincronizar()
 
     def soltar(self):
+        bloqueo = contactos.bloqueo(self.v.doc, self.en_contacto, self.actual.p.poses())
+        if bloqueo:                # contactos prendidos: el arrastre que superpone vuelve a donde estaba
+            self.actual.cancelar()
+            self.v.mensaje(bloqueo, 5000)
+            self.actual = None
+            self.sincronizar()
+            return
         self.actual.soltar()
         self.actual = None
         self.sincronizar()

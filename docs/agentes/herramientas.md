@@ -5036,7 +5036,7 @@ Revierte los componentes a su última posición capturada con capture_position (
 
 ### `drag_component`
 
-Arrastra un componente como con el mouse en el visor (ENSAMBLAR › Posición): con una unión sigue sus grados de libertad y sus límites; sin unión se traslada libre. NO cambia el documento: la posición queda sin capturar hasta capture_position o revert_position, y cualquier otro cambio del documento la descarta. Devuelve dónde quedó cada componente.
+Arrastra un componente como con el mouse en el visor (ENSAMBLAR › Posición): con una unión sigue sus grados de libertad y sus límites; sin unión se traslada libre. NO cambia el documento: la posición queda sin capturar hasta capture_position o revert_position, y cualquier otro cambio del documento la descarta (get_assembly sigue mostrando la posición capturada; el resultado de esta herramienta, la nueva). Con los contactos prendidos rechaza el arrastre que superpone componentes (CONTACT_BLOCKED). Devuelve dónde quedó cada componente y moved (si alguno cambió de lugar).
 
 - Modifica el documento: no.
 - Parámetros:
