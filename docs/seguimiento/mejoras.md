@@ -31,6 +31,7 @@ Abierto 10 · Parcial 9 · Sin verificar 2.
 | P-10f | Paso 6: Rust con PyO3 solo si los números lo justifican | Parcial | Muy alta | Implementar el resto de R1-R13 según las filas RS-. | clon/rust/src/lib.rs (rasterizar, visibilidad, oclusion); omnicad/nativo.py | 2026-10-20 |
 | P-11k | Comparar EXTRUSOR XOX.f3z contra Fusion y probar mallas convertidas | Sin verificar | Baja | Importarlo en Fusion puede crear diseños en la nube del usuario; sin ejemplo BINCHA a mano. | PROJECT_LOG.md:32 | 2026-10-20 |
 | P-31-lic | Respetar licencias AGPL-3.0 (PartMode, QymCAD, Chili3D): solo ideas, nunca código | Sin verificar | Media | Regla de proceso, no tarea; no se puede comprobar contra el código. | PROJECT_LOG.md:117 | 2026-10-20 |
+| P-156 | Holgura de impresión 3D única (Gerardo, 2026-11-15): un valor general calibrado con la placa, aplicado a la rosca modelada (agujero agranda, tornillo achica), al molde (Cortar con «Dejar holgura») y a «La otra pieza es: Impresa / Metálica»; UI de una línea | Abierto | Alta | Diseño aprobado y qué reemplaza: ver la ficha «P-156» en Detalle | Gerardo, `evidencias/reportes_pc/2026-11-15_gerardo_rosca/holgura_impresion_negativa.png` | 2026-11-15 |
 
 ## Hallazgos de pruebas de uso
 
@@ -261,6 +262,17 @@ Abierto 1.
 | NOV-tip-1 | Letra grande: títulos de cinta elididos y ventana mínima de 1038 px | Abierto | Media | Compactar títulos de grupo y botón de espacio de trabajo al 120–150 %. | omnicad/ui/cinta.py; evidencias/tipografia_ui/f3_ventana_150.py | 2026-10-28 |
 
 ## Detalle de lo abierto
+
+### P-156 · Holgura de impresión 3D única (diseño aprobado por Gerardo, 2026-11-15)
+Gerardo: «sí hazlo, pero hazlo con una UI intuitiva y simplificada» y «esto es una mejora de holgura. No dejes piezas sueltas: si una pisa la otra, borra». Especificación:
+1. **Un valor general** en Preferencias, «Holgura de impresión 3D», por lado. Se calibra con la placa de `create_clearance_test`: se elige el agujero que mejor encaja y ese valor queda guardado (botón «Usar este valor»). Toda rosca nueva lo trae por defecto.
+2. **Rosca modelada sobre una cara de Ø nominal:** decide sola si es agujero o tornillo. En el agujero agranda y en el tornillo achica todo el perfil (cresta, raíz y flancos) con el valor general.
+3. **Molde:** en Combinar › Cortar con «Conservar herramienta», una casilla «Dejar holgura» que agranda la herramienta por ese valor antes de cortar (reemplaza el desfase a mano).
+4. **«La otra pieza es: Impresa / Metálica».** Impresa: cada pieza se lleva la mitad. Metálica: la holgura entera va a la pieza impresa.
+5. **UI simple:** en el panel de Rosca, una sola línea, «Holgura de impresión: 0,2 mm por lado», con el valor general cargado y una casilla para activarla. Sin campos sueltos ni términos técnicos. La previa cambia mientras se escribe. Tooltip: «Agranda el agujero o achica el tornillo para que rosque al imprimir».
+6. Negativos: siguen rechazados; si hace falta un ajuste apretado, se propone en una línea.
+**Qué REEMPLAZA y qué se borra (un solo valor, un solo camino):** la holgura vieja `print_clearance` de `create_hole` y `create_thread` (`api/herramientas_modificar.py`), `api/herramientas_calibracion.py`, `nucleo/calibracion.py`, `timeline/ops_calibracion.py` y `api/guia/flujo.md`. El parámetro viejo pasa a leer el mismo valor general (los archivos viejos lo traen y se respeta) o se borra; docs, MCP, CLI y `docs/agentes/herramientas.md` se actualizan en el mismo commit. También absorbe la holgura de P-27-6 (booleanas) y de P-29-1 (perfil de impresora). H-118 (desfase de caras de una rosca, paridad con Fusion) sigue aparte y NO es esta solución.
+Además: MCP y CLI para cada opción nueva; tests numéricos de los Ø en agujero, tornillo y molde; comparar la UI con los paneles de Fusion.
 
 ### P-99 · Extruir recalcula todos los perfiles en cada clic
 

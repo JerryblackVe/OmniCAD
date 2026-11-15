@@ -26,7 +26,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 1 | B-487 | Curvatura línea–spline mueve la línea ~6 mm (Fusion la deja quieta) (E1, después de B-489) |
 | 2 | B-496 | Estrella de boceto: 22 puntas dibuja ~9 lóbulos, glifos encimados, puntos sueltos (Gerardo) (E1, después de B-487) |
 | 3 | B-497 | Rosca: el automático elige M18 en una cara de Ø20 (Fusion M20) y aparece una tercera asa «8,895» (E2, después de la rosca sin booleana) |
-| 4 | B-498 | Rosca: revisar la Holgura impresión 3D con números (sentido, radial o diametral, perfil, previa, tope y create_clearance_test) (E2, después de B-497) |
+| 4 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance` (E2, después de B-497) |
 | 5 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
 | 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
 

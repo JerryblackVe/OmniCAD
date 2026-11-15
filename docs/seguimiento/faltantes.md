@@ -25,7 +25,7 @@ Abierto 13 · Parcial 3.
 | P-11m | Trazos abiertos, construcción, cotas, restricciones y nombres de los bocetos de un .f3d | Abierto | Muy alta | Leer esos datos del flujo de diseño propietario. | omnicad/io_archivos/f3d_bocetos.py | 2026-10-26 |
 | P-11i | Referencias externas de un .f3z (diseños hijos referenciados) | Abierto | Muy alta | Se identifican las ocurrencias externas pero no se decodifica su disposición interna. | PROJECT_LOG.md:32 (upgrades3, SIN RESOLVER) | 2026-10-20 |
 | P-12h | Hélice de boceto | Parcial | Media | Existe la espiral 2D; falta la hélice 3D (barrer/roscar a lo largo de ella). | omnicad/ui/modo_boceto.py:54; omnicad/ui/editor_boceto.py:1154; omnicad/ui/cinta_boceto.py:32 | 2026-10-20 |
-| P-27-6 | Booleanas con holgura y más formas para insertar | Parcial | Media | Agregar holgura, cono, pirámide, cuña y cápsula. | omnicad/api/herramientas_solido.py:327 (create_box); herramientas create_cylinder/sphere/torus | 2026-10-20 |
+| P-27-6 | Más formas para insertar (cono, pirámide, cuña, cápsula) | Parcial | Media | Agregar cono, pirámide, cuña y cápsula. La holgura en booleanas pasó a P-156. | omnicad/api/herramientas_solido.py:327 (create_box); herramientas create_cylinder/sphere/torus | 2026-10-20 |
 
 ## Hallazgos de pruebas de uso
 
@@ -213,7 +213,7 @@ Bloqueado 1. Especificación: [plan_cpp.md](../plan_cpp.md).
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Trazos abiertos, construcción, cotas, restricciones y nombres de los bocetos de un .f3d **Queda:** El `.smb` solo guarda las regiones cerradas: los bocetos importados no traen los trazos que no cierran región, la geometría de construcción, las cotas («4 mm», «120 mm»…) ni las restricciones, y se llaman Boceto1… Todo eso está en el flujo de diseño propietario. **Evidencia:** omnicad/io_archivos/f3d_bocetos.py
 
-### P-27-6 · Booleanas con holgura y más formas
+### P-27-6 · Más formas para insertar
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Booleanas con holgura y formas listas para insertar (cono, pirámide, cuña, cápsula…) **Queda:** Existen create_box/cylinder/sphere/torus; faltan holgura en booleanas y las demás formas. **Evidencia:** omnicad/api/herramientas_solido.py:327 (create_box); herramientas create_cylinder/sphere/torus
 
