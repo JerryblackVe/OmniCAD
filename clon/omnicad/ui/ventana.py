@@ -196,6 +196,10 @@ def _precargar_scipy():
     import scipy.optimize  # noqa: F401
     import scipy.sparse.csgraph  # noqa: F401
     import scipy.spatial.transform  # noqa: F401
+    # B-440: también fontTools y las tablas que lee el primer texto (~130 ms en el hilo de la ventana al salir del boceto)
+    import fontTools.pens.boundsPen  # noqa: F401
+    import fontTools.ttLib.tables.otTables  # noqa: F401
+    from fontTools.ttLib.tables import G_P_O_S_, _c_m_a_p, _g_l_y_f, _h_m_t_x, _k_e_r_n  # noqa: F401
 
 
 PLAZO_PREVIA_PREFERENCIAS_MS = 150     # FL-8: espera al último cambio de Preferencias antes de repintar la vista previa

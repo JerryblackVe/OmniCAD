@@ -429,10 +429,13 @@ def resolver_fuente(nombre, negrita=False, cursiva=False):
 @lru_cache(maxsize=24)
 def _abrir(ruta, indice, peso_variable):
     from fontTools.ttLib import TTCollection, TTFont
+    # B-440: perezosa, solo se decodifica lo que se lee (la GPOS entera, para el kerning, costaba ~0,4 s el primer texto).
+    # El instanciador de una fuente variable necesita la fuente entera.
+    perezosa = not peso_variable
     if str(ruta).lower().endswith((".ttc", ".otc")):
-        f = TTCollection(ruta).fonts[indice]
+        f = TTCollection(ruta, lazy=perezosa).fonts[indice]
     else:
-        f = TTFont(ruta)
+        f = TTFont(ruta, lazy=perezosa)
     if peso_variable and "fvar" in f:
         try:
             from fontTools.varLib.instancer import instantiateVariableFont
