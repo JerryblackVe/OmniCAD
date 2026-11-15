@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | — | En pausa hasta que Gerardo decida sobre el advisor (P-158c integrada: 1186c2d) |
-| E9 | B-557 | **Primero**: regresión de su B-401 (el Puente IA y el Asistente no muestran lo que crea el agente); después sigue P-158d |
+| E9 | P-158d | Acortar mensajes de Bocetos y Sólido (tandas GLM, revisión MiniMax) y arreglar `test_boceto_combinaciones::test_limite_patron[enorme]` |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
