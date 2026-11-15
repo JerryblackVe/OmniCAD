@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
-| E9 | B-495b | Test de la cinta a 1100 y 1400 px (hallazgo 1 de B-495, integrado e4041fd); Sol con token vencido (17:25 UTC), sigue con Claude: H-115, B-435, B-436, B-401, B-457, P-134, B-450, B-438, B-474 |
+| E9 | H-115 | (B-495b integrado: 8ccb78d); Sol con token vencido (17:25 UTC), sigue con Claude: H-115, B-435, B-436, B-401, B-457, P-134, B-450, B-438, B-474 |
 | E10 | B-506 | Agujeros tangentes dan «ok» con un cuerpo inválido (también por set_parameter) (B-509 integrado: 877b040) |
 
 ## Sigue (en orden)
