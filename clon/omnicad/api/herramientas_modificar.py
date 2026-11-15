@@ -129,7 +129,8 @@ def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, b
            radius_points: list[dict] | None = None, sets: list[dict] | None = None,
            type: Literal["fillet", "full_round"] = "fillet", center_face: str | None = None,
            side_faces: list[str] | None = None, radius2: Expr | None = None, continuity: Literal["g1", "g2"] = "g1",
-           corner_type: Literal["rolling_ball", "setback"] = "rolling_ball", setback: Expr | None = None):
+           corner_type: Literal["rolling_ball", "setback"] = "rolling_ball", setback: Expr | None = None,
+           tangency_weight: Expr = 1):
     """
     edges: aristas a redondear: selector ("|Z"), id de find_edges ("Cuerpo1/E7") o lista. No con faces_a.
     radius: radio en mm (número o expresión, p. ej. "espesor / 2"); con radius_type=variable es el inicial.
@@ -139,6 +140,7 @@ def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, b
     continuity: "g1" (por defecto) o "g2"; con radio constante o asimétrico.
     corner_type: "rolling_ball" (por defecto) o "setback" (pide setback).
     setback: distancia en mm desde la esquina a la que el radio vuelve al pedido.
+    tangency_weight: peso de tangencia >0 sin unidad; 1 = habitual. Otro valor: solo type=fillet con edges, radio constante o asimétrico entre planos.
     end_radius: radio final en mm (número o expresión); obligatorio con radius_type=variable.
     chord_length: longitud de cuerda en mm (número o expresión); obligatoria con radius_type=chord.
     tangent_chain: true (por defecto) suma las aristas tangentes encadenadas; false empalma solo las elegidas.
@@ -151,6 +153,8 @@ def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, b
     center_face: con full_round, la cara que se vuelve media caña (selector o id).
     side_faces: con full_round, las dos caras laterales (selectores o ids).
     """
+    if (type == "full_round" or faces_a is not None) and texto_expr(tangency_weight) != "1":
+        raise error("INVALID_ARGUMENTS", "⚠ Grosor de tangencia (tangency_weight): solo con type=fillet y edges, no con full_round ni faces_a.")
     if type == "full_round":
         if not center_face or not side_faces or len(side_faces) != 2:
             raise error("INVALID_ARGUMENTS", "type=full_round necesita center_face y side_faces (dos caras).")
@@ -217,7 +221,8 @@ def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, b
     op = OpEmpalme(doc.nuevo_id(), nombre_nuevo(doc, "Empalme", OpEmpalme), aristas=refs,
                    tipo_radio={"constant": "constante", "chord": "cuerda", "variable": "variable",
                                "asymmetric": "asimetrico"}[radius_type], continuidad=continuity,
-                   radio=texto_expr(1 if radius is None else radius), cadena_tangente=bool(tangent_chain), **extra)
+                   radio=texto_expr(1 if radius is None else radius), cadena_tangente=bool(tangent_chain),
+                   peso_tangencia=texto_expr(tangency_weight), **extra)
     return _informe(_agregar(sesion, op), elegidos, "edges_used")
 
 

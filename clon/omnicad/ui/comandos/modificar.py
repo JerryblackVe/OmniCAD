@@ -130,6 +130,11 @@ class Empalme(Comando):
                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") in ("constante", "asimetrico"),
                      ayuda="G2 y el radio asimétrico solo se hacen en aristas rectas entre dos caras planas."),
             Casilla("cadena_tangente", "Cadena tangente", True, visible_si=empalme),
+            Expresion("peso_tangencia", "Grosor de tangencia", "1", tipo=ESCALAR, rango=(0, float("inf")),
+                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") in ("constante", "asimetrico")
+                      and v.get("esquina") != "setback",
+                      ayuda="1 conserva el empalme habitual. Otro peso ajusta el perfil G1/G2 en aristas rectas entre "
+                      "caras planas, sin cadena tangente; se aplica a todos los conjuntos."),
             Opciones("esquina", "Esquina", {"bola": "Bola rodante", "setback": "Setback"},
                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante",
                      ayuda="Setback: el radio crece hacia las esquinas donde se juntan tres aristas (aproximado)."),
@@ -182,6 +187,8 @@ class Empalme(Comando):
                              radio=v["radio"], radio_fin=v["radio_fin"], cuerda=v["cuerda"], radio2=v["radio2"],
                              esquina="setback" if setback else "bola", setback=v["setback"],
                              continuidad=v["continuidad"] if v.get("tipo_radio") in ("constante", "asimetrico") else "g1",
+                             peso_tangencia=v.get("peso_tangencia", "1") if v["tipo"] == "empalme"
+                             and v.get("tipo_radio") in ("constante", "asimetrico") and not setback else "1",
                              cadena_tangente=v["cadena_tangente"], caras_a=refs(v, "caras_a"),
                              caras_b=refs(v, "caras_b"), regla=v["regla"], redondeos=v["redondeos"],
                              puntos_radio=puntos, conjuntos=conjuntos)
