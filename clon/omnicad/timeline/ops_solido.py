@@ -568,6 +568,10 @@ class OpAgujero(_OpCrear):
     def ejecutar(self, estado, ctx):
         p = self.p
         herramientas = self.herramientas(estado, ctx)
+        # B-506: los del mismo paso, entre sí. shortcut: con rosca modelada no se mide (dos M8 a 8 mm: 5 s; a 7 mm: 14 s,
+        # la distancia entre hélices es lenta); medir contra cilindros del Ø mayor si aparece un caso real.
+        if p["rosca"] != "modelada":
+            _sc().exigir_agujeros_separados(herramientas)
         if p["rosca"] == "cosmetica":
             ctx.aviso(f"Rosca cosmética {p['designacion']}: no cambia la geometría.")
         elif p["rosca"] == "conico":

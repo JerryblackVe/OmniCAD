@@ -2768,8 +2768,26 @@ def exigir_agujero_sin_pellizco(antes, despues):
     cuerpos cortados; `despues`: lo que quedó). Un agujero tangente a una pared deja el material con espesor cero,
     algo que no se puede fabricar; la booleana suelta (Combinar) lo deja pasar con un aviso (B-126)."""
     if not agujero_sin_pellizco(antes, despues):
-        raise geo.ErrorGeometria("El agujero queda tangente a una pared y deja el material con espesor cero: cambiá "
-                                 "el diámetro o la posición unas décimas de milímetro.")
+        raise geo.ErrorGeometria("El agujero toca justo una pared: espesor cero.")   # regla 14: un renglón
+
+
+def exigir_agujeros_separados(herramientas, tol=1e-4):
+    """B-506: dos agujeros del MISMO paso que se tocan justo en el borde (tangentes, sin pisarse) dejan un cuerpo que se
+    cruza consigo mismo y BRepCheck no lo ve; `exigir_agujero_sin_pellizco` tampoco, porque se cortan juntos. Solo se
+    miden los pares cuyas cajas se tocan (una grilla de 200 agujeros separados no mide ninguno)."""
+    from itertools import combinations
+
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    cajas = [geo.caja_envolvente(h) for h in herramientas]
+    for i, j in combinations(range(len(herramientas)), 2):
+        (a0, a1), (b0, b1) = cajas[i], cajas[j]
+        if any(a0[k] > b1[k] + tol or b0[k] > a1[k] + tol for k in range(3)):
+            continue
+        a, b = herramientas[i], herramientas[j]
+        d = BRepExtrema_DistShapeShape(a, b)
+        if d.IsDone() and d.Value() <= tol and geo.volumen(BRepAlgoAPI_Common(a, b).Shape()) <= tol:
+            raise geo.ErrorGeometria("Dos agujeros se tocan justo: espesor cero.")
 
 
 # ================================================================ 8. roscas
