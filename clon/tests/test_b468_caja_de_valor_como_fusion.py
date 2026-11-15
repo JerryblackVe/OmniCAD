@@ -163,3 +163,15 @@ def test_el_menu_radial_ofrece_repetir_el_comando_abierto(app_qt, tmp_path):
         v.doc.modificado = False        # que cerrar no abra «¿Guardar los cambios?» (diálogo modal)
         v.close()
         v.deleteLater()
+
+
+def test_el_foco_diferido_no_falla_si_qt_ya_borro_la_caja(app_qt):
+    """B-518: cerrar la ventana con el panel abierto borra las cajas en Qt; el foco diferido llegaba a una caja ya muerta
+    («CajaValor already deleted»). Se salta la caja borrada, sin excepción."""
+    import shiboken6
+    doc, comando, valores, clave = _caso("extruir")
+    panel, _ = _panel(comando, doc, valores)
+    gestor = panel.manipuladores
+    shiboken6.delete(gestor.cajas[clave])             # lo que hace Qt al cerrar: la caja Python sigue en el dict
+    gestor.enfocar_caja(forzar=True)                  # antes: RuntimeError
+    panel.cancelar()
