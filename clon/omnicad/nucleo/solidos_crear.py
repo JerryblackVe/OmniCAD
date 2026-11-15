@@ -218,10 +218,7 @@ def _alambre(x):
     return alambres[0]
 
 
-def _longitud(forma):
-    p = GProp_GProps()
-    BRepGProp.LinearProperties_s(forma, p)
-    return p.Mass()
+_longitud = geo.longitud
 
 
 def _es_cerrado(alambre):

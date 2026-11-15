@@ -1388,9 +1388,12 @@ def area(forma):
 
 
 def longitud(forma):
-    p = GProp_GProps()
-    BRepGProp.LinearProperties_s(forma, p)
-    return p.Mass()
+    """Largo de las aristas de `forma` (las compartidas cuentan una vez por cara, como GProp), integrado a 1e-9 mm.
+    GProp integra con puntos fijos y se queda corto en elipses: 30 × 10 medía 134,244 en vez de 133,649 (B-494)."""
+    from OCP.GCPnts import GCPnts_AbscissaPoint
+    aristas = (TopoDS.Edge(e) for e in _explorar(forma, TopAbs_EDGE))
+    return math.fsum(GCPnts_AbscissaPoint.Length_s(BRepAdaptor_Curve(e), 1e-9) for e in aristas
+                     if BRep_Tool.IsGeometric_s(e))
 
 
 def centro_masa(forma, superficie=False):
