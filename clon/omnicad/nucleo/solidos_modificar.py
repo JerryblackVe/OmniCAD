@@ -1749,8 +1749,9 @@ def _desfase_por_contorno(forma, caras, dist):
             nuevas = None
             for esquinas in ("vivas", "redondas"):   # vivas como Fusion; una letra B-spline a veces solo sale redondeada
                 try:
-                    nuevas = [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()
-                              for s in vectores.desfase_caras([lazo], d, esquinas) for w in _unicos(s, TopAbs_WIRE)]
+                    nuevas = [c for s in vectores.desfase_caras([lazo], d, esquinas)     # caras: ya limpio (B-528)
+                              for c in (geo.caras(s) or [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()
+                                                         for w in _unicos(s, TopAbs_WIRE)])]
                     break
                 except geo.ErrorGeometria:
                     pass
