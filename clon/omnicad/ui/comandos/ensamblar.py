@@ -203,6 +203,28 @@ class Union(Comando):
     def verificar(self, ctx):
         return None if ctx.estado.componentes else "Primero creá componentes (ENSAMBLAR › Nuevo componente)."
 
+    def preparar_panel(self, panel):
+        """Restaura la presentación de Joint / As-Built Joint sin mezclarla con los parámetros del paso."""
+        self._panel = panel
+        estado = getattr(panel.ctx.ventana, "_estado_panel_union", {}).get(self.CLAVE)
+        if panel.ctx.op is not None and estado is not None:
+            pestana, secciones, mas = estado
+            for titulo, seccion in panel.plegables.items():
+                seccion.boton.setChecked(secciones[titulo])
+            if panel.seccion is not None:
+                panel.seccion.boton.setChecked(mas)
+            panel.barra_pestanas.setCurrentIndex(pestana)
+
+    def al_cerrar(self, ctx):
+        """Recuerda pestaña y plegados al aceptar o cancelar, mientras siga abierta esta ventana."""
+        panel, self._panel = self._panel, None
+        if ctx.ventana is not None:
+            estados = getattr(ctx.ventana, "_estado_panel_union", {})
+            estados[self.CLAVE] = (panel.barra_pestanas.currentIndex(),
+                                  {titulo: s.abierta for titulo, s in panel.plegables.items()},
+                                  panel.seccion.abierta if panel.seccion is not None else False)
+            ctx.ventana._estado_panel_union = estados
+
     def campos(self, ctx):
         simple = lambda lado: (lambda v: v.get(f"modo{lado}", "simple") == "simple")  # noqa: E731
         otro = lambda lado: (lambda v: v.get(f"modo{lado}", "simple") != "simple")  # noqa: E731

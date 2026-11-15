@@ -981,7 +981,11 @@ class AreaVisor(QWidget):
                 self.panel.ajustar_alto(g.bottom() - y - 8)      # B-105: los paneles de comando tienen barra
             if y + self.panel.height() > g.bottom() - 8:         # F3: en una ventana baja, sube para que el pie se vea
                 y = max(g.top() + 4, g.bottom() - self.panel.height() - 8)
-            if getattr(self.panel, "pie_y", None) is not None and self.panel._tam_padre == self.size():
+            if getattr(self.panel, "_y_fijo", None) is not None:           # B-444: cambió de pestaña: la barra no se mueve
+                y = max(g.top() + 4, min(self.panel._y_fijo, g.bottom() - 100))
+                self.panel.ajustar_alto(g.bottom() - y - 8)      # una página más alta se desplaza: no sube el panel ni la barra
+                y = max(g.top() + 4, min(y, g.bottom() - self.panel.height() - 8))
+            elif getattr(self.panel, "pie_y", None) is not None and self.panel._tam_padre == self.size():
                 y = max(g.top() + 4, self.panel.pie_y - self.panel.height())      # B-421: el pie (Aceptar, Cancelar) no se mueve
             elif getattr(self.panel, "pie_y", None) is not None:
                 self.panel.pie_y = None                                           # la ventana cambió de tamaño: se asienta de nuevo
