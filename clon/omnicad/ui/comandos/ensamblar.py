@@ -337,6 +337,9 @@ class RestriccionComponentes(Comando):
         panel._edit_desfase.setPlaceholderText("Desfase (mm) o ángulo (grados) de la fila elegida")
         panel._edit_nombre.editingFinished.connect(lambda: self._editar_fila(panel, "nombre_fila", panel._edit_nombre.text()))
         panel._edit_desfase.editingFinished.connect(lambda: self._editar_fila(panel, None, panel._edit_desfase.text()))
+        # Al teclear ya queda en la fila (no depende de que la caja pierda el foco: con la ventana inactiva Tab no lo suelta).
+        panel._edit_nombre.textEdited.connect(lambda t: self._editar_fila(panel, "nombre_fila", t, en_vivo=True))
+        panel._edit_desfase.textEdited.connect(lambda t: self._editar_fila(panel, None, t, en_vivo=True))
         panel._lista_filas.currentRowChanged.connect(lambda i: self._cargar_editores(panel, i))
         lay.addWidget(panel._lista_filas)
         lay.addLayout(botones)
@@ -352,10 +355,13 @@ class RestriccionComponentes(Comando):
         elegida = lista.currentRow()
         lista.clear()
         for i, f in enumerate(panel.valores.get("filas") or [], 1):
-            par = "–".join((f.get(k) or [{}])[0].get("tipo", "?") for k in ("ref1", "ref2"))
-            lista.addItem(f"{i}. {f.get('nombre_fila') or self.NOMBRES.get(f.get('tipo') or 'alinear', '?')} · {par}")
+            lista.addItem(self._rotulo(i, f))
         lista.setCurrentRow(min(elegida, lista.count() - 1))      # clear() suelta la fila elegida: se la vuelve a elegir
         self._cargar_editores(panel, lista.currentRow())
+
+    def _rotulo(self, i, f):
+        par = "–".join((f.get(k) or [{}])[0].get("tipo", "?") for k in ("ref1", "ref2"))
+        return f"{i}. {f.get('nombre_fila') or self.NOMBRES.get(f.get('tipo') or 'alinear', '?')} · {par}"
 
     @staticmethod
     def _clave_desfase(fila):
@@ -371,8 +377,9 @@ class RestriccionComponentes(Comando):
         panel._edit_nombre.setText(fila.get("nombre_fila") or "" if fila else "")
         panel._edit_desfase.setText(str(fila.get(clave) or "") if clave else "")
 
-    def _editar_fila(self, panel, clave, texto):
-        """Guarda el nombre o el desfase escrito en la fila elegida de la lista."""
+    def _editar_fila(self, panel, clave, texto, en_vivo=False):
+        """Guarda el nombre o el desfase escrito en la fila elegida de la lista. `en_vivo` (mientras se teclea) solo
+        cambia el rótulo de esa fila: volver a pintar todo movería el cursor de la caja."""
         filas, i = [dict(f) for f in panel.valores.get("filas") or []], panel._lista_filas.currentRow()
         if not 0 <= i < len(filas):
             return
@@ -381,7 +388,10 @@ class RestriccionComponentes(Comando):
             return
         filas[i][clave] = texto
         panel.set_valores({"filas": filas})
-        self._pintar_filas(panel)
+        if en_vivo:
+            panel._lista_filas.item(i).setText(self._rotulo(i + 1, filas[i]))
+        else:
+            self._pintar_filas(panel)
 
     def _agregar_fila(self, panel):
         v = panel.valores
