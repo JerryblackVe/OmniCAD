@@ -2761,7 +2761,7 @@ Crea un toroide con el eje en Z (con plane, sobre la normal de un plano o una ca
 
 ### `boolean_operation`
 
-Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o intersect (quedarse con lo común). El resultado queda en el cuerpo objetivo; las herramientas se consumen salvo keep_tools.
+Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o intersect (quedarse con lo común). El resultado queda en el cuerpo objetivo; las herramientas se consumen salvo keep_tools. print_clearance (solo cut) deja holgura de impresión 3D: corta con la herramienta agrandada (molde).
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -2769,6 +2769,8 @@ Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o inters
   - `tools` (lista de texto; obligatorio): cuerpos herramienta (ids o nombres).
   - `operation` ("join" | "cut" | "intersect"; opcional, por defecto `"join"`): "join", "cut" o "intersect".
   - `keep_tools` (true/false; opcional, por defecto `false`): true para conservar los cuerpos herramienta.
+  - `print_clearance` (número o expresión; opcional, por defecto `0`): solo con cut: mm por lado que se agranda la herramienta antes de cortar (el hueco queda con juego); "general" = la de Preferencias (impresion/holgura_mm). La herramienta conservada no cambia.
+  - `other_part` ("printed" | "metal"; opcional, por defecto `"printed"`): con print_clearance="general": "printed" (la otra pieza también impresa: esta se lleva la mitad) o "metal" (la otra es metálica: esta se lleva la holgura entera). Con un número no cambia nada.
 - CLI: `omnicad call boolean_operation --doc pieza.omnicad target=… tools=…`
 
 ### `mirror`
@@ -3152,6 +3154,7 @@ Hace agujeros redondos hacia adentro del material: simples, abocardados (counter
   - `thread_class` (texto; opcional, por defecto `"auto"`): clase de la rosca modelada: "6H"/"6G" (métrica), "2B"/"3B" (unificada), la de las tablas de Fusion en los demás tipos (A en las tuberías, 2G/3G/4G en ACME, 7H en trapezoidal…), "auto" (la de Fusion si hay datos) o "" (perfil básico).
   - `fit` ("close" | "normal" | "loose"; opcional, por defecto `"normal"`): ajuste del agujero de paso (clearance): "close" (serie fina), "normal" (media) o "loose" (gruesa).
   - `print_clearance` (número o expresión; opcional, por defecto `0`): holgura de impresión 3D en mm por lado de la rosca modelada (agranda el agujero); "general" = la de Preferencias (impresion/holgura_mm, la que fija la placa de create_clearance_test).
+  - `other_part` ("printed" | "metal"; opcional, por defecto `"printed"`): con print_clearance="general": "printed" (la otra pieza también impresa: esta se lleva la mitad) o "metal" (la otra es metálica: esta se lleva la holgura entera). Con un número no cambia nada.
   - `left_hand` (true/false; opcional, por defecto `false`): true = rosca a izquierdas (solo modeled).
   - `to` (texto; opcional, por defecto `null`): extensión «hasta»: "XY"/"XZ"/"YZ" o un plano de construcción, un cuerpo (id o nombre) o UNA cara (selector o id).
   - `to_offset` (número o expresión; opcional, por defecto `0`): desfase en mm sobre el «hasta» (positivo = más hondo).
@@ -3178,6 +3181,7 @@ Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el coman
   - `left_hand` (true/false; opcional, por defecto `false`): true = rosca a izquierdas.
   - `reverse` (true/false; opcional, por defecto `false`): true mide length y offset desde el otro extremo de la cara.
   - `print_clearance` (número o expresión; opcional, por defecto `0`): holgura de impresión 3D en mm por lado (agranda el agujero, achica el tornillo); "general" = la de Preferencias (impresion/holgura_mm, la que fija la placa de create_clearance_test).
+  - `other_part` ("printed" | "metal"; opcional, por defecto `"printed"`): con print_clearance="general": "printed" (la otra pieza también impresa: esta se lleva la mitad) o "metal" (la otra es metálica: esta se lleva la holgura entera). Con un número no cambia nada.
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
 - CLI: `omnicad call create_thread --doc pieza.omnicad faces=…`
 

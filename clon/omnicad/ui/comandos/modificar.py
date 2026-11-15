@@ -18,6 +18,7 @@ from ..comando import (Alternar, Botones, Casilla, Comando, Entero, ErrorComando
 from . import registrar
 from .aspecto import Aspecto  # noqa: F401  (el comando vive en aspecto.py; se sigue pudiendo importar desde acá)
 from .comunes import OPCIONES_OPERACION, evaluar_o_cero
+from .crear import _campo_holgura, _holgura_3d, _holgura_paso
 
 TIPOS_DESPLAZAMIENTO = {"libre": ("Desplazamiento libre", "mov_libre"), "traslacion": ("Trasladar", "mov_trasladar"),
                         "rotacion": ("Rotar", "mov_rotar"), "punto_a_punto": ("De punto a punto", "mov_punto_punto"),
@@ -1094,7 +1095,10 @@ class Combinar(Comando):
         return [Seleccion("objetivo", "Cuerpo de destino", {"cuerpo"}),
                 Seleccion("herramientas", "Cuerpos de herramienta", {"cuerpo"}, maximo=None),
                 Botones("operacion", "Operación", {k: OPCIONES_OPERACION[k] for k in OPERACIONES_COMBINAR}),
-                Casilla("mantener", "Conservar herramientas")]
+                Casilla("mantener", "Conservar herramientas"),
+                *_campo_holgura(ctx, lambda v: v.get("operacion") == "cortar" and bool(v.get("mantener")), "holgura",
+                               "dejar_holgura", "Dejar holgura",
+                               "Agranda el hueco que deja la herramienta, para que la pieza impresa entre (molde).")]
 
     def construir(self, v, ctx):
         exigir(v, "objetivo", "Seleccioná el cuerpo de destino.")
@@ -1102,12 +1106,15 @@ class Combinar(Comando):
         obj, herr = _cuerpos(v, "objetivo")[0], _cuerpos(v, "herramientas")
         if obj in herr:
             raise ErrorComando("El cuerpo de destino no puede ser también herramienta.")
+        con_holgura = v["operacion"] == "cortar" and v.get("mantener")      # la casilla escondida no cuenta
+        holgura = _holgura_3d(v, ctx, "holgura", "dejar_holgura") if con_holgura else "0 mm"
         return self.crear_op(OpCombinar, v, ctx, objetivo=obj, herramientas=herr, operacion=v["operacion"],
-                             mantener=v["mantener"])
+                             mantener=v["mantener"], holgura=holgura, otra_pieza=v.get("otra_pieza") or "impresa")
 
     def desde_op(self, op, ctx):
         return dict(op.p, objetivo=_hits_cuerpos(op.p["objetivo"], ctx.estado),
-                    herramientas=_hits_cuerpos(op.p["herramientas"], ctx.estado))
+                    herramientas=_hits_cuerpos(op.p["herramientas"], ctx.estado),
+                    dejar_holgura=_holgura_paso(ctx, "holgura") is not None)
 
 
 class Quitar(Comando):

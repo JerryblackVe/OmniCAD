@@ -480,3 +480,4 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 - B-473 (E11): Chaflán y Empalme con mouse real en Windows; después de Aceptar no tiene que quedar ningún triángulo azul suelto (en Linux no se reproduce desde B-468).
 - B-501 (E11): en Ensamblar › Conjunto, teclear el nombre y el desfase de una fila guardada con la PC en uso y Tab: la fila tiene que mostrar lo tecleado.
 - **2026-11-15 · P-156 fase 1 (Rosca y Agujero, `ui/comandos/crear.py`):** humo y E11 en la ventana: abrir Rosca modelada, ver la línea «Holgura de impresión: 0,2 mm por lado», marcarla y mirar que la previa cambie; Preferencias › Impresión 3D muestra el valor en mm.
+- **2026-11-15 · P-156 fase 2 (UI):** humo y E11: INSERTAR › Placa de holguras (lista «Encaja mejor» + «Usar este valor»), Combinar › Cortar con «Conservar herramientas» y «Dejar holgura», y «La otra pieza es» en Rosca y Agujero; comparar con un molde de Fusion (desfase de 0,2 a mano).

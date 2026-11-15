@@ -635,6 +635,7 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
                 hole_tap: Literal["simple", "clearance", "cosmetic", "modeled", "taper"] = "simple",
                 thread: str | None = None, thread_class: str | None = "auto",
                 fit: Literal["close", "normal", "loose"] = "normal", print_clearance: Expr = 0,
+                other_part: Literal["printed", "metal"] = "printed",
                 left_hand: bool = False, to: str | None = None, to_offset: Expr = 0,
                 reference_edges: list[str] | None = None, reference_distances: list[Expr] | None = None,
                 positions: list[str | dict | list[float]] | None = None, tip_angle: Expr = 118,
@@ -665,6 +666,7 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
     thread_class: clase de la rosca modelada: "6H"/"6G" (métrica), "2B"/"3B" (unificada), la de las tablas de Fusion en los demás tipos (A en las tuberías, 2G/3G/4G en ACME, 7H en trapezoidal…), "auto" (la de Fusion si hay datos) o "" (perfil básico).
     fit: ajuste del agujero de paso (clearance): "close" (serie fina), "normal" (media) o "loose" (gruesa).
     print_clearance: holgura de impresión 3D en mm por lado de la rosca modelada (agranda el agujero); "general" = la de Preferencias (impresion/holgura_mm, la que fija la placa de create_clearance_test).
+    other_part: con print_clearance="general": "printed" (la otra pieza también impresa: esta se lleva la mitad) o "metal" (la otra es metálica: esta se lleva la holgura entera). Con un número no cambia nada.
     left_hand: true = rosca a izquierdas (solo modeled).
     to: extensión «hasta»: "XY"/"XZ"/"YZ" o un plano de construcción, un cuerpo (id o nombre) o UNA cara (selector o id).
     to_offset: desfase en mm sobre el «hasta» (positivo = más hondo).
@@ -677,7 +679,8 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
     referencias = reference_edges is not None or reference_distances is not None
     comunes = _opciones_agujero(sesion, diameter, depth, through_all, hole_type, counterbore_diameter,
                                 counterbore_depth, countersink_diameter, countersink_angle, drill_tip, hole_tap, thread,
-                                thread_class, fit, print_clearance, left_hand, to, to_offset, body)
+                                thread_class, fit, _holgura_impresion(print_clearance, other_part), left_hand, to,
+                                to_offset, body)
     if drill_tip:
         comunes["angulo_punta"] = texto_expr(tip_angle)
     extras = [sesion.cuerpo(b).id for b in bodies or []]
@@ -736,12 +739,14 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
     return res
 
 
-def _holgura_impresion(print_clearance):
-    """P-156: «general» = la holgura de impresión 3D de Preferencias (`impresion/holgura_mm`, la de la placa)."""
+def _holgura_impresion(print_clearance, other_part="printed"):
+    """P-156: (holgura, otra_pieza) del paso. «general» = la holgura de Preferencias (`impresion/holgura_mm`, la de la
+    placa), entera si la otra pieza es metálica y la mitad si también es impresa; un número va tal cual."""
     if print_clearance == "general":
         from .herramientas_preferencias import holgura_general
-        return f"{holgura_general():g} mm"
-    return texto_expr(print_clearance)
+        otra = "metalica" if other_part == "metal" else "impresa"
+        return f"{holgura_general() * (1.0 if otra == 'metalica' else 0.5):g} mm", otra
+    return texto_expr(print_clearance), "metalica"
 
 
 def _opciones_agujero(sesion, diameter, depth, through_all, hole_type, counterbore_diameter, counterbore_depth,
@@ -793,7 +798,7 @@ def _opciones_agujero(sesion, diameter, depth, through_all, hole_type, counterbo
     return dict(tipo=_TIPO_AGUJERO[hole_type], diametro=texto_expr(diameter if diameter is not None else 6),
                 extension=extension, profundidad=texto_expr(depth if depth is not None else 10),
                 punta="angulo" if drill_tip else "plana", rosca=rosca, designacion=designacion, clase_rosca=clase,
-                ajuste=_AJUSTE[fit], holgura_3d=_holgura_impresion(print_clearance),
+                ajuste=_AJUSTE[fit], holgura_3d=print_clearance[0], otra_pieza=print_clearance[1],
                 mano="izquierda" if left_hand else "derecha", **extra)
 
 
@@ -866,7 +871,7 @@ def _unica_cara(sesion, face, body):
 def create_thread(sesion, faces: Elementos, thread: str | None = None, family: Familia = "iso_metric",
                   thread_class: str | None = "auto", modeled: bool = True, length: Expr | None = None,
                   offset: Expr = 0, left_hand: bool = False, reverse: bool = False, print_clearance: Expr = 0,
-                  body: str | None = None):
+                  other_part: Literal["printed", "metal"] = "printed", body: str | None = None):
     """
     faces: caras cilíndricas a roscar: selector ("%CYLINDER"), id de find_faces ("Cuerpo1/F3") o lista.
     thread: designación de la rosca ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "G1/2"…); vacío = automática según la cara.
@@ -878,6 +883,7 @@ def create_thread(sesion, faces: Elementos, thread: str | None = None, family: F
     left_hand: true = rosca a izquierdas.
     reverse: true mide length y offset desde el otro extremo de la cara.
     print_clearance: holgura de impresión 3D en mm por lado (agranda el agujero, achica el tornillo); "general" = la de Preferencias (impresion/holgura_mm, la que fija la placa de create_clearance_test).
+    other_part: con print_clearance="general": "printed" (la otra pieza también impresa: esta se lleva la mitad) o "metal" (la otra es metálica: esta se lleva la holgura entera). Con un número no cambia nada.
     body: cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
     """
     if length is not None:
@@ -901,7 +907,7 @@ def create_thread(sesion, faces: Elementos, thread: str | None = None, family: F
                  familia=familia, clase_rosca=thread_class or "", modelada=modeled, largo_completo=length is None,
                  longitud=texto_expr(length if length is not None else 10), desfase=texto_expr(offset),
                  mano="izquierda" if left_hand else "derecha", invertir=reverse,
-                 holgura_3d=_holgura_impresion(print_clearance))
+                 **dict(zip(("holgura_3d", "otra_pieza"), _holgura_impresion(print_clearance, other_part), strict=True)))
     res = _agregar(sesion, op, combina=modeled)
     res["threads"] = [{"body": sesion.nombre_cuerpo(sesion.cuerpo(r["cuerpo"])), "designation": r["designacion"],
                        "class": r["clase"] or None, "internal": r["interna"], "modeled": r["modelada"]}

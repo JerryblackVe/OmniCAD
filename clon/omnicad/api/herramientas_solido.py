@@ -823,16 +823,22 @@ def create_torus(sesion, major_radius: Expr | None = None, minor_radius: Expr | 
 # ---------------------------------------------------------------- booleanas, simetría, patrones, movimiento
 @herramienta("boolean_operation", "solido",
              "Combina cuerpos: join (unir), cut (restar las herramientas al objetivo) o intersect (quedarse con lo "
-             "común). El resultado queda en el cuerpo objetivo; las herramientas se consumen salvo keep_tools.",
+             "común). El resultado queda en el cuerpo objetivo; las herramientas se consumen salvo keep_tools. "
+             "print_clearance (solo cut) deja holgura de impresión 3D: corta con la herramienta agrandada (molde).",
              modifica=True)
 def boolean_operation(sesion, target: str, tools: list[str], operation: Literal["join", "cut", "intersect"] = "join",
-                      keep_tools: bool = False):
+                      keep_tools: bool = False, print_clearance: Expr = 0,
+                      other_part: Literal["printed", "metal"] = "printed"):
     """
     target: cuerpo objetivo (id o nombre).
     tools: cuerpos herramienta (ids o nombres).
     operation: "join", "cut" o "intersect".
     keep_tools: true para conservar los cuerpos herramienta.
+    print_clearance: solo con cut: mm por lado que se agranda la herramienta antes de cortar (el hueco queda con juego); "general" = la de Preferencias (impresion/holgura_mm). La herramienta conservada no cambia.
+    other_part: con print_clearance="general": "printed" (la otra pieza también impresa: esta se lleva la mitad) o "metal" (la otra es metálica: esta se lleva la holgura entera). Con un número no cambia nada.
     """
+    from .herramientas_modificar import _holgura_impresion
+    holgura, otra = _holgura_impresion(print_clearance if operation == "cut" else 0, other_part)
     objetivo = sesion.cuerpo(target).id
     herramientas = list(dict.fromkeys(_ids_cuerpos(sesion, tools)))       # B-127: una herramienta repetida cuenta una vez
     doc = sesion.doc
@@ -851,7 +857,8 @@ def boolean_operation(sesion, target: str, tools: list[str], operation: Literal[
             sesion.avisar(f"{cuerpos[h].nombre} no toca a {cuerpos[objetivo].nombre}: la unión deja un cuerpo con "
                           "piezas sueltas.")
     op = OpCombinar(doc.nuevo_id(), nombre_nuevo(doc, "Combinar", OpCombinar), objetivo=objetivo,
-                    herramientas=herramientas, operacion=OPERACIONES[operation], mantener=keep_tools)
+                    herramientas=herramientas, operacion=OPERACIONES[operation], mantener=keep_tools, holgura=holgura,
+                    otra_pieza=otra)
     return _agregar(sesion, op, True)
 
 

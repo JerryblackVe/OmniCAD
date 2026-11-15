@@ -1233,6 +1233,12 @@ def _desfase_cuerpo(forma, distancia, union):
         raise
 
 
+def agrandar_con_holgura(forma, holgura):
+    """P-156: el cuerpo agrandado `holgura` mm por lado, con las aristas redondeadas (Combinar › Cortar con «Dejar
+    holgura»: el molde queda con juego parejo para la pieza impresa)."""
+    return _desfase_cuerpo(forma, float(holgura), GeomAbs_Arc)
+
+
 def _desfase_una_vez(forma, distancia, union):
     mo = BRepOffsetAPI_MakeOffsetShape()
     try:
