@@ -862,6 +862,11 @@ class AreaVisor(QWidget):
             w.installEventFilter(self)
         self.reubicar()
 
+    def agregar_lateral(self, panel):
+        """B-411: un panel lateral que se armó después de abrir el boceto."""
+        self.laterales.append(panel)
+        panel.installEventFilter(self)
+
     def eventFilter(self, obj, e):
         """B-387: un panel lateral que cambia de alto (otra casilla le suma filas) se vuelve a acomodar: si no, su pie
         quedaba bajo la barra de vista. Un solo reacomodo por tanda de cambios."""

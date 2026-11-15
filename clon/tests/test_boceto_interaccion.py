@@ -613,3 +613,32 @@ def test_panel_caracter_aparece_con_la_herramienta_texto_y_al_editar_un_texto(ve
         assert not mb.caracter.isVisible()                         # al cerrar la edición, el panel se va
     finally:
         mb.cancelar()
+
+
+def test_entrar_al_boceto_no_arma_los_paneles_que_casi_no_se_usan(ventana):
+    """B-411: Carácter, Simetría, Patrón y Transformar se arman al usarlos, no al entrar (eso bloqueaba la ventana)."""
+    mb = ventana.modo_boceto
+    mb.iniciar(Boceto(), PLANO, {"op": None, "plano": "XY"})
+    try:
+        assert mb._paneles == {}
+        mb.herramienta("rectangulo")
+        assert mb._paneles == {}
+        mb.herramienta("simetria")
+        assert set(mb._paneles) == {"simetria"} and mb.simetria.isVisible()
+        mb.herramienta("mover")
+        assert set(mb._paneles) == {"simetria", "transformar"} and not mb.simetria.isVisible()
+        assert mb.transformar.isVisible() and mb.transformar in ventana.area.laterales
+        mb.herramienta("patron_rectangular")
+        assert mb.patron.isVisible() and not mb.transformar.isVisible()
+        mb.herramienta("texto")
+        assert mb.caracter.isVisible() and not mb.patron.isVisible()
+        viejo = mb.caracter
+    finally:
+        mb.terminar()
+    assert mb._paneles == {} and mb.caracter is None          # al salir no queda ninguno
+    mb.iniciar(Boceto(), PLANO, {"op": None, "plano": "XY"})
+    try:
+        assert mb._paneles == {}                                # el próximo boceto parte de cero, sin paneles viejos
+        assert mb.caracter is not viejo
+    finally:
+        mb.terminar()
