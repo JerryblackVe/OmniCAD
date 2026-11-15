@@ -444,29 +444,35 @@ def _prisma(cara, n, d, conicidad=0.0, aristas_fijas=()):
             continue   # tapas
         da.Add(f, _gdir(tirar), math.radians(-conicidad), neutro, True)
         if not da.AddDone():
-            _error_conicidad(cara, d, conicidad, "No se pudo inclinar una cara lateral de la extrusión.")
+            return _conicidad_sin_draft(cara, n, d, conicidad, fijas, "No se pudo inclinar una cara lateral de la extrusión.")
         inclinadas += 1
     if not inclinadas:
         return prisma
     da.Build()
     if not da.IsDone():
-        _error_conicidad(cara, d, conicidad, "El kernel no pudo aplicar la inclinación a la extrusión.")
+        return _conicidad_sin_draft(cara, n, d, conicidad, fijas, "El kernel no pudo aplicar la inclinación a la extrusión.")
     try:
         return _validar(da.Shape(), "Extrusión con inclinación")
     except geo.ErrorGeometria as error:
-        _error_conicidad(cara, d, conicidad, str(error))
+        return _conicidad_sin_draft(cara, n, d, conicidad, fijas, str(error))
 
 
-def _error_conicidad(cara, distancia, conicidad, mensaje):
-    """Con curvas, distingue el cierre geométrico del fallo anterior de DraftAngle (B-362)."""
-    if any(BRepAdaptor_Curve(e).GetType() != GeomAbs_Line for e in _aristas_de(cara)):
-        radios = radios_conicidad([cara])
-        radio = radios[0 if conicidad < 0 else 1]
-        if math.isfinite(radio) and radio > 0:
-            cierre = radio / abs(math.tan(math.radians(conicidad)))
-            motivo = ("La distancia alcanza o supera ese cierre." if abs(distancia) >= cierre else
-                      "El kernel falla antes de ese cierre; probá una distancia o un ángulo menor.")
-            mensaje = f"{mensaje} El perfil se cierra aproximadamente a {cierre:.3f} mm. {motivo}"
+def _conicidad_sin_draft(cara, n, distancia, conicidad, fijas, mensaje):
+    """DraftAngle falló. Con curvas, el lateral reglado llega hasta el cierre (B-362: DraftAngle fallaba antes del
+    cierre de un círculo y con cualquier elipse o letra de splines); si tampoco se puede, el error indica el cierre."""
+    if not any(BRepAdaptor_Curve(e).GetType() != GeomAbs_Line for e in _aristas_de(cara)):
+        raise geo.ErrorGeometria(mensaje)
+    radio = radios_conicidad([cara])[0 if conicidad < 0 else 1]
+    cierre = radio / abs(math.tan(math.radians(conicidad)))
+    if not fijas and abs(distancia) < cierre:   # con caras fijas (perfiles vecinos) el lateral reglado las inclinaría
+        try:
+            return _prisma_curvo_inclinado(cara, n, distancia, conicidad)
+        except geo.ErrorGeometria as error:
+            mensaje = str(error)
+    if 0 < cierre < math.inf:
+        motivo = ("La distancia alcanza o supera ese cierre." if abs(distancia) >= cierre else
+                  "El kernel falla antes de ese cierre; probá una distancia o un ángulo menor.")
+        mensaje = f"{mensaje} El perfil se cierra aproximadamente a {cierre:.3f} mm. {motivo}"
     raise geo.ErrorGeometria(mensaje)
 
 
@@ -576,14 +582,20 @@ def _prisma_curvo_inclinado(cara, n, d, conicidad):
     """Extruir › Inicio Objeto: lateral reglado entre la base curva y su desfase en el plano neutro.
 
     DraftAngle no admite el lateral de una elipse oblicua. El extremo conserva el plano de inicio
-    trasladado según la dirección; los huecos se cierran al ensanchar el material.
+    trasladado según la dirección; los huecos se cierran al ensanchar el material. También es el respaldo de
+    `_prisma` cuando DraftAngle falla con curvas (B-362).
     """
     exterior = BRepTools.OuterWire_s(TopoDS.Face(cara))
     desfase = abs(d) * math.tan(math.radians(conicidad))
-    piezas = []
+    piezas, tapas = [], []
     alambres = [exterior] + [TopoDS.Wire(w) for w in _explorar(cara, TopAbs_WIRE) if not w.IsSame(exterior)]
     for i, w in enumerate(alambres):
-        extremo = _desfase_alambre(w, desfase if i == 0 else -desfase)
+        s = desfase if i == 0 else -desfase
+        extremo = _desfase_alambre(w, s)
+        # si el desfase cambia la cantidad de aristas, algo se cerró: el tope de las letras que no se pueden medir
+        if len(_aristas_de(extremo)) != len(_aristas_de(_desfase_alambre(w, math.copysign(min(abs(s), 1e-3), s)))):
+            raise geo.ErrorGeometria("La inclinación cierra una parte del perfil: probá una distancia o un ángulo menor.")
+        tapas.append(_cara(extremo))
         mk = BRepOffsetAPI_ThruSections(True, True)
         mk.AddWire(w)
         mk.AddWire(_trasladar(extremo, n * d))
@@ -591,16 +603,36 @@ def _prisma_curvo_inclinado(cara, n, d, conicidad):
         if not mk.IsDone():
             raise geo.ErrorGeometria("No se pudo crear el lateral curvo de la extrusión con inclinación.")
         piezas.append(_validar(mk.Shape(), "Extrusión curva con inclinación"))
+    # un hueco que cruza el borde o pisa otro hueco ya cerró la pared: la tapa pierde menos que la suma de los huecos
+    tapa, esperada = tapas[0], abs(geo.area(tapas[0]))
+    for hueco in tapas[1:]:
+        tapa, esperada = geo.booleano(tapa, hueco, "cortar"), esperada - abs(geo.area(hueco))
+    if len(tapas) > 1 and abs(geo.area(tapa) - esperada) > 1e-6 * abs(geo.area(tapas[0])):
+        raise geo.ErrorGeometria("La inclinación cierra una parte del perfil: probá una distancia o un ángulo menor.")
     resultado = piezas[0]
     for hueco in piezas[1:]:
         resultado = geo.booleano(resultado, hueco, "cortar")
     return _validar(resultado, "Extrusión curva con inclinación")
 
 
-def _desfase_alambre(alambre, d):
-    """Desfase 2D de un alambre cerrado y plano (positivo = hacia afuera), con esquinas vivas."""
+def _sentido_alambre(alambre):
+    """+1 si el desfase positivo de MakeOffset agranda el lazo, −1 si lo achica: sigue el sentido del alambre, y el
+    hueco de una cara de boceto viene al revés que el de una booleana."""
+    cara = _cara(alambre)
     mo = BRepOffsetAPI_MakeOffset(alambre, GeomAbs_Intersection, False)
-    mo.Perform(float(d))
+    mo.Perform(1e-3 * math.sqrt(abs(geo.area(cara))))
+    aristas = _aristas_de(mo.Shape()) if mo.IsDone() else []
+    if not aristas:
+        return 1
+    c = BRepAdaptor_Curve(aristas[0])          # un punto del lazo desfasado: dentro del original = se achicó
+    adentro = BRepClass_FaceClassifier(cara, c.Value((c.FirstParameter() + c.LastParameter()) / 2), 1e-9).State()
+    return -1 if adentro == TopAbs_IN else 1
+
+
+def _desfase_alambre(alambre, d):
+    """Desfase 2D de un alambre cerrado y plano (positivo = agranda el lazo), con esquinas vivas."""
+    mo = BRepOffsetAPI_MakeOffset(alambre, GeomAbs_Intersection, False)
+    mo.Perform(float(d) * _sentido_alambre(alambre))
     if not mo.IsDone():
         raise geo.ErrorGeometria("No se pudo desfasar el contorno (espesor demasiado grande).")
     alambres = [TopoDS.Wire(w) for w in _explorar(mo.Shape(), TopAbs_WIRE)]
