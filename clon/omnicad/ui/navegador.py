@@ -631,6 +631,7 @@ class Navegador(QFrame):
             m.addSeparator()
             m.addAction("Suprimir", lambda: self.accion.emit("borrar_paso", clave))
         elif tipo == "componente":
+            m.addAction("Propiedades", lambda: self.accion.emit("propiedades", clave))
             m.addAction("Fijar / liberar", lambda: self.accion.emit("fijar_componente", clave))
             m.addAction("Anclar / desanclar", lambda: self.accion.emit("anclar_componente", clave))
             m.addAction("Editar posición inicial…", lambda: self.accion.emit("posicion_inicial_componente", clave))

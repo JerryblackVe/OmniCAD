@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-426 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+427 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -21,7 +21,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [malla](#grupo-malla) | 22 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
 | [ensamble](#grupo-ensamble) | 20 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 12 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
-| [inspeccion](#grupo-inspeccion) | 32 | Ver y medir el resultado. |
+| [inspeccion](#grupo-inspeccion) | 33 | Ver y medir el resultado. |
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
 | [dibujo](#grupo-dibujo) | 18 | Espacio DIBUJO: hoja y cajetín, vistas (base, proyectada, sección, detalle), cotas, notas y exportación. |
 | [render](#grupo-render) | 5 | Espacio RENDERIZAR: entornos, escena, cámara guardada e imagen final del render. |
@@ -5242,6 +5242,7 @@ Ver y medir el resultado.
 | [`set_visual_style`](#set_visual_style) | sí | Guarda el estilo visual del visor: uno de los seis de Fusion (shaded, shaded_hidden_edges, shaded_visible_edges, wireframe, wireframe_hidden_edges, wireframe_visible_edges), el entorno de iluminación y los efectos (sombras, reflejos, oclusión ambiental y suelo). get_viewport_image lo usa cuando no se le pide otro estilo. |
 | [`get_viewport_image`](#get_viewport_image) | no | Renderiza el modelo y devuelve una imagen PNG (sombreado, sombras y suelo) desde una vista estándar o una dirección propia. |
 | [`get_physical_properties`](#get_physical_properties) | no | Volumen (mm³), área (mm²), masa (g), centro de masa y caja envolvente de cada cuerpo y del total. |
+| [`get_properties`](#get_properties) | no | Propiedades de un cuerpo o componente (Propiedades de Fusion): material y medidas físicas (volumen, área, masa, centro de masa, caja); en un componente, las de todo su contenido. |
 | [`measure_distance`](#measure_distance) | no | Distancia mínima entre dos cosas, cada una un cuerpo, una cara, una arista o un punto. |
 | [`check_interference`](#check_interference) | no | Busca pares de cuerpos sólidos que se superponen y devuelve cada par con el volumen común (mm³) y su caja envolvente. |
 | [`remove_interference`](#remove_interference) | sí | Quita el volumen de una interferencia (columna Quitar volumen del resultado de Interferencia): por cada par, resta tool de target y conserva tool. |
@@ -5427,6 +5428,15 @@ Volumen (mm³), área (mm²), masa (g), centro de masa y caja envolvente de cada
   - `bodies` (lista de texto o null; opcional, por defecto `null`): ids o nombres de los cuerpos; vacío = todos.
   - `density` (número; opcional, por defecto `null`): densidad en g/cm³ para todos los cuerpos con volumen; vacío = la de su material físico.
 - CLI: `omnicad call get_physical_properties --doc pieza.omnicad`
+
+### `get_properties`
+
+Propiedades de un cuerpo o componente (Propiedades de Fusion): material y medidas físicas (volumen, área, masa, centro de masa, caja); en un componente, las de todo su contenido.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `item` (texto; obligatorio): id o nombre de un cuerpo, o id o nombre de un componente.
+- CLI: `omnicad call get_properties --doc pieza.omnicad item=…`
 
 ### `measure_distance`
 
