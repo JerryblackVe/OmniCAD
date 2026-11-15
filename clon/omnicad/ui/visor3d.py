@@ -368,7 +368,12 @@ def polilineas_boceto(boceto_resuelto):
     """Curvas de un boceto resuelto en 3D (para dibujarlas sobre el modelo)."""
     pl = boceto_resuelto.plano
     auto = boceto_resuelto.boceto.ocultos_por_proyeccion_auto()[0]     # la proyección de la cara no se dibuja
-    prims = tuple(p for p in boceto_resuelto.boceto.geometria(incluir_construccion=False) if p[1] not in auto)
+    from ..restricciones import objetos as ob
+    b = boceto_resuelto.boceto
+    # B-452: lo oculto (una curva suelta, un objeto o lo que tapa un aislamiento) tampoco se ve fuera del boceto
+    visibles = ob.curvas_visibles(b) if b.objetos or b.props_curvas else None
+    prims = tuple(p for p in b.geometria(incluir_construccion=False)
+                  if p[1] not in auto and (visibles is None or p[1] in visibles))
     # P-123: cada redibujo volvía a muestrear todas las splines (377 del texto de un SVG: ~65 ms por boceto). Las copias
     # del estado comparten el boceto resuelto: se guarda en él, con las primitivas y el plano como clave.
     clave = (prims, tuple(pl.origen), tuple(pl.u), tuple(pl.normal))
