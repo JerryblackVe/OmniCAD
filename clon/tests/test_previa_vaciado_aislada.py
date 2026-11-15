@@ -80,10 +80,48 @@ def panel(ventana, monkeypatch):
 
 
 def esperar(p):
-    fin = time.perf_counter() + 15
-    while p._hijo_previa is not None and time.perf_counter() < fin:
+    """B-449: espera a que la ventana junte la previa, sin plazo fijo (bajo carga el hijo tarda lo que tarde). Corta solo si
+    el proceso aparte murió y la ventana no lo recogió en 200 vueltas del bucle; un cuelgue de verdad lo corta el producto
+    (`TOPE_PREVUELO_PARAMETROS`) y el turno de `turno.py`."""
+    muerto = 0
+    while p._hijo_previa is not None and muerto < 200:
         QTest.qWait(10)
-    assert p._hijo_previa is None, "El hijo no terminó"
+        proceso = getattr(p._hijo_previa, "proceso", None)      # None: todavía espera su turno detrás de otra previa
+        muerto = muerto + 1 if proceso is not None and proceso.poll() is not None else 0
+    assert p._hijo_previa is None, "El proceso aparte terminó y la ventana no recogió la previa"
+
+
+class _HijoFalso:
+    """Un hijo que sigue vivo durante `vueltas` vueltas del bucle y después la ventana lo recoge (`p._hijo_previa = None`)."""
+
+    def __init__(self, panel_falso, vueltas, muere=False):
+        self.panel, self.vueltas, self.muere = panel_falso, vueltas, muere
+        self.proceso = SimpleNamespace(poll=lambda: 1 if self.muere else None)
+
+    def vuelta(self):
+        self.vueltas -= 1
+        if self.vueltas <= 0 and not self.muere:
+            self.panel._hijo_previa = None
+
+
+def test_b449_esperar_no_tiene_plazo_fijo_mientras_el_hijo_vive(monkeypatch):
+    """Reproduce la carga de la VPS sin cargarla: un reloj que corre 1 s por consulta y un hijo vivo durante 100 vueltas.
+    Con el plazo de 15 s de antes, `esperar` fallaba a la vuelta 15; ahora espera hasta que la ventana lo recoja."""
+    falso = SimpleNamespace(_hijo_previa=None)
+    falso._hijo_previa = _HijoFalso(falso, vueltas=100)
+    reloj = iter(range(10 ** 6))
+    monkeypatch.setattr(time, "perf_counter", lambda: next(reloj))
+    monkeypatch.setattr(QTest, "qWait", lambda _ms: falso._hijo_previa and falso._hijo_previa.vuelta())
+    esperar(falso)
+    assert falso._hijo_previa is None
+
+
+def test_b449_esperar_falla_si_el_proceso_murio_y_la_ventana_no_lo_recogio(monkeypatch):
+    falso = SimpleNamespace(_hijo_previa=None)
+    falso._hijo_previa = _HijoFalso(falso, vueltas=0, muere=True)
+    monkeypatch.setattr(QTest, "qWait", lambda _ms: None)
+    with pytest.raises(AssertionError, match="no recogió"):
+        esperar(falso)
 
 
 def test_el_hijo_real_no_bloquea_y_cancelar_no_toca_documento(ventana, monkeypatch):
