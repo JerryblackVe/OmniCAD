@@ -367,9 +367,9 @@ def test_paneles_de_agujero_y_rosca_cambian_campos_y_calculan_la_vista_previa():
         return {c.clave for c in panel.campos if panel._visible(c)}
     assert {"colocacion", "diametro"} <= visibles() and "tam_holgura" not in visibles()
     for rosca, modelada, deben, no in (("holgura", False, {"tam_holgura", "ajuste", "info_rosca"}, {"diametro", "tipo_rosca"}),
-                                       ("cosmetica", True, {"tipo_rosca", "tam_iso_metrica", "clase_iso_metrica", "holgura_3d"},
+                                       ("cosmetica", True, {"tipo_rosca", "tam_iso_metrica", "clase_iso_metrica", "impresion"},
                                         {"diametro", "tam_holgura"}),
-                                       ("cosmetica", False, {"tipo_rosca", "diametro"}, {"clase_iso_metrica", "holgura_3d"}),
+                                       ("cosmetica", False, {"tipo_rosca", "diametro"}, {"clase_iso_metrica", "impresion"}),
                                        ("conico", False, {"tipo_conica", "tam_bsp_conica"}, {"tipo_rosca"})):
         panel.set_valor("rosca", rosca)
         panel.set_valor("rosca_modelada", modelada)

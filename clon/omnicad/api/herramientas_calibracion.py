@@ -18,8 +18,9 @@ from .registro import Expr, herramienta
              "placa con count agujeros pasantes de Ø diameter + 2·holgura, con la holgura radial creciente desde "
              "start_clearance en saltos de step y su valor grabado junto a cada agujero, más un peine con los pernos de "
              "Ø diameter a la misma distancia. Se imprimen los dos (quedan lado a lado en el plano XY, apoyados en "
-             "Z = 0), se prueba cuál agujero encaja bien y ese valor es el print_clearance de create_hole y "
-             "create_thread. Es UN paso del timeline con dos cuerpos nuevos.", modifica=True)
+             "Z = 0), se prueba cuál agujero encaja bien y ese valor se guarda con "
+             "set_preference('impresion/holgura_mm'): create_hole y create_thread lo usan con "
+             "print_clearance='general'. Es UN paso del timeline con dos cuerpos nuevos.", modifica=True)
 def create_clearance_test(sesion, diameter: Expr, start_clearance: Expr = 0.1, step: Expr = 0.1, count: int = 5,
                           thickness: Expr = 3, labels: bool = True):
     """

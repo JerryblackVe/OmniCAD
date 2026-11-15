@@ -451,6 +451,39 @@ def _tol():
     return tolerancias
 
 
+def _holgura_paso(ctx):
+    """La `holgura_3d` del paso que se edita (texto, puede ser una expresión) si tiene; si no, None."""
+    texto = ctx.op.p.get("holgura_3d") if ctx.op is not None else None
+    try:
+        return texto if texto and ctx.evaluar(texto) > 0 else None
+    except Exception:  # noqa: BLE001 — una expresión que ya no evalúa: vale la de Preferencias
+        return None
+
+
+def _holgura_general(ctx):
+    """P-156: la holgura de impresión 3D en mm por lado: la del paso que se edita o la de Preferencias."""
+    if (texto := _holgura_paso(ctx)) is not None:
+        return ctx.evaluar(texto)
+    if ctx.ventana is not None:
+        return ctx.ventana.prefs["impresion/holgura_mm"]
+    from ..preferencias import DEFECTOS
+    return DEFECTOS["impresion/holgura_mm"]
+
+
+def _campo_holgura(ctx, visible_si, **kw):
+    """P-156: una sola línea con el valor de Preferencias y una casilla, como pidió Gerardo."""
+    mm = f"{_holgura_general(ctx):g}".replace(".", ",")
+    return Casilla("impresion", f"Holgura de impresión: {mm} mm por lado", visible_si=visible_si,
+                   ayuda="Agranda el agujero o achica el tornillo para que rosque al imprimir.", **kw)
+
+
+def _holgura_3d(v, ctx):
+    """`holgura_3d` del paso: la del paso editado (conserva su expresión), la de Preferencias o 0."""
+    if not v.get("impresion"):
+        return "0 mm"
+    return _holgura_paso(ctx) or f"{_holgura_general(ctx):g} mm"
+
+
 _CLASES = {"iso_metrica": {"auto": "Automática (6H agujero / 6g eje)", "": "Sin clase (perfil básico)",
                            "6g": "6g (exterior)", "6h": "6h (exterior)", "6H": "6H (interior)", "6G": "6G (interior)"},
            "unificada": {"auto": "Automática (2B agujero / 2A eje)", "": "Sin clase (perfil básico)",
@@ -738,9 +771,7 @@ class Agujero(Comando):
             Info("info_rosca", "Detalle de rosca", self._info, visible_si=r("holgura", "cosmetica", "conico"), seccion=fo,
                  compacta=True),
             Expresion("desfase_hasta", "Desfase del límite", "0 mm", visible_si=hasta, avanzado=True),
-            Expresion("holgura_3d", "Holgura impresión 3D", "0 mm", visible_si=modelada, avanzado=True,
-                      ayuda="Desfase radial extra de los flancos y del agujero, para que el tornillo entre en una "
-                            "pieza impresa."),
+            _campo_holgura(ctx, modelada),
             Opciones("mano", "Dirección de la rosca", {"derecha": "Mano derecha", "izquierda": "Mano izquierda"},
                      visible_si=modelada, avanzado=True),
             campo_objetivos(),
@@ -773,7 +804,7 @@ class Agujero(Comando):
         texto = _texto_rosca_basica(datos)
         if rosca == "modelada":
             clase_r, aviso = _tol().resolver_clase(datos["familia"], datos["diametro"], datos["paso"], clase, True)
-            holgura = ctx.evaluar(v.get("holgura_3d") or "0 mm")
+            holgura = ctx.evaluar(_holgura_3d(v, ctx))
             texto += (f" · {_texto_limites(datos['familia'], datos, clase_r) if clase_r else (aviso or 'perfil básico')}"
                       f" · Ø taladro {sc.diametro_taladro_rosca(designacion, clase_r, holgura):.3f} mm")
         elif rosca == "cosmetica" and datos.get("broca"):
@@ -807,9 +838,9 @@ class Agujero(Comando):
         designacion, clase = self._rosca_elegida(v)
         params = {k: v[k] for k in ("tipo", "diametro", "extension", "profundidad", "punta", "angulo_punta",
                                      "diam_abocardado", "prof_abocardado", "diam_avellanado", "angulo_avellanado",
-                                     "invertir", "holgura_3d", "mano", "ajuste", "desfase_hasta",
+                                     "invertir", "mano", "ajuste", "desfase_hasta",
                                      "ref_distancia1", "ref_distancia2") if k in v}
-        params["rosca"] = self._rosca_del_paso(v)
+        params["rosca"], params["holgura_3d"] = self._rosca_del_paso(v), _holgura_3d(v, ctx)
         return self.crear_op(OpAgujero, v, ctx, posiciones=posiciones, puntos_cara=puntos_cara, objetivos=objetivos(v),
                              designacion=designacion, clase_rosca=clase, hasta=hasta, ref_cara=ref_cara,
                              ref_aristas=ref_aristas, **params)
@@ -924,6 +955,7 @@ class Agujero(Comando):
         v["ref_arista1"], v["ref_arista2"] = _h1(aristas[0], ctx.estado), _h1(aristas[1], ctx.estado)
         v["hasta"] = _h1(p.get("hasta"), ctx.estado)
         rosca = p.get("rosca")
+        v["impresion"] = _holgura_paso(ctx) is not None
         if rosca == "modelada":
             v.update(rosca="cosmetica", rosca_modelada=True)
         if rosca == "holgura":
@@ -958,8 +990,7 @@ class Rosca(Comando):
                 Opciones("mano", "Dirección", {"derecha": "Mano derecha", "izquierda": "Mano izquierda"}),
                 Casilla("recordar", "Recordar tamaño", bool(recuerdo)),
                 Casilla("invertir", "Invertir", avanzado=True),
-                Expresion("holgura_3d", "Holgura impresión 3D", "0 mm", visible_si=modelada, avanzado=True,
-                          ayuda="Desfase radial extra de los flancos, para que la rosca impresa enrosque.")]
+                _campo_holgura(ctx, modelada)]
 
     def oculta_seleccion(self, valores):
         return bool(valores.get("modelada"))      # B-297: la cara elegida no tiñe la rosca modelada
@@ -1011,12 +1042,12 @@ class Rosca(Comando):
             Rosca._recuerdo = {k: x for k, x in v.items() if k == "tipo_rosca" or k.startswith(("tam_", "des_",
                                                                                                     "clase_"))}
         return self.crear_op(OpRosca, v, ctx, caras=refs(v, "caras"), designacion=_designacion(v, "tipo_rosca", True),
-                             familia=fam, clase_rosca=_clase(v, "tipo_rosca"), holgura_3d=v.get("holgura_3d") or "0 mm",
+                             familia=fam, clase_rosca=_clase(v, "tipo_rosca"), holgura_3d=_holgura_3d(v, ctx),
                              **{k: v[k] for k in ("largo_completo", "longitud", "desfase", "modelada", "mano",
                                                   "invertir")})
 
     def desde_op(self, op, ctx):
-        v = dict(op.p, caras=hits(op.p["caras"], ctx.estado))
+        v = dict(op.p, caras=hits(op.p["caras"], ctx.estado), impresion=_holgura_paso(ctx) is not None)
         fam = op.p.get("familia") or "iso_metrica"
         if op.p.get("designacion"):
             v.update(_valores_rosca(op.p["designacion"], "tipo_rosca", op.p.get("clase_rosca") or ""))

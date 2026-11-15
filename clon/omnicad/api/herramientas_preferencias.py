@@ -71,6 +71,7 @@ _OPCIONES = {
     "vista/efecto_reflejo": (False, [False, True]),
     "vista/efecto_aa": (True, [False, True]),
     "timeline/color_componente": (False, [False, True]),
+    "impresion/holgura_mm": (0.2, []),      # P-156: mm por lado, de 0 a 1 (la usa print_clearance="general")
     # P-149: color, tamaño y opacidad de asas y superposiciones (la tabla y los valores de fábrica viven en ui/estilo_asas.py)
     **{k: (v, _opciones_asas(k)) for k, v in estilo_asas.DEFECTOS.items()},
 }
@@ -114,9 +115,9 @@ def _valor(ajustes, clave):
     valor = ajustes.value(clave, defecto)
     if isinstance(defecto, bool):
         return valor if isinstance(valor, bool) else str(valor).lower() in ("true", "1")
-    if isinstance(defecto, int):
+    if isinstance(defecto, (int, float)):
         try:
-            return int(valor)
+            return type(defecto)(valor)
         except (TypeError, ValueError):
             return defecto
     return str(valor)
@@ -144,6 +145,10 @@ def _validar(key, value):
             raise error("INVALID_ARGUMENTS", f"«{color}» no es un color #rrggbb: usá «#rrggbb» o vacío para "
                         "dejar el color del tema.")
         return color.lower()
+    if isinstance(defecto, float):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+            raise error("INVALID_ARGUMENTS", f"«{key}» espera mm por lado entre 0 y 1 (por ejemplo 0.2), no {value!r}.")
+        return round(float(value), 3)
     if type(value) is not type(defecto) or value not in opciones:
         raise error("INVALID_ARGUMENTS", f"Valor inválido para «{key}»: opciones válidas {opciones}.")
     return value
@@ -177,7 +182,7 @@ def reset_overlay_style(sesion):
 
 @herramienta("set_preference", "documento", "Valida y guarda una preferencia autorizada. No modifica el documento "
              "ni entra en deshacer; los ajustes se usan cuando la aplicación los relee.", modifica=True, transaccion=False)
-def set_preference(sesion, key: str, value: str | int | bool):
+def set_preference(sesion, key: str, value: str | int | float | bool):
     """
     key: clave autorizada devuelta por get_preferences; permisos, motor, temas y rutas están prohibidos.
     value: valor del tipo y de las opciones indicados por get_preferences. Las fuentes son texto libre («Segoe UI»; en «boceto/fuente_cotas» vacío = la de la interfaz) y los colores «#rrggbb» o vacío (el del tema).
@@ -203,3 +208,8 @@ def set_preference(sesion, key: str, value: str | int | bool):
     if ajustes.status() != ajustes.Status.NoError:
         raise error("FILE_ERROR", "No se pudieron guardar las preferencias.")
     return {"key": key, "value": _valor(ajustes, key), "updated": cambios}
+
+
+def holgura_general():
+    """P-156: la holgura de impresión 3D de Preferencias, en mm por lado (`print_clearance="general"`)."""
+    return _valor(_ajustes(), "impresion/holgura_mm")

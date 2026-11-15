@@ -332,7 +332,7 @@ Valida y guarda una preferencia autorizada. No modifica el documento ni entra en
 - Modifica el documento: sí, pero no entra en deshacer.
 - Parámetros:
   - `key` (texto; obligatorio): clave autorizada devuelta por get_preferences; permisos, motor, temas y rutas están prohibidos.
-  - `value` (texto o entero o true/false; obligatorio): valor del tipo y de las opciones indicados por get_preferences. Las fuentes son texto libre («Segoe UI»; en «boceto/fuente_cotas» vacío = la de la interfaz) y los colores «#rrggbb» o vacío (el del tema).
+  - `value` (texto o entero o número o true/false; obligatorio): valor del tipo y de las opciones indicados por get_preferences. Las fuentes son texto libre («Segoe UI»; en «boceto/fuente_cotas» vacío = la de la interfaz) y los colores «#rrggbb» o vacío (el del tema).
 - CLI: `omnicad call set_preference --doc pieza.omnicad key=… value=…`
 
 ### `set_decal`
@@ -3151,7 +3151,7 @@ Hace agujeros redondos hacia adentro del material: simples, abocardados (counter
   - `thread` (texto; opcional, por defecto `null`): rosca: "M8", "M8x1", "1/4-20 UNC", "Tr20x4", "G1/2" (taper: "R1/2" o "1/2 NPT"); con clearance, el tornillo ("M8").
   - `thread_class` (texto; opcional, por defecto `"auto"`): clase de la rosca modelada: "6H"/"6G" (métrica), "2B"/"3B" (unificada), la de las tablas de Fusion en los demás tipos (A en las tuberías, 2G/3G/4G en ACME, 7H en trapezoidal…), "auto" (la de Fusion si hay datos) o "" (perfil básico).
   - `fit` ("close" | "normal" | "loose"; opcional, por defecto `"normal"`): ajuste del agujero de paso (clearance): "close" (serie fina), "normal" (media) o "loose" (gruesa).
-  - `print_clearance` (número o expresión; opcional, por defecto `0`): holgura radial extra en mm de la rosca modelada (flancos y agujero), para imprimir en 3D.
+  - `print_clearance` (número o expresión; opcional, por defecto `0`): holgura de impresión 3D en mm por lado de la rosca modelada (agranda el agujero); "general" = la de Preferencias (impresion/holgura_mm, la que fija la placa de create_clearance_test).
   - `left_hand` (true/false; opcional, por defecto `false`): true = rosca a izquierdas (solo modeled).
   - `to` (texto; opcional, por defecto `null`): extensión «hasta»: "XY"/"XZ"/"YZ" o un plano de construcción, un cuerpo (id o nombre) o UNA cara (selector o id).
   - `to_offset` (número o expresión; opcional, por defecto `0`): desfase en mm sobre el «hasta» (positivo = más hondo).
@@ -3177,7 +3177,7 @@ Rosca sobre caras cilíndricas (ejes o agujeros: se detecta solo), como el coman
   - `offset` (número o expresión; opcional, por defecto `0`): distancia en mm desde el extremo de la cara hasta donde empieza la rosca (con length).
   - `left_hand` (true/false; opcional, por defecto `false`): true = rosca a izquierdas.
   - `reverse` (true/false; opcional, por defecto `false`): true mide length y offset desde el otro extremo de la cara.
-  - `print_clearance` (número o expresión; opcional, por defecto `0`): holgura radial extra en mm (flancos), para piezas impresas en 3D.
+  - `print_clearance` (número o expresión; opcional, por defecto `0`): holgura de impresión 3D en mm por lado (agranda el agujero, achica el tornillo); "general" = la de Preferencias (impresion/holgura_mm, la que fija la placa de create_clearance_test).
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
 - CLI: `omnicad call create_thread --doc pieza.omnicad faces=…`
 
@@ -3206,7 +3206,7 @@ Desmoldeo: inclina caras un ángulo respecto de un plano neutro (la cara o el pl
 
 ### `create_clearance_test`
 
-Crea la pieza de calibración de holguras para impresión 3D (como la tira de tolerancias de Cura): una placa con count agujeros pasantes de Ø diameter + 2·holgura, con la holgura radial creciente desde start_clearance en saltos de step y su valor grabado junto a cada agujero, más un peine con los pernos de Ø diameter a la misma distancia. Se imprimen los dos (quedan lado a lado en el plano XY, apoyados en Z = 0), se prueba cuál agujero encaja bien y ese valor es el print_clearance de create_hole y create_thread. Es UN paso del timeline con dos cuerpos nuevos.
+Crea la pieza de calibración de holguras para impresión 3D (como la tira de tolerancias de Cura): una placa con count agujeros pasantes de Ø diameter + 2·holgura, con la holgura radial creciente desde start_clearance en saltos de step y su valor grabado junto a cada agujero, más un peine con los pernos de Ø diameter a la misma distancia. Se imprimen los dos (quedan lado a lado en el plano XY, apoyados en Z = 0), se prueba cuál agujero encaja bien y ese valor se guarda con set_preference('impresion/holgura_mm'): create_hole y create_thread lo usan con print_clearance='general'. Es UN paso del timeline con dos cuerpos nuevos.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
