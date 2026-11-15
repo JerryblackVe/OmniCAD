@@ -37,22 +37,33 @@ def _pg():
     return patron_geometrico
 
 
-def _avisar_autointersecciones(ctx, forma, que, causa, antes=None):
-    """Un paso no puede quedar «ok» con una forma que se cruza consigo misma (B-168, B-167): se avisa con el mismo
-    análisis BOPAlgo que usa el desfase de superficies (`nucleo/superficies.py`). `que` es lo que creó el paso y
-    `causa` cómo evitarlo. `antes`: el cuerpo antes del paso, cuyas autointersecciones no son de este paso (Labio).
-    La vista previa no analiza."""
+def _cruces(forma):
+    """(autointersecciones que tocan una cara, problemas), o (None, problemas) si no se pudo contar. Las de solo aristas
+    no cuentan: el barrido cerrado de un círculo por una pista redondeada da 4 «arista y arista» en las uniones tangentes
+    y es sano; los cruces reales de los repros de B-462 siempre tocan una cara."""
+    from ..nucleo import revision                  # local: revision carga medio núcleo
+    n, problemas, _ = revision._autointersecciones_seguras(forma, 1000, 5.0)
+    return (None if n is None else sum("cara" in p["mensaje"] for p in problemas)), problemas
+
+
+def _exigir_sin_autointersecciones(ctx, forma, que, causa, antes=None):
+    """Un paso no deja un cuerpo que se cruza consigo mismo (B-462, como Fusion: ASM_SELF_INTER): es un error, con el
+    mismo análisis BOPAlgo que usa el desfase de superficies (`nucleo/superficies.py`). BRepCheck no lo ve: el barrido
+    de un perfil r15 en un arco R10 da «válido» con volumen −22206. `que` es lo que creó el paso y `causa` cómo
+    evitarlo. `antes`: el cuerpo antes del paso, cuyas autointersecciones no son de este paso (Labio). La vista previa
+    no analiza (es para mirar rápido): ahí solo se rechaza el volumen negativo, que es barato."""
+    if antes is None and geo.volumen_exacto(forma) < 0:
+        raise ErrorOperacion(f"{que} se autointerseca (encierra un volumen negativo): {causa}")
     if not ctx.revisar_autointersecciones:
         return
-    from ..nucleo import revision                  # local: revision carga medio núcleo
-    n, problemas, _ = revision._autointersecciones_seguras(forma, 1, 5.0)
+    n, problemas = _cruces(forma)
     if n is None:                                  # no se pudo contar (forma B-spline lenta): tampoco queda callado
         ctx.aviso(problemas[0]["mensaje"])
         return
     if n and antes is not None:
-        n -= revision._autointersecciones_seguras(antes, 1, 5.0)[0] or 0
+        n -= _cruces(antes)[0] or 0
     if n > 0:
-        ctx.aviso(f"{que} quedó con {n} {'autointersección' if n == 1 else 'autointersecciones'}: {causa}")
+        raise ErrorOperacion(f"{que} se autointerseca ({n} {'autointersección' if n == 1 else 'autointersecciones'}): {causa}")
 
 
 def _caras(refs, estado, que="perfiles"):
@@ -170,7 +181,7 @@ class OpBarrido(_OpCrear):
             if getattr(c, "tipo", "solido") != "solido":
                 raise ErrorOperacion(f"«{c.nombre}» no es un cuerpo sólido: el barrido de un cuerpo lo necesita.")
             forma = _sc().barrer_cuerpo(c.forma, ruta, orientacion=orientacion, distancia=distancia, eje_alineado=eje)
-            _avisar_autointersecciones(
+            _exigir_sin_autointersecciones(
                 ctx, forma, "El barrido del cuerpo",
                 "el cuerpo se pisa al recorrer la ruta. Probá un cuerpo más chico o una ruta más abierta, sin cruces.")
             self._aplicar(estado, ctx, forma)
@@ -193,7 +204,7 @@ class OpBarrido(_OpCrear):
                              distancia_carril=ctx.evaluar(self.p["distancia_carril"], "escalar"))
         if geo.sin_volumen(forma):
             raise ErrorOperacion("El barrido no encierra volumen: el plano del perfil no puede ser paralelo a la ruta.")
-        _avisar_autointersecciones(
+        _exigir_sin_autointersecciones(
             ctx, forma, "El barrido",
             "el perfil se pisa al recorrer la ruta. Probá un perfil más chico o una ruta más abierta, sin cruces.")
         self._aplicar(estado, ctx, forma)
@@ -227,6 +238,7 @@ class OpSolevacion(_OpCrear):
     línea central, cerrada y tramos rectos. `cadena` (Chain Selection): una arista de un cuerpo elegida como sección
     suma las que le siguen tangentes."""
     TIPO, ETIQUETA, ICONO = "solevacion", "Solevación", "⌓"
+    REVISA_AUTOINTERSECCIONES = True
     PARAMS = {"secciones": [], "carriles": [], "linea_central": [], "cerrada": False, "reglada": False,
               "operacion": "nuevo", "objetivos": [], "condicion_inicio": None, "condicion_fin": None,
               "fusionar_tangentes": False, "condiciones_medias": {}, "cadena": False, "version_angulo": 2}
@@ -277,6 +289,10 @@ class OpSolevacion(_OpCrear):
         if geo.sin_volumen(forma):
             raise ErrorOperacion("La solevación no encierra volumen: los perfiles no pueden estar todos en el mismo "
                                  "plano y una solevación cerrada no puede volver sobre sí misma.")
+        _exigir_sin_autointersecciones(
+            ctx, forma, "La solevación",
+            "la superficie se pisa entre los perfiles. Probá perfiles menos girados entre sí, una línea central más "
+            "abierta o, si es cerrada, perfiles que no obliguen a volver cruzando el cuerpo.")
         self._aplicar(estado, ctx, forma)
 
 
@@ -687,7 +703,7 @@ class OpTuberia(_OpCrear):
         # shortcut: con un solo tramo la ruta no tiene esquina donde la sección se pliegue, y el chequeo de una
         # forma B-spline se corre a un proceso aparte (~1 s). Se hace recién con dos tramos o más.
         if len(ruta) > 1:
-            _avisar_autointersecciones(
+            _exigir_sin_autointersecciones(
                 ctx, forma, "El tubo",
                 "en las esquinas de la ruta la sección se pliega sobre sí misma y el kernel no logra "
                 "redondear esas esquinas. Probá una sección más chica o una ruta con esquinas menos cerradas.")
@@ -1754,7 +1770,7 @@ class OpLabio(_OpCrear):
         for cid in usados:
             revisado = estado.cuerpo(cid)
             que = "La ranura" if cid != cuerpo.id or self.p["tipo"] == "ranura" else "El labio"
-            _avisar_autointersecciones(
+            _exigir_sin_autointersecciones(
                 ctx, revisado.forma, f"{que} de «{revisado.nombre}»",
                 "la sección se pisa al recorrer el borde. Reducí el ancho, el alto o la holgura, "
                 "o elegí un borde con curvas y esquinas más abiertas.", antes=previas[cid])

@@ -1,4 +1,4 @@
-"""B-196: Barrer y Labio avisan si el resultado se cruza consigo mismo."""
+"""B-196: Barrer y Labio revisan si el resultado se cruza consigo mismo; desde B-462 es un error, como en Fusion."""
 import math
 from unittest.mock import patch
 
@@ -42,14 +42,33 @@ def _exigir_aviso(s, r, que, causa):
     assert "autointerseccion" in aviso and que in aviso and causa in aviso, r
 
 
-def test_barrido_cruzado_avisa_aunque_el_kernel_lo_de_valido():
+def _exigir_error(r, que, causa):
+    assert not r["ok"], r
+    mensaje = r["mensaje"].lower()
+    assert "se autointerseca" in mensaje and que in mensaje and causa in mensaje, r
+
+
+def _sin_revisar():
+    """Sin el análisis: así se crea el barrido cruzado (B-462 lo rechaza) y se usa su geometría real."""
+    return patch.object(rev, "_autointersecciones_seguras", return_value=(0, [], True))
+
+
+def _cruzado():
     s = _preparar_barrido(True)
-    r = _barrer(s)
+    with _sin_revisar():
+        return s, _barrer(s)
+
+
+def test_barrido_cruzado_falla_aunque_el_kernel_lo_de_valido():
+    s, r = _cruzado()
     forma = _forma(s, r)
     assert geo.es_valida(forma)
     assert rev._autointersecciones_seguras(forma, 1, 5.0)[0] == 4
     assert math.isclose(geo.volumen(forma), math.pi * (30 + 2 * math.hypot(30, 20)), rel_tol=1e-6)
-    _exigir_aviso(s, r, "barrido", "ruta")
+    s = _preparar_barrido(True)
+    _exigir_error(api.llamar(s, "sweep", {"sketch": "Perfil", "path_sketch": "Ruta", "operation": "new_body"}),
+                  "barrido", "ruta")
+    assert not s.doc.estado_final.cuerpos
 
 
 def test_barrido_normal_sigue_ok_sin_aviso_y_con_el_mismo_volumen():
@@ -64,13 +83,12 @@ def test_barrido_normal_sigue_ok_sin_aviso_y_con_el_mismo_volumen():
 
 def test_barrido_de_cuerpo_tambien_revisa_el_resultado():
     """Inyecta una forma cruzada real: no depende de cómo una las copias Solid Sweep."""
-    origen = _preparar_barrido(True)
-    cruzada = _forma(origen, _barrer(origen))
+    cruzada = _forma(*_cruzado())
     s = _preparar_barrido()
     _r(s, "create_box", length=2, width=2, height=2, name="Taco")
     with patch.object(sc, "barrer_cuerpo", return_value=cruzada):
-        r = _r(s, "sweep", sweep_bodies="Taco", path_sketch="Ruta", orientation="parallel")
-    _exigir_aviso(s, r, "barrido", "cuerpo")
+        r = api.llamar(s, "sweep", {"sweep_bodies": "Taco", "path_sketch": "Ruta", "orientation": "parallel"})
+    _exigir_error(r, "barrido", "cuerpo")
 
 
 def test_barrido_de_cuerpo_normal_no_avisa():
@@ -93,32 +111,29 @@ def _preparar_labio(combinado=False):
 
 
 def _labio(s, tipo):
-    return _r(s, "create_lip_groove", body="Base", edges="|X and >Z and <Y", lip_type=tipo,
+    return api.llamar(s, "create_lip_groove", dict( body="Base", edges="|X and >Z and <Y", lip_type=tipo,
               groove_body="Tapa" if tipo == "lip_and_groove" else None,
-              width=1, height=1.5, clearance=0.1, direction="Z")
+              width=1, height=1.5, clearance=0.1, direction="Z"))
 
 
 def test_labio_y_ranura_revisan_el_resultado():
     """La geometría cruzada es real; se sustituye solo la salida del núcleo de Labio."""
-    origen = _preparar_barrido(True)
-    cruzada = _forma(origen, _barrer(origen))
+    cruzada = _forma(*_cruzado())
     for tipo in ("lip", "groove", "lip_and_groove"):
         s = _preparar_labio(tipo == "lip_and_groove")
         funcion = "labio_y_ranura" if tipo == "lip_and_groove" else "labio_ranura"
         resultado = {"labio": cruzada, "ranura": cruzada} if tipo == "lip_and_groove" else cruzada
         with patch.object(sc, funcion, return_value=resultado):
             r = _labio(s, tipo)
-        _exigir_aviso(s, r, "labio" if tipo == "lip" else "ranura", "ancho")
-        aviso = " ".join(r["avisos"])
-        assert aviso.count("quedó con 4 autointersecciones") == (2 if tipo == "lip_and_groove" else 1), r
-        if tipo == "lip_and_groove":
-            assert "El labio de «Base»" in aviso and "La ranura de «Tapa»" in aviso, r
+        _exigir_error(r, "labio" if tipo != "groove" else "ranura", "ancho")
+        assert "se autointerseca (3 autointersecciones)" in r["mensaje"], r
 
 
 def test_labio_y_ranura_normales_no_avisan():
     for tipo in ("lip", "groove", "lip_and_groove"):
         s = _preparar_labio(tipo == "lip_and_groove")
         r = _labio(s, tipo)
+        assert r["ok"], r
         forma = s.cuerpo("Base").forma
         esperado = 16000 - 40 * 1.1 * 1.6 if tipo == "groove" else 16000 + 40 * 1 * 1.5
         assert geo.es_valida(forma)
@@ -139,29 +154,22 @@ def test_barrido_con_revision_agotada_tambien_avisa():
     _exigir_aviso(s, r, "autointersecciones", "plazo agotado")
 
 
-def test_recalcular_conserva_el_aviso_y_editar_otro_paso_no_vuelve_a_analizar():
-    s = _preparar_barrido(True)
+def test_recalcular_y_editar_otro_paso_no_vuelven_a_analizar():
+    s = _preparar_barrido()
     with patch.object(rev, "_autointersecciones_seguras", wraps=rev._autointersecciones_seguras) as analisis:
-        r = _barrer(s)
-        uid = r["result"]["feature"]["id"]
-        aviso = s.doc.resultado(uid).mensaje
+        uid = _barrer(s)["result"]["feature"]["id"]
         assert analisis.call_count == 1
         for _ in range(2):
             _r(s, "recompute_all")
-            assert s.doc.resultado(uid).estado == "aviso"
-            assert s.doc.resultado(uid).mensaje == aviso
+            assert s.doc.resultado(uid).estado == "ok"
         hechos = analisis.call_count
         caja = _r(s, "create_box", length=2, width=2, height=2)["result"]["feature"]["id"]
         _r(s, "edit_feature", feature=caja, params={"height": "3 mm"})
-        assert analisis.call_count == hechos                 # el barrido no se recalcula: su resultado ya traía el aviso
-        assert s.doc.resultado(uid).mensaje == aviso
-        _r(s, "edit_feature", feature=uid, params={"distancia": "0.1"})
-        assert s.doc.resultado(uid).estado == "ok"
+        assert analisis.call_count == hechos                 # el barrido no se recalcula: su resultado ya estaba revisado
 
 
 def test_previa_no_analiza_y_aceptar_y_editar_si_aunque_haya_previa():
-    s = _preparar_barrido(True)
-    r = _barrer(s)
+    s, r = _cruzado()
     uid = r["result"]["feature"]["id"]
     receta = s.doc.operacion(uid).a_dict()
     s.doc.eliminar(uid)
@@ -169,7 +177,7 @@ def test_previa_no_analiza_y_aceptar_y_editar_si_aunque_haya_previa():
     with patch.object(rev, "_autointersecciones_seguras", wraps=rev._autointersecciones_seguras) as analisis:
         s.doc.previsualizar(op)
         assert analisis.call_count == 0
-        assert s.doc.agregar(op).estado == "aviso"
+        assert s.doc.agregar(op).estado == "error"
         assert analisis.call_count == 1
         nueva = op.copia()
         nueva.p["distancia"] = "0.1"
@@ -181,8 +189,7 @@ def test_previa_no_analiza_y_aceptar_y_editar_si_aunque_haya_previa():
 
 def test_previa_aislada_no_analiza_y_aceptar_no_reusa_su_resultado_sin_revision():
     """Ejecuta el protocolo real del hijo en el proceso actual para contar el análisis."""
-    s = _preparar_barrido(True)
-    r = _barrer(s)
+    s, r = _cruzado()
     uid = r["result"]["feature"]["id"]
     op = s.doc.operacion(uid).copia()
     s.doc.eliminar(uid)
@@ -196,11 +203,8 @@ def test_previa_aislada_no_analiza_y_aceptar_no_reusa_su_resultado_sin_revision(
           patch.object(rev, "_autointersecciones_seguras", wraps=rev._autointersecciones_seguras) as analisis):
         s.doc.previsualizar(op)
         assert analisis.call_count == 0
-        assert s.doc.agregar(op).estado == "aviso"
+        assert s.doc.agregar(op).estado == "error"
         assert analisis.call_count == 1
-        aviso = s.doc.resultado(uid).mensaje
-        _r(s, "recompute_all")
-        assert s.doc.resultado(uid).mensaje == aviso
         nueva = op.copia()
         nueva.p["distancia"] = "0.1"
         s.doc.previsualizar(nueva, s.doc.indice(uid))     # el hijo puede ponerse al día con la receta (cálculo real)
@@ -209,33 +213,31 @@ def test_previa_aislada_no_analiza_y_aceptar_no_reusa_su_resultado_sin_revision(
         assert analisis.call_count > hechos                # aceptar analiza: no reusa la previa sin revisión
 
 
-def test_b358_deshacer_y_rehacer_conservan_el_aviso():
-    """B-358: el paso que vuelve con deshacer o rehacer se rearma de la receta; antes volvía en «ok» callado."""
-    s = _preparar_barrido(True)
-    uid = _barrer(s)["result"]["feature"]["id"]
-    aviso = s.doc.resultado(uid).mensaje
+def test_b358_deshacer_y_rehacer_vuelven_a_revisar():
+    """B-358: el paso que vuelve con deshacer o rehacer se rearma de la receta y se revisa; antes volvía en «ok»
+    callado. El barrido cruzado se creó sin el análisis: al volver, el análisis lo encuentra y es un error."""
+    s, r = _cruzado()
+    uid = r["result"]["feature"]["id"]
     _r(s, "delete_feature", feature=uid)
     _r(s, "undo")
-    assert (s.doc.resultado(uid).estado, s.doc.resultado(uid).mensaje) == ("aviso", aviso)
-    _r(s, "undo")                                      # deshace el barrido
-    _r(s, "redo")
-    assert (s.doc.resultado(uid).estado, s.doc.resultado(uid).mensaje) == ("aviso", aviso)
+    assert s.doc.resultado(uid).estado == "error" and "se autointerseca" in s.doc.resultado(uid).mensaje
 
 
 def test_b358_un_cambio_de_parametro_vuelve_a_revisar():
     """B-358: con t = 0 el barrido sale sano; con t = 30 el análisis lo encuentra cruzado (se simula la cuenta, que
-    depende del parámetro), y al volver a 0 el aviso se va."""
+    depende del parámetro) y falla, y al volver a 0 queda sano."""
     s = _preparar_barrido()
     _r(s, "create_parameter", name="t", expression="0 deg")
-    cuenta = lambda forma, *a, **k: (24 if s.doc.parametros.valores()["t"] else 0, [], True)  # noqa: E731
+    cruce = {"mensaje": "Autointersección entre cara y cara."}
+    cuenta = lambda forma, *a, **k: (24, [cruce] * 24, True) if s.doc.parametros.valores()["t"] else (0, [], True)  # noqa: E731
     with patch.object(rev, "_autointersecciones_seguras", side_effect=cuenta):
         uid = _r(s, "sweep", sketch="Perfil", path_sketch="Ruta", operation="new_body",
                  twist_angle="t")["result"]["feature"]["id"]
         assert "autointersec" not in s.doc.resultado(uid).mensaje
-        _r(s, "set_parameter", name="t", expression="30 deg")
-        assert "autointersecciones" in s.doc.resultado(uid).mensaje
+        r = api.llamar(s, "set_parameter", {"name": "t", "expression": "30 deg"})
+        assert "se autointerseca (24 autointersecciones)" in (r.get("mensaje") or s.doc.resultado(uid).mensaje), r
         _r(s, "set_parameter", name="t", expression="0 deg")
-        assert "autointersec" not in s.doc.resultado(uid).mensaje
+        assert s.doc.resultado(uid).estado == "ok"
 
 
 def test_b358_labio_no_culpa_al_labio_de_lo_que_el_cuerpo_ya_traia():

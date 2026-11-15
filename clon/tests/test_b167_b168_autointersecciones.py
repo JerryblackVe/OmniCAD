@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-"""B-168 y B-167: un paso que deja un cuerpo cruzado consigo mismo no puede quedar «ok» callado: avisa.
+"""B-168 y B-167: un paso que deja un cuerpo cruzado consigo mismo no puede quedar «ok» callado: avisa
+(B-167) o, desde B-462, falla (el tubo de B-168, como Fusion).
 
 B-168 — tubo por aristas con esquinas. La ruta `Cuerpo1/E1` + `Cuerpo1/E2` de un cilindro (el círculo de la tapa y
 la arista de costura) forma una esquina: el inglete del barrido pliega la sección sobre sí misma y quedan 5
 autointersecciones en un cuerpo que el kernel devuelve como válido. Con la transición redondeada de OCC
-(`BRepBuilderAPI_RoundCorner`) el kernel no construye el sólido, así que se avisa.
+(`BRepBuilderAPI_RoundCorner`) el kernel no construye el sólido, así que el paso falla con la causa.
 
 cuerpo queda con autointersecciones.
 """
@@ -41,17 +42,15 @@ def _chapa(s, ancho, alto):
 
 # ---------------------------------------------------------------- B-168 · tubo con esquinas
 
-def test_b168_tubo_con_esquina_avisa_en_vez_de_quedar_ok():
+def test_b168_tubo_con_esquina_falla_en_vez_de_quedar_ok():
+    """Desde B-462 el cuerpo cruzado es un error (como Fusion), no un aviso: no se crea."""
     s = api.Sesion()
     _cilindro(s)
-    r = _r(s, "create_pipe", edges=["Cuerpo1/E1", "Cuerpo1/E2"], section_size=8)
-    forma = s.cuerpo(r["result"]["bodies_created"][0]["id"]).forma
-    assert _autointersecciones(forma) == 5                       # el kernel sigue dejando la esquina plegada
-    assert geo.volumen(forma) == pytest.approx(6245.5355, rel=1e-5)   # Linux da 6245.5387 (esquina plegada: el kernel no es idéntico entre sistemas)
-    assert s.doc.resultado(r["result"]["feature"]["id"]).estado == "aviso"
-    aviso = " ".join(r["avisos"]).lower()
-    assert "autointerseccion" in aviso and "esquina" in aviso, r["avisos"]
-    assert "fusion" not in aviso, r["avisos"]                  # la ayuda de Fusion no dice que redondee esas esquinas
+    r = api.llamar(s, "create_pipe", {"edges": ["Cuerpo1/E1", "Cuerpo1/E2"], "section_size": 8})
+    assert not r["ok"] and len(s.doc.estado_final.cuerpos) == 1, r
+    mensaje = r["mensaje"].lower()
+    assert "se autointerseca (3 autointersecciones)" in mensaje and "esquina" in mensaje, r   # el kernel sigue plegándola
+    assert "fusion" not in mensaje, r                  # la ayuda de Fusion no dice que redondee esas esquinas
 
 
 def test_b168_tubo_recto_normal_sigue_ok_y_con_el_mismo_volumen():
