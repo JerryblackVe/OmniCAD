@@ -11,7 +11,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E1 | B-489 | **BLOQUEANTE** Patrón de boceto ×1000 cuelga o cierra la app: tope con error claro antes de detectar perfiles (B-466 integrado: 5924490) |
 | E2 | B-490 | Test de B-462 intermitente por el corte de 5 s; después H-96 (Repujado sobre caras no planas) (B-484 integrado) |
 | E3 | B-362 | Conicidad curva falla antes del cierre: llegar al cierre y topar letras complejas (H-118 a Parcial: bba29f8) |
-| E4 | B-492 | **BLOQUEANTE** Engrosar una cúpula de revolución cierra la app (segfault OCC); B-464 sigue con sus tests en curso |
+| E4 | B-493 | **BLOQUEANTE** Engrosar una cúpula de revolución cierra la app (segfault OCC); B-464 sigue con sus tests en curso |
 | E5 | H-119 | Ensamblar › «Nuevo conjunto de contactos», «Desactivar todos» y los «Activar» grisados, como Fusion (B-443 integrado: c9af24a) |
 | E6 | FL-3c | Resto de FL-3b en el llavero: editar 1900 ms, Unir 17 perfiles 5917 ms, Cortar 3190 ms; la barra no muestra avance (B-488: no es código, espera prueba de E11) |
 | E7 | B-468 | Caja de valor junto al asa como en Fusion, en todas las asas (B-456 integrado: 45f39ca) |
