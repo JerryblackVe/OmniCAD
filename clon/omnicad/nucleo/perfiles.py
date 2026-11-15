@@ -825,13 +825,17 @@ def buscar_por_firma_tolerante(perfiles, firma, centroide=None, plano=None, boce
         entera = buscar_por_firma(detectar_boceto(boceto, plano, solas), objetivo, centroide)
         if entera is not None:
             return entera, None
-    candidatos = [p for p in perfiles if p.firma & objetivo]
+    # B-519: compartir solo unas pocas curvas no es el mismo perfil (sin un arco del contorno, el anillo «se volvía» el
+    # hueco que comparte 4 de sus 12 curvas). Fusion pierde el perfil y marca el paso.
+    candidatos = [p for p in perfiles if 2 * len(p.firma & objetivo) >= len(objetivo)]
     if not candidatos:
         return None, None
-    dif = lambda p: len(p.firma ^ objetivo)
-    candidatos.sort(key=dif)
+    # B-519: gana el que conserva más curvas de la firma vieja (redondear el boceto: el anillo con sus arcos nuevos
+    # conserva las 8; el hueco, 4 con la misma diferencia); después, el que menos cambió.
+    clave = lambda p: (-len(p.firma & objetivo), len(p.firma ^ objetivo))  # noqa: E731
+    candidatos.sort(key=clave)
     mejor = candidatos[0]
-    iguales = [p for p in candidatos if dif(p) == dif(mejor)]
+    iguales = [p for p in candidatos if clave(p) == clave(mejor)]
     if len(iguales) > 1:
         if centroide is None:
             return None, None
@@ -846,6 +850,8 @@ def buscar_por_firma_tolerante(perfiles, firma, centroide=None, plano=None, boce
             mejor = min(adentro, key=lambda p: p.area)
         else:
             mejor = iguales[0]
+    if objetivo <= mejor.firma:        # conserva todas sus curvas y suma otras (un empalme del boceto): el mismo perfil
+        return mejor, None
     return mejor, ("El perfil se re-vinculó con firma parcial: un cambio del boceto alteró su "
                    "contorno (revisá la operación).")
 

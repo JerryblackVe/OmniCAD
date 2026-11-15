@@ -156,8 +156,9 @@ class Extruir(Comando):
                       visible_si=lambda v: v.get("tipo") == "delgada"),
             Opciones("ubicacion", "Ubicación de pared", {"lado1": "Lado 1", "lado2": "Lado 2", "centro": "Centro"},
                      visible_si=lambda v: v.get("tipo") == "delgada"),
-            Casilla("cadena_tangente", "Cadena tangente", False, visible_si=lambda v: v.get("tipo") == "delgada",
-                    ayuda="Al elegir una curva abierta se eligen también las que siguen por tangencia."),
+            Casilla("cadena", "Cadena tangente", True, visible_si=lambda v: v.get("tipo") == "delgada",
+                    ayuda="Al elegir una curva abierta se eligen también las que siguen por tangencia, y al cambiar el "
+                          "boceto la pared sigue a las curvas tangentes nuevas (un empalme)."),
             campo_operacion(),
             campo_objetivos(),
         ]
@@ -166,7 +167,7 @@ class Extruir(Comando):
         """«Cadena tangente» (Extrusión delgada): una curva abierta entra, o sale, con las que siguen por tangencia."""
         ref = hit.get("ref") or {}
         if campo.clave != "perfiles" or ref.get("tipo") != "curva_boceto" or valores.get("tipo") != "delgada" \
-                or not valores.get("cadena_tangente"):
+                or not valores.get("cadena", True):
             return None
         from ...restricciones.auto_candidatos import cadena_tangente_de
         boceto = ctx.estado.bocetos[ref["boceto"]].boceto
@@ -195,6 +196,7 @@ class Extruir(Comando):
         params = {k: v.get(k) for k in ("tipo", "inicio", "desfase_inicio", "direccion", "medida", "extension",
                                          "distancia", "invertir", "conicidad", "distancia2", "conicidad2", "espesor",
                                          "ubicacion", "operacion", "hasta_modo", "desfase_hasta", "extension2")}
+        params["cadena"] = bool(v.get("cadena", True))
         params.update(boceto=boceto, perfiles=perfiles, caras=caras, curvas=curvas, objetivos=objetivos(v),
                       objetivo="", inicio_objeto=ref1(v, "inicio_objeto"), hasta=ref1(v, "hasta"),
                       hasta2=ref1(v, "hasta2"), simetrica=False)

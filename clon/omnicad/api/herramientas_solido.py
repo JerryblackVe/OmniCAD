@@ -197,7 +197,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
             extent: Literal["distance", "to_object", "all"] = "distance", to: str | None = None,
             to_mode: Literal["face", "adjacent", "body", "through"] = "face", to_offset: Expr = 0,
             taper_angle2: Expr | None = None, open_curves: list[int] | None = None, body: str | None = None,
-            tangent_chain: bool = False,
+            tangent_chain: bool = True,
             side2_extent: Literal["distance", "to_object", "all"] = "distance", side2_to: str | None = None):
     """
     sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
@@ -228,7 +228,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     side2_extent: extensión propia del lado 2 con direction=two_sides: distance (distance2), to_object (hasta side2_to) o all.
     side2_to: cara (selector o id), plano o cuerpo límite del lado 2; obligatorio con side2_extent=to_object. Usa to_mode y to_offset.
     open_curves: ids de curvas ABIERTAS de sketch (get_sketch) para extruir con thin=true; reemplazan a profile.
-    tangent_chain: con open_curves, suma las curvas tangentes a cada una.
+    tangent_chain: con open_curves, suma las curvas tangentes a cada una, también al recalcular (un empalme que se agregue después en el boceto entra en la pared); true por defecto, como «Tangent Chain» de Fusion.
     body: cuerpo donde se evalúan los selectores de faces, start_object, to y side2_to; vacío = el único cuerpo.
     """
     if sketch is None and not faces:
@@ -283,6 +283,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
                 from ..restricciones.auto_candidatos import cadena_tangente_de
                 open_curves = [x for c in open_curves for x in cadena_tangente_de(br.boceto, c)]
             p["curvas"] = [{"tipo": "curva_boceto", "boceto": sop.id, "curva": int(c)} for c in dict.fromkeys(open_curves)]
+            p["cadena"] = tangent_chain
     if start == "offset":
         p.update(inicio="desfase", desfase_inicio=texto_expr(start_offset))
     elif start == "object":
