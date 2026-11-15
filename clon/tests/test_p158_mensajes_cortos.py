@@ -15,8 +15,8 @@ HUECO = 6        # lo que ocupa un valor «{}» al mostrarse (p. ej. «36,26 mm�
 RAIZ = Path(__file__).resolve().parent.parent / "omnicad"
 NOMBRES = {"ErrorGeometria", "ErrorOperacion", "ErrorComando", "ErrorBoceto", "exigir", "_mostrar"}
 TOPES = {
-    "nucleo/solidos_crear.py": 145,
-    "nucleo/solidos_modificar.py": 51,
+    "nucleo/solidos_crear.py": 146,
+    "nucleo/solidos_modificar.py": 50,
     "timeline/ops_solido.py": 46,
     "restricciones/boceto.py": 95,
     "ui/comandos/crear.py": 9,

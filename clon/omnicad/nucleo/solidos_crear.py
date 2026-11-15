@@ -4091,7 +4091,7 @@ def perfil_ruta(ruta, muestras=161):
 def exigir_cantidad_patron_ruta(cantidad):
     """Exige al menos dos instancias, incluido el original, del Patrón en trayectoria de Fusion."""
     if ((not isinstance(cantidad, int) and not math.isfinite(cantidad)) or cantidad < 2 or int(cantidad) != cantidad):
-        raise geo.ErrorGeometria("⚠ Cantidad: un entero de 2 o más (cuenta el original)")
+        raise geo.ErrorGeometria("Cantidad: entero de 2 o más.")
 
 
 def instancias_en_ruta(ruta, n, distancia, *, orientacion="identica", inicio=0.0, distribucion="extension",

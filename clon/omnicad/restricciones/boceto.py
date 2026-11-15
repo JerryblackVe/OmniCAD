@@ -3390,7 +3390,7 @@ class Boceto:
                 raise ErrorBoceto("Las líneas no forman una esquina.")
             tang = radio / math.tan(theta / 2)
             if tang < 1e-4:            # B-510: casi colineales o radio ínfimo, el arco quedaría de largo ~0 (Fusion: «Failed to create fillet»)
-                raise ErrorBoceto("El empalme quedaría sin largo: las líneas casi siguen la misma dirección o el radio es muy chico.")
+                raise ErrorBoceto("El empalme no entra: radio muy chico.")
             if tang >= lados[0][3] - 1e-9 or tang >= lados[1][3] - 1e-9:
                 raise ErrorBoceto("El radio es demasiado grande para esas líneas.")
             t1 = (X[0] + tang * d1[0], X[1] + tang * d1[1])
@@ -3513,7 +3513,7 @@ class Boceto:
             raise ErrorBoceto("No entra un empalme de ese radio entre esas curvas.")
         _, F, pies = mejor
         if math.dist(pies[0][0], pies[1][0]) < 1e-4:      # B-510: casi tangentes, el arco quedaría de largo ~0
-            raise ErrorBoceto("El empalme quedaría sin largo: las curvas casi siguen la misma dirección o el radio es muy chico.")
+            raise ErrorBoceto("El empalme no entra: radio muy chico.")
         puntos_t, viejos = [], []
         for cid, (q, t, prim), pick in ((c1, pies[0], pick1), (c2, pies[1], pick2)):
             pid = self.agregar_punto(*q)

@@ -490,8 +490,7 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, peso_tangenc
     caras = [TopoDS.Face(f) for f in _padres(_ancestros(forma, TopAbs_EDGE, TopAbs_FACE), arista)]
     curva = BRepAdaptor_Curve(arista)
     if len(caras) != 2 or curva.GetType() != GeomAbs_Line or any(_plano_de_cara(f) is None for f in caras):
-        raise geo.ErrorGeometria("El peso de tangencia, el radio asimétrico y la continuidad G2 solo se hacen en aristas rectas entre dos caras "
-                                 "planas.")
+        raise geo.ErrorGeometria("Tangencia: solo en aristas rectas y planas.")
     a, b = (np.array([q.X(), q.Y(), q.Z()]) for q in (curva.Value(curva.FirstParameter()), curva.Value(curva.LastParameter())))
     largo = float(np.linalg.norm(b - a))
     t = (b - a) / largo
@@ -527,8 +526,7 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, peso_tangenc
         for f in _padres(por_vertice, v):
             plano = _plano_de_cara(TopoDS.Face(f))
             if not any(f.IsSame(c) for c in caras) and (plano is None or abs(abs(float(np.asarray(plano.normal) @ t)) - 1) > 1e-6):
-                raise geo.ErrorGeometria("El peso de tangencia, el radio asimétrico y la continuidad G2 necesitan caras planas perpendiculares "
-                                         "a la arista en sus extremos.")
+                raise geo.ErrorGeometria("Tangencia: caras planas y perpendiculares.")
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire
     perfil = BRepBuilderAPI_MakeWire()
     for e in (BRepBuilderAPI_MakeEdge(gp_Pnt(*map(float, a)), gp_Pnt(*map(float, p1))).Edge(),
@@ -647,7 +645,7 @@ def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
         raise geo.ErrorGeometria("⚠ Grosor de tangencia: un número mayor que 0")
     if peso_tangencia != 1 and any(g.get("tipo", "constante") not in ("constante", "asimetrico")
                                   or g.get("esquina") == "setback" for g in grupos):
-        raise geo.ErrorGeometria("⚠ Grosor de tangencia: solo con radio constante o asimétrico, sin Setback")
+        raise geo.ErrorGeometria("Tangencia: solo radio constante o asimétrico.")
     por_perfil = [g for g in grupos if peso_tangencia != 1 or g.get("tipo") == "asimetrico" or g.get("continuidad") == "g2"]
     if por_perfil:
         for g in por_perfil:
