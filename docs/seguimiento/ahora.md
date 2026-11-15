@@ -8,25 +8,23 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-463 | Spline de ajuste 2D distinta de la de Fusion (el barrido da −7 %); B-440 queda Parcial (panel ~280 ms, repintado ~190 ms, medir E11) (B-440 integrado: 563ec91) |
-| E2 | B-520 | Rosca: el núcleo elige otro tamaño que la app; después P-156 fase 2 (B-461 y P-156 fase 1 integrados: d8118ac, 2eafead) |
+| E1 | B-522 | `insert_svg` con unidades em/ex da INTERNAL_ERROR (bocetos; corto). B-463 espera los datos de la spline de Fusion (E11) |
+| E2 | P-156 fase 2 | Holgura de impresión: botón de la placa, molde, Impresa/… (B-520 integrado: c325d0c; B-530 Sin verificar para E11) |
 | E3 | B-525 | `offset_faces` deja autointersecciones con «ok» (B-524 integrado: d62586c) |
 | E4 | B-438 | Superficie › Desfase: teclear «1e3 mm» traba la ventana 2 s (worktree `~/OmniCAD-B-438` con un arreglo previo: revisarlo). B-514 (P2) en pausa hasta después del 30/11 |
 | E5 | B-450 | Mover cara con un empalme en el borde deja un escalón; Pulsar/tirar (fila en bugs.md) (B-523 no era bug: guion de la caza) |
-| E6 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (FL-13 listo para integrar) |
+| E6 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (FL-13 integrado: a1f3430) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-518 | Traza «CajaValor already deleted» al cerrar (manipuladores.py:1896) (B-444 integrado: 036c59f) |
-| E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
+| E8b | P-158 (entrega 2) | Mensajes cortos de Superficie y el resto (368 pendientes); P-158b integrado: 126305f |
 | E9 | B-401 | El cálculo aislado pierde atributos de boceto; después B-457 (B-436 integrado: 4048fa8) |
-| E10 | B-474 | MCP `new_document` con cambios sin guardar: la herramienta siguiente corre sobre el documento viejo (worktree con arreglo previo); Sonnet medio desde 19:20 UTC (B-521 integrado: a182d81) |
+| E10 | B-527 | `create_patch` de un anillo ignora el hueco (B-474 integrado: 55d53ea) |
 
 ## Sigue (en orden)
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-527 | `create_patch` de un anillo ignora el hueco (E4, después de B-438) |
-| 2 | B-522 | `insert_svg` con unidades em/ex da INTERNAL_ERROR (E9 con OpenCode GLM: pieza corta) |
-| 3 | B-528 | Desfase 2D de texto que se cruza (lo que queda de B-503; Opus, E3) |
+| 1 | B-528 | Desfase 2D de texto que se cruza (lo que queda de B-503; Opus, E3) |
 
 **Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2 (P-156 sí entra, Gerardo 15/11).
 
