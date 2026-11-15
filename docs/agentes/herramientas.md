@@ -2594,7 +2594,7 @@ Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text'
   - `start_offset` (número o expresión; opcional, por defecto `0`): desfase del inicio en mm según la dirección (número o expresión); con start=offset desde el perfil, con start=object desde el objeto; 0 por defecto.
   - `start_object` (texto; opcional, por defecto `null`): cara plana (selector o id) o plano de construcción donde empieza; con start=object.
   - `symmetric_measure` ("total" | "half"; opcional, por defecto `"total"`): con direction=symmetric, "total" (distance es el largo total) o "half" (distance es la mitad, a cada lado).
-  - `extent` ("distance" | "to_object" | "all"; opcional, por defecto `"distance"`): hasta dónde llega: "distance" (distance, por defecto), "to_object" (hasta to) o "all" (atraviesa todos los cuerpos).
+  - `extent` ("distance" | "to_object" | "all"; opcional, por defecto `"distance"`): hasta dónde llega: "distance" (distance, por defecto), "to_object" (hasta to) o "all" (atraviesa todos los cuerpos; con one_side va hacia el lado donde hay cuerpos y, si hay de los dos, hacia el de reverse).
   - `to` (texto; opcional, por defecto `null`): con extent=to_object: cara (selector o id), plano o cuerpo hasta donde llega.
   - `to_mode` ("face" | "adjacent" | "body" | "through"; opcional, por defecto `"face"`): "face" (cara), "adjacent" (cara y vecinas), "body" (cuerpo) o "through" (atravesarlo).
   - `to_offset` (número o expresión; opcional, por defecto `0`): desfase en mm sobre el «hasta» (positivo = más lejos); con extent=to_object.
@@ -3816,7 +3816,7 @@ Extruye curvas abiertas o cerradas (o un texto de una línea) en una superficie.
   - `start` ("profile_plane" | "offset" | "object"; opcional, por defecto `"profile_plane"`): dónde empieza la extrusión: profile_plane (el plano de las curvas), offset (a start_offset de él) o object (en la cara plana o plano start_object).
   - `start_offset` (número o expresión; opcional, por defecto `0`): desfase del inicio en mm según la dirección (número o expresión); con start=offset desde el perfil, con start=object desde el objeto; 0 por defecto.
   - `start_object` (texto o objeto; opcional, por defecto `null`): cara plana (selector o id) o plano donde empieza; con start=object.
-  - `extent` ("distance" | "to_object" | "all"; opcional, por defecto `"distance"`): hasta dónde llega: distance (por defecto), to_object (hasta to) o all (atraviesa todos los cuerpos).
+  - `extent` ("distance" | "to_object" | "all"; opcional, por defecto `"distance"`): hasta dónde llega: distance (por defecto), to_object (hasta to) o all (atraviesa todos los cuerpos; en un lado va hacia donde hay cuerpos y, si hay de los dos, hacia el de la distancia).
   - `to` (texto o objeto; opcional, por defecto `null`): con extent=to_object: cara (selector o id), plano o cuerpo hasta donde llega.
   - `to_offset` (número o expresión; opcional, por defecto `0`): desfase en mm sobre el «hasta» (positivo = más lejos); con extent=to_object.
   - `flip` (true/false; opcional, por defecto `false`): true invierte el sentido de la extrusión (el de la normal del boceto o de direction).

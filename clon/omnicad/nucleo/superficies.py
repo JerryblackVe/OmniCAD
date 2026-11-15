@@ -387,10 +387,10 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
         lo, hi = _rango_sobre(caja, origen, n)
         margen = 1.0 + 0.05 * (hi - lo)
         if lados == "un_lado":
-            alto = (hi if distancia >= 0 else -lo) + margen
-            if alto <= margen:
-                raise geo.ErrorGeometria("No hay cuerpos en el sentido de la extrusión.")
-            return _extruir_tramos(ws, n, *((alto, 0.0) if distancia >= 0 else (0.0, alto)), conicidad, afuera)
+            from .solidos_crear import lado_todo
+            arriba = lado_todo(lo, hi, 1.0 if distancia >= 0 else -1.0) > 0      # P-160: hacia donde hay cuerpos
+            alto = (hi if arriba else -lo) + margen
+            return _extruir_tramos(ws, n, *((alto, 0.0) if arriba else (0.0, alto)), conicidad, afuera)
         return _extruir_tramos(ws, n, max(hi, 0.0) + margen, max(-lo, 0.0) + margen, conicidad, afuera)
     if lados == "simetrica":
         raise geo.ErrorGeometria("La extensión «A objeto» no se combina con la dirección simétrica.")

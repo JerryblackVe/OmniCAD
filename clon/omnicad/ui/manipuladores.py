@@ -540,6 +540,17 @@ class FlechaCilindro(Flecha):
         return super().empezar(g, pos, sub)
 
 
+class FlechaSentido(Flecha):
+    """P-160: flecha que solo muestra un sentido (Extruir con «Todo»): no se arrastra ni lleva caja de valor."""
+
+    def __init__(self, origen, direccion, color=AMARILLO):
+        super().__init__("distancia", origen, direccion, factor=0.0, caja=False, color=color)
+        self.ident = "flecha:sentido"
+
+    def empezar(self, g, pos, sub):
+        return None
+
+
 class Posicion(Manipulador):
     """Asa de posición: un punto sobre un plano que se arrastra con el ratón (el agujero sobre una cara, el
     desplazamiento de un dibujo insertado). Es un aro con cruz de ~15 px de radio de agarre.

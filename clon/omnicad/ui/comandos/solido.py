@@ -57,6 +57,19 @@ def _otro_plano_revolucion(v, hit, ctx):
 _RADIOS_POR_CARA = []     # (cara, (adentro, afuera)) de los perfiles elegidos ahora
 
 
+def _flecha_todo(ctx, borde, n):
+    """P-160: la flecha de «Todo» con «Un lado» apunta hacia los cuerpos (`lado_todo`, lo mismo que la extrusión);
+    sin cuerpos, en rojo sobre la normal: el aviso de 1 renglón ya sale de la previa."""
+    from .. import manipuladores as mp
+    from ...nucleo import solidos_crear as sc
+    from ...timeline.operaciones import _caja_todo
+    try:
+        lo, hi = sc._proyectar_caja(_caja_todo(ctx.estado), borde, n)
+        return mp.FlechaSentido(borde, n * sc.lado_todo(lo, hi, 1.0))
+    except Exception:  # noqa: BLE001 — sin cuerpos (ErrorOperacion o ErrorGeometria): la flecha en rojo
+        return mp.FlechaSentido(borde, n, mp.COLORES_EJE[0])
+
+
 def _radios_conicidad(formas):
     """(adentro, afuera) de los perfiles, que frenan las asas de la conicidad (B-343); sin tope para lo que no se puede
     medir (curvas sueltas de la extrusión delgada). Se guarda por cara: las asas se rearman en cada cuadro del arrastre y
@@ -207,7 +220,7 @@ class Extruir(Comando):
         lados»; la simétrica, del centro), con el anillo de la conicidad alrededor de su pie (P-139), la flecha del
         desfase de inicio sobre el borde (solo con Inicio=Desfase) y la conicidad del lado 2 (solo en «Dos lados»)."""
         from .. import manipuladores as mp
-        if v.get("extension") != "distancia":
+        if v.get("extension") not in ("distancia", "todo"):
             return []
         texto = repr([h.get("ref", h) if isinstance(h, dict) else h for h in v.get("perfiles") or []])   # sin sus mallas
         if self._base_asas is None or self._base_asas[0] is not ctx.estado or self._base_asas[1] != texto:
@@ -228,6 +241,10 @@ class Extruir(Comando):
             centro = centro + n * _evaluar(ctx, v.get("desfase_inicio"))
         borde = borde + n * float((centro - borde) @ n)          # a la altura del inicio (desfase)
         direccion = v.get("direccion")
+        if v.get("extension") == "todo":     # P-160: la flecha muestra hacia dónde atraviesa; en rojo si no hay cuerpos
+            if direccion not in (None, "un_lado"):
+                return antes
+            return antes + [_flecha_todo(ctx, borde, n * (-1.0 if _evaluar(ctx, v.get("distancia")) < 0 else 1.0))]
         if direccion == "simetrica":
             return antes + [mp.Flecha("distancia", centro, n, factor=1.0 if v.get("medida") != "total" else 0.5,
                                        minimo=0.0)]
