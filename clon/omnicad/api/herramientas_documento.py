@@ -754,6 +754,12 @@ def edit_feature(sesion, feature: str, params: dict):
                         "(p. ej. shell con faces=\">Z\"), o deshacelo con undo si recién lo creaste.")
     nueva = op.copia()
     nueva.p.update(copy.deepcopy(params))
+    if (nueva.TIPO == "plano" and nueva.p.get("tipo") == "angulo" and nueva.p.get("refs")
+            and nueva.p["refs"] != op.p.get("refs") and "eje_0" not in params):
+        from ..timeline.entidades import como_eje, resolver
+        from ..timeline.ops_construir import eje_cero
+        estado = sesion.doc.estado_en(sesion.doc.indice(op.id))
+        nueva.p["eje_0"] = eje_cero(como_eje(resolver(nueva.p["refs"][0], estado))[1])
     sesion.doc.reemplazar(op.id, nueva)
     if nueva.TIPO == "patron" and {"d1", "d2", "angulo", "distribucion"} & set(params):
         sesion.avisar(f"«{nueva.nombre}»: {nueva.aclaracion_distancias()}")
