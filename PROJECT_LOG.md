@@ -451,6 +451,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-15] Quien cambia textos de mensajes corre `grep -rl` de cada texto viejo en tests/ (incluido test_hallazgos_nucleo.py), no solo los tests del archivo tocado; y los tests nuevos fijan una palabra clave de la causa, no la frase entera. · Evidencia: P-158 dejó rojos en main 3 veces (55d9502, 1186c2d) por textos citados en otros archivos.
 - [2026-11-15] Al renombrar una clave, buscar TODOS sus usos sin cortar la salida (`| head` escondió `test_h84` en B-519, que siguió con la clave vieja y falló en main). · Evidencia: B-519b, `tests/test_h84_cadena_tangente.py::test_el_panel_elige_y_quita_la_cadena_con_un_clic`.
 - [2026-11-15] Un freno nuevo en `PanelComando._previa_pesada` deja pasar las sondas del asa (`previa_sana` con `tope_ms`): si no, el asa frena en el valor con que se agarró. · Evidencia: `tests/test_b454_asa_empalme_previa_aparte.py` falló con el primer arreglo de B-438.
 - [2026-11-15] `git worktree remove` borra también lo ignorado (`evidencias/` de la sesión): `tanda.sh` e `integrar.sh` ahora copian `evidencias/` del worktree a main (`cp -rn`) antes de borrarlo. · Evidencia: la captura de B-423 (800×520) se perdió al integrar cf9e7d9.
