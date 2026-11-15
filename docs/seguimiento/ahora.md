@@ -25,11 +25,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 1 | B-489 | **BLOQUEANTE** Patrón rectangular de boceto ×1000 cuelga o cierra la app (E1, apenas cierre B-466) |
 | 2 | FL-3d | Extruir por API 11× más lento que por la UI en el llavero (67 s contra 5,9 s) (E6, después de FL-3c) |
-| 3 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
-| 4 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 5 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 6 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
-| 7 | B-461 (resto) | Rosca modelada debajo de 1 s (sin booleana), indicador al editar, agujero roscado y Windows (E6) |
+| 3 | B-491 | Test rojo en main: una falla de edit_feature/set_parameter ya no pasa por `recalcular` (B-331) |
+| 4 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
+| 5 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 7 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
+| 8 | B-461 (resto) | Rosca modelada debajo de 1 s (sin booleana), indicador al editar, agujero roscado y Windows (E6) |
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) quedan en bugs.md sin cola.
 
