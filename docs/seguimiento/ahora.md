@@ -18,7 +18,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E8 | B-518 | Traza «CajaValor already deleted» al cerrar (manipuladores.py:1896) (B-444 integrado: 036c59f) |
 | E8b | P-158 (entrega 2) | Mensajes cortos de Superficie y el resto (368 pendientes); P-158b integrado: 126305f |
 | E9 | B-401 | El cálculo aislado pierde atributos de boceto; OpenCode siempre corriendo (B-450 integrado: 9044a97) |
-| E10 | B-457 | Rosca modelada rápida: test sobre un cuerpo ya modificado (chaflán, empalme); después B-471 (B-527 integrado: 8eaad48) |
+| E10 | B-471 | Revolución: el asa del ángulo queda pegada al borde del cuerpo (B-457 integrado: 1818c28) |
 
 ## Sigue (en orden)
 
@@ -29,7 +29,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 3 | B-172 | Pedir propiedades tras una solevación cerró la app (Opus) |
 | 4 | B-425 | Patrón con muchas copias congela la ventana (E6) |
 | 5 | B-331 | La API en vivo congela la ventana (E6) |
-| 6 | B-471 | Revolución: el asa del ángulo queda pegada al borde del cuerpo (E10, después de B-457) |
 
 **Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2 (P-156 sí entra, Gerardo 15/11).
 
