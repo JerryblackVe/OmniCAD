@@ -1782,7 +1782,7 @@ def _desfase_por_contorno(forma, caras, dist):
 def exigir_distancia_desfase(forma, caras, distancia):
     """Offset Face / Press Pull: una cara plana no puede atravesar todo su sólido al entrar."""
     if abs(distancia) < 1e-9:
-        raise geo.ErrorGeometria("⚠ Distancia: no puede ser 0")
+        raise geo.ErrorGeometria("⚠ Distancia: no puede ser cero")
     if distancia >= 0 or not geo.solidos(forma):
         return
     # Una selección parcial puede atravesar su franja y dejar material en la vecina: lo decide el resultado.

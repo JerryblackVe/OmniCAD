@@ -86,6 +86,8 @@ def test_dialogo_arranca_en_cero_rechaza_aceptar_y_diez_crea_la_geometria(monkey
         # Volver a cero borra también una previa válida, sin aceptar la operación anterior.
         receta = doc.a_dict()
         _teclear(panel, "distancia", "0")
+        panel._t_previa.stop()
+        panel._calcular_previa()          # B-532: el cero tecleado ya deja Aceptar apagado; la previa se apaga con el temporizador
         QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
         assert previas[-1] is None and aceptadas == [] and doc.a_dict() == receta
 
