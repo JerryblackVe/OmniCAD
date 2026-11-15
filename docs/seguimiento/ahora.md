@@ -8,7 +8,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-519b | test_h84 con la cadena tangente por defecto (B-452 integrado: 5b9fa3f) |
+| E1 | B-519b | test_h84 con la cadena tangente por defecto; después B-538 y B-539 (B-452 integrado: 5b9fa3f; B-519 cerrado, verificado por E11) |
 | E2 | B-531 | Regresión de B-461 (cresta a derechas) (P-156 fase 2 integrada: e85bdb0) |
 | E3 | B-536 | Vaciado tras empalme en un barrido da «No quedó pared» (FL-16 integrado: b395ed2) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
@@ -25,6 +25,21 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-331 | La API en vivo congela la ventana (E6) |
+| 2 | B-537 | Unir sobre un cuerpo con Patrón de operaciones: sólido inválido o acepta un inválido (Alta; E3, Opus) |
+| 3 | P-160 | Extruir «Todo» elige solo el lado del cuerpo (Gerardo; E2) |
+| 4 | B-538 | Mover o copiar un rectángulo con esquina en el origen: «geometría fija» (E1) |
+| 5 | B-539 | La línea que cierra el perfil no recibe la restricción automática (E1) |
+| 6 | B-546 | Llavero de 17 perfiles: abrir Extruir traba 2 s (E6) |
+| 7 | B-547 | Rosca en un cuerpo ya modificado: 3,7 s y bloquea (E6 o E2) |
+| 8 | B-545 | Abrir el panel de Agujero: 263–358 ms (E6) |
+| 9 | B-541 | Enter no acepta Empalme, Extruir ni Patrón (Sonnet) |
+| 10 | B-543 | Chaflán: un clic simple suma aristas (Sonnet) |
+| 11 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (Sonnet) |
+| 12 | B-544 | Punto en vértice: el vértice tiene que ganar (Sonnet) |
+| 13 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
+| 14 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
+| 15 | B-540 | Doble clic en el boceto del navegador renombra en vez de editar (Sonnet) |
+| 16 | P-161 | Extruir preselecciona el único perfil (Sonnet, chico) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
