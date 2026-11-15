@@ -1,13 +1,15 @@
-"""B-457: el corte rápido de P-78 conserva el volumen sobre cuerpos ya modificados."""
+"""B-457: la rosca modelada rápida (P-78, B-461) da el mismo volumen sobre cuerpos ya modificados (chaflán, empalme, unión
+a una base), en cada giro del respaldo, y cae sola al corte de siempre si la vía directa falla.
+
+Referencia: la vía directa (`_rosca_directa`) se comprueba contra el volumen exacto del surco antes de devolver; el corte
+con un `geo.booleano` suelto NO sirve de referencia (en un cilindro solo saca 37,4 mm³ de 249,6, ver `_cortar_helicoidal`)."""
 import pytest
 
 from omnicad import api
 from omnicad.nucleo import geometria as geo
 from omnicad.nucleo import solidos_crear as sc
 
-
-class _DiferenciaVolumen(AssertionError):
-    """Solo la discrepancia conocida de volumen puede quedar como xfail."""
+GIROS = (0, 229, 61, 137)
 
 
 def _llamar(sesion, herramienta, **argumentos):
@@ -20,72 +22,77 @@ def _cuerpo_modificado(modificacion):
     _llamar(sesion, "create_cylinder", radius=6, height=12)
     if modificacion == "chaflanado":
         _llamar(sesion, "chamfer", edges=">Z", distance=1)
+    elif modificacion == "empalmado":
+        _llamar(sesion, "fillet", edges=">Z", radius=1)
     else:
         _llamar(sesion, "create_box", length=24, width=18, height=3, x=2, z=-3, operation="join")
     return sesion
 
 
-def _forma(sesion):
+def _volumen(sesion):
     cuerpos = list(sesion.doc.estado_final.cuerpos.values())
-    assert len(cuerpos) == 1
-    forma = cuerpos[0].forma
-    assert geo.es_valida(forma)
-    assert len(geo.solidos(forma)) == 1
-    return forma
+    assert len(cuerpos) == 1 and geo.es_valida(cuerpos[0].forma) and len(geo.solidos(cuerpos[0].forma)) == 1
+    return geo.volumen_exacto(cuerpos[0].forma, 1e-6)
 
 
-@pytest.mark.parametrize("modificacion", [
-    "chaflanado",
-    pytest.param("unido_a_base", marks=pytest.mark.xfail(
-        strict=True, raises=_DiferenciaVolumen,
-        reason="B-457: M12x1.75 6g unido a una base deja 2394,488 mm³ con P-78 frente a 2323,094 mm³ "
-               "con el corte normal (diferencia 71,394 mm³, 3,07 %) en los cuatro giros.",
-    )),
-])
-@pytest.mark.parametrize("giro", [0, 229, 61, 137])
-def test_b457_rosca_modificada_coincide_con_el_corte_normal(monkeypatch, modificacion, giro):
-    monkeypatch.setattr(sc, "_rosca_directa", lambda *a: None)     # prueba los giros del corte de siempre (B-461)
+def _roscar(modificacion):
     sesion = _cuerpo_modificado(modificacion)
-    volumen_inicial = geo.volumen_exacto(_forma(sesion), 1e-6)
-    giros = (0, 229, 61, 137)
-    intentos = []
-    original = sc.BRepAlgoAPI_Cut
+    inicial = _volumen(sesion)
+    sc._surco_en_origen.cache_clear()
+    _llamar(sesion, "create_thread", faces="%CYLINDER", thread="M12x1.75", thread_class="6g")
+    return inicial, _volumen(sesion)
 
+
+def _corte_desde_giro(original, giro, intentos):
+    """BRepAlgoAPI_Cut que falla en los giros anteriores a `giro`, para llegar también a los respaldos de 61° y 137°."""
     class CorteDesdeGiro(original):
         def Build(self, *argumentos):
-            indice = len(intentos) % len(giros)
-            intentos.append(giros[indice])
-            # Simula cortes fallidos anteriores para alcanzar también los respaldos de 61° y 137°.
-            self.omitido = indice < giros.index(giro)
+            indice = len(intentos) % len(GIROS)
+            intentos.append(GIROS[indice])
+            self.omitido = indice < GIROS.index(giro)
             if not self.omitido:
                 return super().Build(*argumentos)
 
         def IsDone(self):
             return not self.omitido and super().IsDone()
+    return CorteDesdeGiro
 
-    try:
-        sc._surco_en_origen.cache_clear()
-        monkeypatch.setattr(sc, "BRepAlgoAPI_Cut", CorteDesdeGiro)
-        _llamar(sesion, "create_thread", faces="%CYLINDER", thread="M12x1.75", thread_class="6g")
-        rapido = geo.volumen_exacto(_forma(sesion), 1e-6)
-        assert intentos[:giros.index(giro) + 1] == list(giros[:giros.index(giro) + 1])
-        assert rapido < volumen_inicial - 1
 
+@pytest.fixture(autouse=True)
+def _sin_cache():
+    yield
+    sc._surco_en_origen.cache_clear()
+
+
+@pytest.mark.parametrize("modificacion", ["chaflanado", "empalmado", "unido_a_base"])
+def test_b457_la_via_directa_y_el_corte_con_cada_giro_dan_el_mismo_volumen(monkeypatch, modificacion):
+    cortes = []
+    original_corte = sc._cortar_helicoidal
+    monkeypatch.setattr(sc, "_cortar_helicoidal", lambda *a: cortes.append(1) or original_corte(*a))
+    inicial, directa = _roscar(modificacion)
+    assert not cortes and directa < inicial - 1                  # la rosca salió por la vía directa, sin booleana helicoidal
+
+    monkeypatch.setattr(sc, "_rosca_directa", lambda *a: None)    # ahora, el corte de siempre (B-461)
+    original = sc.BRepAlgoAPI_Cut
+    for giro in GIROS:
+        intentos = []
+        monkeypatch.setattr(sc, "BRepAlgoAPI_Cut", _corte_desde_giro(original, giro, intentos))
+        _, cortado = _roscar(modificacion)
+        assert intentos[:GIROS.index(giro) + 1] == list(GIROS[:GIROS.index(giro) + 1])
+        assert cortado == pytest.approx(directa, rel=1e-5), f"{modificacion}, {giro}°"
         monkeypatch.setattr(sc, "BRepAlgoAPI_Cut", original)
-        sesion_normal = _cuerpo_modificado(modificacion)
-        cortes_normales = []
 
-        def cortar_normal(cuerpo, herramienta, origen, eje):
-            cortes_normales.append(1)
-            return geo.booleano(cuerpo, herramienta, "cortar")
 
-        monkeypatch.setattr(sc, "_cortar_helicoidal", cortar_normal)
-        sc._surco_en_origen.cache_clear()
-        _llamar(sesion_normal, "create_thread", faces="%CYLINDER", thread="M12x1.75", thread_class="6g")
-        normal = geo.volumen_exacto(_forma(sesion_normal), 1e-6)
-        assert cortes_normales
-        assert normal < volumen_inicial - 1
-        if rapido != pytest.approx(normal, rel=1e-5):
-            raise _DiferenciaVolumen(f"{modificacion}, {giro}°: {rapido=} frente a {normal=} mm³")
-    finally:
-        sc._surco_en_origen.cache_clear()
+@pytest.mark.parametrize("modificacion", ["chaflanado", "unido_a_base"])
+def test_b457_si_la_via_directa_falla_cae_sola_al_corte_de_siempre(monkeypatch, modificacion):
+    _, directa = _roscar(modificacion)
+
+    def falla(*_a):
+        raise RuntimeError("falla del kernel")
+
+    monkeypatch.setattr(sc, "_varilla_roscada", falla)           # `_rosca_directa` lo atrapa y devuelve None
+    cortes = []
+    original = sc._cortar_helicoidal
+    monkeypatch.setattr(sc, "_cortar_helicoidal", lambda *a: cortes.append(1) or original(*a))
+    _, respaldo = _roscar(modificacion)
+    assert cortes and respaldo == pytest.approx(directa, rel=1e-5)
