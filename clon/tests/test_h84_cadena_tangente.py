@@ -59,11 +59,17 @@ def test_el_panel_elige_y_quita_la_cadena_con_un_clic(escena, tmp_path):
         panel.set_valor("tipo", "delgada")
         ref = lambda i: {"tipo": "curva_boceto", "boceto": sop.id, "curva": i}  # noqa: E731
         panel._activar(next(x for x in panel.campos if x.clave == "perfiles"))
+        assert panel.valores["cadena"] is True                                    # B-519: marcada por defecto, como Fusion
+        panel._elegida(hit_desde_ref(ref(arco), panel.ctx.estado))               # con la casilla: la cadena entera
+        assert sorted(h["ref"]["curva"] for h in panel.valores["perfiles"]) == sorted([a, arco, c])
+        panel._elegida(hit_desde_ref(ref(arco), panel.ctx.estado))               # clic de nuevo: se quita entera
+        assert not panel.valores["perfiles"]
+        panel.set_valor("cadena", False)
         panel._elegida(hit_desde_ref(ref(arco), panel.ctx.estado))               # sin la casilla: solo la curva tocada
         assert [h["ref"]["curva"] for h in panel.valores["perfiles"]] == [arco]
         panel._elegida(hit_desde_ref(ref(arco), panel.ctx.estado))               # clic de nuevo: se quita
         assert not panel.valores["perfiles"]
-        panel.set_valor("cadena_tangente", True)
+        panel.set_valor("cadena", True)
         panel._elegida(hit_desde_ref(ref(arco), panel.ctx.estado))
         assert sorted(h["ref"]["curva"] for h in panel.valores["perfiles"]) == sorted([a, arco, c])
         panel._elegida(hit_desde_ref(ref(c), panel.ctx.estado))                  # otra de la cadena: la quita entera
