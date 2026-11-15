@@ -434,21 +434,21 @@ def _come_cara_justa(forma, arista, radio, mapa=None, cajas=None):
     return False
 
 
-def _perfil_de_empalme(c, p1, p2, continuidad):
+def _perfil_de_empalme(c, p1, p2, continuidad, peso_tangencia=1.0):
     """Arista de la sección de un empalme por perfil: de `p1` a `p2` con la esquina `c` como punto de control.
     G1 (tangente): arco cónico (racional de grado 2), un círculo si las dos distancias a la esquina son iguales. G2 (curvatura):
     Bézier de grado 5 con los tres primeros y los tres últimos puntos de control en línea con las caras, así la curvatura
-    es cero donde empalma con ellas."""
+    es cero donde empalma con ellas. El peso escala los pesos interiores sin cambiar el contacto con las caras."""
     from OCP.Geom import Geom_BezierCurve
     from OCP.OCP.collections import Array1_double, Array1_gp_Pnt
     c, p1, p2 = (np.asarray(x, float) for x in (c, p1, p2))
     if continuidad == "g2":
         puntos = [p1, p1 + 0.3 * (c - p1), p1 + 0.55 * (c - p1), p2 + 0.55 * (c - p2), p2 + 0.3 * (c - p2), p2]
-        pesos = [1.0] * 6
+        pesos = [1.0, *([peso_tangencia] * 4), 1.0]
     else:
         u1, u2 = (p1 - c) / np.linalg.norm(p1 - c), (p2 - c) / np.linalg.norm(p2 - c)
         alfa = math.acos(max(-1.0, min(1.0, float(u1 @ u2))))
-        puntos, pesos = [p1, c, p2], [1.0, math.sin(alfa / 2), 1.0]
+        puntos, pesos = [p1, c, p2], [1.0, math.sin(alfa / 2) * peso_tangencia, 1.0]
     arr, w = Array1_gp_Pnt(1, len(puntos)), Array1_double(1, len(puntos))
     for i, (q, k) in enumerate(zip(puntos, pesos, strict=True), 1):
         arr.SetValue(i, gp_Pnt(*map(float, q)))
@@ -479,20 +479,20 @@ def _reubicar_arista(forma, ref):
         r = k.Value((k.FirstParameter() + k.LastParameter()) / 2)
         if abs(r.X() - medio[0]) + abs(r.Y() - medio[1]) + abs(r.Z() - medio[2]) < 1e-6 and abs(geo.longitud(e) - largo) < 1e-6:
             return e
-    raise geo.ErrorGeometria("Una arista del empalme ya no existe: los empalmes de radio asimétrico o G2 no pueden compartir "
+    raise geo.ErrorGeometria("Una arista del empalme ya no existe: los empalmes con peso de tangencia, radio asimétrico o G2 no pueden compartir "
                              "vértice con otro empalme del mismo paso (hacelos en pasos separados).")
 
 
-def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, desborde=False):
+def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, peso_tangencia=1.0, desborde=False):
     """Empalme de una arista recta entre dos caras planas con la sección que se pide (`_perfil_de_empalme`): radio
     asimétrico (`radio1` sobre la primera cara, `radio2` sobre la segunda) y/o continuidad G2. OpenCascade no los tiene:
     se corta (arista convexa) o se rellena (cóncava) con el prisma de la esquina, de la sección a lo largo de la arista.
     El «radio» de cada lado es el del círculo con esa distancia a la esquina (tangente = r / tan(α/2)); con radios iguales
-    y G1 sale el empalme circular de siempre."""
+    y G1 sale el empalme circular de siempre con peso 1; otro peso ajusta el grosor de tangencia (Tangency Weight)."""
     caras = [TopoDS.Face(f) for f in _padres(_ancestros(forma, TopAbs_EDGE, TopAbs_FACE), arista)]
     curva = BRepAdaptor_Curve(arista)
     if len(caras) != 2 or curva.GetType() != GeomAbs_Line or any(_plano_de_cara(f) is None for f in caras):
-        raise geo.ErrorGeometria("El radio asimétrico y la continuidad G2 solo se hacen en aristas rectas entre dos caras "
+        raise geo.ErrorGeometria("El peso de tangencia, el radio asimétrico y la continuidad G2 solo se hacen en aristas rectas entre dos caras "
                                  "planas.")
     a, b = (np.array([q.X(), q.Y(), q.Z()]) for q in (curva.Value(curva.FirstParameter()), curva.Value(curva.LastParameter())))
     largo = float(np.linalg.norm(b - a))
@@ -529,12 +529,12 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, desborde=Fal
         for f in _padres(por_vertice, v):
             plano = _plano_de_cara(TopoDS.Face(f))
             if not any(f.IsSame(c) for c in caras) and (plano is None or abs(abs(float(np.asarray(plano.normal) @ t)) - 1) > 1e-6):
-                raise geo.ErrorGeometria("El radio asimétrico y la continuidad G2 necesitan caras planas perpendiculares "
+                raise geo.ErrorGeometria("El peso de tangencia, el radio asimétrico y la continuidad G2 necesitan caras planas perpendiculares "
                                          "a la arista en sus extremos.")
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire
     perfil = BRepBuilderAPI_MakeWire()
     for e in (BRepBuilderAPI_MakeEdge(gp_Pnt(*map(float, a)), gp_Pnt(*map(float, p1))).Edge(),
-              _perfil_de_empalme(a, p1, p2, continuidad),
+              _perfil_de_empalme(a, p1, p2, continuidad, peso_tangencia),
               BRepBuilderAPI_MakeEdge(gp_Pnt(*map(float, p2)), gp_Pnt(*map(float, a))).Edge()):
         perfil.Add(e)
     prisma = geo.extruir([BRepBuilderAPI_MakeFace(perfil.Wire()).Face()], tuple(t), largo)
@@ -628,7 +628,7 @@ def _empalme_desbordado(forma, grupos, cadena_tangente):
     return forma
 
 
-def empalme(forma, grupos, *, cadena_tangente=True):
+def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
     """Empalme (Fillet, tipo Fillet) por conjuntos de selección, cada uno con su tipo de radio.
 
     grupos: [{"aristas": [TopoDS_Edge], "tipo": "constante" | "variable" | "cuerda",
@@ -640,12 +640,21 @@ def empalme(forma, grupos, *, cadena_tangente=True):
     "asimetrico": `radio` sobre una cara y `radio2` sobre la otra. "continuidad": "g1" (por defecto) o "g2". Estos dos
     se hacen con `_empalme_por_perfil` (aristas rectas entre caras planas, una por una, sin cadena tangente) y van antes
     que el resto de los conjuntos, que se hacen con el kernel.
+    `peso_tangencia` (Tangency Weight): positivo, 1 conserva el resultado anterior. Otro peso usa el perfil G1/G2
+    en todos los conjuntos (radio constante o asimétrico, sin Setback); mismas limitaciones geométricas que G2.
     """
     if not grupos:
         raise geo.ErrorGeometria("Elegí al menos una arista para empalmar.")
-    por_perfil = [g for g in grupos if g.get("tipo") == "asimetrico" or g.get("continuidad") == "g2"]
+    if not math.isfinite(peso_tangencia) or peso_tangencia <= 0:
+        raise geo.ErrorGeometria("⚠ Grosor de tangencia: un número mayor que 0")
+    if peso_tangencia != 1 and any(g.get("tipo", "constante") not in ("constante", "asimetrico")
+                                  or g.get("esquina") == "setback" for g in grupos):
+        raise geo.ErrorGeometria("⚠ Grosor de tangencia: solo con radio constante o asimétrico, sin Setback")
+    por_perfil = [g for g in grupos if peso_tangencia != 1 or g.get("tipo") == "asimetrico" or g.get("continuidad") == "g2"]
     if por_perfil:
         for g in por_perfil:
+            if not g.get("aristas"):
+                raise geo.ErrorGeometria("Un conjunto de empalme no tiene aristas.")
             if g.get("tipo", "constante") not in ("constante", "asimetrico") or float(g.get("radio", 0)) <= 0 or (
                     g.get("tipo") == "asimetrico" and float(g.get("radio2", 0)) <= 0):
                 raise geo.ErrorGeometria("La continuidad G2 va con radio constante o asimétrico, y los radios deben ser positivos.")
@@ -653,7 +662,7 @@ def empalme(forma, grupos, *, cadena_tangente=True):
                 e = _reubicar_arista(forma, e)
                 forma = _empalme_por_perfil(forma, e, float(g["radio"]),
                                             float(g["radio2"]) if g.get("tipo") == "asimetrico" else float(g["radio"]),
-                                            g.get("continuidad", "g1"))
+                                            g.get("continuidad", "g1"), peso_tangencia)
         grupos = [dict(g, aristas=[_reubicar_arista(forma, e) for e in g.get("aristas") or []])
                   for g in grupos if all(g is not x for x in por_perfil)]
         if not grupos:

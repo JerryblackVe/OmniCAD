@@ -43,7 +43,7 @@ _POR_TIPO = {LONGITUD: "mm", ANGULO: "deg"}
 _CAMPO_TIPO = {LONGITUD: LONGITUD_DIM, ANGULO: ANGULO_DIM}
 _CLAVES_ANGULO = {"rx", "ry", "rz", "helice"}
 _CLAVES_ESCALAR = {"area_minima", "densidad", "dientes", "dispersion", "escala", "factor", "fx", "fy", "fz", "inicio",
-                   "intensidad", "mezcla", "proporcion", "revoluciones", "solidez", "solidez_desfase", "solidez_final"}
+                   "intensidad", "mezcla", "peso_tangencia", "proporcion", "revoluciones", "solidez", "solidez_desfase", "solidez_final"}
 
 
 def _redondear(v):

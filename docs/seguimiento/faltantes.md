@@ -33,7 +33,6 @@ Abierto 12 · Parcial 2 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| H-115 | Empalme sólido: Grosor de tangencia (Tangency Weight) | Abierto | Media | Sumar el peso al núcleo, operación, panel y MCP. | `clon/omnicad/ui/comandos/modificar.py:75` | 2026-11-13 |
 | H-105 | Extruir superficie: extensión propia del lado 2 | Sin verificar | Media | Confirmar en Fusion Al objeto y Todo por lado antes de construir. | timeline/ops_superficie.py:100-151; ui/comandos/superficie.py:53-58 | 2026-11-06 |
 | H-82 | Extruir Al objeto: extensión de caras | Parcial | Media | Hecho el sólido: «Hasta caras adyacentes» en Extruir › Al objeto (`tests/test_h82_extrusion_caras_adyacentes.py`). Falta superficie: Extend Faces / Chain Faces | timeline/operaciones.py:1133; ui/comandos/superficie.py:55 | 2026-11-05 |
 | H-83 | Componente nuevo al Extruir, Revolucionar, Barrer y Solevar | Abierto | Media | Ofrecerlo en sólido y superficie. | timeline/operaciones.py:32 (`OPERACIONES_CUERPO`); api/herramientas_solido.py:183 | 2026-11-05 |
@@ -215,10 +214,6 @@ Bloqueado 1. Especificación: [plan_cpp.md](../plan_cpp.md).
 ### P-27-6 · Más formas para insertar
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Booleanas con holgura y formas listas para insertar (cono, pirámide, cuña, cápsula…) **Queda:** Existen create_box/cylinder/sphere/torus; faltan holgura en booleanas y las demás formas. **Evidencia:** omnicad/api/herramientas_solido.py:327 (create_box); herramientas create_cylinder/sphere/torus
-
-### H-115 · Empalme sólido: Grosor de tangencia
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Empalme sólido › falta «Grosor de tangencia» (Tangency Weight): Fusion lo trae en el diálogo del Fillet (ayuda «Fillet reference» › Tangency Weight), OmniCAD no tiene el parámetro **Queda:** Sumar el peso de tangencia al empalme (núcleo, operación, campo a la vista y herramienta del MCP) **Evidencia:** `clon/omnicad/ui/comandos/modificar.py:75`
 
 ### H-105 · Extruir superficie: extensión propia del lado 2
 

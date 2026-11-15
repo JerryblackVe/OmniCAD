@@ -298,8 +298,8 @@ class OpEmpalme(Operacion):
     TIPO, ETIQUETA, ICONO = "empalme", "Empalme", "◜"
     PARAMS = {"tipo": "empalme", "aristas": [], "tipo_radio": "constante", "radio": "1 mm", "radio_fin": "2 mm",
               "cuerda": "1 mm", "radio2": "1 mm", "continuidad": "g1", "esquina": "bola", "setback": "2 mm", "cadena_tangente": True, "caras_a": [], "caras_b": [], "regla": "todas",
-              "redondeos": "ambos", "puntos_radio": [], "conjuntos": [], "central": None, "laterales": []}
-    EXPRESIONES = ("radio", "radio_fin", "cuerda", "radio2", "setback")
+              "redondeos": "ambos", "puntos_radio": [], "conjuntos": [], "central": None, "laterales": [], "peso_tangencia": "1"}
+    EXPRESIONES = ("radio", "radio_fin", "cuerda", "radio2", "setback", "peso_tangencia")
     OPCIONES = {"tipo": ("empalme", "reglas", "completo"), "tipo_radio": ("constante", "cuerda", "variable", "asimetrico"),
                 "continuidad": ("g1", "g2"), "esquina": ("bola", "setback"),
                 "regla": ("todas", "entre"), "redondeos": ("ambos", "redondeos", "empalmes")}
@@ -324,6 +324,13 @@ class OpEmpalme(Operacion):
 
     def ejecutar(self, estado, ctx):
         p, sm = self.p, _sm()
+        peso, dimension = evaluar(p["peso_tangencia"], "escalar", ctx.valores, con_dimension=True)
+        if dimension not in (None, SIN_DIMENSION):
+            raise ErrorOperacion("⚠ Grosor de tangencia: solo el número, sin unidad")
+        if not math.isfinite(peso) or peso <= 0:
+            raise ErrorOperacion("⚠ Grosor de tangencia: un número mayor que 0")
+        if peso != 1 and p["tipo"] != "empalme":
+            raise ErrorOperacion("⚠ Grosor de tangencia: solo en el modo Empalme")
         if p["tipo"] == "completo":
             return self._completo(estado)
         r = ctx.evaluar(p["radio"])
@@ -347,7 +354,7 @@ class OpEmpalme(Operacion):
                 por_cuerpo.setdefault(cid, []).append(dict(grupo(d), aristas=aristas))
         for cid, grupos in por_cuerpo.items():
             c = estado.cuerpo(cid)
-            c.forma = sm.empalme(c.forma, grupos, cadena_tangente=p["cadena_tangente"])
+            c.forma = sm.empalme(c.forma, grupos, cadena_tangente=p["cadena_tangente"], peso_tangencia=peso)
 
 
 class OpChaflan(Operacion):

@@ -3028,6 +3028,7 @@ Redondea aristas: empalme de radio constante (por defecto), de longitud de cuerd
   - `continuity` ("g1" | "g2"; opcional, por defecto `"g1"`): "g1" (por defecto) o "g2"; con radio constante o asimétrico.
   - `corner_type` ("rolling_ball" | "setback"; opcional, por defecto `"rolling_ball"`): "rolling_ball" (por defecto) o "setback" (pide setback).
   - `setback` (número o expresión; opcional, por defecto `null`): distancia en mm desde la esquina a la que el radio vuelve al pedido.
+  - `tangency_weight` (número o expresión; opcional, por defecto `1`): peso de tangencia >0 sin unidad; 1 = habitual. Otro valor: solo type=fillet con edges, radio constante o asimétrico entre planos.
 - CLI: `omnicad call fillet --doc pieza.omnicad`
 
 ### `chamfer`
