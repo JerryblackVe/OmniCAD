@@ -208,6 +208,26 @@ def test_b485_shell_de_una_caja_con_agujero_ciego(s, caras, esperado, solidos):
     assert g["volume"] == pytest.approx(esperado, rel=1e-3)
 
 
+@pytest.mark.parametrize("espesor,esperado", [(1, 25758.31), (3, None)])
+def test_b470_shell_abierto_de_un_cuerpo_empalmado_y_unido(s, espesor, esperado):
+    """B-470 (caza de E11): caja con agujero pasante, empalme r8 y +10 unido arriba. Con 3 mm el kernel daba «ok» con
+    una cáscara abierta sin sólido (4 aristas libres): ahora falla con mensaje y el cuerpo queda como estaba."""
+    llamar(s, "create_box", length=100, width=60, height=40)
+    llamar(s, "create_cylinder", radius=10, height=40, operation="cut", target="Cuerpo1")
+    aristas = [a["id"] for a in llamar(s, "find_edges", body="Cuerpo1", selector=">Z")["edges"]
+               if a.get("radius") == 10 or a["center"][1] == 30]
+    llamar(s, "fillet", edges=aristas, radius=8, body="Cuerpo1")
+    llamar(s, "extrude", faces=">Z", distance=10, operation="join", target="Cuerpo1")
+    antes = volumen(s)
+    if esperado is None:
+        assert "El vaciado falló" in falla(s, "shell", body="Cuerpo1", faces=">Z", thickness=espesor)["mensaje"]
+        assert volumen(s) == antes
+        return
+    llamar(s, "shell", body="Cuerpo1", faces=">Z", thickness=espesor)
+    g = llamar(s, "check_geometry", body="Cuerpo1")["bodies"][0]
+    assert (g["solids"], g["free_edges"]) == (1, 0) and g["volume"] == pytest.approx(esperado, rel=1e-4)
+
+
 def test_shell_cara_por_id_y_errores(caja):
     cara = llamar(caja, "find_faces", selector=">Z")["faces"][0]["id"]
     llamar(caja, "shell", body="Cuerpo1", faces=cara, thickness=2)

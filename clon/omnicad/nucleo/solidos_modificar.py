@@ -1131,7 +1131,10 @@ def _cascara_exterior_por_desfase(forma, caras, espesor):
 
 def _cascara(forma, caras, espesor, union):
     try:
-        return _validar(_cascara_del_kernel(forma, caras, espesor, union), "Vaciado")
+        resultado = _validar(_cascara_del_kernel(forma, caras, espesor, union), "Vaciado")
+        if not geo.solidos(resultado):      # B-470: BRepCheck da por válida una cáscara abierta sin sólido
+            raise geo.ErrorGeometria(_falla_kernel(forma, espesor))
+        return resultado
     except geo.ErrorGeometria as e:
         alternativo = (_cascara_por_desfase(forma, caras, -espesor) if espesor < 0
                        else _cascara_exterior_por_desfase(forma, caras, espesor))
