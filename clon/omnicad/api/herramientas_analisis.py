@@ -191,7 +191,8 @@ def _parametros(sesion, tipo, dado):
 
 
 def _info(nombre, a):
-    return {"name": nombre, "type": next(k for k, v in TIPOS.items() if v == a["tipo"]),
+    tipos = {v: k for k, v in TIPOS.items()} | {"desviacion": "deviation_map"}     # el mapa de desviación lo crea show_deviation_map
+    return {"name": nombre, "type": tipos.get(a["tipo"], a["tipo"]),
             "visible": bool(a.get("visible", True))}
 
 
@@ -286,6 +287,8 @@ def manage_analysis(sesion, action: Literal["list", "add", "edit", "remove", "sh
             raise error("INVALID_ARGUMENTS", "edit necesita name.")
         _nombre_existente(sesion, name)
         type = _info(name, doc.analisis[name])["type"]
+        if type not in TIPOS:
+            raise error("INVALID_ARGUMENTS", f"«{name}» no se edita acá: quitalo y creá otro con show_deviation_map.")
     if type is None:
         raise error("INVALID_ARGUMENTS", "add necesita type.", f"Tipos: {', '.join(TIPOS)}.")
     dado = {k: v for k, v in dict(bodies=bodies, plane=plane, offset=offset, flip=flip, frequency=frequency,

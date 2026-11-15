@@ -143,6 +143,22 @@ def test_show_deviation_map_lo_dibuja_y_se_deshace():
     assert "Desviación1" not in s.doc.analisis
 
 
+def test_manage_analysis_convive_con_un_mapa_de_desviacion():
+    """B-500: con un Mapa de desviación en el documento, listar, ocultar, agregar y quitar análisis no da INTERNAL_ERROR."""
+    s = _sesion()
+    c = list(s.doc.estado_final.cuerpos)
+    assert api.llamar(s, "show_deviation_map", {"body": c[0], "reference": c[1]})["ok"]
+    r = api.llamar(s, "manage_analysis", {"action": "list"})
+    assert r["ok"], r
+    assert [(a["name"], a["type"]) for a in r["result"]["analyses"]] == [("Desviación1", "deviation_map")]
+    assert api.llamar(s, "manage_analysis", {"action": "hide", "name": "Desviación1"})["result"]["analyses"][0]["visible"] is False
+    r = api.llamar(s, "manage_analysis", {"action": "add", "type": "zebra"})
+    assert r["ok"] and r["result"]["count"] == 2, r
+    r = api.llamar(s, "manage_analysis", {"action": "edit", "name": "Desviación1", "opacity": 50})
+    assert r["error_kind"] == "INVALID_ARGUMENTS" and "show_deviation_map" in r["mensaje"]        # no se edita: lo dice claro
+    assert api.llamar(s, "manage_analysis", {"action": "remove", "name": "Desviación1"})["result"]["count"] == 1
+
+
 def test_las_tandas_de_candidatos_cubren_cada_punto_una_vez(monkeypatch):
     """Lejos de la superficie cada punto toca miles de triángulos: 13 millones juntos agotaron la memoria."""
     from scipy.spatial import cKDTree
