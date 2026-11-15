@@ -1736,11 +1736,9 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
                                      "cierra, más que su radio). Probá una distancia menor.")
         return _validar(resultado, "Desfase de caras")
     planos = [_plano_de_cara(c) for c in todas]
-    if any(p is None for p in planos):
-        from . import referencias as refs
-        consejo = (" En caras de forma libre, como el filete de una rosca modelada, desfasá la cara cilíndrica antes de la "
-                   "rosca o cambiá el tamaño de la rosca." if any(refs.cara_libre(c) for c in todas) else "")
-        raise geo.ErrorGeometria("El desfase de caras falló en el kernel." + consejo)
+    if any(p is None for p in planos):      # B-503: la rosca ya salió arriba; acá, letras o curvas sin rosca (regla 14)
+        raise geo.ErrorGeometria(f"No se pudo desfasar estas caras {abs(dist):g} mm. Probá otra distancia, o desfasá "
+                                 "el boceto y volvé a extruir.")
     return _validar(_reemplazar(forma, [(c, p.desplazado(dist)) for c, p in zip(todas, planos, strict=True)],
                                 operacion="Desfase de caras"), "Desfase de caras")
 

@@ -92,7 +92,7 @@ def test_aceptar_sin_previa_conserva_panel_valores_y_deshacer_si_el_ensayo_falla
     QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
     esperar_barra(v)                                        # FL-3b: el ensayo corre en otro hilo
     assert excepciones == []
-    assert avisos and "error nativo simulado" in avisos[-1]
+    assert not avisos and "error nativo simulado" in panel.mensaje.text()     # B-503: un renglón del panel, sin cuadro
     assert v.panel is panel and panel.isVisible()
     assert panel.widgets["ancho"].text() == "6 mm"
     assert v.doc.a_dict() == antes and v.doc._deshacer == deshacer
