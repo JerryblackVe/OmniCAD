@@ -55,7 +55,7 @@ def test_afbma_3a_con_tabla_conserva_sus_diametros_y_volumen():
 def test_el_perfil_basico_conserva_su_diametro_y_volumen():
     forma = _forma(_exterior("M20", ""))
     assert d_max(forma) == pytest.approx(20, abs=0.001)
-    assert geo.volumen(forma) == pytest.approx(2689.708645, abs=0.001)
+    assert geo.volumen(forma) == pytest.approx(2689.710069, abs=0.002)    # el exacto; B-461: la directa da 2689,71004
 
 
 def test_la_rosca_interior_conserva_su_diametro_y_volumen():

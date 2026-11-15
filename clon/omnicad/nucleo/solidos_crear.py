@@ -10,6 +10,7 @@ donde el comando de Fusion entrega el cuerpo ya modificado (repujado, rosca, sal
 Unidades: mm y grados. Ayuda de cada comando: analisis/fusion_doc/paginas/<ID>.txt.
 """
 import functools
+import itertools
 import math
 import re
 
@@ -3110,7 +3111,7 @@ def _barrido_helicoidal(perfil, helice):
 
 def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_cara=None, *, angulo=60.0,
                  diametro_flancos=None, diametro_menor=None, desfase=0.0, partes=False, extra=0.1, fondo=None, cresta=None,
-                 tramo_torno=None, trozos=True):
+                 tramo_torno=None, trozos=True, solo_trapecio=False):
     """Sólido helicoidal con la forma del hueco entre filetes recortado al tramo [z0, z0 + largo] del eje. Rosca
     exterior: se le resta al cilindro; interior: al cuerpo agujereado. Perfil por defecto: el básico ISO/UN de
     60°; `angulo` (entre flancos), `diametro_flancos` y `diametro_menor` dan el de otras familias (55°, 30°,
@@ -3121,7 +3122,7 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
     holgura incluida) fijan el fondo del surco y la cresta del filete; sin ellos, el fondo sale de `desfase` y la
     cresta queda en la cara. `tramo_torno=(zmin, zmax)` ajusta el diámetro en ese tramo del eje sin alargar el surco.
     `trozos=False`: sin `_en_tramos` (quien va a copiar el surco con otra geometría, como el espejo, no podría reunir
-    las caras partidas)."""
+    las caras partidas). `solo_trapecio=True`: (r_in, w_in, r_out, w_out, r_torno, torno) sin barrer (`_rosca_directa`)."""
     z = _unit(eje)
     o = np.asarray(origen, float)
     h60 = math.sqrt(3) / 2
@@ -3151,6 +3152,12 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
     perfil = (60.0, None, None, 0.0, None, None) if iso else (round(float(angulo), 9), round(d2, 9), round(d1, 9),
                                                               round(desfase, 9), *tabla)
     tramo_torno = None if tramo_torno is None else tuple(round(float(v - z0), 9) for v in tramo_torno)
+    if solo_trapecio:     # B-461: el perfil de la varilla de `_rosca_directa` y el torneado ya en su lugar
+        *trapecio, r_torno = _trapecio_surco(diametro, paso, interna, radio_cara, *perfil, rel_extra)
+        material = radio_cara if radio_cara is not None else d1 / 2 if interna else diametro / 2
+        torno = None if r_torno is None else _torno_surco(r_torno, material, interna, extra, paso, largo, tramo_torno,
+                                                          z, o + z * z0)
+        return (*trapecio, r_torno, torno)
     base = _surco_en_origen(round(float(diametro), 9), round(float(paso), 9), round(float(largo), 9), bool(interna),
                             mano, None if radio_cara is None else round(float(radio_cara), 9), eje_r, *perfil,
                             round(float(rel_extra), 9), tramo_torno, bool(trozos))
@@ -3199,20 +3206,44 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
     recetas viejas dan exactamente la misma geometría)."""
     z = np.asarray(eje, float)
     x = _perpendicular(z)
+    r_in, w_in, r_out, w_out, r_torno = _trapecio_surco(diametro, paso, interna, radio_cara, angulo, d2, d1, desfase,
+                                                        fondo, cresta, rel_extra)
+    torno = None
+    if r_torno is not None:
+        material = radio_cara if radio_cara is not None else d1 / 2 if interna else diametro / 2
+        torno = _torno_surco(r_torno, material, interna, rel_extra * paso, paso, largo, tramo_torno, z, np.zeros(3))
+    # B-371: el barrido largo también sale incompleto en el perfil básico (M20x2.5×100: 57 %); verificado, cae al
+    # corte por mitades de `rosca`
+    return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out, torno,
+                         r_torno, verificar=True, trozos=trozos)
+
+
+def _torno_surco(r_torno, material, interna, extra, paso, largo, tramo_torno, z, origen):
+    """Torneado de la cresta de `_surco_en_origen` con el tramo empezando en `origen`: un cilindro (agujero) o un anillo
+    (eje) que llega al radio `r_torno`."""
+    # el torneado pasa de largo un pelo en las puntas: si terminara justo donde termina el surco, sus caras planas
+    # coincidirían con las del surco y el corte del surco falla (pasó con M3 y holgura 0,1). B-249: con 0,02 pasos
+    # la franja de cresta de la punta quedaba de 0,016 mm en AFBMA (paso 0,79), con aristas de tolerancia 0,01, y
+    # el STEP de ida y vuelta cambiaba el volumen 3·10⁻⁵; con 0,1 pasos, 3·10⁻⁹
+    eps = 0.1 * paso
+    inicio, fin = (0.0, largo) if tramo_torno is None else tramo_torno
+    base, alto = tuple(origen + z * (inicio - eps)), fin - inicio + 2 * eps
+    if interna:
+        return geo.cilindro(r_torno, alto, base=base, eje=tuple(z))
+    grande = geo.cilindro(material + extra + 1.0, alto, base=base, eje=tuple(z))
+    return geo.booleano(grande, geo.cilindro(r_torno, alto, base=base, eje=tuple(z)), "cortar")
+
+
+def _trapecio_surco(diametro, paso, interna, radio_cara, angulo, d2, d1, desfase, fondo, cresta, rel_extra):
+    """(r_in, w_in, r_out, w_out, r_torno) del surco de `_surco_en_origen` (ver allí el perfil); r_torno None: sin
+    torneado."""
     extra = rel_extra * paso                       # el surco sobresale del material para cortar limpio
     if d2 is None and d1 is None:
         prof = 5 / 8 * math.sqrt(3) / 2 * paso     # 5H/8: altura del filete básico
         pend = 2 * math.tan(math.radians(30))      # ancho que gana el surco por mm radial (flancos a 60°)
         if interna:
-            r_out, w_out = diametro / 2, paso / 8
-            r_in, w_in = diametro / 2 - prof - extra, 3 * paso / 4 + pend * extra
-        else:
-            r_in, w_in = diametro / 2 - prof, paso / 4
-            r_out, w_out = diametro / 2 + extra, 7 * paso / 8 + pend * extra
-        # B-371: el barrido largo también sale incompleto en el perfil básico (M20x2.5×100: 57 %); verificado, cae al
-        # corte por mitades de `rosca`
-        return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out,
-                             verificar=True, trozos=trozos)
+            return diametro / 2 - prof - extra, 3 * paso / 4 + pend * extra, diametro / 2, paso / 8, None
+        return diametro / 2 - prof, paso / 4, diametro / 2 + extra, 7 * paso / 8 + pend * extra, None
     t = math.tan(math.radians(angulo / 2))
 
     def ancho(rho):
@@ -3228,15 +3259,8 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
         r_out, r_in = diametro / 2 + desfase if fondo is None else fondo / 2, d1 / 2 - extra
     else:
         r_in, r_out = d1 / 2 - desfase if fondo is None else fondo / 2, diametro / 2 + extra
-    torno = r_torno = None
+    r_torno = None
     material = radio_cara if radio_cara is not None else d1 / 2 if interna else diametro / 2
-    # el torneado pasa de largo un pelo en las puntas: si terminara justo donde termina el surco, sus caras planas
-    # coincidirían con las del surco y el corte del surco falla (pasó con M3 y holgura 0,1). B-249: con 0,02 pasos la
-    # franja de cresta de la punta quedaba de 0,016 mm en AFBMA (paso 0,79), con aristas de tolerancia 0,01, y el STEP
-    # de ida y vuelta cambiaba el volumen 3·10⁻⁵; con 0,1 pasos, 3·10⁻⁹
-    eps = 0.1 * paso
-    inicio_torno, fin_torno = (0.0, largo) if tramo_torno is None else tramo_torno
-    base_torno, largo_torno = tuple(z * (inicio_torno - eps)), fin_torno - inicio_torno + 2 * eps
     if interna and ancho(r_in) > _ANCHO_LIMITE * paso:
         r_in = radio_de_ancho(_ANCHO_TOPE)
         if r_in > material - 0.01 * paso:
@@ -3251,13 +3275,7 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
             r_torno = r_cresta
         elif not interna and r_cresta < min(material, r_torno or math.inf) - 1e-6:
             r_torno = r_cresta
-    if r_torno is not None and interna:
-        torno = geo.cilindro(r_torno, largo_torno, base=base_torno, eje=tuple(z))
-    elif r_torno is not None:
-        grande = geo.cilindro(material + extra + 1.0, largo_torno, base=base_torno, eje=tuple(z))
-        torno = geo.booleano(grande, geo.cilindro(r_torno, largo_torno, base=base_torno, eje=tuple(z)), "cortar")
-    return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, ancho(r_in), r_out,
-                         ancho(r_out), torno, r_torno, verificar=True, trozos=trozos)
+    return r_in, ancho(r_in), r_out, ancho(r_out), r_torno
 
 
 def _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out, torno=None,
@@ -3444,14 +3462,25 @@ def caras_sobre_cilindro(cuerpo, cara, tol=1e-6):
     eje = sup.Cylinder().Axis()
     o, z = _xyz(eje.Location()), _xyz(eje.Direction())
     zmin, zmax = _tramo_axial(cara, o, z)
+    vecinas = geo.IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+    TopExp.MapShapesAndAncestors_s(cuerpo, TopAbs_EDGE, TopAbs_FACE, vecinas)
+    radio = lambda p: float(np.linalg.norm(np.cross(_xyz(p) - o, z)))  # noqa: E731
+
+    def es_fondo(c, cil):     # B-461: el fondo de la varilla directa (solo exterior) es un cilindro; sus flancos suben
+        r = cil.Radius()      # a la cresta. En un agujero la normal mira al eje y las crestas son las de adentro.
+        return cil.Direct() == (c.Orientation() == TopAbs_FORWARD) and any(BRepAdaptor_Surface(TopoDS.Face(f)).GetType() == GeomAbs_BSplineSurface
+                   and any(radio(BRep_Tool.Pnt_s(TopoDS.Vertex(v))) > r + tol for v in geo._explorar(f, TopAbs_VERTEX))
+                   for e in _aristas_de(c) for f in geo.lista_occ(vecinas.FindFromKey(e)))
+
     salida = []
     for c in _caras_cilindricas(cuerpo):
-        e = BRepAdaptor_Surface(c).Cylinder().Axis()
+        cil = BRepAdaptor_Surface(c).Cylinder()
+        e = cil.Axis()
         oc, zc = _xyz(e.Location()) - o, _xyz(e.Direction())
         if abs(abs(float(zc @ z)) - 1) > tol or np.linalg.norm(oc - z * float(oc @ z)) > tol:
             continue
         a, b = _tramo_axial(c, o, z)
-        if a >= zmin - tol and b <= zmax + tol:
+        if a >= zmin - tol and b <= zmax + tol and not es_fondo(c, cil):
             salida.append(c)
     return salida
 
@@ -3511,6 +3540,11 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
         anillo = geo.booleano(geo.cilindro(r_b, zmax - zmin, base=base, eje=tuple(z)),
                               geo.cilindro(r_a, zmax - zmin, base=base, eje=tuple(z)), "cortar")
         cuerpo = geo.booleano(cuerpo, anillo, "unir")
+
+    if not info["interna"] and mano == "derecha":
+        directa = _rosca_directa(cuerpo, o, z, z0, largo, radio, datos, perfil, (zmin, zmax) if tabla else None)
+        if directa is not None:
+            return directa
 
     def cortar(extra):
         def armar_tramo(za, la):
@@ -3600,6 +3634,142 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
             if geo.es_valida(hecho) and 0.2 * surco < base - geo.volumen_exacto(hecho, _EPS_ROSCA) <= 1.01 * surco:
                 return hecho
     raise geo.ErrorGeometria("El kernel no pudo cortar la rosca en el cuerpo.")
+
+
+def _rosca_directa(cuerpo, o, z, z0, largo, radio, datos, perfil, tramo_torno):
+    """B-461: rosca exterior a derechas sin booleana helicoidal: tornea la cresta si hace falta (un anillo), saca del
+    cuerpo el tramo cilíndrico y pega en su lugar la varilla roscada armada cara por cara (`_varilla_roscada`; M10×30:
+    2,1 → 0,4 s). None si el resultado no es válido o no da el volumen exacto: `rosca` sigue con el corte de siempre."""
+    from OCP.BOPAlgo import BOPAlgo_GlueShift
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Fuse
+    if largo / datos["paso"] > 100:     # tamaño extremo (M0.3 en 10 mm: 125 vueltas): el corte da su mensaje (B-299)
+        return None
+    try:
+        paso = datos["paso"]
+        r_in, w_in, r_out, w_out, r_torno, torno = _surco_rosca(o, z, datos["diametro"], paso, z0, largo, False,
+                                                                "derecha", radio, tramo_torno=tramo_torno,
+                                                                solo_trapecio=True, **perfil)
+        if torno is not None:     # la cresta se tornea en toda la cara, como en el corte de siempre
+            cuerpo, radio = geo.booleano(cuerpo, torno, "cortar"), r_torno
+        x = _perpendicular(z) * (-1.0 if _fase_rosca(z) else 1.0)     # la misma fase que el surco (B-79)
+        lugar = gp_Trsf()
+        lugar.SetDisplacement(gp_Ax3(), gp_Ax3(_pnt(o + z * z0), _gdir(z), _gdir(x)))
+        varilla = _varilla_roscada(radio, largo, paso, r_in, w_in, r_out, w_out).Moved(TopLoc_Location(lugar))
+        resto = geo.booleano(cuerpo, geo.cilindro(radio, largo, base=tuple(o + z * z0), eje=tuple(z)), "cortar")
+        if geo.esta_vacia(resto):
+            hecho = varilla
+        else:     # sin `geo.booleano`: unificaría las caras de una vuelta (ver `_varilla_roscada`)
+            op, args, herr = BRepAlgoAPI_Fuse(), List_TopoDS_Shape(), List_TopoDS_Shape()
+            args.Append(resto)
+            herr.Append(varilla)
+            op.SetArguments(args)
+            op.SetTools(herr)
+            op.SetRunParallel(geo.PARALELO)
+            op.SetNonDestructive(True)
+            op.SetGlue(BOPAlgo_GlueShift)     # solo se tocan en las tapas: no busca cruces (si no, lo atajan los controles)
+            op.Build()
+            if not op.IsDone():
+                return None
+            hecho = op.Shape()
+        base, surco = geo.volumen_exacto(cuerpo, _EPS_ROSCA), _volumen_surco(r_in, radio, r_in, w_in, r_out, w_out,
+                                                                              largo, paso)
+        if (len(geo.solidos(hecho)) == len(geo.solidos(cuerpo)) and geo.es_valida(hecho)
+                and abs(geo.volumen_exacto(hecho, _EPS_ROSCA) - (base - surco)) <= 1e-3 * surco + 1e-6 * base):
+            return hecho
+    except Exception:     # vía rápida: cualquier falla del kernel cae al corte de siempre, sin mostrarla (CLAUDE.md)
+        pass
+    return None
+
+
+_MUESTRAS_HELICE = 128     # por vuelta: con 48 quedaban huecos de 2e-5 mm entre caras y la tapa no cerraba
+
+
+def _varilla_roscada(R, largo, paso, r_in, w_in, r_out, w_out):
+    """Varilla de radio R y largo `largo` sobre +Z (desde z = 0) con el surco exterior a derechas de `_barrer_surco`
+    (trapecio (r_in, w_in)–(r_out, w_out) centrado en z = −P/2 sobre +X), armada cara por cara: fondo y cresta en
+    cilindros exactos, flancos reglados entre dos hélices B-spline con el mismo parámetro y tapas planas. Los
+    cilindros van de a una vuelta con u de 0 a 2π (una cara cilíndrica de varias vueltas hace mentir al volumen de
+    GProp); los flancos, de a ~4 vueltas por superficie: uno de 20 vueltas en una sola B-spline (2560 polos) hacía
+    lenta cada booleana posterior (un agujero en M10×30: 7 s) y uno de 1 vuelta no lo reconoce `_es_filete`."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
+    from OCP.GeomFill import GeomFill
+    from OCP.OCP.collections import HArray1_double
+    k, zc = paso / (2 * math.pi), -paso / 2
+    ancho = lambda rho: w_in + (w_out - w_in) * (rho - r_in) / (r_out - r_in)  # noqa: E731
+    ejes = gp_Ax3(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0), gp_Dir(1.0, 0.0, 0.0))
+
+    def helice(rho, z_off, a, b):     # la hélice de t = a a t = b y un poco más a cada lado
+        t0, t1 = a - 0.1, b + 0.1
+        n = math.ceil(_MUESTRAS_HELICE * (t1 - t0) / (2 * math.pi)) + 1
+        pts, par = HArray1_gp_Pnt(1, n), HArray1_double(1, n)
+        for i in range(n):
+            t = t0 + (t1 - t0) * i / (n - 1)
+            pts.SetValue(i + 1, gp_Pnt(rho * math.cos(t), rho * math.sin(t), k * t + z_off))
+            par.SetValue(i + 1, t)
+        interp = GeomAPI_Interpolate(pts, par, False, 1e-9)
+        interp.Perform()
+        return interp.Curve()
+
+    def recortar(poligono, lo, hi):     # polígono convexo recortado a lo <= u <= hi (Sutherland-Hodgman)
+        for dentro, corte in ((lambda q: q[0] >= lo, lo), (lambda q: q[0] <= hi, hi)):
+            salida = []
+            for a, b in zip(poligono, poligono[1:] + poligono[:1], strict=True):
+                if dentro(a):
+                    salida.append(a)
+                if dentro(a) != dentro(b):
+                    salida.append((corte, a[1] + (corte - a[0]) / (b[0] - a[0]) * (b[1] - a[1])))
+            poligono = salida
+        return [q for i, q in enumerate(poligono) if math.dist(q, poligono[i - 1]) > 1e-9]
+
+    def cara_uv(sup, puntos):     # cara de `sup` limitada por segmentos rectos en (u, v)
+        hilo = BRepBuilderAPI_MakeWire()
+        for a, b in zip(puntos, puntos[1:] + puntos[:1], strict=True):
+            arista = BRepBuilderAPI_MakeEdge(Geom2d_Line(gp_Pnt2d(*a), gp_Dir2d(b[0] - a[0], b[1] - a[1])), sup,
+                                             0.0, math.dist(a, b)).Edge()
+            BRepLib.BuildCurves3d_s(arista, 1e-7)
+            hilo.Add(arista)
+        return BRepBuilderAPI_MakeFace(sup, hilo.Wire(), True).Face()
+
+    def por_tramos(superficie, poligono, periodica):     # superficie(a, b): la del tramo a <= u <= b
+        us = [q[0] for q in poligono]
+        if periodica:     # en un cilindro, cada vuelta con u de 0 a 2π (ver el docstring)
+            cortes = [2 * math.pi * j for j in range(math.floor(min(us) / (2 * math.pi)), math.ceil(max(us) / (2 * math.pi)) + 1)]
+        else:             # flancos de ~4 vueltas: livianos y con más de 1,5 vueltas (`_es_filete` los reconoce)
+            n = max(1, math.ceil((max(us) - min(us)) / (8 * math.pi)))
+            cortes = [min(us) + (max(us) - min(us)) * i / n for i in range(n + 1)]
+        salida = []
+        for a, b in itertools.pairwise(cortes):
+            q = recortar(poligono, a, b)
+            if len(q) >= 3:
+                salida.append(cara_uv(superficie(a, b), [(u - a * periodica, v) for u, v in q]))
+        return salida
+
+    caras = []
+    for rho, b1, b2 in ((r_in, zc - w_in / 2, zc + w_in / 2), (R, zc + ancho(R) / 2, zc - ancho(R) / 2 + paso)):
+        # fondo y cresta: la tira helicoidal b1 + k·u <= v <= b2 + k·u recortada a 0 <= v <= largo
+        caras += por_tramos(lambda a, b, sup=Geom_CylindricalSurface(ejes, rho): sup,
+                            [(-b2 / k, 0.0), (-b1 / k, 0.0), ((largo - b1) / k, largo), ((largo - b2) / k, largo)], True)
+    for s in (-1, 1):     # flancos z = zc + k·t + s·w(ρ)/2: regla entre la hélice de r_in y la de R
+        za, zb = zc + s * w_in / 2, zc + s * ancho(R) / 2
+        ta0, ta1, tb0, tb1 = -za / k, -zb / k, (largo - za) / k, (largo - zb) / k     # z = 0 y z = largo
+        caras += por_tramos(lambda a, b, za=za, zb=zb: GeomFill.Surface_s(helice(r_in, za, a, b), helice(R, zb, a, b)),
+                            [(ta0, 0.0), (tb0, 0.0), (tb1, 1.0), (ta1, 1.0)], False)
+    for zt in (0.0, largo):     # tapas con las aristas de los costados que caen en el plano (en lista: de a una
+        lista, hilo = List_TopoDS_Shape(), BRepBuilderAPI_MakeWire()     # descarta las que llegan fuera de orden)
+        for c in list(caras):
+            for e in _aristas_de(c):
+                if all(abs(BRep_Tool.Pnt_s(v).Z() - zt) < 1e-6 for v in (TopExp.FirstVertex_s(e), TopExp.LastVertex_s(e))):
+                    lista.Append(e)
+        hilo.Add(lista)
+        caras.append(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0.0, 0.0, zt), gp_Dir(0.0, 0.0, 1.0)), hilo.Wire(), True).Face())
+    cosido = BRepBuilderAPI_Sewing(1e-5)
+    for c in caras:
+        cosido.Add(c)
+    cosido.Perform()
+    cascara = TopExp_Explorer(cosido.SewedShape(), TopAbs_SHELL)
+    solido = BRepBuilderAPI_MakeSolid(TopoDS.Shell(cascara.Current())).Solid()
+    BRepLib.OrientClosedSolid_s(solido)
+    return solido
 
 
 # ================================================================ 9. bobina

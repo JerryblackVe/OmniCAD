@@ -20,6 +20,7 @@ def cortes(monkeypatch):
             return super().Build(*a)
 
     monkeypatch.setattr(sc, "BRepAlgoAPI_Cut", Contado)
+    monkeypatch.setattr(sc, "_rosca_directa", lambda *a: None)     # B-461: se cuentan los cortes del camino de siempre
     sc._surco_en_origen.cache_clear()
     yield contador
     sc._surco_en_origen.cache_clear()

@@ -44,6 +44,7 @@ def _forma(sesion):
 ])
 @pytest.mark.parametrize("giro", [0, 229, 61, 137])
 def test_b457_rosca_modificada_coincide_con_el_corte_normal(monkeypatch, modificacion, giro):
+    monkeypatch.setattr(sc, "_rosca_directa", lambda *a: None)     # prueba los giros del corte de siempre (B-461)
     sesion = _cuerpo_modificado(modificacion)
     volumen_inicial = geo.volumen_exacto(_forma(sesion), 1e-6)
     giros = (0, 229, 61, 137)
