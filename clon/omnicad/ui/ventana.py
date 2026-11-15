@@ -114,14 +114,15 @@ ICONOS_ANALISIS = {"seccion": "seccion", "cebra": "cebra", "mapa_entorno": "mapa
 
 class _FiltroInfoHerramientas(QObject):
     """
-    Preferencias → 'Mostrar información de herramientas' apagada: se tragan los tooltips.
+    Preferencias → 'Mostrar información de herramientas' apagada: se tragan los tooltips de comandos, no los de pestañas.
     Se instala SOLO en botones y menús, y solo mientras la opción está apagada: un filtro Python
     sobre toda la aplicación interceptaba también los eventos del QOpenGLWidget y su
     initializeGL fallaba (glGetString → GL_INVALID_OPERATION, visto en la prueba de humo).
     """
 
-    def eventFilter(self, _obj, evento):
-        return evento.type() == QEvent.ToolTip
+    def eventFilter(self, obj, evento):
+        # El nombre de una pestaña elidida es navegación, no ayuda de comandos.
+        return evento.type() == QEvent.ToolTip and obj.objectName() != "pestana"
 
 
 PIE_AYUDA = "<br><br><span style='color:#9a9a9a'>Pulse Ctrl+/ para obtener más ayuda.</span>"
