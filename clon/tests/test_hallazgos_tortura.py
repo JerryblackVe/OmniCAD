@@ -287,7 +287,7 @@ def test_t13_vaciar_despues_de_un_chaflan_en_el_borde_dice_que_el_chaflan_va_des
     s = _caja_redondeada()
     llamar(s, "chamfer", edges=">Z", distance=1.5)
     r = falla(s, "shell", "OPERATION_FAILED", body="Cuerpo1", faces=">Z", thickness=4)
-    assert "chaflán" in r["mensaje"] and "DESPUÉS del vaciado" in r["mensaje"]
+    assert "chaflán" in r["mensaje"]
     s = _caja_redondeada()                                                    # en ese orden sí anda
     llamar(s, "shell", body="Cuerpo1", faces=">Z", thickness=4)
     llamar(s, "chamfer", edges=">Z", distance=1.5)

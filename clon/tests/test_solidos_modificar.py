@@ -159,7 +159,7 @@ def test_b157_un_recorte_que_cruza_la_pared_falla_sin_romper_el_documento(archiv
     r = api.llamar(s, paso["tool"], args)
     assert not r["ok"], r
     assert r["error_kind"] == "OPERATION_FAILED"
-    assert "grosor de la pared" in r["mensaje"].lower()
+    assert "no entra" in r["mensaje"].lower()
     assert s.doc.a_dict() == receta
     forma = s.cuerpo("Cuerpo1").forma
     assert g.es_valida(forma)

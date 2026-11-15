@@ -22,7 +22,7 @@ def test_rellenar_la_cavidad_es_un_error(herramienta, medida):
 
     r = api.llamar(s, herramienta, {"body": "op1.c1", "edges": ["Cuerpo1/E1"], **medida})
 
-    assert not r["ok"] and "supera el grosor de la pared" in r["mensaje"], r
+    assert not r["ok"] and "no entra" in r["mensaje"], r
 
 
 @pytest.mark.parametrize("herramienta, medida, volumen", [("fillet", {"radius": 3.4}, 11324.8),

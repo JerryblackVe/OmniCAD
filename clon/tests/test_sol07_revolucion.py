@@ -92,7 +92,7 @@ def test_hasta_un_plano_que_no_contiene_el_eje_recorta_y_exige_que_todo_el_perfi
     llamar(s, "revolve", sketch="Perfil", axis="z", to_object="Pared", operation="new_body")
     esperado = 5 * quad(lambda r: r * math.asin(8 / r), 10, 20)[0]
     assert geo.volumen(_cuerpo(s).forma) == pytest.approx(esperado, rel=5e-3)
-    # y = 13: el borde interno (r = 10) nunca llega, el resultado ya no depende del muestreo: es un error claro
+    # y = 13: el borde interno (r = 10) no llega a ese plano, el resultado ya no depende del muestreo: es un error claro
     llamar(s, "create_construction_plane", plane="XZ", offset=-13, name="Lejos")
     r = api.llamar(s, "revolve", {"sketch": "Perfil", "axis": "z", "to_object": "Lejos", "operation": "new_body"})
-    assert not r["ok"] and "nunca llega" in r["mensaje"]
+    assert not r["ok"] and "no llega a ese plano" in r["mensaje"]

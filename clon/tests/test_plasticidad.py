@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""PL4 (Plasticity › «Fillet Order of Operations»): el error de empalme enseña el orden correcto
-(de lo grande a lo chico) y move_feature deja reordenar los pasos para seguir la pista."""
+"""PL4 (Plasticity › «Fillet Order of Operations»): el error de empalme imposible falla claro (desde P-158, en 1 renglón: el orden de lo grande a lo chico
+ya no va en el mensaje) y move_feature deja reordenar los pasos."""
 import pytest
 
 from omnicad import api
@@ -20,8 +20,7 @@ def test_el_empalme_imposible_ensenia_el_orden_de_lo_grande_a_lo_chico():
     aristas = refs.subformas(caja, "arista")[:4]
     with pytest.raises(geo.ErrorGeometria) as e:
         empalme(caja, [{"aristas": aristas, "tipo": "constante", "radio": 500.0}])
-    assert "radio MAYOR" in str(e.value) and "de lo grande a lo chico" in str(e.value)
-    assert "reordená los empalmes" in str(e.value)
+    assert "El radio no entra" in str(e.value)       # P-158: 1 renglón; el orden se enseña en la ayuda, no en el panel
 
 
 def test_la_pista_llega_por_la_api_y_move_feature_reordena():
@@ -29,7 +28,7 @@ def test_la_pista_llega_por_la_api_y_move_feature_reordena():
     doc = sesion.doc
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="40", largo="40", alto="20"))
     r = api.llamar(sesion, "fillet", {"edges": "|Z", "radius": 500})
-    assert not r["ok"] and "de lo grande a lo chico" in r["mensaje"]
+    assert not r["ok"] and "El radio no entra" in r["mensaje"]
 
     # move_feature (la herramienta nueva que hace la pista accionable): el primitivo pasa al final.
     doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="esfera", radio="5"))

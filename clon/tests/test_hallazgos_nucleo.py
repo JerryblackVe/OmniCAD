@@ -139,7 +139,7 @@ def test_desfase_de_cara_curva_que_se_da_vuelta_falla(distancia):
     """Una cara curva desfasada más que su radio se daba vuelta por el eje y salía «ok»: el cilindro de radio 10
     achicado 25 mm quedaba de radio 15 (MÁS GRANDE)."""
     forma, cara = _cilindro_y_lateral()
-    with pytest.raises(geo.ErrorGeometria, match="la cara se da vuelta"):
+    with pytest.raises(geo.ErrorGeometria, match="da vuelta la cara"):
         sm.desfasar_caras(forma, [cara], distancia)
 
 
@@ -156,7 +156,7 @@ def test_agujero_desfasado_mas_que_su_radio_se_tapa_como_fusion(distancia):
 def test_esfera_achicada_su_radio_falla_como_fusion(distancia):
     """B-507: la esfera de radio 10 desfasada −10 quedaba en un punto (volumen 0) «válido»; Fusion da error."""
     esfera = geo.esfera(10)
-    with pytest.raises(geo.ErrorGeometria, match="la cara se da vuelta"):
+    with pytest.raises(geo.ErrorGeometria, match="da vuelta la cara"):
         sm.desfasar_caras(esfera, geo.caras(esfera), distancia)
     chica = sm.desfasar_caras(esfera, geo.caras(esfera), -9.99)          # una esfera de 0,01 mm sigue siendo material
     assert geo.volumen_exacto(chica) == pytest.approx(4 / 3 * math.pi * 0.01 ** 3, rel=1e-6) and geo.es_valida(chica)

@@ -26,7 +26,7 @@ def test_tamano_extremo_dice_que_probar_y_no_cambia_el_documento():
 
 @pytest.mark.parametrize("diametro, alto, designacion, texto", [
     (0.3, 25, "ANSI M0.3x0.08", "312.5 vueltas"),
-    (10, 1, "M10", "paso de la rosca (1.5 mm) supera el largo roscado (1 mm)"),
+    (10, 1, "M10", "Paso 1.5 mm > largo roscado 1 mm"),
 ])
 def test_extremos_se_rechazan_antes_de_armar_el_perfil(monkeypatch, diametro, alto, designacion, texto):
     sesion = _cilindro(diametro, alto)

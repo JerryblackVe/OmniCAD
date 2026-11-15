@@ -81,7 +81,7 @@ def test_un_valor_imposible_da_el_mismo_texto_que_en_el_proceso_principal(placa,
         _esperar(CalculoPendiente("previa_visual", _datos(doc, op)))
     assert str(aparte.value) == str(principal.value)
     assert "ErrorGeometria" not in str(aparte.value) and "código" not in str(aparte.value)
-    assert caso != "empalme" or len(str(aparte.value)) > 200    # el texto entero, sin el corte a 200 de antes
+    assert caso != "empalme" or "achicalo" in str(aparte.value)    # el texto entero llega al hijo
 
 
 def test_el_hijo_de_una_sola_tarea_da_el_mismo_texto(placa):
@@ -90,13 +90,13 @@ def test_el_hijo_de_una_sola_tarea_da_el_mismo_texto(placa):
     with aislado._ocupado:                  # trabajador ocupado: la previa va a un hijo propio
         h = CalculoPendiente("previa_visual", _datos(doc, op))
     assert h.trabajador is None
-    with pytest.raises(TareaAislada, match=r"^El empalme falló: el radio es demasiado grande.*de lo grande a lo chico"):
+    with pytest.raises(TareaAislada, match=r"^El radio no entra: achicalo"):
         _esperar(h)
 
 
 def test_correr_json_con_un_hijo_propio_tampoco_corta_el_texto(placa):
     doc, empalme, _ = placa
-    with aislado._ocupado, pytest.raises(TareaAislada, match=r"proceso aparte falló \(El empalme.*a lo chico.*\)"):
+    with aislado._ocupado, pytest.raises(TareaAislada, match=r"proceso aparte falló \(El radio no entra: achicalo"):
         aislado.correr_json("previa_visual", _datos(doc, _variante(empalme, radio="32.329 mm")), 60)
 
 
@@ -135,7 +135,7 @@ def test_un_valor_bueno_despues_de_uno_malo_da_lo_mismo_que_un_hijo_nuevo(placa)
     bueno = _variante(empalme, radio="4 mm")
     _esperar(CalculoPendiente("previa_visual", _datos(doc, _variante(empalme, radio="5 mm"))))
     pid = _pid()
-    with pytest.raises(TareaAislada, match="demasiado grande"):
+    with pytest.raises(TareaAislada, match="El radio no entra"):
         _esperar(CalculoPendiente("previa_visual", _datos(doc, _variante(empalme, radio="32.329 mm"))))
     salida = _esperar(CalculoPendiente("previa_visual", _datos(doc, bueno)))
     assert _pid() == pid
@@ -167,7 +167,7 @@ def test_la_segunda_previa_no_reconstruye_el_documento(placa, monkeypatch):
     assert "nodos" in pedir("5 mm")
     vivo, cuantos = aislado.documento_vivo, (len(armados), len(recalculos))
     assert vivo is not None and cuantos[0] == 1
-    assert "demasiado grande" in pedir("32.329 mm")["_fallo"]
+    assert "El radio no entra" in pedir("32.329 mm")["_fallo"]
     assert "nodos" in pedir("4 mm")
     assert aislado.documento_vivo is vivo and (len(armados), len(recalculos)) == cuantos
     assert aislado.formas_enviadas == {} and aislado.marca_enviada is None    # el transporte de las ediciones sigue igual

@@ -245,7 +245,7 @@ def test_circular_pasar_de_completo_a_parcial_no_deja_los_360_sin_explicar(app_q
     assert panel.valores["angulo"] == "180 deg"                         # 360° sería lo mismo que Completo
     _teclear(panel.widgets["angulo"], "720 deg")
     panel._calcular_previa()
-    assert panel.ultima_op is not None and "una vuelta" in panel.mensaje.text()      # el error degenerado se muestra
+    assert panel.ultima_op is not None and "menor que 360" in panel.mensaje.text()      # el error degenerado se muestra
     panel.cancelar()
 
 

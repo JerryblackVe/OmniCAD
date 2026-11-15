@@ -13,7 +13,7 @@ from omnicad.ui.preferencias import Preferencias
 from omnicad.ui.ventana import VentanaPrincipal
 
 
-MENSAJE = "⚠ Cantidad: un entero de 2 o más (cuenta el original)"
+MENSAJE = "Cantidad: entero de 2 o más."
 
 
 def _llamar(sesion, nombre, **args):

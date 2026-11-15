@@ -116,7 +116,7 @@ def test_cuerpo_chico_en_ruta_larga_falla_en_vez_de_dejar_cuentas_sueltas():
     llamar(s, "draw_line", start_x=0, start_y=0, end_x=1000, end_y=0, sketch="Ruta")
     r = api.llamar(s, "sweep", {"sweep_bodies": "Caja", "path_sketch": "Ruta", "orientation": "parallel",
                                 "operation": "new_body"})
-    assert not r["ok"] and "separadas" in r["mensaje"]
+    assert not r["ok"] and "no alcanzan" in r["mensaje"]
 
 
 def test_cadena_con_curvas_de_boceto_no_avisa_y_sigue_toda_la_ruta():

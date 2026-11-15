@@ -1230,7 +1230,8 @@ def test_b345_el_asa_frena_donde_la_pieza_lo_admite(app_qt, caso):
     medio, d = _sobre_flecha(panel, f"flecha:{clave}")
     _arrastrar_con_previa(panel, visor, medio, medio + d * 300)
     if caso != "pulsar":                       # B-364: frenar callado parecía arbitrario (pulsar llega a +18 mm sin frenar)
-        assert "el asa frena en" in panel.mensaje.text(), panel.mensaje.text()
+        assert " máx. " in panel.mensaje.text(), panel.mensaje.text()
+        assert len(panel.mensaje.text()) <= 45, panel.mensaje.text()      # P-158: 1 renglón, sin el error de la previa pegado
     valor = panel.ctx.evaluar(panel.valores[clave])
     panel._calcular_previa()
     assert panel._previa_ok and estados[-1] is not None, panel.mensaje.text()

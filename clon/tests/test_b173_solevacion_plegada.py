@@ -31,12 +31,12 @@ def _secciones():
 
 @pytest.mark.parametrize("orden", list(itertools.permutations(["Bc_ant_n", "Bc_ant_m", "Bc_ant_p"])))
 def test_la_solevacion_no_se_pliega_y_no_depende_del_orden(orden):
-    """B-416: en los 4 órdenes cruzados las secciones van y vuelven; antes daban `ok` plegado (6 044 386 mm³, o
+    """B-416: en los 4 órdenes cruzados va hacia atrás; antes daban `ok` plegado (6 044 386 mm³, o
     −862 235 mm³) y «Propiedades» tardaba 15 s. Ahora se rechazan al instante."""
     s = _secciones()
     if orden[1] != "Bc_ant_m":
         r = api.llamar(s, "loft", {"sketches": list(orden), "operation": "new_body"})
-        assert not r["ok"] and "las secciones van y vuelven" in r["mensaje"], r
+        assert not r["ok"] and "va hacia atrás" in r["mensaje"], r
         assert not s.doc.estado_final.cuerpos             # el paso se deshizo: no queda ningún cuerpo
         return
 
@@ -52,7 +52,7 @@ def test_b416_la_solevacion_de_superficie_tambien_rechaza_secciones_que_van_y_vu
     s = _secciones()
     r = api.llamar(s, "create_surface_loft", {"profiles": [{"sketch": b, "profile": 0}
                                                          for b in ("Bc_ant_n", "Bc_ant_p", "Bc_ant_m")]})
-    assert not r["ok"] and "las secciones van y vuelven" in r["mensaje"], r
+    assert not r["ok"] and "va hacia atrás" in r["mensaje"], r
 
 
 @pytest.mark.parametrize("orden", [("Bc_ant_n", "Bc_ant_m", "Bc_ant_p"), ("Bc_ant_p", "Bc_ant_m", "Bc_ant_n")])

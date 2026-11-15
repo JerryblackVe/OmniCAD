@@ -42,7 +42,7 @@ def test_sol2_vaciado_quitando_todas_las_caras_falla():
     s = api.Sesion()
     llamar(s, "create_box", length=20, width=20, height=10, name="Caja")
     r = falla(s, "shell", body="Caja", faces="all", thickness=2)
-    assert "todas las caras" in r["mensaje"]
+    assert "No quedó pared" in r["mensaje"]
     llamar(s, "shell", body="Caja", faces=">Z", thickness=2)          # quitar una sola sigue andando
 
 
@@ -74,7 +74,7 @@ def test_sol6_patron_circular_de_mas_de_una_vuelta_falla():
     s = api.Sesion()
     llamar(s, "create_box", length=10, width=10, height=10, x=30, name="Caja")
     r = falla(s, "circular_pattern", bodies="Caja", count=4, total_angle=720)
-    assert "una sobre otra" in r["mensaje"]
+    assert "menor que 360" in r["mensaje"]
     llamar(s, "circular_pattern", bodies="Caja", count=3, total_angle=360)
 
 
@@ -106,7 +106,7 @@ def test_sol32_patrones_con_copias_encimadas_fallan():
     r = falla(s, "rectangular_pattern", bodies="Caja", x_count=3, x_spacing="0 mm")
     assert "cero" in r["mensaje"]
     r = falla(s, "circular_pattern", bodies="Caja", count=4, total_angle=0)
-    assert "ángulo del patrón circular" in r["mensaje"]
+    assert "menor que 360" in r["mensaje"]
     llamar(s, "rectangular_pattern", bodies="Caja", x_count=3, x_spacing="20 mm")
     assert len(_cuerpos(s)) == 3
 
@@ -206,7 +206,7 @@ def test_sol32_patron_en_ruta_con_distancia_cero_y_circular_simetrico_fallan():
     s = api.Sesion()
     llamar(s, "create_box", length=4, width=4, height=4, x=20, name="Caja")
     r = falla(s, "circular_pattern", bodies="Caja", count=4, total_angle=0, symmetric=True)
-    assert "ángulo del patrón circular" in r["mensaje"]
+    assert "menor que 360" in r["mensaje"]
     llamar(s, "circular_pattern", bodies="Caja", count=4, total_angle=90, symmetric=True)
 
 

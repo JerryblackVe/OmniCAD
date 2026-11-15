@@ -251,11 +251,11 @@ def test_vaciado_que_deja_la_cara_puesta_falla(monkeypatch):
 def test_borrar_la_tapa_de_una_caja_falla():
     caja = geo.caja(20, 20, 20)
     tapa = max(geo.caras(caja), key=lambda c: geo.centro_masa(c, True)[2])
-    with pytest.raises(geo.ErrorGeometria, match="No se pueden borrar esas caras"):
+    with pytest.raises(geo.ErrorGeometria, match="Esas caras no se pueden borrar"):
         sm.quitar_caras(caja, [tapa])
     agujereada = geo.booleano(caja, geo.cilindro(3, 20, (10, 10, 0)), "cortar")
     cil = [c for c in geo.caras(agujereada) if geo.plano_de_cara(c) is None]
-    with pytest.raises(geo.ErrorGeometria, match="No se pueden borrar esas caras"):
+    with pytest.raises(geo.ErrorGeometria, match="Esas caras no se pueden borrar"):
         sm.quitar_caras(agujereada, cil + [max(geo.caras(agujereada), key=lambda c: geo.centro_masa(c, True)[2])])
     r = sm.quitar_caras(agujereada, cil)
     assert geo.es_valida(r) and geo.volumen(r) == pytest.approx(8000, rel=1e-6)
@@ -265,7 +265,7 @@ def test_borrar_caras_en_el_timeline_falla_y_no_cambia_el_documento(s):
     llamar(s, "create_box", length=20, width=20, height=20)
     forma = cuerpo(s, "op1.c1").forma
     tapa = max(geo.caras(forma), key=lambda c: geo.centro_masa(c, True)[2])
-    falla(s, "run_operation", "No se pueden borrar esas caras", type="borrar_caras",
+    falla(s, "run_operation", "Esas caras no se pueden borrar", type="borrar_caras",
           params={"caras": [refs.referencia("op1.c1", tapa, forma)]})
 
 

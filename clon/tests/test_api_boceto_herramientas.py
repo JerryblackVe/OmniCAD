@@ -683,7 +683,7 @@ def test_b510_empalme_entre_lineas_casi_colineales_da_error_claro(s):
     b = llamar(s, "draw_line", start_x=10, start_y=0, end_x=20, end_y=0.0001)["entities"][0]["id"]
     antes = foto(s)
     r = falla(s, "sketch_fillet", entity1=a, entity2=b, radius=2)
-    assert r["error_kind"] == "INVALID_GEOMETRY" and "quedaría sin largo" in r["mensaje"] and "\n" not in r["mensaje"], r
+    assert r["error_kind"] == "INVALID_GEOMETRY" and "El empalme no entra" in r["mensaje"] and "\n" not in r["mensaje"], r
     assert foto(s) == antes
     # Con un quiebre visible (5°) el empalme sigue andando.
     c = llamar(s, "draw_line", start_x=20, start_y=0.0001, end_x=30, end_y=0.0001 + 10 * math.tan(math.radians(5)))
@@ -698,5 +698,5 @@ def test_b510_empalme_linea_arco_casi_tangentes_da_error_claro(s):
     b = llamar(s, "draw_arc", start_x=10, start_y=0, center_x=c[0], center_y=c[1], sweep_angle=20)["entities"][0]["id"]
     antes = foto(s)
     r = falla(s, "sketch_fillet", entity1=a, entity2=b, radius=2)
-    assert r["error_kind"] == "INVALID_GEOMETRY" and "quedaría sin largo" in r["mensaje"], r
+    assert r["error_kind"] == "INVALID_GEOMETRY" and "El empalme no entra" in r["mensaje"], r
     assert foto(s) == antes

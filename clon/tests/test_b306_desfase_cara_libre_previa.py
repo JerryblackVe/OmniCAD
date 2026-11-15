@@ -103,7 +103,7 @@ def test_el_filete_de_una_rosca_se_rechaza_al_instante(ventana):
     eje = _cuerpo(ventana, "Eje")
     filete = next(c for c in geo.caras(eje.forma) if refs.cara_libre(c))
     inicio = time.perf_counter()
-    with pytest.raises(geo.ErrorGeometria, match="Holgura impresión 3D"):
+    with pytest.raises(geo.ErrorGeometria, match="rosca modelada no se puede desfasar"):
         sm.desfasar_caras(eje.forma, [filete], 0.2)
     assert time.perf_counter() - inicio < 5
 
@@ -114,7 +114,7 @@ def test_vaciar_un_cuerpo_con_rosca_falla_al_instante(ventana):
     eje = _cuerpo(ventana, "Eje")
     tapa = next(c for c in geo.caras(eje.forma) if refs.firma_cara(c)["geom"] == "plano")
     inicio = time.perf_counter()
-    with pytest.raises(geo.ErrorGeometria, match="antes de hacer la rosca"):
+    with pytest.raises(geo.ErrorGeometria, match="no se puede vaciar"):
         sm.vaciado(eje.forma, [tapa], espesor_interior=1.0)
     assert time.perf_counter() - inicio < 5
 
@@ -131,7 +131,7 @@ def test_en_un_cuerpo_con_rosca_la_cara_plana_sale_rapido_y_la_curva_falla_ya():
     cil = next(c for c in geo.caras(forma) if refs.firma_cara(c)["geom"] == "cilindro" and refs.firma_cara(c)["area"] > 600)
     base = min((c for c in geo.caras(forma) if refs.firma_cara(c)["geom"] == "plano"), key=lambda c: refs.firma_cara(c)["centro"][2])
     inicio = time.perf_counter()
-    with pytest.raises(geo.ErrorGeometria, match="rosca cosmética"):
+    with pytest.raises(geo.ErrorGeometria, match="Con rosca modelada"):
         sm.desfasar_caras(forma, [cil], 0.1)
     antes = geo.volumen_exacto(forma)
     assert geo.volumen_exacto(sm.desfasar_caras(forma, [base], 0.5)) == pytest.approx(antes + math.pi * 100 * 0.5, rel=1e-4)

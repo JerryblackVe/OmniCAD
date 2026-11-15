@@ -1,5 +1,5 @@
 """B-400: un empalme de radio constante igual al alto de la cara vecina (caja 40 × 30 × 20, arista de arriba, 20 mm)
-se rechazaba con «se come justo una cara vecina». Fusion lo hace: la cara lateral desaparece y queda un cuarto de
+se rechazaba con «borra una cara una cara vecina». Fusion lo hace: la cara lateral desaparece y queda un cuarto de
 cilindro hasta la arista de abajo (captura `evidencias/fusion_capturas_2026-11-12/2b_tras_Medir_valor_20mm_en_la_caja.jpg`)."""
 import math
 
@@ -53,5 +53,5 @@ def test_mas_grande_que_las_dos_caras_sigue_dando_error():
 def test_dos_aristas_con_vertice_comun_siguen_con_el_error_claro():
     caja = geo.caja(40, 30, 20)
     aristas = [_arista(caja, (20, 0, 20)), _arista(caja, (0, 15, 20))]
-    with pytest.raises(geo.ErrorGeometria, match="se come justo"):
+    with pytest.raises(geo.ErrorGeometria, match="borra una cara"):
         sm.empalme(caja, [{"aristas": aristas, "tipo": "constante", "radio": 20}])

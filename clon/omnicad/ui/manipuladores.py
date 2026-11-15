@@ -2123,9 +2123,8 @@ class GestorManipuladores(QObject):
         if not malos:
             return
         tope = self._buscar_tope(malos)
-        error = self.panel.mensaje.text().removeprefix("⚠").strip()
-        self._aviso_tope = " ".join(f"{getattr(self.campo(k), 'etiqueta', k)}: el asa frena en {self.texto(k, v)}."
-                                    for k, v in tope.items()) + (f" Con más: {error}" if error else "")
+        self._aviso_tope = " ".join(f"{getattr(self.campo(k), 'etiqueta', k)} máx. {self.texto(k, v)}"
+                                    for k, v in tope.items())      # P-158: 1 renglon; el error ya esta en rojo
         for k, v in tope.items():
             self._freno[k] = (v, 1.0 if malos[k] > v else -1.0)
         self.escribir(tope)

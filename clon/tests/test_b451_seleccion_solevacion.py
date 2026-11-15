@@ -1,4 +1,4 @@
-"""B-451: la Solevación con un punto que no sirve (el centro del círculo, en el plano del perfil, o solo puntos)
+"""B-451: la Solevación con un punto que no sirve (el centro del círculo, en el plano del perfil, o al menos un perfil)
 da un error claro en vez de «el kernel no pudo» o un sólido plano de volumen 0."""
 import pytest
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire
@@ -25,7 +25,7 @@ def test_el_centro_en_el_plano_del_perfil_da_error_claro(orden):
 
 
 def test_solo_puntos_da_error_claro():
-    with pytest.raises(geo.ErrorGeometria, match="solo puntos") as e:
+    with pytest.raises(geo.ErrorGeometria, match="al menos un perfil") as e:
         sc.solevar([_punto(0), _punto(5)])
     assert "kernel" not in str(e.value)
 

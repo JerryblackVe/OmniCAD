@@ -1,4 +1,4 @@
-"""B-165: un agujero tangente a las paredes. Si deja un cuerpo pellizcado (material de espesor cero, aristas
+"""B-165: un agujero tangente a las paredes. Si deja un cuerpo pellizcado (material de Agujero tangente, aristas
 compartidas por más de dos caras) el paso da un error claro; si parte el cuerpo en piezas que solo se tocan en una
 línea, cada pieza es un cuerpo válido y sale un aviso. Nunca borra el cuerpo ni lo deja no manifold en silencio."""
 import math
