@@ -4112,6 +4112,12 @@ def perfil_ruta(ruta, muestras=161):
     return np.array([np.asarray(_punto_en(w, x / largo)[0], float) for x in s]), s, _es_cerrado(w)
 
 
+def exigir_cantidad_patron_ruta(cantidad):
+    """Exige al menos dos instancias, incluido el original, del Patrón en trayectoria de Fusion."""
+    if ((not isinstance(cantidad, int) and not math.isfinite(cantidad)) or cantidad < 2 or int(cantidad) != cantidad):
+        raise geo.ErrorGeometria("⚠ Cantidad: un entero de 2 o más (cuenta el original)")
+
+
 def instancias_en_ruta(ruta, n, distancia, *, orientacion="identica", inicio=0.0, distribucion="extension",
                        simetrico=False, suprimir=(), giro=0.0):
     """Todas las instancias del patrón sobre ruta [SLD-REF-PATTERN] con su estado: lista de (k, gp_Trsf o None, estado).
@@ -4125,6 +4131,7 @@ def instancias_en_ruta(ruta, n, distancia, *, orientacion="identica", inicio=0.0
     `giro` (grados, como el Twisted Path Array de FreeCAD Draft): además, cada instancia gira alrededor de la
     tangente de la ruta en su lugar, en forma progresiva: la instancia k gira giro · k / (n − 1), así la última
     gira el ángulo total y el original nada (con «simétrico», las de atrás giran al revés)."""
+    exigir_cantidad_patron_ruta(n)
     if orientacion not in ("identica", "direccion_ruta"):
         raise geo.ErrorGeometria(f"Orientación desconocida: {orientacion}")
     giro = float(giro)

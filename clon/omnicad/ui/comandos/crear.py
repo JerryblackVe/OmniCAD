@@ -1361,6 +1361,7 @@ def campos_patron(pre="", forma=None):
     """Campos de cada tipo de patrón (rectangular, circular, en trayectoria y en puntos) con las claves prefijadas con
     `pre`; `forma(v)` dice qué tipo está activo. Los usan el diálogo del Patrón y cada transformación de la
     Multitransformación (pre = «t_»)."""
+    from ...nucleo.solidos_crear import exigir_cantidad_patron_ruta
     forma = forma or (lambda v: v.get("forma"))
     k = lambda c: pre + c                                                      # noqa: E731
     en = lambda *fs: (lambda v: forma(v) in fs)                                # noqa: E731
@@ -1411,7 +1412,7 @@ def campos_patron(pre="", forma=None):
         Info(k("info_circular"), "", _info_circular(pre), visible_si=en("circular")),
         Seleccion(k("ruta"), "Ruta", CURVA, maximo=None, visible_si=en("ruta"),
                   ayuda="Una o varias aristas o curvas de boceto seguidas: el patrón recorre toda la cadena."),
-        Entero(k("rn"), "Cantidad", 3, 1, visible_si=en("ruta")),
+        Entero(k("rn"), "Cantidad", 3, 0, visible_si=en("ruta"), validar=exigir_cantidad_patron_ruta),
         Expresion(k("rd"), "Extensión total", "30 mm", visible_si=cuando("ruta", rn_mayor), etiqueta_si=total),
         Casilla(k("r_simetrico"), "Simétrico", visible_si=cuando("ruta", rn_mayor)),
         Opciones(k("orientacion"), "Orientación", {"identica": "Idéntica", "direccion_ruta": "Dirección de ruta"},
@@ -1456,7 +1457,7 @@ def params_patron(v, forma, pre="", estricto=True):
                  simetrico=modo == "espaciado" and bool(v.get(k("simetrico_paso"))))
     elif forma == "ruta":
         exigir_(v, k("ruta"), "Seleccioná la ruta.")
-        p = dict(ruta=refs(v, k("ruta")), n1=_cantidad(v, k("rn")), d1=v.get(k("rd")),
+        p = dict(ruta=refs(v, k("ruta")), n1=v.get(k("rn"), 3), d1=v.get(k("rd")),
                  distribucion=v.get(k("distribucion"), "extension"), inicio=porcentaje_a_fraccion(v.get(k("inicio"))),
                  orientacion=v.get(k("orientacion"), "identica"), giro=v.get(k("giro")),
                  simetrico=bool(v.get(k("r_simetrico"))))

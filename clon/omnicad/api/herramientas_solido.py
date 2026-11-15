@@ -1202,8 +1202,11 @@ ORIENTACIONES = {"identical": "identica", "path_direction": "direccion_ruta"}
 def _params_ruta(sesion, path_sketch, path_curves, count, distance, spacing_mode, start, orientation, twist, symmetric,
                  path_edges=None, body=None):
     """Parámetros del Patrón en ruta (curvas de un boceto, como la ruta de sweep, o aristas de un cuerpo)."""
-    if count < 2:
-        raise error("INVALID_ARGUMENTS", "count tiene que ser 2 o más (el original cuenta).")
+    from ..nucleo.solidos_crear import exigir_cantidad_patron_ruta
+    try:
+        exigir_cantidad_patron_ruta(count)
+    except geo.ErrorGeometria as e:
+        raise error("INVALID_ARGUMENTS", str(e)) from None
     if distance is None:
         raise error("INVALID_ARGUMENTS", "Falta distance (el largo total o la separación entre copias).")
     _exigir_instancias(2 * count - 1 if symmetric else count, "count")

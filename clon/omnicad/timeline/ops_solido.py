@@ -1162,7 +1162,7 @@ class OpPatron(_OpCrear):
             puntos, ref = self.puntos_patron(estado, ctx)
             return sc.instancias_en_puntos(puntos, ref, suprimir=sup)
         _, ruta = _aristas(p["ruta"], estado, "la ruta")
-        return sc.instancias_en_ruta(ruta, self.entero("n1"), ctx.evaluar(p["d1"]), orientacion=p["orientacion"],
+        return sc.instancias_en_ruta(ruta, self.entero("n1", minimo=None), ctx.evaluar(p["d1"]), orientacion=p["orientacion"],
                                      inicio=ctx.evaluar(p["inicio"], "escalar"), distribucion=p["distribucion"],
                                      simetrico=p["simetrico"], suprimir=sup, giro=ctx.evaluar(p.get("giro") or "0", ANGULO))
 

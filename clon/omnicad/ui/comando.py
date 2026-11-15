@@ -166,9 +166,12 @@ class Alternar(Casilla):
 
 
 class Entero(Campo):
-    def __init__(self, clave, etiqueta, defecto=1, minimo=1, maximo=10000, **kw):
+    """Control entero con `validar(valor)` opcional, igual que Expresion."""
+
+    def __init__(self, clave, etiqueta, defecto=1, minimo=1, maximo=10000, validar=None, **kw):
         super().__init__(clave, etiqueta, defecto, **kw)
         self.minimo, self.maximo = minimo, maximo
+        self.validar = validar
 
 
 class Deslizador(Entero):
@@ -1199,6 +1202,8 @@ class PanelComando(QFrame):
             w = QSpinBox(minimum=campo.minimo, maximum=campo.maximo)
             w.setValue(int(val))
             w.valueChanged.connect(lambda n, c=campo: self._cambiar(c.clave, n))
+            if campo.validar is not None:
+                w.lineEdit().textChanged.connect(lambda _t: self._validar_expresiones(solo_reglas=True))
             return w
         if isinstance(campo, Texto):
             w = QLineEdit(str(val or ""))
@@ -1371,28 +1376,30 @@ class PanelComando(QFrame):
 
     def _validar_expresiones(self, solo_reglas=False):
         """Marca en rojo las expresiones inválidas (con el motivo en su tooltip). Devuelve la primera, para llevar a ella.
-        `solo_reglas`: al teclear (previa), solo los campos con regla del núcleo (`Expresion.validar`): los opcionales
+        `solo_reglas`: al teclear (previa), solo los campos con regla del núcleo (`validar`): los opcionales
         vacíos, como «Límite mínimo», no son un error hasta Aceptar."""
         from ..nucleo import geometria as geo
         primera = None
         if not solo_reglas:
             self.invalidos = set()
         for c in self.campos:
-            if solo_reglas and (not isinstance(c, Expresion) or c.validar is None):
+            numerico = isinstance(c, Expresion) or isinstance(c, Entero) and c.validar is not None
+            if solo_reglas and (not numerico or c.validar is None):
                 continue
             if solo_reglas:
                 self.invalidos.discard(c.clave)
-            if isinstance(c, Expresion) and self._visible(c):
+            if numerico and self._visible(c):
                 w = self.widgets[c.clave]
+                tipo = c.tipo if isinstance(c, Expresion) else ESCALAR
                 try:
-                    val = self.ctx.evaluar(w.text(), c.tipo)
+                    val = self.ctx.evaluar(w.text(), tipo)
                     if c.validar is not None:
                         c.validar(val)
-                    if c.rango is not None and not c.rango[0] < val < c.rango[1]:
+                    if isinstance(c, Expresion) and c.rango is not None and not c.rango[0] < val < c.rango[1]:
                         unidad = "°" if c.tipo == ANGULO else ""
                         raise ErrorExpresion(f"Tiene que estar entre {c.rango[0]:g}{unidad} y {c.rango[1]:g}{unidad}, "
                                              f"sin incluirlos.")
-                    w.setToolTip(formato.tooltip_valor(val, c.tipo == ANGULO, c.tipo == ESCALAR))
+                    w.setToolTip(formato.tooltip_valor(val, tipo == ANGULO, tipo == ESCALAR))
                     w.setStyleSheet("")
                 except (ErrorExpresion, geo.ErrorGeometria) as e:
                     w.setToolTip(str(e))
