@@ -1675,6 +1675,11 @@ class PanelComando(QFrame):
     def eventFilter(self, obj, e):
         if obj is self.visor and e.type() == QEvent.MouseButtonRelease:
             self._pos_clic = e.position()
+        if (obj is self.visor and e.type() == QEvent.KeyPress and e.key() in (Qt.Key_Return, Qt.Key_Enter)
+                and self.isVisible()):
+            if self.boton_ok.isEnabled():               # B-541: Enter con el foco en la vista acepta, como Fusion
+                self.aceptar()
+            return True
         return super().eventFilter(obj, e)
 
     def _clic_de_otro_rol(self):
