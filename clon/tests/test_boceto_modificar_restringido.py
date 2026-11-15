@@ -321,7 +321,11 @@ def test_transformacion_restringida(perfil, herramienta):
     r = respuesta["result"]
     # Fusion (medido el 2026-11-08, evidencias/fusion_2026-11-08/boceto/medir_cm5.txt): la copia conserva sus
     # cotas y restricciones internas pero no su anclaje, así que su posición queda libre (2 grados).
-    fallos = _bajas(antes, despues, r, set(), dof=2 if herramienta == "copiar" else 0)
+    permitidas = set()
+    if herramienta == "mover":      # B-538: mover suelta el anclaje al origen (Fusion lo mueve): su posición queda libre
+        en_origen = {p["id"] for p in antes["points"] if abs(p["x"]) < 1e-9 and abs(p["y"]) < 1e-9}
+        permitidas = {c["id"] for c in antes["constraints"] if c["type"] == "fix" and set(c["entities"]) <= en_origen}
+    fallos = _bajas(antes, despues, r, permitidas, dof=2 if herramienta == "copiar" or permitidas else 0)
     copias = herramienta == "copiar"
     assert len(_contorno(despues)) == len(curvas) * (2 if copias else 1)
     nuevas = [e for e in _contorno(despues) if not copias or e["id"] not in curvas]

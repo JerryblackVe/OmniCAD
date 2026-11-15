@@ -1006,3 +1006,26 @@ def test_b480_girar_el_boceto_avisa_las_restricciones_que_quita():
         "Las restricciones o las cotas se han eliminado durante la operación (4 restricciones, 0 cotas)."], r
     g = llamar("get_sketch", sketch="B")["result"]
     assert g["constraints"] == [] and [d["value"] for d in g["dimensions"]] == [50.0]
+
+
+def test_b538_mover_un_rectangulo_desde_el_origen_suelta_el_anclaje():
+    """B-538: un rectángulo dibujado desde (0, 0) queda anclado al origen; «Mover» decía «Hay geometría fija… no se puede
+    mover». Fusion lo mueve y lo gira: el anclaje se suelta (avisado en un renglón) y lo demás se conserva."""
+    from omnicad import api
+    s = api.Sesion()
+    llamar = lambda h, **k: api.llamar(s, h, k)  # noqa: E731
+    llamar("create_sketch", plane="XY", name="B")
+    llamar("draw_rectangle", x1=0, y1=0, x2=20, y2=10)
+    r = llamar("transform_sketch", sketch="B", dx=15, dy=5)
+    assert r["ok"] and r["avisos"] == [
+        "Las restricciones o las cotas se han eliminado durante la operación (1 restricción, 0 cotas)."], r
+    puntos = sorted((p["x"], p["y"]) for p in llamar("get_sketch", sketch="B")["result"]["points"])
+    assert puntos[0] == pytest.approx((15.0, 5.0)) and puntos[-1] == pytest.approx((35.0, 15.0))
+    assert llamar("transform_sketch", sketch="B", angle=30)["ok"]
+    # Un punto fijado a mano (no el anclaje al origen) sigue sin moverse.
+    s2 = api.Sesion()
+    api.llamar(s2, "create_sketch", {"plane": "XY", "name": "C"})
+    ids = [e["id"] for e in api.llamar(s2, "draw_rectangle", {"x1": 5, "y1": 5, "x2": 20, "y2": 10})["result"]["entities"]]
+    assert api.llamar(s2, "add_constraint", {"sketch": "C", "type": "fix", "entities": [ids[0]]})["ok"]
+    r = api.llamar(s2, "transform_sketch", {"sketch": "C", "dx": 3})
+    assert r["ok"] is False and "fija" in r["mensaje"], r

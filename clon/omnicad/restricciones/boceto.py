@@ -911,7 +911,9 @@ def aviso_quitadas(antes, boceto):
     ya no valen); `antes` = (restricciones, cotas) contadas antes. None si no quitó nada."""
     r, c = antes[0] - len(boceto.restricciones), antes[1] - len(boceto.cotas)
     if r > 0 or c > 0:
-        return f"Las restricciones o las cotas se han eliminado durante la operación ({r} restricciones, {c} cotas)."
+        cuantas = lambda n, uno, varios: f"{n} {uno if n == 1 else varios}"  # noqa: E731
+        return (f"Las restricciones o las cotas se han eliminado durante la operación "
+                f"({cuantas(r, 'restricción', 'restricciones')}, {cuantas(c, 'cota', 'cotas')}).")
     return None
 
 
@@ -2462,8 +2464,9 @@ class Boceto:
     def extremos(self, cid):
         return self.curvas[cid].extremos()
 
-    def puntos_fijos(self):
-        """Puntos inmóviles: por una restricción 'fijo' (sobre el punto o su curva) o por ser proyectados."""
+    def puntos_fijos(self, origen=True):
+        """Puntos inmóviles: por una restricción 'fijo' (sobre el punto o su curva) o por ser proyectados. `origen=False`
+        no cuenta el anclaje al origen que pone dibujar desde (0, 0): mover la selección lo suelta, como Fusion (B-538)."""
         fijos = {p.id for p in self.puntos.values() if p.proyectado}
         if self.objetos:
             from . import objetos
@@ -2473,7 +2476,7 @@ class Boceto:
             if c.proyectada:
                 fijos.update(c.puntos())
         for r in self.restricciones.values():
-            if r.tipo == "fijo":
+            if r.tipo == "fijo" and (origen or not r.datos.get("origen")):
                 for e in r.entidades:
                     fijos.update([e] if e in self.puntos else self.curvas[e].puntos())
         return fijos
@@ -3994,7 +3997,7 @@ class Boceto:
     def comprobar_mover(self, ids):
         """ErrorBoceto si `transformar` (sin copiar) no puede mover lo elegido: lo de adentro es fijo o proyectado.
         Es la misma comprobación de `transformar`; el panel la usa para avisar antes de aceptar sin copiar el boceto."""
-        fijos = self.puntos_fijos()
+        fijos = self.puntos_fijos(origen=False)
         if any(self.objetos[i]["bloqueado"] for i in ids if i in self.objetos):
             raise ErrorBoceto("Desbloqueá el objeto antes de moverlo.")
         self.exigir_desbloqueadas(ids, "moverla")
@@ -4022,6 +4025,9 @@ class Boceto:
             return objetos_ids + list(mapa_c.values()) + [mapa[i] for i in ids if i in mapa]
         self.comprobar_mover(ids)
         pts = self._con_vertices_virtuales(ids, self.puntos_de(ids))
+        for k in [k for k, r in self.restricciones.items()     # B-538: el anclaje al origen se suelta al moverlo
+                  if r.tipo == "fijo" and r.datos.get("origen") and set(r.entidades) <= set(pts)]:
+            del self.restricciones[k]
         self._transformar_puntos(pts, f)
         for i in ids:
             if isinstance(self.curvas.get(i), Texto):
