@@ -420,6 +420,10 @@ def _prisma(cara, n, d, conicidad=0.0, aristas_fijas=()):
         return BRepPrimAPI_MakePrism(cara, _gvec(np.asarray(n, float) * d)).Shape()
     if abs(conicidad) >= 89.0:
         raise geo.ErrorGeometria("El ángulo de inclinación debe estar entre -89° y 89°.")
+    if conicidad < 0 and not aristas_fijas:     # con aristas fijas (perfiles vecinos) el cierre es otro
+        recortado = _recorte_en_vertice(cara, n, d, conicidad)
+        if recortado is not None:
+            return recortado
     n = np.asarray(n, float)
     plano = geo.plano_de_cara(cara)
     if plano is None or abs(float(plano.normal @ n)) < 1e-9:
@@ -576,6 +580,36 @@ def radios_conicidad(caras):
         adentro = min(adentro, _cierre(cara, -1))
         afuera = min(afuera, _cierre(cara, 1))
     return adentro, afuera
+
+
+_CIERRES = {}
+
+
+def _cierre_adentro(cara):
+    """`radios_conicidad([cara])[0]` (~0,1 s) recordado por el contorno: al arrastrar un asa el perfil se rearma igual."""
+    clave = tuple(np.round(np.concatenate([geo.polilinea_arista(e, 0.01) for e in _aristas_de(cara)]), 6).ravel())
+    if clave not in _CIERRES:
+        if len(_CIERRES) > 64:
+            _CIERRES.clear()
+        _CIERRES[clave] = radios_conicidad([cara])[0]
+    return _CIERRES[clave]
+
+
+def _recorte_en_vertice(cara, n, d, conicidad):
+    """B-508: con conicidad negativa que pasa el cierre, Fusion recorta en el vértice (el kernel armaba un doble cono).
+    El prisma hasta el cierre si ahí se cierra TODO el perfil (la tapa queda en menos del 1 % de la base); None si la
+    distancia no llega o si solo se cierra un cuello angosto (sigue el camino de siempre, que da el error)."""
+    cierre = _cierre_adentro(cara) / math.tan(math.radians(-conicidad)) * (1 - 1e-4)  # en el vértice justo no hay tapa
+    if abs(d) <= cierre:
+        return None
+    try:
+        recortado = _prisma(cara, n, math.copysign(cierre, d), conicidad)
+        normal = geo.plano_de_cara(cara).normal
+        tapas = [geo.area(f) for f in geo.caras(recortado)
+                 if (p := geo.plano_de_cara(f)) is not None and abs(abs(float(p.normal @ normal)) - 1) < 1e-9]
+    except (geo.ErrorGeometria, AttributeError):
+        return None
+    return recortado if min(tapas, default=math.inf) < 0.01 * geo.area(cara) else None
 
 
 def _prisma_curvo_inclinado(cara, n, d, conicidad):

@@ -998,8 +998,8 @@ def test_b343_radios_de_la_conicidad_y_el_limite_del_kernel():
     limite = adentro / math.tan(math.radians(37))
     assert limite == pytest.approx(16.251, abs=1e-3)
     assert g.es_valida(sc._prisma(rect(0, 0, 189.3, 24.492), (0, 0, 1), limite - 1e-3, -37.0))
-    with pytest.raises(g.ErrorGeometria):
-        sc._prisma(rect(0, 0, 189.3, 24.492), (0, 0, 1), limite + 0.02, -37.0)
+    pasado = sc._prisma(rect(0, 0, 189.3, 24.492), (0, 0, 1), limite + 0.02, -37.0)   # B-508: recorta en el cierre
+    assert g.es_valida(pasado) and g.caja_envolvente(pasado)[1][2] == pytest.approx(limite, abs=1e-2)
     con_hueco = g.caras(g.booleano(rect(0, 0, 100, 60), rect(20, 20, 10, 6), "cortar"))[0]
     assert sc.radios_conicidad([con_hueco]) == pytest.approx((10.0, 3.0), abs=1e-3)   # la pared de 20 entre hueco y borde
 

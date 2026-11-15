@@ -327,6 +327,13 @@ def _extruir_tramos(ws, n, arriba, abajo, conicidad, afuera=False):
                              or abs(float(p.normal @ plano.normal)) < 1 - 1e-9)
                 continue
             ang = math.radians(abs(conicidad))
+            if conicidad < 0 and BRep_Tool.IsClosed_s(w):    # B-508: como el sólido, recorta en el vértice
+                from .solidos_crear import _recorte_en_vertice
+                mk = BRepBuilderAPI_MakeFace(w, True)
+                if mk.IsDone() and (recortado := _recorte_en_vertice(mk.Face(), d, alto, conicidad)) is not None:
+                    caras.extend(c for c in geo.caras(recortado) if (p := geo.plano_de_cara(c)) is None
+                                 or abs(abs(float(p.normal @ geo.plano_de_cara(mk.Face()).normal)) - 1) > 1e-9)
+                    continue
             try:
                 dr = BRepOffsetAPI_MakeDraft(w, gp_Dir(*map(float, d)), ang)
                 dr.SetDraft(conicidad < 0)   # "interno" = hacia adentro del contorno

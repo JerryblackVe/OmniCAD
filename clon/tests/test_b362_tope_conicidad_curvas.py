@@ -64,7 +64,15 @@ def test_b362_el_hueco_conserva_su_sentido_en_cualquier_plano(plano):
     assert sc.radios_conicidad([cara]) == pytest.approx((3.5, 3), rel=0.01)
 
 
-@pytest.mark.parametrize("nombre,distancia,angulo", [("circulo", 58, -10), ("rectangulo", 20, -10), ("elipse", 3, -45)])
+def test_b508_el_circulo_pasado_el_cierre_es_un_cono():
+    sesion, _ = _perfil("circulo")
+    assert api.llamar(sesion, "extrude", {"sketch": "Boceto1", "profile": 0, "distance": 58, "taper_angle": -10})["ok"]
+    forma = next(iter(sesion.doc.estado_final.cuerpos.values())).forma
+    assert geo.volumen(forma) == pytest.approx(math.pi * 100 * 10 / math.tan(math.radians(10)) / 3, rel=1e-3)
+
+
+# Un empalme de R3 o la punta de la elipse se cierran antes que el perfil entero: sigue el error (no hay vértice).
+@pytest.mark.parametrize("nombre,distancia,angulo", [("rectangulo", 20, -10), ("elipse", 3, -45)])
 def test_b362_pasado_el_cierre_el_error_lo_indica(nombre, distancia, angulo):
     sesion, _ = _perfil(nombre)
     respuesta = api.llamar(sesion, "extrude", {
