@@ -24,8 +24,9 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-487 | Curvatura línea–spline mueve la línea ~6 mm (Fusion la deja quieta) (E1, después de B-489) |
-| 2 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 3 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 2 | B-496 | Estrella de boceto: 22 puntas dibuja ~9 lóbulos, glifos encimados, puntos sueltos (Gerardo) (E1, después de B-487) |
+| 3 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 4 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) quedan en bugs.md sin cola.
 
