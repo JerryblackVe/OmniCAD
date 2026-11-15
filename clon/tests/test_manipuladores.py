@@ -148,7 +148,6 @@ def test_la_flecha_permite_extruir_hacia_el_otro_lado(app_qt):
 
 
 def test_la_caja_de_valor_edita_el_campo_y_lo_sigue(app_qt):
-    from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
     from omnicad.ui.comandos.solido import Extruir
     doc = _doc_rectangulo()
@@ -158,7 +157,7 @@ def test_la_caja_de_valor_edita_el_campo_y_lo_sigue(app_qt):
     caja.setFocus()
     caja.selectAll()
     QTest.keyClicks(caja, "25 mm")
-    QTest.keyClick(caja, Qt.Key_Return)
+    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     assert panel.valores["distancia"] == "25 mm" and panel.widgets["distancia"].text() == "25 mm"
     visor.setFocus()                                   # el campo del panel manda sobre la caja
     panel.set_valor("distancia", "12 mm")
@@ -1375,11 +1374,11 @@ def test_p144_la_caja_de_valor_tiene_el_menu_de_parametros(app_qt, monkeypatch):
     QTest.keyClicks(caja, "2*")
     next(a for a in caja.menu().actions() if a.text() == "alto").trigger()
     assert caja.text() == "2*alto"
-    QTest.keyClick(caja, Qt.Key_Return)
+    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     assert panel.valores["distancia"] == "2*alto"
     caja.selectAll()
     QTest.keyClicks(caja, "15.5 mm")
-    QTest.keyClick(caja, Qt.Key_Return)
+    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     # lo tecleado queda arriba de todo, el más nuevo primero y sin el que ya está en la caja; elegirlo lo aplica
     assert _textos_menu(caja) == ["2*alto", "lado", "alto", "Medir"]
     next(a for a in caja.menu().actions() if a.text() == "2*alto").trigger()
@@ -1450,7 +1449,7 @@ def test_b375_conicidad_de_90_queda_en_rojo_en_la_caja_y_en_el_campo(app_qt):
         caja.setFocus()
         QTest.keyClick(caja, Qt.Key_A, Qt.ControlModifier)
         QTest.keyClicks(caja, texto)
-        QTest.keyClick(caja, Qt.Key_Return)
+        caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
         panel._t_previa.stop()
         panel._calcular_previa()
         campo = panel.widgets["conicidad"]

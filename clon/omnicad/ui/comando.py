@@ -1399,6 +1399,8 @@ class PanelComando(QFrame):
                     w.setStyleSheet(f"background: {temas.color('campo_error')};")
                     primera = primera or c
                     self.invalidos.add(c.clave)
+        if getattr(self, "boton_ok", None) is not None:
+            self.boton_ok.setEnabled(not self.invalidos)       # B-468: como Fusion, con un valor fuera de rango Aceptar queda apagado
         return primera
 
     def _mostrar_campo_invalido(self):

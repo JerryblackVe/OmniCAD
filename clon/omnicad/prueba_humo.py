@@ -418,7 +418,7 @@ def _gizmo_calcomania(v, r, carpeta):
     grados = g.cajas["angulo"]
     _mover(visor, grados.geometry().center())
     grados.setText("45")
-    QTest.keyClick(grados, Qt.Key_Return)
+    g.aplicar_caja(grados)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     p._calcular_previa()
     m = manip("angulo")
     esperado = m._origen_arco(g) + (m.u + m.v) * m._r(g) / math.sqrt(2)
@@ -430,7 +430,7 @@ def _gizmo_calcomania(v, r, carpeta):
     r.check(abs(g.valor("escala") - 1.5) < 0.03, "Calcomanía: codo azul escala uniformemente a 1.50")
     caja = g.cajas["escala"]
     caja.setText("2.00")
-    QTest.keyClick(caja, Qt.Key_Return)
+    g.aplicar_caja(caja)
     r.check(g.valor("escala") == 2, "Calcomanía: la caja editable aplica 2.00 al panel")
     for clave in ("voltear", "voltear_v"):
         for _ in range(2):
@@ -643,7 +643,10 @@ def _fase_interaccion(v, r):
     _presionar(v.visor, centro, Qt.RightButton)
     _mover(v.visor, centro + QPoint(-90, 0), Qt.RightButton)
     _soltar(v.visor, centro + QPoint(-90, 0), Qt.RightButton)
-    QTest.qWait(200)
+    for _ in range(50):         # B-468: el deshacer corre aparte y bajo carga tarda más de 200 ms
+        QTest.qWait(100)
+        if len(v.doc.operaciones) == n - 1:
+            break
     r.check(len(v.doc.operaciones) == n - 1, "Gesto: clic derecho y arrastrar a la izquierda = Deshacer")
     v.doc.rehacer()
     QTest.qWait(200)

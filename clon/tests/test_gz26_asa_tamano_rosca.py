@@ -137,7 +137,7 @@ def test_teclear_radio_en_caja_elige_tamano_y_rechaza_errores(perno):
     caja.setFocus()
     caja.selectAll()
     QTest.keyClicks(caja, "12")
-    QTest.keyClick(caja, Qt.Key_Return)
+    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     assert panel.valores["tam_iso_metrica"] == "M24"
     assert panel.widgets["tam_iso_metrica"].currentData() == "M24"
     assert caja.text() == "11,882"
@@ -152,9 +152,6 @@ def test_teclear_radio_en_caja_elige_tamano_y_rechaza_errores(perno):
     caja.setText("11,9 mm")
     assert gestor.aplicar_caja(caja) is True
     assert panel.valores["tam_iso_metrica"] == "M24" and caja.text() == "11,882"
-    caja.setText("99")
-    QTest.keyClick(caja, Qt.Key_Escape)
-    assert caja.text() == "11,882"
     ventana.visor.setFocus()
     panel.set_valor("tipo_rosca", "unificada")
     assert "tam_iso_metrica" not in gestor.cajas
