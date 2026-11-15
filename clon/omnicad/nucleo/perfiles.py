@@ -613,8 +613,13 @@ def _sin_area(p):
 
 
 def _detectar(geometria, plano, tolerancia=1e-4):
+    grado = _grado_encimadas(geometria, tolerancia)
+    if grado > _TOPE_ENCIMADAS_RUST:
+        raise _encimadas(len(geometria))
     perfiles = _detectar_rust(geometria, plano, tolerancia)
     if perfiles is None:
+        if grado > _TOPE_ENCIMADAS:
+            raise _encimadas(len(geometria))
         perfiles = _detectar_occ(geometria, plano, tolerancia)
     return [p for p in perfiles if not _sin_area(p)]
 
@@ -624,35 +629,68 @@ def _detectar(geometria, plano, tolerancia=1e-4):
 # se pisa la caja de cada curva: 150 rayos = 148, 200 = 198, 1000 copias = 2000; 200 «W» encimadas (andan, 0,6 GB) = 121,
 # un patrón de 70 copias (anda, 1,5 GB) = 140, un texto dentro de un círculo = 4.
 _TOPE_ENCIMADAS = 160
+# B-492: la vía en Rust aguanta más, pero con 1000 círculos encimados tarda 18 s y 1,5 GB antes de rendirse; 400 andan (5 s).
+_TOPE_ENCIMADAS_RUST = 500
 
 
-def _exigir_pocas_encimadas(aristas, tolerancia):
-    """Error claro ANTES de partir si hay demasiadas curvas encimadas: OpenCascade no se corta y se queda sin memoria."""
-    from OCP.Bnd import Bnd_Box
-    from OCP.BRepBndLib import BRepBndLib
-    if len(aristas) <= _TOPE_ENCIMADAS:              # ni todas encimadas llegan al tope
-        return
-    c = np.empty((len(aristas), 2, 3))
-    for k, (_, e) in enumerate(aristas):                # caja aproximada (Add_s): alcanza para contar y es ~2× más barata
-        caja = Bnd_Box()
-        BRepBndLib.Add_s(e, caja, False)
-        p0, p1 = caja.CornerMin(), caja.CornerMax()
-        c[k] = (p0.X(), p0.Y(), p0.Z()), (p1.X(), p1.Y(), p1.Z())
-    eje = int(np.argmax(c[:, 1].max(axis=0) - c[:, 0].min(axis=0)))      # barrido por el eje más extendido
+def _encimadas(n):
+    return geo.ErrorGeometria(f"Demasiadas curvas encimadas ({n}): separá las copias (más distancia o «Espaciado») "
+                              "o borrá las repetidas.")
+
+
+def _cajas_uv(geometria):
+    """Caja (u, v) de cada curva; holgada en una elipse (la del círculo de su eje mayor) y en una spline (la de sus
+    polos)."""
+    cajas = []
+    for prim in geometria:
+        tipo = prim[0]
+        if not _finita(prim):
+            continue
+        if tipo == "linea":
+            pts = np.array(prim[2:4], float)
+        elif tipo == "arco":                            # extremos y los puntos a 0°, 90°, 180° o 270° que barre
+            (cu, cv), r, a0, a1 = prim[2], prim[3], prim[4], prim[5]
+            while a1 <= a0 + 1e-12:
+                a1 += 2 * math.pi
+            angulos = [a0, a1, *(k * math.pi / 2 for k in range(math.ceil(a0 / (math.pi / 2)),
+                                                                 math.floor(a1 / (math.pi / 2)) + 1))]
+            pts = np.array([(cu + r * math.cos(t), cv + r * math.sin(t)) for t in angulos])
+        elif tipo in ("circulo", "elipse", "arco_elipse"):
+            r = prim[3] if tipo == "circulo" else max(prim[3], prim[4])
+            pts = np.array(prim[2], float) + [[-r, -r], [r, r]]
+        elif tipo == "spline":
+            pts = np.array(prim[2], float)
+        else:
+            continue
+        cajas.append((pts.min(axis=0), pts.max(axis=0)))
+    return np.array(cajas, float).reshape(-1, 2, 2)
+
+
+def _grado_encimadas(geometria, tolerancia):
+    """Con cuántas otras curvas se pisa la caja de la curva más encimada (sin contar una caja dentro de otra): el
+    cálculo de perfiles crece con eso mucho más que con el número de curvas."""
+    if len(geometria) <= _TOPE_ENCIMADAS:              # ni todas encimadas llegan al tope
+        return 0
+    c = _cajas_uv(geometria)
+    eje = int(np.argmax(c[:, 1].max(axis=0, initial=0) - c[:, 0].min(axis=0, initial=0)))     # barrido por el más largo
     c = c[np.argsort(c[:, 0, eje])]
-    grado = np.zeros(len(c))
-    for i in range(len(c)):
-        fin = np.searchsorted(c[:, 0, eje], c[i, 1, eje] + tolerancia, "right")
-        a, b = c[i], c[i + 1:fin]
-        toca = np.all((b[:, 0] <= a[1] + tolerancia) & (a[0] <= b[:, 1] + tolerancia), axis=1)
+    n = len(c)
+    pares = np.searchsorted(c[:, 0, eje], c[:, 1, eje] + tolerancia, "right") - np.arange(n) - 1    # vecinos a la derecha
+    acum = np.concatenate(([0], np.cumsum(pares)))
+    grado, i0 = np.zeros(n, np.int64), 0
+    while i0 < n and grado.max() <= _TOPE_ENCIMADAS_RUST:     # de a ~1 millón de pares: memoria acotada
+        i1 = max(i0 + 1, int(np.searchsorted(acum, acum[i0] + 1_000_000, "right")) - 1)
+        cuantos = pares[i0:i1]
+        I = np.repeat(np.arange(i0, i1), cuantos)
+        J = I + 1 + np.arange(len(I)) - np.repeat(acum[i0:i1] - acum[i0], cuantos)
+        a, b = c[I], c[J]
+        toca = np.all((b[:, 0] <= a[:, 1] + tolerancia) & (a[:, 0] <= b[:, 1] + tolerancia), axis=1)
         # Una caja dentro de otra no cuenta: un círculo con texto adentro no traba el Splitter.
-        toca &= ~np.all((a[0] <= b[:, 0] + tolerancia) & (b[:, 1] <= a[1] + tolerancia), axis=1)
-        toca &= ~np.all((b[:, 0] <= a[0] + tolerancia) & (a[1] <= b[:, 1] + tolerancia), axis=1)
-        grado[i] += toca.sum()
-        grado[i + 1:fin] += toca
-    if grado.max() > _TOPE_ENCIMADAS:
-        raise geo.ErrorGeometria(f"Demasiadas curvas encimadas ({len(c)}): separá las copias (más distancia o «Espaciado») "
-                                 "o borrá las repetidas.")
+        toca &= ~np.all((a[:, 0] <= b[:, 0] + tolerancia) & (b[:, 1] <= a[:, 1] + tolerancia), axis=1)
+        toca &= ~np.all((b[:, 0] <= a[:, 0] + tolerancia) & (a[:, 1] <= b[:, 1] + tolerancia), axis=1)
+        grado += np.bincount(I[toca], minlength=n) + np.bincount(J[toca], minlength=n)
+        i0 = i1
+    return int(grado.max(initial=0))
 
 
 def _detectar_occ(geometria, plano, tolerancia=1e-4):
@@ -660,7 +698,6 @@ def _detectar_occ(geometria, plano, tolerancia=1e-4):
     aristas = aristas_boceto(geometria, plano)
     if not aristas:
         return []
-    _exigir_pocas_encimadas(aristas, tolerancia)
     perfiles, partidas = _perfiles_occ(geometria, plano, aristas, tolerancia)
     malas = [p.cara for p in perfiles if not geo.es_valida(p.cara)]
     if malas:
