@@ -559,11 +559,11 @@ class Navegador(QFrame):
             self.seleccionado.emit(item.data(0, ROL_CLAVE))
 
     def _doble_clic(self, item, _col):
-        """Como el navegador de Fusion: doble clic sobre el nombre lo renombra en el lugar (editar un boceto o
-        un plano queda en el clic derecho y en el timeline)."""
+        """Como el navegador de Fusion: doble clic sobre un boceto lo edita (B-540); sobre otro nombre lo renombra en
+        el lugar (el boceto se renombra con F2 o «Cambiar nombre»; editar un plano queda en el clic derecho)."""
         tipo, clave = item.data(0, ROL_TIPO), item.data(0, ROL_CLAVE)
-        if tipo == "calcomania":
-            self.editar.emit(clave)              # como «Editar calcomanía» del menú: reabre su panel con sus valores
+        if tipo in ("calcomania", "boceto"):
+            self.editar.emit(clave)              # como «Editar boceto» / «Editar calcomanía» del menú
         elif tipo in RENOMBRABLES:
             self.renombrar_en_linea(item)
         elif tipo == "union":

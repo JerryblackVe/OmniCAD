@@ -35,14 +35,14 @@ def test_doble_clic_en_boceto_hace_lo_que_dice_la_barra(tmp_path):
         app.processEvents()
         mensaje = v.timeline.estado.toolTip()  # texto completo, sin el recorte visual de la barra
         assert mensaje.startswith("Boceto1: 3 perfil(es) cerrado(s).")
-        assert "Doble clic para renombrarlo" in mensaje and "Editar boceto" in mensaje
+        assert "Doble clic para editarlo" in mensaje and "F2 para renombrarlo" in mensaje
         assert not v.modo_boceto.activo
 
         QTest.mouseDClick(arbol.viewport(), Qt.LeftButton, pos=punto)
         app.processEvents()
-        # Fusion (docs/fusion_docs, «Rename objects»): el doble clic sobre el nombre lo renombra; editar va por el clic derecho
-        assert not v.modo_boceto.activo
-        assert any(e.isVisible() for e in arbol.findChildren(QLineEdit)), "La barra promete renombrar y no abrió el campo"
+        # B-540: en Fusion el doble clic edita el boceto; renombrar es el doble clic LENTO, F2 o el clic derecho
+        assert v.modo_boceto.activo, "La barra promete editar y no abrió el boceto"
+        assert not any(e.isVisible() for e in arbol.findChildren(QLineEdit))
     finally:
         if v.modo_boceto.activo:
             v.modo_boceto.cancelar()
