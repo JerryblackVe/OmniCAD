@@ -8,16 +8,16 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-440 | Velocidad de boceto: lo que queda de salir del boceto y poner cotas (primer texto de la sesión ~700 ms y el resto de la fila); B-519 queda Parcial solo por el Ctrl+Z de E11 |
-| E2 | B-461 (2.ª vuelta) | Rosca sin booleana (0,4 s) sin romper los 7 grupos de la rosca; worktree `~/OmniCAD-B-461`; después P-156 (entra al 30/11, Gerardo: retomar su worktree) y B-520 |
+| E1 | B-463 | Spline de ajuste 2D distinta de la de Fusion (el barrido da −7 %); B-440 queda Parcial (panel ~280 ms, repintado ~190 ms, medir E11) (B-440 integrado: 563ec91) |
+| E2 | B-520 | Rosca: el núcleo elige otro tamaño que la app; después P-156 fase 2 (B-461 y P-156 fase 1 integrados: d8118ac, 2eafead) |
 | E3 | B-524 | Vaciado agranda el volumen al quitar una cara de un cuerpo ya vaciado; después B-525 (B-503 texto integrado: 24870c5; lo que queda es B-528) |
 | E4 | B-438 | Superficie › Desfase: teclear «1e3 mm» traba la ventana 2 s (worktree `~/OmniCAD-B-438` con un arreglo previo: revisarlo). B-514 (P2) en pausa hasta después del 30/11 |
-| E5 | B-523 | Junta `ball` de la caza (patrones_ensamble_rosca): faltan Pitch/Yaw y get_assembly no la devuelve; reproducir y abrir la fila (B-501 integrado: 6c75a69; E7 lo confirma en la PC) |
+| E5 | B-450 | Mover cara con un empalme en el borde deja un escalón; Pulsar/tirar (fila en bugs.md) (B-523 no era bug: guion de la caza) |
 | E6 | FL-13 | draw_line con detección incremental de perfiles (FL-12 integrado: bda86a4) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
-| E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
+| E8 | B-518 | Traza «CajaValor already deleted» al cerrar (manipuladores.py:1896) (B-444 integrado: 036c59f) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
-| E9 | B-529 | **Primero**: regresión de su H-115 (Empalme con faces_a no redondea); después B-436, B-401, B-450, B-457 |
+| E9 | B-401 | El cálculo aislado pierde atributos de boceto; después B-457 (B-436 integrado: 4048fa8) |
 | E10 | B-474 | MCP `new_document` con cambios sin guardar: la herramienta siguiente corre sobre el documento viejo (worktree con arreglo previo); Sonnet medio desde 19:20 UTC (B-521 integrado: a182d81) |
 
 ## Sigue (en orden)
