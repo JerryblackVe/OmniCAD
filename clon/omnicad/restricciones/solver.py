@@ -36,6 +36,10 @@ TOLERANCIA = 1e-6
 TOLERANCIA_ACEPTA_ARRASTRE = 1e-3  # mm: un movimiento del ratón se da por bueno con este residuo (soltar vuelve a exigir TOLERANCIA)
 TOLERANCIA_ARRASTRE = 1e-10  # de Levenberg-Marquardt en un evento de arrastre: soltar vuelve a resolver todo a 1e-14
 _PESO_REGULARIZACION = 1e-8  # No sesgar las restricciones de cadenas largas durante el arrastre.
+# B-466: al agregar una tangente o una curvatura con el comando (`acomodar_tangente`), la primera corrida prefiere el
+# menor cambio (con 1e-8 la spline se estiraba fuera de la vista); el pulido con `_PESO_REGULARIZACION` quita el sesgo.
+# No va en toda resolución: le quitaría peso a `_PESO_ORIGINAL` (desfases) y a las copias de un patrón.
+_PESO_MENOR_CAMBIO = 1e-4
 _PESO_ARRASTRE = 1.0
 _PESO_ORIGINAL = 1e-3  # Una curva desfasada se queda quieta: al cambiar la cota se mueve la copia, como en Fusion.
 _ESCALA_TANGENTE = 10.0      # mm: convierte el seno del ángulo en un residuo comparable a una distancia
@@ -975,7 +979,7 @@ def _salir_del_paralelismo(b, fijos_p):
         b.puntos[mover].x, b.puntos[mover].y = qx - (my - qy), qy + (mx - qx)
 
 
-def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
+def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cambio=False):
     """Resuelve el boceto en el lugar (modifica coordenadas y radios). Devuelve ResultadoSolver.
 
     valores_cotas: {id_cota: valor} en mm o grados (ya evaluados desde sus expresiones).
@@ -984,6 +988,7 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
         parte que contiene a `arrastrado` (las otras ya estaban resueltas y no cambian) y se conservan los grados de
         libertad y las entidades determinadas de `previo` (arrastrar no cambia las restricciones). Al soltar, el
         editor vuelve a resolver todo sin `previo`.
+    menor_cambio: la primera corrida usa `_PESO_MENOR_CAMBIO` (B-466; solo `acomodar_tangente`).
 
     Se resuelve cada parte independiente por separado (`_grupos`): la geometría sin restricciones no entra,
     así un dibujo importado de miles de curvas no arma un sistema gigante (antes, 30 000 incógnitas pedían
@@ -1000,7 +1005,7 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
     gdl, err_max, inconsistente = 2 * len(sueltos_p) + len(sueltos_r), 0.0, False
     for g in grupos:
         sis = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True)
-        x, err, J, rango = _resolver_grupo(sis, arrastrado)
+        x, err, J, rango = _resolver_grupo(sis, arrastrado, menor_cambio=menor_cambio)
         if x is not None:
             sis.escribir(x)   # también si es inconsistente: queda la mejor aproximación (el editor puede deshacer)
         gdl += len(sis.x0) - rango
@@ -1022,10 +1027,11 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None):
 
 
 def acomodar_tangente(boceto, entidades, valores_cotas=None):
-    """Después de agregar una tangente con el comando: la cumple sin mover el primer arco o círculo y sin cambiar ningún
-    radio de arco, ni el radio o el largo de las curvas de la tangente (`boceto3d.acomodar_tangente` en 3D, BOC-83). Si
-    no, el solver reparte el salto entre los puntos sueltos del arco y su radio cambia. Si la otra curva no puede moverse,
-    se mueve el arco entero; si tampoco, queda el reparto del solver. Las recetas guardadas no pasan por acá."""
+    """Después de agregar una tangente (o una curvatura, B-466) con el comando: la cumple sin mover el primer arco o
+    círculo y sin cambiar ningún radio de arco, ni el radio o el largo de las curvas de la tangente
+    (`boceto3d.acomodar_tangente` en 3D, BOC-83). Si no, el solver reparte el salto entre los puntos sueltos del arco y
+    su radio cambia. Si la otra curva no puede moverse, se mueve el arco entero; si tampoco, queda el reparto del
+    solver. Las recetas guardadas no pasan por acá."""
     redondas = [e for e in entidades if boceto.tipo_de(e) in CIRCULARES]
     conservar = [(cid, "distancia" if c.tipo == "linea" else "radio") for cid, c in boceto.curvas.items()
                  if not c.proyectada and (c.tipo == "arco" or (cid in entidades and c.tipo in ("linea", "circulo")))]
@@ -1035,7 +1041,7 @@ def acomodar_tangente(boceto, entidades, valores_cotas=None):
             prueba.agregar_restriccion("fijo", [k])
         for cid, tipo in conservar:
             valores[prueba.agregar_cota(tipo, [cid], "0")] = boceto.medir_cota(tipo, [cid])
-        if resolver(prueba, valores).ok:
+        if resolver(prueba, valores, menor_cambio=True).ok:
             boceto.puntos, boceto.curvas = prueba.puntos, prueba.curvas
             return
 
@@ -1224,13 +1230,15 @@ def _acomodar_cotas(sis, ancla):
             ancla[i], ancla[j] = ax + (bx - ax) * v / d, ay + (by - ay) * v / d
 
 
-def _resolver_grupo(sis, arrastrado, con_rango=True):
+def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
     """(x resuelto o None, error máximo, jacobiano, rango) de un grupo. Sin `con_rango`, el jacobiano y el rango
     quedan en None (un evento de arrastre no los usa)."""
     n = len(sis.x0)
     # Una incógnita fusionada vale por `cuenta` coordenadas: misma regularización que si estuvieran separadas.
     base = _PESO_REGULARIZACION * np.sqrt(sis.cuenta)
     pesos, ancla = base.copy(), sis.x0.copy()
+    if menor_cambio:
+        pesos = _PESO_MENOR_CAMBIO * np.sqrt(sis.cuenta)
     if arrastrado is None:
         _acomodar_cotas(sis, ancla)
         for cid in sis.originales:

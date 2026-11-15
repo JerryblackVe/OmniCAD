@@ -1499,7 +1499,7 @@ def add_constraint(sesion, sketch: str,
     previo = boceto_resuelto(sesion, op)
     nueva = op.copia()
     b = nueva.boceto
-    if type in ("fix", "tangent"):
+    if type in ("fix", "tangent", "curvature"):
         _sincronizar_con_solver(sesion, op, b)
     b.asegurar_referencias(entities)
     _exigir_entidades(b, entities)
@@ -1521,7 +1521,7 @@ def add_constraint(sesion, sketch: str,
                 raise ErrorBoceto("Polígono necesita una cadena cerrada de líneas.")
             entities = [k for k, _ in cadena]
         rid = b.agregar_restriccion(RESTRICCIONES[type], list(entities))
-        if type == "tangent" and len(entities) == 2:
+        if type in ("tangent", "curvature") and len(entities) == 2:
             acomodar_tangente(b, entities, valores_cotas(sesion, b))
     except ErrorBoceto as e:
         raise error("INVALID_CONSTRAINT", str(e)) from e
