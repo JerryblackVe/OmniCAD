@@ -421,6 +421,22 @@ def test_b245_mover_lo_anclado_al_origen_no_acepta_en_silencio(ventana):
     assert "origen" in mensajes[-1] and lz.herramienta == "mover"
 
 
+def test_b538_mover_un_rectangulo_dibujado_desde_el_origen_suelta_el_anclaje_y_lo_avisa(ventana):
+    lz, panel, ctl = ventana
+    s = api.Sesion()
+    api.llamar(s, "create_sketch", {"plane": "XY", "name": "B"})
+    api.llamar(s, "draw_rectangle", {"x1": 0, "y1": 0, "x2": 20, "y2": 10})
+    lz._restaurar(next(o for o in s.doc.operaciones if hasattr(o, "boceto")).boceto.a_dict())
+    lz.resolver()
+    avisos = []
+    lz.aviso.connect(avisos.append)
+    abrir(lz, "mover", *[c for c in lz.b.curvas])
+    panel.campos["dx"].setText("15")
+    assert ctl.aceptar()
+    assert min(lz.b.coords(p) for p in lz.b.puntos) == pytest.approx((15, 0))
+    assert avisos == [editor_boceto.AVISO_BORRADAS]
+
+
 def _arrastrar_marco(app, lz, dx_px):
     q = lz._manijas_marco(lz._caja_marco())["mover"]
     destino = QPointF(q.x() + dx_px, q.y())

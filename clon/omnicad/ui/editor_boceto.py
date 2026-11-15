@@ -5424,7 +5424,7 @@ class Lienzo(QWidget):
         restricciones (p. ej. una coincidencia con el origen) devolvieron todo a su lugar, no fue un movimiento: se
         deshace y se dice por qué, como hace transform_sketch. Devuelve si quedó aplicado."""
         origen = {q: self.b.coords(q) for q in self.b.puntos_de(ids)}
-        if not self.aplicar_cambio(accion):
+        if not self.aplicar_cambio(accion, operacion=True):    # B-538: avisa si soltó el anclaje al origen
             return False
         if (any(math.dist(f(xy), xy) > 1e-6 for xy in origen.values())
                 and all(math.dist(self.b.coords(q), xy) < 1e-6 for q, xy in origen.items() if q in self.b.puntos)):

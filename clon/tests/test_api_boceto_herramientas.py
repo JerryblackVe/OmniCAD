@@ -90,7 +90,11 @@ def test_p94_lo_dibujado_en_el_origen_queda_anclado_y_coincidir_cambia_el_ancla(
     inicio = r["points"][0]
     assert [k["entities"] for k in boceto(s)["constraints"] if k["type"] == "fix"] == [[inicio]]
     assert boceto(s)["dof"] == 2
-    assert falla(s, "transform_sketch", dx=5)["error_kind"] == "INVALID_GEOMETRY"
+    movido = api.llamar(s, "transform_sketch", {"dx": 5})            # B-538: mover suelta el anclaje, como Fusion
+    assert movido["ok"] and "1 restricción" in movido["avisos"][0], movido
+    assert not [k for k in boceto(s)["constraints"] if k["type"] == "fix"]
+    llamar(s, "undo")
+    assert [k["entities"] for k in boceto(s)["constraints"] if k["type"] == "fix"] == [[inicio]]
     c = llamar(s, "add_constraint", sketch="B", type="coincident", entities=[inicio, 0])
     tipos = [k["type"] for k in boceto(s)["constraints"]]
     assert (c["dof"], "fix" in tipos, "coincident" in tipos) == (2, False, True)
