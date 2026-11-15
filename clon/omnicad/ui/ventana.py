@@ -1862,6 +1862,20 @@ class VentanaPrincipal(QMainWindow):
         self._seleccionar((self.seleccion if aditivo else []) +
                           [h for h in nuevos if not aditivo or h["ref"] not in refs_previas])
 
+    def _perfil_unico(self):
+        """El único perfil de los bocetos visibles (sin los huecos de las letras) como selección, o [] si hay 0 o varios."""
+        from ..timeline.operaciones import OpExtrusion
+        from .comando import hit_desde_ref
+        usados = {o.p.get("boceto") for o in self.doc.operaciones}      # Fusion esconde el boceto que ya se usó
+        todos = [(br, p) for br in self.visor._bocetos_visibles() if br.op_id not in usados for p in br.perfiles
+                 if id(p) not in self.visor._huecos_texto(br)]
+        if len(todos) != 1:
+            return []
+        br, perfil = todos[0]
+        hit = hit_desde_ref({"tipo": "perfil", "boceto": br.op_id, **OpExtrusion.referencia_perfil(perfil)},
+                            self._estado_visible())
+        return [dict(hit, origen="previa")]
+
     def _perfiles_en_region(self, poligono, cruce, estado):
         """Perfiles de los bocetos visibles con todos sus puntos dentro de la ventana (o alguno, en la de cruce). Los huecos
         de las letras no: son aire."""
@@ -2893,6 +2907,10 @@ class VentanaPrincipal(QMainWindow):
         if op is None and valores is None and self.seleccion:
             from .comando import preseleccion
             valores = preseleccion(comando.campos(ctx), self.seleccion) or None
+        if op is None and getattr(comando, "PERFIL_UNICO", False) and not (valores or {}).get("perfiles"):
+            unico = self._perfil_unico()
+            if unico:                              # B-471: Fusion toma solo el perfil cuando es el único a la vista
+                valores = dict(valores or {}, perfiles=unico)
         self._seleccionar([])
         self._ultimo_comando = type(comando) if op is None else self._ultimo_comando
         self.area.set_vistas_multiples(False)

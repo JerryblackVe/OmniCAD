@@ -462,6 +462,7 @@ class Revolucion(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "revolucion", "Revolución", "revolucion", None
     AYUDA = "Gira perfiles de boceto o caras planas alrededor de un eje."
     CLASE_OP = OpRevolucion
+    PERFIL_UNICO = True            # con un solo perfil a la vista, el comando lo toma solo (como Fusion)
 
     def verificar(self, ctx):
         return None if ctx.estado.bocetos or ctx.estado.cuerpos else "Primero creá un boceto con un contorno cerrado."

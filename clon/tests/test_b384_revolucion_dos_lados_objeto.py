@@ -120,7 +120,8 @@ def _hit_perfil(s):
 def test_panel_a_objeto_muestra_un_lado_y_dos_lados(ventana):
     s, v = ventana
     p = v.ejecutar_comando(Revolucion())
-    _tocar(p, s, "perfiles", _hit_perfil(s))
+    if not p.valores.get("perfiles"):          # B-471: con un solo perfil Revolución ya lo trae elegido
+        _tocar(p, s, "perfiles", _hit_perfil(s))
     _tocar(p, s, "eje", {"tipo": "eje", "id": "Z"})
     _elegir_opcion(p, "extension", "objeto")
     direccion = p.widgets["direccion"]
