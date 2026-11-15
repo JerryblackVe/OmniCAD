@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | B-489 | **BLOQUEANTE** Patrón de boceto ×1000 cuelga o cierra la app: tope con error claro antes de detectar perfiles (B-466 integrado: 5924490) |
-| E2 | B-461 (sin booleana) | Integrar el prototipo de rosca sin booleana de E3 (0,27 s) con caída al camino normal (B-490 y H-96 integrados: 30aefd1, d53d5aa) ; B-497 hecho, en tests |
+| E2 | B-497 | Rosca: tamaño automático como Fusion y 2 asas (hecho, en tests reducidos); después B-508 (B-461 sin booleana: al tope, queda en ~/OmniCAD-B-461 y vuelve a Sigue) |
 | E3 | B-503 | Cara de desfase sobre letras: «cálculo aislado falló, pasos incompletos» en cuadro modal; caer al cálculo normal y 1 renglón (B-403 integrado: 0ec7e0d) |
 | E4 | B-496 | Estrella de boceto: 22 puntas dibuja ~9 lóbulos, glifos encimados, puntos sueltos (Gerardo) (B-493 integrado: 6fe740b) |
 | E5 | H-119 | Ensamblar › «Nuevo conjunto de contactos», «Desactivar todos» y los «Activar» grisados, como Fusion (B-443 integrado: c9af24a) |
@@ -30,20 +30,20 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 4 | B-501 | Ensamblar › Conjunto: el nombre y el desfase tecleados en la fila no se aplican (E5) |
 | 5 | B-506 | Agujeros tangentes dan «ok» con un cuerpo inválido (también por set_parameter) (E2 o E3) |
 | 6 | B-507 | `offset_faces` sobre esfera con −radio: «ok» con un sólido inválido (E3) |
-| 7 | B-508 | Conicidad negativa pasado el vértice arma un doble cono (E2) |
-| 8 | B-504 | `stitch_surfaces` con tolerancia 1e6: «ok» con forma vacía que rompe get_scene_info (E4) |
-| 9 | B-505 | `drag_component` da «ok» sin mover (E5, después de H-119) |
-| 10 | B-510 | `sketch_fillet` casi colineal crea un arco de largo 0 (E1) |
-| 11 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él (E6) |
-| 12 | FL-12 | Huella de find_faces/find_edges en caché (11×) (E6) |
-| 13 | FL-13 | draw_line con detección incremental de perfiles (E6 o E1) |
-| 14 | FL-14 | Miniatura al guardar y prevuelo al abrir (E6) |
-| 15 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
-| 16 | P-159 | 179 + 19 parámetros a `Expr` por tandas (E8 o Sol) |
-| 17 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance` (E2, después de B-497) |
-| 18 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 19 | B-389 | Windows agota memoria en una tanda larga: `~/OmniCAD-B-389` tiene un arreglo sin integrar de hace 2 días (`turno.py` con BLAS de un hilo bajo el tope, más su test); verificar, revisar y cerrar |
-| 20 | P-157 | Reorganizar Preferencias como Fusion, visual y con poco texto (P2, pedido de Gerardo; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d) |
+| 7 | B-504 | `stitch_surfaces` con tolerancia 1e6: «ok» con forma vacía que rompe get_scene_info (E4) |
+| 8 | B-505 | `drag_component` da «ok» sin mover (E5, después de H-119) |
+| 9 | B-510 | `sketch_fillet` casi colineal crea un arco de largo 0 (E1) |
+| 10 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él (E6) |
+| 11 | FL-12 | Huella de find_faces/find_edges en caché (11×) (E6) |
+| 12 | FL-13 | draw_line con detección incremental de perfiles (E6 o E1) |
+| 13 | FL-14 | Miniatura al guardar y prevuelo al abrir (E6) |
+| 14 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
+| 15 | P-159 | 179 + 19 parámetros a `Expr` por tandas (E8 o Sol) |
+| 16 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance` (E2, después de B-497) |
+| 17 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 18 | B-389 | Windows agota memoria en una tanda larga: `~/OmniCAD-B-389` tiene un arreglo sin integrar de hace 2 días (`turno.py` con BLAS de un hilo bajo el tope, más su test); verificar, revisar y cerrar |
+| 19 | P-157 | Reorganizar Preferencias como Fusion, visual y con poco texto (P2, pedido de Gerardo; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d) |
+| 20 | B-461 (sin booleana, 2.ª vuelta) | La directa (0,4 s) rompe 7 grupos de la rosca: `_es_filete` (un flanco cada 4–5 vueltas o reconocer por la varilla), sección por el eje degenerada, previa, rechazos de B-299, tolerancia de B-250; worktree `~/OmniCAD-B-461` |
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) y los del lote de las 13 h del 15/11 (B-511 a B-515) quedan en bugs.md sin cola; B-516 Sin verificar.
 
