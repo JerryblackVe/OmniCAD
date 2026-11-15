@@ -9,6 +9,7 @@ import numpy as np
 
 from ..nucleo import geometria as geo
 from . import entidades as ent
+from ..restricciones.boceto import aviso_quitadas
 from .parametros import LONGITUD, SIN_DIMENSION, acotar, evaluar
 from .operaciones import (ANGULO, Boceto, BocetoResuelto, ErrorBoceto, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
                           _resolver_todas, atributos_copia, detectar_boceto, espesor_plastico, registrar_operacion,
@@ -197,10 +198,13 @@ class OpMover(Operacion):
             dx, dy = pl.a_uv(origen)
             angulo = float(np.degrees(np.arctan2(u @ pl.v, u @ pl.u)))
             boceto = br.boceto.copia()
+            antes = len(boceto.restricciones), len(boceto.cotas)
             try:
                 boceto.transformar(ids, dx, dy, angulo, (0.0, 0.0), copiar=bool(self.p.get("copiar")))
             except ErrorBoceto as e:
                 raise ErrorOperacion(f"«{br.nombre}»: {e}") from e
+            if aviso := aviso_quitadas(antes, boceto):
+                ctx.aviso(f"«{br.nombre}»: {aviso}")
             estado.bocetos[bid] = BocetoResuelto(bid, br.nombre, boceto, pl, detectar_boceto(boceto, pl), br.solver)
 
     def ejecutar(self, estado, ctx):

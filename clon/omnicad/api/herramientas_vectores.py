@@ -14,7 +14,7 @@ from typing import Literal
 from ..io_archivos.boceto_archivos import boceto_desde_primitivas, caja_primitivas
 from ..nucleo import fuentes
 from ..restricciones import ErrorBoceto
-from ..restricciones.boceto import MEDIDA_MINIMA, Texto, _validar_opciones_texto, validar_texto_boceto
+from ..restricciones.boceto import MEDIDA_MINIMA, Texto, _validar_opciones_texto, aviso_quitadas, validar_texto_boceto
 from ..timeline.operaciones import OpBoceto, _contenido_texto, texto_con_valores
 from ..timeline.parametros import ESCALAR, ErrorExpresion, TablaParametros
 from .errores import error
@@ -955,7 +955,10 @@ def transform_sketch(sesion, entities: list[int] | None = None, dx: float = 0.0,
         if abs(scale - 1.0) > 1e-12:
             b.escalar(ids, (cx, cy), scale)
         if angle or dx or dy:
+            antes = len(b.restricciones), len(b.cotas)
             b.transformar(ids, dx=dx, dy=dy, angulo=angle, centro=(cx, cy))
+            if aviso := aviso_quitadas(antes, b):
+                avisos.append(aviso)
         _exigir_tamano(b)
         pedido.append(any(math.dist(b.coords(q), xy) > 1e-6 for q, xy in origen.items()))
     r = _dibujar(sesion, sketch, cambiar, sin_conflicto="Mover")

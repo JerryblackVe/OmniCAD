@@ -988,3 +988,21 @@ def test_p72_ventana_y_api_crean_el_mismo_arco_con_radio(barrido):
         lienzo.close()
         lienzo.deleteLater()
         app.processEvents()
+
+
+def test_b480_girar_el_boceto_avisa_las_restricciones_que_quita():
+    """B-480: girar 90° quita las horizontales y verticales (ya no valen; Fusion también) pero lo hacía sin aviso. Ahora
+    avisa en un renglón, con el texto de Fusion; las cotas de largo y de diámetro se conservan. Mover no avisa."""
+    from omnicad import api
+    s = api.Sesion()
+    llamar = lambda h, **k: api.llamar(s, h, k)  # noqa: E731
+    llamar("create_sketch", plane="XY", name="B")
+    lineas = [e["id"] for e in llamar("draw_rectangle", x1=10, y1=10, x2=60, y2=40)["result"]["entities"]]
+    llamar("add_dimension", sketch="B", type="distance", entities=[lineas[0]])
+    r = llamar("transform_sketch", sketch="B", dx=5)
+    assert r["ok"] and not r["avisos"], r
+    r = llamar("transform_sketch", sketch="B", angle=90)
+    assert r["ok"] and r["avisos"] == [
+        "Las restricciones o las cotas se han eliminado durante la operación (4 restricciones, 0 cotas)."], r
+    g = llamar("get_sketch", sketch="B")["result"]
+    assert g["constraints"] == [] and [d["value"] for d in g["dimensions"]] == [50.0]
