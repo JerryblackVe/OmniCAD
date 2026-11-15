@@ -54,7 +54,7 @@ Abierto 1 (H-110 de la fase 2 de CREAR y MODIFICAR). Plan por fases: [plan_bocet
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| BOC-84 | Herramienta Estrella del boceto | Parcial | Media | Campo vivo del giro, previa redondeada y rehacerla ya terminada. | `clon/tests/test_boc84_estrella.py`; pieza `boceto_herramientas` | 2026-11-13 |
+| BOC-84 | Herramienta Estrella del boceto | Parcial | Media | Campo vivo del giro, previa redondeada y rehacerla ya terminada. De B-496 (15/11): los vértices virtuales ocultos se eligen con selección por ventana (`editor_boceto.py` ~5877); la copia o simetría de una estrella comparte el grupo de glifos; con cota propia en el círculo interior, la cota manda sin aviso. | `clon/tests/test_boc84_estrella.py`; pieza `boceto_herramientas` | 2026-11-13 |
 
 ## Superficie (auditoría contra Fusion, 2026-10-24)
 
