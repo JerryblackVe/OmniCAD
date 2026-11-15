@@ -165,3 +165,19 @@ def test_arcos_svg_y_dxf(nombre, plane, kind, param, tmp_path):
     assert len(dxf_ms) == len(orig_mids), (nombre, "dxf count", len(dxf_ms), len(orig_mids))
     for em in orig_mids:
         assert any(math.hypot(em[0] - dm[0], em[1] - dm[1]) <= 0.01 for dm in dxf_ms), (nombre, "dxf", em, dxf_ms)
+
+
+@pytest.mark.parametrize("ancho, alto", [("40em", "20em"), ("60ex", "30ex"), ("1e2", "5E1px"), ("40em", "")])
+def test_b522_unidades_em_ex_y_exponentes_no_rompen_insert_svg(ancho, alto, tmp_path):
+    """B-522: height="40em" daba INTERNAL_ERROR (la «e» de «em» entraba al número: float('40e')). Ahora em y ex valen
+    16 y 8 px (la letra por defecto de un navegador) y un exponente sigue leyéndose (1e2 = 100 px)."""
+    assert svg_mod._longitud("40em") == (40.0, "em") and svg_mod._longitud("1e2") == (100.0, "")
+    assert svg_mod._longitud("2.5e-1mm") == (0.25, "mm") and svg_mod._longitud("em") == (None, "")
+    ruta = tmp_path / "unidades.svg"
+    ruta.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{ancho}" height="{alto}">'
+                    '<rect x="0" y="0" width="96" height="48"/></svg>', encoding="utf-8")
+    s = api.Sesion()
+    r = api.llamar(s, "insert_svg", {"path": str(ruta), "plane": "XY"})
+    assert r["ok"], r
+    xs = [p["x"] for p in api.llamar(s, "get_sketch", {})["result"]["points"]]
+    assert max(xs) - min(xs) == pytest.approx(25.4)                # sin viewBox el dibujo sigue en px: 96 px = 1 pulgada
