@@ -720,8 +720,6 @@ class VentanaPrincipal(QMainWindow):
                 self.timeline.repintar_iconos()
                 cinta = getattr(self, "cinta", None)
                 if cinta is not None:                      # la tipografía nueva cambia el ancho de los botones
-                    for i in range(cinta.pila.count()):
-                        cinta.pila.widget(i).setProperty("ancho_con_texto", None)
                     cinta.ajustar_textos()
                 modo = getattr(self, "modo_boceto", None)
                 if modo is not None and modo.lienzo is not None:

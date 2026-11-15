@@ -76,7 +76,7 @@ def test_la_fila_de_grupos_de_la_cinta_tiene_aire(ventana):
     assert isinstance(lay, QHBoxLayout)
     m = lay.contentsMargins()
     assert (m.left(), m.top(), m.right(), m.bottom()) == (4, 3, 4, 3)
-    assert lay.spacing() >= 8
+    assert lay.spacing() >= 3     # B-495: 8 dejaba la pestaña BOCETO sin entrar a 1780 px
 
 
 def test_la_x_del_panel_de_datos_lo_cierra_y_lo_recuerda(ventana):

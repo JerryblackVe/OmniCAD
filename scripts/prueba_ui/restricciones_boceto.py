@@ -497,8 +497,10 @@ def ventana_chica():
                 b = boton_cinta(f"sk_{herr}")
                 if not v.rect().contains(b.mapTo(v, b.rect().center())):
                     faltan.append(herr)
-            except StopIteration:
-                faltan.append(herr)
+            except StopIteration:      # B-423/B-495: compactada, la herramienta sigue en el menú de su título
+                accion = v.modo_boceto.acciones[f"sk_{herr}"]
+                if not any(accion in t.menu().actions() for t in v.cinta.findChildren(QToolButton, "titulo_grupo") if t.menu()):
+                    faltan.append(herr)
         faltan = sorted(set(faltan))
         A.reg(area, f"{ancho}x{alto}: cuántos botones quedan fuera de la ventana", not faltan, f"fuera: {faltan}" if faltan else "todos a la vista")
         A.foto(v, f"restr_ventana_{ancho}")

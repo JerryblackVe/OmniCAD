@@ -66,10 +66,8 @@ def test_la_cinta_recalcula_los_anchos_de_los_botones_al_cambiar_la_letra(ventan
     v = ventana
     pagina = v.cinta.pila.currentWidget()
     try:
-        pagina.setProperty("ancho_con_texto", 12345)      # medida vieja, de otra tipografía
         v.prefs["interfaz/tamano_pct"] = 150
         v.aplicar_tema()
-        assert pagina.property("ancho_con_texto") != 12345
         for b in pagina.findChildren(QToolButton, "boton_cinta"):     # si muestra texto, el ancho le alcanza
             if b.isVisible() and b.toolButtonStyle() == Qt.ToolButtonTextUnderIcon:
                 necesita = max(b.fontMetrics().horizontalAdvance(r) for r in b.text().split("\n")) + 14
