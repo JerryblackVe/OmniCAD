@@ -1103,8 +1103,14 @@ def _cascara_por_desfase(forma, caras, espesor):
             tapas = _tapa_del_hueco(cavidad, plano, espesor)
             if not tapas:
                 return None
-            salida = gp_Vec(*(np.asarray(plano.normal, float) * espesor * 1.5))
-            herramientas += [BRepPrimAPI_MakePrism(tapa, salida).Shape() for tapa in tapas]
+            # B-536b: el prisma arranca 1e-3 mm adentro de la cavidad. Si solo la tocaba por la tapa, la unión de dos
+            # cuerpos pegados por una cara perdía el prisma según el estado de memoria del kernel (y el corte salía
+            # inválido); con caras B-spline el volumen no lo controla.
+            n = np.asarray(plano.normal, float)
+            adentro = gp_Trsf()
+            adentro.SetTranslation(gp_Vec(*(-1e-3 * n)))
+            herramientas += [BRepPrimAPI_MakePrism(BRepBuilderAPI_Transform(tapa, adentro, True).Shape(),
+                                                   gp_Vec(*(n * (espesor * 1.5 + 1e-3)))).Shape() for tapa in tapas]
         resultado = geo.booleano(forma, geo.unir_todos(herramientas), "cortar")
     except Exception:  # noqa: BLE001 — cualquier fallo del plan B deja el error original del kernel, que es el que se informa
         return None
