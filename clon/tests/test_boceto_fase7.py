@@ -296,3 +296,24 @@ def test_b466_curvatura_arco_spline_no_deforma_el_arco_y_mueve_poco_la_spline(s)
     p = prim(s, sid)
     _c, d1, d2 = evaluar_primitiva(p, dominio(p)[0], 2)
     assert (d1[0] * d2[1] - d1[1] * d2[0]) / math.hypot(*d1) ** 3 == pytest.approx(1 / 21, rel=1e-3)
+
+
+# ---------------------------------------------------------------- B-487: Curvatura línea–spline deja quieta la línea
+def test_b487_curvatura_linea_spline_deja_quieta_la_linea(s):
+    """Antes la línea se corría ~6 mm y la spline ~21 mm (B-466 solo dejaba quieto un arco o círculo). Fusion
+    (SKT-CONSTRAIN-CURVATURE) ajusta la spline: la línea no se mueve y la spline llega recta (curvatura 0)."""
+    linea = llamar(s, "draw_line", start_x=40, start_y=0, end_x=61, end_y=0)["entities"][0]["id"]
+    sid = spline(s, [[61, 0], [65, 20], [55, 40], [70, 60]], degree=3)
+    llamar(s, "add_constraint", sketch="B", type="coincident",
+           entities=[entidad(s, linea)["points"][1], entidad(s, sid)["points"][0]])
+    llamar(s, "add_constraint", sketch="B", type="tangent", entities=[linea, sid])
+    extremos = lambda: entidad(s, linea)["start"] + entidad(s, linea)["end"]  # noqa: E731
+    l_antes, antes = extremos(), entidad(s, sid)["vertices"]
+    llamar(s, "add_constraint", sketch="B", type="curvature", entities=[linea, sid])
+    assert extremos() == pytest.approx(l_antes, abs=1e-6)
+    despues = entidad(s, sid)["vertices"]
+    # Llegar recta obliga a correr los puntos de ajuste (no hay asa de curvatura): ~29 mm; antes el extremo iba 30 mm.
+    assert max(math.dist(p, q) for p, q in zip(antes, despues, strict=True)) < 30
+    p = prim(s, sid)
+    _c, d1, d2 = evaluar_primitiva(p, dominio(p)[0], 2)
+    assert abs(d1[0] * d2[1] - d1[1] * d2[0]) / math.hypot(*d1) ** 3 < 1e-4

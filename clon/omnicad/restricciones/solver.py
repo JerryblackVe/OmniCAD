@@ -1028,14 +1028,16 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cam
 
 def acomodar_tangente(boceto, entidades, valores_cotas=None):
     """Después de agregar una tangente (o una curvatura, B-466) con el comando: la cumple sin mover el primer arco o
-    círculo y sin cambiar ningún radio de arco, ni el radio o el largo de las curvas de la tangente
-    (`boceto3d.acomodar_tangente` en 3D, BOC-83). Si no, el solver reparte el salto entre los puntos sueltos del arco y
+    círculo (o la línea si no hay ninguno, B-487) y sin cambiar ningún radio de arco, ni el radio o el largo de las
+    curvas de la tangente (`boceto3d.acomodar_tangente` en 3D, BOC-83). Si no, el solver reparte el salto entre los puntos sueltos del arco y
     su radio cambia. Si la otra curva no puede moverse, se mueve el arco entero; si tampoco, queda el reparto del
     solver. Las recetas guardadas no pasan por acá."""
-    redondas = [e for e in entidades if boceto.tipo_de(e) in CIRCULARES]
+    # B-487: sin arco ni círculo (línea–spline), queda quieta la línea: Fusion ajusta la spline.
+    quieta = ([e for e in entidades if boceto.tipo_de(e) in CIRCULARES]
+              or [e for e in entidades if boceto.tipo_de(e) == "linea"])[:1]
     conservar = [(cid, "distancia" if c.tipo == "linea" else "radio") for cid, c in boceto.curvas.items()
                  if not c.proyectada and (c.tipo == "arco" or (cid in entidades and c.tipo in ("linea", "circulo")))]
-    for quietas in (redondas[:1], ()) if redondas else ():
+    for quietas in (quieta, ()) if quieta else ():
         prueba, valores = boceto.copia(), dict(valores_cotas or {})
         for k in quietas:
             prueba.agregar_restriccion("fijo", [k])

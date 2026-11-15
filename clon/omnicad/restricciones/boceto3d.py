@@ -767,11 +767,12 @@ def acomodar_tangente(b, entidades, valores):
     cambia (BOC-81). Si la otra curva no puede moverse, se mueve el arco entero; si tampoco, queda el reparto del solver.
     Las recetas guardadas no pasan por acá: resuelven igual que siempre."""
     g, P = datos(b), _P(b)
-    redondas = [e for e in entidades if g["curvas"][e]["tipo"] in ("arco", "circulo")]
+    quieta = ([e for e in entidades if g["curvas"][e]["tipo"] in ("arco", "circulo")]
+              or [e for e in entidades if g["curvas"][e]["tipo"] == "linea"])[:1]     # B-487: si no, la línea
     medidas = {k: _medida(g, P, k) for k, c in g["curvas"].items()
                if c["tipo"] == "arco" or (c["tipo"] == "linea" and k in entidades)}
-    if redondas:
-        for quietas in (redondas[:1], ()):
+    if quieta:
+        for quietas in (quieta, ()):
             if resolver(b, valores, quietas, medidas).ok:
                 return
 
