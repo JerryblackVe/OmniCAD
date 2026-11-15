@@ -8,12 +8,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-541 | Enter no acepta Empalme, Extruir ni Patrón (Fusion acepta con 1 Enter) (B-539 integrado: c1d112f) |
-| E2 | P-160 | Extruir «Todo» elige solo el lado del cuerpo (Gerardo); después B-471b: B-471 (22a940f6, E5) rompió `test_cuerpos_partidos::test_b344…[visible]` (abre en «nuevo», no en «unir») |
+| E1 | B-540 | Doble clic en el boceto del navegador renombra en vez de editar (B-541 integrado: 872e8fc) |
+| E2 | B-471b | B-471 (22a940f6, E5) rompió `test_cuerpos_partidos::test_b344…[visible]`: Revolución abre en «nuevo», no en «unir» (P-160 integrado: 3f35b5b) |
 | E3 | B-536b | Su test `test_b536_barrido_empalmado…` entró rojo en c7d6c3ab (Vaciado1 falla); B-537 integrado: f833909 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | B-545 | Después B-547 (B-546 parcial integrado: 6355948; falta remedir abrir y Cancelar en Windows, E11) |
+| E6 | B-547 | Rosca en un cuerpo ya modificado: 3,7 s y bloquea (B-546 parcial integrado: 6355948; B-545 medido, queda para después) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | — | En pausa hasta que Gerardo decida sobre el advisor (P-158c integrada: 1186c2d) |
@@ -25,15 +25,13 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-331 | La API en vivo congela la ventana (E6) |
-| 2 | B-547 | Rosca en un cuerpo ya modificado: 3,7 s y bloquea (E6 o E2) |
-| 3 | B-545 | Abrir el panel de Agujero: 263–358 ms (E6) |
-| 4 | B-543 | Chaflán: un clic simple suma aristas (Sonnet) |
-| 5 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (Sonnet) |
-| 6 | B-544 | Punto en vértice: el vértice tiene que ganar (Sonnet) |
-| 7 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
-| 8 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
-| 9 | B-540 | Doble clic en el boceto del navegador renombra en vez de editar (Sonnet) |
-| 10 | P-161 | Extruir preselecciona el único perfil (Sonnet, chico) |
+| 2 | B-545 | Abrir el panel de Agujero: 263–358 ms (E6) |
+| 3 | B-543 | Chaflán: un clic simple suma aristas (Sonnet) |
+| 4 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (Sonnet) |
+| 5 | B-544 | Punto en vértice: el vértice tiene que ganar (Sonnet) |
+| 6 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
+| 7 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
+| 8 | P-161 | Extruir preselecciona el único perfil (Sonnet, chico) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
