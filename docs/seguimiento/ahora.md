@@ -18,7 +18,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | P-158c | Entrega 2 de P-158: Mensajes cortos de Superficie y el resto (368 pendientes); P-158b integrado: 126305f |
 | E9 | — | Sin ítem: queda para regresiones y piezas de OpenCode (B-401 integrado: 4034b27) |
-| E10 | B-535 | Pestañas de la cinta cortadas en ventana chica («SUPE…») (B-533 integrado: 9d6852b) |
+| E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
 
