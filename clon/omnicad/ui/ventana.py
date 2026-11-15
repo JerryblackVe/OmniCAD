@@ -2672,11 +2672,22 @@ class VentanaPrincipal(QMainWindow):
                 return False
             from ..registro_uso.ganchos import error
             error(e, origen="ui")
-            QMessageBox.warning(self, NOMBRE_APP, str(e))
+            if self.panel is not None:      # B-503 (regla 14): con un comando abierto, un renglón en su panel, sin cuadro
+                self.panel._mostrar(str(e), tipo="error")
+            else:
+                QMessageBox.warning(self, NOMBRE_APP, str(e))
             return False
 
-    def _agregar(self, op, aparte=False):
+    def _agregar(self, op, aparte=False, desde_panel=False):
         res = self.doc.agregar(op, aparte=aparte)
+        if desde_panel and res.estado == "error":     # B-503: como una previa que falla: el paso no queda y el panel lo dice
+            diferir, self.doc.diferir_calculo = self.doc.diferir_calculo, False   # un CalculoDiferido acá repetía el agregar
+            try:
+                self.doc.deshacer()
+            finally:
+                self.doc.diferir_calculo = diferir
+            self.doc._rehacer.pop()
+            raise ErrorDocumento(res.mensaje)
         self._informar(op, res)
 
     def _reemplazar(self, op, aparte=False):
@@ -2959,7 +2970,7 @@ class VentanaPrincipal(QMainWindow):
             cache, gruesas = self.visor._cache, self.visor._previa_gruesa
             mallas = {cid: datos[1:4] for cid, c in previa.cuerpos.items()
                       if not es_malla(c.forma) and id(c.forma) not in gruesas and (datos := cache.get(id(c.forma)))}
-        hecho = self._cambio_aparte(lambda: (self._reemplazar if edicion else self._agregar)(op, aparte),
+        hecho = self._cambio_aparte(lambda: self._reemplazar(op, aparte) if edicion else self._agregar(op, aparte, True),
                                     None if panel is None else lambda: panel.cerrando or panel.aceptar(), mallas)
         if not hecho:
             return hecho                # None: se calcula aparte y el panel vuelve a Aceptar al terminar (FL-3b)
