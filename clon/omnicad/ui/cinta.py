@@ -490,13 +490,26 @@ class Cinta(QWidget):
         disponible = self.pila.width()
         if preparar(True) <= disponible or preparar(False) <= disponible:
             return
-        # Ni solo con íconos entra: se compactan (un botón y el resto en el menú del título) primero los grupos más
-        # anchos, de a uno, y los demás conservan todos sus íconos.
-        for grupo in sorted(grupos, key=lambda g: -g.sizeHint().width()):
+        # Ni solo con íconos entra: se compactan (un botón y el resto en el menú del título) de a un grupo. Cada vuelta
+        # elige el grupo más angosto que alcanza para entrar; si ninguno solo alcanza, el más ancho, y sigue.
+        # B-495b: aquí se mide con el layout real (`totalSizeHint`), porque con la suma sola los botones se superponían.
+        def entra():
+            return max(ancho_pagina(), pagina.layout().totalSizeHint().width()) <= disponible
+
+        def compactar(grupo, si):
             for b in grupo.findChildren(QToolButton, "boton_cinta")[1:]:
-                b.hide()
-            if ancho_pagina() <= disponible:
-                return
+                b.setVisible(not si)
+
+        pendientes = sorted(grupos, key=lambda g: -g.sizeHint().width())
+        while pendientes and not entra():
+            for grupo in reversed(pendientes):          # del más angosto al más ancho
+                compactar(grupo, True)
+                if entra():
+                    pendientes.remove(grupo)
+                    break
+                compactar(grupo, False)
+            else:
+                compactar(pendientes.pop(0), True)      # ninguno solo alcanza: el más ancho
         for grupo in grupos:        # ni así: el título puede quedar más angosto que su ícono
             grupo.setMinimumWidth(grupo.layout().itemAt(0).minimumSize().width() + 4)
 
