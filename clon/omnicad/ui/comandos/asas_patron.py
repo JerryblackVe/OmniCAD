@@ -171,7 +171,7 @@ def _ruta(ctx, v):
         salida.append(mp.AsaRecorrido("rd", rec, s0, (n - 1) if distribucion == "espaciado" else 1.0))
     signo = -1.0 if paso < 0 else 1.0
     salida.append(mp.AsaCantidad("rn", lambda m: (rec.punto(s0 + paso * (m - 1)), rec.tangente(s0 + paso * (m - 1)) * signo),
-                                 abs(paso) or 10.0))
+                                 abs(paso) or 10.0, minimo=2))      # B-435: Fusion pide 2 o más copias: el asa frena en 2
     return salida
 
 

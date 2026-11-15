@@ -333,7 +333,7 @@ def probar(clave, sel, vals, foto=None):
                     m = next(x for x in g.manips if isinstance(x, mp.AsaCantidad) and x.clave == cl)
                     asa, _pt, t = m._asa(g)
                     ok = arrastrar(p, g, asa, asa - t * m.paso * (despues + 5))
-                    A.reg(nombre, f"asa de cantidad «{cl}» no baja de una copia", ok and int(g.valor(cl)) == 1, str(g.valor(cl)))
+                    A.reg(nombre, f"asa de cantidad «{cl}» no baja de su mínimo ({m.minimo})", ok and int(g.valor(cl)) == m.minimo, str(g.valor(cl)))   # B-534: el patrón en trayectoria frena en 2
                 elif isinstance(m, mp.AsaRuta):
                     antes = g.valor(cl)
                     i = int(np.searchsorted(m.ts, 0.9))
