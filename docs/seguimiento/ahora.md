@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-541 | Enter no acepta Empalme, Extruir ni Patrón (Fusion acepta con 1 Enter) (B-539 integrado: c1d112f) |
 | E2 | P-160 | Extruir «Todo» elige solo el lado del cuerpo (Gerardo) (B-531 integrado: a32a203) |
-| E3 | B-537 | Unir sobre un cuerpo con Patrón de operaciones: sólido inválido o acepta un inválido (B-536 integrado: e758328) |
+| E3 | B-537 | Unir sobre un cuerpo con Patrón de operaciones: sólido inválido o acepta un inválido (después B-536b: su test `test_b536_barrido_empalmado…` entró rojo en c7d6c3ab) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-546 | Llavero de 17 perfiles: abrir Extruir traba 2 s; después B-545 y B-547 (B-425 integrado: d351f73) |
