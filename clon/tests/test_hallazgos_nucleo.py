@@ -104,7 +104,7 @@ def test_desfase_de_cara_que_atraviesa_el_cuerpo_lo_dice(distancia):
     with pytest.raises(geo.ErrorGeometria) as e:
         sm.desfasar_caras(caja, [_tapa(caja)], distancia)
     texto = str(e.value)
-    assert texto.startswith("Desfase de caras:") and "no queda material" in texto and "Reemplazar" not in texto
+    assert "atraviesa el cuerpo" in texto and f"{abs(distancia):g} mm" in texto and "Reemplazar" not in texto     # dice la causa
 
 
 @pytest.mark.parametrize("distancia, alto", [(-5, 5), (-9.99, 0.01), (5, 15)])
