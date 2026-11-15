@@ -483,7 +483,7 @@ def _reubicar_arista(forma, ref):
                              "vértice con otro empalme del mismo paso (hacelos en pasos separados).")
 
 
-def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad):
+def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, desborde=False):
     """Empalme de una arista recta entre dos caras planas con la sección que se pide (`_perfil_de_empalme`): radio
     asimétrico (`radio1` sobre la primera cara, `radio2` sobre la segunda) y/o continuidad G2. OpenCascade no los tiene:
     se corta (arista convexa) o se rellena (cóncava) con el prisma de la esquina, de la sección a lo largo de la arista.
@@ -513,12 +513,16 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad):
     centro = (a + b) / 2
     convexa = geo.punto_toca(forma, tuple(centro + 1e-3 * (u1 + u2) / np.linalg.norm(u1 + u2)), 1e-9)
     p1, p2 = a + d1 * u1, a + d2 * u2
-    for cara, u, d in ((caras[0], u1, d1), (caras[1], u2, d2)):      # el radio no puede pasar del ancho de la cara
-        ancho = max(float((np.array([q.X(), q.Y(), q.Z()]) - a) @ u)
-                    for q in (BRep_Tool.Pnt_s(TopoDS.Vertex(v)) for v in _unicos(cara, TopAbs_VERTEX)))
-        if d > ancho * (1 + 1e-9):           # B-400: igual al ancho se come la cara entera, como Fusion
-            raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
-                                     "Achicalo.")
+    medidas = [(u, d, max(float((np.array([q.X(), q.Y(), q.Z()]) - a) @ u)
+                          for q in (BRep_Tool.Pnt_s(TopoDS.Vertex(v)) for v in _unicos(cara, TopAbs_VERTEX))))
+               for cara, u, d in ((caras[0], u1, d1), (caras[1], u2, d2))]
+    # B-400: igual al ancho se come la cara entera, como Fusion. B-460 (`desborde`): Fusion también deja que se coma
+    # entera UNA cara convexa y siga hasta la cara siguiente, que lo recorta, si entra holgado en la otra.
+    excesos = [m for m in medidas if m[1] > m[2] * (1 + 1e-9)]
+    if excesos and not (desborde and convexa and len(excesos) == 1
+                        and all(m[1] < m[2] * (1 - 1e-9) for m in medidas if m is not excesos[0])):
+        raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
+                                 "Achicalo.")
     # el prisma recto de la esquina sobraría (o dejaría una astilla) si las caras de los extremos no fueran perpendiculares
     por_vertice = _ancestros(forma, TopAbs_VERTEX, TopAbs_FACE)
     for v in _unicos(arista, TopAbs_VERTEX):
@@ -534,6 +538,13 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad):
               BRepBuilderAPI_MakeEdge(gp_Pnt(*map(float, p2)), gp_Pnt(*map(float, a))).Edge()):
         perfil.Add(e)
     prisma = geo.extruir([BRepBuilderAPI_MakeFace(perfil.Wire()).Face()], tuple(t), largo)
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
+    for u, d, ancho in excesos:           # lo que pasa del borde de la cara no puede tocar otra parte del cuerpo
+        borde = geo.Plano.desde_marco(a + ancho * u, u, t)
+        mas_alla = geo.extruir([_cara_plana(borde, centro, largo + 2 * d)], tuple(u), d)
+        if geo.volumen(BRepAlgoAPI_Common(BRepAlgoAPI_Common(prisma, mas_alla).Shape(), forma).Shape()) > 1e-6:
+            raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
+                                     "Achicalo.")
     return _validar(geo.booleano(forma, prisma, "cortar" if convexa else "unir"), "Empalme")
 
 
@@ -595,6 +606,26 @@ def _empalmar_caras_justas(forma, grupos, cadena_tangente):
     grupos = [dict(g, aristas=[_reubicar_arista(forma, x) for x in g.get("aristas") or []
                                if not any(x.IsSame(h) for h in hechas)]) for g in grupos]
     return forma, [g for g in grupos if g["aristas"]], False
+
+
+def _empalme_desbordado(forma, grupos, cadena_tangente):
+    """B-460: caja de 100×60×40, arista de arriba de 100 mm, r55: el kernel falla porque el radio pasa del alto de la
+    cara lateral (40), pero Fusion se la come entera y la base recorta el cilindro. Si todo es radio constante en
+    aristas rectas entre caras planas sin vértices compartidos, se hace con el prisma de la esquina
+    (`_empalme_por_perfil` con `desborde`). Devuelve la forma, o None para que siga el error de siempre."""
+    if any(g.get("tipo", "constante") != "constante" or g.get("esquina") == "setback" for g in grupos):
+        return None
+    elegidas = [(e, float(g["radio"])) for g in grupos
+                for e in _ampliar_tangentes(forma, g.get("aristas") or [], cadena_tangente)]
+    vertices = [v for e, _ in elegidas for v in _unicos(e, TopAbs_VERTEX)]
+    if any(v.IsSame(w) for i, v in enumerate(vertices) for w in vertices[i + 1:]):
+        return None
+    try:
+        for e, r in elegidas:
+            forma = _empalme_por_perfil(forma, _reubicar_arista(forma, e), r, r, "g1", desborde=True)
+    except geo.ErrorGeometria:
+        return None
+    return forma
 
 
 def empalme(forma, grupos, *, cadena_tangente=True):
@@ -696,6 +727,9 @@ def empalme(forma, grupos, *, cadena_tangente=True):
     if not mf.IsDone():
         # PL4 (tutorial «Fillet Order of Operations» de Plasticity): el orden de los empalmes es de
         # lo GRANDE a lo chico; un empalme chico hecho primero puede comerse el material del grande.
+        desbordado = _empalme_desbordado(forma, grupos, cadena_tangente)
+        if desbordado is not None:
+            return desbordado
         raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
                                  "Achicalo. Si el timeline tiene otros empalmes en la misma zona, probá primero el "
                                  "radio MAYOR y después los más chicos (de lo grande a lo chico) y reordená los "

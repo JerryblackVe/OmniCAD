@@ -67,13 +67,14 @@ def test_b454_el_asa_del_empalme_llega_al_limite_con_la_previa_aparte(tmp_path, 
         d = (b - a) / np.linalg.norm(b - a)
         desde = (a + b) / 2
         _raton(p.visor, QEvent.MouseButtonPress, desde, Qt.LeftButton, Qt.LeftButton)
-        # un tirón muy pasado del alto de 51,84 mm: la previa aparte falla sin ningún valor sano en el medio
+        # un tirón muy pasado del alto de 113,23 mm: la previa aparte falla sin ningún valor sano en el medio
         _raton(p.visor, QEvent.MouseMove, desde + d * 1600, Qt.NoButton, Qt.LeftButton)
         _esperar(p)                             # la previa (y el freno) vuelven antes de soltar
         _raton(p.visor, QEvent.MouseButtonRelease, desde + d * 1600, Qt.LeftButton, Qt.NoButton)
         _esperar(p)
         radio = p.ctx.evaluar(p.valores["radio"])
-        assert 20 < radio < 51.84, (radio, p.mensaje.text())      # sin el arreglo: «el asa frena en 1 mm»
+        # sin el arreglo: «el asa frena en 1 mm»; B-460: pasa del ancho de arriba (51,84) como en Fusion, no del alto
+        assert 20 < radio < 113.23, (radio, p.mensaje.text())
         assert p._previa_ok and "el asa frena en" in p.mensaje.text(), p.mensaje.text()
         p.cancelar()
     finally:
