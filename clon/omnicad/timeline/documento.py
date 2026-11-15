@@ -1101,7 +1101,11 @@ class Documento:
         self._esperando_hijo = True
         try:
             salida = aislado.correr_json(tarea, datos, aislado.TOPE_PREVUELO_PARAMETROS, esperar)
-            return _leer_calculo(salida)
+            try:
+                return _leer_calculo(salida)
+            except ValueError:      # B-503: lo que el padre guardó del trabajador quedó desparejo: que mande todo de nuevo
+                aislado.marca_recibida = None
+                return _leer_calculo(aislado.correr_json(tarea, datos, aislado.TOPE_PREVUELO_PARAMETROS, esperar))
         except (aislado.TareaAislada, ValueError, ErrorGeometria, OSError) as e:
             raise ErrorDocumento(f"El cálculo aislado falló: {e}. No se aplicó el resultado y OmniCAD sigue andando.") from e
         finally:
