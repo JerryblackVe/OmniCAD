@@ -46,3 +46,24 @@ def test_b524_vaciar_de_nuevo_un_cuerpo_hueco_no_agranda_el_volumen():
     r = api.llamar(sesion, "shell", {"body": "op1.c1", "faces": ["Cuerpo1/F7"], "thickness": 14.0})
     assert not r["ok"] and "Pared" in r["mensaje"], r
     assert geo.volumen(next(iter(sesion.doc.estado_final.cuerpos.values())).forma) == antes
+
+
+def test_b536_barrido_empalmado_la_cadena_toma_todo_y_sin_cadena_se_vacia():
+    """B-536: tras empalmar todo un barrido, la cadena tangente de una tapa llega a todas las caras (como en Fusion);
+    el error dice qué desmarcar, y sin cadena el vaciado de 1 mm anda."""
+    sesion = api.Sesion()
+    for nombre, args in (("create_sketch", {"plane": "XY", "name": "perfil"}), ("draw_circle", {"radius": 5}),
+                         ("create_sketch", {"plane": "XZ", "name": "ruta"}),
+                         ("draw_spline", {"points": [[0, 0], [30, 10], [60, 0], [90, 10]]}),
+                         ("sweep", {"sketch": "perfil", "path_sketch": "ruta"}),
+                         ("fillet", {"body": "Cuerpo1", "edges": "all", "radius": 1})):
+        assert api.llamar(sesion, nombre, args)["ok"], nombre
+    caras = api.llamar(sesion, "find_faces", {})["result"]["faces"]
+    tapa = [f["id"] for f in caras if f["type"] == "plane"][0]
+    antes = geo.volumen(next(iter(sesion.doc.estado_final.cuerpos.values())).forma)
+    r = api.llamar(sesion, "shell", {"body": "Cuerpo1", "faces": [tapa], "thickness": 1})
+    assert not r["ok"] and "desmarcá Cadena tangente" in r["mensaje"], r
+    r = api.llamar(sesion, "shell", {"body": "Cuerpo1", "faces": [tapa], "thickness": 1, "tangent_chain": False})
+    assert r["ok"], r
+    forma = next(iter(sesion.doc.estado_final.cuerpos.values())).forma
+    assert geo.es_valida(forma) and 0 < geo.volumen(forma) < antes
