@@ -2397,7 +2397,7 @@ class Lienzo(QWidget):
             from .asas_boceto import asas_empalme
 
             def aceptar(v):
-                radio, aviso = self.evaluar(v[0]), ""
+                radio, aviso = self._radio_empalme(v[0], picks), ""
 
                 def empalmar():
                     nonlocal aviso
@@ -2409,6 +2409,18 @@ class Lienzo(QWidget):
                 return ok
             self._abrir_entrada(["Radio"], [formato.numero(self._radio_sugerido(picks))], pos,
                                 aceptar, asas_empalme(self, picks, xys, vertice=vertice))
+
+            def validar_radio(texto):
+                error = ""
+                try:
+                    self._radio_empalme(texto, picks)
+                except (ErrorExpresion, ValueError, ErrorBoceto) as e:
+                    error = str(e)
+                self.entrada.marcar_error(malo=bool(error))
+                self.entrada.campos[0].setToolTip(error)
+                if error:
+                    self.mensaje.emit(error)
+            self.entrada.campos[0].textChanged.connect(validar_radio)
         elif h in ("chaflan", "chaflan_dist_angulo", "chaflan_dos_dist"):
             listo = False
             d = formato.numero(self._radio_sugerido(picks))
@@ -3979,6 +3991,19 @@ class Lienzo(QWidget):
         if clave not in ANGULARES:          # lo escrito se vuelve cota: mayor que cero y hasta 1 km, igual que al editarla
             validar_valor_cota(clave if clave in ("radio", "diametro") else "distancia", valor)
         return valor
+
+    def _radio_empalme(self, texto, picks):
+        """Radio escrito del Empalme. Entre dos rectas paralelas lo manda la separación y el pedido se ignora con un
+        aviso: pasarse del tope no lo rechaza."""
+        from ..restricciones.boceto import MEDIDA_MAXIMA
+        c1, c2 = picks
+        if self.b.tipo_de(c1) == self.b.tipo_de(c2) == "linea":
+            d1, d2 = self.b._direccion(c1), self.b._direccion(c2)
+            if abs(d1[0] * d2[1] - d1[1] * d2[0]) < 1e-12:
+                valor = self.evaluar(texto, LONGITUD)
+                validar_valor_cota("radio", min(valor, MEDIDA_MAXIMA))
+                return valor
+        return self._evaluar_campo("radio", texto)
 
     def _valores_bloqueados(self):
         """Valores fijados (lo escrito); la caja que se está escribiendo ya manda mientras se escribe."""
