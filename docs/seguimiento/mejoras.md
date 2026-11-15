@@ -33,6 +33,7 @@ Abierto 10 · Parcial 9 · Sin verificar 2.
 | P-31-lic | Respetar licencias AGPL-3.0 (PartMode, QymCAD, Chili3D): solo ideas, nunca código | Sin verificar | Media | Regla de proceso, no tarea; no se puede comprobar contra el código. | PROJECT_LOG.md:117 | 2026-10-20 |
 | P-156 | Holgura de impresión 3D única (Gerardo, 2026-11-15): un valor general calibrado con la placa, aplicado a la rosca modelada (agujero agranda, tornillo achica), al molde (Cortar con «Dejar holgura») y a «La otra pieza es: Impresa / Metálica»; UI de una línea | Abierto | Alta | Diseño aprobado y qué reemplaza: ver la ficha «P-156» en Detalle | Gerardo, `evidencias/reportes_pc/2026-11-15_gerardo_rosca/holgura_impresion_negativa.png` | 2026-11-15 |
 | P-157 | Reorganizar Preferencias como Fusion: cada opción en su página, visual, poco texto, nada cortado a 1024×700, grisados con su motivo (Gerardo, 2026-11-15) | Abierto | Alta | Ver la ficha «P-157» en Detalle; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d | Gerardo, `evidencias/reportes_pc/2026-11-15_gerardo_preferencias/` | 2026-11-15 |
+| P-158 | Mensajes de los paneles cortos y gráficos en toda la app (Gerardo, 2026-11-15): 1 renglón con ícono, el tope a la vista en el asa y el campo y la previa en rojo, sin consejos largos; auditoría de todos los mensajes y test de largo | Abierto | Alta | Ver la ficha «P-158» en Detalle | Gerardo, `evidencias/reportes_pc/2026-11-15_gerardo_textos_largos/empalme_mensaje_gigante.png` | 2026-11-15 |
 
 ## Hallazgos de pruebas de uso
 
@@ -262,6 +263,16 @@ Abierto 1.
 | NOV-tip-1 | Letra grande: títulos de cinta elididos y ventana mínima de 1038 px | Abierto | Media | Compactar títulos de grupo y botón de espacio de trabajo al 120–150 %. | omnicad/ui/cinta.py; evidencias/tipografia_ui/f3_ventana_150.py | 2026-10-28 |
 
 ## Detalle de lo abierto
+
+### P-158 · Mensajes de los paneles: cortos, con ícono y gráficos (Gerardo, 2026-11-15)
+Gerardo: «estos textos gigantes no los quiero. Son feos y el usuario no los va a entender. Hay que hacer la app más intuitiva, menos texto, más gráfica, más entendible hasta para un niño de 10 años». Caso: el aviso del Empalme de 6 renglones («el asa frena en 36.26 mm… reordená los empalmes del timeline…»).
+Especificación (prioridad 1: toca los paneles de bocetos y sólido):
+1. **Mensaje del panel: máximo 1 renglón corto**, con ícono (⚠ o ✖) y una palabra clave, p. ej. «⚠ Radio máx. 36,2 mm». El detalle va en un «?» con tooltip, o no va.
+2. **Mostrar en vez de explicar:** el tope en el asa misma (marca o tope rojo donde frena), el campo en rojo cuando el valor no entra, la previa en rojo.
+3. **Sin consejos largos** en el panel; si hace falta, a la ayuda.
+4. **Auditoría de TODOS los mensajes de los paneles** (bocetos → sólido → superficie → resto): lista de los que pasan de 1 renglón y su versión corta.
+5. **Test** que falle si un mensaje de un panel pasa de N caracteres. Guía de estilo de mensajes de la UI (1 renglón, ícono, sin jerga, que lo entienda un chico de 10 años): ⚠ escribirla en AGENTS.md requiere el OK de Gerardo en el chat del coordinador.
+Relación con otras filas: B-436 (mensajes que dicen otra cosa; lo tiene E9) sigue aparte porque corrige el CONTENIDO, pero sus mensajes nuevos ya siguen este estilo. P-2b (traducción) va aparte: se traducen las versiones cortas.
 
 ### P-157 · Reorganizar Preferencias: ordenado, visual, poco texto (Gerardo, 2026-11-15)
 Gerardo: «todo tiene que estar bien ordenado en su lugar, bien explicado pero intuitivo, más visual, sin mucho texto, fácil de entender, que hasta un nene de 10 años entienda». Capturas: `evidencias/reportes_pc/2026-11-15_gerardo_preferencias/`.
