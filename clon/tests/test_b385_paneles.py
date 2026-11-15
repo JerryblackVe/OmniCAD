@@ -163,7 +163,7 @@ def test_solevacion_punto_tangente_crea_cupula_y_reabre(ventana):
     _teclear(p, "peso_fin", "1")
     _elegir_opcion(p, "operacion", "nuevo")
     op, volumen = _aceptar(s, v, p)
-    assert volumen == pytest.approx(2095.2, rel=1e-3)
+    assert volumen == pytest.approx(math.pi * 10 ** 2 * 10 / 2, rel=1e-3)   # B-464: paraboloide de Fusion, π·r²·h/2
     assert op.p["condicion_fin"] == {"tipo": "punto_tangente", "angulo": "0 deg", "peso": "1"}
     v.editar_operacion(op.id)
     q = v.panel
