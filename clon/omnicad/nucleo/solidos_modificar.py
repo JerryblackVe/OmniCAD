@@ -1550,7 +1550,8 @@ def _cara_dada_vuelta(mo, forma, caras, resultado, dist):
     from . import referencias as refs
     if geo.solidos(forma):          # en una superficie abierta el «volumen» no dice nada
         antes, despues = geo.volumen_exacto(forma), geo.volumen_exacto(resultado)
-        if (dist > 0 and despues < antes) or (dist < 0 and despues > antes):
+        # B-507: una esfera achicada justo su radio queda en un punto (volumen 0) que OCC da por válido
+        if despues < 1e-9 or (dist > 0 and despues < antes) or (dist < 0 and despues > antes):
             return True
     for cara in caras:
         for nueva in geo.lista_occ(mo.Generated(cara)):
