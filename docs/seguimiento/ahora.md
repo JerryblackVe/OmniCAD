@@ -9,8 +9,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | B-541 | Enter no acepta Empalme, Extruir ni Patrón (Fusion acepta con 1 Enter) (B-539 integrado: c1d112f) |
-| E2 | P-160 | Extruir «Todo» elige solo el lado del cuerpo (Gerardo) (B-531 integrado: a32a203) |
-| E3 | B-537 | Unir sobre un cuerpo con Patrón de operaciones: sólido inválido o acepta un inválido (después B-536b: su test `test_b536_barrido_empalmado…` entró rojo en c7d6c3ab) |
+| E2 | P-160 | Extruir «Todo» elige solo el lado del cuerpo (Gerardo); después B-471b: B-471 (22a940f6, E5) rompió `test_cuerpos_partidos::test_b344…[visible]` (abre en «nuevo», no en «unir») |
+| E3 | B-536b | Su test `test_b536_barrido_empalmado…` entró rojo en c7d6c3ab (Vaciado1 falla); B-537 integrado: f833909 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-545 | Después B-547 (B-546 parcial integrado: 6355948; falta remedir abrir y Cancelar en Windows, E11) |
