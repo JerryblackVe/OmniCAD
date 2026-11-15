@@ -10,10 +10,10 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-452 + B-519b (test_h84 con la cadena por defecto) | Fuera del boceto, la vista 3D sigue mostrando las curvas y objetos de boceto ocultos (B-480 integrado: e909112) |
 | E2 | B-531 | Regresión de B-461 (cresta a derechas), primero; después P-156 fase 2: Holgura de impresión: botón de la placa, molde, Impresa/… (B-520 integrado: c325d0c; B-530 Sin verificar para E11) |
-| E3 | FL-16 | `caras_tangentes` O(n²): el desfase de «@tienda» tarda ~16 s (B-528 integrado: 49acc9a) |
+| E3 | FL-16, después B-536 | `caras_tangentes` O(n²): el desfase de «@tienda» tarda ~16 s (B-528 integrado: 49acc9a) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | B-534 | Asa de cantidad del Patrón en trayectoria no baja (posible regresión de B-435) (B-471 integrado: bacda54) |
-| E6 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (FL-13 integrado: a1f3430) |
+| E6 | B-425 | Patrón con muchas copias congela la ventana (teselar fuera del hilo) (FL-15 integrado: bfa1513) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | P-158c | Entrega 2 de P-158: Mensajes cortos de Superficie y el resto (368 pendientes); P-158b integrado: 126305f |
@@ -24,8 +24,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-425 | Patrón con muchas copias congela la ventana (E6) |
-| 2 | B-331 | La API en vivo congela la ventana (E6) |
+| 1 | B-331 | La API en vivo congela la ventana (E6) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
