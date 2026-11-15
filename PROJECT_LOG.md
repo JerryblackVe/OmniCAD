@@ -412,6 +412,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-15] Con la regla 4 (solo importadores directos), si se toca una herramienta de la API, buscar también los tests que la llaman por nombre (`grep -rl '"fillet"' tests/`): los que pasan por `api.llamar` no la importan. · Evidencia: H-115 rompió `test_asistente_prompt::test_empalme_en_esto…` (B-529), que no entró en su corrida.
 - [2026-11-15] Un atajo que «da por desaparecida» una región tiene que distinguir desaparecer de fallar: el desfase 2D de una letra hacia adentro falla sin desaparecer y el atajo borraba la letra entera (B-503); criterio: |d| ≥ 2·área/perímetro. · Evidencia: `tests/test_b503_desfase_contorno.py`.
 - [2026-11-15] Antes de commitear seguimiento, mirar el resultado de `pytest test_seguimiento.py` y no solo el código de salida: `| tail -1` devuelve 0 aunque el test falle. · Evidencia: commit 24b0718 entró con B-518 de 6 celdas y quedó en rojo; lo arregló f891aec.
 - [2026-11-15] Una tabla de módulo que recuerda lo recibido (transporte, caché) guarda su propia copia, nunca la lista que adopta el documento: B-503, `aislado.estados_recibidos` era `doc._estados` y un deshacer la recortaba. · Evidencia: `tests/test_b503_transporte_trabajador.py`.
