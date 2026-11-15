@@ -22,7 +22,7 @@ TokenRouter, Ollama Cloud y OpenAI (ChatGPT, oauth).
 | `opencode/mimo-v2.6-flash-free` | OpenCode (gratis) | 8 s ✓ | 9 s ✓ | 10 s ✓ | mecánico (usa los datos para entrenar: nada privado) |
 | `nvidia/nemotron-3-ultra-550b` | NVIDIA (API) | 6 s ✓ | 11 s ✓ | 4 s ✓ | lógica difícil (grande y rápido) |
 | `opencode/big-pickle` | OpenCode (gratis) | 4 s ✓ | 12 s ✓ | 7 s ✓ | lógica y código estándar |
-| `openai/gpt-6.1-sol` | OpenAI (ChatGPT, oauth) | 6 s ✓ | 12 s ✓ | 7 s ✓ | lógica y código difícil (cupo ChatGPT) |
+| `openai/gpt-6.1-sol` | OpenAI (ChatGPT, oauth) | 6 s ✓ | 12 s ✓ | 7 s ✓ | ya no se usa (Gerardo, 2026-11-15); el token venció |
 | `opencode/deepseek-v4.1-flash-free` | OpenCode (gratis) | 8 s ✓ | 14 s ✓ | 6 s ✓ | mecánico / código estándar (cero retención) |
 | `opencode/nemotron-3.5-super-vl-free` | OpenCode (gratis) | 14 s ✓ | 20 s ✓ | 21 s ✓ | imágenes / contexto grande; lento |
 | `opencode/nemotron-3.5-lightning-free` | OpenCode (gratis) | 5 s ✓ | 29 s ✓ | 6 s ✓ | mecánico; lento en código (28 s) |
@@ -63,7 +63,8 @@ TokenRouter, Ollama Cloud y OpenAI (ChatGPT, oauth).
 
 ## Conclusiones
 
-- Mejores: `nvidia/nemotron-3-ultra-550b` y `openai/gpt-6.1-sol` (lógica), `opencode/beam-free` (el más rápido de los gratis).
+- **En uso (Gerardo, 2026-11-15):** `opencode/glm-5.3-flash-free` para las piezas de E9 y la caza; respaldo `opencode/deepseek-v4.1-flash-free`; lógica difícil `nvidia/nemotron-3-ultra-550b`. Sol (`openai/gpt-6.1-sol`) dejó de usarse.
+- Mejores: `nvidia/nemotron-3-ultra-550b` (lógica), `opencode/beam-free` (el más rápido de los gratis).
 - `nvidia/minimaxai/minimax-m3.1-flash` también quedó entre los buenos (código estándar y agentes, 5-12 s); `nvidia/z-ai/glm-5.3-flash` se colgó.
 - Gratis para código estándar y mecánico: `big-pickle`, `deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `mimo-v2.6-flash-free`.
 - OpenCode Go entero falla: falta la suscripción Go activa (y `deepseek-v4-pro` pide región Global).

@@ -130,11 +130,13 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   pide aprobación) y mandarle el brief de la fase siguiente con `SendMessage` (anda desde un aviso automático). El
   brief tiene que ser autocontenido (el clear borra el contexto). Se borra la sesión solo al terminar el plan o si
   Gerardo lo pide. La primera sesión la inicia Gerardo con un clic en la tarjeta.
-- **Implementar en OpenCode con GPT-6.1 Sol** (`openai/gpt-6.1-sol --variant high`): la sesión orquesta con
-  `/orquestador-opencode` y manda corridas chicas (una tarea por corrida) con **`timeout 1500`**; respaldo con `cp`
-  antes de cada una. Si una corrida se cuelga (log en 0 bytes, sin CPU ni archivos tocados) o Sol se queda sin cupo,
-  se corta solo ese proceso (por hora de inicio) y la pieza la hace Claude (Opus alto). Una sesión inactiva no
-  detecta un cuelgue: el coordinador mira el log y los archivos a los ~25 min.
+- **Implementar en OpenCode con GLM** (`opencode/glm-5.3-flash-free`, gratis y sin retención de datos; Gerardo,
+  2026-11-15: Sol/GPT-6.1 ya no se usa): la sesión orquesta con `/orquestador-opencode` y manda corridas chicas (una
+  tarea por corrida) con **`timeout 1500`**; respaldo con `cp` antes de cada una. Respaldo si GLM se cae:
+  `opencode/deepseek-v4.1-flash-free`; lógica difícil: `nvidia/nemotron-3-ultra-550b`; la geometría difícil va a
+  Opus alto. No usar OpenCode Go (sin suscripción) ni `mimo` (entrena con los datos). Si una corrida se cuelga (log en
+  0 bytes, sin CPU ni archivos tocados) se corta solo ese proceso (por hora de inicio) y la pieza la hace Claude. Una
+  sesión inactiva no detecta un cuelgue: el coordinador mira el log y los archivos a los ~25 min.
 - **Cierre de cada fase (lo hace el coordinador, no la sesión):** `ruff check .` limpio; **suite completa** con
   `scripts/turno.py` en dos mitades (corta a los 900 s): la lista de `tests/test_*.py` ordenada, primera y segunda
   mitad; la prueba de humo si se tocó la UI. Fallos en tests lejanos son regresiones reales: devolverlos a la
@@ -199,7 +201,7 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 
   | Tarea | Modelo | Esfuerzo |
   |---|---|---|
-  | Mecánica, formato fijo, mucho volumen, leer/buscar | Haiku 4.5 (o OpenCode con Sol) | sin esfuerzo |
+  | Mecánica, formato fijo, mucho volumen, leer/buscar | Haiku 4.5 (o OpenCode con GLM) | sin esfuerzo |
   | Arreglo chico, UI, validaciones, tests, docs | Sonnet 5 | bajo o medio |
   | Feature normal, refactor, revisar un diff | Sonnet 5 | medio |
   | Solver, geometría difícil, arquitectura, auditoría a fondo | Opus 5 | alto |
