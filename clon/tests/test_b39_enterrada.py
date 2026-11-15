@@ -218,3 +218,19 @@ def test_b39_ruta_completa_carcasa_con_cilindro_enterrado(tmp_path, monkeypatch)
     v_reabierta = volumen_limpio(s2, "tras reabrir")
     assert "unir" not in pasadas                            # el recálculo al reabrir tampoco fusiona
     assert v_reabierta == pytest.approx(v_antes, rel=1e-9)
+
+
+def test_fl3d_el_atajo_arma_un_clasificador_por_solido_y_no_uno_por_punto(monkeypatch):
+    """FL-3d: armar el clasificador por cada vértice y muestra costaba 14-33 ms en un cuerpo de cientos de caras
+    B-spline (unir 17 perfiles al llavero: 87 s). Se arma uno por sólido; el veredicto no cambia (carcasa ya cortada)."""
+    carcasa, cilindro = _carcasa(), geo.cilindro(2.5, 2, (20, 15, 0.5))
+    original, armados = geo.BRepClass3d_SolidClassifier, []
+
+    def contar(*args):
+        armados.append(len(args))
+        return original(*args)
+
+    monkeypatch.setattr(geo, "BRepClass3d_SolidClassifier", contar)
+    assert geo._queda_enterrada(cilindro, carcasa)
+    assert len(armados) <= 4, armados              # antes: uno por vértice y por cada una de las 200 muestras
+    assert not geo._queda_enterrada(geo.caja(10, 10, 10, (25, 0, 0)), carcasa)     # asoma afuera de la carcasa
