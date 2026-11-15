@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView, QTab
                                QToolButton, QVBoxLayout, QWidget)
 
 from ...nucleo.analisis import TABLA_MATERIALES as MATERIALES
+from ...nucleo import solidos_modificar as sm
 from ...timeline.operaciones import OPERACIONES_COMBINAR, OpCombinar, espesor_plastico
 from ...timeline.ops_modificar import (TIPOS_MOVIMIENTO, OpAlinear, OpApoyar, OpBorrarCaras, OpChaflan, OpDesfaseAristas,
                                        OpDesfaseCara, OpEliminarOperaciones,
@@ -103,11 +104,12 @@ class Empalme(Comando):
             Opciones("tipo_radio", "Tipo de radio", {"constante": "Constante", "cuerda": "Longitud de cuerda",
                                                      "variable": "Variable", "asimetrico": "Asimétrico"}, visible_si=empalme),
             Expresion("radio", "Radio", "1 mm", visible_si=lambda v: not completo(v) and (
-                v.get("tipo_radio") != "cuerda" or v.get("tipo") == "reglas")),
+                v.get("tipo_radio") != "cuerda" or v.get("tipo") == "reglas"), validar=sm.exigir_radio_empalme),
             Expresion("radio2", "Radio en la 2.ª cara", "1 mm",
                       visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "asimetrico"),
             Expresion("radio_fin", "Radio final", "2 mm",
-                      visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable"),
+                       visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable",
+                       validar=lambda r: sm.exigir_radio_empalme(r, "Radio final")),
             Expresion("cuerda", "Longitud de cuerda", "1 mm",
                       visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "cuerda"),
             Personalizado("conjuntos", "Otros conjuntos", self._crear_conjuntos, ancho_completo=True, visible_si=empalme,
@@ -118,9 +120,11 @@ class Empalme(Comando):
                                                        "variable": "Variable"},
                      visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos"))),
             Expresion("c_radio", "Radio", "1 mm",
-                      visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") != "cuerda"),
+                       visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") != "cuerda",
+                       validar=sm.exigir_radio_empalme),
             Expresion("c_radio_fin", "Radio final", "2 mm",
-                      visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") == "variable"),
+                       visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") == "variable",
+                       validar=lambda r: sm.exigir_radio_empalme(r, "Radio final")),
             Expresion("c_cuerda", "Longitud de cuerda", "1 mm",
                       visible_si=lambda v: empalme(v) and bool(v.get("_conjuntos")) and v.get("c_tipo_radio") == "cuerda"),
             Texto("puntos_radio", "Puntos intermedios", "",
@@ -650,6 +654,21 @@ class PulsarTirar(Comando):
             frozenset(_tipos_elegidos(v)), "Distancia / radio")
         return [Seleccion("objetos", "Cara o arista", {"cara", "arista"}, maximo=None),
                 Expresion("distancia", "Distancia / radio", "0 mm", etiqueta_si=etiqueta)]
+
+    def preparar_panel(self, panel):
+        from .. import manipuladores as mp
+
+        def validar(distancia):
+            if _tipos_elegidos(panel.valores) == {"arista"}:
+                sm.exigir_radio_empalme(distancia)
+            else:
+                for hit in panel.valores.get("objetos") or []:
+                    entidad = mp.entidad(hit, panel.ctx.estado)
+                    if entidad is not None and entidad.tipo == "cara":
+                        sm.exigir_distancia_desfase(panel.ctx.estado.cuerpos[entidad.cuerpo].forma,
+                                                    [entidad.forma], distancia)
+
+        panel._por_clave["distancia"].validar = validar
 
     def construir(self, v, ctx):
         sel = exigir(v, "objetos", "Seleccioná una cara o una arista.")
