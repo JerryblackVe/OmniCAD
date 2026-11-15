@@ -8,7 +8,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-487 | Curvatura línea–spline mueve la línea ~6 mm; después B-492 y B-510 (B-489 integrado: e172974) |
+| E1 | B-492 | 1000 círculos encimados: la vía Rust tarda ~18 s y 1,5 GB antes de rendirse; después B-510 (B-487 integrado: 1f2d8be) |
 | E2 | B-497 | Rosca: tamaño automático como Fusion y 2 asas (hecho, en tests reducidos); después B-508 (B-461 sin booleana: al tope, queda en ~/OmniCAD-B-461 y vuelve a Sigue) |
 | E3 | B-507 | `offset_faces` sobre esfera con −radio: «ok» con un sólido inválido (B-503 parte 1 integrada: 8dfc8ca; la parte de UI espera el estudio de E11, parche en `evidencias/parches/b503_ui.patch`) |
 | E4 | B-517 | **BLOQUEANTE** offset_profiles −0,5 sobre texto cierra la app (segfault OCC, familia de B-493); B-496 integrado: 66b8433 |
