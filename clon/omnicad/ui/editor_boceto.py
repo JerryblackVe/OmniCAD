@@ -1478,7 +1478,17 @@ class Lienzo(QWidget):
         self.inf_lista = []
         pid = self._punto_cercano(pos, excluir)
         if pid is not None:
-            return pid, self.b.coords(pid)
+            xy = self.b.coords(pid)
+            if (self.herramienta == "linea" and base is not None and self.ajustes_inf["inferencias"]
+                    and self.ajustes_inf["restricciones_auto"]
+                    and not self._modificadores_raton & Qt.ControlModifier):
+                # B-539: al cerrar en un punto que ya existe, Fusion también pone la perpendicular (o la paralela)
+                excluidos = [*self._ocultos()[0], self._ultima_linea]
+                self._inferir(xy, base, excluidos, previa)
+                self.inf_actual = next((replace(i, restriccion=i.restriccion[:2]) for i in self.inf_lista
+                                        if i.tipo in ("perpendicular", "paralela")), None)
+                self.inf_lista = [self.inf_actual] if self.inf_actual else []
+            return pid, xy
         o = self.a_px(0.0, 0.0)
         if math.hypot(o.x() - pos.x(), o.y() - pos.y()) < TOL_PX:
             return None, (0.0, 0.0)                     # el origen del boceto también engancha
