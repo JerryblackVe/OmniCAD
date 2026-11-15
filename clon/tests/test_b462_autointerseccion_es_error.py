@@ -24,7 +24,9 @@ REPROS = json.loads((Path(__file__).parent / "datos" / "b462_autointersecciones.
     ("solevacion_cerrada_3_cuadrados_girados", "La solevación", "8 autointersecciones"),
     ("solevacion_linea_central_en_s", "La solevación", "autointersecciones"),
 ])
-def test_el_resultado_que_se_autointerseca_es_un_error_y_no_un_cuerpo(caso, que, detalle):
+def test_el_resultado_que_se_autointerseca_es_un_error_y_no_un_cuerpo(caso, que, detalle, monkeypatch):
+    # B-490: con la máquina cargada el tope de 5 s se pasaba y daba aviso; el test mide la guarda, no el reloj
+    monkeypatch.setattr(ops_solido, "PLAZO_CRUCES", 120.0)
     doc = Documento.desde_dict(REPROS[caso])
     paso = doc.resultados[-1]
     assert paso.estado == "error", (paso.estado, paso.mensaje)

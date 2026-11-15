@@ -37,12 +37,15 @@ def _pg():
     return patron_geometrico
 
 
+PLAZO_CRUCES = 5.0   # s de tope para contar autointersecciones de un paso (los tests con carga lo suben)
+
+
 def _cruces(forma):
     """(autointersecciones que tocan una cara, problemas), o (None, problemas) si no se pudo contar. Las de solo aristas
     no cuentan: el barrido cerrado de un círculo por una pista redondeada da 4 «arista y arista» en las uniones tangentes
     y es sano; los cruces reales de los repros de B-462 siempre tocan una cara."""
     from ..nucleo import revision                  # local: revision carga medio núcleo
-    n, problemas, _ = revision._autointersecciones_seguras(forma, 1000, 5.0)
+    n, problemas, _ = revision._autointersecciones_seguras(forma, 1000, PLAZO_CRUCES)
     return (None if n is None else sum("cara" in p["mensaje"] for p in problemas)), problemas
 
 
