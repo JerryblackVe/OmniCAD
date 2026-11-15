@@ -40,8 +40,11 @@ def ventana(tmp_path):
 def _abrir_con_perfil(v, boceto, clave):
     p = v.ejecutar_comando(CATALOGO[clave]())
     br = v.doc.estado_final.bocetos[boceto]
-    p._elegida(hit_desde_ref({"tipo": "perfil", "boceto": boceto, **OpExtrusion.referencia_perfil(br.perfiles[0])},
-                             p.ctx.estado))
+    if p.valores.get("perfiles"):              # B-471: Revolución ya trae el único perfil: se vuelve al campo «Perfil»
+        p._activar(next(c for c in p.campos if c.clave == "perfiles"))
+    else:
+        p._elegida(hit_desde_ref({"tipo": "perfil", "boceto": boceto, **OpExtrusion.referencia_perfil(br.perfiles[0])},
+                                 p.ctx.estado))
     assert p.activa.clave == "perfiles"
     return p
 
