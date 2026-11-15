@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | B-519 **BLOQUEANTE** | Editar el boceto rompe los cuerpos: el desempate de `perfiles.py:808-849` elige el perfil interior en vez del anillo (causa hallada por E7) (B-510 integrado: 7c1331b) |
-| E2 | B-497 | Rosca: tamaño automático como Fusion y 2 asas (hecho, en tests reducidos); después B-508 (B-461 sin booleana: al tope, queda en ~/OmniCAD-B-461 y vuelve a Sigue) |
+| E2 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance`; después B-520 (B-497 integrado: 342e241) |
 | E3 | B-503 (parte 3) | Desfase de caras laterales de una extrusión = desfase 2D del contorno y re-extruir (0,5 s, volúmenes de Fusion); parte 2 integrada: 2e8cbb0 |
 | E4 | B-504 | `stitch_surfaces` con tolerancia 1e6: «ok» con forma vacía que rompe get_scene_info (B-517 integrado: 133a8e9) |
 | E5 | B-500 | `manage_analysis` da INTERNAL_ERROR con un Mapa de desviación; después B-501 (B-505 integrado: b5ec414) |
@@ -29,11 +29,10 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 3 | FL-14 | Miniatura al guardar y prevuelo al abrir (E6) |
 | 4 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
 | 5 | P-159 | 179 + 19 parámetros a `Expr` por tandas (E8 o Sol) |
-| 6 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance` (E2, después de B-497) |
-| 7 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 8 | B-389 | Windows agota memoria en una tanda larga: `~/OmniCAD-B-389` tiene un arreglo sin integrar de hace 2 días (`turno.py` con BLAS de un hilo bajo el tope, más su test); verificar, revisar y cerrar |
-| 9 | P-157 | Reorganizar Preferencias como Fusion, visual y con poco texto (P2, pedido de Gerardo; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d) |
-| 10 | B-461 (sin booleana, 2.ª vuelta) | La directa (0,4 s) rompe 7 grupos de la rosca: `_es_filete` (un flanco cada 4–5 vueltas o reconocer por la varilla), sección por el eje degenerada, previa, rechazos de B-299, tolerancia de B-250; worktree `~/OmniCAD-B-461` |
+| 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 7 | B-389 | Windows agota memoria en una tanda larga: `~/OmniCAD-B-389` tiene un arreglo sin integrar de hace 2 días (`turno.py` con BLAS de un hilo bajo el tope, más su test); verificar, revisar y cerrar |
+| 8 | P-157 | Reorganizar Preferencias como Fusion, visual y con poco texto (P2, pedido de Gerardo; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d) |
+| 9 | B-461 (sin booleana, 2.ª vuelta) | La directa (0,4 s) rompe 7 grupos de la rosca: `_es_filete` (un flanco cada 4–5 vueltas o reconocer por la varilla), sección por el eje degenerada, previa, rechazos de B-299, tolerancia de B-250; worktree `~/OmniCAD-B-461` |
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) y los del lote de las 13 h del 15/11 (B-511 a B-515) quedan en bugs.md sin cola; B-516 Sin verificar.
 

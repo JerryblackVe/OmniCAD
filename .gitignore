@@ -1,5 +1,5 @@
 # Entorno y cachés
-clon/.venv/
+clon/.venv
 __pycache__/
 *.pyc
 .pytest_cache/
