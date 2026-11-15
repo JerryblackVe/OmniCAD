@@ -776,8 +776,9 @@ def test_angulo_de_la_revolucion(app_qt):
     panel, visor, estados = _panel(Revolucion(), doc, {"perfiles": [_perfil(doc)], "eje": [eje], "angulo": "90 deg"})
     angulo = _manip(panel, "angulo:angulo")
     gestor = panel.manipuladores
-    # P-139: el anillo de Fusion, en el borde del perfil más lejano al eje y a la altura de su centro
-    assert angulo.centro == pytest.approx((10, 0, 5)) and angulo.eje == pytest.approx((0, 0, 1))
+    # B-471: el anillo de Fusion, sobre el eje y a media altura del perfil (no pegado al borde del cuerpo)
+    assert angulo.centro == pytest.approx((0, 0, 5)) and angulo.eje == pytest.approx((0, 0, 1))
+    assert angulo.u == pytest.approx((1, 0, 0))                     # el asa sale hacia el perfil
     asa = gestor.pantalla([angulo.asa(gestor)])[0][0]
     # el asa está a 90° del perfil: arrastrarla un poco más allá agranda el ángulo
     mas = gestor.pantalla([angulo.centro + (angulo.u * np.cos(2.0) + angulo.v * np.sin(2.0)) * angulo._r(gestor)])[0][0]
