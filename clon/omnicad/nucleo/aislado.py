@@ -63,6 +63,10 @@ proxima_forma = 0
 formas_recibidas = {}
 estados_recibidos = []
 marca_recibida = None
+# FL-3c: en el trabajador, la carpeta donde deja `avance` («hechos total») para la barra de la ventana (`avance()`)
+carpeta_avance = None
+PAUSA_AVANCE = 0.1                    # segundos entre dos anotaciones: un archivo por paso costaba más que el paso chico
+_ultimo_avance = 0.0
 
 
 class TareaAislada(Exception):
@@ -352,11 +356,34 @@ def pedidos_del_padre():
         yield cola.get()
 
 
+def avanzar(hechos, total):
+    """FL-3c: el trabajador anota cuántos pasos lleva (a lo sumo cada `PAUSA_AVANCE`); fuera de él no hace nada."""
+    global _ultimo_avance
+    ahora = time.monotonic()
+    if carpeta_avance is None or ahora - _ultimo_avance < PAUSA_AVANCE:
+        return
+    _ultimo_avance = ahora
+    try:
+        (carpeta_avance / "avance").write_text(f"{hechos} {total}", encoding="ascii")
+    except OSError:
+        pass                    # la barra queda sin dato: no frena el cálculo
+
+
+def avance():
+    """FL-3c: (pasos hechos, total) del pedido en curso del trabajador, o None si todavía no anotó nada.
+    shortcut: un hijo de una sola tarea (trabajador ocupado o apagado) no informa; la barra queda en «ocupado»."""
+    try:
+        hechos, total = map(int, (_trabajador.carpeta / "avance").read_text(encoding="ascii").split())
+    except (AttributeError, OSError, ValueError):
+        return None
+    return hechos, total
+
+
 def _trabajar(carpeta):
     """El bucle del trabajador: un pedido por línea de la entrada, hasta que el padre la cierra (también si muere).
     `args.json` trae el pedido; `listo` avisa que `salida.json` ya está completa."""
-    global formas_enviadas
-    formas_enviadas = {}
+    global formas_enviadas, carpeta_avance
+    formas_enviadas, carpeta_avance = {}, carpeta
     from ..timeline import calculo_aislado  # noqa: F401 — FL-9: OCP y el timeline (~1,5 s) antes del primer pedido
     import faulthandler
     pila = (carpeta / "pila.txt").open("w", encoding="utf-8")     # B-418: dónde se traba en Windows (lo escribe un hilo de C)
@@ -478,6 +505,7 @@ class _Trabajador:
         if self.primer_pedido is None:
             self.primer_pedido = time.time()
         (self.carpeta / "recibido").unlink(missing_ok=True)
+        (self.carpeta / "avance").unlink(missing_ok=True)       # FL-3c: el avance del pedido anterior no vale
         self.enviado = time.time()
         (self.carpeta / "args.json").write_text(json.dumps(datos, default=_a_json), encoding="utf-8", newline="\n")
         self._avisar(tarea)
