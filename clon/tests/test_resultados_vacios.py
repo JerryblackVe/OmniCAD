@@ -179,9 +179,14 @@ def test_vaciado_que_no_quita_la_cara_falla():
     forma = _prisma_con_arcos()
     abajo = min((c for c in geo.caras(forma) if (p := geo.plano_de_cara(c)) is not None and p.normal[2] < -0.99),
                 key=lambda c: geo.centro_masa(c, True)[2])
-    for direccion in ("interior", "exterior"):
-        with pytest.raises(geo.ErrorGeometria, match="El vaciado falló"):
-            sm.vaciado(forma, [abajo], espesor_interior=5, espesor_exterior=5, direccion=direccion)
+    with pytest.raises(geo.ErrorGeometria, match="El vaciado falló"):
+        sm.vaciado(forma, [abajo], espesor_interior=5, direccion="interior")
+    # B-459: hacia afuera ya sale la pared de verdad (el desfase volvía como cáscara sola): 5 mm por fuera, sin pisar el
+    # original y abierta abajo
+    pared = sm.vaciado(forma, [abajo], espesor_interior=5, espesor_exterior=5, direccion="exterior")
+    assert geo.es_valida(pared) and geo.volumen(pared) == pytest.approx(1520114.4, rel=1e-4)
+    assert geo.volumen(geo.booleano(pared, forma, "unir")) == pytest.approx(geo.volumen(forma) + geo.volumen(pared), rel=1e-6)
+    assert geo.caja_envolvente(pared)[0][2] == pytest.approx(38)
 
 
 def _tapa(forma):

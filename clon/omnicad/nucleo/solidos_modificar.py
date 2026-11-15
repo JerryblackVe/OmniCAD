@@ -1200,6 +1200,9 @@ def _desfase_una_vez(forma, distancia, union):
     if not mo.IsDone():
         raise geo.ErrorGeometria(_falla_kernel(forma, distancia, hueco=True))
     desfasado = mo.Shape()
+    # B-459: con un cuerpo ya cortado o unido el kernel devuelve la cáscara cerrada sola, y cortar con ella fallaba
+    if not desfasado.IsNull() and desfasado.ShapeType() == TopAbs_SHELL and BRep_Tool.IsClosed_s(desfasado):
+        desfasado = BRepBuilderAPI_MakeSolid(TopoDS.Shell(desfasado)).Solid()
     antes, despues = geo.volumen_exacto(forma), geo.volumen_exacto(desfasado)
     if (_resultado_imposible(forma, desfasado, distancia) or (distancia < 0 and despues >= antes)
             or (distancia > 0 and despues <= antes)):
