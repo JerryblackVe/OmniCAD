@@ -16,6 +16,7 @@ from omnicad import api
 from omnicad.nucleo import aislado, chapa
 from omnicad.nucleo import geometria as geo
 from omnicad.nucleo import revision as rv
+from omnicad.timeline import ops_solido
 from omnicad.timeline.operaciones import OpCombinar
 
 
@@ -156,6 +157,7 @@ def tope_agotado(monkeypatch):
 
     monkeypatch.setattr(aislado, "correr", correr)
     monkeypatch.setattr(rv, "_AGOTADAS", {})
+    monkeypatch.setattr(ops_solido, "_cruces", lambda forma: (0, []))     # la solevación de armado no cuenta (B-462)
     return llamadas
 
 

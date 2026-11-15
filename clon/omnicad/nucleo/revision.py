@@ -339,7 +339,9 @@ def _autointersecciones_seguras(forma, limite, plazo):
     (T-01 de la prueba de tortura). Si pasa el tope no hay conteo (None) y queda un aviso. La misma forma que ya pasó
     un tope igual o mayor no se vuelve a esperar (T-21: una rosca modelada necesita más de 300 s; el tope entero se
     perdía en cada revisión)."""
-    if not geo.es_forma_libre(forma):
+    if not geo.es_forma_libre(forma) or aislado.EN_HIJO and geo._apta_para_integral_fina(forma):
+        # B-462: ya en el proceso aparte, una forma libre chica se analiza ahí (otro proceso más costaba ~1,5 s por paso
+        # al abrir o recalcular un documento grande); las de muchos polos (roscas modeladas, T-01) siguen aisladas.
         return _autointersecciones(forma, limite)
     previo = _AGOTADAS.get(hash(forma))
     if previo is not None and time.monotonic() - previo[2] > VENCE_AGOTADA:
