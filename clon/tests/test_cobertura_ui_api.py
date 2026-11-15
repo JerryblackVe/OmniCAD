@@ -132,7 +132,7 @@ HERRAMIENTAS = {
     "plano_tangente": "create_construction_plane", "plano_medio": "create_construction_plane",
     "plano_perpendicular": "create_construction_plane", "plano_dos_aristas": "create_construction_plane",
     "plano_tres_puntos": "create_construction_plane", "plano_ruta": "create_construction_plane",
-    "fijacion": "insert_fastener", "lienzo": "insert_canvas", "operacion_base": "create_base_feature",
+    "fijacion": "insert_fastener", "calibracion_holguras": "create_clearance_test", "lienzo": "insert_canvas", "operacion_base": "create_base_feature",
     "activar_patron_plano": "set_flat_pattern_view", "invertir_seleccion": "select_bodies",
     "seleccion_nombre": "select_bodies", "seleccion_tamano": "select_bodies",
     "seleccion_limite": "select_by_boundary", "seleccion_semilla": "select_by_seed_and_boundary",

@@ -18,6 +18,7 @@ CLAVES = frozenset({
     "buscar_similares",
     "caja",
     "calcomania",
+    "calibracion_holguras",
     "capturar_posicion",
     "cebra",
     "centro_masa",

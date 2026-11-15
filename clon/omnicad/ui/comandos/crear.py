@@ -3,7 +3,7 @@
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QSizePolicy, QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout,
+                               QListWidget, QListWidgetItem, QPushButton, QSizePolicy, QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout,
                                QWidget)
 
 from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpNervio, OpPatron, OpRed,
@@ -11,6 +11,7 @@ from ...timeline.ops_solido import (OpAgujero, OpBarrido, OpBobina, OpLabio, OpN
                                     OpSolidoEnvolvente, OpTuberia, OpVolumenFluido)
 from ...timeline import entidades as ent
 from ...timeline.ops_solido import TIPOS_REPETIBLES, punto_a_la_pose_actual
+from ...timeline.ops_calibracion import OpCalibracionHolguras
 from ...timeline.operaciones import angulo_desmoldeo_plastico, espesor_plastico, radio_nominal_plastico
 from ...timeline.parametros import ANGULO, ESCALAR
 from ..esquema_agujero import EsquemaAgujero
@@ -451,37 +452,51 @@ def _tol():
     return tolerancias
 
 
-def _holgura_paso(ctx):
-    """La `holgura_3d` del paso que se edita (texto, puede ser una expresión) si tiene; si no, None."""
-    texto = ctx.op.p.get("holgura_3d") if ctx.op is not None else None
+def _holgura_paso(ctx, clave="holgura_3d"):
+    """La holgura (`clave`) del paso que se edita (texto, puede ser una expresión) si tiene; si no, None."""
+    texto = ctx.op.p.get(clave) if ctx.op is not None else None
     try:
         return texto if texto and ctx.evaluar(texto) > 0 else None
     except Exception:  # noqa: BLE001 — una expresión que ya no evalúa: vale la de Preferencias
         return None
 
 
-def _holgura_general(ctx):
-    """P-156: la holgura de impresión 3D en mm por lado: la del paso que se edita o la de Preferencias."""
-    if (texto := _holgura_paso(ctx)) is not None:
-        return ctx.evaluar(texto)
+# P-156, «La otra pieza es»: impresa, cada pieza se lleva la mitad de la holgura; metálica, la impresa se la lleva toda
+OTRA_PIEZA = {"impresa": ("Impresa", 0.5), "metalica": ("Metálica", 1.0)}
+
+
+def _factor(v):
+    return OTRA_PIEZA[v.get("otra_pieza") or "metalica"][1]
+
+
+def _holgura_general(ctx, clave="holgura_3d"):
+    """P-156: la holgura de impresión 3D en mm por lado: la de Preferencias o, al editar, de la que salió la del paso."""
+    if (texto := _holgura_paso(ctx, clave)) is not None:
+        return ctx.evaluar(texto) / _factor(ctx.op.p)
     if ctx.ventana is not None:
         return ctx.ventana.prefs["impresion/holgura_mm"]
     from ..preferencias import DEFECTOS
     return DEFECTOS["impresion/holgura_mm"]
 
 
-def _campo_holgura(ctx, visible_si, **kw):
+def _campo_holgura(ctx, visible_si, clave="holgura_3d", casilla="impresion", texto="Holgura de impresión",
+                   ayuda="Agranda el agujero o achica el tornillo para que rosque al imprimir."):
     """P-156: una sola línea con el valor de Preferencias y una casilla, como pidió Gerardo."""
-    mm = f"{_holgura_general(ctx):g}".replace(".", ",")
-    return Casilla("impresion", f"Holgura de impresión: {mm} mm por lado", visible_si=visible_si,
-                   ayuda="Agranda el agujero o achica el tornillo para que rosque al imprimir.", **kw)
+    mm = f"{_holgura_general(ctx, clave):g}".replace(".", ",")
+    return [Casilla(casilla, f"{texto}: {mm} mm por lado", visible_si=visible_si, ayuda=ayuda),
+            Opciones("otra_pieza", "La otra pieza es", {k: t for k, (t, _) in OTRA_PIEZA.items()}, defecto="impresa",
+                     visible_si=lambda v: visible_si(v) and bool(v.get(casilla)),
+                     ayuda="Impresa: cada pieza se lleva la mitad de la holgura. Metálica: toda va a la pieza impresa.")]
 
 
-def _holgura_3d(v, ctx):
-    """`holgura_3d` del paso: la del paso editado (conserva su expresión), la de Preferencias o 0."""
-    if not v.get("impresion"):
+def _holgura_3d(v, ctx, clave="holgura_3d", casilla="impresion"):
+    """La holgura del paso: la del paso editado (conserva su expresión), la de Preferencias o 0."""
+    if not v.get(casilla):
         return "0 mm"
-    return _holgura_paso(ctx) or f"{_holgura_general(ctx):g} mm"
+    paso = _holgura_paso(ctx, clave)
+    if paso and _factor(ctx.op.p) == _factor(v):      # sin cambios: conserva la expresión del paso
+        return paso
+    return f"{_holgura_general(ctx, clave) * _factor(v):g} mm"
 
 
 _CLASES = {"iso_metrica": {"auto": "Automática (6H agujero / 6g eje)", "": "Sin clase (perfil básico)",
@@ -771,7 +786,7 @@ class Agujero(Comando):
             Info("info_rosca", "Detalle de rosca", self._info, visible_si=r("holgura", "cosmetica", "conico"), seccion=fo,
                  compacta=True),
             Expresion("desfase_hasta", "Desfase del límite", "0 mm", visible_si=hasta, avanzado=True),
-            _campo_holgura(ctx, modelada),
+            *_campo_holgura(ctx, modelada),
             Opciones("mano", "Dirección de la rosca", {"derecha": "Mano derecha", "izquierda": "Mano izquierda"},
                      visible_si=modelada, avanzado=True),
             campo_objetivos(),
@@ -841,6 +856,7 @@ class Agujero(Comando):
                                      "invertir", "mano", "ajuste", "desfase_hasta",
                                      "ref_distancia1", "ref_distancia2") if k in v}
         params["rosca"], params["holgura_3d"] = self._rosca_del_paso(v), _holgura_3d(v, ctx)
+        params["otra_pieza"] = v.get("otra_pieza") or "impresa"
         return self.crear_op(OpAgujero, v, ctx, posiciones=posiciones, puntos_cara=puntos_cara, objetivos=objetivos(v),
                              designacion=designacion, clase_rosca=clase, hasta=hasta, ref_cara=ref_cara,
                              ref_aristas=ref_aristas, **params)
@@ -990,7 +1006,7 @@ class Rosca(Comando):
                 Opciones("mano", "Dirección", {"derecha": "Mano derecha", "izquierda": "Mano izquierda"}),
                 Casilla("recordar", "Recordar tamaño", bool(recuerdo)),
                 Casilla("invertir", "Invertir", avanzado=True),
-                _campo_holgura(ctx, modelada)]
+                *_campo_holgura(ctx, modelada)]
 
     def oculta_seleccion(self, valores):
         return bool(valores.get("modelada"))      # B-297: la cara elegida no tiñe la rosca modelada
@@ -1042,7 +1058,7 @@ class Rosca(Comando):
             Rosca._recuerdo = {k: x for k, x in v.items() if k == "tipo_rosca" or k.startswith(("tam_", "des_",
                                                                                                     "clase_"))}
         return self.crear_op(OpRosca, v, ctx, caras=refs(v, "caras"), designacion=_designacion(v, "tipo_rosca", True),
-                             familia=fam, clase_rosca=_clase(v, "tipo_rosca"), holgura_3d=_holgura_3d(v, ctx),
+                             familia=fam, clase_rosca=_clase(v, "tipo_rosca"), holgura_3d=_holgura_3d(v, ctx), otra_pieza=v.get("otra_pieza") or "impresa",
                              **{k: v[k] for k in ("largo_completo", "longitud", "desfase", "modelada", "mano",
                                                   "invertir")})
 
@@ -1871,5 +1887,56 @@ class Labio(Comando):
                     cuerpo_ranura=hits([op.p["cuerpo_ranura"]], ctx.estado) if op.p.get("cuerpo_ranura") else [])
 
 
+class PlacaHolguras(Comando):
+    """P-156: la placa de calibración (create_clearance_test) y «Usar este valor»: el agujero que mejor encaja queda
+    como la holgura de impresión de Preferencias, la que traen la Rosca, el Agujero y el molde."""
+    CLAVE, TITULO, ICONO = "calibracion_holguras", "Placa de holguras", "calibracion_holguras"
+    AYUDA = ("Placa con agujeros cada vez más holgados y su peine de pernos: imprimila, probá qué agujero encaja mejor y "
+             "tocá «Usar este valor».")
+    CLASE_OP = OpCalibracionHolguras
+    _CLAVES = ("diametro", "holgura_inicial", "paso", "cantidad", "espesor", "etiquetas")
+
+    def campos(self, ctx):
+        return [Expresion("diametro", "Diámetro del perno", "5 mm"),
+                Expresion("holgura_inicial", "Primera holgura", "0.1 mm"),
+                Expresion("paso", "Salto entre agujeros", "0.1 mm"),
+                Entero("cantidad", "Agujeros", 5, 1, 20),
+                Expresion("espesor", "Espesor", "3 mm"),
+                Casilla("etiquetas", "Grabar el valor", True),
+                OpcionesVivas("elegido", "Encaja mejor", lambda v: self._agujeros(v, ctx)),
+                Personalizado("usar", "", self._boton_usar, ancho_completo=True)]
+
+    @staticmethod
+    def _agujeros(v, ctx):
+        """{holgura en mm (texto): «0,2 mm»}: la de cada agujero de la placa."""
+        try:
+            h0, paso = ctx.evaluar(v.get("holgura_inicial") or "0 mm"), ctx.evaluar(v.get("paso") or "0 mm")
+        except Exception:  # noqa: BLE001 — mientras se escribe un valor inválido no hay lista
+            return {}
+        valores = [round(h0 + i * paso, 4) for i in range(int(v.get("cantidad") or 0))]
+        return {f"{h:g}": f"{h:g} mm".replace(".", ",") for h in valores}
+
+    def _boton_usar(self, panel):
+        boton = QPushButton("Usar este valor", toolTip="Guarda la holgura del agujero elegido en Preferencias › Impresión 3D.")
+        boton.clicked.connect(lambda: self.usar(panel))
+        return boton
+
+    def usar(self, panel):
+        """Guarda en Preferencias la holgura del agujero elegido (o la del primero)."""
+        elegido = panel.valores.get("elegido") or next(iter(self._agujeros(panel.valores, panel.ctx)), None)
+        if elegido is None or panel.ctx.ventana is None:
+            panel._mostrar("Elegí el agujero que mejor encaja.", tipo="invalido")
+            return
+        panel.ctx.ventana.prefs["impresion/holgura_mm"] = float(elegido)
+        panel._mostrar(f"Guardado: {elegido.replace('.', ',')} mm por lado para la Rosca, el Agujero y el molde.",
+                       tipo="instruccion")
+
+    def construir(self, v, ctx):
+        return self.crear_op(OpCalibracionHolguras, v, ctx, **{k: v[k] for k in self._CLAVES})
+
+    def desde_op(self, op, ctx):
+        return dict(op.p)
+
+
 registrar(Barrido, Solevacion, Nervio, Red, Repujado, Agujero, Rosca, Bobina, Tuberia, PatronRectangular, VolumenFluido,
-          PatronCircular, PatronRuta, Simetria, RellenoContorno, SolidoEnvolvente, Saliente, Labio)
+          PatronCircular, PatronRuta, Simetria, RellenoContorno, SolidoEnvolvente, Saliente, Labio, PlacaHolguras)

@@ -53,7 +53,7 @@ INSERTAR = ("INSERTAR", ["insertar_diseno", "lienzo", "fijacion"], [
     _i("Calcomanía", "calcomania"), _i("Lienzo", "lienzo"), _i("Insertar SVG", "insertar_svg"), _i("Vectorizar imagen", "vectorizar_imagen"),
     _i("Insertar archivos DXF", "insertar_dxf"),
     _i("Insertar malla", "insertar_malla"),
-    _i("Insertar STEP…", "importar_step"), SEP, _i("Insertar fijador", "fijacion"),
+    _i("Insertar STEP…", "importar_step"), SEP, _i("Insertar fijador", "fijacion"), _i("Placa de holguras", "calibracion_holguras"),
     _i("Duplicar con uniones", "duplicar_con_uniones"),
     _i("Insertar componente", "insertar_diseno"), _i("Insertar derivación", "insertar_derivacion")])
 ENSAMBLAR = ("ENSAMBLAR", ["union"], [

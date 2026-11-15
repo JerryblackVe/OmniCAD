@@ -1536,13 +1536,16 @@ class OpPrimitiva(Operacion):
 class OpCombinar(Operacion):
     """Equivalente a CombineFeature: cuerpo objetivo + herramientas + operación + mantener herramientas."""
     TIPO, ETIQUETA, ICONO = "combinar", "Combinar", "⊕"
-    PARAMS = {"objetivo": "", "herramientas": [], "operacion": "unir", "mantener": False}
+    PARAMS = {"objetivo": "", "herramientas": [], "operacion": "unir", "mantener": False, "holgura": "0 mm",
+              "otra_pieza": "metalica"}
+    EXPRESIONES = ("holgura",)          # P-156: Cortar con «Dejar holgura» agranda la herramienta antes de cortar
+    # «otra_pieza» solo le dice al panel de qué valor general salió `holgura` (P-156: «Impresa» se lleva la mitad)
     OPCIONES = {"operacion": OPERACIONES_COMBINAR}
 
     def dependencias(self):
         return _deps_objetivo(self.p.get("objetivo")) | _deps_objetivo(self.p.get("herramientas"))
 
-    def _cortar_junto(self, ctx, objetivo, herramientas):
+    def _cortar_junto(self, ctx, objetivo, herramientas, formas):
         """Cortar con varias herramientas en una sola pasada (T-20). None si no corresponde o el kernel no puede: se
         corta de a una, con sus reintentos y su mensaje por herramienta. Con menos de 5 no conviene: la comprobación
         ya corta con cada una, y en un cuerpo grande esa pasada de más pesa más que lo que se ahorra."""
@@ -1550,7 +1553,7 @@ class OpCombinar(Operacion):
             return None
         avisos = []
         try:
-            resultado = geo.cortar_varias(objetivo.forma, [h.forma for h in herramientas], avisos)
+            resultado = geo.cortar_varias(objetivo.forma, [formas[h.id] for h in herramientas], avisos)
         except geo.ErrorGeometria:
             return None
         for h in herramientas:
@@ -1571,15 +1574,23 @@ class OpCombinar(Operacion):
             raise ErrorOperacion("Combinar es para sólidos y superficies: con cuerpos de malla usá MALLA › MODIFICAR › "
                                  "Combinar mallas (combine_meshes) o convertilos a sólido.")
         forma_objetivo = objetivo.forma
-        junto = self._cortar_junto(ctx, objetivo, herramientas)
+        formas = {h.id: h.forma for h in herramientas}
+        holgura = ctx.evaluar(self.p.get("holgura") or "0 mm") if self.p["operacion"] == "cortar" else 0.0
+        if holgura > 0:     # P-156: la herramienta que se conserva no cambia; se corta con su copia agrandada
+            from ..nucleo import solidos_modificar as sm
+            try:
+                formas = {k: sm.agrandar_con_holgura(f, holgura) for k, f in formas.items()}
+            except geo.ErrorGeometria as e:
+                raise ErrorOperacion(f"No se pudo dejar la holgura de {holgura:g} mm: {e}") from e
+        junto = self._cortar_junto(ctx, objetivo, herramientas, formas)
         resultado = forma_objetivo if junto is None else junto
         v_previa = None
         for h in herramientas if junto is None else ():
-            if self.p["operacion"] == "cortar" and not geo.se_tocan(resultado, h.forma):
+            if self.p["operacion"] == "cortar" and not geo.se_tocan(resultado, formas[h.id]):
                 ctx.aviso(f"{h.nombre} no toca a {objetivo.nombre}: no le cortó nada.")
             parcial = resultado
             avisos = []
-            resultado = geo.booleano(resultado, h.forma, self.p["operacion"], avisos)
+            resultado = geo.booleano(resultado, formas[h.id], self.p["operacion"], avisos)
             if self.p["operacion"] == "unir":
                 # Una unión no puede pesar menos que lo que ya había (B-52: la unión de la espiral
                 # del motor descartaba un sólido entero del compuesto en silencio).

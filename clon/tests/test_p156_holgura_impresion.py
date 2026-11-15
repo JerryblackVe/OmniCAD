@@ -39,11 +39,12 @@ def test_p156_print_clearance_general_usa_la_preferencia(prefs, pieza):
         _ok(s, "set_preference", key="impresion/holgura_mm", value=0.3)
         if pieza == "tornillo":
             _ok(s, "create_cylinder", radius=5, height=12)
-            _ok(s, "create_thread", faces="%CYLINDER", thread="M10", thread_class="", print_clearance=holgura)
+            _ok(s, "create_thread", faces="%CYLINDER", thread="M10", thread_class="", print_clearance=holgura,
+                other_part="metal")
         else:
             _ok(s, "create_box", length=30, width=30, height=12)
             _ok(s, "create_hole", face=">Z", hole_tap="modeled", thread="M10", thread_class="", through_all=True,
-                print_clearance=holgura)
+                print_clearance=holgura, other_part="metal")
         volumenes[holgura] = _volumen(s)
         if holgura == "general":
             assert [op.p["holgura_3d"] for op in s.doc.operaciones if "holgura_3d" in op.p] == ["0.3 mm"]
@@ -57,7 +58,7 @@ def test_p156_la_linea_del_panel_lleva_el_valor_y_la_casilla_decide():
     s = api.Sesion()
     ctx = ContextoComando(s.doc)
     campo = crear._campo_holgura(ctx, lambda v: True)
-    assert campo.etiqueta == "Holgura de impresión: 0,2 mm por lado"
+    assert campo[0].etiqueta == "Holgura de impresión: 0,2 mm por lado"
     assert crear._holgura_3d({"impresion": True}, ctx) == "0.2 mm"
     assert crear._holgura_3d({"impresion": False}, ctx) == "0 mm"
 
@@ -69,5 +70,59 @@ def test_p156_al_editar_conserva_la_holgura_del_paso():
     op = s.doc.operaciones[-1]
     ctx = ContextoComando(s.doc, op=op)
     assert crear.Rosca().desde_op(op, ctx)["impresion"] is True
-    assert crear._campo_holgura(ctx, lambda v: True).etiqueta == "Holgura de impresión: 0,35 mm por lado"
+    assert crear._campo_holgura(ctx, lambda v: True)[0].etiqueta == "Holgura de impresión: 0,35 mm por lado"
     assert crear._holgura_3d({"impresion": True}, ctx) == "0.35"     # la expresión del paso, tal cual
+
+
+def test_p156_con_la_otra_pieza_impresa_cada_una_se_lleva_la_mitad(prefs):
+    s = api.Sesion()
+    _ok(s, "set_preference", key="impresion/holgura_mm", value=0.3)
+    _ok(s, "create_cylinder", radius=5, height=12)
+    _ok(s, "create_thread", faces="%CYLINDER", thread="M10", print_clearance="general", modeled=False)
+    op = s.doc.operaciones[-1]
+    assert (op.p["holgura_3d"], op.p["otra_pieza"]) == ("0.15 mm", "impresa")
+    ctx = ContextoComando(s.doc, op=op)       # al editar, la línea muestra el valor general, no la mitad
+    assert crear._campo_holgura(ctx, lambda v: True)[0].etiqueta == "Holgura de impresión: 0,3 mm por lado"
+    assert crear._holgura_3d({"impresion": True, "otra_pieza": "metalica"}, ctx) == "0.3 mm"
+
+
+def test_p156_el_molde_deja_holgura_y_la_herramienta_no_cambia(prefs):
+    """Combinar › Cortar con «Dejar holgura»: el hueco de un cubo de 10 crece 0,2 por lado; la herramienta queda igual."""
+    vols = {}
+    for holgura in (0, 0.2):
+        s = api.Sesion()
+        _ok(s, "create_box", length=30, width=30, height=30, name="Molde")
+        _ok(s, "create_box", length=10, width=10, height=10, z=10, name="Pieza")
+        _ok(s, "boolean_operation", target="Molde", tools=["Pieza"], operation="cut", keep_tools=True,
+            print_clearance=holgura)
+        vols[holgura] = {c["name"]: c["volume"] for c in _ok(s, "get_scene_info")["bodies"]}
+    assert vols[0.2]["Pieza"] == pytest.approx(1000, rel=1e-6)
+    hueco = 27000 - vols[0.2]["Molde"]          # cubo agrandado 0,2 con aristas y esquinas redondeadas
+    assert hueco == pytest.approx(1000 + 6 * 100 * 0.2 + 12 * 10 * 3.14159 * 0.04 / 4 + 4 / 3 * 3.14159 * 0.008, rel=1e-3)
+
+
+def test_p156_usar_este_valor_guarda_la_holgura_del_agujero():
+    from types import SimpleNamespace
+    mensajes, prefs = [], {}
+    panel = SimpleNamespace(valores={"holgura_inicial": "0.1 mm", "paso": "0.05 mm", "cantidad": 5, "elegido": "0.2"},
+                            ctx=SimpleNamespace(ventana=SimpleNamespace(prefs=prefs), evaluar=lambda t: float(t.split()[0])),
+                            _mostrar=lambda texto, tipo=None: mensajes.append((texto, tipo)))
+    placa = crear.PlacaHolguras()
+    assert list(placa._agujeros(panel.valores, panel.ctx)) == ["0.1", "0.15", "0.2", "0.25", "0.3"]
+    placa.usar(panel)
+    assert prefs == {"impresion/holgura_mm": 0.2} and "0,2 mm por lado" in mensajes[0][0]
+
+
+def test_p156_dejar_holgura_escondida_no_cambia_el_corte():
+    """Con «Conservar herramientas» desmarcada, «Dejar holgura» se esconde y no cuenta aunque haya quedado marcada."""
+    from omnicad.ui.comandos.modificar import Combinar
+    s = api.Sesion()
+    _ok(s, "create_box", length=30, width=30, height=30, name="Molde")
+    _ok(s, "create_box", length=10, width=10, height=10, z=10, name="Pieza")
+    ctx = ContextoComando(s.doc)
+    cuerpos = list(s.doc.estado_final.cuerpos)
+    v = {"objetivo": [{"ref": {"tipo": "cuerpo", "cuerpo": cuerpos[0]}}],
+         "herramientas": [{"ref": {"tipo": "cuerpo", "cuerpo": cuerpos[1]}}],
+         "operacion": "cortar", "dejar_holgura": True, "otra_pieza": "metalica"}
+    assert Combinar().construir({**v, "mantener": False}, ctx).p["holgura"] == "0 mm"
+    assert Combinar().construir({**v, "mantener": True}, ctx).p["holgura"] == "0.2 mm"

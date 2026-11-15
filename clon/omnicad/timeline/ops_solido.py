@@ -440,7 +440,7 @@ class OpAgujero(_OpCrear):
               "profundidad": "10 mm", "punta": "angulo", "angulo_punta": "118 deg", "diam_abocardado": "10 mm",
               "prof_abocardado": "4 mm", "diam_avellanado": "12 mm", "angulo_avellanado": "90 deg",
               "rosca": "simple", "designacion": "M6", "invertir": False, "objetivos": [],
-              "clase_rosca": "", "holgura_3d": "0 mm", "mano": "derecha", "ajuste": "normal", "hasta": None,
+              "clase_rosca": "", "holgura_3d": "0 mm", "otra_pieza": "metalica", "mano": "derecha", "ajuste": "normal", "hasta": None,
               "desfase_hasta": "0 mm", "ref_cara": None, "ref_aristas": [], "ref_distancia1": "10 mm",
               "ref_distancia2": "10 mm", "version_rosca": 2}
     EXPRESIONES = ("diametro", "profundidad", "angulo_punta", "diam_abocardado", "prof_abocardado", "diam_avellanado",
@@ -620,7 +620,7 @@ class OpRosca(_OpCrear):
     TIPO, ETIQUETA, ICONO = "rosca", "Rosca", "⌇"
     PARAMS = {"caras": [], "designacion": "", "largo_completo": True, "longitud": "10 mm", "desfase": "0 mm",
               "modelada": True, "mano": "derecha", "invertir": False,
-              "familia": "iso_metrica", "clase_rosca": "", "holgura_3d": "0 mm",   # nuevas: «familia» y siguientes
+              "familia": "iso_metrica", "clase_rosca": "", "holgura_3d": "0 mm", "otra_pieza": "metalica",   # nuevas: «familia» y siguientes
               "version_rosca": 2, "version_tamano": 2}
     EXPRESIONES = ("longitud", "desfase", "holgura_3d")
     OPCIONES = {"mano": ("derecha", "izquierda"), "familia": FAMILIAS_ROSCA}

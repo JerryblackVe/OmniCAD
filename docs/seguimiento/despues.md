@@ -35,7 +35,7 @@ Abierto 40 · Bloqueado 2.
 | P-27-14 | Vista en realidad aumentada con código QR | Abierto | Media | Sin programar. | grep en omnicad/ nucleo/api/timeline: sin función equivalente | 2026-10-20 |
 | P-27-15 | Video de presentación: giro 360° y recorrido de cámara en MP4 | Abierto | Media | Sin programar. | omnicad/api/herramientas_animacion.py:487 (solo gif/png); sin turntable | 2026-10-20 |
 | P-28b | Galería con imágenes de referencia y explicación corta por tipo, con vista en vivo | Abierto | Media | Hay un diálogo de engranaje pero sin galería de tipos ni explicaciones. | omnicad/ui/comandos/engranaje.py | 2026-10-20 |
-| P-29-1 | Perfil de impresora y material (cama aviso «no entra», encogimiento) | Abierto | Media | Sin programar. Las holguras pasaron a P-156. | grep «impresora/cama/boquilla» en omnicad/: sin perfil | 2026-10-20 |
+| P-29-1 | Perfil de impresora y material (cama aviso «no entra», encogimiento) | Abierto | Media | Sin programar. Las holguras ya están: Preferencias › Impresión 3D y la Placa de holguras. | grep «impresora/cama/boquilla» en omnicad/: sin perfil | 2026-10-20 |
 | P-29-4 | Bolsillos de armado (imanes, insertos, tuercas, rodamientos) | Abierto | Media | Sin programar. | omnicad/nucleo/fijaciones.py sin bolsillos de armado | 2026-10-20 |
 | P-29-5 | Agujeros que imprimen bien (gota, puentes, compensación) | Abierto | Media | Sin programar. | omnicad/api/herramientas_solido.py create_hole sin gota | 2026-10-20 |
 | P-2a | Traducir la interfaz Qt al inglés (.ts / QTranslator) | Abierto | Alta | No hay catálogos .ts/.qm ni selector de idioma; solo textos en español. | omnicad/ui/captura.py es el único uso de QTranslator (botones estándar de Qt); sin archivos *.ts ni *.qm en clon/ | 2026-10-20 |
