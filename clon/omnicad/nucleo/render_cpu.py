@@ -390,6 +390,18 @@ def veta_madera(local, color, color2):
 
 
 # ---------------------------------------------------------------- normales suaves
+def _inversa_filas(a):
+    """Lo que `np.unique(a, axis=0, return_inverse=True)` da como inversa (filas enteras iguales → mismo número, en el
+    orden de las filas), con `lexsort`: B-546, 4-6 veces más rápido (en el llavero, 0,13 s por tecla)."""
+    if not len(a):
+        return np.zeros(0, np.int64)
+    orden = np.lexsort(a.T[::-1])
+    s = a[orden]
+    inv = np.empty(len(a), np.int64)
+    inv[orden] = np.cumsum(np.r_[True, np.any(s[1:] != s[:-1], axis=1)]) - 1
+    return inv
+
+
 def normales_suaves(tris, grupos=None, angulo=45.0):
     """(vértices Nx3, normales Nx3) float32 de triángulos sueltos `tris` (Tx3x3) con normales promediadas
     (por área) en los vértices compartidos del mismo grupo (cara B-rep); si la normal promedio se aparta más
@@ -403,8 +415,7 @@ def normales_suaves(tris, grupos=None, angulo=45.0):
     escala = max(float(np.ptp(tris.reshape(-1, 3), axis=0).max()), 1e-9)
     claves = np.round(tris.reshape(-1, 3) / (escala * 1e-6)).astype(np.int64)
     claves = np.c_[np.repeat(grupos, 3), claves]
-    _, inv = np.unique(claves, axis=0, return_inverse=True)
-    inv = inv.reshape(-1)
+    inv = _inversa_filas(claves)
     suma = np.zeros((inv.max() + 1, 3))
     np.add.at(suma, inv, np.repeat(fn, 3, axis=0))
     n = _unit(suma[inv])
@@ -434,11 +445,10 @@ def _borde_perfil(tris, n):
     tris = np.where((giro < 0)[:, None, None], tris[:, [0, 2, 1]], tris)
     puntos = tris.reshape(-1, 3)
     escala = max(float(np.ptp(puntos, axis=0).max()), 1e-9)
-    _, ids = np.unique(np.round(puntos / (escala * 1e-9)).astype(np.int64), axis=0, return_inverse=True)
-    ids = ids.reshape(-1, 3)
+    ids = _inversa_filas(np.round(puntos / (escala * 1e-9)).astype(np.int64)).reshape(-1, 3)
     pares = np.sort(np.c_[ids.reshape(-1), np.roll(ids, -1, axis=1).reshape(-1)], axis=1)
-    _, cual, cuenta = np.unique(pares, axis=0, return_inverse=True, return_counts=True)
-    borde = cuenta[cual.reshape(-1)] == 1
+    cual = _inversa_filas(pares)
+    borde = np.bincount(cual)[cual] == 1
     return tris, puntos[borde], np.roll(tris, -1, axis=1).reshape(-1, 3)[borde]
 
 
