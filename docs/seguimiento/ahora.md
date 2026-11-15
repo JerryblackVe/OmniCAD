@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-492 | 1000 círculos encimados: la vía Rust tarda ~18 s y 1,5 GB antes de rendirse; después B-510 (B-487 integrado: 1f2d8be) |
 | E2 | B-497 | Rosca: tamaño automático como Fusion y 2 asas (hecho, en tests reducidos); después B-508 (B-461 sin booleana: al tope, queda en ~/OmniCAD-B-461 y vuelve a Sigue) |
-| E3 | B-507 | `offset_faces` sobre esfera con −radio: «ok» con un sólido inválido (B-503 parte 1 integrada: 8dfc8ca; la parte de UI espera el estudio de E11, parche en `evidencias/parches/b503_ui.patch`) |
+| E3 | B-503 (parte 2) | Desfase que falla en cuerpos con letras B-spline: renglón en el panel, sin cuadro (parche en `evidencias/parches/b503_ui.patch`, estudio de E11 en `evidencias/reportes_pc/2026-11-15_desfase_estudio/`); también cilindro −radio sin jerga (B-507 integrado: 9f29f78) |
 | E4 | B-517 | **BLOQUEANTE** offset_profiles −0,5 sobre texto cierra la app (segfault OCC, familia de B-493); B-496 integrado: 66b8433 |
 | E5 | B-505 | `drag_component` da «ok» sin mover; después B-500 y B-501 (H-119 integrado: 96c1cd1) |
 | E6 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él; después FL-12 y FL-14 (FL-8 sección integrado: 06882d8) |
