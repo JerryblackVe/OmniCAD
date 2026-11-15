@@ -1,6 +1,6 @@
 {
  "a": {
-  "bloqueo_max_ms": 1100,
+  "bloqueo_max_ms": 500,
   "primera_previa_ms": 1300,
   "aceptar_ms": 250
  },

@@ -625,7 +625,9 @@ class Posicion(Manipulador):
 class Angulo(Manipulador):
     """Arco con asa: gira alrededor de `eje` (regla de la mano derecha) desde la dirección `inicio`.
     El asa está a `valor·factor` grados. `radio` en mm (p. ej. el radio del perfil que gira) o None
-    para un radio constante en pantalla."""
+    para un radio constante en pantalla. `limites`: función que da {"minimo", "maximo"} y se llama al mover el asa
+    por primera vez, para un tope caro de medir."""
+    limites = None
 
     def __init__(self, clave, centro, eje, inicio, radio=None, factor=1.0, minimo=-360.0, maximo=360.0,
                  caja=True, color=AMARILLO, estricto=False):
@@ -647,6 +649,9 @@ class Angulo(Manipulador):
         return math.radians(g.valor(self.clave) * self.factor)
 
     def _acotar(self, v):
+        if self.limites is not None:
+            tope, self.limites = self.limites(), None
+            self.minimo, self.maximo = tope["minimo"], tope["maximo"]
         return max(_tope(self.minimo, 0.1, self.estricto, 1), min(_tope(self.maximo, 0.1, self.estricto, -1), v))
 
     def asa(self, g):

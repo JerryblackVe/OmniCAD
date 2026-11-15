@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Comandos de SÓLIDO › CREAR con diálogo al estilo Fusion: Extruir y Revolución."""
+import functools
 import json
 import math
 
@@ -76,12 +77,23 @@ def _radios_conicidad(formas):
     return adentro, afuera
 
 
-def _distancia_maxima(radios, conicidad):
-    """Distancia a la que la conicidad cierra el perfil (Fusion frena ahí la flecha); None si no hay tope."""
-    r = radios[0] if conicidad < 0 else radios[1]
-    if abs(conicidad) < 1e-9 or math.isinf(r):
+def _distancia_maxima(medir, conicidad):
+    """Distancia a la que la conicidad cierra el perfil (Fusion frena ahí la flecha); None si no hay tope. `medir` da
+    los radios: sin conicidad no se mide."""
+    if abs(conicidad) < 1e-9:
+        return None
+    r = medir()[0 if conicidad < 0 else 1]
+    if math.isinf(r):
         return None
     return r / math.tan(math.radians(abs(conicidad)))
+
+
+def _anillo_conicidad(anillo, medir, distancia):
+    """B-403: el tope del anillo se mide al moverlo, no al elegir perfiles (8 letras de un texto: ~40 desfases del
+    kernel cada una, 1 s de ventana trabada al elegirlas)."""
+    anillo.minimo, anillo.maximo = -89.0, 89.0
+    anillo.limites = lambda: _angulos(medir(), distancia)
+    return anillo
 
 
 def _angulos(radios, distancia):
@@ -218,21 +230,21 @@ class Extruir(Comando):
             return antes + [mp.Flecha("distancia", centro, n, factor=1.0 if v.get("medida") != "total" else 0.5,
                                        minimo=0.0)]
         d = _evaluar(ctx, v.get("distancia"))
-        radios = _radios_conicidad(formas)
+        medir = functools.cache(lambda: _radios_conicidad(formas))     # B-403: solo si hay conicidad o se mueve el anillo
         if direccion != "dos_lados":
             t = n * (-1.0 if d < 0 else 1.0)
-            dmax = _distancia_maxima(radios, _evaluar(ctx, v.get("conicidad"), ANGULO))
+            dmax = _distancia_maxima(medir, _evaluar(ctx, v.get("conicidad"), ANGULO))
             menos = None if dmax is None else -dmax
             # P-139: como Fusion, la flecha sale del borde del perfil y el anillo del ángulo rodea su pie
             flecha = mp.Flecha("distancia", borde, n, minimo=menos, maximo=dmax, estricto=True)
             flecha.cede_a = "angulo:conicidad"
-            return antes + [flecha, mp.AnilloAngulo("conicidad", borde, np.cross(t, lateral), t,
-                                                    sigue=("distancia", n, False), **_angulos(radios, d), estricto=True)]
+            return antes + [flecha, _anillo_conicidad(mp.AnilloAngulo("conicidad", borde, np.cross(t, lateral), t,
+                                                                      sigue=("distancia", n, False), estricto=True), medir, d)]
 
         def lado(clave, valor, sentido, conicidad):
             # B-205: en «Dos lados» cada número es una magnitud de su lado; la flecha queda a |valor| de ese lado
             # y no cruza el cero (con un valor negativo, el eje se da vuelta y el tope pasa a ser el máximo)
-            dmax = _distancia_maxima(radios, _evaluar(ctx, v.get(conicidad), ANGULO))
+            dmax = _distancia_maxima(medir, _evaluar(ctx, v.get(conicidad), ANGULO))
             if valor < 0:
                 flecha = mp.Flecha(clave, borde, -sentido, minimo=None if dmax is None else -dmax, maximo=0.0,
                                    estricto=True)
@@ -245,8 +257,8 @@ class Extruir(Comando):
         if v.get("extension2", "distancia") == "distancia":
             flechas.append(lado("distancia2", d2, -n, "conicidad2"))
         return antes + flechas + [
-            mp.AnilloAngulo(clave, borde, np.cross(t, lateral), t, sigue=(lado_d, t, True), **_angulos(radios, dist),
-                            estricto=True)
+            _anillo_conicidad(mp.AnilloAngulo(clave, borde, np.cross(t, lateral), t, sigue=(lado_d, t, True),
+                                              estricto=True), medir, dist)
             for clave, lado_d, t, dist in (("conicidad", "distancia", n, d), ("conicidad2", "distancia2", -n, d2))]
 
     @staticmethod
