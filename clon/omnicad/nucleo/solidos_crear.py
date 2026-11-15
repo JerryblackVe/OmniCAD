@@ -3497,7 +3497,7 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
     flancos al centro de la tolerancia de la clase (ISO 965-1 / ASME B1.1) y `holgura` (mm, radial) los corre
     más, para imprimir en 3D. El perfil es el de la familia: 60° (M, UN), 55° (G), 30° (Tr) o 29° (ACME); las
     cónicas (R, NPT) solo van cosméticas. `tabla`: ver `_perfil_clase`. Devuelve el cuerpo roscado."""
-    info = analizar_rosca(cuerpo, cara, designacion=designacion, familia=familia, interna=interna)
+    info = analizar_rosca(cuerpo, cara, designacion=designacion, familia=familia, interna=interna, todas=True)  # B-520
     datos, o, z, radio = info["datos"], info["origen"], info["eje"], info["radio"]
     zmin, zmax = info["zmin"], info["zmax"]
     largo = (zmax - zmin - desfase) if longitud is None else float(longitud)

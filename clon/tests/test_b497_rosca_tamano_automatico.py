@@ -27,3 +27,12 @@ def test_b497_una_receta_vieja_conserva_su_tamano_automatico():
     assert viejo.operaciones[-1].p["version_tamano"] == 1 and viejo.operaciones[-1].p["version_rosca"] == 2
     viejo.estado_final                                      # recalcula
     assert viejo.operaciones[-1].roscas[0]["designacion"] == "M10x1.5"
+
+
+def test_b520_el_nucleo_elige_el_mismo_tamano_que_la_app():
+    """`rosca` sin designación (núcleo puro, agentes) elige como «Automático»: Ø9,3 → M9×1,25, no M10."""
+    from omnicad.nucleo import geometria as geo
+    from omnicad.nucleo import solidos_crear as sc
+    cilindro = geo.cilindro(4.65, 10)
+    assert geo.volumen(sc.rosca(cilindro)) == pytest.approx(geo.volumen(sc.rosca(cilindro, designacion="M9x1.25")),
+                                                             rel=1e-9)
