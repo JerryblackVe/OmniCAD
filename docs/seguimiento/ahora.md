@@ -9,15 +9,15 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | B-440 | Velocidad de boceto: lo que queda de salir del boceto y poner cotas (primer texto de la sesión ~700 ms y el resto de la fila); B-519 queda Parcial solo por el Ctrl+Z de E11 |
-| E2 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance`; después B-520 (B-497 integrado: 342e241) |
+| E2 | B-461 (2.ª vuelta) | Rosca sin booleana (0,4 s) sin romper los 7 grupos de la rosca; worktree `~/OmniCAD-B-461`. P-156 en pausa en su worktree hasta después del 30/11; después B-520 |
 | E3 | B-503 (texto entero) | Desfase del texto entero: extruir la región nueva entera al unir (B-473 sin reproducir, guardia integrada 4175fbc; E11 en Windows) |
-| E4 | B-514 | Superficie P2 contra Fusion: Extender «Natural» de borde circular −1,5 % de área; Desfase −9,99 rechaza la esfera (B-447 integrado: 6022af3) |
+| E4 | B-438 | Superficie › Desfase: teclear «1e3 mm» traba la ventana 2 s (worktree `~/OmniCAD-B-438` con un arreglo previo: revisarlo). B-514 (P2) en pausa hasta después del 30/11 |
 | E5 | B-501 | Ensamblar › Conjunto: nombre y desfase tecleados en la fila guardada no se aplican; después la junta `ball` de la caza (B-500 integrado: fe4cefd) |
 | E6 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él; después FL-12 y FL-14 (FL-8 sección integrado: 06882d8) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
-| E9 | B-435 | (H-115 integrado: 72d563c); piezas acotadas a OpenCode: GLM para un archivo, MiniMax M3.1 (minimaxai/) para varios: B-435, B-436, B-401, B-457, P-134, B-450, B-438, B-474 |
+| E9 | B-435 | (H-115 integrado: 72d563c); piezas acotadas a OpenCode: GLM para un archivo, MiniMax M3.1 (minimaxai/) para varios: B-435, B-436, B-401, B-457, B-450, B-474 |
 | E10 | B-521 | Lo que dejó B-506: patrón con copias tangentes (verificar) y agujeros tangentes con rosca modelada (chequeo barato) (B-506 integrado: 45b4719) |
 
 ## Sigue (en orden)
@@ -26,13 +26,9 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 1 | FL-12 | Huella de find_faces/find_edges en caché (11×) (E6) |
 | 2 | FL-13 | draw_line con detección incremental de perfiles (E6 o E1) |
-| 3 | FL-14 | Miniatura al guardar y prevuelo al abrir (E6) |
-| 4 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
-| 5 | P-159 | 179 + 19 parámetros a `Expr` por tandas (E8 o OpenCode con GLM) |
-| 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 7 | B-389 | Windows agota memoria en una tanda larga: `~/OmniCAD-B-389` tiene un arreglo sin integrar de hace 2 días (`turno.py` con BLAS de un hilo bajo el tope, más su test); verificar, revisar y cerrar |
-| 8 | P-157 | Reorganizar Preferencias como Fusion, visual y con poco texto (P2, pedido de Gerardo; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d) |
-| 9 | B-461 (sin booleana, 2.ª vuelta) | La directa (0,4 s) rompe 7 grupos de la rosca: `_es_filete` (un flanco cada 4–5 vueltas o reconocer por la varilla), sección por el eje degenerada, previa, rechazos de B-299, tolerancia de B-250; worktree `~/OmniCAD-B-461` |
+| 3 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
+
+**Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2.
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) y los del lote de las 13 h del 15/11 (B-511 a B-515) quedan en bugs.md sin cola; B-516 Sin verificar.
 
