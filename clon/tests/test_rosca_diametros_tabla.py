@@ -134,11 +134,13 @@ def test_receta_vieja_de_rosca_de_tabla_conserva_su_geometria():
     assert d_max(forma(viejo)) == pytest.approx(12, abs=1e-3) and d_min(forma(viejo)) == pytest.approx(8.803, abs=1e-3)
 
 
-@pytest.mark.parametrize("familia, mayor", [("unificada", 19.05), ("metrica_plasticos", 10.0)])
+@pytest.mark.parametrize("familia, mayor", [("3/4-10 UNC", 19.05), ("metrica_plasticos", 10.0)])
 def test_b247_un_cilindro_mas_grueso_que_la_rosca_se_tornea_a_su_diametro(familia, mayor):
     """B-247 (video de Fusion del 2026-11-07): Ø20 con un tipo cuyo tamaño mayor es más fino (3/4 UNC, plástico 10)
     no falla: el cilindro queda en el Ø mayor de la rosca, como en Fusion."""
-    forma = sc.rosca(g.cilindro(10, 12), familia=familia)
+    # B-520: el tamaño 3/4 UNC va fijo; con todas las filas el automático da 13/16-10 UNC (Ø20,64): falta ver Fusion
+    datos = {"designacion": familia} if "UNC" in familia else {"familia": familia}
+    forma = sc.rosca(g.cilindro(10, 12), **datos)
     assert g.es_valida(forma)
     assert d_max(forma) == pytest.approx(mayor, abs=2e-3)
 
@@ -205,6 +207,7 @@ def test_b249_la_helice_larga_se_barre_de_una_vez(monkeypatch):
     barridos = []
     original = sc._barrido_helicoidal
     monkeypatch.setattr(sc, "_barrido_helicoidal", lambda *a: barridos.append(1) or original(*a))
+    monkeypatch.setattr(sc, "_rosca_directa", lambda *a: None)     # cuenta los barridos del corte (B-461)
     sc._surco_en_origen.cache_clear()
     forma = sc.rosca(g.cilindro(10, 30), familia="afbma")
     assert g.es_valida(forma) and len(barridos) == 1
