@@ -434,6 +434,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-15] `git worktree remove` borra también lo ignorado (`evidencias/` de la sesión): `tanda.sh` e `integrar.sh` ahora copian `evidencias/` del worktree a main (`cp -rn`) antes de borrarlo. · Evidencia: la captura de B-423 (800×520) se perdió al integrar cf9e7d9.
 - [2026-11-15] Un test intermitente por carga se reproduce DENTRO del test (demorar el hijo con sleep o mock), nunca cargando la VPS con procesos que gastan CPU: frena a todas las sesiones. · Evidencia: B-449, 20 `while True: pass` llevaron la carga a 30 en 8 CPU; cortados por el coordinador.
 - [2026-11-15] Al darle a una sesión un ítem que figura en la cola de otra, sacarlo de esa cola EN EL MISMO mensaje a las dos. · Evidencia: B-450 lo hicieron E5 (B-450r) y E9 a la vez; se integró el de E9 (9044a97).
 - [2026-11-15] Al verificar en main, armar la lista de tests con `ls tests | grep` (no con globs adivinados) y leer la salida entera: un glob sin archivos hace «no tests ran» con rc 0 y `grep passed` no muestra nada. · Evidencia: 3 corridas del coordinador el 15/11 (B-508, B-504, la tanda de P-158b) salieron vacías.
