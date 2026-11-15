@@ -76,7 +76,7 @@ Escuadra de las sondas: 25500 mm³; el nervio de la línea (35, 5) → (5, 45) c
 | REP · varias caras y varios cuerpos | ✔ | ✔ | ✔ | PROJECT_LOG 2026-10-13; `test_repujado_alineacion.py` |
 | REP · cilindro con Envolver | ✔ | ✔ `wrap` | ✔ | +37,80 = 6·6·1·(1 + 1/20) |
 | REP · cilindro sin marcar Envolver | ✘ error | ✘ error | Mejora | H-98 (Fusion envuelve solo) |
-| REP · esfera, cono, cara libre | ✘ | ✘ | Falta | H-96 |
+| REP · esfera, cono, cara libre | — | ✔ | ≈ | H-96 (2026-11-15): proyecta según la normal del boceto (Fusion envuelve); esfera r20 + cuadro 6×6: +38,12 por la API |
 | REP · Cadena tangente | ✘ | ✘ | Bug | B-217: +437,12 en vez de +100 (repuja en los costados) |
 | REP · asa de Profundidad | ✔ | — | ✔ | +3 mm; tope en 0 |
 | Botones en SÓLIDO y PLÁSTICO; ninguno en SUPERFICIE, CHAPA y MALLA | ✔ | — | ✔ | pieza: 6 botones abren su comando y Esc no crea pasos |

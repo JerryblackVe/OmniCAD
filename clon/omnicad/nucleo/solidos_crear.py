@@ -1985,6 +1985,8 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     `adaptar` (por defecto) se giran para mirar hacia afuera, se centran en la zona y se achican hasta entrar.
     Cara cilíndrica con `envolver=True`: el boceto (en un plano paralelo al eje) se enrolla sobre el cilindro
     conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial.
+    Otras caras curvas (esfera, cono, forma libre): el boceto se proyecta según su normal sobre la cara, del lado
+    que lo mira, y se engrosa según la normal de la cara (`_proyectar_en_cara`).
     `cadena_tangente` agrega caras conectadas tangencialmente, pero esas caras agregadas reciben solo lo que les cae
     encima (su proyección toca la caja del perfil): un cuadro en el medio de la tapa no se copia en los costados ni en
     los empalmes de al lado. La alineación gira alrededor del centro de los perfiles y después desplaza en los ejes
@@ -2035,15 +2037,15 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
                 grupo.append((i, cara, pl))
             continue
         donde = f" (cara {k})" if len(caras) > 1 else ""
-        if BRepAdaptor_Surface(cara).GetType() != GeomAbs_Cylinder:
-            raise geo.ErrorGeometria("El repujado admite caras planas o cilíndricas (envolviendo)" + donde + ".")
-        if not (envolver or cadena_tangente):
+        cilindro = BRepAdaptor_Surface(cara).GetType() == GeomAbs_Cylinder
+        if cilindro and not (envolver or cadena_tangente):
             raise geo.ErrorGeometria("Sobre una cara cilíndrica el repujado se hace envolviendo (envolver=True)"
                                      + donde + ".")
         pl_perfil = geo.plano_de_cara(perfiles[0])
         alineados = _alinear_repujado(perfiles, pl_perfil, desfase_h, desfase_v, giro)
-        herramientas[i].append(_envolver_en_cilindro(alineados, cara, -profundidad if invertir else profundidad,
-                                                    "relieve" if es_relieve else "grabado", recortar=cadena_tangente))
+        prof, efecto = -profundidad if invertir else profundidad, "relieve" if es_relieve else "grabado"
+        herramientas[i].append(_envolver_en_cilindro(alineados, cara, prof, efecto, recortar=cadena_tangente)
+                               if cilindro else _proyectar_en_cara(alineados, cara, pl_perfil, prof, efecto))
     for grupo in grupos:
         for i, h in _repujado_en_grupo(perfiles, grupo, sentido * profundidad, adaptar, desfase_h, desfase_v, giro):
             herramientas[i].append(h)
@@ -2354,6 +2356,29 @@ def _aristas_envueltas(e, a_uv, superficie):
         BRepLib.BuildCurves3d_s(arista, 1e-6)
         aristas.append(arista)
     return aristas
+
+
+def _proyectar_en_cara(perfiles, cara, plano, profundidad, tipo):
+    """Repujado sobre una cara que no es plana ni cilíndrica (esfera, cono, forma libre; H-96): el boceto se proyecta
+    según su normal sobre la cara, solo del lado que mira al boceto, y lo que cae se engrosa según la normal de la cara
+    (afuera el relieve, adentro el grabado)."""
+    # shortcut: proyecta en vez de envolver conservando longitudes como Fusion; en piezas chicas frente a la curvatura
+    # casi no cambia. Si se nota (texto largo sobre una esfera), mapear en (u, v) como `_envolver_en_cilindro`.
+    n = np.asarray(plano.normal, float)
+    minimo, maximo = (np.asarray(v, float) for v in geo.caja_envolvente(geo.compuesto([cara, *perfiles])))
+    largo = 2 * float(np.linalg.norm(maximo - minimo)) + 1
+    # del lado del boceto: hacia donde queda su plano visto desde el centro de la cara (+normal si la corta)
+    lado = n if float((np.asarray(plano.origen, float) - geo.centro_masa(cara, superficie=True)) @ n) >= -1e-9 else -n
+    herramientas = []
+    for f in perfiles:
+        partes = _booleana_caras([cara], [_prisma(_trasladar(f, -n * largo), n, 2 * largo)], BRepAlgoAPI_Common)
+        if partes is None:
+            raise geo.ErrorGeometria("No se pudo proyectar el boceto sobre la cara del repujado.")
+        for parte in _caras_de(partes):
+            bu0, bu1, bv0, bv1 = BRepTools.UVBounds_s(parte)
+            if float(_normal_orientada(parte, (bu0 + bu1) / 2, (bv0 + bv1) / 2)[1] @ lado) > 0:
+                herramientas.append(_engrosar_lamina(parte, profundidad if tipo == "relieve" else -profundidad))
+    return _unir(herramientas) if herramientas else geo.compuesto([])
 
 
 def _envolver_en_cilindro(perfiles, cara, profundidad, tipo, *, recortar=False):
