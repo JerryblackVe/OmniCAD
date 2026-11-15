@@ -129,7 +129,7 @@ NUMEROS_HERRAMIENTA = {"perfil_giratorio": [("tolerancia_giro", "Tolerancia", 0.
                        "isoparametrica": [("iso_distancia", "Distancia", 0.001, 100000.0, 1.0, " mm")]}
 # Opciones enteras: herramienta → [(clave, etiqueta, mínimo, máximo)]
 ENTEROS_HERRAMIENTA = {"isoparametrica": [("iso_cantidad", "Cantidad", 1, 200)],
-                       "estrella": [("puntas_estrella", "Puntas", 3, 64), ("salto_estrella", "Salto {n/m}", 2, 31)]}
+                       "estrella": [("puntas_estrella", "Puntas", 3, 64), ("salto_estrella", "Salto (con Interior 0)", 2, 31)]}
 # Casillas: herramienta → [(clave, etiqueta)]
 _VINCULO = ("vinculo_proyeccion", "Vínculo de proyección")
 CASILLAS_HERRAMIENTA = {"proyectar": [_VINCULO], "intersecar": [_VINCULO],
