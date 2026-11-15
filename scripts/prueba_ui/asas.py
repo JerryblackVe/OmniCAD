@@ -185,7 +185,7 @@ def probar_triada_seccion(p, g, nombre):
         A.reg(nombre, f"tríada: arrastrar {texto}", ok and abs(g.valor(clave) - antes) > 0.5, f"{antes:g} → {g.valor(clave):g}")
     # un valor tecleado en la caja al lado y Esc
     sub_antes = g.valor("desfase")
-    g._arrastre = {"m": next(x for x in g.manips if isinstance(x, mp.Triada)), "sub": ("eje", 2), "estado": {}}
+    g._arrastre = {"m": next(x for x in g.manips if isinstance(x, mp.Triada)), "sub": ("eje", 2), "estado": {}, "claves": set()}
     g.sincronizar_cajas()
     caja = g.cajas.get("desfase")
     A.reg(nombre, "tríada: la caja de valor aparece junto al eje", caja is not None and not caja.isHidden(), "")
@@ -193,7 +193,7 @@ def probar_triada_seccion(p, g, nombre):
         caja.setFocus()
         caja.selectAll()
         QTest.keyClicks(caja, "7 mm")
-        QTest.keyClick(caja, Qt.Key_Return)
+        g.aplicar_caja(caja)            # B-468: Enter ahora tambien acepta el comando; aca solo se aplica el valor
         A.reg(nombre, "tríada: teclear 7 mm y Enter cambia Distancia", abs(g.valor("desfase") - 7) < 1e-6, f"{sub_antes:g} → {g.valor('desfase'):g}")
     g._arrastre = None
     g.sincronizar_cajas()
@@ -201,7 +201,7 @@ def probar_triada_seccion(p, g, nombre):
         v.resize(ancho, alto)
         A.esperar(200)
         vis.encuadrar()
-        g._arrastre = {"m": next(x for x in g.manips if isinstance(x, mp.Triada)), "sub": ("eje", 2), "estado": {}}
+        g._arrastre = {"m": next(x for x in g.manips if isinstance(x, mp.Triada)), "sub": ("eje", 2), "estado": {}, "claves": set()}
         g.redibujar()
         medida = medir_vista(g)
         g._arrastre = None
