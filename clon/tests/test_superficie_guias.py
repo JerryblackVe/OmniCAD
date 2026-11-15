@@ -104,7 +104,7 @@ def test_riel_estirar_conserva_la_altura_del_perfil():
 
 
 def test_riel_estirar_pegado_a_la_ruta_dice_por_que():
-    with pytest.raises(g.ErrorGeometria, match="separado"):
+    with pytest.raises(g.ErrorGeometria, match="no puede tocar la ruta"):
         sf.barrer_superficie(seg(*RADIO), seg(*RUTA_Z), carril=seg((0, 0, 0), (0, 0, 100)), escala="estirar")
 
 
@@ -122,7 +122,7 @@ def test_extension_completa_usa_una_fraccion_de_cada_una():
     riel = seg((10, 0, 0), (20, 0, 100))
     f = sf.barrer_superficie(seg(*RADIO), seg(*RUTA_Z), carril=riel, extension="completa", distancia=0.5, distancia_carril=0.5)
     assert g.area(f) == pytest.approx(625, rel=1e-6)
-    with pytest.raises(g.ErrorGeometria, match="distancia"):
+    with pytest.raises(g.ErrorGeometria, match="Distancia"):
         sf.barrer_superficie(seg(*RADIO), seg(*RUTA_Z), carril=riel, extension="completa", distancia_carril=0)
 
 
@@ -135,13 +135,13 @@ def test_superficie_guia_con_una_ruta_apoyada_que_no_es_arista_de_ella():
 
 def test_superficie_guia_con_la_ruta_afuera_dice_por_que():
     cilindro = next(c for c in g.caras(g.cilindro(20, 40)) if g.area(c) > 1000)
-    with pytest.raises(g.ErrorGeometria, match="sobre la superficie"):
+    with pytest.raises(g.ErrorGeometria, match="superficie guía"):
         sf.barrer_superficie(seg(*RADIO), seg((50, 0, 0), (50, 0, 10)), superficie_guia=[cilindro])
 
 
 def test_riel_o_superficie_no_se_combinan_con_torsion_ni_entre_si():
     riel = seg((10, 0, 0), (20, 0, 100))
-    with pytest.raises(g.ErrorGeometria, match="Ruta individual"):
+    with pytest.raises(g.ErrorGeometria, match="Torsión y conicidad"):
         sf.barrer_superficie(seg(*RADIO), seg(*RUTA_Z), carril=riel, torsion=10)
     with pytest.raises(g.ErrorGeometria, match="no los dos"):
         sf.barrer_superficie(seg(*RADIO), seg(*RUTA_Z), carril=riel, superficie_guia=[g.caras(g.caja(1, 1, 1))[0]])
@@ -260,11 +260,11 @@ def test_alineacion_y_condiciones_que_no_valen_dicen_por_que():
     lejos = seg((30, 0, 10), (30, 10, 10))
     with pytest.raises(g.ErrorGeometria, match="Alineación"):
         sf.solevar_superficie([borde, lejos], condicion_inicio={"tipo": "tangente", "cara": cara, "alineacion": "xx"})
-    with pytest.raises(g.ErrorGeometria, match="extremos"):
+    with pytest.raises(g.ErrorGeometria, match="Solo los perfiles abiertos"):
         tubo = sf.extruir_superficie(circulo(10), (0, 0, 1), 20)
         sf.solevar_superficie([next(e for e in aristas(tubo) if caja(e)[0][2] == pytest.approx(20)), circulo(5, (0, 0, 40))],
                               condicion_inicio={"tipo": "tangente", "cara": g.caras(tubo)[0], "alineacion": "alinear"})
-    with pytest.raises(g.ErrorGeometria, match="necesita la cara"):
+    with pytest.raises(g.ErrorGeometria, match="elegí la cara vecina"):
         sf.solevar_superficie([borde, lejos], condicion_inicio={"tipo": "suave"})
     with pytest.raises(g.ErrorGeometria, match="peso"):
         sf.solevar_superficie([borde, lejos], condicion_inicio={"tipo": "direccion", "peso": 0.0})
@@ -279,9 +279,9 @@ def test_alineacion_y_condiciones_que_no_valen_dicen_por_que():
 def test_una_condicion_no_se_combina_con_cerrada_ni_tramos_rectos():
     a, b, c = circulo(10), circulo(10, (0, 0, 30)), circulo(10, (0, 30, 15))
     cond = {"tipo": "direccion", "angulo": 30.0}
-    with pytest.raises(g.ErrorGeometria, match="tramos rectos"):
+    with pytest.raises(g.ErrorGeometria, match="Tramos rectos"):
         sf.solevar_superficie([a, b], reglada=True, condicion_inicio=cond)
-    with pytest.raises(g.ErrorGeometria, match="no tiene perfiles extremos"):
+    with pytest.raises(g.ErrorGeometria, match="Cerrada: sin condiciones"):
         sf.solevar_superficie([a, b, c], cerrada=True, condicion_inicio=cond)
     with pytest.raises(g.ErrorGeometria, match="línea central"):
         sf.solevar_superficie([a, b, c], cerrada=True, linea_central=seg((0, 0, 0), (0, 0, 30)))
@@ -419,7 +419,7 @@ def test_punto_tangente_con_rieles_y_solo_puntos():
     f = sf.solevar_superficie([circulo(10), (0.0, 0.0, 10.0)], rieles=[arco((10, 0, 0), (10 * math.sqrt(0.5), 0, 10 * math.sqrt(0.5)), (0, 0, 10))],
                               condicion_fin={"tipo": "punto_tangente"}, condicion_exacta=True)
     assert g.es_valida(f) and caja(f)[1][2] == pytest.approx(10, abs=0.05) and toca(f, (10 * math.sqrt(0.5), 0, 10 * math.sqrt(0.5)))
-    with pytest.raises(g.ErrorGeometria, match="solo puntos"):
+    with pytest.raises(g.ErrorGeometria, match="falta un perfil que sea curva"):
         sf.solevar_superficie([(0.0, 0.0, 0.0), (0.0, 0.0, 10.0)], rieles=[seg((0, 0, 0), (0, 0, 10))])
 
 
@@ -510,7 +510,7 @@ def test_bordes_de_costura_de_una_caja_cierra_y_no_toca_el_documento():
     r = sf.bordes_de_costura(caras, 0.01)
     assert r["es_solido"] and r["libres"] == [] and r["aristas_cosidas"] == 12
     assert [g.caja_envolvente(c) for c in caras] == antes
-    with pytest.raises(g.ErrorGeometria, match="tolerancia"):
+    with pytest.raises(g.ErrorGeometria, match="Tolerancia"):
         sf.bordes_de_costura(caras, 0.0)
 
 

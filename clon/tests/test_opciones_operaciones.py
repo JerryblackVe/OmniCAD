@@ -264,7 +264,7 @@ def test_sup_extruir_con_conicidad_que_occ_no_resuelve(monkeypatch):
     recta = sf.extruir_superficie([_arista((0, 0, 0), (10, 0, 0))], (0, 0, 1), 10, conicidad=5)
     assert geo.es_valida(recta) and geo.caja_envolvente(recta)[0][1] == pytest.approx(-10 * math.tan(math.radians(5)))
     ele = [_arista((0, 0, 0), (10, 0, 0)), _arista((10, 0, 0), (10, 10, 0))]
-    with pytest.raises(geo.ErrorGeometria, match="probá con conicidad 0"):
+    with pytest.raises(geo.ErrorGeometria, match="probá con 0"):
         sf.extruir_superficie(ele, (0, 0, 1), 10, conicidad=5)
 
 

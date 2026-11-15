@@ -97,7 +97,7 @@ def _tipado(forma):
     veces da IsDone y una forma nula (desfase de una caja de 10 mm de alto, 6 mm hacia adentro) y `ShapeType()` sobre
     ella tiraba la app entera (fallo de segmentación)."""
     if forma is None or forma.IsNull():
-        raise geo.ErrorGeometria("El kernel no devolvió ninguna forma con estos valores.")
+        raise geo.ErrorGeometria("No salió ninguna forma con estos valores.")
     return _CAST.get(forma.ShapeType(), lambda s: s)(forma)
 
 
@@ -209,7 +209,7 @@ def alambres(entrada):
         mw = BRepBuilderAPI_MakeWire()
         mw.Add(lista)
         if not mw.IsDone():
-            raise geo.ErrorGeometria("No se pudieron encadenar las aristas en un alambre.")
+            raise geo.ErrorGeometria("No se pudo armar un alambre con las aristas.")
         salida.append(mw.Wire())
     if not salida:
         raise geo.ErrorGeometria("No hay aristas para operar.")
@@ -219,7 +219,7 @@ def alambres(entrada):
 def _alambre_unico(entrada, que):
     ws = alambres(entrada)
     if len(ws) != 1:
-        raise geo.ErrorGeometria(f"{que} tiene que ser una sola cadena de aristas conectadas (hay {len(ws)}).")
+        raise geo.ErrorGeometria(f"{que}: una sola cadena (hay {len(ws)}).")
     return ws[0]
 
 
@@ -346,8 +346,7 @@ def _extruir_tramos(ws, n, arriba, abajo, conicidad, afuera=False):
             elif (t := _direccion_recta(w)) is not None:
                 caras.extend(geo.caras(_prisma_inclinado(w, t, d, alto, conicidad)))
             else:
-                raise geo.ErrorGeometria("No se pudo crear la extrusión de superficie con conicidad con estas curvas: "
-                                         "probá con conicidad 0.")
+                raise geo.ErrorGeometria("Conicidad imposible acá: probá con 0.")
         piezas.append(_coser_caras(caras))
     if afuera:
         piezas = [_hacia_afuera(p, n) if BRep_Tool.IsClosed_s(w) else p for p, w in zip(piezas, ws, strict=True)]
@@ -371,7 +370,7 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
     `afuera=True`: un contorno cerrado da un tubo con la normal hacia afuera, como Fusion; `False`, el lado que da el
     sentido del recorrido (las recetas viejas)."""
     if abs(conicidad) > 89.0:
-        raise geo.ErrorGeometria("La conicidad tiene que estar entre -89° y 89°.")
+        raise geo.ErrorGeometria("Conicidad: entre -89° y 89°.")
     n = _unitario(direccion)
     lados = lados or ("simetrica" if simetrica else "un_lado")
     ws = alambres(aristas_o_alambre)
@@ -393,7 +392,7 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
             return _extruir_tramos(ws, n, *((alto, 0.0) if distancia >= 0 else (0.0, alto)), conicidad, afuera)
         return _extruir_tramos(ws, n, max(hi, 0.0) + margen, max(-lo, 0.0) + margen, conicidad, afuera)
     if lados == "simetrica":
-        raise geo.ErrorGeometria("La extensión «A objeto» no se combina con la dirección simétrica.")
+        raise geo.ErrorGeometria("«A objeto» no va con dirección simétrica.")
     tool = _herramienta(hasta, reunidas)
     signo = 1.0
     lo, hi = _rango_sobre(geo.caja_envolvente(tool), origen, n)
@@ -404,12 +403,12 @@ def extruir_superficie(aristas_o_alambre, direccion, distancia, *, simetrica=Fal
         lo, hi = _rango_sobre(geo.caja_envolvente(tool), origen, n)
     alcance = (hi if signo > 0 else -lo) + 1.0 + 0.05 * (hi - lo)
     if alcance <= 1.0:
-        raise geo.ErrorGeometria("El objeto está del otro lado de las curvas: invertí la distancia o elegí otro.")
+        raise geo.ErrorGeometria("Objeto del otro lado: invertí la distancia.")
     larga = _extruir_tramos(ws, n, *((alcance, 0.0) if signo > 0 else (0.0, alcance)), conicidad, afuera)
     regiones = regiones_recorte(larga, tool)
     toca = [r for r in regiones if BRepExtrema_DistShapeShape(r, reunidas).Value() < 1e-5]
     if len(regiones) < 2 or not toca:
-        raise geo.ErrorGeometria("La extrusión no llega al objeto elegido: no lo corta.")
+        raise geo.ErrorGeometria("La extrusión no llega al objeto.")
     caras = [c for r in toca for c in geo.caras(r)]
     if lados == "dos_lados":
         otro = _extruir_tramos(ws, n, *((0.0, abs(distancia2)) if signo > 0 else (abs(distancia2), 0.0)), conicidad)
@@ -442,7 +441,7 @@ def _prisma_inclinado(alambre, t, d, alto, conicidad):
     t × d (la derecha del recorrido mirando desde `d`): la misma cara plana que da MakeDraft cuando la resuelve."""
     lateral = np.cross(t, d)
     if np.linalg.norm(lateral) < 1e-9:
-        raise geo.ErrorGeometria("La curva es paralela a la dirección de extrusión: no se puede extruir.")
+        raise geo.ErrorGeometria("La curva es paralela a la extrusión.")
     v = (np.asarray(d, float) + lateral * math.tan(math.radians(conicidad))) * alto
     return BRepPrimAPI_MakePrism(alambre, gp_Vec(*map(float, v))).Shape()
 
@@ -472,7 +471,7 @@ def _revolver_hasta(ws, punto, d, objeto):
         medio = (bajo + alto) / 2
         bajo, alto = (bajo, medio) if toca(medio) else (medio, alto)
     if alto < 1e-5:
-        raise geo.ErrorGeometria("El cuerpo ya toca el perfil: elegí uno que esté a un ángulo.")
+        raise geo.ErrorGeometria("El cuerpo ya toca el perfil: elegí otro.")
     return _simplificar(girado(alto))
 
 
@@ -489,23 +488,22 @@ def revolver_superficie(aristas, punto_eje, dir_eje, angulo, *, direccion="un_la
     ws = alambres(aristas)
     if hasta is not None:
         if direccion == "simetrica":
-            raise geo.ErrorGeometria("«A objeto» gira hasta el objeto de cada lado: usá «Un lado» o «Dos lados».")
+            raise geo.ErrorGeometria("«A objeto»: usá «Un lado» o «Dos lados».")
         if direccion == "un_lado":
             return _revolver_hasta(ws, punto_eje, d, hasta)
         if hasta2 is None:
-            raise geo.ErrorGeometria("Elegí el objeto hasta donde gira el perfil en el lado 2.")
+            raise geo.ErrorGeometria("Elegí el objeto del lado 2.")
         piezas = [_revolver_hasta(ws, punto_eje, d, hasta), _revolver_hasta(ws, punto_eje, -d, hasta2)]
         eje = gp_Ax1(_pnt(punto_eje), gp_Dir(*map(float, d)))
         vuelta = geo.area(_juntar([BRepPrimAPI_MakeRevol(w, eje, 2 * math.pi).Shape() for w in ws]))
         if sum(geo.area(pieza) for pieza in piezas) > vuelta * (1 + 1e-6):     # el área crece con el ángulo (Pappus)
-            raise geo.ErrorGeometria("Los dos lados juntos pasan de una vuelta (360°): elegí objetos que no se crucen.")
+            raise geo.ErrorGeometria("Los dos lados pasan de 360°.")
         return _coser_caras([c for pieza in piezas for c in geo.caras(pieza)])
     a2 = (angulo2 or 0.0) if direccion == "dos_lados" else 0.0
     if abs(angulo) < 1e-9:
         raise geo.ErrorGeometria("El ángulo de revolución no puede ser cero.")
     if abs(angulo) > 360.0 + 1e-6 or abs(a2) > 360.0 + 1e-6 or abs(angulo) + abs(a2) > 360.0 + 1e-6:
-        raise geo.ErrorGeometria("El ángulo de revolución no puede pasar de 360° (en total): más de una vuelta se "
-                                 "pisa a sí misma.")
+        raise geo.ErrorGeometria("El ángulo no puede pasar de 360°.")
     tramos = {"un_lado": [(0.0, angulo)], "simetrica": [(-angulo / 2, angulo)],
               "dos_lados": [(0.0, abs(angulo))] + ([(0.0, -abs(a2))] if abs(a2) > 1e-9 else [])}[direccion]
     if abs(angulo) + abs(a2) >= 360.0 - 1e-9 and direccion != "dos_lados":
@@ -517,8 +515,7 @@ def revolver_superficie(aristas, punto_eje, dir_eje, angulo, *, direccion="un_la
             base = geo.rotar(w, np.asarray(punto_eje, float), d, inicio) if inicio else w
             rev = BRepPrimAPI_MakeRevol(base, eje, math.radians(grados))
             if not rev.IsDone():
-                raise geo.ErrorGeometria("No se pudo girar el perfil alrededor del eje: el perfil tiene que quedar de "
-                                         "un solo lado del eje, sin cruzarlo ni apoyarse sobre él. Movelo o cambiá el eje.")
+                raise geo.ErrorGeometria("El perfil debe quedar de un lado del eje.")
             piezas.append(rev.Shape())
     if len(tramos) == 1:
         return _simplificar(_juntar(piezas))
@@ -625,8 +622,7 @@ def _recortar_perpendicular(ruta, riel):
 
     f = _primer_cruce(altura)
     if f is None:
-        raise geo.ErrorGeometria("El riel guía no acompaña a la ruta: no se pudo cortar el barrido en un plano "
-                                 "perpendicular a la ruta. Probá con «Extensión completa».")
+        raise geo.ErrorGeometria("El riel no sigue la ruta: probá «Completa».")
     return sc._recortar_alambre(ruta, f), riel
 
 
@@ -643,8 +639,7 @@ def _ruta_sobre(espina, guia):
                   for k in range(3)]
         cara = next((c for c in caras if all(BRepExtrema_DistShapeShape(v, c).Value() < 1e-4 for v in puntos)), None)
         if cara is None:
-            raise geo.ErrorGeometria("La ruta tiene que estar sobre la superficie guía: cada arista de la ruta, apoyada en "
-                                     "una de sus caras.")
+            raise geo.ErrorGeometria("La ruta debe apoyarse en la superficie guía.")
         arreglo.FixAddPCurve(e, cara, False, 1e-4)
     return copia
 
@@ -676,7 +671,7 @@ def _barrido_estirado(perfiles, espina, riel, solido=False):
         x = v - t * float(v @ t)
         d = float(np.linalg.norm(x))
         if d < 1e-6:
-            raise geo.ErrorGeometria("El riel guía toca la ruta: con «Estirar» tiene que ir separado de ella.")
+            raise geo.ErrorGeometria("«Estirar»: el riel no puede tocar la ruta.")
         return p, np.column_stack([x / d, np.cross(t, x / d), t]), d
 
     p0, f0, d0 = base(0)
@@ -692,7 +687,7 @@ def _barrido_estirado(perfiles, espina, riel, solido=False):
         ts.CheckCompatibility(False)            # copias de un mismo perfil: ya son compatibles
         ts.Build()
         if not ts.IsDone():
-            raise geo.ErrorGeometria("No se pudo estirar el perfil entre la ruta y el riel: probá con «Escalar».")
+            raise geo.ErrorGeometria("No se pudo estirar: probá «Escalar».")
         piezas.append(ts.Shape())
     return _simplificar(_juntar(piezas))
 
@@ -722,24 +717,21 @@ def barrer_superficie(aristas_perfil, ruta, *, orientacion="perpendicular", tors
     if orientacion not in ("perpendicular", "paralela"):
         raise geo.ErrorGeometria(f"Orientación de barrido desconocida: {orientacion}")
     if not math.isfinite(torsion) or abs(torsion) > TORSION_MAXIMA_SUPERFICIE:
-        raise geo.ErrorGeometria(f"La torsión del barrido de superficie admite como máximo "
-                                 f"±{TORSION_MAXIMA_SUPERFICIE:g}° ({TORSION_MAXIMA_SUPERFICIE / 360:g} vueltas); "
-                                 f"recibió {torsion:g}°.")
+        raise geo.ErrorGeometria(f"Torsión máx. ±{TORSION_MAXIMA_SUPERFICIE:g}° (pediste {torsion:g}°).")
     if abs(torsion) > 1e-9 and orientacion != "perpendicular":
-        raise geo.ErrorGeometria("La torsión solo existe con orientación perpendicular.")
+        raise geo.ErrorGeometria("La torsión pide orientación perpendicular.")
     if not math.isfinite(conicidad) or abs(conicidad) >= 89.0:
-        raise geo.ErrorGeometria(f"La conicidad del barrido tiene que estar entre -89° y 89°; recibió {conicidad:g}°.")
+        raise geo.ErrorGeometria(f"Conicidad entre -89° y 89° (pediste {conicidad:g}°).")
     if abs(conicidad) > 1e-9 and orientacion != "perpendicular":
-        raise geo.ErrorGeometria("La conicidad solo existe con orientación perpendicular.")
+        raise geo.ErrorGeometria("La conicidad pide orientación perpendicular.")
     for valor in (distancia, distancia_carril):
         if not math.isfinite(valor) or not 0 < valor <= 1:
-            raise geo.ErrorGeometria(f"La distancia del barrido sobre la ruta va de 0 (sin incluir) a 1; recibió {valor:g}.")
+            raise geo.ErrorGeometria(f"Distancia: más de 0 hasta 1 (pediste {valor:g}).")
     if carril is not None and superficie_guia is not None:
-        raise geo.ErrorGeometria("Elegí un riel guía o una superficie guía, no los dos.")
+        raise geo.ErrorGeometria("Riel o superficie guía, no los dos.")
     guiado = carril is not None or superficie_guia is not None
     if guiado and (abs(torsion) > 1e-9 or abs(conicidad) > 1e-9):
-        raise geo.ErrorGeometria("La torsión y la conicidad son del tipo «Ruta individual»: no se combinan con un riel "
-                                 "ni con una superficie guía.")
+        raise geo.ErrorGeometria("Torsión y conicidad no van con riel ni guía.")
     espina = _alambre_unico(ruta, "La ruta")
     from . import solidos_crear as sc      # diferido: solidos_crear importa este módulo
     if distancia < 1:
@@ -774,8 +766,7 @@ def barrer_superficie(aristas_perfil, ruta, *, orientacion="perpendicular", tors
             if conicidad > 0:                  # B-372: el perfil que crece no puede pasar la curvatura de la ruta
                 sc._exigir_conicidad_en_curvas(perfil, espina, sc._punto_en(espina, 0.0)[0], conicidad, final)
             if final <= 0.01:
-                raise geo.ErrorGeometria("Con esa conicidad el perfil desaparece antes del final de la ruta: probá con "
-                                         "un ángulo menor.")
+                raise geo.ErrorGeometria("Con esa conicidad el perfil desaparece.")
         ts = None
         try:
             if abs(torsion) < 1e-9 and final != 1.0:
@@ -861,7 +852,7 @@ def _auxiliar_puntos(w, direccion, delta, superficie=None):
             if superficie is not None:
                 proy = GeomAPI_ProjectPointOnSurf(_pnt(p), superficie)
                 if proy.NbPoints() == 0:
-                    raise geo.ErrorGeometria("La superficie de la cara no se prolonga hasta donde pide la condición Suave.")
+                    raise geo.ErrorGeometria("La cara no se prolonga para «Suave».")
                 p = _np(proy.NearestPoint())
             puntos.append(p)
         tramos.append(puntos)
@@ -925,7 +916,7 @@ def _direccion_alineada(w, cara, alineacion):
     correccion = {}
     if alineacion != "libre":
         if BRep_Tool.IsClosed_s(w):
-            raise geo.ErrorGeometria("La alineación de bordes es de los perfiles abiertos: uno cerrado no tiene extremos.")
+            raise geo.ErrorGeometria("Solo los perfiles abiertos se alinean.")
         for s in (0.0, 1.0):
             q, t = sc._punto_en(w, s)
             correccion[s] = del_extremo(q, t) - signo * libre(q, t)
@@ -984,7 +975,7 @@ def _cupula(secs, inicio, fin, solido):
     from . import solidos_crear as sc
     peso, p = float(cond.get("peso", 1.0)), _np(BRep_Tool.Pnt_s(punta))
     if peso <= 0:
-        raise geo.ErrorGeometria("El peso de la condición de borde tiene que ser positivo.")
+        raise geo.ErrorGeometria("El peso debe ser positivo.")
     c = sc._centro_alambre(perfil)
     n = _normal_seccion(perfil, p - c)
     q = p - float((p - c) @ n) * n
@@ -1011,7 +1002,7 @@ def _cupula(secs, inicio, fin, solido):
         return _coser_caras(caras)
     r = coser(caras + [BRepBuilderAPI_MakeFace(perfil, True).Face()], 1e-6)
     if not r["es_solido"]:
-        raise geo.ErrorGeometria("La cúpula del punto tangente no cerró un sólido: el perfil tiene que ser cerrado.")
+        raise geo.ErrorGeometria("Perfil cerrado necesario para la cúpula.")
     return r["forma"]
 
 
@@ -1022,17 +1013,17 @@ def _auxiliares(sec, otra, cond, signo, exacta=False):
     from . import solidos_crear as sc
     tipo, peso = cond["tipo"], float(cond.get("peso", 1.0))
     if peso <= 0:
-        raise geo.ErrorGeometria("El peso de la condición de borde tiene que ser positivo.")
+        raise geo.ErrorGeometria("El peso debe ser positivo.")
 
     def centro(s):
         return _np(BRep_Tool.Pnt_s(s[1])) if s[0] == "vertice" else sc._centro_alambre(s[1])
 
     if tipo == "punto_tangente":
         if sec[0] != "vertice" or otra[0] != "alambre":
-            raise geo.ErrorGeometria("La condición «Punto tangente» es de un perfil que es un punto, junto a un contorno.")
+            raise geo.ErrorGeometria("«Punto tangente» pide punto y contorno.")
         return _domo(centro(sec), otra[1], peso)
     if sec[0] != "alambre":
-        raise geo.ErrorGeometria("La condición de borde necesita un perfil con contorno; un punto es agudo o tangente.")
+        raise geo.ErrorGeometria("La condición pide un perfil con contorno.")
     w, c = sec[1], centro(sec)
     hacia = centro(otra) - c
     delta = peso * 0.15 * float(np.linalg.norm(hacia))
@@ -1040,8 +1031,7 @@ def _auxiliares(sec, otra, cond, signo, exacta=False):
         # P-147d: como Fusion, se mide desde la normal (0 = perpendicular) y da vueltas; acá, desde el plano del perfil
         angulo = (90.0 - float(cond.get("angulo", 0.0))) % 360.0
         if not 0 < angulo < 180:
-            raise geo.ErrorGeometria("El ángulo de la condición de borde, medido desde la normal, tiene que quedar entre "
-                                     "−90 y 90 grados.")
+            raise geo.ErrorGeometria("El ángulo de borde va entre −90° y 90°.")
         n = _normal_seccion(w, hacia)
         if BRep_Tool.IsClosed_s(w) and not exacta:
             return [sc._auxiliar_direccion(w, n, delta, angulo, signo)]
@@ -1054,7 +1044,7 @@ def _auxiliares(sec, otra, cond, signo, exacta=False):
         raise geo.ErrorGeometria(f"Condición de borde desconocida: {tipo}")
     cara = cond.get("cara")
     if cara is None:
-        raise geo.ErrorGeometria("La condición Tangente o Suave necesita la cara a la que la superficie es tangente.")
+        raise geo.ErrorGeometria("Tangente o Suave: elegí la cara vecina.")
     direccion = _direccion_alineada(w, cara, cond.get("alineacion", "libre"))
     if tipo == "tangente":
         return [_auxiliar_puntos(w, direccion, delta)]
@@ -1070,10 +1060,10 @@ def _con_condiciones(secs, inicio, fin, medias):
         if not cond or cond.get("tipo", "libre") == "libre":
             continue
         if not 0 <= pos < n:
-            raise geo.ErrorGeometria(f"No hay un perfil en la posición {pos + 1} para la condición de borde.")
+            raise geo.ErrorGeometria(f"No hay perfil en la posición {pos + 1}.")
         extremo = pos in (0, n - 1)
         if not extremo and cond["tipo"] != "direccion":
-            raise geo.ErrorGeometria("Entre el primer perfil y el último solo vale la condición Dirección.")
+            raise geo.ErrorGeometria("Del primero al último: solo «Dirección».")
         if pos < n - 1:
             delante[pos] = _auxiliares(secs[pos], secs[pos + 1], cond, 1.0)
         if pos > 0:
@@ -1138,12 +1128,12 @@ def _solevar_con_rieles(secs, rieles, inicio=None, fin=None, medias=None, cerrad
 
     from . import solidos_crear as sc
     if all(t == "vertice" for t, _f in secs):
-        raise geo.ErrorGeometria("Con rieles hace falta al menos un perfil que sea una curva, no solo puntos.")
+        raise geo.ErrorGeometria("Con rieles falta un perfil que sea curva.")
     anillo = BRep_Tool.IsClosed_s(next(f for t, f in secs if t == "alambre"))
     if any(t == "alambre" and BRep_Tool.IsClosed_s(f) != anillo for t, f in secs):
-        raise geo.ErrorGeometria("Con rieles, los perfiles tienen que ser todos abiertos o todos cerrados.")
+        raise geo.ErrorGeometria("Perfiles todos abiertos o todos cerrados.")
     if cerrada and not all(BRep_Tool.IsClosed_s(r) for r in rieles):
-        raise geo.ErrorGeometria("En una solevación cerrada los rieles tienen que ser lazos cerrados que pasen por todos los perfiles.")
+        raise geo.ErrorGeometria("Los rieles deben ser lazos que cruzan todo.")
     fin_muestras = -1 if anillo else None
     m = _MUESTRAS_PERFIL - (1 if anillo else 0)
     contornos = [_muestras(f, _MUESTRAS_PERFIL)[:fin_muestras] if t == "alambre" else np.tile(_np(BRep_Tool.Pnt_s(f)), (m, 1))
@@ -1156,15 +1146,14 @@ def _solevar_con_rieles(secs, rieles, inicio=None, fin=None, medias=None, cerrad
         for i, (_t, f) in enumerate(secs):
             d = BRepExtrema_DistShapeShape(f, riel)
             if not d.IsDone() or d.Value() > 0.01:
-                raise geo.ErrorGeometria(f"El riel {j + 1} no toca el perfil {i + 1}: un riel tiene que cruzar todos los "
-                                         "perfiles.")
+                raise geo.ErrorGeometria(f"El riel {j + 1} no toca el perfil {i + 1}.")
             q = _np(d.PointOnShape1(1))
             toques[j, i] = np.argmin(np.linalg.norm(contornos[i] - q, axis=1))
             en_riel[j, i] = np.argmin(np.linalg.norm(denso - q, axis=1)) / (len(denso) - 1)
     if cerrada:                                    # cada riel da una vuelta entera: la fracción sigue creciendo (o bajando)
         en_riel = np.unwrap(np.column_stack([en_riel, en_riel[:, 0]]) * 2 * math.pi, axis=1) / (2 * math.pi)
         if np.any(np.abs(np.abs(en_riel[:, -1] - en_riel[:, 0]) - 1.0) > 1e-3):
-            raise geo.ErrorGeometria("En una solevación cerrada cada riel tiene que dar la vuelta pasando por todos los perfiles.")
+            raise geo.ErrorGeometria("Cada riel debe pasar por todos los perfiles.")
     # Cada perfil se recorre desde el primer riel y en el sentido en que más se parece al anterior.
     esquinas, ordenes = [], []
     for i, (t, f) in enumerate(secs):
@@ -1205,7 +1194,7 @@ def _solevar_con_rieles(secs, rieles, inicio=None, fin=None, medias=None, cerrad
 
     tramos = marcas(True) or marcas(False)
     if tramos is None:
-        raise geo.ErrorGeometria("Los rieles se cruzan: tienen que seguir el mismo orden en todos los perfiles.")
+        raise geo.ErrorGeometria("Los rieles se cruzan: mantené el orden.")
     k = len(tramos[0]) - 1
     fr = np.linspace(0.0, 1.0, max(9, math.ceil(49 / k)))
 
@@ -1321,8 +1310,7 @@ def _solevar_con_rieles(secs, rieles, inicio=None, fin=None, medias=None, cerrad
     ts.CheckCompatibility(False)              # todas tienen las mismas aristas, en el mismo orden
     ts.Build()
     if not ts.IsDone():
-        raise geo.ErrorGeometria("No se pudo crear la superficie con esos rieles: revisá que toquen todos los perfiles y "
-                                 "que no se crucen entre sí.")
+        raise geo.ErrorGeometria("No se pudo crear con esos rieles.")
     return ts.Shape()
 
 
@@ -1362,7 +1350,7 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
                 (isinstance(s, (list, tuple)) and len(s) == 3 and all(isinstance(c, (int, float)) for c in s)))
         if es_punto:
             if 0 < i < len(secciones) - 1 or cerrada:
-                raise geo.ErrorGeometria("Un punto solo puede ser la primera o la última sección de un solevado abierto.")
+                raise geo.ErrorGeometria("Un punto solo va al inicio o al final.")
             if isinstance(s, TopoDS_Shape):
                 v = TopoDS.Vertex(s)
             else:
@@ -1371,7 +1359,7 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
         else:
             secs.append(("alambre", _alambre_unico(s, f"La sección {i + 1}")))
     if cerrada and len(secciones) < 3:
-        raise geo.ErrorGeometria("Un solevado cerrado necesita al menos tres secciones.")
+        raise geo.ErrorGeometria("Un solevado cerrado pide 3 secciones o más.")
     rieles = list(rieles)
     if rieles and linea_central is not None:
         raise geo.ErrorGeometria("Elegí rieles o una línea central, no los dos.")
@@ -1382,10 +1370,9 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
     condiciones = any(c and c.get("tipo", "libre") != "libre"
                       for c in (condicion_inicio, condicion_fin, *(condiciones_medias or {}).values()))
     if (guiada or condiciones) and reglada:
-        raise geo.ErrorGeometria("Las condiciones de borde, los rieles y la línea central no se combinan con tramos rectos.")
+        raise geo.ErrorGeometria("Tramos rectos: sin rieles ni condiciones.")
     if cerrada and (condiciones or linea_central is not None):
-        raise geo.ErrorGeometria("Una solevación cerrada no tiene perfiles extremos: no admite condiciones de borde, y OpenCascade "
-                                 "no la arma con línea central. Con rieles sí se puede.")
+        raise geo.ErrorGeometria("Cerrada: sin condiciones ni línea central.")
     exacta = (condicion_exacta and condiciones and not condiciones_medias and linea_central is None
               and _exacta_posible(secs, (condicion_inicio, condicion_fin)))
     if rieles or exacta:
@@ -1406,9 +1393,7 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
         try:
             forma = sc._loft(secs, False, bool(reglada), cerrada)
         except geo.ErrorGeometria:
-            raise geo.ErrorGeometria("No se pudo crear la superficie entre las secciones: revisá que estén en el orden "
-                                     "en que se recorren, que no se crucen y que tengan una forma parecida (o probá con "
-                                     "«Tramos rectos»).") from None
+            raise geo.ErrorGeometria("No se pudo crear: revisá orden y forma.") from None
     forma = _simplificar(forma)
     return _simplificar(geo.unificar_caras(forma)) if fusionar_tangentes else forma
 
@@ -1418,10 +1403,7 @@ def _parche_imposible(continuidad):
     «Geom_RectangularTrimmedSurface::V1==V2» o «BRepFill : The continuity is not G0 G1 or G2»)."""
     que = {"G1": "tangente (G1)", "G2": "de curvatura (G2)"}.get(continuidad, "de conexión (G0)")
     return geo.ErrorGeometria(
-        f"No se pudo construir el parche con continuidad {que}: el kernel no encuentra una superficie que cumpla "
-        "esa continuidad con las caras vecinas en todo el contorno (en una esquina, dos caras que se tocan pueden "
-        "pedir planos tangentes distintos). Probá con Conexión (G0), con menos aristas, o agregá una arista o un "
-        "punto interior que guíe el parche.")
+        f"Parche {que} imposible: probá G0.")
 
 
 def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None, por_arista=()):
@@ -1436,14 +1418,11 @@ def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None, por
     pedidas = [continuidad] + [c for _, c in por_arista]
     for c in pedidas:
         if c not in _CONTINUIDAD:
-            raise geo.ErrorGeometria(f"Continuidad desconocida: {c} (G0, G1 o G2).")
+            raise geo.ErrorGeometria(f"Continuidad desconocida: {c} (G0, G1, G2).")
     if any(c != "G0" for c in pedidas) and soporte is None:
-        raise geo.ErrorGeometria("Tangente (G1) y curvatura (G2) necesitan aristas de un cuerpo con caras vecinas: "
-                                 "elegí las aristas del contorno sobre el cuerpo (no curvas de boceto) o usá "
-                                 "Conexión (G0).")
+        raise geo.ErrorGeometria("G1 y G2 piden aristas de un cuerpo.")
     if any(not BRep_Tool.IsClosed_s(w) for w in alambres(aristas_contorno)):
-        raise geo.ErrorGeometria("El contorno no es cerrado: el parche tapa un contorno cerrado (uní los "
-                                 "extremos o elegí las aristas que lo cierran).")   # B-66: antes, crudo del kernel
+        raise geo.ErrorGeometria("El contorno debe ser cerrado.")   # B-66: antes, crudo del kernel
     interior = list(interior)
     if all(c == "G0" for c in pedidas) and not interior:
         ws = alambres(aristas_contorno)
@@ -1475,8 +1454,7 @@ def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None, por
                 if cont != "G0":
                     if not vecinas:
                         raise geo.ErrorGeometria(
-                            f"La continuidad {cont} necesita que las aristas del parche pertenezcan a las caras "
-                            "del cuerpo de soporte (no se encontró la cara vecina de una arista).")
+                            f"{cont}: falta la cara vecina de una arista.")
                     rel.Add(e, vecinas[0], _CONTINUIDAD[cont], True)
                 else:
                     rel.Add(e, GeomAbs_C0, True)
@@ -1550,8 +1528,7 @@ def _mover_extremo(muestras, extremo, s, fin):
     q = muestras[::-1] if fin == 0 else muestras
     if len(q) == 2:
         if s <= -np.linalg.norm(q[1] - q[0]):
-            raise geo.ErrorGeometria("Las esquinas ingleteadas recortan una arista más de lo que mide: desmarcá "
-                                     "«Esquinas ingleteadas» o usá una distancia menor.")
+            raise geo.ErrorGeometria("Ingletes: usá una distancia menor.")
         q = np.array([q[0], _en_arco(extremo, s)[0]])
     elif s >= 0:
         q = np.vstack([q, [_en_arco(extremo, s * k / 4)[0] for k in range(1, 5)]])
@@ -1559,8 +1536,7 @@ def _mover_extremo(muestras, extremo, s, fin):
         largo = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(q, axis=0), axis=1))])
         quedan = largo < largo[-1] + s - 0.25 * largo[-1] / (len(q) - 1)
         if quedan.sum() < 3:
-            raise geo.ErrorGeometria("Las esquinas ingleteadas recortan una arista más de lo que mide: desmarcá "
-                                     "«Esquinas ingleteadas» o usá una distancia menor.")
+            raise geo.ErrorGeometria("Ingletes: usá una distancia menor.")
         q = np.vstack([q[quedan], _en_arco(extremo, s)[0]])
     return q[::-1] if fin == 0 else q
 
@@ -1618,9 +1594,9 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
     otra cara para la dirección. Sin `ingletear`, cada arista da su propia cara. `avisos`: lista donde se anota el texto
     de lo que quedó a medias (hoy, las esquinas que no se pudieron cortar)."""
     if tipo not in ("normal", "tangente", "direccion"):
-        raise geo.ErrorGeometria(f"Tipo de superficie reglada desconocido: {tipo}")
+        raise geo.ErrorGeometria(f"Tipo reglado desconocido: {tipo}")
     if abs(distancia) < 1e-9:
-        raise geo.ErrorGeometria("La distancia de la superficie reglada no puede ser cero.")
+        raise geo.ErrorGeometria("La distancia no puede ser cero.")
     d_fija = None
     if tipo == "direccion":
         d_fija = _unitario(direccion if direccion is not None else (0, 0, 0), "La dirección")
@@ -1638,8 +1614,7 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
             if tipo != "direccion" and plano is None:
                 vecinas = _caras_de(mapa, e) if mapa is not None else []
                 if not vecinas:
-                    raise geo.ErrorGeometria("Para 'normal' o 'tangente' indicá `referencia`: el cuerpo de la "
-                                             "arista o el plano del boceto.")
+                    raise geo.ErrorGeometria("Normal/tangente: indicá la referencia.")
                 cara = vecinas[1] if alternas and len(vecinas) > 1 else vecinas[0]
                 invertida = _orientacion_en(cara, e) == TopAbs_REVERSED
             else:
@@ -1704,16 +1679,14 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
             caras = unidas
     resultado = _coser_caras(caras)
     if resultado.IsNull() or not geo.es_valida(resultado):
-        raise geo.ErrorGeometria("No se pudo crear una superficie reglada válida: cambiá la distancia o el ángulo.")
+        raise geo.ErrorGeometria("Reglada inválida: cambiá distancia o ángulo.")
     if distancia < 0:
         from . import revision
         cantidad, _, completo = revision._autointersecciones_seguras(resultado, 1, 5.0)
         if cantidad:
-            raise geo.ErrorGeometria("La superficie reglada se cruza consigo misma: la extensión puede superar el radio "
-                                     "de curvatura de ese lado. Reducí la distancia o cambiá el ángulo o el lado.")
+            raise geo.ErrorGeometria("La reglada se cruza: reducí la distancia.")
         if not completo:
-            raise geo.ErrorGeometria("No se pudo comprobar si la superficie reglada se cruza consigo misma. "
-                                     "Probá con menos aristas o una distancia menor.")
+            raise geo.ErrorGeometria("No se pudo comprobar: menos aristas.")
     return resultado
 
 
@@ -1784,15 +1757,13 @@ def desfasar_superficie(forma, distancia, *, tipo="agudo"):
     off = BRepOffsetAPI_MakeOffsetShape()
     off.PerformByJoin(forma, float(distancia), 1e-6, BRepOffset_Skin, False, False, junta)
     if not off.IsDone():
-        raise geo.ErrorGeometria("El desfase falló (¿la distancia supera el radio de curvatura?).")
+        raise geo.ErrorGeometria("Desfase: la distancia no entra.")
     resultado = None if off.Shape().IsNull() else _simplificar(off.Shape())
     from . import revision                  # local: revision carga medio núcleo
     # B-171: un desfase enorme puede cruzarse consigo mismo sin que lo vea _desfase_imposible
     if (resultado is None or _desfase_imposible(forma, resultado, distancia)
             or revision._autointersecciones_seguras(resultado, 1, 5.0)[0]):
-        raise geo.ErrorGeometria(f"El desfase falló: con {abs(distancia):g} mm la superficie se cruza consigo misma "
-                                 "(la distancia es igual o mayor que su radio de curvatura de ese lado, o que la mitad "
-                                 "del grosor del cuerpo). Probá una distancia menor.")
+        raise geo.ErrorGeometria(f"Desfase de {abs(distancia):g} mm: se cruza sola.")
     return resultado
 
 
@@ -1813,8 +1784,7 @@ def _filetear_cantos(forma, aristas, valor, clase_api, sustantivo, parametro):
     mapa = _mapa_aristas(forma)
     for e in _formas(aristas):
         if len(_caras_de(mapa, TopoDS.Edge(e))) < 2:
-            raise geo.ErrorGeometria(f"La arista es libre (la toca una sola cara): el {sustantivo} necesita una arista "
-                                     "compartida por dos caras.")
+            raise geo.ErrorGeometria(f"Para el {sustantivo}: arista de dos caras.")
         if clase_api is BRepFilletAPI_MakeFillet:
             from .solidos_modificar import _rechazar_cara_justa
             geo.rechazar_radio_de_arco(TopoDS.Edge(e), float(valor))
@@ -1826,7 +1796,7 @@ def _filetear_cantos(forma, aristas, valor, clase_api, sustantivo, parametro):
     except Exception as exc:  # noqa: BLE001
         raise geo.ErrorGeometria(f"El {sustantivo} falló (¿{parametro} demasiado grande?).") from exc
     if not op.IsDone():
-        raise geo.ErrorGeometria(f"El {sustantivo} falló (¿{parametro} demasiado grande o arista libre?).")
+        raise geo.ErrorGeometria(f"El {sustantivo} falló: ¿{parametro} muy grande?")
     return _simplificar(op.Shape())
 
 
@@ -1861,7 +1831,7 @@ def regiones_recorte(forma, herramienta):
     sp.SetTools(tools)
     sp.Build()
     if not sp.IsDone():
-        raise geo.ErrorGeometria("No se pudo partir la superficie con la herramienta.")
+        raise geo.ErrorGeometria("No se pudo partir la superficie.")
     caras = geo.caras(sp.Shape())
     # Regiones = caras conectadas por aristas que NO están sobre la herramienta (las del corte separan).
     mapa = _mapa_aristas(sp.Shape())
@@ -1953,7 +1923,7 @@ def destrimar(cara, *, contornos="exteriores", aristas=(), extension=0.0, origin
     if contornos not in ("exteriores", "interiores", "todos", "manual"):
         raise geo.ErrorGeometria(f"Tipo de destrimado desconocido: {contornos}")
     if extension < 0:
-        raise geo.ErrorGeometria("La distancia de extensión no puede ser negativa.")
+        raise geo.ErrorGeometria("La distancia no puede ser negativa.")
     cara = TopoDS.Face(cara)
     adelante = TopoDS.Face(cara.Oriented(TopAbs_FORWARD))
     exterior = BRepTools.OuterWire_s(adelante)
@@ -1963,7 +1933,7 @@ def destrimar(cara, *, contornos="exteriores", aristas=(), extension=0.0, origin
     if contornos == "manual":
         elegidas = [TopoDS.Edge(a) for a in _formas(aristas)]
         if not elegidas:
-            raise geo.ErrorGeometria("En el modo manual elegí las aristas a destrimar.")
+            raise geo.ErrorGeometria("Modo manual: elegí las aristas a destrimar.")
 
         def elegido(w):
             return any(_misma_arista(TopoDS.Edge(e), a) for e in geo._explorar(w, TopAbs_EDGE) for a in elegidas)
@@ -1971,7 +1941,7 @@ def destrimar(cara, *, contornos="exteriores", aristas=(), extension=0.0, origin
         natural = elegido(exterior)
         tapados = [w for w in interiores if elegido(w)]
         if not natural and not tapados:
-            raise geo.ErrorGeometria("Ninguna de las aristas elegidas es un borde de la cara.")
+            raise geo.ErrorGeometria("Ninguna arista elegida es borde de la cara.")
         quedan = [w for w in interiores if not any(w.IsSame(t) for t in tapados)]
     else:
         quedan = interiores if contornos == "exteriores" else []
@@ -2051,7 +2021,7 @@ def _extension_libre(cara, arista, distancia, pasos=8, muestras=41):
         ampliada = TopoDS_Face()
         BRepLib.ExtendFace_s(cara, 2.0 * distancia, True, True, True, True, ampliada)
         if ampliada.IsNull():
-            raise geo.ErrorGeometria("No se pudo prolongar la superficie de la cara para extenderla.")
+            raise geo.ErrorGeometria("No se pudo prolongar la superficie.")
         marcha = BRep_Tool.Surface_s(ampliada)          # conserva la parametrización: los (u, v) de la cara valen
 
     def marco(s, u, v):
@@ -2099,8 +2069,7 @@ def _extension_libre(cara, arista, distancia, pasos=8, muestras=41):
         ts.AddWire(BRepBuilderAPI_MakeWire(_borde_por_puntos(np.array(fila), params)).Wire())
     ts.Build()
     if not ts.IsDone():
-        raise geo.ErrorGeometria("No se pudo extender la cara curva con alineación libre: probá con una distancia "
-                                 "menor o con extensión tangente.")
+        raise geo.ErrorGeometria("No se pudo extender: probá menos distancia.")
     return ts.Shape()
 
 
@@ -2116,7 +2085,7 @@ def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear")
     no es rectangular: plana, el borde se extiende con una cara plana tangente de bordes laterales libres; curva, con una
     franja sobre su propia superficie (`_extension_libre`)."""
     if alineacion not in ("libre", "alinear"):
-        raise geo.ErrorGeometria(f"Alineación de bordes desconocida: {alineacion} (libre o alinear).")
+        raise geo.ErrorGeometria(f"Alineación desconocida: {alineacion}.")
     if distancia <= 0:
         raise geo.ErrorGeometria("La distancia de extensión debe ser positiva.")
     if tipo in ("tangente", "perpendicular"):
@@ -2133,7 +2102,7 @@ def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear")
         e = TopoDS.Edge(e)
         vecinas = _caras_de(mapa, e)
         if len(vecinas) != 1:
-            raise geo.ErrorGeometria("Solo se extienden aristas libres (bordes de una sola cara).")
+            raise geo.ErrorGeometria("Solo se extienden aristas libres.")
         cara = vecinas[0]
         limites = BRepTools.UVBounds_s(cara)
         lado = _lado_iso(cara, e, limites)
@@ -2148,8 +2117,7 @@ def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear")
                     curvas.append((cara, e))
                 continue
             raise geo.ErrorGeometria(
-                "La cara no es rectangular en su parametrización: no se puede extender en forma natural; probá con "
-                "alineación libre, o con extensión tangente o perpendicular.")
+                "La cara no se extiende en forma natural.")
         k = next(i for i, c in enumerate(caras) if c.IsSame(cara))
         pedidos.setdefault(k, (cara, []))[1].append((e, lado))
     reemplazos, extra = {}, []
@@ -2172,7 +2140,7 @@ def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear")
             v0 -= dv if ("v", "min") in lados else 0.0
             v1 += dv if ("v", "max") in lados else 0.0
             if u1 - u0 > 2 * math.pi + 1e-9 and sup.GetType() == GeomAbs_Cylinder:
-                raise geo.ErrorGeometria("La extensión da más de una vuelta completa del cilindro.")
+                raise geo.ErrorGeometria("La extensión pasa de una vuelta.")
             nueva = BRepBuilderAPI_MakeFace(BRep_Tool.Surface_s(cara), u0, u1, v0, v1, 1e-7).Face()
         else:
             nueva = TopoDS_Face()
@@ -2191,8 +2159,7 @@ def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear")
             raise
         except Exception as exc:  # noqa: BLE001 — OCC crudo («out of range»…) o numérico: se dice qué probar
             raise geo.ErrorGeometria(
-                "No se pudo extender la cara curva con alineación libre: la superficie no se puede prolongar más allá de "
-                "su borde. Probá con extensión tangente o perpendicular.") from exc
+                "No se pudo extender: probá otra extensión.") from exc
     return _coser_caras([reemplazos.get(i, c) for i, c in enumerate(caras)] + extra)
 
 
@@ -2200,7 +2167,7 @@ def _tolerancia_costura(formas, tolerancia):
     """Rechaza una tolerancia ≤ 0 o tan grande como la pieza (B-504): OpenCascade junta los vértices que quedan a menos
     de la tolerancia, así que un tubo de 20 mm de alto salía «sólido» desde 45 mm y con 1e6 quedaba una forma vacía."""
     if not math.isfinite(tolerancia) or tolerancia <= 0:
-        raise geo.ErrorGeometria(f"La tolerancia de costura tiene que ser mayor que 0 mm; recibió {tolerancia:g} mm.")
+        raise geo.ErrorGeometria(f"Tolerancia: mayor que 0 mm (pediste {tolerancia:g}).")
     cajas = [c for c in (geo.caja_envolvente(f) for f in _formas(formas)) if c]
     if not cajas:
         return
@@ -2224,7 +2191,7 @@ def coser(formas, tolerancia=0.01):
     cos.Perform()
     cosido = _simplificar(cos.SewedShape())
     if not geo.caras(cosido):
-        raise geo.ErrorGeometria("⚠ La costura no dejó ninguna cara: probá con una tolerancia menor.")
+        raise geo.ErrorGeometria("Sin caras tras coser: menos tolerancia.")
     libres, cosidas = cos.NbFreeEdges(), cos.NbContigousEdges()
     cascarones = [TopoDS.Shell(s) for s in geo._explorar(cosido, TopAbs_SHELL)]
     if libres == 0 and cascarones and all(BRep_Tool.IsClosed_s(s) for s in cascarones):
@@ -2324,7 +2291,7 @@ def invertir_normal(forma):
     """Invertir normal [GUID-3B2D0A04-B93C-4F63-9512-00D91F042C2D]: cambia el lado positivo de una
     superficie (no aplica a sólidos: su normal siempre apunta afuera)."""
     if any(True for _ in geo._explorar(forma, TopAbs_SOLID)):
-        raise geo.ErrorGeometria("Invertir normal es solo para cuerpos de superficie.")
+        raise geo.ErrorGeometria("Invertir normal: solo superficies.")
     return _tipado(forma.Reversed())
 
 
@@ -2405,7 +2372,7 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     op.Initialize(base, float(espesor), 1e-6, BRepOffset_Skin, False, False, junta, True, False)
     op.MakeOffsetShape()
     if not op.IsDone() or op.Shape().IsNull():
-        raise geo.ErrorGeometria("No se pudo engrosar (¿el espesor supera el radio de curvatura?).")
+        raise geo.ErrorGeometria("No se pudo engrosar: ¿espesor muy grande?")
     resultado = _simplificar(op.Shape())
     if not geo.solidos(resultado):
         raise geo.ErrorGeometria("El engrosado no produjo un sólido.")
@@ -2413,15 +2380,11 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     # 10 hacia adentro), dado vuelta por el eje (12 mm: un tubo de radio 2 a 10) o con volumen negativo (25 mm).
     if (not geo.es_valida(resultado) or geo.volumen_exacto(resultado) <= 0
             or _desfase_imposible(base, resultado, espesor, engrosado=True)):
-        raise geo.ErrorGeometria(f"No se pudo engrosar: {abs(espesor):g} mm es igual o mayor que el radio de "
-                                 "curvatura de la superficie de ese lado. Probá un espesor menor o engrosar hacia el "
-                                 "otro lado.")
+        raise geo.ErrorGeometria(f"Espesor {abs(espesor):g} mm: probá menos.")
     from . import revision                  # local: revision carga medio núcleo
     # B-394: tres caras de una caja abierta (borde + dos paredes) daban «ok» con 6 autointersecciones en las esquinas
     if revision._autointersecciones_seguras(resultado, 1, 5.0)[0]:
-        raise geo.ErrorGeometria("No se pudo engrosar: el sólido se cruza consigo mismo (las caras elegidas se "
-                                 "tocan en una esquina o el espesor es mayor que lo que deja la pieza). Probá un "
-                                 "espesor menor, otras caras o engrosar hacia el otro lado.")
+        raise geo.ErrorGeometria("No se pudo engrosar: probá menos espesor.")
     return resultado
 
 

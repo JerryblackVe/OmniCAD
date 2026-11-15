@@ -49,7 +49,7 @@ def test_interior_de_80_se_rechaza_sin_tocar_el_boceto():
     b = Boceto()
     c = b.agregar_circulo((0, 0), R)
     antes = json.dumps(b.a_dict(), sort_keys=True)
-    with pytest.raises(ErrorBoceto, match="deja el radio del círculo negativo"):
+    with pytest.raises(ErrorBoceto, match="el radio queda negativo"):
         b.desfasar(c, -80)
     assert json.dumps(b.a_dict(), sort_keys=True) == antes
 
@@ -103,7 +103,7 @@ def test_arco_concentrico_y_radio_resultante():
     dentro, = b.desfase(arco, 5, punto_lado=(1, 1))
     assert b.radio(fuera) == pytest.approx(35) and b.radio(dentro) == pytest.approx(25)
     assert b.curvas[fuera].centro == b.curvas[dentro].centro == centro          # concéntricos: comparten el centro
-    with pytest.raises(ErrorBoceto, match="radio de un arco de la cadena"):
+    with pytest.raises(ErrorBoceto, match="el radio queda"):
         b.desfase(arco, 30, punto_lado=(1, 1))                                  # el radio llegaría a 0
 
 

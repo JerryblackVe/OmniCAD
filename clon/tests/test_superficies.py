@@ -207,7 +207,8 @@ def test_parche_g1_y_g2_sobre_la_boca_de_la_caja_avisan_claro():
     for continuidad, que in (("G1", "tangente (G1)"), ("G2", "de curvatura (G2)")):
         with pytest.raises(g.ErrorGeometria) as error:
             sf.parche(aristas, continuidad=continuidad, soporte=soporte)
-        assert que in str(error.value) and "Probá con Conexión (G0)" in str(error.value)
+        assert que in str(error.value)
+        assert "G0" in str(error.value)          # la pista corta: probá G0
         assert "V1==V2" not in str(error.value) and "BRepFill" not in str(error.value)
     assert g.area(sf.parche(aristas, continuidad="G0", soporte=soporte)) == pytest.approx(400)
 
@@ -283,7 +284,7 @@ def test_empalme_y_chaflan_de_una_arista_libre_lo_dicen():
     cas = sf.coser([f1, f2], 1e-6)["forma"]
     libre = arista_en(cas, (5, 10, 0))                       # el borde de arriba de la primera cara: la toca una sola
     for funcion in (sf.empalme_superficie, sf.chaflan_superficie):
-        with pytest.raises(g.ErrorGeometria, match="arista es libre"):
+        with pytest.raises(g.ErrorGeometria, match="arista de dos caras"):
             funcion(cas, [libre], 2)
 
 
@@ -378,6 +379,6 @@ def test_parche_con_contorno_abierto_da_error_amable():
     «Geom_RectangularTrimmedSurface::V1==V2»; ahora valida antes."""
     with pytest.raises(g.ErrorGeometria) as e:
         sf.parche([seg((0, 0, 0), (10, 0, 0))])
-    assert "no es cerrado" in str(e.value) and "V1" not in str(e.value)
+    assert "debe ser cerrado" in str(e.value) and "V1" not in str(e.value)
     # cerrado sigue andando (cara plana exacta)
     assert g.es_valida(sf.parche(cuadrado(10)))

@@ -141,7 +141,7 @@ def test_revolucion_dos_lados_simetrica_y_hasta_un_objeto():
     cuerpo = g.trasladar(g.caja(4, 4, 4), np.array([-2.0, 8.0, 3.0]))
     a_cuerpo = sf.revolver_superficie(perfil, origen, Z, 0, hasta=("forma", cuerpo))
     assert 0 < g.area(a_cuerpo) < completa / 2 and g.es_valida(a_cuerpo)
-    with pytest.raises(g.ErrorGeometria, match="un solo lado"):
+    with pytest.raises(g.ErrorGeometria, match="de un lado del eje"):
         sf.revolver_superficie(seg((-5, 0, 5), (5, 0, 5)), origen, Z, 90)       # SUP-22: el perfil cruza el eje
     with pytest.raises(g.ErrorGeometria, match="360"):
         sf.revolver_superficie(perfil, origen, Z, 270, direccion="dos_lados", angulo2=180)
@@ -155,7 +155,7 @@ def test_parche_continuidad_por_arista_y_guias_interiores():
     borde = arista_en(tubo, (0, 0, 20))
     por_arista = sf.parche([borde], por_arista=[(borde, "G1")], soporte=tubo)
     assert g.area(por_arista) == pytest.approx(math.pi * 100, rel=2e-3) and g.es_valida(por_arista)
-    with pytest.raises(g.ErrorGeometria, match="caras vecinas"):                 # SUP-22: dice qué corregir
+    with pytest.raises(g.ErrorGeometria, match="piden aristas de un cuerpo"):                 # SUP-22: dice qué corregir
         sf.parche([borde], por_arista=[(borde, "G1")])
     with pytest.raises(g.ErrorGeometria):
         sf.parche([borde], por_arista=[(borde, "G9")])
@@ -217,7 +217,7 @@ def test_reglada_ingleteada_entre_recta_y_arco():
     assert g.area(adentro) == pytest.approx(_esperado_media_luna(20, -3), rel=5e-3) and g.es_valida(adentro)
     with pytest.raises(g.ErrorGeometria, match="se cruzan entre sí. Activá Esquinas en inglete"):    # B-392: sin inglete se pisan
         sf.reglada(media_luna(), -3, tipo="tangente", referencia=plano)
-    with pytest.raises(g.ErrorGeometria, match="recortan una arista"):
+    with pytest.raises(g.ErrorGeometria, match="Ingletes"):
         sf.reglada([seg((0, 0, 0), (1, 0, 0)), seg((1, 0, 0), (1, 1, 0)), seg((1, 1, 0), (0, 1, 0)), seg((0, 1, 0), (0, 0, 0))],
                    -5, tipo="tangente", referencia=plano, ingletear=True)
 
@@ -258,9 +258,9 @@ def test_extender_alineacion_libre_en_una_cara_plana_no_rectangular():
     hipotenusa = arista_en(triangulo, (5, 5, 0))
     libre = sf.extender(triangulo, [hipotenusa], 2, alineacion="libre")
     assert g.area(libre) == pytest.approx(50 + 10 * math.sqrt(2) * 2) and g.es_valida(libre)
-    with pytest.raises(g.ErrorGeometria, match="no es rectangular"):
+    with pytest.raises(g.ErrorGeometria, match="no se extiende en forma natural"):
         sf.extender(triangulo, [hipotenusa], 2, alineacion="alinear")
-    with pytest.raises(g.ErrorGeometria, match="no es rectangular"):
+    with pytest.raises(g.ErrorGeometria, match="no se extiende en forma natural"):
         sf.extender(triangulo, [hipotenusa], 2)                                      # por defecto: como siempre
     with pytest.raises(g.ErrorGeometria, match="Alineación"):
         sf.extender(triangulo, [hipotenusa], 2, alineacion="g3")
@@ -298,9 +298,9 @@ def test_extender_alineacion_libre_en_una_cara_curva_no_rectangular():
     anillo = g.area(con_domo) - g.area(domo)
     assert 2 * math.pi * 10 * 2 < anillo < 2 * math.pi * 10 * 2 * 1.2 and g.es_valida(con_domo)    # más que plano: el domo baja en el borde
     assert sf.coser_previa(con_domo)["aristas_libres"] == 1
-    with pytest.raises(g.ErrorGeometria, match="no es rectangular"):
+    with pytest.raises(g.ErrorGeometria, match="no se extiende en forma natural"):
         sf.extender(cara, [borde], 2, alineacion="alinear")
-    with pytest.raises(g.ErrorGeometria, match="no es rectangular"):
+    with pytest.raises(g.ErrorGeometria, match="no se extiende en forma natural"):
         sf.extender(cara, [borde], 2)                                                                # el valor por defecto no cambia
     # un cilindro cortado en oblicuo: el borde es una elipse; desarrollado, la franja mide distancia por el largo del borde
     cilindro = g.cilindro(radio, 30)
@@ -356,7 +356,7 @@ def test_extender_libre_traduce_cualquier_excepcion_del_kernel(monkeypatch):
     def rota(*_a, **_k):
         raise RuntimeError("Standard_OutOfRange: Geom_BSplineSurface::D1")
     monkeypatch.setattr(sf, "_extension_libre", rota)
-    with pytest.raises(g.ErrorGeometria, match="extensión tangente") as e:
+    with pytest.raises(g.ErrorGeometria, match="probá otra extensión") as e:
         sf.extender(cara, [aristas(cara)[0]], 2, alineacion="libre")
     assert "Standard_OutOfRange" not in str(e.value)
 
@@ -557,7 +557,7 @@ def test_paso_de_extruir_con_opciones_nuevas_y_la_receta_vieja_se_abre_igual():
     op2, _ = _ejecutar(doc, SupExtruir, curvas=curvas, extension="objeto", hasta=[objeto])
     assert caja(_ultimo(doc).forma)[1][2] == pytest.approx(8) and g.area(_ultimo(doc).forma) == pytest.approx(80)
     _roundtrip(SupExtruir, op2, doc)
-    with pytest.raises(ErrorComando, match="objeto hasta donde"):
+    with pytest.raises(ErrorComando, match="hasta dónde llega"):
         _ejecutar(doc, SupExtruir, curvas=curvas, extension="objeto")
     viejo = Documento()                         # receta vieja: solo `simetrica`, ninguna clave nueva
     bid, ids = _boceto(viejo, lineas=[((0, 0), (10, 0))])
@@ -611,7 +611,7 @@ def test_paso_de_parche_con_continuidad_por_arista_guias_e_invertir():
     _roundtrip(Parche, op, doc)
     with pytest.raises(ErrorComando, match="G0, G1 o G2"):
         _ejecutar(doc, Parche, contorno=contorno, agrupar=False, continuidades="G7")
-    with pytest.raises(ErrorComando, match="solo 4 aristas"):
+    with pytest.raises(ErrorComando, match="y 4 aristas"):
         _ejecutar(doc, Parche, contorno=contorno, agrupar=False, continuidades="G0,G0,G0,G0,G0")
     sin = sf.normal_muestra(_ultimo(doc).forma)[1]
     _ejecutar(doc, Parche, contorno=contorno, invertir=True)
@@ -619,7 +619,7 @@ def test_paso_de_parche_con_continuidad_por_arista_guias_e_invertir():
     cmd, ctx = Parche(), ContextoComando(doc)
     valores = {c.clave: c.defecto for c in cmd.campos(ctx)}
     res = doc.agregar(cmd.construir({**valores, "contorno": contorno, "continuidad": "G1"}, ctx))
-    assert res.estado == "error" and "caras vecinas" in res.mensaje and "`soporte`" not in res.mensaje
+    assert res.estado == "error" and "piden aristas de un cuerpo" in res.mensaje and "`soporte`" not in res.mensaje
 
 
 def test_reglada_ingleteada_avisa_de_la_esquina_que_no_pudo_cortar():
@@ -733,7 +733,7 @@ def test_paso_de_extender_con_alineacion_libre():
     cmd, ctx = Extender(), ContextoComando(doc)
     valores = {c.clave: c.defecto for c in cmd.campos(ctx)}
     estricto = doc.agregar(cmd.construir({**valores, "aristas": [hit], "distancia": "2 mm"}, ctx))
-    assert estricto.estado == "error" and "no es rectangular" in estricto.mensaje
+    assert estricto.estado == "error" and "no se extiende en forma natural" in estricto.mensaje
     op, _ = _ejecutar(doc, Extender, aristas=[hit], distancia="2 mm", alineacion="libre")
     assert g.area(doc.estado_final.cuerpos[cuerpo.id].forma) == pytest.approx(50 + 10 * math.sqrt(2) * 2)
     _roundtrip(Extender, op, doc)

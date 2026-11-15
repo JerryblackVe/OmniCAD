@@ -38,9 +38,9 @@ def test_circulo_de_30_con_distancia_con_signo(d, radio):
 def test_circulo_de_30_rechaza_cero_y_negativo_con_la_causa_real():
     b = Boceto()
     c = b.agregar_circulo((0, 0), 30)
-    with pytest.raises(ErrorBoceto, match="deja el radio del círculo en cero"):
+    with pytest.raises(ErrorBoceto, match="el radio queda en cero"):
         b.desfase(c, -30)
-    with pytest.raises(ErrorBoceto, match="deja el radio del círculo negativo"):
+    with pytest.raises(ErrorBoceto, match="el radio queda negativo"):
         b.desfase(c, -40)
     with pytest.raises(ErrorBoceto, match="cero: no hay nada"):
         b.desfase(c, 0)
@@ -107,7 +107,7 @@ def test_cadena_abierta_con_signo_cambia_de_lado():
 def test_arco_de_la_cadena_que_se_anula_dice_cual():
     b = Boceto()
     arco = b.agregar_arco_centro(b.agregar_punto(0, 0), b.agregar_punto(10, 0), b.agregar_punto(0, 10))
-    with pytest.raises(ErrorBoceto, match="radio de un arco de la cadena"):
+    with pytest.raises(ErrorBoceto, match="el radio queda"):
         b.desfase(arco, 10, punto_lado=(1, 1))
 
 

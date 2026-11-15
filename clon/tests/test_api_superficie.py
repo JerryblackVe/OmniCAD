@@ -298,7 +298,7 @@ def test_coser_rechaza_una_expresion_que_da_cero():
     s = api.Sesion()
     base, pared = dos_superficies(s)
     r = api.llamar(s, "stitch_surfaces", {"bodies": [base, pared], "tolerance": "0 mm"})
-    assert not r["ok"] and "tolerancia de costura" in r["mensaje"], r
+    assert not r["ok"] and "Tolerancia: mayor que 0" in r["mensaje"], r
 
 
 def test_dividir_un_cuerpo_de_superficie():
@@ -424,7 +424,7 @@ def test_error_del_kernel_revierte_transaccion():
     pila = len(s.doc._deshacer)
     r = api.llamar(s, "create_patch", {"boundary": perfil})
     assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
-    assert "no es cerrado" in r["mensaje"]
+    assert "debe ser cerrado" in r["mensaje"]
     assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
     assert len(s.doc._deshacer) == pila
 
@@ -437,10 +437,10 @@ def test_b163_extender_y_destrimar_rechazan_un_solido():
     antes = json.dumps(s.doc.a_dict(), sort_keys=True)
     r = api.llamar(s, "extend_surface", {"edges": [f"{caja}/E4"], "extension_type": "tangent"})
     assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
-    assert "Extender solo se aplica a cuerpos de superficie" in r["mensaje"] and "Cuerpo1" in r["mensaje"]
+    assert "Extender: «" in r["mensaje"] and "Cuerpo1" in r["mensaje"]
     r = api.llamar(s, "untrim_surface", {"faces": [f"{caja}/F3"]})
     assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
-    assert "Destrimar solo se aplica a cuerpos de superficie" in r["mensaje"] and "Cuerpo1" in r["mensaje"]
+    assert "Destrimar: «" in r["mensaje"] and "Cuerpo1" in r["mensaje"]
     assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
 
 
@@ -464,7 +464,7 @@ def test_b163_un_documento_guardado_con_destrimar_sobre_un_solido_abre_y_muestra
     llamar(s2, "open_document", path=ruta)
     pasos = llamar(s2, "get_timeline", include_params=False)["steps"]
     roto = next(p for p in pasos if p["type"] == "destrimar")
-    assert roto["status"] == "error" and "Destrimar solo se aplica a cuerpos de superficie" in roto["message"]
+    assert roto["status"] == "error" and "Destrimar: «" in roto["message"]
     assert [b["name"] for b in llamar(s2, "get_scene_info")["bodies"]] == ["Cuerpo1"]
 
 
