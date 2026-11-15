@@ -34,3 +34,15 @@ def test_un_vaciado_normal_sigue_andando_y_sin_cruces():
     forma = next(iter(sesion.doc.estado_final.cuerpos.values())).forma
     assert geo.es_valida(forma) and revision._autointersecciones_seguras(forma, 1, 5.0)[0] == 0
     assert 24000 - 40 * 30 * 20 < geo.volumen(forma) < 24000
+
+
+def test_b524_vaciar_de_nuevo_un_cuerpo_hueco_no_agranda_el_volumen():
+    """B-524: quitar la cara interior de una pared de 2 mm con 14 mm de espesor daba «ok» y MÁS volumen (ShapeFix
+    «reparaba» el resultado inválido del kernel después del control). Ahora es un error y el cuerpo queda igual."""
+    sesion = api.Sesion()
+    assert api.llamar(sesion, "create_box", {"length": 80, "width": 30, "height": 40})["ok"]
+    assert api.llamar(sesion, "shell", {"body": "Cuerpo1", "faces": "<Z"})["ok"]
+    antes = geo.volumen(next(iter(sesion.doc.estado_final.cuerpos.values())).forma)
+    r = api.llamar(sesion, "shell", {"body": "op1.c1", "faces": ["Cuerpo1/F7"], "thickness": 14.0})
+    assert not r["ok"] and "Pared" in r["mensaje"], r
+    assert geo.volumen(next(iter(sesion.doc.estado_final.cuerpos.values())).forma) == antes

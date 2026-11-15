@@ -1108,8 +1108,9 @@ def _cascara_por_desfase(forma, caras, espesor):
 
 
 def _borde_con_bisel(forma, caras, espesor):
-    """True si alguna cara vecina de las quitadas es una franja más angosta que el espesor: un chaflán o un empalme en
-    el borde de la abertura (el kernel no puede desfasarlos hacia adentro y el vaciado falla culpando a otra cosa)."""
+    """True si alguna cara vecina de las quitadas es una franja más angosta que el espesor: un chaflán, un empalme o
+    el canto de una pared fina en el borde de la abertura (el kernel no puede desfasarlos hacia adentro y el vaciado
+    falla culpando a otra cosa)."""
     arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
     for cara in caras:
         for e in _unicos(cara, TopAbs_EDGE):
@@ -1175,7 +1176,9 @@ def _cascara_exterior_por_desfase(forma, caras, espesor):
 def _cascara(forma, caras, espesor, union):
     try:
         resultado = _validar(_cascara_del_kernel(forma, caras, espesor, union), "Vaciado")
-        if not geo.solidos(resultado):      # B-470: BRepCheck da por válida una cáscara abierta sin sólido
+        # B-470: BRepCheck da por válida una cáscara abierta sin sólido. B-524: ShapeFix «repara» un resultado
+        # inválido y le cambia el volumen (un vaciado hacia adentro salía más grande): se vuelve a controlar.
+        if not geo.solidos(resultado) or _resultado_imposible(forma, resultado, espesor):
             raise geo.ErrorGeometria(_falla_kernel(forma, espesor))
         return resultado
     except geo.ErrorGeometria as e:
@@ -1188,7 +1191,7 @@ def _cascara(forma, caras, espesor, union):
                 f"Vaciado hacia afuera: {espesor:g} mm no entra.") from e
         if not _demasiado_grueso(forma, espesor) and _borde_con_bisel(forma, caras, espesor):    # «muy grueso» manda
             raise geo.ErrorGeometria(
-                "Vaciado: chaflán o empalme muy angosto.") from e
+                "⚠ Pared o chaflán más fino que el espesor") from e
         raise
 
 
