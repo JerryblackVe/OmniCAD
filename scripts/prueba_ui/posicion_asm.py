@@ -317,7 +317,7 @@ def chica():
         barra = v.arrastre.barra
         A.reg(AR, f"ventana {w}x{h}: la barra entra entera y no pisa el navegador ni el ViewCube", barra.isVisible()
               and vis.geometry().contains(barra.geometry()) and not barra.geometry().intersects(v.area.viewcube.geometry())
-              and not any(n.isVisible() and barra.geometry().intersects(n.geometry()) for n in v.area.arriba_izq), f"{barra.geometry()}")
+              and not any(n.isVisible() and barra.geometry().intersects(n.geometry()) for n in v.area.arriba_izq), f"{barra.geometry()} vc={v.area.viewcube.geometry()} " + " ".join(f"{type(n).__name__}={n.geometry()}" for n in v.area.arriba_izq if n.isVisible()))
         A.foto(v, f"posicion_asm_{w}x{h}")
         QTest.mouseClick(barra.revertir, Qt.LeftButton)
         A.esperar(100)
