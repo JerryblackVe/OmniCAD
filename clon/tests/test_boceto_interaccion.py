@@ -642,3 +642,15 @@ def test_entrar_al_boceto_no_arma_los_paneles_que_casi_no_se_usan(ventana):
         assert mb.caracter is not viejo
     finally:
         mb.terminar()
+
+
+def test_b539_la_linea_que_cierra_la_l_recibe_la_perpendicular(app_qt):
+    """B-539: al cerrar el perfil con un clic en el primer punto, la última línea también recibe su restricción
+    automática (Fusion pone la perpendicular). Antes quedaba suelta: 1 GDL de más y al acotar se inclinaba."""
+    lz = _lienzo(app_qt)
+    lz.set_herramienta("linea")
+    for xy in [(0, 0), (20, 0), (20, 10), (10, 10), (10, 20), (0, 20), (0, 0)]:
+        _clic(lz, *xy)
+    cierre = max(lz.b.curvas)
+    assert [r.tipo for r in lz.b.restricciones.values() if cierre in r.entidades] == ["perpendicular"]
+    assert lz.resolver().gdl == 4                     # solo faltan los 4 largos, como en Fusion
