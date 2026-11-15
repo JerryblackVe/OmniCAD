@@ -465,17 +465,6 @@ class AsaTamanoRosca(AsaRadial):
         nuevos = super().mover(g, estado, pos)
         return self._tamano_cercano(nuevos[self.clave]) if nuevos else {}
 
-    def texto_caja(self, g):
-        """Radio en mm del tamaño actual; la caja no muestra el nombre del desplegable."""
-        return f"{self._radio(g):.3f}".rstrip("0").rstrip(".").replace(".", ",")
-
-    def aplicar_caja(self, g, texto):
-        """Convierte el radio tecleado al tamaño más cercano, sin agregar campos al panel."""
-        radio = float(g.ctx.evaluar(texto, LONGITUD))
-        if not math.isfinite(radio) or radio <= 0:
-            raise ValueError("El radio debe ser positivo y finito.")
-        return self._tamano_cercano(radio)
-
 
 class FlechaPuntero(Flecha):
     """Asa del radio del empalme y del chaflán como la de Fusion (P-143): una flecha azul chata con forma de puntero,
@@ -1976,10 +1965,7 @@ class GestorManipuladores(QObject):
             caja.raise_()
 
     def texto_caja(self, caja):
-        """Texto del campo o del gancho opcional del manipulador (p. ej. radio de Rosca)."""
-        gancho = getattr(getattr(caja, "manipulador", None), "texto_caja", None)
-        if gancho is not None:
-            return gancho(self)
+        """Texto del campo (la escala, con dos decimales)."""
         if caja.clave == "escala" and self.comando.CLAVE in CON_ESCALA:
             return f"{self.valor(caja.clave):.2f}"
         return str(self.panel.valores.get(caja.clave, ""))
@@ -2037,14 +2023,10 @@ class GestorManipuladores(QObject):
 
     def aplicar_caja(self, caja):
         texto = caja.text().strip()
-        gancho = getattr(getattr(caja, "manipulador", None), "aplicar_caja", None)
         try:
-            if gancho is not None:
-                nuevos = gancho(self, texto)
-            else:
-                valor = self.ctx.evaluar(texto, self.tipo(caja.clave))
-                if caja.clave == "escala" and self.comando.CLAVE in CON_ESCALA and valor <= 0:
-                    raise ValueError("El factor de escala debe ser positivo.")
+            valor = self.ctx.evaluar(texto, self.tipo(caja.clave))
+            if caja.clave == "escala" and self.comando.CLAVE in CON_ESCALA and valor <= 0:
+                raise ValueError("El factor de escala debe ser positivo.")
         except Exception as e:  # noqa: BLE001 — se marca la caja en rojo, como el panel
             caja.setStyleSheet(qss_caja() + QSS_CAJA_ROJA)
             caja.setToolTip(str(e))
@@ -2053,12 +2035,7 @@ class GestorManipuladores(QObject):
         if re.fullmatch(r"[+-]?\d+(?:[.,]\d+)?", texto) and self.tipo(caja.clave) in (LONGITUD, ANGULO):
             texto += " deg" if self.tipo(caja.clave) == ANGULO else " mm"      # B-405: «0» y el «0 mm» del campo se ven igual
         recordar_valor(self.tipo(caja.clave), texto)
-        if gancho is not None:
-            self.escribir(nuevos)
-            caja.setText(self.texto_caja(caja))
-            caja.setStyleSheet(qss_caja())
-        else:
-            self.panel.set_valor(caja.clave, texto)
+        self.panel.set_valor(caja.clave, texto)
         caja.selectAll()
         return True
 

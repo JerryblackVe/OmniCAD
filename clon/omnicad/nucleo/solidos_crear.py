@@ -3354,22 +3354,23 @@ def _radio_cilindro(cara):
     return BRepAdaptor_Surface(cara).Cylinder().Radius()
 
 
-def _candidatas_auto(familia):
+def _candidatas_auto(familia, todas=False):
+    """Tamaños que compiten en el automático. `todas` (B-497, como Fusion): también las filas sumadas de sus tablas
+    (Ø9,3 → M9×1,25, Ø100 → M100); sin él, solo las de antes, para que una receta vieja elija lo mismo."""
     familia = familia or "iso_metrica"
     if familia not in FAMILIAS_ROSCA:
         raise geo.ErrorGeometria(f"Familia de rosca desconocida: {familia}")
     if FAMILIAS_ROSCA[familia]["conica"]:
         raise geo.ErrorGeometria("Las roscas cónicas no tienen tamaño automático sobre una cara cilíndrica.")
-    todas = [k for t in _POR_FAMILIA[familia].values() for k in t]
-    # las filas sumadas de Fusion no compiten en el tamaño automático: una receta vieja elige lo mismo que antes
-    return [datos_rosca(k) for k in ([k for k in todas if k not in _SUMADAS] or todas)]
+    filas = [k for t in _POR_FAMILIA[familia].values() for k in t]
+    return [datos_rosca(k) for k in (filas if todas else [k for k in filas if k not in _SUMADAS] or filas)]
 
 
-def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna=None):
+def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna=None, todas=False):
     """Lo que la Rosca de Fusion deduce de la cara antes de cortar: {"cara", "datos" (datos_rosca: el tamaño
     elegido o el automático de `familia` según el diámetro de la cara), "interna", "radio", "origen", "eje",
     "zmin", "zmax" (tramo axial de la cara)}. `cara=None`: la cilíndrica que mejor calza con la designación (o
-    la de mayor área)."""
+    la de mayor área). `todas`: ver `_candidatas_auto`."""
     if cara is None:
         candidatas = _caras_cilindricas(cuerpo)
         if not candidatas:
@@ -3399,8 +3400,9 @@ def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna
     else:
         clave_diam = "diametro_menor" if es_interna else "diametro"
         preferida = {"iso_metrica": "ISO métrica gruesa", "unificada": "Unificada UNC"}.get(familia or "iso_metrica")
-        datos = min(_candidatas_auto(familia),
-                    key=lambda dt: (round(abs(2 * radio - dt[clave_diam]), 6), dt["norma"] != preferida))
+        datos = min(_candidatas_auto(familia, todas),
+                    key=lambda dt: (round(abs(2 * radio - dt[clave_diam]), 6), dt["norma"] != preferida,
+                                    dt["designacion"] in _SUMADAS))     # empate (Ø16 interior): la fila de siempre
     zmin, zmax = _tramo_axial(cara, o, z)
     return {"cara": cara, "datos": datos, "interna": es_interna, "radio": radio, "origen": o, "eje": z,
             "zmin": zmin, "zmax": zmax}

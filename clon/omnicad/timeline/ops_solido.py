@@ -617,11 +617,13 @@ class OpRosca(_OpCrear):
     PARAMS = {"caras": [], "designacion": "", "largo_completo": True, "longitud": "10 mm", "desfase": "0 mm",
               "modelada": True, "mano": "derecha", "invertir": False,
               "familia": "iso_metrica", "clase_rosca": "", "holgura_3d": "0 mm",   # nuevas: «familia» y siguientes
-              "version_rosca": 2}
+              "version_rosca": 2, "version_tamano": 2}
     EXPRESIONES = ("longitud", "desfase", "holgura_3d")
     OPCIONES = {"mano": ("derecha", "izquierda"), "familia": FAMILIAS_ROSCA}
     REFS = ("caras",)
-    migrar_receta = _migrador("version_rosca")     # B-122: las clases de tabla modelan sus Ø; una receta vieja, no
+    # B-122: las clases de tabla modelan sus Ø; B-497: el tamaño automático elige entre todas las filas de Fusion.
+    # Una receta vieja, ninguna de las dos.
+    migrar_receta = _migrador("version_rosca", "version_tamano")
 
     def ejecutar(self, estado, ctx):
         ents = _resolver_todas(self.p["caras"], estado, ("cara",))
@@ -633,7 +635,8 @@ class OpRosca(_OpCrear):
         for e in ents:
             cuerpo = estado.cuerpo(e.cuerpo)
             info = sc.analizar_rosca(cuerpo.forma, e.forma, designacion=p["designacion"] or None,
-                                     familia=p.get("familia") or None)
+                                     familia=p.get("familia") or None,
+                                     todas=_version_de(p, "version_tamano") == 2)
             datos, modelada = info["datos"], p["modelada"]
             # P-153: un agujero se compara con el Ø menor (el del taladro); un eje, con el nominal
             diametro_cara, propio = 2 * info["radio"], datos["diametro_menor" if info["interna"] else "diametro"]

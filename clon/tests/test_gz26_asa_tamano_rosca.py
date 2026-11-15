@@ -1,4 +1,5 @@
-"""GZ-26: el radio de Rosca cambia el Tamaño desde el visor y desde su caja flotante."""
+"""GZ-26: el radio de Rosca cambia el Tamaño desde el visor (con «Longitud completa»: en modo parcial Fusion solo
+muestra Desfase y Longitud, B-497)."""
 import numpy as np
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, QSettings, Qt
@@ -75,27 +76,25 @@ def test_asa_tamano_con_y_sin_longitud_completa(perno, completa):
     panel.set_valor("largo_completo", completa)
     panel.set_valor("desfase", "3 mm")
     gestor = panel.manipuladores
-    assert [m.clave for m in gestor.manips] == (["tam_iso_metrica"] if completa else
-                                               ["desfase", "longitud", "tam_iso_metrica"])
+    if not completa:     # B-497, como Fusion: en modo parcial solo Desfase y Longitud
+        assert [m.clave for m in gestor.manips] == ["desfase", "longitud"]
+        return
+    assert [m.clave for m in gestor.manips] == ["tam_iso_metrica"]
     asa = _asa(panel)
     assert isinstance(asa, mp.AsaRadial)
     assert np.linalg.norm(asa.puntos(gestor)[0] - asa.origen) == pytest.approx(10)       # tamaño automático: el radio de la cara
     panel.set_valor("tam_iso_metrica", "M20")
-    assert asa.puntos(gestor)[0][2] == pytest.approx(0 if completa else 3)
+    assert asa.puntos(gestor)[0][2] == pytest.approx(0)
     assert np.linalg.norm(asa.puntos(gestor)[0] - asa.origen) == pytest.approx(9.895, abs=1e-3)   # como Fusion: 6g, no el nominal
     panel.set_valor("tam_iso_metrica", "M24")
     assert np.linalg.norm(_asa(panel).puntos(gestor)[0] - asa.origen) == pytest.approx(11.882, abs=1e-3)
-    if completa:
-        assert not gestor.cajas
-    else:
-        assert gestor.cajas["tam_iso_metrica"].text() == "11,882"
+    assert not gestor.cajas
     _previa_sana(panel)
 
 
-@pytest.mark.parametrize("completa", [True, False])
-def test_arrastre_real_del_radio_cambia_tamano_y_conserva_previa(perno, completa):
+def test_arrastre_real_del_radio_cambia_tamano_y_conserva_previa(perno):
     ventana, panel = perno
-    panel.set_valor("largo_completo", completa)
+    panel.set_valor("largo_completo", True)
     panel.set_valor("tam_iso_metrica", "M20")
     gestor, asa = panel.manipuladores, _asa(panel)
     desde = asa.puntos(gestor)[0]
@@ -126,48 +125,8 @@ def test_arrastre_real_del_radio_cambia_tamano_y_conserva_previa(perno, completa
     assert caja[1][0] - caja[0][0] == pytest.approx(diametro, abs=0.5)
 
 
-def test_teclear_radio_en_caja_elige_tamano_y_rechaza_errores(perno):
+def test_h113_arrastrar_actualiza_designacion_y_cilindro_en_el_visor(perno):
     ventana, panel = perno
-    panel.set_valor("largo_completo", False)
-    panel.set_valor("tam_iso_metrica", "M20")
-    panel.set_valor("des_tipo_rosca", "M20x2.5")
-    gestor = panel.manipuladores
-    caja = gestor.cajas["tam_iso_metrica"]
-    assert caja.text() == "9,895" and caja.isVisible()
-    caja.setFocus()
-    caja.selectAll()
-    QTest.keyClicks(caja, "12")
-    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
-    assert panel.valores["tam_iso_metrica"] == "M24"
-    assert panel.widgets["tam_iso_metrica"].currentData() == "M24"
-    assert caja.text() == "11,882"
-    _previa_sana(panel)
-    assert sc.datos_rosca(panel.ultima_op.p["designacion"])["tamano"] == "M24"
-
-    for texto in ("sin_radio +", "0", "-2", "12 deg"):
-        caja.setText(texto)
-        assert gestor.aplicar_caja(caja) is False
-        assert panel.valores["tam_iso_metrica"] == "M24"
-        assert caja.toolTip()
-    caja.setText("11,9 mm")
-    assert gestor.aplicar_caja(caja) is True
-    assert panel.valores["tam_iso_metrica"] == "M24" and caja.text() == "11,882"
-    ventana.visor.setFocus()
-    panel.set_valor("tipo_rosca", "unificada")
-    assert "tam_iso_metrica" not in gestor.cajas
-    caja = gestor.cajas["tam_unificada"]
-    caja.setText("3,2 mm")
-    assert gestor.aplicar_caja(caja) is True
-    assert panel.valores["tam_unificada"] == "1/4"
-    assert caja.text() == "3,11"
-    _previa_sana(panel)
-
-
-@pytest.mark.parametrize("completa", [True, False])
-def test_h113_arrastrar_actualiza_designacion_y_cilindro_en_el_visor(perno, completa):
-    ventana, panel = perno
-    panel.set_valor("largo_completo", completa)
-    panel.set_valor("desfase", "3 mm")
     panel.set_valor("tam_iso_metrica", "M20")
     panel.set_valor("des_tipo_rosca", "M20x2.5")
     casilla = panel.widgets["modelada"]
