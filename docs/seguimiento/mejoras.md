@@ -32,6 +32,7 @@ Abierto 10 · Parcial 9 · Sin verificar 2.
 | P-11k | Comparar EXTRUSOR XOX.f3z contra Fusion y probar mallas convertidas | Sin verificar | Baja | Importarlo en Fusion puede crear diseños en la nube del usuario; sin ejemplo BINCHA a mano. | PROJECT_LOG.md:32 | 2026-10-20 |
 | P-31-lic | Respetar licencias AGPL-3.0 (PartMode, QymCAD, Chili3D): solo ideas, nunca código | Sin verificar | Media | Regla de proceso, no tarea; no se puede comprobar contra el código. | PROJECT_LOG.md:117 | 2026-10-20 |
 | P-156 | Holgura de impresión 3D única (Gerardo, 2026-11-15): un valor general calibrado con la placa, aplicado a la rosca modelada (agujero agranda, tornillo achica), al molde (Cortar con «Dejar holgura») y a «La otra pieza es: Impresa / Metálica»; UI de una línea | Abierto | Alta | Diseño aprobado y qué reemplaza: ver la ficha «P-156» en Detalle | Gerardo, `evidencias/reportes_pc/2026-11-15_gerardo_rosca/holgura_impresion_negativa.png` | 2026-11-15 |
+| P-157 | Reorganizar Preferencias como Fusion: cada opción en su página, visual, poco texto, nada cortado a 1024×700, grisados con su motivo (Gerardo, 2026-11-15) | Abierto | Alta | Ver la ficha «P-157» en Detalle; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d | Gerardo, `evidencias/reportes_pc/2026-11-15_gerardo_preferencias/` | 2026-11-15 |
 
 ## Hallazgos de pruebas de uso
 
@@ -50,7 +51,6 @@ Abierto 5 · Parcial 7.
 | P-143 | Empalme: flecha del radio y marcador «◁▷» como Fusion | Parcial | Media | Obtener el OK de la captura y estudiar el marcador «◁▷» en Fusion. | evidencias/reportes_pc/2026-11-12_empalme_4_aristas/ | 2026-11-12 |
 | P-147 | Solevación: asas de Ángulo y Peso de despegue | Parcial | Media | Obtener el OK de Gerardo para la captura de convención angular. | Reporte de la PC: `evidencias/reportes_pc/2026-11-12_solevacion/` (`fusion_asas_direccion.jpg`, `omnicad_direccion_sin_asas.jpg`, video 4:20) | 2026-11-12 |
 | P-154 | Cambiar Lados de un polígono ya dibujado | Parcial | Media | Reconocer polígonos terminados por sus restricciones y rehacerlos al editar. | clon/tests/test_boc84_estrella.py; pieza boceto_herramientas | 2026-11-13 |
-| P-152 | Selector de temas con miniaturas y vista previa | Parcial | Media | Obtener el OK de Gerardo para la captura. | `evidencias/p152_2026-11-13/` (capturas); `clon/omnicad/ui/selector_temas.py`; `clon/tests/test_p152_selector_temas.py` | 2026-11-13 |
 | P-150 | Empalme y chaflán: aristas elegidas sin previa gruesas y sin profundidad | Parcial | Media | Decidir si afinar y dar profundidad a las aristas sin previa en todos los comandos. | tests/test_manipuladores.py; evidencias/p150_2026-11-13/p150_empalme_fusion_vs_omnicad.png | 2026-11-13 |
 
 ## Fusion 360
@@ -263,6 +263,23 @@ Abierto 1.
 
 ## Detalle de lo abierto
 
+### P-157 · Reorganizar Preferencias: ordenado, visual, poco texto (Gerardo, 2026-11-15)
+Gerardo: «todo tiene que estar bien ordenado en su lugar, bien explicado pero intuitivo, más visual, sin mucho texto, fácil de entender, que hasta un nene de 10 años entienda». Capturas: `evidencias/reportes_pc/2026-11-15_gerardo_preferencias/`.
+Señalado: los temas de la interfaz están en «General» y van en «Apariencia»; el rótulo «Mi tema (Azu…al) (propio)» sale cortado; «Se aplica al instante, sin reiniciar» queda cortado abajo; Idioma y Orientación grisados sin explicar por qué.
+Especificación:
+1. Árbol de páginas igual al de Fusion (`docs/fusion_docs`, Preferencias); cada opción en su página.
+2. Muestras visuales en vez de textos largos, con una frase corta por opción.
+3. Nada cortado a 1024×700.
+4. Las opciones grisadas, con su motivo en el tooltip.
+Reemplaza y junta (filas borradas el 2026-11-15; su detalle queda acá):
+- **P-152:**  **Qué:** Preferencias › General › «Tema de la interfaz» es un combo de texto y no se ve cómo queda ningún tema antes de aceptar (Gerardo: «no hay forma visual para ver los temas antes de aceptar») · **Queda:** Hecho (2026-11-13, `ui/selector_temas.py`: tarjetas con miniatura, vista previa al pasar el mouse y al elegir, Cancelar vuelve, temas propios). Queda: que Gerardo apruebe la captura (`evidencias/p152_2026-11-13/`) · **Evidencia:** `evidencias/p152_2026-11-13/` (capturas); `clon/omnicad/ui/selector_temas.py`; `clon/tests/test_p152_selector_temas.py`
+- **CF-7:**  **Qué:** Preferencias: páginas que no existen **Queda:** Páginas Dibujo, Configuraciones, Renderizar (valores por defecto), Material, Diseños híbridos y de ensamblaje, Unidades por defecto (Diseño) y Visualización de unidad y valor (faltan 10 de 13 ajustes). **Evidencia:** omnicad/ui/preferencias.py; capturas `INTERFAZ/Preferencias_*`
+- **CF-8:**  **Qué:** Preferencias: opciones sueltas de General y Gráficos **Queda:** Hechas: el tamaño del ViewCube (cinco tamaños como Fusion, en Preferencias › General y en el clic derecho del ViewCube, API incluida) y la barra espaciadora que repite el último comando (`general/espacio_repite`) — tanda C11, 2026-11-06; el tema del sistema (`general/tema` = `sistema`: sigue al claro/oscuro de Windows, como «Match Device Theme» de Fusion; el tema queda fuera del MCP, como manda CLAUDE.md) y los presets de ratón Alias, Inventor, PowerMill y SOLIDWORKS (`general/raton`, también en la API; con Inventor, F2/F3/F4 navegan en el visor en vez de Renombrar) — tanda C13, 2026-11-06. Faltan: (a) orientación Y o Z hacia arriba: el combo «Orientación de modelado por defecto» solo ofrece «Z hacia arriba», y darlo vuelta toca el marco de la cámara en 15 lugares de 6 archivos (`ui/visor3d.py`: `ojo`, `desplazar`,
+- **NOV-tip-2:**  **Qué:** Fuente de la interfaz: la lista no tiene buscador ni grupo de recomendadas, y el combo cerrado no muestra la forma de la letra elegida **Queda:** Hecho el 2026-10-29: cada familia de la lista se escribe con su propia letra y la lista abre acotada (14 filas con barra). Falta: caja de búsqueda dentro de la lista, grupo «Recomendadas» arriba (hoy solo van primero las de lectura fácil) y la fuente elegida mostrada con su letra en el combo cerrado. Pedido de Gerardo del 2026-10-29 (captura de Preferencias a 109 % y video 09-38-04), para una sesión nocturna. **Evidencia:** omnicad/ui/preferencias.py (`_combo_fuentes`, `_agregar_familia`)
+- **NOV-tip-3:**  **Qué:** Colores de texto: el selector es el de Qt, sin el tema de la app, y un color rechazado solo avisa «probá uno más claro» **Queda:** Hecho el 2026-10-29: cada fila muestra el color real (nunca el código), marca en rojo el rechazado y el aviso va en criollo. Falta: selector de color con el tema de la app, proponer con un clic un color parecido que sí se lea, y mostrar «elegido» frente a «aplicado» cuando se rechaza. **Evidencia:** omnicad/ui/preferencias.py (`CampoColor`, `_Muestra`, `_mostrar_aviso_apariencia`)
+- **NOV-tip-4:**  **Qué:** Preferencias › Apariencia no tiene vista previa propia, y los espacios y tamaños de la interfaz no están en un solo lugar **Queda:** Un panel de muestras (botón, campo, texto normal y secundario, acento y una cota del boceto) que cambie al instante con fuente, tamaño y colores; y valores comunes (espacios, radios, alturas) en un solo lugar para que todo escale parejo con letra grande. Validar a 100, 125 y 150 % y en 1024×640 y 800×520, con capturas antes y después. Pedido de Gerardo del 2026-10-29, para una sesión nocturna. **Evidencia:** omnicad/ui/preferencias.py, omnicad/ui/temas.py, omnicad/ui/cinta.py
+- **P-2d:** | P-2d | Selector de idioma en Preferencias y test de cadenas sin traducir | Abierto | Media | Sin selector ni test que falle por cadena sin traducción; AGENTS.md aún exige TODO en español. | omnicad/ui/preferencias.py sin clave de idioma | 2026-10-20 |
+
 ### P-156 · Holgura de impresión 3D única (diseño aprobado por Gerardo, 2026-11-15)
 Gerardo: «sí hazlo, pero hazlo con una UI intuitiva y simplificada» y «esto es una mejora de holgura. No dejes piezas sueltas: si una pisa la otra, borra». Especificación:
 1. **Un valor general** en Preferencias, «Holgura de impresión 3D», por lado. Se calibra con la placa de `create_clearance_test`: se elige el agujero que mejor encaja y ese valor queda guardado (botón «Usar este valor»). Toda rosca nueva lo trae por defecto.
@@ -378,9 +395,6 @@ Además: MCP y CLI para cada opción nueva; tests numéricos de los Ø en agujer
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Polígono: cambiar Lados después de dibujarlo no hace nada (Gerardo lo esperaba). Pedido: con el polígono recién dibujado, y mejor también al editarlo después, Lados en la tarjeta o en el campo vivo lo rehace con el mismo centro, radio, giro y tipo, conservando las cotas y restricciones que se puedan · **Queda:** Hecho para lo recién dibujado (E1, 2026-11-13): `Lienzo.cambiar_lados` / `rehacer_figura` rehacen el polígono (y la estrella, BOC-84) con el mismo círculo guía, así su cota sigue; un paso de deshacer; otra herramienta lo corta. Fusion no lo hace (su ayuda «Create polygons»: los lados se escriben antes del clic que lo ubica). Queda: rehacer un polígono ya terminado (elegirlo y cambiar Lados), que pide reconocerlo por sus restricciones · **Evidencia:** `clon/tests/test_boc84_estrella.py`; pieza `boceto_herramientas` (sección «Estrella y Lados»)
 
-### P-152 · Selector de temas con miniaturas y vista previa
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Preferencias › General › «Tema de la interfaz» es un combo de texto y no se ve cómo queda ningún tema antes de aceptar (Gerardo: «no hay forma visual para ver los temas antes de aceptar») · **Queda:** Hecho (2026-11-13, `ui/selector_temas.py`: tarjetas con miniatura, vista previa al pasar el mouse y al elegir, Cancelar vuelve, temas propios). Queda: que Gerardo apruebe la captura (`evidencias/p152_2026-11-13/`) · **Evidencia:** `evidencias/p152_2026-11-13/` (capturas); `clon/omnicad/ui/selector_temas.py`; `clon/tests/test_p152_selector_temas.py`
 
 ### P-150 · Empalme y chaflán: aristas elegidas sin previa gruesas y sin profundidad
 

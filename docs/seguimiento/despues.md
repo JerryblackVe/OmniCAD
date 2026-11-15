@@ -27,7 +27,6 @@ Abierto 40 · Bloqueado 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| P-2d | Selector de idioma en Preferencias y test de cadenas sin traducir | Abierto | Media | Sin selector ni test que falle por cadena sin traducción; AGENTS.md aún exige TODO en español. | omnicad/ui/preferencias.py sin clave de idioma | 2026-10-20 |
 | P-8c | Primer arranque guiado: idioma y conexión de agentes | Abierto | Media | Crear el asistente de primer arranque. | instalador/windows/omnicad.iss:62,79 (tarea «agentes»); sin asistente en omnicad/ | 2026-10-20 |
 | P-9f | Temas con tipografía propia y fondo con imagen en el visor | Abierto | Media | Los temas solo definen colores; la fuente está fija en el QSS y no hay imagen de fondo. | omnicad/ui/temas.py:208 (font-family fija «Segoe UI») | 2026-10-20 |
 | P-12e | Página web del proyecto y GitHub Actions que la actualice con cada versión | Abierto | Media | No existe la página; comparte las Actions por versión con el pendiente 8. | .github/workflows/instaladores.yml (solo instaladores) | 2026-10-20 |
@@ -134,8 +133,6 @@ Abierto 7 · Parcial 2 · Bloqueado 2. Especificación: mirar las capturas de su
 | CF-3 | DIBUJO: menú COTAS completo | Parcial | Media | Cota automática, ordenar, organizar, igualar, voltear flechas, recodo y máx/mín. | nucleo/dibujo.py; capturas `DIBUJO/Menu_de_cotas` y `DIBUJO/Ordenar` | 2026-11-02 |
 | CF-4 | DIBUJO: notas, tablas y símbolos | Abierto | Media | Completar notas, texto con formato, tablas, símbolos y extensión de arista. | ui/dibujo.py; capturas `DIBUJO/Tablas`, `Simbolos_de_dibujo`, `Texto_y_notas` | 2026-11-02 |
 | CF-5 | DIBUJO: navegador, hojas, cinta y exportar | Abierto | Media | Completar hojas, cinta, DWG/CSV, vistas, boceto y patrón de centros. | ui/dibujo.py; capturas `DIBUJO/Navegador_de_dibujo`, `Exportar_dibujo` | 2026-11-02 |
-| CF-7 | Preferencias: páginas que no existen | Abierto | Media | Agregar las páginas y los diez ajustes faltantes detallados en la ficha. | omnicad/ui/preferencias.py; capturas `INTERFAZ/Preferencias_*` | 2026-11-02 |
-| CF-8 | Preferencias: opciones sueltas de General y Gráficos | Parcial | Baja | Resolver eje vertical, tipo de diseño, finalidad, puesta en marcha y controlador. | tests/test_preferencias.py; omnicad/ui/preferencias.py | 2026-11-06 |
 | CF-9 | MALLA: Suavizar contorno, Puente e Insertar malla completo | Abierto | Media | Crear Suavizar/Puente y completar la colocación de Insertar malla. | grep sin resultados en api/ y ui/comandos/; capturas `MALLA/` e `INSERTAR/Insertar_malla` | 2026-11-02 |
 | CF-10 | MATERIALES: Explorador de materiales y propiedades | Abierto | Media | Propiedades térmicas y mecánicas, favoritos, materiales nuevos y bibliotecas personales. P-25d cubre solo Administrar. | capturas `MATERIALES/` | 2026-11-02 |
 | CF-13 | SÓLIDO: Modelado automatizado | Bloqueado | Muy alta | Genera alternativas entre geometrías a conectar y a evitar; emparentado con EXT-3 (diseño generativo). Espera el alcance. | sin herramienta; capturas `SOLIDO/Modelado_automatizado` | 2026-11-02 |
@@ -488,9 +485,6 @@ Abierto 3.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| NOV-tip-2 | Fuente de interfaz: buscador, recomendadas y muestra en combo cerrado | Abierto | Media | Agregar búsqueda, grupo Recomendadas y letra propia en el combo cerrado. | omnicad/ui/preferencias.py (`_combo_fuentes`, `_agregar_familia`) | 2026-10-29 |
-| NOV-tip-3 | Colores de texto: selector temático y alternativas legibles | Abierto | Media | Agregar selector temático, alternativa legible y comparación elegido/aplicado. | omnicad/ui/preferencias.py (`CampoColor`, `_Muestra`, `_mostrar_aviso_apariencia`) | 2026-10-29 |
-| NOV-tip-4 | Apariencia: vista previa y tamaños de interfaz unificados | Abierto | Alta | Crear muestras vivas y tamaños comunes; validar escalas y ventanas de la ficha. | omnicad/ui/preferencias.py, omnicad/ui/temas.py, omnicad/ui/cinta.py | 2026-10-29 |
 
 ## Detalle de lo abierto
 
@@ -550,13 +544,7 @@ Abierto 3.
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** DIBUJO: navegador, hojas, cinta y exportar **Queda:** Navegador de dibujo con hojas múltiples, pestañas ADMINISTRAR y UTILIDADES, grupos SÍMBOLOS, INSERTAR e INSPECCIONAR, Exportar DWG y CSV, vista de sección parcial y recortada, boceto de dibujo, patrón de marcas de centro. **Evidencia:** ui/dibujo.py; capturas `DIBUJO/Navegador_de_dibujo`, `Exportar_dibujo`
 
-### CF-7 · Preferencias: páginas que no existen
 
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Preferencias: páginas que no existen **Queda:** Páginas Dibujo, Configuraciones, Renderizar (valores por defecto), Material, Diseños híbridos y de ensamblaje, Unidades por defecto (Diseño) y Visualización de unidad y valor (faltan 10 de 13 ajustes). **Evidencia:** omnicad/ui/preferencias.py; capturas `INTERFAZ/Preferencias_*`
-
-### CF-8 · Preferencias: opciones sueltas de General y Gráficos
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Preferencias: opciones sueltas de General y Gráficos **Queda:** Hechas: el tamaño del ViewCube (cinco tamaños como Fusion, en Preferencias › General y en el clic derecho del ViewCube, API incluida) y la barra espaciadora que repite el último comando (`general/espacio_repite`) — tanda C11, 2026-11-06; el tema del sistema (`general/tema` = `sistema`: sigue al claro/oscuro de Windows, como «Match Device Theme» de Fusion; el tema queda fuera del MCP, como manda CLAUDE.md) y los presets de ratón Alias, Inventor, PowerMill y SOLIDWORKS (`general/raton`, también en la API; con Inventor, F2/F3/F4 navegan en el visor en vez de Renombrar) — tanda C13, 2026-11-06. Faltan: (a) orientación Y o Z hacia arriba: el combo «Orientación de modelado por defecto» solo ofrece «Z hacia arriba», y darlo vuelta toca el marco de la cámara en 15 lugares de 6 archivos (`ui/visor3d.py`: `ojo`, `desplazar`, `encuadrar`, `mirar_a_plano`, `primitivas_centro_giro` y el sombreado; `ui/render.py` › `u_atras`; `ui/manipuladores.py`; `ui/comandos/comunes.py`, `editar_cara.py` e `inspeccionar.py`) porque hoy todos leen `visor.R` como dirección del mundo, y sin verlo en pantalla no se puede dar por bueno; (b) tipo de diseño por defecto: OmniCAD no tiene tipos de diseño (Pieza/Ensamblaje/Híbrido), es una función que falta (ver CF-6); (c) finalidad de uso: en Fusion solo elige qué sugiere la puesta en marcha, que OmniCAD no tiene; (d) experiencia de puesta en marcha: no hay asistente ni tour de primer arranque; (e) controlador de gráficos: Fusion elige DirectX/Metal/OpenGL para la interfaz y OmniCAD usa el de Qt, sin una opción que se pueda cumplir de verdad. P-2d cubre el idioma. **Evidencia:** tests/test_preferencias.py; omnicad/ui/preferencias.py; capturas `INTERFAZ/Preferencias_General`
 
 ### CF-9 · MALLA: Suavizar contorno, Puente e Insertar malla completo
 
@@ -714,14 +702,5 @@ Abierto 3.
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Render y respuestas grandes lentas en la API **Queda:** HLR en un proceso persistente: medido y diferido **Evidencia:** tests/test_hallazgos_tortura.py::test_t18_get_scene_info_y_open_document_tienen_modo_resumido
 
-### NOV-tip-2 · Fuente de interfaz: buscador, recomendadas y muestra en combo cerrado
 
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Fuente de la interfaz: la lista no tiene buscador ni grupo de recomendadas, y el combo cerrado no muestra la forma de la letra elegida **Queda:** Hecho el 2026-10-29: cada familia de la lista se escribe con su propia letra y la lista abre acotada (14 filas con barra). Falta: caja de búsqueda dentro de la lista, grupo «Recomendadas» arriba (hoy solo van primero las de lectura fácil) y la fuente elegida mostrada con su letra en el combo cerrado. Pedido de Gerardo del 2026-10-29 (captura de Preferencias a 109 % y video 09-38-04), para una sesión nocturna. **Evidencia:** omnicad/ui/preferencias.py (`_combo_fuentes`, `_agregar_familia`)
 
-### NOV-tip-3 · Colores de texto: selector temático y alternativas legibles
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Colores de texto: el selector es el de Qt, sin el tema de la app, y un color rechazado solo avisa «probá uno más claro» **Queda:** Hecho el 2026-10-29: cada fila muestra el color real (nunca el código), marca en rojo el rechazado y el aviso va en criollo. Falta: selector de color con el tema de la app, proponer con un clic un color parecido que sí se lea, y mostrar «elegido» frente a «aplicado» cuando se rechaza. **Evidencia:** omnicad/ui/preferencias.py (`CampoColor`, `_Muestra`, `_mostrar_aviso_apariencia`)
-
-### NOV-tip-4 · Apariencia: vista previa y tamaños de interfaz unificados
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Preferencias › Apariencia no tiene vista previa propia, y los espacios y tamaños de la interfaz no están en un solo lugar **Queda:** Un panel de muestras (botón, campo, texto normal y secundario, acento y una cota del boceto) que cambie al instante con fuente, tamaño y colores; y valores comunes (espacios, radios, alturas) en un solo lugar para que todo escale parejo con letra grande. Validar a 100, 125 y 150 % y en 1024×640 y 800×520, con capturas antes y después. Pedido de Gerardo del 2026-10-29, para una sesión nocturna. **Evidencia:** omnicad/ui/preferencias.py, omnicad/ui/temas.py, omnicad/ui/cinta.py
