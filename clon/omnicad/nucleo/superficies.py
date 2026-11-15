@@ -958,6 +958,56 @@ def _domo(punto, w, peso):
     return salida
 
 
+def _cupula(secs, inicio, fin, solido):
+    """B-464: Point Tangent de Fusion exacto entre un perfil y un punto, sin otras condiciones ni guías; None si no es
+    ese caso. Cada punto X del perfil llega a la punta P por la Bézier cuadrática X → P + peso/2·(X − Q) → P (Q: P
+    proyectado en el plano del perfil), tangente en P al plano del perfil. Una cara B-spline por arista del perfil.
+    Medido contra Fusion (círculo r10 → punto a 100 mm): peso 0,2 / 0,5 / 1 / 2 / 5 dan 11352,4 / 12828,8 / 15708,3 /
+    23037,5 / 57588,1 mm³, como esta fórmula."""
+    if len(secs) != 2:
+        return None
+    (ta, a), (tb, b) = secs[0][:2], secs[1][:2]
+    punta, perfil, cond, otra = (a, b, inicio, fin) if ta == "vertice" else (b, a, fin, inicio)
+    if (ta, tb) not in (("vertice", "alambre"), ("alambre", "vertice")) or not cond or \
+            cond.get("tipo") != "punto_tangente" or (otra and otra.get("tipo", "libre") != "libre"):
+        return None
+    from OCP.Geom import Geom_BSplineSurface, Geom_TrimmedCurve
+    from OCP.GeomConvert import GeomConvert
+    from OCP.OCP.collections import Array1_double, Array1_int, Array2_double, Array2_gp_Pnt
+    from . import solidos_crear as sc
+    peso, p = float(cond.get("peso", 1.0)), _np(BRep_Tool.Pnt_s(punta))
+    if peso <= 0:
+        raise geo.ErrorGeometria("El peso de la condición de borde tiene que ser positivo.")
+    c = sc._centro_alambre(perfil)
+    n = _normal_seccion(perfil, p - c)
+    q = p - float((p - c) @ n) * n
+    caras = []
+    for e in geo._aristas_unicas(perfil):
+        f0, f1 = BRep_Tool.Range_s(e)
+        curva = GeomConvert.CurveToBSplineCurve_s(Geom_TrimmedCurve(BRep_Tool.Curve_s(e, 0.0, 0.0), f0, f1))
+        nu, nk = curva.NbPoles(), curva.NbKnots()
+        polos, pesos = Array2_gp_Pnt(1, nu, 1, 3), Array2_double(1, nu, 1, 3)
+        for i in range(1, nu + 1):
+            x = _np(curva.Pole(i))
+            for j, y in enumerate((x, p + peso / 2 * (x - q), p), 1):
+                polos.SetValue(i, j, _pnt(y))
+                pesos.SetValue(i, j, curva.Weight(i))
+        ku, mu, kv, mv = Array1_double(1, nk), Array1_int(1, nk), Array1_double(1, 2), Array1_int(1, 2)
+        curva.Knots(ku)
+        curva.Multiplicities(mu)
+        for k, (nudo, mult) in enumerate(((0.0, 3), (1.0, 3)), 1):
+            kv.SetValue(k, nudo)
+            mv.SetValue(k, mult)
+        sup = Geom_BSplineSurface(polos, pesos, ku, kv, mu, mv, curva.Degree(), 2, curva.IsPeriodic(), False)
+        caras.append(BRepBuilderAPI_MakeFace(sup, 1e-7).Face())
+    if not solido:
+        return _coser_caras(caras)
+    r = coser(caras + [BRepBuilderAPI_MakeFace(perfil, True).Face()], 1e-6)
+    if not r["es_solido"]:
+        raise geo.ErrorGeometria("La cúpula del punto tangente no cerró un sólido: el perfil tiene que ser cerrado.")
+    return r["forma"]
+
+
 def _auxiliares(sec, otra, cond, signo, exacta=False):
     """Secciones auxiliares de la condición `cond` del perfil `sec` hacia su vecino `otra`, de la más cercana a la más
     lejana. La solevación pasa por ellas: así sale con la dirección pedida (aproximación, como en la solevación sólida).
@@ -1338,6 +1388,8 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
         from . import solidos_crear as sc
         secs = _con_condiciones(secs, condicion_inicio, condicion_fin, condiciones_medias) if condiciones else secs
         forma = sc.solevar([x[1] for x in secs], linea_central=_alambre_unico(linea_central, "La línea central"), solido=False)
+    elif condiciones and (cupula := _cupula(secs, condicion_inicio, condicion_fin, False)) is not None:
+        forma = cupula
     else:
         if condiciones:
             secs = _con_condiciones(secs, condicion_inicio, condicion_fin, condiciones_medias)
