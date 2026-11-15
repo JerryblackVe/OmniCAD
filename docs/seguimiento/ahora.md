@@ -8,9 +8,9 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-452 + B-519b (test_h84 con la cadena por defecto) | Fuera del boceto, la vista 3D sigue mostrando las curvas y objetos de boceto ocultos (B-480 integrado: e909112) |
+| E1 | B-452 | Con B-519b (test_h84 con la cadena por defecto): Fuera del boceto, la vista 3D sigue mostrando las curvas y objetos de boceto ocultos (B-480 integrado: e909112) |
 | E2 | B-531 | Regresión de B-461 (cresta a derechas), primero; después P-156 fase 2: Holgura de impresión: botón de la placa, molde, Impresa/… (B-520 integrado: c325d0c; B-530 Sin verificar para E11) |
-| E3 | FL-16, después B-536 | `caras_tangentes` O(n²): el desfase de «@tienda» tarda ~16 s (B-528 integrado: 49acc9a) |
+| E3 | FL-16 | Después B-536: `caras_tangentes` O(n²): el desfase de «@tienda» tarda ~16 s (B-528 integrado: 49acc9a) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | B-534 | Asa de cantidad del Patrón en trayectoria no baja (posible regresión de B-435) (B-471 integrado: bacda54) |
 | E6 | B-425 | Patrón con muchas copias congela la ventana (teselar fuera del hilo) (FL-15 integrado: bfa1513) |
