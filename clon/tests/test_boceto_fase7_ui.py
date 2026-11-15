@@ -357,3 +357,23 @@ def test_las_acciones_nuevas_de_la_cinta_existen_en_el_modo_boceto(app):
         assert clave in modo.acciones
         modo.acciones[clave].trigger()                     # sin boceto abierto no hace nada ni falla
     ventana.deleteLater()
+
+
+def test_b492_mil_circulos_encimados_avisan_rapido_con_icono():
+    """B-492: con 1000 círculos corridos 0,005 mm la vía en Rust tardaba ~18 s y 1,5 GB antes de rendirse. Ahora el
+    conteo de curvas encimadas corta antes, y el modo boceto lo muestra en un renglón con ⚠ (regla 14)."""
+    import time
+    from types import SimpleNamespace
+
+    b = Boceto()
+    for i in range(1000):
+        b.agregar_circulo((0.005 * i, 0), 20)
+    mensajes = []
+    falso = SimpleNamespace(
+        activo=True, plano=geo.Plano("XY"), _t_perfiles=SimpleNamespace(setInterval=lambda ms: None),
+        lienzo=SimpleNamespace(b=b, objetos=SimpleNamespace(arrastre=None, previa=None), geometria_real=b.geometria),
+        v=SimpleNamespace(visor=SimpleNamespace(set_perfiles=lambda caras: None), mensaje=lambda t, ms: mensajes.append(t)))
+    t = time.perf_counter()
+    modo_boceto.ModoBoceto._actualizar_perfiles(falso)
+    assert time.perf_counter() - t < 3
+    assert len(mensajes) == 1 and mensajes[0].startswith("⚠ Demasiadas curvas encimadas"), mensajes
