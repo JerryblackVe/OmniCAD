@@ -2,7 +2,7 @@
 import math
 
 import pytest
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
@@ -75,3 +75,27 @@ def test_la_malla_conserva_su_resumen(ventana):
     malla = _llamar(sesion, "tessellate", bodies=[solido])["bodies_created"][0]["id"]
     assert sesion.cuerpo(malla).tipo == "malla"
     assert _elegir(ventana, sesion, [malla]) == "1 Cuerpo"
+
+
+@pytest.mark.parametrize("herramienta,tipo,etiqueta", [
+    ("create_surface_cylinder", "surface", "superficie válida"),
+    ("create_cylinder", "solid", "sólido válido"),
+])
+def test_clic_en_navegador_respeta_el_tipo_del_cilindro_cerrado(ventana, herramienta, tipo, etiqueta):
+    sesion = api.Sesion()
+    cuerpo = _llamar(sesion, herramienta, radius=10, height=15)["bodies_created"][0]["id"]
+    propiedades = _llamar(sesion, "get_physical_properties", bodies=[cuerpo])["bodies"][0]
+    assert propiedades["type"] == tipo
+    assert propiedades["area"] == pytest.approx(500 * math.pi)
+    assert (propiedades["volume"] is None) == (tipo == "surface")
+    _elegir(ventana, sesion, [cuerpo])
+    arbol = ventana.navegador.arbol
+    fila = ventana.navegador.item(cuerpo)
+    arbol.scrollToItem(fila)
+    QTest.mouseClick(arbol.viewport(), Qt.LeftButton, pos=arbol.visualItemRect(fila).center())
+    assert ventana.leer_seleccion() == [{"tipo": "cuerpo", "cuerpo": cuerpo}]
+    for texto in (ventana.timeline.estado.text(), ventana.timeline.estado.toolTip()):
+        assert ("volumen" in texto) == (tipo == "solid"), texto
+        assert "área" in texto and etiqueta in texto, texto
+        if tipo == "surface":
+            assert "sólido" not in texto
