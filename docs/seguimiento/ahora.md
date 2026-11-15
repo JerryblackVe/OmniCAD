@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | B-537 | Unir sobre un cuerpo con Patrón de operaciones: sólido inválido o acepta un inválido (después B-536b: su test `test_b536_barrido_empalmado…` entró rojo en c7d6c3ab) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | B-546 | Llavero de 17 perfiles: abrir Extruir traba 2 s; después B-545 y B-547 (B-425 integrado: d351f73) |
+| E6 | B-545 | Después B-547 (B-546 parcial integrado: 6355948; falta remedir abrir y Cancelar en Windows, E11) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | — | En pausa hasta que Gerardo decida sobre el advisor (P-158c integrada: 1186c2d) |

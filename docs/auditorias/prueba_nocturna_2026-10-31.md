@@ -437,6 +437,7 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 | `git push` de `main` | solo con el «sí» de Gerardo; un push a `main` no dispara CI |
 | B-363 / B-337: el .f3d ya se comparó en Fusion (2026-11-12, ver B-363). Falta en la PC: abrir el .f3d por el puente (Fusion → STEP → OmniCAD) y medir cuánto tarda OmniCAD con esa STEP de 72,6 MB, y la STEP de SolidWorks en la ventana con el proceso aparte (en la VPS: congelada 91 s, abrir 698 s) | Fusion corre solo en la PC de Gerardo (puente y túnel prendidos) |
 | FL-3b en Windows (E11): Aceptar con Rosca modelada, Deshacer y Rehacer en `motor_impreso` con la barra «Calculando en un proceso aparte…» y su Cancelar; medir si sigue la traba de 350-670 ms al recibir la previa de la Rosca y la de 1430 ms del autoguardado (en Linux no se reproducen: previa 16 ms, autoguardado 85 ms) | solo en la PC con Windows (mouse real, GPU real) |
+| B-546 en Windows (E11): llavero de 17 perfiles (`evidencias/reportes_pc/lote_2026-11-15_19h.md`): medir abrir Extruir, escribir la distancia y Cancelar. En la VPS: abrir 300-420 ms, escribir 284 ms, Cancelar 80 ms; en Windows daban 1992 / 497 / 772 ms. |
 
 ## 7. Orden de la noche
 
