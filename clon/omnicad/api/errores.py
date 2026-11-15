@@ -184,7 +184,7 @@ PISTAS = {
                            "Revisá la ventana; get_scene_info dice si el último cambio se aplicó."],
     "UNSAVED_CHANGES": ["El documento tiene cambios sin guardar: guardalo antes con save_document, o pasá "
                         "discard=true para descartarlos (en vivo, mejor que decida el usuario).",
-                        "No se descartó nada."],
+                        "No se descartó nada: lo que llames ahora corre sobre este documento, no sobre uno nuevo."],
     "LIVE_NOT_ALLOWED": ["En vivo, execute_code corre en la interfaz de OmniCAD: solo se permite si el usuario activa "
                          "Preferencias › General › «Permitir también execute_code en vivo».",
                          "Alternativa: run_operation, apply_recipe y las demás herramientas funcionan en vivo; o usá "
