@@ -18,7 +18,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
 | E9 | H-115 | (B-495b integrado: 8ccb78d); piezas acotadas a OpenCode con `opencode/glm-5.3-flash-free` (Sol ya no se usa, Gerardo 15/11): H-115, B-435, B-436, B-401, B-457, P-134, B-450, B-438, B-474 |
-| E10 | B-506 | Agujeros tangentes dan «ok» con un cuerpo inválido (también por set_parameter) (B-509 integrado: 877b040) |
+| E10 | B-521 | Lo que dejó B-506: patrón con copias tangentes (verificar) y agujeros tangentes con rosca modelada (chequeo barato) (B-506 integrado: 45b4719) |
 
 ## Sigue (en orden)
 
