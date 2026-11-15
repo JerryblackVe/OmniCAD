@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | B-440 | Velocidad de boceto: lo que queda de salir del boceto y poner cotas (primer texto de la sesión ~700 ms y el resto de la fila); B-519 queda Parcial solo por el Ctrl+Z de E11 |
-| E2 | B-461 (2.ª vuelta) | Rosca sin booleana (0,4 s) sin romper los 7 grupos de la rosca; worktree `~/OmniCAD-B-461`. P-156 en pausa en su worktree hasta después del 30/11; después B-520 |
+| E2 | B-461 (2.ª vuelta) | Rosca sin booleana (0,4 s) sin romper los 7 grupos de la rosca; worktree `~/OmniCAD-B-461`; después P-156 (entra al 30/11, Gerardo: retomar su worktree) y B-520 |
 | E3 | B-503 (texto entero) | Desfase del texto entero: extruir la región nueva entera al unir (B-473 sin reproducir, guardia integrada 4175fbc; E11 en Windows) |
 | E4 | B-438 | Superficie › Desfase: teclear «1e3 mm» traba la ventana 2 s (worktree `~/OmniCAD-B-438` con un arreglo previo: revisarlo). B-514 (P2) en pausa hasta después del 30/11 |
 | E5 | B-501 | Ensamblar › Conjunto: nombre y desfase tecleados en la fila guardada no se aplican; después la junta `ball` de la caza (B-500 integrado: fe4cefd) |
@@ -28,7 +28,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 2 | FL-13 | draw_line con detección incremental de perfiles (E6 o E1) |
 | 3 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
 
-**Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2.
+**Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2 (P-156 sí entra, Gerardo 15/11).
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) y los del lote de las 13 h del 15/11 (B-511 a B-515) quedan en bugs.md sin cola; B-516 Sin verificar.
 
