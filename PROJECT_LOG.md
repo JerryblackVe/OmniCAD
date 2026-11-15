@@ -11,7 +11,7 @@ git (`git show dbef824:PROJECT_LOG.md`).
 ## Registro
 - **2026-11-15 ~22:00 UTC · Traspaso del coordinador (contexto al 64 %).** Estado para la sesión nueva de coordinación:
   - Cola: `docs/seguimiento/ahora.md`. Activas: E1 B-541, E2 P-160, E3 B-537, E6 B-546 (después B-545 y B-547), E9 B-557 (regresión de su B-401: Puente IA/Asistente, la humo de main da 5 fallas; si no sale, revertir 47796383) y después P-158d (tanda 1 de `solido.py` hecha por GLM, falta su ponytail-review real; tanda 2 `modificar.py` lista). En pausa por el cupo semanal (55 % el 15/11 22 h, sube ~5 %/h): E4, E5, E8, E8b (espera la decisión de Gerardo sobre el advisor), E10. E7 sin caza corriendo.
-  - Por verificar en main: los tests de B-538 (corrida del coordinador sin resultado todavía) y `test_boceto_combinaciones::test_limite_patron[enorme]` (rojo según E1, por un mensaje corto de P-158: pasárselo a E9 dentro de P-158d).
+  - Verificado en main: los tests de B-538 pasan (101); `test_boceto_combinaciones::test_limite_patron[enorme]` está rojo por un mensaje corto de P-158 y ya está en manos de E9 (P-158d).
   - Pendiente con Gerardo: OK de B-398 y B-399 (capturas en `evidencias/b398_2026-11-13/` y `evidencias/b399_2026-11-13/`); bajar a 6 sesiones por el cupo semanal (pregunta abierta); decisión del advisor (E8b).
   - Pendiente al chat maestro: informe del advisor de fin de día (E8b vs E5 y E7). Datos en `~/coordinador/calidad_sonnet.md` y en el scratchpad `sol_noche.txt`.
   - Herramientas: `~/coordinador/vigilar.sh` (cron de 20 min: re-crearlo), `tanda.sh` (ahora copia `evidencias/` del worktree antes de borrarlo), `calidad_sonnet.md` (una fila por integración de Sonnet).
