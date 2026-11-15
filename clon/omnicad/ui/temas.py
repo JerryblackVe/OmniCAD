@@ -289,6 +289,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 
 #pestana { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 2px 14px 1px 14px;
            font-size: $fs9; letter-spacing: 0.3px; }
+#pestana[compacta="true"] { padding: 2px 5px 1px 5px; }      /* B-535: ventana angosta, nombres enteros */
 #pestana:hover { background: transparent; border-bottom-color: $borde; }
 #pestana:checked { background: transparent; border-bottom-color: $acento; }
 #titulo_grupo { font-size: $fs8; padding: 0 6px; border-radius: 0; }

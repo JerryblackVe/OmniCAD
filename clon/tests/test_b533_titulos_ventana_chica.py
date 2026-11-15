@@ -59,3 +59,28 @@ def test_a_1920_todos_los_titulos_van_enteros(ventana, pestana):
     ventana.resize(1920, 900)
     QTest.qWait(30)
     assert all(t.text() == t.property("titulo_completo") for t in _titulos(ventana, pestana))
+
+
+@pytest.mark.parametrize("ancho, alto", [(800, 520), (1100, 700), (1280, 800), (1920, 900)])
+@pytest.mark.parametrize("con_boceto", [False, True])
+def test_b535_ninguna_pestana_queda_cortada(ventana, ancho, alto, con_boceto):
+    """B-535: con 800 px entran enteros los siete nombres (y BOCETO): se achica el relleno, no el nombre."""
+    ventana.resize(ancho, alto)
+    if con_boceto:
+        ventana.cinta.mostrar_contextual("BOCETO")
+    QTest.qWait(50)
+    visibles = [b for b in ventana.cinta.pestanas + list(ventana.cinta.contextuales.values()) if b.isVisible()]
+    assert len(visibles) == (8 if con_boceto else 7)
+    for b in visibles:
+        assert b.text() == b.toolTip() and "…" not in b.text(), (ancho, b.text())
+        assert b.width() >= b.fontMetrics().horizontalAdvance(b.text()), (ancho, b.text(), b.width())
+
+
+def test_b535_si_ni_con_el_relleno_chico_entran_recorta_el_final_y_guarda_el_nombre_en_el_tooltip(ventana):
+    ventana.resize(300, 520)                       # más angosto que cualquier mínimo: la ventana se queda en su mínimo
+    QTest.qWait(50)
+    cinta = ventana.cinta
+    sobra = sum(b.ancho_entero() for b in cinta.pestanas) - (cinta.pila.width() - 6 * 6)
+    for b in cinta.pestanas:
+        assert b.text().startswith(b.toolTip()[:4]) and (b.text() == b.toolTip() or b.text().endswith("…")), b.text()
+        assert (b.text() == b.toolTip()) == (sobra <= 0)
