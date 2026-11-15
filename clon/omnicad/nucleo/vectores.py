@@ -15,8 +15,16 @@ def _iniciar_opencascade():
     global BRepAdaptor_Curve, BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepOffsetAPI_MakeOffset
     global GeomAbs_Arc, GeomAbs_Circle, GeomAbs_Intersection, GeomAbs_Line, List_TopoDS_Shape
     global ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_WIRE, TopExp_Explorer, TopoDS
-    from OCP.BRepAdaptor import BRepAdaptor_Curve
-    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+    global BRep_Tool, BRepAdaptor_Surface, BRepAlgoAPI_Splitter, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+    global BRepExtrema_DistShapeShape, BRepMesh_IncrementalMesh, TopLoc_Location, gp_Pnt
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepAlgoAPI_Splitter
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.gp import gp_Pnt
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
     from OCP.GeomAbs import GeomAbs_Arc, GeomAbs_Circle, GeomAbs_Intersection, GeomAbs_Line
     from OCP.OCP.collections import List_TopoDS_Shape
@@ -28,6 +36,8 @@ def _iniciar_opencascade():
 
 if _motor.motor_activo() == "opencascade":
     _iniciar_opencascade()
+
+import numpy as np
 
 from . import geometria as geo
 from .perfiles import _a_uv, arista_a_primitiva
@@ -103,8 +113,63 @@ def desfase_caras(caras, distancia, esquinas="redondas"):
         mk.Perform(float(distancia))
         if not mk.IsDone() or mk.Shape().IsNull() or next(geo._explorar(mk.Shape(), TopAbs_EDGE), None) is None:
             raise geo.ErrorGeometria(f"El desfase de {distancia} mm no se pudo calcular (¿la región desaparece?).")
-        salida.append(mk.Shape())
+        salida.append(_sin_cruces(cara, float(distancia), mk.Shape()))
     return salida
+
+
+def _sin_cruces(cara, distancia, desfase):
+    """B-528: el desfase de OpenCascade de una letra deja lazos que se cruzan a sí mismos (la «@» al engordar, los huecos
+    de «e» y «a» al achicarse, con aristas de 1e-5 mm). Si algún lazo no da una cara válida, se parte el plano con las
+    curvas desfasadas y quedan las celdas que están donde debe estar el desfase: a lo sumo `distancia` de la región
+    (engordar) o adentro y a más de `distancia` de su borde (achicar). Devuelve las caras limpias (o el desfase tal
+    cual si ya era válido)."""
+    alambres = list(geo._explorar(desfase, TopAbs_WIRE))
+    if all(geo.es_valida(BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()) for w in alambres):
+        return desfase
+    a, b = geo.caja_envolvente(desfase)
+    lado = 2 * max(b[i] - a[i] for i in range(3)) + 1.0
+    pln = BRepAdaptor_Surface(TopoDS.Face(cara)).Plane()
+    pln.SetLocation(gp_Pnt(*((np.asarray(a) + np.asarray(b)) / 2)))      # centrado en la figura
+    plano = BRepBuilderAPI_MakeFace(pln, -lado, lado, -lado, lado).Face()
+    partir = BRepAlgoAPI_Splitter()
+    partir.SetArguments(_lista([plano]))
+    partir.SetTools(_lista([e for w in alambres for e in geo._explorar(w, TopAbs_EDGE)]))
+    partir.SetFuzzyValue(1e-5)
+    partir.Build()
+    borde = geo.compuesto(list(geo._explorar(cara, TopAbs_WIRE)))
+    quedan = []
+    for celda in geo.caras(partir.Shape()):        # cada celda queda entera adentro o afuera del desfase
+        p = _punto_adentro(celda)
+        if p is None:                              # una astilla que no se malla: no suma nada
+            continue
+        fuera = _distancia(p, cara)
+        if fuera <= distancia if distancia > 0 else fuera < 1e-9 and _distancia(p, borde) >= -distancia:
+            quedan.append(celda)
+    if not quedan:
+        raise geo.ErrorGeometria(f"El desfase de {distancia} mm no se pudo calcular (¿la región desaparece?).")
+    return booleana_caras(quedan, [], "union")
+
+
+def _punto_adentro(cara):
+    """El centro del triángulo más grande de la malla de `cara`: un punto seguro adentro (None si no se malla)."""
+    BRepMesh_IncrementalMesh(cara, 0.05, False, 0.3, True)
+    loc = TopLoc_Location()
+    tri = BRep_Tool.Triangulation_s(TopoDS.Face(cara), loc)
+    if tri is None:
+        return None
+    mejor, punto = -1.0, None
+    for k in range(1, tri.NbTriangles() + 1):
+        p = [np.array(tri.Node(i).Transformed(loc.Transformation()).Coord()) for i in tri.Triangle(k).Get()]
+        area = float(np.linalg.norm(np.cross(p[1] - p[0], p[2] - p[0])))
+        if area > mejor:
+            mejor, punto = area, gp_Pnt(*map(float, sum(p) / 3))
+    return punto
+
+
+def _distancia(punto, forma):
+    d = BRepExtrema_DistShapeShape(BRepBuilderAPI_MakeVertex(punto).Vertex(), forma)
+    d.Perform()
+    return d.Value()
 
 
 def _curvas_libres(alambre):

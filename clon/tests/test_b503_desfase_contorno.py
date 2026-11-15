@@ -139,3 +139,35 @@ def test_la_n_de_un_texto_engorda_con_el_prisma_en_nurbs():
     assert r is not None and geo.es_valida(r)
     esperado = (_desfase_2d(tapa, 0.5) - geo.area(tapa)) * 3
     assert geo.volumen_exacto(r) - geo.volumen_exacto(forma) == pytest.approx(esperado, rel=1e-3)
+
+
+def test_b528_el_texto_entero_engorda_por_el_atajo_con_el_desfase_2d_limpio():
+    """B-528: el desfase 2D de la «@» y de los huecos de «e», «a» y «d» se cruzaba a sí mismo (aristas de 1e-5 mm) y el
+    atajo devolvía None con el texto entero. Ahora cada lazo desfasado es una cara válida y el texto engorda su
+    perímetro × 0,5 × alto."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.TopAbs import TopAbs_WIRE
+    from OCP.TopoDS import TopoDS
+    from omnicad import api
+    s = api.Sesion()
+    for nombre, args in (("create_box", {"length": 100, "width": 100, "height": 3}),
+                         ("create_sketch", {"plane": ">Z", "name": "T"}),
+                         ("add_text", {"text": "@tienda", "x": -30, "y": -42, "height": 8}),
+                         ("extrude", {"sketch": "T", "profile": "text", "distance": 3, "operation": "join"})):
+        assert api.llamar(s, nombre, args)["ok"]
+    forma = next(iter(s.doc.estado_final.cuerpos.values())).forma
+    lazos = [w for c in geo.caras(forma) if geo.centro_masa(c, True)[2] > 5.9 for w in sm._unicos(c, TopAbs_WIRE)]
+    for w in lazos:
+        lazo = BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()
+        for d in (0.5, -0.5):
+            try:
+                desfase = vectores.desfase_caras([lazo], d, "redondas")
+            except geo.ErrorGeometria:          # el lazo desaparece (el punto de la «i», el trazo de la «t»)
+                continue
+            assert all(geo.es_valida(c) for f in desfase for c in geo.caras(f) or
+                       [BRepBuilderAPI_MakeFace(TopoDS.Wire(x), True).Face() for x in sm._unicos(f, TopAbs_WIRE)])
+    paredes = [c for c in geo.caras(forma) if 3.1 < geo.centro_masa(c, True)[2] < 5.9]
+    r = sm._desfase_por_contorno(forma, paredes, 0.5)
+    assert r is not None and geo.es_valida(r)
+    perimetro = sum(geo.longitud(w) for w in lazos)
+    assert geo.volumen_exacto(r) - geo.volumen_exacto(forma) == pytest.approx(perimetro * 0.5 * 3, rel=2e-2)
