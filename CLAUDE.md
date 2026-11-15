@@ -8,7 +8,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, Sol y el
 1. **Orden de trabajo**: bocetos → sólido → superficie → construir/inspeccionar/ensamblar; la velocidad es prioridad 1; lo demás después.
 2. **Cola única**: solo `ahora.md`; reportes en lotes de 13 y 19 h; solo un bloqueante entra en el momento.
 3. **Sin desvíos**: un ítem por sesión, cerrado antes del siguiente; tope de 6 iteraciones por tarea y 3 intentos por problema.
-4. **Eficiencia**: modelo y esfuerzo justos; solo `tests_afectados.py --correr`, de a 5 (`OMNICAD_TURNOS=5`), sin repetir; mensajes cortos; leer solo la sección necesaria.
+4. **Eficiencia**: modelo y esfuerzo justos; solo `tests_afectados.py --correr`, de a 5 (`OMNICAD_TURNOS=5`), sin repetir; mensajes cortos; leer solo la sección necesaria. **Si `tests_afectados.py` elige más de 15 grupos** (cambios en el núcleo), la sesión corre solo los tests de su ítem y los de los archivos que importan directo lo que tocó, y la suite completa queda para el cierre nocturno (Gerardo, 2026-11-15, por la cola de tests).
 5. **Nada es «listo» sin verificar**: ruff, tests y humo en verde con la salida real, y `ponytail-review`.
 6. **Copiar Fusion**: leer `docs/fusion_docs` antes de arreglar; comparar contra Fusion.
 7. **Probar como una persona**: mouse, teclado, valores raros; E11 con mouse real solo con la PC libre o el OK de Gerardo.

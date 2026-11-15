@@ -89,7 +89,7 @@ El criterio de ruff (F, B023, B905) vive en `clon/pyproject.toml` › `[tool.ruf
 toma solo de ahí, sin `--select`.
 **Memoria:** la suite completa y la prueba de humo (abren ventanas OpenGL) usan mucha memoria: se corren de a
 UNA a la vez. Para verificar tu cambio, desde `clon/` corré `../scripts/tests_afectados.py --correr`: elige por el
-grafo de imports los tests que tu cambio afecta y los corre con turno (no se eligen tests a ojo). La suite completa y la
+grafo de imports los tests que tu cambio afecta y los corre con turno (no se eligen tests a ojo). Si elige más de 15 grupos (cambios en el núcleo), corré solo los tests de tu ítem y los de los archivos que importan directo lo que tocaste (`grep -rl "import <módulo>\|from .* import <módulo>" tests/`), con turno; la suite completa va al cierre nocturno (CLAUDE.md › regla 4). La suite completa y la
 humo las corre el orquestador (cuatro corridas a la vez colgaron una PC de 13 GB). Con varios agentes, cada
 comando pesado va con turno (uno a la vez en toda la PC; corta a los 900 s; en Windows, tope de 3 GB de memoria):
 `.venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe -m pytest tests/test_x.py -q`
