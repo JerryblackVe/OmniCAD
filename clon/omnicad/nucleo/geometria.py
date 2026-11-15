@@ -623,6 +623,15 @@ def _clasificador(solido):
     return BRepClass3d_SolidClassifier(solido.Reversed()) if c.State() == TopAbs_IN else c
 
 
+def _adentro_de(clasificadores, p):
+    """True si el punto `p` cae adentro de (o sobre) alguno de los sólidos de `clasificadores` (ver `_clasificador`)."""
+    for c in clasificadores:
+        c.Perform(p, 1e-7)
+        if c.State() in (TopAbs_IN, TopAbs_ON):
+            return True
+    return False
+
+
 def _muestras_adentro(forma, cuantas, intentos):
     """Hasta `cuantas` puntos al azar del interior de `forma`. Semilla fija: el veredicto no cambia de corrida a corrida."""
     caja = _caja_occ(forma, 1e-5, holgada=True)
@@ -726,17 +735,10 @@ def _parte_afuera(chica, grande, cuantas=_MUESTRAS_AFUERA, al_menos=1):
         if cg is None or cc is None or _caja_adentro(cc, cg):
             return None
     clasificadores = [_clasificador(s) for s in solidos(grande)]
-
-    def adentro(p):
-        for c in clasificadores:
-            c.Perform(p, 1e-7)
-            if c.State() in (TopAbs_IN, TopAbs_ON):
-                return True
-        return False
     muestras = list(_muestras_adentro(chica, cuantas, 20 * cuantas))
     if len(muestras) < al_menos:
         return None
-    return sum(not adentro(p) for p in muestras) / len(muestras)
+    return sum(not _adentro_de(clasificadores, p) for p in muestras) / len(muestras)
 
 
 def _comun_desmentido(objetivo, herramienta, operacion, vr, volumenes):
@@ -902,15 +904,15 @@ def _queda_enterrada(forma, base):
     ba, bb = _caja_occ(base, 1e-5, holgada=True), _caja_occ(forma, 1e-5, holgada=True)
     if ba is None or bb is None or not _caja_adentro(bb, ba):
         return False
-    sols_b = solidos(base)
+    clasificadores = [_clasificador(s) for s in solidos(base)]   # FL-3d: uno por sólido; armarlo por punto costaba 14-33 ms
+
     for v in _explorar(forma, TopAbs_VERTEX):
-        p = BRep_Tool.Pnt_s(TopoDS.Vertex(v))
-        if not any(BRepClass3d_SolidClassifier(s, p, 1e-7).State() in (TopAbs_IN, TopAbs_ON) for s in sols_b):
+        if not _adentro_de(clasificadores, BRep_Tool.Pnt_s(TopoDS.Vertex(v))):
             return False
     dentro = 0
     for p in _muestras_adentro(forma, 200, 2000):
         dentro += 1
-        if not any(BRepClass3d_SolidClassifier(s, p, 1e-7).State() in (TopAbs_IN, TopAbs_ON) for s in sols_b):
+        if not _adentro_de(clasificadores, p):
             return False                           # una muestra adentro de la forma y afuera del material
     if dentro < 50:
         return False
