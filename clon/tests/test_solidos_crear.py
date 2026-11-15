@@ -518,6 +518,27 @@ def test_repujado_envolviendo_un_cilindro():
         sc.repujado(cil, [boceto], lateral, 1.0)
 
 
+def test_h96_repujado_sobre_esfera_y_cono():
+    """H-96: Fusion repuja sobre cualquier cara. El boceto se proyecta según su normal sobre la cara (solo del lado
+    que lo mira: el polo opuesto no recibe copia) y toma espesor según la normal de la cara."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone
+    esf = g.esfera(20)
+    base = g.volumen(esf)
+    cuadro = rect(-3, -3, 3, 3, 25)                                   # 6×6 sobre el polo norte
+    alto = valido(sc.repujado(esf, [cuadro], g.caras(esf)[0], 1.0))
+    assert base + 30 < g.volumen(alto) < base + 45                    # ~36 mm² × 1 mm (dos copias darían ~80)
+    assert caja_de(alto)[5] > 20.9 and caja_de(alto)[2] == pytest.approx(-20, abs=1e-6)
+    bajo = valido(sc.repujado(esf, [cuadro], g.caras(esf)[0], -1.0))
+    assert base - 45 < g.volumen(bajo) < base - 30
+    cono = BRepPrimAPI_MakeCone(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), 20, 5, 30).Shape()
+    lateral = [c for c in g.caras(cono) if g.plano_de_cara(c) is None][0]
+    perfil = poligono([(-2, 25, 10), (2, 25, 10), (2, 25, 16), (-2, 25, 16)])   # plano y = 25, mira al cono
+    base = g.volumen(cono)
+    r = valido(sc.repujado(cono, [perfil], lateral, 1.0))
+    assert base + 22 < g.volumen(r) < base + 33                       # 24 mm² / cos(26,6°) ≈ 27 mm² × 1 mm
+    assert caja_de(r)[1] == pytest.approx(-20, abs=1e-6)              # del lado y < 0 no se repuja
+
+
 # ---------------------------------------------------------------- 7. agujeros
 def test_agujeros_simple_ciego_abocardado_y_avellanado():
     caja = g.caja(20, 20, 10)
