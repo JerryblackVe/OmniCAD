@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | B-525 | `offset_faces` deja autointersecciones con «ok» (B-524 integrado: d62586c) |
 | E4 | B-438 | Superficie › Desfase: teclear «1e3 mm» traba la ventana 2 s (worktree `~/OmniCAD-B-438` con un arreglo previo: revisarlo). B-514 (P2) en pausa hasta después del 30/11 |
 | E5 | B-450 | Mover cara con un empalme en el borde deja un escalón; Pulsar/tirar (fila en bugs.md) (B-523 no era bug: guion de la caza) |
-| E6 | FL-13 | draw_line con detección incremental de perfiles (FL-12 integrado: bda86a4) |
+| E6 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (FL-13 listo para integrar) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-518 | Traza «CajaValor already deleted» al cerrar (manipuladores.py:1896) (B-444 integrado: 036c59f) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
@@ -24,10 +24,9 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
-| 2 | B-527 | `create_patch` de un anillo ignora el hueco (E4, después de B-438) |
-| 3 | B-522 | `insert_svg` con unidades em/ex da INTERNAL_ERROR (E9 con OpenCode GLM: pieza corta) |
-| 4 | B-528 | Desfase 2D de texto que se cruza (lo que queda de B-503; Opus, E3) |
+| 1 | B-527 | `create_patch` de un anillo ignora el hueco (E4, después de B-438) |
+| 2 | B-522 | `insert_svg` con unidades em/ex da INTERNAL_ERROR (E9 con OpenCode GLM: pieza corta) |
+| 3 | B-528 | Desfase 2D de texto que se cruza (lo que queda de B-503; Opus, E3) |
 
 **Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2 (P-156 sí entra, Gerardo 15/11).
 
