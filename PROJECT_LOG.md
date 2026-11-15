@@ -378,6 +378,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-15] Un cambio que mueve un resultado numérico (volumen, área) lleva un grep del valor viejo en todos los tests antes de integrar: B-464 cambió la cúpula (2095,2 → 1570,8) y dejó rojo `test_b385_paneles.py::test_solevacion_punto_tangente_crea_cupula_y_reabre` en main. · Evidencia: E3, corrida de B-403 sobre main fc1023f.
 - [2026-11-15] Un ajuste para ventana chica lleva también un test al tamaño normal (1920 y 1780 px) que pruebe que no cambia nada: B-423 se probó solo a 800×520 y rompió la cinta grande. · Evidencia: B-495 (Gerardo, Boceto a ~1780 px con rótulos «CONF…AR»), commit 5ff9f67.
 - [2026-11-15] Un test que cierra la ventana con el documento modificado se cuelga en el diálogo «¿Guardar los cambios?» y deja un pytest vivo que ocupa un turno por horas: poner `doc.modificado = False` antes de cerrar. · Evidencia: `tests/test_b468_caja_de_valor_como_fusion.py` colgado 1 h 33 min en ~/OmniCAD-B-468 (E7).
 - [2026-11-15] Para medir largos usá `geo.longitud` (integra a 1e-9); `BRepGProp.LinearProperties_s` con puntos fijos erra 0,45 % en una elipse 30 × 10. · Evidencia: `tests/test_b494_longitud_elipse.py`.
