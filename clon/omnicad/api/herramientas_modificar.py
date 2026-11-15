@@ -153,7 +153,7 @@ def fillet(sesion, edges: Elementos | None = None, radius: Expr | None = None, b
     center_face: con full_round, la cara que se vuelve media caña (selector o id).
     side_faces: con full_round, las dos caras laterales (selectores o ids).
     """
-    if (type == "full_round" or faces_a is not None) and texto_expr(tangency_weight) != "1":
+    if (type == "full_round" or faces_a is not None) and texto_expr(tangency_weight) not in ("1", "1.0"):   # texto_expr(1) = «1.0»
         raise error("INVALID_ARGUMENTS", "⚠ Grosor de tangencia (tangency_weight): solo con type=fillet y edges, no con full_round ni faces_a.")
     if type == "full_round":
         if not center_face or not side_faces or len(side_faces) != 2:

@@ -628,6 +628,12 @@ def _empalme_desbordado(forma, grupos, cadena_tangente):
     return forma
 
 
+def exigir_radio_empalme(radio, campo="Radio"):
+    """Fillet: cada radio debe ser positivo, también en los puntos del radio variable."""
+    if radio <= 0:
+        raise geo.ErrorGeometria(f"⚠ {campo}: {radio:g} mm. Tiene que ser mayor que 0")
+
+
 def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
     """Empalme (Fillet, tipo Fillet) por conjuntos de selección, cada uno con su tipo de radio.
 
@@ -717,8 +723,12 @@ def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
                 mf.Add(r, e)
             elif tipo == "variable":
                 puntos = sorted((float(u), float(r)) for u, r in grupo.get("radios", []))
-                if len(puntos) < 2 or puntos[0][0] < 0 or puntos[-1][0] > 1 or min(r for _, r in puntos) <= 0:
-                    raise geo.ErrorGeometria("El radio variable necesita ≥ 2 puntos con posición 0..1 y radio > 0.")
+                for u, r in puntos:
+                    exigir_radio_empalme(r, "Radio" if u == 0 else "Radio final" if u == 1 else f"Radio en posición {u:g}")
+                if len(puntos) < 2:
+                    raise geo.ErrorGeometria("⚠ Radio variable: hacen falta 2 puntos (inicio y final)")
+                if puntos[0][0] < 0 or puntos[-1][0] > 1:
+                    raise geo.ErrorGeometria("⚠ Radio variable: cada punto va entre 0 y 1")
                 arr = Array1_gp_Pnt2d(1, len(puntos))
                 for i, (u, r) in enumerate(puntos, 1):
                     geo.rechazar_radio_de_arco(e, r)
@@ -1781,6 +1791,26 @@ def _desfase_por_contorno(forma, caras, dist):
         return None
 
 
+def exigir_distancia_desfase(forma, caras, distancia):
+    """Offset Face / Press Pull: una cara plana no puede atravesar todo su sólido al entrar."""
+    if abs(distancia) < 1e-9:
+        raise geo.ErrorGeometria("⚠ Distancia: no puede ser 0")
+    if distancia >= 0 or not geo.solidos(forma):
+        return
+    # Una selección parcial puede atravesar su franja y dejar material en la vecina: lo decide el resultado.
+    if _vecina_coplanar_suelta(forma, caras):
+        return
+    caja = geo.caja_envolvente(forma)
+    for cara in caras:
+        plano = _plano_de_cara(cara)
+        if plano is not None:
+            # La caja da un límite conservador: una cara oblicua puede agotarse antes, nunca después.
+            fondo = np.where(plano.normal >= 0, caja[0], caja[1])
+            limite = float((plano.origen - fondo) @ plano.normal)
+            if -distancia >= limite:
+                raise geo.ErrorGeometria(f"⚠ Distancia {distancia:g} mm: la cara atraviesa todo el cuerpo. Probá menos")
+
+
 def desfasar_caras(forma, caras, distancia, *, tangente=True):
     """Offset Face / Press Pull sobre caras: mueve las caras a lo largo de su normal (positivo = hacia
     afuera, agrega material) y extiende las vecinas. tangente: arrastra las caras tangentes; una cara plana
@@ -1788,8 +1818,7 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
     if not caras:
         raise geo.ErrorGeometria("Elegí las caras a desfasar.")
     dist = float(distancia)
-    if abs(dist) < 1e-9:
-        raise geo.ErrorGeometria("La distancia de desfase no puede ser cero.")
+    exigir_distancia_desfase(forma, caras, dist)
     n, empalmes = _empalmes_del_borde(forma, caras) if tangente else (None, [])
     if empalmes:
         return _trasladar_caras(forma, list(caras) + empalmes, n, dist)
