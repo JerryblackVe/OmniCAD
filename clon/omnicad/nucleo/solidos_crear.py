@@ -379,6 +379,9 @@ def _rayo(forma, punto, direccion, largo=1e5):
 
 def _engrosar_lamina(lamina, espesor):
     """Sólido de dar espesor a una lámina (cara o cáscara) hacia su normal (negativo = hacia atrás)."""
+    from .superficies import _PUNTA_DE_CONO, _punta_de_cono
+    if _punta_de_cono(lamina):              # B-493: OpenCascade cerraba el programa en vez de fallar
+        raise geo.ErrorGeometria("No se pudo dar espesor: " + _PUNTA_DE_CONO)
     mk = BRepOffset_MakeOffset()
     mk.Initialize(lamina, float(espesor), 1e-6, BRepOffset_Skin, False, False, GeomAbs_Intersection, True)
     mk.MakeOffsetShape()
@@ -4239,6 +4242,9 @@ def engrosar(caras_o_cascaron, espesor, *, direccion="un_lado"):
         cosido.Perform()
         lamina = cosido.SewedShape()
     if direccion == "simetrica":
+        from .superficies import _PUNTA_DE_CONO, _punta_de_cono
+        if _punta_de_cono(lamina):              # B-493: el desfase de la mitad también cerraba el programa
+            raise geo.ErrorGeometria("No se pudo engrosar: " + _PUNTA_DE_CONO)
         mo = BRepOffsetAPI_MakeOffsetShape()
         mo.PerformByJoin(lamina, -espesor / 2, 1e-6, BRepOffset_Skin, False, False, GeomAbs_Intersection)
         if not mo.IsDone():

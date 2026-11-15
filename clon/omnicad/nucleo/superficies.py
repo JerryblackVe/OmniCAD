@@ -1759,6 +1759,8 @@ def desfasar_superficie(forma, distancia, *, tipo="agudo"):
     junta = {"agudo": GeomAbs_Intersection, "redondeado": GeomAbs_Arc}.get(tipo)
     if junta is None:
         raise geo.ErrorGeometria(f"Tipo de desfase desconocido: {tipo}")
+    if _punta_de_cono(forma):
+        raise geo.ErrorGeometria("El desfase falló: " + _PUNTA_DE_CONO)
     off = BRepOffsetAPI_MakeOffsetShape()
     off.PerformByJoin(forma, float(distancia), 1e-6, BRepOffset_Skin, False, False, junta)
     if not off.IsDone():
@@ -2307,6 +2309,36 @@ def normal_muestra(forma):
     return _np(ps), -n if cara.Orientation() == TopAbs_REVERSED else n
 
 
+def _punta_de_cono(forma):
+    """B-493: True si alguna cara tiene un polo en punta (el perfil llega al eje sin cruzarlo en ángulo recto: la cúpula
+    de un arco con centro fuera del eje, un cono). Ahí la normal no está definida y el desfase de OpenCascade cerraba el
+    programa (access violation) en vez de fallar. Se miran las normales junto a cada arista degenerada (el polo): en
+    un polo liso, como el de una esfera, todas apuntan por el eje. Se mira a 1e-6 del
+    rango UV: más lejos, un polo liso de radio chico en un perfil largo (elipsoide 1000 × 40) parecía punta."""
+    for cara in geo.caras(forma):
+        sup = BRepAdaptor_Surface(cara)
+        u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
+        medio = np.array([(u0 + u1) / 2, (v0 + v1) / 2])
+        for e in geo._explorar(cara, TopAbs_EDGE):
+            e = TopoDS.Edge(e)
+            if not BRep_Tool.Degenerated_s(e):
+                continue
+            c2 = BRepAdaptor_Curve2d(e, cara)
+            normales = []
+            for k in range(4):
+                p = c2.Value(c2.FirstParameter() + (c2.LastParameter() - c2.FirstParameter()) * (k + 0.5) / 4)
+                u, v = np.array([p.X(), p.Y()]) + 1e-6 * (medio - np.array([p.X(), p.Y()]))
+                ps, du, dv = gp_Pnt(), gp_Vec(), gp_Vec()
+                sup.D1(float(u), float(v), ps, du, dv)
+                normales.append(_unitario(np.cross(_np(du), _np(dv)), "La normal junto al polo"))
+            if min(float(n @ normales[0]) for n in normales) < math.cos(math.radians(1.0)):
+                return True
+    return False
+
+
+_PUNTA_DE_CONO = "la superficie termina en punta. Dibujá el arco con el centro sobre el eje."
+
+
 def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     """Engrosar [GUID-471827A2-EDAE-411B-A1F5-C87B54615D53]: sólido a partir de una superficie.
 
@@ -2325,6 +2357,8 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     base = _simplificar(forma)
     if base.ShapeType() == TopAbs_COMPOUND:
         base = _coser_caras(geo.caras(base))
+    if _punta_de_cono(base):
+        raise geo.ErrorGeometria("No se pudo engrosar: " + _PUNTA_DE_CONO)
     if simetrica:
         base = desfasar_superficie(base, -abs(espesor) / 2, tipo=tipo)
         espesor = abs(espesor)
