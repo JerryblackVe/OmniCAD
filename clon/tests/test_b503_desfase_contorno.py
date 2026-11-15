@@ -75,3 +75,67 @@ def test_una_cara_suelta_no_toma_el_atajo():
     lado = min(geo.caras(caja), key=lambda c: geo.centro_masa(c, True)[0])
     assert sm._desfase_por_contorno(caja, [lado], 1) is None
     assert geo.volumen_exacto(sm.desfasar_caras(caja, [lado], 1)) == pytest.approx(1100)
+
+
+def test_una_letra_con_curvas_libres_engorda_su_contorno():
+    """La «t» en relieve sobre una placa (el offset 3D del kernel no la desfasa entera): el atajo suma exactamente lo
+    que crece la tapa de la letra desfasada en 2D, por su alto."""
+    from omnicad import api
+    from omnicad.nucleo import referencias as refs
+    s = api.Sesion()
+    for nombre, args in (("create_box", {"length": 40, "width": 20, "height": 3}),
+                         ("create_sketch", {"plane": ">Z", "name": "T"}),
+                         ("add_text", {"text": "t", "x": -5, "y": -5, "height": 10}),
+                         ("extrude", {"sketch": "T", "profile": "text", "distance": 3, "operation": "join"})):
+        assert api.llamar(s, nombre, args)["ok"]
+    forma = next(iter(s.doc.estado_final.cuerpos.values())).forma
+    paredes = [c for c in geo.caras(forma) if 3.1 < geo.centro_masa(c, True)[2] < 5.9]
+    assert any(refs.cara_libre(c) for c in paredes)
+    tapa = max(geo.caras(forma), key=lambda c: geo.centro_masa(c, True)[2])
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.TopAbs import TopAbs_WIRE
+    from OCP.TopoDS import TopoDS
+    nuevas = [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()
+              for s in vectores.desfase_caras([tapa], 0.5, "vivas") for w in sm._unicos(s, TopAbs_WIRE)]
+    crece = geo.area(vectores.booleana_caras(nuevas, [], "union"))
+    r = sm.desfasar_caras(forma, paredes, 0.5)
+    assert geo.volumen_exacto(r) - geo.volumen_exacto(forma) == pytest.approx((crece - geo.area(tapa)) * 3, rel=1e-3)
+    assert geo.es_valida(r)
+
+
+def _desfase_2d(cara, d):
+    """Área de la cara desfasada en 2D, con vivas y si no redondas (como el atajo)."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.TopAbs import TopAbs_WIRE
+    from OCP.TopoDS import TopoDS
+    for esquinas in ("vivas", "redondas"):
+        try:
+            nuevas = [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()
+                      for s in vectores.desfase_caras([cara], d, esquinas) for w in sm._unicos(s, TopAbs_WIRE)]
+            return geo.area(vectores.booleana_caras(nuevas, [], "union"))
+        except geo.ErrorGeometria:
+            pass
+    raise AssertionError("sin desfase 2D")
+
+
+def test_la_n_de_un_texto_engorda_con_el_prisma_en_nurbs():
+    """La «n» de «@tienda» (pieza de E11): con el prisma de curvas desfasadas tal cual, la unión salía inválida; pasado
+    a NURBS, suma lo que crece su tapa en 2D por su alto."""
+    from OCP.TopAbs import TopAbs_EDGE
+    from omnicad import api
+    s = api.Sesion()
+    for nombre, args in (("create_box", {"length": 100, "width": 100, "height": 3}),
+                         ("create_sketch", {"plane": ">Z", "name": "T"}),
+                         ("add_text", {"text": "@tienda", "x": -30, "y": -42, "height": 8}),
+                         ("extrude", {"sketch": "T", "profile": "text", "distance": 3, "operation": "join"})):
+        assert api.llamar(s, nombre, args)["ok"]
+    forma = next(iter(s.doc.estado_final.cuerpos.values())).forma
+    tapas = [c for c in geo.caras(forma) if geo.centro_masa(c, True)[2] > 5.9]
+    tapa = min(tapas, key=lambda c: abs(geo.centro_masa(c, True)[0] + 1.5))          # la «n»
+    bordes = sm._unicos(tapa, TopAbs_EDGE)
+    paredes = [c for c in geo.caras(forma) if 3.1 < geo.centro_masa(c, True)[2] < 5.9
+               and any(sm._contiene(bordes, a) for a in sm._unicos(c, TopAbs_EDGE))]
+    r = sm._desfase_por_contorno(forma, paredes, 0.5)
+    assert r is not None and geo.es_valida(r)
+    esperado = (_desfase_2d(tapa, 0.5) - geo.area(tapa)) * 3
+    assert geo.volumen_exacto(r) - geo.volumen_exacto(forma) == pytest.approx(esperado, rel=1e-3)

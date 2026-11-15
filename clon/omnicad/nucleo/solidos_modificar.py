@@ -1709,7 +1709,7 @@ def _desfase_por_contorno(forma, caras, dist):
     Fusion, une las paredes que se tocan y se come las que se cruzan. El offset 3D del kernel procesa todo el cuerpo:
     con letras B-spline fallaba a los 4–16 s aunque no se eligieran. None si las caras no son eso o si algo falla:
     sigue el camino de siempre (regla de B-453)."""
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_NurbsConvert
     from OCP.BRepClass import BRepClass_FaceClassifier
     from OCP.TopAbs import TopAbs_IN, TopAbs_WIRE
     from . import vectores
@@ -1775,6 +1775,10 @@ def _desfase_por_contorno(forma, caras, dist):
             # las caras de la región no se pisan: un solo prisma (geo.extruir las une y su control de volumen
             # rechazaba la letra por 0,02 mm³)
             prisma = BRepPrimAPI_MakePrism(geo.compuesto(geo.caras(region)), gp_Vec(*map(float, eje * (z1 - z0)))).Shape()
+            if vectores._curvas_libres(region):      # letras: el prisma de curvas desfasadas daba una unión inválida
+                prisma = BRepBuilderAPI_NurbsConvert(prisma, True).Shape()
+            if not geo.es_valida(prisma):    # el desfase 2D dejó un contorno que se cruza (la «@», el hueco de la «e»)
+                return None
             resultado = geo.booleano(resultado, prisma, "unir" if dist > 0 else "cortar")
         return _validar(_unificar(resultado), "Desfase de caras")
     except Exception:  # noqa: BLE001 — un atajo: el camino de siempre decide
