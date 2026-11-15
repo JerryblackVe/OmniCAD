@@ -26,6 +26,7 @@ import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, Qt, QTimer
 from PySide6.QtGui import QKeyEvent, QPolygonF
 from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit, QMenu, QToolTip, QWidget
+from shiboken6 import isValid
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD
 from . import estilo_asas
@@ -1882,7 +1883,7 @@ class GestorManipuladores(QObject):
         w = QApplication.focusWidget()
         if not forzar and isinstance(w, (QLineEdit, QComboBox)) and w.isVisible():
             return                      # no se le saca el teclado a un campo que la persona está usando
-        caja = next((c for c in self.cajas.values() if not c.isHidden()), None)
+        caja = next((c for c in self.cajas.values() if isValid(c) and not c.isHidden()), None)    # B-518: el foco diferido puede llegar con la caja ya borrada por Qt
         if caja is not None:
             caja.setFocus()
             caja.selectAll()
