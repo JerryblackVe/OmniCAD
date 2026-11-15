@@ -44,5 +44,5 @@ def test_p78_la_rosca_larga_corta_las_mitades_sin_unirlas(cortes, monkeypatch):
     forma = sc.rosca(geo.cilindro(10, 100), None, designacion="M20x2.5", clase="6g")
     assert geo.es_valida(forma)
     assert geo.volumen_exacto(forma, 1e-6) == pytest.approx(26495.18, rel=1e-5)
-    assert cortes["n"] == 2            # un corte por mitad (el barrido entero sale incompleto: B-371)
+    assert cortes["n"] == 1            # B-461: las dos mitades en una pasada (el barrido entero sale incompleto: B-371)
     assert uniones == ["unir"]         # solo los dos torneados; los surcos no se unen

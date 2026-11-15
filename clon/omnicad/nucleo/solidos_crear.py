@@ -2899,7 +2899,7 @@ def _barrido_helicoidal(perfil, helice):
 
 def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_cara=None, *, angulo=60.0,
                  diametro_flancos=None, diametro_menor=None, desfase=0.0, partes=False, extra=0.1, fondo=None, cresta=None,
-                 tramo_torno=None):
+                 tramo_torno=None, trozos=True):
     """Sólido helicoidal con la forma del hueco entre filetes recortado al tramo [z0, z0 + largo] del eje. Rosca
     exterior: se le resta al cilindro; interior: al cuerpo agujereado. Perfil por defecto: el básico ISO/UN de
     60°; `angulo` (entre flancos), `diametro_flancos` y `diametro_menor` dan el de otras familias (55°, 30°,
@@ -2908,7 +2908,9 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
     anillo) y después el surco es más rápido que unirlos (M3 con holgura 0,1: 3,6 s → menos de la mitad).
     `extra` (en pasos) es cuánto sobresale el surco del material; ver `_cortar_rosca`. `fondo` y `cresta` (Ø, con la
     holgura incluida) fijan el fondo del surco y la cresta del filete; sin ellos, el fondo sale de `desfase` y la
-    cresta queda en la cara. `tramo_torno=(zmin, zmax)` ajusta el diámetro en ese tramo del eje sin alargar el surco."""
+    cresta queda en la cara. `tramo_torno=(zmin, zmax)` ajusta el diámetro en ese tramo del eje sin alargar el surco.
+    `trozos=False`: sin `_en_tramos` (quien va a copiar el surco con otra geometría, como el espejo, no podría reunir
+    las caras partidas)."""
     z = _unit(eje)
     o = np.asarray(origen, float)
     h60 = math.sqrt(3) / 2
@@ -2940,7 +2942,7 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
     tramo_torno = None if tramo_torno is None else tuple(round(float(v - z0), 9) for v in tramo_torno)
     base = _surco_en_origen(round(float(diametro), 9), round(float(paso), 9), round(float(largo), 9), bool(interna),
                             mano, None if radio_cara is None else round(float(radio_cara), 9), eje_r, *perfil,
-                            round(float(rel_extra), 9), tramo_torno)
+                            round(float(rel_extra), 9), tramo_torno, bool(trozos))
     trsf = gp_Trsf()
     trsf.SetTranslation(gp_Vec(*map(float, o + z * z0)))
     giro = _fase_rosca(z)
@@ -2948,8 +2950,10 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
         rot = gp_Trsf()
         rot.SetRotation(gp_Ax1(gp_Pnt(0.0, 0.0, 0.0), _gdir(z)), giro)
         trsf.Multiply(rot)                         # primero gira sobre su eje, después se traslada
-    # copias trasladadas: el corte no toca lo guardado en la caché
-    surco, torno = (None if f is None else BRepBuilderAPI_Transform(f, trsf, True).Shape() for f in base)
+    # copias trasladadas: el corte no toca lo guardado en la caché. Comparten la geometría (B-461: así las caras de
+    # `_en_tramos` siguen sobre la misma superficie y se unifican después del corte)
+    lugar = TopLoc_Location(trsf)
+    surco, torno = (None if f is None else BRepBuilderAPI_Copy(f, False).Shape().Moved(lugar) for f in base)
     if partes:
         return surco, torno
     return surco if torno is None else geo.booleano(surco, torno, "unir")
@@ -2970,7 +2974,7 @@ _ANCHO_LIMITE, _ANCHO_TOPE, _ANCHO_TORNO = 0.995, 0.97, 0.93     # anchos del su
 
 @functools.lru_cache(maxsize=16)
 def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angulo=60.0, d2=None, d1=None,
-                     desfase=0.0, fondo=None, cresta=None, rel_extra=0.1, tramo_torno=None):
+                     desfase=0.0, fondo=None, cresta=None, rel_extra=0.1, tramo_torno=None, trozos=True):
     """Surco de `_surco_rosca` con el tramo empezando en el origen. Se guarda por (tamaño, largo, eje, mano,
     perfil): roscar varios agujeros iguales arma el barrido helicoidal UNA vez y lo copia trasladado (hallazgo
     L138: M3 en 4 agujeros tardaba 30 s).
@@ -2997,7 +3001,7 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
         # B-371: el barrido largo también sale incompleto en el perfil básico (M20x2.5×100: 57 %); verificado, cae al
         # corte por mitades de `rosca`
         return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out,
-                             verificar=True)
+                             verificar=True, trozos=trozos)
     t = math.tan(math.radians(angulo / 2))
 
     def ancho(rho):
@@ -3042,11 +3046,11 @@ def _surco_en_origen(diametro, paso, largo, interna, mano, radio_cara, eje, angu
         grande = geo.cilindro(material + extra + 1.0, largo_torno, base=base_torno, eje=tuple(z))
         torno = geo.booleano(grande, geo.cilindro(r_torno, largo_torno, base=base_torno, eje=tuple(z)), "cortar")
     return _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, ancho(r_in), r_out,
-                         ancho(r_out), torno, r_torno, verificar=True)
+                         ancho(r_out), torno, r_torno, verificar=True, trozos=trozos)
 
 
 def _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, w_in, r_out, w_out, torno=None,
-                  r_torno=None, verificar=False):
+                  r_torno=None, verificar=False, trozos=True):
     """Barre el trapecio (r_in, w_in)–(r_out, w_out) por la hélice, lo recorta al tramo [0, largo] y, en un
     agujero, le saca lo que cae dentro del agujero. Devuelve (surco, torno): el torneado de la cresta va aparte.
     En un agujero, el surco se recorta al radio del torneado `r_torno` (su cara coincide con la del agujero
@@ -3063,12 +3067,17 @@ def _barrer_surco(diametro, paso, largo, interna, mano, radio_cara, z, x, r_in, 
     base = o + z * (z_ini + (0.0 if interna else paso / 2))
     perfil = _poligono([base + x * r_in - z * w_in / 2, base + x * r_out - z * w_out / 2,
                         base + x * r_out + z * w_out / 2, base + x * r_in + z * w_in / 2])
-    surco = _barrido_helicoidal(perfil, _helice(base, z, x, (r_in + r_out) / 2, paso, largo + 2 * paso, mano))
-    tramo = geo.cilindro(r_out + 1.0, largo, base=(0.0, 0.0, 0.0), eje=tuple(z))
-    surco = geo.booleano(surco, tramo, "intersecar")
+    barrido = _barrido_helicoidal(perfil, _helice(base, z, x, (r_in + r_out) / 2, paso, largo + 2 * paso, mano))
     trapecio = (r_in, w_in, r_out, w_out, largo, paso)
-    if verificar:
-        _exigir_volumen(surco, _volumen_surco(r_in, r_out, *trapecio))
+    if verificar:     # B-461: un barrido incompleto (B-371) se descarta antes de recortarlo (M2×30: ~3 s perdidos)
+        _exigir_volumen(barrido, _volumen_surco(r_in, r_out, *trapecio[:4], largo + 2 * paso, paso))
+    esperado = _volumen_surco(r_in, r_out, *trapecio)
+    # en un agujero, los trozos hacen lento el recorte de lo que cae adentro (M10 6H: 1,6 → 6 s)
+    surco = _en_tramos(barrido, z, largo, paso, r_out + 1.0) if trozos and not interna else None
+    if surco is None or not _volumen_ok(surco, esperado):    # vía rápida fallida o que no conviene: el recorte de siempre
+        surco = geo.booleano(barrido, geo.cilindro(r_out + 1.0, largo, base=(0.0, 0.0, 0.0), eje=tuple(z)), "intersecar")
+        if verificar:
+            _exigir_volumen(surco, esperado)
     adentro = r_torno if (r_torno is not None and interna) else radio_cara
     if interna and adentro is not None:
         # Se le saca al surco la parte que cae dentro del agujero: cortar el cuerpo con el surco entero falla
@@ -3093,8 +3102,37 @@ def _volumen_surco(r_a, r_b, r_in, w_in, r_out, w_out, largo, paso):
 _EPS_ROSCA = 1e-6     # B-249: la integración por defecto erra en las hélices largas (AFBMA×30: 414 en vez de 484)
 
 
+def _en_tramos(barrido, z, largo, paso, radio):
+    """B-461: el barrido recortado al tramo [0, largo] del eje y partido con planos en trozos de unas 5 vueltas
+    (hasta 4). Cortar el cuerpo con UNA cara helicoidal larga es lento y falla más (M10×30: 1 a 2,7 s el corte; M2×15
+    quitaba 0,6 % de menos); en trozos el kernel cruza cada cara aparte y en paralelo. Las caras partidas comparten
+    la superficie del barrido: `geo.unificar_caras` las vuelve a juntar después del corte. None con menos de 7,5
+    vueltas (no conviene) o si el kernel falla."""
+    n = min(4, round(largo / paso / 5))
+    if n < 2:
+        return None
+    op, args, planos = BRepAlgoAPI_Splitter(), List_TopoDS_Shape(), List_TopoDS_Shape()
+    args.Append(barrido)
+    for k in range(n + 1):
+        planos.Append(BRepBuilderAPI_MakeFace(gp_Pln(_pnt(z * (largo * k / n)), _gdir(z)),
+                                              -radio, radio, -radio, radio).Face())
+    op.SetArguments(args)
+    op.SetTools(planos)
+    op.SetRunParallel(geo.PARALELO)
+    op.Build()
+    if not op.IsDone():
+        return None
+    trozos = [s for s in geo.solidos(op.Shape()) if 0 < float(np.dot(geo.centro_masa(s), z)) < largo]
+    return geo.compuesto(trozos) if len(trozos) == n else None
+
+
+def _volumen_ok(forma, esperado, tolerancia=0.01):
+    return not (forma is None or geo.esta_vacia(forma)
+                or abs(geo.volumen_exacto(forma, _EPS_ROSCA) - esperado) > tolerancia * esperado)
+
+
 def _exigir_volumen(forma, esperado, tolerancia=0.01):
-    if forma is None or geo.esta_vacia(forma) or abs(geo.volumen_exacto(forma, _EPS_ROSCA) - esperado) > tolerancia * esperado:
+    if not _volumen_ok(forma, esperado, tolerancia):
         raise geo.ErrorGeometria("El kernel armó mal el surco de la rosca: probá otro tamaño, menos largo "
                                  "o una rosca cosmética.")
 
@@ -3267,7 +3305,7 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
             espejar = mano == "izquierda" and not info["interna"]
             surco, torno = _surco_rosca(o, z, datos["diametro"], datos["paso"], za, la, info["interna"],
                                         "derecha" if espejar else mano, radio, partes=True, extra=extra,
-                                        tramo_torno=(zmin, zmax) if tabla else None, **perfil)
+                                        tramo_torno=(zmin, zmax) if tabla else None, trozos=not espejar, **perfil)
             if espejar:
                 t = gp_Trsf()
                 t.SetMirror(gp_Ax2(_pnt(o), _gdir(_perpendicular(z))))
@@ -3285,6 +3323,11 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
 
         def tornear_y_cortar(surcos, torno):
             resultado = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")   # cresta sin espesor: se tornea
+            if len(surcos) > 1:     # B-461: las mitades en UNA pasada (M20x2.5×100: 6,7 → 2,8 s); si falla, de a una
+                try:
+                    return _cortar_helicoidal(resultado, geo.compuesto(surcos), o, z)
+                except geo.ErrorGeometria:
+                    pass
             for surco in surcos:     # P-78: un corte por mitad; unir las mitades antes tardaba 5,7 s (M20x2.5×100)
                 resultado = _cortar_helicoidal(resultado, surco, o, z)   # sale validado y con el surco cortado
             return resultado
@@ -3320,7 +3363,7 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
     Éxito = forma válida que sacó material sin pasarse del volumen del surco (hay que medirlo: sin esto el corte salía vacío)."""
     base, surco = geo.volumen_exacto(cuerpo, _EPS_ROSCA), geo.volumen_exacto(herramienta, _EPS_ROSCA)
     eje_giro = gp_Ax1(_pnt(origen), _gdir(eje))
-    caras_herr = geo.caras(herramienta)
+    caras_por_solido = [geo.caras(s) for s in geo.solidos(herramienta)]
     for difuso in (1e-4, 0.0, 1e-5):
         for giro in (0.0, 229.0, 61.0, 137.0):
             t = gp_Trsf()
@@ -3336,9 +3379,11 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
             if difuso:
                 op.SetFuzzyValue(difuso)
             op.Build()
-            if not op.IsDone() or all(op.IsDeleted(f) for f in caras_herr):
+            # B-461: con varios sólidos (trozos, mitades) uno salteado igual sacaría más del 20 %: se exige cada uno
+            if not op.IsDone() or any(all(op.IsDeleted(f) for f in caras) for caras in caras_por_solido):
                 continue
             hecho = op.Shape().Moved(TopLoc_Location(t.Inverted())) if giro else op.Shape()
+            hecho = geo.unificar_caras(hecho)   # B-461: junta las caras que partió `_en_tramos`
             if geo.es_valida(hecho) and 0.2 * surco < base - geo.volumen_exacto(hecho, _EPS_ROSCA) <= 1.01 * surco:
                 return hecho
     raise geo.ErrorGeometria("El kernel no pudo cortar la rosca en el cuerpo.")
