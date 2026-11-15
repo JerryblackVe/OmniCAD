@@ -15,7 +15,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E5 | B-534 | Asa de cantidad del Patrón en trayectoria no baja (posible regresión de B-435) (B-471 integrado: bacda54) |
 | E6 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (FL-13 integrado: a1f3430) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
-| E8 | — | En pausa por el cupo semanal (B-518 integrado: 1a3345e) |
+| E8 | B-518b | Su test falla en main: `_quitar_caja` también necesita isValid (después, pausa por el cupo) |
 | E8b | P-158c | Entrega 2 de P-158: Mensajes cortos de Superficie y el resto (368 pendientes); P-158b integrado: 126305f |
 | E9 | B-401 | El cálculo aislado pierde atributos de boceto; OpenCode siempre corriendo (B-450 integrado: 9044a97) |
 | E10 | B-533 | Cinta en ventana chica: nombres de grupo partidos al medio («C…▾») (B-423 integrado: verificado en la VPS, falta Windows) |
