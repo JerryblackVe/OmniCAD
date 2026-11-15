@@ -214,16 +214,21 @@ def con_operacion_automatica(clase):
             panel.set_valor("operacion", "nuevo")  # B-431: el objetivo de un preajuste no viaja con él.
         self._ajustando = False
         preparar(self, panel)
+        if not self._fija:     # B-471b: el perfil que ya trae el panel (único a la vista o preseleccionado) también apoya
+            ajustar_auto(self, panel)
+
+    def ajustar_auto(self, panel):
+        try:
+            ajustar_operacion(self, panel, "unir" if apoyo(self, panel) else None)
+        except Exception as e:  # noqa: BLE001 — un apoyo que no se puede medir se informa sin romper la selección
+            panel._mostrar(f"⚠ {e}", tipo="aviso")
 
     def cambiar_auto(self, panel, clave):
         if clave == "operacion" and not self._ajustando:
             self._fija = True
         cambiar(self, panel, clave)
         if not self._fija and clave in ("perfiles", "secciones", "caras", "tipo"):
-            try:
-                ajustar_operacion(self, panel, "unir" if apoyo(self, panel) else None)
-            except Exception as e:  # noqa: BLE001 — un apoyo que no se puede medir se informa sin romper la selección
-                panel._mostrar(f"⚠ {e}", tipo="aviso")
+            ajustar_auto(self, panel)
 
     def previa_auto(self, panel, estado):
         previa(self, panel, estado)
