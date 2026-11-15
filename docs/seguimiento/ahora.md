@@ -8,11 +8,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-480 | Girar el boceto 90° pierde restricciones y cotas sin aviso (Sin verificar: reproducir y arreglar); después B-452 (B-411 integrado, Parcial: d6ad5e5) |
+| E1 | B-452 | Fuera del boceto, la vista 3D sigue mostrando las curvas y objetos de boceto ocultos (B-480 integrado: e909112) |
 | E2 | B-531 | Regresión de B-461 (cresta a derechas), primero; después P-156 fase 2: Holgura de impresión: botón de la placa, molde, Impresa/… (B-520 integrado: c325d0c; B-530 Sin verificar para E11) |
 | E3 | B-528 | Limpiar el desfase 2D de texto (`vectores.desfase_caras`: contornos que se cruzan, aristas de 7e-5 mm) para que el desfase por contorno sirva con «@tienda» (B-525 integrado: 2d91b7d) |
 | E4 | B-438 | Superficie › Desfase: teclear «1e3 mm» traba la ventana 2 s (worktree `~/OmniCAD-B-438` con un arreglo previo: revisarlo). B-514 (P2) en pausa hasta después del 30/11 |
-| E5 | B-471r | Revolución elige sola el perfil cuando el boceto tiene uno solo, como Fusion (B-398 y B-399 esperan el OK de Gerardo) |
+| E5 | B-534 | Asa de cantidad del Patrón en trayectoria no baja (posible regresión de B-435) (B-471 integrado: bacda54) |
 | E6 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (FL-13 integrado: a1f3430) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-518 | Traza «CajaValor already deleted» al cerrar (manipuladores.py:1896) (B-444 integrado: 036c59f) |
