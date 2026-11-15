@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | B-460 | Empalme más estricto que Fusion: falla desde r41 donde Fusion acepta r55 y r59 (B-440 parte integrado: 3ac43ed) |
 | E4 | B-470 | Vaciado da «ok» con una cáscara abierta en un cuerpo modificado; usar la guarda de B-462 (B-459 y B-485 integrados: cbd7c3e) |
 | E5 | B-443 | «Propiedades» no abre desde el cuerpo ni el componente, y falta en la cinta (ASM-17 integrado: 81f0885) |
-| E6 | FL-3c | Resto de FL-3b en el llavero: editar 1900 ms, Unir 17 perfiles 5917 ms, Cortar 3190 ms (B-461 parte integrado: 90a0409) |
+| E6 | B-488 | **BLOQUEANTE** Windows: ventana en blanco desde el arranque; tras abrir con la barra de FL-3b no repinta (FL-3c en pausa, sigue en su worktree) |
 | E7 | B-468 | Caja de valor junto al asa como en Fusion, en todas las asas (B-456 integrado: 45f39ca) |
 | E8 | B-469 | Texto de boceto: el clic en «Contenido» cierra el boceto (B-465 tests integrados: 7f78ac5; falta E11) |
 | E9 | Sol | Sol siempre corriendo (Gerardo 14/11): H-115, B-442, B-435, B-436, B-428, B-423, B-451, B-447, B-401, H-82, B-457, B-444, P-134, P-98, B-450 |
@@ -23,15 +23,16 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-467 | Empalme sobre aristas tangentes: Fusion toma la cadena tangente y entra (resto de B-454) |
-| 2 | B-464 | Solevación con punto tangente da error con peso 1 (Fusion 15708,3) |
-| 3 | H-118 | Desfase de caras de una rosca modelada, como Fusion (holgura para imprimir) |
-| 4 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
-| 5 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 7 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
-| 8 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
-| 9 | B-461 (resto) | Rosca modelada debajo de 1 s (sin booleana), indicador al editar, agujero roscado y Windows (E6) |
+| 1 | FL-3c | Resto de FL-3b en el llavero: editar 1900 ms, Unir 17 perfiles 5917 ms, Cortar 3190 ms; la barra no muestra avance (E6, worktree ~/OmniCAD-FL-3c; vuelve tras B-488) |
+| 2 | B-467 | Empalme sobre aristas tangentes: Fusion toma la cadena tangente y entra (resto de B-454) |
+| 3 | B-464 | Solevación con punto tangente da error con peso 1 (Fusion 15708,3) |
+| 4 | H-118 | Desfase de caras de una rosca modelada, como Fusion (holgura para imprimir) |
+| 5 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
+| 6 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 7 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 8 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
+| 9 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
+| 10 | B-461 (resto) | Rosca modelada debajo de 1 s (sin booleana), indicador al editar, agujero roscado y Windows (E6) |
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) quedan en bugs.md sin cola.
 
