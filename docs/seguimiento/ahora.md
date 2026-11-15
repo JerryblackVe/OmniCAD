@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-522 | Texto en curva de la caza (E7): 4 letras separadas con huecos vacíos y «TXT-9 teclear 10 %» da 2,0857; reproducir y arreglar (B-519 integrado: cb6a77d) |
 | E2 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance`; después B-520 (B-497 integrado: 342e241) |
-| E3 | B-473 | Chaflán: después de Aceptar queda un triángulo azul suelto en la vista; después B-503 texto entero (extruir la región nueva entera al unir) (B-503 parte 3 integrada: 32a1370) |
+| E3 | B-503 (texto entero) | Desfase del texto entero: extruir la región nueva entera al unir (B-473 sin reproducir, guardia integrada 4175fbc; E11 en Windows) |
 | E4 | B-514 | Superficie P2 contra Fusion: Extender «Natural» de borde circular −1,5 % de área; Desfase −9,99 rechaza la esfera (B-447 integrado: 6022af3) |
 | E5 | B-501 | Ensamblar › Conjunto: nombre y desfase tecleados en la fila guardada no se aplican; después la junta `ball` de la caza (B-500 integrado: fe4cefd) |
 | E6 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él; después FL-12 y FL-14 (FL-8 sección integrado: 06882d8) |
