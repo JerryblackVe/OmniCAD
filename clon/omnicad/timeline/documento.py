@@ -1039,8 +1039,7 @@ class Documento:
         return (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
                 and (aparte or sum(not op.suprimida for op in self.operaciones[:self.marcador]) + reactivados
                      >= aislado.UMBRAL_PREVUELO_PARAMETROS
-                     or (sum(self._duraciones[desde:]) >= aislado.UMBRAL_COSTO_AISLAR_S
-                         and not self._pasos_con_efectos_propios())))
+                     or sum(self._duraciones[desde:]) >= aislado.UMBRAL_COSTO_AISLAR_S))
 
     def _solo_primitivas(self, desde):
         """FL-5: lo que `recalcular` calcularía desde `desde` son solo primitivas como cuerpo nuevo, o nada (deshacer lo
@@ -1066,13 +1065,6 @@ class Documento:
         return (all(_barata(d) for d in ops[k:datos.get("marcador", len(ops))])
                 and not cambiados & set().union(*self._usados[:k])
                 and all(datos.get(c) == actual.get(c) for c in fijos))
-
-    def _pasos_con_efectos_propios(self):
-        """Hay un boceto con proyecciones o textos paramétricos: al calcular deja en el propio paso (`rehechas`, `perdidas`,
-        `_textos_parametricos`) lo que el proceso aparte no trae de vuelta (la silueta rehecha perdía sus ids). Con 60 pasos o
-        más el hueco ya existía; el criterio de costo no lo agranda."""
-        return any(getattr(getattr(op, "boceto", None), "proyecciones", None) or getattr(op, "_textos_parametricos", None)
-                   for op in self.operaciones)
 
     def _prevuelo_parametros(self, tabla):
         """Calcula sin modificar el documento ni deshacer; omite documentos chicos, OmniKernel y el propio hijo."""
@@ -1167,8 +1159,10 @@ class Documento:
         self._estados = calculo["estados"]
         self.resultados = [ResultadoPaso(estado, mensaje) for estado, mensaje in calculo["resultados"]]
         self._usados, self._valores, self._duraciones = calculo["usados"], calculo["valores"], calculo["duraciones"]
-        for op, usados in zip(self.operaciones, calculo["dependencias"], strict=True):
+        for op, usados, efectos in zip(self.operaciones, calculo["dependencias"], calculo["efectos_boceto"], strict=True):
             op._usados = set(usados)
+            if isinstance(op, OpBoceto):
+                op.rehechas, op.perdidas, op._textos_parametricos = efectos
         self._memo.clear()
         self._previa = self._ultimo_prevuelo = None
         self._notificar()

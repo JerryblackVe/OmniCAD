@@ -39,8 +39,8 @@ def test_dentro_del_hijo_nunca(monkeypatch):
     assert not d._prevuelo_corresponde()
 
 
-def test_con_proyecciones_de_boceto_el_costo_no_manda_al_proceso_aparte():
-    """El proceso aparte no trae de vuelta la silueta rehecha de una proyección (`rehechas`): se queda en el hilo."""
+def test_con_proyecciones_de_boceto_el_costo_manda_al_proceso_aparte():
+    """B-401: el proceso aparte también devuelve los atributos calculados de los bocetos."""
     from omnicad import api
 
     s = api.Sesion()
@@ -48,5 +48,4 @@ def test_con_proyecciones_de_boceto_el_costo_no_manda_al_proceso_aparte():
     api.llamar(s, "create_sketch", {"plane": "XZ", "name": "Costado"})
     assert api.llamar(s, "project_to_sketch", {"bodies": ["Cuerpo1"], "sketch": "Costado"})["ok"]
     s.doc._duraciones = [4.0] * len(s.doc.operaciones)
-    assert s.doc._pasos_con_efectos_propios()
-    assert not s.doc._prevuelo_corresponde()
+    assert s.doc._prevuelo_corresponde()
