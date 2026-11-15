@@ -85,3 +85,22 @@ def test_salir_del_boceto_no_rearma_la_capa_del_texto(ventana, monkeypatch):
     assert op.id not in ventana.vectores.capas and op.id not in ventana.vectores.dormidas
     ventana.doc.modificado = False
 
+
+
+def test_la_fuente_se_abre_perezosa_y_da_el_mismo_kerning():
+    """B-440: el primer texto de la sesión decodificaba la GPOS entera (~0,4 s en la VPS) solo para el kerning. La fuente
+    se abre perezosa (`lazy`): lo mismo, sin decodificar lo que no se lee."""
+    from fontTools.ttLib import TTFont
+
+    from omnicad.nucleo import fuentes
+    reg = fuentes.resolver_fuente("Arial")
+    if reg is None:
+        pytest.skip("No hay Arial ni una sustituta instalada")
+    fuentes._datos.cache_clear()
+    d = fuentes._datos(reg["ruta"], reg["indice"], 0)
+    assert d["f"].lazy is True
+    entera = fuentes._tabla_kern(TTFont(reg["ruta"]))
+    gl = [d["cmap"][ord(c)] for c in "AVATAR WAVE Toyota LT"]
+    pares = list(zip(gl, gl[1:], strict=False))
+    assert [d["kern"](a, b) for a, b in pares] == [entera(a, b) for a, b in pares]
+    assert any(d["kern"](a, b) for a, b in pares)            # la fuente tiene kerning: la comparación no es trivial
