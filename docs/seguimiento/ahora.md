@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-519b | test_h84 con la cadena tangente por defecto (B-452 integrado: 5b9fa3f) |
 | E2 | B-531 | Regresión de B-461 (cresta a derechas) (P-156 fase 2 integrada: e85bdb0) |
-| E3 | FL-16 | Después B-536: `caras_tangentes` O(n²): el desfase de «@tienda» tarda ~16 s (B-528 integrado: 49acc9a) |
+| E3 | B-536 | Vaciado tras empalme en un barrido da «No quedó pared» (FL-16 integrado: b395ed2) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-425 | Patrón con muchas copias congela la ventana (teselar fuera del hilo) (FL-15 integrado: bfa1513) |
