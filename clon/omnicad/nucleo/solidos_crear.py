@@ -1672,6 +1672,7 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         raise geo.ErrorGeometria("Un punto solo puede ser la primera o la última sección.")
     if cerrada and any(s[0] == "vertice" for s in secs):
         raise geo.ErrorGeometria("Un solevado cerrado no admite puntos como sección.")
+    _exigir_puntos_utiles(secs)
     carriles = _lista(carriles)
     if carriles and linea_central is not None:
         raise geo.ErrorGeometria("Elegí carriles o una línea central, no los dos.")
@@ -1732,6 +1733,33 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         raise geo.ErrorGeometria("Solevado: el sólido se autointersecta; la dirección del flujo de la solevación no "
                                  "es válida. Bajá el peso o cambiá el ángulo de la condición de borde.")
     return forma
+
+
+def _exigir_puntos_utiles(secs):
+    """B-451: un punto como sección solo sirve con un perfil y fuera de su plano. Dos puntos solos, o el centro del
+    círculo tomado como punto en el plano del perfil (Fusion también lo elige con el clic cerca del centro), dan un
+    solevado plano o un «el kernel no pudo»: se dice qué pasa."""
+    from .desfase_aristas import plano_de_aristas
+    if all(t == "vertice" for t, *_ in secs):
+        raise geo.ErrorGeometria("Solevado: las secciones son solo puntos. Un punto sirve de extremo (punta) de un "
+                                 "perfil: elegí al menos un perfil.")
+    if len(secs) != 2:  # con secciones intermedias el conjunto no es plano aunque el punto toque el plano del vecino
+        return
+    for i in (0, 1):
+        if secs[i][0] != "vertice":
+            continue
+        vecino = secs[1][1] if i == 0 else secs[-2][1]
+        if secs[1 if i == 0 else -2][0] == "vertice":
+            continue
+        try:
+            plano = plano_de_aristas(geo._aristas_unicas(vecino))
+        except geo.ErrorGeometria:
+            continue                                   # perfil alabeado o recto: no hay plano contra el que comparar
+        d = float(np.dot(_xyz(BRep_Tool.Pnt_s(secs[i][1])) - plano.origen, plano.normal))
+        if abs(d) < 1e-6:
+            raise geo.ErrorGeometria("Solevado: el punto elegido está en el plano del perfil (suele ser su centro, "
+                                     "tomado por error): la solevación quedaría plana. Quitá el punto o elegí uno "
+                                     "fuera del plano.")
 
 
 def _exigir_ida(secciones):
