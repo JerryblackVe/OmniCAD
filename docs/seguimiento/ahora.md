@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | — | En pausa hasta las 00:30 UTC (cupo de 5 h al 93 %); después B-544 (B-540 integrado: f0b265b) |
 | E2 | — | En pausa hasta las 00:30 UTC (cupo de 5 h); después P-161 (B-471b integrado: f57e7a8) |
-| E3 | — | En pausa hasta las 00:30 UTC (cupo de 5 h); después B-558 (B-536b integrado: ea1996c) |
+| E3 | B-559 | **Primero (Gerardo, prioridad 1)**: Mover/Copiar entero contra Fusion; arranca a las 00:30 UTC (cupo). Después B-558 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | — | En pausa hasta las 00:30 UTC (cupo de 5 h); después lo que siga en `docs/plan_fluidez.md` (B-331 integrado: 5c9c2f5) |
