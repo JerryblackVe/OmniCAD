@@ -274,3 +274,25 @@ def test_relink_de_perfil_giratorio_conserva_eje_y_sentido():
     llamar(s, "manage_lost_projections", action="relink", projection=1, bodies=["Cuerpo1"])
     xs = [p["x"] for p in llamar(s, "get_sketch", sketch=None)["points"]]
     assert min(xs) == pytest.approx(-5, abs=0.06) and max(xs) <= 1e-6
+
+
+# ---------------------------------------------------------------- B-466: Curvatura arco–spline con el menor cambio
+def test_b466_curvatura_arco_spline_no_deforma_el_arco_y_mueve_poco_la_spline(s):
+    """Repro de E11 (evidencias/…_e11_boceto_crear_restricciones): arco r=21 + spline tangente + Curvatura. Antes el arco
+    terminaba en r=5107 y la spline fuera de la vista; Fusion (SKT-CONSTRAIN-CURVATURE) ajusta la spline y deja el arco."""
+    arco = llamar(s, "draw_arc", start_x=40, start_y=-21, center_x=40, center_y=0, sweep_angle=90)["entities"][0]["id"]
+    sid = spline(s, [[61, 0], [65, 20], [55, 40], [70, 60]], degree=3)
+    llamar(s, "add_constraint", sketch="B", type="coincident",
+           entities=[entidad(s, arco)["points"][2], entidad(s, sid)["points"][0]])
+    llamar(s, "add_constraint", sketch="B", type="tangent", entities=[arco, sid])
+    antes = entidad(s, sid)["vertices"]
+    assert max(math.dist(p, q) for p, q in zip(antes, [[61, 0], [65, 20], [55, 40], [70, 60]], strict=True)) < 8
+    r = llamar(s, "add_constraint", sketch="B", type="curvature", entities=[arco, sid])
+    assert r["status"] == "under_constrained"
+    a = entidad(s, arco)
+    assert a["center"] == pytest.approx([40, 0], abs=1e-6) and a["radius"] == pytest.approx(21, abs=1e-6)
+    despues = entidad(s, sid)["vertices"]
+    assert max(math.dist(p, q) for p, q in zip(antes, despues, strict=True)) < 8
+    p = prim(s, sid)
+    _c, d1, d2 = evaluar_primitiva(p, dominio(p)[0], 2)
+    assert (d1[0] * d2[1] - d1[1] * d2[0]) / math.hypot(*d1) ** 3 == pytest.approx(1 / 21, rel=1e-3)

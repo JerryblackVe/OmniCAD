@@ -5019,7 +5019,7 @@ class Lienzo(QWidget):
                 if t == "tangente":
                     self.b.deslizar_a_tangente(*e)
                 self.b.agregar_restriccion(t, e)
-                if t == "tangente":
+                if t in ("tangente", "curvatura"):
                     acomodar_tangente(self.b, e, self._valores_para_diagnostico())
         ok = self.aplicar_cambio(agregar)
         if ok and tipo != "fijo" and gdl is not None and self.resultado.gdl >= gdl:    # no quitó ningún GDL: sobra
