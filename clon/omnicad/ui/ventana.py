@@ -148,6 +148,14 @@ class _FiltroEspera(QObject):
         return True
 
 
+def _mostrar_avance(espera):
+    """FL-3c: la barra de un cálculo aparte muestra los pasos que lleva el trabajador; sin dato sigue en «ocupado»."""
+    avance = aislado.avance()
+    if avance and avance[0] < avance[1] and (espera.maximum(), espera.value()) != (avance[1], avance[0]):
+        espera.setRange(0, avance[1])
+        espera.setValue(avance[0])        # nunca el total: con él, QProgressDialog se cierra solo
+
+
 class _EspacioEnBotones(QObject):
     """B-420: con el foco en un botón o una casilla, la barra espaciadora es del botón (marcar, pulsar) y no del atajo global
     «Boceto sobre la cara elegida» / «Repetir». Un botón no acepta solo ese `ShortcutOverride`; se instala solo en el botón que
@@ -2780,6 +2788,7 @@ class VentanaPrincipal(QMainWindow):
 
         def mirar():
             if hilo.is_alive():
+                _mostrar_avance(espera)
                 return
             reloj.stop()
             cancelada = espera.wasCanceled()
@@ -3269,6 +3278,7 @@ class VentanaPrincipal(QMainWindow):
 
         def mirar():
             if hilo.is_alive():
+                _mostrar_avance(espera)
                 return
             reloj.stop()
             cancelada = espera.wasCanceled()

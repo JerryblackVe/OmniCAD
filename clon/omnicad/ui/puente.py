@@ -25,6 +25,7 @@ Decisiones:
 import json
 import os
 import secrets
+import threading
 import time
 from collections import deque
 from pathlib import Path
@@ -331,12 +332,19 @@ class PuenteAgentes(QObject):
         pasos = len(doc.operaciones)
         copia_anterior = proyecto.ruta_autoguardado(doc)     # por si la herramienta guarda en otra ruta o cambia de documento
         habia_cambios = doc.modificado
+        # FL-3c: un paso nuevo no traba la ventana (Unir 17 perfiles: 5 s); execute_code ya la tiene tomada con su diálogo y
+        # mandaría al proceso aparte cada paso de su bucle con la receta entera
+        doc.nuevos_aparte = modifica and herramienta != "execute_code"
+        doc.diferir_avisos = modifica           # FL-3c: la ventana se actualiza al final, con las mallas de `_mallar_en_hilo`
         latido, dialogo = self._dialogo_codigo() if herramienta == "execute_code" else (None, None)
         self.sesion.latido = latido
         v.registro_uso.herramienta_api = herramienta
         try:
             respuesta = api.llamar(self.sesion, herramienta, args)
         finally:
+            doc.nuevos_aparte = False
+            doc.diferir_avisos, avisar = False, doc._aviso_diferido
+            doc._aviso_diferido = False
             v.registro_uso.api_terminada = (herramienta, time.perf_counter())
             v.registro_uso.herramienta_api = ""
             self.sesion.latido = None
@@ -353,14 +361,48 @@ class PuenteAgentes(QObject):
         elif herramienta == "save_document" and respuesta["ok"]:
             v._guardado(Path(doc.ruta), copia_anterior)      # título sin «*», sin autoguardado viejo, reciente nuevo
         elif modifica:
+            if respuesta["ok"]:
+                self._mallar_en_hilo()
             if v.seleccion:
                 v._seleccionar([])                           # lo elegido puede ya no existir
-            v._actualizar()                                  # título, deshacer, «modificado» tras un rollback
+            if avisar:
+                doc._notificar()                             # los oyentes que la herramienta dejó esperando (`_actualizar` incluido)
+            else:
+                v._actualizar()                              # título, deshacer, «modificado» tras un rollback
         v.arrastre.sincronizar()                             # drag_component no cambia el documento: se dibuja igual
         if modifica and respuesta["ok"]:
             nuevo = f" → {self.sesion.doc.operaciones[-1].nombre}" if len(self.sesion.doc.operaciones) > pasos else ""
             v.mensaje(f"Agente IA: {herramienta}{nuevo}", 5000)
         return respuesta
+
+    def _mallar_en_hilo(self):
+        """FL-3c: malla en otro hilo los cuerpos que dejó la herramienta, con la ventana repintando (sin teclado ni mouse,
+        como `_esperando_calculo`). En el hilo de la ventana, `_actualizar` los mallaba de un tirón (editar un paso del
+        llavero: 2 s). Si algo falla acá, los malla `_actualizar` como siempre."""
+        v = self.ventana
+        formas = {id(c.forma): c.forma for c in v.doc.estado_final.cuerpos.values() if id(c.forma) not in v.visor._cache}
+        if not formas:
+            return
+        hecho = {}
+
+        def trabajo():
+            try:
+                hecho.update({i: v.visor.datos_cuerpo(f) for i, f in formas.items()})
+            except Exception:  # noqa: BLE001 — vía rápida: sin mallas, las hace `_actualizar`
+                hecho.clear()
+
+        hilo = threading.Thread(target=trabajo, daemon=True)
+        hilo.start()
+        app = QApplication.instance()
+        app.installEventFilter(v._espera)
+        try:
+            while hilo.is_alive():
+                app.processEvents()
+                hilo.join(0.02)
+        finally:
+            app.removeEventFilter(v._espera)
+            v._espera.cancelado = False      # el cambio ya está hecho: un Esc acá no tiene nada que cortar
+        v.visor.precargar(hecho)
 
     # ------------------------------------------------------------ indicador visible
     def _actualizar_indicador(self):

@@ -191,6 +191,9 @@ class Documento:
         self._ultimo_prevuelo = None    # (huella, cálculo) de la última previa; se comparte con Aceptar
         self.diferir_calculo = False    # FL-3b: la ventana calcula en otro hilo (ver `CalculoDiferido`)
         self._precalculo = None         # (tarea, datos, cálculo) que la ventana ya hizo aparte para el próximo cambio
+        self.nuevos_aparte = False      # FL-3c: el puente en vivo calcula aparte los pasos nuevos (no hay previa que mida su costo)
+        self.diferir_avisos = False     # FL-3c: el puente avisa a los oyentes al terminar la herramienta (`_aviso_diferido`)
+        self._aviso_diferido = False
         self.motor = motor.motor_activo()
         self._contador = 0
         self._contador_cotas = 0
@@ -255,6 +258,9 @@ class Documento:
         self._oyentes.remove(funcion)
 
     def _notificar(self):
+        if self.diferir_avisos:
+            self._aviso_diferido = True
+            return
         for f in list(self._oyentes):
             f()
 
@@ -460,8 +466,15 @@ class Documento:
         self._fijar_ocultos(op)
         tabla, contador = self._tabla_cotas(self.operaciones[:self.marcador] + [op] + self.operaciones[self.marcador:])
         desde = min(self.marcador, self._primer_afectado(tabla))
-        calculo = self._prevuelo_cambio({"tipo": "agregar", "indice": self.marcador, "operacion": op.a_dict()},
-                                        aparte=aparte)
+        cambio = {"tipo": "agregar", "indice": self.marcador, "operacion": op.a_dict()}
+        forzado = not aparte and self.nuevos_aparte and not self._pasos_con_efectos_propios()
+        try:
+            calculo = self._prevuelo_cambio(cambio, aparte=aparte or forzado)
+        except ErrorDocumento as e:
+            from ..nucleo.aislado import Cancelado
+            if not forzado or isinstance(e.__cause__, Cancelado):
+                raise
+            calculo = self._prevuelo_cambio(cambio)     # FL-3c: si el proceso aparte falla, el cálculo de siempre
         self._guardar_para_deshacer()
         i = self.marcador
         self.operaciones.insert(i, op)
@@ -1268,7 +1281,9 @@ class Documento:
         estado = self.estado_en(desde)
         repetidos = self._pasos_repetidos() if self._cache else set()
         sin_revisar = getattr(self, "_sin_revisar", False)
+        from ..nucleo.aislado import avanzar
         for i in range(desde, len(self.operaciones)):
+            avanzar(i, len(self.operaciones))      # FL-3c: en el trabajador, para la barra de la ventana
             op = self.operaciones[i]
             # B-358: todo cálculo real del paso analiza sus autointersecciones (no la previa, que es para mirar rápido):
             # así un cambio de parámetro, deshacer o rehacer vuelve a avisar, o reusa un resultado que ya traía el aviso
