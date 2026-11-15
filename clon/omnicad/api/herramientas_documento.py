@@ -301,7 +301,7 @@ def set_geometry_engine(sesion, engine: Literal["opencascade", "omnikernel"] | N
 def _exigir_sin_cambios(sesion, discard):
     """Misma regla con y sin ventana: no se tira trabajo sin guardar salvo que se pida (Document.close(False))."""
     if sesion.doc.modificado and not discard:
-        raise error("UNSAVED_CHANGES", f"«{sesion.doc.nombre}» tiene cambios sin guardar.")
+        raise error("UNSAVED_CHANGES", f"«{sesion.doc.nombre}» tiene cambios sin guardar y sigue abierto.")
 
 
 @herramienta("new_document", "documento", "Empieza un documento vacío (o el modelo de ejemplo con example=true) en lugar del actual. Si el actual tiene cambios "
