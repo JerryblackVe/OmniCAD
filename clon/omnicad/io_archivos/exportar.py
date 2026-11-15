@@ -292,10 +292,12 @@ def exportar(cuerpos, ruta, propiedades=None):
     return funciones[ext](cuerpos, ruta)
 
 
-def leer_texto_step(ruta):
-    """Contenido de un STEP para embeberlo en la operación de importación (valida que se pueda leer)."""
+def leer_texto_step(ruta, validar=True):
+    """Contenido de un STEP para embeberlo en la operación de importación (valida que se pueda leer). `validar=False`:
+    solo la cabecera; la lectura completa (que no suelta el GIL) la hace después el proceso aparte (B-337)."""
     texto = Path(ruta).read_text(encoding="utf-8", errors="replace")
     if "ISO-10303-21" not in texto[:200]:
         raise ErrorExportacion("El archivo no parece un STEP (falta la cabecera ISO-10303-21).")
-    intercambio.leer_step_texto(texto)
+    if validar:
+        intercambio.leer_step_texto(texto)
     return texto
