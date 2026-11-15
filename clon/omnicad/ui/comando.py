@@ -1001,7 +1001,7 @@ class PanelComando(QFrame):
 
         # B-421: Aceptar y Cancelar quedan donde estaban cuando el panel crece o se achica (un campo que aparece según la
         # Operación): `pie_y` es el borde de abajo asentado, y la ventana lo respeta al ubicar el panel.
-        self.pie_y = self._tam_padre = None
+        self.pie_y = self._tam_padre = self._y_fijo = None
         self._t_pie = QTimer(self, singleShot=True, interval=250, timeout=self._fijar_pie)
         self._t_previa = QTimer(self, singleShot=True, interval=0)
         self._t_reubicar = QTimer(self, singleShot=True, interval=0, timeout=self._reubicar_ahora)   # B-113: un mensaje de varias líneas asienta su alto recién al volver al bucle de eventos
@@ -1098,6 +1098,8 @@ class PanelComando(QFrame):
             pagina.setVisible(titulo == actual)
         self._activar(next((c for c in self.campos if isinstance(c, Seleccion) and self._a_la_vista(c)
                             and not self.valores.get(c.clave)), None))
+        self.pie_y, self._y_fijo = None, self.y()     # B-444: al navegar por pestañas la barra queda donde está; el pie se asienta después
+        self._t_pie.start()
         self._reubicar()                     # cambiar de pestaña no recalcula: solo cambia lo que se ve
 
     def _widget(self, campo):
@@ -1248,8 +1250,11 @@ class PanelComando(QFrame):
         self._t_pie.start()
 
     def _fijar_pie(self):
+        if self._t_reubicar.isActive() or self._t_previa.isActive():    # el alto todavía no se asentó: se vuelve a intentar
+            self._t_pie.start()
+            return
         if self.isVisible() and self.parent() is not None:
-            self.pie_y, self._tam_padre = self.y() + self.height(), self.parent().size()
+            self.pie_y, self._tam_padre, self._y_fijo = self.y() + self.height(), self.parent().size(), None
 
     def _reubicar(self):
         """El panel cambió de alto (mensaje, ayuda, sección): que siga entrando en el visor."""
@@ -1407,7 +1412,10 @@ class PanelComando(QFrame):
                     primera = primera or c
                     self.invalidos.add(c.clave)
         if getattr(self, "boton_ok", None) is not None:
-            self.boton_ok.setEnabled(not self.invalidos)       # B-468: como Fusion, con un valor fuera de rango Aceptar queda apagado
+            # B-468: como Fusion, con un valor fuera de rango Aceptar queda apagado. B-444: un campo opcional vacío
+            # (sin valor por defecto, como «Límite mínimo») no cuenta: si no, editar una unión dejaba Aceptar gris.
+            vacios = {c.clave for c in self.campos if isinstance(c, Expresion) and not c.defecto and not self.widgets[c.clave].text().strip()}
+            self.boton_ok.setEnabled(not self.invalidos - vacios)
         return primera
 
     def _mostrar_campo_invalido(self):
