@@ -184,6 +184,30 @@ def test_shell_hacia_afuera_y_cerrado(caja):
     assert volumen(caja) == pytest.approx(8000 - 16 ** 3, abs=1e-3)
 
 
+@pytest.mark.parametrize("operacion,z,hueco", [("cut", -5, -8 * 8 * 18), ("join", 20, 4 * 4 * 10)])
+def test_b459_shell_cerrado_de_una_caja_ya_cortada_o_unida(caja, operacion, z, hueco):
+    """B-459: sobre un cuerpo ya modificado el desfase interior del kernel volvía como cáscara sola y el corte del
+    hueco fallaba («La operación 'cortar' falló en el kernel»)."""
+    llamar(caja, "create_box", length=6, width=6, height=30 if operacion == "cut" else 10, z=z, operation=operacion,
+           target="Cuerpo1")
+    antes = volumen(caja)
+    llamar(caja, "shell", body="Cuerpo1", faces=[], thickness=1)
+    cavidad = 18 ** 3 + hueco            # la caja de 18, menos el agujero agrandado a 8 o más la torre achicada a 4×4×10
+    assert volumen(caja) == pytest.approx(antes - cavidad, rel=1e-6)
+
+
+@pytest.mark.parametrize("caras,esperado,solidos", [(">Z", 7976.6, 2), ([], 9652.3, 1)])
+def test_b485_shell_de_una_caja_con_agujero_ciego(s, caras, esperado, solidos):
+    """B-485 (mismo origen que B-459): con un agujero Ø8×10 quitar la tapa o vaciarla cerrada fallaba («el kernel no
+    pudo…»). Sin la tapa, el tubo que rodea al agujero queda suelto: dos sólidos."""
+    llamar(s, "create_box", length=40, width=30, height=20)
+    llamar(s, "create_hole", face=">Z", body="Cuerpo1", diameter=8, depth=10)
+    llamar(s, "shell", body="Cuerpo1", faces=caras, thickness=2)
+    g = llamar(s, "check_geometry", body="Cuerpo1")["bodies"][0]
+    assert (g["valid"], g["solids"], g["free_edges"]) == (True, solidos, 0)
+    assert g["volume"] == pytest.approx(esperado, rel=1e-3)
+
+
 def test_shell_cara_por_id_y_errores(caja):
     cara = llamar(caja, "find_faces", selector=">Z")["faces"][0]["id"]
     llamar(caja, "shell", body="Cuerpo1", faces=cara, thickness=2)
