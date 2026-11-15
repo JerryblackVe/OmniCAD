@@ -1225,9 +1225,9 @@ class ModoBoceto(QObject):
         lz.simetria_estado.connect(lambda e: self._panel("simetria").mostrar(e))
         lz.patron.panel = _PanelPerezoso(self, "patron")
         lz.transformar.panel = _PanelPerezoso(self, "transformar")
-        from .objetos_vectoriales import PanelObjetos
-        self.objetos = PanelObjetos(lz.objetos, area)
-        area.set_capa_boceto(self.lienzo, self.paleta, self.tarjeta, self.objetos)
+        self.objetos, self._objetos_suspendido = None, False
+        lz.objetos.armar_panel = self._armar_objetos         # B-411: armarlo al entrar costaba 35-75 ms
+        area.set_capa_boceto(self.lienzo, self.paleta, self.tarjeta)
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())
         if mirar:
@@ -1358,10 +1358,24 @@ class ModoBoceto(QObject):
         for a in self._tapadas:
             a.setEnabled(False)
 
+    def _armar_objetos(self):
+        from .objetos_vectoriales import PanelObjetos
+        self.objetos = PanelObjetos(self.lienzo.objetos, self.v.area)
+        self.objetos._suspendido = self._objetos_suspendido
+        self.v.area.agregar_lateral(self.objetos)
+
+    def suspender_objetos(self, activo):
+        """Un diálogo de importación ocupa el contexto de Objetos hasta aceptar o cancelar (también si el panel no se armó)."""
+        self._objetos_suspendido = activo
+        if self.objetos is not None:
+            self.objetos.set_suspendido(activo)
+
     def _limpiar(self):
         self.lienzo._cerrar_entrada()
         self.v.area.set_capa_boceto(None, None)
         for w in (self.lienzo, self.paleta, *self._paneles.values(), self.tarjeta, self.objetos):
+            if w is None:
+                continue
             w.hide()
             w.deleteLater()
         self.lienzo = self.paleta = self.tarjeta = None

@@ -59,6 +59,7 @@ class ControlObjetos:
     def __init__(self, lienzo):
         self.l = lienzo
         self.panel = None
+        self.armar_panel = None       # B-411: el modo boceto arma el panel al primer uso
         self.arrastre = None
         self.previa = None
         self.modo_perfiles = False
@@ -382,6 +383,8 @@ class ControlObjetos:
                 "sx": float(np.linalg.norm(m[:2, 0])), "sy": float(np.linalg.norm(m[:2, 1])), "px": p[0], "py": p[1]}
 
     def notificar(self):
+        if self.panel is None and self.armar_panel is not None and self.seleccion():
+            self.armar_panel()          # B-411: el panel se arma recién cuando hay objetos elegidos (se ve solo así)
         if self.panel is not None:
             self.panel.sincronizar()
 

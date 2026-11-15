@@ -531,3 +531,25 @@ def test_botones_de_geometria_y_selector_de_pivote_modifican_realmente(editor, t
     unido = lz.objetos.seleccion()[0]
     assert unido not in (offset, copia)
     assert sum(p.area for p in regiones(lz.b, lz._plano_perfiles(), [unido])[1]) == pytest.approx(816)
+
+
+def test_b411_el_panel_de_objetos_se_arma_al_elegir_un_objeto(ventana_vectorial):
+    """B-411: entrar al boceto armaba el panel de Objetos (35-75 ms en la VPS) aunque solo se ve con objetos elegidos.
+    Ahora se arma con la primera selección de un objeto, y una suspensión pedida antes (un diálogo de importación) vale."""
+    v, _s, oid = ventana_vectorial
+    v.editar_operacion("logo")
+    QApplication.processEvents()
+    assert v.modo_boceto.objetos is None                     # entrar no lo arma
+    lz = v.modo_boceto.lienzo
+    v.modo_boceto.suspender_objetos(True)
+    lz.seleccion = [oid]
+    lz._notificar_seleccion()
+    QApplication.processEvents()
+    panel = v.modo_boceto.objetos
+    assert panel is not None and not panel.isVisible()       # armado, pero suspendido: no se ve
+    v.modo_boceto.suspender_objetos(False)
+    QApplication.processEvents()
+    assert panel.isVisible() and panel in v.area.laterales
+    v.modo_boceto.cancelar()
+    QApplication.processEvents()
+    assert v.modo_boceto.objetos is None
