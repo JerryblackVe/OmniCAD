@@ -12,12 +12,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E2 | B-461 (2.ª vuelta) | Rosca sin booleana (0,4 s) sin romper los 7 grupos de la rosca; worktree `~/OmniCAD-B-461`; después P-156 (entra al 30/11, Gerardo: retomar su worktree) y B-520 |
 | E3 | B-503 (texto entero) | Desfase del texto entero: extruir la región nueva entera al unir (B-473 sin reproducir, guardia integrada 4175fbc; E11 en Windows) |
 | E4 | B-438 | Superficie › Desfase: teclear «1e3 mm» traba la ventana 2 s (worktree `~/OmniCAD-B-438` con un arreglo previo: revisarlo). B-514 (P2) en pausa hasta después del 30/11 |
-| E5 | B-501 | Ensamblar › Conjunto: nombre y desfase tecleados en la fila guardada no se aplican; después la junta `ball` de la caza (B-500 integrado: fe4cefd) |
+| E5 | B-523 | Junta `ball` de la caza (patrones_ensamble_rosca): faltan Pitch/Yaw y get_assembly no la devuelve; reproducir y abrir la fila (B-501 integrado: 6c75a69; E7 lo confirma en la PC) |
 | E6 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él; después FL-12 y FL-14 (FL-8 sección integrado: 06882d8) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
-| E9 | B-435 | (H-115 integrado: 72d563c); piezas acotadas a OpenCode: GLM para un archivo, MiniMax M3.1 (minimaxai/) para varios: B-435, B-436, B-401, B-457, B-450 |
+| E9 | B-436 | Mensajes que confunden (pieza de GLM lista: cerrar tests y review) (B-435 integrado: 5b2e965); OpenCode siempre corriendo; después B-401, B-450, B-457 |
 | E10 | B-474 | MCP `new_document` con cambios sin guardar: la herramienta siguiente corre sobre el documento viejo (worktree con arreglo previo); Sonnet medio desde 19:20 UTC (B-521 integrado: a182d81) |
 
 ## Sigue (en orden)
