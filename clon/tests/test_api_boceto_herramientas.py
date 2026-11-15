@@ -674,3 +674,29 @@ def test_p73_fusion_rechaza_proyeccion_multiple_o_puntual_sin_cambios(selector):
     assert r["error_kind"] == "INVALID_GEOMETRY"
     assert "una curva abierta" in r["mensaje"]
     assert foto(s) == antes
+
+
+def test_b510_empalme_entre_lineas_casi_colineales_da_error_claro(s):
+    """E11, ronda 26/27: (0,0)-(10,0) y (10,0)-(20,0.0001) con r=2 daban «ok» y un arco de largo 0 (0 perfiles). Fusion
+    da «Failed to create fillet»: acá, un error de un renglón y el boceto queda como estaba."""
+    a = llamar(s, "draw_line", start_x=0, start_y=0, end_x=10, end_y=0)["entities"][0]["id"]
+    b = llamar(s, "draw_line", start_x=10, start_y=0, end_x=20, end_y=0.0001)["entities"][0]["id"]
+    antes = foto(s)
+    r = falla(s, "sketch_fillet", entity1=a, entity2=b, radius=2)
+    assert r["error_kind"] == "INVALID_GEOMETRY" and "quedaría sin largo" in r["mensaje"] and "\n" not in r["mensaje"], r
+    assert foto(s) == antes
+    # Con un quiebre visible (5°) el empalme sigue andando.
+    c = llamar(s, "draw_line", start_x=20, start_y=0.0001, end_x=30, end_y=0.0001 + 10 * math.tan(math.radians(5)))
+    assert api.llamar(s, "sketch_fillet", {"entity1": b, "entity2": c["entities"][0]["id"], "radius": 2})["ok"]
+
+
+def test_b510_empalme_linea_arco_casi_tangentes_da_error_claro(s):
+    """Gemelo de B-510 en `_empalme_general`: un arco que sale casi tangente (1e-5 rad) del extremo de la línea dejaba un
+    arco de empalme que empieza y termina en el mismo punto."""
+    a = llamar(s, "draw_line", start_x=0, start_y=0, end_x=10, end_y=0)["entities"][0]["id"]
+    c = (10 - 50 * math.sin(1e-5), 50 * math.cos(1e-5))
+    b = llamar(s, "draw_arc", start_x=10, start_y=0, center_x=c[0], center_y=c[1], sweep_angle=20)["entities"][0]["id"]
+    antes = foto(s)
+    r = falla(s, "sketch_fillet", entity1=a, entity2=b, radius=2)
+    assert r["error_kind"] == "INVALID_GEOMETRY" and "quedaría sin largo" in r["mensaje"], r
+    assert foto(s) == antes
