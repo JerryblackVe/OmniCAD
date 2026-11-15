@@ -1066,6 +1066,13 @@ class Documento:
                 and not cambiados & set().union(*self._usados[:k])
                 and all(datos.get(c) == actual.get(c) for c in fijos))
 
+    def _pasos_con_efectos_propios(self):
+        """Hay un boceto con proyecciones o textos paramétricos: al calcular deja en el propio paso (`rehechas`, `perdidas`,
+        `_textos_parametricos`) lo que el proceso aparte no trae de vuelta (la silueta rehecha perdía sus ids). Con 60 pasos o
+        más el hueco ya existía; el criterio de costo no lo agranda."""
+        return any(getattr(getattr(op, "boceto", None), "proyecciones", None) or getattr(op, "_textos_parametricos", None)
+                   for op in self.operaciones)
+
     def _prevuelo_parametros(self, tabla):
         """Calcula sin modificar el documento ni deshacer; omite documentos chicos, OmniKernel y el propio hijo."""
         if not self._prevuelo_corresponde():
