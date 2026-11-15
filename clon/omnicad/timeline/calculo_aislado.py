@@ -16,7 +16,7 @@ from ..nucleo import aislado, consultas, geometria as geo, intercambio
 from ..restricciones.boceto import Boceto
 from ..restricciones.boceto3d import Resultado3D
 from ..restricciones.solver import ResultadoSolver
-from .operaciones import BocetoResuelto, Cuerpo, EstadoModelo
+from .operaciones import BocetoResuelto, Cuerpo, EstadoModelo, OpBoceto
 
 _TOPE_BYTES = 512 * 1024 * 1024
 
@@ -211,6 +211,8 @@ def _empaquetar(doc, previa=None, mallar=None):
     datos = {"estados": estados[iguales:], "iguales": iguales,
              "resultados": [(r.estado, r.mensaje) for r in doc.resultados], "usados": doc._usados,
              "valores": doc._valores, "duraciones": doc._duraciones,
+             "efectos_boceto": [(o.rehechas, o.perdidas, o._textos_parametricos) if isinstance(o, OpBoceto) else None
+                                for o in doc.operaciones],
              "dependencias": [o._usados for o in doc.operaciones], "previa": previa}
     if mallar is not None and previa is None:   # B-337: OCC no suelta el GIL; mallar un cuerpo de un STEP trababa 28 s
         from ..nucleo.render_cpu import es_malla
@@ -300,8 +302,14 @@ def _leer_calculo(salida):
         if "marca" in salida["calculo"]:
             aislado.estados_recibidos = list(datos["estados"])    # B-503: el documento adopta esa lista y la recorta al recalcular
         n = len(datos["receta"]["operaciones"])
-        if any(len(datos[k]) != n for k in ("estados", "resultados", "usados", "duraciones", "dependencias")):
+        if any(len(datos[k]) != n for k in ("estados", "resultados", "usados", "duraciones", "dependencias", "efectos_boceto")):
             raise ValueError("El cálculo recibido tiene pasos incompletos.")
+        for op, efectos in zip(datos["receta"]["operaciones"], datos["efectos_boceto"], strict=True):
+            if op["tipo"] == OpBoceto.TIPO and (not isinstance(efectos, tuple)
+                                              or tuple(type(v) for v in efectos) != (dict, list, dict)
+                                              or not all(isinstance(k, int) and isinstance(v, tuple) and len(v) == 2
+                                                         for k, v in efectos[0].items())):
+                raise ValueError("El cálculo recibido tiene atributos de boceto inválidos.")
         if not all(isinstance(e, EstadoModelo) for e in datos["estados"]):
             raise ValueError("El cálculo recibido tiene estados inválidos.")
         if any(r[0] not in ("ok", "aviso", "error", "suprimida", "retrocedida") for r in datos["resultados"]):
