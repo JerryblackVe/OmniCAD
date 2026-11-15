@@ -3633,8 +3633,13 @@ def _rosca_directa(cuerpo, o, z, z0, largo, radio, datos, perfil, tramo_torno):
         x = _perpendicular(z) * (-1.0 if _fase_rosca(z) else 1.0)     # la misma fase que el surco (B-79)
         lugar = gp_Trsf()
         lugar.SetDisplacement(gp_Ax3(), gp_Ax3(_pnt(o + z * z0), _gdir(z), _gdir(x)))
-        varilla = _varilla_roscada(radio, largo, paso, r_in, w_in, r_out, w_out).Moved(TopLoc_Location(lugar))
-        resto = geo.booleano(cuerpo, geo.cilindro(radio, largo, base=tuple(o + z * z0), eje=tuple(z)), "cortar")
+        cilindro = geo.cilindro(radio, largo, base=tuple(o + z * z0), eje=tuple(z))
+        vacio = geo.booleano(cilindro, cuerpo, "cortar")     # B-547: el hueco de un cuello vaciado no se rellena
+        hueco = _radio_hueco(vacio, o + z * z0, z, largo, r_in)     # un tubo: la varilla ya sale hueca
+        varilla = _varilla_roscada(radio, largo, paso, r_in, w_in, r_out, w_out, hueco).Moved(TopLoc_Location(lugar))
+        if hueco:
+            vacio = None
+        resto = geo.booleano(cuerpo, cilindro, "cortar")
         if geo.esta_vacia(resto):
             hecho = varilla
         else:     # sin `geo.booleano`: unificaría las caras de una vuelta (ver `_varilla_roscada`)
@@ -3650,6 +3655,11 @@ def _rosca_directa(cuerpo, o, z, z0, largo, radio, datos, perfil, tramo_torno):
             if not op.IsDone():
                 return None
             hecho = op.Shape()
+        if vacio is not None and not geo.esta_vacia(vacio):     # otro hueco: se corta (sin `geo.booleano`, como el pegado)
+            corte = BRepAlgoAPI_Cut(hecho, vacio)
+            if not corte.IsDone():
+                return None
+            hecho = corte.Shape()
         base, surco = geo.volumen_exacto(cuerpo, _EPS_ROSCA), _volumen_surco(r_in, radio, r_in, w_in, r_out, w_out,
                                                                               largo, paso)
         if (len(geo.solidos(hecho)) == len(geo.solidos(cuerpo)) and geo.es_valida(hecho)
@@ -3660,17 +3670,32 @@ def _rosca_directa(cuerpo, o, z, z0, largo, radio, datos, perfil, tramo_torno):
     return None
 
 
+def _radio_hueco(vacio, base, eje, largo, r_in):
+    """B-547: el radio del hueco si `vacio` (lo que falta del cuerpo dentro del cilindro de la rosca) es un cilindro
+    coaxial de largo completo y más fino que el fondo del filete (el cuello vaciado de una botella); si no, 0."""
+    if geo.esta_vacia(vacio):
+        return 0.0
+    v = geo.volumen(vacio)
+    rb = math.sqrt(v / (math.pi * largo))
+    if not 1e-3 < rb < r_in - 1e-3:
+        return 0.0
+    cil = geo.cilindro(rb, largo, base=tuple(base), eje=tuple(eje))
+    sobra = geo.booleano(vacio, cil, "cortar")
+    return rb if geo.esta_vacia(sobra) or geo.volumen(sobra) < 1e-6 * v else 0.0
+
+
 _MUESTRAS_HELICE = 128     # por vuelta: con 48 quedaban huecos de 2e-5 mm entre caras y la tapa no cerraba
 
 
-def _varilla_roscada(R, largo, paso, r_in, w_in, r_out, w_out):
+def _varilla_roscada(R, largo, paso, r_in, w_in, r_out, w_out, hueco=0.0):
     """Varilla de radio R y largo `largo` sobre +Z (desde z = 0) con el surco exterior a derechas de `_barrer_surco`
     (trapecio (r_in, w_in)–(r_out, w_out) centrado en z = −P/2 sobre +X), armada cara por cara: fondo y cresta en
     cilindros exactos, flancos reglados entre dos hélices B-spline con el mismo parámetro y tapas planas. Los
     cilindros van de a una vuelta con u de 0 a 2π (una cara cilíndrica de varias vueltas hace mentir al volumen de
     GProp); los flancos, de a 1,5–3 vueltas por superficie: uno de 20 vueltas en una sola B-spline (2560 polos) hacía
     lenta cada booleana posterior (un agujero en M10×30: 7 s), uno de 1 vuelta no lo reconoce `_es_filete` y uno de 4 hace
-    fallar a `BRepClass3d_SolidClassifier` (un rayo lo cruza varias veces: B-531)."""
+    fallar a `BRepClass3d_SolidClassifier` (un rayo lo cruza varias veces: B-531). `hueco` > 0: un tubo, con un hueco
+    coaxial de ese radio (B-547: el cuello vaciado de una botella), sin booleana."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
     from OCP.GeomFill import GeomFill
     from OCP.OCP.collections import HArray1_double
@@ -3741,7 +3766,16 @@ def _varilla_roscada(R, largo, paso, r_in, w_in, r_out, w_out):
                 if all(abs(BRep_Tool.Pnt_s(v).Z() - zt) < 1e-6 for v in (TopExp.FirstVertex_s(e), TopExp.LastVertex_s(e))):
                     lista.Append(e)
         hilo.Add(lista)
-        caras.append(BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0.0, 0.0, zt), gp_Dir(0.0, 0.0, 1.0)), hilo.Wire(), True).Face())
+        tapa = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0.0, 0.0, zt), gp_Dir(0.0, 0.0, 1.0)), hilo.Wire(), True)
+        if hueco > 0:     # una corona: la tapa menos el círculo del hueco (un corte plano, barato)
+            disco = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(0.0, 0.0, zt), gp_Dir(0.0, 0.0, 1.0)), BRepBuilderAPI_MakeWire(
+                BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(gp_Pnt(0.0, 0.0, zt), gp_Dir(0.0, 0.0, 1.0)), hueco)).Edge()).Wire(),
+                True).Face()
+            caras += _caras_de(BRepAlgoAPI_Cut(tapa.Face(), disco).Shape())
+        else:
+            caras.append(tapa.Face())
+    if hueco > 0:
+        caras.append(BRepBuilderAPI_MakeFace(Geom_CylindricalSurface(ejes, hueco), 0.0, 2 * math.pi, 0.0, largo, 1e-7).Face())
     cosido = BRepBuilderAPI_Sewing(1e-5)
     for c in caras:
         cosido.Add(c)
