@@ -906,6 +906,15 @@ def peine_curvatura(prim, densidad=30, escala=1.0):
     return [(c, k, (c[0] - n[0] * k * factor, c[1] - n[1] * k * factor)) for c, k, n in muestras], factor
 
 
+def aviso_quitadas(antes, boceto):
+    """B-480: el aviso de Fusion si un cambio quitó restricciones o cotas (girar quita las horizontales y verticales que
+    ya no valen); `antes` = (restricciones, cotas) contadas antes. None si no quitó nada."""
+    r, c = antes[0] - len(boceto.restricciones), antes[1] - len(boceto.cotas)
+    if r > 0 or c > 0:
+        return f"Las restricciones o las cotas se han eliminado durante la operación ({r} restricciones, {c} cotas)."
+    return None
+
+
 def interpolar_spline(puntos, grado=3, cerrada=False, derivadas=None):
     """(polos, nudos, grado) de la B-spline que PASA por los puntos (parámetros por cuerda, nudos
     promediados). Cerrada: vuelve al primer punto con la misma tangente (continuidad C1).
