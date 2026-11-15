@@ -218,6 +218,15 @@ def rayo_caja(origen, direccion, minimo, maximo):
     return max(entra, 0.0) if sale >= max(entra, 0.0) else np.inf
 
 
+def _malla_hecha_valida(preparada):
+    """(vértices, normales, aristas) hechos en el proceso aparte o en una previa, con las formas que espera el visor."""
+    try:
+        v, n, seg = preparada
+        return np.shape(v)[1:] == (3,) and np.shape(n) == np.shape(v) and np.shape(seg)[1:] == (3,)
+    except (TypeError, ValueError):
+        return False
+
+
 def teselar_cuerpo(forma, deflexion, angular=0.3, rehacer=True, *, _previa=False):
     """(vǸrtices, normales) de triǭngulos sueltos para dibujar un cuerpo B-rep o de malla."""
     from ..nucleo import render_cpu as rc
@@ -661,7 +670,8 @@ class Visor3D(QOpenGLWidget):
         for i, c in enumerate(estado.cuerpos.values()):
             clave = id(c.forma)
             geometria = None if es_malla(c.forma) else (c.forma.TShape(), c.forma.Orientation())
-            preparada = None if clave in self._cache else getattr(estado, "_mallas_previa", {}).get(c.id)
+            preparada = None if clave in self._cache else (getattr(estado, "_mallas_previa", {}).get(c.id)
+                                                            or getattr(estado, "_mallas_hijo", {}).get(c.id))   # B-337
             if clave in self._cache:
                 datos = self._cache[clave]
             elif preparada is None and geometria in mallas_de:    # copia que solo cambia de lugar: su malla, movida
@@ -692,6 +702,7 @@ class Visor3D(QOpenGLWidget):
         self._lod_datos = (np.array([d[0] for d in lod], float).reshape(-1, 3), np.array([d[1] for d in lod], float),
                            np.array([d[2] for d in lod], float))
         self._cache, self._mallas, self._formas = cache, nuevas, formas
+        vars(estado).pop("_mallas_hijo", None)      # B-337: se usan una vez; otro detalle (Preferencias) vuelve a mallar
         self._previa_gruesa.intersection_update(cache)
         if self._previa_gruesa:
             self._modelo_por_refinar = estado, ocultos, excluir_bocetos, apariencias
@@ -717,6 +728,8 @@ class Visor3D(QOpenGLWidget):
         """Lo que el visor guarda de un cuerpo: malla, aristas, centro, radio y deflexión. Sin Qt ni OpenGL: al abrir un
         proyecto se calcula en otro hilo y entra en la caché con `precargar` (FL-3)."""
         defl = self._deflexion(forma)
+        if preparada is not None and not _malla_hecha_valida(preparada):
+            preparada = None            # B-337 (regla de B-453): una malla de afuera rota se ignora y se malla acá
         v, n = (preparada[:2] if preparada is not None else
                 teselar_cuerpo(forma, defl, self.config.angular, self._limpiar_malla, _previa=gruesa))
         mn, mx = (v.min(axis=0), v.max(axis=0)) if len(v) else (np.zeros(3), np.zeros(3))

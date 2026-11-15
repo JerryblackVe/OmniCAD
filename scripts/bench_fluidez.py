@@ -26,21 +26,42 @@ import traceback
 
 RAIZ = Path(__file__).resolve().parents[1]
 METRICAS = ("bloqueo_max_ms", "primera_previa_ms", "aceptar_ms")
-TOPE_SEGUNDOS = 300
-TITULOS = dict(zip("abcdefghijklmno", (
+TOPE_SEGUNDOS = int(os.environ.get("OMNICAD_TOPE_BANCO", 300))
+TITULOS = dict(zip("abcdefghijklmnopqr", (
     "Texto de 8 perfiles · Unir · 11 cuerpos", "Rosca modelada M20 × 60",
     "Empalme R2 · 200 caras", "Desfase de cara", "Barrido / bobina / solevación",
     "Combinar dos cuerpos", "Eliminar un paso · 20 pasos", "Abrir proyecto pesado (sustituto)",
     "Preferencias · deslizador y combo", "Arrastrar punto · 200 entidades", "Órbita · 300 000 triángulos",
     "Abrir motor_impreso (pieza real)", "Abrir motor_cohete (pieza real)", "Abrir gatoRL (pieza real)",
-    "Abrir ABANICO EMILIA (pieza real)",
+    "Abrir ABANICO EMILIA (pieza real)", "Abrir STEP ABANICO CORAZONES (6,8 MB)", "Abrir STEP Prusa Core One (95 MB)",
+    "Insertar STEP ABANICO CORAZONES (6,8 MB)",
 ), strict=True))
 # Piezas de Gerardo (fuera del repo): se copian a una carpeta temporal y, si falta el archivo, el escenario se omite con aviso.
 PIEZAS_REALES = {
     "l": ("evidencias/motor_impreso/motor_impreso.omnicad", "~/OmniCAD/evidencias/motor_impreso/motor_impreso.omnicad"),
     "m": ("~/piezas/motor_cohete.omnicad",), "n": ("~/piezas/gatoRL.omnicad",),
     "o": ("~/piezas/ABANICO EMILIA.omnicad",),
+    "p": ("~/piezas/ABANICO CORAZONES.step",),
+    "q": ("evidencias/archivos_prueba/prusa_core_one.step", "~/OmniCAD/evidencias/archivos_prueba/prusa_core_one.step"),
+    "r": ("~/piezas/ABANICO CORAZONES.step",),
 }
+STEPS = "pqr"           # B-335/B-337: abrir o insertar un STEP; el bloqueo se mide con un latido del bucle de eventos
+
+
+def _latido():
+    """Un temporizador de 10 ms: si el bucle se queda sin atender más de 100 ms, anota el hueco (lo que se vería congelado)."""
+    ultimo = [time.perf_counter()]
+
+    def tic():
+        ahora = time.perf_counter()
+        ms = (ahora - ultimo[0]) * 1000.0
+        if ms > sonda.UMBRAL_MS or ms > 100:
+            sonda.BLOQUEOS.append(("latido", round(ms), time.time()))
+        ultimo[0] = ahora
+    reloj = QTimer(interval=10)
+    reloj.timeout.connect(tic)
+    reloj.start()
+    return reloj
 
 
 def _cargar_ui():
@@ -576,10 +597,19 @@ def _pieza_real(letra, despues=None):
             with _ventana(api.Sesion()) as v:
                 QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (str(copia), ""))
                 sonda.BLOQUEOS.clear()
+                latido = _latido() if letra in STEPS else None
+                if os.environ.get("OMNICAD_TRAZA"):       # pila del hilo principal cada segundo: dónde se traba
+                    import faulthandler
+                    faulthandler.dump_traceback_later(1, repeat=True, file=open(os.environ["OMNICAD_TRAZA"], "w"))
                 inicio = time.perf_counter()
-                QTest.keyClick(v, Qt.Key_O, Qt.ControlModifier)
-                _esperar(lambda: len(v.doc.operaciones) > 0, "Abrir no cargó la pieza")
+                if letra == "r":                          # Insertar STEP: el documento ya existe, se suma un paso
+                    v.importar_step()
+                else:
+                    QTest.keyClick(v, Qt.Key_O, Qt.ControlModifier)
+                _esperar(lambda: len(v.doc.operaciones) > 0, "Abrir no cargó la pieza", segundos=1100)
                 _responde()
+                if latido is not None:
+                    latido.stop()
                 r["detalle"]["abrir_ms"] = round((time.perf_counter() - inicio) * 1000, 2)
                 r["detalle"]["pasos"] = len(v.doc.operaciones)
                 if despues is not None:

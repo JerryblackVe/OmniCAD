@@ -199,9 +199,10 @@ def _decodificar(grafo):
     return raiz
 
 
-def _empaquetar(doc, previa=None):
+def _empaquetar(doc, previa=None, mallar=None):
     """El cálculo de `doc` para el padre. En el trabajador no viajan los estados del principio que no cambiaron desde
-    la respuesta anterior: una edición cuesta por los pasos que siguen, no por todo el historial."""
+    la respuesta anterior: una edición cuesta por los pasos que siguen, no por todo el historial. `mallar` ((deflexión,
+    ángulo) del visor, ver `aislado.MALLAR`): también la malla de los cuerpos finales que el padre todavía no tiene."""
     estados, iguales = doc._estados, 0
     if aislado.formas_enviadas:                  # vacía: el padre no tiene la respuesta anterior
         previos = aislado.estados_enviados
@@ -211,6 +212,11 @@ def _empaquetar(doc, previa=None):
              "resultados": [(r.estado, r.mensaje) for r in doc.resultados], "usados": doc._usados,
              "valores": doc._valores, "duraciones": doc._duraciones,
              "dependencias": [o._usados for o in doc.operaciones], "previa": previa}
+    if mallar is not None and previa is None:   # B-337: OCC no suelta el GIL; mallar un cuerpo de un STEP trababa 28 s
+        from ..nucleo.render_cpu import es_malla
+        tiene = aislado.formas_enviadas or {}
+        datos["mallas"] = {cid: _malla(c.forma, *mallar) for cid, c in doc.estado_final.cuerpos.items()
+                           if id(c.forma) not in tiene and not es_malla(c.forma)}
     salida = {"errores": sum(r.estado == "error" for r in doc.resultados), "pasos": len(doc.operaciones),
               "cuerpos": len(doc.estado_final.cuerpos), "receta": doc.a_dict(), "calculo": _codificar(datos, estados[:iguales])}
     if aislado.formas_enviadas is not None:
@@ -218,10 +224,20 @@ def _empaquetar(doc, previa=None):
     return salida
 
 
+def _malla(forma, deflexion, angular):
+    """(vértices, normales, aristas) de un cuerpo como los arma el visor (`Visor3D.datos_cuerpo`), hechos en el hijo."""
+    from ..nucleo import render_cpu
+    # FL-9: con el detalle «Automático» (None) malla como el visor; 0,05 mm fijos tardaban 5 s en un barrido con guía
+    d = render_cpu.deflexion_automatica(forma) if deflexion is None else deflexion
+    v, n = render_cpu.malla_suave(forma, d, angular)
+    # B-432: un cuerpo de malla no tiene aristas OCC (el visor dibuja las suyas al aceptar)
+    pares = [] if render_cpu.es_malla(forma) else [np.repeat(p, 2, axis=0)[1:-1] for p in geo.polilineas_aristas(forma) if len(p) >= 2]
+    return v, n, np.concatenate(pares).astype(np.float32) if pares else np.zeros((0, 3), np.float32)
+
+
 def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
     """Previa exacta y su malla dentro del hijo; al padre viajan solo arrays de los cuerpos cambiados. `formas`: también
     su B-Rep, para el comando que resalta caras sobre la previa (P-78 con P-145: las crestas de la rosca)."""
-    from ..nucleo import render_cpu
     from .operaciones import operacion_desde_dict
 
     doc = aislado._documento(receta)
@@ -236,13 +252,7 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
             continue
         if anterior is None:       # un patrón o una copia: el padre arma el cuerpo con sus datos y esta malla
             nuevos[cid] = [c.nombre, c.op_id, c.tipo, c.apariencia, c.material, c.componente, list(c.origen)]
-        # FL-9: con el detalle «Automático» (None) malla como el visor; 0,05 mm fijos tardaban 5 s en un barrido con guía
-        d = render_cpu.deflexion_automatica(c.forma) if deflexion is None else deflexion
-        v, n = render_cpu.malla_suave(c.forma, d, angular)
-        # B-432: un cuerpo de malla no tiene aristas OCC (el visor dibuja las suyas al aceptar)
-        pares = [] if render_cpu.es_malla(c.forma) else [np.repeat(p, 2, axis=0)[1:-1] for p in geo.polilineas_aristas(c.forma) if len(p) >= 2]
-        seg = np.concatenate(pares).astype(np.float32) if pares else np.zeros((0, 3), np.float32)
-        mallas[cid] = v, n, seg
+        mallas[cid] = _malla(c.forma, deflexion, angular)
         if formas:
             enviar[cid] = c.forma
     # FL-1: lo que costaría en la ventana (kernel y malla), sin rehacer el documento. FL-1b: mallar un barrido tarda 0,4 s
@@ -296,6 +306,9 @@ def _leer_calculo(salida):
             raise ValueError("El cálculo recibido tiene estados inválidos.")
         if any(r[0] not in ("ok", "aviso", "error", "suprimida", "retrocedida") for r in datos["resultados"]):
             raise ValueError("El cálculo recibido tiene resultados inválidos.")
+        marcador = datos["receta"].get("marcador", n)
+        if datos.get("mallas") and marcador:     # B-337: las hizo el hijo; la ventana no malla (`Visor3D.datos_cuerpo`)
+            datos["estados"][marcador - 1]._mallas_hijo = datos["mallas"]
         return datos
     except (KeyError, IndexError, TypeError, AttributeError, zlib.error, RecursionError) as e:
         raise ValueError(f"El hijo no entregó un resultado de cálculo completo ({e}).") from e

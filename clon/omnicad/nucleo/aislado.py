@@ -48,6 +48,9 @@ PLAZO_PILA = 20                       # B-418: un pedido que pasa de esto deja l
 # Sin el trabajador, todo cálculo aparte va a un hijo de una sola tarea. En Windows lo apaga OMNICAD_PREVIA_EN_VENTANA=1:
 # la salida de escape de B-418 (el trabajador se trababa cargando una DLL; ver `_lineas_sin_bloquear`).
 TRABAJADOR = sys.platform != "win32" or os.environ.get("OMNICAD_PREVIA_EN_VENTANA") != "1"
+# B-337: (deflexión, ángulo) del visor; la ventana lo fija y el hijo malla lo nuevo de un cálculo (OCC no suelta el GIL).
+MALLAR = None
+_TAREAS_MALLAN = {"prevuelo_parametros", "prevuelo_cambio", "prevuelo_abrir", "recalcular_documento"}
 PACIENCIA_PREVIA = 10                 # segundos para una previa vieja antes de cerrar al trabajador (rehacer el documento cuesta más)
 EN_HIJO = False
 # En el trabajador: el documento al día y lo que el padre ya tiene (id(objeto) → (número, huella, objeto); huella → número),
@@ -132,17 +135,17 @@ def _documento(receta):
     return documento_vivo
 
 
-def _prevuelo_parametros(receta, parametros):
+def _prevuelo_parametros(receta, parametros, mallar=None):
     from ..timeline.calculo_aislado import _empaquetar
     from ..timeline.parametros import TablaParametros
 
     with _motor.fijar_motor("opencascade"):
         doc = _documento(receta)
         doc.aplicar_parametros(TablaParametros.desde_lista(parametros))
-        return _empaquetar(doc)
+        return _empaquetar(doc, mallar=mallar)
 
 
-def _prevuelo_cambio(receta, cambio, previa=False):
+def _prevuelo_cambio(receta, cambio, previa=False, mallar=None):
     """Ensaya editar, suprimir o eliminar un paso (B-48): un cambio del historial también recalcula y podía
     tumbar el proceso con una caída nativa del kernel."""
     from ..timeline.calculo_aislado import _empaquetar
@@ -168,10 +171,10 @@ def _prevuelo_cambio(receta, cambio, previa=False):
             doc.eliminar_varios(cambio.get("ids") or [doc.operaciones[i].id])
         else:
             raise ValueError(f"Cambio desconocido: {cambio['tipo']}")
-        return _empaquetar(doc, estado_previo)
+        return _empaquetar(doc, estado_previo, mallar)
 
 
-def _prevuelo_abrir(ruta):
+def _prevuelo_abrir(ruta, mallar=None):
     """Ensaya abrir un proyecto grande (B-48): si el kernel cae al reconstruirlo, la app no lo abre y sigue viva."""
     global documento_vivo
     from ..io_archivos import proyecto
@@ -181,7 +184,7 @@ def _prevuelo_abrir(ruta):
         doc = proyecto.abrir(ruta)
         if formas_enviadas is not None:
             documento_vivo = doc
-        return _empaquetar(doc)
+        return _empaquetar(doc, mallar=mallar)
 
 
 def _ensayar_lectura(ruta, formato):
@@ -199,7 +202,7 @@ def _calentar(receta):
     return {}
 
 
-def _recalcular_documento(receta, sin_memoria=False):
+def _recalcular_documento(receta, sin_memoria=False, mallar=None):
     """`sin_memoria`: «Calcular todo» ejecuta de verdad cada paso, también los que el trabajador tiene en memoria."""
     from ..timeline.calculo_aislado import _empaquetar
 
@@ -208,7 +211,7 @@ def _recalcular_documento(receta, sin_memoria=False):
         if sin_memoria and formas_enviadas is not None:
             doc.olvidar_memoria()
             doc.recalcular(0)
-        return _empaquetar(doc)
+        return _empaquetar(doc, mallar=mallar)
 
 
 def _previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
@@ -464,6 +467,8 @@ def correr_json(tarea, datos, tope, esperar=None):
     if tarea not in _TAREAS_JSON:
         raise ValueError(f"Tarea aislada desconocida: {tarea}")
     datos = dict(datos, _cwd=os.getcwd())
+    if MALLAR is not None and tarea in _TAREAS_MALLAN:
+        datos["mallar"] = list(MALLAR)
     if TRABAJADOR and _ocupado.acquire(blocking=False):
         try:
             _esperar_previa_cancelada(esperar)

@@ -787,6 +787,7 @@ class VentanaPrincipal(QMainWindow):
                 v.invalidar_teselado()
             if self.doc is not None:
                 self._refrescar_visibilidad()
+        aislado.MALLAR = c.teselado, c.angular      # B-337: el proceso aparte malla con el detalle del visor
         self.area.viewcube.set_tamano(p["general/tamano_viewcube"])
         self.area.reubicar()
         if {k: p[k] for k in estilo_asas.CLAVES} != self._asas_aplicadas:     # también al arrancar y con «Restablecer»
@@ -2772,10 +2773,12 @@ class VentanaPrincipal(QMainWindow):
                     Documento._conservar_formas(doc._estados, calculo["estados"])
                     calculo["conservadas"] = True
                 marcador = calculo["receta"]["marcador"]
-                cuerpos = calculo["estados"][marcador - 1].cuerpos.values() if marcador else ()
+                final = calculo["estados"][marcador - 1] if marcador else None
                 # mallar acá retiene el GIL: el filete de una M20 × 60 trababa la ventana 1,5 s; la previa ya trajo su malla
-                resultado["mallas"] = {id(c.forma): self.visor.datos_cuerpo(c.forma, (mallas_previa or {}).get(c.id))
-                                       for c in cuerpos if id(c.forma) not in self.visor._cache}
+                # y el hijo, la de los cuerpos nuevos (B-337)
+                hechas = {**vars(final).pop("_mallas_hijo", {}), **(mallas_previa or {})} if final else {}
+                resultado["mallas"] = {id(c.forma): self.visor.datos_cuerpo(c.forma, hechas.get(c.id))
+                                       for c in (final.cuerpos.values() if final else ()) if id(c.forma) not in self.visor._cache}
                 resultado["calculo"] = calculo
             except Exception as e:  # noqa: BLE001 — se informa en el hilo de la ventana
                 resultado["error"] = e
@@ -3222,7 +3225,7 @@ class VentanaPrincipal(QMainWindow):
         en otro hilo, con su recálculo en el proceso aparte; la ventana sigue viva con una barra y Cancelar y el documento
         llega después (FL-3). Sin `aparte` (pruebas, guiones), vuelve con el documento ya abierto."""
         if abrir_externo.es_externo(ruta):
-            self._abrir_externo(ruta)
+            self._abrir_externo(ruta, aparte)
             return
         try:
             pendiente = proyecto.autoguardado_pendiente(ruta)
@@ -3257,20 +3260,41 @@ class VentanaPrincipal(QMainWindow):
     def _abrir_en_hilo(self, origen, ruta, copia):
         """FL-3: arma el proyecto en otro hilo (el recálculo va al proceso aparte, que no toma el GIL) mientras la ventana
         repinta; la barra es modal (sin tocar el documento a medio abrir) y Cancelar o Esc dejan el documento de antes."""
+        def fabricar(_cortar):
+            doc = proyecto.abrir(origen, aparte=True)
+            return doc, doc.estado_final
+
+        def llegar(doc):
+            self._abierto(doc, origen, ruta, copia)
+
+        self._trabajar_aparte(f"Abriendo «{Path(ruta).stem}»…", f"Apertura de «{Path(ruta).stem}»", fabricar, llegar,
+                              (proyecto.ErrorProyecto, OSError, ValueError, KeyError))
+
+    def _trabajar_aparte(self, texto, nombre, fabricar, llegar, errores, titulo_error="No se pudo abrir"):
+        """FL-3 / B-337: `fabricar(cortar)` corre en otro hilo y devuelve (resultado, estado a mallar); sus mallas se hacen
+        allí también y entran a la caché del visor antes de `llegar(resultado)`, que corre en el hilo de la ventana. La barra
+        es modal; Cancelar o Esc cortan el proceso aparte (`cortar()` levanta `Cancelado` en el hilo: lo usa de `esperar`)
+        y no se llama a `llegar`. Errores de `errores` salen en un cuadro; la ventana nunca se queda sin atender."""
         from PySide6.QtWidgets import QProgressDialog
-        resultado = {}
+        resultado, cancelado = {}, threading.Event()
+
+        def cortar(_segundos=0):
+            if cancelado.is_set():
+                raise aislado.Cancelado("lo cancelaste")
 
         def trabajo():
             try:
-                doc = proyecto.abrir(origen, aparte=True)
-                # mallar en el hilo de la ventana tardaba más de 1 s con el sustituto de motor_impreso
-                resultado["mallas"] = {id(c.forma): self.visor.datos_cuerpo(c.forma)
-                                       for c in doc.estado_final.cuerpos.values()}
-                resultado["doc"] = doc
+                valor, estado = fabricar(cortar)
+                # mallar en el hilo de la ventana tardaba más de 1 s con el sustituto de motor_impreso; y aquí también
+                # retiene el GIL (un cuerpo de un STEP: 28 s), así que se usa la malla que hizo el hijo (B-337)
+                hechas = vars(estado).pop("_mallas_hijo", {}) if estado else {}     # una vez: no pisan otro detalle
+                resultado["mallas"] = {id(c.forma): self.visor.datos_cuerpo(c.forma, hechas.get(c.id))
+                                       for c in (estado.cuerpos.values() if estado else ())}
+                resultado["valor"] = valor
             except Exception as e:  # noqa: BLE001 — se informa en el hilo de la ventana
                 resultado["error"] = e
 
-        espera = QProgressDialog(f"Abriendo «{Path(ruta).stem}»…", "Cancelar", 0, 0, self)
+        espera = QProgressDialog(texto, "Cancelar", 0, 0, self)
         espera.setWindowTitle(NOMBRE_APP)
         espera.setWindowModality(Qt.WindowModal)
         espera.setMinimumDuration(0)
@@ -3288,17 +3312,18 @@ class VentanaPrincipal(QMainWindow):
             if cancelada:
                 return
             if "error" in resultado:
-                QMessageBox.critical(self, "No se pudo abrir", str(resultado["error"]))
+                QMessageBox.critical(self, titulo_error, str(resultado["error"]))
                 return
             try:
                 self.visor.precargar(resultado["mallas"])
-                self._abierto(resultado["doc"], origen, ruta, copia)
-            except (proyecto.ErrorProyecto, OSError, ValueError, KeyError) as e:
-                QMessageBox.critical(self, "No se pudo abrir", str(e))
+                llegar(resultado["valor"])
+            except errores as e:
+                QMessageBox.critical(self, titulo_error, str(e))
 
         def cancelar():
+            cancelado.set()
             aislado.cerrar_trabajador()            # corta el recálculo aparte; lo que traiga el hilo se descarta
-            self.mensaje(f"Apertura de «{Path(ruta).stem}» cancelada: sigue el documento de antes.", 5000)
+            self.mensaje(f"{nombre} cancelada: sigue el documento de antes.", 5000)
 
         espera.canceled.connect(cancelar)
         reloj.timeout.connect(mirar)
@@ -3306,8 +3331,9 @@ class VentanaPrincipal(QMainWindow):
         reloj.start()
         espera.show()
 
-    def _abrir_externo(self, ruta):
-        """STEP, IGES, mallas, DXF o .f3d/.f3z como documento nuevo (sin ruta: Guardar pide dónde)."""
+    def _abrir_externo(self, ruta, aparte=False):
+        """STEP, IGES, mallas, DXF o .f3d/.f3z como documento nuevo (sin ruta: Guardar pide dónde). `aparte` (lo que abre la
+        persona): lo que no es de Fusion se lee y se malla en otro hilo con barra y Cancelar (B-337)."""
         unidades = "mm"
         if abrir_externo.pide_unidades(ruta):
             unidades, ok = QInputDialog.getItem(self, "Abrir malla", "Unidades del archivo:",
@@ -3320,6 +3346,9 @@ class VentanaPrincipal(QMainWindow):
                 doc, avisos = self._esperando(
                     "Leyendo el archivo de Fusion…",
                     lambda avance: abrir_externo.documento_desde_archivo(ruta, unidades, avance), con_avance=True)
+            elif aparte:
+                self._abrir_externo_en_hilo(ruta, unidades)
+                return
             else:
                 QApplication.setOverrideCursor(Qt.WaitCursor)
                 try:
@@ -3332,10 +3361,23 @@ class VentanaPrincipal(QMainWindow):
         except (abrir_externo.ErrorAbrir, OSError, ValueError) as e:
             QMessageBox.critical(self, "No se pudo abrir", str(e))
             return
+        self._externo_abierto(ruta, doc, avisos)
+
+    def _externo_abierto(self, ruta, doc, avisos):
         self.set_documento(doc)
         self._recordar(ruta)
         if avisos:
             QMessageBox.information(self, f"Abierto: {Path(ruta).name}", "\n\n".join(avisos))
+
+    def _abrir_externo_en_hilo(self, ruta, unidades):
+        """B-337: un STEP, IGES, malla, DXF o .brep grande se lee en el proceso aparte, se recibe y se malla en otro hilo y la
+        ventana sigue viva con la barra (Cancelar o Esc dejan el documento de antes)."""
+        def fabricar(cortar):
+            doc, avisos = abrir_externo.documento_desde_archivo(ruta, unidades, esperar=cortar)
+            return (doc, avisos), doc.estado_final
+
+        self._trabajar_aparte(f"Abriendo «{Path(ruta).name}»…", f"Apertura de «{Path(ruta).name}»", fabricar,
+                              lambda r: self._externo_abierto(ruta, *r), (OSError, ValueError))
 
     def _esperando(self, texto, funcion, con_avance=False):
         """Corre `funcion` en otro hilo mostrando un aviso de espera (la ventana no se congela). Devuelve su
@@ -3553,13 +3595,26 @@ class VentanaPrincipal(QMainWindow):
         if not ruta:
             return
         try:
-            texto = ex.leer_texto_step(ruta)
-        except (ex.ErrorExportacion, RuntimeError, OSError) as e:
+            # B-337: aquí solo la cabecera; el lector de OpenCascade no suelta el GIL (minutos con un STEP grande), así que
+            # la lectura entera va al proceso aparte y el recibo y las mallas a otro hilo (FL-3b), con barra y Cancelar.
+            texto = ex.leer_texto_step(ruta, validar=False)
+        except (ex.ErrorExportacion, OSError) as e:
             QMessageBox.critical(self, "No se pudo importar", str(e))
             return
-        # B-337: el lector de OpenCascade no suelta el GIL (minutos con un STEP grande): se calcula en el proceso aparte.
-        self._agregar(OpImportarSTEP(self.doc.nuevo_id(), f"Importar {Path(ruta).name}", archivo=Path(ruta).name, contenido=texto),
-                      aparte=True)
+        doc, lugar = self.doc, self.doc.marcador
+        op = OpImportarSTEP(doc.nuevo_id(), f"Importar {Path(ruta).name}", archivo=Path(ruta).name, contenido=texto)
+
+        def insertar():
+            return self._agregar(op, aparte=True)
+
+        def adoptar():
+            estado, mensaje = doc._precalculo[2]["resultados"][lugar][:2]
+            if estado == "error":                   # un STEP ilegible avisa y no deja un paso rojo
+                QMessageBox.critical(self, "No se pudo importar", mensaje)
+            else:
+                self._cambio_aparte(insertar)
+
+        self._cambio_aparte(insertar, adoptar)
 
     def insertar_malla(self):
         from ..nucleo import malla
@@ -3618,6 +3673,7 @@ class VentanaPrincipal(QMainWindow):
             if self.asistente is not None:
                 self.asistente.cancelar()     # el hilo del pedido es daemon: no frena el cierre
             self.registro_uso.configurar(False)
+            aislado.MALLAR = None
             e.accept()
         else:
             e.ignore()
