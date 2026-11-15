@@ -132,8 +132,10 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   Gerardo lo pide. La primera sesión la inicia Gerardo con un clic en la tarjeta.
 - **Implementar en OpenCode con GLM** (`opencode/glm-5.3-flash-free`, gratis y sin retención de datos; Gerardo,
   2026-11-15: Sol/GPT-6.1 ya no se usa): la sesión orquesta con `/orquestador-opencode` y manda corridas chicas (una
-  tarea por corrida) con **`timeout 1500`**; respaldo con `cp` antes de cada una. Respaldo si GLM se cae:
-  `opencode/deepseek-v4.1-flash-free`; lógica difícil: `nvidia/nemotron-3-ultra-550b`; la geometría difícil va a
+  tarea por corrida) con **`timeout 1500`**; respaldo con `cp` antes de cada una. GLM, para piezas cortas de un
+  archivo; `nvidia/minimaxai/minimax-m3.1-flash`, para tareas agénticas de varios archivos con herramientas y para
+  revisar lo de GLM (la ruta `minimaxai/`, nunca el alias `nvidia/minimax-m3.1-flash`, que mezcla caracteres chinos).
+  Respaldo si GLM se cae: `opencode/deepseek-v4.1-flash-free`; lógica difícil: `nvidia/nemotron-3-ultra-550b`; la geometría difícil va a
   Opus alto. No usar OpenCode Go (sin suscripción) ni `mimo` (entrena con los datos). Si una corrida se cuelga (log en
   0 bytes, sin CPU ni archivos tocados) se corta solo ese proceso (por hora de inicio) y la pieza la hace Claude. Una
   sesión inactiva no detecta un cuelgue: el coordinador mira el log y los archivos a los ~25 min.
