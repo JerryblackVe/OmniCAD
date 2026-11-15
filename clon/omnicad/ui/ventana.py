@@ -2619,9 +2619,17 @@ class VentanaPrincipal(QMainWindow):
         cuerpo = estado.cuerpos.get(ident)
         if cuerpo:
             n = formato.numero
-            self.mensaje(f"{cuerpo.nombre}: volumen {n(formato.longitud(geo.volumen(cuerpo.forma), 3), miles=True)} {formato.sufijo(3)} · "
+            if cuerpo.tipo == "malla":
+                self.mensaje(f"{cuerpo.nombre}: volumen {n(formato.longitud(cuerpo.forma.volumen(), 3), miles=True)} {formato.sufijo(3)} · "
+                             f"área {n(formato.longitud(cuerpo.forma.area(), 2), miles=True)} {formato.sufijo(2)} · "
+                             "malla válida", 10000)
+                return
+            volumen = (f"volumen {n(formato.longitud(geo.volumen(cuerpo.forma), 3), miles=True)} {formato.sufijo(3)} · "
+                       if cuerpo.tipo != "superficie" else "")
+            tipo = "superficie válida" if cuerpo.tipo == "superficie" else "sólido válido"
+            self.mensaje(f"{cuerpo.nombre}: {volumen}"
                          f"área {n(formato.longitud(geo.area(cuerpo.forma), 2), miles=True)} {formato.sufijo(2)} · "
-                         f"{'sólido válido' if geo.es_valida(cuerpo.forma) else '⚠ geometría inválida'}", 10000)
+                         f"{tipo if geo.es_valida(cuerpo.forma) else '⚠ geometría inválida'}", 10000)
         elif ident in estado.bocetos:
             b = estado.bocetos[ident]
             nombre = {o.id: o.nombre for o in self.doc.operaciones}.get(ident, b.nombre)     # B-273: el vigente
