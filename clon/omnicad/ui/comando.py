@@ -56,6 +56,18 @@ def _firma_previa(op):
     return op.TIPO, repr({k: v for k, v in op.p.items() if k not in op.EXPRESIONES})
 
 
+def _magnitud_previa(ctx, op):
+    """B-438: el mayor valor tecleado de `op` (mm o grados): la firma no lo mira, pero un valor mucho más grande que el
+    de la última previa rápida puede tardar mucho más (desfase de superficie de 1000 mm: 2 s en la ventana)."""
+    mayor = 0.0
+    for k in op.EXPRESIONES:
+        try:
+            mayor = max(mayor, abs(float(ctx.evaluar(op.p[k]))))
+        except Exception:  # noqa: BLE001 — un valor a medio escribir no cuenta
+            pass
+    return mayor
+
+
 def _ids_cuerpo(p):
     """Ids de los cuerpos que nombra una operación: claves `cuerpo` (referencias a aristas y caras), `cuerpos` y `objetivo`."""
     ids, pila = set(), [p]
@@ -854,7 +866,7 @@ class PanelComando(QFrame):
         self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
         self._hijo_previa = self._op_hijo = self._pendiente_hijo = None
         self._previa_cortada = False
-        self._ms_previa = None          # FL-1: (firma, ms) de la última previa calculada, en la ventana o aparte
+        self._ms_previa = None          # FL-1: (firma, ms, magnitud B-438) de la última previa, en la ventana o aparte
         self.cerrando = False           # True desde `_cerrar`: la ventana no redibuja el estado viejo antes de cerrar
         self._previa_aparte = False     # la última previa pedida se calcula en el hijo: aceptar no espera su malla
         self._t_hijo = QTimer(self, interval=16)
@@ -1827,7 +1839,7 @@ class PanelComando(QFrame):
                 with geo.en_serie():         # B-293
                     estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=self._previa_aislada)
             finally:
-                self._ms_previa = _firma_previa(op), (time.perf_counter() - inicio) * 1000
+                self._ms_previa = _firma_previa(op), (time.perf_counter() - inicio) * 1000, _magnitud_previa(self.ctx, op)
             self._previa_aislada = True
         except Exception as e:  # noqa: BLE001 — se muestra el error del kernel como en Fusion
             self._mostrar(f"⚠ {e}", tipo="error")
@@ -1839,7 +1851,7 @@ class PanelComando(QFrame):
         self._previa_vista(op)
         self._previa_lista(estado)
         # FL-1b: también cuenta mallarla en el visor (un barrido: 20 ms de kernel y 0,4 s de malla)
-        self._ms_previa = _firma_previa(op), (time.perf_counter() - inicio) * 1000
+        self._ms_previa = _firma_previa(op), (time.perf_counter() - inicio) * 1000, _magnitud_previa(self.ctx, op)
 
     def previa_sana(self, cambios, tope_ms=None):
         """¿Sale sana la previa con `cambios` (textos de campos)? Sin mostrar nada; None si es pesada y no se prueba acá.
@@ -1965,8 +1977,11 @@ class PanelComando(QFrame):
         if op.TIPO == "rosca" and op.p.get("modelada"):
             return True     # P-78: cortar la hélice tarda segundos aunque el cuerpo sea chico (M20×100: 25-50 s)
         medida = self._ms_previa
+        tecleo = tope_ms is None        # el asa (B-454) prueba valores lejanos a propósito, con su propio plazo
         tope_ms = PREVIA_EN_VENTANA_MS if tope_ms is None else tope_ms
         rapida = medida is not None and medida[0] == _firma_previa(op) and medida[1] < tope_ms
+        if rapida and tecleo and len(medida) > 2:     # B-438: «1e3 mm» tras «15 mm» no es igual de barata
+            rapida = _magnitud_previa(self.ctx, op) <= 5 * max(medida[2], 1.0)
         aparte = PREVIA_APARTE and not rapida    # FL-1: extruir el texto «EMILIA» con Unir trababa la ventana 4 s por tecla
         if aparte or op.TIPO not in TIPOS_PESADOS:
             return aparte
@@ -2012,7 +2027,7 @@ class PanelComando(QFrame):
                 raise salida
             if not vieja:       # FL-1: con un valor más nuevo esperando, esta respuesta no se muestra: solo se ve la última
                 estado, avisos = leer_previa_visual(salida, self.ctx.estado)
-                self._ms_previa = _firma_previa(self._op_hijo), estado._ms_previa
+                self._ms_previa = _firma_previa(self._op_hijo), estado._ms_previa, _magnitud_previa(self.ctx, self._op_hijo)
                 self._previa_aislada = True     # pasó aislada (B-48): si la próxima va en la ventana, no se ensaya de nuevo
                 self._previa_ok = self.ultima_op is not None and self.ultima_op.a_dict() == self._op_hijo.a_dict()
                 self._mostrar(" ".join(avisos), tipo="aviso")
