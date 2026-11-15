@@ -18,7 +18,8 @@ from pathlib import Path
 import numpy as np
 
 PX_MM = 25.4 / 96.0          # 96 px por pulgada (CSS)
-_UNIDADES = {"mm": 1.0, "cm": 10.0, "in": 25.4, "pt": 25.4 / 72, "pc": 25.4 / 6, "px": PX_MM, "": PX_MM}
+_UNIDADES = {"mm": 1.0, "cm": 10.0, "in": 25.4, "pt": 25.4 / 72, "pc": 25.4 / 6, "px": PX_MM, "": PX_MM,
+             "em": 16 * PX_MM, "ex": 8 * PX_MM}     # em/ex: la letra de 16 px que da por defecto un navegador (B-522)
 TOPE_SVG = 20 * 1024 * 1024
 
 
@@ -36,7 +37,8 @@ class ErrorSVG(ValueError):
 
 
 def _longitud(texto):
-    m = re.match(r"\s*([-+0-9.eE]+)\s*([a-z%]*)", texto or "")
+    # B-522: el exponente solo con dígitos detrás; si no, la «e» de «40em» entraba al número y float('40e') fallaba.
+    m = re.match(r"\s*([-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?)\s*([a-z%]*)", texto or "")
     if not m:
         return None, ""
     return float(m.group(1)), m.group(2)
@@ -268,7 +270,7 @@ def _recorrer(ruta, con_formas=False):
     vb = _numeros(raiz.get("viewBox", ""))
     if ancho and len(vb) == 4 and vb[2] > 0:
         escala = ancho * _UNIDADES.get(u, PX_MM) / vb[2]
-    elif ancho and u in _UNIDADES and u not in ("", "px"):
+    elif ancho and u in _UNIDADES and u not in ("", "px", "em", "ex"):     # em/ex: el dibujo sigue en px
         escala = _UNIDADES[u]
     # Y hacia arriba y la esquina inferior izquierda del dibujo en el origen del boceto (como al
     # insertar un SVG en Fusion: el dibujo queda en el cuadrante positivo).
