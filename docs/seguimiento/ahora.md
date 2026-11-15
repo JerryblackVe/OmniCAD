@@ -16,6 +16,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | FL-3d | Extruir join en el llavero: `_queda_enterrada` clasifica miles de vértices (82 s en la VPS) (FL-3c parte integrado: bbcba02) |
 | E7 | Caza | Sin ítem P1 libre para E7: caza automática (`scripts/caza/cazar.py tema` bocetos, sólido, superficie, construir) y `scripts/prueba_ui`; lo rojo entra con su ID (B-468 integrado: e0273ac) |
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
+| E8b | B-502 | Prueba del advisor (Opus) por 1 día, Gerardo 15/11; sesión «E8 con advisor», cwd `~/OmniCAD-E8`: barra de posición pisada a 800×520 |
 | E9 | Sol | **B-495 primero (regresión de su B-423)**; después: Sol siempre corriendo (Gerardo 14/11): H-115, B-435, B-436, B-401, B-457, P-134, B-450, B-438, B-474 |
 | E10 | H-91 | Solevación sólida: condiciones de borde exactas y combinables (B-337/B-335 parte integrado: 8bf27a3) |
 
@@ -27,12 +28,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 2 | P-158 | Mensajes de los paneles cortos y gráficos (1 renglón con ícono, tope en el asa, rojo); auditoría y test de largo (P1, Gerardo) |
 | 3 | B-500 | MCP `manage_analysis` falla con un Mapa de desviación (falta el tipo en TIPOS) (E5, después de H-119) |
 | 4 | B-501 | Ensamblar › Conjunto: el nombre y el desfase tecleados en la fila no se aplican (E5) |
-| 5 | B-502 | Ensamblar › a 800×520 la barra de posición se pisa con el ViewCube (E8 o E9, con B-495) |
-| 6 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance` (E2, después de B-497) |
-| 7 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 8 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 9 | B-389 | Windows agota memoria en una tanda larga: `~/OmniCAD-B-389` tiene un arreglo sin integrar de hace 2 días (`turno.py` con BLAS de un hilo bajo el tope, más su test); verificar, revisar y cerrar |
-| 10 | P-157 | Reorganizar Preferencias como Fusion, visual y con poco texto (P2, pedido de Gerardo; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d) |
+| 5 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance` (E2, después de B-497) |
+| 6 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 7 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 8 | B-389 | Windows agota memoria en una tanda larga: `~/OmniCAD-B-389` tiene un arreglo sin integrar de hace 2 días (`turno.py` con BLAS de un hilo bajo el tope, más su test); verificar, revisar y cerrar |
+| 9 | P-157 | Reorganizar Preferencias como Fusion, visual y con poco texto (P2, pedido de Gerardo; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d) |
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) quedan en bugs.md sin cola.
 
