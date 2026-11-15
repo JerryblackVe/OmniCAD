@@ -7,9 +7,11 @@ Cada fila es una "cajita" clara sobre el fondo oscuro; el ojo muestra/oculta (cl
 Doble clic sobre un boceto lo edita (como "Editar boceto" en Fusion); sobre una vista guardada, la
 restaura. Clic derecho: nueva vista con nombre, renombrar o eliminar vistas, editar boceto o plano.
 """
-from PySide6.QtCore import QEvent, QItemSelectionModel, QPointF, QRectF, QSignalBlocker, QSize, Qt, Signal
+import time
+
+from PySide6.QtCore import QEvent, QItemSelectionModel, QPointF, QRectF, QSignalBlocker, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFontMetricsF, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import (QAbstractItemView, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QStyle, QStyledItemDelegate,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QStyle, QStyledItemDelegate,
                                QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout)
 
 from . import formato, temas
@@ -256,6 +258,7 @@ class Navegador(QFrame):
         self.arbol.itemDoubleClicked.connect(self._doble_clic)
         self.arbol.itemChanged.connect(self._cambio_nombre)
         self._renombrando = None            # (ítem, nombre anterior) mientras se edita el nombre en el lugar
+        self._ultimo_clic, self._clic_lento = (None, 0.0), None   # B-540: clic lento para renombrar
         self.arbol.itemExpanded.connect(self.ajustar_alto)
         self.arbol.itemCollapsed.connect(self.ajustar_alto)
         self.arbol.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -552,6 +555,13 @@ class Navegador(QFrame):
                                      if it.data(0, ROL_TIPO) in RENOMBRABLES | TIPOS_BOCETO])
 
     def _clic(self, item, _col):
+        # B-540: clic lento (otro clic sobre el mismo nombre, más pausado que un doble clic) renombra, como Fusion
+        clave, ahora, intervalo = item.data(0, ROL_CLAVE), time.monotonic(), QApplication.doubleClickInterval()
+        previo, self._ultimo_clic = self._ultimo_clic, (clave, ahora)
+        if item.data(0, ROL_TIPO) in RENOMBRABLES and previo[0] == clave and ahora - previo[1] > intervalo / 1000:
+            self._clic_lento = clave
+            QTimer.singleShot(intervalo, lambda: self._clic_lento == clave and (it := self.item(clave)) is not None
+                              and self.renombrar_en_linea(it))
         if item.data(0, ROL_TIPO) == "conjunto":
             self.accion.emit("elegir_conjunto", item.data(0, ROL_CLAVE))
             return
@@ -560,8 +570,9 @@ class Navegador(QFrame):
 
     def _doble_clic(self, item, _col):
         """Como el navegador de Fusion: doble clic sobre un boceto lo edita (B-540); sobre otro nombre lo renombra en
-        el lugar (el boceto se renombra con F2 o «Cambiar nombre»; editar un plano queda en el clic derecho)."""
+        el lugar (el boceto, con clic lento, F2 o «Cambiar nombre»; editar un plano queda en el clic derecho)."""
         tipo, clave = item.data(0, ROL_TIPO), item.data(0, ROL_CLAVE)
+        self._clic_lento = None                    # un doble clic no es un clic lento
         if tipo in ("calcomania", "boceto"):
             self.editar.emit(clave)              # como «Editar boceto» / «Editar calcomanía» del menú
         elif tipo in RENOMBRABLES:
