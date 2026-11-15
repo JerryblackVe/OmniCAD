@@ -218,10 +218,7 @@ def _a_forma(x):
     return BRepBuilderAPI_MakeVertex(gp_Pnt(*map(float, p))).Vertex()
 
 
-def _largo(forma):
-    p = GProp_GProps()
-    BRepGProp.LinearProperties_s(forma, p)
-    return p.Mass()
+_largo = geo.longitud
 
 
 _aristas_unicas = geo._aristas_unicas

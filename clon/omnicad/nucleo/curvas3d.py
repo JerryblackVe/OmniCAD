@@ -121,12 +121,7 @@ def parametrica(arista):
     return f, ad.FirstParameter(), ad.LastParameter()
 
 
-def longitud(forma):
-    """Largo exacto (a 1e-9 mm) de una arista o de las aristas de un compuesto. `geo.longitud` (GProp) se queda corto
-    en las elipses: 36,49 en vez de 36,37 mm para semiejes 8 y 3."""
-    from OCP.BRepAdaptor import BRepAdaptor_Curve
-    from OCP.GCPnts import GCPnts_AbscissaPoint
-    return sum(GCPnts_AbscissaPoint.Length_s(BRepAdaptor_Curve(e), 1e-9) for e in aristas_de(forma))
+longitud = geo.longitud
 
 
 def aristas_de(forma):
