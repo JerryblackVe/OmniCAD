@@ -421,6 +421,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-15] Dos ítems que cambian textos del mismo archivo (P-158 acorta, B-436 reescribe) no se integran en la misma tanda sin correr juntos `test_p158` y los tests que citan esos textos. · Evidencia: 55d9502 + 4048fa8 dejaron 4 rojos en main (test_p158 y test_hallazgos_nucleo); arreglo en P-158b.
 - [2026-11-15] Con la regla 4 (solo importadores directos), si se toca una herramienta de la API, buscar también los tests que la llaman por nombre (`grep -rl '"fillet"' tests/`): los que pasan por `api.llamar` no la importan. · Evidencia: H-115 rompió `test_asistente_prompt::test_empalme_en_esto…` (B-529), que no entró en su corrida.
 - [2026-11-15] Un flanco de rosca de una vuelta por cara rompe a quien reconoce el filete por vueltas (`solidos_modificar._es_filete` pide más de 1,5): agrupá ~4 vueltas por superficie. · Evidencia: B-461, test_b306 ×3 y test_b356 en rojo con 1 vuelta y verdes con ~4.
 - [2026-11-15] Un atajo que «da por desaparecida» una región tiene que distinguir desaparecer de fallar: el desfase 2D de una letra hacia adentro falla sin desaparecer y el atajo borraba la letra entera (B-503); criterio: |d| ≥ 2·área/perímetro. · Evidencia: `tests/test_b503_desfase_contorno.py`.
