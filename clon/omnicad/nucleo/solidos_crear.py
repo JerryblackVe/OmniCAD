@@ -1681,7 +1681,10 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
             ps.MakeSolid()
         forma = ps.Shape()
     else:
-        forma = _loft(exteriores, solido, reglada, cerrada)
+        from .superficies import _cupula
+        forma = _cupula(secs, condicion_inicio, condicion_fin, solido) if condiciones else None
+        if forma is None:
+            forma = _loft(exteriores, solido, reglada, cerrada)
         huecos = [s[2] for s in secs if s[0] == "alambre"]
         if solido and huecos and all(huecos) and len({len(h) for h in huecos}) == 1:
             for k in range(len(huecos[0])):

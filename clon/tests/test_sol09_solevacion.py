@@ -257,3 +257,21 @@ def test_el_contorno_auxiliar_no_se_tuerce_en_la_costura_de_la_esfera(suave):
     assert maximo[2] == pytest.approx(minimo[2], abs=1e-5)
     assert maximo[0] == pytest.approx(-minimo[0], abs=0.01)
     assert maximo[2] < -5
+
+
+@pytest.mark.parametrize("peso, fusion", [(0.2, 11352.4), (0.5, 12828.8), (1.0, 15708.3), (2.0, 23037.5), (5.0, 57588.1)])
+def test_b464_punto_tangente_da_la_cupula_de_fusion(peso, fusion):
+    """Círculo r10 → punto a 100 mm con Punto tangente: los volúmenes que da Fusion (E11, 2026-11-14)."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeVertex
+    from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Pnt
+
+    from omnicad.nucleo import revision as rv
+    from omnicad.nucleo import solidos_crear as sc
+
+    circulo = BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), 10)).Edge()
+    punta = BRepBuilderAPI_MakeVertex(gp_Pnt(0, 0, 100)).Vertex()
+    cupula = sc.solevar([circulo, punta], condicion_fin={"tipo": "punto_tangente", "peso": peso})
+    assert geo.es_valida(cupula) and geo.volumen(cupula) == pytest.approx(fusion, rel=2e-4)
+    assert rv.revisar(cupula)["autointersecciones"] == 0
+    al_reves = sc.solevar([punta, circulo], condicion_inicio={"tipo": "punto_tangente", "peso": peso})
+    assert geo.volumen(al_reves) == pytest.approx(fusion, rel=2e-4)

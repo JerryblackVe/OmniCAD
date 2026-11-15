@@ -152,11 +152,15 @@ def test_riel_o_superficie_no_se_combinan_con_torsion_ni_entre_si():
 
 
 # ================================================================ SUP-13 solevación: condiciones de borde
+PARABOLOIDE = 50 * math.pi / 3 * (5 ** 1.5 - 1)        # área de z = 10 − r²/10 sobre r ≤ 10
+
+
 def test_punto_agudo_da_el_cono_y_punto_tangente_la_cupula():
     cono = sf.solevar_superficie([circulo(10), (0.0, 0.0, 10.0)])
     assert g.area(cono) == pytest.approx(math.pi * 10 * math.hypot(10, 10), rel=1e-6)
     cupula = sf.solevar_superficie([circulo(10), (0.0, 0.0, 10.0)], condicion_fin={"tipo": "punto_tangente"})
-    assert g.area(cupula) == pytest.approx(2 * math.pi * 100, rel=2e-3) and g.es_valida(cupula)
+    # B-464: la de Fusion con peso 1 es un paraboloide (z = 10 − r²/10), no una semiesfera
+    assert g.area(cupula) == pytest.approx(PARABOLOIDE, rel=5e-3) and g.es_valida(cupula)
     assert caja(cupula)[1][2] == pytest.approx(10, abs=1e-3)
     llena = sf.solevar_superficie([circulo(10), (0.0, 0.0, 10.0)], condicion_fin={"tipo": "punto_tangente", "peso": 2.0})
     assert g.area(llena) > g.area(cupula) * 1.05
@@ -401,7 +405,7 @@ def test_condicion_exacta_conserva_esquinas_y_vuelve_a_auxiliares_si_no_se_puede
     assert g.area(sf.solevar_superficie(distintos, condicion_inicio=cond, condicion_exacta=True)) == pytest.approx(
         g.area(sf.solevar_superficie(distintos, condicion_inicio=cond)))
     punto = sf.solevar_superficie([circulo(10), (0.0, 0.0, 10.0)], condicion_fin={"tipo": "punto_tangente"}, condicion_exacta=True)
-    assert g.area(punto) == pytest.approx(2 * math.pi * 100, rel=2e-3)
+    assert g.area(punto) == pytest.approx(PARABOLOIDE, rel=5e-3)
 
 
 def test_condicion_exacta_empareja_esquinas_aunque_el_perfil_arranque_en_otra():
@@ -639,7 +643,7 @@ def test_paso_de_solevacion_con_rieles_y_punto_tangente():
     seccion = _h(doc, {"tipo": "curva_boceto", "boceto": pid, "curva": c})
     op, _ = _ejecutar(doc, SupSolevacion, secciones=[seccion, punta], condicion_fin="punto_tangente", cadena=False)
     assert op.p["condicion_fin"]["tipo"] == "punto_tangente"
-    assert g.area(_ultimo(doc).forma) == pytest.approx(628.3, rel=3e-3)
+    assert g.area(_ultimo(doc).forma) == pytest.approx(PARABOLOIDE, rel=5e-3)   # B-464: la cúpula de Fusion
     _roundtrip(SupSolevacion, op, doc)
 
 
