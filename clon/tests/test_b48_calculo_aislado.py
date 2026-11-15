@@ -8,6 +8,7 @@ import pytest
 from omnicad.io_archivos import proyecto
 from omnicad.nucleo import aislado, motor
 from omnicad.nucleo import geometria as geo
+from omnicad.timeline import documento as documento_mod
 from omnicad.timeline.documento import ErrorDocumento
 from omnicad.timeline.operaciones import OpPrimitiva
 from test_b48_prevuelo import _caja_ancha, _crash, _documento, _instantanea, _tabla, _volumenes
@@ -25,6 +26,7 @@ def test_el_calculo_grande_no_ejecuta_operaciones_en_el_padre(monkeypatch, tmp_p
     doc = _documento(3)
     ruta = proyecto.guardar(doc, tmp_path / "grande.omnicad", incluir_cache=False)
     monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    monkeypatch.setattr(documento_mod, "_barata", lambda d: False)     # FL-5: acá las primitivas hacen de paso caro
 
     def no_calcular(*args):
         raise AssertionError("Se repitió el cálculo del kernel en el padre")
@@ -86,8 +88,11 @@ def test_crash_al_cambiar_historial_conserva_receta_modelo_y_ambas_colas(monkeyp
         doc.reemplazar("op2", _caja_ancha(doc.operacion("op2")))
         if accion == "rehacer":
             doc.deshacer()
+    elif accion == "marcador":
+        doc.mover_marcador(1)                    # FL-5: volver atrás no calcula nada; adelantarlo sí
     antes = _instantanea(doc)
     monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 2)
+    monkeypatch.setattr(documento_mod, "_barata", lambda d: False)     # FL-5: acá las primitivas hacen de paso caro
     _crash(monkeypatch)
     with pytest.raises(ErrorDocumento, match="error nativo"):
         if accion == "deshacer":
@@ -95,7 +100,7 @@ def test_crash_al_cambiar_historial_conserva_receta_modelo_y_ambas_colas(monkeyp
         elif accion == "rehacer":
             doc.rehacer()
         elif accion == "marcador":
-            doc.mover_marcador(1)
+            doc.mover_marcador(3)
         elif accion == "reordenar":
             doc.mover("op3", 0)
         else:

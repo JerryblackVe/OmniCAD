@@ -10,6 +10,7 @@ import pytest
 from omnicad.io_archivos import proyecto
 from omnicad.nucleo import aislado, motor
 from omnicad.nucleo import geometria as geo
+from omnicad.timeline import documento as documento_mod
 from omnicad.timeline.documento import Documento, ErrorDocumento
 from omnicad.timeline.operaciones import OpPrimitiva, operacion_desde_dict
 from test_b48_prevuelo import _caja_ancha, _documento, _instantanea, _tabla
@@ -18,6 +19,7 @@ from test_b48_prevuelo import _caja_ancha, _documento, _instantanea, _tabla
 @pytest.fixture(autouse=True)
 def opencascade(monkeypatch):
     monkeypatch.setattr(aislado, "UMBRAL_PREVUELO_PARAMETROS", 3)
+    monkeypatch.setattr(documento_mod, "_barata", lambda d: False)     # FL-5: acá las primitivas hacen de paso caro
     with motor.fijar_motor("opencascade"):
         yield
 
@@ -344,6 +346,7 @@ def test_el_trabajador_termina_cuando_muere_el_padre():
         "from omnicad.timeline.documento import Documento\n"
         "from omnicad.timeline.operaciones import OpPrimitiva\n"
         "aislado.UMBRAL_PREVUELO_PARAMETROS = 1\n"
+        "import omnicad.timeline.documento as m; m._barata = lambda d: False\n"
         "d = Documento()\n"
         "d.agregar(OpPrimitiva(d.nuevo_id(), forma='caja'))\n"
         "print(aislado._trabajador.proceso.pid, flush=True)\n"

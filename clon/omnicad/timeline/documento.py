@@ -118,6 +118,12 @@ def _receta(op):
         return None
 
 
+def _barata(d):
+    """FL-5: el paso (en forma de receta) no necesita el ensayo aparte: una primitiva como cuerpo nuevo o un paso suprimido."""
+    return isinstance(d, dict) and (d.get("suprimida") is True or d.get("tipo") == "primitiva"
+                                    and isinstance(d.get("params"), dict) and d["params"].get("operacion") == "nuevo")
+
+
 def _migrar(d):
     """Un paso de una receta leída (archivo, receta aplicada o diseño insertado): si su operación cambió de
     cálculo, `migrar_receta` le completa lo que le falta para que se calcule como antes (p. ej. las uniones
@@ -469,7 +475,8 @@ class Documento:
         cambio = {"tipo": "agregar", "indice": self.marcador, "operacion": op.a_dict()}
         forzado = not aparte and self.nuevos_aparte and not self._pasos_con_efectos_propios()
         try:
-            calculo = self._prevuelo_cambio(cambio, aparte=aparte or forzado)
+            calculo = (None if not aparte and desde == self.marcador and _barata(cambio["operacion"])   # FL-5
+                       else self._prevuelo_cambio(cambio, aparte=aparte or forzado))
         except ErrorDocumento as e:
             from ..nucleo.aislado import Cancelado
             if not forzado or isinstance(e.__cause__, Cancelado):
@@ -1035,6 +1042,31 @@ class Documento:
                      or (sum(self._duraciones[desde:]) >= aislado.UMBRAL_COSTO_AISLAR_S
                          and not self._pasos_con_efectos_propios())))
 
+    def _solo_primitivas(self, desde):
+        """FL-5: lo que `recalcular` calcularía desde `desde` son solo primitivas como cuerpo nuevo, o nada (deshacer lo
+        último): va en la ventana aunque el documento sea grande. Sin booleanas no hay caída nativa que aislar, y el
+        ensayo aparte llevaba cada caja de 2 ms a 50-200 ms con 100-300 pasos (300 cajas: 58 s).
+        shortcut: el trabajador se pone al día en el próximo paso que se le manda (la primera unión tras 140 cajas, 1,5 s);
+        se arregla con el prevuelo incremental que FL-5 deja pendiente."""
+        desde = max(0, min(desde, len(self._estados), len(self.resultados), len(self._usados), len(self._duraciones)))
+        return all(_barata({"tipo": op.TIPO, "params": op.p, "suprimida": op.suprimida})
+                   for op in self.operaciones[desde:self.marcador])
+
+    def _receta_barata(self, datos):
+        """FL-5: la receta propuesta es la actual hasta un paso y después solo primitivas como cuerpo nuevo (deshacer o
+        rehacer una caja), sin tocar parámetros que lean los pasos que quedan: no hace falta ensayarla aparte."""
+        actual, ops = self.a_dict(), datos["operaciones"]
+        k = 0
+        while k < min(len(ops), self.marcador) and ops[k] == actual["operaciones"][k]:
+            k += 1
+        antes = {p["nombre"]: p for p in actual["parametros"]}
+        despues = {p.get("nombre"): p for p in datos.get("parametros") or [] if isinstance(p, dict)}
+        cambiados = {n for n in antes.keys() | despues.keys() if antes.get(n) != despues.get(n)}
+        fijos = (actual.keys() | datos.keys()) - {"operaciones", "marcador", "contador", "parametros", "contador_cotas"}
+        return (all(_barata(d) for d in ops[k:datos.get("marcador", len(ops))])
+                and not cambiados & set().union(*self._usados[:k])
+                and all(datos.get(c) == actual.get(c) for c in fijos))
+
     def _pasos_con_efectos_propios(self):
         """Hay un boceto con proyecciones o textos paramétricos: al calcular deja en el propio paso (`rehechas`, `perdidas`,
         `_textos_parametricos`) lo que el proceso aparte no trae de vuelta (la silueta rehecha perdía sus ids). Con 60 pasos o
@@ -1058,7 +1090,7 @@ class Documento:
             return None
         activos = sum(not o.get("suprimida", False) for o in operaciones[:max(0, marcador)])
         anteriores = sum(not o.suprimida for o in self.operaciones[:self.marcador])
-        if self._prevuelo_corresponde(max(0, activos - anteriores)):
+        if self._prevuelo_corresponde(max(0, activos - anteriores)) and not self._receta_barata(datos):
             return self._solicitar_calculo("recalcular_documento", {"receta": datos})
 
     def _prevuelo_cambio(self, cambio, previa=False, aparte=False):
@@ -1260,7 +1292,7 @@ class Documento:
     @motor.recalculo
     @registrar_calculo
     def recalcular(self, desde=0):
-        if self._prevuelo_corresponde(desde=desde):
+        if not self._solo_primitivas(desde) and self._prevuelo_corresponde(desde=desde):
             self._aplicar_calculo(self._solicitar_calculo("recalcular_documento", {
                 "receta": self.a_dict(), "sin_memoria": self._calcular_todo}))
             self._calcular_todo = False
