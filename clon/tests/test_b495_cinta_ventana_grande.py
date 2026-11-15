@@ -69,3 +69,20 @@ def test_en_800x520_sigue_el_compacto(ventana):
     QTest.qWait(30)
     botones = _botones(v, "BOCETO")
     assert sum(b.isVisible() for b in botones) < len(botones)
+
+
+@pytest.mark.parametrize("ancho", [1100, 1400])
+@pytest.mark.parametrize("pestana", ["BOCETO", "SÓLIDO"])
+def test_en_anchos_intermedios_cada_boton_queda_dentro_de_su_grupo(ventana, ancho, pestana):
+    """Con compactación parcial (algunos grupos sí, otros no) ningún botón visible se sale ni se superpone."""
+    v = ventana
+    v.resize(ancho, 900)
+    QTest.qWait(30)
+    botones = _botones(v, pestana)
+    visibles = [b for b in botones if b.isVisible()]
+    assert visibles
+    for b in visibles:
+        assert b.parentWidget().rect().contains(b.geometry()), (ancho, pestana, b.defaultAction().text())
+        for otro in visibles:
+            if otro is not b and otro.parentWidget() is b.parentWidget():
+                assert not b.geometry().intersects(otro.geometry()), (ancho, pestana, b.text(), otro.text())
