@@ -2218,6 +2218,9 @@ class VentanaPrincipal(QMainWindow):
             items = [None] * 8
             items[2] = I("Aceptar", panel.aceptar, icono("terminar"))
             items[6] = I("Cancelar", panel.cancelar, icono("cancelar"))
+            clase = type(panel.comando)          # B-468: como Fusion, «Repetir <comando>»: acepta este y abre otro igual
+            items[0] = I(f"Repetir {clase.TITULO}", lambda: panel.aceptar() or (self.panel is None and self.ejecutar_comando(clase())),
+                         icono(clase.ICONO), panel.boton_ok.isEnabled())
         elif self.modo_boceto.activo and self.modo_boceto.lienzo.herramienta != "seleccionar":
             lienzo = self.modo_boceto.lienzo
             items[2] = I("Aceptar", lambda: self.modo_boceto.herramienta("seleccionar"), icono("terminar"))

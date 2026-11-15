@@ -24,8 +24,8 @@ import re
 
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, Qt, QTimer
-from PySide6.QtGui import QPolygonF
-from PySide6.QtWidgets import QApplication, QLineEdit, QMenu, QToolTip, QWidget
+from PySide6.QtGui import QKeyEvent, QPolygonF
+from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit, QMenu, QToolTip, QWidget
 
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD
 from . import estilo_asas
@@ -736,7 +736,8 @@ class AnilloAngulo(Angulo):
     def _r(self, g):
         return self.RADIO * self.esc(g, self.centro)
 
-    def __init__(self, clave, centro, eje, inicio, sigue=None, hacia_camara=False, **kw):
+    def __init__(self, clave, centro, eje, inicio, sigue=None, hacia_camara=False, caja_siempre=False, **kw):
+        self.caja_siempre = caja_siempre        # B-468: el asa principal (Revolución) deja su caja abierta, como Fusion
         super().__init__(clave, centro, eje, inicio, caja="arrastre", **kw)
         self.base, self.sigue = self.centro.copy(), sigue
         self.u0 = self.u if hacia_camara else None    # P-151: el 0° del lado de la cámara, como la flecha de la tríada
@@ -802,7 +803,9 @@ class AnilloAngulo(Angulo):
         return super().mover(g, estado, pos)
 
     def cajas(self, g, arrastre):
-        return [(self.clave, self.asa(g))] if _activo(g) == self.ident else []
+        if self.caja_siempre or _activo(g) == self.ident:
+            return [(self.clave, self.asa(g))]
+        return []
 
 
 _SIN_CONTORNO = {AnilloAngulo.AZUL, AnilloAngulo.AZUL_EN_OSCURO, AnilloAngulo.AZUL_ASA, AnilloAngulo.BORDE_ASA,
@@ -1662,12 +1665,12 @@ class CajaValor(QLineEdit):
 
     def keyPressEvent(self, e):
         if e.key() in (Qt.Key_Return, Qt.Key_Enter):
-            self.gestor.aplicar_caja(self)
+            if self.gestor.aplicar_caja(self):
+                self.gestor.aceptar_comando()            # B-468: como Fusion, Enter aplica el valor y acepta el comando
             e.accept()
             return
         if e.key() == Qt.Key_Escape:
-            self.setText(self.gestor.texto_caja(self))
-            self.gestor.visor.setFocus()
+            self.gestor.cancelar_comando()               # B-468: un solo Esc cancela
             e.accept()
             return
         super().keyPressEvent(e)
@@ -1868,6 +1871,28 @@ class GestorManipuladores(QObject):
         finally:
             self._sincronizando = False
 
+    def aceptar_comando(self):
+        """Enter en una caja: acepta el comando si el panel lo deja (con un valor inválido Aceptar está apagado)."""
+        p = self.panel
+        if hasattr(p, "aceptar") and getattr(getattr(p, "boton_ok", None), "isEnabled", lambda: True)():
+            p.aceptar()
+
+    def cancelar_comando(self):
+        if hasattr(self.panel, "cancelar"):
+            self.panel.cancelar()
+
+    def enfocar_caja(self, forzar=False):
+        """B-468: la caja principal (la primera) queda enfocada: teclear un número entra directo, sin clic."""
+        if self._cerrado or not self.cajas:
+            return
+        w = QApplication.focusWidget()
+        if not forzar and isinstance(w, (QLineEdit, QComboBox)) and w.isVisible():
+            return                      # no se le saca el teclado a un campo que la persona está usando
+        caja = next((c for c in self.cajas.values() if not c.isHidden()), None)
+        if caja is not None:
+            caja.setFocus()
+            caja.selectAll()
+
     def _sincronizar_cajas(self):
         sub = self._arrastre["sub"] if self._arrastre is not None else None
         pedidas = {}
@@ -1880,9 +1905,11 @@ class GestorManipuladores(QObject):
                 log.debug("cajas de manipulador", exc_info=True)
         for clave in [c for c in self.cajas if c not in pedidas]:
             self._quitar_caja(self.cajas.pop(clave))
+        nuevas = False
         for clave, (punto, manipulador) in pedidas.items():
             caja = self.cajas.get(clave)
             if caja is None:
+                nuevas = True
                 caja = self.cajas[clave] = CajaValor(self, clave)
                 if clave == "escala" and self.comando.CLAVE in CON_ESCALA:
                     caja.setAlignment(Qt.AlignCenter)
@@ -1898,6 +1925,8 @@ class GestorManipuladores(QObject):
                     caja.setStyleSheet(estilo)
                     caja.setFixedWidth(round(112 * estilo_asas.tamano("cajas")))
         self._ubicar_cajas()
+        if nuevas:
+            QTimer.singleShot(0, self.enfocar_caja)     # tras mostrarlas
 
     def rectangulos_cajas(self):
         """{clave: QRect} de las cajas de valor visibles."""
@@ -2204,6 +2233,13 @@ class GestorManipuladores(QObject):
             return self._filtrar_trazo(e, t)
         if not self.manips and self._arrastre is None:
             return False
+        if t == QEvent.KeyPress and self.cajas and not e.modifiers() & (Qt.ControlModifier | Qt.AltModifier) \
+                and e.text() and e.text() in "0123456789-+.,":
+            self.enfocar_caja(forzar=True)               # B-468: teclear un número con el teclado en la vista entra en la caja
+            caja = QApplication.focusWidget()
+            if isinstance(caja, CajaValor):
+                QApplication.sendEvent(caja, QKeyEvent(QEvent.KeyPress, e.key(), e.modifiers(), e.text()))
+                return True
         if t == QEvent.ToolTip:
             tocado = self._tocado(e.pos())
             ayuda = getattr(tocado[0], "ayuda", "") if tocado else ""

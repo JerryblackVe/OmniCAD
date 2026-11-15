@@ -521,11 +521,11 @@ class Revolucion(Comando):
         borde = mp.punto_borde(base[2], centro, centro - pie)
         borde = borde + d * float((centro - borde) @ d)
         if v.get("direccion") == "simetrica":
-            return [mp.AnilloAngulo("angulo", borde, d, centro - pie, factor=0.5)]
+            return [mp.AnilloAngulo("angulo", borde, d, centro - pie, factor=0.5, caja_siempre=True)]
         # B-210: en «Dos lados» cada ángulo es una magnitud de su lado (el lado lo elige la dirección), como en
         # Extruir (B-205): el asa no se arrastra por debajo de 0, donde ya no cambiaría nada.
         dos = v.get("direccion") == "dos_lados"
-        salida = [mp.AnilloAngulo("angulo", borde, d, centro - pie, minimo=0.0 if dos else -360.0)]
+        salida = [mp.AnilloAngulo("angulo", borde, d, centro - pie, minimo=0.0 if dos else -360.0, caja_siempre=True)]
         if dos:
             salida.append(mp.AnilloAngulo("angulo2", borde, -d, centro - pie, minimo=0.0))
         return salida

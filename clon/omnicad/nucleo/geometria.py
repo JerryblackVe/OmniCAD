@@ -447,6 +447,8 @@ def exigir_angulo_revolucion(angulo_grados):
     """Rechaza un ángulo nulo de Revolución de Fusion, antes de construir geometría."""
     if abs(angulo_grados) < 1e-9:
         raise ErrorGeometria("El ángulo de revolución no puede ser cero.")
+    if abs(angulo_grados) > 360 + 1e-9:         # B-468: como Fusion, una vuelta completa es el tope
+        raise ErrorGeometria("El ángulo de revolución no puede pasar de 360°.")
 
 
 def revolver(caras, punto_eje, dir_eje, angulo_grados):

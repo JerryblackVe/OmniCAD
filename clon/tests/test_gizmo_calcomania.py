@@ -121,7 +121,7 @@ def test_escribir_45_en_caja_gira_imagen_manija_y_campo_z(panel):
     caja.setFocus()
     caja.selectAll()
     QTest.keyClicks(caja, "45")
-    QTest.keyClick(caja, Qt.Key_Return)
+    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     p._calcular_previa()
     assert g.valor("angulo") == 45 and p.widgets["angulo"].text() == "45 deg"
     assert estado_previo(p)["angulo"] == 45
@@ -138,7 +138,7 @@ def test_texto_invalido_en_caja_grados_no_cambia_angulo_ni_manija(panel):
     antes = control(p, "angulo").asa(g).copy()
     caja = g.cajas["angulo"]
     caja.setText("no_es_un_numero")
-    QTest.keyClick(caja, Qt.Key_Return)
+    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     assert g.valor("angulo") == 45 and p.widgets["angulo"].text() == "45 deg"
     assert control(p, "angulo").asa(g) == pytest.approx(antes)
     assert caja.toolTip() and not caja.isHidden()
@@ -184,7 +184,7 @@ def test_codo_escala_uniforme_y_caja_editable(panel, proporcion):
     assert p.manipuladores.valor("escala") == pytest.approx(1.5, abs=0.001)
     assert caja.text() == "1.50"
     caja.setText("2.00")
-    QTest.keyClick(caja, Qt.Key_Return)
+    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     p._calcular_previa()
     assert p.valores["escala"] == p.widgets["escala"].text() == "2.00"
     assert estado_previo(p)["alto"] == pytest.approx(alto * 2)

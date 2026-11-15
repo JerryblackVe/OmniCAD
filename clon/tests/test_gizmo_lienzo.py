@@ -103,7 +103,7 @@ def test_giro_por_asa_y_por_caja(panel):
     caja.setFocus()
     caja.selectAll()
     QTest.keyClicks(caja, "-45")
-    QTest.keyClick(caja, Qt.Key_Return)
+    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     panel._calcular_previa()
     assert g.valor("angulo") == -45 and panel.widgets["angulo"].text() == "-45 deg"
     assert np.allclose(caja.punto, control(panel, "angulo").asa(g))
@@ -124,7 +124,7 @@ def test_escala_por_codo_y_por_caja_con_y_sin_proporcion(panel):
     caja.setText("-2")
     assert not g.aplicar_caja(caja)
     caja.setText("2.00")
-    QTest.keyClick(caja, Qt.Key_Return)
+    caja.gestor.aplicar_caja(caja)      # B-468: Enter ahora también acepta el comando; acá solo se aplica el valor
     panel._calcular_previa()
     assert previo(panel)["ancho"] == pytest.approx(base["ancho"] * 2)
     panel.set_valor("mantener_proporcion", False)                 # candado abierto: la altura es independiente
