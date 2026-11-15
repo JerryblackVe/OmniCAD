@@ -318,11 +318,82 @@ def detectar(geometria, plano, tolerancia=1e-4):
         return _detectar(geometria, plano, tolerancia)
     if clave in _CACHE_PERFILES:
         return list(_CACHE_PERFILES[clave])
-    perfiles = _detectar(geometria, plano, tolerancia)
+    try:
+        islas = _islas(geometria, tolerancia)
+    except Exception:  # noqa: BLE001 — vía rápida: si falla, el camino de siempre
+        islas = [geometria]
+    if len(islas) == 1:
+        perfiles = _detectar(geometria, plano, tolerancia)
+    else:                                  # FL-13: una línea nueva solo vuelve a partir su isla
+        perfiles = [p for isla in islas for p in _detectar_isla(tuple(isla), clave[1], plano, tolerancia)]
+        perfiles.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
     if len(_CACHE_PERFILES) >= _CACHE_MAX:
         _CACHE_PERFILES.pop(next(iter(_CACHE_PERFILES)))
     _CACHE_PERFILES[clave] = tuple(perfiles)
     return perfiles
+
+
+_CACHE_ISLAS = {}
+_CACHE_ISLAS_MAX = 4096
+_MIN_ISLAS = 64                            # con menos curvas partir todo junto ya es rápido
+
+
+def _detectar_isla(isla, clave_plano, plano, tolerancia):
+    clave = (isla, clave_plano, tolerancia)
+    if clave not in _CACHE_ISLAS:
+        if len(_CACHE_ISLAS) >= _CACHE_ISLAS_MAX:
+            _CACHE_ISLAS.pop(next(iter(_CACHE_ISLAS)))
+        _CACHE_ISLAS[clave] = tuple(_detectar(list(isla), plano, tolerancia))
+    return _CACHE_ISLAS[clave]
+
+
+def _componentes(c, tolerancia):
+    """Etiqueta de grupo de cada caja (n, 2, 2): las que se tocan, encadenadas. None si hay demasiados pares."""
+    n = len(c)
+    eje = int(np.argmax(c[:, 1].max(axis=0) - c[:, 0].min(axis=0)))
+    orden = np.argsort(c[:, 0, eje], kind="stable")
+    cs = c[orden]
+    pares = np.searchsorted(cs[:, 0, eje], cs[:, 1, eje] + tolerancia, "right") - np.arange(n) - 1
+    if pares.sum() > 2_000_000:           # muy encimadas: es una sola isla de hecho
+        return None
+    I = np.repeat(np.arange(n), pares)
+    J = I + 1 + np.arange(len(I)) - np.repeat(np.cumsum(pares) - pares, pares)
+    toca = np.all((cs[J, 0] <= cs[I, 1] + tolerancia) & (cs[I, 0] <= cs[J, 1] + tolerancia), axis=1)
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    return connected_components(coo_matrix((np.ones(int(toca.sum())), (orden[I[toca]], orden[J[toca]])),
+                                           shape=(n, n)), directed=False)[1]
+
+
+def _islas(geometria, tolerancia):
+    """FL-13: grupos de curvas cuya caja total no toca la de otro grupo. Sus perfiles no dependen entre sí (un grupo
+    dentro del contorno de otro cae en la caja de ese otro), así que se detectan por separado y cada grupo queda en
+    caché: en un boceto de 500 líneas dibujar una línea más rehacía todo (14-26 ms por línea). Ante cualquier duda
+    (pocas curvas, una sin caja, demasiados pares de vecinos) devuelve un solo grupo: el camino de siempre."""
+    n = len(geometria)
+    if n < _MIN_ISLAS:
+        return [geometria]
+    c = _cajas_uv(geometria)
+    if len(c) != n:                       # una curva sin caja (no finita o de otro tipo): sin islas
+        return [geometria]
+    etiqueta = _componentes(c, tolerancia)
+    while etiqueta is not None:           # las cajas de los grupos: uno adentro de otro (o que se tocan) se juntan
+        k = int(etiqueta.max()) + 1
+        if k == 1:
+            break
+        cajas = np.stack([np.full((k, 2), np.inf), np.full((k, 2), -np.inf)], axis=1)
+        np.minimum.at(cajas[:, 0], etiqueta, c[:, 0])
+        np.maximum.at(cajas[:, 1], etiqueta, c[:, 1])
+        juntas = _componentes(cajas, tolerancia)
+        if juntas is None or int(juntas.max()) + 1 == k:
+            break
+        etiqueta = juntas[etiqueta]
+    if etiqueta is None or etiqueta.max() == 0:
+        return [geometria]
+    islas = [[] for _ in range(int(etiqueta.max()) + 1)]
+    for g, e in zip(geometria, etiqueta, strict=True):
+        islas[e].append(g)
+    return islas
 
 
 def detectar_boceto(boceto, plano, geometria=None):
@@ -643,27 +714,42 @@ def _cajas_uv(geometria):
     polos)."""
     cajas = []
     for prim in geometria:
-        tipo = prim[0]
-        if not _finita(prim):
-            continue
-        if tipo == "linea":
-            pts = np.array(prim[2:4], float)
-        elif tipo == "arco":                            # extremos y los puntos a 0°, 90°, 180° o 270° que barre
-            (cu, cv), r, a0, a1 = prim[2], prim[3], prim[4], prim[5]
-            while a1 <= a0 + 1e-12:
-                a1 += 2 * math.pi
-            angulos = [a0, a1, *(k * math.pi / 2 for k in range(math.ceil(a0 / (math.pi / 2)),
-                                                                 math.floor(a1 / (math.pi / 2)) + 1))]
-            pts = np.array([(cu + r * math.cos(t), cv + r * math.sin(t)) for t in angulos])
-        elif tipo in ("circulo", "elipse", "arco_elipse"):
-            r = prim[3] if tipo == "circulo" else max(prim[3], prim[4])
-            pts = np.array(prim[2], float) + [[-r, -r], [r, r]]
-        elif tipo == "spline":
-            pts = np.array(prim[2], float)
-        else:
-            continue
-        cajas.append((pts.min(axis=0), pts.max(axis=0)))
+        try:                                            # FL-13: cada curva se mide una vez
+            caja = _CAJAS[prim] if prim in _CAJAS else _CAJAS.setdefault(prim, _caja_uv(prim))
+        except TypeError:                               # con listas adentro: sin caché
+            caja = _caja_uv(prim)
+        if caja is not None:
+            cajas.append(caja)
+    if len(_CAJAS) > 100_000:
+        _CAJAS.clear()
     return np.array(cajas, float).reshape(-1, 2, 2)
+
+
+_CAJAS = {}
+
+
+def _caja_uv(prim):
+    """(mín, máx) en (u, v) de una curva, o None si no es finita o no tiene caja."""
+    tipo = prim[0]
+    if not _finita(prim):
+        return None
+    if tipo == "linea":
+        pts = np.array(prim[2:4], float)
+    elif tipo == "arco":                            # extremos y los puntos a 0°, 90°, 180° o 270° que barre
+        (cu, cv), r, a0, a1 = prim[2], prim[3], prim[4], prim[5]
+        while a1 <= a0 + 1e-12:
+            a1 += 2 * math.pi
+        angulos = [a0, a1, *(k * math.pi / 2 for k in range(math.ceil(a0 / (math.pi / 2)),
+                                                             math.floor(a1 / (math.pi / 2)) + 1))]
+        pts = np.array([(cu + r * math.cos(t), cv + r * math.sin(t)) for t in angulos])
+    elif tipo in ("circulo", "elipse", "arco_elipse"):
+        r = prim[3] if tipo == "circulo" else max(prim[3], prim[4])
+        pts = np.array(prim[2], float) + [[-r, -r], [r, r]]
+    elif tipo == "spline":
+        pts = np.array(prim[2], float)
+    else:
+        return None
+    return pts.min(axis=0), pts.max(axis=0)
 
 
 def _grado_encimadas(geometria, tolerancia):
