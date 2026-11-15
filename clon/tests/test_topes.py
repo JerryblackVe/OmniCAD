@@ -174,7 +174,7 @@ def test_barrido_con_torsion_rechaza_rutas_con_esquinas_antes_de_calcular(monkey
     90° o de 10°), o tiraba abajo el proceso (3600°); con 0,5° el plano anda."""
     modos = _sin_barrer(monkeypatch)
     for grados in (90.0, 10.0, 1.0):
-        with pytest.raises(geo.ErrorGeometria, match=r"sin esquinas: la ruta quiebra .* \(admite hasta 0,5°\)"):
+        with pytest.raises(geo.ErrorGeometria, match=r"la ruta quiebra .* \(máx\. 0,5°\)"):
             sc.barrer([rectangulo()], _quiebre(grados), torsion=90.0)
     assert modos == []                                  # no calculó nada
     assert sc.barrer([rectangulo()], _quiebre(1.0), torsion=0.0) == "barrido"     # sin torsión las esquinas valen
@@ -203,7 +203,7 @@ def test_barrido_con_torsion_en_ruta_cerrada_admite_1800(monkeypatch):
 def test_barrido_no_cae_al_curvilineo_de_mas_de_1800(monkeypatch):
     """Revisión: recta + arco de R2 con 3600°: el plano falla y el curvilíneo tiraba abajo el proceso (0xC0000005)."""
     modos = _sin_barrer(monkeypatch, plano_falla=True)
-    with pytest.raises(geo.ErrorGeometria, match=r"no se pudo resolver en esta ruta.*±1800° \(5 vueltas\)"):
+    with pytest.raises(geo.ErrorGeometria, match=r"Torsión máx\. ±1800° en esta ruta"):
         sc.barrer([rectangulo()], RUTA, torsion=3600.0)
     assert modos == [True]
     assert sc.barrer([rectangulo()], RUTA, torsion=1800.0) == "barrido" and modos[1:] == [True, False]

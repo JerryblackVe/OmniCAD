@@ -139,7 +139,7 @@ def test_desfase_de_cara_curva_que_se_da_vuelta_falla(distancia):
     """Una cara curva desfasada más que su radio se daba vuelta por el eje y salía «ok»: el cilindro de radio 10
     achicado 25 mm quedaba de radio 15 (MÁS GRANDE)."""
     forma, cara = _cilindro_y_lateral()
-    with pytest.raises(geo.ErrorGeometria, match="la cara se da vuelta"):
+    with pytest.raises(geo.ErrorGeometria, match="da vuelta la cara"):
         sm.desfasar_caras(forma, [cara], distancia)
 
 

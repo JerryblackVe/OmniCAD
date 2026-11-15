@@ -26,5 +26,5 @@ def test_la_mitad_al_reves_se_da_vuelta(monkeypatch):
 
 def test_partes_que_no_suman_el_cuerpo_dan_error(monkeypatch):
     _partir_y_tocar(monkeypatch, lambda p: [p[0], p[0]])          # una cáscara rota: las «mitades» no son el cuerpo
-    with pytest.raises(geo.ErrorGeometria, match="Revisar geometría"):
+    with pytest.raises(geo.ErrorGeometria, match="cáscara abierta"):
         sm.dividir_cuerpo(geo.caja(40, 20, 10), _PLANO)

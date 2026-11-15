@@ -292,8 +292,7 @@ class OpSolevacion(_OpCrear):
                               fusionar_tangentes=bool(self.p.get("fusionar_tangentes")),
                               condicion_exacta=bool(self.p.get("condicion_exacta")))
         if geo.sin_volumen(forma):
-            raise ErrorOperacion("La solevación no encierra volumen: los perfiles no pueden estar todos en el mismo "
-                                 "plano y una solevación cerrada no puede volver sobre sí misma.")
+            raise ErrorOperacion("La solevación no encierra volumen.")
         _exigir_sin_autointersecciones(
             ctx, forma, "La solevación",
             "la superficie se pisa entre los perfiles. Probá perfiles menos girados entre sí, una línea central más "
@@ -477,8 +476,7 @@ class OpAgujero(_OpCrear):
         if self.p.get("ref_cara") and ctx is not None:
             salida.append(self._por_referencias(estado, ctx))
         if not salida:
-            raise ErrorOperacion("Elegí dónde van los agujeros (puntos de boceto, un punto sobre una cara o una cara "
-                                 "con dos aristas de referencia).")
+            raise ErrorOperacion("Elegí dónde van los agujeros.")
         return [(p, -d if self.p["invertir"] else d) for p, d in salida]
 
     def _por_referencias(self, estado, ctx):
@@ -874,13 +872,10 @@ def repetir_pasos(op, estado, ctx, trsfs):
         registros = estado.herramientas.get(pid)
         if not registros:
             raise ErrorOperacion(
-                f"El paso «{pid}» no dejó una herramienta que se pueda repetir: tiene que estar antes de este paso, "
-                f"activo y sin error, y ser de un tipo que corta, une o crea con una herramienta. Tipos que se pueden "
-                f"repetir: {', '.join(TIPOS_REPETIBLES)} (los dos últimos, de operaciones).")
+                f"El paso «{pid}» no se puede repetir.")
         for forma, operacion, objetivo, tipo in registros:
             if operacion == "intersecar":
-                raise ErrorOperacion(f"El paso «{pid}» interseca: repetirlo dejaría solo lo común a todas las copias. "
-                                     "Se repiten los pasos que cortan, unen o crean un cuerpo nuevo.")
+                raise ErrorOperacion(f"El paso «{pid}» interseca: no se repite.")
             objetivo = _con_partes(estado, pid, objetivo)
             copias = [sc.aplicar(forma, t) for t in trsfs]
             if op.p.get("calculo") == "optimizado" and operacion in ("cortar", "unir") and tipo == "solido":
@@ -1072,8 +1067,7 @@ class OpPatron(_OpCrear):
         puntos = [q for e in _resolver_todas(p.get("puntos"), estado) for q in _puntos_de(e)]
         puntos += [_xyz(ctx, c, "Cada coordenada") for c in coordenadas]
         if not puntos:
-            raise ErrorOperacion("Elegí los puntos del patrón (puntos de boceto, vértices, puntos de construcción, un "
-                                 "boceto con puntos sueltos o coordenadas [x, y, z]).")
+            raise ErrorOperacion("Elegí los puntos del patrón.")
         if p.get("referencia"):
             ref = ent.como_punto(_resolver(p["referencia"], estado))
         elif p.get("referencia_xyz"):

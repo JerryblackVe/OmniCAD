@@ -404,8 +404,7 @@ def _aristas_con_caja(cara, cajas):
 def _rechazar_cara_justa(forma, arista, radio, mapa=None, cajas=None):
     """Lanza el error de B-159 si el empalme se come justo una cara vecina (ver `_come_cara_justa`)."""
     if _come_cara_justa(forma, arista, radio, mapa, cajas):
-        raise geo.ErrorGeometria(f"El empalme de {radio:g} mm se come justo una cara vecina entera (la deja de "
-                                 "ancho cero) y el núcleo no lo resuelve. Probá un radio un poco menor.")
+        raise geo.ErrorGeometria(f"Empalme de {radio:g} mm: borra una cara.")
 
 
 def _come_cara_justa(forma, arista, radio, mapa=None, cajas=None):
@@ -479,8 +478,7 @@ def _reubicar_arista(forma, ref):
         r = k.Value((k.FirstParameter() + k.LastParameter()) / 2)
         if abs(r.X() - medio[0]) + abs(r.Y() - medio[1]) + abs(r.Z() - medio[2]) < 1e-6 and abs(geo.longitud(e) - largo) < 1e-6:
             return e
-    raise geo.ErrorGeometria("Una arista del empalme ya no existe: los empalmes con peso de tangencia, radio asimétrico o G2 no pueden compartir "
-                             "vértice con otro empalme del mismo paso (hacelos en pasos separados).")
+    raise geo.ErrorGeometria("Empalme asimétrico: hacelos en pasos aparte.")
 
 
 def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, peso_tangencia=1.0, desborde=False):
@@ -739,16 +737,12 @@ def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
         desbordado = _empalme_desbordado(forma, grupos, cadena_tangente)
         if desbordado is not None:
             return desbordado
-        raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
-                                 "Achicalo. Si el timeline tiene otros empalmes en la misma zona, probá primero el "
-                                 "radio MAYOR y después los más chicos (de lo grande a lo chico) y reordená los "
-                                 "empalmes del timeline en ese orden.")
+        raise geo.ErrorGeometria("El radio no entra: achicalo.")
     resultado = _validar(mf.Shape(), "Empalme")
     # BRepCheck puede dar válido y estanco aunque el empalme atraviese la pared de una cavidad.
     if ((geo.solidos(resultado) and geo.volumen_exacto(resultado) <= 0)
             or _cruza_mas_que(forma, resultado) or _volumen_al_reves(forma, resultado, empalmadas, vecinas)):
-        raise geo.ErrorGeometria("El empalme falló: el radio supera el grosor de la pared o el espacio disponible. "
-                                 "El resultado tiene caras cruzadas o un volumen inválido. Probá un radio menor.")
+        raise geo.ErrorGeometria("Empalme: el radio no entra.")
     return resultado
 
 
@@ -921,8 +915,7 @@ def _sin_contorno(forma, aristas, que):
         except geo.ErrorGeometria:           # no separa dos caras de este cuerpo
             return False
     if aristas and all(map(lisa, aristas)):
-        return geo.ErrorGeometria(f"La arista elegida es tangente (lisa): sus dos caras ya se unen sin esquina y no "
-                                  f"hay nada que {que}. Elegí una arista con esquina.")
+        return geo.ErrorGeometria(f"Arista tangente: no hay nada que {que}.")
     return geo.ErrorGeometria("Las aristas elegidas no pertenecen al cuerpo.")
 
 
@@ -1003,8 +996,7 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
                                                                 for k in ("distancia", "distancia2") if g.get(k)))
     if ((geo.solidos(resultado) and geo.volumen_exacto(resultado) <= 0)
             or _cruza_mas_que(forma, resultado) or _volumen_al_reves(forma, resultado, elegidas, arista_caras)):
-        raise geo.ErrorGeometria("El chaflán falló: la distancia supera el grosor de la pared o el espacio disponible. "
-                                 "El resultado tiene caras cruzadas o un volumen inválido. Probá una distancia menor.")
+        raise geo.ErrorGeometria("Chaflán: la distancia no entra.")
     return resultado
 
 
@@ -1185,14 +1177,10 @@ def _cascara(forma, caras, espesor, union):
             return alternativo
         if espesor > 0 and geo.es_forma_libre(forma):
             raise geo.ErrorGeometria(
-                f"El vaciado hacia afuera falló con {espesor:g} mm: el kernel no pudo construir una pared válida "
-                "sobre estas caras B-spline. No se modificó el cuerpo. Como alternativa, solevá los perfiles "
-                "exteriores e interiores por separado y restalos con Modificar › Combinar › Cortar (boolean_operation, operation='cut').") from e
+                f"Vaciado hacia afuera: {espesor:g} mm no entra.") from e
         if not _demasiado_grueso(forma, espesor) and _borde_con_bisel(forma, caras, espesor):    # «muy grueso» manda
             raise geo.ErrorGeometria(
-                f"El vaciado falló: la cara quitada tiene un chaflán o un empalme en su borde más angosto que el "
-                f"espesor ({abs(espesor):g} mm) y el kernel no puede desfasarlo. Hacé el chaflán o el empalme "
-                "DESPUÉS del vaciado.") from e
+                "Vaciado: chaflán o empalme muy angosto.") from e
         raise
 
 
@@ -1275,16 +1263,14 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
     if ti < 0 or te < 0 or (direccion != "exterior" and ti <= 0) or (direccion != "interior" and te <= 0):
         raise geo.ErrorGeometria("Los espesores del vaciado deben ser positivos.")
     if any(map(_es_filete, geo.caras(forma))):   # B-306 (gemelo): el kernel también tarda minutos (M8: 124 s) y falla
-        raise geo.ErrorGeometria("Vaciado: un cuerpo con una rosca modelada no se puede vaciar (el kernel tarda minutos "
-                                 "y falla). Vaciá el cuerpo antes de hacer la rosca, o hacé la rosca cosmética.")
+        raise geo.ErrorGeometria("Rosca modelada: no se puede vaciar.")
     caras = []
     for c in caras_quitar or []:
         for t in (caras_tangentes(forma, c) if tangente else [c]):
             if not _contiene(caras, t):
                 caras.append(t)
     if caras and len(caras) >= len(geo.caras(forma)):
-        raise geo.ErrorGeometria("Quitaste todas las caras: no queda pared que dejar. Elegí menos caras (o ninguna, para "
-                                 "un hueco cerrado dentro del cuerpo).")
+        raise geo.ErrorGeometria("No quedó pared: elegí menos caras.")
     if caras:
         partes = []
         if ti:
@@ -1307,8 +1293,7 @@ def _exigir_pared_sin_cruces(forma, resultado):
     from . import revision          # local: revision carga medio núcleo
     n = revision._autointersecciones_seguras(resultado, 1, 5.0)[0]
     if n and n > (revision._autointersecciones_seguras(forma, 1, 5.0)[0] or 0):
-        raise geo.ErrorGeometria(f"Vaciado: el espesor no cabe en la pieza: la pared se cruza consigo misma "
-                                 f"({n} autointersecciones). Probá un espesor menor o quitá más caras.")
+        raise geo.ErrorGeometria(f"Vaciado: el espesor no cabe ({n} cruces).")
 
 
 # ---------------------------------------------------------------- desmoldeo
@@ -1319,8 +1304,7 @@ def _inclinacion(cara, direc):
     if tipo == GeomAbs_Cylinder:
         a = BRepAdaptor_Surface(cara).Cylinder().Axis().Direction()
         if abs(abs(np.dot([a.X(), a.Y(), a.Z()], direc)) - 1) > 1e-6:
-            raise geo.ErrorGeometria("El modo relativo no sabe medir un cilindro inclinado respecto de la dirección de "
-                                     "extracción: usá el modo absoluto.")
+            raise geo.ErrorGeometria("Cilindro inclinado: usá el modo absoluto.")
         return 0.0
     if tipo != GeomAbs_Plane:
         raise geo.ErrorGeometria("El modo relativo solo sirve con caras planas o cilíndricas: usá el modo absoluto.")
@@ -1343,12 +1327,10 @@ def plano_de_particion(arista, direccion):
     elif s[1] <= 1e-6 * s[0]:
         d = np.asarray(direccion, float) / np.linalg.norm(direccion)
         if abs(float(vt[0] @ d)) > 1e-6:
-            raise geo.ErrorGeometria("Una arista recta solo sirve de línea de partición si es perpendicular a la "
-                                     "dirección de extracción; elegí un plano, una cara o una curva plana.")
+            raise geo.ErrorGeometria("Línea de partición: no es perpendicular.")
         normal = d
     else:
-        raise geo.ErrorGeometria("La línea de partición tiene que ser una curva plana: elegí un plano, una cara o una "
-                                 "curva que quede en un plano.")
+        raise geo.ErrorGeometria("La línea de partición debe ser plana.")
     return geo.Plano.desde_marco(centro, normal, (1.0, 0.0, 0.0))
 
 
@@ -1803,15 +1785,12 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
             if not _contiene(todas, t):
                 todas.append(t)
     if any(map(_es_filete, todas)):     # B-306: el kernel tardaba minutos (M8: 89 s con 1 mm, 150 s con 0,2 mm) y fallaba
-        raise geo.ErrorGeometria("Desfase de caras: el filete helicoidal de una rosca modelada no se puede desfasar (el "
-                                 "kernel tarda minutos y falla). Para darle juego, editá la Rosca y usá «Holgura impresión "
-                                 "3D»; o desfasá la cara cilíndrica antes de hacer la rosca.")
+        raise geo.ErrorGeometria("Una rosca modelada no se puede desfasar.")
     # B-306: con un filete en el cuerpo, el kernel tarda lo mismo con cualquier cara (cilindro vecino: 95 s y falla;
     # cara plana: 93 s y después sale por la extrusión): las planas van directo a la extrusión, las curvas fallan ya
     con_filete = any(map(_es_filete, geo.caras(forma)))
     if con_filete and any(_plano_de_cara(c) is None for c in todas):
-        raise geo.ErrorGeometria("Desfase de caras: en un cuerpo con una rosca modelada, el kernel tarda minutos y falla "
-                                 "con las caras curvas. Desfasá la cara antes de hacer la rosca, o hacé la rosca cosmética.")
+        raise geo.ErrorGeometria("Con rosca modelada no se puede desfasar.")
     if not con_filete and (rapido := _desfase_por_contorno(forma, todas, dist)) is not None:
         return rapido
     resultado, dada_vuelta = None, False
@@ -1824,9 +1803,7 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
                 resultado, dada_vuelta = _desfase_kernel(sin_biseles, nuevas, dist)
     if resultado is not None:
         if dada_vuelta:
-            raise geo.ErrorGeometria(f"Desfase de caras: con {abs(dist):g} mm la cara se da vuelta: la distancia es igual "
-                                     "o mayor que su radio de curvatura (un cilindro no se achica, ni un agujero se "
-                                     "cierra, más que su radio). Probá una distancia menor.")
+            raise geo.ErrorGeometria(f"Desfase de {abs(dist):g} mm: da vuelta la cara.")
         return _validar(resultado, "Desfase de caras")
     planos = [_plano_de_cara(c) for c in todas]
     if any(p is None for p in planos):      # B-503: la rosca ya salió arriba; acá, letras o curvas sin rosca (regla 14)
@@ -1957,8 +1934,7 @@ def _cortes_proyectados(herramienta, caras, tipo, direccion):
     else:
         origen = []
     if not origen:
-        raise geo.ErrorGeometria("Este tipo de división necesita curvas de boceto, aristas o una cara como herramienta "
-                                 "(un plano no se puede proyectar).")
+        raise geo.ErrorGeometria("Esa división pide curvas, aristas o una cara.")
     if tipo == "vector" and (direccion is None or np.linalg.norm(np.asarray(direccion, float)) < 1e-12):
         raise geo.ErrorGeometria("Elegí la dirección de proyección (un eje, una arista o una cara).")
     cortes = []
@@ -1989,8 +1965,7 @@ def dividir_cara(forma, caras, herramienta, *, extender=True, tipo="superficie",
     if tipo not in ("superficie", "vector", "cercano"):
         raise geo.ErrorGeometria(f"Tipo de división desconocido: {tipo}")
     if tipo == "cercano" and any(_plano_de_cara(c) is None for c in caras):
-        raise geo.ErrorGeometria("«Punto más cercano» solo divide caras planas: sobre una cara curva las cuerdas rectas "
-                                 "no caen en la superficie. Usá «Con superficie» o «A lo largo de un vector».")
+        raise geo.ErrorGeometria("«Punto más cercano» solo en caras planas.")
     if tipo != "superficie":
         cortes = _cortes_proyectados(herramienta, caras, tipo, direccion)
     elif isinstance(herramienta, TopoDS_Edge) or (isinstance(herramienta, (list, tuple)) and herramienta
@@ -2030,9 +2005,7 @@ def dividir_cuerpo(forma, herramienta, *, extender=True):
         piezas = [TopoDS.Solid(s.Reversed()) if geo.volumen(s) < 0 else s for s in piezas]
         total, partes = abs(geo.volumen(forma)), sum(geo.volumen(s) for s in piezas)
         if abs(partes - total) > 1e-2 * max(total, 1.0):        # la integración por defecto erra poco, el signo no
-            raise geo.ErrorGeometria(f"Dividir cuerpo: las partes suman {partes:.6g} mm³ y el cuerpo tiene {total:.6g} mm³: "
-                                     "el cuerpo tiene la cáscara abierta o al revés. Revisalo con Inspeccionar › Revisar "
-                                     "geometría (check_geometry).")
+            raise geo.ErrorGeometria("Dividir: el cuerpo tiene la cáscara abierta.")
 
     def clave(s):
         superficie = not geo.solidos(s)
@@ -2254,8 +2227,7 @@ def quitar_caras(forma, caras):
     # Como Suprimir caras de Fusion: cura el hueco o falla (en Fusion, dejarlo abierto es otro comando, de superficies).
     # Con la tapa de una caja, el defeaturing da IsDone y devuelve el cuerpo tal cual sin borrar nada.
     if not all(df.IsDeleted(c) for c in caras):
-        raise geo.ErrorGeometria("No se pueden borrar esas caras: las caras vecinas no alcanzan a cerrar el hueco "
-                                 "(por ejemplo, la tapa de una caja).")
+        raise geo.ErrorGeometria("Esas caras no se pueden borrar: no cierran.")
     return _validar(df.Shape(), "Quitar caras")
 
 

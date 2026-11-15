@@ -24,7 +24,7 @@ def test_dividir_cara_punto_mas_cercano_rechaza_caras_curvas():
     from omnicad.nucleo import solidos_modificar as sm
     cilindro = geo.cilindro(10, 20, (0, 0, 0), (0, 0, 1))
     lateral = next(c for c in geo.caras(cilindro) if sm._plano_de_cara(c) is None)
-    with pytest.raises(geo.ErrorGeometria, match="solo divide caras planas"):
+    with pytest.raises(geo.ErrorGeometria, match="solo en caras planas"):
         sm.dividir_cara(cilindro, [lateral], None, tipo="cercano")
 
 

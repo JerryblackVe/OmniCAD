@@ -95,7 +95,7 @@ def test_radio_que_no_entra_da_error_claro():
     op = OpEmpalme(doc.nuevo_id(), "Empalme1", aristas=_aristas(doc, 20), radio="50 mm")
     res = doc.agregar(op)
     assert res.estado == "error"
-    assert res.mensaje and res.mensaje.strip() and not res.mensaje.isascii(), res.mensaje
+    assert res.mensaje and "El radio no entra" in res.mensaje, res.mensaje
 
 
 def test_deshacer_y_rehacer_con_dos_grupos():

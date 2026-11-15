@@ -34,12 +34,12 @@ def test_radio_mayor_que_la_cara_lateral_entra_como_fusion(r):
 
 
 def test_mas_que_la_cara_de_arriba_sigue_dando_error():
-    with pytest.raises(geo.ErrorGeometria, match="demasiado grande"):
+    with pytest.raises(geo.ErrorGeometria, match="El radio no entra"):
         _empalmar(61)
 
 
 def test_no_corta_otra_parte_del_cuerpo():
     """Si debajo de la cara que se come sigue material (un escalón hacia afuera), el desborde lo cortaría: error."""
     base = geo.booleano(geo.caja(100, 60, 40), geo.trasladar(geo.caja(100, 100, 10), (0, -40, -10)), "unir")
-    with pytest.raises(geo.ErrorGeometria, match="demasiado grande"):
+    with pytest.raises(geo.ErrorGeometria, match="El radio no entra"):
         _empalmar(55, base)

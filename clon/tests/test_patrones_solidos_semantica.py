@@ -305,7 +305,7 @@ def test_circular_sentido_cantidades_uno_y_dos_y_limites():
     for ang in ("0 deg", "380 deg"):                              # degenerados: error claro, no se esconde
         r = doc.agregar(OpPatron(doc.nuevo_id(), cuerpos=["op1.c1"], forma_patron="circular", eje=EJE_Z, n=3,
                                  distribucion="parcial", angulo=ang))
-        assert r.estado == "error" and "una vuelta" in r.mensaje, ang
+        assert r.estado == "error" and "menor que 360" in r.mensaje, ang
 
 
 def test_circular_eje_que_atraviesa_el_objeto_y_objeto_lejos_del_eje():

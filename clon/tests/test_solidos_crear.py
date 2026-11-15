@@ -200,13 +200,13 @@ def test_b372_la_conicidad_del_barrido_no_pasa_la_curvatura_de_la_ruta():
     from omnicad.nucleo import revision
     ruta, perfil = _ruta_en_s(), circulo((0, 0, 0), 5)
     for a in (30, 50, 13):
-        with pytest.raises(g.ErrorGeometria, match=r"no entra en la curva.*como máximo 12\.0°"):
+        with pytest.raises(g.ErrorGeometria, match=r"Inclinación máx\. 12\.0°"):
             sc.barrer([perfil], ruta, conicidad=a)
     for a in (0, 5, 11.5):
         forma = valido(sc.barrer([perfil], ruta, conicidad=a))
         assert revision._autointersecciones_seguras(forma, 1, 20.0)[0] == 0
     valido(sc.barrer([perfil], [linea((0, 0, 0), (0, 0, 60))], conicidad=50))   # en una recta no hay curva que pisar
-    with pytest.raises(g.ErrorGeometria, match="no entra en la curva"):              # el de superficie, igual
+    with pytest.raises(g.ErrorGeometria, match="Inclinación máx"):              # el de superficie, igual
         sf.barrer_superficie([linea((-5, 0, 0), (5, 0, 0))], ruta, conicidad=30)
 
 
@@ -417,7 +417,7 @@ def test_repujado_plano_relieve_grabado_y_limite_de_cara():
     valido(sc.repujado(caja, [perfil], tapa, -1.5, tipo="grabado"), 8000 - 150)
     # un perfil que cruza el borde se proyecta en su lugar y se limita a la cara (como Fusion)
     valido(sc.repujado(caja, [rect(35, 5, 45, 15, 20)], tapa, 1.0), 8000 + 50)
-    with pytest.raises(g.ErrorGeometria, match="no caen sobre las caras"):        # no cae encima: no se mueve
+    with pytest.raises(g.ErrorGeometria, match="fuera de las caras"):        # no cae encima: no se mueve
         sc.repujado(caja, [rect(60, 5, 70, 15, 20)], tapa, 1.0)
 
 
@@ -450,7 +450,7 @@ def test_repujado_reparte_el_texto_entre_caras_de_cuerpos_distintos():
 def test_repujado_texto_fuera_de_las_caras_no_se_copia_ni_se_mueve():
     """El texto paralelo va en su lugar: si no cae sobre ninguna de las caras elegidas, error (no se mueve)."""
     listones = _listones()
-    with pytest.raises(g.ErrorGeometria, match="no caen sobre las caras"):
+    with pytest.raises(g.ErrorGeometria, match="fuera de las caras"):
         sc.repujado_en_cuerpos([(c, _tapa(c)) for c in listones], [rect(-20, 100, 60, 110, 10)], 1.0)
     # sobre uno solo de los listones elegidos: los otros quedan igual
     r = sc.repujado_en_cuerpos([(c, _tapa(c)) for c in listones], [rect(12, 10, 20, 20, 10)], 1.0)

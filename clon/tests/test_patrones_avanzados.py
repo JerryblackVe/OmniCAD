@@ -18,7 +18,7 @@ from omnicad.restricciones import Boceto
 from omnicad.timeline import documento
 from omnicad.timeline.documento import Documento
 from omnicad.timeline.operaciones import OpBoceto, OpExtrusion, OpPlano, OpPrimitiva, operacion_desde_dict
-from omnicad.timeline.ops_solido import TIPOS_REPETIBLES, OpAgujero, OpMultitransformar, OpPatron
+from omnicad.timeline.ops_solido import OpAgujero, OpMultitransformar, OpPatron
 
 R, H = 3.0, 10.0                                   # agujero Ø6 pasante en una placa de 10 mm
 CAJA = 100 * 60 * 10
@@ -188,8 +188,7 @@ def test_patron_de_un_patron_de_operaciones():
 def test_errores_claros_del_patron_de_operaciones():
     doc = _placa_con_agujero()
     r = doc.agregar(OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=["op2"], dir1=EJE_X))     # un boceto
-    assert r.estado == "error" and "no dejó una herramienta" in r.mensaje
-    assert all(t in r.mensaje for t in TIPOS_REPETIBLES)
+    assert r.estado == "error" and "no se puede repetir" in r.mensaje
     doc.deshacer()
     r = doc.agregar(OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[], dir1=EJE_X))
     assert r.estado == "error" and "Elegí las operaciones" in r.mensaje

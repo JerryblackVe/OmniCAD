@@ -418,10 +418,8 @@ def _exigir_radio_positivo(radio, achica, que):
     if achica < radio - MEDIDA_MINIMA:
         return
     if achica <= radio + MEDIDA_MINIMA:
-        raise ErrorBoceto(f"El desfase de {achica:g} mm hacia adentro deja el radio {que} en cero ({radio:g} mm de "
-                          f"radio): usá una distancia menor que {radio:g} mm.")
-    raise ErrorBoceto(f"El desfase de {achica:g} mm hacia adentro deja el radio {que} negativo ({radio:g} mm de "
-                      f"radio): hacia adentro el máximo es menos de {radio:g} mm.")
+        raise ErrorBoceto(f"Desfase {achica:g} mm: el radio queda en cero.")
+    raise ErrorBoceto(f"Desfase {achica:g} mm: el radio queda negativo.")
 
 
 def expresion_sin_signo(expresion, valor, evaluar):
@@ -2130,8 +2128,7 @@ class Boceto:
         if not self.reproyectar(r, primitivas, puntos):
             if r["modo"] != "silueta":
                 r["refs"] = viejas
-                raise ErrorBoceto("Lo que elegiste no se proyecta con la misma forma que la proyección original (otra "
-                                  "cantidad o tipo de curvas): usá Romper vínculo o Borrar geometría y proyectá de nuevo.")
+                raise ErrorBoceto("La proyección cambió: rompé el vínculo.")
             self.rehacer_proyeccion(r, primitivas, puntos)        # H-77: una silueta se rehace con lo nuevo
 
     def reproyectar(self, registro, primitivas, puntos) -> bool:
@@ -4410,8 +4407,7 @@ class Boceto:
             if n1 * n2 < 2:
                 raise ErrorBoceto("El patrón necesita al menos dos ejemplares (cantidad 1 × cantidad 2 ≥ 2).")
             if n1 * n2 - 1 > MAX_COPIAS_PATRON:
-                raise ErrorBoceto(f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió {n1 * n2 - 1}): "
-                                  "para más, usá un patrón de cuerpos (Sólido › Crear › Patrón › Patrón rectangular; rectangular_pattern).")
+                raise ErrorBoceto(f"Patrón: máx. {MAX_COPIAS_PATRON} copias (pediste {n1 * n2 - 1}).")
             if p["modo"] not in ("extension", "espaciado"):
                 raise ErrorBoceto("La distancia es la total (extensión) o la de cada paso (espaciado).")
             for n, d, eje in ((n1, p["distancia1"], 1), (n2, p["distancia2"], 2)):
@@ -4428,14 +4424,12 @@ class Boceto:
             if n1 > 1 and n2 > 1 and p.get("linea1") is None and p.get("linea2") is None:
                 (a, b), (c, d) = p["dir1"], p["dir2"]
                 if abs(a * d - b * c) < 1e-9 * math.hypot(a, b) * math.hypot(c, d):
-                    raise ErrorBoceto("Las dos direcciones son paralelas: las copias de una fila caerían sobre las de la "
-                                      "otra. Cambiá el ángulo de la dirección 2 o poné cantidad 1.")
+                    raise ErrorBoceto("Direcciones paralelas: cambiá la 2.")
         else:
             n, total = p["cantidad"], p["angulo_total"]
             entero(n, "La cantidad", 2)
             if n - 1 > MAX_COPIAS_PATRON:
-                raise ErrorBoceto(f"Un patrón de boceto admite hasta {MAX_COPIAS_PATRON} copias (pidió {n - 1}): para "
-                                  "más, usá un patrón de cuerpos (Sólido › Crear › Patrón › Patrón circular; circular_pattern).")
+                raise ErrorBoceto(f"Patrón: máx. {MAX_COPIAS_PATRON} copias (pediste {n - 1}).")
             finito(total, "El ángulo total")
             if not 0 < abs(total) <= 360:
                 raise ErrorBoceto("El ángulo total va de -360 a 360 grados, distinto de cero.")
@@ -4445,9 +4439,7 @@ class Boceto:
         de la selección)."""
         puntos = len([q for q in self.puntos_de(ids) if q not in sin])
         if copias * puntos > MAX_PUNTOS_PATRON:
-            raise ErrorBoceto(f"El patrón copiaría {copias * puntos} puntos ({copias} copias × {puntos}): un patrón de "
-                              f"boceto admite hasta {MAX_PUNTOS_PATRON}, porque cada copia queda atada al original y el "
-                              "boceto se vuelve lento. Para más copias, patroná el cuerpo o la operación.")
+            raise ErrorBoceto(f"Patrón: máx. {MAX_PUNTOS_PATRON} puntos (pediste {copias * puntos}).")
 
     def comprobar_patron(self, tipo, params, ids):
         """Todo lo que puede rechazar un patrón antes de crearlo, sin tocar el boceto: reglas de `validar_patron`,
@@ -4510,8 +4502,7 @@ class Boceto:
         c = self.coords(cp) if cp is not None else (float(centro[0]), float(centro[1]))
         puntos = self.puntos_de(ids)
         if puntos and all(math.dist(self.coords(q), c) < MEDIDA_MINIMA for q in puntos):
-            raise ErrorBoceto("El centro del patrón coincide con la geometría elegida: al girarla quedaría en el mismo "
-                              "lugar y las copias saldrían encimadas. Elegí otro centro.")
+            raise ErrorBoceto("El centro cae sobre la geometría.")
 
     def evaluar_patrones(self, evaluar):
         """Reevalúa los valores de los patrones de Fusion sin reemplazar entidades ni sus referencias.

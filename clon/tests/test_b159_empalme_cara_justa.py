@@ -52,7 +52,7 @@ def test_radio_variable_y_empalme_de_superficie_tambien():
     forma = _caja_vaciada().cuerpo("Cuerpo1").forma
     borde = _borde(forma)
 
-    with pytest.raises(geo.ErrorGeometria, match="se come justo"):
+    with pytest.raises(geo.ErrorGeometria, match="borra una cara"):
         solidos_modificar.empalme(forma, [{"aristas": [borde], "tipo": "variable", "radios": [(0, 1), (1, 1)]}])
-    with pytest.raises(geo.ErrorGeometria, match="se come justo"):
+    with pytest.raises(geo.ErrorGeometria, match="borra una cara"):
         superficies.empalme_superficie(forma, [borde], 1.0)

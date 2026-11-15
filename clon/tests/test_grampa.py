@@ -118,7 +118,7 @@ def test_distancia_sin_valor_falla():
 
 def test_gancho_sin_cuerpo_falla():
     """El punto está lejos de la losa y la base no lo alcanza: el gancho tiene que tocar su cuerpo."""
-    with pytest.raises(geo.ErrorGeometria, match="tocar el cuerpo del gancho"):
+    with pytest.raises(geo.ErrorGeometria, match="debe tocar el cuerpo"):
         _grampa(None, marcos=[((100.0, 0.0, 0.0), ARRIBA, DERECHA)])
 
 

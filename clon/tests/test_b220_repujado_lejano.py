@@ -32,7 +32,7 @@ def test_empalme_lejano_no_recibe_material_al_envolver():
 
     assert not respuesta["ok"], respuesta
     assert respuesta["error_kind"] == "OPERATION_FAILED", respuesta
-    assert "Los perfiles no caen sobre las caras elegidas" in respuesta["mensaje"]
+    assert "Perfiles fuera de las caras: movelos encima." in respuesta["mensaje"]
     cuerpo = sesion.cuerpo("Cuerpo1").forma
     assert geo.es_valida(cuerpo)
     assert geo.volumen(cuerpo) == pytest.approx(antes, rel=0, abs=1e-6)

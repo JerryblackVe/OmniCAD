@@ -264,7 +264,7 @@ def test_con_una_sola_copia_en_la_direccion_2_su_distancia_no_se_usa():
 
 
 def test_el_tope_de_copias_es_el_mismo_en_ventana_y_api():
-    with pytest.raises(ErrorBoceto, match="admite hasta 1000"):
+    with pytest.raises(ErrorBoceto, match="máx. 1000 copias"):
         Boceto.validar_patron("circular", {"cantidad": 1002, "angulo_total": 360})
     s = nuevo()
     assert falla(s, "sketch_circular_pattern", entities=circulo(s), count=1002)["error_kind"] == "INVALID_ARGUMENTS"
@@ -357,9 +357,9 @@ def test_un_patron_guardado_antes_de_simetrico2_se_abre_y_se_edita_igual():
 def test_el_centro_puede_ser_el_punto_central_de_lo_elegido_y_se_rechaza():
     b = Boceto()
     c = b.agregar_circulo((20, 0), 2)
-    with pytest.raises(ErrorBoceto, match="coincide con la geometría"):
+    with pytest.raises(ErrorBoceto, match="cae sobre la geometría"):
         b.patron_circular([c], b.curvas[c].centro, 4)
-    with pytest.raises(ErrorBoceto, match="coincide con la geometría"):
+    with pytest.raises(ErrorBoceto, match="cae sobre la geometría"):
         b.patron_circular([c], (20.0, 0.0), 4)
     assert len(b.curvas) == 1 and not b.patrones
 
