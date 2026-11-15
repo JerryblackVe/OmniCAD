@@ -2927,7 +2927,7 @@ class VentanaPrincipal(QMainWindow):
         self.visor.ventana_libre = False
         self.area.set_panel(panel)
         self.modo_boceto.lienzo.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.modo_boceto.objetos.set_suspendido(True)
+        self.modo_boceto.suspender_objetos(True)
         panel.show()
         self.area.reubicar()
         self.visor.setFocus()
@@ -2949,7 +2949,7 @@ class VentanaPrincipal(QMainWindow):
         if (panel is not None and getattr(panel.comando, "EN_BOCETO_ABIERTO", False)
                 and self.modo_boceto.activo):
             self.modo_boceto.lienzo.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-            self.modo_boceto.objetos.set_suspendido(False)
+            self.modo_boceto.suspender_objetos(False)
         self.visor.ventana_libre, self.visor.ventana_en_comando = True, False
         self.visor.set_filtro(self.filtro_actual())
         self._estado_previa = None
