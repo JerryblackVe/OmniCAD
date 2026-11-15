@@ -8,7 +8,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-540 | Falta el clic lento para renombrar, como Fusion (doble clic que edita integrado: 2a5c755) |
+| E1 | — | En pausa hasta las 00:30 UTC (cupo de 5 h al 93 %); después B-544 (B-540 integrado: f0b265b) |
 | E2 | B-471b | B-471 (22a940f6, E5) rompió `test_cuerpos_partidos::test_b344…[visible]`: Revolución abre en «nuevo», no en «unir» (P-160 integrado: 3f35b5b) |
 | E3 | B-536b | Su test `test_b536_barrido_empalmado…` entró rojo en c7d6c3ab (Vaciado1 falla); B-537 integrado: f833909 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
