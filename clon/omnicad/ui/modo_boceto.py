@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QCompleter
 from .. import NOMBRE_APP
 from .. import registro_uso as _ru
 from ..nucleo import fuentes
+from ..nucleo.geometria import ErrorGeometria
 from ..nucleo.perfiles import detectar_boceto
 from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
 from . import temas
@@ -1578,6 +1579,9 @@ class ModoBoceto(QObject):
             perfiles = detectar_boceto(self.lienzo.b, self.plano, self.lienzo.geometria_real())
             pintables = perfiles_a_pintar(perfiles, self.lienzo.b, self.v.mensaje)
             self.v.visor.set_perfiles([p.cara for p in pintables])
+        except ErrorGeometria as e:                 # el aviso del núcleo ya es corto y dice qué hacer (regla 14)
+            self.v.visor.set_perfiles([])
+            self.v.mensaje(f"⚠ {e}", 7000)
         except Exception as e:  # noqa: BLE001 — el temporizador también debe contener los fallos nativos al mallar
             self.v.visor.set_perfiles([])
             self.v.mensaje(f"No se pudo actualizar el relleno del boceto: {e}", 7000)
