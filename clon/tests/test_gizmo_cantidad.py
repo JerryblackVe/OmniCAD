@@ -92,3 +92,21 @@ def test_patron_en_trayectoria_el_inicio_se_desliza_por_la_ruta(app_qt):  # noqa
     tramo = next(m for m in gm.manips if isinstance(m, mp.AsaRecorrido))
     assert np.allclose(tramo.recorrido.punto(tramo.s0), asa.asa(gm), atol=0.5)    # el tramo sale de donde empieza el patrón
     p.cancelar()
+
+
+def test_patron_en_trayectoria_el_asa_de_cantidad_frena_en_dos(app_qt):  # noqa: F811
+    """B-534: tirar el disco hacia atrás baja de a una copia y se frena en 2 (el mínimo de B-435), no rechaza el arrastre."""
+    from test_manipuladores import _doc_rectangulo
+    doc = _doc_rectangulo()
+    curva = next(iter(doc.estado_final.bocetos["op1"].boceto.curvas))
+    ruta = hit_desde_ref({"tipo": "curva_boceto", "boceto": "op1", "curva": curva}, doc.estado_final)
+    p, visor, _ = _panel(CATALOGO["patron_ruta"](), doc, {"ruta": [ruta], "inicio": "0", "rn": 5, "rd": "4 mm",
+                                                          "distribucion": "espaciado"})
+    visor.vista("iso")
+    p.manipuladores.actualizar()
+    gm = p.manipuladores
+    _arrastrar_n(p, _asa(p, "rn"), -1)
+    assert p.widgets["rn"].value() == 4                                   # baja de a una
+    _arrastrar_n(p, _asa(p, "rn"), -9)
+    assert p.widgets["rn"].value() == 2 and int(gm.valor("rn")) == 2      # y no pasa de 2
+    p.cancelar()
