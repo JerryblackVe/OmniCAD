@@ -65,9 +65,14 @@ def test_atomicidad_operacion_que_falla(s):
     assert foto(s) == antes
 
 
-def test_falla_se_deshace_sin_recalcular(s, monkeypatch):
+@pytest.mark.parametrize("umbral, recalculos", [(1e9, 1), (0.0, 0)])
+def test_falla_se_deshace_sin_recalcular(s, monkeypatch, umbral, recalculos):
     """B-331: un agente que prueba empalmes que fallan congelaba la ventana: cada falla recalculaba dos veces (el cambio
-    y la vuelta atrás). La vuelta usa lo ya calculado: un solo recálculo, y los cuerpos son los mismos objetos."""
+    y la vuelta atrás). En la ventana la vuelta usa lo ya calculado: un solo recálculo. Si el cambio se ensaya antes en
+    el proceso aparte (B-48/B-331: `umbral` 0 lo fuerza), la falla vuelve sin tocar el documento: ningún recálculo.
+    En los dos caminos los cuerpos son los mismos objetos. B-491: el umbral se fija, no depende del tiempo de la máquina."""
+    from omnicad.nucleo import aislado
+    monkeypatch.setattr(aislado, "UMBRAL_COSTO_AISLAR_S", umbral)
     llamados = []
     original = Documento.recalcular
     monkeypatch.setattr(Documento, "recalcular", lambda d, desde=0: (llamados.append(desde), original(d, desde))[1])
@@ -76,7 +81,7 @@ def test_falla_se_deshace_sin_recalcular(s, monkeypatch):
                               ("set_parameter", {"name": "alto_placa", "expression": "0 mm"})):
         llamados.clear()
         assert api.llamar(s, herramienta, args)["ok"] is False
-        assert len(llamados) == 1 and foto(s) == antes
+        assert len(llamados) == recalculos and foto(s) == antes
         assert s.doc.estado_final.cuerpos["op2.c1"].forma is placa
     ok(api.llamar(s, "set_parameter", {"name": "alto_placa", "expression": "10 mm"}))    # sigue editable y deshace bien
     ok(api.llamar(s, "undo"))
