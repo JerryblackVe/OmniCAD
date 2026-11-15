@@ -49,6 +49,7 @@ import hashlib
 import json
 import math
 import re
+import weakref
 
 import numpy as np
 
@@ -101,10 +102,25 @@ class Elemento:
         return self.normal if self.tipo == "cara" else self.direccion
 
 
+_LISTAS = {}    # B-331: (id(forma), tipo) → (ref. débil a la forma, copia del handle, elementos)
+
+
 def listar(forma, tipo):
-    """Todas las caras ("cara") o aristas ("arista") de la forma, en el orden estable de `referencias.subformas`."""
+    """Todas las caras ("cara") o aristas ("arista") de la forma, en el orden estable de `referencias.subformas`.
+    B-331: se miden una vez por forma (las formas no cambian; si alguien la mueve en el lugar, `IsEqual` lo nota):
+    resolver 30 ids de un cuerpo volvía a medir todas sus aristas 30 veces en el hilo de la ventana."""
+    clave = (id(forma), tipo)
+    guardado = _LISTAS.get(clave)
+    if guardado is not None and guardado[0]() is forma and guardado[1].IsEqual(forma):
+        return list(guardado[2])
     f = refs.firma_cara if tipo == "cara" else refs.firma_arista
-    return [Elemento(tipo, i, s, f(s)) for i, s in enumerate(refs.subformas(forma, tipo), 1)]
+    elementos = [Elemento(tipo, i, s, f(s)) for i, s in enumerate(refs.subformas(forma, tipo), 1)]
+    try:
+        _LISTAS[clave] = (weakref.ref(forma, lambda _r, c=clave: _LISTAS.pop(c, None)), forma.Located(forma.Location()),
+                          elementos)
+    except TypeError:     # una forma sin referencia débil: sin caché
+        pass
+    return list(elementos)
 
 
 def resumen_tipos(elementos):
