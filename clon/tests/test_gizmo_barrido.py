@@ -86,7 +86,7 @@ def test_b372_teclear_una_conicidad_que_no_entra_en_la_s_da_error_y_aceptar_no_a
         p._calcular_previa()
         assert p._previa_ok is sale, p.mensaje.text()
         if not sale:
-            assert "como máximo 12.0°" in p.mensaje.text()
+            assert "Inclinación máx. 12.0°" in p.mensaje.text()
             pasos = len(doc.operaciones)
             QTest.mouseClick(p.boton_ok, Qt.LeftButton)
             assert len(doc.operaciones) == pasos                       # Aceptar no deja pasar la forma gigante

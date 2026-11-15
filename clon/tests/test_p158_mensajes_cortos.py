@@ -25,6 +25,9 @@ TOPES = {
     "ui/comandos/primitivas.py": 2,
     "ui/comandos/patrones.py": 2,
     "ui/manipuladores.py": 0,
+    "nucleo/superficies.py": 0,
+    "timeline/ops_superficie.py": 0,
+    "ui/comandos/superficie.py": 0,
 }
 
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""B-394: Engrosar de caras cuyo sólido se cruza consigo mismo da error claro; el caso sano sigue andando."""
+"""B-394: Engrosar de caras cuyo sólido probá menos espesor da error claro; el caso sano sigue andando."""
 from omnicad import api
 
 
@@ -13,7 +13,7 @@ def _caja_abierta():
 def test_engrosar_borde_y_dos_paredes_de_caja_abierta_da_error_claro_y_deja_el_documento():
     s = _caja_abierta()
     r = api.llamar(s, "thicken", {"faces": ["Cuerpo1/F6", "Cuerpo1/F4", "Cuerpo1/F9"]})
-    assert not r["ok"] and "se cruza consigo mismo" in r["mensaje"]
+    assert not r["ok"] and "probá menos espesor" in r["mensaje"]
     assert len(api.llamar(s, "get_timeline", {})["result"]["steps"]) == 2             # caja y vaciado: sin paso nuevo
 
 

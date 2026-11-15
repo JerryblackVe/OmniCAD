@@ -60,7 +60,7 @@ def test_api_rechaza_la_reglada_que_cruza_el_centro_sin_modificar_el_documento(t
     respuesta = api.llamar(sesion, "create_ruled_surface", {
         "edges": curva, "distance": distancia, "surface_type": tipo, "angle": angulo, "direction": "Z"})
     assert not respuesta["ok"], respuesta
-    assert "se cruza consigo misma" in respuesta["mensaje"]
+    assert "La reglada se cruza" in respuesta["mensaje"]
     assert sesion.doc.a_dict() == antes
 
 
@@ -106,7 +106,7 @@ def test_panel_teclear_signo_muestra_previa_o_error_y_se_recupera(tmp_path, tipo
                      lambda: panel.mensaje.text())
             if radio == 5 and tipo == "tangent" and distancia < 0:
                 assert not panel._previa_ok
-                assert "se cruza consigo misma" in panel.mensaje.text()
+                assert "La reglada se cruza" in panel.mensaje.text()
                 assert not ventana._estado_previa.cuerpos
                 QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
                 assert ventana.panel is panel

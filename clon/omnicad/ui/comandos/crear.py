@@ -1226,7 +1226,7 @@ def pasos_repetibles(texto, ctx):
                                + ", ".join(TIPOS_REPETIBLES) + " (patrones, solo los de operaciones).")
         ids.append(op.id)
     if not ids:
-        raise ErrorComando("Escribí las operaciones a repetir (nombres del timeline, separados por coma).")
+        raise ErrorComando("Escribí los pasos a repetir, con coma.")
     return ids
 
 

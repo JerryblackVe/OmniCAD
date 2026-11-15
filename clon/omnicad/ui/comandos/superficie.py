@@ -70,16 +70,16 @@ class SupExtruir(Comando):
         exigir(v, "curvas", "Seleccioná las curvas.")
         ctx.evaluar(v["distancia"])
         if v.get("extension") == "objeto" and not v.get("hasta"):
-            raise ErrorComando("Elegí el objeto hasta donde llega la extrusión.")
+            raise ErrorComando("Elegí hasta dónde llega la extrusión.")
         if v.get("inicio") == "objeto" and not v.get("inicio_objeto"):
-            raise ErrorComando("Elegí la cara plana o el plano donde empieza la extrusión.")
+            raise ErrorComando("Elegí la cara o el plano de inicio.")
         for clave in ("desfase_inicio", "desfase_hasta", "distancia2"):
             ctx.evaluar(v.get(clave) or "0")
         lados = "simetrica" if v.get("simetrica") else v["lados"]      # `simetrica`: el campo de las recetas viejas
         if v.get("extension") == "distancia" and ctx.evaluar(v["distancia"]) == 0:
-            raise ErrorComando("La distancia de extrusión no puede ser cero: arrastrá la flecha o escribí una distancia.")
+            raise ErrorComando("La distancia no puede ser cero.")
         if lados == "dos_lados" and ctx.evaluar(v.get("distancia2") or "0") == 0:
-            raise ErrorComando("La distancia del lado 2 no puede ser cero: arrastrá su flecha o escribí una distancia.")
+            raise ErrorComando("La distancia del lado 2 no puede ser cero.")
         params = {k: v[k] for k in ("distancia", "conicidad", "medida", "inicio", "desfase_inicio", "extension",
                                     "desfase_hasta", "distancia2", "invertir", "cadena")}
         return self.crear_op(OpSupExtruir, v, ctx, curvas=refs(v, "curvas"), direccion=ref1(v, "direccion"),
@@ -126,7 +126,7 @@ class SupRevolucion(Comando):
         if v.get("extension") == "objeto" and not v.get("hasta"):
             raise ErrorComando("Elegí el objeto hasta donde gira el perfil.")
         if v.get("extension") == "objeto" and v.get("lados") == "dos_lados" and not v.get("hasta2"):
-            raise ErrorComando("Elegí el objeto hasta donde gira el perfil en el lado 2.")
+            raise ErrorComando("Elegí el objeto del lado 2.")
         ctx.evaluar(v["angulo"], ANGULO)
         ctx.evaluar(v.get("angulo2") or "0", ANGULO)
         return self.crear_op(OpSupRevolucion, v, ctx, curvas=refs(v, "curvas"), eje=ref1(v, "eje"),
@@ -254,9 +254,9 @@ def _lista_continuidades(texto, cuantas):
     partes = ["" if t == "-" else t for t in partes]
     malas = [t for t in partes if t not in ("", "G0", "G1", "G2")]
     if malas:
-        raise ErrorComando(f"La continuidad de cada arista es G0, G1 o G2; «{malas[0]}» no vale.")
+        raise ErrorComando(f"Continuidad G0, G1 o G2; «{malas[0]}» no vale.")
     if len(partes) > cuantas:
-        raise ErrorComando(f"Hay {len(partes)} continuidades y solo {cuantas} aristas elegidas.")
+        raise ErrorComando(f"{len(partes)} continuidades y {cuantas} aristas.")
     return partes + [""] * (cuantas - len(partes))
 
 
@@ -339,7 +339,7 @@ class SupDesfase(Comando):
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras.")
         if ctx.evaluar(v["distancia"]) == 0:
-            raise ErrorComando("La distancia de desfase no puede ser cero: arrastrá la flecha o escribí una distancia.")
+            raise ErrorComando("La distancia de desfase no puede ser cero.")
         return self.crear_op(OpSupDesfase, v, ctx, caras=refs(v, "caras"), distancia=v["distancia"], tipo=v["tipo"],
                              cadena=bool(v.get("cadena")))
 

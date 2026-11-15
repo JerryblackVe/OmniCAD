@@ -116,7 +116,7 @@ def test_barrido_rechaza_torsion_de_mas_de_10_vueltas():
 def test_barrido_de_superficie_rechaza_torsion_de_mas_de_50_vueltas():
     """Su tope es otro (una sección cada 10°: 18.000° tarda 49 s y andaba; 36.000°, 115 s y falla)."""
     for grados in (18_001.0, -18_001.0, math.nan, math.inf):
-        with pytest.raises(geo.ErrorGeometria, match=r"18000° \(50 vueltas\)"):
+        with pytest.raises(geo.ErrorGeometria, match=r"máx\. ±18000°"):
             sf.barrer_superficie(linea((-5, 0, 0), (5, 0, 0)), RUTA, torsion=grados)
     # más de 10 vueltas (el tope del barrido sólido) sigue andando: 3601° → 362 secciones; helicoide de 10 × 200
     f = sf.barrer_superficie(linea((-5, 0, 0), (5, 0, 0)), [linea((0, 0, 0), (0, 0, 200))], torsion=3601.0)

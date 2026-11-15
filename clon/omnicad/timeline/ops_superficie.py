@@ -35,9 +35,7 @@ def _trazos_texto(ref, estado):
     from ..nucleo import fuentes, perfiles
     registro = fuentes.buscar_fuente(curva.fuente, curva.negrita, curva.cursiva)
     if not (registro or {}).get("una_linea"):
-        raise ErrorOperacion(f"Un texto solo se extruye como superficie con una fuente de una línea (p. ej. «OmniCAD "
-                             f"Trazo SHX» o una .shx): este usa «{curva.fuente}». Para letras con relleno, extruí sus "
-                             "perfiles como sólido.")
+        raise ErrorOperacion(f"«{curva.fuente}» no es una fuente de una línea.")
     geom = [g for g in br.boceto.geometria(incluir_construccion=True) if g[1] == ref["curva"]]
     return [arista for _, arista in perfiles.aristas_boceto(geom, br.plano)]
 
@@ -93,8 +91,7 @@ class _OpSuperficie(Operacion):
         # SUP-6: un resultado inválido o sin extensión (área despreciable frente a su tamaño: aspecto > 1e6) no
         # puede quedar como cuerpo. `aplicar_resultado` solo mira que no esté vacío.
         if not geo.es_valida(forma) or diagonal <= 0 or geo.area(forma) <= 1e-6 * diagonal * diagonal:
-            raise ErrorOperacion("La operación generó una superficie degenerada (sin área o inválida): revisá las "
-                                 "curvas, la distancia y el ángulo.")
+            raise ErrorOperacion("Superficie degenerada: revisá las curvas.")
         self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, "nuevo", tipo="superficie"))
 
 
@@ -127,7 +124,7 @@ class OpSupExtruir(_OpSuperficie):
         if p["inicio"] == "objeto":
             e = _resolver(p["inicio_objeto"], estado) if p["inicio_objeto"] else None
             if e is None or e.plano is None:
-                raise ErrorOperacion("Elegí una cara plana o un plano como inicio de la extrusión.")
+                raise ErrorOperacion("Elegí una cara plana o un plano de inicio.")
             u = d / np.linalg.norm(d)
             if abs(float(e.plano.normal @ u)) < 1 - 1e-9:
                 # Fusion (Start = Object): el objeto inclinado es la base; paralelo, alcanza con el desfase.
@@ -138,11 +135,11 @@ class OpSupExtruir(_OpSuperficie):
         hasta = caja_todo = None
         if p["extension"] == "objeto":
             if not p["hasta"]:
-                raise ErrorOperacion("Elegí la cara, el plano o el cuerpo hasta donde llega la extrusión.")
+                raise ErrorOperacion("Elegí hasta dónde llega la extrusión.")
             o = _resolver(p["hasta"], estado)
             hasta = o.forma if o.forma is not None else o.plano
             if hasta is None:
-                raise ErrorOperacion("El objeto elegido no sirve como límite de la extrusión.")
+                raise ErrorOperacion("Ese objeto no limita la extrusión.")
         elif p["extension"] == "todo":
             caja_todo = _caja_todo(estado)
         self._nuevo(estado, ctx, _sf().extruir_superficie(
@@ -178,7 +175,7 @@ class OpSupRevolucion(_OpSuperficie):
             return "plano", e.plano
         if e.tipo == "cuerpo" and e.forma is not None:
             return "forma", e.forma
-        raise ErrorOperacion("El objeto de la revolución tiene que ser un vértice, un plano, una cara plana o un cuerpo.")
+        raise ErrorOperacion("Elegí vértice, plano, cara plana o cuerpo.")
 
     def ejecutar(self, estado, ctx):
         p = self.p
@@ -269,8 +266,7 @@ class OpSupSolevacion(_OpSuperficie):
                 caras = _sf()._caras_de(_sf()._mapa_aristas(estado.cuerpo(e.cuerpo).forma), e.forma)
                 salida["cara"] = caras[0] if caras else None
             if salida.get("cara") is None:
-                raise ErrorOperacion("La condición Tangente o Suave necesita un perfil que sea el borde de una cara, o "
-                                     "elegir esa cara.")
+                raise ErrorOperacion("Tangente o Suave: elegí el borde de una cara.")
         return salida
 
     def ejecutar(self, estado, ctx):
@@ -406,12 +402,12 @@ class OpDestrimar(_OpSuperficie):
         manual = self.p["contornos"] == "manual"
         elegidas = [e.forma for e in _resolver_todas(self.p["aristas"], estado, ("arista",))] if manual else []
         if manual and not elegidas:
-            raise ErrorOperacion("En el modo manual elegí las aristas a destrimar.")
+            raise ErrorOperacion("Modo manual: elegí las aristas a destrimar.")
         extension = ctx.evaluar(self.p["extension"])
         for e in _resolver_todas(self.p["caras"], estado, ("cara",)):
             c = estado.cuerpo(e.cuerpo)
             if c.tipo != "superficie":      # B-163: Destrimar solo toca superficies, como Untrim de Fusion
-                raise ErrorOperacion(f"Destrimar solo se aplica a cuerpos de superficie: «{c.nombre}» no es una superficie.")
+                raise ErrorOperacion(f"Destrimar: «{c.nombre}» no es superficie.")
             original = _sf().cara_original(e.forma, estado.recortes.get(c.id))
             if manual:                    # las aristas elegidas son las de la cara que se ve, no las de la original
                 nueva = _sf().destrimar(e.forma, contornos="manual", aristas=elegidas, extension=extension,
@@ -443,7 +439,7 @@ class OpExtenderSup(_OpSuperficie):
         for cid, ents in grupos.items():
             c = estado.cuerpo(cid)
             if c.tipo != "superficie":      # B-163: Extender solo toca superficies, como Extend de Fusion
-                raise ErrorOperacion(f"Extender solo se aplica a cuerpos de superficie: «{c.nombre}» no es una superficie.")
+                raise ErrorOperacion(f"Extender: «{c.nombre}» no es superficie.")
             formas = [e.forma for e in ents]
             aristas = _en_cadena(ents, formas, estado) if self.p["cadena"] else formas
             c.forma = _sf().extender(c.forma, aristas, ctx.evaluar(self.p["distancia"]), tipo=self.p["tipo"],

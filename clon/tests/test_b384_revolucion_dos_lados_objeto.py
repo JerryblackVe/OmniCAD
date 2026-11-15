@@ -152,11 +152,11 @@ def test_panel_con_angulo_sigue_ofreciendo_simetrica(ventana):
 def test_dos_lados_que_pasan_de_una_vuelta_dan_error():
     """90° hacia un lado y 300° hacia el otro: la superficie quedaba encimada (108 % de una vuelta) sin aviso."""
     perfil = [BRepBuilderAPI_MakeEdge(gp_Pnt(10, 0, 0), gp_Pnt(10, 0, 10)).Edge()]
-    with pytest.raises(geo.ErrorGeometria, match="pasan de una vuelta"):
+    with pytest.raises(geo.ErrorGeometria, match="pasan de 360°"):
         sf.revolver_superficie(perfil, (0, 0, 0), Z, 0, direccion="dos_lados", hasta=("punto", (0, 10, 5)),
                                hasta2=("punto", (5, 8.660254, 5)))
     s = _perfil()
     _llamar(s, "create_box", length=10, width=10, height=10, y=3.660254, name="Tope60")   # esquina en (5, 8.66, 10): 60°
     r = api.llamar(s, "revolve", {"sketch": "Perfil", "axis": "z", "to_object": "YZ", "direction": "two_sides",
                                   "to_object2": [5, 8.660254, 10], "operation": "new_body"})
-    assert not r["ok"] and "pasan de una vuelta" in str(r)
+    assert not r["ok"] and "360°" in str(r)
