@@ -1828,6 +1828,8 @@ class GestorManipuladores(QObject):
 
     @staticmethod
     def _quitar_caja(caja):
+        if not isValid(caja):               # B-518: Qt ya la borró (cierre de la ventana con el panel abierto)
+            return
         caja.hide()
         caja.setParent(None)                 # deja de ser hija del visor ya mismo (no espera al bucle de eventos)
         caja.deleteLater()
