@@ -288,10 +288,9 @@ def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40):
     return vertices.astype(np.float32), colores.astype(np.float32)
 
 
-def _datos_movidos(forma, ubicacion, datos):
-    """Datos de dibujo de `forma` a partir de los de otro cuerpo con la MISMA geometría (TShape) en `ubicacion`: su
+def _datos_movidos(forma, t, datos):
+    """Datos de dibujo de `forma` a partir de los de otro cuerpo con la misma geometría movida por la gp_Trsf `t`: su
     malla, sus aristas y su caja movidas, sin teselar de nuevo (B-425: un patrón de 5000 copias teselaba 5000 veces)."""
-    t = forma.Location().Transformation().Multiplied(ubicacion.Transformation().Inverted())
     m = np.array([[t.Value(i, j) for j in range(1, 5)] for i in range(1, 4)])
     r, d = m[:, :3], m[:, 3]
     _forma, v, n, seg, centro, radio, defl = datos
@@ -675,7 +674,11 @@ class Visor3D(QOpenGLWidget):
             if clave in self._cache:
                 datos = self._cache[clave]
             elif preparada is None and geometria in mallas_de:    # copia que solo cambia de lugar: su malla, movida
-                datos = _datos_movidos(c.forma, *mallas_de[geometria])
+                ubicacion, base = mallas_de[geometria]
+                datos = _datos_movidos(c.forma, c.forma.Location().Transformation().Multiplied(
+                    ubicacion.Transformation().Inverted()), base)
+            elif preparada is None and (datos := self._datos_de_copia(c.forma, cache)) is not None:
+                pass                                              # copia rígida de un patrón: la malla del original
             else:
                 gruesa = preparada is None and arrastrando and not es_malla(c.forma) and len(geo.caras(c.forma)) >= 64
                 datos = self.datos_cuerpo(c.forma, preparada, gruesa)
@@ -735,6 +738,21 @@ class Visor3D(QOpenGLWidget):
         mn, mx = (v.min(axis=0), v.max(axis=0)) if len(v) else (np.zeros(3), np.zeros(3))
         return (forma, v, n, preparada[2] if preparada is not None else aristas_cuerpo(forma),
                 (mn + mx) / 2, float(np.linalg.norm(mx - mn)) / 2, defl)
+
+    def _datos_de_copia(self, forma, cache):
+        """B-425: los datos de una copia rígida de patrón, movidos desde los de su original ya mallado en este cuadro o
+        antes. None (y se tesela como siempre) si no lo es, si el original no está mallado o si algo falla."""
+        try:
+            from ..timeline.ops_solido import copia_rigida     # aquí: importarlo arriba rompe el orden de timeline
+            origen = copia_rigida(forma)
+            if origen is None or id(origen[0]) in self._previa_gruesa:
+                return None
+            base = cache.get(id(origen[0])) or self._cache.get(id(origen[0]))
+            if base is None or base[0] is not origen[0]:
+                return None
+            return _datos_movidos(forma, origen[1], base)
+        except Exception:  # noqa: BLE001 — vía rápida: si falla, se tesela como siempre
+            return None
 
     def precargar(self, datos):
         """FL-3: suma a la caché las mallas que `datos_cuerpo` hizo en otro hilo ({id de la forma: datos})."""

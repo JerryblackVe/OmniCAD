@@ -8,6 +8,7 @@ El núcleo geométrico está en `nucleo/solidos_crear.py`.
 """
 import math
 import re
+import weakref
 
 import numpy as np
 
@@ -983,6 +984,24 @@ def copiar_objetos(op, estado, ctx, trsfs, sin_cuerpos):
         copiar_cuerpos(op, estado, trsfs)
 
 
+COPIAS_RIGIDAS = {}    # B-425: id(copia) → (ref. débil a la copia, ref. débil al original, gp_Trsf)
+
+
+def copia_rigida(forma):
+    """(original, gp_Trsf) si `forma` es la copia rígida que hizo un patrón de un original todavía vivo; si no, None.
+    El visor mueve la malla del original en vez de teselar cada copia (5000 copias: ~20 s en el hilo de la ventana)."""
+    e = COPIAS_RIGIDAS.get(id(forma))
+    if e is not None and e[0]() is forma and e[1]() is not None:
+        return e[1](), e[2]
+    return None
+
+
+def _anotar_copia(copia, original, t):
+    if not t.IsNegative() and abs(t.ScaleFactor() - 1.0) <= 1e-9:
+        k = id(copia)
+        COPIAS_RIGIDAS[k] = (weakref.ref(copia, lambda _r, k=k: COPIAS_RIGIDAS.pop(k, None)), weakref.ref(original), t)
+
+
 def copiar_cuerpos(op, estado, trsfs):
     """Copias de los cuerpos de `op.p["cuerpos"]` con cada gp_Trsf de `trsfs`: cuerpos nuevos (heredan aspecto,
     material y nombre, con « (copia)») o, con `combinar`, unidas al original. Con `ligeras` las copias son instancias
@@ -992,6 +1011,9 @@ def copiar_cuerpos(op, estado, trsfs):
     for cid in op.p["cuerpos"]:
         c = estado.cuerpo(cid)
         copias = [copiar(c.forma, t) for t in trsfs]
+        if copiar is _sc().aplicar and not op.p["combinar"]:
+            for copia, t in zip(copias, trsfs, strict=True):
+                _anotar_copia(copia, c.forma, t)
         if op.p["combinar"]:
             c.forma = geo.unir_todos([c.forma] + copias)
         else:
