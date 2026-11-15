@@ -208,6 +208,8 @@ CONTEXTUALES = [("BOCETO", BOCETO)]
 
 LARGO_RENGLON = 10      # un nombre más largo que esto se parte en dos renglones bajo el ícono
 ANCHO_SOLO_ICONO = 38   # botón de la cinta sin texto (ventana angosta)
+ESPACIO_GRUPOS = 3        # aire entre grupos: con 8 la pestaña BOCETO no entraba con todos sus íconos a 1780 px (B-495)
+HOLGURA_CINTA = 8         # la suma de los sizeHint de los grupos queda hasta ~17 px corta frente al layout real
 
 
 def etiqueta_boton(texto):
@@ -374,7 +376,7 @@ class Cinta(QWidget):
         # Un poco de aire alrededor de la fila de grupos (auditoría P9: toda la cinta iba pegada, con
         # margen 0 en los cuatro lados) y separación mayor entre grupos, como la cinta de Fusion.
         h.setContentsMargins(4, 3, 4, 3)
-        h.setSpacing(8)
+        h.setSpacing(ESPACIO_GRUPOS)
         for n, (titulo, rapidos, items) in enumerate(grupos):
             if n:
                 self._separador(h)
@@ -460,38 +462,48 @@ class Cinta(QWidget):
         self.ajustar_textos()
 
     def ajustar_textos(self):
-        """Si la pestaña visible no entra con el texto bajo los íconos (ventana angosta), sus botones quedan solo
-        con el ícono; si tampoco caben, queda uno por grupo y el resto en su menú. Al agrandar se restauran.
-        El ancho con texto se mide una vez por pestaña, con la
-        cinta ya visible: antes la fuente del tema no está aplicada y la medida sale de más (1481 px en vez de 1110)."""
+        """Con la pestaña visible, elige el modo más completo que entra en el ancho de la cinta: botones con texto
+        bajo el ícono; si no, solo ícono; si tampoco, un botón por grupo y el resto en el menú de su título.
+        B-495: el ancho de cada modo se mide en cada ajuste sumando los grupos (el `sizeHint` de la página queda
+        en caché y no cambia con el estilo de los botones, y el mínimo de un grupo ya compactado falseaba la medida)."""
         pagina = self.pila.currentWidget()
         botones = pagina.findChildren(QToolButton, "boton_cinta") if pagina is not None and self.isVisible() else []
         if not botones:
             return
-        for b in botones:
-            b.show()
-        ancho = pagina.property("ancho_con_texto")
-        if ancho is None:
-            for b in botones:
-                self._estilo_boton(b, True)
-            for lay in pagina.findChildren(QLayout) + [pagina.layout()]:
-                lay.invalidate()            # sin esto, sizeHint devuelve el ancho viejo (sin texto) guardado en caché
-            ancho = pagina.sizeHint().width()
-            pagina.setProperty("ancho_con_texto", ancho)
-        con_texto = self.pila.width() >= ancho
-        for b in botones:
-            self._estilo_boton(b, con_texto)
-        # Qt superpone los botones de ancho fijo si sus grupos no caben. Se conserva
-        # un acceso por grupo; los demás comandos siguen en el menú del título.
         grupos = {b.parentWidget() for b in botones}
-        for compactar in (False, True):
+
+        def ancho_pagina():
+            self._invalidar(pagina)
+            lay = pagina.layout()
+            m = lay.contentsMargins()
+            return (m.left() + m.right() + lay.spacing() * max(0, lay.count() - 1) + HOLGURA_CINTA
+                    + sum((it.widget() or it).sizeHint().width() for it in map(lay.itemAt, range(lay.count()))))
+
+        def preparar(con_texto):
             for grupo in grupos:
-                for i, b in enumerate(grupo.findChildren(QToolButton, "boton_cinta")):
-                    b.setVisible(not compactar or i == 0)
-                fila = grupo.layout().itemAt(0)
-                grupo.setMinimumWidth(fila.minimumSize().width() + 4)
-            if con_texto or pagina.minimumSizeHint().width() <= self.pila.width():
-                break
+                grupo.setMinimumWidth(0)
+                for b in grupo.findChildren(QToolButton, "boton_cinta"):
+                    self._estilo_boton(b, con_texto)
+                    b.show()
+            return ancho_pagina()
+
+        disponible = self.pila.width()
+        if preparar(True) <= disponible or preparar(False) <= disponible:
+            return
+        # Ni solo con íconos entra: se compactan (un botón y el resto en el menú del título) primero los grupos más
+        # anchos, de a uno, y los demás conservan todos sus íconos.
+        for grupo in sorted(grupos, key=lambda g: -g.sizeHint().width()):
+            for b in grupo.findChildren(QToolButton, "boton_cinta")[1:]:
+                b.hide()
+            if ancho_pagina() <= disponible:
+                return
+        for grupo in grupos:        # ni así: el título puede quedar más angosto que su ícono
+            grupo.setMinimumWidth(grupo.layout().itemAt(0).minimumSize().width() + 4)
+
+    @staticmethod
+    def _invalidar(pagina):
+        for lay in pagina.findChildren(QLayout) + [pagina.layout()]:
+            lay.invalidate()
 
     @staticmethod
     def _estilo_boton(b, con_texto):
