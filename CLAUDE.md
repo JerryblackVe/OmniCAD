@@ -4,7 +4,7 @@ Procedimientos largos (VPS, página de seguimiento, prueba como usuario, ayuda d
 contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.md). Acá queda la regla corta.
 
 ## REGLAS DE NIVEL 1 (mandatorias, Gerardo 2026-11-14)
-Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, Sol y el chat maestro.
+Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode y el chat maestro.
 1. **Orden de trabajo**: bocetos → sólido → superficie → construir/inspeccionar/ensamblar; la velocidad es prioridad 1; lo demás después.
 2. **Cola única**: solo `ahora.md`; reportes en lotes de 13 y 19 h; solo un bloqueante entra en el momento.
 3. **Sin desvíos**: un ítem por sesión, cerrado antes del siguiente; tope de 6 iteraciones por tarea y 3 intentos por problema.
@@ -17,7 +17,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, Sol y el
 10. **Todo en MCP y CLI**: cada herramienta nueva con su versión para agentes, test y doc.
 11. **Avisos**: contexto al 65 %, cupo de Claude al 95 %, OpenCode (glm-5.3-flash-free; Sol dado de baja por Gerardo el 2026-11-15) siempre con trabajo.
 12. **Hablarle corto a Gerardo**: 3–5 líneas, resultado primero, ⚠ para riesgos, una sola pregunta.
-13. **Máximo rendimiento**: todo lo más rápido posible, ordenado y sin perder calidad. Usar al máximo el cupo de 5 h y el semanal de Claude, y el de Sol: nunca capacidad ociosa (sesiones quietas, Sol sin corrida, ventana de 5 h sin usar), y nunca desperdicio (pruebas repetidas, lecturas de más, modelo más caro de lo necesario).
+13. **Máximo rendimiento**: todo lo más rápido posible, ordenado y sin perder calidad. Usar al máximo el cupo de 5 h y el semanal de Claude, y el de OpenCode: nunca capacidad ociosa (sesiones quietas, OpenCode sin corrida, ventana de 5 h sin usar), y nunca desperdicio (pruebas repetidas, lecturas de más, modelo más caro de lo necesario).
 14. **App para todos (Gerardo, 2026-11-15)**: OmniCAD tiene que ser intuitiva y gráfica, y entenderse desde un chico de 10 años hasta una persona de 100. Todo se trabaja bajo esta premisa: mensajes de 1 renglón con ícono y sin jerga, límites y errores mostrados en el dibujo (asa, campo o previa en rojo), muestras visuales en vez de textos largos, y el detalle en un «?» o en la ayuda. Lo que ya existe y no cumple se adapta (P-157, P-158).
 
 ## REGLA ESTRICTA: qué se trabaja primero (Gerardo, 2026-11-10)
@@ -69,7 +69,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, Sol y el
   | E6 | Velocidad y Rust | Opus alto |
   | E7 | Pruebas como usuario (prueba_ui, caza, banco de fluidez) | Sonnet medio |
   | E8 | Linux, arreglos chicos, UI, docs | Sonnet medio |
-  | E9 | Arreglos de prioridad 1, orquestando OpenCode (Sol) para las piezas acotadas | Sonnet medio |
+  | E9 | Arreglos de prioridad 1, orquestando OpenCode (glm-5.3-flash-free) para las piezas acotadas | Sonnet medio |
   | E10 | Arreglos de prioridad 1 (archivos `.f3d`, sólidos, GitHub) | según la tarea |
   | E11 | Pruebas con Computer Use en la PC (OmniCAD y Fusion); reporta al chat maestro | Sonnet medio |
 
@@ -140,7 +140,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, Sol y el
   (`clear_session` + `SendMessage`, sin tarjeta) y llama a `start_session` solo si no queda ninguna.
 - **Un ítem cerrado antes del siguiente (Gerardo, 2026-11-06)**: arreglo → tests → commit; nunca dos ítems sin
   commitear juntos. Cada ítem en su worktree.
-- Cierre de fase, OpenCode con Sol y vigilancia: [docs/coordinacion.md](docs/coordinacion.md).
+- Cierre de fase, OpenCode y vigilancia: [docs/coordinacion.md](docs/coordinacion.md).
 
 ## Regla obligatoria: ponytail
 - **Se INVOCA con la herramienta Skill, no alcanza con leer la regla.** Toda sesión que vaya a tocar código
@@ -175,7 +175,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, Sol y el
 ## Regla estricta: elegir modelo y esfuerzo por tarea (ahorrar tokens sin perder calidad)
 - **Cada tarea lleva su modelo y su esfuerzo elegidos a conciencia**, dichos en una línea ANTES de abrir la sesión o
   mandar el trabajo. Nunca el valor por defecto ni «alto» por reflejo.
-- Mecánico o de volumen: Haiku (o OpenCode con Sol). Arreglo chico, UI, tests, docs: Sonnet bajo o medio. Feature o
+- Mecánico o de volumen: Haiku (o OpenCode con GLM). Arreglo chico, UI, tests, docs: Sonnet bajo o medio. Feature o
   refactor: Sonnet medio. Solver, geometría difícil, arquitectura, auditoría: Opus alto.
 - **Fable no se usa salvo que Gerardo lo pida por nombre (2026-11-01).** El tope es Opus alto.
 - **La calidad del código manda**: si la tarea toca solver, geometría o núcleo, no se baja el esfuerzo para ahorrar.
