@@ -332,3 +332,33 @@ def test_controles_de_texto_sin_marco_o_parametro_estan_deshabilitados(lienzo):
     panel.cargar(lz.opciones)
     assert not panel.pivote.isEnabled() and not panel.valor_parametro_texto.isEnabled()
     assert panel.parametro_texto.text() == "Sin parámetro ligado"
+
+
+@pytest.mark.parametrize("clase", ["PaletaBoceto", "TarjetaHerramienta", "PanelCaracter", "PanelSimetria", "PanelPatron"])
+def test_clic_en_un_panel_flotante_no_llega_al_area_ni_cierra_el_boceto(app, clase):
+    """B-469: el clic en «Contenido» (deshabilitado) subía por el panel hasta el área y terminaba el boceto."""
+    from PySide6.QtTest import QTest
+    from omnicad.ui import panel_patron, panel_simetria
+
+    class Area(QWidget):
+        presiones = 0
+
+        def mousePressEvent(self, e):
+            Area.presiones += 1
+
+    area = Area()
+    area.resize(700, 700)
+    area.show()
+    panel = {"PanelSimetria": panel_simetria.PanelSimetria, "PanelPatron": panel_patron.PanelPatron}.get(
+        clase) or getattr(modo_boceto, clase)
+    panel = panel(area)
+    panel.show()
+    app.processEvents()
+    destinos = [panel]
+    if clase == "PanelCaracter":
+        assert not panel.valor_parametro_texto.isEnabled()
+        destinos.append(panel.valor_parametro_texto)
+    for w in destinos:
+        QTest.mouseClick(w, Qt.LeftButton, Qt.NoModifier, w.rect().center() if w is not panel else w.rect().topLeft() + QPointF(2, 2).toPoint())
+    assert Area.presiones == 0
+    area.close()

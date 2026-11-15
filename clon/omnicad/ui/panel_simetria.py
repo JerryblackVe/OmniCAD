@@ -23,6 +23,7 @@ class PanelSimetria(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WA_NoMousePropagation)    # B-469: un clic en el panel (o en un campo deshabilitado) no llega al lienzo
         self.setObjectName("panel_comando")
         self.setAttribute(Qt.WA_StyledBackground, True)
         v = QVBoxLayout(self)

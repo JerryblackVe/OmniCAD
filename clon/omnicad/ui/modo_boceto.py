@@ -194,6 +194,7 @@ class PaletaBoceto(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WA_NoMousePropagation)    # B-469: un clic en el panel (o en un campo deshabilitado) no llega al lienzo
         self.setObjectName("paleta_boceto")
         v = QVBoxLayout(self)
         v.setSizeConstraint(QLayout.SetFixedSize)      # el panel mide siempre lo que su contenido
@@ -436,6 +437,7 @@ class TarjetaHerramienta(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WA_NoMousePropagation)    # B-469: un clic en el panel (o en un campo deshabilitado) no llega al lienzo
         self.setObjectName("panel_comando")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.posicion_usuario = None   # dónde la dejó la persona (None: al lado de la paleta)
@@ -679,6 +681,7 @@ class PanelCaracter(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WA_NoMousePropagation)    # B-469: un clic en el panel (o en un campo deshabilitado) no llega al lienzo
         self.setObjectName("paleta_boceto")
         self._tam_usuario = [0, 0]
         self._disponible = None          # alto que deja el lienzo (lo pasa `ajustar_alto`); sin él, el natural
