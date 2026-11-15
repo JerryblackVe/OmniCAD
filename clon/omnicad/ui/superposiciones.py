@@ -843,6 +843,7 @@ class AreaVisor(QWidget):
 
     def anclar_arriba_izq(self, w):
         w.setParent(self)
+        w.installEventFilter(self)        # B-502: si cambia de alto, la barra «Posición» (segunda fila) se vuelve a acomodar
         self.arriba_izq.append(w)
 
     def anclar_abajo_izq(self, w):
@@ -870,7 +871,9 @@ class AreaVisor(QWidget):
     def eventFilter(self, obj, e):
         """B-387: un panel lateral que cambia de alto (otra casilla le suma filas) se vuelve a acomodar: si no, su pie
         quedaba bajo la barra de vista. Un solo reacomodo por tanda de cambios."""
-        if e.type() == QEvent.Resize and obj in self.laterales and obj.isVisible() and not self._reacomodo:
+        reacomoda = obj in self.laterales or (obj in self.arriba_izq and self.barra_posicion is not None
+                                              and self.barra_posicion.isVisible())
+        if e.type() == QEvent.Resize and reacomoda and obj.isVisible() and not self._reacomodo:
             self._reacomodo = True
             QTimer.singleShot(0, self, self._reacomodar)      # con contexto: no corre si la vista ya se borró
         return False
@@ -962,8 +965,14 @@ class AreaVisor(QWidget):
                 hijo.ubicar_informacion()
         if self.barra_posicion is not None and self.barra_posicion.isVisible():
             self.barra_posicion.adjustSize()
-            libre = max((wid.geometry().right() for wid in self.arriba_izq if wid.isVisible()), default=g.left()) + 8
-            self.barra_posicion.move(max(libre, g.left() + (g.width() - self.barra_posicion.width()) // 2), g.top() + 8)
+            visibles = [wid.geometry() for wid in self.arriba_izq if wid.isVisible()]
+            libre = max((r.right() for r in visibles), default=g.left()) + 8
+            x = max(libre, g.left() + (g.width() - self.barra_posicion.width()) // 2)
+            if x + self.barra_posicion.width() > self.viewcube.x() - 8:     # B-502: no cabe entre el navegador y el ViewCube
+                x, y = g.left() + 6, max([r.bottom() for r in visibles] + [self.viewcube.geometry().bottom()]) + 8   # segunda fila
+            else:
+                y = g.top() + 8
+            self.barra_posicion.move(x, y)
             self.barra_posicion.raise_()
         y = self.viewcube.y() + self.viewcube.height() + 10
         abajo = h - (self.barra.height() + 8 if self.barra is not None and self.barra.isVisible() else 0) - 8
