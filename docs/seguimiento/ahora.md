@@ -18,7 +18,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E8 | B-518b | Su test falla en main: `_quitar_caja` también necesita isValid (después, pausa por el cupo) |
 | E8b | P-158c | Entrega 2 de P-158: Mensajes cortos de Superficie y el resto (368 pendientes); P-158b integrado: 126305f |
 | E9 | B-401 | El cálculo aislado pierde atributos de boceto; OpenCode siempre corriendo (B-450 integrado: 9044a97) |
-| E10 | B-533 | Cinta en ventana chica: nombres de grupo partidos al medio («C…▾») (B-423 integrado: verificado en la VPS, falta Windows) |
+| E10 | B-535 | Pestañas de la cinta cortadas en ventana chica («SUPE…») (B-533 integrado: 9d6852b) |
 
 ## Sigue (en orden)
 
