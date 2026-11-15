@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows (B-522 integrado: 7a7a8dd) |
 | E2 | B-531 | Regresión de B-461 (cresta a derechas), primero; después P-156 fase 2: Holgura de impresión: botón de la placa, molde, Impresa/… (B-520 integrado: c325d0c; B-530 Sin verificar para E11) |
-| E3 | B-525 | `offset_faces` deja autointersecciones con «ok» (B-524 integrado: d62586c) |
+| E3 | B-528 | Limpiar el desfase 2D de texto (`vectores.desfase_caras`: contornos que se cruzan, aristas de 7e-5 mm) para que el desfase por contorno sirva con «@tienda» (B-525 integrado: 2d91b7d) |
 | E4 | B-438 | Superficie › Desfase: teclear «1e3 mm» traba la ventana 2 s (worktree `~/OmniCAD-B-438` con un arreglo previo: revisarlo). B-514 (P2) en pausa hasta después del 30/11 |
 | E5 | B-471 (resto) | Revolución elige sola el perfil cuando el boceto tiene uno solo, como Fusion (B-398 y B-399 esperan el OK de Gerardo) |
 | E6 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (FL-13 integrado: a1f3430) |
@@ -24,11 +24,10 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-528 | Desfase 2D de texto que se cruza (lo que queda de B-503; Opus, E3) |
-| 2 | B-48 | Caída nativa de OCCT al recalcular (Muy alta; Opus) |
-| 3 | B-172 | Pedir propiedades tras una solevación cerró la app (Opus) |
-| 4 | B-425 | Patrón con muchas copias congela la ventana (E6) |
-| 5 | B-331 | La API en vivo congela la ventana (E6) |
+| 1 | B-425 | Patrón con muchas copias congela la ventana (E6) |
+| 2 | B-331 | La API en vivo congela la ventana (E6) |
+
+Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
 **Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2 (P-156 sí entra, Gerardo 15/11).
 
