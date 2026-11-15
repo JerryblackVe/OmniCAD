@@ -717,7 +717,8 @@ def _distancia_a_plano(origen, n, cara_plana):
 
 def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, direccion="un_lado", distancia2=None,
                      conicidad1=0.0, conicidad2=0.0, medida_simetrica="mitad", delgado=None, aristas=None,
-                     hasta=None, hasta_modo="cara", hasta_desfase=0.0, hasta_caja=None, inicio_plano=None):
+                     hasta=None, hasta_modo="cara", hasta_desfase=0.0, hasta_caja=None, inicio_plano=None,
+                     hasta_dueno=None):
     """Extrusión completa de Fusion [SLD-EXTRUDE-SOLID, SLD-REF-EXTRUDE]. Devuelve el sólido herramienta.
 
     - Inicio: plano del perfil desplazado `inicio_desfase` según la normal (Start = Offset), o `inicio_plano`
@@ -730,7 +731,8 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
       o abiertos (`aristas`, una o varias cadenas en el plano del boceto; lado1 = izquierda de la curva
       mirando desde +n).
     - Extensión "Al objeto" (lado 1): `hasta` = cara (plana o curva) o cuerpo; `hasta_modo` "cara" | "cuerpo"
-      (hasta las caras del cuerpo) | "a_traves" (atraviesa el cuerpo); `hasta_desfase` corre el final.
+      (hasta las caras del cuerpo) | "a_traves" (atraviesa el cuerpo) | "adyacentes" (cara y vecinas de
+      `hasta_dueno`, su forma dueña); `hasta_desfase` corre el final.
     - Extensión "Todo": `hasta_caja` = caja envolvente ((x0,y0,z0),(x1,y1,z1)) de los cuerpos visibles.
     """
     n = _unit(normal, "normal de extrusión")
@@ -773,8 +775,12 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
             geo.exigir_longitud(distancia2, "La distancia del lado 2")
         es_cara = hasta.ShapeType() == TopAbs_FACE
         plano_obj = geo.plano_de_cara(TopoDS.Face(hasta)) if es_cara else None
+        if hasta_modo == "adyacentes":
+            if not es_cara:
+                raise geo.ErrorGeometria("Hasta caras adyacentes necesita una cara o un plano como límite.")
         # plano paralelo al perfil: alcanza una distancia (con la base inclinada no: la tapa saldría inclinada)
-        if plano_obj is not None and inicio_plano is None and abs(float(n @ plano_obj.normal)) > 1 - 1e-9:
+        paralelo = plano_obj is not None and inicio_plano is None and abs(float(n @ plano_obj.normal)) > 1 - 1e-9
+        if paralelo:
             d = _distancia_a_plano(origen, n, TopoDS.Face(hasta))
             fin = d + math.copysign(1.0, d) * hasta_desfase    # B-484: positivo = más lejos, negativo = más cerca
             if fin * d <= 0:
@@ -784,7 +790,23 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
             d = fin
             lados1 = [(d, conicidad1)]
             herr = None
-        else:
+            if hasta_modo == "adyacentes" and hasta_dueno is not None:
+                # No alargar la conicidad más allá del límite si la cara ya cubre toda la tapa real.
+                try:
+                    herr = _herramienta_extrusion(caras, abiertas, n, base, lados1, delgado)
+                    tapas = [c for c in _caras_de(herr) if (pl := geo.plano_de_cara(c)) is not None
+                             and abs(float(n @ pl.normal)) > 1 - 1e-9
+                             and abs(float((pl.origen - origen) @ n) - d) < 1e-7]
+                    limite = _trasladar(hasta, n * math.copysign(1.0, d) * hasta_desfase) if hasta_desfase else hasta
+                    paralelo = bool(tapas) and geo.area(geo.booleano(geo.compuesto(tapas), limite, "cortar")) < 1e-7
+                except geo.ErrorGeometria:
+                    paralelo = False
+                if paralelo:
+                    lados1 = []
+        if not paralelo:
+            if hasta_modo == "adyacentes" and hasta_dueno is not None:
+                hasta = _limite_adyacente(hasta, hasta_dueno)
+                plano_obj = None
             lo, hi = _caja_proyectada(hasta, origen, n)
             signo = -1.0 if (distancia1 is not None and distancia1 < 0) or (hi <= 0 < -lo) else 1.0
             objeto = hasta
@@ -796,6 +818,14 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
                 raise geo.ErrorGeometria("El objeto está del otro lado del perfil.")
             largo = _herramienta_extrusion(caras, abiertas, n, base, [(signo * alcance, conicidad1)], delgado)
             herr = _recortar_hasta(largo, inicios, objeto, hasta_modo, plano_obj, origen)
+            if hasta_modo == "adyacentes":
+                # Ninguna parte puede pasar de largo por fuera del parche de caras límite.
+                extremo = hi + holgura / 2 if signo > 0 else lo - holgura / 2
+                tam = 2 * math.dist(*geo.caja_envolvente(largo))
+                tapa = BRepBuilderAPI_MakeFace(gp_Pln(_pnt(origen + n * extremo), _gdir(n)),
+                                               -tam, tam, -tam, tam).Face()
+                if geo.se_tocan(herr, tapa):
+                    raise geo.ErrorGeometria("La cara y sus caras adyacentes no cubren todo el perfil de extrusión.")
             lados1 = []
         lados2 = []
         if direccion == "dos_lados" and distancia2:
@@ -824,17 +854,32 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
     return _validar(_herramienta_extrusion(caras, abiertas, n, base, lados, delgado), "Extrusión")
 
 
+def _limite_adyacente(cara, dueno):
+    """Extruir › Hasta caras adyacentes: parche de la cara elegida y las que comparten sus aristas."""
+    from .solidos_modificar import _ancestros, _padres
+    mapa = _ancestros(dueno, TopAbs_EDGE, TopAbs_FACE)
+    caras = [cara]
+    for arista in _aristas_de(cara):
+        for vecina in _padres(mapa, arista):
+            if not any(vecina.IsSame(c) for c in caras):
+                caras.append(TopoDS.Face(vecina))
+    return geo.compuesto(caras)
+
+
 def _recortar_hasta(herr, inicios, objeto, modo, plano_obj, origen):
     """Recorta una herramienta larga para que termine en el objeto (cara o cuerpo)."""
-    if objeto.ShapeType() == TopAbs_FACE:
+    if objeto.ShapeType() == TopAbs_FACE or modo == "adyacentes":
         if plano_obj is not None:   # plano oblicuo: semiespacio del lado del perfil
             semi = BRepPrimAPI_MakeHalfSpace(cara_de_plano(plano_obj, 1e5), _pnt(origen)).Solid()
             piezas = _piezas_que_tocan(geo.booleano(herr, semi, "intersecar"), inicios)
         else:                       # cara curva: se parte la herramienta con la cara
             sp = BRepAlgoAPI_Splitter()
+            if modo == "adyacentes":
+                sp.SetNonDestructive(True)
             args, herramientas = List_TopoDS_Shape(), List_TopoDS_Shape()
             args.Append(herr)
-            herramientas.Append(objeto)
+            for cara in _caras_de(objeto):
+                herramientas.Append(cara)
             sp.SetArguments(args)
             sp.SetTools(herramientas)
             sp.Build()
@@ -842,6 +887,8 @@ def _recortar_hasta(herr, inicios, objeto, modo, plano_obj, origen):
                 raise geo.ErrorGeometria("No se pudo cortar la extrusión con la cara objetivo.")
             piezas = _piezas_que_tocan(sp.Shape(), inicios)
             if len(geo.solidos(sp.Shape())) < 2:
+                if modo == "adyacentes":
+                    raise geo.ErrorGeometria("La cara y sus caras adyacentes no cubren todo el perfil de extrusión.")
                 raise geo.ErrorGeometria("La extrusión no llega a la cara objetivo (la cara no la corta entera).")
         return _unir(piezas)
     if modo not in ("cara", "cuerpo", "a_traves", "llega"):

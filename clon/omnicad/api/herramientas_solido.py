@@ -195,7 +195,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
             start: Literal["profile_plane", "offset", "object"] = "profile_plane", start_offset: Expr = 0,
             start_object: str | None = None, symmetric_measure: Literal["total", "half"] = "total",
             extent: Literal["distance", "to_object", "all"] = "distance", to: str | None = None,
-            to_mode: Literal["face", "body", "through"] = "face", to_offset: Expr = 0,
+            to_mode: Literal["face", "adjacent", "body", "through"] = "face", to_offset: Expr = 0,
             taper_angle2: Expr | None = None, open_curves: list[int] | None = None, body: str | None = None,
             tangent_chain: bool = False,
             side2_extent: Literal["distance", "to_object", "all"] = "distance", side2_to: str | None = None):
@@ -222,7 +222,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     symmetric_measure: con direction=symmetric, "total" (distance es el largo total) o "half" (distance es la mitad, a cada lado).
     extent: hasta dónde llega: "distance" (distance, por defecto), "to_object" (hasta to) o "all" (atraviesa todos los cuerpos).
     to: con extent=to_object: cara (selector o id), plano o cuerpo hasta donde llega.
-    to_mode: con to_object: "face" (hasta la cara), "body" (hasta el cuerpo) o "through" (a través del cuerpo).
+    to_mode: "face" (cara), "adjacent" (cara y vecinas), "body" (cuerpo) o "through" (atravesarlo).
     to_offset: desfase en mm sobre el «hasta» (positivo = más lejos); con extent=to_object.
     taper_angle2: conicidad del lado 2 en grados con direction=two_sides; vacío = la misma que taper_angle.
     side2_extent: extensión propia del lado 2 con direction=two_sides: distance (distance2), to_object (hasta side2_to) o all.
@@ -294,7 +294,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         if to is None:
             raise error("INVALID_ARGUMENTS", "extent=to_object necesita to (una cara, un plano o un cuerpo).")
         p.update(extension="objeto", hasta=_referencia(sesion, to, {"cara", "plano", "cuerpo"}, body),
-                 hasta_modo={"face": "cara", "body": "cuerpo", "through": "a_traves"}[to_mode],
+                 hasta_modo={"face": "cara", "adjacent": "adyacentes", "body": "cuerpo", "through": "a_traves"}[to_mode],
                  desfase_hasta=texto_expr(to_offset))
     elif extent == "all":
         p["extension"] = "todo"
@@ -305,7 +305,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
             if side2_to is None:
                 raise error("INVALID_ARGUMENTS", "side2_extent=to_object necesita side2_to (el objeto límite del lado 2).")
             p.update(hasta2=_referencia(sesion, side2_to, {"cara", "plano", "cuerpo"}, body),
-                     hasta_modo={"face": "cara", "body": "cuerpo", "through": "a_traves"}[to_mode],
+                     hasta_modo={"face": "cara", "adjacent": "adyacentes", "body": "cuerpo", "through": "a_traves"}[to_mode],
                      desfase_hasta=texto_expr(to_offset))
     elif direction == "symmetric":
         if symmetric_measure == "half":
