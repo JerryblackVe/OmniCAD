@@ -68,6 +68,7 @@ DEFECTOS = {
     "registro/detallado": False,
     "registro/captura_error": False,
     "registro/retencion_dias": 7,
+    "impresion/holgura_mm": 0.2,          # P-156: holgura de impresión 3D por lado (la placa de calibración la fija)
     "registro/tope_total_mb": 150,
     "registro/tope_capturas_mb": 50,
     "registro/disco_libre_min_gb": 2.0,
@@ -616,6 +617,10 @@ PAGINAS = [
          [(n, "0" if n == 0 else "0." + "123"[:n]) for n in range(4)]),
         ("unidades/ocultar_ceros", "Ocultar ceros finales", "check", None),
     ]),
+    ("impresion", None, "Impresión 3D", "Agranda los agujeros y achica los tornillos para que encajen al imprimir. "
+     "Probá la placa de calibración y poné el valor del agujero que mejor encaja", [
+        ("impresion/holgura_mm", "Holgura de impresión (mm por lado)", "decimal", (0.0, 1.0)),
+    ]),
     ("unidades", None, "Unidades por defecto", "Unidades por defecto de cada espacio de trabajo", []),
     ("diseno", "unidades", "Diseño", "Unidades por defecto del espacio de trabajo Diseño", [
         (None, "Unidad de longitud por defecto", "combo", [("mm", "Milímetro (mm)")]),
@@ -934,7 +939,8 @@ class DialogoPreferencias(QDialog):
                     self.controles[clave] = c
                     continue
             elif tipo == "decimal":
-                c = NumeroDecimal(suffix=" USD", decimals=2, singleStep=0.1)
+                c = (NumeroDecimal(suffix=" mm", decimals=2, singleStep=0.05) if clave.startswith("impresion/")
+                     else NumeroDecimal(suffix=" USD", decimals=2, singleStep=0.1))
                 c.setRange(*opciones)
                 c.setValue(float(actual))
                 c.setFixedWidth(120)

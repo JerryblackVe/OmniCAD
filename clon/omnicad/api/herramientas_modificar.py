@@ -659,7 +659,7 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
     thread: rosca: "M8", "M8x1", "1/4-20 UNC", "Tr20x4", "G1/2" (taper: "R1/2" o "1/2 NPT"); con clearance, el tornillo ("M8").
     thread_class: clase de la rosca modelada: "6H"/"6G" (métrica), "2B"/"3B" (unificada), la de las tablas de Fusion en los demás tipos (A en las tuberías, 2G/3G/4G en ACME, 7H en trapezoidal…), "auto" (la de Fusion si hay datos) o "" (perfil básico).
     fit: ajuste del agujero de paso (clearance): "close" (serie fina), "normal" (media) o "loose" (gruesa).
-    print_clearance: holgura radial extra en mm de la rosca modelada (flancos y agujero), para imprimir en 3D.
+    print_clearance: holgura de impresión 3D en mm por lado de la rosca modelada (agranda el agujero); "general" = la de Preferencias (impresion/holgura_mm, la que fija la placa de create_clearance_test).
     left_hand: true = rosca a izquierdas (solo modeled).
     to: extensión «hasta»: "XY"/"XZ"/"YZ" o un plano de construcción, un cuerpo (id o nombre) o UNA cara (selector o id).
     to_offset: desfase en mm sobre el «hasta» (positivo = más hondo).
@@ -731,6 +731,14 @@ def create_hole(sesion, diameter: Expr | None = None, face: str | None = None, p
     return res
 
 
+def _holgura_impresion(print_clearance):
+    """P-156: «general» = la holgura de impresión 3D de Preferencias (`impresion/holgura_mm`, la de la placa)."""
+    if print_clearance == "general":
+        from .herramientas_preferencias import holgura_general
+        return f"{holgura_general():g} mm"
+    return texto_expr(print_clearance)
+
+
 def _opciones_agujero(sesion, diameter, depth, through_all, hole_type, counterbore_diameter, counterbore_depth,
                       countersink_diameter, countersink_angle, drill_tip, hole_tap, thread, thread_class, fit,
                       print_clearance, left_hand, to, to_offset, body):
@@ -780,7 +788,7 @@ def _opciones_agujero(sesion, diameter, depth, through_all, hole_type, counterbo
     return dict(tipo=_TIPO_AGUJERO[hole_type], diametro=texto_expr(diameter if diameter is not None else 6),
                 extension=extension, profundidad=texto_expr(depth if depth is not None else 10),
                 punta="angulo" if drill_tip else "plana", rosca=rosca, designacion=designacion, clase_rosca=clase,
-                ajuste=_AJUSTE[fit], holgura_3d=texto_expr(print_clearance),
+                ajuste=_AJUSTE[fit], holgura_3d=_holgura_impresion(print_clearance),
                 mano="izquierda" if left_hand else "derecha", **extra)
 
 
@@ -864,7 +872,7 @@ def create_thread(sesion, faces: Elementos, thread: str | None = None, family: F
     offset: distancia en mm desde el extremo de la cara hasta donde empieza la rosca (con length).
     left_hand: true = rosca a izquierdas.
     reverse: true mide length y offset desde el otro extremo de la cara.
-    print_clearance: holgura radial extra en mm (flancos), para piezas impresas en 3D.
+    print_clearance: holgura de impresión 3D en mm por lado (agranda el agujero, achica el tornillo); "general" = la de Preferencias (impresion/holgura_mm, la que fija la placa de create_clearance_test).
     body: cuerpo sobre el que se evalúan los selectores; vacío = el único cuerpo del documento.
     """
     if length is not None:
@@ -888,7 +896,7 @@ def create_thread(sesion, faces: Elementos, thread: str | None = None, family: F
                  familia=familia, clase_rosca=thread_class or "", modelada=modeled, largo_completo=length is None,
                  longitud=texto_expr(length if length is not None else 10), desfase=texto_expr(offset),
                  mano="izquierda" if left_hand else "derecha", invertir=reverse,
-                 holgura_3d=texto_expr(print_clearance))
+                 holgura_3d=_holgura_impresion(print_clearance))
     res = _agregar(sesion, op, combina=modeled)
     res["threads"] = [{"body": sesion.nombre_cuerpo(sesion.cuerpo(r["cuerpo"])), "designation": r["designacion"],
                        "class": r["clase"] or None, "internal": r["interna"], "modeled": r["modelada"]}
