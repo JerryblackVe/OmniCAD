@@ -20,7 +20,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 | B-324 | Extruir rechaza una forma inválida sin caso conservado | Sin verificar | Media | Conseguir el .omnicad original y validar la entrada | `evidencias/registro_2026-11-11.md` (registros de uso de Gerardo, `scripts/registro_bugs.py`) (E55) | 2026-11-11 |
 | B-325 | Booleanas fallan | Sin verificar | Alta | Falta receta | `evidencias/registro_2026-11-11.md` (registros de uso de Gerardo, `scripts/registro_bugs.py`) (E23, E32, E36, E47, E49, E56, E75, E82, E83, E100, E141); `nucleo/geometria.py:926-965`, `timeline/operaciones.py:428-432` | 2026-11-11 |
 | B-327 | Fallos de la suite específicos de Linux | Parcial | Media | Falta clasificar y corregir los rojos del cierre completo en Linux | `clon/tests/test_herramientas_solido.py:1298` (`test_cada_tipo_modelado_en_un_agujero[acme]`, arreglado en B-373) | 2026-11-12 |
-| B-331 | La API en vivo congela la ventana | Parcial | Alta | Falta sacar find_edges y find_faces del hilo de la interfaz | `tests/test_api_inspeccion.py`; `tests/test_b331_costo_aislar.py` | 2026-11-12 |
 | B-335 | Abrir STEP pesado congela la ventana | Parcial | Alta | Hecho 2026-11-15: abrir e insertar van con barra y Cancelar; leer y mallar, en el proceso aparte. Ventana real en la VPS: IMPRESORA 3D.step 27 s → 2,8 s trabada, Prusa 95 MB 2,9 s (al pintar). Falta medir en Windows (E11) | `tests/test_b337_step_en_ventana.py` | 2026-11-15 |
 | B-337 | Importar STEP grande es lento y bloquea | Parcial | Alta | Ya no bloquea (ver B-335). Queda lo lento: `Transfer` de OpenCascade (562-700 s con la Prusa, en el proceso aparte; una sola raíz, `perf` cerrado) y recibir el BREP en texto (2 s; en binario 0,2 s) | `tests/test_b337_step_en_ventana.py` | 2026-11-15 |
 | B-344 | Operación inicial con perfil apoyado | Parcial | Baja | Engrosar hecho (2026-11-13, Sol + E9); falta confirmar Revolución, Barrido, Solevación y Engrosar en Fusion | `tests/test_cuerpos_partidos.py` | 2026-11-13 |
@@ -266,12 +265,6 @@ Crítico
 ### B-327 · Fallos de la suite específicos de Linux
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Suite en Linux (VPS Ubuntu 24.04, `omnicad-vps`): los rojos que en Windows pasan, de métricas de fuente (DejaVu en vez de Segoe), ya están adaptados (2026-11-12: `test_reportar_problema`, `test_render_dialogos_comunes[900]`, `test_proyectar_tarjeta::test_otro_clic_quita…`; `test_asistente_ui` pasa; la humo se arregló en B-291) **Queda:** Clasificar los rojos que dé la suite completa en Linux (el coordinador la corre) y arreglar los de Linux (fuentes, rutas, tiempos, OpenGL por software)
-
-### B-331 · La API en vivo congela la ventana
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** La ventana se congela mientras un agente maneja la app por la API (acción «asistente»): 83 `bloqueo_ui` en 26 min, 184 s congelada en total, máximo 11,2 s (la mayoría 1,4-6,4 s), durante 209 pasos (muchos empalmes que fallaban y se deshacían) **Queda:** Ya no congela `get_viewport_image` (el render corre en otro hilo; era ~115 s de los 184) ni la vuelta atrás de un cambio que falla (usa lo ya calculado). También el recálculo de un cambio que SÍ se aplica (edit_feature, undo) va al proceso aparte aunque el documento tenga menos de 60 pasos, si lo que hay que recalcular desde el cambio suma 0,5 s o más (`UMBRAL_COSTO_AISLAR_S`): 6 ediciones de un documento de 41 pasos pasaron de 6 `bloqueo_ui` y 19 s congelada a 0 y un máximo de 0,16 s (cuesta ~50 % más de tiempo total, como B-48). Falta: `find_edges` y `find_faces` tardan 0,2-0,4 s en el hilo
-
-  **Evidencia original:** `evidencias/reportes_pc/2026-11-11_bloqueos/sesion_2026-11-11_171400_0cf6a4db124d_0001.jsonl` (17:14-17:40 hora AR), PC Windows de Gerardo; `tests/test_api_documento.py::test_falla_se_deshace_sin_recalcular`, `tests/test_api_inspeccion.py::test_imagen_en_vivo_no_congela_la_ventana`, `tests/test_b331_costo_aislar.py::test_documento_chico_pero_lento_va_al_proceso_aparte`
 
 ### B-335 · Abrir STEP pesado congela la ventana
 
