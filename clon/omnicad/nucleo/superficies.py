@@ -1451,6 +1451,19 @@ def parche(aristas_contorno, *, continuidad="G0", interior=(), soporte=None, por
             mf = BRepBuilderAPI_MakeFace(ws[0], True)
             if mf.IsDone():
                 return mf.Face()
+        elif len(ws) > 1:                 # B-527: un anillo llega como dos lazos: el grande es el borde y el resto, huecos
+            caras = [BRepBuilderAPI_MakeFace(w, True) for w in ws]
+            if all(c.IsDone() for c in caras):
+                grande = max(range(len(ws)), key=lambda i: geo.area(caras[i].Face()))
+                mf = BRepBuilderAPI_MakeFace(ws[grande], True)
+                for i, w in enumerate(ws):
+                    if i != grande:
+                        mf.Add(w)
+                arreglo = ShapeFix_Face(mf.Face())      # deja los huecos con el sentido contrario al borde
+                arreglo.Perform()
+                cara = arreglo.Face()
+                if geo.area(cara) < geo.area(caras[grande].Face()) - 1e-9:
+                    return cara
     mapa = _mapa_aristas(soporte) if soporte is not None else None
     rel = BRepOffsetAPI_MakeFilling()
     for w in alambres(aristas_contorno):
