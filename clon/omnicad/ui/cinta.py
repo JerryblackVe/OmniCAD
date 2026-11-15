@@ -459,12 +459,15 @@ class Cinta(QWidget):
 
     def ajustar_textos(self):
         """Si la pestaña visible no entra con el texto bajo los íconos (ventana angosta), sus botones quedan solo
-        con el ícono; al volver a entrar, recuperan el texto. El ancho con texto se mide una vez por pestaña, con la
+        con el ícono; si tampoco caben, queda uno por grupo y el resto en su menú. Al agrandar se restauran.
+        El ancho con texto se mide una vez por pestaña, con la
         cinta ya visible: antes la fuente del tema no está aplicada y la medida sale de más (1481 px en vez de 1110)."""
         pagina = self.pila.currentWidget()
         botones = pagina.findChildren(QToolButton, "boton_cinta") if pagina is not None and self.isVisible() else []
         if not botones:
             return
+        for b in botones:
+            b.show()
         ancho = pagina.property("ancho_con_texto")
         if ancho is None:
             for b in botones:
@@ -476,6 +479,17 @@ class Cinta(QWidget):
         con_texto = self.pila.width() >= ancho
         for b in botones:
             self._estilo_boton(b, con_texto)
+        # Qt superpone los botones de ancho fijo si sus grupos no caben. Se conserva
+        # un acceso por grupo; los demás comandos siguen en el menú del título.
+        grupos = {b.parentWidget() for b in botones}
+        for compactar in (False, True):
+            for grupo in grupos:
+                for i, b in enumerate(grupo.findChildren(QToolButton, "boton_cinta")):
+                    b.setVisible(not compactar or i == 0)
+                fila = grupo.layout().itemAt(0)
+                grupo.setMinimumWidth(fila.minimumSize().width() + 4)
+            if con_texto or pagina.minimumSizeHint().width() <= self.pila.width():
+                break
 
     @staticmethod
     def _estilo_boton(b, con_texto):
