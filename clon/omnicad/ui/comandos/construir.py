@@ -215,6 +215,8 @@ class GeometriaConstruccion(Comando):
             c.maximo = None if v["metodo"] in RUTAS and k == "r0" else 1
             if clave != "r0":
                 v[k] = [h for h in v.get(k) or [] if acepta(c.filtros, h)]
+        if v["metodo"] == "plano_angulo":
+            v["eje_0"] = _eje_cero_de(panel.ctx, ref1(v, "r0"))
         if clave != "r0":
             panel._activar(next((panel._por_clave[k] for k in filas if not v.get(k) and panel._visible(panel._por_clave[k])), None))
             panel._refrescar_seleccion()
