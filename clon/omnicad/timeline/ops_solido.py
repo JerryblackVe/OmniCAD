@@ -569,7 +569,9 @@ class OpAgujero(_OpCrear):
         p = self.p
         herramientas = self.herramientas(estado, ctx)
         # B-506: los del mismo paso, entre sí. shortcut: con rosca modelada no se mide (dos M8 a 8 mm: 5 s; a 7 mm: 14 s,
-        # la distancia entre hélices es lenta); medir contra cilindros del Ø mayor si aparece un caso real.
+        # la distancia entre hélices es lenta). B-521: con las crestas tangentes (M8 a 7,99/8/8,01) el cuerpo queda válido
+        # y sin aristas de 3+ caras, y el radio exacto del surco depende de la clase y la holgura: medir contra cilindros
+        # de ese radio si aparece un caso que rompa.
         if p["rosca"] != "modelada":
             _sc().exigir_agujeros_separados(herramientas)
         if p["rosca"] == "cosmetica":
@@ -1394,7 +1396,10 @@ class OpPatronGeometrico(_OpCrear):
                 raise ErrorOperacion(str(err)) from err
         # B-167: las copias que se pisan (o las de dos caras cercanas) se funden en una sola herramienta; como compuesto
         # eran cientos de autointersecciones, una booleana de minutos y un resultado «imposible»
-        herramienta = geo.unir_todos([sol for f in formas for sol in geo.solidos(f)])
+        copias = [sol for f in formas for sol in geo.solidos(f)]
+        herramienta = geo.unir_todos(copias)
+        if not _sc().agujero_sin_pellizco(copias, [herramienta]):   # B-521: cilindros que se tocan justo (aristas de 3+ caras)
+            raise ErrorOperacion("Dos copias se tocan justo: espesor cero.")
         self._aplicar(estado, ctx, herramienta)
 
 
