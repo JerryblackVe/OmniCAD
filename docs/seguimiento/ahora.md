@@ -17,14 +17,22 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-518 | Traza «CajaValor already deleted» al cerrar (manipuladores.py:1896) (B-444 integrado: 036c59f) |
 | E8b | P-158 (entrega 2) | Mensajes cortos de Superficie y el resto (368 pendientes); P-158b integrado: 126305f |
-| E9 | B-401 | El cálculo aislado pierde atributos de boceto; después B-457 (B-436 integrado: 4048fa8) |
-| E10 | B-527 | `create_patch` de un anillo ignora el hueco (B-474 integrado: 55d53ea) |
+| E9 | B-401 | El cálculo aislado pierde atributos de boceto (B-436 integrado: 4048fa8) |
+| E10 | B-457 | Rosca modelada rápida: test sobre un cuerpo ya modificado (chaflán, empalme); después B-471 (B-527 integrado: 8eaad48) |
 
 ## Sigue (en orden)
 
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-528 | Desfase 2D de texto que se cruza (lo que queda de B-503; Opus, E3) |
+| 2 | B-48 | Caída nativa de OCCT al recalcular (Muy alta; Opus) |
+| 3 | B-172 | Pedir propiedades tras una solevación cerró la app (Opus) |
+| 4 | B-425 | Patrón con muchas copias congela la ventana (E6) |
+| 5 | B-331 | La API en vivo congela la ventana (E6) |
+| 6 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows (E6/E1) |
+| 7 | B-471 | Revolución: el asa del ángulo queda pegada al borde del cuerpo (E10, después de B-457) |
+| 8 | B-398 | La órbita gira fuera del origen en un documento vacío (E5) |
+| 9 | B-399 | ViewCube chico y tamaño difícil de encontrar (E5) |
 
 **Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2 (P-156 sí entra, Gerardo 15/11).
 
