@@ -207,6 +207,31 @@ def proporcion_estrella(puntas, salto=2):
     return math.cos(math.pi * salto / puntas) / math.cos(math.pi * (salto - 1) / puntas)
 
 
+def redondeos_estrella(radio, interior, puntas, r_punta, r_valle):
+    """B-496: los redondeos (punta, valle) que entran en la estrella sin comerse puntas. Si los pedidos no entran en
+    el lado, los achica en la misma proporción y deja recto el 10 % del lado."""
+    a = math.pi / puntas
+    p, v = (radio, 0.0), (interior * math.cos(a), interior * math.sin(a))
+    q, w = (radio * math.cos(2 * a), radio * math.sin(2 * a)), (v[0], -v[1])
+
+    def tangente(x, y, z):                    # de la esquina y al punto de tangencia, por mm de radio
+        u, t = (x[0] - y[0], x[1] - y[1]), (z[0] - y[0], z[1] - y[1])
+        cos = (u[0] * t[0] + u[1] * t[1]) / (math.hypot(*u) * math.hypot(*t))
+        return 1 / math.tan(math.acos(max(-1.0, min(1.0, cos))) / 2)
+
+    usado = r_punta * tangente(v, p, w) + r_valle * tangente(p, v, q)
+    tope = 0.9 * math.dist(p, v)
+    if usado <= tope:
+        return r_punta, r_valle
+    return r_punta * tope / usado, r_valle * tope / usado
+
+
+def _agrupar_estrella(b, antes, ls):
+    """Las restricciones nuevas de la estrella, en un grupo: la ventana dibuja un glifo por tipo (B-496)."""
+    for k in b.restricciones.keys() - antes:
+        b.restricciones[k].datos["grupo"] = f"estrella{ls[0]}"
+
+
 def vertices_estrella(centro, radio, puntas, giro, interior):
     """Puntas (radio `radio`) y valles (radio `interior`) alternados; `giro` orienta la primera punta, en radianes."""
     validar_puntas_estrella(puntas)
@@ -225,12 +250,14 @@ def agregar_estrella(b, centro, radio, puntas, giro, interior, construccion=Fals
     exterior, círculo interior); sin círculos, los dos son None. `existentes` = (exterior, interior) ya dibujados
     (P-154: rehacer la estrella conserva sus cotas)."""
     esquinas = vertices_estrella(centro, radio, puntas, giro, interior)
+    antes = set(b.restricciones)
     verts = [b.agregar_punto(*q) for q in esquinas]
     n = len(verts)
     ls = [b.agregar_linea(verts[k], verts[(k + 1) % n], construccion) for k in range(n)]
     for k in range(1, n):
         b.agregar_restriccion("igual", [ls[0], ls[k]])
     if not circulos:
+        _agrupar_estrella(b, antes, ls)
         return ls, None, None
     if existentes is not None:
         ce, ci = existentes
@@ -239,6 +266,7 @@ def agregar_estrella(b, centro, radio, puntas, giro, interior, construccion=Fals
         ci = b.agregar_circulo(b.curvas[ce].centro, interior, True)
     for k, v in enumerate(verts):
         b.agregar_restriccion("coincidente", [v, ce if k % 2 == 0 else ci])
+    _agrupar_estrella(b, antes, ls)
     return ls, ce, ci
 
 
@@ -247,6 +275,7 @@ def redondear_estrella(b, ls, r_punta=0.0, r_valle=0.0):
     iguales y llevan una sola cota de radio; los vértices quedan virtuales sobre sus círculos, así la estrella sigue
     definida igual que filosa. Devuelve (arcos de las puntas, arcos de los valles)."""
     arcos = ([], [])
+    antes = set(b.restricciones)
     for k in range(len(ls)):
         radio = r_punta if k % 2 == 0 else r_valle
         if radio:
@@ -260,6 +289,7 @@ def redondear_estrella(b, ls, r_punta=0.0, r_valle=0.0):
             for cid in [k for k, c in b.cotas.items() if c.entidades == [a]]:
                 b.eliminar(cid)
             b.agregar_restriccion("igual", [grupo[0], a])
+    _agrupar_estrella(b, antes, ls)
     return arcos
 
 

@@ -167,3 +167,53 @@ def test_rehacer_no_se_lleva_la_linea_donde_se_engancho_el_vertice(boceto):
     _teclear(mb.tarjeta.findChild(QSpinBox), "5")
     assert otra[0] in lz.b.curvas and lz.b.coords(lz.b.curvas[otra[0]].p2) == pytest.approx((40, 0))
     assert sum(1 for c in lz.b.curvas.values() if c.tipo == "linea" and c.id != otra[0]) == 5 and lz.resultado.ok
+
+
+# ---------------------------------------------------------------- B-496: 22 puntas, salto 10, redondeos grandes
+@pytest.mark.parametrize("puntas, salto", [(22, 10), (12, 4), (9, 3), (8, 3)])
+def test_cantidad_de_puntas_es_la_pedida_tambien_con_mcd_mayor_que_1(sesion, puntas, salto):
+    llamar(sesion, "draw_star", points=puntas, outer_radius=50, skip=salto, sketch="E")
+    b = sesion.paso("E").boceto
+    vertices = {round(math.atan2(*b.coords(q)[::-1]), 6) for c in b.curvas.values()
+                if c.tipo == "linea" and not c.construccion for q in c.extremos()
+                if math.dist(b.coords(q), (0, 0)) == pytest.approx(50)}
+    assert len(vertices) == puntas
+    perfiles = llamar(sesion, "get_sketch", sketch="E")["profiles"]
+    r = 50 * proporcion_estrella(puntas, salto)
+    assert len(perfiles) == 1 and perfiles[0]["area"] == pytest.approx(area_estrella(puntas, 50, r), rel=1e-6)
+
+
+def test_redondeos_que_no_entran_se_achican_sin_perder_puntas(sesion):
+    from omnicad.restricciones.boceto import redondeos_estrella
+    assert redondeos_estrella(20, 20 * proporcion_estrella(5), 5, 1, 0.3) == (1, 0.3)       # entran: no se tocan
+    rp, rv = redondeos_estrella(50, 9.5, 22, 3.5, 10.5)
+    assert 0 < rp < 3.5 and rv / rp == pytest.approx(3)                                      # misma proporción
+    llamar(sesion, "draw_star", points=22, outer_radius=50, inner_radius=9.5, tip_fillet=rp, valley_fillet=rv,
+           sketch="E")
+    b = sesion.paso("E").boceto
+    assert sum(1 for c in b.curvas.values() if c.tipo == "arco") == 44
+    assert len(llamar(sesion, "get_sketch", sketch="E")["profiles"]) == 1
+
+
+def test_caso_de_gerardo_22_puntas_redondeadas_en_la_ventana(boceto):
+    mb = boceto
+    lz = mb.lienzo
+    mensajes = []
+    lz.mensaje.connect(mensajes.append)
+    mb.acciones["sk_estrella"].trigger()
+    _clic(lz, 0, 0)
+    _clic(lz, 0, 50)
+    for etiqueta, valor in [("Interior (0 = regular)", "19"), ("Redondeo de puntas", "3,5"),
+                            ("Redondeo de valles", "10,5"), ("Puntas", "22"), ("Salto (con Interior 0)", "10")]:
+        _teclear(_spin(mb, etiqueta), valor)
+    b = lz.b
+    assert lz.resultado.ok and _lineas(lz) == 44 and sum(1 for c in b.curvas.values() if c.tipo == "arco") == 44
+    exterior, interior = sorted((c for c in b.curvas.values() if c.tipo == "circulo"), key=lambda c: -c.radio)
+    assert interior.radio == pytest.approx(0.19 * 50)                       # Interior 19 % vale al rehacer
+    assert mensajes[-1].startswith("⚠ El redondeo no entraba")
+    assert len(lz._vertices_virtuales_estrella()) == 44                     # las esquinas filosas no se dibujan
+    lz.grab()
+    assert len(lz._zonas_glifos) <= 4                                       # un glifo por tipo, no decenas
+    _teclear(_spin(mb, "Interior (0 = regular)"), "0")                      # con 0, manda el salto
+    interior = next(c for c in b.curvas.values() if c.tipo == "circulo" and c.id != exterior.id)
+    assert interior.radio == pytest.approx(50 * proporcion_estrella(22, 10)) and _lineas(lz) == 44

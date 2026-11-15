@@ -55,7 +55,7 @@ from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, 
                                     centro_poligono_arista, circunferencia_3_puntos, dominio,
                                     evaluar_primitiva, expresion_sin_signo, fraccion_en_camino, lado_natural, mas_cercano, paradas_cursor,
                                     primitivas_entidad, proporcion_estrella, puntos_espiral, puntos_primitiva,
-                                    redondear_estrella, validar_lados_poligono, validar_puntas_estrella,
+                                    redondear_estrella, redondeos_estrella, validar_lados_poligono, validar_puntas_estrella,
                                     validar_valor_cota, vertices_estrella, vertices_poligono,
                                     _validar_opciones_texto)
 from ..timeline.parametros import (ANGULO, ESCALAR, LONGITUD, ErrorExpresion, nombres_usados, separar_nombre,
@@ -1742,24 +1742,41 @@ class Lienzo(QWidget):
         r = math.dist(centro, punta)
         if r < 1e-9:
             raise ErrorBoceto("La estrella necesita un tamaño.")
-        interior = self.b.radio(existentes[1]) if existentes is not None else self._interior_estrella(r)
+        interior = self._interior_estrella(r)
+        if existentes is not None:
+            ci = existentes[1]
+            if not any(k.entidades == [ci] for k in self.b.cotas.values()):   # B-496: Interior y Salto valen al rehacer
+                self.b.curvas[ci].radio = interior
+            interior = self.b.radio(ci)
         giro = math.atan2(punta[1] - centro[1], punta[0] - centro[0])
         antes = set(self.b.puntos)
         ls, ce, ci = agregar_estrella(self.b, centro, r, puntas, giro, interior, self.construccion, centro_pid,
                                       bool(o["circulos_estrella"]), existentes)
-        arcos = redondear_estrella(self.b, ls, o["redondeo_puntas"], o["redondeo_valles"])
+        pedidos = (o["redondeo_puntas"], o["redondeo_valles"])
+        rp, rv = redondeos_estrella(r, interior, puntas, *pedidos)
+        if (rp, rv) != pedidos:                  # B-496: achicados, así el redondeo no se come puntas
+            self.mensaje.emit(f"⚠ El redondeo no entraba: va a {formato.numero(rp)} mm en las puntas y "
+                              f"{formato.numero(rv)} mm en los valles.")
+        arcos = redondear_estrella(self.b, ls, rp, rv)
         # sin círculos guía no hay centro ni radio que conservar: no se rehace
         self._ultima_figura = None if ce is None else {"h": "estrella", "lineas": ls, "circulos": [ce, ci],
                                                          "arcos": arcos[0] + arcos[1], "giro": giro,
                                                          "puntos": set(self.b.puntos) - antes}
         return ls
 
+    def _vertices_virtuales_estrella(self):
+        """B-496: las esquinas filosas de una estrella redondeada (puntos sin curva) no se dibujan, como Fusion."""
+        sueltos = {e for r in self.b.restricciones.values() if str(r.datos.get("grupo", "")).startswith("estrella")
+                   for e in r.entidades if e in self.b.puntos}
+        return sueltos and sueltos - {q for c in self.b.curvas.values() for q in c.puntos()}
+
     def _interior_estrella(self, r):
         """Radio de los valles: el % escrito o, con 0, el de la estrella regular {puntas/salto}."""
         o = self.opciones
         if o["interior_estrella"]:
             return r * o["interior_estrella"] / 100
-        return r * proporcion_estrella(int(o["puntas_estrella"]), int(o["salto_estrella"]))
+        puntas = int(o["puntas_estrella"])
+        return r * proporcion_estrella(puntas, max(2, min(int(o["salto_estrella"]), math.ceil(puntas / 2) - 1)))
 
     def cambiar_lados(self, n):
         """Lados desde la tarjeta: valen para el polígono que se va a dibujar y, si recién se dibujó uno, lo rehacen
@@ -6273,6 +6290,7 @@ class Lienzo(QWidget):
         internas = objetos.indice(self.b) if self.b.objetos else {}
         puntos_internos = {p for cid in internas for p in self.b.curvas[cid].puntos()}
         solo_auto, puntos_auto = self.b.ocultos_por_proyeccion_auto()    # no se dibujan (como Fusion)
+        puntos_auto = puntos_auto | self._vertices_virtuales_estrella()
         quietas = determinadas | en_origen        # RS-X3: una vez (por curva era cuadrático con miles de curvas)
         capa = []                                 # lo que se dibuja de cada curva: ver `_dibujar_capa_curvas`
         for c in self.b.curvas.values():
@@ -6436,7 +6454,7 @@ class Lienzo(QWidget):
             if r.datos.get("origen"):                 # pegado al origen: Fusion no le dibuja ícono aparte
                 continue
             grupo = r.datos.get("grupo")
-            if grupo is not None:                 # desfase y patrón: un solo glifo por grupo
+            if grupo is not None and r.id not in en_conflicto:    # desfase, patrón y estrella: un glifo por grupo
                 if (r.tipo, grupo) in grupos:
                     continue
                 grupos.add((r.tipo, grupo))
