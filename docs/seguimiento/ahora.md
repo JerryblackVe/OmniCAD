@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | B-524 | Vaciado agranda el volumen al quitar una cara de un cuerpo ya vaciado; después B-525 (B-503 texto integrado: 24870c5; lo que queda es B-528) |
 | E4 | B-438 | Superficie › Desfase: teclear «1e3 mm» traba la ventana 2 s (worktree `~/OmniCAD-B-438` con un arreglo previo: revisarlo). B-514 (P2) en pausa hasta después del 30/11 |
 | E5 | B-523 | Junta `ball` de la caza (patrones_ensamble_rosca): faltan Pitch/Yaw y get_assembly no la devuelve; reproducir y abrir la fila (B-501 integrado: 6c75a69; E7 lo confirma en la PC) |
-| E6 | FL-12 | Huella de find_faces/find_edges en caché (11×) (FL-5 integrado: db970f7) |
+| E6 | FL-13 | draw_line con detección incremental de perfiles (FL-12 integrado: bda86a4) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
@@ -24,12 +24,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | FL-13 | draw_line con detección incremental de perfiles (E6 o E1) |
-| 2 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
-| 3 | B-525 | `offset_faces` deja autointersecciones con «ok» (E3) |
-| 4 | B-527 | `create_patch` de un anillo ignora el hueco (E4, después de B-438) |
-| 5 | B-522 | `insert_svg` con unidades em/ex da INTERNAL_ERROR (E9 con OpenCode GLM: pieza corta) |
-| 6 | B-528 | Desfase 2D de texto que se cruza (lo que queda de B-503; Opus, E3) |
+| 1 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
+| 2 | B-525 | `offset_faces` deja autointersecciones con «ok» (E3) |
+| 3 | B-527 | `create_patch` de un anillo ignora el hueco (E4, después de B-438) |
+| 4 | B-522 | `insert_svg` con unidades em/ex da INTERNAL_ERROR (E9 con OpenCode GLM: pieza corta) |
+| 5 | B-528 | Desfase 2D de texto que se cruza (lo que queda de B-503; Opus, E3) |
 
 **Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2 (P-156 sí entra, Gerardo 15/11).
 
