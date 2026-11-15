@@ -21,6 +21,8 @@ AR = "TEXTO EN CURVA"
 ESCALA = (2048 / 1466) ** 2                        # Arial: la altura es el alto de la A
 H, O, L_, A_L, HUECO_O = (ESCALA * a for a in (150.34, 160.25, 87.83, 138.63, 206.79))
 TOTAL = 10207.03 + ESCALA * 537.05                 # disco y letras: lo que tiene que estar pintado, sin los huecos
+# Sin Arial (la VPS) el texto sale en su sustituta (DejaVu Sans, más ancha): las medidas de Arial no se comparan.
+CON_ARIAL = fuentes.buscar_fuente("Arial") is not None
 s = api.Sesion()
 
 
@@ -187,7 +189,8 @@ def cancelar_y_aceptar(panel):
     A.esperar(500)
     cuerpos = [geo.volumen(c.forma) for c in v.doc.estado_final.cuerpos.values()]
     A.reg(AR, "Aceptar da 4 letras separadas con los huecos vacíos",
-          len(cuerpos) == 4 and abs(sum(cuerpos) - ESCALA * 5370.5) < 2, f"{len(cuerpos)} cuerpos, {sum(cuerpos):.1f} mm³")
+          len(cuerpos) == 4 and (not CON_ARIAL or abs(sum(cuerpos) - ESCALA * 5370.5) < 2),
+          f"{len(cuerpos)} cuerpos, {sum(cuerpos):.1f} mm³" + ("" if CON_ARIAL else " (sin Arial: solo se cuentan)"))
     A.foto(v, "letras_extruidas")
     extrusion = v.doc.operaciones[-1]
     v.editar_operacion(extrusion.id)
@@ -243,7 +246,9 @@ def panel_caracter():
     QTest.keyClicks(w, "10")
     QTest.keyClick(w, Qt.Key_Tab)
     A.esperar(150)
-    A.reg(AR, "TXT-9: teclear 10 % da el 10 % del ancho medio de Arial con altura 30", abs(lz.opciones["espaciado"] - 1.84992) < 1e-4, str(lz.opciones["espaciado"]))
+    esperado = 1.84992 if CON_ARIAL else 0.1 * fuentes.espaciado_cien("Arial", 30)     # la sustituta, sin Arial
+    A.reg(AR, "TXT-9: teclear 10 % da el 10 % del ancho medio de la fuente con altura 30",
+          abs(lz.opciones["espaciado"] - esperado) < 1e-4, f"{lz.opciones['espaciado']} (esperado {esperado:.5f})")
     c.camino_colocacion.setCurrentIndex(1)
     A.esperar(150)
     c.camino_ajustar.setChecked(True)
