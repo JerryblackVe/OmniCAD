@@ -393,7 +393,8 @@ def _radio_con_clase(fam, designacion, clase, interna):
 
 
 def _asas_rosca(self, ctx, v):
-    """Tamaño siempre, sin caja con «Longitud completa»; en modo parcial, también Desfase y Longitud sobre la pared."""
+    """Como Fusion: con «Longitud completa», el asa de Tamaño (sin caja: B-424); en modo parcial, solo Desfase y
+    Longitud sobre la pared (B-497: el Tamaño suelto con su radio «8,895» confundía; se elige en el panel)."""
     from ...nucleo.solidos_crear import analizar_rosca
     mp = _mp()
     forma = _forma_de(ctx, v["caras"][0]) if v.get("caras") else None
@@ -404,15 +405,15 @@ def _asas_rosca(self, ctx, v):
     inicio = info["origen"] + info["eje"] * (info["zmax"] if v.get("invertir") else info["zmin"])
     alto, radio = info["zmax"] - info["zmin"], -info["radio"] if info["interna"] else info["radio"]
     desfase, largo = (evaluar_o_cero(ctx, v.get(k)) for k in ("desfase", "longitud"))
-    fam = v.get("tipo_rosca") or "iso_metrica"
-    tamano = mp.AsaTamanoRosca(fam, inicio if v.get("largo_completo") else inicio + sentido * desfase, info["eje"],
-                               info["radio"], lambda des: _radio_con_clase(fam, des, v.get("clase_" + fam), info["interna"]))
     if v.get("largo_completo"):
+        fam = v.get("tipo_rosca") or "iso_metrica"
+        tamano = mp.AsaTamanoRosca(fam, inicio, info["eje"], info["radio"],
+                                   lambda des: _radio_con_clase(fam, des, v.get("clase_" + fam), info["interna"]))
         tamano.caja = False  # el radio del tamaño no es la longitud de la cara (B-424)
         return [tamano]
     return [mp.FlechaCilindro("desfase", inicio, sentido, radio, minimo=0.0, maximo=max(0.0, alto - largo), estricto=False),
             mp.FlechaCilindro("longitud", inicio + sentido * desfase, sentido, radio, giro=25.0, minimo=0.0,
-                              maximo=alto - desfase), tamano]
+                              maximo=alto - desfase)]
 
 
 def _asas_tuberia(self, ctx, v):

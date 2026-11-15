@@ -505,14 +505,14 @@ def _deps_objetivo(objetivo):
 
 
 # ---------------------------------------------------------------- operaciones
-def _migrador(clave):
-    """`migrar_receta` de una operación cuyo cálculo cambió: las recetas viejas (sin `clave`) reciben
-    `clave` = 1 y conservan el cálculo de antes, así un ensamblaje compensado a mano (ángulo 180°, Voltear,
+def _migrador(*claves):
+    """`migrar_receta` de una operación cuyo cálculo cambió: las recetas viejas (sin una de las `claves`) la
+    reciben = 1 y conservan el cálculo de antes, así un ensamblaje compensado a mano (ángulo 180°, Voltear,
     dz) abre igual. Las operaciones nuevas toman el valor de PARAMS (2)."""
     def migrar(d):
         params = d.get("params", {})
-        if isinstance(params, dict) and clave not in params:
-            d = dict(d, params=dict(params, **{clave: 1}))
+        if isinstance(params, dict) and any(c not in params for c in claves):
+            d = dict(d, params={**dict.fromkeys(claves, 1), **params})
         return d
     return staticmethod(migrar)
 

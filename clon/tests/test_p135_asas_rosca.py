@@ -50,8 +50,7 @@ def test_p135_flechas_de_desfase_y_longitud_sobre_la_pared(tmp_path):
         QTest.qWait(100)
         assert not panel.valores["largo_completo"] and panel.widgets["desfase"].isVisible()
         gestor = panel.manipuladores
-        desfase, largo, tamano = gestor.manips
-        assert isinstance(tamano, mp.AsaTamanoRosca)
+        desfase, largo = gestor.manips                     # B-497: en parcial solo las 2 flechas, como Fusion
         assert isinstance(desfase, mp.FlechaCilindro) and (desfase.clave, largo.clave) == ("desfase", "longitud")
 
         ojo = np.asarray(v.visor.R[2], float)
