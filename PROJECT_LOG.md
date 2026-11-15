@@ -389,6 +389,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-15] Antes de commitear seguimiento, mirar el resultado de `pytest test_seguimiento.py` y no solo el código de salida: `| tail -1` devuelve 0 aunque el test falle. · Evidencia: commit 24b0718 entró con B-518 de 6 celdas y quedó en rojo; lo arregló f891aec.
 - [2026-11-15] Una tabla de módulo que recuerda lo recibido (transporte, caché) guarda su propia copia, nunca la lista que adopta el documento: B-503, `aislado.estados_recibidos` era `doc._estados` y un deshacer la recortaba. · Evidencia: `tests/test_b503_transporte_trabajador.py`.
 - [2026-11-15] Un cambio que mueve un resultado numérico (volumen, área) lleva un grep del valor viejo en todos los tests antes de integrar: B-464 cambió la cúpula (2095,2 → 1570,8) y dejó rojo `test_b385_paneles.py::test_solevacion_punto_tangente_crea_cupula_y_reabre` en main. · Evidencia: E3, corrida de B-403 sobre main fc1023f.
 - [2026-11-15] Al cambiar un algoritmo de malla o triangulación por uno más rápido, el fuzz compara los triángulos exactos, no solo área y cantidad: hay tests que miden dónde caen los vértices. · Evidencia: `tests/test_b311_seccion_ocultos.py` falló con la primera versión de FL-8 (otra diagonal, misma área).
