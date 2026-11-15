@@ -298,7 +298,7 @@ def _leer_calculo(salida):
         datos["receta"], datos["parcial"] = salida["receta"], salida["calculo"].get("parcial", False)
         datos["estados"] = aislado.estados_recibidos[:datos["iguales"]] + datos["estados"]
         if "marca" in salida["calculo"]:
-            aislado.estados_recibidos = datos["estados"]
+            aislado.estados_recibidos = list(datos["estados"])    # B-503: el documento adopta esa lista y la recorta al recalcular
         n = len(datos["receta"]["operaciones"])
         if any(len(datos[k]) != n for k in ("estados", "resultados", "usados", "duraciones", "dependencias")):
             raise ValueError("El cálculo recibido tiene pasos incompletos.")
