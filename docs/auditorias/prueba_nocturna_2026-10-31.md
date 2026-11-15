@@ -485,3 +485,4 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 - B-471 (E11): Revolución con el mouse en Windows: el anillo del ángulo sobre el eje, a media altura del perfil (captura).
 - **2026-11-15 · P-156 fase 2 (UI):** humo y E11: INSERTAR › Placa de holguras (lista «Encaja mejor» + «Usar este valor»), Combinar › Cortar con «Conservar herramientas» y «Dejar holgura», y «La otra pieza es» en Rosca y Agujero; comparar con un molde de Fusion (desfase de 0,2 a mano).
 - B-556 (E11): cinta y diálogo de Agujero a 1024×700 con main actual (después de B-533 y B-535).
+- B-536 (E11, Fusion): vaciar 1 mm quitando una tapa un barrido (círculo r5 por la spline (0,0),(30,10),(60,0),(90,10)) con empalme r1 en todas las aristas, con y sin Cadena tangente.

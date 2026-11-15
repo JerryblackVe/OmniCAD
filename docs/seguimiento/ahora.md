@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-538 | Mover o copiar un rectángulo con esquina en el origen: «geometría fija»; después B-539 (B-519b integrado: 0521fa2) |
 | E2 | P-160 | Extruir «Todo» elige solo el lado del cuerpo (Gerardo) (B-531 integrado: a32a203) |
-| E3 | B-536 | Vaciado tras empalme en un barrido da «No quedó pared» (FL-16 integrado: b395ed2) |
+| E3 | B-537 | Unir sobre un cuerpo con Patrón de operaciones: sólido inválido o acepta un inválido (B-536 integrado: e758328) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-425 | Patrón con muchas copias congela la ventana (teselar fuera del hilo) (FL-15 integrado: bfa1513) |
@@ -25,19 +25,18 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-331 | La API en vivo congela la ventana (E6) |
-| 2 | B-537 | Unir sobre un cuerpo con Patrón de operaciones: sólido inválido o acepta un inválido (Alta; E3, Opus) |
-| 3 | B-539 | La línea que cierra el perfil no recibe la restricción automática (E1) |
-| 4 | B-546 | Llavero de 17 perfiles: abrir Extruir traba 2 s (E6) |
-| 5 | B-547 | Rosca en un cuerpo ya modificado: 3,7 s y bloquea (E6 o E2) |
-| 6 | B-545 | Abrir el panel de Agujero: 263–358 ms (E6) |
-| 7 | B-541 | Enter no acepta Empalme, Extruir ni Patrón (Sonnet) |
-| 8 | B-543 | Chaflán: un clic simple suma aristas (Sonnet) |
-| 9 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (Sonnet) |
-| 10 | B-544 | Punto en vértice: el vértice tiene que ganar (Sonnet) |
-| 11 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
-| 12 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
-| 13 | B-540 | Doble clic en el boceto del navegador renombra en vez de editar (Sonnet) |
-| 14 | P-161 | Extruir preselecciona el único perfil (Sonnet, chico) |
+| 2 | B-539 | La línea que cierra el perfil no recibe la restricción automática (E1) |
+| 3 | B-546 | Llavero de 17 perfiles: abrir Extruir traba 2 s (E6) |
+| 4 | B-547 | Rosca en un cuerpo ya modificado: 3,7 s y bloquea (E6 o E2) |
+| 5 | B-545 | Abrir el panel de Agujero: 263–358 ms (E6) |
+| 6 | B-541 | Enter no acepta Empalme, Extruir ni Patrón (Sonnet) |
+| 7 | B-543 | Chaflán: un clic simple suma aristas (Sonnet) |
+| 8 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (Sonnet) |
+| 9 | B-544 | Punto en vértice: el vértice tiene que ganar (Sonnet) |
+| 10 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
+| 11 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
+| 12 | B-540 | Doble clic en el boceto del navegador renombra en vez de editar (Sonnet) |
+| 13 | P-161 | Extruir preselecciona el único perfil (Sonnet, chico) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
