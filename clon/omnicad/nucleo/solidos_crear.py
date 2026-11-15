@@ -776,13 +776,21 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
         # plano paralelo al perfil: alcanza una distancia (con la base inclinada no: la tapa saldría inclinada)
         if plano_obj is not None and inicio_plano is None and abs(float(n @ plano_obj.normal)) > 1 - 1e-9:
             d = _distancia_a_plano(origen, n, TopoDS.Face(hasta))
-            d += math.copysign(hasta_desfase, d)
+            fin = d + math.copysign(1.0, d) * hasta_desfase    # B-484: positivo = más lejos, negativo = más cerca
+            if fin * d <= 0:
+                num = [f"{x:g}".replace(".", ",") for x in (hasta_desfase, abs(d))]
+                raise geo.ErrorGeometria(f"El desfase ({num[0]} mm) deja el final del otro lado del perfil: el objeto "
+                                         f"está a {num[1]} mm.")
+            d = fin
             lados1 = [(d, conicidad1)]
             herr = None
         else:
-            objeto = _trasladar(hasta, n * hasta_desfase) if hasta_desfase else hasta
-            lo, hi = _caja_proyectada(objeto, origen, n)
+            lo, hi = _caja_proyectada(hasta, origen, n)
             signo = -1.0 if (distancia1 is not None and distancia1 < 0) or (hi <= 0 < -lo) else 1.0
+            objeto = hasta
+            if hasta_desfase:                        # B-484: hacia el lado de la extrusión, no siempre hacia +n
+                objeto = _trasladar(hasta, n * signo * hasta_desfase)
+                lo, hi = _caja_proyectada(objeto, origen, n)
             alcance = (hi if signo > 0 else -lo) + holgura
             if alcance <= holgura:
                 raise geo.ErrorGeometria("El objeto está del otro lado del perfil.")
