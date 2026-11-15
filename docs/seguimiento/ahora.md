@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-519 **BLOQUEANTE** | Editar el boceto rompe los cuerpos: el desempate de `perfiles.py:808-849` elige el perfil interior en vez del anillo (causa hallada por E7) (B-510 integrado: 7c1331b) |
 | E2 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance`; después B-520 (B-497 integrado: 342e241) |
-| E3 | B-503 (parte 3) | Desfase de caras laterales de una extrusión = desfase 2D del contorno y re-extruir (0,5 s, volúmenes de Fusion); parte 2 integrada: 2e8cbb0 |
+| E3 | B-473 | Chaflán: después de Aceptar queda un triángulo azul suelto en la vista; después B-503 texto entero (extruir la región nueva entera al unir) (B-503 parte 3 integrada: 32a1370) |
 | E4 | B-447 | Superficie reglada con −10 que se cruza: comparar con Fusion y cerrar; después B-514 (B-504 integrado: d20082b) |
 | E5 | B-500 | `manage_analysis` da INTERNAL_ERROR con un Mapa de desviación; después B-501 (B-505 integrado: b5ec414) |
 | E6 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él; después FL-12 y FL-14 (FL-8 sección integrado: 06882d8) |
