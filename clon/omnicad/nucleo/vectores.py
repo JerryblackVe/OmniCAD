@@ -12,15 +12,16 @@ from . import motor as _motor
 
 
 def _iniciar_opencascade():
-    global BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepOffsetAPI_MakeOffset, GeomAbs_Arc
-    global GeomAbs_Intersection, List_TopoDS_Shape, ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopExp_Explorer
-    global TopoDS
+    global BRepAdaptor_Curve, BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepOffsetAPI_MakeOffset
+    global GeomAbs_Arc, GeomAbs_Circle, GeomAbs_Intersection, GeomAbs_Line, List_TopoDS_Shape
+    global ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_WIRE, TopExp_Explorer, TopoDS
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
-    from OCP.GeomAbs import GeomAbs_Arc, GeomAbs_Intersection
+    from OCP.GeomAbs import GeomAbs_Arc, GeomAbs_Circle, GeomAbs_Intersection, GeomAbs_Line
     from OCP.OCP.collections import List_TopoDS_Shape
     from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
-    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_WIRE
     from OCP.TopExp import TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
@@ -93,11 +94,22 @@ def desfase_caras(caras, distancia, esquinas="redondas"):
     salida = []
     for cara in caras:
         mk = BRepOffsetAPI_MakeOffset(TopoDS.Face(cara), union)
+        # B-517: hacia adentro, un lazo con varias curvas libres seguidas (letras, trazados de SVG) cerraba el
+        # programa en OpenCascade; pasado a arcos y rectas (±0,15 % de área) da un error. Una spline o elipse sola
+        # queda exacta, y hacia afuera no se aproxima (ahí falla donde lo exacto anda).
+        # shortcut: el criterio salió de medir letras (d, a, @ cierran; e, o no); si otra figura cierra, ampliarlo.
+        if distancia < 0 and any(_curvas_libres(w) > 1 for w in geo._explorar(cara, TopAbs_WIRE)):
+            mk.SetApprox(True)
         mk.Perform(float(distancia))
-        if not mk.IsDone() or mk.Shape().IsNull():
+        if not mk.IsDone() or mk.Shape().IsNull() or next(geo._explorar(mk.Shape(), TopAbs_EDGE), None) is None:
             raise geo.ErrorGeometria(f"El desfase de {distancia} mm no se pudo calcular (¿la región desaparece?).")
         salida.append(mk.Shape())
     return salida
+
+
+def _curvas_libres(alambre):
+    return sum(BRepAdaptor_Curve(TopoDS.Edge(e)).GetType() not in (GeomAbs_Line, GeomAbs_Circle)
+               for e in geo._explorar(alambre, TopAbs_EDGE))
 
 
 def primitivas_de_formas(formas, plano):
