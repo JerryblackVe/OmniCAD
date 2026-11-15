@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | B-536b | Su test `test_b536_barrido_empalmado…` entró rojo en c7d6c3ab (Vaciado1 falla); B-537 integrado: f833909 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | B-331 | La API en vivo congela la ventana (B-547 integrado: 0a9a781) |
+| E6 | — | En pausa hasta las 00:30 UTC (cupo de 5 h); después lo que siga en `docs/plan_fluidez.md` (B-331 integrado: 5c9c2f5) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | — | En pausa hasta que Gerardo decida sobre el advisor (P-158c integrada: 1186c2d) |
