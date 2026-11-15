@@ -294,7 +294,8 @@ class Solevacion(Comando):
                 ctx.evaluar(c["angulo"], ANGULO)
                 ctx.evaluar(c["peso"], ESCALAR)
         guia = v.get("guia")
-        return self.crear_op(OpSolevacion, v, ctx, secciones=refs(v, "secciones"),
+        exacta = ctx.op.p.get("condicion_exacta", False) if ctx.op else True    # editar no cambia una receta vieja
+        return self.crear_op(OpSolevacion, v, ctx, secciones=refs(v, "secciones"), condicion_exacta=exacta,
                              carriles=refs(v, "carriles") if guia == "carriles" else [],
                              linea_central=refs(v, "linea_central") if guia == "linea_central" else [],
                              cerrada=v["cerrada"], reglada=v["reglada"], operacion=v["operacion"],

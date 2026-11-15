@@ -241,7 +241,8 @@ class OpSolevacion(_OpCrear):
     REVISA_AUTOINTERSECCIONES = True
     PARAMS = {"secciones": [], "carriles": [], "linea_central": [], "cerrada": False, "reglada": False,
               "operacion": "nuevo", "objetivos": [], "condicion_inicio": None, "condicion_fin": None,
-              "fusionar_tangentes": False, "condiciones_medias": {}, "cadena": False, "version_angulo": 2}
+              "fusionar_tangentes": False, "condiciones_medias": {}, "cadena": False, "version_angulo": 2,
+              "condicion_exacta": False}      # H-91: las recetas viejas siguen con secciones auxiliares
     OPCIONES = {"operacion": OPERACIONES_CUERPO}
     REFS = ("secciones", "carriles", "linea_central")
     migrar_receta = staticmethod(_migrar_angulo_despegue)       # P-147d: el ángulo de despegue, desde la normal
@@ -285,7 +286,8 @@ class OpSolevacion(_OpCrear):
                               condicion_fin=self._condicion("condicion_fin", ctx, estado),
                               condiciones_medias={int(k): self._condicion(None, ctx, estado, cond)
                                                   for k, cond in (self.p.get("condiciones_medias") or {}).items()},
-                              fusionar_tangentes=bool(self.p.get("fusionar_tangentes")))
+                              fusionar_tangentes=bool(self.p.get("fusionar_tangentes")),
+                              condicion_exacta=bool(self.p.get("condicion_exacta")))
         if geo.sin_volumen(forma):
             raise ErrorOperacion("La solevación no encierra volumen: los perfiles no pueden estar todos en el mismo "
                                  "plano y una solevación cerrada no puede volver sobre sí misma.")

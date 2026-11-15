@@ -1650,14 +1650,17 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
 
 
 def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido=True, reglada=False,
-            condicion_inicio=None, condicion_fin=None, fusionar_tangentes=False, condiciones_medias=None):
+            condicion_inicio=None, condicion_fin=None, fusionar_tangentes=False, condiciones_medias=None,
+            condicion_exacta=False):
     """Solevado (Loft) de Fusion [SLD-LOFT-SOLID].
 
     `condicion_inicio` / `condicion_fin` (End Conditions de la primera y la última sección): {"tipo": "libre"},
     {"tipo": "direccion", "angulo": grados desde la normal de la sección (0 = perpendicular, como Fusion; da vueltas), "peso": 1} o
     {"tipo": "tangente", "cara": TopoDS_Face (la que la superficie sigue; la sección está sobre su borde), "peso": 1}.
-    `condiciones_medias`: {posición de una sección intermedia: {"tipo": "direccion", ...}}. Solo en el solevado liso
-    (sin carriles, línea central, cerrada ni reglada). `fusionar_tangentes` (Tangent Edges › Merge) une
+    `condiciones_medias`: {posición de una sección intermedia: {"tipo": "direccion", ...}}. Las condiciones se combinan
+    con el carril y la línea central (H-91, como la superficie); no con cerrada ni reglada. Con `condicion_exacta`
+    Dirección, Tangente y Suave de los extremos fijan la derivada de salida (`superficies._exacta_posible`); sin ella
+    (recetas viejas) se aproximan con secciones auxiliares. `fusionar_tangentes` (Tangent Edges › Merge) une
     las caras que quedan tangentes entre sí.
 
     secciones: caras (se respetan los agujeros si todas tienen la misma cantidad), alambres/aristas, o un
@@ -1686,17 +1689,23 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         _exigir_ida(exteriores)
     condiciones = any(c and c.get("tipo", "libre") != "libre"
                       for c in (condicion_inicio, condicion_fin, *(condiciones_medias or {}).values()))
-    if condiciones:
-        if carriles or linea_central is not None or cerrada or reglada:
-            raise geo.ErrorGeometria("Las condiciones de borde no se combinan con carriles, línea central, solevado "
-                                     "cerrado ni reglado.")
-        exteriores = _con_condiciones(exteriores, condicion_inicio, condicion_fin, condiciones_medias)
+    if condiciones and cerrada:
+        raise geo.ErrorGeometria("Cerrada: sin condición de borde.")      # no tiene perfiles extremos
+    if condiciones and reglada:
+        raise geo.ErrorGeometria("Tramos rectos: sin condición de borde.")  # un tramo recto no sale con otra dirección
     if cerrada and (linea_central is not None or carriles):
         raise geo.ErrorGeometria("El solevado cerrado no se combina con línea central ni carril.")
+    from . import superficies as sfc       # H-91: la superficie ya combina las condiciones con rieles y línea central
+    exacta = (condicion_exacta and condiciones and not condiciones_medias and linea_central is None
+              and sfc._exacta_posible(exteriores, (condicion_inicio, condicion_fin)))
     if carriles:
-        from .superficies import _solevar_con_rieles
-        forma = _solevar_con_rieles(exteriores, [_alambre(carriles[0])], solido=solido)
+        forma = sfc._solevar_con_rieles(exteriores, [_alambre(carriles[0])], condicion_inicio, condicion_fin,
+                                        condiciones_medias, False, exacta, solido=solido)
     elif linea_central is not None:
+        if any(c and c.get("tipo") == "punto_tangente" for c in (condicion_inicio, condicion_fin)):
+            raise geo.ErrorGeometria("Punto tangente: sin línea central.")  # las secciones de la cúpula se cruzarían
+        if condiciones:
+            exteriores = sfc._con_condiciones(exteriores, condicion_inicio, condicion_fin, condiciones_medias)
         espina = _alambre(linea_central)
         ps = BRepOffsetAPI_MakePipeShell(espina)
         ps.SetMode(False)
@@ -1713,9 +1722,13 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
             ps.MakeSolid()
         forma = ps.Shape()
     else:
-        from .superficies import _cupula
-        forma = _cupula(secs, condicion_inicio, condicion_fin, solido) if condiciones else None
+        forma = sfc._cupula(secs, condicion_inicio, condicion_fin, solido) if condiciones else None
+        if forma is None and exacta:
+            forma = sfc._solevar_con_rieles(exteriores, [], condicion_inicio, condicion_fin, None, False, True,
+                                            solido=solido)
         if forma is None:
+            if condiciones:         # receta vieja (sin `condicion_exacta`) o perfiles que no se emparejan: auxiliares
+                exteriores = _con_condiciones(exteriores, condicion_inicio, condicion_fin, condiciones_medias)
             forma = _loft(exteriores, solido, reglada, cerrada)
         huecos = [s[2] for s in secs if s[0] == "alambre"]
         if solido and huecos and all(huecos) and len({len(h) for h in huecos}) == 1:
@@ -1730,8 +1743,11 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     if fusionar_tangentes:
         forma = geo.unificar_caras(forma)
     forma = _validar(forma, "Solevado")
-    # B-243: un peso alto en la condición de borde pliega la pared sobre sí misma; es_valida no lo ve y Fusion lo rechaza
-    if condiciones and solido and rv._autointersecciones_seguras(forma, 0, 10)[0]:
+    # B-243: un peso alto en la condición de borde pliega la pared sobre sí misma; es_valida no lo ve y Fusion lo rechaza.
+    # H-91: con carril o línea central la B-spline es densa y el análisis agota los 10 s sin contar nada; ahí revisa el
+    # paso (`ops_solido._exigir_sin_autointersecciones`, B-462).
+    guiada = bool(carriles) or linea_central is not None
+    if condiciones and solido and not guiada and rv._autointersecciones_seguras(forma, 0, 10)[0]:
         raise geo.ErrorGeometria("Solevado: el sólido se autointersecta; la dirección del flujo de la solevación no "
                                  "es válida. Bajá el peso o cambiá el ángulo de la condición de borde.")
     return forma
