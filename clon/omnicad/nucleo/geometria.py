@@ -507,7 +507,7 @@ def _segmentar_tubo_cerrado(forma):
 
 
 def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, invertir=False, nurbs=False, sanar=False,
-              pegar=False, obb=False, con_historial=False, varias=False):
+              pegar=False, obb=False, con_historial=False, varias=False, unificar=True):
     """Una pasada del kernel (BOP). `invertir` cambia objetivo y herramienta (solo 'unir' e 'intersecar', que son
     simétricas); `fuzzy` es la tolerancia difusa en mm; `paralelo=False` corre en un solo hilo; `nurbs` pasa la
     herramienta a B-spline (misma forma, otro algoritmo de intersección: el de toro contra cilindro falla); `sanar`
@@ -516,7 +516,8 @@ def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, inv
     descartar intersecciones.
     `con_historial`: devuelve también las copias de caras de las entradas que no cambiaron, para su revisión.
     `varias`: cada sólido de `herramienta` entra como herramienta propia (un compuesto de sólidos que se tocan no
-    sirve de argumento)."""
+    sirve de argumento). `unificar=False` deja las caras partidas como las da el kernel (B-537: juntarlas invalidaba
+    una unión que el kernel había hecho bien)."""
     entradas = (objetivo, herramienta)
     clases = {"unir": BRepAlgoAPI_Fuse, "cortar": BRepAlgoAPI_Cut, "intersecar": BRepAlgoAPI_Common}
     from OCP.collections import List_TopoDS_Shape
@@ -550,6 +551,8 @@ def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, inv
         reparador = ShapeFix_Shape(BRepBuilderAPI_Copy(resultado).Shape())
         reparador.Perform()
         resultado = reparador.Shape()
+    if not unificar:
+        return (_quitar_cables_colgados(resultado), ()) if con_historial else _quitar_cables_colgados(resultado)
     if con_historial:
         resultado, intactas = _unificar_caras(resultado, entradas)
         return _quitar_cables_colgados(resultado), intactas
@@ -559,6 +562,7 @@ def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, inv
 # Reintentos de una booleana cuyo resultado no es creíble (B-39). Orden: lo que no cambia la geometría primero.
 _REINTENTOS_BOOLEANA = (
     {"sanar": True},                     # el kernel devolvía un sólido inválido sin avisar: ShapeFix lo deja válido
+    {"unificar": False},                 # B-537: juntar las caras coplanares invalidaba una unión bien hecha
     {"paralelo": False},                 # el modo paralelo del kernel a veces da un resultado distinto (1 de 15)
     {"invertir": True},                  # objetivo y herramienta intercambiados: otro camino de clasificación
     {"fuzzy": 1e-6},                     # tolerancia difusa: un contacto tangente casi exacto
@@ -852,9 +856,10 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, c
             desmentido = _comun_desmentido(objetivo, herramienta, operacion, vr, volumenes)
             if desmentido:
                 return desmentido
-            if operacion == "cortar" and vr > maximo - tol:
-                # B-107: un corte que no quita nada cuando la herramienta sí atraviesa el material (el reintento
-                # GlueShift devolvía el objetivo intacto con una cara tangente). El rango «hasta vb» no lo ve.
+            # B-107: un corte que no quita nada cuando la herramienta sí atraviesa el material (el reintento GlueShift
+            # devolvía el objetivo intacto con una cara tangente). B-537: una unión que deja los sólidos sin fundir
+            # (suma exacta). El rango no ve ninguno de los dos: el común los desmiente.
+            if vr > maximo - tol and (operacion == "cortar" or operacion == "unir" and len(solidos(resultado)) > 1):
                 try:
                     comun = abs(_integral(_booleana(objetivo, herramienta, "intersecar", paralelo=False),
                                           BRepGProp.VolumeProperties_s))
@@ -862,8 +867,9 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, c
                     comun = 0.0
                 # El común puede devolver la chica entera aunque casi ni se toquen (B-125): las muestras lo desmienten
                 if tol < comun <= (1 - (_parte_afuera(chica, grande) or 0.0) / 2) * min(vb, vh) * (1 + 1e-6):
-                    return 2, (f"el corte no quitó material aunque la herramienta lo atraviesa "
-                               f"({comun:.6g} mm³)"), comun, vb + vh
+                    que = "el corte no quitó material aunque la herramienta lo atraviesa" if operacion == "cortar" \
+                        else "la unión no fundió el solape"
+                    return 2, f"{que} ({comun:.6g} mm³)", comun, vb + vh
     except Exception:  # noqa: BLE001 — una integración que falla no es motivo para rechazar el resultado
         pass
     problemas, peso = [], 0.0
