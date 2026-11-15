@@ -1687,6 +1687,7 @@ def _empalmes_del_borde(forma, caras):
 def _trasladar_caras(forma, caras, n, dist):
     """Mueve `caras` dist·n sumando (o restando) el prisma que barre cada una: las paredes paralelas a n se estiran."""
     prismas = [BRepPrimAPI_MakePrism(c, gp_Vec(*(n * dist))).Shape() for c in caras]
+    prismas = [p for p in prismas if abs(geo.volumen(p)) > 1e-9]     # B-450: una pared paralela a n no barre volumen
     resultado = geo.unir_todos([forma] + prismas) if dist > 0 else forma
     for prisma in prismas if dist < 0 else ():
         resultado = geo.booleano(resultado, prisma, "cortar")
@@ -1931,7 +1932,8 @@ def reemplazar_cara(forma, caras_origen, destino):
 
 def mover_caras(forma, caras, matriz):
     """Move/Copy de caras (modelado directo): cada cara PLANA se reemplaza por su plano transformado
-    (las vecinas se extienden o recortan). Límite: solo caras planas; mover cilindros/curvas no está."""
+    (las vecinas se extienden o recortan). Al trasladar según su normal, los empalmes del borde viajan con ella
+    conservando el radio, como Fusion. Límite: solo caras planas; mover cilindros/curvas no está."""
     m = np.asarray(matriz, float)
     pares = []
     for c in caras:
@@ -1941,6 +1943,15 @@ def mover_caras(forma, caras, matriz):
         o = m[:3, :3] @ plano.origen + m[:3, 3]
         n = np.linalg.inv(m[:3, :3]).T @ plano.normal
         pares.append((c, geo.Plano.desde_marco(o, n, m[:3, :3] @ plano.u)))
+    if caras and np.allclose(m[:3, :3], np.eye(3), atol=1e-12, rtol=0):
+        n, empalmes = _empalmes_del_borde(forma, caras)
+        if empalmes:
+            dist = float(m[:3, 3] @ n)
+            if abs(dist) > 1e-9 and np.linalg.norm(m[:3, 3] - n * dist) < 1e-9:
+                try:
+                    return _trasladar_caras(forma, list(caras) + empalmes, n, dist)
+                except geo.ErrorGeometria:
+                    pass        # vía especial: si falla, sigue el camino de siempre (sin mostrar su error)
     try:
         return _reemplazar(forma, pares)
     except geo.ErrorGeometria as e:
