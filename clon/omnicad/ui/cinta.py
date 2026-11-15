@@ -272,23 +272,38 @@ ESPACIOS = ["DISEÑO", "DISEÑO GENERATIVO", "RENDERIZAR", "ANIMACIÓN", "SIMULA
 
 
 class _Pestana(QToolButton):
-    """Conserva al menos cuatro letras y recorta solo el final; el tooltip guarda el nombre entero."""
+    """B-535: con la ventana angosta primero se achica el relleno (`Cinta._ajustar_pestanas`) para que todos los nombres
+    entren enteros. Solo si ni así entran (`entera` falso) conserva al menos cuatro letras y recorta el final; el tooltip
+    guarda siempre el nombre entero."""
 
     def __init__(self, nombre):
         super().__init__(objectName="pestana", text=nombre, checkable=True, autoExclusive=True)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.setToolTip(nombre)
         self.setAccessibleName(nombre)
+        self.entera = True
 
-    def resizeEvent(self, evento):
-        super().resizeEvent(evento)
+    def _margen(self):
         opcion = QStyleOptionToolButton()
         self.initStyleOption(opcion)
         opcion.text = ""
-        margen = self.style().sizeFromContents(QStyle.CT_ToolButton, opcion, QSize(0, 0), self).width()
-        medidas = self.fontMetrics()
+        return self.style().sizeFromContents(QStyle.CT_ToolButton, opcion, QSize(0, 0), self).width()
+
+    def ancho_entero(self):
+        return self._margen() + self.fontMetrics().horizontalAdvance(self.toolTip()) + 2
+
+    def ajustar(self):
+        margen, medidas = self._margen(), self.fontMetrics()
+        # el mínimo no obliga a la ventana: con él en el nombre entero, la ventana no bajaría de ~830 px
         self.setMinimumWidth(margen + medidas.horizontalAdvance(self.toolTip()[:4] + "…") + 2)
-        self.setText(medidas.elidedText(self.toolTip(), Qt.ElideRight, max(0, self.width() - margen)))
+        if self.entera:
+            self.setText(self.toolTip())
+        else:
+            self.setText(medidas.elidedText(self.toolTip(), Qt.ElideRight, max(0, self.width() - margen)))
+
+    def resizeEvent(self, evento):
+        super().resizeEvent(evento)
+        self.ajustar()
 
 
 class Cinta(QWidget):
@@ -330,7 +345,7 @@ class Cinta(QWidget):
 
         derecha = QVBoxLayout()
         derecha.setSpacing(0)
-        fila = QHBoxLayout()
+        fila = self.fila_pestanas = QHBoxLayout()
         fila.setSpacing(6)
         self.pila = QStackedWidget()
         # Ancho «Ignored»: la ventana puede ser más angosta que la pestaña; ajustar_textos la compacta.
@@ -456,11 +471,32 @@ class Cinta(QWidget):
     # ------------------------------------------------------------ texto bajo los íconos
     def resizeEvent(self, e):
         super().resizeEvent(e)
+        self._ajustar_pestanas()
         self.ajustar_textos()
 
     def showEvent(self, e):
         super().showEvent(e)
+        self._ajustar_pestanas()
         self.ajustar_textos()
+
+    def _ajustar_pestanas(self):
+        """B-535: que cada nombre de pestaña se lea entero. Si no entran con el relleno de siempre, el relleno se achica
+        (propiedad `compacta` del tema); solo si ni así entran, cada una recorta el final de su nombre."""
+        visibles = [b for b in self.pestanas + list(self.contextuales.values()) if not b.isHidden()]
+        libre = self.pila.width() - 6 * max(0, len(visibles) - 1)       # 6: separación de la fila de pestañas
+        for compacta in (False, True):
+            for b in visibles:
+                if b.property("compacta") != compacta:
+                    b.setProperty("compacta", compacta)
+                    b.style().unpolish(b)
+                    b.style().polish(b)
+            entran = sum(b.ancho_entero() for b in visibles) <= libre
+            if entran:
+                break
+        for b in visibles:
+            b.entera = entran
+            self.fila_pestanas.setStretchFactor(b, b.ancho_entero())   # cada una recibe lo que necesita su nombre
+            b.ajustar()
 
     def ajustar_textos(self):
         """Con la pestaña visible, elige el modo más completo que entra en el ancho de la cinta: botones con texto
@@ -553,6 +589,7 @@ class Cinta(QWidget):
     def mostrar_contextual(self, nombre):
         b = self.contextuales[nombre]
         b.show()
+        self._ajustar_pestanas()
         b.click()
 
     def ocultar_contextual(self, nombre):
@@ -560,3 +597,4 @@ class Cinta(QWidget):
         if b.isChecked():
             self.pestanas[0].click()
         b.hide()
+        self._ajustar_pestanas()
