@@ -80,7 +80,7 @@ def batch(ns):
     for n, nombre, _ in pasos:     # una herramienta inexistente es error de uso: se detecta antes de tocar nada
         if nombre not in indice:
             util.exigir_herramienta(nombre, indice)
-    sesion, abierto, previos, falla = util.abrir_sesion(ns.doc)
+    sesion, abierto, previos, falla = util.abrir_sesion(ns.doc, autoguardado=bool(ns.doc) and not ns.no_save)
     if falla is not None:
         util.mostrar("open_document", falla, ns.json)
         return 1
@@ -101,6 +101,9 @@ def batch(ns):
         if falla is not None:
             resultados.append((0, "save_document", falla))
             errores.append(resultados[-1])
+    if fallo is not None and sesion.autoguardado:   # B-509: se detuvo a propósito sin guardar: la copia no queda pendiente
+        from ..io_archivos import proyecto
+        proyecto.borrar_autoguardado(sesion.doc)
     if ns.json:
         print(util.a_json([r for _, _, r in resultados]))
     else:

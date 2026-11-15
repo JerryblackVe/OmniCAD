@@ -116,7 +116,7 @@ def main(argv=None):
         desconocidas = [t for t in herramientas if t not in conocidas]
         if desconocidas or not herramientas:
             parser.error(f"herramientas desconocidas en --tools: {', '.join(desconocidas) or '(vacío)'}")
-    sesion = api.Sesion()
+    sesion = api.Sesion(autoguardado=True)      # B-509: un agente que se cae no pierde lo que no guardó
     if args.doc:
         try:
             sesion.abrir(args.doc)

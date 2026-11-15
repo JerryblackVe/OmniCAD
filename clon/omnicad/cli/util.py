@@ -108,9 +108,10 @@ def construir_args(ns, herramienta):
 
 
 # ---------------------------------------------------------------- sesión y archivos
-def abrir_sesion(doc):
-    """(sesion, documento_abierto, avisos_de_apertura, error). Sin `doc`: sesión con documento vacío."""
-    sesion = api().Sesion()
+def abrir_sesion(doc, autoguardado=False):
+    """(sesion, documento_abierto, avisos_de_apertura, error). Sin `doc`: sesión con documento vacío.
+    `autoguardado` (B-509, `batch`): copia de recuperación entre pasos por si uno tumba el proceso."""
+    sesion = api().Sesion(autoguardado=autoguardado)
     if not doc:
         return sesion, None, [], None
     ruta = Path(doc)

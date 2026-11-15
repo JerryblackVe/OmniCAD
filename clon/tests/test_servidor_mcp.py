@@ -10,6 +10,7 @@ import socket
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -45,11 +46,14 @@ def json_de(resultado):
     return json.loads(resultado.content[0].text)
 
 
+DATOS = str(Path(tempfile.gettempdir()) / "omnicad_test_servidor")   # carpeta de datos de los servidores
+
+
 def parametros_stdio(*args):
     # --modo sin_ventana: determinista aunque haya un OmniCAD abierto con el puente encendido en esta PC.
     return StdioServerParameters(command=sys.executable, args=["-m", "omnicad.servidor_mcp", "--modo", "sin_ventana", *args],
                                  cwd=str(RAIZ),
-                                 env={"PYTHONPATH": str(RAIZ)})
+                                 env={"PYTHONPATH": str(RAIZ), "LOCALAPPDATA": DATOS})   # B-509: su autoguardado, aparte
 
 
 # ---------------------------------------------------------------- herramientas
@@ -276,7 +280,7 @@ def test_http_real_exige_token_y_solo_escucha_en_127_0_0_1(tmp_path):
     proceso = subprocess.Popen([sys.executable, "-m", "omnicad.servidor_mcp", "--modo", "sin_ventana", "--http",
                                 "--port", str(puerto)],
                                cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                               env={**os.environ, "OMNICAD_PUENTE_DIR": str(tmp_path)})
+                               env={**os.environ, "OMNICAD_PUENTE_DIR": str(tmp_path), "LOCALAPPDATA": str(tmp_path)})
     try:
         ruta_info = tmp_path / "mcp_http.json"
         limite = time.time() + 60

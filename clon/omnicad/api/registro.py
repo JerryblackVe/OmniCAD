@@ -372,6 +372,8 @@ def llamar(sesion, nombre, args=None):
             if h.transaccion:
                 with sesion.transaccion():
                     resultado = h.funcion(sesion, **kwargs)
+                if not anidadas:
+                    sesion.autoguardar_si_toca()        # B-509: fuera de la transacción, como el temporizador de la ventana
             else:
                 resultado = h.funcion(sesion, **kwargs)
         finally:
