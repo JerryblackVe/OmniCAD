@@ -8,7 +8,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-522 | Texto en curva de la caza (E7): 4 letras separadas con huecos vacíos y «TXT-9 teclear 10 %» da 2,0857; reproducir y arreglar (B-519 integrado: cb6a77d) |
+| E1 | B-440 | Velocidad de boceto: lo que queda de salir del boceto y poner cotas (primer texto de la sesión ~700 ms y el resto de la fila); B-519 queda Parcial solo por el Ctrl+Z de E11 |
 | E2 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance`; después B-520 (B-497 integrado: 342e241) |
 | E3 | B-503 (texto entero) | Desfase del texto entero: extruir la región nueva entera al unir (B-473 sin reproducir, guardia integrada 4175fbc; E11 en Windows) |
 | E4 | B-514 | Superficie P2 contra Fusion: Extender «Natural» de borde circular −1,5 % de área; Desfase −9,99 rechaza la esfera (B-447 integrado: 6022af3) |
@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043); sumar el mensaje de `nucleo/vectores.py:105` («⚠ −0,5 mm se come el trazo: probá con menos») |
-| E9 | H-115 | (B-495b integrado: 8ccb78d); piezas acotadas a OpenCode con `opencode/glm-5.3-flash-free` (Sol ya no se usa, Gerardo 15/11): H-115, B-435, B-436, B-401, B-457, P-134, B-450, B-438, B-474 |
+| E9 | B-435 | (H-115 integrado: 72d563c); piezas acotadas a OpenCode: GLM para un archivo, MiniMax M3.1 (minimaxai/) para varios: B-435, B-436, B-401, B-457, P-134, B-450, B-438, B-474 |
 | E10 | B-521 | Lo que dejó B-506: patrón con copias tangentes (verificar) y agujeros tangentes con rosca modelada (chequeo barato) (B-506 integrado: 45b4719) |
 
 ## Sigue (en orden)
