@@ -179,7 +179,7 @@ def test_desfase_de_cara_curva_legitimo_sigue_andando(caso, distancia, volumen):
 def test_engrosar_mas_que_el_radio_de_curvatura_falla(espesor, tipo):
     """La cara lateral de un cilindro de radio 10 engrosada hacia adentro: con −10 salía «ok» con un sólido inválido,
     con −12 un tubo de radio 2 a 10 (dado vuelta por el eje: 6.032 mm³) y con −25 un volumen NEGATIVO (−7.854)."""
-    with pytest.raises(geo.ErrorGeometria, match="engrosar|engrosado"):
+    with pytest.raises(geo.ErrorGeometria, match=r"Espesor .* mm: probá menos|engrosado"):
         sf.engrosar_superficie(_lateral(), espesor, tipo=tipo)
 
 
@@ -207,7 +207,7 @@ def test_engrosar_simetrico_y_de_varias_caras_sigue_andando():
 @pytest.mark.parametrize("distancia", [-10, -12])
 def test_desfasar_superficie_mas_que_el_radio_falla(distancia):
     """−10 dejaba una «superficie» de área 0 sobre el eje y −12 un cilindro de radio 2 (a 8 mm, no a 12)."""
-    with pytest.raises(geo.ErrorGeometria, match="radio de curvatura"):
+    with pytest.raises(geo.ErrorGeometria, match=r"Desfase de .* mm: se cruza sola"):
         sf.desfasar_superficie(_lateral(), distancia)
 
 
@@ -230,7 +230,7 @@ def test_desfasar_superficie_de_un_cuerpo_solido(distancia, medidas):
 def test_desfasar_un_cuerpo_mas_que_su_mitad_falla_sin_tirar_la_app(distancia):
     """Una caja de 10 mm de alto desfasada 6 mm hacia adentro: el kernel daba IsDone y una forma NULA, y
     `_tipado` le pedía el tipo: fallo de segmentación (se caía la app entera). Con 20 mm daba una forma «al revés»."""
-    with pytest.raises(geo.ErrorGeometria, match="se cruza consigo misma"):
+    with pytest.raises(geo.ErrorGeometria, match="se cruza sola"):
         sf.desfasar_superficie(geo.caja(40, 40, 10), distancia)
 
 
@@ -240,7 +240,7 @@ def test_sup_desfase_de_un_cuerpo_por_la_api_falla_limpio():
     antes = json.dumps(s.doc.a_dict(), sort_keys=True)
     r = api.llamar(s, "run_operation", {"type": "sup_desfase", "params": {
         "caras": [{"tipo": "cuerpo", "cuerpo": cid}], "distancia": "-6 mm"}})
-    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and "se cruza consigo misma" in r["mensaje"], r
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and "se cruza sola" in r["mensaje"], r
     assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
     r = api.llamar(s, "run_operation", {"type": "sup_desfase", "params": {
         "caras": [{"tipo": "cuerpo", "cuerpo": cid}], "distancia": "-2 mm"}})
