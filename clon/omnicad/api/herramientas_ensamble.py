@@ -30,7 +30,7 @@ import numpy as np
 
 from ..nucleo import analisis as an
 from ..nucleo import geometria as geo
-from ..timeline import entidades as ent
+from ..timeline import contactos, entidades as ent
 from ..timeline.operaciones import Contexto
 from ..timeline.ops_chapa import cuerpos_del_modelo
 from ..timeline.operaciones import ErrorOperacion
@@ -1027,8 +1027,12 @@ def drive_joint(sesion, joint: str, rotation: Expr | None = None, slide: Expr | 
                       "unión y no se cambió nada. Accioná esa.")
         return {"joint": info_union(sesion, op), "moved_components": []}
     antes = _matrices(sesion)
+    en_contacto = contactos.superposiciones(sesion.doc)
     nuevos["accionada"] = siguiente_accion(sesion.doc.operaciones)
     sesion.doc.reemplazar(op.id, OpUnion(op.id, op.nombre, op.suprimida, **dict(op.p, **nuevos)))
+    bloqueo = contactos.bloqueo(sesion.doc, en_contacto)
+    if bloqueo:                    # la transacción deshace el movimiento: todo queda como estaba
+        raise error("CONTACT_BLOCKED", bloqueo)
     return {"joint": info_union(sesion, sesion.doc.operacion(op.id)), "moved_components": _movidos(sesion, antes)}
 
 

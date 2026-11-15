@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-427 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+431 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -19,7 +19,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 22 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
-| [ensamble](#grupo-ensamble) | 20 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
+| [ensamble](#grupo-ensamble) | 24 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 12 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 33 | Ver y medir el resultado. |
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
@@ -4740,6 +4740,10 @@ Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y
 | [`revert_position`](#revert_position) | sí | Revierte los componentes a su última posición capturada con capture_position (ENSAMBLAR › Posición › Revertir) o, si nunca se capturó, a donde se modelaron. |
 | [`drag_component`](#drag_component) | no | Arrastra un componente como con el mouse en el visor (ENSAMBLAR › Posición): con una unión sigue sus grados de libertad y sus límites; sin unión se traslada libre. |
 | [`motion_study_pose`](#motion_study_pose) | no | Estudio de movimiento con varias uniones a la vez (ENSAMBLAR › Estudio de movimiento): dónde quedan los componentes si cada unión de values tiene ese valor. |
+| [`get_contact_sets`](#get_contact_sets) | no | Los conjuntos de contactos y si el análisis de contacto está prendido (ENSAMBLAR › Activar conjuntos de contactos): mode es none (apagado), sets (solo los conjuntos) o all (todos los componentes entre sí). |
+| [`set_contact_mode`](#set_contact_mode) | sí | Prende o apaga el análisis de contacto (ENSAMBLAR › Activar conjuntos de contactos, Activar todos los contactos y Desactivar todos los contactos): con él prendido, drive_joint rechaza el movimiento que haría que se superpongan los componentes vigilados (CONTACT_BLOCKED). |
+| [`create_contact_set`](#create_contact_set) | sí | Crea un conjunto de contactos entre 2 o más componentes (ENSAMBLAR › Nuevo conjunto de contactos): con el análisis de contacto en «sets», esos componentes no pueden atravesarse. |
+| [`delete_contact_set`](#delete_contact_set) | sí | Borra un conjunto de contactos (navegador › Conjuntos de contactos › Eliminar). |
 
 ### `get_assembly`
 
@@ -5049,6 +5053,42 @@ Estudio de movimiento con varias uniones a la vez (ENSAMBLAR › Estudio de movi
 - Parámetros:
   - `values` (objeto; obligatorio): valor de cada unión: {"Unión1": 90, "Unión2:slide": 12.5}; la clave es la unión (id o nombre) y, tras ":", el movimiento ("rotation", "rotation2", "rotation3", "slide" o "slide2"; vacío = el principal). Grados o mm.
 - CLI: `omnicad call motion_study_pose --doc pieza.omnicad values=…`
+
+### `get_contact_sets`
+
+Los conjuntos de contactos y si el análisis de contacto está prendido (ENSAMBLAR › Activar conjuntos de contactos): mode es none (apagado), sets (solo los conjuntos) o all (todos los componentes entre sí).
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call get_contact_sets --doc pieza.omnicad`
+
+### `set_contact_mode`
+
+Prende o apaga el análisis de contacto (ENSAMBLAR › Activar conjuntos de contactos, Activar todos los contactos y Desactivar todos los contactos): con él prendido, drive_joint rechaza el movimiento que haría que se superpongan los componentes vigilados (CONTACT_BLOCKED).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `mode` ("none" | "sets" | "all"; obligatorio): "sets" vigila los pares de cada conjunto (Enable Contact Sets); "all" vigila todos los componentes entre sí (Enable All Contact); "none" apaga todo (Disable All Contact).
+- CLI: `omnicad call set_contact_mode --doc pieza.omnicad mode=…`
+
+### `create_contact_set`
+
+Crea un conjunto de contactos entre 2 o más componentes (ENSAMBLAR › Nuevo conjunto de contactos): con el análisis de contacto en «sets», esos componentes no pueden atravesarse. No lo prende: usá set_contact_mode.
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `components` (lista de texto; obligatorio): 2 o más componentes (id o nombre, o el id o nombre de uno de sus cuerpos).
+  - `name` (texto; opcional, por defecto `""`): nombre del conjunto; vacío = «Conjunto de contactos<n>».
+- CLI: `omnicad call create_contact_set --doc pieza.omnicad components=…`
+
+### `delete_contact_set`
+
+Borra un conjunto de contactos (navegador › Conjuntos de contactos › Eliminar).
+
+- Modifica el documento: sí, es un paso de deshacer.
+- Parámetros:
+  - `contact_set` (texto; obligatorio): id (CS1) o nombre del conjunto.
+- CLI: `omnicad call delete_contact_set --doc pieza.omnicad contact_set=…`
 
 ## Grupo material
 

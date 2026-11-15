@@ -146,6 +146,7 @@ PISTAS = {
     # --- inspección y avanzado
     "NOTHING_TO_RENDER": ["Creá al menos un cuerpo antes de pedir la imagen (get_scene_info lista los cuerpos).",
                           "Si pasaste bodies, revisá que existan y tengan caras."],
+    "CONTACT_BLOCKED": ["Apagá el análisis de contacto con set_contact_mode(mode=\"none\") o sacá el par con delete_contact_set."],
     "NOTHING_TO_MEASURE": ["Creá al menos un cuerpo antes de medir (get_scene_info lista los cuerpos)."],
     "UNSUPPORTED_BODY_TYPE": ["Esta herramienta trabaja con sólidos o superficies, no con mallas.",
                               "get_scene_info dice el tipo de cada cuerpo."],
