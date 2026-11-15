@@ -18,24 +18,23 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E8 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (B-491 integrado: 28ae484) |
 | E8b | P-158 | Prueba del advisor (1 día). Mensajes de los paneles cortos y gráficos: auditoría (bocetos → sólido) y test de largo (B-502 integrado: d0e9043) |
 | E9 | B-495 | **Regresión de su B-423 (cinta), primero**; Sol con token vencido (17:25 UTC), sigue con Claude; después: Sol siempre corriendo (Gerardo 14/11): H-115, B-435, B-436, B-401, B-457, P-134, B-450, B-438, B-474 |
-| E10 | B-509 | Las sesiones por API, MCP y CLI no autoguardan (H-91 parte integrado: 6d956c9) |
+| E10 | B-506 | Agujeros tangentes dan «ok» con un cuerpo inválido (también por set_parameter) (B-509 integrado: 877b040) |
 
 ## Sigue (en orden)
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-506 | Agujeros tangentes dan «ok» con un cuerpo inválido (también por set_parameter) (E2 o E3) |
-| 2 | B-504 | `stitch_surfaces` con tolerancia 1e6: «ok» con forma vacía que rompe get_scene_info (E4) |
-| 3 | FL-12 | Huella de find_faces/find_edges en caché (11×) (E6) |
-| 4 | FL-13 | draw_line con detección incremental de perfiles (E6 o E1) |
-| 5 | FL-14 | Miniatura al guardar y prevuelo al abrir (E6) |
-| 6 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
-| 7 | P-159 | 179 + 19 parámetros a `Expr` por tandas (E8 o Sol) |
-| 8 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance` (E2, después de B-497) |
-| 9 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 10 | B-389 | Windows agota memoria en una tanda larga: `~/OmniCAD-B-389` tiene un arreglo sin integrar de hace 2 días (`turno.py` con BLAS de un hilo bajo el tope, más su test); verificar, revisar y cerrar |
-| 11 | P-157 | Reorganizar Preferencias como Fusion, visual y con poco texto (P2, pedido de Gerardo; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d) |
-| 12 | B-461 (sin booleana, 2.ª vuelta) | La directa (0,4 s) rompe 7 grupos de la rosca: `_es_filete` (un flanco cada 4–5 vueltas o reconocer por la varilla), sección por el eje degenerada, previa, rechazos de B-299, tolerancia de B-250; worktree `~/OmniCAD-B-461` |
+| 1 | B-504 | `stitch_surfaces` con tolerancia 1e6: «ok» con forma vacía que rompe get_scene_info (E4) |
+| 2 | FL-12 | Huella de find_faces/find_edges en caché (11×) (E6) |
+| 3 | FL-13 | draw_line con detección incremental de perfiles (E6 o E1) |
+| 4 | FL-14 | Miniatura al guardar y prevuelo al abrir (E6) |
+| 5 | FL-15 | Editar el perfil de un Barrido con Empalme y Vaciado: ~20 s (E6) |
+| 6 | P-159 | 179 + 19 parámetros a `Expr` por tandas (E8 o Sol) |
+| 7 | P-156 | Holgura de impresión 3D única (diseño de Gerardo, ficha en mejoras.md): reemplaza `print_clearance` (E2, después de B-497) |
+| 8 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 9 | B-389 | Windows agota memoria en una tanda larga: `~/OmniCAD-B-389` tiene un arreglo sin integrar de hace 2 días (`turno.py` con BLAS de un hilo bajo el tope, más su test); verificar, revisar y cerrar |
+| 10 | P-157 | Reorganizar Preferencias como Fusion, visual y con poco texto (P2, pedido de Gerardo; junta P-152, CF-7, CF-8, NOV-tip-2/3/4 y P-2d) |
+| 11 | B-461 (sin booleana, 2.ª vuelta) | La directa (0,4 s) rompe 7 grupos de la rosca: `_es_filete` (un flanco cada 4–5 vueltas o reconocer por la varilla), sección por el eje degenerada, previa, rechazos de B-299, tolerancia de B-250; worktree `~/OmniCAD-B-461` |
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) y los del lote de las 13 h del 15/11 (B-511 a B-515) quedan en bugs.md sin cola; B-516 Sin verificar.
 
