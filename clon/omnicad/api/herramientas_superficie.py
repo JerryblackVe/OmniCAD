@@ -95,7 +95,7 @@ def create_surface_extrude(sesion, profiles: Seleccion, distance: Expr = "10 mm"
     start: dónde empieza la extrusión: profile_plane (el plano de las curvas), offset (a start_offset de él) o object (en la cara plana o plano start_object).
     start_offset: desfase del inicio en mm según la dirección (número o expresión); con start=offset desde el perfil, con start=object desde el objeto; 0 por defecto.
     start_object: cara plana (selector o id) o plano donde empieza; con start=object.
-    extent: hasta dónde llega: distance (por defecto), to_object (hasta to) o all (atraviesa todos los cuerpos).
+    extent: hasta dónde llega: distance (por defecto), to_object (hasta to) o all (atraviesa todos los cuerpos; en un lado va hacia donde hay cuerpos y, si hay de los dos, hacia el de la distancia).
     to: con extent=to_object: cara (selector o id), plano o cuerpo hasta donde llega.
     to_offset: desfase en mm sobre el «hasta» (positivo = más lejos); con extent=to_object.
     flip: true invierte el sentido de la extrusión (el de la normal del boceto o de direction).

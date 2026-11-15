@@ -96,6 +96,15 @@ from . import revision as rv
 _MARGEN = 1.0   # mm que las herramientas "hasta" y "todo" pasan de largo antes de recortarse
 
 
+def lado_todo(lo, hi, signo):
+    """P-160 (Gerardo): «Todo» con «Un lado» va hacia donde hay cuerpos (`lo`, `hi`: dónde empiezan y terminan sobre la
+    dirección, desde el perfil): si hay de un solo lado, hacia ese; si hay de los dos, el de la flecha (`signo`)."""
+    delante, detras = hi > 1e-6, lo < -1e-6
+    if not (delante or detras):
+        raise geo.ErrorGeometria("No hay ningún cuerpo para atravesar con «Todo».")
+    return signo if delante and detras else (1.0 if delante else -1.0)
+
+
 # ================================================================ utilidades
 def _unit(v, que="dirección"):
     v = np.asarray(v, float)
@@ -829,10 +838,8 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
         lo, hi = _proyectar_caja(hasta_caja, origen, n)
         signo = -1.0 if (distancia1 is not None and distancia1 < 0) else 1.0
         if direccion == "un_lado":
-            alcance = (hi if signo > 0 else -lo) + holgura
-            if alcance <= holgura:
-                raise geo.ErrorGeometria("No hay cuerpos en el sentido de la extrusión.")
-            lados = [(signo * alcance, conicidad1)]
+            signo = lado_todo(lo, hi, signo)
+            lados = [(signo * ((hi if signo > 0 else -lo) + holgura), conicidad1)]
         else:
             lados = [(max(hi, 0.0) + holgura, conicidad1), (min(lo, 0.0) - holgura, conicidad2)]
         return _validar(_herramienta_extrusion(caras, abiertas, n, base, lados, delgado), "Extrusión")

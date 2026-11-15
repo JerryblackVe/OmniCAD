@@ -220,7 +220,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     start_offset: desfase del inicio en mm según la dirección (número o expresión); con start=offset desde el perfil, con start=object desde el objeto; 0 por defecto.
     start_object: cara plana (selector o id) o plano de construcción donde empieza; con start=object.
     symmetric_measure: con direction=symmetric, "total" (distance es el largo total) o "half" (distance es la mitad, a cada lado).
-    extent: hasta dónde llega: "distance" (distance, por defecto), "to_object" (hasta to) o "all" (atraviesa todos los cuerpos).
+    extent: hasta dónde llega: "distance" (distance, por defecto), "to_object" (hasta to) o "all" (atraviesa todos los cuerpos; con one_side va hacia el lado donde hay cuerpos y, si hay de los dos, hacia el de reverse).
     to: con extent=to_object: cara (selector o id), plano o cuerpo hasta donde llega.
     to_mode: "face" (cara), "adjacent" (cara y vecinas), "body" (cuerpo) o "through" (atravesarlo).
     to_offset: desfase en mm sobre el «hasta» (positivo = más lejos); con extent=to_object.
