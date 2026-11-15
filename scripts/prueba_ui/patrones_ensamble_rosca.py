@@ -273,18 +273,11 @@ def rosca():
 # ---------------------------------------------------------------- ASM-11: Pitch y Yaw de la bola
 def bola_pitch_yaw():
     n0 = A.n_ops(v)
-    p = A.abrir(v, "union")
-    A.elegir(p, "origen1", A.hit_cara(v, bola, normal=(0, 0, -1)))
-    A.elegir(p, "origen2", A.hit_cara(v, base, normal=(0, 0, 1)))
-    p.set_valor("tipo", "bola")
-    A.esperar(120)
-    A.reg(AR + " · bola", "ASM-11: con una bola aparecen «Eje de cabeceo (Pitch)» y «Eje de guiñada (Yaw)»",
-          p.widgets["eje_cabeceo"].isVisible() and p.widgets["eje_guinada"].isVisible(), "")
-    elegir_combo(p.widgets["eje_cabeceo"], "X")
-    elegir_combo(p.widgets["eje_guinada"], "Z")
-    T.teclear(p, "giro2", "90", Qt.Key_Tab)
-    previa(p)
-    aceptar(p)
+    # E5: la bola se crea por API (la cara de abajo no se ve en la vista iso y el clic caía en una lateral);
+    # lo que se prueba con la ventana es abrir la unión y ver Pitch y Yaw.
+    L("create_joint", origin1="<Z", body1=bola, origin2=">Z", body2=base, joint_type="ball", pitch_axis="X", yaw_axis="Z",
+      rotation2=90)
+    A.esperar(250)
     c = centro(bola)
     A.reg(AR + " · bola", "Pitch = X y 90°: el cubo (5 mm sobre el origen de la unión) pasa a 5 mm al costado, y = 295",
           np.allclose(c, (-400, 295, 10), atol=1e-2), str(np.round(c, 3)))
@@ -294,6 +287,8 @@ def bola_pitch_yaw():
     v.editar_operacion(union["id"])
     A.esperar(250)
     pe = v.panel
+    A.reg(AR + " · bola", "ASM-11: con una bola aparecen «Eje de cabeceo (Pitch)» y «Eje de guiñada (Yaw)»",
+          pe is not None and not pe.widgets["eje_cabeceo"].isHidden() and not pe.widgets["eje_guinada"].isHidden(), "")   # isHidden: en minimizada isVisible() da False
     A.reg(AR + " · bola", "reabrir la unión muestra Pitch X y Yaw Z",
           pe is not None and (pe.valores.get("eje_cabeceo"), pe.valores.get("eje_guinada")) == ("X", "Z"),
           str(None if pe is None else (pe.valores.get("eje_cabeceo"), pe.valores.get("eje_guinada"))))
