@@ -243,7 +243,11 @@ def buscar_en_ventana(v, ids):
 
 
 def propiedades(v, ids):
+    """Clic derecho › Propiedades: el diálogo del primer cuerpo o componente elegido (varios: el total de los cuerpos)."""
+    from .dialogo_propiedades import abrir
     cuerpos = [k for k in ids if k in v.doc.estado_final.cuerpos]
+    if len(cuerpos) == 1 or (not cuerpos and ids and ids[0] in v.doc.estado_final.componentes):
+        return abrir(v, cuerpos[0] if cuerpos else ids[0])
     if cuerpos:
         r = llamar(v, "get_physical_properties", bodies=cuerpos)
         if r["ok"]:

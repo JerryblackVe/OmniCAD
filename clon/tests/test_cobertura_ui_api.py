@@ -31,7 +31,7 @@ HERRAMIENTAS = {
     "mover_copiar": "move_body", "apoyar": "drop_to_plane", "suprimir": "suppress_feature",
     "eliminar_caras": "delete_faces", "eliminar_operaciones": "remove_features", "reemplazar_primitivas": "replace_with_primitive",
     "material_fisico": "set_material", "aspecto": "set_appearance", "parametros": "set_parameter",
-    "lista_materiales": "get_bill_of_materials", "boceto": "create_sketch", "medir": "measure_distance",
+    "lista_materiales": "get_bill_of_materials", "boceto": "create_sketch", "medir": "measure_distance", "propiedades": "get_properties",
     "interferencia": "check_interference", "barrido_parametros": "parameter_sweep",
     "revisar_geometria": "check_geometry", "reparar_cuerpo": "repair_body",
     "centro_masa": "get_physical_properties", "calcomania": "set_decal", "insertar_svg": "insert_svg",

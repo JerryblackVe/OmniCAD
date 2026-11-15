@@ -456,6 +456,8 @@ class VentanaPrincipal(QMainWindow):
         A("salir", "Salir", self.close, "Ctrl+Q")
         A("deshacer", "Deshacer", self._deshacer, "Ctrl+Z", None, "deshacer")
         A("rehacer", "Rehacer", self._rehacer, "Ctrl+Y", None, "rehacer")
+        A("propiedades", "Propiedades", self._propiedades_de_seleccion, None,
+          "Propiedades del cuerpo o componente elegido: material, masa, volumen, área, centro de masa y caja envolvente.")
         A("boceto", "Crear boceto", self.crear_boceto, "B", "Elegí un plano de origen, un plano de construcción o "
           "una cara plana y dibujá sobre él en la vista 3D. Los contornos cerrados se pueden extruir o revolucionar.",
           "boceto")
@@ -2276,6 +2278,8 @@ class VentanaPrincipal(QMainWindow):
         cuerpos = [h["ref"].get("cuerpo") for h in self.seleccion if h["tipo"] == "cuerpo"]
         if len(cuerpos) == 1:
             filas.append(("Aislar", lambda c=cuerpos[0]: self._accion_navegador("aislar", c)))
+        if cuerpos:
+            filas.append(("Propiedades", self._propiedades_de_seleccion))
         if self.ocultos:
             filas.append(("Anular aislamiento", lambda: self._accion_navegador("desaislar", None)))
         filas += [("Mirar a", lambda: self.barra_nav.mirar_a() if hasattr(self.barra_nav, "mirar_a") else None),
@@ -2405,7 +2409,8 @@ class VentanaPrincipal(QMainWindow):
             self.ocultos -= set(estado.cuerpos)
             self._refrescar_visibilidad()
         elif accion == "propiedades":
-            self._propiedades(clave)
+            from .acciones_navegador import propiedades
+            propiedades(self, [clave])
         elif accion in ("renombrar_paso",):
             self._renombrar(clave)
         elif accion == "buscar_timeline":
@@ -2594,6 +2599,17 @@ class VentanaPrincipal(QMainWindow):
         assert isinstance(self.panel.activa, Seleccion)
         self.panel._elegida(hit_desde_ref(ref, estado))
         return True
+
+    def _propiedades_de_seleccion(self):
+        """INSPECCIONAR › Propiedades y la fila del menú radial: el cuerpo elegido en la vista o en el navegador."""
+        ids = [h["ref"].get("cuerpo") for h in self.seleccion if h["tipo"] == "cuerpo"] or \
+              [h["ref"].get("componente") for h in self.seleccion if h["tipo"] == "componente"]
+        ids = [i for i in ids if i]
+        if not ids:
+            self.mensaje("Propiedades: elegí un cuerpo o un componente.", 5000)
+            return
+        from .acciones_navegador import propiedades
+        propiedades(self, ids)
 
     def _propiedades(self, ident):
         if self._elegido_en_navegador(ident):

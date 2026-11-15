@@ -407,6 +407,39 @@ def get_physical_properties(sesion, bodies: list[str] | None = None, density: fl
             "units": {"volume": "mm3", "area": "mm2", "mass": "g", "density": "g/cm3", "length": "mm"}}
 
 
+@herramienta("get_properties", "inspeccion", "Propiedades de un cuerpo o componente (Propiedades de Fusion): material y medidas físicas "
+             "(volumen, área, masa, centro de masa, caja); en un componente, las de todo su contenido.")
+def get_properties(sesion, item: str):
+    """
+    item: id o nombre de un cuerpo, o id o nombre de un componente.
+    """
+    from ..timeline.ops_ensamblar import ruta_componente
+    from .herramientas_ensamble import componente
+    estado = sesion.doc.estado_final
+    try:
+        c = sesion.cuerpo(item)
+    except ErrorAPI:                # no es un cuerpo: tiene que ser un componente (si no, error COMPONENT_NOT_FOUND)
+        c, k = None, componente(sesion, item)
+    if c is not None:
+        fisicas = get_physical_properties(sesion, bodies=[c.id])
+        return {"kind": "body", "id": c.id, "name": sesion.nombre_cuerpo(c),
+                "component": ruta_componente(estado, c.componente) or None,
+                "material": fisicas["bodies"][0]["material"], "physical": fisicas}
+    familia = {k}
+    while True:                     # el componente y sus subcomponentes
+        mas = {j for j, d in estado.componentes.items() if d.get("padre") in familia} - familia
+        if not mas:
+            break
+        familia |= mas
+    cuerpos = [x.id for x in estado.cuerpos.values() if x.componente in familia]
+    if not cuerpos:
+        raise error("NOTHING_TO_MEASURE", f"El componente «{ruta_componente(estado, k)}» no tiene cuerpos.")
+    d = estado.componentes[k]
+    return {"kind": "component", "id": k, "name": str(d.get("nombre") or k), "path": ruta_componente(estado, k),
+            "grounded": bool(d.get("fijo")), "bodies_count": len(cuerpos),
+            "physical": get_physical_properties(sesion, bodies=cuerpos)}
+
+
 # ---------------------------------------------------------------- medir
 def _componente_o_centro(sesion, nombre):
     """(entidad, descripción) de un componente o de un análisis de Centro de masa, por id o nombre; None si no es ninguno."""

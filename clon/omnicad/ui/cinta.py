@@ -39,7 +39,7 @@ CONSTRUIR = ("CONSTRUIR", ["plano_desfase"], [
     _i("Punto en el centro de círculo/esfera/toroide", "punto_centro"), _i("Punto en arista y plano", "punto_arista_plano"),
     _i("Punto a lo largo de la ruta", "punto_ruta")])
 INSPECCIONAR = ("INSPECCIONAR", ["medir", "seccion"], [
-    _i("Medir", "medir"), _i("Interferencia", "interferencia"), _i("Barrido de parámetros", "barrido_parametros"),
+    _i("Medir", "medir"), _i("Propiedades", "propiedades"), _i("Interferencia", "interferencia"), _i("Barrido de parámetros", "barrido_parametros"),
     _i("Revisar geometría", "revisar_geometria"),
     _i("Reparar cuerpo", "reparar_cuerpo"), SEP,
     _i("Análisis de curvatura en peine", "curvatura_peine"), _i("Análisis cebra", "cebra"),
