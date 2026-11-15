@@ -2183,18 +2183,35 @@ def extender(forma, aristas, distancia, *, tipo="natural", alineacion="alinear")
     return _coser_caras([reemplazos.get(i, c) for i, c in enumerate(caras)] + extra)
 
 
+def _tolerancia_costura(formas, tolerancia):
+    """Rechaza una tolerancia ≤ 0 o tan grande como la pieza (B-504): OpenCascade junta los vértices que quedan a menos
+    de la tolerancia, así que un tubo de 20 mm de alto salía «sólido» desde 45 mm y con 1e6 quedaba una forma vacía."""
+    if not math.isfinite(tolerancia) or tolerancia <= 0:
+        raise geo.ErrorGeometria(f"La tolerancia de costura tiene que ser mayor que 0 mm; recibió {tolerancia:g} mm.")
+    cajas = [c for c in (geo.caja_envolvente(f) for f in _formas(formas)) if c]
+    if not cajas:
+        return
+    medidas = np.max([c[1] for c in cajas], axis=0) - np.min([c[0] for c in cajas], axis=0)
+    # shortcut: el tope es la mitad de la medida más chica (sin las planas); con el tubo colapsaba al doble de eso.
+    tope = min((m for m in medidas if m > 1e-3 * max(medidas)), default=math.inf) / 2   # plana: menos del 0,1 %
+    if tolerancia >= tope:
+        raise geo.ErrorGeometria(f"⚠ Tolerancia demasiado grande para estas piezas: usá menos de "
+                                 f"{tope:.3g}".replace(".", ",") + " mm.")
+
+
 def coser(formas, tolerancia=0.01):
     """Coser superficies [SFC-STITCH] (BRepBuilderAPI_Sewing). Si el resultado queda cerrado
     (estanco) se convierte en sólido, como Fusion. Devuelve {"forma", "es_solido", "aristas_libres", "libres_en",
     "aristas_cosidas"}; `libres_en` son los puntos medios (mm) de los bordes que quedaron libres (hasta 20), para saber
     cuáles son, y `aristas_cosidas` cuántas aristas entraron en la tolerancia."""
-    if not math.isfinite(tolerancia) or tolerancia <= 0:
-        raise geo.ErrorGeometria(f"La tolerancia de costura tiene que ser mayor que 0 mm; recibió {tolerancia:g} mm.")
+    _tolerancia_costura(formas, tolerancia)
     cos = BRepBuilderAPI_Sewing(float(tolerancia))
     for f in _formas(formas):
         cos.Add(f)
     cos.Perform()
     cosido = _simplificar(cos.SewedShape())
+    if not geo.caras(cosido):
+        raise geo.ErrorGeometria("⚠ La costura no dejó ninguna cara: probá con una tolerancia menor.")
     libres, cosidas = cos.NbFreeEdges(), cos.NbContigousEdges()
     cascarones = [TopoDS.Shell(s) for s in geo._explorar(cosido, TopAbs_SHELL)]
     if libres == 0 and cascarones and all(BRep_Tool.IsClosed_s(s) for s in cascarones):
@@ -2237,8 +2254,7 @@ def bordes_de_costura(formas, tolerancia=0.01):
     "aristas_cosidas"}. `libres` (Unstitched Edges, hasta BORDES_MAXIMOS): cada borde abierto con su punto medio, su largo
     y su hueco: cuánto se aleja, en el peor punto, de los demás bordes libres que no se tocan con él (la tolerancia que
     haría falta para cerrarlo; None si no hay otro). `cosidas`: las aristas dentro de la tolerancia (verde en Fusion)."""
-    if not math.isfinite(tolerancia) or tolerancia <= 0:
-        raise geo.ErrorGeometria(f"La tolerancia de costura tiene que ser mayor que 0 mm; recibió {tolerancia:g} mm.")
+    _tolerancia_costura(formas, tolerancia)
     cos = BRepBuilderAPI_Sewing(float(tolerancia))
     for f in _formas(formas):
         cos.Add(BRepBuilderAPI_Copy(f).Shape())
@@ -2302,7 +2318,10 @@ def invertir_normal(forma):
 def normal_muestra(forma):
     """(punto, normal) sobre la primera cara de una superficie: la normal apunta al lado positivo (hacia donde van
     Desfase y Engrosar con distancia positiva). El punto está sobre la cara aunque esté recortada."""
-    cara = geo.caras(forma)[0]
+    caras = geo.caras(forma)
+    if not caras:                                       # B-504: un cuerpo vacío rompía get_scene_info
+        raise geo.ErrorGeometria("La superficie no tiene caras.")
+    cara = caras[0]
     u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
     sup = BRepAdaptor_Surface(cara)
     ps, du, dv = gp_Pnt(), gp_Vec(), gp_Vec()
