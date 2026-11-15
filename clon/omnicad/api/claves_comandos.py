@@ -27,6 +27,7 @@ CLAVES = frozenset({
     "combinar_grupos_caras",
     "combinar_mallas",
     "consejos_diseno",
+    "contactos_nuevo",
     "convertir_chapa",
     "convertir_malla",
     "cortar_plano",

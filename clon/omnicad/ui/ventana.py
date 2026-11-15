@@ -467,6 +467,12 @@ class VentanaPrincipal(QMainWindow):
         A("rehacer", "Rehacer", self._rehacer, "Ctrl+Y", None, "rehacer")
         A("propiedades", "Propiedades", self._propiedades_de_seleccion, None,
           "Propiedades del cuerpo o componente elegido: material, masa, volumen, área, centro de masa y caja envolvente.")
+        A("contactos_activar", "Activar conjuntos de contactos", lambda: self._modo_contactos("sets"), None,
+          "Prende el análisis de contacto de los conjuntos: sus componentes no pueden atravesarse al accionar una unión.", "conjunto_contacto")
+        A("contactos_todos", "Activar todos los contactos", lambda: self._modo_contactos("all"), None,
+          "Prende el análisis de contacto entre todos los componentes, haya o no conjuntos.", "conjunto_contacto")
+        A("contactos_desactivar", "Desactivar todos los contactos", lambda: self._modo_contactos("none"), None,
+          "Apaga el análisis de contacto de todos los componentes.", "conjunto_contacto")
         A("boceto", "Crear boceto", self.crear_boceto, "B", "Elegí un plano de origen, un plano de construcción o "
           "una cara plana y dibujá sobre él en la vista 3D. Los contornos cerrados se pueden extruir o revolucionar.",
           "boceto")
@@ -2612,6 +2618,14 @@ class VentanaPrincipal(QMainWindow):
         assert isinstance(self.panel.activa, Seleccion)
         self.panel._elegida(hit_desde_ref(ref, estado))
         return True
+
+    def _modo_contactos(self, modo):
+        """ENSAMBLAR › Activar conjuntos de contactos / Activar todos / Desactivar todos."""
+        from .. import api
+        r = api.llamar(self._sesion_api(), "set_contact_mode", {"mode": modo})
+        textos = {"sets": "Contactos activados para los conjuntos.", "all": "Contactos activados entre todos los componentes.",
+                  "none": "Contactos desactivados."}
+        self.mensaje(textos[modo] if r["ok"] else f"Contactos: {r['mensaje']}", 5000)
 
     def _propiedades_de_seleccion(self):
         """INSPECCIONAR › Propiedades y la fila del menú radial: el cuerpo elegido en la vista o en el navegador."""

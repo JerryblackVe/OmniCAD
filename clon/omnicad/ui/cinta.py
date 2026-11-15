@@ -63,8 +63,10 @@ ENSAMBLAR = ("ENSAMBLAR", ["union"], [
     _i("Origen de la unión", "origen_union"), SEP,
     _i("Uniones de animación", "accionar_uniones"), _i("Vínculo de movimiento", "vinculo_movimiento"),
     _i("Estudio de movimiento", "estudio_movimiento"), SEP,
-    _i("Activar conjuntos de contactos", ico="conjunto_contacto"),
-    _i("Activar todos los contactos", ico="conjunto_contacto"), SEP,
+    _i("Activar conjuntos de contactos", "contactos_activar", ico="conjunto_contacto"),
+    _i("Nuevo conjunto de contactos", "contactos_nuevo"),
+    _i("Activar todos los contactos", "contactos_todos", ico="conjunto_contacto"),
+    _i("Desactivar todos los contactos", "contactos_desactivar", ico="conjunto_contacto"), SEP,
     _i("Fijar / liberar componente", "fijar_componente"),
     _i("Anclar / desanclar componente", "anclar_componente"), _i("Editar posición inicial", "posicion_inicial"),
     _i("Capturar posición", "capturar_posicion"), _i("Revertir posición", "revertir_posicion")])

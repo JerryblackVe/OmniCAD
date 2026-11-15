@@ -3,6 +3,7 @@
 accionar uniones, vínculo de movimiento y fijar componente."""
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QListWidget, QPushButton, QVBoxLayout, QWidget
 
+from ...timeline import contactos
 from ...timeline.operaciones import ErrorOperacion
 from ...timeline.ops_ensamblar import (CLAVES_MOVIMIENTO, MODOS_POSICION, MOVIMIENTOS, TIPOS_UNION, OpAnclar,
                                        OpCapturarPosicion, OpComponente, OpGrupoRigido, OpOrigenUnion,
@@ -583,7 +584,12 @@ class AccionarUniones(Comando):
 
     def aplicar(self, v, ctx):
         nueva = self._previsualizar(v, ctx)[0]       # un valor imposible se rechaza acá, con el panel abierto
+        en_contacto = contactos.superposiciones(ctx.doc)
         (ctx.ventana._reemplazar if ctx.ventana else lambda o: ctx.doc.reemplazar(o.id, o))(nueva)
+        bloqueo = contactos.bloqueo(ctx.doc, en_contacto)
+        if bloqueo:                # análisis de contacto prendido: el movimiento se deshace y el panel sigue abierto
+            ctx.doc.deshacer()
+            raise ErrorComando(bloqueo)
 
     def manipuladores(self, ctx, v):
         """Arco del ángulo y flecha de la distancia sobre el eje de la unión elegida (marco del componente 2)."""
@@ -735,6 +741,29 @@ class FijarComponente(Comando):
         (ctx.ventana._reemplazar if ctx.ventana else lambda o: ctx.doc.reemplazar(o.id, o))(nueva)
 
 
+class NuevoConjuntoContactos(Comando):
+    CLAVE, TITULO, ICONO = "contactos_nuevo", "Nuevo conjunto de contactos", "conjunto_contacto"
+    AYUDA = ("Crea un conjunto de contactos entre 2 o más componentes: con los contactos activados no pueden "
+             "atravesarse al accionar una unión.")
+    SIN_OP, PREVIA = True, False
+
+    def campos(self, ctx):
+        return [Seleccion("cuerpos", "Componentes", {"cuerpo"}, minimo=2, maximo=None,
+                          ayuda="Elegí cuerpos de dos o más componentes distintos.")]
+
+    def construir(self, v, ctx):
+        return None
+
+    def aplicar(self, v, ctx):
+        comps = _componentes_de(v, ctx)
+        if len(comps) < 2:
+            raise ErrorComando("Elegí cuerpos de dos o más componentes distintos.")
+        from ... import api
+        r = api.llamar(api.Sesion(ctx.doc), "create_contact_set", {"components": comps})
+        if not r["ok"]:
+            raise ErrorComando(r["mensaje"])
+
+
 class AnclarComponente(Comando):
     CLAVE, TITULO, ICONO = "anclar_componente", "Anclar / desanclar componente", "anclar_componente"
     AYUDA = "Ancla un componente a la raíz como un paso del timeline (Pin): las uniones no lo mueven."
@@ -829,4 +858,5 @@ def _hits_de_componentes(ids, ctx):
 
 
 registrar(NuevoComponente, Union, UnionComoEsta, RestriccionComponentes, OrigenUnion, GrupoRigido, AccionarUniones, DuplicarConUniones,
-          VinculoMovimiento, FijarComponente, AnclarComponente, PosicionInicial, CapturarPosicion, RevertirPosicion)
+          VinculoMovimiento, FijarComponente, AnclarComponente, PosicionInicial, CapturarPosicion, RevertirPosicion,
+          NuevoConjuntoContactos)
