@@ -3668,8 +3668,9 @@ def _varilla_roscada(R, largo, paso, r_in, w_in, r_out, w_out):
     (trapecio (r_in, w_in)–(r_out, w_out) centrado en z = −P/2 sobre +X), armada cara por cara: fondo y cresta en
     cilindros exactos, flancos reglados entre dos hélices B-spline con el mismo parámetro y tapas planas. Los
     cilindros van de a una vuelta con u de 0 a 2π (una cara cilíndrica de varias vueltas hace mentir al volumen de
-    GProp); los flancos, de a ~4 vueltas por superficie: uno de 20 vueltas en una sola B-spline (2560 polos) hacía
-    lenta cada booleana posterior (un agujero en M10×30: 7 s) y uno de 1 vuelta no lo reconoce `_es_filete`."""
+    GProp); los flancos, de a 1,5–3 vueltas por superficie: uno de 20 vueltas en una sola B-spline (2560 polos) hacía
+    lenta cada booleana posterior (un agujero en M10×30: 7 s), uno de 1 vuelta no lo reconoce `_es_filete` y uno de 4 hace
+    fallar a `BRepClass3d_SolidClassifier` (un rayo lo cruza varias veces: B-531)."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
     from OCP.GeomFill import GeomFill
     from OCP.OCP.collections import HArray1_double
@@ -3713,8 +3714,8 @@ def _varilla_roscada(R, largo, paso, r_in, w_in, r_out, w_out):
         us = [q[0] for q in poligono]
         if periodica:     # en un cilindro, cada vuelta con u de 0 a 2π (ver el docstring)
             cortes = [2 * math.pi * j for j in range(math.floor(min(us) / (2 * math.pi)), math.ceil(max(us) / (2 * math.pi)) + 1)]
-        else:             # flancos de ~4 vueltas: livianos y con más de 1,5 vueltas (`_es_filete` los reconoce)
-            n = max(1, math.ceil((max(us) - min(us)) / (8 * math.pi)))
+        else:     # flancos de 1,5 a 3 vueltas: `_es_filete` pide más de 1,5 y con 4 el clasificador de puntos falla (B-531)
+            n = max(1, math.floor((max(us) - min(us)) / (3 * math.pi)))
             cortes = [min(us) + (max(us) - min(us)) * i / n for i in range(n + 1)]
         salida = []
         for a, b in itertools.pairwise(cortes):
