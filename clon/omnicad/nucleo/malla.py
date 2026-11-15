@@ -422,41 +422,81 @@ def _puentear(xy, exterior, agujeros):
 
 
 def _orejas(xy, pol):
-    """Triangulación por recorte de orejas de un polígono antihorario (admite puentes repetidos)."""
+    """Triangulación por recorte de orejas de un polígono antihorario (admite puentes repetidos). FL-8: lista enlazada
+    (al cortar una oreja se recalculan solo sus dos vecinos) y los vértices cóncavos en una grilla, para probar cada
+    oreja solo contra los que caen en su caja (40 agujeros, 3448 vértices: 1,1 s → 0,19 s)."""
     pol = list(pol)
-    escala = float(np.ptp(xy[pol], axis=0).max()) or 1.0
+    m = len(pol)
+    P = xy[pol]
+    x0, y0 = P.min(0)
+    escala = float(np.ptp(P, axis=0).max()) or 1.0
     eps = 1e-14 * escala * escala
     tol = 1e-12 * escala
-    tris = []
-    i = 0
-    while len(pol) > 3:
-        n = len(pol)
-        P = xy[pol]
-        prev, nxt = np.roll(P, 1, axis=0), np.roll(P, -1, axis=0)
-        conv = _cruz(prev, P, nxt)
-        R = P[conv <= eps]
-        elegido = None
-        for t in range(n):
-            j = (i + t) % n
-            if conv[j] <= eps:
-                continue
-            a, b, c = prev[j], P[j], nxt[j]
-            if len(R):
-                dentro = (_cruz(a, b, R) >= -eps) & (_cruz(b, c, R) >= -eps) & (_cruz(c, a, R) >= -eps)
-                if dentro.any():
-                    Rd = R[dentro]
-                    propio = ((np.abs(Rd - a) <= tol).all(1) | (np.abs(Rd - b) <= tol).all(1)
-                              | (np.abs(Rd - c) <= tol).all(1))
-                    if not propio.all():
+    X, Y = P[:, 0].tolist(), P[:, 1].tolist()
+    prv, nxt = [(j - 1) % m for j in range(m)], [(j + 1) % m for j in range(m)]
+
+    def cruz(a, b, c):
+        return (X[b] - X[a]) * (Y[c] - Y[a]) - (Y[b] - Y[a]) * (X[c] - X[a])
+
+    celda = escala / max(int(m ** 0.5), 1)
+    grilla = {}
+
+    def a_grilla(j):
+        grilla.setdefault((int((X[j] - x0) / celda), int((Y[j] - y0) / celda)), []).append(j)
+
+    conv = [cruz(prv[j], j, nxt[j]) for j in range(m)]
+    reflejo = [c <= eps for c in conv]
+    for j in range(m):
+        if reflejo[j]:
+            a_grilla(j)
+
+    def es_oreja(a, b, c):
+        """¿Ningún vértice cóncavo (salvo los que coinciden con a, b o c) cae dentro o sobre el triángulo abc?"""
+        ax, ay, bx, by, cx, cy = X[a], Y[a], X[b], Y[b], X[c], Y[c]
+        xmin, xmax = min(ax, bx, cx) - tol, max(ax, bx, cx) + tol
+        ymin, ymax = min(ay, by, cy) - tol, max(ay, by, cy) + tol
+        for i in range(int((xmin - x0) / celda), int((xmax - x0) / celda) + 1):
+            for k in range(int((ymin - y0) / celda), int((ymax - y0) / celda) + 1):
+                for r in grilla.get((i, k), ()):
+                    rx, ry = X[r], Y[r]
+                    if not (xmin <= rx <= xmax and ymin <= ry <= ymax) or not reflejo[r] or r == a or r == c:
                         continue
-            elegido = j
-            break
+                    if ((bx - ax) * (ry - ay) - (by - ay) * (rx - ax) >= -eps
+                            and (cx - bx) * (ry - by) - (cy - by) * (rx - bx) >= -eps
+                            and (ax - cx) * (ry - cy) - (ay - cy) * (rx - cx) >= -eps
+                            and not any(abs(rx - X[v]) <= tol and abs(ry - Y[v]) <= tol for v in (a, b, c))):
+                        return False
+        return True
+
+    tris, j, quedan, cabeza = [], 0, m, 0
+    while quedan > 3:
+        elegido, k = None, j
+        for _ in range(quedan):
+            if conv[k] > eps and es_oreja(prv[k], k, nxt[k]):
+                elegido = k
+                break
+            k = nxt[k]
         if elegido is None:                 # polígono numéricamente roto: se corta la oreja más convexa
-            elegido = int(np.argmax(conv))
-        tris.append((pol[elegido - 1], pol[elegido], pol[(elegido + 1) % n]))
-        del pol[elegido]
-        i = max(elegido - 1, 0) % len(pol)
-    tris.append(tuple(pol))
+            vivos, k = [], cabeza
+            for _ in range(quedan):
+                vivos.append(k)
+                k = nxt[k]
+            elegido = max(vivos, key=lambda v: conv[v])
+        a, c = prv[elegido], nxt[elegido]
+        tris.append((pol[a], pol[elegido], pol[c]))
+        nxt[a], prv[c] = c, a
+        reflejo[elegido] = False
+        quedan -= 1
+        for v in (a, c):
+            conv[v] = cruz(prv[v], v, nxt[v])
+            if conv[v] <= eps and not reflejo[v]:       # no debería pasar (cortar una oreja no achica el ángulo
+                a_grilla(v)                             # del vecino por debajo de 0), pero si pasa, se sigue probando
+            reflejo[v] = conv[v] <= eps
+        if elegido == cabeza:               # mismo orden que el recorte sobre la lista vieja: mismos triángulos que antes
+            cabeza = j = c
+        else:
+            j = a
+    tris.append((pol[cabeza], pol[nxt[cabeza]], pol[nxt[nxt[cabeza]]]))
     return tris
 
 
@@ -475,10 +515,11 @@ def _triangular_2d(xy, contornos):
     contornos, areas = [contornos[i] for i in utiles], areas[utiles]
     n = len(contornos)
     contiene = np.zeros((n, n), bool)
+    cajas = [(xy[k].min(0), xy[k].max(0)) for k in contornos]
     for i in range(n):
         p = xy[contornos[i][0]]
         for j in range(n):
-            if j != i and abs(areas[j]) > abs(areas[i]):
+            if j != i and abs(areas[j]) > abs(areas[i]) and (cajas[j][0] <= p).all() and (p <= cajas[j][1]).all():
                 contiene[j, i] = _punto_en_poligono(p, xy[contornos[j]])
     prof = contiene.sum(0)
     tris = []
