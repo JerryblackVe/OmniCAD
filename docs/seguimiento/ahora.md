@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-519 **BLOQUEANTE** | Editar el boceto rompe los cuerpos y Deshacer no vuelve todo (repro de E7); B-492 en pausa en su worktree, sigue después; luego B-510 (B-487 integrado: 1f2d8be) |
 | E2 | B-497 | Rosca: tamaño automático como Fusion y 2 asas (hecho, en tests reducidos); después B-508 (B-461 sin booleana: al tope, queda en ~/OmniCAD-B-461 y vuelve a Sigue) |
-| E3 | B-503 (parte 2) | Desfase que falla en cuerpos con letras B-spline: renglón en el panel, sin cuadro (parche en `evidencias/parches/b503_ui.patch`, estudio de E11 en `evidencias/reportes_pc/2026-11-15_desfase_estudio/`); también cilindro −radio sin jerga (B-507 integrado: 9f29f78) |
+| E3 | B-503 (parte 3) | Desfase de caras laterales de una extrusión = desfase 2D del contorno y re-extruir (0,5 s, volúmenes de Fusion); parte 2 integrada: 2e8cbb0 |
 | E4 | B-504 | `stitch_surfaces` con tolerancia 1e6: «ok» con forma vacía que rompe get_scene_info (B-517 integrado: 133a8e9) |
 | E5 | B-500 | `manage_analysis` da INTERNAL_ERROR con un Mapa de desviación; después B-501 (B-505 integrado: b5ec414) |
 | E6 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él; después FL-12 y FL-14 (FL-8 sección integrado: 06882d8) |
