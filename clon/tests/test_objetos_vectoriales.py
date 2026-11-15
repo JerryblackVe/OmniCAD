@@ -403,3 +403,20 @@ def test_transformar_no_reintersecta_ni_cambia_topologia_de_un_objeto(forma, mon
     assert len(nuevos) == len(originales)
     assert sorted(p.area for p in nuevos) == pytest.approx(sorted(p.area * .529 ** 2 for p in originales), rel=1e-7, abs=1e-9)
     assert all(geo.es_valida(p.cara) for p in nuevos)
+
+
+def test_b452_lo_oculto_no_se_dibuja_en_la_vista_3d_fuera_del_boceto():
+    """B-452: fuera del boceto la vista 3D dibujaba también las curvas y los objetos ocultos. Ahora sigue la misma regla
+    que el editor (`curvas_visibles`): lo oculto no se dibuja, y sigue en los perfiles."""
+    from omnicad import api
+    from omnicad.ui.visor3d import polilineas_boceto
+    s = api.Sesion()
+    llamar = lambda h, **k: api.llamar(s, h, k)["result"]  # noqa: E731
+    llamar("create_sketch", plane="XY", name="B")
+    llamar("draw_rectangle", x1=0, y1=0, x2=20, y2=10)
+    suelta = llamar("draw_line", start_x=30, start_y=0, end_x=40, end_y=5)["entities"][0]["id"]
+    br = lambda: s.doc.estado_final.bocetos[s.paso("B").id]  # noqa: E731
+    assert len(polilineas_boceto(br())) == 5
+    assert api.llamar(s, "set_sketch_curve", {"curve": suelta, "visible": False})["ok"]
+    assert len(polilineas_boceto(br())) == 4                 # la curva oculta ya no se ve
+    assert len(br().perfiles) == 1                            # y los perfiles no cambian
