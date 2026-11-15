@@ -18,7 +18,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E8 | B-518 | Traza «CajaValor already deleted» al cerrar (manipuladores.py:1896) (B-444 integrado: 036c59f) |
 | E8b | P-158c | Entrega 2 de P-158: Mensajes cortos de Superficie y el resto (368 pendientes); P-158b integrado: 126305f |
 | E9 | B-401 | El cálculo aislado pierde atributos de boceto; OpenCode siempre corriendo (B-450 integrado: 9044a97) |
-| E10 | B-449 | Test intermitente test_previa_vaciado_aislada (B-471 integrado Parcial: ce292a0); después B-423 |
+| E10 | B-423 | Ventana chica (800×520): la cinta queda con íconos y nombres cortados (B-449 integrado: 8b9e4e3) |
 
 ## Sigue (en orden)
 
