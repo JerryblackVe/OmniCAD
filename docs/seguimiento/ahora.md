@@ -11,7 +11,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E1 | B-487 | Curvatura línea–spline mueve la línea ~6 mm; después B-492 y B-510 (B-489 integrado: e172974) |
 | E2 | B-497 | Rosca: tamaño automático como Fusion y 2 asas (hecho, en tests reducidos); después B-508 (B-461 sin booleana: al tope, queda en ~/OmniCAD-B-461 y vuelve a Sigue) |
 | E3 | B-507 | `offset_faces` sobre esfera con −radio: «ok» con un sólido inválido (B-503 parte 1 integrada: 8dfc8ca; la parte de UI espera el estudio de E11, parche en `evidencias/parches/b503_ui.patch`) |
-| E4 | B-496 | Estrella de boceto: 22 puntas dibuja ~9 lóbulos, glifos encimados, puntos sueltos (Gerardo) (B-493 integrado: 6fe740b) |
+| E4 | B-517 | **BLOQUEANTE** offset_profiles −0,5 sobre texto cierra la app (segfault OCC, familia de B-493); B-496 sigue en tests |
 | E5 | B-505 | `drag_component` da «ok» sin mover; después B-500 y B-501 (H-119 integrado: 96c1cd1) |
 | E6 | FL-5 | Prevuelo desde 60 pasos: 300 cajas 23,5 s → 2,6 s sin él; después FL-12 y FL-14 (FL-8 sección integrado: 06882d8) |
 | E7 | Caza | Sin ítem P1 libre para E7: caza automática (`scripts/caza/cazar.py tema` bocetos, sólido, superficie, construir) y `scripts/prueba_ui`; lo rojo entra con su ID (B-468 integrado: e0273ac) |
