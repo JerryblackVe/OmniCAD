@@ -272,6 +272,7 @@ Especificación (prioridad 1: toca los paneles de bocetos y sólido):
 3. **Sin consejos largos** en el panel; si hace falta, a la ayuda.
 4. **Auditoría de TODOS los mensajes de los paneles** (bocetos → sólido → superficie → resto): lista de los que pasan de 1 renglón y su versión corta.
 5. **Test** que falle si un mensaje de un panel pasa de N caracteres. La guía de estilo es la regla de nivel 1 n.º 14 de CLAUDE.md (15641c8); AGENTS.md solo la nombra.
+Casos ya vistos: `nucleo/superficies.py:1380` (solevación de superficie cerrada, mensaje largo; E10, 15/11).
 Relación con otras filas: B-436 (mensajes que dicen otra cosa; lo tiene E9) sigue aparte porque corrige el CONTENIDO, pero sus mensajes nuevos ya siguen este estilo. P-2b (traducción) va aparte: se traducen las versiones cortas.
 
 ### P-157 · Reorganizar Preferencias: ordenado, visual, poco texto (Gerardo, 2026-11-15)
