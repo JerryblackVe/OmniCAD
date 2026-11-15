@@ -15,7 +15,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, Sol y el
 8. **Seguridad**: sin push, gasto, borrado ni archivos privados sin el OK de Gerardo; credenciales nunca a la vista; MCP solo en 127.0.0.1.
 9. **Solo OpenCascade**: OmniKernel suspendido.
 10. **Todo en MCP y CLI**: cada herramienta nueva con su versión para agentes, test y doc.
-11. **Avisos**: contexto al 65 %, cupo de Claude al 95 %, Sol siempre con trabajo.
+11. **Avisos**: contexto al 65 %, cupo de Claude al 95 %, OpenCode (glm-5.3-flash-free; Sol dado de baja por Gerardo el 2026-11-15) siempre con trabajo.
 12. **Hablarle corto a Gerardo**: 3–5 líneas, resultado primero, ⚠ para riesgos, una sola pregunta.
 13. **Máximo rendimiento**: todo lo más rápido posible, ordenado y sin perder calidad. Usar al máximo el cupo de 5 h y el semanal de Claude, y el de Sol: nunca capacidad ociosa (sesiones quietas, Sol sin corrida, ventana de 5 h sin usar), y nunca desperdicio (pruebas repetidas, lecturas de más, modelo más caro de lo necesario).
 14. **App para todos (Gerardo, 2026-11-15)**: OmniCAD tiene que ser intuitiva y gráfica, y entenderse desde un chico de 10 años hasta una persona de 100. Todo se trabaja bajo esta premisa: mensajes de 1 renglón con ícono y sin jerga, límites y errores mostrados en el dibujo (asa, campo o previa en rojo), muestras visuales en vez de textos largos, y el detalle en un «?» o en la ayuda. Lo que ya existe y no cumple se adapta (P-157, P-158).
