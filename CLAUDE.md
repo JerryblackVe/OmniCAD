@@ -3,7 +3,7 @@
 Procedimientos largos (VPS, página de seguimiento, prueba como usuario, ayuda de Fusion, loop por fases, caza,
 contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.md). Acá queda la regla corta.
 
-## REGLAS DE NIVEL 1 (mandatorias, Gerardo 2026-11-14)
+## REGLAS DE NIVEL 1 (mandatorias, Gerardo 2026-11-14 y 15)
 Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode y el chat maestro.
 1. **Orden de trabajo**: bocetos → sólido → superficie → construir/inspeccionar/ensamblar; la velocidad es prioridad 1; lo demás después.
 2. **Cola única**: solo `ahora.md`; reportes en lotes de 13 y 19 h; solo un bloqueante entra en el momento.
@@ -19,6 +19,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 12. **Hablarle corto a Gerardo**: 3–5 líneas, resultado primero, ⚠ para riesgos, una sola pregunta.
 13. **Cuidar los tokens, sin perder calidad (Gerardo, 2026-11-15: prioridad máxima)**: meta, una app usable para el 30/11. Modelo y esfuerzo justos (Opus solo en solver, geometría y núcleo; lo demás en Sonnet; lo mecánico en OpenCode gratis o en scripts); leer solo lo necesario; nada de pruebas ni análisis repetidos; mensajes cortos; nada de prioridad 2 hasta terminar la 1. Sin capacidad ociosa en lo que suma a la meta, pero gastar menos vale más que gastar todo el cupo.
 14. **App para todos (Gerardo, 2026-11-15)**: OmniCAD tiene que ser intuitiva y gráfica, y entenderse desde un chico de 10 años hasta una persona de 100. Todo se trabaja bajo esta premisa: mensajes de 1 renglón con ícono y sin jerga, límites y errores mostrados en el dibujo (asa, campo o previa en rojo), muestras visuales en vez de textos largos, y el detalle en un «?» o en la ayuda. Lo que ya existe y no cumple se adapta (P-157, P-158).
+15. **Nunca ser complaciente (Gerardo, 2026-11-15)**: si un pedido, un plan o una idea (de Gerardo, del coordinador o de otra sesión) es mala idea, no conviene o no es lo adecuado, decirlo antes de hacerlo, en una línea, con la razón y la alternativa. Como expertos, no se ejecuta algo malo por darle el gusto a nadie; si es buena idea, se hace sin vueltas.
 
 ## REGLA ESTRICTA: qué se trabaja primero (Gerardo, 2026-11-10)
 «Esto es lo que va a hacer funcional la app, aunque esté incompleta.» La meta es que estas herramientas anden al
