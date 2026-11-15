@@ -1170,6 +1170,33 @@ def test_b361_los_radios_de_conicidad_se_miden_una_vez_por_perfil(monkeypatch):
     assert solido._radios_conicidad([a]) == solido._radios_conicidad([a, b])
     solido._radios_conicidad([a, b])
     assert medidas == [1, 1]
+
+
+def test_b403_sin_conicidad_el_cierre_se_mide_al_mover_el_anillo(app_qt, monkeypatch):
+    """B-403: medir el cierre son ~40 desfases del kernel por perfil (un texto de 8 letras trababa la ventana 1 s al
+    elegirlas). Con conicidad 0 no se mide al armar las asas; al mover el anillo se mide una vez y frena igual (B-343)."""
+    import math
+
+    from omnicad.nucleo import solidos_crear as sc
+    from omnicad.ui.comandos import solido
+    from omnicad.ui.comandos.solido import Extruir
+    medidas, original = [], sc.radios_conicidad
+    monkeypatch.setattr(sc, "radios_conicidad", lambda caras: medidas.append(1) or original(caras))
+    monkeypatch.setattr(solido, "_RADIOS_POR_CARA", [])          # el perfil de otro test no cuenta como ya medido
+    doc = _doc_rectangulo()
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "distancia": "20 mm"})
+    assert "angulo:conicidad" in [m.ident for m in panel.manipuladores.manips] and medidas == []
+    visor.distancia *= 3
+    gestor = panel.manipuladores
+    angulo = _manip(panel, "angulo:conicidad")
+    asa = gestor.pantalla([angulo.asa(gestor)])[0][0]
+    centro = gestor.pantalla([angulo.centro])[0][0]
+    afuera = gestor.pantalla([angulo.centro + angulo.v * 30])[0][0]
+    _arrastrar(visor, asa, asa - (afuera - centro) * 3)                  # muy hacia adentro: pasaría el cierre
+    limite = -math.degrees(math.atan(5 / 20))
+    assert limite < panel.ctx.evaluar(panel.valores["conicidad"], "angulo") < limite + 0.5
+    assert medidas == [1]
+    panel.cancelar()
 def _arrastrar_con_previa(panel, visor, desde, hasta, pasos=12):
     """Como `_arrastrar`, pero con la vista previa entre movimiento y movimiento (lo que hace el temporizador en la app)."""
     from PySide6.QtCore import QEvent, Qt

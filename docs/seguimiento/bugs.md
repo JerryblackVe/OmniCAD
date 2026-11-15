@@ -8,7 +8,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-403 | Extruir texto con Unir congela la previa | Parcial | Media | Falta llevar la previa al proceso aparte (FL-1) | `clon/tests/test_b403_unir_solo_los_que_toca.py` | 2026-11-13 |
 | B-389 | Windows agota memoria en una tanda larga | Abierto | Media | Liberar memoria retenida entre tests o ajustar el tope | `evidencias/reportes_pc/2026-11-13_noche_windows_3/` (tercer cierre en Windows sobre bdbbb09) | 2026-11-13 |
 | B-272 | La humo con OmniKernel falla bajo carga | Bloqueado | Media | Suspendido: OmniKernel en pausa (Gerardo, 2026-11-14). Estabilizar el dibujo sin cambiar el umbral de 50 | Fusiones de cm-5 (7f629c1) y B-259 (051e799), grupo 3 de 6 las dos veces; repetido solo, verde | 2026-11-09 |
 | B-188 | REMOVEDOR: cara sin triangulación | Parcial | Media | Falta la receta exacta con boceto/SVG y movimientos | clon/tests/test_perfiles_interior.py::test_sin_huecos_preserva_el_svg_valido_sin_malla; clon/omnicad/nucleo/geometria.py (`punto_dentro`) | 2026-11-04 |
@@ -228,10 +227,6 @@ Crítico
 - **Entorno:** VPS Ubuntu 24.04, 8 núcleos; otras corridas pesadas en turno pueden sumar tiempo.
 - **Causa probable:** sin perfilar todavía.
 - **Esquive:** celda de 10 mm o más, o resolución menor.
-
-### B-403 · Extruir texto con Unir congela la previa
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Extruir texto (8 perfiles, Unir, «Objetos» vacío) sobre varios cuerpos congela la ventana: la previa corre en el hilo de la interfaz (1,7 s por valor con 11 cuerpos de 62 caras) **Queda:** Falta llevar la previa de Extruir/Unir al proceso aparte (FL-1 de `plan_fluidez.md`, E6). Medido: Unir ya opera solo contra los cuerpos que toca (`operaciones.py:399`, `se_tocan` con caja envolvente: 1 y 11 cuerpos tardan lo mismo) y el relleno celeste grande es un perfil de Boceto1 sin elegir (las 8 elegidas son 6 letras y 2 corazones de las «i»), no un bug
 
 ### B-389 · Windows agota memoria en una tanda larga
 
