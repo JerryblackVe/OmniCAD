@@ -16,7 +16,7 @@ RAIZ = Path(__file__).resolve().parent.parent / "omnicad"
 NOMBRES = {"ErrorGeometria", "ErrorOperacion", "ErrorComando", "ErrorBoceto", "exigir", "_mostrar"}
 TOPES = {
     "nucleo/solidos_crear.py": 146,
-    "nucleo/solidos_modificar.py": 50,
+    "nucleo/solidos_modificar.py": 49,
     "timeline/ops_solido.py": 46,
     "restricciones/boceto.py": 95,
     "ui/comandos/crear.py": 9,

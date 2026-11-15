@@ -627,7 +627,7 @@ def _empalme_desbordado(forma, grupos, cadena_tangente):
 def exigir_radio_empalme(radio, campo="Radio"):
     """Fillet: cada radio debe ser positivo, también en los puntos del radio variable."""
     if radio <= 0:
-        raise geo.ErrorGeometria(f"⚠ {campo}: {radio:g} mm. Tiene que ser mayor que 0")
+        raise geo.ErrorGeometria(f"{campo}: {radio:g} mm, debe ser mayor que 0")
 
 
 def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
@@ -722,7 +722,7 @@ def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
                 for u, r in puntos:
                     exigir_radio_empalme(r, "Radio" if u == 0 else "Radio final" if u == 1 else f"Radio en posición {u:g}")
                 if len(puntos) < 2:
-                    raise geo.ErrorGeometria("⚠ Radio variable: hacen falta 2 puntos (inicio y final)")
+                    raise geo.ErrorGeometria("Radio variable: hacen falta 2 puntos.")
                 if puntos[0][0] < 0 or puntos[-1][0] > 1:
                     raise geo.ErrorGeometria("⚠ Radio variable: cada punto va entre 0 y 1")
                 arr = Array1_gp_Pnt2d(1, len(puntos))
@@ -1795,7 +1795,7 @@ def exigir_distancia_desfase(forma, caras, distancia):
             fondo = np.where(plano.normal >= 0, caja[0], caja[1])
             limite = float((plano.origen - fondo) @ plano.normal)
             if -distancia >= limite:
-                raise geo.ErrorGeometria(f"⚠ Distancia {distancia:g} mm: la cara atraviesa todo el cuerpo. Probá menos")
+                raise geo.ErrorGeometria(f"Distancia {distancia:g} mm: atraviesa el cuerpo.")
 
 
 def desfasar_caras(forma, caras, distancia, *, tangente=True):
