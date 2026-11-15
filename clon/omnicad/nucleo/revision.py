@@ -333,16 +333,46 @@ def _autointersecciones(forma, limite):
     return cantidad, problemas, completo
 
 
+_POLOS_EN_HIJO = 2000    # FL-15: un barrido con empalme suma ~600 polos (0,5 s); una rosca modelada 6400-8500 (17-26 s)
+
+
+def _pocos_polos(forma):
+    """Todas las caras libres son B-spline (o el desfase de una, como deja el vaciado) y entre todas no pasan de
+    `_POLOS_EN_HIJO` polos."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_BSplineSurface, GeomAbs_OffsetSurface
+    total = 0
+    for c in geo.caras(forma):
+        sup = BRepAdaptor_Surface(c)
+        if sup.GetType() in geo._ANALITICAS:
+            continue
+        if sup.GetType() == GeomAbs_OffsetSurface:
+            sup = sup.BasisSurface()
+        if sup.GetType() != GeomAbs_BSplineSurface:
+            return False
+        b = sup.BSpline()
+        total += b.NbUPoles() * b.NbVPoles()
+        if total > _POLOS_EN_HIJO:
+            return False
+    return True
+
+
 def _autointersecciones_seguras(forma, limite, plazo):
     """Igual que `_autointersecciones`, pero las formas con caras libres (B-spline: roscas modeladas, solevados) van a
     un proceso aparte con tope de `plazo` segundos: ahí el análisis puede no terminar nunca y congelaba la ventana
     (T-01 de la prueba de tortura). Si pasa el tope no hay conteo (None) y queda un aviso. La misma forma que ya pasó
     un tope igual o mayor no se vuelve a esperar (T-21: una rosca modelada necesita más de 300 s; el tope entero se
     perdía en cada revisión)."""
-    if not geo.es_forma_libre(forma) or aislado.EN_HIJO and geo._apta_para_integral_fina(forma):
-        # B-462: ya en el proceso aparte, una forma libre chica se analiza ahí (otro proceso más costaba ~1,5 s por paso
-        # al abrir o recalcular un documento grande); las de muchos polos (roscas modeladas, T-01) siguen aisladas.
+    if not geo.es_forma_libre(forma):
         return _autointersecciones(forma, limite)
+    if aislado.EN_HIJO and (geo._apta_para_integral_fina(forma) or _pocos_polos(forma)):
+        # B-462: ya en el proceso aparte, una forma libre chica se analiza ahí (otro proceso más costaba ~1,5-2 s por
+        # paso al abrir, recalcular o editar un documento: FL-15); las de muchos polos (roscas modeladas, T-01) siguen
+        # aisladas. Si el análisis falla acá, va al proceso aparte como siempre.
+        try:
+            return _autointersecciones(forma, limite)
+        except Exception:  # noqa: BLE001 — vía rápida: si falla, el camino de siempre
+            pass
     previo = _AGOTADAS.get(hash(forma))
     if previo is not None and time.monotonic() - previo[2] > VENCE_AGOTADA:
         previo = None
