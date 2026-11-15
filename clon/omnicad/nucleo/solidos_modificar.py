@@ -1287,9 +1287,13 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
         raise geo.ErrorGeometria("Los espesores del vaciado deben ser positivos.")
     if any(map(_es_filete, geo.caras(forma))):   # B-306 (gemelo): el kernel también tarda minutos (M8: 124 s) y falla
         raise geo.ErrorGeometria("Rosca modelada: no se puede vaciar.")
-    caras = list(caras_quitar or [])
-    caras = caras_en_cadena(forma, caras) if tangente else [c for i, c in enumerate(caras) if not _contiene(caras[:i], c)]
+    elegidas = list(caras_quitar or [])
+    caras = (caras_en_cadena(forma, elegidas) if tangente
+             else [c for i, c in enumerate(elegidas) if not _contiene(elegidas[:i], c)])
     if caras and len(caras) >= len(geo.caras(forma)):
+        # B-536: con todo empalmado, la cadena de una tapa llega a todas las caras (en Fusion también: se desmarca)
+        if len(caras) > len(elegidas):
+            raise geo.ErrorGeometria("⚠ Todo es tangente: desmarcá Cadena tangente")
         raise geo.ErrorGeometria("No quedó pared: elegí menos caras.")
     if caras:
         partes = []
