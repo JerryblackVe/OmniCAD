@@ -90,7 +90,7 @@ def test_loft_punto_tangente_hace_cupula_en_cualquiera_de_los_extremos(extremo):
     cono = _forma_creada(s, "loft", sections=secciones)
     cupula = _forma_creada(s, "loft", sections=secciones, **{extremo: {"type": "point_tangent", "weight": 1}})
     assert geo.volumen(cono) == pytest.approx(math.pi * 100 * 10 / 3, rel=1e-4)
-    assert geo.volumen(cupula) == pytest.approx(2095.2, rel=1e-3)
+    assert geo.volumen(cupula) == pytest.approx(math.pi * 100 * 10 / 2, rel=1e-3)   # B-464: paraboloide de Fusion, π·r²·h/2
 
 
 @pytest.mark.parametrize("extremo", ["start_condition", "end_condition"])
