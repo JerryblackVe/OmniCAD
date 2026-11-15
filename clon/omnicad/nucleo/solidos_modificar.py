@@ -1694,6 +1694,84 @@ def _trasladar_caras(forma, caras, n, dist):
     return _validar(_unificar(resultado), "Desfase de caras")
 
 
+def _desfase_por_contorno(forma, caras, dist):
+    """B-503: caras laterales de una extrusión entre dos planos (letras o un logo en relieve, un bolsillo): el contorno
+    de cada lazo se desfasa en 2D, y la banda que cambia se extruye entre las mismas tapas y se suma o se resta. Como
+    Fusion, une las paredes que se tocan y se come las que se cruzan. El offset 3D del kernel procesa todo el cuerpo:
+    con letras B-spline fallaba a los 4–16 s aunque no se eligieran. None si las caras no son eso o si algo falla:
+    sigue el camino de siempre (regla de B-453)."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.TopAbs import TopAbs_IN, TopAbs_WIRE
+    from . import vectores
+    try:
+        mapa = IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
+        TopExp.MapShapesAndAncestors_s(forma, TopAbs_EDGE, TopAbs_FACE, mapa)
+        aristas = [_unicos(c, TopAbs_EDGE) for c in caras]
+        grupos = []                        # lazos: índices de caras elegidas unidas por aristas
+        for i in range(len(caras)):
+            juntos = [g for g in grupos if any(_contiene(aristas[i], a) for j in g for a in aristas[j])]
+            grupos = [g for g in grupos if not any(g is j for j in juntos)] + [[i] + [k for g in juntos for k in g]]
+        grupos = [[caras[i] for i in g] for g in grupos]
+        eje, bandas = None, {}
+        for grupo in grupos:
+            borde = []                     # (altura de la tapa vecina, arista)
+            for cara in grupo:
+                for arista in _unicos(cara, TopAbs_EDGE):
+                    for vecina in geo.lista_occ(mapa.FindFromKey(arista)):
+                        if _contiene(grupo, vecina):
+                            continue
+                        plano = _plano_de_cara(TopoDS.Face(vecina))
+                        if plano is None:
+                            return None
+                        n = np.asarray(plano.normal, float)
+                        eje = n if eje is None else eje
+                        if np.linalg.norm(np.cross(n, eje)) > 1e-9:
+                            return None
+                        borde.append((round(float(np.asarray(plano.origen, float) @ eje), 6), arista))
+                if abs(float(_punto_normal(cara)[1] @ eje)) > 1e-6:      # inclinada (conicidad): no es una extrusión recta
+                    return None
+            alturas = sorted({h for h, _a in borde})
+            if len(alturas) != 2:
+                return None
+            alambre = BRepBuilderAPI_MakeWire()
+            alambre.Add(_lista_occ([a for h, a in borde if h == alturas[0]]))
+            lazo = BRepBuilderAPI_MakeFace(alambre.Wire(), True).Face()
+            # el material, ¿queda adentro del lazo (letra) o afuera (agujero, bolsillo)?
+            p, n = _punto_normal(grupo[0])
+            q = np.asarray(p) - 1e-3 * np.asarray(n)
+            q -= (float(q @ eje) - alturas[0]) * eje
+            adentro = BRepClass_FaceClassifier(lazo, gp_Pnt(*map(float, q)), 1e-7).State() == TopAbs_IN
+            d = dist if adentro else -dist           # d > 0: el lazo encierra más área
+            nuevas = None
+            for esquinas in ("vivas", "redondas"):   # vivas como Fusion; una letra B-spline a veces solo sale redondeada
+                try:
+                    nuevas = [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()
+                              for s in vectores.desfase_caras([lazo], d, esquinas) for w in _unicos(s, TopAbs_WIRE)]
+                    break
+                except geo.ErrorGeometria:
+                    pass
+            if nuevas is None:
+                # se va todo lo que encierra solo si la distancia pasa su radio inscrito (≤ 2·área/perímetro);
+                # si no, el desfase 2D falló sin desaparecer (una letra B-spline)
+                if d > 0 or abs(d) < 2 * geo.area(lazo) / geo.longitud(alambre.Wire()):
+                    return None
+                nuevas = []
+            banda = (vectores.booleana_caras(nuevas, [lazo], "resta") if d > 0
+                     else vectores.booleana_caras([lazo], nuevas, "resta") if nuevas else lazo)
+            bandas.setdefault(tuple(alturas), []).extend(geo.caras(banda))
+        resultado = forma
+        for (z0, z1), caras_banda in bandas.items():
+            region = vectores.booleana_caras(caras_banda, [], "union")
+            # las caras de la región no se pisan: un solo prisma (geo.extruir las une y su control de volumen
+            # rechazaba la letra por 0,02 mm³)
+            prisma = BRepPrimAPI_MakePrism(geo.compuesto(geo.caras(region)), gp_Vec(*map(float, eje * (z1 - z0)))).Shape()
+            resultado = geo.booleano(resultado, prisma, "unir" if dist > 0 else "cortar")
+        return _validar(_unificar(resultado), "Desfase de caras")
+    except Exception:  # noqa: BLE001 — un atajo: el camino de siempre decide
+        return None
+
+
 def desfasar_caras(forma, caras, distancia, *, tangente=True):
     """Offset Face / Press Pull sobre caras: mueve las caras a lo largo de su normal (positivo = hacia
     afuera, agrega material) y extiende las vecinas. tangente: arrastra las caras tangentes; una cara plana
@@ -1721,6 +1799,8 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
     if con_filete and any(_plano_de_cara(c) is None for c in todas):
         raise geo.ErrorGeometria("Desfase de caras: en un cuerpo con una rosca modelada, el kernel tarda minutos y falla "
                                  "con las caras curvas. Desfasá la cara antes de hacer la rosca, o hacé la rosca cosmética.")
+    if not con_filete and (rapido := _desfase_por_contorno(forma, todas, dist)) is not None:
+        return rapido
     resultado, dada_vuelta = None, False
     # B-280: con la otra mitad de una cara partida al lado, el kernel corre las dos; la extrusión deja el escalón
     if not con_filete and not _vecina_coplanar_suelta(forma, todas):

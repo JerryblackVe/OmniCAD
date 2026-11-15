@@ -134,14 +134,22 @@ def _placa_agujereada():
     return placa, _curva(placa)
 
 
-@pytest.mark.parametrize("caso, distancia", [("cilindro", -12), ("cilindro", -25), ("agujero", 14.9),
-                                              ("agujero", 20)])
-def test_desfase_de_cara_curva_que_se_da_vuelta_falla(caso, distancia):
+@pytest.mark.parametrize("distancia", [-12, -25])
+def test_desfase_de_cara_curva_que_se_da_vuelta_falla(distancia):
     """Una cara curva desfasada más que su radio se daba vuelta por el eje y salía «ok»: el cilindro de radio 10
-    achicado 25 mm quedaba de radio 15 (MÁS GRANDE); el agujero de radio 5 «llenado» 14,9 mm quedaba de radio 9,9."""
-    forma, cara = _cilindro_y_lateral() if caso == "cilindro" else _placa_agujereada()
+    achicado 25 mm quedaba de radio 15 (MÁS GRANDE)."""
+    forma, cara = _cilindro_y_lateral()
     with pytest.raises(geo.ErrorGeometria, match="la cara se da vuelta"):
         sm.desfasar_caras(forma, [cara], distancia)
+
+
+@pytest.mark.parametrize("distancia", [14.9, 20])
+def test_agujero_desfasado_mas_que_su_radio_se_tapa_como_fusion(distancia):
+    """El agujero de radio 5 «llenado» 14,9 mm quedaba de radio 9,9; después daba error. B-503: Fusion lo tapa (estudio
+    de E11, hueco de radio 9 con +9,5), y el desfase por contorno también."""
+    forma, cara = _placa_agujereada()
+    r = sm.desfasar_caras(forma, [cara], distancia)
+    assert geo.volumen_exacto(r) == pytest.approx(40 * 40 * 10, rel=1e-6) and geo.es_valida(r)
 
 
 @pytest.mark.parametrize("distancia", [-10, -9.99999])
