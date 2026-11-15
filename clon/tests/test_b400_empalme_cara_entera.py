@@ -43,10 +43,11 @@ def test_por_la_api_como_un_agente():
     assert r["result"]["bodies_modified"][0]["volume"] == pytest.approx(VOLUMEN, abs=1e-3)
 
 
-def test_mas_grande_que_la_cara_sigue_dando_error():
+def test_mas_grande_que_las_dos_caras_sigue_dando_error():
+    # B-460: más que la cara de adelante (20) entra como en Fusion; más que la de arriba (30) también, no
     caja = geo.caja(40, 30, 20)
     with pytest.raises(geo.ErrorGeometria):
-        sm.empalme(caja, [{"aristas": [_arista(caja, (20, 0, 20))], "tipo": "constante", "radio": 20.5}])
+        sm.empalme(caja, [{"aristas": [_arista(caja, (20, 0, 20))], "tipo": "constante", "radio": 30.5}])
 
 
 def test_dos_aristas_con_vertice_comun_siguen_con_el_error_claro():
