@@ -326,17 +326,7 @@ def caras_tangentes(forma, cara, tol_ang=1.0, *, coplanares=True):
     """Cara + todas las caras unidas a ella por aristas tangentes (cadena de caras tangentes).
     coplanares=False no pasa de una cara plana a otra (la otra mitad de una cara partida), como el desfase de Fusion,
     que solo arrastra las vecinas tangentes curvas."""
-    analisis = _analisis(forma, tol_ang)
-    arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
-    cadena, pendientes = [cara], [cara]
-    while pendientes:
-        f = pendientes.pop(0)
-        plana = not coplanares and _plano_de_cara(f) is not None
-        for otra in _vecinas_tangentes(analisis, arista_caras, f):
-            if not _contiene(cadena, otra) and not (plana and _plano_de_cara(otra) is not None):
-                cadena.append(otra)
-                pendientes.append(otra)
-    return cadena
+    return caras_en_cadena(forma, [cara], tol_ang, coplanares=coplanares)
 
 
 def _vecina_coplanar_suelta(forma, caras):
@@ -348,14 +338,28 @@ def _vecina_coplanar_suelta(forma, caras):
                for otra in _vecinas_tangentes(analisis, arista_caras, f))
 
 
-def caras_en_cadena(forma, caras):
-    """Las `caras` y las tangentes a ellas, sin repetir (Tangent Chain / Chain Selection de una lista de caras)."""
-    salida = []
-    for c in caras:
-        for t in caras_tangentes(forma, c):
-            if not _contiene(salida, t):
-                salida.append(t)
-    return salida
+def caras_en_cadena(forma, caras, tol_ang=1.0, *, coplanares=True):
+    """Las `caras` y las tangentes a ellas, sin repetir (Tangent Chain / Chain Selection de una lista de caras).
+    FL-16: un solo análisis del cuerpo para toda la lista (uno por cara tardaba 7 s con las 164 paredes de un texto)."""
+    analisis = _analisis(forma, tol_ang)
+    arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
+    vistas = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
+    cadena = []
+    for cara in caras:
+        if vistas.Contains(cara):
+            continue
+        vistas.Add(cara)
+        cadena.append(cara)
+        pendientes = [cara]
+        while pendientes:
+            f = pendientes.pop(0)
+            plana = not coplanares and _plano_de_cara(f) is not None
+            for otra in _vecinas_tangentes(analisis, arista_caras, f):
+                if not vistas.Contains(otra) and not (plana and _plano_de_cara(otra) is not None):
+                    vistas.Add(otra)
+                    cadena.append(otra)
+                    pendientes.append(otra)
+    return cadena
 
 
 def _ampliar_tangentes(forma, aristas, activo):
@@ -363,6 +367,8 @@ def _ampliar_tangentes(forma, aristas, activo):
         return list(aristas)
     salida = []
     for a in aristas:
+        if _contiene(salida, a):      # FL-16: su cadena ya entró (es la misma desde cualquiera de sus aristas)
+            continue
         for e in aristas_cadena_tangente(forma, a):
             if not _contiene(salida, e):
                 salida.append(e)
@@ -1281,11 +1287,8 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
         raise geo.ErrorGeometria("Los espesores del vaciado deben ser positivos.")
     if any(map(_es_filete, geo.caras(forma))):   # B-306 (gemelo): el kernel también tarda minutos (M8: 124 s) y falla
         raise geo.ErrorGeometria("Rosca modelada: no se puede vaciar.")
-    caras = []
-    for c in caras_quitar or []:
-        for t in (caras_tangentes(forma, c) if tangente else [c]):
-            if not _contiene(caras, t):
-                caras.append(t)
+    caras = list(caras_quitar or [])
+    caras = caras_en_cadena(forma, caras) if tangente else [c for i, c in enumerate(caras) if not _contiene(caras[:i], c)]
     if caras and len(caras) >= len(geo.caras(forma)):
         raise geo.ErrorGeometria("No quedó pared: elegí menos caras.")
     if caras:
@@ -1817,11 +1820,8 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
     n, empalmes = _empalmes_del_borde(forma, caras) if tangente else (None, [])
     if empalmes:
         return _trasladar_caras(forma, list(caras) + empalmes, n, dist)
-    todas = []
-    for c in caras:
-        for t in (caras_tangentes(forma, c, coplanares=False) if tangente else [c]):
-            if not _contiene(todas, t):
-                todas.append(t)
+    todas = (caras_en_cadena(forma, caras, coplanares=False) if tangente
+             else [c for i, c in enumerate(caras) if not _contiene(caras[:i], c)])
     if any(map(_es_filete, todas)):     # B-306: el kernel tardaba minutos (M8: 89 s con 1 mm, 150 s con 0,2 mm) y fallaba
         raise geo.ErrorGeometria("Una rosca modelada no se puede desfasar.")
     # B-306: con un filete en el cuerpo, el kernel tarda lo mismo con cualquier cara (cilindro vecino: 95 s y falla;
