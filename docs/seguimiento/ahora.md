@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-466 | Restricción Curvatura arco–spline destruye la geometría (arco a r=5107) (B-48 parte integrado: c8f9e66; falta Windows) |
 | E2 | B-484 | Extruir «Hasta objeto» con desfase negativo suma en vez de restar (B-462 integrado: f590218) |
-| E3 | B-467 | Empalme sobre aristas tangentes: tomar la cadena tangente como Fusion (B-460 integrado: 44d9a08) |
+| E3 | H-118 | Desfase de caras de una rosca modelada, como Fusion (holgura para imprimir) (B-460 integrado: 44d9a08; B-467 a Sin verificar) |
 | E4 | B-470 | Vaciado da «ok» con una cáscara abierta en un cuerpo modificado; usar la guarda de B-462 (B-459 y B-485 integrados: cbd7c3e) |
 | E5 | B-443 | «Propiedades» no abre desde el cuerpo ni el componente, y falta en la cinta (ASM-17 integrado: 81f0885) |
 | E6 | FL-3c | Resto de FL-3b en el llavero: editar 1900 ms, Unir 17 perfiles 5917 ms, Cortar 3190 ms; la barra no muestra avance (B-488: no es código, espera prueba de E11) |
@@ -25,13 +25,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 1 | B-489 | **BLOQUEANTE** Patrón rectangular de boceto ×1000 cuelga o cierra la app (E1, apenas cierre B-466) |
 | 2 | B-464 | Solevación con punto tangente da error con peso 1 (Fusion 15708,3) |
-| 3 | H-118 | Desfase de caras de una rosca modelada, como Fusion (holgura para imprimir) |
-| 4 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
-| 5 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
-| 6 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
-| 7 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
-| 8 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
-| 9 | B-461 (resto) | Rosca modelada debajo de 1 s (sin booleana), indicador al editar, agujero roscado y Windows (E6) |
+| 3 | B-444 (resto) | Cambiar de pestaña en el panel no mueve la barra con el anclaje por el pie de B-421; test intermitente 1 de 4 (E6, dueña del anclaje) |
+| 4 | FL-8 (sección) | Análisis de sección con muchos agujeros, 1,1 s en `malla._orejas` (E6) |
+| 5 | B-405 | Plano de desfase con distancia cero: falta comparar otros desfases en Fusion (E11) |
+| 6 | B-411 | Entrar a un boceto bloquea la ventana 409 ms en Windows |
+| 7 | H-91 | Solevación sólida: condiciones de borde exactas y combinables |
+| 8 | B-461 (resto) | Rosca modelada debajo de 1 s (sin booleana), indicador al editar, agujero roscado y Windows (E6) |
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) quedan en bugs.md sin cola.
 
