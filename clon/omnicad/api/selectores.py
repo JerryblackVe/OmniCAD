@@ -350,8 +350,16 @@ _PREFIJO = re.compile(r"^\s*(faces|edges)\s*:\s*(?=\S)", re.IGNORECASE)
 
 
 def _huella(sesion):
-    """Identifica el estado del documento: si cambia, los ids emitidos antes dejan de valer."""
-    return hashlib.md5(json.dumps(sesion.doc.a_dict(), sort_keys=True, default=str).encode()).hexdigest()
+    """Identifica el estado del documento: si cambia, los ids emitidos antes dejan de valer. FL-12: dentro de una
+    herramienta que no modifica (`llamar` deja `_huella_fija` en `[]`) se calcula una vez: antes era una por id
+    y find_faces con 100 cuerpos tardaba 1,2 s."""
+    fija = getattr(sesion, "_huella_fija", None)
+    if fija and fija[0] is sesion.doc:
+        return fija[1]
+    h = hashlib.md5(json.dumps(sesion.doc.a_dict(), sort_keys=True, default=str).encode()).hexdigest()
+    if fija is not None:
+        fija[:] = [sesion.doc, h]
+    return h
 
 
 def _emitidos(sesion):

@@ -367,7 +367,8 @@ def llamar(sesion, nombre, args=None):
         if not anidadas:
             sesion.avisos = []
         desde = len(sesion.avisos)
-        sesion._llamadas = anidadas + 1
+        sesion._llamadas, fija = anidadas + 1, getattr(sesion, "_huella_fija", None)
+        sesion._huella_fija = None if h.modifica else []      # FL-12: lo que no modifica calcula la huella una vez
         try:
             if h.transaccion:
                 with sesion.transaccion():
@@ -377,7 +378,7 @@ def llamar(sesion, nombre, args=None):
             else:
                 resultado = h.funcion(sesion, **kwargs)
         finally:
-            sesion._llamadas = anidadas
+            sesion._llamadas, sesion._huella_fija = anidadas, fija
         return {"ok": True, "result": _a_json(resultado), "avisos": list(dict.fromkeys(sesion.avisos[desde:]))}
     except Exception as e:  # noqa: BLE001 — contrato: llamar nunca lanza
         # No se pasan args ni resultados: pueden ser chat, código o contenido de un archivo.
