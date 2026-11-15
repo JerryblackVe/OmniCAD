@@ -1067,18 +1067,43 @@ class PanelCaracter(QFrame):
                 w.blockSignals(False)
 
 
+class _PanelPerezoso:
+    """B-411: lo que ve el control de Patrón o de Transformar como su panel: el real se arma recién al usarlo."""
+
+    def __init__(self, modo, nombre):
+        self._modo, self._nombre = modo, nombre
+
+    def __getattr__(self, clave):
+        return getattr(self._modo._panel(self._nombre), clave)
+
+
+def _panel_perezoso(nombre):
+    """Propiedad de ModoBoceto: el panel se arma al pedirlo la primera vez (si hay boceto abierto)."""
+    def leer(self):
+        return self._panel(nombre) if self.activo else None
+
+    def poner(self, panel):
+        if panel is None:
+            self._paneles.pop(nombre, None)
+        else:
+            self._paneles[nombre] = panel
+    return property(leer, poner)
+
+
 class ModoBoceto(QObject):
     terminado = Signal(object, object)       # boceto editado, datos de contexto (dict)
+    # B-411: entrar al boceto armaba cuatro paneles que casi nunca se usan (~150 ms en la VPS, más en Windows)
+    caracter = _panel_perezoso("caracter")
+    simetria = _panel_perezoso("simetria")
+    patron = _panel_perezoso("patron")
+    transformar = _panel_perezoso("transformar")
 
     def __init__(self, ventana):
         super().__init__(ventana)
         self.v = ventana
+        self._paneles = {}
         self.lienzo = None
         self.paleta = None
-        self.caracter = None
-        self.simetria = None
-        self.patron = None
-        self.transformar = None
         self.tarjeta = None
         self.datos = None
         self.plano = None
@@ -1194,44 +1219,14 @@ class ModoBoceto(QObject):
         self.lienzo.installEventFilter(self.interaccion3d)
         self.paleta.b_triada.clicked.connect(self.interaccion3d.reiniciar)
         self.paleta.checks["boceto3d"].setChecked(any(self.boceto.geo3d.values()))
-        self.caracter = PanelCaracter(area)         # fuente, decoraciones y transformación del texto
-        self.caracter.cambio.connect(self._ajuste)
-        self.lienzo.texto_valores.connect(self.caracter.mostrar_valores)
-        self.caracter.hide()
-        self.simetria = PanelSimetria(area)         # Objetos, Eje de simetría, Vista previa, Aceptar y Cancelar
         lz = self.lienzo
-        lz.simetria_estado.connect(self.simetria.mostrar)
-        self.simetria.campo.connect(lz.elegir_campo_simetria)
-        self.simetria.limpiar.connect(lz.limpiar_campo_simetria)
-        self.simetria.previa.connect(lz.set_previa_simetria)
-        self.simetria.aceptado.connect(lz.aceptar_simetria)
-        self.simetria.cancelado.connect(lz.cancelar_simetria)
-        self.simetria.hide()
-        self.patron = PanelPatron(area)             # Objetos, dirección o centro, cantidades, Vista previa, Aceptar y Cancelar
-        control = lz.patron
-        control.panel = self.patron
-        self.patron.campo.connect(control.elegir_campo)
-        self.patron.limpiar.connect(control.limpiar_campo)
-        self.patron.cambio.connect(control.recibir)
-        self.patron.invertir.connect(control.invertir)
-        self.patron.previa.connect(control.set_previa)
-        self.patron.aceptado.connect(control.aceptar)
-        self.patron.cancelado.connect(control.cancelar)
-        self.patron.hide()
-        self.transformar = PanelTransformar(area)   # Escala y Mover/copiar: Objetos, Punto base, valores, Vista previa
-        control = lz.transformar
-        control.panel = self.transformar
-        self.transformar.campo.connect(control.elegir_campo)
-        self.transformar.limpiar.connect(control.limpiar_campo)
-        self.transformar.cambio.connect(control.recibir)
-        self.transformar.previa.connect(control.set_previa)
-        self.transformar.aceptado.connect(control.aceptar)
-        self.transformar.cancelado.connect(control.cancelar)
-        self.transformar.hide()
+        lz.texto_valores.connect(lambda *a: self._panel("caracter").mostrar_valores(*a))
+        lz.simetria_estado.connect(lambda e: self._panel("simetria").mostrar(e))
+        lz.patron.panel = _PanelPerezoso(self, "patron")
+        lz.transformar.panel = _PanelPerezoso(self, "transformar")
         from .objetos_vectoriales import PanelObjetos
         self.objetos = PanelObjetos(lz.objetos, area)
-        area.set_capa_boceto(self.lienzo, self.paleta, self.caracter, self.simetria, self.patron, self.transformar,
-                             self.tarjeta, self.objetos)
+        area.set_capa_boceto(self.lienzo, self.paleta, self.tarjeta, self.objetos)
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())
         if mirar:
@@ -1251,6 +1246,50 @@ class ModoBoceto(QObject):
         if self.lienzo.perdidas:
             v.mensaje(f"El boceto tiene {len(self.lienzo.perdidas)} proyección(es) perdida(s): Administrar "
                       "proyecciones perdidas (Proyectar/Incluir) las re-vincula, rompe o borra.", 9000)
+
+    def _panel(self, nombre):
+        """Devuelve el panel `nombre` («caracter», «simetria», «patron» o «transformar»); lo arma la primera vez."""
+        panel = self._paneles.get(nombre)
+        if panel is None and self.activo:
+            panel = self._paneles[nombre] = getattr(self, "_armar_" + nombre)(self.v.area)
+            panel.hide()
+            self.v.area.agregar_lateral(panel)
+        return panel
+
+    def _armar_caracter(self, area):            # fuente, decoraciones y transformación del texto
+        panel = PanelCaracter(area)
+        panel.cambio.connect(self._ajuste)
+        return panel
+
+    def _armar_simetria(self, area):            # Objetos, Eje de simetría, Vista previa, Aceptar y Cancelar
+        lz, panel = self.lienzo, PanelSimetria(area)
+        panel.campo.connect(lz.elegir_campo_simetria)
+        panel.limpiar.connect(lz.limpiar_campo_simetria)
+        panel.previa.connect(lz.set_previa_simetria)
+        panel.aceptado.connect(lz.aceptar_simetria)
+        panel.cancelado.connect(lz.cancelar_simetria)
+        return panel
+
+    def _armar_patron(self, area):              # Objetos, dirección o centro, cantidades, Vista previa, Aceptar y Cancelar
+        control, panel = self.lienzo.patron, PanelPatron(area)
+        panel.campo.connect(control.elegir_campo)
+        panel.limpiar.connect(control.limpiar_campo)
+        panel.cambio.connect(control.recibir)
+        panel.invertir.connect(control.invertir)
+        panel.previa.connect(control.set_previa)
+        panel.aceptado.connect(control.aceptar)
+        panel.cancelado.connect(control.cancelar)
+        return panel
+
+    def _armar_transformar(self, area):         # Escala y Mover/copiar: Objetos, Punto base, valores, Vista previa
+        control, panel = self.lienzo.transformar, PanelTransformar(area)
+        panel.campo.connect(control.elegir_campo)
+        panel.limpiar.connect(control.limpiar_campo)
+        panel.cambio.connect(control.recibir)
+        panel.previa.connect(control.set_previa)
+        panel.aceptado.connect(control.aceptar)
+        panel.cancelado.connect(control.cancelar)
+        return panel
 
     def terminar(self):
         if not self.activo:
@@ -1321,10 +1360,11 @@ class ModoBoceto(QObject):
     def _limpiar(self):
         self.lienzo._cerrar_entrada()
         self.v.area.set_capa_boceto(None, None)
-        for w in (self.lienzo, self.paleta, self.caracter, self.simetria, self.patron, self.transformar, self.tarjeta, self.objetos):
+        for w in (self.lienzo, self.paleta, *self._paneles.values(), self.tarjeta, self.objetos):
             w.hide()
             w.deleteLater()
-        self.lienzo = self.paleta = self.caracter = self.simetria = self.patron = self.transformar = self.tarjeta = None
+        self.lienzo = self.paleta = self.tarjeta = None
+        self._paneles.clear()
         self.objetos = None
         self.v.visor.set_capa("boceto3d", None)
         self.v.visor.set_capa("triada3d", None)
@@ -1361,12 +1401,12 @@ class ModoBoceto(QObject):
         if self.paleta is not None:
             self._mostrar_tarjeta(h)
             self._mostrar_caracter(h == "texto")
-            if self.simetria is not None:
-                self.simetria.setVisible(h == "simetria")
-            if self.patron is not None:
-                self.patron.setVisible(h in ("patron_rectangular", "patron_circular"))
-            if self.transformar is not None:
-                self.transformar.setVisible(h in ("escala", "mover"))
+            for nombre, visible in (("simetria", h == "simetria"),
+                                    ("patron", h in ("patron_rectangular", "patron_circular")),
+                                    ("transformar", h in ("escala", "mover"))):
+                panel = self._panel(nombre) if visible else self._paneles.get(nombre)
+                if panel is not None:
+                    panel.setVisible(visible)
             self.v.area.reubicar()
 
     def _mostrar_tarjeta(self, h):
@@ -1376,10 +1416,11 @@ class ModoBoceto(QObject):
 
     def _mostrar_caracter(self, visible):
         """El panel «Carácter» se ve con la herramienta Texto (o al editar un texto) y arranca con sus opciones."""
-        if self.caracter is not None:
+        panel = self._panel("caracter") if visible else self._paneles.get("caracter")
+        if panel is not None:
             if visible:
-                self.caracter.cargar(self.lienzo.opciones)
-            self.caracter.setVisible(visible)
+                panel.cargar(self.lienzo.opciones)
+            panel.setVisible(visible)
 
     def _opciones_de_texto(self):
         """Doble clic sobre un texto: la paleta muestra sus opciones aunque la herramienta activa sea otra."""
