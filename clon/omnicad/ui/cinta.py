@@ -419,6 +419,7 @@ class Cinta(QWidget):
         t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾" if titulo else " ")
         if titulo:
             t.setToolTip(titulo)
+            t.setProperty("titulo_completo", t.text())      # B-533: `ajustar_textos` lo pone entero o solo «▾», nunca recortado
             t.setPopupMode(QToolButton.InstantPopup)
             t.setMenu(self._menu(items, t))
         else:
@@ -471,6 +472,9 @@ class Cinta(QWidget):
         if not botones:
             return
         grupos = {b.parentWidget() for b in botones}
+        titulos = [x for x in pagina.findChildren(QToolButton, "titulo_grupo") if x.property("titulo_completo")]
+        for x in titulos:               # se mide con el nombre entero; el recorte (más abajo) se decide con el ancho final
+            x.setText(x.property("titulo_completo"))
 
         def ancho_pagina():
             self._invalidar(pagina)
@@ -489,6 +493,7 @@ class Cinta(QWidget):
 
         disponible = self.pila.width()
         if preparar(True) <= disponible or preparar(False) <= disponible:
+            self._titulos_enteros(pagina, titulos)
             return
         # Ni solo con íconos entra: se compactan (un botón y el resto en el menú del título) de a un grupo. Cada vuelta
         # elige el grupo más angosto que alcanza para entrar; si ninguno solo alcanza, el más ancho, y sigue.
@@ -512,6 +517,17 @@ class Cinta(QWidget):
                 compactar(pendientes.pop(0), True)      # ninguno solo alcanza: el más ancho
         for grupo in grupos:        # ni así: el título puede quedar más angosto que su ícono
             grupo.setMinimumWidth(grupo.layout().itemAt(0).minimumSize().width() + 4)
+        self._titulos_enteros(pagina, titulos)
+
+    @staticmethod
+    def _titulos_enteros(pagina, titulos):
+        """B-533: un título que no entra en el ancho de su grupo se queda en «▾» (el nombre entero va en el tooltip); nunca
+        un nombre partido al medio («INSP…AR»), que no se entiende."""
+        pagina.layout().activate()
+        for x in titulos:
+            ancho = x.parentWidget().width()
+            if x.fontMetrics().horizontalAdvance(x.property("titulo_completo")) + 14 > ancho:
+                x.setText("▾")
 
     @staticmethod
     def _invalidar(pagina):

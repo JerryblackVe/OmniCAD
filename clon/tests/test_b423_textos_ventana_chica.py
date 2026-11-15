@@ -59,7 +59,7 @@ def test_pestanas_legibles_y_botones_con_nombre_completo(ventana, ancho, alto):
             assert completo in b.toolTip(), (completo, b.toolTip())
         for b in v.cinta.pila.currentWidget().findChildren(QToolButton, "titulo_grupo"):
             if b.menu() is not None:
-                assert b.toolTip() == b.text().removesuffix(" ▾")
+                assert b.toolTip() == b.property("titulo_completo").removesuffix(" ▾")   # B-533: el texto puede ser solo «▾»
     # Volver a agrandar restaura los nombres, sin conservar abreviaturas de la ventana chica.
     v.resize(1280, 800)
     QTest.qWait(20)
