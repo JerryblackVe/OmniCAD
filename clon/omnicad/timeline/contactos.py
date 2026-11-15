@@ -12,7 +12,7 @@ Los conjuntos no son pasos del timeline (como las vistas guardadas): viven en `d
 el proyecto y entran en deshacer. Sin Qt.
 """
 from ..nucleo import analisis as an
-from .ops_ensamblar import familia
+from .ops_ensamblar import _mover_componentes, familia
 
 MODOS = ("ninguno", "conjuntos", "todos")
 
@@ -42,13 +42,27 @@ def _grupos(doc, estado):
     return []
 
 
-def superposiciones(doc):
+def estado_en_poses(estado, poses):
+    """Copia del estado con cada componente en la pose de su primer cuerpo (la posición sin capturar de un arrastre)."""
+    movido = estado.copia()
+    for k in estado.componentes:
+        m = next((poses[c.id] for c in estado.cuerpos.values() if c.componente == k and c.id in poses), None)
+        if m is not None:
+            _mover_componentes(movido, {k}, m)
+    return movido
+
+
+def superposiciones(doc, poses=None):
     """Los pares (id de cuerpo, id de cuerpo) que hoy se superponen y que el análisis de contacto vigila; vacío con el
-    análisis apagado."""
-    estado = doc.estado_final
+    análisis apagado. Con `poses` (una posición sin capturar), cómo quedarían los componentes ahí."""
+    final = doc.estado_final
+    grupos = _grupos(doc, final)
+    if not grupos:
+        return set()
+    estado = estado_en_poses(final, poses) if poses else final
     solidos = {c.id: c for c in estado.cuerpos.values() if c.tipo == "solido"}
     pares = set()
-    for grupo in _grupos(doc, estado):
+    for grupo in grupos:
         miembro = {}
         for i, comps in enumerate(grupo):
             for c in solidos.values():
@@ -62,11 +76,11 @@ def superposiciones(doc):
     return pares
 
 
-def bloqueo(doc, antes):
+def bloqueo(doc, antes, poses=None):
     """Mensaje si el último cambio hizo que se superpongan componentes vigilados (pares que no estaban en `antes`, lo
     que devolvió `superposiciones` antes del cambio); None si no. A propósito, un par que ya se superponía antes no
     bloquea: así un modelo que arranca superpuesto se puede seguir moviendo."""
-    nuevos = superposiciones(doc) - antes
+    nuevos = superposiciones(doc, poses) - antes
     if not nuevos:
         return None
     estado = doc.estado_final

@@ -36,7 +36,7 @@ from ..timeline.ops_chapa import cuerpos_del_modelo
 from ..timeline.operaciones import ErrorOperacion
 from ..timeline.ops_ensamblar import (MOVIMIENTOS, OpAnclar, OpCapturarPosicion, OpComponente, OpCopiarComponente, ruta_componente,
                                       OpGrupoRigido, OpInsertarDiseno, OpOrigenUnion, OpPosicionInicial, OpRevertirPosicion,
-                                      OpRestriccion, OpUnion, OpVinculoMovimiento, _mover_componentes, es_fijo, exigir_numero, grupo_rigido,
+                                      OpRestriccion, OpUnion, OpVinculoMovimiento, es_fijo, exigir_numero, grupo_rigido,
                                       limites_expr, pose_de_componente, pose_de_reasignar, poses_de_estudio, principal_de, siguiente_accion)
 from ..timeline.parametros import ANGULO, LONGITUD, ErrorExpresion, evaluar
 from ..timeline.posicion import Arrastre, pendiente_de
@@ -1384,11 +1384,7 @@ def revert_position(sesion, components: list[str] | None = None, name: str | Non
 
 def _componentes_en_poses(sesion, estado, poses):
     """Información de cada componente como si sus cuerpos estuvieran en `poses`, con la traslación que tiene hoy."""
-    movido = estado.copia()
-    for k in estado.componentes:
-        m = next((poses[c.id] for c in estado.cuerpos.values() if c.componente == k and c.id in poses), None)
-        if m is not None:
-            _mover_componentes(movido, {k}, m)
+    movido = contactos.estado_en_poses(estado, poses)
     return [dict(info_componente(sesion, k, movido), previous_translation=info_componente(sesion, k)["translation"])
             for k in estado.componentes]
 
@@ -1396,7 +1392,9 @@ def _componentes_en_poses(sesion, estado, poses):
 @herramienta("drag_component", "ensamble", "Arrastra un componente como con el mouse en el visor (ENSAMBLAR › "
              "Posición): con una unión sigue sus grados de libertad y sus límites; sin unión se traslada libre. NO cambia "
              "el documento: la posición queda sin capturar hasta capture_position o revert_position, y cualquier otro "
-             "cambio del documento la descarta. Devuelve dónde quedó cada componente.")
+             "cambio del documento la descarta (get_assembly sigue mostrando la posición capturada; el resultado de esta "
+             "herramienta, la nueva). Con los contactos prendidos rechaza el arrastre que superpone componentes "
+             "(CONTACT_BLOCKED). Devuelve dónde quedó cada componente y moved (si alguno cambió de lugar).")
 def drag_component(sesion, component: str, offset: list[float], point: list[float] | None = None):
     """
     component: id, nombre o un cuerpo del componente.
@@ -1417,15 +1415,26 @@ def drag_component(sesion, component: str, offset: list[float], point: list[floa
         centro = np.mean(geo.caja_envolvente(cuerpo.forma) if cuerpo.tipo != "malla" else cuerpo.forma.caja(), axis=0)
         pose = p.poses().get(cuerpo.id, np.identity(4)) if p is not None else np.identity(4)
         point = (pose @ np.r_[centro, 1.0])[:3]
+    previa = pendiente_de(sesion.doc)
+    poses_antes = previa.poses() if previa is not None else {}
+    en_contacto = contactos.superposiciones(sesion.doc, poses_antes)
     try:
         arrastre = Arrastre(sesion.doc, cuerpo.id, point)
     except ErrorOperacion as e:
         raise error("INVALID_ARGUMENTS", str(e)) from None
     arrastre.mover(np.add(point, offset))
+    bloqueo = contactos.bloqueo(sesion.doc, en_contacto, arrastre.p.poses())
+    if bloqueo:                    # el arrastre no toca el documento: se vuelve a la posición de antes
+        arrastre.cancelar()
+        raise error("CONTACT_BLOCKED", bloqueo)
+    poses = arrastre.p.poses()
+    movio = any(not np.allclose(m, poses_antes.get(k, np.identity(4)), atol=1e-6) for k, m in poses.items())
     arrastre.soltar()
     p = pendiente_de(sesion.doc)
-    return {"components": _componentes_en_poses(sesion, estado, p.poses() if p is not None else {}),
-            "uncaptured": p is not None, "document_changed": False}
+    comps = _componentes_en_poses(sesion, estado, p.poses() if p is not None else {})
+    if not movio:
+        sesion.avisar("No se movió nada: la unión o sus límites no dejan ir hacia ahí.")
+    return {"components": comps, "moved": movio, "uncaptured": p is not None, "document_changed": False}
 
 
 @herramienta("motion_study_pose", "ensamble", "Estudio de movimiento con varias uniones a la vez (ENSAMBLAR › Estudio de "
