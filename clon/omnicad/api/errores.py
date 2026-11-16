@@ -113,6 +113,10 @@ PISTAS = {
                            "Las líneas de construcción no forman perfiles."],
     "NO_TARGET_BODY": ["join, cut e intersect actúan sobre un cuerpo existente: creá uno antes o usá operation=new_body.",
                        "Con target elegís el cuerpo (id o nombre); sin target se usan los sólidos que toca la herramienta."],
+    "INVALID_TRANSFORM_TYPE": ["«tipo» de cada transformación de multitransformar: rectangular, circular, ruta, puntos, "
+                               "simetria o escala."],
+    "INVALID_COUNT": ["«n» cuenta las instancias con el original: un entero de 2 o más (en la escala, n=3 da "
+                      "original, ×factor y ×factor²)."],
     "INVALID_AXIS": ["axis: 'sketch_x', 'sketch_y', 'x', 'y', 'z' o el id de una línea del boceto (get_sketch)."],
     # --- selectores
     "INVALID_SELECTOR": ["Sintaxis: >Z <Z (más alto/bajo), |Z (paralelo), #Z (perpendicular), +Z -Z (normal), "
@@ -224,6 +228,8 @@ _TABLA = [
     (ErrorOperacion, r"^Parámetro mal formado", "INVALID_ARGUMENTS"),
     (ErrorOperacion, r"^El cuerpo '.*' no existe", "BODY_NOT_FOUND"),
     (ErrorOperacion, r"^Se perdió la referencia", "REFERENCE_LOST"),
+    (ErrorOperacion, r"«tipo» mal:", "INVALID_TRANSFORM_TYPE"),
+    (ErrorOperacion, r"«n» tiene que ser un entero", "INVALID_COUNT"),
     (ErrorExportacion, r"^No hay cuerpos", "NOTHING_TO_EXPORT"),
     (ErrorExportacion, r"^Formato no soportado|malla no se pueden guardar|no parece un STEP", "INVALID_FORMAT"),
     (ErrorExportacion, None, "OPERATION_FAILED"),

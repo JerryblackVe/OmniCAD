@@ -28,7 +28,7 @@ from ..nucleo.perfiles import detectar_boceto
 from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
 from . import temas
 from .campo_expresion import nombres_sugeridos
-from .editor_boceto import (AYUDA_RESTRICCION, CAPA_PROYECCION, COMANDO_PROYECCION, HERRAMIENTAS, NOMBRES_RESTRICCION,
+from .editor_boceto import (AYUDA_RESTRICCION, DETALLE_RESTRICCION, CAPA_PROYECCION, COMANDO_PROYECCION, HERRAMIENTAS, NOMBRES_RESTRICCION,
                             RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia)
 from . import navegador_boceto
 from .formulario import armar_cabecera, NumeroDecimal
@@ -1117,7 +1117,8 @@ class ModoBoceto(QObject):
         for clave, texto, herramienta, atajo, ico in ACCIONES_BOCETO:
             a = QAction(icono(ico), texto, ventana, checkable=herramienta != "proyectar_eje")
             a.setProperty("clave", clave)
-            ayuda = HERRAMIENTAS.get(herramienta, ("", AYUDA_RESTRICCION.get(herramienta, "")))[1]
+            ayuda = HERRAMIENTAS.get(herramienta, ("", DETALLE_RESTRICCION.get(herramienta)
+                                                   or AYUDA_RESTRICCION.get(herramienta, "")))[1]
             visible = (atajo or "").replace("Shift", "Mayúsculas")
             a.setToolTip(f"<b>{texto}</b><br>{ayuda}" + (f"<br><span style='color:#bbbbbb'>{visible}</span>" if atajo else ""))
             if atajo:

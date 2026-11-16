@@ -279,6 +279,7 @@ def test_el_menu_restricciones_tiene_las_13_y_el_poligono_aparte():
 def test_cada_herramienta_de_restriccion_dice_que_pedir():
     assert set(editor_boceto.AYUDA_RESTRICCION) == set(editor_boceto.RESTRICCIONES_HERRAMIENTA)
     assert len(set(editor_boceto.AYUDA_RESTRICCION.values())) == 13     # cada una con su texto
+    assert "horizontales o verticales" in editor_boceto.DETALLE_RESTRICCION["r_horizontal_vertical"]   # P-158g: va al «?»
     assert "r_autorestringir" in iconos.DIBUJOS                           # su ícono no es el candado de Fijar
 
 
