@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | P-173 | La vista no se congela mientras calcula (sin diálogo modal). Opus alto. B-608 Parcial: 6115ddb (falta Windows) |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
-| E9 | H-118 (mensaje) + B-605 | Tanda de OpenCode (glm-5.3-flash-free): mensaje de la rosca con salida; B-spline con pesos de más al abrir. Sonnet medio |
+| E9 | P-158 (Bocetos y Sólido) | Cola de OpenCode: mensajes de más de 45 caracteres → 1 renglón (GLM; revisa MiniMax o E9). H-118 (mensaje) y B-605 hechos, por integrar. Sonnet medio |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
