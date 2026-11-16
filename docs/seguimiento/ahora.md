@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D). B-572 y B-573 integrados: 8e22b1f, e02505e |
+| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-582, B-585, B-584 y B-583 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
 | E2 | B-579 | 🚨 Bloqueante: Extruir salta solo a «Cortar» y pisa la elección manual (vació un documento) |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
