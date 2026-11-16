@@ -24,7 +24,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | P-157 | Preferencias como Fusion (Gerardo pidió, regla 14): cada opción en su página, visual, poco texto, nada cortado a 1024×700, lo grisado con su motivo; leer Preferencias en docs/fusion_docs primero (E9 al cerrar B-588) |
+| 1 | P-157 + P-164/165/166 | Preferencias como Fusion (Gerardo, regla 14): cada opción en su página, visual, nada cortado a 1024×700, lo grisado con su motivo; más cinta personalizable (P-164), atajos (P-165) y colores con 10 temas (P-166), cada uno con MCP/CLI. Leer Preferencias en docs/fusion_docs primero (E9 al cerrar B-588) |
 | 2 | B-325 | Booleanas fallan (Sin verificar): primero confirmar si sigue pasando (E3, Opus alto) |
 | 3 | B-546 + P-99 | Extruir lento con muchos perfiles: recalcula todos en cada clic; la 1.ª apertura arma las asas (E6, Opus alto) |
 | 4 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
