@@ -2,7 +2,7 @@
 
 Funciones que todavía no existen. La especificación de cada ID está en el `docs/brechas_*.md` que nombra cada sección. Método y columnas: [README](README.md).
 
-Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 73: Abierto 40 · Parcial 30 · Bloqueado 2 · Sin verificar 1 (2026-11-12: fusión de H-119; 2026-11-12: fusión de H-97; 2026-11-14: se cerró H-69 (nombre, ocultar, bloquear y «en perfiles» por curva suelta); 2026-11-13: se cerraron H-88 (Revolución «A objeto» con Dos lados, con B-384) y H-90 (Punto tangente de la Solevación sólida, ya hecho en B-385); 2026-11-12: fusión de ASM-19; 2026-11-12: fusión de B-392; 2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
+Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra el código el 2026-10-20 (secciones Boceto, Superficie y Sólido: 2026-10-24). Total 74: Abierto 41 · Parcial 30 · Bloqueado 2 · Sin verificar 1 (2026-11-12: fusión de H-119; 2026-11-12: fusión de H-97; 2026-11-14: se cerró H-69 (nombre, ocultar, bloquear y «en perfiles» por curva suelta); 2026-11-13: se cerraron H-88 (Revolución «A objeto» con Dos lados, con B-384) y H-90 (Punto tangente de la Solevación sólida, ya hecho en B-385); 2026-11-12: fusión de ASM-19; 2026-11-12: fusión de B-392; 2026-11-12: fusión de BOC-84; 2026-11-13: el cambio 3 pasó las filas de prioridad 2 a despues.md; 2026-11-12: fusión de B-385; 2026-11-13: sumó BOC-84 Estrella; 2026-11-13: ASM-18 pasó a Parcial (componente vacío, nombre y «A partir de cuerpos» por API); 2026-11-13: se cerró CF-15 (Gerardo aprobó el ViewCube); 2026-11-12: fusión de GZ-26; 2026-11-12: fusión de CF-15; 2026-11-13: H-115 nuevo (Grosor de tangencia del Empalme, visto en P-141); 2026-11-12: sumó GZ-26 (flecha de radio de la Rosca, E1); 2026-11-12: sumó CF-15 de Gerardo (ViewCube como el de Fusion); 2026-11-10: entraron H-113 y H-114 de los videos de roscas; 2026-11-07: +H-110 de la fase 2 de CREAR y MODIFICAR; H-109 y H-111 ya cerrados).
 
 ## Pendientes generales
 
@@ -72,7 +72,7 @@ Parcial 3.
 
 Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPECCIONAR, INSERTAR, SELECCIONAR) con los artículos de la ayuda de Fusion (carpeta `fusion-model`) y de probar unas 70 herramientas por API con valores normales, de borde e inválidos. Los bugs se reprodujeron; los scripts (`s*.py`) están en `evidencias/solido_2026-10-24/`, fuera de git. Lo que ya estaba cargado (SC12, SC3, P-25d, P-25f, P-25g2, P-25i, P-25j) no se repite.
 
-Abierto 1 · Parcial 3.
+Abierto 2 · Parcial 3.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
@@ -80,6 +80,7 @@ Abierto 1 · Parcial 3.
 | SOL-22 | Retícula volumétrica dentro de un cuerpo | Parcial | Alta | OctetoTruss, Panal, paneles, asas y Restablecer; mejorar aproximaciones (ficha). | omnicad/nucleo/reticula.py; tests/test_sol22_reticula.py | 2026-11-01 |
 | SOL-24 | Reconocer funciones en cuerpos importados | Parcial | Muy alta | Rehacer revoluciones, simetrías y patrones; ampliar reconocimiento (ficha). | omnicad/nucleo/reconocer_funciones.py; tests/test_sol24_reconocer_funciones.py | 2026-10-25 |
 | SOL-39 | Mover/copiar › Mover objeto «Componentes» (Fusion: Componentes, Cuerpos, Caras y Objetos del boceto; acá faltan los componentes) | Abierto | Media | Sumar la opción con `ops_ensamblar._mover_componentes`, su herramienta MCP y su test | B-559 (E3); `docs/fusion_docs/contenido/fusion-model/move-copy-reference-952166a90ef.md` | 2026-11-16 |
+| SOL-40 | Alinear › Objeto «Componentes» en el panel (Fusion: Cuerpos y Componentes; la API `align_bodies` ya acepta un componente en `bodies`) | Abierto | Baja | Sumar la opción al panel con los cuerpos del componente elegido y su test | B-560 (E3); `docs/fusion_docs/contenido/fusion-model/align-solids-6274b973a35.md` | 2026-11-16 |
 
 ## SUPERFICIE contra capturas de Fusion (2026-11-01)
 

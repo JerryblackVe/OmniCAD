@@ -277,6 +277,34 @@ def test_align_bodies(copiar):
         assert geo.caja_envolvente(s.cuerpo(cid).forma)[0][0] == pytest.approx(0)
 
 
+@pytest.mark.parametrize("voltear,angulo", [(False, 0), (False, 90), (True, 0)])
+def test_b560_cara_sobre_cara_queda_centrada_y_girar_o_voltear_no_la_corre(voltear, angulo):
+    """Como Fusion, una cara plana se toma por su centro: arriba de B y centrada; Voltear y Girar giran ahí mismo
+    (antes giraban alrededor del origen de la superficie y la pieza saltaba fuera de B)."""
+    s = api.Sesion()
+    a, b = _caja(s), _caja(s, x=100)
+    _ok(s, "align_bodies", bodies=a, source=">Z", source_body=a, destination=">Z", destination_body=b,
+        flip=voltear, angle=angulo)
+    (a0, a1), (b0, b1) = geo.caja_envolvente(s.cuerpo(a).forma), geo.caja_envolvente(s.cuerpo(b).forma)
+    assert np.add(a0, a1)[:2] == pytest.approx(np.add(b0, b1)[:2])          # mismo centro en planta
+    assert (a1[2] if voltear else a0[2]) == pytest.approx(b1[2])               # enfrentada: apoyada; volteada: adentro
+
+
+def test_b560_una_receta_vieja_de_alinear_abre_igual():
+    """Las recetas sin `version_centro` siguen tomando la cara por el origen de su plano: un archivo viejo no se mueve."""
+    s = api.Sesion()
+    a, b = _caja(s), _caja(s, x=100)
+    _ok(s, "align_bodies", bodies=a, source="<Z", source_body=a, destination=">Z", destination_body=b)
+    receta = s.doc.a_dict()
+    paso = next(o for o in receta["operaciones"] if o.get("tipo") == "alinear")
+    del paso["params"]["version_centro"]
+    viejo = api.Sesion()
+    _ok(viejo, "apply_recipe", recipe=receta, mode="replace")
+    op = next(o for o in viejo.doc.operaciones if o.TIPO == "alinear")
+    assert op.p["version_centro"] == 1
+    assert geo.caja_envolvente(viejo.cuerpo(a).forma)[0][0] == pytest.approx(0)      # quedó donde estaba en x
+
+
 def test_scale_body_sin_cuerpos_pide_el_cuerpo():
     s = api.Sesion()
     r = api.llamar(s, "scale_body", {})

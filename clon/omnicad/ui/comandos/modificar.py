@@ -1072,7 +1072,7 @@ class Alinear(Comando):
         if ctx.op is not None:                  # un paso hecho por la API puede girar cualquier ángulo: no se pierde al reabrir
             actual = f"{float(ctx.op.p.get('angulo') or 0):g}"
             giros.setdefault(actual, f"{actual}°")
-        return [Opciones("objeto", "Objeto", {"cuerpos": ("Cuerpos…", "cuerpo")}), Seleccion("origen", "Desde", geom),
+        return [Opciones("objeto", "Objeto", {"cuerpos": ("Cuerpos", "cuerpo")}), Seleccion("origen", "Desde", geom),
                 Seleccion("destino", "A", geom), Casilla("voltear", "Voltear"),
                 Opciones("angulo", "Girar", giros), Casilla("copiar", "Crear copia"),
                 Seleccion("cuerpos", "Otros cuerpos", {"cuerpo"}, minimo=0, maximo=None,

@@ -12,8 +12,8 @@ from . import entidades as ent
 from ..restricciones.boceto import aviso_quitadas
 from .parametros import LONGITUD, SIN_DIMENSION, acotar, evaluar
 from .operaciones import (ANGULO, Boceto, BocetoResuelto, ErrorBoceto, ErrorOperacion, Operacion, _deps_objetivo, _resolver,
-                          _resolver_todas, atributos_copia, detectar_boceto, espesor_plastico, registrar_operacion,
-                          resolver)
+                          _resolver_todas, _migrador, _version_de, atributos_copia, detectar_boceto, espesor_plastico,
+                          registrar_operacion, resolver)
 
 
 def _sm():
@@ -697,20 +697,25 @@ class OpAlinear(Operacion):
     """Alinear de Fusion [SLD-ALIGN-CMD]: lleva una referencia de los cuerpos (punto, plano o eje) sobre
     otra; planos enfrentados, ejes coincidentes; «Voltear» gira 180° y «Ángulo» gira de a 90° (o lo que se pida)."""
     TIPO, ETIQUETA, ICONO = "alinear", "Alinear", "⇶"
-    PARAMS = {"cuerpos": [], "origen": None, "destino": None, "voltear": False, "copiar": False, "angulo": 0}
+    PARAMS = {"cuerpos": [], "origen": None, "destino": None, "voltear": False, "copiar": False, "angulo": 0,
+              "version_centro": 2}
+    migrar_receta = _migrador("version_centro")      # B-560: las recetas viejas toman la cara por el origen de su plano
 
     def dependencias(self):
         return (_deps_objetivo(self.p["cuerpos"]) | _deps_refs(self.p["origen"], self.p["destino"])) - {self.id}
 
     @staticmethod
-    def _dato(e):
+    def _dato(e, centro=True):
         if e.tipo in ("vertice", "punto", "punto_boceto"):
             return {"tipo": "punto", "punto": ent.como_punto(e)}
         if e.tipo == "eje" or (e.tipo in ("arista", "curva_boceto") and e.eje is not None):
             p, d = ent.como_eje(e)
             return {"tipo": "eje", "punto": p, "direccion": d}
         if e.plano is not None:
-            return {"tipo": "plano", "plano": e.plano}
+            # B-560: una cara plana se toma por su centro (Fusion se engancha ahí); el origen de su superficie podía
+            # caer lejos y Voltear o Girar hacian saltar la pieza fuera de la cara de destino.
+            punto = ent.como_punto(e) if centro and e.tipo == "cara" else e.plano.origen
+            return {"tipo": "plano", "origen": punto, "normal": e.plano.normal}
         if e.tipo == "cara":
             p, d = ent.como_eje(e)
             return {"tipo": "eje", "punto": p, "direccion": d}
@@ -720,8 +725,9 @@ class OpAlinear(Operacion):
         p = self.p
         if not p["cuerpos"] or not p["origen"] or not p["destino"]:
             raise ErrorOperacion("Elegí los cuerpos, la referencia de origen y la de destino.")
-        _, m = _sm().alinear(None, self._dato(_resolver(p["origen"], estado)),
-                             self._dato(_resolver(p["destino"], estado)), voltear=p["voltear"],
+        centro = _version_de(p, "version_centro") == 2
+        _, m = _sm().alinear(None, self._dato(_resolver(p["origen"], estado), centro),
+                             self._dato(_resolver(p["destino"], estado), centro), voltear=p["voltear"],
                              angulo=float(p.get("angulo") or 0))
         for cid in p["cuerpos"]:
             c = estado.cuerpo(cid)
