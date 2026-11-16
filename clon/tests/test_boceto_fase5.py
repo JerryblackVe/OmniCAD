@@ -473,7 +473,7 @@ def test_boc15_empalme_paralelas_sin_picks_alarga_la_linea_mas_corta():
     assert linea["end"] == [20, 10] and linea["length"] == 20
 
 
-@pytest.mark.parametrize("separacion,pick2,mensaje", [(0, [2, 0], "colineales"), (10, [18, 10], "mismo lado")])
+@pytest.mark.parametrize("separacion,pick2,mensaje", [(0, [2, 0], "misma recta"), (10, [18, 10], "mismo lado")])
 def test_boc15_empalme_paralelas_invalido_no_cambia_documento(separacion, pick2, mensaje):
     s = api.Sesion()
     r = llamar_fase5(s, "sketch_from_spec", entities=[

@@ -297,7 +297,7 @@ def test_h69_curva_suelta_con_nombre_oculta_bloqueada_y_fuera_de_perfiles():
     p1 = b.curvas[lineas[0]].p1
     for intento in (lambda: b.eliminar(lineas[0]), lambda: b.eliminar(p1), lambda: b.transformar([lineas[0]], dx=5),
                     lambda: b.escalar([lineas[0]], (0, 0), 2), lambda: b.reflejar([lineas[0]], (0, 0))):
-        with pytest.raises(ErrorBoceto, match="bloqueada"):
+        with pytest.raises(ErrorBoceto, match="desbloqueala"):
             intento()
     k = b.agregar_cota("distancia", [lineas[0]], "40")
     assert resolver(b, {k: 60}).ok and b.medir(b.cotas[k]) == pytest.approx(60)   # el solver la sigue moviendo

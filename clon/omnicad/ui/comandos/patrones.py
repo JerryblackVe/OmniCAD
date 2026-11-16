@@ -160,7 +160,7 @@ class Multitransformar(Comando):
         if not lista:
             raise ErrorComando("Elegí al menos una transformación.")
         if len(lista) > MAX_TRANSFORMACIONES:
-            raise ErrorComando(f"Una multitransformación admite hasta {MAX_TRANSFORMACIONES} transformaciones.")
+            raise ErrorComando(f"Máximo {MAX_TRANSFORMACIONES} transformaciones.")
         sel = self._sel(v)
         try:
             lista[sel] = self._item_desde_editor(v, lista[sel], estricto=True)
@@ -169,9 +169,8 @@ class Multitransformar(Comando):
                                f"{e}") from None
         for i, t in enumerate(lista):
             if not _completa(t):
-                raise ErrorComando(f"Falta completar la transformación {i + 1} ({TIPOS_TRANSFORMACION.get(t.get('tipo'), '?')}): "
-                                   f"elegí {FALTA.get(t.get('tipo'), 'lo que falta')}. Mientras tanto no hay vista previa ni "
-                                   "se puede aceptar.")
+                raise ErrorComando(f"Transformación {i + 1} ({TIPOS_TRANSFORMACION.get(t.get('tipo'), '?')}): "
+                                   f"falta {FALTA.get(t.get('tipo'), 'lo que falta')}.")
         return lista
 
     def _guardar(self, panel):

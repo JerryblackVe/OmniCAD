@@ -461,8 +461,8 @@ def test_spec_con_numeros_no_finitos_falla_sin_colgarse(s, entidad, kind):
 
 
 @pytest.mark.parametrize("tipo, valor, texto", [
-    ("radius", -5, "mayor que cero"), ("radius", 0, "mayor que cero"), ("diameter", -1, "mayor que cero"),
-    ("distance", 0, "mayor que cero"), ("radius", 1e9, "1.000.000 mm"), ("distance", 2e6, "1.000.000 mm"),
+    ("radius", -5, "mayor que 0"), ("radius", 0, "mayor que 0"), ("diameter", -1, "mayor que 0"),
+    ("distance", 0, "mayor que 0"), ("radius", 1e9, "1.000.000 mm"), ("distance", 2e6, "1.000.000 mm"),
     ("diameter", 1e7, "1.000.000 mm"),
 ])
 def test_cota_de_largo_fuera_de_rango_se_rechaza(s, tipo, valor, texto):
@@ -502,7 +502,7 @@ def test_spline_y_rectangulo_degenerados_se_rechazan(s):
     llamar(s, "create_sketch")
     antes = foto(s)
     r = api.llamar(s, "draw_spline", {"points": [[1, 1], [1, 1], [1, 1]]})
-    assert r["error_kind"] == "INVALID_GEOMETRY" and "coinciden" in r["mensaje"], r
+    assert r["error_kind"] == "INVALID_GEOMETRY" and "no hay curva" in r["mensaje"], r
     for args in ({"origin_x": 0, "origin_y": 0, "width": -10, "height": 5},
                  {"center_x": 0, "center_y": 0, "width": 10, "height": -5}):
         r = api.llamar(s, "draw_rectangle", args)
@@ -537,7 +537,7 @@ def test_cota_manejada_por_parametro_fuera_de_rango_avisa(s):
     llamar(s, "create_sketch")
     c = llamar(s, "draw_circle", radius=5, center_x=0, center_y=0)["entities"][0]["id"]
     llamar(s, "add_dimension", sketch="Boceto1", type="radius", entities=[c], value="r")
-    for valor, texto in (("-5 mm", "mayor que cero"), ("1e9 mm", "1.000.000 mm")):
+    for valor, texto in (("-5 mm", "mayor que 0"), ("1e9 mm", "1.000.000 mm")):
         r = api.llamar(s, "set_parameter", {"name": "r", "expression": valor})
         assert r["ok"] and any(texto in a for a in r.get("avisos", [])), r
     r = api.llamar(s, "set_parameter", {"name": "r", "expression": "7 mm"})

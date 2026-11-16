@@ -67,7 +67,7 @@ def test_regular_7_3_y_redondeo_de_valles(sesion):
 
 
 @pytest.mark.parametrize("args, texto", [
-    ({"tip_fillet": 50}, "redondeo de las puntas"), ({"points": 2}, "entre 3 y 64"), ({"points": 5, "skip": 3}, "salto"),
+    ({"tip_fillet": 50}, "Redondeo de las puntas"), ({"points": 2}, "entre 3 y 64"), ({"points": 5, "skip": 3}, "salto"),
     ({"inner_radius": 25}, "menor que el exterior"), ({"inner_ratio": 1.5}, "inner_ratio"),
     ({"inner_ratio": 0.5, "skip": 2}, "solo uno")])
 def test_lo_que_no_sirve_da_un_mensaje_claro_y_no_toca_el_boceto(sesion, args, texto):
