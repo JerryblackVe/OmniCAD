@@ -890,6 +890,14 @@ def _hits_bocetos(ids, estado):
             for b in ids or [] if b in estado.bocetos]
 
 
+def _punto_clic(v):
+    """Punto 3D del clic con que se eligió el primer cuerpo (Fusion pone ahí el pivote de la tríada); al editar, el
+    guardado en el paso. None si no hay."""
+    punto = next((h.get("punto") for h in v.get("cuerpos") or [] if isinstance(h, dict) and h.get("punto") is not None),
+                 None)
+    return [float(x) for x in punto] if punto is not None else v.get("pivote_xyz")
+
+
 class MoverCopiar(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "mover_copiar", "Mover/copiar", "mover_copiar", "M"
     AYUDA = ("Mueve, gira o copia cuerpos o caras planas: libre, trasladar, girar, punto a punto o punto a "
@@ -959,6 +967,8 @@ class MoverCopiar(Comando):
                 raise ErrorComando("Indicá una distancia o un ángulo distinto de cero para mover el objeto.")
         p = {k: v.get(k) for k in ("tipo", "dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z",
                                     "copiar", "ligera")}
+        p["pivote_xyz"] = _punto_clic(v) if v.get("tipo") == "libre" and not v.get("pivote") and not por_caras \
+            and not por_bocetos else None
         p.update(cuerpos=[] if por_caras or por_bocetos else _cuerpos(v), caras=refs(v, "caras") if por_caras else [],
                  bocetos=enteros, curvas_boceto=refs(v, "bocetos") if por_bocetos and not enteros else [],
                  ligera=bool(v.get("ligera")) and not por_caras, pivote=ref1(v, "pivote"), direccion=ref1(v, "direccion"), eje=ref1(v, "eje"),
@@ -986,6 +996,8 @@ class MoverCopiar(Comando):
             if caja:
                 centros.append((np.array(caja[0]) + np.array(caja[1])) / 2)
         centro = np.mean(centros, axis=0) if centros else np.zeros(3)
+        if (clic := _punto_clic(v)) is not None:       # B-559: la tríada va donde se hizo clic (Fusion)
+            centro = np.asarray(clic, float)
         tipo = v.get("tipo")
         if tipo == "libre":
             e = mp.entidad(v["pivote"][0], ctx.estado) if v.get("pivote") else None

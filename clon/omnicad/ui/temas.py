@@ -367,6 +367,9 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #opcion_cmd { border: 1px solid transparent; background: transparent; padding: 1px; }
 #opcion_cmd:hover { background: $activo; }
 #opcion_cmd:checked { border: 1px solid $enlace; background: $activo; }
+#alternar_cmd { border: 1px solid $borde; border-radius: 3px; background: transparent; padding: 2px; }
+#alternar_cmd:hover { background: $activo; }
+#alternar_cmd:checked { border: 1px solid $enlace; background: $activo; }
 #pestanas_cmd::tab { padding: 3px 10px; }
 #pestanas_cmd::tab:selected { font-weight: 600; border-bottom: 2px solid $acento; }
 

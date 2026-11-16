@@ -1523,7 +1523,8 @@ def move_body(sesion, body: Cuerpos | None = None, translate: list[Expr] | None 
               direction: str | dict | None = None, distance: Expr = 10, axis: str | dict | None = None,
               angle: Expr = 90, origin_point: str | dict | list[float] | None = None,
               destination_point: str | dict | list[float] | None = None,
-              pivot_point: str | dict | list[float] | None = None, ref_body: str | None = None,
+              pivot_point: str | dict | list[float] | None = None, pivot_position: list[float] | None = None,
+              ref_body: str | None = None,
               sketches: list[str] | None = None, sketch_curves: list[dict] | None = None):
     """
     body: cuerpo(s) a mover (id o nombre); vacío si solo se mueven bocetos.
@@ -1544,6 +1545,7 @@ def move_body(sesion, body: Cuerpos | None = None, translate: list[Expr] | None 
     origin_point: type=point_to_point: punto de partida (vértice [x, y, z], punto de construcción o {"sketch", "point"}).
     destination_point: type=point_to_point: punto de llegada (mismas formas que origin_point).
     pivot_point: type=free: pivote del giro (vértice [x, y, z], punto de construcción o {"sketch", "point"}); reemplaza a pivot.
+    pivot_position: type=free: pivote del giro en un punto suelto [x, y, z] mm (el clic sobre el cuerpo en la ventana); reemplaza a pivot.
     ref_body: cuerpo donde se evalúan los selectores de direction, axis y los puntos; vacío = el único cuerpo.
     """
     if type != "free" and (rotate is not None or position is not None):
@@ -1585,13 +1587,16 @@ def move_body(sesion, body: Cuerpos | None = None, translate: list[Expr] | None 
             raise error("INVALID_ARGUMENTS", "type=point_to_point necesita origin_point y destination_point.")
         nuevos = dict(tipo="punto_a_punto", origen=_referencia(sesion, origin_point, _PUNTO, ref_body),
                       destino=_referencia(sesion, destination_point, _PUNTO, ref_body))
+    if pivot_position is not None and len(pivot_position) != 3:
+        raise error("INVALID_ARGUMENTS", "pivot_position: [x, y, z] en mm.")
     pivote = {"tipo": "punto", "id": "O"} if pivot == "origin" else None
     if pivot_point is not None and type == "free":
         pivote = _referencia(sesion, pivot_point, _PUNTO, ref_body)
     op = OpMover(doc.nuevo_id(), nombre_nuevo(doc, "Mover", OpMover), cuerpos=ids, bocetos=bocetos, curvas_boceto=curvas, tipo="libre",
                  dx=texto_expr(t[0]), dy=texto_expr(t[1]), dz=texto_expr(t[2]),
                  rx=texto_expr(g[0]), ry=texto_expr(g[1]), rz=texto_expr(g[2]),
-                 pivote=pivote, copiar=copy, ligera=lightweight)
+                 pivote=pivote, copiar=copy, ligera=lightweight,
+                 pivote_xyz=[float(x) for x in pivot_position] if pivot_position is not None and type == "free" else None)
     for k, v in nuevos.items():
         op.p[k] = v
     if not ids:                                   # solo bocetos: no hay centro de cuerpos que informar
