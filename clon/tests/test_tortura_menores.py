@@ -253,7 +253,8 @@ def test_b129_el_volumen_de_una_lente_de_dos_esferas_cierra_con_la_formula(a, b)
 
 # ---------------------------------------------------------------- B-129 · la integración fina no puede tumbar al volumen
 def _lente():
-    return geo.booleano(geo.esfera(20, (0, 0, 0)), geo.esfera(20, (10, 0, 0)), "intersecar")
+    # nurbs=True: una cara B-spline (B-568: desde B-537 el común sale con dos esferas exactas, sin cara libre)
+    return geo._booleana(geo.esfera(20, (0, 0, 0)), geo.esfera(20, (10, 0, 0)), "intersecar", nurbs=True)
 
 
 def test_b129_si_la_integracion_fina_falla_el_volumen_cae_a_la_de_siempre(monkeypatch):
@@ -289,7 +290,9 @@ def _lentes(n):
     formas = []
     for i in range(n):
         o = ((i % 10) * 60.0, (i // 10) * 60.0, 10.0)
-        formas.append(geo.booleano(geo.esfera(20, o), geo.esfera(20, (o[0] + 20, o[1], o[2] + 5)), "intersecar"))
+        # nurbs=True: la herramienta en B-spline (B-568: desde B-537 el común sale con dos esferas exactas, sin cara libre)
+        formas.append(geo._booleana(geo.esfera(20, o), geo.esfera(20, (o[0] + 20, o[1], o[2] + 5)), "intersecar",
+                                    nurbs=True))
     d = math.hypot(20, 5)
     return geo.compuesto(formas), n * math.pi * (4 * 20 + d) * (2 * 20 - d) ** 2 / 12
 
