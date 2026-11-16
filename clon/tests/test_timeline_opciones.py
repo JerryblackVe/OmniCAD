@@ -105,3 +105,22 @@ def test_la_ventana_guarda_y_restaura_la_casilla(app_qt, tmp_path):
         v2.doc.modificado = False
         v2.close()
         v2.deleteLater()
+
+
+def test_preferencias_con_el_menu_del_engranaje_borrado_por_qt_no_falla(app_qt, tmp_path):
+    # B-591 (gemelo): Aplicar Preferencias llegaba a `poner_color_componente` con la QAction ya borrada.
+    from shiboken6 import delete
+
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+    v = VentanaPrincipal(prefs=Preferencias(QSettings(str(tmp_path / "ventana.ini"), QSettings.IniFormat)))
+    try:
+        delete(v.timeline.engranaje.menu())
+        v.prefs[CLAVE] = True
+        v.aplicar_preferencias()
+        v._actualizar()                                  # y después recalcular, sin excepción
+        assert v.timeline.accion_color.isChecked() and v.timeline.engranaje.menu().actions() == [v.timeline.accion_color]
+    finally:
+        v.doc.modificado = False
+        v.close()
+        v.deleteLater()

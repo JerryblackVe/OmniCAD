@@ -69,3 +69,13 @@ def test_preferencias_abre_en_la_pagina_pedida(ventana):
     dlg = DialogoPreferencias(ventana.prefs, ventana, "no_existe")
     assert dlg.arbol.currentItem().text(0) == "General"
     dlg.deleteLater()
+
+
+def test_menu_de_unidades_borrado_por_qt_se_rearma_sin_excepcion(ventana):
+    # B-591: «QAction already deleted» al terminar un boceto cortaba `_actualizar` a la mitad.
+    from shiboken6 import delete
+    delete(ventana.menu_unidades)
+    ventana._actualizar()
+    assert ventana.timeline.unidades.menu() is ventana.menu_unidades
+    assert all(a.isEnabled() for a in ventana._acciones_unidad.values())
+    assert ventana._acciones_unidad[("longitud", "mm")].isChecked()

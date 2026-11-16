@@ -21,6 +21,7 @@ from PySide6.QtGui import QBrush, QColor, QIcon, QPen
 from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QInputDialog, QLabel, QListView, QListWidget,
                                QListWidgetItem, QMenu, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolButton,
                                QWidget)
+from shiboken6 import isValid
 
 from ..timeline import aspectos_doc
 from ..timeline.operaciones import OPERACIONES_CUERPO
@@ -218,14 +219,18 @@ class PanelTimeline(QWidget):
         self.engranaje.setAutoRaise(True)
         self.engranaje.setPopupMode(QToolButton.InstantPopup)
         self.engranaje.setToolTip("<b>Opciones del timeline</b>")
+        self._armar_menu_engranaje()
+        lay.addWidget(self.engranaje)
+
+    def _armar_menu_engranaje(self):
         menu = QMenu(self.engranaje)
         self.accion_color = menu.addAction("Muestra de color por componente")
         self.accion_color.setCheckable(True)
+        self.accion_color.setChecked(self.color_componente)
         self.accion_color.setToolTip("Pinta cada paso con el color del componente al que pertenece.")
         self.accion_color.triggered.connect(self.poner_color_componente)
         menu.setToolTipsVisible(True)
         self.engranaje.setMenu(menu)
-        lay.addWidget(self.engranaje)
 
     # ------------------------------------------------------------ navegación
     def _paso(self, delta):
@@ -244,6 +249,8 @@ class PanelTimeline(QWidget):
     def poner_color_componente(self, activo):
         """Enciende o apaga la muestra de color por componente (la ventana lo guarda en las preferencias)."""
         activo = bool(activo)
+        if not isValid(self.accion_color):      # B-591: Qt ya borró el menú del engranaje (en Windows pasa); se rearma
+            self._armar_menu_engranaje()
         self.accion_color.setChecked(activo)
         if activo != self.color_componente:
             self.color_componente = activo
