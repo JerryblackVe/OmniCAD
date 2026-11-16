@@ -1346,10 +1346,29 @@ def _por_malla(forma, funcion, deflexion, relativa):
     return p.Mass()
 
 
+_INTEGRALES = {}         # B-578: (forma, función, eps) → (hijos, valor), como `_CAJAS`
+
+
 def _integral(forma, funcion, eps=None):
     """Volumen o área por la integración exacta de OpenCascade, sin el control por malla de `_propiedades`. Con `eps`
     (solo volumen) la integración es adaptativa hasta ese error relativo estimado; si el kernel falla en una forma
-    rota, vale la integración por defecto (sin esa precisión, pero con un número)."""
+    rota, vale la integración por defecto (sin esa precisión, pero con un número). B-578: recuerda las últimas; una
+    booleana verificaba con 8 integrales de las mismas formas (20 ms cada una con una rosca modelada)."""
+    clave, hijos = (forma, funcion, eps), forma.NbChildren()
+    guardada = _INTEGRALES.get(clave)
+    if guardada is not None and guardada[0] == hijos:
+        return guardada[1]
+    valor = _integrar(forma, funcion, eps)
+    if len(_INTEGRALES) >= _TOPE_CAJAS:
+        try:
+            _INTEGRALES.pop(next(iter(_INTEGRALES)), None)
+        except (RuntimeError, StopIteration):       # otro hilo (MCP en vivo) la cambió a la vez: se empieza de nuevo
+            _INTEGRALES.clear()
+    _INTEGRALES[clave] = (hijos, valor)
+    return valor
+
+
+def _integrar(forma, funcion, eps):
     if eps is not None:
         try:
             p = GProp_GProps()
@@ -1646,12 +1665,14 @@ def _adentro(a, b, tolerancia):
     sols = solidos(a)
     if not sols:
         return False
+    cajas = [_caja_occ(s, tolerancia) for s in sols]  # B-578: el clasificador de una rosca modelada tarda 44 ms
     for pieza in solidos(b) or [b]:
         v = next(_explorar(pieza, TopAbs_VERTEX), None)
         if v is None:
             continue
         p = BRep_Tool.Pnt_s(TopoDS.Vertex(v))
-        if any(BRepClass3d_SolidClassifier(s, p, tolerancia).State() == TopAbs_IN for s in sols):
+        if any((c is None or not c.IsOut(p)) and BRepClass3d_SolidClassifier(s, p, tolerancia).State() == TopAbs_IN
+               for s, c in zip(sols, cajas, strict=True)):
             return True
     return False
 
