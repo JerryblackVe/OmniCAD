@@ -30,6 +30,8 @@ ESPERADAS = {"documento": {"get_scene_info", "new_document", "open_document", "s
                             "list_shortcuts", "set_shortcut", "reset_shortcuts",
                             # P-164: cinta personalizable
                             "get_ribbon", "set_ribbon_section", "reset_ribbon",
+                            # P-166: temas de color
+                            "list_themes", "set_theme",
                             # MCP-50 (tests/test_api_vivo.py): la selección de la ventana en vivo
                             "get_selection", "select_entities",
                             # SOL-23 y SOL-27: conjuntos de selección, por límite, semilla y límite, y preajustes
@@ -57,7 +59,7 @@ def temporales():
 def test_herramientas_registradas_por_grupo():
     for grupo, nombres in ESPERADAS.items():
         assert {h["nombre"] for h in api.catalogo(grupo)} == nombres
-    assert len(api.catalogo(["documento", "parametros"])) == 63
+    assert len(api.catalogo(["documento", "parametros"])) == 65
 
 
 def test_esquemas_validos_y_documentados():

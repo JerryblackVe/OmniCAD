@@ -34,7 +34,7 @@ Si te ayuda, una donación me ayuda a seguir.
   importa STEP; bocetos desde DXF, SVG e imágenes vectorizadas; guarda bocetos como DXF y SVG.
 - **Inspección:** volumen, masa, área, caja envolvente, distancias, ángulos, interferencias, desmoldeo, accesibilidad, radio mínimo, cebra, curvatura, sección, huella de carbono (Sustainability Insights) y grupos de caras.
 - **Asistente IA dentro de la app:** un chat que diseña y modifica la pieza con las herramientas del programa, con API o con tu suscripción de Claude Code, Codex u OpenCode.
-- **Interfaz:** 5 temas (oscuro moderno, claro moderno, azul profesional, minimalista y clásico) y temas propios del
+- **Interfaz:** 9 temas (oscuro moderno, claro moderno, azul profesional, minimalista, clásico, grafito, violeta, alto contraste y menta) y temas propios del
   usuario en un archivo JSON; caja de herramientas con la tecla S (buscar y fijar comandos).
 - **Kernel geométrico:** [OpenCascade](https://dev.opencascade.org/) (B-rep), el mismo tipo de núcleo que usan los CAD comerciales.
 
