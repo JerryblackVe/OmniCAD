@@ -112,7 +112,8 @@ PISTAS = {
     "PROFILE_NOT_CLOSED": ["El boceto no tiene regiones cerradas: los extremos de las curvas tienen que coincidir.",
                            "Las líneas de construcción no forman perfiles."],
     "NO_TARGET_BODY": ["join, cut e intersect actúan sobre un cuerpo existente: creá uno antes o usá operation=new_body.",
-                       "Con target elegís el cuerpo (id o nombre); sin target se usan los sólidos que toca la herramienta."],
+                       "Con target elegís el cuerpo (id o nombre); sin target se usan los sólidos que toca la herramienta.",
+                       "Sin target no cuentan los cuerpos ocultos: mostralos (set_browser_visibility) o pasalos en target."],
     "INVALID_TRANSFORM_TYPE": ["«tipo» de cada transformación de multitransformar: rectangular, circular, ruta, puntos, "
                                "simetria o escala."],
     "INVALID_COUNT": ["«n» cuenta las instancias con el original: un entero de 2 o más (en la escala, n=3 da "
@@ -251,7 +252,7 @@ _MENSAJES_PASO = [
     (r"^La forma pertenece al otro motor geométrico", "MOTOR_INCOMPATIBLE"),
     (r"^Nombre desconocido", "INVALID_EXPRESSION"),
     (r"^Sintaxis inválida|^Expresión vacía|^Expresión no permitida|^División por cero", "INVALID_EXPRESSION"),
-    (r"^No hay cuerpos sobre los que", "NO_TARGET_BODY"),
+    (r"^No hay cuerpos sobre los que|^El cuerpo está oculto", "NO_TARGET_BODY"),
 ]
 
 
