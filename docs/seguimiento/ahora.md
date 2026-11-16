@@ -15,8 +15,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | B-593 integrado (5e91b41). Libre hasta el lote de las 13 h |
 | E6 | B-598 | Extruir «Hasta la cara» de 15 letras: previa de más de 4 min (caso LINCES). P-99/B-546 Parcial integrados: 04bf7a8. Después FL-2/FL-3 |
-| E7 | P-168 + P-167 | Primero P-168: auditoría de Patrón rectangular y circular en todos los entornos (prioridad 1); después P-167: barra de navegación del visor. Pedidos de Gerardo, Sonnet medio. E11 hace la parte del mouse cuando le toque |
-| E8 | — | B-590 integrado y B-591 3.er caso Parcial (117a131). Libre hasta el lote de las 13 h |
+| E7 | P-168 → P-169 (2) → P-167 | Auditoría de patrones (prioridad 1); después el barrido de lo que no funciona para la lista de P-169; después la barra de navegación. E11 hace la parte del mouse |
+| E8 | P-169 (1) | Lista central de lo deshabilitado: gris + «No disponible: motivo» en cinta, menús y paneles, kind claro en la API (Sonnet medio). B-590 y B-591 (3.er caso) integrados: 117a131 |
 | E9 | — | P-166 integrado (5e91b41). Libre hasta el lote de las 13 h |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
