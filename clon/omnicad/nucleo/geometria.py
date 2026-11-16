@@ -15,6 +15,7 @@ import itertools
 import math
 import os
 import random
+import time
 
 import numpy as np
 from . import motor as _motor
@@ -559,11 +560,12 @@ def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, inv
     return _quitar_cables_colgados(unificar_caras(resultado))
 
 
-# Reintentos de una booleana cuyo resultado no es creíble (B-39). Orden: lo que no cambia la geometría primero.
+# Reintentos de una booleana cuyo resultado no es creíble (B-39). Orden: lo que no cambia la geometría primero y, entre
+# eso, lo que más rescata (B-567, en los tests: sin paralelo 164 de 209, sin unificar 17, sanar 3).
 _REINTENTOS_BOOLEANA = (
-    {"sanar": True},                     # el kernel devolvía un sólido inválido sin avisar: ShapeFix lo deja válido
-    {"unificar": False},                 # B-537: juntar las caras coplanares invalidaba una unión bien hecha
     {"paralelo": False},                 # el modo paralelo del kernel a veces da un resultado distinto (1 de 15)
+    {"unificar": False},                 # B-537: juntar las caras coplanares invalidaba una unión bien hecha
+    {"sanar": True},                     # el kernel devolvía un sólido inválido sin avisar: ShapeFix lo deja válido
     {"invertir": True},                  # objetivo y herramienta intercambiados: otro camino de clasificación
     {"fuzzy": 1e-6},                     # tolerancia difusa: un contacto tangente casi exacto
     {"nurbs": True},                     # herramienta en B-spline: un toro cruzando un cilindro devolvía «sin contacto»
@@ -572,6 +574,10 @@ _REINTENTOS_BOOLEANA = (
     {"fuzzy": 1e-6, "sanar": True}, {"nurbs": True, "sanar": True},     # lo que salvó el volumen pero salió inválido
     {"pegar": True}, {"obb": True},                  # GlueShift y caja orientada: dos caminos de intersección distintos
 )
+# B-567: tope de los reintentos, en segundos, o el doble de la primera pasada si es más. En los tests ningún rescate pasó
+# de 1,9 s (con la máquina quieta: el tope deja el triple para la carga); con caras libres que el kernel no logra unir,
+# los 13 reintentos tardaban 34 s antes del error.
+_TOPE_REINTENTOS_S = 6.0
 _TOPE_VOLUMEN_BOOLEANA = 1e-3     # parte del volumen de la pieza más chica que se tolera de más o de menos (más 1e-6 del total)
 _RESOLUCION_BOOLEANA = 1e-5       # mm: debajo de esto una herramienta deja autointersecciones o partes sueltas (B-128)
 _MUESTRAS_AFUERA = 16
@@ -1040,13 +1046,18 @@ def cortar_varias(objetivo, formas, avisos=None):
 
 
 def _booleana_verificada(objetivo, herramienta, operacion, volumenes, avisos, **modo):
-    """Corre el kernel y verifica el resultado; si no es creíble, reintenta (ver `booleano`). `modo`: va a cada pasada."""
+    """Corre el kernel y verifica el resultado; si no es creíble, reintenta (ver `booleano`) hasta `_TOPE_REINTENTOS_S`
+    o el doble de la primera pasada. `modo`: va a cada pasada."""
+    inicio = time.monotonic()
     resultado, intactas = _booleana(objetivo, herramienta, operacion, con_historial=True, **modo)
     problema = _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, intactas)
     if problema is None:
         return resultado
     mejor, peor_problema = resultado, problema
+    hasta = time.monotonic() + max(_TOPE_REINTENTOS_S, 2 * (time.monotonic() - inicio))
     for intento in _REINTENTOS_BOOLEANA:
+        if time.monotonic() > hasta:
+            break                   # B-567: el kernel insiste en fallar; el error llega en segundos, no en 30-45
         if intento.get("invertir") and operacion == "cortar":
             continue
         if intento.get("nurbs") and (problema[0] < 2 and volumenes is None):
