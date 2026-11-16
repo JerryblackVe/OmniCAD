@@ -15,7 +15,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 8. **Seguridad**: sin push, gasto, borrado ni archivos privados sin el OK de Gerardo; credenciales nunca a la vista; MCP solo en 127.0.0.1.
 9. **Solo OpenCascade**: OmniKernel suspendido.
 10. **Todo en MCP y CLI**: cada herramienta nueva con su versión para agentes, test y doc.
-11. **Avisos**: contexto al 25 %, cupo semanal fuera de ritmo o al 90 % (Protocolo de ahorro), OpenCode (glm-5.3-flash-free; Sol dado de baja por Gerardo el 2026-11-15) siempre con trabajo.
+11. **Avisos**: contexto al 25 %, cupo semanal fuera de ritmo o al 90 % (Protocolo de ahorro), OpenCode siempre con trabajo (GLM, MiniMax o DeepSeek según el trabajo y el cupo: «Protocolo de OpenCode» en [docs/coordinacion.md](docs/coordinacion.md)).
 12. **Hablarle corto a Gerardo**: 3–5 líneas, resultado primero, ⚠ para riesgos, una sola pregunta.
 13. **Cuidar los tokens, sin perder calidad (Gerardo, 2026-11-15: prioridad máxima)**: meta, una app usable para el 30/11. Modelo y esfuerzo justos (Opus solo en solver, geometría, núcleo y velocidad; lo demás en Sonnet; lo mecánico en OpenCode gratis o en scripts); leer solo lo necesario; nada de pruebas ni análisis repetidos; mensajes cortos; nada de prioridad 2 hasta terminar la 1. Sin capacidad ociosa en lo que suma a la meta, pero gastar menos vale más que gastar todo el cupo. Cómo se hace: sección «Protocolo de ahorro».
 14. **App para todos (Gerardo, 2026-11-15)**: OmniCAD tiene que ser intuitiva y gráfica, y entenderse desde un chico de 10 años hasta una persona de 100. Todo se trabaja bajo esta premisa: mensajes de 1 renglón con ícono y sin jerga, límites y errores mostrados en el dibujo (asa, campo o previa en rojo), muestras visuales en vez de textos largos, y el detalle en un «?» o en la ayuda. Lo que ya existe y no cumple se adapta (P-157, P-158).
@@ -72,7 +72,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
   | E6 | Velocidad y Rust | Opus alto |
   | E7 | Pruebas como usuario (prueba_ui, caza, banco de fluidez) | Sonnet medio |
   | E8 | Linux, arreglos chicos, UI, docs | Sonnet medio |
-  | E9 | Arreglos de prioridad 1, orquestando OpenCode (glm-5.3-flash-free) para las piezas acotadas | Sonnet medio |
+  | E9 | Arreglos de prioridad 1, orquestando OpenCode (lanza y revisa sus corridas: «Protocolo de OpenCode») | Sonnet medio |
   | E10 | Arreglos de prioridad 1 (archivos `.f3d`, sólidos, GitHub) | según la tarea |
   | E11 | Pruebas con Computer Use en la PC (OmniCAD y Fusion); reporta al chat maestro | Sonnet medio |
 
