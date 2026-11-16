@@ -183,8 +183,8 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - El coordinador mira cuánto lleva lleno su contexto (`get_usage` con `session_id: "self"`) cada vez que cierra una
   tarea o una tanda, y antes de lanzar otra.
 - **Al llegar al 20 %, avisa en una línea que se acerca al límite.** **Al llegar al 25 %, no arranca nada nuevo:**
-  1. guarda todo: commit de lo verificado; `docs/seguimiento/`, `PROJECT_LOG.md`, la lista nocturna y la página de
-     seguimiento al día;
+  1. guarda todo: commit de lo verificado; `docs/seguimiento/`, `PROJECT_LOG.md` y la lista nocturna al día (la página
+     de seguimiento, solo a las 19 h);
   2. escribe una nota de traspaso en `PROJECT_LOG.md` (Registro): sesiones abiertas y su estado, lo que espera
      revisión, lo que quedó sin commitear y de quién es, y el próximo paso;
   3. le dice a Gerardo en una línea que abra una sesión nueva de coordinación, que arranca leyendo esa nota.
