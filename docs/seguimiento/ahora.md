@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-572 | Boceto 3D: «Puntos» + Intro no dibuja (Gerardo: ya, sin esperar el lote); después B-573 |
+| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D). B-572 y B-573 integrados: 8e22b1f, e02505e |
 | E2 | — | En pausa hasta el lote de las 13 h (Sigue vacía; cupo semanal). B-543 integrado: 57ed767 |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
