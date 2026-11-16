@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | B-545 | Panel perezoso (su worktree ~/OmniCAD-B-545): abrir Agujero y Extruir < 150 ms; después B-567. B-574 integrado: d7806c4 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
-| E9 | P-158h | Los tests que P-158f dejó rojos con el texto viejo (lista en la fila); P-158g integrado: 704370e |
+| E9 | B-577 | Su B-557 rompió `test_perfiles_interior` (3; panel Objetos del boceto). P-158h integrado: b322fcc |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
