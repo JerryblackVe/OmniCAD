@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-601 | `suppress` fuera de rango en el Patrón de boceto; después B-582. Sonnet medio. B-595/596/597 integrados: bbaec71 (B-596 falta Windows) |
+| E1 | B-582 | Tangente círculo–círculo + Concéntrica: el solver converge con la tangente violada y no marca conflicto (solver.py ~701 `_tangencia`). Opus alto. B-601 integrado |
 | E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
 | E3 | — | En pausa (cupo amarillo, 82 % el 16/11 19 UTC). B-503 Parcial: 7cc89af (falta una cara sola de letra curva, velocidad y Arial en Windows) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |

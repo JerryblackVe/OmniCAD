@@ -97,6 +97,23 @@ def test_c6_excluir_una_copia_no_mueve_las_demas():
     assert llamar(s, "get_sketch")["patterns"][0]["suppressed"] == [2, 6]
 
 
+def test_b601_suppress_fuera_de_rango_se_rechaza_en_crear_y_editar():
+    s = nuevo()
+    c = circulo(s)
+    for herramienta, args, copias in (("sketch_rectangular_pattern", {"count1": 4, "distance1": 30}, 3),
+                                      ("sketch_circular_pattern", {"count": 4}, 3)):
+        r = falla(s, herramienta, entities=c, suppress=[99], **args)
+        assert r["error_kind"] == "INVALID_ARGUMENTS", r
+        falla(s, herramienta, entities=c, suppress=[copias], **args)           # la primera fuera de rango
+        llamar(s, herramienta, entities=c, suppress=[copias - 1], **args)       # la última válida
+        pid = llamar(s, "get_sketch")["patterns"][-1]["id"]
+        r = falla(s, "edit_sketch_pattern", pattern=pid, suppress=[copias])
+        assert r["error_kind"] == "INVALID_ARGUMENTS", r
+        assert llamar(s, "get_sketch")["patterns"][-1]["suppressed"] == [copias - 1]
+    # con más copias el mismo índice ya es válido
+    llamar(s, "edit_sketch_pattern", pattern=pid, count=6, suppress=[4])
+
+
 def test_c7_cambiar_el_centro_despues_regenera_el_patron():
     s = nuevo()
     pid = llamar(s, "sketch_circular_pattern", entities=circulo(s), count=4)["pattern"]
