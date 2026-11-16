@@ -496,3 +496,4 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 - B-556 (E11): cinta y diálogo de Agujero a 1024×700 con main actual (después de B-533 y B-535).
 - B-536 (E11, Fusion): vaciar 1 mm quitando una tapa un barrido (círculo r5 por la spline (0,0),(30,10),(60,0),(90,10)) con empalme r1 en todas las aristas, con y sin Cadena tangente.
 - **2026-11-15 · P-160 (Extruir «Todo», `ui/comandos/solido.py`):** humo y E11: boceto sobre la cara de una caja, Extruir › Todo › Cortar: la flecha apunta hacia la caja y corta sin aviso; sin cuerpos, la flecha en rojo y el aviso de 1 renglón (comparar con la captura de Gerardo).
+- **2026-11-16, B-610 (E11, Windows):** con un cuerpo que tapa el origen, abrir Análisis de sección (y Crear boceto, Plano de desfase): los 3 planos se ven encima del cuerpo y se eligen con clic; al salir vuelven como estaban.
