@@ -278,7 +278,7 @@ def test_asm13_una_receta_con_un_movimiento_inexistente_falla_diciendo_cuales_ti
     from omnicad.timeline.ops_ensamblar import OpVinculoMovimiento
     s.doc.reemplazar(vinculo.id, OpVinculoMovimiento(vinculo.id, "V", False, **dict(vinculo.p, mov2="giro3")))
     paso = next(p for p in llamar(s, "get_timeline")["steps"] if p["name"] == "V")
-    assert paso["status"] == "error" and "no tiene el movimiento «giro3»" in paso["message"]
+    assert paso["status"] == "error" and "Unión «J2» sin «giro3»; tiene" in paso["message"]
 
 
 # ---------------------------------------------------------------- ASM-14: estudio de movimiento

@@ -182,7 +182,7 @@ class NuevoComponente(Comando):
         nombre = (v.get("nombre") or "").strip()
         if nombre and ctx.op is None:                 # «Component Name» de Fusion: el nombre del componente es el del paso
             if any(o.nombre == nombre for o in ctx.doc.operaciones):
-                raise ErrorComando(f"Ya hay un paso llamado «{nombre}»: elegí otro nombre.")
+                raise ErrorComando(f"Ya hay un paso «{nombre}»: elegí otro nombre.")
             op.nombre = nombre
         return op
 
@@ -418,7 +418,7 @@ class RestriccionComponentes(Comando):
     def _agregar_fila(self, panel):
         v = panel.valores
         if not (v.get("ref1") and v.get("ref2")):
-            panel._mostrar("Elegí la geometría de los dos componentes antes de agregar otra restricción.")
+            panel._mostrar("Elegí geometría de los dos componentes.")
             return
         fila = {k: list(v[k]) if isinstance(v.get(k), list) else v.get(k) for k in self.CAMPOS_FILA if k in v}
         panel.set_valores({"filas": list(v.get("filas") or []) + [fila], "nombre_fila": "", "ref1": [], "ref2": [], "ref1b": [], "ref2b": [], "ref_angulo": []})
@@ -458,7 +458,7 @@ class RestriccionComponentes(Comando):
                     exigir(v, f"ref{n}b", f"Seleccioná la segunda cara del componente {n}.")
                     extra[f"ref{n}b"] = ref1(v, f"ref{n}b")
             if extra["modo1"] == extra["modo2"] == "simple":
-                raise ErrorComando("Centro: poné al menos un componente en «Entre dos caras».")
+                raise ErrorComando("Centro: un componente en «Entre dos caras».")
         return dict(tipo=v.get("tipo", "alinear"), ref1=ref1(v, "ref1"), ref2=ref1(v, "ref2"),
                     desfase="0 mm" if centro or v.get("tipo") == "tangente" else valor, voltear=bool(v.get("voltear")),
                     ref_angulo=ref1(v, "ref_angulo") if angulo else None, nombre_fila=(v.get("nombre_fila") or "").strip(), **extra)
@@ -538,7 +538,7 @@ class GrupoRigido(Comando):
     def construir(self, v, ctx):
         comps = _componentes_de(v, ctx)
         if len(comps) < 2:
-            raise ErrorComando("Elegí cuerpos de al menos dos componentes distintos.")
+            raise ErrorComando("Elegí cuerpos de dos componentes distintos.")
         return self.crear_op(OpGrupoRigido, v, ctx, componentes=comps, incluir_hijos=bool(v.get("incluir_hijos", True)))
 
     def desde_op(self, op, ctx):
@@ -586,8 +586,7 @@ class AccionarUniones(Comando):
         op = ctx.doc.operacion(v["union"])
         vinculo = _vinculo_que_la_mueve(ctx, op.id)
         if vinculo:
-            raise ErrorComando(f"La unión «{op.nombre}» la mueve el vínculo «{vinculo.nombre}»: su valor sale de la otra "
-                               "unión. Accioná esa.")
+            raise ErrorComando(f"Unión «{op.nombre}» la mueve el vínculo «{vinculo.nombre}».")
         params = dict(op.p)
         _numero(v.get("giro"))
         _numero(v.get("desliz"))
@@ -743,8 +742,7 @@ class VinculoMovimiento(Comando):
         if v["union1"] == v["union2"]:
             u = ctx.doc.estado_final.uniones.get(v["union1"])
             if u is not None and _clave_movimiento(u, v.get("mov1")) == _clave_movimiento(u, v.get("mov2")):
-                raise ErrorComando("Con la misma unión en las dos puntas hay que elegir dos movimientos distintos de ella "
-                                   "(por ejemplo Giro y Deslizamiento de una cilíndrica).")
+                raise ErrorComando("Unión repetida: dos movimientos distintos.")
         _numero(v["factor"])
         return self.crear_op(OpVinculoMovimiento, v, ctx, union1=v["union1"], union2=v["union2"], factor=v["factor"],
                              invertir=v["invertir"], mov1=v.get("mov1") or "", mov2=v.get("mov2") or "",
@@ -789,7 +787,7 @@ class NuevoConjuntoContactos(Comando):
     def aplicar(self, v, ctx):
         comps = _componentes_de(v, ctx)
         if len(comps) < 2:
-            raise ErrorComando("Elegí cuerpos de dos o más componentes distintos.")
+            raise ErrorComando("Elegí cuerpos de dos o más componentes.")
         from ... import api
         r = api.llamar(api.Sesion(ctx.doc), "create_contact_set", {"components": comps})
         if not r["ok"]:

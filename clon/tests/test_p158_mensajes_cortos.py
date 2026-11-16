@@ -28,6 +28,8 @@ TOPES = {
     "nucleo/superficies.py": 0,
     "timeline/ops_superficie.py": 0,
     "ui/comandos/superficie.py": 0,
+    "ui/comandos/ensamblar.py": 0,
+    "timeline/ops_ensamblar.py": 0,
 }
 
 

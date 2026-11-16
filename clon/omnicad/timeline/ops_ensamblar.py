@@ -37,7 +37,7 @@ CLAVES_MOVIMIENTO = ("giro", "giro2", "giro3", "desliz", "desliz2")
 def exigir_numero(texto):
     """«nan» e «inf» (con signo o en mayúsculas) no son números: el mensaje lo dice, en vez de «Nombre desconocido»."""
     if re.fullmatch(r"\s*[+-]?(nan|inf|infinity)\s*", str(texto or ""), re.IGNORECASE):
-        raise ErrorOperacion(f"No es un número: «{str(texto).strip()}». Escribí un valor finito (por ejemplo 30 o 45 deg).")
+        raise ErrorOperacion(f"No es un número: «{str(texto).strip()}». Escribí otro.")
 
 
 def es_fijo(estado, comp):
@@ -174,7 +174,7 @@ def _marco_resto(e, f, punto_clave):
         return marco_desde(p, d)
     if e.punto is not None:
         return marco_desde(e.punto, e.plano.normal if e.plano is not None else (0, 0, 1))
-    raise ErrorOperacion("No se puede poner un origen de unión en esa selección.")
+    raise ErrorOperacion("Esa selección no admite un origen de unión.")
 
 
 def _centro_circular(cara):
@@ -221,10 +221,10 @@ def _marco_entre_caras(a, b, version):
     """Origen centrado entre dos caras planas paralelas: sobre el centro de la primera, a medio camino de la
     segunda, con la normal de la primera (Between Two Faces)."""
     if a.plano is None or b.plano is None:
-        raise ErrorOperacion("«Entre dos caras» necesita dos caras planas (o planos).")
+        raise ErrorOperacion("«Entre dos caras»: caras planas o planos.")
     n = _unit(a.plano.normal)
     if abs(float(np.dot(n, _unit(b.plano.normal)))) < 1 - 1e-6:
-        raise ErrorOperacion("Las dos caras tienen que ser paralelas para centrar el origen entre ellas.")
+        raise ErrorOperacion("Para centrar, las caras deben ser paralelas.")
     ca, cb = _marco(a, "centro", version)[0][:3, 3], _marco(b, "centro", version)[0][:3, 3]
     return marco_desde(ca + n * float((cb - ca) @ n) / 2, n, a.plano.u)
 
@@ -240,7 +240,7 @@ def _marco_interseccion(a, b):
     s, t = np.linalg.solve(np.c_[d1, -d2, n], p2 - p1)[:2]
     q1, q2 = p1 + d1 * s, p2 + d2 * t
     if np.linalg.norm(q1 - q2) > 1e-6 * max(1.0, np.linalg.norm(q1)):
-        raise ErrorOperacion("Las dos aristas no se cruzan (no están en el mismo plano): no hay intersección.")
+        raise ErrorOperacion("Las aristas no se cruzan: no comparten plano.")
     return marco_desde((q1 + q2) / 2, n, d1)
 
 
@@ -257,9 +257,9 @@ def _marco_modo(estado, origen, origen_b, modo, clave, version):
             marco = m @ _marco_de_eje(local[:3, 3], local[:3, 2])
         return marco, eje, e
     if modo not in MODOS_POSICION:
-        raise ErrorOperacion(f"Modo de posición desconocido: «{modo}». Modos: {', '.join(MODOS_POSICION)}.")
+        raise ErrorOperacion(f"Modo desconocido: «{modo}». Modos: {', '.join(MODOS_POSICION)}.")
     if not origen_b:
-        raise ErrorOperacion(f"El modo «{MODOS_POSICION[modo]}» necesita la segunda selección: "
+        raise ErrorOperacion(f"El modo «{MODOS_POSICION[modo]}» necesita además "
                              f"{'otra cara' if modo == 'entre_caras' else 'otra arista'}.")
     e2 = _resolver(origen_b, estado)
     return (_marco_entre_caras(e, e2, version) if modo == "entre_caras" else _marco_interseccion(e, e2)), False, e
@@ -332,7 +332,7 @@ def ejes_bola(ejes):
     guinada = guinada - float(guinada @ cabeceo) * cabeceo
     largo = float(np.linalg.norm(guinada))
     if largo < 1e-6:
-        raise ErrorOperacion("El eje de cabeceo (Pitch) y el de guiñada (Yaw) son paralelos: elegí dos ejes distintos.")
+        raise ErrorOperacion("Los ejes de cabeceo y guiñada son paralelos.")
     guinada = guinada / largo
     return centro, np.cross(guinada, cabeceo), cabeceo, guinada
 
@@ -384,7 +384,7 @@ def _recta_de(e):
         if f["geom"] == "linea":
             a, b = (np.array(p, float) for p in f["extremos"])
             return a, b - a
-    raise ErrorOperacion("La intersección de dos aristas necesita dos aristas rectas (o ejes).")
+    raise ErrorOperacion("La intersección necesita dos aristas rectas.")
 
 
 # ---------------------------------------------------------------- operaciones
@@ -518,8 +518,8 @@ class OpComponente(Operacion):
         if self.p.get("padre"):
             padre = componente_por_ref(estado, self.p["padre"])
             if padre is None:
-                raise ErrorOperacion(f"No encuentro el componente padre «{self.p['padre']}» en este punto del timeline. "
-                                     f"Componentes: {', '.join(c.get('nombre') or k for k, c in estado.componentes.items()) or 'ninguno'}.")
+                raise ErrorOperacion(f"No encontré el padre «{self.p['padre']}». "
+                                     f"Hay: {', '.join(c.get('nombre') or k for k, c in estado.componentes.items()) or 'ninguno'}.")
         matriz = np.identity(4)
         if _version_de(self.p, "version_pose") >= 2:
             pose = None
@@ -820,28 +820,26 @@ class OpUnion(Operacion):
         version = _version_de(p, "version_marco")
         accionada = self.entero("accionada", minimo=0)
         if not p["origen1"]:
-            raise ErrorOperacion("Elegí el origen de la unión en el componente 1.")
+            raise ErrorOperacion("Elegí el origen de unión en el componente 1.")
         F1, eje1, e1 = _marco_modo(estado, p["origen1"], p.get("origen1b"), p.get("modo1"), p["clave1"], version)
         comp1 = _componente_de(estado, e1)
         if not comp1:
-            raise ErrorOperacion("El componente 1 tiene que ser un componente (no la raíz): creá uno con "
-                                 "ENSAMBLAR › Nuevo componente.")
+            raise ErrorOperacion("El componente 1 no puede ser la raíz.")
         if es_fijo(estado, comp1):
-            raise ErrorOperacion("El componente 1 está fijo: no se puede mover con una unión.")
+            raise ErrorOperacion("El componente 1 está fijo: no se mueve.")
         valores = self.valores(ctx, ctx.aviso)
         reaplicar = None
         comps = grupo_rigido(estado, comp1)
         fijos = [c for c in comps if es_fijo(estado, c)]
         if fijos:
             nombre = estado.componentes[fijos[0]].get("nombre") or fijos[0]
-            raise ErrorOperacion(f"El componente 1 está en un grupo rígido con «{nombre}», que está fijo: no se "
-                                 "puede mover con una unión.")
+            raise ErrorOperacion(f"Componente 1 va en grupo con «{nombre}» fijo.")
         if p["como_esta"]:
             comp2, seguir = "", np.identity(4)
             if p["origen2"]:
                 comp2 = _componente_de(estado, _resolver(p["origen2"], estado)) or ""
                 if comp2 == comp1:
-                    raise ErrorOperacion("Los dos orígenes están en el mismo componente.")
+                    raise ErrorOperacion("Los orígenes están en el mismo componente.")
             camino = _camino_lazo(estado, comp1, comp2)
             base = estado.componentes[comp1].get("base", np.identity(4).tolist())       # la heredada no es movimiento
             ya_movida = not np.allclose(_matriz_de(estado, comp1), base, atol=1e-9)
@@ -870,11 +868,11 @@ class OpUnion(Operacion):
                              "como_esta": True}
         else:
             if not p["origen2"]:
-                raise ErrorOperacion("Elegí el origen de la unión en el componente 2.")
+                raise ErrorOperacion("Elegí el origen de unión en el componente 2.")
             F2, eje2, e2 = _marco_modo(estado, p["origen2"], p.get("origen2b"), p.get("modo2"), p["clave2"], version)
             comp2 = _componente_de(estado, e2) or ""
             if comp2 == comp1:
-                raise ErrorOperacion("Los dos orígenes están en el mismo componente.")
+                raise ErrorOperacion("Los orígenes están en el mismo componente.")
             opuestos = not (version >= 2 and eje1 and eje2)       # caras enfrentadas; dos ejes: mismo sentido
             enfrentar = _rot(0, 180.0) if opuestos != bool(p["voltear"]) else np.identity(4)
             desfase = _tras([ctx.evaluar(p[k]) for k in ("dx", "dy", "dz")])
@@ -950,7 +948,7 @@ def componente_por_ref(estado, ref):
     nombre = ref.strip().casefold()
     hallados = [k for k, c in estado.componentes.items() if str(c.get("nombre") or "").casefold() == nombre]
     if len(hallados) > 1:
-        raise ErrorOperacion(f"Hay varios componentes llamados «{ref}»: usá el id.")
+        raise ErrorOperacion(f"Nombre «{ref}» repetido: usá el id.")
     if hallados:
         return hallados[0]
     cuerpo = estado.cuerpos.get(ref)
@@ -972,8 +970,7 @@ class OpGrupoRigido(Operacion):
 
     def ejecutar(self, estado, ctx):
         if not estado.componentes:
-            raise ErrorOperacion("Todavía no hay componentes en este punto del timeline: creá uno con "
-                                 "ENSAMBLAR › Nuevo componente.")
+            raise ErrorOperacion("Todavía no hay componentes: creá uno.")
         ids, faltan = [], []
         for ref in self.p["componentes"]:
             comp = componente_por_ref(estado, ref)
@@ -985,7 +982,7 @@ class OpGrupoRigido(Operacion):
         if faltan or len(ids) < 2:
             no_hay = f" No encontré: {', '.join(f'«{r}»' for r in faltan)}." if faltan else ""
             hay = ", ".join(f"{c.get('nombre') or k} ({k})" for k, c in estado.componentes.items())
-            raise ErrorOperacion(f"Elegí al menos dos componentes existentes.{no_hay} Componentes disponibles: {hay}.")
+            raise ErrorOperacion(f"Hacen falta dos.{no_hay} Componentes: {hay}.")
         if self.p.get("incluir_hijos"):
             ids = _con_subcomponentes(estado, ids)
         estado.grupos_rigidos = estado.grupos_rigidos + [ids]
@@ -998,8 +995,8 @@ def _clave_movimiento(u, elegido):
     if not elegido:
         return "giro" if giros else "desliz"
     if elegido not in giros + desliz:
-        raise ErrorOperacion(f"La unión «{u['nombre']}» no tiene el movimiento «{elegido}»: tiene "
-                             f"{', '.join(giros + desliz) or 'ninguno (es rígida)'}.")
+        raise ErrorOperacion(f"Unión «{u['nombre']}» sin «{elegido}»; "
+                             f"tiene {', '.join(giros + desliz) or 'ninguno (es rígida)'}.")
     return elegido
 
 
@@ -1024,29 +1021,24 @@ class OpVinculoMovimiento(Operacion):
         u1, u2 = estado.uniones.get(self.p["union1"]), estado.uniones.get(self.p["union2"])
         faltan = [f"«{i}»" for i, u in ((self.p["union1"], u1), (self.p["union2"], u2)) if not u]
         if faltan:
-            raise ErrorOperacion(f"El vínculo necesita la unión {' y la unión '.join(faltan)}, que no está calculada: "
-                                 "está suprimida, borrada o después de este paso.")
+            raise ErrorOperacion(f"La unión {' y la unión '.join(faltan)} falta: suprimida o después.")
         clave1 = _clave_movimiento(u1, self.p.get("mov1"))
         clave2 = _clave_movimiento(u2, self.p.get("mov2"))
         misma = self.p["union1"] == self.p["union2"]
         if misma and clave1 == clave2:
-            raise ErrorOperacion(f"Para relacionar dos movimientos de la misma unión («{u1['nombre']}») hay que elegir dos "
-                                 f"distintos (los dos son «{clave1}»): elegí el de la unión 1 y el de la unión 2 (por "
-                                 "ejemplo, giro y deslizamiento de una cilíndrica).")
+            raise ErrorOperacion(f"Unión «{u1['nombre']}»: movimiento «{clave1}» repetido.")
         if self.p["union2"] in estado.vinculos:
             otro = estado.uniones.get(estado.vinculos[self.p["union2"]], {})
-            raise ErrorOperacion(f"La unión «{u2['nombre']}» ya la mueve el vínculo «{otro.get('nombre', 'otro')}»: "
-                                 "una unión solo puede seguir a un vínculo.")
+            raise ErrorOperacion(f"La unión «{u2['nombre']}» ya la mueve «{otro.get('nombre', 'otro')}».")
         actual, vistos = self.p["union1"], set()
         while actual in estado.vinculos and actual not in vistos:
             vistos.add(actual)
             actual = estado.vinculos[actual]
             if actual == self.p["union2"]:
-                raise ErrorOperacion(f"El vínculo «{u1['nombre']}» → «{u2['nombre']}» armaría un círculo: "
-                                     f"«{u2['nombre']}» ya mueve a «{u1['nombre']}».")
+                raise ErrorOperacion(f"«{u1['nombre']}» → «{u2['nombre']}» cierra círculo.")
         factor = ctx.evaluar(self.p["factor"], "escalar") * (-1 if self.p["invertir"] else 1)
         if not math.isfinite(factor) or factor == 0:
-            raise ErrorOperacion("La relación del vínculo no puede ser cero: la unión 2 no se movería.")
+            raise ErrorOperacion("La relación del vínculo no puede ser cero.")
         estado.vinculos[self.p["union2"]] = self.p["union1"]
         F2 = np.asarray(u2["marco"], float)
         if version < 2:
@@ -1071,7 +1063,7 @@ def _comp_o_error(estado, ref):
     comp = componente_por_ref(estado, ref)
     if comp is None:
         hay = ", ".join(f"{c.get('nombre') or k} ({k})" for k, c in estado.componentes.items()) or "ninguno"
-        raise ErrorOperacion(f"No encontré el componente «{ref}». Componentes: {hay}.")
+        raise ErrorOperacion(f"No encontré «{ref}». Componentes: {hay}.")
     return comp
 
 
@@ -1172,8 +1164,7 @@ class OpCapturarPosicion(Operacion):
         comps = ([_comp_o_error(estado, c) for c in self.p["componentes"]] if self.p["componentes"]
                  else list(estado.componentes))
         if not comps:
-            raise ErrorOperacion("Todavía no hay componentes en este punto del timeline: creá uno con "
-                                 "ENSAMBLAR › Nuevo componente.")
+            raise ErrorOperacion("Todavía no hay componentes: creá uno.")
         self._usados = set(comps)
         for k in _con_subcomponentes(estado, comps):
             estado.componentes[k] = dict(estado.componentes[k], captura=_matriz_de(estado, k).tolist())
@@ -1193,8 +1184,7 @@ class OpRevertirPosicion(Operacion):
         comps = ([_comp_o_error(estado, c) for c in self.p["componentes"]] if self.p["componentes"]
                  else list(estado.componentes))
         if not comps:
-            raise ErrorOperacion("Todavía no hay componentes en este punto del timeline: creá uno con "
-                                 "ENSAMBLAR › Nuevo componente.")
+            raise ErrorOperacion("Todavía no hay componentes: creá uno.")
         self._usados = set(comps)
         for k in _con_subcomponentes(estado, comps):        # cada uno vuelve a SU captura: el orden no importa
             meta = np.asarray(estado.componentes[k].get("captura", np.identity(4).tolist()), float)
@@ -1306,7 +1296,7 @@ def _clase_de_alinear(e):
         return "eje"
     if e.tipo in ("vertice", "punto", "punto_boceto") and e.punto is not None:
         return "punto"
-    raise ErrorOperacion("Alinear: elegí una cara, una arista, un vértice, un plano, un eje o un punto.")
+    raise ErrorOperacion("Alinear: cara/arista/vértice/plano/eje/punto.")
 
 
 def _alinear(e1, e2, desfase, voltear):
@@ -1321,10 +1311,10 @@ def _alinear(e1, e2, desfase, voltear):
     o1, o2 = F1[:3, 3], F2[:3, 3]
     if c1 == c2 == "punto":
         if abs(desfase) > 1e-12:
-            raise ErrorOperacion("Alinear: el desfase no se aplica a dos puntos.")
+            raise ErrorOperacion("Alinear: el desfase no aplica a dos puntos.")
         return _tras(o2 - o1)
     if c1 != c2 or c1 == "punto":
-        raise ErrorOperacion(f"Alinear: la combinación {c1}–{c2} todavía no está. Hoy: cara-cara, eje-eje y punto-punto.")
+        raise ErrorOperacion(f"Alinear: {c1}–{c2} todavía no está.")
     n2 = _unit(F2[:3, 2])
     sentido = (-1.0 if float(F1[:3, 2] @ n2) < 0 else 1.0) * (-1.0 if voltear else 1.0)
     giro = _rotar_a(F1[:3, 2], sentido * n2, o1)
@@ -1384,7 +1374,7 @@ def _superficie_tg(e):
         return "toro", np.asarray(c, float), _unit(d), float(refs.firma_arista(e.forma)["radio"]), 0.0
     if e.tipo in ("vertice", "punto", "punto_boceto") and e.punto is not None:
         return "esf", np.asarray(e.punto, float), 0.0
-    raise ErrorOperacion("Tangente: elegí una cara plana, cilíndrica, cónica, esférica o toroidal, un plano, una arista recta o circular, un eje o un vértice.")
+    raise ErrorOperacion("Tangente: cara, plano, arista, eje o vértice.")
 
 
 def _tangente(e1, e2, voltear):
@@ -1404,8 +1394,7 @@ def _tangente(e1, e2, voltear):
         n, o = pl[1], pl[2]
         if cv[0] == "cono":
             if abs(abs(float(n @ cv[2])) - math.sin(cv[3])) > 1e-4:
-                raise ErrorOperacion("Tangente: el plano no tiene la inclinación del cono (su normal forma con el eje 90° menos el "
-                                     "semiángulo). Giralo antes con Ángulo.")
+                raise ErrorOperacion("Tangente: al plano le falta la inclinación.")
             centro, radio = cv[1], 0.0
         elif cv[0] == "toro":
             paralelo = abs(float(n @ cv[2]))
@@ -1414,10 +1403,10 @@ def _tangente(e1, e2, voltear):
             elif paralelo < 1e-6:                            # eje ∥ plano: roza el borde más lejano del aro
                 centro, radio = cv[1], cv[3] + cv[4]
             else:
-                raise ErrorOperacion("Tangente: el eje del toro (o del círculo) tiene que ser perpendicular o paralelo al plano.")
+                raise ErrorOperacion("Tangente: el eje va perpendicular o paralelo.")
         elif cv[0] == "cil":
             if abs(float(n @ cv[2])) > 1e-6:
-                raise ErrorOperacion("Tangente: el eje del cilindro (o la arista) tiene que ser paralelo al plano.")
+                raise ErrorOperacion("Tangente: el eje del cilindro va paralelo.")
             centro, radio = cv[1], cv[3]
         else:
             centro, radio = cv[1], cv[2]
@@ -1425,11 +1414,11 @@ def _tangente(e1, e2, voltear):
         t = n * (float(lado(d) * radio) - d)
         return _tras(t if s1[0] != "plano" else -t)
     if {"cono", "toro"} & {s1[0], s2[0]}:
-        raise ErrorOperacion("Tangente: un cono, un toro o una arista circular solo se apoyan en un plano o en una cara plana.")
+        raise ErrorOperacion("Tangente: cono, toro o círculo piden plano.")
     (c1, r1), (c2, r2) = ((s[1], s[3] if s[0] == "cil" else s[2]) for s in (s1, s2))
     ejes = [s[2] for s in (s1, s2) if s[0] == "cil"]
     if len(ejes) == 2 and np.linalg.norm(np.cross(ejes[0], ejes[1])) > 1e-6:
-        raise ErrorOperacion("Tangente: los dos cilindros (o aristas) tienen que tener los ejes paralelos.")
+        raise ErrorOperacion("Tangente: los ejes tienen que ser paralelos.")
     w = c2 - c1
     if ejes:
         w = w - float(w @ ejes[0]) * ejes[0]
@@ -1437,7 +1426,7 @@ def _tangente(e1, e2, voltear):
     if largo < 1e-9:
         if objetivo < 1e-9:
             return np.identity(4)
-        raise ErrorOperacion("Tangente: las dos ya son concéntricas; no hay lado desde el cual tocarse.")
+        raise ErrorOperacion("Tangente: ya son concéntricas, no hay lado.")
     return _tras(w / largo * (largo - objetivo))
 
 
@@ -1445,7 +1434,7 @@ def _direccion_de(e):
     """Dirección unitaria de la geometría para Ángulo: la normal de un plano o cara plana, o el eje de un cilindro, una
     arista o un eje de construcción."""
     if _clase_de_alinear(e) == "punto":
-        raise ErrorOperacion("Ángulo: un punto no tiene dirección; elegí una cara, una arista o un eje.")
+        raise ErrorOperacion("Ángulo: un punto no tiene dirección.")
     return _unit(_marco(e, "centro", 2)[0][:3, 2])
 
 
@@ -1465,7 +1454,7 @@ def _angular(e1, e2, grados, voltear, e_ref=None):
     a = _direccion_de(e_ref)
     p1, p2 = d1 - a * float(d1 @ a), d2 - a * float(d2 @ a)
     if np.linalg.norm(p1) < 1e-9 or np.linalg.norm(p2) < 1e-9:
-        raise ErrorOperacion("Ángulo: la referencia es paralela a una de las geometrías; elegí otra arista o eje de referencia.")
+        raise ErrorOperacion("Ángulo: referencia paralela; elegí otra.")
     psi = math.atan2(float(a @ np.cross(p2, p1)), float(p2 @ p1))
     return _giro_eje(a, math.radians(grados) - psi, o1)
 
@@ -1544,14 +1533,13 @@ class OpRestriccion(Operacion):
             if not sueltas:
                 return movidos
         nombres = [f"{i}" + (f" «{filas[i - 1]['nombre_fila']}»" if filas[i - 1].get("nombre_fila") else "") for i in sueltas]
-        raise ErrorOperacion(f"Las restricciones del conjunto se contradicen: las filas {', '.join(nombres)} no se pueden cumplir "
-                             "a la vez. Cambiá la geometría o el desfase de alguna, o sacala.")
+        raise ErrorOperacion(f"Las filas {', '.join(nombres)} se contradicen entre sí.")
 
     def _movimiento(self, estado, ctx, p, orden):
         """(movimiento 4x4, componentes que se mueven, orden) de la fila `p` con el estado actual. `orden` es (c1, c2) de la primera
         fila ya con el cambio «Component 2 moves to Component 1»: las demás tienen que ir del mismo componente 1 al mismo 2."""
         if p["tipo"] not in ("alinear", "angulo", "centro", "tangente"):
-            raise ErrorOperacion(f"La restricción «{p['tipo']}» no existe: Alinear, Ángulo, Centro o Tangente.")
+            raise ErrorOperacion(f"La restricción «{p['tipo']}» no existe.")
         if not p["ref1"] or not p["ref2"]:
             raise ErrorOperacion("Elegí la geometría de los dos componentes.")
         exigir_numero(p["desfase"])
@@ -1559,14 +1547,14 @@ class OpRestriccion(Operacion):
         c1, c2 = _componente_de(estado, e1) or "", _componente_de(estado, e2) or ""
         invertido = False
         if c1 == c2:
-            raise ErrorOperacion("Las dos selecciones están en el mismo componente: elegí geometría de otro componente.")
+            raise ErrorOperacion("Las selecciones están en el mismo componente.")
         e1b = e2b = None
         if p["tipo"] == "centro":
             e1b, e2b = self._segundas_caras(p, estado, e1, e2, c1, c2)
         if orden is None:
             if not c1 or es_fijo(estado, c1):               # «Component 2 moves to Component 1»
                 if not c2 or es_fijo(estado, c2):
-                    raise ErrorOperacion("Los dos componentes están fijos o son la raíz: ninguno se puede mover.")
+                    raise ErrorOperacion("Ambos componentes están fijos o son la raíz.")
                 e1, e2, c1, c2, e1b, e2b = e2, e1, c2, c1, e2b, e1b
                 invertido = True
             orden = (c1, c2, invertido)
@@ -1575,17 +1563,17 @@ class OpRestriccion(Operacion):
             if invertido:
                 e1, e2, c1, c2, e1b, e2b = e2, e1, c2, c1, e2b, e1b
             if (c1, c2) != orden[:2]:
-                raise ErrorOperacion("Todas las filas del conjunto tienen que ir del mismo componente 1 al mismo componente 2.")
+                raise ErrorOperacion("Cada fila va del mismo componente 1 al 2.")
         comps = grupo_rigido(estado, c1)
         fijos = [c for c in comps if es_fijo(estado, c)]
         if fijos:
             nombre = estado.componentes[fijos[0]].get("nombre") or fijos[0]
-            raise ErrorOperacion(f"El componente a mover está en un grupo rígido con «{nombre}», que está fijo.")
+            raise ErrorOperacion(f"El componente a mover va con «{nombre}» fijo.")
         self._usados = (comps | {c2}) - {"", self.id}
         if p["tipo"] == "alinear":
             m = _alinear(e1, e2, self._valor(ctx, p), bool(p["voltear"]))
         elif p["tipo"] in ("tangente", "centro") and (abs(ctx.evaluar(p["desfase"])) > 1e-12 or str(p.get("minimo") or p.get("maximo") or "").strip()):
-            raise ErrorOperacion(f"La restricción «{p['tipo']}» no usa desfase ni límites: dejalos vacíos.")
+            raise ErrorOperacion(f"«{p['tipo']}»: dejá desfase y límites vacíos.")
         elif p["tipo"] == "tangente":
             m = _tangente(e1, e2, bool(p["voltear"]))
             if not p.get("todas_caras", True):
@@ -1608,16 +1596,16 @@ class OpRestriccion(Operacion):
         if topes == [None, None]:
             return valor
         if p["tipo"] == "angulo" and not p.get("ref_angulo"):
-            raise ErrorOperacion("Los límites de un ángulo piden primero una referencia de ángulo (una arista recta o un eje).")
+            raise ErrorOperacion("Los límites de ángulo piden una referencia.")
         lo, hi = topes
         if lo is not None and hi is not None and lo > hi:
-            raise ErrorOperacion(f"El límite mínimo ({lo:g}) es mayor que el máximo ({hi:g}).")
+            raise ErrorOperacion(f"Mínimo ({lo:g}) mayor que máximo ({hi:g}).")
         acotado = valor if lo is None else max(valor, lo)
         acotado = acotado if hi is None else min(acotado, hi)
         if abs(acotado - valor) > 1e-9:
             if p.get("apoyo"):
-                raise ErrorOperacion(f"«Usar desfase como apoyo»: el desfase ({valor:g}) tiene que estar dentro de los límites "
-                                     f"({'' if lo is None else f'{lo:g}'} a {'' if hi is None else f'{hi:g}'}).")
+                raise ErrorOperacion(f"Desfase ({valor:g}) no entra en "
+                                     f"{'' if lo is None else f'{lo:g}'} a {'' if hi is None else f'{hi:g}'}.")
             aviso = f"El desfase {valor:g} queda fuera de los límites: se usa {acotado:g}."
             if aviso not in ctx.avisos:             # un conjunto de filas recalcula cada fila varias veces
                 ctx.aviso(aviso)
@@ -1632,8 +1620,7 @@ class OpRestriccion(Operacion):
         from ..nucleo import consultas
         lejos = consultas.distancia(geo.transformar(e1.forma, m), e2.forma)
         if lejos > 1e-4:
-            raise ErrorOperacion(f"Tangente: con «Todas las caras» apagado las dos selecciones tienen que tocarse y quedan a "
-                                 f"{lejos:.3f} mm. Activá «Todas las caras» o acercá los componentes.")
+            raise ErrorOperacion(f"Tangente: faltan {lejos:.3f} mm para tocarse.")
 
     @staticmethod
     def _segundas_caras(p, estado, e1, e2, c1, c2):
@@ -1643,18 +1630,18 @@ class OpRestriccion(Operacion):
         for n, e, c in (("1", e1, c1), ("2", e2, c2)):
             modo = p.get("modo" + n) or "simple"
             if modo not in ("simple", "entre_caras"):
-                raise ErrorOperacion(f"Centro: modo de posición desconocido «{modo}». Modos: simple, entre_caras.")
+                raise ErrorOperacion(f"Centro: modo «{modo}» no existe.")
             if modo == "simple":
                 salida.append(None)
                 continue
             if not p.get("ref" + n + "b"):
-                raise ErrorOperacion(f"Centro: el componente {n} está en «Entre dos caras»: elegí su segunda cara.")
+                raise ErrorOperacion(f"Centro: el componente {n} pide 2 caras.")
             eb = _resolver(p["ref" + n + "b"], estado)
             if (_componente_de(estado, eb) or "") != c:
-                raise ErrorOperacion(f"Centro: las dos caras del componente {n} tienen que ser del mismo componente.")
+                raise ErrorOperacion(f"Centro: las dos caras de {n} van juntas.")
             salida.append(eb)
         if salida == [None, None]:
-            raise ErrorOperacion("Centro: al menos un componente tiene que estar en «Entre dos caras» (centra entre dos caras del otro).")
+            raise ErrorOperacion("Centro: un componente en «Entre dos caras».")
         return salida
 
 
