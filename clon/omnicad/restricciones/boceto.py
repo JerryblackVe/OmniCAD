@@ -2877,6 +2877,11 @@ class Boceto:
                 raise ErrorBoceto("La igualdad necesita dos segmentos con extremos distintos.")
         elif len(set(entidades)) != len(entidades):
             raise ErrorBoceto("Seleccioná entidades distintas.")
+        if tipo == "tangente" and "linea" in t:
+            l, c = entidades if t[0] == "linea" else entidades[::-1]
+            sobre = {r.entidades[0] for r in self.restricciones.values() if r.tipo == "coincidente" and r.entidades[1:] == [c]}
+            if set(self.curvas[l].extremos()) <= sobre:          # B-563: una cuerda no puede ser tangente (colapsaba)
+                raise ErrorBoceto("Tangente: la línea tiene los 2 extremos sobre la curva; soltá uno.")
         if tipo == "curvatura" and self.extremo_comun(*entidades) is None:
             raise ErrorBoceto("La curvatura se aplica a dos curvas encadenadas (que compartan un extremo).")
         if tipo == "poligono":
