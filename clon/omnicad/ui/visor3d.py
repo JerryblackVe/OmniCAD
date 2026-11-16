@@ -1249,10 +1249,23 @@ class Visor3D(QOpenGLWidget):
             return bool(vis["planos_origen"] and cfg.origen.get(ref.lower()))
         return bool(vis["planos_usuario"])
 
+    def _rect_origen(self, plano, L):
+        """Rectángulo uv de un plano de origen: (0, 0, L, L); al pedir un plano, además cubre la caja del modelo (B-610:
+        si el cuerpo tapa el origen, el plano tiene que asomar por fuera para verse y elegirse)."""
+        caja = self._caja_escena() if self.eligiendo_planos() else None
+        if caja is None:
+            return (0.0, 0.0, L, L)
+        mn, mx = caja
+        uv = np.array([plano.a_uv(np.array([x, y, z])) for x in (mn[0], mx[0]) for y in (mn[1], mx[1]) for z in (mn[2], mx[2])])
+        u0, v0 = np.minimum(uv.min(0), 0.0)
+        u1, v1 = np.maximum(uv.max(0), L)
+        m = 0.1 * max(u1 - u0, v1 - v0)
+        return (float(u0 - m) if u0 < 0 else 0.0, float(v0 - m) if v0 < 0 else 0.0, float(u1 + m), float(v1 + m))
+
     def planos_elegibles(self):
         """Planos que se pueden elegir: (ref, plano, rectángulo en uv)."""
         L = self._tam_planos()
-        salida = [(n, geo.Plano(n), (0.0, 0.0, L, L)) for n in ("XY", "XZ", "YZ")]
+        salida = [(n, geo.Plano(n), self._rect_origen(geo.Plano(n), L)) for n in ("XY", "XZ", "YZ")]
         for ident, _nombre, pl in self.config.planos_usuario:
             limites, extendido = self._medida(ident)
             if limites is None:
@@ -2264,10 +2277,10 @@ class Visor3D(QOpenGLWidget):
     def _origen_y_planos(self):
         cfg, vis, L = self.config, self.config.visibilidad, self._tam_planos()
         eligiendo = self.eligiendo_planos()
-        hover = self._hover[1] if self._hover and self._hover[0] == "plano" else None
-        for ref, pl, rect in self.planos_elegibles():
-            if eligiendo or self.plano_visible(ref):
-                self._cuadro_plano(pl, rect, NARANJA_PLANO, 0.22 if eligiendo else 0.12, ref == hover)
+        if not eligiendo:                   # al pedir un plano se dibujan después, encima del cuerpo (`_planos_encima`)
+            for ref, pl, rect in self.planos_elegibles():
+                if self.plano_visible(ref):
+                    self._cuadro_plano(pl, rect, NARANJA_PLANO, 0.12, False)
         if vis["ejes_origen"]:
             GL.glLineWidth(2.5)
             GL.glBegin(GL.GL_LINES)
@@ -2283,6 +2296,15 @@ class Visor3D(QOpenGLWidget):
             GL.glBegin(GL.GL_POINTS)
             GL.glVertex3f(0, 0, 0)
             GL.glEnd()
+
+    def _planos_encima(self):
+        """B-610: mientras un campo pide un plano, los planos de origen y de construcción se dibujan encima de los
+        cuerpos (sin prueba de profundidad), semitransparentes."""
+        hover = self._hover[1] if self._hover and self._hover[0] == "plano" else None
+        GL.glDisable(GL.GL_DEPTH_TEST)
+        for ref, pl, rect in self.planos_elegibles():
+            self._cuadro_plano(pl, rect, NARANJA_PLANO, 0.22, ref == hover)
+        GL.glEnable(GL.GL_DEPTH_TEST)
 
     def _dibujar_caras(self, alfa=1.0, transparentes=False):
         """Caras de los cuerpos: primero los opacos; los de opacidad < 1 en una segunda pasada."""
@@ -2526,6 +2548,8 @@ class Visor3D(QOpenGLWidget):
         self._cuerpos()
         for i in range(5):
             GL.glDisable(GL.GL_CLIP_PLANE0 + i)
+        if self.eligiendo_planos():
+            self._planos_encima()
         if cfg.lienzos:
             self._dibujar_lienzos()
 
