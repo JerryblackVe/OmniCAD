@@ -9,13 +9,13 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-595, B-596 y B-597 (texto girado y zoom, Alta), B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
+| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-595, B-596 y B-597 (texto girado y zoom), B-599 (previa del patrón circular sin geometría), B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
 | E2 | B-325 | Booleanas fallan (Sin verificar): confirmar primero. H-91 espera a E11 en Fusion; SOL-8 Parcial integrado: 39f5758 |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | B-593 | Plano de desfase que flota a un costado y no acompaña el zoom (Construir, Alta; Sonnet medio) |
 | E6 | B-546 + P-99 | Extruir lento con muchos perfiles (B-567 integrado: 9d842a7); después B-598 (Extruir «Hasta la cara» de 15 letras: previa de más de 4 min), después FL-2/FL-3 |
-| E7 | P-167 | Auditoría de la barra de navegación del visor contra Fusion, como usuario y MCP/CLI (pedido de Gerardo, esta semana; Sonnet medio). Arranca con el lote de las 13 h; E11 hace la parte del mouse cuando le toque |
+| E7 | P-168 + P-167 | Primero P-168: auditoría de Patrón rectangular y circular en todos los entornos (prioridad 1); después P-167: barra de navegación del visor. Pedidos de Gerardo, Sonnet medio. E11 hace la parte del mouse cuando le toque |
 | E8 | B-590 | Ciclo de imports en ops_solido (Sonnet, chico); después la causa de fondo de B-591 (3.er objeto muerto: QStatusBar en closeEvent → registro_uso._detener). B-591 y B-592 Parcial integrados: f9d7a3b (falta confirmar en Windows) |
 | E9 | P-166 | Colores de toda la app con ~10 temas. P-164 integrado: 13e93f9 |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
