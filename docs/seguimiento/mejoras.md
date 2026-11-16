@@ -283,6 +283,7 @@ Relación con otras filas: B-436 (mensajes que dicen otra cosa; lo tiene E9) sig
 ### P-157 · Reorganizar Preferencias: ordenado, visual, poco texto (Gerardo, 2026-11-15)
 Gerardo: «todo tiene que estar bien ordenado en su lugar, bien explicado pero intuitivo, más visual, sin mucho texto, fácil de entender, que hasta un nene de 10 años entienda». Capturas: `evidencias/reportes_pc/2026-11-15_gerardo_preferencias/`.
 Señalado: los temas de la interfaz están en «General» y van en «Apariencia»; el rótulo «Mi tema (Azu…al) (propio)» sale cortado; «Se aplica al instante, sin reiniciar» queda cortado abajo; Idioma y Orientación grisados sin explicar por qué.
+**Hecho (2026-11-16, E9):** los temas pasaron de «General» a «Apariencia»; el nombre de una tarjeta de tema se parte en líneas en vez de cortarse con «…»; la ventana nunca pasa del espacio libre de la pantalla (capturas a 1024×700 en `evidencias/p157_2026-11-16/`); Idioma, Orientación y Aplicar grisados con su motivo en el tooltip. **Falta:** el árbol igual al de Fusion (páginas Dibujo, Configuraciones, Renderizar, Diseños híbridos… de CF-7), muestras en vez de textos largos en el resto de las páginas (General, Boceto, Gráficos), y revisar las demás páginas a 1024×700 (solo se midieron General y Apariencia).
 Especificación:
 1. Árbol de páginas igual al de Fusion (`docs/fusion_docs`, Preferencias); cada opción en su página.
 2. Muestras visuales en vez de textos largos, con una frase corta por opción.

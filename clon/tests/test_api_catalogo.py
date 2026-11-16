@@ -26,6 +26,8 @@ ESPERADAS = {"documento": {"get_scene_info", "new_document", "open_document", "s
                             "set_preference", "isolate_bodies", "set_object_visibility",
                             # P-149: restablece el estilo de asas y superposiciones del visor
                             "reset_overlay_style",
+                            # P-165: atajos de teclado
+                            "list_shortcuts", "set_shortcut", "reset_shortcuts",
                             # MCP-50 (tests/test_api_vivo.py): la selección de la ventana en vivo
                             "get_selection", "select_entities",
                             # SOL-23 y SOL-27: conjuntos de selección, por límite, semilla y límite, y preajustes
@@ -53,7 +55,7 @@ def temporales():
 def test_herramientas_registradas_por_grupo():
     for grupo, nombres in ESPERADAS.items():
         assert {h["nombre"] for h in api.catalogo(grupo)} == nombres
-    assert len(api.catalogo(["documento", "parametros"])) == 57
+    assert len(api.catalogo(["documento", "parametros"])) == 60
 
 
 def test_esquemas_validos_y_documentados():

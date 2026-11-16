@@ -118,6 +118,8 @@ PISTAS = {
                                "simetria o escala."],
     "INVALID_COUNT": ["«n» cuenta las instancias con el original: un entero de 2 o más (en la escala, n=3 da "
                       "original, ×factor y ×factor²)."],
+    "INVALID_SHORTCUT": ["Una combinación es una tecla con modificadores: 'Ctrl+Alt+V', 'Shift+E', 'F2'. Vacío quita el atajo."],
+    "SHORTCUT_CONFLICT": ["list_shortcuts(query='<combinación>') muestra quién la usa."],
     "INVALID_AXIS": ["axis: 'sketch_x', 'sketch_y', 'x', 'y', 'z' o el id de una línea del boceto (get_sketch)."],
     # --- selectores
     "INVALID_SELECTOR": ["Sintaxis: >Z <Z (más alto/bajo), |Z (paralelo), #Z (perpendicular), +Z -Z (normal), "

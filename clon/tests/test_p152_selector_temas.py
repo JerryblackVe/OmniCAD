@@ -31,7 +31,7 @@ def dialogo(qapp, tmp_path, monkeypatch):
         "colores": {"fondo": "#123456", "visor_arriba": "#abcdef"},
     }), encoding="utf-8")
     prefs = Preferencias(QSettings(str(tmp_path / "prefs.ini"), QSettings.IniFormat))
-    dlg = DialogoPreferencias(prefs)
+    dlg = DialogoPreferencias(prefs, inicial="apariencia")      # P-157: los temas viven en Apariencia
     dlg.show()
     QTest.qWait(1)
     yield dlg
@@ -177,7 +177,7 @@ def test_exportar_plantilla_recarga_tarjetas_sin_cambiar_eleccion(dialogo):
     dialogo._exportar_plantilla()
     tarjetas = _tarjetas(dialogo)
     assert len(tarjetas) == combo.count()
-    assert _tarjeta(dialogo, "usuario:mi_tema").text().endswith(" (propio)")
+    assert _tarjeta(dialogo, "usuario:mi_tema").toolTip().endswith(" (propio)")
     assert _tarjeta(dialogo, "azul_profesional").isChecked()
     assert combo.currentData() == "azul_profesional" and elegidos == []
     QTest.mouseClick(_tarjeta(dialogo, "usuario:mi_tema"), Qt.LeftButton)

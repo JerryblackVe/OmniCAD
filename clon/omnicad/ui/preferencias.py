@@ -27,6 +27,7 @@ from ..asistente.proveedores.base import ErrorProveedor
 from ..nucleo import motor
 from ..timeline.documento import TOPE_INSTRUCCIONES
 from . import estilo_asas, temas
+from .pagina_atajos import PaginaAtajos
 from .selector_temas import SelectorTemas
 
 NOMBRE_ANTERIOR = "FusionClone"      # nombre del programa hasta el 2026-10-09: sus preferencias se migran una vez
@@ -498,6 +499,8 @@ class CampoColor(QWidget):
 
 
 # (página, padre, título en el árbol, descripción, [(clave, etiqueta, tipo, opciones)])
+_MOTIVO_UNICA = {"Idioma del usuario": "OmniCAD está solo en español por ahora.",
+                 "Orientación de modelado por defecto": "Por ahora solo Z hacia arriba (Y hacia arriba: pendiente)."}
 PAGINAS = [
     ("geometria", None, "Geometría", "Motor geométrico del documento: se recalcula entero al cambiarlo", [
         ("geometria/motor", "Motor geométrico", "combo",
@@ -507,8 +510,6 @@ PAGINAS = [
     ("general", None, "General", "Preferencias que controlan el comportamiento general de la interfaz de usuario", [
         (None, "Idioma del usuario", "combo", [("es", "Español | Español")]),
         (None, "Orientación de modelado por defecto", "combo", [("z", "Z hacia arriba")]),
-        ("general/tema", "Tema de la interfaz", "tema", None),
-        (None, "Temas propios", "acciones_tema", None),
         ("general/autoguardado_min", "Intervalo de copia de seguridad de recuperación automática (minutos)", "entero", (1, 60)),
         ("general/info_herramientas", "Mostrar información de herramientas", "check", None),
         ("navegador/no_desplegar_al_seleccionar", "Al seleccionar en el visor, no desplegar el navegador "
@@ -536,6 +537,9 @@ PAGINAS = [
         ("general/puente_codigo", "Permitir también execute_code en vivo (congela la app mientras corre: como mucho 100 s)",
          "check", None),
     ]),
+    ("atajos", None, "Atajos de teclado", "Elegí un comando y pulsá su tecla. Si otro comando ya la usa, se marca en "
+     "rojo y no se guarda", [
+        ("atajos/teclas", "", "pagina_atajos", None)]),
     ("registro", None, "Registro de uso", "Todo lo que guarda el registro LOCAL de uso (nada sale de esta PC). "
      "Los cambios rigen al aceptar, sin reiniciar", [
         ("general/registro_uso", "Registro de uso", "check", None),
@@ -549,8 +553,10 @@ PAGINAS = [
         (None, "Estado", "estado_registro", None),
         (None, "Carpeta del registro", "acciones_registro", None),
     ]),
-    ("apariencia", None, "Apariencia", "Perfil, fuente, tamaño y color del texto de la interfaz y de las cotas del "
+    ("apariencia", None, "Apariencia", "Tema, perfil, fuente, tamaño y color del texto de la interfaz y de las cotas del "
      "boceto. Se aplica al instante, sin reiniciar; un color solo se aplica si se lee bien sobre el tema", [
+        ("general/tema", "Tema de la interfaz", "tema", None),
+        (None, "Temas propios", "acciones_tema", None),
         ("interfaz/perfil", "Perfil de apariencia", "combo",
          [("personalizado", "Personalizado"), ("normal", "Normal"), ("lectura_comoda", "Lectura cómoda")]),
         ("interfaz/fuente", "Fuente de la interfaz", "fuente", None),
@@ -702,7 +708,9 @@ class DialogoPreferencias(QDialog):
         super().__init__(parent)
         self.setObjectName("dlg_preferencias")
         self.setWindowTitle("Preferencias")
-        self.resize(1060, 680)
+        pantalla = self.screen().availableGeometry() if self.screen() else None
+        # P-157: nada se corta a 1024×700: la ventana nunca es más grande que el espacio libre de la pantalla
+        self.resize(min(1060, pantalla.width() - 16) if pantalla else 1060, min(680, pantalla.height() - 48) if pantalla else 680)
         self.prefs = prefs
         self.crear_proveedor = config_asistente.crear_proveedor   # los tests ponen el proveedor falso
         self._pedido_modelos = None    # Asistente IA › Modelo: el último pedido de lista (los viejos se descartan)
@@ -775,6 +783,7 @@ class DialogoPreferencias(QDialog):
         self.b_cancelar.clicked.connect(self.reject)
         self.b_aceptar.setDefault(True)
         self.b_aplicar.setEnabled(False)
+        self.b_aplicar.setToolTip("Todavía no cambiaste nada.")       # P-157: lo grisado dice por qué
         botones = QHBoxLayout()
         botones.addWidget(self.b_restablecer)
         botones.addStretch(1)
@@ -819,6 +828,12 @@ class DialogoPreferencias(QDialog):
                 c.textChanged.connect(self._cambio)
                 form.addRow(texto, c)
                 self._ayuda(clave, c, form)
+                self.controles[clave] = c
+                continue
+            if tipo == "pagina_atajos":
+                c = PaginaAtajos()
+                c.cambiado.connect(self._cambio)
+                form.addRow(c)
                 self.controles[clave] = c
                 continue
             if tipo == "estado_registro":
@@ -899,8 +914,7 @@ class DialogoPreferencias(QDialog):
                 caja = QVBoxLayout()
                 caja.addWidget(self.selector_temas)
                 caja.addWidget(self.aviso_tema)
-                form.addRow(QLabel(texto))              # solo, a la izquierda: las tarjetas ocupan todo el ancho
-                form.addRow(caja)
+                form.addRow(caja)                       # las tarjetas ocupan todo el ancho; su título es el de la página
                 self.controles[clave] = c
                 self._mostrar_aviso_tema(c.currentData())
                 continue
@@ -909,6 +923,10 @@ class DialogoPreferencias(QDialog):
                 if clave == "geometria/motor" and motor.version_omnikernel() is None:
                     c.model().item(c.findData("omnikernel")).setEnabled(False)
                 c.setEnabled(len(opciones) > 1)
+                if len(opciones) == 1:          # P-157: lo grisado dice por qué
+                    motivo = _MOTIVO_UNICA.get(etiqueta, "Hoy hay una sola opción.")
+                    c.setToolTip(motivo)
+                    texto.setToolTip(motivo)
                 c.currentIndexChanged.connect(self._cambio)
             elif tipo == "check":
                 c = QCheckBox()
@@ -1330,7 +1348,7 @@ class DialogoPreferencias(QDialog):
 
     def _hay_invalidos(self):
         """Un campo numérico fuera de rango bloquea guardar: Aplicar queda apagado."""
-        return any(isinstance(c, CampoNumero) and not c.valido() for c in self.controles.values())
+        return any(isinstance(c, (CampoNumero, PaginaAtajos)) and not c.valido() for c in self.controles.values())
 
     def _cambio(self, *_):
         for c in self.controles.values():
@@ -1431,6 +1449,8 @@ class DialogoPreferencias(QDialog):
                 salida[clave] = c.text().strip()
             elif isinstance(c, CampoInstrucciones):
                 salida[clave] = c.texto()
+            elif isinstance(c, PaginaAtajos):
+                salida[clave] = c.value()
             else:
                 salida[clave] = c.value()
         return salida
@@ -1450,6 +1470,8 @@ class DialogoPreferencias(QDialog):
                 c.setText(valor)
             elif isinstance(c, CampoInstrucciones):
                 c.setPlainText(valor)
+            elif isinstance(c, PaginaAtajos):
+                c.setValue(valor)
             elif isinstance(c, CampoColor):
                 c.setValue(valor)
             elif isinstance(c, QDoubleSpinBox):

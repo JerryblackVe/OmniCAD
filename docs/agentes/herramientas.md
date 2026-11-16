@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-431 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+434 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 50 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 53 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 72 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 37 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -61,6 +61,9 @@ Archivo, escena, timeline y deshacer.
 | [`get_preferences`](#get_preferences) | no | Consulta las preferencias autorizadas, sus valores por defecto y opciones válidas. |
 | [`reset_overlay_style`](#reset_overlay_style) | sí | Devuelve al color, tamaño y opacidad de fábrica todas las asas y superposiciones del visor (Preferencias › Asas y superposiciones). |
 | [`set_preference`](#set_preference) | sí | Valida y guarda una preferencia autorizada. |
+| [`list_shortcuts`](#list_shortcuts) | no | Lista los comandos con su atajo de teclado de fábrica y el vigente (Preferencias › Atajos de teclado). conflicts_with nombra los comandos que usan la misma combinación. |
+| [`set_shortcut`](#set_shortcut) | sí | Cambia, agrega o quita el atajo de un comando (Preferencias › Atajos de teclado, como «Change Keyboard Shortcut» de Fusion). |
+| [`reset_shortcuts`](#reset_shortcuts) | sí | Devuelve un comando (o todos) al atajo de fábrica. |
 | [`set_decal`](#set_decal) | sí | Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. |
 | [`decal_view`](#decal_view) | no | Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. |
 | [`manage_configurations`](#manage_configurations) | sí | Consulta y edita la tabla de variantes de CONFIGURAR. Solo apply aplica parámetros y supresiones; cada edición o aplicación es un deshacer. |
@@ -334,6 +337,35 @@ Valida y guarda una preferencia autorizada. No modifica el documento ni entra en
   - `key` (texto; obligatorio): clave autorizada devuelta por get_preferences; permisos, motor, temas y rutas están prohibidos.
   - `value` (texto o entero o número o true/false; obligatorio): valor del tipo y de las opciones indicados por get_preferences. Las fuentes son texto libre («Segoe UI»; en «boceto/fuente_cotas» vacío = la de la interfaz) y los colores «#rrggbb» o vacío (el del tema).
 - CLI: `omnicad call set_preference --doc pieza.omnicad key=… value=…`
+
+### `list_shortcuts`
+
+Lista los comandos con su atajo de teclado de fábrica y el vigente (Preferencias › Atajos de teclado). conflicts_with nombra los comandos que usan la misma combinación.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `query` (texto; opcional, por defecto `null`): texto a buscar en el nombre del comando, su título o su atajo (sin distinguir mayúsculas); omitido lista todo.
+  - `only_changed` (true/false; opcional, por defecto `false`): true muestra solo los comandos cuyo atajo difiere del de fábrica.
+- CLI: `omnicad call list_shortcuts --doc pieza.omnicad`
+
+### `set_shortcut`
+
+Cambia, agrega o quita el atajo de un comando (Preferencias › Atajos de teclado, como «Change Keyboard Shortcut» de Fusion). No lo guarda si otro comando ya usa esa combinación. No modifica el documento ni entra en deshacer; la ventana lo toma al aplicar preferencias.
+
+- Modifica el documento: sí, pero no entra en deshacer.
+- Parámetros:
+  - `command` (texto; obligatorio): clave del comando (list_shortcuts).
+  - `keys` (texto; obligatorio): la combinación, p. ej. 'Ctrl+Alt+V' o 'Shift+E'; vacío = el comando queda sin atajo.
+- CLI: `omnicad call set_shortcut --doc pieza.omnicad command=… keys=…`
+
+### `reset_shortcuts`
+
+Devuelve un comando (o todos) al atajo de fábrica. No modifica el documento ni entra en deshacer.
+
+- Modifica el documento: sí, pero no entra en deshacer.
+- Parámetros:
+  - `command` (texto; opcional, por defecto `null`): clave del comando; omitido restablece todos los atajos.
+- CLI: `omnicad call reset_shortcuts --doc pieza.omnicad`
 
 ### `set_decal`
 

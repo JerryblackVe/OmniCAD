@@ -60,6 +60,19 @@ def miniatura_tema(colores, ancho=168, alto=104) -> QPixmap:
     return imagen
 
 
+def _envolver(texto, fuente_m, ancho):
+    """Parte el nombre en líneas que entran en `ancho` px (un QToolButton lo corta con «…» si no)."""
+    lineas, actual = [], ""
+    for palabra in texto.split():
+        prueba = f"{actual} {palabra}".strip()
+        if actual and fuente_m.horizontalAdvance(prueba) > ancho:
+            lineas.append(actual)
+            actual = palabra
+        else:
+            actual = prueba
+    return "\n".join(lineas + [actual])
+
+
 class SelectorTemas(QWidget):
     """Grilla de tres columnas sincronizada con el QComboBox que guarda la elección."""
 
@@ -96,7 +109,8 @@ class SelectorTemas(QWidget):
             clave = self.combo.itemData(i)
             tema, _avisos = temas.resolver(clave)
             c = tema["colores"]
-            tarjeta = QToolButton(self, objectName="tarjeta_tema", text=self.combo.itemText(i))
+            tarjeta = QToolButton(self, objectName="tarjeta_tema")
+            tarjeta.setText(_envolver(self.combo.itemText(i), tarjeta.fontMetrics(), 160))
             tarjeta.setProperty("clave_tema", clave)
             tarjeta.setCheckable(True)
             tarjeta.setFocusPolicy(Qt.StrongFocus)
@@ -104,8 +118,8 @@ class SelectorTemas(QWidget):
             tarjeta.setIcon(QIcon(miniatura_tema(c)))
             tarjeta.setIconSize(QSize(168, 104))
             tarjeta.setFixedWidth(184)
-            tarjeta.setToolTip(tarjeta.text())
-            tarjeta.setAccessibleName(tarjeta.text())
+            tarjeta.setToolTip(self.combo.itemText(i))
+            tarjeta.setAccessibleName(self.combo.itemText(i))
             tarjeta.setStyleSheet(
                 f"QToolButton#tarjeta_tema {{ background: {c['tarjeta']}; color: {c['texto']};"
                 f" border: 2px solid {c['borde']}; border-radius: 4px; padding: 6px; }}"
