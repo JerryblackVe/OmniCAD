@@ -50,12 +50,15 @@ def _sin_respuesta(monkeypatch):
 
 def _cancelar(ventana, como):
     QTest.qWait(300)
-    (espera,) = [d for d in ventana.findChildren(QProgressDialog) if d.isVisible()]
+    # abrir espera en un diálogo; insertar, abajo en la barra del timeline (P-173)
+    dialogos = [d for d in ventana.findChildren(QProgressDialog) if d.isVisible()]
+    abajo = ventana.timeline.espera
+    assert len(dialogos) + abajo.isVisible() == 1
     if como == "esc":
-        QTest.keyClick(espera, Qt.Key_Escape)
+        QTest.keyClick(dialogos[0] if dialogos else ventana.visor, Qt.Key_Escape)
     else:
-        QTest.mouseClick(espera.findChild(QPushButton), Qt.LeftButton)
-    _esperar(lambda: not any(d.isVisible() for d in ventana.findChildren(QProgressDialog)), 10)
+        QTest.mouseClick(dialogos[0].findChild(QPushButton) if dialogos else ventana.timeline.cancelar_espera, Qt.LeftButton)
+    _esperar(lambda: not any(d.isVisible() for d in ventana.findChildren(QProgressDialog)) and not abajo.isVisible(), 10)
     QTest.qWait(200)
 
 

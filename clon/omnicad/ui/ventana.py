@@ -132,7 +132,8 @@ PIE_AYUDA = "<br><br><span style='color:#9a9a9a'>Pulse Ctrl+/ para obtener más 
 
 class _FiltroEspera(QObject):
     """Mientras un hijo calcula por la ventana (B-48), el teclado y el mouse no tocan el documento; Esc o el «Cancelar»
-    del panel dejan de esperar (B-418: un cálculo que no contesta no deja la ventana tomada)."""
+    del panel o de la barra de abajo dejan de esperar (B-418: un cálculo que no contesta no deja la ventana tomada). La
+    cámara sí se mueve (P-173): rueda y arrastres de órbita, encuadre y zoom en el visor, sin elegir ni menú al soltar."""
 
     def __init__(self, ventana):
         super().__init__(ventana)
@@ -141,11 +142,21 @@ class _FiltroEspera(QObject):
     def eventFilter(self, obj, evento):
         if not isinstance(evento, QInputEvent):
             return False
-        panel = self.ventana.panel
+        t, ventana, visor = evento.type(), self.ventana, self.ventana.visor
+        if t in (QEvent.Wheel, QEvent.MouseButtonPress, QEvent.MouseButtonDblClick):
+            if ventana.childAt(ventana.mapFromGlobal(evento.globalPosition().toPoint())) is visor and (t == QEvent.Wheel or (
+                    evento.button() != Qt.LeftButton or visor.modo in (None, "orbita", "encuadre", "zoom"))
+                    and visor.accion_raton(evento.button(), evento.modifiers())):
+                return False
+        elif t in (QEvent.MouseMove, QEvent.MouseButtonRelease) and visor._accion is not None:
+            visor._presion = None           # al soltar no elige ni abre el menú: fue un arrastre de la cámara
+            return False
+        elif t == QEvent.ShortcutOverride:
+            evento.accept()                 # aceptado, los atajos de la ventana (Supr, Ctrl+Z…) no se disparan
         # el clic llega antes a la QWindow que al botón (y ahí se descarta): se mira qué hay bajo el puntero
-        if (evento.type() == QEvent.KeyPress and evento.key() == Qt.Key_Escape
-                or evento.type() == QEvent.MouseButtonRelease and panel is not None
-                and self.ventana.childAt(self.ventana.mapFromGlobal(evento.globalPosition().toPoint())) is panel.boton_cancelar):
+        if t == QEvent.KeyPress and evento.key() == Qt.Key_Escape or t == QEvent.MouseButtonRelease and ventana.childAt(
+                ventana.mapFromGlobal(evento.globalPosition().toPoint())) in (
+                ventana.timeline.cancelar_espera, getattr(ventana.panel, "boton_cancelar", None)):
             self.cancelado = True
         return True
 
@@ -2808,10 +2819,10 @@ class VentanaPrincipal(QMainWindow):
 
     def _cambio_aparte(self, funcion, al_terminar=None, mallas_previa=None):
         """FL-3b: hace `funcion` (Aceptar, editar, deshacer, rehacer) como `_intentar`. Si su cálculo va al proceso aparte,
-        lo hace en otro hilo con una barra modal y Cancelar (o Esc), que deja el documento como estaba, y al terminar
-        repite `funcion` (o llama a `al_terminar`), que adopta lo calculado. Devuelve None mientras el cálculo sigue.
+        lo hace en otro hilo con una barra y Cancelar abajo (P-173: la cámara se mueve, el documento no se toca); Cancelar
+        o Esc dejan el documento como estaba. Al terminar repite `funcion` (o llama a `al_terminar`), que adopta lo
+        calculado. Devuelve None mientras el cálculo sigue.
         `mallas_previa` ({id de cuerpo: (v, n, seg)}): las de la previa de esta misma operación, ya hechas."""
-        from PySide6.QtWidgets import QProgressDialog
         doc = self.doc
         doc.diferir_calculo = doc._precalculo is None     # al repetir no se difiere: si no coincide, espera como antes
         try:
@@ -2844,21 +2855,23 @@ class VentanaPrincipal(QMainWindow):
             except Exception as e:  # noqa: BLE001 — se informa en el hilo de la ventana
                 resultado["error"] = e
 
-        espera = QProgressDialog("Calculando en un proceso aparte…", "Cancelar", 0, 0, self)
-        espera.setWindowTitle(NOMBRE_APP)
-        espera.setWindowModality(Qt.WindowModal)
-        espera.setMinimumDuration(0)
-        hilo, reloj = threading.Thread(target=trabajo, daemon=True), QTimer(espera, interval=20)
+        barra, app = self.timeline.barra_espera, QApplication.instance()
+        barra.setRange(0, 0)
+        hilo, reloj, cancelada = threading.Thread(target=trabajo, daemon=True), QTimer(self, interval=20), []
 
         def mirar():
+            if self._espera.cancelado and not cancelada:
+                cancelada.append(True)
+                cancelar()
             if hilo.is_alive():
-                _mostrar_avance(espera)
+                _mostrar_avance(barra)
                 return
             reloj.stop()
-            cancelada = espera.wasCanceled()
-            espera.canceled.disconnect(cancelar)     # close() también emite canceled: cerraba el trabajador vivo
-            espera.close()
-            espera.deleteLater()
+            reloj.deleteLater()
+            app.removeEventFilter(self._espera)
+            self._espera.cancelado = False
+            self.timeline.espera.hide()
+            self._fin_calculo()                     # saca el «Calculando…» de abajo (no si dice «cancelado»)
             if cancelada or doc is not self.doc or not self.isVisible():     # cerrar la ventana también descarta
                 if self.panel is not None:      # como Esc en la espera (B-418c): el comando también se cierra
                     self.panel.cancelar()
@@ -2880,11 +2893,13 @@ class VentanaPrincipal(QMainWindow):
             aislado.cerrar_trabajador()            # corta el cálculo aparte; lo que traiga el hilo se descarta
             self.mensaje("Cálculo cancelado: el documento quedó como estaba.", 5000)
 
-        espera.canceled.connect(cancelar)
         reloj.timeout.connect(mirar)
         hilo.start()
+        self._espera.cancelado = False
+        app.installEventFilter(self._espera)
+        self.mensaje("Calculando en un proceso aparte… (Esc cancela)", 30000)
+        self.timeline.espera.show()
         reloj.start()
-        espera.show()
         return None
 
     def _salir_de_boceto(self):
