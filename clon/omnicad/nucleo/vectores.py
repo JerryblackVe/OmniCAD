@@ -15,12 +15,12 @@ def _iniciar_opencascade():
     global BRepAdaptor_Curve, BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepOffsetAPI_MakeOffset
     global GeomAbs_Arc, GeomAbs_Circle, GeomAbs_Intersection, GeomAbs_Line, List_TopoDS_Shape
     global ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_WIRE, TopExp_Explorer, TopoDS
-    global BRep_Tool, BRepAdaptor_Surface, BRepAlgoAPI_Splitter, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+    global BRep_Tool, BRepAdaptor_Surface, BRepAlgoAPI_Splitter, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire
     global BRepExtrema_DistShapeShape, BRepMesh_IncrementalMesh, TopLoc_Location, gp_Pnt
     from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse, BRepAlgoAPI_Splitter
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
     from OCP.BRepMesh import BRepMesh_IncrementalMesh
     from OCP.TopLoc import TopLoc_Location
@@ -112,9 +112,49 @@ def desfase_caras(caras, distancia, esquinas="redondas"):
             mk.SetApprox(True)
         mk.Perform(float(distancia))
         if not mk.IsDone() or mk.Shape().IsNull() or next(geo._explorar(mk.Shape(), TopAbs_EDGE), None) is None:
+            if distancia < 0 and esquinas == "redondas":    # B-503: un trazo que se parte (la cola de la «e», la «@»)
+                try:
+                    salida.append(booleana_caras([cara], _franjas(cara, -float(distancia)), "resta"))
+                    continue
+                except geo.ErrorGeometria:          # la región desaparece: el mensaje de siempre
+                    pass
             raise geo.ErrorGeometria(f"El desfase de {distancia} mm no se pudo calcular (¿la región desaparece?).")
         salida.append(_sin_cruces(cara, float(distancia), mk.Shape()))
     return salida
+
+
+def _franjas(cara, r):
+    """B-503: las franjas a ≤ r de cada arista de la región (su contorno desfasado, con puntas redondas). Restadas,
+    achican la región sin el desfase de OpenCascade, que falla cuando un trazo se parte (la cola de la «e», la «@»)."""
+    plano = BRepBuilderAPI_MakeFace(BRepAdaptor_Surface(TopoDS.Face(cara)).Plane()).Face()   # una recta sola no lo define
+    franjas = []
+    for arista in geo._explorar(cara, TopAbs_EDGE):
+        if BRep_Tool.IsClosed_s(TopoDS.Edge(arista)):
+            # shortcut: una curva cerrada se desfasa a un solo lado; si una letra o un SVG la trae, armar su anillo
+            raise geo.ErrorGeometria(f"El desfase de {-r} mm no se pudo calcular (¿la región desaparece?).")
+        mk = BRepOffsetAPI_MakeOffset()
+        mk.Init(plano, GeomAbs_Arc, False)
+        mk.AddWire(BRepBuilderAPI_MakeWire(TopoDS.Edge(arista)).Wire())
+        mk.Perform(r)
+        franja = [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face() for w in geo._explorar(mk.Shape(), TopAbs_WIRE)]
+        if not franja or not all(map(geo.es_valida, franja)):
+            raise geo.ErrorGeometria(f"El desfase de {-r} mm no se pudo calcular (¿la región desaparece?).")
+        franjas += franja
+    return franjas
+
+
+def se_borra_al_achicar(cara, r):
+    """True si achicar la región r la borra entera (el palo de la «i» con 0,5 mm): sus franjas la cubren."""
+    try:
+        franjas = _franjas(cara, r)
+    except geo.ErrorGeometria:
+        return False
+    op = BRepAlgoAPI_Cut()
+    op.SetArguments(_lista([cara]))
+    op.SetTools(_lista(franjas))
+    op.SetFuzzyValue(1e-5)
+    op.Build()
+    return op.IsDone() and sum(geo.area(c) for c in geo.caras(op.Shape())) < 1e-9
 
 
 def _sin_cruces(cara, distancia, desfase):

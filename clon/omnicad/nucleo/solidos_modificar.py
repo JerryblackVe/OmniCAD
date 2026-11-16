@@ -1734,6 +1734,19 @@ def _trasladar_caras(forma, caras, n, dist):
     return _validar(_unificar(resultado), "Desfase de caras")
 
 
+def _booleana_pegada(forma, prisma, operacion):
+    """B-503: la banda del desfase toca el cuerpo solo en caras que coinciden (la pared de la letra, la tapa): pegada
+    (GlueShift) la unión del texto entero baja de 3,2 a 1,2 s, con la misma verificación de toda booleana. Si no sale
+    creíble, la booleana de siempre (sin reintentos pegados: costaban hasta 6 s más)."""
+    try:
+        r, intactas = geo._booleana(forma, prisma, operacion, pegar=True, con_historial=True)
+        if geo._problema_booleana(forma, prisma, operacion, r, geo._volumenes_entrada(forma, prisma), intactas) is None:
+            return r
+    except Exception:  # noqa: BLE001 — una vía rápida: la booleana de siempre decide
+        pass
+    return geo.booleano(forma, prisma, operacion)
+
+
 def _desfase_por_contorno(forma, caras, dist):
     """B-503: caras laterales de una extrusión entre dos planos (letras o un logo en relieve, un bolsillo): el contorno
     de cada lazo se desfasa en 2D, y la banda que cambia se extruye entre las mismas tapas y se suma o se resta. Como
@@ -1793,9 +1806,10 @@ def _desfase_por_contorno(forma, caras, dist):
                 except geo.ErrorGeometria:
                     pass
             if nuevas is None:
-                # se va todo lo que encierra solo si la distancia pasa su radio inscrito (≤ 2·área/perímetro);
-                # si no, el desfase 2D falló sin desaparecer (una letra B-spline)
-                if d > 0 or abs(d) < 2 * geo.area(lazo) / geo.longitud(alambre.Wire()):
+                # se va todo lo que encierra solo si la distancia pasa su radio inscrito (≤ 2·área/perímetro, o el
+                # palo de la «i» que las franjas de sus aristas cubren); si no, el desfase 2D falló sin desaparecer
+                if d > 0 or (abs(d) < 2 * geo.area(lazo) / geo.longitud(alambre.Wire())
+                             and not vectores.se_borra_al_achicar(lazo, -d)):
                     return None
                 nuevas = []
             banda = (vectores.booleana_caras(nuevas, [lazo], "resta") if d > 0
@@ -1811,7 +1825,7 @@ def _desfase_por_contorno(forma, caras, dist):
                 prisma = BRepBuilderAPI_NurbsConvert(prisma, True).Shape()
             if not geo.es_valida(prisma):    # el desfase 2D dejó un contorno que se cruza (la «@», el hueco de la «e»)
                 return None
-            resultado = geo.booleano(resultado, prisma, "unir" if dist > 0 else "cortar")
+            resultado = _booleana_pegada(resultado, prisma, "unir" if dist > 0 else "cortar")
         return _validar(_unificar(resultado), "Desfase de caras")
     except Exception:  # noqa: BLE001 — un atajo: el camino de siempre decide
         return None
