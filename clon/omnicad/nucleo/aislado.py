@@ -31,6 +31,7 @@ import time
 import traceback
 from pathlib import Path
 
+from ..reintentos import reintentar
 from . import intercambio
 from . import motor as _motor
 
@@ -74,6 +75,31 @@ _ultimo_avance = 0.0
 
 class TareaAislada(Exception):
     """El hijo no pudo hacer la tarea (no arrancó, falló o devolvió basura)."""
+
+
+class ArchivoTrabado(TareaAislada):
+    """B-562: un archivo del intercambio siguió trabado tras los reintentos (Windows): se repite en un hijo nuevo."""
+
+    def __init__(self, mensaje="un archivo temporal estaba ocupado"):
+        super().__init__(mensaje)
+
+
+def _marcar(ruta, borrar=False):
+    """B-562: crea o borra una marca auxiliar (`despierto`, `recibido`, `avance`); si sigue trabada, no voltea el cálculo."""
+    try:
+        if borrar:
+            reintentar(ruta.unlink, missing_ok=True)
+        else:
+            reintentar(ruta.touch)
+    except OSError:
+        pass
+
+
+def _leer_errores(ruta):
+    try:
+        return ruta.read_bytes()
+    except OSError:
+        return b""
 
 
 class TiempoAgotado(TareaAislada):
@@ -389,18 +415,18 @@ def _trabajar(carpeta):
     formas_enviadas, carpeta_avance = {}, carpeta
     from ..timeline import calculo_aislado  # noqa: F401 — FL-9: OCP y el timeline (~1,5 s) antes del primer pedido
     import faulthandler
-    pila = (carpeta / "pila.txt").open("w", encoding="utf-8")     # B-418: dónde se traba en Windows (lo escribe un hilo de C)
-    (carpeta / "despierto").touch()
+    pila = reintentar((carpeta / "pila.txt").open, "w", encoding="utf-8")     # B-418: dónde se traba en Windows (lo escribe un hilo de C)
+    _marcar(carpeta / "despierto")
     for linea in pedidos_del_padre():
-        (carpeta / "recibido").touch()      # B-418: el padre sabe que el pedido llegó (si no, lo reintenta)
+        _marcar(carpeta / "recibido")       # B-418: el padre sabe que el pedido llegó (si no, lo reintenta)
         faulthandler.dump_traceback_later(PLAZO_PILA, file=pila)
-        args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
+        args = json.loads(reintentar((carpeta / "args.json").read_text, encoding="utf-8"))
         tope = args.pop("_tope_mb")
         salida = _atender(linea.decode("ascii").strip(), args)
         if _memoria_mb() > tope:
             salida["_cerrar"] = True     # lo cierra el padre: si se fuera solo, el próximo pedido lo encontraría saliendo
-        (carpeta / "salida.json").write_text(json.dumps(salida, default=_a_json), encoding="utf-8", newline="\n")
-        (carpeta / "listo").touch()
+        reintentar((carpeta / "salida.json").write_text, json.dumps(salida, default=_a_json), encoding="utf-8", newline="\n")
+        reintentar((carpeta / "listo").touch)
         faulthandler.cancel_dump_traceback_later()
 
 
@@ -413,7 +439,7 @@ def principal(argv):
     if tarea == "trabajador":
         return aislado._trabajar(carpeta)
     next(pedidos_del_padre())     # B-397: vigila la tubería también durante una sola tarea
-    args = json.loads((carpeta / "args.json").read_text(encoding="utf-8"))
+    args = json.loads(reintentar((carpeta / "args.json").read_text, encoding="utf-8"))
     if tarea in _TAREAS_JSON:
         os.chdir(args.pop("_cwd"))     # las rutas relativas del documento (derivaciones) valen desde el padre
         try:
@@ -423,7 +449,7 @@ def principal(argv):
     else:
         forma = intercambio.leer_brep(carpeta / "forma.brep")
         salida = _TAREAS[tarea](forma, **args)
-    (carpeta / "salida.json").write_text(json.dumps(salida, default=_a_json), encoding="utf-8", newline="\n")
+    reintentar((carpeta / "salida.json").write_text, json.dumps(salida, default=_a_json), encoding="utf-8", newline="\n")
     return 0
 
 
@@ -474,8 +500,8 @@ def correr_json(tarea, datos, tope, esperar=None):
             _esperar_previa_cancelada(esperar)
             if _previa_en_curso is None:
                 return _pedir(tarea, dict(datos, _marca=marca_recibida, _tope_mb=TOPE_MEMORIA_TRABAJADOR), tope, esperar)
-        except PedidoPerdido:
-            pass                    # B-418: dos trabajadores no lo tomaron; el hijo de una sola tarea lo lee de un archivo
+        except (PedidoPerdido, ArchivoTrabado):
+            pass                    # B-418 / B-562: no lo tomó o un archivo quedó trabado: un hijo de una sola tarea, en otra carpeta
         finally:
             _ocupado.release()
     return _correr(tarea, tope, datos, esperar=esperar)     # otro hilo, documento o previa lo usa: un hijo de una sola tarea
@@ -509,10 +535,14 @@ class _Trabajador:
     def enviar(self, tarea, datos):
         if self.primer_pedido is None:
             self.primer_pedido = time.time()
-        (self.carpeta / "recibido").unlink(missing_ok=True)
-        (self.carpeta / "avance").unlink(missing_ok=True)       # FL-3c: el avance del pedido anterior no vale
+        _marcar(self.carpeta / "recibido", borrar=True)
+        _marcar(self.carpeta / "avance", borrar=True)       # FL-3c: el avance del pedido anterior no vale
         self.enviado = time.time()
-        (self.carpeta / "args.json").write_text(json.dumps(datos, default=_a_json), encoding="utf-8", newline="\n")
+        try:
+            reintentar((self.carpeta / "args.json").write_text, json.dumps(datos, default=_a_json), encoding="utf-8",
+                       newline="\n")
+        except OSError as e:
+            raise ArchivoTrabado() from e
         self._avisar(tarea)
 
     def termino(self):
@@ -531,10 +561,7 @@ class _Trabajador:
     def motivo_perdido(self):
         """El aviso de un pedido que no tomó, con lo último de su salida de errores. Queda en el registro de uso: con él
         se busca la causa en Windows (B-418), aunque el pedido siga por otro camino."""
-        try:
-            ultima = (self.carpeta / "errores.txt").read_bytes().decode("utf-8", "replace").strip().splitlines()
-        except OSError:
-            ultima = []
+        ultima = _leer_errores(self.carpeta / "errores.txt").decode("utf-8", "replace").strip().splitlines()
         texto = "el proceso aparte no tomó el pedido" + (f": {ultima[-1]}" if ultima else "")
         from ..registro_uso.ganchos import aviso
         aviso(origen="aislado", mensaje=texto)
@@ -570,17 +597,23 @@ class _Trabajador:
         if not listo.is_file() and (self.proceso.returncode != 0 or not salida.is_file()):
             codigo = self.proceso.returncode
             self.errores.close()
-            ultima = (self.carpeta / "errores.txt").read_bytes()
+            ultima = _leer_errores(self.carpeta / "errores.txt")
             self.cerrar()
             raise _caida(codigo, ultima)
         try:
             terminado = listo.stat().st_mtime if listo.is_file() else time.time()
-            resultado = json.loads(salida.read_text(encoding="utf-8"))
-            salida.unlink()
-            listo.unlink(missing_ok=True)
-        except (OSError, ValueError) as e:
+            resultado = json.loads(reintentar(salida.read_text, encoding="utf-8"))
+        except OSError as e:
+            self.cerrar()
+            raise ArchivoTrabado() from e
+        except ValueError as e:
             self.cerrar()
             raise TareaAislada(f"el proceso aparte dejó un resultado ilegible ({e})") from e
+        try:
+            reintentar(salida.unlink)
+            reintentar(listo.unlink, missing_ok=True)
+        except OSError:
+            resultado["_cerrar"] = True      # B-562: con la respuesta vieja en su carpeta no sirve para el próximo
         if self.arranque is None:       # lo que cuesta uno nuevo: de abrirlo a su primera respuesta, sin lo que esperó quieto
             despierto = self.carpeta / "despierto"
             quieto = max(0.0, self.primer_pedido - despierto.stat().st_mtime) if despierto.exists() else 0.0
@@ -740,7 +773,10 @@ class CalculoPendiente:
             if _previa_en_curso is not None:
                 return False
             t = _trabajador_vivo()
-            t.enviar(self.tarea, dict(self.datos, _marca=marca_recibida, _tope_mb=TOPE_MEMORIA_TRABAJADOR))
+            try:
+                t.enviar(self.tarea, dict(self.datos, _marca=marca_recibida, _tope_mb=TOPE_MEMORIA_TRABAJADOR))
+            except ArchivoTrabado:
+                return False                    # B-562: la hace un hijo de una sola tarea, en otra carpeta
             self.trabajador, self.proceso, _previa_en_curso = t, t.proceso, self
             return True
         finally:
@@ -749,7 +785,8 @@ class CalculoPendiente:
     def _arrancar_hijo(self):
         self.temporal = tempfile.TemporaryDirectory(prefix="omnicad_previa_", ignore_cleanup_errors=True)
         self.carpeta = Path(self.temporal.name)
-        (self.carpeta / "args.json").write_text(json.dumps(self.datos, default=_a_json), encoding="utf-8", newline="\n")
+        reintentar((self.carpeta / "args.json").write_text, json.dumps(self.datos, default=_a_json), encoding="utf-8",
+                   newline="\n")
         self.errores = (self.carpeta / "errores.txt").open("wb")
         self.proceso = subprocess.Popen(_comando(self.tarea, self.carpeta), cwd=_RAIZ, bufsize=0,
                                         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
@@ -786,8 +823,8 @@ class CalculoPendiente:
             else:
                 self.errores.close()
                 if self.proceso.returncode:
-                    raise _caida(self.proceso.returncode, (self.carpeta / "errores.txt").read_bytes())
-                resultado = json.loads((self.carpeta / "salida.json").read_text(encoding="utf-8"))
+                    raise _caida(self.proceso.returncode, _leer_errores(self.carpeta / "errores.txt"))
+                resultado = json.loads(reintentar((self.carpeta / "salida.json").read_text, encoding="utf-8"))
         except TareaAislada as e:
             raise TareaAislada(f"No se pudo calcular la vista previa: {e}.") from e
         except (OSError, ValueError) as e:
@@ -860,6 +897,8 @@ def _caida(codigo, errores):
         return TareaAislada(f"el kernel cayó por un error nativo (código {codigo:#x}) dentro "
                             "del proceso aparte; OmniCAD sigue andando")
     ultima = (errores or b"").decode("utf-8", "replace").strip().splitlines()[-1:] or ["sin detalle"]
+    if ultima[0].startswith("PermissionError"):      # B-562: el hijo no pudo con un archivo trabado
+        return ArchivoTrabado()
     return TareaAislada(f"el proceso aparte falló ({ultima[0][:200]})")
 
 
@@ -876,7 +915,7 @@ def _correr(tarea, tope, args, forma=None, esperar=None):
         try:
             if forma is not None:
                 intercambio.escribir_brep(forma, carpeta / "forma.brep")
-            (carpeta / "args.json").write_text(json.dumps(args, default=_a_json), encoding="utf-8", newline="\n")
+            reintentar((carpeta / "args.json").write_text, json.dumps(args, default=_a_json), encoding="utf-8", newline="\n")
             hijo = _ejecutar(_comando(tarea, carpeta), tope, esperar)
         except subprocess.TimeoutExpired:         # run() ya mató al hijo
             raise TiempoAgotado(f"pasó de {tope:.3g} s y se cortó".replace(".", ",")) from None
@@ -886,7 +925,7 @@ def _correr(tarea, tope, args, forma=None, esperar=None):
         if hijo.returncode != 0 or not salida.is_file():
             raise _caida(hijo.returncode, hijo.stderr)
         try:
-            resultado = json.loads(salida.read_text(encoding="utf-8"))
+            resultado = json.loads(reintentar(salida.read_text, encoding="utf-8"))
         except (OSError, ValueError) as e:
             raise TareaAislada(f"el proceso aparte dejó un resultado ilegible ({e})") from e
         if "_fallo" in resultado:
