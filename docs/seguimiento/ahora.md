@@ -25,6 +25,14 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | P-157 | Preferencias como Fusion (Gerardo pidió, regla 14): cada opción en su página, visual, poco texto, nada cortado a 1024×700, lo grisado con su motivo; leer Preferencias en docs/fusion_docs primero (E9 al cerrar B-588) |
+| 2 | B-325 | Booleanas fallan (Sin verificar): primero confirmar si sigue pasando (E3, Opus alto) |
+| 3 | B-546 + P-99 | Extruir lento con muchos perfiles: recalcula todos en cada clic; la 1.ª apertura arma las asas (E6, Opus alto) |
+| 4 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
+| 5 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
+| 6 | H-91 / H-116 | Solevación: condiciones de borde exactas; 2 o más raíles (E2, Opus alto) |
+| 7 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
+| 8 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
+| 9 | ASM-9 / ASM-16 | Activar componente; arrastrar componentes (E5, Sonnet medio) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
