@@ -22,8 +22,8 @@ Alcance de la entrega 1: Bocetos y Sólido (`nucleo/solidos_crear.py`, `nucleo/s
 | `nucleo/solidos_modificar.py:1313` | El modo relativo no sabe medir un cilindro inclinado respecto de la dirección de extracción: usá el modo absoluto. | Cilindro inclinado: usá el modo absoluto. |
 | `nucleo/solidos_modificar.py:1337` | Una arista recta solo sirve de línea de partición si es perpendicular a la dirección de extracción; elegí un plano, u… | Línea de partición: no es perpendicular. |
 | `nucleo/solidos_modificar.py:1341` | La línea de partición tiene que ser una curva plana: elegí un plano, una cara o una curva que quede en un plano. | La línea de partición debe ser plana. |
-| `nucleo/solidos_modificar.py:1714` | Desfase de caras: el filete helicoidal de una rosca modelada no se puede desfasar (el kernel tarda minutos y falla). … | Una rosca modelada no se puede desfasar. |
-| `nucleo/solidos_modificar.py:1721` | Desfase de caras: en un cuerpo con una rosca modelada, el kernel tarda minutos y falla con las caras curvas. Desfasá … | Con rosca modelada no se puede desfasar. |
+| `nucleo/solidos_modificar.py:1714` | Desfase de caras: el filete helicoidal de una rosca modelada no se puede desfasar (el kernel tarda minutos y falla). … | Una rosca no se desfasa: usá Holgura de impresión al editar la rosca. |
+| `nucleo/solidos_modificar.py:1721` | Desfase de caras: en un cuerpo con una rosca modelada, el kernel tarda minutos y falla con las caras curvas. Desfasá … | Una rosca no se desfasa: usá Holgura de impresión al editar la rosca. |
 | `nucleo/solidos_modificar.py:1733` | Desfase de caras: con {} mm la cara se da vuelta: la distancia es igual o mayor que su radio de curvatura (un cilindr… | Desfase de {abs(dist):g} mm: da vuelta la cara. |
 | `nucleo/solidos_modificar.py:1868` | Este tipo de división necesita curvas de boceto, aristas o una cara como herramienta (un plano no se puede proyectar). | Esa división pide curvas, aristas o una cara. |
 | `nucleo/solidos_modificar.py:1900` | «Punto más cercano» solo divide caras planas: sobre una cara curva las cuerdas rectas no caen en la superficie. Usá «… | «Punto más cercano» solo en caras planas. |

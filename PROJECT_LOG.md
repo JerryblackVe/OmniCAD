@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-16 · H-118 solo el mensaje (E9).** `nucleo/solidos_modificar.py:1850` y `:1855` ahora dicen «Una rosca no se desfasa: usá Holgura de impresión al editar la rosca.»; `tests/test_b306_desfase_cara_libre_previa.py` (6 passed) y `docs/auditoria_mensajes_paneles.md` ajustados. H-118 sigue Parcial (falta rehacer el surco con perfil desfasado).
 - **2026-11-16 · Traspaso del chat maestro (25 %).** Protocolo de ahorro integrado (425c5a6 + 7e9385e0); beta v0.3.0 el 17/11 espera el OK directo de Gerardo al coordinador; push a GitHub hoy 23:13 UTC; después del push, el chat maestro cierra los issues #1 y #2 (arreglados en 778090e3); B-607 a E11 en Windows; B-610 falta verlo en Windows; el chat maestro nuevo recrea su vigilancia cada 2 h y le pasa su dirección al coordinador.
 - **2026-11-16 · B-606 cerrado (coordinador).** h77 de la CI de Windows del 13/11: verificado en Windows por el chat maestro sobre main 46409796 (`tests/test_proyeccion_seccion.py` 13 passed, h77 1 passed en 4,91 s) y en Linux. Sin cambio de código; fila borrada.
 - **2026-11-16 · Dirección del chat maestro (coordinador).** Desde la VPS, SendMessage con `to` = «Chat Maestro OmniCAD setup» (el nombre solo; con el id o con «[1c4d23]» no llega). Pendientes del coordinador en `~/coordinador/pendientes_envio.md`.
