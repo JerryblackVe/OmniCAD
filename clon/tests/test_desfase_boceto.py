@@ -42,11 +42,11 @@ def test_circulo_de_30_rechaza_cero_y_negativo_con_la_causa_real():
         b.desfase(c, -30)
     with pytest.raises(ErrorBoceto, match="el radio queda negativo"):
         b.desfase(c, -40)
-    with pytest.raises(ErrorBoceto, match="cero: no hay nada"):
+    with pytest.raises(ErrorBoceto, match="es cero"):
         b.desfase(c, 0)
-    with pytest.raises(ErrorBoceto, match="no es un número válido"):
+    with pytest.raises(ErrorBoceto, match="no es válida"):
         b.desfase(c, float("nan"))
-    with pytest.raises(ErrorBoceto, match="no puede pasar de"):
+    with pytest.raises(ErrorBoceto, match="máximo"):
         b.desfase(c, 1e9)
     assert _radios(b) == [30]                            # ningún intento dejó nada
 
@@ -88,7 +88,7 @@ def test_cadena_cerrada_adentro_y_afuera_con_signo():
 def test_cadena_cerrada_se_rechaza_con_su_causa():
     b = Boceto()
     lineas = b.agregar_rectangulo((0, 0), (40, 20))
-    with pytest.raises(ErrorBoceto, match="largo cero o al revés"):
+    with pytest.raises(ErrorBoceto, match="queda en cero"):
         b.desfase(lineas[0], -12)                        # el alto es 20: 12 por lado se pasa
     assert len(b.curvas) == 4
 
@@ -137,7 +137,7 @@ def test_match_topology_limita_y_avisa():
 
 
 def test_la_cota_de_desfase_acepta_negativo_y_rechaza_cero():
-    with pytest.raises(ErrorBoceto, match="mayor que cero"):
+    with pytest.raises(ErrorBoceto, match="mayor que 0"):
         validar_valor_cota("desfase", 0)
     validar_valor_cota("desfase", -30)
     validar_valor_cota("desfase", 12)
@@ -421,9 +421,9 @@ def test_la_previa_dibuja_exactamente_lo_que_se_crea(lienzo):
     assert _radios(lz.b) == pytest.approx([10, 30]) and c in lz.b.curvas
 
 
-@pytest.mark.parametrize("texto,fragmento", [("-30", "en cero"), ("-40", "negativo"), ("0", "cero: no hay nada"),
+@pytest.mark.parametrize("texto,fragmento", [("-30", "en cero"), ("-40", "negativo"), ("0", "es cero"),
                                               ("", "Escribí la distancia"), ("abc", "Nombre desconocido"),
-                                              ("1e9", "no puede pasar de")])
+                                              ("1e9", "máximo")])
 def test_valor_invalido_no_deja_previa_vieja_y_explica(lienzo, texto, fragmento):
     lz = lienzo
     _abrir(lz)
@@ -513,7 +513,7 @@ def test_cadena_cerrada_con_signo_en_la_ventana(lienzo):
     assert not error and nota == "Hacia adentro"
     assert sorted({round(q[0], 3) for poli in polis for q in poli}) == pytest.approx([3, 37])
     _teclear(lz, "-12")
-    assert lz._previa_desfase()[2] and "largo cero o al revés" in lz._previa_desfase()[1]
+    assert lz._previa_desfase()[2] and "queda en cero" in lz._previa_desfase()[1]
 
 
 def test_la_previa_es_fluida_con_una_cadena_larga(lienzo):

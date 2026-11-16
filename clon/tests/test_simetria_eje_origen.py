@@ -46,7 +46,7 @@ def test_la_copia_sigue_al_original_al_moverlo_con_el_eje_del_origen():
 def test_lo_que_esta_sobre_el_eje_del_origen_no_se_copia_y_se_dice():
     b = Boceto()
     sobre = b.agregar_linea((0, 2), (0, 9))
-    with pytest.raises(Exception, match="ya está sobre"):
+    with pytest.raises(Exception, match="Ya está sobre"):
         b.simetria([sobre], Boceto.EJE_Y)
 
 

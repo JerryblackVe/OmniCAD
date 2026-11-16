@@ -114,7 +114,7 @@ def test_lo_que_ya_es_su_propio_reflejo_no_se_copia_encima(que):
               "elipse": lambda: b.agregar_elipse((0, 3), (0, 8), 2),               # eje mayor sobre el eje
               "arco de elipse": lambda: _arco_de_elipse(b, (2, 3), (-2, 3))}[que]()   # la mitad de arriba: extremos espejados
     antes, vinculos = len(b.curvas), len(b.restricciones)
-    with pytest.raises(ErrorBoceto, match="ya está sobre"):
+    with pytest.raises(ErrorBoceto, match="Ya está sobre"):
         b.simetria([propio], eje)
     assert len(b.curvas) == antes and len(b.restricciones) == vinculos
     suelta = b.agregar_linea((2, 0), (6, 3))
@@ -165,7 +165,7 @@ def test_errores_claros_del_motor():
     cero = b.agregar_linea((20, 20), (25, 25))
     b.puntos[b.curvas[cero].p2].x = b.puntos[b.curvas[cero].p1].x
     b.puntos[b.curvas[cero].p2].y = b.puntos[b.curvas[cero].p1].y
-    with pytest.raises(ErrorBoceto, match="largo cero"):
+    with pytest.raises(ErrorBoceto, match="largo 0"):
         b.simetria([otra], cero)
 
 
@@ -282,7 +282,7 @@ def test_mirror_sketch_lo_ya_simetrico_y_el_eje_de_largo_cero_fallan_con_mensaje
     sobre = llamar(s, "draw_line", sketch="S", start_x=0, start_y=2, end_x=0, end_y=6)["entities"][0]["id"]
     antes = len(llamar(s, "get_sketch", sketch="S")["entities"])
     r = api.llamar(s, "mirror_sketch", {"sketch": "S", "entities": [sobre], "axis": eje})
-    assert not r["ok"] and r["error_kind"] == "INVALID_GEOMETRY" and "ya está sobre" in r["mensaje"]
+    assert not r["ok"] and r["error_kind"] == "INVALID_GEOMETRY" and "Ya está sobre" in r["mensaje"]
     assert len(llamar(s, "get_sketch", sketch="S")["entities"]) == antes
 
 

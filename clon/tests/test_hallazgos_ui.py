@@ -482,7 +482,7 @@ def test_editar_una_primitiva_vieja_abre_el_comando_y_conserva_la_receta(app_qt)
     panel, _visor = _panel(Toroide(), doc, op=toro)
     assert (panel.valores["diametro"], panel.valores["diametro_tubo"]) == ("40 mm", "10 mm")
     panel.set_valor("diametro_tubo", "50 mm")
-    with pytest.raises(Exception, match="menor"):
+    with pytest.raises(Exception, match="supera"):
         panel.comando.construir(panel.valores, panel.ctx)
 
 

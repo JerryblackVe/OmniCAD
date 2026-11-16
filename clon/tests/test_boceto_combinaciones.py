@@ -394,7 +394,7 @@ def _limite_llamar(s, herramienta, esperado, **argumentos):
         # Se comprueban giros españoles, no palabras como «factor», comunes al inglés.
         assert any(palabra in mensaje for palabra in (
             "el ", "la ", "los ", "las ", "debe", "no ", "tiene que", "admite", "necesita", "expresión vacía",
-            "máx", "pediste",       # P-158d: mensajes cortos del panel («Patrón: máx. 1000 copias (pediste N).»)
+            "máx", "pediste", "mayor que",     # P-158d: mensajes cortos del panel («Patrón: máx. 1000 copias (pediste N).»)
         )), resultado
         assert _boceto(s) == antes, resultado
         _reabrir(s)

@@ -57,7 +57,7 @@ def test_interior_de_80_se_rechaza_sin_tocar_el_boceto():
 def test_dos_lados_en_cero_las_dos_se_rechaza():
     b = Boceto()
     c = b.agregar_circulo((0, 0), R)
-    with pytest.raises(ErrorBoceto, match="cero: no hay nada"):
+    with pytest.raises(ErrorBoceto, match="es cero"):
         b.desfasar(c, 0, direccion="dos", distancia2=0)
 
 
@@ -175,7 +175,7 @@ def test_spline_cerrada_y_abierta_a_distancia_constante():
     s = b.agregar_spline([(0, 0), (20, 15), (40, -5), (60, 10)])
     nuevo, = b.desfase(s, 3)
     assert max(abs(x - 3) for x in _distancia_a(b, nuevo, s)) < 0.15
-    with pytest.raises(ErrorBoceto, match="se pliega sobre sí mismo"):
+    with pytest.raises(ErrorBoceto, match="se pliega"):
         b.desfase(s, 40)
 
 
