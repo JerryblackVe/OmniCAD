@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D): ahí B-572 y B-573 |
-| E2 | B-548 | Patrón: «Extensión total» entra como cantidad (B-569 integrado: 74c7784) |
+| E2 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (B-548 parcial integrado: bab799f; falta el caso exacto de E11 con mouse) |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
@@ -25,7 +25,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-543 | Chaflán: un clic simple suma aristas (Sonnet) |
-| 2 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 

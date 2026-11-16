@@ -441,6 +441,7 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 | B-547 en Windows (E11): Rosca M20×2,5 en el cuello vaciado de una botella (Ø60, cuello Ø20×15, vaciado 1,5). En la VPS 0,63 s; en Windows daba 3,7 s. |
 | B-559 Mover/Copiar y B-560 Alinear (E11, prioridad 1 de Gerardo): en Alinear, Desde/A, Voltear, Girar y Crear copia; en Mover/Copiar, con el mouse, Fusion contra OmniCAD, cada tipo (libre, traslación, rotación, punto a punto, punto a posición), «Definir punto de giro», «Crear copia» y cada objeto (cuerpo, componente, caras, boceto). Capturas de cada diferencia en `evidencias/reportes_pc/<fecha>_mover_copiar/`. |
 | B-562 en Windows (E11), cuando esté integrado: correr en la PC los tests de aislado y prevuelo (`tests/*aislad*`, `tests/*prevuelo*`) y la humo; después Extruir cuerpo nuevo 110 mm varias veces seguidas con el mouse: nunca «[WinError 32]» y el resultado se aplica. |
+| B-548 en Windows (E11): Patrón rectangular, teclear Cantidad 4 y después clic en «Extensión total» (en el campo y en el rótulo) y teclear 380: tiene que quedar Cantidad 4 y Extensión 380. Captura si el 380 cae en Cantidad (en la VPS no se reprodujo). |
 
 ## 7. Orden de la noche
 
