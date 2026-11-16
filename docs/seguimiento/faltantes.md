@@ -113,7 +113,6 @@ Abierto 1 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| ASM-9 | Activar componente | Parcial | Alta | Filtrar timeline (FU-14), atenuar padre/hermanos y crear en el activo; uniones/estudios en raíz. | tests/test_ensamblar_asm9.py; scripts/prueba_ui/subensamblaje.py | 2026-11-01 |
 | ASM-16 | Arrastrar componentes: lazos, giro libre y multiselección | Abierto | Alta | Resolver lazos, rotar libres, arrastrar varios y elegir sin capturar. | omnicad/timeline/posicion.py; tests/test_posicion_ventana.py | 2026-11-01 |
 
 
@@ -130,7 +129,7 @@ Abierto 1 · Parcial 1. Especificación: [brechas_fusion.md](../brechas_fusion.m
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| FU-14 | Timeline: ocultar pasos inactivos y cambiar a modelado directo | Abierto | Alta | Agregar componente activo con filtro y modo sin historial. | ui/panel_timeline.py; ui/acciones_navegador.py:164 | 2026-10-21 |
+| FU-14 | Timeline: ocultar pasos inactivos y cambiar a modelado directo | Abierto | Alta | Falta el modo sin historial («Cambiar a modelado directo»); el componente activo con su filtro ya está (ASM-9). | ui/panel_timeline.py; ui/acciones_navegador.py:164 | 2026-10-21 |
 | FU-8 | Historial de pasos al abrir un .f3d | Parcial | Muy alta | Descifrar el flujo de diseño o traducirlo con la API de Fusion (P-11h). | omnicad/io_archivos/f3d_historial.py; integraciones/fusion/OmniCADPuente (parámetros con Fusion) | 2026-10-26 |
 
 ## FreeCAD
@@ -287,7 +286,7 @@ Bloqueado 1. Especificación: [plan_cpp.md](../plan_cpp.md).
 
 ### ASM-18 · Nuevo componente con opciones de Fusion
 
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Nuevo componente vacío y con opciones de Fusion **Queda:** Hecho (2026-11-13): componente vacío (sin cuerpos, por API y por el comando), nombre del componente (campo del comando, `name`), Padre (ya estaba) y «A partir de cuerpos» por API (`from_bodies`: un componente por cuerpo, en un solo deshacer). Falta: «A partir de cuerpos» en el comando (un paso por cuerpo: el comando devuelve un solo paso), Tipo de componente (Estándar o Chapa: OmniCAD no tiene componentes de chapa, la chapa es de cada cuerpo), Externo con Tipo de diseño (crea otro archivo: decidir el alcance) y Activar (no hay componente activo; depende de ASM-9). **Evidencia:** docs/brechas_ensamblar.md § ASM-18; `tests/test_asm18_nuevo_componente.py`
+- **Historia (movida de la fila, 2026-11-13):** **Qué:** Nuevo componente vacío y con opciones de Fusion **Queda:** Hecho (2026-11-13): componente vacío (sin cuerpos, por API y por el comando), nombre del componente (campo del comando, `name`), Padre (ya estaba) y «A partir de cuerpos» por API (`from_bodies`: un componente por cuerpo, en un solo deshacer). Falta: «A partir de cuerpos» en el comando (un paso por cuerpo: el comando devuelve un solo paso), Tipo de componente (Estándar o Chapa: OmniCAD no tiene componentes de chapa, la chapa es de cada cuerpo), Externo con Tipo de diseño (crea otro archivo: decidir el alcance) y Activar (activate_component ya existe; falta la casilla «Activar» en el comando). **Evidencia:** docs/brechas_ensamblar.md § ASM-18; `tests/test_asm18_nuevo_componente.py`
 
 ### ASM-19 · Menú ENSAMBLAR y paneles como Fusion
 
@@ -297,17 +296,13 @@ Bloqueado 1. Especificación: [plan_cpp.md](../plan_cpp.md).
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Diálogo «¿Qué desea diseñar?» al crear un diseño **Queda:** Tipo (piezas, ensamblaje, híbrido, dibujo), sistema de unidades y plantilla. Hoy `nuevo()` crea siempre un diseño vacío. Relacionada con H-5. **Evidencia:** grep «Qué desea» en omnicad/: sin resultados; capturas `INTERFAZ/Nuevo_diseno*`
 
-### ASM-9 · Activar componente
-
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Activar componente (lo que queda de los subensamblajes) **Queda:** Hecho el 2026-11-01: Nuevo componente con «Padre», navegador en árbol, mover o unir al padre arrastra a sus hijos (uniones, vínculos, posición inicial, Capturar y Revertir, estudio y arrastre del visor), «Incluir componentes secundarios» del grupo rígido, copiar y patronear subensamblajes enteros, `parent`/`children`/`path` en `get_assembly` y la lista de materiales. Falta Activar componente (Activate a component): el timeline muestra solo los pasos del componente activo (lo espera FU-14), padre y hermanos translúcidos, y lo que se crea entra al componente activo (uniones y estudios siguen en la raíz). **Evidencia:** tests/test_ensamblar_asm9.py; scripts/prueba_ui/subensamblaje.py
-
 ### ASM-16 · Arrastrar componentes: lazos, giro libre y multiselección
 
 - **Historia (movida de la fila, 2026-11-13):** **Qué:** Arrastrar componentes: lazos cerrados, rotar libre y varios a la vez **Queda:** El arrastre del visor (ASM-15, resuelto) sigue los grados de libertad de una unión y traslada los libres. Falta: resolver un lazo cerrado de uniones mientras se arrastra (hoy lo rechaza con un mensaje que manda a Accionar uniones), rotar un componente libre con el mouse (hoy, Editar posición inicial) y arrastrar varios componentes elegidos a la vez. Con algo sin capturar, elegir en el visor queda en pausa hasta Capturar o Revertir (en Fusion se sigue eligiendo). Ayuda: Capture or revert position of components. **Evidencia:** omnicad/timeline/posicion.py (`que_arrastra`); tests/test_posicion_ventana.py::test_sin_capturar_ni_el_resaltado_ni_el_clic_eligen_la_posicion_vieja
 
 ### FU-14 · Timeline: pasos inactivos y modelado directo
 
-- **Historia (movida de la fila, 2026-11-13):** **Qué:** Engranaje del timeline: «Ocultar pasos inactivos» y «Cambiar a modelado directo» **Queda:** Hace falta un componente activo (que filtre el timeline) y un modo sin historial; el engranaje ya existe con «Muestra de color por componente» **Evidencia:** ui/panel_timeline.py (engranaje con una sola opción); ui/acciones_navegador.py:164 («Cambiar al modelado directo» grisado)
+- **Historia (movida de la fila, 2026-11-13):** **Qué:** Engranaje del timeline: «Ocultar pasos inactivos» y «Cambiar a modelado directo» **Queda:** Falta un modo sin historial (el componente activo ya filtra el timeline); el engranaje ya existe con «Muestra de color por componente» **Evidencia:** ui/panel_timeline.py (engranaje con una sola opción); ui/acciones_navegador.py:164 («Cambiar al modelado directo» grisado)
 
 ### FU-8 · Historial de pasos al abrir un .f3d
 

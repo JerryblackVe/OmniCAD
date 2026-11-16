@@ -455,13 +455,32 @@ class Documento:
             return None
 
     # ------------------------------------------------------------ edición del timeline
+    def componente_activo(self):
+        """ASM-9 (Activate Component): id del componente activo, "" = el predeterminado (la raíz). Si ya no existe, la raíz."""
+        activo = self.propiedad("__navegador__", "componente_activo", "")
+        return activo if activo in self.estado_final.componentes else ""
+
+    def activar_componente(self, ref):
+        """Activa el componente `ref` (id, nombre o uno de sus cuerpos; "" = el predeterminado): los pasos nuevos crean
+        sus cuerpos ahí. Como en Fusion, no cambia el modelo ni entra en el deshacer."""
+        from .ops_ensamblar import componente_por_ref
+        destino = componente_por_ref(self.estado_final, ref) if ref else ""
+        if ref and destino is None:
+            raise ErrorDocumento(f"No hay un componente «{ref}».")
+        self.propiedades.setdefault("__navegador__", {})["componente_activo"] = destino
+        self.modificado = True
+        self._notificar()
+        return destino
+
     def _fijar_ocultos(self, op):
         """B-118: como en Fusion, lo que combina sin objetos elegidos alcanza a lo que se veía al crear el paso. Lo
         oculto se anota en el paso: mostrar u ocultar después no cambia el resultado, y editarlo lo conserva."""
         vieja = next((o for o in self.operaciones if o.id == op.id), None)
         if vieja is not None:
-            op.ocultos = vieja.ocultos
-        elif any(k in op.p for k in ("operacion", "forma_patron", "transformaciones")):
+            op.ocultos, op.activo = vieja.ocultos, vieja.activo
+            return
+        op.activo = self.componente_activo()
+        if any(k in op.p for k in ("operacion", "forma_patron", "transformaciones")):
             ocultos = self.propiedad("__navegador__", "ocultos", [])
             op.ocultos = sorted(i for i in ocultos if isinstance(i, str)) if isinstance(ocultos, list) else []
 

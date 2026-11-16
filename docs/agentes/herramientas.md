@@ -5,7 +5,7 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-439 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+440 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
@@ -19,7 +19,7 @@ El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catá
 | [solido](#grupo-solido) | 87 | Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones. |
 | [chapa](#grupo-chapa) | 18 | Chapa metálica: reglas, pestañas, dobladillo, plegar, desplegar, desgarro, patrón plano y DXF. |
 | [malla](#grupo-malla) | 22 | Mallas de triángulos: teselar, reparar, limpiar, reducir, remallar, suavizar, vaciar, cortar, combinar, separar y convertir a sólido (traer un .stl/.obj/.3mf/.ply: insert_file). |
-| [ensamble](#grupo-ensamble) | 24 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
+| [ensamble](#grupo-ensamble) | 25 | Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y estudio de movimiento. |
 | [material](#grupo-material) | 12 | Materiales físicos (densidad para la masa), materiales propios y aspecto de los cuerpos. |
 | [inspeccion](#grupo-inspeccion) | 33 | Ver y medir el resultado. |
 | [animacion](#grupo-animacion) | 15 | Espacio ANIMACIÓN: guiones gráficos, acciones, explosión automática, cámara, cuadros y video. |
@@ -4809,6 +4809,7 @@ Ensamble: componentes, uniones, accionar, límites, grupos rígidos, vínculos y
 | Herramienta | Modifica | Resumen |
 |---|---|---|
 | [`get_assembly`](#get_assembly) | no | Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: traslación y rotación respecto de donde se modelaron, caja envolvente), si hay algo arrastrado sin capturar (uncaptured_position; los componentes se informan sin ese arrastre), uniones (tipo, componentes, valores actuales de giro en grados y deslizamiento en mm, límites, ejes, estado), orígenes de unión, grupos rígidos, vínculos de movimiento y los cuerpos sueltos en la raíz. |
+| [`activate_component`](#activate_component) | no | Activa un componente (ENSAMBLAR › Activar componente): lo que se crea después (cuerpos, componentes hijos) entra en él; las uniones y los estudios siguen en la raíz. |
 | [`create_component`](#create_component) | sí | Crea un componente (ENSAMBLAR › Nuevo componente). |
 | [`cycle_component_color`](#cycle_component_color) | sí | Color del componente de ciclo: pasa el componente al siguiente color de la paleta, el de component_colors de get_viewport_image y de Mostrar colores de componente. |
 | [`ground_component`](#ground_component) | sí | Fija o libera un componente (ENSAMBLAR › Fijar). |
@@ -4841,6 +4842,15 @@ Ensamble del documento: componentes (id, nombre, fijo, cuerpos, posición: trasl
 - Parámetros:
   - `summary` (true/false; opcional, por defecto `false`): true devuelve solo nombres, conteos y las uniones con sus valores, sin la lista de cuerpos.
 - CLI: `omnicad call get_assembly --doc pieza.omnicad`
+
+### `activate_component`
+
+Activa un componente (ENSAMBLAR › Activar componente): lo que se crea después (cuerpos, componentes hijos) entra en él; las uniones y los estudios siguen en la raíz. Sin component vuelve al componente predeterminado (la raíz). No cambia el modelo ni entra en el deshacer; get_assembly informa active_component.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `component` (texto; opcional, por defecto `null`): id, nombre o cuerpo del componente a activar; vacío activa el predeterminado (la raíz).
+- CLI: `omnicad call activate_component --doc pieza.omnicad`
 
 ### `create_component`
 

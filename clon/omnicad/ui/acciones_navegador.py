@@ -139,6 +139,10 @@ def menu(v, item):
     conjunto.setEnabled(bool(ids))
     conjunto.setToolTip("Elegí al menos un cuerpo o boceto." if not ids else "Guarda y permite reutilizar esta selección.")
     m.addSeparator()
+    if tipo == "componente":       # ASM-9: Activate Component; el activo se desactiva con «predeterminado»
+        activo = v.doc.componente_activo() == clave
+        m.addAction("Volver al componente predeterminado" if activo else "Activar componente",
+                    lambda: llamar(v, "activate_component", component=None if activo else clave))
     if tipo == "cuerpo":
         m.addAction("Mover/copiar", lambda: v._accion_navegador("mover", clave))
         m.addAction("Crear componentes a partir de cuerpos", lambda: v._accion_navegador("nuevo_componente", clave))
@@ -197,6 +201,8 @@ def menu_raiz(v):
     m = QMenu(v.navegador)
     m.setToolTipsVisible(True)
     no_disponible(m, "Añadir a ensamblaje")
+    if v.doc.componente_activo():
+        m.addAction("Activar el componente predeterminado", lambda: llamar(v, "activate_component"))
     m.addAction("Crear dibujo", v.acciones["nuevo_dibujo"].trigger)
     m.addAction("Configurar", v.acciones["configurar"].trigger)
     m.addAction("Grupo rígido", v.acciones["grupo_rigido"].trigger)

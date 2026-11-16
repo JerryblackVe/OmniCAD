@@ -368,6 +368,7 @@ def get_assembly(sesion, summary: bool = False):
     uniones = [o for o in ops if isinstance(o, OpUnion)]
     if summary:
         return {"components": [{"id": k, "name": _nombre_comp(estado, k)} for k in estado.componentes],
+                "active_component": doc.componente_activo(),
                 "uncaptured_position": pendiente_de(doc) is not None,
                 "joints": [info_union(sesion, o) for o in uniones],
                 "joint_origins": [{"id": o.id, "name": o.nombre} for o in ops if isinstance(o, OpOrigenUnion)],
@@ -378,6 +379,7 @@ def get_assembly(sesion, summary: bool = False):
                            "joints": len(estado.uniones)},
                 "units": {"length": "mm", "angle": "deg"}}
     return {"components": [info_componente(sesion, k) for k in estado.componentes],
+            "active_component": doc.componente_activo(),
             "uncaptured_position": pendiente_de(doc) is not None,
             "joints": [info_union(sesion, o) for o in uniones],
             "joint_origins": origenes, "rigid_groups": grupos,
@@ -387,6 +389,18 @@ def get_assembly(sesion, summary: bool = False):
 
 
 # ---------------------------------------------------------------- componentes
+@herramienta("activate_component", "ensamble", "Activa un componente (ENSAMBLAR › Activar componente): lo que se crea después "
+             "(cuerpos, componentes hijos) entra en él; las uniones y los estudios siguen en la raíz. Sin component vuelve al "
+             "componente predeterminado (la raíz). No cambia el modelo ni entra en el deshacer; get_assembly informa "
+             "active_component.")
+def activate_component(sesion, component: str | None = None):
+    """
+    component: id, nombre o cuerpo del componente a activar; vacío activa el predeterminado (la raíz).
+    """
+    activo = sesion.doc.activar_componente(componente(sesion, component) if component else "")
+    return {"active_component": activo}
+
+
 @herramienta("create_component", "ensamble", "Crea un componente (ENSAMBLAR › Nuevo componente). Sin bodies queda vacío, como "
              "en Fusion; con bodies lleva esos cuerpos y, con from_bodies=true, crea un componente por cada cuerpo («A partir de "
              "cuerpos»; se llama como el cuerpo, o name seguido del número). Las uniones mueven componentes, no cuerpos sueltos. "
