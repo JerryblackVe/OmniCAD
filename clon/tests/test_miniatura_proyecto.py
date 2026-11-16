@@ -27,6 +27,18 @@ def test_guardar_desde_la_api_escribe_la_miniatura(tmp_path):
     assert proyecto.leer_miniatura(tmp_path / "caja.omnicad") == png
 
 
+def test_b574_la_miniatura_se_dibuja_sin_supermuestreo(tmp_path, monkeypatch):
+    """B-574: a 512 px (supermuestreo ×2) la miniatura era 0,5 s de cada guardado por la API; a 256 px, ~0,1 s."""
+    from omnicad.api import herramientas_inspeccion as hi
+    lados, original = [], hi.rc.renderizar
+    monkeypatch.setattr(hi.rc, "renderizar", lambda objetos, cam, escena, w, h, **k: lados.append((w, h))
+                        or original(objetos, cam, escena, w, h, **k))
+    s = Sesion()
+    api.llamar(s, "create_box", {"length": 40, "width": 30, "height": 10})
+    assert api.llamar(s, "save_document", {"path": str(tmp_path / "caja.omnicad")})["ok"]
+    assert lados == [(256, 256)] and hi.PIXELES.get() == hi._PIXELES_RENDER       # y la vista del agente sigue igual
+
+
 def test_documento_vacio_se_guarda_sin_miniatura(tmp_path):
     r = api.llamar(Sesion(), "save_document", {"path": str(tmp_path / "vacio.omnicad")})
     assert r["ok"], r

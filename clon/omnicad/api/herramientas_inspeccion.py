@@ -4,6 +4,7 @@
 Todo sin Qt: la imagen sale de `nucleo.render_cpu` (rasterizador por software) y los números del núcleo
 (`nucleo.analisis`, `nucleo.geometria`). Unidades: mm, mm², mm³, g (densidades en g/cm³) y grados.
 """
+import contextvars
 import io
 import math
 import threading
@@ -29,6 +30,7 @@ _LADO_MINIMO = 16
 # Presupuesto de píxeles que se calculan por imagen (~1,5 s en CPU para el ejemplo): las imágenes chicas se
 # calculan más grandes y se reducen (antialias); las grandes se calculan a su tamaño.
 _PIXELES_RENDER = 450_000
+PIXELES = contextvars.ContextVar("pixeles_render", default=_PIXELES_RENDER)  # B-574: la miniatura de 256 px pide menos
 
 # Dirección HACIA la cámara (desde el modelo) de cada vista, con Z hacia arriba, como las vistas del visor
 # (ui/visor3d.VISTAS). «iso» es la isométrica verdadera (elevación 35,26°, la esquina del ViewCube).
@@ -258,7 +260,7 @@ def get_viewport_image(sesion, view: str | None = None,
     z_suelo = min(float(o["v"][:, 2].min()) for o in objetos)
     if datos.get("rejilla", {}).get("mostrar"):
         objetos.append(_rejilla(cam, z_suelo, height))
-    k = min(2.0, max(1.0, math.sqrt(_PIXELES_RENDER / (width * height))))
+    k = min(2.0, max(1.0, math.sqrt(PIXELES.get() / (width * height))))
     w, h = round(width * k), round(height * k)
     res = int(min(2048, max(512, 2 ** math.ceil(math.log2(max(w, h) * 1.5)))))
     from ..timeline.ops_insertar import calcomanias_vigentes
