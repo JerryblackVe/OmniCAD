@@ -37,7 +37,7 @@ def _pieza(atributo):
             llamar(s, "move_feature", feature="op3", index=1)
         else:
             llamar(s, "create_parameter", name="ancho", expression="20 mm")
-            llamar(s, "add_text", text="{ancho}", font="DejaVu Sans")
+            llamar(s, "add_text", text="{ancho}", font="Arial")
     assert llamar(s, "recompute_all")["failed_steps"] == []
     assert getattr(s.paso("Boceto"), atributo), atributo
     return s
