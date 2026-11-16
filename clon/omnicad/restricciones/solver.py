@@ -675,6 +675,16 @@ class _Sistema:
                     return [_cruz(_unitario((bb[0] - a[0], bb[1] - a[1])), self.extremo(x, c, p)[0]) * _ESCALA_TANGENTE]
                 T.append(f)
                 return
+            sobre = self._extremo_sobre(l, c)
+            if sobre is not None:
+                # B-561: el extremo de la línea está sobre el círculo: la tangente es la línea perpendicular al radio en
+                # ese extremo; la de distancia al centro sería singular ahí y el editor la quitaba por «sobrante».
+                def f(x, l=l, c=c, p=sobre):
+                    (a, bb), q, o = self.L(x, l), self.P(x, p), self.C(x, c)
+                    u, v = _unitario((bb[0] - a[0], bb[1] - a[1])), _unitario((q[0] - o[0], q[1] - o[1]))
+                    return [(u[0] * v[0] + u[1] * v[1]) * _ESCALA_TANGENTE]
+                T.append(f)
+                return
             s = _signo(self.dist_signada(x0, self.C(x0, c), l))
             T.append(lambda x, l=l, c=c, s=s: [s * self.dist_signada(x, self.C(x, c), l) - self.R(x, c)])
             return
@@ -692,6 +702,20 @@ class _Sistema:
             return
         if "linea" in tipos and (tipos[0] in ELIPTICAS or tipos[1] in ELIPTICAS):
             l, c = (e[0], e[1]) if tipos[0] == "linea" else (e[1], e[0])
+            sobre = self._extremo_sobre(l, c)
+            if sobre is not None:
+                # B-561 (gemelo): extremo de la línea sobre la elipse: la línea, perpendicular a la normal en ese extremo
+                def f(x, l=l, c=c, p=sobre):
+                    (a, bb), q = self.L(x, l), self.P(x, p)
+                    o, ra, rb, ang = self.elipse(x, c)
+                    du, dv = q[0] - o[0], q[1] - o[1]
+                    lu, lv = du * math.cos(ang) + dv * math.sin(ang), -du * math.sin(ang) + dv * math.cos(ang)
+                    nu, nv = lu / (ra * ra), lv / (rb * rb)
+                    n = _unitario((nu * math.cos(ang) - nv * math.sin(ang), nu * math.sin(ang) + nv * math.cos(ang)))
+                    u = _unitario((bb[0] - a[0], bb[1] - a[1]))
+                    return [(u[0] * n[0] + u[1] * n[1]) * _ESCALA_TANGENTE]
+                T.append(f)
+                return
             s = _signo(self.dist_signada(x0, self.C(x0, c), l))
 
             def f(x, l=l, c=c, s=s):
