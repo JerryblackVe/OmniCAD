@@ -11,7 +11,7 @@ Leyenda: ✓ igual que Fusion y probado · ⚠ anda pero con una diferencia o si
 | Boceto (rectangular y circular) | Sí | Sí: cinta BOCETO › Crear, panel con asas | ✓ |
 | Sólido › Crear › Patrón | Sí (rectangular, circular, en ruta) | Sí: `cinta.py:105` | ✓ |
 | Superficie | La ayuda lista `Surface > Create > Mirror`; el Patrón no aparece | Sin Patrón ni Simetría en la pestaña (`cinta.py:139`); se hace desde Sólido con cuerpos de superficie | ⚠ B-602 |
-| Ensamblar | No tiene Patrón; el de componentes sale de Sólido (Tipo de objeto = Componentes) | Igual | ✓ (ver B-600) |
+| Ensamblar | No tiene Patrón; el de componentes sale de Sólido (Tipo de objeto = Componentes) | Igual | ✓ |
 | Chapa | La ayuda no lista Patrón en Sheet Metal › Create | Sin Patrón | ✓ n/a |
 | Plástico | `Plastic > Create > Geometric Pattern` | El grupo CREAR lleva los patrones y el Patrón geométrico (`cinta.py:168`) | ✓ |
 
@@ -44,7 +44,7 @@ Medido: `patrones_boceto.py` da 98 de 106 en verde; los 8 ✗ son textos esperad
 | Tipo de objeto: Cuerpos | ✓ | ✓ | `bodies` |
 | Tipo de objeto: Caras | ✓ (copias como cuerpos de superficie) | ✓ | `faces` |
 | Tipo de objeto: Operaciones (features) | ✓ (clic en el timeline) | ✓ | `features` |
-| Tipo de objeto: Componentes | ⚠ se escriben los nombres (B-600) | ⚠ idem | `components` |
+| Tipo de objeto: Componentes | ✓ clic en el navegador o en la vista (B-600, cerrado) | ✓ idem | `components` |
 | Tipo de objeto: Geometría de construcción | ✓ | ✓ | `construction` |
 | Eje / Ejes (origen, eje de construcción, arista, cara, plano) | ✓ | ✓ (también cara cilíndrica) | `axis1`, `axis2`, `plane2` / `axis` |
 | Distribución Extensión / Espaciado | ✓ | ✓ (más Completa, Parcial, Simétrica) | `distribution` |
@@ -63,7 +63,7 @@ Medido: `patrones_boceto.py` da 98 de 106 en verde; los 8 ✗ son textos esperad
 ## Superficie, Ensamblar, Chapa, Plástico
 
 - **Superficie:** sin botón propio (B-602). Por Sólido › Patrón con cuerpos de superficie y con Caras anda.
-- **Ensamblar:** por Sólido › Patrón con Componentes; por API anda (`components=[...]`); en la ventana, ver B-600.
+- **Ensamblar:** por Sólido › Patrón con Componentes; por API anda (`components=[...]`); en la ventana, con clic en el navegador o en la vista (B-600, cerrado).
 - **Chapa:** nada que comparar; sin diferencia con la ayuda de Fusion. Nada va a `despues.md`.
 - **Plástico:** hereda los patrones del Sólido. Sin hallazgos.
 
@@ -72,7 +72,7 @@ Medido: `patrones_boceto.py` da 98 de 106 en verde; los 8 ✗ son textos esperad
 | ID | Qué | Dueño |
 |---|---|---|
 | B-599 | No se reproduce en la VPS con 3 variantes de centro; falta el archivo o la captura de Gerardo | E1 / E11 |
-| B-600 | Patrón › Componentes se elige escribiendo nombres | E2 |
+| B-600 | Patrón › Componentes se elige escribiendo nombres | E2 (cerrado el 2026-11-16) |
 | B-601 | `suppress` fuera de rango se acepta en silencio en el patrón de boceto | E1 |
 | B-602 | Superficie sin Patrón ni Simetría | E4 |
 | B-603 | `patrones_boceto.py` espera textos viejos (8 ✗) | E7 |

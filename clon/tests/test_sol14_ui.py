@@ -56,18 +56,26 @@ def test_simetria_de_caras_en_el_dialogo(doc):
     assert cmd.desde_op(op, ContextoComando(doc, op=op))["objeto"] == "caras"
 
 
+def _componente_taco(doc):
+    r = api.llamar(api.Sesion(doc), "create_component", {"bodies": ["op1.c1"], "name": "Taco"})
+    assert r["ok"], r
+    return doc.estado_final.cuerpos["op1.c1"].componente
+
+
 def test_patron_de_componentes_y_de_construccion_en_el_dialogo(doc):
-    api.llamar(api.Sesion(doc), "create_component", {"bodies": ["op1.c1"], "name": "Taco"})
+    k = _componente_taco(doc)
     eje = hit_desde_ref({"tipo": "eje", "id": "X"}, doc.estado_final)
     cmd = PatronRectangular()
     ctx = ContextoComando(doc)
     v = _valores(cmd, ctx)
-    v.update(objeto="componentes", componentes="Inexistente", dir1=[eje], n1=3, d1="40 mm")
-    with pytest.raises(ErrorComando, match="Inexistente"):
+    v.update(objeto="componentes", dir1=[eje], n1=3, d1="40 mm")
+    with pytest.raises(ErrorComando, match="Seleccioná los componentes"):
         cmd.construir(v, ctx)
-    op = _ejecutar(doc, cmd, objeto="componentes", componentes="Taco", dir1=[eje], n1=3, d1="40 mm")
+    taco = hit_desde_ref({"tipo": "componente", "componente": k}, doc.estado_final)   # B-600: clic en el navegador
+    op = _ejecutar(doc, cmd, objeto="componentes", componentes=[taco], dir1=[eje], n1=3, d1="40 mm")
     assert len(doc.estado_final.componentes) == 3
-    assert cmd.desde_op(op, ContextoComando(doc, op=op))["componentes"] == "Taco"
+    assert sum(geo.volumen(c.forma) for c in doc.estado_final.cuerpos.values()) == pytest.approx(3 * 4000)
+    assert [h["ref"] for h in cmd.desde_op(op, ContextoComando(doc, op=op))["componentes"]] == [taco["ref"]]
     plano = hit_desde_ref({"tipo": "plano", "id": "XY"}, doc.estado_final)
     _ejecutar(doc, cmd, objeto="construccion", construccion=[plano], dir1=[eje], n1=3, d1="40 mm")
     assert len([k for k in doc.estado_final.planos if "_k" in k]) == 2
@@ -87,22 +95,26 @@ def test_patron_de_operaciones_con_calculo_ajustar_en_el_dialogo(doc):
     assert r.estado == "aviso" and "no tocan al cuerpo" in r.mensaje
 
 
-def test_nombre_repetido_de_componente_se_avisa_sin_escapar_del_slot(doc):
-    sesion = api.Sesion(doc)
-    api.llamar(sesion, "create_component", {"bodies": ["op1.c1"], "name": "Taco"})
+def test_tocar_un_cuerpo_en_la_vista_elige_su_componente(doc):
+    """B-600: con «Tipo de objeto» Componentes, el clic en un cuerpo de la vista elige su componente (como Fusion);
+    un cuerpo sin componente no vale y lo dice."""
+    from omnicad.ui.comandos.patrones import Multitransformar
+    k = _componente_taco(doc)
+    cuerpo = hit_desde_ref({"tipo": "cuerpo", "cuerpo": "op1.c1"}, doc.estado_final)
+    ctx = ContextoComando(doc)
+    for cmd in (PatronRectangular(), Simetria(), Multitransformar()):
+        campo = next(c for c in cmd.campos(ctx) if c.clave == "componentes")
+        assert cmd.ajustar_hit(campo, cuerpo, ctx, None)["ref"] == {"tipo": "componente", "componente": k}
     eje = hit_desde_ref({"tipo": "eje", "id": "X"}, doc.estado_final)
     cmd = PatronRectangular()
-    _ejecutar(doc, cmd, objeto="componentes", componentes="Taco", dir1=[eje], n1=3, d1="40 mm")
-    ctx = ContextoComando(doc)
-    nombres = [c["nombre"] for c in doc.estado_final.componentes.values()]
-    assert len(nombres) == len(set(nombres)), nombres                         # «Taco (copia)», «Taco (copia 2)»
-    v = dict(_valores(cmd, ctx), objeto="componentes", componentes="Taco (copia)", dir1=[eje], n1=2, d1="10 mm")
-    cmd.construir(v, ctx)                                                      # único: anda
-    # dos componentes con el mismo nombre (receta vieja): ErrorComando, no una excepción suelta
-    k = next(k for k, c in doc.estado_final.componentes.items() if c["nombre"] == "Taco (copia)")
-    doc.estado_final.componentes[k]["nombre"] = "Taco"
-    with pytest.raises(ErrorComando, match="varios componentes"):
-        cmd.construir(dict(v, componentes="Taco"), ContextoComando(doc))
+    op = _ejecutar(doc, cmd, objeto="componentes", componentes=[cuerpo], dir1=[eje], n1=2, d1="40 mm")
+    assert op.p["componentes"] == [k]
+    api.llamar(api.Sesion(doc), "create_box", {"length": 5, "width": 5, "height": 5, "name": "Suelto"})
+    suelto = next(c for c, cu in doc.estado_final.cuerpos.items() if cu.nombre == "Suelto")
+    v = dict(_valores(cmd, ContextoComando(doc)), objeto="componentes", dir1=[eje], n1=2, d1="10 mm",
+             componentes=[hit_desde_ref({"tipo": "cuerpo", "cuerpo": suelto}, doc.estado_final)])
+    with pytest.raises(ErrorComando, match="«Suelto» no está en un componente"):
+        cmd.construir(v, ContextoComando(doc))
 
 
 def test_construccion_y_caras_vuelven_a_cargarse_al_editar(doc):

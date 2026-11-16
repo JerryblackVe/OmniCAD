@@ -1174,7 +1174,7 @@ def _objeto_es(clase):
 def campos_objeto():
     """«Tipo de objeto» de Fusion para Patrón, Multitransformación y Simetría: cuerpos y caras (se eligen en la vista),
     operaciones (pasos anteriores del timeline, por nombre o id: el agujero, la extrusión que corta…), componentes
-    (por nombre o id) y geometría de construcción (planos, ejes y puntos)."""
+    (en el navegador o en la vista) y geometría de construcción (planos, ejes y puntos)."""
     return [Opciones("objeto", "Tipo de objeto", {"cuerpos": "Cuerpos", "operaciones": "Operaciones", "caras": "Caras",
                                                   "componentes": "Componentes",
                                                   "construccion": "Geometría de construcción"}),
@@ -1189,8 +1189,8 @@ def campos_objeto():
                            "tocan al cuerpo."),
             Seleccion("caras", "Caras", {"cara"}, maximo=None, visible_si=_objeto_es("caras"),
                       ayuda="Cada copia queda como un cuerpo de superficie nuevo."),
-            Texto("componentes", "Componentes (nombres o ids, separados por coma)", "", visible_si=_objeto_es("componentes"),
-                  ayuda="Cada copia es un componente nuevo con copias de los cuerpos."),
+            Seleccion("componentes", "Componentes", {"componente", "cuerpo"}, maximo=None, visible_si=_objeto_es("componentes"),
+                      ayuda="Tocá los componentes en el navegador o en la vista. Cada copia es un componente nuevo."),
             Seleccion("construccion", "Geometría de construcción", {"plano", "eje", "punto"}, maximo=None,
                       visible_si=_objeto_es("construccion"), ayuda="Cada copia es un plano, eje o punto nuevo.")]
 
@@ -1230,24 +1230,27 @@ def pasos_repetibles(texto, ctx):
     return ids
 
 
-def componentes_escritos(texto, ctx):
-    """Ids de los componentes escritos en el campo «Componentes» (nombres o ids separados por coma)."""
-    from ...timeline.operaciones import ErrorOperacion
-    from ...timeline.ops_ensamblar import componente_por_ref
+def hit_de_componente(campo, hit, ctx):
+    """B-600: en «Componentes», tocar un cuerpo en la vista elige su componente (como Fusion). None = sin cambios."""
+    if campo.clave != "componentes" or hit["ref"].get("tipo") != "cuerpo":
+        return None
+    k = getattr(ctx.estado.cuerpos.get(hit["ref"].get("cuerpo")), "componente", None)
+    return hit_desde_ref({"tipo": "componente", "componente": k}, ctx.estado) if k else None
+
+
+def componentes_elegidos(v, ctx):
+    """Ids de los componentes del campo «Componentes» (un cuerpo suelto, sin componente, no vale)."""
     ids = []
-    for nombre in (x.strip() for x in str(texto or "").replace(";", ",").split(",")):
-        if not nombre:
-            continue
-        try:
-            k = componente_por_ref(ctx.estado, nombre)
-        except ErrorOperacion as e:                      # dos componentes con ese nombre: pide el id
-            raise ErrorComando(str(e)) from None
-        if k is None:
-            raise ErrorComando(f"No hay un componente «{nombre}».")
+    for h in v.get("componentes") or []:
+        r = h["ref"]
+        cuerpo = ctx.estado.cuerpos.get(r.get("cuerpo"))
+        k = r.get("componente") if r.get("tipo") == "componente" else getattr(cuerpo, "componente", None)
+        if not k:
+            raise ErrorComando(f"«{getattr(cuerpo, 'nombre', r.get('cuerpo'))}» no está en un componente: tocá un componente.")
         ids.append(k)
     if not ids:
-        raise ErrorComando("Escribí componentes: nombres o ids, con comas")
-    return ids
+        raise ErrorComando("Seleccioná los componentes.")
+    return list(dict.fromkeys(ids))
 
 
 def objeto_params(v, ctx):
@@ -1261,19 +1264,12 @@ def objeto_params(v, ctx):
         return {"objeto": "caras", "cuerpos": [], "pasos": [], "caras": refs(v, "caras")}
     if objeto == "componentes":
         return {"objeto": "componentes", "cuerpos": [], "pasos": [],
-                "componentes": componentes_escritos(v.get("componentes"), ctx)}
+                "componentes": componentes_elegidos(v, ctx)}
     if objeto == "construccion":
         exigir(v, "construccion", "Seleccioná los planos, ejes o puntos de construcción.")
         return {"objeto": "construccion", "cuerpos": [], "pasos": [], "construccion": refs(v, "construccion")}
     exigir(v, "cuerpos", "Seleccioná los cuerpos.")
     return {"objeto": "cuerpos", "cuerpos": _cuerpos(v["cuerpos"]), "pasos": []}
-
-
-def _nombre_unico_de_componente(estado, k):
-    """El nombre del componente `k` si nadie más lo tiene; si no, su id (el campo se vuelve a leer por nombre)."""
-    nombre = str(estado.componentes.get(k, {}).get("nombre") or "")
-    repetido = sum(str(c.get("nombre") or "").casefold() == nombre.casefold() for c in estado.componentes.values()) > 1
-    return k if not nombre or repetido else nombre
 
 
 def objeto_valores(op, ctx):
@@ -1282,7 +1278,8 @@ def objeto_valores(op, ctx):
     return {"objeto": op.p.get("objeto", "cuerpos"), "cuerpos": _hits_cuerpos(op.p.get("cuerpos") or [], ctx.estado),
             "pasos": ", ".join(nombres.get(i, i) for i in op.p.get("pasos") or []),
             "calculo": op.p.get("calculo", "identico"), "caras": hits(op.p.get("caras") or [], ctx.estado),
-            "componentes": ", ".join(_nombre_unico_de_componente(ctx.estado, k) for k in op.p.get("componentes") or []),
+            "componentes": hits([{"tipo": "componente", "componente": k} for k in op.p.get("componentes") or []],
+                                ctx.estado),
             "construccion": hits(op.p.get("construccion") or [], ctx.estado)}
 
 
@@ -1591,6 +1588,9 @@ class _Patron(Comando):
     def al_tocar_paso(self, panel, op_id):
         tocar_paso(panel, op_id)
 
+    def ajustar_hit(self, campo, hit, ctx, visor):
+        return hit_de_componente(campo, hit, ctx)
+
     def al_cambiar(self, panel, clave):
         """Al pasar el tipo circular a Parcial o Simétrico con los 360° de «Completo», el ángulo se baja (360° sería lo
         mismo que Completo y el panel lo explica en vez de dejar un valor incompatible)."""
@@ -1636,6 +1636,9 @@ class Simetria(Comando):
 
     def al_tocar_paso(self, panel, op_id):
         tocar_paso(panel, op_id)
+
+    def ajustar_hit(self, campo, hit, ctx, visor):
+        return hit_de_componente(campo, hit, ctx)
 
     def campos(self, ctx):
         return campos_objeto() + [Seleccion("plano", "Plano de simetría", {"plano", "cara_plana"}),

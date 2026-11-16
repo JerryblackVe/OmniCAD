@@ -14,8 +14,8 @@ from ...timeline.ops_solido import OpMultitransformar
 from ...timeline.parametros import ESCALAR
 from ..comando import Casilla, Comando, Entero, ErrorComando, Expresion, Info, Opciones, Personalizado, Seleccion, ref1
 from . import registrar
-from .crear import (_cantidad, _de_cuerpos, _h1, _Patron, campos_objeto, campos_patron, objeto_params, objeto_valores,
-                    params_patron, valores_patron)
+from .crear import (_cantidad, _de_cuerpos, _h1, _Patron, campos_objeto, campos_patron, hit_de_componente, objeto_params,
+                    objeto_valores, params_patron, tocar_paso, valores_patron)
 
 MAX_TRANSFORMACIONES = 12                         # recursos: cada una multiplica las instancias (tope total: 10.000)
 TIPOS_TRANSFORMACION = {"rectangular": "Patrón rectangular", "circular": "Patrón circular",
@@ -77,6 +77,12 @@ class Multitransformar(Comando):
              "las anteriores (patrón de 3 + simetría = 6).")
     CLASE_OP = OpMultitransformar
     ANCHO_PANEL = "ancho"          # lista de transformaciones + el editor de la elegida
+
+    def al_tocar_paso(self, panel, op_id):
+        tocar_paso(panel, op_id)
+
+    def ajustar_hit(self, campo, hit, ctx, visor):
+        return hit_de_componente(campo, hit, ctx)
 
     # ------------------------------------------------------------ campos
     def campos(self, ctx):

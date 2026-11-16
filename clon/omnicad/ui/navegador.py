@@ -565,7 +565,7 @@ class Navegador(QFrame):
         if item.data(0, ROL_TIPO) == "conjunto":
             self.accion.emit("elegir_conjunto", item.data(0, ROL_CLAVE))
             return
-        if item.data(0, ROL_TIPO) in ("cuerpo", "boceto", "plano", "eje", "punto", "origen"):
+        if item.data(0, ROL_TIPO) in ("cuerpo", "componente", "boceto", "plano", "eje", "punto", "origen"):   # B-600
             self.seleccionado.emit(item.data(0, ROL_CLAVE))
 
     def _doble_clic(self, item, _col):
