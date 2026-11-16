@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-582, B-586, B-585, B-584 y B-583 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
+| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
 | E2 | B-580 | Ctrl+P: el doble clic no siempre edita y Enter cierra sin cambiar el valor (B-581 integrado: 07b7392) |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
@@ -17,14 +17,13 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | B-567 | Reintentos de booleanas: 45 s antes del error. B-578 queda Parcial en 0,67 s (3 intentos sin ganancia; para 0,3 s hace falta bajar 6 partes chicas, una de arquitectura) |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
-| E9 | B-589 | `create_thread` cosmética por defecto como Fusion y la ventana (decisión del chat maestro), con la línea «para imprimir en 3D o exportar a STL, pasá modeled=true» y la doc regenerada; después B-587 |
+| E9 | B-588 | Import circular en test_b502 (B-589 y B-587 integrados: 9215c01) |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-588 | Import circular en test_b502 (Sonnet, chico) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 

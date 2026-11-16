@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-16 · B-583 cerrado: no era bug.** `ui/editor_boceto.py` › `_color_curva`: lo totalmente restringido sale blanco con fondo oscuro y negro con fondo claro, como Fusion; el verde es solo para curvas con todos sus puntos en `puntos_fijos()` (restricción Fijar o proyectados). E11 había usado Fijar.
 - **2026-11-16 · B-579 verificado en Windows (E11, con el mouse).** Pieza chica con varios cuerpos y pieza12 por la vía del cálculo aparte: la automática elige sola mientras no se toca nada (como Fusion) y «Cuerpo nuevo» elegido a mano se mantiene; ningún cuerpo desaparece. Con pieza12 no se probó el caso de varios cuerpos (tiene uno solo).
 - **2026-11-16 · B-578 cerrado en 0,67 s (chat maestro).** La rosca modelada pasó de 1,67 a 0,67 s al cambiar una cota (parte 1, 94315be); la meta de 0,3 s no salió tras 3 intentos (B-578b). Como la rosca por defecto es cosmética, lo que queda va a P-163, de baja prioridad.
 - **2026-11-16 · B-578b (E6): sin cambio de código; 0,3 s no se alcanzó.** Probado y descartado (3 intentos, medido en la pieza de E11): integral de volumen por cara con punto fijo (`BRepGProp_Vinert`) recordada por cara, y clave real de forma en `_CAJAS`/`_INTEGRALES`; ninguno movió los 0,67 s. Reparto y opciones en la fila B-578.
