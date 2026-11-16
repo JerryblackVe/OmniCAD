@@ -9,13 +9,13 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-595, B-596 y B-597 (texto girado y zoom), B-599 (previa del patrón circular sin geometría), B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
-| E2 | — | B-325 cerrado (confirmado, 5e91b41); H-91 espera a E11 en Fusion. Libre hasta el lote de las 13 h |
+| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-595, B-596 y B-597 (texto girado y zoom), B-599 (previa del patrón circular sin geometría; no se reproduce en la VPS), B-601 (`suppress` fuera de rango en el patrón de boceto), B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
+| E2 | B-600 | Patrón de Componentes: elegir con clic en el navegador o la vista, como Fusion (hoy se escriben nombres). B-325 cerrado |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
-| E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
+| E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | B-593 integrado (5e91b41). Libre hasta el lote de las 13 h |
 | E6 | B-598 | Extruir «Hasta la cara» de 15 letras: previa de más de 4 min (caso LINCES). P-99/B-546 Parcial integrados: 04bf7a8. Después FL-2/FL-3 |
-| E7 | P-168 → P-169 (2) → P-167 | Auditoría de patrones (prioridad 1); después el barrido de lo que no funciona para la lista de P-169; después la barra de navegación. E11 hace la parte del mouse |
+| E7 | P-169 (2) + B-603 | Barrido de lo que no funciona: tabla de candidatos para la lista de P-169 (la carga cuando E8 integre el mecanismo); y arreglar los 8 textos viejos de `prueba_ui/patrones_boceto.py`. Después P-167. P-168 integrado (Parcial: falta E11) |
 | E8 | P-169 (1) | Lista central de lo deshabilitado: gris + «No disponible: motivo» en cinta, menús y paneles, kind claro en la API (Sonnet medio). B-590 y B-591 (3.er caso) integrados: 117a131 |
 | E9 | — | P-166 integrado (5e91b41). Libre hasta el lote de las 13 h |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
