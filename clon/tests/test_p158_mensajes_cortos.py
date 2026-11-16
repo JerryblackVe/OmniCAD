@@ -30,6 +30,9 @@ TOPES = {
     "ui/comandos/superficie.py": 0,
     "ui/comandos/ensamblar.py": 0,
     "timeline/ops_ensamblar.py": 0,
+    "ui/comandos/construir.py": 0,
+    "ui/comandos/inspeccionar.py": 0,
+    "timeline/ops_construir.py": 0,
 }
 
 

@@ -37,7 +37,7 @@ def _a_tiro(punto):
     """P-93: lo construido queda a menos de 1 km del origen, como las cotas: más lejos el núcleo ya no calcula bien
     (una posición proporcional enorme o un lugar fuera de la cara llegaban a cualquier distancia)."""
     if np.abs(punto).max() > LONGITUD_MAXIMA:
-        raise ErrorOperacion("Queda a más de 1.000.000 mm (1 km) del origen: acercalo (posición, distancia o lugar).")
+        raise ErrorOperacion("Acercalo: queda a más de 1 km del origen.")
     return punto
 
 
@@ -114,7 +114,7 @@ def _vecinas(e, estado):
 def _ruta(E, p, estado):
     """Aristas de la ruta. Con Cadena tangente, una sola arista elegida arrastra a las que siguen por tangencia."""
     if any(e.forma is None for e in E):
-        raise ErrorOperacion("La ruta tiene que ser una arista, una curva de boceto o una cadena de ellas.")
+        raise ErrorOperacion("La ruta: arista, curva de boceto o cadena.")
     if p.get("cadena_tangente") and len(E) == 1:
         return _cs().cadena_tangente(E[0].forma, _vecinas(E[0], estado))
     return [e.forma for e in E]
@@ -135,7 +135,7 @@ def _plano_perpendicular(p, E, ctx, estado):
     plana = E[0].plano is not None
     if len(E) > 1 and E[1].tipo in ("plano", "cara"):
         if not plana:
-            raise ErrorOperacion("En una cara curva, el Objeto de referencia tiene que ser un punto.")
+            raise ErrorOperacion("Cara curva: la referencia debe ser un punto.")
         return cs.plano_perpendicular_en_plano(base, ent.como_plano(E[1]), distancia=d)
     punto = ent.como_punto(E[1]) if len(E) > 1 else _objeto(p, "lugar", estado)
     return cs.plano_perpendicular(base, punto, direccion=p.get("direccion", "U") if plana else "U", distancia=d)
@@ -161,7 +161,7 @@ def _plano_de_tipo(p, entidades, ctx, estado):
         return cs.plano_desfase(base, d + extra)
     if t == "angulo":
         if E[0].tipo not in ("eje", "arista", "curva_boceto"):     # B-261: el mismo filtro que la herramienta de creación
-            raise ErrorOperacion("El plano en el ángulo necesita un eje, una arista o una línea de boceto.")
+            raise ErrorOperacion("Plano en el ángulo: un eje, arista o línea.")
         if E[0].tipo != "eje" and E[0].forma is not None:     # P-93: recta, como Fusion (una circular daba su eje)
             cs.eje_arista(E[0].forma)
         punto, direccion = ent.como_eje(E[0])
@@ -205,7 +205,7 @@ def _lado(p, ctx):
         return 0.0
     lado = ctx.evaluar(p.get("medida", "0"))
     if lado < 0:
-        raise ErrorOperacion("La medida del plano o del eje no puede ser negativa.")
+        raise ErrorOperacion("La medida no puede ser negativa.")
     return lado
 
 

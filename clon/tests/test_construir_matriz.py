@@ -134,7 +134,7 @@ def test_edit_feature_valida_el_plano_como_al_crearlo():
     """B-261: editar no se saltea el filtro de la creación ni deja pasar una lista como expresión; null = por defecto."""
     s = _armar()
     pid = llamar(s, "create_construction_plane", plane=">Z", offset=2, body="Cuerpo1")["plane"]["id"]
-    for params, texto in (({"tipo": "angulo"}, "necesita un eje"), ({"distancia": [1]}, "no una lista"),
+    for params, texto in (({"tipo": "angulo"}, "Plano en el ángulo"), ({"distancia": [1]}, "no una lista"),
                           ({"distancia": {"a": 1}}, "no un objeto")):
         r = api.llamar(s, "edit_feature", {"feature": pid, "params": params})
         assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and texto in r["mensaje"], r

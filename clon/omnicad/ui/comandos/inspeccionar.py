@@ -727,7 +727,7 @@ class ReconocerFunciones(Comando):
         if v.get("rehacer_extrusion"):
             tipos = ["extrude", *tipos]
         if not tipos:
-            raise ErrorComando("Marcá agujeros, empalmes o chaflanes para rehacer.")
+            raise ErrorComando("Marcá agujeros, empalmes o chaflanes.")
         r = llamar(Sesion(ctx.doc), "rebuild_features", {"body": v["cuerpo"][0]["ref"]["cuerpo"], "types": tipos})
         if not r["ok"]:
             raise ErrorComando(r["mensaje"])
