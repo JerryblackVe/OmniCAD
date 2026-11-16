@@ -1034,12 +1034,13 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cam
     _salir_del_paralelismo(boceto, fijos[0])
     sueltos_p, sueltos_r = _sueltas(boceto, grupos, fijos)
     libres_p, libres_r = set(sueltos_p), set(sueltos_r)
-    gdl, err_max, inconsistente = 2 * len(sueltos_p) + len(sueltos_r), 0.0, False
+    gdl, err_max, inconsistente, invertidas = 2 * len(sueltos_p) + len(sueltos_r), 0.0, False, []
     for g in grupos:
         sis = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True)
         x, err, J, rango = _resolver_grupo(sis, arrastrado, menor_cambio=menor_cambio)
         if x is not None:
             sis.escribir(x)   # también si es inconsistente: queda la mejor aproximación (el editor puede deshacer)
+            invertidas += [cid for cid, i in sis.idx_r.items() if x[i] < 0]
         gdl += len(sis.x0) - rango
         err_max = max(err_max, err)
         inconsistente = inconsistente or err >= TOLERANCIA
@@ -1049,6 +1050,11 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cam
     determinadas = _determinadas(boceto, libres_p, libres_r)
     if inconsistente:
         return ResultadoSolver("inconsistente", gdl, err_max, "Revisá las últimas restricciones o cotas.", determinadas)
+    if invertidas:
+        # B-582: el radio es una incógnita con signo y se escribe en valor absoluto. Negativo, «cumple» lo imposible
+        # (tangente exterior + concéntrica: d = r1 + r2 con d = 0) y el boceto parecía bien. Fusion lo marca en conflicto.
+        return ResultadoSolver("inconsistente", gdl, 0.0, "Para cumplirse, un radio tendría que ser negativo: "
+                               f"curva {', '.join(map(str, sorted(invertidas)))}.", determinadas)
     colapsadas = _curvas_colapsadas(boceto) if grupos else ""
     if colapsadas:
         # Ej.: "horizontal" sobre una línea vertical se "cumple" achicándola a largo cero. Fusion lo
