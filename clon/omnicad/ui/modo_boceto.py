@@ -189,7 +189,7 @@ class PaletaBoceto(QFrame):
                 ("proyectadas", "Geometrías proyectadas", True, True),
                 ("construccion", "Geometrías de construcción", True, True), ("boceto3d", "Boceto 3D", False, True)]
     # Bloqueos de la tríada del Boceto 3D (3D Sketch Manipulator de Fusion: eje o plano temporal)
-    BLOQUEOS_3D = [("libre", "Libre (x, y, z de cada punto)"), ("x", "Eje X: inicio + largo"),
+    BLOQUEOS_3D = [("libre", "Libre (x, y, z)"), ("x", "Eje X: inicio + largo"),
                    ("y", "Eje Y: inicio + largo"), ("z", "Eje Z: inicio + largo"), ("xy", "Plano XY del inicio"),
                    ("yz", "Plano YZ del inicio"), ("zx", "Plano ZX del inicio")]
 
@@ -251,7 +251,9 @@ class PaletaBoceto(QFrame):
         grilla.addWidget(b, 1, 1, Qt.AlignRight)
         self.checks = {}
         for fila, (clave, texto, inicial, activa) in enumerate(self.OPCIONES, start=2):
-            grilla.addWidget(QLabel(texto), fila, 0)
+            etiqueta = QLabel(texto)
+            etiqueta.setWordWrap(True)                 # B-573: con la barra vertical, la etiqueta parte; el ✔ no se corta
+            grilla.addWidget(etiqueta, fila, 0)
             ch = QCheckBox()
             ch.setChecked(inicial)
             ch.setEnabled(activa)
@@ -274,6 +276,9 @@ class PaletaBoceto(QFrame):
         self.altura3d.setSuffix(" mm")
         for clave, texto in self.BLOQUEOS_3D:
             self.bloqueo3d.addItem(texto, clave)
+        for combo in (self.h3d, self.bloqueo3d):      # B-573: el texto más largo no ensancha la paleta (cortaba la derecha)
+            combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(8)
         self.puntos3d, self.largo3d = QLineEdit(), QLineEdit()
         self.puntos3d.setPlaceholderText("0, 0, 0; 0, 0, 20")
         self.puntos3d.setToolTip("Puntos en coordenadas del boceto (mm): x, y sobre el plano y z sobre la normal, "
@@ -288,9 +293,10 @@ class PaletaBoceto(QFrame):
         f3.addRow("Largo", self.largo3d)
         f3.addRow("Texto", self.texto3d)
         f3.addRow("Altura", self.altura3d)
-        ayuda = QLabel("Con la casilla activa, el botón izquierdo dibuja en la vista sobre el plano activo de la "
-                       "tríada: clic en un plano lo activa (Alt los recorre), arrastrar un eje la mueve y un asa "
-                       "redonda la gira. Esc corta, Intro termina la spline.")
+        self.ayuda3d = ayuda = QLabel("🖱 Dibujá en el plano de la tríada.")   # B-573: 1 renglón; el resto, al pasar el ratón
+        ayuda.setToolTip("Con la casilla activa, el botón izquierdo dibuja en la vista sobre el plano activo de la "
+                         "tríada: clic en un plano lo activa (Alt los recorre), arrastrar un eje la mueve y un asa "
+                         "redonda la gira. Esc corta, Intro termina la spline.")
         ayuda.setWordWrap(True)
         ayuda.setStyleSheet("font-size: 8pt;")
         f3.addRow(ayuda)
@@ -298,7 +304,8 @@ class PaletaBoceto(QFrame):
         for campo in (self.puntos3d, self.largo3d):     # B-572: Intro en el campo = «Agregar»; al corregir se va el rojo
             campo.returnPressed.connect(b3d.click)
             campo.textEdited.connect(lambda _t, c=campo: c.setStyleSheet(""))
-        self.b_triada = QPushButton("Restablecer orientación de la tríada")
+        self.b_triada = QPushButton("Restablecer tríada")         # B-573: el texto largo ensanchaba la paleta
+        self.b_triada.setToolTip("Restablecer orientación de la tríada: vuelve a los ejes del boceto.")
         f3.addRow(self.b_triada)
         self.panel3d.setVisible(False)
         c.addWidget(self.panel3d)
