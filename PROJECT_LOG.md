@@ -550,6 +550,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-16] Al integrar, encadenar test y commit con `&&`, nunca con `;`: con `;` se commiteó una fila de bugs.md rota. · Evidencia: test_seguimiento «6 celdas, no 7» después de faa93678, arreglado en a0020974.
 - [2026-11-16] `ui/comando.py` tiene fin de línea mixto (CRLF y LF): editarlo con `open(...).read()`/`write` en modo texto lo pasa entero a LF (diff de 4600 líneas); se edita en binario o con Edit. · Evidencia: B-608, `git diff --stat` de `clon/omnicad/ui/comando.py`
 - [2026-11-16] `BRepOffsetAPI_MakeOffset` sobre UNA arista: una recta sola no define plano (sin resultado) y con alambre abierto `IsDone()` da False aunque el contorno salga bien: `Init(cara_del_plano)` + `AddWire` y mirar las caras. · Evidencia: `tests/test_b503_desfase_achicar.py`.
 - [2026-11-16] Un test que elige un plano con clic debe caer dentro de su cuadro dibujado (`visor3d.planos_elegibles`, medido por los cuerpos desde B-593), no en un punto cualquiera del plano infinito. · Evidencia: `tests/test_proyectar_tarjeta.py::test_h54_…`.
