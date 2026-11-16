@@ -9,12 +9,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa (sin ítem de bocetos en la cola; cupo semanal). B-561, B-563 y B-564 integrados: 06dc572, 204e6c5, b2697d6 |
-| E2 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (P-161 integrado: 379cf08) |
+| E2 | B-566 | Ejes tapados por el cuerpo se siguen eligiendo (gemelo de B-542; B-542 integrado: 4088fbb) |
 | E3 | B-558 | Booleanas con caras B-spline sin control de volumen (B-565 integrado: 1635ff2) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-562 | 🚨 **Bloqueante primero**: WinError 32 en el archivo `avance` del cálculo aislado (Windows). Después sigue B-545: Panel perezoso (solo crea los campos visibles): baja abrir Agujero (B-545) y abrir Extruir con el llavero (B-546) a < 150 ms |
-| E7 | Caza | P-162 integrado (ac5217a: 407 casos, rojos a B-561/B-563/B-564 y P-158); vuelve a la caza y `scripts/prueba_ui` |
+| E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | — | En pausa hasta que Gerardo decida sobre el advisor (P-158c integrada: 1186c2d) |
 | E9 | P-158f | Mensajes cortos en `restricciones/boceto.py` (96), `ui/comandos/{primitivas,patrones}.py` y el aviso de H/V (P-162); después las `pistas` de la API para los kinds que perdieron detalle (review de P-158d). P-158d integrado: 1162d59 |
