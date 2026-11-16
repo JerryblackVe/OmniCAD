@@ -20,6 +20,14 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
   sigue de a 1). El cupo lo maneja Gerardo. La tabla de sesiones vive solo en `CLAUDE.md`.
 - El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; acceso con `gh` de la cuenta JerryblackVe desde el 2026-11-11, token en `~/.config/gh/hosts.yml`, nunca en el repo).
 
+## Dirección del chat maestro (Gerardo, 2026-11-16)
+- `~/chat_maestro.txt` en la VPS: 1.ª línea, el **nombre exacto** de la sesión del chat maestro actual tal como sale en
+  `ListAgents`; 2.ª, su id. Cada chat maestro nuevo lo reescribe al arrancar.
+- Todo lo que es para Gerardo o el chat maestro (cierres, integraciones, bloqueos, pedidos de OK) va **siempre** por
+  `SendMessage` a ese nombre, leído antes de cada envío. Escribirlo solo en el chat del coordinador no alcanza.
+- Desde la VPS, el id de una sesión de la PC no llega («not found»): llega solo por el nombre (Remote Control prendido).
+  Si el envío falla, avisarle a Gerardo en el chat del coordinador en 1 renglón.
+
 ## Página de seguimiento (Artifact de claude.ai)
 - Gerardo ve los pendientes en una página: <https://claude.ai/artifact/4oDQpqbDYfnnsmBREjDRbp> («Seguimiento
   OmniCAD», tipo Dashboard, privada hasta que él la comparta). Muestra bugs, faltantes y mejoras con filtros,
