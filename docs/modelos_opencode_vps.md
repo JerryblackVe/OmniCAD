@@ -64,6 +64,7 @@ TokenRouter, Ollama Cloud y OpenAI (ChatGPT, oauth).
 ## Conclusiones
 
 - **En uso (Gerardo, 2026-11-15):** `opencode/glm-5.3-flash-free` para piezas cortas de un archivo (E9 y la caza); `nvidia/minimaxai/minimax-m3.1-flash` para tareas agénticas de varios archivos con herramientas y para revisar lo de GLM (16 s en vivo, español limpio; nunca el alias `nvidia/minimax-m3.1-flash`); respaldo `opencode/deepseek-v4.1-flash-free`; lógica difícil `nvidia/nemotron-3-ultra-550b`. Sol (`openai/gpt-6.1-sol`) dejó de usarse.
+- **Proveedor `numes/` (Gerardo, 2026-11-16), costo USD 0, SOLO estos 3:** `numes/moonshotai/kimi-k3.1-pro` (el mejor gratis, lento: 60–120 s por respuesta; piezas difíciles, revisiones y el modo del 90 % del semanal), `numes/z-ai/glm-5.3` (GLM completo, ~10 s por `opencode run`) y `numes/deepseek/deepseek-v4.1-flash`. ⚠ Ningún otro modelo de numes: la clave no tiene tope de gasto y casi todos son pagos. La clave vive fuera del repo.
 - Mejores: `nvidia/nemotron-3-ultra-550b` (lógica), `opencode/beam-free` (el más rápido de los gratis).
 - `nvidia/minimaxai/minimax-m3.1-flash` también quedó entre los buenos (código estándar y agentes, 5-12 s); `nvidia/z-ai/glm-5.3-flash` se colgó.
 - Gratis para código estándar y mecánico: `big-pickle`, `deepseek-v4.1-flash-free`, `glm-5.3-flash-free`, `mimo-v2.6-flash-free`.
