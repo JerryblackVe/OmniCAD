@@ -10,14 +10,14 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
-| E2 | H-91 | Solevación: condiciones de borde exactas (H-116 integrado: b3627b0); después SOL-8 |
+| E2 | B-325 | Booleanas fallan (Sin verificar): confirmar primero. H-91 espera a E11 en Fusion; SOL-8 Parcial integrado: 39f5758 |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | B-593 | Plano de desfase que flota a un costado y no acompaña el zoom (Construir, Alta; Sonnet medio) |
 | E6 | B-546 + P-99 | Extruir lento con muchos perfiles (B-567 integrado: 9d842a7); después FL-2/FL-3 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | B-591 + B-592 | 🚨 Terminar boceto: acciones de Unidades ya borradas y, de rebote, «la receta repite el id» que bloquea Extruir |
-| E9 | P-164 | Cinta personalizable; después P-166 (colores). P-157 parcial y P-165 integrados: a41aedc |
+| E9 | P-166 | Colores de toda la app con ~10 temas. P-164 integrado: 13e93f9 |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
@@ -25,12 +25,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-590 | Ciclo de imports en ops_solido (Sonnet, chico) |
-| 2 | B-325 | Booleanas fallan (Sin verificar): primero confirmar si sigue pasando (E3, Opus alto) |
-| 3 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
-| 4 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
-| 5 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
-| 6 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
-| 7 | ASM-9 / ASM-16 | Activar componente; arrastrar componentes (E5, Sonnet medio) |
+| 2 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
+| 3 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
+| 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
+| 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
+| 6 | ASM-9 / ASM-16 | Activar componente; arrastrar componentes (E5, Sonnet medio) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
