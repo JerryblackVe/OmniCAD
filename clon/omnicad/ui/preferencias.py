@@ -28,6 +28,7 @@ from ..nucleo import motor
 from ..timeline.documento import TOPE_INSTRUCCIONES
 from . import estilo_asas, temas
 from .pagina_atajos import PaginaAtajos
+from .pagina_cinta import PaginaCinta
 from .selector_temas import SelectorTemas
 
 NOMBRE_ANTERIOR = "FusionClone"      # nombre del programa hasta el 2026-10-09: sus preferencias se migran una vez
@@ -81,6 +82,7 @@ DEFECTOS = {
     "atajos/boceto": "",
     "atajos/barra": "",                      # comandos fijados en la barra de arriba (menú «Más» ⋮)
     "atajos/teclas": "{}",                   # combinaciones cambiadas por el usuario (JSON clave → combinación)
+    "cinta/personal": "{}",                  # botones de cada sección de la cinta (JSON «PESTAÑA/GRUPO» → claves; P-164)
     "material/aspecto": "acero",
     "graficos/preset": "personalizar",
     "graficos/detalle": "automatico",        # teselado: automatico (según el tamaño de cada pieza), bajo, medio, alto
@@ -540,6 +542,9 @@ PAGINAS = [
     ("atajos", None, "Atajos de teclado", "Elegí un comando y pulsá su tecla. Si otro comando ya la usa, se marca en "
      "rojo y no se guarda", [
         ("atajos/teclas", "", "pagina_atajos", None)]),
+    ("cinta", None, "Cinta", "Elegí qué botones lleva cada sección de la cinta y en qué orden: arrastrá con el mouse. "
+     "«FAVORITAS» es tu sección: soltá ahí tus herramientas preferidas", [
+        ("cinta/personal", "", "pagina_cinta", None)]),
     ("registro", None, "Registro de uso", "Todo lo que guarda el registro LOCAL de uso (nada sale de esta PC). "
      "Los cambios rigen al aceptar, sin reiniciar", [
         ("general/registro_uso", "Registro de uso", "check", None),
@@ -828,6 +833,12 @@ class DialogoPreferencias(QDialog):
                 c.textChanged.connect(self._cambio)
                 form.addRow(texto, c)
                 self._ayuda(clave, c, form)
+                self.controles[clave] = c
+                continue
+            if tipo == "pagina_cinta":
+                c = PaginaCinta(getattr(self.parent(), "acciones", None))
+                c.cambiado.connect(self._cambio)
+                form.addRow(c)
                 self.controles[clave] = c
                 continue
             if tipo == "pagina_atajos":
@@ -1348,7 +1359,7 @@ class DialogoPreferencias(QDialog):
 
     def _hay_invalidos(self):
         """Un campo numérico fuera de rango bloquea guardar: Aplicar queda apagado."""
-        return any(isinstance(c, (CampoNumero, PaginaAtajos)) and not c.valido() for c in self.controles.values())
+        return any(isinstance(c, (CampoNumero, PaginaAtajos, PaginaCinta)) and not c.valido() for c in self.controles.values())
 
     def _cambio(self, *_):
         for c in self.controles.values():
@@ -1449,7 +1460,7 @@ class DialogoPreferencias(QDialog):
                 salida[clave] = c.text().strip()
             elif isinstance(c, CampoInstrucciones):
                 salida[clave] = c.texto()
-            elif isinstance(c, PaginaAtajos):
+            elif isinstance(c, (PaginaAtajos, PaginaCinta)):
                 salida[clave] = c.value()
             else:
                 salida[clave] = c.value()
@@ -1470,7 +1481,7 @@ class DialogoPreferencias(QDialog):
                 c.setText(valor)
             elif isinstance(c, CampoInstrucciones):
                 c.setPlainText(valor)
-            elif isinstance(c, PaginaAtajos):
+            elif isinstance(c, (PaginaAtajos, PaginaCinta)):
                 c.setValue(valor)
             elif isinstance(c, CampoColor):
                 c.setValue(valor)

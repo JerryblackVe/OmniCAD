@@ -266,6 +266,7 @@ def grupo_secundario(owner, acciones, no_disponibles, titulo, rapidos, items):
     return w
 
 
+FAVORITAS = ("SÓLIDO", "FAVORITAS")      # P-164: la sección que cada persona llena desde Preferencias › Cinta
 PESTANAS = [("SÓLIDO", SOLIDO), ("SUPERFICIE", SUPERFICIE), ("MALLA", MALLA), ("CHAPA", CHAPA),
             ("PLÁSTICO", PLASTICO), ("ADMINISTRAR", ADMINISTRAR), ("UTILIDADES", UTILIDADES)]
 ESPACIOS = ["DISEÑO", "DISEÑO GENERATIVO", "RENDERIZAR", "ANIMACIÓN", "SIMULACIÓN", "FABRICACIÓN", "DIBUJO", "ELECTRÓNICA"]
@@ -351,12 +352,14 @@ class Cinta(QWidget):
         # Ancho «Ignored»: la ventana puede ser más angosta que la pestaña; ajustar_textos la compacta.
         self.pila.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.pestanas = []
+        self._personal = {}               # P-164: «PESTAÑA/GRUPO» → botones elegidos en Preferencias › Cinta
+        self._paginas = [*PESTANAS, *CONTEXTUALES]       # (nombre, grupos) de cada página de la pila, en su orden
         for i, (nombre, grupos) in enumerate(PESTANAS):
             b = _Pestana(nombre)
             b.clicked.connect(lambda _=False, i=i: self.pila.setCurrentIndex(i))
             fila.addWidget(b, 1)
             self.pestanas.append(b)
-            self.pila.addWidget(self._fila_grupos(grupos))
+            self.pila.addWidget(self._fila_grupos(self._efectivos(nombre, grupos)))
         self.pestanas[0].setChecked(True)
         self.pila.currentChanged.connect(lambda _i: self.ajustar_textos())
         self.contextuales = {}
@@ -366,7 +369,7 @@ class Cinta(QWidget):
             b.clicked.connect(lambda _=False, i=indice: self.pila.setCurrentIndex(i))
             b.hide()
             fila.addWidget(b, 1)
-            self.pila.addWidget(self._fila_grupos(grupos))
+            self.pila.addWidget(self._fila_grupos(self._efectivos(nombre, grupos)))
             self.contextuales[nombre] = b
         fila.addStretch(1)
         derecha.addLayout(fila)
@@ -384,6 +387,36 @@ class Cinta(QWidget):
         a.setToolTip(f"<b>{texto}</b><br>No disponible en {NOMBRE_APP} {VERSION}.")
         self.no_disponibles.append(a)
         return a
+
+    def _efectivos(self, pestana, grupos):
+        """Los grupos de la pestaña con los botones que la persona eligió (P-164); «FAVORITAS» abre la pestaña SÓLIDO y
+        no se ve mientras está vacía. Una clave que ya no existe se ignora."""
+        salida = []
+        favoritas = [c for c in self._personal.get(f"{FAVORITAS[0]}/{FAVORITAS[1]}", []) if c in self.acciones]
+        if pestana == FAVORITAS[0] and favoritas:
+            salida.append((FAVORITAS[1], favoritas, [_i(self.acciones[c].property("titulo") or c, c) for c in favoritas]))
+        for titulo, rapidos, items in grupos:
+            elegidos = self._personal.get(f"{pestana}/{titulo}")
+            if elegidos is not None:
+                rapidos = [c for c in elegidos if c in self.acciones]
+            salida.append((titulo, rapidos, items))
+        return salida
+
+    def personalizar(self, personal):
+        """Pone los botones elegidos en Preferencias › Cinta ({«PESTAÑA/GRUPO»: [claves]}); rehace solo las pestañas que
+        cambiaron."""
+        antes, self._personal = self._personal, dict(personal)
+        actual = self.pila.currentIndex()
+        for i, (nombre, grupos) in enumerate(self._paginas):
+            claves = {k for k in {**antes, **self._personal} if k.startswith(nombre + "/")}
+            if all(antes.get(k) == self._personal.get(k) for k in claves):
+                continue
+            viejo = self.pila.widget(i)
+            self.pila.insertWidget(i, self._fila_grupos(self._efectivos(nombre, grupos)))
+            self.pila.removeWidget(viejo)
+            viejo.deleteLater()
+        self.pila.setCurrentIndex(actual)
+        self.ajustar_textos()
 
     def _fila_grupos(self, grupos):
         w = QWidget()
