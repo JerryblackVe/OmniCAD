@@ -1266,7 +1266,11 @@ def _desfase_cuerpo(forma, distancia, union):
 
 def agrandar_con_holgura(forma, holgura):
     """P-156: el cuerpo agrandado `holgura` mm por lado, con las aristas redondeadas (Combinar › Cortar con «Dejar
-    holgura»: el molde queda con juego parejo para la pieza impresa)."""
+    holgura»: el molde queda con juego parejo para la pieza impresa). B-609: con varios sólidos el kernel no desfasa
+    el conjunto: se desfasa cada sólido y se devuelven juntos."""
+    solidos = geo.solidos(forma)
+    if len(solidos) > 1:
+        return geo.compuesto([_desfase_cuerpo(s, float(holgura), GeomAbs_Arc) for s in solidos])
     return _desfase_cuerpo(forma, float(holgura), GeomAbs_Arc)
 
 

@@ -126,3 +126,49 @@ def test_p156_dejar_holgura_escondida_no_cambia_el_corte():
          "operacion": "cortar", "dejar_holgura": True, "otra_pieza": "metalica"}
     assert Combinar().construir({**v, "mantener": False}, ctx).p["holgura"] == "0 mm"
     assert Combinar().construir({**v, "mantener": True}, ctx).p["holgura"] == "0.2 mm"
+
+
+def _perno_en_cilindro(s):
+    _ok(s, "create_cylinder", height=20, diameter=40, name="Cuerpo1")
+    _ok(s, "create_cylinder", height=20, diameter=10, name="Cuerpo2")
+
+
+def test_b609_perno_coaxial_con_holgura_impresa(prefs):
+    """B-609: perno Ø10 coaxial en un cilindro Ø40, Cortar con 0,15 por lado e «Impresa»: esta pieza se lleva la mitad
+    (0,075 por lado), así que el agujero queda Ø10,15; los dos cuerpos válidos y el perno intacto."""
+    from omnicad.nucleo import geometria as geo
+    s = api.Sesion()
+    _ok(s, "set_preference", key="impresion/holgura_mm", value=0.15)
+    _perno_en_cilindro(s)
+    _ok(s, "boolean_operation", target="Cuerpo1", tools=["Cuerpo2"], operation="cut", keep_tools=True,
+        print_clearance="general", other_part="printed")
+    cuerpos = {c.nombre: c.forma for c in s.doc.estado_final.cuerpos.values()}
+    assert all(geo.es_valida(f) for f in cuerpos.values())
+    assert geo.volumen(cuerpos["Cuerpo2"]) == pytest.approx(3.14159265 * 25 * 20, rel=1e-6)
+    hueco = 3.14159265 * 400 * 20 - geo.volumen(cuerpos["Cuerpo1"])
+    assert hueco == pytest.approx(3.14159265 * 5.075 ** 2 * 20, rel=1e-6)
+
+
+def test_b609_herramienta_de_varios_solidos_y_mensaje_de_un_renglon(prefs, monkeypatch):
+    """Una herramienta de dos pernos sueltos (un cuerpo «unido») se desfasa sólido por sólido; si el kernel no puede,
+    el mensaje es de 1 renglón con el número de la casilla y coma."""
+    from omnicad.nucleo import geometria as geo
+    from omnicad.nucleo import solidos_modificar as sm
+    s = api.Sesion()
+    _ok(s, "create_box", length=60, width=20, height=10, x=20, name="Molde")
+    _ok(s, "create_cylinder", height=10, diameter=10, name="Pernos")
+    _ok(s, "create_cylinder", height=10, diameter=10, x=40, operation="join", target="Pernos")
+    _ok(s, "boolean_operation", target="Molde", tools=["Pernos"], operation="cut", keep_tools=True, print_clearance=0.1)
+    molde = next(c.forma for c in s.doc.estado_final.cuerpos.values() if c.nombre == "Molde")
+    assert geo.es_valida(molde)
+    assert 12000 - geo.volumen(molde) == pytest.approx(2 * 3.14159265 * 5.1 ** 2 * 10, rel=1e-6)
+
+    def falla(*_):
+        raise geo.ErrorGeometria("detalle del kernel")
+    monkeypatch.setattr(sm, "_desfase_cuerpo", falla)
+    s = api.Sesion()
+    _ok(s, "set_preference", key="impresion/holgura_mm", value=0.15)
+    _perno_en_cilindro(s)
+    r = api.llamar(s, "boolean_operation", {"target": "Cuerpo1", "tools": ["Cuerpo2"], "operation": "cut",
+                                            "keep_tools": True, "print_clearance": "general"})
+    assert not r["ok"] and r["mensaje"].endswith(": ⚠ No pude dejar 0,15 mm de holgura en esta pieza"), r

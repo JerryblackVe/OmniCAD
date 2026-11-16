@@ -1605,7 +1605,9 @@ class OpCombinar(Operacion):
             try:
                 formas = {k: sm.agrandar_con_holgura(f, holgura) for k, f in formas.items()}
             except geo.ErrorGeometria as e:
-                raise ErrorOperacion(f"No se pudo dejar la holgura de {holgura:g} mm: {e}") from e
+                # B-609: el número de la casilla (con «Impresa» el paso guarda la mitad), con coma y en 1 renglón
+                casilla = holgura * (2 if self.p.get("otra_pieza") == "impresa" else 1)
+                raise ErrorOperacion(f"⚠ No pude dejar {casilla:g} mm de holgura en esta pieza".replace(".", ",")) from e
         junto = self._cortar_junto(ctx, objetivo, herramientas, formas)
         resultado = forma_objetivo if junto is None else junto
         v_previa = None
