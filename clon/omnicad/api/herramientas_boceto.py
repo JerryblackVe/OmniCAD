@@ -2705,9 +2705,13 @@ def _exigir_tamano_patron(b, entities, copias, sin=()):
         raise error("INVALID_ARGUMENTS", str(e)) from e
 
 
-def _exigir_supresion(suppress):
+def _exigir_supresion(suppress, copias=None):
+    """suppress: enteros desde 0; con `copias` (las que tendrá el patrón, sin el original) también dentro de rango."""
     if suppress is not None and any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in suppress):
         raise error("INVALID_ARGUMENTS", "suppress lleva índices de copia enteros desde 0 (get_sketch › patterns).")
+    if copias is not None and suppress and (n := max(suppress)) >= copias:
+        raise error("INVALID_ARGUMENTS", f"suppress: la copia {n} no existe (el patrón tiene {copias}: índices de 0 a "
+                    f"{copias - 1}).")
 
 
 def _informar_patron(r, b):
@@ -2764,6 +2768,7 @@ def sketch_rectangular_pattern(sesion, entities: list[int], count1: int, distanc
     _exigir_patron("rectangular", {"cantidad1": count1, "distancia1": distance1, "cantidad2": count2,
                                    "distancia2": distance2, "dir1": d1, "dir2": d2, "modo": modo,
                                    "linea1": direction1_line, "linea2": direction2_line})
+    _exigir_supresion(suppress, count1 * count2 - 1)
     hecho = {}
 
     def repetir(b):
@@ -2803,7 +2808,7 @@ def sketch_circular_pattern(sesion, entities: list[int], count: int, center_x: f
     _exigir_finitos(locals())
     expresion, total_angle = _valor_expr(sesion, total_angle, ANGULO)
     _exigir_patron("circular", {"cantidad": count, "angulo_total": total_angle})
-    _exigir_supresion(suppress)
+    _exigir_supresion(suppress, count - 1)
     hecho = {}
 
     def repetir(b):
@@ -2905,6 +2910,7 @@ def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distanc
             if direction2_line is not None:
                 cambios["linea2"] = direction2_line
             _exigir_patron("rectangular", {**p, **cambios})
+            _exigir_supresion(suppress, n1 * n2 - 1)
             _exigir_tamano_patron(b, registro["ids"], n1 * n2 - 1)
         else:
             if any(v is not None for v in (count1, distance1, count2, distance2, angle, angle2, spacing,
@@ -2925,6 +2931,7 @@ def edit_sketch_pattern(sesion, pattern: int, count1: int | None = None, distanc
                     raise error("INVALID_ARGUMENTS", "Para mover el centro dá center_x y center_y juntos.")
                 cambios["centro"] = [float(center_x), float(center_y)]
             _exigir_patron("circular", {**p, **cambios})
+            _exigir_supresion(suppress, n - 1)
             centro = cambios.get("centro", p["centro"])
             _exigir_tamano_patron(b, registro["ids"], n - 1, sin=(centro,) if isinstance(centro, int) else ())
         if suppress is not None:
