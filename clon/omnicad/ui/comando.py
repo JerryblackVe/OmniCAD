@@ -744,6 +744,20 @@ class _FilaLista(QWidget):
         self.tabla.blockSignals(False)
 
 
+class _Etiqueta(QLabel):
+    """Rótulo de un campo. B-548: un clic en él enfoca su campo y selecciona el valor, así lo que se teclea va ahí y no
+    se pierde ni cae en el campo anterior."""
+    campo_w = None
+
+    def mousePressEvent(self, e):
+        w = self.campo_w
+        if w is not None and w.isEnabled() and w.focusPolicy() & Qt.ClickFocus:
+            w.setFocus(Qt.MouseFocusReason)
+            if hasattr(w, "selectAll"):
+                w.selectAll()
+        super().mousePressEvent(e)
+
+
 class _FilaSeleccion(QWidget):
     """Fila «Seleccionar». Sin descripción (paneles de boceto) dice «N seleccionados»; con ella (paneles de comando)
     muestra qué es lo elegido («Cara +Z · Caja1», «3 aristas · Caja1»), con el detalle en el tooltip y, si hay
@@ -953,12 +967,13 @@ class PanelComando(QFrame):
                 ultimo[id(grilla)][1].append(campo.clave)
             else:
                 ultimo[id(grilla)] = None
-            et = QLabel(campo.etiqueta_si(self.valores) if campo.etiqueta_si else campo.etiqueta,
-                        objectName="etiqueta_cmd", wordWrap=True)
+            et = _Etiqueta(campo.etiqueta_si(self.valores) if campo.etiqueta_si else campo.etiqueta,
+                           objectName="etiqueta_cmd", wordWrap=True)
             et.setFixedWidth(ANCHO_ETIQUETA)
             if campo.ayuda:
                 et.setToolTip(campo.ayuda)
             w = self._widget(campo)
+            et.campo_w = w
             if getattr(campo, "ancho_completo", False):
                 et.hide()                                       # sin etiqueta: el widget ocupa las dos columnas
                 grilla.addWidget(w, fila, 0, 1, 2)
