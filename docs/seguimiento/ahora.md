@@ -11,10 +11,10 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-601 | `suppress` fuera de rango en el Patrón de boceto; después B-582. Sonnet medio. B-595/596/597 integrados: bbaec71 (B-596 falta Windows) |
 | E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
-| E3 | B-503 | Desfase de 0,5 mm en letras curvas (falla en 5–41 s). Opus alto. P-170 Bloqueado por el kernel; B-609 Parcial: bb9a729 |
+| E3 | — | En pausa (cupo amarillo, 82 % el 16/11 19 UTC). B-503 Parcial: 7cc89af (falta una cara sola de letra curva, velocidad y Arial en Windows) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
-| E5 | ASM-9 | Activar componente (filtrar timeline, atenuar, crear en el activo); después ASM-16. Sonnet medio. HOOKS-1116 integrado: 329fd21 |
-| E6 | P-173 | La vista no se congela mientras calcula (sin diálogo modal). Opus alto. B-608 Parcial: 6115ddb (falta Windows) |
+| E5 | — | En pausa (cupo amarillo). ASM-9 integrado: 99fb1de. Sigue ASM-16 con Opus alto (pide el solver de uniones) cuando haya cupo |
+| E6 | B-611 | Regresión de B-608: falta el aviso «no entra» de Empalme y Chaflán (prueba_ui). Sonnet medio. P-173 integrado: 814ffa2 |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
 | E9 | P-158 (Bocetos y Sólido) | Cola de OpenCode: mensajes de más de 45 caracteres → 1 renglón (GLM; revisa MiniMax o E9). H-118 (mensaje) y B-605 hechos, por integrar. Sonnet medio |
