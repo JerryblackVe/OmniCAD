@@ -83,7 +83,7 @@ def test_barrido_de_un_cuerpo_perpendicular_en_un_arco_sigue_la_ruta():
     assert r["ok"], r
     nuevo = [c for c in s.doc.estado_final.cuerpos.values() if c.nombre != "Taco"][0]
     assert geo.es_valida(nuevo.forma)
-    assert geo.volumen(nuevo.forma) == pytest.approx(4 * 4 * (4 + 10 * math.pi), rel=0.03)
+    assert geo.volumen(nuevo.forma) == pytest.approx(4 * (16 + 41 * math.pi), rel=0.01)   # ver el test del arco, abajo
 
 
 def test_barrido_de_un_cuerpo_rechaza_perfil_y_torsion():
@@ -151,10 +151,12 @@ def test_cadena_de_barrido_expande_las_curvas_de_boceto_tangentes():
 
 
 def test_barrido_de_cuerpo_en_arco_se_acerca_al_volumen_exacto_y_la_via_por_caras_se_queda_corta():
-    """Caja de 4 en un cuarto de arco de radio 20 (perpendicular): el volumen exacto es el sector (π/4·(22²−18²)·4 = 502,65)
-    más las dos medias cajas de los extremos (2·32) = 566,65. Las copias unidas dan un 2 % de más (borde escalonado).
-    La vía alternativa (MakePipe de cada cara + la caja inicial) da 535,6: `BRepOffsetAPI_MakePipe` devuelve un sólido
-    nulo e inválido para las caras que contienen la tangente de la ruta, así que se pierde un tercio del barrido."""
+    """Caja de 4 en un cuarto de arco de radio 20 (perpendicular). Es un barrido plano: el cuadrado de 4 gira 90° alrededor
+    del centro del arco y cada radio r barre su arco del cuadrado más 90°, así que el área es 16 + π/4·(r_max² − r_min²) con
+    r_min = 18 y r_max = √(2² + 22²) (la esquina de afuera, no 22): volumen 4·(16 + 41π) = 579,22. Las copias quedan un
+    0,7 % abajo (les faltan las cuñas entre copia y copia). La vía por caras (MakePipe de cada cara + la caja inicial) da
+    535,6: `BRepOffsetAPI_MakePipe` lleva cada cara al punto de la ruta más cercano y la barre desde ahí (la cara de
+    adelante termina 2 mm antes), y las caras que contienen la tangente salen nulas."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipe
     from OCP.GC import GC_MakeArcOfCircle
@@ -165,9 +167,9 @@ def test_barrido_de_cuerpo_en_arco_se_acerca_al_volumen_exacto_y_la_via_por_cara
     arco = GC_MakeArcOfCircle(gp_Pnt(0, 0, 0), gp_Pnt(20 * math.sin(math.pi / 4), 20 - 20 * math.cos(math.pi / 4), 0),
                               gp_Pnt(20, 20, 0)).Value()
     arista = BRepBuilderAPI_MakeEdge(arco).Edge()
-    exacto = math.pi / 4 * (22 ** 2 - 18 ** 2) * 4 + 2 * 32
+    exacto = 4 * (16 + 41 * math.pi)
     copias = sc.barrer_cuerpo(caja, [arista], orientacion="perpendicular")
-    assert geo.es_valida(copias) and geo.volumen(copias) == pytest.approx(exacto, rel=0.03)
+    assert geo.es_valida(copias) and exacto * 0.98 < geo.volumen(copias) < exacto      # las copias nunca se pasan
     hilo = BRepBuilderAPI_MakeWire(arista).Wire()
     piezas = [caja]
     for cara in geo.caras(caja):
