@@ -1037,6 +1037,9 @@ class PanelComando(QFrame):
             self.previa.connect(lambda estado: self.visor.set_capa("seleccion", None if self.cerrando else
                                                                    comando.seleccion_en_previa(self.valores, estado))
                 if self.cerrando or estado is not None and comando.oculta_seleccion(self.valores) else self._refrescar_seleccion())
+            self.previa.connect(lambda estado: setattr(self.visor, "formas_para_elegir", None if self.cerrando or estado is None
+                                                       or not comando.oculta_seleccion(self.valores)
+                                                       else {k: c.forma for k, c in self.ctx.estado.cuerpos.items()}))
         self.manipuladores = None            # GestorManipuladores si el comando tiene asas en la vista
         if (type(comando).manipuladores is not Comando.manipuladores
                 or type(comando).previa_vista is not Comando.previa_vista):

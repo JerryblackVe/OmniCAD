@@ -532,6 +532,7 @@ class Visor3D(QOpenGLWidget):
         self._excluir_bocetos = ()
         self.filtro = None                 # conjunto de FILTROS activos o None (sin selección en la vista)
         self.cuerpos_de_previa = frozenset()  # cuerpos que solo existen en la vista previa del comando abierto
+        self.formas_para_elegir = None        # B-543: {id: forma original} si la previa reemplaza lo que se elige
         self.texto_entero = False          # con un campo de perfiles activo: una letra resalta y elige todo su texto
         self._hover_ent = None             # entidad bajo el cursor con el filtro activo
         self._sobre_avisado = None         # lo último que se avisó por `entidad_sobre` (sobrevive al reinicio de `_hover_ent`)
@@ -702,9 +703,10 @@ class Visor3D(QOpenGLWidget):
                                "forma": None if es_malla(c.forma) else c.forma})   # las mallas no tienen niveles
                 lod.append(datos[4:7])
                 formas[c.id] = c.forma
-        self._pick = {k: v for k, v in self._pick.items() if k in cache}
-        self._pick_aristas = {k: v for k, v in self._pick_aristas.items() if k in cache}
-        self._pick_paquete = {k: v for k, v in self._pick_paquete.items() if k in cache}
+        vivas = cache.keys() | {id(f) for f in (self.formas_para_elegir or {}).values()}   # B-543: se eligen sin dibujarse
+        self._pick = {k: v for k, v in self._pick.items() if k in vivas}
+        self._pick_aristas = {k: v for k, v in self._pick_aristas.items() if k in vivas}
+        self._pick_paquete = {k: v for k, v in self._pick_paquete.items() if k in vivas}
         self._lod = {k: v for k, v in self._lod.items() if k[0] in cache}
         self._lod_pendientes = {k: v for k, v in self._lod_pendientes.items() if k[0] in cache}
         self._lod_datos = (np.array([d[0] for d in lod], float).reshape(-1, 3), np.array([d[1] for d in lod], float),
@@ -1408,6 +1410,7 @@ class Visor3D(QOpenGLWidget):
         self.texto_entero = bool(self.filtro and "perfil" in self.filtro)
         if self.filtro is None:
             self.cuerpos_de_previa = frozenset()
+            self.formas_para_elegir = None
         self._hover_ent = self._sobre_avisado = None
         self._marcas_forzado = None
         self._capas.pop("forzado", None)
@@ -1719,6 +1722,19 @@ class Visor3D(QOpenGLWidget):
         return [br for br in self._estado.bocetos.values() if br.op_id not in self._ocultos]
 
     def elegir_entidad(self, pos, filtros=None, a_traves=False):
+        """B-543: con una previa que se come lo elegido (Chaflán, Empalme) se elige sobre los cuerpos originales, como
+        Fusion con la previa a la vista; lo demás, en `_elegir_entidad`."""
+        originales = self.formas_para_elegir
+        if not originales:
+            return self._elegir_entidad(pos, filtros, a_traves)
+        guardadas = self._formas
+        self._formas = {k: originales.get(k, f) for k, f in guardadas.items()}
+        try:
+            return self._elegir_entidad(pos, filtros, a_traves)
+        finally:
+            self._formas = guardadas
+
+    def _elegir_entidad(self, pos, filtros=None, a_traves=False):
         """Entidad bajo el cursor según los filtros (FILTROS). Devuelve un dict con "tipo", "ref"
         (referencia serializable de `timeline.entidades`), "dibujo" (primitivas para resaltar), "t"
         (profundidad), "punto" (punto 3D del clic) y, si corresponde, "cuerpo" y "forma" (subforma OCC).
