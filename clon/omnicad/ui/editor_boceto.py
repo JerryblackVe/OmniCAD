@@ -179,6 +179,8 @@ AYUDA_RESTRICCION = {
 }
 # Detalle que no cabe en el cartel de 1 renglón: va en el tooltip / Ctrl+/ del botón (regla 14, P-158g)
 DETALLE_RESTRICCION = {
+    "r_tangente": AYUDA_RESTRICCION["r_tangente"] + " Si el contacto cae fuera del tramo dibujado del arco, la tangencia vale para "
+                  "su círculo entero: mové la línea o alargá el arco para que se toquen.",
     "r_horizontal_vertical": "elegí una o más líneas, o dos puntos: quedan horizontales o verticales, según lo que "
                              "tengan más cerca."}
 ICONO_RESTRICCION = {"horizontal": "r_horizontal", "vertical": "r_vertical",

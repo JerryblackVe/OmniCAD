@@ -22,7 +22,7 @@ def tapa():
     _ok(s, "create_cylinder", height=5, radius=22.5, name="Tapa")
     _ok(s, "create_cylinder", height=15, radius=15.5, z=-15, operation="join", target="Tapa")
     _ok(s, "create_cylinder", height=15, radius=14, z=-15, name="Eje")
-    _ok(s, "create_thread", faces=["%CYLINDER"], body="Eje", thread="M28")
+    _ok(s, "create_thread", faces=["%CYLINDER"], body="Eje", thread="M28", modeled=True)
     _ok(s, "boolean_operation", target="Tapa", tools=["Eje"], operation="cut", keep_tools=True)
     _ok(s, "create_construction_plane", plane="XY", offset=0, name="P")
     _ok(s, "split_body", body="Tapa", tool="P")

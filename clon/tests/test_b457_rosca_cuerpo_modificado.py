@@ -39,7 +39,7 @@ def _roscar(modificacion):
     sesion = _cuerpo_modificado(modificacion)
     inicial = _volumen(sesion)
     sc._surco_en_origen.cache_clear()
-    _llamar(sesion, "create_thread", faces="%CYLINDER", thread="M12x1.75", thread_class="6g")
+    _llamar(sesion, "create_thread", faces="%CYLINDER", thread="M12x1.75", thread_class="6g", modeled=True)
     return inicial, _volumen(sesion)
 
 

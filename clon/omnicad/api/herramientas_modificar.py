@@ -864,12 +864,12 @@ def _unica_cara(sesion, face, body):
              "vacío = el tamaño de family más cercano al diámetro de la cara. thread_class: '6g'/'6h'/'6H'/'6G' "
              "(métrica, ISO 965-1), '2A'/'3A'/'2B'/'3B' (unificada, ASME B1.1), 'auto' (la de Fusion: 6H/6g o "
              "2B/2A, si hay datos del tamaño) o '' (perfil básico): corre los flancos al centro de la tolerancia. "
-             "print_clearance agrega holgura radial para imprimir en 3D. modeled=false = cosmética (no cambia la "
-             "geometría; las roscas cónicas R/NPT siempre quedan cosméticas sobre una cara cilíndrica). length "
+             "print_clearance agrega holgura radial para imprimir en 3D. modeled=false (por defecto, como Fusion) = "
+             "cosmética (no cambia la geometría; para imprimir en 3D o exportar a STL, pasá modeled=true; las roscas cónicas R/NPT siempre quedan cosméticas sobre una cara cilíndrica). length "
              "vacío = largo completo; offset corre el inicio. Perfil según el tipo: 60° (M, UN), 55° (G), 30° (Tr) "
              "o 29° (ACME).", modifica=True)
 def create_thread(sesion, faces: Elementos, thread: str | None = None, family: Familia = "iso_metric",
-                  thread_class: str | None = "auto", modeled: bool = True, length: Expr | None = None,
+                  thread_class: str | None = "auto", modeled: bool = False, length: Expr | None = None,
                   offset: Expr = 0, left_hand: bool = False, reverse: bool = False, print_clearance: Expr = 0,
                   other_part: Literal["printed", "metal"] = "printed", body: str | None = None):
     """
@@ -877,7 +877,7 @@ def create_thread(sesion, faces: Elementos, thread: str | None = None, family: F
     thread: designación de la rosca ("M10", "M10x1.25", "1/4-20 UNC", "Tr20x4", "G1/2"…); vacío = automática según la cara.
     family: tipo de rosca para el tamaño automático; thread_info lista los 24 tipos.
     thread_class: clase de tolerancia: "6g", "6H", "2A", "2B"…, "auto" (la de Fusion) o "" (perfil básico). Los demás tipos traen las clases de las tablas de Fusion (A y B en las tuberías, 2G/3G/4G en ACME, 7e/7H en trapezoidal, h14 en las autorroscantes…): thread_info lista las de cada tamaño.
-    modeled: true corta el filete real; false = rosca cosmética (la geometría no cambia).
+    modeled: true corta el filete real (para imprimir en 3D o exportar a STL, pasá modeled=true); false (por defecto, como Fusion) = rosca cosmética (la geometría no cambia).
     length: largo roscado en mm (número o expresión); vacío = toda la cara.
     offset: distancia en mm desde el extremo de la cara hasta donde empieza la rosca (con length).
     left_hand: true = rosca a izquierdas.

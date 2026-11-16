@@ -40,7 +40,7 @@ def test_p156_print_clearance_general_usa_la_preferencia(prefs, pieza):
         if pieza == "tornillo":
             _ok(s, "create_cylinder", radius=5, height=12)
             _ok(s, "create_thread", faces="%CYLINDER", thread="M10", thread_class="", print_clearance=holgura,
-                other_part="metal")
+                other_part="metal", modeled=True)
         else:
             _ok(s, "create_box", length=30, width=30, height=12)
             _ok(s, "create_hole", face=">Z", hole_tap="modeled", thread="M10", thread_class="", through_all=True,

@@ -403,3 +403,10 @@ def test_b439_cota_de_circulo_y_arco_clic_en_el_borde_y_clic_para_ubicar(lz, arc
     QTest.keyClick(lz.entrada.campos[0], Qt.Key_Return)
     cota, = lz.b.cotas.values()
     assert (cota.tipo, cota.entidades, cota.expresion) == (tipo, [c], "30")
+
+
+def test_b587_aviso_de_tangente_fuera_del_arco_cabe_en_la_barra():
+    from omnicad.restricciones.boceto import aviso_tangencias_fuera
+    assert len(aviso_tangencias_fuera()) <= 45                                 # regla 14: 1 renglón, sin cortarse
+    assert "círculo entero" in editor_boceto.DETALLE_RESTRICCION["r_tangente"]    # el detalle va al «?»
+    assert "fuera del tramo" in aviso_tangencias_fuera([["a", "b"]])             # el agente conserva el texto completo

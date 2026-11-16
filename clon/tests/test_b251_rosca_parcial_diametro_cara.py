@@ -19,7 +19,7 @@ def _crear_rosca(radio=10, designacion="AFBMA N 04", clase="3A", interna=False, 
     if interna:
         _llamar(sesion, "create_box", length=40, width=40, height=30)
     _llamar(sesion, "create_cylinder", radius=radio, height=30, operation="cut" if interna else "new_body")
-    _llamar(sesion, "create_thread", faces="%CYLINDER", thread=designacion, thread_class=clase, **opciones)
+    _llamar(sesion, "create_thread", faces="%CYLINDER", thread=designacion, thread_class=clase, **{"modeled": True, **opciones})
     forma = next(iter(sesion.doc.estado_final.cuerpos.values())).forma
     assert geo.es_valida(forma) and len(geo.solidos(forma)) == 1
     return forma

@@ -390,7 +390,7 @@ def test_tornillo_y_tuerca_modelados_sobre_el_mismo_eje_encajan(s):
     está dado vuelta (el eje de la cara apunta a −Z y la rosca empieza en la otra punta), como el eje del motor."""
     llamar(s, "create_cylinder", radius=5, height=18, name="Tornillo")
     llamar(s, "move_body", body="Tornillo", rotate=[180, 0, 0], pivot="origin", translate=[0, 0, 15])
-    llamar(s, "create_thread", body="Tornillo", faces="%CYLINDER", thread="M10", thread_class="6g")
+    llamar(s, "create_thread", body="Tornillo", faces="%CYLINDER", thread="M10", thread_class="6g", modeled=True)
     llamar(s, "create_cylinder", radius=9, height=15, name="Tuerca")
     llamar(s, "create_hole", body="Tuerca", face="<Z", depth=15, hole_tap="modeled", thread="M10", thread_class="6H")
     assert llamar(s, "check_interference", bodies=["Tornillo", "Tuerca"])["count"] == 0
@@ -426,7 +426,7 @@ def test_agujero_roscado_errores(caja):
 
 def test_create_thread_exterior_con_clase_y_tamano_automatico(s):
     llamar(s, "create_cylinder", radius=5, height=12)
-    r = llamar(s, "create_thread", faces="%CYLINDER", thread_class="6g", length=6)
+    r = llamar(s, "create_thread", faces="%CYLINDER", thread_class="6g", length=6, modeled=True)
     assert r["threads"] == [{"body": "Cuerpo1", "designation": "M10x1.5", "class": "6g", "internal": False,
                              "modeled": True}]
     assert r["faces_used"] == 1 and r["bodies_modified"][0]["volume"] < math.pi * 25 * 12
@@ -443,7 +443,7 @@ def test_create_thread_m5_largo_completo_no_empuja_al_kernel_al_mal_surco(s):
     """B-44: un perno Ø5×50 con rosca a largo completo fallaba con «El kernel armó mal el surco» (rosca
     demasiado larga para el barrido único con flancos de clase): hoy se barre por mitades y sale."""
     llamar(s, "create_cylinder", radius=2.5, height=50)
-    r = llamar(s, "create_thread", faces="%CYLINDER", thread="M5x0.8")
+    r = llamar(s, "create_thread", faces="%CYLINDER", thread="M5x0.8", modeled=True)
     from omnicad.nucleo import geometria as geo
     from omnicad.nucleo import revision as rv
     c = next(iter(s.doc.estado_final.cuerpos.values()))
@@ -457,7 +457,7 @@ def test_create_thread_m5_salientes_sin_aristas_no_manifold(s):
     llamar(s, "create_cylinder", radius=2.5, height=50)
     from omnicad.nucleo import revision as rv
     llamar(s, "create_thread", faces="%CYLINDER", thread="M5x0.8", thread_class="auto", length=12,
-           print_clearance=0.1)
+           print_clearance=0.1, modeled=True)
     topo = rv._topologia(next(iter(s.doc.estado_final.cuerpos.values())).forma)
     assert not topo["no_manifold"] and not topo["libres"]
 
@@ -478,11 +478,11 @@ def test_create_thread_interior_trapezoidal(s):
     llamar(s, "create_box", length=40, width=40, height=12)
     llamar(s, "create_hole", face=">Z", diameter=16, through_all=True)
     v0 = volumen(s)
-    r = llamar(s, "create_thread", faces="%CYLINDER", family="trapezoidal", thread_class="")
+    r = llamar(s, "create_thread", faces="%CYLINDER", family="trapezoidal", thread_class="", modeled=True)
     assert r["threads"][0]["designation"] == "Tr20x4" and r["threads"][0]["internal"]
     assert v0 - volumen(s) == pytest.approx(0.5 * math.pi * (10 ** 2 - 8 ** 2) * 12, rel=0.03)
     llamar(s, "undo")
-    r = llamar(s, "create_thread", faces="%CYLINDER", family="trapezoidal")       # CAP-14: «auto» = la clase 7H de Fusion
+    r = llamar(s, "create_thread", faces="%CYLINDER", family="trapezoidal", modeled=True)       # CAP-14: «auto» = la clase 7H de Fusion
     assert r["threads"][0]["class"] == "7H" and v0 - volumen(s) > 0.5 * math.pi * (10 ** 2 - 8 ** 2) * 12 * 1.02
 
 

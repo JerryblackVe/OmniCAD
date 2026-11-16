@@ -4974,7 +4974,9 @@ def circunferencia_3_puntos(a, b, c):
 def aviso_tangencias_fuera(pares=()):
     """Texto del aviso de `tangencias_fuera_del_arco` (en 2D y en 3D). `pares`, los [[a, b]] de ids para un agente; en la
     ventana no van: la persona ve la curva, no su número."""
-    quien = "Tangente entre " + ", ".join(f"{a} y {b}" for a, b in pares) if pares else "La tangente"
+    if not pares:
+        return "Toca fuera del arco dibujado: alargalo."        # ≤45 (regla 14); el detalle va en el «?» de Tangente
+    quien = "Tangente entre " + ", ".join(f"{a} y {b}" for a, b in pares)
     return (f"{quien}: el contacto cae fuera del tramo dibujado del arco (vale para su círculo entero). "
             "Mové la línea o alargá el arco para que se toquen.")
 
