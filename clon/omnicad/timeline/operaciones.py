@@ -247,6 +247,7 @@ class EstadoModelo:
         # unión 2 → unión 1 de cada vínculo de movimiento vigente (ASM-2: una sola por unión y sin ciclos)
         self.vinculos = {}
         self.contador_cuerpos = 0
+        self.componente_activo = ""   # ASM-9: lo que crea el paso en curso entra en este componente ("" = la raíz)
 
     def copia(self):
         e = EstadoModelo()
@@ -295,6 +296,8 @@ class EstadoModelo:
         while cid in self.cuerpos:
             k += 1
             cid = f"{op_id}.c{k}"
+        if self.componente_activo in self.componentes:
+            atributos.setdefault("componente", self.componente_activo)
         self.cuerpos[cid] = Cuerpo(cid, nombre or f"Cuerpo{self.contador_cuerpos}", forma, op_id, tipo, **atributos)
         return cid
 
@@ -563,6 +566,7 @@ class Operacion:
         self.p = copy.deepcopy(self.PARAMS)
         self.p.update(params)
         self.ocultos = []       # ids ocultos al crear el paso (`Documento._fijar_ocultos`)
+        self.activo = ""        # ASM-9: componente activo al crear el paso; sus cuerpos nuevos entran ahí
         # Pasos cuyos cuerpos modificó la última ejecución con objetivo "Automático": también son
         # dependencias (si no, se podría mover o borrar el cuerpo que esta operación corta o une).
         self._usados = set()
@@ -640,6 +644,7 @@ class Operacion:
         self.revisar_parametros()
         self.validar_opciones()
         ctx.ocultos = self.ocultos
+        estado.componente_activo = self.activo
         try:
             self.ejecutar(estado, ctx)
         except (ParametroMalFormado, ent.ReferenciaMalFormada) as e:
@@ -654,7 +659,8 @@ class Operacion:
 
     def a_dict(self):
         return {"tipo": self.TIPO, "id": self.id, "nombre": self.nombre, "suprimida": self.suprimida,
-                "params": copy.deepcopy(self.p), **({"ocultos": list(self.ocultos)} if self.ocultos else {})}
+                "params": copy.deepcopy(self.p), **({"ocultos": list(self.ocultos)} if self.ocultos else {}),
+                **({"activo": self.activo} if self.activo else {})}
 
 
 def _ubicar(p, valor):
@@ -1781,6 +1787,7 @@ def operacion_desde_dict(d):
     op = clase(d["id"], d.get("nombre"), d.get("suprimida", False), **params)
     ocultos = d.get("ocultos")
     op.ocultos = [i for i in ocultos if isinstance(i, str)] if isinstance(ocultos, list) else []
+    op.activo = d["activo"] if isinstance(d.get("activo"), str) else ""
     return op
 
 

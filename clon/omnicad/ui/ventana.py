@@ -1331,9 +1331,14 @@ class VentanaPrincipal(QMainWindow):
         # P-38: un boceto terminado que ningún paso usa muestra su perfil celeste y su construcción punteada
         usados = set().union(*(o.dependencias() for o in self.doc.operaciones))
         libres = frozenset(k for k in estado.bocetos if k not in usados)
+        comp_activo = self.doc.componente_activo()      # ASM-9
         for v in self.area.visores:
             v.opacidad = {cid: props["opacidad"] for cid, props in self.doc.propiedades.items() if "opacidad" in props}
             v.opacidad.update(nuevos_previa)
+            if comp_activo:   # ASM-9: el padre y los hermanos del componente activo se ven translúcidos
+                familia_activa = familia(estado, comp_activo)
+                v.opacidad.update({cid: min(v.opacidad.get(cid, 1.0), 0.25) for cid, c in estado.cuerpos.items()
+                                   if c.componente not in familia_activa})
             v.bocetos_libres = libres
             v.set_modelo(estado, ocultos, excluir, apariencias)
             v.set_caras_pintadas(caras)
@@ -1345,7 +1350,7 @@ class VentanaPrincipal(QMainWindow):
         self.navegador.muestras = ({k: "#%02x%02x%02x" % rgb for k, rgb in (muestras if estado_nav is estado else colores_componentes(self.doc, estado_nav)).items()}
                                    if self.prefs_colores_componente or self.timeline.color_componente else {})
         self.navegador.componentes = [
-            (k, comp["nombre"], comp.get("fijo", False),
+            (k, comp["nombre"] + ("  (activo)" if k == comp_activo else ""), comp.get("fijo", False),
              [(c.id, self.nombre_cuerpo(c)) for c in estado_nav.cuerpos.values() if c.componente == k], comp.get("padre") or "")
             for k, comp in estado_nav.componentes.items()]
         self.navegador.uniones = [(k, u["nombre"]) for k, u in estado_nav.uniones.items()]

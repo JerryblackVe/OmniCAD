@@ -514,7 +514,7 @@ class OpComponente(Operacion):
         return (_deps_objetivo(self.p["cuerpos"]) | _dep_componente(self.p.get("padre") or "")) - {self.id}
 
     def ejecutar(self, estado, ctx):
-        padre = ""
+        padre = estado.componente_activo if estado.componente_activo in estado.componentes else ""   # ASM-9
         if self.p.get("padre"):
             padre = componente_por_ref(estado, self.p["padre"])
             if padre is None:
@@ -533,7 +533,7 @@ class OpComponente(Operacion):
                                               "momento de reasignar los cuerpos.") from None
             matriz = _matriz_de_cuerpos(estado, self.p["cuerpos"], self.nombre, ctx, pose)
         base = matriz
-        if padre and self.p.get("pose_padre") is not None:
+        if self.p.get("padre") and self.p.get("pose_padre") is not None:
             # B-178: los cuerpos se modelaron con el padre en `pose_padre`; si hoy está en otra pose (se accionó una
             # unión suya antes de este paso), el hijo lo sigue.
             delta = _matriz_de(estado, padre) @ np.linalg.inv(np.asarray(self.p["pose_padre"], float))
@@ -544,7 +544,7 @@ class OpComponente(Operacion):
             base = matriz        # B-353: lo que sigue al padre es heredado, no el movimiento de otra unión
         estado.componentes[self.id] = {"nombre": self.nombre, "padre": padre, "fijo": bool(self.p["fijo"]),
                                        "matriz": matriz.tolist(), "base": base.tolist()}
-        if padre and self.p.get("pose_padre") is not None:
+        if self.p.get("padre") and self.p.get("pose_padre") is not None:
             estado.componentes[self.id]["pose_padre"] = self.p["pose_padre"]
         viejos = {estado.cuerpo(cid).componente for cid in self.p["cuerpos"]} - {"", self.id}
         for cid in self.p["cuerpos"]:

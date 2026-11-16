@@ -13,8 +13,8 @@ Varios elegidos + clic derecho → «Agrupar N pasos» (Fusion: Create Group): f
 la contrae o la expande (+/− de Fusion), la suprime entera y la desagrupa (Edit Group › Expand), y doble clic la renombra. La
 carpeta no es un paso: sólo ordena la vista. Ctrl+C y Ctrl+V copian y pegan el paso elegido (SC9).
 El engranaje de la derecha («Opciones» de Fusion) tiene «Muestra de color por componente»: pinta el fondo de cada
-paso con el color de su componente. «Ocultar pasos inactivos» y «Cambiar a modelado directo» no están: OmniCAD no
-tiene componente activo ni modo sin historial.
+paso con el color de su componente. Con un componente activo (ASM-9) solo se listan sus pasos y los de sus hijos. «Ocultar
+pasos inactivos» y «Cambiar a modelado directo» no están: OmniCAD no tiene modo sin historial.
 """
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QPen
@@ -276,6 +276,11 @@ class PanelTimeline(QWidget):
         nombres = [icono_operacion(op) for op in doc.operaciones]       # una vez por paso: resolver el comando recorre el catálogo
         existentes = {op.id for op in doc.operaciones}
         plegados = {i for g in doc.grupos if g["plegado"] for i in g["pasos"]}
+        activo = doc.componente_activo()
+        if activo:        # ASM-9: solo los pasos del componente activo y de los que cuelgan de él (el predeterminado muestra todo)
+            from ..timeline.ops_ensamblar import familia
+            familia = familia(doc.estado_final, activo)
+            plegados |= {op.id for op in doc.operaciones if op.activo not in familia and op.id != activo}
         chips = {}                        # carpeta que va delante de este paso (la de su paso más antiguo)
         for g in doc.grupos:
             reales = [i for i in g["pasos"] if i in existentes]
@@ -284,7 +289,7 @@ class PanelTimeline(QWidget):
         firma = (id(doc), doc.marcador, [(op.id, op.nombre, op.ETIQUETA, nombre, insignia_de(op, res.estado),
                                           res.estado, res.mensaje, colores.get(op.id))
                                          for op, res, nombre in zip(doc.operaciones, doc.resultados, nombres, strict=True)],
-                 self._origen, [(g["id"], g["nombre"], g["plegado"], tuple(g["pasos"])) for g in doc.grupos])
+                 self._origen, activo, [(g["id"], g["nombre"], g["plegado"], tuple(g["pasos"])) for g in doc.grupos])
         if doc is self.doc and firma == getattr(self, "_firma", None):
             return
         self._firma = firma
