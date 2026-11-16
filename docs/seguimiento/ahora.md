@@ -10,14 +10,14 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
-| E2 | H-91 / H-116 | Solevación: condiciones de borde exactas; 2 o más raíles (B-580 integrado: ae0838b) |
+| E2 | H-91 | Solevación: condiciones de borde exactas (H-116 integrado: b3627b0); después SOL-8 |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | B-567 | Reintentos de booleanas: 45 s antes del error. B-578 queda Parcial en 0,67 s (3 intentos sin ganancia; para 0,3 s hace falta bajar 6 partes chicas, una de arquitectura) |
+| E6 | B-546 + P-99 | Extruir lento con muchos perfiles (B-567 integrado: 9d842a7); después FL-2/FL-3 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | B-591 + B-592 | 🚨 Terminar boceto: acciones de Unidades ya borradas y, de rebote, «la receta repite el id» que bloquea Extruir |
-| E9 | P-157 | Preferencias como Fusion (parcial en su worktree), después P-164, P-165 y P-166. B-588 integrado: 33918f0 |
+| E9 | P-164 | Cinta personalizable; después P-166 (colores). P-157 parcial y P-165 integrados: a41aedc |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
@@ -26,12 +26,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 1 | B-590 | Ciclo de imports en ops_solido (Sonnet, chico) |
 | 2 | B-325 | Booleanas fallan (Sin verificar): primero confirmar si sigue pasando (E3, Opus alto) |
-| 3 | B-546 + P-99 | Extruir lento con muchos perfiles: recalcula todos en cada clic; la 1.ª apertura arma las asas (E6, Opus alto) |
-| 4 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
-| 5 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
-| 6 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
-| 7 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
-| 8 | ASM-9 / ASM-16 | Activar componente; arrastrar componentes (E5, Sonnet medio) |
+| 3 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
+| 4 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
+| 5 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
+| 6 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
+| 7 | ASM-9 / ASM-16 | Activar componente; arrastrar componentes (E5, Sonnet medio) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
