@@ -17,14 +17,14 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | B-567 | Reintentos de booleanas: 45 s antes del error. B-578 queda Parcial en 0,67 s (3 intentos sin ganancia; para 0,3 s hace falta bajar 6 partes chicas, una de arquitectura) |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
-| E9 | B-588 | Import circular en test_b502 (B-589 y B-587 integrados: 9215c01) |
+| E9 | P-157 | Preferencias como Fusion (parcial en su worktree), después P-164, P-165 y P-166. B-588 integrado: 33918f0 |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | P-157 + P-164/165/166 | Preferencias como Fusion (Gerardo, regla 14): cada opción en su página, visual, nada cortado a 1024×700, lo grisado con su motivo; más cinta personalizable (P-164), atajos (P-165) y colores con 10 temas (P-166), cada uno con MCP/CLI. Leer Preferencias en docs/fusion_docs primero (E9 al cerrar B-588) |
+| 1 | B-590 | Ciclo de imports en ops_solido (Sonnet, chico) |
 | 2 | B-325 | Booleanas fallan (Sin verificar): primero confirmar si sigue pasando (E3, Opus alto) |
 | 3 | B-546 + P-99 | Extruir lento con muchos perfiles: recalcula todos en cada clic; la 1.ª apertura arma las asas (E6, Opus alto) |
 | 4 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
