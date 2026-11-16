@@ -378,15 +378,15 @@ def circular_invalidos():
     clic(34, 10)
     tecla(Qt.Key_Return)
     clic(0, 0)
-    for texto, esperado in (("0", "entero de 2"), ("1", "entero de 2"), ("-3", "entero de 2"), ("2.5", "entero"), ("abc", "cantidad"),
-                            ("", "Falta"), (str(MAX_COPIAS_PATRON + 2), "admite hasta"), ("8", "")):   # B-381: una copia más que el tope
+    for texto, esperado in (("0", "entero desde 2"), ("1", "entero desde 2"), ("-3", "entero desde 2"), ("2.5", "entero"), ("abc", "cantidad"),
+                            ("", "Falta"), (str(MAX_COPIAS_PATRON + 2), "máx. 1000"), ("8", "")):   # B-381: una copia más que el tope
         escribir("cantidad", texto)
         ok = (panel.boton_ok.isEnabled() if not esperado else not panel.boton_ok.isEnabled()) and (
             esperado.lower() in panel.mensaje.text().lower() if esperado else not panel.mensaje.isVisible())
         A.reg(AR + " · inválidos", f"cantidad «{texto}»: " + ("Aceptar se deshabilita y dice «…%s…»" % esperado if esperado else "vuelve a ser válida"),
               ok, f"msg={panel.mensaje.text()!r} ok={panel.boton_ok.isEnabled()}")
     combo("distribucion", "parcial")
-    for texto, esperado in (("0", "distinto de cero"), ("361", "-360 a 360"), ("-400", "-360 a 360"), ("nan", "")):
+    for texto, esperado in (("0", "sin 0"), ("361", "-360 a 360"), ("-400", "-360 a 360"), ("nan", "")):
         escribir("angulo_total", texto)
         A.reg(AR + " · inválidos", f"ángulo «{texto}» no se acepta",
               not panel.boton_ok.isEnabled() and (esperado in panel.mensaje.text() if esperado else panel.mensaje.isVisible()), panel.mensaje.text())
@@ -395,7 +395,7 @@ def circular_invalidos():
     pulsar(panel.sel["centro"].boton)
     clic(30, 10)                                             # el centro justo sobre el centro del círculo original
     A.reg(AR + " · inválidos", "el centro sobre la geometría elegida se rechaza con su causa",
-          not panel.boton_ok.isEnabled() and "coincide" in panel.mensaje.text(), panel.mensaje.text())
+          not panel.boton_ok.isEnabled() and "cae sobre" in panel.mensaje.text(), panel.mensaje.text())
     A.foto(v, "patrones_c8_invalido")
     tecla(Qt.Key_Escape)
     A.reg(AR + " · inválidos", "Esc cierra y no queda ninguna operación a medias (1 patrón, las curvas de antes)",
@@ -570,9 +570,9 @@ def inválidos_rect():
     clic(-2.1213, -2.1213)
     casilla("dos", True)
     for clave, texto, esperado in (("cantidad1", "0", "entero"), ("cantidad1", "-2", "entero"), ("cantidad1", "2.5", "entero"),
-                                   ("cantidad1", "3", ""), ("distancia1", "0", "encima"), ("distancia1", "abc", "distancia"),
+                                   ("cantidad1", "3", ""), ("distancia1", "0", "se pisan"), ("distancia1", "abc", "distancia"),
                                    ("distancia1", "20", ""), ("angulo2", "0", "paralelas"), ("angulo2", "180", "paralelas"),
-                                   ("angulo2", "90", ""), ("cantidad2", "1000", "admite hasta"), ("cantidad2", "2", "")):
+                                   ("angulo2", "90", ""), ("cantidad2", "1000", "máx. 1000"), ("cantidad2", "2", "")):
         escribir(clave, texto)
         mal = bool(esperado)
         ok = (not panel.boton_ok.isEnabled() and esperado.lower() in panel.mensaje.text().lower()) if mal else (
