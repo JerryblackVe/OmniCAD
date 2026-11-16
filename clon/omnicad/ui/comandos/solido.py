@@ -14,7 +14,7 @@ from ...timeline.parametros import ANGULO, LONGITUD
 from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, OpcionesVivas, Seleccion, exigir,
                        hit_desde_ref, hits, ref1)
 from . import registrar
-from .comunes import (DIRECCIONES_UI, ajustar_operacion, caja_cuerpo, caja_nueva, campo_objetivos, campo_operacion,
+from .comunes import (DIRECCIONES_UI, ajustar_operacion, caja_cuerpo, caja_nueva, campo_objetivos, campo_operacion, fijar_al_elegir,
                       direcciones_revolucion, evaluar_o_cero as _evaluar, objetivos, objetivos_desde_op, perfil_apoyado,
                       perfiles_a_params, perfiles_desde_op, solidos_visibles)
 
@@ -313,6 +313,7 @@ class Extruir(Comando):
         if not self._fija:
             panel.set_valor("operacion", "nuevo")   # B-431: el objetivo de un preajuste o del último uso no viaja con él
         self._ajustando = False
+        fijar_al_elegir(self, panel)
         self._cajas = {}                         # id de cuerpo → caja envolvente: el estado no cambia con el panel abierto
         self._apoyos = {}                        # B-344: selección de perfiles → ¿se apoya en un sólido visible?
         self._hijo, self._op_hijo = None, None

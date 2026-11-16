@@ -179,6 +179,8 @@ def perfil_apoyado(ctx, v, apoyos, cajas):
 
 def ajustar_operacion(comando, panel, auto):
     """Cortar/Unir automáticos; None restaura la operación anterior sin fijarla como elección manual."""
+    if comando._fija:       # B-579: también la respuesta tardía del cálculo aparte respeta lo elegido a mano
+        return
     actual = panel.valores.get("operacion")
     if auto is not None and actual != auto:
         if comando._antes_auto is None:
@@ -193,6 +195,11 @@ def ajustar_operacion(comando, panel, auto):
         panel.set_valor("operacion", nueva)
     finally:
         comando._ajustando = False
+
+
+def fijar_al_elegir(comando, panel):
+    """B-579: elegir a mano la operación la fija aunque sea la que ya estaba (`activated` sale solo del clic de la persona)."""
+    panel.widgets["operacion"].activated.connect(lambda _i: setattr(comando, "_fija", True))
 
 
 def con_operacion_automatica(clase):
@@ -213,6 +220,7 @@ def con_operacion_automatica(clase):
         if not self._fija:
             panel.set_valor("operacion", "nuevo")  # B-431: el objetivo de un preajuste no viaja con él.
         self._ajustando = False
+        fijar_al_elegir(self, panel)
         preparar(self, panel)
         if not self._fija:     # B-471b: el perfil que ya trae el panel (único a la vista o preseleccionado) también apoya
             ajustar_auto(self, panel)
