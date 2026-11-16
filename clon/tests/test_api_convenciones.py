@@ -96,6 +96,15 @@ def test_pivote_origin_editable_y_estable(s):
     assert s.paso(paso).p["pivote"] is None
 
 
+def test_b559_pivote_en_un_punto_suelto(s):
+    """pivot_position: el pivote del clic en la ventana (Fusion), un punto que no es un vértice."""
+    c = llamar(s, "create_box", length=20, width=20, height=20)["bodies_created"][0]["id"]
+    llamar(s, "move_body", body=c, rotate=[0, 0, 90], pivot_position=[20, 20, 20])
+    assert caja(s, c)[:2] == pytest.approx((30, -10)) and caja(s, c)[3:5] == pytest.approx((50, 10))    # caja centrada
+    mal = api.llamar(s, "move_body", {"body": c, "rotate": [0, 0, 90], "pivot_position": [1, 2]})
+    assert not mal["ok"] and mal["error_kind"] == "INVALID_ARGUMENTS"
+
+
 def test_pivote_invalido_no_toca_el_documento(s):
     d = _rueda(s)
     paso = llamar(s, "move_body", body=d, rotate=[90, 0, 0])["feature"]["id"]

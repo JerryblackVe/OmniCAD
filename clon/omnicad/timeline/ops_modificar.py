@@ -121,7 +121,7 @@ class OpMover(Operacion):
     PARAMS = {"cuerpos": [], "caras": [], "bocetos": [], "curvas_boceto": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
               "ry": "0 deg", "rz": "0 deg", "pivote": None, "direccion": None, "distancia": "10 mm", "eje": None,
               "angulo": "90 deg", "origen": None, "destino": None, "x": "0 mm", "y": "0 mm", "z": "0 mm",
-              "copiar": False, "ligera": False}
+              "copiar": False, "ligera": False, "pivote_xyz": None}
     EXPRESIONES = ("dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z")
     OPCIONES = {"tipo": TIPOS_MOVIMIENTO}
 
@@ -139,6 +139,8 @@ class OpMover(Operacion):
         if t == "libre":
             if p.get("pivote"):
                 piv = ent.como_punto(_resolver(p["pivote"], estado))
+            elif p.get("pivote_xyz") is not None:   # B-559: donde se hizo clic sobre el cuerpo, como Fusion
+                piv = np.asarray(p["pivote_xyz"], float)
             else:                                   # pivote por defecto: centro de la selección
                 cajas = [f.caja() if hasattr(f, "caja") else geo.caja_envolvente(f) for f in formas]  # malla o B-rep
                 centros = [(np.array(c[0]) + np.array(c[1])) / 2 for c in cajas if c is not None]

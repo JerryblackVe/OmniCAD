@@ -2949,6 +2949,7 @@ Mueve (o copia) cuerpos, como Mover › Movimiento libre de Fusion: primero gira
   - `origin_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=point_to_point: punto de partida (vértice [x, y, z], punto de construcción o {"sketch", "point"}).
   - `destination_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=point_to_point: punto de llegada (mismas formas que origin_point).
   - `pivot_point` (texto o objeto o lista de número o null; opcional, por defecto `null`): type=free: pivote del giro (vértice [x, y, z], punto de construcción o {"sketch", "point"}); reemplaza a pivot.
+  - `pivot_position` (lista de número o null; opcional, por defecto `null`): type=free: pivote del giro en un punto suelto [x, y, z] mm (el clic sobre el cuerpo en la ventana); reemplaza a pivot.
   - `ref_body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores de direction, axis y los puntos; vacío = el único cuerpo.
   - `sketches` (lista de texto o null; opcional, por defecto `null`): bocetos enteros a mover o copiar (id o nombre); quedan derivados (sin edición a mano); no con position.
   - `sketch_curves` (lista de objeto o null; opcional, por defecto `null`): curvas sueltas a mover dentro de su boceto: lista de {"sketch": id o nombre, "curve": n}; el movimiento tiene que quedar en el plano del boceto.

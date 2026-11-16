@@ -1150,7 +1150,7 @@ class PanelComando(QFrame):
             w.currentIndexChanged.connect(lambda _i, c=campo, w=w: self._cambiar(c.clave, w.currentData()))
             return w
         if isinstance(campo, Alternar):
-            w = QToolButton(objectName="opcion_cmd", checkable=True, checked=bool(val), toolTip=campo.etiqueta,
+            w = QToolButton(objectName="alternar_cmd", checkable=True, checked=bool(val), toolTip=campo.etiqueta,
                             accessibleName=campo.etiqueta)
             w.setIcon(icono(campo.icono_boton))
             w.setIconSize(QSize(20, 20))

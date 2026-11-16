@@ -341,6 +341,25 @@ def test_la_triada_mueve_un_cuerpo(app_qt):
     assert "manipuladores" not in visor._capas
 
 
+def test_b559_la_triada_va_donde_se_hizo_clic_y_gira_ahi(app_qt):
+    """B-559, como Fusion: el clic con que se elige el cuerpo pone ahí el pivote de la tríada (no el centro de la caja,
+    que en una pieza doblada cae en el aire) y el giro libre usa ese mismo punto, también al editar el paso."""
+    from omnicad.ui.comandos.modificar import MoverCopiar
+    doc = _doc_caja()
+    hit = dict(_hit_cuerpo(doc), punto=np.array([20.0, 20.0, 20.0]))       # clic en la esquina de la caja
+    panel, _visor, _ = _panel(MoverCopiar(), doc, {"cuerpos": [hit]})
+    assert _manip(panel, "triada").centro == pytest.approx((20, 20, 20))
+    panel.set_valor("rz", "90 deg")
+    panel._calcular_previa()
+    op = panel.ultima_op
+    doc.agregar(op)
+    assert op.p["pivote_xyz"] == pytest.approx([20, 20, 20])
+    (x0, y0, _), (x1, y1, _) = g.caja_envolvente(_cuerpo(doc.estado_final).forma)
+    assert (x0, y0, x1, y1) == pytest.approx((20, 0, 40, 20))                # giró alrededor de la esquina
+    v = MoverCopiar().desde_op(op, panel.ctx)
+    assert MoverCopiar.manipuladores(MoverCopiar(), panel.ctx, v)[0].centro == pytest.approx((20, 20, 20))
+
+
 def test_p151_triada_compacta_apunta_a_la_camara(app_qt):
     """Como Fusion, cada flecha de la tríada de Mover/copiar sale hacia la cámara; arrastrar la flecha dada vuelta
     hacia afuera mueve el cuerpo hacia ese lado (valor negativo)."""

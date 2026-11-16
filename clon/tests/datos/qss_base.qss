@@ -105,6 +105,9 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 #opcion_cmd { border: 1px solid transparent; background: transparent; padding: 1px; }
 #opcion_cmd:hover { background: #3b2c20; }
 #opcion_cmd:checked { border: 1px solid #5aa9ff; background: #3b2c20; }
+#alternar_cmd { border: 1px solid #36424f; border-radius: 3px; background: transparent; padding: 2px; }
+#alternar_cmd:hover { background: #3b2c20; }
+#alternar_cmd:checked { border: 1px solid #5aa9ff; background: #3b2c20; }
 #pestanas_cmd::tab { padding: 3px 10px; }
 #pestanas_cmd::tab:selected { font-weight: 600; border-bottom: 2px solid #ff7d0a; }
 
