@@ -201,7 +201,7 @@ def test_sol32_patron_en_ruta_con_distancia_cero_y_circular_simetrico_fallan():
     llamar(s, "create_sketch", plane="XY", name="Ruta")
     llamar(s, "draw_line", start_x=0, start_y=0, end_x=100, end_y=0)
     r = falla(s, "path_pattern", bodies="Caja", path_sketch="Ruta", count=3, distance=0)
-    assert "cero" in r["mensaje"]
+    assert "Distancia 0" in r["mensaje"]
     llamar(s, "path_pattern", bodies="Caja", path_sketch="Ruta", count=3, distance=50)
     s = api.Sesion()
     llamar(s, "create_box", length=4, width=4, height=4, x=20, name="Caja")

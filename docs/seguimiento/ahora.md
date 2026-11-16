@@ -11,10 +11,10 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D): ahí B-572 y B-573 |
 | E2 | B-569 | Elegir con el «Corte» del boceto activado (B-566 integrado: 099624a) |
-| E3 | B-568 | Regresión de su B-537 en `test_tortura_menores::test_b129_*` (B-558 integrado: 3ee2f87) |
+| E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | B-571 | Rosca modelada: 15 s por cambio (tope de 5 s por Chaflán); después B-574 (velocidad contra Fusion), B-545 (su worktree) y B-567 |
+| E6 | B-574 | Velocidad contra Fusion: recalcular una cota 1,66 s (0,04), guardar 0,95 s (0,08); después B-545 (su worktree) y B-567. B-571 integrado: 189bd98 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E9 | P-158g | `pistas` de la API para los kinds que perdieron detalle y el detalle de H/V en el «?» (P-158f integrado: e01576e) |

@@ -51,7 +51,7 @@ def test_radio_invalido_se_marca_y_se_puede_corregir(lienzo, seleccion, texto):
     assert temas.color("campo_error") in campo.styleSheet()
     assert campo.toolTip() and campo.toolTip() == mensajes[-1]
     if texto in ("0", "-2"):
-        assert "mayor que cero" in campo.toolTip()
+        assert "mayor que 0" in campo.toolTip()
     QTest.keyClick(campo, Qt.Key_Return)
     assert lienzo.entrada is entrada
     assert lienzo.b.a_dict() == antes
