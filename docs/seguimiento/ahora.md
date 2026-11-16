@@ -15,7 +15,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | — | En pausa (noche del 16/11; ya vaciada); a la mañana primero B-568 (su B-537 rompió test_b129). B-558 integrado: 3ee2f87 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | B-570 | 🚨 Bloqueante (entra de noche): pieza guardada que no recalcula (proceso aparte, 97–147 s y error); con B-562 reabierto (8 + 11 rojos en Windows). Después B-545 y B-567 |
+| E6 | — | En pausa (noche); B-570 integrado (bd93066), B-562 y B-570 Parcial hasta que E11 los pruebe en Windows. A la mañana B-571, B-545 y B-567 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E9 | — | En pausa (noche del 16/11); a la mañana P-158g: `pistas` de la API para los kinds que perdieron detalle y el detalle de H/V en el «?». P-158f integrado: e01576e |
