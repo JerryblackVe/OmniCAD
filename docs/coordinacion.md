@@ -130,15 +130,8 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   pide aprobación) y mandarle el brief de la fase siguiente con `SendMessage` (anda desde un aviso automático). El
   brief tiene que ser autocontenido (el clear borra el contexto). Se borra la sesión solo al terminar el plan o si
   Gerardo lo pide. La primera sesión la inicia Gerardo con un clic en la tarjeta.
-- **Implementar en OpenCode con GLM** (`opencode/glm-5.3-flash-free`, gratis y sin retención de datos; Gerardo,
-  2026-11-15: Sol/GPT-6.1 ya no se usa): la sesión orquesta con `/orquestador-opencode` y manda corridas chicas (una
-  tarea por corrida) con **`timeout 1500`**; respaldo con `cp` antes de cada una. GLM, para piezas cortas de un
-  archivo; `nvidia/minimaxai/minimax-m3.1-flash`, para tareas agénticas de varios archivos con herramientas y para
-  revisar lo de GLM (la ruta `minimaxai/`, nunca el alias `nvidia/minimax-m3.1-flash`, que mezcla caracteres chinos).
-  Respaldo si GLM se cae: `opencode/deepseek-v4.1-flash-free`; lógica difícil: `nvidia/nemotron-3-ultra-550b`; la geometría difícil va a
-  Opus alto. No usar OpenCode Go (sin suscripción) ni `mimo` (entrena con los datos). Si una corrida se cuelga (log en
-  0 bytes, sin CPU ni archivos tocados) se corta solo ese proceso (por hora de inicio) y la pieza la hace Claude. Una
-  sesión inactiva no detecta un cuelgue: el coordinador mira el log y los archivos a los ~25 min.
+- **Implementar en OpenCode:** la sesión orquesta con `/orquestador-opencode` siguiendo el «Protocolo de OpenCode»
+  (más abajo): modelo, cupo, corridas y vigilancia.
 - **Cierre de cada fase (lo hace el coordinador, no la sesión):** `ruff check .` limpio; **suite completa** con
   `scripts/turno.py` en dos mitades (corta a los 900 s): la lista de `tests/test_*.py` ordenada, primera y segunda
   mitad; la prueba de humo si se tocó la UI. Fallos en tests lejanos son regresiones reales: devolverlos a la
@@ -152,6 +145,34 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   corrida siguiente espera; si hay que paralelizar, cada ítem va en su propio worktree: `bash scripts/worktree_item.sh
   crear <ID>` crea la rama `item/<ID>` y la carpeta `<repo>-<ID>` (usa el `clon/.venv` del repo principal) y, ya
   fusionada la rama, `bash scripts/worktree_item.sh borrar <ID>` borra las dos.
+
+## Protocolo de OpenCode (Gerardo, 2026-11-16)
+Meta: OpenCode trabaja **siempre**. Sus modelos son gratis y ahorran el cupo de Claude. Esta sección es la única regla
+de OpenCode; las demás la enlazan.
+- **Modelo según el trabajo** (los tres andan con `opencode run` en la VPS, probados el 16/11):
+
+  | Trabajo | Modelo |
+  |---|---|
+  | Pieza corta de un archivo o mecánica (filas de seguimiento, textos, doc generada, un test) | GLM: `opencode/glm-5.3-flash-free` |
+  | Varios archivos con herramientas, y revisar lo de otro modelo | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) |
+  | Respaldo de los dos | DeepSeek: `opencode/deepseek-v4.1-flash-free` |
+
+  Lógica difícil: `nvidia/nemotron-3-ultra-550b`. La geometría difícil no va a OpenCode: va a Opus alto. Prohibidos:
+  OpenCode Go (sin suscripción) y `mimo` (entrena con los datos).
+- **Modelo según el cupo**: si un modelo corta por límite, saldo o error, la pieza pasa al siguiente sin preguntar
+  (GLM → DeepSeek → MiniMax; MiniMax → GLM). Antes de cada tanda, prueba de 90 s:
+  `timeout 90 opencode run -m <modelo> "Respondé solo la palabra OK"`.
+- **Según el semanal de Claude**: en verde y amarillo, OpenCode hace lo mecánico y las piezas acotadas; en rojo (90 %)
+  trabaja solo OpenCode («Cupo semanal de Claude al 90 %»).
+- **Siempre trabajando**: la cola de OpenCode es la fila de E9 en `ahora.md` (el coordinador la llena con tandas de
+  1 o 2 tareas). Al cerrar una corrida, E9 lanza la siguiente; si la fila queda vacía, el coordinador la rellena de
+  `docs/seguimiento/` con filas de prioridad 1 chicas. En rojo las lanza el coordinador con su ~5 %.
+- **Cada corrida**: una tarea, en su worktree, con `timeout 1500` y `cp` de respaldo antes. Hasta 2 corridas a la vez
+  en la VPS, de modelos distintos; en la PC, nunca. Se comprueba con `scripts/tests_afectados.py --correr` y ruff; lo
+  de GLM o DeepSeek lo revisa MiniMax o E9. A main entra solo con el diff revisado por el coordinador.
+- **Vigilancia**: el coordinador y el chat maestro, cada 2 h, comprueban que haya una corrida activa
+  (`pgrep -af opencode`); si no la hay, la cola se rellena. Una corrida sin log, sin CPU ni archivos tocados a los
+  ~25 min se corta (solo ese proceso, por hora de inicio) y la pieza la hace Claude.
 
 ## Caza automática de errores
 - `scripts/caza/` es un programa que busca errores solo, sin modelos ni red: cadenas de operaciones con medidas
@@ -241,6 +262,6 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 
 ## Cupo semanal de Claude al 90 % (Gerardo, 2026-11-16)
 - El coordinador mide el semanal con `get_usage` al cerrar cada ítem y avisa al chat maestro en cuanto llega al 90 %.
-- Al 90 %: se pausan todas las sesiones de Claude (E1–E11). Hasta el reinicio semanal trabaja solo OpenCode: MiniMax M3.1 Flash (`nvidia/minimaxai/minimax-m3.1-flash`), y GLM o DeepSeek cuando tengan cupo.
-- Cada tarea de OpenCode va en su worktree, es chica y se comprueba sola con `scripts/tests_afectados.py --correr` y ruff. No se integra a main.
+- Al 90 %: se pausan todas las sesiones de Claude (E1–E11). Hasta el reinicio semanal trabaja solo OpenCode, según el
+  «Protocolo de OpenCode». Lo que deja en verde no se integra a main hasta la integración diaria.
 - El coordinador se guarda ~5 % del semanal: una integración por día de lo que OpenCode dejó en verde (revisando el diff), y los bloqueantes. Nada más.
