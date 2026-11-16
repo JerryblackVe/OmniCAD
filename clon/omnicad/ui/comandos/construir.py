@@ -238,7 +238,7 @@ class GeometriaConstruccion(Comando):
                 raise ErrorComando(f"Seleccioná: {et.lower()}.")
             lista += refs(v, k)
         if _ruta_eje(v) and len(lista) > 1:
-            raise ErrorComando("Un eje no se encadena: elegí solo el eje o solo aristas.")
+            raise ErrorComando("El eje no se encadena: elegí eje o aristas.")
         params = {"tipo": tipo, "refs": lista}
         for k, t, ver in VALORES:
             if k in clase.PARAMS and ver(v):

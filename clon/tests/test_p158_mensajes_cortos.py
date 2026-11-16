@@ -28,6 +28,9 @@ TOPES = {
     "nucleo/superficies.py": 0,
     "timeline/ops_superficie.py": 0,
     "ui/comandos/superficie.py": 0,
+    "ui/comandos/construir.py": 0,
+    "ui/comandos/inspeccionar.py": 0,
+    "timeline/ops_construir.py": 0,
 }
 
 
