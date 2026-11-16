@@ -360,7 +360,7 @@ def test_multitransformar_lista_agregar_reordenar_quitar_y_aceptar_sin_cambios(a
     QTest.keyClick(lista.lista, Qt.Key_Up)                              # volver a la 1.ª: la 2.ª sigue incompleta
     assert panel.valores["_sel"] == 0 and panel.valores["t_tipo"] == "rectangular" and panel.valores["t_n1"] == 3
     panel._calcular_previa()
-    assert panel.ultima_op is None and "Falta completar la transformación 2" in panel.mensaje.text()
+    assert panel.ultima_op is None and "Transformación 2" in panel.mensaje.text()
     QTest.keyClick(lista.lista, Qt.Key_Down)
     assert panel.valores["_sel"] == 1 and panel.valores["t_tipo"] == "simetria"
     panel.set_valor("t_plano", [_hit(doc, {"tipo": "plano", "id": "YZ"})])

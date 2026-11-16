@@ -120,7 +120,7 @@ def agregar_arco_tangente(b, curva, inicio, fin=None, geometria=None, construcci
     if radio is not None:
         validar_valor_cota("radio", radio)
         if barrido is None or not math.isfinite(barrido) or abs(barrido) < 1e-9 or abs(barrido) > 360 - 1e-6:
-            raise ErrorBoceto("El ángulo de barrido del arco tiene que estar entre 0 y 360 grados (sin incluirlos).")
+            raise ErrorBoceto("Barrido del arco: entre 0 y 360 grados.")
         p = b.coords(inicio)
         if direccion is None:
             _, direccion = b._salida_extremo(curva, inicio)
@@ -149,7 +149,7 @@ def agregar_circulo_puntos(b, puntos, construccion=False):
     else:
         circ = circunferencia_3_puntos(*puntos)
         if circ is None:
-            raise ErrorBoceto("Los tres puntos están alineados: no definen un círculo.")
+            raise ErrorBoceto("Tres puntos alineados: no hay círculo.")
         centro, radio = (circ[0], circ[1]), circ[2]
     return b.agregar_circulo(centro, radio, construccion)
 
@@ -236,7 +236,7 @@ def vertices_estrella(centro, radio, puntas, giro, interior):
     """Puntas (radio `radio`) y valles (radio `interior`) alternados; `giro` orienta la primera punta, en radianes."""
     validar_puntas_estrella(puntas)
     if not 0 < interior < radio:
-        raise ErrorBoceto("El radio interior de la estrella tiene que ser positivo y menor que el exterior.")
+        raise ErrorBoceto("Radio interior: menor que el exterior.")
     cx, cy = centro
     return [(cx + (radio if k % 2 == 0 else interior) * math.cos(giro + math.pi * k / puntas),
              cy + (radio if k % 2 == 0 else interior) * math.sin(giro + math.pi * k / puntas))
@@ -283,7 +283,7 @@ def redondear_estrella(b, ls, r_punta=0.0, r_valle=0.0):
                 arcos[k % 2].append(b.empalme(ls[k - 1], ls[k], radio))
             except ErrorBoceto as e:
                 que = "las puntas" if k % 2 == 0 else "los valles"
-                raise ErrorBoceto(f"El redondeo de {que} ({_numero(radio)} mm) no entra en la estrella: {e}") from e
+                raise ErrorBoceto(f"Redondeo de {que} ({_numero(radio)} mm) no entra.") from e
     for grupo in arcos:
         for a in grupo[1:]:
             for cid in [k for k, c in b.cotas.items() if c.entidades == [a]]:
@@ -375,13 +375,13 @@ VUELTAS_MAX_ESPIRAL = 199 / 8      # 200 puntos de ajuste (8 tramos por vuelta):
 def puntos_espiral(centro, inicio, vueltas, paso):
     """Puntos de ajuste de la espiral plana del editor, en mm (no una hélice 3D de Fusion)."""
     if not all(math.isfinite(v) for v in (*centro, *inicio, vueltas, paso)):
-        raise ErrorBoceto("La espiral necesita coordenadas, vueltas y paso finitos.")
+        raise ErrorBoceto("La espiral necesita números finitos.")
     r0 = math.dist(centro, inicio)
     a0 = math.atan2(inicio[1] - centro[1], inicio[0] - centro[0])
     if vueltas <= 0:
-        raise ErrorBoceto("La espiral necesita al menos una fracción de vuelta.")
+        raise ErrorBoceto("La espiral necesita vueltas mayores que 0.")
     if vueltas > VUELTAS_MAX_ESPIRAL:
-        raise ErrorBoceto(f"La espiral admite hasta {VUELTAS_MAX_ESPIRAL:g} vueltas (200 puntos de ajuste).")
+        raise ErrorBoceto(f"La espiral admite hasta {VUELTAS_MAX_ESPIRAL:g} vueltas.")
     n = max(4, int(math.ceil(8 * vueltas)))
     pts = []
     for i in range(n + 1):
@@ -399,18 +399,17 @@ def validar_valor_cota(tipo, valor):
     de 1e9 o infinito). La de desfase admite negativo: la copia pasa al otro lado. Una cota de ángulo debe estar
     estrictamente entre 0 y 180 grados (entre rectas no paralelas, como Sketch Dimension de Fusion)."""
     if tipo == "angulo" and not 0 < valor < 180:          # también NaN e infinito
-        raise ErrorBoceto(f"La cota de ángulo tiene que estar entre 0 y 180 grados, sin incluirlos (vale {valor:g}).")
+        raise ErrorBoceto(f"Cota de ángulo: entre 0 y 180 (vale {valor:g}).")
     if tipo not in COTAS_POSITIVAS:
         return
     nombre = TIPOS_COTA[tipo].lower()
     if tipo == "desfase":
         valor = abs(valor)
     if not valor > 0:                                   # también NaN
-        raise ErrorBoceto(f"La cota de {nombre} tiene que ser mayor que cero (vale {valor:g}).")
+        raise ErrorBoceto(f"Cota de {nombre}: mayor que 0 (vale {valor:g}).")
     if not valor <= MEDIDA_MAXIMA:                      # también infinito
         miles = f"{MEDIDA_MAXIMA:,.0f}".replace(",", ".")
-        raise ErrorBoceto(f"La cota de {nombre} no puede pasar de {miles} mm (1 km; vale {valor:g} mm): más grande, "
-                          "el núcleo geométrico ya no calcula bien.")
+        raise ErrorBoceto(f"Cota de {nombre}: máximo {miles} mm.")
 
 
 def _exigir_radio_positivo(radio, achica, que):
@@ -1548,11 +1547,11 @@ def _validar_opciones_texto(op):
     if op.get("alineacion", "izq") not in ("izq", "centro", "der"):
         raise ErrorBoceto("La alineación es izq, centro o der.")
     if op.get("ancla_v", "base") not in ("base", "arriba", "medio", "abajo"):
-        raise ErrorBoceto("El anclaje vertical es base, arriba, medio o abajo.")
+        raise ErrorBoceto("Anclaje vertical: base, arriba, medio, abajo.")
     if op.get("camino_lado", "izq") not in ("izq", "der"):
         raise ErrorBoceto("El lado del texto en curva es izq o der.")
     if op.get("camino_colocacion", "arriba") not in ("arriba", "abajo"):
-        raise ErrorBoceto("La colocación del texto en curva es arriba o abajo.")
+        raise ErrorBoceto("Texto en curva: arriba o abajo.")
     for k in ("camino_pos", "camino_desfase", "desfase_base", "inclinacion", "escala_h", "escala_v",
               "grosor_decoracion"):
         if k in op and not math.isfinite(float(op[k])):
@@ -1563,9 +1562,9 @@ def _validar_opciones_texto(op):
     if "inclinacion" in op and abs(float(op["inclinacion"])) > 80.0:
         raise ErrorBoceto("La inclinación va de -80 a 80 grados.")
     if "grosor_decoracion" in op and float(op["grosor_decoracion"]) < 0:
-        raise ErrorBoceto("El grosor del subrayado y el tachado no puede ser negativo.")
+        raise ErrorBoceto("Grosor de subrayado y tachado: no negativo.")
     if op.get("capitalizacion", "ninguno") not in ("ninguno", "mayusculas", "minusculas", "titulo", "versalitas"):
-        raise ErrorBoceto("La capitalización es ninguno, mayusculas, minusculas, titulo o versalitas.")
+        raise ErrorBoceto("Capitalización: opción no válida.")
     for k in ("subrayado", "tachado"):
         if op.get(k, "ninguno") not in ("ninguno", "simple", "doble"):
             raise ErrorBoceto(f"El {k} es ninguno, simple o doble.")
@@ -1576,7 +1575,7 @@ def _validar_opciones_texto(op):
         except (TypeError, ValueError):
             valido = False
         if not valido:
-            raise ErrorBoceto("Los ajustes de kerning son pares [posición desde 0, mm].")
+            raise ErrorBoceto("Kerning: cada par [posición, mm].")
 
 
 # ---------------------------------------------------------------- boceto
@@ -1633,7 +1632,7 @@ class Boceto:
     # ------------------------------------------------------------ creación
     def agregar_punto(self, x, y, proyectado=False):
         if not (math.isfinite(x) and math.isfinite(y)):     # con NaN o infinito, OCC no termina de partir la cara
-            raise ErrorBoceto("Las coordenadas de un punto tienen que ser números finitos.")
+            raise ErrorBoceto("Las coordenadas del punto deben ser finitas.")
         p = Punto(self._nuevo_id(), x, y, proyectado)
         self.puntos[p.id] = p
         return p.id
@@ -1660,7 +1659,7 @@ class Boceto:
         """Rectángulo por dos esquinas opuestas → 4 líneas + 2 horizontales + 2 verticales."""
         (x1, y1), (x2, y2) = a, b
         if abs(x2 - x1) < 1e-9 or abs(y2 - y1) < 1e-9:
-            raise ErrorBoceto("El rectángulo no puede tener ancho o alto cero.")
+            raise ErrorBoceto("El rectángulo no puede tener lado cero.")
         esquinas = [self.agregar_punto(x1, y1), self.agregar_punto(x2, y1),
                     self.agregar_punto(x2, y2), self.agregar_punto(x1, y2)]
         lineas = [self.agregar_linea(esquinas[i], esquinas[(i + 1) % 4], construccion) for i in range(4)]
@@ -1685,7 +1684,7 @@ class Boceto:
         pf = self.coords(fin) if isinstance(fin, int) else fin
         c = circunferencia_3_puntos(pi, medio, pf)
         if c is None:
-            raise ErrorBoceto("Los tres puntos están alineados: no definen un arco.")
+            raise ErrorBoceto("Tres puntos alineados: no hay arco.")
         cx, cy, _ = c
         if not _antihorario_por(pi, medio, pf, (cx, cy)):
             inicio, fin = fin, inicio
@@ -1726,7 +1725,7 @@ class Boceto:
             raise ErrorBoceto("La spline necesita más puntos.")
         primero = self.coords(ids[0])
         if all(math.dist(primero, self.coords(i)) < 1e-9 for i in ids[1:]):
-            raise ErrorBoceto("Los puntos de la spline coinciden: no definen una curva.")
+            raise ErrorBoceto("Puntos de spline iguales: no hay curva.")
         if modo not in ("ajuste", "control"):
             raise ErrorBoceto(f"Tipo de spline desconocido: {modo}")
         if modo == "control":
@@ -1742,7 +1741,7 @@ class Boceto:
         if math.dist(self.coords(a), self.coords(b)) < 1e-9:
             raise ErrorBoceto("Los dos extremos de la cónica coinciden.")
         if abs(distancia_punto_recta(self.coords(v), self.coords(a), self.coords(b))) < 1e-9:
-            raise ErrorBoceto("El vértice no puede estar alineado con los extremos.")
+            raise ErrorBoceto("Vértice alineado con los extremos.")
         return self._agregar_curva(Conica(self._nuevo_id(), a, v, b, rho, construccion))
 
     def agregar_texto(self, posicion, texto, altura=5.0, angulo=0.0, fuente="Arial", negrita=False, cursiva=False,
@@ -1768,7 +1767,7 @@ class Boceto:
             return
         c = self.curvas.get(camino)
         if c is None or isinstance(c, Texto):
-            raise ErrorBoceto(f"El camino del texto tiene que ser una curva del boceto (no un texto): {camino}.")
+            raise ErrorBoceto("Camino del texto: una curva, no un texto.")
 
     def agregar_ranura(self, tipo, puntos, ancho, construccion=False):
         """Ranuras de Fusion (SKT-CREATE-SLOTS), armadas con líneas y arcos tangentes:
@@ -1802,7 +1801,7 @@ class Boceto:
             a, b, q = coords
             circ = circunferencia_3_puntos(a, q, b)
             if circ is None:
-                raise ErrorBoceto("Los tres puntos están alineados: no definen un arco.")
+                raise ErrorBoceto("Tres puntos alineados: no hay arco.")
             centro = (circ[0], circ[1])
             if not _antihorario_por(a, q, b, centro):
                 a, b = b, a
@@ -1810,13 +1809,12 @@ class Boceto:
             centro, a, b2 = coords
             R = math.dist(centro, a)
             if math.dist(centro, b2) < 1e-9:
-                raise ErrorBoceto("El tercer punto de la ranura de arco no puede coincidir con el centro.")
+                raise ErrorBoceto("El tercer punto no puede ser el centro.")
             ang = math.atan2(b2[1] - centro[1], b2[0] - centro[0])
             b = (centro[0] + R * math.cos(ang), centro[1] + R * math.sin(ang))
             a0 = math.atan2(a[1] - centro[1], a[0] - centro[0])
             if math.dist(a, b) < 1e-9:
-                raise ErrorBoceto("El barrido de la ranura de arco es cero: el tercer punto está en la dirección del "
-                                  "extremo inicial.")
+                raise ErrorBoceto("El barrido es 0: el tercer punto no gira.")
             if _barrido(a0, ang) > math.pi:
                 a, b = b, a
         else:
@@ -1845,7 +1843,7 @@ class Boceto:
         C = self.agregar_punto(*centro)
         R = math.dist(centro, a)
         if R <= w + 1e-9:
-            raise ErrorBoceto("El ancho de la ranura es mayor que el radio del arco.")
+            raise ErrorBoceto("Ranura: ancho mayor que el radio del arco.")
         pa, pb = self.agregar_punto(*a), self.agregar_punto(*b)
 
         def radial(q, r):
@@ -1915,10 +1913,10 @@ class Boceto:
                 if mejor is None or puntaje < mejor[0]:
                     mejor = (puntaje, (cx, cy), rr)
             if mejor is None:
-                raise ErrorBoceto("No hay un círculo tangente a esas tres líneas.")
+                raise ErrorBoceto("No hay círculo tangente a esas 3 líneas.")
             _, centro, r = mejor
         if r <= 1e-9:
-            raise ErrorBoceto("Ubicá el círculo dentro del ángulo que forman las líneas.")
+            raise ErrorBoceto("Ubicá el círculo dentro del ángulo.")
         cid = self.agregar_circulo((float(centro[0]), float(centro[1])), float(r), construccion)
         for k in lineas:
             self.agregar_restriccion("tangente", [k, cid])
@@ -2244,8 +2242,7 @@ class Boceto:
         símbolo y la selección siguen siendo los mismos). No resuelve: si choca con las demás lo ve el solver."""
         if tipo not in self.tipos_compatibles(rid):
             r = self.restricciones[rid]
-            raise ErrorBoceto(f"La restricción «{TIPOS_RESTRICCION[r.tipo]}» no se puede cambiar por «"
-                              f"{TIPOS_RESTRICCION.get(tipo, tipo)}» sobre esas entidades.")
+            raise ErrorBoceto(f"No se puede cambiar «{TIPOS_RESTRICCION[r.tipo]}» por «{TIPOS_RESTRICCION.get(tipo, tipo)}».")
         self.restricciones[rid] = Restriccion(rid, tipo, self.restricciones[rid].entidades)
         return rid
 
@@ -2279,7 +2276,7 @@ class Boceto:
         if tipo == "distancia" and [self.tipo_de(e) for e in entidades] == ["linea", "linea"]:
             d1, d2 = (self._direccion(e) for e in entidades)
             if abs(d1[0] * d2[1] - d1[1] * d2[0]) >= 1e-6:  # mismo umbral que la herramienta Cota de la ventana
-                raise ErrorBoceto("Las líneas no son paralelas. Usá una cota de ángulo.")
+                raise ErrorBoceto("No son paralelas: usá cota de ángulo.")
         if tipo == "angulo" and not referencia:
             try:
                 valor = float(expresion.replace(",", "."))
@@ -2289,11 +2286,11 @@ class Boceto:
                 validar_valor_cota(tipo, valor)
         modo = datos.pop("modo", "centro")
         if modo not in ("centro", "tangente"):
-            raise ErrorBoceto(f"Modo de cota desconocido: {modo} (centro o tangente).")
+            raise ErrorBoceto(f"Modo de cota desconocido: {modo}.")
         if self.admite_modo(tipo, entidades):
             datos["modo"] = modo
         elif modo == "tangente":
-            raise ErrorBoceto("El modo tangente solo vale en una cota de distancia con un círculo o un arco.")
+            raise ErrorBoceto("Tangente solo vale en cota de distancia.")
         if tipo in ("distancia_h", "distancia_v") and "signo" not in datos:
             (x1, y1), (x2, y2) = self._extremos_cota(entidades)
             d = (x2 - x1) if tipo == "distancia_h" else (y2 - y1)
@@ -2324,7 +2321,7 @@ class Boceto:
                 k.expresion = repr(self.medir(k))
         if tipo is not None:
             if not {tipo, k.tipo} <= {"radio", "diametro"}:
-                raise ErrorBoceto("Solo una cota de radio pasa a diámetro (o al revés).")
+                raise ErrorBoceto("Solo radio pasa a diámetro (o al revés).")
             if tipo != k.tipo:
                 try:
                     v = float(k.expresion.replace(",", "."))      # como en escalar: el editor admite "6,5"
@@ -2334,9 +2331,9 @@ class Boceto:
                 k.tipo = tipo
         if modo is not None:
             if modo not in ("centro", "tangente"):
-                raise ErrorBoceto(f"Modo de cota desconocido: {modo} (centro o tangente).")
+                raise ErrorBoceto(f"Modo de cota desconocido: {modo}.")
             if not self.admite_modo(k.tipo, k.entidades):
-                raise ErrorBoceto("Centro o tangente solo vale en una cota de distancia con un círculo o un arco.")
+                raise ErrorBoceto("Centro/tangente: solo en cota de distancia.")
             k.datos["modo"] = modo
             if k.referencia:
                 k.expresion = repr(self.medir(k))
@@ -2345,7 +2342,7 @@ class Boceto:
     def eliminar(self, id):
         """Borra una entidad, restricción o cota, y en cascada lo que dependa de ella."""
         if id <= 0:
-            raise ErrorBoceto("El origen y los ejes del boceto son referencias fijas: no se pueden borrar.")
+            raise ErrorBoceto("El origen y los ejes no se pueden borrar.")
         self.exigir_desbloqueadas([id], "borrarla")
         if id in self.restricciones:
             del self.restricciones[id]
@@ -2492,7 +2489,7 @@ class Boceto:
             curvas = [i] if i in self.curvas else [c.id for c in self.curvas.values() if i in c.puntos()]
             for cid in curvas:
                 if self.curva_bloqueada(cid):
-                    raise ErrorBoceto(f"La curva {cid} está bloqueada: desbloqueala antes de {verbo}.")
+                    raise ErrorBoceto(f"Curva {cid}: desbloqueala para {verbo}.")
 
     def puntos_de(self, ids):
         """Puntos usados por las curvas de `ids` más los puntos sueltos de `ids`."""
@@ -2825,12 +2822,12 @@ class Boceto:
         while len(usados) < len(lados):
             sig = next((i for i, (p, q) in enumerate(lados) if i not in usados and orden[-1] in (p, q)), None)
             if sig is None:
-                raise ErrorBoceto("Las líneas del polígono deben formar una cadena cerrada.")
+                raise ErrorBoceto("Las líneas del polígono no forman cadena.")
             p, q = lados[sig]
             orden.append(q if p == orden[-1] else p)
             usados.add(sig)
         if orden[-1] != orden[0]:
-            raise ErrorBoceto("Las líneas del polígono deben formar una cadena cerrada.")
+            raise ErrorBoceto("Polígono: las líneas deben cerrar.")
         return orden[:-1]
 
     # ------------------------------------------------------------ validación
@@ -2874,7 +2871,7 @@ class Boceto:
             raise ErrorBoceto(f"La restricción '{TIPOS_RESTRICCION[tipo]}' no aplica a: {', '.join(t) or 'nada'}.")
         if tipo == "igual" and t == ["punto"] * 4:
             if entidades[0] == entidades[1] or entidades[2] == entidades[3]:
-                raise ErrorBoceto("La igualdad necesita dos segmentos con extremos distintos.")
+                raise ErrorBoceto("La igualdad pide dos segmentos distintos.")
         elif len(set(entidades)) != len(entidades):
             raise ErrorBoceto("Seleccioná entidades distintas.")
         if tipo == "tangente" and "linea" in t:
@@ -2883,7 +2880,7 @@ class Boceto:
             if set(self.curvas[l].extremos()) <= sobre:          # B-563: una cuerda no puede ser tangente (colapsaba)
                 raise ErrorBoceto("Tangente: soltá un extremo de la línea.")
         if tipo == "curvatura" and self.extremo_comun(*entidades) is None:
-            raise ErrorBoceto("La curvatura se aplica a dos curvas encadenadas (que compartan un extremo).")
+            raise ErrorBoceto("Curvatura: dos curvas con un extremo común.")
         if tipo == "poligono":
             self.vertices_cadena(entidades)
 
@@ -2909,9 +2906,9 @@ class Boceto:
         if not validas[tipo]():
             raise ErrorBoceto(f"La cota '{TIPOS_COTA[tipo]}' no aplica a: {', '.join(t) or 'nada'}.")
         if tipo == "angulo" and entidades[0] == entidades[1]:
-            raise ErrorBoceto("Una cota de ángulo necesita dos líneas distintas.")
+            raise ErrorBoceto("Cota de ángulo: dos líneas distintas.")
         if tipo == "distancia" and len(entidades) == 2 and entidades[0] == entidades[1]:
-            raise ErrorBoceto("Una cota de distancia necesita dos entidades distintas.")
+            raise ErrorBoceto("Cota de distancia: dos entidades distintas.")
 
     # ------------------------------------------------------------ geometría para perfiles y dibujo
     def primitivas(self, cid):
@@ -3108,9 +3105,9 @@ class Boceto:
         if c is None:
             raise ErrorBoceto("Hacé clic en una curva.")
         if isinstance(c, Texto):
-            raise ErrorBoceto("Un texto no se puede recortar ni partir: desglosalo primero.")
+            raise ErrorBoceto("Un texto no se puede recortar ni partir.")
         if c.proyectada:
-            raise ErrorBoceto("La geometría proyectada no se modifica (es una referencia fija).")
+            raise ErrorBoceto("La geometría proyectada no se modifica.")
         return c
 
     # ------------------------------------------------------------ MODIFICAR: recortar, alargar, partir
@@ -3178,7 +3175,7 @@ class Boceto:
         despues = [k for k in cortes if k[0] > tc]
         if per:
             if len(cortes) < 2:
-                raise ErrorBoceto("Para partir una curva cerrada hacen falta dos intersecciones.")
+                raise ErrorBoceto("Curva cerrada: hacen falta dos cortes.")
             lo = antes[-1] if antes else cortes[-1]
             hi = despues[0] if despues else cortes[0]
             otro = self._tramo(cid, prim, lo, hi, True, nuevos, viejos)
@@ -3187,7 +3184,7 @@ class Boceto:
         else:
             lo, hi = (antes[-1] if antes else None), (despues[0] if despues else None)
             if lo is None and hi is None:
-                raise ErrorBoceto("La curva no cruza con nada: no hay dónde partirla.")
+                raise ErrorBoceto("La curva no cruza nada: no se puede partir.")
             self._sin_cotas_de_largo(cid, self.curvas[cid].extremos())
             ids = []
             if hi is not None:
@@ -3217,12 +3214,12 @@ class Boceto:
         pasa a puntos de control. Un arco circular o elíptico continúa sobre su curva portadora."""
         c = self._curva_modificable(cid)
         if not isinstance(c, (Linea, Arco, ArcoElipse, Spline)) or not c.extremos():
-            raise ErrorBoceto("Alargar funciona con líneas, arcos circulares o elípticos y splines abiertas.")
+            raise ErrorBoceto("Alargar: líneas, arcos y splines abiertas.")
         ini, fin = c.extremos()
         lado_fin = math.dist(self.coords(fin), punto) <= math.dist(self.coords(ini), punto)
         extremo = fin if lado_fin else ini
         if extremo in self.puntos_fijos():      # Fusion: lo fijo se suelta antes de editarlo (B-237)
-            raise ErrorBoceto("El extremo es fijo: quitale «Fijo» antes de alargarlo.")
+            raise ErrorBoceto("Extremo fijo: quitá «Fijo» para alargar.")
         xs = [p.x for p in self.puntos.values()]
         ys = [p.y for p in self.puntos.values()]
         grande = 10 * (max(xs) - min(xs) + max(ys) - min(ys)) + 1000
@@ -3232,7 +3229,7 @@ class Boceto:
                 a, b = b, a
             L = math.dist(a, b)
             if L < 1e-9:
-                raise ErrorBoceto("No se puede alargar una línea de longitud cero.")
+                raise ErrorBoceto("No se puede alargar una línea de largo 0.")
             d = ((b[0] - a[0]) / L, (b[1] - a[1]) / L)
             rayo = ("linea", None, b, (b[0] + d[0] * grande, b[1] + d[1] * grande))
         else:
@@ -3242,7 +3239,7 @@ class Boceto:
                 b, tangente = evaluar_primitiva(prim, t1 if lado_fin else t0, 1)
                 rapidez = math.hypot(*tangente)
                 if rapidez < 1e-12:
-                    raise ErrorBoceto("La spline no tiene una tangente definida en ese extremo.")
+                    raise ErrorBoceto("La spline no tiene tangente en ese extremo.")
                 signo = 1 if lado_fin else -1
                 d = (signo * tangente[0] / rapidez, signo * tangente[1] / rapidez)
                 rayo = ("linea", None, b, (b[0] + d[0] * grande, b[1] + d[1] * grande))
@@ -3257,7 +3254,7 @@ class Boceto:
             if mejor is None or clave < mejor[0]:
                 mejor = (clave, xy, oid)
         if mejor is None:
-            raise ErrorBoceto("No hay ninguna curva para alcanzar en esa dirección.")
+            raise ErrorBoceto("No hay curva para alcanzar en esa dirección.")
         _, xy, oid = mejor
         nuevos, viejos = [], []
         otras = [k for k in self.curvas.values() if k.id != cid and extremo in k.puntos()]
@@ -3306,14 +3303,14 @@ class Boceto:
             raise ErrorBoceto(f"No existe el vértice {pid} en el boceto.")
         curvas = sorted(c.id for c in self.curvas.values() if pid in (c.extremos() or ()))
         if len(curvas) != 2:
-            raise ErrorBoceto("El vértice debe ser extremo de exactamente dos curvas.")
+            raise ErrorBoceto("El vértice debe unir exactamente dos curvas.")
         if any(self.curvas[k].tipo not in tipos for k in curvas):
             raise ErrorBoceto("El vértice debe unir dos líneas." if tipos == ("linea",) else
                               "El vértice debe unir dos curvas de tipo línea o arco circular.")
         for k in curvas:
             self._curva_modificable(k)
             if len(set(self.curvas[k].extremos())) != 2:
-                raise ErrorBoceto("El vértice debe unir dos curvas abiertas con extremos distintos.")
+                raise ErrorBoceto("El vértice une dos curvas abiertas distintas.")
         lados = [self.coords(next(p for p in self.curvas[k].extremos() if p != pid)) for k in curvas]
         return curvas, lados
 
@@ -3325,7 +3322,7 @@ class Boceto:
         d2 = (b2[0] - a2[0], b2[1] - a2[1])
         X = recta_interseccion(a1, d1, a2, d2)
         if X is None:
-            raise ErrorBoceto("Las líneas son paralelas: no forman una esquina.")
+            raise ErrorBoceto("Líneas paralelas: no forman esquina.")
         salida = []
         for lid, (a, b), pick in ((l1, (a1, b1), pick1), (l2, (a2, b2), pick2)):
             ln = self.curvas[lid]
@@ -3409,7 +3406,7 @@ class Boceto:
             if tang < 1e-4:            # B-510: casi colineales o radio ínfimo, el arco quedaría de largo ~0 (Fusion: «Failed to create fillet»)
                 raise ErrorBoceto("El empalme no entra: radio muy chico.")
             if tang >= lados[0][3] - 1e-9 or tang >= lados[1][3] - 1e-9:
-                raise ErrorBoceto("El radio es demasiado grande para esas líneas.")
+                raise ErrorBoceto("El radio es muy grande para esas líneas.")
             t1 = (X[0] + tang * d1[0], X[1] + tang * d1[1])
             t2 = (X[0] + tang * d2[0], X[1] + tang * d2[1])
             bis = (d1[0] + d2[0], d1[1] + d2[1])
@@ -3433,7 +3430,7 @@ class Boceto:
         a1, b1 = self._extremos_linea(c1)
         a2, b2 = self._extremos_linea(c2)
         if min(math.dist(a1, b1), math.dist(a2, b2)) < 1e-9:
-            raise ErrorBoceto("El empalme necesita dos líneas de longitud positiva.")
+            raise ErrorBoceto("Empalme: dos líneas de largo positivo.")
         d = self._direccion(c1)
         if pick1 is not None:
             invertir = math.dist(pick1, a1) > math.dist(pick1, b1)
@@ -3446,13 +3443,13 @@ class Boceto:
             d = (-d[0], -d[1])
         distancia = (a2[0] - a1[0]) * -d[1] + (a2[1] - a1[1]) * d[0]
         if abs(distancia) < 1e-9:
-            raise ErrorBoceto("Las líneas son colineales: no hay separación para un empalme.")
+            raise ErrorBoceto("Líneas sobre la misma recta: no hay hueco.")
         lados = []
         for cid, pick in ((c1, pick1), (c2, pick2)):
             ids = sorted(self.curvas[cid].extremos(), key=lambda pid: (
                 (self.coords(pid)[0] - a1[0]) * d[0] + (self.coords(pid)[1] - a1[1]) * d[1]))
             if pick is not None and math.dist(pick, self.coords(ids[0])) > math.dist(pick, self.coords(ids[1])):
-                raise ErrorBoceto("Elegí el mismo lado a conservar en las dos líneas paralelas.")
+                raise ErrorBoceto("Elegí el mismo lado en las dos líneas.")
             lados.append(ids)
         cierre = max((self.coords(ids[1])[0] - a1[0]) * d[0] +
                      (self.coords(ids[1])[1] - a1[1]) * d[1] for ids in lados)
@@ -3489,7 +3486,7 @@ class Boceto:
             if prim[0] in CIRCULARES:
                 c, R = prim[2], prim[3]
                 return prim, [("circ", c, R + r)] + ([("circ", c, abs(R - r))] if abs(R - r) > 1e-9 else [])
-            raise ErrorBoceto("El empalme funciona con líneas, arcos y círculos.")
+            raise ErrorBoceto("Empalme: líneas, arcos y círculos.")
         p1, o1 = portadoras(c1)
         p2, o2 = portadoras(c2)
         candidatos = []
@@ -3527,7 +3524,7 @@ class Boceto:
             if mejor is None or puntaje < mejor[0]:
                 mejor = (puntaje, F, pies)
         if mejor is None:
-            raise ErrorBoceto("No entra un empalme de ese radio entre esas curvas.")
+            raise ErrorBoceto("No entra un empalme de ese radio.")
         _, F, pies = mejor
         if math.dist(pies[0][0], pies[1][0]) < 1e-4:      # B-510: casi tangentes, el arco quedaría de largo ~0
             raise ErrorBoceto("El empalme no entra: radio muy chico.")
@@ -3577,7 +3574,7 @@ class Boceto:
             distancia2 = distancia * math.sin(alfa) / math.sin(theta + alfa)
         e1, e2 = distancia, (distancia if distancia2 is None else distancia2)
         if e1 >= lados[0][3] - 1e-9 or e2 >= lados[1][3] - 1e-9:
-            raise ErrorBoceto("La distancia es demasiado grande para esas líneas.")
+            raise ErrorBoceto("La distancia es demasiado grande.")
         t1 = (X[0] + e1 * d1[0], X[1] + e1 * d1[1])
         t2 = (X[0] + e2 * d2[0], X[1] + e2 * d2[1])
         pt1, pt2, virtual = self._recortar_esquina(l1, l2, X, lados, t1, t2)
@@ -3631,7 +3628,7 @@ class Boceto:
         nuevos, avisos, primera = [], [], None
         for valor, inv, texto in pasos:
             if not math.isfinite(valor):
-                raise ErrorBoceto("La distancia de desfase no es un número válido.")
+                raise ErrorBoceto("La distancia de desfase no es válida.")
             if topologia:
                 tope = self.desfase_con_topologia(cid, valor, punto_lado, inv, cadena, elipse, entre)
                 if tope < valor:
@@ -3680,9 +3677,9 @@ class Boceto:
         negativa. `igual_a`: id de otra cota de desfase a la que queda ligada la nueva (el Simétrico). Rechaza,
         diciendo por qué, lo que deja un radio o un segmento en cero o al revés. Devuelve los ids nuevos."""
         if not math.isfinite(distancia):
-            raise ErrorBoceto("La distancia de desfase no es un número válido.")
+            raise ErrorBoceto("La distancia de desfase no es válida.")
         if distancia == 0:
-            raise ErrorBoceto("La distancia de desfase es cero: no hay nada que desfasar.")
+            raise ErrorBoceto("La distancia de desfase es cero.")
         validar_valor_cota("desfase", abs(distancia))
         if distancia < 0:
             distancia, invertir = -distancia, not invertir
@@ -3702,7 +3699,7 @@ class Boceto:
             self.agregar_cota("desfase", [cid, nuevo], expresion or _numero(distancia), datos)
             return [nuevo]
         if any(not isinstance(self.curvas[k], (Linea, Arco)) for k, _ in cadena):
-            raise ErrorBoceto("El desfase funciona con cadenas de líneas y arcos, círculos, elipses y splines.")
+            raise ErrorBoceto("El desfase funciona con curvas del boceto.")
         elems = []
         for k, inv in cadena:
             c = self.curvas[k]
@@ -3774,8 +3771,7 @@ class Boceto:
                 direccion = portadoras[i][0][2]  # unitaria, en el sentido de recorrido original
                 largo = (b2[0] - a2[0]) * direccion[0] + (b2[1] - a2[1]) * direccion[1]
                 if largo <= 1e-9:
-                    raise ErrorBoceto(f"Con {distancia:g} mm hacia ese lado, un segmento de la cadena queda con largo "
-                                      "cero o al revés: usá una distancia menor.")
+                    raise ErrorBoceto(f"Con {distancia:g} mm, un segmento queda en cero.")
         pids = [self.agregar_punto(*q) for q in esquinas]
         if cerrada:
             extremos = [(pids[i - 1], pids[i]) for i in range(m)]
@@ -3826,7 +3822,7 @@ class Boceto:
             medio = (bajo + alto) / 2
             bajo, alto = (medio, alto) if sirve(medio) else (bajo, medio)
         if bajo <= MEDIDA_MINIMA:
-            raise ErrorBoceto("Ninguna distancia de desfase conserva la topología de esa curva.")
+            raise ErrorBoceto("Ningún desfase deja la curva entera.")
         return bajo * 0.999
 
     def _desfase_libre(self, cid, d, punto_lado, invertir, muestras=48, expresion=None, datos=None):
@@ -3858,7 +3854,7 @@ class Boceto:
         nuevos = [(C[0] + s * d * n[0], C[1] + s * d * n[1]) for C, n in pts]
         densos = [C for C, _n in normales(4 * muestras)]
         if any(min(math.dist(q, C) for C in densos) < 0.9 * d for q in nuevos):
-            raise ErrorBoceto("El desfase es mayor que el radio de curvatura de la curva: se pliega sobre sí mismo.")
+            raise ErrorBoceto("Desfase mayor que el radio: se pliega.")
         nuevo = self.agregar_spline(nuevos, "ajuste", 3, cerrada, construccion=c.construccion)
         # B-231: cada punto de ajuste queda en su parámetro de la madre (clave texto: sobrevive al JSON). Absoluto y no
         # fracción: recortar la madre conserva su parametrización.
@@ -3908,7 +3904,7 @@ class Boceto:
                   if r.tipo == "desfase" and semilla & set(r.entidades)}
         viejas = [r for r in self.restricciones.values() if r.tipo == "desfase" and r.datos.get("grupo") in grupos]
         if not viejas and not cotas:
-            raise ErrorBoceto(f"La entidad {cid} no forma parte de un desfase.")
+            raise ErrorBoceto(f"La entidad {cid} no es un desfase.")
         pares = {frozenset(k.entidades) for k in cotas}
         for r in viejas:
             if len(r.entidades) == 4:
@@ -3929,7 +3925,7 @@ class Boceto:
         Lo pegado es geometría normal (la proyectada deja de ser fija). Devuelve los ids de las curvas y puntos nuevos."""
         ids = [i for i in ids if i > 0 and (i in origen.curvas or i in origen.puntos)]
         if not ids:
-            raise ErrorBoceto("Seleccioná la geometría a copiar (el origen y los ejes no se copian).")
+            raise ErrorBoceto("Seleccioná la geometría a copiar.")
         mapa = {p: self.agregar_punto(origen.puntos[p].x + dx, origen.puntos[p].y + dy)
                 for p in origen._con_vertices_virtuales(ids, origen.puntos_de(ids))}
         mapa_c = {}
@@ -4007,7 +4003,7 @@ class Boceto:
             raise ErrorBoceto("Desbloqueá el objeto antes de moverlo.")
         self.exigir_desbloqueadas(ids, "moverla")
         if any(p in fijos for p in self.puntos_de(ids)):
-            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección: no se puede mover.")
+            raise ErrorBoceto("Hay geometría fija: no se puede mover.")
 
     def transformar(self, ids, dx=0.0, dy=0.0, angulo=0.0, centro=(0.0, 0.0), copiar=False):
         """Mover/copiar (M): traslada (dx, dy) y gira `angulo` grados alrededor de `centro`. Con `copiar`
@@ -4177,7 +4173,7 @@ class Boceto:
         self.exigir_desbloqueadas(ids, "espejarla")
         pts = self.puntos_de(ids)
         if any(p in self.puntos_fijos() for p in pts):
-            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección: no se puede espejar.")
+            raise ErrorBoceto("Hay geometría fija: no se puede espejar.")
         self._transformar_puntos(pts, (lambda q: (2 * cx - q[0], q[1])) if horizontal else
                                  (lambda q: (q[0], 2 * cy - q[1])))
         for i in ids:
@@ -4198,7 +4194,7 @@ class Boceto:
             raise ErrorBoceto("Desbloqueá el objeto antes de escalarlo.")
         self.exigir_desbloqueadas(ids, "escalarla")
         if any(p in fijos and math.dist(self.coords(p), base) > 1e-9 for p in self.puntos_de(ids)):
-            raise ErrorBoceto("Hay geometría fija (o proyectada) en la selección que no está en la base: no se puede escalar.")
+            raise ErrorBoceto("Geometría fija fuera de base: no se escala.")
 
     def escalar(self, ids, base, factor):
         """Escala del boceto (SKT-SCALE): agranda o achica la geometría desde el punto base; las cotas
@@ -4270,7 +4266,7 @@ class Boceto:
             raise ErrorBoceto("Seleccioná la geometría a reflejar.")
         a, b = self._extremos_linea(eje)
         if math.dist(a, b) < MEDIDA_MINIMA:
-            raise ErrorBoceto("La línea de simetría no puede tener largo cero.")
+            raise ErrorBoceto("Línea de simetría: no puede tener largo 0.")
 
         def reflejo(q):
             dx, dy = b[0] - a[0], b[1] - a[1]
@@ -4299,8 +4295,7 @@ class Boceto:
             return False         # shortcut: una spline o una cónica que ya es simétrica se copia encima; si molesta, comparar la curva con su reflejo
         ids = [i for i in ids if not encimada(i)]
         if not ids:
-            raise ErrorBoceto("Lo elegido ya está sobre la línea de simetría (o es simétrico respecto de ella): "
-                              "no hay nada que reflejar.")
+            raise ErrorBoceto("Ya está sobre el eje: nada que reflejar.")
         mapa = {}
         for p in self.puntos_de(ids):
             q = self.coords(p)
@@ -4369,7 +4364,7 @@ class Boceto:
         dir2 = self._dir_patron(p["dir2"], p.get("linea2"))
         largo1, largo2 = math.hypot(*dir1), math.hypot(*dir2)
         if largo1 < 1e-9 or largo2 < 1e-9:
-            raise ErrorBoceto("La dirección del patrón no puede ser una línea de largo cero.")
+            raise ErrorBoceto("La dirección del patrón es de largo 0.")
 
         def paso(n, d):
             if n <= 1:
@@ -4415,32 +4410,32 @@ class Boceto:
         distancia no se usa (0 vale). Lo que tendría que ser otro valor lo dice el mensaje."""
         def entero(n, que, minimo):
             if isinstance(n, bool) or not isinstance(n, (int, np.integer)) or n < minimo:
-                raise ErrorBoceto(f"{que} tiene que ser un entero de {minimo} en adelante (llegó {n!r}).")
+                raise ErrorBoceto(f"{que}: entero desde {minimo} (llegó {n!r}).")
 
         def finito(x, que):
             if isinstance(x, bool) or not isinstance(x, (int, float, np.integer, np.floating)) or not math.isfinite(x):
-                raise ErrorBoceto(f"{que} tiene que ser un número finito (llegó {x!r}).")
+                raise ErrorBoceto(f"{que}: número finito (llegó {x!r}).")
         if tipo == "rectangular":
             n1, n2 = p["cantidad1"], p["cantidad2"]
             entero(n1, "La cantidad en la dirección 1", 1)
             entero(n2, "La cantidad en la dirección 2", 1)
             if n1 * n2 < 2:
-                raise ErrorBoceto("El patrón necesita al menos dos ejemplares (cantidad 1 × cantidad 2 ≥ 2).")
+                raise ErrorBoceto("El patrón necesita al menos 2 ejemplares.")
             if n1 * n2 - 1 > MAX_COPIAS_PATRON:
                 raise ErrorBoceto(f"Patrón: máx. {MAX_COPIAS_PATRON} copias (pediste {n1 * n2 - 1}).")
             if p["modo"] not in ("extension", "espaciado"):
-                raise ErrorBoceto("La distancia es la total (extensión) o la de cada paso (espaciado).")
+                raise ErrorBoceto("Distancia: total o de cada paso.")
             for n, d, eje in ((n1, p["distancia1"], 1), (n2, p["distancia2"], 2)):
                 finito(d, f"La distancia en la dirección {eje}")
                 if n > 1 and d == 0:
-                    raise ErrorBoceto(f"La distancia en la dirección {eje} es 0: las copias quedarían una encima de otra.")
+                    raise ErrorBoceto(f"Distancia {eje} = 0: las copias se pisan.")
             vectores = [p["dir1"], p["dir2"]]
             for k, (v, linea) in enumerate(zip(vectores, (p.get("linea1"), p.get("linea2")), strict=True), 1):
                 if linea is None:
                     finito(v[0], f"La dirección {k}")
                     finito(v[1], f"La dirección {k}")
                     if math.hypot(*v) < 1e-9:
-                        raise ErrorBoceto(f"La dirección {k} del patrón no puede tener largo cero.")
+                        raise ErrorBoceto(f"Dirección {k} del patrón: largo 0.")
             if n1 > 1 and n2 > 1 and p.get("linea1") is None and p.get("linea2") is None:
                 (a, b), (c, d) = p["dir1"], p["dir2"]
                 if abs(a * d - b * c) < 1e-9 * math.hypot(a, b) * math.hypot(c, d):
@@ -4452,7 +4447,7 @@ class Boceto:
                 raise ErrorBoceto(f"Patrón: máx. {MAX_COPIAS_PATRON} copias (pediste {n - 1}).")
             finito(total, "El ángulo total")
             if not 0 < abs(total) <= 360:
-                raise ErrorBoceto("El ángulo total va de -360 a 360 grados, distinto de cero.")
+                raise ErrorBoceto("Ángulo total: de -360 a 360, sin 0.")
 
     def exigir_tamano_patron(self, ids, copias, sin=()):
         """Cada copia queda atada al original y el solver resuelve todo junto: tope de puntos copiados (copias × puntos
@@ -4612,7 +4607,7 @@ class Boceto:
         for cid, pick in ((c1, pick1), (c2, pick2)):
             ext = self.curvas[cid].extremos()
             if not ext:
-                raise ErrorBoceto("La curva de fusión une extremos de curvas abiertas.")
+                raise ErrorBoceto("La fusión une extremos de curvas abiertas.")
             extremos.append(min(ext, key=lambda p, pick=pick: math.dist(self.coords(p), pick)))
         (e1, t1), (e2, t2) = self._salida_extremo(c1, extremos[0]), self._salida_extremo(c2, extremos[1])
         L = math.dist(e1, e2)
@@ -4666,9 +4661,9 @@ class Boceto:
         la cuerda total / tramos, que no cambia la forma). Devuelve el id de la línea."""
         c = self._spline(sid, "ajuste")
         if c.cerrada:
-            raise ErrorBoceto("Las manijas se activan en una spline de ajuste abierta: abrila primero.")
+            raise ErrorBoceto("Las manijas piden una spline abierta: abrila.")
         if pid not in c.pts:
-            raise ErrorBoceto(f"El punto {pid} no es un punto de ajuste de la spline {sid}.")
+            raise ErrorBoceto(f"{pid} no es punto de ajuste de la spline.")
         if any(m[0] == pid for m in c.manijas):
             raise ErrorBoceto(f"El punto {pid} ya tiene manija: editala.")
         Q = [self.coords(p) for p in c.pts]
@@ -4715,13 +4710,13 @@ class Boceto:
             raise ErrorBoceto(f"La spline ya está {'cerrada' if cerrada else 'abierta'}.")
         if cerrada:
             if c.manijas:
-                raise ErrorBoceto("Desactivá las manijas antes de cerrar la spline.")
+                raise ErrorBoceto("Desactivá las manijas antes de cerrar.")
             ultimo = c.pts[-1]
             if len(c.pts) > 3 and math.dist(self.coords(c.pts[0]), self.coords(ultimo)) < 1e-9:
                 c.pts.pop()
                 self._depurar([ultimo])
             if len(c.pts) < 3:
-                raise ErrorBoceto("Una spline cerrada necesita al menos tres puntos.")
+                raise ErrorBoceto("Spline cerrada: al menos 3 puntos.")
             c.cerrada = True
         else:
             c.pts.append(self.agregar_punto(*self.coords(c.pts[0])))
@@ -4736,7 +4731,7 @@ class Boceto:
         t, _d, sobre = mas_cercano(prim, q)
         t0, t1, _ = dominio(prim)
         if not t0 + 1e-9 < t < t1 - 1e-9:
-            raise ErrorBoceto("El punto nuevo tiene que caer entre los extremos de la spline.")
+            raise ErrorBoceto("Punto nuevo: debe caer dentro de la spline.")
         if c.modo == "ajuste":
             Q = [self.coords(p) for p in c.pts]
             ub = parametros_cuerda(Q + [Q[0]] if c.cerrada else Q)
@@ -4775,7 +4770,7 @@ class Boceto:
         los extremos. Ajuste por mínimos cuadrados sobre la curva; una spline racional pasa a no racional."""
         c = self._spline(sid, "control")
         if grado not in (3, 5):
-            raise ErrorBoceto("El grado de una spline de puntos de control es 3 o 5.")
+            raise ErrorBoceto("Grado de la spline de control: 3 o 5.")
         prim = self.primitivas(sid)[0]
         polos, nudos, p0 = prim[2], prim[3], prim[4]
         if grado == p0:
@@ -4814,7 +4809,7 @@ class Boceto:
         Devuelve los ids de las 4 líneas."""
         t = self.curvas[tid]
         if not (1e-6 < ancho < math.inf and 1e-6 < alto < math.inf):
-            raise ErrorBoceto("El marco del texto necesita ancho y alto positivos.")
+            raise ErrorBoceto("El marco del texto pide ancho y alto > 0.")
         (ax, ay), a = self.coords(t.punto), math.radians(t.angulo)
         u, v = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
         der = self.agregar_punto(ax + ancho * u[0], ay + ancho * u[1])
@@ -4833,12 +4828,12 @@ class Boceto:
         "bl" abajo a la izquierda (el ancla), "br", "tl", "tr" o "center". El texto tiene que tener marco."""
         t = self.curvas[tid]
         if not isinstance(t, Texto) or not t.marco:
-            raise ErrorBoceto("Ese texto no tiene marco: agregalo (frame) para girar alrededor de una esquina.")
+            raise ErrorBoceto("Ese texto no tiene marco: agregalo.")
         bl, br, tl = (self.coords(p) for p in (t.punto, *t.marco))
         tr = (br[0] + tl[0] - bl[0], br[1] + tl[1] - bl[1])
         puntos = {"bl": bl, "br": br, "tl": tl, "tr": tr, "center": ((bl[0] + tr[0]) / 2, (bl[1] + tr[1]) / 2)}
         if esquina not in puntos:
-            raise ErrorBoceto(f"Esquina desconocida: {esquina!r} (bl, br, tl, tr o center).")
+            raise ErrorBoceto(f"Esquina desconocida: {esquina!r}.")
         return puntos[esquina]
 
     def girar_texto(self, tid, angulo, pivote=None):
@@ -4856,7 +4851,7 @@ class Boceto:
             raise ErrorBoceto("Hacé clic en un texto.")
         prims = primitivas_entidad(c, self.coords, curvas=self.curvas)
         if not prims:
-            raise ErrorBoceto("No se pudo generar la geometría del texto (¿fuente disponible?).")
+            raise ErrorBoceto("No se pudo generar la geometría del texto.")
         cache = {}
 
         def punto(q):
@@ -4920,7 +4915,7 @@ class Boceto:
         b.patrones = copy.deepcopy(d.get("patrones", []))
         b.objetos = {o["id"]: copy.deepcopy(o) for o in d.get("objetos", [])}
         if len(b.objetos) != len(d.get("objetos", [])):
-            raise ErrorBoceto("Hay identificadores de objetos repetidos en el proyecto.")
+            raise ErrorBoceto("Identificadores de objetos repetidos.")
         b.props_curvas = {p["id"]: {k: v for k, v in p.items() if k != "id"} for p in d.get("props_curvas", [])}
         for p in d.get("puntos", []):
             b.puntos[p["id"]] = Punto(p["id"], p["x"], p["y"], p.get("proyectado", False))

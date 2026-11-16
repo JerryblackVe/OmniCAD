@@ -163,7 +163,7 @@ NOMBRES_RESTRICCION = {"r_horizontal_vertical": "Horizontal/Vertical", "r_coinci
                        "r_simetria": "Simetría", "r_curvatura": "Curvatura", "r_poligono": "Polígono regular"}
 # Qué pedir en cada herramienta: sale en el cartel del botón y en el mensaje de la barra al activarla
 AYUDA_RESTRICCION = {
-    "r_horizontal_vertical": "elegí una o más líneas, o dos puntos: quedan horizontales o verticales, según lo que tengan más cerca.",
+    "r_horizontal_vertical": "líneas o dos puntos.",
     "r_coincidente": "elegí un punto y otro punto, o un punto y una curva: quedan unidos.",
     "r_tangente": "elegí dos curvas (línea, círculo, arco, elipse, spline): se tocan en un solo punto sin cruzarse.",
     "r_igual": "elegí dos líneas, dos círculos o arcos, o dos elipses: miden lo mismo.",

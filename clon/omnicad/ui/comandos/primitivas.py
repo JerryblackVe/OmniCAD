@@ -116,7 +116,7 @@ class _Primitiva(Comando):
             if punto is None:
                 punto = e.punto if e.punto is not None else (plano.origen if plano is not None else None)
         if punto is None:
-            raise ErrorComando("Elegí un plano, una cara plana, un punto o un vértice.")
+            raise ErrorComando("Elegí plano, cara, punto o vértice.")
         normal = None
         if hit["ref"].get("tipo") in ("plano", "cara") and plano is not None:
             normal = np.asarray(plano.normal, float)
@@ -192,7 +192,7 @@ class _Primitiva(Comando):
             lado = {"interior": -1, "centro": 0, "exterior": 1}[params["posicion_toroide"]]
             menor = ctx.evaluar(params["radio_menor"])
             if not menor < ctx.evaluar(params["radio_mayor"]) + lado * menor:
-                raise ErrorComando("El diámetro del toroide tiene que ser menor que el diámetro interior.")
+                raise ErrorComando("El diámetro del toroide supera el interior.")
         x, y, z, centrada = self.posicion(v, ctx)
         objetivo = [h["ref"]["cuerpo"] for h in v.get("objetivo") or [] if h["ref"].get("tipo") == "cuerpo"]
         inclinado = self._plano_inclinado(v, ctx)
