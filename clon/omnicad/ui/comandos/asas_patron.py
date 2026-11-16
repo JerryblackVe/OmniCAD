@@ -46,8 +46,8 @@ def _formas_del_objeto(ctx, v):
         if objeto == "caras":
             return [ent.resolver(h["ref"], ctx.estado).forma for h in v.get("caras") or []]
         if objeto == "componentes":
-            from .crear import componentes_escritos
-            ids = set(componentes_escritos(v.get("componentes"), ctx))
+            from .crear import componentes_elegidos
+            ids = set(componentes_elegidos(v, ctx))
             return [c.forma for c in ctx.estado.cuerpos.values() if (c.componente or "") in ids]
     except (ErrorComando, ent.ErrorReferencia, KeyError, AttributeError, geo.ErrorGeometria):
         pass                                           # pasos o referencias a medio escribir

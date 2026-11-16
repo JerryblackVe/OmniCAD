@@ -109,6 +109,23 @@ def test_ctrl_clic_vista_refleja_tres_cuerpos_y_quita_uno(v, monkeypatch):
     assert len(v.seleccion) == 2
 
 
+def test_clic_en_componente_del_navegador_lo_elige_en_patron_de_componentes(v):
+    """B-600: con «Tipo de objeto» Componentes, el clic en la fila del componente lo suma al campo; otro clic lo saca."""
+    from omnicad.ui.comandos import CATALOGO
+    cid = next(iter(v.doc.estado_final.cuerpos))
+    assert api.llamar(api.Sesion(v.doc), "create_component", {"bodies": [cid], "name": "Taco"})["ok"]
+    v.set_documento(v.doc)
+    k = v.doc.estado_final.cuerpos[cid].componente
+    p = v.ejecutar_comando(CATALOGO["patron_rectangular_3d"]())
+    p.set_valor("objeto", "componentes")
+    p._activar(next(c for c in p.campos if c.clave == "componentes"))
+    clicar_fila(v, k)
+    assert [h["ref"] for h in p.valores["componentes"]] == [{"tipo": "componente", "componente": k}]
+    QTest.qWait(QApplication.doubleClickInterval() + 50)              # que no sea doble clic
+    clicar_fila(v, k)
+    assert not p.valores["componentes"]
+
+
 def menu_de(v, clave):
     return v.navegador.menu_elemento(v.navegador.item(clave))
 
