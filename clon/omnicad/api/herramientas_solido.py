@@ -339,9 +339,9 @@ def _eje_revolucion(sesion, sop, br, axis, body=None):
         return {"eje": str(int(s))}
     if isinstance(axis, dict) or (isinstance(axis, str) and not s.isdigit() and s not in ("sketch_x", "sketch_y")):
         # un eje de construcción, una arista recta, una cara cilíndrica o una línea de OTRO boceto
-        from .herramientas_construccion import _referencia
+        from .herramientas_construccion import _eje_de_giro
         try:
-            return {"eje_ref": _referencia(sesion, axis, {"eje", "arista", "curva_boceto", "cara"}, body, "eje")}
+            return {"eje_ref": _eje_de_giro(sesion, axis, body)}
         except ErrorAPI as e:
             if e.error_kind != "INVALID_ARGUMENTS":
                 raise

@@ -3103,12 +3103,12 @@ def project_spun_profile(sesion, axis: str | dict, edges: list[str] | str | None
     outer_contour: true = solo el contorno exterior; false = todas las aristas giradas, también las internas.
     project_axis: true = proyecta también el eje de giro al boceto (otra proyección, con el mismo link).
     """
-    from .herramientas_construccion import _referencia
+    from .herramientas_construccion import _eje_de_giro
     _exigir_finitos(locals())
     if tolerance <= 0:
         raise error("INVALID_ARGUMENTS", "tolerance tiene que ser mayor que cero.")
     op, br = boceto_activo(sesion, sketch, derivados=False)
-    ref_eje = _referencia(sesion, axis, {"eje", "arista", "curva_boceto", "cara"}, body, "eje")
+    ref_eje = _eje_de_giro(sesion, axis, body)
     entidad_eje = ent.resolver(ref_eje, sesion.doc.estado_final)
     giro = {"eje": ent.como_eje(entidad_eje), "tolerancia": tolerance, "invertir": flip}
     try:
