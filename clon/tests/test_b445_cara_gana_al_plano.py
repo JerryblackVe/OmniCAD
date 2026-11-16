@@ -54,5 +54,6 @@ def test_la_cara_gana_al_plano_de_origen(visor):
     hit = vis.elegir_entidad(_pos(vis, [0.0, cerca, 0.0]), vis.filtro)
     assert hit is not None and hit["tipo"] == "cara", hit and hit["ref"]
     # el borde del plano se sigue eligiendo aunque haya una caja detrás
-    fuera = vis.elegir_entidad(_pos(vis, [vis._tam_planos(), 0.0, vis._tam_planos() * 0.5]), vis.filtro)
+    pl, (_u0, _v0, u1, v1) = next((p, r) for ref, p, r in vis.planos_elegibles() if ref == "XZ")    # B-610: el borde real
+    fuera = vis.elegir_entidad(_pos(vis, pl.a_3d(u1, v1 * 0.5)), vis.filtro)
     assert fuera is not None and fuera["tipo"] == "plano"
