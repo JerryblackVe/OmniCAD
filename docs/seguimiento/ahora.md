@@ -14,7 +14,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | B-593 integrado (5e91b41). Libre hasta el lote de las 13 h |
-| E6 | B-598 | Extruir «Hasta la cara» de 15 letras: previa de más de 4 min (caso LINCES). P-99/B-546 Parcial integrados: 04bf7a8. Después FL-2/FL-3 |
+| E6 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (Opus alto). B-598 Parcial integrado: 39e5a48 (falta < 2 s: booleanas de las letras ~5 s, y medir en Windows) |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
 | E9 | — | P-166 integrado (5e91b41). Libre hasta el lote de las 13 h |
@@ -24,7 +24,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 2 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
 | 3 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
