@@ -8,7 +8,7 @@ import json
 import re
 import sys
 
-COMMIT = re.compile(r"(?:^|&&|\|\||;|\||\n)[ \t]*git(?:[ \t]+-[^\s]+(?:[ \t]+[^\s-][^\s]*)?)*[ \t]+commit\b")
+COMMIT = re.compile(r"(?:^|&&|\|\||;|\||\n)[ \t]*git(?:[ \t]+-[^\s]+(?:[ \t]+[^\s-][^\s]*)?)*[ \t]+commit(?![-\w])")
 
 try:
     comando = (json.load(sys.stdin).get("tool_input") or {}).get("command", "")
