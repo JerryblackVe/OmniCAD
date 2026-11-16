@@ -1850,7 +1850,8 @@ class Visor3D(QOpenGLWidget):
                         if "perfil" in filtros and (tipo_curva == "texto" or curva_id in objetos.indice(br.boceto)):
                             continue
                         dist, p = self._dist_polilinea(q, poli, mvp, (o, d))
-                        if dist < mejor[0] and p is not None:
+                        # B-542: la curva tapada por un cuerpo no se ve (se dibuja con profundidad): no se elige
+                        if dist < mejor[0] and p is not None and visible(p):
                             mejor = (dist, _hit("curva_boceto", {"tipo": "curva_boceto", "boceto": br.op_id,
                                                                  "curva": curva_id},
                                                 [("lineas", _segmentos([poli]), None, 3.5)], float((p - o) @ d), p,
