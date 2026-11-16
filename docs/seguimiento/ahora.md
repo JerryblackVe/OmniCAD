@@ -16,7 +16,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E5 | B-593 | Plano de desfase que flota a un costado y no acompaña el zoom (Construir, Alta; Sonnet medio) |
 | E6 | B-546 + P-99 | Extruir lento con muchos perfiles (B-567 integrado: 9d842a7); después FL-2/FL-3 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
-| E8 | B-591 + B-592 | 🚨 Terminar boceto: acciones de Unidades ya borradas y, de rebote, «la receta repite el id» que bloquea Extruir |
+| E8 | B-590 | Ciclo de imports en ops_solido (Sonnet, chico). B-591 y B-592 Parcial integrados: f9d7a3b (falta confirmar en Windows) |
 | E9 | P-166 | Colores de toda la app con ~10 temas. P-164 integrado: 13e93f9 |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
@@ -24,7 +24,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-590 | Ciclo de imports en ops_solido (Sonnet, chico) |
 | 2 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
 | 3 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
