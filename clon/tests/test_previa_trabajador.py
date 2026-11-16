@@ -239,3 +239,17 @@ def test_una_previa_vigente_no_se_pisa_con_otro_pedido(placa, monkeypatch):
     h = CalculoPendiente("previa_visual", _datos(doc, empalme))
     assert aislado.correr_json("recalcular_documento", {"receta": doc.a_dict()}, 60)["pasos"] == 2
     assert pedidos == ["recalcular_documento"] and _esperar(h)      # un hijo aparte; la previa sigue intacta
+
+
+def test_b598_una_previa_que_no_termina_se_corta_con_su_tope_y_un_aviso_corto(placa, monkeypatch):
+    """B-598: la previa de Extruir de 15 letras hasta una cara quedó más de 4 min al 90 % (tope de 900 s del prevuelo)."""
+    doc, empalme, _ = placa
+    assert aislado.TOPE_PREVIA <= 60                                                    # nunca minutos
+    avisar = aislado._Trabajador._avisar
+    monkeypatch.setattr(aislado._Trabajador, "_avisar", lambda self, tarea: None)      # nunca contesta
+    h = CalculoPendiente("previa_visual", _datos(doc, empalme), tope=0.3)
+    with pytest.raises(aislado.TiempoAgotado, match="tardaba demasiado") as e:
+        _esperar(h, plazo=10)
+    assert "\n" not in str(e.value) and aislado._previa_en_curso is None               # un renglón; el trabajador, libre
+    monkeypatch.setattr(aislado._Trabajador, "_avisar", avisar)
+    assert _esperar(CalculoPendiente("previa_visual", _datos(doc, empalme)))           # la siguiente anda

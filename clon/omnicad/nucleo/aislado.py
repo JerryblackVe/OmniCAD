@@ -40,6 +40,7 @@ _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 UMBRAL_PREVUELO_PARAMETROS = 60       # pasos no suprimidos anteriores al marcador
 UMBRAL_COSTO_AISLAR_S = 0.5           # B-331: aunque haya menos pasos, si recalcular desde el cambio tarda más de esto (suma de lo que tardó cada paso)
 TOPE_PREVUELO_PARAMETROS = 900        # segundos, incluida la reconstrucción del documento
+TOPE_PREVIA = 30                      # B-598: la vista previa de un comando nunca espera minutos (Extruir de 15 letras hasta una cara: más de 4 min al 90 %)
 TOPE_PREVUELO_ABRIR = 900             # segundos para el ensayo de apertura de un archivo grande (B-48)
 TOPE_ENSAYO_LECTURA = 900             # segundos para ensayar la importación STEP/IGES completa (B-160)
 TOPE_MEMORIA_TRABAJADOR = 2048        # MB: pasado esto se cierra el trabajador al contestar (su memoria se libera con él)
@@ -813,7 +814,7 @@ class CalculoPendiente:
                 return None
             if time.monotonic() - self.inicio > self.tope:
                 self.cancelar(ya=True)
-                raise TiempoAgotado("La vista previa pasó su plazo y se cortó.")
+                raise TiempoAgotado("La vista previa tardaba demasiado y se cortó")
             return None
         try:
             if self.trabajador is not None:

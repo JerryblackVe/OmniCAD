@@ -155,7 +155,7 @@ def test_mover_muchas_veces_lanza_solo_el_ultimo_pendiente(ventana, monkeypatch)
     class Hijo:
         listo = False
 
-        def __init__(self, tarea, datos):
+        def __init__(self, tarea, datos, tope=None):
             pedidos.append(datos["operacion"]["params"]["espesor_interior"])
 
         def sondear(self):
@@ -192,7 +192,7 @@ def test_b455_un_error_interno_del_hijo_rehace_la_previa_en_la_ventana(tmp_path,
     v.show()
     try:
         class Hijo:
-            def __init__(self, tarea, datos):
+            def __init__(self, tarea, datos, tope=None):
                 pass
 
             def sondear(self):
@@ -265,7 +265,7 @@ def test_un_valor_nuevo_corta_una_vez_el_calculo_que_se_alarga(ventana, monkeypa
     class Hijo:
         inicio = -1e9               # ya pasó la paciencia
 
-        def __init__(self, tarea, datos):
+        def __init__(self, tarea, datos, tope=None):
             pedidos.append(datos["operacion"]["params"]["espesor_interior"])
 
         def sondear(self):
@@ -383,7 +383,7 @@ def test_un_hijo_que_pasa_su_plazo_se_corta_y_avisa(ventana, monkeypatch):
     hijo.tope = 0.0
     esperar(p)
     assert hijo.proceso.poll() is not None
-    assert not p._previa_ok and "plazo" in p.mensaje.text()
+    assert not p._previa_ok and "tardaba demasiado" in p.mensaje.text()
     assert not any(es_malla(c.forma) for c in ventana.visor._estado.cuerpos.values())
     assert ventana.panel is p
 
