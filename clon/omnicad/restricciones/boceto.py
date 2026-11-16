@@ -4836,6 +4836,14 @@ class Boceto:
             raise ErrorBoceto(f"Esquina desconocida: {esquina!r}.")
         return puntos[esquina]
 
+    def angulo_texto(self, tid):
+        """Giro (grados) con que se escribe el texto: el de su marco si lo tiene, el suyo si no. 0 si sus letras
+        siguen una curva (no hay una dirección única)."""
+        t = self.curvas[tid]
+        if t.camino in self.curvas:
+            return 0.0
+        return math.degrees(_medidas_marco(*map(self.coords, t.puntos()))[0]) if t.marco else t.angulo
+
     def girar_texto(self, tid, angulo, pivote=None):
         """Gira el texto (y su marco) hasta `angulo` grados alrededor de `pivote` (por defecto, su ancla)."""
         t = self.curvas[tid]

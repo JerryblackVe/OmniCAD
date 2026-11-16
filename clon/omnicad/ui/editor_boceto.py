@@ -3827,6 +3827,25 @@ class Lienzo(QWidget):
         return Texto(0, d["pos"], texto, o["fuente"], altura, ang, o["negrita"], o["cursiva"], espaciado=esp,
                      interlineado=inter, altura_a=True, **extra, **tipografia)
 
+    def _cuadro_texto_previa(self):
+        """Esquinas (mm) del cuadro del texto que se escribe: el dibujado con el ratón o el que envuelve las letras,
+        girado con el texto (Fusion). [] si no hay."""
+        d = self._previa_texto or {}
+        ang = d.get("angulo") or 0.0
+        caja = d.get("caja")
+        if caja:                              # el cuadro gira con el texto alrededor de su esquina de arriba a la izquierda
+            x0, y0, x1, y1 = caja
+            c, s = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+            return [(x0 + (x - x0) * c - (y - y1) * s, y1 + (x - x0) * s + (y - y1) * c)
+                    for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
+        if not self._previa_polis:
+            return []
+        c, s = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+        locales = [(q[0] * c + q[1] * s, -q[0] * s + q[1] * c) for poli in self._previa_polis for q in poli]
+        x0, x1 = min(q[0] for q in locales), max(q[0] for q in locales)
+        y0, y1 = min(q[1] for q in locales), max(q[1] for q in locales)
+        return [(x * c - y * s, x * s + y * c) for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
+
     def _mapa_cursor(self, t, P, ang):
         """Mapa de posiciones del texto `t` para el cursor: ver `paradas_cursor` (más `dir` y `caja`)."""
         prim_camino = None
@@ -3863,6 +3882,7 @@ class Lienzo(QWidget):
             altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
             esp, inter = _espaciado_mm(v[3], altura, self.opciones), _numero(v[4] or "1")
             if altura > 0 and inter > 0:
+                d["angulo"] = ang                # el cuadro de trazos gira con el texto
                 t = self._texto_en_vivo(texto, altura, ang, esp, inter)
 
                 def P(q):
@@ -5319,9 +5339,23 @@ class Lienzo(QWidget):
     def _ids_marco(self):
         return [i for i in self.seleccion if i in self.b.curvas or i in self.b.puntos]
 
+    def _giro_marco(self):
+        """Grados con que se gira el marco: los del texto cuando lo elegido es un solo texto (el marco lo envuelve
+        girado, como Fusion); 0 en cualquier otro caso."""
+        ids = self._ids_marco()
+        if len(ids) == 1 and isinstance(self.b.curvas.get(ids[0]), Texto):
+            return self.b.angulo_texto(ids[0])
+        return 0.0
+
+    def _esquinas_marco(self, caja, giro):
+        """Las 4 esquinas (mm) de la caja medida en los ejes girados `giro`: abajo-izq., abajo-der., arriba-der., arriba-izq."""
+        c, s = math.cos(math.radians(giro)), math.sin(math.radians(giro))
+        x0, y0, x1, y1 = caja
+        return [(x * c - y * s, x * s + y * c) for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
+
     def _caja_marco(self):
-        """Caja (xmin, ymin, xmax, ymax) en mm de lo elegido, o None si el marco no corresponde: hace falta
-        estar seleccionando y tener al menos dos curvas (o un texto)."""
+        """Caja (xmin, ymin, xmax, ymax) en mm de lo elegido (en los ejes girados `_giro_marco()`), o None si el marco
+        no corresponde: hace falta estar seleccionando y tener al menos dos curvas (o un texto)."""
         if not self.mostrar_marco or self.herramienta != "seleccionar" or self.fase not in (None, "", "seleccion"):
             return None
         ids = self._ids_marco()
@@ -5348,9 +5382,14 @@ class Lienzo(QWidget):
                     pts += puntos_primitiva(prim, 24)
         if not pts:
             return None
+        giro = self._giro_marco()
+        if giro:
+            c, s = math.cos(math.radians(giro)), math.sin(math.radians(giro))
+            pts = [(q[0] * c + q[1] * s, -q[0] * s + q[1] * c) for q in pts]
         xs, ys = [q[0] for q in pts], [q[1] for q in pts]
         caja = (min(xs), min(ys), max(xs), max(ys))
-        a, b = self.a_px(caja[0], caja[1]), self.a_px(caja[2], caja[3])
+        esq = self._esquinas_marco(caja, giro)
+        a, b = self.a_px(*esq[0]), self.a_px(*esq[2])
         if abs(b.x() - a.x()) < 4 and abs(b.y() - a.y()) < 4:
             return None
         return caja
@@ -5358,14 +5397,22 @@ class Lienzo(QWidget):
     def _manijas_marco(self, caja):
         """{nombre: punto en píxeles} de las manijas del marco."""
         x0, y0, x1, y1 = caja
-        esq = [self.a_px(x0, y0), self.a_px(x1, y0), self.a_px(x1, y1), self.a_px(x0, y1)]
-        arriba = self.a_px((x0 + x1) / 2, y1)
-        derecha, abajo = self.a_px(x1, (y0 + y1) / 2), self.a_px((x0 + x1) / 2, y0)
+        g = self._marco["giro"] if self._marco is not None else self._giro_marco()
+        c, s = math.cos(math.radians(g)), math.sin(math.radians(g))
+        px = lambda x, y: self.a_px(x * c - y * s, x * s + y * c)        # noqa: E731  (ejes del marco → pantalla)
+        esq = [px(x0, y0), px(x1, y0), px(x1, y1), px(x0, y1)]
+        arriba = px((x0 + x1) / 2, y1)
+        derecha, abajo = px(x1, (y0 + y1) / 2), px((x0 + x1) / 2, y0)
+        # los asas de giro y de espejo salen hacia afuera del marco, en la dirección de sus ejes en pantalla
+        sube = px((x0 + x1) / 2, y1 + 1) - arriba
+        sale = px(x1 + 1, (y0 + y1) / 2) - derecha
+        baja = px((x0 + x1) / 2, y0 - 1) - abajo
+        unit = lambda v, largo: v * (largo / math.hypot(v.x(), v.y())) if math.hypot(v.x(), v.y()) > 1e-9 else QPointF(0, 0)  # noqa: E731
         m = {f"escala{k}": q for k, q in enumerate(esq)}
-        m["rotar"] = QPointF(arriba.x(), arriba.y() - 28)
-        m["mover"] = self.a_px((x0 + x1) / 2, (y0 + y1) / 2)
-        m["espejo_h"] = QPointF(derecha.x() + 18, derecha.y())
-        m["espejo_v"] = QPointF(abajo.x(), abajo.y() + 18)
+        m["rotar"] = arriba + unit(sube, 28)
+        m["mover"] = px((x0 + x1) / 2, (y0 + y1) / 2)
+        m["espejo_h"] = derecha + unit(sale, 18)
+        m["espejo_v"] = abajo + unit(baja, 18)
         return m
 
     def _presionar_marco(self, pos):
@@ -5377,16 +5424,16 @@ class Lienzo(QWidget):
         for nombre, q in self._manijas_marco(caja).items():
             if math.hypot(q.x() - pos.x(), q.y() - pos.y()) <= TOL_MANIJA:
                 mm = self.a_mm(pos)
-                self._marco = {"tipo": nombre, "caja": caja, "inicio": mm, "actual": mm, "px_inicio": pos,
-                               "px_actual": pos, "shift": False}
+                self._marco = {"tipo": nombre, "caja": caja, "giro": self._giro_marco(), "inicio": mm, "actual": mm,
+                               "px_inicio": pos, "px_actual": pos, "shift": False}
                 return True
         return False
 
     def _transformacion_marco(self):
         """(descripción, función punto → punto, acción sobre el boceto) del arrastre en curso."""
         m = self._marco
-        x0, y0, x1, y1 = m["caja"]
-        c = ((x0 + x1) / 2, (y0 + y1) / 2)
+        esq = self._esquinas_marco(m["caja"], m["giro"])
+        c = ((esq[0][0] + esq[2][0]) / 2, (esq[0][1] + esq[2][1]) / 2)
         (ix, iy), (ax, ay) = m["inicio"], m["actual"]
         tipo, ids = m["tipo"], self._ids_marco()
         if tipo == "mover":
@@ -5397,7 +5444,6 @@ class Lienzo(QWidget):
                     lambda: self.b.transformar(ids, dx=dx, dy=dy))
         if tipo.startswith("escala"):
             k = int(tipo[-1])
-            esq = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
             ancla = c if m["shift"] else esq[(k + 2) % 4]
             d0 = math.dist(esq[k], ancla)
             f = max(math.dist((ax, ay), ancla) / d0, 1e-3) if d0 > 1e-12 else 1.0
@@ -5456,14 +5502,13 @@ class Lienzo(QWidget):
         caja = self._marco["caja"] if self._marco is not None else self._caja_marco()
         if caja is None:
             return
-        x0, y0, x1, y1 = caja
         azul = QColor(0, 150, 255)
         p.setBrush(Qt.NoBrush)
         p.setPen(QPen(azul, 1, Qt.DashLine))
-        esq = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        esq = self._esquinas_marco(caja, self._marco["giro"] if self._marco is not None else self._giro_marco())
         p.drawPolygon(QPolygonF([self.a_px(*q) for q in esq]))
         manijas = self._manijas_marco(caja)
-        arriba = self.a_px((x0 + x1) / 2, y1)
+        arriba = self.a_px((esq[2][0] + esq[3][0]) / 2, (esq[2][1] + esq[3][1]) / 2)
         p.setPen(QPen(azul, 1))
         p.drawLine(arriba, manijas["rotar"])
         for nombre, q in manijas.items():
@@ -6820,15 +6865,10 @@ class Lienzo(QWidget):
             if self._caret is not None and self._caret_on and self.hasFocus():
                 p.setPen(QPen(QColor(245, 245, 245) if self._oscuro() else QColor(20, 20, 20), 2.0))
                 self._dibujar_polilinea(p, list(self._caret))     # el cursor parpadeante: acá se escribe
-            caja = (self._previa_texto or {}).get("caja")
-            if not caja and self._previa_polis:     # texto ya creado: el cuadro es el que lo envuelve
-                xs = [q[0] for poli in self._previa_polis for q in poli]
-                ys = [q[1] for poli in self._previa_polis for q in poli]
-                caja = (min(xs), min(ys), max(xs), max(ys))
-            if caja:                         # el cuadro dibujado con el ratón, en línea de trazos
-                x0, y0, x1, y1 = caja
+            esquinas = self._cuadro_texto_previa()
+            if esquinas:                     # el cuadro dibujado con el ratón (o el que envuelve el texto), en trazos
                 p.setPen(QPen(acento, 1, Qt.DashLine))
-                self._dibujar_polilinea(p, [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])
+                self._dibujar_polilinea(p, esquinas + esquinas[:1])
         if h == "recortar" and self._previa_recorte:
             p.setPen(QPen(QColor(230, 60, 60), 3, Qt.DashLine))
             self._dibujar_polilinea(p, self._previa_recorte)
