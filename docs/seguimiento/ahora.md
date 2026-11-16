@@ -9,9 +9,9 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-595, B-596 y B-597 (texto girado y zoom), B-599 (previa del patrón circular sin geometría; no se reproduce en la VPS), B-601 (`suppress` fuera de rango en el patrón de boceto), B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
+| E1 | B-595 | Caja y asas del texto girado; después B-596 (copia borrosa al hacer zoom) y B-597 (gemelos). Sonnet medio |
 | E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
-| E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
+| E3 | B-609 | Cortar con holgura en perno coaxial: desfase del sólido, número coherente y mensaje de 1 renglón. Opus alto |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | B-610 integrado (falta verlo en Windows). B-607 pasa a E11 en Windows (no hay .omnicad). Libre |
 | E6 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (Opus alto). B-598 Parcial integrado: 39e5a48 (falta < 2 s: booleanas de las letras ~5 s, y medir en Windows) |
@@ -24,7 +24,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 2 | B-609 | Cortar con holgura falla en perno en agujero (cilindros coaxiales): holgura con desfase del sólido, número coherente y mensaje de 1 renglón (E3, Opus alto) |
 | 2b | B-608 | Empalme y Chaflán lentos en una caja simple (9–17 s; Fusion instantáneo): medir en Windows y «no entra» antes de calcular (E6 después de FL-2/FL-3, Opus alto) |
 | 2c | P-170 | Empalme: clic en una cara vecina saca las aristas sobrantes de la cadena tangente (E3, Sonnet medio) |
 | 2d | P-173 | La vista no se congela mientras calcula: orbitar y zoom durante la espera, aviso y Cancelar fuera de una ventana modal (E6, Opus alto) |
