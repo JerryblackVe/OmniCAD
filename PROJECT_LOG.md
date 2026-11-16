@@ -472,6 +472,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-16] IPC por archivos entre procesos: siempre escritura atómica (temporal + os.replace) y reintento ante PermissionError; Windows bloquea los archivos abiertos y la VPS (Linux) no lo ve. · Evidencia: B-562, «[WinError 32] … avance» en Extruir (`nucleo/aislado.py:513`, `unlink` sin proteger).
 - [2026-11-15] Nunca dejar dos herramientas de una booleana pegadas solo por una cara: darles un solape real (1e-3 mm); el kernel pierde una según el estado de memoria y con B-spline no hay control de volumen. · Evidencia: B-536b, `_cascara_por_desfase`, 3 de 4 corridas perdían el prisma.
 - [2026-11-15] Todo control que use el común de una booleana lleva el tope de `_parte_afuera` (B-125): con contacto casi tangente el kernel devuelve la pieza chica entera. · Evidencia: B-537, 1.ª versión sin tope rompió `test_booleanas_tortura.py::test_b125_*` (7 rojos).
 - [2026-11-15] Quien cambia textos de mensajes corre `grep -rl` de cada texto viejo en tests/ (incluido test_hallazgos_nucleo.py), no solo los tests del archivo tocado; y los tests nuevos fijan una palabra clave de la causa, no la frase entera. · Evidencia: P-158 dejó rojos en main 3 veces (55d9502, 1186c2d) por textos citados en otros archivos.

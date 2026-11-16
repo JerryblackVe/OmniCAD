@@ -440,7 +440,7 @@ Prompt en `docs/arreglos_qwen.md` (B-210, B-211, B-214, B-216, B-217, B-209, H-9
 | B-546 en Windows (E11): llavero de 17 perfiles (`evidencias/reportes_pc/lote_2026-11-15_19h.md`): medir abrir Extruir, escribir la distancia y Cancelar. En la VPS: abrir 300-420 ms, escribir 284 ms, Cancelar 80 ms; en Windows daban 1992 / 497 / 772 ms. |
 | B-547 en Windows (E11): Rosca M20×2,5 en el cuello vaciado de una botella (Ø60, cuello Ø20×15, vaciado 1,5). En la VPS 0,63 s; en Windows daba 3,7 s. |
 | B-559 Mover/Copiar y B-560 Alinear (E11, prioridad 1 de Gerardo): en Alinear, Desde/A, Voltear, Girar y Crear copia; en Mover/Copiar, con el mouse, Fusion contra OmniCAD, cada tipo (libre, traslación, rotación, punto a punto, punto a posición), «Definir punto de giro», «Crear copia» y cada objeto (cuerpo, componente, caras, boceto). Capturas de cada diferencia en `evidencias/reportes_pc/<fecha>_mover_copiar/`. |
-| B-562 en Windows (E11): Extruir cuerpo nuevo 110 mm varias veces seguidas; no tiene que salir «[WinError 32] … avance» y el resultado se aplica. |
+| B-562 en Windows (E11), cuando esté integrado: correr en la PC los tests de aislado y prevuelo (`tests/*aislad*`, `tests/*prevuelo*`) y la humo; después Extruir cuerpo nuevo 110 mm varias veces seguidas con el mouse: nunca «[WinError 32]» y el resultado se aplica. |
 
 ## 7. Orden de la noche
 
