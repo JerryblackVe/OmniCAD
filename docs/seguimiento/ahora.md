@@ -8,7 +8,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-544 | Punto en vértice: el vértice tiene que ganar (B-540 integrado: f0b265b) |
+| E1 | B-544 | Punto en vértice: el vértice tiene que ganar; después B-561 (Tangente línea-círculo no hace nada, Gerardo trabado) (B-540 integrado: f0b265b) |
 | E2 | P-161 | Extruir preselecciona el único perfil (B-471b integrado: f57e7a8) |
 | E3 | B-559 | **Primero (Gerardo, prioridad 1)**: Mover/Copiar entero contra Fusion. Después B-560 (Alinear, misma revisión) y B-558 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
