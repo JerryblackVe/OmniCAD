@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (QAbstractButton, QApplication, QFileDialog, QHBox
 from .. import NOMBRE_APP, RECURSOS, VERSION
 from ..ejemplo import crear_documento_ejemplo
 from .. import informes_error
+from ..api import cinta_personal
 from . import navegador_boceto
 from .mas_comando import FiltroMas, _normal, leer_barra, leer_teclas
 from .sugerencias import TiraSugerencias, comandos_sugeridos, tipos_de_seleccion
@@ -785,6 +786,8 @@ class VentanaPrincipal(QMainWindow):
         c.dinamico, c.fps_minimo, c.limite_fps = p["graficos/dinamico"], p["graficos/fps_minimo"], p["graficos/limite_fps"]
         c.luces, c.indicador_giro = p["graficos/luces"], p["graficos/indicador_giro"]
         self.aplicar_teclas()
+        if getattr(self, "cinta", None) is not None:
+            self.cinta.personalizar(cinta_personal.leer(p["cinta/personal"]))
         self.refrescar_barra_fijados()
         if self.asistente is not None:
             self.asistente.actualizar_cabecera()

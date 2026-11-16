@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-434 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+437 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 53 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 56 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 72 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 37 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -66,6 +66,9 @@ Archivo, escena, timeline y deshacer.
 | [`reset_shortcuts`](#reset_shortcuts) | sí | Devuelve un comando (o todos) al atajo de fábrica. |
 | [`set_decal`](#set_decal) | sí | Crea o edita una calcomanía sobre una cara, con tamaño, proporción, caras tangentes, opacidad, posición, giro y volteos. |
 | [`decal_view`](#decal_view) | no | Opera una calcomanía como el menú de su fila en el navegador: edit reabre su panel con sus valores (Editar calcomanía), find_in_window la encuadra, find_in_timeline la encuentra en la secuencia temporal y replace_image cambia su archivo de imagen (queda embebido) sin tocar el resto. |
+| [`get_ribbon`](#get_ribbon) | no | Lista las secciones de la cinta (pestaña/grupo) con los botones grandes que llevan, en orden, y los de fábrica (Preferencias › Cinta). «SÓLIDO/FAVORITAS» es la sección que cada persona llena. |
+| [`set_ribbon_section`](#set_ribbon_section) | sí | Elige los botones grandes de una sección de la cinta y su orden (Preferencias › Cinta). |
+| [`reset_ribbon`](#reset_ribbon) | sí | Devuelve una sección de la cinta (o toda) a sus botones de fábrica. |
 | [`manage_configurations`](#manage_configurations) | sí | Consulta y edita la tabla de variantes de CONFIGURAR. Solo apply aplica parámetros y supresiones; cada edición o aplicación es un deshacer. |
 | [`manage_comments`](#manage_comments) | sí | Lista, agrega o borra comentarios del proyecto. |
 | [`list_recent_documents`](#list_recent_documents) | no | Lista los proyectos recientes existentes, en el orden del panel de datos. |
@@ -402,6 +405,34 @@ Opera una calcomanía como el menú de su fila en el navegador: edit reabre su p
   - `action` ("edit" | "find_in_window" | "find_in_timeline" | "replace_image"; obligatorio): edit, find_in_window, find_in_timeline o replace_image.
   - `image` (texto; opcional, por defecto `null`): ruta de la imagen nueva (solo con replace_image).
 - CLI: `omnicad call decal_view --doc pieza.omnicad decal=… action=…`
+
+### `get_ribbon`
+
+Lista las secciones de la cinta (pestaña/grupo) con los botones grandes que llevan, en orden, y los de fábrica (Preferencias › Cinta). «SÓLIDO/FAVORITAS» es la sección que cada persona llena.
+
+- Modifica el documento: no.
+- Parámetros:
+  - `tab` (texto; opcional, por defecto `null`): nombre de la pestaña (p. ej. 'SÓLIDO'); omitido lista todas.
+- CLI: `omnicad call get_ribbon --doc pieza.omnicad`
+
+### `set_ribbon_section`
+
+Elige los botones grandes de una sección de la cinta y su orden (Preferencias › Cinta). Con 'SÓLIDO/FAVORITAS' agrega tus herramientas preferidas a la sección principal. No modifica el documento ni entra en deshacer; la ventana lo toma al aplicar preferencias.
+
+- Modifica el documento: sí, pero no entra en deshacer.
+- Parámetros:
+  - `section` (texto; obligatorio): «PESTAÑA/GRUPO» devuelto por get_ribbon, p. ej. 'SÓLIDO/CREAR'.
+  - `tools` (lista de texto; obligatorio): claves de comando (list_shortcuts las lista), en el orden en que se ven; como mucho 8 y sin repetir; [] deja la sección sin botones.
+- CLI: `omnicad call set_ribbon_section --doc pieza.omnicad section=… tools=…`
+
+### `reset_ribbon`
+
+Devuelve una sección de la cinta (o toda) a sus botones de fábrica. No modifica el documento ni entra en deshacer.
+
+- Modifica el documento: sí, pero no entra en deshacer.
+- Parámetros:
+  - `section` (texto; opcional, por defecto `null`): «PESTAÑA/GRUPO»; omitido restablece toda la cinta.
+- CLI: `omnicad call reset_ribbon --doc pieza.omnicad`
 
 ### `manage_configurations`
 
