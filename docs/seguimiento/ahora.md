@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | B-608 | Empalme y Chaflán lentos en una caja simple: medir por etapa y «no entra» antes de calcular; después P-173. Opus alto. FL-2/FL-3: solo falta medir en Windows. B-598 Parcial: 39e5a48 |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
-| E9 | — | P-166 integrado (5e91b41). Libre hasta el lote de las 13 h |
+| E9 | H-118 (mensaje) + B-605 | Tanda de OpenCode (glm-5.3-flash-free): mensaje de la rosca con salida; B-spline con pesos de más al abrir. Sonnet medio |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
