@@ -493,6 +493,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-16] En un bisect, comprobar primero que el commit «bueno» de verdad pasa el test; si no, el bisect culpa al commit equivocado. · Evidencia: B-577, el bisect con 6dfac6ed sin probar culpó a B-557 (257623fa); el test ya fallaba ahí (la causa era B-411).
 - [2026-11-16] En un worktree nunca `git stash`: el stash es del repositorio y lo comparten todos los worktrees; para probar un test contra main se copia el test y se corre en main con `--rootdir`. · Evidencia: B-548, stash creado por error y recuperado al instante.
 - [2026-11-16] Al integrar un P-158 (textos acortados), correr TODOS los tests del área que comparan mensajes (`grep -l 'mensaje\|toolTip\|match='`), en tandas de 28 archivos con turno (una corrida grande pasa los 900 s y se corta). · Evidencia: P-158f entró con 1105 tests verdes y dejó rojos `test_b442` y `test_sol32` (texto viejo «cero»).
 - [2026-11-16] Un armado de test que necesita una forma concreta (p. ej. una cara B-spline) la pide explícita, no depende de qué reintento de `booleano` la rescata: cambiar la escalera de reintentos lo rompe. · Evidencia: B-568, `tests/test_tortura_menores.py::_lentes`.

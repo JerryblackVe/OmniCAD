@@ -10,14 +10,14 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D): ahí B-572 y B-573 |
-| E2 | B-543 | Chaflán: un clic simple suma aristas (B-549 parcial integrado: 8f72369; falta el «No tocó» con cuerpo visible → E11) |
+| E2 | — | En pausa hasta el lote de las 13 h (Sigue vacía; cupo semanal). B-543 integrado: 57ed767 |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-545 | Panel perezoso (su worktree ~/OmniCAD-B-545): abrir Agujero y Extruir < 150 ms; después B-567. B-574 integrado: d7806c4 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
-| E9 | B-577 | Su B-557 rompió `test_perfiles_interior` (3; panel Objetos del boceto). P-158h integrado: b322fcc |
+| E9 | — | En pausa hasta el lote de las 13 h (P-158 terminado en bocetos y sólido). B-577 integrado: 14872ed |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
