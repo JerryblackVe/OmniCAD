@@ -15,9 +15,9 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 8. **Seguridad**: sin push, gasto, borrado ni archivos privados sin el OK de Gerardo; credenciales nunca a la vista; MCP solo en 127.0.0.1.
 9. **Solo OpenCascade**: OmniKernel suspendido.
 10. **Todo en MCP y CLI**: cada herramienta nueva con su versión para agentes, test y doc.
-11. **Avisos**: contexto al 65 %, cupo de Claude al 95 %, OpenCode (glm-5.3-flash-free; Sol dado de baja por Gerardo el 2026-11-15) siempre con trabajo.
+11. **Avisos**: contexto al 25 %, cupo semanal fuera de ritmo o al 90 % (Protocolo de ahorro), OpenCode (glm-5.3-flash-free; Sol dado de baja por Gerardo el 2026-11-15) siempre con trabajo.
 12. **Hablarle corto a Gerardo**: 3–5 líneas, resultado primero, ⚠ para riesgos, una sola pregunta.
-13. **Cuidar los tokens, sin perder calidad (Gerardo, 2026-11-15: prioridad máxima)**: meta, una app usable para el 30/11. Modelo y esfuerzo justos (Opus solo en solver, geometría y núcleo; lo demás en Sonnet; lo mecánico en OpenCode gratis o en scripts); leer solo lo necesario; nada de pruebas ni análisis repetidos; mensajes cortos; nada de prioridad 2 hasta terminar la 1. Sin capacidad ociosa en lo que suma a la meta, pero gastar menos vale más que gastar todo el cupo.
+13. **Cuidar los tokens, sin perder calidad (Gerardo, 2026-11-15: prioridad máxima)**: meta, una app usable para el 30/11. Modelo y esfuerzo justos (Opus solo en solver, geometría y núcleo; lo demás en Sonnet; lo mecánico en OpenCode gratis o en scripts); leer solo lo necesario; nada de pruebas ni análisis repetidos; mensajes cortos; nada de prioridad 2 hasta terminar la 1. Sin capacidad ociosa en lo que suma a la meta, pero gastar menos vale más que gastar todo el cupo. Cómo se hace: sección «Protocolo de ahorro».
 14. **App para todos (Gerardo, 2026-11-15)**: OmniCAD tiene que ser intuitiva y gráfica, y entenderse desde un chico de 10 años hasta una persona de 100. Todo se trabaja bajo esta premisa: mensajes de 1 renglón con ícono y sin jerga, límites y errores mostrados en el dibujo (asa, campo o previa en rojo), muestras visuales en vez de textos largos, y el detalle en un «?» o en la ayuda. Lo que ya existe y no cumple se adapta (P-157, P-158).
 15. **Nunca ser complaciente (Gerardo, 2026-11-15)**: si un pedido, un plan o una idea (de Gerardo, del coordinador o de otra sesión) es mala idea, no conviene o no es lo adecuado, decirlo antes de hacerlo, en una línea, con la razón y la alternativa. Como expertos, no se ejecuta algo malo por darle el gusto a nadie; si es buena idea, se hace sin vueltas.
 16. **Lo que no funciona, en gris (Gerardo, 2026-11-16)**: toda función que no funciona queda deshabilitada, con un aviso chico «No disponible: <motivo>» de 1 renglón, hasta que funcione y esté probada. Se deshabilita lo más chico posible (la opción que falla, no el comando entero) y solo lo que falla de verdad en el uso común (rompe, pierde trabajo o no hace nada), no lo lento ni los casos raros. Vive en una lista central que leen la cinta, los menús, los paneles y la API (P-169); al cerrar el bug con su prueba, se vuelve a habilitar en el mismo commit.
@@ -58,8 +58,8 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
   `scripts/worktree_item.sh`).
 - Gasto: tope USD 290/mes. Cambiar la máquina o sumar algo que suba el costo pide su OK.
 - Tests de a 5 con `scripts/turno.py` (`OMNICAD_TURNOS=5` en `~/.claude/settings.json` de la VPS; Gerardo, 2026-11-14).
-- **Sesiones de ejecución fijas**, una por carril. El coordinador les manda ítems con `SendMessage` (vaciado al 65 %: ver
-  la regla de contexto):
+- **Sesiones de ejecución fijas**, una por carril. El coordinador les manda ítems con `SendMessage` (vaciado por ítem y al
+  25 %, modelo por ítem: ver el «Protocolo de ahorro»). La columna «Modelo» es el de partida:
 
   | Sesión | Carril | Modelo |
   |---|---|---|
@@ -167,21 +167,31 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 - `scripts/caza/` busca errores solo, sin modelos ni red (`docs/plan_caza_errores.md`). Comandos (`rapida`, `noche`,
   `tema`, `repetir`) y qué hacer con el informe: [docs/coordinacion.md](docs/coordinacion.md).
 
-## Regla estricta: aviso de contexto al 65 % (Gerardo, 2026-11-05; 65 % desde 2026-11-11)
-- El coordinador mira su contexto (`get_usage`) al cerrar cada tarea o tanda. **Al 60 % avisa; al 65 % no arranca
-  nada nuevo:** commit de lo verificado, seguimiento y página al día, nota de traspaso en el Registro de
-  `PROJECT_LOG.md`, y le dice a Gerardo en una línea que abra una sesión nueva de coordinación.
-- Las sesiones de ejecución hacen lo mismo al 65 %; el coordinador las vacía con `clear_session` entre ítems (nunca
-  en medio de uno) y les manda un brief que empieza leyendo su nota. Detalle: [docs/coordinacion.md](docs/coordinacion.md).
-
-## Regla estricta: elegir modelo y esfuerzo por tarea (ahorrar tokens sin perder calidad)
-- **Cada tarea lleva su modelo y su esfuerzo elegidos a conciencia**, dichos en una línea ANTES de abrir la sesión o
-  mandar el trabajo. Nunca el valor por defecto ni «alto» por reflejo.
-- Mecánico o de volumen: Haiku (o OpenCode con GLM). Arreglo chico, UI, tests, docs: Sonnet bajo o medio. Feature o
-  refactor: Sonnet medio. Solver, geometría difícil, arquitectura, auditoría: Opus alto.
-- **Fable no se usa salvo que Gerardo lo pida por nombre (2026-11-01).** El tope es Opus alto.
-- **La calidad del código manda**: si la tarea toca solver, geometría o núcleo, no se baja el esfuerzo para ahorrar.
-- No se cambia el modelo de una sesión en marcha salvo que se quede corta. Tabla completa: [docs/coordinacion.md](docs/coordinacion.md).
+## Protocolo de ahorro: estirar el cupo hasta el 30/11 (Gerardo, 2026-11-16)
+Medido el 16/11: plan Pro, semanal al 77 % con 2,7 días hasta el reinicio, sesiones con 200–575 mil tokens de
+contexto. Cada turno relee el contexto entero: **el tamaño del contexto es el gasto principal**. Vale para el
+coordinador, E1–E11 y el chat maestro.
+1. **Contexto chico.** Ítem cerrado → nota de traspaso de 5 líneas en el Registro de `PROJECT_LOG.md` →
+   `clear_session` → brief nuevo que empieza leyendo la nota. Tope: **25 %** de contexto (al 20 % se avisa); el
+   coordinador y el chat maestro también. Nunca se vacía en medio de un ítem. Detalle: [docs/coordinacion.md](docs/coordinacion.md).
+2. **Ritmo del cupo.** El coordinador mira el semanal con `get_usage` al cerrar cada ítem. Ritmo = lo que queda ÷ días
+   hasta el reinicio (los jueves 05:00 de Argentina). Plan: hasta el 19/11, ~8 % por día; del 19 al 26/11, ~13 %; del
+   26 al 30/11, ~19 % (queda ~10 % para el 1 al 3/12).
+   - **Verde** (en ritmo): hasta 5 sesiones de Claude trabajando a la vez.
+   - **Amarillo** (3 puntos o más arriba del ritmo): 3 a la vez, solo prioridad 1.
+   - **Rojo** (90 %): se pausa Claude y sigue OpenCode («Cupo semanal al 90 %» en [docs/coordinacion.md](docs/coordinacion.md)).
+3. **Modelo por ítem, no por carril.** El coordinador lo elige en cada brief y lo cambia con `set_session_model` al
+   vaciar la sesión. Opus alto: solver, geometría OCC, núcleo y velocidad (ahí no se baja el esfuerzo). Sonnet medio:
+   UI, diálogos, selección, tests, docs e integración. OpenCode gratis o un script: lo mecánico (filas de seguimiento,
+   doc generada, textos). Fable solo si Gerardo lo pide por nombre.
+4. **Leer y correr lo mínimo.** `grep -n` y leer la sección (offset/limit), no el archivo entero; salidas largas con
+   `| tail` o `ctx_execute`; `tests_afectados.py --correr` al final de cada intento, no tras cada edición; la suite y
+   la humo, solo de noche y por script.
+5. **Mensajes cortos.** Brief de 15 líneas como mucho, que nombra archivos y no pega su contenido. Informe de 10
+   líneas más los hallazgos de `ponytail-review` (no su salida entera). Entre sesiones: ID, archivo:línea, comando y resultado.
+6. **Coordinador liviano.** Vigila cada 2 h y cuando una sesión termina, no por reloj corto; integra por tandas; la
+   página de seguimiento se refresca una vez por día (19 h). En el lote de las 19 h, una línea al chat maestro:
+   semanal %, ritmo, color e ítems cerrados del día.
 
 ## Límites de intentos (Gerardo, 2026-11-13)
 - Por tarea, como mucho **6 iteraciones** (cambio → prueba → mirar). Por problema, **3 intentos de prueba**, cada uno
@@ -193,8 +203,8 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 ## Avisos de recursos (Gerardo, 2026-11-13)
 - Antes de empezar, la sesión avisa al coordinador en una línea si necesita Opus alto o ultracode (y qué de la tarea
   lo justifica), Fusion abierto o el túnel VPS↔PC (`127.0.0.1:27182`).
-- Primero lo barato: la ayuda local (`scripts/fusion_docs.py buscar`) antes que Fusion abierto; el modelo de la
-  tabla de «elegir modelo y esfuerzo» antes que uno más caro.
+- Primero lo barato: la ayuda local (`scripts/fusion_docs.py buscar`) antes que Fusion abierto; el modelo del
+  «Protocolo de ahorro» antes que uno más caro.
 - Sin el recurso, sigue con lo que puede y anota el caso para después.
 
 ## Agente de Computer Use: E11 en la PC (Gerardo, 2026-11-13)
@@ -206,14 +216,5 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 - Complementa `scripts/prueba_ui` y la skill `omnicad-test`, no los reemplaza. Mueve el cursor real (única excepción a
   «eventos simulados»): corre solo con la PC libre o con el OK de Gerardo. No toca código.
 - Detalle: [docs/coordinacion.md](docs/coordinacion.md).
-
-## Consumo de tokens (Gerardo, 2026-11-13)
-- Modelo y esfuerzo: los de «elegir modelo y esfuerzo»; lo caro solo donde la complejidad lo justifica.
-- Leer la sección que hace falta, no el archivo entero. No releer lo que no cambió. Reusar la evidencia válida; no
-  repetir análisis ni pruebas sin motivo.
-- Cada sesión carga solo el contexto de su ítem. Lo mecánico va a un script o a un modelo barato; las operaciones
-  se agrupan.
-- Mensajes entre sesiones: cortos y verificables (ID, archivo:línea, comando y resultado).
-- El coordinador mide el gasto con `get_usage` y lo informa al chat de la PC los viernes.
 
 @AGENTS.md
