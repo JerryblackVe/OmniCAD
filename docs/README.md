@@ -59,7 +59,8 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | Documento | Qué tiene |
 |---|---|
 | [plan_mcp_cli.md](plan_mcp_cli.md) | Plan de la capa para agentes (paquetes A–L) |
-| [coordinacion.md](coordinacion.md) | Procedimientos de coordinación movidos de `CLAUDE.md` (VPS, página de seguimiento, prueba como usuario, ayuda de Fusion, loop por fases, caza, contexto, modelos, memoria de la PC) |
+| [coordinacion.md](coordinacion.md) | Procedimientos de coordinación movidos de `CLAUDE.md` (VPS, página de seguimiento, prueba como usuario, ayuda de Fusion, loop por fases, caza, contexto, modelos, memoria de la PC); `brief.md`: plantilla de brief |
+| [brief.md](brief.md) | Plantilla fija de brief a una sesión o a OpenCode (skills, Fusion, informe); el brief solo nombra ID, archivo y «seguí docs/brief.md» |
 | [seguimiento/ahora.md](seguimiento/ahora.md) | La única cola de trabajo: «Ahora» (uno por sesión) y «Sigue» (los próximos 10) |
 | [plan_fluidez.md](plan_fluidez.md) | Plan de fluidez (2026-11-13): que la ventana nunca se congele; paquetes F0–F11 (filas FL-*) |
 | [plan_rust.md](plan_rust.md) | Qué pasa a Rust (R1–R13) y arreglos de Python (P1–P24) |
