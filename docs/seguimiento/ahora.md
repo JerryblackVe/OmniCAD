@@ -14,7 +14,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | B-578 | Rosca modelada: 0,67 s, sigue hacia < 0,3 s (integral por cara con punto fijo); después B-567. Parte 1 integrada: 94315be |
+| E6 | B-567 | Reintentos de booleanas: 45 s antes del error. B-578 queda Parcial en 0,67 s (3 intentos sin ganancia; para 0,3 s hace falta bajar 6 partes chicas, una de arquitectura) |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E9 | B-589 | `create_thread` cosmética por defecto como Fusion y la ventana (decisión del chat maestro), con la línea «para imprimir en 3D o exportar a STL, pasá modeled=true» y la doc regenerada; después B-587 |
