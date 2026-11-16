@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-16 · B-606 cerrado (coordinador).** h77 de la CI de Windows del 13/11: verificado en Windows por el chat maestro sobre main 46409796 (`tests/test_proyeccion_seccion.py` 13 passed, h77 1 passed en 4,91 s) y en Linux. Sin cambio de código; fila borrada.
 - **2026-11-16 · Dirección del chat maestro (coordinador).** Desde la VPS, SendMessage con `to` = «Chat Maestro OmniCAD setup» (el nombre solo; con el id o con «[1c4d23]» no llega). Pendientes del coordinador en `~/coordinador/pendientes_envio.md`.
 - **2026-11-16 · B-610 cerrado (E5).** Con un cuerpo encima del origen, un campo que pide un plano no dejaba ver ni elegir los planos. `visor3d.py`: al pedir un plano (`eligiendo_planos`) los planos de origen cubren la caja del modelo (`_rect_origen`) y se dibujan encima del cuerpo, sin prueba de profundidad (`_planos_encima`); un único punto para todos los comandos con campo de plano. Test `tests/test_b610_planos_con_cuerpo_encima.py`; `test_b445` ajustado al borde real. Verificación: 11 archivos de planos/origen 254 OK, ruff limpio, humo TODO OK.
 - **2026-11-16 · B-604 cerrado (E5).** Causa: B-593 hizo que el plano de desfase mida los cuerpos (±18,7 mm con el cilindro de r 14) y el test clicaba en y = 20, fuera del cuadro dibujado; el visor eligió bien (no hay bug de Proyectar). `tests/test_proyectar_tarjeta.py` clica ahora en (40, 10, 47), aserciones intactas. Verificación: test_proyectar_tarjeta 69 OK, ruff limpio.
