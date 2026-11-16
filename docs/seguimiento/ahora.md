@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
 | E3 | B-503 | Desfase de 0,5 mm en letras curvas (falla en 5–41 s). Opus alto. P-170 Bloqueado por el kernel; B-609 Parcial: bb9a729 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
-| E5 | HOOKS-1116 | Hooks del protocolo (reusar sesiones, traspaso al 25 %, lista de arranque); OK de Gerardo. Sonnet medio. B-610: 29cd17c (falta Windows) |
+| E5 | ASM-9 | Activar componente (filtrar timeline, atenuar, crear en el activo); después ASM-16. Sonnet medio. HOOKS-1116 integrado: 329fd21 |
 | E6 | P-173 | La vista no se congela mientras calcula (sin diálogo modal). Opus alto. B-608 Parcial: 6115ddb (falta Windows) |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
@@ -26,7 +26,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
-| 6 | ASM-9 / ASM-16 | Activar componente; arrastrar componentes (E5, Sonnet medio) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
