@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-595, B-596 y B-597 (texto girado y zoom), B-599 (previa del patrón circular sin geometría; no se reproduce en la VPS), B-601 (`suppress` fuera de rango en el patrón de boceto), B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
-| E2 | B-600 | Patrón de Componentes: elegir con clic en el navegador o la vista, como Fusion (hoy se escriben nombres). B-325 cerrado |
+| E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | B-593 integrado (5e91b41). Libre hasta el lote de las 13 h |
