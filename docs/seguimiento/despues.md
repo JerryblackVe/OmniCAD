@@ -4,7 +4,7 @@ Prioridad 2, **congelada** (Gerardo, 2026-11-13): render, animación, simulació
 
 Mismas columnas que las otras listas ([README](README.md)); no ordena nada: la cola es [ahora.md](ahora.md). Al resolverse, la fila se borra.
 
-Total 224: Abierto 138 · Parcial 47 · Bloqueado 32 · Sin verificar 7 (2026-11-13: lote de E11, B-414, B-415 y P-155; 2026-11-13: creado por el cambio 3 de la reorganización).
+Total 226: Abierto 140 · Parcial 47 · Bloqueado 32 · Sin verificar 7 (2026-11-13: lote de E11, B-414, B-415 y P-155; 2026-11-13: creado por el cambio 3 de la reorganización).
 
 ## Bugs › Abiertos y parciales
 
@@ -317,11 +317,13 @@ Abierto 6 · Parcial 1 · Bloqueado 1.
 
 ## Faltantes › Otros CAD libres
 
-Abierto 1 · Parcial 1.
+Abierto 3 · Parcial 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
 | CL1 | Cambio de agente con vista previa y control de revisión | Parcial | Media | Agregar expected_revision para agentes externos del puente en vivo. | omnicad/ui/asistente.py (_Tarjeta); tests/test_asistente_ui.py | 2026-10-25 |
+| P-171 | Mouse configurable: elegir qué botón orbita, desplaza y hace zoom (como MitCAD y Fusion › Preferencias › Navegación) | Abierto | Media | Preferencia de navegación por botón, que lean el visor y el boceto; después del 30/11 | Comparación con MitCAD aprobada por Gerardo vía el chat maestro (16/11) | 2026-11-16 |
+| P-172 | Pestaña CNC y láser (trayectorias de corte y grabado, como MitCAD) | Abierto | Alta | Definir alcance contra Fusion › Fabricar; después del 30/11 | Comparación con MitCAD aprobada por Gerardo vía el chat maestro (16/11) | 2026-11-16 |
 | CL3 | Tutoriales reproducibles con capítulos y cámara | Abierto | Media | Todo. | grep tutorial sin resultados | 2026-10-20 |
 
 ## Mejoras › Pendientes generales
