@@ -19,7 +19,6 @@ from ..nucleo import referencias as refs
 from . import entidades as ent
 from .operaciones import (OPERACIONES_CUERPO, ErrorOperacion, Operacion, ParametroMalFormado, _deps_objetivo,
                           _resolver, aplicar_resultado, registrar_operacion)
-from .ops_ensamblar import OpComponente, OpUnion, OpVinculoMovimiento, pose_de_reasignar
 from .parametros import ANGULO, ESCALAR
 
 TIPOS = {"engranaje": "Engranaje (recto o helicoidal)", "cremallera": "Cremallera", "rueda_cadena": "Rueda de cadena"}
@@ -169,6 +168,7 @@ def agregar_ensamblaje(doc, op_id, un_paso=False):
     op = doc.operacion(op_id)
     if not isinstance(op, OpEngranaje) or op.p.get("tipo", "engranaje") != "engranaje" or not op.p.get("par"):
         raise ErrorOperacion("El ensamblaje automático es para un paso Engranaje con «Par de engranajes».")
+    from .ops_ensamblar import OpComponente, OpUnion, OpVinculoMovimiento, pose_de_reasignar   # B-588: a nivel de módulo cierra un ciclo
     pila = list(doc._deshacer)
     estado = doc.estado_en(doc.indice(op_id) + 1)
     cuerpos = [c for c in estado.cuerpos.values() if c.op_id == op_id]
