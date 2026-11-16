@@ -1246,7 +1246,7 @@ def componentes_elegidos(v, ctx):
         cuerpo = ctx.estado.cuerpos.get(r.get("cuerpo"))
         k = r.get("componente") if r.get("tipo") == "componente" else getattr(cuerpo, "componente", None)
         if not k:
-            raise ErrorComando(f"«{getattr(cuerpo, 'nombre', r.get('cuerpo'))}» no está en un componente: tocá un componente.")
+            raise ErrorComando(f"«{getattr(cuerpo, 'nombre', r.get('cuerpo'))}» no está en un componente.")
         ids.append(k)
     if not ids:
         raise ErrorComando("Seleccioná los componentes.")
