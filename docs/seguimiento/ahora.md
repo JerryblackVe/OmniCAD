@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-582, B-586, B-585 y B-584 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
-| E2 | B-580 | Ctrl+P: el doble clic no siempre edita y Enter cierra sin cambiar el valor (B-581 integrado: 07b7392) |
+| E2 | H-91 / H-116 | Solevación: condiciones de borde exactas; 2 o más raíles (B-580 integrado: ae0838b) |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
@@ -29,10 +29,9 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 3 | B-546 + P-99 | Extruir lento con muchos perfiles: recalcula todos en cada clic; la 1.ª apertura arma las asas (E6, Opus alto) |
 | 4 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (E6, Opus alto) |
 | 5 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
-| 6 | H-91 / H-116 | Solevación: condiciones de borde exactas; 2 o más raíles (E2, Opus alto) |
-| 7 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
-| 8 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
-| 9 | ASM-9 / ASM-16 | Activar componente; arrastrar componentes (E5, Sonnet medio) |
+| 6 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
+| 7 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
+| 8 | ASM-9 / ASM-16 | Activar componente; arrastrar componentes (E5, Sonnet medio) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
