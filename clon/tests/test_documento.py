@@ -242,3 +242,17 @@ def test_lo_del_dialogo_sigue_siendo_un_solo_deshacer():
     assert doc.parametros.obtener("alto").expresion == "10 mm" and doc.puede_rehacer()
     doc.rehacer()
     assert doc.parametros.obtener("alto").expresion == "40 mm"
+
+
+def test_agregar_nunca_deja_un_paso_dos_veces_ni_un_id_repetido():
+    # B-592: «La receta repite el id de paso» al extruir justo después de una excepción durante `agregar`.
+    doc = Documento()
+    a = OpPrimitiva("op1", "Caja", forma="caja", ancho=10, largo=10, alto=10)
+    doc.agregar(a)
+    with pytest.raises(ErrorDocumento, match="ya está en el timeline"):
+        doc.agregar(a)
+    b = OpPrimitiva("op1", "Caja2", forma="caja", ancho=5, largo=5, alto=5)
+    doc.agregar(b)
+    ids = [o.id for o in doc.operaciones]
+    assert len(ids) == 2 and len(set(ids)) == 2 and b.id != "op1"
+    doc._cargar(doc.a_dict())                       # la receta vuelve a abrir (B-262 no se queja)

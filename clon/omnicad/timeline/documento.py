@@ -469,6 +469,10 @@ class Documento:
         """Inserta la operación en la posición del marcador (como Fusion) y la ejecuta. `aparte`: la calcula en un proceso
         aparte aunque el documento sea chico (un paso pesado aceptado desde la ventana, B-306)."""
         exigir_nombre(op.nombre)                       # P-93: el `name` de las herramientas de creación también
+        if any(o is op for o in self.operaciones):     # B-592: un paso nunca queda dos veces
+            raise ErrorDocumento(f"«{op.nombre}» ya está en el timeline.")
+        if any(o.id == op.id for o in self.operaciones):    # B-592: un id repetido rompería la receta; el paso nuevo toma uno propio
+            op.id = self.nuevo_id()
         self._fijar_ocultos(op)
         tabla, contador = self._tabla_cotas(self.operaciones[:self.marcador] + [op] + self.operaciones[self.marcador:])
         desde = min(self.marcador, self._primer_afectado(tabla))

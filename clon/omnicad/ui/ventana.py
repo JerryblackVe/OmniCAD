@@ -23,6 +23,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import numpy as np
+from shiboken6 import isValid
 
 from PySide6.QtCore import QEvent, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QInputEvent, QKeySequence
@@ -1084,6 +1085,8 @@ class VentanaPrincipal(QMainWindow):
         u = self.doc.unidades
         formato.configurar_unidades(u["longitud"], u["masa"])
         self.timeline.unidades.setText(f"Unidades: {u['longitud']}, {u['masa']}  ▾")
+        if not isValid(self.menu_unidades) or not all(isValid(a) for a in self._acciones_unidad.values()):
+            self._crear_menu_unidades()         # B-591: Qt ya borró el menú (o sus acciones); un QAction muerto cortaba `_actualizar`
         for (magnitud, unidad), a in self._acciones_unidad.items():
             a.setChecked(u[magnitud] == unidad)
 
