@@ -1138,6 +1138,10 @@ class Documento:
                 aislado.marca_recibida = None
                 return _leer_calculo(aislado.correr_json(tarea, datos, aislado.TOPE_PREVUELO_PARAMETROS, esperar))
         except (aislado.TareaAislada, ValueError, ErrorGeometria, OSError) as e:
+            if isinstance(e, (PermissionError, aislado.ArchivoTrabado)) or isinstance(e.__cause__, PermissionError):
+                raise ErrorDocumento("No se pudo calcular: un archivo temporal estaba ocupado. Probá de nuevo.") from e
+            if isinstance(e, OSError) or isinstance(e.__cause__, OSError):     # B-562 (regla 14): sin la ruta
+                raise ErrorDocumento("No se pudo calcular en el proceso aparte. Probá de nuevo.") from e
             raise ErrorDocumento(f"El cálculo aislado falló: {e}. No se aplicó el resultado y OmniCAD sigue andando.") from e
         finally:
             self._esperando_hijo = False

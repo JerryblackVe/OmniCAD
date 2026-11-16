@@ -35,6 +35,7 @@ from .. import NOMBRE_APP, VERSION, carpeta_datos
 from ..nucleo import geometria as geo
 from ..nucleo import intercambio
 from ..nucleo import motor
+from ..reintentos import reintentar
 from ..timeline.documento import Documento, ErrorDocumento
 from ..timeline.operaciones import ErrorOperacion
 from ..timeline.parametros import ErrorExpresion
@@ -230,7 +231,7 @@ def _escribir(ruta, manifiesto, receta, miniatura_png=None, doc_cache=None):
                 _escribir_cache(z, doc_cache, receta)
             if miniatura_png:      # sin comprimir: el PNG ya lo está, y el lector de miniaturas de Windows la lee directo
                 z.writestr("miniatura.png", miniatura_png, zipfile.ZIP_STORED)
-        os.replace(temporal, ruta)
+        reintentar(os.replace, temporal, ruta)      # B-562: el Explorador o el antivirus pueden tenerlo abierto un instante
     except BaseException:
         if os.path.exists(temporal):
             os.remove(temporal)
@@ -439,7 +440,7 @@ def suprimir_copia(ruta):
     if not es_copia_de_autoguardado(ruta):
         raise ErrorProyecto(f"«{Path(ruta).name}» no es una copia de autoguardado (*.autoguardado{EXTENSION}): "
                             "no se borra.")
-    Path(ruta).unlink(missing_ok=True)
+    reintentar(Path(ruta).unlink, missing_ok=True)
 
 
 def abrir_recuperado(copia, proyecto_original=None):

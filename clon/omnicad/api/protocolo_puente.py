@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 
 from .. import carpeta_datos
+from ..reintentos import reintentar
 from .registro import Imagen
 
 PUERTO_POR_DEFECTO = 27191
@@ -50,7 +51,7 @@ def ruta_info():
 def leer_info(ruta=None, clave_puerto="port"):
     """Datos de `puente.json` ({port, token, pid, version, protocol}) o None si no hay o está dañado."""
     try:
-        datos = json.loads(Path(ruta or ruta_info()).read_text(encoding="utf-8"))
+        datos = json.loads(reintentar(Path(ruta or ruta_info()).read_text, encoding="utf-8"))   # B-562
     except (OSError, ValueError):
         return None
     if not isinstance(datos, dict) or not isinstance(datos.get(clave_puerto), int) or not isinstance(datos.get("token"), str):
@@ -64,7 +65,7 @@ def escribir_info(ruta, datos):
     ruta.parent.mkdir(parents=True, exist_ok=True)
     temporal = ruta.with_name(ruta.name + f".{os.getpid()}.tmp")
     temporal.write_text(json.dumps(datos), encoding="utf-8")
-    os.replace(temporal, ruta)
+    reintentar(os.replace, temporal, ruta)      # B-562: en Windows, un cliente leyéndolo lo traba un instante
     try:
         os.chmod(ruta, 0o600)      # el JSON lleva el token: solo el usuario (en Windows chmod casi no aplica)
     except OSError:
