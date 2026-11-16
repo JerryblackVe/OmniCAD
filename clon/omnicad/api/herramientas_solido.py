@@ -604,7 +604,7 @@ def loft(sesion, sketches: list[str] | None = None, profiles: list[int | str] | 
     closed: true para cerrar el sólido uniendo la última sección con la primera.
     target: cuerpo(s) afectados por join, cut o intersect (id o nombre); vacío = los sólidos visibles que toca.
     sections: secciones en orden, en lugar de sketches: {"sketch": id, "profile": índice} (profile 0 por defecto), una cara o arista (selector o id de find_faces / find_edges), un vértice [x, y, z] o un punto de construcción (id o nombre). Mínimo dos.
-    rails: curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una lista por carril.
+    rails: curvas guía {"sketch": id, "curve": n} o aristas (selector o id), una por carril; cualquier cantidad de carriles.
     center_line: la línea central de la solevación: {"sketch": id, "curve": n} o aristas; no se combina con rails.
     body: cuerpo donde se evalúan los selectores de sections, rails y center_line; vacío = el único cuerpo.
     start_condition: condición de borde de la primera sección: {"type": "free" | "direction" | "tangent" | "smooth" | "point_tangent", "angle": grados desde la normal de la sección (0 = perpendicular, por defecto, como Fusion), "weight": número (1 por defecto), "face": cara (selector o id; solo con tangent y smooth)}; point_tangent solo en un punto (cúpula; sin condición queda agudo).

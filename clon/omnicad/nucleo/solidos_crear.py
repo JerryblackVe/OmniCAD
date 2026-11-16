@@ -1736,7 +1736,7 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
 
     secciones: caras (se respetan los agujeros si todas tienen la misma cantidad), alambres/aristas, o un
     punto/vértice como primera o última sección. `cerrada` une la última sección con la primera. Con
-    `linea_central` se usa MakePipeShell con todas las secciones. Con `carriles` se admite UNO y se comparte
+    `linea_central` se usa MakePipeShell con todas las secciones. Con `carriles` (cualquier cantidad, como Fusion) se comparte
     la construcción de secciones intermedias de la solevación de superficie, conservando las esquinas;
     el sólido se cierra con tapas sobre esas mismas secciones. Los contornos y carriles curvos se aproximan
     por muestras (ver superficies._solevar_con_rieles). Las formas analíticas se recuperan si cumplen la
@@ -1753,8 +1753,6 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     carriles = _lista(carriles)
     if carriles and linea_central is not None:
         raise geo.ErrorGeometria("⚠ Carriles o línea central, no los dos.")
-    if len(carriles) > 1:
-        raise geo.ErrorGeometria("⚠ El solevado admite un solo carril.")
     exteriores = [(s[0], s[1]) for s in secs]
     if not (carriles or linea_central is not None or cerrada):
         _exigir_ida(exteriores)
@@ -1770,7 +1768,7 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     exacta = (condicion_exacta and condiciones and not condiciones_medias and linea_central is None
               and sfc._exacta_posible(exteriores, (condicion_inicio, condicion_fin)))
     if carriles:
-        forma = sfc._solevar_con_rieles(exteriores, [_alambre(carriles[0])], condicion_inicio, condicion_fin,
+        forma = sfc._solevar_con_rieles(exteriores, [_alambre(c) for c in carriles], condicion_inicio, condicion_fin,
                                         condiciones_medias, False, exacta, solido=solido)
     elif linea_central is not None:
         if any(c and c.get("tipo") == "punto_tangente" for c in (condicion_inicio, condicion_fin)):
