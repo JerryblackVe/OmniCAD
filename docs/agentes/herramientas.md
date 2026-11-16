@@ -5,14 +5,14 @@
 > Archivo generado: no editar a mano. Regenerar con `omnicad tools --markdown --output docs/agentes/herramientas.md` (desde la raíz del repo).
 > Sale del catálogo de `omnicad.api`, la misma fuente del servidor MCP y de la CLI. Un test avisa si queda viejo.
 
-437 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
+439 herramientas en 17 grupos. Unidades: mm y grados. Nombres, parámetros y claves del resultado en inglés; textos en español.
 Cada llamada devuelve `{"ok": true, "result": ..., "avisos": [...]}` o `{"ok": false, "error_kind": ..., "mensaje": ..., "pistas": [...]}`.
 
 El servidor MCP en modo en vivo o auto suma `get_mode`, que no está en el catálogo (ver `puente.md`).
 
 | Grupo | Herramientas | Para qué |
 |---|---|---|
-| [documento](#grupo-documento) | 56 | Archivo, escena, timeline y deshacer. |
+| [documento](#grupo-documento) | 58 | Archivo, escena, timeline y deshacer. |
 | [parametros](#grupo-parametros) | 7 | Medidas con nombre que gobiernan el modelo. |
 | [boceto](#grupo-boceto) | 72 | Bocetos 2D: geometría, restricciones y cotas. |
 | [vectores](#grupo-vectores) | 37 | Texto y vectores: fuentes, texto de boceto, SVG, DXF e imágenes vectorizadas. |
@@ -85,6 +85,8 @@ Archivo, escena, timeline y deshacer.
 | [`manage_selection_sets`](#manage_selection_sets) | sí | Conjuntos de selección guardados en el diseño (Seleccionar › Crear conjunto de selección): guarda cuerpos, caras o aristas bajo un nombre, los vuelve a elegir, les suma objetos (update) o los borra. |
 | [`select_by_boundary`](#select_by_boundary) | no | Elige los objetos que quedan dentro o fuera de un límite 3D (Seleccionar › Herramientas de selección › Por límite): una caja, un cilindro (eje X) o una esfera centrada en un cuerpo o en un punto. |
 | [`select_by_seed_and_boundary`](#select_by_seed_and_boundary) | no | Elige las caras de un cuerpo que hay entre unos objetos límite y una cara semilla (Seleccionar › Herramientas de selección › Semilla y límite): desde la semilla se avanza de cara en cara sin cruzar las caras ni las aristas límite. |
+| [`list_themes`](#list_themes) | no | Lista los temas de color de la interfaz (Preferencias › Apariencia): el del sistema y los incluidos, con sus colores principales para verlos sin abrir la ventana, y cuál está elegido. |
+| [`set_theme`](#set_theme) | sí | Elige el tema de color de toda la interfaz (uno de list_themes). |
 | [`move_feature`](#move_feature) | sí | Mueve un paso del timeline a otro índice (como arrastrarlo en la app). |
 | [`set_marker`](#set_marker) | sí | Mueve el marcador del timeline (Fusion: «Rodar marcador aquí» del menú contextual). |
 | [`get_profile_sketches`](#get_profile_sketches) | no | Bocetos que usa un paso del timeline (perfiles de una extrusión o revolución, ruta de un barrido…), en orden: lo mismo que abre «Editar boceto de perfil» en el timeline. |
@@ -632,6 +634,23 @@ Elige las caras de un cuerpo que hay entre unos objetos límite y una cara semil
   - `boundary_edges` (lista de texto o texto o null; opcional, por defecto `null`): aristas límite: selector, ids o lista; la selección no las cruza.
   - `body` (texto; opcional, por defecto `null`): cuerpo donde se evalúan los selectores; vacío = el único cuerpo.
 - CLI: `omnicad call select_by_seed_and_boundary --doc pieza.omnicad seed=…`
+
+### `list_themes`
+
+Lista los temas de color de la interfaz (Preferencias › Apariencia): el del sistema y los incluidos, con sus colores principales para verlos sin abrir la ventana, y cuál está elegido.
+
+- Modifica el documento: no.
+- Parámetros: ninguno.
+- CLI: `omnicad call list_themes --doc pieza.omnicad`
+
+### `set_theme`
+
+Elige el tema de color de toda la interfaz (uno de list_themes). No modifica el documento ni entra en deshacer; la ventana lo toma al aplicar preferencias.
+
+- Modifica el documento: sí, pero no entra en deshacer.
+- Parámetros:
+  - `theme` (texto; obligatorio): clave de list_themes ('oscuro_moderno', 'claro_moderno', 'sistema'…).
+- CLI: `omnicad call set_theme --doc pieza.omnicad theme=…`
 
 ### `move_feature`
 

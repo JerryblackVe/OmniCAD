@@ -37,7 +37,7 @@ If it is useful to you, a donation helps keep it going.
   imports STEP; sketches from DXF and SVG.
 - **Inspection:** volume, mass, area, bounding box, distances, angles, interference, draft, accessibility, minimum radius, zebra, curvature, section, carbon footprint (Sustainability Insights) and face groups.
 - **In-app AI assistant:** a chat that designs and edits the part with the program's own tools, using an API key or your Claude Code, Codex or OpenCode subscription.
-- **Interface:** 5 themes (modern dark, modern light, professional blue, minimalist and classic) plus user themes
+- **Interface:** 9 themes (modern dark, modern light, professional blue, minimalist, classic, graphite, violet, high contrast and mint) plus user themes
   in a JSON file; toolbox on the S key (search and pin commands).
 - **Geometry kernel:** [OpenCascade](https://dev.opencascade.org/) (B-rep).
 

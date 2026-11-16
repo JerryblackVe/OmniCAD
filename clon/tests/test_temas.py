@@ -33,7 +33,8 @@ def escribir(carpeta, nombre, contenido):
 
 # ---------------------------------------------------------------- los temas incluidos
 def test_hay_cinco_temas_y_el_de_fabrica_es_oscuro_moderno():
-    assert INCLUIDOS == ["oscuro_moderno", "claro_moderno", "azul_profesional", "minimalista", "clasico"]
+    assert INCLUIDOS == ["oscuro_moderno", "claro_moderno", "azul_profesional", "minimalista", "clasico", "grafito", "violeta",
+                         "alto_contraste", "menta"]
     assert temas.DEFECTO == "oscuro_moderno" and temas.clave_activa() == "oscuro_moderno"
     from omnicad.ui.preferencias import DEFECTOS
     assert DEFECTOS["general/tema"] == "oscuro_moderno"
@@ -215,8 +216,8 @@ def test_disponibles_lista_los_incluidos_primero_y_los_del_usuario_marcados(tmp_
     lista, avisos = temas.disponibles()
     assert avisos == []
     assert lista[0] == ("sistema", "Tema del sistema", False)
-    assert [c for c, _n, _u in lista[1:6]] == INCLUIDOS and not any(u for _c, _n, u in lista[1:6])
-    assert lista[6] == ("usuario:zeta", "Zeta", True)
+    assert [c for c, _n, _u in lista[1:10]] == INCLUIDOS and not any(u for _c, _n, u in lista[1:10])
+    assert lista[10] == ("usuario:zeta", "Zeta", True)
 
 
 def test_exportar_plantilla_es_un_json_con_todos_los_colores_que_se_vuelve_a_leer(tmp_path):

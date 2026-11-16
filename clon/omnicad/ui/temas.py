@@ -3,7 +3,7 @@
 Sistema de temas de la interfaz: colores como datos, hoja de estilo (QSS) generada y temas del usuario.
 
   - Un tema es un dict de «tokens» de color (`#rrggbb`): superficies, textos, bordes, estados, menús, la vista 3D.
-  - Hay cinco temas incluidos (`INCLUIDOS`); el de fábrica es `oscuro_moderno`. «clasico» conserva el aspecto de las
+  - Hay nueve temas incluidos (`INCLUIDOS`); el de fábrica es `oscuro_moderno`. «clasico» conserva el aspecto de las
     primeras versiones (medido de las capturas de Fusion que pasó el usuario). Además se puede elegir «Tema del
     sistema» (`SISTEMA`): el claro u oscuro que tenga el sistema operativo, como «Match Device Theme» de Fusion.
   - El QSS sale de UNA plantilla (`PLANTILLA_QSS`) y de los tokens: ningún color suelto en otro lado de la
@@ -150,6 +150,57 @@ INCLUIDOS = {
         aviso="#7a6000", ok="#1b6e20", campo_error="#ffd9d9", nav_fila="#f5f5f5", nav_flecha="#d6d9de",
         visor_arriba="#2d323f", visor_abajo="#2d323f", rejilla="#9ea8bd"),
 }
+
+def _variante(base, nombre, **cambios):
+    """Un tema incluido hecho sobre otro: cambia solo los colores dados (P-166)."""
+    return _tema(nombre, **{**INCLUIDOS[base]["colores"], **cambios})
+
+
+# P-166: cuatro temas más (nueve incluidos y el del sistema: diez tarjetas en Preferencias › Apariencia).
+INCLUIDOS.update({
+    # Gris neutro con acento verde.
+    "grafito": _variante(
+        "oscuro_moderno", "Grafito",
+        fondo="#202225", panel="#1a1b1e", panel_cabecera="#2a2c30", tarjeta="#26282c", entrada="#25272b",
+        boton="#30333a", flotante="#18191c", flotante_cabecera="#222428", borde="#3d4046", borde_suave="#2f3136",
+        acento="#3fb950", hover="#2c2f34", hover_borde="#44474e", activo="#1f3a27", activo_borde="#3fb950",
+        seleccion="#24402c", seleccion_borde="#3fb950", boton_primario="#3fb950", boton_primario_hover="#56cc67",
+        boton_primario_texto="#06130a", menu_fondo="#1c1d20", menu_borde="#3d4046", menu_hover="#2d3036",
+        menu_separador="#43464d", nav_fila="#2a2c30", visor_arriba="#1b1d20", visor_abajo="#2a2d33", rejilla="#8a93a0"),
+    # Noche con acento violeta.
+    "violeta": _variante(
+        "oscuro_moderno", "Violeta",
+        fondo="#241f33", panel="#1b1728", panel_cabecera="#2c2640", tarjeta="#2a2439", entrada="#282238",
+        boton="#352e4b", flotante="#171322", flotante_cabecera="#231d34", texto_tenue="#a59fc0", enlace="#b79cff",
+        borde="#4a4066", borde_suave="#383050", acento="#a970ff", hover="#312a47", hover_borde="#54497a",
+        activo="#3b2b63", activo_borde="#a970ff", seleccion="#3f2f6b", seleccion_borde="#a970ff",
+        boton_primario="#a970ff", boton_primario_hover="#bd8fff", boton_primario_texto="#12081f",
+        menu_fondo="#1e1930", menu_borde="#4a4066", menu_hover="#332b4d", menu_separador="#54497a", nav_fila="#2c2640",
+        visor_arriba="#171326", visor_abajo="#2a2342", rejilla="#8f86b8"),
+    # Negro con letras blancas y acento amarillo: el que más se lee (baja visión).
+    "alto_contraste": _variante(
+        "oscuro_moderno", "Alto contraste",
+        fondo="#000000", panel="#000000", panel_cabecera="#141414", tarjeta="#0a0a0a", entrada="#000000",
+        boton="#1a1a1a", flotante="#000000", flotante_cabecera="#141414", texto="#ffffff", texto_tenue="#d0d0d0",
+        texto_inactivo="#7a7a7a", enlace="#7fd4ff", borde="#ffffff", borde_suave="#6a6a6a", acento="#ffd400",
+        hover="#262626", hover_borde="#ffd400", activo="#3a3000", activo_borde="#ffd400", seleccion="#3a3000",
+        seleccion_borde="#ffd400", boton_primario="#ffd400", boton_primario_hover="#ffe44d",
+        boton_primario_texto="#000000", menu_fondo="#000000", menu_borde="#ffffff", menu_hover="#262626",
+        menu_separador="#8a8a8a", tooltip_fondo="#ffffff", tooltip_texto="#000000", aviso="#ffd400",
+        campo_error="#5c0000", nav_fila="#0a0a0a", nav_flecha="#d0d0d0", visor_arriba="#000000", visor_abajo="#1a1a1a",
+        rejilla="#9a9a9a"),
+    # Claro con verde agua.
+    "menta": _variante(
+        "claro_moderno", "Menta",
+        fondo="#eef6f4", panel="#f6fbfa", panel_cabecera="#e1eeeb", tarjeta="#ffffff", entrada="#ffffff",
+        boton="#e8f2f0", flotante="#f9fdfc", flotante_cabecera="#e8f2f0", texto="#1d2b29", texto_tenue="#51625f",
+        texto_inactivo="#9db0ac", enlace="#00695c", borde="#c3d6d2", borde_suave="#dbe8e5", acento="#00a38c",
+        hover="#dcefeb", hover_borde="#b5d6cf", activo="#c9ebe4", activo_borde="#5cbfae", seleccion="#c9ebe4",
+        seleccion_borde="#5cbfae", seleccion_texto="#10201e", boton_primario="#00796b",
+        boton_primario_hover="#00695c", boton_primario_texto="#ffffff", menu_fondo="#ffffff", menu_borde="#c3d6d2",
+        menu_hover="#e6f3f0", menu_separador="#cfe0dc", tooltip_fondo="#26403c", tooltip_texto="#f1f8f6",
+        nav_fila="#ffffff", nav_flecha="#7a918c", visor_arriba="#e1ecea", visor_abajo="#f2f8f7", rejilla="#7b9791"),
+})
 
 # «De dónde viene esta cara»: el paso que creó lo elegido va en amarillo fuerte y los que lo modificaron en suave. Son
 # iguales en todos los temas (un resaltado tiene que verse igual en claro y en oscuro): con texto oscuro y borde ámbar
