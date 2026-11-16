@@ -179,17 +179,17 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   quedan menos de 2 GB libres, frena una sesión (`stop_session` y el mensaje «pausa por memoria») antes de lanzar nada.
 - Una sola corrida pesada por vez en toda la PC: `scripts/turno.py`, y nunca dos OpenCode.
 
-## Regla estricta: aviso de contexto al 65 % (Gerardo, 2026-11-05; 65 % desde 2026-11-11)
+## Regla estricta: contexto al 25 % (Gerardo, 2026-11-05; 25 % desde 2026-11-16, Protocolo de ahorro de CLAUDE.md)
 - El coordinador mira cuánto lleva lleno su contexto (`get_usage` con `session_id: "self"`) cada vez que cierra una
   tarea o una tanda, y antes de lanzar otra.
-- **Al llegar al 60 %, avisa en una línea que se acerca al límite.** **Al llegar al 65 %, no arranca nada nuevo:**
+- **Al llegar al 20 %, avisa en una línea que se acerca al límite.** **Al llegar al 25 %, no arranca nada nuevo:**
   1. guarda todo: commit de lo verificado; `docs/seguimiento/`, `PROJECT_LOG.md`, la lista nocturna y la página de
      seguimiento al día;
   2. escribe una nota de traspaso en `PROJECT_LOG.md` (Registro): sesiones abiertas y su estado, lo que espera
      revisión, lo que quedó sin commitear y de quién es, y el próximo paso;
   3. le dice a Gerardo en una línea que abra una sesión nueva de coordinación, que arranca leyendo esa nota.
-- Lo mismo vale para las sesiones de ejecución: al 65 % cierran su informe y lo dicen, en vez de seguir.
-- **Las sesiones que inició el coordinador se compactan al llegar al 65 % (Gerardo, 2026-11-09; 65 % desde 2026-11-11).** El coordinador
+- Lo mismo vale para las sesiones de ejecución: al 25 % cierran su informe y lo dicen, en vez de seguir.
+- **Las sesiones que inició el coordinador se vacían al cerrar CADA ítem, y sí o sí al llegar al 25 % (Gerardo, 2026-11-09; 25 % y por ítem desde 2026-11-16).** El coordinador
   revisa su contexto con `get_usage` en cada vigilancia. Hay que esperar a que la sesión termine el ítem en curso
   y no tenga nada sin guardar. Entonces la sesión escribe su nota de traspaso en el Registro de `PROJECT_LOG.md`.
   Después el coordinador la vacía con `clear_session` y le manda con `SendMessage` un brief autocontenido que
@@ -212,7 +212,8 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - **Fable no se usa salvo que Gerardo lo pida por nombre (2026-11-01): consume mucho.** El tope es Opus alto.
 - **La calidad del código manda**: si la tarea toca solver, geometría, núcleo o es delicada, no se baja el
   esfuerzo para ahorrar. Se ahorra en lo mecánico, no en lo que decide si el código anda.
-- No se cambia el modelo de una sesión en marcha (corta y pierde contexto) salvo que se quede corta.
+- No se cambia el modelo en medio de un ítem salvo que se quede corto. Entre ítems sí: al vaciar la sesión, el
+  coordinador le pone el modelo del ítem nuevo con `set_session_model` (Protocolo de ahorro de CLAUDE.md, 2026-11-16).
 - Al integrar una sesión, anotar si el modelo elegido alcanzó; si falló por quedarse corto, subir un escalón la
   próxima vez, y si sobró, bajarlo.
 

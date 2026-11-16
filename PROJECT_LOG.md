@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-16 · Protocolo de ahorro (chat maestro, pedido de Gerardo).** CLAUDE.md: una sola sección «Protocolo de ahorro» reemplaza «aviso de contexto al 65 %», «elegir modelo y esfuerzo» y «Consumo de tokens». Vaciar la sesión al cerrar cada ítem y tope de 25 % de contexto; ritmo del cupo semanal con semáforo (5/3 sesiones, rojo al 90 %); modelo por ítem; coordinador vigila cada 2 h. `docs/coordinacion.md` al día. Medido: plan Pro, semanal 77 % con 2,7 días por delante, contextos de 200–575 mil tokens.
 - **2026-11-16 · B-590 resuelto (E8).** `timeline/__init__.py` importa `operaciones` primero: ningún `ops_*.py` suelto da ImportError. Test: `tests/test_b590_imports_sueltos.py` (14 casos, subprocess limpio). ruff limpio, 69 OK, humo OK.
 - **2026-11-16 · B-591, 3.er caso (E8).** `ui/registro_uso.py` › `_detener` saltea objetos Qt ya borrados y siempre devuelve el gancho de excepciones y el de mensajes Qt. Test en `tests/test_registro_uso_ui.py` (abre A, B, recalcula y cierra). 68 OK, humo OK. Causa de fondo sin hallar: sigue Parcial.
 - **2026-11-16 · B-593 resuelto (E5).** `timeline/ops_construir.py`: el plano de desfase toma su tamaño de los cuerpos, no de la cámara: ya no flota ni cambia con el zoom. Test: `tests/test_b593_plano_desfase_mide_cuerpos.py`. 246 OK, humo OK.
