@@ -237,3 +237,9 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - El coordinador junta get_usage de cada sesión E1–E11 y el suyo propio: contexto usado, modelo/esfuerzo, ítems cerrados en la semana.
 - Mensaje al chat de la PC, 5 filas como mucho: sesión, modelo, ítems cerrados, gasto, si el modelo alcanzó o sobró (y el ajuste propuesto: subir o bajar un escalón).
 - Señales de desperdicio a cortar: archivos leídos enteros sin necesidad, pruebas repetidas sin cambio, mensajes largos entre sesiones, Opus en tareas mecánicas.
+
+## Cupo semanal de Claude al 90 % (Gerardo, 2026-11-16)
+- El coordinador mide el semanal con `get_usage` al cerrar cada ítem y avisa al chat maestro en cuanto llega al 90 %.
+- Al 90 %: se pausan todas las sesiones de Claude (E1–E11). Hasta el reinicio semanal trabaja solo OpenCode: MiniMax M3.1 Flash (`nvidia/minimaxai/minimax-m3.1-flash`), y GLM o DeepSeek cuando tengan cupo.
+- Cada tarea de OpenCode va en su worktree, es chica y se comprueba sola con `scripts/tests_afectados.py --correr` y ruff. No se integra a main.
+- El coordinador se guarda ~5 % del semanal: una integración por día de lo que OpenCode dejó en verde (revisando el diff), y los bloqueantes. Nada más.
