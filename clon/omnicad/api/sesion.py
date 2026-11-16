@@ -135,7 +135,8 @@ class Sesion:
     def _miniatura(self):
         """PNG de 256 px (vista guardada o iso) para `miniatura.png`: la que muestra el Explorador de Windows (H-112).
         Sin cuerpos no hay miniatura; si el render falla se guarda igual, sin ella."""
-        from .herramientas_inspeccion import get_viewport_image
+        from .herramientas_inspeccion import PIXELES, get_viewport_image
+        marca = PIXELES.set(256 * 256)  # B-574: sin supermuestreo; la de 512 px tardaba 0,5 s de cada guardado
         try:
             return get_viewport_image(self, width=256, height=256)["image"].png
         except ErrorAPI as e:
@@ -143,6 +144,8 @@ class Sesion:
                 log.warning("No se pudo dibujar la miniatura del proyecto: %s", e)
         except Exception:                      # la miniatura nunca impide guardar
             log.exception("No se pudo dibujar la miniatura del proyecto")
+        finally:
+            PIXELES.reset(marca)
         return None
 
     # ------------------------------------------------------------ búsqueda por id o nombre
