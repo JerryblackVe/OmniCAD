@@ -2301,16 +2301,26 @@ def base_perfiles(seleccion, estado):
     return np.mean(puntos, axis=0), plano, formas
 
 
+_PUNTOS_BORDE = {}       # P-99: id(forma) → (forma, puntos); el perfil es el mismo objeto mientras no cambie el estado
+
+
 def punto_borde(formas, centro, direccion):
-    """Punto del contorno de las formas más alejado del centro según `direccion` (para la conicidad)."""
+    """Punto del contorno de las formas más alejado del centro según `direccion` (para la conicidad). P-99: teselar los
+    17 perfiles del llavero en cada clic costaba ~20 ms; los puntos se recuerdan por forma."""
     from ..nucleo import geometria as geo
     pts = []
     for f in formas:
-        try:
-            v = geo.teselar(f, 0.2)[0]
-            pts.append(v if len(v) else np.array([centroide(f)]))
-        except Exception:  # noqa: BLE001
-            pts.append(np.array([centroide(f)]))
+        guardado = _PUNTOS_BORDE.get(id(f))
+        if guardado is None or guardado[0] is not f:
+            try:
+                v = geo.teselar(f, 0.2)[0]
+                v = v if len(v) else np.array([centroide(f)])
+            except Exception:  # noqa: BLE001
+                v = np.array([centroide(f)])
+            if len(_PUNTOS_BORDE) >= 256:
+                _PUNTOS_BORDE.clear()                      # guarda la forma: su id no se reutiliza mientras esté
+            guardado = _PUNTOS_BORDE[id(f)] = (f, v)
+        pts.append(guardado[1])
     pts = np.concatenate(pts).astype(float)
     return pts[int(np.argmax((pts - centro) @ direccion))]
 
