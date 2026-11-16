@@ -11,7 +11,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-601 | `suppress` fuera de rango en el Patrón de boceto; después B-582. Sonnet medio. B-595/596/597 integrados: bbaec71 (B-596 falta Windows) |
 | E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
-| E3 | P-170 | Empalme: clic en una cara vecina saca aristas de la cadena. Sonnet medio. B-609 Parcial integrado: bb9a729 (falta Windows) |
+| E3 | B-503 | Desfase de 0,5 mm en letras curvas (falla en 5–41 s). Opus alto. P-170 Bloqueado por el kernel; B-609 Parcial: bb9a729 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | B-610 integrado (falta verlo en Windows). B-607 pasa a E11 en Windows (no hay .omnicad). Libre |
 | E6 | B-608 | Empalme y Chaflán lentos en una caja simple: medir por etapa y «no entra» antes de calcular; después P-173. Opus alto. FL-2/FL-3: solo falta medir en Windows. B-598 Parcial: 39e5a48 |
@@ -24,7 +24,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 3 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
 | 6 | ASM-9 / ASM-16 | Activar componente; arrastrar componentes (E5, Sonnet medio) |
