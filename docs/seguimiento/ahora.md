@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-582, B-585, B-584 y B-583 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
+| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-582, B-586, B-585, B-584 y B-583 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
 | E2 | B-579 | 🚨 Bloqueante: Extruir salta solo a «Cortar» y pisa la elección manual (vació un documento) |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | B-578 | Rosca modelada: cota < 0,3 s y copiar el defecto de Fusion (Gerardo); después B-567. B-545 integrado: 94ad1ee |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
-| E9 | — | En pausa hasta el lote de las 13 h (P-158 terminado en bocetos y sólido). B-577 integrado: 14872ed |
+| E9 | — | En pausa hasta el lote de las 13 h; después B-587 (aviso de tangente–arco cortado) |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
