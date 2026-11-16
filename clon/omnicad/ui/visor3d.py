@@ -1326,6 +1326,14 @@ class Visor3D(QOpenGLWidget):
             return None
         return rayo_triangulos(o, d, self._datos_pick(cid)[1])
 
+    def _planos_corte(self):
+        """[(normal, punto)] que recortan los cuerpos al dibujarlos: el «Corte» del boceto y el análisis de sección.
+        Queda lo de detrás del plano, normal·(x - punto) <= 0."""
+        planos = list(self.cortes[:4])
+        if self.plano_boceto is not None and self.opciones_boceto.get("corte"):
+            planos.insert(0, (self.plano_boceto.normal, self.plano_boceto.origen))
+        return [(np.asarray(n, float), np.asarray(o, float)) for n, o in planos]
+
     def _primer_rayo_cuerpo(self, cid, o, d, limite=math.inf):
         """(t, índice del triángulo) del primero que corta el rayo en el cuerpo, o None si no entra en su caja antes
         de `limite`. Con Rust usa un BVH del cuerpo guardado en `_pick`."""
@@ -1724,12 +1732,30 @@ class Visor3D(QOpenGLWidget):
         mvp = self.matriz_mvp()
         tol_t = max(self.distancia * 3e-3, 1e-3)
 
+        # B-569: lo que el corte no dibuja no tapa ni se elige; el rayo se mira solo en el tramo que queda dibujado
+        cortes = self._planos_corte()
+        recortado = lambda p: any(float(n @ (np.asarray(p) - p0)) > tol_t for n, p0 in cortes)  # noqa: E731
+
+        def choque_cuerpo(cid, o, d, limite):
+            t0, t1 = 0.0, limite
+            for n, p0 in cortes:                    # se dibuja donde t·(n·d) <= n·(p0 - o)
+                dn, s = float(n @ d), float(n @ (p0 - o))
+                if abs(dn) < 1e-12:
+                    t1 = t1 if s >= 0 else -math.inf
+                elif dn > 0:
+                    t1 = min(t1, s / dn)
+                else:
+                    t0 = max(t0, s / dn)
+            t0, t1 = max(0.0, t0 - tol_t), t1 + tol_t     # la cara sobre el plano del corte (boceto en una cara) sigue
+            c = self._primer_rayo_cuerpo(cid, o + d * t0, d, t1 - t0) if t0 < t1 else None
+            return None if c is None or c[0] + t0 > t1 else (c[0] + t0, c[1])
+
         # 1) cara más cercana (oculta lo que esté detrás)
         t_cara, cara_hit = math.inf, None
         for cid in self._formas:
             if cid in self.cuerpos_de_previa:      # la vista previa no se elige: el clic sigue a lo que hay detrás
                 continue
-            choque = self._primer_rayo_cuerpo(cid, o, d, t_cara)
+            choque = choque_cuerpo(cid, o, d, t_cara)
             if choque is None:
                 continue
             t, i = choque
@@ -1751,7 +1777,7 @@ class Visor3D(QOpenGLWidget):
                 return False
             o2, d2 = self.rayo(px)
             t_p = float((np.asarray(p) - o2) @ d2) - tol_t
-            return not any((c := self._primer_rayo_cuerpo(cid, o2, d2, t_p)) is not None and c[0] < t_p
+            return not any((c := choque_cuerpo(cid, o2, d2, t_p)) is not None and c[0] < t_p
                            for cid in self._formas if cid not in self.cuerpos_de_previa)
 
         def _hit(tipo, ref, dibujo, t, punto, **extra):
@@ -1769,7 +1795,7 @@ class Visor3D(QOpenGLWidget):
                 s, ok = self._a_pantalla(pts, mvp)
                 dist = np.where(ok, np.linalg.norm(s - q, axis=1), np.inf)
                 i = int(np.argmin(dist))
-                if dist[i] < mejor[0] and a_la_vista(pts[i]):
+                if dist[i] < mejor[0] and not recortado(pts[i]) and a_la_vista(pts[i]):
                     v = vertices[i]
                     mejor = (dist[i], _hit("vertice", self._referencia(cid, v), [("puntos", pts[i:i + 1], None, 9)],
                                           float((pts[i] - o) @ d), pts[i], cuerpo=cid, forma=v))
@@ -1813,7 +1839,7 @@ class Visor3D(QOpenGLWidget):
                             break
                         arista, poli = aristas[quien[j]], polis[quien[j]]
                         dist, p = self._dist_polilinea(q, poli, mvp, (o, d))
-                        if dist >= mejor[0] or p is None or not visible(p):
+                        if dist >= mejor[0] or p is None or not visible(p) or recortado(p):
                             continue
                         f = refs.firma_arista(arista)
                         if not ({"arista"} & filtros or ("arista_lineal" in filtros or "eje" in filtros)
@@ -2485,13 +2511,7 @@ class Visor3D(QOpenGLWidget):
             self._rejilla(geo.Plano("XY"), self.paso_rejilla())
         self._origen_y_planos()
 
-        corte = self.plano_boceto is not None and self.opciones_boceto.get("corte")
-        if corte:
-            n, o = self.plano_boceto.normal, self.plano_boceto.origen
-            GL.glClipPlane(GL.GL_CLIP_PLANE0, (-float(n[0]), -float(n[1]), -float(n[2]), float(n @ o)))
-            GL.glEnable(GL.GL_CLIP_PLANE0)
-        for i, (n, o) in enumerate(self.cortes[:4], 1):     # análisis de sección: se ve lo de detrás del plano
-            n, o = np.asarray(n, float), np.asarray(o, float)
+        for i, (n, o) in enumerate(self._planos_corte()):
             GL.glClipPlane(GL.GL_CLIP_PLANE0 + i, (-float(n[0]), -float(n[1]), -float(n[2]), float(n @ o)))
             GL.glEnable(GL.GL_CLIP_PLANE0 + i)
         self._cuerpos()
