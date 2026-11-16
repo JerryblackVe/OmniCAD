@@ -110,6 +110,31 @@ def test_colapso_a_largo_cero_es_conflicto():
     assert not r.ok and "colapsa" in r.mensaje
 
 
+def test_b582_concentrica_sobre_tangente_exterior_es_conflicto():
+    """B-582: d = r1 + r2 con d = 0 solo se «cumplía» con un radio negativo (al escribirlo queda r1 = r2 = 1)."""
+    b = Boceto()
+    a, c = b.agregar_circulo((0, 0), 10), b.agregar_circulo((25, 0), 8)
+    b.agregar_restriccion("tangente", [a, c])
+    assert resolver(b).ok
+    b.agregar_restriccion("concentrica", [a, c])
+    r = resolver(b)
+    assert not r.ok and "negativo" in r.mensaje
+
+
+def test_b582_por_mcp_se_rechaza_y_los_circulos_quedan_como_estaban():
+    from omnicad import api
+    s = api.Sesion()
+    api.llamar(s, "create_sketch", {"name": "U"})
+    ids = [api.llamar(s, "draw_circle", {"sketch": "U", "center_x": x, "center_y": 0, "radius": rr})["result"]
+           ["entities"][0]["id"] for x, rr in ((0, 10), (25, 8))]
+    assert api.llamar(s, "add_constraint", {"sketch": "U", "type": "tangent", "entities": ids})["ok"]
+    r = api.llamar(s, "add_constraint", {"sketch": "U", "type": "concentric", "entities": ids})
+    assert not r["ok"] and r["error_kind"] == "SKETCH_OVERCONSTRAINED", r
+    radios = [e["radius"] for e in api.llamar(s, "get_sketch", {"sketch": "U"})["result"]["entities"]
+              if e["type"] == "circle"]
+    assert min(radios) > 5
+
+
 def test_validaciones_de_tipo():
     b = Boceto()
     c = b.agregar_circulo((0, 0), 3)
