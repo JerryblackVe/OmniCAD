@@ -845,6 +845,57 @@ def tramo_revolucion(p, a1, a2):
     return a, b
 
 
+class _Filas(dict):
+    """B-545: `widgets` y `etiquetas` del panel. La fila de un campo oculto al abrir se arma recién cuando se muestra o
+    alguien la pide (`[]`, `get`, recorrerlos): Agujero tiene 65 campos y al abrir se ven 12. Para quien lo usa, es el
+    dict de siempre con todas las claves, en el orden de los campos."""
+
+    def __init__(self, panel):
+        super().__init__()
+        self._panel = panel
+
+    def __missing__(self, clave):
+        if clave not in self._panel._pendientes:
+            raise KeyError(clave)
+        self._panel._armar_fila(clave)
+        return dict.__getitem__(self, clave)
+
+    def __contains__(self, clave):
+        return dict.__contains__(self, clave) or clave in self._panel._pendientes
+
+    def get(self, clave, defecto=None):
+        return self[clave] if clave in self else defecto
+
+    def __iter__(self):
+        return iter([c.clave for c in self._panel.campos if c.clave in self])
+
+    def __len__(self):
+        return len(list(iter(self)))
+
+    def keys(self):
+        return list(iter(self))
+
+    def values(self):
+        return [self[k] for k in self]
+
+    def items(self):
+        return [(k, self[k]) for k in self]
+
+
+def _hojas_foco(w):
+    """`w` y sus hijos que toman el foco, en el orden del Tab (una fila compuesta: botones, lista, campo)."""
+    hojas = [w] if w.focusPolicy() != Qt.NoFocus else []
+    x = w.nextInFocusChain()
+    while x is not w and w.isAncestorOf(x):
+        if x.focusPolicy() != Qt.NoFocus:
+            hojas.append(x)
+        x = x.nextInFocusChain()
+    return hojas
+
+
+_PEREZOSOS = (Expresion, Opciones, Casilla, Entero, Texto, Info)     # B-545: los que pueden esperar a mostrarse
+
+
 class PanelComando(QFrame):
     """Panel flotante de un comando. Emite `aceptado(op)` o `cancelado()`."""
     aceptado = Signal(object)
@@ -873,7 +924,9 @@ class PanelComando(QFrame):
                                              if not visor.es_hueco_texto(h, getattr(ctx, "estado", None))]
                 except Exception:  # noqa: BLE001 — sin poder mirarlo, queda como estaba
                     pass
-        self.widgets, self.etiquetas, self.filas_sel = {}, {}, {}
+        self._pendientes = {}              # B-545: clave → (grilla, fila) de un campo oculto que todavía no se armó
+        self._hojas = {}                   # B-545: clave → hojas de foco, tomadas antes de reordenar el Tab
+        self.widgets, self.etiquetas, self.filas_sel = _Filas(self), _Filas(self), {}
         self.activa = None
         self.ultima_op = None
         self._previa_ok = False
@@ -931,6 +984,7 @@ class PanelComando(QFrame):
         en_seccion = {None: False}         # pestaña → ¿el campo anterior estaba en una sección plegable?
         self.rotulos = []                  # (rótulo del grupo, [claves]) → se ve si algún campo del grupo se ve
         ultimo = {}                        # por grilla (principal / «Más opciones»): (grupo, claves del rótulo vigente)
+        siguiente = {}                     # por grilla: la próxima fila (una fila reservada no cuenta en rowCount)
         for campo in self.campos:
             if getattr(campo, "en_esquema", False):        # FU-2: la caja la adopta el dibujo que viene después
                 self.etiquetas[campo.clave], self.widgets[campo.clave] = QLabel(campo.etiqueta), self._widget(campo)
@@ -955,7 +1009,7 @@ class PanelComando(QFrame):
                     marcos[p].insertLayout(self._antes_de_mas_opciones(marcos[p]), libres[p])
                     en_seccion[p] = False
                 grilla = libres[p]
-            fila = grilla.rowCount()
+            fila = max(grilla.rowCount(), siguiente.get(id(grilla), 0))
             if campo.grupo and (ultimo.get(id(grilla)) or (None,))[0] != campo.grupo:
                 rotulo = QLabel(campo.grupo, objectName="grupo_cmd")
                 grilla.addWidget(rotulo, fila, 0, 1, 2)
@@ -967,20 +1021,11 @@ class PanelComando(QFrame):
                 ultimo[id(grilla)][1].append(campo.clave)
             else:
                 ultimo[id(grilla)] = None
-            et = _Etiqueta(campo.etiqueta_si(self.valores) if campo.etiqueta_si else campo.etiqueta,
-                           objectName="etiqueta_cmd", wordWrap=True)
-            et.setFixedWidth(ANCHO_ETIQUETA)
-            if campo.ayuda:
-                et.setToolTip(campo.ayuda)
-            w = self._widget(campo)
-            et.campo_w = w
-            if getattr(campo, "ancho_completo", False):
-                et.hide()                                       # sin etiqueta: el widget ocupa las dos columnas
-                grilla.addWidget(w, fila, 0, 1, 2)
+            if isinstance(campo, _PEREZOSOS) and not self._visible(campo):
+                self._pendientes[campo.clave] = (grilla, fila)      # B-545: se arma al mostrarse o al pedirla
             else:
-                grilla.addWidget(et, fila, 0, Qt.AlignTop if isinstance(campo, Info) else Qt.AlignVCenter)
-                grilla.addWidget(w, fila, 1)
-            self.etiquetas[campo.clave], self.widgets[campo.clave] = et, w
+                self._poner_fila(campo, grilla, fila)
+            siguiente[id(grilla)] = fila + 1
         # B-105: en una ventana chica el cuerpo se desplaza con una barra y Aceptar/Cancelar quedan siempre visibles.
         self.desplazador = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
         self.desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)     # solo si un widget propio no entra: no se recorta en silencio
@@ -1341,9 +1386,54 @@ class PanelComando(QFrame):
             return False
         return not campo.avanzado or campo.pestana is not None or self.seccion is None or self.seccion.abierta
 
+    def _poner_fila(self, campo, grilla, fila):
+        et = _Etiqueta(campo.etiqueta_si(self.valores) if campo.etiqueta_si else campo.etiqueta,
+                       objectName="etiqueta_cmd", wordWrap=True)
+        et.setFixedWidth(ANCHO_ETIQUETA)
+        if campo.ayuda:
+            et.setToolTip(campo.ayuda)
+        w = self._widget(campo)
+        et.campo_w = w
+        if getattr(campo, "ancho_completo", False):
+            et.hide()                                       # sin etiqueta: el widget ocupa las dos columnas
+            grilla.addWidget(w, fila, 0, 1, 2)
+        else:
+            grilla.addWidget(et, fila, 0, Qt.AlignTop if isinstance(campo, Info) else Qt.AlignVCenter)
+            grilla.addWidget(w, fila, 1)
+        dict.__setitem__(self.etiquetas, campo.clave, et)
+        dict.__setitem__(self.widgets, campo.clave, w)
+        return et, w
+
+    def _poner_info(self, c):
+        try:
+            texto = c.funcion(self.valores, self.ctx) or ""
+            self.widgets[c.clave].setText(_resumen(texto) if c.compacta else texto)
+            self.widgets[c.clave].setToolTip(texto if c.compacta else "")
+        except Exception as e:  # noqa: BLE001 — un análisis que falla se informa en el panel
+            self.widgets[c.clave].setText(f"⚠ {e}")
+
+    def _armar_fila(self, clave):
+        """B-545: la fila de un campo que estaba oculto al abrir, en su lugar de la grilla y del orden de Tab."""
+        grilla, fila = self._pendientes.pop(clave)
+        campo = self._por_clave[clave]
+        et, w = self._poner_fila(campo, grilla, fila)
+        vis = self._visible(campo) and not getattr(campo, "oculta", False)
+        w.setVisible(vis)
+        if not getattr(campo, "ancho_completo", False):
+            et.setVisible(vis)
+        if isinstance(campo, Info):
+            self._poner_info(campo)
+        armados = [c.clave for c in self.campos if dict.__contains__(self.widgets, c.clave) and not getattr(c, "en_esquema", False)]
+        for k in armados:       # una vez reordenado, la cadena ya no recorre seguidas las hojas de una fila compuesta
+            if k not in self._hojas:
+                self._hojas[k] = _hojas_foco(dict.__getitem__(self.widgets, k))
+        hojas = [h for k in armados for h in self._hojas[k]]
+        for a, b in zip(hojas, hojas[1:], strict=False):
+            QWidget.setTabOrder(a, b)                   # el Tab sigue el orden de los campos, como si se hubieran armado todos
+
     def _refrescar_vivas(self):
         for c in self.campos:
-            if not isinstance(c, OpcionesVivas):
+            if not isinstance(c, OpcionesVivas) or c.clave in self._pendientes:
                 continue
             w, nuevas = self.widgets[c.clave], c.listar(self.valores)
             w.blockSignals(True)
@@ -1363,6 +1453,8 @@ class PanelComando(QFrame):
         self._refrescar_vivas()
         for c in self.campos:
             vis = self._visible(c) and not getattr(c, "oculta", False)
+            if not vis and c.clave in self._pendientes:
+                continue                                 # B-545: oculto y sin armar, sigue sin armar
             self.widgets[c.clave].setVisible(vis)
             if not getattr(c, "ancho_completo", False) and not getattr(c, "en_esquema", False):
                 self.etiquetas[c.clave].setVisible(vis)
@@ -1441,7 +1533,8 @@ class PanelComando(QFrame):
         if getattr(self, "boton_ok", None) is not None:
             # B-468: como Fusion, con un valor fuera de rango Aceptar queda apagado. B-444: un campo opcional vacío
             # (sin valor por defecto, como «Límite mínimo») no cuenta: si no, editar una unión dejaba Aceptar gris.
-            vacios = {c.clave for c in self.campos if isinstance(c, Expresion) and not c.defecto and not self.widgets[c.clave].text().strip()}
+            vacios = {c.clave for c in self.campos if isinstance(c, Expresion) and not c.defecto
+                      and not (str(self.valores.get(c.clave) or "") if c.clave in self._pendientes else self.widgets[c.clave].text()).strip()}
             self.boton_ok.setEnabled(not self.invalidos - vacios)
         return primera
 
@@ -1788,13 +1881,8 @@ class PanelComando(QFrame):
 
     def _calcular_previa_ahora(self, en_ventana=False):
         for c in self.campos:
-            if isinstance(c, Info):
-                try:
-                    texto = c.funcion(self.valores, self.ctx) or ""
-                    self.widgets[c.clave].setText(_resumen(texto) if c.compacta else texto)
-                    self.widgets[c.clave].setToolTip(texto if c.compacta else "")
-                except Exception as e:  # noqa: BLE001 — un análisis que falla se informa en el panel
-                    self.widgets[c.clave].setText(f"⚠ {e}")
+            if isinstance(c, Info) and c.clave not in self._pendientes:      # B-545: la de una fila sin armar, al armarla
+                self._poner_info(c)
         self._previa_ok = False
         self._previa_aparte = False
         if self.comando.SIN_OP:
