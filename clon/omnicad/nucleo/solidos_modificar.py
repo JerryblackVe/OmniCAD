@@ -155,10 +155,32 @@ def _fusionar_costuras(forma):
 
 def _cruza_mas_que(entrada, resultado):
     """B-157: True si `resultado` tiene más autointersecciones que `entrada`. Un cuerpo que ya venía cruzado (p. ej. un
-    compuesto de cajas superpuestas) no bloquea el empalme o el chaflán; la entrada se mide solo si el resultado cruza."""
+    compuesto de cajas superpuestas) no bloquea el empalme o el chaflán; la entrada se mide solo si el resultado cruza.
+    B-571: se miden solo las caras cerca de las que cambiaron (un cruce nuevo toca una cara nueva); una rosca modelada
+    lejos esperaba el tope entero de 5 s en cada recálculo. Si la zona falla, se mide todo como antes."""
     from . import revision                  # local: revision carga medio núcleo
+    try:
+        resultado, entrada = _zona_cambiada(entrada, resultado)
+    except Exception:  # noqa: BLE001 — vía rápida: si falla, el camino de siempre
+        pass
+    if resultado is None:
+        return False
     n = revision._autointersecciones_seguras(resultado, 1, 5.0)[0]
     return bool(n) and n > (revision._autointersecciones_seguras(entrada, 1, 5.0)[0] or 0)
+
+
+def _zona_cambiada(entrada, resultado):
+    """B-571: (resultado, entrada) recortados a las caras que tocan la caja de las caras nuevas del resultado, como
+    compuestos; (None, None) si ninguna cambió."""
+    previas = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
+    TopExp.MapShapes_s(entrada, TopAbs_FACE, previas)
+    nuevas = [c for c in _unicos(resultado, TopAbs_FACE) if not previas.Contains(c)]
+    if not nuevas:
+        return None, None
+    cajas = [geo.caja_aproximada(c) for c in nuevas]
+    zona = (tuple(min(c[0][i] for c in cajas) for i in range(3)), tuple(max(c[1][i] for c in cajas) for i in range(3)))
+    return tuple(geo.compuesto([c for c in _unicos(f, TopAbs_FACE)
+                                if geo.cajas_se_tocan(geo.caja_aproximada(c), zona, 1e-3)]) for f in (resultado, entrada))
 
 
 def _volumen_al_reves(entrada, resultado, aristas, vecinas):
