@@ -125,3 +125,19 @@ def test_reabrir_el_paso_conserva_el_modo_de_la_receta(vieja):
     op.p["condicion_exacta"] = not vieja
     cmd, ctx = Solevacion(), ContextoComando(s.doc, op=op)
     assert cmd.construir(cmd.desde_op(op, ctx), ctx).p["condicion_exacta"] is (not vieja)
+
+
+@pytest.mark.parametrize("peso, fusion", [(0.2, 11352.4), (0.5, 12828.8), (1, 15708.3), (2, 23037.5), (5, 57588.1)])
+def test_punto_tangente_da_lo_mismo_que_fusion(peso, fusion):
+    """Círculo r 10 → punto a 100 mm con Punto tangente: volúmenes medidos en Fusion por E11 (2026-11-14)."""
+    punta = BRepBuilderAPI_MakeVertex(gp_Pnt(0, 0, 100)).Vertex()
+    v, _caja = _solevar(secciones=[circulo(10), punta], condicion_fin={"tipo": "punto_tangente", "peso": peso},
+                        condicion_exacta=True)
+    assert v == pytest.approx(fusion, rel=5e-4)
+
+
+def test_direccion_exacta_da_lo_mismo_que_fusion():
+    """Dos círculos r 10 a 60 mm con Dirección −30° / 30°: Fusion da 19644,7 mm³ (E11, 2026-11-14)."""
+    v, _caja = _solevar(secciones=[circulo(10), circulo(10, 60)], condicion_inicio={"tipo": "direccion", "angulo": -30},
+                        condicion_fin={"tipo": "direccion", "angulo": 30}, condicion_exacta=True)
+    assert v == pytest.approx(19644.7, rel=2e-3)

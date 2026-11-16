@@ -304,8 +304,8 @@ def test_solevado_con_linea_central_y_carril():
     cono = math.pi * 10 / 3 * (4 + 9 + 6)
     valido(sc.solevar(secciones, linea_central=[linea((0, 0, 0), (0, 0, 10))]), cono, rel=1e-4)
     valido(sc.solevar(secciones, carriles=[linea((2, 0, 0), (3, 0, 10))]), cono, rel=1e-4)
-    with pytest.raises(g.ErrorGeometria):
-        sc.solevar(secciones, carriles=[linea((2, 0, 0), (3, 0, 10)), linea((-2, 0, 0), (-3, 0, 10))])
+    valido(sc.solevar(secciones, carriles=[linea((2, 0, 0), (3, 0, 10)), linea((-2, 0, 0), (-3, 0, 10))]), cono,
+           rel=1e-4)   # H-116: varios raíles, como Fusion
 
 
 def octogono(radio, z):

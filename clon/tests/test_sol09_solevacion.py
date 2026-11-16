@@ -275,3 +275,32 @@ def test_b464_punto_tangente_da_la_cupula_de_fusion(peso, fusion):
     assert rv.revisar(cupula)["autointersecciones"] == 0
     al_reves = sc.solevar([punta, circulo], condicion_inicio={"tipo": "punto_tangente", "peso": peso})
     assert geo.volumen(al_reves) == pytest.approx(fusion, rel=2e-4)
+
+
+def test_h116_varios_carriles():
+    """Fusion admite cualquier cantidad de raíles: dos rectos sobre un cilindro dan 18849,56 mm³ (medido en Fusion por E11);
+    cuatro, uno por lado, dan el tronco de pirámide exacto."""
+    def con_carriles(base, tapa, alto, carriles):
+        s = api.Sesion()
+        llamar(s, "create_sketch", plane="XY", name="Base")
+        base(s)
+        plano = llamar(s, "create_construction_plane", plane="XY", offset=alto)["plane"]["id"]
+        llamar(s, "create_sketch", plane=plano, name="Tapa")
+        tapa(s)
+        refs = []
+        for i, (plano_carril, (x0, y0), (x1, y1)) in enumerate(carriles):
+            llamar(s, "create_sketch", plane=plano_carril, name=f"C{i}")
+            curva = llamar(s, "draw_line", start_x=x0, start_y=y0, end_x=x1, end_y=y1)["entities"][0]["id"]
+            refs.append({"sketch": f"C{i}", "curve": curva})
+        llamar(s, "loft", sketches=["Base", "Tapa"], rails=refs)
+        return _volumen(s)
+
+    def circulo(s):
+        return llamar(s, "draw_circle", radius=10)
+
+    assert con_carriles(circulo, circulo, 60, [("XZ", (10, 0), (10, 60)), ("XZ", (-10, 0), (-10, 60))]) == pytest.approx(
+        18849.56, rel=1e-5)
+    lados = [(plano, (5 * sg, 0), (10 * sg, 10)) for plano in ("XZ", "YZ") for sg in (1, -1)]
+    assert con_carriles(lambda s: llamar(s, "draw_rectangle", x1=-5, y1=-5, x2=5, y2=5),
+                        lambda s: llamar(s, "draw_rectangle", x1=-10, y1=-10, x2=10, y2=10),
+                        10, lados) == pytest.approx(10 / 3 * (100 + 400 + 200), rel=1e-6)
