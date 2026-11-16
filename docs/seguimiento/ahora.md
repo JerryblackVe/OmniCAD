@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | B-611 | Regresión de B-608: falta el aviso «no entra» de Empalme y Chaflán (prueba_ui). Sonnet medio. P-173 integrado: 814ffa2 |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
-| E9 | P-158 (Bocetos y Sólido) | Cola de OpenCode: mensajes de más de 45 caracteres → 1 renglón (GLM; revisa MiniMax o E9). H-118 (mensaje) y B-605 hechos, por integrar. Sonnet medio |
+| E9 | Caza | `scripts/caza/cazar.py tema` sobre superficie y construir; lo rojo con su ID. P-158 (Ensamblar, Construir, Inspeccionar), H-118 (mensaje) y B-605 integrados: 9b26ba2, 7701250 |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
