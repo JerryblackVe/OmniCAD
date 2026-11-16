@@ -6,14 +6,15 @@ una dirección): va siempre al análisis con tope."""
 import json
 from pathlib import Path
 
-from omnicad.nucleo import aislado, revision
+from omnicad.nucleo import aislado, revision, solidos_modificar
 from omnicad.nucleo import geometria as geo
 from omnicad.timeline.documento import Documento
 
 RECETA = json.loads((Path(__file__).parent / "datos" / "b570_pieza12_receta.json").read_text(encoding="utf-8"))
 
 
-def test_b570_la_pieza_guardada_con_rosca_se_rearma_en_el_hijo_sin_analisis_sin_tope(monkeypatch):
+def _rearmar(monkeypatch):
+    """Rearma pieza12 en el hijo; devuelve (formas libres analizadas sin tope, análisis con tope, documento)."""
     monkeypatch.setattr(aislado, "EN_HIJO", True)                       # como la rearma el trabajador
     sin_tope, original = [], revision._autointersecciones
 
@@ -27,11 +28,33 @@ def test_b570_la_pieza_guardada_con_rosca_se_rearma_en_el_hijo_sin_analisis_sin_
     monkeypatch.setattr(aislado, "correr", lambda tarea, *a, **k: con_tope.append(tarea) or (_ for _ in ()).throw(
         aislado.TiempoAgotado("pasó de 5 s y se cortó")))                  # el análisis con tope, sin esperarlo
     doc = Documento.desde_dict(RECETA)
-    assert sin_tope == [] and "autointersecciones" in con_tope
     assert len(doc.estado_final.cuerpos) == 1 and all(r.estado == "ok" for r in doc.resultados)
+    return sin_tope, con_tope
+
+
+def test_b570_b571_la_pieza_guardada_con_rosca_no_analiza_la_rosca_en_el_chaflan(monkeypatch):
+    """B-571: el Chaflán mide solo las caras cerca de lo que cambió; la rosca, lejos, no se analiza ni con tope (antes
+    esperaba los 5 s enteros en cada recálculo)."""
+    assert _rearmar(monkeypatch) == ([], [])
+
+
+def test_b571_si_la_zona_falla_se_mide_todo_con_tope(monkeypatch):
+    monkeypatch.setattr(solidos_modificar, "_zona_cambiada", lambda *a: 1 / 0)
+    sin_tope, con_tope = _rearmar(monkeypatch)
+    assert sin_tope == [] and "autointersecciones" in con_tope
 
 
 def test_b570_una_cara_reglada_no_cuenta_como_pocos_polos():
     doc = Documento.desde_dict(RECETA)
     (cuerpo,) = doc.estado_final.cuerpos.values()
     assert geo.es_forma_libre(cuerpo.forma) and not revision._pocos_polos(cuerpo.forma)
+
+
+def test_b571_la_zona_deja_afuera_lo_lejano_y_sigue_viendo_el_cruce():
+    a, lejos = geo.caja(10, 10, 10), geo.caja(5, 5, 5, origen=(100, 0, 0))
+    b = geo.caja(10, 10, 10, origen=(5, 5, 5))                         # cruza a `a`: sus 6 caras son las nuevas
+    entrada, resultado = geo.compuesto([a, lejos]), geo.compuesto([a, b, lejos])
+    zona, _ = solidos_modificar._zona_cambiada(entrada, resultado)
+    assert len(geo.caras(zona)) == 9                     # b y las 3 caras de a que la tocan; lo demás, afuera
+    assert solidos_modificar._cruza_mas_que(entrada, resultado)
+    assert not solidos_modificar._cruza_mas_que(entrada, entrada)
