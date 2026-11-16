@@ -2677,7 +2677,30 @@ def herramienta_agujero(punto, direccion, *, tipo="simple", diametro=None, profu
     ("6H", "2B", "auto"…: ver `tolerancias`) lleva el diámetro menor y los flancos al centro de su tolerancia y
     `holgura` (mm, radial) agranda todo para imprimir en 3D. `conicidad` (diámetro por mm de profundidad, p. ej.
     1/16 en las roscas de tubería cónicas) angosta el agujero hacia el fondo (Roscado cónico). `tabla`: ver
-    `_perfil_clase`."""
+    `_perfil_clase`. Con rosca, la herramienta se arma una vez en el origen y se traslada (B-578)."""
+    opciones = dict(tipo=tipo, diametro=diametro, profundidad=profundidad, punta=punta, angulo_punta=angulo_punta,
+                    diam_abocardado=diam_abocardado, prof_abocardado=prof_abocardado, diam_avellanado=diam_avellanado,
+                    angulo_avellanado=angulo_avellanado, roscado=roscado, mano=mano, clase=clase, holgura=holgura,
+                    conicidad=conicidad, tabla=tabla, variante_surco=variante_surco)
+    if roscado:
+        try:    # B-578: unir el surco al agujero tardaba 0,4 s y se repetía en cada cambio de cota de la pieza
+            base = _rosca_en_origen(tuple(map(float, _unit(direccion))), tuple(sorted(opciones.items())))
+            lugar = gp_Trsf()
+            lugar.SetTranslation(gp_Vec(*map(float, punto)))
+            return BRepBuilderAPI_Copy(base, False).Shape().Moved(TopLoc_Location(lugar))  # la copia no toca la caché
+        except Exception:  # noqa: BLE001 — vía rápida: si falla, el camino de siempre
+            pass
+    return _herramienta_agujero(punto, direccion, **opciones)
+
+
+@functools.lru_cache(maxsize=16)
+def _rosca_en_origen(direccion, opciones):
+    return _herramienta_agujero((0.0, 0.0, 0.0), direccion, **dict(opciones))
+
+
+def _herramienta_agujero(punto, direccion, *, tipo, diametro, profundidad, punta, angulo_punta, diam_abocardado,
+                         prof_abocardado, diam_avellanado, angulo_avellanado, roscado, mano, clase, holgura, conicidad,
+                         tabla, variante_surco):
     a = _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo_punta, diam_abocardado,
                         prof_abocardado, diam_avellanado, angulo_avellanado, roscado, clase, holgura, conicidad, tabla)
     p, d = a["punto"], a["direccion"]
