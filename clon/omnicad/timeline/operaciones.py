@@ -414,15 +414,21 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
     if lista:
         objetivos = [estado.cuerpo(o) for o in lista]
     else:
-        objetivos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"
-                     and c.id not in ctx.ocultos and c.componente not in ctx.ocultos]
+        solidos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
+        objetivos = [c for c in solidos if c.id not in ctx.ocultos and c.componente not in ctx.ocultos]
         if operacion == "unir":
             objetivos = [c for c in objetivos if _toca(c, herramienta)]
     if not objetivos:
+        # B-549: si el cuerpo está pero oculto, el mensaje dice la causa (regla 14: un renglón, sin jerga)
+        ocultos = [] if lista else [c for c in solidos if c.id in ctx.ocultos or c.componente in ctx.ocultos]
         if operacion == "unir":
-            ctx.aviso("No tocó ningún cuerpo: se creó un cuerpo nuevo.")
+            ocultos = [c for c in ocultos if _toca(c, herramienta)]
+            ctx.aviso("El cuerpo que toca está oculto: se creó un cuerpo nuevo." if ocultos
+                      else "No tocó ningún cuerpo: se creó un cuerpo nuevo.")
             return [estado.nuevo_cuerpo(op_id, herramienta)]
-        raise ErrorOperacion(f"No hay cuerpos sobre los que {OPERACIONES_COMBINAR[operacion].lower()}.")
+        verbo = OPERACIONES_COMBINAR[operacion].lower()
+        raise ErrorOperacion(f"El cuerpo está oculto: mostralo para {verbo}." if ocultos
+                             else f"No hay cuerpos sobre los que {verbo}.")
 
     if operacion == "unir":
         resultado = herramienta
