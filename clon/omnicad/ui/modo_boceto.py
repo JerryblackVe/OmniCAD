@@ -295,6 +295,9 @@ class PaletaBoceto(QFrame):
         ayuda.setStyleSheet("font-size: 8pt;")
         f3.addRow(ayuda)
         f3.addRow("", b3d)
+        for campo in (self.puntos3d, self.largo3d):     # B-572: Intro en el campo = «Agregar»; al corregir se va el rojo
+            campo.returnPressed.connect(b3d.click)
+            campo.textEdited.connect(lambda _t, c=campo: c.setStyleSheet(""))
         self.b_triada = QPushButton("Restablecer orientación de la tríada")
         f3.addRow(self.b_triada)
         self.panel3d.setVisible(False)
@@ -1579,14 +1582,25 @@ class ModoBoceto(QObject):
         from ..restricciones import boceto3d as b3
         lz = self.lienzo
         lz._instantanea()                  # Ctrl+Z del boceto también deshace lo agregado en 3D
+        campo = self.paleta.puntos3d
         try:
-            pts = [[float(v) for v in t.split(",")] for t in texto.split(";") if t.strip()]
+            try:
+                pts = [[float(v) for v in t.split(",")] for t in texto.split(";") if t.strip()]
+            except ValueError:
+                pts = [[]]
+            if any(len(p) != 3 for p in pts):        # B-572: sin la jerga de Python («could not convert…»)
+                raise ErrorBoceto("No entiendo los puntos: escribí x, y, z separados por «;» (0, 0, 0; 0, 0, 20).")
             if not pts:
                 raise ErrorBoceto("Escribí al menos un punto: x, y, z.")
             if bloqueo in b3.EJES:
                 if h != "linea" or len(pts) != 1:
                     raise ErrorBoceto("Con un eje de la tríada: herramienta Línea, solo el punto inicial y el largo.")
-                pts.append([c + float(largo) * e for c, e in zip(pts[0], b3.EJES[bloqueo], strict=True)])
+                try:
+                    d = float(largo)
+                except ValueError:
+                    campo = self.paleta.largo3d
+                    raise ErrorBoceto("Escribí el largo en mm, con signo (por ejemplo 20 o -20).") from None
+                pts.append([c + d * e for c, e in zip(pts[0], b3.EJES[bloqueo], strict=True)])
             elif bloqueo in ("xy", "yz", "zx"):
                 k = {"xy": 2, "yz": 0, "zx": 1}[bloqueo]
                 for p in pts[1:]:
@@ -1605,8 +1619,11 @@ class ModoBoceto(QObject):
                         b3.agregar_restriccion(self.boceto, "eje", [cid], eje=bloqueo)
         except (ValueError, IndexError, ErrorBoceto) as e:
             lz._restaurar(lz.historial.pop())
-            self.v.mensaje(f"Boceto 3D: {e}", 7000)
+            self.v.mensaje(f"⚠ Boceto 3D: {e}", 7000)
+            campo.setStyleSheet(f"background: {temas.color('campo_error')};")
             return
+        for c in (self.paleta.puntos3d, self.paleta.largo3d):   # salió bien: ningún campo queda en rojo
+            c.setStyleSheet("")
         lz.pila_rehacer.clear()
         self._cambio()
 
