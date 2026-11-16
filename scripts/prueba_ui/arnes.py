@@ -154,9 +154,12 @@ def iniciar(doc, ancho=1900, alto=1000):
 
 def esperar(ms=350):
     QTest.qWait(ms)
-    # FL-3b: Aceptar, deshacer y rehacer con el cálculo aparte siguen en otro hilo, con una barra modal: se espera su cierre
+    # FL-3b: Aceptar, deshacer y rehacer con el cálculo aparte siguen en otro hilo, con la barra de abajo (P-173); abrir,
+    # con una barra modal: se espera su cierre
     fin = time.monotonic() + 120
-    while time.monotonic() < fin and any(isinstance(w, QProgressDialog) and w.isVisible() for w in QApplication.topLevelWidgets()):
+    while time.monotonic() < fin and any(isinstance(w, QProgressDialog) and w.isVisible()
+                                         or getattr(getattr(w, "timeline", None), "espera", None) is not None
+                                         and w.timeline.espera.isVisible() for w in QApplication.topLevelWidgets()):
         QTest.qWait(50)
 
 

@@ -19,8 +19,8 @@ pasos inactivos» y «Cambiar a modelado directo» no están: OmniCAD no tiene m
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QPen
 from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QInputDialog, QLabel, QListView, QListWidget,
-                               QListWidgetItem, QMenu, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolButton,
-                               QWidget)
+                               QListWidgetItem, QMenu, QProgressBar, QPushButton, QStyle, QStyledItemDelegate,
+                               QStyleOptionViewItem, QToolButton, QWidget)
 from shiboken6 import isValid
 
 from ..timeline import aspectos_doc
@@ -210,6 +210,15 @@ class PanelTimeline(QWidget):
         self.unidades.setToolTip("<b>Unidades del documento</b><br>Unidades y precisión con que se muestran los valores.")
         lay.addWidget(self.unidades)
         lay.addSpacing(12)
+        # P-173: barra y Cancelar de un cálculo aparte, abajo y sin tapar la vista (la ventana los muestra y oculta)
+        self.espera = QWidget(objectName="espera_calculo", visible=False)
+        fila = QHBoxLayout(self.espera)
+        fila.setContentsMargins(0, 0, 6, 0)
+        self.barra_espera = QProgressBar(textVisible=False, maximumWidth=120, maximumHeight=12)
+        self.cancelar_espera = QPushButton("Cancelar", toolTip="Corta el cálculo y deja el documento como estaba (Esc)")
+        fila.addWidget(self.barra_espera)
+        fila.addWidget(self.cancelar_espera)
+        lay.addWidget(self.espera)
         self.estado = QLabel(objectName="estado_timeline")
         lay.addWidget(self.estado)
         # Engranaje de la derecha (Opciones del timeline de Fusion).

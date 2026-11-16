@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """FL-3b: Aceptar, deshacer y rehacer con el cálculo en el proceso aparte no esperan en la ventana: el cálculo corre en
-otro hilo con una barra y Cancelar (o Esc), que deja el documento como estaba."""
+otro hilo con una barra y Cancelar (o Esc) abajo, que deja el documento como estaba; mientras, la cámara se mueve (P-173)."""
 import time
 
 import pytest
-from PySide6.QtCore import QSettings, Qt
+import numpy as np
+from PySide6.QtCore import QEvent, QPoint, QPointF, QSettings, Qt
+from PySide6.QtGui import QMouseEvent, QWheelEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLineEdit, QProgressDialog, QPushButton
+from PySide6.QtWidgets import QApplication, QLineEdit, QProgressDialog
 
 from omnicad import api
 from omnicad.nucleo import aislado
@@ -84,7 +86,7 @@ def test_fl3b_aceptar_deshacer_y_rehacer_vuelven_enseguida(monkeypatch, ventana)
         QTest.qWaitForWindowActive(v, 2000)
         assert _vuelve_enseguida(lambda t=tecla: QTest.keyClick(v.visor, t, Qt.ControlModifier)) < 0.25
         _esperar(lambda q=quedan: len(v.doc.operaciones) == q and not v.doc._esperando_hijo)
-    assert not [d for d in v.findChildren(QProgressDialog) if d.isVisible()]
+    assert not v.timeline.espera.isVisible()
 
 
 @pytest.mark.parametrize("como", ["cancelar", "esc"])
@@ -98,11 +100,54 @@ def test_fl3b_cancelar_aceptar_deja_el_documento_como_estaba(monkeypatch, ventan
     v.doc._ultimo_prevuelo = None               # que Aceptar no reuse la previa: tiene que calcular aparte
     QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
     QTest.qWait(300)
-    (espera,) = [d for d in v.findChildren(QProgressDialog) if d.isVisible()]
+    assert v.timeline.espera.isVisible() and not v.findChildren(QProgressDialog)    # abajo, sin ventana encima
     if como == "esc":
-        QTest.keyClick(espera, Qt.Key_Escape)
+        QTest.keyClick(v.visor, Qt.Key_Escape)
     else:
-        QTest.mouseClick(espera.findChild(QPushButton), Qt.LeftButton)
-    _esperar(lambda: not any(d.isVisible() for d in v.findChildren(QProgressDialog)) and not v.doc._esperando_hijo, 10)
+        QTest.mouseClick(v.timeline.cancelar_espera, Qt.LeftButton)
+    _esperar(lambda: not v.timeline.espera.isVisible() and not v.doc._esperando_hijo, 10)
+    QTest.qWait(200)
+    assert v.doc.a_dict() == receta and v.panel is None and not v.doc.puede_rehacer()
+
+
+def _raton(widget, tipo, pos, boton, botones):
+    """Evento de mouse simulado (el cursor real no se mueve) que pasa por los filtros de la aplicación como uno de verdad."""
+    QApplication.sendEvent(widget, QMouseEvent(tipo, QPointF(pos), QPointF(widget.mapToGlobal(pos)), boton, botones,
+                                               Qt.NoModifier))
+
+
+def test_p173_durante_el_calculo_aparte_la_camara_se_mueve_y_el_documento_no(monkeypatch, ventana):
+    v = ventana
+    panel = _panel_mover(v)
+    receta = v.doc.a_dict()
+    monkeypatch.setattr(aislado._Trabajador, "_avisar", lambda self, tarea: None)   # un proceso aparte que no contesta
+    monkeypatch.setattr(aislado, "PLAZO_RECIBIR", 10 ** 6)
+    aislado.cerrar_trabajador()
+    v.doc._ultimo_prevuelo = None
+    QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
+    QTest.qWait(300)
+    assert v.timeline.espera.isVisible()
+    vis, centro = v.visor, v.visor.rect().center()
+
+    def camara():
+        return vis.R.copy(), vis.objetivo.copy(), vis.distancia
+
+    antes = camara()
+    _raton(vis, QEvent.MouseButtonPress, centro, Qt.MiddleButton, Qt.MiddleButton)      # encuadre con el medio
+    for d in (10, 30, 60):
+        _raton(vis, QEvent.MouseMove, centro + QPoint(d, d // 2), Qt.NoButton, Qt.MiddleButton)
+    _raton(vis, QEvent.MouseButtonRelease, centro + QPoint(60, 30), Qt.MiddleButton, Qt.NoButton)
+    assert not np.array_equal(antes[1], camara()[1])
+    distancia = vis.distancia
+    QApplication.sendEvent(vis, QWheelEvent(QPointF(centro), QPointF(vis.mapToGlobal(centro)), QPoint(), QPoint(0, 120),
+                                            Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False))
+    assert vis.distancia != distancia                                                    # zoom con la rueda
+    QTest.keyClick(vis, Qt.Key_Delete)                                                   # el teclado no toca el documento
+    _raton(vis, QEvent.MouseButtonPress, centro, Qt.RightButton, Qt.RightButton)          # ni un menú contextual
+    _raton(vis, QEvent.MouseButtonRelease, centro, Qt.RightButton, Qt.NoButton)
+    QTest.qWait(100)
+    assert v.timeline.espera.isVisible() and v.doc.a_dict() == receta and v.panel is panel
+    QTest.keyClick(vis, Qt.Key_Escape)                                                   # Esc sigue cancelando
+    _esperar(lambda: not v.timeline.espera.isVisible() and not v.doc._esperando_hijo, 10)
     QTest.qWait(200)
     assert v.doc.a_dict() == receta and v.panel is None and not v.doc.puede_rehacer()

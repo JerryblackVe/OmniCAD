@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
-"""FL-3b: Aceptar, editar, deshacer y rehacer con el cálculo en el proceso aparte siguen en otro hilo, con una barra modal
-«Calculando en un proceso aparte…»; la ventana aplica el resultado al cerrarla."""
+"""FL-3b: Aceptar, editar, deshacer y rehacer con el cálculo en el proceso aparte siguen en otro hilo, con una barra y
+Cancelar abajo, en la barra del timeline (P-173); la ventana aplica el resultado al ocultarla."""
 import time
 
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QProgressDialog
 
 
 def barra(ventana):
     """La barra abierta del cálculo aparte, o None."""
-    return next((d for d in ventana.findChildren(QProgressDialog) if d.isVisible()), None)
+    return ventana.timeline.espera if ventana.timeline.espera.isVisible() else None
 
 
 def esperar_barra(ventana, segundos=60):
