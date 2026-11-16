@@ -808,7 +808,7 @@ def _ctrl_derivada(ctrl, nudos, p):
 
 def evaluar_bspline(polos, nudos, grado, pesos, t, derivadas=0):
     """[C, C', C''][:derivadas+1] de una B-spline (racional si hay pesos) en t."""
-    w = pesos or [1.0] * len(polos)
+    w = pesos if pesos and len(pesos) == len(polos) else [1.0] * len(polos)   # B-605: pesos de más (archivo externo) se ignoran
     ctrl = [(x * wi, y * wi, wi) for (x, y), wi in zip(polos, w, strict=True)]
     hs, k, q = [], list(nudos), grado
     c = ctrl
