@@ -1865,12 +1865,12 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
     todas = (caras_en_cadena(forma, caras, coplanares=False) if tangente
              else [c for i, c in enumerate(caras) if not _contiene(caras[:i], c)])
     if any(map(_es_filete, todas)):     # B-306: el kernel tardaba minutos (M8: 89 s con 1 mm, 150 s con 0,2 mm) y fallaba
-        raise geo.ErrorGeometria("Una rosca no se desfasa: usá Holgura de impresión al editar la rosca.")
+        raise geo.ErrorGeometria("Una rosca no se desfasa: editala › Holgura.")
     # B-306: con un filete en el cuerpo, el kernel tarda lo mismo con cualquier cara (cilindro vecino: 95 s y falla;
     # cara plana: 93 s y después sale por la extrusión): las planas van directo a la extrusión, las curvas fallan ya
     con_filete = any(map(_es_filete, geo.caras(forma)))
     if con_filete and any(_plano_de_cara(c) is None for c in todas):
-        raise geo.ErrorGeometria("Una rosca no se desfasa: usá Holgura de impresión al editar la rosca.")
+        raise geo.ErrorGeometria("Una rosca no se desfasa: editala › Holgura.")
     if not con_filete and (rapido := _desfase_por_contorno(forma, todas, dist)) is not None:
         return rapido
     resultado, dada_vuelta = None, False
