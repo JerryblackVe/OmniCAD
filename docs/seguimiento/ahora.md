@@ -24,10 +24,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
+| 1 | P-157 | Preferencias como Fusion (Gerardo pidió, regla 14): cada opción en su página, visual, poco texto, nada cortado a 1024×700, lo grisado con su motivo; leer Preferencias en docs/fusion_docs primero (E9 al cerrar B-588) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
-**Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-157, P-134 y todo P2 (P-156 sí entra, Gerardo 15/11).
+**Meta 30/11 (Gerardo, regla 13): app usable.** Fuera de la cola hasta esa fecha (siguen en sus listas): FL-14, P-159, B-405, B-389, P-134 y todo P2 (P-156 sí entra, Gerardo 15/11).
 
 Sin ítem de prioridad 1 libre: caza automática (`scripts/caza/cazar.py tema` sobre bocetos, sólido, superficie y construir) y `scripts/prueba_ui` de las mismas áreas; lo rojo entra con su ID (chat maestro, 14/11). Los P2 del lote de las 19 h (B-471 a B-479, B-481) y los del lote de las 13 h del 15/11 (B-511 a B-515) quedan en bugs.md sin cola; B-516 Sin verificar.
 
