@@ -17,6 +17,7 @@ avisa lo que vence ese día o ya venció.
 | AG-7 | [2.º] Auditoría, reparación y paridad del sistema CONSTRUIR (SCU, planos, ejes y puntos de construcción) en todos los espacios contra Fusion 360; prompt en `docs/auditoria_construir.md` | A definir | 2026-11-07 | Programada |
 | AG-9 | [8.º] Rediseño de «Apariencia y materiales» (color, aspecto, material físico, texturas PBR, colocación, «En uso»): primero una maqueta de la interfaz que Gerardo aprueba, después las fases; no es prioritario; prompt en `docs/apariencia_materiales.md` | A definir | 2026-11-09 | Programada |
 | AG-10 | Auditoría completa de Sólido › Crear con Fusion abierto, herramienta por herramienta (clics, asas, topes, campos, previa, velocidad). Insumo: los reportes de la PC del 2026-11-12 en `evidencias/reportes_pc/`, empezando por la Bobina (`2026-11-12_bobina/`: centro sin elegir y bobina corrida, valor y previa que no coinciden, eje con Plano XZ, congelamientos de 0,8–4 s, asas de Ángulo y círculo base, las 4 secciones) | A definir | 2026-11-12 | Programada |
+| AG-11 | Publicar OmniCAD v0.3.0 beta (pre-release en GitHub): antes, B-606 cerrado (h77 rojo en la CI de Windows) y main subido con el cierre completo verde. Etiqueta v0.3.0 (en origin no hay otra), «Instaladores» una sola vez, notas con lo nuevo desde v0.2.0 por tema, fallas conocidas en 1 renglón y cómo reportar (botón «Reportar») | 2026-11-17 | 2026-11-16 (vía el chat maestro; espera el OK directo de Gerardo al coordinador) | Programada |
 
 ## Orden y reparto de las auditorías
 
