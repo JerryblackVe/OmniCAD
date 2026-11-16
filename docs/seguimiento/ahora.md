@@ -6,6 +6,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 ## Ahora (uno por sesión)
 
+**Noche del 16/11 (Gerardo):** la VPS se pausa; E11 prueba en la PC. Cada sesión cierra su ítem y queda en pausa, sin ítems nuevos. B-562 se integra apenas quede verde, para que E11 lo pruebe esta noche.
+
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa (sin ítem de bocetos en la cola; cupo semanal). B-561, B-563 y B-564 integrados: 06dc572, 204e6c5, b2697d6 |
