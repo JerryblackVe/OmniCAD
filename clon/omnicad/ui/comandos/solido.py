@@ -122,6 +122,7 @@ class Extruir(Comando):
     CLAVE, TITULO, ICONO, ATAJO = "extruir", "Extruir", "extruir", "E"
     AYUDA = "Agrega profundidad a perfiles de boceto o caras planas: cuerpo nuevo, unir, cortar o intersecar."
     CLASE_OP = OpExtrusion
+    PERFIL_UNICO = True            # P-161: con un solo perfil a la vista lo toma solo, como Fusion (y Revolución, B-471)
     TITULOS_MODO = ("tipo", {"solida": ("Extruir", "extruir"), "delgada": ("Extrusión delgada", "extruir")})
     _herramienta_previa = None      # (estado, índice, receta del paso) → formas de `_formas_herramienta` (P-99)
     _base_asas = None               # (estado, perfiles, base, borde): las asas se rearman en cada tecla (FL-1)

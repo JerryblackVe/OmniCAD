@@ -26,7 +26,7 @@ def test_cuerpo_de_previa_solo_aparece_en_navegador_al_aceptar(tmp_path, monkeyp
         app.processEvents()
         panel = v.ejecutar_comando(CATALOGO["extruir"]())
         assert panel is not None
-        assert panel.elegir_boceto(op_id)
+        assert [h["ref"]["boceto"] for h in panel.valores["perfiles"]] == [op_id]     # P-161: el único perfil ya viene
         panel.set_valor("distancia", "5 mm")
         panel._t_previa.stop()
         panel._calcular_previa()
