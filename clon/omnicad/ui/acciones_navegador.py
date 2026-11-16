@@ -1,7 +1,7 @@
 """Menús del navegador: las mismas acciones de ventana y herramientas públicas."""
 from PySide6.QtWidgets import QInputDialog, QMenu
 
-from .. import api
+from .. import api, deshabilitado
 from ..api.herramientas_navegador import datos_navegador
 from .iconos import icono
 from .navegador import ROL_CLAVE, ROL_TIPO
@@ -132,7 +132,7 @@ def menu(v, item):
         mover.addAction(fila["nombre"], lambda _=False, g=gid: organizar(v, "move", clave, g))
     if tipo == "grupo":
         mover.setEnabled(False)
-        mover.menuAction().setToolTip("Los grupos anidados todavía no están disponibles.")
+        mover.menuAction().setToolTip(deshabilitado.motivo_sin_comando("Desplazar al grupo"))
     m.addSeparator()
     m.addAction("Nuevo grupo", lambda: organizar(v, "create_group", clave))
     conjunto = m.addAction("Crear conjunto de selección", lambda: organizar(v, "create_set", clave))
@@ -183,7 +183,7 @@ def menu(v, item):
 def no_disponible(m, texto, ayuda=""):
     a = m.addAction(texto)
     a.setEnabled(False)
-    a.setToolTip("Todavía no disponible" + (f": {ayuda}" if ayuda else ""))
+    a.setToolTip(deshabilitado.motivo_sin_comando(texto.split("\t")[0], "Todavía no disponible" + (f": {ayuda}" if ayuda else "")))
 
 
 def menu_opacidad(v, m, clave):
