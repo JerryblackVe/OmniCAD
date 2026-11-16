@@ -28,10 +28,10 @@ def test_sol1_rosca_externa_a_izquierdas():
     s = api.Sesion()
     llamar(s, "create_cylinder", height=20, radius=5)
     cilindro = geo.volumen(_cuerpos(s)[0].forma)
-    llamar(s, "create_thread", faces="%CYLINDER", thread="M10", left_hand=False)
+    llamar(s, "create_thread", faces="%CYLINDER", thread="M10", left_hand=False, modeled=True)
     derecha = geo.volumen(_cuerpos(s)[0].forma)
     llamar(s, "undo")
-    llamar(s, "create_thread", faces="%CYLINDER", thread="M10", left_hand=True)
+    llamar(s, "create_thread", faces="%CYLINDER", thread="M10", left_hand=True, modeled=True)
     izquierda = _cuerpos(s)[0].forma
     assert geo.es_valida(izquierda)
     assert geo.volumen(izquierda) < cilindro
@@ -222,7 +222,7 @@ def test_sol1_la_cresta_avanza_a_derechas_o_a_izquierdas_segun_el_pedido():
     for izquierda in (False, True):
         s = api.Sesion()
         llamar(s, "create_cylinder", height=20, radius=5)
-        llamar(s, "create_thread", faces="%CYLINDER", thread="M10", left_hand=izquierda)
+        llamar(s, "create_thread", faces="%CYLINDER", thread="M10", left_hand=izquierda, modeled=True)
         forma = _cuerpos(s)[0].forma
         a, b = _toca_cresta(forma, 10.0), _toca_cresta(forma, 10.375)      # un cuarto de paso más arriba
         assert sum(a) == 7                                                  # una cresta: 70° de arco

@@ -105,7 +105,7 @@ def llamar(sesion, nombre, **args):
 def _volumen_del_eje(clase):
     sesion = api.Sesion()
     llamar(sesion, "create_cylinder", radius=6.35, height=12)
-    llamar(sesion, "create_thread", faces="%CYLINDER", thread="1/2-10 ACME", thread_class=clase, length=8)
+    llamar(sesion, "create_thread", faces="%CYLINDER", thread="1/2-10 ACME", thread_class=clase, length=8, modeled=True)
     return geo.volumen(next(iter(sesion.doc.estado_final.cuerpos.values())).forma)
 
 

@@ -123,7 +123,8 @@ def test_receta_vieja_de_rosca_de_tabla_conserva_su_geometria():
     s = api.Sesion()
     r = api.llamar(s, "create_cylinder", {"radius": 6, "height": 24})
     assert r["ok"], r
-    r = api.llamar(s, "create_thread", {"faces": "%CYLINDER", "thread": "Tr12x3", "thread_class": "7e"})
+    r = api.llamar(s, "create_thread", {"faces": "%CYLINDER", "thread": "Tr12x3", "thread_class": "7e",
+                                       "modeled": True})
     assert r["ok"], r
     forma = lambda d: next(iter(d.estado_final.cuerpos.values())).forma  # noqa: E731
     assert d_max(forma(s.doc)) == pytest.approx(11.882, abs=1e-3)
