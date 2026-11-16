@@ -22,8 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit*)",
-            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"Antes de commitear: si el commit lleva cambios de codigo y todavia no corriste la skill ponytail-review en esta sesion, invocala ahora con la herramienta Skill. Reporta el resultado real.\"}}'"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aviso_commit.py"
           }
         ]
       },

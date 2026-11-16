@@ -19,10 +19,15 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 - Otros agentes trabajan EN PARALELO: tocá solo los archivos que te asignaron; si necesitás un cambio
   en otro, anotalo en el informe, no lo hagas.
 - No digas "listo" sin correr la verificación y pegar su salida real.
-- Usar SIEMPRE la skill `/ponytail` en todo proceso de código donde sea útil o necesario
+- Usar SIEMPRE la skill `/ponytail` en todo proceso de código (CLAUDE.md › «Regla obligatoria: ponytail»)
   (escribir, arreglar, refactorizar, elegir dependencias): el cambio más chico que resuelve la
   tarea completa, sin sobre-ingeniería; y la skill `/ponytail-review` antes de dar por terminado
   un cambio de código (lógica, seguridad, carga real, tests, y que cada línea sea necesaria).
+- **Reglas de nivel 1 para quien programa** (resumen; texto completo en CLAUDE.md, que OpenCode no lee): un ítem por
+  sesión, y lo hallado fuera del ítem va como fila nueva en `docs/seguimiento/` (3); modelo justo, solo
+  `tests_afectados.py --correr`, mensajes cortos, leer solo la sección necesaria (4); nada es «listo» sin ruff y tests
+  verdes con salida real (5); copiar Fusion leyendo `docs/fusion_docs/` antes de arreglar (6); toda herramienta nueva
+  con su versión MCP/CLI, test y doc (10).
 - Errores del núcleo: `raise geo.ErrorGeometria("mensaje claro en español")`
   (`from . import geometria as geo` dentro de `nucleo`).
 - Funciones PURAS del núcleo: reciben formas OCC, arrays numpy, `geo.Plano` o números; devuelven formas
@@ -91,7 +96,7 @@ toma solo de ahí, sin `--select`.
 UNA a la vez. Para verificar tu cambio, desde `clon/` corré `../scripts/tests_afectados.py --correr`: elige por el
 grafo de imports los tests que tu cambio afecta y los corre con turno (no se eligen tests a ojo). Si elige más de 15 grupos (cambios en el núcleo), corré solo los tests de tu ítem y los de los archivos que importan directo lo que tocaste (`grep -rl "import <módulo>\|from .* import <módulo>" tests/`), con turno; la suite completa va al cierre nocturno (CLAUDE.md › regla 4). La suite completa y la
 humo las corre el orquestador (cuatro corridas a la vez colgaron una PC de 13 GB). Con varios agentes, cada
-comando pesado va con turno (uno a la vez en toda la PC; corta a los 900 s; en Windows, tope de 3 GB de memoria):
+comando pesado va con turno (PC de a 1, VPS de a 5; corta a los 900 s; en Windows, tope de 3 GB de memoria):
 `.venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe -m pytest tests/test_x.py -q`
 (cada pytest reserva ~1 GB aunque use 350 MB de RAM).
 **Prueba de humo:** no mueve el cursor real ni pide el foco (P-60): con `OMNICAD_PRUEBA_VENTANA=minimizada` corre transparente mientras se usa la PC. Todo paso nuevo usa `_mover` (movimiento simulado), nunca `QTest.mouseMove` ni `QCursor.setPos`.
@@ -99,7 +104,7 @@ Una prueba suelta: `pytest tests/<archivo>.py -q`. Cada función del núcleo lle
 un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)`; rápidas (< 3 s).
 
 **Definición de terminado** (de la sesión: `tests_afectados.py --correr` verde; la suite completa y la humo las corre el
-coordinador al cerrar): ruff limpio, pytest verde, prueba de humo OK (la UI se toca → obligatoria),
+coordinador en el cierre nocturno): ruff limpio y `tests_afectados.py --correr` verde (la humo, aunque se toque la UI, es del cierre nocturno),
 entrada nueva en `PROJECT_LOG.md`, `docs/seguimiento/` al día (lo resuelto, borrado; lo nuevo, agregado) y lección
 anotada si hubo un error verificable. Sin archivos sueltos: nada de informes, capturas o temporales en la raíz.
 
@@ -152,7 +157,7 @@ modo en vivo y la lista de herramientas). Plan y estado: [docs/plan_mcp_cli.md](
 
 ## Registrar el trabajo
 **Pendientes: una sola fuente de verdad.** Todo lo que falta resolver vive en `docs/seguimiento/` (`bugs.md`,
-`faltantes.md`, `mejoras.md`; método en su `README.md`). Las listas tienen SOLO lo pendiente. Reglas:
+`faltantes.md`, `mejoras.md`, `despues.md`; método en su `README.md`). Las listas tienen SOLO lo pendiente. Reglas:
 - Antes de decir qué está hecho o qué falta, se comprueba en el código y los tests: el log y la memoria envejecen.
 - Bug, faltante o mejora nueva: fila nueva en su lista con el siguiente ID libre.
 - **Al resolverse, la fila se borra** en el mismo commit que el arreglo (también su ficha de «Detalle» y su ID en
@@ -173,5 +178,7 @@ En `PROJECT_LOG.md`, al terminar:
   test que falló, hallazgo con archivo y línea):
   `- [AAAA-MM-DD] Regla accionable en una línea. · Evidencia: test/archivo/comando que lo prueba.`
 - Antes de aplicar una lección que nombra un archivo, función o flag, comprobá que siga existiendo.
-- Informe final al orquestador: firma de cada función pública, una línea de qué hace, limitaciones honestas
-  y salida real de pytest y ruff.
+- Informe final al orquestador: 10 líneas como mucho (CLAUDE.md › Protocolo de ahorro, punto 5): qué se hizo, firmas
+  públicas nuevas, limitaciones honestas, salida real de pytest y ruff y los hallazgos de `ponytail-review`.
+- **Tamaño del Registro:** entrada de 300 caracteres como mucho. El Registro conserva 2 días; en el cierre diario el
+  coordinador mueve lo viejo a `docs/historial/registro_AAAA-MM.md`. Una lección por tema, sin repetir.
