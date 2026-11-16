@@ -90,6 +90,12 @@ def _cruz(a, b):
     return a[0] * b[1] - a[1] * b[0]
 
 
+def _en_tramo(prim, t):
+    """B-564: el parámetro de un contacto, dentro del tramo de la curva (no en la prolongación de una spline abierta)."""
+    a, z, periodica = dominio(prim)
+    return t if periodica else min(max(t, a), z)
+
+
 def _unitario(v):
     n = math.hypot(*v) or 1e-12
     return v[0] / n, v[1] / n
@@ -637,10 +643,11 @@ class _Sistema:
         prim0, p0 = self.prim(self.x0, cid), self.P(self.x0, pid)
         t0 = _afinar_contacto(lambda t: np.subtract(evaluar_primitiva(prim0, t[0])[0], p0),
                               [mas_cercano(prim0, p0)[0]])[0]
-        j = self._parametro(t0)
+        j = self._parametro(_en_tramo(prim0, t0))
 
         def f(x, pid=pid, cid=cid, j=j):
-            q = evaluar_primitiva(self.prim(x, cid), x[j])[0]
+            prim = self.prim(x, cid)
+            q = evaluar_primitiva(prim, _en_tramo(prim, x[j]))[0]
             p = self.P(x, pid)
             return [q[0] - p[0], q[1] - p[1]]
         self.terminos.append(f)
@@ -736,8 +743,9 @@ class _Sistema:
         ja, jb = self._parametro(ta), self._parametro(tb)
 
         def f(x, a=e[0], c=e[1], ja=ja, jb=jb):
-            Ca, Da = evaluar_primitiva(self.prim(x, a), x[ja], 1)
-            Cb, Db = evaluar_primitiva(self.prim(x, c), x[jb], 1)
+            pa, pb = self.prim(x, a), self.prim(x, c)
+            Ca, Da = evaluar_primitiva(pa, _en_tramo(pa, x[ja]), 1)
+            Cb, Db = evaluar_primitiva(pb, _en_tramo(pb, x[jb]), 1)
             return [Ca[0] - Cb[0], Ca[1] - Cb[1], _cruz(_unitario(Da), _unitario(Db)) * _ESCALA_TANGENTE]
         T.append(f)
 
