@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
 | E3 | B-503 | Desfase de 0,5 mm en letras curvas (falla en 5–41 s). Opus alto. P-170 Bloqueado por el kernel; B-609 Parcial: bb9a729 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
-| E5 | — | B-610 integrado (falta verlo en Windows). B-607 pasa a E11 en Windows (no hay .omnicad). Libre |
+| E5 | HOOKS-1116 | Hooks del protocolo (reusar sesiones, traspaso al 25 %, lista de arranque); OK de Gerardo. Sonnet medio. B-610: 29cd17c (falta Windows) |
 | E6 | P-173 | La vista no se congela mientras calcula (sin diálogo modal). Opus alto. B-608 Parcial: 6115ddb (falta Windows) |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
