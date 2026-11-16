@@ -16,7 +16,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E5 | — | B-593 integrado (5e91b41). Libre hasta el lote de las 13 h |
 | E6 | B-598 | Extruir «Hasta la cara» de 15 letras: previa de más de 4 min (caso LINCES). P-99/B-546 Parcial integrados: 04bf7a8. Después FL-2/FL-3 |
 | E7 | P-169 (2) + B-603 | Barrido de lo que no funciona: tabla de candidatos para la lista de P-169 (la carga cuando E8 integre el mecanismo); y arreglar los 8 textos viejos de `prueba_ui/patrones_boceto.py`. Después P-167. P-168 integrado (Parcial: falta E11) |
-| E8 | P-169 (1) | Lista central de lo deshabilitado: gris + «No disponible: motivo» en cinta, menús y paneles, kind claro en la API (Sonnet medio). B-590 y B-591 (3.er caso) integrados: 117a131 |
+| E8 | — | En pausa (tope de 3 sesiones por el cupo). P-169 (1) integrado: 50aea22 |
 | E9 | — | P-166 integrado (5e91b41). Libre hasta el lote de las 13 h |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
