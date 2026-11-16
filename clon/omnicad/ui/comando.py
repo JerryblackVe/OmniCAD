@@ -2111,7 +2111,8 @@ class PanelComando(QFrame):
         rapida = medida is not None and medida[0] == _firma_previa(op) and medida[1] < tope_ms
         if rapida and tecleo and len(medida) > 2:     # B-438: «1e3 mm» tras «15 mm» no es igual de barata
             rapida = _magnitud_previa(self.ctx, op) <= 5 * max(medida[2], 1.0)
-        aparte = PREVIA_APARTE and not rapida    # FL-1: extruir el texto «EMILIA» con Unir trababa la ventana 4 s por tecla
+        # FL-1: extruir el texto «EMILIA» con Unir trababa la ventana 4 s por tecla
+        aparte = PREVIA_APARTE and not rapida and not self._sobre_caras_planas(op)
         if aparte or op.TIPO not in TIPOS_PESADOS:
             return aparte
         from ..nucleo import geometria as geo
@@ -2122,6 +2123,20 @@ class PanelComando(QFrame):
             if any(c is not None and any(map(cara_libre, geo.caras(c.forma))) for c in cuerpos):
                 return True
         return any(c is not None and len(geo.caras(c.forma)) >= CARAS_PESADAS for c in cuerpos)
+
+    def _sobre_caras_planas(self, op):
+        """B-608: Empalme o Chaflán sobre cuerpos de pocas caras, todas planas (una caja: 15-25 ms en el kernel), van en
+        la ventana aun sin medida: el proceso aparte costaba 1,5 s en la VPS y 9-17 s en Windows (arrancar y rehacer el
+        documento). Si algo falla al mirarlo, sigue el camino normal (aparte)."""
+        if op.TIPO not in ("empalme", "chaflan"):
+            return False
+        from ..nucleo import geometria as geo
+        try:
+            cuerpos = [self.ctx.estado.cuerpos[cid].forma for cid in _ids_cuerpo(op.p)]
+            return bool(cuerpos) and all(len(caras := geo.caras(f)) < CARAS_PESADAS
+                                         and all(geo.plano_de_cara(c) is not None for c in caras) for f in cuerpos)
+        except Exception:  # noqa: BLE001 — vía rápida: ante cualquier duda, el proceso aparte de siempre
+            return False
 
     def _iniciar_previa(self, op):
         from ..nucleo.aislado import TOPE_PREVIA, CalculoPendiente, TareaAislada
