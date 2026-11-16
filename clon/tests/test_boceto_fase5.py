@@ -716,3 +716,12 @@ def test_boc26_rho_elipse_parabola_hiperbola_y_punto_conocido(rho, signo):
         assert x * x + coeficiente * y * y + 2 * y - 1 == pytest.approx(0, abs=1e-6)
     if rho == 0.5:
         assert evaluar_primitiva(prim, 0.25)[0] == pytest.approx((25, 27.5), abs=1e-6)
+
+
+def test_b605_bspline_con_pesos_de_mas_no_se_cae():
+    """B-605: un archivo externo con más pesos que polos no rompe la evaluación: se ignoran los pesos."""
+    from omnicad.restricciones.boceto import evaluar_bspline
+    polos, nudos = [(0, 0), (1, 2), (2, 0)], [0, 0, 0, 1, 1, 1]
+    sin = evaluar_bspline(polos, nudos, 2, None, 0.5)
+    con = evaluar_bspline(polos, nudos, 2, [1.0, 2.0, 1.0, 5.0], 0.5)
+    assert con == sin and abs(sin[0][0] - 1.0) < 1e-9

@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-16 · B-605 cerrado (E9).** `evaluar_bspline` (`restricciones/boceto.py`) ignora los pesos si no son tantos como los polos (archivo externo con pesos de más); cubre el visor y todo el que la llame. Prueba: `tests/test_boceto_fase5.py::test_b605_bspline_con_pesos_de_mas_no_se_cae`; ruff limpio.
 - **2026-11-16 · Traspaso del chat maestro (25 %).** Protocolo de ahorro integrado (425c5a6 + 7e9385e0); beta v0.3.0 el 17/11 espera el OK directo de Gerardo al coordinador; push a GitHub hoy 23:13 UTC; después del push, el chat maestro cierra los issues #1 y #2 (arreglados en 778090e3); B-607 a E11 en Windows; B-610 falta verlo en Windows; el chat maestro nuevo recrea su vigilancia cada 2 h y le pasa su dirección al coordinador.
 - **2026-11-16 · B-606 cerrado (coordinador).** h77 de la CI de Windows del 13/11: verificado en Windows por el chat maestro sobre main 46409796 (`tests/test_proyeccion_seccion.py` 13 passed, h77 1 passed en 4,91 s) y en Linux. Sin cambio de código; fila borrada.
 - **2026-11-16 · Dirección del chat maestro (coordinador).** Desde la VPS, SendMessage con `to` = «Chat Maestro OmniCAD setup» (el nombre solo; con el id o con «[1c4d23]» no llega). Pendientes del coordinador en `~/coordinador/pendientes_envio.md`.
