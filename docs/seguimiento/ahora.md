@@ -8,13 +8,13 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-544 | Punto en vértice: el vértice tiene que ganar; después B-561 (Tangente línea-círculo no hace nada, Gerardo trabado) (B-540 integrado: f0b265b) |
-| E2 | P-161 | Extruir preselecciona el único perfil (B-471b integrado: f57e7a8) |
+| E1 | B-561 | Tangente línea-círculo: aviso falso «ya la cumple» (P-162 lo reprodujo); después B-563 y B-564 (B-544 integrado: 430fcb0) |
+| E2 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (P-161 integrado: 379cf08) |
 | E3 | B-559 | **Primero (Gerardo, prioridad 1)**: Mover/Copiar entero contra Fusion. Después B-560 (Alinear, misma revisión) y B-558 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-562 | 🚨 **Bloqueante primero**: WinError 32 en el archivo `avance` del cálculo aislado (Windows). Después sigue B-545: Panel perezoso (solo crea los campos visibles): baja abrir Agujero (B-545) y abrir Extruir con el llavero (B-546) a < 150 ms |
-| E7 | P-162 | **Primero (Gerardo, prioridad 1)**: auditoría de todas las restricciones de boceto por la ventana (`scripts/prueba_ui`); después vuelve a la caza |
+| E7 | Caza | P-162 integrado (ac5217a: 407 casos, rojos a B-561/B-563/B-564 y P-158); vuelve a la caza y `scripts/prueba_ui` |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | — | En pausa hasta que Gerardo decida sobre el advisor (P-158c integrada: 1186c2d) |
 | E9 | P-158d | Acortar mensajes de Bocetos y Sólido (tandas GLM, revisión MiniMax) y arreglar `test_boceto_combinaciones::test_limite_patron[enorme]` |
@@ -25,9 +25,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-543 | Chaflán: un clic simple suma aristas (Sonnet) |
-| 2 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (Sonnet) |
-| 3 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
-| 4 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
+| 2 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
+| 3 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
