@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-16 · P-169 (1) listo (E8).** `omnicad/deshabilitado.py` (lista central, vacía): `clave → (motivo, ID)`; `ventana._accion/_poner_atajo` la ponen en gris con «No disponible: <motivo>», `comando._widget` apaga campos y opciones, `api.llamar` rechaza con `FEATURE_DISABLED`. Test: `tests/test_deshabilitado.py` (6); doc: `docs/seguimiento/README.md` punto 6.
+  Traspaso: worktree ~/OmniCAD-P-169 (rama item/P-169), sin commit; informe en ~/coordinador/buzon/E8.md. Falta (parte 2, E7): cargar la lista con el barrido. Suite completa y humo de cierre, del coordinador.
 - **2026-11-16 · B-590 resuelto (E8).** `timeline/__init__.py` importa `operaciones` primero: ningún `ops_*.py` suelto da ImportError. Test: `tests/test_b590_imports_sueltos.py` (14 casos, subprocess limpio). ruff limpio, 69 OK, humo OK.
 - **2026-11-16 · B-591, 3.er caso (E8).** `ui/registro_uso.py` › `_detener` saltea objetos Qt ya borrados y siempre devuelve el gancho de excepciones y el de mensajes Qt. Test en `tests/test_registro_uso_ui.py` (abre A, B, recalcula y cierra). 68 OK, humo OK. Causa de fondo sin hallar: sigue Parcial.
 - **2026-11-16 · B-593 resuelto (E5).** `timeline/ops_construir.py`: el plano de desfase toma su tamaño de los cuerpos, no de la cámara: ya no flota ni cambia con el zoom. Test: `tests/test_b593_plano_desfase_mide_cuerpos.py`. 246 OK, humo OK.

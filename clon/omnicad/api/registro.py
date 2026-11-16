@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Union
 
+from .. import deshabilitado
 from .errores import ErrorAPI, error, traducir
 from ..registro_uso.ganchos import error as registrar_error
 
@@ -359,6 +360,8 @@ def llamar(sesion, nombre, args=None):
             parecidas = difflib.get_close_matches(str(nombre), list(_CATALOGO), n=3)
             raise error("UNKNOWN_TOOL", f"No existe la herramienta '{nombre}'.",
                         *([f"¿Quisiste decir: {', '.join(parecidas)}?"] if parecidas else []))
+        if (apagada := deshabilitado.entrada(nombre)) is not None:       # P-169: lo que no funciona se rechaza con el ID
+            raise error("FEATURE_DISABLED", f"'{nombre}' está deshabilitada: {apagada[0]} ({apagada[1]}).")
         kwargs = _argumentos(h, args)
         # Solo la llamada de afuera empieza la lista de avisos: una anidada (llamar dentro de execute_code)
         # devuelve los suyos sin borrar los que ya juntaron las anteriores. Cada llamada devuelve sus avisos sin

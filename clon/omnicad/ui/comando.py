@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QC
 
 from ..timeline.documento import ErrorDocumento
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, SIN_DIMENSION, ErrorExpresion, evaluar
-from .. import registro_uso
+from .. import deshabilitado, registro_uso
 from ..registro_uso.ganchos import aviso as registrar_aviso
 from ..registro_uso.ganchos import error as registrar_error
 from . import formato, preajustes_ui, temas
@@ -1178,6 +1178,24 @@ class PanelComando(QFrame):
         self._reubicar()                     # cambiar de pestaña no recalcula: solo cambia lo que se ve
 
     def _widget(self, campo):
+        w = self._widget_base(campo)
+        base = f"{self.comando.CLAVE}.{campo.clave}"
+        if deshabilitado.entrada(base):                    # P-169: el campo entero, en gris con su motivo
+            w.setEnabled(False)
+            w.setToolTip(deshabilitado.motivo(base))
+        for k in getattr(campo, "opciones", ()):           # P-169: una opción de la lista o de la fila de íconos
+            if not deshabilitado.entrada(f"{base}.{k}"):
+                continue
+            if isinstance(w, QComboBox):
+                i = w.findData(k)
+                w.model().item(i).setEnabled(False)
+                w.setItemData(i, deshabilitado.motivo(f"{base}.{k}"), Qt.ToolTipRole)
+            elif isinstance(w, _FilaBotones):
+                w.boton(k).setEnabled(False)
+                w.boton(k).setToolTip(deshabilitado.motivo(f"{base}.{k}"))
+        return w
+
+    def _widget_base(self, campo):
         val = self.valores.get(campo.clave)
         if isinstance(campo, Seleccion):
             w = _FilaLista(campo, self) if isinstance(campo, ListaSeleccion) else _FilaSeleccion(campo)

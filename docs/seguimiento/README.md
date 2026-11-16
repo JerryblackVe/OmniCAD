@@ -40,6 +40,7 @@ los `docs/brechas_*.md`. Esos archivos describen; **el estado vive solo acá**.
 4. **Lo que no se va a hacer** (no era un bug, no se reproduce, se descarta): también se borra, con una línea en
    el Registro que diga por qué. Si un bug vuelve a aparecer, se carga de nuevo con un B-n nuevo.
 5. **Detalle largo** (pasos para reproducir, mediciones): en la sección «Detalle» del mismo archivo.
+6. **Un bug abierto que rompe o pierde trabajo en el uso común, o algo que no hace nada (P-169)**: se apaga con una entrada en `clon/omnicad/deshabilitado.py` (`"clave": ("motivo en 1 renglón, sin jerga", "B-123")`; la clave es un comando, `comando.campo`, `comando.campo.opcion` o una herramienta de la API). La cinta, los menús y los paneles lo muestran en gris con «No disponible: <motivo>» y la API responde `FEATURE_DISABLED` con el ID. **La entrada se quita en el mismo commit que cierra el bug**; `tests/test_deshabilitado.py` falla si el ID ya no está en estas listas.
 
 ## Decisiones que esperan al usuario (estado `Bloqueado`)
 
