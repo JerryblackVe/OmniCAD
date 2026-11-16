@@ -173,6 +173,15 @@ def create_construction_axis(sesion, type: Literal["cilindro", "perpendicular_ca
             "origin": _vector(punto), "direction": _vector(direccion), "display": estado.medidas[op.id]}
 
 
+def _eje_de_giro(sesion, valor, body=None):
+    """Eje de giro: eje, arista, línea de boceto o cara cilíndrica o cónica. Una cara plana no es un eje (Fusion no la
+    acepta y el panel tampoco); `como_eje` le daba la normal por el origen de su superficie, lejos de la cara (B-565)."""
+    ref = _referencia(sesion, valor, {"eje", "arista", "curva_boceto", "cara"}, body, "eje")
+    if ref["tipo"] == "cara" and ent.resolver(ref, sesion.doc.estado_final).plano is not None:
+        raise error("INVALID_AXIS", "Una cara plana no es un eje: elegí una arista recta, un eje o una cara cilíndrica.")
+    return ref
+
+
 def _referencias(sesion, referencias, filtros, body):
     if len(referencias) != len(filtros):
         raise error("INVALID_ARGUMENTS", f"Esta variante necesita {len(filtros)} referencias en orden.")
