@@ -310,6 +310,7 @@ def test_temporizador_y_terminar_boceto_contienen_fallos_del_mallador(tmp_path, 
                 raise geo.ErrorGeometria("No se pudo calcular el centro geométrico")
             parche.setattr(perfiles_mod, "_punto_adentro", fallar)
             modo.lienzo.seleccion = r["object_ids"]
+            modo.lienzo.objetos.notificar()                # B-411: el panel se arma al haber objetos elegidos
             modo.objetos.pivotes.activated.emit(1)
             assert "No se pudo calcular" in modo.objetos.error.text()
             assert modo.boceto.a_dict() == receta and not errores
