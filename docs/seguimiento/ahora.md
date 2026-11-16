@@ -8,7 +8,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-561 | Tangente línea-círculo: aviso falso «ya la cumple» (P-162 lo reprodujo); después B-563 y B-564 (B-544 integrado: 430fcb0) |
+| E1 | — | En pausa (sin ítem de bocetos en la cola; cupo semanal). B-561, B-563 y B-564 integrados: 06dc572, 204e6c5, b2697d6 |
 | E2 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (P-161 integrado: 379cf08) |
 | E3 | B-565 | `como_eje` toma el origen del plano en vez del centro de la cara (gemelo de B-560; B-560 parcial integrado: 8ac5502, falta el mouse contra Fusion → E11). Después B-558 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E7 | Caza | P-162 integrado (ac5217a: 407 casos, rojos a B-561/B-563/B-564 y P-158); vuelve a la caza y `scripts/prueba_ui` |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | — | En pausa hasta que Gerardo decida sobre el advisor (P-158c integrada: 1186c2d) |
-| E9 | P-158d | Acortar mensajes de Bocetos y Sólido (tandas GLM, revisión MiniMax) y arreglar `test_boceto_combinaciones::test_limite_patron[enorme]` |
+| E9 | P-158f | Mensajes cortos en `restricciones/boceto.py` (96), `ui/comandos/{primitivas,patrones}.py` y el aviso de H/V (P-162); después las `pistas` de la API para los kinds que perdieron detalle (review de P-158d). P-158d integrado: 1162d59 |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)

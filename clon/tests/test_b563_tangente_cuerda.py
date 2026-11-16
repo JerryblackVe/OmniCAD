@@ -12,7 +12,7 @@ from omnicad.restricciones import Boceto  # noqa: E402
 from omnicad.restricciones.boceto import ErrorBoceto  # noqa: E402
 from omnicad.timeline.parametros import TablaParametros  # noqa: E402
 
-AVISO = "Tangente: la línea tiene los 2 extremos sobre la curva; soltá uno."
+AVISO = "Tangente: soltá un extremo de la línea."
 
 
 def _cuerda():
@@ -28,7 +28,7 @@ def _cuerda():
 @pytest.mark.parametrize("orden", [0, 1])
 def test_la_cuerda_se_rechaza_en_los_dos_ordenes(orden):
     b, c, l = _cuerda()
-    with pytest.raises(ErrorBoceto, match="2 extremos"):
+    with pytest.raises(ErrorBoceto, match="soltá un extremo"):
         b.agregar_restriccion("tangente", [l, c] if orden == 0 else [c, l])
     assert not any(r.tipo == "tangente" for r in b.restricciones.values())
 
