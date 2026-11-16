@@ -2,6 +2,7 @@
 (ASM_SELF_INTER), en vez de crear un cuerpo inválido. BRepCheck no los ve: `es_valida` da True con volumen negativo.
 Los pasos son los de los repros de E11 (evidencias/reportes_pc/2026-11-14_e11_barrido y _solevacion)."""
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,19 +19,21 @@ from omnicad.timeline.operaciones import ErrorOperacion
 REPROS = json.loads((Path(__file__).parent / "datos" / "b462_autointersecciones.json").read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("caso, que, detalle", [
-    ("barrido_r15_en_arco_r10", "El barrido", "volumen negativo"),
-    ("solevacion_cerrada_4_circulos", "La solevación", "volumen negativo"),
-    ("solevacion_cerrada_3_cuadrados_girados", "La solevación", "8 autointersecciones"),
-    ("solevacion_linea_central_en_s", "La solevación", "autointersecciones"),
+@pytest.mark.parametrize("caso, que, con_cruces", [
+    ("barrido_r15_en_arco_r10", "El barrido", False),
+    ("solevacion_cerrada_4_circulos", "La solevación", False),
+    ("solevacion_cerrada_3_cuadrados_girados", "La solevación", True),
+    ("solevacion_linea_central_en_s", "La solevación", True),
 ])
-def test_el_resultado_que_se_autointerseca_es_un_error_y_no_un_cuerpo(caso, que, detalle, monkeypatch):
+def test_el_resultado_que_se_autointerseca_es_un_error_y_no_un_cuerpo(caso, que, con_cruces, monkeypatch):
     # B-490: con la máquina cargada el tope de 5 s se pasaba y daba aviso; el test mide la guarda, no el reloj
     monkeypatch.setattr(ops_solido, "PLAZO_CRUCES", 120.0)
     doc = Documento.desde_dict(REPROS[caso])
     paso = doc.resultados[-1]
     assert paso.estado == "error", (paso.estado, paso.mensaje)
-    assert paso.mensaje.startswith(f"{que} se autointerseca") and detalle in paso.mensaje, paso.mensaje
+    assert f"{que} se autointerseca" in paso.mensaje, paso.mensaje
+    # P-158d: con cruces contados el mensaje trae «(N)»; el volumen negativo no cuenta cruces
+    assert bool(re.search(r"se autointerseca \(\d+\)", paso.mensaje)) == con_cruces, paso.mensaje
     assert not doc.estado_final.cuerpos
 
 
@@ -39,7 +42,7 @@ def test_la_previa_tambien_rechaza_el_volumen_negativo_sin_analizar():
     barato y se rechaza igual; el sólido sano pasa."""
     previa = SimpleNamespace(revisar_autointersecciones=False)
     caja = geo.caja(10, 10, 10)
-    with pytest.raises(ErrorOperacion, match="El barrido se autointerseca .encierra un volumen negativo"):
+    with pytest.raises(ErrorOperacion, match="El barrido se autointerseca: causa"):
         ops_solido._exigir_sin_autointersecciones(previa, caja.Reversed(), "El barrido", "causa")
     ops_solido._exigir_sin_autointersecciones(previa, caja, "El barrido", "causa")
 

@@ -38,7 +38,7 @@ def test_agujeros_del_mismo_paso_que_se_tocan_justo_son_un_error(agujero, tangen
 
 @pytest.mark.parametrize("agujero, mensaje", [
     ({"diameter": 8, "points": [[-4, 0], [4, 0]]}, "Dos agujeros se tocan justo: espesor cero."),
-    ({"diameter": 10, "points": [[0, 15]]}, "El agujero toca justo una pared: espesor cero."),   # B-165, regla 14
+    ({"diameter": 10, "points": [[0, 15]]}, "El agujero toca una pared: espesor cero."),   # B-165, regla 14
 ])
 def test_creado_directo_da_el_error_en_un_renglon(agujero, mensaje):
     s = api.Sesion()

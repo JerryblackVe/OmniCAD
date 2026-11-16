@@ -55,7 +55,7 @@ def test_b213_nervio_invertido_sin_cara_da_error_y_conserva_el_cuerpo():
     b = _linea(s, "XZ", 0, 35, 5, 5, 45)
     r = api.llamar(s, "create_rib", dict(sketch=b, thickness=2, target=cid, reverse=True))
     assert not r["ok"], r
-    assert "no llega al cuerpo" in r["mensaje"].lower(), r
+    assert "no llega" in r["mensaje"].lower(), r
     assert _aumento(s, cid, 25500) == pytest.approx(0)
 
 
@@ -263,7 +263,7 @@ def test_red_invertir_hacia_la_boca_abierta_avisa():
     assert geo.volumen(s.cuerpo(cid).forma) == pytest.approx(16408.0, rel=1e-4)
     _ok(s, "undo")
     r = api.llamar(s, "create_web", dict(sketch=b, thickness=2, target=cid, reverse=True))
-    assert not r["ok"] and "no llega al cuerpo" in r["mensaje"], r
+    assert not r["ok"] and "no llega" in r["mensaje"], r
     assert geo.volumen(s.cuerpo(cid).forma) == pytest.approx(14752.0, rel=1e-4)   # el documento quedó como estaba
 
 

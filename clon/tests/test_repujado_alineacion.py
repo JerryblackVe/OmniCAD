@@ -214,5 +214,5 @@ def test_dialogo_conserva_las_opciones_al_editar():
 @pytest.mark.parametrize("clave", ["desfase_h", "desfase_v", "giro"])
 def test_alineacion_rechaza_valores_no_finitos(clave):
     cuerpo = geo.caja(40, 30, 10)
-    with pytest.raises(geo.ErrorGeometria, match="finitos"):
+    with pytest.raises(geo.ErrorGeometria, match="valor inválido"):
         sc.repujado(cuerpo, [_rectangulo()], _tapa(cuerpo), 1, **{clave: math.nan})

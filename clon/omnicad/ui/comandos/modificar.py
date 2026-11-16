@@ -155,10 +155,10 @@ class Empalme(Comando):
             if not parte.strip():
                 continue
             if parte.count(":") != 1:
-                raise ErrorComando(f"Cada punto es posición:radio (p. ej. 0.5:3 mm), no «{parte.strip()}».")
+                raise ErrorComando(f"Usá posición:radio (0.5:3), no «{parte.strip()}».")
             pos, rad = (x.strip() for x in parte.split(":"))
             if not 0 < ctx.evaluar(pos, ESCALAR) < 1:
-                raise ErrorComando("La posición de un punto intermedio está entre 0 y 1 (sin incluirlos).")
+                raise ErrorComando("La posición va entre 0 y 1 (sin incluirlos).")
             ctx.evaluar(rad)
             puntos.append({"posicion": pos, "radio": rad})
         return puntos
@@ -543,7 +543,7 @@ class ReticulaVolumetrica(Comando):
         except ValueError:
             barras = []
         if not barras or any(len(b) != 6 or not all(0 <= x <= 1 for x in b) for b in barras):
-            raise ErrorComando("Cada barra son 6 números de 0 a 1 (x1 y1 z1 x2 y2 z2), separadas con «;».")
+            raise ErrorComando("Barra: 6 números de 0 a 1, separados con «;».")
         return barras
 
     def construir(self, v, ctx):
@@ -629,7 +629,7 @@ class CaraDesfase(Comando):
     def construir(self, v, ctx):
         exigir(v, "caras", "Seleccioná las caras.")
         if ctx.evaluar(v["distancia"]) == 0:
-            raise ErrorComando("La distancia de desfase no puede ser cero: arrastrá la flecha o escribí una distancia.")
+            raise ErrorComando("La distancia de desfase no puede ser cero.")
         return self.crear_op(OpDesfaseCara, v, ctx, caras=refs(v, "caras"), distancia=v["distancia"],
                              tangente=v["tangente"])
 
@@ -677,7 +677,7 @@ class PulsarTirar(Comando):
         if len(tipos) > 1:
             raise ErrorComando("Elegí solo caras o solo aristas.")
         if ctx.evaluar(v["distancia"]) == 0:
-            raise ErrorComando("La distancia o el radio no puede ser cero: arrastrá la flecha o escribí un valor.")
+            raise ErrorComando("La distancia o el radio no puede ser cero.")
         if tipos == {"cara"}:
             op = self.crear_op(OpDesfaseCara, v, ctx, caras=refs(v, "objetos"), distancia=v["distancia"],
                                origen="pulsar_tirar")
@@ -749,9 +749,9 @@ class Desfase(Comando):
     def construir(self, v, ctx):
         exigir(v, "objetos", "Seleccioná caras, aristas o curvas.")
         if _con_caras(v) and _con_aristas(v):
-            raise ErrorComando("Elegí solo caras (desfase de cara) o solo aristas y curvas (desfase de aristas).")
+            raise ErrorComando("Elegí solo caras o solo aristas y curvas.")
         if ctx.evaluar(v["distancia"]) == 0:
-            raise ErrorComando("La distancia de desfase no puede ser cero: arrastrá la flecha o escribí una distancia.")
+            raise ErrorComando("La distancia de desfase no puede ser cero.")
         if _con_caras(v):
             op = self.crear_op(OpDesfaseCara, v, ctx, caras=refs(v, "objetos"), distancia=v["distancia"],
                                tangente=v["tangente"])
@@ -952,11 +952,11 @@ class MoverCopiar(Comando):
         if v.get("tipo") == "traslacion" and not v.get("copiar"):     # una copia en el lugar es válida, como en Libre
             claves = ("distancia",) if v.get("direccion") else ("dx", "dy", "dz")
             if all(ctx.evaluar(v.get(k) or "0") == 0 for k in claves):
-                raise ErrorComando("La traslación no puede ser cero: arrastrá una flecha o escribí una distancia.")
+                raise ErrorComando("La traslación no puede ser cero.")
         elif v.get("tipo") == "libre" and not v.get("copiar"):
             if (all(ctx.evaluar(v.get(k) or "0") == 0 for k in ("dx", "dy", "dz"))
                     and all(ctx.evaluar(v.get(k) or "0", ANGULO) == 0 for k in ("rx", "ry", "rz"))):
-                raise ErrorComando("Indicá una distancia o un ángulo distinto de cero para mover el objeto.")
+                raise ErrorComando("Indicá una distancia o un ángulo, no cero.")
         p = {k: v.get(k) for k in ("tipo", "dx", "dy", "dz", "rx", "ry", "rz", "distancia", "angulo", "x", "y", "z",
                                     "copiar", "ligera")}
         p.update(cuerpos=[] if por_caras or por_bocetos else _cuerpos(v), caras=refs(v, "caras") if por_caras else [],
@@ -1072,7 +1072,7 @@ class Alinear(Comando):
         duena = ref1(v, "origen").get("cuerpo")              # Fusion toma el objeto de lo elegido en «Desde»
         cuerpos = list(dict.fromkeys(([duena] if duena else []) + _cuerpos(v)))
         if not cuerpos:
-            raise ErrorComando("«Desde» no es de un cuerpo: elegí los cuerpos a alinear en «Otros cuerpos».")
+            raise ErrorComando("«Desde» no es un cuerpo: usá «Otros cuerpos».")
         return self.crear_op(OpAlinear, v, ctx, cuerpos=cuerpos, origen=ref1(v, "origen"),
                              destino=ref1(v, "destino"), voltear=v["voltear"], copiar=v["copiar"],
                              angulo=a if (a := float(v["angulo"])) % 1 else int(a))
@@ -1105,7 +1105,7 @@ class Combinar(Comando):
         exigir(v, "herramientas", "Seleccioná los cuerpos de herramienta.")
         obj, herr = _cuerpos(v, "objetivo")[0], _cuerpos(v, "herramientas")
         if obj in herr:
-            raise ErrorComando("El cuerpo de destino no puede ser también herramienta.")
+            raise ErrorComando("El cuerpo destino no puede ser herramienta.")
         con_holgura = v["operacion"] == "cortar" and v.get("mantener")      # la casilla escondida no cuenta
         holgura = _holgura_3d(v, ctx, "holgura", "dejar_holgura") if con_holgura else "0 mm"
         return self.crear_op(OpCombinar, v, ctx, objetivo=obj, herramientas=herr, operacion=v["operacion"],
@@ -1310,7 +1310,7 @@ class EliminarOperaciones(Comando):
         exigir(v, "cuerpos", "Seleccioná los cuerpos a simplificar.")
         tipos = self._tipos(v)
         if not tipos:
-            raise ErrorComando("Elegí al menos un tipo de operación (empalmes, chaflanes o agujeros).")
+            raise ErrorComando("Elegí empalmes, chaflanes o agujeros.")
         return self.crear_op(OpEliminarOperaciones, v, ctx, cuerpos=_cuerpos(v), tipos=tipos)
 
     def desde_op(self, op, ctx):

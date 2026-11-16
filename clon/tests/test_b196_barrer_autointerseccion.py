@@ -126,7 +126,7 @@ def test_labio_y_ranura_revisan_el_resultado():
         with patch.object(sc, funcion, return_value=resultado):
             r = _labio(s, tipo)
         _exigir_error(r, "labio" if tipo != "groove" else "ranura", "ancho")
-        assert "se autointerseca (3 autointersecciones)" in r["mensaje"], r
+        assert "se autointerseca (3)" in r["mensaje"], r
 
 
 def test_labio_y_ranura_normales_no_avisan():
@@ -235,7 +235,7 @@ def test_b358_un_cambio_de_parametro_vuelve_a_revisar():
                  twist_angle="t")["result"]["feature"]["id"]
         assert "autointersec" not in s.doc.resultado(uid).mensaje
         r = api.llamar(s, "set_parameter", {"name": "t", "expression": "30 deg"})
-        assert "se autointerseca (24 autointersecciones)" in (r.get("mensaje") or s.doc.resultado(uid).mensaje), r
+        assert "se autointerseca (24)" in (r.get("mensaje") or s.doc.resultado(uid).mensaje), r
         _r(s, "set_parameter", name="t", expression="0 deg")
         assert s.doc.resultado(uid).estado == "ok"
 

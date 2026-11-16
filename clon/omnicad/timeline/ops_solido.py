@@ -57,7 +57,7 @@ def _exigir_sin_autointersecciones(ctx, forma, que, causa, antes=None):
     evitarlo. `antes`: el cuerpo antes del paso, cuyas autointersecciones no son de este paso (Labio). La vista previa
     no analiza (es para mirar rápido): ahí solo se rechaza el volumen negativo, que es barato."""
     if antes is None and geo.volumen_exacto(forma) < 0:
-        raise ErrorOperacion(f"{que} se autointerseca (encierra un volumen negativo): {causa}")
+        raise ErrorOperacion(f"⚠ {que} se autointerseca: {causa}")
     if not ctx.revisar_autointersecciones:
         return
     n, problemas = _cruces(forma)
@@ -67,7 +67,7 @@ def _exigir_sin_autointersecciones(ctx, forma, que, causa, antes=None):
     if n and antes is not None:
         n -= _cruces(antes)[0] or 0
     if n > 0:
-        raise ErrorOperacion(f"{que} se autointerseca ({n} {'autointersección' if n == 1 else 'autointersecciones'}): {causa}")
+        raise ErrorOperacion(f"⚠ {que} se autointerseca ({n}): {causa}")
 
 
 def _caras(refs, estado, que="perfiles"):
@@ -120,7 +120,7 @@ def _cuerpo_objetivo(estado, ents, p):
         return estado.cuerpo(p["objetivo"])
     solidos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
     if not solidos:
-        raise ErrorOperacion("No hay un cuerpo sólido sobre el que trabajar.")
+        raise ErrorOperacion("⚠ No hay un cuerpo sólido para trabajar.")
     from ..nucleo.consultas import distancia
     forma = ents[0].forma
     return min(solidos, key=lambda c: distancia(c.forma, forma))
@@ -158,11 +158,11 @@ class OpBarrido(_OpCrear):
 
     def _eje_alineado(self, estado):
         if not self.p.get("eje_alineado"):
-            raise ErrorOperacion("Elegí el eje de la orientación alineada (un eje, una arista, un plano o una cara).")
+            raise ErrorOperacion("⚠ Elegí el eje de la orientación alineada.")
         e = _resolver(self.p["eje_alineado"], estado)
         eje = e.eje[1] if e.eje is not None else e.plano.normal if e.plano is not None else None
         if eje is None:
-            raise ErrorOperacion("El eje de la orientación alineada tiene que ser un eje, una arista recta, un plano o una cara plana.")
+            raise ErrorOperacion("⚠ Eje no vale: tiene que ser recto o plano.")
         return eje
 
     def _ruta(self, estado, ctx):
@@ -178,12 +178,12 @@ class OpBarrido(_OpCrear):
         orientacion = self.p["orientacion"]
         if self.p["carril"] or self.p.get("superficie_guia") or abs(ctx.evaluar(self.p["torsion"], ANGULO)) > 1e-9 or abs(
                 ctx.evaluar(self.p["conicidad"], ANGULO)) > 1e-9:
-            raise ErrorOperacion("El barrido de un cuerpo no usa carril, superficie guía, torsión ni conicidad.")
+            raise ErrorOperacion("⚠ Barrido de cuerpo: sin carril ni torsión.")
         distancia = ctx.evaluar(self.p["distancia"], "escalar")
         for cid in self.p["cuerpos"]:
             c = estado.cuerpo(cid)
             if getattr(c, "tipo", "solido") != "solido":
-                raise ErrorOperacion(f"«{c.nombre}» no es un cuerpo sólido: el barrido de un cuerpo lo necesita.")
+                raise ErrorOperacion(f"⚠ «{c.nombre}» no es un cuerpo sólido.")
             forma = _sc().barrer_cuerpo(c.forma, ruta, orientacion=orientacion, distancia=distancia, eje_alineado=eje)
             _exigir_sin_autointersecciones(
                 ctx, forma, "El barrido del cuerpo",
@@ -207,7 +207,7 @@ class OpBarrido(_OpCrear):
                              eje_alineado=eje, superficie_guia=superficie, extension=self.p["extension"],
                              distancia_carril=ctx.evaluar(self.p["distancia_carril"], "escalar"))
         if geo.sin_volumen(forma):
-            raise ErrorOperacion("El barrido no encierra volumen: el plano del perfil no puede ser paralelo a la ruta.")
+            raise ErrorOperacion("⚠ El barrido no encierra volumen.")
         _exigir_sin_autointersecciones(
             ctx, forma, "El barrido",
             "el perfil se pisa al recorrer la ruta. Probá un perfil más chico o una ruta más abierta, sin cruces.")
@@ -265,7 +265,7 @@ class OpSolevacion(_OpCrear):
                   "peso": ctx.evaluar(str(c.get("peso", "1")), "escalar")}
         if salida["tipo"] in ("tangente", "suave"):
             if not c.get("cara"):
-                raise ErrorOperacion("La condición Tangente o Suave necesita la cara a la que la superficie es tangente.")
+                raise ErrorOperacion("⚠ Condición Tangente o Suave pide una cara.")
             cara = _resolver(c["cara"], estado)
             if cara.tipo != "cara":
                 raise ErrorOperacion("La condición Tangente se apoya en una cara.")
@@ -484,17 +484,17 @@ class OpAgujero(_OpCrear):
         """Posición «Referencias»: el punto de la cara a las dos distancias de las dos aristas."""
         e = _resolver(self.p["ref_cara"], estado, ("cara",))
         if e.plano is None:
-            raise ErrorOperacion("La posición por referencias va sobre una cara plana.")
+            raise ErrorOperacion("⚠ Posición por referencias: cara plana.")
         aristas = _resolver_todas(self.p.get("ref_aristas") or [], estado, ("arista",))
         if len(aristas) != 2:
-            raise ErrorOperacion("La posición por referencias necesita dos aristas rectas de la cara.")
+            raise ErrorOperacion("⚠ Referencias: elegí dos aristas rectas.")
         distancias = [ctx.evaluar(self.p["ref_distancia1"]), ctx.evaluar(self.p["ref_distancia2"])]
         punto = _sc().punto_por_referencias(e.forma, [a.forma for a in aristas], distancias)
         return punto, -e.plano.normal
 
     def _objetivo_hasta(self, estado):
         if not self.p.get("hasta"):
-            raise ErrorOperacion("Extensión «Hasta»: elegí la cara, el plano o el cuerpo donde termina el agujero.")
+            raise ErrorOperacion("⚠ «Hasta»: elegí cara, plano o cuerpo.")
         e = _resolver(self.p["hasta"], estado, ("cara", "plano", "cuerpo"))
         if e.tipo == "plano":
             return e.plano
@@ -511,7 +511,7 @@ class OpAgujero(_OpCrear):
         if rosca == "modelada":
             datos = sc.datos_rosca(p["designacion"])
             if datos["conica"]:
-                raise ErrorOperacion(f"{datos['designacion']} es una rosca cónica: usá «Roscado cónico».")
+                raise ErrorOperacion(f"⚠ {datos['designacion']} es rosca cónica: usá Roscado cónico.")
             clase, _ = _tol().resolver_clase(datos["familia"], datos["diametro"], datos["paso"],
                                              p.get("clase_rosca") or "", True)
             if rapido:
@@ -525,8 +525,7 @@ class OpAgujero(_OpCrear):
         elif rosca == "conico":
             datos = sc.datos_rosca(p["designacion"])
             if not datos["conica"]:
-                raise ErrorOperacion(f"Roscado cónico: {datos['designacion']} no es una rosca de tubería cónica "
-                                     "(R/Rc o NPT).")
+                raise ErrorOperacion(f"⚠ Roscado cónico: {datos['designacion']} no es rosca R/NPT.")
             opciones.update(diametro=datos["diametro_menor"], conicidad=datos["conicidad"])
         else:
             opciones["diametro"] = L("diametro")
@@ -597,8 +596,7 @@ class OpAgujero(_OpCrear):
                                           p.get("objetivos") or "")
             vacios = [nombres[c] for c in afectados if c in antes and c not in estado.cuerpos]
             if vacios:       # B-346: un agujero no borra cuerpos (el corte general sí, con aviso): es un error, no un paso verde
-                raise ErrorOperacion(f"El agujero deja sin material a {', '.join(vacios)}: es más grande que el cuerpo. "
-                                     "Achicá el diámetro o la profundidad.")
+                raise ErrorOperacion(f"⚠ El agujero borra {', '.join(vacios)} entero: achicalo.")
             ant = [antes[c] for c in afectados if c in antes]
             desp = [estado.cuerpos[c].forma for c in afectados if c in estado.cuerpos]
             if variante == ultimo or sc.agujero_sin_pellizco(ant, desp):
@@ -864,7 +862,7 @@ def repetir_pasos(op, estado, ctx, trsfs):
     nueva zona, y las copias que ya no tocan al cuerpo se omiten. Devuelve los ids de los cuerpos afectados."""
     pasos = _ids_pasos(op.p)
     if not pasos:
-        raise ErrorOperacion("Elegí las operaciones (pasos del timeline) que se repiten.")
+        raise ErrorOperacion("⚠ Elegí los pasos del timeline a repetir.")
     if not trsfs:
         ctx.aviso("El patrón no tiene copias: no cambió nada.")
         return []
@@ -921,7 +919,7 @@ def copiar_construccion(op, estado, trsfs):
     (`<paso>_k<n>`, nombre « (copia)»)."""
     entidades = _resolver_todas(op.p.get("construccion"), estado, ("plano", "eje", "punto"))
     if not entidades:
-        raise ErrorOperacion("Elegí los planos, ejes o puntos de construcción.")
+        raise ErrorOperacion("⚠ Elegí la geometría de construcción.")
     n, nombrar = 0, estado.nombres_de_copia()
     for ref, e in zip(op.p["construccion"], entidades, strict=True):
         for t in trsfs:
@@ -958,8 +956,7 @@ def copiar_componentes(op, estado, trsfs):
     for k in ids:
         for m in sorted(familia(estado, k)):       # el subensamblaje entero tiene que estar donde se modeló
             if not np.allclose(np.asarray(estado.componentes[m].get("matriz", np.identity(4)), float), np.identity(4)):
-                raise ErrorOperacion(f"El componente «{estado.componentes[m].get('nombre') or m}» ya fue movido por una "
-                                     "unión: copiá sus cuerpos o volvé a su posición.")
+                raise ErrorOperacion(f"⚠ «{estado.componentes[m].get('nombre') or m}» ya lo movió una unión.")
         for t in trsfs:
             n += 1
             copiar_componente(estado, k, f"{op.id}.k{n}", op.id, lambda c, t=t: _sc().aplicar(c.forma, t))
@@ -970,7 +967,7 @@ def copiar_objetos(op, estado, ctx, trsfs, sin_cuerpos):
     objeto = op.p.get("objeto", "cuerpos")
     if objeto == "operaciones":
         if not _ids_pasos(op.p):
-            raise ErrorOperacion("Elegí las operaciones (pasos del timeline) que se repiten.")
+            raise ErrorOperacion("⚠ Elegí los pasos del timeline a repetir.")
         op._registrar_usados(repetir_pasos(op, estado, ctx, trsfs))
     elif objeto == "caras":
         copiar_caras(op, estado, trsfs)
@@ -1111,7 +1108,7 @@ class OpPatron(_OpCrear):
         """Identificadores de instancia que pide suprimir `suprimir` (pares (i, j) en el rectangular, enteros en el resto)."""
         crudo = self.p.get("suprimir") or []
         if not isinstance(crudo, (list, tuple)):
-            raise ErrorOperacion(f"«suprimir» tiene que ser una lista de instancias: llegó {ent.describir_valor(crudo)}.")
+            raise ErrorOperacion(f"⚠ «suprimir» debe ser lista: llegó {ent.describir_valor(crudo)}.")
         try:
             if self.p["forma_patron"] == "rectangular":
                 return [_sc()._id_rectangular(i) for i in crudo]
@@ -1119,8 +1116,7 @@ class OpPatron(_OpCrear):
                 raise ValueError
             return [int(i) for i in crudo]
         except (TypeError, ValueError, geo.ErrorGeometria):
-            raise ErrorOperacion(f"«suprimir» tiene que ser una lista de números enteros (o pares [i, j] en el "
-                                 f"rectangular): llegó {ent.describir_valor(crudo)}.") from None
+            raise ErrorOperacion(f"⚠ «suprimir»: enteros o [i, j]: llegó {ent.describir_valor(crudo)}.") from None
 
     def _direcciones(self, estado, ctx):
         """(dirección 1, dirección 2 o None) del rectangular: la 2 elegida, la derivada perpendicular o ninguna."""
@@ -1146,8 +1142,7 @@ class OpPatron(_OpCrear):
         forma = p["forma_patron"]
         total = _version_de(p, "version_simetria") == 2
         if forma != "circular" and p["distribucion"] not in ("extension", "espaciado"):
-            raise ErrorOperacion(f"La distribución «{p['distribucion']}» solo existe en el patrón circular: usá "
-                                 "«extension» o «espaciado».")
+            raise ErrorOperacion(f"⚠ «{p['distribucion']}» solo vale en el patrón circular.")
         if forma == "rectangular":
             if not p["dir1"]:
                 raise ErrorOperacion("Elegí la dirección 1.")
@@ -1283,14 +1278,13 @@ class OpMultitransformar(_OpCrear):
         """Lista compuesta de gp_Trsf (la primera, la identidad = el original)."""
         lista = self._lista()
         if not lista:
-            raise ErrorOperacion("Agregá al menos una transformación (rectangular, circular, ruta, puntos, simetria o escala).")
+            raise ErrorOperacion("⚠ Agregá al menos una transformación.")
         from ..nucleo.consultas import transformacion_identidad
         sc, listas = _sc(), []
         for i, t in enumerate(lista, start=1):
             tipo = t.get("tipo")
             if tipo not in TIPOS_TRANSFORMACION:
-                raise ErrorOperacion(f"Transformación {i}: «tipo» tiene que ser uno de: {', '.join(TIPOS_TRANSFORMACION)}; "
-                                     f"llegó {ent.describir_valor(tipo)}.")
+                raise ErrorOperacion(f"⚠ Transformación {i}: «tipo» mal: {ent.describir_valor(tipo)}.")
             try:
                 if tipo == "simetria":
                     if not t.get("plano"):
@@ -1316,16 +1310,16 @@ class OpMultitransformar(_OpCrear):
         """[identidad, escala factor, escala factor², …] de una transformación de escala (n instancias con el original)."""
         n = t.get("n", 2)
         if isinstance(n, bool) or not isinstance(n, (int, float)) or int(n) != n or n < 2:
-            raise ErrorOperacion(f"«n» (instancias con el original) tiene que ser un entero de al menos 2; llegó {ent.describir_valor(n)}.")
+            raise ErrorOperacion("⚠ «n» tiene que ser un entero de al menos 2.")
         _sc()._exigir_instancias(int(n))
         factor = ctx.evaluar(str(t.get("factor", "2")), ESCALAR)
         if not factor > 0:
-            raise ErrorOperacion(f"«factor» tiene que ser mayor que cero; llegó {factor:g}.")
+            raise ErrorOperacion("⚠ «factor» tiene que ser mayor que 0.")
         if abs(factor - 1) < 1e-9:
-            raise ErrorOperacion("«factor» no puede ser 1: todas las copias quedarían encimadas en el original.")
+            raise ErrorOperacion("⚠ «factor» no puede ser 1: copias encimadas.")
         escalas = [factor ** k if k * abs(math.log(factor)) < 14 else None for k in range(1, int(n))]
         if None in escalas:                                    # la última copia sale de 1e-6…1e6 (el kernel no la calcula)
-            raise ErrorOperacion(f"«factor» {factor:g} con {int(n)} instancias da una escala fuera de 1e-6 a 1e6: bajá la cantidad o el factor.")
+            raise ErrorOperacion(f"⚠ factor {factor:g}: escala fuera de 1e-6 a 1e6.")
         return [identidad] + [_sc().transformacion_escala(s) for s in escalas]
 
     def ejecutar(self, estado, ctx):
@@ -1395,7 +1389,7 @@ class OpPatronGeometrico(_OpCrear):
         custom = None
         if p["objeto"] == "personalizado":
             if not p["personalizado"]:
-                raise ErrorOperacion("Elegí el cuerpo que se repite (objeto personalizado).")
+                raise ErrorOperacion("⚠ Elegí el cuerpo que se repite.")
             custom = _resolver(p["personalizado"], estado).forma
         formas = []
         for e in _resolver_todas(p["caras"], estado):
@@ -1454,7 +1448,7 @@ class OpReticulaVolumetrica(Operacion):
             elif e.forma is not None:
                 salida.extend(p for p in geo.polilineas_aristas(e.forma, paso / 4) if len(p))
             else:
-                raise ErrorOperacion("La ruta y las zonas de la retícula son puntos, aristas, curvas, caras o cuerpos.")
+                raise ErrorOperacion("⚠ Ruta y zonas: puntos, curvas, caras…")
         return np.concatenate(salida).astype(float) if salida else np.zeros((0, 3))
 
     def ejecutar(self, estado, ctx):
@@ -1462,10 +1456,10 @@ class OpReticulaVolumetrica(Operacion):
         from .parametros import ESCALAR, LONGITUD
         p = self.p
         if not p["cuerpo"]:
-            raise ErrorOperacion("Elegí el sólido o la malla cerrada que se llena con la retícula.")
+            raise ErrorOperacion("⚠ Elegí el sólido o la malla que se llena.")
         c = estado.cuerpo(p["cuerpo"])
         if getattr(c, "tipo", "solido") not in ("solido", "malla"):
-            raise ErrorOperacion("La retícula se aplica a un cuerpo sólido o a una malla cerrada.")
+            raise ErrorOperacion("⚠ Retícula: solo sólido o malla cerrada.")
 
         def opcional(clave, tipo=LONGITUD):
             texto = str(p.get(clave) or "").strip()
@@ -1477,9 +1471,9 @@ class OpReticulaVolumetrica(Operacion):
         desfase, mezcla = opcional("desfase") or 0.0, opcional("mezcla") or 0.0
         en_zona = (100.0 if opcional("solidez_desfase", ESCALAR) is None else opcional("solidez_desfase", ESCALAR)) / 100
         if min(tam) <= 0 or not 0.01 <= solidez <= 0.99 or (final is not None and not 1 <= final <= 99):
-            raise ErrorOperacion("El tamaño de celda es positivo y la solidez va de 1 a 99 %.")
+            raise ErrorOperacion("⚠ Tamaño de celda > 0; solidez de 1 a 99 %.")
         if desfase < 0 or mezcla < 0 or not 0 <= en_zona <= 1:
-            raise ErrorOperacion("El desfase y la mezcla no son negativos y la solidez del desfase va de 0 a 100 %.")
+            raise ErrorOperacion("⚠ Desfase y mezcla ≥ 0 y solidez de 0 a 100.")
         paso = min(tam) / 8
         ruta = self._puntos(p.get("ruta") or [], estado, paso) if final is not None else None
         zona = None
@@ -1519,7 +1513,7 @@ class OpRellenoContorno(_OpCrear):
         for e in _resolver_todas(self.p["herramientas"], estado):
             formas.append(e.plano if e.tipo == "plano" else e.forma)
         if len(formas) < 1:
-            raise ErrorOperacion("Elegí las herramientas que encierran el volumen.")
+            raise ErrorOperacion("⚠ Elegí herramientas que cierran el volumen.")
         return formas
 
     def ejecutar(self, estado, ctx):
@@ -1575,12 +1569,12 @@ class OpSolidoEnvolvente(_OpCrear):
         if o == "scu":
             sid = self.p["scu"]
             if f"{sid}_x" not in estado.ejes:
-                raise ErrorOperacion("Elegí el sistema de coordenadas de usuario de la orientación.")
+                raise ErrorOperacion("⚠ Elegí el sistema de coordenadas de usuario.")
             return sc.marco_ortonormal(z=estado.ejes[f"{sid}_z"][1], x=estado.ejes[f"{sid}_x"][1])
 
         def direccion(clave):
             if not self.p[clave]:
-                raise ErrorOperacion("La orientación necesita dos ejes: eje_a y eje_b.")
+                raise ErrorOperacion("⚠ La orientación pide ejes eje_a y eje_b.")
             return np.asarray(ent.como_eje(_resolver(self.p[clave], estado))[1], float)
         a, b = direccion("eje_a"), direccion("eje_b")
         n1, n2 = o.split("_")
@@ -1608,7 +1602,7 @@ class OpSolidoEnvolvente(_OpCrear):
         if not self.p["cuerpos"]:
             raise ErrorOperacion("Elegí los cuerpos.")
         if self.p.get("reemplazar") and self.p["operacion"] == "nuevo" and self.p["tipo"] == "tubo":
-            raise ErrorOperacion("«Reemplazar con primitivas» solo hace caja, cilindro o esfera (no tubo).")
+            raise ErrorOperacion("⚠ Reemplazar con primitivas: no hace tubo.")
         if self.p.get("reemplazar") and self.p["operacion"] == "nuevo":
             self._reemplazar(estado, ctx)
             return
@@ -1682,7 +1676,7 @@ class OpReglaPlastico(_OpCrear):
         from .ops_ensamblar import componente_por_ref
         k = componente_por_ref(estado, self.p["componente"])
         if k is None:
-            raise ErrorOperacion("Elegí el componente: ENSAMBLAR › Nuevo componente lo crea.")
+            raise ErrorOperacion("⚠ Elegí el componente: ENSAMBLAR › Nuevo.")
         regla = self.p["regla"]
         if not isinstance(regla, dict) or "espesor" not in regla:
             raise ErrorOperacion("Elegí la regla de plástico.")
@@ -1718,7 +1712,7 @@ class OpSaliente(_OpCrear):
     def ejecutar(self, estado, ctx):
         ents = _resolver_todas(self.p["posiciones"], estado)
         if not ents:
-            raise ErrorOperacion("Elegí puntos de boceto donde van los salientes.")
+            raise ErrorOperacion("⚠ Elegí puntos de boceto para los salientes.")
         L = lambda k: ctx.evaluar(self.p[k]) if str(self.p.get(k) or "").strip() else None  # noqa: E731
         for e in ents:
             n = e.plano.normal if e.plano is not None else np.array([0.0, 0.0, 1.0])
@@ -1779,10 +1773,10 @@ class OpLabio(_OpCrear):
         previas = {cuerpo.id: cuerpo.forma}          # B-358: lo que el cuerpo ya traía no es culpa del labio
         if self.p["tipo"] == "labio y acanalado":
             if not self.p.get("cuerpo_ranura"):
-                raise ErrorOperacion("Elegí el cuerpo de la ranura del labio y acanalado.")
+                raise ErrorOperacion("⚠ Elegí el cuerpo de la ranura.")
             ranura = estado.cuerpo(_resolver(self.p["cuerpo_ranura"], estado, ("cuerpo",)).cuerpo)
             if ranura.id == cuerpo.id:
-                raise ErrorOperacion("El cuerpo de la ranura tiene que ser distinto del cuerpo del labio.")
+                raise ErrorOperacion("⚠ Ranura y labio: cuerpos distintos.")
             antes_ranura = geo.volumen(ranura.forma)
             previas[ranura.id] = ranura.forma
             r = _sc().labio_y_ranura(cuerpo.forma, ranura.forma, aristas, -d if self.p["invertir"] else d,
@@ -1827,11 +1821,11 @@ class OpApoyo(_OpCrear):
         planos = []
         for e in _resolver_todas(self.p["perfiles"], estado, ("perfil", "cara")):
             if e.plano is None:
-                raise ErrorOperacion("El apoyo necesita perfiles cerrados de boceto o caras planas.")
+                raise ErrorOperacion("⚠ Apoyo: perfiles cerrados o caras planas.")
             perfiles.append(e.forma)
             planos.append(e.plano)
         if len({tuple(np.round(p.normal, 6)) for p in planos if p is not None}) > 1:
-            raise ErrorOperacion("Los perfiles del apoyo tienen que estar en planos paralelos.")
+            raise ErrorOperacion("⚠ Perfiles del apoyo: planos paralelos.")
         if not self.p.get("cuerpo"):
             raise ErrorOperacion("Elegí el cuerpo del apoyo.")
         cuerpo = estado.cuerpo(_resolver(self.p["cuerpo"], estado, ("cuerpo",)).cuerpo)
@@ -1861,14 +1855,14 @@ class OpGrampa(_OpCrear):
     def ejecutar(self, estado, ctx):
         ents = _resolver_todas(self.p["posiciones"], estado)
         if not ents:
-            raise ErrorOperacion("Elegí los puntos de boceto donde van las grampas.")
+            raise ErrorOperacion("⚠ Elegí puntos de boceto para las grampas.")
         if not self.p.get("cuerpo_gancho"):
             raise ErrorOperacion("Elegí el cuerpo del gancho.")
         gancho = estado.cuerpo(_resolver(self.p["cuerpo_gancho"], estado, ("cuerpo",)).cuerpo)
         ranura = (estado.cuerpo(_resolver(self.p["cuerpo_ranura"], estado, ("cuerpo",)).cuerpo)
                   if self.p.get("cuerpo_ranura") else None)
         if ranura is not None and ranura.id == gancho.id:
-            raise ErrorOperacion("El cuerpo del gancho y el de la ranura tienen que ser distintos.")
+            raise ErrorOperacion("⚠ Gancho y ranura: cuerpos distintos.")
         marcos = []
         for e in ents:
             n = e.plano.normal if e.plano is not None else np.array([0.0, 0.0, 1.0])

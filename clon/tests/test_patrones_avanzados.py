@@ -191,7 +191,7 @@ def test_errores_claros_del_patron_de_operaciones():
     assert r.estado == "error" and "no se puede repetir" in r.mensaje
     doc.deshacer()
     r = doc.agregar(OpPatron(doc.nuevo_id(), objeto="operaciones", pasos=[], dir1=EJE_X))
-    assert r.estado == "error" and "Elegí las operaciones" in r.mensaje
+    assert r.estado == "error" and "Elegí los pasos del timeline" in r.mensaje
     doc.deshacer()
     corte = OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="50", largo="50", alto="50", operacion="intersecar")
     _ok(doc, corte)
@@ -300,7 +300,7 @@ def test_multitransformar_operaciones_y_errores():
     assert _vol(doc) == pytest.approx(CAJA - 4 * AGUJERO, rel=1e-9)
     assert g.es_valida(doc.estado_final.cuerpos["op1.c1"].forma)
     r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[{"tipo": "espiral"}]))
-    assert r.estado == "error" and "Transformación 1" in r.mensaje and "simetria" in r.mensaje
+    assert r.estado == "error" and "Transformación 1" in r.mensaje and "tipo" in r.mensaje
     doc.deshacer()
     r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"], transformaciones=[]))
     assert r.estado == "error" and "al menos una transformación" in r.mensaje
@@ -353,7 +353,7 @@ def test_multitransformar_escala_errores_claros():
     doc.deshacer()
     r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"],
                                        transformaciones=[{"tipo": "escala", "factor": 0, "n": 3}]))
-    assert r.estado == "error" and "factor" in r.mensaje and "mayor que cero" in r.mensaje
+    assert r.estado == "error" and "factor" in r.mensaje and "mayor que 0" in r.mensaje
     doc.deshacer()
     r = doc.agregar(OpMultitransformar(doc.nuevo_id(), cuerpos=["op1.c1"],
                                        transformaciones=[{"tipo": "escala", "factor": 1, "n": 3}]))

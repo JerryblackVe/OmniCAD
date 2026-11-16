@@ -40,7 +40,7 @@ def test_p160_con_cuerpo_a_los_dos_lados_gana_la_flecha(invertir):
 
 
 def test_p160_sin_cuerpos_a_ningun_lado_el_aviso_es_de_un_renglon():
-    with pytest.raises(geo.ErrorGeometria, match="^No hay ningún cuerpo para atravesar con «Todo».$"):
+    with pytest.raises(geo.ErrorGeometria, match="^⚠ «Todo» no atraviesa ningún cuerpo.$"):
         sc.lado_todo(0.0, 0.0, 1.0)
     assert sc.lado_todo(-10.0, 0.0, 1.0) == -1.0 and sc.lado_todo(0.0, 10.0, -1.0) == 1.0
     assert sc.lado_todo(-5.0, 5.0, -1.0) == -1.0

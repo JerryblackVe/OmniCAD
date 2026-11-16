@@ -123,8 +123,8 @@ def test_run_operation_con_enum_invalido(tipo, clave, validos):
 
 # ---------------------------------------------------------------- bobina: revoluciones y paso
 def test_bobina_con_revoluciones_o_paso_cero():
-    revoluciones = "Las revoluciones de la bobina tienen que ser mayores"
-    paso = "El paso de la bobina tiene que ser mayor"
+    revoluciones = "Revoluciones 0: debe ser mayor"
+    paso = "Paso -?[0-9]+: debe ser mayor"
     for datos, mensaje in (({"revoluciones": 0, "altura": 30}, revoluciones),
                            ({"revoluciones": 0, "paso": 6}, revoluciones),
                            ({"altura": 30, "paso": 0}, paso), ({"revoluciones": 5, "paso": -1}, paso)):
@@ -133,7 +133,7 @@ def test_bobina_con_revoluciones_o_paso_cero():
     s = api.Sesion()
     for params in ({"revoluciones": "0"}, {"tipo": "altura_paso", "paso": "0 mm"}):
         r = _fallo(api.llamar(s, "run_operation", {"type": "bobina", "params": params}))
-        assert "mayor que cero" in r["mensaje"] or "mayores que cero" in r["mensaje"], r
+        assert "mayor que 0" in r["mensaje"], r
         assert "division" not in r["mensaje"] and "inesperado" not in r["mensaje"], r
 
 

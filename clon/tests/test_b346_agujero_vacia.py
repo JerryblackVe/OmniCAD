@@ -13,7 +13,7 @@ def test_un_agujero_que_se_lleva_el_cuerpo_entero_es_un_error_y_no_borra_nada():
     s, caja = _caja()
     antes = s.doc.a_dict()
     r = api.llamar(s, "create_hole", {"diameter": 406, "depth": 408, "face": ">Z", "body": caja})
-    assert not r["ok"] and "deja sin material a Caja" in r["mensaje"], r
+    assert not r["ok"] and "borra Caja entero" in r["mensaje"], r
     assert s.doc.a_dict() == antes and caja in s.doc.estado_final.cuerpos          # atómica: ni paso ni cuerpo perdido
 
 

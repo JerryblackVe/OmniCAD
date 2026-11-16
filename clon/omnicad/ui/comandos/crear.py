@@ -270,7 +270,7 @@ class Solevacion(Comando):
             return {"tipo": tipo, "angulo": "0 deg", "peso": v[f"peso_{lado}"]}
         if tipo in ("tangente", "suave"):
             if not v.get(f"cara_{lado}"):
-                raise ErrorComando(f"Seleccioná la cara a la que es tangente el {'primer' if lado == 'inicio' else 'último'} perfil.")
+                raise ErrorComando(f"Elegí la cara tangente al {'primer' if lado == 'inicio' else 'último'} perfil.")
             return {"tipo": tipo, "angulo": "0 deg", "peso": v[f"peso_{lado}"], "cara": ref1(v, f"cara_{lado}")}
         return None
 
@@ -281,7 +281,7 @@ class Solevacion(Comando):
         for trozo in (t.strip() for t in str(v.get("medias") or "").split(";") if t.strip()):
             partes = [x.strip() for x in trozo.split(":")]
             if len(partes) not in (2, 3) or not partes[0].isdigit() or not 1 < int(partes[0]) < n:
-                raise ErrorComando(f"«{trozo}»: escribí n.º:ángulo:peso, con el n.º entre 2 y {n - 1} (hay {n} perfiles).")
+                raise ErrorComando(f"«{trozo}»: n.º:ángulo:peso; n.º de 2 a {n - 1}")
             salida[str(int(partes[0]) - 1)] = {"tipo": "direccion", "angulo": partes[1],
                                               "peso": partes[2] if len(partes) == 3 else "1"}
         return salida
@@ -849,7 +849,7 @@ class Agujero(Comando):
         if v.get("extension") == "hasta":
             hasta = ref1(v, "hasta")
             if hasta is None:
-                raise ErrorComando("Elegí la cara, el plano o el cuerpo donde termina el agujero.")
+                raise ErrorComando("Final del agujero: elegí cara, plano o cuerpo")
         designacion, clase = self._rosca_elegida(v)
         params = {k: v[k] for k in ("tipo", "diametro", "extension", "profundidad", "punta", "angulo_punta",
                                      "diam_abocardado", "prof_abocardado", "diam_avellanado", "angulo_avellanado",
@@ -1219,7 +1219,7 @@ def pasos_repetibles(texto, ctx):
         op = next((o for o in anteriores if o.id == nombre), None) or next(
             (o for o in anteriores if o.nombre.casefold() == nombre.casefold()), None)
         if op is None:
-            raise ErrorComando(f"No hay un paso «{nombre}» antes de este en el timeline.")
+            raise ErrorComando(f"El paso «{nombre}» debe estar antes de este.")
         if op.TIPO not in TIPOS_REPETIBLES or (op.TIPO in ("patron", "multitransformar")
                                                and op.p.get("objeto") != "operaciones"):
             raise ErrorComando(f"«{op.nombre}» ({op.ETIQUETA}) no deja una herramienta para repetir. Se repiten: "
@@ -1246,7 +1246,7 @@ def componentes_escritos(texto, ctx):
             raise ErrorComando(f"No hay un componente «{nombre}».")
         ids.append(k)
     if not ids:
-        raise ErrorComando("Escribí los componentes a repetir (nombres o ids, separados por coma).")
+        raise ErrorComando("Escribí componentes: nombres o ids, con comas")
     return ids
 
 
@@ -1319,9 +1319,9 @@ def texto_a_suprimir(forma, texto):
                 ident = int(tok)
         except ValueError:
             ejemplo = "«2:1» (paso i en la dirección 1 : paso j en la 2)" if forma == "rectangular" else "números enteros"
-            raise ErrorComando(f"En «Copias suprimidas» van {ejemplo} separados por coma; «{tok}» no sirve.") from None
+            raise ErrorComando(f"Copias suprimidas: {ejemplo}; «{tok}» no sirve") from None
         if ident in (0, [0, 0]):
-            raise ErrorComando("El original no se puede suprimir (es el cuerpo fuente).")
+            raise ErrorComando("No podés suprimir el original.")
         if ident not in salida:
             salida.append(ident)
     return salida
@@ -1789,7 +1789,7 @@ class SolidoEnvolvente(Comando):
             exigir(v, "eje_a", "Elegí el primer eje de la orientación.")
             exigir(v, "eje_b", "Elegí el segundo eje de la orientación.")
         if v.get("orientacion") == "scu" and not str(v.get("scu") or "").strip():
-            raise ErrorComando("Escribí el id del paso del sistema de coordenadas de usuario.")
+            raise ErrorComando("Escribí el id del paso de coordenadas.")
         return self.crear_op(OpSolidoEnvolvente, v, ctx, cuerpos=_cuerpos(v["cuerpos"]), objetivos=objetivos(v),
                              eje_a=ref1(v, "eje_a"), eje_b=ref1(v, "eje_b"), scu=str(v.get("scu") or "").strip() or None,
                              componente=bool(v.get("componente")), grupo_rigido=bool(v.get("componente") and v.get("grupo_rigido")),
@@ -1928,7 +1928,7 @@ class PlacaHolguras(Comando):
             panel._mostrar("Elegí el agujero que mejor encaja.", tipo="invalido")
             return
         panel.ctx.ventana.prefs["impresion/holgura_mm"] = float(elegido)
-        panel._mostrar(f"Guardado: {elegido.replace('.', ',')} mm por lado para la Rosca, el Agujero y el molde.",
+        panel._mostrar(f"Guardé {elegido.replace('.', ',')} mm por lado (Rosca, Agujero…)",
                        tipo="instruccion")
 
     def construir(self, v, ctx):

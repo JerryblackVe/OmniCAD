@@ -170,7 +170,7 @@ def test_api_remove_fillets_y_el_comando_del_catalogo():
 
     r = api.llamar(sesion, "remove_fillets", {"body": "op1.c1", "max_radius": 3})
     assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED"  # sin empalmes: falla y no cambia nada
-    assert "No se encontraron empalmes" in r["mensaje"]
+    assert "No hay empalmes" in r["mensaje"]
 
     comando = CATALOGO["quitar_empalmes"]
     assert comando.CLASE_OP.TIPO == "quitar_empalmes" and comando.ICONO == "quitar_empalmes"

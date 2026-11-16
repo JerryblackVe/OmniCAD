@@ -32,8 +32,7 @@ def test_la_letra_que_no_se_desfasa_no_nombra_la_rosca(monkeypatch):
     monkeypatch.setattr(sm, "_desfase_kernel", lambda *a: (None, False))
     with pytest.raises(geo.ErrorGeometria) as e:
         sm.desfasar_caras(forma, letra[:1], 0.5)
-    assert str(e.value) == ("No se pudo desfasar estas caras 0.5 mm. Probá otra distancia, o desfasá el boceto y volvé "
-                            "a extruir.")
+    assert str(e.value) == "⚠ No se pudo desfasar estas caras 0.5 mm"
 
 
 @pytest.fixture

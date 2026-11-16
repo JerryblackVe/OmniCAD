@@ -261,7 +261,7 @@ def _herramienta_corte(herramienta, forma, extender):
                 return _cara_extendida(cara, 2 * diag)
             return cara
         return herramienta
-    raise geo.ErrorGeometria("Herramienta de división no reconocida (plano, cara, aristas o cuerpo).")
+    raise geo.ErrorGeometria("⚠ Herramienta de división no reconocida")
 
 
 def _partir(forma, herramientas):
@@ -468,7 +468,7 @@ def plano_de_extremo(formas, direccion, extremo, nombre="Plano neutro"):
     d = d / np.linalg.norm(d)
     puntos = [np.array([q.X(), q.Y(), q.Z()]) for f in formas for q in (BRep_Tool.Pnt_s(TopoDS.Vertex(v)) for v in _unicos(f, TopAbs_VERTEX))]
     if not puntos:
-        raise geo.ErrorGeometria("Las caras no tienen vértices de donde sacar el borde que no se mueve.")
+        raise geo.ErrorGeometria("⚠ Las caras no tienen vértices")
     k = [float(p @ d) for p in puntos]
     p = puntos[k.index(min(k) if extremo == "min" else max(k))]
     return geo.Plano.desde_marco(p, d, (1.0, 0.0, 0.0), nombre)
@@ -511,7 +511,7 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, peso_tangenc
     u1, u2 = direcciones
     alfa = math.acos(max(-1.0, min(1.0, float(u1 @ u2))))
     if alfa < 1e-3 or alfa > math.pi - 1e-3:
-        raise geo.ErrorGeometria("La arista no tiene esquina que empalmar (las caras son tangentes).")
+        raise geo.ErrorGeometria("⚠ Las caras son tangentes: no hay esquina")
     d1, d2 = radio1 / math.tan(alfa / 2), radio2 / math.tan(alfa / 2)
     centro = (a + b) / 2
     convexa = geo.punto_toca(forma, tuple(centro + 1e-3 * (u1 + u2) / np.linalg.norm(u1 + u2)), 1e-9)
@@ -524,8 +524,7 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, peso_tangenc
     excesos = [m for m in medidas if m[1] > m[2] * (1 + 1e-9)]
     if excesos and not (desborde and convexa and len(excesos) == 1
                         and all(m[1] < m[2] * (1 - 1e-9) for m in medidas if m is not excesos[0])):
-        raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
-                                 "Achicalo.")
+        raise geo.ErrorGeometria("⚠ El radio no entra: achicalo")
     # el prisma recto de la esquina sobraría (o dejaría una astilla) si las caras de los extremos no fueran perpendiculares
     por_vertice = _ancestros(forma, TopAbs_VERTEX, TopAbs_FACE)
     for v in _unicos(arista, TopAbs_VERTEX):
@@ -545,8 +544,7 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, peso_tangenc
         borde = geo.Plano.desde_marco(a + ancho * u, u, t)
         mas_alla = geo.extruir([_cara_plana(borde, centro, largo + 2 * d)], tuple(u), d)
         if geo.volumen(BRepAlgoAPI_Common(BRepAlgoAPI_Common(prisma, mas_alla).Shape(), forma).Shape()) > 1e-6:
-            raise geo.ErrorGeometria("El empalme falló: el radio es demasiado grande para las caras vecinas (no entra). "
-                                     "Achicalo.")
+            raise geo.ErrorGeometria("⚠ El radio no entra: achicalo")
     return _validar(geo.booleano(forma, prisma, "cortar" if convexa else "unir"), "Empalme")
 
 
@@ -665,7 +663,7 @@ def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
                 raise geo.ErrorGeometria("Un conjunto de empalme no tiene aristas.")
             if g.get("tipo", "constante") not in ("constante", "asimetrico") or float(g.get("radio", 0)) <= 0 or (
                     g.get("tipo") == "asimetrico" and float(g.get("radio2", 0)) <= 0):
-                raise geo.ErrorGeometria("La continuidad G2 va con radio constante o asimétrico, y los radios deben ser positivos.")
+                raise geo.ErrorGeometria("⚠ G2: radio constante o asimétrico, positivo")
             for e in g.get("aristas") or []:
                 e = _reubicar_arista(forma, e)
                 forma = _empalme_por_perfil(forma, e, float(g["radio"]),
@@ -689,7 +687,7 @@ def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
         esquinas = []
         if grupo.get("esquina") == "setback":
             if tipo != "constante" or float(grupo.get("setback", 0)) <= 0:
-                raise geo.ErrorGeometria("La esquina Setback va con radio constante y una distancia de setback positiva.")
+                raise geo.ErrorGeometria("⚠ Setback pide radio constante y setback > 0")
             incidencia = {}
             for e in aristas:
                 for v in _unicos(e, TopAbs_VERTEX):
@@ -718,7 +716,7 @@ def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
                 c = float(grupo.get("cuerda", 0))
                 phi = _angulo_entre_caras(forma, e)
                 if c <= 0 or phi < 1e-6:
-                    raise geo.ErrorGeometria("La cuerda debe ser positiva y la arista no puede ser tangente.")
+                    raise geo.ErrorGeometria("⚠ Cuerda positiva y arista no tangente")
                 r = c / (2 * math.sin(phi / 2))
                 geo.rechazar_radio_de_arco(e, r)
                 _rechazar_cara_justa(forma, e, r, vecinas, cajas)
@@ -768,28 +766,28 @@ def empalme_completo(forma, central, lateral1, lateral2):
     esquina con una caja menos un cilindro."""
     pc, p1, p2 = (_plano_de_cara(c) for c in (central, lateral1, lateral2))
     if None in (pc, p1, p2):
-        raise geo.ErrorGeometria("El redondeo completo necesita tres caras planas (una central y dos laterales).")
+        raise geo.ErrorGeometria("⚠ Redondeo completo: elegí tres caras planas")
     n, n1, n2 = (np.asarray(p.normal, float) for p in (pc, p1, p2))
     if abs(float(n1 @ n2) + 1) > 1e-6:
-        raise geo.ErrorGeometria("Las dos caras laterales del redondeo completo tienen que ser paralelas y enfrentadas.")
+        raise geo.ErrorGeometria("⚠ Las caras laterales deben ser paralelas")
     if abs(float(n @ n1)) > 1e-6:
-        raise geo.ErrorGeometria("Las caras laterales tienen que ser perpendiculares a la cara central.")
+        raise geo.ErrorGeometria("⚠ Laterales perpendiculares a la central")
     ancho = abs(float((np.asarray(p2.origen, float) - np.asarray(p1.origen, float)) @ n1))
     if ancho < 1e-6:
         raise geo.ErrorGeometria("Las caras laterales coinciden.")
     compartidas = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
     aristas = [e for e in _aristas(central) if any(f.IsSame(lateral1) for f in _padres(compartidas, e))]
     if len(aristas) != 1:
-        raise geo.ErrorGeometria("La cara central tiene que compartir una arista con la primera lateral.")
+        raise geo.ErrorGeometria("⚠ La cara central no toca la primera lateral")
     e1 = aristas[0]
     a, b = (np.array([q.X(), q.Y(), q.Z()]) for q in (BRep_Tool.Pnt_s(TopExp.FirstVertex_s(e1)),
                                                      BRep_Tool.Pnt_s(TopExp.LastVertex_s(e1))))
     largo = float(np.linalg.norm(b - a))
     if largo < 1e-6:
-        raise geo.ErrorGeometria("La arista del redondeo completo no tiene largo.")
+        raise geo.ErrorGeometria("⚠ La arista del redondeo no tiene largo")
     eje = (b - a) / largo
     if abs(float(eje @ n1)) > 1e-6 or abs(float(eje @ n)) > 1e-6 or BRepAdaptor_Curve(e1).GetType() != GeomAbs_Line:
-        raise geo.ErrorGeometria("Las aristas del redondeo completo tienen que ser rectas y paralelas a las caras laterales.")
+        raise geo.ErrorGeometria("⚠ Aristas rectas y paralelas a las laterales")
     r = ancho / 2
     m = -n1                                                   # de la primera lateral hacia la segunda
     centro = a + m * r - n * r                                # eje del cilindro, r por debajo de la cara central
@@ -807,7 +805,7 @@ def empalme_reglas(forma, caras_a, caras_b=None, *, radio, tipo="todas", redonde
     if tipo not in ("todas", "entre"):
         raise geo.ErrorGeometria(f"Regla desconocida: {tipo}")
     if tipo == "entre" and not caras_b:
-        raise geo.ErrorGeometria("La regla 'entre' necesita dos conjuntos de caras.")
+        raise geo.ErrorGeometria("⚠ Regla 'entre' necesita dos grupos de caras")
     filtro = {"ambos": {ChFiDS_Convex, ChFiDS_Concave}, "redondeos": {ChFiDS_Convex},
               "empalmes": {ChFiDS_Concave}}.get(redondeos)
     if filtro is None:
@@ -882,16 +880,14 @@ def _ingletear(original, chaflanado, alcance):
         for chaflan_ in lados:
             plano = geo.plano_de_cara(TopoDS.Face(chaflan_))
             if plano is None:
-                raise geo.ErrorGeometria("La esquina «Inglete» solo funciona con chaflanes planos (aristas rectas "
-                                         "entre caras planas).")
+                raise geo.ErrorGeometria("⚠ «Inglete» va solo con chaflanes planos")
             # la losa se centra en el origen del plano (proyección del origen del mundo): se suma lo que se aleja la esquina
             tam = 4 * alcance + 4 * _diagonal(original) + float(np.linalg.norm(plano.origen - centro))
             detras = geo.extruir([geo.cara_de_plano(plano, tam)], plano.normal, -tam)
             local = geo.booleano(local, detras, "intersecar")
         resultado, hubo = geo.booleano(resultado, local, "unir"), True
     if not hubo:
-        raise geo.ErrorGeometria("No hay esquinas donde se junten tres chaflanes: la esquina «Inglete» no tiene "
-                                 "nada que hacer.")
+        raise geo.ErrorGeometria("⚠ «Inglete»: no hay esquinas de 3 chaflanes")
     return _validar(geo.unificar_caras(resultado), "Chaflán")
 
 
@@ -915,8 +911,7 @@ def _mezclar(original, chaflanado, alcance, distancia):
             return _validar(empalme(inglete, [{"aristas": entre, "tipo": "constante", "radio": radio}]), "Chaflán")
         except geo.ErrorGeometria:
             radio /= 2
-    raise geo.ErrorGeometria("La esquina «Mezcla» no pudo redondear la unión de los chaflanes: probá «Inglete» o "
-                             "una distancia menor.")
+    raise geo.ErrorGeometria("⚠ «Mezcla» no pudo redondear: probá «Inglete»")
 
 
 def _sin_contorno(forma, aristas, que):
@@ -945,7 +940,7 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
     (Miter: se cortan en un punto, ver `_ingletear`) o "mezcla" (Blend: inglete con la unión redondeada, `_mezclar`).
     """
     if esquina not in ("chaflan", "inglete", "mezcla"):
-        raise geo.ErrorGeometria(f"Tipo de esquina del chaflán desconocido: {esquina}")
+        raise geo.ErrorGeometria(f"⚠ Tipo de esquina desconocido: {esquina}")
     if not grupos:
         raise geo.ErrorGeometria("Elegí al menos una arista para el chaflán.")
     arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
@@ -979,12 +974,12 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
             if tipo == "dos_distancias":
                 d2 = float(grupo.get("distancia2", 0))
                 if d2 <= 0:
-                    raise geo.ErrorGeometria("La segunda distancia del chaflán debe ser positiva.")
+                    raise geo.ErrorGeometria("⚠ La segunda distancia debe ser positiva")
                 mc.Add(d1, d2, e, cara)
             elif tipo == "distancia_angulo":
                 ang = float(grupo.get("angulo", 45.0))
                 if not 0 < ang < 90:
-                    raise geo.ErrorGeometria("El ángulo del chaflán debe estar entre 0 y 90 grados.")
+                    raise geo.ErrorGeometria("⚠ El ángulo del chaflán va de 0 a 90")
                 mc.AddDA(d1, math.radians(ang), e, cara)
             else:
                 raise geo.ErrorGeometria(f"Tipo de chaflán desconocido: {tipo}")
@@ -995,12 +990,11 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
     except Exception:  # noqa: BLE001 — StdFail_NotDone
         pass
     if not mc.IsDone():
-        raise geo.ErrorGeometria("El chaflán falló: la distancia es demasiado grande para las caras vecinas. Achicala.")
+        raise geo.ErrorGeometria("⚠ Chaflán: distancia muy grande. Achicala.")
     resultado = _validar(mc.Shape(), "Chaflán")
     # B-162: un chaflán que abre un sólido estanco es un error, no un «ok».
     if estanco_antes and geo._aristas_defectuosas(resultado)[0] > 0:
-        raise geo.ErrorGeometria("El chaflán abrió el sólido: la distancia es demasiado grande para las caras vecinas. "
-                                 "Achicala.")
+        raise geo.ErrorGeometria("⚠ Esa distancia abrió el cuerpo: achicala")
     if esquina != "chaflan":
         alcance = 1.5 * max(float(g.get(k, 0) or 0) for g in grupos for k in ("distancia", "distancia2"))
         if esquina == "inglete":
@@ -1290,7 +1284,7 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
     ti = float(espesor_interior) if direccion in ("interior", "ambos") else 0.0
     te = float(espesor_exterior) if direccion in ("exterior", "ambos") else 0.0
     if ti < 0 or te < 0 or (direccion != "exterior" and ti <= 0) or (direccion != "interior" and te <= 0):
-        raise geo.ErrorGeometria("Los espesores del vaciado deben ser positivos.")
+        raise geo.ErrorGeometria("⚠ Espesores del vaciado deben ser positivos")
     if any(map(_es_filete, geo.caras(forma))):   # B-306 (gemelo): el kernel también tarda minutos (M8: 124 s) y falla
         raise geo.ErrorGeometria("Rosca modelada: no se puede vaciar.")
     elegidas = list(caras_quitar or [])
@@ -1337,7 +1331,7 @@ def _inclinacion(cara, direc):
             raise geo.ErrorGeometria("Cilindro inclinado: usá el modo absoluto.")
         return 0.0
     if tipo != GeomAbs_Plane:
-        raise geo.ErrorGeometria("El modo relativo solo sirve con caras planas o cilíndricas: usá el modo absoluto.")
+        raise geo.ErrorGeometria("⚠ Modo relativo: solo planas o cilíndricas")
     _, n = _punto_normal(cara)
     return math.degrees(math.asin(max(-1.0, min(1.0, float(np.dot(n, direc))))))
 
@@ -1351,7 +1345,7 @@ def plano_de_particion(arista, direccion):
     centro = pts.mean(axis=0)
     s, vt = np.linalg.svd(pts - centro)[1:]
     if s[0] < 1e-9:
-        raise geo.ErrorGeometria("La curva de la línea de partición no tiene largo.")
+        raise geo.ErrorGeometria("⚠ La línea de partición no tiene largo")
     if s[2] <= 1e-6 * s[0] and s[1] > 1e-6 * s[0]:
         normal = vt[2]
     elif s[1] <= 1e-6 * s[0]:
@@ -1386,7 +1380,7 @@ def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados
     a1 = float(angulo)
     a2 = a1 if lados == "simetrico" else (float(angulo2) if angulo2 is not None else None)
     if lados == "dos" and a2 is None:
-        raise geo.ErrorGeometria("El desmoldeo de dos lados necesita el segundo ángulo.")
+        raise geo.ErrorGeometria("⚠ Dos lados: falta el segundo ángulo")
     pln = gp_Pln(gp_Pnt(*map(float, plano_neutro.origen)), gp_Dir(*map(float, plano_neutro.normal)))
     if lados == "uno":
         objetivo, trabajo = forma, [(c, d, a1) for c in caras]
@@ -1407,22 +1401,21 @@ def desmoldeo(forma, caras, direccion_extraccion, angulo, plano_neutro, *, lados
         if modo_angulo == "relativo":
             ang += _inclinacion(cara, direc)
             if abs(ang) >= 90:
-                raise geo.ErrorGeometria("Con el ángulo que ya tiene la cara, el desmoldeo relativo llega a 90 grados o más.")
+                raise geo.ErrorGeometria("⚠ El desmoldeo llega a 90 grados o más")
         if abs(ang) < 1e-12:
             continue
         da.Add(cara, gp_Dir(*direc), math.radians(ang), pln, cadena_tangente)
         hechas += 1
         if not da.AddDone():
-            raise geo.ErrorGeometria("Una cara no admite desmoldeo (solo planas, cilíndricas o cónicas, "
-                                     "y no paralelas al plano neutro).")
+            raise geo.ErrorGeometria("⚠ Una cara no admite desmoldeo")
     if not hechas:
-        raise geo.ErrorGeometria("El ángulo de desmoldeo no cambia ninguna cara: no puede ser cero.")
+        raise geo.ErrorGeometria("⚠ El ángulo de desmoldeo no puede ser cero")
     try:
         da.Build()
     except Exception:  # noqa: BLE001
         pass
     if not da.IsDone():
-        raise geo.ErrorGeometria("El desmoldeo falló en el kernel (ángulo demasiado grande?).")
+        raise geo.ErrorGeometria("⚠ El desmoldeo falló: probá menos ángulo")
     return _validar(da.Shape(), "Desmoldeo")
 
 
@@ -1438,7 +1431,7 @@ def _cara_dentro_de(pieza, cara):
 def escalar(forma, punto, factor=None, factores=None):
     """Escala (Scale) desde `punto`: uniforme (`factor`) o no uniforme (`factores` = (sx, sy, sz))."""
     if (factor is None) == (factores is None):
-        raise geo.ErrorGeometria("Indicá un factor uniforme o tres factores, no ambos.")
+        raise geo.ErrorGeometria("⚠ Usá un factor o tres factores, no ambos")
     p = np.asarray(punto, float)
     if factor is not None:
         if factor <= 0:
@@ -1448,7 +1441,7 @@ def escalar(forma, punto, factor=None, factores=None):
         return BRepBuilderAPI_Transform(forma, t, True).Shape()
     s = np.asarray(factores, float)
     if s.shape != (3,) or np.any(s <= 0):
-        raise geo.ErrorGeometria("Los tres factores de escala deben ser positivos.")
+        raise geo.ErrorGeometria("⚠ Los tres factores de escala: positivos")
     m = np.eye(4)
     m[:3, :3] = np.diag(s)
     m[:3, 3] = p - s * p
@@ -1487,7 +1480,7 @@ def transformar(forma, matriz4x4):
     con escala no uniforme o corte → gp_GTrsf (convierte la geometría a B-spline)."""
     m = np.asarray(matriz4x4, float)
     if m.shape != (4, 4) or not np.allclose(m[3], (0, 0, 0, 1)):
-        raise geo.ErrorGeometria("La matriz de transformación debe ser 4x4 afín (última fila 0 0 0 1).")
+        raise geo.ErrorGeometria("⚠ La matriz debe ser de 4x4 afín")
     r, t = m[:3, :3], m[:3, 3]
     det = float(np.linalg.det(r))
     if abs(det) < 1e-12:
@@ -1550,7 +1543,7 @@ def alinear(forma, origen, destino, *, voltear=False, angulo=0.0):
     r = np.eye(3)
     if t_o != "punto":
         if t_o != t_d:
-            raise geo.ErrorGeometria("Solo se alinea plano con plano, eje con eje o un punto con cualquier cosa.")
+            raise geo.ErrorGeometria("⚠ Alineá solo plano con plano o eje con eje")
         objetivo = -d_d if t_o == "plano" else d_d
         r = _rotacion_entre(d_o, -objetivo if voltear else objetivo)
     m = np.eye(4)
@@ -1558,7 +1551,7 @@ def alinear(forma, origen, destino, *, voltear=False, angulo=0.0):
     m[:3, 3] = p_d - r @ p_o
     if angulo % 360.0:
         if d_d is None:
-            raise geo.ErrorGeometria("El giro necesita un destino plano o eje: un punto no tiene alrededor de qué girar.")
+            raise geo.ErrorGeometria("⚠ El giro necesita un destino plano o eje")
         m = matriz_rotacion(p_d, d_d, angulo) @ m
     return (transformar(forma, m) if forma is not None else None), m
 
@@ -1711,8 +1704,7 @@ def _trasladar_caras(forma, caras, n, dist):
     for prisma in prismas if dist < 0 else ():
         resultado = geo.booleano(resultado, prisma, "cortar")
     if geo.esta_vacia(resultado) or not geo.solidos(resultado):
-        raise geo.ErrorGeometria("Desfase de caras: no queda material: la cara entra hasta atravesar todo el cuerpo. "
-                                 "Probá una distancia menor.")
+        raise geo.ErrorGeometria("⚠ Desfase: la cara atraviesa todo el cuerpo")
     return _validar(_unificar(resultado), "Desfase de caras")
 
 
@@ -1854,8 +1846,7 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
     if resultado is None:
         planos = [_plano_de_cara(c) for c in todas]
         if any(p is None for p in planos):      # B-503: la rosca ya salió arriba; acá, letras o curvas sin rosca (regla 14)
-            raise geo.ErrorGeometria(f"No se pudo desfasar estas caras {abs(dist):g} mm. Probá otra distancia, o "
-                                     "desfasá el boceto y volvé a extruir.")
+            raise geo.ErrorGeometria(f"⚠ No se pudo desfasar estas caras {abs(dist):g} mm")
         resultado = _reemplazar(forma, [(c, p.desplazado(dist)) for c, p in zip(todas, planos, strict=True)],
                                 operacion="Desfase de caras")
     resultado = _validar(resultado, "Desfase de caras")
@@ -1868,7 +1859,7 @@ def _largo_extension(cara, destino, d, diag):
     if isinstance(destino, geo.Plano):
         dn = float(d @ destino.normal)
         if abs(dn) < 1e-9:
-            raise geo.ErrorGeometria("El destino es perpendicular a la cara: no se puede extender hasta él.")
+            raise geo.ErrorGeometria("⚠ El destino es perpendicular a la cara")
         ts = [abs(float((destino.origen - _np(BRep_Tool.Pnt_s(TopoDS.Vertex(v)))) @ destino.normal) / dn)
               for v in _unicos(cara, TopAbs_VERTEX)]
         return max(ts + [0.0]) + diag
@@ -1908,7 +1899,7 @@ def _reemplazar(forma, pares, operacion="Reemplazar cara"):
             herr = destino
             t = _cruce_rayo(c, d, destino)
             if t is None:
-                raise geo.ErrorGeometria("El destino no corta la normal de la cara origen.")
+                raise geo.ErrorGeometria("⚠ El destino no corta la normal de la cara")
             lados = lados[:1] if t > 0 else lados[1:]
         for signo, lista in lados:
             prisma = BRepPrimAPI_MakePrism(cara, gp_Vec(*(d * signo * largo)))
@@ -1918,14 +1909,13 @@ def _reemplazar(forma, pares, operacion="Reemplazar cara"):
                 lista.extend(p for p in piezas if not geo.se_tocan(p, tapa, 1e-7))
     if not sumar and not restar:
         if coincide:
-            raise geo.ErrorGeometria(f"{operacion}: la cara ya está sobre el plano destino, no hay nada que reemplazar.")
-        raise geo.ErrorGeometria("El destino no corta por completo la extensión de las caras elegidas.")
+            raise geo.ErrorGeometria(f"⚠ {operacion}: la cara ya está en el destino")
+        raise geo.ErrorGeometria("⚠ El destino no corta la extensión entera")
     resultado = geo.unir_todos([forma] + sumar)
     for pieza in restar:
         resultado = geo.booleano(resultado, pieza, "cortar")
     if restar and (geo.esta_vacia(resultado) or not geo.solidos(resultado)):
-        raise geo.ErrorGeometria(f"{operacion}: no queda material: la cara entra hasta atravesar todo el cuerpo. "
-                                 "Probá una distancia menor.")
+        raise geo.ErrorGeometria(f"⚠ {operacion}: la cara atraviesa todo el cuerpo")
     return _validar(_unificar(resultado), operacion)
 
 
@@ -1997,7 +1987,7 @@ def _cortes_proyectados(herramienta, caras, tipo, direccion):
     if not origen:
         raise geo.ErrorGeometria("Esa división pide curvas, aristas o una cara.")
     if tipo == "vector" and (direccion is None or np.linalg.norm(np.asarray(direccion, float)) < 1e-12):
-        raise geo.ErrorGeometria("Elegí la dirección de proyección (un eje, una arista o una cara).")
+        raise geo.ErrorGeometria("⚠ Elegí la dirección de proyección")
     cortes = []
     for cara in caras:
         for arista in origen:
@@ -2223,7 +2213,7 @@ def division_silueta(forma, direccion):
         except Exception:  # noqa: BLE001
             pass
         if not divisor.IsDone():
-            raise geo.ErrorGeometria("No se pudo partir una cara libre por su silueta.")
+            raise geo.ErrorGeometria("⚠ No se pudo partir la cara por su silueta")
         resultado, partida = divisor.Shape(), True
     if not partida:
         raise geo.ErrorGeometria("El cuerpo no tiene silueta en esa dirección.")
@@ -2247,7 +2237,7 @@ def division_silueta_cuerpo(forma, direccion, *, modo="solido"):
     if modo not in ("vaciado", "solido"):
         raise geo.ErrorGeometria(f"Operación de silueta desconocida: {modo}")
     if modo == "vaciado" and not _es_hueco(forma):
-        raise geo.ErrorGeometria("«Cuerpo vaciado» necesita un cuerpo vaciado: aplicale Vaciado antes, o usá «Cuerpo sólido».")
+        raise geo.ErrorGeometria("⚠ «Cuerpo vaciado» pide un cuerpo vaciado")
     d = np.asarray(direccion, float)
     d = d / np.linalg.norm(d)
     partida = division_silueta(forma, d)
@@ -2264,8 +2254,7 @@ def division_silueta_cuerpo(forma, direccion, *, modo="solido"):
     centro = pts.mean(axis=0)
     _, valores, vt = np.linalg.svd(pts - centro)
     if valores[-1] > 1e-6 * max(1.0, valores[0]):
-        raise geo.ErrorGeometria("La línea de partición no es plana: «Cuerpo sólido» y «Cuerpo vaciado» la necesitan "
-                                 "plana. Usá «Solo caras».")
+        raise geo.ErrorGeometria("⚠ La línea de partición debe ser plana")
     normal = vt[-1]
     u = np.cross(normal, (0.0, 0.0, 1.0) if abs(normal[2]) < 0.9 else (1.0, 0.0, 0.0))
     return dividir_cuerpo(partida, geo.Plano.desde_marco(centro, normal, u / np.linalg.norm(u)))
@@ -2284,7 +2273,7 @@ def quitar_caras(forma, caras):
     df.SetRunParallel(False)
     df.Build()
     if not df.IsDone():
-        raise geo.ErrorGeometria("No se pudieron quitar esas caras: las vecinas no cierran el hueco.")
+        raise geo.ErrorGeometria("⚠ Las vecinas no cierran el hueco")
     # Como Suprimir caras de Fusion: cura el hueco o falla (en Fusion, dejarlo abierto es otro comando, de superficies).
     # Con la tapa de una caja, el defeaturing da IsDone y devuelve el cuerpo tal cual sin borrar nada.
     if not all(df.IsDeleted(c) for c in caras):
@@ -2332,7 +2321,7 @@ def quitar_empalmes(forma, radio_max):
     ninguno con ese filtro."""
     caras = caras_de_empalme(forma, radio_max)
     if not caras:
-        raise geo.ErrorGeometria(f"No se encontraron empalmes con radio <= {radio_max:g} mm en el cuerpo.")
+        raise geo.ErrorGeometria(f"⚠ No hay empalmes con radio <= {radio_max:g} mm")
     radios = {}
     for _cara, radio in caras:
         radios[radio] = radios.get(radio, 0) + 1

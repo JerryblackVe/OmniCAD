@@ -131,7 +131,7 @@ def test_chaflan_demasiado_grande_abre_el_solido():
     e = next(a for a in sm._aristas(cil)
              if abs(BRepAdaptor_Curve(a).Value((BRepAdaptor_Curve(a).FirstParameter()
                                                 + BRepAdaptor_Curve(a).LastParameter()) / 2).Z() - 30) < 1e-6)
-    with pytest.raises(g.ErrorGeometria, match="abrió el sólido"):
+    with pytest.raises(g.ErrorGeometria, match="abrió el cuerpo"):
         sm.chaflan(cil, [{"aristas": [e], "tipo": "distancia_igual", "distancia": 15}])
     r = sm.chaflan(cil, [{"aristas": [e], "tipo": "distancia_igual", "distancia": 2}])
     assert g.es_valida(r)
@@ -344,7 +344,7 @@ def test_desfase_cara_de_superficie_no_queda_invalido_silenciosamente():
 
 def test_reemplazar_cara_por_el_plano_donde_ya_esta_lo_dice():
     b = caja10()
-    with pytest.raises(g.ErrorGeometria, match="ya está sobre el plano destino"):
+    with pytest.raises(g.ErrorGeometria, match="ya está en el destino"):
         sm.reemplazar_cara(b, [tapa(b)], g.Plano("XY", 10))
 
 
