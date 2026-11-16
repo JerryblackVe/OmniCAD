@@ -9,7 +9,7 @@ from omnicad.nucleo import solidos_crear as sc
 
 def test_surco_largo_incompleto_se_rechaza():
     # 100 mm: el barrido sale con 3 401 mm³ en vez de 6 003 (60,03 por mm, como con 30 o 90 mm)
-    with pytest.raises(geo.ErrorGeometria, match="surco"):
+    with pytest.raises(geo.ErrorGeometria, match="otro tamaño"):
         sc._surco_rosca(np.zeros(3), np.array([0.0, 0.0, 1.0]), 20, 2.5, 0, 100, False, "derecha", 10, partes=True)
 
 

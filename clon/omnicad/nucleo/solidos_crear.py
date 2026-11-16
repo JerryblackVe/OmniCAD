@@ -3361,7 +3361,7 @@ def _volumen_ok(forma, esperado, tolerancia=0.01):
 
 def _exigir_volumen(forma, esperado, tolerancia=0.01):
     if not _volumen_ok(forma, esperado, tolerancia):
-        raise geo.ErrorGeometria("⚠ El kernel armó mal el surco de la rosca.")
+        raise geo.ErrorGeometria("⚠ Probá otro tamaño o la rosca cosmética.")
 
 
 _EXTRAS = (0.1, 0.13, 0.07)     # cuánto sobresale el surco (en pasos): el primero es el de siempre; los otros, reintentos
