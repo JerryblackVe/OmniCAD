@@ -747,6 +747,26 @@ def _parte_afuera(chica, grande, cuantas=_MUESTRAS_AFUERA, al_menos=1):
     return sum(not _adentro_de(clasificadores, p) for p in muestras) / len(muestras)
 
 
+def _union_libre_perdida(objetivo, herramienta, resultado):
+    """B-558: con caras B-spline no hay control de volumen (`_volumenes_entrada` da None) y una unión de dos sólidos que
+    solo se tocaban por una cara perdía uno según el estado de memoria del kernel (cavidad 3250,8 + prisma 70,6 = 3250,8).
+    La integración por defecto erra en B-spline (B-249) pero es coherente entre las entradas y el resultado: si la unión
+    casi no sumó y la chica no estaba adentro (el común es poco), se perdió una pieza. El común (caro) se pide solo en
+    ese caso sospechoso. Devuelve el problema o None."""
+    try:
+        va, vb, vr = (abs(_integral(f, BRepGProp.VolumeProperties_s)) for f in (objetivo, herramienta, resultado))
+        chica, sumado = min(va, vb), vr - max(va, vb)
+        if chica <= 0 or sumado >= chica / 4:
+            return None
+        comun = abs(_integral(_booleana(objetivo, herramienta, "intersecar", paralelo=False),
+                              BRepGProp.VolumeProperties_s))
+    except Exception:  # noqa: BLE001 — sin medir no se puede afirmar nada: camino de siempre
+        return None
+    if sumado < (chica - comun) / 4:
+        return 2, f"la unión perdió una pieza ({chica - comun:.6g} mm³ que no sumó)", chica - comun, va + vb
+    return None
+
+
 def _comun_desmentido(objetivo, herramienta, operacion, vr, volumenes):
     """Cada booleana afirma cuánto comparten las piezas: unir va + vb − vr, cortar va − vr, intersecar vr. Si afirma un
     extremo (la chica entera adentro, o nada en común) cae justo en el borde del rango de volumen, donde un resultado
@@ -872,6 +892,8 @@ def _problema_booleana(objetivo, herramienta, operacion, resultado, volumenes, c
                     return 2, f"{que} ({comun:.6g} mm³)", comun, vb + vh
     except Exception:  # noqa: BLE001 — una integración que falla no es motivo para rechazar el resultado
         pass
+    if volumenes is None and operacion == "unir" and (perdida := _union_libre_perdida(objetivo, herramienta, resultado)):
+        return perdida
     problemas, peso = [], 0.0
     libres, no_manifold = _aristas_defectuosas(resultado)
     if libres or no_manifold:
