@@ -6,19 +6,18 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 ## Ahora (uno por sesión)
 
-**Noche del 16/11 (Gerardo):** la VPS se pausa; E11 prueba en la PC. Cada sesión cierra su ítem y queda en pausa, sin ítems nuevos. B-562 se integra apenas quede verde, para que E11 lo pruebe esta noche.
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | — | En pausa (sin ítem de bocetos en la cola; cupo semanal). B-561, B-563 y B-564 integrados: 06dc572, 204e6c5, b2697d6 |
-| E2 | — | En pausa (noche del 16/11); a la mañana B-569 (elegir con el Corte del boceto). B-566 integrado: 099624a |
-| E3 | — | En pausa (noche del 16/11; ya vaciada); a la mañana primero B-568 (su B-537 rompió test_b129). B-558 integrado: 3ee2f87 |
+| E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D): ahí B-572 y B-573 |
+| E2 | B-569 | Elegir con el «Corte» del boceto activado (B-566 integrado: 099624a) |
+| E3 | B-568 | Regresión de su B-537 en `test_tortura_menores::test_b129_*` (B-558 integrado: 3ee2f87) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | — | En pausa (noche); B-570 integrado (bd93066), B-562 y B-570 Parcial hasta que E11 los pruebe en Windows. A la mañana B-571, B-545 y B-567 |
+| E6 | B-571 | Rosca modelada: 15 s por cambio (tope de 5 s por Chaflán); después B-574 (velocidad contra Fusion), B-545 (su worktree) y B-567 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
-| E9 | — | En pausa (noche del 16/11); a la mañana P-158g: `pistas` de la API para los kinds que perdieron detalle y el detalle de H/V en el «?». P-158f integrado: e01576e |
+| E9 | P-158g | `pistas` de la API para los kinds que perdieron detalle y el detalle de H/V en el «?» (P-158f integrado: e01576e) |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
