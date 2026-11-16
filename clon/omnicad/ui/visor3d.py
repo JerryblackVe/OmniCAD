@@ -1741,6 +1741,19 @@ class Visor3D(QOpenGLWidget):
             t_cara = math.inf
         visible = lambda p: float((np.asarray(p) - o) @ d) <= t_cara + tol_t  # noqa: E731
 
+        def a_la_vista(p):
+            """B-544: un vértice de una cara inclinada queda «detrás» de lo que toca el cursor aunque se vea: si la
+            prueba rápida lo descarta, un rayo hacia el propio punto dice si algo lo tapa."""
+            if visible(p):
+                return True
+            px = self.proyectar(p, mvp)
+            if px is None:
+                return False
+            o2, d2 = self.rayo(px)
+            t_p = float((np.asarray(p) - o2) @ d2) - tol_t
+            return not any((c := self._primer_rayo_cuerpo(cid, o2, d2, t_p)) is not None and c[0] < t_p
+                           for cid in self._formas if cid not in self.cuerpos_de_previa)
+
         def _hit(tipo, ref, dibujo, t, punto, **extra):
             h = {"tipo": tipo, "ref": ref, "dibujo": dibujo, "t": t, "punto": punto}
             h.update(extra)
@@ -1756,7 +1769,7 @@ class Visor3D(QOpenGLWidget):
                 s, ok = self._a_pantalla(pts, mvp)
                 dist = np.where(ok, np.linalg.norm(s - q, axis=1), np.inf)
                 i = int(np.argmin(dist))
-                if dist[i] < mejor[0] and visible(pts[i]):
+                if dist[i] < mejor[0] and a_la_vista(pts[i]):
                     v = vertices[i]
                     mejor = (dist[i], _hit("vertice", self._referencia(cid, v), [("puntos", pts[i:i + 1], None, 9)],
                                           float((pts[i] - o) @ d), pts[i], cuerpo=cid, forma=v))
@@ -1776,13 +1789,13 @@ class Visor3D(QOpenGLWidget):
                 for _i, p, ref in candidatos:
                     s, ok = self._a_pantalla(p, mvp)
                     dist = float(np.linalg.norm(s[0] - q)) if ok[0] else math.inf
-                    if dist < mejor[0] and (ref["tipo"] == "centro_masa" or visible(p)):     # el centro cae adentro del sólido
+                    if dist < mejor[0] and (ref["tipo"] == "centro_masa" or a_la_vista(p)):     # el centro cae adentro del sólido
                         mejor = (dist, _hit(ref["tipo"], ref, [("puntos", np.array([p]), None, 9)],
                                             float((p - o) @ d), p))
             if mejor[1] is not None:
                 return mejor[1]
         if "forzado" in filtros:
-            h = self._elegir_forzado(pos, q, mvp, cara_hit, visible, a_traves, _hit)
+            h = self._elegir_forzado(pos, q, mvp, cara_hit, a_la_vista, a_traves, _hit)
             if h is not None:
                 return h
 
