@@ -5,7 +5,7 @@ Diálogo no modal: el modelo se ve detrás y, con Cálculo automático, cada cam
 la tabla, así un valor en rojo o lo pendiente con la casilla apagada no tocan el documento. Todo lo que se hace mientras
 está abierto es un solo paso de deshacer.
 """
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QTimer, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QStyledItemDelegate,
@@ -215,6 +215,7 @@ class DialogoParametros(QDialog):
         self.arbol.setItemDelegate(_Delegado(self))
         self.arbol.itemDelegate().closeEditor.connect(self._editor_cerrado)
         self.arbol.itemChanged.connect(self._editar)
+        self.arbol.viewport().installEventFilter(self)
         self.arbol.itemClicked.connect(self._clic)
         self.arbol.itemCollapsed.connect(lambda i: self._cerrados.add(i.text(PARAMETRO)))
         self.arbol.itemExpanded.connect(lambda i: self._cerrados.discard(i.text(PARAMETRO)))
@@ -335,6 +336,18 @@ class DialogoParametros(QDialog):
         self._orden = ("timeline", False)
         self.b_orden.setChecked(True)
         self._poblar()
+
+    def eventFilter(self, obj, e):
+        """B-580: el doble clic en una celda siempre edita. Qt lo descarta si la tabla se rehizo entre los dos clics (el
+        recálculo del cambio anterior), y la fila quedaba solo elegida."""
+        if e.type() == QEvent.MouseButtonDblClick and obj is self.arbol.viewport():
+            pos = e.position().toPoint()
+            item, columna = self.arbol.itemAt(pos), self.arbol.columnAt(pos.x())
+            if item is not None and item.data(0, ROL) is not None and columna not in (PARAMETRO, VALOR):   # la estrella y Valor no se editan
+                self.arbol.setCurrentItem(item, columna)
+                self.arbol.editItem(item, columna)
+                return True
+        return super().eventFilter(obj, e)
 
     def _editor_cerrado(self, *_):
         self.editando = False
