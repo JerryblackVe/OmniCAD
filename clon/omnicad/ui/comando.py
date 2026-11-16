@@ -2241,6 +2241,7 @@ class PanelComando(QFrame):
         """Estado del panel. `tipo`: instruccion (falta elegir algo), invalido (valor mal escrito), aviso, calculando o error;
         sin `tipo`, `aviso=True` es un aviso y lo demás un error. El símbolo acompaña al color."""
         tipo = tipo or ("aviso" if aviso else "error")
+        texto = texto.replace("⚠ ⚠", "⚠")      # B-611: el mensaje del kernel ya trae su ⚠ y el panel suma otro
         if registro_uso.activo is not None and texto and texto != self._uso_error:
             if tipo in ("error", "invalido"):
                 registrar_error(origen="comando", comando=self.comando.CLAVE, mensaje=texto,

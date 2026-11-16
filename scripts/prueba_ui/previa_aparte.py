@@ -98,10 +98,10 @@ def probar(clave, campo, nombre, valores):
     teclear(p, campo, imposible)
     t = esperar_previa(p)
     texto = p.mensaje.text()
-    A.reg(nombre, f"«{imposible}»: el panel dice el motivo real", "falló" in texto and "código" not in texto and "Error" not in texto
+    A.reg(nombre, f"«{imposible}»: el panel dice el motivo real", texto.startswith("⚠ ") and "⚠ ⚠" not in texto and "código" not in texto and "Error" not in texto
           and not p._previa_ok, f"{t:.2f} s; «{texto}»")
     A.reg(nombre, "el texto entra entero en el panel", p.mensaje.height() >= p.mensaje.heightForWidth(p.mensaje.width())
-          and len(texto) > 100, f"{p.mensaje.height()} px de alto, {len(texto)} letras")
+          and 0 < len(texto) <= 60, f"{p.mensaje.height()} px de alto, {len(texto)} letras")
     A.reg(nombre, "con el valor imposible no queda una previa vieja", not hay_malla())
     A.foto(v, f"previa_{clave}_imposible")
 

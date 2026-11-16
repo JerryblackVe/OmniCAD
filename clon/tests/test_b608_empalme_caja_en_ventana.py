@@ -84,3 +84,12 @@ def test_empalme_de_la_caja_ya_achaflanada_no_abre_el_proceso_aparte(ventana, mo
     assert p._previa_ok and not p._previa_aparte
     p.aceptar()
     assert len(ventana.doc.operaciones) == pasos + 1 and ventana.doc.resultados[-1].estado == "ok"
+
+
+def test_b611_el_aviso_de_chaflan_lleva_un_solo_simbolo(ventana):
+    """B-611: el kernel ya antepone «⚠» y el panel suma otro: la persona leía «⚠ ⚠ Chaflán: distancia muy grande»."""
+    p = ventana.ejecutar_comando(Empalme())
+    p._mostrar("⚠ ⚠ Chaflán: distancia muy grande. Achicala.", tipo="error")
+    assert p.mensaje.text() == "⚠ Chaflán: distancia muy grande. Achicala."
+    p._mostrar("⚠ El radio no entra: achicalo.", tipo="error")      # uno solo no se toca
+    assert p.mensaje.text() == "⚠ El radio no entra: achicalo."
