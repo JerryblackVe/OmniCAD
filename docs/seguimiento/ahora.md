@@ -11,14 +11,14 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa (sin ítem de bocetos en la cola; cupo semanal). B-561, B-563 y B-564 integrados: 06dc572, 204e6c5, b2697d6 |
-| E2 | B-566 | Ejes tapados por el cuerpo se siguen eligiendo (gemelo de B-542; B-542 integrado: 4088fbb) |
-| E3 | — | En pausa (noche del 16/11; ya vaciada). B-558 integrado: 3ee2f87 |
+| E2 | — | En pausa (noche del 16/11); a la mañana B-569 (elegir con el Corte del boceto). B-566 integrado: 099624a |
+| E3 | — | En pausa (noche del 16/11; ya vaciada); a la mañana primero B-568 (su B-537 rompió test_b129). B-558 integrado: 3ee2f87 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | B-562 | 🚨 **Bloqueante primero**: WinError 32 en el archivo `avance` del cálculo aislado (Windows). Después sigue B-545: Panel perezoso (solo crea los campos visibles): baja abrir Agujero (B-545) y abrir Extruir con el llavero (B-546) a < 150 ms ; después B-567 (45 s de reintentos de booleanas) |
+| E6 | — | En pausa (noche del 16/11); B-562 integrado (d637411), E11 lo prueba en Windows. A la mañana B-545 (su worktree) y B-567 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
-| E9 | P-158f | Mensajes cortos en `restricciones/boceto.py` (96), `ui/comandos/{primitivas,patrones}.py` y el aviso de H/V (P-162); después las `pistas` de la API para los kinds que perdieron detalle (review de P-158d). P-158d integrado: 1162d59 |
+| E9 | — | En pausa (noche del 16/11); a la mañana P-158g: `pistas` de la API para los kinds que perdieron detalle y el detalle de H/V en el «?». P-158f integrado: e01576e |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)

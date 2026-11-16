@@ -484,6 +484,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-16] Al integrar un cambio en `nucleo/geometria.py`, correr también `tests/test_tortura_menores.py` (y los que miden volumen), no solo los de booleanas. · Evidencia: B-537 se verificó con 76 tests de booleanas y rompió 3 `test_b129_*` (B-568, bisect 899f1843).
 - [2026-11-16] IPC por archivos entre procesos: siempre escritura atómica (temporal + os.replace) y reintento ante PermissionError; Windows bloquea los archivos abiertos y la VPS (Linux) no lo ve. · Evidencia: B-562, «[WinError 32] … avance» en Extruir (`nucleo/aislado.py:513`, `unlink` sin proteger).
 - [2026-11-16] Al editar con Python, leer y escribir en binario (`rb`/`wb`) y respetar el fin de línea de cada línea: `comando.py`, `temas.py` y `herramientas_solido.py` tienen CRLF (y mezclado); `open().read()` + `write` los convirtió y el diff pasó de 2 a 4412 líneas. · Evidencia: B-559, `git diff --stat`.
 - [2026-11-15] Nunca dejar dos herramientas de una booleana pegadas solo por una cara: darles un solape real (1e-3 mm); el kernel pierde una según el estado de memoria y con B-spline no hay control de volumen. · Evidencia: B-536b, `_cascara_por_desfase`, 3 de 4 corridas perdían el prisma.
