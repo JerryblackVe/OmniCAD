@@ -110,7 +110,7 @@ def test_componer_transformaciones():
     assert g.es_valida(copia) and g.volumen(copia) == pytest.approx(125)
     reflejo = sc.aplicar(g.caja(5, 5, 5), sc.componer_transformaciones([rect, espejo])[-1])
     assert g.es_valida(reflejo) and g.volumen(reflejo) == pytest.approx(125)
-    with pytest.raises(g.ErrorGeometria, match="como máximo"):
+    with pytest.raises(g.ErrorGeometria, match="Máximo"):
         sc.componer_transformaciones([[gp_Trsf()] * 200, [gp_Trsf()] * 200])
     with pytest.raises(g.ErrorGeometria):
         sc.componer_transformaciones([])

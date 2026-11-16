@@ -138,5 +138,5 @@ def test_b362_la_pared_delgada_del_hueco_de_un_boceto_no_se_pierde():
 def test_b362_el_lateral_reglado_frena_donde_el_hueco_alcanza_el_borde():
     _, cara = _perfil("anillo")          # pared de 7 mm: se cierra a 3,5 / tan 10° = 19,85 mm
     assert geo.es_valida(sc._prisma_curvo_inclinado(cara, np.array([0, 0, 1.0]), 19.5, -10))
-    with pytest.raises(geo.ErrorGeometria, match="cierra una parte del perfil"):
+    with pytest.raises(geo.ErrorGeometria, match="cierra parte del perfil"):
         sc._prisma_curvo_inclinado(cara, np.array([0, 0, 1.0]), 20.5, -10)
