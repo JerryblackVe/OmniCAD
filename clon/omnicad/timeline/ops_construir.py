@@ -218,7 +218,11 @@ def _puntos_objeto(p, estado):
 def medida_plano(p, plano, E, ctx, estado):
     """Cómo se dibuja el plano: Predeterminado ajusta a lo elegido; Tipo de extensión fija el lado o llega al objeto."""
     limites, lado = None, _lado(p, ctx)
-    uv = np.array([plano.a_uv(q) for e in E for q in _puntos_de(e)], float)
+    pts = [q for e in E for q in _puntos_de(e)]
+    if not pts and lado == 0:      # B-593: un plano de origen o de construcción no da puntos; se mide por los cuerpos, no por la cámara
+        pts = [q for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") != "malla" and c.forma is not None
+               for q in _puntos_de(ent.Entidad("cuerpo", forma=c.forma))]
+    uv = np.array([plano.a_uv(q) for q in pts], float)
     a, b = (uv.min(axis=0), uv.max(axis=0)) if len(uv) else (np.zeros(2), np.zeros(2))
     if lado > 0:
         c = (a + b) / 2
