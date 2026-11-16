@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
-| E5 | B-607 | En espera: no se reproduce en la VPS; falta el .omnicad de Gerardo y por dónde abrió Editar |
+| E5 | B-610 | Planos tapados por el cuerpo al pedir un plano (Análisis de sección y los demás comandos). Sonnet medio. B-607 sigue en espera del .omnicad de Gerardo |
 | E6 | FL-2 / FL-3 | Previa barata al teclear y arrastrar; aceptar, editar y deshacer fuera de la ventana (Opus alto). B-598 Parcial integrado: 39e5a48 (falta < 2 s: booleanas de las letras ~5 s, y medir en Windows) |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
