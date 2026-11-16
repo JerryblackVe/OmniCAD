@@ -8,12 +8,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | — | En pausa hasta las 00:30 UTC (cupo de 5 h al 93 %); después B-544 (B-540 integrado: f0b265b) |
-| E2 | — | En pausa hasta las 00:30 UTC (cupo de 5 h); después P-161 (B-471b integrado: f57e7a8) |
-| E3 | B-559 | **Primero (Gerardo, prioridad 1)**: Mover/Copiar entero contra Fusion; arranca a las 00:30 UTC (cupo). Después B-560 (Alinear, misma revisión) y B-558 |
+| E1 | B-544 | Punto en vértice: el vértice tiene que ganar (B-540 integrado: f0b265b) |
+| E2 | P-161 | Extruir preselecciona el único perfil (B-471b integrado: f57e7a8) |
+| E3 | B-559 | **Primero (Gerardo, prioridad 1)**: Mover/Copiar entero contra Fusion. Después B-560 (Alinear, misma revisión) y B-558 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | — | En pausa hasta las 00:30 UTC (cupo de 5 h); después lo que siga en `docs/plan_fluidez.md` (B-331 integrado: 5c9c2f5) |
+| E6 | B-546 | Cerrar: abrir Extruir con el llavero de 17 perfiles (escribir ya integrado: 6355948) |
 | E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | — | En pausa hasta que Gerardo decida sobre el advisor (P-158c integrada: 1186c2d) |
@@ -27,10 +27,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 1 | B-545 | Abrir el panel de Agujero: 263–358 ms (E6) |
 | 2 | B-543 | Chaflán: un clic simple suma aristas (Sonnet) |
 | 3 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (Sonnet) |
-| 4 | B-544 | Punto en vértice: el vértice tiene que ganar (Sonnet) |
-| 5 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
-| 6 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
-| 7 | P-161 | Extruir preselecciona el único perfil (Sonnet, chico) |
+| 4 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
+| 5 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
