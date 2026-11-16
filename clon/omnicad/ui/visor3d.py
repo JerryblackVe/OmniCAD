@@ -1830,7 +1830,8 @@ class Visor3D(QOpenGLWidget):
                 for ident, p0, dd in ejes:
                     poli = np.array([p0, p0 + dd * L] if ident in "XYZ" else self.segmento_eje(ident, p0, dd))
                     dist, p = self._dist_polilinea(q, poli, mvp, (o, d))
-                    if dist < mejor[0] and p is not None:
+                    # B-566: el eje tapado por un cuerpo no se ve (se dibuja con profundidad): no se elige
+                    if dist < mejor[0] and p is not None and visible(p):
                         mejor = (dist, _hit("eje", {"tipo": "eje", "id": ident}, [("lineas", poli, None, 3.5)],
                                             float((p - o) @ d), p))
             if "curva_boceto" in filtros or "eje" in filtros:
