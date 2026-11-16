@@ -10,14 +10,14 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D): ahí B-572 y B-573 |
-| E2 | B-569 | Elegir con el «Corte» del boceto activado (B-566 integrado: 099624a) |
+| E2 | B-548 | Patrón: «Extensión total» entra como cantidad (B-569 integrado: 74c7784) |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
-| E6 | B-574 | Velocidad contra Fusion: recalcular una cota 1,66 s (0,04), guardar 0,95 s (0,08); después B-545 (su worktree) y B-567. B-571 integrado: 189bd98 |
+| E6 | B-545 | Panel perezoso (su worktree ~/OmniCAD-B-545): abrir Agujero y Extruir < 150 ms; después B-567. B-574 integrado: d7806c4 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
-| E9 | P-158g | `pistas` de la API para los kinds que perdieron detalle y el detalle de H/V en el «?» (P-158f integrado: e01576e) |
+| E9 | P-158h | Los tests que P-158f dejó rojos con el texto viejo (lista en la fila); P-158g integrado: 704370e |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
@@ -26,7 +26,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 1 | B-543 | Chaflán: un clic simple suma aristas (Sonnet) |
 | 2 | B-549 | Unir/Cortar con el cuerpo oculto sin explicación (Sonnet) |
-| 3 | B-548 | Patrón: «Extensión total» entra como cantidad (Sonnet) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
