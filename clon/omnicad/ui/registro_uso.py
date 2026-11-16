@@ -9,6 +9,7 @@ from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (QAbstractButton, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QFormLayout, QLabel, QLineEdit, QMenu, QPlainTextEdit, QPushButton, QToolButton,
                                QVBoxLayout)
+from shiboken6 import isValid
 
 from .. import VERSION
 from .. import registro_uso as registro
@@ -141,13 +142,14 @@ class RegistroVentana(QObject):
 
     def _detener(self):
         self.reloj.stop()
-        if self._barra is not None:
+        if self._barra is not None and isValid(self._barra):
             self._barra.removeWidget(self.indicador)
             self._barra.removeWidget(self.boton)
             self._barra.hide()
-            self._barra = None
-        self.indicador.hide()
-        self.boton.hide()
+        self._barra = None
+        for w in (self.indicador, self.boton):
+            if isValid(w):                  # B-591: si Qt ya borró la barra, se llevó sus widgets: no se tocan
+                w.hide()
         self.ventana.visor._cuadros_uso = None
         if sys.excepthook == self._excepcion and self._anterior_excepcion is not None:
             sys.excepthook = self._anterior_excepcion

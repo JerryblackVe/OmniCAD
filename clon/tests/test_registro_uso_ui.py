@@ -107,3 +107,29 @@ def test_b330_extrusion_con_aviso_abre_para_editar_y_no_cuenta_como_falla(tmp_pa
         v.close()
         v.deleteLater()
         ru.ultimo = None
+
+
+def test_abrir_a_luego_b_recalcular_y_cerrar_sin_objetos_muertos(tmp_path, monkeypatch):
+    # B-591: en Windows morían QAction de la barra de abajo y la QStatusBar; cerrar fallaba en `_detener`.
+    from shiboken6 import delete, isValid
+
+    from omnicad.ejemplo import crear_documento_ejemplo
+    from omnicad.timeline.documento import Documento
+    QApplication.instance() or QApplication([])
+    monkeypatch.setenv("OMNICAD_REGISTRO_DIR", str(tmp_path / "registro"))
+    vistos = []
+    monkeypatch.setattr(sys, "excepthook", lambda *args: vistos.append(args))
+    v = VentanaPrincipal(prefs=Preferencias(QSettings(str(tmp_path / "prefs.ini"), QSettings.IniFormat)))
+    v.show()
+    v.registro_uso.configurar(True)
+    v.set_documento(crear_documento_ejemplo())              # proyecto A
+    v.set_documento(Documento())                            # proyecto B
+    v.doc.recalcular(0)
+    assert isValid(v.registro_uso._barra) and isValid(v.menu_unidades) and isValid(v.timeline.accion_color)
+    assert all(isValid(a) for a in v._acciones_unidad.values())
+    delete(v.statusBar())                                   # Qt se llevó la barra (y sus widgets) antes de cerrar
+    v.doc.modificado = False
+    assert v.close()                                        # sin RuntimeError en `_detener`
+    assert v.registro_uso._barra is None and not v.registro_uso._encendido
+    v.deleteLater()
+    assert not vistos
