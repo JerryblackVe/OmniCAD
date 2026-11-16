@@ -16,7 +16,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-567 | Reintentos de booleanas: 45 s antes del error. B-578 queda Parcial en 0,67 s (3 intentos sin ganancia; para 0,3 s hace falta bajar 6 partes chicas, una de arquitectura) |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
-| E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
+| E8 | B-591 | Terminar boceto: «OmniCAD tuvo un problema» por acciones de Unidades ya borradas (Sonnet medio) |
 | E9 | P-157 | Preferencias como Fusion (parcial en su worktree), después P-164, P-165 y P-166. B-588 integrado: 33918f0 |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
