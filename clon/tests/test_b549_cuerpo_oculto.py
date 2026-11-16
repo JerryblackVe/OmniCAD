@@ -31,7 +31,7 @@ def test_unir_con_el_cuerpo_oculto_avisa_que_esta_oculto():
     s, cid = _caso()
     r = api.llamar(s, "extrude", {"sketch": "Perfil", "distance": 5, "operation": "join"})
     assert r["ok"], r
-    assert "El cuerpo que toca está oculto: se creó un cuerpo nuevo." in str(r), r
+    assert "El cuerpo está oculto: se creó uno nuevo." in str(r), r
     assert len(s.doc.estado_final.cuerpos) == 2 and cid in s.doc.estado_final.cuerpos
 
 

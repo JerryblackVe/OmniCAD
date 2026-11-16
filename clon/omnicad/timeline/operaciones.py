@@ -423,7 +423,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
         ocultos = [] if lista else [c for c in solidos if c.id in ctx.ocultos or c.componente in ctx.ocultos]
         if operacion == "unir":
             ocultos = [c for c in ocultos if _toca(c, herramienta)]
-            ctx.aviso("El cuerpo que toca está oculto: se creó un cuerpo nuevo." if ocultos
+            ctx.aviso("El cuerpo está oculto: se creó uno nuevo." if ocultos
                       else "No tocó ningún cuerpo: se creó un cuerpo nuevo.")
             return [estado.nuevo_cuerpo(op_id, herramienta)]
         verbo = OPERACIONES_COMBINAR[operacion].lower()
