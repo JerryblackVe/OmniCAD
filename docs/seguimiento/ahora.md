@@ -14,7 +14,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-545 | Panel perezoso (solo crea los campos visibles): baja abrir Agujero (B-545) y abrir Extruir con el llavero (B-546) a < 150 ms |
-| E7 | Caza | Repro de B-519 entregado (Deshacer del menú vuelve todo; Ctrl+Z real queda para E11); vuelve a la caza automática y `scripts/prueba_ui`; lo rojo entra con su ID |
+| E7 | P-162 | **Primero (Gerardo, prioridad 1)**: auditoría de todas las restricciones de boceto por la ventana (`scripts/prueba_ui`); después vuelve a la caza |
 | E8 | — | En pausa por el cupo semanal (B-518b integrado: 6f5deb3) |
 | E8b | — | En pausa hasta que Gerardo decida sobre el advisor (P-158c integrada: 1186c2d) |
 | E9 | P-158d | Acortar mensajes de Bocetos y Sólido (tandas GLM, revisión MiniMax) y arreglar `test_boceto_combinaciones::test_limite_patron[enorme]` |
