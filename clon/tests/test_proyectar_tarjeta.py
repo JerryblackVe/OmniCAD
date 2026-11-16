@@ -350,7 +350,7 @@ def test_h54_proyectar_elige_plano_eje_y_puntos_y_aceptar_deja_el_vinculo(v54):
     QApplication.processEvents()
     lz = _proyectar(ventana)
     tarjeta = ventana.modo_boceto.tarjeta
-    for punto in ((40, 20, 47), (30, 0, 0), (0, 0, 47), (50, 50, 0)):
+    for punto in ((40, 10, 47), (30, 0, 0), (0, 0, 47), (50, 50, 0)):
         _clic(ventana, punto)
     assert [e["tipo"] for e in lz._elegidos_proy] == ["plano", "eje", "punto", "punto_boceto"]
     assert ([lz._nombre_elegido(e) for e in lz._elegidos_proy]
