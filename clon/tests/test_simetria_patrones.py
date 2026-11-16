@@ -148,6 +148,16 @@ def test_run_operation_patron_de_operaciones_y_multitransformar(s):
     assert geo.es_valida(forma) and geo.volumen(forma) == pytest.approx(1000 - 3 * un_agujero, rel=1e-9)
 
 
+def test_multitransformar_tipo_o_n_malo_devuelve_la_pista_que_saco_p158d(s):
+    """P-158d acortó los mensajes: la lista de tipos válidos y el «n» mínimo vuelven al agente como pista."""
+    mal = api.llamar(s, "run_operation", {"type": "multitransformar", "params": {
+        "objeto": "cuerpos", "transformaciones": [{"tipo": "espiral"}]}})
+    assert mal["error_kind"] == "INVALID_TRANSFORM_TYPE" and "escala" in " ".join(mal["pistas"])
+    mal = api.llamar(s, "run_operation", {"type": "multitransformar", "params": {
+        "objeto": "cuerpos", "transformaciones": [{"tipo": "escala", "n": 1}]}})
+    assert mal["error_kind"] == "INVALID_COUNT" and "2 o más" in " ".join(mal["pistas"])
+
+
 def test_describe_operation_patron_y_multitransformar_explican_lo_nuevo():
     sesion = api.Sesion(Documento())
     doc = ok(api.llamar(sesion, "describe_operation", {"type": "patron"}))["doc"]

@@ -177,6 +177,10 @@ AYUDA_RESTRICCION = {
     "r_curvatura": "elegí una spline y la curva que se une a ella por un extremo: la unión queda suave (G2).",
     "r_poligono": "elegí un lado de una cadena cerrada de líneas: queda un polígono regular (lados y vértices iguales).",
 }
+# Detalle que no cabe en el cartel de 1 renglón: va en el tooltip / Ctrl+/ del botón (regla 14, P-158g)
+DETALLE_RESTRICCION = {
+    "r_horizontal_vertical": "elegí una o más líneas, o dos puntos: quedan horizontales o verticales, según lo que "
+                             "tengan más cerca."}
 ICONO_RESTRICCION = {"horizontal": "r_horizontal", "vertical": "r_vertical",
                      "coincidente": "r_coincidente", "paralela": "r_paralela", "perpendicular": "r_perpendicular",
                      "igual": "r_igual", "tangente": "r_tangente", "concentrica": "r_concentrica",
