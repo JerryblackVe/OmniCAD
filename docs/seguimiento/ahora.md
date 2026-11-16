@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | — | En pausa hasta el lote de las 13 h (Boceto 3D); después B-582, B-586, B-585, B-584 y B-583 (auditoría de restricciones de E11). B-572 y B-573 integrados: 8e22b1f, e02505e |
-| E2 | B-579 | 🚨 Bloqueante: Extruir salta solo a «Cortar» y pisa la elección manual (vació un documento) |
+| E2 | B-581 | Extruir: Aceptar cambia de altura según los avisos (B-579 integrado: d73c6d9; E11 lo repite con una pieza pesada) |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
@@ -24,8 +24,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-581 | Extruir: Aceptar cambia de altura (E2) |
-| 2 | B-580 | Ctrl+P: doble clic no siempre edita (Sonnet) |
+| 1 | B-580 | Ctrl+P: doble clic no siempre edita (Sonnet) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
