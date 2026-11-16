@@ -26,8 +26,8 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
   «nuevo» ni «(PC)» de más) y archivando o renombrando «(viejo)» la anterior: con dos sesiones de igual título el
   mensaje puede llegar a la equivocada.
 - **El coordinador se reemplaza igual que el maestro** (`clear_session` falla con Remote Control): nota de traspaso,
-  sesión nueva con el mismo título «Coordinador principal OmniCAD en VPS» y la vieja pasa a «(viejo)». Así el nombre
-  no cambia y no necesita archivo.
+  sesión nueva con el mismo título «Coordinador principal OmniCAD en VPS», **Remote Control prendido** (sin eso el
+  maestro no la encuentra por nombre) y la vieja pasa a «(viejo)». Así el nombre no cambia y no necesita archivo.
 - Todo lo que es para Gerardo o el chat maestro (cierres, integraciones, bloqueos, pedidos de OK) va **siempre** por
   `SendMessage` a ese nombre, leído antes de cada envío. Escribirlo solo en el chat del coordinador no alcanza.
 - Desde la VPS, el id de una sesión de la PC no llega («not found»): llega solo por el nombre (Remote Control prendido).
@@ -218,8 +218,7 @@ de OpenCode; las demás la enlazan.
   | Mecánica, formato fijo, mucho volumen, leer/buscar | Haiku 5.5 (o OpenCode con GLM) | sin esfuerzo |
   | Arreglo chico, UI, validaciones, tests, docs | Sonnet 5.5 | bajo o medio |
   | Feature normal, refactor, revisar un diff | Sonnet 5.5 | medio |
-  | Solver, geometría difícil, arquitectura, auditoría a fondo | Opus 5.5 | alto |
-  | Lo más difícil o agéntico largo, última instancia | Opus 5.5 | alto |
+  | Solver, geometría difícil, arquitectura, auditoría a fondo, lo más difícil o agéntico largo | Opus 5.5 | alto |
 
 - **Fable no se usa salvo que Gerardo lo pida por nombre (2026-11-01): consume mucho.** El tope es Opus alto.
 - **La calidad del código manda**: si la tarea toca solver, geometría, núcleo o es delicada, no se baja el

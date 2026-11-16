@@ -46,8 +46,8 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
   `ahora.md` ni en Sigue.
 
 ## Cola única y bandeja de entrada (reorganización, Gerardo 2026-11-13)
-- **La cola es [docs/seguimiento/ahora.md](docs/seguimiento/ahora.md)**: «Ahora» (un ítem por sesión) y «Sigue» (los
-  próximos 10). Lo que no está ahí no se toma. Una sesión tiene un ítem a la vez (cada ítem en su worktree) y toma el
+- **La cola es [docs/seguimiento/ahora.md](docs/seguimiento/ahora.md)**: «Ahora» (un ítem por sesión) y «Sigue» (lo que viene, en orden; son los ítems que
+  de verdad hay, no un cupo fijo). Lo que no está ahí no se toma. Una sesión tiene un ítem a la vez (cada ítem en su worktree) y toma el
   siguiente recién cuando cerró el suyo. La columna «Prioridad» de las listas no ordena: ordena `ahora.md`.
 - **Los reportes de Gerardo llegan del chat de la PC en dos lotes por día (13:00 y 19:00, hora de Argentina)**, un
   mensaje cada uno. Con cada lote el coordinador da todos los ID en un commit, los ubica en la cola y **no saca a
@@ -179,8 +179,8 @@ coordinador, E1–E11 y el chat maestro.
 1. **Contexto chico.** Ítem cerrado → nota de traspaso de 5 líneas en el Registro de `PROJECT_LOG.md` →
    `clear_session` → brief nuevo que empieza leyendo la nota. **Tope: 40 % de contexto para el chat maestro y el
    coordinador, 35 % para E1–E11; aviso al 30 % para todos** (lo mide el hook `ctx25.py`, que dice el tope de cada rol). Quién vacía a quién: E1–E11, el coordinador (nota + `clear_session` + brief); el coordinador y el
-   chat maestro se reemplazan solos: nota de traspaso, sesión nueva con el mismo título y la vieja pasa a «(viejo)»
-   (`clear_session` falla con Remote Control; el maestro además reescribe `~/chat_maestro.txt`). El autocompactado de
+   chat maestro se reemplazan solos: nota de traspaso, sesión nueva con el mismo título, Remote Control prendido, y la
+   vieja pasa a «(viejo)» (`clear_session` falla con Remote Control; el maestro además reescribe `~/chat_maestro.txt`). El autocompactado de
    Claude al 70 % queda solo como red de seguridad. Nunca se vacía en medio de un ítem. Detalle: [docs/coordinacion.md](docs/coordinacion.md).
 2. **Ritmo del cupo.** El coordinador mira el semanal con `get_usage` al cerrar cada ítem. Ritmo = lo que queda ÷ días
    hasta el reinicio (los jueves 05:00 de Argentina). Plan: hasta el 19/11, ~8 % por día; del 19 al 26/11, ~13 %; del
@@ -194,7 +194,7 @@ coordinador, E1–E11 y el chat maestro.
    doc generada, textos). Fable solo si Gerardo lo pide por nombre. Tabla de modelos con nombres vigentes: [docs/coordinacion.md](docs/coordinacion.md).
 4. **Leer y correr lo mínimo.** `grep -n` y leer la sección (offset/limit), no el archivo entero; salidas largas con
    `| tail` o `ctx_execute`; `tests_afectados.py --correr` al final de cada intento, no tras cada edición; la suite y
-   la humo, solo de noche y por script. **Al arrancar se lee solo la nota de traspaso más nueva** (no `PROJECT_LOG.md`
+   la humo, solo de noche y por script. **Al arrancar se lee solo la última nota de TU sesión** (la que empieza con el encabezado «Traspaso <título de la sesión>»; no `PROJECT_LOG.md`
    ni `APRENDIZAJES.md` enteros; de las lecciones, la sección del tema): en OmniCAD esto manda sobre `project-memory`,
    `aprender` y el global.
 5. **Mensajes cortos.** Brief de 5 líneas como mucho (ID + archivo + «seguí [docs/brief.md](docs/brief.md)»; no pega contenido). Informe de 10
