@@ -41,6 +41,8 @@ PISTAS = {
     "MOTOR_INCOMPATIBLE": ["Recalculá el documento completo con el motor elegido."],
     "INVALID_ARGUMENTS": ["Revisá nombres y tipos de los argumentos contra el esquema de la herramienta."],
     "UNKNOWN_TOOL": ["catalogo() o la lista de herramientas del MCP dice qué nombres existen."],
+    "FEATURE_DISABLED": ["Esa función hoy no anda y está apagada a propósito; el ID del bug abierto está en el mensaje "
+                         "(docs/seguimiento/bugs.md). Vuelve cuando el bug se cierre.", "Probá otra herramienta que haga algo parecido."],
     "TOOL_NOT_AVAILABLE": ["Usá buscar_herramientas o elegí una herramienta habilitada para el asistente."],
     "CANCELLED": ["El usuario canceló el pedido; no se ejecutó."],
     "FEATURE_NOT_FOUND": ["Usá el id (p. ej. 'op3') o el nombre exacto del paso.", _VER_TIMELINE],

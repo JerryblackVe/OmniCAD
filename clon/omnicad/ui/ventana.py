@@ -30,7 +30,7 @@ from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QInputEvent, Q
 from PySide6.QtWidgets import (QAbstractButton, QApplication, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMenu,
                                QMessageBox, QSizePolicy, QToolButton, QTreeWidget, QVBoxLayout, QWidget)
 
-from .. import NOMBRE_APP, RECURSOS, VERSION
+from .. import NOMBRE_APP, RECURSOS, VERSION, deshabilitado
 from ..ejemplo import crear_documento_ejemplo
 from .. import informes_error
 from ..api import cinta_personal
@@ -398,7 +398,8 @@ class VentanaPrincipal(QMainWindow):
         clave, texto, ayuda = a.property("clave"), a.property("titulo"), a.property("ayuda")
         a.setShortcut(QKeySequence(atajo or ""))
         a.setText(f"{texto}\t{texto_atajo(atajo)}" if atajo else texto)
-        a.setToolTip(f"<b>{texto}</b>" + (f"<br>{ayuda}" if ayuda else "") +
+        no = deshabilitado.motivo(clave)               # P-169: lo que no funciona queda en gris con su motivo
+        a.setToolTip(f"<b>{texto}</b>" + (f"<br><b>{no}</b>" if no else "") + (f"<br>{ayuda}" if ayuda else "") +
                      (f"<br><span style='color:#bbbbbb'>{texto_atajo(atajo)}</span>" if atajo else "") +
                      (imagen_ayuda(clave) + PIE_AYUDA if ayuda else ""))
 
@@ -445,6 +446,8 @@ class VentanaPrincipal(QMainWindow):
         a.setProperty("atajo_defecto", atajo or "")          # el de fábrica: «Más» › Cambiar atajo puede volver a él
         self._poner_atajo(a, atajo)
         a.setCheckable(marcable)
+        if deshabilitado.entrada(clave):
+            a.setEnabled(False)
         a.triggered.connect(funcion)
         self.addAction(a)                   # así el atajo funciona aunque el menú esté cerrado
         self.acciones[clave] = a
