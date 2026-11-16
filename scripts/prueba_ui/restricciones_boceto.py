@@ -563,14 +563,304 @@ def rendimiento():
         limpiar()
 
 
-for nombre, f in (("menu", menu),):
-    probar(nombre, f)
-for nombre in mate.ESCENARIOS:
-    probar(nombre, lambda n=nombre: ciclo(n))
-for nombre, f in (("seleccion_primero", seleccion_primero), ("sobra_y_choca", sobra_y_choca),
-                  ("menu_contextual", menu_contextual), ("densidad", densidad), ("persistencia", persistencia),
-                  ("fijar", fijar), ("incompatible_y_esc", incompatible_y_esc), ("sobra_y_cambiar", sobra_y_cambiar),
-                  ("deprisa", deprisa), ("ventana_chica", ventana_chica), ("rendimiento", rendimiento)):
+# ---------------------------------------------------------------- 14) P-162: cada tipo × cada par de entidades, con la cinta y dos clics
+# Una persona elige la herramienta, hace clic en dos cosas y espera una de dos: que la restricción quede (bajan los
+# grados de libertad y la geometría cumple lo que dice) o que un aviso de UN renglón diga por qué no. Lo que nunca
+# puede pasar: que entre y no haga nada (B-561), que no se cumpla, o que no pase nada y no diga nada.
+TIPOS_SUELTOS = ("horizontal_vertical", "fijo")
+FAMILIA = {"circulo_proy": "circulo", "linea_constr": "linea", "punto_proy": "punto"}
+# Lo que Fusion admite (SKT-CONSTRAIN-*). Si acá se rechaza un par de esta tabla, es una diferencia con Fusion.
+ADMITE = {
+    "coincidente": lambda a, b: "punto" in (a, b),
+    "tangente": lambda a, b: "punto" not in (a, b) and (a, b) != ("linea", "linea"),
+    "igual": lambda a, b: (a, b) in (("linea", "linea"), ("circulo", "circulo"), ("arco", "arco"), ("arco", "circulo"), ("circulo", "arco")),
+    "paralela": lambda a, b: (a, b) == ("linea", "linea"),
+    "perpendicular": lambda a, b: (a, b) == ("linea", "linea"),
+    "colineal": lambda a, b: (a, b) == ("linea", "linea"),
+    "punto_medio": lambda a, b: (a, b) in (("punto", "linea"), ("punto", "arco")),
+    "concentrica": lambda a, b: a in ("circulo", "arco") and b in ("circulo", "arco"),
+    "curvatura": lambda a, b: False,       # exige curvas encadenadas: acá nunca (no comparten extremo)
+}
+_ORDENADOS = ("coincidente", "punto_medio")
+MATRIZ = []                                  # (tipo, entidades, resultado, nota) para la tabla de evidencia
+
+
+def _crear(b, clase, cx, cy):
+    base = FAMILIA.get(clase, clase)
+    if base == "linea":
+        e = b.agregar_linea((cx - 14, cy - 6), (cx + 14, cy + 9), construccion=clase == "linea_constr")
+    elif base == "circulo":
+        e = b.agregar_circulo((cx, cy), 10)
+    elif base == "arco":
+        e = b.agregar_arco_centro((cx, cy), (cx + 10, cy), (cx, cy + 10))
+    elif base == "spline":
+        e = b.agregar_spline([(cx - 15, cy - 5), (cx - 5, cy + 10), (cx + 5, cy - 8), (cx + 15, cy + 6)])
+    else:
+        e = b.agregar_punto(cx, cy, proyectado=clase == "punto_proy")
+    if clase == "circulo_proy":
+        b.curvas[e].proyectada = True
+    return e
+
+
+def _curva(b, e):
+    """(t0, t1, f) de la curva EXTENDIDA: la línea entera y el círculo completo (el contacto puede caer fuera del tramo)."""
+    prim = b.primitivas(e)[0]
+    k = prim[0]
+    if k == "linea":
+        return -3.0, 4.0, lambda t: mate.evaluar_primitiva(prim, t, 1)
+    if k == "arco":
+        prim = ("circulo", prim[1], prim[2], prim[3])
+    t0, t1, _ = mate.dominio(prim)
+    return t0, t1, lambda t: mate.evaluar_primitiva(prim, t, 1)
+
+
+def _contacto(b, e1, e2):
+    """(distancia mínima entre las curvas, seno del ángulo entre sus tangentes ahí): medidos aparte del solver."""
+    import numpy as np
+    from scipy.optimize import least_squares
+    a0, a1, f1 = _curva(b, e1)
+    c0, c1, f2 = _curva(b, e2)
+    ta, tc = np.linspace(a0, a1, 480), np.linspace(c0, c1, 480)
+    pa, pc = np.array([f1(t)[0] for t in ta]), np.array([f2(t)[0] for t in tc])
+    d = np.linalg.norm(pa[:, None, :] - pc[None, :, :], axis=2)
+    i, j = np.unravel_index(np.argmin(d), d.shape)
+    sol = least_squares(lambda x: np.array(f1(x[0])[0]) - np.array(f2(x[1])[0]), [ta[i], tc[j]],
+                        bounds=([a0 - 1, c0 - 1], [a1 + 1, c1 + 1]), xtol=1e-14, ftol=1e-14, gtol=1e-14)
+    (p, u), (q, w) = f1(sol.x[0]), f2(sol.x[1])
+    seno = abs(u[0] * w[1] - u[1] * w[0]) / (math.hypot(*u) * math.hypot(*w))
+    return math.dist(p, q), seno
+
+
+def _dist_punto_curva(b, pid, e):
+    import numpy as np
+    from scipy.optimize import minimize_scalar
+    t0, t1, f = _curva(b, e)
+    x, y = b.coords(pid)
+    ts = np.linspace(t0, t1, 1500)
+    d = [math.dist(f(t)[0], (x, y)) for t in ts]
+    k = int(np.argmin(d))
+    r = minimize_scalar(lambda t: math.dist(f(t)[0], (x, y)), bounds=(ts[max(k - 1, 0)], ts[min(k + 1, len(ts) - 1)]),
+                        method="bounded", options={"xatol": 1e-12})
+    return min(r.fun, d[k])
+
+
+def _centro(b, e):
+    return b.coords(e) if e in b.puntos else b.coords(b.curvas[e].centro)
+
+
+def _mide(b, tipo, ents, clases):
+    """True/False si la condición geométrica se cumple; None si este par no tiene una medida propia."""
+    a, c = ents[0], ents[1]
+    ka, kc = (FAMILIA.get(x, x) for x in clases[:2])
+    if tipo == "coincidente":
+        if ka == "punto" and kc == "punto":
+            return math.dist(b.coords(a), b.coords(c)) < 1e-6
+        p, e = (a, c) if ka == "punto" else (c, a)
+        return _dist_punto_curva(b, p, e) < 1e-6
+    if tipo in ("tangente", "curvatura"):
+        dist, seno = _contacto(b, a, c)
+        return dist < 1e-5 and seno < 1e-4
+    if tipo == "igual":
+        if ka == kc == "linea":
+            return abs(mate._largo(b, a) - mate._largo(b, c)) < 1e-6
+        return abs(b.radio(a) - b.radio(c)) < 1e-6 if ka in ("circulo", "arco") and kc in ("circulo", "arco") else None
+    if tipo in ("paralela", "perpendicular", "colineal"):
+        if not (ka == kc == "linea"):
+            return None
+        u, w = mate._dir(b, a), mate._dir(b, c)
+        if tipo == "paralela":
+            return abs(mate._cruz(u, w)) < 1e-7
+        if tipo == "perpendicular":
+            return abs(mate._punto(u, w)) < 1e-7
+        p1, p2 = (b.coords(b.curvas[a].p1), b.coords(b.curvas[a].p2))
+        return abs(mate._cruz(u, w)) < 1e-7 and abs(mate._dist_recta(b.coords(b.curvas[c].p1), p1, p2)) < 1e-6
+    if tipo == "punto_medio":
+        p, e = (a, c) if ka == "punto" else (c, a)
+        if FAMILIA.get(clases[ents.index(e)], clases[ents.index(e)]) == "linea":
+            l = b.curvas[e]
+            (x1, y1), (x2, y2) = b.coords(l.p1), b.coords(l.p2)
+            return math.dist(b.coords(p), ((x1 + x2) / 2, (y1 + y2) / 2)) < 1e-6
+        return None
+    if tipo == "concentrica":
+        return math.dist(_centro(b, a), _centro(b, c)) < 1e-6
+    return None
+
+
+def _un_renglon(texto):
+    return bool(texto) and "\n" not in texto and len(texto) <= 110
+
+
+def _contexto(b, ctx, ents, clases):
+    """Lo que trae una pieza real alrededor de la línea y el círculo (B-561: extremos sobre el círculo, círculo fijo)."""
+    lin = next(e for e, k in zip(ents, clases, strict=True) if FAMILIA.get(k, k) == "linea")
+    cir = next(e for e, k in zip(ents, clases, strict=True) if FAMILIA.get(k, k) in ("circulo", "arco"))
+    l = b.curvas[lin]
+    if ctx == "circulo_fijo":
+        b.agregar_restriccion("fijo", [b.curvas[cir].centro])
+    elif ctx in ("extremos_sobre_circulo", "V_sobre_circulo"):
+        b.agregar_restriccion("coincidente", [l.p1, cir])
+        if ctx == "V_sobre_circulo":              # dos líneas en V: el vértice abajo y el otro extremo también sobre el círculo
+            fin = b.agregar_punto(b.coords(l.p2)[0] + 25, b.coords(l.p2)[1] - 25)
+            b.agregar_linea(l.p2, fin)
+            b.agregar_restriccion("coincidente", [fin, cir])
+        else:
+            b.agregar_restriccion("coincidente", [l.p2, cir])
+    elif ctx == "linea_encadenada":
+        fin = b.agregar_punto(b.coords(l.p2)[0] + 20, b.coords(l.p2)[1] + 15)
+        b.agregar_linea(l.p2, fin)
+
+
+CONTEXTOS = {"tangente": [(("linea", "circulo"), c) for c in ("circulo_fijo", "extremos_sobre_circulo", "V_sobre_circulo", "linea_encadenada")]
+             + [(("linea", "arco"), c) for c in ("circulo_fijo", "extremos_sobre_circulo", "linea_encadenada")]
+             + [(("linea", "circulo_proy"), c) for c in ("extremos_sobre_circulo", "V_sobre_circulo", "linea_encadenada")]
+             + [(("linea_constr", "circulo"), "V_sobre_circulo")]}
+
+
+def _caso(tipo, clases, ctx=None):
+    """Un par, de punta a punta: escena nueva, herramienta de la cinta, un clic en cada entidad."""
+    b = mate.Boceto()
+    ents = [_crear(b, k, 30 + 65 * i, 40) for i, k in enumerate(clases)]
+    if ctx:
+        _contexto(b, ctx, ents, clases)
+    instalar(b)
+    gdl0 = lz.resultado.gdl
+    n0 = len(MENSAJES)
+    r0 = n_restr()
+    ok_antes = lz.resultado.ok
+    pulsar(boton_cinta(f"sk_{HERRAMIENTA[tipo] if tipo in HERRAMIENTA else 'r_' + tipo}"))
+    for e in ents:
+        clic(*punto_de_clic(b, e))
+    A.esperar(80)
+    # solo 'creada' si hay una restricción más de ese tipo
+    creada = n_restr() == r0 + 1
+    nuevos = [m for m in MENSAJES[n0:] if m]
+    aviso = nuevos[-1] if nuevos else ""
+    gdl1 = lz.resultado.gdl
+    problemas, nota = [], ""
+    if creada:
+        r = list(lz.b.restricciones.values())[-1]
+        if r.tipo != ({"horizontal_vertical": r.tipo}.get(tipo, tipo)):
+            problemas.append(f"CREÓ OTRO TIPO ({r.tipo})")
+        if not lz.resultado.ok:
+            problemas.append("CONFLICTO TRAS APLICAR")
+        if gdl1 >= gdl0:
+            problemas.append(f"NO HACE NADA (gdl {gdl0}→{gdl1})")
+        try:
+            cumple = _mide(b, r.tipo, ents, clases)
+        except Exception as e:  # noqa: BLE001 — la medida falló: se anota, no se esconde
+            cumple, nota = None, f"medida falló: {type(e).__name__}: {e}"
+        if cumple is False:
+            problemas.append("NO CUMPLE LA CONDICIÓN")
+        nota = nota or f"gdl {gdl0}→{gdl1}; cumple={cumple}"
+    else:
+        if not _un_renglon(aviso):
+            problemas.append("NO PASA NADA Y NO AVISA" if not aviso else "AVISO DE MÁS DE 1 RENGLÓN")
+        proy = [k.endswith("_proy") for k in clases]
+        if "ya la cumple" in aviso:                      # el aviso afirma algo: se comprueba con la medida aparte
+            try:
+                if _mide(b, tipo, ents, clases) is False:
+                    problemas.append("AVISO FALSO: dice que ya se cumple y no se cumple")
+            except Exception as e:  # noqa: BLE001 — no se traga: queda en la tabla
+                problemas.append(f"MEDIDA FALLÓ ({type(e).__name__})")
+        if not ctx and ADMITE[tipo](*(FAMILIA.get(k, k) for k in clases)) and not all(proy):          # dos fijas entre sí: no hay nada que mover
+            problemas.append("FUSION LO ADMITE Y ACÁ SE RECHAZA")
+        if not ok_antes:
+            problemas.append("BOCETO EN CONFLICTO ANTES")
+        nota = f"aviso: {aviso[:90]!r}"
+    limpiar()
+    MATRIZ.append((tipo, "+".join(clases) + (f" [{ctx}]" if ctx else ""), "OK" if not problemas else " / ".join(problemas),
+                   ("creada; " if creada else "rechazada; ") + nota))
+    return problemas, nota, creada
+
+
+def matriz():
+    solo = os.environ.get("OMNICAD_MATRIZ_TIPOS")
+    clases = ("linea", "circulo", "arco", "spline", "punto", "linea_constr", "circulo_proy", "punto_proy")
+    pares = {}
+    for tipo in ADMITE:
+        orden = tipo in _ORDENADOS
+        lista = [(x, y) for x in clases for y in clases] if orden else \
+                [(x, y) for i, x in enumerate(clases) for y in clases[i:]]
+        pares[tipo] = lista
+    for tipo, lista in pares.items():
+        if solo and tipo not in solo.split(","):
+            continue
+        for par in lista:
+            area = AR + f" · matriz · {tipo}"
+            try:
+                problemas, nota, creada = _caso(tipo, list(par))
+            except Exception as e:  # noqa: BLE001
+                import traceback
+                traceback.print_exc()
+                MATRIZ.append((tipo, "+".join(par), f"EXCEPCIÓN {type(e).__name__}", str(e)[:120]))
+                A.reg(area, f"{par[0]} + {par[1]}", False, f"EXCEPCIÓN {type(e).__name__}: {e}")
+                limpiar()
+                continue
+            A.reg(area, f"{par[0]} + {par[1]}", not problemas, " / ".join(problemas + [nota]) if problemas else nota)
+    for tipo, lista in CONTEXTOS.items():
+        if solo and tipo not in solo.split(","):
+            continue
+        for par, ctx in lista:
+            area = AR + f" · matriz · {tipo} con contexto"
+            try:
+                problemas, nota, _c = _caso(tipo, list(par), ctx)
+            except Exception as e:  # noqa: BLE001
+                import traceback
+                traceback.print_exc()
+                MATRIZ.append((tipo, "+".join(par) + f" [{ctx}]", f"EXCEPCIÓN {type(e).__name__}", str(e)[:120]))
+                A.reg(area, f"{par[0]} + {par[1]} [{ctx}]", False, f"EXCEPCIÓN {type(e).__name__}: {e}")
+                limpiar()
+                continue
+            A.reg(area, f"{par[0]} + {par[1]} [{ctx}]", not problemas, " / ".join(problemas + [nota]) if problemas else nota)
+    # sueltos: una sola entidad (H/V y Fijar)
+    for tipo, herr in (("horizontal_vertical", "r_horizontal_vertical"), ("fijo", "r_fijo")):
+        for k in clases:
+            area = AR + f" · matriz · {tipo}"
+            b = mate.Boceto()
+            e = _crear(b, k, 60, 40)
+            instalar(b)
+            gdl0, n0, r0 = lz.resultado.gdl, len(MENSAJES), n_restr()
+            pulsar(boton_cinta(f"sk_{herr}"))
+            clic(*punto_de_clic(b, e))
+            A.esperar(80)
+            creada, aviso = n_restr() == r0 + 1, (MENSAJES[n0:] or [""])[-1]
+            problemas = []
+            if creada:
+                if lz.resultado.gdl >= gdl0 and not k.endswith("_proy"):      # lo proyectado ya está fijo
+                    problemas.append(f"NO HACE NADA (gdl {gdl0}→{lz.resultado.gdl})")
+                if tipo == "horizontal_vertical" and k in ("linea", "linea_constr"):
+                    (x1, y1), (x2, y2) = b._extremos_linea(e)
+                    if min(abs(x2 - x1), abs(y2 - y1)) > 1e-6:
+                        problemas.append("NO CUMPLE LA CONDICIÓN")
+            elif tipo == "horizontal_vertical" and k in ("linea", "linea_constr"):
+                problemas.append(f"RECHAZA UNA LÍNEA: {aviso[:60]!r}")
+            elif not _un_renglon(aviso):
+                problemas.append("NO PASA NADA Y NO AVISA" if not aviso else "AVISO DE MÁS DE 1 RENGLÓN")
+            if tipo == "fijo" and not creada and not (k.endswith("_proy") and _un_renglon(aviso)):
+                problemas.append("FIJAR RECHAZA")
+            MATRIZ.append((tipo, k, "OK" if not problemas else " / ".join(problemas),
+                           ("creada" if creada else f"rechazada; aviso: {aviso[:90]!r}") + f"; gdl {gdl0}→{lz.resultado.gdl}"))
+            A.reg(area, k, not problemas, " / ".join(problemas) if problemas else MATRIZ[-1][3])
+            limpiar()
+    # tabla de evidencia: una fila por caso, para pasarle a E1 lo rojo
+    sal = A.SALIDA / "matriz_restricciones.md"
+    filas = ["| tipo | entidades | resultado | detalle |", "|---|---|---|---|"]
+    filas += [f"| {t} | {e} | {r} | {d.replace('|', '/')} |" for t, e, r, d in MATRIZ]
+    sal.write_text("\n".join(filas) + "\n", encoding="utf-8")
+    print(f"=== matriz: {len(MATRIZ)} casos, {sum(1 for m in MATRIZ if m[2] != 'OK')} rojos → {sal}", flush=True)
+
+
+SOLO_MATRIZ = os.environ.get("OMNICAD_SOLO_MATRIZ") == "1"          # solo la matriz de P-162 (el resto ya está probado)
+RESTO = (("seleccion_primero", seleccion_primero), ("sobra_y_choca", sobra_y_choca),
+         ("menu_contextual", menu_contextual), ("densidad", densidad), ("persistencia", persistencia),
+         ("fijar", fijar), ("incompatible_y_esc", incompatible_y_esc), ("sobra_y_cambiar", sobra_y_cambiar),
+         ("deprisa", deprisa), ("ventana_chica", ventana_chica), ("rendimiento", rendimiento))
+if not SOLO_MATRIZ:
+    probar("menu", menu)
+    for nombre in mate.ESCENARIOS:
+        probar(nombre, lambda n=nombre: ciclo(n))
+probar("matriz", matriz)
+for nombre, f in (() if SOLO_MATRIZ else RESTO):
     probar(nombre, f)
 
 v.modo_boceto.cancelar()
