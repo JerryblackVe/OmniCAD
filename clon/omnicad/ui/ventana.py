@@ -2927,6 +2927,8 @@ class VentanaPrincipal(QMainWindow):
         self.area.set_panel(panel)
         panel.show()
         self.area.reubicar()
+        # B-581: el pie (Aceptar) queda donde abrió, sin esperar a asentarse: un aviso temprano ya no lo empuja (B-421)
+        panel.pie_y, panel._tam_padre = panel.y() + panel.height(), self.area.size()
         self.visor.setFocus()
         return panel
 
