@@ -14,7 +14,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | B-503 | Desfase de 0,5 mm en letras curvas (falla en 5–41 s). Opus alto. P-170 Bloqueado por el kernel; B-609 Parcial: bb9a729 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | B-610 integrado (falta verlo en Windows). B-607 pasa a E11 en Windows (no hay .omnicad). Libre |
-| E6 | B-608 | Empalme y Chaflán lentos en una caja simple: medir por etapa y «no entra» antes de calcular; después P-173. Opus alto. FL-2/FL-3: solo falta medir en Windows. B-598 Parcial: 39e5a48 |
+| E6 | P-173 | La vista no se congela mientras calcula (sin diálogo modal). Opus alto. B-608 Parcial: 6115ddb (falta Windows) |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
 | E9 | H-118 (mensaje) + B-605 | Tanda de OpenCode (glm-5.3-flash-free): mensaje de la rosca con salida; B-spline con pesos de más al abrir. Sonnet medio |
