@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E2 | H-91 | Solevación: condiciones de borde exactas (H-116 integrado: b3627b0); después SOL-8 |
 | E3 | — | En pausa por el cupo semanal; cuando haya lugar, B-575 (común esfera-esfera paga 3 booleanas). B-568 integrado: 94fe5d0 |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
-| E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
+| E5 | B-593 | Plano de desfase que flota a un costado y no acompaña el zoom (Construir, Alta; Sonnet medio) |
 | E6 | B-546 + P-99 | Extruir lento con muchos perfiles (B-567 integrado: 9d842a7); después FL-2/FL-3 |
 | E7 | — | En pausa (cupo semanal): la caza `tema` de boceto y extruir no dio rojos nuevos (evidencias/caza_2026-11-16/) |
 | E8 | B-591 + B-592 | 🚨 Terminar boceto: acciones de Unidades ya borradas y, de rebote, «la receta repite el id» que bloquea Extruir |
