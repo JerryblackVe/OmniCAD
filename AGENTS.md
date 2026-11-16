@@ -134,7 +134,7 @@ Modelo: `InsertarFijacion` en `clon/omnicad/ui/comandos/fijacion.py`; base `Coma
 5. Botón en la cinta: `_i("Texto", "clave")` en el grupo/pestaña de `ui/cinta.py` (p. ej. `INSERTAR`).
    Sin clave el ítem queda GRISADO: regla de honestidad, nunca un botón activo que no hace nada.
 6. Ícono: función en `ui/iconos_extra.py` y su entrada en el dict de íconos (ver `_fijacion`).
-7. Prueba en `tests/test_comandos*.py` y correr la prueba de humo.
+7. Prueba en `tests/test_comandos*.py` y `tests_afectados.py --correr` (la humo es del cierre nocturno).
 
 ## Herramientas para agentes (MCP y CLI)
 Documentación completa: [docs/agentes/README.md](docs/agentes/README.md) (conectar un agente, CLI, guía de diseño,
@@ -173,7 +173,7 @@ seguimiento, se actualizan los dos README en el mismo turno (una línea por tema
 
 En `PROJECT_LOG.md`, al terminar:
 - **Registro** (sección `## Registro`, una viñeta por tarea):
-  `- **AAAA-MM-DD · Fase/tema.** Qué se hizo, archivos clave, verificación (pytest N OK, humo N/N, ruff limpio), bugs hallados y corregidos.`
+  `- **AAAA-MM-DD · Fase/tema.** Qué se hizo, archivos clave, verificación (pytest N OK, ruff limpio), bugs hallados y corregidos.`
 - **Lección** (sección `## Lecciones aprendidas`, solo con señal verificable: corrección del usuario,
   test que falló, hallazgo con archivo y línea):
   `- [AAAA-MM-DD] Regla accionable en una línea. · Evidencia: test/archivo/comando que lo prueba.`

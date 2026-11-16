@@ -178,9 +178,10 @@ contexto. Cada turno relee el contexto entero: **el tamaño del contexto es el g
 coordinador, E1–E11 y el chat maestro.
 1. **Contexto chico.** Ítem cerrado → nota de traspaso de 5 líneas en el Registro de `PROJECT_LOG.md` →
    `clear_session` → brief nuevo que empieza leyendo la nota. **Tope: 40 % de contexto para el chat maestro y el
-   coordinador, 35 % para E1–E11; aviso al 30 % para todos** (lo mide el hook `ctx25.py`, que dice el tope de cada rol). Quién vacía a quién: E1–E11, el coordinador (nota + `clear_session` + brief); el coordinador, el
-   chat maestro desde la PC (el nombre del coordinador no cambia); el chat maestro, una sesión nueva que reescribe
-   `~/chat_maestro.txt`. Nunca se vacía en medio de un ítem. Detalle: [docs/coordinacion.md](docs/coordinacion.md).
+   coordinador, 35 % para E1–E11; aviso al 30 % para todos** (lo mide el hook `ctx25.py`, que dice el tope de cada rol). Quién vacía a quién: E1–E11, el coordinador (nota + `clear_session` + brief); el coordinador y el
+   chat maestro se reemplazan solos: nota de traspaso, sesión nueva con el mismo título y la vieja pasa a «(viejo)»
+   (`clear_session` falla con Remote Control; el maestro además reescribe `~/chat_maestro.txt`). El autocompactado de
+   Claude al 70 % queda solo como red de seguridad. Nunca se vacía en medio de un ítem. Detalle: [docs/coordinacion.md](docs/coordinacion.md).
 2. **Ritmo del cupo.** El coordinador mira el semanal con `get_usage` al cerrar cada ítem. Ritmo = lo que queda ÷ días
    hasta el reinicio (los jueves 05:00 de Argentina). Plan: hasta el 19/11, ~8 % por día; del 19 al 26/11, ~13 %; del
    26 al 30/11, ~19 % (queda ~10 % para el 1 al 3/12).
@@ -196,7 +197,7 @@ coordinador, E1–E11 y el chat maestro.
    la humo, solo de noche y por script. **Al arrancar se lee solo la nota de traspaso más nueva** (no `PROJECT_LOG.md`
    ni `APRENDIZAJES.md` enteros; de las lecciones, la sección del tema): en OmniCAD esto manda sobre `project-memory`,
    `aprender` y el global.
-5. **Mensajes cortos.** Brief de 15 líneas como mucho, que nombra archivos y no pega su contenido. Informe de 10
+5. **Mensajes cortos.** Brief de 5 líneas como mucho (ID + archivo + «seguí [docs/brief.md](docs/brief.md)»; no pega contenido). Informe de 10
    líneas más los hallazgos de `ponytail-review` (no su salida entera). Entre sesiones: ID, archivo:línea, comando y resultado.
 6. **Coordinador liviano.** Vigila cada 2 h y cuando una sesión termina, no por reloj corto; integra por tandas; la
    página de seguimiento se refresca una vez por día (19 h). En el lote de las 19 h, una línea al chat maestro:

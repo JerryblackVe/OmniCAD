@@ -25,9 +25,9 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
   `ListAgents`; 2.ª, su id. Cada chat maestro nuevo lo reescribe al arrancar, con el título de la sesión idéntico a esa línea 1 (sin
   «nuevo» ni «(PC)» de más) y archivando o renombrando «(viejo)» la anterior: con dos sesiones de igual título el
   mensaje puede llegar a la equivocada.
-- **El coordinador no se reemplaza: se vacía** (nota + `clear_session` + brief, lo hace el chat maestro desde la PC), así
-  que su nombre «Coordinador principal OmniCAD en VPS» no cambia y no necesita archivo. Si algún día se reemplaza, usa
-  el mismo mecanismo de archivo que el maestro.
+- **El coordinador se reemplaza igual que el maestro** (`clear_session` falla con Remote Control): nota de traspaso,
+  sesión nueva con el mismo título «Coordinador principal OmniCAD en VPS» y la vieja pasa a «(viejo)». Así el nombre
+  no cambia y no necesita archivo.
 - Todo lo que es para Gerardo o el chat maestro (cierres, integraciones, bloqueos, pedidos de OK) va **siempre** por
   `SendMessage` a ese nombre, leído antes de cada envío. Escribirlo solo en el chat del coordinador no alcanza.
 - Desde la VPS, el id de una sesión de la PC no llega («not found»): llega solo por el nombre (Remote Control prendido).
@@ -41,9 +41,8 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
 - **Prompt nuevo:** se guarda en su documento (`## Prompt para el agente`) y se suma a la tabla «Prompts guardados»
   de `docs/seguimiento/README.md`, en el mismo turno. `tests/test_seguimiento.py` falla si queda afuera.
 - **Prompt hecho:** cuando el coordinador revisa y cierra el trabajo de un prompt, borra su sección `## Prompt para el agente`
-  (o el documento entero si era solo el prompt) y su fila de «Prompts guardados», y refresca `datasets/prompts`: la
-  página muestra solo prompts por hacer o por revisar.
-- **No se actualiza sola.** Se refresca una vez por día, a las 19 h (Protocolo de ahorro de `CLAUDE.md`); antes, solo si Gerardo lo pide:
+  (o el documento entero si era solo el prompt) y su fila de «Prompts guardados»; la página lo recoge en el refresco de las 19 h y muestra solo prompts por hacer o por revisar.
+- **No se actualiza sola.** Se refresca una vez por día, a las 19 h y solo a esa hora (Protocolo de ahorro de `CLAUDE.md`):
   1. `python scripts/seguimiento_json.py <carpeta_temporal>` escribe `seguimiento.json`, `resueltos.json`,
      `prompts.json` y `agenda.json` (pendientes de `docs/seguimiento/`, las últimas 25 entradas del Registro de `PROJECT_LOG.md` y
      los prompts guardados).
@@ -59,10 +58,7 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
   datasets `seguimiento`, `resueltos`, `prompts` y `agenda` como archivos JSON y las calcs `resumen`, `total` y `por_tema`.
 
 ## Regla estricta: toda prueba se hace como un usuario humano habitual
-- Al probar la app (a mano, con QTest, MCP en vivo o computer use) se simula a una persona que la usa todos los días:
-  movimientos y clics de mouse (elegir en el visor, arrastrar asas, hover, doble clic), botones, Enter, Esc, Tab, y
-  **teclear en los campos donde se escriben valores y textos** (unidades, expresiones, vacío, 0, negativo, enormes),
-  mirando dónde aparece lo escrito y qué mensaje sale. Llamar a la API o poner un valor por código no reemplaza esto.
+- La regla (mouse, teclado, teclear en los campos, valores raros) está en `CLAUDE.md`; acá, el detalle.
 - Eventos simulados al widget, nunca el cursor real. Detalle y modelos: skill `omnicad-test`, sección 4b.
 - **Una prueba de la app está completa solo si cubre TODO esto** (lo que no se pudo se dice con ⚠):
   1. Cada botón de la cinta y de cada pestaña (clic real) y cada ítem de sus menús.
@@ -134,11 +130,7 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - **El chat coordinador ya corre en `bypassPermissions`**: sus comandos no piden permiso. Lo que SÍ pide
   aprobación y corta el loop es **borrar sesiones** (tarjeta en todos los modos) y **abrir sesiones nuevas desde un
   aviso automático** (solo se puede proponer una tarjeta). Por eso **no se borran ni se abren sesiones entre fases**.
-- **OBLIGATORIO (Gerardo, 2026-10-31): no pedirle permiso para abrir sesiones.** Prohibido preguntarle si se abre una
-  sesión y hacerle aprobar una tarjeta que se puede evitar. El coordinador reusa las sesiones que ya existen
-  (`clear_session` + `SendMessage`, sin tarjeta) y llama a `start_session` solo si no queda ninguna para reusar, con
-  `mcp__ccd_session__start_session` permitido en `.claude/settings.local.json`. Si aun así la app muestra su tarjeta,
-  no hay ajuste que la apague desde acá: se le avisa en una línea.
+- **No pedir permiso para abrir sesiones** (regla en `CLAUDE.md` › «Loop por fases»). Si la app igual muestra su tarjeta, no hay ajuste que la apague desde acá: se le avisa en una línea.
 - **Reusar UNA sesión de ejecución**: al cerrar una fase y commitearla, vaciarla con `clear_session` (en bypass no
   pide aprobación) y mandarle el brief de la fase siguiente con `SendMessage` (anda desde un aviso automático). El
   brief tiene que ser autocontenido (el clear borra el contexto). Se borra la sesión solo al terminar el plan o si
@@ -151,12 +143,9 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   sesión. Recién con eso: `git add` explícito (sin `docs/fusion_docs/`, que está ignorada) y commit; el `push` solo si
   Gerardo lo pide. El brief siguiente nombra `docs/fusion_docs/` y exige `ponytail` y `ponytail-review`.
 - El estado de cada fase vive en `docs/seguimiento/`.
-- **Un ítem cerrado antes del siguiente (Gerardo, 2026-11-06).** Con un agente que arregla varios ítems en la misma
-  carpeta, cada ítem termina entero (arreglo → tests → commit) antes de lanzar la corrida del siguiente. Nunca quedan
-  dos ítems sin commitear juntos: si un test falla no se sabe cuál lo rompió. Si la fila de tests está ocupada, la
-  corrida siguiente espera; si hay que paralelizar, cada ítem va en su propio worktree: `bash scripts/worktree_item.sh
-  crear <ID>` crea la rama `item/<ID>` y la carpeta `<repo>-<ID>` (usa el `clon/.venv` del repo principal) y, ya
-  fusionada la rama, `bash scripts/worktree_item.sh borrar <ID>` borra las dos.
+- **Un ítem cerrado antes del siguiente** (regla en `CLAUDE.md`): cada ítem va en su worktree, `bash scripts/worktree_item.sh
+  crear <ID>` crea la rama `item/<ID>` y la carpeta `<repo>-<ID>` (usa el `clon/.venv` del repo principal) y, ya fusionada
+  la rama, `bash scripts/worktree_item.sh borrar <ID>` borra las dos. Los briefs siguen `docs/brief.md`.
 
 ## Protocolo de OpenCode (Gerardo, 2026-11-16)
 Meta: OpenCode trabaja **siempre**. Sus modelos son gratis y ahorran el cupo de Claude. Esta sección es la única regla
@@ -214,8 +203,8 @@ de OpenCode; las demás la enlazan.
   commitear y de quién es, próximo paso). Después, según quién sea:
   - **E1–E11**: el coordinador espera que no tenga nada sin guardar, la vacía con `clear_session` y le manda con
     `SendMessage` un brief autocontenido que empieza leyendo la nota (se vacía al cerrar CADA ítem, Gerardo 2026-11-09).
-  - **Coordinador**: lo vacía el chat maestro desde la PC. **Chat maestro**: abre una sesión nueva que reescribe
-    `~/chat_maestro.txt` (ver «Dirección del chat maestro»).
+  - **Coordinador y chat maestro**: sesión nueva con el mismo título, la vieja pasa a «(viejo)»; el maestro además
+    reescribe `~/chat_maestro.txt` (ver «Dirección del chat maestro»). Sin `clear_session`.
 - No se compacta una sesión en medio de un ítem.
 
 ## Regla estricta: elegir modelo y esfuerzo por tarea (ahorrar tokens sin perder calidad)
