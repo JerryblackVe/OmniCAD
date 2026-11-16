@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | — | En pausa (sin ítem de bocetos en la cola; cupo semanal). B-561, B-563 y B-564 integrados: 06dc572, 204e6c5, b2697d6 |
 | E2 | B-542 | Patrón › Dirección toma la curva de boceto en vez de la arista (P-161 integrado: 379cf08) |
-| E3 | B-565 | `como_eje` toma el origen del plano en vez del centro de la cara (gemelo de B-560; B-560 parcial integrado: 8ac5502, falta el mouse contra Fusion → E11). Después B-558 |
+| E3 | B-558 | Booleanas con caras B-spline sin control de volumen (B-565 integrado: 1635ff2) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64) |
 | E5 | — | En pausa por el cupo semanal (B-534 integrado: 93f5f50) |
 | E6 | B-562 | 🚨 **Bloqueante primero**: WinError 32 en el archivo `avance` del cálculo aislado (Windows). Después sigue B-545: Panel perezoso (solo crea los campos visibles): baja abrir Agujero (B-545) y abrir Extruir con el llavero (B-546) a < 150 ms |
