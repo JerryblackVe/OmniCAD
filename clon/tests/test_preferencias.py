@@ -173,3 +173,15 @@ def test_raton_estilos_alias_inventor_powermill_solidworks(ventana):
     assert opciones == ["omnicad", "fusion", "alias", "inventor", "powermill", "solidworks", "tinkercad"]
     from omnicad.api.herramientas_preferencias import _OPCIONES
     assert _OPCIONES["general/raton"] == ("fusion", opciones)
+
+
+def test_p157_los_temas_estan_en_apariencia_y_lo_grisado_dice_por_que():
+    """P-157: los temas van en «Apariencia» (como Fusion), no en «General»; Idioma y Orientación, grisados, explican su
+    motivo en el tooltip (capturas a 1024×700 en evidencias/p157_2026-11-16)."""
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from omnicad.ui.preferencias import PAGINAS
+    filas = {p[0]: [f[0] for f in p[4]] for p in PAGINAS}
+    assert "general/tema" in filas["apariencia"] and "general/tema" not in filas["general"]
+    from omnicad.ui.preferencias import _MOTIVO_UNICA
+    assert {f[1] for p in PAGINAS if p[0] == "general" for f in p[4] if f[2] == "combo" and len(f[3]) == 1} <= set(_MOTIVO_UNICA)
