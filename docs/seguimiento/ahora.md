@@ -24,6 +24,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
+| 2 | B-608 | Empalme y Chaflán lentos en una caja simple (9–17 s; Fusion instantáneo): medir en Windows y «no entra» antes de calcular (E6 después de FL-2/FL-3, Opus alto) |
 | 3 | B-503 | Desfase de 0,5 mm en letras curvas: falla en 5–41 s (E3, Opus alto) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
