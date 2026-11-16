@@ -488,6 +488,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-16] Al integrar un P-158 (textos acortados), correr TODOS los tests del área que comparan mensajes (`grep -l 'mensaje\|toolTip\|match='`), en tandas de 28 archivos con turno (una corrida grande pasa los 900 s y se corta). · Evidencia: P-158f entró con 1105 tests verdes y dejó rojos `test_b442` y `test_sol32` (texto viejo «cero»).
 - [2026-11-16] Un armado de test que necesita una forma concreta (p. ej. una cara B-spline) la pide explícita, no depende de qué reintento de `booleano` la rescata: cambiar la escalera de reintentos lo rompe. · Evidencia: B-568, `tests/test_tortura_menores.py::_lentes`.
 - [2026-11-16] Antes de cachear por TShape, mirar si el parámetro que cambia está antes del paso que crea esas caras: ahí se rearman y el caché nunca acierta; achicar lo que se analiza (la zona que cambió) sirve en los dos casos. · Evidencia: B-571, pieza12 `espesor` (op2) rearma la rosca (op4); `_zona_cambiada` 5,2 → <0,2 s.
 - [2026-11-16] Un atajo que corre el kernel SIN tope en el hijo no puede usar solo la cantidad de polos: una rosca modelada corta son caras regladas de pocos polos y BOPAlgo no termina; las regladas van al camino con tope. · Evidencia: `tests/test_b570_pieza_guardada_rosca.py`, pila de `pila.txt` en `revision.py:318`.
