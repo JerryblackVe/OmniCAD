@@ -389,13 +389,22 @@ def poner_resultado(estado, ctx, op_id, c, nueva):
     return [c.id] + [estado.nuevo_cuerpo(op_id, s, c.tipo, **atributos_copia(c)) for s in partes[1:]]
 
 
-def _toca(c, herramienta):
-    """¿El cuerpo toca a la herramienta? B-403: la caja envolvente (cacheada) descarta a los lejanos sin pagar `se_tocan`."""
-    return (geo.cajas_se_tocan(geo.caja_envolvente(c.forma), geo.caja_envolvente(herramienta))
-            and geo.se_tocan(c.forma, herramienta))
+def _toca(c, herramienta, cara=None):
+    """¿El cuerpo toca a la herramienta? B-403: la caja envolvente (cacheada) descarta a los lejanos sin pagar `se_tocan`.
+    B-598: `cara`, la del cuerpo donde termina la herramienta («Hasta la cara»): tocarla basta y se mide en 0,1 s; el
+    cuerpo entero contra 15 letras B-spline tardaba 108 s. Si no la toca o falla, se mide el cuerpo como siempre."""
+    if not geo.cajas_se_tocan(geo.caja_envolvente(c.forma), geo.caja_envolvente(herramienta)):
+        return False
+    if cara is not None:
+        try:
+            if geo.se_tocan(cara, herramienta):
+                return True
+        except Exception:  # noqa: BLE001 — vía rápida: si falla, el camino de siempre
+            pass
+    return geo.se_tocan(c.forma, herramienta)
 
 
-def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", tipo="solido", apoyos=None):
+def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", tipo="solido", apoyos=None, limites=None):
     """Aplica una forma recién creada según FeatureOperations. `objetivo`: id de un cuerpo, lista de ids
     ("Objetos para cortar" de Fusion) o vacío = automático (los cuerpos sólidos que toca). `apoyos`: función que da
     puntos del perfil de partida; el cuerpo que los toca es la base (la cara o el boceto de donde nace la herramienta).
@@ -417,7 +426,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
         solidos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
         objetivos = [c for c in solidos if c.id not in ctx.ocultos and c.componente not in ctx.ocultos]
         if operacion == "unir":
-            objetivos = [c for c in objetivos if _toca(c, herramienta)]
+            objetivos = [c for c in objetivos if _toca(c, herramienta, (limites or {}).get(c.id))]
     if not objetivos:
         # B-549: si el cuerpo está pero oculto, el mensaje dice la causa (regla 14: un renglón, sin jerga)
         ocultos = [] if lista else [c for c in solidos if c.id in ctx.ocultos or c.componente in ctx.ocultos]
@@ -1241,7 +1250,16 @@ class OpExtrusion(_OpConPerfiles):
         apoyos = None
         if self.p.get("inicio", "plano") == "plano" and (self.p.get("perfiles") or self.p.get("caras")):
             apoyos = lambda: [geo.punto_dentro(c) for c in self._caras(estado, None)[1]]  # noqa: E731
-        afectados = aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo(), apoyos=apoyos)
+        limites = {}
+        if self.p.get("extension") == "objeto" and self.p.get("operacion") == "unir":
+            try:    # B-598: la cara donde termina la extrusión dice rápido qué cuerpo toca
+                limite = _resolver(self.p["hasta"], estado)
+                if limite.tipo == "cara" and limite.cuerpo:
+                    limites[limite.cuerpo] = limite.forma
+            except Exception:  # noqa: BLE001 — vía rápida: sin el límite, `_toca` mide el cuerpo entero
+                pass
+        afectados = aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo(), apoyos=apoyos,
+                                      limites=limites)
         self._registrar_usados(afectados)
         _exigir_cuerpo_con_volumen(estado, afectados)
 

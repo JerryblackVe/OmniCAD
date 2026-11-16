@@ -2124,9 +2124,9 @@ class PanelComando(QFrame):
         return any(c is not None and len(geo.caras(c.forma)) >= CARAS_PESADAS for c in cuerpos)
 
     def _iniciar_previa(self, op):
-        from ..nucleo.aislado import CalculoPendiente, TareaAislada
+        from ..nucleo.aislado import TOPE_PREVIA, CalculoPendiente, TareaAislada
         try:
-            self._hijo_previa = CalculoPendiente("previa_visual", {
+            self._hijo_previa = CalculoPendiente("previa_visual", tope=TOPE_PREVIA, datos={
                 "receta": self.ctx.doc.a_dict(), "operacion": op.a_dict(), "indice": self.ctx.indice,
                 "deflexion": None if self.visor.config.teselado is None else self.visor.config.teselado or 0.05, "angular": self.visor.config.angular,
                 # FL-1: siempre el B-Rep, como la previa de la ventana: se eligen aristas sobre ella (Empalme), se
