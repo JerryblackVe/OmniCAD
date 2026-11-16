@@ -8,6 +8,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-612 | `create_lip_groove` (ranura de labio) con ancho y alto 1e-06 sobre las aristas de una caja de superficie cierra el proceso (core dump), sin error | Abierto | Media | Validar ancho/alto mínimos antes de llamar al kernel y fallar con `error(...)` de 1 renglón; test con 1e-06 | Caza `tema construir` 2026-11-16: `evidencias/caza_2026-11-16/proceso_create_lip_groove_cierre_fffffff5_aislado_py_376/repro.py` | 2026-11-16 |
 | B-389 | Windows agota memoria en una tanda larga | Abierto | Media | Liberar memoria retenida entre tests o ajustar el tope | `evidencias/reportes_pc/2026-11-13_noche_windows_3/` (tercer cierre en Windows sobre bdbbb09) | 2026-11-13 |
 | B-272 | La humo con OmniKernel falla bajo carga | Bloqueado | Media | Suspendido: OmniKernel en pausa (Gerardo, 2026-11-14). Estabilizar el dibujo sin cambiar el umbral de 50 | Fusiones de cm-5 (7f629c1) y B-259 (051e799), grupo 3 de 6 las dos veces; repetido solo, verde | 2026-11-09 |
 | B-188 | REMOVEDOR: cara sin triangulación | Parcial | Media | Falta la receta exacta con boceto/SVG y movimientos | clon/tests/test_perfiles_interior.py::test_sin_huecos_preserva_el_svg_valido_sin_malla; clon/omnicad/nucleo/geometria.py (`punto_dentro`) | 2026-11-04 |
