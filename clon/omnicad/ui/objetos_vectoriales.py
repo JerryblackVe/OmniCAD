@@ -55,6 +55,17 @@ def _camino(polis):
     return camino
 
 
+def _girar(q, grados):
+    """`q` girado `grados` alrededor del origen."""
+    c, s = math.cos(math.radians(grados)), math.sin(math.radians(grados))
+    return (q[0] * c - q[1] * s, q[0] * s + q[1] * c)
+
+
+def _en_marco(m, grados, pivote):
+    """Matriz `m` (escala, p. ej.) aplicada en los ejes del marco girado `grados`, alrededor de `pivote`."""
+    return ob.afin(angulo=grados, pivote=pivote) @ m @ ob.afin(angulo=-grados, pivote=pivote)
+
+
 class ControlObjetos:
     def __init__(self, lienzo):
         self.l = lienzo
@@ -69,6 +80,9 @@ class ControlObjetos:
         self._poligonos = {}
         self._firma = None
         self._cajas = {}
+        self._marcos = {}             # objeto → (x0, y0, x1, y1, grados): su caja en los ejes girados del objeto
+        self._clave_marcos = None     # de qué geometría son: no dependen de la cámara, no se rehacen al hacer zoom
+        self._rects = {}              # objeto → rectángulo de ese marco en pantalla (clic sobre un texto girado)
         self._sobre = None
         self.editar_pivote = False
         self._seleccion_objetos = []
@@ -110,6 +124,9 @@ class ControlObjetos:
                  tuple(sorted(l.mostrar.items())))
         if firma != self._firma:
             self._firma, self._cache, self._cajas, self._poligonos = firma, {}, {}, {}
+            self._rects = {}
+            if (l._generacion, tuple(b.objetos), l._texto_oculto) != self._clave_marcos:
+                self._clave_marcos, self._marcos = (l._generacion, tuple(b.objetos), l._texto_oculto), {}
             visibles = ob.curvas_visibles(b)
             for oid in ob.raices(b):
                 prims = [p for cid in ob.curvas(b, [oid]) for p in b.primitivas(cid)]
@@ -129,7 +146,31 @@ class ControlObjetos:
                 limites = np.asarray([ob.limites_primitiva(p) for p in prims])
                 self._cajas[oid] = (float(limites[:, 0].min()), float(limites[:, 1].min()),
                                      float(limites[:, 2].max()), float(limites[:, 3].max())) if len(limites) else (0, 0, 0, 0)
+                if oid not in self._marcos:
+                    self._marcos[oid] = self._marco_objeto(oid, prims, self._cajas[oid])
+                if isinstance(b.curvas.get(b.objetos[oid].get("texto_automatico")), Texto):   # para elegir un texto girado con el clic
+                    x0, y0, x1, y1, g = self._marcos[oid]
+                    self._rects[oid] = t.map(QPolygonF([QPointF(*_girar(q, g)) for q in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]))
         return self._cache
+
+    def _angulo_objeto(self, oid):
+        """Giro (grados) del objeto: el de su matriz más el del texto que es (un texto escrito girado)."""
+        b = self.l.b
+        u, _, vt = np.linalg.svd(ob.acumulada(b, oid)[:2, :2])        # el giro puro: estirar no lo cambia
+        giro = u @ vt
+        grados = math.degrees(math.atan2(giro[1, 0], giro[0, 0]))
+        texto = b.curvas.get(b.objetos[oid].get("texto_automatico"))
+        if isinstance(texto, Texto):
+            grados += b.angulo_texto(texto.id)
+        return grados
+
+    def _marco_objeto(self, oid, prims, caja):
+        """(x0, y0, x1, y1, grados): la caja del objeto medida en sus ejes girados; con giro 0 es la caja de siempre."""
+        grados = self._angulo_objeto(oid)
+        if abs(grados) < 1e-9 or not prims:
+            return (*caja, 0.0)
+        pts = np.asarray([_girar(q, -grados) for p in prims for q in puntos_primitiva(p, 64)])
+        return (float(pts[:, 0].min()), float(pts[:, 1].min()), float(pts[:, 0].max()), float(pts[:, 1].max()), grados)
 
     def _a_pantalla(self, m):
         """Homografía del plano: también funciona mirando el boceto en perspectiva."""
@@ -160,7 +201,7 @@ class ControlObjetos:
         return [oid for oid, (camino, borde) in reversed(list(self._datos().items()))
                 if b.objetos[oid]["visible"] and (camino.contains(pos) or borde.contains(pos)
                                                   or isinstance(b.curvas.get(b.objetos[oid].get("texto_automatico")), Texto)
-                                                  and camino.boundingRect().contains(pos))]
+                                                  and self._rects[oid].containsPoint(pos, Qt.OddEvenFill))]
 
     def en(self, pos):
         if self.modo_perfiles:
@@ -170,7 +211,7 @@ class ControlObjetos:
             tid = o.get("texto_automatico")
             texto = self.l.b.curvas.get(tid)
             if o["visible"] and (camino.contains(pos) or borde.contains(pos) or
-                                 isinstance(texto, Texto) and camino.boundingRect().contains(pos)):
+                                 isinstance(texto, Texto) and self._rects[oid].containsPoint(pos, Qt.OddEvenFill)):
                 return tid if (isinstance(texto, Texto) and texto.camino in self.l.b.curvas
                                and np.array_equal(o["matriz"], ob.IDENTIDAD)) else oid
         return None
@@ -183,27 +224,42 @@ class ControlObjetos:
         cs = [self._cajas[i] if i in self._cajas else ob.caja(self.l.b, [i]) for i in ids]   # dentro de un grupo
         return (min(c[0] for c in cs), min(c[1] for c in cs), max(c[2] for c in cs), max(c[3] for c in cs))
 
+    def marco(self):
+        """(x0, y0, x1, y1, grados): la caja de lo elegido en los ejes del objeto (girados `grados`, como Fusion con un
+        texto girado); con varios objetos, la de los ejes del boceto."""
+        caja = self.caja()
+        if caja is None:
+            return None
+        ids = self.seleccion()
+        return self._marcos[ids[0]] if len(ids) == 1 and ids[0] in self._marcos else (*caja, 0.0)
+
+    def esquinas_marco(self):
+        """Las 4 esquinas del marco en mm (abajo-izquierda, abajo-derecha, arriba-derecha, arriba-izquierda)."""
+        x0, y0, x1, y1, g = self.marco()
+        return [_girar(q, g) for q in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
+
     def pivote(self):
         ids = self.seleccion()
         if len(ids) == 1 and self.l.b.objetos[ids[0]]["pivote"] is not None:
             return ob.pivote(self.l.b, ids[0])
-        x0, y0, x1, y1 = self.caja()
-        return ((x0 + x1) / 2, (y0 + y1) / 2)
+        x0, y0, x1, y1, g = self.marco()
+        return _girar(((x0 + x1) / 2, (y0 + y1) / 2), g)
 
     def manijas(self):
-        caja = self.caja()
-        if caja is None or self.modo_perfiles or self.l.entrada is not None:
+        marco = self.marco()
+        if marco is None or self.modo_perfiles or self.l.entrada is not None:
             return {}
-        x0, y0, x1, y1 = caja
+        x0, y0, x1, y1, g = marco
         xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
-        mm = [(x0, y0), (xm, y0), (x1, y0), (x1, ym), (x1, y1), (xm, y1), (x0, y1), (x0, ym)]
+        mm = [_girar(q, g) for q in ((x0, y0), (xm, y0), (x1, y0), (x1, ym), (x1, y1), (xm, y1), (x0, y1), (x0, ym))]
         def pantalla(p):
             if self.previa is not None:
                 p = self.previa[:2, :2] @ p + self.previa[:2, 2]
             return self.l.a_px(*p)
         r = {f"escala{k}": pantalla(p) for k, p in enumerate(mm)}
-        arriba = pantalla((xm, y1))
-        r["rotar"] = arriba + QPointF(0, -28)
+        arriba, afuera = r["escala5"], pantalla(_girar((xm, y1 + 1.0), g))
+        largo = math.hypot(afuera.x() - arriba.x(), afuera.y() - arriba.y())
+        r["rotar"] = arriba + (QPointF(0, -28) if largo < 1e-9 else (afuera - arriba) * (28 / largo))   # hacia afuera del marco
         pivote = self.arrastre.get("nuevo_pivote") if self.arrastre is not None else self.previa_pivote
         r["pivote"] = self.l.a_px(*pivote) if pivote is not None else pantalla(self.pivote())
         return r
@@ -229,7 +285,7 @@ class ControlObjetos:
         if any(self.l.b.objetos[i]["bloqueado"] for i in self.seleccion()):
             self.l.mensaje.emit("Desbloqueá el objeto antes de transformarlo.")
             return
-        self.arrastre = {"tipo": tipo, "inicio": self.l.a_mm(pos), "pos": pos, "caja": self.caja(),
+        self.arrastre = {"tipo": tipo, "inicio": self.l.a_mm(pos), "pos": pos, "caja": self.caja(), "marco": self.marco(),
                          "pivote": self.pivote(), "m": np.eye(3), "movio": False}
         self.previa = None
         self.guias = []
@@ -278,7 +334,7 @@ class ControlObjetos:
         x, y = self.l.a_mm(pos)
         ix, iy = d["inicio"]
         tipo = d["tipo"]
-        x0, y0, x1, y1 = d["caja"]
+        x0, y0, x1, y1, g = d["marco"]
         if tipo == "mover":
             dx, dy = self._snap((x - ix, y - iy), mods)
             if mods & Qt.ShiftModifier:
@@ -299,7 +355,8 @@ class ControlObjetos:
                       (x1, y1), ((x0 + x1) / 2, y1), (x0, y1), (x0, (y0 + y1) / 2))
             base = ((x0 + x1) / 2, (y0 + y1) / 2) if mods & Qt.AltModifier else puntos[(k + 4) % 8]
             if mods & Qt.ControlModifier and not mods & Qt.AltModifier:
-                base = d["pivote"]
+                base = _girar(d["pivote"], -g)
+            x, y = _girar((x, y), -g)             # el cursor en los ejes del marco
             q = puntos[k]
             sx = (x - base[0]) / (q[0] - base[0]) if abs(q[0] - base[0]) > 1e-9 else 1.0
             sy = (y - base[1]) / (q[1] - base[1]) if abs(q[1] - base[1]) > 1e-9 else 1.0
@@ -311,7 +368,7 @@ class ControlObjetos:
                 mantener = not mantener
             if mantener:
                 sx = sy = sx if k in (3, 7) else sy if k in (1, 5) else max(sx, sy)
-            m = ob.afin(sx=max(sx, 1e-6), sy=max(sy, 1e-6), pivote=base)
+            m = ob.afin(angulo=g) @ ob.afin(sx=max(sx, 1e-6), sy=max(sy, 1e-6), pivote=base) @ ob.afin(angulo=-g)
         d["m"] = m
         self.previa = m
         if self.panel is not None:
@@ -368,17 +425,15 @@ class ControlObjetos:
         ids = self.seleccion()
         if not ids:
             return None
-        caja = self.caja()
+        esq = self.esquinas_marco()
         m = ob.acumulada(self.l.b, ids[0]) if len(ids) == 1 else np.eye(3)
         p = self.pivote()
         if self.previa is not None:
             m = self.previa @ m
-            x0, y0, x1, y1 = caja
-            pts = np.array(((x0, y0), (x1, y0), (x1, y1), (x0, y1))) @ self.previa[:2, :2].T + self.previa[:2, 2]
-            caja = (*pts.min(axis=0), *pts.max(axis=0))
+            esq = [self.previa[:2, :2] @ q + self.previa[:2, 2] for q in esq]
             p = self.previa[:2, :2] @ p + self.previa[:2, 2]
-        x0, y0, x1, y1 = caja
-        return {"x": x0, "y": y0, "ancho": x1 - x0, "alto": y1 - y0,
+        xs, ys = [q[0] for q in esq], [q[1] for q in esq]
+        return {"x": min(xs), "y": min(ys), "ancho": math.dist(esq[0], esq[1]), "alto": math.dist(esq[1], esq[2]),
                 "angulo": math.degrees(math.atan2(m[1, 0], m[0, 0])),
                 "sx": float(np.linalg.norm(m[:2, 0])), "sy": float(np.linalg.norm(m[:2, 1])), "px": p[0], "py": p[1]}
 
@@ -411,7 +466,7 @@ class ControlObjetos:
             m[:2, :2] = lineal @ np.diag((sx, sy)) @ np.linalg.inv(lineal)
             m[:2, 2] = p - m[:2, :2] @ p
             return m, None
-        return ob.afin(sx=sx, sy=sy, pivote=p), None
+        return _en_marco(ob.afin(sx=sx, sy=sy, pivote=p), self.marco()[4], p), None
 
     def confirmar_campo(self, clave, valor, expresion):
         """La medida escrita se confirma una vez; una referencia a parámetros conserva su fórmula."""
@@ -432,6 +487,11 @@ class ControlObjetos:
                 proporcional = all(self.l.b.objetos[i]["proporciones"] for i in ids)
                 parametros = {"sx": factor if proporcional or clave in ("ancho", "sx") else 1,
                               "sy": factor if proporcional or clave in ("alto", "sy") else 1, "pivote": pivote}
+                g = self.marco()[4]
+                if clave in ("ancho", "alto") and abs(g) > 1e-9:       # el ancho y el alto se miden en los ejes del marco
+                    pasos = [{"matriz": ob.afin(angulo=-g, pivote=pivote).tolist()}, {"parametros": parametros},
+                             {"matriz": ob.afin(angulo=g, pivote=pivote).tolist()}]
+                    parametros = None
                 if clave in ("sx", "sy") and len(ids) == 1 and not proporcional:
                     marco = np.eye(3)
                     marco[:2, :2] = ob.acumulada(self.l.b, ids[0])[:2, :2]
@@ -462,8 +522,7 @@ class ControlObjetos:
             p.restore()
         if not seleccion or self.l.herramienta != "seleccionar" or self.modo_perfiles or self.l.entrada is not None:
             return
-        x0, y0, x1, y1 = self.caja()
-        esq = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        esq = self.esquinas_marco()
         if self.previa is not None:
             esq = [self.previa[:2, :2] @ q + self.previa[:2, 2] for q in esq]
         p.setPen(QPen(QColor(0, 150, 255), 1, Qt.DashLine))

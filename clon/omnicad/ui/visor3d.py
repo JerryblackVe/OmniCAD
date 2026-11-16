@@ -601,7 +601,7 @@ class Visor3D(QOpenGLWidget):
         self._t_fin_nav = QTimer(self, singleShot=True, interval=250)
         self._t_fin_nav.timeout.connect(self._fin_navegacion)
         self._t_limite = QTimer(self, singleShot=True)
-        self._t_limite.timeout.connect(lambda: QOpenGLWidget.update(self))
+        self._t_limite.timeout.connect(self._redibujar)
         self._etiquetas = {}               # nombre → [(punto 3D, QLabel)]: valores de las cotas guía de Medir
         self.camara_cambiada.connect(self._ubicar_etiquetas)
         self._fijar_direccion(*VISTAS["iso"])
@@ -611,12 +611,19 @@ class Visor3D(QOpenGLWidget):
         """Con «Límite de cuadros por segundo», junta los pedidos de redibujo para no pasar de ese ritmo."""
         limite = self.config.limite_fps
         if args or not limite:
-            return QOpenGLWidget.update(self, *args)
+            return self._redibujar(*args)
         espera = self._t_cuadro + 1.0 / limite - time.perf_counter()
         if espera <= 0:
-            QOpenGLWidget.update(self)
+            self._redibujar()
         elif not self._t_limite.isActive():
             self._t_limite.start(int(espera * 1000) + 1)
+
+    def _redibujar(self, *args):
+        """Pide el cuadro y avisa YA si la cámara cambió (B-596): el boceto dibujado encima se repinta con el visor, no un
+        cuadro después. Avisando recién al terminar `paintGL`, durante un zoom se veía una copia del texto con la cámara vieja."""
+        if getattr(self, "_firma_aviso", None) is not None:      # antes del primer cuadro no hay nada que avisar
+            self._avisar_camara()
+        QOpenGLWidget.update(self, *args)
 
     def _navegar(self):
         self._cancelar_animacion()
