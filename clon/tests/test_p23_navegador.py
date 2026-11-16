@@ -187,7 +187,7 @@ def test_menu_del_cuerpo_trae_opacidad_aislar_y_aspecto(v):
 @pytest.mark.parametrize("texto", ["Copiar", "Cortar"])
 def test_portapapeles_no_implementado_queda_gris_con_razon(v, texto):
     a = accion(menu_de(v, next(iter(v.doc.estado_final.cuerpos))), texto)
-    assert not a.isEnabled() and "portapapeles" in a.toolTip()
+    assert not a.isEnabled() and a.toolTip().startswith("No disponible: ") and "referencias" in a.toolTip()
 
 
 def test_suprimir_cuerpo_y_grupo_conserva_contenido(v):
@@ -331,7 +331,7 @@ def test_menu_cuerpo_en_orden_con_separadores_y_no_disponibles(v):
     for texto in ("Activar conjuntos de contactos", "Controles de mapa de textura", "Copiar", "Cortar",
                   "Control de detalles de visualización", "Seleccionable/no seleccionable"):
         a = accion(m, texto)
-        assert not a.isEnabled() and a.toolTip().startswith("Todavía no disponible")
+        assert not a.isEnabled() and a.toolTip().startswith(("Todavía no disponible", "No disponible: "))   # P-169 (3)
 
 
 def test_raiz_vacia_deshabilita_acciones_que_necesitan_cuerpos(v):

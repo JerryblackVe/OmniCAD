@@ -16,7 +16,7 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QMenu, QSizePolicy, QStackedWidget, QStyle,
                                QStyleOptionToolButton, QToolButton, QVBoxLayout, QWidget)
 
-from .. import NOMBRE_APP, VERSION
+from .. import NOMBRE_APP, VERSION, deshabilitado
 from .cinta_boceto import GRUPOS_BOCETO
 from .cinta_items import SEP, _i, _sub
 from .iconos import icono
@@ -231,7 +231,7 @@ def accion_secundaria(owner, acciones, no_disponibles, ref):
         return acciones[ref]
     a = QAction(ref[0], owner)
     a.setEnabled(False)
-    a.setToolTip(f"<b>{ref[0]}</b><br>No disponible en {NOMBRE_APP} {VERSION}.")
+    a.setToolTip(f"<b>{ref[0]}</b><br>" + deshabilitado.motivo_sin_comando(ref[0], f"No disponible en {NOMBRE_APP} {VERSION}."))
     no_disponibles.append(a)
     return a
 
@@ -384,7 +384,7 @@ class Cinta(QWidget):
         texto, ico = ref
         a = QAction(icono(ico) if ico else icono(""), texto, self)
         a.setEnabled(False)
-        a.setToolTip(f"<b>{texto}</b><br>No disponible en {NOMBRE_APP} {VERSION}.")
+        a.setToolTip(f"<b>{texto}</b><br>" + deshabilitado.motivo_sin_comando(texto, f"No disponible en {NOMBRE_APP} {VERSION}."))
         self.no_disponibles.append(a)
         return a
 
@@ -484,6 +484,8 @@ class Cinta(QWidget):
             elif it[0] == "sub":
                 sub = m.addMenu(icono(it[3]), it[1]) if it[3] else m.addMenu(it[1])
                 sub.setToolTipsVisible(True)
+                if not it[2]:
+                    sub.menuAction().setToolTip(deshabilitado.motivo_sin_comando(it[1], ""))
                 for s in it[2]:
                     sub.addAction(self._item(s))
                 # habilitado si tiene algún comando real (las acciones del boceto se activan después)
