@@ -331,7 +331,7 @@ def test_circular_receta_vieja_extension_y_espaciado_siguen_igual():
     doc = _cubo()
     r = doc.agregar(OpPatron(doc.nuevo_id(), cuerpos=["op1.c1"], forma_patron="rectangular", dir1=EJE_X, n1=3,
                              d1="10 mm", distribucion="completo"))
-    assert r.estado == "error" and "solo existe en el patrón circular" in r.mensaje
+    assert r.estado == "error" and "solo vale en el patrón circular" in r.mensaje
 
 
 # ---------------------------------------------------------------- ruta

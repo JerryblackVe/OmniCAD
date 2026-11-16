@@ -49,7 +49,7 @@ def test_b168_tubo_con_esquina_falla_en_vez_de_quedar_ok():
     r = api.llamar(s, "create_pipe", {"edges": ["Cuerpo1/E1", "Cuerpo1/E2"], "section_size": 8})
     assert not r["ok"] and len(s.doc.estado_final.cuerpos) == 1, r
     mensaje = r["mensaje"].lower()
-    assert "se autointerseca (3 autointersecciones)" in mensaje and "esquina" in mensaje, r   # el kernel sigue plegándola
+    assert "se autointerseca (3)" in mensaje and "esquina" in mensaje, r   # el kernel sigue plegándola
     assert "fusion" not in mensaje, r                  # la ayuda de Fusion no dice que redondee esas esquinas
 
 

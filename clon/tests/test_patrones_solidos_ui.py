@@ -171,10 +171,10 @@ def test_suprimir_con_texto_mal_escrito_dice_que_formato_va(app_qt):  # noqa: F8
         "dir1": [_hit(_doc_caja(), EJE_X)], "n1": 3, "d1": "30 mm", "distribucion": "espaciado"})
     _teclear(panel.widgets["suprimir"], "uno, 2:x")
     panel._calcular_previa()
-    assert panel.ultima_op is None and "separados por coma" in panel.mensaje.text()
+    assert panel.ultima_op is None and "«uno» no sirve" in panel.mensaje.text()
     _teclear(panel.widgets["suprimir"], "0:0")
     panel._calcular_previa()
-    assert "original no se puede suprimir" in panel.mensaje.text()
+    assert "suprimir el original" in panel.mensaje.text()
     panel.cancelar()
 
 

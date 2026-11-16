@@ -194,19 +194,19 @@ class Extruir(Comando):
         curvas = [h["ref"] for h in v.get("perfiles") or [] if h["ref"]["tipo"] == "curva_boceto"]
         resto = [h for h in v.get("perfiles") or [] if h["ref"]["tipo"] != "curva_boceto"]
         if curvas and v.get("tipo") != "delgada":
-            raise ErrorComando("Las curvas abiertas solo se extruyen con «Extrusión delgada».")
+            raise ErrorComando("Curva abierta: usá «Extrusión delgada».")
         boceto, perfiles, caras = perfiles_a_params(resto) if resto or not curvas else ("", [], [])
         for clave, tipo in (("distancia", None), ("desfase_inicio", None), ("conicidad", ANGULO)):
             ctx.evaluar(v.get(clave) or "0", tipo or LONGITUD)
         if v.get("extension") == "distancia" and ctx.evaluar(v.get("distancia") or "0") == 0:
-            raise ErrorComando("La distancia de extrusión no puede ser cero: arrastrá la flecha o escribí una distancia.")
+            raise ErrorComando("La distancia no puede ser cero.")
         if (v.get("direccion") == "dos_lados" and v.get("extension2") == "distancia"
                 and ctx.evaluar(v.get("distancia2") or "0") == 0):
-            raise ErrorComando("La distancia del lado 2 no puede ser cero: arrastrá su flecha o escribí una distancia.")
+            raise ErrorComando("La distancia del lado 2 no puede ser cero.")
         if v.get("extension") == "objeto" and not v.get("hasta"):
-            raise ErrorComando("Elegí el objeto hasta donde llega la extrusión.")
+            raise ErrorComando("Elegí el objeto límite de la extrusión.")
         if v.get("direccion") == "dos_lados" and v.get("extension2") == "objeto" and not v.get("hasta2"):
-            raise ErrorComando("Elegí el objeto hasta donde llega el lado 2 de la extrusión.")
+            raise ErrorComando("Elegí el objeto límite del lado 2.")
         params = {k: v.get(k) for k in ("tipo", "inicio", "desfase_inicio", "direccion", "medida", "extension",
                                          "distancia", "invertir", "conicidad", "distancia2", "conicidad2", "espesor",
                                          "ubicacion", "operacion", "hasta_modo", "desfase_hasta", "extension2")}
@@ -519,7 +519,7 @@ class Revolucion(Comando):
             if central is not None:
                 eje = {"tipo": "curva_boceto", "boceto": boceto, "curva": central}
         if eje is None:
-            raise ErrorComando("Seleccioná el eje de revolución (una línea, arista o eje).")
+            raise ErrorComando("Elegí el eje de revolución.")
         ctx.evaluar(v.get("angulo") or "0", ANGULO)
         if v.get("extension") == "objeto":
             exigir(v, "hasta", "Seleccioná el objeto hasta donde gira el perfil.")

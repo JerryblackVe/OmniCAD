@@ -463,7 +463,7 @@ def test_patron_de_operaciones_y_en_puntos_por_el_dialogo():
     ctx = ContextoComando(doc)
     with pytest.raises(ErrorComando, match="no deja una herramienta"):
         PatronRectangular().construir(dict(v, pasos="Puntos"), ctx)
-    with pytest.raises(ErrorComando, match="No hay un paso"):
+    with pytest.raises(ErrorComando, match="debe estar antes de este"):
         PatronRectangular().construir(dict(v, pasos="Agujero9"), ctx)
     # en puntos: los puntos sueltos de otro boceto; la referencia es el punto del agujero
     b = Boceto()

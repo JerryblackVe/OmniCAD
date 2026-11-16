@@ -31,7 +31,7 @@ def test_holgura_negativa_falla_con_mensaje_claro_y_sin_cambiar_el_documento(ros
     assert resultado["error_kind"] == "OPERATION_FAILED", resultado
     mensaje = resultado["mensaje"].lower()
     assert "holgura" in mensaje and "negativa" in mensaje, resultado
-    assert "usá 0 o un valor positivo" in mensaje, resultado
+    assert "no va negativa" in mensaje, resultado
     assert sesion.doc.a_dict() == antes
 
 

@@ -149,7 +149,7 @@ def test_caras_superiores_limitan_el_area_y_terminan_en_la_cara(escalones):
 
 def test_cara_superior_lejana_al_perfil_falla(escalones):
     """La cara elegida (la tapa de z = 14, en x∈[0,20]) no pisa el perfil (x∈[22,38]): no hay área de apoyo."""
-    with pytest.raises(geo.ErrorGeometria, match="caras superiores"):
+    with pytest.raises(geo.ErrorGeometria, match="caras elegidas"):
         _apoyo_repisa(escalones, caras_superiores=[_cara_horizontal(escalones, 14.0)])
 
 
@@ -174,7 +174,7 @@ def test_solo_lado_2_falla():
 
 
 def test_grosor_distinto_de_la_suma_de_los_lados_falla():
-    with pytest.raises(geo.ErrorGeometria, match="suma de los lados"):
+    with pytest.raises(geo.ErrorGeometria, match="suma lados"):
         sc.apoyo([geo.caja(10, 10, 10)], [_perfil((2, 2, 8, 8))], direccion=ARRIBA, grosor=3, lados=[(1, 2)])
 
 
@@ -185,7 +185,7 @@ def test_perfil_vacio_falla():
 
 
 def test_perfil_fuera_del_cuerpo_falla():
-    with pytest.raises(geo.ErrorGeometria, match="tocar el cuerpo"):
+    with pytest.raises(geo.ErrorGeometria, match="no toca el cuerpo"):
         sc.apoyo([geo.caja(10, 10, 10)], [_perfil((12, 2, 18, 8))], direccion=ARRIBA, grosor=2, lados=[(1, 2)])
 
 
@@ -274,7 +274,7 @@ def test_create_rest_caras_superiores_invalidas_no_cambian_el_documento():
     s, cid, boceto = _sesion()
     antes = len(s.doc.operaciones)
     r = api.llamar(s, "create_rest", {"sketch": boceto, "body": cid, "top_faces": ">Z"})
-    assert not r["ok"] and "caras superiores" in r["mensaje"], r
+    assert not r["ok"] and "caras elegidas" in r["mensaje"], r
     assert len(s.doc.operaciones) == antes
 
 
@@ -317,7 +317,7 @@ def test_create_rest_operacion_que_falla_no_cambia_el_documento():
         api.llamar(maciza, "draw_line", {"sketch": plano, "start_x": x1, "start_y": y1, "end_x": x2, "end_y": y2})
     pasos = [o.id for o in maciza.doc.operaciones]
     r = api.llamar(maciza, "create_rest", {"sketch": plano, "body": otro})
-    assert not r["ok"] and "tocar el cuerpo" in r["mensaje"], r
+    assert not r["ok"] and "no toca el cuerpo" in r["mensaje"], r
     assert [o.id for o in maciza.doc.operaciones] == pasos
     assert geo.volumen(maciza.cuerpo(otro).forma) == pytest.approx(40 * 20 * ALTO, rel=1e-9)
 

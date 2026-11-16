@@ -204,7 +204,7 @@ def test_eliminar_operaciones_quita_el_empalme_y_se_reabre():
     assert [h["ref"]["cuerpo"] for h in v["cuerpos"]] == ["op1.c1"]
     assert [t in op.p["tipos"] for t in ("empalme", "chaflan", "agujero")] == [True, False, False]
     doc2 = _doc_caja()
-    with pytest.raises(ErrorComando, match="al menos un tipo"):
+    with pytest.raises(ErrorComando, match="empalmes, chaflanes o agujeros"):
         _ejecutar(doc2, EliminarOperaciones, cuerpos=[_hit(doc2, {"tipo": "cuerpo", "cuerpo": "op1.c1"})],
                   empalme=False, chaflan=False, agujero=False)
     assert len(doc2.operaciones) == 1

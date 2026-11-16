@@ -101,7 +101,7 @@ def lado_todo(lo, hi, signo):
     dirección, desde el perfil): si hay de un solo lado, hacia ese; si hay de los dos, el de la flecha (`signo`)."""
     delante, detras = hi > 1e-6, lo < -1e-6
     if not (delante or detras):
-        raise geo.ErrorGeometria("No hay ningún cuerpo para atravesar con «Todo».")
+        raise geo.ErrorGeometria("⚠ «Todo» no atraviesa ningún cuerpo.")
     return signo if delante and detras else (1.0 if delante else -1.0)
 
 
@@ -215,7 +215,7 @@ def _cadenas(x, tol=1e-5):
         for e in cadena:
             mk.Add(e)
         if not mk.IsDone():
-            raise geo.ErrorGeometria("No se pudo encadenar las aristas en un alambre.")
+            raise geo.ErrorGeometria("⚠ No se pudo encadenar las aristas.")
         alambres.append(mk.Wire())
     return alambres
 
@@ -224,7 +224,7 @@ def _alambre(x):
     """Un único alambre continuo a partir de aristas, un alambre o una lista de aristas."""
     alambres = _cadenas(x)
     if len(alambres) != 1:
-        raise geo.ErrorGeometria("La ruta debe ser una sola cadena continua de aristas.")
+        raise geo.ErrorGeometria("⚠ La ruta no es una sola cadena de aristas.")
     return alambres[0]
 
 
@@ -256,12 +256,11 @@ def _punto_en(alambre, fraccion):
 def _recortar_alambre(alambre, fraccion, inicio=0.0):
     """Tramo entre dos fracciones de longitud (opción Distancia de barrido y tubería)."""
     if not math.isfinite(fraccion) or fraccion > 1.0 + 1e-9:
-        raise geo.ErrorGeometria("La distancia sobre la ruta va de 0 a 1 (fracción del total); "
-                                 f"recibió {fraccion:g}.")
+        raise geo.ErrorGeometria(f"⚠ La distancia va de 0 a 1: recibió {fraccion:g}.")
     if fraccion >= 1.0 - 1e-9 and inicio == 0:
         return alambre
     if fraccion - inicio <= 1e-6:
-        raise geo.ErrorGeometria("La distancia sobre la ruta debe ser mayor que cero.")
+        raise geo.ErrorGeometria("⚠ La distancia debe ser mayor que cero.")
     total = _longitud(alambre)
     objetivo, desde, acumulado = min(fraccion, 1.0) * total, inicio * total, 0.0
     mk = BRepBuilderAPI_MakeWire()
@@ -345,7 +344,7 @@ def _validar(forma, que):
     if forma is None or geo.esta_vacia(forma):
         raise geo.ErrorGeometria(f"{que}: el resultado quedó vacío.")
     if not geo.es_valida(forma):
-        raise geo.ErrorGeometria(f"{que}: el kernel produjo un sólido inválido con estos valores.")
+        raise geo.ErrorGeometria(f"⚠ {que}: el kernel dio un sólido inválido.")
     return forma
 
 
@@ -429,7 +428,7 @@ def _prisma(cara, n, d, conicidad=0.0, aristas_fijas=()):
     if abs(conicidad) < 1e-9:
         return BRepPrimAPI_MakePrism(cara, _gvec(np.asarray(n, float) * d)).Shape()
     if abs(conicidad) >= 89.0:
-        raise geo.ErrorGeometria("El ángulo de inclinación debe estar entre -89° y 89°.")
+        raise geo.ErrorGeometria("⚠ La inclinación debe ir de -89° a 89°.")
     if conicidad < 0 and not aristas_fijas:     # con aristas fijas (perfiles vecinos) el cierre es otro
         recortado = _recorte_en_vertice(cara, n, d, conicidad)
         if recortado is not None:
@@ -437,7 +436,7 @@ def _prisma(cara, n, d, conicidad=0.0, aristas_fijas=()):
     n = np.asarray(n, float)
     plano = geo.plano_de_cara(cara)
     if plano is None or abs(float(plano.normal @ n)) < 1e-9:
-        raise geo.ErrorGeometria("Con inclinación, el perfil debe ser plano y transversal a la extrusión.")
+        raise geo.ErrorGeometria("⚠ Con inclinación, el perfil debe ser plano.")
     if abs(float(plano.normal @ n)) < 1 - 1e-9 and any(
             BRepAdaptor_Curve(e).GetType() != GeomAbs_Line for e in _aristas_de(cara)):
         return _prisma_curvo_inclinado(cara, n, d, conicidad)
@@ -638,21 +637,21 @@ def _prisma_curvo_inclinado(cara, n, d, conicidad):
         extremo = _desfase_alambre(w, s)
         # si el desfase cambia la cantidad de aristas, algo se cerró: el tope de las letras que no se pueden medir
         if len(_aristas_de(extremo)) != len(_aristas_de(_desfase_alambre(w, math.copysign(min(abs(s), 1e-3), s)))):
-            raise geo.ErrorGeometria("La inclinación cierra una parte del perfil: probá una distancia o un ángulo menor.")
+            raise geo.ErrorGeometria("⚠ La inclinación cierra parte del perfil.")
         tapas.append(_cara(extremo))
         mk = BRepOffsetAPI_ThruSections(True, True)
         mk.AddWire(w)
         mk.AddWire(_trasladar(extremo, n * d))
         mk.Build()
         if not mk.IsDone():
-            raise geo.ErrorGeometria("No se pudo crear el lateral curvo de la extrusión con inclinación.")
+            raise geo.ErrorGeometria("⚠ No se pudo crear el lateral curvo.")
         piezas.append(_validar(mk.Shape(), "Extrusión curva con inclinación"))
     # un hueco que cruza el borde o pisa otro hueco ya cerró la pared: la tapa pierde menos que la suma de los huecos
     tapa, esperada = tapas[0], abs(geo.area(tapas[0]))
     for hueco in tapas[1:]:
         tapa, esperada = geo.booleano(tapa, hueco, "cortar"), esperada - abs(geo.area(hueco))
     if len(tapas) > 1 and abs(geo.area(tapa) - esperada) > 1e-6 * abs(geo.area(tapas[0])):
-        raise geo.ErrorGeometria("La inclinación cierra una parte del perfil: probá una distancia o un ángulo menor.")
+        raise geo.ErrorGeometria("⚠ La inclinación cierra parte del perfil.")
     resultado = piezas[0]
     for hueco in piezas[1:]:
         resultado = geo.booleano(resultado, hueco, "cortar")
@@ -678,10 +677,10 @@ def _desfase_alambre(alambre, d):
     mo = BRepOffsetAPI_MakeOffset(alambre, GeomAbs_Intersection, False)
     mo.Perform(float(d) * _sentido_alambre(alambre))
     if not mo.IsDone():
-        raise geo.ErrorGeometria("No se pudo desfasar el contorno (espesor demasiado grande).")
+        raise geo.ErrorGeometria("⚠ No se pudo desfasar (espesor muy grande).")
     alambres = [TopoDS.Wire(w) for w in _explorar(mo.Shape(), TopAbs_WIRE)]
     if len(alambres) != 1:
-        raise geo.ErrorGeometria("El desfase del contorno se partió en varios lazos: reducí el espesor.")
+        raise geo.ErrorGeometria("⚠ El desfase se partió en varios lazos.")
     return alambres[0]
 
 
@@ -734,7 +733,7 @@ def _extruir_perfiles_vecinos(caras, n, base, lados):
         grupo = sorted(grupo)
         region = _caras_de(_unir([caras[i] for i in grupo]))
         if len(region) != 1:
-            raise geo.ErrorGeometria("No se pudieron unir los perfiles vecinos en una región plana.")
+            raise geo.ErrorGeometria("⚠ No se pudieron unir los perfiles vecinos.")
         for d, conicidad in lados:
             limite = _prisma(region[0], n, d, conicidad) if len(grupo) > 1 and abs(conicidad) >= 1e-9 else None
             anteriores = []
@@ -766,7 +765,7 @@ def _herramienta_extrusion(caras, abiertas, n, base, lados, delgado):
             solidos.append(_prisma(_trasladar(cara, n * base), n, d, conicidad))
     if abiertas:
         if any(abs(c) > 1e-9 for _, c in lados):
-            raise geo.ErrorGeometria("La inclinación no se admite en la extrusión delgada de un perfil abierto.")
+            raise geo.ErrorGeometria("⚠ La extrusión delgada no admite inclinación.")
         lo = min([0.0] + [d for d, _ in lados])
         hi = max([0.0] + [d for d, _ in lados])
         t, ubic = float(delgado["espesor"]), delgado.get("ubicacion", "centro")
@@ -787,7 +786,7 @@ def _distancia_a_plano(origen, n, cara_plana):
     pl = geo.plano_de_cara(cara_plana)
     coseno = float(n @ pl.normal)
     if abs(coseno) < 1e-9:
-        raise geo.ErrorGeometria("El plano objetivo es paralelo a la dirección de extrusión.")
+        raise geo.ErrorGeometria("⚠ El plano objetivo es paralelo al avance.")
     return float((pl.origen - origen) @ pl.normal) / coseno
 
 
@@ -817,7 +816,7 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
     if not caras and not abiertas:
         raise geo.ErrorGeometria("Elegí al menos un perfil para extruir.")
     if abiertas and not delgado:
-        raise geo.ErrorGeometria("Los perfiles abiertos solo se extruyen como extrusión delgada.")
+        raise geo.ErrorGeometria("⚠ Perfil abierto: solo extrusión delgada.")
     if delgado and caras:
         caras = _bandas_cerradas(caras, float(delgado["espesor"]), delgado.get("ubicacion", "lado1"))
     if inicio_plano is not None:      # después de las bandas: el espesor de la pared se mide en el plano del perfil
@@ -851,7 +850,7 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
         plano_obj = geo.plano_de_cara(TopoDS.Face(hasta)) if es_cara else None
         if hasta_modo == "adyacentes":
             if not es_cara:
-                raise geo.ErrorGeometria("Hasta caras adyacentes necesita una cara o un plano como límite.")
+                raise geo.ErrorGeometria("⚠ Hasta caras adyacentes necesita una cara.")
         # plano paralelo al perfil: alcanza una distancia (con la base inclinada no: la tapa saldría inclinada)
         paralelo = plano_obj is not None and inicio_plano is None and abs(float(n @ plano_obj.normal)) > 1 - 1e-9
         if paralelo:
@@ -859,8 +858,7 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
             fin = d + math.copysign(1.0, d) * hasta_desfase    # B-484: positivo = más lejos, negativo = más cerca
             if fin * d <= 0:
                 num = [f"{x:g}".replace(".", ",") for x in (hasta_desfase, abs(d))]
-                raise geo.ErrorGeometria(f"El desfase ({num[0]} mm) deja el final del otro lado del perfil: el objeto "
-                                         f"está a {num[1]} mm.")
+                raise geo.ErrorGeometria(f"⚠ El desfase deja el objeto a {num[1]} mm.")
             d = fin
             lados1 = [(d, conicidad1)]
             herr = None
@@ -899,13 +897,13 @@ def extruir_avanzado(caras, normal, *, distancia1=None, inicio_desfase=0.0, dire
                 tapa = BRepBuilderAPI_MakeFace(gp_Pln(_pnt(origen + n * extremo), _gdir(n)),
                                                -tam, tam, -tam, tam).Face()
                 if geo.se_tocan(herr, tapa):
-                    raise geo.ErrorGeometria("La cara y sus caras adyacentes no cubren todo el perfil de extrusión.")
+                    raise geo.ErrorGeometria("⚠ El límite «adyacentes» no cubre el perfil.")
             lados1 = []
         lados2 = []
         if direccion == "dos_lados" and distancia2:
             lados2 = [(-abs(distancia2), conicidad2)]
         elif direccion == "simetrica":
-            raise geo.ErrorGeometria("La extensión 'Al objeto' no se combina con dirección simétrica.")
+            raise geo.ErrorGeometria("⚠ «Al objeto» no va con dirección simétrica.")
         partes = [herr] if herr is not None else []
         if lados1 or lados2:
             partes.append(_herramienta_extrusion(caras, abiertas, n, base, lados1 + lados2, delgado))
@@ -958,12 +956,12 @@ def _recortar_hasta(herr, inicios, objeto, modo, plano_obj, origen):
             sp.SetTools(herramientas)
             sp.Build()
             if not sp.IsDone():
-                raise geo.ErrorGeometria("No se pudo cortar la extrusión con la cara objetivo.")
+                raise geo.ErrorGeometria("⚠ No se pudo cortar la extrusión con la cara.")
             piezas = _piezas_que_tocan(sp.Shape(), inicios)
             if len(geo.solidos(sp.Shape())) < 2:
                 if modo == "adyacentes":
-                    raise geo.ErrorGeometria("La cara y sus caras adyacentes no cubren todo el perfil de extrusión.")
-                raise geo.ErrorGeometria("La extrusión no llega a la cara objetivo (la cara no la corta entera).")
+                    raise geo.ErrorGeometria("⚠ El límite «adyacentes» no cubre el perfil.")
+                raise geo.ErrorGeometria("⚠ La extrusión no llega entera a la cara.")
         return _unir(piezas)
     if modo not in ("cara", "cuerpo", "a_traves", "llega"):
         raise geo.ErrorGeometria(f"Modo de extensión desconocido: {modo}")
@@ -1004,7 +1002,7 @@ def revolver_avanzado(caras, punto_eje, dir_eje, *, direccion="un_lado", angulo1
     if delgado and caras:
         caras = _bandas_cerradas(caras, float(delgado["espesor"]), delgado.get("ubicacion", "lado1"))
     elif abiertas and not delgado:
-        raise geo.ErrorGeometria("Los perfiles abiertos solo se revolucionan como revolución delgada.")
+        raise geo.ErrorGeometria("⚠ Perfil abierto: solo revolución delgada.")
     if direccion == "un_lado":
         tramos = [(0.0, float(angulo1))]
     elif direccion == "dos_lados":
@@ -1060,8 +1058,7 @@ _QUIEBRE_LISO = 0.1          # hasta acá la ruta es lisa: si el modo plano fall
 def validar_torsion(grados):
     """Frena una torsión no finita o de más de ±TORSION_MAXIMA grados antes de calcular nada."""
     if not math.isfinite(grados) or abs(grados) > TORSION_MAXIMA:
-        raise geo.ErrorGeometria(f"La torsión del barrido admite como máximo ±{TORSION_MAXIMA:g}° "
-                                 f"({TORSION_MAXIMA / 360:g} vueltas); recibió {grados:g}°.")
+        raise geo.ErrorGeometria(f"⚠ Torsión: hasta ±{TORSION_MAXIMA:g}°; recibió {grados:g}°.")
 
 
 def _quiebre_maximo(ruta):
@@ -1188,7 +1185,7 @@ def _ley_escala_carril(ruta, carril, n=33):
         d = float(np.linalg.norm(_punto_en(carril, f)[0] - _punto_en(ruta, f)[0]))
         if d0 is None:
             if d < 1e-6:
-                raise geo.ErrorGeometria("El carril guía no puede empezar sobre la ruta.")
+                raise geo.ErrorGeometria("⚠ El carril no puede empezar sobre la ruta.")
             d0 = d
         puntos.SetValue(i + 1, gp_Pnt2d(f, d / d0))
     ley = Law_Interpol()
@@ -1203,7 +1200,7 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
     torsion /= len(rutas)
     if carril is not None:
         if abs(torsion) > 1e-9 or abs(conicidad) > 1e-9:
-            raise geo.ErrorGeometria("La torsión y la inclinación no se combinan con un carril guía.")
+            raise geo.ErrorGeometria("⚠ Torsión e inclinación no van con carril.")
         if escala_carril not in ("escalar", "estirar", "ninguna"):
             raise geo.ErrorGeometria(f"Escala de carril desconocida: {escala_carril}")
         if escala_carril == "estirar":
@@ -1243,8 +1240,7 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
             ps.SetMode(_gdir(orientacion[1]))      # binormal fija: el perfil conserva su ángulo con el eje
         elif isinstance(orientacion, tuple) and orientacion[0] == "superficie":
             if not ps.SetMode(orientacion[1]):
-                raise geo.ErrorGeometria("La ruta tiene que estar sobre la superficie guía (cada arista de la ruta, "
-                                         "apoyada en una de sus caras).")
+                raise geo.ErrorGeometria("⚠ La ruta no está sobre la superficie guía.")
         elif orientacion == "paralela":
             p0, t0 = _punto_en(tramo, 0.0)
             ps.SetMode(gp_Ax2(_pnt(p0), _gdir(t0), _gdir(_perpendicular(t0))))
@@ -1257,7 +1253,7 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
             p0, _ = _punto_en(tramo, 0.0)
             escala = 1.0 + _longitud(tramo) * math.tan(math.radians(conicidad)) / _radio_referencia(perfil, p0)
             if escala <= 0.01:
-                raise geo.ErrorGeometria("La inclinación del barrido hace desaparecer el perfil antes del final.")
+                raise geo.ErrorGeometria("⚠ La inclinación achica el perfil a cero.")
             if conicidad > 0:
                 _exigir_conicidad_en_curvas(perfil, tramo, p0, conicidad, escala)
             ley = Law_Linear()
@@ -1272,13 +1268,13 @@ def _barrido_alambre(perfil, ruta, carril, orientacion, torsion, conicidad, esca
         except Exception:  # noqa: BLE001 — OCC lanza Standard_ConstructionError en los casos que no resuelve
             hecho = False
         if not hecho:
-            raise geo.ErrorGeometria("El kernel no pudo barrer el perfil por la ruta.")
+            raise geo.ErrorGeometria("⚠ El kernel no pudo barrer el perfil.")
         if cerrada_con_torsion:
             # OCC toma el perfil inicial como referencia del triedro de cada tramo: LastShape conserva el giro
             # acumulado aunque _marcos elija otro u,v inicial para la segunda mitad.
             perfil = TopoDS.Wire(ps.LastShape())
         if solido and not ps.MakeSolid():
-            raise geo.ErrorGeometria("El barrido no cierra un sólido (¿el perfil está abierto?).")
+            raise geo.ErrorGeometria("⚠ El barrido no cierra un sólido.")
         partes.append(ps.Shape())
     if len(partes) == 1:
         return partes[0]
@@ -1309,11 +1305,11 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
     validar_torsion(torsion)
     if orientacion == "alineada":
         if eje_alineado is None or np.linalg.norm(eje_alineado) < 1e-12:
-            raise geo.ErrorGeometria("La orientación alineada necesita la dirección del eje.")
+            raise geo.ErrorGeometria("⚠ La orientación alineada necesita el eje.")
         orientacion = ("alineada", tuple(float(x) for x in eje_alineado))
     if superficie_guia is not None:
         if carril is not None or abs(torsion) > 1e-9:
-            raise geo.ErrorGeometria("La superficie guía no se combina con un carril ni con torsión.")
+            raise geo.ErrorGeometria("⚠ Superficie guía sin carril ni torsión.")
         orientacion = ("superficie", superficie_guia)
     ruta = _recortar_alambre(_alambre(ruta), float(distancia))
     carril = _alambre(carril) if carril is not None else None
@@ -1324,7 +1320,7 @@ def barrer(perfiles, ruta, *, carril=None, orientacion="perpendicular", distanci
         elif extension != "completa":
             raise geo.ErrorGeometria(f"Extensión del barrido desconocida: {extension}")
         elif not 0 < float(distancia_carril) <= 1:
-            raise geo.ErrorGeometria(f"La fracción del carril va de 0 (sin incluir) a 1; recibió {distancia_carril:g}.")
+            raise geo.ErrorGeometria(f"⚠ Fracción del carril fuera de 0 a 1: {distancia_carril:g}.")
         elif distancia_carril < 1:
             carril = _recortar_alambre(carril, float(distancia_carril))
     datos =(_lista(perfiles), ruta, carril, orientacion, torsion, conicidad, escala_carril, solido)
@@ -1355,7 +1351,7 @@ def barrer_cuerpo(forma, ruta, *, orientacion="paralela", distancia=1.0, eje_ali
     if orientacion not in ("paralela", "perpendicular", "alineada"):
         raise geo.ErrorGeometria(f"Orientación del barrido desconocida: {orientacion}")
     if orientacion == "alineada" and (eje_alineado is None or np.linalg.norm(eje_alineado) < 1e-12):
-        raise geo.ErrorGeometria("La orientación alineada necesita la dirección del eje.")
+        raise geo.ErrorGeometria("⚠ La orientación alineada necesita el eje.")
     w = _recortar_alambre(_alambre(ruta), float(distancia))
     largo = _longitud(w)
     caja = geo.caja_envolvente(forma)
@@ -1397,11 +1393,9 @@ def _exigir_ruta_para_torsion(ruta, torsion):
     quiebre = _quiebre_maximo(ruta)
     if quiebre > QUIEBRE_MAXIMO_TORSION:
         grados = (f"{x:.3g}°".replace(".", ",") for x in (quiebre, QUIEBRE_MAXIMO_TORSION))
-        raise geo.ErrorGeometria("Torsión: la ruta quiebra {} (máx. {}).".format(*grados))
+        raise geo.ErrorGeometria("⚠ Torsión: quiebre {} (máx. {}).".format(*grados))
     if _es_cerrado(ruta) and abs(torsion) > TORSION_MAXIMA_CURVILINEA:
-        raise geo.ErrorGeometria(f"En una ruta cerrada la torsión del barrido admite como máximo "
-                                 f"±{TORSION_MAXIMA_CURVILINEA:g}° ({TORSION_MAXIMA_CURVILINEA / 360:g} vueltas); "
-                                 f"recibió {torsion:g}°.")
+        raise geo.ErrorGeometria(f"⚠ Ruta cerrada: torsión admite ±{TORSION_MAXIMA_CURVILINEA:g}°.")
 
 
 def _barrer(perfiles, ruta, carril, orientacion, torsion, conicidad, escala_carril, solido, guia_plana):
@@ -1571,7 +1565,7 @@ def _auxiliar_direccion(w, normal, delta, angulo, signo=1.0):
     radio = max(1e-6, float(np.linalg.norm(np.subtract(*geo.caja_envolvente(w)[::-1]))) / 2)
     escala = 1.0 + signo * delta / math.tan(math.radians(angulo)) / radio
     if escala <= 0.05:
-        raise geo.ErrorGeometria("Con ese ángulo la sección auxiliar de la condición de borde se achica a casi nada.")
+        raise geo.ErrorGeometria("⚠ Ese ángulo achica la sección a casi nada.")
     m = np.identity(4)
     m[:3, :3] *= escala
     m[:3, 3] = c + np.asarray(normal, float) * delta - escala * c
@@ -1606,7 +1600,7 @@ def _hacia_afuera_de_la_cara(cara, punto):
             d = -d
         suma += d
     if float(np.linalg.norm(suma)) < 1e-9:
-        raise geo.ErrorGeometria("La sección no está sobre el borde de la cara de la condición Tangente.")
+        raise geo.ErrorGeometria("⚠ La sección no toca el borde de la cara.")
     return _unit(suma)
 
 
@@ -1634,7 +1628,7 @@ def _auxiliar_tangente(w, cara, delta, sobre_la_superficie=False):
             if superficie is not None:
                 proy = GeomAPI_ProjectPointOnSurf(_pnt(p), superficie)
                 if proy.NbPoints() == 0:
-                    raise geo.ErrorGeometria("La superficie de la cara no se prolonga hasta donde pide la condición Suave.")
+                    raise geo.ErrorGeometria("⚠ La cara no llega hasta donde pide «Suave».")
                 p = _xyz(proy.NearestPoint())
             pts.append(p)
         if cerrada and isinstance(curva.Curve().Curve(), Geom_Circle):
@@ -1652,7 +1646,7 @@ def _auxiliar_tangente(w, cara, delta, sobre_la_superficie=False):
             ip = GeomAPI_Interpolate(arreglo, cerrada, 1e-7)
             ip.Perform()
             if not ip.IsDone():
-                raise geo.ErrorGeometria("No se pudo armar la sección auxiliar de la condición Tangente.")
+                raise geo.ErrorGeometria("⚠ No se pudo armar la sección de «Tangente».")
             nuevas.append(BRepBuilderAPI_MakeEdge(ip.Curve()).Edge())
     return ("alambre", _alambre(nuevas))
 
@@ -1672,44 +1666,41 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
         if not cond or cond.get("tipo", "libre") == "libre":
             continue
         if not 0 <= pos < len(exteriores):
-            raise geo.ErrorGeometria(f"No hay una sección en la posición {pos + 1} para la condición de borde.")
+            raise geo.ErrorGeometria(f"⚠ No hay sección en la posición {pos + 1}.")
         if cond["tipo"] not in ("direccion", "tangente", "suave", "punto_tangente"):
             raise geo.ErrorGeometria(f"Condición de borde desconocida: {cond['tipo']}")
         tipo, w = exteriores[pos]
         if cond["tipo"] == "punto_tangente":         # Point Tangent: cúpula, con las secciones de la superficie
             vecino = exteriores[1] if pos == 0 else exteriores[-2]
             if tipo != "vertice" or pos not in (0, len(exteriores) - 1) or vecino[0] != "alambre":
-                raise geo.ErrorGeometria("La condición «Punto tangente» es de un perfil que es un punto, junto a un "
-                                         "contorno.")
+                raise geo.ErrorGeometria("⚠ «Punto tangente» necesita un perfil punto.")
             if float(cond.get("peso", 1.0)) <= 0:
-                raise geo.ErrorGeometria("El peso de la condición de borde tiene que ser positivo.")
+                raise geo.ErrorGeometria("⚠ El peso de la condición debe ser positivo.")
             from .superficies import _domo
             (delante if pos == 0 else detras)[pos] = _domo(_xyz(BRep_Tool.Pnt_s(w)), vecino[1], float(cond.get("peso", 1.0)))
             continue
         if tipo != "alambre":
-            raise geo.ErrorGeometria("La condición de borde necesita secciones con contorno, no puntos.")
+            raise geo.ErrorGeometria("⚠ La condición de borde necesita un contorno.")
         # P-147d: como Fusion, se mide desde la normal (0 = perpendicular) y da vueltas; acá, desde el plano de la sección
         angulo, peso = (90.0 - float(cond.get("angulo", 0.0))) % 360.0, float(cond.get("peso", 1.0))
         if not 0 < angulo < 180 or peso <= 0:
             raise geo.ErrorGeometria("Ángulo de borde entre −90° y 90°; peso > 0.")
         es_extremo = pos in (0, len(exteriores) - 1)
         if cond["tipo"] in ("tangente", "suave") and not es_extremo:
-            raise geo.ErrorGeometria(f"La condición {'Tangente' if cond['tipo'] == 'tangente' else 'Suave'} solo vale en "
-                                     "la primera y la última sección.")
+            raise geo.ErrorGeometria(f"⚠ Condición {'Tangente' if cond['tipo'] == 'tangente' else 'Suave'}: solo en los extremos.")
         c = _centro_alambre(w)
         lados = ([(pos + 1, delante)] if pos == 0 else [(pos - 1, detras)] if pos == len(exteriores) - 1
                  else [(pos + 1, delante), (pos - 1, detras)])
         for vecino, destino in lados:
             otro = exteriores[vecino]
             if otro[0] != "alambre":
-                raise geo.ErrorGeometria("La condición de borde necesita secciones con contorno, no puntos.")
+                raise geo.ErrorGeometria("⚠ La condición de borde necesita un contorno.")
             c2 = _centro_alambre(otro[1])
             delta = peso * 0.15 * float(np.linalg.norm(c2 - c))
             if cond["tipo"] in ("tangente", "suave"):
                 cara = cond.get("cara")
                 if cara is None:
-                    raise geo.ErrorGeometria(f"La condición {'Tangente' if cond['tipo'] == 'tangente' else 'Suave'} necesita "
-                                             "la cara a la que la superficie es tangente.")
+                    raise geo.ErrorGeometria(f"⚠ Condición {'Tangente' if cond['tipo'] == 'tangente' else 'Suave'}: falta la cara tangente.")
                 if cond["tipo"] == "tangente":
                     destino[pos] = [_auxiliar_tangente(w, cara, delta)]
                 else:               # G2: dos secciones (a 0,5 y 1,5 pasos) sobre la superficie prolongada de la cara
@@ -1755,16 +1746,15 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     if len(secs) < 2:
         raise geo.ErrorGeometria("El solevado necesita al menos dos secciones.")
     if any(s[0] == "vertice" for s in secs[1:-1]):
-        raise geo.ErrorGeometria("Un punto solo puede ser la primera o la última sección.")
+        raise geo.ErrorGeometria("⚠ El punto solo va al inicio o al final.")
     if cerrada and any(s[0] == "vertice" for s in secs):
-        raise geo.ErrorGeometria("Un solevado cerrado no admite puntos como sección.")
+        raise geo.ErrorGeometria("⚠ Un solevado cerrado no admite puntos.")
     _exigir_puntos_utiles(secs)
     carriles = _lista(carriles)
     if carriles and linea_central is not None:
-        raise geo.ErrorGeometria("Elegí carriles o una línea central, no los dos.")
+        raise geo.ErrorGeometria("⚠ Carriles o línea central, no los dos.")
     if len(carriles) > 1:
-        raise geo.ErrorGeometria("OpenCascade no admite solevado con varios carriles: usá uno solo o una "
-                                 "línea central.")
+        raise geo.ErrorGeometria("⚠ El solevado admite un solo carril.")
     exteriores = [(s[0], s[1]) for s in secs]
     if not (carriles or linea_central is not None or cerrada):
         _exigir_ida(exteriores)
@@ -1775,7 +1765,7 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     if condiciones and reglada:
         raise geo.ErrorGeometria("Tramos rectos: sin condición de borde.")  # un tramo recto no sale con otra dirección
     if cerrada and (linea_central is not None or carriles):
-        raise geo.ErrorGeometria("El solevado cerrado no se combina con línea central ni carril.")
+        raise geo.ErrorGeometria("⚠ Cerrado no va con línea central ni carril.")
     from . import superficies as sfc       # H-91: la superficie ya combina las condiciones con rieles y línea central
     exacta = (condicion_exacta and condiciones and not condiciones_medias and linea_central is None
               and sfc._exacta_posible(exteriores, (condicion_inicio, condicion_fin)))
@@ -1798,7 +1788,7 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         except Exception:  # noqa: BLE001 — OCC lanza Standard_ConstructionError en los casos que no resuelve
             hecho = False
         if not hecho:
-            raise geo.ErrorGeometria("El kernel no pudo solevar con esa línea central.")
+            raise geo.ErrorGeometria("⚠ No se pudo solevar con esa línea central.")
         if solido:
             ps.MakeSolid()
         forma = ps.Shape()
@@ -1898,13 +1888,12 @@ def _sentido_hacia_cuerpo(cuerpo, alambre, candidatos, invertir, *, exigir_cara=
         if choques and (mejor is None or choques[0] < mejor[0]):
             mejor = (choques[0], d)
     if mejor is None:
-        raise geo.ErrorGeometria("Desde la curva no se llega al cuerpo en ningún sentido.")
+        raise geo.ErrorGeometria("⚠ Del boceto no se llega al cuerpo.")
     if not invertir:
         return mejor[1]
     opuesto = -mejor[1]
     if exigir_cara and not [h for h in _rayo(cuerpo, medio, opuesto) if h > 1e-7]:
-        raise geo.ErrorGeometria("El sentido invertido no llega al cuerpo: desactivá «Cambiar dirección»"
-                                 " o mové el boceto.")
+        raise geo.ErrorGeometria("⚠ Invertido no llega: mové el boceto.")
     return opuesto
 
 
@@ -1950,7 +1939,7 @@ def _hasta_el_cuerpo(bruto, cuerpo, curvas, direccion, largo, que, profundidad):
         raise geo.ErrorGeometria(f"{que}: la curva queda dentro del cuerpo.")
     resultado = _unir(piezas)
     if profundidad is None and not geo.se_tocan(resultado, cuerpo, 1e-4):
-        raise geo.ErrorGeometria(f"{que}: no llega al cuerpo (revisá el sentido o usá una profundidad).")
+        raise geo.ErrorGeometria(f"⚠ {que}: no llega al cuerpo.")
     return _validar(resultado, que)
 
 
@@ -1964,7 +1953,7 @@ def _lamina_hasta_el_cuerpo(lamina, cuerpo, curvas, finales, que, profundidad):
     resultado = geo.compuesto(piezas)
     if profundidad is None and (not geo.se_tocan(resultado, cuerpo, 1e-4)
                                or any(geo.se_tocan(resultado, f, 1e-5) for f in finales)):
-        raise geo.ErrorGeometria(f"{que}: no llega al cuerpo (revisá el sentido o usá una profundidad).")
+        raise geo.ErrorGeometria(f"⚠ {que}: no llega al cuerpo.")
     return resultado
 
 
@@ -1993,13 +1982,13 @@ def _engrosar_nervio(recorte, cuerpo, n, lo, hi, profundidad):
                 for lateral in prisma.Generated(arista):
                     ajuste.Add(TopoDS.Face(lateral), _gdir(n), angulo, neutro, False)
                     if not ajuste.AddDone():
-                        raise geo.ErrorGeometria("Nervio: no se pudo ajustar la cara de llegada oblicua.")
+                        raise geo.ErrorGeometria("⚠ Nervio: no se pudo ajustar la cara oblicua.")
                     ajustadas = True
                 break
         if ajustadas:
             ajuste.Build()
             if not ajuste.IsDone():
-                raise geo.ErrorGeometria("Nervio: el kernel no pudo ajustar la llegada oblicua.")
+                raise geo.ErrorGeometria("⚠ Nervio: no se pudo ajustar la llegada.")
             forma = _validar(ajuste.Shape(), "Nervio con llegada oblicua")
         solidos.append(_trasladar(forma, n * lo))
     return _unir(solidos)
@@ -2110,7 +2099,7 @@ def unir_con_empalme(cuerpo, pieza, radio):
     de_la_red = [c for c in geo.caras(unido)
                  if geo.se_tocan(BRepBuilderAPI_MakeVertex(_pnt(geo.centro_masa(c, True))).Vertex(), pieza, 1e-5)]
     if not de_la_red:
-        raise geo.ErrorGeometria("No se encontraron las caras de la red para empalmarlas.")
+        raise geo.ErrorGeometria("⚠ No se hallaron las caras de la red.")
     return empalme_reglas(unido, de_la_red, radio=radio, tipo="todas", redondeos="empalmes")
 
 
@@ -2155,7 +2144,7 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     if not perfiles:
         raise geo.ErrorGeometria("Elegí al menos un perfil para repujar.")
     if not all(math.isfinite(x) for x in (desfase_h, desfase_v, giro)):
-        raise geo.ErrorGeometria("La alineación del repujado debe tener valores finitos.")
+        raise geo.ErrorGeometria("⚠ Alineación del repujado: valor inválido.")
     # La cadena agrega caras que el usuario no eligió: solo reciben lo que les cae encima, así que se descarta la
     # cara cuya caja proyectada sobre el plano del perfil no lo toca (planos perpendiculares, empalmes lejos, etc.).
     # shortcut: la caja de todos los perfiles se mide en el plano del primero (como el alineado y el envoltorio);
@@ -2436,7 +2425,7 @@ def _perfiles_en_zona(perfiles, caras, pl, adaptar):
         return [_trasladar(f, n * float((origen - np.array(geo.centro_masa(f, superficie=True))) @ n))
                 for f in perfiles]
     if not adaptar:
-        raise geo.ErrorGeometria("Los perfiles deben estar en un plano paralelo a la cara objetivo.")
+        raise geo.ErrorGeometria("⚠ Los perfiles no son paralelos a la cara.")
     areas = [geo.area(f) for f in perfiles]           # se gira para mirar hacia afuera (se lee bien desde afuera)
     c0 = sum(x * np.array(geo.centro_masa(f, superficie=True)) for x, f in zip(areas, perfiles, strict=True)) / sum(areas)
     m = np.identity(4)
@@ -2525,7 +2514,7 @@ def _proyectar_en_cara(perfiles, cara, plano, profundidad, tipo):
     for f in perfiles:
         partes = _booleana_caras([cara], [_prisma(_trasladar(f, -n * largo), n, 2 * largo)], BRepAlgoAPI_Common)
         if partes is None:
-            raise geo.ErrorGeometria("No se pudo proyectar el boceto sobre la cara del repujado.")
+            raise geo.ErrorGeometria("⚠ No se pudo proyectar el boceto en la cara.")
         for parte in _caras_de(partes):
             bu0, bu1, bv0, bv1 = BRepTools.UVBounds_s(parte)
             if float(_normal_orientada(parte, (bu0 + bu1) / 2, (bv0 + bv1) / 2)[1] @ lado) > 0:
@@ -2550,7 +2539,7 @@ def _envolver_en_cilindro(perfiles, cara, profundidad, tipo, *, recortar=False):
     for f in perfiles:
         nf = _normal_superficie(f)
         if abs(float(nf @ z)) > 1e-6:
-            raise geo.ErrorGeometria("El boceto a envolver debe estar en un plano paralelo al eje del cilindro.")
+            raise geo.ErrorGeometria("⚠ El boceto a envolver no es paralelo al eje.")
         c = np.array(geo.centro_masa(f, superficie=True))
         er = nf if float((c - o) @ nf) >= 0 else -nf
         et = np.cross(z, er)
@@ -2573,7 +2562,7 @@ def _envolver_en_cilindro(perfiles, cara, profundidad, tipo, *, recortar=False):
                 for arista in _aristas_envueltas(e, a_uv, superficie):
                     mk.Add(arista)
             if not mk.IsDone():
-                raise geo.ErrorGeometria("No se pudo envolver el contorno sobre el cilindro.")
+                raise geo.ErrorGeometria("⚠ No se envolvió el contorno en el cilindro.")
             envueltos.append(mk.Wire())
         mf = BRepBuilderAPI_MakeFace(superficie, envueltos[0], True)
         for w in envueltos[1:]:
@@ -2583,7 +2572,7 @@ def _envolver_en_cilindro(perfiles, cara, profundidad, tipo, *, recortar=False):
         lamina = arreglo.Face()
         partes = _booleana_caras([lamina], [cara], BRepAlgoAPI_Common) if recortar else lamina
         if partes is None:
-            raise geo.ErrorGeometria("No se pudo recortar el repujado sobre la cara tangente.")
+            raise geo.ErrorGeometria("⚠ No se pudo recortar el repujado en la cara.")
         for parte in _caras_de(partes):
             bu0, bu1, bv0, bv1 = BRepTools.UVBounds_s(parte)
             p_l, n_l = _normal_orientada(parte, (bu0 + bu1) / 2, (bv0 + bv1) / 2)
@@ -2617,7 +2606,7 @@ def diametro_paso_libre(tamano, ajuste="normal"):
     m = re.fullmatch(r"\s*[Mm]\s*(\d+(?:\.\d+)?)(?:\s*[xX×]\s*\d+(?:\.\d+)?)?\s*", str(tamano or ""))
     clave = f"M{float(m.group(1)):g}" if m else None
     if clave not in PASO_LIBRE_ISO273:
-        raise geo.ErrorGeometria(f"ISO 273 no tiene el tamaño «{tamano}»: hay M1.6 a M64 (solo métricos).")
+        raise geo.ErrorGeometria(f"⚠ ISO 273 no tiene «{tamano}» (va M1.6 a M64).")
     return PASO_LIBRE_ISO273[clave][AJUSTES_PASO_LIBRE.index(ajuste)]
 
 
@@ -2632,16 +2621,16 @@ def profundidad_hasta(punto, direccion, objetivo, desfase=0.0):
     if plano is not None:
         den = float(d @ plano.normal)
         if abs(den) < 1e-9:
-            raise geo.ErrorGeometria("El plano «hasta» es paralelo al agujero: no lo corta nunca.")
+            raise geo.ErrorGeometria("⚠ El plano «hasta» no corta al agujero.")
         t = float((plano.origen - p) @ plano.normal) / den
     else:
         cortes = [x for x in _rayo(objetivo, p, d) if x > 1e-6]
         if not cortes:
-            raise geo.ErrorGeometria("El agujero no llega a la cara o cuerpo «hasta» en su dirección.")
+            raise geo.ErrorGeometria("⚠ El agujero no llega a la cara «hasta».")
         t = cortes[0]
     t += float(desfase)
     if t <= 1e-6:
-        raise geo.ErrorGeometria("La cara «hasta» queda detrás del inicio del agujero (o el desfase la deja ahí).")
+        raise geo.ErrorGeometria("⚠ La cara «hasta» queda detrás del agujero.")
     return t
 
 
@@ -2651,20 +2640,20 @@ def punto_por_referencias(cara, aristas, distancias):
     Las aristas no pueden ser paralelas."""
     plano = geo.plano_de_cara(TopoDS.Face(cara))
     if plano is None:
-        raise geo.ErrorGeometria("La posición por referencias va sobre una cara plana.")
+        raise geo.ErrorGeometria("⚠ Referencias: la cara debe ser plana.")
     aristas, distancias = list(aristas), [float(x) for x in distancias]
     if len(aristas) != 2 or len(distancias) != 2:
-        raise geo.ErrorGeometria("La posición por referencias necesita dos aristas y dos distancias.")
+        raise geo.ErrorGeometria("⚠ Referencias: dos aristas y dos distancias.")
     centro = plano.a_uv(geo.centro_masa(cara, superficie=True))
     filas, lados = [], []
     for arista, dist in zip(aristas, distancias, strict=True):
         curva = BRepAdaptor_Curve(TopoDS.Edge(arista))
         if curva.GetType() != GeomAbs_Line:
-            raise geo.ErrorGeometria("Las referencias del agujero tienen que ser aristas rectas.")
+            raise geo.ErrorGeometria("⚠ Las referencias del agujero no son rectas.")
         a = np.array(plano.a_uv(_xyz(curva.Value(curva.FirstParameter()))))
         b = np.array(plano.a_uv(_xyz(curva.Value(curva.LastParameter()))))
         if np.linalg.norm(b - a) < 1e-9:
-            raise geo.ErrorGeometria("Una arista de referencia es perpendicular a la cara.")
+            raise geo.ErrorGeometria("⚠ Una arista de referencia es perpendicular.")
         t = (b - a) / np.linalg.norm(b - a)
         n = np.array([-t[1], t[0]])
         if float((np.asarray(centro) - a) @ n) < 0:          # la normal mira hacia el lado de la cara
@@ -2673,7 +2662,7 @@ def punto_por_referencias(cara, aristas, distancias):
         lados.append(dist + float(a @ n))
     m = np.array(filas)
     if abs(np.linalg.det(m)) < 1e-6:
-        raise geo.ErrorGeometria("Las dos aristas de referencia son paralelas: elegí dos que se crucen.")
+        raise geo.ErrorGeometria("⚠ Las aristas de referencia son paralelas.")
     u, v = np.linalg.solve(m, np.array(lados))
     return plano.a_3d(u, v)
 
@@ -2721,18 +2710,18 @@ def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo
     if roscado:
         datos = datos_rosca(roscado)
         if datos["conica"]:
-            raise geo.ErrorGeometria("Las roscas cónicas (R, NPT) no se modelan: usá Roscado cónico (cosmético).")
+            raise geo.ErrorGeometria("⚠ Rosca cónica no se modela: usá cosmético.")
         if datos["solo_exterior"]:
-            raise geo.ErrorGeometria(f"«{FAMILIAS_ROSCA[datos['familia']]['nombre']}» es una rosca solo exterior: no va en un agujero.")
+            raise geo.ErrorGeometria(f"⚠ «{FAMILIAS_ROSCA[datos['familia']]['nombre']}»: rosca externa.")
         if conicidad:
-            raise geo.ErrorGeometria("Un agujero cónico no lleva rosca modelada paralela.")
+            raise geo.ErrorGeometria("⚠ Agujero cónico: sin rosca paralela.")
         perfil = _perfil_clase(datos, clase, True, holgura, tabla)
         diametro = diametro_taladro_rosca(roscado, clase, holgura)
     if diametro is None or diametro <= 0:
         raise geo.ErrorGeometria("El diámetro del agujero debe ser positivo.")
     exigir_profundidad_agujero(profundidad)
     if conicidad < 0 or conicidad * profundidad >= diametro:
-        raise geo.ErrorGeometria("La conicidad cierra el agujero antes del fondo.")
+        raise geo.ErrorGeometria("⚠ La conicidad cierra el agujero.")
     r = diametro / 2
     radio = lambda z: r - conicidad / 2 * z  # noqa: E731 — radio del agujero a la profundidad z
     medio = [(0.0, 0.0)]
@@ -2740,15 +2729,14 @@ def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo
         medio.append((r, 0.0))
     elif tipo == "abocardado":
         if not diam_abocardado or diam_abocardado <= diametro or not prof_abocardado or prof_abocardado <= 0:
-            raise geo.ErrorGeometria("El abocardado necesita diámetro mayor que el del agujero y profundidad positiva.")
+            raise geo.ErrorGeometria("⚠ Abocardado: diámetro mayor y hondo > 0.")
         if prof_abocardado >= profundidad:
-            raise geo.ErrorGeometria("La profundidad del abocardado supera la del agujero.")
+            raise geo.ErrorGeometria("⚠ El abocardado es más hondo que el agujero.")
         medio += [(diam_abocardado / 2, 0.0), (diam_abocardado / 2, prof_abocardado),
                   (radio(prof_abocardado), prof_abocardado)]
     elif tipo == "avellanado":
         if not diam_avellanado or diam_avellanado <= diametro or not 0 < angulo_avellanado < 180:
-            raise geo.ErrorGeometria("El avellanado necesita diámetro mayor que el del agujero y ángulo entre "
-                                     "0° y 180°.")
+            raise geo.ErrorGeometria("⚠ Avellanado: diámetro y ángulo 0°–180°.")
         h = (diam_avellanado - diametro) / 2 / math.tan(math.radians(angulo_avellanado) / 2)
         if h >= profundidad:
             raise geo.ErrorGeometria("El avellanado es más profundo que el agujero.")
@@ -2759,7 +2747,7 @@ def _perfil_agujero(punto, direccion, tipo, diametro, profundidad, punta, angulo
     medio.append((r_fondo, profundidad))
     if punta == "angulo":
         if not 0 < angulo_punta < 180:
-            raise geo.ErrorGeometria("El ángulo de la punta debe estar entre 0° y 180°.")
+            raise geo.ErrorGeometria("⚠ Ángulo de la punta: de 0° a 180°.")
         medio.append((0.0, profundidad + r_fondo / math.tan(math.radians(angulo_punta) / 2)))
     elif punta == "plana":
         medio.append((0.0, profundidad))
@@ -2776,7 +2764,7 @@ def agujero(cuerpo, punto, direccion, *, profundidad=None, **opciones):
     if profundidad is None:
         _, hi = _caja_proyectada(cuerpo, punto, d)
         if hi <= 0:
-            raise geo.ErrorGeometria("El cuerpo no está en la dirección del agujero.")
+            raise geo.ErrorGeometria("⚠ El cuerpo no está del lado del agujero.")
         profundidad = hi + _MARGEN
         opciones["punta"] = "plana"
     return herramienta_agujero(punto, d, profundidad=profundidad, **opciones)
@@ -2794,7 +2782,7 @@ def exigir_agujero_sin_pellizco(antes, despues):
     cuerpos cortados; `despues`: lo que quedó). Un agujero tangente a una pared deja el material con espesor cero,
     algo que no se puede fabricar; la booleana suelta (Combinar) lo deja pasar con un aviso (B-126)."""
     if not agujero_sin_pellizco(antes, despues):
-        raise geo.ErrorGeometria("El agujero toca justo una pared: espesor cero.")   # regla 14: un renglón
+        raise geo.ErrorGeometria("⚠ El agujero toca una pared: espesor cero.")   # regla 14: un renglón
 
 
 def exigir_agujeros_separados(herramientas, tol=1e-4):
@@ -3041,7 +3029,7 @@ def _desfases_clase(datos, clase, interna):
 def _holgura_rosca(holgura):
     holgura = float(holgura)
     if holgura < 0:
-        raise geo.ErrorGeometria("La holgura de impresión 3D no puede ser negativa: usá 0 o un valor positivo.")
+        raise geo.ErrorGeometria("⚠ La holgura de impresión 3D no va negativa.")
     return holgura
 
 
@@ -3078,7 +3066,7 @@ def _helice(origen, eje, x, radio, paso, altura, mano="derecha", angulo=0.0):
     du = 2 * math.pi * (altura / paso) * (1 if mano == "derecha" else -1)
     if abs(angulo) > 1e-9:
         if abs(angulo) >= 89:
-            raise geo.ErrorGeometria("El ángulo de la bobina debe estar entre -89° y 89°.")
+            raise geo.ErrorGeometria("⚠ Ángulo de la bobina: de -89° a 89°.")
         a = math.radians(angulo)
         sup, dv = Geom_ConicalSurface(ax3, a, radio), altura / math.cos(a)
     else:
@@ -3127,12 +3115,12 @@ def _surco_rosca(origen, eje, diametro, paso, z0, largo, interna, mano, radio_ca
     r_fondo = (diametro / 2 + desfase if interna else d1 / 2 - desfase) if fondo is None else float(fondo) / 2
     if interna:
         if radio_cara is not None and radio_cara >= r_fondo - 1e-6:
-            raise geo.ErrorGeometria("El agujero es más grande que el diámetro mayor de la rosca.")
+            raise geo.ErrorGeometria("⚠ El agujero supera el diámetro de la rosca.")
     else:
         if radio_cara is not None and cresta is None and radio_cara > diametro / 2 + extra - 0.01 * paso:
-            raise geo.ErrorGeometria("El cilindro es más grueso que el diámetro mayor de la rosca.")
+            raise geo.ErrorGeometria("⚠ El cilindro es más grueso que la rosca.")
         if radio_cara is not None and radio_cara <= r_fondo:
-            raise geo.ErrorGeometria("El cilindro es más fino que el núcleo de la rosca.")
+            raise geo.ErrorGeometria("⚠ El cilindro es más fino que la rosca.")
     eje_r = tuple(round(float(c), 12) for c in z)
     iso = (angulo == 60 and desfase == 0 and abs(d2 - (diametro - 2 * (3 / 8) * h60 * paso)) < 1e-9
            and abs(d1 - (diametro - 2 * (5 / 8) * h60 * paso)) < 1e-9 and fondo is None and cresta is None)
@@ -3350,8 +3338,7 @@ def _volumen_ok(forma, esperado, tolerancia=0.01):
 
 def _exigir_volumen(forma, esperado, tolerancia=0.01):
     if not _volumen_ok(forma, esperado, tolerancia):
-        raise geo.ErrorGeometria("El kernel armó mal el surco de la rosca: probá otro tamaño, menos largo "
-                                 "o una rosca cosmética.")
+        raise geo.ErrorGeometria("⚠ El kernel armó mal el surco de la rosca.")
 
 
 _EXTRAS = (0.1, 0.13, 0.07)     # cuánto sobresale el surco (en pasos): el primero es el de siempre; los otros, reintentos
@@ -3385,7 +3372,7 @@ def _candidatas_auto(familia, todas=False):
     if familia not in FAMILIAS_ROSCA:
         raise geo.ErrorGeometria(f"Familia de rosca desconocida: {familia}")
     if FAMILIAS_ROSCA[familia]["conica"]:
-        raise geo.ErrorGeometria("Las roscas cónicas no tienen tamaño automático sobre una cara cilíndrica.")
+        raise geo.ErrorGeometria("⚠ Rosca cónica: sin tamaño automático.")
     filas = [k for t in _POR_FAMILIA[familia].values() for k in t]
     return [datos_rosca(k) for k in (filas if todas else [k for k in filas if k not in _SUMADAS] or filas)]
 
@@ -3398,7 +3385,7 @@ def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna
     if cara is None:
         candidatas = _caras_cilindricas(cuerpo)
         if not candidatas:
-            raise geo.ErrorGeometria("El cuerpo no tiene caras cilíndricas para roscar.")
+            raise geo.ErrorGeometria("⚠ No hay caras cilíndricas para roscar.")
         if designacion:
             dat = datos_rosca(designacion)
             cara = min(candidatas, key=lambda c: min(abs(2 * _radio_cilindro(c) - dat["diametro"]),
@@ -3416,11 +3403,11 @@ def analizar_rosca(cuerpo, cara=None, *, designacion=None, familia=None, interna
                                (sup.FirstVParameter() + sup.LastVParameter()) / 2)
     es_interna = (float(nrm @ (p - o - z * float((p - o) @ z))) < 0) if interna is None else bool(interna)
     if familia and FAMILIAS_ROSCA.get(familia, {}).get("solo_exterior") and es_interna:
-        raise geo.ErrorGeometria(f"«{FAMILIAS_ROSCA[familia]['nombre']}» es una rosca solo exterior: no va en un agujero.")
+        raise geo.ErrorGeometria(f"⚠ «{FAMILIAS_ROSCA[familia]['nombre']}»: rosca externa, no va en agujero.")
     if designacion:
         datos = datos_rosca(designacion)
         if datos["solo_exterior"] and es_interna:
-            raise geo.ErrorGeometria(f"«{FAMILIAS_ROSCA[datos['familia']]['nombre']}» es una rosca solo exterior: no va en un agujero.")
+            raise geo.ErrorGeometria(f"⚠ «{FAMILIAS_ROSCA[datos['familia']]['nombre']}»: rosca externa.")
     else:
         clave_diam = "diametro_menor" if es_interna else "diametro"
         preferida = {"iso_metrica": "ISO métrica gruesa", "unificada": "Unificada UNC"}.get(familia or "iso_metrica")
@@ -3490,17 +3477,15 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
     zmin, zmax = info["zmin"], info["zmax"]
     largo = (zmax - zmin - desfase) if longitud is None else float(longitud)
     if largo <= 1e-6 or desfase < 0 or desfase + largo > zmax - zmin + 1e-6:
-        raise geo.ErrorGeometria("La longitud y el desfase de la rosca no entran en la cara.")
+        raise geo.ErrorGeometria("⚠ El largo y desfase de la rosca no entran.")
     if not modelada:
         return cuerpo
     if datos["conica"]:
-        raise geo.ErrorGeometria(f"{datos['designacion']} es una rosca cónica: sobre una cara cilíndrica solo va "
-                                 "cosmética (o con Agujero › Roscado cónico).")
+        raise geo.ErrorGeometria(f"⚠ {datos['designacion']} es cónica: solo va cosmética aquí.")
     paso = datos["paso"]
     vueltas = largo / paso
     if vueltas > 300:     # mismo límite que fijaciones._filete
-        raise geo.ErrorGeometria(f"Demasiadas vueltas para una rosca modelada ({vueltas:g} vueltas): usá la rosca "
-                                 "cosmética o un tamaño más grande.")
+        raise geo.ErrorGeometria(f"⚠ {vueltas:g} vueltas: mucho para rosca modelada.")
     if paso > largo + 1e-6:
         raise geo.ErrorGeometria(f"Paso {paso:g} mm > largo roscado {largo:g} mm.")
     perfil = _perfil_clase(datos, clase, info["interna"], holgura, tabla)
@@ -3619,7 +3604,7 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
             hecho = geo.unificar_caras(hecho)   # B-461: junta las caras que partió `_en_tramos`
             if geo.es_valida(hecho) and 0.2 * surco < base - geo.volumen_exacto(hecho, _EPS_ROSCA) <= 1.01 * surco:
                 return hecho
-    raise geo.ErrorGeometria("El kernel no pudo cortar la rosca en el cuerpo.")
+    raise geo.ErrorGeometria("⚠ El kernel no pudo cortar la rosca.")
 
 
 def _rosca_directa(cuerpo, o, z, z0, largo, radio, datos, perfil, tramo_torno):
@@ -3840,14 +3825,13 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
         raise geo.ErrorGeometria(f"Tipo de bobina desconocido: {tipo}")
     espiral = tipo == "espiral"
     if espiral and (revoluciones is None or paso is None or altura is not None):
-        raise geo.ErrorGeometria("La espiral necesita revoluciones y paso, sin altura.")
+        raise geo.ErrorGeometria("⚠ La espiral necesita revoluciones y paso.")
     if sum(v is not None for v in (revoluciones, altura, paso)) != 2:
-        raise geo.ErrorGeometria("Dá exactamente dos de: revoluciones, altura y paso.")
+        raise geo.ErrorGeometria("⚠ Dá dos de: revoluciones, altura y paso.")
     if revoluciones is not None and revoluciones <= 0:     # antes de dividir por ellas
-        raise geo.ErrorGeometria(f"Las revoluciones de la bobina tienen que ser mayores que cero; recibió "
-                                 f"{revoluciones:g}.")
+        raise geo.ErrorGeometria(f"⚠ Revoluciones {revoluciones:g}: debe ser mayor que 0.")
     if paso is not None and paso <= 0:
-        raise geo.ErrorGeometria(f"El paso de la bobina tiene que ser mayor que cero; recibió {paso:g} mm.")
+        raise geo.ErrorGeometria(f"⚠ Paso {paso:g}: debe ser mayor que 0.")
     if revoluciones is None:
         revoluciones = altura / paso
     elif altura is None:
@@ -3855,7 +3839,7 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
     else:
         paso = altura / revoluciones
     if diametro <= 0 or tamano_seccion <= 0 or revoluciones <= 0 or altura <= 0:
-        raise geo.ErrorGeometria("Diámetro, sección, revoluciones y altura deben ser positivos.")
+        raise geo.ErrorGeometria("⚠ Todos los valores de la bobina: positivos.")
     z = _unit(eje, "eje de la bobina")
     x = _perpendicular(z) if eje_x is None else _unit(np.asarray(eje_x, float) - z * float(np.asarray(eje_x) @ z))
     o = np.asarray(base_punto, float)
@@ -3867,12 +3851,12 @@ def bobina(base_punto, eje, *, diametro, revoluciones=None, altura=None, paso=No
     if r_c is None:
         raise geo.ErrorGeometria(f"Posición de sección desconocida: {posicion_seccion}")
     if r_c + min(radiales) <= 0:
-        raise geo.ErrorGeometria("La sección no entra: cruza el eje de la bobina.")
+        raise geo.ErrorGeometria("⚠ La sección cruza el eje de la bobina.")
     if not espiral and r_c + altura * math.tan(math.radians(angulo)) + min(radiales) <= 0:   # el cono angosta el radio
-        raise geo.ErrorGeometria("Con ese ángulo la bobina llega al eje antes del final: bajá el ángulo o la altura.")
+        raise geo.ErrorGeometria("⚠ Bajá el ángulo: la bobina llega al eje.")
     ancho = max(radiales) - min(radiales) if espiral else max(axiales) - min(axiales)
     if paso <= ancho + 1e-6:
-        raise geo.ErrorGeometria("El paso es menor que la sección: las espiras se superpondrían.")
+        raise geo.ErrorGeometria("⚠ El paso es menor que la sección: se pisan.")
     centro = o + x * r_c
     if pts is None:
         perfil = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(
@@ -3910,7 +3894,7 @@ def tuberia(ruta, *, seccion="circular", tamano, hueca=False, espesor=0.0, dista
     pared (paredes paralelas a las exteriores)."""
     distancia, distancia2 = float(distancia), float(distancia2)
     if not math.isfinite(distancia) or not math.isfinite(distancia2) or not 0 <= distancia2 < min(distancia, 1.0):
-        raise geo.ErrorGeometria("Las distancias deben ser finitas: el inicio debe estar entre cero y el fin de la ruta.")
+        raise geo.ErrorGeometria("⚠ Distancia finita: inicio entre 0 y el fin.")
     w = _recortar_alambre(_alambre(ruta), distancia, distancia2)
     if tamano <= 0:
         raise geo.ErrorGeometria("El tamaño de la sección debe ser positivo.")
@@ -3924,7 +3908,7 @@ def tuberia(ruta, *, seccion="circular", tamano, hueca=False, espesor=0.0, dista
         lados = {"circular": None, "cuadrada": 4, "triangular": 3}[seccion]
         interior = radio - espesor / (1.0 if lados is None else math.cos(math.pi / lados))
         if espesor <= 0 or interior <= 1e-6:
-            raise geo.ErrorGeometria("El espesor de la tubería hueca debe ser positivo y menor que la sección.")
+            raise geo.ErrorGeometria("⚠ Espesor del tubo: mayor que 0 y menor.")
         forma = geo.booleano(forma, _barrido_alambre(_seccion_tuberia(seccion, p0, u, v, interior), *args), "cortar")
     return _validar(forma, "Tubería")
 
@@ -3949,8 +3933,7 @@ def _cantidad(n, simetrico, total=False):
 
 def _exigir_instancias(total):
     if total > INSTANCIAS_MAXIMAS:
-        raise geo.ErrorGeometria(f"Un patrón admite como máximo {_miles(INSTANCIAS_MAXIMAS)} instancias (el original "
-                                 f"cuenta); pediste {_miles(total)}.")
+        raise geo.ErrorGeometria(f"⚠ Máximo {_miles(INSTANCIAS_MAXIMAS)} instancias: pediste {_miles(total)}.")
 
 
 def unir_instancias(formas):
@@ -3978,7 +3961,7 @@ def unir_instancias(formas):
     except Exception:  # noqa: BLE001 — OCC lanza excepciones sin texto en los casos que no resuelve
         hecho = False
     if not hecho:
-        raise geo.ErrorGeometria("La unión de las instancias del patrón falló en el kernel.")
+        raise geo.ErrorGeometria("⚠ El kernel no unió las copias del patrón.")
     return geo.unificar_caras(op.Shape())
 
 
@@ -4176,10 +4159,10 @@ def _id_rectangular(s):
     recetas viejas: la copia i de la primera fila, (i, 0)) o un par [i, j]."""
     if isinstance(s, (tuple, list)):
         if len(s) != 2 or any(isinstance(x, bool) or int(x) != x for x in s):
-            raise geo.ErrorGeometria(f"Una copia a suprimir del patrón rectangular es un entero i o un par [i, j]: llegó {s!r}.")
+            raise geo.ErrorGeometria("⚠ Copia a suprimir: entero i o par [i, j].")
         return int(s[0]), int(s[1])
     if isinstance(s, bool) or int(s) != s:
-        raise geo.ErrorGeometria(f"Una copia a suprimir del patrón rectangular es un entero i o un par [i, j]: llegó {s!r}.")
+        raise geo.ErrorGeometria("⚠ Copia a suprimir: entero i o par [i, j].")
     return int(s), 0
 
 
@@ -4207,7 +4190,7 @@ def instancias_rectangulares(dir1, n1, d1, dir2=None, n2=1, d2=0.0, *, distribuc
         exigir_no_paralelas(u1, u2)
     for n, d, que in ((n1, d1, "1"), (n2, d2, "2")):
         if (que == "1" or dir2 is not None) and int(n) > 1 and abs(d) < 1e-9:
-            raise geo.ErrorGeometria(f"La distancia {que} del patrón no puede ser cero: las copias quedarían una sobre otra.")
+            raise geo.ErrorGeometria(f"⚠ Distancia {que}: no puede ser cero.")
     s1 = _paso(int(n1), d1, distribucion, total and simetrico1)
     s2 = _paso(int(n2), d2, distribucion, total and simetrico2) if dir2 is not None else 0.0
     fuera = {_id_rectangular(s) for s in suprimir} - {(0, 0)}
@@ -4324,10 +4307,10 @@ def instancias_en_ruta(ruta, n, distancia, *, orientacion="identica", inicio=0.0
         raise geo.ErrorGeometria(f"Orientación desconocida: {orientacion}")
     giro = float(giro)
     if not math.isfinite(giro):
-        raise geo.ErrorGeometria("El giro del patrón en ruta tiene que ser un ángulo finito.")
+        raise geo.ErrorGeometria("⚠ Giro del patrón en ruta: ángulo finito.")
     _exigir_instancias(_cantidad(n, simetrico))
     if int(n) > 1 and abs(distancia) < 1e-9:
-        raise geo.ErrorGeometria("La distancia del patrón en ruta no puede ser cero: las copias quedarían una sobre otra.")
+        raise geo.ErrorGeometria("⚠ Distancia 0 en ruta: las copias se pisan.")
     w = _alambre(ruta)
     largo, cerrada, s0, paso = recorrido_ruta(ruta, n, distancia, inicio=inicio, distribucion=distribucion)
     marcos = _marcos(w, 257)
@@ -4384,11 +4367,11 @@ def instancias_en_puntos(puntos, referencia=(0.0, 0.0, 0.0), *, suprimir=()):
     ref = np.asarray(referencia, float).reshape(-1)
     pts = [np.asarray(p, float).reshape(-1) for p in puntos]
     if ref.size != 3 or not np.all(np.isfinite(ref)):
-        raise geo.ErrorGeometria("El punto de referencia del patrón tiene que ser [x, y, z] con números finitos.")
+        raise geo.ErrorGeometria("⚠ Referencia del patrón: 3 números finitos.")
     if any(p.size != 3 or not np.all(np.isfinite(p)) for p in pts):
-        raise geo.ErrorGeometria("Cada punto del patrón tiene que ser [x, y, z] con números finitos.")
+        raise geo.ErrorGeometria("⚠ Cada punto del patrón: 3 números finitos.")
     if not pts:
-        raise geo.ErrorGeometria("El patrón en puntos necesita al menos un punto.")
+        raise geo.ErrorGeometria("⚠ El patrón en puntos necesita un punto.")
     _exigir_instancias(len(pts) + 1)
     fuera = {int(i) for i in suprimir} - {0}
     usados = [ref]
@@ -4434,11 +4417,11 @@ def componer_transformaciones(listas):
     repetir instancias iguales. Como máximo INSTANCIAS_MAXIMAS (se controla antes de componer)."""
     listas = [list(lista) for lista in listas]
     if not listas:
-        raise geo.ErrorGeometria("La multitransformación necesita al menos una transformación.")
+        raise geo.ErrorGeometria("⚠ Multitransformación sin transformaciones.")
     total = 1
     for lista in listas:
         if not lista:
-            raise geo.ErrorGeometria("Una transformación de la lista no dejó ninguna instancia.")
+            raise geo.ErrorGeometria("⚠ Una transformación no dejó instancias.")
         total *= len(lista)
     _exigir_instancias(total)
     salida = [_identidad()]
@@ -4513,7 +4496,7 @@ def engrosar(caras_o_cascaron, espesor, *, direccion="un_lado"):
         mo = BRepOffsetAPI_MakeOffsetShape()
         mo.PerformByJoin(lamina, -espesor / 2, 1e-6, BRepOffset_Skin, False, False, GeomAbs_Intersection)
         if not mo.IsDone():
-            raise geo.ErrorGeometria("No se pudo desfasar la superficie para el engrosado simétrico.")
+            raise geo.ErrorGeometria("⚠ No se pudo engrosar de forma simétrica.")
         lamina = mo.Shape()
     elif direccion != "un_lado":
         raise geo.ErrorGeometria(f"Dirección de engrosado desconocida: {direccion}")
@@ -4533,7 +4516,7 @@ def relleno_contorno_celdas(herramientas, *, tamano_plano=1e3):
     mv.SetIntersect(True)
     mv.Perform()
     if mv.HasErrors():
-        raise geo.ErrorGeometria("No se pudieron calcular las celdas del relleno de contorno.")
+        raise geo.ErrorGeometria("⚠ No se pudieron calcular celdas del relleno.")
     celdas = [{"solido": s, "centroide": tuple(round(c, 6) for c in geo.centro_masa(s)), "volumen": geo.volumen(s)}
               for s in geo.solidos(mv.Shape())]
     return sorted(celdas, key=lambda c: c["centroide"])
@@ -4604,7 +4587,7 @@ def revolver_hasta(caras, punto_eje, dir_eje, objeto):
     if tipo == "punto":
         rel = np.asarray(dato, float) - punto
         if np.linalg.norm(rel - d * (rel @ d)) < 1e-9:
-            raise geo.ErrorGeometria("El vértice está sobre el eje de revolución: no define un ángulo.")
+            raise geo.ErrorGeometria("⚠ El vértice está sobre el eje: sin ángulo.")
         angulo = math.atan2(float(rel @ e2), float(rel @ e1)) % (2 * math.pi)
     elif tipo == "plano":
         n = _unit(dato.normal)
@@ -4633,7 +4616,7 @@ def revolver_hasta(caras, punto_eje, dir_eje, objeto):
     else:
         raise geo.ErrorGeometria(f"Objeto de revolución desconocido: {tipo}")
     if angulo < 1e-7:
-        raise geo.ErrorGeometria("El objeto está en el mismo plano que el perfil: elegí uno que esté a un ángulo.")
+        raise geo.ErrorGeometria("⚠ Elegí un objeto fuera del plano del perfil.")
     forma = geo.revolver(caras, punto, d, math.degrees(min(angulo, 2 * math.pi)))
     if recorte is not None:
         plano, lado = recorte
@@ -4686,7 +4669,7 @@ def marco_ortonormal(z=None, x=None, y=None):
     b = np.asarray(v2, float)
     b = b - a * (b @ a)
     if np.linalg.norm(b) < 1e-9 * max(1.0, np.linalg.norm(v2)):
-        raise geo.ErrorGeometria("Los dos ejes de la orientación son paralelos: elegí dos distintos.")
+        raise geo.ErrorGeometria("⚠ Los dos ejes son paralelos: elegí otros.")
     b = b / np.linalg.norm(b)
     c = np.cross(a, b)
     ejes = {n1: a, n2: b}
@@ -4782,7 +4765,7 @@ def solido_envolvente(formas, *, tipo="caja", margen=0.0, eje="z", marco=None, e
         return exterior
     pared = radio / 10 if espesor_tubo is None else float(espesor_tubo)
     if not 0 < pared < radio:
-        raise geo.ErrorGeometria(f"La pared del tubo tiene que estar entre 0 y el radio ({radio:g} mm).")
+        raise geo.ErrorGeometria(f"⚠ La pared del tubo va de 0 a {radio:g} mm.")
     hueco = geo.cilindro(radio - pared, alto + 2.0, base=tuple(base - z), eje=tuple(z))
     return geo.booleano(exterior, hueco, "cortar")
 
@@ -4816,7 +4799,7 @@ def volumen_fluido(solidos, tapas=(), *, tipo="interno", forma_externa="caja", m
     mv.SetIntersect(True)
     mv.Perform()
     if mv.HasErrors():
-        raise geo.ErrorGeometria("No se pudo calcular el volumen de fluido del diseño.")
+        raise geo.ErrorGeometria("⚠ No se pudo calcular el volumen de fluido.")
     celdas = geo.solidos(mv.Shape())
     libres = [c for c in celdas if not _es_material(c, material)]
     if tipo == "interno":
@@ -4855,13 +4838,13 @@ def saliente(cuerpo, punto, direccion, *, diametro_exterior, diametro_agujero, a
     la de la columna si no se indica). Devuelve el cuerpo resultante."""
     d = _unit(direccion, "dirección del saliente")
     if diametro_agujero <= 0 or diametro_exterior <= diametro_agujero:
-        raise geo.ErrorGeometria("El diámetro exterior del saliente debe superar al del agujero.")
+        raise geo.ErrorGeometria("⚠ El diámetro exterior no supera al agujero.")
     disco = _cara(BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(
         gp_Circ(gp_Ax2(_pnt(punto), _gdir(d)), diametro_exterior / 2)).Edge()).Wire())
     if altura is None:
         _, hi = _caja_proyectada(cuerpo, punto, d)
         if hi <= 0:
-            raise geo.ErrorGeometria("El cuerpo no está en la dirección del saliente.")
+            raise geo.ErrorGeometria("⚠ El cuerpo no está del lado del saliente.")
         columna = _recortar_hasta(_prisma(disco, d, hi + _MARGEN, angulo_desmoldeo), [disco], cuerpo,
                                   "cuerpo", None, punto)
         if not geo.se_tocan(columna, cuerpo, 1e-4):
@@ -4881,9 +4864,9 @@ def _validar_aristas_labio(cuerpo, aristas):
     caras = [TopoDS.Face(c) for c in _explorar(cuerpo, TopAbs_FACE)]
     for arista in _aristas_de(aristas):
         if _longitud(arista) <= 1e-9:
-            raise geo.ErrorGeometria("La arista del labio no tiene largo: elegí una arista del borde de una pared.")
+            raise geo.ErrorGeometria("⚠ Arista sin largo: elegí un borde.")
         if any(analizador.IsSeam(arista, cara) for cara in caras):
-            raise geo.ErrorGeometria("La arista del labio es de costura: elegí una arista del borde de una pared.")
+            raise geo.ErrorGeometria("⚠ Arista de costura: elegí un borde.")
 
 
 def _marco_labio(cuerpo, aristas, tirar, ancho, alto):
@@ -4918,7 +4901,7 @@ def labio_ranura(cuerpo, aristas, direccion_tirado, *, tipo="labio", ancho, alto
     if tipo not in ("labio", "ranura"):
         raise geo.ErrorGeometria(f"Tipo desconocido: {tipo}")
     if ancho <= 0 or alto <= 0 or holgura < 0:
-        raise geo.ErrorGeometria("Ancho y alto deben ser positivos y la holgura no negativa.")
+        raise geo.ErrorGeometria("⚠ Ancho y alto positivos, holgura 0 o más.")
     _validar_aristas_labio(cuerpo, aristas)
     tirar = _unit(direccion_tirado, "dirección de tirado")
     w, p0, m = _marco_labio(cuerpo, aristas, tirar, ancho, alto)
@@ -4934,7 +4917,7 @@ def labio_y_ranura(cuerpo_labio, cuerpo_ranura, aristas, direccion_tirado, *, an
     holgura agranda el ancho y el alto. Los dos cuerpos tienen que tocarse y las aristas tienen que estar alineadas
     (Fusion: «las caras normales entre sí»). Devuelve {"labio": forma, "ranura": forma}."""
     if ancho <= 0 or alto <= 0 or holgura < 0:
-        raise geo.ErrorGeometria("Ancho y alto deben ser positivos y la holgura no negativa.")
+        raise geo.ErrorGeometria("⚠ Ancho y alto positivos, holgura 0 o más.")
     _validar_aristas_labio(cuerpo_labio, aristas)
     tirar = _unit(direccion_tirado, "dirección de tirado")
     w, p0, m = _marco_labio(cuerpo_labio, aristas, tirar, ancho, alto)
@@ -4968,17 +4951,16 @@ def apoyo(cuerpos, perfiles, *, direccion, invertir=False, desfase=0.0, grosor, 
     if extension not in ("todo", "objeto"):
         raise geo.ErrorGeometria(f"Extensión desconocida: {extension}")
     if any(geo.plano_de_cara(cara) is None for cara in caras_superiores):
-        raise geo.ErrorGeometria("Las caras superiores del apoyo tienen que ser planas.")
+        raise geo.ErrorGeometria("⚠ Caras superiores del apoyo no son planas.")
     if not lados:
-        raise geo.ErrorGeometria("El apoyo necesita al menos la distancia de los lados 1 o 2.")
+        raise geo.ErrorGeometria("⚠ El apoyo necesita la distancia de un lado.")
     if any(dist < 0 for _, dist in lados):
-        raise geo.ErrorGeometria("Las distancias de los lados del apoyo no pueden ser negativas.")
+        raise geo.ErrorGeometria("⚠ Distancias de lado negativas en el apoyo.")
     if any(signo == -1 for signo, _ in lados) and not any(signo == 1 for signo, _ in lados):
-        raise geo.ErrorGeometria("El apoyo necesita material del lado 1: el lado 2 es el del perfil.")
+        raise geo.ErrorGeometria("⚠ El apoyo necesita material del lado 1.")
     suma = sum(dist for _, dist in lados)
     if not abs(suma - grosor) <= 1e-6 * max(grosor, 1.0):
-        raise geo.ErrorGeometria(f"El grosor del apoyo tiene que ser {suma:g} mm: "
-                                 "la suma de los lados 1 y 2.")
+        raise geo.ErrorGeometria(f"⚠ Grosor del apoyo: {suma:g} mm (suma lados).")
     compuestos = cuerpos if isinstance(cuerpos, (list, tuple)) else [cuerpos]
     solidos = [c if c.ShapeType() == TopAbs_SOLID else TopoDS.Solid(c)
                for c in (list(_explorar(geo.compuesto(compuestos), TopAbs_SOLID)) if cuerpos else [])]
@@ -4987,13 +4969,13 @@ def apoyo(cuerpos, perfiles, *, direccion, invertir=False, desfase=0.0, grosor, 
     cuerpos_forma = _unir(solidos)
     caras = [TopoDS.Face(f) for perfil in perfiles for f in _explorar(perfil, TopAbs_FACE)]
     if not caras:
-        raise geo.ErrorGeometria("El apoyo necesita perfiles cerrados de boceto o caras.")
+        raise geo.ErrorGeometria("⚠ Apoyo: perfiles cerrados de boceto o caras.")
     centro = np.mean([geo.centro_masa(f, superficie=True) for f in caras], axis=0)
     inicios = [_trasladar(f, d * desfase) for f in caras] if desfase else caras
     cerca = min(solidos, key=lambda s: min(BRepExtrema_DistShapeShape(i, s).Value() for i in inicios))
     lo, hi = _caja_proyectada(cerca, centro, d)
     if not lo <= desfase <= hi:
-        raise geo.ErrorGeometria("El perfil del apoyo tiene que quedar dentro del cuerpo (ni por encima ni por debajo).")
+        raise geo.ErrorGeometria("⚠ El perfil del apoyo queda fuera del cuerpo.")
     # La pared se angosta hacia la cara final (donde apoya el cuerpo): en `_prisma` la conicidad positiva ensancha
     # desde el perfil, así que se pasa cambiada de signo. `invertir` es el espejo del abanico.
     if invertir:
@@ -5022,10 +5004,10 @@ def apoyo(cuerpos, perfiles, *, direccion, invertir=False, desfase=0.0, grosor, 
         columnas = [_prisma(TopoDS.Face(cara), -d, arriba - abajo + 2.0) for cara in caras_superiores]
         acotado = geo.booleano(herramienta, _unir(columnas), "intersecar")
         if geo.esta_vacia(acotado):
-            raise geo.ErrorGeometria("El apoyo no pasa por las caras superiores elegidas: están fuera del perfil.")
+            raise geo.ErrorGeometria("⚠ Las caras elegidas quedan fuera del perfil.")
         herramienta = _validar(acotado, "Apoyo")
     if geo.esta_vacia(herramienta) or BRepExtrema_DistShapeShape(herramienta, cuerpos_forma).Value() > 1e-4:
-        raise geo.ErrorGeometria("El apoyo tiene que tocar el cuerpo: el perfil es un agujero dentro de la pared.")
+        raise geo.ErrorGeometria("⚠ El apoyo no toca el cuerpo.")
     return _validar(herramienta, "Apoyo")
 
 
@@ -5061,7 +5043,7 @@ def grampa(cuerpo_gancho, cuerpo_ranura, marcos, *, tipo="paralelo", largo, anch
     if extension not in ("siguiente", "distancia"):
         raise geo.ErrorGeometria(f"Extensión desconocida: {extension}")
     if extension == "distancia" and distancia is None:
-        raise geo.ErrorGeometria("La extensión por distancia necesita la distancia de la base.")
+        raise geo.ErrorGeometria("⚠ Falta la distancia de la extensión.")
     if min(largo, ancho, espesor, alto_gancho) <= 0 or (distancia is not None and distancia < 0):
         raise geo.ErrorGeometria("Las medidas de la grampa deben ser positivas.")
     if holgura < 0:
@@ -5103,7 +5085,7 @@ def grampa(cuerpo_gancho, cuerpo_ranura, marcos, *, tipo="paralelo", largo, anch
         ranura = _validar(_unir(partes_r), "Grampa")
         recortado = geo.booleano(cuerpo_ranura, ranura, "cortar")
         if geo.volumen(cuerpo_ranura) - geo.volumen(recortado) <= 1e-9:
-            raise geo.ErrorGeometria("La ranura no corta el cuerpo: el gancho no llega hasta él.")
+            raise geo.ErrorGeometria("⚠ El gancho no llega al cuerpo.")
         salida["ranura"] = _validar(_unificar(recortado), "Grampa")
     else:
         salida["ranura"] = None

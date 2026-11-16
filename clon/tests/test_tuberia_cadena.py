@@ -115,7 +115,7 @@ def test_limites_invalidos(fin, inicio):
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
     from OCP.gp import gp_Pnt
     ruta = BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(20, 0, 0)).Edge()
-    with pytest.raises(geo.ErrorGeometria, match="distancias"):
+    with pytest.raises(geo.ErrorGeometria, match="Distancia finita"):
         sc.tuberia(ruta, tamano=2, distancia=fin, distancia2=inicio)
 
 

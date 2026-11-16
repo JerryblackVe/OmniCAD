@@ -109,7 +109,7 @@ def test_barrido_rechaza_torsion_de_mas_de_10_vueltas():
     sc.validar_torsion(3600.0)
     sc.validar_torsion(-3600.0)
     for grados in (3601.0, -3601.0, math.nan, math.inf):
-        with pytest.raises(geo.ErrorGeometria, match=r"3600° \(10 vueltas\)"):
+        with pytest.raises(geo.ErrorGeometria, match=r"hasta ±3600°"):
             sc.barrer([rectangulo()], RUTA, torsion=grados)
 
 
@@ -174,7 +174,7 @@ def test_barrido_con_torsion_rechaza_rutas_con_esquinas_antes_de_calcular(monkey
     90° o de 10°), o tiraba abajo el proceso (3600°); con 0,5° el plano anda."""
     modos = _sin_barrer(monkeypatch)
     for grados in (90.0, 10.0, 1.0):
-        with pytest.raises(geo.ErrorGeometria, match=r"la ruta quiebra .* \(máx\. 0,5°\)"):
+        with pytest.raises(geo.ErrorGeometria, match=r"quiebre .* \(máx\. 0,5°\)"):
             sc.barrer([rectangulo()], _quiebre(grados), torsion=90.0)
     assert modos == []                                  # no calculó nada
     assert sc.barrer([rectangulo()], _quiebre(1.0), torsion=0.0) == "barrido"     # sin torsión las esquinas valen
@@ -194,7 +194,7 @@ def test_barrido_con_torsion_en_ruta_cerrada_admite_1800(monkeypatch):
                                                           gp_Pnt(60, 0, 0)).Value()).Edge(),
                BRepBuilderAPI_MakeEdge(GC_MakeArcOfCircle(gp_Pnt(60, 0, 0), gp_Pnt(30 + 30 * r, 0, -30 * r),
                                                           gp_Pnt(0, 0, 0)).Value()).Edge()]
-    with pytest.raises(geo.ErrorGeometria, match=r"ruta cerrada .* como máximo ±1800° \(5 vueltas\)"):
+    with pytest.raises(geo.ErrorGeometria, match=r"Ruta cerrada: torsión admite ±1800°"):
         sc.barrer([rectangulo()], circulo, torsion=1801.0)
     assert modos == []
     assert sc.barrer([rectangulo()], circulo, torsion=1800.0) == "barrido" and modos == [False]
