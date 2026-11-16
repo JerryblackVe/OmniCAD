@@ -557,7 +557,6 @@ class Visor3D(QOpenGLWidget):
         self._lazo = None                  # puntos de la selección de forma libre mientras se arrastra
         self._bocetos = np.zeros((0, 3), np.float32)
         self._bocetos_de, self._ver_bocetos = (), None   # de qué bocetos y visibilidad salen los segmentos de arriba
-        self._resalte = np.zeros((0, 3), np.float32)
         self._perfiles = np.zeros((0, 3), np.float32)
         self.bocetos_libres = frozenset()          # bocetos que ningún paso usa: la ventana los pone
         self._perfiles_hechos = np.zeros((0, 3), np.float32)      # relleno de esos bocetos ya terminados
@@ -917,12 +916,6 @@ class Visor3D(QOpenGLWidget):
         """Triángulos de los cuerpos que se dibujan en el cuadro actual (con el detalle a la distancia)."""
         self._elegir_niveles()
         return sum(len(self._malla_dibujo(i, m)[0]) for i, m in enumerate(self._mallas)) // 3
-
-    def set_resaltado(self, caras):
-        caras = list(caras or [])
-        self._resalte = (np.concatenate([geo.teselar(c)[0] for c in caras]) if caras
-                         else np.zeros((0, 3), np.float32))
-        self.update()
 
     def set_perfiles(self, caras):
         """Sombreado azul de los perfiles cerrados del boceto activo (como "Mostrar perfil" de Fusion)."""
@@ -2553,7 +2546,6 @@ class Visor3D(QOpenGLWidget):
             self._triangulos_planos(self._perfiles_hechos, AZUL_PERFIL, 0.30)
         if self.plano_boceto is not None and self.opciones_boceto.get("perfil", True):
             self._triangulos_planos(self._perfiles, AZUL_PERFIL, 0.30)
-        self._triangulos_planos(self._resalte, (1.0, 0.55, 0.1), 0.55)
         if self._hover and self._hover[0] == "cara":
             self._triangulos_planos(self._hover[1], estilo_asas.rgb("resaltado"), 0.45 * estilo_asas.opacidad("resaltado"))
         self._construccion_usuario()
