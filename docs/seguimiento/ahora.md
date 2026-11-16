@@ -16,7 +16,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E5 | — | B-593 integrado (5e91b41). Libre hasta el lote de las 13 h |
 | E6 | B-598 | Extruir «Hasta la cara» de 15 letras: previa de más de 4 min (caso LINCES). P-99/B-546 Parcial integrados: 04bf7a8. Después FL-2/FL-3 |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
-| E8 | P-169 (3) | La cinta muestra «No disponible: <motivo>» en los 11 ítems grises sin comando (sección A de la auditoría de deshabilitar); Sonnet medio |
+| E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
 | E9 | — | P-166 integrado (5e91b41). Libre hasta el lote de las 13 h |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
