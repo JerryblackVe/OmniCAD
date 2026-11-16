@@ -337,8 +337,8 @@ _POLOS_EN_HIJO = 2000    # FL-15: un barrido con empalme suma ~600 polos (0,5 s)
 
 
 def _pocos_polos(forma):
-    """Todas las caras libres son B-spline (o el desfase de una, como deja el vaciado) y entre todas no pasan de
-    `_POLOS_EN_HIJO` polos."""
+    """Todas las caras libres son B-spline (o el desfase de una, como deja el vaciado), ninguna reglada, y entre todas no
+    pasan de `_POLOS_EN_HIJO` polos."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_BSplineSurface, GeomAbs_OffsetSurface
     total = 0
@@ -351,6 +351,8 @@ def _pocos_polos(forma):
         if sup.GetType() != GeomAbs_BSplineSurface:
             return False
         b = sup.BSpline()
+        if min(b.NbUPoles(), b.NbVPoles()) == 2:
+            return False        # B-570: reglada, como la hélice de una rosca modelada (B-386): BOPAlgo puede no terminar
         total += b.NbUPoles() * b.NbVPoles()
         if total > _POLOS_EN_HIJO:
             return False

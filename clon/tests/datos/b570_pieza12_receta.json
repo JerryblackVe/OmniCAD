@@ -1,0 +1,1124 @@
+{
+ "version_receta": 1,
+ "nombre": "pieza12",
+ "parametros": [
+  {
+   "nombre": "largo",
+   "expresion": "100 mm",
+   "tipo": "longitud",
+   "comentario": ""
+  },
+  {
+   "nombre": "espesor",
+   "expresion": "20 mm",
+   "tipo": "longitud",
+   "comentario": ""
+  },
+  {
+   "nombre": "radio_e",
+   "expresion": "5 mm",
+   "tipo": "longitud",
+   "comentario": ""
+  },
+  {
+   "nombre": "d1",
+   "expresion": "espesor",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op2",
+   "clave": "distancia"
+  },
+  {
+   "nombre": "d2",
+   "expresion": "0.0",
+   "tipo": "angulo",
+   "comentario": "",
+   "op": "op2",
+   "clave": "conicidad"
+  },
+  {
+   "nombre": "d3",
+   "expresion": "radio_e",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op3",
+   "clave": "radio"
+  },
+  {
+   "nombre": "d4",
+   "expresion": "2 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op3",
+   "clave": "radio_fin"
+  },
+  {
+   "nombre": "d5",
+   "expresion": "1 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op3",
+   "clave": "cuerda"
+  },
+  {
+   "nombre": "d6",
+   "expresion": "1 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op3",
+   "clave": "radio2"
+  },
+  {
+   "nombre": "d7",
+   "expresion": "2 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op3",
+   "clave": "setback"
+  },
+  {
+   "nombre": "d8",
+   "expresion": "1.0",
+   "tipo": "escalar",
+   "comentario": "",
+   "op": "op3",
+   "clave": "peso_tangencia"
+  },
+  {
+   "nombre": "d9",
+   "expresion": "10.0",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op4",
+   "clave": "diametro"
+  },
+  {
+   "nombre": "d10",
+   "expresion": "10.0",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op4",
+   "clave": "profundidad"
+  },
+  {
+   "nombre": "d11",
+   "expresion": "118 deg",
+   "tipo": "angulo",
+   "comentario": "",
+   "op": "op4",
+   "clave": "angulo_punta"
+  },
+  {
+   "nombre": "d12",
+   "expresion": "10 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op4",
+   "clave": "diam_abocardado"
+  },
+  {
+   "nombre": "d13",
+   "expresion": "4 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op4",
+   "clave": "prof_abocardado"
+  },
+  {
+   "nombre": "d14",
+   "expresion": "12 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op4",
+   "clave": "diam_avellanado"
+  },
+  {
+   "nombre": "d15",
+   "expresion": "90 deg",
+   "tipo": "angulo",
+   "comentario": "",
+   "op": "op4",
+   "clave": "angulo_avellanado"
+  },
+  {
+   "nombre": "d16",
+   "expresion": "0.0",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op4",
+   "clave": "holgura_3d"
+  },
+  {
+   "nombre": "d17",
+   "expresion": "0 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op4",
+   "clave": "desfase_hasta"
+  },
+  {
+   "nombre": "d18",
+   "expresion": "10 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op4",
+   "clave": "ref_distancia1"
+  },
+  {
+   "nombre": "d19",
+   "expresion": "10 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op4",
+   "clave": "ref_distancia2"
+  },
+  {
+   "nombre": "d20",
+   "expresion": "6.0",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op5",
+   "clave": "diametro"
+  },
+  {
+   "nombre": "d21",
+   "expresion": "15.0",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op5",
+   "clave": "profundidad"
+  },
+  {
+   "nombre": "d22",
+   "expresion": "118 deg",
+   "tipo": "angulo",
+   "comentario": "",
+   "op": "op5",
+   "clave": "angulo_punta"
+  },
+  {
+   "nombre": "d23",
+   "expresion": "10 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op5",
+   "clave": "diam_abocardado"
+  },
+  {
+   "nombre": "d24",
+   "expresion": "4 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op5",
+   "clave": "prof_abocardado"
+  },
+  {
+   "nombre": "d25",
+   "expresion": "12 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op5",
+   "clave": "diam_avellanado"
+  },
+  {
+   "nombre": "d26",
+   "expresion": "90 deg",
+   "tipo": "angulo",
+   "comentario": "",
+   "op": "op5",
+   "clave": "angulo_avellanado"
+  },
+  {
+   "nombre": "d27",
+   "expresion": "0.0",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op5",
+   "clave": "holgura_3d"
+  },
+  {
+   "nombre": "d28",
+   "expresion": "0 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op5",
+   "clave": "desfase_hasta"
+  },
+  {
+   "nombre": "d29",
+   "expresion": "10 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op5",
+   "clave": "ref_distancia1"
+  },
+  {
+   "nombre": "d30",
+   "expresion": "10 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op5",
+   "clave": "ref_distancia2"
+  },
+  {
+   "nombre": "d31",
+   "expresion": "10 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op7",
+   "clave": "distancia"
+  },
+  {
+   "nombre": "d32",
+   "expresion": "0.0",
+   "tipo": "angulo",
+   "comentario": "",
+   "op": "op7",
+   "clave": "conicidad"
+  },
+  {
+   "nombre": "d33",
+   "expresion": "1.0",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op8",
+   "clave": "distancia"
+  },
+  {
+   "nombre": "d34",
+   "expresion": "1 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op8",
+   "clave": "distancia2"
+  },
+  {
+   "nombre": "d35",
+   "expresion": "45 deg",
+   "tipo": "angulo",
+   "comentario": "",
+   "op": "op8",
+   "clave": "angulo"
+  },
+  {
+   "nombre": "d36",
+   "expresion": "20 mm",
+   "tipo": "longitud",
+   "comentario": "",
+   "op": "op10",
+   "clave": "distancia"
+  },
+  {
+   "nombre": "d37",
+   "expresion": "0.0",
+   "tipo": "angulo",
+   "comentario": "",
+   "op": "op10",
+   "clave": "conicidad"
+  }
+ ],
+ "marcador": 10,
+ "contador": 10,
+ "operaciones": [
+  {
+   "tipo": "boceto",
+   "id": "op1",
+   "nombre": "B1",
+   "suprimida": false,
+   "params": {
+    "plano": "XY",
+    "desplazamiento": "0",
+    "marco": null,
+    "cara": null,
+    "angulo_plano": "0 deg"
+   },
+   "boceto": {
+    "siguiente_id": 14,
+    "puntos": [
+     {
+      "id": 1,
+      "x": 0.0,
+      "y": 0.0
+     },
+     {
+      "id": 2,
+      "x": 100.0,
+      "y": 0.0
+     },
+     {
+      "id": 3,
+      "x": 100.0,
+      "y": 60.0
+     },
+     {
+      "id": 4,
+      "x": 0.0,
+      "y": 60.0
+     }
+    ],
+    "curvas": [
+     {
+      "tipo": "linea",
+      "id": 5,
+      "p1": 1,
+      "p2": 2,
+      "construccion": false
+     },
+     {
+      "tipo": "linea",
+      "id": 6,
+      "p1": 2,
+      "p2": 3,
+      "construccion": false
+     },
+     {
+      "tipo": "linea",
+      "id": 7,
+      "p1": 3,
+      "p2": 4,
+      "construccion": false
+     },
+     {
+      "tipo": "linea",
+      "id": 8,
+      "p1": 4,
+      "p2": 1,
+      "construccion": false
+     }
+    ],
+    "restricciones": [
+     {
+      "id": 9,
+      "tipo": "horizontal",
+      "entidades": [
+       5
+      ],
+      "datos": {}
+     },
+     {
+      "id": 10,
+      "tipo": "horizontal",
+      "entidades": [
+       7
+      ],
+      "datos": {}
+     },
+     {
+      "id": 11,
+      "tipo": "vertical",
+      "entidades": [
+       6
+      ],
+      "datos": {}
+     },
+     {
+      "id": 12,
+      "tipo": "vertical",
+      "entidades": [
+       8
+      ],
+      "datos": {}
+     },
+     {
+      "id": 13,
+      "tipo": "fijo",
+      "entidades": [
+       1
+      ],
+      "datos": {
+       "origen": true
+      }
+     }
+    ],
+    "cotas": []
+   }
+  },
+  {
+   "tipo": "extrusion",
+   "id": "op2",
+   "nombre": "Extrusión1",
+   "suprimida": false,
+   "params": {
+    "boceto": "op1",
+    "perfiles": [
+     {
+      "firma": [
+       5,
+       6,
+       7,
+       8
+      ],
+      "centroide": [
+       49.999999999999986,
+       29.999999999999996
+      ]
+     }
+    ],
+    "caras": [],
+    "tipo": "solida",
+    "inicio": "plano",
+    "desfase_inicio": "0 mm",
+    "inicio_objeto": null,
+    "direccion": "un_lado",
+    "medida": "mitad",
+    "extension": "distancia",
+    "distancia": "espesor",
+    "hasta": null,
+    "extension2": "distancia",
+    "distancia2": "10 mm",
+    "hasta2": null,
+    "conicidad": "0.0",
+    "conicidad2": "0.0",
+    "espesor": "",
+    "ubicacion": "lado1",
+    "invertir": null,
+    "hasta_modo": "cara",
+    "desfase_hasta": "0 mm",
+    "curvas": [],
+    "cadena": true,
+    "simetrica": false,
+    "operacion": "nuevo",
+    "objetivo": "",
+    "objetivos": []
+   }
+  },
+  {
+   "tipo": "empalme",
+   "id": "op3",
+   "nombre": "Empalme1",
+   "suprimida": false,
+   "params": {
+    "tipo": "empalme",
+    "aristas": [
+     {
+      "tipo": "arista",
+      "cuerpo": "op2.c1",
+      "firma": {
+       "geom": "linea",
+       "medio": [
+        0.0,
+        0.0,
+        10.0
+       ],
+       "largo": 20.0,
+       "extremos": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         20.0
+        ]
+       ],
+       "rel": [
+        0.0,
+        0.0,
+        0.5
+       ]
+      },
+      "sentido": 1,
+      "indice": 0,
+      "de": 12
+     },
+     {
+      "tipo": "arista",
+      "cuerpo": "op2.c1",
+      "firma": {
+       "geom": "linea",
+       "medio": [
+        100.0,
+        0.0,
+        10.0
+       ],
+       "largo": 20.0,
+       "extremos": [
+        [
+         100.0,
+         0.0,
+         0.0
+        ],
+        [
+         100.0,
+         0.0,
+         20.0
+        ]
+       ],
+       "rel": [
+        1.0,
+        0.0,
+        0.5
+       ]
+      },
+      "sentido": 1,
+      "indice": 1,
+      "de": 12
+     },
+     {
+      "tipo": "arista",
+      "cuerpo": "op2.c1",
+      "firma": {
+       "geom": "linea",
+       "medio": [
+        100.0,
+        60.0,
+        10.0
+       ],
+       "largo": 20.0,
+       "extremos": [
+        [
+         100.0,
+         60.0,
+         0.0
+        ],
+        [
+         100.0,
+         60.0,
+         20.0
+        ]
+       ],
+       "rel": [
+        1.0,
+        1.0,
+        0.5
+       ]
+      },
+      "sentido": 1,
+      "indice": 4,
+      "de": 12
+     },
+     {
+      "tipo": "arista",
+      "cuerpo": "op2.c1",
+      "firma": {
+       "geom": "linea",
+       "medio": [
+        0.0,
+        60.0,
+        10.0
+       ],
+       "largo": 20.0,
+       "extremos": [
+        [
+         0.0,
+         60.0,
+         0.0
+        ],
+        [
+         0.0,
+         60.0,
+         20.0
+        ]
+       ],
+       "rel": [
+        0.0,
+        1.0,
+        0.5
+       ]
+      },
+      "sentido": 1,
+      "indice": 7,
+      "de": 12
+     }
+    ],
+    "tipo_radio": "constante",
+    "radio": "radio_e",
+    "radio_fin": "2 mm",
+    "cuerda": "1 mm",
+    "radio2": "1 mm",
+    "continuidad": "g1",
+    "esquina": "bola",
+    "setback": "2 mm",
+    "cadena_tangente": true,
+    "caras_a": [],
+    "caras_b": [],
+    "regla": "todas",
+    "redondeos": "ambos",
+    "puntos_radio": [],
+    "conjuntos": [],
+    "central": null,
+    "laterales": [],
+    "peso_tangencia": "1.0"
+   }
+  },
+  {
+   "tipo": "agujero",
+   "id": "op4",
+   "nombre": "Agujero1",
+   "suprimida": false,
+   "params": {
+    "posiciones": [],
+    "puntos_cara": [
+     {
+      "cara": {
+       "tipo": "cara",
+       "cuerpo": "op2.c1",
+       "firma": {
+        "geom": "plano",
+        "centro": [
+         49.99999999999999,
+         30.0,
+         20.0
+        ],
+        "area": 5978.539816339744,
+        "normal": [
+         0.0,
+         0.0,
+         1.0
+        ],
+        "rel": [
+         0.49999999999999994,
+         0.5,
+         1.0
+        ]
+       },
+       "indice": 4,
+       "de": 10
+      },
+      "punto": [
+       20.0,
+       30.0,
+       20.0
+      ]
+     }
+    ],
+    "tipo": "simple",
+    "diametro": "10.0",
+    "extension": "todo",
+    "profundidad": "10.0",
+    "punta": "plana",
+    "angulo_punta": "118 deg",
+    "diam_abocardado": "10 mm",
+    "prof_abocardado": "4 mm",
+    "diam_avellanado": "12 mm",
+    "angulo_avellanado": "90 deg",
+    "rosca": "simple",
+    "designacion": "M6",
+    "invertir": false,
+    "objetivos": [
+     "op2.c1"
+    ],
+    "clase_rosca": "",
+    "holgura_3d": "0.0",
+    "otra_pieza": "metalica",
+    "mano": "derecha",
+    "ajuste": "normal",
+    "hasta": null,
+    "desfase_hasta": "0 mm",
+    "ref_cara": null,
+    "ref_aristas": [],
+    "ref_distancia1": "10 mm",
+    "ref_distancia2": "10 mm",
+    "version_rosca": 2
+   }
+  },
+  {
+   "tipo": "agujero",
+   "id": "op5",
+   "nombre": "Agujero2",
+   "suprimida": false,
+   "params": {
+    "posiciones": [],
+    "puntos_cara": [
+     {
+      "cara": {
+       "tipo": "cara",
+       "cuerpo": "op2.c1",
+       "firma": {
+        "geom": "plano",
+        "centro": [
+         50.399354998337685,
+         30.0,
+         20.0
+        ],
+        "area": 5899.999999999999,
+        "normal": [
+         0.0,
+         0.0,
+         1.0
+        ],
+        "rel": [
+         0.5039935499833769,
+         0.5,
+         1.0
+        ]
+       },
+       "indice": 4,
+       "de": 11
+      },
+      "punto": [
+       50.0,
+       30.0,
+       20.0
+      ]
+     }
+    ],
+    "tipo": "simple",
+    "diametro": "6.0",
+    "extension": "distancia",
+    "profundidad": "15.0",
+    "punta": "plana",
+    "angulo_punta": "118 deg",
+    "diam_abocardado": "10 mm",
+    "prof_abocardado": "4 mm",
+    "diam_avellanado": "12 mm",
+    "angulo_avellanado": "90 deg",
+    "rosca": "modelada",
+    "designacion": "M10x1.5",
+    "invertir": false,
+    "objetivos": [
+     "op2.c1"
+    ],
+    "clase_rosca": "auto",
+    "holgura_3d": "0.0",
+    "otra_pieza": "metalica",
+    "mano": "derecha",
+    "ajuste": "normal",
+    "hasta": null,
+    "desfase_hasta": "0 mm",
+    "ref_cara": null,
+    "ref_aristas": [],
+    "ref_distancia1": "10 mm",
+    "ref_distancia2": "10 mm",
+    "version_rosca": 2
+   }
+  },
+  {
+   "tipo": "boceto",
+   "id": "op6",
+   "nombre": "B2",
+   "suprimida": false,
+   "params": {
+    "plano": "cara",
+    "desplazamiento": "0",
+    "marco": {
+     "origen": [
+      0.0,
+      0.0,
+      20.0
+     ],
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "u": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "cara": {
+     "tipo": "cara",
+     "cuerpo": "op2.c1",
+     "firma": {
+      "geom": "plano",
+      "centro": [
+       50.40391743929705,
+       29.995209610263895,
+       20.0
+      ],
+      "area": 5833.358309567998,
+      "normal": [
+       0.0,
+       0.0,
+       1.0
+      ],
+      "rel": [
+       0.5040391743848922,
+       0.49992016017133106,
+       0.999999994829239
+      ]
+     },
+     "indice": 4,
+     "de": 27
+    },
+    "angulo_plano": "0 deg"
+   },
+   "boceto": {
+    "siguiente_id": 3,
+    "puntos": [
+     {
+      "id": 2,
+      "x": 80.0,
+      "y": 30.0
+     }
+    ],
+    "curvas": [
+     {
+      "tipo": "circulo",
+      "id": 1,
+      "centro": 2,
+      "radio": 10.0,
+      "construccion": false
+     }
+    ],
+    "restricciones": [],
+    "cotas": []
+   }
+  },
+  {
+   "tipo": "extrusion",
+   "id": "op7",
+   "nombre": "Extrusión2",
+   "suprimida": false,
+   "params": {
+    "boceto": "op6",
+    "perfiles": [
+     {
+      "firma": [
+       1
+      ],
+      "centroide": [
+       80.0,
+       30.0
+      ]
+     }
+    ],
+    "caras": [],
+    "tipo": "solida",
+    "inicio": "plano",
+    "desfase_inicio": "0 mm",
+    "inicio_objeto": null,
+    "direccion": "un_lado",
+    "medida": "mitad",
+    "extension": "distancia",
+    "distancia": "10 mm",
+    "hasta": null,
+    "extension2": "distancia",
+    "distancia2": "10 mm",
+    "hasta2": null,
+    "conicidad": "0.0",
+    "conicidad2": "0.0",
+    "espesor": "",
+    "ubicacion": "lado1",
+    "invertir": null,
+    "hasta_modo": "cara",
+    "desfase_hasta": "0 mm",
+    "curvas": [],
+    "cadena": true,
+    "simetrica": false,
+    "operacion": "unir",
+    "objetivo": "",
+    "objetivos": []
+   }
+  },
+  {
+   "tipo": "chaflan",
+   "id": "op8",
+   "nombre": "Chaflán1",
+   "suprimida": false,
+   "params": {
+    "aristas": [
+     {
+      "tipo": "arista",
+      "cuerpo": "op2.c1",
+      "firma": {
+       "geom": "circulo",
+       "medio": [
+        70.0,
+        30.0,
+        30.0
+       ],
+       "largo": 62.83185307179586,
+       "extremos": [
+        [
+         90.0,
+         29.999999999999996,
+         30.0
+        ],
+        [
+         90.0,
+         30.0,
+         30.0
+        ]
+       ],
+       "radio": 10.0,
+       "centro": [
+        80.0,
+        30.0,
+        30.0
+       ],
+       "rel": [
+        0.6999999996,
+        0.5,
+        1.0
+       ]
+      },
+      "indice": 2,
+      "de": 95
+     }
+    ],
+    "tipo": "distancia_igual",
+    "distancia": "1.0",
+    "distancia2": "1 mm",
+    "angulo": "45 deg",
+    "voltear": false,
+    "cadena_tangente": true,
+    "esquina": "chaflan"
+   }
+  },
+  {
+   "tipo": "boceto",
+   "id": "op9",
+   "nombre": "B3",
+   "suprimida": false,
+   "params": {
+    "plano": "XZ",
+    "desplazamiento": "0",
+    "marco": null,
+    "cara": null,
+    "angulo_plano": "0 deg"
+   },
+   "boceto": {
+    "siguiente_id": 13,
+    "puntos": [
+     {
+      "id": 1,
+      "x": 10.0,
+      "y": 0.0
+     },
+     {
+      "id": 2,
+      "x": 20.0,
+      "y": 0.0
+     },
+     {
+      "id": 3,
+      "x": 20.0,
+      "y": 10.0
+     },
+     {
+      "id": 4,
+      "x": 10.0,
+      "y": 10.0
+     }
+    ],
+    "curvas": [
+     {
+      "tipo": "linea",
+      "id": 5,
+      "p1": 1,
+      "p2": 2,
+      "construccion": false
+     },
+     {
+      "tipo": "linea",
+      "id": 6,
+      "p1": 2,
+      "p2": 3,
+      "construccion": false
+     },
+     {
+      "tipo": "linea",
+      "id": 7,
+      "p1": 3,
+      "p2": 4,
+      "construccion": false
+     },
+     {
+      "tipo": "linea",
+      "id": 8,
+      "p1": 4,
+      "p2": 1,
+      "construccion": false
+     }
+    ],
+    "restricciones": [
+     {
+      "id": 9,
+      "tipo": "horizontal",
+      "entidades": [
+       5
+      ],
+      "datos": {}
+     },
+     {
+      "id": 10,
+      "tipo": "horizontal",
+      "entidades": [
+       7
+      ],
+      "datos": {}
+     },
+     {
+      "id": 11,
+      "tipo": "vertical",
+      "entidades": [
+       6
+      ],
+      "datos": {}
+     },
+     {
+      "id": 12,
+      "tipo": "vertical",
+      "entidades": [
+       8
+      ],
+      "datos": {}
+     }
+    ],
+    "cotas": []
+   }
+  },
+  {
+   "tipo": "extrusion",
+   "id": "op10",
+   "nombre": "Extrusión3",
+   "suprimida": false,
+   "params": {
+    "boceto": "op9",
+    "perfiles": [
+     {
+      "firma": [
+       5,
+       6,
+       7,
+       8
+      ],
+      "centroide": [
+       15.0,
+       5.0
+      ]
+     }
+    ],
+    "caras": [],
+    "tipo": "solida",
+    "inicio": "plano",
+    "desfase_inicio": "0 mm",
+    "inicio_objeto": null,
+    "direccion": "un_lado",
+    "medida": "mitad",
+    "extension": "distancia",
+    "distancia": "20 mm",
+    "hasta": null,
+    "extension2": "distancia",
+    "distancia2": "10 mm",
+    "hasta2": null,
+    "conicidad": "0.0",
+    "conicidad2": "0.0",
+    "espesor": "",
+    "ubicacion": "lado1",
+    "invertir": null,
+    "hasta_modo": "cara",
+    "desfase_hasta": "0 mm",
+    "curvas": [],
+    "cadena": true,
+    "simetrica": false,
+    "operacion": "unir",
+    "objetivo": "",
+    "objetivos": []
+   }
+  }
+ ],
+ "sin_partir": [],
+ "contador_cotas": 37,
+ "vistas": {},
+ "propiedades": {},
+ "analisis": {},
+ "configuraciones": {},
+ "espacios": {},
+ "comentarios": []
+}
