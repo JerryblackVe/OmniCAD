@@ -4,7 +4,9 @@ La única cola de trabajo (plan de reorganización del 2026-11-13). Lo que no es
 Una sesión toma el siguiente de «Sigue» recién cuando cerró el suyo (integrado o devuelto a su lista con una nota).
 La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo actualiza el coordinador al integrar.
 
-## Ahora (uno por sesión)
+## Ahora
+
+**Cupo ROJO (90 %, 17/11 ~09:40 UTC): todo Claude en pausa hasta el 19/11 08 UTC; solo OpenCode.** (uno por sesión)
 
 
 | Sesión | Ítem | Qué |
