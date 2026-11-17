@@ -72,7 +72,7 @@ def _formas_de_bocetos(ids, estado):
     for bid in ids:
         br = estado.bocetos.get(bid)
         if br is None:
-            raise ErrorOperacion(f"«{bid}» no es un boceto de este punto del timeline.")
+            raise ErrorOperacion(f"«{bid}» no es un boceto del timeline.")
         formas = [_resolver({"tipo": "curva_boceto", "boceto": bid, "curva": cid}, estado).forma
                   for cid in br.boceto.curvas if not br.boceto.curvas[cid].construccion]
         if not formas:
@@ -89,9 +89,9 @@ def _bocetos_transformados(op, estado, ids, matriz, copiar, factor=None):
     for n, bid in enumerate(ids, 1):
         br = estado.bocetos.get(bid)
         if br is None:
-            raise ErrorOperacion(f"«{bid}» no es un boceto de este punto del timeline.")
+            raise ErrorOperacion(f"«{bid}» no es un boceto del timeline.")
         if br.boceto.geo3d.get("curvas") or br.boceto.geo3d.get("puntos"):
-            raise ErrorOperacion(f"«{br.nombre}» es un boceto 3D: moverlo o escalarlo todavía no está.")
+            raise ErrorOperacion(f"Boceto 3D «{br.nombre}»: no se mueve ni escala.")
         r = matriz[:3, :3]
         giro = r / (float(np.cbrt(abs(np.linalg.det(r)))) or 1.0)
         plano = geo.Plano.desde_marco(r @ br.plano.origen + matriz[:3, 3], giro @ br.plano.normal, giro @ br.plano.u,
@@ -190,13 +190,12 @@ class OpMover(Operacion):
         for bid, ids in grupos.items():
             br = estado.bocetos.get(bid)
             if br is None:
-                raise ErrorOperacion(f"«{bid}» no es un boceto de este punto del timeline.")
+                raise ErrorOperacion(f"«{bid}» no es un boceto del timeline.")
             formas = [e.forma for e in _resolver_todas(self.p["curvas_boceto"], estado) if e.forma is not None]
             m, pl = self.matriz(estado, ctx, [geo.compuesto(formas)]), br.plano
             origen, u = m[:3, :3] @ pl.origen + m[:3, 3], m[:3, :3] @ pl.u
             if abs(float((origen - pl.origen) @ pl.normal)) > 1e-6 or abs(abs(float((m[:3, :3] @ pl.normal) @ pl.normal)) - 1) > 1e-9:
-                raise ErrorOperacion(f"Las curvas de «{br.nombre}» se mueven dentro del plano del boceto: elegí un "
-                                     "movimiento en ese plano (o movés el boceto entero).")
+                raise ErrorOperacion(f"«{br.nombre}»: mové las curvas solo en su plano.")
             dx, dy = pl.a_uv(origen)
             angulo = float(np.degrees(np.arctan2(u @ pl.v, u @ pl.u)))
             boceto = br.boceto.copia()
@@ -259,7 +258,7 @@ class OpApoyar(Operacion):
         zs = {i: self._z_min(estado.cuerpos[i]) for i in ids}
         validos = [z for z in zs.values() if z is not None]
         if not validos:
-            raise ErrorOperacion("Los cuerpos están vacíos: no hay nada que apoyar.")
+            raise ErrorOperacion("Los cuerpos están vacíos: nada que apoyar.")
         for i, z in zs.items():
             if z is None:
                 continue
@@ -318,10 +317,10 @@ class OpEmpalme(Operacion):
     def _completo(self, estado):
         p, sm = self.p, _sm()
         if not p.get("central") or len(p.get("laterales") or []) != 2:
-            raise ErrorOperacion("Elegí la cara central y las dos caras laterales.")
+            raise ErrorOperacion("Elegí la cara central y dos laterales.")
         central, l1, l2 = (_resolver(r, estado) for r in [p["central"], *p["laterales"]])
         if not central.cuerpo == l1.cuerpo == l2.cuerpo:
-            raise ErrorOperacion("Las tres caras tienen que ser del mismo cuerpo.")
+            raise ErrorOperacion("Las 3 caras tienen que ser del mismo cuerpo.")
         c = estado.cuerpo(central.cuerpo)
         try:
             c.forma = sm.empalme_completo(c.forma, central.forma, l1.forma, l2.forma)
@@ -332,11 +331,11 @@ class OpEmpalme(Operacion):
         p, sm = self.p, _sm()
         peso, dimension = evaluar(p["peso_tangencia"], "escalar", ctx.valores, con_dimension=True)
         if dimension not in (None, SIN_DIMENSION):
-            raise ErrorOperacion("⚠ Grosor de tangencia: solo el número, sin unidad")
+            raise ErrorOperacion("⚠ Grosor de tangencia: número sin unidad")
         if not math.isfinite(peso) or peso <= 0:
             raise ErrorOperacion("⚠ Grosor de tangencia: un número mayor que 0")
         if peso != 1 and p["tipo"] != "empalme":
-            raise ErrorOperacion("⚠ Grosor de tangencia: solo en el modo Empalme")
+            raise ErrorOperacion("⚠ Grosor de tangencia: solo en Empalme")
         if p["tipo"] == "completo":
             return self._completo(estado)
         r = ctx.evaluar(p["radio"])
@@ -443,13 +442,13 @@ class OpDesmoldeo(Operacion):
     def ejecutar(self, estado, ctx):
         p, sm = self.p, _sm()
         if not p["plano"]:
-            raise ErrorOperacion("Elegí el plano fijo (una cara plana o un plano).")
+            raise ErrorOperacion("Elegí el plano fijo (cara plana o plano).")
         e = _resolver(p["plano"], estado)
         if p["tipo"] == "linea_particion":
             if not p.get("herramienta_particion"):
-                raise ErrorOperacion("Elegí la herramienta de partición (un plano, una cara o una curva plana).")
+                raise ErrorOperacion("Elegí la herramienta de partición.")
             if e.tipo not in ("plano", "cara", "eje", "arista", "curva_boceto") or (e.plano is None and e.eje is None):
-                raise ErrorOperacion("La dirección de extracción es un plano, una cara plana o un eje.")
+                raise ErrorOperacion("Dirección: un plano, una cara plana o un eje.")
             pull = e.plano.normal if e.plano is not None else e.eje[1]
         else:
             plano = ent.como_plano(e)
@@ -495,7 +494,7 @@ class OpEscala(Operacion):
         def E(k):
             valor, dimension = evaluar(p[k], "escalar", ctx.valores, con_dimension=True)
             if dimension not in (None, SIN_DIMENSION):
-                raise ErrorOperacion(f"El factor de escala no lleva unidad: «{p[k]}». Escribí un número, p. ej. 2.")
+                raise ErrorOperacion(f"El factor no lleva unidad: «{p[k]}».")
             return ctx.evaluar(valor, "escalar")
         if p.get("bocetos"):
             if p["tipo"] != "uniforme":
@@ -514,7 +513,7 @@ class OpEscala(Operacion):
             if caja is not None:                    # el mismo tope de 1 km que mover, crear y extruir
                 acotar(float(np.abs(caja).max()), LONGITUD)
             if getattr(c, "tipo", "solido") == "solido" and geo.sin_volumen(c.forma):
-                raise ErrorOperacion(f"«{c.nombre}» queda sin volumen con esa escala: el factor es demasiado chico.")
+                raise ErrorOperacion(f"«{c.nombre}» queda sin volumen con esa escala.")
 
 
 class OpDesfaseCara(Operacion):
@@ -719,12 +718,12 @@ class OpAlinear(Operacion):
         if e.tipo == "cara":
             p, d = ent.como_eje(e)
             return {"tipo": "eje", "punto": p, "direccion": d}
-        raise ErrorOperacion("La referencia de alineación tiene que ser un punto, un plano o un eje.")
+        raise ErrorOperacion("Referencia de alineación: punto, plano o eje.")
 
     def ejecutar(self, estado, ctx):
         p = self.p
         if not p["cuerpos"] or not p["origen"] or not p["destino"]:
-            raise ErrorOperacion("Elegí los cuerpos, la referencia de origen y la de destino.")
+            raise ErrorOperacion("Elegí los cuerpos, el origen y el destino.")
         centro = _version_de(p, "version_centro") == 2
         _, m = _sm().alinear(None, self._dato(_resolver(p["origen"], estado), centro),
                              self._dato(_resolver(p["destino"], estado), centro), voltear=p["voltear"],
@@ -780,7 +779,7 @@ class OpEliminarOperaciones(Operacion):
             o_marco = c.forma
             c.forma, cuantas = simplificar.quitar_operaciones(o_marco, tamano, p["tipos"])
             if o_marco.IsSame(c.forma):
-                raise ErrorOperacion(f"{c.nombre}: no se quitaron operaciones: las caras vecinas no cierran el hueco.")
+                raise ErrorOperacion(f"{c.nombre}: las caras no cierran el hueco.")
             ctx.aviso(f"{c.nombre}: se quitaron " + ", ".join(f"{n} {tipo}" for tipo, n in cuantas.items() if n))
 
 
