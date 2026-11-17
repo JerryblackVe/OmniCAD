@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-585 | Solver: al restringir agranda mucho el círculo en vez de mover lo menos posible. Opus alto. B-582 integrado |
+| E1 | B-619 | Proyectar un barril: silueta con cientos de puntos, picos y puntos sueltos; revisar los 5 tipos de PROYECTAR contra Fusion. Opus alto. B-585 integrado |
 | E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
 | E3 | — | En pausa (cupo amarillo, 82 % el 16/11 19 UTC). B-503 Parcial: 7cc89af (falta una cara sola de letra curva, velocidad y Arial en Windows) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
@@ -25,7 +25,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-626 | Planos de origen enormes y naranjas al abrir cualquier herramienta (Gerardo, ALTA; ¿por B-610?). E5 o E8, Sonnet medio |
-| 2 | B-619 | Proyectar un barril: silueta con cientos de puntos, borde ondulado y puntos sueltos; y revisar los 5 tipos de PROYECTAR contra Fusion (E1 tras B-585, Opus alto) |
 | 3 | B-618 | Solevación entre dos círculos: falso «se autointerseca» y previa manchada (E2, Opus alto; bug de prioridad 1, va antes que SOL-8) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
