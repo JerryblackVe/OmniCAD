@@ -89,7 +89,7 @@ def test_errores_claros_y_el_documento_no_cambia(dos):
     _falla(s, "constrain_components", "OPERATION_FAILED", geometry1=">Z", geometry2="<Z", body1=a, body2=a)   # mismo componente
     arista = _ll(s, "find_edges", body=a)["edges"][0]["id"]
     r = _falla(s, "constrain_components", "OPERATION_FAILED", geometry1=">Z", geometry2=arista, body1=b)       # cara con arista
-    assert "combinación plano–eje" in r["mensaje"]
+    assert "plano–eje" in r["mensaje"]
 
 
 def test_deshacer_y_el_paso_queda_en_el_timeline(dos):
@@ -592,9 +592,9 @@ def test_limites_de_desfase_recortan_avisan_y_con_apoyo_fallan(dos):
     assert _caja(s, b)[0] == 14
     _ll(s, "undo")
     r = _falla(s, "constrain_components", "OPERATION_FAILED", offset=8, offset_max=5, offset_as_rest=True, **args)
-    assert "apoyo" in r["mensaje"]
+    assert "fuera del límite" in r["mensaje"] and "máximo 5" in r["mensaje"]
     r = _falla(s, "constrain_components", "OPERATION_FAILED", offset=4, offset_min=6, offset_max=5, **args)
-    assert "mayor que el máximo" in r["mensaje"]
+    assert "mayor que máximo" in r["mensaje"]
     _falla(s, "constrain_components", "OPERATION_FAILED", type="angle", offset=30, offset_max=45, **args)      # el ángulo pide referencia
     _falla(s, "constrain_components", "INVALID_ARGUMENTS", type="tangent", offset_max=5, **args)
     _falla(s, "constrain_components", "INVALID_ARGUMENTS", offset_as_rest=True, **args)                         # sin límites

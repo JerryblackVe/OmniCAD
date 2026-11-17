@@ -69,7 +69,7 @@ def test_el_comando_crea_un_componente_vacio_con_nombre_y_rechaza_un_nombre_usad
     assert s.doc.estado_final.componentes[op.id]["nombre"] == "Carcasa"
     vacio = NuevoComponente().construir({"cuerpos": [], "fijo": False, "padre": ""}, ctx)         # sin nombre: Componente<n>
     assert vacio.nombre == "Componente1"
-    with pytest.raises(ErrorComando, match="Ya hay un paso llamado"):
+    with pytest.raises(ErrorComando, match="Ya hay un paso «Carcasa»"):
         NuevoComponente().construir({"cuerpos": [], "fijo": False, "padre": "", "nombre": "Carcasa"}, ctx)
     editando = ContextoComando(s.doc, op=op)                                                       # al editar, el nombre no se ofrece
     assert {c.clave: c for c in NuevoComponente().campos(editando)}["nombre"].visible_si({}) is False
