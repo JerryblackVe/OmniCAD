@@ -29,6 +29,7 @@ mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs" "$COLA/reserva" "$EST"
 anota() { echo "$(date -u '+%F %T') $*" >> "$LOG"; }
 quieto() {   # nada escribió en $MIN minutos (el log de la corrida casi no se escribe hasta el final; el de opencode sí)
   [ -z "$(find "$@" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; }
+cpu() { ps -o times= -s "$1" 2>/dev/null | awk '{s+=$1} END{print s+0}'; }   # segundos de CPU de la sesión (setsid) del pid
 ultimo() { awk '/^=== intento /{b=""} {b=b $0 "
 "} END{printf "%s", b}' "$COLA/logs/$1.log" 2>/dev/null | tail -20; }  # solo el intento actual
 usado() {   # el modelo ya está en su tope de corridas a la vez (CodeBuddy 2, OpenCode 1; cuenta también el lanzador de E9)
@@ -71,9 +72,16 @@ reintenta() {   # nombre intento modelo motivo
 for f in "$EST"/*; do
   [ -f "$f" ] || continue
   read -r n k m pid < "$f"
-  if [ "${m#VERIF:}" != "$m" ]; then   # una verificación: se espera a que termine, sin tope de quietud
-    kill -0 "$pid" 2>/dev/null && continue
-    m=${m#VERIF:}; fin=$(tail -1 "$COLA/logs/$n.verif" 2>/dev/null)
+  if [ "${m#VERIF:}" != "$m" ]; then   # una verificación: mismo tope de quietud ($MIN) que una corrida (B-632)
+    q="$COLA/logs/$n.cpu"
+    if kill -0 "$pid" 2>/dev/null; then   # viva: se corta si en $MIN min no usó CPU ni escribió su salida
+      c=$(cpu "$pid"); [ "$c" != "$(cat "$q" 2>/dev/null)" ] && { echo "$c" > "$q"; continue; }
+      [ $(( $(date +%s) - $(stat -c %Y "$q") )) -lt $(( (MIN - 1) * 60 )) ] && continue
+      [ -n "$(find "$COLA/logs/$n.verif" -newermt "-$MIN min" 2>/dev/null)" ] && continue
+      kill -- -"$pid" 2>/dev/null; sleep 5; kill -9 -- -"$pid" 2>/dev/null; rm -f "$q"
+      reintenta "$n" "$k" "${m#VERIF:}" "verificación trabada: $MIN min sin CPU ni escribir"; continue
+    fi
+    rm -f "$q"; m=${m#VERIF:}; fin=$(tail -1 "$COLA/logs/$n.verif" 2>/dev/null)
     if [ "$fin" = "rc=0" ]; then anota "VERDE $n: lista para integrar"; mv "$COLA/$n.tarea" "$COLA/hechos/"; rm -f "$f"
     else reintenta "$n" "$k" "$m" "verificación en rojo; arreglá esto: $(tail -40 "$COLA/logs/$n.verif" | tr '\n' ' ' | cut -c1-1500)"; fi
     continue

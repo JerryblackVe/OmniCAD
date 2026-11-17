@@ -43,5 +43,12 @@ printf 'WT=%s\nBRIEF=%s\nMODELO=cb:hy3\n' $T/wt $T/brief > $T/cola/05_v.tarea; r
 for x in $T/cola/*.tarea; do [ "$x" = $T/cola/05_v.tarea ] || mv $x $T/cola/hechos/; done
 VIGIA_VERIF="echo ruff dice error; false" bash "$V"; sleep 9; VIGIA_VERIF="echo ruff dice error; false" bash "$V"; sleep 2; VIGIA_VERIF="echo ruff dice error; false" bash "$V"
 grep -q "verificación en rojo" $T/cola/vigia.log && grep -q "ruff dice error" $T/cola/logs/05_v.brief2.md || { echo "FALLA 11: el rojo de la verificación no se relanza con el error"; ok=0; }
+# B-632: una verificación colgada (sin CPU ni salida) se corta con el tope de quietud y se relanza
+printf 'WT=%s\nBRIEF=%s\nMODELO=cb:hy3\n' $T/wt $T/brief > $T/cola/06_c.tarea; mv $T/cola/05_v.tarea $T/cola/hechos/ 2>/dev/null; rm -f $T/cola/corriendo/05_v
+export VIGIA_VERIF="sleep 300" VIGIA_MIN=0
+bash "$V"; sleep 9; bash "$V"; sleep 1; bash "$V"; bash "$V"
+grep -q "falla 06_c (intento 1, cb:hy3: verificación trabada" $T/cola/vigia.log || { echo "FALLA 12: la verificación colgada no se cortó"; ok=0; }
+pgrep -f "^sleep 300$" > /dev/null && { echo "FALLA 13: quedó viva la verificación colgada"; ok=0; pkill -f "^sleep 300$"; }
+unset VIGIA_VERIF VIGIA_MIN
 [ $ok = 1 ] && echo "PRUEBA OK" || { cat $T/cola/vigia.log; exit 1; }
 rm -rf $T
