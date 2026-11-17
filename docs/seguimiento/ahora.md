@@ -34,6 +34,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 1d | B-637 | Extruir: perfiles coplanares de varios bocetos (como Fusion), mensaje y flecha en su lugar (E2, Opus alto) |
 | 2 | B-633 + B-634 | Solevación rectángulo→círculo: Engrosar (superficie) y Vaciado (sólido) fallan con mensajes falsos (E3, Opus alto; reporte de Gerardo del 17/11) |
 | 3 | B-618 | Solevación entre dos círculos: falso «se autointerseca» y previa manchada (E2, Opus alto; bug de prioridad 1, va antes que SOL-8) |
+| 3b | B-639 | Plano a lo largo de la ruta: la previa no muestra el plano; título del panel cortado (E5, Sonnet) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
 
