@@ -15,7 +15,8 @@ COLA=${VIGIA_COLA:-$HOME/coordinador/opencode_cola}
 LOGS=${VIGIA_LOGS:-$HOME/coordinador/e9prompts}
 OC=${VIGIA_OC:-$HOME/.opencode/bin/opencode}
 MIN=${VIGIA_MIN:-20}
-MODELOS=(opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free nvidia/minimaxai/minimax-m3.1-flash)
+CB=${VIGIA_CB:-$HOME/.local/cb/codebuddy}   # CodeBuddy (Node 22 propio); sus modelos van con «cb:»
+MODELOS=(opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free nvidia/minimaxai/minimax-m3.1-flash cb:deepseek-v4.1-flash cb:hy3)
 CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound'
 MAX=${VIGIA_MAX:-2}
 LOG=$COLA/vigia.log; EST=$COLA/corriendo   # un archivo por corrida: «nombre intento modelo pid»
@@ -25,20 +26,21 @@ quieto() {   # nada escribió en $MIN minutos (el log de la corrida casi no se e
   [ -z "$(find "$@" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; }
 ultimo() { awk '/^=== intento /{b=""} {b=b $0 "
 "} END{printf "%s", b}' "$COLA/logs/$1.log" 2>/dev/null | tail -20; }  # solo el intento actual
-usado() { grep -qs " $1 " "$EST"/* || pgrep -f "$OC run -m $1 " > /dev/null; }   # lo corre alguien (la cola o un lanzador de E9)
-responde() { timeout 150 "$OC" run -m "$1" "Respondé solo la palabra OK" 2>/dev/null | grep -qi OK; }
+usado() { grep -qs " $1 " "$EST"/* || pgrep -f -- "run -m $1 |--model ${1#cb:} " > /dev/null; }   # lo corre alguien (la cola o un lanzador de E9)
+cmd() { case $1 in cb:*) echo "$CB -p -y --model ${1#cb:}";; *) echo "$OC run -m $1";; esac; }   # modelo -> comando
+responde() { timeout 150 $(cmd "$1") "Respondé solo la palabra OK" 2>/dev/null | grep -qi OK; }
 siguiente_modelo() {   # modelo_actual -> el próximo de la lista que responde (o vacío)
   local i j m
   for i in "${!MODELOS[@]}"; do [ "${MODELOS[$i]}" = "$1" ] && break; done
-  for j in 1 2 3; do m=${MODELOS[$(( (i + j) % ${#MODELOS[@]} ))]}
+  for j in $(seq 1 ${#MODELOS[@]}); do m=${MODELOS[$(( (i + j) % ${#MODELOS[@]} ))]}
     usado "$m" && [ "$m" != "$1" ] && continue   # otro modelo que el de la corrida de al lado
     responde "$m" && { echo "$m"; return; }; done; }
 lanza() {    # nombre intento modelo [brief extra]
   local n=$1 k=$2 m=$3 extra=$4 v=; VARIANTE=; source "$COLA/$n.tarea"
-  [ -n "$VARIANTE" ] && v="--variant $VARIANTE"
+  [ -n "$VARIANTE" ] && [ "${m#cb:}" = "$m" ] && v="--variant $VARIANTE"   # CodeBuddy no tiene variante
   { [ -n "$extra" ] && echo "$extra"; cat "$BRIEF"; } > "$COLA/logs/$n.brief$k.md"
   echo "=== intento $k ($m)" >> "$COLA/logs/$n.log"
-  setsid nohup bash -c "cd '$WT' && timeout 1500 '$OC' run -m '$m' $v \"\$(cat '$COLA/logs/$n.brief$k.md')\" >> '$COLA/logs/$n.log' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.log'" < /dev/null > /dev/null 2>&1 &
+  setsid nohup bash -c "cd '$WT' && timeout 1500 $(cmd "$m") $v \"\$(cat '$COLA/logs/$n.brief$k.md')\" >> '$COLA/logs/$n.log' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.log'" < /dev/null > /dev/null 2>&1 &
   echo "$n $k $m $!" > "$EST/$n"; anota "lanzo $n (intento $k, $m, esfuerzo ${VARIANTE:-del modelo}, pid $!)"
 }
 reintenta() {   # nombre intento modelo motivo

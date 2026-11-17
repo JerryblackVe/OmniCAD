@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Prueba en seco del vigía con un opencode falso. Sale 0 si todo pasa.
-set -u; T=$(mktemp -d); export VIGIA_COLA=$T/cola VIGIA_LOGS=$T/e9 VIGIA_OC=$T/oc VIGIA_LANZ=lanzador_de_prueba_inexistente VIGIA_MAX=1
+set -u; T=$(mktemp -d); export VIGIA_COLA=$T/cola VIGIA_LOGS=$T/e9 VIGIA_OC=$T/oc VIGIA_CB=$T/oc VIGIA_LANZ=lanzador_de_prueba_inexistente VIGIA_MAX=1
 mkdir -p $T/cola $T/e9 $T/wt; (cd $T/wt && git init -q)
 cat > $T/oc <<'EOF'
 #!/usr/bin/env bash
 # args: run -m MODELO [--variant V] PROMPT
-m=$3; p="${@: -1}"; echo "args: $*" >> $(dirname $0)/llamadas
+m=$(echo "$*" | grep -oE -- "(-m|--model) [^ ]+" | head -1 | cut -d" " -f2); p="${@: -1}"; echo "args: $*" >> $(dirname $0)/llamadas
 case "$p" in *"Respondé solo"*) [[ "$m" == *deepseek* && -f $(dirname $0)/ds_muerto ]] || echo OK; exit 0;; esac
 [[ "$m" == *glm* ]] && { echo "Error: status 429 rate limit"; exit 1; }
 echo "trabajo hecho"; exit 0
@@ -22,9 +22,9 @@ grep -q "seguí desde ahí" $T/cola/logs/01_x.brief2.md || { echo "FALLA 4: el r
 # todos fallan: GLM con 429, DeepSeek no responde, MiniMax OK pero lo forzamos a fallar con rc
 printf 'WT=%s\nBRIEF=%s\n' $T/wt $T/brief > $T/cola/02_y.tarea; touch $T/ds_muerto
 sed -i 's/echo "trabajo hecho"; exit 0/echo "rate limit"; exit 1/' $T/oc
-for i in 1 2 3 4 5; do vuelta; done
+for i in 1 2 3 4 5 6 7; do vuelta; done
 grep -q "TRABADA 02_y" $T/cola/vigia.log && [ -f $T/cola/trabadas/02_y.tarea ] || { echo "FALLA 5: no la pasó a trabadas"; ok=0; }
-grep -q "relanzo con nvidia/minimaxai" $T/cola/vigia.log || { echo "FALLA 6: no salteó al que no responde"; ok=0; }
+grep -q "relanzo con nvidia/minimaxai" $T/cola/vigia.log && grep -q "relanzo con cb:" $T/cola/vigia.log || { echo "FALLA 6: no salteó al que no responde"; ok=0; }
 # en paralelo: 2 tareas lentas, 2 corridas a la vez y de modelos distintos
 rm -f $T/ds_muerto; sed -i 's/echo "rate limit"; exit 1/sleep 8; echo listo; exit 0/' $T/oc
 for x in 03_a 04_b; do printf 'WT=%s
