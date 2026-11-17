@@ -15,7 +15,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | En pausa (cupo amarillo). ASM-9 integrado: 99fb1de. Sigue ASM-16 con Opus alto (pide el solver de uniones) cuando haya cupo |
 | E6 | — | Libre. B-620 integrado como Parcial (previa del Vaciado 3,5 → 1,3 s en la VPS; falta medir en Windows con E11) |
-| E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
+| E7 | B-626 | Planos de origen enormes al abrir Boceto, Bobina o Plano de desfase (Gerardo, ALTA). Sonnet medio. B-624 y B-625 integrados |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
 | E9 | Caza + cola OpenCode | 1) caza superficie y construir (corriendo); 2) P-158, un archivo por corrida (GLM, revisa MiniMax), agregándolo a TOPES en 0: timeline/operaciones.py (38), nucleo/geometria.py (22), timeline/ops_modificar.py (19), nucleo/editar_cara.py (17), nucleo/construccion.py (16), nucleo/analisis.py (13), nucleo/vectores.py (9); 3) lo rojo de la caza, con su ID. En rojo (90 %) las lanza el coordinador |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
@@ -24,7 +24,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-626 | Planos de origen enormes y naranjas al abrir cualquier herramienta (Gerardo, ALTA; ¿por B-610?). E5 o E8, Sonnet medio |
 | 3 | B-618 | Solevación entre dos círculos: falso «se autointerseca» y previa manchada (E2, Opus alto; bug de prioridad 1, va antes que SOL-8) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
