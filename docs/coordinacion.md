@@ -252,6 +252,6 @@ de OpenCode; las demás la enlazan.
 
 ## Cupo semanal de Claude al 90 % (Gerardo, 2026-11-16)
 - El coordinador mide el semanal con `get_usage` al cerrar cada ítem y avisa al chat maestro en cuanto llega al 90 %.
-- Al 90 %: se pausan todas las sesiones de Claude (E1–E11). Hasta el reinicio semanal trabaja solo OpenCode, según el
+- Al 90 %: se pausan todas las sesiones de Claude (E1–E11) (el coordinador sigue activo). Hasta el reinicio semanal trabaja solo OpenCode, según el
   «Protocolo de OpenCode». Lo que deja en verde no se integra a main hasta la integración diaria.
 - El coordinador se guarda ~5 % del semanal: una integración por día de lo que OpenCode dejó en verde (revisando el diff), y los bloqueantes. Nada más.
