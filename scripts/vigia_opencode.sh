@@ -25,7 +25,7 @@ quieto() {   # nada escribió en $MIN minutos (el log de la corrida casi no se e
   [ -z "$(find "$@" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; }
 ultimo() { awk '/^=== intento /{b=""} {b=b $0 "
 "} END{printf "%s", b}' "$COLA/logs/$1.log" 2>/dev/null | tail -20; }  # solo el intento actual
-usado() { pgrep -f "^$OC run -m $1 " > /dev/null; }   # lo corre alguien (la cola o un lanzador de E9)
+usado() { pgrep -f "$OC run -m $1 " > /dev/null; }   # lo corre alguien (la cola o un lanzador de E9)
 responde() { timeout 150 "$OC" run -m "$1" "Respondé solo la palabra OK" 2>/dev/null | grep -qi OK; }
 siguiente_modelo() {   # modelo_actual -> el próximo de la lista que responde (o vacío)
   local i j m
