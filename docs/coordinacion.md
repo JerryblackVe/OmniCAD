@@ -168,6 +168,7 @@ de OpenCode; las demás la enlazan.
   | Pieza corta de un archivo o mecánica (filas de seguimiento, textos, doc generada, un test) | GLM: `opencode/glm-5.3-flash-free` |
   | Varios archivos con herramientas, y revisar lo de otro modelo | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) |
   | Respaldo de los dos | DeepSeek: `opencode/deepseek-v4.1-flash-free` |
+  | Respaldo extra (CodeBuddy, gratis: `~/.local/cb/codebuddy -p -y --model <m>`, con su Node 22) | `cb:deepseek-v4.1-flash`, `cb:hy3` |
 
   La geometría difícil no va a OpenCode: va a Opus alto. Prohibidos:
   OpenCode Go (sin suscripción) y `mimo` (entrena con los datos).
