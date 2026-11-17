@@ -217,8 +217,7 @@ def _primitiva(constructor, que):
     except Exception:  # noqa: BLE001 — Standard_DomainError / Standard_ConstructionError de OCC
         forma = None
     if forma is None or not es_valida(forma):
-        raise ErrorGeometria(f"No se puede construir {que}: las medidas son demasiado grandes o demasiado chicas "
-                             "para el kernel.")
+        raise ErrorGeometria(f"{que}: medidas demasiado grandes o chicas.")
     return forma
 
 
@@ -231,7 +230,7 @@ def caja(ancho, largo, alto, origen=(0, 0, 0)):
 
 def cilindro(radio, alto, base=(0, 0, 0), eje=(0, 0, 1)):
     if radio <= 0 or alto <= 0:
-        raise ErrorGeometria("Radio y alto del cilindro deben ser positivos.")
+        raise ErrorGeometria("Radio y alto del cilindro deben ser > 0.")
     return _primitiva(lambda: BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(*map(float, base)), _dir(eje)), float(radio),
                                                        float(alto)), "el cilindro")
 
@@ -244,7 +243,7 @@ def esfera(radio, centro=(0, 0, 0)):
 
 def toroide(radio_mayor, radio_menor, centro=(0, 0, 0), eje=(0, 0, 1)):
     if radio_menor <= 0 or radio_mayor <= radio_menor:
-        raise ErrorGeometria("El toroide necesita radio mayor > radio menor > 0.")
+        raise ErrorGeometria("Toroide: radio mayor > radio menor > 0.")
     return _primitiva(lambda: BRepPrimAPI_MakeTorus(gp_Ax2(gp_Pnt(*map(float, centro)), _dir(eje)),
                                                     float(radio_mayor), float(radio_menor)), "el toroide")
 
@@ -287,8 +286,7 @@ def rechazar_radio_de_arco(arista, radio):
     from OCP.GeomAbs import GeomAbs_Circle
     c = BRepAdaptor_Curve(arista)
     if c.GetType() == GeomAbs_Circle and not c.IsClosed() and abs(c.Circle().Radius() - radio) <= 1e-6 * radio:
-        raise ErrorGeometria(f"El empalme no se puede hacer con un radio igual al del arco elegido ({radio:g} mm): "
-                             "la superficie del empalme queda degenerada. Probá un radio menor.")
+        raise ErrorGeometria(f"Empalme de {radio:g} mm: es igual al del arco.")
 
 
 def _arista_analitica(arista, tol=1e-6):
@@ -331,8 +329,7 @@ def proyectar_sobre_plano(forma, direccion, plano):
     m = m / np.linalg.norm(m)
     den = float(n @ m)
     if abs(den) < 1e-9:
-        raise ErrorGeometria("El plano elegido como inicio es paralelo a la dirección de extrusión: la extrusión "
-                             "no arranca sobre él; elegí otro o usá «Desfase».")
+        raise ErrorGeometria("El plano inicial es paralelo a la extrusión.")
     a = np.eye(3) - np.outer(n, m) / den                     # p → p + n·((o − p)·m)/(n·m)
     b = n * (float(np.asarray(plano.origen, float) @ m) / den)
     g = gp_GTrsf()
@@ -370,7 +367,7 @@ def exigir_longitud(valor, que, minimo=LONGITUD_MINIMA):
     """Error claro si una distancia de extrusión (en valor absoluto) es menor que `minimo`: el kernel
     fallaría con «BRepSweep_Prism::Constructor». `que`: «La distancia de extrusión», «La profundidad…»."""
     if abs(valor) < minimo:
-        raise ErrorGeometria(f"{que} tiene que ser de al menos {minimo:.6f} mm; recibió {valor:g} mm.")
+        raise ErrorGeometria(f"{que}: mínimo {minimo:.6f} mm, recibió {valor:g} mm.")
 
 
 def exigir_distancias_extrusion(direccion, distancia1, distancia2=None, medida="mitad"):
@@ -449,14 +446,14 @@ def exigir_angulo_revolucion(angulo_grados):
     if abs(angulo_grados) < 1e-9:
         raise ErrorGeometria("El ángulo de revolución no puede ser cero.")
     if abs(angulo_grados) > 360 + 1e-9:         # B-468: como Fusion, una vuelta completa es el tope
-        raise ErrorGeometria("El ángulo de revolución no puede pasar de 360°.")
+        raise ErrorGeometria("El ángulo de revolución no puede ser > 360°.")
 
 
 def revolver(caras, punto_eje, dir_eje, angulo_grados):
     """Revolución de caras alrededor de un eje (equivalente a RevolveFeature con AngleExtentDefinition)."""
     exigir_angulo_revolucion(angulo_grados)
     if abs(angulo_grados) > 360.0 + 1e-6:
-        raise ErrorGeometria("El ángulo de revolución no puede pasar de 360°: más de una vuelta se pisa a sí misma.")
+        raise ErrorGeometria("Revolución: más de 360° y la vuelta se pisa.")
     ang = math.radians(max(-360.0, min(360.0, angulo_grados)))
     eje = gp_Ax1(gp_Pnt(*map(float, punto_eje)), _dir(dir_eje))
     solidos = []
@@ -464,12 +461,10 @@ def revolver(caras, punto_eje, dir_eje, angulo_grados):
     for c in _unir_caras_coplanares(caras) or caras:
         rev = BRepPrimAPI_MakeRevol(c, eje, ang)
         if not rev.IsDone():        # OCC lo marca así cuando el sólido se cortaría a sí mismo
-            raise ErrorGeometria("El perfil cruza el eje de revolución: tiene que quedar de un solo lado del eje "
-                                 "(puede apoyarse en él).")
+            raise ErrorGeometria("El perfil cruza el eje: que quede de un lado.")
         forma = rev.Shape()
         if sin_volumen(forma):
-            raise ErrorGeometria("La revolución no genera un sólido: el eje no puede ser perpendicular al plano "
-                                 "del perfil.")
+            raise ErrorGeometria("No genera un sólido: el eje es perpendicular.")
         solidos.append(forma)
     return unir_todos(solidos)
 
@@ -1021,7 +1016,7 @@ def cortar_varias(objetivo, formas, avisos=None):
     separadas y si quita justo lo que cada una le quita sola al objetivo. Si no, lanza ErrorGeometria y quien llama corta
     de a una, que es más lento pero verifica cada herramienta."""
     if not all(solidos(f) for f in formas):
-        raise ErrorGeometria("Cortar con varias herramientas juntas necesita que todas sean sólidos.")
+        raise ErrorGeometria("Cada herramienta a cortar debe ser un sólido.")
     pesan = [f for f in formas if not _es_diminuta(f)]
     if len(pesan) < len(formas):
         _sin_cambios(objetivo, avisos)
@@ -1029,11 +1024,11 @@ def cortar_varias(objetivo, formas, avisos=None):
         return objetivo
     cajas = [_caja_occ(f, 1e-5, holgada=True) for f in pesan]
     if not all(a.IsOut(b) for a, b in itertools.combinations(cajas, 2)):
-        raise ErrorGeometria("Las herramientas se superponen: hay que cortar de a una.")
+        raise ErrorGeometria("Herramientas superpuestas: cortá de a una.")
     herramienta = compuesto(pesan)
     volumenes = _volumenes_entrada(objetivo, herramienta)
     if volumenes is None:
-        raise ErrorGeometria("Con superficies libres el volumen no comprueba el corte: hay que cortar de a una.")
+        raise ErrorGeometria("Superficies libres: el corte no se comprueba.")
 
     def medir(forma):
         return 0.0 if esta_vacia(forma) else abs(_integral(forma, BRepGProp.VolumeProperties_s))
@@ -1041,7 +1036,7 @@ def cortar_varias(objetivo, formas, avisos=None):
     quita = sum(volumenes[0] - medir(booleano(objetivo, f, "cortar")) for f in pesan)
     resultado = _booleana_verificada(objetivo, herramienta, "cortar", volumenes, avisos, varias=True)
     if abs(volumenes[0] - quita - medir(resultado)) > 1e-6 * (volumenes[0] + quita):
-        raise ErrorGeometria("El corte conjunto no quitó lo que debía: hay que cortar de a una.")
+        raise ErrorGeometria("El corte conjunto falló: cortá de a una.")
     return resultado
 
 
@@ -1077,15 +1072,13 @@ def _booleana_verificada(objetivo, herramienta, operacion, volumenes, avisos, **
         if (p[0], p[2]) < (peor_problema[0], peor_problema[2]):
             mejor, peor_problema = candidato, p
     if peor_problema[0] >= 2:
-        raise ErrorGeometria(f"La operación '{operacion}' dio un resultado imposible ({peor_problema[1]}) y el kernel "
-                             f"no logró corregirlo. {CONSEJO_CONTACTO}")
+        raise ErrorGeometria(f"{operacion} da un imposible ({peor_problema[1]}). {CONSEJO_CONTACTO}")
     libres, no_manifold = _aristas_defectuosas(mejor)
     (la, _), (lb, _) = _aristas_defectuosas(objetivo), _aristas_defectuosas(herramienta)
     if libres > la + lb or "sólido inválido" in peor_problema[1]:
         # No estanco o inválido: nunca sale en silencio (B-39). Solo-no-manifold SÍ se devuelve: el cuerpo sigue
         # estanco y puede ser la geometría real (un agujero tangente a una pared pellizca el material, B-126).
-        raise ErrorGeometria(f"La operación '{operacion}' quedó sin un resultado estanco o válido ({peor_problema[1]}) "
-                             f"y el kernel no logró corregirlo. {CONSEJO_CONTACTO}")
+        raise ErrorGeometria(f"{operacion} sin resultado estanco ({peor_problema[1]}). {CONSEJO_CONTACTO}")
     if avisos is not None:
         avisos.append(f"quedaron {no_manifold} aristas compartidas por más de dos caras (posible contacto tangente "
                       f"o en cuña); {REVISAR}")
@@ -1529,7 +1522,7 @@ def punto_dentro(cara):
     """
     from OCP.BRepClass3d import BRepClass3d_SolidExplorer
     if cara is None or cara.IsNull() or cara.ShapeType() != TopAbs_FACE:
-        raise ErrorGeometria("El perfil no tiene una cara válida para calcular su punto interior.")
+        raise ErrorGeometria("El perfil no tiene una cara válida.")
     try:
         tris = np.asarray(teselar(cara)[0], float).reshape(-1, 3, 3)
         if len(tris):
@@ -1543,9 +1536,9 @@ def punto_dentro(cara):
         pass
     try:
         if not es_valida(cara) or _integral(cara, BRepGProp.SurfaceProperties_s) <= 0:
-            raise ErrorGeometria("El perfil tiene una cara inválida o sin área interior. Revisá sus contornos.")
+            raise ErrorGeometria("El perfil tiene una cara inválida o sin área.")
         if BRepAdaptor_Surface(cara).GetType() != GeomAbs_Plane:
-            raise ErrorGeometria("El punto interior del perfil necesita una cara plana.")
+            raise ErrorGeometria("El punto interior necesita una cara plana.")
         caja = caja_envolvente(cara)
         escala = math.dist(*caja)
         trabajo, cambio = cara, None
@@ -1563,9 +1556,8 @@ def punto_dentro(cara):
     except ErrorGeometria:
         raise
     except Exception as e:  # noqa: BLE001 — las excepciones nativas de OCC no comparten una clase base
-        raise ErrorGeometria("No se pudo clasificar el interior del perfil con OpenCascade.") from e
-    raise ErrorGeometria("La cara es válida, pero no se pudo localizar un punto interior sin triangulación. "
-                         "Revisá las tolerancias de sus contornos.")
+        raise ErrorGeometria("No se clasificó el interior del perfil.") from e
+    raise ErrorGeometria("La cara es válida, pero sin punto interior.")
 
 
 def _brepcheck_estable(forma):

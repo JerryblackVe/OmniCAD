@@ -155,7 +155,7 @@ def test_revolucion_con_el_perfil_cruzando_el_eje_falla(s):
 
 def test_revolucion_con_el_eje_perpendicular_al_perfil_falla(s):
     boceto(s, "Plano", "XY", circulo(20, 0, 5))
-    falla(s, "revolve", "no genera un sólido", sketch="Plano", profile=0, axis="z")
+    falla(s, "revolve", "genera un sólido", sketch="Plano", profile=0, axis="z")
 
 
 def test_revolucion_apoyada_en_el_eje_sigue_andando(s):
