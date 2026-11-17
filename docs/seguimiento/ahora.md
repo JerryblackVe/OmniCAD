@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 | — | Libre. B-620 integrado como Parcial (previa del Vaciado 3,5 → 1,3 s en la VPS; falta medir en Windows con E11) |
 | E7 | — | Libre. B-626 integrado (planos del tamaño de la pieza) |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
-| E9 | Caza + cola OpenCode | 1) caza superficie y construir (corriendo); 2) P-158, un archivo por corrida (GLM, revisa MiniMax), agregándolo a TOPES en 0: timeline/operaciones.py (38), nucleo/geometria.py (22), timeline/ops_modificar.py (19), nucleo/editar_cara.py (17), nucleo/construccion.py (16), nucleo/analisis.py (13), nucleo/vectores.py (9); 3) lo rojo de la caza, con su ID. En rojo (90 %) las lanza el coordinador |
+| E9 | UI-1117 + OpenCode | 2.ª vuelta de las piezas de prueba_ui con ✗ del cierre del 16/11 (lanzador 209588, logs_ui2); lo que sea de la app va con su ID. P-158 del núcleo integrado: 6c65875c |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 
 ## Sigue (en orden)
