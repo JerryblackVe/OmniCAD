@@ -180,7 +180,7 @@ coordinador, E1–E11 y el chat maestro.
    `clear_session` → brief nuevo que empieza leyendo la nota. **Tope: 40 % de contexto para el chat maestro y el
    coordinador, 35 % para E1–E11; aviso al 30 % para todos** (lo mide el hook `ctx25.py`, que dice el tope de cada rol). Quién vacía a quién: E1–E11, el coordinador (nota + `clear_session` + brief); el coordinador y el
    chat maestro se reemplazan solos: nota de traspaso, sesión nueva con el mismo título, Remote Control prendido, y la
-   vieja pasa a «(viejo)» (`clear_session` falla con Remote Control; el maestro además reescribe `~/chat_maestro.txt`). El autocompactado de
+   vieja pasa a «(viejo)»; sin sesiones colgadas: la vieja suelta las que abrió y la nueva queda suelta y fijada (lista en [docs/coordinacion.md](docs/coordinacion.md) › «Lista para abrir el reemplazo») (`clear_session` falla con Remote Control; el maestro además reescribe `~/chat_maestro.txt`). El autocompactado de
    Claude al 70 % queda solo como red de seguridad. Nunca se vacía en medio de un ítem. Detalle: [docs/coordinacion.md](docs/coordinacion.md).
 2. **Ritmo del cupo.** El coordinador mira el semanal con `get_usage` al cerrar cada ítem. Ritmo = lo que queda ÷ días
    hasta el reinicio (los jueves 05:00 de Argentina). Plan: hasta el 19/11, ~8 % por día; del 19 al 26/11, ~13 %; del
