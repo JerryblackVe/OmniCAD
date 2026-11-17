@@ -168,7 +168,7 @@ de OpenCode; las demás la enlazan.
   | Pieza corta de un archivo o mecánica (filas de seguimiento, textos, doc generada, un test) | GLM: `opencode/glm-5.3-flash-free` |
   | Varios archivos con herramientas, y revisar lo de otro modelo | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) |
   | Respaldo de los dos | DeepSeek: `opencode/deepseek-v4.1-flash-free` |
-  | Respaldo extra (CodeBuddy, gratis: `~/.local/cb/codebuddy -p -y --model <m>`, con su Node 22) | `cb:deepseek-v4.1-flash`, `cb:hy3` |
+  | **Primero (prueba de carga 17/11: ~8 s, 4 a la vez sin cortes)**: CodeBuddy gratis (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | `cb:deepseek-v4.1-flash`, `cb:hy3` |
 
   La geometría difícil no va a OpenCode: va a Opus alto. Prohibidos:
   OpenCode Go (sin suscripción) y `mimo` (entrena con los datos).
@@ -185,8 +185,8 @@ de OpenCode; las demás la enlazan.
   más en `~/coordinador/opencode_cola/reserva/`; el vigía de la crontab las pasa a la cola hasta tener 8 y anota «AVISO
   reserva con menos de 8» cuando hay que reponer. Tareas que tocan una lista compartida (p. ej. los TOPES de un test):
   el brief dice «no toques esa lista»; el coordinador la actualiza una sola vez al integrar, así no hay choques.
-- **Cada corrida**: una tarea, en su worktree, con `timeout 1500` y `cp` de respaldo antes. Hasta 4 corridas a la vez
-  en la VPS, de modelos distintos (2 de OpenCode y 2 de CodeBuddy, Gerardo 2026-11-17: exprimirlos mientras Claude está en rojo); en la PC, nunca. Se comprueba con `scripts/tests_afectados.py --correr` y ruff; lo
+- **Cada corrida**: una tarea, en su worktree, con `timeout 1500` y `cp` de respaldo antes. Hasta 6 corridas a la vez
+  en la VPS (2 por modelo de CodeBuddy y 1 por modelo de OpenCode; Gerardo 2026-11-17: exprimirlos; GLM y DeepSeek gratis no contestaron en la prueba de carga); en la PC, nunca. Se comprueba con `scripts/tests_afectados.py --correr` y ruff; lo
   de GLM o DeepSeek lo revisa MiniMax o E9. A main entra solo con el diff revisado por el coordinador.
 - **Vigilancia**: el coordinador y el chat maestro, cada 2 h, comprueban que haya una corrida activa
   (`pgrep -af opencode`); si no la hay, la cola se rellena. Una corrida sin log, sin CPU ni archivos tocados a los
