@@ -44,7 +44,7 @@ lanza() {    # nombre intento modelo [brief extra]
   [ -n "$VARIANTE" ] && [ "${m#cb:}" = "$m" ] && v="--variant $VARIANTE"   # CodeBuddy no tiene variante
   { [ -n "$extra" ] && echo "$extra"; cat "$BRIEF"; } > "$COLA/logs/$n.brief$k.md"
   echo "=== intento $k ($m)" >> "$COLA/logs/$n.log"
-  setsid nohup bash -c "cd '$WT' && timeout 1500 $(cmd "$m") $v \"\$(cat '$COLA/logs/$n.brief$k.md')\" >> '$COLA/logs/$n.log' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.log'" < /dev/null > /dev/null 2>&1 &
+  setsid nohup bash -c "cd '$WT' && timeout 2700 $(cmd "$m") $v \"\$(cat '$COLA/logs/$n.brief$k.md')\" >> '$COLA/logs/$n.log' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.log'" < /dev/null > /dev/null 2>&1 &
   echo "$n $k $m $!" > "$EST/$n"; anota "lanzo $n (intento $k, $m, esfuerzo ${VARIANTE:-del modelo}, pid $!)"
 }
 reintenta() {   # nombre intento modelo motivo
@@ -64,7 +64,7 @@ for f in "$EST"/*; do
   read -r n k m pid < "$f"
   if kill -0 "$pid" 2>/dev/null; then
     if ultimo "$n" | grep -qiE "$CORTE"; then motivo="límite o cupo del modelo"
-    elif quieto "$COLA/logs/$n.log"; then motivo="$MIN min sin escribir"
+    elif source "$COLA/$n.tarea"; quieto "$COLA/logs/$n.log" "$HOME/.codebuddy/projects/$(echo "$WT" | tr / -)"; then motivo="$MIN min sin escribir"
     else continue; fi
     kill -- -"$pid" 2>/dev/null; sleep 5; kill -9 -- -"$pid" 2>/dev/null
     reintenta "$n" "$k" "$m" "$motivo"; continue
