@@ -1356,6 +1356,22 @@ class Visor3D(QOpenGLWidget):
             return None
         return primer_rayo_triangulos(o, d, self._datos_pick(cid)[1], self._pick, ("bvh", id(self._formas[cid])))
 
+    def _choque_dibujado(self, cid, o, d, limite, cortes, tol):
+        """Como `_primer_rayo_cuerpo` pero solo en el tramo que el corte deja dibujado: lo de adelante del plano no
+        tapa ni se elige (B-569, B-576). `cortes` de `_planos_corte()`."""
+        t0, t1 = 0.0, limite
+        for n, p0 in cortes:                    # se dibuja donde t·(n·d) <= n·(p0 - o)
+            dn, s = float(n @ d), float(n @ (p0 - o))
+            if abs(dn) < 1e-12:
+                t1 = t1 if s >= 0 else -math.inf
+            elif dn > 0:
+                t1 = min(t1, s / dn)
+            else:
+                t0 = max(t0, s / dn)
+        t0, t1 = max(0.0, t0 - tol), t1 + tol     # la cara sobre el plano del corte (boceto en una cara) sigue
+        c = self._primer_rayo_cuerpo(cid, o + d * t0, d, t1 - t0) if t0 < t1 else None
+        return None if c is None or c[0] + t0 > t1 else (c[0] + t0, c[1])
+
     @property
     def _sin_capturar(self):
         """Hay componentes dibujados fuera de su lugar: elegir y resaltar, que miran el modelo, quedan en pausa."""
@@ -1373,12 +1389,15 @@ class Visor3D(QOpenGLWidget):
     def cuerpo_bajo_cursor(self, pos):
         """(id de cuerpo, punto 3D) del primero bajo el cursor tal como se dibuja, con `transformaciones`; o None."""
         o, d = self.rayo(pos)
+        cortes, tol = self._planos_corte(), max(self.distancia * 3e-3, 1e-3)
         mejor_t, mejor = math.inf, None
         for cid in self._formas:
             m = self.transformaciones.get(cid)
             inv = None if m is None else np.linalg.inv(m)
-            choque = self._primer_rayo_cuerpo(cid, *((o, d) if inv is None else (inv[:3, :3] @ o + inv[:3, 3], inv[:3, :3] @ d)),
-                                              mejor_t)
+            # los planos de corte son del mundo: al espacio del cuerpo para mirar su rayo (B-576)
+            planos = cortes if inv is None else [(inv[:3, :3] @ n, inv[:3, :3] @ p0 + inv[:3, 3]) for n, p0 in cortes]
+            choque = self._choque_dibujado(cid, *((o, d) if inv is None else (inv[:3, :3] @ o + inv[:3, 3],
+                                              inv[:3, :3] @ d)), mejor_t, planos, tol)
             if choque is not None and choque[0] < mejor_t:
                 mejor_t, mejor = choque[0], cid
         return None if mejor is None else (mejor, o + d * mejor_t)
@@ -1398,8 +1417,9 @@ class Visor3D(QOpenGLWidget):
                 if u0 <= u <= u1 and v0 <= v <= v1 and t < mejor_t:
                     mejor_t, mejor = t, {"ref": ref, "plano": pl, "marco": None, "tris": None}
         if caras:
+            cortes, tol = self._planos_corte(), max(self.distancia * 3e-3, 1e-3)
             for cid in self._formas:
-                choque = self._primer_rayo_cuerpo(cid, o, d, mejor_t)
+                choque = self._choque_dibujado(cid, o, d, mejor_t, cortes, tol)
                 if choque is None:
                     continue
                 t, i = choque
@@ -1766,18 +1786,7 @@ class Visor3D(QOpenGLWidget):
         recortado = lambda p: any(float(n @ (np.asarray(p) - p0)) > tol_t for n, p0 in cortes)  # noqa: E731
 
         def choque_cuerpo(cid, o, d, limite):
-            t0, t1 = 0.0, limite
-            for n, p0 in cortes:                    # se dibuja donde t·(n·d) <= n·(p0 - o)
-                dn, s = float(n @ d), float(n @ (p0 - o))
-                if abs(dn) < 1e-12:
-                    t1 = t1 if s >= 0 else -math.inf
-                elif dn > 0:
-                    t1 = min(t1, s / dn)
-                else:
-                    t0 = max(t0, s / dn)
-            t0, t1 = max(0.0, t0 - tol_t), t1 + tol_t     # la cara sobre el plano del corte (boceto en una cara) sigue
-            c = self._primer_rayo_cuerpo(cid, o + d * t0, d, t1 - t0) if t0 < t1 else None
-            return None if c is None or c[0] + t0 > t1 else (c[0] + t0, c[1])
+            return self._choque_dibujado(cid, o, d, limite, cortes, tol_t)
 
         # 1) cara más cercana (oculta lo que esté detrás)
         t_cara, cara_hit = math.inf, None

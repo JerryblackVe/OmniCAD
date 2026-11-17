@@ -62,7 +62,7 @@ def test_derivar_un_cuerpo_y_parametro_actualizar_y_borrar_origen(origen):
     doc.recalcular()
     resultado = doc.resultado(op.id)
     assert resultado.estado == "error"
-    assert "proyecto de origen" in resultado.mensaje and str(ruta) in resultado.mensaje
+    assert "No encuentro el origen" in resultado.mensaje and str(ruta) in resultado.mensaje
     assert "No encuentro" in resultado.mensaje
 
 

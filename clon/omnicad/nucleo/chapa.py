@@ -97,15 +97,15 @@ def regla(nombre=REGLA_DEFECTO, definicion=None, **ajustes):
     receta. Sin ella, `nombre` se busca en las reglas de fábrica y después en las propias del usuario."""
     if definicion is not None:
         if not isinstance(definicion, dict) or "espesor" not in definicion:
-            raise geo.ErrorGeometria("La definición de la regla tiene que ser un dict con al menos «espesor».")
+            raise geo.ErrorGeometria("La regla necesita un dict con «espesor».")
         base = definicion
     elif nombre in REGLAS:
         base = REGLAS[nombre]
     elif nombre in REGLAS_USUARIO:
         base = REGLAS_USUARIO[nombre]
     else:
-        raise geo.ErrorGeometria(f"Regla de chapa desconocida: {nombre}. Reglas disponibles: "
-                                 f"{', '.join(reglas_disponibles())}.")
+        raise geo.ErrorGeometria(f"Reglas disponibles: {', '.join(reglas_disponibles())}. "
+                                 f"No existe {nombre}.")
     ajustes = {k: v for k, v in ajustes.items() if v is not None}
     desconocidos = set(ajustes) - set(CAMPOS_REGLA)
     if desconocidos:
@@ -121,17 +121,17 @@ def regla(nombre=REGLA_DEFECTO, definicion=None, **ajustes):
         try:
             r[k] = float(r[k])
         except (TypeError, ValueError):
-            raise geo.ErrorGeometria(f"El valor «{k}» de la regla tiene que ser un número: llegó {r[k]!r}.") from None
+            raise geo.ErrorGeometria(f"En la regla, «{k}» no es número: {r[k]!r}.") from None
         if not math.isfinite(r[k]):
-            raise geo.ErrorGeometria(f"El valor «{k}» de la regla tiene que ser un número finito.")
+            raise geo.ErrorGeometria(f"El valor «{k}» de la regla no es finito.")
     if r["espesor"] <= 0:
-        raise geo.ErrorGeometria("El espesor de la chapa tiene que ser positivo.")
+        raise geo.ErrorGeometria("El espesor tiene que ser positivo.")
     if r["radio"] < 0:
         raise geo.ErrorGeometria("El radio de plegado no puede ser negativo.")
     if not 0.0 <= r["k"] <= 1.0:
-        raise geo.ErrorGeometria("El factor K va de 0 a 1 (posición de la fibra neutra dentro del espesor).")
+        raise geo.ErrorGeometria("El factor K va de 0 a 1.")
     if r["alivio_ancho"] <= 0 or r["alivio_profundidad"] < 0 or r["esquina_tam"] <= 0 or r["separacion"] <= 0:
-        raise geo.ErrorGeometria("Los alivios y la separación tienen que ser positivos.")
+        raise geo.ErrorGeometria("Alivios y separación deben ser positivos.")
     if r["alivio_forma"] not in FORMAS_ALIVIO or r["esquina_forma"] not in FORMAS_ESQUINA:
         raise geo.ErrorGeometria("Forma de alivio desconocida.")
     return r
@@ -151,7 +151,7 @@ def definicion_regla(nombre, espesor, k=0.44, material=None, radio=None, alivio_
     if not nombre:
         raise geo.ErrorGeometria("La regla necesita un nombre.")
     if len(nombre) > 80:
-        raise geo.ErrorGeometria("El nombre de la regla es demasiado largo (máximo 80 caracteres).")
+        raise geo.ErrorGeometria("Nombre de regla: máximo 80 caracteres.")
     d = {"nombre": nombre, "espesor": espesor, "k": k, "material": material or None}
     opcionales = {"radio": radio, "alivio_forma": alivio_forma, "alivio_ancho": alivio_ancho,
                   "alivio_profundidad": alivio_profundidad, "esquina_forma": esquina_forma,
@@ -201,7 +201,7 @@ def definir_regla(definicion, guardar=True):
     escribe en `ruta_reglas_propias()` para las próximas sesiones. Devuelve la definición."""
     d = definicion_regla(**definicion)
     if any(d["nombre"].casefold() == n.casefold() for n in REGLAS):
-        raise geo.ErrorGeometria(f"«{d['nombre']}» es una regla de fábrica: elegí otro nombre para la regla propia.")
+        raise geo.ErrorGeometria(f"«{d['nombre']}» es una regla de fábrica.")
     REGLAS_USUARIO[d["nombre"]] = d
     if guardar:
         escribir_biblioteca_json(ruta_reglas_propias(), "reglas", d["nombre"], d)
@@ -587,11 +587,11 @@ def _armar(piezas, que):
     esperado = sum(v for _, v in piezas)
     real = geo.volumen(forma)
     if esperado - real > max(1e-6, 1e-7 * esperado):
-        raise geo.ErrorGeometria(f"{que}: partes de la chapa se superponen ({esperado - real:.3g} mm³). Probá otra "
-                                 "posición del pliegue, menos altura o un alivio de esquina.")
+        raise geo.ErrorGeometria(f"{que}: se superponen "
+                                 f"{esperado - real:.3g} mm³.")
     sols = geo.solidos(forma)
     if len(sols) > 1:
-        raise geo.ErrorGeometria(f"{que}: la chapa quedó partida en {len(sols)} piezas sueltas.")
+        raise geo.ErrorGeometria(f"{que}: chapa partida en {len(sols)} piezas.")
     return sols[0] if sols else forma
 
 
@@ -703,8 +703,8 @@ def ubicar_arista(modelo, arista):
                 libres = _intervalos_libres(modelo, pid, p[:2], q[:2])
                 if libres:
                     return pid, p[:2], q[:2], w, libres
-    raise geo.ErrorGeometria("La arista elegida no es un borde libre de una cara plana de la chapa (elegí una arista "
-                             "del borde de la cara de arriba o de abajo, no la de un pliegue ni la del espesor).")
+    raise geo.ErrorGeometria("La arista no es un borde libre "
+                             "de la chapa.")
 
 
 def _normal_exterior(caras, p, d, s):
@@ -715,7 +715,7 @@ def _normal_exterior(caras, p, d, s):
         return -izq
     if adentro_der and not adentro_izq:
         return izq
-    raise geo.ErrorGeometria("La arista elegida no está en el borde de la cara.")
+    raise geo.ErrorGeometria("La arista no está en el borde de la cara.")
 
 
 def _punto_en_cara(cara):
@@ -728,7 +728,7 @@ def _punto_en_cara(cara):
 def placa_de_cara(modelo, cara, punto=None):
     """(placa, w) de una cara plana de arriba (w = t) o de abajo (w = 0) de la pieza. `punto` (el clic) desempata."""
     if BRepAdaptor_Surface(cara).GetType() != GeomAbs_Plane:
-        raise geo.ErrorGeometria("Elegí una cara plana de la chapa (la de arriba o la de abajo).")
+        raise geo.ErrorGeometria("Elegí una cara plana de la chapa.")
     t = modelo["regla"]["espesor"]
     x = np.asarray(punto, float) if punto is not None else _punto_en_cara(cara)
     f = _m(modelo)
@@ -737,7 +737,7 @@ def placa_de_cara(modelo, cara, punto=None):
         for w in (0.0, t):
             if abs(local[2] - w) < 1e-4 and _dentro(region_a_caras(modelo["placas"][pid]), local[:2]):
                 return pid, w
-    raise geo.ErrorGeometria("La cara elegida no es la cara de arriba ni la de abajo de una parte plana de la chapa.")
+    raise geo.ErrorGeometria("La cara no es de arriba ni de abajo.")
 
 
 def pliegue_de_cara(modelo, cara):
@@ -761,7 +761,7 @@ def pliegue_de_cara(modelo, cara):
             continue
         if min(abs(cil.Radius() - b["radio"]), abs(cil.Radius() - b["radio"] - t)) < 1e-5:
             return bid
-    raise geo.ErrorGeometria("La cara elegida no es un pliegue de esta chapa.")
+    raise geo.ErrorGeometria("La cara no es un pliegue de esta chapa.")
 
 
 # ---------------------------------------------------------------- pestañas (de arista y dobladillo)
@@ -777,7 +777,7 @@ def recorte_y_largo(altura, angulo, radio, espesor, posicion="interior", referen
     (la cara exterior de la pestaña queda en la arista), exterior (la interior queda en la arista), adyacente
     (el pliegue empieza en la arista) o tangente (la curva exterior toca la arista)."""
     if not 0 < angulo < 180:
-        raise geo.ErrorGeometria("El ángulo de la pestaña va entre 0° y 180° (sin incluirlos).")
+        raise geo.ErrorGeometria("El ángulo de la pestaña va entre 0° y 180°.")
     th = math.radians(angulo)
     tg = math.tan(th / 2)
     tang = (radio + espesor) * (math.sin(th) if angulo <= 90 else 1.0)
@@ -789,8 +789,8 @@ def recorte_y_largo(altura, angulo, radio, espesor, posicion="interior", referen
         raise geo.ErrorGeometria(f"Referencia de altura desconocida: {referencia}")
     largo = altura - retiros[referencia]
     if largo <= TOL:
-        raise geo.ErrorGeometria(f"La altura tiene que ser mayor que lo que ocupa el pliegue "
-                                 f"({retiros[referencia]:.3g} mm).")
+        raise geo.ErrorGeometria(f"La altura debe superar "
+                                 f"{retiros[referencia]:.3g} mm de pliegue.")
     return recortes[posicion], largo
 
 
@@ -806,9 +806,9 @@ def _intervalo_ancho(libres, ancho, distancia, distancia1, distancia2):
     else:
         raise geo.ErrorGeometria(f"Tipo de ancho desconocido: {ancho}")
     if b - a <= TOL:
-        raise geo.ErrorGeometria("El ancho de la pestaña tiene que ser positivo.")
+        raise geo.ErrorGeometria("El ancho de la pestaña debe ser positivo.")
     if a < s0 - TOL or b > s1 + TOL:
-        raise geo.ErrorGeometria("La pestaña es más ancha que la arista elegida.")
+        raise geo.ErrorGeometria("La pestaña es más ancha que la arista.")
     return a, b
 
 

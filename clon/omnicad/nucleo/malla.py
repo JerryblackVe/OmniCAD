@@ -92,9 +92,9 @@ class Malla:
         if len(g) != len(c):
             raise geo.ErrorGeometria("Tiene que haber un grupo por cara.")
         if len(c) and (c.min() < 0 or c.max() >= len(v)):
-            raise geo.ErrorGeometria("Hay caras que apuntan a vértices que no existen.")
+            raise geo.ErrorGeometria("Hay caras con vértices inexistentes.")
         if not np.isfinite(v).all():
-            raise geo.ErrorGeometria("La malla tiene coordenadas no finitas (NaN o infinito).")
+            raise geo.ErrorGeometria("La malla tiene coordenadas no finitas.")
         self.vertices, self.caras, self.grupos = v, c, g
 
     @classmethod
@@ -625,7 +625,7 @@ def leer_stl(ruta, *, unidades="mm"):
         try:
             tris = np.array(numeros, dtype=np.float64).reshape(-1, 3, 3)
         except ValueError as e:
-            raise geo.ErrorGeometria("El STL ASCII tiene coordenadas inválidas o triángulos incompletos.") from e
+            raise geo.ErrorGeometria("El STL ASCII tiene datos inválidos.") from e
     elif n >= 0 and len(datos) > 84 + 50 * n:
         tris = np.frombuffer(datos, _DT_STL, n, 84)["v"].astype(np.float64)
     else:
@@ -732,9 +732,7 @@ def _leer_miembro_3mf(z, nombre):
     """Lee un miembro del ZIP del 3MF con tope (`TOPE_MIEMBRO_3MF`): un archivo hostil falla con un
     error claro en vez de descomprimir una zip bomb en la RAM."""
     if z.getinfo(nombre).file_size > TOPE_MIEMBRO_3MF:
-        raise geo.ErrorGeometria(f"El miembro «{nombre}» del 3MF pesa {z.getinfo(nombre).file_size} bytes "
-                                 f"descomprimidos, más que el tope de {TOPE_MIEMBRO_3MF}: el archivo parece "
-                                 "dañado o hostil.")
+        raise geo.ErrorGeometria(f"3MF: «{nombre}» {z.getinfo(nombre).file_size} bytes, tope {TOPE_MIEMBRO_3MF}")
     return z.read(nombre)
 
 
@@ -799,7 +797,7 @@ def leer_3mf(ruta, *, unidades=None):
     def agregar(oid, T, profundidad):
         obj = objetos.get(oid)
         if obj is None or profundidad > 16:
-            raise geo.ErrorGeometria(f"El 3MF referencia un objeto inexistente o anidado de más: {oid}")
+            raise geo.ErrorGeometria(f"3MF: objeto inexistente o anidado: {oid}")
         malla = obj.find(q("mesh"))
         if malla is not None:
             V = np.array([(float(e.get("x")), float(e.get("y")), float(e.get("z")))
@@ -839,7 +837,7 @@ def _ply_lista_caras(props):
     for i, (nombre, _tipo, cuenta) in enumerate(props):
         if cuenta is not None and nombre in ("vertex_indices", "vertex_index"):
             return i
-    raise geo.ErrorGeometria("El PLY no tiene la lista 'vertex_indices' en las caras.")
+    raise geo.ErrorGeometria("El PLY no tiene la lista 'vertex_indices'.")
 
 
 def _ply_vertices(arr_o_columnas, nombres):
@@ -939,7 +937,7 @@ def leer_ply(ruta, *, unidades="mm"):
         else:
             raise geo.ErrorGeometria(f"Formato PLY no soportado: {formato}")
     except (KeyError, IndexError, ValueError) as e:
-        raise geo.ErrorGeometria(f"El PLY está dañado o usa un tipo no soportado: {e}") from e
+        raise geo.ErrorGeometria(f"PLY dañado o tipo no soportado: {e}") from e
     if V is None or not C:
         raise geo.ErrorGeometria("El PLY no tiene vértices o caras.")
     return Malla(V * f, C)
@@ -974,7 +972,7 @@ def leer(ruta, **opciones):
     """Lee una malla eligiendo el formato por la extensión (.stl, .obj, .3mf, .ply)."""
     ext = Path(ruta).suffix.lower()
     if ext not in _LECTORES:
-        raise geo.ErrorGeometria(f"Formato de malla no soportado: {ext} (usá .stl, .obj, .3mf o .ply)")
+        raise geo.ErrorGeometria(f"Formato de malla no soportado: {ext}")
     return _LECTORES[ext](ruta, **opciones)
 
 
@@ -982,7 +980,7 @@ def escribir(m, ruta, **opciones):
     """Guarda una malla eligiendo el formato por la extensión (.stl, .obj, .3mf, .ply)."""
     ext = Path(ruta).suffix.lower()
     if ext not in _ESCRITORES:
-        raise geo.ErrorGeometria(f"Formato de malla no soportado: {ext} (usá .stl, .obj, .3mf o .ply)")
+        raise geo.ErrorGeometria(f"Formato de malla no soportado: {ext}")
     return _ESCRITORES[ext](m, ruta, **opciones)
 
 
@@ -1000,7 +998,7 @@ def desde_brep(forma, *, refinamiento="medio", desviacion=None, angulo=None,
     if refinamiento not in (*_REFINAMIENTO, "personalizado"):
         raise geo.ErrorGeometria(f"Refinamiento desconocido: {refinamiento}")
     if refinamiento == "personalizado" and desviacion is None and angulo is None:
-        raise geo.ErrorGeometria("El refinamiento personalizado necesita desviacion y/o angulo.")
+        raise geo.ErrorGeometria("Personalizado: falta desviación o ángulo.")
     caja = geo.caja_envolvente(forma) if forma is not None else None
     if caja is None:
         raise geo.ErrorGeometria("La forma no tiene geometría para teselar.")
@@ -1009,7 +1007,7 @@ def desde_brep(forma, *, refinamiento="medio", desviacion=None, angulo=None,
     desv = float(desviacion) if desviacion is not None else frac * diag
     ang = float(angulo) if angulo is not None else ang
     if not math.isfinite(desv) or desv <= 0 or not 0 < ang < 180:
-        raise geo.ErrorGeometria("La desviación debe ser positiva y el ángulo estar entre 0° y 180°.")
+        raise geo.ErrorGeometria("Desviación > 0 y ángulo entre 0° y 180°.")
     copia = BRepBuilderAPI_Copy(forma, True, False).Shape()   # sin la malla de visualización previa
     tris, grupos = [], []
     for k, (_cara, t) in enumerate(geo.teselar_por_cara(copia, desv, math.radians(ang))):
@@ -1070,9 +1068,9 @@ def refinar_triangulos(m, *, longitud_maxima=0.0, relacion_aspecto=0.0):
     ni mover la superficie teselada. 0 desactiva el límite. La relación es arista mayor / altura menor;
     si la geometría no permite alcanzarla por subdivisión, falla en vez de exportar incumpliéndola."""
     if not math.isfinite(longitud_maxima) or longitud_maxima < 0:
-        raise geo.ErrorGeometria("La longitud máxima debe ser finita y no negativa (0 = sin límite).")
+        raise geo.ErrorGeometria("Longitud máxima ≥ 0 y finita (0 = sin tope).")
     if not math.isfinite(relacion_aspecto) or (relacion_aspecto != 0 and relacion_aspecto <= 2 / math.sqrt(3)):
-        raise geo.ErrorGeometria("La relación de aspecto debe ser mayor que 1,154701 (0 = sin límite).")
+        raise geo.ErrorGeometria("Relación de aspecto > 1,154701 (0 = libre).")
     if not longitud_maxima and not relacion_aspecto:
         return m
     for _ in range(24):
@@ -1083,7 +1081,7 @@ def refinar_triangulos(m, *, longitud_maxima=0.0, relacion_aspecto=0.0):
         if relacion_aspecto:
             doble_area = 2 * m.areas_caras()
             if np.any(doble_area == 0):
-                raise geo.ErrorGeometria("No se puede controlar el aspecto de triángulos sin área.")
+                raise geo.ErrorGeometria("Sin área no se puede medir el aspecto.")
             malas |= mayor ** 2 > relacion_aspecto * doble_area * (1 + 1e-12)
         if not malas.any():
             return m
@@ -1092,7 +1090,7 @@ def refinar_triangulos(m, *, longitud_maxima=0.0, relacion_aspecto=0.0):
         aristas = np.unique(np.sort(np.stack([caras[np.arange(len(j)), j],
                                               caras[np.arange(len(j)), (j + 1) % 3]], axis=1), axis=1), axis=0)
         if len(m.caras) + 2 * len(aristas) > TRIANGULOS_MAXIMOS_REMALLADO:
-            raise geo.ErrorGeometria("El refinado supera los 100.000 triángulos: aumentá los límites personalizados.")
+            raise geo.ErrorGeometria("El refinado supera los 100.000 triángulos.")
         ed = _Editor(m.vertices, m.caras, m.grupos)
         for a, b in aristas.tolist():
             ed.dividir(a, b)
@@ -1100,7 +1098,7 @@ def refinar_triangulos(m, *, longitud_maxima=0.0, relacion_aspecto=0.0):
             _mejorar_diagonales(ed)
             _relajar_planos(ed)
         m = ed.exportar()
-    raise geo.ErrorGeometria("No se pudieron alcanzar los límites por subdivisión: aumentá la longitud o el aspecto.")
+    raise geo.ErrorGeometria("No se alcanzaron los límites de subdivisión.")
 
 
 # ---------------------------------------------------------------- reparar
@@ -1202,7 +1200,7 @@ def reparar(m, *, tipo="cerrar_agujeros", tolerancia=None, umbral_cascara=0.001,
     tolerancia: mm (por defecto una millonésima de la diagonal de la caja)."""
     tipos = ("cerrar_agujeros", "unir_vertices", "coser_y_quitar", "reconstruir")
     if tipo not in tipos:
-        raise geo.ErrorGeometria(f"Tipo de reparación desconocido: {tipo} (usá {', '.join(tipos)}).")
+        raise geo.ErrorGeometria(f"Tipo de reparación desconocido: {tipo}")
     if not len(m.caras):
         raise geo.ErrorGeometria("La malla está vacía.")
     tol = 1e-6 * _diagonal(m.vertices) if tolerancia is None else float(tolerancia)
@@ -1224,15 +1222,11 @@ def reparar(m, *, tipo="cerrar_agujeros", tolerancia=None, umbral_cascara=0.001,
         return remallar(r, densidad=densidad)
     except _RemalladoExcesivo as e:     # Reparar no tiene densidad: lo que baja la cuenta es reducir la malla antes
         if e.pico_maximo is not None:
-            raise geo.ErrorGeometria(f"Reconstruir pasaría de {_miles(e.pico_maximo)} triángulos (el máximo) al "
-                                     f"dividir las aristas largas (astillas de un teselado: triángulos largos y finos): "
-                                     f"reducí antes la malla (Modificar › Reducir).") from None
+            raise geo.ErrorGeometria(f"Reconstruir pasaría de {_miles(e.pico_maximo)} triángulos.") from None
         if not (e.triangulos and math.isfinite(e.triangulos)):
             raise
-        objetivo = _tres_cifras(len(r.caras) * TRIANGULOS_MAXIMOS_REMALLADO / e.triangulos, abajo=True)
-        raise geo.ErrorGeometria(f"Reconstruir daría unos {_miles(e.triangulos)} triángulos y el máximo es "
-                                 f"{_miles(TRIANGULOS_MAXIMOS_REMALLADO)}: reducí antes la malla (Modificar › "
-                                 f"Reducir) a unos {objetivo} triángulos o menos.") from None
+        raise geo.ErrorGeometria(f"Reconstruir: {_miles(e.triangulos)} triángulos, "
+                                 f"máx {_miles(TRIANGULOS_MAXIMOS_REMALLADO)}.") from None
 
 
 # ---------------------------------------------------------------- grupos de caras
@@ -1297,7 +1291,7 @@ def combinar_grupos(m, ids):
     ncomp, _ = connected_components(coo_matrix((np.ones(len(a)), (a, b)), shape=(len(ids), len(ids))),
                                     directed=False)
     if ncomp > 1:
-        raise geo.ErrorGeometria("Los grupos a combinar tienen que estar unidos por aristas compartidas.")
+        raise geo.ErrorGeometria("Los grupos deben estar unidos por aristas.")
     g = m.grupos.copy()
     g[np.isin(g, ids)] = ids[0]
     return Malla(m.vertices, m.caras, g)
@@ -1309,7 +1303,7 @@ def crear_grupo(m, ids_caras=(), ids_grupos=()):
     c = np.unique(np.asarray(list(ids_caras), np.int64))
     gs = np.unique(np.asarray(list(ids_grupos), np.int64))
     if not len(c) and not len(gs):
-        raise geo.ErrorGeometria("Elegí las caras o los grupos para el grupo nuevo.")
+        raise geo.ErrorGeometria("Elegí caras o grupos para el grupo nuevo.")
     if len(c) and (c.min() < 0 or c.max() >= len(m.caras)):
         raise geo.ErrorGeometria("Las caras elegidas no existen en la malla.")
     if len(gs):

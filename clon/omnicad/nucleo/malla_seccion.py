@@ -126,7 +126,7 @@ def tramo(P, cerrada, inicio, fin, camino="corto"):
     L = S[-1]
     (sa, qa), (sb, qb) = _ubicar(Q, np.asarray(inicio, float)), _ubicar(Q, np.asarray(fin, float))
     if math.dist(qa, qb) < 1e-6 and (not cerrada or abs(sa - sb) < 1e-6 or abs(abs(sa - sb) - L) < 1e-6):
-        raise geo.ErrorGeometria("El primer y el segundo punto caen en el mismo lugar de la sección.")
+        raise geo.ErrorGeometria("Puntos inicial y final en el mismo lugar.")
     S = S[:-1] if cerrada else S                      # un parámetro por vértice de P
     if cerrada:
         adelante = (sb - sa) % L
@@ -170,11 +170,11 @@ def _elipse(P):
         M = np.array([M[2] / 2, -M[1], M[0] / 2])
         val, vec = np.linalg.eig(M)
     except np.linalg.LinAlgError as e:
-        raise geo.ErrorGeometria("La sección no se puede aproximar con una elipse.") from e
+        raise geo.ErrorGeometria("Sección no se puede aproximar con una elipse.") from e
     vec = np.real(vec)
     elegidos = vec[:, 4 * vec[0] * vec[2] - vec[1] ** 2 > 0]
     if not elegidos.shape[1]:
-        raise geo.ErrorGeometria("La sección no se puede aproximar con una elipse.")
+        raise geo.ErrorGeometria("Sección no se puede aproximar con una elipse.")
     A, B, C = elegidos[:, 0]
     Dd, E, F = T @ elegidos[:, 0]
     centro = np.linalg.solve([[2 * A, B], [B, 2 * C]], [-Dd, -E])
@@ -182,7 +182,7 @@ def _elipse(P):
     lam, ejes = np.linalg.eigh([[A, B / 2], [B / 2, C]])
     semi = -Fc / lam
     if not (semi > 0).all():
-        raise geo.ErrorGeometria("La sección no se puede aproximar con una elipse.")
+        raise geo.ErrorGeometria("Sección no se puede aproximar con una elipse.")
     semi = np.sqrt(semi)
     mayor = int(np.argmax(semi))
     c = centro + m
@@ -280,13 +280,13 @@ def ajustar(P, cerrada, tipo, *, inicio=None, fin=None, camino="corto", toleranc
         raise geo.ErrorGeometria(f"Tipo de curva desconocido: {tipo}")
     if (tipo in CERRADOS or tipo == "lineas_arcos") and inicio is None:
         if tipo in CERRADOS and not cerrada:
-            raise geo.ErrorGeometria("La sección está abierta: una curva cerrada necesita una sección cerrada.")
+            raise geo.ErrorGeometria("Sección abierta: no admite una curva cerrada.")
         if tipo == "lineas_arcos":
             return _lineas_arcos(P, cerrada, desviacion)
         if tipo == "circulo":
             circ = _circulo(P)
             if circ is None:
-                raise geo.ErrorGeometria("La sección no se puede aproximar con un círculo.")
+                raise geo.ErrorGeometria("Sección no se puede aproximar con un círculo.")
             return [{"tipo": "circulo", "centro": circ[0], "radio": circ[1], "datos": P, "cerrada": True}]
         if tipo == "elipse":
             centro, mayor, menor = _elipse(P)
@@ -298,7 +298,7 @@ def ajustar(P, cerrada, tipo, *, inicio=None, fin=None, camino="corto", toleranc
             idx = sorted({0, len(P) // 3, 2 * len(P) // 3})
         return [{"tipo": "spline", "puntos": list(P[idx]), "cerrada": True, "datos": P}]
     if inicio is None or fin is None:
-        raise geo.ErrorGeometria("Las curvas abiertas necesitan el primer y el segundo punto sobre la sección.")
+        raise geo.ErrorGeometria("Curvas abiertas: piden punto inicial y final.")
     Q = tramo(P, cerrada, inicio, fin, camino)
     if tipo == "lineas_arcos":
         return _lineas_arcos(Q, False, desviacion)
@@ -310,8 +310,7 @@ def ajustar(P, cerrada, tipo, *, inicio=None, fin=None, camino="corto", toleranc
         return [{"tipo": "arco", "puntos": [Q[0], medio, Q[-1]], "datos": Q}]
     if tipo == "spline":
         return [{"tipo": "spline", "puntos": list(Q[_dp(Q, tolerancia)]), "cerrada": False, "datos": Q}]
-    raise geo.ErrorGeometria("Las curvas cerradas (spline cerrada, círculo, elipse) siguen toda la sección: "
-                             "no llevan primer ni segundo punto.")
+    raise geo.ErrorGeometria("Curva cerrada: sin punto inicial ni final.")
 
 
 # ---------------------------------------------------------------- al boceto

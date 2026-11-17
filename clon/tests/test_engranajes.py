@@ -119,7 +119,7 @@ def test_helicoidal_valido_y_mismo_perfil_en_cada_seccion():
 
 
 def test_errores_claros():
-    with pytest.raises(geo.ErrorGeometria, match="entre 3 y"):
+    with pytest.raises(geo.ErrorGeometria, match="va de 3 a"):
         en.engranaje(M, 2)
     with pytest.raises(geo.ErrorGeometria, match="entero"):
         en.medidas_engranaje(M, 20.5)

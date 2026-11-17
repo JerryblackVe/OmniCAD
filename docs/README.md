@@ -14,6 +14,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [seguimiento/faltantes.md](seguimiento/faltantes.md) | Funciones pendientes (todavía no existen) |
 | [seguimiento/mejoras.md](seguimiento/mejoras.md) | Mejoras pendientes de lo que ya existe: rendimiento, interfaz, instalador |
 | [seguimiento/despues.md](seguimiento/despues.md) | Prioridad 2 congelada (render, animación, simulación, malla, plástico, chapa, dibujo, IA, escaneo, extensiones…): no se toma sin que Gerardo la descongele |
+| [seguimiento/preparado/](seguimiento/preparado/) | Fichas de preparación de un bug para otra sesión: repro, ayuda de Fusion y archivo:línea sospechoso, sin arreglo |
 | Página de seguimiento (Artifact) | Vista web de bugs, faltantes, mejoras, lo último resuelto y los prompts para agentes; se refresca con `scripts/seguimiento_json.py` (pasos en `CLAUDE.md`). No es fuente de verdad |
 | [../PROJECT_LOG.md](../PROJECT_LOG.md) | Bitácora: estado en una tabla, registro de cada tarea y lecciones aprendidas |
 | [historial/](historial/) | Registro histórico de tareas de PROJECT_LOG.md, archivado por mes, [lecciones archivadas](historial/lecciones_archivo.md) y [pruebas nocturnas ya verdes](historial/prueba_nocturna_verde_2026-11.md) |

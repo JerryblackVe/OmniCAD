@@ -212,7 +212,7 @@ def marco_orientacion(nombre):
 def direccion_proyectada(dx, dy):
     """Sector de la posición respecto de la vista padre: (±1, 0) o (0, ±1) ortogonal, diagonal = isométrica."""
     if abs(dx) < 1e-9 and abs(dy) < 1e-9:
-        raise geo.ErrorGeometria("La vista proyectada tiene que quedar a un costado de la vista padre.")
+        raise geo.ErrorGeometria("La vista proyectada va junto a la padre.")
     k = round(math.degrees(math.atan2(dy, dx)) / 45.0) % 8
     return [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)][k]
 
@@ -370,7 +370,7 @@ def proyectar(forma, marco, metodo="exacto", deflexion=None, respaldo=True, info
             salida = {c: [np.asarray(p, float) for p in crudo[c]] for c in CATEGORIAS}
         except aislado.TareaAislada as ex:
             if not respaldo:
-                raise geo.ErrorGeometria(f"El método exacto no terminó: {ex}. Probá con el método rápido.") from None
+                raise geo.ErrorGeometria(f"El método exacto no terminó: {ex}.") from None
             metodo = "rapido"
             if info is not None:
                 info["motivo"] = str(ex)
@@ -490,7 +490,7 @@ def cortar_por_linea(forma, padre, p1, p2, lado=1):
     Devuelve (forma cortada, marco de la sección, (origen 3D, normal 3D del plano))."""
     p1, p2 = np.asarray(p1, float), np.asarray(p2, float)
     if np.linalg.norm(p2 - p1) < 1e-9:
-        raise geo.ErrorGeometria("La línea de sección necesita dos puntos distintos.")
+        raise geo.ErrorGeometria("La línea de sección necesita dos puntos.")
     t = _unit(p2 - p1)
     m = (1 if lado >= 0 else -1) * np.array([-t[1], t[0]])
     origen = padre.a_3d(p1)
@@ -499,7 +499,7 @@ def cortar_por_linea(forma, padre, p1, p2, lado=1):
     medio = BRepPrimAPI_MakeHalfSpace(cara, gp_Pnt(*map(float, origen + normal))).Solid()
     corte = BRepAlgoAPI_Cut(forma, medio)
     if not corte.IsDone():
-        raise geo.ErrorGeometria("El corte de la vista de sección falló en el kernel.")
+        raise geo.ErrorGeometria("El corte de la sección falló en el kernel.")
     return corte.Shape(), _marco_girado(padre, m, 1), (origen, normal)
 
 
@@ -722,7 +722,7 @@ def sector_angular(a0, a1, b0, b1, lugar):
     """(vértice, ángulo inicial, barrido) en radianes del ángulo entre dos aristas que contiene a `lugar`."""
     v = interseccion_rectas(a0, a1, b0, b1)
     if v is None:
-        raise geo.ErrorGeometria("Las aristas son paralelas: no forman un ángulo.")
+        raise geo.ErrorGeometria("Las aristas son paralelas: no hay ángulo.")
     dos_pi = 2 * math.pi
     aq = math.atan2(lugar[1] - v[1], lugar[0] - v[0]) % dos_pi
     rayos = []
@@ -810,7 +810,7 @@ def lugar_linea_base(base, punto, lugar, indice=0):
     la primera va en `lugar` y las siguientes se apilan con SEPARACION_BASE, del mismo lado de la geometría."""
     base, punto, lugar = (np.asarray(v, float) for v in (base, punto, lugar))
     if np.linalg.norm(punto - base) < 1e-9:
-        raise geo.ErrorGeometria("La cota de línea base necesita un punto distinto de la referencia.")
+        raise geo.ErrorGeometria("La cota de línea base necesita otro punto.")
     u = _unit(punto - base)
     if abs(u[0]) > abs(u[1]):
         u, tipo = np.array([1.0, 0.0]) * math.copysign(1.0, u[0]), "horizontal"
@@ -1237,7 +1237,7 @@ class Dibujo:
             return
         forma, faltan = self._forma_de(v)
         if forma is None:
-            raise geo.ErrorGeometria("Los cuerpos de la vista ya no existen en el diseño.")
+            raise geo.ErrorGeometria("Los cuerpos de la vista ya no existen.")
         if v.tipo == "seccion":
             padre = self.vista(v.padre)
             forma, v.marco, plano = cortar_por_linea(forma, padre.marco, v.linea[0], v.linea[1], v.lado)
@@ -1324,7 +1324,7 @@ class Dibujo:
         padre = self.vista(padre_id)
         a, b = padre.de_hoja(p1), padre.de_hoja(p2)
         if np.linalg.norm(b - a) < 1e-9:
-            raise geo.ErrorGeometria("La línea de sección necesita dos puntos distintos.")
+            raise geo.ErrorGeometria("La línea de sección necesita dos puntos.")
         t = b - a
         lado_hoja = padre.de_hoja(posicion) - a
         lado = 1 if (t[0] * lado_hoja[1] - t[1] * lado_hoja[0]) >= 0 else -1
@@ -1340,7 +1340,7 @@ class Dibujo:
         """Vista de detalle (Detail View): círculo (centro y radio en la hoja) ampliado; por defecto al doble."""
         padre = self.vista(padre_id)
         if radio <= 0:
-            raise geo.ErrorGeometria("El círculo de detalle necesita un radio positivo.")
+            raise geo.ErrorGeometria("El círculo de detalle pide radio positivo.")
         v = Vista(self._nuevo_id("v"), "detalle", padre=padre_id, centro_detalle=padre.de_hoja(centro),
                   radio_detalle=radio / padre.escala, escala=escala or padre.escala * 2, posicion=posicion,
                   estilo=None, tangentes=padre.tangentes, marcas_centro=padre.marcas_centro,
@@ -1399,9 +1399,9 @@ class Dibujo:
             q = np.asarray(a["puntos"], float)
             dist = np.linalg.norm(q[1:] - q[0], axis=1)
             if np.ptp(dist) > max(1e-6, 1e-6 * float(dist[0])):
-                raise geo.ErrorGeometria("Los puntos del arco no están todos a la misma distancia del centro.")
+                raise geo.ErrorGeometria("Los puntos del arco no equidistan del centro.")
             if _barrido_arco(q) < 1e-9:
-                raise geo.ErrorGeometria("El arco a acotar no tiene recorrido (inicio y fin coinciden).")
+                raise geo.ErrorGeometria("El arco no tiene recorrido.")
         self.anotaciones.append(a)
         return a
 
@@ -1850,7 +1850,7 @@ class Dibujo:
     def desde_dict(cls, datos):
         version = datos.get("version", 1)
         if version > 1:
-            raise geo.ErrorGeometria(f"El dibujo es de una versión más nueva ({version}) que la soportada (1).")
+            raise geo.ErrorGeometria(f"Dibujo v{version} más nuevo; soporta v1.")
         hoja = datos.get("hoja", {})
         d = cls(hoja.get("tamano", "A3"), hoja.get("orientacion", "horizontal"), hoja.get("norma", "ISO"))
         d.diedro = hoja.get("diedro", d.diedro)

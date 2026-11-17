@@ -37,14 +37,16 @@ def test_b454_el_asa_del_empalme_llega_al_limite_con_la_previa_aparte(tmp_path, 
     monkeypatch.setattr(comando, "PREVIA_EN_VENTANA_MS", 1)     # como en Windows: toda previa del empalme va aparte
     app = QApplication.instance() or QApplication([])
     s = api.Sesion()
+    # B-608/B-613: un agujero interior da una cara curva, así que el empalme sigue yendo en proceso aparte; la arista de arriba no cambia.
     assert api.llamar(s, "sketch_from_spec", {"entities": [
-        {"type": "rectangle", "corner1": [0, 0], "corner2": [92.18, 51.84]}]})["ok"]
+        {"type": "rectangle", "corner1": [0, 0], "corner2": [92.18, 51.84]},
+        {"type": "circle", "center": [46.09, 25.92], "radius": 5}]})["ok"]
     boceto = s.doc.operaciones[-1].id
     v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
     v.show()
     try:
         p = v.ejecutar_comando(Extruir())
-        perfil = s.doc.estado_final.bocetos[boceto].perfiles[0]
+        perfil = max(s.doc.estado_final.bocetos[boceto].perfiles, key=lambda pf: pf.area)  # el rectángulo, no el agujero
         p._elegida(hit_desde_ref({"tipo": "perfil", "boceto": boceto, **OpExtrusion.referencia_perfil(perfil)}, p.ctx.estado))
         p.set_valor("distancia", "113.23 mm")
         _esperar(p)

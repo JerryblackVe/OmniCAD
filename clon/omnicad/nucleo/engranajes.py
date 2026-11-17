@@ -74,7 +74,7 @@ def _inv(a):
 def _inv_inversa(y):
     """α tal que inv(α) = y (Newton; y ≥ 0)."""
     if y < 0:
-        raise geo.ErrorGeometria("El ángulo de presión de trabajo da negativo: revisá los desplazamientos de perfil.")
+        raise geo.ErrorGeometria("El ángulo de presión de trabajo da negativo.")
     a = (3 * y) ** (1 / 3) if y > 0 else 0.0           # inv(α) ≈ α³/3 para α chico
     for _ in range(60):
         f = _inv(a) - y
@@ -94,14 +94,14 @@ def _finito(valor, que):
     except (TypeError, ValueError):
         raise geo.ErrorGeometria(f"{que} tiene que ser un número; llegó {valor!r}.") from None
     if not math.isfinite(v):
-        raise geo.ErrorGeometria(f"{que} tiene que ser un número finito; llegó {valor!r}.")
+        raise geo.ErrorGeometria(f"{que} tiene que ser finito; llegó {valor!r}.")
     return v
 
 
 def _positivo(valor, que):
     v = _finito(valor, que)
     if v <= 0:
-        raise geo.ErrorGeometria(f"{que} tiene que ser mayor que cero; llegó {v:g}.")
+        raise geo.ErrorGeometria(f"{que} tiene que ser positivo; llegó {v:g}.")
     return v
 
 
@@ -109,9 +109,9 @@ def _entero(valor, que, minimo):
     v = _finito(valor, que)
     n = round(v)
     if abs(v - n) > 1e-9:
-        raise geo.ErrorGeometria(f"{que} tiene que ser un número entero; llegó {v:g}.")
+        raise geo.ErrorGeometria(f"{que} tiene que ser entero; llegó {v:g}.")
     if n < minimo or n > DIENTES_MAXIMOS:
-        raise geo.ErrorGeometria(f"{que} tiene que estar entre {minimo} y {DIENTES_MAXIMOS}; llegó {n}.")
+        raise geo.ErrorGeometria(f"{que} va de {minimo} a {DIENTES_MAXIMOS}; llegó {n}.")
     return int(n)
 
 
@@ -138,7 +138,7 @@ def _spline(puntos):
     interp = GeomAPI_Interpolate(arr, False, 1e-9)
     interp.Perform()
     if not interp.IsDone():
-        raise geo.ErrorGeometria("No se pudo construir la curva evolvente del flanco.")
+        raise geo.ErrorGeometria("No se pudo construir la evolvente del flanco.")
     return BRepBuilderAPI_MakeEdge(interp.Curve()).Edge()
 
 
@@ -147,7 +147,7 @@ def _cara(aristas):
     for a in aristas:
         w.Add(a)
         if not w.IsDone():
-            raise geo.ErrorGeometria("El contorno del perfil no cierra (aristas que no se tocan).")
+            raise geo.ErrorGeometria("El contorno del perfil no cierra.")
     cara = BRepBuilderAPI_MakeFace(w.Wire(), True)
     if not cara.IsDone():
         raise geo.ErrorGeometria("No se pudo armar la cara del perfil.")
@@ -160,7 +160,7 @@ def _extruir(cara, ancho):
 
 def _validar(forma, que):
     if forma is None or geo.esta_vacia(forma) or not geo.es_valida(forma):
-        raise geo.ErrorGeometria(f"{que}: el kernel devolvió una forma inválida con estas medidas.")
+        raise geo.ErrorGeometria(f"{que}: forma inválida del kernel.")
     return forma
 
 
@@ -168,12 +168,11 @@ def _con_agujero(forma, diametro, ancho, maximo, que):
     """Corta el agujero central (Ø `diametro`, 0 = sin agujero) a lo largo de todo el ancho."""
     d = _finito(diametro, "El diámetro del agujero")
     if d < 0:
-        raise geo.ErrorGeometria(f"El diámetro del agujero no puede ser negativo; llegó {d:g} mm.")
+        raise geo.ErrorGeometria(f"Diámetro del agujero negativo: {d:g} mm.")
     if d == 0:
         return forma
     if d >= maximo:
-        raise geo.ErrorGeometria(f"El agujero de Ø{d:g} mm no entra en {que}: tiene que ser menor que "
-                                 f"Ø{maximo:.4g} mm.")
+        raise geo.ErrorGeometria(f"Agujero Ø{d:g} no entra en {que} (Ø{maximo:.4g}).")
     return geo.booleano(forma, geo.cilindro(d / 2, ancho + 2.0, base=(0, 0, -1.0)), "cortar")
 
 
@@ -207,19 +206,19 @@ def medidas_engranaje(modulo, dientes, angulo_presion=20.0, helice=0.0, desplaza
     z = _entero(dientes, "La cantidad de dientes", 3)
     alfa = _finito(angulo_presion, "El ángulo de presión")
     if not 5.0 <= alfa <= 35.0:
-        raise geo.ErrorGeometria(f"El ángulo de presión tiene que estar entre 5° y 35°; llegó {alfa:g}°.")
+        raise geo.ErrorGeometria(f"El ángulo de presión va de 5° a 35°: {alfa:g}°.")
     beta = _finito(helice, "El ángulo de hélice")
     if abs(beta) > 45.0:
-        raise geo.ErrorGeometria(f"El ángulo de hélice tiene que estar entre −45° y 45°; llegó {beta:g}°.")
+        raise geo.ErrorGeometria(f"El ángulo de hélice fuera de ±45°: {beta:g}°.")
     x = _finito(desplazamiento, "El desplazamiento de perfil")
     if abs(x) > 2.0:
-        raise geo.ErrorGeometria(f"El desplazamiento de perfil tiene que estar entre −2 y 2; llegó {x:g}.")
+        raise geo.ErrorGeometria(f"Desplazamiento de perfil fuera de ±2: {x:g}.")
     c = _finito(holgura, "La holgura de fondo")
     if not 0.0 <= c <= 1.0:
-        raise geo.ErrorGeometria(f"La holgura de fondo tiene que estar entre 0 y 1 (× módulo); llegó {c:g}.")
+        raise geo.ErrorGeometria(f"Holgura de fondo fuera de 0..1: {c:g}.")
     j = _finito(juego, "El juego")
     if j < 0:
-        raise geo.ErrorGeometria(f"El juego no puede ser negativo; llegó {j:g} mm.")
+        raise geo.ErrorGeometria(f"El juego no puede ser negativo: {j:g} mm.")
     an, b = math.radians(alfa), math.radians(beta)
     mt = m / math.cos(b)
     at = math.atan(math.tan(an) / math.cos(b))
@@ -228,12 +227,10 @@ def medidas_engranaje(modulo, dientes, angulo_presion=20.0, helice=0.0, desplaza
     ra = r + m * (ADENDO + x)
     rf = r - m * (ADENDO + c - x)
     if rf <= 0:
-        raise geo.ErrorGeometria(f"Con {z} dientes el círculo de fondo queda en el centro: usá más dientes o un "
-                                 "desplazamiento de perfil positivo.")
+        raise geo.ErrorGeometria(f"Con {z} dientes: fondo en el centro.")
     espesor = mt * (math.pi / 2 + 2 * x * math.tan(an)) - j / 2
     if espesor <= 0:
-        raise geo.ErrorGeometria(f"El juego de {j:g} mm es más grande que el diente ({2 * (espesor + j / 2):.4g} mm "
-                                 "de espesor en el primitivo).")
+        raise geo.ErrorGeometria(f"Juego {j:g} mm supera al diente {2 * (espesor + j / 2):.4g} mm.")
     tp = espesor / (2 * r)                         # semiángulo del diente en el primitivo
     tb = tp + _inv(at)                             # … en el círculo base
     ta = tb - _inv(math.acos(min(1.0, rb / ra))) if ra > rb else tb
@@ -337,16 +334,14 @@ def perfil_engranaje(modulo, dientes, angulo_presion=20.0, helice=0.0, desplazam
     ra, rf = g["diametro_exterior"] / 2, g["diametro_fondo"] / 2
     tb, ta = g["semiangulo_base"], g["semiangulo_exterior"]
     if ta * ra < 1e-3:
-        raise geo.ErrorGeometria(f"Los dientes quedan en punta antes del diámetro exterior (Ø{2 * ra:.4g} mm): bajá "
-                                 "el desplazamiento de perfil, el juego o el ángulo de presión.")
+        raise geo.ErrorGeometria(f"Dientes en punta antes de Ø{2 * ra:.4g} mm.")
     radial = rf < rb
     tr = tb if radial else tb - _inv(math.acos(rb / rf))       # semiángulo del diente en el fondo
     paso = 2 * math.pi / z
     if paso - 2 * tr < 1e-6:
-        raise geo.ErrorGeometria(f"Con {z} dientes y estos desplazamientos los dientes se tocan en el fondo: bajá el "
-                                 "desplazamiento de perfil o usá más dientes.")
+        raise geo.ErrorGeometria(f"Con {z} dientes se tocan en el fondo.")
     if ra <= max(rf, rb if radial else rf):
-        raise geo.ErrorGeometria("El diámetro exterior quedó por debajo del de fondo: revisá el desplazamiento.")
+        raise geo.ErrorGeometria("Diámetro exterior bajo el de fondo.")
     evo = _evolvente(rb, rb if radial else rf, ra)
     giro = math.radians(_finito(giro, "El giro"))
     aristas = []

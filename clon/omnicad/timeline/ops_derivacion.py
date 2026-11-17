@@ -21,20 +21,20 @@ def _abrir_origen(ruta):
     from ..io_archivos import proyecto
     ruta = Path(str(ruta).strip()).expanduser().resolve()
     if ruta in _ORIGENES_EN_CURSO:
-        raise ErrorOperacion(f"Referencia circular entre proyectos de derivación: «{ruta}».")
+        raise ErrorOperacion(f"Referencia circular en derivación: «{ruta}».")
     _ORIGENES_EN_CURSO.add(ruta)
     try:
         otro = proyecto.abrir(ruta)
         errores = [r.mensaje for r in otro.resultados[:otro.marcador] if r.estado == "error"]
         if errores:
-            raise ErrorOperacion(f"El proyecto de origen «{ruta}» tiene errores: {errores[0]}")
+            raise ErrorOperacion(f"Errores en origen «{ruta}»: {errores[0]}")
         return otro
     except proyecto.ErrorProyecto as e:
-        raise ErrorOperacion(f"No se pudo leer el proyecto de origen «{ruta}»: {e}") from None
+        raise ErrorOperacion(f"No se pudo leer el origen «{ruta}»: {e}") from None
     except OSError as e:
         detalle = f" ({e.strerror})" if getattr(e, "strerror", None) else ""
-        raise ErrorOperacion(f"No encuentro el proyecto de origen de la derivación «{ruta}»{detalle}. "
-                             "Traé de vuelta el archivo o borrá este paso del timeline.") from None
+        raise ErrorOperacion(f"No encuentro el origen «{ruta}»"
+                             f"{detalle}.") from None
     finally:
         _ORIGENES_EN_CURSO.discard(ruta)
 
@@ -74,10 +74,10 @@ class OpDerivacion(Operacion):
         if not str(self.p["archivo"] or "").strip():
             raise ErrorOperacion("La derivación no tiene el archivo de origen.")
         if not any(self.p[k] for k in ("cuerpos", "bocetos", "parametros")):
-            raise ErrorOperacion("Elegí al menos un cuerpo, boceto o parámetro del origen.")
+            raise ErrorOperacion("Elegí cuerpo, boceto o parámetro del origen.")
         for clave in ("cuerpos", "bocetos", "parametros"):
             if any(not isinstance(ref, str) or not ref.strip() for ref in self.p[clave]):
-                raise ErrorOperacion(f"«{clave}» debe contener nombres o ids de texto no vacíos.")
+                raise ErrorOperacion(f"«{clave}» debe tener nombres o ids no vacíos.")
         otro = _abrir_origen(self.p["archivo"])
         origen, valores = otro.estado_final, otro.parametros.valores()
         self._parametros_derivados = []
@@ -111,8 +111,8 @@ class OpDerivacion(Operacion):
             comentario = f"{datos['comentario']}\n{marca}".strip()
             if nombre in nueva:
                 if not nueva.obtener(nombre).comentario.endswith(marca):
-                    raise ErrorOperacion(f"El parámetro «{nombre}» ya existe en este documento; renombralo "
-                                         "antes de derivarlo para no sobrescribirlo.")
+                    raise ErrorOperacion(f"El parámetro «{nombre}» ya existe "
+                                         "aquí.")
                 nueva.modificar(nombre, datos["expresion"], comentario)
                 nueva.obtener(nombre).tipo = datos["tipo"]
             else:

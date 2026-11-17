@@ -198,7 +198,7 @@ def parche():
     p._t_previa.stop()
     A.previa(p)
     st = A.estado_panel(p)
-    A.reg(AR, "parche: más continuidades que aristas elegidas avisa cuántas hay", not st["previa_ok"] and "solo 1 aristas" in st["mensaje"],
+    A.reg(AR, "parche: más continuidades que aristas elegidas avisa cuántas hay", not st["previa_ok"] and "3 continuidades y 1 aristas" in st["mensaje"],
           f"mensaje=«{st['mensaje']}»")
     T.teclear(p, "continuidades", "G1", Qt.Key_Tab)
     p._t_previa.stop()
@@ -216,7 +216,7 @@ def parche():
     A.previa(p)
     st = A.estado_panel(p)
     A.reg(AR, "SUP-22 · parche G1 sobre una curva suelta: el mensaje dice qué corregir",
-          not st["previa_ok"] and "caras vecinas" in st["mensaje"] and "soporte" not in st["mensaje"], f"mensaje=«{st['mensaje']}»")
+          not st["previa_ok"] and "piden aristas de un cuerpo" in st["mensaje"] and "soporte" not in st["mensaje"], f"mensaje=«{st['mensaje']}»")
     p.cancelar()
     A.esperar(100)
 
@@ -418,8 +418,8 @@ def extender_curva():
     A.previa(p)
     A.esperar(150)
     st = A.estado_panel(p)
-    A.reg(AR, "SUP-17 · «Alinear bordes» en una cara curva no rectangular avisa y sugiere «alineación libre»",
-          not st["previa_ok"] and "no es rectangular" in st["mensaje"] and "libre" in st["mensaje"], f"mensaje=«{st['mensaje']}»")
+    A.reg(AR, "SUP-17 · «Alinear bordes» en una cara curva no rectangular avisa lo que pasa",
+          not st["previa_ok"] and "no se extiende en forma natural" in st["mensaje"], f"mensaje=«{st['mensaje']}»")
     p.set_valor("alineacion", "libre")
     p._t_previa.stop()
     A.previa(p)

@@ -377,9 +377,7 @@ def test_reparar_reconstruir_pide_reducir_y_no_una_densidad_que_no_tiene(monkeyp
     m = _esfera()
     assert m.es_cerrada() and len(m.caras) == 1140
     monkeypatch.setattr(ml, "TRIANGULOS_MAXIMOS_REMALLADO", 300)
-    with pytest.raises(geo.ErrorGeometria, match=r"Reconstruir daría unos [\d.]+ triángulos y el máximo es 300: "
-                                                 r"reducí antes la malla \(Modificar › Reducir\) a unos [\d.,]+ "
-                                                 r"triángulos o menos\.") as e:
+    with pytest.raises(geo.ErrorGeometria, match=r"Reconstruir: [\d.]+ triángulos, máx 300\.") as e:
         ml.reparar(m, tipo="reconstruir")
     assert "densidad" not in str(e.value)
     with pytest.raises(geo.ErrorGeometria, match="bajá la densidad"):      # Remallar sí la tiene
@@ -448,7 +446,6 @@ def test_reparar_reconstruir_con_astillas_pide_reducir(monkeypatch):
     m = _esfera()
     monkeypatch.setattr(ml, "PICO_MAXIMO_REMALLADO", 0)          # el tope queda en las caras de la malla: 1140
     _sin_calcular(monkeypatch)
-    with pytest.raises(geo.ErrorGeometria, match=r"Reconstruir pasaría de 1\.140 triángulos \(el máximo\) al dividir "
-                                                 r"las aristas largas .*: reducí antes la malla") as e:
+    with pytest.raises(geo.ErrorGeometria, match=r"Reconstruir pasaría de 1\.140 triángulos\.") as e:
         ml.reparar(m, tipo="reconstruir")
     assert "densidad" not in str(e.value)

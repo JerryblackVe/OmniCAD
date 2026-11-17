@@ -88,7 +88,7 @@ def campo_solidez(solidez, solidez_final=None, ruta=None, zona=None, desfase=0.0
     de la ruta (Gradient Along Path). `zona` (puntos Mx3): hasta `desfase` mm de ella la solidez es `solidez_zona`, y en
     los `mezcla` mm siguientes pasa de a poco a la del resto (Offset + Blend Distance)."""
     if solidez_final is not None and (ruta is None or len(ruta) < 2):
-        raise geo.ErrorGeometria("La solidez en gradiente necesita una ruta: una arista o curva, o dos puntos.")
+        raise geo.ErrorGeometria("La solidez en gradiente necesita una ruta.")
     arbol = None
     if zona is not None and len(zona):
         from scipy.spatial import cKDTree
@@ -112,7 +112,7 @@ def _muestrear_triangulos(tris, paso):
     tris = np.asarray(tris, float).reshape(-1, 3, 3)
     n = np.maximum(1, np.ceil(np.linalg.norm(tris - np.roll(tris, 1, axis=1), axis=2).max(axis=1) / paso)).astype(int)
     if ((n + 1) * (n + 2) // 2).sum() > MAXIMO_PUNTOS:
-        raise geo.ErrorGeometria("La superficie es demasiado grande para la celda: agrandá la celda.")
+        raise geo.ErrorGeometria("La superficie es muy grande para la celda.")
     salida = []
     for k in np.unique(n):
         i, j = np.meshgrid(np.arange(k + 1), np.arange(k + 1), indexing="ij")
@@ -192,7 +192,7 @@ def _pieza(a, b, ra, rb, altura=None):
 def _segmentos_unidad(tipo, segmentos=None):
     seg = np.asarray(segmentos if tipo == "custom" else SEGMENTOS.get(tipo, ()), float)
     if seg.size == 0 or seg.size % 6 or seg.min() < -1e-9 or seg.max() > 1 + 1e-9:
-        raise geo.ErrorGeometria("La celda a medida necesita barras de 6 números (x1 y1 z1 x2 y2 z2), de 0 a 1.")
+        raise geo.ErrorGeometria("La celda a medida: barras de 6 números.")
     return seg.reshape(-1, 2, 3)
 
 
@@ -225,8 +225,7 @@ def diametro_para(tipo, solidez, sx, sy, sz, segmentos=None):
     lo, hi = 1e-4 * min(sx, sy, sz), 0.999 * min(sx, sy, sz)        # barras sobre las aristas de la celda: 1/4 adentro
     seg, vecinas = _segmentos_unidad(tipo, segmentos), tipo == "custom"
     if geo.volumen(_celda(seg, pared, hi, sx, sy, sz, vecinas)) < objetivo:
-        raise geo.ErrorGeometria(f"Con ese tamaño de celda las barras no llegan a {solidez:.0%} de solidez: bajá la "
-                                 "solidez o achicá la celda.")
+        raise geo.ErrorGeometria(f"Las barras no llegan a {solidez:.0%} de solidez.")
     for _ in range(14):
         mid = (lo + hi) / 2
         if geo.volumen(_celda(seg, pared, mid, sx, sy, sz, vecinas)) < objetivo:
@@ -268,14 +267,14 @@ def reticula_barras(cuerpo, tipo, solidez_en, rejilla, segmentos=None):
         from .malla import a_brep
         cuerpo = a_brep(cuerpo, metodo="prismatico")
         if not geo.solidos(cuerpo):
-            raise geo.ErrorGeometria("La malla tiene que ser cerrada para llenarla con la retícula.")
+            raise geo.ErrorGeometria("La malla tiene que ser cerrada.")
     seg, pared = _segmentos_unidad(tipo, segmentos), tipo == "x_cell_25d"
     lo, hi = caja(cuerpo)
     local = rejilla.a_local(np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]))
     i0 = np.floor(local.min(0) / rejilla.tam + 1e-9).astype(int)
     i1 = np.maximum(np.ceil(local.max(0) / rejilla.tam - 1e-9).astype(int), i0 + 1)
     if np.prod(i1 - i0) * len(seg) > 50 * MAXIMO_BARRAS:
-        raise geo.ErrorGeometria("La retícula tendría demasiadas barras: agrandá la celda.")
+        raise geo.ErrorGeometria("La retícula tendría demasiadas barras.")
     indices = np.stack(np.meshgrid(*(np.arange(a, b) for a, b in zip(i0, i1, strict=True)), indexing="ij"), -1)
     indices = indices.reshape(-1, 1, 3)
     A = rejilla.a_mundo(((indices + seg[None, :, 0]) * rejilla.tam).reshape(-1, 3))
@@ -297,11 +296,11 @@ def reticula_barras(cuerpo, tipo, solidez_en, rejilla, segmentos=None):
         r = np.interp(s, valores, diametros) / 2
         pares, radios = list(zip(A, B, strict=True)), list(zip(r[:len(A)], r[len(A):], strict=True))
     if len(pares) > MAXIMO_BARRAS:
-        raise geo.ErrorGeometria(f"La retícula tendría {len(pares)} barras (máximo {MAXIMO_BARRAS}): agrandá la celda.")
+        raise geo.ErrorGeometria(f"La retícula: {len(pares)} barras (tope {MAXIMO_BARRAS}).")
     piezas = [_pieza(a, b, ra, rb, altura) for (a, b), (ra, rb) in zip(pares, radios, strict=True)]
     resultado = geo.booleano(cuerpo, geo.unir_todos(piezas), "intersecar")
     if geo.sin_volumen(resultado):
-        raise geo.ErrorGeometria("La retícula no deja material dentro del cuerpo: probá con otra celda.")
+        raise geo.ErrorGeometria("La retícula no deja material en el cuerpo.")
     return resultado
 
 
@@ -423,7 +422,7 @@ def reticula_malla(cuerpo, tipo, solidez_en, rejilla, resolucion=8):
 
     from .malla import Malla
     if hasattr(cuerpo, "es_cerrada") and not cuerpo.es_cerrada():
-        raise geo.ErrorGeometria("La malla tiene que ser cerrada para llenarla con la retícula.")
+        raise geo.ErrorGeometria("La malla tiene que ser cerrada.")
     h = float(rejilla.tam.min()) / max(4, int(resolucion))
     tris = _triangulos(cuerpo, h / 20)
     if not len(tris):
@@ -432,8 +431,7 @@ def reticula_malla(cuerpo, tipo, solidez_en, rejilla, resolucion=8):
     # corrida una fracción rara del paso: un nodo sobre la pared daría g = 0 y triángulos degenerados (malla no cerrada)
     xs, ys, zs = (np.arange(lo[k] - 0.9137 * h, hi[k] + 1.5 * h, h) for k in range(3))
     if len(xs) * len(ys) * len(zs) > MAXIMO_MUESTRAS:
-        raise geo.ErrorGeometria(f"La grilla tendría más de {MAXIMO_MUESTRAS:,} muestras: agrandá la celda o bajá la "
-                                 "resolución.".replace(",", "."))
+        raise geo.ErrorGeometria(f"La grilla tendría más de {MAXIMO_MUESTRAS:,} muestras.".replace(",", "."))
     dentro = _dentro(tris, xs, ys, zs)
     pos = np.stack(np.meshgrid(xs, ys, zs, indexing="ij"), axis=-1)
     puntos = pos.reshape(-1, 3)
@@ -445,5 +443,5 @@ def reticula_malla(cuerpo, tipo, solidez_en, rejilla, resolucion=8):
     g = np.maximum(np.abs(f) - umbral, np.where(dentro, -distancia, distancia) * k)
     tris = [t_ for i in range(len(xs) - 1) if len(t_ := _triangular_losa(g, pos, i))]
     if not tris:
-        raise geo.ErrorGeometria("La retícula no deja material dentro del cuerpo: probá con otra celda o más solidez.")
+        raise geo.ErrorGeometria("La retícula no deja material en el cuerpo.")
     return Malla.desde_triangulos(np.concatenate(tris))
