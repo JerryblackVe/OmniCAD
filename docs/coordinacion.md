@@ -28,6 +28,17 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
 - **El coordinador se reemplaza igual que el maestro** (`clear_session` falla con Remote Control): nota de traspaso,
   sesión nueva con el mismo título «Coordinador principal OmniCAD en VPS», **Remote Control prendido** (sin eso el
   maestro no la encuentra por nombre) y la vieja pasa a «(viejo)». Así el nombre no cambia y no necesita archivo.
+- **Lista para abrir el reemplazo (maestro o coordinador), todo en el mismo turno** (Gerardo, 2026-11-17, tras dejar
+  sesiones colgadas dos veces):
+  1. Antes de irse, la vieja hace `detach_session` de TODAS las sesiones que abrió (E1–E11, etc.) y las fija: si no, quedan
+     colgadas de «(viejo)» y se archivan con ella.
+  2. Abre la nueva el chat maestro desde la PC (`start_session`; el coordinador con host «VPS OMNICAD»). Desde una sesión
+     con Remote Control `start_session` no anda; y si el pedido no lo escribió Gerardo en ese turno, la app lo frena:
+     pedirle en 1 línea «escribí: abrí el coordinador nuevo».
+  3. Recién abierta: `detach_session` de la nueva (no queda colgada de quien la abrió), `set_pinned` true a la nueva y
+     false a la vieja, y `move_sessions` al grupo que corresponda.
+  4. Remote Control prendido, vieja renombrada «(viejo)», `~/chat_maestro.txt` al día y toda vigilancia (cron) que nombre
+     el id viejo, rehecha con el id nuevo.
 - Todo lo que es para Gerardo o el chat maestro (cierres, integraciones, bloqueos, pedidos de OK) va **siempre** por
   `SendMessage` a ese nombre, leído antes de cada envío. Escribirlo solo en el chat del coordinador no alcanza.
 - Desde la VPS, el id de una sesión de la PC no llega («not found»): llega solo por el nombre (Remote Control prendido).
