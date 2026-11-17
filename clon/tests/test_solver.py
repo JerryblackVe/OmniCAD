@@ -135,6 +135,25 @@ def test_b582_por_mcp_se_rechaza_y_los_circulos_quedan_como_estaban():
     assert min(radios) > 5
 
 
+def test_b585_coincidente_punto_circulo_mueve_el_punto_no_agranda_el_circulo():
+    b = Boceto()
+    c = b.agregar_circulo((0, 0), 10)
+    b.agregar_restriccion("fijo", [b.curvas[c].centro])
+    p = b.agregar_punto(30, 0)
+    b.agregar_restriccion("coincidente", [p, c])
+    assert resolver(b).ok
+    assert b.curvas[c].radio == pytest.approx(10, abs=1e-3)       # antes: 20 (el radio se llevaba la mitad)
+    assert b.coords(p) == pytest.approx((10, 0), abs=1e-3)
+    # Si el punto no se puede mover, el radio cambia igual.
+    b2 = Boceto()
+    c2 = b2.agregar_circulo((0, 0), 10)
+    b2.agregar_restriccion("fijo", [b2.curvas[c2].centro])
+    p2 = b2.agregar_punto(30, 0)
+    b2.agregar_restriccion("fijo", [p2])
+    b2.agregar_restriccion("coincidente", [p2, c2])
+    assert resolver(b2).ok and b2.curvas[c2].radio == pytest.approx(30, abs=1e-6)
+
+
 def test_validaciones_de_tipo():
     b = Boceto()
     c = b.agregar_circulo((0, 0), 3)
