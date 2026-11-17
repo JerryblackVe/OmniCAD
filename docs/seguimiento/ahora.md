@@ -14,7 +14,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | — | En pausa (cupo amarillo, 82 % el 16/11 19 UTC). B-503 Parcial: 7cc89af (falta una cara sola de letra curva, velocidad y Arial en Windows) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | En pausa (cupo amarillo). ASM-9 integrado: 99fb1de. Sigue ASM-16 con Opus alto (pide el solver de uniones) cuando haya cupo |
-| E6 | B-620 | URGENTE (Gerardo): la previa del Vaciado tarda ~19 s y Aceptar 2–3 s; medir por etapa y arreglar. Opus alto. B-611 integrado |
+| E6 | — | Libre. B-620 integrado como Parcial (previa del Vaciado 3,5 → 1,3 s en la VPS; falta medir en Windows con E11) |
 | E7 | — | En pausa (tope de sesiones). P-169 (2) y B-603 integrados. Sigue P-167 cuando haya lugar |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
 | E9 | Caza + cola OpenCode | 1) caza superficie y construir (corriendo); 2) P-158, un archivo por corrida (GLM, revisa MiniMax), agregándolo a TOPES en 0: timeline/operaciones.py (38), nucleo/geometria.py (22), timeline/ops_modificar.py (19), nucleo/editar_cara.py (17), nucleo/construccion.py (16), nucleo/analisis.py (13), nucleo/vectores.py (9); 3) lo rojo de la caza, con su ID. En rojo (90 %) las lanza el coordinador |

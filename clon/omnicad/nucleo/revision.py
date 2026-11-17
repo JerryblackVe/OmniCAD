@@ -337,8 +337,11 @@ _POLOS_EN_HIJO = 2000    # FL-15: un barrido con empalme suma ~600 polos (0,5 s)
 
 
 def _pocos_polos(forma):
-    """Todas las caras libres son B-spline (o el desfase de una, como deja el vaciado), ninguna reglada, y entre todas no
-    pasan de `_POLOS_EN_HIJO` polos."""
+    """Todas las caras libres son B-spline (o el desfase de una, como deja el vaciado), ninguna el filete reglado de una
+    rosca, y entre todas no pasan de `_POLOS_EN_HIJO` polos. B-620: una reglada que no enrosca (una solevación reglada,
+    una extrusión de spline de un .f3d) se analiza en el trabajador: aparte abría otro proceso por cuerpo (1,4 s contra
+    0,27 s en la VPS, varios segundos en Windows; la previa de un Vaciado de 2 cuerpos tardaba ~19 s)."""
+    from .solidos_modificar import _es_filete     # local: solidos_modificar carga medio núcleo
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_BSplineSurface, GeomAbs_OffsetSurface
     total = 0
@@ -351,8 +354,8 @@ def _pocos_polos(forma):
         if sup.GetType() != GeomAbs_BSplineSurface:
             return False
         b = sup.BSpline()
-        if min(b.NbUPoles(), b.NbVPoles()) == 2:
-            return False        # B-570: reglada, como la hélice de una rosca modelada (B-386): BOPAlgo puede no terminar
+        if min(b.NbUPoles(), b.NbVPoles()) == 2 and _es_filete(c):
+            return False        # B-570: la hélice reglada de una rosca modelada (B-386): BOPAlgo puede no terminar
         total += b.NbUPoles() * b.NbVPoles()
         if total > _POLOS_EN_HIJO:
             return False
