@@ -185,6 +185,9 @@ de OpenCode; las demás la enlazan.
   más en `~/coordinador/opencode_cola/reserva/`; el vigía de la crontab las pasa a la cola hasta tener 8 y anota «AVISO
   reserva con menos de 8» cuando hay que reponer. Tareas que tocan una lista compartida (p. ej. los TOPES de un test):
   el brief dice «no toques esa lista»; el coordinador la actualiza una sola vez al integrar, así no hay choques.
+- **Tareas chicas (Gerardo, 2026-11-17: los gratis fallaron 24 de 53 corridas, 10 por tiempo)**: una tarea = un archivo y un
+  solo cambio (un bug, o hasta 10 mensajes o 5 tests); lo más grande se parte antes de cargarlo. Lo que es solo leer y
+  proponer (preparar un bug, medir, revisar listas) deja un `.md` en `docs/seguimiento/preparado/` y no toca la app.
 - **Cada corrida**: una tarea, en su worktree, con `timeout 1500` y `cp` de respaldo antes. Hasta 6 corridas a la vez
   en la VPS (2 por modelo de CodeBuddy y 1 por modelo de OpenCode; Gerardo 2026-11-17: exprimirlos; GLM y DeepSeek gratis no contestaron en la prueba de carga); en la PC, nunca. Se comprueba con `scripts/tests_afectados.py --correr` y ruff; lo
   de GLM o DeepSeek lo revisa MiniMax o E9. A main entra solo con el diff revisado por el coordinador.
