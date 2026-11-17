@@ -46,5 +46,5 @@ def test_una_union_que_pierde_material_falla_y_no_deja_aceptar(monkeypatch):
     monkeypatch.setattr(geo, "booleano", lambda o, h, op, avisos=None: real(o, h, "cortar" if op == "unir" else op))
     r = api.llamar(s, "create_box", {"length": 5, "width": 5, "height": 5, "x": 8, "operation": "join", "target": "A"})
     assert not r["ok"] and "perdió" in r["mensaje"]
-    assert "milésima" not in r["mensaje"] and "al menos 0,1 mm" in r["mensaje"]
+    assert "milésima" not in r["mensaje"] and "0,1 mm" in r["mensaje"]
     assert _volumen(s, "A") == pytest.approx(1000)        # el documento quedó como estaba

@@ -140,15 +140,15 @@ def test_bobina_con_revoluciones_o_paso_cero():
 # ---------------------------------------------------------------- enteros
 def test_entero_del_patron():
     op = _op("patron", n1="abc", n2=2.5, n="4", d1=3.0)
-    with pytest.raises(ErrorOperacion, match=r"«n1» tiene que ser un número entero \(al menos 1\): llegó el texto "
+    with pytest.raises(ErrorOperacion, match=r"«n1» debe ser entero \(al menos 1\): llegó el texto "
                                              r"'abc'"):
         op.entero("n1")
-    with pytest.raises(ErrorOperacion, match="«n2» tiene que ser un número entero"):
+    with pytest.raises(ErrorOperacion, match="«n2» debe ser entero"):
         op.entero("n2")
     assert op.entero("n") == 4 and op.entero("d1") == 3
     with pytest.raises(ErrorOperacion, match="al menos 1"):
         _op("patron", n1=0).entero("n1")
-    with pytest.raises(ErrorOperacion, match="número entero"):
+    with pytest.raises(ErrorOperacion, match="debe ser entero"):
         _op("patron", n1=True).entero("n1")
 
 
@@ -158,7 +158,7 @@ def test_patron_con_cantidad_de_texto():
     (cid,) = s.doc.estado_final.cuerpos
     base = {"cuerpos": [cid], "dir1": {"tipo": "eje", "id": "X"}, "d1": "30 mm"}
     r = _fallo(api.llamar(s, "run_operation", {"type": "patron", "params": dict(base, n1="abc")}))
-    assert "«n1» tiene que ser un número entero" in r["mensaje"] and "invalid literal" not in r["mensaje"], r
+    assert "«n1» debe ser entero" in r["mensaje"] and "invalid literal" not in r["mensaje"], r
     res = _ok(api.llamar(s, "run_operation", {"type": "patron", "params": dict(base, n1="3")}))
     assert res["status"] == "ok" and len(res["new_bodies"]) == 2
     x0 = geo.caja_envolvente(s.doc.estado_final.cuerpos[cid].forma)[0][0]
