@@ -65,7 +65,7 @@ def booleana_caras(caras_a, caras_b=(), operacion="union"):
     juntas; "resta": a menos b; "interseccion": lo común entre a y b. Devuelve la forma con las caras
     resultantes, unificadas. Levanta ErrorGeometria si no queda nada."""
     if operacion not in OPERACIONES:
-        raise geo.ErrorGeometria(f"Operación desconocida: {operacion} (union, resta o interseccion).")
+        raise geo.ErrorGeometria(f"Operación inválida: {operacion} (unir/restar…).")
     caras_a, caras_b = list(caras_a), list(caras_b)
     if not caras_a:
         raise geo.ErrorGeometria("Hace falta al menos un perfil.")
@@ -78,17 +78,17 @@ def booleana_caras(caras_a, caras_b=(), operacion="union"):
         op.SetTools(_lista(todas[1:]))
     else:
         if not caras_b:
-            raise geo.ErrorGeometria("Restar e intersecar necesitan perfiles herramienta.")
+            raise geo.ErrorGeometria("Restar/intersecar: falta perfil herramienta.")
         op = BRepAlgoAPI_Cut() if operacion == "resta" else BRepAlgoAPI_Common()
         op.SetArguments(_lista(caras_a))
         op.SetTools(_lista(caras_b))
     op.SetFuzzyValue(1e-5)
     op.Build()
     if not op.IsDone():
-        raise geo.ErrorGeometria("OpenCascade no pudo calcular la operación entre perfiles.")
+        raise geo.ErrorGeometria("No se pudo combinar los perfiles.")
     forma = _unificar(op.Shape())
     if not geo.caras(forma) or sum(geo.area(c) for c in geo.caras(forma)) < 1e-9:
-        raise geo.ErrorGeometria("La operación no deja ninguna región (¿los perfiles no se tocan?).")
+        raise geo.ErrorGeometria("La operación no deja ninguna región.")
     return forma
 
 
@@ -97,7 +97,7 @@ def desfase_caras(caras, distancia, esquinas="redondas"):
     mueven al revés, como el material). esquinas: "redondas" (arcos) o "vivas" (se prolongan hasta cortarse).
     Devuelve la lista de formas (alambres) resultantes. Levanta ErrorGeometria si la región desaparece."""
     if esquinas not in ESQUINAS:
-        raise geo.ErrorGeometria(f"Esquinas desconocidas: {esquinas} (redondas o vivas).")
+        raise geo.ErrorGeometria(f"Esquinas {esquinas}: redondas o vivas.")
     if abs(distancia) < 1e-9:
         raise geo.ErrorGeometria("La distancia del desfase no puede ser cero.")
     union = GeomAbs_Arc if esquinas == "redondas" else GeomAbs_Intersection
@@ -116,9 +116,9 @@ def desfase_caras(caras, distancia, esquinas="redondas"):
                 try:
                     salida.append(booleana_caras([cara], _franjas(cara, -float(distancia)), "resta"))
                     continue
-                except geo.ErrorGeometria:          # la región desaparece: el mensaje de siempre
+                except geo.ErrorGeometria:          # falló el desfase de franjas: se avisa igual
                     pass
-            raise geo.ErrorGeometria(f"El desfase de {distancia} mm no se pudo calcular (¿la región desaparece?).")
+            raise geo.ErrorGeometria(f"No se pudo hacer el desfase de {distancia} mm.")
         salida.append(_sin_cruces(cara, float(distancia), mk.Shape()))
     return salida
 
@@ -131,14 +131,14 @@ def _franjas(cara, r):
     for arista in geo._explorar(cara, TopAbs_EDGE):
         if BRep_Tool.IsClosed_s(TopoDS.Edge(arista)):
             # shortcut: una curva cerrada se desfasa a un solo lado; si una letra o un SVG la trae, armar su anillo
-            raise geo.ErrorGeometria(f"El desfase de {-r} mm no se pudo calcular (¿la región desaparece?).")
+            raise geo.ErrorGeometria(f"No se pudo hacer el desfase de {-r} mm.")
         mk = BRepOffsetAPI_MakeOffset()
         mk.Init(plano, GeomAbs_Arc, False)
         mk.AddWire(BRepBuilderAPI_MakeWire(TopoDS.Edge(arista)).Wire())
         mk.Perform(r)
         franja = [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face() for w in geo._explorar(mk.Shape(), TopAbs_WIRE)]
         if not franja or not all(map(geo.es_valida, franja)):
-            raise geo.ErrorGeometria(f"El desfase de {-r} mm no se pudo calcular (¿la región desaparece?).")
+            raise geo.ErrorGeometria(f"No se pudo hacer el desfase de {-r} mm.")
         franjas += franja
     return franjas
 
@@ -186,7 +186,7 @@ def _sin_cruces(cara, distancia, desfase):
         if fuera <= distancia if distancia > 0 else fuera < 1e-9 and _distancia(p, borde) >= -distancia:
             quedan.append(celda)
     if not quedan:
-        raise geo.ErrorGeometria(f"El desfase de {distancia} mm no se pudo calcular (¿la región desaparece?).")
+        raise geo.ErrorGeometria(f"No se pudo hacer el desfase de {distancia} mm.")
     return booleana_caras(quedan, [], "union")
 
 
