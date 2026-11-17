@@ -46,3 +46,20 @@ def test_clic_fuera_del_cuerpo_elige_el_plano_xy(visor):
         assert hit is not None and hit["ref"] == {"tipo": "plano", "id": "XY"}
     finally:
         visor.set_filtro(None)
+
+
+def test_b626_tamano_del_plano_no_depende_del_zoom(visor):
+    """B-626: los planos al pedir un plano miden ~1,2× la pieza aunque la cámara esté lejos (como Fusion)."""
+    visor.set_filtro({"plano"})
+    try:
+        cerca = {r: rect for r, _p, rect in visor.planos_elegibles()}
+        d0 = visor.distancia
+        visor.distancia = d0 * 4
+        lejos = {r: rect for r, _p, rect in visor.planos_elegibles()}
+        visor.distancia = d0
+        assert lejos == cerca
+        for r in ("XY", "XZ", "YZ"):
+            u0, v0, u1, v1 = cerca[r]
+            assert max(u1 - u0, v1 - v0) <= 1.4 * 40      # la pieza mide 40 mm
+    finally:
+        visor.set_filtro(None)
