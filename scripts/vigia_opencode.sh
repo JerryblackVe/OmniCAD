@@ -25,7 +25,7 @@ quieto() {   # nada escribió en $MIN minutos (el log de la corrida casi no se e
   [ -z "$(find "$@" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; }
 ultimo() { awk '/^=== intento /{b=""} {b=b $0 "
 "} END{printf "%s", b}' "$COLA/logs/$1.log" 2>/dev/null | tail -20; }  # solo el intento actual
-responde() { timeout 90 "$OC" run -m "$1" "Respondé solo la palabra OK" 2>/dev/null | grep -qi OK; }
+responde() { timeout 150 "$OC" run -m "$1" "Respondé solo la palabra OK" 2>/dev/null | grep -qi OK; }
 siguiente_modelo() {   # modelo_actual -> el próximo de la lista que responde (o vacío)
   local i j m
   for i in "${!MODELOS[@]}"; do [ "${MODELOS[$i]}" = "$1" ] && break; done
@@ -84,7 +84,7 @@ while [ "$usadas" -lt "$MAX" ]; do
   fi
   n=$(basename "$siguiente" .tarea); MODELO=; source "$siguiente"
   m=${MODELO:-${MODELOS[0]}}
-  { ! grep -qs " $m " "$EST"/* && responde "$m"; } || m=$(siguiente_modelo "$m")
+  grep -qs " $m " "$EST"/* && m=$(siguiente_modelo "$m")   # el primer intento no se prueba antes: los gratis tardan 1–2 min en contestar; si falla, lo agarra la vuelta siguiente
   [ -z "$m" ] && { anota "ningún modelo libre responde: espero a la próxima vuelta"; exit 0; }
   lanza "$n" 1 "$m"; usadas=$((usadas + 1))
 done
