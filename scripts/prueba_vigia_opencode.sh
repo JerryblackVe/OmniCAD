@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prueba en seco del vigía con un opencode falso. Sale 0 si todo pasa.
-set -u; T=$(mktemp -d); export VIGIA_COLA=$T/cola VIGIA_LOGS=$T/e9 VIGIA_OC=$T/oc VIGIA_CB=$T/oc VIGIA_LANZ=lanzador_de_prueba_inexistente VIGIA_MAX=1
+set -u; T=$(mktemp -d); export VIGIA_COLA=$T/cola VIGIA_LOGS=$T/e9 VIGIA_OC=$T/oc VIGIA_CB=$T/oc VIGIA_LANZ=lanzador_de_prueba_inexistente VIGIA_MAX=1 VIGIA_VERIF=true
 mkdir -p $T/cola $T/e9 $T/wt; (cd $T/wt && git init -q)
 cat > $T/oc <<'EOF'
 #!/usr/bin/env bash
@@ -17,7 +17,7 @@ vuelta() { bash "$V"; sleep 2; }
 vuelta; grep -q "lanzo 01_x (intento 1, opencode/glm" $T/cola/vigia.log || { echo "FALLA 1: no lanzó con GLM"; ok=0; }
 grep -q -- "--variant high" $T/llamadas || { echo "FALLA 1b: no pasó el esfuerzo"; ok=0; }
 vuelta; grep -q "relanzo con opencode/deepseek" $T/cola/vigia.log || { echo "FALLA 2: no rotó a DeepSeek tras 429"; ok=0; }
-vuelta; grep -q "fin 01_x (rc=0)" $T/cola/vigia.log && [ -f $T/cola/hechos/01_x.tarea ] || { echo "FALLA 3: no cerró bien"; ok=0; }
+vuelta; vuelta; grep -q "fin 01_x (rc=0)" $T/cola/vigia.log && [ -f $T/cola/hechos/01_x.tarea ] || { echo "FALLA 3: no cerró bien"; ok=0; }
 grep -q "seguí desde ahí" $T/cola/logs/01_x.brief2.md || { echo "FALLA 4: el reintento no retoma"; ok=0; }
 # todos fallan: GLM con 429, DeepSeek no responde, MiniMax OK pero lo forzamos a fallar con rc
 printf 'WT=%s\nBRIEF=%s\n' $T/wt $T/brief > $T/cola/02_y.tarea; echo MODELO=opencode/glm-5.3-flash-free >> $T/cola/02_y.tarea; touch $T/ds_muerto
@@ -32,11 +32,16 @@ BRIEF=%s
 ' $T/wt $T/brief > $T/cola/$x.tarea; done
 VIGIA_MAX=2 bash "$V"; sleep 1
 [ "$(ls $T/cola/corriendo | wc -l)" = 2 ] || { echo "FALLA 7: no lanzó 2 a la vez"; ok=0; }
-sleep 9; VIGIA_MAX=2 bash "$V"
+sleep 9; VIGIA_MAX=2 bash "$V"; sleep 1; VIGIA_MAX=2 bash "$V"
 [ -f $T/cola/hechos/03_a.tarea ] && [ -f $T/cola/hechos/04_b.tarea ] || { echo "FALLA 9: no cerró las 2 en paralelo"; ok=0; }
 # reserva: pasa a la cola hasta 8
 for x in $(seq 10 19); do printf WT=%snBRIEF=%sn $T/wt $T/brief > $T/cola/reserva/r$x.tarea; done
 VIGIA_MAX=0 bash "$V"
 [ "$(ls $T/cola/*.tarea | wc -l)" = 8 ] || { echo "FALLA 10: la reserva no llenó la cola a 8"; ok=0; }
+# verificación en rojo: se relanza con el error en el brief
+printf 'WT=%s\nBRIEF=%s\nMODELO=cb:hy3\n' $T/wt $T/brief > $T/cola/05_v.tarea; rm -f $T/cola/reserva/*.tarea $T/cola/[0-9r]*.tarea.x
+for x in $T/cola/*.tarea; do [ "$x" = $T/cola/05_v.tarea ] || mv $x $T/cola/hechos/; done
+VIGIA_VERIF="echo ruff dice error; false" bash "$V"; sleep 9; VIGIA_VERIF="echo ruff dice error; false" bash "$V"; sleep 2; VIGIA_VERIF="echo ruff dice error; false" bash "$V"
+grep -q "verificación en rojo" $T/cola/vigia.log && grep -q "ruff dice error" $T/cola/logs/05_v.brief2.md || { echo "FALLA 11: el rojo de la verificación no se relanza con el error"; ok=0; }
 [ $ok = 1 ] && echo "PRUEBA OK" || { cat $T/cola/vigia.log; exit 1; }
 rm -rf $T

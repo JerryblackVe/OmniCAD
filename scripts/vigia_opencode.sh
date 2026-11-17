@@ -3,6 +3,8 @@
 # Cola: archivos `$COLA/NN_nombre.tarea` (orden alfabético) con líneas que se leen con `source`:
 #   WT=/home/mosos/OmniCAD-<ID>   BRIEF=/ruta/al/brief.md   MODELO=opencode/glm-5.3-flash-free (opcional)
 #   VARIANTE=high (opcional: esfuerzo de `opencode run --variant`; sin ella, el del modelo)
+# - Al terminar bien, se verifica sola (ruff + tests_afectados en su worktree, sin modelo): verde -> hechos/ (lista para
+#   integrar); rojo -> se relanza con el error y el modelo siguiente.
 # - Corre hasta $MAX corridas a la vez, de modelos distintos: 2 de OpenCode (el lanzador de E9 ocupa una) y 2 en CodeBuddy.
 #   Salida en $COLA/logs/<nombre>.log; al terminar bien la tarea pasa a hechos/.
 # - Falla (trabada 20 min sin escribir, límite/429/cupo, o termina con error): respaldo (tgz) y relanza la MISMA
@@ -19,6 +21,8 @@ CB=${VIGIA_CB:-$HOME/.local/cb/codebuddy}   # CodeBuddy (Node 22 propio); sus mo
 # Orden por la prueba de carga del 17/11: CodeBuddy contesta en ~8 s y aguanta 4 a la vez; MiniMax ~3; GLM y DeepSeek gratis de OpenCode no contestaron.
 MODELOS=(cb:deepseek-v4.1-flash cb:hy3 nvidia/minimaxai/minimax-m3.1-flash opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free)
 CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound'
+PY=${VIGIA_PY:-$HOME/OmniCAD/clon/.venv/bin/python}
+VERIF=${VIGIA_VERIF:-cd clon && $PY -m ruff check . && $PY ../scripts/tests_afectados.py --correr}
 MAX=${VIGIA_MAX:-6}   # hasta 2 por modelo de CodeBuddy y 1 por modelo de OpenCode
 LOG=$COLA/vigia.log; EST=$COLA/corriendo   # un archivo por corrida: «nombre intento modelo pid»
 mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs" "$COLA/reserva" "$EST"
@@ -47,6 +51,11 @@ lanza() {    # nombre intento modelo [brief extra]
   setsid nohup bash -c "cd '$WT' && timeout 2700 $(cmd "$m") $v \"\$(cat '$COLA/logs/$n.brief$k.md')\" >> '$COLA/logs/$n.log' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.log'" < /dev/null > /dev/null 2>&1 &
   echo "$n $k $m $!" > "$EST/$n"; anota "lanzo $n (intento $k, $m, esfuerzo ${VARIANTE:-del modelo}, pid $!)"
 }
+verifica() {   # nombre intento modelo: corre la verificación aparte y la anota como corrida «VERIF:<modelo>»
+  local n=$1; source "$COLA/$n.tarea"
+  setsid nohup bash -c "cd '$WT' && { $VERIF; } > '$COLA/logs/$n.verif' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.verif'" < /dev/null > /dev/null 2>&1 &
+  echo "$n $2 VERIF:$3 $!" > "$EST/$n"; anota "verifico $n (ruff + tests_afectados, pid $!)"
+}
 reintenta() {   # nombre intento modelo motivo
   local n=$1 k=$2 m=$3 sig; source "$COLA/$n.tarea"
   (cd "$WT" && git ls-files -m -o --exclude-standard | tar -czf "$COLA/logs/$n.respaldo$k.tgz" -T - 2>/dev/null)
@@ -56,12 +65,19 @@ reintenta() {   # nombre intento modelo motivo
     mv "$COLA/$n.tarea" "$COLA/trabadas/"; rm -f "$EST/$n"; return
   fi
   anota "falla $n (intento $k, $m: $4): relanzo con $sig"
-  lanza "$n" $((k + 1)) "$sig" "Ya hay trabajo hecho en $WT: leé \`git diff\` del worktree y las últimas 40 líneas de $COLA/logs/$n.log; seguí desde ahí, no rehagas."
+  lanza "$n" $((k + 1)) "$sig" "Ya hay trabajo hecho en $WT: leé \`git diff\` del worktree y las últimas 40 líneas de $COLA/logs/$n.log; seguí desde ahí, no rehagas. Motivo del reintento: $4"
 }
 
 for f in "$EST"/*; do
   [ -f "$f" ] || continue
   read -r n k m pid < "$f"
+  if [ "${m#VERIF:}" != "$m" ]; then   # una verificación: se espera a que termine, sin tope de quietud
+    kill -0 "$pid" 2>/dev/null && continue
+    m=${m#VERIF:}; fin=$(tail -1 "$COLA/logs/$n.verif" 2>/dev/null)
+    if [ "$fin" = "rc=0" ]; then anota "VERDE $n: lista para integrar"; mv "$COLA/$n.tarea" "$COLA/hechos/"; rm -f "$f"
+    else reintenta "$n" "$k" "$m" "verificación en rojo; arreglá esto: $(tail -40 "$COLA/logs/$n.verif" | tr '\n' ' ' | cut -c1-1500)"; fi
+    continue
+  fi
   if kill -0 "$pid" 2>/dev/null; then
     if ultimo "$n" | grep -qiE "$CORTE"; then motivo="límite o cupo del modelo"
     elif source "$COLA/$n.tarea"; quieto "$COLA/logs/$n.log" "$HOME/.codebuddy/projects/$(echo "$WT" | tr / -)"; then motivo="$MIN min sin escribir"
@@ -73,7 +89,7 @@ for f in "$EST"/*; do
   if [ "$fin" != "rc=0" ] || ultimo "$n" | grep -qiE "$CORTE"; then
     reintenta "$n" "$k" "$m" "terminó con error ($fin)"; continue
   fi
-  anota "fin $n ($fin)"; mv "$COLA/$n.tarea" "$COLA/hechos/" 2>/dev/null; rm -f "$f"
+  anota "fin $n ($fin)"; verifica "$n" "$k" "$m"
 done
 
 # Corridas ajenas a la cola (los lanzadores de E9): si se traban, solo se matan; el lanzador sigue solo.
