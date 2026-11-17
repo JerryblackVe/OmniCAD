@@ -24,6 +24,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
+| 1 | B-626 | Planos de origen enormes y naranjas al abrir cualquier herramienta (Gerardo, ALTA; ¿por B-610?). E5 o E8, Sonnet medio |
 | 2 | B-619 | Proyectar un barril: silueta con cientos de puntos, borde ondulado y puntos sueltos; y revisar los 5 tipos de PROYECTAR contra Fusion (E1 tras B-585, Opus alto) |
 | 3 | B-618 | Solevación entre dos círculos: falso «se autointerseca» y previa manchada (E2, Opus alto; bug de prioridad 1, va antes que SOL-8) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
