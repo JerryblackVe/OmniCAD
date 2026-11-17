@@ -19,7 +19,7 @@ def test_b567_el_error_llega_en_segundos_y_no_tras_todos_los_reintentos(monkeypa
     monkeypatch.setattr(geo, "_booleana", lenta)
     monkeypatch.setattr(geo, "_problema_booleana", lambda *a, **k: (2, "el resultado quedó vacío", 1.0, 0.0))
     t = time.monotonic()
-    with pytest.raises(geo.ErrorGeometria, match="no logró corregirlo"):
+    with pytest.raises(geo.ErrorGeometria, match="imposible"):
         geo.booleano(geo.caja(10, 10, 10), geo.caja(10, 10, 10, origen=(5, 5, 5)), "unir")
     assert time.monotonic() - t < 2.5
     assert 2 < len(pasadas) < 1 + len(geo._REINTENTOS_BOOLEANA)      # reintenta, pero no todos

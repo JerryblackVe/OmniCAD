@@ -173,17 +173,17 @@ def _cara():
 
 
 def test_extrusion_de_un_diezmillonesimo_de_mm():
-    with pytest.raises(geo.ErrorGeometria, match=r"La distancia de extrusión tiene que ser de al menos 0\.000001 mm"):
+    with pytest.raises(geo.ErrorGeometria, match=r"La distancia de extrusión: mínimo 0\.000001 mm"):
         geo.extruir([_cara()], (0, 0, 1), 1e-7)
-    with pytest.raises(geo.ErrorGeometria, match=r"al menos 0\.000001 mm; recibió 0 mm"):
+    with pytest.raises(geo.ErrorGeometria, match=r"mínimo 0\.000001 mm, recibió 0 mm"):
         geo.extruir([_cara()], (0, 0, 1), 0)
-    with pytest.raises(geo.ErrorGeometria, match=r"al menos 0\.000001 mm"):
+    with pytest.raises(geo.ErrorGeometria, match=r"mínimo 0\.000001 mm"):
         sc.extruir_avanzado([_cara()], (0, 0, 1), distancia1=1e-7, conicidad1=5)
-    with pytest.raises(geo.ErrorGeometria, match=r"La distancia del lado 2 tiene que ser de al menos 0\.000001 mm"):
+    with pytest.raises(geo.ErrorGeometria, match=r"La distancia del lado 2: mínimo 0\.000001 mm"):
         sc.extruir_avanzado([_cara()], (0, 0, 1), direccion="dos_lados", distancia1=5, distancia2=1e-7, conicidad1=5)
-    with pytest.raises(geo.ErrorGeometria, match=r"La profundidad del repujado tiene que ser de al menos 0\.000001 mm"):
+    with pytest.raises(geo.ErrorGeometria, match=r"La profundidad del repujado: mínimo 0\.000001 mm"):
         sc.repujado(geo.caja(10, 10, 10), [_cara()], _cara(), 1e-7)
-    with pytest.raises(geo.ErrorGeometria, match=r"al menos 0\.000001 mm"):
+    with pytest.raises(geo.ErrorGeometria, match=r"mínimo 0\.000001 mm"):
         sf.extruir_superficie([_arista((0, 0, 0), (10, 0, 0))], (0, 0, 1), -1e-7)
     borde = geo.extruir([_cara()], (0, 0, 1), 1e-6)                 # el mínimo sí se construye
     assert geo.es_valida(borde) and geo.volumen(borde) == pytest.approx(100 * 1e-6, rel=1e-6)
@@ -195,7 +195,7 @@ def test_extrusion_minima_por_la_api():
         {"type": "rectangle", "origin": [-10, -10], "width": 20, "height": 20, "id": "rc"}]}))["sketch"]["id"]
     antes = _foto(s)
     r = _fallo(api.llamar(s, "extrude", {"sketch": sid, "distance": "0.0000001 mm"}))
-    assert r["error_kind"] == "OPERATION_FAILED" and "al menos 0.000001 mm" in r["mensaje"], r
+    assert r["error_kind"] == "OPERATION_FAILED" and "mínimo 0.000001 mm" in r["mensaje"], r
     assert "BRepSweep" not in r["mensaje"] and _foto(s) == antes
 
 
@@ -211,15 +211,15 @@ def test_extrusion_minima_nombra_el_campo_y_el_valor_escrito():
     perfiles = [dict(OpExtrusion.referencia_perfil(p), tipo="perfil", boceto=sid)
                 for p in s.doc.estado_final.bocetos[sid].perfiles]
     base = {"boceto": sid, "perfiles": perfiles, "operacion": "nuevo"}
-    lado2 = r"La distancia del lado 2 tiene que ser de al menos 0\.000001 mm; recibió 1e-07 mm"
-    total = r"La distancia total de la extrusión simétrica tiene que ser de al menos 0\.000002 mm; recibió 1\.5e-06 mm"
+    lado2 = r"La distancia del lado 2: mínimo 0\.000001 mm, recibió 1e-07 mm"
+    total = r"La distancia total de la extrusión simétrica: mínimo 0\.000002 mm, recibió 1\.5e-06 mm"
     casos = [({"direccion": "dos_lados", "distancia": "5 mm", "distancia2": "0.0000001 mm"}, lado2),
              ({"direccion": "dos_lados", "distancia": "5 mm", "distancia2": "0.0000001 mm", "conicidad": "5 deg"},
               lado2),
              ({"direccion": "dos_lados", "extension": "objeto", "hasta": {"tipo": "cuerpo", "cuerpo": cid},
                "distancia2": "0.0000001 mm"}, lado2),
              ({"direccion": "simetrica", "medida": "mitad", "distancia": "0.0000001 mm"},
-              r"La distancia de extrusión tiene que ser de al menos 0\.000001 mm; recibió 1e-07 mm"),
+              r"La distancia de extrusión: mínimo 0\.000001 mm, recibió 1e-07 mm"),
              ({"direccion": "simetrica", "medida": "total", "distancia": "0.0000015 mm"}, total),
              ({"direccion": "simetrica", "medida": "total", "distancia": "0.0000015 mm", "conicidad": "5 deg"}, total)]
     antes = _foto(s)
