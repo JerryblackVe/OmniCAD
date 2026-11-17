@@ -9,7 +9,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-619 | Proyectar un barril: silueta con cientos de puntos, picos y puntos sueltos; revisar los 5 tipos de PROYECTAR contra Fusion. Opus alto. B-585 integrado |
+| E1 | — | En pausa (cupo semanal 89 %, contexto 37 %). B-619 integrado como Parcial (0b099ba7; quedan B-619b y B-619c). Cuando vuelva: B-617 (Concéntrica arco–arco), Opus alto |
 | E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
 | E3 | — | En pausa (cupo amarillo, 82 % el 16/11 19 UTC). B-503 Parcial: 7cc89af (falta una cara sola de letra curva, velocidad y Arial en Windows) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
