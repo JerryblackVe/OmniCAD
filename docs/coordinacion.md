@@ -180,7 +180,7 @@ de OpenCode; las demás la enlazan.
 - **Siempre trabajando**: la cola de OpenCode es la fila de E9 en `ahora.md` (el coordinador la llena con tandas de
   1 o 2 tareas). Al cerrar una corrida, E9 lanza la siguiente; si la fila queda vacía, el coordinador la rellena de
   `docs/seguimiento/` con filas de prioridad 1 chicas. En rojo las lanza el coordinador con su ~5 %.
-- **Vigía sin modelo** (Gerardo, 2026-11-17): `scripts/vigia_opencode.sh` en la crontab de la VPS, cada 10 min: mata una corrida que no escribe hace 20 min y, si no corre nada, lanza la siguiente `NN_nombre.tarea` de `~/coordinador/opencode_cola/` (`WT=`, `BRIEF=`, `MODELO=` opcional; log en `vigia.log`). Una tarea trabada se relanza con el modelo siguiente y un brief que sigue desde `git diff` + el log; a la 2.ª trabada va a `trabadas/` (Gerardo, 17/11). El coordinador llena esa cola.
+- **Vigía sin modelo** (Gerardo, 2026-11-17): `scripts/vigia_opencode.sh` en la crontab de la VPS, cada 20 min: mata una corrida que no escribe hace 20 min y, si no corre nada, lanza la siguiente `NN_nombre.tarea` de `~/coordinador/opencode_cola/` (`WT=`, `BRIEF=`, `MODELO=` opcional; log en `vigia.log`). Una tarea trabada se relanza con el modelo siguiente y un brief que sigue desde `git diff` + el log; a la 2.ª trabada va a `trabadas/` (Gerardo, 17/11). El coordinador llena esa cola.
 - **Cola sin sesiones (Gerardo, 2026-11-17: todo verde, sin depender de una sesión)**: el coordinador deja 20 tareas o
   más en `~/coordinador/opencode_cola/reserva/`; el vigía de la crontab las pasa a la cola hasta tener 8 y anota «AVISO
   reserva con menos de 8» cuando hay que reponer. Tareas que tocan una lista compartida (p. ej. los TOPES de un test):
