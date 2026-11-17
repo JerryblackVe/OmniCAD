@@ -1258,7 +1258,7 @@ def test_cap13_movimiento_que_no_cambia_nada_y_superficies():
     from omnicad.nucleo import editar_cara as ec
     from omnicad.nucleo import superficies as sf
     _cid, forma, tapa = _tapa(_caja_edicion())
-    with pytest.raises(geo.ErrorGeometria, match="misma superficie"):
+    with pytest.raises(geo.ErrorGeometria, match="no cambia la cara"):
         ec.editar_cara(forma, tapa, 1, 1, {(0, 0): (5, 0, 0)})
     lamina = sf.extruir_superficie(BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(20, 0, 0)).Edge(), (0, 1, 0), 20)
     cara = geo.caras(lamina)[0]
