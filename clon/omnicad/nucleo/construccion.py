@@ -116,7 +116,7 @@ def _alambre(aristas):
     mw = BRepBuilderAPI_MakeWire()
     mw.Add(lista)
     if not mw.IsDone():
-        raise geo.ErrorGeometria("La ruta tiene que ser una cadena de aristas conectadas.")
+        raise geo.ErrorGeometria("La ruta tiene aristas que no se conectan.")
     return mw.Wire()
 
 
@@ -253,7 +253,7 @@ def plano_en_angulo(plano_base, eje_punto, eje_dir, angulo, *, desfase=0.0):
     a = eje.direccion
     n0 = base.normal - a * float(base.normal @ a)
     if np.linalg.norm(n0) < 1e-9:
-        raise geo.ErrorGeometria("El eje es perpendicular al plano base: el ángulo no está definido.")
+        raise geo.ErrorGeometria("Eje perpendicular: ángulo no definido.")
     n = _rotar(n0 / np.linalg.norm(n0), a, math.radians(angulo))
     origen = eje.punto + a * float((base.origen - eje.punto) @ a)
     return geo.Plano.desde_marco(origen, n, a, "Plano en ángulo").desplazado(desfase)
@@ -270,7 +270,7 @@ def _ejes_tangente(cara, plano_ref):
         r = plano_de(plano_ref).normal
         r = r - a * float(r @ a)
         if np.linalg.norm(r) < 1e-9:
-            raise geo.ErrorGeometria("El plano de referencia es perpendicular al eje de la cara.")
+            raise geo.ErrorGeometria("Referencia perpendicular: ángulo indefinido.")
         ref = r / np.linalg.norm(r)
     return pos, a, x, y, ref
 
@@ -280,7 +280,7 @@ def marco_tangente(cara_curva, plano_ref=None):
     de la cara: lo que necesita el asa de ángulo."""
     cara = _cara(cara_curva)
     if BRepAdaptor_Surface(cara).GetType() not in (GeomAbs_Cylinder, GeomAbs_Cone):
-        raise geo.ErrorGeometria("El plano tangente necesita una cara cilíndrica o cónica.")
+        raise geo.ErrorGeometria("Plano tangente: cara cilíndrica o cónica.")
     pos, a, x, y, ref = _ejes_tangente(cara, plano_ref)
     _, _, v0, v1 = BRepTools.UVBounds_s(cara)
     u = math.atan2(float(ref @ y), float(ref @ x))
@@ -299,7 +299,7 @@ def plano_tangente(cara_curva, punto_referencia_o_angulo, plano_ref=None, *, des
     cara = _cara(cara_curva)
     sup = BRepAdaptor_Surface(cara)
     if sup.GetType() not in (GeomAbs_Cylinder, GeomAbs_Cone):
-        raise geo.ErrorGeometria("El plano tangente necesita una cara cilíndrica o cónica.")
+        raise geo.ErrorGeometria("Plano tangente: cara cilíndrica o cónica.")
     if isinstance(punto_referencia_o_angulo, (int, float)):
         pos, a, x, y, ref = _ejes_tangente(cara, plano_ref)
         w = _rotar(ref, a, math.radians(punto_referencia_o_angulo))
@@ -321,7 +321,7 @@ def plano_medio(a, b):
     if abs(abs(float(pa.normal @ pb.normal)) - 1.0) < 1e-9:
         d = float((pb.origen - pa.origen) @ pa.normal)
         if abs(d) < 1e-9:
-            raise geo.ErrorGeometria("Los dos planos coinciden: elegí dos caras o planos distintos.")
+            raise geo.ErrorGeometria("Planos iguales: elegí dos planos distintos.")
         return geo.Plano.desde_marco(pa.origen + pa.normal * d / 2, pa.normal, pa.u, "Plano medio")
     eje = eje_dos_planos(pa, pb)
     return geo.Plano.desde_marco(eje.punto, pa.normal - pb.normal, eje.direccion, "Plano medio")
@@ -334,10 +334,10 @@ def plano_dos_aristas(e1, e2, *, desfase=0.0):
     if np.linalg.norm(n) < 1e-9:   # paralelas: el plano lo fija el segmento que las une
         n = np.cross(a.direccion, b.punto - a.punto)
         if np.linalg.norm(n) < 1e-9:
-            raise geo.ErrorGeometria("Las aristas son colineales: hay infinitos planos.")
+            raise geo.ErrorGeometria("Aristas colineales: hay infinitos planos.")
     n = n / np.linalg.norm(n)
     if abs(float((b.punto - a.punto) @ n)) > 1e-6:
-        raise geo.ErrorGeometria("No existe un plano que contenga ambas aristas (se cruzan sin cortarse).")
+        raise geo.ErrorGeometria("Las aristas se cruzan sin cortarse.")
     return geo.Plano.desde_marco(a.punto, n, a.direccion, "Plano por dos aristas").desplazado(desfase)
 
 
@@ -346,7 +346,7 @@ def plano_tres_puntos(p1, p2, p3, *, desfase=0.0):
     a, b, c = punto_de(p1), punto_de(p2), punto_de(p3)
     n = np.cross(b - a, c - a)
     if np.linalg.norm(n) < 1e-9:
-        raise geo.ErrorGeometria("Los tres puntos están alineados: no definen un plano.")
+        raise geo.ErrorGeometria("Puntos alineados: no definen un plano.")
     return geo.Plano.desde_marco(a, n, b - a, "Plano por tres puntos").desplazado(desfase)
 
 
@@ -357,7 +357,7 @@ def plano_perpendicular(cara_o_arista, punto, *, direccion="U", distancia=0.0):
     plano que pasa por `punto` (proyectado) y contiene la normal de la cara; su normal es la dirección
     U o V de la cara en ese punto (Plane Direction). `distancia` lo corre sobre su propia normal."""
     if direccion not in ("U", "V"):
-        raise geo.ErrorGeometria("La dirección del plano perpendicular es 'U' o 'V'.")
+        raise geo.ErrorGeometria("La dirección del plano es 'U' o 'V'.")
     q = punto_de(punto)
     if _tipo(cara_o_arista, TopAbs_EDGE):
         arista = TopoDS.Edge(cara_o_arista)
@@ -419,12 +419,12 @@ def eje_cilindro(cara, *, esfera=True):
         ax = sup.Torus().Axis()
     elif tipo == GeomAbs_Sphere:
         if not esfera:
-            raise geo.ErrorGeometria("Una esfera no tiene un eje propio: elegí un cilindro, un cono o un toroide.")
+            raise geo.ErrorGeometria("Una esfera no tiene eje propio.")
         ax = sup.Sphere().Position().Axis()
     elif tipo == GeomAbs_SurfaceOfRevolution:
         ax = sup.AxeOfRevolution()
     else:
-        raise geo.ErrorGeometria("La cara no es de revolución (cilindro, cono, toroide o esfera).")
+        raise geo.ErrorGeometria("La cara no es de revolución.")
     o, d = _np(ax.Location()), _unitario(_np(ax.Direction()))
     c = np.array(geo.centro_masa(cara, superficie=True))
     return Eje(o + d * float((c - o) @ d), d)
@@ -498,11 +498,10 @@ def punto_dos_aristas(e1, e2):
     else:
         dist = BRepExtrema_DistShapeShape(_arista(e1), _arista(e2))
         if not dist.IsDone() or dist.NbSolution() == 0:
-            raise geo.ErrorGeometria("No se pudo calcular el punto entre las aristas.")
+            raise geo.ErrorGeometria("No se pudo calcular el punto entre aristas.")
         p, q = _np(dist.PointOnShape1(1)), _np(dist.PointOnShape2(1))
     if np.linalg.norm(p - q) > 1e-6:
-        raise geo.ErrorGeometria("Las aristas no se cortan, ni siquiera prolongadas: se cruzan a "
-                                 f"{np.linalg.norm(p - q):.4g} mm.")
+        raise geo.ErrorGeometria(f"Las aristas no se cortan: distan {np.linalg.norm(p - q):.4g} mm.")
     return (p + q) / 2
 
 
@@ -511,7 +510,7 @@ def punto_tres_planos(p1, p2, p3):
     planos = [plano_de(p) for p in (p1, p2, p3)]
     m = np.array([p.normal for p in planos])
     if abs(np.linalg.det(m)) < 1e-9:
-        raise geo.ErrorGeometria("Los tres planos no se cortan en un único punto (hay dos paralelos o comparten recta).")
+        raise geo.ErrorGeometria("Los tres planos no se cortan en un punto.")
     return np.linalg.solve(m, np.array([float(p.normal @ p.origen) for p in planos]))
 
 
@@ -541,7 +540,7 @@ def punto_centro(entidad):
             centros.append(_np(curva.Circle().Location()))
         if centros and all(np.allclose(c, centros[0], atol=1e-6) for c in centros):
             return centros[0]
-    raise geo.ErrorGeometria("Se esperaba un círculo, una esfera, un toroide o una cara circular.")
+    raise geo.ErrorGeometria("Objeto circular, esfera o toroide.")
 
 
 def punto_arista_plano(arista, plano):
