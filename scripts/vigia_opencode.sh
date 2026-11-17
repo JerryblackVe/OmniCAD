@@ -16,9 +16,10 @@ LOGS=${VIGIA_LOGS:-$HOME/coordinador/e9prompts}
 OC=${VIGIA_OC:-$HOME/.opencode/bin/opencode}
 MIN=${VIGIA_MIN:-20}
 CB=${VIGIA_CB:-$HOME/.local/cb/codebuddy}   # CodeBuddy (Node 22 propio); sus modelos van con «cb:»
-MODELOS=(opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free nvidia/minimaxai/minimax-m3.1-flash cb:deepseek-v4.1-flash cb:hy3)
+# Orden por la prueba de carga del 17/11: CodeBuddy contesta en ~8 s y aguanta 4 a la vez; MiniMax ~3; GLM y DeepSeek gratis de OpenCode no contestaron.
+MODELOS=(cb:deepseek-v4.1-flash cb:hy3 nvidia/minimaxai/minimax-m3.1-flash opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free)
 CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound'
-MAX=${VIGIA_MAX:-4}   # 2 de OpenCode + 2 de CodeBuddy (otro cupo)
+MAX=${VIGIA_MAX:-6}   # hasta 2 por modelo de CodeBuddy y 1 por modelo de OpenCode
 LOG=$COLA/vigia.log; EST=$COLA/corriendo   # un archivo por corrida: «nombre intento modelo pid»
 mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs" "$COLA/reserva" "$EST"
 anota() { echo "$(date -u '+%F %T') $*" >> "$LOG"; }
@@ -26,7 +27,10 @@ quieto() {   # nada escribió en $MIN minutos (el log de la corrida casi no se e
   [ -z "$(find "$@" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; }
 ultimo() { awk '/^=== intento /{b=""} {b=b $0 "
 "} END{printf "%s", b}' "$COLA/logs/$1.log" 2>/dev/null | tail -20; }  # solo el intento actual
-usado() { grep -qs " $1 " "$EST"/* || pgrep -f -- "$OC run -m $1 |$CB -p -y --model ${1#cb:} " > /dev/null; }   # lo corre alguien (la cola o un lanzador de E9)
+usado() {   # el modelo ya está en su tope de corridas a la vez (CodeBuddy 2, OpenCode 1; cuenta también el lanzador de E9)
+  local c tope=1; [ "${1#cb:}" != "$1" ] && tope=2
+  c=$(grep -ls " $1 " "$EST"/* | wc -l); pgrep -f -- "^$OC run -m $1 " > /dev/null && c=$((c + 1))
+  [ "$c" -ge "$tope" ]; }   # lo corre alguien (la cola o un lanzador de E9)
 cmd() { case $1 in cb:*) echo "$CB -p -y --model ${1#cb:}";; *) echo "$OC run -m $1";; esac; }   # modelo -> comando
 responde() { timeout 150 $(cmd "$1") "Respondé solo la palabra OK" 2>/dev/null | grep -qi OK; }
 siguiente_modelo() {   # modelo_actual -> el próximo de la lista que responde (o vacío)
@@ -93,7 +97,6 @@ while [ "$usadas" -lt "$MAX" ]; do
   fi
   n=$(basename "$siguiente" .tarea); MODELO=; source "$siguiente"
   m=${MODELO:-${MODELOS[0]}}
-  [ "$usadas" -ge 2 ] && [ "${m#cb:}" = "$m" ] && m=cb:deepseek-v4.1-flash   # la 3.ª y la 4.ª van a CodeBuddy
   usado "$m" && m=$(siguiente_modelo "$m")   # el primer intento no se prueba antes: los gratis tardan 1–2 min en contestar; si falla, lo agarra la vuelta siguiente
   [ -z "$m" ] && { anota "ningún modelo libre responde: espero a la próxima vuelta"; exit 0; }
   lanza "$n" 1 "$m"; usadas=$((usadas + 1))
