@@ -42,6 +42,7 @@ _PESO_REGULARIZACION = 1e-8  # No sesgar las restricciones de cadenas largas dur
 _PESO_MENOR_CAMBIO = 1e-4
 _PESO_ARRASTRE = 1.0
 _PESO_ORIGINAL = 1e-3  # Una curva desfasada se queda quieta: al cambiar la cota se mueve la copia, como en Fusion.
+_PESO_RADIO = 1e3      # B-585: el radio pesa más que una coordenada: cambiarlo mueve todo el círculo.
 _ESCALA_TANGENTE = 10.0      # mm: convierte el seno del ángulo en un residuo comparable a una distancia
 _ESCALA_CURVATURA = 100.0    # mm²
 TOPE_AUTO_RESTRINGIR = 500
@@ -1284,6 +1285,9 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
         for cid in sis.originales:
             ij = [j for pid in sis.b.curvas[cid].puntos() for j in sis.idx_p.get(pid, ())]
             pesos[ij + ([sis.idx_r[cid]] if cid in sis.idx_r else [])] = _PESO_ORIGINAL
+        # B-585: si un punto suelto puede ir a la curva, va él y el círculo no se agranda (como Fusion). También sobre
+        # el radio de un original: así sigue pesando más que el de su copia desfasada.
+        pesos[list(set(sis.idx_r.values()))] *= _PESO_RADIO
     if arrastrado in sis.idx_p:
         ij = list(sis.idx_p[arrastrado])
         pesos[ij] = _PESO_ARRASTRE
