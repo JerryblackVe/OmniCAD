@@ -361,17 +361,16 @@ class Documento:
         recalculaba desde el paso 0: con una rosca modelada de 30 s, cada deshacer tardaba ~35 s)."""
         for n, d in enumerate(datos.get("operaciones", []), 1):    # B-285: un id raro rompía después delete_feature
             if not isinstance(d.get("id"), str) or not d["id"].strip():
-                raise ErrorOperacion(f"El paso {n} de la receta necesita un id de texto (llegó {d.get('id')!r}).")
+                raise ErrorOperacion(f"Paso {n}: id de texto, llegó {d.get('id')!r}.")
         ids = Counter(d.get("id") for d in datos.get("operaciones", []))
         if repetidos := sorted((i for i, n in ids.items() if n > 1), key=str):      # B-262: un paso taparía al otro
-            raise ErrorOperacion(f"La receta repite el id de paso {', '.join(map(str, repetidos))}: cada paso necesita uno propio.")
+            raise ErrorOperacion(f"La receta repite el id de paso {', '.join(map(str, repetidos))}.")
         for d in datos.get("operaciones", []):
             if d.get("tipo") == "scu":
                 for sufijo in ("_o", "_x", "_y", "_z", "_xy", "_xz", "_yz"):
                     derivado = f"{d['id']}{sufijo}"
                     if derivado in ids:
-                        raise ErrorOperacion(f"El id de paso {derivado} choca con un id derivado del SCU {d['id']} "
-                                             "(origen, ejes o planos): elegí otro id.")
+                        raise ErrorOperacion(f"Id derivado {derivado} choca con SCU {d['id']}.")
         for props in (datos.get("propiedades") or {}).values():                   # B-262: nombres de cuerpos también
             exigir_nombre(props.get("nombre") if isinstance(props, dict) else None)
         if calculo is None:
@@ -983,7 +982,7 @@ class Documento:
                 expresion = tabla.obtener(cota.nombre).expresion
                 if cota.referencia:
                     if expresion != self.parametros.obtener(cota.nombre).expresion:
-                        raise ErrorBoceto("Una cota de referencia mide la geometría: su valor no se puede editar.")
+                        raise ErrorBoceto("La cota de referencia no se puede editar.")
                     continue
                 if expresion != cota.expresion:
                     cambios[cota.id] = expresion

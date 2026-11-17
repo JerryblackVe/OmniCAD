@@ -17,7 +17,7 @@ ALINEACIONES = {"left": "izquierda", "right": "derecha", "top": "arriba", "botto
 
 def _exigir(b, ids):
     if not ids or any(i not in b.objetos for i in ids):
-        raise error("ENTITY_NOT_FOUND", "Elegí ids de objetos existentes (get_vector_objects).")
+        raise error("ENTITY_NOT_FOUND", "Elegí ids de objetos existentes.")
 
 
 def _exigir_unidades(b, ids, mensaje):
@@ -90,11 +90,11 @@ def desfasar(b, plano, ids, distancia, esquinas="redondas"):
     from ..nucleo import geometria as geo, vectores
     _todos, perfiles = regiones(b, plano, ids)
     if not perfiles:
-        raise ob._error("El objeto no tiene regiones cerradas utilizables para el desfase.")
+        raise ob._error("El objeto no tiene regiones cerradas.")
     try:
         formas = vectores.desfase_caras([p.cara for p in perfiles], distancia, esquinas)
         if any(not geo.es_valida(f) for f in formas):
-            raise geo.ErrorGeometria("El desfase produce contornos inválidos; probá una distancia menor.")
+            raise geo.ErrorGeometria("El desfase produce contornos inválidos.")
         curvas = agregar_geometria(b, vectores.primitivas_de_formas(formas, plano))
         nuevo = ob.crear(b, curvas, "Desfase")
         _todos, cerrados = regiones(b, plano, [nuevo])
@@ -110,17 +110,17 @@ def separar_regiones(b, plano, oid):
     import copy
     o = b.objetos[oid]
     if oid not in ob.raices(b):
-        raise ob._error("Desagrupá el grupo padre antes de separar sus regiones.")
+        raise ob._error("Desagrupá el grupo padre antes de separar.")
     if o["bloqueado"]:
-        raise ob._error("Desbloqueá el objeto antes de separar sus regiones.")
+        raise ob._error("Desbloqueá el objeto antes de separar.")
     _todos, perfiles = regiones(b, plano, [oid])
     if not perfiles:
-        raise ob._error("El objeto no tiene regiones cerradas para separar.")
+        raise ob._error("El objeto no tiene regiones cerradas.")
     # Cada isla lleva sus contornos interior y exterior; las firmas originales se conservan
     # siempre que una curva no forme parte de dos islas (perfiles partidos por intersecciones).
     conjuntos = [set(p.firma) for p in perfiles]
     if sum(map(len, conjuntos)) != len(set().union(*conjuntos)):
-        raise ob._error("Las regiones comparten curvas: resolvé las intersecciones antes de separarlas.")
+        raise ob._error("Las regiones comparten curvas.")
     hijos, actuales = [], set(ob.curvas(b, [oid]))
     originales, viejos = dict(b.objetos), set()
 
@@ -157,7 +157,7 @@ def combinar(b, plano, ids, operacion="union"):
     from ..nucleo import geometria as geo, vectores
     grupos = [regiones(b, plano, [i])[1] for i in ids]
     if not grupos or any(not g for g in grupos):
-        raise ob._error("Cada objeto debe tener al menos una región cerrada válida.")
+        raise ob._error("Cada objeto debe tener una región cerrada.")
     try:
         a = [p.cara for p in grupos[0]]
         herramientas = [p.cara for g in grupos[1:] for p in g]
@@ -284,7 +284,7 @@ def transform_vector_objects(sesion, objects: list[int], dx: Expr = 0, dy: Expr 
     """
     def cambiar(b):
         _exigir(b, objects)
-        _exigir_unidades(b, objects, "Transformá el SVG, el DXF o el texto completo, no una pieza interna.")
+        _exigir_unidades(b, objects, "Transformá SVG, DXF o texto completo.")
         if pivot is not None and len(pivot) != 2:
             raise error("INVALID_ARGUMENTS", "pivot es [x, y] en milímetros.")
         x0, y0, x1, y1 = ob.caja(b, objects)
@@ -425,7 +425,7 @@ def validate_vector_objects(sesion, objects: list[int], tolerance: float = 1e-6,
     """
     import math
     if not math.isfinite(tolerance) or not 0 < tolerance <= 1:
-        raise error("INVALID_ARGUMENTS", "tolerance debe ser positiva y no superar 1 mm.")
+        raise error("INVALID_ARGUMENTS", "tolerance debe ser positiva, tope 1 mm.")
     _op, br = boceto_activo(sesion, sketch)
     _exigir(br.boceto, objects)
     return validar_objetos(br.boceto, br.plano, objects, tolerance)
@@ -500,7 +500,7 @@ def select_vector_objects(sesion, objects: list[int], mode: Literal["replace", "
     """
     elegir = getattr(sesion, "seleccionar_objetos_vectoriales", None)
     if elegir is None:
-        raise error("APP_NOT_RUNNING", "La selección visual necesita la ventana con un boceto abierto.")
+        raise error("APP_NOT_RUNNING", "La selección visual necesita boceto abierto.")
     return elegir(objects, mode, sketch)
 
 

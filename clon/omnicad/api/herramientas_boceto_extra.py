@@ -43,13 +43,13 @@ def _editar_curva(sesion, sketch, curve, point, partir):
         c = _curva(b, curve)
         if partir:
             if c.tipo == "texto":
-                raise ErrorBoceto("Un texto no se puede partir: desglosalo primero.")
+                raise ErrorBoceto("Un texto no se puede partir.")
             if mas_cercano(b.primitivas(curve)[0], punto)[1] > 1e-7:
-                raise ErrorBoceto("El punto no cae sobre la curva que se quiere partir (tolerancia 1e-7 mm).")
+                raise ErrorBoceto("El punto no está sobre la curva a partir.")
             partes.extend(b.partir(curve, punto))
         else:
             if c.tipo == "linea" and math.dist(*b._extremos_linea(curve)) < 1e-9:
-                raise ErrorBoceto("No se puede alargar una línea de longitud cero.")
+                raise ErrorBoceto("No se alarga una línea de longitud cero.")
             b.alargar(curve, punto)
 
     informe = _dibujar(sesion, op.id, modificar, desde_solver=True)
@@ -82,9 +82,9 @@ def set_circle_radius(sesion, curve: int, radius: float, sketch: str | None = No
         if c.proyectada:
             raise ErrorBoceto("La geometría proyectada no se puede cambiar.")
         if any(k.tipo in ("radio", "diametro") and curve in k.entidades for k in b.cotas.values()):
-            raise ErrorBoceto(f"El radio de la curva {curve} tiene una cota: cambiala con edit_dimension.")
+            raise ErrorBoceto(f"Curva {curve}: radio con cota.")
         if cambiar_radio(b, curve, radius) is None and isinstance(c, Arco):
-            raise ErrorBoceto(f"El arco {curve} tiene sus dos extremos fijos: no se puede cambiar su radio.")
+            raise ErrorBoceto(f"Arco {curve}: extremos fijos, radio fijo.")
 
     informe = _dibujar(sesion, op.id, modificar, desde_solver=True)
     _exigir_sin_conflicto(sesion, op, previo.solver.ok, "El nuevo radio")

@@ -116,5 +116,5 @@ def test_una_distancia_diminuta_se_rechaza_antes_de_enumerar():
     from omnicad.nucleo import geometria as geo
     from omnicad.nucleo import patron_geometrico as pg
     for dist in ("rectangular", "triangular", "hexagonal", "circular", "radial"):
-        with pytest.raises(geo.ErrorGeometria, match="muchísimos"):
+        with pytest.raises(geo.ErrorGeometria, match="Muchísimos"):
             pg._puntos(dist, 0, 60, 0, 60, _base_p(distancia=0.003, distancia_radial=0.003))

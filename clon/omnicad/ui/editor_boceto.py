@@ -1672,7 +1672,7 @@ class Lienzo(QWidget):
                 for adicional, destino in objetivos[1:]:
                     self.b.agregar_restriccion(adicional, [pid, destino])
             if not resolver(self.b.copia(), self.valores_cotas()).ok:
-                raise ErrorBoceto("La inferencia entra en conflicto con las restricciones existentes.")
+                raise ErrorBoceto("Conflicto con las restricciones existentes.")
         except ErrorBoceto:
             self._restaurar(antes)
 
@@ -1710,7 +1710,7 @@ class Lienzo(QWidget):
             try:
                 self.b.agregar_restriccion(tipo, [pid, objetivo])
                 if not resolver(self.b.copia(), self.valores_cotas()).ok:
-                    raise ErrorBoceto("La inferencia entra en conflicto con las restricciones existentes.")
+                    raise ErrorBoceto("Conflicto con las restricciones existentes.")
             except ErrorBoceto:
                 self._restaurar(antes)
 
@@ -2165,9 +2165,9 @@ class Lienzo(QWidget):
             copia = self.b.copia()
             try:
                 if not ids:
-                    raise ErrorBoceto("Además de la línea de simetría, elegí la geometría a reflejar.")
+                    raise ErrorBoceto("Elegí qué reflejar, además del eje.")
                 if all(isinstance(copia.curvas.get(i), Texto) for i in ids):
-                    raise ErrorBoceto("Los textos no se reflejan con Simetría: usá Voltear en el panel Carácter.")
+                    raise ErrorBoceto("Los textos no se reflejan: usá Voltear.")
                 polis = [puntos_primitiva(prim) for k in copia.simetria(ids, self._eje_simetria)
                          for prim in copia.primitivas(k)]
             except ErrorBoceto as e:
@@ -2324,8 +2324,7 @@ class Lienzo(QWidget):
                         else:      # True = dejó un paso; p. ej. el borde de un agujero: la fusión no lo usa
                             self._quitar_proyecciones(self._proy_fusion + 1)
                             self.picks, self.picks_xy = [], []
-                            self.mensaje.emit("La arista debe proyectar exactamente una curva abierta "
-                                              "(no un círculo ni un punto).")
+                            self.mensaje.emit("La arista debe dar una curva abierta.")
                             return True
         if cid is None:
             if self.herramienta == "circulo_2t" and len(self.picks) == 2:
@@ -3002,7 +3001,7 @@ class Lienzo(QWidget):
         from ..timeline import entidades as ent
         if self.opciones["eje_giro"] == "arista":
             if self._eje_giro is None:
-                raise ErrorBoceto("Elegí primero una arista recta como eje del perfil giratorio.")
+                raise ErrorBoceto("Elegí una arista recta como eje del giro.")
             return self._eje_giro
         ref = {"tipo": "eje", "id": self.opciones["eje_giro"]}
         return ent.como_eje(ent.resolver(ref, self.estado_referencias())), ref
@@ -3020,7 +3019,7 @@ class Lienzo(QWidget):
         from ..timeline import entidades as ent
         try:
             if self.plano is None:
-                raise ErrorBoceto("El boceto no tiene plano para proyectar el eje.")
+                raise ErrorBoceto("Falta el plano para proyectar el eje.")
             eje, ref = self._eje_perfil_giratorio()
         except (ErrorBoceto, ent.ErrorReferencia) as e:
             self.mensaje.emit(str(e))
@@ -3272,7 +3271,7 @@ class Lienzo(QWidget):
         reg = next(r for r in self.b.proyecciones if r["id"] == pid)
         try:
             if ref is None:
-                raise ErrorBoceto("Lo elegido no tiene referencia para re-vincular la proyección.")
+                raise ErrorBoceto("Sin referencia no se puede re-vincular.")
             giro = None
             if reg["modo"] == "giro":
                 giro = {"eje": ent.como_eje(ent.resolver(reg["eje"], self.estado_referencias())),
@@ -3323,7 +3322,7 @@ class Lienzo(QWidget):
                 except ErrorBoceto:          # no es desfase, o ya lo soltó otra curva del mismo desfase
                     pass
             if not hechos:
-                raise ErrorBoceto("Soltar desfase: seleccioná una curva de un desfase.")
+                raise ErrorBoceto("Soltar desfase: elegí una curva del desfase.")
         return self.aplicar_cambio(soltar, anclar=False)
 
     def patron_de(self, ids):
@@ -4826,7 +4825,7 @@ class Lienzo(QWidget):
             cota.referencia = not cota.referencia
             cota.expresion = repr(self.b.medir(cota))
             if not cota.referencia and self._sobre_restringe(cid):
-                raise ErrorBoceto("La cota sobre-restringiría el boceto: sigue como cota de referencia.")
+                raise ErrorBoceto("La cota sobre-restringe: sigue de referencia.")
         self.aplicar_cambio(cambiar)
 
     def _menu_cota(self, cid, pos=None):

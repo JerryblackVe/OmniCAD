@@ -76,7 +76,7 @@ def _comprobar_lectura(ruta, formato):
         aislado.correr_json("ensayar_lectura", {"ruta": os.path.abspath(ruta), "formato": formato},
                            aislado.TOPE_ENSAYO_LECTURA)
     except aislado.TareaAislada as e:
-        raise ErrorGeometria(f"El archivo {formato.split('_')[0]} está dañado o no se pudo leer con seguridad: {e}.") from e
+        raise ErrorGeometria(f"El archivo {formato.split('_')[0]} está dañado: {e}.") from e
 
 
 def _leer_control(ruta, clase, formato):

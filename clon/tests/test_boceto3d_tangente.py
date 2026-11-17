@@ -301,7 +301,7 @@ def test_linea_y_spline_sin_extremo_comun_sigue_pidiendolo():
     b = Boceto()
     l = b3.agregar_linea(b, (0, 0, 0), (10, 0, 0))
     s = b3.agregar_spline(b, [(20, 0, 0), (30, 5, 0)])
-    with pytest.raises(ErrorBoceto, match="empezar o terminar"):
+    with pytest.raises(ErrorBoceto, match="tocar un extremo"):
         b3.agregar_restriccion(b, "tangente", [l, s])
 
 

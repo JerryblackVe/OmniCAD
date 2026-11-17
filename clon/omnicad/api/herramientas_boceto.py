@@ -335,9 +335,9 @@ def _circulo(b, cx, cy, radio, construccion=False):
 def _arco(b, cx, cy, sx, sy, barrido, construccion=False):
     r = math.hypot(sx - cx, sy - cy)
     if r < 1e-9:
-        raise ErrorBoceto("El punto inicial del arco no puede coincidir con el centro.")
+        raise ErrorBoceto("El inicio del arco no puede ser su centro.")
     if abs(barrido) < 1e-9 or abs(barrido) > 360 - 1e-6:
-        raise ErrorBoceto("El ángulo de barrido del arco tiene que estar entre 0 y 360 grados (sin incluirlos).")
+        raise ErrorBoceto("El barrido del arco: 0 < ángulo < 360.")
     a = math.atan2(sy - cy, sx - cx) + math.radians(barrido)
     fin = (cx + r * math.cos(a), cy + r * math.sin(a))
     if barrido > 0:
@@ -364,21 +364,21 @@ def _inicio_tangente(b, curva, inicio, extremo=None):
     if ext:
         pid = min(ext, key=lambda p: math.dist(b.coords(p), inicio)) if extremo is None else ext[extremo == "end"]
         if math.dist(b.coords(pid), inicio) > 1e-7:
-            raise ErrorBoceto("El inicio debe coincidir con el extremo indicado de la curva tangente.")
+            raise ErrorBoceto("Inicio = extremo de la curva tangente.")
         _p, direccion = b._salida_extremo(curva, pid)
     elif isinstance(c, Elipse):
         prim = b.primitivas(curva)[0]
         t, distancia, p = mas_cercano(prim, inicio)
         if distancia > 1e-7:
-            raise ErrorBoceto("El inicio debe estar sobre la elipse tangente.")
+            raise ErrorBoceto("El inicio debe estar en la elipse tangente.")
         direccion = evaluar_primitiva(prim, t, 1)[1]
         pid = b.agregar_punto(*p)
         b.agregar_restriccion("coincidente", [pid, curva])
     else:
-        raise ErrorBoceto("La curva tangente debe tener extremos: la spline cerrada no los tiene.")
+        raise ErrorBoceto("La curva tangente debe tener extremos.")
     n = math.hypot(*direccion)
     if n < 1e-9:
-        raise ErrorBoceto("La curva no tiene una tangente definida en ese extremo.")
+        raise ErrorBoceto("La curva no tiene tangente en ese extremo.")
     return pid, (direccion[0] / n, direccion[1] / n)
 
 
@@ -391,7 +391,7 @@ def _arco_tangente(b, curva, inicio, fin, construccion=False, radio=None, barrid
         otro = (p[0] - direccion[0], p[1] - direccion[1])
         geometria = centro_arco_tangente(p, otro, fin)
         if geometria is None:
-            raise ErrorBoceto("El final no puede coincidir con el inicio ni estar sobre la recta tangente.")
+            raise ErrorBoceto("Final ≠ inicio y fuera de la tangente.")
     aid, destino = agregar_arco_tangente(b, curva, pid, fin, geometria, construccion,
                                         radio=radio, barrido=barrido, direccion=direccion)
     arco = b.curvas[aid]
@@ -492,7 +492,7 @@ def _poligono(b, lados, radio, cx, cy, giro, circunscrito, construccion=False, a
 def _poligono_arista(b, lados, puntos, construccion=False, acotar=False):
     """Polígono por arista A→B y punto del lado elegido, como create_polygon."""
     if len(puntos) != 3:
-        raise ErrorBoceto("kind=edge necesita tres edge_points: A, B y un punto del lado hacia donde crece.")
+        raise ErrorBoceto("kind=edge: edge_points = A, B y un punto.")
     a, z, lado = (_xy(q, "Cada punto de edge_points") for q in puntos)
     largo = math.dist(a, z)
     if largo < 1e-9:
@@ -507,7 +507,7 @@ def _spline(b, puntos, tipo, grado, cerrada, construccion=False, tangente=None, 
     pts = [_xy(p, "Cada punto de la spline") for p in puntos]
     control = tipo == "control_points"
     if control and grado not in (3, 5):
-        raise ErrorBoceto(f"Una spline de puntos de control tiene grado 3 o 5 (llegó {grado}).")
+        raise ErrorBoceto(f"Spline de control: grado 3 o 5; llegó {grado}.")
     if tangente is not None:
         if len(pts) < 2:
             raise ErrorBoceto("La spline necesita al menos dos puntos.")
@@ -527,7 +527,7 @@ def _elipse(b, cx, cy, radio_mayor, radio_menor, giro, construccion=False):
     """Elipse por centro, radios y giro del eje mayor (con sus ejes de construcción, como la interfaz)."""
     for v, que in ((radio_mayor, "mayor"), (radio_menor, "menor")):
         if not v > 1e-9:
-            raise ErrorBoceto(f"El radio {que} de la elipse tiene que ser positivo (llegó {v:g}).")
+            raise ErrorBoceto(f"Elipse: radio {que} positivo (llegó {v:g}).")
         validar_valor_cota("radio", v)
     a = math.radians(giro)
     antes = set(b.curvas)
@@ -546,14 +546,14 @@ def _ranura(b, tipo, puntos, ancho, construccion=False):
     """Ranura de la interfaz (líneas y arcos tangentes + eje de construcción). Alias: side1, end2, side2, end1 (los
     dos lados y los dos extremos curvos), axis (eje), center1 y center2 (centros de los extremos)."""
     if tipo not in RANURAS:
-        raise ErrorBoceto(f"Tipo de ranura desconocido: {tipo}. Tipos: {', '.join(RANURAS)}.")
+        raise ErrorBoceto(f"Ranura desconocida: {tipo}; tipos: {', '.join(RANURAS)}.")
     interno, n = RANURAS[tipo]
     if not isinstance(puntos, (list, tuple)) or len(puntos) != n:
-        raise ErrorBoceto(f"La ranura «{tipo}» necesita {n} puntos [x, y] (llegaron "
-                          f"{len(puntos) if isinstance(puntos, (list, tuple)) else 'otra cosa'}).")
+        raise ErrorBoceto(f"Ranura {tipo}: {n} puntos, llegaron "
+                          f"{len(puntos) if isinstance(puntos, (list, tuple)) else 'otra cosa'}")
     pts = [_xy(p, f"El punto {i + 1} de la ranura") for i, p in enumerate(puntos)]
     if not (_finito(ancho) and ancho > 1e-9):
-        raise ErrorBoceto(f"El ancho de la ranura tiene que ser un número positivo (llegó {ancho!r}).")
+        raise ErrorBoceto(f"Ancho de ranura > 0 (llegó {ancho!r}).")
     validar_valor_cota("distancia", ancho)
     ids = b.agregar_ranura(interno, pts, float(ancho), construccion)
     alias = dict(zip(("side1", "end2", "side2", "end1", "axis"), ids, strict=True))
@@ -1386,11 +1386,11 @@ def _estrella(b, puntas, radio, cx, cy, giro, interior, proporcion, salto, r_pun
     """Estrella (BOC-84) como la interfaz: el radio interior escrito, o la proporción, o el de la estrella regular
     {puntas/salto}."""
     if radio <= 1e-9:
-        raise ErrorBoceto("El radio exterior de la estrella tiene que ser positivo.")
+        raise ErrorBoceto("La estrella necesita un radio exterior > 0.")
     if sum(x is not None for x in (interior, proporcion, salto)) > 1:
-        raise ErrorBoceto("Pasá solo uno de inner_radius, inner_ratio o skip.")
+        raise ErrorBoceto("Usá solo uno: inner_radius, inner_ratio, skip")
     if r_punta < 0 or r_valle < 0:
-        raise ErrorBoceto("Los redondeos de la estrella no pueden ser negativos (0 = filosa).")
+        raise ErrorBoceto("Los redondeos de la estrella deben ser >= 0.")
     if interior is None:
         interior = radio * (proporcion if proporcion is not None else proporcion_estrella(puntas, salto or 2))
     ls, _ce, _ci = agregar_estrella(b, (cx, cy), radio, puntas, math.radians(giro), interior, construccion,
@@ -1518,7 +1518,7 @@ def add_constraint(sesion, sketch: str,
             _curva(b, entities[0], ("linea",))
             cadena, cerrada = b.cadena(entities[0])
             if not cerrada or any(b.tipo_de(k) != "linea" for k, _ in cadena):
-                raise ErrorBoceto("Polígono necesita una cadena cerrada de líneas.")
+                raise ErrorBoceto("Polígono: cadena cerrada de líneas.")
             entities = [k for k, _ in cadena]
         rid = b.agregar_restriccion(RESTRICCIONES[type], list(entities))
         if type in ("tangent", "curvature") and len(entities) == 2:
@@ -2307,7 +2307,7 @@ def draw_blend_curve(sesion, entity1: int | str, entity2: int | str, point1: lis
                 sesion, br.plano, "project", entidad, None, None, None, None, body)
             ids = b.agregar_proyeccion(prims, puntos, origen={"modo": "project", "refs": refs, "infinitas": infinitas})
             if len(ids) != 1 or ids[0] not in b.curvas or not b.curvas[ids[0]].extremos():
-                raise ErrorBoceto("La arista debe proyectar exactamente una curva abierta (no un círculo ni un punto).")
+                raise ErrorBoceto("La arista debe dar una curva abierta.")
             return ids[0]
         return entidad
 
@@ -2318,7 +2318,7 @@ def draw_blend_curve(sesion, entity1: int | str, entity2: int | str, point1: lis
             raise ErrorBoceto("Elegí dos curvas distintas.")
         e1, e2 = c1.extremos(), c2.extremos()
         if not e1 or not e2 or isinstance(c1, Texto) or isinstance(c2, Texto):
-            raise ErrorBoceto("La curva de fusión une extremos de curvas abiertas (no círculos, elipses ni textos).")
+            raise ErrorBoceto("La curva de fusión une curvas abiertas.")
         a, c = min(((a, c) for a in e1 for c in e2), key=lambda par: math.dist(b.coords(par[0]), b.coords(par[1])))
         b.curva_fusion(id1, p1 or b.coords(a), id2, p2 or b.coords(c), continuity)
     return _dibujar(sesion, sketch, crear, desde_solver=True, sin_conflicto="La curva de fusión")
@@ -3237,7 +3237,7 @@ def set_line_type(sesion, entities: list[int], line_type: Literal["normal", "con
         for i in entities:
             c = _curva(b, i)
             if line_type == "centerline" and isinstance(c, Texto):
-                raise ErrorBoceto(f"La entidad {i} es un texto: no puede ser línea central.")
+                raise ErrorBoceto(f"Entidad {i}: texto no es línea central.")
         for i in entities:
             c = b.curvas[i]
             c.construccion = line_type == "construction"

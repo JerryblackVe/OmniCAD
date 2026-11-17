@@ -132,9 +132,9 @@ def _problema(tipo, gravedad, mensaje, punto=None, segmentos=None, valor=None):
 
 def _exigir_forma(forma):
     if not isinstance(forma, TopoDS_Shape) or forma.IsNull():
-        raise geo.ErrorGeometria("No hay forma para revisar: el cuerpo está vacío.")
+        raise geo.ErrorGeometria("No hay forma para revisar: cuerpo vacío.")
     if next(geo._explorar(forma, TopAbs_VERTEX), None) is None:      # sin vértices no hay geometría (la caja exacta costaba 0,4 s)
-        raise geo.ErrorGeometria("La forma está vacía: no tiene geometría para revisar.")
+        raise geo.ErrorGeometria("La forma está vacía: sin geometría.")
 
 
 def _diagonal_caja(caja):
@@ -520,7 +520,7 @@ def _problemas_aristas_malla(v, aristas, tipo, gravedad, texto):
 def _revisar_malla(m, max_problemas):
     v, c = m.vertices, m.caras
     if not len(c):
-        raise geo.ErrorGeometria("La malla está vacía: no tiene triángulos para revisar.")
+        raise geo.ErrorGeometria("La malla está vacía: sin triángulos.")
     info = ml.analizar(m)
     topo = ml._Topo(c, len(v))
     problemas = []
@@ -578,7 +578,7 @@ def revisar(forma, *, autointersecciones=True, tolerancia_maxima=TOLERANCIA_ALTA
     `tolerancia_maxima` (mm): tolerancias mayores se avisan; None no las avisa.
     """
     if int(max_problemas) < 0:
-        raise geo.ErrorGeometria("La cantidad máxima de problemas no puede ser negativa.")
+        raise geo.ErrorGeometria("Cantidad máxima de problemas: negativa.")
     if isinstance(forma, ml.Malla):
         return _revisar_malla(forma, int(max_problemas))
     plazo = PLAZO_AUTOINTERSECCION if hasta is None else min(PLAZO_AUTOINTERSECCION, hasta - time.monotonic())
@@ -808,20 +808,20 @@ def revisar_impresion(forma, *, espesor_minimo=0.8, angulo_voladizo=45.0, angulo
     su precisión es la del teselado (exacta en caras planas).
     """
     if not espesor_minimo >= 0 or not math.isfinite(espesor_minimo):
-        raise geo.ErrorGeometria("El espesor mínimo tiene que ser un número mayor o igual que cero (mm).")
+        raise geo.ErrorGeometria("Espesor mínimo: debe ser mayor o igual a 0.")
     if not 0 < angulo_voladizo < 90:
-        raise geo.ErrorGeometria("El ángulo de voladizo tiene que estar entre 0° y 90° (desde la vertical).")
+        raise geo.ErrorGeometria("Ángulo de voladizo: entre 0° y 90°.")
     if not 0 <= angulo_filoso < 180:
-        raise geo.ErrorGeometria("El ángulo de filo tiene que estar entre 0° y 180°.")
+        raise geo.ErrorGeometria("Ángulo de filo: entre 0° y 180°.")
     if int(muestras) < 1:
-        raise geo.ErrorGeometria("Hace falta al menos una muestra para medir el espesor.")
+        raise geo.ErrorGeometria("Muestras: hace falta al menos 1.")
     max_problemas = int(max_problemas)
     if max_problemas < 0:
-        raise geo.ErrorGeometria("La cantidad máxima de problemas no puede ser negativa.")
+        raise geo.ErrorGeometria("Cantidad máxima de problemas: negativa.")
     problemas = []
     if isinstance(forma, ml.Malla):
         if not len(forma.caras):
-            raise geo.ErrorGeometria("La malla está vacía: no tiene triángulos para revisar.")
+            raise geo.ErrorGeometria("La malla está vacía: sin triángulos.")
         m, tipo_cuerpo = forma, "malla"
         cerrado = m.es_cerrada()
         volumen = abs(m.volumen()) if cerrado else None
@@ -895,7 +895,7 @@ def reparar(forma, *, tolerancia=0.01, coser=True, refinar=True, arreglar=True):
     """
     tol = float(tolerancia or 0.0)
     if tol < 0 or not math.isfinite(tol):
-        raise geo.ErrorGeometria("La tolerancia de reparación no puede ser negativa.")
+        raise geo.ErrorGeometria("Tolerancia de reparación: negativa.")
     if isinstance(forma, ml.Malla):
         return ml.reparar(forma, tipo="coser_y_quitar", tolerancia=tol if tol > 0 else None)
     _exigir_forma(forma)
@@ -915,7 +915,7 @@ def reparar(forma, *, tolerancia=0.01, coser=True, refinar=True, arreglar=True):
     if refinar:
         r = geo.unificar_caras(r)
     if r is None or r.IsNull() or geo.esta_vacia(r):
-        raise geo.ErrorGeometria("La reparación dejó la forma vacía: probá con otra tolerancia o sin refinar.")
+        raise geo.ErrorGeometria("La reparación dejó la forma vacía.")
     return r
 
 

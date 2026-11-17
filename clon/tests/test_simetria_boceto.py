@@ -381,7 +381,7 @@ def test_clic_en_el_vacio_o_en_una_curva_como_eje_dice_por_que_no(app_qt):
     QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, lz.a_px(-120, -48).toPoint())        # el círculo
     assert "recta" in estados[-1]["error"] and lz._eje_simetria is None
     QTest.mouseClick(lz, Qt.LeftButton, Qt.NoModifier, lz.a_px(-25, 0).toPoint())          # AB, que es el único objeto
-    assert lz._eje_simetria == ab and "Además de la línea" in estados[-1]["error"] and not estados[-1]["valido"]
+    assert lz._eje_simetria == ab and "además del eje" in estados[-1]["error"] and not estados[-1]["valido"]
     lz.hide()
 
 

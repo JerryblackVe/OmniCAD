@@ -286,7 +286,7 @@ def perfiles_a_params(seleccion):
         ref = h["ref"]
         if ref["tipo"] == "perfil":
             if boceto and ref["boceto"] != boceto:
-                raise ErrorComando("Los perfiles tienen que ser de un mismo boceto.")
+                raise ErrorComando("Los perfiles deben ser del mismo boceto.")
             boceto = ref["boceto"]
             perfiles.append({"firma": ref["firma"], "centroide": ref["centroide"]})
         elif ref["tipo"] == "cara":

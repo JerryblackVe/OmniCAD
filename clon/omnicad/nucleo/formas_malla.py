@@ -705,7 +705,7 @@ def medir(m, *, tolerancia=None):
     defecto = max(_TOLERANCIA_RELATIVA * diagonal, 1e-3)
     tol = float(tolerancia) if tolerancia is not None else defecto
     if not (tol > 0 and math.isfinite(tol)):
-        raise geo.ErrorGeometria("La tolerancia tiene que ser mayor que cero (mm).")
+        raise geo.ErrorGeometria("La tolerancia debe ser mayor que cero (mm).")
     g = _Facetas(m, tol, ruidosa=tol > defecto)
     area_total = float(g.area.sum())
     pares, etiqueta_f = _segmentar(g, tol, diagonal, area_total)

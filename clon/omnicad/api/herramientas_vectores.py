@@ -1025,7 +1025,7 @@ def move_sketch_point(sesion, point: int, x: float, y: float, sketch: str | None
         if point not in b.puntos:
             raise error("ENTITY_NOT_FOUND", f"No existe el punto {point} en el boceto.")
         if point in b.puntos_fijos():
-            raise ErrorBoceto(f"El punto {point} está fijo (o es proyectado): no se puede mover.")
+            raise ErrorBoceto(f"El punto {point} está fijo o proyectado.")
         # Como Fusion (y la ventana, `_empezar_arrastre`): lo totalmente restringido no se arrastra; si no, el
         # solver del arrastre podía saltar a otra solución (la cuerda de un arco de 20 a 0 mm con dof = 0).
         if previo is not None and previo.solver.ok and point in previo.solver.determinadas:
@@ -1036,7 +1036,7 @@ def move_sketch_point(sesion, point: int, x: float, y: float, sketch: str | None
         # repartía el movimiento y el punto quedaba a mitad de camino (p. ej. con una simetría)
         res = resolver(b, valores_cotas(sesion, b), arrastrado=point)
         if not res.ok and (previo is None or previo.solver.ok):
-            raise ErrorBoceto(f"No se pudo mover el punto {point} cumpliendo las restricciones: {res.descripcion()}")
+            raise ErrorBoceto(f"No se pudo mover el punto {point}: {res.descripcion()}")
     r = _dibujar(sesion, sketch, mover, desde_solver=True)
     br = boceto_resuelto(sesion, op_boceto(sesion, r["sketch"]["id"]))
     px, py = (br.boceto if br is not None else op_boceto(sesion, r["sketch"]["id"]).boceto).coords(point)

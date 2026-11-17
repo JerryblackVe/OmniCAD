@@ -74,7 +74,7 @@ def fijar_motor(nombre=None):
 
 def sin_soporte(operacion):
     from .geometria import ErrorGeometria
-    e = ErrorGeometria(f"OmniKernel todavía no hace {operacion}. Podés elegir OpenCascade en Preferencias.")
+    e = ErrorGeometria(f"OmniKernel no hace {operacion}. Usá OpenCascade.")
     e.error_kind = "MOTOR_SIN_SOPORTE"
     raise e
 
@@ -87,7 +87,7 @@ def _comprobar_formas(valor, elegido):
     es_nativo = nativo is not None and isinstance(valor, nativo.Cuerpo)
     if (elegido == "omnikernel" and modulo.startswith("OCP")) or (elegido == "opencascade" and es_nativo):
         from .geometria import ErrorGeometria
-        e = ErrorGeometria("La forma pertenece al otro motor geométrico; recalculá el documento completo.")
+        e = ErrorGeometria("Forma del otro motor: recalculá el documento.")
         e.error_kind = "MOTOR_INCOMPATIBLE"
         raise e
     if isinstance(valor, dict):

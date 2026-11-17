@@ -31,7 +31,7 @@ class OpReparar(Operacion):
             raise ErrorOperacion("Elegí los cuerpos a reparar.")
         tol = ctx.evaluar(self.p["tolerancia"])
         if tol < 0:
-            raise ErrorOperacion("La tolerancia de reparación no puede ser negativa.")
+            raise ErrorOperacion("La tolerancia no puede ser negativa.")
         rv = _rv()
         for cid in self.p["cuerpos"]:
             c = estado.cuerpo(cid)

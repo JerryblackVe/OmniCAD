@@ -51,9 +51,9 @@ def _xyz(p):
     try:
         x, y, z = (float(v) for v in p)
     except (TypeError, ValueError) as e:
-        raise ErrorBoceto(f"Un punto 3D es [x, y, z] (tres números): llegó {p!r}.") from e
+        raise ErrorBoceto(f"Un punto 3D es [x, y, z]: llegó {p!r}.") from e
     if not all(math.isfinite(v) for v in (x, y, z)):
-        raise ErrorBoceto(f"Las coordenadas tienen que ser números finitos: llegó {p!r}.")
+        raise ErrorBoceto(f"Coordenadas finitas: llegó {p!r}.")
     return [x, y, z]
 
 
@@ -71,7 +71,7 @@ def _positivo(v, nombre):
     except (TypeError, ValueError) as e:
         raise ErrorBoceto(f"{nombre} tiene que ser un número.") from e
     if not (math.isfinite(v) and v > 0):
-        raise ErrorBoceto(f"{nombre} tiene que ser mayor que 0 (llegó {v:g}).")
+        raise ErrorBoceto(f"{nombre} debe ser > 0 (llegó {v:g}).")
     return v
 
 
@@ -107,7 +107,7 @@ def _curva(b, tipo, pts, construccion, **extra):
     g = datos(b)
     ids = [agregar_punto(b, p) for p in pts]
     if any(a == c for a, c in zip(ids, ids[1:], strict=False)):
-        raise ErrorBoceto("Dos puntos seguidos de la curva coinciden: tienen que ser distintos.")
+        raise ErrorBoceto("Dos puntos seguidos de la curva coinciden.")
     cid = b._nuevo_id()
     g["curvas"][cid] = {"tipo": tipo, "puntos": ids, "construccion": bool(construccion), **extra}
     return cid
@@ -121,7 +121,7 @@ def agregar_spline(b, pts, construccion=False, cerrada=False):
     """Spline de ajuste 3D: pasa por todos los puntos (al menos dos); `cerrada` la cierra suave sobre el primero."""
     pts = list(pts)
     if len(pts) < (3 if cerrada else 2):
-        raise ErrorBoceto("Una spline necesita al menos dos puntos (tres si es cerrada).")
+        raise ErrorBoceto("Spline cerrada: 3 puntos; abierta: 2.")
     return _curva(b, "spline", pts, construccion, **({"cerrada": True} if cerrada else {}))
 
 
@@ -129,7 +129,7 @@ def agregar_arco(b, inicio, paso, fin, construccion=False):
     """Arco de 3 puntos (3D Sketch › Arco): de `inicio` a `fin` pasando por `paso`."""
     a, m, c = (np.array(_xyz(p)) for p in (inicio, paso, fin))
     if np.linalg.norm(_cruz(m - a, c - a)) < _TOL * max(1.0, np.linalg.norm(c - a)) ** 2:
-        raise ErrorBoceto("Los tres puntos del arco están alineados (o repetidos): no definen un círculo.")
+        raise ErrorBoceto("Puntos del arco alineados: no hay círculo.")
     return _curva(b, "arco", [a, m, c], construccion)
 
 
@@ -145,7 +145,7 @@ def agregar_elipse(b, centro, eje_mayor, radio_menor, normal=(0, 0, 1), construc
     if np.linalg.norm(e) < _TOL:
         raise ErrorBoceto("El eje mayor de la elipse no puede medir 0.")
     if abs(float(e @ n)) > 1e-9 * np.linalg.norm(e):
-        raise ErrorBoceto("El eje mayor de la elipse tiene que ser perpendicular a su normal (estar en su plano).")
+        raise ErrorBoceto("Elipse: eje mayor perpendicular a su normal.")
     return _curva(b, "elipse", [centro], construccion, eje_mayor=_lista(e),
                   radio_menor=_positivo(radio_menor, "El radio menor"), normal=_lista(n))
 
@@ -157,10 +157,10 @@ def agregar_conica(b, inicio, vertice, fin, rho=0.5, construccion=False):
     except (TypeError, ValueError) as e:
         raise ErrorBoceto("rho tiene que ser un número entre 0 y 1.") from e
     if not 0 < rho < 1:
-        raise ErrorBoceto(f"rho tiene que estar entre 0 y 1, sin incluirlos (llegó {rho:g}).")
+        raise ErrorBoceto(f"rho debe estar entre 0 y 1 (llegó {rho:g}).")
     a, v, c = (np.array(_xyz(p)) for p in (inicio, vertice, fin))
     if np.linalg.norm(_cruz(v - a, c - a)) < _TOL:
-        raise ErrorBoceto("El vértice de la cónica no puede estar alineado con sus extremos.")
+        raise ErrorBoceto("Vértice de la cónica alineado con extremos.")
     return _curva(b, "conica", [a, v, c], construccion, rho=rho)
 
 
@@ -179,7 +179,7 @@ def agregar_rectangulo(b, esquina, opuesta, u=(1, 0, 0), v=(0, 1, 0), construcci
     d = np.array(_xyz(opuesta)) - p0
     ancho, alto = float(d @ u), float(d @ v)
     if abs(ancho) < _TOL or abs(alto) < _TOL:
-        raise ErrorBoceto("El rectángulo necesita ancho y alto distintos de 0 en el plano elegido.")
+        raise ErrorBoceto("El rectángulo necesita ancho y alto > 0.")
     esquinas = [p0, p0 + ancho * u, p0 + ancho * u + alto * v, p0 + alto * v]
     lineas = [agregar_linea(b, esquinas[i], esquinas[(i + 1) % 4], construccion) for i in range(4)]
     agregar_restriccion(b, "perpendicular", lineas[:2])
@@ -206,7 +206,7 @@ def agregar_texto(b, origen, texto, altura, u=(1, 0, 0), v=(0, 1, 0), fuente="Ar
     altura = _positivo(altura, "La altura del texto")
     u, v = _base(u, v)
     if not _contornos(texto, altura, fuente):
-        raise ErrorBoceto(f"La fuente «{fuente}» no tiene contornos para «{texto}».")
+        raise ErrorBoceto(f"Sin contornos en «{fuente}» para «{texto}».")
     return _curva(b, "texto", [origen], construccion, texto=texto, altura=altura, fuente=str(fuente),
                   u=_lista(u), v=_lista(v), altura_a=True)
 
@@ -222,7 +222,7 @@ _TEXTO_FIRMA = {"coincidente": "dos puntos o un punto y una curva", "tangente": 
 
 def agregar_restriccion(b, tipo, entidades, eje=None):
     if tipo not in TIPOS_RESTRICCION:
-        raise ErrorBoceto(f"Restricción 3D desconocida: {tipo!r}. Valen: {', '.join(TIPOS_RESTRICCION)}.")
+        raise ErrorBoceto(f"Restricción 3D: {tipo!r} (valen {', '.join(TIPOS_RESTRICCION)}).")
     entidades = list(entidades)
     tipos = [tipo_de(b, e) for e in entidades]
     distintas = len(set(entidades)) == len(entidades)
@@ -231,18 +231,18 @@ def agregar_restriccion(b, tipo, entidades, eje=None):
             raise ErrorBoceto("Fijar necesita al menos una entidad.")
     elif tipo == "concentrica":
         if len(entidades) != 2 or not distintas or not set(tipos) <= set(CON_CENTRO):
-            raise ErrorBoceto(f"La restricción concéntrica une dos arcos, círculos o elipses (llegó {'+'.join(tipos)}).")
+            raise ErrorBoceto(f"Concéntrica: arco/círculo/elipse ({'+'.join(tipos)}).")
     elif len(entidades) != _CANTIDAD.get(tipo, 2) or set(tipos) not in _FIRMAS[tipo] or not distintas:
         esperado = _TEXTO_FIRMA.get(tipo) or " o ".join("+".join(sorted(f)) for f in _FIRMAS[tipo])
-        raise ErrorBoceto(f"La restricción {tipo} se aplica a {esperado} (llegó {'+'.join(tipos)}).")
+        raise ErrorBoceto(f"{tipo}: {esperado} (llegó {'+'.join(tipos)}).")
     datos_r = {"tipo": tipo, "entidades": entidades}
     if tipo == "eje":
         if eje not in EJES:
-            raise ErrorBoceto(f"La restricción de eje necesita el eje: x, y o z (llegó {eje!r}).")
+            raise ErrorBoceto(f"El eje debe ser x, y o z (llegó {eje!r}).")
         datos_r["eje"] = eje
     if tipo == "tangente" and set(tipos) <= {"linea", "spline"} and _comun(datos(b), *entidades) is None:
-        raise ErrorBoceto("Para la tangencia, la spline tiene que empezar o terminar en un extremo de la otra curva "
-                          "(dibujala desde ese extremo: se encadenan solas).")
+        raise ErrorBoceto("Tangencia: la spline debe tocar "
+                          "un extremo.")
     rid = b._nuevo_id()
     datos(b)["restricciones"][rid] = datos_r
     return rid
@@ -293,9 +293,9 @@ def agregar_cota(b, entidades, expresion, tipo="distancia"):
     tipos = [tipo_de(b, e) for e in entidades]
     if tipo == "angulo":
         if tipos != ["linea", "linea"] or entidades[0] == entidades[1]:
-            raise ErrorBoceto("La cota angular 3D mide el ángulo entre dos líneas.")
+            raise ErrorBoceto("La cota angular 3D mide un ángulo.")
     elif tipos not in (["linea"], ["punto", "punto"]):
-        raise ErrorBoceto("La cota 3D mide el largo de una línea o la distancia entre dos puntos.")
+        raise ErrorBoceto("La cota 3D mide largo o distancia.")
     kid = b._nuevo_id()
     datos(b)["cotas"][kid] = {"entidades": entidades, "expresion": str(expresion),
                               **({"tipo": "angulo"} if tipo == "angulo" else {})}
@@ -352,7 +352,7 @@ def transformar(b, ids, matriz, traslacion=(0, 0, 0), centro=(0, 0, 0), copiar=F
     m = np.asarray(matriz, float)
     det = float(np.linalg.det(m)) if m.shape == (3, 3) else 0.0
     if not det > 1e-12:
-        raise ErrorBoceto("La transformación tiene que ser un giro con escala positiva.")
+        raise ErrorBoceto("Transformación: giro con escala positiva.")
     escala = det ** (1 / 3)
     giro = m / escala
     c0, t = np.array(_xyz(centro)), np.array(_xyz(traslacion))
@@ -520,7 +520,7 @@ def _spline_parametrica(b, cid, c, P):
     try:
         curva = Curva(*curvas3d.parametrica(curvas3d.arista_spline(pts, tangentes, cerrada)))
     except geo.ErrorGeometria as e:
-        raise ErrorBoceto(f"No se pudo construir la curva 3D {cid}: {e}") from e
+        raise ErrorBoceto(f"No se pudo construir la curva {cid}: {e}") from e
     if len(_SPLINES) >= 16:
         _SPLINES.pop(next(iter(_SPLINES)))
     _SPLINES[clave] = curva
@@ -568,7 +568,7 @@ def curva_parametrica(b, cid, P=None):
         return Curva(f, 0.0, 1.0)
     if t == "spline":
         return _spline_parametrica(b, cid, c, P)
-    raise ErrorBoceto(f"Un {t} no es una curva con la que se pueda restringir.")
+    raise ErrorBoceto(f"Un {t} no es curva para restringir.")
 
 
 def _muestras(c, recta=False):
@@ -862,7 +862,7 @@ def arista(b, cid, plano):
         tangentes = {i: _vec(plano, v) for i, v in _tangentes(b, cid, P).items()}
         return curvas3d.arista_spline(pts, tangentes, c.get("cerrada", False))
     except geo.ErrorGeometria as e:
-        raise ErrorBoceto(f"No se pudo construir la curva 3D {cid}: {e}") from e
+        raise ErrorBoceto(f"No se pudo construir la curva {cid}: {e}") from e
 
 
 def polilineas_de(b, cid, plano, muestras=48):

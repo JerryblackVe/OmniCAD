@@ -170,7 +170,7 @@ def test_dos_cadenas_que_no_se_tocan_dan_dos_desfases():
 
 
 def test_un_desfase_que_hace_desaparecer_el_lazo_falla_con_mensaje():
-    with pytest.raises(geo.ErrorGeometria, match="desaparecer"):
+    with pytest.raises(geo.ErrorGeometria, match="no se pudo calcular"):
         da.desfasar_aristas(_cuadrado(), XY, -6)
 
 

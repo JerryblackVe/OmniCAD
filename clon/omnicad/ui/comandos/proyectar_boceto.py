@@ -36,17 +36,17 @@ class _CurvasEnBoceto(Comando):
 
     def construir(self, v, ctx):
         if not v.get("curvas") or not v.get("caras"):
-            raise ErrorComando("Elegí las curvas del boceto y las caras de destino.")
+            raise ErrorComando("Elegí curvas del boceto y caras de destino.")
         origen = {"tool": self.HERRAMIENTA, "refs": [h["ref"] for h in v["caras"]],
                   "curves": [h["ref"] for h in v["curvas"]]}
         if self.HERRAMIENTA == "project_to_surface":
             modo = v.get("tipo", "closest")
             if modo not in ("closest", "vector"):
-                raise ErrorComando("Elegí Punto más cercano o A lo largo de un vector.")
+                raise ErrorComando("Elegí Punto más cercano o vector.")
             origen.update(mode=modo, direction=None)
             if modo == "vector":
                 if not v.get("direccion"):
-                    raise ErrorComando("Elegí un eje o una arista recta como dirección de proyección.")
+                    raise ErrorComando("Elegí la Dirección: eje o arista recta.")
                 try:
                     direccion = ent.como_eje(ent.resolver(v["direccion"][0]["ref"], ctx.estado))[1]
                 except ent.ErrorReferencia as e:
@@ -57,7 +57,7 @@ class _CurvasEnBoceto(Comando):
         except (geo.ErrorGeometria, ent.ErrorReferencia) as e:
             raise ErrorComando(str(e)) from e
         if not curvas:
-            raise ErrorComando("La selección no deja ninguna curva (no se cortan o no cae sobre la cara).")
+            raise ErrorComando("Ninguna curva cae en las caras elegidas.")
         return curvas, origen
 
     def mostrar(self, v, ctx):
@@ -71,7 +71,7 @@ class _CurvasEnBoceto(Comando):
             for i, curva in enumerate(curvas):
                 b3.agregar_desde_mundo(lz.b, curva, lz.plano, lz.construccion, {**origen, "index": i})
         if not lz.aplicar_cambio(agregar, anclar=False):
-            raise ErrorComando("No se pudieron agregar las curvas: entran en conflicto con el boceto.")
+            raise ErrorComando("Las curvas chocan con el boceto.")
 
 
 class ProyectarSuperficie(_CurvasEnBoceto):

@@ -13,14 +13,14 @@ def limite(forma_tipo, centro, x=None, y=None, z=None, radio=None, largo=None):
     if forma_tipo == "box":
         for v, n in ((x, "x_size"), (y, "y_size"), (z, "z_size")):
             if not v or v <= 0:
-                raise geo.ErrorGeometria(f"La caja necesita x_size, y_size y z_size positivos (falta {n}).")
+                raise geo.ErrorGeometria(f"Falta {n}: x_size, y_size y z_size > 0.")
         return geo.caja(x, y, z, (centro[0] - x / 2, centro[1] - y / 2, centro[2] - z / 2))
     if not radio or radio <= 0:
         raise geo.ErrorGeometria("Falta radius (positivo, en mm).")
     if forma_tipo == "sphere":
         return geo.esfera(radio, centro)
     if not largo or largo <= 0:
-        raise geo.ErrorGeometria("El cilindro necesita length (su largo sobre el eje X) positivo.")
+        raise geo.ErrorGeometria("El cilindro necesita length positivo.")
     return geo.cilindro(radio, largo, (centro[0] - largo / 2, centro[1], centro[2]), (1, 0, 0))
 
 
