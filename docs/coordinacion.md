@@ -181,8 +181,8 @@ de OpenCode; las demás la enlazan.
   1 o 2 tareas). Al cerrar una corrida, E9 lanza la siguiente; si la fila queda vacía, el coordinador la rellena de
   `docs/seguimiento/` con filas de prioridad 1 chicas. En rojo las lanza el coordinador con su ~5 %.
 - **Vigía sin modelo** (Gerardo, 2026-11-17): `scripts/vigia_opencode.sh` en la crontab de la VPS, cada 10 min: mata una corrida que no escribe hace 20 min y, si no corre nada, lanza la siguiente `NN_nombre.tarea` de `~/coordinador/opencode_cola/` (`WT=`, `BRIEF=`, `MODELO=` opcional; log en `vigia.log`). Una tarea trabada se relanza con el modelo siguiente y un brief que sigue desde `git diff` + el log; a la 2.ª trabada va a `trabadas/` (Gerardo, 17/11). El coordinador llena esa cola.
-- **Cada corrida**: una tarea, en su worktree, con `timeout 1500` y `cp` de respaldo antes. Hasta 2 corridas a la vez
-  en la VPS, de modelos distintos; en la PC, nunca. Se comprueba con `scripts/tests_afectados.py --correr` y ruff; lo
+- **Cada corrida**: una tarea, en su worktree, con `timeout 1500` y `cp` de respaldo antes. Hasta 3 corridas a la vez
+  en la VPS, de modelos distintos (2 de OpenCode y la 3.ª en CodeBuddy, Gerardo 2026-11-17); en la PC, nunca. Se comprueba con `scripts/tests_afectados.py --correr` y ruff; lo
   de GLM o DeepSeek lo revisa MiniMax o E9. A main entra solo con el diff revisado por el coordinador.
 - **Vigilancia**: el coordinador y el chat maestro, cada 2 h, comprueban que haya una corrida activa
   (`pgrep -af opencode`); si no la hay, la cola se rellena. Una corrida sin log, sin CPU ni archivos tocados a los
