@@ -701,7 +701,7 @@ def resolver(b, valores, quietas=(), medidas=None):
         if not valores.get(k, 0) > 0:
             return Resultado3D(False, None, f"La cota 3D {k} tiene que medir más que 0.")
         if cota.get("tipo") == "angulo" and not valores[k] < 180:
-            return Resultado3D(False, None, f"La cota angular 3D {k} tiene que medir menos de 180°.")
+            return Resultado3D(False, None, f"Cota angular 3D {k}: menor de 180°.")
     fijos = puntos_fijos(b).union(*(g["curvas"][k]["puntos"] for k in quietas))
     libres = [p for p in g["puntos"] if p not in fijos]
     aux = []
@@ -726,7 +726,7 @@ def resolver(b, valores, quietas=(), medidas=None):
     if not fs or not len(x0):
         r = residuos(x0)
         ok = not len(r) or float(np.max(np.abs(r))) < _TOL
-        return Resultado3D(ok, len(x0), "" if ok else "Restricciones 3D en conflicto (sobre geometría fija).")
+        return Resultado3D(ok, len(x0), "" if ok else "Restricciones 3D fijas en conflicto.")
     from scipy.optimize import least_squares
     from scipy.optimize._numdiff import approx_derivative
     # BOC-82: cada grupo independiente se resuelve aparte; junto, el jacobiano por diferencias finitas evaluaba todo el
@@ -741,7 +741,7 @@ def resolver(b, valores, quietas=(), medidas=None):
                 return np.concatenate([np.ravel(f(P)) for f in ecs])
             if not cols:
                 if float(np.max(np.abs(r(x[cols])))) > _TOL:
-                    return Resultado3D(False, None, "Restricciones o cotas 3D en conflicto: quitá alguna.")
+                    return Resultado3D(False, None, "Restricciones o cotas 3D en conflicto.")
                 continue
             r0 = r(x[cols])
             if float(np.max(np.abs(r0))) <= _YA_CUMPLE:      # un arrastre solo mueve su grupo: el resto ya cumple
@@ -749,7 +749,7 @@ def resolver(b, valores, quietas=(), medidas=None):
             else:
                 sol = least_squares(r, x[cols], method="trf", xtol=1e-14, ftol=1e-14, gtol=1e-14, max_nfev=2000)
                 if float(np.max(np.abs(r(sol.x)))) > _TOL:
-                    return Resultado3D(False, None, "Restricciones o cotas 3D en conflicto: quitá alguna.")
+                    return Resultado3D(False, None, "Restricciones o cotas 3D en conflicto.")
                 x[cols], jac = sol.x, sol.jac
             gdl -= int(np.linalg.matrix_rank(jac, tol=1e-8))
     except ErrorBoceto as e:
