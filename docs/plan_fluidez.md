@@ -166,6 +166,36 @@ La corrida completa se ejecutó una vez; el JSON conserva las 33 corridas, error
 `round(max(50, HOY × 1,5))` en ms; los `null` sin motivo de omisión son métricas no aplicables.
 Son presupuestos de regresión del estado actual, **no** las metas de fluidez de esta tabla.
 
+### F0 › Medición 2026-11-17 (VPS)
+
+Banco F0 `a–k`, 8 núcleos, tres repeticiones por escenario y mediana. Se ordenan los diez escenarios
+completados por el mayor exceso relativo de su medida más fallada sobre la meta. La medida elegida es la que
+más se aparta de su meta: primera previa (M2), bloqueo máximo (M1), apertura total (M6) o evento (M3).
+
+| Comando | Medida | ms medido | Meta | Repetir |
+|---|---|---:|---|---|
+| e · Barrido / bobina / solevación | Primera previa de bobina | 4174,64 | < 300 ms (M2) | `bench_fluidez.py e --rep 3` |
+| k · Órbita, 300 000 triángulos | Evento más lento | 128,41 | < 33 ms por evento (M3) | `bench_fluidez.py k --rep 3` |
+| j · Arrastrar punto, 200 entidades | Evento más lento | 117,54 | < 33 ms por evento (M3) | `bench_fluidez.py j --rep 3` |
+| h · Abrir proyecto pesado (sustituto) | Apertura total | 5130,96 | < 1500 ms (M6) | `bench_fluidez.py h --rep 3` |
+| i · Preferencias, deslizador y combo | Bloqueo máximo | 507,00 | < 250 ms (M1) | `bench_fluidez.py i --rep 3` |
+| c · Empalme R2, 200 caras | Primera previa | 595,04 | < 300 ms (M2) | `bench_fluidez.py c --rep 3` |
+| a · Texto, 8 perfiles, Unir, 11 cuerpos | Primera previa | 398,49 | < 300 ms (M2) | `bench_fluidez.py a --rep 3` |
+| g · Eliminar un paso de 20 | Bloqueo máximo | 139,00 | < 250 ms (M1) | `bench_fluidez.py g --rep 3` |
+| d · Desfase de cara | Primera previa | 127,42 | < 300 ms (M2) | `bench_fluidez.py d --rep 3` |
+| f · Combinar dos cuerpos | Primera previa | 95,99 | < 300 ms (M2) | `bench_fluidez.py f --rep 3` |
+
+Repetir cada fila desde `clon/` con este prefijo y cambiar `<letra>` por `a`, `c`, `d`, `e`, `f`, `g`, `h`, `i`, `j` o `k`:
+
+```bash
+QT_QPA_PLATFORM=xcb OMNICAD_PRUEBA_VENTANA=minimizada xvfb-run -a \
+  /home/mosos/OmniCAD/clon/.venv/bin/python ../scripts/turno.py --plazo 1500 -- \
+  /home/mosos/OmniCAD/clon/.venv/bin/python ../scripts/bench_fluidez.py <letra> --rep 3 --json /tmp/fl0.json
+```
+
+El escenario `b` (rosca modelada M20 × 60) no aporta cifra: las tres corridas terminaron con
+`RuntimeError: No está el asa tam_iso_metrica; longitud completa=False; asas=['desfase', 'longitud']`.
+
 - **Listo cuando:** la tabla «hoy / meta» de los 11 escenarios está commiteada y el test corre con turno.
 - **Ejecutor:** E7 (Sonnet medio) arma el banco; E6 revisa la medición. Es mecánico y no decide geometría.
 
