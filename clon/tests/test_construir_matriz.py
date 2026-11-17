@@ -305,7 +305,7 @@ def test_b284_un_nombre_con_un_sustituto_suelto_se_rechaza_y_el_documento_se_gua
                               ("create_construction_point", dict(type="vertice", references=["O"])),
                               ("create_ucs", dict(origin="O"))):
         r = api.llamar(s, herramienta, {**args, "name": malo})
-        assert not r["ok"] and "no es válido" in r["mensaje"], (herramienta, r)
+        assert not r["ok"] and "sin caracteres raros" in r["mensaje"], (herramienta, r)
     pl = llamar(s, "create_construction_plane", plane="XY", offset=3)["plane"]["id"]
     r = api.llamar(s, "rename", {"target": pl, "new_name": malo})
     assert not r["ok"], r

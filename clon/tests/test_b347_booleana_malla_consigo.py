@@ -26,4 +26,4 @@ def test_combinar_con_una_malla_pide_combinar_mallas(operacion):
     api.llamar(s, "create_box", {"length": 10, "width": 10, "height": 10, "x": 100})
     assert api.llamar(s, "tessellate", {"bodies": "Cuerpo2"})["ok"]
     r = api.llamar(s, "boolean_operation", {"target": "op1.c1", "tools": ["op3.c1"], "operation": operacion})
-    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and "combine_meshes" in r["mensaje"]
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED" and "Combinar mallas" in r["mensaje"]

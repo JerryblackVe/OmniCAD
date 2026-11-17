@@ -369,7 +369,7 @@ def test_version_de_calculo_mal_formada_nombra_el_campo():
                    OpOrigenUnion(doc.nuevo_id(), "O", version_marco=valor, origen=cuerpo),
                    OpVinculoMovimiento(doc.nuevo_id(), "V", union1="op7", union2="op8", version_vinculo=valor)):
             res = doc.agregar(op)
-            assert res.estado == "error" and res.mensaje.startswith("Parámetro mal formado «version_"), res.mensaje
+            assert res.estado == "error" and res.mensaje.startswith("«version_"), res.mensaje
             assert repr(valor) in res.mensaje
             doc.eliminar(op.id)
 

@@ -329,7 +329,7 @@ class EstadoModelo:
     def cuerpo(self, cid):
         cid = id_cuerpo(cid)
         if cid not in self.cuerpos:
-            raise ErrorOperacion(f"El cuerpo '{cid}' no existe en este punto del timeline.")
+            raise ErrorOperacion(f"El cuerpo '{cid}' no existe en este punto.")
         return self.cuerpos[cid]
 
 
@@ -469,8 +469,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
             if v_nueva < v_menor - max(v_menor, 1.0) * 5e-4:
                 v_nueva, v_menor = geo.volumen(nueva), max(geo.volumen(resultado), geo.volumen(c.forma))
                 if v_nueva < v_menor - max(v_menor, 1.0) * 5e-4:      # B-308: un resultado roto no se acepta
-                    raise ErrorOperacion(f"{c.nombre}: la unión perdió {v_menor - v_nueva:.2f} mm³ de material (el "
-                                         f"kernel descartó geometría en un contacto degenerado). {geo.CONSEJO_CONTACTO}")
+                    raise ErrorOperacion(f"{c.nombre}: perdió {v_menor - v_nueva:.2f} mm³ (solapá 0,1 mm).")
             v_previa = v_nueva
             resultado = nueva
         principal = objetivos[0]
@@ -496,7 +495,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
         for texto in avisos:
             ctx.aviso(f"{c.nombre}: {texto}")
         if geo.esta_vacia(nueva) and operacion == "intersecar":      # T-22: igual que Combinar, nada se borra
-            raise ErrorOperacion(f"El resultado quedó vacío: la herramienta no se interseca con {c.nombre}.")
+            raise ErrorOperacion(f"El resultado quedó vacío: no toca a {c.nombre}.")
         if geo.esta_vacia(nueva):
             del estado.cuerpos[c.id]
             ctx.aviso(f"{c.nombre} quedó vacío y se eliminó.")
@@ -540,8 +539,7 @@ def _version_de(p, clave):
     nombra el campo."""
     v = p.get(clave)
     if isinstance(v, bool) or not isinstance(v, (int, float)) or v not in (1, 2):
-        raise ErrorOperacion(f"Parámetro mal formado «{clave}»: llegó {v!r}; tiene que ser 1 (el cálculo de las "
-                             "recetas viejas) o 2 (el actual).")
+        raise ErrorOperacion(f"«{clave}» tiene que ser 1 o 2: llegó {v!r}.")
     return int(v)
 
 
@@ -614,8 +612,8 @@ class Operacion:
             if valor is None and self.PARAMS.get(clave) is None:
                 continue
             if valor not in list(validos):
-                raise ErrorOperacion(f"Valor no válido para «{clave}»: llegó {ent.describir_valor(valor)}. Valores "
-                                     f"válidos: {', '.join(map(str, validos))}.")
+                raise ErrorOperacion(f"«{clave}»: llegó {ent.describir_valor(valor)}; válidos: "
+                                     f"{', '.join(map(str, validos))}.")
 
     def entero(self, clave, minimo=1):
         """El parámetro `clave` como entero: acepta un int, un float sin decimales o un texto de dígitos («3»).
@@ -633,7 +631,7 @@ class Operacion:
                 pass
         if n is None or (minimo is not None and n < minimo):
             al_menos = f" (al menos {minimo})" if minimo is not None else ""
-            raise ErrorOperacion(f"«{clave}» tiene que ser un número entero{al_menos}: llegó "
+            raise ErrorOperacion(f"«{clave}» debe ser entero{al_menos}: llegó "
                                  f"{ent.describir_valor(valor)}.")
         return n
 
@@ -689,15 +687,13 @@ def _plano_de_cara_asociada(cara, estado):
     ent.validar(cara)
     cuerpo = estado.cuerpos.get(cara.get("cuerpo"))
     if cuerpo is None:
-        raise ErrorOperacion(f"El cuerpo de la cara donde está el boceto («{cara.get('cuerpo')}») ya no existe "
-                             "en este punto del timeline.")
+        raise ErrorOperacion(f"El cuerpo del boceto («{cara.get('cuerpo')}») ya no existe.")
     sub = refs.resolver(cuerpo.forma, cara)
     if sub is None:
-        raise ErrorOperacion(f"El boceto perdió la cara de {cuerpo.nombre} donde estaba apoyado: la geometría "
-                             "cambió demasiado. Deshacé el cambio o volvé a crear el boceto sobre la cara.")
+        raise ErrorOperacion(f"El boceto perdió la cara de {cuerpo.nombre}: recrealo.")
     plano = geo.plano_de_cara(sub)
     if plano is None:
-        raise ErrorOperacion(f"La cara de {cuerpo.nombre} donde está el boceto dejó de ser plana.")
+        raise ErrorOperacion(f"La cara {cuerpo.nombre} del boceto dejó de ser plana.")
     return plano
 
 
@@ -717,8 +713,7 @@ def resolver_plano(ref, marco, estado, cara=None):
             raise ErrorOperacion("Falta la definición del plano de la cara.")
         return geo.Plano.desde_marco(marco["origen"], marco["normal"], marco["u"])
     if ref not in estado.planos:
-        raise ErrorOperacion("El plano de construcción de referencia no está disponible "
-                             "(¿borrado, suprimido o después del marcador?).")
+        raise ErrorOperacion("El plano de referencia no está disponible.")
     return estado.planos[ref]
 
 
@@ -729,7 +724,7 @@ def _es_ref_operacion(ref):
 def exigir_sin_ciclo(op, *referencias):
     """B-260: un paso no puede usarse a sí mismo como referencia (vía edit_feature o una receta)."""
     if op.id in ent.dependencias_de(*referencias):
-        raise ErrorOperacion(f"«{op.nombre}» no puede usarse a sí mismo como referencia.")
+        raise ErrorOperacion(f"«{op.nombre}» no puede referenciarse a sí mismo.")
 
 
 class OpPlano(Operacion):
@@ -1118,7 +1113,7 @@ def _caja_todo(estado):
     cajas = [geo.caja_envolvente(c.forma) for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") != "malla"]
     cajas = [c for c in cajas if c]
     if not cajas:
-        raise ErrorOperacion("La extensión «Todo» necesita cuerpos para atravesar.")
+        raise ErrorOperacion("«Todo» necesita cuerpos para atravesar.")
     return (tuple(min(c[0][i] for c in cajas) for i in range(3)), tuple(max(c[1][i] for c in cajas) for i in range(3)))
 
 
@@ -1151,8 +1146,7 @@ class _OpConPerfiles(Operacion):
         if self.p.get("perfiles"):
             br = estado.bocetos.get(self.p["boceto"])
             if br is None:
-                raise ErrorOperacion("El boceto de referencia no está disponible (¿borrado, suprimido o después del "
-                                     "marcador?).")
+                raise ErrorOperacion("El boceto de referencia no está disponible.")
             for ref in self.p["perfiles"]:
                 detalle = ent.problema_perfil(ref)
                 if detalle:
@@ -1168,9 +1162,8 @@ class _OpConPerfiles(Operacion):
                     continue
                 if perfil is None:
                     if ent.es_de_texto(ref["firma"], br):
-                        raise ErrorOperacion("Un perfil seleccionado era un pedazo de una letra y ya no existe como "
-                                             "región: volvé a elegir el texto.")
-                    raise ErrorOperacion("Un perfil seleccionado ya no existe en el boceto (cambió su contorno).")
+                        raise ErrorOperacion("El perfil era de una letra: elegí el texto.")
+                    raise ErrorOperacion("Un perfil ya no existe (cambió su contorno).")
                 if nota and ctx is not None:
                     ctx.aviso(nota)
                 vistos.add(id(perfil))
@@ -1274,7 +1267,7 @@ class OpExtrusion(_OpConPerfiles):
         p = self.p
         if not p.get("simetrica") and p.get("direccion") == "dos_lados":
             if p.get("extension2") == "objeto" and not p.get("hasta2"):
-                raise ErrorOperacion("Elegí la cara, el plano o el cuerpo hasta donde llega el lado 2 de la extrusión.")
+                raise ErrorOperacion("Elegí el límite del lado 2 de la extrusión.")
             if p.get("extension") != "distancia" or p.get("extension2") != "distancia":
                 if p.get("extension2") == "distancia":
                     geo.exigir_longitud(ctx.evaluar(p["distancia2"]), "La distancia del lado 2")
@@ -1295,7 +1288,7 @@ class OpExtrusion(_OpConPerfiles):
         if curvas and not p.get("perfiles") and not p.get("caras"):
             plano = next((e.plano for e in curvas if e.plano is not None), None)
             if plano is None:
-                raise ErrorOperacion("Las curvas abiertas tienen que ser de un boceto.")
+                raise ErrorOperacion("Curvas abiertas: tienen que ser de un boceto.")
             caras = []
         else:
             plano, caras = self._caras(estado, ctx)
@@ -1311,7 +1304,7 @@ class OpExtrusion(_OpConPerfiles):
         if p.get("inicio") == "objeto":
             e = _resolver(p.get("inicio_objeto"), estado) if p.get("inicio_objeto") else None
             if e is None or e.plano is None:
-                raise ErrorOperacion("Elegí una cara plana o un plano como inicio de la extrusión.")
+                raise ErrorOperacion("Elegí una cara plana o un plano de inicio.")
             if abs(float(e.plano.normal @ n)) < 1 - 1e-9:
                 # Fusion (Start = Object): con el objeto inclinado la base de la extrusión es el perfil proyectado
                 # sobre él a lo largo de la dirección; con un objeto paralelo basta el desfase, como siempre.
@@ -1321,7 +1314,7 @@ class OpExtrusion(_OpConPerfiles):
         hasta = caja = dueno = None
         if p.get("extension") == "objeto":
             if not p.get("hasta"):
-                raise ErrorOperacion("Elegí la cara, el plano o el cuerpo hasta donde llega la extrusión.")
+                raise ErrorOperacion("Elegí el límite de la extrusión.")
             limite = _resolver(p["hasta"], estado)
             hasta = self._forma_objeto(limite)
             if p.get("hasta_modo") == "adyacentes" and limite.tipo == "cara" and limite.cuerpo:
@@ -1338,7 +1331,7 @@ class OpExtrusion(_OpConPerfiles):
         avanzada = delgado or abs(conicidad) > 1e-9 or abs(conicidad2) > 1e-9 or hasta is not None or caja is not None
         if kernel is not None and hasattr(kernel, "extruir_avanzado") and avanzada:
             if hasta is not None and direccion == "simetrica":
-                raise ErrorOperacion("«Al objeto» no se combina con la dirección simétrica.")
+                raise ErrorOperacion("«Al objeto» no va con la dirección simétrica.")
             forma = kernel.extruir_avanzado(caras, n, inicio_desfase=desfase, direccion=direccion, distancia1=d1,
                                             distancia2=d2, conicidad1=conicidad, conicidad2=conicidad2,
                                             medida_simetrica=medida, delgado=delgado,
@@ -1347,13 +1340,13 @@ class OpExtrusion(_OpConPerfiles):
                                             hasta_desfase=ctx.evaluar(p.get("desfase_hasta", "0")), hasta_caja=caja,
                                             inicio_plano=inclinado, hasta_dueno=dueno)
         elif avanzada:
-            raise ErrorOperacion("Esta opción de extrusión todavía no está disponible.")
+            raise ErrorOperacion("Esta opción de extrusión no está disponible.")
         else:
             if inclinado is not None:
                 caras = [geo.proyectar_sobre_plano(c, n, inclinado) for c in caras]
             forma = _extrusion_basica(caras, n, d1, d2, direccion, medida, desfase)
         if not geo.esta_vacia(forma) and caras and all(cara_sin_area(c) for c in caras):
-            raise ErrorOperacion("La extrusión no tiene volumen: el perfil elegido casi no tiene área.")
+            raise ErrorOperacion("El perfil casi no tiene área: sin volumen.")
         return forma
 
     def _cuerpos_objetivo(self):
@@ -1367,7 +1360,7 @@ class OpExtrusion(_OpConPerfiles):
             return e.forma
         if e.plano is not None:
             return geo.cara_de_plano(e.plano)
-        raise ErrorOperacion("El objeto elegido no sirve como límite de la extrusión.")
+        raise ErrorOperacion("El objeto elegido no sirve de límite.")
 
 
 def _exigir_cuerpo_con_volumen(estado, ids):
@@ -1378,11 +1371,9 @@ def _exigir_cuerpo_con_volumen(estado, ids):
         if c is None or getattr(c, "tipo", "solido") != "solido":
             continue
         if not geo.es_valida(c.forma):
-            raise ErrorOperacion("La extrusión dejó un cuerpo con una forma inválida: revisá las caras elegidas "
-                                 "y la distancia.")
+            raise ErrorOperacion("La extrusión dejó un cuerpo inválido.")
         if geo.volumen_exacto(c.forma) <= 0:
-            raise ErrorOperacion("La extrusión dejó un cuerpo sin volumen (0 o menos): revisá las caras elegidas "
-                                 "y la distancia.")
+            raise ErrorOperacion("La extrusión dejó un cuerpo sin volumen.")
 
 
 def _extrusion_basica(caras, n, d1, d2, direccion, medida, desfase):
@@ -1423,7 +1414,7 @@ class OpRevolucion(_OpConPerfiles):
             return plano.a_3d(0, 0), (plano.u if eje == "u" else plano.v)
         lid = int(eje)
         if br is None or lid not in br.boceto.curvas or br.boceto.curvas[lid].tipo != "linea":
-            raise ErrorOperacion("La línea elegida como eje ya no existe en el boceto.")
+            raise ErrorOperacion("La línea del eje ya no existe en el boceto.")
         (u1, v1), (u2, v2) = br.boceto._extremos_linea(lid)
         punto = plano.a_3d(u1, v1)
         return punto, plano.a_3d(u2, v2) - punto
@@ -1440,7 +1431,7 @@ class OpRevolucion(_OpConPerfiles):
             return "plano", e.plano
         if e.tipo == "cuerpo" and e.forma is not None:
             return "forma", e.forma
-        raise ErrorOperacion("El objeto de la revolución tiene que ser un vértice, un plano, una cara plana o un cuerpo.")
+        raise ErrorOperacion("El objeto tiene que ser plano, cara o cuerpo.")
 
     def eje_de_giro(self, estado, plano):
         """(punto, dirección) del eje alrededor del que gira el perfil: proyectado al plano con «Eje de proyecto» y
@@ -1462,15 +1453,15 @@ class OpRevolucion(_OpConPerfiles):
         if self.p.get("extension") == "objeto":
             modo = self.p.get("direccion", "un_lado")
             if modo == "simetrica":
-                raise ErrorOperacion("«A objeto» gira hasta el objeto de cada lado: usá «Un lado» o «Dos lados».")
+                raise ErrorOperacion("«A objeto» no va con «Simétrica».")
             kernel = _kernel_crear()
             if kernel is None or not hasattr(kernel, "revolver_hasta"):
-                raise ErrorOperacion("«A objeto» todavía no está disponible con este motor geométrico.")
+                raise ErrorOperacion("«A objeto» no está disponible con este motor.")
             forma = kernel.revolver_hasta(caras, punto, direccion, self._hasta(estado))
             if modo == "dos_lados":         # B-384/H-88: como Fusion, cada lado gira hasta su propio objeto
                 lado2 = kernel.revolver_hasta(caras, punto, -direccion, self._hasta(estado, "hasta2"))
                 if geo.volumen(forma) + geo.volumen(lado2) > geo.volumen(geo.revolver(caras, punto, direccion, 360)) * (1 + 1e-6):
-                    raise ErrorOperacion("Los dos lados juntos pasan de una vuelta (360°): elegí objetos que no se crucen.")
+                    raise ErrorOperacion("Los dos lados juntos pasan de 360°.")
                 forma = geo.unir_todos([forma, lado2])
             self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo(),
                                                  apoyos=apoyos))
@@ -1479,7 +1470,7 @@ class OpRevolucion(_OpConPerfiles):
         modo = self.p.get("direccion", "un_lado")
         a2 = ctx.evaluar(self.p.get("angulo2", "0"), ANGULO) if modo == "dos_lados" and self.p.get("extension") != "completa" else 0.0
         if abs(a1) > 360.0 + 1e-9 or abs(a2) > 360.0 + 1e-9 or (modo == "dos_lados" and abs(a1) + abs(a2) > 360.0 + 1e-9):
-            raise ErrorOperacion("El ángulo de revolución no puede pasar de 360° (en total): una vuelta completa ya cierra el sólido.")
+            raise ErrorOperacion("El ángulo no puede pasar de 360° en total.")
         if modo == "simetrica" and self.p.get("extension") != "completa":
             caras = [geo.rotar(c, punto, direccion, -a1 / 2) for c in caras]
             forma = geo.revolver(caras, punto, direccion, a1)
@@ -1595,14 +1586,13 @@ class OpCombinar(Operacion):
 
     def ejecutar(self, estado, ctx):
         if not self.p["objetivo"] or not self.p["herramientas"]:
-            raise ErrorOperacion("Elegí un cuerpo objetivo y al menos una herramienta.")
+            raise ErrorOperacion("Elegí un cuerpo objetivo y una herramienta.")
         objetivo = estado.cuerpo(self.p["objetivo"])
         herramientas = list({h.id: h for h in map(estado.cuerpo, self.p["herramientas"])}.values())   # B-127: sin repetidas
         if any(h.id == objetivo.id for h in herramientas):
             raise ErrorOperacion("El objetivo no puede ser también herramienta.")
         if any(isinstance(c.forma, Malla) for c in (objetivo, *herramientas)):     # B-347: antes, TypeError del kernel
-            raise ErrorOperacion("Combinar es para sólidos y superficies: con cuerpos de malla usá MALLA › MODIFICAR › "
-                                 "Combinar mallas (combine_meshes) o convertilos a sólido.")
+            raise ErrorOperacion("Combinar no toma mallas: usá Combinar mallas.")
         forma_objetivo = objetivo.forma
         formas = {h.id: h.forma for h in herramientas}
         holgura = ctx.evaluar(self.p.get("holgura") or "0 mm") if self.p["operacion"] == "cortar" else 0.0
@@ -1630,9 +1620,8 @@ class OpCombinar(Operacion):
                     v_previa = geo.volumen(forma_objetivo)
                 v_nueva = geo.volumen(resultado)
                 if v_nueva < v_previa - max(v_previa, 1.0) * 5e-4:      # B-308: un resultado roto no se acepta
-                    raise ErrorOperacion(f"{objetivo.nombre}: la unión con {h.nombre} perdió {v_previa - v_nueva:.2f} "
-                                         "mm³ de material (el kernel descartó geometría en un contacto degenerado). "
-                                         f"{geo.CONSEJO_CONTACTO}")
+                    raise ErrorOperacion(f"{objetivo.nombre} y {h.nombre}: la unión perdió {v_previa - v_nueva:.2f} "
+                                         "mm³.")
                 v_previa = v_nueva
                 # Tampoco puede quedar peor que las entradas (B-37/B-52): más sólidos que la suma de
                 # las partes (explotó), partes que se tocaban y no se fusionaron (la espiral contra la
@@ -1649,7 +1638,7 @@ class OpCombinar(Operacion):
             for texto in avisos:
                 ctx.aviso(f"{objetivo.nombre}: {texto}")
         if geo.esta_vacia(resultado):
-            raise ErrorOperacion("El resultado quedó vacío (¿los cuerpos no se intersecan?).")
+            raise ErrorOperacion("El resultado quedó vacío: no se intersecan.")
         if self.p["operacion"] == "unir":
             objetivo.forma = resultado
         else:
@@ -1763,8 +1752,7 @@ def exigir_nombre(nombre):
     B-284: tampoco un sustituto UTF-16 suelto (U+D800…U+DFFF): entraba y después el archivo no se podía guardar."""
     if nombre is not None and (not isinstance(nombre, str) or "\0" in nombre or len(nombre) > TOPE_NOMBRE
                                or not _codificable(nombre)):
-        raise ErrorOperacion(f"El nombre no es válido: tiene que ser texto sin el carácter NUL ni caracteres sueltos "
-                             f"que no se pueden guardar, y de hasta {TOPE_NOMBRE} caracteres.")
+        raise ErrorOperacion(f"Nombre: sin caracteres raros y hasta {TOPE_NOMBRE}.")
     return nombre
 
 
