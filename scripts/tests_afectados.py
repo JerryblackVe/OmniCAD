@@ -197,6 +197,9 @@ def _correr_grupo(raiz, grupo, numero):
     return codigo
 
 
+MAX_GRUPOS = 15  # CLAUDE.md, regla 4 (tests/test_reglas_coherentes.py comprueba que coincidan)
+
+
 def main(argumentos=None):
     """Lista la selección o ejecuta sus grupos con turno.py; devuelve 1 si falla algún grupo, 2 ante errores."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -225,6 +228,9 @@ def main(argumentos=None):
             archivo_tiempos = comun.parent / "evidencias" / "tiempos.json"
         tiempos = json.loads(archivo_tiempos.read_text(encoding="utf-8"))["archivos"] if archivo_tiempos.exists() else {}
         grupos = agrupar(tests, tiempos)
+        if len(grupos) > MAX_GRUPOS:
+            print(f"AVISO: {len(grupos)} grupos (más de {MAX_GRUPOS}, cambio en el núcleo): corré solo los tests de tu ítem y los que "
+                  "importan directo lo que tocaste; la suite va de noche (CLAUDE.md, regla 4).", flush=True)
         fallos = 0
         for i, grupo in enumerate(grupos, 1):
             estimado = sum(float(tiempos.get(t, SEGUNDOS_SIN_MEDIR)) for t in grupo)

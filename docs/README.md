@@ -9,6 +9,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 |---|---|
 | [seguimiento/README.md](seguimiento/README.md) | Método: dónde se anota cada cosa y cómo se borra al resolverse |
 | [seguimiento/bugs.md](seguimiento/bugs.md) | Bugs pendientes, verificados contra el código |
+| [seguimiento/preparado/](seguimiento/preparado/README.md) | Bugs preparados para Opus: repro, ayuda de Fusion y archivo sospechoso |
 | [seguimiento/agenda.md](seguimiento/agenda.md) | Tareas que Gerardo programa para una fecha (AG-n) |
 | [seguimiento/faltantes.md](seguimiento/faltantes.md) | Funciones pendientes (todavía no existen) |
 | [seguimiento/mejoras.md](seguimiento/mejoras.md) | Mejoras pendientes de lo que ya existe: rendimiento, interfaz, instalador |

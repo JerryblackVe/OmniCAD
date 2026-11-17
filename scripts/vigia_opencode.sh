@@ -5,11 +5,11 @@
 #   VARIANTE=high (opcional: esfuerzo de `opencode run --variant`; sin ella, el del modelo)
 # - Al terminar bien, se verifica sola (scripts/verif_tarea.sh en su worktree, sin modelo): verde -> hechos/ (lista para
 #   integrar); rojo -> se relanza con el error y el modelo siguiente.
-# - Corre hasta $MAX corridas a la vez, de modelos distintos: 2 de OpenCode (el lanzador de E9 ocupa una) y 2 en CodeBuddy.
+# - Corre hasta $MAX corridas a la vez (tope y reparto: «Protocolo de OpenCode» en docs/coordinacion.md).
 #   Salida en $COLA/logs/<nombre>.log; al terminar bien la tarea pasa a hechos/.
 # - Falla (trabada 20 min sin escribir, límite/429/cupo, o termina con error): respaldo (tgz) y relanza la MISMA
 #   tarea con el siguiente modelo que responda (orden del Protocolo de OpenCode) y un brief que sigue desde ahí.
-#   Tras probar los 3 modelos, pasa a trabadas/ y sigue la cola.
+#   Tras probar todos los de MODELOS, pasa a trabadas/ y sigue la cola.
 #   shortcut: retoma con brief (git diff + log), no con `opencode run --session`: el id de sesión no queda a mano.
 # - Corridas que no son de la cola (los lanzadores de E9): si se traban, solo se matan; el lanzador sigue solo.
 # Línea de crontab: */20 * * * * bash /home/mosos/OmniCAD/scripts/vigia_opencode.sh

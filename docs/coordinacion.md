@@ -13,11 +13,13 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
 - La regla de memoria de la PC (13 GB, `main.log`) no aplica en la VPS: ahí se mira `free -g`.
 - OpenCode 1.19.5 instalado en la VPS (`~/.opencode/bin/opencode`, pedido de Gerardo 2026-11-11); cuentas y los 276 modelos de la PC ya copiados (`~/.config/opencode/opencode.json`, `auth.json`; MCP: remotos + `omnicad`).
 - Ver videos (skill `watch`, modo local; **no está instalada en la VPS**, solo el plugin `watch:watch` de la PC):  ffmpeg, yt-dlp (`~/.local/bin`, con pipx) y Deno (`~/.deno/bin`) instalados en la VPS (2026-11-11).
-- Capacidad medida (2026-11-11): un pytest pesado ocupa 1,5 GB y ~3 núcleos; la humo, 1,1 GB. El rendimiento tope llega
-  con 3-4 corridas a la vez (8 a la vez no rinde más y rompe B-222). Cada sesión de Claude ocupa ~0,35 GB. La memoria
+- Capacidad medida (2026-11-11): un pytest pesado ocupa 1,5 GB y ~3 núcleos; la humo, 1,1 GB. Con pytest pesados el
+  rendimiento tope llega con 3-4 a la vez (8 a la vez no rinde más y rompe B-222); las corridas de OpenCode casi no usan
+  CPU y tienen su tope en el «Protocolo de OpenCode». Cada sesión de Claude ocupa ~0,35 GB. La memoria
   no limita: el límite es el CPU.
-- Tests de a 5 con `scripts/turno.py` (`OMNICAD_TURNOS=5`, desde 2026-11-14 en `~/.claude/settings.json` de la VPS, no en el repo: la PC
-  sigue de a 1). El cupo lo maneja Gerardo. La tabla de sesiones vive solo en `CLAUDE.md`.
+- Tests con `scripts/turno.py` (cuántos a la vez: `CLAUDE.md` › «Dónde se trabaja»; en la PC, de a 1). Ese tope vale
+  para las sesiones: la suite nocturna corre en 4 partes por su cuenta y la verificación de la cola (`scripts/verif_tarea.sh`)
+  corre sin turno. El cupo lo maneja Gerardo. La tabla de sesiones vive solo en `CLAUDE.md`.
 - El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; acceso con `gh` de la cuenta JerryblackVe desde el 2026-11-11, token en `~/.config/gh/hosts.yml`, nunca en el repo).
 
 ## Dirección del chat maestro (Gerardo, 2026-11-16)
@@ -34,7 +36,7 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
      colgadas de «(viejo)» y se archivan con ella.
   2. Abre la nueva el chat maestro desde la PC (`start_session`; el coordinador con host «VPS OMNICAD»). Desde una sesión
      con Remote Control `start_session` no anda; y si el pedido no lo escribió Gerardo en ese turno, la app lo frena:
-     pedirle en 1 línea «escribí: abrí el coordinador nuevo».
+     pedirle en 1 línea «escribí: abrí el coordinador nuevo» (es la excepción de `CLAUDE.md` › «Loop por fases»).
   3. Recién abierta: `detach_session` de la nueva (no queda colgada de quien la abrió), `set_pinned` true a la nueva y
      false a la vieja, y `move_sessions` al grupo que corresponda.
   4. Remote Control prendido, vieja renombrada «(viejo)», `~/chat_maestro.txt` al día y toda vigilancia (cron) que nombre
@@ -149,51 +151,62 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - **Implementar en OpenCode:** la sesión orquesta con `/orquestador-opencode` siguiendo el «Protocolo de OpenCode»
   (más abajo): modelo, cupo, corridas y vigilancia.
 - **Cierre de cada fase (lo hace el coordinador, no la sesión):** `ruff check .` limpio y `scripts/tests_afectados.py
-  --correr` verde sobre lo integrado, más `git merge-tree` sin conflicto; la suite completa y la humo son del cierre
-  nocturno (`CLAUDE.md` › «pruebas pesadas de noche»). Fallos en tests lejanos son regresiones reales: devolverlos a la
+  --correr` verde sobre lo integrado, más `git merge-tree` sin conflicto; la suite completa y la humo corren solas cada
+  noche (`CLAUDE.md` › «pruebas pesadas de noche»). Fallos en tests lejanos son regresiones reales: devolverlos a la
   sesión. Recién con eso: `git add` explícito (sin `docs/fusion_docs/`, que está ignorada) y commit; el `push` solo si
   Gerardo lo pide. El brief siguiente nombra `docs/fusion_docs/` y exige `ponytail` y `ponytail-review`.
 - El estado de cada fase vive en `docs/seguimiento/`.
 - **Un ítem cerrado antes del siguiente** (regla en `CLAUDE.md`): cada ítem va en su worktree, `bash scripts/worktree_item.sh
   crear <ID>` crea la rama `item/<ID>` y la carpeta `<repo>-<ID>` (usa el `clon/.venv` del repo principal) y, ya fusionada
   la rama, `bash scripts/worktree_item.sh borrar <ID>` borra las dos. Los briefs siguen `docs/brief.md`.
+- **Limpieza semanal de worktrees (OK de Gerardo, 2026-11-17)**: la crontab corre `scripts/limpiar_worktrees.sh` los domingos
+  07:00 UTC. Borra solo worktrees sin cambios sin guardar, sin commits fuera de main, sin tarea en la cola de OpenCode
+  y sin proceso adentro; registro en `~/coordinador/limpieza_worktrees.log`. Lo demás se borra a mano tras fusionar.
 
 ## Protocolo de OpenCode y CodeBuddy (Gerardo, 2026-11-16 y 17; regla 18 de CLAUDE.md)
 Meta: OpenCode trabaja **siempre**. Sus modelos son gratis y ahorran el cupo de Claude. Esta sección es la única regla
 de OpenCode; las demás la enlazan.
-- **Modelo según el trabajo** (los tres andan con `opencode run` en la VPS, probados el 16/11):
+- **Modelos, en el orden en que los usa el vigía** (la lista que corre es `MODELOS` en `scripts/vigia_opencode.sh`;
+  esta tabla la describe):
 
-  | Trabajo | Modelo |
-  |---|---|
-  | Pieza corta de un archivo o mecánica (filas de seguimiento, textos, doc generada, un test) | GLM: `opencode/glm-5.3-flash-free` |
-  | Varios archivos con herramientas, y revisar lo de otro modelo | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) |
-  | Respaldo de los dos | DeepSeek: `opencode/deepseek-v4.1-flash-free` |
-  | **Primero (prueba de carga 17/11: ~8 s, 4 a la vez sin cortes)**: CodeBuddy gratis (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | `cb:deepseek-v4.1-flash`, `cb:hy3` |
+  | Orden | Modelo | Para qué |
+  |---|---|---|
+  | 1–2 | CodeBuddy gratis: `cb:deepseek-v4.1-flash`, `cb:hy3` (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | Primero en todo: prueba de carga del 17/11, ~8 s, 4 a la vez sin cortes |
+  | 3 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Varios archivos con herramientas |
+  | 4 | GLM: `opencode/glm-5.3-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
+  | 5 | DeepSeek: `opencode/deepseek-v4.1-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
 
   La geometría difícil no va a OpenCode: va a Opus alto. Prohibidos:
   OpenCode Go (sin suscripción) y `mimo` (entrena con los datos).
-- **Modelo según el cupo**: si un modelo corta por límite, saldo o error, la pieza pasa al siguiente sin preguntar
-  (GLM → DeepSeek → MiniMax; MiniMax → GLM). Antes de cada tanda, prueba de 90 s:
+- **Modelo según el cupo**: si un modelo corta por límite, saldo o error, el vigía pasa la pieza al siguiente de la
+  tabla sin preguntar (esta rotación es la excepción a «solo los modelos del brief» de `docs/brief.md`). A mano, prueba:
   `timeout 90 opencode run -m <modelo> "Respondé solo la palabra OK"`.
 - **Según el semanal de Claude**: en verde y amarillo, OpenCode hace lo mecánico y las piezas acotadas; en rojo (90 %)
   trabaja solo OpenCode («Cupo semanal de Claude al 90 %»).
-- **Siempre trabajando**: la cola de OpenCode es la fila de E9 en `ahora.md` (el coordinador la llena con tandas de
-  1 o 2 tareas). Al cerrar una corrida, E9 lanza la siguiente; si la fila queda vacía, el coordinador la rellena de
-  `docs/seguimiento/` con filas de prioridad 1 chicas. En rojo las lanza el coordinador con su ~5 %.
-- **Vigía sin modelo** (Gerardo, 2026-11-17): `scripts/vigia_opencode.sh` en la crontab de la VPS, cada 20 min: mata una corrida que no escribe hace 20 min y, si no corre nada, lanza la siguiente `NN_nombre.tarea` de `~/coordinador/opencode_cola/` (`WT=`, `BRIEF=`, `MODELO=` opcional; log en `vigia.log`). Una tarea trabada se relanza con el modelo siguiente y un brief que sigue desde `git diff` + el log; a la 2.ª trabada va a `trabadas/` (Gerardo, 17/11). El coordinador llena esa cola.
+- **Quién hace qué**: el vigía lanza las corridas; el coordinador llena la cola (con filas chicas de prioridad 1 de
+  `docs/seguimiento/`), revisa el diff e integra. `ahora.md` tiene solo los ítems de las sesiones: su fila de OpenCode
+  enlaza a la cola.
+- **Vigía sin modelo** (Gerardo, 2026-11-17): `scripts/vigia_opencode.sh` en la crontab de la VPS, cada 20 min: mata una corrida que no escribe hace 20 min (`MIN`) y lanza las `NN_nombre.tarea` de `~/coordinador/opencode_cola/` en orden alfabético hasta el tope de corridas (`WT=`, `BRIEF=`, `MODELO=` y `VARIANTE=` opcionales; cada corrida con `timeout 2700`; log en `vigia.log`). Una tarea trabada o en rojo se relanza con el modelo siguiente y un brief que sigue desde `git diff` + el log; probados todos los modelos, va a `trabadas/`. Al terminar bien la verifica `scripts/verif_tarea.sh` (ruff y los tests de los archivos tocados, sin turno, ignora los rojos de main de `~/coordinador/suite_noche/rojos.txt`): verde → `hechos/`.
 - **Cola sin sesiones (Gerardo, 2026-11-17: todo verde, sin depender de una sesión)**: el coordinador deja 20 tareas o
   más en `~/coordinador/opencode_cola/reserva/`; el vigía de la crontab las pasa a la cola hasta tener 8 y anota «AVISO
-  reserva con menos de 8» cuando hay que reponer. Tareas que tocan una lista compartida (p. ej. los TOPES de un test):
+  reserva con menos de 8» cuando hay que reponer. Las de prioridad 2 llevan el prefijo `z_` (corren al final) y las que
+  esperan un archivo ocupado, `zz_`. Tareas que tocan una lista compartida (p. ej. los TOPES de un test):
   el brief dice «no toques esa lista»; el coordinador la actualiza una sola vez al integrar, así no hay choques.
 - **Tareas chicas (Gerardo, 2026-11-17: los gratis fallaron 24 de 53 corridas, 10 por tiempo)**: una tarea = un archivo y un
   solo cambio (un bug, o hasta 10 mensajes o 5 tests); lo más grande se parte antes de cargarlo. Lo que es solo leer y
   proponer (preparar un bug, medir, revisar listas) deja un `.md` en `docs/seguimiento/preparado/` y no toca la app.
-- **Cada corrida**: una tarea, en su worktree, con `timeout 1500` y `cp` de respaldo antes. Hasta 6 corridas a la vez
-  en la VPS (2 por modelo de CodeBuddy y 1 por modelo de OpenCode; Gerardo 2026-11-17: exprimirlos; GLM y DeepSeek gratis no contestaron en la prueba de carga); en la PC, nunca. Se comprueba con `scripts/tests_afectados.py --correr` y ruff; lo
-  de GLM o DeepSeek lo revisa MiniMax o E9. A main entra solo con el diff revisado por el coordinador.
-- **Vigilancia**: el coordinador y el chat maestro, cada 2 h, comprueban que haya una corrida activa
-  (`pgrep -af opencode`); si no la hay, la cola se rellena. Una corrida sin log, sin CPU ni archivos tocados a los
-  ~25 min se corta (solo ese proceso, por hora de inicio) y la pieza la hace Claude.
+- **Scripts de la cola** (todos sin modelo): `scripts/vigia_opencode.sh` (lanza y rota), `scripts/verif_tarea.sh`
+  (verifica), `scripts/limpiar_worktrees.sh` (limpieza semanal), `scripts/suite_noche.sh` (cierre nocturno). Los de
+  `~/coordinador/` (`vigilar.sh`, `tanda.sh`, `integrar.sh`, `fusionar.sh`) son ayudas del coordinador, fuera del repo.
+- **Cada corrida**: una tarea, en su worktree, con respaldo antes (tgz del vigía). **Tope: hasta 6 corridas a la vez**
+  en la VPS (2 por modelo de CodeBuddy y 1 por modelo de OpenCode; Gerardo, 2026-11-17: exprimirlos; `MAX` del vigía);
+  en la PC, nunca. La verificación de la cola es `scripts/verif_tarea.sh` (rápida); `tests_afectados.py --correr` es
+  la de las sesiones y la corre el coordinador al integrar. La revisión del diff (y `ponytail-review`) es solo del
+  coordinador: a main entra solo lo que él revisó.
+- **Vigilancia**: el coordinador y el chat maestro, cada 2 h, comprueban que haya corridas activas
+  (`ls ~/coordinador/opencode_cola/corriendo`, que ve OpenCode y CodeBuddy) y que la reserva no baje de 8; si baja, la
+  rellenan. Las corridas trabadas las corta el vigía; lo que llega a `trabadas/` lo decide el coordinador (partirlo o
+  pasarlo a una sesión de Claude).
 
 ## Caza automática de errores
 - `scripts/caza/` es un programa que busca errores solo, sin modelos ni red: cadenas de operaciones con medidas
@@ -238,7 +251,8 @@ de OpenCode; las demás la enlazan.
   | Mecánica, formato fijo, mucho volumen, leer/buscar | Haiku 5.5 (o OpenCode con GLM) | sin esfuerzo |
   | Arreglo chico, UI, validaciones, tests, docs | Sonnet 5.5 | bajo o medio |
   | Feature normal, refactor, revisar un diff | Sonnet 5.5 | medio |
-  | Solver, geometría difícil, arquitectura, auditoría a fondo, lo más difícil o agéntico largo | Opus 5.5 | alto |
+  | Solver, geometría OCC, núcleo y velocidad (`CLAUDE.md` › Protocolo de ahorro, punto 3); auditoría a fondo | Opus 5.5 | alto |
+  | Solo si Gerardo lo pide por nombre | Fable 5.2 | — |
 
 - **Fable no se usa salvo que Gerardo lo pida por nombre (2026-11-01): consume mucho.** El tope es Opus alto.
 - **La calidad del código manda**: si la tarea toca solver, geometría, núcleo o es delicada, no se baja el
@@ -260,11 +274,18 @@ de OpenCode; las demás la enlazan.
 
 ## E11 · Computer Use en la PC
 - Dónde: sesión de Claude en la PC de Gerardo, checkout D:/PROGRAMA-noche (o D:/PROGRAMA al día con vps/main). Herramientas: mcp__computer-use (request_access a OmniCAD y Fusion 360), MCP fusion360 local, capturas y grabación.
-- Cuándo: solo con la PC libre (Gerardo avisa) o con su OK explícito en el momento. Antes de arrancar, avisa al coordinador; al terminar, devuelve la PC (cierra Fusion si lo abrió, como pide la regla de Fusion).
+- Cuándo: solo con el OK explícito de Gerardo en el momento (nunca porque la PC parezca quieta). Antes de arrancar, avisa al coordinador; al terminar, devuelve la PC (cierra Fusion si lo abrió, como pide la regla de Fusion).
 - Cómo prueba: sigue los 10 puntos de «toda prueba como usuario humano» y la sección 4b de la skill omnicad-test, pero con mouse y teclado reales. Modela una pieza real de principio a fin, cambia una cota, guarda y reabre. Hace lo mismo en Fusion y compara resultado, opciones y mensajes.
-- Evidencia por falla en evidencias/reportes_pc/AAAA-MM-DD_<tema>/: capturas (antes/después), video si la falla es de movimiento o tiempo, pasos numerados reproducibles, versión (git rev-parse --short HEAD), qué hace Fusion en el mismo caso. Respeta los límites de intentos (3 por problema).
+- Evidencia por falla en evidencias/reportes_pc/AAAA-MM-DD_<tema>/: capturas (antes/después), video si la falla es de movimiento o tiempo, pasos numerados reproducibles, versión (git rev-parse --short HEAD), qué hace Fusion en el mismo caso. Respeta los límites de intentos (`CLAUDE.md` › «Límites de intentos»).
 - Informe al coordinador (no al chat maestro; este lo ve en el lote): un mensaje con la carpeta y una línea por falla. El coordinador asigna ID, carga la fila en docs/seguimiento/ y la ubica en ahora.md (lotes de 13:00 y 19:00; solo un bloqueante entra en el momento).
 - No toca código, no commitea, no edita docs/seguimiento/.
+## Informes al chat maestro (única tabla de cadencias)
+| Cuándo | Qué |
+|---|---|
+| Lote de las 19 h | 1 línea: semanal %, ritmo, color e ítems cerrados del día; refresco de la página de seguimiento |
+| Viernes | Consumo de tokens por sesión (abajo) |
+| Al llegar al 90 % del semanal | Aviso inmediato («Cupo semanal al 90 %») |
+
 ## Consumo de tokens: informe de los viernes
 - El coordinador junta get_usage de cada sesión E1–E11 y el suyo propio: contexto usado, modelo/esfuerzo, ítems cerrados en la semana.
 - Mensaje al chat de la PC, 5 filas como mucho: sesión, modelo, ítems cerrados, gasto, si el modelo alcanzó o sobró (y el ajuste propuesto: subir o bajar un escalón).

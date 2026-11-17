@@ -19,10 +19,8 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 - Otros agentes trabajan EN PARALELO: tocá solo los archivos que te asignaron; si necesitás un cambio
   en otro, anotalo en el informe, no lo hagas.
 - No digas "listo" sin correr la verificación y pegar su salida real.
-- Usar SIEMPRE la skill `/ponytail` en todo proceso de código (CLAUDE.md › «Regla obligatoria: ponytail»)
-  (escribir, arreglar, refactorizar, elegir dependencias): el cambio más chico que resuelve la
-  tarea completa, sin sobre-ingeniería; y la skill `/ponytail-review` antes de dar por terminado
-  un cambio de código (lógica, seguridad, carga real, tests, y que cada línea sea necesaria).
+- Skills obligatorias (invocadas, no solo nombradas): la lista vive en `docs/brief.md` › punto 1 (`ponytail` al
+  empezar: el cambio más chico que resuelve la tarea completa; `ponytail-review` antes de dar por terminado).
 - **Reglas de nivel 1 para quien programa** (resumen; texto completo en CLAUDE.md, que OpenCode no lee): un ítem por
   sesión, y lo hallado fuera del ítem va como fila nueva en `docs/seguimiento/` (3); modelo justo, solo
   `tests_afectados.py --correr`, mensajes cortos, leer solo la sección necesaria (4); nada es «listo» sin ruff y tests
@@ -35,7 +33,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 - OCP: los métodos estáticos llevan sufijo `_s` (p. ej. `BRepGProp.VolumeProperties_s`).
 - Para replicar un comando de otro programa, mirá su documentación pública y el análisis de
   `analisis auto/`, y replicá sus opciones y su comportamiento. **Para Fusion 360, la fuente principal es
-  `docs/fusion_docs/` (documentación oficial completa con imágenes; cómo buscar y en qué carpeta está cada pestaña: `CLAUDE.md` y `scripts/fusion_docs.py buscar`)**: leé el artículo antes de
+  `docs/fusion_docs/` (cómo buscar: `docs/coordinacion.md` › ayuda de Fusion)**: leé el artículo antes de
   corregir un bug o agregar un faltante.
 
 ## Seguridad
@@ -52,8 +50,8 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
   (`mcp_http.json` / `puente.json`): no los expongas a la red, no los reenvíes ni los loguees.
 - Al tocar el arranque del servidor o el protocolo de red, dejá el test que pruebe el rechazo sin
   token (patrón: `tests/test_servidor_mcp.py`).
-- Subir solo con la CI verde: ruff, pytest y el escaneo de secretos del workflow (nada se empuja
-  «para ver si anda»).
+- Subir solo con los chequeos locales en verde (ruff, la suite nocturna y el escaneo de secretos): un push a main
+  no dispara la CI. Nada se empuja «para ver si anda».
 
 ## Mapa de carpetas
 | Ruta | Qué hay |
@@ -87,24 +85,24 @@ Desde `clon/`, con el Python del venv: `.venv/Scripts/python.exe` en Windows, `.
 Desde `clon/` (shell Bash; en Linux, `.venv/bin/python` en lugar de `.venv/Scripts/python.exe`):
 ```
 .venv/Scripts/python.exe -m ruff check .
-.venv/Scripts/python.exe -m pytest -q
-PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe OmniCAD.py --prueba-humo
+../scripts/tests_afectados.py --correr
 ```
+La suite completa (`pytest -q`) y la humo (`OmniCAD.py --prueba-humo`) no las corre la sesión: corren solas cada
+noche (CLAUDE.md › «Pruebas pesadas de noche»).
 El criterio de ruff (F, B023, B905) vive en `clon/pyproject.toml` › `[tool.ruff.lint]`: `ruff check .` lo
 toma solo de ahí, sin `--select`.
 **Memoria:** la suite completa y la prueba de humo (abren ventanas OpenGL) usan mucha memoria: se corren de a
 UNA a la vez. Para verificar tu cambio, desde `clon/` corré `../scripts/tests_afectados.py --correr`: elige por el
-grafo de imports los tests que tu cambio afecta y los corre con turno (no se eligen tests a ojo). Si elige más de 15 grupos (cambios en el núcleo), corré solo los tests de tu ítem y los de los archivos que importan directo lo que tocaste (`grep -rl "import <módulo>\|from .* import <módulo>" tests/`), con turno; la suite completa va al cierre nocturno (CLAUDE.md › regla 4). La suite completa y la
-humo las corre el orquestador (cuatro corridas a la vez colgaron una PC de 13 GB). Con varios agentes, cada
-comando pesado va con turno (PC de a 1, VPS de a 5; corta a los 900 s; en Windows, tope de 3 GB de memoria):
+grafo de imports los tests que tu cambio afecta y los corre con turno (no se eligen tests a ojo). Si elige más de 15 grupos (cambios en el núcleo), corré solo los tests de tu ítem y los de los archivos que importan directo lo que tocaste (`grep -rl "import <módulo>\|from .* import <módulo>" tests/`), con turno; la suite completa va al cierre nocturno (CLAUDE.md › regla 4). Con varios agentes, cada
+comando pesado va con turno (cuántos a la vez: CLAUDE.md › «Dónde se trabaja»; corta a los 900 s; en Windows, tope de 3 GB de memoria):
 `.venv/Scripts/python.exe ../scripts/turno.py -- .venv/Scripts/python.exe -m pytest tests/test_x.py -q`
 (cada pytest reserva ~1 GB aunque use 350 MB de RAM).
 **Prueba de humo:** no mueve el cursor real ni pide el foco (P-60): con `OMNICAD_PRUEBA_VENTANA=minimizada` corre transparente mientras se usa la PC. Todo paso nuevo usa `_mover` (movimiento simulado), nunca `QTest.mouseMove` ni `QCursor.setPos`.
 Una prueba suelta: `pytest tests/<archivo>.py -q`. Cada función del núcleo lleva al menos una prueba con
 un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)`; rápidas (< 3 s).
 
-**Definición de terminado** (de la sesión: `tests_afectados.py --correr` verde; la suite completa y la humo las corre el
-coordinador en el cierre nocturno): ruff limpio y `tests_afectados.py --correr` verde (la humo, aunque se toque la UI, es del cierre nocturno),
+**Definición de terminado** (de la sesión; la suite completa y la humo corren solas cada noche, aunque se toque la UI):
+ruff limpio y `tests_afectados.py --correr` verde,
 entrada nueva en `PROJECT_LOG.md`, `docs/seguimiento/` al día (lo resuelto, borrado; lo nuevo, agregado) y lección
 anotada si hubo un error verificable. Sin archivos sueltos: nada de informes, capturas o temporales en la raíz.
 
@@ -134,7 +132,7 @@ Modelo: `InsertarFijacion` en `clon/omnicad/ui/comandos/fijacion.py`; base `Coma
 5. Botón en la cinta: `_i("Texto", "clave")` en el grupo/pestaña de `ui/cinta.py` (p. ej. `INSERTAR`).
    Sin clave el ítem queda GRISADO: regla de honestidad, nunca un botón activo que no hace nada.
 6. Ícono: función en `ui/iconos_extra.py` y su entrada en el dict de íconos (ver `_fijacion`).
-7. Prueba en `tests/test_comandos*.py` y `tests_afectados.py --correr` (la humo es del cierre nocturno).
+7. Prueba en `tests/test_comandos*.py` y `tests_afectados.py --correr` (la humo corre de noche).
 
 ## Herramientas para agentes (MCP y CLI)
 Documentación completa: [docs/agentes/README.md](docs/agentes/README.md) (conectar un agente, CLI, guía de diseño,

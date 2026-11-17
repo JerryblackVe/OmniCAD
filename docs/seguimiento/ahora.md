@@ -16,11 +16,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | — | En pausa (cupo amarillo, 82 % el 16/11 19 UTC). B-503 Parcial: 7cc89af (falta una cara sola de letra curva, velocidad y Arial en Windows) |
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | En pausa (cupo amarillo). ASM-9 integrado: 99fb1de. Sigue ASM-16 con Opus alto (pide el solver de uniones) cuando haya cupo |
-| E6 | (19/11) Velocidad P1 | Desde el 19/11, SOLO velocidad de prioridad 1, comando por comando, contra plan_fluidez M1/M2 (congelamientos >250 ms, previa <0,3 s), empezando por lo que mida FLUIDEZ-P1 (OpenCode). B-620 Parcial: falta Windows (E11) |
+| E6 | — | Desde el 19/11, SOLO velocidad de prioridad 1, comando por comando, contra plan_fluidez M1/M2 (congelamientos >250 ms, previa <0,3 s), empezando por lo que mida FLUIDEZ-P1 (OpenCode). B-620 Parcial: falta Windows (E11) |
 | E7 | — | Libre. B-626 integrado (planos del tamaño de la pieza) |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
-| E9 | UI-1117 + OpenCode | 2.ª vuelta de las piezas de prueba_ui con ✗ del cierre del 16/11 (lanzador 209588, logs_ui2); lo que sea de la app va con su ID. P-158 del núcleo integrado: 6c65875c |
+| E9 | — | En pausa (rojo). Las corridas de OpenCode las lanza el vigía; cola en `~/coordinador/opencode_cola/` («Protocolo de OpenCode» en `docs/coordinacion.md`). P-158 del núcleo integrado: 6c65875c; UI-1117 terminada, falta integrar |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
+| E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620 |
 
 ## Sigue (en orden)
 

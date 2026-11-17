@@ -6729,7 +6729,7 @@ Corre la verificación del proyecto (ruff, pytest y, si se pide, la prueba de hu
 
 - Modifica el documento: no.
 - Parámetros:
-  - `include_smoke` (true/false; opcional, por defecto `true`): true corre también la prueba de humo (abre la ventana real; tarda 1 a 2 minutos).
+  - `include_smoke` (true/false; opcional, por defecto `false`): true corre también la prueba de humo (abre la ventana real; tarda 1 a 2 minutos; en OmniCAD corre de noche).
   - `pytest_args` (texto; opcional, por defecto `""`): argumentos de pytest separados por espacios, p. ej. "tests/test_parametros.py -k ancho"; vacío = toda la suite.
 - CLI: `omnicad call run_checks --doc pieza.omnicad`
 

@@ -115,9 +115,9 @@ def _paso_humo():
 
 @herramienta("run_checks", "dev", "Corre la verificación del proyecto (ruff, pytest y, si se pide, la prueba de humo "
              "de la interfaz) y devuelve un resumen por paso. Es lo que hay que correr antes de dar un cambio por bueno.")
-def run_checks(sesion, include_smoke: bool = True, pytest_args: str = ""):
+def run_checks(sesion, include_smoke: bool = False, pytest_args: str = ""):
     """
-    include_smoke: true corre también la prueba de humo (abre la ventana real; tarda 1 a 2 minutos).
+    include_smoke: true corre también la prueba de humo (abre la ventana real; tarda 1 a 2 minutos; en OmniCAD corre de noche).
     pytest_args: argumentos de pytest separados por espacios, p. ej. "tests/test_parametros.py -k ancho"; vacío = toda la suite.
     """
     _exigir_codigo_fuente("run_checks")

@@ -1,6 +1,6 @@
 # OmniCAD
 
-**Precedencia:** este CLAUDE.md > AGENTS.md > docs/coordinacion.md > `~/.claude/CLAUDE.md` global > memoria. La memoria no fija números ni reglas: solo enlaza. Los números (contexto, semáforo, sesiones a la vez) viven solo en «Protocolo de ahorro».
+**Precedencia:** este CLAUDE.md > AGENTS.md > docs/coordinacion.md, docs/brief.md y CLAUDE.local.md (solo PC) > `~/.claude/CLAUDE.md` global > memoria. La memoria no fija números ni reglas: solo enlaza. Cada número o regla vive en un solo archivo (regla 19).
 
 Procedimientos largos (VPS, página de seguimiento, prueba como usuario, ayuda de Fusion, loop por fases, caza,
 contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.md). Acá queda la regla corta.
@@ -9,15 +9,15 @@ contexto, modelos, memoria de la PC): [docs/coordinacion.md](docs/coordinacion.m
 Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode y el chat maestro.
 1. **Orden de trabajo**: bocetos → sólido → superficie → construir/inspeccionar/ensamblar; la velocidad es prioridad 1; lo demás después.
 2. **Cola única**: solo `ahora.md`; reportes en lotes de 13 y 19 h; solo un bloqueante entra en el momento.
-3. **Sin desvíos**: un ítem por sesión, cerrado antes del siguiente; lo que aparece fuera del ítem va como fila nueva en `docs/seguimiento/` y no se arregla de paso (vale más que el «arreglá todo» del global); tope de 6 iteraciones por tarea y 3 intentos por problema.
-4. **Eficiencia**: modelo y esfuerzo justos; solo `tests_afectados.py --correr`, de a 5 (`OMNICAD_TURNOS=5`), sin repetir; mensajes cortos; leer solo la sección necesaria. Esfuerzo mínimo que alcance, se sube solo si hace falta (Protocolo de ahorro, punto 3). **Si `tests_afectados.py` elige más de 15 grupos** (cambios en el núcleo), la sesión corre solo los tests de su ítem y los de los archivos que importan directo lo que tocó, y la suite completa queda para el cierre nocturno (Gerardo, 2026-11-15, por la cola de tests).
-5. **Nada es «listo» sin verificar**: ruff y `tests_afectados.py --correr` en verde con la salida real, y `ponytail-review`; la humo y la suite completa son del cierre nocturno.
+3. **Sin desvíos**: un ítem por sesión, cerrado antes del siguiente; lo que aparece fuera del ítem va como fila nueva en `docs/seguimiento/` y no se arregla de paso (vale más que el «arreglá todo» del global); topes de iteraciones e intentos en «Límites de intentos».
+4. **Eficiencia**: modelo y esfuerzo justos; solo `tests_afectados.py --correr`, con turno («Dónde se trabaja»), sin repetir; mensajes cortos; leer solo la sección necesaria. Esfuerzo mínimo que alcance, se sube solo si hace falta (Protocolo de ahorro, punto 3). **Si `tests_afectados.py` elige más de 15 grupos** (cambios en el núcleo), la sesión corre solo los tests de su ítem y los de los archivos que importan directo lo que tocó, y la suite completa queda para el cierre nocturno (Gerardo, 2026-11-15, por la cola de tests). `tests_afectados.py` avisa cuando pasa de 15 grupos.
+5. **Nada es «listo» sin verificar**: ruff y `tests_afectados.py --correr` en verde con la salida real, y `ponytail-review`; la suite completa y la humo corren solas cada noche («Pruebas pesadas de noche»).
 6. **Copiar Fusion**: leer `docs/fusion_docs` antes de arreglar; comparar contra Fusion.
-7. **Probar como una persona**: mouse, teclado, valores raros; E11 con mouse real solo con la PC libre o el OK de Gerardo.
+7. **Probar como una persona**: mouse, teclado, valores raros; E11 con mouse real solo con el OK de Gerardo.
 8. **Seguridad**: sin push, gasto, borrado (las sesiones terminadas se archivan, no se borran) ni archivos privados sin el OK de Gerardo; credenciales nunca a la vista; MCP solo en 127.0.0.1.
 9. **Solo OpenCascade**: OmniKernel suspendido.
 10. **Todo en MCP y CLI**: cada herramienta nueva con su versión para agentes, test y doc.
-11. **Avisos**: contexto en el tope, cupo semanal fuera de ritmo o al 90 % (Protocolo de ahorro), OpenCode siempre con trabajo (GLM, MiniMax o DeepSeek según el trabajo y el cupo: «Protocolo de OpenCode» en [docs/coordinacion.md](docs/coordinacion.md)).
+11. **Avisos**: contexto en el tope, cupo semanal fuera de ritmo o al 90 % (Protocolo de ahorro), OpenCode y CodeBuddy siempre con trabajo (regla 18).
 12. **Hablarle corto a Gerardo**: 3–5 líneas, resultado primero, ⚠ para riesgos, una sola pregunta.
 13. **Cuidar los tokens, sin perder calidad (Gerardo, 2026-11-15: prioridad máxima)**: meta, una app usable para el 30/11. Modelo y esfuerzo justos (Opus solo en solver, geometría, núcleo y velocidad; lo demás en Sonnet; lo mecánico en OpenCode gratis o en scripts); leer solo lo necesario; nada de pruebas ni análisis repetidos; mensajes cortos; nada de prioridad 2 hasta terminar la 1. Sin capacidad ociosa en lo que suma a la meta, pero gastar menos vale más que gastar todo el cupo. Cómo se hace: sección «Protocolo de ahorro».
 14. **App para todos (Gerardo, 2026-11-15)**: OmniCAD tiene que ser intuitiva y gráfica, y entenderse desde un chico de 10 años hasta una persona de 100. Todo se trabaja bajo esta premisa: mensajes de 1 renglón con ícono y sin jerga, límites y errores mostrados en el dibujo (asa, campo o previa en rojo), muestras visuales en vez de textos largos, y el detalle en un «?» o en la ayuda. Lo que ya existe y no cumple se adapta (P-157, P-158).
@@ -25,7 +25,8 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 16. **Lo que no funciona, en gris (Gerardo, 2026-11-16)**: toda función que no funciona queda deshabilitada, con un aviso chico «No disponible: <motivo>» de 1 renglón, hasta que funcione y esté probada. Se deshabilita lo más chico posible (la opción que falla, no el comando entero) y solo lo que falla de verdad en el uso común (rompe, pierde trabajo o no hace nada), no lo lento ni los casos raros. Vive en una lista central que leen la cinta, los menús, los paneles y la API (P-169); al cerrar el bug con su prueba, se vuelve a habilitar en el mismo commit.
 17. **Hacer solo lo que una regla ya decide (Gerardo, 2026-11-16)**: si CLAUDE.md, la memoria o el «Protocolo de ahorro» ya deciden un paso (traspaso al tope de contexto, abrir o reusar sesiones, anotar bugs y mejoras, asignar ítems, verificar), se hace sin preguntar y se avisa en 1 renglón. Se pregunta solo por push o publicación, gasto, borrado, algo que sale hacia afuera, o una decisión de producto con dos caminos válidos (una pregunta, con la recomendación primero).
 
-18. **OpenCode y CodeBuddy, siempre exprimidos (Gerardo, 2026-11-17)**: trabajan sin parar en prioridad 1, gratis. Hasta 4 corridas a la vez (2 OpenCode + 2 CodeBuddy, modelos distintos); cola `~/coordinador/opencode_cola/` con 8 tareas chicas o más, que llena el coordinador; el vigía sin modelo (`scripts/vigia_opencode.sh`, cada 20 min) retoma lo trabado desde donde quedó, rota de modelo si uno no responde o se queda sin cupo y pasa el esfuerzo de cada tarea. El coordinador revisa el diff e integra. Detalle: «Protocolo de OpenCode» en [docs/coordinacion.md](docs/coordinacion.md).
+18. **OpenCode y CodeBuddy, siempre exprimidos (Gerardo, 2026-11-17)**: trabajan sin parar en prioridad 1, gratis. Las corridas a la vez, el tamaño de la cola y la cadencia del vigía tienen su número solo en el Protocolo. La cola es `~/coordinador/opencode_cola/` (tareas chicas), la llena el coordinador; el vigía sin modelo (`scripts/vigia_opencode.sh`, en la crontab) lanza las corridas, retoma lo trabado desde donde quedó, rota de modelo si uno no responde o se queda sin cupo y pasa el esfuerzo de cada tarea. El coordinador revisa el diff e integra. Detalle: «Protocolo de OpenCode» en [docs/coordinacion.md](docs/coordinacion.md).
+19. **Una fuente por regla (Gerardo, 2026-11-17: «todo siempre homogéneo»)**: cada número o regla vive en UN solo archivo; los demás enlazan sin repetir el valor. Lo que no puede enlazar (un script, un hook) lleva el mismo valor y `tests/test_reglas_coherentes.py` falla si difiere; corre cada noche con la suite.
 
 ## REGLA ESTRICTA: qué se trabaja primero (Gerardo, 2026-11-10)
 «Esto es lo que va a hacer funcional la app, aunque esté incompleta.» La meta es que estas herramientas anden al
@@ -54,7 +55,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 - **Los reportes de Gerardo llegan del chat de la PC en dos lotes por día (13:00 y 19:00, hora de Argentina)**, un
   mensaje cada uno. Con cada lote el coordinador da todos los ID en un commit, los ubica en la cola y **no saca a
   ninguna sesión de lo que está haciendo**. Solo un **bloqueante** (no puede trabajar, pierde trabajo o la app se
-  cierra) entra en el momento.
+  cierra) entra en el momento, o antes si Gerardo dice «mandá».
 
 ## Dónde se trabaja: main vive en la VPS de Google (Gerardo, 2026-11-11)
 - `main` vive en `omnicad-vps` (`/home/mosos/OmniCAD`; app de Claude › SSH `mosos@34.66.139.76`). La PC de Gerardo
@@ -62,11 +63,11 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 - En Linux: `.venv/bin/python`; lo que abre ventanas va con `xvfb-run -a`. Un worktree por ítem (`~/OmniCAD-<ID>`,
   `scripts/worktree_item.sh`).
 - Gasto: tope USD 290/mes. Cambiar la máquina o sumar algo que suba el costo pide su OK.
-- Tests de a 5 con `scripts/turno.py` (`OMNICAD_TURNOS=5` en `~/.claude/settings.json` de la VPS; Gerardo, 2026-11-14).
+- Tests de a 5 con `scripts/turno.py` (`OMNICAD_TURNOS=5` en `~/.claude/settings.json` de la VPS; Gerardo, 2026-11-14). Vale para las sesiones; la suite nocturna y el vigía llevan su propio tope ([docs/coordinacion.md](docs/coordinacion.md)).
 - **Sesiones de ejecución fijas**, una por carril. El coordinador les manda ítems con `SendMessage` (vaciado por ítem y al
-  tope de contexto, modelo por ítem: ver el «Protocolo de ahorro»). La columna «Modelo» es el de partida:
+  tope de contexto, modelo por ítem: ver el «Protocolo de ahorro»):
 
-  | Sesión | Carril | Modelo |
+  | Sesión | Carril | Modelo de partida |
   |---|---|---|
   | E1 | Bocetos (crear, modificar, restricciones, cotas, solver) | Opus alto |
   | E2 | Sólido › Crear | Opus alto |
@@ -76,7 +77,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
   | E6 | Velocidad y Rust | Opus alto |
   | E7 | Pruebas como usuario (prueba_ui, caza, banco de fluidez) | Sonnet medio |
   | E8 | Linux, arreglos chicos, UI, docs | Sonnet medio |
-  | E9 | Arreglos de prioridad 1, orquestando OpenCode (lanza y revisa sus corridas: «Protocolo de OpenCode») | Sonnet medio |
+  | E9 | Arreglos de prioridad 1 con OpenCode (las corridas las lanza el vigía; E9 las prepara cuando el coordinador se lo pide: «Protocolo de OpenCode») | Sonnet medio |
   | E10 | Arreglos de prioridad 1 (archivos `.f3d`, sólidos, GitHub) | según la tarea |
   | E11 | Pruebas con Computer Use en la PC (OmniCAD y Fusion); reporta al coordinador | Sonnet medio |
 
@@ -100,7 +101,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 
 ## Regla: commit automático del coordinador (Gerardo, 2026-11-05)
 - **El coordinador hace commit solo, sin preguntar, cada vez que una tarea o tanda queda verificada**: tests verdes
-  (los rojos que ya fallaban, con su fila), `ruff check .` limpio y `tests_afectados.py --correr` verde (la humo va en el cierre nocturno), más seguimiento,
+  (los rojos que ya fallaban, con su fila), `ruff check .` limpio y `tests_afectados.py --correr` verde (la suite y la humo corren de noche), más seguimiento,
   `PROJECT_LOG.md` y lista nocturna al día. Un commit por tarea o tanda.
 - `git add` explícito, archivo por archivo (nunca `privado/`, `analisis/`, `evidencias/`, `docs/fusion_docs/`,
   `PROJECT_CONTEXT.md` ni `.agents/`). Mensaje con qué se hizo y los IDs.
@@ -111,7 +112,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
 - El siguiente ID libre se busca mirando **todos los worktrees**, no solo `main`.
 - Cada tarea deja el proyecto limpio: sin archivos sueltos ni contradicciones entre documentos.
 
-## Página de seguimiento (Artifact de claude.ai)
+## Página de seguimiento (Artifact de claude.ai; la pidió Gerardo el 26/10: excepción a «sin Artifacts no pedidos» del global)
 - <https://claude.ai/artifact/4oDQpqbDYfnnsmBREjDRbp> («Seguimiento OmniCAD»): bugs, faltantes, mejoras, resueltos,
   prompts y agenda. **No es fuente de verdad** (lo es `docs/seguimiento/`) y **no se actualiza sola**: la refresca el
   coordinador una vez por día, a las 19 h (Protocolo de ahorro). Pasos, prompts guardados y agenda: [docs/coordinacion.md](docs/coordinacion.md).
@@ -135,40 +136,37 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
   su error al usuario, y lleva un test sobre un cuerpo YA modificado por un paso anterior. Sin eso no se integra.
 
 ## Recurso indispensable: documentación oficial de Fusion 360
-- Está completa en **`docs/fusion_docs/`** (no se sube a git) y es la fuente de verdad de **cómo funciona Fusion**.
-- **Se consulta SIEMPRE antes de corregir un bug o agregar un faltante** que replique un comando de Fusion. No se
-  programa de memoria.
-- Buscar con `clon/.venv/bin/python scripts/fusion_docs.py buscar <palabras> [-s carpeta]` y `ver "<título>"`.
-  Carpeta de cada pestaña, trampas y Fusion en vivo por el túnel de la PC: [docs/coordinacion.md](docs/coordinacion.md).
-- Los briefs a sub-sesiones y a OpenCode nombran `docs/fusion_docs/` y el comando `scripts/fusion_docs.py buscar`.
+- **`docs/fusion_docs/`** (no se sube a git) es la fuente de verdad de **cómo funciona Fusion** y se consulta SIEMPRE
+  antes de corregir un bug o agregar un faltante que replique un comando (regla 6); no se programa de memoria.
+  Cómo buscar, carpetas, trampas y Fusion en vivo: [docs/coordinacion.md](docs/coordinacion.md).
 
 ## Loop por fases sin que Gerardo apruebe nada
 - **OBLIGATORIO (Gerardo, 2026-10-31): no pedirle permiso para abrir sesiones.** El coordinador reusa las que existen
-  (`clear_session` + `SendMessage`, sin tarjeta) y llama a `start_session` solo si no queda ninguna.
+  (`clear_session` + `SendMessage`, sin tarjeta) y llama a `start_session` solo si no queda ninguna. Excepción de la app:
+  en un turno que no escribió Gerardo, `start_session` se frena; ahí se le pide en 1 línea «escribí: abrí el coordinador nuevo».
 - **Un ítem cerrado antes del siguiente (Gerardo, 2026-11-06)**: arreglo → tests → commit; nunca dos ítems sin
   commitear juntos. Cada ítem en su worktree.
 - Cierre de fase, OpenCode y vigilancia: [docs/coordinacion.md](docs/coordinacion.md).
 
 ## Regla obligatoria: ponytail
-- **Se INVOCA con la herramienta Skill, no alcanza con leer la regla.** Toda sesión que vaya a tocar código
-  (también las sub-sesiones y las que orquestan OpenCode) arranca con `ponytail`, termina con `ponytail-review`, y
-  usa `ponytail-audit` / `ponytail-debt` cuando haga falta. Un hook de `.claude/settings.json` lo recuerda.
-- **OBLIGATORIO para TODAS las sesiones de código**: el brief lleva ARRIBA DE TODO, en el `prompt` (nunca solo en
-  `background`): «invocá con la herramienta Skill `fable-method` y `ponytail` al empezar,
-  `verify-before-commit` (y `omnicad-test` si prueba la ventana), y `ponytail-review` antes de cerrar».
-  `plan-then-do` y `tool-calling-guard` solo en los briefs a OpenCode (modelos chicos). En E1–E11 y el coordinador la
+- **La lista de skills obligatorias vive solo en [docs/brief.md](docs/brief.md) (punto 1)**, para toda sesión de código,
+  sub-sesión y OpenCode. Se INVOCAN con la herramienta Skill: no alcanza con leer la regla. Un hook de
+  `.claude/settings.json` lo recuerda. El brief las lleva ARRIBA DE TODO, en el `prompt` (nunca solo en `background`). En E1–E11 y el coordinador la
   skill y el modelo los fija el brief: no rige la tabla de ruteo global. A OpenCode las reglas 3, 4, 5, 6 y 10 le llegan
   copiadas en `AGENTS.md`. El coordinador comprueba en el informe que la sesión pegó la salida real de `ponytail-review`.
 
 ## Regla: pruebas pesadas de noche y lista viva
-- **Quién verifica qué:** la sesión termina su ítem con `tests_afectados.py --correr` verde (la humo va en el cierre);
-  el coordinador integra y corre la suite completa y la humo en el cierre.
-- Mientras haya sesiones o pedidos abiertos **no se lanza el cierre completo** (suite, piezas de ventana, humo). Solo se
+- **Quién verifica qué:** la sesión termina su ítem con `tests_afectados.py --correr` verde; el coordinador integra;
+  la suite completa y la humo corren solas cada noche (cierre nocturno, abajo); la ventana de Windows, Gerardo o E11.
+- Mientras haya sesiones o pedidos abiertos **no se lanzan las piezas de ventana** (`scripts/prueba_ui`, cierre completo). Solo se
   integra y se verifica lo mínimo (git, `merge-tree`, `scripts/tests_afectados.py --correr`).
 - Todo lo que falta probar vive en **`docs/auditorias/prueba_nocturna_2026-10-31.md`**. Cada tarea nueva de Gerardo
   la actualiza en el mismo turno.
-- El cierre completo corre con `scripts/cierre_completo.sh` solo cuando Gerardo diga «corré todo». La suite sola (pytest, sin humo ni piezas) corre igual cada noche por la crontab: `scripts/suite_noche.sh`, 03:15, resultado en `~/coordinador/suite_noche/ultima.txt`; el coordinador lo mira a la mañana y lo rojo va a `docs/seguimiento/` (Gerardo, 2026-11-17). Lo verde se borra
-  de la lista; lo rojo va a `docs/seguimiento/`.
+- **Cierre nocturno automático (Gerardo, 2026-11-17)**: la crontab de la VPS corre `scripts/suite_noche.sh` a las 06:15 UTC
+  (03:15 de Argentina): la suite completa y después la humo, más `tests/test_reglas_coherentes.py` (va en la suite).
+  Resultado en `~/coordinador/suite_noche/ultima.txt`: el coordinador lo mira a la mañana; lo rojo va a
+  `docs/seguimiento/` y lo verde se borra de la lista. El cierre completo con las piezas de ventana
+  (`scripts/cierre_completo.sh`) corre solo cuando Gerardo diga «corré todo».
 
 ## Caza automática de errores
 - `scripts/caza/` busca errores solo, sin modelos ni red (`docs/plan_caza_errores.md`). Comandos (`rapida`, `noche`,
@@ -180,7 +178,7 @@ contexto. Cada turno relee el contexto entero: **el tamaño del contexto es el g
 coordinador, E1–E11 y el chat maestro.
 1. **Contexto chico.** Ítem cerrado → nota de traspaso de 5 líneas en el Registro de `PROJECT_LOG.md` →
    `clear_session` → brief nuevo que empieza leyendo la nota. **Tope: 40 % de contexto para el chat maestro y el
-   coordinador, 35 % para E1–E11; aviso al 30 % para todos** (lo mide el hook `ctx25.py`, que dice el tope de cada rol). Quién vacía a quién: E1–E11, el coordinador (nota + `clear_session` + brief); el coordinador y el
+   coordinador, 35 % para E1–E11; aviso al 30 % para todos** (lo mide el hook `ctx25.py`, que dice el tope de cada rol; el nombre es histórico). Quién vacía a quién: E1–E11, el coordinador (nota + `clear_session` + brief); el coordinador y el
    chat maestro se reemplazan solos: nota de traspaso, sesión nueva con el mismo título, Remote Control prendido, y la
    vieja pasa a «(viejo)»; sin sesiones colgadas: la vieja suelta las que abrió y la nueva queda suelta y fijada (lista en [docs/coordinacion.md](docs/coordinacion.md) › «Lista para abrir el reemplazo») (`clear_session` falla con Remote Control; el maestro además reescribe `~/chat_maestro.txt`). El autocompactado de
    Claude al 70 % queda solo como red de seguridad. Nunca se vacía en medio de un ítem. Detalle: [docs/coordinacion.md](docs/coordinacion.md).
@@ -189,7 +187,7 @@ coordinador, E1–E11 y el chat maestro.
    26 al 30/11, ~19 % (queda ~10 % para el 1 al 3/12).
    - **Verde** (en ritmo): hasta 5 sesiones de Claude trabajando a la vez.
    - **Amarillo** (3 puntos o más arriba del ritmo): 3 a la vez, solo prioridad 1.
-   - **Rojo** (90 %): se pausan E1–E11 y sigue OpenCode; el coordinador NO se pausa: con su ~5 % lanza y revisa las corridas de OpenCode, rellena su fila, integra una vez por día y atiende bloqueantes (Gerardo, 2026-11-17; «Cupo semanal al 90 %» en [docs/coordinacion.md](docs/coordinacion.md)).
+   - **Rojo** (90 %): se pausan E1–E11 y sigue OpenCode; el coordinador NO se pausa: con su ~5 % llena la cola de OpenCode, revisa lo que deja, integra una vez por día y atiende bloqueantes (Gerardo, 2026-11-17; «Cupo semanal al 90 %» en [docs/coordinacion.md](docs/coordinacion.md)).
 3. **Modelo por ítem, no por carril.** El coordinador lo elige en cada brief y lo cambia con `set_session_model` al
    vaciar la sesión. Opus alto: solver, geometría OCC, núcleo y velocidad (ahí no se baja el esfuerzo). Sonnet medio:
    UI, diálogos, selección, tests, docs e integración. OpenCode gratis o un script: lo mecánico (filas de seguimiento,
@@ -199,10 +197,11 @@ coordinador, E1–E11 y el chat maestro.
    `| tail` o `ctx_execute`; `tests_afectados.py --correr` al final de cada intento, no tras cada edición; la suite y
    la humo, solo de noche y por script. **Al arrancar se lee solo la última nota de TU sesión** (la que empieza con el encabezado «Traspaso <título de la sesión>»; no `PROJECT_LOG.md`
    ni `APRENDIZAJES.md` enteros; de las lecciones, la sección del tema): en OmniCAD esto manda sobre `project-memory`,
-   `aprender` y el global.
+   `aprender` y el global (el coordinador además lee `agenda.md`). `codebase-memory` es opcional para código; para
+   texto y docs, `grep -n` y Read.
 5. **Mensajes cortos.** Brief de 5 líneas como mucho (ID + archivo + «seguí [docs/brief.md](docs/brief.md)»; no pega contenido). Informe de 10
    líneas más los hallazgos de `ponytail-review` (no su salida entera). Entre sesiones: ID, archivo:línea, comando y resultado.
-6. **Coordinador liviano.** Vigila cada 2 h y cuando una sesión termina, no por reloj corto; integra por tandas; la
+6. **Coordinador liviano.** Vigila con la cadencia de «Vigilancia» en [docs/coordinacion.md](docs/coordinacion.md) y cuando una sesión termina, no por reloj corto; integra por tandas; la
    página de seguimiento se refresca una vez por día (19 h). En el lote de las 19 h, una línea al chat maestro:
    semanal %, ritmo, color e ítems cerrados del día.
 
@@ -227,7 +226,7 @@ coordinador, E1–E11 y el chat maestro.
 - Cada falla va a `evidencias/reportes_pc/<fecha>_<tema>/` con capturas y pasos reproducibles. Avisa al coordinador,
   que asigna, recibe y decide. Si se bloquea, pide ayuda en vez de insistir.
 - Complementa `scripts/prueba_ui` y la skill `omnicad-test`, no los reemplaza. Mueve el cursor real (única excepción a
-  «eventos simulados»): corre solo con la PC libre o con el OK de Gerardo. No toca código.
+  «eventos simulados»): corre solo con el OK de Gerardo. No toca código.
 - Detalle: [docs/coordinacion.md](docs/coordinacion.md).
 
 @AGENTS.md

@@ -9,6 +9,7 @@ corrige. Lo que se resuelve **se borra** de la lista: la historia queda en el Re
 | [faltantes.md](faltantes.md) | Una función que todavía no existe |
 | [mejoras.md](mejoras.md) | Algo que existe y se puede hacer mejor: rendimiento, interfaz, mensajes, instalador |
 | [despues.md](despues.md) | Prioridad 2 congelada (bugs, faltantes y mejoras de render, animación, simulación, malla, plástico, chapa, dibujo, IA, escaneo, extensiones y parecidos); mismo formato, sin ordenar nada; solo Gerardo descongela |
+| [preparado/](preparado/README.md) | Bugs preparados para Opus (repro, ayuda de Fusion, archivo sospechoso); no son filas: la fila sigue en su lista |
 
 La especificación de cada faltante (qué hace en el programa de referencia y cómo tiene que sentirse) está en
 los `docs/brechas_*.md`. Esos archivos describen; **el estado vive solo acá**.

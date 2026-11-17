@@ -138,7 +138,7 @@ def test_run_checks_marca_sus_subprocesos(monkeypatch):
 
 def test_run_checks_todo_verde_y_con_humo(monkeypatch):
     simular_pasos(monkeypatch)
-    r = resultado_ok(api.llamar(api.Sesion(), "run_checks", {}))
+    r = resultado_ok(api.llamar(api.Sesion(), "run_checks", {"include_smoke": True}))
     assert r["ok"] is True and r["smoke"]["ok"] is True
     assert r["smoke"]["summary"] == "Resultado: TODO OK (1/1)"
 

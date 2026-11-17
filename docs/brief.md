@@ -7,9 +7,9 @@ El brief que manda el coordinador es corto (5 líneas como mucho; número único
 - Modelo y esfuerzo del ítem (los fija el coordinador: tabla en `docs/coordinacion.md`).
 
 ## Lo que esta plantilla ya exige
-1. **Skills** (invocadas con la herramienta Skill, no solo nombradas): `fable-method` y `ponytail` al empezar, `verify-before-commit`, y `ponytail-review` antes de cerrar (`omnicad-test` si prueba la ventana). Briefs a OpenCode: además `plan-then-do` y `tool-calling-guard`.
-2. **Fusion**: leer `docs/fusion_docs/` con `scripts/fusion_docs.py buscar <palabras>` antes de arreglar algo que replica un comando.
+1. **Skills** (fuente única de esta lista; invocadas con la herramienta Skill, no solo nombradas): `fable-method` y `ponytail` al empezar, `verify-before-commit` (en OmniCAD se cumple con ruff y `tests_afectados.py --correr`: la suite y la humo corren de noche), y `ponytail-review` antes de cerrar (`omnicad-test` si prueba la ventana; `ponytail-audit` / `ponytail-debt` cuando haga falta). Briefs a OpenCode: además `plan-then-do` y `tool-calling-guard`.
+2. **Fusion**: leer `docs/fusion_docs/` antes de arreglar algo que replica un comando (cómo buscar: `docs/coordinacion.md`).
 3. **Autocontenido**: la sesión arranca leyendo solo la última nota de TU sesión (la que empieza con el encabezado «Traspaso <título de la sesión>») en el Registro de `PROJECT_LOG.md`, nada más.
 4. **Un ítem**: worktree propio (`scripts/worktree_item.sh`), `tests_afectados.py --correr`, sin commit ni push.
-5. **Modelos**: solo los que nombra el brief; si no están o se acaba el cupo, parar y avisar, nunca reemplazar.
+5. **Modelos**: solo los que nombra el brief; si no están o se acaba el cupo, parar y avisar, nunca reemplazar (salvo la rotación del vigía, «Protocolo de OpenCode»).
 6. **Informe** (10 líneas más los hallazgos de `ponytail-review`): hecho / no hecho, archivos, salida real de ruff y tests, y qué falta. El coordinador comprueba que pegó la salida real de `ponytail-review`.

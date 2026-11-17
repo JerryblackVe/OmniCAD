@@ -87,6 +87,7 @@ Decidí por `error_kind`, leé `mensaje` y probá las `pistas`.
 | `CODE_TIMEOUT` | Tu código de `execute_code` pasó su tiempo máximo, timeout (60 s por defecto) y se cortó; el documento no cambió |
 | `APP_BUSY` | (en vivo) el usuario está en un comando: esperá unos segundos y repetí |
 | `APP_NOT_RUNNING` | (en vivo) la app no escucha: abrila con los agentes permitidos o usá `--modo sin_ventana` |
+| `FEATURE_DISABLED` | La función está apagada hasta que se arregle (aviso «No disponible: …»): usá otra opción o esperá |
 
 ## Si encontrás un bug de OmniCAD: documentalo, no lo arregles
 
@@ -135,10 +136,10 @@ no toques el código del programa: anotalo con la ficha de abajo y seguí con tu
 
 ## Si el pedido es mejorar el programa OmniCAD
 
-Leé `AGENTS.md` en la raíz del repo, que manda sobre todo lo demás: reglas absolutas y mapa de carpetas.
+Seguí `CLAUDE.md` y `AGENTS.md` en la raíz del repo (si chocan, manda `CLAUDE.md`): reglas absolutas y mapa de carpetas.
 - Operación nueva en el timeline: Receta A. Comando de la interfaz: Receta B. Herramienta nueva para
   agentes (MCP y CLI a la vez): Receta C.
 - Todo en español; `nucleo`, `timeline`, `restricciones` e `io_archivos` no importan Qt.
-- No digas "listo" sin correr la verificación y pegar su salida real: `omnicad dev check` (con `--json`
-  trae el resumen) o la herramienta `run_checks`, que corren ruff, pytest y la prueba de humo.
+- No digas "listo" sin correr la verificación y pegar su salida real: ruff y `scripts/tests_afectados.py --correr`
+  (o `run_checks` con `pytest_args` = tus tests). La suite completa y la humo corren solas cada noche.
 - Anotá el trabajo en `PROJECT_LOG.md`. Git solo local: nada de `push` ni commits sin que te lo pidan.

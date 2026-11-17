@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"OBLIGATORIO (regla de OmniCAD): al empezar cualquier trabajo de codigo, invocar la skill ponytail con la herramienta Skill (skill: ponytail) antes de editar. Antes de dar por terminado un cambio de codigo, invocar la skill ponytail-review. Para auditar el repo entero usar ponytail-audit; para ver atajos pendientes, ponytail-debt. No alcanza con leer la regla: hay que invocar la skill.\"}}'",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"OBLIGATORIO (regla de OmniCAD): en todo trabajo de codigo, invocar con la herramienta Skill las skills de docs/brief.md punto 1: fable-method y ponytail al empezar, verify-before-commit antes de commitear y ponytail-review antes de cerrar. No alcanza con leer la regla: hay que invocar la skill.\"}}'",
             "statusMessage": "Cargando regla ponytail"
           },
           {
