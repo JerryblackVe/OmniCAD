@@ -205,8 +205,14 @@ de OpenCode; las demás la enlazan.
   coordinador: a main entra solo lo que él revisó.
 - **Vigilancia**: el coordinador y el chat maestro, cada 2 h, comprueban que haya corridas activas
   (`ls ~/coordinador/opencode_cola/corriendo`, que ve OpenCode y CodeBuddy) y que la reserva no baje de 8; si baja, la
-  rellenan. Las corridas trabadas las corta el vigía; lo que llega a `trabadas/` lo decide el coordinador (partirlo o
-  pasarlo a una sesión de Claude).
+  rellenan. Leen también `avisos.txt` de la cola (trabadas, cola o reserva vacías, ningún modelo responde, pytest
+  huérfano cortado) y la hora de `latido`: si tiene más de 1 vuelta, el vigía no corre (crontab o máquina) y se avisa a
+  Gerardo. Lo que llega a `trabadas/` lo decide el coordinador (partirlo o pasarlo a una sesión de Claude).
+- **Topes del vigía (nada queda quieto sin corte)**: corrida o verificación sin escribir ni usar CPU en `MIN` min → se
+  corta y se relanza con el modelo siguiente; probados todos → `trabadas/` con aviso. Corrida: `timeout 2700`;
+  verificación: pytest con `timeout 1500`. Sin worktree o sin brief → `trabadas/` sin rotar. Una vuelta a la vez
+  (`flock`, se suelta solo si el vigía muere). Pytest huérfano (sin padre) de más de 45 min → se corta con aviso.
+  Prueba en seco: `scripts/prueba_vigia_opencode.sh`.
 
 ## Caza automática de errores
 - `scripts/caza/` es un programa que busca errores solo, sin modelos ni red: cadenas de operaciones con medidas

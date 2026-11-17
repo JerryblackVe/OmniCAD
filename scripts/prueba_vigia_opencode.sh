@@ -50,5 +50,12 @@ bash "$V"; sleep 9; bash "$V"; sleep 1; bash "$V"; bash "$V"
 grep -q "falla 06_c (intento 1, cb:hy3: verificación trabada" $T/cola/vigia.log || { echo "FALLA 12: la verificación colgada no se cortó"; ok=0; }
 pgrep -f "^sleep 300$" > /dev/null && { echo "FALLA 13: quedó viva la verificación colgada"; ok=0; pkill -f "^sleep 300$"; }
 unset VIGIA_VERIF VIGIA_MIN
+# sin worktree: a trabadas/ con aviso, sin rotar modelos en vano; latido al día
+printf 'WT=%s\nBRIEF=%s\n' $T/no_existe $T/brief > $T/cola/07_w.tarea; VIGIA_MAX=5 bash "$V"
+[ -f $T/cola/trabadas/07_w.tarea ] && grep -q "07_w: falta el worktree" $T/cola/avisos.txt || { echo "FALLA 14: tarea sin worktree no pasó a trabadas con aviso"; ok=0; }
+[ -n "$(find $T/cola/latido -newermt '-1 min')" ] || { echo "FALLA 15: sin latido"; ok=0; }
+# una vuelta a la vez: con el candado tomado, la segunda no hace nada
+( exec 9> $T/cola/.vigia.lock; flock 9; sleep 3 ) & sleep 1; bash "$V"; wait
+grep -q "la vuelta anterior sigue corriendo" $T/cola/vigia.log || { echo "FALLA 16: dos vueltas a la vez"; ok=0; }
 [ $ok = 1 ] && echo "PRUEBA OK" || { cat $T/cola/vigia.log; exit 1; }
 rm -rf $T

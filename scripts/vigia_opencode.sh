@@ -27,6 +27,15 @@ MAX=${VIGIA_MAX:-6}   # hasta 2 por modelo de CodeBuddy y 1 por modelo de OpenCo
 LOG=$COLA/vigia.log; EST=$COLA/corriendo   # un archivo por corrida: «nombre intento modelo pid»
 mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs" "$COLA/reserva" "$EST"
 anota() { echo "$(date -u '+%F %T') $*" >> "$LOG"; }
+# Avisos para el coordinador y el chat maestro (el vigía no tiene modelo: los leen en su vigilancia de 2 h).
+avisa() { anota "AVISO $*"; echo "$(date -u '+%F %T') $*" >> "$COLA/avisos.txt"; }
+# Una vuelta a la vez: si la anterior sigue (p. ej. probando modelos), esta no lanza nada doble. flock se suelta solo.
+exec 9> "$COLA/.vigia.lock"; flock -n 9 || { anota "la vuelta anterior sigue corriendo: salto esta"; exit 0; }
+touch "$COLA/latido"   # si tiene más de 1 vuelta, el vigía no corre (crontab o máquina): lo mira la vigilancia de 2 h
+# Huérfanos: un pytest sin padre (su sesión murió) que pasa de 45 min no lo corta nadie más (3 h el 17/11).
+for p in $(pgrep -f "python -m pytest"); do
+  [ "$(ps -o ppid= -p "$p" | tr -d ' ')" = 1 ] && [ "$(ps -o etimes= -p "$p" | tr -d ' ')" -gt 2700 ] || continue
+  kill "$p" 2>/dev/null && avisa "pytest huérfano cortado (pid $p, más de 45 min)"; done
 quieto() {   # nada escribió en $MIN minutos (el log de la corrida casi no se escribe hasta el final; el de opencode sí)
   [ -z "$(find "$@" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; }
 cpu() { ps -o times= -s "$1" 2>/dev/null | awk '{s+=$1} END{print s+0}'; }   # segundos de CPU de la sesión (setsid) del pid
@@ -49,12 +58,12 @@ lanza() {    # nombre intento modelo [brief extra]
   [ -n "$VARIANTE" ] && [ "${m#cb:}" = "$m" ] && v="--variant $VARIANTE"   # CodeBuddy no tiene variante
   { [ -n "$extra" ] && echo "$extra"; cat "$BRIEF"; } > "$COLA/logs/$n.brief$k.md"
   echo "=== intento $k ($m)" >> "$COLA/logs/$n.log"
-  setsid nohup bash -c "cd '$WT' && timeout 2700 $(cmd "$m") $v \"\$(cat '$COLA/logs/$n.brief$k.md')\" >> '$COLA/logs/$n.log' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.log'" < /dev/null > /dev/null 2>&1 &
+  setsid nohup bash -c "cd '$WT' && timeout 2700 $(cmd "$m") $v \"\$(cat '$COLA/logs/$n.brief$k.md')\" >> '$COLA/logs/$n.log' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.log'" < /dev/null > /dev/null 2>&1 9>&- &
   echo "$n $k $m $!" > "$EST/$n"; anota "lanzo $n (intento $k, $m, esfuerzo ${VARIANTE:-del modelo}, pid $!)"
 }
 verifica() {   # nombre intento modelo: corre la verificación aparte y la anota como corrida «VERIF:<modelo>»
   local n=$1; source "$COLA/$n.tarea"
-  setsid nohup bash -c "cd '$WT' && { $VERIF; } > '$COLA/logs/$n.verif' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.verif'" < /dev/null > /dev/null 2>&1 &
+  setsid nohup bash -c "cd '$WT' && { $VERIF; } > '$COLA/logs/$n.verif' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.verif'" < /dev/null > /dev/null 2>&1 9>&- &
   echo "$n $2 VERIF:$3 $!" > "$EST/$n"; anota "verifico $n (verif_tarea.sh, pid $!)"
 }
 reintenta() {   # nombre intento modelo motivo
@@ -62,7 +71,7 @@ reintenta() {   # nombre intento modelo motivo
   (cd "$WT" && git ls-files -m -o --exclude-standard | tar -czf "$COLA/logs/$n.respaldo$k.tgz" -T - 2>/dev/null)
   sig=$( [ "$k" -lt "${#MODELOS[@]}" ] && siguiente_modelo "$m" )
   if [ -z "$sig" ]; then
-    anota "TRABADA $n ($4): sin más modelos que prueben; pasa a trabadas/ (respaldos en logs/)"
+    avisa "TRABADA $n ($4): sin más modelos que prueben; pasa a trabadas/ (respaldos en logs/)"
     mv "$COLA/$n.tarea" "$COLA/trabadas/"; rm -f "$EST/$n"; return
   fi
   anota "falla $n (intento $k, $m: $4): relanzo con $sig"
@@ -110,18 +119,21 @@ for t in $(ls "$COLA"/reserva/*.tarea 2>/dev/null); do
   [ "$(ls "$COLA"/*.tarea 2>/dev/null | wc -l)" -ge 8 ] && break
   mv "$t" "$COLA/" && anota "de reserva a la cola: $(basename "$t")"
 done
-[ "$(ls "$COLA"/reserva/*.tarea 2>/dev/null | wc -l)" -lt 8 ] && anota "AVISO reserva con menos de 8 tareas"
+[ "$(ls "$COLA"/reserva/*.tarea 2>/dev/null | wc -l)" -lt 8 ] && avisa "reserva con menos de 8 tareas"
 usadas=$(ls "$EST" | wc -l)
 { [ -n "$ajenas" ] || pgrep -f "${VIGIA_LANZ:-lanzador.sh}" > /dev/null; } && usadas=$((usadas + 1))
 while [ "$usadas" -lt "$MAX" ]; do
   siguiente=$(for t in "$COLA"/*.tarea; do [ -f "$t" ] && [ ! -f "$EST/$(basename "$t" .tarea)" ] && echo "$t"; done | head -1)
   if [ -z "$siguiente" ]; then
-    [ "$(tail -1 "$LOG" 2>/dev/null | cut -d' ' -f3-)" = "cola vacía" ] || anota "cola vacía"
+    [ "$(tail -1 "$LOG" 2>/dev/null | cut -d' ' -f3-)" = "AVISO cola vacía" ] || avisa "cola vacía"
     exit 0
   fi
-  n=$(basename "$siguiente" .tarea); MODELO=; source "$siguiente"
+  n=$(basename "$siguiente" .tarea); MODELO=; WT=; BRIEF=; source "$siguiente"
+  if [ ! -d "$WT" ] || [ ! -f "$BRIEF" ]; then   # sin worktree o sin brief no hay corrida posible: no se rota en vano
+    avisa "TRABADA $n: falta el worktree o el brief ($WT, $BRIEF); pasa a trabadas/"; mv "$siguiente" "$COLA/trabadas/"; continue
+  fi
   m=${MODELO:-${MODELOS[0]}}
   usado "$m" && m=$(siguiente_modelo "$m")   # el primer intento no se prueba antes: los gratis tardan 1–2 min en contestar; si falla, lo agarra la vuelta siguiente
-  [ -z "$m" ] && { anota "ningún modelo libre responde: espero a la próxima vuelta"; exit 0; }
+  [ -z "$m" ] && { avisa "ningún modelo libre responde: espero a la próxima vuelta"; exit 0; }
   lanza "$n" 1 "$m"; usadas=$((usadas + 1))
 done
