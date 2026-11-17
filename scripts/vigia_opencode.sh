@@ -3,7 +3,7 @@
 # Cola: archivos `$COLA/NN_nombre.tarea` (orden alfabético) con líneas que se leen con `source`:
 #   WT=/home/mosos/OmniCAD-<ID>   BRIEF=/ruta/al/brief.md   MODELO=opencode/glm-5.3-flash-free (opcional)
 #   VARIANTE=high (opcional: esfuerzo de `opencode run --variant`; sin ella, el del modelo)
-# - Al terminar bien, se verifica sola (ruff + tests_afectados en su worktree, sin modelo): verde -> hechos/ (lista para
+# - Al terminar bien, se verifica sola (scripts/verif_tarea.sh en su worktree, sin modelo): verde -> hechos/ (lista para
 #   integrar); rojo -> se relanza con el error y el modelo siguiente.
 # - Corre hasta $MAX corridas a la vez, de modelos distintos: 2 de OpenCode (el lanzador de E9 ocupa una) y 2 en CodeBuddy.
 #   Salida en $COLA/logs/<nombre>.log; al terminar bien la tarea pasa a hechos/.
@@ -22,7 +22,7 @@ CB=${VIGIA_CB:-$HOME/.local/cb/codebuddy}   # CodeBuddy (Node 22 propio); sus mo
 MODELOS=(cb:deepseek-v4.1-flash cb:hy3 nvidia/minimaxai/minimax-m3.1-flash opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free)
 CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound'
 PY=${VIGIA_PY:-$HOME/OmniCAD/clon/.venv/bin/python}
-VERIF=${VIGIA_VERIF:-cd clon && $PY -m ruff check . && $PY ../scripts/tests_afectados.py --correr}
+VERIF=${VIGIA_VERIF:-bash $HOME/OmniCAD/scripts/verif_tarea.sh}   # rápida: ruff + tests que importan directo lo tocado
 MAX=${VIGIA_MAX:-6}   # hasta 2 por modelo de CodeBuddy y 1 por modelo de OpenCode
 LOG=$COLA/vigia.log; EST=$COLA/corriendo   # un archivo por corrida: «nombre intento modelo pid»
 mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs" "$COLA/reserva" "$EST"
@@ -54,7 +54,7 @@ lanza() {    # nombre intento modelo [brief extra]
 verifica() {   # nombre intento modelo: corre la verificación aparte y la anota como corrida «VERIF:<modelo>»
   local n=$1; source "$COLA/$n.tarea"
   setsid nohup bash -c "cd '$WT' && { $VERIF; } > '$COLA/logs/$n.verif' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.verif'" < /dev/null > /dev/null 2>&1 &
-  echo "$n $2 VERIF:$3 $!" > "$EST/$n"; anota "verifico $n (ruff + tests_afectados, pid $!)"
+  echo "$n $2 VERIF:$3 $!" > "$EST/$n"; anota "verifico $n (verif_tarea.sh, pid $!)"
 }
 reintenta() {   # nombre intento modelo motivo
   local n=$1 k=$2 m=$3 sig; source "$COLA/$n.tarea"
