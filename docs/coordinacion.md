@@ -173,11 +173,16 @@ de OpenCode; las demás la enlazan.
 
   | Orden | Modelo | Para qué |
   |---|---|---|
-  | 1–2 | CodeBuddy gratis: `cb:deepseek-v4.1-flash`, `cb:hy3` (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | Primero en todo: prueba de carga del 17/11, ~8 s, 4 a la vez sin cortes |
-  | 3 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Varios archivos con herramientas |
-  | 4 | GLM: `opencode/glm-5.3-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
-  | 5 | DeepSeek: `opencode/deepseek-v4.1-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
+  | 1 | OpenAI (suscripción ChatGPT de Gerardo, OK del 17/11): `openai/gpt-6.2-sol` | Piezas de varios archivos y revisión |
+  | 2 | OpenAI: `openai/gpt-6.1-terra` | Lo mecánico (mensajes, filas, doc) |
+  | 3–4 | CodeBuddy gratis: `cb:deepseek-v4.1-flash`, `cb:hy3` (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | Prueba de carga del 17/11, ~8 s, 4 a la vez sin cortes; corta con 429 al quedarse sin cupo |
+  | 5 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Varios archivos con herramientas |
+  | 6 | OpenAI: `openai/gpt-6.2-astra` | Respaldo de OpenAI |
+  | 7 | GLM: `opencode/glm-5.3-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
+  | 8 | DeepSeek: `opencode/deepseek-v4.1-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
 
+  Con la cuenta ChatGPT NO andan `gpt-5.x`, `gpt-5.4-mini` ni `codex-spark`. La suscripción tiene límite de uso: con
+  429 el vigía rota al siguiente, como con CodeBuddy.
   La geometría difícil no va a OpenCode: va a Opus alto. Prohibidos:
   OpenCode Go (sin suscripción) y `mimo` (entrena con los datos).
 - **Modelo según el cupo**: si un modelo corta por límite, saldo o error, el vigía pasa la pieza al siguiente de la
