@@ -167,7 +167,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
   integra y se verifica lo mínimo (git, `merge-tree`, `scripts/tests_afectados.py --correr`).
 - Todo lo que falta probar vive en **`docs/auditorias/prueba_nocturna_2026-10-31.md`**. Cada tarea nueva de Gerardo
   la actualiza en el mismo turno.
-- El cierre completo corre con `scripts/cierre_completo.sh` solo cuando Gerardo diga «corré todo». Lo verde se borra
+- El cierre completo corre con `scripts/cierre_completo.sh` solo cuando Gerardo diga «corré todo». La suite sola (pytest, sin humo ni piezas) corre igual cada noche por la crontab: `scripts/suite_noche.sh`, 03:15, resultado en `~/coordinador/suite_noche/ultima.txt`; el coordinador lo mira a la mañana y lo rojo va a `docs/seguimiento/` (Gerardo, 2026-11-17). Lo verde se borra
   de la lista; lo rojo va a `docs/seguimiento/`.
 
 ## Caza automática de errores
