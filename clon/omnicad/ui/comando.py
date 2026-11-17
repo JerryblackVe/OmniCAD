@@ -841,7 +841,7 @@ def tramo_revolucion(p, a1, a2):
     a, b = (-a1 / 2, a1 / 2) if modo == "simetrica" else (-abs(a2), abs(a1)) if modo == "dos_lados" else (0.0, a1)
     if abs(b - a) <= 1e-9 or abs(b - a) > 360.0 + 1e-9:
         from ..nucleo import geometria as geo
-        raise geo.ErrorGeometria("El ángulo de revolución tiene que estar entre 0° y 360° (en total).")
+        raise geo.ErrorGeometria("Ángulo de revolución: entre 0° y 360°.")
     return a, b
 
 

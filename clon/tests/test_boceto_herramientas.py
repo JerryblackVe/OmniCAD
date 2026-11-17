@@ -756,7 +756,7 @@ def test_p73_fusion_elige_arista_del_modelo_y_la_proyecta(app_qt):
                            if referencias.firma_arista(e)["geom"] == "circulo")
         assert lz._clic_pick(pos)          # el borde de un agujero: no sirve y no queda proyectado
         assert lz.b.a_dict() == antes and lz.picks == [] and lz.b.proyecciones == []
-        assert mensajes[-1].startswith("La arista debe proyectar exactamente una curva abierta")
+        assert mensajes[-1].startswith("La arista debe dar una curva abierta")
         visor.forma = arista
         assert lz._clic_pick(pos)
         assert len(lz.picks) == 1

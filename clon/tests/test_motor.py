@@ -86,8 +86,8 @@ def test_faltante_es_error_tipado_sin_respaldo(monkeypatch):
     with pytest.raises(geo.ErrorGeometria) as e:
         geo.longitud(geo.caja(1, 2, 3))
     assert e.value.error_kind == "MOTOR_SIN_SOPORTE"
-    assert str(e.value) == ("OmniKernel todavía no hace geometria.longitud. "
-                            "Podés elegir OpenCascade en Preferencias.")
+    assert str(e.value) == ("OmniKernel no hace geometria.longitud. "
+                            "Usá OpenCascade.")
 
 
 @requiere_omnikernel

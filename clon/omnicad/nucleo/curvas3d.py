@@ -57,7 +57,7 @@ def arista_arco(a, m, b):
     from OCP.GC import GC_MakeArcOfCircle
     hecho = GC_MakeArcOfCircle(_pnt(a), _pnt(m), _pnt(b))
     if not hecho.IsDone():
-        raise geo.ErrorGeometria("Los tres puntos del arco no definen un círculo.")
+        raise geo.ErrorGeometria("Los puntos del arco no definen un círculo.")
     return _arista(hecho.Value())
 
 
@@ -278,12 +278,12 @@ def isoparametricas(cara, punto, direccion="u", tipo="single", distancia=None, c
     from OCP.ShapeAnalysis import ShapeAnalysis_Surface
     from OCP.TopoDS import TopoDS
     if direccion not in ("u", "v", "both") or tipo not in ("single", "distributed"):
-        raise geo.ErrorGeometria("Dirección: u, v o both. Tipo: single o distributed.")
+        raise geo.ErrorGeometria("Dirección u/v/both; tipo single/distributed.")
     if tipo == "distributed":
         if (distancia is None) == (cantidad is None):
-            raise geo.ErrorGeometria("Distribuidas: dá la distancia entre curvas o la cantidad, una de las dos.")
+            raise geo.ErrorGeometria("Distribuidas: dá distancia o cantidad.")
         if distancia is not None and not distancia > 0 or cantidad is not None and not cantidad >= 1:
-            raise geo.ErrorGeometria("La distancia tiene que ser mayor que 0 y la cantidad, de 1 o más.")
+            raise geo.ErrorGeometria("Distancia mayor que 0; cantidad desde 1.")
     try:
         cara = TopoDS.Face(cara)
     except Exception as e:  # noqa: BLE001 — OCP lanza TypeError o Standard_Failure según la forma
@@ -294,7 +294,7 @@ def isoparametricas(cara, punto, direccion="u", tipo="single", distancia=None, c
     tol = 1e-6
     clasificador = BRepClass_FaceClassifier()
     if not _dentro(clasificador, cara, (uv.X(), uv.Y()), tol):
-        raise geo.ErrorGeometria("El punto no cae sobre la cara: elegí un punto de la cara.")
+        raise geo.ErrorGeometria("El punto no cae sobre la cara.")
     p_u, p_v = uv.X(), uv.Y()
     salida = []
     for sentido in (("u", "v") if direccion == "both" else (direccion,)):
@@ -315,12 +315,12 @@ def isoparametricas(cara, punto, direccion="u", tipo="single", distancia=None, c
                 pasos = [s0 + k * distancia for k in range(k0, int((largo - s0) / distancia + 1e-9) + 1)]
                 pasos = [s for s in pasos if 1e-9 < s < largo - 1e-9]
             if len(pasos) > TOPE_ISO:
-                raise geo.ErrorGeometria(f"Salen {len(pasos)} curvas: el tope es {TOPE_ISO}. Subí la distancia o bajá la cantidad.")
+                raise geo.ErrorGeometria(f"Salen {len(pasos)} curvas; tope {TOPE_ISO}.")
             fijos = [GCPnts_AbscissaPoint(ref, s, ancho[0]).Parameter() for s in pasos]
         for f in fijos:
             curva = iso(f)
             for a, b in _tramos_dentro(clasificador, cara, *libre, f, par, tol):
                 salida.append(describir(BRepBuilderAPI_MakeEdge(curva, a, b).Edge()))
     if not salida:
-        raise geo.ErrorGeometria("La cara no deja ninguna curva con esos valores.")
+        raise geo.ErrorGeometria("La cara no deja ninguna curva.")
     return salida

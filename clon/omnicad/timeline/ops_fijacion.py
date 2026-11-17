@@ -43,8 +43,7 @@ def _apoyos(p, estado):
             salida.append({"punto": np.asarray(punto, float), "direccion": d, "diametro": None, "interior": True,
                            "cuerpo": cuerpo})
         else:
-            raise ErrorOperacion("Para colocar una fijación elegí una arista circular, una cara cilíndrica o cónica "
-                                 "o un punto o eje.")
+            raise ErrorOperacion("Elegí arista circular, cara cilíndrica o eje.")
     unicos = []
     for ap in salida:                              # la misma posición elegida dos veces da una sola fijación
         if not any(np.allclose(ap["punto"], u["punto"], atol=1e-6) and np.allclose(ap["direccion"], u["direccion"])
@@ -113,7 +112,7 @@ class OpFijacion(Operacion):
 
     def ejecutar(self, estado, ctx):
         if not self.p.get("posiciones"):
-            raise ErrorOperacion("Elegí dónde va la fijación: una arista circular, una cara cilíndrica o un punto.")
+            raise ErrorOperacion("Elegí arista, cara cilíndrica o punto.")
         r = resolver_fijacion(self.p, estado)
         for a in r["avisos"]:
             ctx.aviso(a)

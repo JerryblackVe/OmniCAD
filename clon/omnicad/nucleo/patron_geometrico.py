@@ -76,9 +76,9 @@ def _puntos(distribucion, u0, u1, v0, v1, p):
     if distribucion in ("circular", "radial") and dr <= 0:
         raise geo.ErrorGeometria("La distancia radial tiene que ser positiva.")
     if distribucion in ("triangular", "hexagonal") and d <= 0 and not (p["separacion"] == "extension" and p["cantidad_u"] > 1):
-        raise geo.ErrorGeometria("La distancia entre objetos tiene que ser positiva.")
+        raise geo.ErrorGeometria("La distancia entre objetos debe ser positiva.")
     if _estimar(distribucion, u0, u1, v0, v1, p) > 50 * MAXIMO_OBJETOS:      # antes de enumerar: 0,003 mm daría 400 M de puntos
-        raise geo.ErrorGeometria(f"El patrón tendría muchísimos más de {MAXIMO_OBJETOS} objetos: aumentá la distancia.")
+        raise geo.ErrorGeometria(f"Muchísimos más de {MAXIMO_OBJETOS} objetos.")
     cu, cv = (u0 + u1) / 2 + p["desfase_u"], (v0 + v1) / 2 + p["desfase_v"]
     if distribucion == "rectangular":
         us = _eje(u0, u1, p["alineacion_u"], p["desfase_u"], d, p["cantidad_u"], p["separacion"] == "extension",
@@ -116,7 +116,7 @@ def _puntos(distribucion, u0, u1, v0, v1, p):
         return pts
     rayos = int(p["rayos"])
     if rayos < 1:
-        raise geo.ErrorGeometria("La distribución radial necesita al menos un rayo.")
+        raise geo.ErrorGeometria("La distribución radial necesita un rayo.")
     pts = [(cu, cv)]
     k = 1
     while k * dr <= radio_max:
@@ -172,7 +172,7 @@ def patron_geometrico(cara, objeto, tamano1, tamano2, *, dispersion=1.0, distrib
                 limpiar_perimetro=True, desfase_perimetro=0.0)
     desconocidos = set(p) - set(base)
     if desconocidos:
-        raise geo.ErrorGeometria(f"Opciones desconocidas del patrón geométrico: {', '.join(sorted(desconocidos))}")
+        raise geo.ErrorGeometria(f"Opciones desconocidas del patrón: {', '.join(sorted(desconocidos))}")
     p = {**base, **p}
     if distribucion not in DISTRIBUCIONES:
         raise geo.ErrorGeometria(f"Distribución desconocida: {distribucion}")
@@ -181,9 +181,9 @@ def patron_geometrico(cara, objeto, tamano1, tamano2, *, dispersion=1.0, distrib
     if objeto == "personalizado" and personalizado is None:
         raise geo.ErrorGeometria("El objeto personalizado necesita un cuerpo.")
     if p["distancia"] <= 0 and distribucion in ("rectangular", "triangular", "hexagonal") and p["separacion"] == "incremento":
-        raise geo.ErrorGeometria("La distancia entre objetos tiene que ser positiva.")
+        raise geo.ErrorGeometria("La distancia entre objetos debe ser positiva.")
     if min(tamano1, tamano2) <= 0 or dispersion <= 0:
-        raise geo.ErrorGeometria("Los límites de tamaño y la dispersión tienen que ser positivos.")
+        raise geo.ErrorGeometria("Tamaño y dispersión deben ser positivos.")
     plano = sm._plano_de_cara(cara)
     if plano is None:
         raise geo.ErrorGeometria("El patrón geométrico necesita una cara plana.")
@@ -208,9 +208,9 @@ def patron_geometrico(cara, objeto, tamano1, tamano2, *, dispersion=1.0, distrib
             continue
         piezas.append((q, tam))
         if len(piezas) > MAXIMO_OBJETOS:
-            raise geo.ErrorGeometria(f"El patrón tendría más de {MAXIMO_OBJETOS} objetos: aumentá la distancia o el tamaño.")
+            raise geo.ErrorGeometria(f"El patrón tendría más de {MAXIMO_OBJETOS} objetos.")
     if not piezas:
-        raise geo.ErrorGeometria("Ningún objeto entra en la cara con esa distribución, ese tamaño y ese perímetro.")
+        raise geo.ErrorGeometria("Ningún objeto entra en la cara.")
     rot = np.column_stack([u, v, n]) if p["orientacion"] == "cara" else np.identity(3)
     formas = []
     for q, tam in piezas:

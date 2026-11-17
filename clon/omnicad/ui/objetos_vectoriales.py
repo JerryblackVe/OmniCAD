@@ -925,7 +925,7 @@ class PanelObjetos(QFrame):
                 x0, y0, x1, y1 = c.caja()
                 limites = np.array(((x0, y0), (x1, y0), (x1, y1), (x0, y1))) @ m[:2, :2].T + m[:2, 2]
                 if not np.isfinite(limites).all() or abs(limites).max() > 1e6:
-                    raise ErrorBoceto("El objeto transformado supera 1 km desde el origen del boceto.")
+                    raise ErrorBoceto("El objeto transformado supera 1 km.")
             self.error.clear()
             if previa:
                 c.previa, c.previa_pivote = m, p

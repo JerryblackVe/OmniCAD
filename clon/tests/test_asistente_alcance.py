@@ -13,7 +13,7 @@ from omnicad.asistente.herramientas import MODOS, NUCLEO, TOPE_BUSQUEDA, TOPE_RE
 from omnicad.asistente.proveedores.base import PedidoHerramienta, ProveedorFalso, Respuesta
 from omnicad.servidor_mcp.servidor import CALL_TOOL, FIND_TOOLS, crear_servidor
 
-TOPE_TOKENS = 25_330  # 2026-11-15: +20 por los 4 nombres de contactos (H-119: medido 25 316 y 25 322); 2026-11-14: +10 por el nombre get_properties en la lista del prompt (B-443); antes, 2026-11-05: subió con las carpetas del timeline (SC9) y la guía; recortar antes de volver a subir
+TOPE_TOKENS = 25_575  # 2026-11-17: +245 (B-615) por parámetros nuevos, sin texto redundante: extrude to_mode=adjacent y tangent_chain (H-82), fillet tangency_weight (H-115), create_hole other_part/print_clearance=general (P-156); medido 25 561 y 25 567. 2026-11-15: +20 por los 4 nombres de contactos (H-119: medido 25 316 y 25 322); 2026-11-14: +10 por el nombre get_properties en la lista del prompt (B-443); antes, 2026-11-05: subió con las carpetas del timeline (SC9) y la guía; recortar antes de volver a subir
 CATALOGO = {h["nombre"]: h for h in api.catalogo()}
 PROHIBIDAS = ["execute_code", "assistant_ask", next(h["nombre"] for h in api.catalogo("dev")), "no_existe",
               "call_tool", "find_tools"]

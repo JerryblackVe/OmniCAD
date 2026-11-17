@@ -46,14 +46,13 @@ def desfasar_aristas(aristas, plano, distancia, simetrico=False, esquinas="redon
     o "vivas" (se prolongan hasta cortarse). Levanta ErrorGeometria si la distancia es cero, las aristas no son
     paralelas al plano o el desfase desaparece."""
     if esquinas not in ESQUINAS:
-        raise geo.ErrorGeometria(f"Esquinas desconocidas: {esquinas} (redondas o vivas).")
+        raise geo.ErrorGeometria(f"Esquinas desconocidas: {esquinas}.")
     if abs(distancia) < 1e-9:
         raise geo.ErrorGeometria("La distancia del desfase no puede ser cero.")
     normal = np.asarray(plano.normal, float)
     alturas = [float(np.dot(p, normal)) for a in aristas for p in _muestras(a, 9)]
     if alturas and max(alturas) - min(alturas) > TOL_PLANO:
-        raise geo.ErrorGeometria("Las aristas no son paralelas al plano elegido: elegí la cara o el plano donde "
-                                 "están.")
+        raise geo.ErrorGeometria("Las aristas no son paralelas al plano.")
     union = GeomAbs_Arc if esquinas == "redondas" else GeomAbs_Intersection
     lados = (abs(distancia), -abs(distancia)) if simetrico else (float(distancia),)
     salida = []
@@ -107,8 +106,7 @@ def _offset(cadena, d, union, abierta):
     mk = BRepOffsetAPI_MakeOffset(cadena, union, abierta)
     mk.Perform(float(d))
     if not mk.IsDone() or mk.Shape().IsNull() or not refs.subformas(mk.Shape(), "arista"):
-        raise geo.ErrorGeometria(f"El desfase de {d:g} mm no se pudo calcular: ¿las aristas están en el plano elegido, "
-                                 "o el desfase hace desaparecer la curva?")
+        raise geo.ErrorGeometria(f"El desfase de {d:g} mm no se pudo calcular.")
     return mk.Shape()
 
 
@@ -142,12 +140,10 @@ def plano_de_aristas(aristas, tolerancia=1e-3):
     centro = puntos.mean(axis=0)
     _, valores, vt = np.linalg.svd(puntos - centro)
     if valores[1] < 1e-6 * max(valores[0], 1.0):
-        raise geo.ErrorGeometria("Las aristas están en línea recta: no definen un plano. Elegí también la cara o el "
-                                 "plano donde se hace el desfase.")
+        raise geo.ErrorGeometria("Las aristas en línea recta no dan plano.")
     normal = vt[2]
     if valores[2] / np.sqrt(len(puntos)) > tolerancia:
-        raise geo.ErrorGeometria("Las aristas no están en un mismo plano. Elegí también la cara o el plano donde se "
-                                 "hace el desfase.")
+        raise geo.ErrorGeometria("Las aristas no están en un mismo plano.")
     if normal[np.argmax(np.abs(normal))] < 0:
         normal = -normal
     return geo.Plano.desde_marco(centro, normal, vt[0])

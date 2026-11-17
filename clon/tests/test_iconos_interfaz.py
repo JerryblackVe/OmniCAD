@@ -64,7 +64,9 @@ def test_menu_aplica_iconos_a_mas_del_80_por_ciento_de_sus_textos(app_qt, monkey
     arbol.arbol = arbol
     estado = SimpleNamespace(cuerpos={"cuerpo": None}, componentes={},
                              bocetos={"boceto": SimpleNamespace(perfiles=[])})
-    ventana = SimpleNamespace(navegador=arbol, doc=SimpleNamespace(estado_final=estado, operaciones=[]),
+    # ASM-9: menu_raiz consulta el componente activo; el Documento real siempre expone este método.
+    ventana = SimpleNamespace(navegador=arbol, doc=SimpleNamespace(estado_final=estado, operaciones=[],
+                                                                   componente_activo=lambda: ""),
                               modo_boceto=SimpleNamespace(activo=False), ocultos=set(),
                               acciones={clave: QAction(arbol) for clave in ("configurar", "nuevo_dibujo", "grupo_rigido")})
     monkeypatch.setattr(navegador, "datos_navegador", lambda doc: {"grupos": {}})

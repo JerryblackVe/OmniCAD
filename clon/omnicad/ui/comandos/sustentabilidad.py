@@ -88,7 +88,7 @@ class Sustentabilidad(Comando):
         h = v.get("stock_cuerpo") or []
         c = ctx.estado.cuerpos[h[0]["ref"]["cuerpo"]] if modo == "cuerpo" and h else c
         if getattr(c, "tipo", "solido") != "solido":
-            raise geo.ErrorGeometria(f"«{c.nombre}» no es un sólido: no tiene volumen para estimar.")
+            raise geo.ErrorGeometria(f"«{c.nombre}» no es un sólido: sin volumen.")
         return geo.volumen(c.forma)
 
     def _resultado(self, v, ctx):

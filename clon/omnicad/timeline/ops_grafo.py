@@ -80,8 +80,7 @@ class OpGrafo(Operacion):
     def ejecutar(self, estado, ctx):
         datos = self.p.get("grafo")
         if not isinstance(datos, dict) or not datos.get("nodos"):
-            raise ErrorOperacion("El grafo está vacío: «grafo» lleva el JSON del grafo con su lista «nodos» "
-                                 "(list_graph_nodes muestra el formato).")
+            raise ErrorOperacion("El grafo está vacío: falta «nodos».")
         try:
             resultado = motor_para(datos).evaluar(self.p.get("entradas") or {}, ctx.valores)
         except ErrorGrafo as e:
@@ -99,8 +98,7 @@ class OpGrafo(Operacion):
             raise ErrorOperacion(str(e)) from e
         if not piezas:
             salidas = ", ".join(resultado.salidas) or "(ninguna)"
-            raise ErrorOperacion(f"El grafo no dio cuerpos: ninguna salida tiene un cuerpo (salidas: {salidas}). "
-                                 "Conectá un nodo de sólidos a un nodo «salida».")
+            raise ErrorOperacion(f"El grafo no dio cuerpos (salidas: {salidas}).")
         operacion = self.p.get("operacion", "nuevo")
         if operacion == "nuevo":
             for (_n, forma, tipo), nombre in zip(piezas, nombres_de_cuerpos(piezas), strict=True):

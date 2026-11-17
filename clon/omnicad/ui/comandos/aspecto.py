@@ -142,7 +142,7 @@ class Aspecto(Comando):
         if (rgb is not None or elegido is not None) and not (cuerpos or caras):
             raise ErrorComando("Seleccioná las caras." if v.get("aplicar_a") == "caras" else "Seleccioná los cuerpos.")
         if rgb is None and elegido is None and not hay_cambios:
-            raise ErrorComando("Elegí un aspecto de la biblioteca o de «En este diseño».")
+            raise ErrorComando("Elegí un aspecto o «En este diseño».")
         with api.Sesion(doc).transaccion():          # un solo paso de deshacer para todo lo que hace Aceptar
             try:
                 ad.aplicar_panel(doc, diseno if hay_cambios else None, elegido, cuerpos, caras, rgb,

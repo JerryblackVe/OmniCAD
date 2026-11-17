@@ -1599,14 +1599,13 @@ def _auto(b, valores_cotas, tol_angulo, tol_distancia, tipos, limite, datum, exc
     (sugerencias, gdl inicial, gdl final)."""
     tipos = set(TIPOS_AUTO if tipos is None else tipos)
     if tipos - set(TIPOS_AUTO):
-        raise ErrorBoceto(f"Tipo de restricción desconocido: {', '.join(sorted(tipos - set(TIPOS_AUTO)))}. "
-                          f"Los válidos son: {', '.join(TIPOS_AUTO)}.")
+        raise ErrorBoceto(f"Tipo desconocido: {', '.join(sorted(tipos - set(TIPOS_AUTO)))}. "
+                          f"Válidos: {', '.join(TIPOS_AUTO)}.")
     if datum is not None and datum not in b.puntos:
         raise ErrorBoceto(f"El datum {datum} no es un punto del boceto.")
     cantidad = contar_entidades(b)
     if cantidad > TOPE_AUTO_RESTRINGIR:
-        raise ErrorBoceto(f"El boceto tiene {cantidad} entidades; el tope para restringir automáticamente es "
-                          f"{TOPE_AUTO_RESTRINGIR}. Simplificá o dividí el boceto.")
+        raise ErrorBoceto(f"Boceto: {cantidad} entidades; tope {TOPE_AUTO_RESTRINGIR}; dividí")
     excluir = set(excluir)
     valores = dict(valores_cotas or {})
     salida = []

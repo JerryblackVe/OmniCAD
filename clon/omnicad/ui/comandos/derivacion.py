@@ -82,9 +82,9 @@ class InsertarDerivacion(Comando):
     def construir(self, v, ctx):
         ruta = Path((v.get("archivo") or "").strip()).expanduser()
         if ruta.suffix.lower() not in proyecto.EXTENSIONES or not ruta.is_file():
-            raise ErrorComando("Elegí un proyecto de origen .omnicad (o .fclone) existente.")
+            raise ErrorComando("Elegí un .omnicad o .fclone existente.")
         if not any(v.get(k) for k in ("cuerpos", "bocetos", "parametros")):
-            raise ErrorComando("Elegí al menos un cuerpo, boceto o parámetro del origen.")
+            raise ErrorComando("Elegí un cuerpo, boceto o parámetro.")
         return self.crear_op(OpDerivacion, v, ctx, archivo=str(ruta.resolve()),
                              **{k: list(v.get(k) or []) for k in ("cuerpos", "bocetos", "parametros")})
 

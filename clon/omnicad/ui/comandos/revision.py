@@ -159,8 +159,7 @@ class RevisarGeometria(Comando):
         ctx.evaluar(v["tolerancia"])                      # una tolerancia mal escrita se avisa en el panel
         ids = _ids(v) or [c.id for c, g, _imp in self.calcular(v, ctx) if g["errores"] or g["avisos"]]
         if not ids:
-            raise ErrorComando("Ningún cuerpo tiene problemas de geometría: no hace falta reparar. Destildá «Reparar "
-                               "al aceptar» para cerrar.")
+            raise ErrorComando("Ningún cuerpo con problemas de geometría.")
         op = OpReparar(ctx.doc.nuevo_id(), RepararCuerpo().nombre_nuevo(ctx), cuerpos=ids, tolerancia=v["tolerancia"])
         (ctx.ventana._agregar if ctx.ventana else ctx.doc.agregar)(op)
 

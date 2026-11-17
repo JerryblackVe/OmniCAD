@@ -215,8 +215,7 @@ def suprimir(doc, ref, quitar_usos=False):
         raise geo.ErrorGeometria(f"El diseño no tiene un aspecto «{ref}».")
     cuerpos, caras = usos(doc, anterior["id"])
     if (cuerpos or caras) and not quitar_usos:
-        raise geo.ErrorGeometria(f"«{anterior['nombre']}» lo usan {len(cuerpos)} cuerpo(s) y {len(caras)} cara(s): "
-                                 "quitáselo primero o pedí que se quite de todos.")
+        raise geo.ErrorGeometria(f"«{anterior['nombre']}»: {len(cuerpos)} cuerpos y {len(caras)} caras.")
     cambios = {CLAVE: {"lista": [a for a in lista(doc) if a["id"] != anterior["id"]]}}
     doc.set_propiedades(cambios)
     if cuerpos or caras:
@@ -259,7 +258,7 @@ def reemplazar_lista(doc, nueva, quitar_usos=()):
         if not (cuerpos or caras):
             continue
         if anterior["id"] not in quitar_usos:
-            raise geo.ErrorGeometria(f"«{anterior['nombre']}» todavía se usa: no se puede sacar del diseño.")
+            raise geo.ErrorGeometria(f"«{anterior['nombre']}» todavía se usa.")
         _limpiar_usos(doc, cambios, cuerpos, caras)
     doc.set_propiedades({CLAVE: {"lista": destino}, **cambios})
     return mapa

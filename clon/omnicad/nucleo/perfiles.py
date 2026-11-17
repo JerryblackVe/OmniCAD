@@ -457,7 +457,7 @@ def _cara_de_objeto(perfil, matriz4):
         return perfil.cara
     caras = geo.caras(transformar(perfil.cara, matriz4))
     if len(caras) != 1:
-        raise geo.ErrorGeometria("La transformación del perfil no produjo una única cara.")
+        raise geo.ErrorGeometria("La transformación del perfil no dio una cara.")
     return caras[0]
 
 
@@ -705,8 +705,7 @@ _TOPE_ENCIMADAS_RUST = 500
 
 
 def _encimadas(n):
-    return geo.ErrorGeometria(f"Demasiadas curvas encimadas ({n}): separá las copias (más distancia o «Espaciado») "
-                              "o borrá las repetidas.")
+    return geo.ErrorGeometria(f"Demasiadas curvas encimadas ({n}).")
 
 
 def _cajas_uv(geometria):
@@ -846,7 +845,7 @@ def _partir_cruces(caras, aristas):
         for k, (t0, t1) in enumerate(zip(ts[:-1], ts[1:], strict=True)):
             creador = BRepBuilderAPI_MakeEdge(curva, vertices[k], vertices[k + 1], t0, t1)
             if not creador.IsDone():
-                raise geo.ErrorGeometria("No se pudo partir una curva en el cruce de los perfiles del boceto.")
+                raise geo.ErrorGeometria("No se pudo partir una curva en el cruce.")
             salida.append((cid, creador.Edge()))
     return salida
 
@@ -867,7 +866,7 @@ def _perfiles_occ(geometria, plano, aristas, tolerancia):
     sp.SetNonDestructive(True)   # B-48: no escribir en las entradas
     sp.Build()
     if not sp.IsDone():
-        raise geo.ErrorGeometria("No se pudieron calcular los perfiles del boceto.")
+        raise geo.ErrorGeometria("No se calcularon los perfiles del boceto.")
     aristas_de = _sin_despacho(_aristas_de)
     caras = list(geo.caras(sp.Shape()))
     por_cara = [aristas_de(c) for c in caras]            # una sola pasada por las aristas de cada cara
@@ -1535,7 +1534,7 @@ def intersecar_forma(forma, plano):
     sec = BRepAlgoAPI_Section(forma, gp_Pln(plano.pnt(0, 0), gp_Dir(*plano.normal)))
     sec.Build()
     if not sec.IsDone():
-        raise geo.ErrorGeometria("No se pudo intersecar con el plano del boceto.")
+        raise geo.ErrorGeometria("No se pudo intersecar el plano del boceto.")
     a_uv = lambda p: plano.a_uv((p.X(), p.Y(), p.Z()))  # noqa: E731
     prims = []
     for e in _con_meridianos(_aristas_unicas(sec.Shape()), forma, plano, en_el_plano=True):    # B-619a
@@ -1573,7 +1572,7 @@ def proyectar_giro_forma(forma, plano, eje, tolerancia=0.1, invertir=False, mues
     d2 = d - n * float(d @ n)
     largo = float(np.linalg.norm(d2))
     if largo < 1e-9:
-        raise geo.ErrorGeometria("El eje es perpendicular al plano del boceto: no hay perfil giratorio que proyectar.")
+        raise geo.ErrorGeometria("Eje perpendicular: no hay perfil giratorio.")
     d2 = d2 / largo
     v2 = np.cross(n, d2)
     lado = float(v2 @ plano.u) if abs(float(v2 @ plano.u)) > 1e-9 else float(v2 @ plano.v)

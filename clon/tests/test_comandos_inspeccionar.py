@@ -157,7 +157,7 @@ def test_revisar_geometria_informa_marca_y_repara():
     assert geo.es_valida(doc.estado_final.cuerpos[roto.id].forma)
     assert POR_TIPO["reparar_cuerpo"] is RepararCuerpo and comando_para(doc.operaciones[-1]) is RepararCuerpo
     ctx = ContextoComando(doc)
-    with pytest.raises(ErrorComando, match="no hace falta reparar"):
+    with pytest.raises(ErrorComando, match="Ningún cuerpo con problemas de geometría"):
         RevisarGeometria().aplicar(dict(_valores(cmd, ctx), reparar=True), ctx)
 
 

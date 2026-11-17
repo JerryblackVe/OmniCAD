@@ -94,7 +94,7 @@ class InsertarEnBoceto(Comando):
         escala = tr.get("escala", 1.)
         if tr.get("ancho") is not None:
             if self._caja is None or self._caja[1][0] - self._caja[0][0] <= 1e-12 or tr["ancho"] <= 0:
-                raise ErrorComando("El ancho tiene que ser positivo y el dibujo debe tener ancho.")
+                raise ErrorComando("El ancho y el dibujo deben ser positivos.")
             escala = tr["ancho"] / (self._caja[1][0] - self._caja[0][0])
         if escala <= 0:
             raise ErrorComando("La escala tiene que ser positiva.")
@@ -105,7 +105,7 @@ class InsertarEnBoceto(Comando):
         matriz = np.column_stack((np.asarray(f((1., 0.))) - origen, np.asarray(f((0., 1.))) - origen))
         uv = self._muestras @ matriz.T + origen
         if not np.isfinite(uv).all() or abs(uv).max(initial=0) > 1e6:
-            raise ErrorComando("El dibujo transformado supera 1 km desde el origen del boceto.")
+            raise ErrorComando("El dibujo supera 1 km desde el origen.")
         plano = self.lienzo.plano
         return plano.origen + uv[:, :1] * plano.u + uv[:, 1:] * plano.v
 
@@ -141,7 +141,7 @@ class InsertarEnBoceto(Comando):
         finally:
             lz.eje = eje
         if not ok:
-            raise ErrorComando("No se pudo sumar el dibujo al boceto (entra en conflicto con sus restricciones).")
+            raise ErrorComando("El dibujo choca con las restricciones.")
         self.agregadas = len(lz.b.curvas) - antes
         from ...restricciones import objetos
         nuevos = [i for i in objetos.raices(lz.b) if i not in objetos_antes]
