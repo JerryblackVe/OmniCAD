@@ -3,7 +3,7 @@
 # Cola: archivos `$COLA/NN_nombre.tarea` (orden alfabético) con líneas que se leen con `source`:
 #   WT=/home/mosos/OmniCAD-<ID>   BRIEF=/ruta/al/brief.md   MODELO=opencode/glm-5.3-flash-free (opcional)
 #   VARIANTE=high (opcional: esfuerzo de `opencode run --variant`; sin ella, el del modelo)
-# - Corre hasta $MAX corridas a la vez, de modelos distintos: 2 de OpenCode (el lanzador de E9 ocupa una) y la 3.ª en CodeBuddy.
+# - Corre hasta $MAX corridas a la vez, de modelos distintos: 2 de OpenCode (el lanzador de E9 ocupa una) y 2 en CodeBuddy.
 #   Salida en $COLA/logs/<nombre>.log; al terminar bien la tarea pasa a hechos/.
 # - Falla (trabada 20 min sin escribir, límite/429/cupo, o termina con error): respaldo (tgz) y relanza la MISMA
 #   tarea con el siguiente modelo que responda (orden del Protocolo de OpenCode) y un brief que sigue desde ahí.
@@ -18,7 +18,7 @@ MIN=${VIGIA_MIN:-20}
 CB=${VIGIA_CB:-$HOME/.local/cb/codebuddy}   # CodeBuddy (Node 22 propio); sus modelos van con «cb:»
 MODELOS=(opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free nvidia/minimaxai/minimax-m3.1-flash cb:deepseek-v4.1-flash cb:hy3)
 CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound'
-MAX=${VIGIA_MAX:-3}   # 2 de OpenCode + 1 de CodeBuddy (otro cupo)
+MAX=${VIGIA_MAX:-4}   # 2 de OpenCode + 2 de CodeBuddy (otro cupo)
 LOG=$COLA/vigia.log; EST=$COLA/corriendo   # un archivo por corrida: «nombre intento modelo pid»
 mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs" "$EST"
 anota() { echo "$(date -u '+%F %T') $*" >> "$LOG"; }
@@ -87,7 +87,7 @@ while [ "$usadas" -lt "$MAX" ]; do
   fi
   n=$(basename "$siguiente" .tarea); MODELO=; source "$siguiente"
   m=${MODELO:-${MODELOS[0]}}
-  [ "$usadas" -ge 2 ] && [ "${m#cb:}" = "$m" ] && m=cb:deepseek-v4.1-flash   # la 3.ª va a CodeBuddy
+  [ "$usadas" -ge 2 ] && [ "${m#cb:}" = "$m" ] && m=cb:deepseek-v4.1-flash   # la 3.ª y la 4.ª van a CodeBuddy
   usado "$m" && m=$(siguiente_modelo "$m")   # el primer intento no se prueba antes: los gratis tardan 1–2 min en contestar; si falla, lo agarra la vuelta siguiente
   [ -z "$m" ] && { anota "ningún modelo libre responde: espero a la próxima vuelta"; exit 0; }
   lanza "$n" 1 "$m"; usadas=$((usadas + 1))
