@@ -1604,8 +1604,8 @@ class OpRestriccion(Operacion):
         acotado = acotado if hi is None else min(acotado, hi)
         if abs(acotado - valor) > 1e-9:
             if p.get("apoyo"):
-                raise ErrorOperacion(f"Desfase ({valor:g}) fuera del límite "
-                                     f"({'mínimo' if acotado == lo else 'máximo'} {acotado:g}).")
+                raise ErrorOperacion(f"Desfase {valor:g}: límite "
+                                     f"{'mínimo' if acotado == lo else 'máximo'} {acotado:g}.")
             aviso = f"El desfase {valor:g} queda fuera de los límites: se usa {acotado:g}."
             if aviso not in ctx.avisos:             # un conjunto de filas recalcula cada fila varias veces
                 ctx.aviso(aviso)

@@ -592,7 +592,7 @@ def test_limites_de_desfase_recortan_avisan_y_con_apoyo_fallan(dos):
     assert _caja(s, b)[0] == 14
     _ll(s, "undo")
     r = _falla(s, "constrain_components", "OPERATION_FAILED", offset=8, offset_max=5, offset_as_rest=True, **args)
-    assert "fuera del límite" in r["mensaje"] and "máximo 5" in r["mensaje"]
+    assert "límite máximo 5" in r["mensaje"]
     r = _falla(s, "constrain_components", "OPERATION_FAILED", offset=4, offset_min=6, offset_max=5, **args)
     assert "mayor que máximo" in r["mensaje"]
     _falla(s, "constrain_components", "OPERATION_FAILED", type="angle", offset=30, offset_max=45, **args)      # el ángulo pide referencia
