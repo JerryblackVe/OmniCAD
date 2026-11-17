@@ -1364,6 +1364,74 @@ def silueta_forma(forma, plano, tolerancia=1e-4):
     return salida
 
 
+def _meridianos(forma, plano, en_el_plano=False):
+    """B-619: una cara de revolución con el eje paralelo al plano tiene por silueta los dos meridianos cuyo plano es
+    paralelo al del boceto (el perfil girado): exactos, con los polos del perfil. El HLR da exacto solo el que cae en la
+    costura (una arista real) y aproxima el otro con decenas de polos y desvío. Devuelve las aristas en el plano del
+    boceto. Con `en_el_plano`, solo las caras cuyo eje está en el plano (el corte de Intersecar). shortcut: toma el
+    rectángulo UV de la cara (las de una revolución lo son); una cara recortada en diagonal daría un meridiano de más
+    largo."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.BRepTools import BRepTools
+    from OCP.GeomAbs import GeomAbs_SurfaceOfRevolution
+    from OCP.gp import gp_Trsf, gp_Vec
+    n = np.asarray(plano.normal, float)
+    salida = []
+    for cara in geo.caras(forma):
+        if BRepAdaptor_Surface(cara).GetType() != GeomAbs_SurfaceOfRevolution:
+            continue
+        eje = BRepAdaptor_Surface(cara).AxeOfRevolution()
+        d, p = np.array(eje.Direction().Coord()), np.array(eje.Location().Coord())
+        lejos = float((p - plano.origen) @ n)
+        if abs(float(d @ n)) > 1e-9 or en_el_plano and abs(lejos) > 1e-7:
+            continue                                     # el eje no es paralelo al plano: queda el HLR
+        sup = BRep_Tool.Surface_s(cara)
+        u0, u1, v0, v1 = BRepTools.UVBounds_s(cara)
+
+        def radial(u, v, sup=sup, p=p, d=d):
+            q = np.array(sup.Value(u, v).Coord()) - p
+            return q - d * float(q @ d)
+        v = max(np.linspace(v0, v1, 9), key=lambda v: float(np.linalg.norm(radial(0.0, v))))
+        r0, r90 = radial(0.0, v), radial(math.pi / 2, v)    # el giro: r(u) = r0·cos u + r90·sen u
+        if np.linalg.norm(r0) < 1e-9:
+            continue
+        mover = gp_Trsf()
+        mover.SetTranslation(gp_Vec(*(-n * lejos)))     # el meridiano, paralelo al plano: se traslada
+        base = math.atan2(-float(r0 @ n), float(r90 @ n))
+        for u in (base, base + math.pi):
+            u = u0 + (u - u0) % (2 * math.pi)
+            if u <= u1 + 1e-9:
+                arista = BRepBuilderAPI_MakeEdge(sup.UIso(u), v0, v1).Edge()
+                salida.append(TopoDS.Edge(BRepBuilderAPI_Transform(arista, mover, True).Shape()))
+    return salida
+
+
+def _con_meridianos(aristas, forma, plano, en_el_plano=False):
+    """`aristas` (ya en el plano del boceto) sin las que caen sobre un meridiano exacto (`_meridianos`), más esos
+    meridianos: el contorno o el corte aproximado de OpenCascade queda cambiado por el perfil girado. Holgura: el contorno
+    del HLR se aparta ~0,1 % del tamaño (0,5 %); el corte, < 0,01 % (más ajustada: una pared fina no se pierde)."""
+    from OCP.GCPnts import GCPnts_AbscissaPoint
+    meridianos = _meridianos(forma, plano, en_el_plano)
+    caja = geo.caja_envolvente(forma)
+    if not meridianos or not caja:
+        return aristas
+    tol = math.dist(*caja) * (1e-4 if en_el_plano else 5e-3)
+    muestras = np.array([c.Value(t).Coord() for c in map(BRepAdaptor_Curve, meridianos)
+                         for t in np.linspace(c.FirstParameter(), c.LastParameter(),
+                                              min(20000, int(GCPnts_AbscissaPoint.Length_s(c) / tol) + 2))])
+    return [a for a in aristas if not _sobre(a, muestras, 1.5 * tol)] + meridianos
+
+
+def _sobre(arista, muestras, tol):
+    """True si toda la arista cae a menos de `tol` de los puntos `muestras` (meridianos muestreados cada `tol`)."""
+    c = BRepAdaptor_Curve(arista)
+    for t in np.linspace(c.FirstParameter(), c.LastParameter(), 16):
+        if float(np.min(np.linalg.norm(muestras - np.array(c.Value(t).Coord()), axis=1))) > tol:
+            return False
+    return True
+
+
 def _a_vertices(prim, arista, a_uv):
     """La unión difusa mueve los vértices hasta la holgura y deja la curva como estaba: los extremos de una línea o de
     una spline van a los vértices de la arista, para que el boceto los comparta y el perfil cierre."""
@@ -1401,6 +1469,7 @@ def _silueta(forma, plano, tolerancia, caja):
                 normal=[float(x) for x in plano.normal], u=[float(x) for x in plano.u])))
         except aislado.TareaAislada:
             return _silueta_malla(forma, plano, caja)
+    aristas = _con_meridianos(aristas, forma, plano)
     if not aristas:
         return proyectar_forma(forma, plano)            # sin área a la vista (un punto, una arista suelta)
     normal = gp_Dir(*map(float, plano.normal))
@@ -1469,7 +1538,7 @@ def intersecar_forma(forma, plano):
         raise geo.ErrorGeometria("No se pudo intersecar con el plano del boceto.")
     a_uv = lambda p: plano.a_uv((p.X(), p.Y(), p.Z()))  # noqa: E731
     prims = []
-    for e in _aristas_unicas(sec.Shape()):
+    for e in _con_meridianos(_aristas_unicas(sec.Shape()), forma, plano, en_el_plano=True):    # B-619a
         prim = arista_a_primitiva(e, a_uv, tuple(plano.normal))
         if prim is not None:
             prims.append(prim)
