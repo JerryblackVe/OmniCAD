@@ -13,7 +13,8 @@ anota() { echo "$(date -u '+%F %T') $*" >> "$LOG"; }
 
 corridas=$(pgrep -f "^[^ ]*/opencode run " || true)     # solo el binario: un comando que nombre «opencode run» (un grep) no cuenta
 if [ -n "$corridas" ]; then
-  if [ -z "$(find "$LOGS" "$COLA/logs" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; then
+  # el log de la corrida casi no se escribe hasta el final; el propio de opencode sí, mientras trabaja
+  if [ -z "$(find "$LOGS" "$COLA/logs" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; then
     anota "trabada: sin escribir hace más de $MIN min; mato opencode run ($(echo $corridas))"
     kill $corridas 2>/dev/null; sleep 5; kill -9 $corridas 2>/dev/null
   fi
