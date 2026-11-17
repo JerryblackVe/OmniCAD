@@ -1265,8 +1265,8 @@ class Visor3D(QOpenGLWidget):
         mn, mx = caja
         uv = np.array([plano.a_uv(np.array([x, y, z])) for x in (mn[0], mx[0]) for y in (mn[1], mx[1]) for z in (mn[2], mx[2])])
         u0, v0 = np.minimum(uv.min(0), 0.0)
-        u1, v1 = np.maximum(uv.max(0), L)
-        m = 0.1 * max(u1 - u0, v1 - v0)
+        u1, v1 = np.maximum(uv.max(0), 0.0)   # B-626: el tamaño sale de la pieza, no del zoom
+        m = 0.15 * max(u1 - u0, v1 - v0, 0.1 * L)   # el piso 0,1·L es solo por si la pieza es un punto
         return (float(u0 - m) if u0 < 0 else 0.0, float(v0 - m) if v0 < 0 else 0.0, float(u1 + m), float(v1 + m))
 
     def planos_elegibles(self):
