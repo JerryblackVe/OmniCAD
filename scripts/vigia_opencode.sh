@@ -20,13 +20,13 @@ MODELOS=(opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free nvidia/mi
 CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound'
 MAX=${VIGIA_MAX:-4}   # 2 de OpenCode + 2 de CodeBuddy (otro cupo)
 LOG=$COLA/vigia.log; EST=$COLA/corriendo   # un archivo por corrida: «nombre intento modelo pid»
-mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs" "$EST"
+mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs" "$COLA/reserva" "$EST"
 anota() { echo "$(date -u '+%F %T') $*" >> "$LOG"; }
 quieto() {   # nada escribió en $MIN minutos (el log de la corrida casi no se escribe hasta el final; el de opencode sí)
   [ -z "$(find "$@" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; }
 ultimo() { awk '/^=== intento /{b=""} {b=b $0 "
 "} END{printf "%s", b}' "$COLA/logs/$1.log" 2>/dev/null | tail -20; }  # solo el intento actual
-usado() { grep -qs " $1 " "$EST"/* || pgrep -f -- "run -m $1 |--model ${1#cb:} " > /dev/null; }   # lo corre alguien (la cola o un lanzador de E9)
+usado() { grep -qs " $1 " "$EST"/* || pgrep -f -- "$OC run -m $1 |$CB -p -y --model ${1#cb:} " > /dev/null; }   # lo corre alguien (la cola o un lanzador de E9)
 cmd() { case $1 in cb:*) echo "$CB -p -y --model ${1#cb:}";; *) echo "$OC run -m $1";; esac; }   # modelo -> comando
 responde() { timeout 150 $(cmd "$1") "Respondé solo la palabra OK" 2>/dev/null | grep -qi OK; }
 siguiente_modelo() {   # modelo_actual -> el próximo de la lista que responde (o vacío)
@@ -77,6 +77,12 @@ mios=$(cat "$EST"/* 2>/dev/null | awk '{print $4}')
 ajenas=$(for p in $(pgrep -f "^$OC run "); do g=$(ps -o pgid= -p "$p" | tr -d ' '); echo "$mios" | grep -qx "$g" || echo "$p"; done)
 [ -n "$ajenas" ] && quieto "$LOGS" && { anota "trabada fuera de la cola: mato $(echo $ajenas)"; kill $ajenas 2>/dev/null; ajenas=; }
 
+# Reserva: el coordinador deja muchas tareas en reserva/ y acá se pasan a la cola hasta tener 8 (no depende de ninguna sesión).
+for t in $(ls "$COLA"/reserva/*.tarea 2>/dev/null); do
+  [ "$(ls "$COLA"/*.tarea 2>/dev/null | wc -l)" -ge 8 ] && break
+  mv "$t" "$COLA/" && anota "de reserva a la cola: $(basename "$t")"
+done
+[ "$(ls "$COLA"/reserva/*.tarea 2>/dev/null | wc -l)" -lt 8 ] && anota "AVISO reserva con menos de 8 tareas"
 usadas=$(ls "$EST" | wc -l)
 { [ -n "$ajenas" ] || pgrep -f "${VIGIA_LANZ:-lanzador.sh}" > /dev/null; } && usadas=$((usadas + 1))
 while [ "$usadas" -lt "$MAX" ]; do

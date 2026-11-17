@@ -35,5 +35,9 @@ VIGIA_MAX=2 bash "$V"; sleep 1
 [ "$(cat $T/cola/corriendo/* | awk '{print $3}' | sort -u | wc -l)" = 2 ] || { echo "FALLA 8: mismo modelo en las 2"; ok=0; }
 sleep 9; VIGIA_MAX=2 bash "$V"
 [ -f $T/cola/hechos/04_b.tarea ] && grep -q "falla 03_a.*relanzo" $T/cola/vigia.log || { echo "FALLA 9: no cerró la buena o no reintentó la de GLM (429 falso)"; ok=0; }
+# reserva: pasa a la cola hasta 8
+for x in $(seq 10 19); do printf WT=%snBRIEF=%sn $T/wt $T/brief > $T/cola/reserva/r$x.tarea; done
+VIGIA_MAX=0 bash "$V"
+[ "$(ls $T/cola/*.tarea | wc -l)" = 8 ] || { echo "FALLA 10: la reserva no llenó la cola a 8"; ok=0; }
 [ $ok = 1 ] && echo "PRUEBA OK" || { cat $T/cola/vigia.log; exit 1; }
 rm -rf $T
