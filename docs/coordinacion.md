@@ -158,7 +158,7 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   crear <ID>` crea la rama `item/<ID>` y la carpeta `<repo>-<ID>` (usa el `clon/.venv` del repo principal) y, ya fusionada
   la rama, `bash scripts/worktree_item.sh borrar <ID>` borra las dos. Los briefs siguen `docs/brief.md`.
 
-## Protocolo de OpenCode (Gerardo, 2026-11-16)
+## Protocolo de OpenCode y CodeBuddy (Gerardo, 2026-11-16 y 17; regla 18 de CLAUDE.md)
 Meta: OpenCode trabaja **siempre**. Sus modelos son gratis y ahorran el cupo de Claude. Esta sección es la única regla
 de OpenCode; las demás la enlazan.
 - **Modelo según el trabajo** (los tres andan con `opencode run` en la VPS, probados el 16/11):
