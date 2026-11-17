@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prueba en seco del vigía con un opencode falso. Sale 0 si todo pasa.
-set -u; T=$(mktemp -d); export VIGIA_COLA=$T/cola VIGIA_LOGS=$T/e9 VIGIA_OC=$T/oc VIGIA_LANZ=lanzador_de_prueba_inexistente
+set -u; T=$(mktemp -d); export VIGIA_COLA=$T/cola VIGIA_LOGS=$T/e9 VIGIA_OC=$T/oc VIGIA_LANZ=lanzador_de_prueba_inexistente VIGIA_MAX=1
 mkdir -p $T/cola $T/e9 $T/wt; (cd $T/wt && git init -q)
 cat > $T/oc <<'EOF'
 #!/usr/bin/env bash
@@ -25,5 +25,15 @@ sed -i 's/echo "trabajo hecho"; exit 0/echo "rate limit"; exit 1/' $T/oc
 for i in 1 2 3 4 5; do vuelta; done
 grep -q "TRABADA 02_y" $T/cola/vigia.log && [ -f $T/cola/trabadas/02_y.tarea ] || { echo "FALLA 5: no la pasó a trabadas"; ok=0; }
 grep -q "relanzo con nvidia/minimaxai" $T/cola/vigia.log || { echo "FALLA 6: no salteó al que no responde"; ok=0; }
+# en paralelo: 2 tareas lentas, 2 corridas a la vez y de modelos distintos
+rm -f $T/ds_muerto; sed -i 's/echo "rate limit"; exit 1/sleep 8; echo listo; exit 0/' $T/oc
+for x in 03_a 04_b; do printf 'WT=%s
+BRIEF=%s
+' $T/wt $T/brief > $T/cola/$x.tarea; done
+VIGIA_MAX=2 bash "$V"; sleep 1
+[ "$(ls $T/cola/corriendo | wc -l)" = 2 ] || { echo "FALLA 7: no lanzó 2 a la vez"; ok=0; }
+[ "$(cat $T/cola/corriendo/* | awk '{print $3}' | sort -u | wc -l)" = 2 ] || { echo "FALLA 8: mismo modelo en las 2"; ok=0; }
+sleep 9; VIGIA_MAX=2 bash "$V"
+[ -f $T/cola/hechos/04_b.tarea ] && grep -q "falla 03_a.*relanzo" $T/cola/vigia.log || { echo "FALLA 9: no cerró la buena o no reintentó la de GLM (429 falso)"; ok=0; }
 [ $ok = 1 ] && echo "PRUEBA OK" || { cat $T/cola/vigia.log; exit 1; }
 rm -rf $T

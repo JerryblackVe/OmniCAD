@@ -3,7 +3,8 @@
 # Cola: archivos `$COLA/NN_nombre.tarea` (orden alfabético) con líneas que se leen con `source`:
 #   WT=/home/mosos/OmniCAD-<ID>   BRIEF=/ruta/al/brief.md   MODELO=opencode/glm-5.3-flash-free (opcional)
 #   VARIANTE=high (opcional: esfuerzo de `opencode run --variant`; sin ella, el del modelo)
-# - Corre una tarea a la vez (salida en $COLA/logs/<nombre>.log). Al terminar bien pasa a hechos/.
+# - Corre hasta $MAX corridas a la vez (Protocolo: 2 en la VPS, de modelos distintos; el lanzador de E9 ocupa una).
+#   Salida en $COLA/logs/<nombre>.log; al terminar bien la tarea pasa a hechos/.
 # - Falla (trabada 20 min sin escribir, límite/429/cupo, o termina con error): respaldo (tgz) y relanza la MISMA
 #   tarea con el siguiente modelo que responda (orden del Protocolo de OpenCode) y un brief que sigue desde ahí.
 #   Tras probar los 3 modelos, pasa a trabadas/ y sigue la cola.
@@ -16,8 +17,9 @@ OC=${VIGIA_OC:-$HOME/.opencode/bin/opencode}
 MIN=${VIGIA_MIN:-20}
 MODELOS=(opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free nvidia/minimaxai/minimax-m3.1-flash)
 CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound'
-LOG=$COLA/vigia.log; EST=$COLA/actual
-mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs"
+MAX=${VIGIA_MAX:-2}
+LOG=$COLA/vigia.log; EST=$COLA/corriendo   # un archivo por corrida: «nombre intento modelo pid»
+mkdir -p "$COLA/hechos" "$COLA/trabadas" "$COLA/logs" "$EST"
 anota() { echo "$(date -u '+%F %T') $*" >> "$LOG"; }
 quieto() {   # nada escribió en $MIN minutos (el log de la corrida casi no se escribe hasta el final; el de opencode sí)
   [ -z "$(find "$@" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; }
@@ -27,14 +29,16 @@ responde() { timeout 90 "$OC" run -m "$1" "Respondé solo la palabra OK" 2>/dev/
 siguiente_modelo() {   # modelo_actual -> el próximo de la lista que responde (o vacío)
   local i j m
   for i in "${!MODELOS[@]}"; do [ "${MODELOS[$i]}" = "$1" ] && break; done
-  for j in 1 2 3; do m=${MODELOS[$(( (i + j) % ${#MODELOS[@]} ))]}; responde "$m" && { echo "$m"; return; }; done; }
+  for j in 1 2 3; do m=${MODELOS[$(( (i + j) % ${#MODELOS[@]} ))]}
+    grep -qs " $m " "$EST"/* && [ "$m" != "$1" ] && continue   # otro modelo que el de la corrida de al lado
+    responde "$m" && { echo "$m"; return; }; done; }
 lanza() {    # nombre intento modelo [brief extra]
   local n=$1 k=$2 m=$3 extra=$4 v=; VARIANTE=; source "$COLA/$n.tarea"
   [ -n "$VARIANTE" ] && v="--variant $VARIANTE"
   { [ -n "$extra" ] && echo "$extra"; cat "$BRIEF"; } > "$COLA/logs/$n.brief$k.md"
   echo "=== intento $k ($m)" >> "$COLA/logs/$n.log"
   setsid nohup bash -c "cd '$WT' && timeout 1500 '$OC' run -m '$m' $v \"\$(cat '$COLA/logs/$n.brief$k.md')\" >> '$COLA/logs/$n.log' 2>&1; echo \"rc=\$?\" >> '$COLA/logs/$n.log'" < /dev/null > /dev/null 2>&1 &
-  echo "$n $k $m $!" > "$EST"; anota "lanzo $n (intento $k, $m, esfuerzo ${VARIANTE:-del modelo}, pid $!)"
+  echo "$n $k $m $!" > "$EST/$n"; anota "lanzo $n (intento $k, $m, esfuerzo ${VARIANTE:-del modelo}, pid $!)"
 }
 reintenta() {   # nombre intento modelo motivo
   local n=$1 k=$2 m=$3 sig; source "$COLA/$n.tarea"
@@ -42,42 +46,45 @@ reintenta() {   # nombre intento modelo motivo
   sig=$( [ "$k" -lt "${#MODELOS[@]}" ] && siguiente_modelo "$m" )
   if [ -z "$sig" ]; then
     anota "TRABADA $n ($4): sin más modelos que prueben; pasa a trabadas/ (respaldos en logs/)"
-    mv "$COLA/$n.tarea" "$COLA/trabadas/"; rm -f "$EST"; return
+    mv "$COLA/$n.tarea" "$COLA/trabadas/"; rm -f "$EST/$n"; return
   fi
   anota "falla $n (intento $k, $m: $4): relanzo con $sig"
   lanza "$n" $((k + 1)) "$sig" "Ya hay trabajo hecho en $WT: leé \`git diff\` del worktree y las últimas 40 líneas de $COLA/logs/$n.log; seguí desde ahí, no rehagas."
 }
 
-if [ -f "$EST" ]; then
-  read -r n k m pid < "$EST"
+for f in "$EST"/*; do
+  [ -f "$f" ] || continue
+  read -r n k m pid < "$f"
   if kill -0 "$pid" 2>/dev/null; then
     if ultimo "$n" | grep -qiE "$CORTE"; then motivo="límite o cupo del modelo"
     elif quieto "$COLA/logs/$n.log"; then motivo="$MIN min sin escribir"
-    else exit 0; fi
+    else continue; fi
     kill -- -"$pid" 2>/dev/null; sleep 5; kill -9 -- -"$pid" 2>/dev/null
-    reintenta "$n" "$k" "$m" "$motivo"; exit 0
+    reintenta "$n" "$k" "$m" "$motivo"; continue
   fi
   fin=$(tail -1 "$COLA/logs/$n.log" 2>/dev/null)
   if [ "$fin" != "rc=0" ] || ultimo "$n" | grep -qiE "$CORTE"; then
-    reintenta "$n" "$k" "$m" "terminó con error ($fin)"; exit 0
+    reintenta "$n" "$k" "$m" "terminó con error ($fin)"; continue
   fi
-  anota "fin $n ($fin)"; mv "$COLA/$n.tarea" "$COLA/hechos/" 2>/dev/null; rm -f "$EST"
-fi
+  anota "fin $n ($fin)"; mv "$COLA/$n.tarea" "$COLA/hechos/" 2>/dev/null; rm -f "$f"
+done
 
-corridas=$(pgrep -f "^$OC run " || true)   # solo el binario: un comando que nombre «opencode run» no cuenta
-if [ -n "$corridas" ]; then
-  quieto "$LOGS" && { anota "trabada fuera de la cola: mato $(echo $corridas)"; kill $corridas 2>/dev/null; }
-  exit 0
-fi
-pgrep -f "${VIGIA_LANZ:-lanzador.sh}" > /dev/null && exit 0         # un lanzador de E9 entre dos pasos (p. ej. corriendo los tests)
+# Corridas ajenas a la cola (los lanzadores de E9): si se traban, solo se matan; el lanzador sigue solo.
+mios=$(cat "$EST"/* 2>/dev/null | awk '{print $4}')
+ajenas=$(for p in $(pgrep -f "^$OC run "); do g=$(ps -o pgid= -p "$p" | tr -d ' '); echo "$mios" | grep -qx "$g" || echo "$p"; done)
+[ -n "$ajenas" ] && quieto "$LOGS" && { anota "trabada fuera de la cola: mato $(echo $ajenas)"; kill $ajenas 2>/dev/null; ajenas=; }
 
-siguiente=$(ls "$COLA"/*.tarea 2>/dev/null | head -1)
-if [ -z "$siguiente" ]; then
-  [ "$(tail -1 "$LOG" 2>/dev/null | cut -d' ' -f3-)" = "cola vacía" ] || anota "cola vacía"
-  exit 0
-fi
-n=$(basename "$siguiente" .tarea); MODELO=; source "$siguiente"
-m=${MODELO:-${MODELOS[0]}}
-responde "$m" || m=$(siguiente_modelo "$m")
-[ -z "$m" ] && { anota "ningún modelo responde: espero a la próxima vuelta"; exit 0; }
-lanza "$n" 1 "$m"
+usadas=$(ls "$EST" | wc -l)
+{ [ -n "$ajenas" ] || pgrep -f "${VIGIA_LANZ:-lanzador.sh}" > /dev/null; } && usadas=$((usadas + 1))
+while [ "$usadas" -lt "$MAX" ]; do
+  siguiente=$(for t in "$COLA"/*.tarea; do [ -f "$t" ] && [ ! -f "$EST/$(basename "$t" .tarea)" ] && echo "$t"; done | head -1)
+  if [ -z "$siguiente" ]; then
+    [ "$(tail -1 "$LOG" 2>/dev/null | cut -d' ' -f3-)" = "cola vacía" ] || anota "cola vacía"
+    exit 0
+  fi
+  n=$(basename "$siguiente" .tarea); MODELO=; source "$siguiente"
+  m=${MODELO:-${MODELOS[0]}}
+  { ! grep -qs " $m " "$EST"/* && responde "$m"; } || m=$(siguiente_modelo "$m")
+  [ -z "$m" ] && { anota "ningún modelo libre responde: espero a la próxima vuelta"; exit 0; }
+  lanza "$n" 1 "$m"; usadas=$((usadas + 1))
+done
