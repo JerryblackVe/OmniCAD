@@ -28,6 +28,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-635 | Extruir un rectángulo por el centro extruye sus diagonales de construcción (E1, Opus alto; bocetos, va primero) |
+| 1a | B-638 | Alargar del boceto no hace nada en la ventana (E1, Opus alto; si no sale rápido, en gris por la regla 16) |
 | 1b | B-626 | Reabierto: los planos de origen aparecen solos al abrir una herramienta y tapan la pieza (E7, Sonnet; comparar con Fusion) |
 | 1c | B-636 | Extrusión delgada con plano límite paralelo: mensaje crudo de OCC (E3, Sonnet) |
 | 1d | B-637 | Extruir: perfiles coplanares de varios bocetos (como Fusion), mensaje y flecha en su lugar (E2, Opus alto) |
