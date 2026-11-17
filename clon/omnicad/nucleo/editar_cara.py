@@ -144,20 +144,20 @@ def _largos(cara):
 def divisiones(cara, n_u=1, n_v=1, cortes_u=(), cortes_v=(), espaciado=0.0):
     """Divisiones de la grilla: (n_u, n_v, cortes a lo largo, cortes a lo ancho), con el Espaciado de contorno ya como cortes."""
     if not (1 <= n_u <= _FACTOR_MAXIMO and 1 <= n_v <= _FACTOR_MAXIMO):
-        raise geo.ErrorGeometria(f"Los factores de longitud y anchura van de 1 a {_FACTOR_MAXIMO}.")
+        raise geo.ErrorGeometria(f"Los factores van de 1 a {_FACTOR_MAXIMO}.")
     try:
         cortes = [float(c) for c in cortes_u], [float(c) for c in cortes_v]
     except (TypeError, ValueError):
         cortes = [math.nan], []
     if max(map(len, cortes)) > _CORTES_MAXIMOS or not all(0 < c < 1 for lista in cortes for c in lista):
-        raise geo.ErrorGeometria(f"La grilla admite hasta {_CORTES_MAXIMOS} cortes, cada uno entre 0 y 1.")
+        raise geo.ErrorGeometria(f"La grilla admite hasta {_CORTES_MAXIMOS} cortes (0 a 1).")
     espaciado = float(espaciado)
     if not (math.isfinite(espaciado) and espaciado >= 0):
-        raise geo.ErrorGeometria("El espaciado de contorno tiene que ser un número positivo o cero.")
+        raise geo.ErrorGeometria("El espaciado tiene que ser 0 o positivo.")
     if espaciado:
         largos = _largos(cara)
         if espaciado >= min(largos) / 2:
-            raise geo.ErrorGeometria(f"El espaciado de contorno tiene que ser menor que {min(largos) / 2:g} mm, la mitad de la cara.")
+            raise geo.ErrorGeometria(f"El espaciado supera la mitad: {min(largos) / 2:g} mm.")
         cortes = tuple(lista + [espaciado / largo, 1 - espaciado / largo] for lista, largo in zip(cortes, largos, strict=True))
     return n_u, n_v, *cortes
 
@@ -180,7 +180,7 @@ def grilla_cara(cara, n_u=1, n_v=1, cortes_u=(), cortes_v=(), espaciado=0.0):
     div = divisiones(cara, n_u, n_v, cortes_u, cortes_v, espaciado)
     u0, u1, v0, v1 = _dominio(cara)
     if not all(map(math.isfinite, (u0, u1, v0, v1))):
-        raise geo.ErrorGeometria("La cara no tiene dominio finito: no se puede editar.")
+        raise geo.ErrorGeometria("La cara no tiene dominio finito.")
     nudos_u, nudos_v = _nudos_cara(cara, *div)
     sup = BRepAdaptor_Surface(cara)
     puntos = _evaluar(sup, _greville(nudos_u), _greville(nudos_v))
@@ -220,10 +220,10 @@ def extruir_grilla(div, desplazamientos, puntos):
         g = _greville(nudos[eje])
         lo, hi = min(p[eje] for p in puntos), max(p[eje] for p in puntos)
         if lo < 0 or hi >= len(g):
-            raise geo.ErrorGeometria(f"Hay un punto afuera de la grilla, que va de 0 a {len(g) - 1}.")
+            raise geo.ErrorGeometria(f"Punto afuera de la grilla (0 a {len(g) - 1}).")
         nuevos.append([float((g[k - 1] + g[k]) / 2) for k in (lo, hi + 1) if 0 < k < len(g)])
     if len(cortes_u) + len(nuevos[0]) > _CORTES_MAXIMOS or len(cortes_v) + len(nuevos[1]) > _CORTES_MAXIMOS:
-        raise geo.ErrorGeometria(f"La grilla admite hasta {_CORTES_MAXIMOS} cortes: no se pueden sumar más caras.")
+        raise geo.ErrorGeometria(f"La grilla admite hasta {_CORTES_MAXIMOS} cortes, no más.")
     final = (n_u, n_v, [*cortes_u, *nuevos[0]], [*cortes_v, *nuevos[1]])
     g0, g1 = [_greville(n) for n in nudos], [_greville(n) for n in _nudos_01(final)]
     lugar = [{i: int(np.argmin(np.abs(g1[eje] - x))) for i, x in enumerate(g0[eje])} for eje in (0, 1)]
@@ -253,7 +253,7 @@ def _campo(desplazamientos, nudos_u, nudos_v, us, vs, extendido=False):
     d = np.zeros((len(nudos_u) - _GRADO - 1, len(nudos_v) - _GRADO - 1, 3))
     for (i, j), v in desplazamientos.items():
         if not (0 <= i < d.shape[0] and 0 <= j < d.shape[1]):
-            raise geo.ErrorGeometria(f"El punto ({i}, {j}) no está en la grilla de {d.shape[0]} × {d.shape[1]}.")
+            raise geo.ErrorGeometria(f"({i}, {j}) no está en {d.shape[0]} × {d.shape[1]}.")
         d[i, j] = v
     base = _extrapoladas if extendido else _base
     return np.einsum("ai,bj,ijk->abk", base(nudos_u, us), base(nudos_v, vs), d, optimize=True)
@@ -353,8 +353,7 @@ def _prolongar(forma, cara, alto, normal):
     if crecido is not None and geo.solidos(crecido) and geo.volumen(crecido) <= maximo:
         return crecido
     if BRepAdaptor_Surface(cara).GetType() != GeomAbs_Plane:
-        raise geo.ErrorGeometria("Las caras vecinas no se pueden prolongar hasta el borde nuevo (pasa con vecinas tangentes a una "
-                                 "cara curva): mové puntos de adentro o bajá el borde.")
+        raise geo.ErrorGeometria("Las vecinas no se prolongan: bajá el borde.")
     return geo.unir_todos([forma, BRepPrimAPI_MakePrism(cara, gp_Vec(*map(float, normal * alto))).Shape()])
 
 
@@ -369,7 +368,7 @@ def _con_vecinas(forma, cara, nudos_u, nudos_v, desplazamientos):
     campo = _campo(desplazamientos, nudos_u, nudos_v, us, vs)
     avance = (campo * normales).sum(axis=2)
     if np.abs(avance).max() < 1e-6:
-        raise geo.ErrorGeometria("Ese movimiento deja el borde sobre la misma superficie: la cara no cambia.")
+        raise geo.ErrorGeometria("Ese movimiento no cambia la cara.")
     largos = _largos(cara)
     alto = float(avance.max()) * 1.25 + 0.02 * min(largos) if avance.max() > 1e-6 else 0.0
     extra = 2 * alto + 0.1 * max(largos)
@@ -386,7 +385,7 @@ def _con_vecinas(forma, cara, nudos_u, nudos_v, desplazamientos):
     otros = [s for s in geo.solidos(forma) if not s.IsSame(propio)]
     piezas = geo.solidos(sm._partir(_prolongar(propio, cara, alto, normales[12, 12]), [herramienta]))
     if len(piezas) < 2:
-        raise geo.ErrorGeometria("La cara editada no corta las vecinas: probá con un desplazamiento menor.")
+        raise geo.ErrorGeometria("La cara no corta las vecinas: desplazá menos.")
     dentro, votos = IntTools_FClass2d(cara, 1e-7), [0] * len(piezas)
     clases = [BRepClass3d_SolidClassifier(p) for p in piezas]
     for i, u in enumerate(us):
@@ -400,7 +399,7 @@ def _con_vecinas(forma, cara, nudos_u, nudos_v, desplazamientos):
                 votos[k] += clase.State() == TopAbs_IN
     quedan = [sm._unificar(p) for p, n in zip(piezas, votos, strict=True) if n] + otros
     if not quedan:
-        raise geo.ErrorGeometria("La cara editada no deja material del lado del cuerpo: probá con un desplazamiento menor.")
+        raise geo.ErrorGeometria("La cara no deja material: desplazá menos.")
     return sm._validar(geo.compuesto(quedan) if len(quedan) > 1 else quedan[0], "Editar cara")
 
 
@@ -434,8 +433,7 @@ def _recoser(forma, hoja, otras):
     from . import superficies as sf
     cosidas = sf.bordes_de_costura(geo.caras(forma), _TOLERANCIA_COSTURA)["aristas_cosidas"]
     if sf.bordes_de_costura([hoja, *otras], _TOLERANCIA_COSTURA)["aristas_cosidas"] < cosidas:
-        raise geo.ErrorGeometria("En una superficie cosida se puede mover un borde libre, no el que comparte con otra cara: mové "
-                                 "puntos de adentro o de un borde libre.")
+        raise geo.ErrorGeometria("En superficie cosida, mové un borde libre.")
     return sf.coser([hoja, *otras], _TOLERANCIA_COSTURA)["forma"]
 
 
@@ -446,11 +444,11 @@ def editar_cara(forma, cara, n_u, n_v, desplazamientos, cortes_u=(), cortes_v=()
     grilla = grilla_cara(cara, n_u, n_v, cortes_u, cortes_v, espaciado)
     fijos = grilla["fijos"]
     if desplazamientos and not np.isfinite(np.array(list(desplazamientos.values()), float)).all():
-        raise geo.ErrorGeometria("Los desplazamientos tienen que ser números finitos.")
+        raise geo.ErrorGeometria("Los desplazamientos tienen que ser finitos.")
     movidos = [p for p, d in desplazamientos.items() if 0 <= p[0] < fijos.shape[0] and 0 <= p[1] < fijos.shape[1] and any(d)]
     for p in movidos:
         if fijos[p]:
-            raise geo.ErrorGeometria(f"El punto {p} está en una costura o afuera de la cara: queda fijo.")
+            raise geo.ErrorGeometria(f"Punto {p} en costura o afuera: queda fijo.")
     u0, u1, v0, v1 = _dominio(cara)
     nudos_u, nudos_v = _nudos_cara(cara, *divisiones(cara, n_u, n_v, cortes_u, cortes_v, espaciado))
     borde_movido = any(grilla["contorno"][p] for p in movidos)
@@ -465,7 +463,7 @@ def editar_cara(forma, cara, n_u, n_v, desplazamientos, cortes_u=(), cortes_v=()
         if otras:
             hoja = _recoser(forma, hoja, otras)
         if not geo.es_valida(hoja):
-            raise geo.ErrorGeometria("La cara editada deja una superficie no válida: probá con un desplazamiento menor.")
+            raise geo.ErrorGeometria("La cara deja una superficie no válida.")
         return hoja
 
     indice = next((i for i, c in enumerate(geo.caras(forma)) if c.IsSame(cara)), None)
@@ -495,7 +493,7 @@ def editar_cara(forma, cara, n_u, n_v, desplazamientos, cortes_u=(), cortes_v=()
             b.UpdateEdge(arista, c1, c2, destino, tol)
     ShapeFix_ShapeTolerance().LimitTolerance(destino, 0.0, max(tol * 4, 1e-4))
     if not geo.es_valida(copia):
-        raise geo.ErrorGeometria("La cara editada deja un cuerpo no válido: probá con un desplazamiento menor.")
+        raise geo.ErrorGeometria("La cara deja un cuerpo no válido.")
     return copia
 
 
