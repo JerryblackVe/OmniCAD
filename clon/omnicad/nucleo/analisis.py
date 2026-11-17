@@ -109,9 +109,9 @@ def _color_valido(color):
     try:
         c = tuple(float(x) for x in color)
     except (TypeError, ValueError):
-        raise geo.ErrorGeometria("El color va como [r, g, b] con valores de 0 a 1.") from None
+        raise geo.ErrorGeometria("El color va como [r, g, b] entre 0 y 1.") from None
     if len(c) != 3 or not all(math.isfinite(x) and 0.0 <= x <= 1.0 for x in c):
-        raise geo.ErrorGeometria("El color va como [r, g, b] con valores de 0 a 1.")
+        raise geo.ErrorGeometria("El color va como [r, g, b] entre 0 y 1.")
     return c
 
 
@@ -121,14 +121,13 @@ def material_propio(nombre, densidad, color=None):
     if not nombre:
         raise geo.ErrorGeometria("El material necesita un nombre.")
     if len(nombre) > 80:
-        raise geo.ErrorGeometria("El nombre del material es demasiado largo (máximo 80 caracteres).")
+        raise geo.ErrorGeometria("El nombre del material pasa de 80 caracteres.")
     try:
         densidad = float(densidad)
     except (TypeError, ValueError):
-        raise geo.ErrorGeometria(f"La densidad tiene que ser un número (g/cm³): llegó {densidad!r}.") from None
+        raise geo.ErrorGeometria(f"La densidad no es un número (g/cm³): {densidad!r}.") from None
     if not math.isfinite(densidad) or not 0.0 < densidad <= DENSIDAD_MAXIMA:
-        raise geo.ErrorGeometria(f"La densidad va en g/cm³, mayor que 0 y hasta {DENSIDAD_MAXIMA:g} "
-                                 f"(recibió {densidad:g}).")
+        raise geo.ErrorGeometria(f"Densidad: >0 y hasta {DENSIDAD_MAXIMA:g} g/cm³: {densidad:g}.")
     return nombre, {"densidad": densidad, "color": _color_valido(color)}
 
 
@@ -143,7 +142,7 @@ def definir_material(nombre, densidad, color=None, guardar=True):
     próximas sesiones. Devuelve (nombre, datos)."""
     nombre, datos = material_propio(nombre, densidad, color)
     if any(nombre.casefold() == b.casefold() for b in MATERIALES_BASE):
-        raise geo.ErrorGeometria(f"«{nombre}» es un material de fábrica: elegí otro nombre para el material propio.")
+        raise geo.ErrorGeometria(f"«{nombre}» es de fábrica: elegí otro nombre.")
     TABLA_MATERIALES[nombre] = datos
     if guardar:
         from .chapa import escribir_biblioteca_json
@@ -378,7 +377,7 @@ def medir(a, b=None, *, centro_a_centro=False):
     info_b = _info_entidad(b)
     dist = BRepExtrema_DistShapeShape(_a_forma(a), _a_forma(b))
     if not dist.IsDone() or dist.NbSolution() == 0:
-        raise geo.ErrorGeometria("No se pudo medir la distancia entre las selecciones.")
+        raise geo.ErrorGeometria("No pude medir entre las selecciones.")
     pa, pb = _np(dist.PointOnShape1(1)), _np(dist.PointOnShape2(1))
     res = {"a": info_a, "b": info_b, "distancia": dist.Value(), "punto_a": _tupla(pa), "punto_b": _tupla(pb),
            "delta": _tupla(pb - pa)}
@@ -392,7 +391,7 @@ def medir(a, b=None, *, centro_a_centro=False):
             res.update(distancia=cc["distancia"], punto_a=cc["punto_a"], punto_b=cc["punto_b"],
                        delta=_tupla(np.array(cc["punto_b"]) - np.array(cc["punto_a"])))
     elif centro_a_centro:
-        raise geo.ErrorGeometria("Centro a centro necesita dos selecciones circulares (arco, círculo o cilindro).")
+        raise geo.ErrorGeometria("Centro a centro: dos selecciones circulares.")
     return res
 
 
@@ -459,7 +458,7 @@ def propiedades_fisicas(forma, densidad_g_cm3=7.85):
     if densidad_g_cm3 <= 0:
         raise geo.ErrorGeometria("La densidad debe ser positiva.")
     if not geo.solidos(forma):
-        raise geo.ErrorGeometria("Las propiedades físicas necesitan un cuerpo sólido.")
+        raise geo.ErrorGeometria("Propiedades físicas piden un cuerpo sólido.")
     props = GProp_GProps()
     BRepGProp.VolumeProperties_s(forma, props)
     vol = props.Mass()
@@ -513,7 +512,7 @@ def centro_de_masa(formas, densidades=None):
         formas = list(formas.values())
     formas = list(formas)
     if not formas:
-        raise geo.ErrorGeometria("No hay cuerpos para calcular el centro de masa.")
+        raise geo.ErrorGeometria("No hay cuerpos para el centro de masa.")
     if densidades is None:
         densidades = [1.0] * len(formas)
     if len(densidades) != len(formas):
@@ -748,7 +747,7 @@ def colores_curvatura(forma, *, tipo="gaussiana", rango=None, bandas=False, alta
     else:
         lo, hi = map(float, rango)
         if hi <= lo:
-            raise geo.ErrorGeometria("El rango de curvatura necesita mínimo < máximo.")
+            raise geo.ErrorGeometria("Curvatura: el mínimo tiene que ser < máximo.")
         t = 2.0 * (val - lo) / (hi - lo) - 1.0
     t = np.clip(t * float(escala), -1.0, 1.0)
     if bandas:
@@ -782,7 +781,7 @@ def colores_desmoldeo(forma, direccion, angulo_min=0.0, angulo_max=3.0, *, degra
     (mín, máx) deja esa banda en amarillo (Zona de tolerancia). `opacidad`: ver `_con_opacidad`.
     """
     if angulo_max < angulo_min:
-        raise geo.ErrorGeometria("El ángulo máximo de desmoldeo debe ser ≥ al mínimo.")
+        raise geo.ErrorGeometria("El desmoldeo máximo va bajo el mínimo.")
     v, n, ang = angulos_desmoldeo(forma, direccion, alta_calidad=alta_calidad, deflexion=deflexion,
                                   angular=angular)
     if degradado:
@@ -983,7 +982,7 @@ def colores_radio_minimo(forma, radio_herramienta, *, aristas_vivas=True, radio_
     if radio_herramienta <= 0:
         raise geo.ErrorGeometria("El radio de la herramienta debe ser positivo.")
     if radio_minimo is not None and not 0 <= radio_minimo <= radio_herramienta:
-        raise geo.ErrorGeometria("El radio mínimo va de 0 al radio máximo de la herramienta.")
+        raise geo.ErrorGeometria("El radio mínimo va de 0 al radio máximo.")
     v, n, k, bloques = _malla(forma, deflexion, angular, True, alta_calidad)
     # Sin radio_minimo también se pinta solo la banda junto al rincón (mismo criterio que con radio_minimo).
     vivas = (_mascara_aristas_concavas(forma, bloques, len(v)) if aristas_vivas
