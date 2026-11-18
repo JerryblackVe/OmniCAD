@@ -23,6 +23,7 @@ avisa lo que vence ese día o ya venció.
 | AG-14 | Revisar con Gerardo (1 hora) lo que prepararon los gratis en `docs/seguimiento/preparado/`: `reglas_cortas.md` (bajar las reglas de 68 KB a 20 KB) y `triage_viejos.md` (37 bugs anteriores a B-500: arreglar, cerrar o pasar a después). Decidir y aplicar. | 2026-11-19 | Gerardo, 17/11 | Pendiente |
 | AG-15 | Cada lunes: E11 modela una pieza real en OmniCAD y la compara con Fusion (pedir antes la PC libre); las fallas van a `evidencias/reportes_pc/`. Al hacerse, la fila pasa al lunes siguiente. | 2026-11-23 | Gerardo, 17/11 | Pendiente |
 | AG-16 | Medir qué papeleo se repite (de 1.570 commits de la semana, unos 800 no tocan código de la app) y pasar lo mecánico a un script o a los gratis. | 2026-11-20 | Gerardo, 17/11 | Pendiente |
+| AG-17 | E11 en Windows: reproducir B-638 (Alargar no hace nada) y B-630 (Engrosar el filete corta la previa); en Linux no se reproducen | 2026-11-19 | 2026-11-18 | Programada |
 
 ## Orden y reparto de las auditorías
 
