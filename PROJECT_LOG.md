@@ -10,6 +10,7 @@ git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
 - **2026-11-17 ~20:50 UTC · Traspaso OmniCAD · Coordinador (37 %; reemplaza la nota de las 19:40).** 1) Rojo hasta 19/11 08 UTC: solo OpenCode/CodeBuddy; vigía nuevo (flock, `latido`, `avisos.txt`: leerlos en la vigilancia de 2 h). 2) `hechos/` con 35 tareas sin integrar: integrar 1×día en worktree INT (`git apply --exclude` de TOPES/PROJECT_LOG/bugs.md; TOPES a mano), revisando cada diff; después partir `restricciones/boceto.py` y `solidos_crear.py`. 3) Bugs del lote 19 h ya en Sigue: B-635 (1), B-638 (1a), B-626 reabierto (1b), B-636 (1c), B-637 (1d), B-639 (1e), B-633+B-634 (2); sus PREP en la reserva. 4) Al reiniciar el cupo (19/11): asignar Sigue a E1/E2/E3/E7 según `ahora.md` (cerrar Parcial primero, AG-13). 5) Cada mañana `~/coordinador/suite_noche/ultima.txt` (suite + humo) → rojos a seguimiento; push frenado.
+- **2026-11-18 · Vigía: 429 de verdad.** `ultimo()` tenía un salto de línea literal dentro del texto de awk: awk fallaba callado y el chequeo de corte nunca vio nada; ahora `"\n"` (probado: REGLAS-cortas corta, FLUIDEZ-P1 no). Repros B-638 y B-639 en `preparado/`.
 - **2026-11-18 · Integración OpenCode (tanda 6).** P-158 en `nucleo/tolerancias.py` (r04); test nuevo de Intersecar e Incluir 3D (`test_faltantes_bocetos.py`); repro B-633. 1902 tests OK.
 - **2026-11-18 · Integración OpenCode (tanda 5).** B-636 (plano límite paralelo: aviso en rojo en la fila, `test_b636_extrusion_plano_paralelo.py`) y B-623 (Dividir cuerpo: el clic va a la selección vacía, `test_b623_dividir_cuerpo_seleccion.py`) cerrados; repro B-635. 3377 tests OK; rojos solo B-628/B-640.
 - **2026-11-17 · Integración OpenCode (tanda 4).** `ui/editor_boceto.py` partido en 10 mixins por tema (movimiento puro; 1656 tests OK, rojos solo B-628 y B-640); P-158 en `restricciones/boceto3d.py`; repro B-622 en `preparado/`.
@@ -577,6 +578,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-18] Un `awk` que falla dentro de un pipe con `2>/dev/null` devuelve vacío sin avisar: probar la función real del script, no una copia. · Evidencia: `scripts/vigia_opencode.sh` › `ultimo()`.
 - [2026-11-16] Al integrar, encadenar test y commit con `&&`, nunca con `;`: con `;` se commiteó una fila de bugs.md rota. · Evidencia: test_seguimiento «6 celdas, no 7» después de faa93678, arreglado en a0020974.
 - [2026-11-16] `ui/comando.py` tiene fin de línea mixto (CRLF y LF): editarlo con `open(...).read()`/`write` en modo texto lo pasa entero a LF (diff de 4600 líneas); se edita en binario o con Edit. · Evidencia: B-608, `git diff --stat` de `clon/omnicad/ui/comando.py`
 - [2026-11-16] `BRepOffsetAPI_MakeOffset` sobre UNA arista: una recta sola no define plano (sin resultado) y con alambre abierto `IsDone()` da False aunque el contorno salga bien: `Init(cara_del_plano)` + `AddWire` y mirar las caras. · Evidencia: `tests/test_b503_desfase_achicar.py`.

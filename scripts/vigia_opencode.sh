@@ -39,8 +39,7 @@ for p in $(pgrep -f "python -m pytest"); do
 quieto() {   # nada escribió en $MIN minutos (el log de la corrida casi no se escribe hasta el final; el de opencode sí)
   [ -z "$(find "$@" "$HOME/.local/share/opencode/log" -type f -newermt "-$MIN min" -print -quit 2>/dev/null)" ]; }
 cpu() { ps -o times= -s "$1" 2>/dev/null | awk '{s+=$1} END{print s+0}'; }   # segundos de CPU de la sesión (setsid) del pid
-ultimo() { awk '/^=== intento /{b=""} {b=b $0 "
-"} END{printf "%s", b}' "$COLA/logs/$1.log" 2>/dev/null | tail -20; }  # solo el intento actual
+ultimo() { awk '/^=== intento /{b=""} {b=b $0 "\n"} END{printf "%s", b}' "$COLA/logs/$1.log" 2>/dev/null | tail -20; }  # solo el intento actual
 usado() {   # el modelo ya está en su tope de corridas a la vez (CodeBuddy 2, OpenCode 1; cuenta también el lanzador de E9)
   local c tope=1; [ "${1#cb:}" != "$1" ] && tope=2
   c=$(grep -ls " $1 " "$EST"/* | wc -l); pgrep -f -- "^$OC run -m $1 " > /dev/null && c=$((c + 1))
