@@ -1,5 +1,7 @@
 """Sólidos avanzados: geometría numérica, referencias persistentes y transacciones."""
 import math
+from multiprocessing import get_context
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -183,6 +185,28 @@ def test_create_lip_groove(modo, volumen):
     _tipo(s, r, "labio")
     _volumen(s, cid, volumen)
     assert "firma" in s.paso(r["feature"]["id"]).p["aristas"][0]
+
+
+def _comprobar_medidas_labio():
+    s = api.Sesion()
+    _ok(s, "create_surface_box", length=40, width=20, height=20)
+    with patch("omnicad.nucleo.solidos_crear_plastico._marco_labio", side_effect=AssertionError("Llegó al barrido")):
+        for ancho, alto in ((1e-6, 1e-6), (1e-6, 1), (1, 1e-6)):
+            r = api.llamar(s, "create_lip_groove", {"edges": "|X and >Z and <Y", "width": ancho, "height": alto})
+            assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
+            assert "Ancho y alto: mínimo" in r["mensaje"] and "mm" in r["mensaje"], r
+
+
+def test_create_lip_groove_medidas_minimas_b612():
+    hijo = get_context("spawn").Process(target=_comprobar_medidas_labio)
+    hijo.start()
+    try:
+        hijo.join(60)
+        assert hijo.exitcode == 0
+    finally:
+        if hijo.is_alive():
+            hijo.kill()
+            hijo.join()
 
 
 def test_create_lip_groove_rechaza_arista_sin_largo_o_de_costura():
