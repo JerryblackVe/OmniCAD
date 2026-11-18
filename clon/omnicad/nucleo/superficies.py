@@ -2371,11 +2371,17 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     op = BRepOffset_MakeOffset()
     op.Initialize(base, float(espesor), 1e-6, BRepOffset_Skin, False, False, junta, True, False)
     op.MakeOffsetShape()
-    if not op.IsDone() or op.Shape().IsNull():
-        raise geo.ErrorGeometria("No se pudo engrosar: ¿espesor muy grande?")
-    resultado = _simplificar(op.Shape())
-    if not geo.solidos(resultado):
-        raise geo.ErrorGeometria("El engrosado no produjo un sólido.")
+    resultado = _simplificar(op.Shape()) if op.IsDone() and not op.Shape().IsNull() else None
+    if resultado is None or not geo.solidos(resultado):
+        fallo = "El engrosado no produjo un sólido." if resultado is not None else "No se pudo engrosar con ese espesor."
+        if junta == GeomAbs_Intersection and base.ShapeType() == TopAbs_SHELL:
+            try:
+                from .engrosar_reglada import engrosar_banda
+                resultado = engrosar_banda(base, espesor)
+            except Exception:  # noqa: BLE001 — construcción opcional: conservar el diagnóstico del kernel
+                resultado = None
+        if resultado is None or not geo.solidos(resultado):
+            raise geo.ErrorGeometria(fallo)
     # Más grueso que el radio de curvatura, el kernel daba «ok» con un sólido inválido (cilindro de radio 10 engrosado
     # 10 hacia adentro), dado vuelta por el eje (12 mm: un tubo de radio 2 a 10) o con volumen negativo (25 mm).
     if (not geo.es_valida(resultado) or geo.volumen_exacto(resultado) <= 0

@@ -26,7 +26,6 @@ def _pieza(superficie):
     return s, r["bodies_created"][0]["id"]
 
 
-@pytest.mark.xfail(strict=True, reason="B-633", raises=pytest.RaisesExc(AssertionError, match="«Engrosar1»"))
 def test_engrosar_solevacion():
     s, cid = _pieza(superficie=True)
     r = _ok(s, "thicken", faces=cid, thickness=2)

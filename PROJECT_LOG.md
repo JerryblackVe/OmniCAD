@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-18 · B-633.** Engrosar conserva las esquinas agudas de la transición rectángulo→círculo si OCC no cierra el sólido. Sin filtros de autointersecciones. `test_b_633_repro.py`: Engrosar pasa; Vaciado sigue en B-634. Ruff limpio y 714 tests de entorno OK.
 - **2026-11-18 · B-629 cerrado.** El desfase avisa «El perfil desaparece» si la resta de franjas deja la región vacía; conserva el aviso genérico si el cálculo falla. `test_b517_desfase_texto_adentro.py` y `test_b_629_repro.py` verdes; ruff limpio.
 - **2026-11-18 · B-616.** Lo arregla el solape de B-634 (9dc3063b) en `_cascara_por_desfase`; `tests/test_b_616_repro.py` sin xfail pasa con main. El arreglo propio de OpenCode (1e-2 mm) no se integró.
 - **2026-11-18 · B-592 (bloqueante «sorbete trini»).** Abrir un .omnicad con un paso repetido idéntico lo quita con aviso en vez de rechazar el archivo (`documento.desde_dict`, ventana). Causa: archivo guardado antes de la guarda de `agregar` (33eafbcc). test_b643 3 OK (2 fallan sin el arreglo), ruff limpio.
