@@ -1,6 +1,4 @@
 """B-634: Vaciar la tapa circular de una solevación sólida rectángulo → círculo falla."""
-import pytest
-
 from omnicad import api
 from omnicad.nucleo import geometria as geo
 
@@ -23,8 +21,6 @@ def _pieza_solida():
     return s, r["bodies_created"][0]["id"]
 
 
-@pytest.mark.xfail(strict=True, reason="B-634",
-                   raises=pytest.RaisesExc(AssertionError, match="«Vaciado1».*(?:el espesor no cabe|el kernel no pudo)"))
 def test_vaciar_tapa_circular():
     s, cid = _pieza_solida()
     antes = geo.volumen_exacto(s.cuerpo(cid).forma)
