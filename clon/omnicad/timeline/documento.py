@@ -1635,10 +1635,24 @@ class Documento:
         doc.comentarios = [dict(c) for c in datos.get("comentarios", [])]
         doc.unidades = cls.unidades_de(datos)
         doc.instrucciones = cls.instrucciones_de(datos)
+        # B-643: un archivo con un paso repetido idéntico (mismo id y mismos datos) se abre sin el repetido, con aviso.
+        ops, vistos = [], set()
+        for d in datos.get("operaciones", []):
+            clave = json.dumps(d, sort_keys=True, default=str)
+            if clave not in vistos:
+                vistos.add(clave)
+                ops.append(d)
+        doc.avisos_apertura = []
+        if len(ops) < len(datos.get("operaciones", [])):
+            quitados = len(datos["operaciones"]) - len(ops)
+            datos = {**datos, "operaciones": ops,
+                     "marcador": min(datos.get("marcador", len(ops)), len(ops))}
+            cache, _calculo = None, None       # la caché y el ensayo eran de la receta con el repetido
+            doc.avisos_apertura.append(f"⚠ El archivo tenía {quitados} paso(s) repetido(s): se quitaron. Guardalo para arreglarlo.")
         doc._cache = cache or {}
         try:
             doc._cargar(datos, _calculo)
         finally:
             doc._cache = {}
-        doc.modificado = False
+        doc.modificado = bool(doc.avisos_apertura)
         return doc

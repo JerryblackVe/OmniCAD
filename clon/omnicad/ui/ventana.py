@@ -3340,9 +3340,11 @@ class VentanaPrincipal(QMainWindow):
         if copia:                                  # eligió el guardado: recién ahora, con el guardado ya abierto,
             proyecto.suprimir_copia(copia)         # se descarta la copia (si no abría, la copia era lo único que quedaba)
         doc.ruta, doc.nombre = str(ruta), Path(ruta).stem
-        doc.modificado = origen != ruta
+        doc.modificado = origen != ruta or bool(getattr(doc, "avisos_apertura", None))
         self.set_documento(doc)
         self._recordar(ruta)
+        if getattr(doc, "avisos_apertura", None):      # B-643: se quitó un paso repetido al abrir
+            self.mensaje(doc.avisos_apertura[0], 15000)
 
     def _abrir_en_hilo(self, origen, ruta, copia):
         """FL-3: arma el proyecto en otro hilo (el recálculo va al proceso aparte, que no toma el GIL) mientras la ventana
