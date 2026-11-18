@@ -11,7 +11,6 @@ from omnicad.ui.comando import hit_desde_ref
 from omnicad.ui.comandos.modificar import DividirCuerpo
 
 
-@pytest.mark.xfail(strict=True, reason="B-623")
 def test_un_clic_en_el_cuerpo_no_cae_en_la_herramienta(app_qt):  # noqa: F811 (fixture importado)
     doc = _doc_caja()
     cuerpo = hit_desde_ref({"tipo": "cuerpo", "cuerpo": "op1.c1"}, doc.estado_final)

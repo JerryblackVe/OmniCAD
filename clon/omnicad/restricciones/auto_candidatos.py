@@ -179,7 +179,7 @@ def _encadenadas(b, tol_angulo):
                 yield a, c
 
 
-def cadena_tangente_de(b, curva, tol_angulo=1.0, tol=1e-6):
+def cadena_tangente_de(b, curva, tol_angulo=1.0, tol=1e-6, *, incluir_construccion=True):
     """Ids de las curvas unidas a `curva` por extremos con la misma tangente (la «Tangent Chain» de Fusion, que elige
     de una vez toda la cadena). La primera es `curva`. Se unen por el mismo punto, por una restricción coincidente o
     por estar en el mismo lugar (`tol`: lo que se dibuja con herramientas que no comparten puntos).
@@ -187,7 +187,7 @@ def cadena_tangente_de(b, curva, tol_angulo=1.0, tol=1e-6):
     seno = math.sin(math.radians(tol_angulo))
     extremos = []                           # (id de curva, id de punto, x, y)
     for c in b.curvas.values():
-        if c.tipo in GEOMETRICAS and c.extremos():
+        if (incluir_construccion or not c.construccion) and c.tipo in GEOMETRICAS and c.extremos():
             for pid in c.extremos():
                 extremos.append((c.id, pid, b.puntos[pid].x, b.puntos[pid].y))
     coincidentes = {frozenset(r.entidades) for r in b.restricciones.values()

@@ -45,6 +45,7 @@ class SupExtruir(Comando):
         dos = lambda v: v.get("lados") == "dos_lados"  # noqa: E731
         objeto = lambda v: v.get("extension") == "objeto"  # noqa: E731
         return [Seleccion("curvas", "Perfiles", PERFILES_SUPERFICIE, maximo=None,
+                          filtros_si=lambda v: PERFILES_SUPERFICIE | {"sin_construccion"},
                           ayuda="Curvas de boceto, aristas, perfiles cerrados o caras planas. Un texto de una sola línea "
                                 "extruye todos sus trazos."),
                 Casilla("cadena", "Selección de cadena", True,

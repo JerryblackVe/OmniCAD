@@ -140,7 +140,8 @@ class Extruir(Comando):
             Seleccion("perfiles", "Perfiles", {"perfil", "cara_plana", "curva_boceto"}, maximo=None,
                       ayuda="Perfiles cerrados o caras planas; en la extrusión delgada también curvas abiertas.",
                       # B-265: en la sólida un clic sobre el borde elige el perfil, no la curva (Fusion: Extrude reference)
-                      filtros_si=lambda v: {"perfil", "cara_plana"} | ({"curva_boceto"} if v.get("tipo") == "delgada" else set()),
+                      filtros_si=lambda v: {"perfil", "cara_plana"} | (
+                          {"curva_boceto", "sin_construccion"} if v.get("tipo") == "delgada" else set()),
                       desvio=_otro_plano),
             Opciones("inicio", "Inicio", {"plano": ("Plano de perfil", "ini_plano"), "desfase": ("Desfase", "ini_desfase"),
                                           "objeto": ("Objeto", "ini_objeto")}),
@@ -186,7 +187,7 @@ class Extruir(Comando):
             return None
         from ...restricciones.auto_candidatos import cadena_tangente_de
         boceto = ctx.estado.bocetos[ref["boceto"]].boceto
-        cadena = cadena_tangente_de(boceto, ref["curva"])
+        cadena = cadena_tangente_de(boceto, ref["curva"], incluir_construccion=False)
         if len(cadena) < 2:
             return None
         return hits([{"tipo": "curva_boceto", "boceto": ref["boceto"], "curva": c} for c in cadena], ctx.estado)

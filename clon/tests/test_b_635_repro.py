@@ -8,7 +8,7 @@ from omnicad.restricciones import Boceto
 from omnicad.restricciones.boceto import agregar_rectangulo_centro
 from omnicad.timeline.documento import Documento
 from omnicad.timeline.operaciones import OpBoceto, OpExtrusion
-from omnicad.ui.comando import ContextoComando, PanelComando
+from omnicad.ui.comando import ContextoComando, PanelComando, hit_desde_ref, preseleccion
 from omnicad.ui.comandos.solido import Extruir
 from omnicad.ui.comandos.superficie import SupExtruir
 from omnicad.ui.visor3d import Visor3D
@@ -46,7 +46,6 @@ def test_perfil_y_extrusion_solida_ignoran_las_diagonales(escenario):
     assert geo.es_valida(forma)
 
 
-@pytest.mark.xfail(strict=True, reason="B-635", raises=AssertionError)
 @pytest.mark.parametrize("modo", ["delgada", "superficie"])
 def test_las_diagonales_no_se_seleccionan_para_extruir(escenario, modo):
     doc, visor = escenario
@@ -76,3 +75,31 @@ def test_las_diagonales_no_se_seleccionan_para_extruir(escenario, modo):
     finally:
         panel._t_previa.stop()
         panel.deleteLater()
+
+
+def test_la_construccion_sigue_disponible_como_referencia(escenario):
+    doc, visor = escenario
+    ctx = ContextoComando(doc)
+    campos = SupExtruir().campos(ctx)
+    filtros = campos[0].filtros_si({})
+    diagonal = visor.proyectar(np.array([5.0, 2.5, 0.0]))
+    hit = visor.elegir_entidad(diagonal, {"eje"})
+    assert hit["tipo"] == "curva_boceto"
+    assert set(preseleccion(campos, [hit_desde_ref(hit["ref"], ctx.estado)])) == {"direccion"}
+    assert all(h["tipo"] != "curva_boceto" for h in visor.entidades_bajo_cursor(diagonal, filtros))
+    borde = visor.proyectar(np.array([0.0, -5.0, 0.0]))
+    assert visor.elegir_entidad(borde, filtros)["tipo"] == "curva_boceto"
+
+
+def test_la_extrusion_delgada_no_encadena_curvas_de_construccion():
+    doc, boceto = Documento(), Boceto()
+    a = boceto.agregar_linea((0, 0), (10, 0))
+    b = boceto.agregar_linea((10, 0), (20, 0))
+    boceto.agregar_linea((20, 0), (30, 0), construccion=True)
+    bid = doc.nuevo_id()
+    doc.agregar(OpBoceto(bid, "Boceto1", boceto=boceto))
+    ctx, comando = ContextoComando(doc), Extruir()
+    campo = next(c for c in comando.campos(ctx) if c.clave == "perfiles")
+    hit = hit_desde_ref({"tipo": "curva_boceto", "boceto": bid, "curva": a}, ctx.estado)
+    grupo = comando.grupo_de(campo, hit, {"tipo": "delgada"}, ctx)
+    assert [h["ref"]["curva"] for h in grupo] == [a, b]

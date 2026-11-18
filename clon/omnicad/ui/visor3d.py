@@ -132,7 +132,14 @@ TOL_PX_ARISTA, TOL_PX_VERTICE = 9.0, 11.0     # zonas de agarre generosas (antes
 ESCALA_EXTENDIDO = 2.5                        # Redimensionar › Extendido: cuánto más grande que el cuadro de la vista
 # Filtros de selección que entiende `elegir_entidad` (los diálogos de comando piden uno o varios).
 FILTROS = ("cara", "cara_plana", "arista", "arista_lineal", "arista_circular", "vertice", "cuerpo", "perfil",
-           "curva_boceto", "punto_boceto", "boceto", "plano", "eje", "punto", "forzado", "centro_masa")
+           "curva_boceto", "punto_boceto", "boceto", "plano", "eje", "punto", "forzado", "centro_masa",
+           "sin_construccion")
+
+
+def es_curva_construccion(boceto, cid):
+    if cid in boceto.curvas:
+        return boceto.curvas[cid].construccion
+    return boceto.geo3d.get("curvas", {}).get(cid, {}).get("construccion", False)
 
 
 def _normalizar(v):
@@ -1911,6 +1918,9 @@ class Visor3D(QOpenGLWidget):
                         curva_id, poli, tipo_curva = curvas[quien[j]]
                         if "curva_boceto" not in filtros and tipo_curva != "linea":
                             continue
+                        construccion = es_curva_construccion(br.boceto, curva_id)
+                        if construccion and "sin_construccion" in filtros:
+                            continue
                         from ..restricciones import objetos
                         if "perfil" in filtros and (tipo_curva == "texto" or curva_id in objetos.indice(br.boceto)):
                             continue
@@ -1920,7 +1930,7 @@ class Visor3D(QOpenGLWidget):
                             mejor = (dist, _hit("curva_boceto", {"tipo": "curva_boceto", "boceto": br.op_id,
                                                                  "curva": curva_id},
                                                 [("lineas", _segmentos([poli]), None, 3.5)], float((p - o) @ d), p,
-                                                es_linea=tipo_curva == "linea"))
+                                                es_linea=tipo_curva == "linea", construccion=construccion))
                             break
             if mejor[1] is not None:
                 return mejor[1]
@@ -2808,7 +2818,7 @@ class Visor3D(QOpenGLWidget):
         salida = []
         for f in ("vertice", "punto", "arista", "eje", "curva_boceto", "perfil", "plano"):
             if f in filtros:
-                h = self.elegir_entidad(pos, {f}, a_traves=True)
+                h = self.elegir_entidad(pos, {f} | (filtros & {"sin_construccion"}), a_traves=True)
                 if h is not None and all(h["ref"] != x["ref"] for x in salida):
                     salida.append(h)
         if filtros & {"cara", "cuerpo"}:

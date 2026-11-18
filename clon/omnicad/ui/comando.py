@@ -398,13 +398,15 @@ def hit_desde_ref(ref, estado):
 
     from ..nucleo import geometria as geo
     from ..timeline import entidades as ent
-    from .visor3d import _segmentos, teselar_cuerpo
+    from .visor3d import _segmentos, es_curva_construccion, teselar_cuerpo
     hit = {"ref": ref, "tipo": ref.get("tipo"), "dibujo": []}
     try:
         e = ent.resolver(ref, estado)
     except Exception:  # noqa: BLE001 — la referencia perdida se muestra igual (sin resalte)
         return hit
     hit.update(forma=e.forma, cuerpo=e.cuerpo, plano=e.plano, es_linea=e.tipo != "curva_boceto" or e.eje is not None)
+    if e.tipo == "curva_boceto":
+        hit["construccion"] = es_curva_construccion(e.boceto.boceto, ref["curva"])
     try:
         if e.tipo == "cuerpo":
             hit["dibujo"] = [("tris", teselar_cuerpo(e.forma, 0.1)[0], None, 0.35)]
@@ -484,6 +486,8 @@ def acepta(filtros, hit):
     if t == "punto_boceto":
         return "punto" in filtros or "punto_boceto" in filtros
     if t == "curva_boceto":        # B-131: donde va una línea no entra otra curva
+        if "sin_construccion" in filtros and hit.get("construccion"):
+            return False
         return "curva_boceto" in filtros or ("eje" in filtros and hit.get("es_linea", True))
     return t in filtros
 
