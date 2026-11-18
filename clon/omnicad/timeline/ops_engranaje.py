@@ -155,7 +155,7 @@ def _cara_superior(forma, normal):
             if h > alto:
                 mejor, alto = cara, h
     if mejor is None:
-        raise ErrorOperacion("No se encontró la cara superior del engranaje.")
+        raise ErrorOperacion("No está la cara superior del engranaje.")
     return mejor
 
 

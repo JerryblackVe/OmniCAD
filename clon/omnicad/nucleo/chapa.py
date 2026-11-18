@@ -1256,7 +1256,7 @@ def plegar(modelo, cara, lineas, angulo=90.0, posicion="centro", invertir=False,
     if not lineas:
         raise geo.ErrorGeometria("Elegí al menos una línea de plegado.")
     if not 0 < abs(angulo) < 180:
-        raise geo.ErrorGeometria("El ángulo de plegado va de −180° a 180°, sin 0°.")
+        raise geo.ErrorGeometria("Ángulo de plegado: −180° a 180°, sin 0°.")
     if posicion not in POSICIONES_LINEA:
         raise geo.ErrorGeometria(f"Posición de la línea desconocida: {posicion}")
     t, k = m["regla"]["espesor"], m["regla"]["k"]

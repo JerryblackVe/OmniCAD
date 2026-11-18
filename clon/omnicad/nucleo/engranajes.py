@@ -588,7 +588,7 @@ def _tramos(tramos):
         for lado in ("inicio", "fin"):
             tipo = t.get(lado) or "ninguno"
             if tipo not in REMATES:
-                raise geo.ErrorGeometria(f"El remate «{lado}» del tramo {i} es inválido: {tipo!r}.")
+                raise geo.ErrorGeometria(f"El remate «{lado}» es inválido: {tipo!r}.")
             medida = 0.0
             if tipo != "ninguno":
                 medida = _positivo(t.get(f"medida_{lado}"), f"La medida del {REMATES[tipo].lower()} ({lado}) del "
