@@ -196,7 +196,7 @@ def test_extruir_un_resto_sin_area_se_rechaza_con_un_mensaje_claro(monkeypatch):
     assert g["profiles"][0]["area"] == pytest.approx(0.1, abs=1e-3)
     r = api.llamar(s, "extrude", {"sketch": "b", "profile": 0, "distance": 100})
     pf._CACHE_PERFILES.clear()
-    assert not r["ok"] and "no tiene volumen" in r["mensaje"]
+    assert not r["ok"] and "El perfil casi no tiene área: sin volumen." in r["mensaje"]
     assert ok(api.llamar(s, "get_scene_info", {}))["bodies"] == []
 
 
