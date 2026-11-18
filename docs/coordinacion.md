@@ -43,6 +43,8 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
      el id viejo, rehecha con el id nuevo.
   5. El brief de la nueva cierra con: «Listo cuando no queda nada pendiente; nunca terminar el turno con trabajo»
      (integración, cola vacía, ítems sin asignar). Gerardo, 2026-11-17.
+  6. Antes de dar el reemplazo por cerrado, `list_sessions` y comprobar que haya UNA sola sesión fijada con ese título
+     sin «(viejo)»; si hay dos, renombrar y desfijar la vieja en ese momento (Gerardo, 2026-11-18).
 - Todo lo que es para Gerardo o el chat maestro (cierres, integraciones, bloqueos, pedidos de OK) va **siempre** por
   `SendMessage` a ese nombre, leído antes de cada envío. Escribirlo solo en el chat del coordinador no alcanza.
 - Desde la VPS, el id de una sesión de la PC no llega («not found»): llega solo por el nombre (Remote Control prendido).
