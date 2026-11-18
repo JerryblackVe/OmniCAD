@@ -10,6 +10,7 @@ Abierto 13 · Parcial 3.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-178 | Boceto › Cota de una línea de eje: al acotar una línea de eje (centerline) contra otra curva, Fusion pone sola una cota de DIÁMETRO (el doble de la distancia), pensada para Revolución | Abierto | Media | Que Cota detecte la línea de eje y ofrezca el diámetro; MCP y CLI igual | Ayuda de Fusion «Create centerline geometry in a sketch»; análisis PhysCAD del 18/11 | 2026-11-18 |
 | P-22a | Modo seguro (contador de arranques fallidos) | Abierto | Media | Sin programar. | grep «modo seguro» y «arranques fallidos» en omnicad/: sin resultados | 2026-10-20 |
 | P-22b | Diario del solver de bocetos (grabar y reproducir) | Abierto | Media | Sin programar; serviría de corpus para R4. | omnicad/restricciones/ sin diario | 2026-10-20 |
 | P-23c3 | c) Grupos anidados (mover un grupo dentro de otro) | Abierto | Media | Opción grisada: sin grupos anidados. | omnicad/ui/acciones_navegador.py | 2026-10-20 |

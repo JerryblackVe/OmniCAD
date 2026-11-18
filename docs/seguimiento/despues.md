@@ -12,6 +12,7 @@ Abierto 1 · Bloqueado 1 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-179 | Insertar › Lienzo: calibrar con dos puntos y una distancia real (Fusion «Calibrate canvas»); hoy solo se fija el ancho real | Abierto | Baja | Comando Calibrar sobre el lienzo, con su herramienta MCP y CLI | `timeline/ops_insertar.py` (solo ancho); ayuda «Calibrate canvas (image)»; análisis PhysCAD del 18/11 | 2026-11-18 |
 | B-414 | Registro de uso › con poco disco se pausa sin ningún aviso en pantalla (la PC de Gerardo ya pasó de 0,26 a 7,96 GB libres) | Abierto | Baja | Avisar en pantalla cuando se pausa | evidencias/reportes_pc/2026-11-13_tanda1/06 (E11) | 2026-11-13 |
 | B-415 | Arranque › OmniCAD arrancó minimizado las 2 veces que E11 lo lanzó desde su shell; con doble clic no pasa | Sin verificar | Baja | Solo anotado; confirmar | evidencias/reportes_pc/2026-11-13_tanda1 (E11) | 2026-11-13 |
 | P-155 | Proceso aparte › si el trabajador no puede escribir (disco lleno), mostrar un error en vez de «Calculando…» para siempre (la rosca quedó colgada) | Abierto | Baja | Error claro y salida del estado «Calculando» | evidencias/reportes_pc/2026-11-13_tanda1/01, tanda2/03 (E11) | 2026-11-13 |
