@@ -38,7 +38,7 @@ def _ubicacion(p, estado, ctx):
 def _entero(ctx, expr, que):
     v = ctx.evaluar(expr, ESCALAR)
     if abs(v - round(v)) > 1e-9:
-        raise ErrorOperacion(f"{que} tiene que ser un número entero; «{expr}» da {v:g}.")
+        raise ErrorOperacion(f"{que}: «{expr}» da {v:g}, no entero.")
     return int(round(v))
 
 
@@ -155,7 +155,7 @@ def _cara_superior(forma, normal):
             if h > alto:
                 mejor, alto = cara, h
     if mejor is None:
-        raise ErrorOperacion("No se encontró la cara de arriba del engranaje para ubicar la unión.")
+        raise ErrorOperacion("No se encontró la cara superior del engranaje.")
     return mejor
 
 
@@ -167,13 +167,13 @@ def agregar_ensamblaje(doc, op_id, un_paso=False):
     (el diálogo lo agrega primero). Devuelve {"componentes", "uniones", "vinculo"} con los ids de los pasos."""
     op = doc.operacion(op_id)
     if not isinstance(op, OpEngranaje) or op.p.get("tipo", "engranaje") != "engranaje" or not op.p.get("par"):
-        raise ErrorOperacion("El ensamblaje automático es para un paso Engranaje con «Par de engranajes».")
+        raise ErrorOperacion("Ensamblaje requiere Par de engranajes.")
     from .ops_ensamblar import OpComponente, OpUnion, OpVinculoMovimiento, pose_de_reasignar   # B-588: a nivel de módulo cierra un ciclo
     pila = list(doc._deshacer)
     estado = doc.estado_en(doc.indice(op_id) + 1)
     cuerpos = [c for c in estado.cuerpos.values() if c.op_id == op_id]
     if len(cuerpos) != 2:
-        raise ErrorOperacion("El par de engranajes tiene que estar calculado (sin error) para ensamblarlo.")
+        raise ErrorOperacion("El par de engranajes no está calculado.")
     plano = ent.como_plano(ent.resolver(op.p["plano"], estado)) if op.p.get("plano") else geo.Plano("XY")
     origenes = [refs.referencia(c.id, _cara_superior(c.forma, plano.normal), c.forma) for c in cuerpos]
     comps, uniones = [], []
@@ -235,8 +235,7 @@ class OpEje(Operacion):
                                           f"tramos[{i}]")
             sobran = [k for k in t if k not in _CLAVES_TRAMO]
             if sobran:
-                raise ErrorOperacion(f"El tramo {i + 1} tiene claves desconocidas ({', '.join(map(str, sobran))}); "
-                                     f"valen: {', '.join(_CLAVES_TRAMO)}.")
+                raise ErrorOperacion(f"Tramo {i + 1}: claves desconocidas {', '.join(map(str, sobran))}.")
             d = dict(TRAMO, **t)
             for k in ("diametro", "largo", "medida_inicio", "medida_fin"):
                 if isinstance(d[k], bool) or not isinstance(d[k], (str, int, float)):
@@ -246,13 +245,12 @@ class OpEje(Operacion):
             for lado in ("inicio", "fin"):
                 fila[lado] = d[lado]
                 if d[lado] not in en.REMATES:
-                    raise ErrorOperacion(f"Valor no válido para «tramos[{i}].{lado}»: llegó {ent.describir_valor(d[lado])}."
-                                         f" Valores válidos: {', '.join(en.REMATES)}.")
+                    raise ErrorOperacion(f"tramos[{i}].{lado}: valor inválido {ent.describir_valor(d[lado])}.")
                 if d[lado] != "ninguno":
                     fila[f"medida_{lado}"] = ctx.evaluar(d[f"medida_{lado}"])
             salida.append(fila)
         if not salida:
-            raise ErrorOperacion("El eje necesita al menos un tramo (diámetro y largo).")
+            raise ErrorOperacion("El eje necesita al menos un tramo.")
         return salida
 
     def ejecutar(self, estado, ctx):
