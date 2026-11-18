@@ -405,8 +405,7 @@ def par_engranajes(modulo, dientes1, dientes2, *, angulo_presion=20.0, ancho=10.
     par (cada rueda adelgaza la mitad). Devuelve {"engranaje1", "engranaje2", "centro2", "giro2", **datos_par}."""
     datos = datos_par(modulo, dientes1, dientes2, angulo_presion, desplazamiento1, desplazamiento2, helice, holgura)
     if datos["holgura_fondo1"] < -1e-9 or datos["holgura_fondo2"] < -1e-9:
-        raise geo.ErrorGeometria("Con estos desplazamientos la cabeza de un engranaje toca el fondo del otro: bajá la "
-                                 "suma de los desplazamientos o acortá la cabeza.")
+        raise geo.ErrorGeometria("La cabeza toca el fondo del otro engranaje.")
     z1, z2 = datos["engranaje1"]["dientes"], datos["engranaje2"]["dientes"]
     direccion = _finito(direccion, "La dirección del segundo engranaje")
     giro = _finito(giro, "El giro")
@@ -442,28 +441,26 @@ def _contorno_cremallera(modulo, dientes, angulo_presion, ancho, alto, holgura, 
     n = _entero(dientes, "La cantidad de dientes", 1)
     alfa = _finito(angulo_presion, "El ángulo de presión")
     if not 5.0 <= alfa <= 35.0:
-        raise geo.ErrorGeometria(f"El ángulo de presión tiene que estar entre 5° y 35°; llegó {alfa:g}°.")
+        raise geo.ErrorGeometria(f"El ángulo de presión: 5° a 35°; llegó {alfa:g}.")
     c = _finito(holgura, "La holgura de fondo")
     if not 0.0 <= c <= 1.0:
-        raise geo.ErrorGeometria(f"La holgura de fondo tiene que estar entre 0 y 1 (× módulo); llegó {c:g}.")
+        raise geo.ErrorGeometria(f"Holgura de fondo: entre 0 y 1; llegó {c:g}.")
     j = _finito(juego, "El juego")
     if j < 0:
-        raise geo.ErrorGeometria(f"El juego no puede ser negativo; llegó {j:g} mm.")
+        raise geo.ErrorGeometria(f"El juego no puede ser negativo: {j:g} mm.")
     b = _positivo(ancho, "El ancho")
     ha, hf = ADENDO * m, (ADENDO + c) * m
     alto = (hf + m) if alto is None else _positivo(alto, "El alto")
     if alto <= hf + 1e-6:
-        raise geo.ErrorGeometria(f"El alto de la cremallera (de la base a la línea primitiva) tiene que ser mayor que "
-                                 f"el pie del diente ({hf:.4g} mm); llegó {alto:g} mm.")
+        raise geo.ErrorGeometria(f"Alto de cremallera {alto:g} mm < pie {hf:.4g} mm.")
     p = math.pi * m
     t = math.tan(math.radians(alfa))
     s2 = p / 4 - j / 4                          # medio espesor en la línea primitiva
     w_cabeza, w_pie = s2 - ha * t, s2 + hf * t
     if w_cabeza < 1e-4:
-        raise geo.ErrorGeometria("Los dientes de la cremallera quedan en punta: bajá el ángulo de presión o el juego.")
+        raise geo.ErrorGeometria("Dientes de cremallera quedan en punta.")
     if p - 2 * w_pie < 1e-4:
-        raise geo.ErrorGeometria("Los dientes de la cremallera se tocan en el fondo: bajá la holgura o el ángulo de "
-                                 "presión.")
+        raise geo.ErrorGeometria("Dientes de cremallera se tocan en el fondo.")
     largo = n * p
     puntos = [(0.0, -alto), (largo, -alto), (largo, -hf)]
     for k in reversed(range(n)):
@@ -481,7 +478,7 @@ def datos_rueda_cadena(paso, rodillo, dientes):
     d1 = _positivo(rodillo, "El diámetro del rodillo")
     z = _entero(dientes, "La cantidad de dientes", 6)
     if d1 >= 0.9 * p:
-        raise geo.ErrorGeometria(f"El rodillo (Ø{d1:g} mm) no entra en el paso de {p:g} mm.")
+        raise geo.ErrorGeometria(f"Rodillo Ø{d1:g} mm no cabe en paso {p:g}.")
     d = p / math.sin(math.pi / z)
     return {"paso": p, "rodillo": d1, "dientes": z, "diametro_primitivo": d, "diametro_fondo": d - d1,
             "diametro_exterior_min": d + p * (1 - 1.6 / z) - d1, "diametro_exterior_max": d + 1.25 * p - d1,
@@ -542,11 +539,10 @@ def rueda_cadena(paso, rodillo, dientes, *, ancho=7.0, agujero=0.0):
     if r_punta is not None:
         ra = min(ra, r_punta - 0.02 * p)
     if ra <= float(np.linalg.norm(T)) + 1e-3:
-        raise geo.ErrorGeometria("Con estas medidas el diente de la rueda de cadena no tiene flanco: revisá el paso y "
-                                 "el rodillo.")
+        raise geo.ErrorGeometria("Diente de rueda de cadena sin flanco.")
     Q = _circulo_por_circulo(F, re, ra, T)
     if Q is None or math.atan2(Q[1], Q[0]) >= paso_ang / 2 - 1e-6:
-        raise geo.ErrorGeometria("El diente de la rueda de cadena queda en punta: revisá el paso y el rodillo.")
+        raise geo.ErrorGeometria("Diente de rueda de cadena en punta.")
 
     def mitad(a, b_, centro, radio):
         """Punto medio del arco (centro, radio) entre a y b (el arco corto)."""
@@ -581,19 +577,18 @@ def rueda_cadena(paso, rodillo, dientes, *, ancho=7.0, agujero=0.0):
 def _tramos(tramos):
     """Valida la tabla de tramos y la normaliza a [(diámetro, largo, (remate, medida) inicio, (…) fin)]."""
     if not isinstance(tramos, (list, tuple)) or not tramos:
-        raise geo.ErrorGeometria("El eje necesita al menos un tramo (diámetro y largo).")
+        raise geo.ErrorGeometria("El eje necesita al menos un tramo.")
     salida = []
     for i, t in enumerate(tramos, 1):
         if not isinstance(t, dict):
-            raise geo.ErrorGeometria(f"El tramo {i} tiene que ser un dict con diámetro y largo.")
+            raise geo.ErrorGeometria(f"El tramo {i} no es un dict válido.")
         d = _positivo(t.get("diametro"), f"El diámetro del tramo {i}")
         largo = _positivo(t.get("largo"), f"El largo del tramo {i}")
         remates = []
         for lado in ("inicio", "fin"):
             tipo = t.get(lado) or "ninguno"
             if tipo not in REMATES:
-                raise geo.ErrorGeometria(f"El remate «{lado}» del tramo {i} tiene que ser {', '.join(REMATES)}; "
-                                         f"llegó {tipo!r}.")
+                raise geo.ErrorGeometria(f"El remate «{lado}» del tramo {i} es inválido: {tipo!r}.")
             medida = 0.0
             if tipo != "ninguno":
                 medida = _positivo(t.get(f"medida_{lado}"), f"La medida del {REMATES[tipo].lower()} ({lado}) del "
@@ -626,8 +621,7 @@ def eje_escalonado(tramos):
         if limpios and math.dist(limpios[-1][0], q) < 1e-9:
             for r_ in (limpios[-1][1], rem):
                 if r_ is not None and r_[0][0] != "ninguno":
-                    raise geo.ErrorGeometria(f"El tramo {r_[1]} tiene un {REMATES[r_[0][0]].lower()} en el {r_[2]}, "
-                                             "pero ahí no hay escalón: el tramo vecino tiene el mismo diámetro.")
+                    raise geo.ErrorGeometria(f"Tramo {r_[1]}: {REMATES[r_[0][0]].lower()} {r_[2]}: no hay escalón.")
             limpios[-1] = (q, None)
             continue
         limpios.append((q, rem))
@@ -651,7 +645,7 @@ def eje_escalonado(tramos):
             quien = [vertices[i][1] for i in (k, (k + 1) % n) if vertices[i][1] is not None and retiro[i] > 0]
             nombres = " y ".join(f"{REMATES[r[0][0]].lower()} de {r[0][1]:g} mm ({r[2]} del tramo {r[1]})"
                                  for r in quien)
-            raise geo.ErrorGeometria(f"El {nombres} no entra: el lado donde se apoya mide {largo:.4g} mm.")
+            raise geo.ErrorGeometria(f"El {nombres} no entra: mide {largo:.4g} mm.")
 
     def hacia(desde, hasta, d):
         v = np.subtract(hasta, desde)
