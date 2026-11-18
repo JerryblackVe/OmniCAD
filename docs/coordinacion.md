@@ -173,14 +173,16 @@ de OpenCode; las demás la enlazan.
 
   | Orden | Modelo | Para qué |
   |---|---|---|
-  | 1 | OpenAI (suscripción ChatGPT de Gerardo, OK del 17/11): `openai/gpt-6.2-sol` | Piezas de varios archivos y revisión |
-  | 2 | OpenAI: `openai/gpt-6.1-terra` | Lo mecánico (mensajes, filas, doc) |
-  | 3–4 | CodeBuddy gratis: `cb:deepseek-v4.1-flash`, `cb:hy3` (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | Prueba de carga del 17/11, ~8 s, 4 a la vez sin cortes; corta con 429 al quedarse sin cupo |
-  | 5 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Varios archivos con herramientas |
-  | 6 | OpenAI: `openai/gpt-6.2-astra` | Respaldo de OpenAI |
+  | 1–2 | CodeBuddy gratis: `cb:hy3`, `cb:deepseek-v4.1-flash` (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | Lo mecánico; ~8 s, 4 a la vez; corta con 429 al quedarse sin cupo |
+  | 3 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Lo mecánico y varios archivos con herramientas |
+  | 4 | OpenAI (ChatGPT Plus de Gerardo, OK del 17/11): `openai/gpt-6.2-sol` | Lo difícil: arreglos de varios archivos y revisión (la tarea lo pide con `MODELO=`) |
+  | 5–6 | OpenAI: `openai/gpt-6.2-astra`, `openai/gpt-6.1-terra` | Respaldo |
   | 7 | GLM: `opencode/glm-5.3-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
   | 8 | DeepSeek: `opencode/deepseek-v4.1-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
 
+  **Cupo de OpenAI (Gerardo, 2026-11-18):** compartido entre todos los modelos de Codex, con tope cada 5 h y otro semanal
+  (el 18/11 se fue el 36 % del semanal en ~12 h). Se guarda para lo difícil; lo mecánico va a CodeBuddy y MiniMax. Un
+  «usage limit» no lo da por muerto: el vigía lo vuelve a probar en cada tarea nueva y vuelve solo al reiniciarse las 5 h.
   Con la cuenta ChatGPT NO andan `gpt-5.x`, `gpt-5.4-mini` ni `codex-spark`. La suscripción tiene límite de uso: con
   429 el vigía rota al siguiente, como con CodeBuddy.
   La geometría difícil no va a OpenCode: va a Opus alto. Prohibidos:
