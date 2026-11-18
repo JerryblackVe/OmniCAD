@@ -3,7 +3,6 @@
 
 Preparación para Opus: reproduce los clics del visor con señales (sin mover el cursor real).
 """
-import pytest
 from PySide6.QtCore import QCoreApplication, QPointF
 from test_manipuladores import _doc_caja, _panel, app_qt  # noqa: F401 (fixture)
 
