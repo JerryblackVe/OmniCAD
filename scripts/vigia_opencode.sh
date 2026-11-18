@@ -20,7 +20,7 @@ MIN=${VIGIA_MIN:-20}
 CB=${VIGIA_CB:-$HOME/.local/cb/codebuddy}   # CodeBuddy (Node 22 propio); sus modelos van con «cb:»
 # Orden por la prueba de carga del 17/11: CodeBuddy contesta en ~8 s y aguanta 4 a la vez; MiniMax ~3; GLM y DeepSeek gratis de OpenCode no contestaron.
 MODELOS=(openai/gpt-6.2-sol openai/gpt-6.1-terra cb:deepseek-v4.1-flash cb:hy3 nvidia/minimaxai/minimax-m3.1-flash openai/gpt-6.2-astra opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free)
-CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound|^429 |credits.?exhausted|frequency.?limit'
+CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound|^429 |credits.?exhausted|frequency.?limit|usage.?limit'
 PY=${VIGIA_PY:-$HOME/OmniCAD/clon/.venv/bin/python}
 VERIF=${VIGIA_VERIF:-bash $HOME/OmniCAD/scripts/verif_tarea.sh}   # rápida: ruff + tests que importan directo lo tocado
 MAX=${VIGIA_MAX:-6}   # hasta 2 por modelo de CodeBuddy y 1 por modelo de OpenCode
