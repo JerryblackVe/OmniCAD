@@ -6,10 +6,11 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 ## Pendientes generales
 
-Abierto 10 · Parcial 9 · Sin verificar 2.
+Abierto 11 · Parcial 9 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-180 | Archivo que no abre (prioridad 2, Gerardo 18/11): botón «🛠 Reparar una copia» que arregla solo casos conocidos y seguros (p. ej. un paso repetido, B-592), nunca toca el original y muestra qué cambió; muy visual, ícono grande y 1 renglón sin jerga (regla 14). El error actual («La receta repite el id de paso op305») tampoco cumple: pasarlo a 1 renglón para cualquiera | Abierto | Media | Diálogo de error de abrir con el botón, lista de arreglos seguros, mensajes sin jerga, MCP/CLI y test | Pedido de Gerardo vía el chat maestro | 2026-11-18 |
 | P-99 | Extruir recalcula todos los perfiles en cada clic | Parcial | Alta | Hecho (E6, 2026-11-16): el asa de la conicidad (`manipuladores.punto_borde`) teselaba todos los perfiles en cada clic; ahora recuerda los puntos por forma. Llavero en la VPS, 16 clics de perfil (CPU del hilo principal, últimos 5): 102 → 71 ms; reloj 134 → 113 ms; la previa va aparte. Falta: medir en la PC de Gerardo (antes 0,5 → 2 s por clic); lo que queda son 2 `set_modelo` de ~30 ms y el dibujo de bocetos | tests/test_previa_prisma.py; evidencias/video_extrusion_2026-11-08/medir_extruir.py | 2026-11-12 |
 | P-78 | Rosca modelada lenta | Parcial | Alta | El corte en sí (~0,35 s por corte en M40x3×30; Fusion ~0,05 s por rosca) y el corte que se tira cuando 0° falla: 229° primero lo ahorraría, pero rompe B-308. El costo ya no crece con el documento. | tests/test_p78_rosca_un_corte.py; PROJECT_LOG.md (2026-11-13 · P-78); nucleo/solidos_crear.py › `_cortar_helicoidal` | 2026-11-13 |
 | P-61 | Las ventanas minimizadas de prueba pueden verse o tomar el foco | Abierto | Media | Medir foco y cursor en prueba_ui y evitar destellos sin romper atajos. | scripts/prueba_ui/arnes.py; clon/omnicad/prueba_humo.py | 2026-11-06 |
