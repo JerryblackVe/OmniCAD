@@ -23,7 +23,7 @@ def test_b489_patron_de_mil_copias_encimadas_falla_claro_y_rapido():
     t = time.perf_counter()
     r = api.llamar(s, "sketch_rectangular_pattern", {"entities": rect, "count1": 1000, "distance1": 5})
     assert time.perf_counter() - t < 20
-    assert not r["ok"] and "curvas encimadas" in r["mensaje"] and "Espaciado" in r["mensaje"], r
+    assert not r["ok"] and "Demasiadas curvas encimadas (4000)." in r["mensaje"], r
     assert len(api.llamar(s, "get_sketch", {})["result"]["entities"]) == 4    # el boceto quedó como estaba
     # Un patrón chico encimado sigue andando (19 perfiles).
     r = api.llamar(s, "sketch_rectangular_pattern", {"entities": rect, "count1": 10, "distance1": 5})

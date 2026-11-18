@@ -138,7 +138,7 @@ def test_boceto_sobre_cara_perdida_da_error_y_depende_del_cuerpo():
         doc.eliminar("op1")
     doc.suprimir("op1")
     r = doc.resultados[1]                                                    # el boceto, op2
-    assert r.estado == "error" and "cara" in r.mensaje
+    assert r.estado == "error" and r.mensaje == "El cuerpo del boceto («op1.c1») ya no existe."
 
 
 def test_boceto_sobre_cara_sigue_a_la_cara_tras_guardar_y_abrir():
