@@ -228,6 +228,17 @@ de OpenCode; las demás la enlazan.
   (`flock`, se suelta solo si el vigía muere). Pytest huérfano (sin padre) de más de 45 min → se corta con aviso.
   Prueba en seco: `scripts/prueba_vigia_opencode.sh`.
 
+## Protocolo de tests rápidos (Gerardo, 2026-11-18: tests rápidos = feedback rápido para los agentes)
+<a id="protocolo-de-tests-rapidos"></a>
+- **Tope de un test:** el de AGENTS.md › «Cómo verificar» (pruebas rápidas); no se repite acá.
+- **Cada noche** `scripts/suite_noche.sh` corre la suite con `--durations=20` y guarda los 20 tests más lentos de sus 4 partes
+  en `~/coordinador/suite_noche/lentos.txt`.
+- **Al mirar la suite a la mañana**, el coordinador carga a la reserva de OpenCode una tarea por cada test de `lentos.txt`
+  arriba del tope: acelerarlo sin perder lo que prueba (fixture compartida, menos geometría o malla más gruesa) y, si no
+  hay otra, marcarlo `@pytest.mark.lento`. Un archivo por tarea; el brief prohíbe tocar las aserciones.
+- **`scripts/tests_afectados.py --correr`** corre primero los tests del ítem (los que el cambio toca) con `-x`: si uno falla,
+  corta ahí y no espera al resto (falla rápido). Después, el resto de lo elegido.
+
 ## Caza automática de errores
 - `scripts/caza/` es un programa que busca errores solo, sin modelos ni red: cadenas de operaciones con medidas
   relativas a la pieza, contratos de cada herramienta, archivos alterados, eventos al azar en la ventana y rendimiento.

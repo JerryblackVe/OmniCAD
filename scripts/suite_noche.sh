@@ -7,7 +7,7 @@ D=$HOME/coordinador/suite_noche; mkdir -p "$D"; hoy=$(date -u +%F)
 cd "$HOME/OmniCAD/clon" || exit 1
 for i in 0 1 2 3; do
   archivos=$(ls tests/test_*.py | awk -v i=$i 'NR % 4 == i')
-  ( timeout 10800 xvfb-run -a .venv/bin/python -m pytest -q -p no:cacheprovider $archivos > "$D/$hoy.parte$i.txt" 2>&1
+  ( timeout 10800 xvfb-run -a .venv/bin/python -m pytest -q -p no:cacheprovider --durations=20 $archivos > "$D/$hoy.parte$i.txt" 2>&1
     echo "rc=$?" >> "$D/$hoy.parte$i.txt" ) &
 done
 wait
@@ -19,4 +19,6 @@ PYTHONIOENCODING=utf-8 OMNICAD_PRUEBA_VENTANA=minimizada timeout 1800 xvfb-run -
   grep -hE "^(FAILED|ERROR) " "$D/$hoy".parte*.txt | cut -c1-160; } > "$D/ultima.txt"
 # Rojos de main para verif_tarea.sh; si una parte cortó por tiempo, la lista vieja se conserva.
 grep -q "rc=124" "$D/$hoy".parte*.txt || grep -hoE "^(FAILED|ERROR) [^ ]+" "$D/$hoy".parte*.txt | cut -d" " -f2 | sort -u > "$D/rojos.txt"
+# Los 20 más lentos de las 4 partes («Protocolo de tests rápidos» en docs/coordinacion.md): el coordinador los pasa a OpenCode.
+grep -hE "^[0-9.]+s (call|setup|teardown) " "$D/$hoy".parte*.txt | sort -rn | head -20 > "$D/lentos.txt"
 ls -1t "$D"/2*.txt | tail -n +57 | xargs -r rm   # guarda 2 semanas

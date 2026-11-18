@@ -230,10 +230,10 @@ def test_correr_repite_en_mitades_y_archivo_solo_cortado_falla(repo, monkeypatch
     def simular_grupo(comando, **opciones):
         if comando[0] == "git":
             return ejecutar(comando, **opciones)
-        grupo = comando[8:-5]
+        grupo = comando[8:-6]
         assert opciones == {"cwd": repo / "clon"}
         assert comando == [sys.executable, "../scripts/turno.py", "--plazo", "900", "--", sys.executable,
-                           "-m", "pytest", *grupo, "-q", "-W", "error", "-p", "no:cacheprovider"]
+                           "-m", "pytest", *grupo, "-q", "-x", "-W", "error", "-p", "no:cacheprovider"]
         llamadas.append(grupo)
         codigo = 124 if len(grupo) > limite else codigo_final if tests[0] in grupo else 0
         return SimpleNamespace(returncode=codigo)
@@ -301,3 +301,26 @@ def test_cli_sin_correr_no_lanza_pytest_y_lista_ordenada(repo):
 def test_error_de_git_se_informa_sin_exito(repo, capsys):
     assert selector.main(["--raiz", str(repo), "--desde", "referencia_inexistente"]) == 2
     assert "No se pudo seleccionar" in capsys.readouterr().err
+
+
+def test_tests_del_item_primero_con_x_y_cortan_si_fallan(repo, monkeypatch, capsys):
+    """Protocolo de tests rápidos: el test tocado corre primero, con -x; si falla, el resto no se corre."""
+    elegidos = {"tests/test_a.py": "depende por imports de x", "tests/test_b.py": "test tocado"}
+    monkeypatch.setattr(selector, "seleccionar", lambda *args: (elegidos, {}, []))
+    llamadas = []
+    ejecutar = subprocess.run
+
+    def simular_grupo(comando, **opciones):
+        if comando[0] == "git":
+            return ejecutar(comando, **opciones)
+        llamadas.append(comando[7:])
+        return SimpleNamespace(returncode=resultado)
+
+    monkeypatch.setattr(selector.subprocess, "run", simular_grupo)
+    resultado = 1
+    assert selector.main(["--raiz", str(repo), "--correr"]) == 1
+    assert llamadas == [["pytest", "tests/test_b.py", "-q", "-x", "-W", "error", "-p", "no:cacheprovider"]]
+    assert "Falla un test del ítem: corto acá" in capsys.readouterr().out
+    resultado, llamadas[:] = 0, []
+    assert selector.main(["--raiz", str(repo), "--correr"]) == 0
+    assert [c[1] for c in llamadas] == ["tests/test_b.py", "tests/test_a.py"] and "-x" not in llamadas[1]

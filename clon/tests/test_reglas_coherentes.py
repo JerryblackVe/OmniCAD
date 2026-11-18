@@ -77,3 +77,9 @@ def test_umbral_de_grupos_de_tests_afectados_igual_a_la_regla_4():
     n = uno(r"\*\*Si `tests_afectados.py` elige más de (\d+) grupos\*\*", "CLAUDE.md")
     assert re.search(r"^MAX_GRUPOS = (\d+)", texto("scripts/tests_afectados.py"), re.M).group(1) == n
     assert not distintos(r"más de (\d+) grupos", n)
+
+
+def test_cantidad_de_lentos_igual_en_la_suite_nocturna_y_el_protocolo():
+    n = re.search(r"--durations=(\d+)", texto("scripts/suite_noche.sh")).group(1)
+    assert re.search(r"head -(\d+) > \"\$D/lentos.txt\"", texto("scripts/suite_noche.sh")).group(1) == n
+    assert f"`--durations={n}` y guarda los {n} tests más lentos" in texto("docs/coordinacion.md")

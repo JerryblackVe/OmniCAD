@@ -183,16 +183,17 @@ def agrupar(tests, tiempos):
     return grupos
 
 
-def _correr_grupo(raiz, grupo, numero):
-    """Corre con turno.py y repite en mitades si vence el plazo, salvo que quede un solo archivo."""
+def _correr_grupo(raiz, grupo, numero, rapido=False):
+    """Corre con turno.py y repite en mitades si vence el plazo, salvo que quede un solo archivo. `rapido`: corta en el
+    primer fallo (-x; los tests del ítem, «Protocolo de tests rápidos» en docs/coordinacion.md)."""
     comando = [sys.executable, "../scripts/turno.py", "--plazo", "900", "--", sys.executable,
-               "-m", "pytest", *grupo, "-q", "-W", "error", "-p", "no:cacheprovider"]
+               "-m", "pytest", *grupo, "-q", *(["-x"] if rapido else []), "-W", "error", "-p", "no:cacheprovider"]
     codigo = subprocess.run(comando, cwd=raiz / "clon").returncode
     if codigo == 124 and len(grupo) > 1:
         print(f"Grupo {numero}: cortado por el plazo de 900 s (124); lo repito en dos mitades", flush=True)
         mitad = len(grupo) // 2
-        primera = _correr_grupo(raiz, grupo[:mitad], numero)
-        segunda = _correr_grupo(raiz, grupo[mitad:], numero)
+        primera = _correr_grupo(raiz, grupo[:mitad], numero, rapido)
+        segunda = _correr_grupo(raiz, grupo[mitad:], numero, rapido)
         return primera or segunda
     return codigo
 
@@ -227,7 +228,11 @@ def main(argumentos=None):
             comun = Path(_git(args.raiz, "rev-parse", "--path-format=absolute", "--git-common-dir").strip())
             archivo_tiempos = comun.parent / "evidencias" / "tiempos.json"
         tiempos = json.loads(archivo_tiempos.read_text(encoding="utf-8"))["archivos"] if archivo_tiempos.exists() else {}
-        grupos = agrupar(tests, tiempos)
+        # Primero los tests del ítem (los tocados), con -x: si fallan, no se espera al resto.
+        del_item = [t for t, motivo in tests.items() if motivo == "test tocado"]
+        grupos = agrupar(del_item, tiempos)
+        primeros = len(grupos)
+        grupos += agrupar([t for t in tests if t not in del_item], tiempos)
         if len(grupos) > MAX_GRUPOS:
             print(f"AVISO: {len(grupos)} grupos (más de {MAX_GRUPOS}, cambio en el núcleo): corré solo los tests de tu ítem y los que "
                   "importan directo lo que tocaste; la suite va de noche (CLAUDE.md, regla 4).", flush=True)
@@ -237,9 +242,12 @@ def main(argumentos=None):
             print(f"Grupo {i}/{len(grupos)}: {len(grupo)} archivos, {estimado:.1f} s estimados", flush=True)
             if estimado >= TOPE_GRUPO:
                 print(f"Aviso: un archivo solo alcanza los {TOPE_GRUPO} s; no se puede dividir por archivo.", flush=True)
-            codigo = _correr_grupo(args.raiz, grupo, i)
+            codigo = _correr_grupo(args.raiz, grupo, i, rapido=i <= primeros)
             fallos += codigo != 0
             print(f"Grupo {i}: salida {codigo}", flush=True)
+            if codigo != 0 and i <= primeros:
+                print("Falla un test del ítem: corto acá (arreglalo y volvé a correr).", flush=True)
+                break
         print(f"Resultado: {len(grupos)} grupos, {fallos} fallidos", flush=True)
         return int(fallos > 0)
     except (OSError, ValueError, SyntaxError, KeyError) as error:

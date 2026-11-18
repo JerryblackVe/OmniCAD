@@ -157,6 +157,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
   copiadas en `AGENTS.md`. El coordinador comprueba en el informe que la sesión pegó la salida real de `ponytail-review`.
 
 ## Regla: pruebas pesadas de noche y lista viva
+- **Tests rápidos (Gerardo, 2026-11-18):** lentos de cada noche a OpenCode y los tests del ítem primero con `-x`: [docs/coordinacion.md › Protocolo de tests rápidos](docs/coordinacion.md#protocolo-de-tests-rapidos).
 - **Quién verifica qué:** la sesión termina su ítem con `tests_afectados.py --correr` verde; el coordinador integra;
   la suite completa y la humo corren solas cada noche (cierre nocturno, abajo); la ventana de Windows, Gerardo o E11.
 - Mientras haya sesiones o pedidos abiertos **no se lanzan las piezas de ventana** (`scripts/prueba_ui`, cierre completo). Solo se

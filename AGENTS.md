@@ -82,6 +82,7 @@ Desde `clon/`, con el Python del venv: `.venv/Scripts/python.exe` en Windows, `.
 - `OmniCAD.py --prueba-humo` prueba automática de la interfaz (sale con 0 si pasa).
 
 ## Cómo verificar
+Tests rápidos (tope, lista de lentos y orden de `tests_afectados.py`): [docs/coordinacion.md › Protocolo de tests rápidos](docs/coordinacion.md#protocolo-de-tests-rapidos).
 Desde `clon/` (shell Bash; en Linux, `.venv/bin/python` en lugar de `.venv/Scripts/python.exe`):
 ```
 .venv/Scripts/python.exe -m ruff check .
