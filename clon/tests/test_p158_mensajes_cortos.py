@@ -15,6 +15,9 @@ HUECO = 6        # lo que ocupa un valor «{}» al mostrarse (p. ej. «36,26 mm�
 RAIZ = Path(__file__).resolve().parent.parent / "omnicad"
 NOMBRES = {"ErrorGeometria", "ErrorOperacion", "ErrorComando", "ErrorBoceto", "exigir", "_mostrar"}
 TOPES = {
+    "nucleo/malla.py": 0,
+    "nucleo/render_cpu.py": 0,
+    "timeline/ops_chapa.py": 0,
     "timeline/ops_engranaje.py": 0,
     "nucleo/engranajes.py": 0,
     "nucleo/chapa.py": 0,

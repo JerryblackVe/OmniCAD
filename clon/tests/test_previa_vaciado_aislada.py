@@ -135,6 +135,7 @@ def test_el_hijo_real_no_bloquea_y_cancelar_no_toca_documento(ventana, monkeypat
             QTimer.singleShot(0, latir)
 
     p._calcular_previa()
+    p._t_hijo.setInterval(2000)   # el hijo caliente de la suite contesta en milisegundos: al demorar la recepción, el conteo de latidos no depende de la carga
     antes["contador"] = ventana.doc.a_dict()["contador"]  # construir reserva ids aun si se cancela
     assert p._hijo_previa is not None and not p._previa_ok
     QTimer.singleShot(0, latir)

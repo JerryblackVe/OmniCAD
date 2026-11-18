@@ -1548,14 +1548,14 @@ def reducir(m, *, objetivo_caras=None, proporcion=None, tolerancia=None, preserv
     Los bordes entre grupos se protegen con planos de penalización; con `preservar_bordes` los bordes
     abiertos no se tocan. Si no quedan colapsos válidos puede terminar por encima del objetivo."""
     if objetivo_caras is None and proporcion is None and tolerancia is None:
-        raise geo.ErrorGeometria("Indicá objetivo_caras, proporcion o tolerancia.")
+        raise geo.ErrorGeometria("Sin objetivo_caras, proporcion ni tolerancia.")
     M = len(m.caras)
     if not M:
         raise geo.ErrorGeometria("La malla está vacía.")
     if proporcion is not None and not 0 < proporcion <= 1:
         raise geo.ErrorGeometria("La proporción tiene que estar entre 0 y 1.")
     if objetivo_caras is not None and objetivo_caras < 4:
-        raise geo.ErrorGeometria("El objetivo tiene que ser de al menos 4 caras.")
+        raise geo.ErrorGeometria("El objetivo necesita al menos 4 caras.")
     if tolerancia is not None and tolerancia < 0:
         raise geo.ErrorGeometria("La tolerancia no puede ser negativa.")
     objetivo = 4
@@ -1957,12 +1957,12 @@ def remallar(m, *, densidad=1.0, longitud=None, preservar_bordes=True, preservar
         raise geo.ErrorGeometria("La malla está vacía.")
     if not (densidad > 0 and math.isfinite(densidad)) or \
             (longitud is not None and not (longitud > 0 and math.isfinite(longitud))):
-        raise geo.ErrorGeometria("La densidad y la longitud tienen que ser positivas y finitas.")
+        raise geo.ErrorGeometria("Densidad y longitud positivas y finitas.")
     if iteraciones < 1:
         raise geo.ErrorGeometria("Hace falta al menos una iteración.")
     base = _sin_degenerados(m)
     if not len(base.caras) or not np.isfinite(base.vertices).all():
-        raise geo.ErrorGeometria("La malla no tiene caras con área o tiene coordenadas no finitas.")
+        raise geo.ErrorGeometria("Sin caras con área o coordenadas no finitas.")
     topo = _Topo(base.caras, len(base.vertices))
     largos = np.linalg.norm(base.vertices[topo.aristas[:, 0]] - base.vertices[topo.aristas[:, 1]], axis=1)
     largo = float(longitud) if longitud is not None else float(largos.mean()) / math.sqrt(densidad)
@@ -2015,7 +2015,7 @@ def cortar_plano(m, punto, normal, *, tipo="recortar", rellenar=True, invertir=F
         raise geo.ErrorGeometria(f"Tipo de corte desconocido: {tipo}")
     n = np.asarray(normal, float)
     if np.linalg.norm(n) < 1e-12:
-        raise geo.ErrorGeometria("La normal del plano de corte no puede ser nula.")
+        raise geo.ErrorGeometria("La normal del plano no puede ser nula.")
     n = n / np.linalg.norm(n) * (-1.0 if invertir else 1.0)
     v, c, g = m.vertices, m.caras, m.grupos
     if not len(c):
@@ -2075,7 +2075,7 @@ def cortar_plano(m, punto, normal, *, tipo="recortar", rellenar=True, invertir=F
     arriba = armar(1, -n)
     if tipo == "recortar":
         if not len(arriba.caras):
-            raise geo.ErrorGeometria("Del lado que se conserva no queda nada de la malla.")
+            raise geo.ErrorGeometria("Del lado que se conserva no queda malla.")
         return arriba
     abajo = armar(-1, n)
     if not len(arriba.caras) or not len(abajo.caras):
@@ -2091,7 +2091,7 @@ def vaciar(m, espesor):
     if espesor <= 0:
         raise geo.ErrorGeometria("El espesor tiene que ser positivo.")
     if not m.es_cerrada():
-        raise geo.ErrorGeometria("Para vaciar, la malla tiene que ser cerrada (estanca); repárela primero.")
+        raise geo.ErrorGeometria("Para vaciar, la malla tiene que ser cerrada.")
     v, c, g = m.vertices, m.caras, m.grupos
     nf = m.normales_caras(False)
     nu = nf / np.maximum(np.linalg.norm(nf, axis=1), 1e-300)[:, None]
@@ -2155,12 +2155,12 @@ def combinar(mallas, *, operacion="unir", motor="auto"):
             desfase = int(np.concatenate(G).max()) + 1 if len(mm.grupos) else desfase
         return Malla(np.vstack(V), np.vstack(C), np.concatenate(G))
     if len(mallas) < 2:
-        raise geo.ErrorGeometria("Combinar necesita un cuerpo objetivo y al menos una herramienta.")
+        raise geo.ErrorGeometria("Combinar: objetivo y 1 o más herramientas.")
     for i, mm in enumerate(mallas):
         if not mm.es_cerrada():
-            raise geo.ErrorGeometria(f"La malla {i + 1} no es cerrada (estanca): repárela antes de combinar.")
+            raise geo.ErrorGeometria(f"La malla {i + 1} no es cerrada (estanca).")
     if motor == "manifold" and _manifold is None:
-        raise geo.ErrorGeometria("Falta el paquete opcional manifold3d (pip install manifold3d).")
+        raise geo.ErrorGeometria("Falta el paquete opcional manifold3d.")
     if motor == "brep" or _manifold is None:
         return _combinar_brep(mallas, operacion)
     resultado = _combinar_manifold(mallas, operacion)
@@ -2309,7 +2309,7 @@ def escalar(m, fx, fy=None, fz=None, punto=(0.0, 0.0, 0.0)):
     Un factor negativo espeja; las caras se reordenan para que las normales sigan hacia afuera."""
     f = np.array([fx, fx if fy is None else fy, fx if fz is None else fz], float)
     if not np.all(np.isfinite(f)) or np.any(f == 0):
-        raise geo.ErrorGeometria("Los factores de escala tienen que ser números distintos de cero.")
+        raise geo.ErrorGeometria("Escala: factores finitos y distintos de 0.")
     p = np.asarray(punto, float)
     c = m.caras if np.prod(f) > 0 else m.caras[:, [0, 2, 1]]
     return Malla((m.vertices - p) * f + p, c, m.grupos)
@@ -2403,8 +2403,7 @@ def a_brep(m, *, metodo="facetado", max_triangulos=50000):
     if not len(c):
         raise geo.ErrorGeometria("La malla está vacía.")
     if len(c) > max_triangulos:
-        raise geo.ErrorGeometria(f"La malla tiene {len(c)} triángulos y el máximo para convertir es "
-                                 f"{max_triangulos}: reducila antes con reducir().")
+        raise geo.ErrorGeometria(f"{len(c)} triángulos pasan del máximo ({max_triangulos}).")
     puntos = [gp_Pnt(*p) for p in v.tolist()]
     vertices = [BRepBuilderAPI_MakeVertex(p).Vertex() for p in puntos]
     aristas = {}
@@ -2451,7 +2450,7 @@ def a_brep(m, *, metodo="facetado", max_triangulos=50000):
         unificar.Build()
         forma = unificar.Shape()
     if not geo.es_valida(forma):
-        raise geo.ErrorGeometria("La conversión dio un cuerpo inválido (¿la malla se autointersecta?).")
+        raise geo.ErrorGeometria("La conversión dio un cuerpo inválido.")
     return forma
 
 
@@ -2466,7 +2465,7 @@ def _exigir_no_vacia(m):
 def _distancia_valida(distancia, que="La distancia"):
     d = float(distancia)
     if not (d >= 0 and math.isfinite(d)):
-        raise geo.ErrorGeometria(f"{que} tiene que ser un número mayor o igual que cero (mm).")
+        raise geo.ErrorGeometria(f"{que} tiene que ser 0 o más (mm).")
     return d
 
 
@@ -2529,7 +2528,7 @@ def disolver_degenerados(m, distancia=None):
             break
     r = _quitar_caras_dobles(r)
     if not len(r.caras):
-        raise geo.ErrorGeometria("Disolver degenerados no dejó ninguna cara: la distancia es demasiado grande.")
+        raise geo.ErrorGeometria("Disolver degenerados no dejó ninguna cara.")
     return r
 
 
@@ -2540,7 +2539,7 @@ def borrar_sueltos(m, *, caras_aisladas=True, area_minima=0.0):
     los restos sueltos de un escaneo."""
     _exigir_no_vacia(m)
     if not 0 <= area_minima < 1:
-        raise geo.ErrorGeometria("El área mínima es una fracción del área total entre 0 y 1.")
+        raise geo.ErrorGeometria("El área mínima es una fracción entre 0 y 1.")
     c = m.caras
     ok = np.ones(len(c), bool)
     if caras_aisladas:
@@ -2548,7 +2547,7 @@ def borrar_sueltos(m, *, caras_aisladas=True, area_minima=0.0):
         ok = ~(topo.cuenta[topo.inv] == 1).reshape(-1, 3).all(1)
     r = _quitar_cascaras_chicas(_compactar(m.vertices, c[ok], m.grupos[ok]), area_minima)
     if not len(r.caras):
-        raise geo.ErrorGeometria("Borrar sueltos quitaría toda la malla: no tiene caras unidas entre sí.")
+        raise geo.ErrorGeometria("Borrar sueltos quitaría toda la malla.")
     return r
 
 
@@ -2559,7 +2558,7 @@ def rellenar_huecos(m, *, lados_maximos=0):
     abierto."""
     _exigir_no_vacia(m)
     if int(lados_maximos) != lados_maximos or lados_maximos < 0:
-        raise geo.ErrorGeometria("Los lados máximos son un entero mayor o igual que cero (0 = todos los agujeros).")
+        raise geo.ErrorGeometria("Lados máximos: entero de 0 o más (0 = todos).")
     v, c, g = m.vertices, m.caras, m.grupos
     lazos = _lazos(_Topo(c, len(v)).libres())
     if lados_maximos:

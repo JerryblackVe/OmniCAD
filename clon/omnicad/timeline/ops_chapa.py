@@ -53,8 +53,7 @@ def modelo_actual(cuerpo, aviso=None):
     """Modelo de chapa del cuerpo, con los cortes que le hicieron otras herramientas ya incorporados."""
     m = getattr(cuerpo, "chapa", None)
     if m is None:
-        raise ErrorOperacion(f"«{cuerpo.nombre}» no es un cuerpo de chapa: creálo con Pestaña o usá Convertir a "
-                             "chapa.")
+        raise ErrorOperacion(f"«{cuerpo.nombre}» no es un cuerpo de chapa.")
     if cuerpo.forma is not cuerpo.forma_chapa:
         m, avisos = chapa.absorber(m, cuerpo.forma)
         for a in avisos:
@@ -67,7 +66,7 @@ def _modelo(estado, ctx, cid):
     c = estado.cuerpo(cid)
     m = modelo_actual(c, ctx.aviso)
     if m.get("patron_de"):
-        raise ErrorOperacion("El patrón plano no se edita: cambiá la pieza plegada.")
+        raise ErrorOperacion("El patrón plano no se edita.")
     return c, m
 
 
@@ -186,7 +185,7 @@ class OpPestana(_OpChapa):
         elif tipo == "contorno":
             ents = _resolver_todas(self.p["curvas"], estado)
             if not ents or any(e.tipo != "curva_boceto" for e in ents):
-                raise ErrorOperacion("Elegí las curvas de un perfil abierto de boceto.")
+                raise ErrorOperacion("Elegí curvas de un perfil abierto de boceto.")
             m = chapa.pestana_contorno([e.forma for e in ents], self._plano_comun(ents), _regla(self.p, ctx),
                                        ctx.evaluar(self.p["distancia"]), self.p["orientacion"],
                                        self.p["direccion"], ctx.evaluar(self.p["distancia2"]))
@@ -218,7 +217,7 @@ class OpPestana(_OpChapa):
         for e in ents[1:]:
             if e.plano is None or abs(abs(float(e.plano.normal @ plano.normal)) - 1) > 1e-9 or \
                     abs(float((e.plano.origen - plano.origen) @ plano.normal)) > 1e-6:
-                raise ErrorOperacion("Los perfiles tienen que estar en un mismo plano.")
+                raise ErrorOperacion("Los perfiles deben estar en el mismo plano.")
         return plano
 
 
@@ -262,7 +261,7 @@ class OpPlegar(_OpChapa):
             raise ErrorOperacion("Las líneas de plegado tienen que ser rectas.")
         lineas = [_extremos(x.forma) for x in ents]
         if not lineas:
-            raise ErrorOperacion("Elegí las líneas de plegado (rectas de un boceto sobre la cara).")
+            raise ErrorOperacion("Elegí las líneas de plegado.")
         c, m = _modelo(estado, ctx, e.cuerpo)
         radio = ctx.evaluar(p["radio"]) if p.get("anular") and p.get("radio") else None
         m = chapa.plegar(m, e.forma, lineas, ctx.evaluar(p["angulo"], ANGULO), p["posicion"], p["invertir"], radio,
@@ -427,7 +426,7 @@ class OpUnirPlegando(_OpChapa):
     def ejecutar(self, estado, ctx):
         ents = _resolver_todas(self.p["aristas"], estado)
         if len(ents) != 2 or ents[0].cuerpo == ents[1].cuerpo or None in (ents[0].cuerpo, ents[1].cuerpo):
-            raise ErrorOperacion("Elegí dos aristas, una de cada cuerpo de chapa.")
+            raise ErrorOperacion("Elegí dos aristas de chapa, una por cuerpo.")
         ca, ma = _modelo(estado, ctx, ents[0].cuerpo)
         cb, mb = _modelo(estado, ctx, ents[1].cuerpo)
         radio = ctx.evaluar(self.p["radio"]) if self.p.get("anular") and self.p.get("radio") else None

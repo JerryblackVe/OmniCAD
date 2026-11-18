@@ -144,7 +144,7 @@ _ACABADO_MATERIAL = {"Acero": (1.0, 0.35, 0.0), "Acero inoxidable": (1.0, 0.30, 
 def aspecto(nombre):
     """(color [r, g, b], acabado dict) de un aspecto de la biblioteca."""
     if nombre not in BIBLIOTECA_ASPECTOS:
-        raise geo.ErrorGeometria(f"No existe el aspecto «{nombre}» en la biblioteca.")
+        raise geo.ErrorGeometria(f"No existe el aspecto «{nombre}».")
     a = BIBLIOTECA_ASPECTOS[nombre]
     return list(a["color"]), dict(a["acabado"])
 
@@ -505,13 +505,13 @@ class PrismaVisual:
         self.eje = int(np.argmax(abs(self.normal))) if np.count_nonzero(self.normal) == 1 else None
         v, n, seg = (np.asarray(a, float).reshape(-1, 3) for a in (vertices, normales, segmentos))
         if not len(v) or len(v) % 3 or n.shape != v.shape or not all(np.isfinite(a).all() for a in (v, n, seg)):
-            raise geo.ErrorGeometria("La malla de la previa no contiene triángulos y normales válidos.")
+            raise geo.ErrorGeometria("La malla exige triángulos y normales válidos.")
         origen = np.asarray(origen, float)
         if origen.shape != (3,) or not np.isfinite(origen).all():
-            raise geo.ErrorGeometria("El origen de la previa debe ser un punto finito.")
+            raise geo.ErrorGeometria("El origen de la previa debe ser finito.")
         self.alturas = (v - origen) @ self.normal
         if abs(self.alturas.min()) > 1e-6 or abs(self.alturas.max() - 1) > 1e-6:
-            raise geo.ErrorGeometria("La previa solo admite un perfil plano extruido 1 mm desde su plano.")
+            raise geo.ErrorGeometria("La previa necesita un perfil plano de 1 mm.")
         self.perfil = v - self.alturas[:, None] * self.normal
         self.minimo, self.maximo = self.perfil.min(0), self.perfil.max(0)
         self.alturas_seg = (seg - origen) @ self.normal
@@ -524,7 +524,7 @@ class PrismaVisual:
     def transformar(self, inicio, fin):
         """(vértices, normales, segmentos) del prisma entre dos distancias firmadas al plano, en mm."""
         if not np.isfinite([inicio, fin]).all() or abs(fin - inicio) <= 1e-12:
-            raise geo.ErrorGeometria("La distancia de la previa debe ser finita y distinta de cero.")
+            raise geo.ErrorGeometria("La distancia debe ser finita y no ser cero.")
         if self.eje is not None:
             v, seg = self.perfil.copy(), self.perfil_seg.copy()
             v[:, self.eje] += (inicio + self.alturas * (fin - inicio)) * self.normal[self.eje]
@@ -1263,7 +1263,7 @@ def renderizar(objetos, cam, escena=None, ancho=800, alto=600, supermuestreo=2, 
     progreso(fracción) puede devolver False para cancelar (lanza RenderCancelado)."""
     ancho, alto, ss = int(ancho), int(alto), max(1, int(supermuestreo))
     if ancho < 1 or alto < 1:
-        raise geo.ErrorGeometria("La imagen tiene que medir al menos 1 × 1 píxel.")
+        raise geo.ErrorGeometria("La imagen debe medir al menos 1 × 1 píxel.")
     esc = _Escena(objetos, escena, cielo, z_suelo, res_sombras, n_luces, calcomanias)
     W, H = ancho * ss, alto * ss
     proy, vista = matrices_camara(cam, W / H)
