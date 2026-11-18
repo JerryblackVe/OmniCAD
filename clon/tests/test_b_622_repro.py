@@ -9,15 +9,17 @@ from PySide6.QtWidgets import QApplication
 
 from omnicad import api
 from omnicad.nucleo import geometria as geo
+from omnicad.timeline import calculo_aislado
 from omnicad.timeline.operaciones import OpExtrusion
 from omnicad.ui import comando
 from omnicad.ui.comandos.solido import Extruir
+from omnicad.ui.manipuladores import CAPA_PREVIA
 from omnicad.ui.preferencias import Preferencias
 from omnicad.ui.ventana import VentanaPrincipal
 
 
-@pytest.mark.xfail(strict=True, reason="B-622", raises=pytest.fail.Exception)
-def test_recibir_el_corte_aparte_no_recalcula_la_herramienta_en_la_ventana(tmp_path, monkeypatch):
+@pytest.mark.parametrize("desfase,sin_malla", [(0, False), (-1, False), (-1, True)])
+def test_recibir_el_corte_aparte_no_recalcula_la_herramienta_en_la_ventana(tmp_path, monkeypatch, desfase, sin_malla):
     monkeypatch.setattr(comando, "PREVIA_APARTE", True)
     app = QApplication.instance() or QApplication([])
     sesion = api.Sesion()
@@ -42,6 +44,18 @@ def test_recibir_el_corte_aparte_no_recalcula_la_herramienta_en_la_ventana(tmp_p
             for perfil in perfiles])
         panel.set_valor("operacion", "cortar")
         panel.set_valor("distancia", "-4 mm")
+        if desfase:
+            panel.set_valor("inicio", "desfase")
+            panel.set_valor("desfase_inicio", f"{desfase} mm")
+        if sin_malla:
+            leer = calculo_aislado.leer_previa_visual
+
+            def sin_malla_roja(salida, entrada):
+                estado, avisos = leer(salida, entrada)
+                estado._tris_corte = None
+                return estado, avisos
+
+            monkeypatch.setattr(calculo_aislado, "leer_previa_visual", sin_malla_roja)
         panel._t_previa.stop()
         panel._calcular_previa()
         assert panel._previa_aparte and panel._hijo_previa is not None, panel.mensaje.text()
@@ -65,8 +79,14 @@ def test_recibir_el_corte_aparte_no_recalcula_la_herramienta_en_la_ventana(tmp_p
         estado = ventana.visor._estado
         volumen = sum(geo.volumen_exacto(c.forma) for c in estado.cuerpos.values())
         assert volumen == pytest.approx(50 * 40 * 10 - len(circulos) * math.pi * 4)
-        if tiempos:
+        if sin_malla:
+            assert len(tiempos) == 1  # Sin el dibujo del hijo, funciona el camino normal.
+        elif tiempos:
             pytest.fail(f"La ventana volvió a extruir la herramienta al recibir la previa: {sum(tiempos):.0f} ms")
+        (rojo,) = ventana.visor._capas[CAPA_PREVIA]
+        assert rojo[0] == "tris"
+        assert rojo[1][:, 2].min() == pytest.approx(6 + desfase)
+        assert rojo[1][:, 2].max() == pytest.approx(10 + desfase)
     finally:
         if ventana.panel is not None:
             ventana.panel.cancelar()

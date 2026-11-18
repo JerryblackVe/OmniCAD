@@ -1233,6 +1233,7 @@ class OpExtrusion(_OpConPerfiles):
     (distancia, al objeto o todo), ángulo de conicidad y operación (nuevo cuerpo, unir, cortar, intersecar)
     sobre los cuerpos automáticos o los elegidos en «Objetos para cortar»."""
     TIPO, ETIQUETA, ICONO = "extrusion", "Extrusión", "⬆"
+    _guardar_herramienta_previa = False
     MENSAJE_CARAS = "Las caras elegidas no miran para el mismo lado: extruí cada cara por separado."
     PARAMS = {"boceto": "", "perfiles": [], "caras": [], "tipo": "solida", "inicio": "plano", "desfase_inicio": "0 mm",
               # El panel y la API arrancan en «Longitud total» (H-86); acá queda "mitad": es lo que calcula una
@@ -1281,6 +1282,8 @@ class OpExtrusion(_OpConPerfiles):
                                       limites=limites)
         self._registrar_usados(afectados)
         _exigir_cuerpo_con_volumen(estado, afectados)
+        if self._guardar_herramienta_previa:
+            self._herramienta_previa = forma
 
     def _forma(self, estado, ctx):
         """Herramienta común a la previa y al resultado; los límites se calculan por lado."""

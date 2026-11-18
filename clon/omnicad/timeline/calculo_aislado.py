@@ -245,6 +245,9 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
     doc = aislado._documento(receta)
     entrada = doc.estado_en(doc.marcador if indice is None else indice)
     op = operacion_desde_dict(operacion)
+    if formas and op.TIPO == "extrusion" and op.p["operacion"] == "cortar":
+        # La booleana ya arma la herramienta; la ventana solo necesita sus triángulos.
+        op._guardar_herramienta_previa = True
     inicio = time.perf_counter()
     estado, avisos = doc.previsualizar(op, indice, en_vivo=True)
     mallas, nuevos, enviar = {}, {}, {}
@@ -257,10 +260,19 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
         mallas[cid] = _malla(c.forma, deflexion, angular)
         if formas:
             enviar[cid] = c.forma
+    tris_corte = None
+    herramienta = getattr(op, "_herramienta_previa", None)
+    if herramienta is not None:
+        try:
+            tris = geo.teselar(herramienta, 0.1)[0]
+            if 0 < tris.nbytes <= _TOPE_BYTES:
+                tris_corte = tris
+        except Exception:  # noqa: BLE001 — el dibujo extra no invalida la previa exacta
+            pass
     # FL-1: lo que costaría en la ventana (kernel y malla), sin rehacer el documento. FL-1b: mallar un barrido tarda 0,4 s
     ms = (time.perf_counter() - inicio) * 1000
     return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos),
-                       "formas": enviar, "ms": ms}, transporte=False)
+                       "formas": enviar, "ms": ms, "tris_corte": tris_corte}, transporte=False)
 
 
 def solape_herramienta(receta, operacion, indice, cuerpos):
@@ -291,6 +303,7 @@ def leer_previa_visual(salida, entrada):
     estado._mallas_previa = preparadas
     estado._origen_previa = entrada
     estado._ms_previa = datos.get("ms", math.inf)
+    estado._tris_corte = datos.get("tris_corte")
     return estado, datos["avisos"]
 
 

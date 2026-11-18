@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-18 · B-622.** La previa aparte de Extruir › Cortar manda en rojo la malla de la herramienta que ya usó; si falta, queda el dibujo normal. `test_b_622_repro.py`: 100 ms de extrusión duplicada antes, ninguna al dibujar después. Falta medir el caso original en Windows.
 - **2026-11-18 · B-618 cerrado.** Solevación sólida de dos círculos en planos que se cruzan: la reglada se metía en la tapa y el chequeo la rechazaba; ahora sale lisa (`_loft_liso`). `test_b_618_repro.py` sin xfail, 0 autointersecciones; ruff limpio.
 - **2026-11-18 · B-612.** Labio, ranura y modo combinado rechazan ancho o alto menores que la resolución booleana antes del barrido. Regresión en subproceso: `test_create_lip_groove_medidas_minimas_b612`; 256 tests OK, ruff limpio.
 - **2026-11-18 · B-628 cerrado.** Tres aserciones al día con P-158: `test_boceto_3d.py`, `test_texto_curva.py` y `test_b489_patron_encimado.py`. Los tres fallaban solo por texto viejo; no se tocó la app. Ruff limpio, pytest: 159 OK, 106 omitidos por fuentes y omnikernel.
@@ -598,6 +599,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-18] Si una previa aparte todavía bloquea la ventana, medí también el dibujo auxiliar al recibirla: el cuerpo final puede venir del hijo y el panel repetir el trabajo para pintarlo. · Evidencia: `test_b_622_repro.py` detectó 100 ms al volver a extruir la herramienta roja.
 - [2026-11-18] `ThruSections` con dos secciones es reglado aunque `reglada=False`: entre planos que se cruzan la pared se mete en la tapa. · Evidencia: `tests/test_b_618_repro.py` (0 autointersecciones).
 - [2026-11-18] Antes de cerrar un ítem, contrastá el número de casos del brief con los que enumera la fila vigente y reproducí los agregados. · Evidencia: B-628 anunciaba dos tests, pero la fila incluía B-489 y pytest reprodujo los tres fallos.
 - [2026-11-18] Al acortar un error, conservá la causa confirmada: distinguí un cálculo fallido de un resultado vacío antes de traducir el mensaje. · Evidencia: B-629, `test_b517_desfase_texto_adentro.py` fallaba porque el desfase descartaba el resultado vacío de la resta de franjas.

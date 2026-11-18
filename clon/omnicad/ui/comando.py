@@ -2203,7 +2203,7 @@ class PanelComando(QFrame):
                 self._previa_ok = self.ultima_op is not None and self.ultima_op.a_dict() == self._op_hijo.a_dict()
                 self._mostrar(" ".join(avisos), tipo="aviso")
                 if self._previa_ok:
-                    self._previa_vista(self._op_hijo)
+                    self._previa_vista(self._op_hijo, estado._tris_corte)
                     if self.manipuladores is not None:
                         self.manipuladores.previa_calculada(True)
                 self._previa_lista(estado)
@@ -2252,14 +2252,18 @@ class PanelComando(QFrame):
             self._hijo_previa = None
         self._pendiente_hijo = None
 
-    def _previa_vista(self, op):
+    def _previa_vista(self, op, tris_corte=None):
         """Dibujo extra del comando para la vista previa (el agujero en rojo…)."""
         if self.manipuladores is None:
             return
         prims = None
         if op is not None:
             try:
-                prims = self.comando.previa_vista(self.ctx, self.valores, op)
+                if tris_corte is not None and len(tris_corte):
+                    from .manipuladores import tris_rojos
+                    prims = tris_rojos(tris_corte)
+                else:
+                    prims = self.comando.previa_vista(self.ctx, self.valores, op)
             except Exception:  # noqa: BLE001 — sin el dibujo extra la vista previa sigue sirviendo
                 prims = None
         self.manipuladores.mostrar_previa(prims)
