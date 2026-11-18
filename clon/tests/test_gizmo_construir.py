@@ -194,7 +194,7 @@ def test_asa_de_ruta_en_milimetros_y_flecha_sobre_un_eje(app_qt):  # noqa: F811
     gm = p.manipuladores
     gm.actualizar()
     assert p._visible(p._por_clave["distancia"]) and not p._visible(p._por_clave["tipo_distancia"])
-    assert [m.clave for m in gm.manips] == ["distancia"]
+    assert [m.clave for m in gm.manips if hasattr(m, "clave")] == ["distancia"]  # B-639: el contorno del plano no es un asa
     p.cancelar()
 
 

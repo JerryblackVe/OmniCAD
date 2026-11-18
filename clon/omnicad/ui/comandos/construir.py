@@ -9,6 +9,7 @@ import numpy as np
 from ...timeline.operaciones import OpPlano
 from ...timeline.ops_construir import TIPOS_EJE, TIPOS_PLANO, TIPOS_PUNTO, OpEje, OpPunto, OpSCU, calcular_plano, lugar_en
 from ...timeline.parametros import ANGULO, ESCALAR, LONGITUD
+from .. import manipuladores as mp
 from ..comando import (Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, OpcionesVivas, Seleccion, acepta, hit_desde_ref,
                        hits, ref1, refs)
 from . import registrar
@@ -298,7 +299,6 @@ class GeometriaConstruccion(Comando):
 
 
 def _entidad(ctx, v, clave="r0"):
-    from .. import manipuladores as mp
     return mp.entidad(v[clave][0], ctx.estado) if v.get(clave) else None
 
 
@@ -313,12 +313,46 @@ def _asas_desfase(self, ctx, v):
     return [mp.Flecha("distancia", ent.como_punto(e) if e.tipo == "cara" else plano.origen, plano.normal)]
 
 
+class _ContornoPlanoRuta(mp.Manipulador):
+    """Contorno del plano exacto mientras se ajusta la ruta, sin un asa adicional."""
+    ident = "contorno_plano_ruta"
+
+    def __init__(self, plano, medida):
+        self.plano, self.medida = plano, medida
+
+    def dibujar(self, g, activo):
+        from ..visor3d import ESCALA_EXTENDIDO, NARANJA_PLANO
+
+        limites = self.medida["limites"]
+        extendido = self.medida["redimensionar"] == "extendido"
+        if limites is None or extendido:
+            u, v = self.plano.a_uv(g.visor.objetivo)
+            lado = g.visor._tam_planos() * (ESCALA_EXTENDIDO if extendido else 1.0)
+            limites = (u - lado, v - lado, u + lado, v + lado)
+        u0, v0, u1, v1 = limites
+        esquinas = np.array([self.plano.a_3d(u, v) for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))])
+        return [("lineas", mp._segs(np.vstack((esquinas, esquinas[0]))), NARANJA_PLANO, 1.2)]
+
+
+def _asas_plano_ruta(self, ctx, v):
+    from ...timeline.ops_construir import medida_plano
+
+    asas = _asas_ruta(self, ctx, v)
+    try:
+        op = self.construir(v, ctx)
+        entidades = [mp.entidad(ref, ctx.estado) for ref in op.p["refs"]]
+        plano = calcular_plano(op.p, entidades, ctx, ctx.estado)
+        medida = medida_plano(op.p, plano, entidades, ctx, ctx.estado)
+    except Exception:  # noqa: BLE001 — el contorno no impide usar el asa ni la previa normal
+        return asas
+    return [*asas, _ContornoPlanoRuta(plano, medida)]
+
+
 def _asas_ruta(self, ctx, v):
     """Asa que se desliza por la ruta. Escribe la posición de 0 a 1 o, con distancia absoluta, los milímetros; sobre un eje
     es una flecha. También se puede pasar de los extremos."""
     from ...nucleo import construccion as cs
     from ...timeline.ops_construir import _ruta
-    from .. import manipuladores as mp
     e = _entidad(ctx, v)
     if e is None:
         return []
@@ -388,7 +422,7 @@ def _asas_perpendicular(self, ctx, v):
 
 TITULOS = {OpPlano: TIPOS_PLANO, OpEje: TIPOS_EJE, OpPunto: TIPOS_PUNTO}
 ASAS = {"plano_desfase": _asas_desfase, "plano_angulo": _asas_angulo, "plano_tangente": _asas_tangente,
-        "plano_perpendicular": _asas_perpendicular, "plano_ruta": _asas_ruta, "punto_ruta": _asas_ruta}
+        "plano_perpendicular": _asas_perpendicular, "plano_ruta": _asas_plano_ruta, "punto_ruta": _asas_ruta}
 COMANDOS = [type(f"Construir_{k}", (GeometriaConstruccion,),
                  {"CLAVE": k, "TITULO": TITULOS[d[0]][d[1]], "ICONO": k, "CLASE_OP": d[0], "TIPO_CONSTR": d[1],
                   "AYUDA": f"CONSTRUIR › {d[2]}."}) for k, d in METODOS.items()]
