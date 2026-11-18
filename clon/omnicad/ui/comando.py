@@ -90,6 +90,14 @@ class ErrorComando(ValueError):
     """Faltan datos para armar la operación (se muestra en el panel, no es un error del modelo)."""
 
 
+class ErrorSeleccion(ErrorComando):
+    """La selección no sirve para el campo indicado."""
+
+    def __init__(self, campo, mensaje):
+        super().__init__(mensaje)
+        self.campo = campo
+
+
 # ---------------------------------------------------------------- campos
 class Campo:
     """Un control del panel. Jerarquía (docs/auditorias/ui_paneles_2026-10-31.md): los campos son imprescindibles o
@@ -930,6 +938,7 @@ class PanelComando(QFrame):
         self.activa = None
         self.ultima_op = None
         self._previa_ok = False
+        self._seleccion_invalida = None
         self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
         self._hijo_previa = self._op_hijo = self._pendiente_hijo = None
         self._previa_cortada = False
@@ -1792,7 +1801,7 @@ class PanelComando(QFrame):
         self.valores[campo.clave] = lista
         self._refrescar_seleccion()
         if campo.maximo is not None and len(lista) >= campo.maximo:
-            siguiente = self._siguiente_seleccion(campo)
+            siguiente = self._siguiente_seleccion(campo) or self._seleccion_faltante()
             self._activar(siguiente if siguiente is not None else campo)
         else:
             self._activar(campo)
@@ -1834,6 +1843,13 @@ class PanelComando(QFrame):
             if not self.valores.get(c.clave):
                 return c
         return None
+
+    def _seleccion_faltante(self):
+        """La primera selección obligatoria que quedó vacía, también ANTES del campo lleno (B-623: en
+        Dividir cuerpo, la herramienta elegida primero dejaba activa su fila, que acepta cuerpos, y el clic
+        del cuerpo se perdía ahí)."""
+        return next((c for c in self.campos if isinstance(c, Seleccion) and c.minimo > 0
+                     and self._a_la_vista(c) and not self.valores.get(c.clave)), None)
 
     def _refrescar_seleccion(self):
         self._previa_aislada = False     # otra selección es otra geometría: la próxima previa vuelve a ensayarse aislada
@@ -1901,6 +1917,9 @@ class PanelComando(QFrame):
             self.manipuladores.previa_calculada(self._previa_ok)
 
     def _calcular_previa_ahora(self, en_ventana=False):
+        if self._seleccion_invalida is not None:
+            self._seleccion_invalida.setStyleSheet("")
+            self._seleccion_invalida = None
         for c in self.campos:
             if isinstance(c, Info) and c.clave not in self._pendientes:      # B-545: la de una fila sin armar, al armarla
                 self._poner_info(c)
@@ -1927,7 +1946,11 @@ class PanelComando(QFrame):
         except (ErrorComando, ErrorExpresion) as e:
             self._cancelar_previa_hijo()
             self.ultima_op = None
-            self._mostrar(str(e), tipo="instruccion" if isinstance(e, ErrorComando) else "invalido")
+            if isinstance(e, ErrorSeleccion):
+                self._seleccion_invalida = self.filas_sel[e.campo].boton
+                self._seleccion_invalida.setStyleSheet(f"background: {temas.color('campo_error')};")
+                self.boton_ok.setEnabled(False)
+            self._mostrar(str(e), tipo="invalido" if isinstance(e, (ErrorSeleccion, ErrorExpresion)) else "instruccion")
             if isinstance(e, ErrorExpresion):
                 self._mostrar_campo_invalido()
             self._previa_vista(None)

@@ -1316,6 +1316,8 @@ class OpExtrusion(_OpConPerfiles):
             if not p.get("hasta"):
                 raise ErrorOperacion("Elegí el límite de la extrusión.")
             limite = _resolver(p["hasta"], estado)
+            if problema := self.problema_plano_limite(limite, n):
+                raise ErrorOperacion(problema)
             hasta = self._forma_objeto(limite)
             if p.get("hasta_modo") == "adyacentes" and limite.tipo == "cara" and limite.cuerpo:
                 dueno = estado.cuerpos[limite.cuerpo].forma
@@ -1353,6 +1355,12 @@ class OpExtrusion(_OpConPerfiles):
         """Los cuerpos de «Objetos para cortar», siempre como lista (vacía = automático)."""
         o = self._objetivo()
         return list(o) if isinstance(o, (list, tuple)) else ([o] if o else [])
+
+    @staticmethod
+    def problema_plano_limite(limite, normal):
+        if limite is not None and limite.tipo == "plano" and abs(float(limite.plano.normal @ normal)) < 1e-9:
+            return "El plano límite es paralelo al avance."
+        return None
 
     @staticmethod
     def _forma_objeto(e):

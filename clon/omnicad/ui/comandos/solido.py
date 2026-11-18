@@ -11,8 +11,8 @@ from ...nucleo import geometria as geo
 from ...nucleo.malla import Malla
 from ...timeline.operaciones import OpExtrusion, OpRevolucion, espesor_plastico
 from ...timeline.parametros import ANGULO, LONGITUD
-from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, Expresion, Opciones, OpcionesVivas, Seleccion, exigir,
-                       hit_desde_ref, hits, ref1)
+from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, ErrorSeleccion, Expresion, Opciones,
+                        OpcionesVivas, Seleccion, exigir, hit_desde_ref, hits, ref1)
 from . import registrar
 from .comunes import (DIRECCIONES_UI, ajustar_operacion, caja_cuerpo, caja_nueva, campo_objetivos, campo_operacion, fijar_al_elegir,
                       direcciones_revolucion, evaluar_o_cero as _evaluar, objetivos, objetivos_desde_op, perfil_apoyado,
@@ -208,6 +208,16 @@ class Extruir(Comando):
             raise ErrorComando("Elegí el objeto límite de la extrusión.")
         if v.get("direccion") == "dos_lados" and v.get("extension2") == "objeto" and not v.get("hasta2"):
             raise ErrorComando("Elegí el objeto límite del lado 2.")
+        for lado in ("", "2") if v.get("direccion") == "dos_lados" else ("",):
+            campo = "hasta" + lado
+            limite = ref1(v, campo)
+            if v.get("extension" + lado) != "objeto" or not limite or limite["tipo"] != "plano":
+                continue
+            from ..manipuladores import entidad
+            plano = next((e.plano for h in (resto or v.get("perfiles") or [])
+                          if (e := entidad(h, ctx.estado)) is not None and e.plano is not None), None)
+            if plano is not None and (problema := OpExtrusion.problema_plano_limite(entidad(limite, ctx.estado), plano.normal)):
+                raise ErrorSeleccion(campo, problema)
         params = {k: v.get(k) for k in ("tipo", "inicio", "desfase_inicio", "direccion", "medida", "extension",
                                          "distancia", "invertir", "conicidad", "distancia2", "conicidad2", "espesor",
                                          "ubicacion", "operacion", "hasta_modo", "desfase_hasta", "extension2")}
