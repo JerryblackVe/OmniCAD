@@ -129,7 +129,7 @@ def obtener(clave, nombre, uso=True):
     c = _comando(datos, clave)
     presets = c.get("preajustes") or {}
     if nombre not in presets:
-        raise geo.ErrorGeometria(f"El comando «{clave}» no tiene un preajuste «{nombre}».")
+        raise geo.ErrorGeometria(f"Comando «{clave}»: falta preajuste «{nombre}».")
     if uso:
         c["usado"][nombre] = time.time()
         _guardar_si_se_puede(datos)
@@ -165,7 +165,7 @@ def renombrar(clave, nombre, nuevo):
     c = _comando(datos, clave)
     presets = c.get("preajustes") or {}
     if nombre not in presets:
-        raise geo.ErrorGeometria(f"El comando «{clave}» no tiene un preajuste «{nombre}».")
+        raise geo.ErrorGeometria(f"Comando «{clave}»: falta preajuste «{nombre}».")
     if nuevo in presets and nuevo != nombre:
         raise geo.ErrorGeometria(f"Ya existe el preajuste «{nuevo}».")
     c["preajustes"] = {(nuevo if n == nombre else n): v for n, v in presets.items()}
@@ -182,7 +182,7 @@ def borrar(clave, nombre):
     c = _comando(datos, clave)
     presets = c.get("preajustes") or {}
     if nombre not in presets:
-        raise geo.ErrorGeometria(f"El comando «{clave}» no tiene un preajuste «{nombre}».")
+        raise geo.ErrorGeometria(f"Comando «{clave}»: falta preajuste «{nombre}».")
     del presets[nombre]
     c["modificado"].pop(nombre, None)
     c["usado"].pop(nombre, None)
@@ -196,7 +196,7 @@ def definir_defecto(clave, defecto):
     datos = _leer()
     c = datos.setdefault(clave, {})
     if defecto not in (FABRICA, ULTIMO) and defecto not in (c.get("preajustes") or {}):
-        raise geo.ErrorGeometria(f"El comando «{clave}» no tiene un preajuste «{defecto}».")
+        raise geo.ErrorGeometria(f"Comando «{clave}»: falta preajuste «{defecto}».")
     c["defecto"] = defecto
     _guardar(datos)
 

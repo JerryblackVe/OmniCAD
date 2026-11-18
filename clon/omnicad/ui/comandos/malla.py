@@ -76,7 +76,7 @@ def _parsear_grupos(texto):
     try:
         return [int(x) for x in str(texto or "").replace(",", " ").split()]
     except ValueError:
-        raise ErrorComando("Los grupos de caras se indican con números separados por coma.") from None
+        raise ErrorComando("Grupos de caras: números separados por coma.") from None
 
 
 class CombinarGruposCaras(Comando):
@@ -117,7 +117,7 @@ class CrearGrupoCaras(Comando):
         exigir(v, "cuerpos", "Seleccioná los cuerpos de malla.")
         caras, grupos = _parsear_caras(v.get("caras")), _parsear_grupos(v.get("grupos"))
         if not caras and not grupos:
-            raise ErrorComando("Indicá las caras o los grupos para el grupo nuevo.")
+            raise ErrorComando("Indicá caras o grupos para el grupo nuevo.")
         return self.crear_op(OpCrearGrupoCaras, v, ctx, cuerpos=_ids(v["cuerpos"]), caras=caras, grupos=grupos)
 
     def desde_op(self, op, ctx):
@@ -153,7 +153,7 @@ def _parsear_caras(texto):
     try:
         return [int(x) for x in str(texto or "").replace(",", " ").split()]
     except ValueError:
-        raise ErrorComando("Los índices de caras se indican con números separados por coma.") from None
+        raise ErrorComando("Índices de caras: números separados por coma.") from None
 
 
 class BorrarRellenar(Comando):

@@ -432,7 +432,7 @@ def _tornillo(norma, dt, L):
     if cabeza == "avellanada":
         kc = (dt["dk"] - d) / 2                 # cono de 90°: del diámetro de cabeza al nominal
         if L <= kc + c:
-            raise geo.ErrorGeometria("El largo no alcanza para la cabeza avellanada.")
+            raise geo.ErrorGeometria("Largo insuficiente para cabeza avellanada.")
         solido = _revolucion([(0, 0), (dt["dk"] / 2, 0), (r, -kc)] + punta)
         return geo.booleano(solido, _allen(dt["s"], dt["t"], 0.0), "cortar")
     if cabeza == "hexagonal":
@@ -527,7 +527,7 @@ def _filete(forma, dt, z_material, z_fin, largo_material, interna=False):
         r_in, w_in = D / 2 - prof, P / 4
         r_out, w_out = D / 2 + extra, 7 * P / 8 + pend * extra
     if (z_fin - z_material) / P > 300:
-        raise geo.ErrorGeometria("Demasiadas vueltas para una rosca modelada: usá la rosca cosmética.")
+        raise geo.ErrorGeometria("Demasiadas vueltas para rosca modelada.")
     w = max(w_in, w_out)
     esperado = _por_mm(dt, interna) * largo_material
     v0 = geo.volumen(forma)
@@ -537,7 +537,7 @@ def _filete(forma, dt, z_material, z_fin, largo_material, interna=False):
         z_ini = z_material - antes * P
         altura = (z_fin - z_ini) - w
         if altura <= P / 4:
-            raise geo.ErrorGeometria("El tramo roscado es demasiado corto para modelar la rosca.")
+            raise geo.ErrorGeometria("Tramo roscado muy corto para modelar.")
         # Las caras de revolución tienen la costura en el ángulo 0 (+X): el arranque se gira para que las dos
         # puntas del surco queden lo más lejos posible de ella.
         giro = (altura / P % 1.0) * 360.0
@@ -556,7 +556,7 @@ def _filete(forma, dt, z_material, z_fin, largo_material, interna=False):
         res = _cortar(forma, surco, difuso)
         if res is not None and abs((v0 - geo.volumen(res)) / esperado - 1) < 0.025:
             return res
-    raise geo.ErrorGeometria("El kernel no pudo modelar esta rosca: usá la rosca cosmética.")
+    raise geo.ErrorGeometria("No se pudo modelar la rosca.")
 
 
 def generar(familia, norma, tamano, largo=None, *, rosca="cosmetica"):
@@ -609,7 +609,7 @@ def _unit(v):
     v = np.asarray(v, float)
     n = np.linalg.norm(v)
     if n < 1e-12:
-        raise geo.ErrorGeometria("La dirección de la fijación no puede ser nula.")
+        raise geo.ErrorGeometria("La dirección de la fijación es nula.")
     return v / n
 
 
@@ -701,7 +701,7 @@ def apoyo_cara(cuerpo, cara, otro_extremo=False):
     elif sup.GetType() == GeomAbs_Cone:
         eje = sup.Cone().Axis()
     else:
-        raise geo.ErrorGeometria("La fijación se coloca en una cara cilíndrica o cónica.")
+        raise geo.ErrorGeometria("La cara debe ser cilíndrica o cónica.")
     lo, di = eje.Location(), eje.Direction()
     o, z = np.array([lo.X(), lo.Y(), lo.Z()]), np.array([di.X(), di.Y(), di.Z()])
     pts = _extremos_cara(cara, o, z)

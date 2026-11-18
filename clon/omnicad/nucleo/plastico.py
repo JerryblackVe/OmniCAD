@@ -44,9 +44,9 @@ def ruta_reglas_propias():
 def _numero(d, clave, minimo=None, maximo=None, defecto=None):
     valor = d.get(clave, defecto)
     if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not math.isfinite(valor):
-        raise geo.ErrorGeometria(f"«{clave}» tiene que ser un número finito (llegó {valor!r}).")
+        raise geo.ErrorGeometria(f"«{clave}» no es finito (llegó {valor!r}).")
     if (minimo is not None and valor < minimo) or (maximo is not None and valor > maximo):
-        raise geo.ErrorGeometria(f"«{clave}» tiene que estar entre {minimo} y {maximo} (llegó {valor:g}).")
+        raise geo.ErrorGeometria(f"«{clave}» fuera de [{minimo}, {maximo}]: {valor:g}.")
     return float(valor)
 
 
@@ -57,7 +57,7 @@ def definicion(**datos):
     if not nombre:
         raise geo.ErrorGeometria("La regla necesita un nombre.")
     if len(nombre) > 80:
-        raise geo.ErrorGeometria("El nombre de la regla es demasiado largo (máximo 80 caracteres).")
+        raise geo.ErrorGeometria("El nombre de la regla supera 80 caracteres.")
     espesor = _numero(datos, "espesor", 0.01, 100)
     d = {"nombre": nombre, "material": datos.get("material") or None, "espesor": espesor,
          "angulo_desmoldeo": _numero(datos, "angulo_desmoldeo", 0, 45, 1.0),
@@ -86,7 +86,7 @@ def definir_regla(datos, guardar=True):
     """Suma (o reemplaza) una regla propia. No pisa las de fábrica. Devuelve la regla validada."""
     d = definicion(**datos)
     if any(d["nombre"].casefold() == n.casefold() for n in REGLAS):
-        raise geo.ErrorGeometria(f"«{d['nombre']}» es una regla de fábrica: elegí otro nombre para la regla propia.")
+        raise geo.ErrorGeometria(f"«{d['nombre']}» es de fábrica: elegí otro nombre.")
     REGLAS_USUARIO[d["nombre"]] = d
     if guardar:
         escribir_biblioteca_json(ruta_reglas_propias(), "reglas", d["nombre"], d)

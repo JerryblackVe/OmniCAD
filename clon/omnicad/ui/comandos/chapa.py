@@ -113,7 +113,7 @@ class ReglasChapa(Comando):
         try:
             return c, ctx.doc.operacion(op_id)
         except ValueError as e:
-            raise ErrorComando("No se encontró la operación que tiene la regla de este cuerpo.") from e
+            raise ErrorComando("Falta la operación de la regla del cuerpo.") from e
 
     def _actual(self, v, ctx):
         if not v.get("cuerpo"):
@@ -128,7 +128,7 @@ class ReglasChapa(Comando):
             if texto:
                 ajustes[k] = texto
         if op.TIPO == "convertir_chapa" and "espesor" in ajustes:
-            raise ErrorComando("El espesor de una chapa convertida es el medido: no se puede cambiar.")
+            raise ErrorComando("El espesor medido de la chapa no se cambia.")
         nombre = v.get("regla") or op.p.get("regla") or ch.REGLA_DEFECTO
         valores = {k: x if k in ("alivio_forma", "esquina_forma") else
                    ctx.evaluar(x, ESCALAR if k == "k" else LONGITUD) for k, x in ajustes.items()}
@@ -559,7 +559,7 @@ class UnirPlegando(Comando):
 
     def construir(self, v, ctx):
         if len(v.get("aristas") or []) != 2:
-            raise ErrorComando("Seleccioná dos aristas, una de cada cuerpo de chapa.")
+            raise ErrorComando("Seleccioná 2 aristas, una de cada cuerpo.")
         _validar(ctx, v, ("radio",))
         return self.crear_op(OpUnirPlegando, v, ctx, aristas=refs(v, "aristas"), anular=bool(v.get("anular")),
                              radio=(v.get("radio") or "").strip())
