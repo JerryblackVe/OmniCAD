@@ -45,6 +45,8 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
      (integración, cola vacía, ítems sin asignar). Gerardo, 2026-11-17.
   6. Antes de dar el reemplazo por cerrado, `list_sessions` y comprobar que haya UNA sola sesión fijada con ese título
      sin «(viejo)»; si hay dos, renombrar y desfijar la vieja en ese momento (Gerardo, 2026-11-18).
+  7. Antes de irse, la vieja deja la cola y la reserva de OpenCode llenas según los números de «Cola sin sesiones»
+     (Gerardo, 2026-11-18).
 - Todo lo que es para Gerardo o el chat maestro (cierres, integraciones, bloqueos, pedidos de OK) va **siempre** por
   `SendMessage` a ese nombre, leído antes de cada envío. Escribirlo solo en el chat del coordinador no alcanza.
 - Desde la VPS, el id de una sesión de la PC no llega («not found»): llega solo por el nombre (Remote Control prendido).
@@ -197,7 +199,7 @@ de OpenCode; las demás la enlazan.
 - **Quién hace qué**: el vigía lanza las corridas; el coordinador llena la cola (con filas chicas de prioridad 1 de
   `docs/seguimiento/`), revisa el diff e integra. `ahora.md` tiene solo los ítems de las sesiones: su fila de OpenCode
   enlaza a la cola.
-- **Vigía sin modelo** (Gerardo, 2026-11-17): `scripts/vigia_opencode.sh` en la crontab de la VPS, cada 20 min: mata una corrida que no escribe hace 20 min (`MIN`) y lanza las `NN_nombre.tarea` de `~/coordinador/opencode_cola/` en orden alfabético hasta el tope de corridas (`WT=`, `BRIEF=`, `MODELO=` y `VARIANTE=` opcionales; cada corrida con `timeout 2700`; log en `vigia.log`). Una tarea trabada o en rojo se relanza con el modelo siguiente y un brief que sigue desde `git diff` + el log; probados todos los modelos, va a `trabadas/`. Al terminar bien la verifica `scripts/verif_tarea.sh` (ruff y los tests de los archivos tocados, sin turno, ignora los rojos de main de `~/coordinador/suite_noche/rojos.txt`): verde → `hechos/`.
+- **Vigía sin modelo** (Gerardo, 2026-11-17): `scripts/vigia_opencode.sh` en la crontab de la VPS, cada 20 min: mata una corrida que no escribe hace 20 min (`MIN`) y lanza las `NN_nombre.tarea` de `~/coordinador/opencode_cola/` en orden alfabético hasta el tope de corridas (`WT=`, `BRIEF=`, `MODELO=` y `VARIANTE=` opcionales; cada corrida con `timeout 2700`; log en `vigia.log`). Una tarea trabada o en rojo se relanza con el modelo siguiente y un brief que sigue desde `git diff` + el log; si no queda modelo libre (cupo, 429, sin respuesta) vuelve a la cola para la vuelta siguiente, y va a `trabadas/` solo si falló de verdad (error o rojo, sin cupo) con 2 modelos distintos (Gerardo, 2026-11-18). Al terminar bien la verifica `scripts/verif_tarea.sh` (ruff y los tests de los archivos tocados, sin turno, ignora los rojos de main de `~/coordinador/suite_noche/rojos.txt`): verde → `hechos/`.
 - **Cola sin sesiones (Gerardo, 2026-11-17: todo verde, sin depender de una sesión)**: el coordinador deja 20 tareas o
   más en `~/coordinador/opencode_cola/reserva/`; el vigía de la crontab las pasa a la cola hasta tener 8 y anota «AVISO
   reserva con menos de 8» cuando hay que reponer. Las de prioridad 2 llevan el prefijo `z_` (corren al final) y las que
@@ -216,11 +218,12 @@ de OpenCode; las demás la enlazan.
   coordinador: a main entra solo lo que él revisó.
 - **Vigilancia**: el coordinador y el chat maestro, cada 2 h, comprueban que haya corridas activas
   (`ls ~/coordinador/opencode_cola/corriendo`, que ve OpenCode y CodeBuddy) y que la reserva no baje de 8; si baja, la
-  rellenan. Leen también `avisos.txt` de la cola (trabadas, cola o reserva vacías, ningún modelo responde, pytest
+  rellenan. El aviso «reserva con menos de 8» de `avisos.txt` se atiende en esa misma vuelta, llenando la reserva
+  (Gerardo, 2026-11-18). Leen también `avisos.txt` de la cola (trabadas, cola o reserva vacías, ningún modelo responde, pytest
   huérfano cortado) y la hora de `latido`: si tiene más de 1 vuelta, el vigía no corre (crontab o máquina) y se avisa a
   Gerardo. Lo que llega a `trabadas/` lo decide el coordinador (partirlo o pasarlo a una sesión de Claude).
 - **Topes del vigía (nada queda quieto sin corte)**: corrida o verificación sin escribir ni usar CPU en `MIN` min → se
-  corta y se relanza con el modelo siguiente; probados todos → `trabadas/` con aviso. Corrida: `timeout 2700`;
+  corta y se relanza con el modelo siguiente; sin modelo libre → vuelve a la cola; falla real con 2 modelos → `trabadas/` con aviso. Corrida: `timeout 2700`;
   verificación: pytest con `timeout 1500`. Sin worktree o sin brief → `trabadas/` sin rotar. Una vuelta a la vez
   (`flock`, se suelta solo si el vigía muere). Pytest huérfano (sin padre) de más de 45 min → se corta con aviso.
   Prueba en seco: `scripts/prueba_vigia_opencode.sh`.

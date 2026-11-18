@@ -68,10 +68,15 @@ verifica() {   # nombre intento modelo: corre la verificación aparte y la anota
 reintenta() {   # nombre intento modelo motivo
   local n=$1 k=$2 m=$3 sig; source "$COLA/$n.tarea"
   (cd "$WT" && git ls-files -m -o --exclude-standard | tar -czf "$COLA/logs/$n.respaldo$k.tgz" -T - 2>/dev/null)
-  sig=$( [ "$k" -lt "${#MODELOS[@]}" ] && siguiente_modelo "$m" )
-  if [ -z "$sig" ]; then
-    avisa "TRABADA $n ($4): sin más modelos que prueben; pasa a trabadas/ (respaldos en logs/)"
+  # Falla de verdad: terminó mal o la verificación dio rojo, sin un 429/cupo en su salida. Un cupo o un cuelgue no cuentan.
+  case $4 in "terminó con error"*|"verificación en rojo"*) ultimo "$n" | grep -qiE "$CORTE" || echo "$m" >> "$COLA/logs/$n.fallas";; esac
+  if [ "$(sort -u "$COLA/logs/$n.fallas" 2>/dev/null | wc -l)" -ge 2 ]; then
+    avisa "TRABADA $n ($4): falló de verdad con 2 modelos distintos; pasa a trabadas/ (respaldos en logs/)"
     mv "$COLA/$n.tarea" "$COLA/trabadas/"; rm -f "$EST/$n"; return
+  fi
+  sig=$( [ "$k" -lt "${#MODELOS[@]}" ] && siguiente_modelo "$m" )
+  if [ -z "$sig" ]; then   # ningún modelo libre (cupo, 429, sin respuesta): vuelve a la cola para la próxima vuelta
+    anota "sin modelo libre para $n ($4): vuelve a la cola"; rm -f "$EST/$n"; return
   fi
   anota "falla $n (intento $k, $m: $4): relanzo con $sig"
   lanza "$n" $((k + 1)) "$sig" "Ya hay trabajo hecho en $WT: leé \`git diff\` del worktree y las últimas 40 líneas de $COLA/logs/$n.log; seguí desde ahí, no rehagas. Motivo del reintento: $4"
@@ -134,5 +139,6 @@ while [ "$usadas" -lt "$MAX" ]; do
   m=${MODELO:-${MODELOS[0]}}
   usado "$m" && m=$(siguiente_modelo "$m")   # el primer intento no se prueba antes: los gratis tardan 1–2 min en contestar; si falla, lo agarra la vuelta siguiente
   [ -z "$m" ] && { avisa "ningún modelo libre responde: espero a la próxima vuelta"; exit 0; }
-  lanza "$n" 1 "$m"; usadas=$((usadas + 1))
+  extra=; [ -n "$(git -C "$WT" status --porcelain 2>/dev/null)" ] && extra="Ya hay trabajo hecho en $WT: leé \`git diff\` del worktree y las últimas 40 líneas de $COLA/logs/$n.log; seguí desde ahí, no rehagas."
+  lanza "$n" 1 "$m" "$extra"; usadas=$((usadas + 1))
 done
