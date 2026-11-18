@@ -1253,9 +1253,10 @@ class Visor3D(QOpenGLWidget):
         return self.distancia * 0.22
 
     def eligiendo_planos(self):
-        """True cuando se pide un plano (Crear boceto o un comando con campo de plano): ahí se muestran y se
-        pueden elegir también los planos del origen ocultos. Sin comando, solo los visibles (como Fusion)."""
-        return self.modo == "elegir_plano" or bool(self.filtro and "plano" in self.filtro and not self.ventana_libre)
+        """True solo al pedir un plano de boceto (Crear boceto / redefinir su plano). En Fusion los planos de
+        origen son una opción más entre caras planas y planos de trabajo: no se agrandan ni tapan la pieza al
+        abrir un comando cuyo campo solo acepta un plano entre otras referencias (B-626)."""
+        return self.modo == "elegir_plano"
 
     def plano_visible(self, ref):
         cfg, vis = self.config, self.config.visibilidad

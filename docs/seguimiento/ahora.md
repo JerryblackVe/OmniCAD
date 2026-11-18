@@ -17,7 +17,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
 | E5 | — | En pausa (cupo amarillo). ASM-9 integrado: 99fb1de. Sigue ASM-16 con Opus alto (pide el solver de uniones) cuando haya cupo |
 | E6 | — | Desde el 19/11, SOLO velocidad de prioridad 1, comando por comando, contra plan_fluidez M1/M2 (congelamientos >250 ms, previa <0,3 s), empezando por lo que mida FLUIDEZ-P1 (OpenCode). B-620 Parcial: falta Windows (E11) |
-| E7 | — | Libre. B-626 integrado (planos del tamaño de la pieza) |
+| E7 | — | Libre |
 | E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
 | E9 | — | En pausa (rojo). Las corridas de OpenCode las lanza el vigía; cola en `~/coordinador/opencode_cola/` («Protocolo de OpenCode» en `docs/coordinacion.md`). P-158 del núcleo integrado: 6c65875c; UI-1117 terminada, falta integrar |
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
@@ -28,7 +28,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1a | B-638 | Alargar del boceto no hace nada en la ventana (E1, Opus alto; si no sale rápido, en gris por la regla 16) |
-| 1b | B-626 | Reabierto: los planos de origen aparecen solos al abrir una herramienta y tapan la pieza (E7, Sonnet; comparar con Fusion) |
 | 1d | B-637 | Extruir: perfiles coplanares de varios bocetos (como Fusion), mensaje y flecha en su lugar (E2, Opus alto) |
 | 1e | B-639 | La spline usada como ruta sale deformada (Plano a lo largo de la ruta; revisar Barrido); previa y campo 0–1 (E2, Opus alto) |
 | 2 | B-633 + B-634 | Solevación rectángulo→círculo: Engrosar (superficie) y Vaciado (sólido) fallan con mensajes falsos (E3, Opus alto; reporte de Gerardo del 17/11) |

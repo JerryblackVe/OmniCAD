@@ -2,8 +2,8 @@
 
 En Fusion los planos de origen tienen un interruptor Hidden/Visible explícito y no aparecen solos al abrir
 un comando; cuando un comando pide un plano (p. ej. Create Sketch) las opciones son planos de origen, planos
-de trabajo y caras planas de la geometría. xfail hasta que se arregle: al hacerlo hay que reconciliar con
-``test_b610_planos_con_cuerpo_encima.py``, que hoy exige justo lo contrario (que el plano crezca y cubra la caja).
+de trabajo y caras planas de la geometría. El crecimiento se reserva al modo ``elegir_plano`` (pedir un plano
+de boceto); ver ``test_b610_planos_con_cuerpo_encima.py``.
 """
 import os
 
@@ -33,7 +33,6 @@ def visor():
     v.close()
 
 
-@pytest.mark.xfail(strict=True, reason="B-626")
 def test_b626_planos_origen_no_tapan_la_pieza_al_abrir_herramienta(visor):
     """B-626: con un cuerpo en la escena y un comando abierto, los planos de origen no deben crecerse
     hasta cubrir la pieza (en Fusion no aparecen solos al abrir una herramienta)."""
