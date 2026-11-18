@@ -2,14 +2,13 @@
 
 El caso es el de B-536: un círculo de r5 barrido por una spline y empalmado en todas las aristas; al quitar una tapa
 con 1 mm de espesor y Cadena tangente desmarcada, el kernel devuelve el cuerpo sin tocar y el plan B no lo salva.
+B-616: el plan B arrancaba el prisma 1e-3 mm dentro de la cavidad y `unir_todos` no lo soldaba (solape demasiado
+chico); con 1e-2 mm el vaciado sale como en Fusion. Antes era xfail estricto; ahora es prueba de regresión.
 """
-import pytest
-
 from omnicad import api
 from omnicad.nucleo import geometria as geo
 
 
-@pytest.mark.xfail(strict=True, reason="B-616")
 def test_vaciado_de_un_barrido_empalmado_sin_cadena_tangente():
     sesion = api.Sesion()
     for nombre, args in (("create_sketch", {"plane": "XY", "name": "perfil"}), ("draw_circle", {"radius": 5}),
