@@ -26,8 +26,10 @@ for i in 1 2 3 4 5 6 7 8 9; do vuelta; done
 grep -q "sin modelo libre para 02_y" $T/cola/vigia.log && [ -f $T/cola/02_y.tarea ] && ! grep -q "TRABADA 02_y" $T/cola/vigia.log || { echo "FALLA 5: sin modelo libre no volvió a la cola (o fue a trabadas)"; ok=0; }
 grep -q "relanzo con nvidia/minimaxai" $T/cola/vigia.log && grep -q "relanzo con cb:" $T/cola/vigia.log || { echo "FALLA 6: no salteó al que no responde"; ok=0; }
 grep -q "seguí desde ahí" $T/cola/logs/02_y.brief1.md 2>/dev/null || [ -z "$(git -C $T/wt status --porcelain)" ] || { echo "FALLA 6b: al volver de la cola no retoma"; ok=0; }
+for i in $(seq 1 30); do vuelta; [ -f $T/cola/trabadas/02_y.tarea ] && break; done
+grep -q "TRABADA 02_y (.*sin modelo libre 4 veces" $T/cola/vigia.log || { echo "FALLA 5c: no cortó a la 4.ª vuelta a la cola"; ok=0; }
 # falla de verdad (rc=1 sin 429) con 2 modelos distintos: a trabadas/
-for i in 1 2 3; do while pgrep -f "$T/oc" > /dev/null; do sleep 1; done; bash "$V"; done; rm -f $T/cola/02_y.tarea $T/cola/corriendo/02_y
+for i in 1 2 3; do while pgrep -f "$T/oc" > /dev/null; do sleep 1; done; bash "$V"; done; rm -f $T/cola/02_y.tarea $T/cola/corriendo/02_y $T/cola/trabadas/02_y.tarea
 sed -i 's/echo "rate limit"; exit 1/echo "rompí algo"; exit 1/' $T/oc
 printf 'WT=%s\nBRIEF=%s\nMODELO=cb:hy3\n' $T/wt $T/brief > $T/cola/02_z.tarea
 for i in 1 2 3 4 5; do vuelta; done

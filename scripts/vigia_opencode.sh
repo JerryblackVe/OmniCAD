@@ -76,6 +76,11 @@ reintenta() {   # nombre intento modelo motivo
   fi
   sig=$( [ "$k" -lt "${#MODELOS[@]}" ] && siguiente_modelo "$m" )
   if [ -z "$sig" ]; then   # ningún modelo libre (cupo, 429, sin respuesta): vuelve a la cola para la próxima vuelta
+    echo x >> "$COLA/logs/$n.vueltas"
+    if [ "$(wc -l < "$COLA/logs/$n.vueltas")" -gt 3 ]; then   # tope de 3 vueltas a la cola (Gerardo, 2026-11-18)
+      avisa "TRABADA $n ($4): sin modelo libre 4 veces; pasa a trabadas/ (respaldos en logs/)"
+      mv "$COLA/$n.tarea" "$COLA/trabadas/"; rm -f "$EST/$n"; return
+    fi
     anota "sin modelo libre para $n ($4): vuelve a la cola"; rm -f "$EST/$n"; return
   fi
   anota "falla $n (intento $k, $m: $4): relanzo con $sig"
