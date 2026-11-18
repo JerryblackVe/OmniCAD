@@ -43,7 +43,7 @@ ultimo() { awk '/^=== intento /{b=""} {b=b $0 "\n"} END{printf "%s", b}' "$COLA/
 usado() {   # el modelo ya está en su tope de corridas a la vez (CodeBuddy 2, OpenCode 1; cuenta también el lanzador de E9)
   local c tope=1; [ "${1#cb:}" != "$1" ] && tope=2
   c=$(grep -ls " $1 " "$EST"/* | wc -l); pgrep -f -- "^$OC run -m $1 " > /dev/null && c=$((c + 1))
-  [ "$c" -ge "$tope" ]; }   # lo corre alguien (la cola o un lanzador de E9)
+  [ "$c" -ge "$tope" ] || { [ "${1#openai/}" != "$1" ] && [ "$(cat "$EST"/* 2>/dev/null | grep -c " openai/")" -ge 2 ]; }; }   # OpenAI: 2 a la vez en total (cupo semanal; Gerardo, 2026-11-18)   # lo corre alguien (la cola o un lanzador de E9)
 cmd() { case $1 in cb:*) echo "$CB -p -y --model ${1#cb:}";; *) echo "$OC run -m $1";; esac; }   # modelo -> comando
 responde() { timeout 150 $(cmd "$1") "Respondé solo la palabra OK" 2>/dev/null | grep -qi OK; }
 siguiente_modelo() {   # modelo_actual -> el próximo de la lista que responde (o vacío)
