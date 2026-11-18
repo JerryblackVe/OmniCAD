@@ -46,6 +46,10 @@ OPERACIONES = ("union", "resta", "interseccion")
 ESQUINAS = ("redondas", "vivas")
 
 
+class _RegionVacia(geo.ErrorGeometria):
+    """La operación se calculó, pero no quedó ninguna región."""
+
+
 def _lista(formas):
     lista = List_TopoDS_Shape()
     for f in formas:
@@ -88,7 +92,7 @@ def booleana_caras(caras_a, caras_b=(), operacion="union"):
         raise geo.ErrorGeometria("No se pudo combinar los perfiles.")
     forma = _unificar(op.Shape())
     if not geo.caras(forma) or sum(geo.area(c) for c in geo.caras(forma)) < 1e-9:
-        raise geo.ErrorGeometria("La operación no deja ninguna región.")
+        raise _RegionVacia("La operación no deja ninguna región.")
     return forma
 
 
@@ -116,6 +120,8 @@ def desfase_caras(caras, distancia, esquinas="redondas"):
                 try:
                     salida.append(booleana_caras([cara], _franjas(cara, -float(distancia)), "resta"))
                     continue
+                except _RegionVacia as e:
+                    raise geo.ErrorGeometria("El perfil desaparece con ese desfase.") from e
                 except geo.ErrorGeometria:          # falló el desfase de franjas: se avisa igual
                     pass
             raise geo.ErrorGeometria(f"No se pudo hacer el desfase de {distancia} mm.")
