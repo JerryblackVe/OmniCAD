@@ -27,7 +27,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1a | B-638 | Alargar del boceto no hace nada en la ventana (E1, Opus alto; si no sale rápido, en gris por la regla 16) |
+| 1a | B-638 | Alargar del boceto no hace nada en la ventana; en Linux no se reproduce: E11 en Windows (E1, Opus alto; si no sale rápido, en gris por la regla 16) |
 | 1b | B-626 | Reabierto: los planos de origen aparecen solos al abrir una herramienta y tapan la pieza (E7, Sonnet; comparar con Fusion) |
 | 1d | B-637 | Extruir: perfiles coplanares de varios bocetos (como Fusion), mensaje y flecha en su lugar (E2, Opus alto) |
 | 1e | B-639 | La spline usada como ruta sale deformada (Plano a lo largo de la ruta; revisar Barrido); previa y campo 0–1 (E2, Opus alto) |
