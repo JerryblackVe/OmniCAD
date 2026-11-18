@@ -63,4 +63,4 @@ def test_error_de_clase_sin_datos_sin_comparaciones():
     mensaje = str(fallo.value)
     assert "Fusion" not in mensaje
     assert "clase 2G para este tamaño" in mensaje
-    assert "usá la rosca sin clase o la «auto»" in mensaje
+    assert len(mensaje) <= 45

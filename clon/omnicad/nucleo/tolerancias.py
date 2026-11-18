@@ -71,21 +71,21 @@ GRADOS_IT = tuple(sorted(_IT))
 def _escalon(nominal):
     n = float(nominal)
     if not 0 < n <= _ESCALONES[-1]:
-        raise geo.ErrorGeometria(f"ISO 286 cubre medidas nominales de más de 0 hasta 500 mm (llegó {nominal:g}).")
+        raise geo.ErrorGeometria(f"ISO 286: nominal 0 a 500 mm (llegó {nominal:g}).")
     return next(i for i, b in enumerate(_ESCALONES) if n <= b)
 
 
 def grado_it(nominal, grado):
     """Tolerancia fundamental ITn (mm) de ISO 286-1 para una medida nominal (grados 5 a 11, hasta 500 mm)."""
     if grado not in _IT:
-        raise geo.ErrorGeometria(f"Grado IT{grado} sin datos: hay IT{GRADOS_IT[0]} a IT{GRADOS_IT[-1]}.")
+        raise geo.ErrorGeometria(f"Grado IT{grado} sin datos: IT{GRADOS_IT[0]}-{GRADOS_IT[-1]}.")
     return _IT[grado][_escalon(nominal)] / 1000
 
 
 def _partir_clase(clase):
     m = re.fullmatch(r"\s*([A-Za-z])\s*(\d{1,2})\s*", str(clase or ""))
     if not m:
-        raise geo.ErrorGeometria(f"Clase de tolerancia no válida: «{clase}» (ejemplos: H7, g6, k6).")
+        raise geo.ErrorGeometria(f"Clase «{clase}» no válida (H7, g6, k6).")
     return m.group(1), int(m.group(2))
 
 
@@ -94,7 +94,7 @@ def _desviaciones_um(nominal, clase):
     letra, grado = _partir_clase(clase)
     i = _escalon(nominal)
     if grado not in _IT:
-        raise geo.ErrorGeometria(f"Grado IT{grado} sin datos: hay IT{GRADOS_IT[0]} a IT{GRADOS_IT[-1]}.")
+        raise geo.ErrorGeometria(f"Grado IT{grado} sin datos: IT{GRADOS_IT[0]}-{GRADOS_IT[-1]}.")
     it = _IT[grado][i]
     if letra.isupper():                                       # agujero
         if letra not in LETRAS_AGUJERO:
@@ -133,9 +133,9 @@ def ajuste(nominal, agujero, eje):
     letra_a, _ = _partir_clase(agujero)
     letra_e, _ = _partir_clase(eje)
     if not letra_a.isupper():
-        raise geo.ErrorGeometria(f"La clase del agujero va en mayúscula (H7), llegó «{agujero}».")
+        raise geo.ErrorGeometria(f"El agujero va en mayúscula (H7): «{agujero}».")
     if not letra_e.islower():
-        raise geo.ErrorGeometria(f"La clase del eje va en minúscula (g6), llegó «{eje}».")
+        raise geo.ErrorGeometria(f"El eje va en minúscula (g6): «{eje}».")
     n = float(nominal)
     es_a, ei_a = _desviaciones_um(n, agujero)
     es_e, ei_e = _desviaciones_um(n, eje)
@@ -215,8 +215,7 @@ def _limites_iso965(diametro, paso, clase):
     d, p = float(diametro), _clave_paso(paso)
     td2 = _ISO965_TD2.get((round(d, 4), p))
     if td2 is None or p not in _ISO965_G:
-        raise geo.ErrorGeometria(f"No hay datos verificados de ISO 965-1 para M{d:g}x{p:g} (se cargaron M3 a M39 "
-                                 "gruesa y algunas finas): usá la rosca sin clase.")
+        raise geo.ErrorGeometria(f"Sin datos ISO 965-1 para M{d:g}x{p:g}.")
     h = math.sqrt(3) / 2 * p                        # altura del triángulo fundamental (ISO 68-1)
     d2, d1 = d - 0.75 * h, d - 1.25 * h             # diámetros de flancos y menor básicos (ISO 724)
     interna = CLASES_ISO965[clase]
@@ -264,16 +263,14 @@ def _hilo_de_tabla(familia, diametro, paso, clase):
         por_clase = tablas_rosca.CLASES[familia].get(nombre)
         if por_clase and clase in por_clase:
             return por_clase[clase]
-    raise geo.ErrorGeometria(f"No hay datos de la clase {clase} para este tamaño: usá la rosca sin clase "
-                             "o la «auto».")
+    raise geo.ErrorGeometria(f"No hay clase {clase} para este tamaño.")
 
 
 def _limites_tabla(familia, diametro, paso, clase, interna):
     """Límites de una clase de las tablas de Fusion: un solo valor por diámetro (el hilo se modela ahí)."""
     hilo = _hilo_de_tabla(familia, diametro, paso, clase)[0 if interna else 1]
     if hilo is None:
-        raise geo.ErrorGeometria(f"La clase {clase} no tiene datos de rosca {'interior' if interna else 'exterior'} para "
-                                 "este tamaño.")
+        raise geo.ErrorGeometria(f"Clase {clase} sin datos de rosca {'interior' if interna else 'exterior'}.")
     mayor, flancos, menor = hilo
     par = lambda v: [None, None] if v is None else [v, v]      # noqa: E731
     if interna:
@@ -293,9 +290,9 @@ def limites_rosca(familia, diametro, paso, clase, interna=None):
     limita (o no se cargó). Ej.: M10×1,5 6g → diámetro mayor [9.732, 9.968]."""
     clases = CLASES_POR_FAMILIA.get(familia)
     if not clases:
-        raise geo.ErrorGeometria("Esta familia de rosca no tiene clases cargadas.")
+        raise geo.ErrorGeometria("Esta rosca no tiene clases cargadas.")
     if clase not in clases:
-        raise geo.ErrorGeometria(f"Clase «{clase}» desconocida para esta rosca: hay {', '.join(clases)}.")
+        raise geo.ErrorGeometria(f"Clase «{clase}» desconocida (hay {', '.join(clases)}).")
     lado = clases[clase] if clases[clase] is not None else bool(interna)
     if _usa_tabla(familia, diametro, paso, clase):
         from .solidos_crear import FAMILIAS_ROSCA
@@ -332,11 +329,10 @@ def resolver_clase(familia, diametro, paso, clase, interna):
         return clase, None
     if clase not in clases:
         disponibles = ", ".join(clases) or "ninguna"
-        raise geo.ErrorGeometria(f"Clase «{clase}» desconocida para esta rosca (hay: {disponibles}).")
+        raise geo.ErrorGeometria(f"Clase «{clase}» desconocida (hay: {disponibles}).")
     if clases[clase] is not None and clases[clase] != bool(interna):
-        lado = "interior (agujero)" if interna else "exterior (eje)"
-        otras = ", ".join(k for k, v in clases.items() if v in (None, bool(interna))) or "ninguna"
-        raise geo.ErrorGeometria(f"La clase {clase} no es de rosca {lado}: usá {otras}.")
+        lado = "interior" if interna else "exterior"
+        raise geo.ErrorGeometria(f"Clase {clase}: no es de rosca {lado}.")
     limites_rosca(familia, diametro, paso, clase, interna)     # sin datos para el tamaño: error claro
     return clase, None
 
