@@ -30,7 +30,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 1a | B-638 | Alargar del boceto no hace nada en la ventana (E1, Opus alto; si no sale rápido, en gris por la regla 16) |
 | 1b | B-626 | Reabierto: los planos de origen aparecen solos al abrir una herramienta y tapan la pieza (E7, Sonnet; comparar con Fusion) |
 | 1d | B-637 | Extruir: perfiles coplanares de varios bocetos (como Fusion), mensaje y flecha en su lugar (E2, Opus alto) |
-| 1e | B-639 | La spline usada como ruta sale deformada (Plano a lo largo de la ruta; revisar Barrido); previa y campo 0–1 (E2, Opus alto) |
 | 2 | B-633 + B-634 | Solevación rectángulo→círculo: Engrosar (superficie) y Vaciado (sólido) fallan con mensajes falsos (E3, Opus alto; reporte de Gerardo del 17/11) |
 | 3 | B-618 | Solevación entre dos círculos: falso «se autointerseca» y previa manchada (E2, Opus alto; bug de prioridad 1, va antes que SOL-8) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |

@@ -5,7 +5,6 @@ La ruta en sí está bien: los 20 puntos de la spline del boceto (en mundo) y la
 coinciden (desvío máximo 0,012 mm, el paso del muestreo). Lo que falta es el cuadrado perpendicular que muestra Fusion.
 """
 import numpy as np
-import pytest
 from test_manipuladores import _panel, app_qt  # noqa: F401  (fixture)
 
 from omnicad.restricciones.boceto import Boceto
@@ -27,7 +26,6 @@ def _doc_onda():
     return doc, sp
 
 
-@pytest.mark.xfail(strict=True, reason="B-639")
 def test_la_previa_del_plano_en_ruta_dibuja_el_plano_perpendicular(app_qt):  # noqa: F811
     doc, sp = _doc_onda()
     estado = doc.estado_final
