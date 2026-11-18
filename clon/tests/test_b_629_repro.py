@@ -4,12 +4,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 
-
-@pytest.mark.xfail(strict=True, reason="B-629", raises=AssertionError)
 def test_desfase_informa_que_el_trazo_desaparece():
-    # Como en B-517, aislar OpenCascade: un cierre del proceso no cuenta como el XFAIL del mensaje.
+    # Como en B-517, aislar OpenCascade para que un cierre del proceso falle solo este test.
     codigo = '''
 import json
 from omnicad import api
