@@ -82,7 +82,7 @@ def test_mallas_sin_superficie_dan_un_mensaje_claro(malla, mensaje):
 
 def test_una_malla_enorme_se_rechaza_con_un_mensaje_claro(monkeypatch):
     monkeypatch.setattr(cm, "TOPE_TRIANGULOS", 5)
-    with pytest.raises(geo.ErrorGeometria, match="reducila"):
+    with pytest.raises(geo.ErrorGeometria, match="máximo"):
         cm.comparar(_caja(), _caja())
 
 

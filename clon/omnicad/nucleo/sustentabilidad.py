@@ -60,7 +60,7 @@ def materiales_propios():
 
 def _positivo(valor, que):
     if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not math.isfinite(valor) or valor <= 0:
-        raise geo.ErrorGeometria(f"{que} tiene que ser un número mayor que cero: llegó {valor!r}.")
+        raise geo.ErrorGeometria(f"{que} tiene que ser > 0: llegó {valor!r}.")
     return float(valor)
 
 
@@ -69,7 +69,7 @@ def _validado(nombre, co2, densidad, parecido=""):
     if not nombre:
         raise geo.ErrorGeometria("El material necesita un nombre.")
     if nombre in MATERIALES or nombre == PERSONALIZADO:
-        raise geo.ErrorGeometria(f"«{nombre}» es un material de fábrica: elegí otro nombre.")
+        raise geo.ErrorGeometria(f"«{nombre}» de fábrica: elegí otro nombre.")
     if parecido and (not isinstance(parecido, str) or parecido not in MATERIALES):       # puede venir de un archivo de otro
         raise geo.ErrorGeometria(f"Material más parecido desconocido: «{parecido}».")
     return nombre, {"co2": _positivo(co2, "CO2 por kg"), "densidad": _positivo(densidad, "La densidad"),
@@ -140,7 +140,7 @@ def estimar(volumen_mm3, material):
     Sin factor con fuente, ErrorGeometria: nunca se inventa un número."""
     d = datos_material(material)
     if d.get("co2") is None:
-        raise geo.ErrorGeometria(f"{material} no tiene un factor de CO₂ con fuente: elegí otro material o creá uno propio.")
+        raise geo.ErrorGeometria(f"{material} no tiene factor de CO₂ con fuente.")
     masa = _positivo(volumen_mm3, "El volumen") * d["densidad"] * 1e-6     # mm³ × g/cm³ → kg
     return {"material": material, "volumen_mm3": float(volumen_mm3), "densidad": d["densidad"], "masa_kg": masa,
             "co2_por_kg": d["co2"], "co2_kg": masa * d["co2"], "fuente": d["fuente"]}

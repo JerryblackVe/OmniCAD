@@ -35,10 +35,9 @@ def exigir_malla(m, que="La malla"):
     if not len(m.caras):
         raise geo.ErrorGeometria(f"{que} está vacía.")
     if len(m.caras) > TOPE_TRIANGULOS:
-        raise geo.ErrorGeometria(f"{que} tiene {len(m.caras):,} triángulos y el máximo es {TOPE_TRIANGULOS:,}: reducila "
-                                 "antes con MALLA › Modificar › Reducir (reduce_mesh).".replace(",", "."))
+        raise geo.ErrorGeometria(f"{que} tiene {len(m.caras):,} triángulos (máximo {TOPE_TRIANGULOS:,}).".replace(",", "."))
     if not m.area() > 0:
-        raise geo.ErrorGeometria(f"{que} no tiene área: todos sus triángulos están degenerados.")
+        raise geo.ErrorGeometria(f"{que} sin área: triángulos degenerados.")
 
 
 def a_malla(x, tolerancia):
@@ -240,9 +239,9 @@ def comparar(a, b, *, tolerancia=0.1, muestras=50000, semilla=_SEMILLA):
     """Compara `a` contra `b` (cada uno una Malla o una forma OCC). Devuelve la desviación de cada sentido y la mayor de
     las dos, el % de superficie dentro de `tolerancia`, volúmenes, solapamiento y zonas fuera de tolerancia."""
     if not (tolerancia > 0 and math.isfinite(tolerancia)):
-        raise geo.ErrorGeometria("La tolerancia tiene que ser mayor que cero (mm).")
+        raise geo.ErrorGeometria("La tolerancia tiene que ser mayor que 0 (mm).")
     if not 1000 <= muestras <= 2_000_000:
-        raise geo.ErrorGeometria("La cantidad de muestras tiene que estar entre 1000 y 2.000.000.")
+        raise geo.ErrorGeometria("La cantidad de muestras: 1000 a 2.000.000.")
     ma, mb = a_malla(a, tolerancia), a_malla(b, tolerancia)
     sa, sb = Superficie(ma), Superficie(mb)
     pa, na = muestrear(ma, muestras, semilla)

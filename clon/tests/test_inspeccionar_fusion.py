@@ -277,7 +277,7 @@ def test_estimar_con_cuenta_a_la_vista():
         su.estimar(1000, "ASA")
     with pytest.raises(geo.ErrorGeometria, match="desconocido"):
         su.estimar(1000, "Unobtainio")
-    with pytest.raises(geo.ErrorGeometria, match="mayor que cero"):
+    with pytest.raises(geo.ErrorGeometria, match="ser > 0"):
         su.estimar(0, "ABS")
 
 
@@ -382,7 +382,7 @@ def test_panel_de_sustainability_textos_y_estimacion(app_qt, materiales):
     texto = cmd._resultado(v, ctx)
     assert "Estimación: 0.148 kg" in texto and "0.0162 kg × 9.16" in texto and "ICE" in texto
     v.update(material="asa")
-    assert "no tiene un factor" in cmd._resultado(v, ctx)
+    assert "no tiene factor de CO₂" in cmd._resultado(v, ctx)
     v.update(material="abs", sobrescritura="manual", stock_volumen="12000")
     assert "0.0127 kg" in cmd._resultado(v, ctx)
     doc.estado_final.cuerpos["op1.c1"].tipo = "malla"

@@ -112,9 +112,9 @@ def test_el_chaflan_de_la_herramienta_tambien_se_quita():
 
 
 def test_sin_nada_para_quitar_falla_y_el_tipo_invalido_tambien():
-    with pytest.raises(geo.ErrorGeometria, match="No se encontraron"):
+    with pytest.raises(geo.ErrorGeometria, match="No hay"):
         quitar_operaciones(geo.caja(40, 30, 20), 5.0)
-    with pytest.raises(geo.ErrorGeometria, match="Tipo de operación desconocido"):
+    with pytest.raises(geo.ErrorGeometria, match="Tipo desconocido"):
         detectar(geo.caja(40, 30, 20), 5.0, ["rosca"])
 
 

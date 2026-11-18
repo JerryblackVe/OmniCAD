@@ -118,10 +118,9 @@ def detectar(forma, tamano, tipos=TIPOS):
     [[caras]...], "agujero": [[pared y fondo]...]}, solo de los `tipos` pedidos y con medida <= `tamano`."""
     desconocidos = set(tipos) - set(TIPOS)
     if desconocidos:
-        raise geo.ErrorGeometria(f"Tipo de operación desconocido: {', '.join(sorted(desconocidos))}. "
-                                 f"Los válidos son: {', '.join(TIPOS)}.")
+        raise geo.ErrorGeometria(f"Tipo desconocido: {', '.join(sorted(desconocidos))}. Válidos: {', '.join(TIPOS)}.")
     if tamano <= 0:
-        raise geo.ErrorGeometria("El tamaño máximo tiene que ser mayor que cero.")
+        raise geo.ErrorGeometria("El tamaño máximo tiene que ser mayor que 0.")
     caras = [TopoDS.Face(f) for f in _unicos(forma, TopAbs_FACE)]
     firma = _firmas(forma, caras)
     arista_caras = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE)
@@ -145,7 +144,7 @@ def quitar_operaciones(forma, tamano, tipos=TIPOS):
     "chaflan": n, "agujero": n}); falla si no encontró nada de esos tipos."""
     encontrados = detectar(forma, tamano, tipos)
     if not any(encontrados.values()):
-        raise geo.ErrorGeometria(f"No se encontraron {', '.join(tipos)} con tamaño <= {tamano:g} mm en el cuerpo.")
+        raise geo.ErrorGeometria(f"No hay {', '.join(tipos)} con tamaño <= {tamano:g} mm.")
     # Un grupo por vez sobre el cuerpo ACTUAL: las caras ya quitadas dejan de existir, y unificar antes
     # de tiempo deja aristas finitas que el defeaturing no logra cerrar. Los recuentos son los detectados.
     while True:

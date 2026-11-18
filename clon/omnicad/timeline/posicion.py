@@ -75,18 +75,17 @@ def que_arrastra(estado, comp):
         uid = next((k for k, u in reversed(estado.uniones.items()) if comp in u["componentes"]), None)
         grupo = grupo_rigido(estado, comp) if uid is None else {comp}
         if any(es_fijo(estado, k) for k in grupo):
-            raise ErrorOperacion(f"«{nombre}» está fijo o anclado: no se puede arrastrar.")
+            raise ErrorOperacion(f"«{nombre}» fijo o anclado: no se puede mover.")
         if uid is None:
             return [], sorted(grupo)
         if any(u.get("cierra_lazo") for u in estado.uniones.values()):
             # shortcut: frena con cualquier lazo del documento; alcanza hasta que el arrastre resuelva lazos cerrados
-            raise ErrorOperacion("El ensamble tiene un lazo cerrado de uniones: arrastrar todavía no lo resuelve. "
-                                 "Usá ENSAMBLAR › Uniones de animación.")
+            raise ErrorOperacion("Hay un lazo cerrado: no se puede arrastrar.")
         variables = _variables(estado, uid)
         if variables:
             return variables, []
         comp = estado.uniones[uid]["comp2"]
-    raise ErrorOperacion("Una unión rígida lo sujeta y no tiene a dónde moverse: no se puede arrastrar.")
+    raise ErrorOperacion("Unión rígida lo sujeta: no se puede mover.")
 
 
 def _limites(doc, uid, clave):

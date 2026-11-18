@@ -252,7 +252,7 @@ def test_malla_vacia_y_enorme_dan_mensaje_claro(tmp_path, monkeypatch):
     s, malla = _insertar(tmp_path, m)
     monkeypatch.setattr(cm, "TOPE_TRIANGULOS", 3)
     r = api.llamar(s, "reconstruct_from_mesh", {"body": malla})
-    assert r["ok"] is False and "reduce_mesh" in r["mensaje"] and len(s.doc.operaciones) == 1
+    assert r["ok"] is False and "12 triángulos (máximo 3)" in r["mensaje"] and len(s.doc.operaciones) == 1
     monkeypatch.undo()
     s.doc.estado_final.cuerpos[malla].forma = ml.Malla(np.zeros((0, 3)), np.zeros((0, 3), int))
     r = api.llamar(s, "reconstruct_from_mesh", {"body": malla})
