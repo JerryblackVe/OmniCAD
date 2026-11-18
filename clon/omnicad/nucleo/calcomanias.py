@@ -38,7 +38,7 @@ def superficie(cara, cuerpo=None, encadenar=False, centrada=True):
         if cara.Orientation() == TopAbs_REVERSED:
             normal = -normal
         if np.linalg.norm(du) < 1e-12 or np.linalg.norm(normal) < 1e-15:
-            raise geo.ErrorGeometria("No se puede orientar la calcomanía en el polo de esta cara.")
+            raise geo.ErrorGeometria("No se puede orientar en el polo de esta cara.")
         pl = geo.Plano.desde_marco(p, normal / np.linalg.norm(normal), du / np.linalg.norm(du))
     caras = caras_tangentes(cuerpo, cara) if encadenar and cuerpo is not None else [cara]
     vertices, normales, coords = [], [], []
@@ -66,7 +66,7 @@ def superficie(cara, cuerpo=None, encadenar=False, centrada=True):
         normales.append(ns)
         coords.append(uv)
     if not coords or not len(coords[0]):
-        raise geo.ErrorGeometria("La cara no tiene una malla utilizable para la calcomanía.")
+        raise geo.ErrorGeometria("La cara no tiene malla utilizable.")
     base = coords[0]
     minimo, maximo = base.min(axis=0), base.max(axis=0)
     tamano = (np.array([(s.LastUParameter() - s.FirstUParameter()) * cil.Radius(),
@@ -83,7 +83,7 @@ def textura(coordenadas, ancho, alto, dx=0, dy=0, angulo=0, voltear_h=False, vol
     """Transformación inversa de Calcomanía: coordenadas de cara en mm → UV de imagen."""
     valores = np.asarray([ancho, alto, dx, dy, angulo], float)
     if not np.isfinite(valores).all() or ancho <= 0 or alto <= 0:
-        raise geo.ErrorGeometria("Las medidas de la calcomanía deben ser finitas y positivas.")
+        raise geo.ErrorGeometria("La calcomanía debe tener medidas positivas.")
     a = math.radians(angulo)
     c, s = math.cos(a), math.sin(a)
     xy = (np.asarray(coordenadas) - [dx, dy]) @ np.array([[c, -s], [s, c]])

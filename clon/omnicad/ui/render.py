@@ -1009,7 +1009,7 @@ class LienzoRender(Visor3D):
         GLSL en un framebuffer propio (si no hay OpenGL cae al de CPU); "cpu" usa `render_cpu.renderizar`."""
         ancho, alto, ss = int(ancho), int(alto), max(1, int(supermuestreo))
         if ancho < 1 or alto < 1:
-            raise ErrorGeometria("La imagen tiene que medir al menos 1 × 1 píxel.")
+            raise ErrorGeometria("La imagen debe medir al menos 1 × 1 píxel.")
         if motor == "gl" and self.gl_disponible():
             try:
                 img = self._renderizar_gl(ancho, alto, ss, fondo_transparente)
@@ -1030,7 +1030,7 @@ class LienzoRender(Visor3D):
             while ss > 1 and max(ancho, alto) * ss > maximo:
                 ss -= 1
             if max(ancho, alto) > maximo:
-                raise ErrorGeometria(f"La imagen supera el máximo de la placa gráfica ({maximo} px).")
+                raise ErrorGeometria(f"La imagen supera el máximo GL ({maximo} px).")
             final = self._fbo("final", ancho, alto)
             res = 4096 if ss >= 3 else 2048
             self._pintar(final.id, ancho, alto, lienzo=False, ss=ss, transparente=transparente, res_sombras=res)

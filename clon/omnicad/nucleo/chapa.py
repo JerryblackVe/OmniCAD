@@ -896,7 +896,7 @@ def _agregar_pestana(modelo, pid, p, d, s0, s1, n, sentido, angulo, radio, largo
     if cortes:
         caras = _op2d(caras, cortes, "cortar")
     if not _dentro(caras, o + (e0 + e1) / 2 * a - _DELTA * n):
-        raise geo.ErrorGeometria("La posición del pliegue se come la cara de la que sale la pestaña.")
+        raise geo.ErrorGeometria("Posición del pliegue fuera de la cara.")
     modelo["placas"][pid] = caras_a_region(caras)
     hija = _nuevo_id(modelo, "p")
     modelo["placas"][hija] = caras_a_region([_rect(o, a, n, e0, e1, ba, ba + largo)]) if largo > TOL else []
@@ -944,7 +944,7 @@ def _libres_actuales(modelo, pid, p, q):
     # El borde pudo cambiar por una pestaña anterior de la misma operación: se vuelve a medir.
     libres = _intervalos_libres(modelo, pid, p, q)
     if not libres:
-        raise geo.ErrorGeometria("Otra pestaña de esta misma operación ya ocupa esa arista.")
+        raise geo.ErrorGeometria("Otra pestaña ya ocupa esa arista.")
     return libres
 
 
@@ -986,19 +986,19 @@ def dobladillo(modelo, aristas, tipo="cerrado", longitud=10.0, separacion=None, 
         r = 0.0
     elif tipo == "abierto":
         if sep <= 0:
-            raise geo.ErrorGeometria("La separación del dobladillo abierto tiene que ser positiva.")
+            raise geo.ErrorGeometria("Separación del dobladillo debe ser > 0.")
         r = sep / 2
     elif tipo == "lagrima":
         r = m["regla"]["radio"] if radio is None else float(radio)
         if r <= 0:
-            raise geo.ErrorGeometria("El radio de la lágrima tiene que ser positivo.")
+            raise geo.ErrorGeometria("El radio de la lágrima debe ser positivo.")
     else:
         raise geo.ErrorGeometria(f"Tipo de dobladillo desconocido: {tipo}")
     if posicion not in ("adyacente", "tangente"):
-        raise geo.ErrorGeometria("La posición del dobladillo es adyacente o tangente.")
+        raise geo.ErrorGeometria("Dobladillo: posición adyacente o tangente.")
     largo = longitud - (r + t)
     if largo <= TOL:
-        raise geo.ErrorGeometria(f"La longitud del dobladillo tiene que ser mayor que {r + t:.3g} mm.")
+        raise geo.ErrorGeometria(f"Longitud del dobladillo > {r + t:.3g} mm.")
     extra = 0.0
     if tipo == "lagrima" and sep < 2 * r:
         # Pasa de 180° hasta que la punta queda a `sep` de la cara: r·cos β − L·sen β = sep − r.
@@ -1060,17 +1060,16 @@ def _segmentos_perfil(aristas, plano):
                          "r": ci.Radius(), "barrido": abs(t1 - t0),
                          "ccw": float(np.dot([d.X(), d.Y(), d.Z()], plano.normal)) > 0})
         else:
-            raise geo.ErrorGeometria("El perfil del contorno solo puede tener líneas y arcos.")
+            raise geo.ErrorGeometria("El contorno solo admite líneas y arcos.")
     if not segs:
         raise geo.ErrorGeometria("Elegí las curvas del perfil abierto.")
     extremos = [s["p0"] for s in segs] + [s["p1"] for s in segs]
     grados = [sum(1 for q in extremos if np.linalg.norm(q - p) < 1e-6) for p in extremos]
     if max(grados) > 2:
-        raise geo.ErrorGeometria("El perfil del contorno se bifurca: elegí una sola cadena de curvas.")
+        raise geo.ErrorGeometria("El contorno se bifurca: elegí una cadena.")
     libres = [p for p, g in zip(extremos, grados, strict=True) if g == 1]
     if len(libres) != 2:
-        raise geo.ErrorGeometria("El perfil del contorno tiene que ser una cadena ABIERTA (para perfiles cerrados "
-                                 "usá la pestaña base).")
+        raise geo.ErrorGeometria("El contorno debe ser una cadena ABIERTA.")
     actual = min(libres, key=lambda p: (round(p[0], 6), round(p[1], 6)))
     restantes, cadena = list(segs), []
     while restantes:
@@ -1110,7 +1109,7 @@ def pestana_contorno(aristas, plano, regla_chapa, distancia, orientacion="lado1"
     x0, x1 = {"un_lado": (0.0, distancia), "simetrica": (-distancia / 2, distancia / 2),
               "dos_lados": (-distancia2, distancia)}.get(direccion, (0.0, 0.0))
     if distancia <= 0 or x1 - x0 <= TOL:
-        raise geo.ErrorGeometria("Dirección o distancias de la pestaña de contorno inválidas.")
+        raise geo.ErrorGeometria("Dirección o distancias de contorno inválidas.")
     cadena = _segmentos_perfil(aristas, plano)
     # Secuencia alternada placa / pliegue: los tramos rectos pierden el retiro de cada esquina viva.
     seq = []
@@ -1132,8 +1131,7 @@ def pestana_contorno(aristas, plano, regla_chapa, distancia, orientacion="lado1"
             sentido = 1 if s["ccw"] else -1
             ri = s["r"] - (l0 + t) if sentido > 0 else s["r"] + l0
             if ri < -1e-9:
-                raise geo.ErrorGeometria(f"El radio del arco ({s['r']:.3g} mm) es menor que el espesor del lado "
-                                         "interior del pliegue.")
+                raise geo.ErrorGeometria(f"Radio del arco ({s['r']:.3g} mm) < espesor.")
             pliegue(math.degrees(s["barrido"]), sentido, max(ri, 0.0))
         if i + 1 == len(cadena):
             break
@@ -1142,9 +1140,9 @@ def pestana_contorno(aristas, plano, regla_chapa, distancia, orientacion="lado1"
         if abs(giro) < 1e-7:
             continue
         if s["tipo"] != "l" or cadena[i + 1]["tipo"] != "l":
-            raise geo.ErrorGeometria("Los arcos del perfil tienen que ser tangentes a los tramos vecinos.")
+            raise geo.ErrorGeometria("Los arcos del perfil deben ser tangentes.")
         if abs(abs(giro) - math.pi) < 1e-7:
-            raise geo.ErrorGeometria("El perfil vuelve sobre sí mismo (giro de 180°).")
+            raise geo.ErrorGeometria("El perfil vuelve sobre sí (180°).")
         sentido = 1 if giro > 0 else -1
         retiro = ((l0 + t + rr) if sentido > 0 else (rr - l0)) * math.tan(abs(giro) / 2)
         placa(-retiro)
@@ -1153,7 +1151,7 @@ def pestana_contorno(aristas, plano, regla_chapa, distancia, orientacion="lado1"
     if "placa" not in seq[-1]:
         seq.append({"placa": 0.0})
     if any("placa" in e and e["placa"] < -1e-7 for e in seq):
-        raise geo.ErrorGeometria("Un tramo del perfil es demasiado corto para el radio de plegado.")
+        raise geo.ErrorGeometria("Tramo corto para el radio de plegado.")
     d0 = plano.dir_3d(*_tangentes(cadena[0])[0])
     izq = np.cross(plano.normal, d0)
     m = modelo_nuevo(regla_chapa, marco(plano.a_3d(*cadena[0]["p0"]) + l0 * izq, plano.normal, d0, izq), [])
@@ -1197,10 +1195,7 @@ def convertir(forma, cara, nombre_regla=REGLA_DEFECTO, definicion=None, **ajuste
         raise geo.ErrorGeometria("La cara elegida no es una tapa del cuerpo.")
     vol = geo.volumen(forma)
     if abs(vol - geo.area(cara) * t) > max(1e-6, 1e-6 * vol):
-        raise geo.ErrorGeometria(f"El cuerpo no es una placa plana de espesor constante: por ahora solo se convierten "
-                                 f"placas planas (sin pliegues ni caras inclinadas). Distancia de la cara elegida al "
-                                 f"punto más lejano del cuerpo: {t:.4g} mm (en una placa de espesor constante, esa "
-                                 "distancia sería el espesor).")   # B-67: antes decía «Espesor medido» y mentía
+        raise geo.ErrorGeometria(f"No es placa plana (distancia {t:.4g} mm).")   # B-67: antes decía «Espesor medido» y mentía
     mat = np.array(marco(plano.origen - t * plano.normal, plano.u, plano.v, plano.normal))
     r = regla(nombre_regla, definicion, **{**ajustes, "espesor": t})
     return modelo_nuevo(r, mat, caras_a_region(_a_plano(cara, mat)))
@@ -1261,7 +1256,7 @@ def plegar(modelo, cara, lineas, angulo=90.0, posicion="centro", invertir=False,
     if not lineas:
         raise geo.ErrorGeometria("Elegí al menos una línea de plegado.")
     if not 0 < abs(angulo) < 180:
-        raise geo.ErrorGeometria("El ángulo de plegado va entre −180° y 180° y no puede ser 0°.")
+        raise geo.ErrorGeometria("El ángulo de plegado va de −180° a 180°, sin 0°.")
     if posicion not in POSICIONES_LINEA:
         raise geo.ErrorGeometria(f"Posición de la línea desconocida: {posicion}")
     t, k = m["regla"]["espesor"], m["regla"]["k"]
@@ -1289,20 +1284,19 @@ def _plegar_linea(m, p, q, fijo, ba, posicion, radio, angulo, sentido):
     placa = next((pid for pid, reg in m["placas"].items() if reg and _estado(region_a_caras(reg), medio, 1e-6)),
                  None)
     if placa is None:
-        raise geo.ErrorGeometria("La línea de plegado no está sobre una cara plana de la chapa.")
+        raise geo.ErrorGeometria("Línea de plegado fuera de una cara plana.")
     caras = region_a_caras(m["placas"][placa])
     tramos = []
     for c in _op2d(caras, [banda], "intersecar"):
         xs = [float((np.array(v) - o) @ a) for v in _puntos_2d(c)]
         if abs(geo.area(c) - (max(xs) - min(xs)) * ba) > 1e-6 * max(1.0, geo.area(c)):
-            raise geo.ErrorGeometria("En la zona del pliegue los bordes de la cara tienen que ser perpendiculares a "
-                                     "la línea de plegado.")
+            raise geo.ErrorGeometria("Bordes perpendiculares a la línea de pliegue.")
         tramos.append([min(xs), max(xs)])
     resto = _op2d(caras, [banda], "cortar")
     lado_fijo = [c for c in resto if (np.array(geo.centro_masa(c, True)[:2]) - p) @ n < 0]
     lado_giro = [c for c in resto if (np.array(geo.centro_masa(c, True)[:2]) - p) @ n >= 0]
     if not tramos or not lado_fijo or not lado_giro:
-        raise geo.ErrorGeometria("La línea de plegado tiene que cruzar la cara de lado a lado.")
+        raise geo.ErrorGeometria("La línea de plegado debe cruzar la cara.")
     # La placa conserva el lado de su pliegue padre (o el fijo, si es la raíz); el otro es una placa nueva.
     padre = next((b for b in m["pliegues"].values() if b["hija"] == placa), None)
     conserva_fijo = True
@@ -1382,7 +1376,7 @@ def desgarrar(modelo, modo, cara=None, puntos=None, lado="centro", separacion=No
             raise geo.ErrorGeometria("Elegí dos puntos del borde de una misma cara.")
         sep = m["regla"]["separacion"] if separacion is None else float(separacion)
         if sep <= 0:
-            raise geo.ErrorGeometria("La separación del desgarro tiene que ser positiva.")
+            raise geo.ErrorGeometria("La separación del desgarro debe ser > 0.")
         if lado not in ORIENTACIONES:
             raise geo.ErrorGeometria(f"Lado desconocido: {lado}")
         t = m["regla"]["espesor"]
@@ -1397,7 +1391,7 @@ def desgarrar(modelo, modo, cara=None, puntos=None, lado="centro", separacion=No
                 destino = (pid, p[:2], q[:2], caras)
                 break
         if destino is None:
-            raise geo.ErrorGeometria("Los dos puntos tienen que estar en el borde de una misma cara plana.")
+            raise geo.ErrorGeometria("Los dos puntos deben estar en la misma cara.")
         pid, p, q, caras = destino
         largo = float(np.linalg.norm(q - p))
         if largo < TOL:
@@ -1423,10 +1417,10 @@ def _repartir(m, pid, piezas, corte, mats, posiciones):
         p0, p1 = base + b["tramos"][0][0] * a, base + b["tramos"][-1][1] * a
         linea = BRepBuilderAPI_MakeEdge(_pnt(*p0), _pnt(*p1)).Edge()
         if _distancia(corte, linea) < 1e-7:
-            raise geo.ErrorGeometria("El desgarro no puede cortar la unión de un pliegue con la cara.")
+            raise geo.ErrorGeometria("El desgarro no puede cortar la unión.")
         cerca = [i for i, c in enumerate(piezas) if _distancia(c, _vertice((p0 + p1) / 2)) < 1e-5]
         if len(cerca) != 1:
-            raise geo.ErrorGeometria("No se pudo saber a qué lado del desgarro queda un pliegue.")
+            raise geo.ErrorGeometria("No se sabe de qué lado del desgarro queda.")
         return cerca[0]
 
     padre = next((b for b in m["pliegues"].values() if b["hija"] == pid), None)
@@ -1508,7 +1502,7 @@ def unir_plegando(modelo_a, arista_a, modelo_b, arista_b, radio=None):
     regla de la pieza A o `radio`). Devuelve el modelo unido (manda la pieza A: regla y marco)."""
     t, k = modelo_a["regla"]["espesor"], modelo_a["regla"]["k"]
     if abs(t - modelo_b["regla"]["espesor"]) > 1e-6:
-        raise geo.ErrorGeometria("Las dos piezas tienen que tener el mismo espesor.")
+        raise geo.ErrorGeometria("Las dos piezas deben tener el mismo espesor.")
     r = modelo_a["regla"]["radio"] if radio is None else float(radio)
     pa, a_p, a_q, _wa, libres_a = ubicar_arista(modelo_a, arista_a)
     pb, b_p, b_q, _wb, libres_b = ubicar_arista(modelo_b, arista_b)
@@ -1530,7 +1524,7 @@ def unir_plegando(modelo_a, arista_a, modelo_b, arista_b, radio=None):
     pbs = sec @ (_aplicar(wb, [*b_p, t / 2]) - pa0)
     giro = math.atan2(ub[1], ub[0])
     if abs(giro) < 1e-6 or abs(abs(giro) - math.pi) < 1e-6:
-        raise geo.ErrorGeometria("Las caras de las aristas son paralelas: no se pueden unir con un pliegue.")
+        raise geo.ErrorGeometria("Las caras son paralelas: no se pueden unir.")
     # Líneas medias: A = (s, t/2), B = pbs + q·ub; se cortan en V y el pliegue retira (R + t/2)·tan(θ/2).
     s_v, q_v = np.linalg.solve(np.array([[1.0, -ub[0]], [0.0, -ub[1]]]), pbs - np.array([0.0, t / 2]))
     retiro = (r + t / 2) * math.tan(abs(giro) / 2)
@@ -1541,7 +1535,7 @@ def unir_plegando(modelo_a, arista_a, modelo_b, arista_b, radio=None):
     proy_b = sorted(float((_aplicar(wb, [*(b_p + s * db2), 0.0]) - pa0) @ e) for s in (sb0, sb1))
     c0, c1 = max(proy_a[0], proy_b[0]), min(proy_a[1], proy_b[1])
     if c1 - c0 <= TOL:
-        raise geo.ErrorGeometria("Las aristas no se enfrentan: no tienen un tramo en común.")
+        raise geo.ErrorGeometria("Las aristas no se enfrentan: no hay tramo.")
     ma["placas"][pa] = caras_a_region(_estirar(ca, a_p, da2, na2, sa0, sa1, xi_a))
     mb["placas"][pb] = caras_a_region(_estirar(cb, b_p, db2, nb2, sb0, sb1, xi_b))
     sg = float(np.sign(da2 @ np.array([na2[1], -na2[0]])))
@@ -1553,7 +1547,7 @@ def unir_plegando(modelo_a, arista_a, modelo_b, arista_b, radio=None):
     voltear = e4[2, 2] < 0
     if abs(abs(e4[2, 2]) - 1) > 1e-6 or np.linalg.norm(e4[2, :2]) > 1e-6 or \
             abs(e4[2, 3] - (t if voltear else 0.0)) > 1e-5 or (np.linalg.det(e4[:2, :2]) < 0) != voltear:
-        raise geo.ErrorGeometria("Las dos piezas no quedan alineadas para unirse con un pliegue.")
+        raise geo.ErrorGeometria("Las piezas no quedan alineadas para unirse.")
     e3 = np.eye(3)
     e3[:2, :2], e3[:2, 2] = e4[:2, :2], e4[:2, 3]
     placas_b, pliegues_b, nombres = _mapear(mb, e3, voltear, f"u{bid}")
@@ -1597,8 +1591,7 @@ def absorber(modelo, forma):
                 avisos.append("Un corte atraviesa un pliegue: el modelo de chapa lo ignora (cortá las partes planas o "
                               "la pieza desplegada).")
     if total < 0.5 * esperado:
-        raise geo.ErrorGeometria("El cuerpo de chapa cambió demasiado fuera del entorno de chapa (¿se movió?): "
-                                 "hacé esos cambios antes de convertirlo, o solo en las partes planas.")
+        raise geo.ErrorGeometria("El cuerpo de chapa cambió fuera de lo plano.")
     if geo.volumen(forma) > total + max(1e-5, 1e-6 * total):
         avisos.append("Se agregó material fuera de la chapa (no tiene espesor constante): se ignora.")
     return m, list(dict.fromkeys(avisos))

@@ -50,11 +50,11 @@ def pieza_calibracion_holguras(diametro, holgura_inicial=0.1, paso=0.1, cantidad
     Devuelve {"placa", "peine", "holguras", "diametros_agujero", "largo", "ancho_placa", "ancho_peine"}."""
     for valor, que in ((diametro, "El diámetro del perno"), (paso, "El paso de la holgura"), (espesor, "El espesor")):
         if not math.isfinite(valor) or valor < geo.LONGITUD_MINIMA:
-            raise geo.ErrorGeometria(f"{que} tiene que ser positivo; recibió {valor:g} mm.")
+            raise geo.ErrorGeometria(f"{que} debe ser positivo; recibió {valor:g} mm.")
     if not math.isfinite(holgura_inicial) or holgura_inicial < 0:
         raise geo.ErrorGeometria("La holgura inicial no puede ser negativa.")
     if cantidad != int(cantidad) or not 1 <= cantidad <= CANTIDAD_MAXIMA:
-        raise geo.ErrorGeometria(f"La cantidad de agujeros va de 1 a {CANTIDAD_MAXIMA} (llegó {cantidad:g}).")
+        raise geo.ErrorGeometria(f"La cantidad va de 1 a {CANTIDAD_MAXIMA} (llegó {cantidad:g}).")
     cantidad = int(cantidad)
     hs = holguras(holgura_inicial, paso, cantidad)
     d_max = diametro + 2 * hs[-1]
@@ -84,6 +84,6 @@ def pieza_calibracion_holguras(diametro, holgura_inicial=0.1, paso=0.1, cantidad
 
     for nombre, forma in (("la placa", placa), ("el peine", peine)):
         if not geo.es_valida(forma):
-            raise geo.ErrorGeometria(f"El kernel no pudo armar {nombre} con esas medidas.")
+            raise geo.ErrorGeometria(f"El kernel no pudo armar {nombre}.")
     return {"placa": placa, "peine": peine, "holguras": hs, "diametros_agujero": [round(diametro + 2 * h, 6) for h in hs],
             "largo": largo, "ancho_placa": ancho_placa, "ancho_peine": ancho_peine}

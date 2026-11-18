@@ -46,14 +46,14 @@ CLAVES_ACABADO = ("nombre", "categoria", "metalico", "transparencia", "barniz", 
 
 def _num(valor, que, minimo=0.0, maximo=1.0):
     if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not math.isfinite(valor):
-        raise geo.ErrorGeometria(f"{que} tiene que ser un número (llegó {valor!r}).")
+        raise geo.ErrorGeometria(f"{que} debe ser un número (llegó {valor!r}).")
     return float(min(maximo, max(minimo, valor)))
 
 
 def _color(valor, que):
     if (not isinstance(valor, (list, tuple)) or len(valor) != 3
             or not all(isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) for x in valor)):
-        raise geo.ErrorGeometria(f"{que} tiene que ser [r, g, b] de 0 a 1 (llegó {valor!r}).")
+        raise geo.ErrorGeometria(f"{que} debe ser [r, g, b] 0-1 (llegó {valor!r}).")
     escala = 255.0 if any(x > 1 for x in valor) else 1.0
     return [float(min(1.0, max(0.0, x / escala))) for x in valor]
 
@@ -215,7 +215,7 @@ def agregar_mio(aspecto, reemplazar=False):
     a = normalizar(aspecto)
     datos = cargar_usuario()
     if a["nombre"] in BIBLIOTECA:
-        raise geo.ErrorGeometria(f"«{a['nombre']}» es un aspecto de la biblioteca: elegí otro nombre.")
+        raise geo.ErrorGeometria(f"«{a['nombre']}» ya es un aspecto de la biblioteca.")
     if a["nombre"] in datos["mis"] and not reemplazar:
         raise geo.ErrorGeometria(f"Ya hay un aspecto tuyo llamado «{a['nombre']}».")
     datos["mis"][a["nombre"]] = a
