@@ -50,7 +50,7 @@ def test_bocetos_de_planos_distintos_da_error_claro():
                      perfiles=[_ref(s, "A"), _ref(s, "B")], distancia="5 mm")
     resultado = s.doc.agregar(op)
     assert resultado.estado == "error"
-    assert "Los perfiles tienen que estar en el mismo plano" in resultado.mensaje
+    assert "Los perfiles deben estar en un mismo plano" in resultado.mensaje
     assert not [c for c in s.doc.estado_final.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
 
 

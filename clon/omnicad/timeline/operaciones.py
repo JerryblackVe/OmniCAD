@@ -1186,7 +1186,7 @@ class _OpConPerfiles(Operacion):
                 n0, o0 = np.asarray(planos[0].normal, float), np.asarray(planos[0].origen, float)
                 if any(abs(abs(float(np.dot(p.normal, n0))) - 1.0) > 1e-9
                        or abs(float(np.dot(np.asarray(p.origen) - o0, n0))) > 1e-7 for p in planos[1:]):
-                    raise ErrorOperacion("Los perfiles tienen que estar en el mismo plano.")
+                    raise ErrorOperacion("Los perfiles deben estar en un mismo plano.")
             caras.extend(c for c in resueltos if c is not None)
             plano = planos[0]
         normal_cara = None
