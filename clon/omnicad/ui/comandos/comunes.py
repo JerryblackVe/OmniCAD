@@ -279,16 +279,18 @@ def objetivos(v):
     return [h["ref"]["cuerpo"] for h in v.get("objetivos") or [] if h["ref"].get("tipo") == "cuerpo"]
 
 
-def perfiles_a_params(seleccion):
-    """Selección de perfiles y caras planas → (boceto, perfiles, caras) como los guarda la operación."""
+def perfiles_a_params(seleccion, un_solo_boceto=False):
+    """Selección de perfiles y caras planas → (boceto, perfiles, caras) como los guarda la operación.
+    B-637: cada perfil guarda su boceto (Fusion pide coplanares, no del mismo boceto); la coplanaridad la
+    revisa la operación al calcular. `un_solo_boceto` conserva la regla de Revolución (B-339)."""
     boceto, perfiles, caras = "", [], []
     for h in seleccion or []:
         ref = h["ref"]
         if ref["tipo"] == "perfil":
-            if boceto and ref["boceto"] != boceto:
+            if un_solo_boceto and boceto and ref["boceto"] != boceto:
                 raise ErrorComando("Los perfiles deben ser del mismo boceto.")
-            boceto = ref["boceto"]
-            perfiles.append({"firma": ref["firma"], "centroide": ref["centroide"]})
+            boceto = boceto or ref["boceto"]
+            perfiles.append({"firma": ref["firma"], "centroide": ref["centroide"], "boceto": ref["boceto"]})
         elif ref["tipo"] == "cara":
             caras.append(ref)
     if not perfiles and not caras:

@@ -1133,6 +1133,10 @@ class _OpConPerfiles(Operacion):
         deps = super().dependencias()
         if self.p.get("boceto") and isinstance(self.p["boceto"], str):
             deps.add(self.p["boceto"].split(".", 1)[0])
+        for ref in self.p.get("perfiles") or []:
+            # B-637: cada perfil recuerda su boceto; el de la referencia no alcanza.
+            if isinstance(ref, dict) and isinstance(ref.get("boceto"), str) and ref["boceto"]:
+                deps.add(ref["boceto"].split(".", 1)[0])
         deps |= _deps_objetivo(self.p.get("objetivo")) | _deps_objetivo(self.p.get("objetivos"))
         deps |= ent.dependencias_de(self.p.get("caras"), self.p.get("hasta"), self.p.get("inicio_objeto"),
                                     self.p.get("eje_ref"), self.p.get("hasta2"), self.p.get("curvas"))
@@ -1144,31 +1148,47 @@ class _OpConPerfiles(Operacion):
         if self.p.get("boceto") is not None and not isinstance(self.p["boceto"], str):    # [] y {} también
             raise ParametroMalFormado(self.p["boceto"], 'se esperaba el id del boceto (texto, p. ej. "op1")')
         if self.p.get("perfiles"):
-            br = estado.bocetos.get(self.p["boceto"])
-            if br is None:
-                raise ErrorOperacion("El boceto de referencia no está disponible.")
-            for ref in self.p["perfiles"]:
+            vistos, planos = set(), []
+            # B-637: Fusion pide perfiles COPLANARES, no del mismo boceto. Cada referencia trae su boceto (las
+            # viejas caen al de la operación); se buscan agrupadas por él para no mezclar firmas de bocetos distintos.
+            por_boceto = {}
+            for i, ref in enumerate(self.p["perfiles"]):
                 detalle = ent.problema_perfil(ref)
                 if detalle:
                     raise ParametroMalFormado(ref, detalle)
-            vistos = set()
-            for ref, (perfil, nota) in zip(self.p["perfiles"],
-                                           buscar_perfiles(br.perfiles, self.p["perfiles"], br.plano, br.boceto),
-                                           strict=True):
-                if perfil is not None and id(perfil) in vistos:     # B-404: dos referencias, una sola región
-                    perfil, nota = None, "Dos perfiles elegidos son ahora la misma región del boceto: revisá la operación."
-                if perfil is None and nota:
-                    ctx is not None and ctx.aviso(nota)
-                    continue
-                if perfil is None:
-                    if ent.es_de_texto(ref["firma"], br):
-                        raise ErrorOperacion("El perfil era de una letra: elegí el texto.")
-                    raise ErrorOperacion("Un perfil ya no existe (cambió su contorno).")
-                if nota and ctx is not None:
-                    ctx.aviso(nota)
-                vistos.add(id(perfil))
-                caras.append(perfil.cara)
-            plano = br.plano
+                bid = ref.get("boceto") or self.p["boceto"]
+                if not isinstance(bid, str):
+                    raise ParametroMalFormado(ref, 'se esperaba el id del boceto del perfil (texto, p. ej. "op1")')
+                por_boceto.setdefault(bid, []).append(i)
+            resueltos = [None] * len(self.p["perfiles"])
+            for bid, indices in por_boceto.items():
+                br = estado.bocetos.get(bid)
+                if br is None:
+                    raise ErrorOperacion("El boceto de referencia no está disponible.")
+                refs = [self.p["perfiles"][i] for i in indices]
+                pares = zip(refs, buscar_perfiles(br.perfiles, refs, br.plano, br.boceto), strict=True)
+                for i, (ref, (perfil, nota)) in zip(indices, pares, strict=True):
+                    if perfil is not None and id(perfil) in vistos:     # B-404: dos referencias, una sola región
+                        perfil, nota = None, "Dos perfiles elegidos son ahora la misma región del boceto: revisá la operación."
+                    if perfil is None and nota:
+                        ctx is not None and ctx.aviso(nota)
+                        continue
+                    if perfil is None:
+                        if ent.es_de_texto(ref["firma"], br):
+                            raise ErrorOperacion("El perfil era de una letra: elegí el texto.")
+                        raise ErrorOperacion("Un perfil ya no existe (cambió su contorno).")
+                    if nota and ctx is not None:
+                        ctx.aviso(nota)
+                    vistos.add(id(perfil))
+                    resueltos[i] = perfil.cara
+                    planos.append(br.plano)
+            if planos:
+                n0, o0 = np.asarray(planos[0].normal, float), np.asarray(planos[0].origen, float)
+                if any(abs(abs(float(np.dot(p.normal, n0))) - 1.0) > 1e-9
+                       or abs(float(np.dot(np.asarray(p.origen) - o0, n0))) > 1e-7 for p in planos[1:]):
+                    raise ErrorOperacion("Los perfiles tienen que estar en el mismo plano.")
+            caras.extend(c for c in resueltos if c is not None)
+            plano = planos[0]
         normal_cara = None
         for e in _resolver_todas(self.p.get("caras"), estado):
             if e.plano is None:

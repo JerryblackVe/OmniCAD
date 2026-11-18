@@ -522,7 +522,7 @@ class Revolucion(Comando):
         ]
 
     def construir(self, v, ctx):
-        boceto, perfiles, caras = perfiles_a_params(v.get("perfiles"))
+        boceto, perfiles, caras = perfiles_a_params(v.get("perfiles"), un_solo_boceto=True)
         eje = ref1(v, "eje")
         if eje is None and boceto:
             # Como Fusion: si el boceto tiene una línea central, es el eje por defecto.
