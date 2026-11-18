@@ -247,7 +247,46 @@ def _auxiliar_tangente(w, cara, delta, sobre_la_superficie=False):
     return ("alambre", _alambre(nuevas))
 
 
-def _con_condiciones(exteriores, inicio, fin, medias=None):
+# B-618: entre dos secciones en planos que se cruzan, la solevación reglada (ThruSections con dos secciones) se mete
+# en la tapa; Fusion soleva liso (la superficie sale perpendicular al perfil). Se agregan secciones auxiliares
+# perpendiculares, como con la condición «Dirección» a 0°.
+_CONDICION_PERPENDICULAR = {"tipo": "direccion", "angulo": 0.0, "peso": 1.0}
+
+
+def _planos_paralelos(exteriores):
+    """True si las dos secciones están en planos paralelos (o no se les puede leer el plano): ahí la solevación reglada
+    ya es la de Fusion, un tronco, y no hay que tocarla."""
+    try:
+        normales = [np.asarray(geo.plano_de_cara(BRepBuilderAPI_MakeFace(w, True).Face()).normal, float)
+                    for _t, w in exteriores]
+    except Exception:  # sin plano legible (aristas abiertas, alabeadas) queda la solevación de siempre
+        return True
+    return abs(float(normales[0] @ normales[1])) > 1.0 - 1e-9
+
+
+def _cruces_de_caras(forma):
+    """Autointersecciones que tocan una cara (las de arista sola son uniones tangentes: no cuentan)."""
+    n, problemas, _ = rv._autointersecciones_seguras(forma, 1000, 10)
+    return None if n is None else sum("cara" in p["mensaje"] for p in problemas)
+
+
+def _loft_liso(exteriores, solido, reglada, cerrada):
+    """B-618: solevación lisa entre dos secciones en planos que se cruzan. La reglada se mete en la tapa (la superficie
+    es tangente al plano de la tapa y la cruza); Fusion soleva liso. Se agregan dos secciones auxiliares perpendiculares
+    a los perfiles; el sentido de la del final no lo fija la geometría (la normal es perpendicular a la cuerda), así que
+    se prueban los dos y queda el que no se cruza."""
+    for signo in (1.0, -1.0):
+        try:
+            forma = _loft(_con_condiciones(exteriores, _CONDICION_PERPENDICULAR, _CONDICION_PERPENDICULAR,
+                                           signo_fin=signo), solido, reglada, cerrada)
+        except geo.ErrorGeometria:
+            return None
+        if _cruces_de_caras(forma) == 0:
+            return forma
+    return None
+
+
+def _con_condiciones(exteriores, inicio, fin, medias=None, signo_fin=1.0):
     """Condiciones de borde (End Conditions) de la primera y la última sección, y «Dirección» en las intermedias
     (`medias`: {posición: condición}). Se agrega, a poca distancia, una sección auxiliar por el lado que corresponda: copia
     corrida y ensanchada o angostada según el ángulo («Dirección») o corrida por el plano tangente de la cara
@@ -306,6 +345,8 @@ def _con_condiciones(exteriores, inicio, fin, medias=None):
             normal = np.asarray(geo.plano_de_cara(BRepBuilderAPI_MakeFace(w, True).Face()).normal, float)
             if float((c2 - c) @ normal) < 0:
                 normal = -normal
+            if pos == len(exteriores) - 1:
+                normal = normal * signo_fin          # B-618: la normal del final es perpendicular a la cuerda
             destino[pos] = [_auxiliar_direccion(w, normal, delta, angulo,
                                                 -1.0 if (not es_extremo and destino is detras) else 1.0)]
     salida = []
@@ -394,7 +435,11 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
         if forma is None:
             if condiciones:         # receta vieja (sin `condicion_exacta`) o perfiles que no se emparejan: auxiliares
                 exteriores = _con_condiciones(exteriores, condicion_inicio, condicion_fin, condiciones_medias)
-            forma = _loft(exteriores, solido, reglada, cerrada)
+            elif (solido and not reglada and len(exteriores) == 2
+                  and all(t == "alambre" for t, _ in exteriores) and not _planos_paralelos(exteriores)):
+                forma = _loft_liso(exteriores, solido, reglada, cerrada)
+            if forma is None:
+                forma = _loft(exteriores, solido, reglada, cerrada)
         huecos = [s[2] for s in secs if s[0] == "alambre"]
         if solido and huecos and all(huecos) and len({len(h) for h in huecos}) == 1:
             for k in range(len(huecos[0])):
