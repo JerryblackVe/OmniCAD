@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-18 · B-612.** Labio, ranura y modo combinado rechazan ancho o alto menores que la resolución booleana antes del barrido. Regresión en subproceso: `test_create_lip_groove_medidas_minimas_b612`; 256 tests OK, ruff limpio.
 - **2026-11-18 · B-628 cerrado.** Tres aserciones al día con P-158: `test_boceto_3d.py`, `test_texto_curva.py` y `test_b489_patron_encimado.py`. Los tres fallaban solo por texto viejo; no se tocó la app. Ruff limpio, pytest: 159 OK, 106 omitidos por fuentes y omnikernel.
 - **2026-11-18 · B-633.** Engrosar conserva las esquinas agudas de la transición rectángulo→círculo si OCC no cierra el sólido. Sin filtros de autointersecciones. `test_b_633_repro.py`: Engrosar pasa; Vaciado sigue en B-634. Ruff limpio y 714 tests de entorno OK.
 - **2026-11-18 · B-629 cerrado.** El desfase avisa «El perfil desaparece» si la resta de franjas deja la región vacía; conserva el aviso genérico si el cálculo falla. `test_b517_desfase_texto_adentro.py` y `test_b_629_repro.py` verdes; ruff limpio.

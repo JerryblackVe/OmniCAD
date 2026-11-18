@@ -48,6 +48,14 @@ def saliente(cuerpo, punto, direccion, *, diametro_exterior, diametro_agujero, a
     return _validar(geo.booleano(resultado, hueco, "cortar"), "Saliente")
 
 
+def _validar_medidas_labio(ancho, alto, holgura):
+    minimo = geo._RESOLUCION_BOOLEANA
+    if not (ancho >= minimo and alto >= minimo):
+        raise geo.ErrorGeometria(f"⚠ Ancho y alto: mínimo {minimo:.5f} mm.")
+    if holgura < 0:
+        raise geo.ErrorGeometria("⚠ La holgura debe ser 0 o más.")
+
+
 def _validar_aristas_labio(cuerpo, aristas):
     """Las aristas del labio tienen que tener largo y no ser de costura: si no, el kernel se cuelga (B-158)."""
     analizador = ShapeAnalysis_Edge()
@@ -90,8 +98,7 @@ def labio_ranura(cuerpo, aristas, direccion_tirado, *, tipo="labio", ancho, alto
     adentro del material (se corta). Sin desmoldeo ni reglas de plástico. Devuelve el cuerpo resultante."""
     if tipo not in ("labio", "ranura"):
         raise geo.ErrorGeometria(f"Tipo desconocido: {tipo}")
-    if ancho <= 0 or alto <= 0 or holgura < 0:
-        raise geo.ErrorGeometria("⚠ Ancho y alto positivos, holgura 0 o más.")
+    _validar_medidas_labio(ancho, alto, holgura)
     _validar_aristas_labio(cuerpo, aristas)
     tirar = _unit(direccion_tirado, "dirección de tirado")
     w, p0, m = _marco_labio(cuerpo, aristas, tirar, ancho, alto)
@@ -106,8 +113,7 @@ def labio_y_ranura(cuerpo_labio, cuerpo_ranura, aristas, direccion_tirado, *, an
     calculada del labio (con `holgura`) en `cuerpo_ranura`, en un paso. La ranura sale de las medidas del labio: la
     holgura agranda el ancho y el alto. Los dos cuerpos tienen que tocarse y las aristas tienen que estar alineadas
     (Fusion: «las caras normales entre sí»). Devuelve {"labio": forma, "ranura": forma}."""
-    if ancho <= 0 or alto <= 0 or holgura < 0:
-        raise geo.ErrorGeometria("⚠ Ancho y alto positivos, holgura 0 o más.")
+    _validar_medidas_labio(ancho, alto, holgura)
     _validar_aristas_labio(cuerpo_labio, aristas)
     tirar = _unit(direccion_tirado, "dirección de tirado")
     w, p0, m = _marco_labio(cuerpo_labio, aristas, tirar, ancho, alto)
