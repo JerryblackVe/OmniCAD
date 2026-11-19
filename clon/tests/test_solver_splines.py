@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """B-111: el solver no rearma cada spline en cada evaluación (caché por coordenadas) y da lo mismo que sin caché."""
+import math
 import random
 
 import numpy as np
@@ -160,6 +161,50 @@ def test_rust_da_los_extremos_de_python(semilla):
     esperado = _extremos_python(pts, grado)
     obtenido = rs.spline_extremos(np.array(pts, dtype=float), grado)
     assert list(obtenido) == pytest.approx(esperado, rel=1e-9, abs=1e-9)
+
+
+@sin_rust
+@pytest.mark.parametrize("semilla", range(12))
+def test_solver_fusion_rust_da_los_extremos_de_la_quintica(semilla):
+    """SOLVER-FUSION: `spline_quintica_extremos` (Rust) = `_quintica_fusion` (Python), también con más de 19 segmentos
+    (ahí Python va disperso) y con dos puntos casi encimados."""
+    azar = random.Random(semilla)
+    m = (2, 4, 9, 25)[semilla % 4]
+    pts = [(10.0 * i + azar.uniform(-4, 4), azar.uniform(-30, 30)) for i in range(m)]
+    if semilla % 3 == 0:
+        pts.insert(1, (pts[0][0] + 1e-4, pts[0][1]))
+    obtenido = rs.spline_quintica_extremos(np.array(pts, dtype=float))
+    assert list(obtenido) == pytest.approx(_extremos_python(pts, 5), rel=1e-7, abs=1e-7)
+
+
+def test_solver_fusion_arrastre_de_quinticas_rapido_y_sin_rust_igual(monkeypatch):
+    """SOLVER-FUSION: un movimiento del ratón sobre el contorno de 10 splines quínticas (B-463) tardaba 1,4 s (jacobiano
+    ruidoso con paso 1e-7 y la quíntica por Python; ahora va por Rust). Sobre un boceto YA arrastrado: el 2.º movimiento cumple, y con un
+    módulo Rust viejo (sin la quíntica) cae a Python con el mismo resultado."""
+    import time
+
+    def arrastre(b, v, pid):
+        previo = S.resolver(b, v)
+        (x0, y0), tiempos = b.coords(pid), []
+        for i in (1, 2):
+            b.puntos[pid].x, b.puntos[pid].y = x0 + 0.5 * i, y0 + 0.3 * i
+            t0 = time.perf_counter()
+            r = S.resolver(b, v, pid, previo)
+            tiempos.append(time.perf_counter() - t0)
+            assert r.ok and r.residuo_max < S.TOLERANCIA_ACEPTA_ARRASTRE
+        return b, tiempos[-1]
+
+    base, v = contorno_splines(10)
+    assert {c.grado for c in base.curvas.values()} == {5}
+    pid = [q for q in base.puntos if q not in base.puntos_fijos()][7]
+    rapido, t = arrastre(base.copia(), v, pid)
+    if hasattr(rs, "spline_quintica_extremos"):    # un módulo viejo (o ninguno) va por Python: ~1 s
+        assert t < 0.5                               # medido: ~0,05 s con Rust (antes 1,4 s)
+    viejo = type("Viejo", (), {"spline_extremos": staticmethod(lambda *a: (_ for _ in ()).throw(ValueError()))})()
+    monkeypatch.setattr(S.nativo, "disponible", lambda: viejo)
+    lento, _t = arrastre(base.copia(), v, pid)
+    # subdeterminado: Rust redondea distinto y el camino de LM se aparta en las direcciones libres (medido: 7,5 µm)
+    assert max(math.dist(rapido.coords(q), lento.coords(q)) for q in base.puntos) < 1e-2
 
 
 @sin_rust
