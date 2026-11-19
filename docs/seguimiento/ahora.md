@@ -20,6 +20,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
+| 0 | B-695 y B-696 (prioridad alta, Gerardo en vivo; E4 o E8, mismo panel Carácter/Texto) | B-695: aviso falso «el cuerpo 'op58.c5' no existe» al editar el texto de un boceto anterior. B-696: el panel Carácter dice «Juli J» y el dibujo muestra «Ceci» |
 | 0 | PRUEBA-TEXTO-SIM (E7) | Probar como usuario Texto/Panel Carácter (parámetro, familia, pivote de 6) y Panel Simetría (eje); y revisar las filas «no» viejas de `preparado/opciones_asas_boceto.md` contra los scripts de `prueba_ui` |
 | 0b | B-677 (E1 desde las 16:35 UTC) (E3, Opus alto) | Perfiles: OmniCAD detecta menos que Fusion en el mismo boceto |
 | 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
