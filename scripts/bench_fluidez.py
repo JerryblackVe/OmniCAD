@@ -295,21 +295,20 @@ def _rosca(r):
         if p.seccion is not None:
             QTest.mouseClick(p.seccion.boton, Qt.LeftButton)
         _casilla(p.widgets["modelada"], True)
-        _casilla(p.widgets["largo_completo"], False)
         _combo(p.widgets["tam_iso_metrica"], "M20")
-        _teclear(_campo(p, "longitud"), "60")
         _esperar(lambda: not p._t_previa.isActive() and p._hijo_previa is None, "rosca inicial")
         if not p._previa_ok:
             raise RuntimeError(p.mensaje.text())
         sonda.BLOQUEOS.clear()
         previas = r["detalle"]["previas_ms"] = {}
         previas["arrastrar_tamano"] = _previa(p, lambda: _asa(p, "tam_iso_metrica", 1))
-        caja = p.manipuladores.cajas["tam_iso_metrica"]
-        previas["teclear_radio_10"] = _previa(p, lambda: _teclear(caja, "10", enter=True))
+        _combo(p.widgets["tam_iso_metrica"], "M20")
         _casilla(p.widgets["largo_completo"], False)
-        _responde()
+        _esperar(lambda: not p._t_previa.isActive() and p._hijo_previa is None, "rosca parcial")
+        previas["longitud_60"] = _previa(p, lambda: _teclear(_campo(p, "longitud"), "60"))
         previas["arrastrar_longitud"] = _previa(p, lambda: _asa(p, "longitud", -10))
         previas["teclear_longitud_60"] = _previa(p, lambda: _teclear(_campo(p, "longitud"), "60"))
+        assert p.valores["tam_iso_metrica"] == "M20" and p.ctx.evaluar(p.valores["longitud"]) == 60, p.valores
         r["detalle"]["previas_ms"] = previas
         r["primera_previa_ms"] = max(previas.values())
         r["aceptar_ms"] = _aceptar(v, p)
