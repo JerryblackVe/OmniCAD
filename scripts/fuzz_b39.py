@@ -274,9 +274,10 @@ def correr_caso(semilla, indice, ligero=False):
             if not (geo.es_valida(w) and rv.es_estanca(w)):
                 fallos.append("D:orden_no_estanca")
     except geo.ErrorGeometria as e:
-        # rechazo limpio de un resultado imposible o no estanco: error claro en vez de geometría equivocada (la
-        # defensa de B-39 siempre termina con «no logró corregirlo»; otros ErrorGeometria sí son fallo)
-        fallos.append(f"E:rechazo:{e}" if "no logró corregirlo" in str(e) else f"G:excepcion:{e}")
+        # rechazo limpio de un resultado imposible o no estanco: error claro en vez de geometría equivocada (los dos
+        # rechazos de la defensa de B-39, y solo ellos, llevan `geo.CONSEJO_CONTACTO`; B-631: comparar el texto se
+        # rompió cuando P-158 acortó el mensaje). Otros ErrorGeometria sí son fallo
+        fallos.append(f"E:rechazo:{e}" if geo.CONSEJO_CONTACTO in str(e) else f"G:excepcion:{e}")
     except Exception as e:  # noqa: BLE001
         fallos.append(f"G:excepcion:{type(e).__name__}:{e}")
     return nombre, herr, fallos
