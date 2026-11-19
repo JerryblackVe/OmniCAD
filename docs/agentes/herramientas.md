@@ -2565,7 +2565,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 
 | Herramienta | Modifica | Resumen |
 |---|---|---|
-| [`extrude`](#extrude) | sí | Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text' o 'sketch'; ver abajo). distance acepta un número (mm) o una expresión con parámetros. |
+| [`extrude`](#extrude) | sí | Extruye perfiles coplanares de uno (sketch y profile) o varios bocetos (profiles), o caras planas (faces). |
 | [`revolve`](#revolve) | sí | Revoluciona perfiles de un boceto alrededor de un eje. axis: 'sketch_x' o 'sketch_y' (ejes del plano del boceto que pasan por su origen), 'x', 'y', 'z' (ejes del origen del diseño) o el id de una línea del boceto (get_sketch; puede ser de construcción); también un eje de construcción (id o nombre), una arista recta o una cara cilíndrica (selector o id de find_edges / find_faces) o una línea de OTRO boceto ({"sketch": id, "curve": n}). |
 | [`sweep`](#sweep) | sí | Barre un perfil a lo largo de una ruta de otro boceto (o del mismo). |
 | [`loft`](#loft) | sí | Solevación: un sólido que pasa por los perfiles de varios bocetos, en el orden dado (mínimo dos). profiles elige un perfil por boceto (índice o 'largest'); vacío = el perfil 0 de cada uno. ruled usa tramos rectos entre secciones y closed une la última con la primera. |
@@ -2655,11 +2655,11 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 
 ### `extrude`
 
-Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text' o 'sketch'; ver abajo). distance acepta un número (mm) o una expresión con parámetros. El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, un cut entra al material sin pedirlo con reverse vacío (sobre una cara va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material). direction: one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo lo estrecha). operation: new_body, join, cut, intersect o auto (cut si la extrusión se mete en un sólido visible o en target; join si sale de una cara de ese sólido; si no new_body, como el panel Extruir). También las opciones de Extruir de Fusion: faces, thin, start, symmetric_measure, extent (distance, to_object o all) y taper_angle2.
+Extruye perfiles coplanares de uno (sketch y profile) o varios bocetos (profiles), o caras planas (faces). La distancia positiva sigue la normal del boceto (−Y en XZ); reverse la invierte. Con reverse vacío, cut entra hacia el material.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
+  - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces) o si usás profiles.
   - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos), "text:<id>" o "sketch" (todos los perfiles sin esos huecos). Se ignora con open_curves.
   - `distance` (número o expresión; opcional, por defecto `"10 mm"`): distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
   - `operation` ("new_body" | "join" | "cut" | "intersect" | "auto"; opcional, por defecto `"new_body"`): "new_body", "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; "join" si no se mete y el perfil es una cara (faces) de ese sólido; si no, "new_body"; apoyarse en una cara no cuenta).
@@ -2668,7 +2668,7 @@ Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text'
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut, intersect o auto (id o nombre); vacío = los sólidos visibles que toca.
   - `distance2` (número o expresión; opcional, por defecto `null`): distancia del segundo lado con direction="two_sides"; vacío = igual a distance.
   - `reverse` (true/false; opcional, por defecto `null`): true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al material (sobre una cara, o con faces como único perfil, va contra la normal exterior; en un boceto flotante va hacia el lado que tiene material, como Fusion).
-  - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch; tienen que ser coplanares. Extruir solo una cara de un cuerpo: operation="join" la empuja hacia afuera (agrega material); operation="cut" la empuja hacia adentro (corta; ver reverse).
+  - `faces` (texto o lista de texto o null; opcional, por defecto `null`): caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de boceto; tienen que ser coplanares. Extruir solo una cara de un cuerpo: operation="join" la empuja hacia afuera (agrega material); operation="cut" la empuja hacia adentro (corta; ver reverse).
   - `thin` (true/false; opcional, por defecto `false`): true hace una extrusión delgada (pared de wall_thickness) en lugar de sólida.
   - `wall_thickness` (número o expresión; opcional, por defecto `null`): espesor de la pared en mm (número o expresión); solo con thin. Vacío = el espesor de la regla de plástico del componente (1 mm si no hay regla asignada).
   - `wall_location` ("side1" | "side2" | "center"; opcional, por defecto `"side1"`): lado del contorno donde va la pared: "side1", "side2" o "center"; solo con thin.
@@ -2686,6 +2686,7 @@ Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text'
   - `tangent_chain` (true/false; opcional, por defecto `true`): con open_curves, suma las curvas tangentes a cada una, también al recalcular (un empalme que se agregue después en el boceto entra en la pared); true por defecto, como «Tangent Chain» de Fusion.
   - `side2_extent` ("distance" | "to_object" | "all"; opcional, por defecto `"distance"`): extensión propia del lado 2 con direction=two_sides: distance (distance2), to_object (hasta side2_to) o all.
   - `side2_to` (texto; opcional, por defecto `null`): cara (selector o id), plano o cuerpo límite del lado 2; obligatorio con side2_extent=to_object. Usa to_mode y to_offset.
+  - `profiles` (lista de objeto o null; opcional, por defecto `null`): lista de perfiles coplanares, p. ej. [{"sketch": "A", "profile": 0}, {"sketch": "B", "profile": "all"}]. sketch es id o nombre y profile usa las opciones de profile (0 por defecto). Sin sketch, profile ni open_curves externos.
 - CLI: `omnicad call extrude --doc pieza.omnicad`
 
 ### `revolve`
