@@ -18,7 +18,6 @@ Revisión del 2026-11-18 en Linux. `T` significa `xvfb-run -a /home/mosos/OmniCA
 | B-344 | Perfil apoyado inicia operación incorrecta | 1 | sin comprobar | `T tests/test_cuerpos_partidos.py::test_b344_el_perfil_dibujado_sobre_una_cara_abre_en_unir_y_suma_al_cuerpo -q` → `1 passed in 3.04s`; falta comparar otras operaciones con Fusion | preguntar a Gerardo |
 | B-405 | Plano de desfase rechazaba distancia cero | 1 | sin comprobar | `T tests/test_p136_distancia_cero_por_defecto.py::test_b405_plano_de_desfase_acepta_cero_y_negativos_como_fusion -q` → `6 passed in 2.34s`; faltan otros desfases en Fusion | preguntar a Gerardo |
 | B-363 | Archivo Prusa F3D no encuentra geometría | 2 | sin comprobar | Sin comando: `prusa_core_one.f3d` no está en el worktree | preguntar a Gerardo |
-| B-362 | Conicidad curva falla pasado el cierre | 1 | SIGUE | `T tests/test_b362_tope_conicidad_curvas.py::test_b362_pasado_el_cierre_el_error_lo_indica -q` → `2 passed in 2.12s`; el test afirma el rechazo aún existente | arreglar |
 | B-292 | Procesos agotan memoria en tandas Windows | 2 | sin comprobar | `T tests/test_b292_hijo_un_hilo_blas.py::test_todos_los_lanzamientos_pasan_el_entorno -q` → `24 passed in 1.03s`; falta tanda Windows | preguntar a Gerardo |
 | B-399 | ViewCube pequeño y configuración escondida | 2 | necesita ventana | Sin comando: pendiente aprobación visual de Gerardo | preguntar a Gerardo |
 | B-398 | Órbita gira fuera del origen | 2 | necesita ventana | Sin comando: pendiente aprobación visual y decisión del centro | preguntar a Gerardo |

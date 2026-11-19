@@ -12,10 +12,12 @@ from .solidos_crear_comun import (
 
 if TYPE_CHECKING:
     from .solidos_crear_occ import (
-        BRepAdaptor_Curve, BRepAlgoAPI_Splitter, BRepBuilderAPI_MakeFace, BRepClass_FaceClassifier,
+        BRepAdaptor_Curve, BRepAlgoAPI_Splitter, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakeWire, BRepClass_FaceClassifier,
         BRepOffsetAPI_DraftAngle, BRepOffsetAPI_MakeOffset, BRepOffsetAPI_ThruSections, BRepPrimAPI_MakeHalfSpace,
         BRepPrimAPI_MakePrism, BRepTools, BRepTools_WireExplorer, GeomAbs_Arc, GeomAbs_Intersection, GeomAbs_Line,
-        List_TopoDS_Shape, TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_REVERSED, TopAbs_WIRE, TopoDS, gp_Pln,
+        GeomAPI_Interpolate, HArray1_gp_Pnt,
+        List_TopoDS_Shape, TopAbs_EDGE, TopAbs_FACE, TopAbs_IN, TopAbs_REVERSED, TopAbs_WIRE, TopoDS, gp_Pln, gp_Pnt,
     )
 
 
@@ -76,7 +78,7 @@ def _conicidad_sin_draft(cara, n, distancia, conicidad, fijas, mensaje):
         raise geo.ErrorGeometria(mensaje)
     radio = radios_conicidad([cara])[0 if conicidad < 0 else 1]
     cierre = radio / abs(math.tan(math.radians(conicidad)))
-    if not fijas and abs(distancia) < cierre:   # con caras fijas (perfiles vecinos) el lateral reglado las inclinaría
+    if not fijas:   # con caras fijas (perfiles vecinos) el lateral reglado las inclinaría
         try:
             return _prisma_curvo_inclinado(cara, n, distancia, conicidad)
         except geo.ErrorGeometria as error:
@@ -229,32 +231,48 @@ def _prisma_curvo_inclinado(cara, n, d, conicidad):
     """
     exterior = BRepTools.OuterWire_s(TopoDS.Face(cara))
     desfase = abs(d) * math.tan(math.radians(conicidad))
-    piezas, tapas = [], []
     alambres = [exterior] + [TopoDS.Wire(w) for w in _explorar(cara, TopAbs_WIRE) if not w.IsSame(exterior)]
-    for i, w in enumerate(alambres):
-        s = desfase if i == 0 else -desfase
-        extremo = _desfase_alambre(w, s)
-        # si el desfase cambia la cantidad de aristas, algo se cerró: el tope de las letras que no se pueden medir
-        if len(_aristas_de(extremo)) != len(_aristas_de(_desfase_alambre(w, math.copysign(min(abs(s), 1e-3), s)))):
+
+    def lateral(desfasar, revisar_cierre):
+        piezas, tapas = [], []
+        for i, w in enumerate(alambres):
+            s = desfase if i == 0 else -desfase
+            extremo = desfasar(w, s)
+            if revisar_cierre:
+                # si el desfase cambia la cantidad de aristas, algo se cerró: el tope de las letras que no se pueden medir
+                chico = math.copysign(min(abs(s), 1e-3), s)
+                if len(_aristas_de(extremo)) != len(_aristas_de(desfasar(w, chico))):
+                    raise geo.ErrorGeometria("⚠ La inclinación cierra parte del perfil.")
+            tapas.append(_cara(extremo))
+            mk = BRepOffsetAPI_ThruSections(True, True)
+            mk.AddWire(w)
+            mk.AddWire(_trasladar(extremo, n * d))
+            mk.Build()
+            if not mk.IsDone():
+                raise geo.ErrorGeometria("⚠ No se pudo crear el lateral curvo.")
+            piezas.append(_validar(mk.Shape(), "Extrusión curva con inclinación"))
+        # un hueco que cruza el borde o pisa otro hueco ya cerró la pared: la tapa pierde menos que la suma de los huecos
+        tapa, esperada = tapas[0], abs(geo.area(tapas[0]))
+        for hueco in tapas[1:]:
+            tapa, esperada = geo.booleano(tapa, hueco, "cortar"), esperada - abs(geo.area(hueco))
+        if len(tapas) > 1 and abs(geo.area(tapa) - esperada) > 1e-6 * abs(geo.area(tapas[0])):
             raise geo.ErrorGeometria("⚠ La inclinación cierra parte del perfil.")
-        tapas.append(_cara(extremo))
-        mk = BRepOffsetAPI_ThruSections(True, True)
-        mk.AddWire(w)
-        mk.AddWire(_trasladar(extremo, n * d))
-        mk.Build()
-        if not mk.IsDone():
-            raise geo.ErrorGeometria("⚠ No se pudo crear el lateral curvo.")
-        piezas.append(_validar(mk.Shape(), "Extrusión curva con inclinación"))
-    # un hueco que cruza el borde o pisa otro hueco ya cerró la pared: la tapa pierde menos que la suma de los huecos
-    tapa, esperada = tapas[0], abs(geo.area(tapas[0]))
-    for hueco in tapas[1:]:
-        tapa, esperada = geo.booleano(tapa, hueco, "cortar"), esperada - abs(geo.area(hueco))
-    if len(tapas) > 1 and abs(geo.area(tapa) - esperada) > 1e-6 * abs(geo.area(tapas[0])):
-        raise geo.ErrorGeometria("⚠ La inclinación cierra parte del perfil.")
-    resultado = piezas[0]
-    for hueco in piezas[1:]:
-        resultado = geo.booleano(resultado, hueco, "cortar")
-    return _validar(resultado, "Extrusión curva con inclinación")
+        resultado = piezas[0]
+        for hueco in piezas[1:]:
+            resultado = geo.booleano(resultado, hueco, "cortar")
+        return _validar(resultado, "Extrusión curva con inclinación")
+
+    try:
+        return lateral(_desfase_alambre, True)
+    except geo.ErrorGeometria as primero:
+        # B-362: MakeOffset con juntas vivas falla o deja un alambre que ThruSections no puede emparejar con
+        # contornos de letras que mezclan rectas y splines; muestrear cada arista sí conserva los dos extremos.
+        try:
+            return lateral(_desfase_alambre_muestreado, False)
+        except geo.ErrorGeometria:
+            if "cierra parte del perfil" in str(primero):
+                raise primero
+            raise
 
 
 def _sentido_alambre(alambre):
@@ -281,6 +299,88 @@ def _desfase_alambre(alambre, d):
     if len(alambres) != 1:
         raise geo.ErrorGeometria("⚠ El desfase se partió en varios lazos.")
     return alambres[0]
+
+
+def _desfase_alambre_muestreado(alambre, d):
+    """Desfase de un alambre arista por arista (punto + d·normal) con uniones en esquina viva (B-362).
+
+    MakeOffset con junta Intersection falla con los contornos de letras que mezclan rectas y splines, y con la junta
+    en arco el kernel se cae. Cada arista conserva su cantidad de tramos, así ThruSections arma el lateral reglado
+    contra la base exacta."""
+    plano = geo.plano_de_cara(_cara(alambre))
+    if plano is None:
+        raise geo.ErrorGeometria("⚠ No se pudo desfasar (espesor muy grande).")
+    normal = np.asarray(plano.normal, float)
+    tramos, area = [], 0.0
+    ex = BRepTools_WireExplorer(alambre)
+    while ex.More():
+        arista = ex.Current()
+        puntos = np.asarray(geo.polilinea_arista(arista, 0.01), float)
+        if len(puntos) < 2:
+            raise geo.ErrorGeometria("⚠ No se pudo desfasar (espesor muy grande).")
+        if arista.Orientation() == TopAbs_REVERSED:
+            puntos = puntos[::-1]
+        tramos.append(puntos)
+        q = np.array([[plano.u @ p, plano.v @ p] for p in puntos])
+        area += np.sum(q[:-1, 0] * q[1:, 1] - q[1:, 0] * q[:-1, 1])   # área con signo: dice para qué lado crece
+        ex.Next()
+    if len(tramos) < 2:
+        raise geo.ErrorGeometria("⚠ No se pudo desfasar (espesor muy grande).")
+    sentido = 1.0 if area >= 0 else -1.0
+    desplazados = []
+    for puntos in tramos:
+        q = np.zeros_like(puntos)
+        for i in range(len(puntos)):
+            t = puntos[min(i + 1, len(puntos) - 1)] - puntos[max(i - 1, 0)]
+            t = t / (np.linalg.norm(t) or 1.0)
+            q[i] = puntos[i] + sentido * d * np.cross(t, normal)
+        desplazados.append(q)
+    uniones = [_union_esquina(desplazados[i - 1][-2:], desplazados[i][:2], d, plano)
+               for i in range(len(desplazados))]
+    aristas = []
+    for i, q in enumerate(desplazados):
+        recorrido = [uniones[i]] + list(q[1:-1]) + [uniones[(i + 1) % len(uniones)]]
+        limpio = [recorrido[0]]
+        for p in recorrido[1:]:
+            if np.linalg.norm(p - limpio[-1]) > 1e-7:
+                limpio.append(p)
+        if len(limpio) < 2:
+            raise geo.ErrorGeometria("⚠ No se pudo desfasar (espesor muy grande).")
+        if len(limpio) == 2:
+            aristas.append(BRepBuilderAPI_MakeEdge(gp_Pnt(*map(float, limpio[0])),
+                                                   gp_Pnt(*map(float, limpio[1]))).Edge())
+            continue
+        puntos = HArray1_gp_Pnt(1, len(limpio))
+        for k, p in enumerate(limpio):
+            puntos.SetValue(k + 1, gp_Pnt(*map(float, p)))
+        interp = GeomAPI_Interpolate(puntos, False, 1e-7)
+        interp.Perform()
+        if not interp.IsDone():
+            raise geo.ErrorGeometria("⚠ No se pudo desfasar (espesor muy grande).")
+        aristas.append(BRepBuilderAPI_MakeEdge(interp.Curve()).Edge())
+    mk = BRepBuilderAPI_MakeWire()
+    for arista in aristas:
+        mk.Add(arista)
+    if not mk.IsDone():
+        raise geo.ErrorGeometria("⚠ No se pudo desfasar (espesor muy grande).")
+    return mk.Wire()
+
+
+def _union_esquina(previas, siguientes, d, plano):
+    """Esquina viva entre dos tramos desfasados: cruce de sus tangentes; si se van paralelas, el punto medio."""
+    a, b = previas[-2], previas[-1]
+    c, e = siguientes[0], siguientes[1]
+    p = np.array([[plano.u @ a, plano.v @ a], [plano.u @ b, plano.v @ b]])
+    q = np.array([[plano.u @ c, plano.v @ c], [plano.u @ e, plano.v @ e]])
+    d1, d2 = p[1] - p[0], q[1] - q[0]
+    den = d1[0] * d2[1] - d1[1] * d2[0]
+    if abs(den) < 1e-12:
+        return (b + c) / 2
+    t = ((q[0][0] - p[0][0]) * d2[1] - (q[0][1] - p[0][1]) * d2[0]) / den
+    cruce = p[0] + t * d1
+    if np.linalg.norm(cruce - (p[1] + q[0]) / 2) > max(4 * abs(d), 0.5):   # un cruce disparatado es un lazo cerrado
+        return (b + c) / 2
+    return plano.a_3d(float(cruce[0]), float(cruce[1]))
 
 
 def _bandas_cerradas(caras, espesor, ubicacion):

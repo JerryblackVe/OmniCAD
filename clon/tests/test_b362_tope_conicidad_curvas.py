@@ -72,7 +72,8 @@ def test_b508_el_circulo_pasado_el_cierre_es_un_cono():
 
 
 # Un empalme de R3 o la punta de la elipse se cierran antes que el perfil entero: sigue el error (no hay vértice).
-@pytest.mark.parametrize("nombre,distancia,angulo", [("rectangulo", 20, -10), ("elipse", 3, -45)])
+# La elipse 30×10 cierra recién a 3,33 mm (su radio de curvatura mínimo); a 3 mm el contorno todavía es válido.
+@pytest.mark.parametrize("nombre,distancia,angulo", [("rectangulo", 20, -10), ("elipse", 4, -45)])
 def test_b362_pasado_el_cierre_el_error_lo_indica(nombre, distancia, angulo):
     sesion, _ = _perfil(nombre)
     respuesta = api.llamar(sesion, "extrude", {
@@ -127,6 +128,22 @@ def test_b362_las_letras_de_splines_se_inclinan_y_frenan_donde_se_cierran():
         assert 0.99 * minimo < geo.volumen(forma) < geo.area(cara) * 3
         with pytest.raises(geo.ErrorGeometria):
             sc._prisma(cara, (0, 0, 1), 60, -10)                    # 60·tan 10° = 10,6 mm: el trazo ya se cerró
+
+
+def test_b362_las_letras_con_splines_y_rectas_se_inclinan():
+    """B-362: un contorno que mezcla rectas y splines (la «C») se inclina en los dos sentidos; antes MakeOffset
+    fallaba con cualquier distancia y la letra quedaba sin inclinar."""
+    sesion = api.Sesion()
+    boceto = _ok(sesion, "sketch_from_spec", entities=[{"type": "text", "text": "C", "height": 20}])["sketch"]["id"]
+    caras = [p.cara for p in sesion.doc.estado_final.bocetos[boceto].perfiles]
+    assert len(caras) == 1
+    cara = caras[0]
+    for angulo in (-10, 10):
+        forma = sc._prisma(cara, (0, 0, 1), 3, angulo)
+        t = math.tan(math.radians(angulo))
+        assert geo.es_valida(forma)
+        esperado = geo.area(cara) * 3 + geo.longitud(cara) * t * 9 / 2
+        assert geo.volumen(forma) == pytest.approx(esperado, rel=0.03)
 
 
 def test_b362_la_pared_delgada_del_hueco_de_un_boceto_no_se_pierde():
