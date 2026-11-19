@@ -442,3 +442,47 @@ def test_las_exclusiones_de_una_cantidad_anterior_no_se_guardan(ventana):
     panel.campos["cantidad1"].setText("3")                 # ahora hay 2 copias: el índice 4 ya no existe
     assert ctl.aceptar()
     assert lz.b.patrones[0]["suprimidos"] == [1]
+
+
+# ------------------------------------------------------------------ B-599: un objeto vectorial (SVG) se repite entero
+def _cuadro_svg(b, x=20.0, y=0.0):
+    from omnicad.restricciones import objetos
+    lineas = [b.agregar_linea(p, q) for p, q in (((x, y), (x + 4, y)), ((x + 4, y), (x + 4, y + 4)),
+                                                 ((x + 4, y + 4), (x, y + 4)), ((x, y + 4), (x, y)))]
+    return objetos.crear(b, lineas, "Trazo")
+
+
+def test_b599_patron_circular_de_un_objeto_svg_copia_el_objeto_y_se_edita():
+    from omnicad.restricciones import objetos
+    b = Boceto()
+    oid = _cuadro_svg(b)
+    puntos = b.puntos_de(objetos.curvas(b, [oid]))       # la ventana de selección también trae sus puntos
+    sueltos = len(b.puntos)
+    b.patron_circular([oid] + puntos, (0.0, 0.0), 4)
+    copias = [i for i in objetos.raices(b) if i != oid]
+    assert len(copias) == 3
+    cajas = sorted(tuple(round(v, 6) for v in objetos.caja(b, [i])) for i in copias)
+    assert cajas == [(-24.0, -4.0, -20.0, 0.0), (-4.0, 20.0, 0.0, 24.0), (0.0, -24.0, 4.0, -20.0)]
+    assert len(b.puntos) == sueltos * 4                  # sin puntos sueltos de más: viajan dentro de cada copia
+    b.editar_patron(b.patrones[0]["id"], cantidad=2)
+    copias = [i for i in objetos.raices(b) if i != oid]
+    assert [tuple(round(v, 6) for v in objetos.caja(b, copias))] == [(-24.0, -4.0, -20.0, 0.0)]
+
+
+def test_b599_la_previa_de_un_objeto_svg_dibuja_su_geometria(ventana):
+    from omnicad.restricciones import objetos
+    lz, panel, ctl = ventana
+    oid = _cuadro_svg(lz.b)
+    lz.seleccion = lz.b.puntos_de(objetos.curvas(lz.b, [oid])) + [oid]
+    lz.set_herramienta("patron_circular")
+    panel.campos["centro_x"].setText("0")
+    panel.campos["centro_y"].setText("0")
+    panel.campos["cantidad"].setText("4")
+    r = ctl.calcular()
+    largos = [math.dist(poli[0], poli[-1]) for poli in r["polis"]]
+    assert r["error"] == "" and sum(lg > 3.9 for lg in largos) == 12     # 4 lados × 3 copias, no solo puntos
+    assert ctl.aceptar() and len(objetos.raices(lz.b)) == 4
+    lz.set_herramienta("patron_circular")
+    ctl.cargar(lz.b.patrones[0])                                         # editar (doble clic en el glifo)
+    copia = next(i for i in objetos.raices(lz.b) if i != oid)
+    assert ctl.calcular()["error"] == "" and set(objetos.curvas(lz.b, [copia])) <= lz.copias_en_edicion

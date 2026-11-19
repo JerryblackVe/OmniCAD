@@ -27,7 +27,7 @@ Leyenda: ✓ igual que Fusion y probado · ⚠ anda pero con una diferencia o si
 | Distancia / Ángulo total (campo y asa) | ✓ | ✓ | `distance1/2`, `total_angle` |
 | Dirección Una / Simétrica | ✓ (por dirección: `symmetric2`) | ✓ | `symmetric`, `symmetric2` |
 | Supresión de copias (casilla sobre cada copia) | ✓ | ✓ | `suppress`; ⚠ B-601 acepta un índice inexistente |
-| Misma previa y mismas asas | ✓ | ⚠ B-599: no se reproduce en la VPS | — |
+| Misma previa y mismas asas | ✓ | ✓ (B-599 cerrado el 2026-11-19: los objetos SVG se ignoraban) | — |
 | Editar con doble clic en el glifo | ✓ | ✓ | `edit_sketch_pattern` |
 | Cantidad 0, 1, negativa | ✓ rechaza con su mensaje | ✓ | — |
 | Distancia 0, ángulo 0, ángulo > 360 | ✓ rechaza | ✓ rechaza | — |
@@ -71,7 +71,7 @@ Medido: `patrones_boceto.py` da 98 de 106 en verde; los 8 ✗ son textos esperad
 
 | ID | Qué | Dueño |
 |---|---|---|
-| B-599 | No se reproduce en la VPS con 3 variantes de centro; falta el archivo o la captura de Gerardo | E1 / E11 |
+| B-599 | La previa y el patrón ignoraban los objetos vectoriales (SVG) elegidos | E3 (cerrado el 2026-11-19) |
 | B-600 | Patrón › Componentes se elige escribiendo nombres | E2 (cerrado el 2026-11-16) |
 | B-601 | `suppress` fuera de rango se acepta en silencio en el patrón de boceto | E1 |
 | B-602 | Superficie sin Patrón ni Simetría | E4 |
@@ -79,7 +79,7 @@ Medido: `patrones_boceto.py` da 98 de 106 en verde; los 8 ✗ son textos esperad
 
 ## Lo que necesita el mouse real (lista de E11)
 
-1. B-599: con el `.omnicad` de Gerardo, Patrón circular con 4 objetos y centro «Punto 576»: ¿se ven las copias en Windows? Capturas con y sin tema oscuro.
+1. (B-599 cerrado el 2026-11-19: era un objeto SVG, no el tema.)
 2. Arrastrar las asas de Cantidad, Distancia y Ángulo total del boceto con el mouse físico y comparar con Fusion.
 3. Casillas de supresión sobre la vista (sólido y boceto) con clic real, en ventana de 1024×700.
 4. Panel en 1024×700: moverlo con el mouse y ver si deja ver las copias.
