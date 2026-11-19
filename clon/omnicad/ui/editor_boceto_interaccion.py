@@ -966,7 +966,15 @@ class LienzoInteraccionMixin:
         h = self.herramienta
         if h == "circulo_2t":
             return len(self.picks) == 2
-        return bool(self._claves_vivas())
+        return bool(self._claves_vivas()) or self._cota_elegida() is not None
+
+    def _cota_elegida(self):
+        """B-652: id de la única cota con driving elegida (teclear un número la edita, como Fusion), o None."""
+        if self.herramienta != "seleccionar" or self.entrada is not None or len(self.seleccion) != 1:
+            return None
+        cid = self.seleccion[0]
+        cota = self.b.cotas.get(cid)
+        return cid if cota is not None and not cota.referencia and cid in self._zonas_cotas else None
 
     def event(self, e):
         if e.type() == QEvent.WindowDeactivate and getattr(self, "objetos", None) is not None:
@@ -1045,6 +1053,10 @@ class LienzoInteraccionMixin:
         elif self._admite_entrada(e):
             if self._claves_vivas():
                 self._editar_campo_vivo(e.text())
+            elif (cid := self._cota_elegida()) is not None:
+                self.editar_cota(cid, self._zonas_cotas[cid].center())     # B-652: el número abre la caja de la cota
+                if self.entrada is not None:
+                    self.entrada.campos[0].setText(e.text())
             else:
                 self._entrada_dinamica(e.text())
         else:

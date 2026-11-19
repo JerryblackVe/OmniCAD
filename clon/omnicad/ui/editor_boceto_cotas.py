@@ -72,11 +72,18 @@ class LienzoCotasMixin:
             if ok is not False:
                 self._cerrar_entrada()
         self.entrada.aceptado.connect(aceptar)
-        self.entrada.cancelado.connect(self._cerrar_entrada)
+        self.entrada.cancelado.connect(self._cancelar_entrada)
         if asas is not None:
             from .asas_boceto import GestorAsas2D
             self._asas = GestorAsas2D(self, self.entrada, *asas)
         self.entrada.abrir(pos)
+
+    def _cancelar_entrada(self):
+        """Esc o ✕ en la barra de valores. B-654: en el Desfase un solo Esc sale del comando, como Fusion."""
+        salir = self.herramienta == "desfase"
+        self._cerrar_entrada()
+        if salir:
+            self.set_herramienta("seleccionar")
 
     def _cerrar_entrada(self):
         self._previa_desfase_cache = None
