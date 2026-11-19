@@ -391,3 +391,24 @@ def test_clic_en_un_panel_flotante_no_llega_al_area_ni_cierra_el_boceto(app, cla
         QTest.mouseClick(w, Qt.LeftButton, Qt.NoModifier, w.rect().center() if w is not panel else w.rect().topLeft() + QPointF(2, 2).toPoint())
     assert Area.presiones == 0
     area.close()
+
+
+def test_b686_mensaje_arista_recta_cuando_no_elige_nada(lienzo):
+    lz = lienzo
+    mensajes = []
+    lz.mensaje.connect(mensajes.append)
+    lz.set_herramienta("perfil_giratorio")
+    lz.opciones["eje_giro"] = "arista"
+    lz._eje_giro = None
+
+    class Visor:
+        def mapFromGlobal(self, p):
+            return p
+
+        def elegir_entidad(self, p, tipos):
+            return None
+
+    lz.visor = Visor()
+    lz._clic_proyectar(QPointF(100, 100))
+    lz.visor = None
+    assert mensajes and "arista recta" in mensajes[-1]

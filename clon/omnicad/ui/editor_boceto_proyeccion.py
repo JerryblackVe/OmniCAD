@@ -413,7 +413,12 @@ class LienzoProyeccionMixin:
             info["forma"] = ent.resolver(info["ref"], self.estado_referencias()).forma
         if not info or (info.get("forma") is None
                         and info.get("tipo") not in ("plano", "eje", "punto", "punto_boceto")):
-            self.mensaje.emit("Hacé clic en una arista, una cara o un cuerpo del modelo.")
+            if (self.herramienta == "perfil_giratorio"
+                    and self.opciones.get("eje_giro") == "arista"
+                    and self._eje_giro is None):
+                self.mensaje.emit("Hacé clic en una arista recta del modelo.")
+            else:
+                self.mensaje.emit("Hacé clic en una arista, una cara o un cuerpo del modelo.")
             return
         if self._hay_tarjeta_proyeccion():
             self._elegir_proyeccion(info)
