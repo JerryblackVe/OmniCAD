@@ -336,6 +336,14 @@ class _Sistema:
         c, s = qx / r, qy / r
         return r - a * b / (math.hypot(b * c, a * s) or 1e-12)
 
+    def _normal_elipse(self, x, cid, q):
+        """Normal unitaria de la elipse en la dirección del punto q (el gradiente de la elipse que pasa por q)."""
+        o, ra, rb, ang = self.elipse(x, cid)
+        cs, sn = math.cos(ang), math.sin(ang)
+        du, dv = q[0] - o[0], q[1] - o[1]
+        nu, nv = (du * cs + dv * sn) / (ra * ra or 1e-12), (-du * sn + dv * cs) / (rb * rb or 1e-12)
+        return _unitario((nu * cs - nv * sn, nu * sn + nv * cs))
+
     def separacion(self, x, o, d):
         """Distancia con signo entre una curva y su desfase: el signo dice de qué lado quedó la copia y es lo que deja
         pasar por cero una cota editada a negativo (BOC-50)."""
@@ -696,8 +704,25 @@ class _Sistema:
                     return [(u[0] * v[0] + u[1] * v[1]) * _ESCALA_TANGENTE]
                 T.append(f)
                 return
-            s = _signo(self.dist_signada(x0, self.C(x0, c), l))
-            T.append(lambda x, l=l, c=c, s=s: [s * self.dist_signada(x, self.C(x, c), l) - self.R(x, c)])
+            if not isinstance(self.b.curvas[c], Circulo):   # arcos: contra el círculo entero (BOC-52, aviso aparte)
+                s = _signo(self.dist_signada(x0, self.C(x0, c), l))
+                T.append(lambda x, l=l, c=c, s=s: [s * self.dist_signada(x, self.C(x, c), l) - self.R(x, c)])
+                return
+            # B-650/B-651 (Fusion: «se tocan sin cruzarse»): el contacto Q(u) = a + u·(b − a), con u acotado al tramo
+            # como B-564. Con la recta infinita el contacto se iba a la prolongación y, al arrastrar, el otro extremo
+            # se escapaba. Q sobre el círculo y radio perpendicular a la línea: en el extremo, también es tangente.
+            (a0, b0), o0 = self.L(x0, l), self.C(x0, c)
+            d0 = (b0[0] - a0[0], b0[1] - a0[1])
+            j = self._parametro(min(max(((o0[0] - a0[0]) * d0[0] + (o0[1] - a0[1]) * d0[1])
+                                        / ((d0[0] * d0[0] + d0[1] * d0[1]) or 1e-12), 0.0), 1.0))
+
+            def f(x, l=l, c=c, j=j):
+                (a, bb), o = self.L(x, l), self.C(x, c)
+                u = min(max(x[j], 0.0), 1.0)
+                q = (a[0] + u * (bb[0] - a[0]) - o[0], a[1] + u * (bb[1] - a[1]) - o[1])
+                d = _unitario((bb[0] - a[0], bb[1] - a[1]))
+                return [math.hypot(*q) - self.R(x, c), q[0] * d[0] + q[1] * d[1]]
+            T.append(f)
             return
         if tipos[0] in CIRCULARES and tipos[1] in CIRCULARES:
             c1, c2 = e
@@ -717,17 +742,35 @@ class _Sistema:
             if sobre is not None:
                 # B-561 (gemelo): extremo de la línea sobre la elipse: la línea, perpendicular a la normal en ese extremo
                 def f(x, l=l, c=c, p=sobre):
-                    (a, bb), q = self.L(x, l), self.P(x, p)
-                    o, ra, rb, ang = self.elipse(x, c)
-                    du, dv = q[0] - o[0], q[1] - o[1]
-                    lu, lv = du * math.cos(ang) + dv * math.sin(ang), -du * math.sin(ang) + dv * math.cos(ang)
-                    nu, nv = lu / (ra * ra), lv / (rb * rb)
-                    n = _unitario((nu * math.cos(ang) - nv * math.sin(ang), nu * math.sin(ang) + nv * math.cos(ang)))
+                    (a, bb), n = self.L(x, l), self._normal_elipse(x, c, self.P(x, p))
                     u = _unitario((bb[0] - a[0], bb[1] - a[1]))
                     return [(u[0] * n[0] + u[1] * n[1]) * _ESCALA_TANGENTE]
                 T.append(f)
                 return
-            s = _signo(self.dist_signada(x0, self.C(x0, c), l))
+            if isinstance(self.b.curvas[c], Elipse):
+                # B-669 (gemelo de B-650): el contacto Q(u) = a + u·(b − a), con u acotado al tramo de la línea; Q sobre
+                # la elipse y la línea perpendicular a su normal ahí. Arranca en el contacto de la recta infinita.
+                (a0, b0), (o0, ra0, rb0, ang0) = self.L(x0, l), self.elipse(x0, c)
+                d0 = (b0[0] - a0[0], b0[1] - a0[1])
+                n0 = _unitario((-d0[1], d0[0]))
+                cs, sn = math.cos(ang0), math.sin(ang0)
+                nu, nv = n0[0] * cs + n0[1] * sn, -n0[0] * sn + n0[1] * cs
+                h = math.hypot(ra0 * nu, rb0 * nv) or 1e-12
+                tu, tv = ra0 * ra0 * nu / h, rb0 * rb0 * nv / h
+                q0 = min(((o0[0] + k * (tu * cs - tv * sn), o0[1] + k * (tu * sn + tv * cs)) for k in (1, -1)),
+                         key=lambda q: abs(self.dist_signada(x0, q, l)))
+                j = self._parametro(min(max(((q0[0] - a0[0]) * d0[0] + (q0[1] - a0[1]) * d0[1])
+                                            / ((d0[0] * d0[0] + d0[1] * d0[1]) or 1e-12), 0.0), 1.0))
+
+                def f(x, l=l, c=c, j=j):
+                    (a, bb) = self.L(x, l)
+                    u = min(max(x[j], 0.0), 1.0)
+                    q = (a[0] + u * (bb[0] - a[0]), a[1] + u * (bb[1] - a[1]))
+                    n, d = self._normal_elipse(x, c, q), _unitario((bb[0] - a[0], bb[1] - a[1]))
+                    return [self.sobre_elipse(x, q, c), (d[0] * n[0] + d[1] * n[1]) * _ESCALA_TANGENTE]
+                T.append(f)
+                return
+            s = _signo(self.dist_signada(x0, self.C(x0, c), l))   # arco de elipse: la elipse entera, como los arcos
 
             def f(x, l=l, c=c, s=s):
                 _o, a, bb, ang = self.elipse(x, c)
@@ -1609,6 +1652,12 @@ class _GradosAuto:
                 columnas.extend(self.sis.idx_p[pid])
             columnas.extend(self.sis.idx_r[cid] for cid in local.idx_r)
             J = _jacobiano(local, local.x0)
+            if J.shape[1] > local.n_base:
+                # Contactos con parámetro auxiliar (B-564, B-650): se elimina proyectando las filas sobre lo que el
+                # parámetro no puede absorber. shortcut: un parámetro clavado en el borde (columna nula) no suma su
+                # grado libre como en `grados_de_libertad`; si AutoConstrain cuenta de más ahí, guardarlo en el estado.
+                u, s, _ = np.linalg.svd(J[:, local.n_base:])
+                J = u[:, int(np.count_nonzero(s > 1e-9)):].T @ J[:, :local.n_base]
             filas = np.zeros((len(J), n))
             filas[:, columnas] = J
             if tolerancia is not None:
