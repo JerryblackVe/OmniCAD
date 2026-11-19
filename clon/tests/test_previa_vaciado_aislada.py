@@ -134,8 +134,11 @@ def test_el_hijo_real_no_bloquea_y_cancelar_no_toca_documento(ventana, monkeypat
             atendidos.append(1)
             QTimer.singleShot(0, latir)
 
+    # B-640: el trabajador caliente contesta en milisegundos y, con la ventana cargada, el bucle alcanzaba menos de 3
+    # latidos antes de que el timer de 16 ms reciba la respuesta. Un hijo de una tarea arranca en ~1 s: la ventana para
+    # contar latidos deja de depender de si el trabajador está caliente (y de la carga) sin bajar el listón de 3.
+    monkeypatch.setattr(aislado, "TRABAJADOR", False)
     p._calcular_previa()
-    p._t_hijo.setInterval(2000)   # el hijo caliente de la suite contesta en milisegundos: al demorar la recepción, el conteo de latidos no depende de la carga
     antes["contador"] = ventana.doc.a_dict()["contador"]  # construir reserva ids aun si se cancela
     assert p._hijo_previa is not None and not p._previa_ok
     QTimer.singleShot(0, latir)
