@@ -56,7 +56,12 @@ def test_b461_si_la_via_rapida_sale_mal_cae_al_recorte_normal(monkeypatch):
 
 
 def _adentro(forma, puntos):
-    return [BRepClass3d_SolidClassifier(forma, gp_Pnt(*q), 1e-7).State() for q in puntos]
+    clasificador = BRepClass3d_SolidClassifier(forma)
+    estados = []
+    for punto in puntos:
+        clasificador.Perform(gp_Pnt(*punto), 1e-7)
+        estados.append(clasificador.State())
+    return estados
 
 
 def _misma_fase(a, b, puntos):
@@ -66,6 +71,7 @@ def _misma_fase(a, b, puntos):
     assert distintos <= len(puntos) // 50, f"{distintos} de {len(puntos)} puntos de prueba distintos"
 
 
+@pytest.mark.lento
 @pytest.mark.parametrize("modificacion, clase", [("chaflanado", ""), ("unido_a_base", "6g")])   # 6g: tornea la cresta
 def test_b461_la_rosca_directa_da_lo_mismo_que_el_corte(monkeypatch, modificacion, clase):
     forma = _cuerpo(modificacion)
