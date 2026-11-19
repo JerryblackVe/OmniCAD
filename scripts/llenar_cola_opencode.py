@@ -46,8 +46,11 @@ def sin_cobertura():
     tabla = Path(os.environ.get("TMPDIR", "/tmp")) / "cobertura_boceto_auto.md"
     subprocess.run([PY, "../scripts/cobertura_boceto.py", str(tabla)], cwd=REPO / "clon", capture_output=True, text=True, timeout=300)
     # claves sin test automático (**no** en esa columna), las que además no se probaron como usuario primero
-    filas = re.findall(r"^\|[^|]*\|[^|]*\| `([^`]+)` \| (\*\*no\*\*|sí[^|]*) \| (\*\*no\*\*|sí[^|]*) \|", tabla.read_text(encoding="utf-8"), re.M)
-    return [k for k, t, u in sorted(filas, key=lambda f: "sí" in f[2]) if t == "**no**"]
+    filas = re.findall(r"^\| ([^|]*?) \|[^|]*\| `([^`]+)` \| (\*\*no\*\*|sí[^|]*) \| (\*\*no\*\*|sí[^|]*) \|", tabla.read_text(encoding="utf-8"), re.M)
+    # primero lo propio del boceto (crear, modificar, restricciones, selección); lo que no se probó como usuario, antes
+    orden = ["CREAR", "MODIFICAR", "RESTRICCIONES", "SELECCIONAR", "TERMINAR BOCETO", "INSERTAR", "INSPECCIONAR", "CONFIGURAR", "ENSAMBLAR"]
+    clave = lambda f: (orden.index(f[0].split(" › ")[0]) if f[0].split(" › ")[0] in orden else 99, "sí" in f[3])
+    return [k for g, k, t, u in sorted(filas, key=clave) if t == "**no**"]
 
 
 def candidatas():
@@ -82,10 +85,14 @@ def main():
             break
         if nombre in ya:
             continue
-        wt = Path.home() / f"OmniCAD-{nombre}"
+        # el worktree se llama como el ítem (B-701) o como la tarea sin guiones bajos (PREP-TEST-sk-x): lo que ya existe, alguien lo tomó
+        wid = re.sub(r"[^A-Za-z0-9-]", "-", re.sub(r"^(FIX|PREP)-(?=[BPFH]-\d)", "", nombre))
+        wt = Path.home() / f"OmniCAD-{wid}"
+        if wt.exists():
+            continue
         if not a.seco:
-            if not wt.exists():
-                subprocess.run(["bash", str(REPO / "scripts/worktree_item.sh"), "crear", nombre], capture_output=True)
+            if subprocess.run(["bash", str(REPO / "scripts/worktree_item.sh"), "crear", wid], capture_output=True).returncode:
+                continue
             brief = BRIEFS / f"{nombre}.md"
             brief.write_text(REGLAS.format(que=que, wt=wt, py=PY), encoding="utf-8")
             (reserva / f"70_{nombre}.tarea").write_text(f"WT={wt}\nBRIEF={brief}\n", encoding="utf-8")
