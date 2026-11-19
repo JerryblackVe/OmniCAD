@@ -512,7 +512,7 @@ def _spline(b, puntos, tipo, grado, cerrada, construccion=False, tangente=None, 
         if len(pts) < 2:
             raise ErrorBoceto("La spline necesita al menos dos puntos.")
         pts[0], _direccion = _inicio_tangente(b, tangente, pts[0], extremo)
-    # como Fusion, la spline de ajuste es siempre cúbica: su grado se ignora (con 0 o −1 rompía la interpolación)
+    # como Fusion, la spline de ajuste tiene su grado fijo (5, B-463): el grado se ignora (con 0 o −1 rompía la interpolación)
     sid = b.agregar_spline(pts, "control" if control else "ajuste", grado if control else 3, cerrada,
                            construccion=construccion)
     if tangente is not None:

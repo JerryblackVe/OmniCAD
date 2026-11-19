@@ -228,7 +228,7 @@ class Spline(_Curva):
 
     `manijas` (solo la de ajuste abierta): [[punto de ajuste, punta, curvatura o None]]. La manija de tangente de
     Fusion es una línea de construcción del punto de ajuste a la `punta`: su dirección es la tangente de la curva
-    ahí y su largo, la fuerza (largo = cuerda total / tramos deja la tangente natural). `curvatura` (1/mm, con
+    ahí y su largo, la fuerza (largo = |C'| / tramos deja la tangente natural). `curvatura` (1/mm, con
     signo: + gira a la izquierda) es la manija de curvatura. La punta es un punto del boceto: se acota y la mueve
     el solver."""
     tipo, DATOS = "spline", ("modo", "grado", "cerrada", "pesos", "nudos", "manijas")

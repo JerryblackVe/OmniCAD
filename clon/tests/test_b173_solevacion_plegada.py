@@ -29,6 +29,16 @@ def _secciones():
     return s
 
 
+def _secciones_cubicas():
+    """Las de un proyecto de antes de B-463 (spline de ajuste cúbica): con la quíntica la solevación ya no se pliega."""
+    s = _secciones()
+    for boceto in PUNTOS:
+        for c in s.paso(boceto).boceto.curvas.values():
+            c.grado = 3
+    s.doc.recalcular()
+    return s
+
+
 @pytest.mark.parametrize("orden", list(itertools.permutations(["Bc_ant_n", "Bc_ant_m", "Bc_ant_p"])))
 def test_la_solevacion_no_se_pliega_y_no_depende_del_orden(orden):
     """B-416: en los 4 órdenes cruzados va hacia atrás; antes daban `ok` plegado (6 044 386 mm³, o
@@ -91,7 +101,7 @@ def test_revisar_marca_invalida_una_autointerseccion():
     from OCP.TopoDS import TopoDS
 
     from omnicad.timeline.operaciones import _resolver_todas
-    s = _secciones()
+    s = _secciones_cubicas()
     paso = _llamar(s, "loft", sketches=["Bc_ant_n", "Bc_ant_m"], operation="new_body")["feature"]["id"]
     ts = BRepOffsetAPI_ThruSections(True, False)       # con el ajuste de compatibilidad, como antes del arreglo
     for seccion in _resolver_todas(s.paso(paso).p["secciones"], s.doc.estado_final):
