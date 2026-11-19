@@ -1135,6 +1135,8 @@ class VentanaPrincipal(QMainWindow):
 
     def _anunciar_avisos(self):
         """Cuando un paso del timeline pasa a tener aviso o error, lo anuncia con el aviso flotante."""
+        if self.modo_boceto.activo:         # B-695: al teclear un texto los pasos posteriores pasan por estados a medias
+            return
         actuales = {(i, r.estado, r.mensaje) for i, r in enumerate(self.doc.resultados) if r.estado in ("aviso", "error")}
         nuevos = sorted(actuales - (self._avisos_vistos or set()))
         primera = self._avisos_vistos is None

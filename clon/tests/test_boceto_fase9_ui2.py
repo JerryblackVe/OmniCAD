@@ -289,7 +289,7 @@ def test_panel_text_muestra_y_edita_parametro_por_set_parameter(modo_texto, monk
     inicial = len(lz._previa_polis)
     panel.valor_parametro_texto.setText("WWW")
     panel.valor_parametro_texto.editingFinished.emit()
-    assert any(n == "set_parameter" and a == {"name": "Text", "expression": "WWW"} for n, a in llamadas)
+    assert any(n == "set_parameter" and a == {"name": "Text", "expression": "WWW", "keep_errors": True} for n, a in llamadas)
     assert modo.v.doc.parametros.valores()["Text"] == "WWW"
     cantidad = len(lz._previa_polis)
     lz.entrada.aceptado.emit([c.text() for c in lz.entrada.campos])

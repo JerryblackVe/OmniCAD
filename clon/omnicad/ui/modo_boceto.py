@@ -1511,9 +1511,9 @@ class ModoBoceto(QObject):
         from ..restricciones import ErrorBoceto
         if nombre in self.v.doc.parametros and self.v.doc.parametros.obtener(nombre).expresion == valor:
             return
-        r = api.llamar(api.Sesion(self.v.doc), "set_parameter", {"name": nombre, "expression": valor})
+        r = api.llamar(api.Sesion(self.v.doc), "set_parameter", {"name": nombre, "expression": valor, "keep_errors": True})
         if not r["ok"]:
-            raise ErrorBoceto(r["error"])
+            raise ErrorBoceto(r.get("mensaje") or r.get("error") or "No se pudo cambiar el texto.")
         self.lienzo.opciones["valor_parametro_texto"] = valor
 
     def _tipo_de_linea(self):
