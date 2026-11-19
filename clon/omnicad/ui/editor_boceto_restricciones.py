@@ -68,6 +68,8 @@ class LienzoRestriccionesMixin:
             self.b.reemplazar_restriccion(rid, tipo)
             if tipo == "tangente":
                 acomodar_tangente(self.b, r.entidades, self._valores_para_diagnostico())
+            elif tipo in ("concentrica", "punto_medio", "igual"):
+                acomodar_segunda(self.b, r.entidades[0], self._valores_para_diagnostico())     # B-663: la primera queda quieta
         if not self.aplicar_cambio(cambiar):
             return False
         self.mensaje.emit(f"Restricción cambiada: {antes} → {TIPOS_RESTRICCION[tipo].lower()}.")
