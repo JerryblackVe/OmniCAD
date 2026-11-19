@@ -603,25 +603,50 @@ class SupEmpalme(Comando):
     AYUDA = "Redondea o bisela aristas entre superficies."
     CLASE_OP = OpSupEmpalme
     TITULOS_MODO = ("tipo", {"empalme": ("Empalme de superficie", "sup_empalme"),
+                             "reglas": ("Empalme de reglas de superficie", "sup_empalme"),
+                             "completo": ("Redondo completo de superficie", "sup_empalme"),
                              "chaflan": ("Chaflán de superficie", "chaflan_3d")})
 
     def campos(self, ctx):
         def empalme(v):
-            return v.get("tipo") != "chaflan"
+            return v.get("tipo", "empalme") == "empalme"
 
         def chaflan(v):
             return v.get("tipo") == "chaflan"
 
+        def reglas(v):
+            return v.get("tipo") == "reglas"
+
+        def completo(v):
+            return v.get("tipo") == "completo"
+
         def etiqueta(v):
-            return "Distancia" if chaflan(v) else "Longitud de cuerda" if v.get("tipo_radio") == "cuerda" else "Radio"
-        return [Seleccion("aristas", "Aristas", {"arista"}, maximo=None),
-                Opciones("tipo", "Tipo", {"empalme": "Empalme", "chaflan": "Chaflán"}),
+            return "Distancia" if chaflan(v) else "Longitud de cuerda" if empalme(v) and v.get("tipo_radio") == "cuerda" \
+                else "Radio"
+        return [Opciones("tipo", "Tipo", {"empalme": "Empalme", "reglas": "Empalme de reglas",
+                                          "completo": "Redondo completo", "chaflan": "Chaflán"}),
+                Seleccion("aristas", "Aristas", {"arista"}, maximo=None,
+                          visible_si=lambda v: empalme(v) or chaflan(v)),
+                Seleccion("central", "Cara central", {"cara_plana"}, visible_si=completo,
+                          ayuda="La cara que se vuelve una media caña entre las dos laterales."),
+                Seleccion("laterales", "Caras laterales", {"cara_plana"}, minimo=2, maximo=2, visible_si=completo,
+                          ayuda="Dos caras planas, paralelas y perpendiculares a la central."),
+                Seleccion("caras_a", "Caras", {"cara"}, maximo=None, visible_si=reglas),
+                Opciones("regla", "Regla", {"todas": "Todas las aristas", "entre": "Entre caras"}, visible_si=reglas),
+                Seleccion("caras_b", "Caras 2", {"cara"}, maximo=None,
+                          visible_si=lambda v: reglas(v) and v.get("regla") == "entre"),
+                Opciones("redondeos", "Topología", {"ambos": "Redondeos y empalmes", "redondeos": "Solo redondeos",
+                                                    "empalmes": "Solo empalmes"}, visible_si=reglas),
                 Opciones("tipo_radio", "Tipo de radio", {"constante": "Constante", "cuerda": "Longitud de cuerda",
-                                                         "variable": "Variable"}, visible_si=empalme),
+                                                         "variable": "Variable", "asimetrico": "Asimétrico"},
+                         visible_si=empalme),
                 Opciones("tipo_chaflan", "Tipo de chaflán", {"distancia_igual": "Distancia igual",
                                                              "dos_distancias": "Dos distancias",
                                                              "distancia_angulo": "Distancia y ángulo"}, visible_si=chaflan),
-                Expresion("medida", "Radio / distancia", "1 mm", etiqueta_si=etiqueta),
+                Expresion("medida", "Radio / distancia", "1 mm", etiqueta_si=etiqueta,
+                          visible_si=lambda v: not completo(v)),
+                Expresion("radio2", "Radio en la 2.ª cara", "1 mm",
+                          visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "asimetrico"),
                 Expresion("radio_fin", "Radio final", "2 mm",
                           visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable"),
                 Expresion("distancia2", "Distancia 2", "1 mm",
@@ -629,7 +654,10 @@ class SupEmpalme(Comando):
                 Expresion("angulo", "Ángulo", "45 deg", ANGULO,
                           visible_si=lambda v: chaflan(v) and v.get("tipo_chaflan") == "distancia_angulo"),
                 Casilla("voltear", "Voltear", visible_si=lambda v: chaflan(v) and v.get("tipo_chaflan") != "distancia_igual"),
-                Casilla("cadena_tangente", "Cadena tangente", True),
+                Opciones("continuidad", "Continuidad", {"g1": "Tangente (G1)", "g2": "Curvatura (G2)"},
+                         visible_si=lambda v: empalme(v) and v.get("tipo_radio") in ("constante", "asimetrico"),
+                         ayuda="G2 y el radio asimétrico solo se hacen en aristas rectas entre dos caras planas."),
+                Casilla("cadena_tangente", "Cadena tangente", True, visible_si=lambda v: empalme(v) or chaflan(v)),
                 Opciones("esquina", "Esquina", {"bola": "Bola rodante", "setback": "Setback"},
                          visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante"),
                 Expresion("setback", "Distancia de setback", "2 mm",
@@ -639,13 +667,26 @@ class SupEmpalme(Comando):
                          visible_si=chaflan)]
 
     def construir(self, v, ctx):
+        tipo = v["tipo"]
+        if tipo == "completo":
+            exigir(v, "central", "Seleccioná la cara central.")
+            if len(v.get("laterales") or []) != 2:
+                raise ErrorComando("Hacen falta exactamente dos caras laterales.")
+            return self.crear_op(OpSupEmpalme, v, ctx, tipo=tipo, central=ref1(v, "central"), laterales=refs(v, "laterales"))
+        if tipo == "reglas":
+            exigir(v, "caras_a", "Seleccioná las caras para la regla.")
+            return self.crear_op(OpSupEmpalme, v, ctx, tipo=tipo, medida=v["medida"], caras_a=refs(v, "caras_a"),
+                                 caras_b=refs(v, "caras_b"), regla=v["regla"], redondeos=v["redondeos"])
         exigir(v, "aristas", "Seleccioná las aristas.")
         claves = ("tipo", "medida", "cadena_tangente", "tipo_radio", "radio_fin", "esquina", "setback", "tipo_chaflan",
-                  "distancia2", "angulo", "voltear", "esquina_chaflan")
+                  "distancia2", "angulo", "voltear", "esquina_chaflan", "radio2", "continuidad")
         return self.crear_op(OpSupEmpalme, v, ctx, aristas=refs(v, "aristas"), **{k: v[k] for k in claves})
 
     def desde_op(self, op, ctx):
-        return dict(op.p, aristas=hits(op.p["aristas"], ctx.estado))
+        e = ctx.estado
+        return dict(op.p, aristas=hits(op.p["aristas"], e), caras_a=hits(op.p["caras_a"], e),
+                    caras_b=hits(op.p["caras_b"], e), laterales=hits(op.p["laterales"], e),
+                    central=hits([op.p["central"]], e) if op.p.get("central") else [])
 
 
 class _PrimitivaSup:

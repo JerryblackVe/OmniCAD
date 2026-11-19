@@ -42,7 +42,7 @@ normal. Los nombres de la API no cambian.
 
 ## SUP-28 · Empalme y Chaflán de superficie
 
-`sup_empalme` y `fillet_surface` usan el Empalme y el Chaflán del sólido (`solidos_modificar.empalme` y `chaflan`) pasados los chequeos de superficie; el estado está en la fila SUP-28 de `docs/seguimiento/faltantes.md`.
+`sup_empalme` y `fillet_surface` usan el Empalme y el Chaflán del sólido (`solidos_modificar.empalme` y `chaflan`) pasados los chequeos de superficie; en una superficie, el Redondo completo, el asimétrico y G2 cortan las caras y cosen la cara curva (`_recortar_esquina`).
 
 | Comando | Fila | Control |
 |---|---|---|

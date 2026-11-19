@@ -69,3 +69,36 @@ def test_esquina_de_chaflan_con_empalme_da_error_y_receta_vieja_sin_cadena():
     r = api.llamar(_caja(), "fillet_surface", {"edges": VERTICAL, "size": 2, "corner_type": "miter"})
     assert not r["ok"] and "corner_type=miter" in r["mensaje"], r
     assert OpSupEmpalme.migrar_receta({"params": {"tipo": "empalme"}})["params"]["cadena_tangente"] is False
+
+
+def _caja_angosta():                   # 20 × 10 × 20: las caras de 10 mm de ancho son la de adelante (<Y) y la de atrás (>Y)
+    s = api.Sesion()
+    assert api.llamar(s, "create_surface_box", {"length": 20, "width": 10, "height": 20, "anchor": "corner"})["ok"]
+    return s
+
+
+def test_redondo_completo_y_empalme_de_reglas_dan_el_area_exacta():
+    # media caña de r 5 en la tapa: se van la tapa (200), 5 mm de adelante y atrás (200) y, en cada costado, el
+    # rectángulo de 10×5 de arriba menos el medio disco; entra medio cilindro de 20 de largo
+    completo = _area(_caja_angosta(), fillet_type="full_round", center_face=">Z", side_faces=["<Y", ">Y"])
+    assert completo == pytest.approx(1600 - 200 - 200 - 2 * (10 * 5 - math.pi * 25 / 2) + math.pi * 5 * 20, abs=1e-3)
+    # entre la tapa y los costados (dos aristas de 10 mm, r 2): cada una tira 40, suma un cuarto de cilindro y recorta
+    # dos esquinas en adelante y atrás
+    entre = _area(_caja_angosta(), fillet_type="rule", size=2, faces_a=">Z", faces_b=["<X", ">X"])
+    assert entre == pytest.approx(1600 - 2 * (40 - math.pi * 10) - 4 * (4 - math.pi), abs=1e-3)
+
+
+@pytest.mark.parametrize("args,grupo", [
+    ({"radius_type": "asymmetric", "radius2": 4}, {"tipo": "asimetrico", "radio2": 4}),
+    ({"continuity": "g2"}, {"tipo": "constante", "continuidad": "g2"}),
+])
+def test_asimetrico_y_g2_dan_la_misma_superficie_que_el_solido(args, grupo):
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopoDS import TopoDS
+
+    from omnicad.nucleo import solidos_modificar as sm
+    solido = geo.caja(20, 10, 20)
+    arista = next(TopoDS.Edge(e) for e in geo._explorar(solido, TopAbs_EDGE)
+                  if geo.caja_envolvente(e) == ((0, 0, 0), (0, 0, 20)))
+    esperada = geo.area(sm.empalme(solido, [dict(grupo, radio=2, aristas=[arista])], cadena_tangente=False))
+    assert _area(_caja_angosta(), edges=VERTICAL, size=2, tangent_chain=False, **args) == pytest.approx(esperada, abs=1e-6)
