@@ -52,6 +52,66 @@ def arista_spline(pts, tangentes=None, cerrada=False):
     return _arista(interp.Curve())
 
 
+def arista_bspline(polos, nudos, grado, pesos=None):
+    """Arista B-spline exacta (Fusion: spline de puntos de control) de `polos` 3D, `nudos` con su multiplicidad
+    repetida (len(polos) + grado + 1 valores), `grado` y `pesos` (None si no es racional)."""
+    from OCP.Geom import Geom_BSplineCurve
+    from OCP.Standard import Standard_Failure
+    from OCP.OCP.collections import Array1_double, Array1_gp_Pnt, Array1_int
+    unicos, mult = [], []
+    for k in nudos:
+        if unicos and abs(k - unicos[-1]) < 1e-12:
+            mult[-1] += 1
+        else:
+            unicos.append(float(k))
+            mult.append(1)
+    P, K, M = Array1_gp_Pnt(1, len(polos)), Array1_double(1, len(unicos)), Array1_int(1, len(mult))
+    for i, p in enumerate(polos, 1):
+        P.SetValue(i, _pnt(p))
+    for i, (k, m) in enumerate(zip(unicos, mult, strict=True), 1):
+        K.SetValue(i, k)
+        M.SetValue(i, m)
+    try:
+        if pesos:
+            W = Array1_double(1, len(pesos))
+            for i, w in enumerate(pesos, 1):
+                W.SetValue(i, float(w))
+            return _arista(Geom_BSplineCurve(P, W, K, M, int(grado)))
+        return _arista(Geom_BSplineCurve(P, K, M, int(grado)))
+    except Standard_Failure as e:
+        raise geo.ErrorGeometria("Polos y nudos no forman una spline válida.") from e
+
+
+def _bspline_exacta(ad, tope):
+    """B-619b: la B-spline del adaptador `ad`, recortada a su tramo, como spline de puntos de control (polos, nudos,
+    grado, pesos), en el mundo; None si tiene más de `tope` polos (un corte aproximado de cientos de polos pesaría más
+    en el solver que la spline de ajuste) o dos polos seguidos iguales."""
+    bs = ad.BSpline()                       # copia ya llevada al mundo (aplica la ubicación de la arista)
+    t0, t1 = ad.FirstParameter(), ad.LastParameter()
+    if bs.IsPeriodic():
+        bs.SetNotPeriodic()
+    if t0 > bs.FirstParameter() + 1e-12 or t1 < bs.LastParameter() - 1e-12:
+        bs.Segment(t0, t1)
+    if bs.NbPoles() > tope:
+        return None
+    polos = [list(bs.Pole(i).Coord()) for i in range(1, bs.NbPoles() + 1)]
+    if any(math.dist(a, b) < 1e-6 for a, b in zip(polos, polos[1:], strict=False)):
+        return None
+    nudos = [bs.Knot(i) for i in range(1, bs.NbKnots() + 1) for _ in range(bs.Multiplicity(i))]
+    pesos = [bs.Weight(i) for i in range(1, bs.NbPoles() + 1)] if bs.IsRational() else None
+    return {"tipo": "spline", "puntos": polos, "nudos": nudos, "grado": bs.Degree(), "pesos": pesos}
+
+
+def como_ajuste(desc, muestras=32):
+    """La descripción con una spline de puntos de control pasada a spline de ajuste por `muestras`+1 puntos, como la
+    daba `describir` antes de B-619b (los bocetos guardados antes conservan su cantidad de puntos al recalcular)."""
+    if "nudos" not in desc:
+        return desc
+    pts = muestrear(arista_bspline(desc["puntos"], desc["nudos"], desc["grado"], desc["pesos"]), muestras).astype(float)
+    cerrada = math.dist(pts[0], pts[-1]) < 1e-7
+    return {"tipo": "spline", "puntos": [list(p) for p in (pts[:-1] if cerrada else pts)], "cerrada": cerrada}
+
+
 def arista_arco(a, m, b):
     """Arco de 3 puntos (Fusion: 3D Sketch › Arco): de `a` a `b` pasando por `m`."""
     from OCP.GC import GC_MakeArcOfCircle
@@ -199,10 +259,11 @@ def proyectar_cercano(arista, forma, n=48):
 def describir(arista, muestras=32):
     """La arista como curva de boceto 3D, en coordenadas del mundo: {"tipo": "linea", "puntos": [p, q]},
     {"tipo": "circulo", "centro", "radio", "normal"}, {"tipo": "arco", "puntos": [a, m, b]},
-    {"tipo": "elipse", "centro", "eje_mayor", "radio_menor", "normal"} o, si es otra curva, una spline de ajuste por
-    `muestras`+1 puntos."""
+    {"tipo": "elipse", "centro", "eje_mayor", "radio_menor", "normal"}, una B-spline de hasta `muestras`+1 polos tal
+    cual ({"tipo": "spline", "puntos": polos, "nudos", "grado", "pesos"}, B-619b) o, si es otra curva, una spline de
+    ajuste por `muestras`+1 puntos."""
     from OCP.BRepAdaptor import BRepAdaptor_Curve
-    from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Ellipse, GeomAbs_Line
+    from OCP.GeomAbs import GeomAbs_BSplineCurve, GeomAbs_Circle, GeomAbs_Ellipse, GeomAbs_Line
     ad = BRepAdaptor_Curve(arista)
     t0, t1, tipo = ad.FirstParameter(), ad.LastParameter(), ad.GetType()
     xyz = lambda q: [q.X(), q.Y(), q.Z()]  # noqa: E731
@@ -220,6 +281,8 @@ def describir(arista, muestras=32):
         x = np.array(xyz(e.XAxis().Direction())) * e.MajorRadius()
         return {"tipo": "elipse", "centro": xyz(e.Location()), "eje_mayor": list(x), "radio_menor": e.MinorRadius(),
                 "normal": xyz(e.Axis().Direction())}
+    if tipo == GeomAbs_BSplineCurve and (exacta := _bspline_exacta(ad, muestras + 1)):
+        return exacta
     pts = muestrear(arista, muestras).astype(float)
     cerrada = math.dist(pts[0], pts[-1]) < 1e-7      # cerrada: spline periódica, sin repetir el primer punto
     return {"tipo": "spline", "puntos": [list(p) for p in (pts[:-1] if cerrada else pts)], "cerrada": cerrada}

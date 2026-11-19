@@ -700,6 +700,8 @@ def info_3d(sesion, b, br):
             e["rho"] = c["rho"]
         elif t == "texto":
             e.update(text=c["texto"], height=_r(c["altura"]), font=c["fuente"], x_axis=vec(c["u"]), y_axis=vec(c["v"]))
+        elif t == "spline" and "nudos" in c:            # B-619b: vertices son los polos, no puntos de la curva
+            e.update(spline_type="control_points", degree=c["grado"])
         elif t == "spline" and c.get("cerrada"):
             e["closed"] = True
         if "origen" in c:
