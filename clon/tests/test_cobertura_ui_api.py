@@ -73,6 +73,7 @@ HERRAMIENTAS = {
     "sk_chaflan_dist_angulo": "sketch_chamfer", "sk_chaflan_dos_dist": "sketch_chamfer",
     "sk_curva_fusion": "draw_blend_curve", "sk_desfase": "offset_sketch_curves", "sk_recortar": "trim_sketch_curve",
     "sk_escala": "transform_sketch", "sk_mover": "transform_sketch", "sk_autorestringir": "auto_constrain",
+    "sk_autorestringir_referencia": "auto_constrain",
     "sk_r_horizontal_vertical": "add_constraint", "sk_r_coincidente": "add_constraint",
     "sk_r_tangente": "add_constraint", "sk_r_igual": "add_constraint", "sk_r_paralela": "add_constraint",
     "sk_r_perpendicular": "add_constraint", "sk_r_fijo": "add_constraint", "sk_r_punto_medio": "add_constraint",
