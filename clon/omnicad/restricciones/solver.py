@@ -49,6 +49,10 @@ TOPE_AUTO_RESTRINGIR = 500
 MAX_INTENTOS_EXTRA = 6       # alternativas repetidas que se descartan antes de rendirse (cada una cuesta un cálculo entero)
 TOPE_TERMINAR_AUTO = 250      # «Terminar con AutoConstrain» de Fusion no corre con más de 250 entidades
 TROZO_EVALUACIONES = 60     # evaluaciones por tramo de Levenberg-Marquardt (ver `_resolver_grupo`)
+PUNTOS_QUINTICA_RUST = 20   # hasta acá la quíntica va por Rust (densa, O(n³)); con más, la dispersa de Python es más rápida
+PASO_JACOBIANO_LM = 1e-5    # SOLVER-FUSION: paso del jacobiano de LM en un evento de arrastre (Fusion lo deriva exacto,
+                            # VCSNonLinearEqFAD). Con 1e-7 el ruido de la quíntica (B-463) pedía 15 iteraciones por movimiento en
+                            # vez de 4. Soltar (tolerancia 1e-6, curvatura B-658) y el rango siguen con 1e-7
 UMBRAL_VENTANA = 40         # puntos de la parte arrastrada desde los que un movimiento resuelve solo una ventana (B-111)
 RADIO_VENTANA = 1           # pasos de vínculos alrededor del punto arrastrado que entran a la ventana; el resto se congela
 UMBRAL_TRF = 200            # RS-S1: incógnitas desde las que una resolución completa va con «trf» y el jacobiano disperso (LSMR)
@@ -366,9 +370,16 @@ class _Sistema:
     def _extremo_spline(self, x, c, clave, pid):
         """`extremo` de una spline de ajuste abierta y sin manijas con el módulo Rust (R5: tangente y curvatura en los
         extremos sin armar la primitiva); el resto de las splines, por la primitiva de Python."""
-        if self._rs is not None and c.modo == "ajuste" and c.grado == 3 and not c.cerrada and not c.manijas:   # B-463: la quíntica, por Python
+        rapida = None
+        if self._rs is not None and c.modo == "ajuste" and not c.cerrada and not c.manijas:
+            if c.grado == 3:
+                rapida = lambda q: self._rs.spline_extremos(q, 3)  # noqa: E731
+            elif (c.grado == 5 and hasattr(self._rs, "spline_quintica_extremos")    # SOLVER-FUSION: un módulo viejo no la trae
+                  and len(c.pts) <= PUNTOS_QUINTICA_RUST):     # Rust la resuelve densa: con más puntos rige la dispersa de Python
+                rapida = self._rs.spline_quintica_extremos
+        if rapida is not None:
             try:
-                d = self._rs.spline_extremos(np.array(clave[1], dtype=float).reshape(-1, 2), c.grado)
+                d = rapida(np.array(clave[1], dtype=float).reshape(-1, 2))
             except ValueError:               # sistema singular: Python lo resuelve por mínimos cuadrados
                 d = None
             if d is not None:
@@ -1430,7 +1441,8 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
     def corrida(x_inicio, ancla, w, tol=1e-14, meseta=False):
         reg = _QuietasCopias(sis, ancla)
         fun = lambda x: np.concatenate([sis.residuos(x), w * (x - ancla), reg.residuos(x)])  # noqa: E731
-        jac = lambda x: np.vstack([_jacobiano(sis, x), np.diag(w)] + ([_jacobiano(reg, x)] if sis.deriva else []))  # noqa: E731
+        paso = 1e-7 if con_rango else PASO_JACOBIANO_LM
+        jac = lambda x: np.vstack([_jacobiano(sis, x, paso), np.diag(w)] + ([_jacobiano(reg, x)] if sis.deriva else []))  # noqa: E731
         from scipy.optimize import least_squares   # perezoso: importarlo cuesta ~0,8 s al arrancar la CLI y el MCP
         # Levenberg-Marquardt (MINPACK, QR): "trf" hacía una SVD por iteración y con los hilos de OpenBLAS cada
         # una costaba ~2,4 ms en matrices de 100×100; con "lm" el arrastre del polígono de 24 lados baja a ~15 ms.

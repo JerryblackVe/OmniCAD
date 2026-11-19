@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · SOLVER-FUSION (E1).** Arrastre de 10 splines quínticas (B-463): 1,35 s → 50 ms por movimiento (~1 s sin Rust). Jacobiano de LM del arrastre con paso 1e-5 (Fusion lo deriva exacto) y `spline_quintica_extremos` en Rust. LM de Nielsen no adoptado. Tests: `test_solver_splines.py`.
 - **2026-11-19 · Traspaso E1 (B-704 listo; sin ítem).** 1) B-702, B-701 integrados; B-704 en ~/OmniCAD-B-704 sin commit (test del hover manda el MouseMove directo; `test_b704_hover_aislado.py`). 2) B-463 en espera: Gerardo saca la parametrización de ShapeManager; los datos de Fusion traen 4 decimales, para ≤0,0001 mm hacen falta ≥8 (tabla en `~/coordinador/casos/b463/hallazgos_e1.md`). 3) Próximo: el ítem de boceto que mande el coordinador. 4) Con CRLF mezclado (test_texto_vectores.py), editar sin normalizar: restaurar de git y agregar al final.
 - **2026-11-19 · B-704 (E1).** `test_rsx3_el_hover…` fallaba en tandas grandes: `QTest.mouseMove` reparte el evento por la ventana bajo el cursor y un Lienzo visible sin cerrar de una prueba anterior (que falló antes de `lz.close()`) se lo quedaba. Ahora el evento va directo al lienzo. `test_b704_hover_aislado.py` (falla con el test viejo, pasa con el nuevo).
 - **2026-11-19 · B-701 (E1).** Kerning de par con el cursor al inicio: el campo del panel Carácter queda en gris con «No disponible: ponete entre dos letras» (el signal `texto_valores` lleva si hay par). `test_texto_vectores.py::test_b701_…` (falla sin el arreglo).
@@ -715,6 +716,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 
 - **2026-11-19 · Bocetos › Incluir 3D B-684/B-685.** Se habilitan caras y se evita repetir la misma arista (`sin_indice`, `incluir_3d_forma`). `test_faltantes_bocetos.py`: 7 OK; ruff limpio.
 ## Lecciones aprendidas
+- [2026-11-19] Una curva nueva del boceto se mide arrastrando (no solo resolviendo): el jacobiano por diferencias con paso 1e-7 sobre una curva que resuelve un sistema (quíntica B-463) es ruidoso y LM hace 15 iteraciones en vez de 4. · Evidencia: `test_solver_fusion_arrastre_de_quinticas_rapido_y_sin_rust_igual`.
 - [2026-11-19] Validar los tres modos de `trim_sketch_curve`: P-69 cubrió break y extend y trim siguió aceptando un clic a 999 mm. · Evidencia: `test_b512_recortar_con_clic_lejos_de_la_curva_no_recorta`.
 - [2026-11-19] El `BRepAlgoAPI_Splitter` deja una curva suelta dentro de una región como alambre de aristas INTERNAL en la cara: `es_valida(cara)` da True pero el sólido extruido no. · Evidencia: `tests/test_b699_curvas_sueltas.py`.
 - [2026-11-19] `arreglo_planar` usa `tol` = 1e-8 y el Splitter funde a 1e-4: todo lo que esté entre las dos (toques, rectas casi encimadas) tiene que dar `Err`, no un resultado. · Evidencia: `test_boc28_rust.py::test_b677_toque_tangente_y_rectas_casi_encimadas_dan_los_perfiles_de_fusion`.

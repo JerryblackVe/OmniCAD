@@ -14,6 +14,9 @@ devuelve arrays. Sin módulo compilado se usa la referencia Python. `OMNICAD_SIN
   superpuestas, autocruces, elipses, un extremo libre a menos de 1e-4 mm de otra curva) devuelve error y rige el
   `Splitter` de siempre. Equivale al `Splitter` salvo en triples puntos casi concurrentes (< 1e-4 mm), donde éste funde
   con su tolerancia y el arreglo no: `tests/test_boc28_rust.py`. Pruebas de Rust: `cargo test`.
+- **Extremos de splines de ajuste** (`src/spline.rs`, R5 y SOLVER-FUSION): `spline_extremos` (cúbica) y
+  `spline_quintica_extremos` (la quíntica de Fusion, B-463): tangente y curvatura en las puntas para el jacobiano del
+  solver. Sin ellas (módulo viejo) rige Python; paridad en `tests/test_solver_splines.py`.
 - **Zstandard del `.f3d`** (`src/zstd.rs`, RS-R1): `zstd_descomprimir(datos, tope)` con el crate `ruzstd`; mismos bytes y errores que
   `io_archivos/zstd_puro.py` (respaldo), con tope de salida contra zip bombs. Lo llama `zstd_puro.descomprimir`.
 - **BVH de triángulos** (`src/bvh.rs`, RS-R3): clase `Bvh(triángulos)` y `primer_choque(orígenes, direcciones, eps, det_abs,

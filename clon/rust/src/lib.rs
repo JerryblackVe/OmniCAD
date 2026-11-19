@@ -201,6 +201,7 @@ fn _rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(oclusion, m)?)?;
     m.add_function(wrap_pyfunction!(perfiles::arreglo_planar, m)?)?;
     m.add_function(wrap_pyfunction!(spline::spline_extremos, m)?)?;
+    m.add_function(wrap_pyfunction!(spline::spline_quintica_extremos, m)?)?;
     m.add_function(wrap_pyfunction!(zstd::zstd_descomprimir, m)?)?;
     m.add_class::<bvh::Bvh>()?;
     Ok(())
