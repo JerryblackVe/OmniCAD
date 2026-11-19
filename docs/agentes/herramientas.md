@@ -3984,11 +3984,11 @@ Redondea o bisela aristas entre superficies, con las opciones del Empalme y el C
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
-  - `edges` (texto o objeto o lista de texto o objeto; obligatorio): aristas por id o selector; admite listas y {"body": "Cuerpo1", "edges": "|Z"}.
+  - `edges` (texto o objeto o lista de texto o objeto o null; opcional, por defecto `null`): aristas por id o selector; admite listas y {"body": "Cuerpo1", "edges": "|Z"}. Con fillet o chamfer.
   - `size` (número o expresión; opcional, por defecto `"1 mm"`): radio del empalme (con radius_type=chord, el largo de cuerda; con variable, el radio inicial) o distancia del chaflán (la primera), en mm o expresión.
-  - `fillet_type` ("fillet" | "chamfer"; opcional, por defecto `"fillet"`): fillet (empalme) o chamfer (chaflán).
+  - `fillet_type` ("fillet" | "chamfer" | "rule" | "full_round"; opcional, por defecto `"fillet"`): fillet (empalme), chamfer (chaflán), rule (empalme de reglas con faces_a) o full_round (redondo completo con center_face y side_faces).
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
-  - `radius_type` ("constant" | "chord" | "variable"; opcional, por defecto `"constant"`): empalme: constant (constante), chord (longitud de cuerda) o variable (de size a end_radius).
+  - `radius_type` ("constant" | "chord" | "variable" | "asymmetric"; opcional, por defecto `"constant"`): empalme: constant (constante), chord (longitud de cuerda), variable (de size a end_radius) o asymmetric (size y radius2).
   - `end_radius` (número o expresión; opcional, por defecto `"2 mm"`): empalme variable: radio al final de cada arista.
   - `chamfer_type` ("equal" | "two_distances" | "distance_angle"; opcional, por defecto `"equal"`): chaflán: equal (distancia igual), two_distances (size y distance2) o distance_angle (size y angle).
   - `distance2` (número o expresión; opcional, por defecto `"1 mm"`): chaflán two_distances: distancia sobre la otra cara.
@@ -3997,7 +3997,14 @@ Redondea o bisela aristas entre superficies, con las opciones del Empalme y el C
   - `tangent_chain` (true/false; opcional, por defecto `true`): true suma las aristas tangentes encadenadas (como Fusion, por defecto).
   - `corner_type` ("rolling_ball" | "setback" | "chamfer" | "miter" | "blend" o null; opcional, por defecto `null`): esquina; empalme: rolling_ball (por defecto) o setback (solo radio constante); chaflán: chamfer (por defecto), miter (inglete) o blend (mezcla).
   - `setback` (número o expresión; opcional, por defecto `"2 mm"`): empalme con corner_type=setback: distancia de setback en mm.
-- CLI: `omnicad call fillet_surface --doc pieza.omnicad edges=…`
+  - `radius2` (número o expresión; opcional, por defecto `"1 mm"`): empalme asymmetric: radio sobre la segunda cara.
+  - `continuity` ("g1" | "g2"; opcional, por defecto `"g1"`): empalme de radio constante o asimétrico: g1 (tangente) o g2 (curvatura; aristas rectas entre caras planas).
+  - `faces_a` (texto o objeto o lista de texto o objeto o null; opcional, por defecto `null`): rule: caras cuyas aristas se redondean (con size de radio).
+  - `faces_b` (texto o objeto o lista de texto o objeto o null; opcional, por defecto `null`): rule: segundo grupo; solo las aristas entre faces_a y faces_b; vacío = todas las de faces_a.
+  - `rounds` ("both" | "rounds" | "fillets"; opcional, por defecto `"both"`): rule: both (por defecto), rounds (solo convexas) o fillets (solo cóncavas).
+  - `center_face` (texto; opcional, por defecto `null`): full_round: la cara que se vuelve media caña.
+  - `side_faces` (lista de texto o null; opcional, por defecto `null`): full_round: las dos caras laterales, planas y paralelas.
+- CLI: `omnicad call fillet_surface --doc pieza.omnicad`
 
 ### `create_patch`
 

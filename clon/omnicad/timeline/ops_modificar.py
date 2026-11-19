@@ -291,6 +291,15 @@ class OpQuitar(Operacion):
             del estado.cuerpos[estado.cuerpo(cid).id]
 
 
+def empalme_de_reglas(p, estado, radio):
+    """Empalme de reglas (Rule Fillet) con `caras_a`, `caras_b`, `regla` y `redondeos` de `p`; también en superficie."""
+    otras = _por_cuerpo(p["caras_b"], estado, "caras") if p["regla"] == "entre" else {}
+    for cid, caras in _por_cuerpo(p["caras_a"], estado, "caras").items():
+        c = estado.cuerpo(cid)
+        c.forma = _sm().empalme_reglas(c.forma, caras, otras.get(cid) if p["regla"] == "entre" else None,
+                                       radio=radio, tipo=p["regla"], redondeos=p["redondeos"])
+
+
 class OpEmpalme(Operacion):
     """Empalme de Fusion [SLD-FILLET-SOLID]: tipo Empalme (radio constante, de cuerda o variable entre
     inicio y fin) o Empalme de reglas (todas las aristas de unas caras o las que están entre dos grupos de
@@ -338,14 +347,8 @@ class OpEmpalme(Operacion):
             raise ErrorOperacion("⚠ Grosor de tangencia: solo en Empalme")
         if p["tipo"] == "completo":
             return self._completo(estado)
-        r = ctx.evaluar(p["radio"])
         if p["tipo"] == "reglas":
-            otras = _por_cuerpo(p["caras_b"], estado, "caras") if p["regla"] == "entre" else {}
-            for cid, caras in _por_cuerpo(p["caras_a"], estado, "caras").items():
-                c = estado.cuerpo(cid)
-                c.forma = sm.empalme_reglas(c.forma, caras, otras.get(cid) if p["regla"] == "entre" else None,
-                                            radio=r, tipo=p["regla"], redondeos=p["redondeos"])
-            return
+            return empalme_de_reglas(p, estado, ctx.evaluar(p["radio"]))
         def grupo(d):
             r0 = ctx.evaluar(d["radio"])
             medios = [(ctx.evaluar(q["posicion"], "escalar"), ctx.evaluar(q["radio"])) for q in d.get("puntos_radio") or []]

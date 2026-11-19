@@ -304,19 +304,23 @@ _ESQUINAS_SUP = {"rolling_ball": ("empalme", "bola"), "setback": ("empalme", "se
 @herramienta("fillet_surface", "solido",
              "Redondea o bisela aristas entre superficies, con las opciones del Empalme y el Chaflán del sólido.",
              modifica=True)
-def fillet_surface(sesion, edges: Seleccion, size: Expr = "1 mm",
-                   fillet_type: Literal["fillet", "chamfer"] = "fillet", body: str | None = None,
-                   radius_type: Literal["constant", "chord", "variable"] = "constant", end_radius: Expr = "2 mm",
+def fillet_surface(sesion, edges: Seleccion | None = None, size: Expr = "1 mm",
+                   fillet_type: Literal["fillet", "chamfer", "rule", "full_round"] = "fillet", body: str | None = None,
+                   radius_type: Literal["constant", "chord", "variable", "asymmetric"] = "constant",
+                   end_radius: Expr = "2 mm",
                    chamfer_type: Literal["equal", "two_distances", "distance_angle"] = "equal",
                    distance2: Expr = "1 mm", angle: Expr = "45 deg", flip: bool = False, tangent_chain: bool = True,
                    corner_type: Literal["rolling_ball", "setback", "chamfer", "miter", "blend"] | None = None,
-                   setback: Expr = "2 mm"):
+                   setback: Expr = "2 mm", radius2: Expr = "1 mm", continuity: Literal["g1", "g2"] = "g1",
+                   faces_a: Seleccion | None = None, faces_b: Seleccion | None = None,
+                   rounds: Literal["both", "rounds", "fillets"] = "both", center_face: str | None = None,
+                   side_faces: list[str] | None = None):
     """
-    edges: aristas por id o selector; admite listas y {"body": "Cuerpo1", "edges": "|Z"}.
+    edges: aristas por id o selector; admite listas y {"body": "Cuerpo1", "edges": "|Z"}. Con fillet o chamfer.
     size: radio del empalme (con radius_type=chord, el largo de cuerda; con variable, el radio inicial) o distancia del chaflán (la primera), en mm o expresión.
-    fillet_type: fillet (empalme) o chamfer (chaflán).
+    fillet_type: fillet (empalme), chamfer (chaflán), rule (empalme de reglas con faces_a) o full_round (redondo completo con center_face y side_faces).
     body: cuerpo sobre el que evaluar selectores.
-    radius_type: empalme: constant (constante), chord (longitud de cuerda) o variable (de size a end_radius).
+    radius_type: empalme: constant (constante), chord (longitud de cuerda), variable (de size a end_radius) o asymmetric (size y radius2).
     end_radius: empalme variable: radio al final de cada arista.
     chamfer_type: chaflán: equal (distancia igual), two_distances (size y distance2) o distance_angle (size y angle).
     distance2: chaflán two_distances: distancia sobre la otra cara.
@@ -325,11 +329,36 @@ def fillet_surface(sesion, edges: Seleccion, size: Expr = "1 mm",
     tangent_chain: true suma las aristas tangentes encadenadas (como Fusion, por defecto).
     corner_type: esquina; empalme: rolling_ball (por defecto) o setback (solo radio constante); chaflán: chamfer (por defecto), miter (inglete) o blend (mezcla).
     setback: empalme con corner_type=setback: distancia de setback en mm.
+    radius2: empalme asymmetric: radio sobre la segunda cara.
+    continuity: empalme de radio constante o asimétrico: g1 (tangente) o g2 (curvatura; aristas rectas entre caras planas).
+    faces_a: rule: caras cuyas aristas se redondean (con size de radio).
+    faces_b: rule: segundo grupo; solo las aristas entre faces_a y faces_b; vacío = todas las de faces_a.
+    rounds: rule: both (por defecto), rounds (solo convexas) o fillets (solo cóncavas).
+    center_face: full_round: la cara que se vuelve media caña.
+    side_faces: full_round: las dos caras laterales, planas y paralelas.
     """
+    clase = ops.OpSupEmpalme
+    if fillet_type == "full_round":
+        if not center_face or not side_faces or len(side_faces) != 2:
+            raise error("INVALID_ARGUMENTS", "full_round necesita center_face y side_faces (dos caras).")
+        return _crear(sesion, clase, tipo="completo", central=_una(sesion, clase, "central", center_face, body),
+                      laterales=[_una(sesion, clase, "laterales", f, body) for f in side_faces])
     _numero_positivo(size, "size")
+    if fillet_type == "rule":
+        if not faces_a:
+            raise error("INVALID_ARGUMENTS", "rule necesita faces_a.")
+        caras_b = _seleccion(sesion, clase, "caras_b", faces_b, body, tipo="cara") if faces_b else []
+        return _crear(sesion, clase, tipo="reglas", medida=texto_expr(size),
+                      caras_a=_seleccion(sesion, clase, "caras_a", faces_a, body, tipo="cara"), caras_b=caras_b,
+                      regla="entre" if caras_b else "todas",
+                      redondeos={"both": "ambos", "rounds": "redondeos", "fillets": "empalmes"}[rounds])
+    if edges is None:
+        raise error("INVALID_ARGUMENTS", "Elegí las aristas en edges.")
     tipo = "empalme" if fillet_type == "fillet" else "chaflan"
     params = {"tipo": tipo, "medida": texto_expr(size), "cadena_tangente": bool(tangent_chain),
-              "tipo_radio": {"constant": "constante", "chord": "cuerda", "variable": "variable"}[radius_type],
+              "tipo_radio": {"constant": "constante", "chord": "cuerda", "variable": "variable",
+                             "asymmetric": "asimetrico"}[radius_type],
+              "radio2": texto_expr(radius2), "continuidad": continuity,
               "radio_fin": texto_expr(end_radius), "setback": texto_expr(setback), "distancia2": texto_expr(distance2),
               "angulo": texto_expr(angle), "voltear": bool(flip),
               "tipo_chaflan": {"equal": "distancia_igual", "two_distances": "dos_distancias",
@@ -339,7 +368,6 @@ def fillet_surface(sesion, edges: Seleccion, size: Expr = "1 mm",
         if para != tipo:
             raise error("INVALID_ARGUMENTS", f"corner_type={corner_type} no va con fillet_type={fillet_type}.")
         params["esquina" if tipo == "empalme" else "esquina_chaflan"] = esquina
-    clase = ops.OpSupEmpalme
     return _crear(sesion, clase, aristas=_seleccion(sesion, clase, "aristas", edges, body), **params)
 
 

@@ -567,7 +567,7 @@ def _empalme_por_perfil(forma, arista, radio1, radio2, continuidad, peso_tangenc
         mas_alla = geo.extruir([_cara_plana(borde, centro, largo + 2 * d)], tuple(u), d)
         if geo.volumen(BRepAlgoAPI_Common(BRepAlgoAPI_Common(prisma, mas_alla).Shape(), forma).Shape()) > 1e-6:
             raise geo.ErrorGeometria("⚠ El radio no entra: achicalo")
-    return _validar(geo.booleano(forma, prisma, "cortar" if convexa else "unir"), "Empalme")
+    return _recortar_esquina(forma, prisma, convexa, "Empalme")
 
 
 FACTOR_SETBACK = 1.6        # cuánto crece el radio justo en la esquina (en la distancia de setback vuelve al radio pedido)
@@ -818,7 +818,23 @@ def empalme_completo(forma, central, lateral1, lateral2):
     marco[:3, 0], marco[:3, 1], marco[:3, 2], marco[:3, 3] = m, eje, n, esquina
     herramienta = geo.booleano(geo.transformar(geo.caja(ancho, largo, r + 1.0), marco),
                                geo.cilindro(r, largo, tuple(centro), tuple(eje)), "cortar")
-    return _validar(geo.unificar_caras(geo.booleano(forma, herramienta, "cortar")), "Redondeo completo")
+    if geo.solidos(forma):
+        return _validar(geo.unificar_caras(geo.booleano(forma, herramienta, "cortar")), "Redondeo completo")
+    return _recortar_esquina(forma, herramienta, True, "Redondeo completo")
+
+
+def _recortar_esquina(forma, herramienta, convexa, operacion):
+    """Corta (arista convexa) o rellena (cóncava) la esquina con `herramienta`. SUP-28: un cuerpo de superficie no tiene
+    adentro: se cortan las caras que la herramienta tapa y se cose su cara curva (la del empalme)."""
+    if geo.solidos(forma):
+        return _validar(geo.booleano(forma, herramienta, "cortar" if convexa else "unir"), operacion)
+    costura = BRepBuilderAPI_Sewing(1e-4)
+    costura.Add(geo.booleano(forma, herramienta, "cortar"))
+    for cara in geo.caras(herramienta):
+        if _plano_de_cara(cara) is None:
+            costura.Add(cara)
+    costura.Perform()
+    return _validar(costura.SewedShape(), operacion)
 
 
 def empalme_reglas(forma, caras_a, caras_b=None, *, radio, tipo="todas", redondeos="ambos"):

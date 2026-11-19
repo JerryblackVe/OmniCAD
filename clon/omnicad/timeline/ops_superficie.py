@@ -13,6 +13,7 @@ from . import entidades as ent
 from .operaciones import (ANGULO, OPERACIONES_CUERPO, ErrorOperacion, Operacion, OpPrimitiva, _caja_todo, _deps_objetivo,
                           _migrador, _resolver, _resolver_todas, _version_de, aplicar_resultado, espesor_plastico,
                           registrar_operacion)
+from .ops_modificar import OpEmpalme, empalme_de_reglas
 from .ops_solido import OpBobina, OpTuberia, _en_cadena, _migrar_angulo_despegue
 
 LADOS = {"un_lado": "Un lado", "dos_lados": "Dos lados", "simetrica": "Simétrica"}
@@ -553,17 +554,22 @@ class OpSupEmpalme(_OpSuperficie):
     """SUPERFICIE › Empalme/chaflán de aristas de superficies [SFC-FILLET-CHAMFER]. SUP-28: las opciones del sólido.
     Empalme: `tipo_radio` constante, cuerda (`medida` es el largo de cuerda) o variable (de `medida` a `radio_fin`) y
     esquina bola o setback. Chaflán: distancia igual, dos distancias o distancia y ángulo, Voltear y esquina chaflán,
-    inglete o mezcla. `cadena_tangente` suma las aristas tangentes (las recetas viejas, sin la clave, quedan sin)."""
+    inglete o mezcla. `cadena_tangente` suma las aristas tangentes (las recetas viejas, sin la clave, quedan sin).
+    También radio asimétrico (`radio2` sobre la 2.ª cara), continuidad G2, Empalme de reglas (`caras_a`, `caras_b`,
+    `regla`, `redondeos`, con `medida` de radio) y Redondo completo (`central` y dos `laterales`), como `OpEmpalme`."""
     TIPO, ETIQUETA, ICONO = "sup_empalme", "Empalme de superficie", "◜"
     PARAMS = {"aristas": [], "tipo": "empalme", "medida": "1 mm", "cadena_tangente": True,
               "tipo_radio": "constante", "radio_fin": "2 mm", "esquina": "bola", "setback": "2 mm",
               "tipo_chaflan": "distancia_igual", "distancia2": "1 mm", "angulo": "45 deg", "voltear": False,
-              "esquina_chaflan": "chaflan"}
-    EXPRESIONES = ("medida", "radio_fin", "setback", "distancia2", "angulo")
-    OPCIONES = {"tipo": ("empalme", "chaflan"), "tipo_radio": ("constante", "cuerda", "variable"),
+              "esquina_chaflan": "chaflan", "radio2": "1 mm", "continuidad": "g1", "caras_a": [], "caras_b": [],
+              "regla": "todas", "redondeos": "ambos", "central": None, "laterales": []}
+    EXPRESIONES = ("medida", "radio_fin", "setback", "distancia2", "angulo", "radio2")
+    OPCIONES = {"tipo": ("empalme", "chaflan", "reglas", "completo"),
+                "tipo_radio": ("constante", "cuerda", "variable", "asimetrico"), "continuidad": ("g1", "g2"),
+                "regla": ("todas", "entre"), "redondeos": ("ambos", "redondeos", "empalmes"),
                 "esquina": ("bola", "setback"), "tipo_chaflan": ("distancia_igual", "dos_distancias", "distancia_angulo"),
                 "esquina_chaflan": ("chaflan", "inglete", "mezcla")}
-    REFS = ("aristas",)
+    REFS = ("aristas", "caras_a", "caras_b", "central", "laterales")
 
     @staticmethod
     def migrar_receta(d):
@@ -576,11 +582,13 @@ class OpSupEmpalme(_OpSuperficie):
         """Las opciones para el núcleo; None con las de siempre (radio constante o distancia igual, esquina común)."""
         p = self.p
         if p["tipo"] == "empalme":
-            if (p["tipo_radio"], p["esquina"]) == ("constante", "bola"):
+            if (p["tipo_radio"], p["esquina"], p["continuidad"]) == ("constante", "bola", "g1"):
                 return None
             setback = p["tipo_radio"] == "constante" and p["esquina"] == "setback"    # como en el sólido
+            g2 = p["tipo_radio"] in ("constante", "asimetrico") and p["continuidad"] == "g2"
             return {"tipo": p["tipo_radio"], "cuerda": medida, "esquina": "setback" if setback else "bola",
-                    "setback": ctx.evaluar(p["setback"]),
+                    "setback": ctx.evaluar(p["setback"]), "radio2": ctx.evaluar(p["radio2"]),
+                    "continuidad": "g2" if g2 else "g1",
                     "radios": [(0.0, medida), (1.0, ctx.evaluar(p["radio_fin"]))]}
         if (p["tipo_chaflan"], p["esquina_chaflan"]) == ("distancia_igual", "chaflan"):
             return None
@@ -588,6 +596,10 @@ class OpSupEmpalme(_OpSuperficie):
                 "angulo": ctx.evaluar(p["angulo"], ANGULO), "voltear": p["voltear"], "esquina": p["esquina_chaflan"]}
 
     def ejecutar(self, estado, ctx):
+        if self.p["tipo"] == "reglas":
+            return empalme_de_reglas(self.p, estado, ctx.evaluar(self.p["medida"]))
+        if self.p["tipo"] == "completo":
+            return OpEmpalme._completo(self, estado)
         grupos = {}
         for e in _resolver_todas(self.p["aristas"], estado, ("arista",)):
             grupos.setdefault(e.cuerpo, []).append(e.forma)
