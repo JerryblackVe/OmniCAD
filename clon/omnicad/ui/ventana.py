@@ -3707,6 +3707,8 @@ class VentanaPrincipal(QMainWindow):
             self.mensaje(f"Imagen guardada en {ruta}" if ok else "No se pudo guardar la imagen", 5000)
 
     def importar_step(self):
+        if not self._salir_de_boceto():    # como Insertar componente y malla: el STEP no entra con un boceto abierto
+            return
         ruta, _ = QFileDialog.getOpenFileName(self, "Insertar STEP", "", "STEP (*.step *.stp)")
         if not ruta:
             return
