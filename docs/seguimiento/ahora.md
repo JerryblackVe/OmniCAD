@@ -21,7 +21,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 0 | B-695 y B-696 (prioridad alta, Gerardo en vivo; E4 o E8, mismo panel Carácter/Texto) | B-695: aviso falso «el cuerpo 'op58.c5' no existe» al editar el texto de un boceto anterior. B-696: el panel Carácter dice «Juli J» y el dibujo muestra «Ceci» |
-| 0 | B-699 (E1, Opus alto) | La extrusión da un cuerpo inválido en los casos 138071 y 24822 de la galería (el perfil ya se encuentra; pasa igual sin Rust) |
 | 0 | PRUEBA-OPC-2 (E7) | Probar como usuario las 11 opciones que quedan sin prueba en `preparado/opciones_asas_boceto.md`: Insertar DXF, Vectorizar, Perfil giratorio (tolerancia, invertir, solo contorno), Desfase (cadena, topología), Kerning de un par, Boceto 3D |
 | 0 | B-698 (después de B-695/696, E4) | Texto: la ventana no tiene cómo agregar el marco; el pivote solo anda con marco |
 | 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
