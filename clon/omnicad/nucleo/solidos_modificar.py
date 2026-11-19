@@ -656,6 +656,48 @@ def exigir_radio_empalme(radio, campo="Radio"):
         raise geo.ErrorGeometria(f"{campo}: {radio:g} mm, debe ser mayor que 0")
 
 
+def _puntas(forma, aristas):
+    """Vértices de `aristas` donde termina una arista degenerada: la punta en que convergen las caras (una solevación
+    que cierra en un punto, como la estrella del exprimidor de B-644)."""
+    puntas = []
+    for e in _aristas(forma):
+        if BRep_Tool.Degenerated_s(e):
+            for v in _unicos(e, TopAbs_VERTEX):
+                if (not any(v.IsSame(p) for p in puntas)
+                        and any(v.IsSame(w) for a in aristas for w in _unicos(a, TopAbs_VERTEX))):
+                    puntas.append(v)
+    return puntas
+
+
+def _empalme_sin_puntas(forma, grupos, cadena_tangente, puntas):
+    """B-644: el empalme de OpenCascade que llega a una punta tarda minutos (una arista del exprimidor: 133 s). Se saca
+    una bolita chica alrededor de cada punta, se empalma lo demás y se vuelve a pegar la punta tal cual: 0,4 s, y el
+    volumen difiere del empalme completo en 0,002 mm³. Si algo falla, quien llama sigue con el empalme de siempre."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeSphere
+    lo, hi = geo.caja_envolvente(forma)
+    h = min(0.5, 0.005 * float(np.linalg.norm(np.subtract(hi, lo))))     # mm: lo que queda sin redondear junto a la punta
+    bolas = geo.unir_todos([BRepPrimAPI_MakeSphere(BRep_Tool.Pnt_s(TopoDS.Vertex(v)), h).Shape() for v in puntas])
+    resto, punta = geo.booleano(forma, bolas, "cortar"), geo.booleano(forma, bolas, "intersecar")
+    candidatas = _aristas(resto)
+
+    def reubicar(e):            # la misma arista, recortada por la bolita: la que pasa por su punto medio
+        c = BRepAdaptor_Curve(e)
+        medio = BRepBuilderAPI_MakeVertex(c.Value((c.FirstParameter() + c.LastParameter()) / 2)).Vertex()
+        for nueva in candidatas:
+            d = BRepExtrema_DistShapeShape(medio, nueva)
+            if d.IsDone() and d.Value() < 1e-4:
+                return nueva
+        raise geo.ErrorGeometria("No se encontró la arista recortada.")
+
+    grupos = [dict(g, aristas=[reubicar(e) for e in g.get("aristas") or []]) for g in grupos]
+    if _puntas(resto, [e for g in grupos for e in g["aristas"]]):
+        raise geo.ErrorGeometria("La bolita no separó la punta.")     # sin esto, `empalme` volvería a entrar acá
+    resultado = _validar(geo.booleano(empalme(resto, grupos, cadena_tangente=cadena_tangente), punta, "unir"), "Empalme")
+    if len(geo.solidos(resultado)) != len(geo.solidos(forma)):
+        raise geo.ErrorGeometria("La punta no quedó pegada.")
+    return resultado
+
+
 def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
     """Empalme (Fillet, tipo Fillet) por conjuntos de selección, cada uno con su tipo de radio.
 
@@ -698,6 +740,12 @@ def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
     forma, grupos, sin_justas = _empalmar_caras_justas(forma, grupos, cadena_tangente)
     if not grupos:
         return forma
+    puntas = _puntas(forma, [e for g in grupos for e in _ampliar_tangentes(forma, g.get("aristas") or [], cadena_tangente)])
+    if puntas:
+        try:
+            return _empalme_sin_puntas(forma, grupos, cadena_tangente, puntas)
+        except Exception:  # noqa: BLE001 — vía rápida (B-644): ante cualquier falla, el empalme de siempre
+            pass
     mf = BRepFilletAPI_MakeFillet(forma)
     vecinas, cajas, empalmadas = _ancestros(forma, TopAbs_EDGE, TopAbs_FACE), {}, []
     for grupo in grupos:
