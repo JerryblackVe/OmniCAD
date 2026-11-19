@@ -141,7 +141,9 @@ SUPERFICIE = [
         _i("Crear boceto", "boceto"), SEP,
         _i("Extruir", "sup_extruir"), _i("Revolución", "sup_revolucion"), _i("Barrido", "sup_barrido"),
         _i("Solevación", "sup_solevacion"), _i("Parche", "parche"), _i("Reglada", "reglada"),
-        _i("Desfase", "sup_desfase"), SEP, _i("Engrosar", "engrosar"), SEP,
+        _i("Desfase", "sup_desfase"), SEP,
+        _sub("Patrón", [_i("Patrón circular", "patron_circular_3d")]), _i("Simetría", "simetria_3d"), SEP,
+        _i("Engrosar", "engrosar"), SEP,
         _i("Caja", "sup_caja"), _i("Cilindro", "sup_cilindro"), _i("Esfera", "sup_esfera"), _i("Toroide", "sup_toroide"),
         _i("Bobina", "sup_bobina"), _i("Tubería", "sup_tuberia")]),
     ("MODIFICAR", ["recortar_sup", "extender_sup", "coser", "engrosar"], [
