@@ -12,11 +12,11 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 | B-650/B-651 | Contacto línea–círculo limitado al tramo (Opus alto); entra cuando se libere un lugar de los 3 |
 | E3 | B-660 | Simetría con objeto vectorial; después B-667 (perpendicular línea–spline en solver.py) |
-| E4 | B-665 | Campo Contenido del panel de Texto; después B-666 (ventana chica) |
-| E8 | B-664 | Foco en la cota nueva; después B-658 (Curvatura al arrastrar la spline) |
+| E4 | — | B-665 integrado (30fe274c); quieta: su lugar es de E1. B-666 sin dueño hasta que haya lugar |
+| E8 | B-658 | Curvatura al arrastrar la spline (B-664 Parcial integrado: e7ef8182, falta Windows) |
 | OpenCode | B-584, H-117, B-656, B-653, B-479, B-512, P-178 | Cola de boceto (vigía); lo demás en `manana/` |
 | E2, E5, E6, E7, E9, E10 | — | En pausa por el amarillo (E6: B-659 y velocidad del solver cuando haya lugar) |
-| E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620 |
+| E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620, B-664 |
 
 **Foco del 19/11 (Gerardo): Boceto y Restricciones hasta dejarlo perfecto.** Plan: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md).
 
