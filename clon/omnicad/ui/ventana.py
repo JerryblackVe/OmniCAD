@@ -1838,6 +1838,9 @@ class VentanaPrincipal(QMainWindow):
         if self.panel is not None:              # H-72: con un comando abierto, la herramienta elige para su campo
             if self.modo_boceto.activo:
                 return
+        elif self.modo_boceto.activo:
+            self.modo_boceto.herramienta("seleccionar")   # B-687: el boceto elige geometría arrastrando la ventana
+            return
         elif not self._salir_de_boceto():
             return
         self.visor.set_modo(None if self.visor.modo == modo else modo)
