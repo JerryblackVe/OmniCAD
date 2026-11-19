@@ -62,6 +62,8 @@ class LienzoRestriccionesMixin:
                                   "por otras restricciones o cotas. No se cambió.")
                 return False
         def cambiar():
+            if tipo == "perpendicular":
+                self.b.girar_a_perpendicular(*r.entidades)       # B-586: sin esto el solver deformaba la spline
             self.b.reemplazar_restriccion(rid, tipo)
             if tipo == "tangente":
                 acomodar_tangente(self.b, r.entidades, self._valores_para_diagnostico())
@@ -147,6 +149,8 @@ class LienzoRestriccionesMixin:
             for t, e in pedidos:
                 if t == "tangente":
                     self.b.deslizar_a_tangente(*e)
+                elif t == "perpendicular":
+                    self.b.girar_a_perpendicular(*e)           # B-586: línea–spline, como Fusion
                 self.b.agregar_restriccion(t, e)
                 if t in ("tangente", "curvatura"):
                     acomodar_tangente(self.b, e, self._valores_para_diagnostico())

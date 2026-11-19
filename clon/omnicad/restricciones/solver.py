@@ -31,6 +31,7 @@ from . import auto_candidatos
 from .boceto import (CIRCULARES, ELIPTICAS, Arco, ArcoElipse, Circulo, Elipse, ErrorBoceto, Linea, Spline,
                      _numero, distancia_con_circulo, dominio, evaluar_primitiva, mas_cercano, primitivas_entidad,
                      puntos_primitiva, signos_cuadrante)
+from .boceto_geometria import pie_normal
 
 TOLERANCIA = 1e-6
 TOLERANCIA_ACEPTA_ARRASTRE = 1e-3  # mm: un movimiento del ratón se da por bueno con este residuo (soltar vuelve a exigir TOLERANCIA)
@@ -412,6 +413,8 @@ class _Sistema:
                     T.append(lambda x, l=e[0], k=k: [self.L(x, l)[0][k] - self.L(x, l)[1][k]])
                 else:
                     T.append(lambda x, a=e[0], c=e[1], k=k: [self.P(x, a)[k] - self.P(x, c)[k]])
+            elif t == "perpendicular" and "spline" in tipos:
+                self._perpendicular_spline(e, tipos)
             elif t in ("paralela", "perpendicular"):
                 def f(x, l1=e[0], l2=e[1], par=(t == "paralela")):
                     (a, bb), (c, d) = self.L(x, l1), self.L(x, l2)
@@ -749,6 +752,22 @@ class _Sistema:
             Cb, Db = evaluar_primitiva(pb, _en_tramo(pb, x[jb]), 1)
             return [Ca[0] - Cb[0], Ca[1] - Cb[1], _cruz(_unitario(Da), _unitario(Db)) * _ESCALA_TANGENTE]
         T.append(f)
+
+    def _perpendicular_spline(self, e, tipos):
+        """B-586 (como Fusion): la línea queda normal a la spline. Su recta pasa por un punto S(t) de la spline (t es
+        incógnita auxiliar; arranca donde la normal pasa más cerca del punto medio de la línea, `pie_normal`) y es
+        perpendicular a la tangente ahí. No pide que el segmento toque la spline: alcanza con girarlo."""
+        l, s = (e[0], e[1]) if tipos[0] == "linea" else (e[1], e[0])
+        a, bb = self.L(self.x0, l)
+        j = self._parametro(pie_normal(self.prim(self.x0, s), ((a[0] + bb[0]) / 2, (a[1] + bb[1]) / 2))[0])
+
+        def f(x, l=l, s=s, j=j):
+            pr = self.prim(x, s)
+            C, D = evaluar_primitiva(pr, _en_tramo(pr, x[j]), 1)
+            (a, bb), v = self.L(x, l), _unitario(D)
+            u = _unitario((bb[0] - a[0], bb[1] - a[1]))
+            return [self.dist_signada(x, C, l), (u[0] * v[0] + u[1] * v[1]) * _ESCALA_TANGENTE]
+        self.terminos.append(f)
 
     def _poligono(self, vertices):
         """Polígono regular por vértices = centro + radio·(cos, sin)(giro + k·2π/m), con el centro, el radio y el giro
