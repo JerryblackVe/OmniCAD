@@ -177,6 +177,7 @@ de OpenCode; las demás la enlazan.
 
   | Orden | Modelo | Para qué |
   |---|---|---|
+  | 0 (hasta el 23/11) | `opencode-go/glm-5.3`: promo de OpenCode Go (Gerardo, 19/11), primero hasta el domingo 23/11; después vuelve al puesto 6 | Todo, mientras dure; Extra Usage apagado, sin comprar créditos |
   | 1–2 | CodeBuddy gratis: `cb:hy3`, `cb:deepseek-v4.1-flash` (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | Lo mecánico; ~8 s, 4 a la vez; corta con 429 al quedarse sin cupo |
   | 3–4 | OpenCode Go gratis (Gerardo, 19/11): `opencode-go/beam-free`, `opencode-go/hy4-flash-free` | Lo mecánico con herramientas; 10–13 s. `iceman-contributor-free` y `longcat-2.5-free` no andan hasta que Gerardo cambie la consola |
   | 5 | `opencode/nemotron-3.5-lightning-free` | Lo mecánico; ~14 s |
