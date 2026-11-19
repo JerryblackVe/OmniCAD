@@ -33,7 +33,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 0c | B-651 | Saltos al arrastrar un extremo coincidente (E1) |
 | 0d | B-652 | Teclear en una cota cierra el boceto y abre Agujero (E8) |
 | 0e | B-654, B-655, B-653, B-656 | Esc doble, panel de Texto, Ctrl+A, traducción (E8, de a uno) |
-| 0f | B-657 | Concéntrico/Punto medio/Igual mueven las dos figuras (E1, después de B-651) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
 

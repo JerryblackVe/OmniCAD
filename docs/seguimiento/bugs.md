@@ -8,6 +8,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-663 | Bocetos › Cambiar una restricción existente por Igual, Concéntrica o Punto medio (menú «Cambiar a» y `replace_constraint`) todavía mueve las dos figuras (B-657 lo arregló solo al agregarlas) | Abierto | Baja | Usar `solver.acomodar_segunda` también al reemplazar | Informe E1 19/11 | 2026-11-19 |
 | B-662 | `test_caza_regresion` falla en main: espera la firma de B-612, cuya fila ya se borró | Abierto | Baja | Actualizar la lista de firmas del test | Informe E4 19/11 | 2026-11-19 |
 | B-658 | Bocetos › Restricción Curvatura: arrastrar con el mouse el extremo de la spline da «Restricciones en conflicto (error 2.91e-06 mm)» aunque la relación se conserva (2/2); solo por el camino del Lienzo | Abierto | Media | Ver por qué el Lienzo rechaza un error de 3e-6 mm | E7 19/11, `scripts/prueba_ui/restricciones_boceto.py` ciclo «curvatura» | 2026-11-19 |
 | B-659 | Bocetos › Fluidez en `prueba_ui/restricciones_boceto.py`: un clic tardó 3936 ms (otros 986 y 714 ms; 55 acciones de más de 100 ms) | Abierto | Media | Medir qué se congela al hacer clic (E6, velocidad del solver) | E7 19/11 | 2026-11-19 |
