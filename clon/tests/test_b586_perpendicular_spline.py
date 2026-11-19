@@ -89,3 +89,34 @@ def test_b586_cambiar_tangente_a_perpendicular_no_deforma_la_spline():
     assert lz.reemplazar_restriccion(rid, "perpendicular")                  # menú de la restricción › Cambiar a
     assert [r.tipo for r in b.restricciones.values()] == ["perpendicular"]
     assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(antes, abs=1e-6)
+
+
+def _contacto(b, l, s):
+    """(distancia de la recta de la línea a la spline, |coseno| entre la línea y la tangente ahí)."""
+    from omnicad.restricciones.boceto_geometria import dominio, evaluar_primitiva
+    p, q = (b.coords(i) for i in b.curvas[l].puntos())
+    u = ((q[0] - p[0]) / math.dist(p, q), (q[1] - p[1]) / math.dist(p, q))
+    prim = b.primitivas(s)[0]
+    t0, t1 = dominio(prim)[:2]
+    muestras = [evaluar_primitiva(prim, t0 + (t1 - t0) * k / 4000, 1) for k in range(4001)]
+    c, d = min(muestras, key=lambda m: abs((m[0][0] - p[0]) * u[1] - (m[0][1] - p[1]) * u[0]))
+    return abs((c[0] - p[0]) * u[1] - (c[1] - p[1]) * u[0]), abs(u[0] * d[0] + u[1] * d[1]) / math.hypot(*d)
+
+
+def test_b667_dos_arrastres_seguidos_mueven_la_linea_y_no_la_spline():
+    b, s, l = _escena()
+    b.girar_a_perpendicular(l, s)
+    b.agregar_restriccion("perpendicular", [l, s])
+    previo = resolver(b)
+    pid = b.curvas[l].puntos()[1]
+    for destino in ((-5, 45), (10, 40)):             # como el ratón: 20 movimientos y soltar
+        x0, y0 = b.coords(pid)
+        for k in range(1, 21):
+            b.puntos[pid].x, b.puntos[pid].y = x0 + (destino[0] - x0) * k / 20, y0 + (destino[1] - y0) * k / 20
+            previo = resolver(b, arrastrado=pid, previo=previo)
+            assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=1e-3)
+        previo = resolver(b, arrastrado=pid)
+        assert previo.ok and b.coords(pid) == pytest.approx(destino, abs=1e-6)
+        assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=1e-3)
+        distancia, coseno = _contacto(b, l, s)
+        assert distancia < 0.02 and coseno < 1e-3         # la recta sigue pasando por la spline, a 90°

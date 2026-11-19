@@ -31,7 +31,6 @@ from . import auto_candidatos
 from .boceto import (CIRCULARES, ELIPTICAS, Arco, ArcoElipse, Circulo, Elipse, ErrorBoceto, Linea, Spline,
                      _numero, distancia_con_circulo, dominio, evaluar_primitiva, mas_cercano, primitivas_entidad,
                      puntos_primitiva, signos_cuadrante)
-from .boceto_geometria import pie_normal
 
 TOLERANCIA = 1e-6
 TOLERANCIA_ACEPTA_ARRASTRE = 1e-3  # mm: un movimiento del ratón se da por bueno con este residuo (soltar vuelve a exigir TOLERANCIA)
@@ -178,6 +177,7 @@ class _Sistema:
         self.x0 = np.array(x0, dtype=float)
         self._extra = []
         self.originales = set()      # curvas con una copia desfasada (`_resolver_grupo` no las mueve si puede evitarlo)
+        self.quietas = set()         # B-667: incógnitas de una spline con Perpendicular a una línea: se mueve la línea
         self._dvar = {}              # (madre, copia) de un desfase de curva libre → índice de su distancia (incógnita)
         self.terminos = []
         self._armar()
@@ -755,11 +755,26 @@ class _Sistema:
 
     def _perpendicular_spline(self, e, tipos):
         """B-586 (como Fusion): la línea queda normal a la spline. Su recta pasa por un punto S(t) de la spline (t es
-        incógnita auxiliar; arranca donde la normal pasa más cerca del punto medio de la línea, `pie_normal`) y es
-        perpendicular a la tangente ahí. No pide que el segmento toque la spline: alcanza con girarlo."""
+        incógnita auxiliar) y es perpendicular a la tangente ahí. No pide que el segmento toque la spline: alcanza con
+        girarlo."""
         l, s = (e[0], e[1]) if tipos[0] == "linea" else (e[1], e[0])
         a, bb = self.L(self.x0, l)
-        j = self._parametro(pie_normal(self.prim(self.x0, s), ((a[0] + bb[0]) / 2, (a[1] + bb[1]) / 2))[0])
+        self.quietas.update(k for pid in self.b.curvas[s].puntos() for k in self.idx_p.get(pid, ()))
+        # B-667: arranca donde la recta ya toca la spline a 90° (al arrastrar, el contacto anterior). El pie de la
+        # normal más cercana al punto medio podía ser otro y el solver saltaba a él deformando la spline.
+        pr0, u0 = self.prim(self.x0, s), _unitario((bb[0] - a[0], bb[1] - a[1]))
+        t0, t1 = dominio(pr0)[:2]
+
+        def desajuste(t):
+            C, D = evaluar_primitiva(pr0, t, 1)
+            v = _unitario(D)
+            return abs((C[0] - a[0]) * u0[1] - (C[1] - a[1]) * u0[0]) + abs(u0[0] * v[0] + u0[1] * v[1]) * _ESCALA_TANGENTE
+        t = min((t0 + (t1 - t0) * k / 96 for k in range(97)), key=desajuste)
+        izq, der = max(t0, t - (t1 - t0) / 96), min(t1, t + (t1 - t0) / 96)
+        for _ in range(40):                   # afina entre las muestras vecinas: si ya se cumple, nada se mueve
+            m1, m2 = izq + (der - izq) / 3, der - (der - izq) / 3
+            izq, der = (izq, m2) if desajuste(m1) < desajuste(m2) else (m1, der)
+        j = self._parametro((izq + der) / 2)
 
         def f(x, l=l, s=s, j=j):
             pr = self.prim(x, s)
@@ -1318,6 +1333,7 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
     # el radio de un original: así sigue pesando más que el de su copia desfasada. B-649: también al arrastrar (mover
     # el centro de un círculo tangente lo agrandaba); arrastrar el borde cambia el radio antes de resolver.
     pesos[list(set(sis.idx_r.values()))] *= _PESO_RADIO
+    pesos[list(sis.quietas)] *= _PESO_RADIO       # B-667: la spline de una Perpendicular queda; gira la línea
     if arrastrado in sis.idx_p:
         ij = list(sis.idx_p[arrastrado])
         pesos[ij] = _PESO_ARRASTRE
