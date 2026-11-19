@@ -37,11 +37,17 @@ def ventana(app_qt, tmp_path_factory):
 
 @pytest.fixture
 def prefs(app_qt, tmp_path):             # sin QApplication, crear el diálogo aborta el proceso (se vio al correr un test suelto)
-    from PySide6.QtCore import QSettings
-    from omnicad.ui.preferencias import Preferencias
+    from PySide6.QtCore import QCoreApplication, QEvent, QSettings
+    from omnicad.ui.preferencias import DialogoPreferencias, Preferencias
     from omnicad.ui import temas
     temas.activar_tipografia()
     yield Preferencias(QSettings(str(tmp_path / "prefs.ini"), QSettings.IniFormat))
+    for dlg in app_qt.topLevelWidgets():
+        if isinstance(dlg, DialogoPreferencias):
+            dlg.close()
+            dlg.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    app_qt.processEvents()
     temas.activar_tipografia()
     temas.activar(temas.DEFECTO)             # los tests de diálogo cambian el tema activo; que no pase al siguiente
 
