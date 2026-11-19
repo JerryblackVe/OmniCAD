@@ -1397,7 +1397,7 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
 
     cumple = TOLERANCIA if con_rango else TOLERANCIA_ACEPTA_ARRASTRE
 
-    def corrida(x_inicio, ancla, w, tol=1e-14):
+    def corrida(x_inicio, ancla, w, tol=1e-14, meseta=False):
         reg = _QuietasCopias(sis, ancla)
         fun = lambda x: np.concatenate([sis.residuos(x), w * (x - ancla), reg.residuos(x)])  # noqa: E731
         jac = lambda x: np.vstack([_jacobiano(sis, x), np.diag(w)] + ([_jacobiano(reg, x)] if sis.deriva else []))  # noqa: E731
@@ -1410,7 +1410,7 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
         # Un movimiento gasta un solo trozo, y menos cuanto más grande es el sistema (un punto arrastrado sobre otro deja una
         # spline degenerada que ninguna solución cumple: no se la persigue durante segundos).
         tope = 200 * (n + 1) if con_rango else max(10, TROZO_EVALUACIONES * 100 // max(n, 100))
-        hechas, x = 0, x_inicio
+        hechas, x, costo = 0, x_inicio, None
         while True:
             if con_rango and n >= UMBRAL_TRF:     # un arrastre (tope chico de evaluaciones) sigue con «lm»: «trf» no
                                                   # llegaba a cumplir la cadena rígida de 300 líneas (test_b101)
@@ -1423,8 +1423,14 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
             x, hechas = r.x, hechas + r.nfev
             if r.status != 0 or hechas >= tope or float(np.max(np.abs(sis.residuos(x)), initial=0.0)) < cumple:
                 return x
+            # B-659: con menor cambio, un trozo que baja el costo menos del 5 % es la meseta: seguir cambiaba cumplir la
+            # restricción por cambiar menos, de a 0,3-9 % por trozo (37 trozos, 3,4 s), hasta una spline con 2 puntos
+            # encimados. La 1.ª corrida solo elige la solución cercana; el pulido la deja exacta (B-466 baja 17-60 %).
+            if meseta and costo is not None and r.cost > 0.95 * costo:
+                return x
+            costo = r.cost
 
-    x = corrida(ancla, ancla, pesos, 1e-14 if con_rango else TOLERANCIA_ARRASTRE)
+    x = corrida(ancla, ancla, pesos, 1e-14 if con_rango else TOLERANCIA_ARRASTRE, meseta=menor_cambio)
     # Pulido: re-anclar en la solución elimina el sesgo de la regularización y rescata una primera corrida que se quedó
     # en una meseta. Un evento de arrastre (`con_rango=False`) lo hace solo si no cumple, y en un solo trozo.
     if con_rango or float(np.max(np.abs(sis.residuos(x)), initial=0.0)) >= cumple:

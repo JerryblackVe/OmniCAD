@@ -777,6 +777,30 @@ def test_tangente_imposible_sin_cambiar_el_radio_queda_para_el_solver():
     assert resolver(b, {}).ok and b.radio(k) != pytest.approx(10, abs=0.01)
 
 
+def test_b659_tangente_arco_spline_lejana_rapida_y_sin_encimar_puntos():
+    """B-659 (boceto de la prueba de la ventana): la spline está a ~40 mm del arco. Antes la 1.ª corrida de menor cambio
+    tardaba 3,4 s y dejaba 2 puntos de la spline encimados. Va su extremo cercano; el lejano casi no se mueve."""
+    import time
+    b = Boceto.desde_dict({"siguiente_id": 11, "puntos": [
+        {"id": 2, "x": 30.0, "y": 40.0}, {"id": 3, "x": 40.0, "y": 40.0}, {"id": 4, "x": 30.0, "y": 50.0},
+        {"id": 5, "x": 80.0, "y": 35.0}, {"id": 6, "x": 90.0, "y": 50.0}, {"id": 7, "x": 100.0, "y": 32.0},
+        {"id": 8, "x": 110.0, "y": 46.0}], "curvas": [
+        {"tipo": "arco", "id": 1, "centro": 2, "inicio": 3, "fin": 4, "construccion": False},
+        {"tipo": "spline", "id": 9, "modo": "ajuste", "grado": 3, "cerrada": False, "pesos": None, "nudos": None,
+         "construccion": False, "puntos": [5, 6, 7, 8]}],
+        "restricciones": [{"id": 10, "tipo": "tangente", "entidades": [1, 9], "datos": {}}], "cotas": []})
+    antes = {p: _p(b, p) for p in b.puntos}
+    t = time.perf_counter()
+    acomodar_tangente(b, [1, 9])
+    assert time.perf_counter() - t < 1.0                                      # antes 3,4 s
+    assert all(_p(b, p) == pytest.approx(antes[p], abs=TOL) for p in (2, 3, 4))   # el arco queda quieto
+    assert _p(b, 5) == pytest.approx((40, 40), abs=0.5)                       # el extremo cercano va al arco
+    assert math.dist(antes[8], _p(b, 8)) < 5                                  # el lejano casi no se mueve
+    fit = [_p(b, p) for p in (5, 6, 7, 8)]
+    assert min(math.dist(a, z) for a, z in zip(fit, fit[1:], strict=False)) > 1             # ningún par encimado
+    assert resolver(b, {}).ok
+
+
 def test_cambiar_por_tangente_tampoco_cambia_el_radio():
     s = api.Sesion()
 
