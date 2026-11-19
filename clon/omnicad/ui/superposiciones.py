@@ -749,6 +749,7 @@ class BarraNavegacion(QFrame):
             self.estilos[clave].setChecked(True)
 
 
+ALTO_CHICO, ANCHO_CHICO = 400, 700    # B-666: visor más chico que esto: navegador y opciones de la paleta plegados
 ALTO_UTIL_PANEL = 330        # alto mínimo que se le quiere dar a un panel de comando debajo del ViewCube
 
 
@@ -816,6 +817,8 @@ class AreaVisor(QWidget):
         self.capa = None
         self.paleta = None
         self._reacomodo = False
+        self._chica = None                # B-666: el visor es chico (None: medirlo de nuevo en el próximo reubicar)
+        self._plegados = []               # lo que se plegó por la ventana chica: se despliega al agrandarla
         self.laterales = []               # paneles del boceto a la izquierda de la paleta: «Carácter» (texto) y SIMETRÍA
         self.panel = None                 # diálogo de comando abierto (a la derecha, debajo del ViewCube)
         self.barra_posicion = None        # panel «Posición»: componentes movidos sin capturar (arriba al centro)
@@ -858,6 +861,7 @@ class AreaVisor(QWidget):
 
     def set_capa_boceto(self, capa, paleta, *laterales):
         self.capa, self.paleta = capa, paleta
+        self._chica = None                # la paleta nueva también se pliega si la ventana es chica
         self.laterales = [w for w in laterales if w is not None]
         for w in self.laterales:
             w.installEventFilter(self)
@@ -935,6 +939,22 @@ class AreaVisor(QWidget):
         if self.al_mover_panel is not None:
             self.al_mover_panel(self.posicion_panel)
 
+    def _plegar_si_chica(self, g):
+        """B-666: en un visor chico el navegador y las opciones de la paleta se pliegan solos (quedan sus cabeceras
+        para abrirlos); al agrandarlo se despliega solo lo que se plegó así."""
+        chica = g.width() < ANCHO_CHICO or g.height() < ALTO_CHICO
+        if chica == self._chica:
+            return
+        self._chica = chica
+        vivos = [w for w in self.arriba_izq + [self.paleta] if hasattr(w, "plegar_por_ventana")]
+        if chica:
+            self._plegados += [w for w in vivos if w not in self._plegados and w.plegar_por_ventana(True)]
+        else:
+            for w in self._plegados:
+                if w in vivos:
+                    w.plegar_por_ventana(False)
+            self._plegados = []
+
     def reubicar(self):
         w, h = self.width(), self.height()
         if self.multiples:
@@ -944,6 +964,7 @@ class AreaVisor(QWidget):
             self.visor.setGeometry(mw, mh, w - mw, h - mh)
         else:
             self.visor.setGeometry(self.rect())
+        self._plegar_si_chica(self.visor.geometry())
         if self.capa is not None:
             self.capa.setGeometry(self.visor.geometry())
             self.capa.raise_()

@@ -666,6 +666,13 @@ class Navegador(QFrame):
         self.b_plegar.setText("+" if self.arbol.isHidden() else "–")
         self.ajustar_alto()
 
+    def plegar_por_ventana(self, plegar):
+        """B-666: en una ventana chica el navegador se pliega solo (queda la cabecera). True si cambió algo."""
+        if self.arbol.isHidden() == plegar:
+            return False
+        self._plegar()
+        return True
+
     def ajustar_alto(self, *_):
         filas = 0
         pila = [self.arbol.topLevelItem(i) for i in range(self.arbol.topLevelItemCount())]
