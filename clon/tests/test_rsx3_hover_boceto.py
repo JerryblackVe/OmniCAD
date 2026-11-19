@@ -4,8 +4,8 @@ import random
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QPointF, Qt  # noqa: E402
-from PySide6.QtTest import QTest  # noqa: E402
+from PySide6.QtCore import QEvent, QPointF, Qt  # noqa: E402
+from PySide6.QtGui import QMouseEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from omnicad.nucleo import geometria as g  # noqa: E402
@@ -73,8 +73,10 @@ def test_rsx3_el_hover_resalta_con_mas_de_400_curvas():
     linea = next(c for c in lz.b.curvas.values() if c.tipo == "linea")
     (x1, y1), (x2, y2) = lz.b._extremos_linea(linea.id)
     medio = lz.a_px(x1 + 0.37 * (x2 - x1), y1 + 0.37 * (y2 - y1))
-    QTest.mouseRelease(lz, Qt.LeftButton)   # B-640: otra prueba pudo dejar el botón apretado; el hover solo resalta sin botones
-    QTest.mouseMove(lz, medio.toPoint())
+    # B-704: el evento va DIRECTO al lienzo, sin botones. QTest.mouseMove lo reparte por la ventana que haya bajo el
+    # cursor: otro Lienzo visible que una prueba anterior no cerró (al fallar) se lo quedaba y el hover no llegaba.
+    QApplication.sendEvent(lz, QMouseEvent(QEvent.Type.MouseMove, medio, lz.mapToGlobal(medio), Qt.NoButton, Qt.NoButton,
+                                           Qt.NoModifier))
     esperada = lz.entidad_en(QPointF(medio.toPoint()))
     assert esperada is not None and lz._sobre == esperada       # antes, con más de 400 curvas, no se resaltaba nada
     lz.close()
