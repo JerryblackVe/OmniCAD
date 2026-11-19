@@ -35,7 +35,7 @@ El plan no se arma solo con los bugs conocidos: lo que nunca se probó no tiene 
 Proyectar). La tabla sale de la cinta (`ui/cinta.py` › BOCETO: CREAR, MODIFICAR, RESTRICCIONES, CONFIGURAR, INSPECCIONAR, INSERTAR,
 SELECCIONAR y TERMINAR) y se rehace con `scripts/cobertura_boceto.py` (desde `clon/`). «Test automático» = algún test que no es de
 catálogo nombra su clave; «Probado como usuario» = lo nombra algún script de `scripts/prueba_ui/`.
-**Resumen (19/11, tras PRUEBA-CMDS grupos 1 y 2 de E7): 150 comandos; 20 sin test automático; 35 sin prueba como usuario; 0 sin ninguna de las dos.**
+**Resumen (19/11, tras PRUEBA-CMDS grupos 1 y 2 de E7 y el grupo B de E8): 150 comandos; 20 sin test automático; 23 sin prueba como usuario; 0 sin ninguna de las dos.**
 Faltan por contar a mano: las opciones de cada diálogo (p. ej. los 5 tipos de Proyectar, ver PRUEBA-PROY en `ahora.md`) y las asas.
 Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana a E7 y E11.
 
@@ -88,17 +88,17 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | CREAR › Spline | sk_spline_control | `sk_spline_control` | sí (5) | sí (1) | — |
 | CREAR › Texto | sk_desglosar_texto | `sk_desglosar_texto` | sí (2) | **no** | — |
 | CREAR › Texto | sk_texto | `sk_texto` | sí (57) | sí (7) | — |
-| ENSAMBLAR | Activar conjuntos de contactos | `contactos_activar` | sí (1) | **no** | — |
-| ENSAMBLAR | Activar todos los contactos | `contactos_todos` | sí (1) | **no** | — |
+| ENSAMBLAR | Activar conjuntos de contactos | `contactos_activar` | sí (1) | sí (1) | — |
+| ENSAMBLAR | Activar todos los contactos | `contactos_todos` | sí (1) | sí (1) | — |
 | ENSAMBLAR | Anclar / desanclar componente | `anclar_componente` | **no** | sí (1) | — |
 | ENSAMBLAR | Capturar posición | `capturar_posicion` | sí (3) | sí (1) | — |
-| ENSAMBLAR | Desactivar todos los contactos | `contactos_desactivar` | sí (1) | **no** | — |
+| ENSAMBLAR | Desactivar todos los contactos | `contactos_desactivar` | sí (1) | sí (1) | — |
 | ENSAMBLAR | Editar posición inicial | `posicion_inicial` | sí (3) | sí (1) | — |
 | ENSAMBLAR | Estudio de movimiento | `estudio_movimiento` | sí (1) | sí (1) | — |
 | ENSAMBLAR | Fijar / liberar componente | `fijar_componente` | **no** | sí (1) | — |
 | ENSAMBLAR | Grupo rígido | `grupo_rigido` | sí (3) | sí (2) | — |
 | ENSAMBLAR | Nuevo componente | `nuevo_componente` | sí (1) | sí (2) | — |
-| ENSAMBLAR | Nuevo conjunto de contactos | `contactos_nuevo` | sí (1) | **no** | — |
+| ENSAMBLAR | Nuevo conjunto de contactos | `contactos_nuevo` | sí (1) | sí (1) | — |
 | ENSAMBLAR | Origen de la unión | `origen_union` | sí (3) | sí (3) | — |
 | ENSAMBLAR | Restricción de componentes | `restriccion_componentes` | sí (1) | sí (1) | — |
 | ENSAMBLAR | Revertir posición | `revertir_posicion` | sí (1) | sí (2) | — |
@@ -108,16 +108,16 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | ENSAMBLAR | Vínculo de movimiento | `vinculo_movimiento` | sí (4) | sí (3) | — |
 | INSERTAR | Calcomanía | `calcomania` | sí (6) | sí (1) | — |
 | INSERTAR | Duplicar con uniones | `duplicar_con_uniones` | sí (1) | sí (1) | H-4 |
-| INSERTAR | Insertar STEP… | `importar_step` | sí (4) | **no** | — |
+| INSERTAR | Insertar STEP… | `importar_step` | sí (4) | sí (1) | B-691 |
 | INSERTAR | Insertar SVG | `insertar_svg` | sí (1) | sí (3) | — |
-| INSERTAR | Insertar archivos DXF | `insertar_dxf` | sí (1) | **no** | — |
-| INSERTAR | Insertar componente | `insertar_diseno` | sí (2) | **no** | — |
-| INSERTAR | Insertar derivación | `insertar_derivacion` | sí (2) | **no** | — |
+| INSERTAR | Insertar archivos DXF | `insertar_dxf` | sí (1) | sí (1) | — |
+| INSERTAR | Insertar componente | `insertar_diseno` | sí (2) | sí (1) | — |
+| INSERTAR | Insertar derivación | `insertar_derivacion` | sí (2) | sí (1) | — |
 | INSERTAR | Insertar fijador | `fijacion` | sí (8) | sí (1) | — |
-| INSERTAR | Insertar malla | `insertar_malla` | sí (2) | **no** | — |
+| INSERTAR | Insertar malla | `insertar_malla` | sí (2) | sí (1) | — |
 | INSERTAR | Lienzo | `lienzo` | sí (67) | sí (29) | B-411 |
-| INSERTAR | Placa de holguras | `calibracion_holguras` | sí (2) | **no** | — |
-| INSERTAR | Vectorizar imagen | `vectorizar_imagen` | sí (1) | **no** | — |
+| INSERTAR | Placa de holguras | `calibracion_holguras` | sí (2) | sí (1) | — |
+| INSERTAR | Vectorizar imagen | `vectorizar_imagen` | sí (1) | sí (1) | — |
 | INSPECCIONAR | Análisis cebra | `cebra` | sí (5) | sí (2) | — |
 | INSPECCIONAR | Análisis de accesibilidad | `accesibilidad` | sí (2) | sí (1) | — |
 | INSPECCIONAR | Análisis de curvatura en peine | `curvatura_peine` | sí (1) | sí (1) | — |
@@ -136,7 +136,7 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | INSPECCIONAR | Mostrar colores de componente | `colores_componente` | sí (1) | sí (1) | — |
 | INSPECCIONAR | Mostrar grupos de caras de malla | `ver_grupos_caras` | **no** | sí (1) | — |
 | INSPECCIONAR | Propiedades | `propiedades` | sí (31) | sí (1) | B-172 |
-| INSPECCIONAR | Reparar cuerpo | `reparar_cuerpo` | sí (3) | **no** | — |
+| INSPECCIONAR | Reparar cuerpo | `reparar_cuerpo` | sí (3) | sí (1) | — |
 | INSPECCIONAR | Revisar geometría | `revisar_geometria` | **no** | sí (1) | — |
 | INSPECCIONAR | Sustainability Insights | `sustentabilidad` | sí (2) | sí (1) | — |
 | MODIFICAR | Alargar | `sk_alargar` | sí (4) | **no** | — |
