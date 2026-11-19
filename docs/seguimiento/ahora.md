@@ -10,13 +10,10 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | B-669 | Gemelo de B-650: tangente línea–elipse y línea–curva 3D con el contacto en el tramo (Opus alto). B-650/B-651 integrados |
-| E3 | — | B-667 integrado (f268a01d: B-667b cerrado); libre |
-| E4 | B-619 (desde 13:10 UTC) | Proyectar un cuerpo de revolución: B-619b (curva 3D exacta) y B-619c (Opus alto; trabada en OpenCode con 2 modelos). B-665 y B-666 integrados |
-| E8 | — | B-658 integrado (855b50ab); se vacía (contexto 30 %) |
-| OpenCode | B-584, H-117, B-656, B-653, B-479, B-512, P-178, B-670, B-671, B-672; PREP: B-667b, B-619b, tests de restricciones y de cotas | Cola de boceto (vigía); lo demás en `manana/` |
-| E2, E5, E6, E7, E9, E10 | — | En pausa por el amarillo (E6: B-659 y velocidad del solver cuando haya lugar) |
-| E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620 |
+| E7 | PRUEBA-CMDS parte 2 | 23 comandos del grupo A del boceto sin prueba como usuario (ventana, `prueba_ui`) |
+| E1, E3, E4, E8 | — | Vaciadas y quietas; reciben lo que salga de OpenCode que no cierre (por el chat maestro) |
+| OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
+| E11 | — | En pausa (Gerardo en la PC). Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 |
 
 **Foco del 19/11 (Gerardo: «que los agentes solo trabajen en boseto»): solo boceto en Ahora y Sigue; sin fecha de corte hasta cerrar el «Listo cuando» de `plan_boceto_perfecto.md`.** Plan: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md).
 
