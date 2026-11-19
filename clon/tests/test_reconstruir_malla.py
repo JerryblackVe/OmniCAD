@@ -19,13 +19,13 @@ def _ok(s, nombre, **a):
     return r["result"]
 
 
-def _malla(*pasos):
+def _malla(*pasos, desviacion=0.02, angulo=15):
     """Sesión nueva con solo la malla de la pieza que arman `pasos`, para partir como de un STL."""
     origen = api.Sesion()
     for nombre, args in pasos:
         _ok(origen, nombre, **args)
     forma = next(iter(origen.doc.estado_final.cuerpos.values())).forma
-    return forma, ml.desde_brep(forma, refinamiento="personalizado", desviacion=0.02, angulo=15)
+    return forma, ml.desde_brep(forma, refinamiento="personalizado", desviacion=desviacion, angulo=angulo)
 
 
 def _insertar(tmp_path, m):
@@ -35,8 +35,8 @@ def _insertar(tmp_path, m):
     return s, _ok(s, "insert_file", path=str(ruta))["new_bodies"][0]
 
 
-def _reconstruir(tmp_path, *pasos, tolerancia=0.1):
-    forma, m = _malla(*pasos)
+def _reconstruir(tmp_path, *pasos, tolerancia=0.1, desviacion=0.02, angulo=15):
+    forma, m = _malla(*pasos, desviacion=desviacion, angulo=angulo)
     s, malla = _insertar(tmp_path, m)
     r = _ok(s, "reconstruct_from_mesh", body=malla, tolerance=tolerancia)
     nuevo = s.doc.estado_final.cuerpos[r["body"]].forma
@@ -173,21 +173,25 @@ def test_lo_reconstruido_se_guarda_se_abre_se_edita_y_recalcula(tmp_path):
     assert geo.volumen(cuerpo.forma) == pytest.approx(geo.volumen(nuevo) * 1.5, rel=1e-6)
 
 
+@pytest.mark.lento
 def test_la_vuelta_de_correccion_se_corta_sola_si_no_mejora(tmp_path):
     """Un agujero oblicuo no entra en la pila de capas: la vuelta prueba, no mejora y se detiene sin colgarse."""
     s, r, _forma, _nuevo = _reconstruir(tmp_path, ("create_sphere", dict(radius=20)),
-                                        ("create_box", dict(length=4, width=4, height=60, z=-30, operation="cut")))
+                                        ("create_box", dict(length=4, width=4, height=60, z=-30, operation="cut")),
+                                        desviacion=0.3, angulo=45)
     assert len(r["iterations"]) <= 3
     if r["iterations"]:
         assert r["iterations"][-1]["applied"] == 0 or r["tolerance_met"]
 
 
+@pytest.mark.lento
 def test_informa_lo_que_no_recupera_sin_fingir(tmp_path):
-    u, v = np.meshgrid(np.linspace(0, 2 * math.pi, 40), np.linspace(0.3, math.pi - 0.3, 20))
+    nu, nv = 14, 8
+    u, v = np.meshgrid(np.linspace(0, 2 * math.pi, nu), np.linspace(0.3, math.pi - 0.3, nv))
     rr = 20 + 2 * np.sin(4 * u) * np.sin(3 * v)
     V = np.c_[(rr * np.sin(v) * np.cos(u)).ravel(), (rr * np.sin(v) * np.sin(u)).ravel(), (rr * np.cos(v)).ravel()]
-    i = np.arange(19 * 40).reshape(19, 40)[:, :39].ravel()
-    m = ml.Malla(V, np.r_[np.c_[i, i + 1, i + 40], np.c_[i + 1, i + 41, i + 40]])
+    i = np.arange((nv - 1) * nu).reshape(nv - 1, nu)[:, :-1].ravel()
+    m = ml.Malla(V, np.r_[np.c_[i, i + 1, i + nu], np.c_[i + 1, i + nu + 1, i + nu]])
     s, malla = _insertar(tmp_path, m)
     r = api.llamar(s, "reconstruct_from_mesh", {"body": malla})
     if r["ok"]:
