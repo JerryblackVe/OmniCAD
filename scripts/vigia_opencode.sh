@@ -19,8 +19,8 @@ OC=${VIGIA_OC:-$HOME/.opencode/bin/opencode}
 MIN=${VIGIA_MIN:-20}
 CB=${VIGIA_CB:-$HOME/.local/cb/codebuddy}   # CodeBuddy (Node 22 propio); sus modelos van con «cb:»
 # Orden por la prueba de carga del 17/11: CodeBuddy contesta en ~8 s y aguanta 4 a la vez; MiniMax ~3; GLM y DeepSeek gratis de OpenCode no contestaron.
-# OpenCode Go gratis (Gerardo, 19/11): beam-free y hy4-flash-free, probados con herramientas (10–13 s).
-MODELOS=(cb:hy3 cb:deepseek-v4.1-flash opencode-go/beam-free opencode-go/hy4-flash-free nvidia/minimaxai/minimax-m3.1-flash openai/gpt-6.2-sol openai/gpt-6.2-astra openai/gpt-6.1-terra opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free)
+# OpenCode Go (Gerardo, 19/11; sin Extra Usage ni créditos: si se acaba el cupo, rota): probados con una tarea de boceto; fuera: gpt-6-luna (tocó de más), qwen4-max y deepseek-v4-pro.
+MODELOS=(cb:hy3 cb:deepseek-v4.1-flash opencode-go/beam-free opencode-go/hy4-flash-free opencode/nemotron-3.5-lightning-free opencode-go/glm-5.3 opencode-go/kimi-k3.1-pro nvidia/minimaxai/minimax-m3.1-flash openai/gpt-6.2-sol openai/gpt-6.2-astra openai/gpt-6.1-terra opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode/big-pickle)
 CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound|^429 |credits.?exhausted|frequency.?limit|usage.?limit'
 PY=${VIGIA_PY:-$HOME/OmniCAD/clon/.venv/bin/python}
 VERIF=${VIGIA_VERIF:-bash $HOME/OmniCAD/scripts/verif_tarea.sh}   # rápida: ruff + tests que importan directo lo tocado
