@@ -39,6 +39,11 @@ from .panel_simetria import PanelSimetria
 from .superposiciones import CabeceraMovible
 from .visor3d import perfiles_a_pintar
 
+# B-697: primitivas de texto a partir de las cuales el relleno en vivo no se pinta (cada letra es un perfil: 400
+# letras tardaban ~1,5 s y congelaban la ventana al aceptar; el boceto terminado ya tiene su tope en
+# `tris_perfil_terminado`). Extruir calcula los perfiles igual.
+RELLENO_TEXTO_TOPE = 2000
+
 # acción → (texto del menú, herramienta, atajo, ícono). Atajos de Fusion: L, R, C, D, T, O, P, M, Mayús+V.
 ACCIONES_BOCETO = [
     ("sk_linea", "Línea", "linea", "L", "linea"),
@@ -1715,7 +1720,20 @@ class ModoBoceto(QObject):
             return
         inicio = time.perf_counter()
         try:
-            perfiles = detectar_boceto(self.lienzo.b, self.plano, self.lienzo.geometria_real())
+            geometria = self.lienzo.geometria_real()
+            # B-697: cada letra de un texto es un perfil; con miles de primitivas el relleno tardaba >1 s y congelaba
+            # la ventana al aceptar el texto. Como el boceto terminado (tope de `tris_perfil_terminado`), un texto
+            # así no se rellena en vivo; Extruir calcula sus perfiles igual.
+            textos = {c.id for c in self.lienzo.b.curvas.values() if c.tipo == "texto"}
+            if textos and sum(1 for g in geometria if g[1] in textos) > RELLENO_TEXTO_TOPE:
+                self.v.visor.set_perfiles([])
+                if not getattr(self, "_aviso_relleno_texto", False):
+                    self._aviso_relleno_texto = True
+                    self.v.mensaje("Texto largo: el relleno de sus perfiles no se muestra; Extruir los calcula igual.",
+                                   7000)
+                return
+            self._aviso_relleno_texto = False
+            perfiles = detectar_boceto(self.lienzo.b, self.plano, geometria)
             pintables = perfiles_a_pintar(perfiles, self.lienzo.b, self.v.mensaje)
             self.v.visor.set_perfiles([p.cara for p in pintables])
         except ErrorGeometria as e:                 # el aviso del núcleo ya es corto y dice qué hacer (regla 14)
