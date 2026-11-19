@@ -43,6 +43,32 @@ from .editor_boceto_comun import (
 )
 
 
+class _Ocupadas:
+    """Cajas ya ocupadas por textos e íconos, en una grilla de celdas: `choca` mira solo las de las celdas que toca la
+    caja (antes, todas contra todas: 1 millón de comparaciones por arrastre con 100 cotas)."""
+    CELDA = 64.0                                       # px
+
+    def __init__(self, cajas):
+        self.celdas = {}
+        for caja in cajas:
+            self.agregar(caja)
+
+    def _claves(self, caja):
+        c = self.CELDA
+        if not all(map(math.isfinite, (caja.left(), caja.right(), caja.top(), caja.bottom()))):
+            return                                     # NaN o infinito: no ocupa ni choca (como `intersects`)
+        for i in range(math.floor(caja.left() / c), math.floor(caja.right() / c) + 1):
+            for j in range(math.floor(caja.top() / c), math.floor(caja.bottom() / c) + 1):
+                yield i, j
+
+    def agregar(self, caja):
+        for k in self._claves(caja):
+            self.celdas.setdefault(k, []).append(caja)
+
+    def choca(self, caja):
+        return any(caja.intersects(o) for k in self._claves(caja) for o in self.celdas.get(k, ()))
+
+
 def icono(*args, **kwargs):
     from . import editor_boceto
     return editor_boceto.icono(*args, **kwargs)
@@ -348,7 +374,8 @@ class LienzoDibujoMixin:
         fondo claro), el valor SIN caja, al costado de la línea de cota, con un fondo redondeado del color
         del lienzo para que se lea sobre cualquier línea. La caja con borde aparece solo al editarla
         (doble clic). Los textos no se pisan (ni entre ellos ni con los íconos de restricción)."""
-        zonas, ocupadas = {}, list(self._zonas_glifos.values()) + [c for _i, c in self._zonas_glifos_extra]
+        zonas = {}
+        ocupadas = _Ocupadas([*self._zonas_glifos.values(), *(c for _i, c in self._zonas_glifos_extra)])
         trazos = self._trazos_cotas = {}              # por cota, las rayas donde se puede agarrar (no el texto)
         fondos = self._fondos_cotas = {}              # por cota, la caja del fondo de su texto
         actual = []
@@ -480,10 +507,10 @@ class LienzoDibujoMixin:
             if math.hypot(paso.x(), paso.y()) < 1:
                 paso = QPointF(0, h + 2)
             for _ in range(0 if "texto" in c.datos or "ubic" in c.datos else 20):   # un texto ubicado no se corre
-                if not any(caja.intersects(o) for o in ocupadas):
+                if not ocupadas.choca(caja):
                     break
                 caja.translate(paso)
-            ocupadas.append(caja)
+            ocupadas.agregar(caja)
             if c.id >= 0:
                 zonas[c.id] = caja
                 trazos[c.id] = list(actual)
