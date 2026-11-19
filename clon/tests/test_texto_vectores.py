@@ -1716,3 +1716,22 @@ def test_escalar_texto_con_altura_formula_conserva_formula():
     assert b.curvas[tid].altura == 80
     assert b.curvas[tid].altura_expr == "(ancho / 2) * 2"
 
+
+
+def test_b701_kerning_de_par_en_gris_con_el_cursor_al_inicio(app_qt):
+    from PySide6.QtCore import Qt
+    from omnicad.ui.modo_boceto import PanelCaracter
+    b, lz = _lienzo_con_cuadro("HHH")
+    panel = PanelCaracter()
+    lz.texto_valores.connect(panel.mostrar_valores)
+    panel.cargar(lz.opciones)
+    lz.refrescar_previa_texto()
+    assert panel.par.isEnabled() and "No disponible" not in panel.par.toolTip()      # cursor al final: hay par
+    for _ in range(3):
+        _tecla(lz, Qt.Key_Left)                                    # cursor al inicio: no hay letra a la izquierda
+    assert lz._previa_texto["cursor"] == 0
+    assert not panel.par.isEnabled() and "No disponible: ponete entre dos letras" in panel.par.toolTip()
+    lz.ajustar_kerning_par(4.0)                                    # sin efecto, y el panel ya lo avisa en gris
+    assert lz.opciones.get("ajustes_kerning", []) == []
+    _tecla(lz, Qt.Key_Right)
+    assert panel.par.isEnabled() and "No disponible" not in panel.par.toolTip()

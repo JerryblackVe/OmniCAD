@@ -398,7 +398,7 @@ class LienzoTextoMixin:
         d["cursor"] = cur = min(max(d["cursor"], 0), n)
         self._caret = paradas[cur]
         if d.get("valores"):
-            self.texto_valores.emit(*d["valores"], self._kerning_en(cur))
+            self.texto_valores.emit(*d["valores"], self._kerning_en(cur), cur > 0)    # B-701: al inicio no hay par
         sel = self._seleccion_texto()
         if sel:
             desde, hasta = sel[0], min(sel[1], n)
