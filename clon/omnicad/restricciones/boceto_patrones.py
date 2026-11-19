@@ -32,7 +32,7 @@ class _Patrones:
         from . import objetos
         obj = [i for i in ids if i in self.objetos]
         if set(obj) - set(objetos.raices(self)):
-            raise ErrorBoceto("Simetría: elegí el objeto vectorial entero, no una parte.")
+            raise ErrorBoceto("Elegí el objeto vectorial entero.")
         de_objetos = set(objetos.curvas(self, obj))     # B-660: el objeto se refleja entero, no sus curvas ni puntos
         de_objetos |= set(self.puntos_de(de_objetos))
         ids = [i for i in ids if i != eje and i not in self.objetos and i not in de_objetos

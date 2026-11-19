@@ -674,8 +674,13 @@ def _ecuaciones(b, valores, aux):
             comun = _comun(g, *e)
             if comun is None:
                 aux.extend(_contacto(b, *e))
-                fs.append(lambda P, a=e[0], c=e[1], j=len(aux) - 2: _residuo_tangencia(
-                    curva_parametrica(b, a, P), curva_parametrica(b, c, P), P["aux"][j], P["aux"][j + 1]))
+                # B-669 (como B-650 en 2D): en una línea, el contacto dentro del tramo (s en [0, 1]), no en la prolongación;
+                # con un arco, como antes (contra su círculo entero, BOC-52)
+                clases = [g["curvas"][k]["tipo"] for k in e]
+                tramo = [(0.0, 1.0) if k == "linea" and "arco" not in clases else (-math.inf, math.inf) for k in clases]
+                fs.append(lambda P, a=e[0], c=e[1], j=len(aux) - 2, tramo=tramo: _residuo_tangencia(
+                    curva_parametrica(b, a, P), curva_parametrica(b, c, P),
+                    min(max(P["aux"][j], tramo[0][0]), tramo[0][1]), min(max(P["aux"][j + 1], tramo[1][0]), tramo[1][1])))
             elif "spline" not in (g["curvas"][e[0]]["tipo"], g["curvas"][e[1]]["tipo"]):
                 fs.append(lambda P, a=e[0], c=e[1], k=comun: _cruz(u(_llegada(b, a, k, P)), u(_llegada(b, c, k, P)))
                           * _ESCALA_TANGENTE)                       # la spline la cumple al construirse (`_tangentes`)
