@@ -749,7 +749,7 @@ class BarraNavegacion(QFrame):
             self.estilos[clave].setChecked(True)
 
 
-ALTO_CHICO, ANCHO_CHICO = 400, 700    # B-666: visor más chico que esto: navegador y opciones de la paleta plegados
+ALTO_CHICO, ANCHO_CHICO = 440, 700    # B-666/B-672: visor más chico que esto: navegador y opciones de la paleta plegados
 ALTO_UTIL_PANEL = 330        # alto mínimo que se le quiere dar a un panel de comando debajo del ViewCube
 
 
