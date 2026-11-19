@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · AG-19 descartada.** codex-chatgpt-web (v6.1.18, revisado sin correrlo por el chat maestro): no ofrece GPT-6.2 Astra ni Sol; pide Electron con pantalla para el login (no corre en la VPS ni en Docker); no tiene /v1/chat/completions; se actualiza con un checksum del mismo release. No manda datos a terceros.
 - **2026-11-19 · Traspaso E11 (33 %).** Reprueba 1 y 2 OK salvo B-586/B-667 (el 2.º arrastre deforma la spline). Falta: Fusion lado a lado, suave/curvatura, simetría de boceto, Fusion tangente B-650/651 (`fusion_tangente/pasos.md`). Nota original en la PC (D:\PROGRAMA-noche).
 - **2026-11-19 · Reprueba E11 (Windows).** B-664, B-665, B-666, B-660 y B-658 (ciclo curvatura) OK con mouse real; B-664 cerrado. B-667 vuelve como Parcial (el 2.º arrastre deforma la spline); nuevos B-671 (la cota no reemplaza el valor) y B-672 (umbral de ventana chica).
 - **2026-11-19 · E1 B-669.** Gemelo de B-650: tangente línea–elipse 2D (`solver._tangencia`, parámetro u∈[0,1]; arco de elipse como antes) y línea–curva 3D (`boceto3d`, s de la línea acotado; con arcos como antes). Test `tests/test_b669_tangente_elipse_3d_en_el_tramo.py` (6/8 fallan en main). B-673 nuevo (test_p158 rojo en main, mensaje largo).
