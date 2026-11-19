@@ -41,11 +41,13 @@ def test_parecida_a_fusion(caso):
 
 @pytest.mark.parametrize("caso", sorted(CASOS_HP))
 def test_igual_a_fusion(caso):
-    """Mismo parámetro por punto, mismos nudos y mismos polos que Fusion (a 1e-4 mm; da ~3e-8)."""
+    """Mismo parámetro por punto, mismos nudos y mismos polos que Fusion (a 1e-4 mm; da ~3e-8). La cerrada (caso 6)
+    Fusion la da «periódica» con 25 nudos: son los nuestros sin el primero ni los 5 últimos (mismos polos)."""
     c = CASOS_HP[caso]
     polos, nudos, grado = interpolar_spline(c["puntos"], 5, c["cerrada"])
-    assert grado == 5 and np.allclose(nudos, c["nudos"], atol=1e-12)
-    assert np.allclose(parametros_cuerda(c["puntos"], 5), c["parametros"], atol=1e-12)
+    assert grado == 5 and np.allclose(nudos[1:-5] if c["cerrada"] else nudos, c["nudos"], atol=1e-12)
+    vuelta = c["puntos"] + c["puntos"][:1] if c["cerrada"] else c["puntos"]
+    assert np.allclose(parametros_cuerda(vuelta, 5)[:len(c["puntos"])], c["parametros"], atol=1e-12)
     assert np.max(np.abs(np.array(polos) - c["polos"])) < 1e-4
 
 
