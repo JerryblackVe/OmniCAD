@@ -409,10 +409,9 @@ def test_b439_cota_de_circulo_y_arco_clic_en_el_borde_y_clic_para_ubicar(lz, arc
     _clic(lz, 60, 10)                                  # el borde, arriba
     assert lz.entrada.campos[0].text() == valor        # lo que mide: diámetro del círculo, radio del arco
     lz.entrada.campos[0].setText("")
-    QTest.keyClicks(lz.entrada.campos[0], "3")          # lo escrito antes de ubicar no se pierde
-    _clic(lz, 90, 25)                                  # clic para ubicar, lejos de la geometría
-    assert lz.entrada is not None and lz.entrada.isVisible() and lz.entrada.campos[0].text() == "3"
-    QTest.keyClicks(lz.entrada.campos[0], "0")
+    QTest.keyClicks(lz.entrada.campos[0], "30")         # lo escrito antes de ubicar no se pierde (tras ubicar, B-671:
+    _clic(lz, 90, 25)                                   # lo tecleado reemplaza el valor, que queda seleccionado)
+    assert lz.entrada is not None and lz.entrada.isVisible() and lz.entrada.campos[0].text() == "30"
     QTest.keyClick(lz.entrada.campos[0], Qt.Key_Return)
     cota, = lz.b.cotas.values()
     assert (cota.tipo, cota.entidades, cota.expresion) == (tipo, [c], "30")
