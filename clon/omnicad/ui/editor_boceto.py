@@ -236,7 +236,7 @@ class Lienzo(_LienzoBaseMixin,
     mensaje = Signal(str)
     herramienta_cambiada = Signal(str)
     texto_en_edicion = Signal()     # se abre el cuadro de un texto (nuevo o ya creado): la paleta muestra sus opciones
-    texto_valores = Signal(float, float, float, float)   # altura, interletraje, interlineado y kerning en el cursor
+    texto_valores = Signal(float, float, float, float, bool)   # altura, interletraje, interlineado, kerning en el cursor y si hay par
     info = Signal(str)          # medidas de lo elegido, como Fusion ("1 línea de boceto | Longitud: …")
     seleccion_cambiada = Signal()   # la ventana la refleja en el navegador
     aviso = Signal(str)         # aviso flotante (p. ej. una operación borró restricciones o cotas)

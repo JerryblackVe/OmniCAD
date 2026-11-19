@@ -792,9 +792,9 @@ class PanelCaracter(QFrame):
                                        "fuente (0 % = el de la fuente). Negativo las junta.")
         self.interletraje.valueChanged.connect(self._emitir_espaciado)
         self.altura.valueChanged.connect(self._emitir_espaciado)
-        self.par = self._spin("kerning_par", -1000.0, 1000.0, 0.05, " mm", "<b>Kerning de un par</b><br>Ajusta la "
-                              "distancia entre las dos letras que rodean al cursor (mm). Con el texto abierto, "
-                              "Alt+← / Alt+→ lo ajustan sin salir del teclado.")
+        self._AYUDA_PAR = ("<b>Kerning de un par</b><br>Ajusta la distancia entre las dos letras que rodean al cursor "
+                           "(mm). Con el texto abierto, Alt+← / Alt+→ lo ajustan sin salir del teclado.")
+        self.par = self._spin("kerning_par", -1000.0, 1000.0, 0.05, " mm", self._AYUDA_PAR)
         self.par.setEnabled(False)
         self.interlineado = self._spin("interlineado", 0.1, 20.0, 0.05, " ×", "<b>Interlineado (leading)</b><br>"
                                        "Distancia vertical entre líneas, como factor del salto de la fuente "
@@ -1043,14 +1043,16 @@ class PanelCaracter(QFrame):
         self.cambio.emit("cursiva", cursiva)
         self._emitir_espaciado()
 
-    def mostrar_valores(self, altura, interletraje, interlineado, par):
-        """Con un texto abierto: los valores de su barra y el kerning en el cursor (sin emitir cambios)."""
+    def mostrar_valores(self, altura, interletraje, interlineado, par, hay_par=True):
+        """Con un texto abierto: los valores de su barra y el kerning en el cursor (sin emitir cambios). Sin par
+        (cursor al inicio) el campo queda en gris, B-701 / regla 16."""
         for sp, valor in ((self.altura, altura), (self.interletraje, 100 * float(interletraje) / max(self._espaciado_cien(altura), 1e-9)),
                           (self.interlineado, interlineado), (self.par, par)):
             sp.blockSignals(True)
             sp.setValue(float(valor))
             sp.blockSignals(False)
-        self.par.setEnabled(True)
+        self.par.setEnabled(bool(hay_par))
+        self.par.setToolTip(self._AYUDA_PAR if hay_par else "No disponible: ponete entre dos letras.")
 
     def ligar_contenido(self, campo):
         """B-665: con el cuadro de texto abierto, «Contenido» muestra lo que se escribe en el visor y escribir acá
@@ -1111,6 +1113,7 @@ class PanelCaracter(QFrame):
             self.interletraje.setValue(100 * float(o.get("espaciado", 0.0)) / max(self._espaciado_cien(self.altura.value()), 1e-9))
             self.par.setValue(0.0)
             self.par.setEnabled(False)               # el kerning de un par se ajusta con un texto abierto
+            self.par.setToolTip(self._AYUDA_PAR)
             self.sin_division.setChecked(bool(o.get("sin_division")))
         finally:
             for w in widgets:
