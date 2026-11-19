@@ -22,7 +22,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | 0 | B-695 y B-696 (prioridad alta, Gerardo en vivo; E4 o E8, mismo panel Carácter/Texto) | B-695: aviso falso «el cuerpo 'op58.c5' no existe» al editar el texto de un boceto anterior. B-696: el panel Carácter dice «Juli J» y el dibujo muestra «Ceci» |
 | 0 | B-699 (E1, Opus alto) | La extrusión da un cuerpo inválido en los casos 138071 y 24822 de la galería (el perfil ya se encuentra; pasa igual sin Rust) |
-| 0 | PRUEBA-TEXTO-SIM (E7) | Probar como usuario Texto/Panel Carácter (parámetro, familia, pivote de 6) y Panel Simetría (eje); y revisar las filas «no» viejas de `preparado/opciones_asas_boceto.md` contra los scripts de `prueba_ui` |
+| 0 | PRUEBA-OPC-2 (E7) | Probar como usuario las 11 opciones que quedan sin prueba en `preparado/opciones_asas_boceto.md`: Insertar DXF, Vectorizar, Perfil giratorio (tolerancia, invertir, solo contorno), Desfase (cadena, topología), Kerning de un par, Boceto 3D |
+| 0 | B-698 (después de B-695/696, E4) | Texto: la ventana no tiene cómo agregar el marco; el pivote solo anda con marco |
 | 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
 | 2 | PRUEBA-PROY (hecha por E7: B-684, B-685, B-686 a OpenCode) | Probar como usuario los 5 tipos de PROYECTAR del boceto (Proyectar, Intersecar, Incluir geometría 3D, Perfil giratorio, Curva isoparamétrica): mouse simulado y valores raros contra `docs/fusion_docs` (E7, Sonnet medio; cada falla = fila nueva de boceto; antes, OpenCode prepara los tests que falten) |
 | 3 | PRUEBA-CMDS | Probar en la ventana los 61 comandos de la cinta del boceto sin prueba como usuario (lista en `docs/plan_boceto_perfecto.md` › Cobertura; script `scripts/cobertura_boceto.py`): E7 en Linux con `prueba_ui`, E11 con mouse real lo que E7 no pueda; cada falla, fila nueva de boceto |
