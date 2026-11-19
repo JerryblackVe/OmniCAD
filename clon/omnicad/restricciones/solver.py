@@ -1073,6 +1073,15 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cam
     for g in grupos:
         sis = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True)
         x, err, J, rango = _resolver_grupo(sis, arrastrado, menor_cambio=menor_cambio)
+        for _ in range(3):      # B-658: un residuo apenas sobre TOLERANCIA (Curvatura, diferencias finitas) se afina desde ahí
+            if x is None or not TOLERANCIA <= err < TOLERANCIA_ACEPTA_ARRASTRE:
+                break
+            sis.escribir(x)
+            otro = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True)
+            x2, err2, J2, rango2 = _resolver_grupo(otro, arrastrado, menor_cambio=menor_cambio)
+            if x2 is None or err2 >= err:
+                break
+            sis, x, err, J, rango = otro, x2, err2, J2, rango2
         if x is not None:
             sis.escribir(x)   # también si es inconsistente: queda la mejor aproximación (el editor puede deshacer)
             invertidas += [cid for cid, i in sis.idx_r.items() if x[i] < 0]
