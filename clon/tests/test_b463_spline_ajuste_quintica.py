@@ -1,15 +1,18 @@
-"""B-463: la spline de ajuste nueva es la quíntica natural centrípeta (grado 5), la más cercana a la de Fusion; las
-guardadas con grado 3 siguen siendo la cúbica vieja. Muestras: 5 splines medidas en Fusion (E11, 19/11)."""
+"""B-463: la spline de ajuste es la quíntica de Fusion (energía mínima, método de BauhausCM10.dll); las guardadas con
+grado 3 siguen siendo la cúbica vieja. Datos: splines medidas en Fusion (E11, 19/11); `_hp`: 17 cifras, con nudos y polos."""
 import json
+import math
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from omnicad.restricciones.boceto import Boceto
-from omnicad.restricciones.boceto_geometria import evaluar_primitiva, mas_cercano
+from omnicad.restricciones.boceto_geometria import (
+    _base_derivada, _tramo, evaluar_primitiva, interpolar_spline, mas_cercano, parametros_cuerda)
 
 CASOS = json.loads((Path(__file__).parent / "datos" / "b463_splines_fusion.json").read_text())
+CASOS_HP = json.loads((Path(__file__).parent / "datos" / "b463_splines_fusion_hp.json").read_text())
 
 
 def _curva(b, sid, n=4001):
@@ -32,8 +35,32 @@ def test_parecida_a_fusion(caso):
     sid = b.agregar_spline([tuple(p) for p in c["puntos"]], "ajuste", 3, c["cerrada"])
     prim, C = _curva(b, sid)
     assert prim[4] == 5
-    assert _desvio(C, c["muestras"]) <= (0.05 if c["cerrada"] else 0.5)
+    assert _desvio(C, c["muestras"]) <= 0.05   # al punto de muestra más cercano; lo exacto: test_igual_a_fusion
     assert _pasa_por(prim, c["puntos"])
+
+
+@pytest.mark.parametrize("caso", sorted(CASOS_HP))
+def test_igual_a_fusion(caso):
+    """Mismo parámetro por punto, mismos nudos y mismos polos que Fusion (a 1e-4 mm; da ~3e-8)."""
+    c = CASOS_HP[caso]
+    polos, nudos, grado = interpolar_spline(c["puntos"], 5, c["cerrada"])
+    assert grado == 5 and np.allclose(nudos, c["nudos"], atol=1e-12)
+    assert np.allclose(parametros_cuerda(c["puntos"], 5), c["parametros"], atol=1e-12)
+    assert np.max(np.abs(np.array(polos) - c["polos"])) < 1e-4
+
+
+def test_cerrada_c4_en_la_costura():
+    polos, nudos, p = interpolar_spline([(0, 0), (20, 0), (20, 20), (0, 20)], 5, True)
+    prim = ("spline", None, polos, nudos, p, None)
+    assert np.allclose(evaluar_primitiva(prim, 0)[0], (0, 0)) and np.allclose(evaluar_primitiva(prim, 1)[0], (0, 0))
+    for orden in range(1, 5):
+        assert np.allclose(_base_derivada_curva(polos, nudos, p, 0.0, orden), _base_derivada_curva(polos, nudos, p, 1.0, orden))
+
+
+def _base_derivada_curva(polos, nudos, p, t, orden):
+    n = len(polos) - 1
+    k = _tramo(nudos, p, n, t)
+    return np.array(_base_derivada(nudos, p, t, k, orden)) @ np.array(polos[k - p:k + 1])
 
 
 def test_spline_modificada_sigue_quintica():
@@ -61,3 +88,11 @@ def test_archivo_viejo_sigue_cubica():
     prim = b.primitivas(6)[0]
     assert prim[4] == 3 and b.a_dict()["curvas"][0]["grado"] == 3
     assert np.allclose(evaluar_primitiva(prim, 0.5)[0], (41.9727602573098, 20.111313949348446))   # la de antes de B-463
+
+
+def test_muchos_puntos_pasa_exacto():
+    """Con 41 puntos la energía (h^-5) tapaba las restricciones y la punta quedaba a 1,7e-4 mm (perfil sin cerrar)."""
+    puntos = [(x, 2 * math.sin(x * math.pi / 5)) for x in range(41)]
+    polos, nudos, p = interpolar_spline(puntos, 5)
+    prim = ("spline", None, polos, nudos, p, None)
+    assert np.allclose(polos[-1], puntos[-1], atol=1e-9) and _pasa_por(prim, puntos)

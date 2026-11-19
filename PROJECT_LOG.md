@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · B-463 ronda 3 (E1, Parcial).** Spline de ajuste = método de Fusion (BauhausCM10.dll): `boceto_geometria._quintica_fusion`, energía mínima, nudos uniformes, parámetro en cm; polos = Fusion a ~1e-10 mm (`test_igual_a_fusion`); KKT disperso 1–3 ms. Falta: cerrada vs Fusion.
 - **2026-11-19 · B-702 (E1).** Boceto 3D: coordenadas por encima de ±1 km (`MEDIDA_MAXIMA`) se rechazan en `boceto3d._xyz` (valida todos los puntos antes de crear ninguno) con «Máximo 1.000.000 mm…»; el panel pinta «Puntos» (o «Largo» con eje) en rojo. `test_b702_boceto3d_tope.py`.
 - **2026-11-19 · Traspaso E1 (B-463 integrado; sin ítem).** 1) B-690 y B-463 en main; B-463 Parcial: falta saber qué curva usa Fusion (tabla en `~/coordinador/casos/b463/hallazgos_e1.md`). 2) Próximo: el ítem de boceto que mande el coordinador (B-697 no: es de OpenCode). 3) B-704: hover que depende del orden de los tests. 4) La spline de ajuste nueva es de grado 5; las de grado 3 son la versión vieja.
 - **2026-11-19 · B-463 (E1, Parcial).** Spline de ajuste nueva = quíntica natural centrípeta, grado 5 (`boceto_geometria._quintica_natural`); las guardadas con grado 3 siguen cúbicas; vía Rust solo para grado 3; tangente con el extremo apoyado sobre la otra curva = G1 ahí (`solver._tangencia`). Peor 0,47 mm contra Fusion (antes 8,4). `test_b463_spline_ajuste_quintica.py`.

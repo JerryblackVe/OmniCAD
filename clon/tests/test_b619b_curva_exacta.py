@@ -11,7 +11,7 @@ from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from OCP.GeomAbs import GeomAbs_BSplineCurve
 from OCP.gp import gp_Pnt
 
-POCOS = 10       # el perfil del barril tiene 5 polos; 33 era el remuestreo de antes
+POCOS = 25       # el meridiano tiene 25 polos (quíntica de Fusion); 33 era el remuestreo de antes
 TOL = 1e-3       # mm: la copia exacta da ~5e-5; guardar los polos como puntos de ajuste da 1,35 mm
 
 
@@ -49,9 +49,9 @@ def _distancia(shape, punto):
 
 
 def _comprobar(s, sketch, cantidad):
-    """Las curvas incluidas conservan los 9 polos y siguen sobre el meridiano exacto."""
+    """Las curvas incluidas conservan los 25 polos y siguen sobre el meridiano exacto."""
     exactos = _meridianos(s)
-    assert len(exactos) == 2 and all(BRepAdaptor_Curve(a).BSpline().NbPoles() == 9 for a in exactos)   # B-463: quíntica
+    assert len(exactos) == 2 and all(BRepAdaptor_Curve(a).BSpline().NbPoles() == 25 for a in exactos)   # B-463: quíntica de Fusion, 5 + 5·4 polos
     spl = [e for e in _llamar(s, "get_sketch", sketch=sketch)["entities_3d"] if e["type"] == "spline"]
     assert len(spl) == cantidad
     assert max(len(e["points"]) for e in spl) <= POCOS              # antes: 33 puntos por curva

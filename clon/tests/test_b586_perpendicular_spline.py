@@ -126,9 +126,9 @@ def test_b667_dos_arrastres_seguidos_mueven_la_linea_y_no_la_spline(linea, desti
         for k in range(1, 21):
             b.puntos[pid].x, b.puntos[pid].y = x0 + (destino[0] - x0) * k / 20, y0 + (destino[1] - y0) * k / 20
             previo = resolver(b, arrastrado=pid, previo=previo)
-            assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=1e-3)
+            assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=5e-3)   # B-707: la quíntica de Fusion se corre 3,7 µm
         previo = resolver(b, arrastrado=pid)
         assert previo.ok and b.coords(pid) == pytest.approx(destino, abs=1e-6)
-        assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=1e-3)
+        assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=5e-3)   # B-707: la quíntica de Fusion se corre 3,7 µm
         distancia, coseno = _contacto(b, l, s)
         assert distancia < 0.02 and coseno < 1e-3         # la recta sigue pasando por la spline, a 90°

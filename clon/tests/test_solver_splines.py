@@ -174,7 +174,7 @@ def test_resolver_con_rust_cumple_lo_mismo_que_python(nombre, monkeypatch):
 
 
 def test_rs_s1_un_sistema_grande_va_con_trf_y_da_lo_mismo_que_lm(monkeypatch):
-    """RS-S1: desde UMBRAL_TRF incógnitas se resuelve con «trf» y el jacobiano disperso; da lo mismo que «lm» (a 1e-4 mm),
+    """RS-S1: desde UMBRAL_TRF incógnitas se resuelve con «trf» y el jacobiano disperso; da lo mismo que «lm» (a 1e-3 mm),
     los mismos grados de libertad y las mismas entidades determinadas (`_libres` con la SVD económica)."""
     import scipy.optimize as so
     base, v = contorno_splines(60)
@@ -190,7 +190,8 @@ def test_rs_s1_un_sistema_grande_va_con_trf_y_da_lo_mismo_que_lm(monkeypatch):
     assert set(metodos) == {"lm"}
     assert r_trf.ok and r_trf.residuo_max < S.TOLERANCIA
     assert (r_trf.gdl, r_trf.determinadas) == (r_lm.gdl, r_lm.determinadas)
-    assert max(np.hypot(*np.subtract(con_trf.coords(p), con_lm.coords(p))) for p in base.puntos) < 1e-4
+    # 298 grados libres: en las direcciones libres los dos métodos pueden quedar a ~5e-4 mm (B-463, quíntica de Fusion)
+    assert max(np.hypot(*np.subtract(con_trf.coords(p), con_lm.coords(p))) for p in base.puntos) < 1e-3
 
 
 def test_rs_s1_libres_con_la_svd_economica_da_lo_mismo_que_con_la_completa():

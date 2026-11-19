@@ -1,5 +1,6 @@
 """Boceto 2D: geometria."""
 import bisect
+import functools
 import math
 
 import numpy as np
@@ -117,10 +118,13 @@ def _base_derivada(nudos, p, t, k, d):
 
 def parametros_cuerda(Q, grado=3):
     """Parámetro 0-1 de cada punto de ajuste (largo de cuerda acumulado; la cerrada repite el primero al final).
-    Grado 5 (la spline de ajuste desde B-463): centrípeto, la raíz de cada cuerda."""
+    Grado 5 (la spline de ajuste de Fusion, B-463): centrípeto regularizado, sqrt(cuerda + 1,1·h) con la cuerda en cm
+    (unidad interna de Fusion) y h = 1/(5m) el paso de nudos (método leído en BauhausCM10.dll de Fusion 360)."""
     m = len(Q) - 1
-    alfa = 0.5 if grado == 5 else 1.0
-    cuerdas = [math.dist(Q[i], Q[i - 1]) ** alfa for i in range(1, m + 1)]
+    if grado == 5:
+        cuerdas = [math.sqrt(math.dist(Q[i], Q[i - 1]) / 10.0 + 1.1 / (5 * m)) for i in range(1, m + 1)]
+    else:
+        cuerdas = [math.dist(Q[i], Q[i - 1]) for i in range(1, m + 1)]
     total = sum(cuerdas)
     if total < 1e-12:
         cuerdas, total = [1.0] * m, float(m)
@@ -174,7 +178,7 @@ def interpolar_spline(puntos, grado=3, cerrada=False, derivadas=None):
     if m < 1:
         raise ErrorBoceto("Una spline necesita al menos dos puntos.")
     if grado == 5:
-        return _quintica_natural(Q, cerrar, derivadas)
+        return _quintica_fusion(Q, cerrar, derivadas)
     ub = parametros_cuerda(Q)
     if cerrar:
         p, n = 3, m + 2
@@ -203,29 +207,63 @@ def interpolar_spline(puntos, grado=3, cerrada=False, derivadas=None):
     return [(float(x), float(y)) for x, y in P], nudos, p
 
 
-def _quintica_natural(Q, cerrar, derivadas):
-    """B-463: quíntica natural (3.ª y 4.ª derivadas nulas en los extremos) con parámetro centrípeto, la más cercana a
-    la spline de ajuste de Fusion (0,2 a 0,5 mm; la cúbica por cuerda se iba hasta 8 mm). Cerrada: C4 en la costura.
-    Una manija en un extremo reemplaza condiciones naturales; adentro, suma un nudo por condición."""
+_GAUSS_X, _GAUSS_W = np.polynomial.legendre.leggauss(6)     # exacta para |C^(k)|² de una quíntica
+_PESOS_ENERGIA = (0.0, 1.0, 0.03906249762079824, 0.008)     # C, C', C'', C''' (los de Fusion por defecto)
+
+
+@functools.lru_cache(maxsize=64)
+def _energia_quintica(m):
+    """(nudos, 2H) de la quíntica de ajuste con m segmentos: solo dependen de m (caché: arrastrar un punto no la rehace).
+    H es la matriz de Σ w_k ∫ N_a^(k) N_b^(k), exacta con Gauss de 6 puntos por tramo."""
+    from scipy import sparse
+    p, tramos = 5, 5 * m
+    nudos = tuple([0.0] * p + [j / tramos for j in range(tramos)] + [1.0] * (p + 1))
+    n = len(nudos) - p - 1
+    H = np.zeros((n, n))
+    for s in range(tramos):
+        a0, a1 = nudos[p + s], nudos[p + s + 1]
+        for x, w in zip(_GAUSS_X, _GAUSS_W, strict=True):
+            u, jac = 0.5 * (a0 + a1 + (a1 - a0) * x), 0.5 * (a1 - a0) * w
+            for orden in (1, 2, 3):
+                b = np.asarray(_base_derivada(nudos, p, u, p + s, orden))
+                H[s:s + p + 1, s:s + p + 1] += _PESOS_ENERGIA[orden] * jac * np.outer(b, b)
+    return nudos, sparse.csr_matrix(2 * H)                  # 2H (gradiente de la energía), disperso: de banda
+
+
+def _quintica_fusion(Q, cerrar, derivadas):
+    """B-463: la spline de ajuste de Fusion 360 (Fit Point Spline), con el método leído en BauhausCM10.dll
+    (ingeniería inversa de Gerardo, ~/coordinador/casos/b463/INFORME_SPLINE_AJUSTE.md; código propio): B-spline
+    quíntica con 5 tramos uniformes por segmento que pasa EXACTO por los puntos y minimiza
+    Σ w_k ∫|C^(k)|² (w = 0; 1; 0,0390625; 0,008). Abierta: puntas libres. Cerrada: C1 a C4 en la costura.
+    `derivadas` {índice: (C', C'')} suma esas condiciones exactas (manijas). Coincide con Fusion a ~1e-8 mm."""
+    from scipy import sparse
+    from scipy.sparse.linalg import splu
     m, p = len(Q) - 1, 5
     ub = parametros_cuerda(Q, 5)
-    extra = [(i, orden, v) for i, par in sorted((derivadas or {}).items()) if 0 <= i <= m
-             for orden, v in enumerate(par, 1) if v is not None]
-    nudos = [0.0] * (p + 1) + sorted(ub[1:m] + [ub[i] for i, _o, _v in extra if 0 < i < m]) + [1.0] * (p + 1)
-    n = len(nudos) - p - 2
-    filas = [(u, 0, q) for u, q in zip(ub, Q, strict=True)] + [(ub[i], o, v) for i, o, v in extra]
-    if not cerrar:
-        for i in (0, m):
-            filas += [(ub[i], o, (0.0, 0.0)) for o in (3, 4)[:2 - sum(j == i for j, _o, _v in extra)]]
-    A, B = np.zeros((n + 1, n + 1)), np.zeros((n + 1, 2))
+    nudos, H2 = _energia_quintica(m)
+    nudos = list(nudos)
+    n = len(nudos) - p - 1                                  # cantidad de polos
+    filas = [(u, 0, q) for u, q in zip(ub, Q, strict=True)]
+    filas += [(ub[i], orden, v) for i, par in sorted((derivadas or {}).items()) if 0 <= i <= m
+              for orden, v in enumerate(par, 1) if v is not None]
+    A, B = np.zeros((len(filas), n)), np.zeros((len(filas), 2))
     for fila, (u, orden, v) in enumerate(filas):
-        k = _tramo(nudos, p, n, u)
+        k = _tramo(nudos, p, n - 1, u)
         A[fila, k - p:k + 1], B[fila] = _base_derivada(nudos, p, u, k, orden), v
     if cerrar:                                              # misma derivada 1.ª a 4.ª a los dos lados de la costura
-        for fila, orden in enumerate(range(1, 5), len(filas)):
-            A[fila, :p + 1] = _base_derivada(nudos, p, 0.0, p, orden)
-            A[fila, n - p:] -= _base_derivada(nudos, p, 1.0, _tramo(nudos, p, n, 1.0), orden)
-    P = _resolver_lineal(A, B)
+        C = np.zeros((4, n))
+        for fila, orden in enumerate(range(1, 5)):
+            C[fila, :p + 1] = _base_derivada(nudos, p, 0.0, p, orden)
+            C[fila, n - p - 1:] -= _base_derivada(nudos, p, 1.0, n - 1, orden)
+        A, B = np.vstack([A, C]), np.vstack([B, np.zeros((4, 2))])
+    escala = abs(H2).max() / np.abs(A).max(axis=1, keepdims=True)    # filas a la escala de H (h^-5): sin esto se pierde
+    A, B = A * escala, B * escala                           # precisión en la punta con muchos puntos (1e-4 mm con 41)
+    K = sparse.bmat([[H2, sparse.csr_matrix(A.T)], [sparse.csr_matrix(A), None]], format="csc")   # Lagrange
+    D = np.vstack([np.zeros((n, 2)), B])
+    try:                                                    # disperso: ~1 ms con 100 puntos (el denso, cientos)
+        P = splu(K).solve(D)[:n]
+    except RuntimeError:                                    # singular (puntos repetidos): mínimos cuadrados
+        P = _resolver_lineal(K.toarray(), D)[:n]
     return [(float(x), float(y)) for x, y in P], nudos, p
 
 
