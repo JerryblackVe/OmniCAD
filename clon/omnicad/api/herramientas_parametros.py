@@ -144,11 +144,12 @@ def create_parameter(sesion, name: str, expression: str | int | float, comment: 
 
 @herramienta("set_parameter", "parametros", "Cambia la expresión, el comentario, la unidad, el favorito o el nombre de un "
              "parámetro existente y recalcula el modelo. Renombrar actualiza los parámetros, pasos, cotas y textos que lo "
-             "citan. Si algún paso queda con error, el cambio se descarta. Con un parámetro dN también cambia la cota o el "
+             "citan. Si algún paso queda con error, el cambio se descarta (salvo con keep_errors). Con un parámetro dN también cambia la cota o el "
              "paso del que sale. El valor de una cota de referencia (driven) es medido y no se puede editar; se puede "
              "citar en otras expresiones.", modifica=True)
 def set_parameter(sesion, name: str, expression: str | int | float | None = None, comment: str | None = None,
-                  new_name: str | None = None, unit: str | None = None, favorite: bool | None = None):
+                  new_name: str | None = None, unit: str | None = None, favorite: bool | None = None,
+                  keep_errors: bool = False):
     """
     name: nombre exacto del parámetro.
     expression: valor nuevo: número o expresión, p. ej. "80 mm" o "ancho * 2"; para parámetros text, texto literal ("" lo vacía); null = no cambia.
@@ -156,7 +157,9 @@ def set_parameter(sesion, name: str, expression: str | int | float | None = None
     new_name: nombre nuevo; lo que citaba el nombre viejo pasa a citar el nuevo; vacío = no cambia.
     unit: unidad nueva, p. ej. "in", "mm^2", "text", "" para sin unidad; solo en parámetros de usuario; null = no cambia.
     favorite: true o false pone o quita la estrella; null = no cambia.
+    keep_errors: true deja en rojo (con aviso) los pasos que fallen con el valor nuevo en vez de descartar el cambio; sirve para teclear un texto de boceto letra a letra.
     """
+    sesion.tolerar_errores = keep_errors
     anterior = _parametro(sesion.doc, name)["expression"]
     if expression is None and comment is None and new_name is None and unit is None and favorite is None:
         raise error("INVALID_ARGUMENTS", "No pediste ningún cambio: pasá expression, comment, new_name, unit o favorite.")

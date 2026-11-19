@@ -776,7 +776,7 @@ Crea un parámetro de usuario. Con kind=auto la magnitud sale de la expresión: 
 
 ### `set_parameter`
 
-Cambia la expresión, el comentario, la unidad, el favorito o el nombre de un parámetro existente y recalcula el modelo. Renombrar actualiza los parámetros, pasos, cotas y textos que lo citan. Si algún paso queda con error, el cambio se descarta. Con un parámetro dN también cambia la cota o el paso del que sale. El valor de una cota de referencia (driven) es medido y no se puede editar; se puede citar en otras expresiones.
+Cambia la expresión, el comentario, la unidad, el favorito o el nombre de un parámetro existente y recalcula el modelo. Renombrar actualiza los parámetros, pasos, cotas y textos que lo citan. Si algún paso queda con error, el cambio se descarta (salvo con keep_errors). Con un parámetro dN también cambia la cota o el paso del que sale. El valor de una cota de referencia (driven) es medido y no se puede editar; se puede citar en otras expresiones.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
@@ -786,6 +786,7 @@ Cambia la expresión, el comentario, la unidad, el favorito o el nombre de un pa
   - `new_name` (texto; opcional, por defecto `null`): nombre nuevo; lo que citaba el nombre viejo pasa a citar el nuevo; vacío = no cambia.
   - `unit` (texto; opcional, por defecto `null`): unidad nueva, p. ej. "in", "mm^2", "text", "" para sin unidad; solo en parámetros de usuario; null = no cambia.
   - `favorite` (true/false; opcional, por defecto `null`): true o false pone o quita la estrella; null = no cambia.
+  - `keep_errors` (true/false; opcional, por defecto `false`): true deja en rojo (con aviso) los pasos que fallen con el valor nuevo en vez de descartar el cambio; sirve para teclear un texto de boceto letra a letra.
 - CLI: `omnicad call set_parameter --doc pieza.omnicad name=…`
 
 ### `delete_parameter`
