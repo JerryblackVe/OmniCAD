@@ -18,7 +18,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E2, E5, E6, E7, E9, E10 | — | En pausa por el amarillo (E6: B-659 y velocidad del solver cuando haya lugar) |
 | E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620 |
 
-**Foco del 19/11 (Gerardo: «que los agentes solo trabajen en boseto»): solo boceto en Ahora y Sigue; SOL-8 y SUP-13 vuelven mañana.** Plan: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md).
+**Foco del 19/11 (Gerardo: «que los agentes solo trabajen en boseto»): solo boceto en Ahora y Sigue; sin fecha de corte hasta cerrar el «Listo cuando» de `plan_boceto_perfecto.md`.** Plan: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md).
 
 ## Sigue (en orden)
 

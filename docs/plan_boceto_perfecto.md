@@ -23,8 +23,12 @@ Lo que no es boceto se frena al cerrar su ítem actual (E4 con SUP-28, E7 con AG
 ## Ciclo
 E11 o E7 encuentran → el coordinador da ID → E1, E3 o E8 arreglan con su test → E11 vuelve a probar.
 
-## Listo cuando
-La batería entera de E11 pasa sin fallas y no queda ningún bug de boceto abierto en `bugs.md`.
+## Listo cuando (Gerardo, 19/11: «boceto tiene que quedar 100 % operativo y sin errores; no avanzamos si eso no está listo»)
+Mientras no se cumplan los 4 puntos, Ahora, Sigue y la cola de OpenCode son solo de boceto, sin fecha de corte.
+1. La tabla de cobertura (abajo) con cada comando y cada opción probados: test automático **y** prueba como usuario.
+2. Cero filas abiertas de boceto en `docs/seguimiento/`.
+3. La caza `tema` boceto (`scripts/caza/cazar.py tema`) y la `prueba_ui` de boceto en verde dos noches seguidas.
+4. E11 con mouse real en Windows: la batería entera OK.
 
 ## Cobertura de comandos del boceto (Gerardo, 19/11: «trabajar en boceto» = TODO el boceto)
 El plan no se arma solo con los bugs conocidos: lo que nunca se probó no tiene fila y queda afuera (pasó con 4 de los 5 tipos de
