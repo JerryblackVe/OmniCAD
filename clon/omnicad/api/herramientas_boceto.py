@@ -1220,7 +1220,7 @@ def draw_rectangle(sesion, x1: float | None = None, y1: float | None = None, x2:
         if width is None or height is None:
             raise error("INVALID_ARGUMENTS", "Indicá las dos esquinas (x1, y1, x2, y2) o un tamaño (width y height) "
                         "con center_x/center_y o con origin_x/origin_y.")
-        if not (width > 0 and height > 0):
+        if abs(width) < 1e-9 or abs(height) < 1e-9:
             raise error("INVALID_GEOMETRY", f"width y height tienen que ser mayores que cero (llegaron {width:g} y "
                         f"{height:g}).")
         if center_x is not None or center_y is not None:
@@ -1869,7 +1869,7 @@ def _construir_entidad(b, i, e, alias, sesion):
         else:
             w = _numero(_campo(e, i, "width"), i, tipo, "'width'")
             h = _numero(_campo(e, i, "height"), i, tipo, "'height'")
-            if not (w > 0 and h > 0):
+            if abs(w) < 1e-9 or abs(h) < 1e-9:
                 raise _spec_error(i, tipo, "'width' y 'height' tienen que ser mayores que cero.")
             if "center" in e:
                 cx, cy = p("center")
