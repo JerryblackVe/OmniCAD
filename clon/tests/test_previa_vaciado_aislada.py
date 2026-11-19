@@ -1,7 +1,5 @@
 """Previa de Vaciado en un proceso aparte (P-51): la malla es solo visual; lo aceptado sale del kernel en el padre."""
 import time
-from pathlib import Path
-import runpy
 from types import SimpleNamespace
 
 import numpy as np
@@ -11,6 +9,7 @@ from PySide6.QtCore import QSettings, QTimer, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
+from omnicad import api
 from omnicad.nucleo import aislado, geometria as geo
 from omnicad.nucleo.render_cpu import es_malla
 from omnicad.timeline.calculo_aislado import leer_previa_visual, previa_visual
@@ -31,9 +30,20 @@ def documento():
 
 @pytest.fixture(scope="module")
 def placa():
-    banco = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts/medir_previa_comandos.py"))
-    receta, _ = banco["_modelo"]("placa200")
-    return receta
+    """Placa de 200×200×20 con 40 agujeros: antes era `placa200` (400×400, 200 agujeros) y el vaciado exacto, que corre
+    tres veces por espesor, tardaba ~5 s cada vez. Nada de lo que se mide depende de cuántos agujeros tenga."""
+    sesion = api.Sesion()
+
+    def llamar(nombre, **datos):
+        respuesta = api.llamar(sesion, nombre, datos)
+        assert respuesta["ok"], (nombre, respuesta)
+
+    llamar("create_sketch", name="R", plane="XY")
+    llamar("draw_rectangle", sketch="R", x1=0, y1=0, x2=200, y2=200)
+    for i in range(40):
+        llamar("draw_circle", sketch="R", center_x=10 + i % 10 * 18, center_y=10 + i // 10 * 18, radius=3)
+    llamar("extrude", sketch="R", profile="largest", distance=20)
+    return sesion.doc.a_dict()
 
 
 @pytest.mark.parametrize("espesor", np.linspace(0.1, 1.0, 10))
