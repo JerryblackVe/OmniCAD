@@ -483,12 +483,15 @@ def test_esc_cancela_sin_tocar_nada_y_el_boton_cancelar_tambien(lienzo):
     antes = json.dumps(lz.b.a_dict(), sort_keys=True)
     _teclear(lz, "-20")
     QTest.keyClick(lz.entrada.campos[0], Qt.Key_Escape)
-    assert lz.entrada is None and json.dumps(lz.b.a_dict(), sort_keys=True) == antes and lz.herramienta == "desfase"
+    assert lz.entrada is None and json.dumps(lz.b.a_dict(), sort_keys=True) == antes
+    assert lz.herramienta == "seleccionar"                            # B-654: un solo Esc sale del comando
+    lz.set_herramienta("desfase")
     _clic(lz, lz.a_px(R, 0))
     botones = lz.entrada.findChildren(QToolButton)
     assert [b.text() for b in botones] == ["⇄", "✓", "✕"] and "Esc" in botones[2].toolTip() and "Enter" in botones[1].toolTip()
     botones[2].click()
-    assert lz.entrada is None and json.dumps(lz.b.a_dict(), sort_keys=True) == antes
+    assert lz.entrada is None and json.dumps(lz.b.a_dict(), sort_keys=True) == antes and lz.herramienta == "seleccionar"
+    lz.set_herramienta("desfase")
     _clic(lz, lz.a_px(R, 0))
     lz.entrada.findChildren(QToolButton)[1].click()                   # ✓ acepta
     assert len(_radios(lz.b)) == 2

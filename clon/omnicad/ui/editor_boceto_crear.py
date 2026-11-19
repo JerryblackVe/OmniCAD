@@ -124,6 +124,9 @@ class LienzoCrearMixin:
             self.cambio.emit()
             self.update()
             return
+        if self.herramienta in ("desfase", "texto") or self.herramienta in RESTRICCIONES_HERRAMIENTA:
+            self.set_herramienta("seleccionar")    # B-654/B-655: como Fusion, un solo Esc sale del comando
+            return
         if self.herramienta == "simetria":         # el panel SIMETRÍA se cierra entero, sin tocar el boceto
             self.cancelar_simetria()
             return
