@@ -964,6 +964,13 @@ def _caja_edicion():
     return s
 
 
+@pytest.fixture(scope="module")
+def caja_contorno_editado():
+    s = _caja_edicion()
+    _llamar(s, "edit_face", face=">Z", moves=[{"u": i, "v": 3, "offset": [0, 0, 5]} for i in range(4)])
+    return s
+
+
 def test_nucleo_editar_cara_da_el_volumen_de_la_cuenta():
     from omnicad.nucleo import editar_cara as ec
     _cid, forma, tapa = _tapa(_caja_edicion())
@@ -1175,7 +1182,8 @@ def test_cap13_en_curvas_y_lo_que_queda_fijo():
     assert geo.es_valida(r) and geo.caja_envolvente(r)[1][2] > 31 and geo.area(r) > geo.area(forma)
 
 
-def test_cap13_cara_con_un_agujero_ciego_y_cara_ya_editada():
+@pytest.mark.lento
+def test_cap13_cara_con_un_agujero_ciego_y_cara_ya_editada(caja_contorno_editado):
     from omnicad.nucleo import editar_cara as ec
     s = Sesion()
     _llamar(s, "create_box", length=40, width=40, height=10)
@@ -1185,9 +1193,7 @@ def test_cap13_cara_con_un_agujero_ciego_y_cara_ya_editada():
     r = ec.editar_cara(forma, tapa, 1, 1, {(i, 3): (0, 0, 5) for i in range(4)})
     assert geo.es_valida(r) and geo.volumen_exacto(r) == pytest.approx(17555.9, abs=0.5)     # lo de la caja, menos lo que sube el agujero
     assert len(geo.solidos(r)) == 1
-    s = _caja_edicion()
-    _llamar(s, "edit_face", face=">Z", moves=[{"u": i, "v": 3, "offset": [0, 0, 5]} for i in range(4)])
-    forma = next(iter(s.doc.estado_final.cuerpos.values())).forma
+    forma = next(iter(caja_contorno_editado.doc.estado_final.cuerpos.values())).forma
     cara = max(geo.caras(forma), key=lambda c: geo.caja_envolvente(c)[1][2] + geo.area(c) * 1e-3)
     r = ec.editar_cara(forma, cara, 1, 1, {(0, 0): (0, 0, 3)})
     assert geo.es_valida(r) and geo.volumen_exacto(r) == pytest.approx(18000 + 1600 / 16 * 3, rel=1e-4)
@@ -1310,11 +1316,10 @@ def test_cap13_espaciado_de_contorno_suma_una_fila_junto_al_borde():
         ec.grilla_cara(tapa, 1, 1, espaciado=float("inf"))
 
 
-def test_cap13_api_contorno_extruir_espaciado_y_receta_vieja(tmp_path):
+def test_cap13_api_contorno_extruir_espaciado_y_receta_vieja(tmp_path, caja_contorno_editado):
     s = _caja_edicion()
     assert _llamar(s, "get_face_grid", face=">Z", contour_spacing=4)["size"] == [6, 6]
-    _llamar(s, "edit_face", face=">Z", moves=[{"u": i, "v": 3, "offset": [0, 0, 5]} for i in range(4)])
-    assert _volumen(s) == pytest.approx(18000, rel=1e-5)
+    assert _volumen(caja_contorno_editado) == pytest.approx(18000, rel=1e-5)
     s = _caja_edicion()
     _llamar(s, "edit_face", face=">Z", length_factor=2, width_factor=2, moves=[{"u": 2, "v": 2, "offset": [0, 0, 8]}], extrude=True)
     op = s.doc.operaciones[-1]
