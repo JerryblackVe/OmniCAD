@@ -55,6 +55,9 @@ def _armar_via_run(sesion, tipo):
     _base(sesion)
     d = ok(api.llamar(sesion, "describe_operation", {"type": tipo}))
     params = _params_heuristic(tipo, d)
+    if tipo in ("bobina", "sup_bobina"):
+        # Una vuelta completa conserva el paso de 6 mm sin repetir la hélice.
+        params.update(revoluciones="1", altura="6 mm")
     r = api.llamar(sesion, "run_operation", {"type": tipo, "params": params})
     assert r["ok"], r
 
