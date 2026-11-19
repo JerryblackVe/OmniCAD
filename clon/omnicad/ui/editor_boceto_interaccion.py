@@ -1002,6 +1002,7 @@ class LienzoInteraccionMixin:
         if e.type() == e.Type.ShortcutOverride and (
                 self._admite_entrada(e) or e.key() in (Qt.Key_Delete, Qt.Key_Backspace, Qt.Key_Escape,
                                                        Qt.Key_Return, Qt.Key_Enter)
+                or e.matches(QKeySequence.SelectAll)
                 # Espacio (alternar ayudas) y Flecha arriba (bloquear) son del boceto mientras hay una ayuda activa:
                 # Espacio es también el atajo de «Boceto sobre la cara» de la ventana
                 or (e.key() in (Qt.Key_Space, Qt.Key_Up) and (self.inf_lista or self._inf_bloqueo is not None))):
@@ -1033,6 +1034,15 @@ class LienzoInteraccionMixin:
             self.copiar_seleccion()
         elif e.matches(QKeySequence.Paste) and PORTAPAPELES:
             self.pegar()
+        elif e.matches(QKeySequence.SelectAll):
+            en_curvas = {p for c in self.b.curvas.values() for p in c.puntos()}
+            ocultos = self._ocultos()[1]
+            self.seleccion = [c.id for c in self.b.curvas.values() if self._visible(c)]
+            self.seleccion += [p.id for p in self.b.puntos.values()
+                               if p.id > 0 and p.id not in en_curvas and p.id not in ocultos]
+            self.cambio.emit()
+            self._notificar_seleccion()
+            self.update()
         elif k == Qt.Key_Space and self.inf_lista:
             self._inf_alt += 1                       # alterna entre las ayudas ambiguas bajo el cursor
             self._refrescar_cursor()
