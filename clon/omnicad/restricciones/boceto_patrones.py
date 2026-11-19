@@ -29,8 +29,15 @@ class _Patrones:
         self.asegurar_referencias([eje])
         if self.tipo_de(eje) != "linea":
             raise ErrorBoceto("La línea de simetría tiene que ser una línea.")
-        ids = [i for i in ids if i != eje and not isinstance(self.curvas.get(i), Texto)]
-        if not ids:
+        from . import objetos
+        obj = [i for i in ids if i in self.objetos]
+        if set(obj) - set(objetos.raices(self)):
+            raise ErrorBoceto("Simetría: elegí el objeto vectorial entero, no una parte.")
+        de_objetos = set(objetos.curvas(self, obj))     # B-660: el objeto se refleja entero, no sus curvas ni puntos
+        de_objetos |= set(self.puntos_de(de_objetos))
+        ids = [i for i in ids if i != eje and i not in self.objetos and i not in de_objetos
+               and not isinstance(self.curvas.get(i), Texto)]
+        if not ids and not obj:
             raise ErrorBoceto("Seleccioná la geometría a reflejar.")
         a, b = self._extremos_linea(eje)
         if math.dist(a, b) < MEDIDA_MINIMA:
@@ -62,7 +69,7 @@ class _Patrones:
                         and (isinstance(c, Elipse) or math.dist(reflejo(P(c.inicio)), P(c.fin)) < MEDIDA_MINIMA))
             return False         # shortcut: una spline o una cónica que ya es simétrica se copia encima; si molesta, comparar la curva con su reflejo
         ids = [i for i in ids if not encimada(i)]
-        if not ids:
+        if not ids and not obj:
             raise ErrorBoceto("Ya está sobre el eje: nada que reflejar.")
         mapa = {}
         for p in self.puntos_de(ids):
@@ -86,6 +93,11 @@ class _Patrones:
             nuevos.append(c.id)
             if isinstance(c, (Circulo, Elipse, ArcoElipse)):
                 self.agregar_restriccion("igual", [i, c.id])
+        if obj:
+            # shortcut: la copia no sigue al original si este se mueve después (igual que en Patrón, B-599)
+            obj = objetos.duplicar(self, obj, 0, 0)
+            objetos.transformar(self, obj, _matriz_de(reflejo))
+            nuevos += objetos.curvas(self, obj)
         return nuevos
 
     def _patron(self, ids, trans, tipo, params, suprimidos=(), pid=None):
