@@ -606,14 +606,43 @@ class SupEmpalme(Comando):
                              "chaflan": ("Chaflán de superficie", "chaflan_3d")})
 
     def campos(self, ctx):
+        def empalme(v):
+            return v.get("tipo") != "chaflan"
+
+        def chaflan(v):
+            return v.get("tipo") == "chaflan"
+
+        def etiqueta(v):
+            return "Distancia" if chaflan(v) else "Longitud de cuerda" if v.get("tipo_radio") == "cuerda" else "Radio"
         return [Seleccion("aristas", "Aristas", {"arista"}, maximo=None),
                 Opciones("tipo", "Tipo", {"empalme": "Empalme", "chaflan": "Chaflán"}),
-                Expresion("medida", "Radio / distancia", "1 mm",
-                          etiqueta_si=lambda v: "Distancia" if v.get("tipo") == "chaflan" else "Radio")]
+                Opciones("tipo_radio", "Tipo de radio", {"constante": "Constante", "cuerda": "Longitud de cuerda",
+                                                         "variable": "Variable"}, visible_si=empalme),
+                Opciones("tipo_chaflan", "Tipo de chaflán", {"distancia_igual": "Distancia igual",
+                                                             "dos_distancias": "Dos distancias",
+                                                             "distancia_angulo": "Distancia y ángulo"}, visible_si=chaflan),
+                Expresion("medida", "Radio / distancia", "1 mm", etiqueta_si=etiqueta),
+                Expresion("radio_fin", "Radio final", "2 mm",
+                          visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "variable"),
+                Expresion("distancia2", "Distancia 2", "1 mm",
+                          visible_si=lambda v: chaflan(v) and v.get("tipo_chaflan") == "dos_distancias"),
+                Expresion("angulo", "Ángulo", "45 deg", ANGULO,
+                          visible_si=lambda v: chaflan(v) and v.get("tipo_chaflan") == "distancia_angulo"),
+                Casilla("voltear", "Voltear", visible_si=lambda v: chaflan(v) and v.get("tipo_chaflan") != "distancia_igual"),
+                Casilla("cadena_tangente", "Cadena tangente", True),
+                Opciones("esquina", "Esquina", {"bola": "Bola rodante", "setback": "Setback"},
+                         visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante"),
+                Expresion("setback", "Distancia de setback", "2 mm",
+                          visible_si=lambda v: empalme(v) and v.get("tipo_radio") == "constante"
+                          and v.get("esquina") == "setback"),
+                Opciones("esquina_chaflan", "Esquina", {"chaflan": "Chaflán", "inglete": "Inglete", "mezcla": "Mezcla"},
+                         visible_si=chaflan)]
 
     def construir(self, v, ctx):
         exigir(v, "aristas", "Seleccioná las aristas.")
-        return self.crear_op(OpSupEmpalme, v, ctx, aristas=refs(v, "aristas"), tipo=v["tipo"], medida=v["medida"])
+        claves = ("tipo", "medida", "cadena_tangente", "tipo_radio", "radio_fin", "esquina", "setback", "tipo_chaflan",
+                  "distancia2", "angulo", "voltear", "esquina_chaflan")
+        return self.crear_op(OpSupEmpalme, v, ctx, aristas=refs(v, "aristas"), **{k: v[k] for k in claves})
 
     def desde_op(self, op, ctx):
         return dict(op.p, aristas=hits(op.p["aristas"], ctx.estado))

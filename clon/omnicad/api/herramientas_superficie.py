@@ -297,19 +297,50 @@ def offset_surface(sesion, faces: Seleccion, distance: Expr = "2 mm",
                   cadena=chain)
 
 
-@herramienta("fillet_surface", "solido", "Redondea o bisela aristas entre superficies.", modifica=True)
+_ESQUINAS_SUP = {"rolling_ball": ("empalme", "bola"), "setback": ("empalme", "setback"),
+                 "chamfer": ("chaflan", "chaflan"), "miter": ("chaflan", "inglete"), "blend": ("chaflan", "mezcla")}
+
+
+@herramienta("fillet_surface", "solido",
+             "Redondea o bisela aristas entre superficies, con las opciones del Empalme y el Chaflán del sólido.",
+             modifica=True)
 def fillet_surface(sesion, edges: Seleccion, size: Expr = "1 mm",
-                   fillet_type: Literal["fillet", "chamfer"] = "fillet", body: str | None = None):
+                   fillet_type: Literal["fillet", "chamfer"] = "fillet", body: str | None = None,
+                   radius_type: Literal["constant", "chord", "variable"] = "constant", end_radius: Expr = "2 mm",
+                   chamfer_type: Literal["equal", "two_distances", "distance_angle"] = "equal",
+                   distance2: Expr = "1 mm", angle: Expr = "45 deg", flip: bool = False, tangent_chain: bool = True,
+                   corner_type: Literal["rolling_ball", "setback", "chamfer", "miter", "blend"] | None = None,
+                   setback: Expr = "2 mm"):
     """
     edges: aristas por id o selector; admite listas y {"body": "Cuerpo1", "edges": "|Z"}.
-    size: radio del empalme o distancia del chaflán en mm o expresión.
+    size: radio del empalme (con radius_type=chord, el largo de cuerda; con variable, el radio inicial) o distancia del chaflán (la primera), en mm o expresión.
     fillet_type: fillet (empalme) o chamfer (chaflán).
     body: cuerpo sobre el que evaluar selectores.
+    radius_type: empalme: constant (constante), chord (longitud de cuerda) o variable (de size a end_radius).
+    end_radius: empalme variable: radio al final de cada arista.
+    chamfer_type: chaflán: equal (distancia igual), two_distances (size y distance2) o distance_angle (size y angle).
+    distance2: chaflán two_distances: distancia sobre la otra cara.
+    angle: chaflán distance_angle: ángulo (grados).
+    flip: chaflán: pasa la primera distancia a la otra cara.
+    tangent_chain: true suma las aristas tangentes encadenadas (como Fusion, por defecto).
+    corner_type: esquina; empalme: rolling_ball (por defecto) o setback (solo radio constante); chaflán: chamfer (por defecto), miter (inglete) o blend (mezcla).
+    setback: empalme con corner_type=setback: distancia de setback en mm.
     """
     _numero_positivo(size, "size")
+    tipo = "empalme" if fillet_type == "fillet" else "chaflan"
+    params = {"tipo": tipo, "medida": texto_expr(size), "cadena_tangente": bool(tangent_chain),
+              "tipo_radio": {"constant": "constante", "chord": "cuerda", "variable": "variable"}[radius_type],
+              "radio_fin": texto_expr(end_radius), "setback": texto_expr(setback), "distancia2": texto_expr(distance2),
+              "angulo": texto_expr(angle), "voltear": bool(flip),
+              "tipo_chaflan": {"equal": "distancia_igual", "two_distances": "dos_distancias",
+                               "distance_angle": "distancia_angulo"}[chamfer_type]}
+    if corner_type is not None:
+        para, esquina = _ESQUINAS_SUP[corner_type]
+        if para != tipo:
+            raise error("INVALID_ARGUMENTS", f"corner_type={corner_type} no va con fillet_type={fillet_type}.")
+        params["esquina" if tipo == "empalme" else "esquina_chaflan"] = esquina
     clase = ops.OpSupEmpalme
-    return _crear(sesion, clase, aristas=_seleccion(sesion, clase, "aristas", edges, body),
-                  medida=texto_expr(size), tipo="empalme" if fillet_type == "fillet" else "chaflan")
+    return _crear(sesion, clase, aristas=_seleccion(sesion, clase, "aristas", edges, body), **params)
 
 
 @herramienta("create_patch", "solido",

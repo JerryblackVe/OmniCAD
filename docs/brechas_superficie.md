@@ -42,7 +42,7 @@ normal. Los nombres de la API no cambian.
 
 ## SUP-28 · Empalme y Chaflán de superficie
 
-Hoy `sup_empalme` tiene Aristas, Tipo y Radio, y `fillet_surface` solo acepta tamaño y tipo.
+`sup_empalme` y `fillet_surface` usan el Empalme y el Chaflán del sólido (`solidos_modificar.empalme` y `chaflan`) pasados los chequeos de superficie; el estado está en la fila SUP-28 de `docs/seguimiento/faltantes.md`.
 
 | Comando | Fila | Control |
 |---|---|---|
