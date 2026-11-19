@@ -1341,13 +1341,17 @@ def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
             intentos = [g]
             if len(g["p"]) > UMBRAL_VENTANA and not sin_ventana:
                 intentos.insert(0, _ventana(boceto, g, arrastrado, RADIO_VENTANA))
+            quietos = _quietos(boceto, g, arrastrado)
             for sub in intentos:
                 antes = _foto(boceto, sub)
                 usada_parte_entera = sub is g and len(intentos) > 1
-                sis = _Sistema(boceto, valores, sub, fusionar=True, quieto=arrastrado, derivar=True)
-                x, err, _J, _rango = _resolver_grupo(sis, arrastrado, con_rango=False)
-                if x is not None:
-                    sis.escribir(x)
+                # B-707: como Fusion (sin pesos por tipo), la spline queda fija si así se cumple todo y el punto llega al
+                # cursor; si no (B-690: sin normal desde el punto; un punto pegado a la spline), se mueve como siempre
+                err = _resolver_sub(boceto, valores, _congelar(sub, quietos), arrastrado) if quietos else math.inf
+                if (err >= TOLERANCIA_ACEPTA_ARRASTRE
+                        or math.dist(boceto.coords(arrastrado), objetivo) >= 10 * TOLERANCIA_ACEPTA_ARRASTRE):   # LM deja ~6 µm
+                    _volver(boceto, antes)
+                    err = _resolver_sub(boceto, valores, sub, arrastrado)
                 if sub is g or (err < TOLERANCIA_ACEPTA_ARRASTRE
                                 and (math.dist(boceto.coords(arrastrado), objetivo) < TOLERANCIA_ACEPTA_ARRASTRE
                                      or not _la_parte_entera_lo_acerca(boceto, valores, g, arrastrado, objetivo))):
@@ -1361,6 +1365,32 @@ def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
         r = ResultadoSolver("ok", previo.gdl, err, determinadas=previo.determinadas)
     r.sin_ventana = sin_ventana or (usada_parte_entera and err < TOLERANCIA_ACEPTA_ARRASTRE)   # solo si la parte entera cumplió
     return r
+
+
+def _resolver_sub(boceto, valores, sub, arrastrado):
+    """Resuelve un evento de arrastre sobre `sub` (parte o ventana), escribe el resultado y devuelve el error máximo."""
+    sis = _Sistema(boceto, valores, sub, fusionar=True, quieto=arrastrado, derivar=True)
+    x, err, _J, _rango = _resolver_grupo(sis, arrastrado, con_rango=False)
+    if x is not None:
+        sis.escribir(x)
+    return err
+
+
+def _quietos(boceto, g, arrastrado):
+    """B-707: puntos de las splines con Perpendicular a una línea en la parte `g` (los que Fusion no mueve al arrastrar
+    la línea). Ninguno si el arrastrado es uno de ellos."""
+    q = set()
+    for r in g["restricciones"]:
+        tipos = [boceto.tipo_de(e) for e in r.entidades]
+        if r.tipo == "perpendicular" and sorted(tipos) == ["linea", "spline"]:
+            q |= set(boceto.curvas[r.entidades[tipos.index("spline")]].puntos())
+    return set() if arrastrado in q else q & g["p"]
+
+
+def _congelar(sub, puntos):
+    """`sub` con `puntos` como constantes (igual que lo de afuera de una ventana, `_ventana`)."""
+    cp, cr = sub.get("congelados", (set(), set()))
+    return dict(sub, p=sub["p"] - puntos, congelados=(cp | (sub["p"] & puntos), cr))
 
 
 def _la_parte_entera_lo_acerca(boceto, valores, g, arrastrado, objetivo):

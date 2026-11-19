@@ -126,9 +126,26 @@ def test_b667_dos_arrastres_seguidos_mueven_la_linea_y_no_la_spline(linea, desti
         for k in range(1, 21):
             b.puntos[pid].x, b.puntos[pid].y = x0 + (destino[0] - x0) * k / 20, y0 + (destino[1] - y0) * k / 20
             previo = resolver(b, arrastrado=pid, previo=previo)
-            assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=5e-3)   # B-707: la quíntica de Fusion se corre 3,7 µm
+            assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=1e-6)   # B-707: quieta, como Fusion (antes se corría 3,7 µm)
         previo = resolver(b, arrastrado=pid)
         assert previo.ok and b.coords(pid) == pytest.approx(destino, abs=1e-6)
-        assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=5e-3)   # B-707: la quíntica de Fusion se corre 3,7 µm
+        assert [v for q in b.curvas[s].pts for v in b.coords(q)] == pytest.approx(PLANA, abs=1e-6)   # B-707: quieta, como Fusion (antes se corría 3,7 µm)
         distancia, coseno = _contacto(b, l, s)
         assert distancia < 0.02 and coseno < 1e-3         # la recta sigue pasando por la spline, a 90°
+
+
+def test_b707_un_punto_pegado_a_la_spline_sigue_al_raton():
+    """B-707: la spline de una Perpendicular queda fija al arrastrar, salvo que el arrastrado esté pegado a ella (una
+    línea que sale de su extremo): ahí el punto sigue al ratón y la spline se mueve."""
+    b = Boceto()
+    s, l = b.agregar_spline(SPLINE), b.agregar_linea((-30, 20), (-20, 40))
+    b.girar_a_perpendicular(l, s)
+    b.agregar_restriccion("perpendicular", [l, s])
+    m = b.agregar_linea((0, 0), (-10, -20))
+    pid = b.curvas[m].puntos()[0]
+    b.agregar_restriccion("coincidente", [pid, b.curvas[s].pts[0]])
+    previo = resolver(b)
+    for k in range(1, 11):
+        b.puntos[pid].x, b.puntos[pid].y = -0.5 * k, 0.3 * k
+        previo = resolver(b, arrastrado=pid, previo=previo)
+        assert previo.ok and b.coords(pid) == pytest.approx((-0.5 * k, 0.3 * k), abs=1e-3)
