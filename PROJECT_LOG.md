@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · B-362 cerrado.** Extruir inclina letras con splines y rectas: si MakeOffset falla o ThruSections no empareja, `_prisma_curvo_inclinado` desfasa arista por arista (muestreo + ingletes + GeomAPI_Interpolate). «OmniCAD&@g8» a −10°: 20/20 (antes 7 fallaban). Test y ruff limpios.
 - **2026-11-18 · B-629 cerrado.** El desfase avisa «El perfil desaparece» si la resta de franjas deja la región vacía; conserva el aviso genérico si el cálculo falla. `test_b517_desfase_texto_adentro.py` y `test_b_629_repro.py` verdes; ruff limpio.
 - **2026-11-18 · B-616.** Lo arregla el solape de B-634 (9dc3063b) en `_cascara_por_desfase`; `tests/test_b_616_repro.py` sin xfail pasa con main. El arreglo propio de OpenCode (1e-2 mm) no se integró.
 - **2026-11-18 · B-592 (bloqueante «sorbete trini»).** Abrir un .omnicad con un paso repetido idéntico lo quita con aviso en vez de rechazar el archivo (`documento.desde_dict`, ventana). Causa: archivo guardado antes de la guarda de `agregar` (33eafbcc). test_b643 3 OK (2 fallan sin el arreglo), ruff limpio.
@@ -594,6 +595,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-19] Al pasar un prototipo al código, compará la función vieja y la nueva sobre la misma entrada: tenía el índice de las esquinas corrido y el alambre desfasado se autointersecaba. · Evidencia: `_desfase_alambre_muestreado` (`solidos_crear_extrusion.py`); `test_b362_las_letras_con_splines_y_rectas_se_inclinan` y `ShapeAnalysis_Wire`.
 - [2026-11-18] Al acortar un error, conservá la causa confirmada: distinguí un cálculo fallido de un resultado vacío antes de traducir el mensaje. · Evidencia: B-629, `test_b517_desfase_texto_adentro.py` fallaba porque el desfase descartaba el resultado vacío de la resta de franjas.
 - [2026-11-18] Un pytest de muchos archivos en una sola llamada se corta por timeout de la herramienta: partirlo en lotes. · Evidencia: 14 archivos → SIGTERM a 120 s; en 2 lotes, 44 + 507 passed.
 - [2026-11-18] Integrar con `a && b; git commit` commitea aunque ruff o pytest den rojo: mirar la salida y recién después commitear. · Evidencia: 60a5dcf2 (rojo) → 3e58d3be, da627650.
