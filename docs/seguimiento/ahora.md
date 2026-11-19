@@ -29,8 +29,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 0b | B-650 | Arrastre pierde la tangencia con cota de diámetro (E1) |
-| 0c | B-651 | Saltos al arrastrar un extremo coincidente (E1) |
 | 0d | B-652 | Teclear en una cota cierra el boceto y abre Agujero (E8) |
 | 0e | B-654, B-655, B-653, B-656 | Esc doble, panel de Texto, Ctrl+A, traducción (E8, de a uno) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
