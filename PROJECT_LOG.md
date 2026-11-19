@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · Traspaso E1 (B-699 listo; sin ítem).** 1) B-677 en main (cea54e8d); B-699 en ~/OmniCAD-B-699 sin commit: `perfiles._sin_curvas_sueltas` saca de las caras del Splitter las curvas sueltas (aristas INTERNAL). 2) Galería: los 9 casos de B-677 coinciden con Fusion. 3) Sin verificar: la silueta (`perfiles.py` › `_silueta`, también con Splitter) podría guardar aristas internas. 4) Probar la galería: `PYTHONPATH=$PWD` y el Python de main; `galeria.py uno <id>_0000`.
+- **2026-11-19 · B-699.** Perfiles por el Splitter (`perfiles._sin_curvas_sueltas`): una curva suelta dentro de una región quedaba en la cara como arista interna y la extrusión daba un cuerpo inválido; ahora se saca, como Fusion. Galería 138071 y 24822 ok. `test_b699_curvas_sueltas.py` 4 OK.
 - **2026-11-19 · PRUEBA-OPCIONES (E7).** `scripts/prueba_ui/boceto_opciones.py`: 55 comprobaciones en verde (estrella, spline grado 5/3, arrastres, marco mover/espejo, SVG capas/colores). Sin bugs nuevos. La tabla de opciones marca «no» filas que ya cubren otros scripts (f-strings que el contador no ve). Sin commit.
 
 - **2026-11-19 · B-677.** Perfiles en Rust (`rust/src/perfiles.rs`): un toque tangente sin cruce de cuerdas y dos rectas encimadas a < 1e-4 mm daban error para que rija el Splitter (antes unían regiones). Galería: 7 de 9 iguales a Fusion; `galeria.py` tolera el redondeo de `get_sketch`; B-699 anotada. `test_boc28_rust.py` 17 OK, `cargo test` 9 OK.
@@ -686,6 +688,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 
 - **2026-11-19 · Bocetos › Incluir 3D B-684/B-685.** Se habilitan caras y se evita repetir la misma arista (`sin_indice`, `incluir_3d_forma`). `test_faltantes_bocetos.py`: 7 OK; ruff limpio.
 ## Lecciones aprendidas
+- [2026-11-19] El `BRepAlgoAPI_Splitter` deja una curva suelta dentro de una región como alambre de aristas INTERNAL en la cara: `es_valida(cara)` da True pero el sólido extruido no. · Evidencia: `tests/test_b699_curvas_sueltas.py`.
 - [2026-11-19] `arreglo_planar` usa `tol` = 1e-8 y el Splitter funde a 1e-4: todo lo que esté entre las dos (toques, rectas casi encimadas) tiene que dar `Err`, no un resultado. · Evidencia: `test_boc28_rust.py::test_b677_toque_tangente_y_rectas_casi_encimadas_dan_los_perfiles_de_fusion`.
 - [2026-11-19] `sin_indice` vive en `restricciones.boceto3d`, no en `nucleo`: reusar el módulo ya importado evita imports inventados. · Evidencia: `test_faltantes_bocetos.py` falló con ModuleNotFoundError y pasó 7/7 al corregirlo.
 - [2026-11-19] En `detectar_boceto` no tocar `p.cara` de todas las piezas por las dudas: con la vía Rust las caras son perezosas y armarlas cuesta ~10 ms cada una (132 letras: 2,6 s); primero un disparador sin caras. · Evidencia: `perfiles._contornos_cerrados`, B-694.

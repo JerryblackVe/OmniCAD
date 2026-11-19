@@ -470,6 +470,28 @@ def _perfil_de_cara(cara, plano, firma):
     return Perfil(cara, props.Mass(), plano.a_uv((c.X(), c.Y(), c.Z())), firma)
 
 
+def _sin_curvas_sueltas(cara):
+    """La cara sin los alambres de aristas internas: las curvas sueltas dentro de una región, que el Splitter deja en
+    la cara. Fusion no las cuenta en el perfil, y al extruir dejan una pared adentro: sólido inválido (B-699).
+    shortcut: solo saca alambres hechos todos de aristas internas (los únicos que dio el Splitter); uno mezclado queda."""
+    from OCP.BRepTools import BRepTools
+    from OCP.TopAbs import TopAbs_FORWARD, TopAbs_INTERNAL, TopAbs_WIRE
+    adelante, alambres = TopoDS.Face(cara.Oriented(TopAbs_FORWARD)), []
+    ex = TopExp_Explorer(adelante, TopAbs_WIRE)
+    while ex.More():
+        alambres.append(TopoDS.Wire(ex.Current()))
+        ex.Next()
+    suelto = [all(a.Orientation() == TopAbs_INTERNAL for a in _aristas_de(w)) for w in alambres]
+    if not any(suelto):
+        return cara
+    exterior = BRepTools.OuterWire_s(adelante)
+    nueva = BRepBuilderAPI_MakeFace(BRep_Tool.Surface_s(adelante), exterior)
+    for w, s in zip(alambres, suelto, strict=True):
+        if not s and not w.IsSame(exterior):
+            nueva.Add(w)
+    return TopoDS.Face(nueva.Face().Oriented(cara.Orientation()))
+
+
 def detectar_boceto(boceto, plano, geometria=None):
     """Perfiles de un boceto, en el orden de `detectar`. Como en Fusion, cada texto va aparte: no parte las curvas ni a
     otro texto, así que sus letras se pisan con lo que tengan debajo (B-134). `geometria`: la de `Boceto.geometria()`
@@ -974,7 +996,7 @@ def _perfiles_occ(geometria, plano, aristas, tolerancia):
         BRepGProp.SurfaceProperties_s(cara, props)
         c = props.CentreOfMass()
         dx, dy, dz = c.X() - ox, c.Y() - oy, c.Z() - oz
-        perfiles.append(Perfil(cara, props.Mass(), (dx * ux + dy * uy + dz * uz, dx * vx + dy * vy + dz * vz),
+        perfiles.append(Perfil(_sin_curvas_sueltas(cara), props.Mass(), (dx * ux + dy * uy + dz * uz, dx * vx + dy * vy + dz * vz),
                                frozenset(firma)))
     perfiles.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
     partidas = {hash(a): a for grupo in por_cara for a in grupo if hash(a) not in borde}
