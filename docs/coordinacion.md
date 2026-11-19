@@ -178,11 +178,12 @@ de OpenCode; las demás la enlazan.
   | Orden | Modelo | Para qué |
   |---|---|---|
   | 1–2 | CodeBuddy gratis: `cb:hy3`, `cb:deepseek-v4.1-flash` (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | Lo mecánico; ~8 s, 4 a la vez; corta con 429 al quedarse sin cupo |
-  | 3 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Lo mecánico y varios archivos con herramientas |
-  | 4 | OpenAI (ChatGPT Plus de Gerardo, OK del 17/11): `openai/gpt-6.2-sol` | Lo difícil: arreglos de varios archivos y revisión (la tarea lo pide con `MODELO=`) |
-  | 5–6 | OpenAI: `openai/gpt-6.2-astra`, `openai/gpt-6.1-terra` | Respaldo |
-  | 7 | GLM: `opencode/glm-5.3-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
-  | 8 | DeepSeek: `opencode/deepseek-v4.1-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
+  | 3–4 | OpenCode Go gratis (Gerardo, 19/11): `opencode-go/beam-free`, `opencode-go/hy4-flash-free` | Lo mecánico con herramientas; 10–13 s en la prueba del 19/11. Los de Go que no son `-free` gastan el cupo pago: solo con su OK. `iceman-contributor-free` y `longcat-2.5-free` no andan hasta que Gerardo cambie la consola (entrenar con los pedidos; región Global) |
+  | 5 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Lo mecánico y varios archivos con herramientas |
+  | 6 | OpenAI (ChatGPT Plus de Gerardo, OK del 17/11): `openai/gpt-6.2-sol` | Lo difícil: arreglos de varios archivos y revisión (la tarea lo pide con `MODELO=`) |
+  | 7–8 | OpenAI: `openai/gpt-6.2-astra`, `openai/gpt-6.1-terra` | Respaldo |
+  | 9 | GLM: `opencode/glm-5.3-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
+  | 10 | DeepSeek: `opencode/deepseek-v4.1-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
 
   **Cupo de OpenAI (Gerardo, 2026-11-18):** compartido entre todos los modelos de Codex, con tope cada 5 h y otro semanal
   (el 18/11 se fue el 36 % del semanal en ~12 h). Se guarda para lo difícil; lo mecánico va a CodeBuddy y MiniMax. Un
