@@ -8,6 +8,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-667 | Bocetos › Perpendicular línea–spline (B-586): al arrastrar el extremo de la línea, la spline se deforma mucho (~100 px; la joroba pasa a S) y en el 2.º arrastre la recta ya no pasa por la curva | Abierto | Alta | Que la línea gire o se deslice y la spline quede quieta (menor cambio); que el contacto se sostenga | E11 19/11, `evidencias/reportes_pc/2026-11-19_boceto/reprueba/` (PC), b586_arrastre1/2.jpg | 2026-11-19 |
 | B-664 | Bocetos › Recién ubicada una cota nueva, teclear sin hacer clic no entra al campo (el foco queda en el visor) | Abierto | Baja | Dar el foco al campo de la cota nueva | E11 19/11, `evidencias/reportes_pc/2026-11-19_boceto/reprueba/` (PC) | 2026-11-19 |
 | B-665 | Bocetos › Texto: el campo «Contenido» del panel Carácter no recibe el clic ni muestra el texto; solo se escribe en el cuadro del visor | Abierto | Media | Ligar el campo con el texto del visor | E11 19/11, `evidencias/reportes_pc/2026-11-19_boceto/reprueba/` (PC) | 2026-11-19 |
 | B-666 | Bocetos › Ventana chica (~790×510): la paleta y el navegador tapan casi todo el visor | Abierto | Media | Plegar o achicar los paneles en ventanas chicas | E11 19/11, `evidencias/reportes_pc/2026-11-19_boceto/reprueba/` (PC) | 2026-11-19 |
