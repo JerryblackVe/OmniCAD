@@ -1576,6 +1576,8 @@ def replace_constraint(sesion, sketch: str, constraint: int,
         b.reemplazar_restriccion(constraint, RESTRICCIONES[type])
         if type == "tangent":
             acomodar_tangente(b, b.restricciones[constraint].entidades, valores_cotas(sesion, b))
+        elif type in ("concentric", "midpoint", "equal"):
+            acomodar_segunda(b, b.restricciones[constraint].entidades[0], valores_cotas(sesion, b))   # B-663
     except ErrorBoceto as e:
         raise error("INVALID_CONSTRAINT", str(e)) from e
     sesion.doc.reemplazar(op.id, nueva)
