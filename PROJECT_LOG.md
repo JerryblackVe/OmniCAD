@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · PRUEBA-TEXTO-SIM (E7).** `prueba_ui/boceto_texto_panel.py`: 89 comprobaciones, 5 ✗ = B-697 (texto de 400 letras congela ~1,4 s), B-698 (sin comando para agregar marco al texto: pivote casi inalcanzable) y B-700 (Anclaje ignorado con cuadro dibujado). Tabla opciones_asas corregida (41 filas pasan a «sí» con su script; quedan 11 sin prueba). Sin commit.
 - **2026-11-19 · PRUEBA-OPCIONES (E7).** `scripts/prueba_ui/boceto_opciones.py`: 55 comprobaciones en verde (estrella, spline grado 5/3, arrastres, marco mover/espejo, SVG capas/colores). Sin bugs nuevos. La tabla de opciones marca «no» filas que ya cubren otros scripts (f-strings que el contador no ve). Sin commit.
 
 - **2026-11-19 · B-677.** Perfiles en Rust (`rust/src/perfiles.rs`): un toque tangente sin cruce de cuerdas y dos rectas encimadas a < 1e-4 mm daban error para que rija el Splitter (antes unían regiones). Galería: 7 de 9 iguales a Fusion; `galeria.py` tolera el redondeo de `get_sketch`; B-699 anotada. `test_boc28_rust.py` 17 OK, `cargo test` 9 OK.
