@@ -88,6 +88,18 @@ def test_b223_coincidente_punto_sobre_diagonal_con_origen(lz, origen_primero, ma
             assert lz.b.coords(pid) == pytest.approx(xy, abs=1e-6)
 
 
+def test_b584_primer_clic_que_no_entra_avisa(lz):
+    """B-584: con una restricción activa, el clic que no elige nada avisa en vez de parecer que no hace nada."""
+    lz.set_herramienta("circulo")
+    _clic(lz, 40, 30)
+    _clic(lz, 50, 30)
+    lz.set_herramienta("r_paralela")
+    lz.mensajes.clear()
+    _clic(lz, -40, -30)                     # lejos del círculo y del origen: no entra ninguna entidad
+    assert lz.picks == []
+    assert any("clic" in m.lower() for m in lz.mensajes), lz.mensajes
+
+
 @pytest.mark.parametrize("herramienta", [*editor_boceto.RESTRICCIONES_HERRAMIENTA, "cota", "seleccionar"])
 def test_b223_origen_elegible_sin_citar_en_todas_las_herramientas(lz, herramienta):
     assert Boceto.ORIGEN not in lz.b.puntos
