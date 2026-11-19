@@ -25,7 +25,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
-| 2 | B-659 | Clic de 3,9 s en `prueba_ui/restricciones_boceto.py` (E6, cuando haya lugar) |
+| 2 | B-659 | Tangente arco–spline tarda 3,4 s (`acomodar_tangente`, 1.ª corrida con menor cambio): E1 decide qué es «lo mínimo» (solver, Opus alto); caso en `~/coordinador/casos/b659/` |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
