@@ -235,14 +235,19 @@ class Extruir(Comando):
         from .. import manipuladores as mp
         if v.get("extension") not in ("distancia", "todo"):
             return []
-        texto = repr([h.get("ref", h) if isinstance(h, dict) else h for h in v.get("perfiles") or []])   # sin sus mallas
+        referencias = [h.get("ref", h) if isinstance(h, dict) else h for h in v.get("perfiles") or []]
+        texto = repr(referencias)   # sin sus mallas
         if self._base_asas is None or self._base_asas[0]() is not ctx.estado or self._base_asas[1] != texto:
             # FL-1: resolver y teselar el texto «EMILIA» tardaba 350 ms en cada tecla de la distancia
             base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
-            # P-139: el borde de -u (de dos esquinas, la de abajo); en la vista inicial el asa queda adelante, como en Fusion
-            borde = None if base is None else mp.punto_borde(
-                base[2], base[0], -mp.unitario(base[1].u) - 0.01 * mp.unitario(base[1].v))
-            type(self)._base_asas = weakref.ref(ctx.estado), texto, base, borde  # B-546: en la clase, sirve al reabrir; débil: no retiene el documento viejo
+            pie = None
+            if base is not None:
+                centro, plano, formas = base
+                bocetos = {r["boceto"] for r in referencias if isinstance(r, dict) and r.get("tipo") == "perfil" and r.get("boceto")}
+                # B-642: con varios bocetos no hay un borde común; con uno, conservar el borde de -u (P-139).
+                pie = centro if len(bocetos) > 1 else mp.punto_borde(
+                    formas, centro, -mp.unitario(plano.u) - 0.01 * mp.unitario(plano.v))
+            type(self)._base_asas = weakref.ref(ctx.estado), texto, base, pie  # B-546: en la clase, sirve al reabrir; débil: no retiene el documento viejo
         _, _, base, borde = self._base_asas
         if base is None:
             return []

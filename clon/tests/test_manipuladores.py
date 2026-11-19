@@ -46,10 +46,10 @@ def _doc_rectangulo(plano="XY"):
     return doc
 
 
-def _perfil(doc):
+def _perfil(doc, boceto="op1"):
     from omnicad.ui.comando import hit_desde_ref
-    perfil = doc.estado_final.bocetos["op1"].perfiles[0]
-    return hit_desde_ref({"tipo": "perfil", "boceto": "op1", **OpExtrusion.referencia_perfil(perfil)}, doc.estado_final)
+    perfil = doc.estado_final.bocetos[boceto].perfiles[0]
+    return hit_desde_ref({"tipo": "perfil", "boceto": boceto, **OpExtrusion.referencia_perfil(perfil)}, doc.estado_final)
 
 
 def _doc_caja():
@@ -103,6 +103,22 @@ def _cuerpo(estado):
 
 
 # ---------------------------------------------------------------- Extruir: flecha + caja de valor
+def test_b642_distancia_en_el_centro_de_perfiles_de_dos_bocetos(app_qt):
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    b = Boceto()
+    b.agregar_rectangulo((40, 20), (60, 30))
+    doc.agregar(OpBoceto(doc.nuevo_id(), "Boceto2", plano="XY", boceto=b))
+    panel, _, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc), _perfil(doc, "op2")]})
+    gestor = panel.manipuladores
+    flecha = _manip(panel, "flecha:distancia")
+    pie, punta = flecha.puntos(gestor)
+    assert pie == pytest.approx((30, 15, 0))
+    assert gestor.cajas["distancia"].text() == "0 mm"
+    assert dict(flecha.cajas(gestor, None))["distancia"] == pytest.approx(punta)
+    panel.cancelar()
+
+
 def test_arrastrar_la_flecha_de_extruir_cambia_la_distancia_y_la_previa(app_qt):
     from omnicad.ui.comandos.solido import Extruir
     doc = _doc_rectangulo()
