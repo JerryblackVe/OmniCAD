@@ -8,7 +8,6 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| B-667 | Bocetos › Perpendicular línea–spline (B-586): al arrastrar el extremo de la línea, la spline se deforma mucho (~100 px; la joroba pasa a S) y en el 2.º arrastre la recta ya no pasa por la curva | Abierto | Alta | Que la línea gire o se deslice y la spline quede quieta (menor cambio); que el contacto se sostenga | E11 19/11, `evidencias/reportes_pc/2026-11-19_boceto/reprueba/` (PC), b586_arrastre1/2.jpg | 2026-11-19 |
 | B-664 | Bocetos › Recién ubicada una cota nueva, teclear sin hacer clic no entra al campo (el foco queda en el visor) | Parcial | Baja | Hecho: la caja recupera el foco (`EntradaValor._tomar_foco`, `tests/test_b664_foco_en_la_cota_nueva.py`); no se reprodujo fuera de Windows: E11 confirma con mouse real | E11 19/11, `evidencias/reportes_pc/2026-11-19_boceto/reprueba/` (PC) | 2026-11-19 |
 | B-666 | Bocetos › Ventana chica (~790×510): la paleta y el navegador tapan casi todo el visor | Abierto | Media | Plegar o achicar los paneles en ventanas chicas | E11 19/11, `evidencias/reportes_pc/2026-11-19_boceto/reprueba/` (PC) | 2026-11-19 |
 | B-662 | `test_caza_regresion` falla en main: espera la firma de B-612, cuya fila ya se borró | Abierto | Baja | Actualizar la lista de firmas del test | Informe E4 19/11 | 2026-11-19 |
