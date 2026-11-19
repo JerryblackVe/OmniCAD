@@ -135,6 +135,15 @@ def test_boc6_fix_de_varias_entidades_es_idempotente_en_cualquier_orden(sesion):
     assert sesion.doc.a_dict() == antes
 
 
+def test_b512_fix_repetido_avisa(sesion):
+    dibujo = llamar(sesion, "draw_line", start_x=3, start_y=4, end_x=8, end_y=9)
+    entidad = dibujo["points"][0]
+    primero = api.llamar(sesion, "add_constraint", {"sketch": "Base", "type": "fix", "entities": [entidad]})
+    assert not primero.get("avisos")
+    segundo = api.llamar(sesion, "add_constraint", {"sketch": "Base", "type": "fix", "entities": [entidad]})
+    assert any("fij" in a.lower() for a in segundo.get("avisos", []))
+
+
 def test_boc6_fijar_el_anclaje_automatico_reutiliza_su_restriccion(sesion):
     dibujo = llamar(sesion, "draw_rectangle", x1=0, y1=0, x2=20, y2=10)
     info = llamar(sesion, "get_sketch")
