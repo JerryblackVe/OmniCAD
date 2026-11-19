@@ -67,7 +67,7 @@ def test_un_precalentado_que_se_cuelga_se_corta_y_no_traba_las_previas(monkeypat
 
 def _pedido_perdido(monkeypatch, veces):
     """El aviso por la tubería se pierde `veces` veces, como en Windows (B-418): el trabajador despierta y no lo ve."""
-    monkeypatch.setattr(aislado, "PLAZO_RECIBIR", 0.3)
+    monkeypatch.setattr(aislado, "PLAZO_RECIBIR", 0.1)      # despierto, no lo toma enseguida: como el plazo real, más corto
     avisar, perdidos = aislado._Trabajador._avisar, []
 
     def avisar_a_veces(self, tarea):
@@ -123,6 +123,7 @@ def _prisma_e11(p):
         p.set_valor(clave, valor)
 
 
+@pytest.mark.lento        # 8 comandos, cada uno con su pedido perdido y el proceso nuevo del reintento: ~15 s
 def test_b418_en_la_ventana_la_previa_en_frio_llega_aunque_se_pierda_el_pedido(tmp_path, monkeypatch):
     """B-418: con la app recién abierta, Extruir, Barrido, Solevación, Agujero, las primitivas (aparte desde FL-1), Rosca
     modelada (desde P-78) y Empalme se quedaban en «Calculando…» para siempre si el trabajador nuevo no tomaba el pedido (Windows)."""
@@ -199,10 +200,12 @@ def test_b418_en_la_ventana_la_previa_en_frio_llega_aunque_se_pierda_el_pedido(t
     v = VentanaPrincipal(s.doc, prefs=Preferencias(QSettings(str(tmp_path / "p.ini"), QSettings.IniFormat)))
     v.show()
     try:
+        aislado.cerrar_trabajador()                      # en frío, como con la app recién abierta
         for clave, elegir in (("extruir", extruir), ("barrido", barrido), ("solevacion", solevacion),
                               ("agujero", agujero), ("rosca", rosca), ("empalme_3d", empalme), ("caja", _prisma_e11),
                               ("cilindro", lambda p: p.set_valor("alto", "15 mm"))):
-            aislado.cerrar_trabajador()                  # en frío, como con la app recién abierta
+            # De la segunda en adelante el trabajador llega despierto (el reintento de la anterior queda vivo): el
+            # «en frío» es el de abrir la app y arrancar un proceso por comando costaba 8 arranques de más.
             perdidos = _pedido_perdido(monkeypatch, 1)
             p = v.ejecutar_comando(CATALOGO[clave]())
             elegir(p)
