@@ -11,8 +11,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 | B-650/B-651 | Contacto línea–círculo limitado al tramo (Opus alto); entra cuando se libere un lugar de los 3 |
-| E3 | B-660 | Simetría con objeto vectorial; después B-667 (perpendicular línea–spline en solver.py) |
-| E4 | — | B-665 integrado (30fe274c); quieta: su lugar es de E1. B-666 sin dueño hasta que haya lugar |
+| E3 | — | B-660 y B-667 integrados (7f03f6f2, 220601c3); se vacía y queda quieta |
+| E4 | B-619 | Proyectar un cuerpo de revolución: B-619b (curva 3D exacta) y B-619c (Opus alto; trabada en OpenCode con 2 modelos). B-665 y B-666 integrados |
 | E8 | B-658 | Curvatura al arrastrar la spline (B-664 Parcial integrado: e7ef8182, falta Windows) |
 | OpenCode | B-584, H-117, B-656, B-653, B-479, B-512, P-178 | Cola de boceto (vigía); lo demás en `manana/` |
 | E2, E5, E6, E7, E9, E10 | — | En pausa por el amarillo (E6: B-659 y velocidad del solver cuando haya lugar) |
@@ -24,8 +24,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-666 | Ventana chica: la paleta y el navegador tapan el visor (E4 si se libera lugar) |
-| 2 | B-659 | Clic de 3,9 s en `prueba_ui/restricciones_boceto.py` (E6, cuando haya lugar) |
+| 1 | B-659 | Clic de 3,9 s en `prueba_ui/restricciones_boceto.py` (E6, cuando haya lugar) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
