@@ -1522,6 +1522,7 @@ def add_constraint(sesion, sketch: str,
             if not cerrada or any(b.tipo_de(k) != "linea" for k, _ in cadena):
                 raise ErrorBoceto("Polígono: cadena cerrada de líneas.")
             entities = [k for k, _ in cadena]
+        b.exigir_disponible(RESTRICCIONES[type], list(entities))        # B-690 (P-169)
         rid = b.agregar_restriccion(RESTRICCIONES[type], list(entities))
         if type in ("tangent", "curvature") and len(entities) == 2:
             acomodar_tangente(b, entities, valores_cotas(sesion, b))

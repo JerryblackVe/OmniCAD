@@ -150,6 +150,7 @@ class LienzoRestriccionesMixin:
 
         def agregar():
             for t, e in pedidos:
+                self.b.exigir_disponible(t, e)                  # B-690: antes de girar o deslizar la línea
                 if t == "tangente":
                     self.b.deslizar_a_tangente(*e)
                 elif t == "perpendicular":
