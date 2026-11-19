@@ -34,7 +34,7 @@ from ..restricciones.boceto import (MEDIDA_MAXIMA, MEDIDA_MINIMA, ArcoElipse, Ci
                                     aviso_radio_empalme, aviso_tangencias_fuera, expresion_sin_signo, _medidas_marco, centro_arco_tangente,
                                     centro_poligono_arista, evaluar_primitiva, mas_cercano, peine_curvatura,
                                     proporcion_estrella, redondear_estrella, validar_lados_poligono, validar_valor_cota)
-from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
+from ..restricciones.solver import (acomodar_segunda, acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
                                      restriccion_quita_grados)
 from ..timeline import entidades as ent
 from ..timeline.operaciones import OpBoceto, OpPlano
@@ -1493,13 +1493,13 @@ def add_constraint(sesion, sketch: str,
     """
     sketch: id o nombre del boceto.
     type: tipo de restricción.
-    entities: ids de las entidades (curvas o puntos); en coincident, midpoint y tangent el orden no importa, en symmetry el eje va último; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
+    entities: ids de las entidades (curvas o puntos); en coincident y tangent el orden no importa; en concentric, midpoint y equal la primera queda quieta y se mueve la segunda; en symmetry el eje va último; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
     """
     op = op_boceto(sesion, sketch)
     previo = boceto_resuelto(sesion, op)
     nueva = op.copia()
     b = nueva.boceto
-    if type in ("fix", "tangent", "curvature"):
+    if type in ("fix", "tangent", "curvature", "concentric", "midpoint", "equal"):
         _sincronizar_con_solver(sesion, op, b)
     b.asegurar_referencias(entities)
     _exigir_entidades(b, entities)
@@ -1523,6 +1523,8 @@ def add_constraint(sesion, sketch: str,
         rid = b.agregar_restriccion(RESTRICCIONES[type], list(entities))
         if type in ("tangent", "curvature") and len(entities) == 2:
             acomodar_tangente(b, entities, valores_cotas(sesion, b))
+        elif type in ("concentric", "midpoint", "equal") and len(entities) == 2:
+            acomodar_segunda(b, entities[0], valores_cotas(sesion, b))   # B-657: la primera queda quieta
     except ErrorBoceto as e:
         raise error("INVALID_CONSTRAINT", str(e)) from e
     if rid not in antes["restricciones"] or ancla:

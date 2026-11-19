@@ -8,6 +8,7 @@ from .editor_boceto_comun import (
     TIPOS_RESTRICCION,
     _registro_uso,
     _tipo_valor,
+    acomodar_segunda,
     acomodar_tangente,
     aviso_tangencias_fuera,
     grados_de_libertad,
@@ -150,6 +151,8 @@ class LienzoRestriccionesMixin:
                 self.b.agregar_restriccion(t, e)
                 if t in ("tangente", "curvatura"):
                     acomodar_tangente(self.b, e, self._valores_para_diagnostico())
+                elif t in ("concentrica", "punto_medio", "igual"):
+                    acomodar_segunda(self.b, e[0], self._valores_para_diagnostico())
         ok = self.aplicar_cambio(agregar)
         if ok and tipo != "fijo" and gdl is not None and self.resultado.gdl >= gdl:    # no quitó ningún GDL: sobra
             self._restaurar(self.historial.pop())
