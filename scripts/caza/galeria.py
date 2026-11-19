@@ -151,7 +151,7 @@ def _perfil(api, s, e, uid_perfil, nombre, marco):
     o, xa, ya = _vec(t["origin"]), _vec(t["x_axis"]), _vec(t["y_axis"])
     cen = _a_local(marco, _mm([o[i] + c["x"] * xa[i] + c["y"] * ya[i] for i in range(3)]))
     perfiles = _llamar(api, s, "perfil", "get_sketch", sketch=nombre)["profiles"]
-    cand = [q for q in perfiles if abs(q["area"] - area) <= TOL_REL * max(area, 1e-9) + 1e-6]
+    cand = [q for q in perfiles if abs(q["area"] - area) <= TOL_REL * max(area, 1e-9) + 5e-5]     # get_sketch redondea a 4 decimales
     if not cand:
         raise Fallo("perfil", f"sin perfil de área {area:.1f} mm2: OmniCAD tiene {len(perfiles)} perfiles de áreas "
                     f"{sorted(round(q['area']) for q in perfiles)[:6]}")

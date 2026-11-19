@@ -191,6 +191,28 @@ fn proyectar(c: &Curva, q: P2, ini: f64) -> (f64, f64) {
     (t, dist(c.pt(t), q))
 }
 
+/// Distancia de `p` al segmento `a`-`b`.
+fn dist_seg(p: P2, a: P2, b: P2) -> f64 {
+    let d = [b[0] - a[0], b[1] - a[1]];
+    let l2 = d[0] * d[0] + d[1] * d[1];
+    let t = if l2 > 0.0 { (((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / l2).clamp(0.0, 1.0) } else { 0.0 };
+    dist(p, [a[0] + t * d[0], a[1] + t * d[1]])
+}
+
+/// Par de puntos más cercanos de dos curvas, cerca de `ta` y `tb` (proyecciones alternadas): distancia y punto de `a`.
+fn acercar(a: &Curva, b: &Curva, mut ta: f64, mut tb: f64) -> (f64, P2) {
+    for _ in 0..100 {
+        tb = proyectar(b, a.pt(ta), tb).0;
+        let t = proyectar(a, b.pt(tb), ta).0;
+        let quieto = (t - ta).abs() * hyp(a.der(t)) < 1e-13;
+        ta = t;
+        if quieto {
+            break;
+        }
+    }
+    (dist(a.pt(ta), b.pt(tb)), a.pt(ta))
+}
+
 const GL8X: [f64; 4] = [0.1834346424956498, 0.525_532_409_916_329, 0.7966664774136267, 0.9602898564975363];
 const GL8W: [f64; 4] = [0.362_683_783_378_362, 0.3137066458778873, 0.2223810344533745, 0.1012285362903763];
 
@@ -392,6 +414,22 @@ fn calcular(curvas: &[Curva], gap: f64) -> Result<Salida, String> {
     orden.sort_by(|&a, &b| cuerdas[a].caja[0].total_cmp(&cuerdas[b].caja[0]));
     let cerca = 4.0 * SAGITA;
     let holgura = tol + 2.0 * SAGITA; // la curva real se aparta de su cuerda hasta SAGITA
+    // B-677: un toque tangente (un arco apoyado en una recta) puede no cruzar ninguna cuerda: se busca en las curvas
+    // reales y, si al final ningún evento lo marca, no se puede certificar y rige el Splitter.
+    let mut sospechas: Vec<(usize, usize, P2)> = Vec::new();
+    let sospecha = |ca: &Cuerda, cb: &Cuerda| -> Option<(usize, usize, P2)> {
+        let (a, b) = (&curvas[ca.c], &curvas[cb.c]);
+        let curvo = |c: &Curva| if matches!(c.g, Geo::Linea(..)) { 0.0 } else { SAGITA };
+        if ca.c == cb.c || curvo(a) + curvo(b) == 0.0 {
+            return None;
+        }
+        let ds = dist_seg(ca.pa, cb.pa, cb.pb).min(dist_seg(ca.pb, cb.pa, cb.pb)).min(dist_seg(cb.pa, ca.pa, ca.pb)).min(dist_seg(cb.pb, ca.pa, ca.pb));
+        if ds > gap + 2.0 * (curvo(a) + curvo(b)) {
+            return None;
+        }
+        let (d, p) = acercar(a, b, 0.5 * (ca.a + ca.b), 0.5 * (cb.a + cb.b));
+        if d <= gap { Some((ca.c, cb.c, p)) } else { None }
+    };
     for ii in 0..orden.len() {
         let ca = &cuerdas[orden[ii]];
         for &j in &orden[ii + 1..] {
@@ -419,13 +457,16 @@ fn calcular(curvas: &[Curva], gap: f64) -> Result<Salida, String> {
             let cr = cruz(d1, d2);
             let qp = [cb.pa[0] - ca.pa[0], cb.pa[1] - ca.pa[1]];
             if cr.abs() <= 1e-9 * l1 * l2 {
-                // paralelas: solo preocupan si son la misma recta y se solapan
-                if cruz(qp, d1).abs() / l1 <= tol {
+                // paralelas: solo preocupan si son la misma recta y se solapan; dos rectas a menos de `gap` el Splitter
+                // las funde (B-677: a 1,5e-8 mm quedaban como dos y unían regiones)
+                let junto = if matches!((&a.g, &b.g), (Geo::Linea(..), Geo::Linea(..))) { gap } else { tol };
+                if cruz(qp, d1).abs() / l1 <= junto {
                     let (s0, s1) = ((qp[0] * d1[0] + qp[1] * d1[1]) / l1, ((cb.pb[0] - ca.pa[0]) * d1[0] + (cb.pb[1] - ca.pa[1]) * d1[1]) / l1);
                     if s0.min(s1).max(0.0) + tol < s0.max(s1).min(l1) {
                         return Err("curvas superpuestas".into());
                     }
                 }
+                sospechas.extend(sospecha(ca, cb));
                 continue;
             }
             let s = cruz(qp, d2) / cr;
@@ -434,6 +475,7 @@ fn calcular(curvas: &[Curva], gap: f64) -> Result<Salida, String> {
             let (sa, sb) = (if matches!(a.g, Geo::Linea(..)) { 0.0 } else { SAGITA }, if matches!(b.g, Geo::Linea(..)) { 0.0 } else { SAGITA });
             let (ms, mu) = if sa + sb == 0.0 { (tol / l1, tol / l2) } else { (((tol + 2.0 * sb) * l2 / cr.abs()).min(1.0), ((tol + 2.0 * sa) * l1 / cr.abs()).min(1.0)) };
             if s < -ms || s > 1.0 + ms || u < -mu || u > 1.0 + mu {
+                sospechas.extend(sospecha(ca, cb));
                 continue;
             }
             if misma {
@@ -473,7 +515,10 @@ fn calcular(curvas: &[Curva], gap: f64) -> Result<Salida, String> {
             } else {
                 match newton2(a, b, ta0, tb0)? {
                     Some(r) => r,
-                    None => continue,
+                    None => {
+                        sospechas.extend(sospecha(ca, cb));
+                        continue;
+                    }
                 }
             };
             let p = a.pt(ta);
@@ -486,6 +531,13 @@ fn calcular(curvas: &[Curva], gap: f64) -> Result<Salida, String> {
             }
             ev.push((ca.c, ta, p));
             ev.push((cb.c, tb, p));
+        }
+    }
+
+    for (i, j, p) in sospechas {
+        let marcado = |k: usize| ev.iter().any(|e| e.0 == k && dist(e.2, p) <= cerca);
+        if !(marcado(i) && marcado(j)) {
+            return Err("toque tangente".into());
         }
     }
 
@@ -905,6 +957,23 @@ mod pruebas {
         let mut a = s.area.clone();
         a.sort_by(|x, y| x.total_cmp(y));
         assert!((a[0] - PI).abs() < 1e-9 && (a[1] - (16.0 - PI)).abs() < 1e-9, "{a:?}");
+    }
+
+    #[test]
+    fn arco_tangente_a_un_lado_no_se_certifica() {
+        // B-677: el arco apoya en x = -72 sin cruzar ninguna cuerda; sin el error unía las dos regiones (372 en vez de 186 + 186)
+        let (ce, r) = ([-36.945241029680282, 32.0], 35.05475899115143);
+        let a = (32.0f64 / r).asin();
+        let mut c = vec![linea([-72., 0.], [-30.515, 0.]), linea([-30.515, 0.], [-30.515, 64.]), linea([-30.515, 64.], [-72., 64.]), linea([-72., 64.], [-72., 0.])];
+        c.push(Curva { g: Geo::Circ(ce, r), t0: PI - a, t1: PI + a });
+        assert!(calcular(&c, 1e-4).is_err());
+    }
+
+    #[test]
+    fn rectas_encimadas_a_menos_de_la_tolerancia_no_se_certifican() {
+        // B-677: a 1,5e-8 mm (más que `tol`, menos que `gap`) el Splitter las funde; el arreglo las dejaba separadas
+        let c = vec![linea([0., 0.], [-40., 0.]), linea([0., 1.49e-8], [-3.97, 1.49e-8])];
+        assert!(calcular(&c, 1e-4).is_err());
     }
 
     #[test]
