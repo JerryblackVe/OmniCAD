@@ -550,12 +550,42 @@ class OpEngrosar(_OpSuperficie):
 
 
 class OpSupEmpalme(_OpSuperficie):
-    """SUPERFICIE › Empalme/chaflán de aristas de superficies [SFC-FILLET-CHAMFER]."""
+    """SUPERFICIE › Empalme/chaflán de aristas de superficies [SFC-FILLET-CHAMFER]. SUP-28: las opciones del sólido.
+    Empalme: `tipo_radio` constante, cuerda (`medida` es el largo de cuerda) o variable (de `medida` a `radio_fin`) y
+    esquina bola o setback. Chaflán: distancia igual, dos distancias o distancia y ángulo, Voltear y esquina chaflán,
+    inglete o mezcla. `cadena_tangente` suma las aristas tangentes (las recetas viejas, sin la clave, quedan sin)."""
     TIPO, ETIQUETA, ICONO = "sup_empalme", "Empalme de superficie", "◜"
-    PARAMS = {"aristas": [], "tipo": "empalme", "medida": "1 mm"}
-    EXPRESIONES = ("medida",)
-    OPCIONES = {"tipo": ("empalme", "chaflan")}
+    PARAMS = {"aristas": [], "tipo": "empalme", "medida": "1 mm", "cadena_tangente": True,
+              "tipo_radio": "constante", "radio_fin": "2 mm", "esquina": "bola", "setback": "2 mm",
+              "tipo_chaflan": "distancia_igual", "distancia2": "1 mm", "angulo": "45 deg", "voltear": False,
+              "esquina_chaflan": "chaflan"}
+    EXPRESIONES = ("medida", "radio_fin", "setback", "distancia2", "angulo")
+    OPCIONES = {"tipo": ("empalme", "chaflan"), "tipo_radio": ("constante", "cuerda", "variable"),
+                "esquina": ("bola", "setback"), "tipo_chaflan": ("distancia_igual", "dos_distancias", "distancia_angulo"),
+                "esquina_chaflan": ("chaflan", "inglete", "mezcla")}
     REFS = ("aristas",)
+
+    @staticmethod
+    def migrar_receta(d):
+        params = d.get("params", {})
+        if isinstance(params, dict) and "cadena_tangente" not in params:
+            d = dict(d, params=dict(params, cadena_tangente=False))
+        return d
+
+    def _grupo(self, ctx, medida):
+        """Las opciones para el núcleo; None con las de siempre (radio constante o distancia igual, esquina común)."""
+        p = self.p
+        if p["tipo"] == "empalme":
+            if (p["tipo_radio"], p["esquina"]) == ("constante", "bola"):
+                return None
+            setback = p["tipo_radio"] == "constante" and p["esquina"] == "setback"    # como en el sólido
+            return {"tipo": p["tipo_radio"], "cuerda": medida, "esquina": "setback" if setback else "bola",
+                    "setback": ctx.evaluar(p["setback"]),
+                    "radios": [(0.0, medida), (1.0, ctx.evaluar(p["radio_fin"]))]}
+        if (p["tipo_chaflan"], p["esquina_chaflan"]) == ("distancia_igual", "chaflan"):
+            return None
+        return {"tipo": p["tipo_chaflan"], "distancia2": ctx.evaluar(p["distancia2"]),
+                "angulo": ctx.evaluar(p["angulo"], ANGULO), "voltear": p["voltear"], "esquina": p["esquina_chaflan"]}
 
     def ejecutar(self, estado, ctx):
         grupos = {}
@@ -563,10 +593,12 @@ class OpSupEmpalme(_OpSuperficie):
             grupos.setdefault(e.cuerpo, []).append(e.forma)
         if not grupos:
             raise ErrorOperacion("Elegí las aristas.")
+        medida = ctx.evaluar(self.p["medida"])
+        opciones = self._grupo(ctx, medida)
         for cid, aristas in grupos.items():
             c = estado.cuerpo(cid)
             f = _sf().empalme_superficie if self.p["tipo"] == "empalme" else _sf().chaflan_superficie
-            c.forma = f(c.forma, aristas, ctx.evaluar(self.p["medida"]))
+            c.forma = f(c.forma, aristas, medida, opciones, self.p["cadena_tangente"])
 
 
 class _Cascaron:

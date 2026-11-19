@@ -2636,7 +2636,7 @@ Sólidos: extruir, revolucionar, primitivas, empalmes, agujeros y patrones.
 | [`create_surface_sweep`](#create_surface_sweep) | sí | Barre curvas por una ruta. |
 | [`create_surface_loft`](#create_surface_loft) | sí | Crea una superficie entre secciones ordenadas, abiertas o cerradas. start_condition y end_condition fijan cómo sale de la primera y la última: free, direction (ángulo y peso), tangent y smooth (G1 y G2 contra una cara, con alineación de bordes), o point_tangent (cúpula en un punto; sin condición un punto queda agudo). rails (cualquier cantidad, tocan cada sección; con closed, lazos cerrados) y center_line guían la forma y se combinan con las condiciones: entre rieles manda la condición y sobre cada riel, el riel. |
 | [`offset_surface`](#offset_surface) | sí | Crea una superficie paralela a caras o cuerpos. |
-| [`fillet_surface`](#fillet_surface) | sí | Redondea o bisela aristas entre superficies. |
+| [`fillet_surface`](#fillet_surface) | sí | Redondea o bisela aristas entre superficies, con las opciones del Empalme y el Chaflán del sólido. |
 | [`create_patch`](#create_patch) | sí | Tapa un contorno cerrado con continuidad G0, G1 o G2. group_edges=false permite una continuidad por arista (edge_continuity); interior guía el parche con curvas, aristas o puntos y flip da vuelta la normal. |
 | [`create_ruled_surface`](#create_ruled_surface) | sí | Crea superficies rectas desde aristas, con dirección y ángulo. |
 | [`extend_surface`](#extend_surface) | sí | Alarga bordes libres de superficies. |
@@ -3980,14 +3980,23 @@ Crea una superficie paralela a caras o cuerpos.
 
 ### `fillet_surface`
 
-Redondea o bisela aristas entre superficies.
+Redondea o bisela aristas entre superficies, con las opciones del Empalme y el Chaflán del sólido.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `edges` (texto o objeto o lista de texto o objeto; obligatorio): aristas por id o selector; admite listas y {"body": "Cuerpo1", "edges": "|Z"}.
-  - `size` (número o expresión; opcional, por defecto `"1 mm"`): radio del empalme o distancia del chaflán en mm o expresión.
+  - `size` (número o expresión; opcional, por defecto `"1 mm"`): radio del empalme (con radius_type=chord, el largo de cuerda; con variable, el radio inicial) o distancia del chaflán (la primera), en mm o expresión.
   - `fillet_type` ("fillet" | "chamfer"; opcional, por defecto `"fillet"`): fillet (empalme) o chamfer (chaflán).
   - `body` (texto; opcional, por defecto `null`): cuerpo sobre el que evaluar selectores.
+  - `radius_type` ("constant" | "chord" | "variable"; opcional, por defecto `"constant"`): empalme: constant (constante), chord (longitud de cuerda) o variable (de size a end_radius).
+  - `end_radius` (número o expresión; opcional, por defecto `"2 mm"`): empalme variable: radio al final de cada arista.
+  - `chamfer_type` ("equal" | "two_distances" | "distance_angle"; opcional, por defecto `"equal"`): chaflán: equal (distancia igual), two_distances (size y distance2) o distance_angle (size y angle).
+  - `distance2` (número o expresión; opcional, por defecto `"1 mm"`): chaflán two_distances: distancia sobre la otra cara.
+  - `angle` (número o expresión; opcional, por defecto `"45 deg"`): chaflán distance_angle: ángulo (grados).
+  - `flip` (true/false; opcional, por defecto `false`): chaflán: pasa la primera distancia a la otra cara.
+  - `tangent_chain` (true/false; opcional, por defecto `true`): true suma las aristas tangentes encadenadas (como Fusion, por defecto).
+  - `corner_type` ("rolling_ball" | "setback" | "chamfer" | "miter" | "blend" o null; opcional, por defecto `null`): esquina; empalme: rolling_ball (por defecto) o setback (solo radio constante); chaflán: chamfer (por defecto), miter (inglete) o blend (mezcla).
+  - `setback` (número o expresión; opcional, por defecto `"2 mm"`): empalme con corner_type=setback: distancia de setback en mm.
 - CLI: `omnicad call fillet_surface --doc pieza.omnicad edges=…`
 
 ### `create_patch`

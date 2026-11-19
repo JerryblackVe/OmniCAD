@@ -1776,8 +1776,10 @@ def primitiva_superficie(solido):
     return _juntar(cascarones)
 
 
-def _filetear_cantos(forma, aristas, valor, clase_api, sustantivo, parametro):
-    """Empalme (MakeFillet) o chaflán (MakeChamfer) de aristas: misma mecánica, cambia la clase OCC [SFC-FILLET-CHAMFER]."""
+def _filetear_cantos(forma, aristas, valor, clase_api, sustantivo, parametro, grupo=None, cadena_tangente=False):
+    """Empalme (MakeFillet) o chaflán (MakeChamfer) de aristas: misma mecánica, cambia la clase OCC [SFC-FILLET-CHAMFER].
+    SUP-28: con `grupo` (tipo de radio o de chaflán, esquina…) o `cadena_tangente`, pasados los chequeos de superficie lo
+    hace el empalme o el chaflán del sólido, que ya tienen esas opciones (Fusion usa el mismo diálogo)."""
     if valor <= 0:
         raise geo.ErrorGeometria(f"El {parametro} del {sustantivo} debe ser positivo.")
     op = clase_api(forma)
@@ -1785,11 +1787,20 @@ def _filetear_cantos(forma, aristas, valor, clase_api, sustantivo, parametro):
     for e in _formas(aristas):
         if len(_caras_de(mapa, TopoDS.Edge(e))) < 2:
             raise geo.ErrorGeometria(f"Para el {sustantivo}: arista de dos caras.")
-        if clase_api is BRepFilletAPI_MakeFillet:
+        # con cuerda o variable `valor` no es EL radio: esos los revisa el empalme del sólido
+        if clase_api is BRepFilletAPI_MakeFillet and (grupo or {}).get("tipo", "constante") == "constante":
             from .solidos_modificar import _rechazar_cara_justa
             geo.rechazar_radio_de_arco(TopoDS.Edge(e), float(valor))
             _rechazar_cara_justa(forma, TopoDS.Edge(e), float(valor))
         op.Add(float(valor), TopoDS.Edge(e))
+    if grupo is not None or cadena_tangente:
+        from . import solidos_modificar as sm
+        g = dict(grupo or {}, aristas=[TopoDS.Edge(e) for e in _formas(aristas)])
+        if clase_api is BRepFilletAPI_MakeFillet:
+            return _simplificar(sm.empalme(forma, [dict({"radio": float(valor)}, **g)], cadena_tangente=cadena_tangente))
+        esquina = g.pop("esquina", "chaflan")
+        return _simplificar(sm.chaflan(forma, [dict({"distancia": float(valor)}, **g)],
+                                       cadena_tangente=cadena_tangente, esquina=esquina))
     # OCC lanza Standard_Failure con mensajes poco útiles
     try:
         op.Build()
@@ -1800,14 +1811,19 @@ def _filetear_cantos(forma, aristas, valor, clase_api, sustantivo, parametro):
     return _simplificar(op.Shape())
 
 
-def empalme_superficie(forma, aristas, radio):
-    """Empalme (Fillet) de aristas compartidas por dos caras de un cuerpo de superficie [SFC-FILLET-CHAMFER]."""
-    return _filetear_cantos(forma, aristas, radio, BRepFilletAPI_MakeFillet, "empalme", "radio")
+def empalme_superficie(forma, aristas, radio, grupo=None, cadena_tangente=False):
+    """Empalme (Fillet) de aristas compartidas por dos caras de un cuerpo de superficie [SFC-FILLET-CHAMFER].
+    `grupo`: tipo de radio (constante, cuerda, variable con `radios`) y esquina, como un conjunto de
+    `solidos_modificar.empalme`; `cadena_tangente` suma las aristas tangentes."""
+    return _filetear_cantos(forma, aristas, radio, BRepFilletAPI_MakeFillet, "empalme", "radio", grupo, cadena_tangente)
 
 
-def chaflan_superficie(forma, aristas, distancia):
-    """Chaflán de distancia igual en aristas de un cuerpo de superficie [SFC-FILLET-CHAMFER]."""
-    return _filetear_cantos(forma, aristas, distancia, BRepFilletAPI_MakeChamfer, "chaflán", "distancia")
+def chaflan_superficie(forma, aristas, distancia, grupo=None, cadena_tangente=False):
+    """Chaflán en aristas de un cuerpo de superficie [SFC-FILLET-CHAMFER]. `grupo`: tipo (distancia igual, dos
+    distancias, distancia y ángulo), `distancia2`, `angulo`, `voltear` y `esquina` (chaflan, inglete, mezcla), como
+    `solidos_modificar.chaflan`; `cadena_tangente` suma las aristas tangentes."""
+    return _filetear_cantos(forma, aristas, distancia, BRepFilletAPI_MakeChamfer, "chaflán", "distancia", grupo,
+                            cadena_tangente)
 
 
 # ---------------------------------------------------------------- modificar
