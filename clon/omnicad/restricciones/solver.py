@@ -1285,9 +1285,10 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
         for cid in sis.originales:
             ij = [j for pid in sis.b.curvas[cid].puntos() for j in sis.idx_p.get(pid, ())]
             pesos[ij + ([sis.idx_r[cid]] if cid in sis.idx_r else [])] = _PESO_ORIGINAL
-        # B-585: si un punto suelto puede ir a la curva, va él y el círculo no se agranda (como Fusion). También sobre
-        # el radio de un original: así sigue pesando más que el de su copia desfasada.
-        pesos[list(set(sis.idx_r.values()))] *= _PESO_RADIO
+    # B-585: si un punto suelto puede ir a la curva, va él y el círculo no se agranda (como Fusion). También sobre
+    # el radio de un original: así sigue pesando más que el de su copia desfasada. B-649: también al arrastrar (mover
+    # el centro de un círculo tangente lo agrandaba); arrastrar el borde cambia el radio antes de resolver.
+    pesos[list(set(sis.idx_r.values()))] *= _PESO_RADIO
     if arrastrado in sis.idx_p:
         ij = list(sis.idx_p[arrastrado])
         pesos[ij] = _PESO_ARRASTRE
