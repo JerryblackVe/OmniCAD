@@ -14,7 +14,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E3 | — | B-660 y B-667 integrados (7f03f6f2, 220601c3); se vacía y queda quieta |
 | E4 | B-619 (desde 13:10 UTC) | Proyectar un cuerpo de revolución: B-619b (curva 3D exacta) y B-619c (Opus alto; trabada en OpenCode con 2 modelos). B-665 y B-666 integrados |
 | E8 | — | B-658 integrado (855b50ab); se vacía (contexto 30 %) |
-| OpenCode | B-584, H-117, B-656, B-653, B-479, B-512, P-178 | Cola de boceto (vigía); lo demás en `manana/` |
+| OpenCode | B-584, H-117, B-656, B-653, B-479, B-512, P-178, B-670, B-671, B-672 | Cola de boceto (vigía); lo demás en `manana/` |
 | E2, E5, E6, E7, E9, E10 | — | En pausa por el amarillo (E6: B-659 y velocidad del solver cuando haya lugar) |
 | E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620 |
 
@@ -24,7 +24,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-659 | Clic de 3,9 s en `prueba_ui/restricciones_boceto.py` (E6, cuando haya lugar) |
+| 1 | B-667 | Parcial: el 2.º arrastre de la línea perpendicular deforma la spline (solver, Opus alto; E1 después de B-669 o E3) |
+| 2 | B-659 | Clic de 3,9 s en `prueba_ui/restricciones_boceto.py` (E6, cuando haya lugar) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
