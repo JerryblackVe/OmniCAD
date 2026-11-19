@@ -8,6 +8,7 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-662 | `test_caza_regresion` falla en main: espera la firma de B-612, cuya fila ya se borró | Abierto | Baja | Actualizar la lista de firmas del test | Informe E4 19/11 | 2026-11-19 |
 | B-661 | Bocetos › El círculo se dibuja con 64 lados fijos: de cerca se ve facetado y la línea tangente parece no tocarlo; Fusion lo redibuja según el zoom | Abierto | Media | Muestrear el círculo según el zoom | Informe E1 19/11 (B-649) | 2026-11-19 |
 | B-658 | Bocetos › Restricción Curvatura: arrastrar con el mouse el extremo de la spline da «Restricciones en conflicto (error 2.91e-06 mm)» aunque la relación se conserva (2/2); solo por el camino del Lienzo | Abierto | Media | Ver por qué el Lienzo rechaza un error de 3e-6 mm | E7 19/11, `scripts/prueba_ui/restricciones_boceto.py` ciclo «curvatura» | 2026-11-19 |
 | B-659 | Bocetos › Fluidez en `prueba_ui/restricciones_boceto.py`: un clic tardó 3936 ms (otros 986 y 714 ms; 55 acciones de más de 100 ms) | Abierto | Media | Medir qué se congela al hacer clic (E6, velocidad del solver) | E7 19/11 | 2026-11-19 |
