@@ -27,7 +27,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1a | B-638 | Alargar del boceto no hace nada en la ventana; en Linux no se reproduce: E11 en Windows (E1, Opus alto; si no sale rápido, en gris por la regla 16) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
 
