@@ -369,9 +369,9 @@ def test_editor_menu_de_la_cota_edita_el_valor_y_renombra(app_qt, monkeypatch):
 
 
 def test_editor_al_pasar_el_mouse_la_cota_muestra_nombre_y_valor(app_qt, monkeypatch):
-    from PySide6.QtCore import QPoint
-    from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QToolTip
+    from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication, QToolTip
     b = Boceto()
     ln = b.agregar_linea((0, 0), (20, 0))
     cid = b.agregar_cota("distancia", [ln], "20")
@@ -381,16 +381,22 @@ def test_editor_al_pasar_el_mouse_la_cota_muestra_nombre_y_valor(app_qt, monkeyp
     lz.grab()
     textos = []
     monkeypatch.setattr(QToolTip, "showText", staticmethod(lambda pos, texto, *a, **k: textos.append(texto)))
-    QTest.mouseMove(lz, lz._zonas_cotas[cid].center().toPoint())
+
+    def mover(pos):
+        # evento directo: QTest.mouseMove mueve el cursor real y no emite si ya está en ese punto (B-681)
+        p = QPointF(pos)
+        QApplication.sendEvent(lz, QMouseEvent(QEvent.MouseMove, p, p, Qt.NoButton, Qt.NoButton, Qt.NoModifier))
+
+    mover(lz._zonas_cotas[cid].center().toPoint())
     assert lz._cita_sobre == cid and textos[-1] == "ANCHO : 20 mm"
-    QTest.mouseMove(lz, QPoint(750, 550))
+    mover(QPoint(750, 550))
     assert lz._cita_sobre is None
     lz.b.cotas[cid].nombre = ""
     lz.grab()
-    QTest.mouseMove(lz, lz._zonas_cotas[cid].center().toPoint())
+    mover(lz._zonas_cotas[cid].center().toPoint())
     assert textos[-1].startswith("d1 : 20 mm")
     lz.herramienta = "linea"
-    QTest.mouseMove(lz, QPoint(750, 550))
+    mover(QPoint(750, 550))
     assert lz._cita_sobre is None
     lz.close()
     lz.deleteLater()
