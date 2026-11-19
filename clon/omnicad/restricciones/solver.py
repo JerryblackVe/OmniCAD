@@ -1334,9 +1334,12 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
     res = sis.residuos(x)
     err = float(np.max(np.abs(res))) if len(res) else 0.0
     if not con_rango:
+        x = _trasladar_arcos_concentricos(sis, x, TOLERANCIA_ACEPTA_ARRASTRE)
+        err = float(np.max(np.abs(sis.residuos(x)), initial=0.0))
         return x, err, None, None
     if arrastrado is None:
         x = _preferir_traslacion(sis, x)
+        x = _trasladar_arcos_concentricos(sis, x)
         err = float(np.max(np.abs(sis.residuos(x)), initial=0.0))
     J = _jacobiano(sis, x)
     rango = int(np.linalg.matrix_rank(J, tol=1e-6)) if J.size else 0
@@ -1355,6 +1358,29 @@ class _QuietasCopias:
 
     def residuos(self, x):
         return np.array([v for f in self.terminos for v in f(x)], dtype=float)
+
+
+def _trasladar_arcos_concentricos(sis, x, tol=TOLERANCIA):
+    """B-617: acompañar el centro con los dos extremos, salvo que otra restricción lo impida.
+
+    Vale al aplicar la restricción y al arrastrar (`tol` es la del arrastre); cada arco se prueba solo."""
+    for cid in {e for r in sis._restricciones if r.tipo == "concentrica" for e in r.entidades}:
+        arco = sis.b.curvas[cid]
+        if not isinstance(arco, Arco) or not all(p in sis.idx_p for p in arco.extremos()):
+            continue
+        cx, cy = sis.b.coords(arco.centro)
+        x1, y1 = sis.P(x, arco.centro)
+        dx, dy = x1 - cx, y1 - cy
+        if math.hypot(dx, dy) <= TOLERANCIA:
+            continue
+        candidata = x.copy()
+        for p in arco.extremos():
+            px, py = sis.b.coords(p)
+            i, j = sis.idx_p[p]
+            candidata[i], candidata[j] = px + dx, py + dy
+        if np.max(np.abs(sis.residuos(candidata)), initial=0.0) < tol:
+            x = candidata
+    return x
 
 
 def _preferir_traslacion(sis, x):
