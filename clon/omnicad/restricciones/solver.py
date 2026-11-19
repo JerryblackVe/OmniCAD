@@ -130,6 +130,7 @@ class _Sistema:
         copias de los patrones no son incógnitas (`_derivar`), salvo el punto `quieto` (el arrastrado)."""
         self.b = boceto
         self.valores = valores_cotas
+        self.quieto = quieto           # el punto arrastrado (B-667b: la línea perpendicular gira alrededor de él)
         self._cache = {}
         rs = nativo.disponible()
         self._rs = rs if hasattr(rs, "spline_extremos") else None      # un .pyd viejo no la trae: rige Python
@@ -817,7 +818,25 @@ class _Sistema:
         for _ in range(40):                   # afina entre las muestras vecinas: si ya se cumple, nada se mueve
             m1, m2 = izq + (der - izq) / 3, der - (der - izq) / 3
             izq, der = (izq, m2) if desajuste(m1) < desajuste(m2) else (m1, der)
-        j = self._parametro((izq + der) / 2)
+        t = (izq + der) / 2
+        if self.quieto in self.b.curvas[l].puntos():
+            # B-667b: se arrastra un extremo: la línea gira alrededor de él, así que el contacto es un pie de la normal
+            # desde ese punto (el más cercano al anterior). Si el punto cruzó adonde ese pie ya no existe, el arranque
+            # quedaba lejos de toda solución con la spline quieta y el solver la deformaba (2.º arrastre en Windows).
+            px, py = self.b.coords(self.quieto)
+
+            def g(t):
+                C, D = evaluar_primitiva(pr0, t, 1)
+                return (C[0] - px) * D[0] + (C[1] - py) * D[1]
+            pies, muestras = [], [t0 + (t1 - t0) * k / 96 for k in range(97)]
+            for izq, der in zip(muestras[:-1], muestras[1:], strict=True):
+                if g(izq) * g(der) <= 0:
+                    for _ in range(40):
+                        m = (izq + der) / 2
+                        izq, der = (izq, m) if g(izq) * g(m) <= 0 else (m, der)
+                    pies.append((izq + der) / 2)
+            t = min(pies, key=lambda r: abs(r - t), default=t)
+        j = self._parametro(t)
 
         def f(x, l=l, s=s, j=j):
             pr = self.prim(x, s)
