@@ -49,6 +49,8 @@ go_libre() {   # Go sin pausa por 429 y con menos de GO_HORA corridas lanzadas e
   [ -z "$(find "$GO_PAUSA" -newermt '-300 min' 2>/dev/null)" ] || return 1
   [ "$(awk -v d="$(date -u -d '-60 min' '+%F %T')" '$1" "$2 >= d && /lanzo .*opencode-go\/(glm-5.3|kimi-k3.1-pro)[ ,]/' "$LOG" 2>/dev/null | wc -l)" -lt "$GO_HORA" ]; }
 omitir() {   # modelo de Go que esta tarea no puede usar ahora (no es un arreglo FIX-* o Go está sin cupo)
+  # promo de glm-5.3 (USD 200 de API, hasta el 23/11; Gerardo, 19/11): sin tope por hora ni go_apagado, solo la pausa por 429
+  [ "$1" = opencode-go/glm-5.3 ] && [ "$(date -u +%F)" \< 2026-11-24 ] && { [ -n "$(find "$GO_PAUSA" -newermt '-300 min' 2>/dev/null)" ]; return; }
   case "$GO" in *" $1 "*) [ -e "$COLA/go_apagado" ] && return 0; go_libre || return 0;; esac; return 1; }   # Go para toda tarea (Gerardo, 19/11); `touch $COLA/go_apagado` lo apaga (semanal al 80 %)
 usado() {   # el modelo ya está en su tope de corridas a la vez (CodeBuddy 2, OpenCode 1; cuenta también el lanzador de E9)
   local c tope=1; [ "${1#cb:}" != "$1" ] && tope=2
