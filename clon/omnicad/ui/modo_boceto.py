@@ -715,8 +715,11 @@ class PanelCaracter(QFrame):
         self.parametro_texto = QLabel()
         self.valor_parametro_texto = QLineEdit()
         self.valor_parametro_texto.setEnabled(False)
-        self.valor_parametro_texto.setToolTip("Contenido del parámetro automático Text ligado a este texto. "
-                                              "Editar lo cambia con set_parameter.")
+        self.valor_parametro_texto.setToolTip("Lo que dice el texto: es lo mismo que el cuadro del visor. "
+                                              "Si hay un parámetro ligado, editarlo lo cambia con set_parameter.")
+        self._contenido = None           # B-665: el campo del cuadro del visor ligado a «Contenido» (o None)
+        self._con_parametro = False
+        self.valor_parametro_texto.textEdited.connect(lambda t: self.cambio.emit("contenido_texto", t))
         self.valor_parametro_texto.editingFinished.connect(
             lambda: self.cambio.emit("valor_parametro_texto", self.valor_parametro_texto.text()))
         parametro = QFormLayout()
@@ -1033,6 +1036,24 @@ class PanelCaracter(QFrame):
             sp.blockSignals(False)
         self.par.setEnabled(True)
 
+    def ligar_contenido(self, campo):
+        """B-665: con el cuadro de texto abierto, «Contenido» muestra lo que se escribe en el visor y escribir acá
+        lo cambia allá (el campo Text del diálogo de Fusion). Al cerrarse el cuadro, el campo se suelta."""
+        self._contenido = campo
+        self.valor_parametro_texto.setEnabled(True)
+        self._copiar_contenido(campo.text())
+        campo.textChanged.connect(self._copiar_contenido)
+        campo.destroyed.connect(lambda *_: self._soltar_contenido(campo))
+
+    def _copiar_contenido(self, texto):
+        if self.valor_parametro_texto.text() != texto:      # igual: no mover el cursor de quien escribe acá
+            self.valor_parametro_texto.setText(texto)
+
+    def _soltar_contenido(self, campo):
+        if self._contenido is campo:     # el cuadro viejo se borra tarde (deleteLater): no soltar el nuevo
+            self._contenido = None
+            self.valor_parametro_texto.setEnabled(self._con_parametro)
+
     def _widgets(self):
         return (self.filtro, self.fuente, self.estilo, self.b_kerning, self.b_voltear_h, self.b_voltear_v, self.subrayado, self.tachado, self.grosor,
                 self.base, self.inclinacion, self.escala_h, self.escala_v, self.capitalizacion, self.sin_division,
@@ -1048,8 +1069,10 @@ class PanelCaracter(QFrame):
             self.pivote.setCurrentIndex(max(0, self.pivote.findData(o.get("pivote_texto"))))
             self.pivote.setEnabled(bool(o.get("marco_texto")))
             self.parametro_texto.setText(o.get("parametro_texto") or "Sin parámetro ligado")
-            self.valor_parametro_texto.setText(o.get("valor_parametro_texto", "").replace("\n", "\\n"))
-            self.valor_parametro_texto.setEnabled(bool(o.get("parametro_texto")))
+            self.valor_parametro_texto.setText(self._contenido.text() if self._contenido is not None
+                                               else o.get("valor_parametro_texto", "").replace("\n", "\\n"))
+            self.valor_parametro_texto.setEnabled(bool(o.get("parametro_texto")) or self._contenido is not None)
+            self._con_parametro = bool(o.get("parametro_texto"))
             self._poblar_fuentes(o.get("fuente", "Arial"))
             clave = {v: k for k, v in _ESTILO_BC.items()}[(bool(o.get("negrita")), bool(o.get("cursiva")))]
             self.estilo.setCurrentIndex(max(0, self.estilo.findData(clave)))
@@ -1459,6 +1482,8 @@ class ModoBoceto(QObject):
         if self.paleta is not None:
             self._mostrar_tarjeta("texto")
             self._mostrar_caracter(True)
+            if lz.entrada is not None:
+                self.caracter.ligar_contenido(lz.entrada.campos[0])
             self.v.area.reubicar()
 
     def _editar_parametro_texto(self, nombre, valor):
@@ -1515,6 +1540,9 @@ class ModoBoceto(QObject):
 
     def _ajuste(self, clave, valor):
         if self.activo:
+            if clave == "contenido_texto":
+                self.lienzo.escribir_contenido_texto(valor)
+                return
             if clave == "valor_parametro_texto":
                 from ..restricciones import ErrorBoceto
                 nombre = self.lienzo.opciones.get("parametro_texto")
@@ -1524,8 +1552,10 @@ class ModoBoceto(QObject):
                     self._editar_parametro_texto(nombre, valor.replace("\\n", "\n"))
                 except ErrorBoceto as e:
                     self.v.mensaje(str(e), 7000)
-                    self.caracter.valor_parametro_texto.setText(
-                        self.lienzo.opciones["valor_parametro_texto"].replace("\n", "\\n"))
+                    previo = self.lienzo.opciones["valor_parametro_texto"].replace("\n", "\\n")
+                    self.caracter.valor_parametro_texto.setText(previo)
+                    if self.lienzo.entrada is not None and self.lienzo._previa_texto is not None:
+                        self.lienzo.entrada.campos[0].setText(previo)    # lo tecleado ya había llegado al cuadro
                     return
                 if self.lienzo.entrada is not None and self.lienzo._previa_texto is not None:
                     self.lienzo.entrada.campos[0].setText(valor)

@@ -168,6 +168,12 @@ class LienzoTextoMixin:
         else:
             self.refrescar_previa_texto()
 
+    def escribir_contenido_texto(self, texto):
+        """B-665: lo escrito en «Contenido» (panel Carácter) pasa al cuadro abierto, con deshacer y el cursor al final."""
+        if self._previa_texto is not None and self.entrada is not None:
+            real = texto.replace("\\n", "\n")
+            self._escribir_texto(real, len(real))
+
     def _reemplazar_rango(self, desde, hasta, nuevo):
         texto = self._texto_real()
         corrimiento = len(nuevo) - (hasta - desde)
