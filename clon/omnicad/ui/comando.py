@@ -823,10 +823,12 @@ class _FilaSeleccion(QWidget):
         self._items = list(items)
         self.boton.setToolTip(detalle or vacio)
         self.boton.poner(texto, propio)
-        self.boton.setProperty("activa", activa)
-        self.boton.setProperty("lleno", n > 0)
-        self.boton.style().unpolish(self.boton)
-        self.boton.style().polish(self.boton)
+        if self.boton.property("activa") != activa or self.boton.property("lleno") != (n > 0):
+            self.boton.setProperty("activa", activa)
+            self.boton.setProperty("lleno", n > 0)
+            estilo = self.boton.style()
+            estilo.unpolish(self.boton)
+            estilo.polish(self.boton)
         self.borrar.setVisible(n > 0)
         self.revisar.setVisible(n > 1 and bool(descripcion))
 

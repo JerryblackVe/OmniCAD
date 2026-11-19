@@ -97,3 +97,19 @@ def test_b546_extruir_reabre_sin_rearmar_las_asas_y_las_rearma_si_cambia_el_esta
     _llamar(api.Sesion(ventana.doc), "create_box", length=5, width=5, height=5, x=-50)    # otro estado
     _abrir_extruir(ventana)
     assert len(llamadas) == 2
+
+
+def test_b440_agujero_no_reaplica_el_estilo_si_solo_cambia_el_texto(ventana, monkeypatch):
+    p = ventana.ejecutar_comando(Agujero())
+    fila = p.filas_sel["colocacion"]
+    consultas = []
+    estilo = fila.boton.style
+    monkeypatch.setattr(fila.boton, "style", lambda: consultas.append(1) or estilo())
+    fila.set_estado(1, True, "Cara A")
+    assert consultas and fila.boton.property("lleno") is True
+    consultas.clear()
+    fila.set_estado(1, True, "Cara B", detalle="Otra cara")
+    assert fila.boton.toolTip() == "Otra cara" and not consultas
+    fila.set_estado(0, False)
+    assert consultas and fila.boton.property("lleno") is False and fila.boton.property("activa") is False
+    p.cancelar()
