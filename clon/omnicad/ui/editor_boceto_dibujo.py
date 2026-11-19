@@ -369,7 +369,7 @@ class LienzoDibujoMixin:
         «fx:» delante si sale de una expresión (Fusion). Con la unidad: «20 mm» (la del documento) o «90°»."""
         angular = c.tipo == "angulo"
         unidad = "°" if angular else f" {formato.sufijo()}"
-        prefijo = {"radio": "R", "diametro": "⌀"}.get(c.tipo, "")
+        prefijo = {"radio": "R", "diametro": "⌀"}.get(c.tipo, "⌀" if c.datos.get("diametral") else "")
         texto = f"{prefijo}{formato.numero(valor if angular else formato.longitud(valor), angular=angular)}{unidad}"
         if c.referencia:
             return f"({texto})"

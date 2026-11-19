@@ -1264,6 +1264,14 @@ def test_ui_cota_con_expresion_lleva_fx_y_la_de_referencia_parentesis():
         formato.configurar_unidades("mm")
 
 
+def test_p178_cota_con_linea_de_eje_lleva_el_simbolo_de_diametro():
+    from omnicad.ui.editor_boceto import Lienzo
+    d = Cota(5, "distancia", [1, 2], "14", {"diametral": True})      # con la línea de eje: es un diámetro
+    assert Lienzo._texto_cota(d, 14) == "⌀14 mm"
+    assert Lienzo._texto_cota(Cota(6, "distancia", [1, 2], "14", {}), 14) == "14 mm"
+    assert Lienzo._texto_cota(Cota(7, "distancia", [1, 2], "14", {"diametral": True}, referencia=True), 14) == "(⌀14 mm)"
+
+
 def test_ui_cota_se_resalta_y_da_tooltip_al_pasar_con_la_caja_abierta(monkeypatch):
     from PySide6.QtCore import QEvent, QPointF, Qt
     from PySide6.QtGui import QMouseEvent
