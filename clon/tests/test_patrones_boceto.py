@@ -486,3 +486,29 @@ def test_b599_la_previa_de_un_objeto_svg_dibuja_su_geometria(ventana):
     ctl.cargar(lz.b.patrones[0])                                         # editar (doble clic en el glifo)
     copia = next(i for i in objetos.raices(lz.b) if i != oid)
     assert ctl.calcular()["error"] == "" and set(objetos.curvas(lz.b, [copia])) <= lz.copias_en_edicion
+
+
+# ------------------------------------------------------------------ B-660: la Simetría también refleja el objeto SVG entero
+def test_b660_simetria_de_un_objeto_svg_lo_refleja_entero():
+    from omnicad.restricciones import objetos
+    b = Boceto()
+    eje = b.agregar_linea((0.0, -10.0), (0.0, 10.0))
+    oid = _cuadro_svg(b)
+    sueltos = len(b.puntos)
+    nuevos = b.simetria([oid] + b.puntos_de(objetos.curvas(b, [oid])), eje)
+    copia = next(i for i in objetos.raices(b) if i != oid)
+    assert [round(v, 6) for v in objetos.caja(b, [copia])] == [-24.0, 0.0, -20.0, 4.0]
+    assert len(nuevos) == 4 and len(b.puntos) == sueltos + 8          # sin puntos espejados sueltos de más
+
+
+def test_b660_la_previa_de_simetria_dibuja_el_objeto_svg(ventana):
+    from omnicad.restricciones import objetos
+    lz, _panel, _ctl = ventana
+    eje = lz.b.agregar_linea((0.0, -10.0), (0.0, 10.0))
+    oid = _cuadro_svg(lz.b)
+    lz.seleccion = [oid]
+    lz.set_herramienta("simetria")
+    lz._eje_simetria = eje
+    polis, error = lz._calcular_simetria()
+    assert error == "" and sum(math.dist(p[0], p[-1]) > 3.9 for p in polis) == 4
+    assert lz.aceptar_simetria() and len(objetos.raices(lz.b)) == 2

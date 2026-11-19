@@ -670,7 +670,7 @@ class LienzoCrearMixin:
 
     def _seleccion_util(self):
         return [i for i in self.seleccion if i in self.b.curvas or i in self.b.puntos
-                or self.herramienta in TRANSFORMAR and i in self.b.objetos]
+                or self.herramienta in (*TRANSFORMAR, "simetria") and i in self.b.objetos]
 
     def _avanzar_seleccion(self, avisar=True):
         """Enter en la fase de selección: pasa al paso siguiente de la herramienta."""
