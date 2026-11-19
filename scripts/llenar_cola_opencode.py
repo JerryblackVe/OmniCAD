@@ -3,7 +3,7 @@
 Uso: llenar_cola_opencode.py [--tope N] [--seco]. Fuentes en orden: a) comandos del boceto sin test ni prueba
 (scripts/cobertura_boceto.py), b) filas abiertas de boceto sin tarea, c) caza de boceto (una por día).
 No repite lo que ya está en la cola, la reserva, corriendo, hechos, descartadas o trabadas."""
-import argparse, datetime, os, re, subprocess, sys
+import argparse, datetime, hashlib, os, re, subprocess, sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -53,7 +53,20 @@ def sin_cobertura():
     return [k for g, k, t, u in sorted(filas, key=clave) if t == "**no**"]
 
 
+def opciones_sin_test():
+    """Filas del inventario de opciones y asas con «**no**» en test automático (preparado/opciones_asas_boceto.md)."""
+    ruta = SEGUIMIENTO / "preparado/opciones_asas_boceto.md"
+    for f in re.findall(r"^\| ([^|]+?) \| ([^|]+?) \| \*\*no\*\* \|", ruta.read_text(encoding="utf-8"), re.M):
+        yield "%s|%s" % f
+
+
 def candidatas():
+    for fila in opciones_sin_test():
+        cmd, opc = fila.split("|", 1)
+        yield "PREP-TEST-OPC-" + hashlib.md5(fila.encode()).hexdigest()[:6], (
+            f"PREPARAR el test de la opción «{opc}» del comando «{cmd}» del boceto: clon/tests/test_prep_opc_<nombre>.py "
+            f"(valor numérico y un borde, según docs/fusion_docs). Ubicá el código en clon/omnicad/ui/comandos/ o ui/modo_boceto.py. "
+            f"Si falla, es un bug: fila nueva y xfail. Solo escribís tests.")
     for k in sin_cobertura():
         yield f"PREP-TEST-{k}", (f"PREPARAR el test del comando de boceto «{k}»: escribí clon/tests/test_prep_cmd_{k}.py "
                                  f"(un caso con valor numérico y un caso borde) según docs/fusion_docs. Si falla, es un bug: fila nueva y xfail. "
