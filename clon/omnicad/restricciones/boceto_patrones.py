@@ -11,6 +11,13 @@ from .boceto_entidades import (
 from .boceto_geometria import _rot
 
 
+def _matriz_de(f):
+    """Matriz afín 3×3 de una transformación de copia `f` (giro o traslación del patrón)."""
+    o = np.asarray(f((0.0, 0.0)), float)
+    ex, ey = np.asarray(f((1.0, 0.0)), float) - o, np.asarray(f((0.0, 1.0)), float) - o
+    return np.array([[ex[0], ey[0], o[0]], [ex[1], ey[1], o[1]], [0.0, 0.0, 1.0]])
+
+
 class _Patrones:
     # ------------------------------------------------------------ CREAR: simetría y patrones
     def simetria(self, ids, eje):
@@ -84,7 +91,8 @@ class _Patrones:
     def _patron(self, ids, trans, tipo, params, suprimidos=(), pid=None):
         """Copia `ids` por cada transformación `(f, ángulo, extra, datos)` de `trans` (salvo las suprimidas, por
         índice) y registra el patrón para poder editarlo (`editar_patron`). Devuelve las curvas nuevas."""
-        ids = [i for i in ids if i in self.curvas or i in self.puntos]
+        from . import objetos
+        ids = [i for i in ids if i in self.curvas or i in self.puntos or i in self.objetos]
         if not ids:
             raise ErrorBoceto("Seleccioná la geometría del patrón.")
         grupo = self._siguiente
@@ -92,13 +100,19 @@ class _Patrones:
         for n, (f, angulo, extra, datos) in enumerate(trans):
             if n in suprimidos:
                 continue
+            # B-599: un objeto vectorial (SVG) se copia entero, con su matriz movida como en Mover/Copiar.
+            # shortcut: sus copias no siguen al original si este se mueve después; atarlas pide restricciones por objeto
+            obj = [i for i in ids if i in self.objetos]
+            if obj:
+                obj = objetos.duplicar(self, obj, 0, 0)
+                objetos.transformar(self, obj, _matriz_de(f))
             mapa, mapa_c = self._copiar(ids, f, False, angulo, extra)
             for p, q in mapa.items():
                 self.agregar_restriccion("patron", [p, q] + extra, {**datos, "grupo": grupo})
             for i, k in mapa_c.items():
                 if isinstance(self.curvas[i], (Circulo, Elipse, ArcoElipse)):
                     self.agregar_restriccion("igual", [i, k])
-            copias[str(n)] = list(mapa_c.values()) + list(mapa.values())
+            copias[str(n)] = list(mapa_c.values()) + list(mapa.values()) + obj
             nuevos += list(mapa_c.values())
         registro = {"id": pid if pid is not None else self._nuevo_id(), "tipo": tipo, "ids": list(ids),
                     "params": params, "suprimidos": sorted(suprimidos), "copias": copias}
@@ -221,8 +235,13 @@ class _Patrones:
         """Todo lo que puede rechazar un patrón antes de crearlo, sin tocar el boceto: reglas de `validar_patron`,
         tope de puntos y centro apartado de la geometría. Devuelve (transformaciones, punto del centro o None, ids
         sin ese punto): lo que usan la creación, la edición y la vista previa."""
+        from . import objetos
         trans, cp = (self._trans_rectangular(params), None) if tipo == "rectangular" else self._trans_circular(params)
-        ids = [i for i in ids if i != cp]
+        obj = [i for i in ids if i in self.objetos]
+        if set(obj) - set(objetos.raices(self)):
+            raise ErrorBoceto("Patrón: elegí el objeto vectorial entero, no una parte.")
+        de_objetos = set(self.puntos_de(objetos.curvas(self, obj)))
+        ids = [i for i in ids if i != cp and i not in de_objetos]       # sus puntos viajan con el objeto (B-599)
         if tipo == "circular":
             self._exigir_centro_aparte(ids, params["centro"], cp)
         self.exigir_tamano_patron(ids, len(trans), sin=(cp,))
@@ -312,7 +331,12 @@ class _Patrones:
                                          (i for i in copia if i in self.curvas), strict=False):
                     if isinstance(self.curvas[cid], Texto):
                         self.curvas[cid].angulo = self.curvas[original].angulo + angulo
+                for original, oid in zip((i for i in registro["ids"] if i in self.objetos),
+                                         (i for i in copia if i in self.objetos), strict=False):
+                    self.objetos[oid]["matriz"] = (_matriz_de(f) @ np.asarray(self.objetos[original]["matriz"])).tolist()
             registro["params"] = nuevo
+            from . import objetos
+            objetos.invalidar(self)
 
     def editar_patron(self, pid, **cambios):
         """Edita un patrón ya hecho (cantidades, distancias, direcciones, `suprimidos`): borra sus copias y las
@@ -324,11 +348,15 @@ class _Patrones:
             raise ErrorBoceto(f"No existe el patrón {pid}.")
         suprimidos = set(cambios.pop("suprimidos", registro["suprimidos"]))
         params = {**registro["params"], **cambios}
-        ids = [i for i in registro["ids"] if i in self.curvas or i in self.puntos]
+        ids = [i for i in registro["ids"] if i in self.curvas or i in self.puntos or i in self.objetos]
         if not ids:
             raise ErrorBoceto("El patrón ya no tiene geometría original.")
         trans, cp, _ids = self.comprobar_patron(registro["tipo"], params, ids)
         lugar = {i: (n, k) for n, lista in registro["copias"].items() for k, i in enumerate(lista)}
+        viejos = [i for i in lugar if i in self.objetos]
+        if viejos:
+            from . import objetos
+            objetos.eliminar(self, viejos)
         originales = set(registro["ids"])
         sobre_copias = [copy.deepcopy(v) for tabla in (self.restricciones, self.cotas) for v in tabla.values()
                         if set(v.entidades) & set(lugar) and not (isinstance(v, Restriccion) and (

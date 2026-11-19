@@ -17,7 +17,7 @@ from types import SimpleNamespace
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPen
 
-from ..restricciones import ErrorBoceto
+from ..restricciones import ErrorBoceto, objetos
 from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, ErrorExpresion
 from . import formato
 from .asas_boceto import Asa2D, GestorAsas2D, _desfase_px, centro_de, polilineas_de
@@ -79,6 +79,11 @@ class ControlPatron:
     def activo(self):
         return self.tipo is not None and self.l.herramienta in HERRAMIENTAS
 
+    def _ids(self):
+        """Lo elegido para repetir: curvas, puntos y objetos vectoriales (B-599: un SVG elegido se repite entero)."""
+        l = self.l
+        return [i for i in l.seleccion if i in l.b.curvas or i in l.b.puntos or i in l.b.objetos]
+
     # ------------------------------------------------------------ arranque y cierre
     def iniciar(self, herramienta):
         """Al elegir la herramienta (o cambiar de herramienta): estado nuevo. Con algo ya elegido salta al centro."""
@@ -88,7 +93,7 @@ class ControlPatron:
             return
         self.textos = dict(DEFECTO[self.tipo])
         self.l.fase = self.campo = "seleccion"
-        if self.l._seleccion_util() and self.tipo == "circular":
+        if self._ids() and self.tipo == "circular":
             self.l.fase = self.campo = "centro"
         self._emitir()
 
@@ -106,11 +111,12 @@ class ControlPatron:
         """Editar un patrón ya hecho: el panel arranca con sus valores. Cancelar no toca el boceto."""
         p, l = registro["params"], self.l
         self.tipo, self.editando = registro["tipo"], registro["id"]
-        l.seleccion = [i for i in registro["ids"] if i in l.b.curvas or i in l.b.puntos]
+        l.seleccion = [i for i in registro["ids"] if i in l.b.curvas or i in l.b.puntos or i in l.b.objetos]
         self.suprimidos, self.previa, self.error_clic = set(registro["suprimidos"]), True, ""
         # Las copias que ya existen se ocultan mientras dura el panel: la vista previa trae las nuevas y, debajo, las
-        # viejas hacían difícil ver qué cambió.
-        l.copias_en_edicion = frozenset(i for ids in registro["copias"].values() for i in ids)
+        # viejas hacían difícil ver qué cambió. De una copia de objeto vectorial se ocultan sus curvas (B-599).
+        copias = [i for ids in registro["copias"].values() for i in ids]
+        l.copias_en_edicion = frozenset(copias) | set(objetos.curvas(l.b, [i for i in copias if i in l.b.objetos]))
         self.lineas = {"dir1": p.get("linea1"), "dir2": p.get("linea2")}
         if self.tipo == "rectangular":
             self.textos = {"cantidad1": str(p["cantidad1"]), "distancia1": formato.numero(p["distancia1"]),
@@ -220,7 +226,7 @@ class ControlPatron:
     def calcular(self):
         """{params, error, malos, polis, copias}: se rehace solo si cambió algo que importa (campos, elegido, boceto)."""
         l = self.l
-        ids = l._seleccion_util()
+        ids = self._ids()
         clave = (self.tipo, tuple(ids), tuple(sorted(self.textos.items())), self.centro, tuple(self.lineas.values()),
                  tuple(sorted(self.suprimidos)), l._generacion)
         if self._cache is not None and self._cache[0] == clave:
@@ -266,7 +272,7 @@ class ControlPatron:
 
     def estado(self):
         """Lo que muestra el panel: conteos de cada selección, campo activo, valores, qué falta y qué reparo hay."""
-        l, r = self.l, self.calcular()
+        r = self.calcular()
         nombres = {k: ("Línea %d" % v if v is not None else "") for k, v in self.lineas.items()}
         guia = ""
         if r["falta"] and not r["error"].startswith("Elegí el centro"):
@@ -280,7 +286,7 @@ class ControlPatron:
         if self.error_clic:
             error = self.error_clic
         return {"tipo": self.tipo, "editando": self.editando is not None, "campo": self.campo,
-                "conteos": {"seleccion": len(l._seleccion_util()), "centro": int(self.centro is not None),
+                "conteos": {"seleccion": len(self._ids()), "centro": int(self.centro is not None),
                             "dir1": int(self.lineas["dir1"] is not None), "dir2": int(self.lineas["dir2"] is not None)},
                 "etiquetas": {"centro": self._etiqueta_centro(), "dir1": nombres["dir1"], "dir2": nombres["dir2"]},
                 "campos": dict(self.textos), "malos": set(r["malos"]), "valido": r["params"] is not None and not r["error"],
@@ -290,7 +296,7 @@ class ControlPatron:
         """Le manda el estado al panel (solo si cambió) y deja las asas listas."""
         if not self.activo or self.panel is None:
             return
-        firma = (tuple(self.l._seleccion_util()), self.campo, self.centro, tuple(self.lineas.values()))
+        firma = (tuple(self._ids()), self.campo, self.centro, tuple(self.lineas.values()))
         if firma != self._firma:
             self._firma, self.error_clic = firma, ""
         estado = self.estado()
@@ -306,7 +312,7 @@ class ControlPatron:
     # ------------------------------------------------------------ campos y clics
     def elegir_campo(self, campo):
         """Panel: lo que llena el próximo clic."""
-        if campo != "seleccion" and not self.l._seleccion_util():
+        if campo != "seleccion" and not self._ids():
             self.error_clic = "Primero elegí la geometría a repetir."
         else:
             self.error_clic = ""
@@ -373,7 +379,7 @@ class ControlPatron:
         e = self.estado()
         if e["valido"]:
             self.aceptar()
-        elif self.campo == "seleccion" and self.l._seleccion_util() and self.tipo == "circular" and self.centro is None:
+        elif self.campo == "seleccion" and self._ids() and self.tipo == "circular" and self.centro is None:
             self.elegir_campo("centro")
         else:
             self.l.mensaje.emit(e["error"] or e["guia"])
@@ -386,7 +392,7 @@ class ControlPatron:
             return []
         l, p = self.l, r["params"]
         trans = l.b._trans_rectangular(p) if self.tipo == "rectangular" else l.b._trans_circular(p)[0]
-        centro = centro_de(l, l._seleccion_util())
+        centro = centro_de(l, self._ids())
         salida = []
         for i, (fn, *_) in enumerate(trans):
             q = l.a_px(*fn(centro))
@@ -411,7 +417,7 @@ class ControlPatron:
             l.mensaje.emit(e["error"] or e["guia"])
             return False
         r, perdidas = self.calcular(), []
-        p, ids, pid = dict(r["params"]), l._seleccion_util(), self.editando
+        p, ids, pid = dict(r["params"]), self._ids(), self.editando
         claves = ("distancia1", "angulo1") if self.tipo == "rectangular" else ("angulo_total",)
         if self.tipo == "rectangular" and self.textos.get("dos"):
             claves += ("distancia2", "angulo2")
@@ -444,7 +450,7 @@ class ControlPatron:
         """Vista previa de las copias (con la casilla activa), el centro o las direcciones y las casillas de exclusión."""
         l, r = self.l, self.calcular()
         pen = QPen(QColor(255, 140, 0), 1, Qt.DashDotLine)
-        c0 = centro_de(l, l._seleccion_util())
+        c0 = centro_de(l, self._ids())
         if self.tipo == "circular" and self.centro is not None:
             o = l.b.coords(self.centro) if isinstance(self.centro, int) and self.centro in l.b.puntos else (
                 self.centro if not isinstance(self.centro, int) else None)
@@ -497,7 +503,7 @@ class ControlPatron:
         # La dirección de una fila sin línea la mueve su asa de ángulo: no entra en la clave, o soltar el asa a la mitad
         # de un arrastre rearmaría todas. Con una línea de dirección, sí (es fija).
         direcciones = tuple(round(x, 9) for k in (1, 2) if self.lineas[f"dir{k}"] is not None for x in p.get(f"dir{k}", ()))
-        clave = (self.tipo, tuple(l._seleccion_util()), self.centro, direcciones, p.get("modo"), p["cantidad2"] > 1
+        clave = (self.tipo, tuple(self._ids()), self.centro, direcciones, p.get("modo"), p["cantidad2"] > 1
                  if self.tipo == "rectangular" else p["angulo_total"] > 0)
         if l._asas is not None and getattr(l._asas, "_clave", None) == clave:
             return
@@ -510,7 +516,7 @@ class ControlPatron:
 
     def _asas_rectangular(self, p):
         l = self.l
-        c = centro_de(l, l._seleccion_util())
+        c = centro_de(l, self._ids())
         extension = p["modo"] == "extension"
 
         def eje(dirk, i_n, i_d, i_a, lado):
@@ -564,7 +570,7 @@ class ControlPatron:
     def _asas_circular(self, p):
         l = self.l
         o = l.b.coords(p["centro"]) if isinstance(p["centro"], int) else (float(p["centro"][0]), float(p["centro"][1]))
-        ids = [i for i in l._seleccion_util() if i != p["centro"]]
+        ids = [i for i in self._ids() if i != p["centro"]]
         c = centro_de(l, ids)
         radio = math.dist(c, o) or 25.0
         a0 = _angulo((c[0] - o[0], c[1] - o[1])) if math.dist(c, o) > 1e-9 else 0.0
