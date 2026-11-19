@@ -11,7 +11,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 - Se puede usar el análisis de programas de referencia (Fusion 360, Rhino, Grasshopper…) guardado en
   `analisis auto/` (fuera de git) para mejorar OmniCAD (Gerardo, 2026-11-19): lo que sale de la ingeniería inversa de esos
   programas (informes, métodos, fórmulas, constantes, datos medidos y prototipos escritos a partir del método) se usa directo, citando el origen en el
-  docstring. Lo único que no se pega es el código descompilado tal cual: se escribe en código nuevo de OmniCAD. Código GPL
+  docstring. El código descompilado también se puede copiar solo si es útil, ahorra tiempo, trabajo o tokens y beneficia al proyecto, citando el origen; si no, se reescribe como código nuevo de OmniCAD. Código GPL
   (p. ej. Blender) también, citando el origen.
 - TODO en español: código, docstrings, comentarios, mensajes de error, nombres.
 - No gastar en APIs pagas sin pedido explícito del usuario. No instalar paquetes sin permiso.
