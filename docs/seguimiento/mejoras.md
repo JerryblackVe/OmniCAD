@@ -6,10 +6,11 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 ## Pendientes generales
 
-Abierto 12 · Parcial 9 · Sin verificar 2.
+Abierto 13 · Parcial 9 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-182 | Velocidad › Arrastrar en un boceto grande (200 piezas, 100 cotas): ~90 ms por evento (meta < 33). Pintar ~50 ms (íconos de restricción 20, cotas 24, ~1000 `a_px` por cuadro) y el ratón ~30 ms (inferencia y `_ajustar`); el solver solo 2–12 ms. Con 70 piezas, ~40–65 ms | Abierto | Media | Pintar menos por cuadro (caché de textos y anclas, no recalcular lo que no se movió) | E6 19/11: peine cerrado de 200 tramos con H/V y cotas, arrastre de 20 eventos en xvfb (Registro); `bench_fluidez.py j` | 2026-11-19 |
 | P-181 | Velocidad › Solevación de 2 perfiles en planos que se cruzan (tras B-618): elegir la orientación corre el análisis de autointersecciones hasta 2 veces, también en la vista previa (~1 s en el repro; más con splines). Orientar la sección auxiliar con la normal de la tapa, sin análisis | Abierto | Media | Medir la previa y sacar el análisis del camino de la previa | `clon/omnicad/nucleo/solidos_crear_solevacion.py` › `_loft_liso`; revisión de OpenCode en B-618 | 2026-11-18 |
 | P-180 | Archivo que no abre (prioridad 2, Gerardo 18/11): botón «🛠 Reparar una copia» que arregla solo casos conocidos y seguros (p. ej. un paso repetido, B-592), nunca toca el original y muestra qué cambió; muy visual, ícono grande y 1 renglón sin jerga (regla 14). El error actual («La receta repite el id de paso op305») tampoco cumple: pasarlo a 1 renglón para cualquiera | Abierto | Media | Diálogo de error de abrir con el botón, lista de arreglos seguros, mensajes sin jerga, MCP/CLI y test | Pedido de Gerardo vía el chat maestro | 2026-11-18 |
 | P-99 | Extruir recalcula todos los perfiles en cada clic | Parcial | Alta | Hecho (E6, 2026-11-16): el asa de la conicidad (`manipuladores.punto_borde`) teselaba todos los perfiles en cada clic; ahora recuerda los puntos por forma. Llavero en la VPS, 16 clics de perfil (CPU del hilo principal, últimos 5): 102 → 71 ms; reloj 134 → 113 ms; la previa va aparte. Falta: medir en la PC de Gerardo (antes 0,5 → 2 s por clic); lo que queda son 2 `set_modelo` de ~30 ms y el dibujo de bocetos | tests/test_previa_prisma.py; evidencias/video_extrusion_2026-11-08/medir_extruir.py | 2026-11-12 |

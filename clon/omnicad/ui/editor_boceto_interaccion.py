@@ -50,6 +50,7 @@ from .editor_boceto_comun import (
     temas,
     texto_valor,
 )
+from ..restricciones.solver import _grupos
 
 
 class LienzoInteraccionMixin:
@@ -528,6 +529,15 @@ class LienzoInteraccionMixin:
                 p = self.b.puntos[pid]
                 p.x, p.y = p.x + dx, p.y + dy
             ref = min(libres, key=lambda q: math.dist(self.b.coords(q), cur)) if libres else None
+            partes = [g["p"] & set(libres) for g in _grupos(self.b) if g["p"].intersection(libres)]
+            if len(partes) == 1 and self.resultado is not None:
+                # Lo movido está en una sola parte: se resuelve solo esa, como al arrastrar un punto (antes, el boceto
+                # entero en cada evento: 140 ms con 100 piezas). Entera, sin ventana: la ventana rodea a un solo punto y
+                # congelaría el resto de la curva ya movido. Soltar resuelve todo.
+                self.resultado.sin_ventana = True
+                self._ultimo = cur
+                self.resolver(arrastrado=min(partes[0], key=lambda q: math.dist(self.b.coords(q), cur)), rapido=True)
+                return
         self._ultimo = cur
         self.resolver(arrastrado=ref)
 
@@ -544,7 +554,7 @@ class LienzoInteraccionMixin:
                         self.b.puntos[q].x += dx
                         self.b.puntos[q].y += dy
         # Rápido: lo movido es un punto (y, si es centro de arcos, sus arcos: misma parte del boceto). Arrastrar una
-        # curva entera mueve puntos que pueden estar en partes distintas, por eso `_mover_curva` resuelve todo.
+        # curva entera mueve puntos que pueden estar en partes distintas: `_mover_curva` resuelve todo en ese caso.
         self.resolver(arrastrado=pid, rapido=True)
 
     def _manija_en(self, pos):
