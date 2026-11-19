@@ -49,9 +49,9 @@ def _distancia(shape, punto):
 
 
 def _comprobar(s, sketch, cantidad):
-    """Las curvas incluidas conservan 5 polos y siguen sobre el meridiano exacto."""
+    """Las curvas incluidas conservan los 9 polos y siguen sobre el meridiano exacto."""
     exactos = _meridianos(s)
-    assert len(exactos) == 2 and all(BRepAdaptor_Curve(a).BSpline().NbPoles() == 5 for a in exactos)
+    assert len(exactos) == 2 and all(BRepAdaptor_Curve(a).BSpline().NbPoles() == 9 for a in exactos)   # B-463: quíntica
     spl = [e for e in _llamar(s, "get_sketch", sketch=sketch)["entities_3d"] if e["type"] == "spline"]
     assert len(spl) == cantidad
     assert max(len(e["points"]) for e in spl) <= POCOS              # antes: 33 puntos por curva

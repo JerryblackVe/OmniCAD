@@ -422,6 +422,8 @@ class _Crear:
             raise ErrorBoceto(f"Tipo de spline desconocido: {modo}")
         if modo == "control":
             grado = min(grado, len(ids) - 1)
+        else:
+            grado = 5           # B-463: la de ajuste es la quíntica de Fusion; las guardadas con grado 3 siguen cúbicas
         return self._agregar_curva(Spline(self._nuevo_id(), ids, modo, grado, cerrada if modo == "ajuste" else False,
                                           pesos, nudos, construccion))
 

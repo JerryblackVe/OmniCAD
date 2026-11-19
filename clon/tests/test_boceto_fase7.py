@@ -152,7 +152,7 @@ def test_boc11_insertar_punto_de_ajuste_queda_sobre_la_curva(s):
     assert len(info["vertices"]) == 10
     nuevo = info["vertices"][1]
     assert mas_cercano(curva, nuevo)[1] < 1e-3          # get_sketch redondea
-    assert max(min(math.dist(q, a) for a in antes) for q in muestras(prim(s, sid))) < 0.02
+    assert max(min(math.dist(q, a) for a in antes) for q in muestras(prim(s, sid))) < 0.1     # B-463: la quíntica centrípeta se reacomoda 0,06
 
 
 def test_boc11_insertar_punto_de_control_no_cambia_la_forma(s):
@@ -312,8 +312,8 @@ def test_b487_curvatura_linea_spline_deja_quieta_la_linea(s):
     llamar(s, "add_constraint", sketch="B", type="curvature", entities=[linea, sid])
     assert extremos() == pytest.approx(l_antes, abs=1e-6)
     despues = entidad(s, sid)["vertices"]
-    # Llegar recta obliga a correr los puntos de ajuste (no hay asa de curvatura): ~29 mm; antes el extremo iba 30 mm.
-    assert max(math.dist(p, q) for p, q in zip(antes, despues, strict=True)) < 30
+    # Llegar recta obliga a correr los puntos de ajuste (no hay asa de curvatura): ~37 mm con la quíntica (B-463).
+    assert max(math.dist(p, q) for p, q in zip(antes, despues, strict=True)) < 40
     p = prim(s, sid)
     _c, d1, d2 = evaluar_primitiva(p, dominio(p)[0], 2)
     assert abs(d1[0] * d2[1] - d1[1] * d2[0]) / math.hypot(*d1) ** 3 < 1e-4

@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · B-463 (E1, Parcial).** Spline de ajuste nueva = quíntica natural centrípeta, grado 5 (`boceto_geometria._quintica_natural`); las guardadas con grado 3 siguen cúbicas; vía Rust solo para grado 3; tangente con el extremo apoyado sobre la otra curva = G1 ahí (`solver._tangencia`). Peor 0,47 mm contra Fusion (antes 8,4). `test_b463_spline_ajuste_quintica.py`.
 - **2026-11-19 · B-690 (E1, Parcial).** Perpendicular y Tangente línea–spline de ajuste sin punto en común quedan apagadas como en Fusion (`deshabilitado` «restriccion.linea_spline», `Boceto.exigir_disponible` en editor, API y «Cambiar a»; lo guardado sigue). `test_b690_linea_spline_gris.py`; 2994 OK, ruff limpio.
 
 - **2026-11-19 · Tanda E11 en la PC (mouse real).** Rust recompilado (`maturin develop --release`). B-667: el 2.º arrastre ya no deforma. B-591 y B-671: no reproducen con 17 pasos/8 cuerpos y cambio a cm; filas cerradas (guardas y tests de B-591 siguen; si vuelve, fila nueva con traceback; la variante de foco es B-664). B-690 y B-463: datos de Fusion en `informe_tanda_E11.md` (PC), van a E1.- **2026-11-19 · Traspaso E1 (B-701 listo; sin ítem).** 1) B-701 en ~/OmniCAD-B-701 sin commit. 2) Próximo: B-690 (lo manda el coordinador). 3) Sin reproducir: `superficies.regiones_recorte` también usa el Splitter y podría dejar aristas internas. 4) Repro con `_hlr_exacto` simulado: el test de B-701.

@@ -555,7 +555,7 @@ def test_limite_espiral(vueltas, esperado):
     for documento in (s, _reabrir(s)):
         assert len(_ents(documento)) == 1
         espiral, = _de(documento, "spline")
-        assert espiral["degree"] == 3 and not espiral["closed"]
+        assert espiral["degree"] == 5 and not espiral["closed"]      # B-463
         vertices = espiral["vertices"]
         assert 4 <= len(vertices) <= 200
         assert all(math.dist(a, b) > 0 for a, b in zip(vertices, vertices[1:], strict=False))

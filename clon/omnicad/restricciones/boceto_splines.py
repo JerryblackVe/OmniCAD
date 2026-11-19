@@ -80,7 +80,7 @@ class _Splines:
     def activar_manija(self, sid, pid, angulo=None, largo=None, curvatura=None):
         """Activa la manija de tangente (y, con `curvatura`, la de curvatura) en el punto de ajuste `pid`: una
         línea de construcción con la tangente actual de la curva (o `angulo`, grados) y largo `largo` (por defecto
-        la cuerda total / tramos, que no cambia la forma). Devuelve el id de la línea."""
+        |C'| / tramos, que no cambia la forma). Devuelve el id de la línea."""
         c = self._spline(sid, "ajuste")
         if c.cerrada:
             raise ErrorBoceto("Las manijas piden una spline abierta: abrila.")
@@ -89,10 +89,10 @@ class _Splines:
         if any(m[0] == pid for m in c.manijas):
             raise ErrorBoceto(f"El punto {pid} ya tiene manija: editala.")
         Q = [self.coords(p) for p in c.pts]
-        u = parametros_cuerda(Q)[c.pts.index(pid)]
+        u = parametros_cuerda(Q, c.grado)[c.pts.index(pid)]
         d = evaluar_primitiva(self.primitivas(sid)[0], u, 1)[1]
         a = math.radians(angulo) if angulo is not None else math.atan2(d[1], d[0])
-        largo = sum(math.dist(Q[i], Q[i - 1]) for i in range(1, len(Q))) / (len(Q) - 1) if largo is None else largo
+        largo = math.hypot(*d) / (len(Q) - 1) if largo is None else largo       # la derivada de hoy: no cambia la forma
         if not 1e-6 < largo < math.inf:
             raise ErrorBoceto("El largo de la manija tiene que ser positivo.")
         fx, fy = self.coords(pid)
@@ -156,7 +156,7 @@ class _Splines:
             raise ErrorBoceto("Punto nuevo: debe caer dentro de la spline.")
         if c.modo == "ajuste":
             Q = [self.coords(p) for p in c.pts]
-            ub = parametros_cuerda(Q + [Q[0]] if c.cerrada else Q)
+            ub = parametros_cuerda(Q + [Q[0]] if c.cerrada else Q, c.grado)
             i = next(j for j in range(len(ub) - 1) if t <= ub[j + 1])
             if min(t - ub[i], ub[i + 1] - t) < 1e-6:
                 raise ErrorBoceto("Ya hay un punto de ajuste ahí.")

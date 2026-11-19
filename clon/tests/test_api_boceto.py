@@ -524,7 +524,7 @@ def test_spline_y_rectangulo_degenerados_se_rechazan(s):
 def test_el_grado_de_la_spline_de_ajuste_se_ignora(s, grado):
     llamar(s, "create_sketch")
     sp = llamar(s, "draw_spline", points=[[0, 0], [5, 5], [10, 0], [15, 3], [20, -2], [25, 4]], degree=grado)
-    assert entidades(s)[sp["entities"][0]["id"]]["degree"] == 3                # como Fusion: la de ajuste es cúbica
+    assert entidades(s)[sp["entities"][0]["id"]]["degree"] == 5                # como Fusion: la de ajuste es quíntica (B-463)
     r = api.llamar(s, "draw_spline", {"points": [[0, 0], [1, 1], [2, 0], [3, 1], [4, 0], [5, 1]],
                                       "spline_type": "control_points", "degree": grado})
     assert r["ok"] is (grado == 5) and (r["ok"] or r["error_kind"] == "INVALID_GEOMETRY"), r

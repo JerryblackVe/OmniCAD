@@ -115,10 +115,12 @@ def _base_derivada(nudos, p, t, k, d):
     return salida
 
 
-def parametros_cuerda(Q):
-    """Parámetro 0-1 de cada punto de ajuste (largo de cuerda acumulado; la cerrada repite el primero al final)."""
+def parametros_cuerda(Q, grado=3):
+    """Parámetro 0-1 de cada punto de ajuste (largo de cuerda acumulado; la cerrada repite el primero al final).
+    Grado 5 (la spline de ajuste desde B-463): centrípeto, la raíz de cada cuerda."""
     m = len(Q) - 1
-    cuerdas = [math.dist(Q[i], Q[i - 1]) for i in range(1, m + 1)]
+    alfa = 0.5 if grado == 5 else 1.0
+    cuerdas = [math.dist(Q[i], Q[i - 1]) ** alfa for i in range(1, m + 1)]
     total = sum(cuerdas)
     if total < 1e-12:
         cuerdas, total = [1.0] * m, float(m)
@@ -171,6 +173,8 @@ def interpolar_spline(puntos, grado=3, cerrada=False, derivadas=None):
     m = len(Q) - 1
     if m < 1:
         raise ErrorBoceto("Una spline necesita al menos dos puntos.")
+    if grado == 5:
+        return _quintica_natural(Q, cerrar, derivadas)
     ub = parametros_cuerda(Q)
     if cerrar:
         p, n = 3, m + 2
@@ -195,6 +199,32 @@ def interpolar_spline(puntos, grado=3, cerrada=False, derivadas=None):
         for fila, (u, orden) in enumerate([(u, 0) for u in ub] + [(u, o) for u, o, _v in extra]):
             k = _tramo(nudos, p, n, u)
             A[fila, k - p:k + 1] = _base_derivada(nudos, p, u, k, orden)
+    P = _resolver_lineal(A, B)
+    return [(float(x), float(y)) for x, y in P], nudos, p
+
+
+def _quintica_natural(Q, cerrar, derivadas):
+    """B-463: quíntica natural (3.ª y 4.ª derivadas nulas en los extremos) con parámetro centrípeto, la más cercana a
+    la spline de ajuste de Fusion (0,2 a 0,5 mm; la cúbica por cuerda se iba hasta 8 mm). Cerrada: C4 en la costura.
+    Una manija en un extremo reemplaza condiciones naturales; adentro, suma un nudo por condición."""
+    m, p = len(Q) - 1, 5
+    ub = parametros_cuerda(Q, 5)
+    extra = [(i, orden, v) for i, par in sorted((derivadas or {}).items()) if 0 <= i <= m
+             for orden, v in enumerate(par, 1) if v is not None]
+    nudos = [0.0] * (p + 1) + sorted(ub[1:m] + [ub[i] for i, _o, _v in extra if 0 < i < m]) + [1.0] * (p + 1)
+    n = len(nudos) - p - 2
+    filas = [(u, 0, q) for u, q in zip(ub, Q, strict=True)] + [(ub[i], o, v) for i, o, v in extra]
+    if not cerrar:
+        for i in (0, m):
+            filas += [(ub[i], o, (0.0, 0.0)) for o in (3, 4)[:2 - sum(j == i for j, _o, _v in extra)]]
+    A, B = np.zeros((n + 1, n + 1)), np.zeros((n + 1, 2))
+    for fila, (u, orden, v) in enumerate(filas):
+        k = _tramo(nudos, p, n, u)
+        A[fila, k - p:k + 1], B[fila] = _base_derivada(nudos, p, u, k, orden), v
+    if cerrar:                                              # misma derivada 1.ª a 4.ª a los dos lados de la costura
+        for fila, orden in enumerate(range(1, 5), len(filas)):
+            A[fila, :p + 1] = _base_derivada(nudos, p, 0.0, p, orden)
+            A[fila, n - p:] -= _base_derivada(nudos, p, 1.0, _tramo(nudos, p, n, 1.0), orden)
     P = _resolver_lineal(A, B)
     return [(float(x), float(y)) for x, y in P], nudos, p
 

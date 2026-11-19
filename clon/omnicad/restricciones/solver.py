@@ -366,7 +366,7 @@ class _Sistema:
     def _extremo_spline(self, x, c, clave, pid):
         """`extremo` de una spline de ajuste abierta y sin manijas con el módulo Rust (R5: tangente y curvatura en los
         extremos sin armar la primitiva); el resto de las splines, por la primitiva de Python."""
-        if self._rs is not None and c.modo == "ajuste" and not c.cerrada and not c.manijas:
+        if self._rs is not None and c.modo == "ajuste" and c.grado == 3 and not c.cerrada and not c.manijas:   # B-463: la quíntica, por Python
             try:
                 d = self._rs.spline_extremos(np.array(clave[1], dtype=float).reshape(-1, 2), c.grado)
             except ValueError:               # sistema singular: Python lo resuelve por mínimos cuadrados
@@ -782,6 +782,17 @@ class _Sistema:
                 return [s * self.dist_signada(x, self.C(x, c), l) - math.hypot(a * nu, bb * nv)]
             T.append(f)
             return
+        for c, o in ((e[0], e[1]), (e[1], e[0])):
+            sobre = self._extremo_sobre(c, o)
+            if sobre is not None:
+                # B-463: el extremo de una curva queda sobre la otra (coincidente): G1 ahí, como B-255. Con el contacto
+                # libre la tangencia caía en otro punto, a un pelo del extremo.
+                def g(x, c=c, o=o, p=sobre):
+                    po = self.prim(x, o)
+                    d = evaluar_primitiva(po, mas_cercano(po, self.P(x, p))[0], 1)[1]
+                    return [_cruz(_unitario(d), self.extremo(x, c, p)[0]) * _ESCALA_TANGENTE]
+                T.append(g)
+                return
         # Caso general (curvas libres, elipses): un punto de contacto en cada curva, que coincidan y
         # con tangentes paralelas.
         pa0, pb0 = self.prim(x0, e[0]), self.prim(x0, e[1])
