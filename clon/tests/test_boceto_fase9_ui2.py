@@ -324,6 +324,22 @@ def test_parametro_rechazado_conserva_boceto_y_valor_del_panel(modo_texto, monke
     assert lz.b.curvas[tid].altura == pytest.approx(7)
 
 
+def test_b696_rechazo_real_de_la_api_restaura_el_panel(modo_texto, monkeypatch):
+    """B-696: la API falla con la clave «mensaje» (no «error»): antes saltaba un KeyError antes de restaurar el campo
+    y el panel Carácter decía otro texto que el dibujo."""
+    modo, s, tid = modo_texto
+    lz, panel = modo.lienzo, modo.caracter
+    lz.editar_texto(tid, lz.a_px(10, 20))
+    antes = s.doc.a_dict()
+    mensajes = []
+    modo.v.mensaje = lambda texto, *a: mensajes.append(texto)
+    monkeypatch.setattr(api, "llamar", lambda *a: {"ok": False, "error_kind": "BODY_NOT_FOUND", "mensaje": "Paso roto"})
+    panel.valor_parametro_texto.setText("Otro")
+    panel.valor_parametro_texto.editingFinished.emit()
+    assert s.doc.a_dict() == antes and mensajes == ["Paso roto"]
+    assert panel.valor_parametro_texto.text() == "I" and lz.entrada.campos[0].text() == "I"
+
+
 def test_b665_contenido_muestra_y_edita_el_cuadro_del_visor(modo_texto):
     """B-665: «Contenido» (panel Carácter) es el campo Text de Fusion: muestra lo escrito en el visor y teclear ahí
     lo cambia en el cuadro, aunque el texto no tenga parámetro ligado; al cerrarse el cuadro vuelve a gris."""
