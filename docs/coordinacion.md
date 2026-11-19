@@ -253,6 +253,19 @@ de OpenCode; las demás la enlazan.
   en `docs/seguimiento/`, suma la firma a `scripts/caza/conocidos.json` y el caso mínimo a `clon/tests/corpus_caza/`.
   Lo que quedó «sin confirmar» se confirma solo en la corrida siguiente.
 
+### Caza con el Fusion 360 Gallery Dataset (AG-20, 2026-11-19)
+- `scripts/caza/galeria.py` rehace boceto + extruir de diseños reales de Fusion con la API y compara volumen, área y caja
+  envolvente con los `properties` del JSON (cm → mm). Sin modelos ni red: los datos ya están en el disco.
+- **Datos fuera del repo y nunca a git** (licencia solo investigación): `~/datos/fusion_gallery/r1.0.1/reconstruction/`
+  (2,1 GB comprimido; `OMNICAD_GALERIA` cambia la carpeta). Se bajan de
+  `fusion-360-gallery-dataset.s3.us-west-2.amazonaws.com/reconstruction/r1.0.1/r1.0.1.zip`.
+- Comandos, desde `clon/` con el Python del venv (sin `scripts/turno.py`, que corta a los 900 s: un diseño a la vez, cada uno en su proceso, poca memoria):
+  - `../scripts/caza/galeria.py correr --n 500`: ~25 min; informe en `evidencias/galeria_<fecha>/informe.md` y `resultados.json`.
+  - `../scripts/caza/galeria.py uno <id>`: un diseño, para reproducir un caso.
+- Alcance: curvas línea, arco y círculo, y bocetos paralelos a un plano de origen (la API no arma planos sueltos sin un
+  vértice). Lo demás cuenta como «fuera de alcance», no como falla de OmniCAD.
+- Quien coordina carga las diferencias y errores en `docs/seguimiento/` **una fila por causa**, con los ids de diseño.
+
 ## Memoria de la PC (Gerardo, 2026-11-08)
 - La PC tiene 13 GB: ahí corren solo E11 y el chat maestro, **nada de pytest pesado ni de OpenCode** (una sola corrida
   pesada a la vez, con `scripts/turno.py`). El 2026-11-07 la app se cayó por memoria con 4 sesiones, OpenCode y varios pytest.
