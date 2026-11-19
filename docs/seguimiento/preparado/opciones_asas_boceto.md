@@ -70,7 +70,7 @@ Criterio de cobertura (igual que `scripts/cobertura_boceto.py`): «test automát
 | Texto / Panel Carácter | Volteo horizontal / vertical | sí | sí | — |
 | Texto / Panel Carácter | Espaciado de caracteres / Interlineado | sí | sí (boceto_texto_panel) | — |
 | Texto / Panel Carácter | Alineación (izq / centro / der) | sí | sí | — |
-| Texto / Panel Carácter | Anclaje (base / arriba / medio / abajo) | sí | sí (boceto_texto_panel) | B-700 |
+| Texto / Panel Carácter | Anclaje (base / arriba / medio / abajo) | sí | sí (boceto_texto_panel) | — |
 | Texto / Panel Carácter | Pivote de giro (6 opciones) | **no** | sí (boceto_texto_panel) | B-698 |
 | Texto / Panel Carácter | Colocación en curva (arriba / abajo) | sí | sí | — |
 | Texto / Panel Carácter | Lado en curva (a favor / al revés) | sí | sí | — |

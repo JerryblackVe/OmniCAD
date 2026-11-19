@@ -275,7 +275,8 @@ def test_texto_asa_de_giro_del_marco(lienzo):
     lz._procesar_clics()
     lz.encuadrar()
     assert lz._asas is not None and len(lz._asas.asas) == 1
-    ancla = (0.0, 10.0)                                                  # la esquina de arriba a la izquierda del marco
+    ancla = (0.0, 0.0)                                                  # el ancla del texto: con el Anclaje del panel en
+                                                                         # «Línea base», el borde inferior del cuadro (B-700)
     assert posicion(lz, 0) == pytest.approx((ancla[0] + 40.0, ancla[1]), abs=1e-6)
     arrastrar(lz, posicion(lz, 0), (ancla[0] + 20.0, ancla[1] + 20.0))
     assert float(textos(lz)[2]) == pytest.approx(45, abs=1.0)

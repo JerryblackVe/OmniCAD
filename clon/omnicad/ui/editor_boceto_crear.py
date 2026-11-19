@@ -604,8 +604,11 @@ class LienzoCrearMixin:
                 x0, x1 = sorted((xy[0], fin_xy[0]))
                 y0, y1 = sorted((xy[1], fin_xy[1]))
                 if x1 - x0 > 1e-6 and y1 - y0 > 1e-6:   # cuadro dibujado: su alto es el de la letra, su ancho parte líneas
-                    pid, xy, altura_ini = None, (x0, y1), y1 - y0
-                    caja = {"ancho_caja": x1 - x0, "ancla_v": "arriba"}
+                    # como el marco (boceto_primitivas): el Anclaje cae en el borde del cuadro que pide (B-700);
+                    # abajo y base apoyan en el borde inferior, y el texto queda dentro del cuadro (Fusion)
+                    pid, altura_ini = None, y1 - y0
+                    xy = (x0, {"arriba": y1, "medio": (y0 + y1) / 2}.get(self.opciones["ancla_v"], y0))
+                    caja = {"ancho_caja": x1 - x0}      # sin ancla_v: manda el Anclaje del panel Carácter
                     rect = (x0, y0, x1, y1)
 
             def aceptar(v):
@@ -617,8 +620,9 @@ class LienzoCrearMixin:
                          "voltear_v": o["voltear_v"]} | en_curva | caja | {k: o[k] for k in Texto.TIPOGRAFIA}
                 if en_curva:
                     extra |= {k: o[k] for k in CURVA_TEXTO}
+                pos = xy if rect is None else (x0, {"arriba": y1, "medio": (y0 + y1) / 2}.get(o["ancla_v"], y0))
                 ok = self.aplicar_cambio(lambda: self.b.agregar_texto(
-                    pid if pid is not None else xy, v[0].replace("\\n", "\n"), altura, ang, o["fuente"],
+                    pid if pid is not None else pos, v[0].replace("\\n", "\n"), altura, ang, o["fuente"],
                     o["negrita"], o["cursiva"], espaciado=espaciado, interlineado=interlineado, **extra))
                 self.clics = []
                 self.opciones["ajustes_kerning"] = []          # el kerning a mano es de ESE texto
