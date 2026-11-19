@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · E4 B-666.** Visor chico (<400 px de alto o <700 de ancho): se pliegan solos el navegador y «Opciones» de la paleta (Terminar y estado a la vista); al agrandar vuelven. `AreaVisor._plegar_si_chica`, `plegar_por_ventana`. 790×510: tapan 22 % (antes 52 %). Test: `test_b666_ventana_chica.py`.
 - **2026-11-19 · E4 B-665.** «Contenido» del panel Carácter queda ligado al cuadro de texto del visor en los dos sentidos, con o sin parámetro (`PanelCaracter.ligar_contenido`, `escribir_contenido_texto`); gris al cerrarse el cuadro. Test: `test_b665_contenido_muestra_y_edita_el_cuadro_del_visor`.
 - **2026-11-19 · E8 B-664 (Parcial).** `EntradaValor` recupera el foco un turno después de abrirse si el lienzo lo tomó (`_tomar_foco`, editor_boceto_comun.py; el cuadro de Texto queda afuera). Test: `test_b664_foco_en_la_cota_nueva` (foco robado a propósito). No reproducido sin Windows: E11 debe confirmar con mouse real.
 - **2026-11-19 · E3 B-667.** Perpendicular línea–spline: al arrastrar, la spline queda y gira la línea (`_Sistema.quietas` ×`_PESO_RADIO`); el contacto arranca donde la recta ya toca la spline a 90°, no en otra normal (`_perpendicular_spline`). Test: `test_b667_dos_arrastres_seguidos_mueven_la_linea_y_no_la_spline`.

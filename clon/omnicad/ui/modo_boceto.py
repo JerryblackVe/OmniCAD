@@ -214,6 +214,11 @@ class PaletaBoceto(QFrame):
         self.cuerpo.setFixedWidth(234)
         externo = QVBoxLayout(self.cuerpo)
         externo.setContentsMargins(0, 0, 0, 0)
+        self.b_opciones = QToolButton(text="▾ Opciones", toolButtonStyle=Qt.ToolButtonTextOnly, autoRaise=True)
+        self.b_opciones.setStyleSheet("text-align: left; font-weight: 600;")
+        self.b_opciones.setToolTip("Plegar o desplegar las opciones (en una ventana chica arrancan plegadas)")
+        self.b_opciones.clicked.connect(self._alternar_opciones)
+        externo.addWidget(self.b_opciones)
         self.opciones = QScrollArea(frameShape=QFrame.NoFrame, widgetResizable=True)   # en una ventana baja se desplaza
         self.opciones.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         lista = QWidget()
@@ -221,8 +226,6 @@ class PaletaBoceto(QFrame):
         externo.addWidget(self.opciones)
         c = QVBoxLayout(lista)
         c.setContentsMargins(0, 0, 0, 0)
-        seccion = QLabel("▾ <b>Opciones</b>")
-        c.addWidget(seccion)
         grilla = QGridLayout()
         grilla.setColumnStretch(0, 1)
         grilla.addWidget(QLabel("Tipo de línea"), 0, 0)
@@ -364,6 +367,19 @@ class PaletaBoceto(QFrame):
         self.cuerpo.setVisible(not self.cuerpo.isVisible())
         self.b_plegar.setText("–" if self.cuerpo.isVisible() else "+")
         self.ajustar()
+
+    def _alternar_opciones(self):
+        self.opciones.setVisible(self.opciones.isHidden())
+        self.b_opciones.setText(("▸ " if self.opciones.isHidden() else "▾ ") + "Opciones")
+        self.ajustar()
+
+    def plegar_por_ventana(self, plegar):
+        """B-666: en una ventana chica se pliegan las opciones (el estado y Terminar boceto siguen a la vista).
+        Devuelve True si cambió algo."""
+        if self.opciones.isHidden() == plegar:
+            return False
+        self._alternar_opciones()
+        return True
 
     def mostrar_subrestringidos(self, filas):
         """Llena la lista de Buscar subrestringidos con [(id, texto)]; sin filas, el boceto está totalmente
