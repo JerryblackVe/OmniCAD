@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QHBoxLayout, QInpu
 from ..nucleo import fuentes
 from ..restricciones import (Boceto, ErrorBoceto, TIPOS_COTA, TIPOS_RESTRICCION, auto_restringir, grados_de_libertad,
                              resolver)
-from ..restricciones.solver import (acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
+from ..restricciones.solver import (acomodar_segunda, acomodar_tangente, restricciones_en_conflicto, restricciones_redundantes,
                                      restriccion_quita_grados)
 from ..restricciones.inferencia import Indice, TIPOS_INFERENCIA, inferencias, proyectar_bloqueo
 from ..restricciones.boceto import (Arco, Circulo, Conica, Cota, Linea, Spline, Texto, agregar_linea_medio, agregar_rectangulo_3p,
@@ -656,6 +656,7 @@ __all__ = [
     "auto_restringir",
     "grados_de_libertad",
     "resolver",
+    "acomodar_segunda",
     "acomodar_tangente",
     "restricciones_en_conflicto",
     "restricciones_redundantes",

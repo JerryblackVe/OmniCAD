@@ -1106,6 +1106,16 @@ def acomodar_tangente(boceto, entidades, valores_cotas=None):
             return
 
 
+def acomodar_segunda(boceto, quieta, valores_cotas=None):
+    """B-657: después de agregar Concéntrica, Punto medio o Igual con el comando: la cumple sin mover la primera figura
+    elegida (`quieta`), así se mueve o cambia la segunda, como Fusion. Si la primera no puede quedar quieta, queda el
+    reparto del solver."""
+    prueba = boceto.copia()
+    prueba.agregar_restriccion("fijo", [quieta])
+    if resolver(prueba, valores_cotas or {}, menor_cambio=True).ok:
+        boceto.puntos, boceto.curvas = prueba.puntos, prueba.curvas
+
+
 def restricciones_en_conflicto(boceto, valores_cotas=None, cancelar=None):
     """Ids de restricciones/cotas cuya retirada individual deja el boceto consistente.
 

@@ -1080,7 +1080,7 @@ Restringe entidades del boceto (ids de get_sketch: curvas y puntos). Si choca co
 - Parámetros:
   - `sketch` (texto; obligatorio): id o nombre del boceto.
   - `type` ("coincident" | "horizontal" | "vertical" | "parallel" | "perpendicular" | "equal" | "tangent" | "concentric" | "midpoint" | "fix" | "collinear" | "symmetry" | "curvature" | "polygon"; obligatorio): tipo de restricción.
-  - `entities` (lista de entero; obligatorio): ids de las entidades (curvas o puntos); en coincident, midpoint y tangent el orden no importa, en symmetry el eje va último; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
+  - `entities` (lista de entero; obligatorio): ids de las entidades (curvas o puntos); en coincident y tangent el orden no importa; en concentric, midpoint y equal la primera queda quieta y se mueve la segunda; en symmetry el eje va último; origen 0, eje X -1 y eje Y -2 son referencias fijas reservadas.
 - CLI: `omnicad call add_constraint --doc pieza.omnicad sketch=… type=… entities=…`
 
 ### `replace_constraint`
