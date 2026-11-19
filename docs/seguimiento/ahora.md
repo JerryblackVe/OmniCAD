@@ -10,7 +10,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E7 | PRUEBA-CMDS parte 2 | 23 comandos del grupo A del boceto sin prueba como usuario (ventana, `prueba_ui`) |
 | E1, E3, E4, E8 | — | Vaciadas y quietas; reciben lo que salga de OpenCode que no cierre (por el chat maestro) |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | En pausa (Gerardo en la PC). Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 |
@@ -21,8 +20,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 0 | PRUEBA-OPCIONES (E7, al cerrar PRUEBA-CMDS) | Probar como usuario las opciones con «no» en «Probado como usuario» de `docs/seguimiento/preparado/opciones_asas_boceto.md` (~40 filas): mouse simulado y valores raros; lo roto, fila nueva |
-| 0b | B-677 (E3, Opus alto) | Perfiles: OmniCAD detecta menos que Fusion en el mismo boceto |
+| 0 | PRUEBA-TEXTO-SIM (E7) | Probar como usuario Texto/Panel Carácter (parámetro, familia, pivote de 6) y Panel Simetría (eje); y revisar las filas «no» viejas de `preparado/opciones_asas_boceto.md` contra los scripts de `prueba_ui` |
+| 0b | B-677 (E1 desde las 16:35 UTC) (E3, Opus alto) | Perfiles: OmniCAD detecta menos que Fusion en el mismo boceto |
 | 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
 | 2 | PRUEBA-PROY (hecha por E7: B-684, B-685, B-686 a OpenCode) | Probar como usuario los 5 tipos de PROYECTAR del boceto (Proyectar, Intersecar, Incluir geometría 3D, Perfil giratorio, Curva isoparamétrica): mouse simulado y valores raros contra `docs/fusion_docs` (E7, Sonnet medio; cada falla = fila nueva de boceto; antes, OpenCode prepara los tests que falten) |
 | 3 | PRUEBA-CMDS | Probar en la ventana los 61 comandos de la cinta del boceto sin prueba como usuario (lista en `docs/plan_boceto_perfecto.md` › Cobertura; script `scripts/cobertura_boceto.py`): E7 en Linux con `prueba_ui`, E11 con mouse real lo que E7 no pueda; cada falla, fila nueva de boceto |
