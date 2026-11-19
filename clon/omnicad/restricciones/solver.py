@@ -696,8 +696,25 @@ class _Sistema:
                     return [(u[0] * v[0] + u[1] * v[1]) * _ESCALA_TANGENTE]
                 T.append(f)
                 return
-            s = _signo(self.dist_signada(x0, self.C(x0, c), l))
-            T.append(lambda x, l=l, c=c, s=s: [s * self.dist_signada(x, self.C(x, c), l) - self.R(x, c)])
+            if not isinstance(self.b.curvas[c], Circulo):   # arcos: contra el círculo entero (BOC-52, aviso aparte)
+                s = _signo(self.dist_signada(x0, self.C(x0, c), l))
+                T.append(lambda x, l=l, c=c, s=s: [s * self.dist_signada(x, self.C(x, c), l) - self.R(x, c)])
+                return
+            # B-650/B-651 (Fusion: «se tocan sin cruzarse»): el contacto Q(u) = a + u·(b − a), con u acotado al tramo
+            # como B-564. Con la recta infinita el contacto se iba a la prolongación y, al arrastrar, el otro extremo
+            # se escapaba. Q sobre el círculo y radio perpendicular a la línea: en el extremo, también es tangente.
+            (a0, b0), o0 = self.L(x0, l), self.C(x0, c)
+            d0 = (b0[0] - a0[0], b0[1] - a0[1])
+            j = self._parametro(min(max(((o0[0] - a0[0]) * d0[0] + (o0[1] - a0[1]) * d0[1])
+                                        / ((d0[0] * d0[0] + d0[1] * d0[1]) or 1e-12), 0.0), 1.0))
+
+            def f(x, l=l, c=c, j=j):
+                (a, bb), o = self.L(x, l), self.C(x, c)
+                u = min(max(x[j], 0.0), 1.0)
+                q = (a[0] + u * (bb[0] - a[0]) - o[0], a[1] + u * (bb[1] - a[1]) - o[1])
+                d = _unitario((bb[0] - a[0], bb[1] - a[1]))
+                return [math.hypot(*q) - self.R(x, c), q[0] * d[0] + q[1] * d[1]]
+            T.append(f)
             return
         if tipos[0] in CIRCULARES and tipos[1] in CIRCULARES:
             c1, c2 = e
@@ -1609,6 +1626,12 @@ class _GradosAuto:
                 columnas.extend(self.sis.idx_p[pid])
             columnas.extend(self.sis.idx_r[cid] for cid in local.idx_r)
             J = _jacobiano(local, local.x0)
+            if J.shape[1] > local.n_base:
+                # Contactos con parámetro auxiliar (B-564, B-650): se elimina proyectando las filas sobre lo que el
+                # parámetro no puede absorber. shortcut: un parámetro clavado en el borde (columna nula) no suma su
+                # grado libre como en `grados_de_libertad`; si AutoConstrain cuenta de más ahí, guardarlo en el estado.
+                u, s, _ = np.linalg.svd(J[:, local.n_base:])
+                J = u[:, int(np.count_nonzero(s > 1e-9)):].T @ J[:, :local.n_base]
             filas = np.zeros((len(J), n))
             filas[:, columnas] = J
             if tolerancia is not None:
