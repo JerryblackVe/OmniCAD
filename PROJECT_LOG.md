@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+
+- **2026-11-19 · B-695 cerrado (E4).** Teclear un texto ligado de un boceto anterior a una extrusión: `set_parameter` descartaba el cambio si un paso posterior citaba un cuerpo que desaparecía ("op58.c5 no existe") y la UI leía `r["error"]` (KeyError, dejaba el panel desfasado: causa probable de B-696). Ahora `keep_errors` en set_parameter, `_anunciar_avisos` calla con el boceto abierto. Test: `test_b695_aviso_falso_boceto_anterior.py`.
 - **2026-11-19 · PRUEBA-OPCIONES (E7).** `scripts/prueba_ui/boceto_opciones.py`: 55 comprobaciones en verde (estrella, spline grado 5/3, arrastres, marco mover/espejo, SVG capas/colores). Sin bugs nuevos. La tabla de opciones marca «no» filas que ya cubren otros scripts (f-strings que el contador no ve). Sin commit.
 
 - **2026-11-19 · Traspaso E1 (B-694 integrado; próximo B-677).** 1) B-694 en main (8cceaf35): `perfiles._letras_unidas` une letras encimadas de un texto; P-183 anotada (cursiva larga lenta). 2) Próximo: B-677 (Opus alto), perfiles: OmniCAD detecta menos que Fusion (fila en bugs.md); worktree ~/OmniCAD-B-677, nada empezado. 3) Ojo al probar scripts sueltos: `PYTHONPATH=$PWD` en el worktree y el Python de main (`/home/mosos/OmniCAD/clon/.venv/bin/python`). 4) `extrude profile:"all"` toma también los huecos de las letras (a propósito); lo de Fusion es `profile:"sketch"`. 5) Cambios en perfiles.py son núcleo (>15 grupos): correr los tests que importan `perfiles` + los de texto (39 archivos, ~3,5 min).
