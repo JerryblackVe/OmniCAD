@@ -12,6 +12,7 @@ BRIEFS = Path(os.environ.get("LLENAR_BRIEFS", Path.home() / "coordinador/e9promp
 PY = os.environ.get("VIGIA_PY", str(Path.home() / "OmniCAD/clon/.venv/bin/python"))
 SEGUIMIENTO = REPO / "docs/seguimiento"
 CARPETAS = ["", "reserva", "corriendo", "hechos", "hechos/integrados", "descartadas", "trabadas"]
+BOCETO = {"CREAR", "MODIFICAR", "RESTRICCIONES", "SELECCIONAR", "TERMINAR BOCETO"}      # grupos de la cinta propios del boceto
 GRANDE = 600      # fila más larga que esto: PREP (repro + test rojo) y no FIX
 
 REGLAS = """/fable-method
@@ -38,7 +39,7 @@ def filas_abiertas():
     en_ahora = (SEGUIMIENTO / "ahora.md").read_text(encoding="utf-8")
     for linea in (SEGUIMIENTO / "bugs.md").read_text(encoding="utf-8").splitlines():     # solo bugs: lo de diseño no va a OpenCode
         m = re.match(r"\| (B-\d+[a-z]?) \| Bocetos?\b", linea)
-        if m and "| Abierto |" in linea and m.group(1) not in en_ahora:
+        if m and ("| Abierto |" in linea or "| Sin verificar |" in linea) and m.group(1) not in en_ahora:
             yield m.group(1), len(linea)
 
 
@@ -50,7 +51,7 @@ def sin_cobertura():
     # primero lo propio del boceto (crear, modificar, restricciones, selección); lo que no se probó como usuario, antes
     orden = ["CREAR", "MODIFICAR", "RESTRICCIONES", "SELECCIONAR", "TERMINAR BOCETO", "INSERTAR", "INSPECCIONAR", "CONFIGURAR", "ENSAMBLAR"]
     clave = lambda f: (orden.index(f[0].split(" › ")[0]) if f[0].split(" › ")[0] in orden else 99, "sí" in f[3])
-    return [k for g, k, t, u in sorted(filas, key=clave) if t == "**no**"]
+    return [(g.split(" › ")[0], k) for g, k, t, u in sorted(filas, key=clave) if t == "**no**"]
 
 
 def opciones_sin_test():
@@ -61,16 +62,6 @@ def opciones_sin_test():
 
 
 def candidatas():
-    for fila in opciones_sin_test():
-        cmd, opc = fila.split("|", 1)
-        yield "PREP-TEST-OPC-" + hashlib.md5(fila.encode()).hexdigest()[:6], (
-            f"PREPARAR el test de la opción «{opc}» del comando «{cmd}» del boceto: clon/tests/test_prep_opc_<nombre>.py "
-            f"(valor numérico y un borde, según docs/fusion_docs). Ubicá el código en clon/omnicad/ui/comandos/ o ui/modo_boceto.py. "
-            f"Si falla, es un bug: fila nueva y xfail. Solo escribís tests.")
-    for k in sin_cobertura():
-        yield f"PREP-TEST-{k}", (f"PREPARAR el test del comando de boceto «{k}»: escribí clon/tests/test_prep_cmd_{k}.py "
-                                 f"(un caso con valor numérico y un caso borde) según docs/fusion_docs. Si falla, es un bug: fila nueva y xfail. "
-                                 f"Solo escribís tests, no código de la app.")
     for i, largo in filas_abiertas():
         if largo > GRANDE:
             yield f"PREP-{i}", (f"{i}: leé su fila en docs/seguimiento/ (grep -n \"| {i} |\"). Reproducilo y dejá un test rojo (xfail con el motivo) "
@@ -78,9 +69,26 @@ def candidatas():
         else:
             yield f"FIX-{i}", (f"{i}: leé su fila en docs/seguimiento/ (grep -n \"| {i} |\"). Reproducilo, arreglá la causa con el cambio más chico "
                                f"(UN archivo), dejá un test que falle sin el arreglo, borrá la fila y sumá una viñeta de ≤300 caracteres al Registro de PROJECT_LOG.md.")
+    for fila in opciones_sin_test():
+        cmd, opc = fila.split("|", 1)
+        yield "PREP-TEST-OPC-" + hashlib.md5(fila.encode()).hexdigest()[:6], (
+            f"PREPARAR el test de la opción «{opc}» del comando «{cmd}» del boceto: clon/tests/test_prep_opc_<nombre>.py "
+            f"(valor numérico y un borde, según docs/fusion_docs). Ubicá el código en clon/omnicad/ui/comandos/ o ui/modo_boceto.py. "
+            f"Si falla, es un bug: fila nueva y xfail. Solo escribís tests.")
+    fuera = []
+    for g, k in sin_cobertura():
+        tarea = (f"PREP-TEST-{k}", (f"PREPARAR el test del comando de boceto «{k}»: escribí clon/tests/test_prep_cmd_{k}.py "
+                                    f"(un caso con valor numérico y un caso borde) según docs/fusion_docs. Si falla, es un bug: fila nueva y xfail. "
+                                    f"Solo escribís tests, no código de la app."))
+        if g in BOCETO:
+            yield tarea
+        else:
+            fuera.append(tarea)
     hoy = datetime.date.today().strftime("%Y%m%d")
     yield f"CAZA-boceto-{hoy}", ("Corré desde clon/: ../scripts/caza/cazar.py tema boceto (fecha %s). "
                                   "Cada falla nueva es una fila de boceto en docs/seguimiento/ con su repro; no arregles nada." % hoy)
+    for t in fuera:        # solo si no queda nada de boceto (Gerardo, 19/11: «solo boceto»); main() lo avisa
+        yield t[0] + "@fuera", t[1]
 
 
 def main():
@@ -92,10 +100,13 @@ def main():
     hay = len(list(reserva.glob("*.tarea")))
     ya = existentes()
     BRIEFS.mkdir(parents=True, exist_ok=True)
-    creadas = []
+    creadas, aviso = [], []
     for nombre, que in candidatas():
         if hay + len(creadas) >= a.tope:
             break
+        if nombre.endswith("@fuera"):
+            nombre = nombre[:-6]
+            aviso.append(nombre)
         if nombre in ya:
             continue
         # el worktree se llama como el ítem (B-701) o como la tarea sin guiones bajos (PREP-TEST-sk-x): lo que ya existe, alguien lo tomó
@@ -110,7 +121,7 @@ def main():
             brief.write_text(REGLAS.format(que=que, wt=wt, py=PY), encoding="utf-8")
             (reserva / f"70_{nombre}.tarea").write_text(f"WT={wt}\nBRIEF={brief}\n", encoding="utf-8")
         creadas.append(nombre)
-    print("reserva:", hay, "→", hay + len(creadas), creadas)
+    print("reserva:", hay, "→", hay + len(creadas), creadas, ("AVISO fuera de boceto (no queda nada de boceto): %s" % aviso) if aviso else "")
 
 
 if __name__ == "__main__":

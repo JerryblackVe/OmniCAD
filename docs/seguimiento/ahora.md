@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Opus alto) | SOLVER-FUSION | Comparar el arrastre del solver con el método de Fusion (LM de Nielsen, mínimo movimiento) en comportamiento y velocidad; adoptar lo que mejore. Brief: `~/coordinador/casos/solver/E1_BRIEF_SOLVER-FUSION.md` |
+| E1 (Opus alto) | SOLVER-FUSION | Comparar el arrastre del solver (incluye B-707) con el método de Fusion (LM de Nielsen, mínimo movimiento) en comportamiento y velocidad; adoptar lo que mejore. Brief: `~/coordinador/casos/solver/E1_BRIEF_SOLVER-FUSION.md` |
 | E3, E4, E8 | — | Vaciadas y quietas; reciben lo que salga de OpenCode que no cierre (por el chat maestro) |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | En pausa (Gerardo en la PC). Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-591 (reprobar en Windows; sin traceback nuevo no hay nada que cazar), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
