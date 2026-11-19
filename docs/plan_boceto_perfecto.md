@@ -35,36 +35,36 @@ El plan no se arma solo con los bugs conocidos: lo que nunca se probó no tiene 
 Proyectar). La tabla sale de la cinta (`ui/cinta.py` › BOCETO: CREAR, MODIFICAR, RESTRICCIONES, CONFIGURAR, INSPECCIONAR, INSERTAR,
 SELECCIONAR y TERMINAR) y se rehace con `scripts/cobertura_boceto.py` (desde `clon/`). «Test automático» = algún test que no es de
 catálogo nombra su clave; «Probado como usuario» = lo nombra algún script de `scripts/prueba_ui/`.
-**Resumen (19/11): 149 comandos; 20 sin test automático; 61 sin prueba como usuario; 11 sin ninguna de las dos.**
+**Resumen (19/11, tras PRUEBA-CMDS grupos 1 y 2 de E7): 150 comandos; 20 sin test automático; 35 sin prueba como usuario; 0 sin ninguna de las dos.**
 Faltan por contar a mano: las opciones de cada diálogo (p. ej. los 5 tipos de Proyectar, ver PRUEBA-PROY en `ahora.md`) y las asas.
 Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana a E7 y E11.
 
 | Grupo | Comando | Clave | Test automático | Probado como usuario | Fila abierta |
 |---|---|---|---|---|---|
 | CONFIGURAR | Configurar | `configurar` | sí (13) | sí (2) | B-591 |
-| CONFIGURAR | Mostrar tabla de configuración | `mostrar_configuracion` | **no** | **no** | — |
+| CONFIGURAR | Mostrar tabla de configuración | `mostrar_configuracion` | **no** | sí (1) | — |
 | CREAR | Cota de boceto | `sk_cota` | sí (12) | sí (5) | — |
-| CREAR | Curva cónica | `sk_conica` | sí (9) | **no** | — |
+| CREAR | Curva cónica | `sk_conica` | sí (9) | sí (1) | — |
 | CREAR | Editar patrón | `sk_editar_patron` | sí (3) | sí (1) | — |
 | CREAR | Elipse | `sk_elipse` | sí (21) | sí (2) | — |
-| CREAR | Espiral | `sk_espiral` | sí (6) | **no** | — |
-| CREAR | Línea | `sk_linea` | sí (76) | sí (13) | — |
+| CREAR | Espiral | `sk_espiral` | sí (6) | sí (1) | B-689 |
+| CREAR | Línea | `sk_linea` | sí (76) | sí (14) | — |
 | CREAR | Línea de punto medio | `sk_linea_medio` | sí (5) | sí (1) | — |
 | CREAR | Patrón circular | `sk_patron_circular` | sí (10) | sí (2) | — |
 | CREAR | Patrón rectangular | `sk_patron_rectangular` | sí (12) | sí (1) | — |
 | CREAR | Punto | `sk_punto` | sí (56) | sí (9) | — |
 | CREAR | Simetría | `sk_simetria` | sí (19) | sí (6) | — |
-| CREAR › Arco | sk_arco | `sk_arco` | sí (33) | sí (4) | — |
+| CREAR › Arco | sk_arco | `sk_arco` | sí (33) | sí (5) | — |
 | CREAR › Arco | sk_arco_centro | `sk_arco_centro` | sí (5) | sí (1) | — |
-| CREAR › Arco | sk_arco_tangente | `sk_arco_tangente` | sí (2) | **no** | — |
-| CREAR › Círculo | sk_circulo | `sk_circulo` | sí (60) | sí (11) | — |
-| CREAR › Círculo | sk_circulo_2p | `sk_circulo_2p` | sí (4) | **no** | — |
-| CREAR › Círculo | sk_circulo_2t | `sk_circulo_2t` | sí (2) | **no** | — |
-| CREAR › Círculo | sk_circulo_3p | `sk_circulo_3p` | sí (3) | **no** | — |
-| CREAR › Círculo | sk_circulo_3t | `sk_circulo_3t` | sí (2) | **no** | — |
+| CREAR › Arco | sk_arco_tangente | `sk_arco_tangente` | sí (2) | sí (1) | — |
+| CREAR › Círculo | sk_circulo | `sk_circulo` | sí (60) | sí (12) | — |
+| CREAR › Círculo | sk_circulo_2p | `sk_circulo_2p` | sí (4) | sí (1) | — |
+| CREAR › Círculo | sk_circulo_2t | `sk_circulo_2t` | sí (2) | sí (1) | — |
+| CREAR › Círculo | sk_circulo_3p | `sk_circulo_3p` | sí (3) | sí (1) | — |
+| CREAR › Círculo | sk_circulo_3t | `sk_circulo_3t` | sí (2) | sí (1) | — |
 | CREAR › Polígono | sk_estrella | `sk_estrella` | sí (1) | sí (1) | — |
-| CREAR › Polígono | sk_poligono_arista | `sk_poligono_arista` | sí (4) | **no** | — |
-| CREAR › Polígono | sk_poligono_circunscrito | `sk_poligono_circunscrito` | sí (2) | **no** | — |
+| CREAR › Polígono | sk_poligono_arista | `sk_poligono_arista` | sí (4) | sí (1) | — |
+| CREAR › Polígono | sk_poligono_circunscrito | `sk_poligono_circunscrito` | sí (2) | sí (1) | — |
 | CREAR › Polígono | sk_poligono_inscrito | `sk_poligono_inscrito` | sí (7) | sí (2) | — |
 | CREAR › Proyectar/Incluir | Proyectar eje | `sk_proyectar_eje` | sí (2) | sí (4) | — |
 | CREAR › Proyectar/Incluir | sk_curva_interseccion | `sk_curva_interseccion` | sí (2) | sí (2) | — |
@@ -76,16 +76,16 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | CREAR › Proyectar/Incluir | sk_proyectar | `sk_proyectar` | sí (2) | sí (4) | — |
 | CREAR › Proyectar/Incluir | sk_proyectar_superficie | `sk_proyectar_superficie` | sí (2) | sí (2) | — |
 | CREAR › Proyectar/Incluir | sk_romper_vinculo | `sk_romper_vinculo` | sí (2) | sí (1) | — |
-| CREAR › Ranura | sk_ranura_arco_3p | `sk_ranura_arco_3p` | sí (2) | **no** | — |
-| CREAR › Ranura | sk_ranura_arco_centro | `sk_ranura_arco_centro` | sí (3) | **no** | — |
-| CREAR › Ranura | sk_ranura_centro | `sk_ranura_centro` | sí (7) | **no** | — |
-| CREAR › Ranura | sk_ranura_punto | `sk_ranura_punto` | sí (3) | **no** | — |
-| CREAR › Ranura | sk_ranura_total | `sk_ranura_total` | sí (3) | **no** | — |
+| CREAR › Ranura | sk_ranura_arco_3p | `sk_ranura_arco_3p` | sí (2) | sí (1) | — |
+| CREAR › Ranura | sk_ranura_arco_centro | `sk_ranura_arco_centro` | sí (3) | sí (1) | — |
+| CREAR › Ranura | sk_ranura_centro | `sk_ranura_centro` | sí (7) | sí (1) | — |
+| CREAR › Ranura | sk_ranura_punto | `sk_ranura_punto` | sí (3) | sí (1) | — |
+| CREAR › Ranura | sk_ranura_total | `sk_ranura_total` | sí (3) | sí (1) | — |
 | CREAR › Rectángulo | sk_rectangulo | `sk_rectangulo` | sí (15) | sí (3) | — |
 | CREAR › Rectángulo | sk_rectangulo_3p | `sk_rectangulo_3p` | sí (7) | sí (1) | — |
-| CREAR › Rectángulo | sk_rectangulo_centro | `sk_rectangulo_centro` | sí (5) | **no** | — |
+| CREAR › Rectángulo | sk_rectangulo_centro | `sk_rectangulo_centro` | sí (5) | sí (1) | — |
 | CREAR › Spline | sk_spline_ajuste | `sk_spline_ajuste` | sí (5) | sí (1) | — |
-| CREAR › Spline | sk_spline_control | `sk_spline_control` | sí (5) | **no** | — |
+| CREAR › Spline | sk_spline_control | `sk_spline_control` | sí (5) | sí (1) | — |
 | CREAR › Texto | sk_desglosar_texto | `sk_desglosar_texto` | sí (2) | **no** | — |
 | CREAR › Texto | sk_texto | `sk_texto` | sí (57) | sí (7) | — |
 | ENSAMBLAR | Activar conjuntos de contactos | `contactos_activar` | sí (1) | **no** | — |
@@ -115,7 +115,7 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | INSERTAR | Insertar derivación | `insertar_derivacion` | sí (2) | **no** | — |
 | INSERTAR | Insertar fijador | `fijacion` | sí (8) | sí (1) | — |
 | INSERTAR | Insertar malla | `insertar_malla` | sí (2) | **no** | — |
-| INSERTAR | Lienzo | `lienzo` | sí (66) | sí (27) | B-411 |
+| INSERTAR | Lienzo | `lienzo` | sí (67) | sí (29) | B-411 |
 | INSERTAR | Placa de holguras | `calibracion_holguras` | sí (2) | **no** | — |
 | INSERTAR | Vectorizar imagen | `vectorizar_imagen` | sí (1) | **no** | — |
 | INSPECCIONAR | Análisis cebra | `cebra` | sí (5) | sí (2) | — |
@@ -124,11 +124,11 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | INSPECCIONAR | Análisis de la isocurva | `isocurva` | sí (3) | sí (2) | B-515 |
 | INSPECCIONAR | Análisis de mapas de entorno | `mapa_entorno` | sí (2) | sí (1) | — |
 | INSPECCIONAR | Análisis de radio mínimo | `radio_minimo` | sí (2) | sí (1) | — |
-| INSPECCIONAR | Análisis de sección | `seccion` | sí (29) | sí (10) | P-181,P-22c |
+| INSPECCIONAR | Análisis de sección | `seccion` | sí (29) | sí (10) | B-688,P-181,P-22c |
 | INSPECCIONAR | Análisis de ángulo de desmoldeo | `angulo_desmoldeo` | sí (4) | sí (2) | — |
 | INSPECCIONAR | Análisis del mapa de curvatura | `mapa_curvatura` | sí (1) | sí (2) | — |
-| INSPECCIONAR | Barrido de parámetros | `barrido_parametros` | **no** | **no** | — |
-| INSPECCIONAR | Buscar componentes similares | `buscar_similares` | **no** | **no** | — |
+| INSPECCIONAR | Barrido de parámetros | `barrido_parametros` | **no** | sí (1) | — |
+| INSPECCIONAR | Buscar componentes similares | `buscar_similares` | **no** | sí (1) | — |
 | INSPECCIONAR | Centro de masa | `centro_masa` | sí (25) | sí (1) | — |
 | INSPECCIONAR | Interferencia | `interferencia` | sí (5) | sí (1) | B-481 |
 | INSPECCIONAR | Mapa de desviación | `mapa_desviacion` | **no** | sí (2) | — |
@@ -137,10 +137,10 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | INSPECCIONAR | Mostrar grupos de caras de malla | `ver_grupos_caras` | **no** | sí (1) | — |
 | INSPECCIONAR | Propiedades | `propiedades` | sí (31) | sí (1) | B-172 |
 | INSPECCIONAR | Reparar cuerpo | `reparar_cuerpo` | sí (3) | **no** | — |
-| INSPECCIONAR | Revisar geometría | `revisar_geometria` | **no** | **no** | — |
+| INSPECCIONAR | Revisar geometría | `revisar_geometria` | **no** | sí (1) | — |
 | INSPECCIONAR | Sustainability Insights | `sustentabilidad` | sí (2) | sí (1) | — |
 | MODIFICAR | Alargar | `sk_alargar` | sí (4) | **no** | — |
-| MODIFICAR | Cambiar parámetros | `parametros` | sí (103) | sí (3) | H-68 |
+| MODIFICAR | Cambiar parámetros | `parametros` | sí (104) | sí (3) | H-68 |
 | MODIFICAR | Curva de fusión | `sk_curva_fusion` | sí (3) | **no** | — |
 | MODIFICAR | Desfase | `sk_desfase` | sí (43) | sí (12) | — |
 | MODIFICAR | Empalme | `sk_empalme` | sí (35) | sí (5) | — |
@@ -152,7 +152,8 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | MODIFICAR › Chaflán | sk_chaflan | `sk_chaflan` | sí (18) | sí (4) | — |
 | MODIFICAR › Chaflán | sk_chaflan_dist_angulo | `sk_chaflan_dist_angulo` | sí (2) | sí (1) | — |
 | MODIFICAR › Chaflán | sk_chaflan_dos_dist | `sk_chaflan_dos_dist` | sí (2) | sí (1) | — |
-| RESTRICCIONES | sk_autorestringir | `sk_autorestringir` | sí (2) | **no** | — |
+| RESTRICCIONES | sk_autorestringir | `sk_autorestringir` | sí (3) | **no** | — |
+| RESTRICCIONES | sk_autorestringir_referencia | `sk_autorestringir_referencia` | sí (3) | **no** | — |
 | RESTRICCIONES | sk_r_coincidente | `sk_r_coincidente` | sí (3) | sí (2) | — |
 | RESTRICCIONES | sk_r_colineal | `sk_r_colineal` | **no** | sí (2) | — |
 | RESTRICCIONES | sk_r_concentrica | `sk_r_concentrica` | **no** | sí (2) | — |
@@ -166,10 +167,10 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | RESTRICCIONES | sk_r_punto_medio | `sk_r_punto_medio` | sí (3) | sí (2) | — |
 | RESTRICCIONES | sk_r_simetria | `sk_r_simetria` | sí (1) | sí (2) | — |
 | RESTRICCIONES | sk_r_tangente | `sk_r_tangente` | sí (6) | sí (3) | — |
-| SELECCIONAR | Seleccionar | `seleccionar` | sí (39) | sí (20) | — |
-| SELECCIONAR | Selección de forma libre | `sel_libre` | **no** | **no** | — |
+| SELECCIONAR | Seleccionar | `seleccionar` | sí (39) | sí (21) | — |
+| SELECCIONAR | Selección de forma libre | `sel_libre` | **no** | sí (1) | — |
 | SELECCIONAR | Selección de pintura | `sel_pintura` | sí (1) | **no** | — |
-| SELECCIONAR | Selección en ventana | `sel_ventana` | **no** | **no** | — |
+| SELECCIONAR | Selección en ventana | `sel_ventana` | **no** | sí (1) | B-687 |
 | SELECCIONAR › Filtros de selección | Aristas | `filtro_aristas` | sí (1) | **no** | — |
 | SELECCIONAR › Filtros de selección | Caras | `filtro_caras` | sí (2) | **no** | — |
 | SELECCIONAR › Filtros de selección | Cuerpos | `filtro_cuerpos` | sí (1) | **no** | — |
@@ -178,15 +179,15 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | SELECCIONAR › Filtros de selección | Vértices | `filtro_vertices` | sí (1) | **no** | — |
 | SELECCIONAR › Herramientas de selección | Crear conjunto de selección | `conjunto_seleccion` | sí (1) | **no** | — |
 | SELECCIONAR › Herramientas de selección | Elegir conjunto de selección | `elegir_conjunto` | sí (1) | **no** | — |
-| SELECCIONAR › Herramientas de selección | Invertir selección | `invertir_seleccion` | **no** | **no** | — |
+| SELECCIONAR › Herramientas de selección | Invertir selección | `invertir_seleccion` | **no** | sí (1) | — |
 | SELECCIONAR › Herramientas de selección | Seleccionar por límite | `seleccion_limite` | sí (1) | **no** | — |
-| SELECCIONAR › Herramientas de selección | Seleccionar por nombre | `seleccion_nombre` | **no** | **no** | — |
-| SELECCIONAR › Herramientas de selección | Seleccionar por tamaño | `seleccion_tamano` | **no** | **no** | — |
-| SELECCIONAR › Herramientas de selección | Seleccionar todo | `seleccionar_todo` | **no** | **no** | — |
+| SELECCIONAR › Herramientas de selección | Seleccionar por nombre | `seleccion_nombre` | **no** | sí (1) | — |
+| SELECCIONAR › Herramientas de selección | Seleccionar por tamaño | `seleccion_tamano` | **no** | sí (1) | — |
+| SELECCIONAR › Herramientas de selección | Seleccionar todo | `seleccionar_todo` | **no** | sí (1) | — |
 | SELECCIONAR › Herramientas de selección | Semilla y límite | `seleccion_semilla` | sí (1) | **no** | — |
 | SELECCIONAR › Prioridad de selección | Prioridad de arista | `prioridad_arista` | sí (1) | **no** | — |
 | SELECCIONAR › Prioridad de selección | Prioridad de cara | `prioridad_cara` | sí (1) | **no** | — |
 | SELECCIONAR › Prioridad de selección | Prioridad de componente | `prioridad_componente` | sí (1) | **no** | — |
 | SELECCIONAR › Prioridad de selección | Prioridad de cuerpo | `prioridad_cuerpo` | sí (1) | **no** | — |
 | TERMINAR BOCETO | sk_terminar | `sk_terminar` | sí (1) | sí (3) | — |
-| TERMINAR BOCETO | sk_terminar_auto | `sk_terminar_auto` | **no** | **no** | — |
+| TERMINAR BOCETO | sk_terminar_auto | `sk_terminar_auto` | **no** | sí (1) | — |
