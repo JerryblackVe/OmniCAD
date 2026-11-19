@@ -1934,10 +1934,34 @@ class VentanaPrincipal(QMainWindow):
             self._seleccionar(self.seleccion + [hit])
 
     def _seleccionar_todo(self):
-        if self.panel is None and not self.modo_boceto.activo:
+        if self.modo_boceto.activo:
+            lienzo = self.modo_boceto.lienzo
+            en_curvas = {p for c in lienzo.b.curvas.values() for p in c.puntos()}
+            ocultos = lienzo._ocultos()[1]
+            lienzo.seleccion = [c.id for c in lienzo.b.curvas.values() if lienzo._visible(c)]
+            lienzo.seleccion += [p.id for p in lienzo.b.puntos.values()
+                               if p.id > 0 and p.id not in en_curvas and p.id not in ocultos]
+            lienzo.cambio.emit()
+            lienzo._notificar_seleccion()
+            lienzo.update()
+            return
+        if self.panel is None:
             self._seleccionar(self._hits_cuerpos([m["id"] for m in self.visor._mallas]))
 
     def _invertir_seleccion(self):
+        if self.modo_boceto.activo:
+            lienzo = self.modo_boceto.lienzo
+            en_curvas = {p for c in lienzo.b.curvas.values() for p in c.puntos()}
+            ocultos = lienzo._ocultos()[1]
+            todos = [c.id for c in lienzo.b.curvas.values() if lienzo._visible(c)] + [
+                p.id for p in lienzo.b.puntos.values()
+                if p.id > 0 and p.id not in en_curvas and p.id not in ocultos]
+            elegidos = set(lienzo.seleccion)
+            lienzo.seleccion = [i for i in todos if i not in elegidos]
+            lienzo.cambio.emit()
+            lienzo._notificar_seleccion()
+            lienzo.update()
+            return
         elegidos = {h["ref"].get("cuerpo") for h in self.seleccion if h["tipo"] == "cuerpo"}
         self._seleccionar(self._hits_cuerpos([m["id"] for m in self.visor._mallas if m["id"] not in elegidos]))
 
