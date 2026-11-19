@@ -29,7 +29,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 0a | B-649 | Tangente línea–círculo agranda el círculo (E1, Opus alto; foco boceto: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md)) |
 | 0b | B-650 | Arrastre pierde la tangencia con cota de diámetro (E1) |
 | 0c | B-651 | Saltos al arrastrar un extremo coincidente (E1) |
 | 0d | B-652 | Teclear en una cota cierra el boceto y abre Agujero (E8) |
