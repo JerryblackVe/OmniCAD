@@ -976,6 +976,8 @@ class LienzoInteraccionMixin:
         h = self.herramienta
         if h == "circulo_2t":
             return len(self.picks) == 2
+        if h == "espiral":
+            return self.entrada is not None      # B-689: la caja abierta recibe lo tecleado en el Lienzo
         return bool(self._claves_vivas()) or self._cota_elegida() is not None
 
     def _cota_elegida(self):
@@ -1025,6 +1027,16 @@ class LienzoInteraccionMixin:
         if k == Qt.Key_Control:
             self._modificadores_raton = e.modifiers()       # Ctrl apaga las ayudas mientras se mantiene
             self._refrescar_cursor()
+        # B-689: la caja de la espiral queda abierta tras los 2 clics y el foco puede quedar en el Lienzo;
+        # lo tecleado entra en «Vueltas» y Enter la crea (con lo escrito o los valores por defecto, como Fusion).
+        if h == "espiral" and self.entrada is not None:
+            if k in (Qt.Key_Return, Qt.Key_Enter):
+                self.entrada.aceptado.emit([c.text().strip() for c in self.entrada.campos])
+                return
+            if self._admite_entrada(e):
+                self.entrada.campos[0].setFocus()
+                self.entrada.campos[0].setText(e.text())
+                return
         if k == Qt.Key_Escape:
             if self.visor is not None and self.visor.modo:
                 self.visor.set_modo(None)
