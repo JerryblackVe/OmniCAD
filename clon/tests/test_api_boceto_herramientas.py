@@ -279,6 +279,18 @@ def test_recortar_errores(s):
     assert foto(s) == antes
 
 
+def test_b512_recortar_con_clic_lejos_de_la_curva_no_recorta(s):
+    """B-512: Fusion recorta el tramo bajo el clic; un clic lejos de la curva no toca nada."""
+    v = llamar(s, "draw_line", start_x=10, start_y=-5, end_x=10, end_y=5)["entities"][0]["id"]
+    llamar(s, "draw_line", start_x=0, start_y=0, end_x=20, end_y=0)
+    antes = foto(s)
+    r = falla(s, "trim_sketch_curve", entity=v, x=999, y=999)
+    assert r["error_kind"] == "INVALID_GEOMETRY"
+    assert foto(s) == antes
+    llamar(s, "trim_sketch_curve", entity=v, x=10, y=-3)
+    assert sorted([por_id(s)[v]["start"], por_id(s)[v]["end"]]) == [[10, 0], [10, 5]]
+
+
 # ---------------------------------------------------------------- desfase paramétrico
 def test_desfase_de_cadena_afuera_adentro_y_con_parametro(s):
     abajo = rectangulo_acotado(s)[0]
