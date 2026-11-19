@@ -126,6 +126,23 @@ def test_insertar_un_step_ilegible_avisa_y_no_deja_un_paso_rojo(tmp_path, monkey
     assert avisos[0][0] == "No se pudo importar" and len(ventana.doc.operaciones) == antes
 
 
+def test_b692_aviso_step_roto_nombra_archivo_y_motivo_sin_ruta_temporal(tmp_path, monkeypatch, ventana):
+    """B-692: el aviso de un STEP roto dice qué archivo elegido falló y por qué, en 1 renglón y sin la copia temporal."""
+    ruta = tmp_path / "pieza del cliente.step"
+    ruta.write_text("ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\n#1=BASURA(;\nENDSEC;\nEND-ISO-10303-21;\n", encoding="utf-8")
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(ruta), "")))
+    avisos = []
+    monkeypatch.setattr(QMessageBox, "critical", staticmethod(lambda *a: avisos.append(a[1:])))
+    ventana.importar_step()
+    _esperar(lambda: avisos)
+    titulo, texto = avisos[0][0], avisos[0][1]
+    assert titulo == "No se pudo importar"
+    assert "pieza del cliente.step" in texto        # el nombre del archivo elegido
+    assert "tmp" not in texto and str(tmp_path) not in texto   # sin la ruta de la copia temporal
+    assert "dañado" in texto                         # el motivo en 1 renglón
+    assert "\n" not in texto
+
+
 def test_el_proceso_aparte_malla_solo_los_cuerpos_que_la_ventana_no_tiene(tmp_path, monkeypatch):
     """B-337: OpenCascade no suelta el GIL al mallar (un cuerpo de un STEP trababa la ventana 28 s): con `MALLAR` el hijo
     manda la malla de los cuerpos nuevos, y no la de los que ya mandó antes."""

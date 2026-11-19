@@ -3697,9 +3697,11 @@ class VentanaPrincipal(QMainWindow):
             return self._agregar(op, aparte=True)
 
         def adoptar():
-            estado, mensaje = doc._precalculo[2]["resultados"][lugar][:2]
+            estado = doc._precalculo[2]["resultados"][lugar][0]
             if estado == "error":                   # un STEP ilegible avisa y no deja un paso rojo
-                QMessageBox.critical(self, "No se pudo importar", mensaje)
+                # B-692: el mensaje del kernel trae la copia temporal; mostrar el archivo elegido y el motivo.
+                QMessageBox.critical(self, "No se pudo importar",
+                                     f"No se pudo leer «{Path(ruta).name}»: el archivo STEP está dañado.")
             else:
                 self._cambio_aparte(insertar)
 
