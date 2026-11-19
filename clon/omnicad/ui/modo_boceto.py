@@ -1189,6 +1189,10 @@ class ModoBoceto(QObject):
                  "AutoConstrain: detecta coincidencias, concentricidad, horizontales, verticales, paralelas, "
                  "perpendiculares, tangencias, igualdades, puntos medios y simetrías, y agrega las cotas que faltan. "
                  "Muestra varios resultados para elegir."),
+                ("sk_autorestringir_referencia", "Restricciones automáticas desde referencia", None, "r_autorestringir",
+                 self._autorestringir_desde_referencia,
+                 "AutoConstrain From Datum: elegí primero el punto datum con un clic en el lienzo; con el datum "
+                 "puesto, el diálogo de resultados se genera solo y las posiciones se miden desde ese punto."),
                 ("sk_terminar_auto", "Terminar con AutoConstrain", None, "terminar", self.terminar_con_autorestringir,
                  "Restringe el boceto automáticamente y lo termina (Finish with AutoConstrain). Si no se puede "
                  "(vacío o más de 250 entidades), lo termina igual."),
@@ -1529,6 +1533,15 @@ class ModoBoceto(QObject):
     def _autorestringir(self):
         if self.activo:
             self.lienzo.auto_restringir_dialogo()
+
+    def _autorestringir_desde_referencia(self):
+        """AutoConstrain From Datum: el clic elige el punto datum y el diálogo abre con los resultados ya
+        calculados desde él (Fusion: Restricciones automáticas desde referencia)."""
+        if self.activo:
+            pid = self.lienzo.elegir_punto_en_lienzo(
+                "Restringir automáticamente desde referencia: hacé clic en el punto datum (Esc cancela).")
+            if pid is not None:
+                self.lienzo.auto_restringir_dialogo(datum=pid)
 
     def _conflictos(self):
         if self.activo:

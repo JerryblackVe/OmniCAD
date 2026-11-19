@@ -284,7 +284,8 @@ def test_el_menu_restricciones_tiene_las_13_y_el_poligono_aparte():
     assert sorted(visibles) == sorted(herramientas)                # las 13, ninguna repetida
     assert claves[claves.index("sk_r_curvatura") + 1] == "-"                       # un separador entre las 12 y la propia
     assert claves[claves.index("sk_r_poligono") - 1] == "-"
-    assert claves[-1] == "sk_autorestringir"
+    assert claves[-1] == "sk_autorestringir_referencia"        # H-117: al lado de «Restringir automáticamente»
+    assert claves[-2] == "sk_autorestringir"
     assert editor_boceto.NOMBRES_RESTRICCION["r_poligono"] == "Polígono regular"
 
 

@@ -599,15 +599,20 @@ class LienzoModificarMixin:
         self.previa_auto = lista
         self.update()
 
-    def auto_restringir_dialogo(self):
-        """AutoConstrain con el diálogo de resultados (BOC-5); el punto seleccionado, si hay uno, es el datum."""
+    def auto_restringir_dialogo(self, datum=None):
+        """AutoConstrain con el diálogo de resultados (BOC-5); `datum` (Restricciones automáticas desde
+        referencia) manda sobre el punto seleccionado, si hay uno."""
         from .dialogo_autorestringir import ELEGIR_DATUM, DialogoAutoRestringir
         if not self.b.curvas and not self.b.puntos:
             self.mensaje.emit("Restringir automáticamente: el boceto está vacío.")
             return []
-        puntos = [i for i in self.seleccion if i in self.b.puntos]
+        if datum is None:
+            puntos = [i for i in self.seleccion if i in self.b.puntos]
+            datum = puntos[0] if len(puntos) == 1 else None
         try:
-            dialogo = DialogoAutoRestringir(self.b, self.valores_cotas(), puntos[0] if len(puntos) == 1 else None, self)
+            dialogo = DialogoAutoRestringir(self.b, self.valores_cotas(), datum, self)
+            if datum is not None and dialogo.datum.currentData() != datum:
+                dialogo.fijar_datum(datum)   # punto fuera de los 200 más cercanos: se agrega y se elige
         except (ErrorBoceto, ErrorExpresion) as e:
             self.mensaje.emit(str(e))
             return []

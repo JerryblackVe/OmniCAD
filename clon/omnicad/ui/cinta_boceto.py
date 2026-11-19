@@ -45,5 +45,6 @@ GRUPOS_BOCETO = [
         _i("Cambiar parámetros", "parametros")]),
     ("RESTRICCIONES", [f"sk_{r}" for r in _RESTR],
      # las 12 de Fusion, y aparte (SEP) la propia de OmniCAD: el polígono regular que crean las herramientas de polígono
-     [_i("", f"sk_{r}") for r in _RESTR[:-1]] + [SEP, _i("", "sk_r_poligono"), SEP, _i("", "sk_autorestringir")]),
+     [_i("", f"sk_{r}") for r in _RESTR[:-1]] + [SEP, _i("", "sk_r_poligono"), SEP, _i("", "sk_autorestringir"),
+      _i("", "sk_autorestringir_referencia")]),
 ]
