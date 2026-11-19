@@ -396,6 +396,80 @@ def _islas(geometria, tolerancia):
     return islas
 
 
+_CACHE_TEXTO = {}
+_MAX_PIEZAS_UNION = 1000   # una cursiva de 64 letras da 132 piezas; 200 «W» apretadas en un círculo, 20 mil (BOC-28)
+
+
+def _letras_unidas(grupo, plano):
+    """Perfiles de un texto con las letras que se pisan unidas, como en Fusion (B-694): en una cursiva los contornos se
+    cruzan y partirlos dejaba astillas de 0,0001 mm² que Extruir no podía usar. Las piezas con tinta (regla de relleno
+    «no cero» de las fuentes) se funden; los huecos quedan. Sin piezas encimadas (vueltas de ±1), `detectar` tal cual."""
+    piezas = detectar(grupo, plano)
+    if any(g[0] not in ("linea", "spline") for g in grupo) or len(piezas) == _contornos_cerrados(grupo) \
+            or len(piezas) > _MAX_PIEZAS_UNION:
+        # sin cruces cada contorno encierra una pieza: ni caras ni vueltas (B-440: velocidad).
+        # shortcut: con más de _MAX_PIEZAS_UNION piezas no se une (~10 ms por pieza: serían minutos); subir si aparece un texto real así
+        return piezas
+    clave = (tuple(grupo), _clave_plano(plano))
+    try:
+        hash(clave)
+    except TypeError:          # shortcut: una primitiva con listas (respaldo de OCC) queda sin unir, como `detectar`
+        return piezas
+    if clave in _CACHE_TEXTO:
+        return list(_CACHE_TEXTO[clave])
+    from ..restricciones.objetos import vueltas_primitiva
+    pts = [np.asarray(g[2:4] if g[0] == "linea" else g[2], float) for g in grupo]
+    x0, x1, y1 = (np.array([f(p[:, k]) for p in pts]) for f, k in ((np.min, 0), (np.max, 0), (np.max, 1)))
+    # rayo hacia +Y (el de `vueltas_primitiva` es +X: se gira todo 90°), que en un renglón cruza solo la columna de la
+    # letra; hacia +X cruzaba el renglón entero (64 letras: 2,5 s)
+    gira = lambda ps: tuple((y, -x) for x, y in ps)  # noqa: E731
+    vueltas = []
+    for p in piezas:
+        if getattr(p, "_punto", None) is None:
+            p._punto = _punto_adentro(p.cara)
+        u, v = plano.a_uv(p._punto)
+        cerca = np.flatnonzero((x0 <= u) & (u <= x1) & (y1 > v))   # la caja de los polos encierra la curva
+        vueltas.append(sum(vueltas_primitiva((g[0], g[1], *gira(g[2:4])) if g[0] == "linea" else
+                                             (g[0], g[1], gira(g[2]), *g[3:]), (v, -u))
+                           for g in (grupo[i] for i in cerca)))
+    resultado = piezas
+    if len({w for w in vueltas if w}) > 1:          # letras encimadas (±2) o un bucle torcido de la fuente (signo opuesto)
+        tinta = [p for p, w in zip(piezas, vueltas, strict=True) if w]
+        firma = frozenset().union(*(p.firma for p in tinta))
+        try:
+            unidas = [_perfil_de_cara(c, plano, firma) for c in geo.caras(geo.unir_todos([p.cara for p in tinta]))]
+            # un lóbulo que toca al resto solo en un punto no se funde: la «i» de Ananda Black deja dos de 0,004 mm²;
+            # un punto «.» ronda 1/30 de una letra, así que 1/1000 de la cara mediana no se lleva nada que se vea
+            minima = 1e-3 * float(np.median([p.area for p in unidas]))
+            resultado = [p for p, w in zip(piezas, vueltas, strict=True) if not w] + [p for p in unidas
+                                                                                       if p.area >= minima]
+        except Exception:  # noqa: BLE001 — si la unión falla, quedan las piezas de siempre
+            pass
+    if len(_CACHE_TEXTO) >= _CACHE_MAX:
+        _CACHE_TEXTO.pop(next(iter(_CACHE_TEXTO)))
+    _CACHE_TEXTO[clave] = tuple(resultado)
+    return list(resultado)
+
+
+def _contornos_cerrados(grupo):
+    """Cuántos contornos cierran las primitivas de un texto, que llegan en orden, contorno por contorno.
+    shortcut: dos cruces que suman y restan una pieza dejan la cuenta igual y no se unen; no se vio en fuentes reales."""
+    n, inicio = 0, None
+    for g in grupo:
+        a, z = (g[2], g[3]) if g[0] == "linea" else (g[2][0], g[2][-1])
+        inicio = a if inicio is None else inicio
+        if math.dist(z, inicio) < 1e-6:
+            n, inicio = n + 1, None
+    return n
+
+
+def _perfil_de_cara(cara, plano, firma):
+    props = GProp_GProps()
+    BRepGProp.SurfaceProperties_s(cara, props)
+    c = props.CentreOfMass()
+    return Perfil(cara, props.Mass(), plano.a_uv((c.X(), c.Y(), c.Z())), firma)
+
+
 def detectar_boceto(boceto, plano, geometria=None):
     """Perfiles de un boceto, en el orden de `detectar`. Como en Fusion, cada texto va aparte: no parte las curvas ni a
     otro texto, así que sus letras se pisan con lo que tengan debajo (B-134). `geometria`: la de `Boceto.geometria()`
@@ -422,7 +496,7 @@ def detectar_boceto(boceto, plano, geometria=None):
     perfiles = []
     for clave, grupo in grupos.items():
         if clave is None or clave[0] != "objeto":
-            perfiles.extend(detectar(grupo, plano))
+            perfiles.extend(detectar(grupo, plano) if clave is None else _letras_unidas(grupo, plano))
             continue
         # Una matriz no cambia qué curvas se intersectan dentro del recurso. Se intersecta una vez, en XY local.
         m = objetos.matriz(boceto.objetos[clave[1]]["matriz"])
