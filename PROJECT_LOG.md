@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · B-704 (E1).** `test_rsx3_el_hover…` fallaba en tandas grandes: `QTest.mouseMove` reparte el evento por la ventana bajo el cursor y un Lienzo visible sin cerrar de una prueba anterior (que falló antes de `lz.close()`) se lo quedaba. Ahora el evento va directo al lienzo. `test_b704_hover_aislado.py` (falla con el test viejo, pasa con el nuevo).
 - **2026-11-19 · B-701 (E1).** Kerning de par con el cursor al inicio: el campo del panel Carácter queda en gris con «No disponible: ponete entre dos letras» (el signal `texto_valores` lleva si hay par). `test_texto_vectores.py::test_b701_…` (falla sin el arreglo).
 - **2026-11-19 · B-702 (E1).** Boceto 3D: coordenadas por encima de ±1 km (`MEDIDA_MAXIMA`) se rechazan en `boceto3d._xyz` (valida todos los puntos antes de crear ninguno) con «Máximo 1.000.000 mm…»; el panel pinta «Puntos» (o «Largo» con eje) en rojo. `test_b702_boceto3d_tope.py`.
 - **2026-11-19 · Traspaso E1 (B-463 integrado; sin ítem).** 1) B-690 y B-463 en main; B-463 Parcial: falta saber qué curva usa Fusion (tabla en `~/coordinador/casos/b463/hallazgos_e1.md`). 2) Próximo: el ítem de boceto que mande el coordinador (B-697 no: es de OpenCode). 3) B-704: hover que depende del orden de los tests. 4) La spline de ajuste nueva es de grado 5; las de grado 3 son la versión vieja.
