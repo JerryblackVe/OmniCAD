@@ -178,6 +178,7 @@ class LienzoRestriccionesMixin:
     def _clic_restriccion(self, pos):
         ent = self.entidad_en(pos)
         if ent is None:
+            self.mensaje.emit("Hacé clic sobre una curva o un punto del boceto.")
             return
         tipo, n = RESTRICCIONES_HERRAMIENTA[self.herramienta]
         if ent in self.picks:
