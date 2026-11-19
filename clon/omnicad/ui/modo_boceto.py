@@ -1646,6 +1646,7 @@ class ModoBoceto(QObject):
         largo; con un plano, los demás puntos quedan en el plano por el inicio."""
         from ..restricciones import ErrorBoceto
         from ..restricciones import boceto3d as b3
+        from ..restricciones.boceto import MEDIDA_MAXIMA
         lz = self.lienzo
         lz._instantanea()                  # Ctrl+Z del boceto también deshace lo agregado en 3D
         campo = self.paleta.puntos3d
@@ -1666,6 +1667,9 @@ class ModoBoceto(QObject):
                 except ValueError:
                     campo = self.paleta.largo3d
                     raise ErrorBoceto("El largo en mm lleva signo (20 o -20).") from None
+                if abs(d) > MEDIDA_MAXIMA:         # B-702: el campo en rojo es el que se pasa
+                    campo = self.paleta.largo3d
+                    raise ErrorBoceto(f"Máximo {MEDIDA_MAXIMA:,.0f} mm de largo.".replace(",", "."))
                 pts.append([c + d * e for c, e in zip(pts[0], b3.EJES[bloqueo], strict=True)])
             elif bloqueo in ("xy", "yz", "zx"):
                 k = {"xy": 2, "yz": 0, "zx": 1}[bloqueo]
