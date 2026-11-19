@@ -1,6 +1,6 @@
 """LienzoDibujoMixin: métodos del lienzo por tema."""
 
-from .editor_boceto_comun import (
+from .editor_boceto_comun import (pasos_segun_zoom, 
     Boceto,
     COMANDO_PROYECCION,
     CONFLICTO,
@@ -75,6 +75,12 @@ def icono(*args, **kwargs):
 
 
 class LienzoDibujoMixin:
+    def _circulo_vista(self, centro, r):
+        """Polilínea de la vista previa de un círculo, con las muestras que pide el zoom (B-661)."""
+        n = pasos_segun_zoom(("circulo", None, centro, r), self.px_por_mm())
+        return [(centro[0] + r * math.cos(2 * math.pi * i / n), centro[1] + r * math.sin(2 * math.pi * i / n))
+                for i in range(n + 1)]
+
     def paintEvent(self, _):
         self._camara()
         p = QPainter(self)
@@ -679,8 +685,7 @@ class LienzoDibujoMixin:
                 r, esquinas = _vertices_poligono(a, cur, self.lados, tipo)
                 self._dibujar_polilinea(p, esquinas + esquinas[:1])
                 p.setPen(QPen(acento, 1, Qt.DotLine))           # el círculo de construcción
-                self._dibujar_polilinea(p, [(a[0] + r * math.cos(2 * math.pi * i / 64), a[1] + r * math.sin(2 * math.pi * i / 64))
-                                            for i in range(65)])
+                self._dibujar_polilinea(p, self._circulo_vista(a, r))
             elif h == "estrella" and math.dist(a, cur) > 1e-9:
                 r = math.dist(a, cur)
                 try:
@@ -690,8 +695,7 @@ class LienzoDibujoMixin:
                     esquinas = []                       # un salto que no entra: el clic lo dice; acá no hay previa
                 self._dibujar_polilinea(p, esquinas + esquinas[:1])
                 p.setPen(QPen(acento, 1, Qt.DotLine))           # el círculo de las puntas
-                self._dibujar_polilinea(p, [(a[0] + r * math.cos(2 * math.pi * i / 64), a[1] + r * math.sin(2 * math.pi * i / 64))
-                                            for i in range(65)])
+                self._dibujar_polilinea(p, self._circulo_vista(a, r))
             elif h == "arco" and len(pts) == 2:
                 polis = self._temporal(lambda t: t.agregar_arco_3_puntos(pts[0], cur, pts[1]))
             elif h == "arco_centro" and len(pts) == 2 and math.dist(a, pts[1]) > 1e-9:
@@ -707,9 +711,7 @@ class LienzoDibujoMixin:
                     centro, r = ((a[0] + cur[0]) / 2, (a[1] + cur[1]) / 2), math.dist(a, cur) / 2
                 else:
                     centro, r = a, math.dist(a, cur)
-                circ = [(centro[0] + r * math.cos(2 * math.pi * i / 64), centro[1] + r * math.sin(2 * math.pi * i / 64))
-                        for i in range(65)]
-                self._dibujar_polilinea(p, circ)
+                self._dibujar_polilinea(p, self._circulo_vista(centro, r))
             elif h == "elipse" and len(pts) == 2:
                 m = pts[1]
                 aa = math.dist(a, m) or 1e-9
