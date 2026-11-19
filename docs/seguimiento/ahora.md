@@ -16,7 +16,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E8 | — | B-658 integrado (855b50ab); se vacía (contexto 30 %) |
 | OpenCode | B-584, H-117, B-656, B-653, B-479, B-512, P-178 | Cola de boceto (vigía); lo demás en `manana/` |
 | E2, E5, E6, E7, E9, E10 | — | En pausa por el amarillo (E6: B-659 y velocidad del solver cuando haya lugar) |
-| E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620, B-664 |
+| E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620 |
 
 **Foco del 19/11 (Gerardo: «que los agentes solo trabajen en boseto»): solo boceto en Ahora y Sigue; SOL-8 y SUP-13 vuelven mañana.** Plan: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md).
 
