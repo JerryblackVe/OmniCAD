@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · B-512 (Boceto, P2).** `trim_sketch_curve` rechaza el clic lejos de la curva (1e-7, como partir) en vez de recortar el tramo más cercano; fila recortada. Test `test_b512_recortar_con_clic_lejos_de_la_curva_no_recorta`; ruff limpio.
 - **2026-11-19 · B-690 (E1, Parcial).** Perpendicular y Tangente línea–spline de ajuste sin punto en común quedan apagadas como en Fusion (`deshabilitado` «restriccion.linea_spline», `Boceto.exigir_disponible` en editor, API y «Cambiar a»; lo guardado sigue). `test_b690_linea_spline_gris.py`; 2994 OK, ruff limpio.
 
 - **2026-11-19 · Tanda E11 en la PC (mouse real).** Rust recompilado (`maturin develop --release`). B-667: el 2.º arrastre ya no deforma. B-591 y B-671: no reproducen con 17 pasos/8 cuerpos y cambio a cm; filas cerradas (guardas y tests de B-591 siguen; si vuelve, fila nueva con traceback; la variante de foco es B-664). B-690 y B-463: datos de Fusion en `informe_tanda_E11.md` (PC), van a E1.- **2026-11-19 · Traspaso E1 (B-701 listo; sin ítem).** 1) B-701 en ~/OmniCAD-B-701 sin commit. 2) Próximo: B-690 (lo manda el coordinador). 3) Sin reproducir: `superficies.regiones_recorte` también usa el Splitter y podría dejar aristas internas. 4) Repro con `_hlr_exacto` simulado: el test de B-701.
@@ -706,6 +707,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 
 - **2026-11-19 · Bocetos › Incluir 3D B-684/B-685.** Se habilitan caras y se evita repetir la misma arista (`sin_indice`, `incluir_3d_forma`). `test_faltantes_bocetos.py`: 7 OK; ruff limpio.
 ## Lecciones aprendidas
+- [2026-11-19] Validar los tres modos de `trim_sketch_curve`: P-69 cubrió break y extend y trim siguió aceptando un clic a 999 mm. · Evidencia: `test_b512_recortar_con_clic_lejos_de_la_curva_no_recorta`.
 - [2026-11-19] El `BRepAlgoAPI_Splitter` deja una curva suelta dentro de una región como alambre de aristas INTERNAL en la cara: `es_valida(cara)` da True pero el sólido extruido no. · Evidencia: `tests/test_b699_curvas_sueltas.py`.
 - [2026-11-19] `arreglo_planar` usa `tol` = 1e-8 y el Splitter funde a 1e-4: todo lo que esté entre las dos (toques, rectas casi encimadas) tiene que dar `Err`, no un resultado. · Evidencia: `test_boc28_rust.py::test_b677_toque_tangente_y_rectas_casi_encimadas_dan_los_perfiles_de_fusion`.
 - [2026-11-19] `sin_indice` vive en `restricciones.boceto3d`, no en `nucleo`: reusar el módulo ya importado evita imports inventados. · Evidencia: `test_faltantes_bocetos.py` falló con ModuleNotFoundError y pasó 7/7 al corregirlo.

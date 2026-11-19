@@ -2450,6 +2450,9 @@ def trim_sketch_curve(sesion, entity: int, x: float, y: float, mode: Literal["tr
 
     def modificar(b):
         _curva(b, entity)
+        b._curva_modificable(entity)                     # texto o geometría proyectada: su mensaje, no el del clic
+        if mas_cercano(b.primitivas(entity)[0], (x, y))[1] > 1e-7:
+            raise ErrorBoceto("El punto no está sobre la curva a recortar.")
         hecho["queda"] = b.recortar(entity, (x, y))
     r = _dibujar(sesion, sketch, modificar, desde_solver=True, sin_conflicto="El recorte")
     r["mode"] = mode
