@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · Traspaso E7 (PRUEBA-OPC-2 pendiente).** 1) En main: boceto_modificar_cortes, seleccion_modos, boceto_opciones, boceto_texto_panel (prueba_ui). 2) Filas: B-693, B-697, B-698, B-700. 3) Plantillas: boceto_opciones.py (arrastres, marco, SVG por panel con A.abrir) y boceto_texto_panel.py (panel Carácter). 4) Lección: minimizada → A.activar(v), no activateWindow; QDialog.exec está parchado; turno.py se corre con .venv/bin/python, sin timeout externo. 5) Sigue PRUEBA-OPC-2: las 11 filas «no» de preparado/opciones_asas_boceto.md (DXF escala/ángulo/volteos, Vectorizar casillas/umbral, Perfil giratorio, Desfase cadena/topología, Kerning de par, Desfase/Ajustar en curva, Boceto 3D); al cerrar, actualizar la tabla.
 - **2026-11-19 · PRUEBA-TEXTO-SIM (E7).** `prueba_ui/boceto_texto_panel.py`: 89 comprobaciones, 5 ✗ = B-697 (texto de 400 letras congela ~1,4 s), B-698 (sin comando para agregar marco al texto: pivote casi inalcanzable) y B-700 (Anclaje ignorado con cuadro dibujado). Tabla opciones_asas corregida (41 filas pasan a «sí» con su script; quedan 11 sin prueba). Sin commit.
 - **2026-11-19 · PRUEBA-OPCIONES (E7).** `scripts/prueba_ui/boceto_opciones.py`: 55 comprobaciones en verde (estrella, spline grado 5/3, arrastres, marco mover/espejo, SVG capas/colores). Sin bugs nuevos. La tabla de opciones marca «no» filas que ya cubren otros scripts (f-strings que el contador no ve). Sin commit.
 
