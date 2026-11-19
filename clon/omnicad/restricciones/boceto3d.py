@@ -9,7 +9,8 @@ Coordenadas del boceto (mm): x, y sobre el plano y z a lo largo de su normal; en
 `Boceto.geo3d` es un dict JSON (vacío si el boceto no tiene nada en 3D):
   puntos {id: [x, y, z]},
   curvas {id: {"tipo", "puntos": [ids], "construccion": bool, ...}} con tipo
-    linea [inicio, fin] · spline [puntos de paso] (+ "cerrada") · arco [inicio, paso, fin] ·
+    linea [inicio, fin] · spline [puntos de paso] (+ "cerrada"), o [polos] + "nudos", "grado", "pesos" (B-619b: la
+    B-spline exacta de Include 3D Geometry o Isoparametric Curve) · arco [inicio, paso, fin] ·
     circulo [centro] + "radio", "normal" · elipse [centro] + "eje_mayor" (vector), "radio_menor", "normal" ·
     conica [inicio, vértice, fin] + "rho" · texto [origen] + "texto", "altura", "fuente", "u", "v" (ejes del texto);
     "origen" (opcional) anota de qué selección salió una curva de Intersection Curve / Project To Surface,
@@ -103,9 +104,10 @@ def agregar_punto(b, p, unir=True):
     return pid
 
 
-def _curva(b, tipo, pts, construccion, **extra):
+def _curva(b, tipo, pts, construccion, solo_extremos=False, **extra):
+    """Con `solo_extremos`, los puntos del medio no se unen a los que ya hay (polos de una spline de control)."""
     g = datos(b)
-    ids = [agregar_punto(b, p) for p in pts]
+    ids = [agregar_punto(b, p, not solo_extremos or i in (0, len(pts) - 1)) for i, p in enumerate(pts)]
     if any(a == c for a, c in zip(ids, ids[1:], strict=False)):
         raise ErrorBoceto("Dos puntos seguidos de la curva coinciden.")
     cid = b._nuevo_id()
@@ -508,17 +510,26 @@ def _sobre_marco(centro, e1, e2, a, b, barrido):
     return Curva(f, 0.0, barrido, (centro, e1, e2, a, b))
 
 
-_SPLINES = {}          # BOC-82: (puntos, tangentes, cerrada) → Curva; el jacobiano la pide igual en casi cada evaluación
+_SPLINES = {}          # BOC-82: (puntos, tangentes, cerrada, nudos) → Curva; el jacobiano la pide igual en casi cada evaluación
+
+
+def _bspline(c, polos):
+    """Arista de la spline de puntos de control `c` (B-619b) con sus `polos` (mundo o boceto: es afín)."""
+    return curvas3d.arista_bspline(polos, c["nudos"], c["grado"], c["pesos"])
 
 
 def _spline_parametrica(b, cid, c, P):
-    pts, tangentes, cerrada = [P[p] for p in c["puntos"]], _tangentes(b, cid, P), c.get("cerrada", False)
-    clave = (np.array(pts, float).tobytes(), tuple((i, tuple(v)) for i, v in sorted(tangentes.items())), cerrada)
+    pts = [P[p] for p in c["puntos"]]
+    # shortcut: la spline de control no se dobla para cumplir una tangencia (la de ajuste sí, `_tangentes`); si hiciera
+    # falta, sumar la tangencia como residuo entre polos.
+    exacta = (tuple(c["nudos"]), c["grado"], tuple(c["pesos"] or ())) if "nudos" in c else None
+    tangentes, cerrada = ({} if exacta else _tangentes(b, cid, P)), c.get("cerrada", False)
+    clave = (np.array(pts, float).tobytes(), tuple((i, tuple(v)) for i, v in sorted(tangentes.items())), cerrada, exacta)
     if clave in _SPLINES:
         _SPLINES[clave] = _SPLINES.pop(clave)          # la más usada queda al final
         return _SPLINES[clave]
     try:
-        curva = Curva(*curvas3d.parametrica(curvas3d.arista_spline(pts, tangentes, cerrada)))
+        curva = Curva(*curvas3d.parametrica(_bspline(c, pts) if exacta else curvas3d.arista_spline(pts, tangentes, cerrada)))
     except geo.ErrorGeometria as e:
         raise ErrorBoceto(f"No se pudo construir la curva {cid}: {e}") from e
     if len(_SPLINES) >= 16:
@@ -864,6 +875,8 @@ def arista(b, cid, plano):
             return curvas3d.arista_conica(*pts, c["rho"])
         if t == "texto":
             return curvas3d.compuesto_polilineas(_polilineas_texto(c, P, plano))
+        if "nudos" in c:
+            return _bspline(c, pts)
         tangentes = {i: _vec(plano, v) for i, v in _tangentes(b, cid, P).items()}
         return curvas3d.arista_spline(pts, tangentes, c.get("cerrada", False))
     except geo.ErrorGeometria as e:
@@ -906,6 +919,8 @@ def agregar_desde_mundo(b, desc, plano, construccion=False, origen=None):
     elif t == "elipse":
         cid = agregar_elipse(b, a_boceto(plano, desc["centro"]), a_boceto(plano, desc["eje_mayor"], vector=True),
                              desc["radio_menor"], a_boceto(plano, desc["normal"], vector=True), construccion)
+    elif "nudos" in desc:
+        cid = _curva(b, "spline", pts, construccion, True, nudos=desc["nudos"], grado=desc["grado"], pesos=desc["pesos"])
     else:
         cid = agregar_spline(b, pts, construccion, desc.get("cerrada", False))
     if origen:

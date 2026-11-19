@@ -930,6 +930,7 @@ class OpBoceto(Operacion):
         vértices incluidos) con el modelo actual, conservando sus ids. Cada curva sigue a la de su «index» en el
         resultado (las que se borraron no cuentan); si
         la referencia se perdió o esa curva ya no existe o cambió de tipo, aviso y queda como estaba."""
+        from ..nucleo import curvas3d
         from ..restricciones import boceto3d as b3
         g = b3.datos(boceto)
         grupos = {}
@@ -940,8 +941,10 @@ class OpBoceto(Operacion):
         for ids in grupos.values():
             nuevo = Boceto()
             try:
-                nuevas = [b3.agregar_desde_mundo(nuevo, d, plano) for d in aristas_de_origen(g["curvas"][ids[0]]["origen"],
-                                                                                            estado)]
+                descs = aristas_de_origen(g["curvas"][ids[0]]["origen"], estado)
+                if not any("nudos" in g["curvas"][i] for i in ids):   # guardado antes de B-619b: splines de ajuste
+                    descs = [curvas3d.como_ajuste(d) for d in descs]
+                nuevas = [b3.agregar_desde_mundo(nuevo, d, plano) for d in descs]
             except (ent.ErrorReferencia, ent.ReferenciaMalFormada, geo.ErrorGeometria, ErrorBoceto, KeyError) as e:
                 ctx.aviso(f"{self.nombre}: una curva 3D ya no se puede recalcular ({e}); queda como estaba.")
                 continue
@@ -956,9 +959,11 @@ class OpBoceto(Operacion):
                     continue
                 for viejo, punto in zip(g["curvas"][i]["puntos"], h["curvas"][n]["puntos"], strict=True):
                     g["puntos"][viejo] = h["puntos"][punto]
-                for clave in ("radio", "normal", "eje_mayor", "radio_menor", "cerrada"):
+                for clave in ("radio", "normal", "eje_mayor", "radio_menor", "cerrada", "nudos", "grado", "pesos"):
                     if clave in h["curvas"][n]:
                         g["curvas"][i][clave] = h["curvas"][n][clave]
+                    elif clave in ("nudos", "grado", "pesos"):              # pasó de spline de control a la de ajuste
+                        g["curvas"][i].pop(clave, None)
         for pid, origen in g.get("vinculos", {}).items():                 # H-79: los vértices incluidos también
             try:
                 g["puntos"][pid] = b3.a_boceto(plano, ent.resolver(origen["refs"][0], estado).punto)
