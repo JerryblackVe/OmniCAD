@@ -103,13 +103,18 @@ def _contacto(b, l, s):
     return abs((c[0] - p[0]) * u[1] - (c[1] - p[1]) * u[0]), abs(u[0] * d[0] + u[1] * d[1]) / math.hypot(*d)
 
 
-def test_b667_dos_arrastres_seguidos_mueven_la_linea_y_no_la_spline():
-    b, s, l = _escena()
+# B-667b: en la 2.ª escena el 2.º arrastre cruza adonde la normal anterior ya no pasa por el extremo: la línea tiene que
+# saltar a otro pie de la normal (antes la spline se deformaba hasta 33 mm para no soltar el contacto).
+@pytest.mark.parametrize("linea, destinos", [(((-30, 20), (-20, 40)), ((-5, 45), (10, 40))),
+                                             (((35, -25), (40, 20)), ((20, -35), (20, 5)))])
+def test_b667_dos_arrastres_seguidos_mueven_la_linea_y_no_la_spline(linea, destinos):
+    b = Boceto()
+    s, l = b.agregar_spline(SPLINE), b.agregar_linea(*linea)
     b.girar_a_perpendicular(l, s)
     b.agregar_restriccion("perpendicular", [l, s])
     previo = resolver(b)
     pid = b.curvas[l].puntos()[1]
-    for destino in ((-5, 45), (10, 40)):             # como el ratón: 20 movimientos y soltar
+    for destino in destinos:                         # como el ratón: 20 movimientos y soltar
         x0, y0 = b.coords(pid)
         for k in range(1, 21):
             b.puntos[pid].x, b.puntos[pid].y = x0 + (destino[0] - x0) * k / 20, y0 + (destino[1] - y0) * k / 20
