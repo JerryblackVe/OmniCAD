@@ -139,7 +139,7 @@ AYUDA_RESTRICCION = {
     "r_tangente": "elegí dos curvas (línea, círculo, arco, elipse, spline): se tocan en un solo punto sin cruzarse.",
     "r_igual": "elegí dos líneas, dos círculos o arcos, o dos elipses: miden lo mismo.",
     "r_paralela": "elegí dos líneas: quedan en la misma dirección.",
-    "r_perpendicular": "elegí dos líneas: forman 90°.",
+    "r_perpendicular": "elegí dos líneas, o una línea y una spline: forman 90°.",
     "r_fijo": "elegí geometría para dejarla fija en su lugar; sobre algo ya fijo se anula la fijación.",
     "r_punto_medio": "elegí un punto y una línea (o un arco): el punto queda justo en el medio.",
     "r_concentrica": "elegí dos círculos, arcos o elipses: comparten el centro.",

@@ -27,7 +27,7 @@ Resultado corto: **casi todo lo abierto ya funciona o falla con un error claro**
 
 | Clave / opción | Motivo de 1 renglón | ID | Por qué entra |
 |---|---|---|---|
-| `restr_perpendicular` con una spline y una línea | Perpendicular no funciona con splines | B-586 | Con el mouse queda «elegí dos líneas» y nada más: no hace nada. Se grisa solo ese par, no la restricción |
+| `restr_perpendicular` con una spline y una línea (B-586 cerrado el 2026-11-19: ya anda) | — | B-586 | Con el mouse queda «elegí dos líneas» y nada más: no hace nada. Se grisa solo ese par, no la restricción |
 | `mover_copiar` › Objeto «Boceto 3D» | Mover un boceto 3D no está hecho | `ops_modificar.py:94` (sin fila) | Se elige, se acepta y recién ahí avisa «todavía no está» |
 | `alinear` › combinaciones cara–eje, cara–punto y eje–punto | Alinear: las dos cosas tienen que ser del mismo tipo | `ops_ensamblar.py:1327` (sin fila) | El panel deja elegir cualquier par y falla al aceptar. Mejor: grisar el segundo campo que no sirve, no el comando |
 | `restr_concentrica` sobre dos círculos que ya tienen Tangente externa | — | B-582 | Pierde geometría (los círculos colapsan a radio ~0) sin aviso. **Mejor arreglarla que grisarla**; si no entra en el día, grisar solo esa combinación |
@@ -53,7 +53,7 @@ Resultado corto: **casi todo lo abierto ya funciona o falla con un error claro**
 
 **Resultado: la lista queda vacía, a propósito.** Ninguna candidata se puede expresar con el mecanismo sin apagar algo que anda:
 - **Sección A (ya en gris):** son ítems sin comando (`_i("Texto")`), sin clave que apagar; y sus IDs viven en `despues.md`, que `tests/test_deshabilitado.py` no cuenta como «abierto». Lo que falta es que el tooltip diga el motivo: es un cambio de `cinta.py` (los ítems grises con texto), no una entrada de la lista.
-- **B-586 (Perpendicular spline–línea), Alinear con tipos mezclados, B-582:** son combinaciones de dos elecciones. El mecanismo apaga un comando, un campo o una opción; apagar `restr_perpendicular` o `alinear` entero quita lo que anda (línea–línea, cara–cara). No lo hago (regla 15). B-582 se arregla.
+- **B-586 (Perpendicular spline–línea; cerrado el 2026-11-19), Alinear con tipos mezclados, B-582:** son combinaciones de dos elecciones. El mecanismo apaga un comando, un campo o una opción; apagar `restr_perpendicular` o `alinear` entero quita lo que anda (línea–línea, cara–cara). No lo hago (regla 15). B-582 se arregla.
 - **Mover un boceto 3D:** sin fila de seguimiento (el ID es obligatorio) y es un caso raro; si se quiere, crear la fila y apagar la opción de objeto «Bocetos 3D» de `mover_copiar`.
 
 Propuesta (para el coordinador): (1) que la cinta muestre «No disponible: <motivo>» también en los ítems grises sin comando, con el motivo de la sección A; (2) darle fila a «Mover boceto 3D» y a «Alinear con tipos mezclados» si se quieren apagar esas opciones.

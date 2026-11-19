@@ -382,6 +382,23 @@ def mas_cercano(prim, q):
     return t, math.dist(p, q), p
 
 
+def pie_normal(prim, q, pasos=96):
+    """(t, punto, derivada) del punto de la curva cuya recta normal pasa más cerca de q (Perpendicular línea–spline,
+    B-586): ahí basta girar la línea alrededor de q para dejarla normal a la curva."""
+    t0, t1 = dominio(prim)[:2]
+    def lejos(t):
+        c, d = evaluar_primitiva(prim, t, 1)
+        n = math.hypot(*d) or 1e-12
+        return abs((q[0] - c[0]) * d[0] + (q[1] - c[1]) * d[1]) / n
+    t = min((t0 + (t1 - t0) * k / pasos for k in range(pasos + 1)), key=lejos)
+    a, b = max(t0, t - (t1 - t0) / pasos), min(t1, t + (t1 - t0) / pasos)
+    for _ in range(40):                       # afina entre las muestras vecinas (búsqueda ternaria)
+        m1, m2 = a + (b - a) / 3, b - (b - a) / 3
+        a, b = (a, m2) if lejos(m1) < lejos(m2) else (m1, b)
+    t = (a + b) / 2
+    return (t, *evaluar_primitiva(prim, t, 1))
+
+
 def distancia_primitiva(prim, q):
     """Distancia de un punto (u, v) a una primitiva."""
     return mas_cercano(prim, q)[1]

@@ -6,7 +6,7 @@ from .boceto_entidades import (
     distancia_punto_recta, Elipse, ELIPTICAS, ErrorBoceto, GEOMETRICAS, LIBRES, Linea, ORDEN_RESTRICCION, Punto,
     Restriccion, signos_cuadrante, Spline, TIPOS_COTA, TIPOS_RESTRICCION, _validar_cuadrante, validar_valor_cota,
 )
-from .boceto_geometria import dominio, evaluar_primitiva, mas_cercano
+from .boceto_geometria import dominio, evaluar_primitiva, mas_cercano, pie_normal
 from .boceto_primitivas import primitivas_entidad
 
 
@@ -23,6 +23,26 @@ class _Consultas:
         r = Restriccion(self._nuevo_id(), tipo, entidades, datos)
         self.restricciones[r.id] = r
         return r.id
+
+    def girar_a_perpendicular(self, a, b):
+        """Antes de agregar Perpendicular línea–spline con el comando (B-586): gira la línea alrededor de su punto medio
+        hasta dejarla normal a la spline, como Fusion (no la mueve a tocarla). Si no, el solver deformaba la spline.
+        No toca una línea con un punto fijo."""
+        l, s = (a, b) if self.tipo_de(a) == "linea" else (b, a)
+        if self.tipo_de(l) != "linea" or self.tipo_de(s) != "spline":
+            return
+        extremos = self.curvas[l].puntos()
+        if self.puntos_fijos().intersection(extremos):
+            return
+        (x1, y1), (x2, y2) = (self.coords(p) for p in extremos)
+        m, medio = ((x1 + x2) / 2, (y1 + y2) / 2), math.hypot(x2 - x1, y2 - y1) / 2
+        _t, _c, d = pie_normal(self.primitivas(s)[0], m)
+        n = math.hypot(*d) or 1e-12
+        u = (-d[1] / n, d[0] / n)
+        if u[0] * (x2 - x1) + u[1] * (y2 - y1) < 0:      # conserva hacia dónde apuntaba la línea
+            u = (-u[0], -u[1])
+        for p, k in zip(extremos, (-1, 1), strict=True):
+            self.puntos[p].x, self.puntos[p].y = m[0] + k * medio * u[0], m[1] + k * medio * u[1]
 
     def tipos_compatibles(self, rid):
         """Tipos por los que se puede cambiar la restricción `rid` sin cambiar sus entidades (`CAMBIABLES`)."""
@@ -540,7 +560,8 @@ class _Consultas:
             "horizontal": lambda: (t == ["linea"] or t == ["punto", "punto"]),
             "vertical": lambda: (t == ["linea"] or t == ["punto", "punto"]),
             "paralela": lambda: t == ["linea", "linea"],
-            "perpendicular": lambda: t == ["linea", "linea"],
+            # B-586: también línea–spline, como Fusion (la línea queda normal a la spline); arco o círculo no
+            "perpendicular": lambda: t == ["linea", "linea"] or sorted(t) == ["linea", "spline"],
             "igual": lambda: (t in (["linea", "linea"], ["punto"] * 4) or (len(t) == 2 and t[0] in CIRCULARES and t[1] in CIRCULARES)
                               or (len(t) == 2 and t[0] in ELIPTICAS and t[1] in ELIPTICAS)),
             "tangente": lambda: (len(t) == 2 and t[0] in GEOMETRICAS and t[1] in GEOMETRICAS and t != ["linea", "linea"]),

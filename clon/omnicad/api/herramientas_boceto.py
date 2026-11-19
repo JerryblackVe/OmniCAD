@@ -1476,7 +1476,7 @@ def draw_spline(sesion, points: list[list[float]], spline_type: Literal["fit_poi
 @herramienta("add_constraint", "boceto",
              "Restringe entidades del boceto (ids de get_sketch: curvas y puntos). Si "
              "choca con las existentes, falla sin cambiar nada. Entidades por tipo: horizontal y "
-             "vertical: una línea o dos puntos; parallel, perpendicular, collinear y equal: dos líneas (equal también "
+             "vertical: una línea o dos puntos; parallel, perpendicular, collinear y equal: dos líneas (perpendicular también línea y spline; equal también "
              "dos círculos/arcos o dos elipses/arcos de elipse); coincident: un punto y otro punto o una curva; "
              "midpoint: un punto y una línea o arco; tangent: dos curvas, no dos líneas; "
              "concentric: dos curvas con centro; curvature: dos curvas encadenadas, al menos una spline o cónica; "
@@ -1514,6 +1514,8 @@ def add_constraint(sesion, sketch: str,
     try:
         if type == "tangent" and len(entities) == 2:
             b.deslizar_a_tangente(*entities)
+        if type == "perpendicular" and len(entities) == 2:
+            b.girar_a_perpendicular(*entities)
         if type == "polygon" and len(entities) == 1:
             _curva(b, entities[0], ("linea",))
             cadena, cerrada = b.cadena(entities[0])
