@@ -22,9 +22,9 @@ CB=${VIGIA_CB:-$HOME/.local/cb/codebuddy}   # CodeBuddy (Node 22 propio); sus mo
 # Hasta el 23/11 (promo de OpenCode Go: GLM 5.3 por USD 500 con la suscripción) glm-5.3 va primero; AG-21 lo devuelve a su lugar.
 # OpenCode Go (Gerardo, 19/11; sin Extra Usage ni créditos: si se acaba el cupo, rota): probados con una tarea de boceto; fuera: gpt-6-luna (tocó de más), qwen4-max y deepseek-v4-pro.
 MODELOS=(opencode-go/glm-5.3 cb:hy3 cb:deepseek-v4.1-flash opencode-go/beam-free opencode-go/hy4-flash-free opencode/nemotron-3.5-lightning-free opencode-go/kimi-k3.1-pro nvidia/minimaxai/minimax-m3.1-flash openai/gpt-6.2-sol openai/gpt-6.2-astra openai/gpt-6.1-terra opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode/big-pickle)
-# Cupo de OpenCode Go (Gerardo vía el chat maestro, 19/11): GLM 5.3 y Kimi solo para arreglos de código (tareas FIX-*), con tope de
-# corridas por hora; lo mecánico (PREP-*, tests, docs) va a los gratis. Si un modelo de Go da 429/límite, no se reintenta Go 5 h.
-GO=" opencode-go/glm-5.3 opencode-go/kimi-k3.1-pro "; GO_HORA=${VIGIA_GO_HORA:-3}; GO_PAUSA=$COLA/go_pausa; TAREA=
+# Cupo de OpenCode Go (Gerardo vía el chat maestro, 19/11): sirve para toda tarea; tope de corridas por hora (GO_HORA); si un modelo de Go da
+# 429/límite, no se reintenta Go 5 h; con el semanal al 80 % el coordinador apaga Go (touch $COLA/go_apagado).
+GO=" opencode-go/glm-5.3 opencode-go/kimi-k3.1-pro "; GO_HORA=${VIGIA_GO_HORA:-12}; GO_PAUSA=$COLA/go_pausa; TAREA=
 CORTE='(status|code|error)[^0-9]{0,12}429|rate.?limit|quota|insufficient.?(balance|credit|quota)|overloaded|ModelNotFound|^429 |credits.?exhausted|frequency.?limit|usage.?limit'
 PY=${VIGIA_PY:-$HOME/OmniCAD/clon/.venv/bin/python}
 VERIF=${VIGIA_VERIF:-bash $HOME/OmniCAD/scripts/verif_tarea.sh}   # rápida: ruff + tests que importan directo lo tocado
@@ -49,7 +49,7 @@ go_libre() {   # Go sin pausa por 429 y con menos de GO_HORA corridas lanzadas e
   [ -z "$(find "$GO_PAUSA" -newermt '-300 min' 2>/dev/null)" ] || return 1
   [ "$(awk -v d="$(date -u -d '-60 min' '+%F %T')" '$1" "$2 >= d && /lanzo .*opencode-go\/(glm-5.3|kimi-k3.1-pro)[ ,]/' "$LOG" 2>/dev/null | wc -l)" -lt "$GO_HORA" ]; }
 omitir() {   # modelo de Go que esta tarea no puede usar ahora (no es un arreglo FIX-* o Go está sin cupo)
-  case "$GO" in *" $1 "*) case $TAREA in FIX-*|[0-9]*_FIX-*) go_libre || return 0;; *) return 0;; esac;; esac; return 1; }
+  case "$GO" in *" $1 "*) [ -e "$COLA/go_apagado" ] && return 0; go_libre || return 0;; esac; return 1; }   # Go para toda tarea (Gerardo, 19/11); `touch $COLA/go_apagado` lo apaga (semanal al 80 %)
 usado() {   # el modelo ya está en su tope de corridas a la vez (CodeBuddy 2, OpenCode 1; cuenta también el lanzador de E9)
   local c tope=1; [ "${1#cb:}" != "$1" ] && tope=2
   c=$(grep -ls " $1 " "$EST"/* | wc -l); pgrep -f -- "^$OC run -m $1 " > /dev/null && c=$((c + 1))

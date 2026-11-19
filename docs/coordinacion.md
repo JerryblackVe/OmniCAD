@@ -190,10 +190,10 @@ de OpenCode; las demás la enlazan.
   | 14 | `opencode/big-pickle` | Último respaldo (anda, pero ~77 s) |
 
   **Cupo de OpenCode Go (Gerardo, 2026-11-19, vía el chat maestro; el 19/11 iba 26 % de la ventana de 5 h, 10 % del semanal y 5 % del mensual):**
-  se administra para que dure el semanal. 1) Lo mecánico (tests, filas, doc, textos: tareas `PREP-*`) va primero con los gratis
-  (`beam-free`, `hy4-flash-free`, `nemotron-lightning`, `big-pickle`). 2) `glm-5.3` y `kimi-k3.1-pro` solo para arreglos de código del boceto
-  (tareas `FIX-*`). 3) Tope de ~1,2 % del semanal por hora: como el vigía no lee el uso de Go, cuenta las corridas de Go lanzadas en la última
-  hora y pone un tope (`VIGIA_GO_HORA`, 3 por defecto). 4) Un 429 o «limit» de un modelo de Go pausa Go 5 h (`opencode_cola/go_pausa`) y rotan los gratis. En el script: `go_libre`, `omitir`.
+  Actualización 19/11 (semanal al 29 %): Go sirve para TODA tarea de la cola (la suscripción ya está paga y Extra Usage está apagado: al tope corta solo).
+  1) Tope por hora de corridas de Go en `VIGIA_GO_HORA` (el vigía no lee el uso de Go, así que las cuenta). 2) Con el semanal al 80 %, el coordinador
+  apaga Go con `touch ~/coordinador/opencode_cola/go_apagado` y vuelven los gratis y CodeBuddy; se reanuda borrando ese archivo. 3) Un 429 o «limit» de
+  un modelo de Go pausa Go 5 h (`opencode_cola/go_pausa`) y rotan los demás. En el script: `go_libre`, `omitir`.
   **Cupo de OpenAI (Gerardo, 2026-11-18):** compartido entre todos los modelos de Codex, con tope cada 5 h y otro semanal
   (el 18/11 se fue el 36 % del semanal en ~12 h). Se guarda para lo difícil; lo mecánico va a CodeBuddy y MiniMax. Un
   «usage limit» no lo da por muerto: el vigía lo vuelve a probar en cada tarea nueva y vuelve solo al reiniciarse las 5 h.
