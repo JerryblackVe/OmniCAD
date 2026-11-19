@@ -397,7 +397,7 @@ def test_spec_con_todos_los_tipos_de_entidad(s):
     ({"plane": "ZZ"}, "PLANE_NOT_FOUND"),
     ({"entities": [{"type": "circle", "id": "c", "center": [0, 0], "radius": 5}],
       "dimensions": [{"type": "radius", "entities": ["c"], "value": -5}]}, "INVALID_DIMENSION"),
-    ({"entities": [{"type": "rectangle", "origin": [0, 0], "width": -10, "height": 5}]}, "INVALID_SPEC"),
+    ({"entities": [{"type": "rectangle", "origin": [0, 0], "width": 0, "height": 5}]}, "INVALID_SPEC"),
     ({"entities": [{"type": "spline", "points": [[0, 0], [5, 5], [10, 0]], "degree": "abc"}]}, "INVALID_SPEC"),
 ])
 def test_spec_invalido_no_deja_nada(s, spec, kind):
@@ -406,6 +406,16 @@ def test_spec_invalido_no_deja_nada(s, spec, kind):
     r = api.llamar(s, "sketch_from_spec", spec)
     assert r["ok"] is False and r["error_kind"] == kind, r
     assert foto(s) == antes
+
+
+def test_b479_rectangulo_con_tamano_negativo_invierte_el_lado(s):
+    llamar(s, "create_sketch")
+    r = api.llamar(s, "draw_rectangle", {"origin_x": 0, "origin_y": 0, "width": -20, "height": 10})
+    assert r["ok"], r
+    perf = api.llamar(s, "get_sketch")["result"]["profiles"][0]
+    assert perf["area"] == pytest.approx(200.0)
+    r2 = api.llamar(s, "draw_rectangle", {"center_x": 0, "center_y": 0, "width": 10, "height": -5})
+    assert r2["ok"], r2
 
 
 # ---------------------------------------------------------------- entradas no finitas y medidas inválidas
@@ -503,8 +513,8 @@ def test_spline_y_rectangulo_degenerados_se_rechazan(s):
     antes = foto(s)
     r = api.llamar(s, "draw_spline", {"points": [[1, 1], [1, 1], [1, 1]]})
     assert r["error_kind"] == "INVALID_GEOMETRY" and "no hay curva" in r["mensaje"], r
-    for args in ({"origin_x": 0, "origin_y": 0, "width": -10, "height": 5},
-                 {"center_x": 0, "center_y": 0, "width": 10, "height": -5}):
+    for args in ({"origin_x": 0, "origin_y": 0, "width": 0, "height": 5},
+                 {"center_x": 0, "center_y": 0, "width": 10, "height": 0}):
         r = api.llamar(s, "draw_rectangle", args)
         assert r["error_kind"] == "INVALID_GEOMETRY" and "mayores que cero" in r["mensaje"], r
     assert foto(s) == antes
