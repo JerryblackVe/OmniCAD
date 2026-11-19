@@ -301,6 +301,7 @@ class LienzoProyeccionMixin:
         from ..nucleo import curvas3d
         from ..nucleo import geometria as geo
         from ..restricciones import boceto3d as b3
+        from ..restricciones.boceto3d import sin_indice
         origen = {"tool": "include_3d", "refs": [ref]} if ref and self.opciones["vinculo_proyeccion"] else None
         if forma.ShapeType() == geo.TopAbs_VERTEX:
             from ..nucleo import referencias as refs
@@ -313,6 +314,10 @@ class LienzoProyeccionMixin:
             ok = self.aplicar_cambio(agregar_punto, anclar=False)
         else:
             curvas = [curvas3d.describir(a) for a in geo._aristas_unicas(forma)]
+            if origen:
+                if any(sin_indice(c.get("origen", {})) == sin_indice(origen) for c in self.b.geo3d.get("curvas", {}).values()):
+                    self.mensaje.emit("Incluir 3D: Ya estaba")
+                    return True
             ok = self.aplicar_cambio(lambda: [b3.agregar_desde_mundo(self.b, d, self.plano, self.construccion,
                                                                      {**origen, "index": i} if origen else None)
                                               for i, d in enumerate(curvas)], anclar=False)
@@ -386,7 +391,7 @@ class LienzoProyeccionMixin:
             return {"cuerpo", "cara", "arista", "vertice"}
         if h == "incluir_3d" or (h == "perfil_giratorio" and self.opciones["eje_giro"] == "arista"
                                  and self._eje_giro is None):
-            return {"arista", "vertice"} if h == "incluir_3d" else {"arista"}
+            return {"arista", "cara", "vertice"} if h == "incluir_3d" else {"arista"}
         if h == "isoparametrica":
             return {"cara"}
         if self.opciones["filtro_proyectar"] == "cuerpos" and h != "perfil_giratorio":
