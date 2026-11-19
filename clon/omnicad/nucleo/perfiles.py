@@ -1597,7 +1597,7 @@ def _silueta(forma, plano, tolerancia, caja):
             continue                                    # una astilla sin área (dos curvas casi encimadas)
         rayo.Perform(gp_Lin(gp_Pnt(*map(float, adentro)), normal), -1e12, 1e12)
         if rayo.NbPnt():
-            constructor.Add(sombra, cara)
+            constructor.Add(sombra, _sin_curvas_sueltas(cara))   # B-701: una arista suelta no es contorno
             hay = True
     if not hay:
         return proyectar_forma(forma, plano)
