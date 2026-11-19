@@ -24,7 +24,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 1 | B-667 | Parcial: el 2.º arrastre de la línea perpendicular deforma la spline (solver, Opus alto; E1 después de B-669 o E3) |
+| 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
 | 2 | B-659 | Clic de 3,9 s en `prueba_ui/restricciones_boceto.py` (E6, cuando haya lugar) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
