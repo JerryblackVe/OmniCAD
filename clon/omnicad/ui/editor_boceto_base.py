@@ -25,6 +25,7 @@ from .editor_boceto_comun import (
     _dist_px,
     _foto_uso,
     _muestras,
+    pasos_segun_zoom,
     _ru,
     _suelta_aislada,
     _tipo_valor,
@@ -379,9 +380,16 @@ class LienzoBaseMixin:
         """Anclaje compartido con los rectángulos de la API."""
         return self.b.anclar_al_origen(puntos_nuevos)
 
-    def _polilineas(self, c, pasos=64):
+    def _polilineas(self, c, pasos=None):
         """Polilíneas (u, v) de una curva (un texto da una por contorno). Con caché por primitiva: con miles de
-        curvas, muestrear las splines en cada cuadro tardaba ~1 s y trababa el zoom y el paneo."""
+        curvas, muestrear las splines en cada cuadro tardaba ~1 s y trababa el zoom y el paneo. `pasos` = muestras por
+        vuelta; None = según el zoom (B-661: círculos, arcos y elipses redondos de cerca, `pasos_segun_zoom`)."""
+        if pasos is None:
+            escala = self.px_por_mm()
+            return self._polilineas_con(c, lambda p: pasos_segun_zoom(p, escala))
+        return self._polilineas_con(c, lambda p: pasos)
+
+    def _polilineas_con(self, c, pasos_de):
         if isinstance(c, Texto) and c.parametro_texto:
             from ..timeline.operaciones import _contenido_texto, texto_con_valores
             valores = self.valores_parametros()
@@ -390,7 +398,7 @@ class LienzoBaseMixin:
                 c.texto = texto_con_valores(_contenido_texto(c, valores), valores)
                 from ..restricciones import objetos
                 prims = primitivas_entidad(c, self.b.coords, curvas=self.b.curvas)
-                return [_muestras(p, pasos) for p in objetos.aplicar_a_primitivas(self.b, c.id, prims)]
+                return [_muestras(p, pasos_de(p)) for p in objetos.aplicar_a_primitivas(self.b, c.id, prims)]
         if isinstance(c, Spline) and c.modo == "ajuste" and not self.b.objetos:
             # RS-X3: interpolar una spline de ajuste cuesta ~25 µs y se hacía en cada cuadro; la clave es todo lo que la
             # define (`primitivas_entidad`): sus puntos, grado, cierre y manijas (punta y curvatura)
@@ -399,8 +407,8 @@ class LienzoBaseMixin:
             hecho = self._cache_splines.get(c.id)
             if hecho is None or hecho[0] != clave:
                 hecho = self._cache_splines[c.id] = (clave, self.b.primitivas(c.id))
-            return [_muestras(p, pasos) for p in hecho[1]]
-        return [_muestras(p, pasos) for p in self.b.primitivas(c.id)]
+            return [_muestras(p, pasos_de(p)) for p in hecho[1]]
+        return [_muestras(p, pasos_de(p)) for p in self.b.primitivas(c.id)]
 
     def geometria_real(self):
         """`Boceto.geometria()` con el contenido de los textos ligados a un parámetro, no el «{Text}» que guardan."""

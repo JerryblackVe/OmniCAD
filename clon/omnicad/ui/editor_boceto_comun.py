@@ -374,6 +374,23 @@ def _espaciado_porcentaje(mm, altura, o):
 _CACHE_MUESTRAS = {}
 
 
+def pasos_segun_zoom(prim, px_por_mm, base=64):
+    """B-661: muestras por vuelta de un círculo, arco o elipse para que la cuerda se aparte a lo sumo 0,25 px de la curva
+    con el zoom de ahora (Fusion lo redibuja según el zoom; con 64 fijos, de cerca se veía facetado). Potencia de 2
+    entre `base` y 4096, así la caché de `_muestras` sirve para muchos zooms; el resto de las primitivas, `base`."""
+    if prim[0] in ("circulo", "arco"):
+        radio = prim[3]
+    elif prim[0] in ("elipse", "arco_elipse"):
+        radio = max(prim[3], prim[4])
+    else:
+        return base
+    r_px = abs(radio) * px_por_mm
+    if r_px <= 0.5:
+        return base
+    n = math.pi / math.acos(1 - 0.25 / r_px)
+    return int(min(4096, max(base, 2 ** math.ceil(math.log2(n)))))
+
+
 def _muestras(prim, pasos):
     """`puntos_primitiva` con caché: la primitiva (tupla de números) es la clave, así un cambio la invalida."""
     clave = (prim, pasos)
