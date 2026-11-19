@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · B-440.** Visor proyecta por curva; Agujero evita reaplicar estilos. Qt/Xvfb, 42 curvas: salir ~100 ms, cota 12→10 ms, salir con H 139→128 ms. Repros B-440 en `test_p123_polilineas_boceto_cache.py` y `test_b545_panel_perezoso.py`; ruff limpio. Falta medir en Windows.
 - **2026-11-18 · B-629 cerrado.** El desfase avisa «El perfil desaparece» si la resta de franjas deja la región vacía; conserva el aviso genérico si el cálculo falla. `test_b517_desfase_texto_adentro.py` y `test_b_629_repro.py` verdes; ruff limpio.
 - **2026-11-18 · B-616.** Lo arregla el solape de B-634 (9dc3063b) en `_cascara_por_desfase`; `tests/test_b_616_repro.py` sin xfail pasa con main. El arreglo propio de OpenCode (1e-2 mm) no se integró.
 - **2026-11-18 · B-592 (bloqueante «sorbete trini»).** Abrir un .omnicad con un paso repetido idéntico lo quita con aviso en vez de rechazar el archivo (`documento.desde_dict`, ventana). Causa: archivo guardado antes de la guarda de `agregar` (33eafbcc). test_b643 3 OK (2 fallan sin el arreglo), ruff limpio.
@@ -594,6 +595,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 - **AAAA-MM-DD · Tema.** Qué se hizo, archivos clave, verificación.`
 
 ## Lecciones aprendidas
+- [2026-11-19] Para blindar una mejora pequeña de latencia, probá que se eliminó el trabajo repetido y conservá la igualdad del resultado; medí el tiempo aparte. · Evidencia: repros B-440 rojos antes y verdes después aunque el tiempo total de salida fluctúa alrededor de 100 ms.
 - [2026-11-18] Al acortar un error, conservá la causa confirmada: distinguí un cálculo fallido de un resultado vacío antes de traducir el mensaje. · Evidencia: B-629, `test_b517_desfase_texto_adentro.py` fallaba porque el desfase descartaba el resultado vacío de la resta de franjas.
 - [2026-11-18] Un pytest de muchos archivos en una sola llamada se corta por timeout de la herramienta: partirlo en lotes. · Evidencia: 14 archivos → SIGTERM a 120 s; en 2 lotes, 44 + 507 passed.
 - [2026-11-18] Integrar con `a && b; git commit` commitea aunque ruff o pytest den rojo: mirar la salida y recién después commitear. · Evidencia: 60a5dcf2 (rojo) → 3e58d3be, da627650.

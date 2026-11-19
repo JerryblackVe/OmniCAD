@@ -40,3 +40,19 @@ def test_una_curva_nueva_se_dibuja(boceto, muestreos):
     despues = visor3d.polilineas_boceto(boceto)
     assert len(despues) == len(antes) + 1
     assert any(np.allclose(p[[0, -1], 1], 20) for p in despues)
+
+
+def test_b440_proyecta_la_curva_entera_sin_convertir_punto_por_punto(boceto, monkeypatch):
+    plano = boceto.plano
+    plano.origen = np.array([7., -3., 30.])
+    plano.u = np.array([0., 0.6, 0.8])
+    plano.v = np.array([1., 0., 0.])
+    plano.normal = np.cross(plano.u, plano.v)
+    original = plano.a_3d
+    llamadas = []
+    monkeypatch.setattr(plano, "a_3d", lambda *uv: llamadas.append(uv) or original(*uv))
+    esperado = [np.array([original(*uv) for uv in visor3d.muestrear_primitiva(p)], np.float32)
+                for p in boceto.boceto.geometria(incluir_construccion=False)]
+    real = visor3d.polilineas_boceto(boceto)
+    assert len(real) == 2 and all(np.array_equal(a, b) for a, b in zip(real, esperado, strict=True))
+    assert len(llamadas) == len(real)

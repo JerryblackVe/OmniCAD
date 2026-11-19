@@ -370,6 +370,11 @@ def muestrear_primitiva(prim):
     return funcion(prim) if funcion is not None else _muestrear_basico(prim)
 
 
+def _polilinea_en_plano(plano, uv):
+    u, v = np.asarray(uv).T
+    return plano.a_3d(u[:, None], v[:, None]).astype(np.float32)
+
+
 def polilineas_boceto(boceto_resuelto):
     """Curvas de un boceto resuelto en 3D (para dibujarlas sobre el modelo)."""
     pl = boceto_resuelto.plano
@@ -391,7 +396,7 @@ def polilineas_boceto(boceto_resuelto):
         for prim in prims:
             uv = muestrear_primitiva(prim)
             if len(uv) >= 2:
-                salida.append(np.array([pl.a_3d(u, v) for u, v in uv], np.float32))
+                salida.append(_polilinea_en_plano(pl, uv))
         boceto_resuelto._polilineas = (clave, tuple(salida))
     if any(boceto_resuelto.boceto.geo3d.values()):          # Boceto 3D
         from ..restricciones import boceto3d
@@ -408,7 +413,7 @@ def polilineas_construccion(boceto_resuelto):
             for prim in b.primitivas(c.id):
                 uv = muestrear_primitiva(prim)
                 if len(uv) >= 2:
-                    salida.append(np.array([pl.a_3d(u, v) for u, v in uv], np.float32))
+                    salida.append(_polilinea_en_plano(pl, uv))
     return salida
 
 
