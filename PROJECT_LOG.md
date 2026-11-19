@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · E8 B-664 (Parcial).** `EntradaValor` recupera el foco un turno después de abrirse si el lienzo lo tomó (`_tomar_foco`, editor_boceto_comun.py; el cuadro de Texto queda afuera). Test: `test_b664_foco_en_la_cota_nueva` (foco robado a propósito). No reproducido sin Windows: E11 debe confirmar con mouse real.
 - **2026-11-19 · E8 B-663.** «Cambiar a» Concéntrica, Punto medio o Igual (menú y `replace_constraint`) deja quieta la primera figura con `solver.acomodar_segunda` (`editor_boceto_restricciones.reemplazar_restriccion`, `api/herramientas_boceto.replace_constraint`). Test: `test_b663_cambiar_a_mueve_la_segunda`. B-658: causa y arreglo propuesto anotados en su fila (es del solver, E1).
 - **2026-11-19 · Traspaso E3 (31 %).** 1) Cerrados sin commit, listos para integrar: B-599 (worktree ~/OmniCAD-B-599, patrón de boceto copia objetos SVG enteros) y B-586 (~/OmniCAD-B-586, Perpendicular línea–spline). 2) B-584 lo tomó OpenCode. 3) Fila nueva B-660 (Simetría ignora objetos SVG, gemelo de B-599). 4) Rojo intermitente sin fila: `test_teselado_cache::test_visor_recupera_malla_fina_al_soltar` (pasa solo, también en main). 5) Sin ítem asignado.
 - **2026-11-19 · Re-prueba E11 (Windows).** B-652, B-654, B-655, B-661 y guardar/reabrir OK con mouse real. Nuevos: B-664 (foco tras ubicar cota), B-665 (campo Contenido de Texto), B-666 (ventana chica).

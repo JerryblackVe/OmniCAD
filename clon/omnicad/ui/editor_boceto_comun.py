@@ -522,6 +522,20 @@ class EntradaValor(QFrame):
         self.raise_()
         self.campos[0].setFocus()
         self.campos[0].selectAll()
+        QTimer.singleShot(0, self, self._tomar_foco)
+
+    def _tomar_foco(self):
+        """B-664: el clic que ubica una cota deja el foco en el visor (en Windows el lienzo lo recupera después de
+        abrir la caja): si pasó, la caja lo vuelve a tomar para que se pueda teclear sin otro clic. El cuadro de Texto
+        escribe en el lienzo a propósito y no entra acá."""
+        try:
+            lz = self.parent()
+            if (self.isVisible() and getattr(lz, "_previa_texto", None) is None
+                    and lz.window().focusWidget() in (None, lz)):
+                self.campos[0].setFocus()
+                self.campos[0].selectAll()
+        except RuntimeError:                      # la caja ya se cerró
+            pass
 
     def showEvent(self, e):
         super().showEvent(e)
