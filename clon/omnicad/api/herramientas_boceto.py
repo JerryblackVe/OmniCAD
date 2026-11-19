@@ -1529,8 +1529,11 @@ def add_constraint(sesion, sketch: str,
             acomodar_segunda(b, entities[0], valores_cotas(sesion, b))   # B-657: la primera queda quieta
     except ErrorBoceto as e:
         raise error("INVALID_CONSTRAINT", str(e)) from e
+    repetido = type == "fix" and rid in antes["restricciones"] and not ancla
     if rid not in antes["restricciones"] or ancla:
         sesion.doc.reemplazar(op.id, nueva)
+    if repetido:
+        sesion.avisar("Eso ya estaba fijo: el boceto no cambió.")
     _exigir_sin_conflicto(sesion, nueva, previo is None or previo.solver.ok, f"La restricción «{type}»")
     despues = boceto_resuelto(sesion, nueva)
     if (type != "fix" and not ancla and rid not in antes["restricciones"] and previo is not None and despues is not None
