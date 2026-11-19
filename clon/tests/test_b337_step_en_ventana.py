@@ -103,6 +103,25 @@ def test_insertar_step_vuelve_enseguida_y_el_paso_llega_despues(tmp_path, monkey
     assert [c.nombre for c in ventana.doc.estado_final.cuerpos.values()] == ["Viejo"]
 
 
+def test_insertar_step_termina_el_boceto_abierto(tmp_path, monkeypatch, ventana):
+    """B-691: Insertar STEP… cierra el boceto abierto como Insertar componente y malla. Si no, al terminarlo el primer
+    Ctrl+Z solo cierra el boceto y recién el segundo quita el STEP."""
+    s = api.Sesion(ventana.doc)
+    r = api.llamar(s, "sketch_from_spec", {"name": "Boceto", "entities": [
+        {"type": "rectangle", "corner1": [0, 0], "corner2": [10, 10]}]})
+    assert r["ok"], r
+    # Cancelar el diálogo basta: _salir_de_boceto va ANTES de pedir el archivo, como en Insertar componente y malla.
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", "")))
+    ventana.editar_operacion(s.paso("Boceto").id)
+    assert ventana.modo_boceto.activo
+    try:
+        ventana.importar_step()
+        assert not ventana.modo_boceto.activo             # sin el arreglo el boceto sigue abierto (B-691)
+    finally:
+        if ventana.modo_boceto.activo:
+            ventana.modo_boceto.terminar()                # el teardown no debe cerrar un boceto abierto
+
+
 @pytest.mark.parametrize("como", ["cancelar", "esc"])
 def test_cancelar_insertar_step_no_toca_el_documento(tmp_path, monkeypatch, ventana, como):
     ruta = _step_con_estructura(tmp_path / "conjunto.step")
