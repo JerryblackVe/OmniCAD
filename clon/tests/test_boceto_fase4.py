@@ -330,6 +330,7 @@ def test_boc4_rendimiento_boceto_de_250_entidades():
     assert grados_de_libertad(b, _valores(b)) == 0
 
 
+@pytest.mark.lento
 def test_boc4_rendimiento_440_lineas_inclinadas_aisladas():
     from omnicad.restricciones import solver
 
