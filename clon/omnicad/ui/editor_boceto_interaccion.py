@@ -128,6 +128,7 @@ class LienzoInteraccionMixin:
                 texto = self.entrada.campos[0].text()
                 self._abrir_cota(*self._cota_abierta[:2], pos)
                 self.entrada.campos[0].setText(texto)
+                self.entrada.campos[0].selectAll()   # B-671: setText borra la selección; Fusion deja el valor elegido
                 return
             else:
                 self._cerrar_entrada()
