@@ -215,6 +215,11 @@ de OpenCode; las demás la enlazan.
   reserva con menos de 8» cuando hay que reponer. Las de prioridad 2 llevan el prefijo `z_` (corren al final) y las que
   esperan un archivo ocupado, `zz_`. Tareas que tocan una lista compartida (p. ej. los TOPES de un test):
   el brief dice «no toques esa lista»; el coordinador la actualiza una sola vez al integrar, así no hay choques.
+- **Reserva que se llena sola (Gerardo, 2026-11-19: «OpenCode nunca más quieto»)**: con la reserva baja, el vigía corre
+  `scripts/llenar_cola_opencode.py` (sin modelo): 1) comandos del boceto sin test (`cobertura_boceto.py`) → `PREP-TEST-<clave>`;
+  2) filas abiertas de boceto de `bugs.md` que no están en `ahora.md` → `FIX-<ID>` (fila corta) o `PREP-<ID>` (larga); 3) una
+  caza de boceto por día. No repite lo que ya está en la cola, `corriendo`, `hechos`, `descartadas` o `trabadas`; el modelo y
+  el cupo de Go los decide el vigía como siempre. Test: `clon/tests/test_llenar_cola_opencode.py`.
 - **Tareas chicas (Gerardo, 2026-11-17: los gratis fallaron 24 de 53 corridas, 10 por tiempo)**: una tarea = un archivo y un
   solo cambio (un bug, o hasta 10 mensajes o 5 tests); lo más grande se parte antes de cargarlo. Lo que es solo leer y
   proponer (preparar un bug, medir, revisar listas) deja un `.md` en `docs/seguimiento/preparado/` y no toca la app.

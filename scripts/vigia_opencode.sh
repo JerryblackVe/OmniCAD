@@ -140,7 +140,8 @@ for t in $(ls "$COLA"/reserva/*.tarea 2>/dev/null); do
   [ "$(ls "$COLA"/*.tarea 2>/dev/null | wc -l)" -ge 8 ] && break
   mv "$t" "$COLA/" && anota "de reserva a la cola: $(basename "$t")"
 done
-[ "$(ls "$COLA"/reserva/*.tarea 2>/dev/null | wc -l)" -lt 8 ] && avisa "reserva con menos de 8 tareas"
+# Reserva baja de 8: se llena sola desde fuentes fijas de boceto, sin modelo (scripts/llenar_cola_opencode.py).
+[ "$(ls "$COLA"/reserva/*.tarea 2>/dev/null | wc -l)" -lt 8 ] && { python3 "$(dirname "$0")/llenar_cola_opencode.py" 2>&1 | tail -1 | while read -r l; do anota "llenar reserva: $l"; done; }
 usadas=$(ls "$EST" | wc -l)
 { [ -n "$ajenas" ] || pgrep -f "${VIGIA_LANZ:-lanzador.sh}" > /dev/null; } && usadas=$((usadas + 1))
 while [ "$usadas" -lt "$MAX" ]; do
