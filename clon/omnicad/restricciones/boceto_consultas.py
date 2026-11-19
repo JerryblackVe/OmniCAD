@@ -1,6 +1,7 @@
 """Boceto 2D: consultas."""
 import math
 
+from .. import deshabilitado
 from .boceto_entidades import (
     Arco, ArcoElipse, CAMBIABLES, CIRCULARES, Circulo, CON_CENTRO, Cota, distancia_con_circulo,
     distancia_punto_recta, Elipse, ELIPTICAS, ErrorBoceto, GEOMETRICAS, LIBRES, Linea, ORDEN_RESTRICCION, Punto,
@@ -54,6 +55,7 @@ class _Consultas:
             try:
                 if tipo != r.tipo:
                     self._validar_restriccion(tipo, r.entidades)
+                    self.exigir_disponible(tipo, r.entidades)
                     salida.append(tipo)
             except ErrorBoceto:
                 pass
@@ -482,6 +484,25 @@ class _Consultas:
                 if q in ea and p in eb:
                     return q, p
         return None
+
+    def exigir_disponible(self, tipo, entidades):
+        """B-690 (P-169): Perpendicular o Tangente entre una línea y una spline de ajuste sin ningún punto en común están
+        apagadas, como en Fusion (las deja en gris). Lo llaman el editor, la API y «Cambiar a», no `agregar_restriccion`:
+        copiar, el patrón y el desfase repiten las ya guardadas, que siguen y se resuelven."""
+        apagada = deshabilitado.entrada("restriccion.linea_spline")
+        if apagada is None or tipo not in ("perpendicular", "tangente") or len(entidades) != 2:
+            return
+        tipos = [self.tipo_de(e) for e in entidades]
+        if sorted(tipos) != ["linea", "spline"]:
+            return
+        l, s = entidades if tipos[0] == "linea" else entidades[::-1]
+        if self.curvas[s].modo != "ajuste":
+            return
+        extremos, de_spline = set(self.curvas[l].extremos()), set(self.curvas[s].puntos()) | {s}
+        if extremos & de_spline or any(r.tipo == "coincidente" and {r.entidades[0]} & extremos and set(r.entidades[1:]) & de_spline
+                                       for r in self.restricciones.values()):
+            return                              # con un punto en común Fusion no se probó: queda como estaba
+        raise ErrorBoceto(f"No disponible: {apagada[0]} ({apagada[1]}).")
 
     def _contacto_tangente(self, a, b):
         """Punto donde se tocan, tangentes, una línea y una circunferencia o dos circunferencias; None con otras curvas."""

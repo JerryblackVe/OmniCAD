@@ -4,10 +4,17 @@ import math
 
 import pytest
 
-from omnicad import api
+from omnicad import api, deshabilitado
 from omnicad.restricciones import Boceto, ErrorBoceto
 from omnicad.restricciones.boceto_geometria import pie_normal
 from omnicad.restricciones.solver import resolver
+
+@pytest.fixture(autouse=True)
+def _encendida(monkeypatch):
+    # B-690: el par está apagado (Fusion lo deja en gris); estos tests cuidan el solver para los proyectos guardados
+    # con él y para el día que se vuelva a encender
+    monkeypatch.delitem(deshabilitado.DESHABILITADO, "restriccion.linea_spline", raising=False)
+
 
 SPLINE = [(0, 0), (20, 10), (40, -5), (60, 5)]
 PLANA = [v for q in SPLINE for v in q]
