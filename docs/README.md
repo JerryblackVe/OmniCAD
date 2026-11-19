@@ -65,6 +65,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | [brief.md](brief.md) | Plantilla fija de brief a una sesión o a OpenCode (skills, Fusion, informe); el brief solo nombra ID, archivo y «seguí docs/brief.md» |
 | [seguimiento/ahora.md](seguimiento/ahora.md) | La única cola de trabajo: «Ahora» (uno por sesión) y «Sigue» (lo que viene, en orden) |
 | [plan_fluidez.md](plan_fluidez.md) | Plan de fluidez (2026-11-13): que la ventana nunca se congele; paquetes F0–F11 (filas FL-*) |
+| [plan_boceto_perfecto.md](plan_boceto_perfecto.md) | Plan integral de Boceto y Restricciones (2026-11-19): quién hace qué y cuándo está listo |
 | [plan_rust.md](plan_rust.md) | Qué pasa a Rust (R1–R13) y arreglos de Python (P1–P24) |
 | [plan_cpp.md](plan_cpp.md) | Qué pasa a C++ (C1–C5) |
 | [plan_boceto_organizar.md](plan_boceto_organizar.md) | Organización, agrupación y manipulación de objetos en Boceto (prompt maestro de Gerardo); se borra al terminarla |

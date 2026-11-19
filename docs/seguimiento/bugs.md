@@ -8,6 +8,9 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| B-649 | Bocetos › Tangente línea–círculo: al aplicarla el círculo crece enorme (radio de ~50 a varios cientos) en vez de mover poco la línea; Fusion mueve lo mínimo | Abierto | Alta | Que el solver mueva lo mínimo (menor cambio) | Video de Gerardo 19/11 (`~/coordinador/casos/video_boceto_1119/`), t_05 | 2026-11-19 |
+| B-650 | Bocetos › Con cota de diámetro (Ø119,73) y línea tangente, arrastrar la línea pierde la tangencia: la línea cruza el círculo | Abierto | Alta | La tangencia tiene que sostenerse en el arrastre | Video de Gerardo 19/11 (`~/coordinador/casos/video_boceto_1119/`), t_05 | 2026-11-19 |
+| B-651 | Bocetos › Arrastrar el extremo de una línea coincidente con el extremo de una vertical hace saltos: la vertical se despega del círculo y se estira | Abierto | Alta | Arrastre continuo sin saltos | Video de Gerardo 19/11 (`~/coordinador/casos/video_boceto_1119/`), t_06 | 2026-11-19 |
 | B-647 | Sólido › Engrosar: Cancelar con la previa terminando dejó la ventana «No responde» 15-20 s (Windows, 1 de 2 veces) | Sin verificar | Media | Reproducir y ver qué bloquea el hilo de la ventana al cancelar | E11, `evidencias/reportes_pc/2026-11-19_ag17/` | 2026-11-19 |
 | B-648 | Campos › triple clic en un campo de valor (Grosor de Engrosar) no selecciona todo: quedó «2 0,5 mm»; Ctrl+A sí anda | Abierto | Baja | Seleccionar todo con triple clic en los campos de expresión | E11, `evidencias/reportes_pc/2026-11-19_ag17/` | 2026-11-19 |
 | B-645 | Superficie › `test_h84_cadena_tangente.py::test_el_panel_elige_y_quita_la_cadena_con_un_clic` falla también en main | Abierto | Media | Ver si es el test o el clic que elige la cadena | Informe E4 19/11 | 2026-11-19 |

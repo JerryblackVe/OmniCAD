@@ -23,10 +23,15 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
 | E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620 |
 
+**Foco del 19/11 (Gerardo): Boceto y Restricciones hasta dejarlo perfecto.** Plan: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md).
+
 ## Sigue (en orden)
 
 | # | Ítem | Qué |
 |---|---|---|
+| 0a | B-649 | Tangente línea–círculo agranda el círculo (E1, Opus alto; foco boceto: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md)) |
+| 0b | B-650 | Arrastre pierde la tangencia con cota de diámetro (E1) |
+| 0c | B-651 | Saltos al arrastrar un extremo coincidente (E1) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
 
