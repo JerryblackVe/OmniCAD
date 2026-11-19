@@ -134,7 +134,7 @@ ENTEROS_HERRAMIENTA = {"isoparametrica": [("iso_cantidad", "Cantidad", 1, 200)],
 # Casillas: herramienta → [(clave, etiqueta)]
 _VINCULO = ("vinculo_proyeccion", "Vínculo de proyección")
 CASILLAS_HERRAMIENTA = {"proyectar": [_VINCULO], "intersecar": [_VINCULO],
-                        "desfase": [("seleccion_cadena", "Selección de cadena"), ("match_topology", "Match Topology")],
+                        "desfase": [("seleccion_cadena", "Selección de cadena"), ("match_topology", "Igualar topología")],
                         "perfil_giratorio": [("invertir_giro", "Invertir"), _VINCULO,
                                               ("contorno_exterior", "Solo contorno exterior"),
                                               ("proyectar_eje", "Proyectar eje")],

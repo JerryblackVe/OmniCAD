@@ -74,7 +74,7 @@ def test_match_topology_casilla_limita_y_avisa(lienzo, direccion):
     tarjeta = modo_boceto.TarjetaHerramienta(lz)
     tarjeta.ajuste.connect(lambda k, v: lz.opciones.__setitem__(k, v))
     tarjeta.set_herramienta("desfase", opciones=lz.opciones)
-    casilla = _casilla(tarjeta, "Match Topology")
+    casilla = _casilla(tarjeta, "Igualar topología")
     assert isinstance(casilla, QCheckBox) and not casilla.isChecked()
     casilla.setChecked(True)
     mensajes = []
