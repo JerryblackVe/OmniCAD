@@ -239,7 +239,7 @@ class _Patrones:
         trans, cp = (self._trans_rectangular(params), None) if tipo == "rectangular" else self._trans_circular(params)
         obj = [i for i in ids if i in self.objetos]
         if set(obj) - set(objetos.raices(self)):
-            raise ErrorBoceto("Patrón: elegí el objeto vectorial entero, no una parte.")
+            raise ErrorBoceto("Patrón: elegí el objeto entero, no una parte.")
         de_objetos = set(self.puntos_de(objetos.curvas(self, obj)))
         ids = [i for i in ids if i != cp and i not in de_objetos]       # sus puntos viajan con el objeto (B-599)
         if tipo == "circular":
