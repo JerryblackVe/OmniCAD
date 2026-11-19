@@ -29,7 +29,7 @@ import numpy as np
 
 from ..nucleo import curvas3d
 from ..nucleo import geometria as geo
-from .boceto import ErrorBoceto, puntos_primitiva
+from .boceto import MEDIDA_MAXIMA, ErrorBoceto, puntos_primitiva
 
 EJES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
 TIPOS_RESTRICCION = ("coincidente", "eje", "paralela", "perpendicular", "tangente", "igual", "punto_medio", "fijo",
@@ -55,6 +55,8 @@ def _xyz(p):
         raise ErrorBoceto(f"Un punto 3D es [x, y, z]: llegó {p!r}.") from e
     if not all(math.isfinite(v) for v in (x, y, z)):
         raise ErrorBoceto(f"Coordenadas finitas: llegó {p!r}.")
+    if any(abs(v) > MEDIDA_MAXIMA for v in (x, y, z)):     # B-702: el mismo tope que las cotas, 1 km
+        raise ErrorBoceto(f"Máximo {MEDIDA_MAXIMA:,.0f} mm de coordenada.".replace(",", "."))
     return [x, y, z]
 
 
@@ -107,6 +109,7 @@ def agregar_punto(b, p, unir=True):
 def _curva(b, tipo, pts, construccion, solo_extremos=False, **extra):
     """Con `solo_extremos`, los puntos del medio no se unen a los que ya hay (polos de una spline de control)."""
     g = datos(b)
+    pts = [_xyz(p) for p in pts]              # B-702: se validan todos antes de crear alguno
     ids = [agregar_punto(b, p, not solo_extremos or i in (0, len(pts) - 1)) for i, p in enumerate(pts)]
     if any(a == c for a, c in zip(ids, ids[1:], strict=False)):
         raise ErrorBoceto("Dos puntos seguidos de la curva coinciden.")
