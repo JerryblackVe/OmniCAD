@@ -324,6 +324,35 @@ def test_parametro_rechazado_conserva_boceto_y_valor_del_panel(modo_texto, monke
     assert lz.b.curvas[tid].altura == pytest.approx(7)
 
 
+def test_b665_contenido_muestra_y_edita_el_cuadro_del_visor(modo_texto):
+    """B-665: «Contenido» (panel Carácter) es el campo Text de Fusion: muestra lo escrito en el visor y teclear ahí
+    lo cambia en el cuadro, aunque el texto no tenga parámetro ligado; al cerrarse el cuadro vuelve a gris."""
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtTest import QTest
+    modo, _s, _tid = modo_texto
+    lz, campo = modo.lienzo, modo.caracter.valor_parametro_texto
+    lz.set_herramienta("texto")
+    for xy in ((0.0, 0.0), (60.0, 20.0)):
+        lz.clics.append((None, xy))
+        lz._procesar_clics()
+    assert campo.isEnabled() and campo.text() == "Texto"
+    lz._escribir_texto("HOLA", 4)                        # se escribe en el cuadro del visor
+    assert campo.text() == "HOLA"
+    campo.selectAll()
+    QTest.keyClicks(campo, "Chau")                       # se escribe en el panel, tecla por tecla
+    assert lz.entrada.campos[0].text() == "Chau" and campo.text() == "Chau" and lz._previa_polis
+    lz.entrada.aceptado.emit([c.text() for c in lz.entrada.campos])
+    assert any(c.tipo == "texto" and c.texto == "Chau" for c in lz.b.curvas.values())
+    for xy in ((0.0, 40.0), (60.0, 60.0)):               # otro cuadro antes de que se borre el viejo
+        lz.clics.append((None, xy))
+        lz._procesar_clics()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    assert campo.isEnabled() and campo.text() == "Texto"
+    lz.entrada.cancelado.emit()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    assert not campo.isEnabled()
+
+
 def test_controles_de_texto_sin_marco_o_parametro_estan_deshabilitados(lienzo):
     lz = lienzo
     tid = lz.b.agregar_texto((10, 20), "Antiguo")

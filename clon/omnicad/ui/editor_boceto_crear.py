@@ -636,9 +636,8 @@ class LienzoCrearMixin:
             self._previa_texto = {"pos": pid if pid is not None else xy, "existente": None,
                                   "extra": en_curva | caja, "caja": rect, "reemplazar": True}
             self._conectar_previa_texto()
-            if camino is not None:                       # el panel muestra el lado elegido para esta curva
-                self.opciones.update(parametro_texto=None, valor_parametro_texto="")
-                self.texto_en_edicion.emit()
+            self.opciones.update(parametro_texto=None, valor_parametro_texto="")   # un texto nuevo no tiene parámetro
+            self.texto_en_edicion.emit()                 # el panel muestra sus opciones y liga «Contenido» (B-665)
         elif h == "espiral" and len(c) == 2:
             (_, ce), (_, ini) = c
 
