@@ -194,7 +194,7 @@ de OpenCode; las demás la enlazan.
   1) Tope por hora de corridas de Go en `VIGIA_GO_HORA` (el vigía no lee el uso de Go, así que las cuenta). 2) Con el semanal al 80 %, el coordinador
   apaga Go con `touch ~/coordinador/opencode_cola/go_apagado` y vuelven los gratis y CodeBuddy; se reanuda borrando ese archivo. 3) Un 429 o «limit» de
   un modelo de Go pausa Go 5 h (`opencode_cola/go_pausa`) y rotan los demás. En el script: `go_libre`, `omitir`.
-  Promo de `glm-5.3` (USD 200 de API, hasta el 23/11): corre sin tope por hora y sin `go_apagado`; solo lo frena un 429. Después del 23/11 vuelve a las reglas de arriba.
+  Promo de `glm-5.3` (USD 200 de API, hasta el 23/11): corre sin `go_apagado` y con su propio tope por hora (`VIGIA_GLM_HORA`; el semanal de Go subió del 29 al 50 % en 1 h); además lo frena un 429. Después del 23/11 vuelve a las reglas de arriba.
   **Cupo de OpenAI (Gerardo, 2026-11-18):** compartido entre todos los modelos de Codex, con tope cada 5 h y otro semanal
   (el 18/11 se fue el 36 % del semanal en ~12 h). Se guarda para lo difícil; lo mecánico va a CodeBuddy y MiniMax. Un
   «usage limit» no lo da por muerto: el vigía lo vuelve a probar en cada tarea nueva y vuelve solo al reiniciarse las 5 h.
