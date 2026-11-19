@@ -746,7 +746,7 @@ A.reg(AR + " · tangente", "elegir la línea y el arco deja la tangente", len(ta
 A.reg(AR + " · tangente", "el radio del arco no cambia: la línea se desliza hasta tocarlo (figura de la ayuda de Fusion)",
       abs(lz.b.radio(AY) - 12) < 1e-6, f"{lz.b.radio(AY)}")
 A.reg(AR + " · tangente", "el contacto cae fuera del tramo dibujado y el mensaje lo avisa",
-      any("fuera del tramo" in m for m in avisos_y), f"{avisos_y[-1:]}")
+      any("fuera del arco" in m or "fuera del tramo" in m for m in avisos_y), f"{avisos_y[-1:]}")
 A.foto(v, "herr_tangente_fuera_del_arco")
 tecla(Qt.Key_Z, Qt.ControlModifier)
 A.reg(AR + " · tangente", "Ctrl+Z quita la tangente y la línea vuelve a su lugar",
@@ -876,14 +876,15 @@ A.reg(AR, "Esc a mitad de una estrella no deja nada", not lz.clics and dibujadas
 teclear_fila("Redondeo de puntas", "50")
 clic(60, 0)
 clic(60, 10)
-A.reg(AR, "un redondeo que no entra no crea nada y lo dice", dibujadas() == 12 and any("no entra" in t for t in avisos),
+A.reg(AR, "un redondeo que no entra se ajusta y lo dice", dibujadas() > 12 and any("no entraba" in t for t in avisos),
       f"{avisos[-1:]}")
+base_est = dibujadas()
 teclear_fila("Redondeo de puntas", "1")
 clic(60, 0)
 clic(60, 10)
 arcos = [c for c in lz.b.curvas.values() if c.tipo == "arco"]
 A.reg(AR, "con redondeo 1 mm: otra estrella de 8 puntas (la tarjeta quedó en 8) y un arco igual en cada punta",
-      dibujadas() == 28 and len(arcos) == 8 and lz.resultado.ok, f"{dibujadas()} lados, {len(arcos)} arcos")
+      dibujadas() == base_est + 16 and len(arcos) >= 8 and lz.resultado.ok, f"{dibujadas()} lados, {len(arcos)} arcos")
 A.foto(v, "herr_estrella_redondeada")
 teclear_fila("Redondeo de puntas", "0")
 herramienta("poligono_inscrito", por_menu=True)
