@@ -10,6 +10,7 @@ git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
 
+- **2026-11-19 · B-677.** Perfiles en Rust (`rust/src/perfiles.rs`): un toque tangente sin cruce de cuerdas y dos rectas encimadas a < 1e-4 mm daban error para que rija el Splitter (antes unían regiones). Galería: 7 de 9 iguales a Fusion; `galeria.py` tolera el redondeo de `get_sketch`; B-699 anotada. `test_boc28_rust.py` 17 OK, `cargo test` 9 OK.
 - **2026-11-19 · Traspaso E1 (B-694 integrado; próximo B-677).** 1) B-694 en main (8cceaf35): `perfiles._letras_unidas` une letras encimadas de un texto; P-183 anotada (cursiva larga lenta). 2) Próximo: B-677 (Opus alto), perfiles: OmniCAD detecta menos que Fusion (fila en bugs.md); worktree ~/OmniCAD-B-677, nada empezado. 3) Ojo al probar scripts sueltos: `PYTHONPATH=$PWD` en el worktree y el Python de main (`/home/mosos/OmniCAD/clon/.venv/bin/python`). 4) `extrude profile:"all"` toma también los huecos de las letras (a propósito); lo de Fusion es `profile:"sketch"`. 5) Cambios en perfiles.py son núcleo (>15 grupos): correr los tests que importan `perfiles` + los de texto (39 archivos, ~3,5 min).
 - **2026-11-19 · B-682.** 15 `Visor3D` visibles de `test_b468...` robaban los `QTest.mouseMove` y vaciaban 24 cajas del boceto; limpieza al terminar cada prueba (conserva `visor.show()`). Test `test_b682_no_queda_un_visor_visible` falla sin ella; B-468+sonda 14 OK, 5 archivos 41 OK, ruff limpio.
 - **2026-11-19 · B-694 (E1).** Texto con letras encimadas: `perfiles._letras_unidas` funde las piezas con tinta (regla no cero) y descarta lóbulos < 1/1000; «Juli J» Ananda: 12→4 perfiles, 0 astillas. Test `test_b694_letras_unidas.py`; ruff y 39 archivos verdes.
@@ -684,6 +685,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 
 - **2026-11-19 · Bocetos › Incluir 3D B-684/B-685.** Se habilitan caras y se evita repetir la misma arista (`sin_indice`, `incluir_3d_forma`). `test_faltantes_bocetos.py`: 7 OK; ruff limpio.
 ## Lecciones aprendidas
+- [2026-11-19] `arreglo_planar` usa `tol` = 1e-8 y el Splitter funde a 1e-4: todo lo que esté entre las dos (toques, rectas casi encimadas) tiene que dar `Err`, no un resultado. · Evidencia: `test_boc28_rust.py::test_b677_toque_tangente_y_rectas_casi_encimadas_dan_los_perfiles_de_fusion`.
 - [2026-11-19] `sin_indice` vive en `restricciones.boceto3d`, no en `nucleo`: reusar el módulo ya importado evita imports inventados. · Evidencia: `test_faltantes_bocetos.py` falló con ModuleNotFoundError y pasó 7/7 al corregirlo.
 - [2026-11-19] En `detectar_boceto` no tocar `p.cara` de todas las piezas por las dudas: con la vía Rust las caras son perezosas y armarlas cuesta ~10 ms cada una (132 letras: 2,6 s); primero un disparador sin caras. · Evidencia: `perfiles._contornos_cerrados`, B-694.
 - [2026-11-19] Un QAction de la ventana con atajo global (Ctrl+A) se come la tecla antes del keyPressEvent del widget: aceptá el ShortcutOverride en el editor antes de agregar la rama de selección. · Evidencia: B-653, `tests/test_b653_ctrl_a_boceto.py` (sin el override, `e.isAccepted()` era False).

@@ -125,6 +125,18 @@ def test_curvas_superpuestas_se_delegan_al_respaldo():
     assert perfiles._detectar_rust([("circulo", 1, (0.0, 0.0), 3.0), ("circulo", 2, (0.0, 0.0), 3.0)], PLANO) is None
 
 
+def test_b677_toque_tangente_y_rectas_casi_encimadas_dan_los_perfiles_de_fusion():
+    """B-677 (galería de Fusion 85195_c6ef0067 y 36163_04339590): un arco apoyado en un lado y dos rectas a 1,5e-8 mm
+    unían regiones en Rust; Fusion separa 186 + 186 y 40,9 + 49,3."""
+    ce, r = (-36.945241029680282, 32.00000000000001), 35.05475899115143
+    a = math.asin(32 / r)
+    g = _rect(1, -72, 0, -30.515, 64) + [("arco", 2, ce, r, math.pi - a, math.pi + a)]
+    assert perfiles._detectar_rust(g, PLANO) is None
+    assert [round(p.area, 2) for p in sorted(perfiles.detectar(g, PLANO), key=lambda p: p.area)] == [186.04, 186.04, 2282.97]
+    h = [_linea(1, (0.0, 0.0), (-40.0, 0.0)), _linea(2, (0.0, 1.49e-8), (-4.0, 1.49e-8))]
+    assert perfiles._detectar_rust(h, PLANO) is None
+
+
 def test_elipse_y_sin_rust_usan_la_referencia(monkeypatch):
     g = _rect(1, -5, -5, 5, 5) + [("elipse", 2, (0.0, 0.0), 3.0, 2.0, 0.3)]
     assert perfiles._detectar_rust(g, PLANO) is None
