@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · PRUEBA-OPCIONES (E7).** `scripts/prueba_ui/boceto_opciones.py`: 55 comprobaciones en verde (estrella, spline grado 5/3, arrastres, marco mover/espejo, SVG capas/colores). Sin bugs nuevos. La tabla de opciones marca «no» filas que ya cubren otros scripts (f-strings que el contador no ve). Sin commit.
 
 - **2026-11-19 · Traspaso E1 (B-694 integrado; próximo B-677).** 1) B-694 en main (8cceaf35): `perfiles._letras_unidas` une letras encimadas de un texto; P-183 anotada (cursiva larga lenta). 2) Próximo: B-677 (Opus alto), perfiles: OmniCAD detecta menos que Fusion (fila en bugs.md); worktree ~/OmniCAD-B-677, nada empezado. 3) Ojo al probar scripts sueltos: `PYTHONPATH=$PWD` en el worktree y el Python de main (`/home/mosos/OmniCAD/clon/.venv/bin/python`). 4) `extrude profile:"all"` toma también los huecos de las letras (a propósito); lo de Fusion es `profile:"sketch"`. 5) Cambios en perfiles.py son núcleo (>15 grupos): correr los tests que importan `perfiles` + los de texto (39 archivos, ~3,5 min).
 - **2026-11-19 · B-682.** 15 `Visor3D` visibles de `test_b468...` robaban los `QTest.mouseMove` y vaciaban 24 cajas del boceto; limpieza al terminar cada prueba (conserva `visor.show()`). Test `test_b682_no_queda_un_visor_visible` falla sin ella; B-468+sonda 14 OK, 5 archivos 41 OK, ruff limpio.
