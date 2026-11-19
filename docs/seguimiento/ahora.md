@@ -6,21 +6,16 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 ## Ahora
 
-**Cupo ROJO (90 %, 17/11 ~09:40 UTC): todo Claude en pausa hasta el 19/11 08 UTC; solo OpenCode.** (uno por sesión)
-
+**Cupo AMARILLO (19/11 11 UTC, semanal 8 %): 3 sesiones de Claude a la vez, solo boceto.** (uno por sesión)
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 | — | En pausa (cupo semanal 89 %, contexto 37 %). B-619 integrado como Parcial (0b099ba7; quedan B-619b y B-619c). Cuando vuelva: B-617 (Concéntrica arco–arco), Opus alto |
-| E2 | — | En pausa (tope de 3 sesiones por el cupo). B-600 integrado: 80b708f |
-| E3 | — | En pausa (cupo amarillo, 82 % el 16/11 19 UTC). B-503 Parcial: 7cc89af (falta una cara sola de letra curva, velocidad y Arial en Windows) |
-| E4 | — | En pausa por el cupo semanal (B-438 integrado: 9e70b64); cuando vuelva: B-602 (Superficie sin Patrón ni Simetría, sin verificar) |
-| E5 | — | En pausa (cupo amarillo). ASM-9 integrado: 99fb1de. Sigue ASM-16 con Opus alto (pide el solver de uniones) cuando haya cupo |
-| E6 | — | Desde el 19/11, SOLO velocidad de prioridad 1, comando por comando, contra plan_fluidez M1/M2 (congelamientos >250 ms, previa <0,3 s), empezando por lo que mida FLUIDEZ-P1 (OpenCode). B-620 Parcial: falta Windows (E11) |
-| E7 | — | Libre |
-| E8 | — | Libre (tope de sesiones por el cupo). P-169 completa: 243e3cb |
-| E9 | — | En pausa (rojo). Las corridas de OpenCode las lanza el vigía; cola en `~/coordinador/opencode_cola/` («Protocolo de OpenCode» en `docs/coordinacion.md`). P-158 del núcleo integrado: 6c65875c; UI-1117 terminada, falta integrar |
-| E10 | — | En pausa por el cupo semanal (B-535 integrado: 97226db) |
+| E1 | B-650/B-651 | Contacto línea–círculo limitado al tramo (Opus alto); entra cuando se libere un lugar de los 3 |
+| E3 | B-660 | Simetría con objeto vectorial; después B-667 (perpendicular línea–spline en solver.py) |
+| E4 | B-665 | Campo Contenido del panel de Texto; después B-666 (ventana chica) |
+| E8 | B-664 | Foco en la cota nueva; después B-658 (Curvatura al arrastrar la spline) |
+| OpenCode | B-584, H-117, B-656, B-653, B-479, B-512, P-178 | Cola de boceto (vigía); lo demás en `manana/` |
+| E2, E5, E6, E7, E9, E10 | — | En pausa por el amarillo (E6: B-659 y velocidad del solver cuando haya lugar) |
 | E11 | — | En la PC, solo con el OK de Gerardo. Esperan Windows: B-48, B-172, B-620 |
 
 **Foco del 19/11 (Gerardo): Boceto y Restricciones hasta dejarlo perfecto.** Plan: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md).
@@ -29,10 +24,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 0b | B-650 | Arrastre pierde la tangencia con cota de diámetro (E1) |
-| 0c | B-651 | Saltos al arrastrar un extremo coincidente (E1) |
-| 0d | B-652 | Teclear en una cota cierra el boceto y abre Agujero (E8) |
-| 0e | B-654, B-655, B-653, B-656 | Esc doble, panel de Texto, Ctrl+A, traducción (E8, de a uno) |
+| 1 | B-659 | Clic de 3,9 s en `prueba_ui/restricciones_boceto.py` (E6, cuando haya lugar) |
 | 4 | SOL-8 | Barrido exacto de un cuerpo sólido (E2, Opus alto) |
 | 5 | SUP-13 / SUP-28 | Solevación de superficie con condiciones y guías; Empalme y Chaflán de superficie (E4, Opus alto) |
 
