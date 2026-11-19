@@ -354,6 +354,7 @@ def test_b103_auto_restringir_conserva_candidatos_del_calculo_completo(monkeypat
     assert grados_de_libertad(b, valores) == 0
 
 
+@pytest.mark.lento
 def test_b103_auto_restringir_440_lineas_aisladas():
     from omnicad.restricciones import auto_restringir, solver
 
