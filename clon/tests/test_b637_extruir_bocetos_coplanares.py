@@ -63,3 +63,35 @@ def test_el_panel_acepta_perfiles_de_dos_bocetos_coplanares():
     assert not caras and len(perfiles) == 2
     assert {p["boceto"] for p in perfiles} == {s.paso("A").id, s.paso("B").id}
     assert boceto == s.paso("A").id
+
+
+def test_extrude_api_acepta_dos_bocetos_coplanares():
+    s = _sesion()
+    a, b = s.paso("A").id, s.paso("B").id
+    resultado = _llamar(s, "extrude", profiles=[{"sketch": a}, {"sketch": "B", "profile": "all"}], distance=5)
+    cuerpo, = resultado["bodies_created"]
+    assert cuerpo["volume"] == pytest.approx(1500.0)
+    assert resultado["profiles_used"] == [0, 0]
+    op = s.paso(resultado["feature"]["id"])
+    assert [p["boceto"] for p in op.p["perfiles"]] == [a, b]
+
+
+def test_extrude_api_rechaza_bocetos_no_coplanares_sin_cambiar_el_documento():
+    s = _sesion("XZ")
+    antes = s.doc.a_dict()
+    r = api.llamar(s, "extrude", {"profiles": [{"sketch": "A"}, {"sketch": "B"}], "distance": 5})
+    assert not r["ok"]
+    assert r["error_kind"] == "OPERATION_FAILED"
+    assert "mismo plano" in r["mensaje"]
+    assert s.doc.a_dict() == antes
+    assert not s.doc.estado_final.cuerpos
+
+
+@pytest.mark.parametrize("args", [
+    {"profiles": []}, {"profiles": [{"sketch": None}]}, {"profiles": [{"sketch": "A", "profiel": 0}]},
+    {"sketch": "A", "profiles": [{"sketch": "B"}]},
+    {"profile": "all", "profiles": [{"sketch": "B"}]},
+])
+def test_extrude_api_rechaza_profiles_invalidos(args):
+    r = api.llamar(_sesion(), "extrude", args)
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r

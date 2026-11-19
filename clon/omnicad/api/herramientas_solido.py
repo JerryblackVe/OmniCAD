@@ -175,16 +175,9 @@ def _avisar_curvas_sin_perfil(sesion, br, sop):
 
 
 @herramienta("extrude", "solido",
-             "Extruye perfiles de un boceto (profile: índice, lista, 'all', 'largest', 'text' o 'sketch'; ver abajo). "
-             "distance acepta un número (mm) o una expresión con parámetros. "
-             "El sentido positivo es la normal del plano del boceto (en XZ es −Y); reverse lo invierte. Como en Fusion, "
-              "un cut entra al material sin pedirlo con reverse vacío (sobre una cara va contra la normal exterior; "
-              "en un boceto flotante va hacia el lado que tiene material). direction: "
-             "one_side, two_sides (distance y distance2) o symmetric (distance es el largo TOTAL, mitad a cada "
-             "lado). taper_angle inclina las paredes (grados; positivo ensancha el sólido hacia el final, negativo "
-             "lo estrecha). operation: new_body, join, cut, intersect o auto (cut si la extrusión se mete en un sólido "
-             "visible o en target; join si sale de una cara de ese sólido; si no new_body, como el panel Extruir). También las opciones de Extruir de Fusion: "
-             "faces, thin, start, symmetric_measure, extent (distance, to_object o all) y taper_angle2.",
+             "Extruye perfiles coplanares de uno (sketch y profile) o varios bocetos (profiles), o caras planas (faces). "
+             "La distancia positiva sigue la normal del boceto (−Y en XZ); reverse la invierte. "
+             "Con reverse vacío, cut entra hacia el material.",
              modifica=True)
 def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: Expr = "10 mm",
             operation: Literal["new_body", "join", "cut", "intersect", "auto"] = "new_body",
@@ -198,10 +191,13 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
             to_mode: Literal["face", "adjacent", "body", "through"] = "face", to_offset: Expr = 0,
             taper_angle2: Expr | None = None, open_curves: list[int] | None = None, body: str | None = None,
             tangent_chain: bool = True,
-            side2_extent: Literal["distance", "to_object", "all"] = "distance", side2_to: str | None = None):
+            side2_extent: Literal["distance", "to_object", "all"] = "distance", side2_to: str | None = None,
+            profiles: list[dict] | None = None):
     """
-    sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces).
+    sketch: id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces) o si usás profiles.
     profile: perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos), "text:<id>" o "sketch" (todos los perfiles sin esos huecos). Se ignora con open_curves.
+    profiles: lista de perfiles coplanares, p. ej. [{"sketch": "A", "profile": 0}, {"sketch": "B", "profile": "all"}].
+        sketch es id o nombre y profile usa las opciones de profile (0 por defecto). Sin sketch, profile ni open_curves externos.
     distance: distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
     operation: "new_body", "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; "join" si no se mete y el perfil es una cara (faces) de ese sólido; si no, "new_body"; apoyarse en una cara no cuenta).
     direction: "one_side", "two_sides" o "symmetric".
@@ -211,7 +207,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     reverse: true para extruir hacia el lado contrario de la normal del plano. Vacío = automático: un cut entra al
         material (sobre una cara, o con faces como único perfil, va contra la normal exterior; en un boceto flotante
         va hacia el lado que tiene material, como Fusion).
-    faces: caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de sketch; tienen que ser coplanares. Extruir solo una cara de un cuerpo: operation="join" la empuja hacia afuera (agrega material); operation="cut" la empuja hacia adentro (corta; ver reverse).
+    faces: caras planas (selector o id de find_faces, o lista) usadas como perfil, solas o junto con los perfiles de boceto; tienen que ser coplanares. Extruir solo una cara de un cuerpo: operation="join" la empuja hacia afuera (agrega material); operation="cut" la empuja hacia adentro (corta; ver reverse).
     thin: true hace una extrusión delgada (pared de wall_thickness) en lugar de sólida.
     wall_thickness: espesor de la pared en mm (número o expresión); solo con thin. Vacío = el espesor de la regla de
         plástico del componente (1 mm si no hay regla asignada).
@@ -231,8 +227,9 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     tangent_chain: con open_curves, suma las curvas tangentes a cada una, también al recalcular (un empalme que se agregue después en el boceto entra en la pared); true por defecto, como «Tangent Chain» de Fusion.
     body: cuerpo donde se evalúan los selectores de faces, start_object, to y side2_to; vacío = el único cuerpo.
     """
-    if sketch is None and not faces:
-        raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile) o faces (caras planas).")
+    if sketch is None and profiles is None and not faces:
+        raise error("INVALID_ARGUMENTS", "Falta el perfil: sketch (con profile), profiles (varios bocetos) o faces "
+                                         "(caras planas).")
     auto = operation == "auto"
     if auto:
         operation = "new_body"
@@ -243,13 +240,33 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     if thin and wall_thickness is not None:
         _numero_positivo(wall_thickness, "wall_thickness")
     sop = br = None
-    perfiles = []
-    if sketch is not None:
+    grupos = []                                  # B-637: (sop, br, perfiles elegidos), uno por boceto
+    if profiles is not None:
+        if sketch is not None or profile != 0:
+            raise error("INVALID_ARGUMENTS", "Usá sketch con profile, o profiles (varios bocetos), pero no los dos.")
+        if not profiles:
+            raise error("INVALID_ARGUMENTS", "profiles necesita al menos un elemento.")
+        for item in profiles:
+            if (not isinstance(item, dict) or set(item) - {"sketch", "profile"}
+                    or not isinstance(item.get("sketch"), str) or not item["sketch"].strip()):
+                raise error("INVALID_ARGUMENTS", "Cada elemento de profiles necesita un sketch (id o nombre) y admite "
+                            "un profile opcional, p. ej. "
+                            '{"sketch": "Boceto1", "profile": 0}.')
+            sop_i, br_i = boceto_activo(sesion, item["sketch"])
+            seleccion = item.get("profile", 0)
+            elegidos = seleccionar_perfiles(br_i, sop_i, seleccion)
+            if isinstance(seleccion, str) and seleccion.strip().casefold() == "all":
+                _avisar_curvas_sin_perfil(sesion, br_i, sop_i)
+            if sop is None:
+                sop, br = sop_i, br_i
+            grupos.append((sop_i, br_i, elegidos))
+    elif sketch is not None:
         sop, br = boceto_activo(sesion, sketch)
         if not open_curves:
-            perfiles = seleccionar_perfiles(br, sop, profile)
+            elegidos = seleccionar_perfiles(br, sop, profile)
             if isinstance(profile, str) and profile.strip().casefold() == "all":
                 _avisar_curvas_sin_perfil(sesion, br, sop)
+            grupos.append((sop, br, elegidos))
     if reverse is None and br is not None:
         if operation == "cut" and sop.p.get("plano") == "cara":
             reverse = True                        # sobre una cara: entra al material (la normal mira afuera)
@@ -264,7 +281,9 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         reverse = True                            # solo caras: su normal mira afuera, el cut entra al material
     from .herramientas_construccion import _referencia
     doc = sesion.doc
-    p = {"boceto": sop.id if sop is not None else "", "perfiles": [OpExtrusion.referencia_perfil(x) for x in perfiles],
+    p = {"boceto": sop.id if sop is not None else "",
+         "perfiles": [(_ref_perfil(sop_i, x) if profiles is not None else OpExtrusion.referencia_perfil(x))
+                      for sop_i, _br, elegidos in grupos for x in elegidos],
          "distancia": texto_expr(distance), "operacion": OPERACIONES[operation],
          "objetivos": _objetivos(sesion, "cut" if auto else operation, target), "invertir": reverse,
          "conicidad": texto_expr(taper_angle),
@@ -321,7 +340,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
         op.p["operacion"] = "unir"               # B-338: nace de una cara del sólido y sale (como Fusion)
         operation = "join"
     resultado = _agregar(sesion, op, operation != "new_body")
-    resultado["profiles_used"] = [br.perfiles.index(x) for x in perfiles] if br is not None else []
+    resultado["profiles_used"] = [br_i.perfiles.index(x) for _sop, br_i, elegidos in grupos for x in elegidos]
     if auto:
         resultado["operation"] = operation
     return resultado
