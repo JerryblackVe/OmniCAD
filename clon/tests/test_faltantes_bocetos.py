@@ -4,10 +4,15 @@
 aca se prueban por la API, con resultado numérico: radio y área del corte, largos de las aristas, coordenadas de los
 vértices y vínculo con el modelo."""
 import math
+from types import SimpleNamespace
 
 import pytest
 
 from omnicad import api
+from omnicad.nucleo import geometria as geo
+from omnicad.nucleo import referencias as refs
+from omnicad.restricciones.boceto import Boceto
+from omnicad.ui.editor_boceto_proyeccion import LienzoProyeccionMixin
 
 
 @pytest.fixture
@@ -101,3 +106,36 @@ def test_sk_incluir_3d_sigue_al_modelo_y_con_link_falso_queda_congelado(s):
     assert r["linked"] is False
     llamar(s2, "set_parameter", name="largo", expression="30 mm")
     assert sorted(c["length"] for c in entidades3d(s2)) == pytest.approx([10, 10, 20, 20])
+
+
+class _LienzoIncluir(LienzoProyeccionMixin):
+    """Lo mínimo del lienzo para el filtro y el clic de Incluir 3D, sin abrir la ventana (que necesita OpenGL)."""
+
+    def __init__(self):
+        self.b = Boceto()
+        self.plano, self.construccion = geo.Plano(), False
+        self.herramienta, self._revincular = "incluir_3d", None
+        self.opciones = {"filtro_proyectar": "entidades", "vinculo_proyeccion": True, "eje_giro": "Z"}
+        self.mensajes = []
+        self.mensaje = SimpleNamespace(emit=self.mensajes.append)
+
+    def aplicar_cambio(self, fn, anclar=True):
+        fn()
+        return True
+
+
+def test_incluir_3d_deja_elegir_caras_como_fusion():
+    """B-684: el filtro de Incluir geometría 3D admite caras (Fusion: «faces, edges, and points»)."""
+    assert "cara" in _LienzoIncluir()._filtros_proyeccion()
+
+
+def test_incluir_3d_no_duplica_la_misma_arista_y_lo_avisa():
+    """B-685: dos clics en la misma arista dejan una sola curva 3D y avisan como Proyectar («Ya estaba»)."""
+    lienzo = _LienzoIncluir()
+    arista = refs.subformas(geo.cilindro(14, 47), "arista")[0]
+    ref = refs.referencia("Cuerpo1", arista)
+    lienzo.incluir_3d_forma(arista, ref)
+    assert len(lienzo.b.geo3d["curvas"]) == 1
+    lienzo.incluir_3d_forma(arista, ref)
+    assert len(lienzo.b.geo3d["curvas"]) == 1
+    assert "Ya estaba" in lienzo.mensajes[-1]
