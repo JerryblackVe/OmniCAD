@@ -20,6 +20,17 @@ def app_qt():
     return QApplication.instance() or QApplication([])
 
 
+@pytest.fixture(autouse=True)
+def _cerrar_visores(app_qt):
+    """B-682: un Visor3D visible en (2,2,800,600) se roba los QTest.mouseMove del Lienzo de otros módulos."""
+    yield
+    from PySide6.QtWidgets import QApplication
+    from omnicad.ui.visor3d import Visor3D
+    for w in QApplication.topLevelWidgets():
+        if isinstance(w, Visor3D):
+            w.close()
+
+
 def _panel(comando, doc, valores):
     from omnicad.ui.comando import ContextoComando, PanelComando
     from omnicad.ui.visor3d import Visor3D
@@ -175,3 +186,10 @@ def test_el_foco_diferido_no_falla_si_qt_ya_borro_la_caja(app_qt):
     shiboken6.delete(gestor.cajas[clave])             # lo que hace Qt al cerrar: la caja Python sigue en el dict
     gestor.enfocar_caja(forzar=True)                  # antes: RuntimeError
     panel.cancelar()
+
+
+def test_b682_no_queda_un_visor_visible(app_qt):
+    """B-682: los Visor3D de este módulo no deben quedar visibles: tapan el Lienzo y vacían sus cajas de valor."""
+    from PySide6.QtWidgets import QApplication
+    from omnicad.ui.visor3d import Visor3D
+    assert not [w for w in QApplication.topLevelWidgets() if isinstance(w, Visor3D) and w.isVisible()]
