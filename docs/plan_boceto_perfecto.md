@@ -35,7 +35,7 @@ El plan no se arma solo con los bugs conocidos: lo que nunca se probó no tiene 
 Proyectar). La tabla sale de la cinta (`ui/cinta.py` › BOCETO: CREAR, MODIFICAR, RESTRICCIONES, CONFIGURAR, INSPECCIONAR, INSERTAR,
 SELECCIONAR y TERMINAR) y se rehace con `scripts/cobertura_boceto.py` (desde `clon/`). «Test automático» = algún test que no es de
 catálogo nombra su clave; «Probado como usuario» = lo nombra algún script de `scripts/prueba_ui/`.
-**Resumen (19/11, tras PRUEBA-CMDS parte 2: grupo A de E7 y lo que E8 ya dejó en prueba_ui): 150 comandos; 20 sin test automático; 0 sin prueba como usuario; 0 sin ninguna de las dos.**
+**Resumen (19/11, tras PRUEBA-CMDS parte 2: grupo A de E7 y lo que E8 ya dejó en prueba_ui): 150 comandos; 19 sin test automático; 0 sin prueba como usuario; 0 sin ninguna de las dos.**
 Faltan por contar a mano: las opciones de cada diálogo (p. ej. los 5 tipos de Proyectar, ver PRUEBA-PROY en `ahora.md`) y las asas.
 Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana a E7 y E11.
 
@@ -131,7 +131,7 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 | INSPECCIONAR | Buscar componentes similares | `buscar_similares` | **no** | sí (1) | — |
 | INSPECCIONAR | Centro de masa | `centro_masa` | sí (25) | sí (1) | — |
 | INSPECCIONAR | Interferencia | `interferencia` | sí (5) | sí (1) | B-481 |
-| INSPECCIONAR | Mapa de desviación | `mapa_desviacion` | **no** | sí (2) | — |
+| INSPECCIONAR | Mapa de desviación | `mapa_desviacion` | sí (1) | sí (2) | — |
 | INSPECCIONAR | Medir | `medir` | sí (37) | sí (14) | B-335,B-411,B-461,B-503,B-515,B-546,B-598,B-672,P-99 |
 | INSPECCIONAR | Mostrar colores de componente | `colores_componente` | sí (1) | sí (1) | — |
 | INSPECCIONAR | Mostrar grupos de caras de malla | `ver_grupos_caras` | **no** | sí (1) | — |
