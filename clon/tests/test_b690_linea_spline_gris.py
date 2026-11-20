@@ -31,6 +31,15 @@ def test_encadenada_a_la_spline_sigue_tangente():
     b.exigir_disponible("tangente", [l, s])                 # no lanza
 
 
+def test_encadenada_a_la_spline_perpendicular_tambien_falla():
+    b = Boceto()
+    s = b.agregar_spline(SPLINE)
+    l = b.agregar_linea((60, 5), (80, 5))
+    b.agregar_restriccion("coincidente", [b.curvas[l].puntos()[0], b.curvas[s].puntos()[-1]])
+    with pytest.raises(ErrorBoceto, match=r"^No disponible: .*\(B-690\)"):
+        b.exigir_disponible("perpendicular", [l, s])
+
+
 def test_la_guardada_sigue_se_copia_y_cambiar_a_no_la_ofrece():
     b, s, l = _escena()
     b2 = Boceto.desde_dict(b.a_dict())          # un proyecto viejo que ya la tenía

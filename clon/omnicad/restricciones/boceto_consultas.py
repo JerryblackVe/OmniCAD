@@ -486,9 +486,9 @@ class _Consultas:
         return None
 
     def exigir_disponible(self, tipo, entidades):
-        """B-690 (P-169): Perpendicular o Tangente entre una línea y una spline de ajuste sin ningún punto en común están
-        apagadas, como en Fusion (las deja en gris). Lo llaman el editor, la API y «Cambiar a», no `agregar_restriccion`:
-        copiar, el patrón y el desfase repiten las ya guardadas, que siguen y se resuelven."""
+        """B-690 (P-169): Perpendicular entre una línea y una spline de ajuste está siempre apagada, como en Fusion (la deja en gris);
+        Tangente queda como estaba (con un punto en común sigue disponible). Lo llaman el editor, la API y «Cambiar a», no
+        `agregar_restriccion`: copiar, el patrón y el desfase repiten las ya guardadas, que siguen y se resuelven."""
         apagada = deshabilitado.entrada("restriccion.linea_spline")
         if apagada is None or tipo not in ("perpendicular", "tangente") or len(entidades) != 2:
             return
@@ -498,10 +498,12 @@ class _Consultas:
         l, s = entidades if tipos[0] == "linea" else entidades[::-1]
         if self.curvas[s].modo != "ajuste":
             return
+        if tipo == "perpendicular":
+            raise ErrorBoceto(f"No disponible: {apagada[0]} ({apagada[1]}).")
         extremos, de_spline = set(self.curvas[l].extremos()), set(self.curvas[s].puntos()) | {s}
         if extremos & de_spline or any(r.tipo == "coincidente" and {r.entidades[0]} & extremos and set(r.entidades[1:]) & de_spline
                                        for r in self.restricciones.values()):
-            return                              # con un punto en común Fusion no se probó: queda como estaba
+            return                              # tangente: con un punto en común queda como estaba
         raise ErrorBoceto(f"No disponible: {apagada[0]} ({apagada[1]}).")
 
     def _contacto_tangente(self, a, b):
