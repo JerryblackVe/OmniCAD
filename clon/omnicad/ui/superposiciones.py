@@ -702,7 +702,7 @@ class BarraNavegacion(QFrame):
         m = self._menu("rejilla")
         self._opcion(m, "Rejilla de esbozo", "rejilla", ayuda="Mostrar la rejilla de la vista.")
         self._opcion(m, "Bloqueo de rejilla de esbozo", "rejilla_bloqueada",
-                     ayuda="Fija la rejilla: ya no se mueve con la cámara.")
+                     ayuda="Fija el tamaño de los cuadros: deja de cambiar con el zoom.")
         self._opcion(m, "Forzar objetos a rejilla", "forzar_rejilla",
                      ayuda="Los clics y puntos se pegan a los pasos de la rejilla.")
         a = m.addAction(icono("rejilla"), "Parámetros de rejilla")
