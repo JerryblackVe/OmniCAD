@@ -11,7 +11,7 @@ from ...nucleo import geometria as geo
 from ...nucleo.malla import Malla
 from ...timeline.operaciones import OpExtrusion, OpRevolucion, espesor_plastico
 from ...timeline.parametros import ANGULO, LONGITUD
-from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, ErrorSeleccion, Expresion, Opciones,
+from ..comando import (CARAS_PESADAS, Botones, Casilla, Comando, ErrorComando, ErrorSeleccion, Expresion, Info, Opciones,
                         OpcionesVivas, Seleccion, exigir, hit_desde_ref, hits, ref1)
 from . import registrar
 from .comunes import (DIRECCIONES_UI, ajustar_operacion, caja_cuerpo, caja_nueva, campo_objetivos, campo_operacion, fijar_al_elegir,
@@ -128,15 +128,13 @@ class Extruir(Comando):
     _herramienta_previa = None      # (estado, índice, receta del paso) → formas de `_formas_herramienta` (P-99)
     _base_asas = None               # (estado, perfiles, base, borde): las asas se rearman en cada tecla (FL-1)
 
-    def verificar(self, ctx):
-        if not ctx.estado.bocetos and not ctx.estado.cuerpos:
-            return "Primero creá un boceto con un contorno cerrado (o elegí una cara plana de un cuerpo)."
-        return None
-
     def campos(self, ctx):
         dos = lambda v: v.get("direccion") == "dos_lados"  # noqa: E731
+        vacio = not ctx.estado.bocetos and not ctx.estado.cuerpos
         return [
             Botones("tipo", "Tipo", {"solida": ("Extruir", "extruir"), "delgada": ("Extrusión delgada", "ext_delgada")}),
+            # B-772: sin boceto el panel abre igual (como Fusion) y avisa acá, sin cuadro modal
+            Info("sin_boceto", "", lambda v, c: "Primero creá un boceto con un contorno cerrado.", visible_si=lambda v: vacio),
             Seleccion("perfiles", "Perfiles", {"perfil", "cara_plana", "curva_boceto"}, maximo=None,
                       ayuda="Perfiles cerrados o caras planas; en la extrusión delgada también curvas abiertas.",
                       # B-265: en la sólida un clic sobre el borde elige el perfil, no la curva (Fusion: Extrude reference)
