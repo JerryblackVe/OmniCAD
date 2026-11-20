@@ -10,7 +10,7 @@ from omnicad import api
 from omnicad.nucleo import geometria as g
 from omnicad.nucleo.perfiles import detectar
 from omnicad.restricciones import Boceto, ErrorBoceto, puntos_primitiva, resolver
-from omnicad.restricciones.boceto import ArcoElipse, Texto, distancia_primitiva
+from omnicad.restricciones.boceto import ArcoElipse, Texto, distancia_primitiva, evaluar_primitiva, parametros_cuerda
 from omnicad.timeline.parametros import TablaParametros
 
 PLANO = g.Plano("XY")
@@ -200,16 +200,56 @@ def test_espejar_en_el_lugar_tambien_invierte_la_curvatura_de_las_manijas():
     assert all(min(distancia_primitiva(c, (-q[0], q[1])) for c in despues) < 1e-6 for q in antes)
 
 
-def test_escalar_ajusta_la_curvatura_de_las_manijas_de_una_spline():
-    """Gemelo del defecto anterior: la curvatura (1/mm) de una manija baja al agrandar la figura."""
+_PUNTOS_MANIJA = [(8, 2), (14, 11), (22, 4), (30, 12)]
+
+
+def _con_manija(pts, angulo, largo, k):
+    """Boceto con una spline de ajuste por `pts` y manija en su punto 1 (dibujada así de entrada)."""
     b = Boceto()
-    sid = b.agregar_spline([(8, 2), (14, 11), (22, 4), (30, 12)], "ajuste")
-    b.activar_manija(sid, b.curvas[sid].pts[1], angulo=20.0, largo=6.0, curvatura=0.05)
-    antes = [q for prim in b.primitivas(sid) for q in puntos_primitiva(prim, 64)]
+    sid = b.agregar_spline(pts, "ajuste")
+    b.activar_manija(sid, b.curvas[sid].pts[1], angulo=angulo, largo=largo, curvatura=k)
+    return b, sid
+
+
+def _misma_curva(b1, s1, b2, s2, tol=1e-6):
+    return all(min(distancia_primitiva(c, q) for c in b2.primitivas(s2)) < tol
+               for prim in b1.primitivas(s1) for q in puntos_primitiva(prim, 64))
+
+
+def test_escalar_ajusta_la_curvatura_de_las_manijas_de_una_spline():
+    """Gemelo del defecto anterior: la curvatura (1/mm) de una manija baja al agrandar la figura. B-735: la quíntica
+    de Fusion no es semejante al escalar (su parámetro centrípeto suma una constante en cm: casos 7 y 9 de B-463,
+    el mismo dibujo ×2, dan 0,32727 y 0,32717 en el punto 1), así que la curva ×2 es la que dibuja Fusion con los
+    datos ×2, no la vieja ×2."""
+    b, sid = _con_manija(_PUNTOS_MANIJA, 20.0, 6.0, 0.05)
     b.escalar([sid], (0.0, 0.0), 2.0)
-    assert b.curvas[sid].manijas[0][2] == pytest.approx(0.025)
-    despues = b.primitivas(sid)
-    assert all(min(distancia_primitiva(c, (2 * q[0], 2 * q[1])) for c in despues) < 1e-6 for q in antes)
+    c = b.curvas[sid]
+    assert c.manijas[0][2] == pytest.approx(0.025)
+    ref, rid = _con_manija([(2 * x, 2 * y) for x, y in _PUNTOS_MANIJA], 20.0, 12.0, 0.025)
+    assert _misma_curva(b, sid, ref, rid) and _misma_curva(ref, rid, b, sid)
+    Q = [b.coords(p) for p in c.pts]                 # la curvatura de la curva en el punto es la de la manija
+    _, (dx, dy), (ex, ey) = evaluar_primitiva(b.primitivas(sid)[0], parametros_cuerda(Q, c.grado)[1], 2)
+    assert (dx * ey - dy * ex) / math.hypot(dx, dy) ** 3 == pytest.approx(0.025, rel=1e-6)
+
+
+@pytest.mark.parametrize("como", ["patron", "simetria"])
+def test_patron_y_simetria_giradas_copian_la_manija_de_una_spline(como):
+    """La copia girada 30° (patrón circular) o reflejada en un eje a 30° es la spline que se dibuja con los puntos y
+    la manija ya transformados: punta transformada, mismo largo, curvatura con el signo del giro."""
+    b, sid = _con_manija(_PUNTOS_MANIJA, 20.0, 6.0, 0.05)
+    t = math.radians(30)
+    if como == "patron":
+        b.patron_circular([sid], (0.0, 0.0), 2, angulo_total=30.0)
+        mover, angulo, k = (lambda x, y: (x * math.cos(t) - y * math.sin(t), x * math.sin(t) + y * math.cos(t))), 50.0, 0.05
+    else:
+        eje = b.agregar_linea((0, 0), (10 * math.cos(t), 10 * math.sin(t)), True)
+        b.simetria([sid], eje)
+        t2 = 2 * t
+        mover, angulo, k = (lambda x, y: (x * math.cos(t2) + y * math.sin(t2), x * math.sin(t2) - y * math.cos(t2))), 40.0, -0.05
+    copia = next(i for i, c in b.curvas.items() if i != sid and c.tipo == "spline")
+    assert b.curvas[copia].manijas[0][2] == k
+    ref, rid = _con_manija([mover(x, y) for x, y in _PUNTOS_MANIJA], angulo, 6.0, k)
+    assert _misma_curva(b, copia, ref, rid) and _misma_curva(ref, rid, b, copia)
 
 
 # ---------------------------------------------------------------- la herramienta mirror_sketch (la misma para agentes)
