@@ -11,8 +11,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 (Opus alto) | B-732 (BLOQUEANTE), luego B-463f | La gota colapsa al arrastrar el círculo (brief `~/coordinador/briefs/E1_B-732.md`; video de Gerardo); B-463f pausada |
-| E4 (Sonnet medio) | B-698, luego B-705 | Texto: marco desde la ventana (informe `~/coordinador/casos/texto/`), después Ctrl+Z |
-| E7 (Sonnet medio) | PRUEBA-OPC-2 | 11 opciones sin prueba como usuario; filas nuevas para la cola |
+| E4 (Sonnet medio) | B-728, B-731 | Altura de texto recortada sin aviso; Enter tras Tab en el patrón circular (B-698 integrado) |
+| E7 (Sonnet medio) | REPRO-E11 | Reproducir con eventos simulados B-729, B-730, B-731 (brief `~/coordinador/briefs/E7_repro.md`) |
 | E3, E8 | — | Vaciadas y quietas |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | Paró la noche del 20/11 (driver AMD de la PC en blanco; Gerardo reinicia a la mañana). Pendiente tras el reinicio: B-667, batería del punto 4, B-710; B-690 resuelto (Fusion no permite Perpendicular línea–spline). Tanda: `~/coordinador/casos/e11_noche_19-11.md`. Antes: Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
@@ -23,7 +23,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 0 | B-696 (E4; B-695 integrado dbd9e9ba) | B-696: el panel Carácter dice «Juli J» y el dibujo muestra «Ceci» |
 | 0 | PRUEBA-OPC-2 (E7) | Probar como usuario las 11 opciones que quedan sin prueba en `preparado/opciones_asas_boceto.md`: Insertar DXF, Vectorizar, Perfil giratorio (tolerancia, invertir, solo contorno), Desfase (cadena, topología), Kerning de un par, Boceto 3D |
 | 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
 | 2 | PRUEBA-PROY (hecha por E7: B-684, B-685, B-686 a OpenCode) | Probar como usuario los 5 tipos de PROYECTAR del boceto (Proyectar, Intersecar, Incluir geometría 3D, Perfil giratorio, Curva isoparamétrica): mouse simulado y valores raros contra `docs/fusion_docs` (E7, Sonnet medio; cada falla = fila nueva de boceto; antes, OpenCode prepara los tests que falten) |
