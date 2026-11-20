@@ -36,11 +36,12 @@ def test_cada_letra_se_malla_una_sola_vez(monkeypatch):
     monkeypatch.setattr(perfiles_mod, "_punto_adentro", lambda cara: (llamadas.append(cara), original(cara))[1])
     primera = perfiles_mod.sin_huecos(br.perfiles, br.boceto)
     letras = sum(1 for p in br.perfiles if p.firma and len(p.firma) == 1 and br.boceto.curvas[next(iter(p.firma))].tipo == "texto")
-    assert letras > 0 and len(llamadas) == letras      # antes, el doble: por texto y por objeto
+    mallas = len(llamadas)
+    assert letras > 0 and mallas <= letras             # antes, el doble: por texto y por objeto (P-183: Rust da el punto)
     # el relleno vuelve a clasificar en cada cota y al terminar: `detectar` devuelve los mismos perfiles de su caché
     assert perfiles_mod.detectar_boceto(br.boceto, br.plano)[0] is br.perfiles[0]
     assert [id(p) for p in perfiles_mod.sin_huecos(br.perfiles, br.boceto)] == [id(p) for p in primera]
-    assert len(llamadas) == letras
+    assert len(llamadas) == mallas
     assert len(primera) == 8           # el marco y las 7 letras, sin los huecos de la O, las A y las B
 
 

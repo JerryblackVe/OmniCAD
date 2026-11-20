@@ -305,6 +305,41 @@ fn caja_pieza(c: &Curva, t0: f64, t1: f64) -> [f64; 4] {
     b
 }
 
+/// P-183: un punto del material de una cara sin armarla ni mallarla en OpenCascade (`_punto_adentro` tardaba ~5 ms
+/// por pieza de texto): el centro de un tramo interior de 8 horizontales que quede a más de 4·SAGITA de la poligonal de
+/// sus `anillos` (el borde real se aparta de ella hasta SAGITA). Se miden los 8 tramos más anchos, de mayor a menor (cada
+/// medida recorre todo el borde: en una placa con 1600 agujeros, medirlos todos tardaba 1 s). NaN si ninguno: Python
+/// malla la cara.
+fn punto_interior(anillos: &[Vec<P2>], caja: [f64; 4]) -> P2 {
+    let margen = 4.0 * SAGITA;
+    let mut tramos: Vec<(f64, P2)> = Vec::new();
+    for i in 0..8 {
+        let y = caja[1] + (caja[3] - caja[1]) * (i as f64 + 0.5) / 8.0;
+        let mut xs: Vec<f64> = Vec::new();
+        for p in anillos {
+            for (k, &b) in p.iter().enumerate() {
+                let a = p[(k + p.len() - 1) % p.len()];
+                if (a[1] > y) != (b[1] > y) {
+                    xs.push(a[0] + (y - a[1]) * (b[0] - a[0]) / (b[1] - a[1]));
+                }
+            }
+        }
+        xs.sort_by(f64::total_cmp);
+        tramos.extend(xs.chunks_exact(2).map(|par| (par[1] - par[0], [0.5 * (par[0] + par[1]), y])));
+    }
+    tramos.sort_by(|a, b| b.0.total_cmp(&a.0));
+    for &(ancho, q) in tramos.iter().take(8) {
+        if 0.5 * ancho <= margen {
+            break;
+        }
+        let d = anillos.iter().flat_map(|p| p.iter().enumerate().map(move |(k, &b)| dist_seg(q, p[(k + p.len() - 1) % p.len()], b))).fold(f64::MAX, f64::min);
+        if d > margen {
+            return q;
+        }
+    }
+    [f64::NAN, f64::NAN]
+}
+
 struct Pieza {
     c: usize,
     t0: f64,
@@ -333,6 +368,7 @@ struct Salida {
     piezas: Vec<Pieza>,
     area: Vec<f64>,
     cen: Vec<P2>,
+    interior: Vec<P2>,
     caja: Vec<[f64; 4]>,
     firma_ptr: Vec<i64>,
     firma: Vec<i64>,
@@ -479,6 +515,18 @@ fn calcular(curvas: &[Curva], gap: f64) -> Result<Salida, String> {
                 continue;
             }
             if misma {
+                // P-183: en una horquilla de letra cursiva (una cuadrática que vuelve sobre sí) dos cuerdas caen dentro del
+                // margen sin que la curva se corte: un tramo de cónica (grado ≤ 2, pesos > 0) no puede cortarse a sí mismo
+                let conica = match &a.g {
+                    Geo::Spl(sp) => {
+                        let k = sp.tramo(0.5 * (ca.a + ca.b));
+                        sp.p <= 2 && k == sp.tramo(0.5 * (cb.a + cb.b)) && sp.ctrl[k - sp.p..=k].iter().all(|q| q[2] > 0.0)
+                    }
+                    _ => false,
+                };
+                if conica {
+                    continue;
+                }
                 return Err("curva que se corta a sí misma".into());
             }
             let g = [ca.pa[0] + s.clamp(0.0, 1.0) * d1[0], ca.pa[1] + s.clamp(0.0, 1.0) * d1[1]];
@@ -731,22 +779,22 @@ fn calcular(curvas: &[Curva], gap: f64) -> Result<Salida, String> {
     // --- a qué cara pertenece cada componente suelta (hueco o árbol dentro de una región)
     let mut huecos: HashMap<usize, Vec<usize>> = HashMap::new(); // cara -> lazos exteriores de componentes con ciclos
     let mut arboles: HashMap<usize, Vec<usize>> = HashMap::new(); // cara -> componentes sin ciclos
-    if exterior.len() > 1 {
-        let poligono = |l: usize| -> Vec<P2> {
-            let mut pts = Vec::new();
-            for &h in &lazos[l] {
-                let pz = &piezas[h >> 1];
-                let c = &curvas[pz.c];
-                let mut ts: Vec<f64> = c.trozos().into_iter().filter(|&t| t > pz.t0 && t < pz.t1).collect();
-                ts.insert(0, pz.t0);
-                ts.push(pz.t1);
-                if h & 1 == 1 {
-                    ts.reverse();
-                }
-                pts.extend(ts[..ts.len() - 1].iter().map(|&t| c.pt(t)));
+    let poligono = |l: usize| -> Vec<P2> {
+        let mut pts = Vec::new();
+        for &h in &lazos[l] {
+            let pz = &piezas[h >> 1];
+            let c = &curvas[pz.c];
+            let mut ts: Vec<f64> = c.trozos().into_iter().filter(|&t| t > pz.t0 && t < pz.t1).collect();
+            ts.insert(0, pz.t0);
+            ts.push(pz.t1);
+            if h & 1 == 1 {
+                ts.reverse();
             }
-            pts
-        };
+            pts.extend(ts[..ts.len() - 1].iter().map(|&t| c.pt(t)));
+        }
+        pts
+    };
+    if exterior.len() > 1 {
         let polis: Vec<(Vec<P2>, [f64; 4])> = caras_l
             .iter()
             .map(|&l| {
@@ -795,7 +843,7 @@ fn calcular(curvas: &[Curva], gap: f64) -> Result<Salida, String> {
 
     // --- caras
     let cajas: Vec<[f64; 4]> = piezas.iter().map(|pz| caja_pieza(&curvas[pz.c], pz.t0, pz.t1)).collect();
-    let mut sal = Salida { verts, piezas: Vec::new(), area: Vec::new(), cen: Vec::new(), caja: Vec::new(), firma_ptr: vec![0], firma: Vec::new(), ciclo_ptr: vec![0], semi_ptr: vec![0], semi: Vec::new() };
+    let mut sal = Salida { verts, piezas: Vec::new(), area: Vec::new(), cen: Vec::new(), interior: Vec::new(), caja: Vec::new(), firma_ptr: vec![0], firma: Vec::new(), ciclo_ptr: vec![0], semi_ptr: vec![0], semi: Vec::new() };
     let mut curvas_de_comp: HashMap<usize, Vec<i64>> = HashMap::new();
     for pz in &piezas {
         curvas_de_comp.entry(buscar(&mut ufv, pz.va)).or_default().push(pz.c as i64);
@@ -827,10 +875,18 @@ fn calcular(curvas: &[Curva], gap: f64) -> Result<Salida, String> {
         curvas_cara.dedup();
         sal.area.push(m[0]);
         sal.cen.push([ref_l[l][0] + m[1] / m[0], ref_l[l][1] + m[2] / m[0]]);
-        sal.caja.push(lazos[l].iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, &h| {
+        let caja = lazos[l].iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, &h| {
             let c = cajas[h >> 1];
             [b[0].min(c[0]), b[1].min(c[1]), b[2].max(c[2]), b[3].max(c[3])]
-        }));
+        });
+        sal.caja.push(caja);
+        sal.interior.push(if arboles.contains_key(&l) {
+            [f64::NAN, f64::NAN] // curvas sueltas adentro: el punto podría caer sobre una
+        } else {
+            let mut anillos = vec![poligono(l)];
+            anillos.extend(huecos.get(&l).into_iter().flatten().map(|&e| poligono(e)));
+            punto_interior(&anillos, caja)
+        });
         sal.firma.extend(curvas_cara);
         sal.firma_ptr.push(sal.firma.len() as i64);
         for (c, _a) in cics {
@@ -877,10 +933,12 @@ type Retorno<'py> = (
     Bound<'py, PyArray1<i64>>,
     Bound<'py, PyArray1<i64>>,
     Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray2<f64>>,
 );
 
 /// Arreglo planar de las curvas de un boceto. Devuelve (vértices, piezas (curva, va, vb), piezas t, áreas, centroides,
-/// firma_ptr, firma, ciclo_ptr, semi_ptr, semiaristas, cajas). Una semiarista `h` es la pieza `h >> 1`, hacia adelante si `h` es par.
+/// firma_ptr, firma, ciclo_ptr, semi_ptr, semiaristas, cajas, puntos interiores (NaN si no hay uno seguro). Una semiarista `h`
+/// es la pieza `h >> 1`, hacia adelante si `h` es par.
 #[pyfunction]
 #[pyo3(signature = (tipos, params, info, polos, pesos, nudos, tolerancia))]
 #[allow(clippy::too_many_arguments)]
@@ -918,6 +976,7 @@ pub fn arreglo_planar<'py>(
     let nf = s.area.len();
     let cen = Array2::from_shape_vec((nf, 2), s.cen.iter().flatten().copied().collect()).unwrap();
     let caja = Array2::from_shape_vec((nf, 4), s.caja.iter().flatten().copied().collect()).unwrap();
+    let interior = Array2::from_shape_vec((nf, 2), s.interior.iter().flatten().copied().collect()).unwrap();
     Ok((
         verts.into_pyarray(py),
         pz_i.into_pyarray(py),
@@ -930,6 +989,7 @@ pub fn arreglo_planar<'py>(
         s.semi_ptr.into_pyarray(py),
         s.semi.into_pyarray(py),
         caja.into_pyarray(py),
+        interior.into_pyarray(py),
     ))
 }
 

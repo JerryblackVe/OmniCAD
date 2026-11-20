@@ -9,9 +9,9 @@ devuelve arrays. Sin módulo compilado se usa la referencia Python. `OMNICAD_SIN
 - **Render** (`src/lib.rs`): rasterización, sombras y oclusión ambiental para `get_viewport_image` y el render local.
 - **Perfiles de un boceto** (`src/perfiles.rs`, BOC-28): `arreglo_planar` calcula intersecciones, grafo planar, lazos y
   regiones de las curvas del boceto (líneas, círculos, arcos y B-splines) y devuelve, por perfil, área, centroide, caja,
-  firma y los tramos de curva de su borde. Python arma la cara exacta de OpenCascade al pedirla
+  firma, los tramos de curva de su borde y un punto interior seguro (P-183: sin armar ni mallar la cara; NaN si no hay). Python arma la cara exacta de OpenCascade al pedirla
   (`nucleo/perfiles.py` › `_fabrica_caras`), sin `Splitter`. Si no puede certificar el resultado (cruces tangentes, curvas
-  superpuestas, autocruces, elipses, un extremo libre a menos de 1e-4 mm de otra curva) devuelve error y rige el
+  superpuestas, autocruces (no la horquilla de una cónica: P-183), elipses, un extremo libre a menos de 1e-4 mm de otra curva) devuelve error y rige el
   `Splitter` de siempre. Equivale al `Splitter` salvo en triples puntos casi concurrentes (< 1e-4 mm), donde éste funde
   con su tolerancia y el arreglo no: `tests/test_boc28_rust.py`. Pruebas de Rust: `cargo test`.
 - **Extremos de splines de ajuste** (`src/spline.rs`, R5 y SOLVER-FUSION): `spline_extremos` (cúbica) y

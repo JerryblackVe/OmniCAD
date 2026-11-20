@@ -110,21 +110,60 @@ def _caras_con(q, cajas, caras):
             if BRepClass_FaceClassifier(caras[j], gp_Pnt(*map(float, q)), 1e-7).State() == TopAbs_IN]
 
 
+_CACHE_CAPAS = {}
+
+
 def _capas_de_texto(del_texto):
     """(letras, huecos) de perfiles con el borde hecho solo de texto: los que quedan dentro de un número PAR de
-    contornos exteriores de los demás son letras (0 = una letra; 1 = el hueco de una letra; 2 = una isla en un hueco)."""
+    contornos exteriores de los demás son letras (0 = una letra; 1 = el hueco de una letra; 2 = una isla en un hueco).
+    P-183: por grupos de cajas que se tocan (un perfil solo puede quedar dentro del contorno de otro de su grupo), cada
+    uno con caché por los mismos perfiles (los de `detectar` y `_letras_unidas`, que la tienen): al tipear se reclasifica
+    solo el grupo de la última letra, y el relleno pide cada texto dos veces (como texto y como objeto) y en cada cota."""
     from OCP.BRepTools import BRepTools
-    llenas = [BRepBuilderAPI_MakeFace(BRepTools.OuterWire_s(p.cara), True).Face() for p in del_texto]
-    cajas = _cajas(llenas)
-    letras, huecos = [], []
-    for i, p in enumerate(del_texto):
+    if not del_texto:
+        return [], []
+    for p in del_texto:
+        if getattr(p, "_llena", None) is None:          # la cara sin sus huecos y su caja: una vez por perfil
+            p._llena = BRepBuilderAPI_MakeFace(BRepTools.OuterWire_s(p.cara), True).Face()
+            p._caja = _cajas([p._llena])[0]
+    etiqueta = _componentes(np.array([p._caja for p in del_texto], float), 1e-3)
+    grupos = [del_texto] if etiqueta is None else [[p for p, e in zip(del_texto, etiqueta, strict=True) if e == k]
+                                                    for k in range(int(etiqueta.max()) + 1)]
+    huecos = set()
+    for grupo in grupos:
+        clave = tuple(grupo)
+        if clave not in _CACHE_CAPAS:
+            # shortcut: los perfiles de un objeto (`detectar_boceto`) son nuevos en cada llamada y no aciertan; ocupan
+            # lugar hasta el tope, como `_CACHE_ISLAS`. Si pesa en memoria, no cachear los que tienen `objeto`
+            if len(_CACHE_CAPAS) >= _CACHE_ISLAS_MAX:
+                _CACHE_CAPAS.pop(next(iter(_CACHE_CAPAS)))
+            _CACHE_CAPAS[clave] = _huecos_de(grupo)
+        huecos.update(map(id, _CACHE_CAPAS[clave]))
+    return [p for p in del_texto if id(p) not in huecos], [p for p in del_texto if id(p) in huecos]
+
+
+def _huecos_de(grupo):
+    cajas, llenas, huecos = np.array([p._caja for p in grupo], float), [p._llena for p in grupo], []
+    for i, p in enumerate(grupo):
         # B-440: mallar la letra para hallar su punto costaba ~4 ms; `detectar` devuelve los mismos perfiles de su caché
-        # y el relleno del boceto los vuelve a clasificar en cada cota y al terminar (cada texto, dos veces)
         if getattr(p, "_punto", None) is None:
-            p._punto = _punto_adentro(p.cara)
-        profundidad = sum(1 for j in _caras_con(p._punto, cajas, llenas) if j != i)
-        (huecos if profundidad % 2 else letras).append(p)
-    return letras, huecos
+            p._punto = _punto_heredado(p, cajas[i])
+        if sum(1 for j in _caras_con(p._punto, cajas, llenas) if j != i) % 2:
+            huecos.append(p)
+    return tuple(huecos)
+
+
+def _punto_heredado(p, caja):
+    """P-183: una cara de letras unidas contiene el punto interior de alguna de sus piezas (`_letras_unidas`): se busca
+    con su `caja` y el clasificador en vez de mallar la cara (~10 ms); si ninguno sirve, se malla como siempre."""
+    from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.TopAbs import TopAbs_IN
+    q = getattr(p, "_candidatos", None)
+    if q is not None:
+        for x in q[np.all((caja[0] <= q) & (q <= caja[1]), axis=1)]:
+            if BRepClass_FaceClassifier(p.cara, gp_Pnt(*map(float, x)), 1e-7).State() == TopAbs_IN:
+                return x
+    return _punto_adentro(p.cara)
 
 
 def partes_de_texto(perfiles, ids_texto):
@@ -437,7 +476,7 @@ def _letras_unidas(grupo, plano):
         tinta = [p for p, w in zip(piezas, vueltas, strict=True) if w]
         firma = frozenset().union(*(p.firma for p in tinta))
         try:
-            unidas = [_perfil_de_cara(c, plano, firma) for c in geo.caras(geo.unir_todos([p.cara for p in tinta]))]
+            unidas = _unidas(tinta, plano, firma)
             # un lóbulo que toca al resto solo en un punto no se funde: la «i» de Ananda Black deja dos de 0,004 mm²;
             # un punto «.» ronda 1/30 de una letra, así que 1/1000 de la cara mediana no se lleva nada que se vea
             minima = 1e-3 * float(np.median([p.area for p in unidas]))
@@ -449,6 +488,31 @@ def _letras_unidas(grupo, plano):
         _CACHE_TEXTO.pop(next(iter(_CACHE_TEXTO)))
     _CACHE_TEXTO[clave] = tuple(resultado)
     return list(resultado)
+
+
+_CACHE_UNION = {}
+
+
+def _unidas(tinta, plano, firma):
+    """Perfiles de la unión de las piezas con `tinta`. P-183: por grupos de cajas que se tocan (las islas de `detectar`),
+    cada uno con caché: al tipear se une solo el grupo de la última letra (todo el renglón tardaba ~0,5 s por tecla)."""
+    cajas = [p.caja_uv for p in tinta]
+    etiqueta = None if None in cajas else _componentes(np.array(cajas, float).reshape(-1, 2, 2), 1e-4)
+    grupos = [tinta] if etiqueta is None else [[p for p, e in zip(tinta, etiqueta, strict=True) if e == k]
+                                               for k in range(int(etiqueta.max()) + 1)]
+    unidas = []
+    for grupo in grupos:
+        clave = (tuple(grupo), _clave_plano(plano), firma)
+        if clave not in _CACHE_UNION:
+            if len(_CACHE_UNION) >= _CACHE_ISLAS_MAX:
+                _CACHE_UNION.pop(next(iter(_CACHE_UNION)))
+            nuevas = [_perfil_de_cara(c, plano, firma) for c in geo.caras(geo.unir_todos([p.cara for p in grupo]))]
+            candidatos = np.array([p._punto for p in grupo], float).reshape(-1, 3)
+            for p in nuevas:
+                p._candidatos = candidatos                    # para `_punto_heredado`
+            _CACHE_UNION[clave] = tuple(nuevas)
+        unidas += _CACHE_UNION[clave]
+    return unidas
 
 
 def _contornos_cerrados(grupo):
@@ -755,6 +819,8 @@ def _detectar_rust(geometria, plano, tolerancia=1e-4):
         if curvas not in firmas:
             firmas[curvas] = frozenset(ids[k] for k in curvas if ids[k] is not None)
         salida.append(Perfil(None, area, tuple(centros[i]), firmas[curvas], partial(cara, i), tuple(cajas[i])))
+        if len(r) > 11 and np.isfinite(r[11][i]).all():   # P-183: sin armar ni mallar la cara (un módulo viejo no lo trae)
+            salida[-1]._punto = plano.a_3d(*r[11][i])
     salida.sort(key=lambda p: (round(p.centroide_uv[0], 4), round(p.centroide_uv[1], 4), p.area))
     return salida
 
