@@ -1337,6 +1337,7 @@ class ModoBoceto(QObject):
     def _armar_caracter(self, area):            # fuente, decoraciones y transformación del texto
         panel = PanelCaracter(area)
         panel.cambio.connect(self._ajuste)
+        panel.altura.excedido.connect(lambda m: self.v.mensaje(f"Tamaño: máximo {m:,.0f} mm.".replace(",", "."), 5000))
         return panel
 
     def _armar_simetria(self, area):            # Objetos, Eje de simetría, Vista previa, Aceptar y Cancelar
