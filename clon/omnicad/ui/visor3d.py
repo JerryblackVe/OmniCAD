@@ -273,9 +273,10 @@ def nivel_lod(diametro_px, deflexion_px):
     return nivel
 
 
-def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40):
+def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40, cada=5):
     """(vértices, colores RGBA) float32 para GL_LINES de la rejilla: 2n+1 líneas por eje alrededor de `centro_uv`,
-    más marcadas cada 5. Con numpy: punto por punto en Python costaba ~1,5 ms por cuadro."""
+    más marcadas cada `cada` (las subdivisiones de la rejilla). Con numpy: punto por punto en Python costaba ~1,5 ms
+    por cuadro."""
     cu, cv = centro_uv
     ext = paso * n
     i = np.arange(-n, n + 1)
@@ -287,7 +288,7 @@ def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40):
     uv[:, 1, :, 1] = v[:, None]
     uv = uv.reshape(-1, 2)
     vertices = plano.origen + np.outer(uv[:, 0], plano.u) + np.outer(uv[:, 1], plano.v)
-    mayor = np.stack([np.round(u / paso).astype(int) % 5 == 0, np.round(v / paso).astype(int) % 5 == 0], axis=1)
+    mayor = np.stack([np.round(u / paso).astype(int) % cada == 0, np.round(v / paso).astype(int) % cada == 0], axis=1)
     alfa = np.where(mayor, 0.40, 0.16) if oscuro else np.where(mayor, 0.45, 0.22)
     colores = np.empty((len(uv), 4))
     colores[:, :3] = rgb
@@ -1249,9 +1250,15 @@ class Visor3D(QOpenGLWidget):
         if cfg.rejilla_fija:
             mayor, sub = cfg.rejilla_fija
             return mayor / max(1, sub)
-        if cfg.rejilla_bloqueada and cfg.paso_bloqueado:
+        if cfg.rejilla_bloqueada:
+            if not cfg.paso_bloqueado:      # P-197: bloqueada al abrir (preferencia): se fija en el paso del primer uso
+                cfg.paso_bloqueado = paso_lindo(minimo_px / self.px_por_mm())
             return cfg.paso_bloqueado
         return paso_lindo(minimo_px / self.px_por_mm())
+
+    def subdivisiones_rejilla(self):
+        """Pasos entre dos líneas mayores: las subdivisiones de la rejilla fija (Parámetros de rejilla); si no, 5."""
+        return max(1, int(self.config.rejilla_fija[1])) if self.config.rejilla_fija else 5
 
     # ------------------------------------------------------------ elegir planos y caras
     def _tam_planos(self):
@@ -2257,7 +2264,7 @@ class Visor3D(QOpenGLWidget):
         return 0.0
 
     def _rejilla(self, plano, paso, color_ejes=True):
-        """Rejilla sobre un plano, centrada en la zona que se está mirando (líneas mayores cada 5)."""
+        """Rejilla sobre un plano, centrada en la zona que se está mirando (líneas mayores cada `subdivisiones_rejilla`)."""
         oscuro = self.config.oscuro()
         if self.config.entorno == "tema":           # el color de la rejilla lo da el tema; los otros entornos, el suyo
             rojo, verde, azul = temas.rgb_f(temas.color("rejilla"))
@@ -2266,10 +2273,11 @@ class Visor3D(QOpenGLWidget):
         n = 40
         ext = paso * n
         cu, cv = plano.a_uv(self.objetivo)
-        cu, cv = round(cu / (5 * paso)) * 5 * paso, round(cv / (5 * paso)) * 5 * paso
-        clave = (tuple(plano.origen), tuple(plano.u), tuple(plano.v), paso, cu, cv, rojo, verde, azul, oscuro)
+        cada = self.subdivisiones_rejilla()
+        cu, cv = round(cu / (cada * paso)) * cada * paso, round(cv / (cada * paso)) * cada * paso
+        clave = (tuple(plano.origen), tuple(plano.u), tuple(plano.v), paso, cu, cv, rojo, verde, azul, oscuro, cada)
         if self._rejilla_cache[0] != clave:     # cambia al desplazar o al cambiar el paso, no en cada cuadro
-            self._rejilla_cache = (clave, lineas_rejilla(plano, paso, (cu, cv), (rojo, verde, azul), oscuro, n))
+            self._rejilla_cache = (clave, lineas_rejilla(plano, paso, (cu, cv), (rojo, verde, azul), oscuro, n, cada))
         vertices, colores = self._rejilla_cache[1]
         GL.glDepthMask(GL.GL_FALSE)        # sin escribir profundidad: una cara pegada al plano del boceto tapa la rejilla
         GL.glLineWidth(1.0)
