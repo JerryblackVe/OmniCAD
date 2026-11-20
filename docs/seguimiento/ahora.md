@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Opus alto) | — | B-710 integrado; B-463 manija espera el paso V→C'(t) de Craft |
+| E1 (Opus alto) | P-184 | Velocidad del desfase de spline (brief `~/coordinador/casos/desfase/E1_BRIEF_P184.md`); B-463 manija en pausa |
 | E4 (Sonnet medio) | B-698, luego B-705 | Texto: marco desde la ventana (informe `~/coordinador/casos/texto/`), después Ctrl+Z |
 | E7 (Sonnet medio) | PRUEBA-OPC-2 | 11 opciones sin prueba como usuario; filas nuevas para la cola |
 | E3, E8 | — | Vaciadas y quietas |
