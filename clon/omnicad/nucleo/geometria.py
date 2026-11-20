@@ -544,9 +544,7 @@ def _booleana(objetivo, herramienta, operacion, *, paralelo=True, fuzzy=0.0, inv
     if sanar:
         # Copia ANTES de ShapeFix: el resultado comparte topología con las entradas y ShapeFix repara «in place»,
         # dejando inválida la forma viva que llamó (B-39: después el guard de entradas tapaba el problema).
-        reparador = ShapeFix_Shape(BRepBuilderAPI_Copy(resultado).Shape())
-        reparador.Perform()
-        resultado = reparador.Shape()
+        resultado = sanar_forma(resultado)
     if not unificar:
         return (_quitar_cables_colgados(resultado), ()) if con_historial else _quitar_cables_colgados(resultado)
     if con_historial:
@@ -1572,6 +1570,13 @@ def _brepcheck_estable(forma):
 
 def es_valida(forma):
     return _brepcheck_estable(forma)
+
+
+def sanar_forma(forma):
+    """ShapeFix sobre una COPIA (repara «in place»: la forma viva quedaría inválida, B-39). Equivale a «Reparar» de Fusion."""
+    reparador = ShapeFix_Shape(BRepBuilderAPI_Copy(forma).Shape())
+    reparador.Perform()
+    return reparador.Shape()
 
 
 def _explorar(forma, tipo):
