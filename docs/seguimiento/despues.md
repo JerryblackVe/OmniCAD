@@ -12,6 +12,7 @@ Abierto 1 · Bloqueado 1 · Sin verificar 1.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-190 | Malla › Guardar como malla (Tipo Exportar): la lista «Objeto» sale con un solo cuerpo tildado (INICIAL) aunque los visibles son INICIAL y CUERPO; la «Desviación de normal» se ve como «17,188733854°» | Abierto | Media | Al abrir, tildar todos los cuerpos visibles y dejar los ocultos sin tildar; mostrar la desviación con 1 decimal (UX-1 y UX-3 de `docs/protocolo_ux.md`) | Gerardo 20/11 vía maestro; prioridad 2 (malla/exportar), fuera de la cola de boceto | 2026-11-20 |
 | P-179 | Insertar › Lienzo: calibrar con dos puntos y una distancia real (Fusion «Calibrate canvas»); hoy solo se fija el ancho real | Abierto | Baja | Comando Calibrar sobre el lienzo, con su herramienta MCP y CLI | `timeline/ops_insertar.py` (solo ancho); ayuda «Calibrate canvas (image)»; análisis PhysCAD del 18/11 | 2026-11-18 |
 | B-414 | Registro de uso › con poco disco se pausa sin ningún aviso en pantalla (la PC de Gerardo ya pasó de 0,26 a 7,96 GB libres) | Abierto | Baja | Avisar en pantalla cuando se pausa | evidencias/reportes_pc/2026-11-13_tanda1/06 (E11) | 2026-11-13 |
 | B-415 | Arranque › OmniCAD arrancó minimizado las 2 veces que E11 lo lanzó desde su shell; con doble clic no pasa | Sin verificar | Baja | Solo anotado; confirmar | evidencias/reportes_pc/2026-11-13_tanda1 (E11) | 2026-11-13 |
