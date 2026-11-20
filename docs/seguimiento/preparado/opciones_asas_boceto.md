@@ -18,7 +18,7 @@ Criterio de cobertura (igual que `scripts/cobertura_boceto.py`): «test automát
 | Insertar SVG en boceto | Desplazamiento X (Expresion) | sí | sí | — |
 | Insertar SVG en boceto | Desplazamiento Y (Expresion) | **no** | sí | — |
 | Insertar SVG en boceto | Ángulo (Expresion) | **no** | sí | — |
-| Insertar SVG en boceto | Volteo horizontal (Casilla) | **no** | sí | — |
+| Insertar SVG en boceto | Volteo horizontal (Casilla) | sí | sí | — |
 | Insertar SVG en boceto | Volteo vertical (Casilla) | **no** | sí | — |
 | Insertar SVG en boceto | Capas (Texto) | sí | sí (boceto_opciones) | — |
 | Insertar SVG en boceto | Colores (Texto) | sí | sí (boceto_opciones) | — |
@@ -113,6 +113,6 @@ Criterio de cobertura (igual que `scripts/cobertura_boceto.py`): «test automát
 | Marco de selección (boceto) | Manija de mover | sí | sí (boceto_opciones) | — |
 | Marco de selección (boceto) | Manijas de espejo horizontal / vertical | sí | sí (boceto_opciones) | — |
 
-**Resumen (corregido 19/11 cruzando con los scripts de prueba_ui):** 106 filas; 22 sin test automático, 11 sin prueba como usuario, 0 sin ninguna de las dos. El contador literal de `cobertura_boceto.py` no ve claves dentro de f-strings ni bucles, por eso la tabla original marcaba «no» filas que sí tienen script; la celda dice qué script las cubre.
+**Resumen (corregido 19/11 cruzando con los scripts de prueba_ui; el 19/11 sumó test automático el Volteo horizontal de Insertar SVG):** 106 filas; 21 sin test automático, 11 sin prueba como usuario, 0 sin ninguna de las dos. El contador literal de `cobertura_boceto.py` no ve claves dentro de f-strings ni bucles, por eso la tabla original marcaba «no» filas que sí tienen script; la celda dice qué script las cubre.
 
 Catálogos de `scripts/prueba_ui/` excluidos por nombrar más de 25 claves de la cinta: `cm_ventana.py`. Las claves genéricas de la paleta pueden aparecer en `dialogos_inventario.py` (inventario de diálogos), no necesariamente en una prueba de uso.
