@@ -8,8 +8,47 @@ from .boceto_entidades import (
     validar_valor_cota,
 )
 from .boceto_geometria import (
-    caja_primitiva, _cruces_circulos, _cruces_recta_circulo, dominio, evaluar_primitiva, recta_interseccion,
+    caja_primitiva, _cruces_circulos, _cruces_recta_circulo, dominio, evaluar_primitiva, interpolar_spline,
+    parametros_cuerda, recta_interseccion,
 )
+
+# B-710: tolerancia de ajuste del desfase de una curva libre: resfit de ShapeManager (0,001 cm) que Fusion usa al
+# aproximar la curva desfasada exacta (informe de ingeniería inversa, ~/coordinador/casos/desfase/).
+TOL_DESFASE = 0.01      # mm
+
+
+def _normales(prim, ts):
+    """(C, N) de la primitiva en cada t: punto y normal unitaria a la izquierda del recorrido (arrays n×2)."""
+    if prim[0] == "spline" and prim[5] is None:     # B-710: vectorizada; la de puntos sueltos tardaba ~65 µs por t
+        from scipy.interpolate import BSpline
+        b = BSpline(np.array(prim[3]), np.array(prim[2]), prim[4])
+        C, D = b(ts), b(ts, 1)
+    else:
+        C, D = (np.array(v) for v in zip(*(evaluar_primitiva(prim, float(t), 1) for t in ts), strict=True))
+    n = np.hypot(D[:, 0], D[:, 1])
+    n[n == 0] = 1.0
+    return C, np.column_stack([-D[:, 1] / n, D[:, 0] / n])
+
+
+def _error_desfase(prim, nuevos, ext, cerrada, sd):
+    """B-710: por tramo [ext[i], ext[i+1]] de la madre, cuánto se aleja de la quíntica de ajuste que pasa por `nuevos`
+    (la de `agregar_spline`, B-463) la curva desfasada exacta C + sd·N, medido a ¼, ½ y ¾ del tramo (en una punta el
+    mayor error no cae en el medio) con el pie sobre la quíntica buscado por Newton."""
+    from scipy.interpolate import BSpline
+    lista = [tuple(q) for q in nuevos]
+    polos, nudos, p = interpolar_spline(lista, 5, cerrada)
+    copia = BSpline(np.array(nudos), np.array(polos), p)
+    ub = np.array(parametros_cuerda(lista + lista[:1] if cerrada else lista, 5))
+    f = np.tile([0.25, 0.5, 0.75], len(ub) - 1)
+    lo, hi = np.repeat(ub[:-1], 3), np.repeat(ub[1:], 3)
+    u = lo + f * (hi - lo)
+    C, N = _normales(prim, np.repeat(ext[:-1], 3) + f * np.repeat(np.diff(ext), 3))
+    Q = C + sd * N
+    for _ in range(3):
+        r, F1, F2 = copia(u) - Q, copia(u, 1), copia(u, 2)
+        h = np.sum(F1 * F1, axis=1) + np.sum(r * F2, axis=1)
+        u = np.clip(u - np.sum(r * F1, axis=1) / np.where(h > 0, h, np.inf), lo, hi)
+    return np.linalg.norm(copia(u) - Q, axis=1).reshape(-1, 3).max(axis=1)
 
 
 class _Desfase:
@@ -246,34 +285,36 @@ class _Desfase:
         t0, t1, _ = dominio(prim)
         cerrada = isinstance(c, Elipse) or (isinstance(c, Spline) and c.cerrada)
 
-        def normales(cantidad):
-            salida = []
-            for t in np.linspace(t0, t1, cantidad, endpoint=not cerrada):
-                C, D = evaluar_primitiva(prim, float(t), 1)
-                n = math.hypot(*D) or 1.0
-                salida.append((C, (-D[1] / n, D[0] / n)))     # normal a la izquierda del recorrido
-            return salida
-        pts = normales(muestras)
+        ts = np.linspace(t0, t1, muestras, endpoint=not cerrada)
+        C, N = _normales(prim, ts)
         if punto_lado is not None:
-            C, n = min(pts, key=lambda cn: math.dist(cn[0], punto_lado))
-            s = 1.0 if n[0] * (punto_lado[0] - C[0]) + n[1] * (punto_lado[1] - C[1]) > 0 else -1.0
+            i = int(np.argmin(np.hypot(*(C - punto_lado).T)))
+            s = 1.0 if N[i] @ np.subtract(punto_lado, C[i]) > 0 else -1.0
         elif cerrada:
-            area = sum(p[0][0] * q[0][1] - q[0][0] * p[0][1] for p, q in zip(pts, pts[1:] + pts[:1], strict=True))
-            s = -1.0 if area > 0 else 1.0
+            s = -1.0 if np.sum(C[:, 0] * np.roll(C[:, 1], -1) - np.roll(C[:, 0], -1) * C[:, 1]) > 0 else 1.0
         else:
             s = 1.0
         if invertir:
             s = -s
-        nuevos = [(C[0] + s * d * n[0], C[1] + s * d * n[1]) for C, n in pts]
-        densos = [C for C, _n in normales(4 * muestras)]
-        if any(min(math.dist(q, C) for C in densos) < 0.9 * d for q in nuevos):
+        # B-710: como Fusion (aproxima la curva desfasada exacta hasta su tolerancia), parte cada tramo que se aleja
+        # más de TOL_DESFASE de la curva exacta mientras haya: la cota asociativa sigue igual (un t por punto).
+        for _ in range(5):
+            nuevos = C + s * d * N
+            ext = np.append(ts, t1) if cerrada else ts
+            partir = np.flatnonzero(_error_desfase(prim, nuevos, ext, cerrada, s * d) > TOL_DESFASE)
+            if not len(partir) or len(ts) + len(partir) > 8 * muestras:
+                break
+            ts = np.sort(np.concatenate([ts, (ext[partir] + ext[partir + 1]) / 2]))
+            C, N = _normales(prim, ts)
+        densos = _normales(prim, np.linspace(t0, t1, 4 * muestras, endpoint=not cerrada))[0]
+        if np.any(np.linalg.norm(nuevos[:, None] - densos[None], axis=2).min(axis=1) < 0.9 * d):
             raise ErrorBoceto("Desfase mayor que el radio: se pliega.")
-        nuevo = self.agregar_spline(nuevos, "ajuste", 3, cerrada, construccion=c.construccion)
+        nuevo = self.agregar_spline([tuple(map(float, q)) for q in nuevos], "ajuste", 3, cerrada,
+                                    construccion=c.construccion)
         # B-231: cada punto de ajuste queda en su parámetro de la madre (clave texto: sobrevive al JSON). Absoluto y no
         # fracción: recortar la madre conserva su parametrización.
         ids = self.curvas[nuevo].pts
-        parametros = ({str(p): float(t) for p, t in zip(ids, np.linspace(t0, t1, muestras, endpoint=not cerrada),
-                                                        strict=True)} if len(ids) == muestras else None)
+        parametros = {str(p): float(t) for p, t in zip(ids, ts, strict=True)} if len(ids) == len(ts) else None
         self._atar_desfase_libre(cid, nuevo, s, expresion or _numero(d), datos, parametros)
         return nuevo
 

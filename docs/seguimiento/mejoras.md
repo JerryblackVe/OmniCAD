@@ -6,10 +6,11 @@ Solo lo que falta resolver: al resolverse, la fila se borra. Verificado contra e
 
 ## Pendientes generales
 
-Abierto 14 · Parcial 9 · Sin verificar 2.
+Abierto 15 · Parcial 9 · Sin verificar 2.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
+| P-184 | Velocidad › Desfase de una spline: el solver crece más que lineal con los puntos de ajuste de la copia (cada uno, un término con su evaluación de la madre). Cambiar la cota: 0,8 s con 48 puntos; la spline larga de 12 puntos, que B-710 refina a 108 para quedar a 0,01 mm, pasa de 1,7 a 5,8 s | Abierto | Media | Medir el solver con la copia (Jacobiano denso o evaluación por término) y bajarlo; o rehacer la copia tras resolver, como Fusion (`postSolveOnOffsetChanges`), en vez de atar cada punto | E1 20/11, `resolver` con `[(i*30, 15*(-1)**i) for i in range(12)]` desfasada 3 mm | 2026-11-20 |
 | P-183 | Velocidad › Texto cursivo largo: el relleno del boceto (`detectar_boceto` + `sin_huecos`) de 64 letras de «Ananda Black» tarda 1,8 s la primera vez en main (armar ~130 caras perezosas y su punto interior, ~10 ms cada una); con la unión de B-694, 2,4 s. Cada tecla cambia la geometría y lo repite | Abierto | Media | Punto interior sin mallar la cara (o sin armarla) para las piezas de texto | E1 19/11, medido en la VPS con `detectar_boceto` + `sin_huecos` | 2026-11-19 |
 | P-182 | Velocidad › Arrastrar en un boceto grande (200 piezas, 100 cotas): ~90 ms por evento (meta < 33). Pintar ~50 ms (íconos de restricción 20, cotas 24, ~1000 `a_px` por cuadro) y el ratón ~30 ms (inferencia y `_ajustar`); el solver solo 2–12 ms. Con 70 piezas, ~40–65 ms | Abierto | Media | Pintar menos por cuadro (caché de textos y anclas, no recalcular lo que no se movió) | E6 19/11: peine cerrado de 200 tramos con H/V y cotas, arrastre de 20 eventos en xvfb (Registro); `bench_fluidez.py j` | 2026-11-19 |
 | P-181 | Velocidad › Solevación de 2 perfiles en planos que se cruzan (tras B-618): elegir la orientación corre el análisis de autointersecciones hasta 2 veces, también en la vista previa (~1 s en el repro; más con splines). Orientar la sección auxiliar con la normal de la tapa, sin análisis | Abierto | Media | Medir la previa y sacar el análisis del camino de la previa | `clon/omnicad/nucleo/solidos_crear_solevacion.py` › `_loft_liso`; revisión de OpenCode en B-618 | 2026-11-18 |

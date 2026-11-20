@@ -138,3 +138,28 @@ def test_api_parametro_arrastre_y_release_offset(tipo):
     llamar("move_sketch_point", point=pid, x=x, y=y + 3)
     b = boceto_resuelto(sesion, op).boceto
     assert [b.coords(p) for p in b.curvas[copia].pts] == antes
+
+
+@pytest.mark.parametrize("puntos, cantidad", [([(0, 0), (20, 10), (40, -5), (60, 5)], 48),
+                                              ([(i * 30, 15 * (-1) ** i) for i in range(12)], None)])
+def test_desfase_de_spline_queda_dentro_de_la_tolerancia_de_fusion(puntos, cantidad):
+    """B-710: Fusion aproxima la curva desfasada exacta hasta 0,01 mm (resfit); la spline larga ya no entra con 48
+    puntos fijos (0,22 mm) y se parte donde hace falta, con cada punto atado a su t de la madre (B-231)."""
+    import numpy as np
+    from scipy.spatial import cKDTree
+    from omnicad.restricciones.boceto import dominio
+    from omnicad.restricciones.boceto_desfase import _normales
+    b = Boceto()
+    madre = b.agregar_spline(puntos)
+    copia, = b.desfase(madre, 3)
+    pts = b.curvas[copia].pts
+    assert len(pts) == cantidad if cantidad else len(pts) > 48
+    restriccion, = (r for r in b.restricciones.values() if r.tipo == "desfase")
+    assert set(restriccion.datos["parametros"]) == {str(p) for p in pts}
+
+    def densos(cid, n):
+        prim = b.primitivas(cid)[0]
+        t0, t1, _ = dominio(prim)
+        return _normales(prim, np.linspace(t0, t1, n))[0]
+    error = np.abs(cKDTree(densos(madre, 200000)).query(densos(copia, 3000))[0] - 3).max()
+    assert error < 0.01
