@@ -51,7 +51,8 @@ def test_la_cara_gana_al_plano_de_origen(visor):
     vis.modo = "elegir_plano"
     o, _d = vis.rayo(_pos(vis, [0.0, 0.0, 0.0]))
     cerca = 10.0 if o[1] < 0 else -10.0            # la caja que queda detrás del plano XZ vista desde la cámara
-    hit = vis.elegir_entidad(_pos(vis, [0.0, cerca, 0.0]), vis.filtro)
+    # B-762: (-12, -12) queda fuera del cuadro XZ (de 0 a 0,4 de la pieza): ahí la cara gana; dentro del cuadro gana el plano
+    hit = vis.elegir_entidad(_pos(vis, [-12.0, cerca, -12.0]), vis.filtro)
     assert hit is not None and hit["tipo"] == "cara", hit and hit["ref"]
     # el borde del plano se sigue eligiendo aunque haya una caja detrás
     pl, (_u0, _v0, u1, v1) = next((p, r) for ref, p, r in vis.planos_elegibles() if ref == "XZ")    # B-610: el borde real
