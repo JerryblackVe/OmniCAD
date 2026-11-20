@@ -38,6 +38,7 @@ Dueño: Gerardo. Aplica a TODO trabajo nuevo de UI (cinta, paneles, diálogos, P
 - **UX-19 Prueba del novato.** Cada tarjeta nueva o cambiada pasa la «tarea de 1 minuto»: una persona que nunca vio el comando lo completa sin ayuda en menos de 60 s (E11 con Computer Use, o la medición de `registro_uso`). Si no, la tarjeta se rehace.
 - **UX-20 Una fuente por regla.** Este archivo es la fuente de los números UX. CLAUDE.md, AGENTS.md y el brief solo lo enlazan. `tests/test_ux_protocolo.py` lee las constantes de un único lugar.
 - **UX-21 Íconos grandes, propios y claros (Gerardo, 2026-11-20).** Los íconos de la cinta son grandes como los de Fusion y se entienden sin leer, para un chico de 10 y una persona de 100 (regla 14). Diseño propio y original de OmniCAD, nunca copiado de Fusion: una imagen que muestra qué hace el comando (UX-3), sin letras sueltas ni siglas, con el mismo estilo en toda la cinta y legible en claro y oscuro. Todo ícono nuevo o cambiado lo cumple; el rediseño de los existentes es P-200. Estilos solo desde `ui/temas.py`.
+- **UX-22 Criterio visual con `impeccable` (Gerardo, 2026-11-20).** La sesión que diseña íconos o pantallas nuevas o cambiadas invoca la skill `impeccable` (herramienta Skill) para el criterio visual: jerarquía, contraste, claridad y consistencia. Su parte de código web (HTML/CSS) no aplica: OmniCAD es Qt y los estilos salen de `ui/temas.py`. Se anota en el informe que se invocó.
 
 ### Lista de control (la pasa TODA sesión que toque UI antes de cerrar)
 
