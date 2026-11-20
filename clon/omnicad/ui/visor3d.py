@@ -2358,7 +2358,7 @@ class Visor3D(QOpenGLWidget):
         for p in esquinas:
             GL.glVertex3f(*p)
         GL.glEnd()
-        GL.glColor4f(*((0.45, 0.70, 1.0) if resaltado else color), 0.9 if resaltado else 0.5)
+        GL.glColor4f(*((0.45, 0.70, 1.0) if resaltado else color), 0.9 if resaltado else min(0.5, 5 * alfa))
         GL.glLineWidth(1.2)
         GL.glBegin(GL.GL_LINE_LOOP)
         for p in esquinas:
@@ -2393,10 +2393,13 @@ class Visor3D(QOpenGLWidget):
         """B-610: mientras un campo pide un plano, los planos de origen y de construcción se dibujan encima de los
         cuerpos (sin prueba de profundidad), semitransparentes."""
         hover = self._hover[1] if self._hover and self._hover[0] == "plano" else None
-        GL.glDisable(GL.GL_DEPTH_TEST)
-        for ref, pl, rect in self.planos_elegibles():
+        planos = self.planos_elegibles()
+        for ref, pl, rect in planos:                # B-764: la parte a la vista, con prueba de profundidad (un cuerpo la tapa)
             self._cuadro_plano(pl, rect, NARANJA_PLANO, 0.10, ref == hover)
-        GL.glEnable(GL.GL_DEPTH_TEST)
+        GL.glDepthFunc(GL.GL_GREATER)               # lo que queda detrás del cuerpo, apenas insinuado (se puede elegir igual)
+        for ref, pl, rect in planos:
+            self._cuadro_plano(pl, rect, NARANJA_PLANO, 0.03, ref == hover)
+        GL.glDepthFunc(GL.GL_LESS)
 
     def _dibujar_caras(self, alfa=1.0, transparentes=False):
         """Caras de los cuerpos: primero los opacos; los de opacidad < 1 en una segunda pasada."""
