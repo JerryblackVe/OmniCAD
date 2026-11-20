@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+
+- **2026-11-20 · Traspaso E6 (B-781, B-679 y B-775 integrados).** 1) Los tres ya están en main (8b7d90ca, 0f2dd4e1); sin pendientes de código. 2) ⚠ Rueda física sin medir (necesita OK de Gerardo). 3) Archivos con CRLF (editor_boceto*.py): editar con sed, no con Python en modo texto. 4) Libre: el brief nuevo llega por el chat maestro. 5) Informe al coordinador y en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · Traspaso E4.** 1) B-767 cerrado e integrado en main (721f9bf6). 2) B-554 (P2) no tomada. 3) B-514 (P2) sigue en pausa en `~/OmniCAD-B-514`. 4) Siguiente: B-675 y B-676 (brief del maestro).
 
 - **2026-11-20 · B-775 (E6): rueda sin aceleración.** `ZOOM_MUESCA` = 1/0,9 (1,111×) fijo por muesca en visor y boceto; borrados `muescas_rueda`/`RUEDA_ACEL*`. Valores de E11 (3→1,37, 4→1,52, 10→2,87) en `test_b763_b764_rueda_rejilla.py`. 104 tests de rueda/visor verdes, ruff limpio. ⚠ Fusion pudo no acelerar por muescas sintéticas: sin medir rueda física.

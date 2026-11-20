@@ -12,7 +12,7 @@ BRIEFS = Path(os.environ.get("LLENAR_BRIEFS", Path.home() / "coordinador/e9promp
 PY = os.environ.get("VIGIA_PY", str(Path.home() / "OmniCAD/clon/.venv/bin/python"))
 SEGUIMIENTO = REPO / "docs/seguimiento"
 CARPETAS = ["", "reserva", "corriendo", "hechos", "hechos/integrados", "descartadas", "trabadas"]
-BOCETO = {"CREAR", "MODIFICAR", "RESTRICCIONES", "SELECCIONAR", "TERMINAR BOCETO"}      # grupos de la cinta propios del boceto
+BOCETO = {"CREAR", "MODIFICAR", "RESTRICCIONES", "SELECCIONAR", "TERMINAR BOCETO", "CONFIGURAR", "INSPECCIONAR", "INSERTAR"}      # grupos de la cinta propios del boceto
 GRANDE = 600      # fila más larga que esto: PREP (repro + test rojo) y no FIX
 
 REGLAS = """/fable-method
@@ -37,11 +37,13 @@ def existentes():
 
 
 def filas_abiertas():
+    """Filas abiertas de boceto (bugs, mejoras y faltantes; Abierto, Sin verificar o Parcial) que no están en ahora.md."""
     en_ahora = (SEGUIMIENTO / "ahora.md").read_text(encoding="utf-8")
-    for linea in (SEGUIMIENTO / "bugs.md").read_text(encoding="utf-8").splitlines():     # solo bugs: lo de diseño no va a OpenCode
-        m = re.match(r"\| (B-\d+[a-z]?) \| Bocetos?\b", linea)
-        if m and ("| Abierto |" in linea or "| Sin verificar |" in linea) and m.group(1) not in en_ahora:
-            yield m.group(1), len(linea)
+    for archivo in ("bugs.md", "mejoras.md", "faltantes.md"):
+        for linea in (SEGUIMIENTO / archivo).read_text(encoding="utf-8").splitlines():
+            m = re.match(r"\| ([BPFH]-\d+[a-z]?) \| Bocetos?\b", linea)
+            if m and re.search(r"\| (Abierto|Sin verificar|Parcial) \|", linea) and m.group(1) not in en_ahora:
+                yield m.group(1), len(linea)
 
 
 def sin_cobertura():
@@ -70,7 +72,7 @@ def opciones_sin_test():
 
 def candidatas():
     for i, largo in filas_abiertas():
-        if largo > GRANDE:
+        if largo > GRANDE or not i.startswith('B-'):      # una mejora o un faltante es diseño: PREP (ficha y test rojo), no FIX
             yield f"PREP-{i}", (f"{i}: leé su fila en docs/seguimiento/ (grep -n \"| {i} |\"). Reproducilo y dejá un test rojo (xfail con el motivo) "
                                 f"y una ficha de 10 líneas en docs/seguimiento/preparado/{i}.md con la causa probable. No toques código de la app.")
         else:
@@ -84,7 +86,12 @@ def candidatas():
             f"Si falla, es un bug: fila nueva y xfail. Solo escribís tests.")
     fuera = []
     for g, k in sin_cobertura():
-        tarea = (f"PREP-TEST-{k}", (f"PREPARAR el test del comando de boceto «{k}»: escribí clon/tests/test_prep_cmd_{k}.py "
+        nom = f"PREP-TEST-{k}"
+        if nom in existentes():           # ya se pidió: se repite una sola vez (-r2) si el test sigue sin existir
+            nom = f"PREP-TEST-{k}-r2" if not (REPO / f"clon/tests/test_prep_cmd_{k}.py").exists() else None
+        if nom is None:
+            continue
+        tarea = (nom, (f"PREPARAR el test del comando de boceto «{k}»: escribí clon/tests/test_prep_cmd_{k}.py "
                                     f"(un caso con valor numérico y un caso borde) según docs/fusion_docs. Si falla, es un bug: fila nueva y xfail. "
                                     f"Solo escribís tests, no código de la app."))
         if g in BOCETO:
@@ -143,7 +150,7 @@ def main():
                 continue
             brief = BRIEFS / f"{nombre}.md"
             brief.write_text(REGLAS.format(que=que, wt=wt, py=PY), encoding="utf-8")
-            (reserva / f"70_{nombre}.tarea").write_text(f"WT={wt}\nBRIEF={brief}\n", encoding="utf-8")
+            (reserva / f"{'50' if re.match(r'(FIX|PREP|REV|RARO|BANCO|CAZA|TEST)', nombre) else '70'}_{nombre}.tarea").write_text(f"WT={wt}\nBRIEF={brief}\n", encoding="utf-8")
         creadas.append(nombre)
     print("reserva:", hay, "→", hay + len(creadas), creadas, ("AVISO fuera de boceto (no queda nada de boceto): %s" % aviso) if aviso else "")
 
