@@ -300,7 +300,6 @@ class Lienzo(_LienzoBaseMixin,
         self._t_caret.timeout.connect(self._parpadeo)
         self.escala = 4.0
         self.centro = [0.0, 0.0]
-        self._rueda = []                # giros recientes de la rueda (aceleración, B-775)
         self.seleccion = []
         self.mostrar_marco = True       # marco de control (Fusion: «Mostrar el marco de control») sobre lo elegido
         self._marco = None              # arrastre en curso de una manija del marco
