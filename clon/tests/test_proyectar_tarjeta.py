@@ -646,12 +646,50 @@ def test_incluir_3d_con_clic_deja_una_curva_3d_vinculada_y_se_deshace(v):
     QApplication.processEvents()
     lz = v.modo_boceto.lienzo
     planas = len(_curvas(lz.b))
+    tarjeta = v.modo_boceto.tarjeta
     _clic(v, BORDE)
+    assert not lz.b.geo3d.get("curvas") and tarjeta.boton_ok.isEnabled()      # el clic elige: recién Aceptar lo agrega
+    QTest.mouseClick(tarjeta.boton_ok, Qt.LeftButton)
     curvas3d = list(lz.b.geo3d.get("curvas", {}).values())
     assert [c["tipo"] for c in curvas3d] == ["circulo"] and curvas3d[0]["origen"]["tool"] == "include_3d"
     assert len(_curvas(lz.b)) == planas
     lz.deshacer()                                                         # Ctrl+Z de la ventana
     assert not lz.b.geo3d.get("curvas")
+
+
+def test_p193_isoparametrica_junta_varios_clics_y_aceptar_los_agrega_en_un_paso(v):
+    """Una sola tarjeta: la lista de lo elegido y Aceptar/Cancelar viven con las opciones. Dos clics = dos curvas, un deshacer."""
+    v.modo_boceto.herramienta("isoparametrica")
+    QApplication.processEvents()
+    lz, tarjeta = v.modo_boceto.lienzo, v.modo_boceto.tarjeta
+    assert not tarjeta.boton_ok.isEnabled()
+    _clic(v, CARA_SUPERIOR)
+    _clic(v, (-5.0, 5.0, 47.0))
+    assert len(lz._elegidos_proy) == 2 and tarjeta.boton_ok.isEnabled() and not lz.b.geo3d.get("curvas")
+    QTest.mouseClick(tarjeta.boton_ok, Qt.LeftButton)
+    assert len(lz.b.geo3d["curvas"]) == 2 and lz._elegidos_proy == []
+    lz.deshacer()
+    assert not lz.b.geo3d.get("curvas")
+
+
+def test_p193_cancelar_en_incluir_3d_descarta_lo_elegido(v):
+    v.modo_boceto.herramienta("incluir_3d")
+    QApplication.processEvents()
+    lz, tarjeta = v.modo_boceto.lienzo, v.modo_boceto.tarjeta
+    _clic(v, BORDE)
+    QTest.mouseClick(tarjeta.boton_cancelar, Qt.LeftButton)
+    assert lz._elegidos_proy == [] and not lz.b.geo3d.get("curvas") and lz.herramienta == "seleccionar"
+
+def test_p193_perfil_giratorio_elige_con_clic_y_aceptar_lo_agrega(v):
+    v.modo_boceto.herramienta("perfil_giratorio")
+    QApplication.processEvents()
+    lz, tarjeta = v.modo_boceto.lienzo, v.modo_boceto.tarjeta
+    lz.opciones["eje_giro"] = "X"
+    n = len(_curvas(lz.b))
+    _clic(v, CARA_SUPERIOR)
+    assert lz._elegidos_proy and tarjeta.boton_ok.isEnabled() and len(_curvas(lz.b)) == n
+    QTest.mouseClick(tarjeta.boton_ok, Qt.LeftButton)
+    assert lz._elegidos_proy == [] and len(_curvas(lz.b)) > n
 
 
 @pytest.mark.parametrize("ancho,alto", [(1280, 720), (1024, 640), (800, 520)])
@@ -713,7 +751,8 @@ def test_cada_herramienta_con_opciones_las_tiene_en_su_tarjeta(v, h):
     assert modo_boceto.TARJETAS[h][0].upper() == modo.tarjeta.titulo.text()
     assert not modo.paleta.cuerpo.findChildren(QComboBox) or all(
         modo.paleta.panel3d.isAncestorOf(c) for c in modo.paleta.cuerpo.findChildren(QComboBox))
-    assert modo.tarjeta.pie.isVisibleTo(modo.tarjeta) is (h in ("proyectar", "intersecar"))
+    assert modo.tarjeta.pie.isVisibleTo(modo.tarjeta) is (h in ("proyectar", "intersecar", "incluir_3d", "perfil_giratorio",
+                                                                "isoparametrica"))      # P-193: lista y Aceptar en la misma tarjeta
 
 
 @pytest.mark.parametrize("h", ["seleccionar", "linea", "punto", "texto"])

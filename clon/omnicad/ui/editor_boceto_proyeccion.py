@@ -13,6 +13,7 @@ from .editor_boceto_comun import (
     QPoint,
     QPointF,
     Qt,
+    SIN_VISTA_PREVIA,
     YA_PROYECTADA,
     np,
     puntos_primitiva,
@@ -55,6 +56,10 @@ class LienzoProyeccionMixin:
             return False
         return self._aplicar_proyecciones([tanda])
 
+    def _falta_eje_giro(self):
+        return (self.herramienta == "perfil_giratorio" and self.opciones["eje_giro"] == "arista"
+                and self._eje_giro is None)
+
     def _hay_tarjeta_proyeccion(self):
         return self.herramienta in COMANDO_PROYECCION and self._revincular is None
 
@@ -62,8 +67,8 @@ class LienzoProyeccionMixin:
         """Clic en el modelo: suma lo elegido a la selección de la tarjeta; otro clic en lo mismo lo saca. El boceto no
         cambia: eso lo hace Aceptar."""
         ref, forma = info.get("ref"), info.get("forma")
-        repetido = next((e for e in self._elegidos_proy
-                         if (e["ref"] == ref if ref else e["forma"].IsSame(forma))), None)
+        repetido = None if self.herramienta == "isoparametrica" else next(      # la isoparamétrica: cada clic es otro punto
+            (e for e in self._elegidos_proy if (e["ref"] == ref if ref else e["forma"].IsSame(forma))), None)
         if repetido is not None:
             self._elegidos_proy.remove(repetido)
         else:
@@ -143,6 +148,8 @@ class LienzoProyeccionMixin:
             "Elegí caras, aristas, vértices, planos, ejes o puntos en el modelo.")
         e = {"elegidos": [self._nombre_elegido(x) for x in self._elegidos_proy], "valido": False, "nota": self._nota_proy,
              "resultado": vacio, "error": "", "prims": [], "puntos": []}
+        if self.herramienta in SIN_VISTA_PREVIA:
+            return self._estado_sin_vista(e)
         if not self._elegidos_proy:
             return e
         tandas, resumen, error = self._calcular_proyeccion()
@@ -156,6 +163,38 @@ class LienzoProyeccionMixin:
         e["prims"] = [p for t in tandas for p in t[0]]
         e["puntos"] = [q for t in tandas for q in t[1]]
         return e
+
+    def _estado_sin_vista(self, e):
+        """Estado de la tarjeta de Incluir 3D, Perfil giratorio e Isoparamétrica: lista lo elegido; Aceptar lo agrega."""
+        h = self.herramienta
+        if h == "perfil_giratorio" and self.opciones["eje_giro"] == "arista" and self._eje_giro is None:
+            e["resultado"] = "Elegí una arista recta como eje del giro."
+        elif not self._elegidos_proy:
+            e["resultado"] = {"incluir_3d": "Elegí aristas, caras o vértices del modelo.",
+                              "perfil_giratorio": "Elegí aristas, caras o cuerpos del modelo.",
+                              "isoparametrica": "Elegí una cara: el clic marca por dónde pasa la curva."}[h]
+        else:
+            n = len(self._elegidos_proy)
+            e.update(valido=True, resultado=f"Se agregará{'n' if n > 1 else ''} {n} al boceto.")
+        return e
+
+    def _aplicar_elegidos_sin_vista(self):
+        """Aceptar en esas tres herramientas: lo elegido entra en UN solo paso de deshacer; si algo falla, no entra nada."""
+        crear = {"incluir_3d": lambda x: self.incluir_3d_forma(x["forma"], x.get("ref")),
+                 "perfil_giratorio": lambda x: self.perfil_giratorio_forma(x["forma"], x.get("ref")),
+                 "isoparametrica": lambda x: self.isoparametrica_forma(x["forma"], x.get("ref"), x.get("punto"))}[self.herramienta]
+        antes, viejo, self.historial = self.b.a_dict(), self.historial, []     # la pila vieja no se toca: tiene tope y se recorta
+        try:
+            ok = all(crear(x) for x in self._elegidos_proy)
+            hubo_cambio = bool(self.historial)
+        finally:
+            self.historial = viejo
+        if not ok:
+            self._restaurar(antes)
+            return False
+        if hubo_cambio:
+            self.historial.append(antes)
+        return True
 
     def _emitir_proyeccion(self):
         """Le manda el estado a la tarjeta, marca lo elegido en el modelo y repinta la vista previa."""
@@ -176,7 +215,8 @@ class LienzoProyeccionMixin:
         if not e["valido"]:
             self.mensaje.emit(e["error"] or e["resultado"])
             return False
-        if not self._aplicar_proyecciones(e["tandas"]):
+        if not (self._aplicar_elegidos_sin_vista() if self.herramienta in SIN_VISTA_PREVIA
+                else self._aplicar_proyecciones(e["tandas"])):
             return False
         self._elegidos_proy = []
         nombre, texto = HERRAMIENTAS[self.herramienta][0], e["resultado"]
@@ -397,7 +437,7 @@ class LienzoProyeccionMixin:
         if self.opciones["filtro_proyectar"] == "cuerpos" and h != "perfil_giratorio":
             return {"cuerpo"}
         comunes = {"cara", "arista", "vertice"}
-        if h in COMANDO_PROYECCION:
+        if h in ("proyectar", "intersecar"):
             comunes.add("curva_boceto")
         if h == "proyectar":                       # H-54: Proyectar también elige planos, ejes y puntos
             comunes |= {"plano", "eje", "punto", "punto_boceto"}
@@ -425,7 +465,7 @@ class LienzoProyeccionMixin:
             else:
                 self.mensaje.emit("Hacé clic en una arista, una cara o un cuerpo del modelo.")
             return
-        if self._hay_tarjeta_proyeccion():
+        if self._hay_tarjeta_proyeccion() and not self._falta_eje_giro():
             self._elegir_proyeccion(info)
         else:
             self._usar_entidad(info)
@@ -445,6 +485,7 @@ class LienzoProyeccionMixin:
             a, b = (np.array(p, float) for p in firma["extremos"])
             self._eje_giro = ((a, (b - a) / np.linalg.norm(b - a)), ref)
             self.mensaje.emit("Perfil giratorio: eje elegido. Ahora clic en lo que se gira.")
+            self._emitir_proyeccion()
             return True
         if h == "isoparametrica":
             ok = self.isoparametrica_forma(forma, ref, info.get("punto"))
