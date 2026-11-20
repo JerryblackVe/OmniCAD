@@ -85,6 +85,7 @@ class PanelEstudioMovimiento(QDialog):
         lista.addStretch(1)
         marco = QScrollArea()
         marco.setWidgetResizable(True)
+        marco.setFocusPolicy(Qt.NoFocus)  # B-733: Tab desde el último campo no cae en el área (Enter no aceptaba)
         marco.setWidget(cuerpo)
         marco.setMinimumHeight(110)
         marco.setMaximumHeight(230)

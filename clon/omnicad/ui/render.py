@@ -1308,6 +1308,7 @@ class PanelFlotante(QFrame):
         # UI-1: en una ventana de render baja el cuerpo se desplaza con una barra y la cabecera (con su ✕) queda a la vista.
         self.desplazador = QScrollArea(widgetResizable=True, frameShape=QFrame.NoFrame)
         self.desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)      # solo si un widget propio no entra: no se recorta en silencio
+        self.desplazador.setFocusPolicy(Qt.NoFocus)  # B-733: Tab desde el último campo no cae en el área (Enter no aceptaba)
         self.desplazador.setWidget(pagina)
         self.desplazador.setFixedWidth(ANCHOS["normal"])
         v.addWidget(self.desplazador)
