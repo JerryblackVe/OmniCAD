@@ -24,12 +24,12 @@ Criterio de cobertura (igual que `scripts/cobertura_boceto.py`): «test automát
 | Insertar SVG en boceto | Colores (Texto) | sí | sí (boceto_opciones) | — |
 | Insertar SVG en boceto | Destino: boceto abierto (Info) | sí | sí | — |
 | Insertar DXF en boceto | Archivo (Texto) | sí | sí (grupo_b_boceto) | — |
-| Insertar DXF en boceto | Escala / desplazamiento / ángulo / volteos | sí | **no** | — |
+| Insertar DXF en boceto | Escala / desplazamiento / ángulo / volteos | sí | sí (opciones_dxf_vectorizar) | — |
 | Insertar DXF en boceto | Destino: boceto abierto (Info) | sí | sí (grupo_b_boceto) | — |
 | Vectorizar imagen en boceto | Imagen (Texto) | sí | sí (grupo_b_boceto) | — |
 | Vectorizar imagen en boceto | Ancho final (Expresion) | sí | sí (grupo_b_boceto) | — |
-| Vectorizar imagen en boceto | Tinta clara / Curvas suaves (Casilla) | sí | **no** | — |
-| Vectorizar imagen en boceto | Umbral / Suavizado / Manchas / Tolerancia (Entero, Deslizador) | sí | **no** | — |
+| Vectorizar imagen en boceto | Tinta clara / Curvas suaves (Casilla) | sí | sí (opciones_dxf_vectorizar) | — |
+| Vectorizar imagen en boceto | Umbral / Suavizado / Manchas / Tolerancia (Entero, Deslizador) | sí | sí (opciones_dxf_vectorizar) | — |
 | Vectorizar imagen en boceto | Destino: boceto abierto (Info) | sí | sí (grupo_b_boceto) | — |
 | Proyectar (paleta) | Proyectar | **no** | sí | — |
 | Proyectar (paleta) | Intersecar | sí | sí | — |
@@ -50,23 +50,23 @@ Criterio de cobertura (igual que `scripts/cobertura_boceto.py`): «test automát
 | Perfil giratorio | Eje: X / Y / Z / Arista recta | sí | sí | — |
 | Curva isoparamétrica | Dirección: U / V / Ambas | sí | sí (boceto_herramientas) | — |
 | Curva isoparamétrica | Distribución: Una / Por distancia / Por cantidad | sí | sí (boceto_herramientas) | — |
-| Perfil giratorio | Tolerancia (numérico) | sí | **no** | — |
+| Perfil giratorio | Tolerancia (numérico) | sí | sí (opciones_sin_prueba) | — |
 | Estrella | Interior / Redondeo de puntas / Redondeo de valles (numérico) | **no** | sí (boceto_opciones) | — |
 | Curva isoparamétrica | Distancia (numérico) | sí | sí (boceto_herramientas) | — |
 | Curva isoparamétrica | Cantidad (Entero) | sí | sí (boceto_herramientas) | — |
 | Estrella | Puntas (Entero) | **no** | sí (boceto_opciones) | — |
 | Estrella | Salto con Interior 0 (Entero) | **no** | sí (boceto_opciones) | — |
 | Proyectar / Intersecar / Perfil / Iso | Vínculo de proyección (Casilla) | sí | sí (proyectar_cinco) | — |
-| Desfase | Selección de cadena (Casilla) | sí | **no** | — |
-| Desfase | Igualar topología (Casilla) | sí | **no** | — |
-| Perfil giratorio | Invertir (Casilla) | sí | **no** | — |
-| Perfil giratorio | Solo contorno exterior (Casilla) | sí | **no** | — |
+| Desfase | Selección de cadena (Casilla) | sí | sí (opciones_desfase_cadena) | — |
+| Desfase | Igualar topología (Casilla) | sí | sí (opciones_desfase_cadena) | — |
+| Perfil giratorio | Invertir (Casilla) | sí | sí (opciones_sin_prueba) | — |
+| Perfil giratorio | Solo contorno exterior (Casilla) | sí | sí (opciones_sin_prueba) | — |
 | Perfil giratorio | Proyectar eje (Casilla) | sí | sí | — |
 | Estrella | Círculos de construcción (Casilla) | **no** | sí (boceto_opciones) | — |
 | Texto / Panel Carácter | Parámetro de texto y Contenido | **no** | sí (boceto_texto_panel) | — |
 | Texto / Panel Carácter | Familia tipográfica y Filtro de fuentes | **no** | sí (boceto_texto_panel) | — |
 | Texto / Panel Carácter | Tamaño / altura | sí | sí (boceto_texto_panel) | — |
-| Texto / Panel Carácter | Kerning y par | sí | **no** | — |
+| Texto / Panel Carácter | Kerning y par | sí | sí (opciones_kerning_3d) | — |
 | Texto / Panel Carácter | Volteo horizontal / vertical | sí | sí | — |
 | Texto / Panel Carácter | Espaciado de caracteres / Interlineado | sí | sí (boceto_texto_panel) | — |
 | Texto / Panel Carácter | Alineación (izq / centro / der) | sí | sí | — |
@@ -74,7 +74,7 @@ Criterio de cobertura (igual que `scripts/cobertura_boceto.py`): «test automát
 | Texto / Panel Carácter | Pivote de giro (6 opciones) | **no** | sí (boceto_texto_panel) | B-698 |
 | Texto / Panel Carácter | Colocación en curva (arriba / abajo) | sí | sí | — |
 | Texto / Panel Carácter | Lado en curva (a favor / al revés) | sí | sí | — |
-| Texto / Panel Carácter | Desfase en curva / Ajustar a la curva | sí | **no** | — |
+| Texto / Panel Carácter | Desfase en curva / Ajustar a la curva | sí | sí (opciones_kerning_3d) | — |
 | Texto / Panel Carácter | Subrayado / Tachado / Grosor | sí | sí (boceto_texto_panel) | — |
 | Texto / Panel Carácter | Línea base / Inclinación / Ancho / Alto | sí | sí (boceto_texto_panel) | — |
 | Texto / Panel Carácter | Mayúsculas y minúsculas | sí | sí (boceto_texto_panel) | — |
