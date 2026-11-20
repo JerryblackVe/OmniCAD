@@ -120,6 +120,7 @@ HERRAMIENTAS = {
     "mover": ("Mover/copiar", "Elegí la geometría y el punto base; clic en el destino o escribí ΔX, ΔY y el ángulo, y "
               "Aceptar. «Crear copia» deja el original."),
     "desglosar_texto": ("Desglosar texto", "Clic en un texto para convertirlo en curvas fijas."),
+    "editar_patron": ("Editar patrón", "Clic en una curva del patrón (original o copia) para abrir su panel."),
 }
 # herramienta de restricción → (tipo, cantidad de entidades que pide)
 RESTRICCIONES_HERRAMIENTA = {
@@ -171,7 +172,8 @@ NOMBRES_ENTIDAD = {"punto": "punto", "linea": "línea", "circulo": "círculo", "
 PICKS = {"circulo_2t": (2, ("linea",)), "circulo_3t": (3, ("linea",)), "empalme": (2, ("linea", "arco", "circulo")),
          "chaflan": (2, ("linea",)), "chaflan_dist_angulo": (2, ("linea",)), "chaflan_dos_dist": (2, ("linea",)),
          "curva_fusion": (2, None), "desfase": (1, None), "recortar": (1, None), "alargar": (1, None),
-         "partir": (1, None), "desglosar_texto": (1, ("texto",)), "manija": (1, ("spline",))}
+         "partir": (1, None), "desglosar_texto": (1, ("texto",)), "manija": (1, ("spline",)),
+         "editar_patron": (1, None)}
 SELECCION = ("simetria", "patron_rectangular", "patron_circular", "escala", "mover")
 PATRON = ("patron_rectangular", "patron_circular")     # los maneja `ControlPatron` (ui/patron_boceto.py)
 TRANSFORMAR = ("escala", "mover")                      # los maneja `ControlTransformar` (ui/transformar_boceto.py)

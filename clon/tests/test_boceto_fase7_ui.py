@@ -151,8 +151,8 @@ def test_boc16_editar_patron_desde_la_seleccion_y_cancelar_no_cambia_nada(lienzo
     pid = _patron(lz)
     antes = (_circulos(lz), dict(lz.b.patrones[0]["params"]), len(lz.historial))
     lz.seleccion = []
-    assert not lz.editar_patron()                          # sin selección: avisa
-    assert lz.herramienta == "seleccionar"
+    assert not lz.editar_patron()                          # sin selección: espera el clic (B-729)
+    assert lz.herramienta == "editar_patron"
     lz.seleccion = [next(iter(lz.b.curvas))]
     assert lz.editar_patron()
     lz.patron.recibir({**lz.patron.textos, "cantidad1": "9"})
