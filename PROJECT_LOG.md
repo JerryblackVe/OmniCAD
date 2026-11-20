@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · Traspaso E3 (P-192 listo sin commit en ~/OmniCAD-P-192).** 1) Tarjeta de herramienta solo si hay opciones además del «Tipo» (`modo_boceto._mostrar_tarjeta`); test `test_p192_tipo_solo_no_abre_tarjeta`. 2) Falta integrar. 3) Sin prueba con mouse real (E7/E11).
+- **2026-11-20 · P-192 (E3).** La tarjeta de herramienta del boceto ya no se abre si solo tiene el «Tipo» (rectángulo, círculo, arco, ranura, chaflán): una tarjeta por tarea junto a la Paleta (`modo_boceto._mostrar_tarjeta`). Test `test_p192_tipo_solo_no_abre_tarjeta`; 545 tests de tarjeta OK, ruff limpio.
 - **2026-11-20 · Traspaso E6 (P-207 listo sin commit).** 1) Worktree ~/OmniCAD-P-207 (rama item/P-207): incrementos por defecto 5 mm/5° (Fusion); ruff limpio, 664 tests OK, ponytail-review sin hallazgos. 2) P-192 no empezado: P-194/P-195 abiertos. 3) Informe en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · Traspaso E6 (B-763/B-764 listos en ~/OmniCAD-B-763, sin commit).** 1) Rueda 1,4×/muesca hacia el cursor; arrastre igual. 2) Rejilla finita (3× el modelo, ≥100 mm), desvanecida al borde y rasante. 3) Resto de B-764 (planos del origen) a E3 con B-762. 4) Falta: E11 compara la rueda con Fusion. 5) Informe al coordinador.
 - **2026-11-20 · B-763/B-764 (visor).** `ZOOM_MUESCA` 1,4 (era 1,14), `lineas_rejilla` con `limite` y `tramos_desvanecidos`, `limite_rejilla`, `opacidad_rasante` en `visor3d.py`. Test `test_b763_b764_rueda_rejilla.py`; 296 tests de rueda/rejilla OK, ruff limpio.
