@@ -35,7 +35,7 @@ El plan no se arma solo con los bugs conocidos: lo que nunca se probó no tiene 
 Proyectar). La tabla sale de la cinta (`ui/cinta.py` › BOCETO: CREAR, MODIFICAR, RESTRICCIONES, CONFIGURAR, INSPECCIONAR, INSERTAR,
 SELECCIONAR y TERMINAR) y se rehace con `scripts/cobertura_boceto.py` (desde `clon/`). «Test automático» = algún test que no es de
 catálogo nombra su clave; «Probado como usuario» = lo nombra algún script de `scripts/prueba_ui/`.
-**Resumen (19/11, tras PRUEBA-CMDS parte 2: grupo A de E7 y lo que E8 ya dejó en prueba_ui): 150 comandos; 19 sin test automático; 0 sin prueba como usuario; 0 sin ninguna de las dos.**
+**Resumen (20/11 noche, tras integrar los 4 PREP-TEST de OpenCode): 151 comandos; 0 sin test automático; 0 sin prueba como usuario; 0 sin ninguna de las dos. Falta el punto 1 «opción por opción» (PREP-TEST-OPC, RARO), el 2 (cero filas), el 3 y el 4.**
 Faltan por contar a mano: las opciones de cada diálogo (p. ej. los 5 tipos de Proyectar, ver PRUEBA-PROY en `ahora.md`) y las asas.
 Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana a E7 y E11.
 
