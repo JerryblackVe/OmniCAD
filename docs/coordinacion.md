@@ -239,6 +239,7 @@ de OpenCode; las demás la enlazan.
   (Gerardo, 2026-11-18). Leen también `avisos.txt` de la cola (trabadas, cola o reserva vacías, ningún modelo responde, pytest
   huérfano cortado) y la hora de `latido`: si tiene más de 1 vuelta, el vigía no corre (crontab o máquina) y se avisa a
   Gerardo. Lo que llega a `trabadas/` lo decide el coordinador (partirlo o pasarlo a una sesión de Claude).
+- **Próximo brief escrito de antemano (Gerardo, 2026-11-20)**: al entregar un brief a una sesión EX, el coordinador deja también `~/coordinador/briefs/EX_proximo.md` con su ítem siguiente de «Sigue» (sin ítem, no hay archivo). El chat maestro vigila cada 1 h: si EX está quieta y existe `EX_proximo.md`, la vacía, se lo entrega y lo renombra a `EX_<IDs>.md`. El coordinador integra aparte, sin frenar el reparto.
 - **Topes del vigía (nada queda quieto sin corte)**: corrida o verificación sin escribir ni usar CPU en `MIN` min → se
   corta y se relanza con el modelo siguiente; sin modelo libre → vuelve a la cola; falla real con 2 modelos → `trabadas/` con aviso. Corrida: `timeout 2700`;
   verificación: pytest con `timeout 1500`. Sin worktree o sin brief → `trabadas/` sin rotar. Una vuelta a la vez
