@@ -18,11 +18,12 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QCompleter, QFormLayout, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit, QMessageBox, QPushButton,
-                               QScrollArea, QSpinBox, QToolButton, QVBoxLayout, QWidget)
+                               QScrollArea, QSpinBox, QToolButton, QToolTip, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP
 from .. import registro_uso as _ru
 from ..nucleo import fuentes
+from . import formato
 from ..nucleo.geometria import ErrorGeometria
 from ..nucleo.perfiles import detectar_boceto
 from ..restricciones import TOPE_TERMINAR_AUTO, contar_entidades
@@ -709,6 +710,8 @@ class PanelCaracter(QFrame):
     las opciones del Lienzo y cada cambio sale por `cambio(clave, valor)`. Con un texto abierto, el Lienzo le avisa
     sus valores (`mostrar_valores`): tamaño, interletraje e interlineado son los mismos de la barra del texto."""
     cambio = Signal(str, object)
+    aceptado = Signal()          # P-188: con un texto abierto, ✓ y ✕ viven acá (la barra flotante ya no se ve)
+    cancelado = Signal()
     ANCHO = 300                  # ancho mínimo; se puede agrandar arrastrando la esquina inferior izquierda
 
     def __init__(self, parent=None):
@@ -723,7 +726,13 @@ class PanelCaracter(QFrame):
         self.b_plegar = QToolButton(text="–", toolTip="Plegar o desplegar el panel")
         self.b_plegar.setFocusPolicy(Qt.NoFocus)
         self.b_plegar.clicked.connect(self._plegar)
-        cab, ico, titulo = armar_cabecera(self, None, [self.b_plegar])      # la misma cabecera movible que los demás paneles
+        self.b_ayuda = QToolButton(text="?", toolTip="Ayuda del texto")      # UX-13
+        self.b_ayuda.setFocusPolicy(Qt.NoFocus)
+        self.b_ayuda.clicked.connect(lambda: QToolTip.showText(
+            self.b_ayuda.mapToGlobal(self.b_ayuda.rect().bottomLeft()),
+            "Escribí en el cuadro del dibujo. Fuente, altura y alineación están acá; lo demás, en las secciones plegadas.",
+            self.b_ayuda))
+        cab, ico, titulo = armar_cabecera(self, None, [self.b_ayuda, self.b_plegar])      # la misma cabecera movible que los demás paneles
         ico.setPixmap(icono("texto").pixmap(18, 18))
         titulo.setText("CARÁCTER")
         v.addWidget(cab)
@@ -747,6 +756,18 @@ class PanelCaracter(QFrame):
         parametro.addRow("Parámetro de texto", self.parametro_texto)
         parametro.addRow("Contenido", self.valor_parametro_texto)
         c.addLayout(parametro)
+        self.fila_aceptar = QWidget()
+        fa = QHBoxLayout(self.fila_aceptar)
+        fa.setContentsMargins(8, 4, 8, 8)
+        fa.addStretch(1)
+        b_ok, b_no = QPushButton("Aceptar"), QPushButton("Cancelar")
+        b_ok.setToolTip("Termina el texto (Ctrl+Enter).")
+        b_no.setToolTip("Descarta los cambios del texto (Esc).")
+        b_ok.clicked.connect(self.aceptado.emit)
+        b_no.clicked.connect(self.cancelado.emit)
+        fa.addWidget(b_no)                 # UX-6: Aceptar abajo a la derecha, Cancelar a su izquierda
+        fa.addWidget(b_ok)
+        self.fila_aceptar.hide()
         # ---- Fuente: familia (filtro + búsqueda), estilo, tamaño y kerning de la fuente
         fila = QHBoxLayout()
         self.filtro = QComboBox()
@@ -791,7 +812,7 @@ class PanelCaracter(QFrame):
         fila.addWidget(self.b_voltear_v)
         c.addLayout(fila)
         # ---- Espaciado
-        self._seccion(c, "Espaciado", True)
+        self._seccion(c, "Espaciado", False)       # P-188: a la vista, contenido, fuente, altura y alineación; el resto, plegado
         self.interletraje = self._spin(None, -1000.0, 1000.0, 1.0, " %", "<b>Espaciado de caracteres</b><br>"
                                        "Suma o resta distancia entre TODAS las letras, en % del ancho medio de la "
                                        "fuente (0 % = el de la fuente). Negativo las junta.")
@@ -811,10 +832,13 @@ class PanelCaracter(QFrame):
         f.addRow("Interlineado", self.interlineado)
         self._cuerpo_de["Espaciado"].setLayout(f)
         # ---- Alineación y curva
-        self._seccion(c, "Alineación y curva", True)
         self.alineacion = self._combo(ALINEACIONES_TEXTO, "alineacion", "<b>Alineación</b><br>De cada línea dentro "
                                       "de la caja; en un camino abierto nuevo: inicio, centro o fin del recorrido. "
                                       "Un texto anterior con posición manual conserva su ancla.")
+        fila = QFormLayout()                    # UX-5: la alineación queda a la vista; Anclaje y curva, plegados
+        fila.addRow("Alineación", self.alineacion)
+        c.addLayout(fila)
+        self._seccion(c, "Alineación y curva", False)
         self.ancla_v = self._combo(ANCLAJES_TEXTO, "ancla_v", "<b>Punto de anclaje</b><br>Qué parte del bloque "
                                    "de texto cae sobre el punto donde se hizo clic.")
         self.camino_colocacion = self._combo(COLOCACIONES_TEXTO, "camino_colocacion", "<b>Colocación</b><br>Las "
@@ -831,7 +855,6 @@ class PanelCaracter(QFrame):
         self.camino_ajustar.toggled.connect(lambda x: self.cambio.emit("camino_ajustar", bool(x)))
         f = QFormLayout()
         f.setContentsMargins(10, 0, 0, 0)
-        f.addRow("Alineación", self.alineacion)
         f.addRow("Anclaje", self.ancla_v)
         f.addRow("Colocación", self.camino_colocacion)
         f.addRow("Lado en curva", self.camino_lado)
@@ -857,6 +880,7 @@ class PanelCaracter(QFrame):
         self._seccion(c, "Transformaciones", False)
         self.pivote = self._combo(PIVOTES_TEXTO, "pivote_texto", "Punto fijo al cambiar el ángulo del texto. "
                                   "Las esquinas y el centro requieren un marco acotable.")
+        self.angulo = self._spin("angulo_texto", -360.0, 360.0, 5.0, " °", "<b>Ángulo</b><br>Giro del texto, en grados.")
         self.base = self._spin("desfase_base", -100000.0, 100000.0, 0.5, " mm", "<b>Línea base</b><br>Sube (+) o "
                                "baja (−) todo el texto respecto de su ancla.")
         self.inclinacion = self._spin("inclinacion", -80.0, 80.0, 1.0, " °", "<b>Inclinación</b><br>Sesga las "
@@ -880,6 +904,7 @@ class PanelCaracter(QFrame):
         self.con_marco.toggled.connect(lambda x: (self.cambio.emit("marco_texto", bool(x)), self._pivote_segun_marco()))
         f.addRow("", self.con_marco)
         f.addRow("Pivote de giro", self.pivote)
+        f.addRow("Ángulo", self.angulo)
         f.addRow("Línea base", self.base)
         f.addRow("Inclinación", self.inclinacion)
         f.addRow("Ancho", self.escala_h)
@@ -903,6 +928,7 @@ class PanelCaracter(QFrame):
         self.desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.desplazador.setWidget(self.cuerpo)
         v.addWidget(self.desplazador, 1)
+        v.addWidget(self.fila_aceptar)          # fuera del scroll: siempre a la vista
         self._agarre = _AgarreTamano(self)
         self._agarre.raise_()
         self.ajustar()
@@ -1068,6 +1094,7 @@ class PanelCaracter(QFrame):
         """B-665: con el cuadro de texto abierto, «Contenido» muestra lo que se escribe en el visor y escribir acá
         lo cambia allá (el campo Text del diálogo de Fusion). Al cerrarse el cuadro, el campo se suelta."""
         self._contenido = campo
+        self.fila_aceptar.show()
         self.valor_parametro_texto.setEnabled(True)
         self._copiar_contenido(campo.text())
         campo.textChanged.connect(self._copiar_contenido)
@@ -1080,6 +1107,7 @@ class PanelCaracter(QFrame):
     def _soltar_contenido(self, campo):
         if self._contenido is campo:     # el cuadro viejo se borra tarde (deleteLater): no soltar el nuevo
             self._contenido = None
+            self.fila_aceptar.hide()
             self.valor_parametro_texto.setEnabled(self._con_parametro)
 
     def _pivote_segun_marco(self):
@@ -1337,6 +1365,9 @@ class ModoBoceto(QObject):
     def _armar_caracter(self, area):            # fuente, decoraciones y transformación del texto
         panel = PanelCaracter(area)
         panel.cambio.connect(self._ajuste)
+        panel.aceptado.connect(lambda: self.lienzo.entrada is not None and self.lienzo.entrada.aceptado.emit(
+            [c.text().strip() for c in self.lienzo.entrada.campos]))
+        panel.cancelado.connect(lambda: self.lienzo.entrada is not None and self.lienzo.cancelar())
         panel.altura.excedido.connect(lambda m: self.v.mensaje(f"Tamaño: máximo {m:,.0f} mm.".replace(",", "."), 5000))
         return panel
 
@@ -1528,6 +1559,13 @@ class ModoBoceto(QObject):
             self._mostrar_caracter(True)
             if lz.entrada is not None:
                 self.caracter.ligar_contenido(lz.entrada.campos[0])
+                try:
+                    self.caracter.angulo.blockSignals(True)
+                    self.caracter.angulo.setValue(float(lz.entrada.campos[2].text().replace(",", ".")))
+                except ValueError:
+                    pass
+                finally:
+                    self.caracter.angulo.blockSignals(False)
             self.v.area.reubicar()
 
     def _editar_parametro_texto(self, nombre, valor):
@@ -1615,6 +1653,10 @@ class ModoBoceto(QObject):
                 self.lienzo.update()
             elif clave in ("altura_texto", "espaciado", "interlineado"):
                 self.lienzo.aplicar_opcion_texto(clave, valor)       # van también a la barra del texto abierto
+            elif clave == "angulo_texto":
+                if self.lienzo.entrada is not None and self.lienzo._previa_texto is not None:
+                    self.lienzo.entrada.campos[2].setText(formato.numero(valor, True))      # la barra oculta es donde se lee al aceptar
+                return
             elif clave == "kerning_par":
                 self.lienzo.ajustar_kerning_par(valor)               # entre las dos letras del cursor
                 return

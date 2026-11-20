@@ -136,7 +136,7 @@ def test_el_panel_caracter_no_pasa_del_alto_del_lienzo_y_su_cuerpo_se_desplaza(a
     barra = p.desplazador.verticalScrollBar()
     natural = p.findChild(CabeceraMovible).sizeHint().height() + p.cuerpo.sizeHint().height()
     assert (barra.maximum() > 0) == (natural > alto - 16)
-    for seccion in ("Decoraciones", "Transformaciones", "Avanzado"):
+    for seccion in ("Espaciado", "Alineación y curva", "Decoraciones", "Transformaciones", "Avanzado"):   # P-188: las dos primeras arrancan plegadas
         next(b for b in p.findChildren(QToolButton) if b.text().endswith(seccion)).click()
     p.ajustar_alto(alto - 16)
     app_qt.processEvents()

@@ -761,7 +761,8 @@ class PanelObjetos(QFrame):
         ids = control.seleccion()
         libres = [i for i in control.l.seleccion if i in b.curvas and i not in ob.indice(b)]
         # P-74: como en Fusion, elegir curvas comunes no abre el panel; solo un objeto vectorial o un texto.
-        self.setVisible(bool(ids) and control.l.herramienta == "seleccionar" and not self._suspendido)
+        editando = getattr(control.l, "_previa_texto", None) is not None      # P-188: con un texto abierto manda UNA tarjeta (Carácter)
+        self.setVisible(bool(ids) and control.l.herramienta == "seleccionar" and not self._suspendido and not editando)
         bloqueo = any(b.objetos[i]["bloqueado"] for i in ids)
         self.principal.setVisible(bool(ids) or bool(libres))
         self.lista.setVisible(not ids or len(roots) > 1)
