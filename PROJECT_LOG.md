@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · P-186 (E4).** Restringir automáticamente: resultados en mosaico (miniatura con candado, «Restricciones: N / Cotas: N añadidas», menú ⋮ y clic derecho con «Establecer referencia»). `dialogo_autorestringir.py`; `test_p186_*` + `test_boceto_fase4` ajustado. ruff y 52+24 tests OK. Referencia: una sola, para todo el diálogo (no por mosaico).
 - **2026-11-20 · B-728 (E4).** Altura de texto 99999999 se recortaba a 9999 sin aviso: el campo Tamaño del panel Carácter rechaza el dígito de más. `NumeroDecimal.excedido` avisa «Tamaño: máximo 10.000 mm.». Test: `test_b728_aviso_altura_maxima.py`.
 - **2026-11-20 · B-731 (E4).** Patrón circular: Enter tras Tab desde Cantidad no aceptaba porque el foco caía en el QScrollArea del panel; ahora `scroll` no toma foco. Test: `test_b731_enter_tras_tab_patron.py`.
 - **2026-11-20 · B-710 contra Fusion (coordinador).** Spline de 12 puntos, desfase 3 mm a la izquierda: largo OmniCAD 250,892 mm, Fusion 250,887; distancia máxima entre curvas 0,035 mm (límite del muestreo de 4000 puntos). Datos: `~/coordinador/casos/e11_20-11/b710_fusion_completo.json`.

@@ -231,3 +231,40 @@ def test_boc23_clic_dentro_de_una_region_elige_el_perfil(lienzo):
     lz.b.agregar_linea((20, 0), (20, 20))                     # el boceto cambió: los perfiles se recalculan
     lz.aplicar_cambio(lambda: None)
     assert lz.perfiles_seleccionados() == []
+
+
+def test_p186_mosaico_con_miniatura_conteos_y_menu_referencia(app):
+    d = DialogoAutoRestringir(_boceto_auto(), {})
+    item = d.lista.item(0)
+    assert d.lista.viewMode() == d.lista.ViewMode.IconMode
+    assert item.text().startswith("Restricciones: ") and "/\nCotas: " in item.text() and item.text().endswith("añadidas")
+    img = item.icon().pixmap(d.lista.iconSize()).toImage()
+    colores = {img.pixelColor(x, y).name() for x in range(0, img.width(), 2) for y in range(0, img.height(), 2)}
+    assert len(colores) > 3                                    # dibujo real, no un cuadro vacío
+    assert [a.text() for a in d.mas.menu().actions()] == ["Establecer referencia"]
+    d.mas.menu().actions()[0].trigger()
+    assert d.result() == ELEGIR_DATUM
+
+
+def test_p186_ux_aceptar_a_la_derecha_y_cabe_con_letra_150(app):
+    from PySide6.QtWidgets import QApplication
+    original = QApplication.font()
+    f = QApplication.font()
+    f.setPointSizeF(f.pointSizeF() * 1.5)
+    QApplication.setFont(f)
+    try:
+        d = DialogoAutoRestringir(_boceto_auto(), {})
+        _verificar_letra_grande(d)
+    finally:
+        QApplication.setFont(original)
+
+
+def _verificar_letra_grande(d):
+    d.resize(1024, 700)
+    d.show()
+    ok = d.aceptar
+    cancelar = next(b for b in d.findChildren(type(ok)) if b.text() == "Cancelar")
+    assert cancelar.geometry().right() < ok.geometry().left()          # Cancelar a su izquierda
+    assert d.rect().contains(ok.geometry())                            # Aceptar a la vista
+    assert ok.geometry().center().x() > d.width() / 2
+    assert d.lista.gridSize().width() > d.fontMetrics().horizontalAdvance("Cotas: 12 añadidas")   # el texto cabe

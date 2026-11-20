@@ -447,7 +447,7 @@ def test_boc5_dialogo_resultados_cantidad_quitar_y_reiniciar(app_qt):
     assert len(d.resultados) == 3 and d.lista.count() == 3
     completo = d.resultado()
     assert completo.totalmente_restringido and d.cantidad.maximum() == len(completo.sugerencias)
-    assert "totalmente restringido" in d.lista.item(0).text() and d.aceptar.isEnabled()
+    assert "totalmente restringido" in d.lista.item(0).toolTip() and d.aceptar.isEnabled()
     d.cantidad.setValue(1)                                   # deslizador: solo la primera sugerencia
     assert d.detalle.count() == 1 and d.opciones()["limite"] == 1
     assert "quedan" in d.estado.text()
