@@ -820,6 +820,8 @@ class AreaVisor(QWidget):
         self._reacomodo = False
         self._chica = None                # B-666: el visor es chico (None: medirlo de nuevo en el próximo reubicar)
         self._plegados = []               # lo que se plegó por la ventana chica: se despliega al agrandarla
+        self.de_comando = []              # P-194: laterales de comando (Patrón, Simetría, Escala/Mover): compactan la paleta
+        self._paleta_plegada = False
         self.laterales = []               # paneles del boceto a la izquierda de la paleta: «Carácter» (texto) y SIMETRÍA
         self.panel = None                 # diálogo de comando abierto (a la derecha, debajo del ViewCube)
         self.barra_posicion = None        # panel «Posición»: componentes movidos sin capturar (arriba al centro)
@@ -864,6 +866,7 @@ class AreaVisor(QWidget):
         self.capa, self.paleta = capa, paleta
         self._chica = None                # la paleta nueva también se pliega si la ventana es chica
         self.laterales = [w for w in laterales if w is not None]
+        self.de_comando, self._paleta_plegada = [], False        # P-194: los paneles del boceto anterior ya no existen
         for w in self.laterales:
             w.installEventFilter(self)
         self.reubicar()
@@ -876,12 +879,23 @@ class AreaVisor(QWidget):
     def eventFilter(self, obj, e):
         """B-387: un panel lateral que cambia de alto (otra casilla le suma filas) se vuelve a acomodar: si no, su pie
         quedaba bajo la barra de vista. Un solo reacomodo por tanda de cambios."""
+        if obj in self.de_comando and e.type() in (QEvent.Show, QEvent.Hide) and self.paleta is not None:
+            self._paleta_con_panel(any(w.isVisible() for w in self.de_comando))
         reacomoda = obj in self.laterales or (obj in self.arriba_izq and self.barra_posicion is not None
                                               and self.barra_posicion.isVisible())
         if e.type() == QEvent.Resize and reacomoda and obj.isVisible() and not self._reacomodo:
             self._reacomodo = True
             QTimer.singleShot(0, self, self._reacomodar)      # con contexto: no corre si la vista ya se borró
         return False
+
+    def _paleta_con_panel(self, abierto):
+        """P-194: con el panel de un comando abierto (Patrón, Simetría, Escala, Mover) la paleta se compacta: una sola
+        tarjeta grande a la vista; al cerrarlo vuelve a como estaba."""
+        if abierto:
+            self._paleta_plegada |= bool(hasattr(self.paleta, "plegar_por_ventana") and self.paleta.plegar_por_ventana(True))
+        elif self._paleta_plegada:
+            self._paleta_plegada = False
+            self.paleta.plegar_por_ventana(False)
 
     def _reacomodar(self):
         try:

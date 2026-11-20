@@ -61,6 +61,13 @@ class PanelComentarios(QFrame):
         if self.parentWidget() is not None and hasattr(self.parentWidget(), "reubicar"):
             self.parentWidget().reubicar()
 
+    def plegar_por_ventana(self, plegar):
+        """P-195: dentro del boceto los comentarios arrancan plegados. True si cambió algo."""
+        if self.lista.isHidden() == plegar:
+            return False
+        self.plegar()
+        return True
+
     def agregar(self, texto=None):
         if self.doc is None:
             return
