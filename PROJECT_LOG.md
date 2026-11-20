@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · Traspaso E6 (P-185b listo sin commit).** 1) ~/OmniCAD-P-185b: P-185 cerrado (fila borrada), cambio de cota 0,8–2,2 s → 0,4–0,8 s. 2) Fila nueva P-201: hilos de OpenBLAS lentos con la VPS cargada. 3) Integra el coordinador. 4) Informe en ~/coordinador/buzon/E6.md.
+- **2026-11-20 · P-185b (E6): desfase de spline larga 0,8–2,2 → 0,4–0,8 s.** Jacobiano con la derivada exacta de la quíntica (`sensibilidad_spline`, `_spline_movida`: 161 → 73 jacobianos) y `_libres` con QR (`_libres_qr`). Tests: `test_derivada_de_la_quintica_es_la_de_diferencias_finitas`, `test_resolver_con_la_derivada_de_la_spline_da_lo_mismo`.
 - **2026-11-20 · Traspaso E6 (contexto 30 %, P-185 listo sin commit).** 1) ~/OmniCAD-P-185: cota del desfase de spline larga 3–7 → 0,8–2,2 s, mismo resultado. 2) Queda (P-185 Parcial): SVD de `_libres` y reinterpolar la madre. 3) Banco: ~/coordinador/casos/p185/p185.py. 4) Tests del núcleo: 1265 OK.
 - **2026-11-20 · P-185 (E6): desfase de spline larga.** `_energia_quintica` copia el tramo uniforme (343 → 16 ms); el término de puntos atados dice qué lee cada fila (`propias`, `_patron`): el jacobiano junta las columnas de la copia. Cota 3–7 → 0,8–2,2 s. Tests en `test_boceto_fase9_desfase.py`.
 - **2026-11-20 · Traspaso E6 (B-741 listo sin commit).** 1) ~/OmniCAD-B-741: texto de cotas suavizado en gris; el arrastre dibuja igual que el normal (≤ 2 niveles). 2) Descartados: texto encima (+2 ms) y QStaticText (no da igual). 3) Falta: E11 lo mira en Windows. 4) Capturas: evidencias/b741/.
@@ -768,6 +770,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 
 - **2026-11-19 · Bocetos › Incluir 3D B-684/B-685.** Se habilitan caras y se evita repetir la misma arista (`sin_indice`, `incluir_3d_forma`). `test_faltantes_bocetos.py`: 7 OK; ruff limpio.
 ## Lecciones aprendidas
+- [2026-11-20] La quíntica de ajuste derivada por diferencias finitas con paso 1e-7 trae ruido de ~1e-4 (Lagrange mal condicionado): usar `sensibilidad_spline` (derivada implícita) o un paso de 1e-3 para comparar. · Evidencia: `test_derivada_de_la_quintica_es_la_de_diferencias_finitas`.
 - [2026-11-20] Al arrastrar un punto, el menor cambio se mide desde el estado del comienzo del arrastre (Fusion), no desde el evento anterior: si no, lo que cedió para dejar pasar el punto (un radio libre) no vuelve. · Evidencia: `tests/test_b732_gota_arrastre.py`.
 - [2026-11-20] Los campos numéricos del boceto se evalúan con `evaluar`, no con `float`: si no, una expresión no dibuja y la unidad filtra el error crudo de Python. · Evidencia: `tests/test_raro_sk_conica.py` (B-716) y `ui/editor_boceto_crear.py:563`.
 - [2026-11-20] Un campo ESCALAR no pasa por el filtro de dimensión de `_CAMPO_TIPO`: «30 mm» en una Cantidad se evalúa como 30; y `_numero_o_none` traga la expresión inválida del Centro, dejando Aceptar habilitado con el valor viejo. · Evidencia: `tests/test_raro_sk_editar_patron.py` (9 xfail), B-712 y B-713.

@@ -83,8 +83,9 @@ def _corpus():
 CORPUS = _corpus()
 
 
-def _resolver(fabrica, cache, monkeypatch, rust=False):
+def _resolver(fabrica, cache, monkeypatch, rust=False, sensible=False):
     monkeypatch.setattr(S, "CACHE_SPLINES", cache)
+    monkeypatch.setattr(S, "SENSIBILIDAD_SPLINES", sensible)     # P-185b: la derivada no es caché (cambia el camino)
     monkeypatch.setattr(S.nativo, "disponible", (lambda: nativo._rs) if rust else (lambda: None))
     b, valores = fabrica()
     r = S.resolver(b, valores)
@@ -115,6 +116,15 @@ def test_resolver_da_lo_mismo_con_y_sin_cache(nombre, monkeypatch):
     sin, b_sin = _resolver(CORPUS[nombre], False, monkeypatch)
     con, b_con = _resolver(CORPUS[nombre], True, monkeypatch)
     _comparar(sin, b_sin, con, b_con, 1e-9)
+
+
+@pytest.mark.parametrize("nombre", list(CORPUS))
+def test_resolver_con_la_derivada_de_la_spline_da_lo_mismo(nombre, monkeypatch):
+    """P-185b: con los polos movidos por su derivada en el jacobiano, mismo estado, GDL, residuo y determinadas (las
+    posiciones de un boceto sub-restringido dependen del camino del solver)."""
+    sin, b_sin = _resolver(CORPUS[nombre], True, monkeypatch)
+    con, b_con = _resolver(CORPUS[nombre], True, monkeypatch, sensible=True)
+    _comparar(sin, b_sin, con, b_con, None)
 
 
 def test_el_corpus_cubre_un_conflicto_real(monkeypatch):
