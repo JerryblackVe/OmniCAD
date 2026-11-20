@@ -191,3 +191,34 @@ def test_cambiar_la_cota_de_la_spline_larga_sigue_exacto_y_rapido():
     b.puntos[b.curvas[madre].pts[5]].y += 4
     assert resolver(b, {cota: 5.0}).ok
     exacto(5.0)
+
+
+def test_cambiar_la_cota_rehace_la_copia_dentro_de_la_tolerancia():
+    """B-711: los puntos de la copia son los de la distancia con que se creó; al cambiar la cota, entre ellos se
+    alejaba de la curva desfasada exacta (3→5 mm: 0,031 mm). Fusion la rehace tras resolver: la copia toma los puntos
+    de la nueva distancia, atados a su t, y queda a 0,01 mm; las puntas conservan su id."""
+    import numpy as np
+    from scipy.spatial import cKDTree
+    from omnicad.restricciones.boceto import dominio
+    from omnicad.restricciones.boceto_desfase import _normales
+    b = Boceto()
+    madre = b.agregar_spline([(i * 30, 15 * (-1) ** i) for i in range(12)])
+    copia, = b.desfase(madre, 3)
+    cota = next(k for k, c in b.cotas.items() if c.tipo == "desfase")
+    ts = next(r for r in b.restricciones.values() if r.tipo == "desfase").datos["parametros"]
+    viejos = list(b.curvas[copia].pts)
+
+    def densos(cid, n):
+        prim = b.primitivas(cid)[0]
+        t0, t1, _ = dominio(prim)
+        return _normales(prim, np.linspace(t0, t1, n))[0]
+    for d in (4.0, 5.0, 1.0):
+        assert resolver(b, {cota: d}).ok
+        assert np.abs(cKDTree(densos(madre, 200000)).query(densos(copia, 3000))[0] - d).max() < 0.01
+        pts = b.curvas[copia].pts
+        assert (pts[0], pts[-1]) == (viejos[0], viejos[-1]) and set(ts) == {str(p) for p in pts}
+        assert [ts[str(p)] for p in pts] == sorted(ts.values()) and set(pts) <= set(b.puntos)
+    assert len(b.puntos) == len(b.curvas[madre].pts) + len(pts)    # los que sobraban se borraron
+    medio = pts[len(pts) // 2]
+    b.agregar_linea(medio, (0.0, 200.0))                             # otra cosa usa un punto del medio: no se rehace
+    assert resolver(b, {cota: 4.0}).ok and b.curvas[copia].pts == pts

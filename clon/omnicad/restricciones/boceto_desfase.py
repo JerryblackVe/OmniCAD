@@ -51,6 +51,62 @@ def _error_desfase(prim, nuevos, ext, cerrada, sd):
     return np.linalg.norm(copia(u) - Q, axis=1).reshape(-1, 3).max(axis=1)
 
 
+def _puntos_desfase(prim, sd, cerrada, muestras=48):
+    """(ts, puntos) de la copia de un desfase libre a distancia firmada `sd`: B-710, como Fusion (aproxima la curva
+    desfasada exacta hasta su tolerancia), parte cada tramo que se aleja más de TOL_DESFASE mientras haya. Partir
+    unos tramos y otros no puede alejar a los vecinos un rato: con 5 vueltas, a 4 o 5 mm quedaba a 0,012 mm (B-711)."""
+    t0, t1, _ = dominio(prim)
+    ts = np.linspace(t0, t1, muestras, endpoint=not cerrada)
+    C, N = _normales(prim, ts)
+    for _ in range(12):
+        ext = np.append(ts, t1) if cerrada else ts
+        partir = np.flatnonzero(_error_desfase(prim, C + sd * N, ext, cerrada, sd) > TOL_DESFASE)
+        if not len(partir) or len(ts) + len(partir) > 8 * muestras:
+            break
+        ts = np.sort(np.concatenate([ts, (ext[partir] + ext[partir + 1]) / 2]))
+        C, N = _normales(prim, ts)
+    return ts, C + sd * N
+
+
+def refinar_desfases(b):
+    """B-711: tras resolver, la copia de un desfase de spline con sus t (B-231) que se aleja más de TOL_DESFASE de la
+    curva desfasada exacta (la cota cambió y los puntos siguen siendo los de la distancia con que se creó) se rehace
+    con los puntos de esa distancia, como Fusion (`postSolveOnOffsetChanges`). Las puntas y los primeros puntos
+    conservan su id; no se rehace si otra cosa usa un punto del medio. Devuelve si cambió alguna copia."""
+    cambio = False
+    for r in list(b.restricciones.values()):
+        par = r.datos.get("parametros")
+        c = b.curvas.get(r.entidades[1]) if r.tipo == "desfase" and par and len(r.entidades) == 2 else None
+        if not isinstance(c, Spline) or c.modo != "ajuste" or c.manijas or any(str(p) not in par for p in c.pts):
+            continue
+        prim = b.primitivas(r.entidades[0])[0]
+        ts = np.array([par[str(p)] for p in c.pts])
+        Q = np.array([b.coords(p) for p in c.pts])
+        C, N = _normales(prim, ts)
+        sd = float(np.median(np.sum((Q - C) * N, axis=1)))
+        ext = np.append(ts, dominio(prim)[1]) if c.cerrada else ts
+        if np.any(np.diff(ext) <= 0) or not np.any(_error_desfase(prim, Q, ext, c.cerrada, sd) > TOL_DESFASE):
+            continue
+        ts, nuevos = _puntos_desfase(prim, sd, c.cerrada)
+        fin = [] if c.cerrada else c.pts[-1:]
+        medio = c.pts[1:len(c.pts) - len(fin)]
+        quedan = len(ts) - 1 - len(fin)
+        usados = {e for x in (*b.restricciones.values(), *b.cotas.values()) for e in x.entidades}
+        usados |= {p for k, otra in b.curvas.items() if k != c.id for p in otra.puntos()}
+        if usados & set(medio):
+            continue
+        ids = c.pts[:1] + medio[:quedan] + [b.agregar_punto(0.0, 0.0) for _ in range(quedan - len(medio))] + fin
+        for pid in medio[quedan:]:
+            del b.puntos[pid]
+        for pid, q in zip(ids, nuevos, strict=True):
+            b.puntos[pid].x, b.puntos[pid].y = float(q[0]), float(q[1])
+        c.pts = ids
+        par.clear()
+        par.update({str(p): float(t) for p, t in zip(ids, ts, strict=True)})
+        cambio = True
+    return cambio
+
+
 class _Desfase:
     # ------------------------------------------------------------ MODIFICAR: desfase
     def desfasar(self, cid, distancia, punto_lado=None, expresion=None, direccion="un", distancia2=None,
@@ -296,16 +352,7 @@ class _Desfase:
             s = 1.0
         if invertir:
             s = -s
-        # B-710: como Fusion (aproxima la curva desfasada exacta hasta su tolerancia), parte cada tramo que se aleja
-        # más de TOL_DESFASE de la curva exacta mientras haya: la cota asociativa sigue igual (un t por punto).
-        for _ in range(5):
-            nuevos = C + s * d * N
-            ext = np.append(ts, t1) if cerrada else ts
-            partir = np.flatnonzero(_error_desfase(prim, nuevos, ext, cerrada, s * d) > TOL_DESFASE)
-            if not len(partir) or len(ts) + len(partir) > 8 * muestras:
-                break
-            ts = np.sort(np.concatenate([ts, (ext[partir] + ext[partir + 1]) / 2]))
-            C, N = _normales(prim, ts)
+        ts, nuevos = _puntos_desfase(prim, s * d, cerrada, muestras)    # la cota asociativa: un t por punto
         densos = _normales(prim, np.linspace(t0, t1, 4 * muestras, endpoint=not cerrada))[0]
         if np.any(np.linalg.norm(nuevos[:, None] - densos[None], axis=2).min(axis=1) < 0.9 * d):
             raise ErrorBoceto("Desfase mayor que el radio: se pliega.")
