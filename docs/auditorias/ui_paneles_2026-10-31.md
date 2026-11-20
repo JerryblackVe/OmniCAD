@@ -39,7 +39,7 @@ videos, que es una versión concreta y no necesariamente la actual del repositor
 
 Reglas de jerarquía que se aplicaron a cada comando (las mismas se dieron a todos los que tocaron archivos):
 1. **Orden**: modo/tipo → objetos → parámetros principales → opciones.
-2. **Avanzado** solo lo opcional, poco frecuente y con valor por defecto sensato; nunca una selección que define la operación, ni lo necesario para completarla; panel de ≤ 6 campos sin avanzados; como máximo ~40 % de los campos.
+2. **Avanzado** solo lo opcional, poco frecuente y con valor por defecto sensato; nunca una selección que define la operación, ni lo necesario para completarla; panel de ≤ 5 campos (docs/protocolo_ux.md, UX-5) sin avanzados; como máximo ~40 % de los campos.
 3. **Grupos** solo en paneles de ≥ 8 campos visibles con unidades claras (Dirección 1 / Dirección 2…).
 4. **Etiquetas** semánticas y sin repetidas confundibles; lo que depende del modo, con `etiqueta_si`.
 5. Un valor inválido dentro de «Más opciones» cerrada **abre la sección** (no queda escondido); plegar/desplegar, ver la ayuda o mover el panel **no recalculan** la vista previa (prueba: `test_la_seccion_mas_opciones_resume_lo_activo_y_plegar_no_recalcula`).
@@ -52,17 +52,17 @@ Todos usan el componente `PanelComando`. «Antes» y «Después» son el tamaño
 | Herramienta | Módulo | Antes (ancho×alto @720p) | Después | Problemas encontrados | Tratamiento | Verificación |
 |---|---|---|---|---|---|---|
 | `aspecto` | aspecto | 331×377 · barra · recorta | 462×377 · barra | panel simple | ancho = «ancho» (biblioteca con buscador y miniaturas) | abre y cabe en 1280×720 |
-| `convertir_chapa` | chapa | 306×233 | 322×213 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `convertir_chapa` | chapa | 306×233 | 322×213 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `desgarro` | chapa | 252×212 | 322×207 | chocaba con las filas de selección | «Selección» → «Desgarro por» | abre y cabe en 1280×720 |
-| `desplegar` | chapa | 360×209 | 322×205 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `desplegar` | chapa | 360×209 | 322×205 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `dobladillo` | chapa | 250×291 | 362×281 | orden | tipo (modo) primero | abre y cabe en 1280×720 |
-| `exportar_dxf_chapa` | chapa | 373×225 | 322×265 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `patron_plano` | chapa | 292×233 | 322×213 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `exportar_dxf_chapa` | chapa | 373×225 | 322×265 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `patron_plano` | chapa | 292×233 | 322×213 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `pestana` | chapa | 308×377 · barra · recorta | 362×377 · barra | ancho variable, recorte lateral con barra, cabecera fija, selección «1 seleccionado» | sistema común | abre y cabe en 1280×720 |
 | `pestana_contorno` | chapa | 282×349 | 362×377 | ancho variable, recorte lateral con barra, cabecera fija, selección «1 seleccionado» | sistema común | abre y cabe en 1280×720 |
 | `plegar` | chapa | 303×312 | 362×297 | etiqueta de 32 caracteres | radio: «Radio de plegado» + ayuda | abre y cabe en 1280×720 |
 | `reglas_chapa` | chapa | 358×377 · barra · recorta | 362×377 | 13 campos planos, etiquetas largas con «(vacío = sin cambio)» | avanzados: alivio_forma/ancho/profundidad, esquina_forma/tam (5/13); grupos «Nuevos valores», «Alivio de plegado», «Alivio de esquina»; etiquetas cortas (Espesor, Separación de desgarro, Volver a la regla) con ayuda «Vacío = sin cambio» | abre y cabe en 1280×720 |
-| `replegar` | chapa | 292×182 | 322×162 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `replegar` | chapa | 292×182 | 322×162 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `unir_plegando` | chapa | 271×225 | 322×201 | etiqueta de 32 caracteres | radio: «Radio de plegado» + ayuda | abre y cabe en 1280×720 |
 | `eje_arista` | construir | 232×179 | 322×159 | ancho variable, recorte lateral con barra, cabecera fija, selección «1 seleccionado» | sistema común | abre y cabe en 1280×720 |
 | `eje_cilindro` | construir | 327×179 | 322×159 | ancho variable, recorte lateral con barra, cabecera fija, selección «1 seleccionado» | sistema común | abre y cabe en 1280×720 |
@@ -105,11 +105,11 @@ Todos usan el componente `PanelComando`. «Antes» y «Después» son el tamaño
 | `insertar_derivacion` | derivacion | 388×377 · barra · recorta | 462×377 · barra | panel simple con listas apretadas | ancho = «ancho» (tres listas) | abre y cabe en 1280×720 |
 | `eje_escalonado` | engranaje | 335×377 · barra · recorta | 362×377 · barra | hasta 53 campos con el prefijo «Tramo N:» repetido en cada etiqueta | grupo Ubicación, un grupo «Tramo N» por tramo (etiquetas sin prefijo: Diámetro, Largo, Remate inicial/final, Medida inicial/final), grupo Resultado (operación y objetos). Sin avanzados (superaría el 40 %) | abre y cabe en 1280×720 |
 | `engranaje` | engranaje | 370×377 · barra · recorta | 362×377 · barra | 24 campos sin jerarquía, etiquetas de 30 caracteres con unidades dentro | 7 avanzados (ángulo de presión, desplazamiento x, holgura, juego, giro, desplazamiento 2.º, dirección 2.º); grupos Ubicación / Dimensiones / Par; etiquetas acortadas (Desplazamiento (x), Holgura de fondo, Agujero central, Alto hasta primitivo, «del 2.º», Crear unión y vínculo); cabecera por modo (engranaje / cremallera / rueda de cadena); ayudas con las unidades | abre y cabe en 1280×720 |
-| `accionar_uniones` | ensamblar | 250×191 | 322×191 | ≤ 6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `accionar_uniones` | ensamblar | 250×191 | 322×191 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `fijar_componente` | ensamblar | 365×159 | 322×159 | etiqueta larga | etiqueta «Componente» + ayuda | abre y cabe en 1280×720 |
 | `grupo_rigido` | ensamblar | 438×179 | 322×171 | etiqueta de 40 caracteres | etiqueta «Componentes» + ayuda | abre y cabe en 1280×720 |
-| `nuevo_componente` | ensamblar | 246×209 | 322×189 | ≤ 6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `origen_union` | ensamblar | 284×328 | 322×308 | ≤ 6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `nuevo_componente` | ensamblar | 246×209 | 322×189 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `origen_union` | ensamblar | 284×328 | 322×308 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `union` | ensamblar | 318×377 · barra · recorta | 362×374 | ancho variable, recorte lateral con barra, cabecera fija, selección «1 seleccionado» | sistema común | abre y cabe en 1280×720 |
 | `union_construida` | ensamblar | 374×270 | 362×285 | ancho variable, recorte lateral con barra, cabecera fija, selección «1 seleccionado» | sistema común | abre y cabe en 1280×720 |
 | `vinculo_movimiento` | ensamblar | 349×242 | 322×242 | etiqueta de 28 caracteres | «Relación 2 / 1» + ayuda | abre y cabe en 1280×720 |
@@ -134,19 +134,19 @@ Todos usan el componente `PanelComando`. «Antes» y «Después» son el tamaño
 | `reconocer_funciones` | inspeccionar | 324×343 | 362×377 · barra | 12 campos en fila sin separar detección de acción | grupos «Qué reconocer» / «Rehacer» / «Resultado» | abre y cabe en 1280×720 |
 | `seccion` | inspeccionar | 302×320 | 362×272 | color y rayado (cosmético) ocupaban la vista; dos «Color…» confundibles | «Caras/plano» -> «Plano de corte»; «Color» -> «Color propio»; cuerpos sube tras el plano; avanzados color_modo, color, rayado (3 de 8) | abre y cabe en 1280×720 |
 | `combinar_mallas` | malla | 329×262 | 322×250 | orden y cabecera | operación primero; cabecera por modo (Unir/Cortar/Intersecar/Fusionar mallas) | abre y cabe en 1280×720 |
-| `convertir_malla` | malla | 342×233 | 322×229 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `convertir_malla` | malla | 342×233 | 322×229 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `cortar_plano` | malla | 294×341 | 362×323 | orden, etiquetas vagas | tipo primero; angulo avanzado; «Distancia al plano», «Ángulo del plano»; ayuda en Rellenar | abre y cabe en 1280×720 |
-| `escalar_malla` | malla | 294×270 | 322×250 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `grupos_caras` | malla | 294×212 | 322×192 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `invertir_normal_malla` | malla | 294×179 | 322×159 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `escalar_malla` | malla | 294×270 | 322×250 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `grupos_caras` | malla | 294×212 | 322×192 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `invertir_normal_malla` | malla | 294×179 | 322×159 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `limpiar_malla` | malla | 383×346 | 362×299 | etiquetas largas | avanzados: distancia, area_minima, lados (3/9); etiquetas más cortas | abre y cabe en 1280×720 |
-| `malla_teselar` | malla | 350×233 | 322×229 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `reducir_malla` | malla | 298×241 | 322×231 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `remallar` | malla | 320×254 | 322×234 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `reparar_malla` | malla | 301×212 | 322×192 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `separar_malla` | malla | 294×212 | 322×192 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `suavizar_malla` | malla | 294×248 | 322×228 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `vaciado_malla` | malla | 294×212 | 322×192 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `malla_teselar` | malla | 350×233 | 322×229 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `reducir_malla` | malla | 298×241 | 322×231 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `remallar` | malla | 320×254 | 322×234 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `reparar_malla` | malla | 301×212 | 322×192 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `separar_malla` | malla | 294×212 | 322×192 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `suavizar_malla` | malla | 294×248 | 322×228 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `vaciado_malla` | malla | 294×212 | 322×192 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `seccion_malla` | malla_seccion | 294×299 | 322×284 | etiquetas vagas | «Distancia al plano», «Ángulo del plano» | abre y cabe en 1280×720 |
 | `alinear` | modificar | 262×312 | 322×292 | 6 campos claros | sin cambios | abre y cabe en 1280×720 |
 | `apoyar` | modificar | 342×189 | 322×208 | 2 campos | sin cambios | abre y cabe en 1280×720 |
@@ -171,8 +171,8 @@ Todos usan el componente `PanelComando`. «Antes» y «Después» son el tamaño
 | `vaciado` | modificar | 292×291 | 322×276 | casilla entre selección y parámetros | orden: «Cadena tangente» al final | abre y cabe en 1280×720 |
 | `multitransformar` | patrones | 413×377 · barra · recorta | 462×377 · barra | lista y editor en 41 campos sin jerarquía | `ANCHO_PANEL="ancho"` (lista + editor); «Tipo de la elegida»→«Tipo de transformación»; avanzados (los de cada patrón + copias ligeras); info de etapa más corta | abre y cabe en 1280×720 |
 | `patron_puntos` | patrones | 413×377 · barra · recorta | 362×377 · barra | el título seguía «PATRÓN RECTANGULAR» al elegir otro tipo; «Cantidad 1», «Distancia 1»… sin decir qué miden; 39 campos del mismo peso | diálogo único: «Tipo de patrón» primero; cabecera e ícono siguen al modo (Rectangular / Circular / En trayectoria / En puntos); grupos «Dirección 1» y «Dirección 2»; etiquetas por modo («Extensión total» / «Separación entre instancias», «Ángulo total» / «Ángulo entre instancias»); avanzados: copias suprimidas, elegir copias en la vista, copias ligeras, posición inicial y giro de la ruta | abre y cabe en 1280×720 |
-| `asignar_regla_plastico` | plastico | 291×192 | 322×192 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
-| `consejos_diseno` | plastico | 325×225 | 322×225 | ≤6 campos, etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `asignar_regla_plastico` | plastico | 291×192 | 322×192 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
+| `consejos_diseno` | plastico | 325×225 | 322×225 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras | sin cambios | abre y cabe en 1280×720 |
 | `patron_geometrico` | plastico | 356×377 · barra · recorta | 362×377 · barra | 22 campos planos, etiquetas largas | avanzados: orientación, alineaciones, desfases, perímetro (7/18 visibles); grupos Tamaño, Distribución, Dirección U/V, Perímetro; operación y objetivos antes de los avanzados; etiquetas «Tamaño en el centro/esquina», «Distancia entre objetos» | abre y cabe en 1280×720 |
 | `reglas_plastico` | plastico | 333×249 | 322×257 | etiqueta fija | cabecera por modo (Crear/Borrar regla); «Nombre» → «Regla a borrar» al borrar | abre y cabe en 1280×720 |
 | `caja` | primitivas | 275×377 · barra · recorta | 362×377 · barra | 9 campos visibles sin rótulos; «Posición» repetía «Posición X/Y/Z» | grupos «Medidas» y «Ubicación»; Info «Posición» -> «Centro» | abre y cabe en 1280×720 |
@@ -182,23 +182,23 @@ Todos usan el componente `PanelComando`. «Antes» y «Después» son el tamaño
 | `reparar_cuerpo` | revision | 374×296 | 322×308 | 6 campos, Info calculado | sin cambios | abre y cabe en 1280×720 |
 | `revisar_geometria` | revision | 388×217 · barra · recorta | 362×348 · barra | 9 campos, 3 numéricos de afinado siempre a la vista | grupos «Revisar» / «Informe» / «Reparar»; avanzados espesor, voladizo, filo (3 de 9; solo aparecen con la casilla de impresión) | abre y cabe en 1280×720 |
 | `extruir` | solido | 312×377 · barra · recorta | 362×377 | 20 campos con dos «Desfase» y dos «Objeto» iguales; opciones raras mezcladas con lo principal | cabecera por tipo (Extruir / Extrusión delgada); avanzados: inicio, desfase e inicio por objeto, conicidad (lado 1 y 2); «Tipo de extensión»→«Extensión», «Desfase»→«Desfase de inicio» / «Desfase del límite», «Objeto»→«Objeto de inicio» / «Objeto límite» | abre y cabe en 1280×720 |
-| `extruir_cara` | solido | 258×241 | 322×221 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `extruir_cara` | solido | 258×241 | 322×221 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
 | `revolucion` | solido | 291×370 | 362×375 | «Tipo» suelto; «Ángulo 2» ambiguo; casilla rara en vista principal | «Tipo» -> «Extensión», «Objeto» -> «Objeto límite», «Ángulo»/«Ángulo 2» -> «Ángulo del lado 1/2» (etiqueta_si), «Proyectar eje» avanzado + ayuda | abre y cabe en 1280×720 |
-| `coser` | superficie | 259×212 | 322×192 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `descoser` | superficie | 246×179 | 322×159 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `destrimar` | superficie | 305×212 | 322×192 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `engrosar` | superficie | 301×299 | 322×284 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `extender_sup` | superficie | 295×241 | 322×221 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `invertir_normal` | superficie | 259×179 | 322×159 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `parche` | superficie | 305×212 | 322×192 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `recortar_sup` | superficie | 324×182 | 322×162 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `reglada` | superficie | 250×270 | 322×255 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `coser` | superficie | 259×212 | 322×192 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `descoser` | superficie | 246×179 | 322×159 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `destrimar` | superficie | 305×212 | 322×192 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `engrosar` | superficie | 301×299 | 322×284 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `extender_sup` | superficie | 295×241 | 322×221 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `invertir_normal` | superficie | 259×179 | 322×159 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `parche` | superficie | 305×212 | 322×192 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `recortar_sup` | superficie | 324×182 | 322×162 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `reglada` | superficie | 250×270 | 322×255 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
 | `sup_barrido` | superficie | 297×299 | 322×279 | «Distancia» era una fracción 0-1 | «Distancia» -> «Largo de la ruta» | abre y cabe en 1280×720 |
-| `sup_desfase` | superficie | 308×241 | 322×221 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `sup_desfase` | superficie | 308×241 | 322×221 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
 | `sup_empalme` | superficie | 290×241 | 322×221 | etiqueta doble; cabecera fija | TITULOS_MODO (Empalme / Chaflán de superficie); «Radio / distancia» -> etiqueta_si «Radio» / «Distancia» | abre y cabe en 1280×720 |
-| `sup_extruir` | superficie | 312×291 | 322×271 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `sup_revolucion` | superficie | 241×241 | 322×221 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
-| `sup_solevacion` | superficie | 326×225 | 322×205 | ≤ 6 campos, etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `sup_extruir` | superficie | 312×291 | 322×271 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `sup_revolucion` | superficie | 241×241 | 322×221 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
+| `sup_solevacion` | superficie | 326×225 | 322×205 | ≤ 5 campos (docs/protocolo_ux.md, UX-5), etiquetas claras, orden correcto | sin cambios | abre y cabe en 1280×720 |
 
 
 ## 4. Diálogos y paneles de herramienta que no salen del catálogo de comandos
