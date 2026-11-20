@@ -31,6 +31,7 @@ def existentes():
     for c in CARPETAS:
         for t in (COLA / c).glob("*.tarea"):
             nombres.add(re.sub(r"^\w*?_?(?=(FIX|PREP|CAZA|LENTO)-)", "", t.stem))
+            nombres.add(re.sub(r"^\d+_", "", t.stem))          # RARO-, BANCO-, REV-
             nombres.update(re.findall(r"[BPFH]-\d+[a-z]?", t.stem))
     return nombres
 
@@ -45,7 +46,13 @@ def filas_abiertas():
 
 def sin_cobertura():
     tabla = Path(os.environ.get("TMPDIR", "/tmp")) / "cobertura_boceto_auto.md"
-    subprocess.run([PY, "../scripts/cobertura_boceto.py", str(tabla)], cwd=REPO / "clon", capture_output=True, text=True, timeout=300)
+    nueva = tabla.with_suffix(".nueva")          # si falla (p. ej. con la suite nocturna corriendo), queda la tabla anterior
+    try:
+        subprocess.run([PY, "../scripts/cobertura_boceto.py", str(nueva)], cwd=REPO / "clon", capture_output=True, text=True, timeout=300)
+        if nueva.exists() and nueva.stat().st_size > 0:
+            nueva.replace(tabla)
+    except subprocess.TimeoutExpired:
+        pass
     # claves sin test automático (**no** en esa columna), las que además no se probaron como usuario primero
     filas = re.findall(r"^\| ([^|]*?) \|[^|]*\| `([^`]+)` \| (\*\*no\*\*|sí[^|]*) \| (\*\*no\*\*|sí[^|]*) \|", tabla.read_text(encoding="utf-8"), re.M)
     # primero lo propio del boceto (crear, modificar, restricciones, selección); lo que no se probó como usuario, antes
