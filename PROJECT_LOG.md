@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · Traspaso E6 (contexto 30 %, P-185 listo sin commit).** 1) ~/OmniCAD-P-185: cota del desfase de spline larga 3–7 → 0,8–2,2 s, mismo resultado. 2) Queda (P-185 Parcial): SVD de `_libres` y reinterpolar la madre. 3) Banco: ~/coordinador/casos/p185/p185.py. 4) Tests del núcleo: 1265 OK.
+- **2026-11-20 · P-185 (E6): desfase de spline larga.** `_energia_quintica` copia el tramo uniforme (343 → 16 ms); el término de puntos atados dice qué lee cada fila (`propias`, `_patron`): el jacobiano junta las columnas de la copia. Cota 3–7 → 0,8–2,2 s. Tests en `test_boceto_fase9_desfase.py`.
 - **2026-11-20 · Traspaso E6 (B-741 listo sin commit).** 1) ~/OmniCAD-B-741: texto de cotas suavizado en gris; el arrastre dibuja igual que el normal (≤ 2 niveles). 2) Descartados: texto encima (+2 ms) y QStaticText (no da igual). 3) Falta: E11 lo mira en Windows. 4) Capturas: evidencias/b741/.
 - **2026-11-20 · B-741 (E6): texto de cotas igual al arrastrar.** Suavizado en gris (`NoSubpixelAntialias`, `_dibujar_cotas`): la imagen transparente de P-182b no admite subpíxel. Mismo tiempo que main. Tests: `test_cotas_quietas_desde_la_imagen_mientras_se_arrastra` (píxeles).
 - **2026-11-20 · Traspaso E6 (P-182c listo sin commit).** 1) ~/OmniCAD-P-182c: íconos quietos desde una imagen; banco 36 → 33 ms. 2) Falta: E11 mide en Windows (P-182 Parcial). 3) Fila nueva B-741 (texto de cotas de la imagen de P-182b). 4) Banco: ~/coordinador/casos/p182/.
