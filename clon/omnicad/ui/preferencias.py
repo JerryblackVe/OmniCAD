@@ -109,8 +109,8 @@ DEFECTOS = {
     "vista/forzar_rejilla": False,
     "vista/rejilla_fija": "",
     "vista/incremental": False,             # P-202: Desplazamiento incremental de las asas
-    "vista/incremento_lineal": 1.0,         # mm
-    "vista/incremento_angular": 15.0,       # grados
+    "vista/incremento_lineal": 5.0,         # mm (Fusion: 5,00 mm, P-207)
+    "vista/incremento_angular": 5.0,        # grados (Fusion: 5,0°)
     "vista/desfase_suelo": False,
     "vista/vis_planos_origen": True,
     "vista/vis_ejes_origen": True,

@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · P-207 (Definir incrementos, valores de Fusion).** Por defecto 5 mm y 5° (eran 1 mm/15°, de memoria) en `preferencias.py`, `visor3d.py`, `DialogoIncrementos` y `set_grid`; doc MCP regenerada. La rejilla ya arranca Adaptativa (`vista/rejilla_fija` vacío). Prueba: `test_api_visor.py::test_p202_set_grid_guarda_el_desplazamiento_incremental_y_valida` (5.0, 5.0).
 - **2026-11-20 · B-743 (cinta, ventana chica).** Era el test, no la app: desde P-187 el botón vive en `_ZonaSoltar` y el menú del título en el grupo; `test_b423` buscaba el menú en el padre equivocado. Ajustado `parentWidget().parentWidget()`. test_b423 11 OK, ruff limpio.
 - **2026-11-20 · Traspaso E6 (P-202, P-203, P-204 listos sin commit).** 1) Worktrees ~/OmniCAD-P-202, -P-203, -P-204; se fusionan limpios salvo PROJECT_LOG y mejoras.md (filas vecinas). 2) Capturas UX en evidencias/P-202_P-203_ux/. 3) Nueva P-205 (arrastre del boceto con incrementos: E11 mide en Fusion). 4) Próximo: lo manda el maestro.
 - **2026-11-20 · P-202 (E6): Desplazamiento incremental y Definir incrementos.** Las asas saltan de a 1 mm / 15° (editable); menú activo, `DialogoIncrementos`, `set_grid` con `incremental_move`. Tests: `test_p202_*` (manipuladores, p9_ui, api_visor). Boceto: P-205.

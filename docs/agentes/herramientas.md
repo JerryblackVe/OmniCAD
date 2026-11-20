@@ -5862,8 +5862,8 @@ Guarda mostrar rejilla, forzar a la rejilla, cuatro vistas y el Desplazamiento i
   - `snap` (true/false; opcional, por defecto `null`): activa o desactiva forzar a la rejilla.
   - `four_views` (true/false; opcional, por defecto `null`): activa o desactiva la opción de cuatro vistas.
   - `incremental_move` (true/false; opcional, por defecto `null`): las asas de los comandos saltan de a un incremento fijo al arrastrarlas.
-  - `linear_increment` (número; opcional, por defecto `null`): salto de las medidas en mm, de 0,001 a 10000 (por defecto 1).
-  - `angular_increment` (número; opcional, por defecto `null`): salto de los ángulos en grados, de 0,01 a 360 (por defecto 15).
+  - `linear_increment` (número; opcional, por defecto `null`): salto de las medidas en mm, de 0,001 a 10000 (por defecto 5, como Fusion).
+  - `angular_increment` (número; opcional, por defecto `null`): salto de los ángulos en grados, de 0,01 a 360 (por defecto 5, como Fusion).
 - CLI: `omnicad call set_grid --doc pieza.omnicad`
 
 ### `set_home_view`

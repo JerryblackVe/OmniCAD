@@ -165,7 +165,7 @@ class DialogoIncrementos(QDialog):
     """Rejilla y forzados › Definir incrementos (Fusion «Set Increments», P-202): el salto lineal y el angular que usa
     «Desplazamiento incremental» al arrastrar las asas de los comandos."""
 
-    def __init__(self, lineal=1.0, angular=15.0, parent=None):
+    def __init__(self, lineal=5.0, angular=5.0, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Definir incrementos")
         self.setWindowIcon(icono("rejilla"))
