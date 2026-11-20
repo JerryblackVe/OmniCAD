@@ -54,7 +54,7 @@ class LienzoTextoMixin:
                              voltear_h=t.voltear_h, voltear_v=t.voltear_v,
                              espaciado=t.espaciado, interlineado=t.interlineado,
                              **{k: getattr(t, k) for k in Texto.TIPOGRAFIA})
-        self.opciones.update(marco_texto=bool(t.marco), pivote_texto=None,
+        self.opciones.update(marco_texto=bool(t.marco), marco_fijo=bool(t.marco), pivote_texto=None,
                              parametro_texto=t.parametro_texto, valor_parametro_texto="")
 
         def aceptar(v):
@@ -67,10 +67,11 @@ class LienzoTextoMixin:
             if interlineado <= 0:
                 raise ErrorBoceto("El interlineado tiene que ser mayor que cero.")
             _validar_opciones_texto({k: self.opciones[k] for k in Texto.TIPOGRAFIA})
-            pivote = self.opciones.get("pivote_texto")
-            pivote = self.b.esquina_marco(tid, pivote.removeprefix("corner:")) if pivote else None
-
             def cambiar():
+                if self.opciones["marco_texto"] and not t.marco:
+                    self.b.marco_texto_ajustado(tid)
+                pivote = self.opciones.get("pivote_texto")
+                pivote = self.b.esquina_marco(tid, pivote.removeprefix("corner:")) if pivote else None
                 texto = v[0].replace("\\n", "\n")
                 if t.altura_expr and abs(altura - t.altura) > 1e-9:      # si no, el recálculo vuelve a la altura de antes
                     t.altura_expr = v[1] if nombres_usados(v[1]) else f"{altura:.12g} mm"

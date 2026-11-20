@@ -428,3 +428,30 @@ def test_b686_mensaje_arista_recta_cuando_no_elige_nada(lienzo):
     lz._clic_proyectar(QPointF(100, 100))
     lz.visor = None
     assert mensajes and "arista recta" in mensajes[-1]
+
+
+def test_b698_casilla_con_marco_agrega_el_marco_y_habilita_el_pivote(lienzo):
+    lz = lienzo
+    tid = lz.b.agregar_texto((10, 20), "I")
+    lz.editar_texto(tid, lz.a_px(10, 20))
+    panel = modo_boceto.PanelCaracter(lz)
+    panel.cargar(lz.opciones)
+    panel.cambio.connect(lambda k, v: lz.opciones.__setitem__(k, v))
+    assert panel.con_marco.isEnabled() and not panel.con_marco.isChecked() and not panel.pivote.isEnabled()
+    panel.con_marco.setChecked(True)
+    assert panel.pivote.isEnabled()
+    panel.pivote.setCurrentIndex(panel.pivote.findData("corner:center"))
+    _aceptar(lz, "I", "5", "90")
+    t = lz.b.curvas[tid]
+    assert t.marco and t.angulo == pytest.approx(90) and len(lz.historial) == 1
+    lz.editar_texto(tid, lz.a_px(10, 20))
+    panel.cargar(lz.opciones)
+    assert panel.con_marco.isChecked() and not panel.con_marco.isEnabled()
+
+
+def test_b698_marco_respeta_la_caja_de_ancho_del_texto(lienzo):
+    b = lienzo.b
+    tid = b.agregar_texto((0, 0), "ABC DEF", ancho_caja=50)
+    b.marco_texto_ajustado(tid)
+    assert b.curvas[tid].ancho_caja == pytest.approx(50)
+

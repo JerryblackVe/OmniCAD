@@ -330,11 +330,7 @@ def add_text(sesion, text: str, x: float = 0.0, y: float = 0.0, height: Expr = 5
                               fuente=font, negrita=bold, cursiva=italic,
                               altura_expr=altura_expr, **op)
         if frame:
-            pts = [q for p in b.primitivas(tid) for q in ((p[2], p[3]) if p[0] == "linea" else p[2])] or [(0, 0)]
-            ancho = max(q[0] for q in pts) - min(q[0] for q in pts)
-            alto = max(q[1] for q in pts) - min(q[1] for q in pts)
-            b.agregar_marco_texto(tid, box_width if box_width > 0 else ancho or altura,
-                                  frame_height if frame_height > 0 else alto or altura)
+            b.marco_texto_ajustado(tid, box_width, frame_height)
         if pivot is not None:
             b.girar_texto(tid, angle, _pivote_texto(b, tid, pivot))
         ligar_parametro_texto(sesion.doc, b.curvas[tid], texto)
