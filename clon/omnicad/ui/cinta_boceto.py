@@ -40,7 +40,7 @@ GRUPOS_BOCETO = [
         _i("Curva de fusión", "sk_curva_fusion"), _i("Desfase", "sk_desfase"),
         _i("Soltar desfase", "sk_soltar_desfase"), SEP,
         _i("Recortar", "sk_recortar"), _i("Alargar", "sk_alargar"),
-        _i("Partir", "sk_partir"), _i("Escala del boceto", "sk_escala"),
+        _i("Partir", "sk_partir"), _i("Manija de spline", "sk_manija"), _i("Escala del boceto", "sk_escala"),
         _i("Mover/copiar", "sk_mover"), SEP,
         _i("Cambiar parámetros", "parametros")]),
     ("RESTRICCIONES", ["sk_autorestringir"] + [f"sk_{r}" for r in _RESTR[:-1]],     # a la vista: Autorestringir + las 12 de Fusion (P-187)

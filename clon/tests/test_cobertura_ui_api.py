@@ -147,7 +147,7 @@ HERRAMIENTAS = {
     "sk_romper_vinculo": "break_projection_link",
     "sk_proyecciones_perdidas": "manage_lost_projections", "sk_editar_patron": "edit_sketch_pattern",
     "sk_soltar_desfase": "release_offset",
-    "sk_alargar": "extend_sketch_curve", "sk_partir": "split_sketch_curve", "capturar": "capture_viewport",
+    "sk_alargar": "extend_sketch_curve", "sk_partir": "split_sketch_curve", "sk_manija": "edit_sketch_spline", "capturar": "capture_viewport",
 }
 
 # clave → motivo por el que no tiene herramienta.

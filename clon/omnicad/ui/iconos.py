@@ -927,6 +927,14 @@ def _b_desfase(p):
     _flecha(p, 16, 11.5, 16, 15.5, GRIS_OSCURO, 1.2, 3.2)  # sentido del desfase
 
 
+def _b_manija(p):
+    _trazo(p)
+    p.drawPath(_curva_por([(4, 22), (12, 10), (20, 20), (28, 9)]))
+    _trazo(p, GRIS_OSCURO, 1.2)
+    _linea(p, 12, 10, 21, 4)  # la manija: tangente en un punto de ajuste
+    _ptos(p, [(4, 22), (12, 10), (20, 20), (28, 9), (21, 4)])
+
+
 def _b_recortar(p):
     _trazo(p, GRIS_OSCURO, 2.2)  # las dos hojas, que se cruzan en el pivote
     _linea(p, 12, 21.5, 23, 4)
@@ -1194,7 +1202,7 @@ DIBUJOS = {
     "simetria_boceto": _b_simetria, "patron_circular": _b_patron_circular,
     "patron_rectangular": _b_patron_rectangular, "proyectar": _b_proyectar, "cota": _b_cota, "helice": _b_helice,
     "empalme": _b_empalme, "chaflan_boceto": _b_chaflan, "curva_fusion": _b_curva_fusion, "desfase": _b_desfase,
-    "recortar": _b_recortar, "alargar": _b_alargar, "partir": _b_partir, "escala_boceto": _b_escala,
+    "recortar": _b_recortar, "alargar": _b_alargar, "partir": _b_partir, "manija": _b_manija, "escala_boceto": _b_escala,
     "mover": _b_mover,
     # restricciones
     "r_horizontal_vertical": _r_horizontal_vertical, "r_horizontal": _r_horizontal, "r_vertical": _r_vertical,
