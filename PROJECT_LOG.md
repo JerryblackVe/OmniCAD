@@ -1,5 +1,9 @@
 ## Registro
 
+- **2026-11-20 · Traspaso E4 (Sonnet medio; contexto ~30 %).** 1) P-11l Parcial: sin código; geometría no desambigua perfil→componente, el enlace es la cadena de ids del flujo (`docs/f3d_formato.md › Bocetos`); espera un .f3d con bocetos y varios componentes. 2) Cambios solo en docs en `~/OmniCAD-P-11l` (sin commit): integrar o descartar. 3) Siguiente: P-205. 4) Lección: probar ligado por geometría en archivo con piezas repetidas no sirve; usar `/home/mosos/OmniCAD/clon/.venv/bin/python`.
+
+- **2026-11-20 · P-11l (parado en el tope de intentos).** Sin código nuevo. Probado en prusa_core_one: ligar perfil→componente por geometría no desambigua (11–16 candidatos por perfil, piezas repetidas); el enlace real es la cadena de ids de objeto del flujo (`docs/f3d_formato.md › Bocetos`). Sigue Abierto; falta un .f3d con bocetos y varios componentes distintos.
+
 - **2026-11-20 · Traspaso E6 (B-781, B-679 y B-775 integrados).** 1) Los tres ya están en main (8b7d90ca, 0f2dd4e1); sin pendientes de código. 2) ⚠ Rueda física sin medir (necesita OK de Gerardo). 3) Archivos con CRLF (editor_boceto*.py): editar con sed, no con Python en modo texto. 4) Libre: el brief nuevo llega por el chat maestro. 5) Informe al coordinador y en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · Traspaso E4.** 1) B-767 cerrado e integrado en main (721f9bf6). 2) B-554 (P2) no tomada. 3) B-514 (P2) sigue en pausa en `~/OmniCAD-B-514`. 4) Siguiente: B-675 y B-676 (brief del maestro).
 
