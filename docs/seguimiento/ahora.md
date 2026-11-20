@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E1 (Sonnet medio) | — libre | B-753/754/755 y B-738 integrados (B-738 cerrado con el ajuste empírico); sin ítem en Sigue (pasa B-766) |
 | E4 (Sonnet medio) | B-734 y B-730 | Texto: clic en vista 3D y Desagrupar (B-697 cerrado; brief `~/coordinador/briefs/E4_B-734_B-730.md`) |
 | E7 (Sonnet medio) | En espera (cupo 5) | Prueba como usuario de lo integrado el 20/11 y PRUEBA-OPC-2 (brief `~/coordinador/briefs/E7_siguiente.md`) |
-| E8 (Sonnet medio) | B-512 (P-187 integrado; B-619 en pausa hasta que E11 mida en Fusion) | Mover/rotar/escalar con esquina en el origen (brief `~/coordinador/briefs/E8_B-512.md`) |
+| E8 (Sonnet medio) | B-772 | Extruir sin boceto abre el panel (B-512 parcial integrado: Escalar con esquina en el origen; brief `E8_B-772.md`) |
 | E3 (Sonnet medio) | B-778 (B-764 integrado; arreglar test_b445 por B-762) | Navegador visible en el boceto (brief `E3_B-778.md`) |
 | E6 (Sonnet medio) | B-781 y B-679 | Main verde: operación elegida a mano en Extruir y test intermitente del plástico (B-775 integrado; brief `E6_proximo.md`) |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
