@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .. import nativo
+from ..hilos_blas import un_hilo
 from . import auto_candidatos
 from .boceto import (CIRCULARES, ELIPTICAS, Arco, ArcoElipse, Circulo, Elipse, ErrorBoceto, Linea, Spline,
                      _numero, distancia_con_circulo, dominio, evaluar_primitiva, mas_cercano, primitivas_entidad,
@@ -1643,7 +1644,8 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False, referen
         x = _trasladar_arcos_concentricos(sis, x)
         err = float(np.max(np.abs(sis.residuos(x)), initial=0.0))
     J = _jacobiano(sis, x)
-    rango = int(np.linalg.matrix_rank(J, tol=1e-6)) if J.size else 0
+    with un_hilo():     # P-201: con la máquina cargada, los hilos de OpenBLAS duplicaban el tiempo de estas cuentas
+        rango = int(np.linalg.matrix_rank(J, tol=1e-6)) if J.size else 0
     return x, err, J, rango
 
 
@@ -1742,10 +1744,11 @@ def _libres(sis, J, rango, tol=1e-6):
     elif J.size:
         # RS-S1: SVD económica (sin la V entera de n × n, 0,9 s con 120 splines). La parte de cada incógnita en el núcleo
         # es lo que le falta a su parte en el espacio de filas: |núcleo|² = 1 − |filas|².
-        libres = _libres_qr(J, rango, tol)
-        if libres is None:
-            _, _, vt = np.linalg.svd(J, full_matrices=False)
-            libres = 1 - np.linalg.norm(vt[:rango].T, axis=1) ** 2 > tol ** 2
+        with un_hilo():     # P-201
+            libres = _libres_qr(J, rango, tol)
+            if libres is None:
+                _, _, vt = np.linalg.svd(J, full_matrices=False)
+                libres = 1 - np.linalg.norm(vt[:rango].T, axis=1) ** 2 > tol ** 2
     else:
         libres = np.ones(n, bool)
     puntos = {pid for pid, (i, j) in sis.idx_p.items() if libres[i] or libres[j]}
@@ -1817,7 +1820,8 @@ def grados_de_libertad(boceto, valores_cotas=None):
             gdl += len(sis.x0)
             continue
         J = _jacobiano(sis, sis.x0)
-        gdl += len(sis.x0) - int(np.linalg.matrix_rank(J, tol=1e-6))
+        with un_hilo():     # P-201
+            gdl += len(sis.x0) - int(np.linalg.matrix_rank(J, tol=1e-6))
     return gdl
 
 
