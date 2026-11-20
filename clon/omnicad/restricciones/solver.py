@@ -1229,6 +1229,8 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cam
         # rechaza como conflicto; acá también.
         return ResultadoSolver("inconsistente", gdl, 0.0,
                                f"Para cumplirse, la geometría colapsa (largo o radio cero): {colapsadas}.")
+    from .boceto_desfase import refinar_desfases
+    refinar_desfases(boceto)    # B-711: rehace la copia de un desfase de spline que se alejó (ya queda exacta y atada)
     return ResultadoSolver("ok", gdl, err_max, determinadas=determinadas)
 
 
