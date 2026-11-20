@@ -65,7 +65,35 @@ def test_el_menu_de_visualizacion_explica_cada_opcion(ventana):
     camaras = next(a for a in acciones if a.text() == "Cámara").menu()
     assert all(_ayuda(a) for a in camaras.actions()), "alguna cámara quedó sin ayuda"
     rejilla = [a for a in barra.menus["rejilla"].actions() if a.text()]
-    assert all(_ayuda(a) for a in rejilla[:3]), "la rejilla quedó sin ayuda"
+    assert all(_ayuda(a) for a in rejilla), "la rejilla quedó sin ayuda"     # P-202: también los incrementos
+
+
+def test_p202_desplazamiento_incremental_y_definir_incrementos(ventana, monkeypatch):
+    """Rejilla y forzados › Desplazamiento incremental se marca y llega al visor; Definir incrementos guarda el salto."""
+    from omnicad.ui import ventana as modulo
+    from omnicad.ui.dialogos import DialogoIncrementos
+    acciones = {a.text(): a for a in ventana.barra_nav.menus["rejilla"].actions() if a.text()}
+    inc, definir = acciones["Desplazamiento incremental"], acciones["Definir incrementos"]
+    assert inc.isEnabled() and definir.isEnabled() and "No disponible" not in inc.toolTip() + definir.toolTip()
+    inc.trigger()
+    assert ventana.visor.config.incremental is True and ventana.prefs["vista/incremental"] is True
+    ventana.cambiar_vista("incremental", False)
+    assert ventana.visor.config.incremental is False
+
+    class Falso(DialogoIncrementos):
+        def exec(self):
+            self.lineal.setValue(2.5)
+            self.angular.setValue(45)
+            return True
+    monkeypatch.setattr(modulo, "DialogoIncrementos", Falso)
+    definir.trigger()
+    assert ventana.visor.config.incrementos == (2.5, 45.0)
+    assert (ventana.prefs["vista/incremento_lineal"], ventana.prefs["vista/incremento_angular"]) == (2.5, 45.0)
+    dlg = DialogoIncrementos()                                      # tecleado de más: el aviso dice el máximo
+    dlg.angular.lineEdit().selectAll()
+    QTest.keyClicks(dlg.angular.lineEdit(), "999")
+    assert dlg.aviso.text() == "⚠ Máximo 360 °"
+    dlg.deleteLater()
 
 
 def test_la_fila_de_grupos_de_la_cinta_tiene_aire(ventana):

@@ -106,13 +106,26 @@ def test_ortografica_ancho_de_silueta_medido_en_pixeles(s):
 def test_rejilla_agrega_pixeles_guarda_opciones_y_deshace(s):
     antes = imagen(s, view="iso")
     estado = llamar(s, "set_grid", show=True, snap=True, four_views=True)
-    assert sum(estado.values()) == 3
+    assert estado["show"] and estado["snap"] and estado["four_views"]
     assert np.count_nonzero(imagen(s, view="iso") != antes) > 100
     llamar(s, "set_grid", snap=False)
-    assert s.doc.espacios["visor"]["rejilla"] == {"mostrar": True, "forzar": False, "cuatro_vistas": True}
+    rejilla = s.doc.espacios["visor"]["rejilla"]
+    assert (rejilla["mostrar"], rejilla["forzar"], rejilla["cuatro_vistas"]) == (True, False, True)
     llamar(s, "undo")
     assert llamar(s, "set_grid")["snap"] is True
     falla(s, "set_grid", show="sí")
+
+
+def test_p202_set_grid_guarda_el_desplazamiento_incremental_y_valida(s):
+    estado = llamar(s, "set_grid")
+    assert (estado["incremental_move"], estado["linear_increment"], estado["angular_increment"]) == (False, 1.0, 15.0)
+    estado = llamar(s, "set_grid", incremental_move=True, linear_increment=2.5, angular_increment=45)
+    assert (estado["incremental_move"], estado["linear_increment"], estado["angular_increment"]) == (True, 2.5, 45)
+    assert s.doc.espacios["visor"]["rejilla"]["incremento_lineal"] == 2.5
+    llamar(s, "undo")
+    assert llamar(s, "set_grid")["incremental_move"] is False
+    falla(s, "set_grid", linear_increment=0)
+    falla(s, "set_grid", angular_increment=400)
 
 
 def test_aislar_restaurar_y_deshacer(s):

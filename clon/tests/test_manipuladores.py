@@ -1618,3 +1618,57 @@ def test_p139_la_inclinacion_es_un_anillo_sobre_la_linea_neutra(app_qt):
     normal_cara = mp.punto_normal_cara(lateral)[1]
     assert abs(float(anillo.eje @ [0, 0, 1])) < 1e-6 and abs(float(anillo.eje @ normal_cara)) < 1e-6   # gira alrededor de la línea neutra: ⟂ al plano y a la cara
     panel.cancelar()
+
+
+# ---------------------------------------------------------------- P-202: Desplazamiento incremental
+def test_p202_con_desplazamiento_incremental_las_asas_saltan_de_a_un_incremento(app_qt):
+    """Fusion «Incremental Move»: la flecha de Extruir y la tríada/anillo de Mover quedan en múltiplos del incremento
+    lineal y del angular; sin la opción, el valor es libre."""
+    from omnicad.ui.comandos.modificar import MoverCopiar
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
+    visor.config.incremental, visor.config.incrementos = True, (5.0, 30.0)
+    medio, d = _sobre_flecha(panel, "flecha:distancia")
+    _arrastrar(visor, medio, medio + d * 120)
+    distancia = panel.ctx.evaluar(panel.valores["distancia"])
+    assert distancia >= 5 and distancia % 5 == pytest.approx(0)
+    panel.cancelar()
+
+    doc = _doc_caja()
+    panel, visor, _ = _panel(MoverCopiar(), doc, {"cuerpos": [_hit_cuerpo(doc)]})
+    visor.config.incremental, visor.config.incrementos = True, (2.5, 30.0)
+    gestor, triada = panel.manipuladores, _manip(panel, "triada")
+    k = gestor.escala(triada.centro)
+    a, b = gestor.pantalla([triada.centro + [30 * k, 0, 0], triada.centro + [40 * k, 0, 0]])[0]
+    _arrastrar(visor, a, a + (b - a) / np.linalg.norm(b - a) * 80)
+    dx = panel.ctx.evaluar(panel.valores["dx"])
+    assert dx > 0 and (dx / 2.5) == pytest.approx(round(dx / 2.5))
+    anillo = _manip(panel, "angulo:rz")
+    p0, p1 = (anillo.centro + (anillo.u * np.cos(t) + anillo.v * np.sin(t)) * anillo._r(gestor) for t in (0.0, 0.2))
+    s, _ = gestor.pantalla([p0, p1])
+    _arrastrar(visor, s[0], s[0] + (s[1] - s[0]) / np.linalg.norm(s[1] - s[0]) * 120)
+    rz = panel.ctx.evaluar(panel.valores["rz"], "angulo")
+    assert rz != 0 and rz % 30 == pytest.approx(0)
+    visor.config.incremental = False                                    # sin la opción: libre
+    nuevos = {"dx": 3.7, "rz": 12.3}
+    gestor._a_incrementos(triada, nuevos)
+    assert nuevos == {"dx": 3.7, "rz": 12.3}
+    panel.cancelar()
+
+
+def test_p202_el_incremento_no_deja_la_flecha_en_un_tope(app_qt):
+    """Si el múltiplo cae en el tope (distancia 0 no es válida), queda el valor acotado, no el tope."""
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, visor, _ = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "distancia": "3 mm"})
+    flecha = _manip(panel, "flecha:distancia")
+    flecha.minimo = 0
+    visor.config.incremental, visor.config.incrementos = True, (10.0, 15.0)
+    nuevos = {"distancia": 0.4}
+    panel.manipuladores._a_incrementos(flecha, nuevos)
+    assert nuevos == {"distancia": 0.4}                                 # 0 sería el tope: queda el acotado
+    nuevos = {"distancia": 13.0}
+    panel.manipuladores._a_incrementos(flecha, nuevos)
+    assert nuevos == {"distancia": 10.0}
+    panel.cancelar()

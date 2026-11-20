@@ -5420,7 +5420,7 @@ Ver y medir el resultado.
 | [`manage_carbon_materials`](#manage_carbon_materials) | no | Materiales de Sustainability Insights: lista los de fábrica con su fuente, las regiones y los propios; agrega o quita propios, y los importa o exporta a un .json. |
 | [`set_view`](#set_view) | sí | Guarda la cámara del visor: vista, órbita, proyección, zoom y objetivo. |
 | [`manage_named_views`](#manage_named_views) | sí | Lista, guarda, aplica, renombra o elimina vistas con nombre compatibles con el navegador de la ventana. |
-| [`set_grid`](#set_grid) | sí | Guarda mostrar rejilla, forzar a la rejilla y cuatro vistas. |
+| [`set_grid`](#set_grid) | sí | Guarda mostrar rejilla, forzar a la rejilla, cuatro vistas y el Desplazamiento incremental de las asas con sus incrementos (Rejilla y forzados › Definir incrementos). |
 | [`set_home_view`](#set_home_view) | sí | Fija o restablece la vista Inicio del ViewCube (la casita) o la vista de una de sus caras: «Establecer la vista actual como Inicio / como Frontal» y «Restablecer» de su menú. |
 | [`capture_viewport`](#capture_viewport) | no | Captura la vista 3D REAL de la ventana de OmniCAD tal como la ve la persona: cámara, estilo visual, entorno, selección y análisis mostrados. |
 
@@ -5854,13 +5854,16 @@ Lista, guarda, aplica, renombra o elimina vistas con nombre compatibles con el n
 
 ### `set_grid`
 
-Guarda mostrar rejilla, forzar a la rejilla y cuatro vistas. La imagen dibuja la rejilla del suelo cuando está visible.
+Guarda mostrar rejilla, forzar a la rejilla, cuatro vistas y el Desplazamiento incremental de las asas con sus incrementos (Rejilla y forzados › Definir incrementos). La imagen dibuja la rejilla del suelo cuando está visible.
 
 - Modifica el documento: sí, es un paso de deshacer.
 - Parámetros:
   - `show` (true/false; opcional, por defecto `null`): muestra u oculta la rejilla del suelo.
   - `snap` (true/false; opcional, por defecto `null`): activa o desactiva forzar a la rejilla.
   - `four_views` (true/false; opcional, por defecto `null`): activa o desactiva la opción de cuatro vistas.
+  - `incremental_move` (true/false; opcional, por defecto `null`): las asas de los comandos saltan de a un incremento fijo al arrastrarlas.
+  - `linear_increment` (número; opcional, por defecto `null`): salto de las medidas en mm, de 0,001 a 10000 (por defecto 1).
+  - `angular_increment` (número; opcional, por defecto `null`): salto de los ángulos en grados, de 0,01 a 360 (por defecto 15).
 - CLI: `omnicad call set_grid --doc pieza.omnicad`
 
 ### `set_home_view`

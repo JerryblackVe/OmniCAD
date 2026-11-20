@@ -467,6 +467,8 @@ class ConfigVista:
         self.rejilla_bloqueada = False      # el paso deja de adaptarse al zoom
         self.paso_bloqueado = None
         self.rejilla_fija = None            # None = adaptativa; (espaciado mayor, subdivisiones)
+        self.incremental = False            # P-202: las asas saltan de a un incremento fijo
+        self.incrementos = (1.0, 15.0)      # (lineal en mm, angular en grados)
         self.visibilidad = {"planos_origen": True, "ejes_origen": True, "punto_origen": True,
                             "planos_usuario": True, "bocetos": True, "nombres_planos_construccion": True,
                             "nombres_planos_origen": True}

@@ -57,7 +57,7 @@ from .cinta import Cinta
 from .comando import ContextoComando, PanelComando
 from .comandos import CATALOGO, comando_para
 from .dialogo_parametros import DialogoParametros
-from .dialogos import DialogoRecuperados, DialogoRejilla
+from .dialogos import DialogoIncrementos, DialogoRecuperados, DialogoRejilla
 from .iconos import icono
 from .modo_boceto import ModoBoceto
 from .navegador import ORIGEN, Navegador
@@ -711,6 +711,8 @@ class VentanaPrincipal(QMainWindow):
             c.rejilla_fija = (float(mayor), int(sub))
         except ValueError:
             c.rejilla_fija = None
+        c.incremental = bool(p["vista/incremental"])
+        c.incrementos = (float(p["vista/incremento_lineal"]), float(p["vista/incremento_angular"]))
         c.visibilidad = {k: p[f"vista/vis_{k}"] for k in CLAVES_VISIBILIDAD}
         self.barra_nav.set_estilo(c.estilo_visual)
 
@@ -874,7 +876,7 @@ class VentanaPrincipal(QMainWindow):
         return {"estilo_visual": c.estilo_visual, "entorno": c.entorno, "preset": self.prefs["graficos/preset"],
                 "camara": c.camara, "desfase_suelo": c.desfase_suelo, "rejilla": c.rejilla,
                 "rejilla_bloqueada": c.rejilla_bloqueada, "forzar_rejilla": self.prefs["vista/forzar_rejilla"],
-                "vistas_multiples": self.area.multiples, "tipo_orbita": c.tipo_orbita}.get(clave)
+                "incremental": c.incremental, "vistas_multiples": self.area.multiples, "tipo_orbita": c.tipo_orbita}.get(clave)
 
     def cambiar_vista(self, clave, valor):
         p, c = self.prefs, self.visor.config
@@ -905,6 +907,8 @@ class VentanaPrincipal(QMainWindow):
             p["vista/forzar_rejilla"] = bool(valor)
             if self.modo_boceto.activo:
                 self.modo_boceto.set_forzar(bool(valor))
+        elif clave == "incremental":
+            c.incremental = p["vista/incremental"] = bool(valor)
         elif clave == "vistas_multiples":
             if valor and self.modo_boceto.activo:
                 self.mensaje("Las vistas múltiples no se usan mientras se edita un boceto.")
@@ -934,6 +938,14 @@ class VentanaPrincipal(QMainWindow):
             self.prefs["vista/rejilla_fija"] = ",".join(map(str, c.rejilla_fija)) if c.rejilla_fija else ""
             for v in self.area.visores:
                 v.update()
+
+    def definir_incrementos(self):
+        """Rejilla y forzados › Definir incrementos (P-202): el salto lineal y el angular del Desplazamiento incremental."""
+        c = self.visor.config
+        dlg = DialogoIncrementos(*c.incrementos, parent=self)
+        if dlg.exec():
+            c.incrementos = dlg.valor()
+            self.prefs["vista/incremento_lineal"], self.prefs["vista/incremento_angular"] = c.incrementos
 
     def mirar_a(self):
         """Barra de navegación › Mirar a: en un boceto mira su plano; si no, la barra pide elegir."""
@@ -1654,6 +1666,9 @@ class VentanaPrincipal(QMainWindow):
         rejilla = datos.get("rejilla") or {}
         if rejilla != (previo.get("rejilla") or {}):
             c.rejilla = bool(rejilla["mostrar"]) if "mostrar" in rejilla else p["vista/rejilla"]
+            c.incremental = bool(rejilla.get("incremental", p["vista/incremental"]))     # P-202: set_grid (MCP/CLI)
+            c.incrementos = (float(rejilla.get("incremento_lineal", p["vista/incremento_lineal"])),
+                             float(rejilla.get("incremento_angular", p["vista/incremento_angular"])))
         self.visor.home, self.visor.vistas_cara = datos.get("home"), dict(datos.get("vistas_cara") or {})
         cam = datos.get("camara")
         if cam and cam != previo.get("camara"):
