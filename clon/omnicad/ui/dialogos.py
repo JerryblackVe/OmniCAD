@@ -147,6 +147,44 @@ class DialogoRejilla(QDialog):
         return (self.espaciado.value(), self.subdivisiones.value()) if self.fija.isChecked() else None
 
 
+class DialogoIncrementos(QDialog):
+    """Rejilla y forzados › Definir incrementos (Fusion «Set Increments», P-202): el salto lineal y el angular que usa
+    «Desplazamiento incremental» al arrastrar las asas de los comandos."""
+
+    def __init__(self, lineal=1.0, angular=15.0, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Definir incrementos")
+        self.setWindowIcon(icono("rejilla"))
+        self.lineal = NumeroDecimal(decimals=3, minimum=0.001, maximum=10000.0, suffix=" mm")
+        self.angular = NumeroDecimal(decimals=2, minimum=0.01, maximum=360.0, suffix=" °")
+        self.lineal.setValue(lineal)
+        self.angular.setValue(angular)
+        self.lineal.setToolTip("Cuánto avanza una flecha en cada salto.")
+        self.angular.setToolTip("Cuánto gira un anillo en cada salto.")
+        form = QFormLayout()
+        form.addRow("Incremento lineal", self.lineal)
+        form.addRow("Incremento angular", self.angular)
+        self.aviso = QLabel()           # B-728: el campo rechaza el dígito de más; acá se dice por qué
+        self.aviso.hide()
+        form.addRow(self.aviso)
+        for campo, unidad in ((self.lineal, "mm"), (self.angular, "°")):
+            campo.excedido.connect(lambda m, u=unidad: (self.aviso.setText(f"⚠ Máximo {m:g} {u}"), self.aviso.show()))
+        aceptar, cancelar = QPushButton("Aceptar"), QPushButton("Cancelar")
+        aceptar.setDefault(True)
+        aceptar.clicked.connect(self.accept)
+        cancelar.clicked.connect(self.reject)
+        botones = QHBoxLayout()         # UX-6: Cancelar a la izquierda, Aceptar abajo a la derecha
+        botones.addStretch(1)
+        botones.addWidget(cancelar)
+        botones.addWidget(aceptar)
+        lay = QVBoxLayout(self)
+        lay.addLayout(form)
+        lay.addLayout(botones)
+
+    def valor(self):
+        return (self.lineal.value(), self.angular.value())
+
+
 class DialogoPrimitiva(_DialogoBase):
     """Diálogo VIEJO de las primitivas (X/Y/Z y radio escritos a mano). La interfaz ya no lo abre: la cinta y el
     timeline usan los comandos con panel de `comandos/primitivas.py`. Se conserva para scripts y pruebas viejas."""

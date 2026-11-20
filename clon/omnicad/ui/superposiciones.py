@@ -709,10 +709,11 @@ class BarraNavegacion(QFrame):
         a.setToolTip("<b>Parámetros de rejilla</b><br>Paso y estilo de la rejilla (igual que Preferencias).")
         a.triggered.connect(self.ctl.parametros_rejilla)
         m.addSeparator()
-        for texto in ("Desplazamiento incremental", "Definir incrementos"):
-            a = m.addAction(texto)
-            a.setEnabled(False)
-            a.setToolTip("No disponible en OmniCAD: no hay herramienta de mover con incrementos.")
+        self._opcion(m, "Desplazamiento incremental", "incremental",
+                     ayuda="Al arrastrar las flechas y anillos de un comando, avanzan a saltos fijos.")
+        a = m.addAction("Definir incrementos")
+        a.setToolTip("<b>Definir incrementos</b><br>Cuánto salta cada paso: distancia y ángulo.")
+        a.triggered.connect(self.ctl.definir_incrementos)
         return m
 
     def _menu_ventanas(self):

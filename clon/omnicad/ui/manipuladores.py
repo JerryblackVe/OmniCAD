@@ -2110,6 +2110,7 @@ class GestorManipuladores(QObject):
         except Exception:  # noqa: BLE001
             log.debug("arrastre de manipulador", exc_info=True)
             return
+        self._a_incrementos(a["m"], nuevos)
         for k, (sano, sentido) in self._freno.items():
             if isinstance(nuevos.get(k), (int, float)) and (nuevos[k] - sano) * sentido > 0:
                 nuevos[k] = sano
@@ -2119,6 +2120,24 @@ class GestorManipuladores(QObject):
                 if self._sano is not None:
                     self._sano[k] = self.valor(k)        # el valor con que se agarró el asa tenía la previa sana
         self.escribir(nuevos)
+
+    def _a_incrementos(self, m, nuevos):
+        """P-202, Fusion «Incremental Move» (barra de navegación › Rejilla y forzados): con «Desplazamiento incremental»
+        el asa salta de a un incremento fijo, el lineal en medidas y el angular en ángulos («Definir incrementos»). El
+        valor queda en un múltiplo del incremento; si ese múltiplo toca o pasa un tope del asa, queda el valor acotado."""
+        cfg = getattr(self.visor, "config", None)
+        if not getattr(cfg, "incremental", False):
+            return
+        from .comando import Entero
+        lineal, angular = cfg.incrementos
+        for k, v in nuevos.items():
+            paso = {LONGITUD: lineal, ANGULO: angular}.get(self.tipo(k))
+            if not paso or isinstance(v, bool) or not isinstance(v, (int, float)) or isinstance(self.campo(k), Entero):
+                continue
+            s = round(v / paso) * paso
+            mn, mx = getattr(m, "minimo", None), getattr(m, "maximo", None)
+            if (mn is None or s > mn + 1e-9) and (mx is None or s < mx - 1e-9):
+                nuevos[k] = s
 
     def previa_calculada(self, sana):
         """B-345: el asa frena donde la pieza lo admite. Con el asa agarrada, una previa sana guarda los valores; una que

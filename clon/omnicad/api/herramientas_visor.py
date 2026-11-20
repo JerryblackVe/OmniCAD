@@ -125,22 +125,37 @@ def manage_named_views(sesion, action: Literal["list", "save", "apply", "rename"
     return {"views": [{"name": n, "camera": _vista_guardada(sesion, n)} for n in vistas], "count": len(vistas)}
 
 
-@herramienta("set_grid", "inspeccion", "Guarda mostrar rejilla, forzar a la rejilla y cuatro vistas. "
+@herramienta("set_grid", "inspeccion", "Guarda mostrar rejilla, forzar a la rejilla, cuatro vistas y el Desplazamiento "
+             "incremental de las asas con sus incrementos (Rejilla y forzados › Definir incrementos). "
              "La imagen dibuja la rejilla del suelo cuando está visible.", modifica=True)
-def set_grid(sesion, show: bool | None = None, snap: bool | None = None, four_views: bool | None = None):
+def set_grid(sesion, show: bool | None = None, snap: bool | None = None, four_views: bool | None = None,
+             incremental_move: bool | None = None, linear_increment: float | None = None,
+             angular_increment: float | None = None):
     """
     show: muestra u oculta la rejilla del suelo.
     snap: activa o desactiva forzar a la rejilla.
     four_views: activa o desactiva la opción de cuatro vistas.
+    incremental_move: las asas de los comandos saltan de a un incremento fijo al arrastrarlas.
+    linear_increment: salto de las medidas en mm, de 0,001 a 10000 (por defecto 1).
+    angular_increment: salto de los ángulos en grados, de 0,01 a 360 (por defecto 15).
     """
+    if linear_increment is not None and not 0.001 <= linear_increment <= 10000:
+        raise error("INVALID_ARGUMENTS", "El incremento lineal va de 0,001 a 10000 mm.")
+    if angular_increment is not None and not 0.01 <= angular_increment <= 360:
+        raise error("INVALID_ARGUMENTS", "El incremento angular va de 0,01 a 360 grados.")
     datos = _datos(sesion)
-    rejilla = {"mostrar": False, "forzar": False, "cuatro_vistas": False, **datos.get("rejilla", {})}
-    for clave, valor in (("mostrar", show), ("forzar", snap), ("cuatro_vistas", four_views)):
+    rejilla = {"mostrar": False, "forzar": False, "cuatro_vistas": False, "incremental": False,
+               "incremento_lineal": 1.0, "incremento_angular": 15.0, **datos.get("rejilla", {})}
+    for clave, valor in (("mostrar", show), ("forzar", snap), ("cuatro_vistas", four_views),
+                         ("incremental", incremental_move), ("incremento_lineal", linear_increment),
+                         ("incremento_angular", angular_increment)):
         if valor is not None:
             rejilla[clave] = valor
     datos["rejilla"] = rejilla
     sesion.doc.espacios["visor"] = datos
-    return {"show": rejilla["mostrar"], "snap": rejilla["forzar"], "four_views": rejilla["cuatro_vistas"]}
+    return {"show": rejilla["mostrar"], "snap": rejilla["forzar"], "four_views": rejilla["cuatro_vistas"],
+            "incremental_move": rejilla["incremental"], "linear_increment": rejilla["incremento_lineal"],
+            "angular_increment": rejilla["incremento_angular"]}
 
 
 @herramienta("set_flat_pattern_view", "chapa", "Activa solo el desarrollo de chapa o vuelve al modelo plegado. "
