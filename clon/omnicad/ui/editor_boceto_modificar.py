@@ -152,6 +152,14 @@ class LienzoModificarMixin:
             self.aplicar_cambio(lambda: self.b.partir(cid, xy), operacion=True)
         elif h == "desglosar_texto":
             self.aplicar_cambio(lambda: self.b.desglosar_texto(cid), operacion=True)
+        elif h == "editar_patron":
+            pid = self.patron_de([cid])
+            if pid is None:
+                self.mensaje.emit("Esa curva no es de un patrón.")
+            else:
+                listo = False
+                self.picks, self.picks_xy = [], []
+                self.editar_patron(pid)
         elif h == "circulo_3t":
             self.aplicar_cambio(lambda: self.b.agregar_circulo_tangente(picks, None, None, xys, self.construccion))
         elif h == "circulo_2t":
@@ -572,7 +580,7 @@ class LienzoModificarMixin:
         lo deja como estaba. Sin `pid`, el patrón de lo seleccionado."""
         pid = self.patron_de(self.seleccion) if pid is None else pid
         if pid is None:
-            self.mensaje.emit("Editar patrón: seleccioná una curva del patrón (o doble clic en su glifo).")
+            self.set_herramienta("editar_patron")     # B-729: espera el clic en una curva del patrón
             return False
         registro = next(r for r in self.b.patrones if r["id"] == pid)
         self.set_herramienta("patron_" + registro["tipo"])
