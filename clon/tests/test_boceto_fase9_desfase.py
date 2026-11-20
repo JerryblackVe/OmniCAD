@@ -193,6 +193,61 @@ def test_cambiar_la_cota_de_la_spline_larga_sigue_exacto_y_rapido():
     exacto(5.0)
 
 
+def _spline_larga_ya_modificada():
+    """Desfase de la spline larga con la cota ya cambiada (copia rehecha por B-711) y la madre deformada."""
+    from omnicad.restricciones import solver as S
+    b = Boceto()
+    madre = b.agregar_spline([(i * 30, 15 * (-1) ** i) for i in range(12)])
+    b.desfase(madre, 3)
+    cota = next(k for k, c in b.cotas.items() if c.tipo == "desfase")
+    assert resolver(b, {cota: 4.0}).ok
+    b.puntos[b.curvas[madre].pts[5]].y += 4
+    v = {cota: 5.0}
+    return S._Sistema(b, v, S._grupos(b)[0], fusionar=True)
+
+
+def test_jacobiano_del_desfase_de_spline_por_filas_da_lo_mismo(monkeypatch):
+    """P-185: el término de los puntos atados dice qué incógnita es de cada fila; el coloreo junta las columnas de la
+    copia (224 puntos: de ~450 evaluaciones por jacobiano a ~30) y el jacobiano da lo mismo, bit a bit."""
+    import numpy as np
+    from omnicad.restricciones import solver as S
+    sis = _spline_larga_ya_modificada()
+    atados = [f for f in sis.terminos if hasattr(f, "propias")]
+    assert atados
+    J, colores = S._jacobiano(sis, sis.x0), len(sis._coloreo[1])
+    for f in atados:
+        monkeypatch.delattr(f, "propias")
+    assert np.array_equal(J, S._jacobiano(sis, sis.x0)) and colores * 5 < len(sis._coloreo[1])
+
+
+def test_jacobiano_del_desfase_si_las_filas_fallan_lee_todo(monkeypatch):
+    import numpy as np
+    from omnicad.restricciones import solver as S
+    sis = _spline_larga_ya_modificada()
+    f = next(f for f in sis.terminos if hasattr(f, "propias"))
+    J = S._jacobiano(sis, sis.x0)
+    monkeypatch.setattr(f, "propias", [None] * len(f.propias), raising=False)      # filas rotas: camino normal
+    assert np.array_equal(J, S._jacobiano(sis, sis.x0))
+
+
+def test_energia_de_la_quintica_es_la_de_tramo_por_tramo():
+    """P-185: la matriz de energía copia la del tramo uniforme del medio (antes, 0,34 s con 224 puntos)."""
+    import numpy as np
+    from omnicad.restricciones.boceto_geometria import _GAUSS_W, _GAUSS_X, _PESOS_ENERGIA, _base_derivada, _energia_quintica
+    for m in (1, 3, 40):
+        nudos, H2 = _energia_quintica(m)
+        p, n = 5, len(nudos) - 6
+        H = np.zeros((n, n))
+        for s in range(5 * m):
+            a0, a1 = nudos[p + s], nudos[p + s + 1]
+            for x, w in zip(_GAUSS_X, _GAUSS_W, strict=True):
+                u, jac = 0.5 * (a0 + a1 + (a1 - a0) * x), 0.5 * (a1 - a0) * w
+                for orden in (1, 2, 3):
+                    b = np.asarray(_base_derivada(nudos, p, u, p + s, orden))
+                    H[s:s + p + 1, s:s + p + 1] += _PESOS_ENERGIA[orden] * jac * np.outer(b, b)
+        assert np.abs(H2.toarray() - 2 * H).max() <= 1e-12 * np.abs(H).max()
+
+
 def test_cambiar_la_cota_rehace_la_copia_dentro_de_la_tolerancia():
     """B-711: los puntos de la copia son los de la distancia con que se creó; al cambiar la cota, entre ellos se
     alejaba de la curva desfasada exacta (3→5 mm: 0,031 mm). Fusion la rehace tras resolver: la copia toma los puntos

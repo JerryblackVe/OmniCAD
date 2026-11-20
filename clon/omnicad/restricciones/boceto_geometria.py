@@ -220,13 +220,20 @@ def _energia_quintica(m):
     nudos = tuple([0.0] * p + [j / tramos for j in range(tramos)] + [1.0] * (p + 1))
     n = len(nudos) - p - 1
     H = np.zeros((n, n))
-    for s in range(tramos):
-        a0, a1 = nudos[p + s], nudos[p + s + 1]
+
+    def local(s):                                          # Σ w_k ∫ N_a^(k) N_b^(k) en el tramo s (6×6)
+        a0, a1, L = nudos[p + s], nudos[p + s + 1], np.zeros((p + 1, p + 1))
         for x, w in zip(_GAUSS_X, _GAUSS_W, strict=True):
             u, jac = 0.5 * (a0 + a1 + (a1 - a0) * x), 0.5 * (a1 - a0) * w
             for orden in (1, 2, 3):
                 b = np.asarray(_base_derivada(nudos, p, u, p + s, orden))
-                H[s:s + p + 1, s:s + p + 1] += _PESOS_ENERGIA[orden] * jac * np.outer(b, b)
+                L += _PESOS_ENERGIA[orden] * jac * np.outer(b, b)
+        return L
+    # P-185: lejos de las puntas los nudos son uniformes y la matriz del tramo es la misma; con 200 puntos (1000 tramos)
+    # armarla tramo por tramo tardaba 0,34 s y el refinado del desfase (B-711) la pide para cada cantidad de puntos
+    medio = local(p) if tramos > 2 * p + 1 else None
+    for s in range(tramos):
+        H[s:s + p + 1, s:s + p + 1] += medio if medio is not None and p <= s <= tramos - p - 1 else local(s)
     return nudos, sparse.coo_matrix(2 * H)                  # 2H (gradiente de la energía), disperso: de banda
 
 

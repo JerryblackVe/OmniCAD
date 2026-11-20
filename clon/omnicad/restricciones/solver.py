@@ -697,6 +697,8 @@ class _Sistema:
             else:   # `_patron` lee con su lector: índice por índice
                 P = np.array([self.P(x, p) for p in pids], dtype=float)
             return (P - hit[1] - lados * dist * hit[2]).ravel()
+        if ix is not None:      # P-185: cada fila lee su punto (más la madre y la distancia); ver `_patron`
+            f.propias = [self.idx_p[p] for p in pids for _xy in range(2)]
         self.terminos.append(f)
 
     def _contacto_punto(self, pid, cid):
@@ -1026,7 +1028,17 @@ def _patron(sis, x):
         k = len(f(lector))
         inicio.append(len(filas))
         lee.append(tuple(leidos))
-        filas += [tuple(leidos)] * k
+        propias, mias = getattr(f, "propias", None), [tuple(leidos)] * k
+        if propias is not None:
+            # P-185: un término vectorizado que dice qué incógnitas son de cada fila (las demás las leen todas): el
+            # coloreo junta sus columnas y el desfase de una spline larga (224 puntos) se deriva en pocas evaluaciones
+            try:
+                if len(propias) == k:
+                    comunes = leidos.difference(*propias)
+                    mias = [tuple(comunes.union(pr)) for pr in propias]
+            except Exception:   # vía rápida: si falla, todas las filas leen todo (el camino normal)
+                pass
+        filas += mias
     patron = np.zeros((len(filas), len(x)), dtype=bool)
     for r, cols in enumerate(filas):
         patron[r, list(cols)] = True
