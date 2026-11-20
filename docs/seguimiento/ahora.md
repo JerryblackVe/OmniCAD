@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Opus alto) | B-735 | Escalar una spline con manija (brief `~/coordinador/briefs/E1_B-735.md`); B-463 espera la prueba de E11 en Windows |
+| E1 (Sonnet medio) | P-191 | Botón «Usar estos valores siempre» en todos los comandos (brief `~/coordinador/briefs/E1_P-191.md`) |
 | E4 (Sonnet medio) | P-186 | Mosaico de Restricciones automáticas como Fusion (brief `~/coordinador/briefs/E4_P-186.md`) |
 | E7 (Sonnet medio) | REPRO-E11 + auditoría UX | Reproducir con eventos simulados B-729, B-730, B-731 (brief `~/coordinador/briefs/E7_repro.md`); incluir Restricciones automáticas (mosaico, P-186) en su prueba; B-734; después recorrer los comandos del boceto buscando tarjetas repetidas (una fila por caso) |
 | E8 (Sonnet medio) | P-187 | Cinta de BOCETO como Fusion y personalizable (brief `~/coordinador/briefs/E8_P-187.md`) |
@@ -24,7 +24,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 0 | P-191 (primera sesión que quede libre, Sonnet medio) | Botón «Usar estos valores siempre» (estrella) en todos los comandos |
 | 0 | PRUEBA-OPC-2 (E7) | Probar como usuario las 11 opciones que quedan sin prueba en `preparado/opciones_asas_boceto.md`: Insertar DXF, Vectorizar, Perfil giratorio (tolerancia, invertir, solo contorno), Desfase (cadena, topología), Kerning de un par, Boceto 3D |
 | 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
 | 2 | PRUEBA-PROY (hecha por E7: B-684, B-685, B-686 a OpenCode) | Probar como usuario los 5 tipos de PROYECTAR del boceto (Proyectar, Intersecar, Incluir geometría 3D, Perfil giratorio, Curva isoparamétrica): mouse simulado y valores raros contra `docs/fusion_docs` (E7, Sonnet medio; cada falla = fila nueva de boceto; antes, OpenCode prepara los tests que falten) |
