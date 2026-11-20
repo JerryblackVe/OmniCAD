@@ -71,6 +71,7 @@ class PanelPatron(QFrame):
         self.g.setColumnMinimumWidth(1, 150)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
+        self.scroll.setFocusPolicy(Qt.NoFocus)             # B-731: Tab desde el último campo no cae acá (Enter no aceptaba)
         self.scroll.setFrameShape(QFrame.NoFrame)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll.setWidget(self.cuerpo)
