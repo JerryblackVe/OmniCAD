@@ -15,7 +15,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E7 (Sonnet medio) | En espera (cupo 5) | Prueba como usuario de lo integrado el 20/11 y PRUEBA-OPC-2 (brief `~/coordinador/briefs/E7_siguiente.md`) |
 | E8 (Sonnet medio) | P-187 (B-619 en pausa hasta que E11 mida en Fusion) | Cinta de boceto como Fusion (brief `~/coordinador/briefs/E8_proximo.md`, lo entrega el maestro) |
 | E3 (Sonnet medio) | B-761 y B-762 | Origen oculto sin sólidos y elegir plano de boceto como Fusion (P-194/P-195 integrados; brief `~/coordinador/briefs/E3_B-761_B-762.md`) |
-| E6 (Opus alto) | B-763 y B-764 | Rueda con zoom al cursor < 1 s y grilla finita adaptativa (P-207 integrado; brief `~/coordinador/briefs/E6_B-763_B-764.md`) |
+| E6 (Opus alto) | — libre | B-763 integrado; B-764 Parcial (planos del origen: los cubre B-762 de E3). Sin ítem de velocidad en Sigue |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | Paró la noche del 20/11 (driver AMD de la PC en blanco; Gerardo reinicia a la mañana). Pendiente tras el reinicio: batería del punto 4, B-710; B-690 resuelto (Fusion no permite Perpendicular línea–spline). Tanda: `~/coordinador/casos/e11_noche_19-11.md`. Antes: Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
 
