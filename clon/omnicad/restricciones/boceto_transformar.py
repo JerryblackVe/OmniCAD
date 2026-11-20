@@ -280,7 +280,7 @@ class _Transformar:
 
     def comprobar_escalar(self, ids, base):
         """ErrorBoceto si `escalar` no puede mover lo elegido desde `base`: un punto fijo solo vale como base."""
-        fijos = self.puntos_fijos()
+        fijos = self.puntos_fijos(origen=False)
         if any(self.objetos[i]["bloqueado"] for i in ids if i in self.objetos):
             raise ErrorBoceto("Desbloqueá el objeto antes de escalarlo.")
         self.exigir_desbloqueadas(ids, "escalarla")
@@ -300,6 +300,10 @@ class _Transformar:
             ids = [i for i in ids if i not in self.objetos]
         self.comprobar_escalar(ids, base)
         pts = self._con_vertices_virtuales(ids, self.puntos_de(ids))
+        for k in [k for k, r in self.restricciones.items()     # B-512: el anclaje al origen se suelta si el punto se mueve
+                  if r.tipo == "fijo" and r.datos.get("origen") and set(r.entidades) <= set(pts)
+                  and math.dist(self.coords(r.entidades[0]), base) > 1e-9]:
+            del self.restricciones[k]
         self._transformar_puntos(pts, lambda q: (base[0] + factor * (q[0] - base[0]), base[1] + factor * (q[1] - base[1])))
         afectados = set(pts) | set(ids)
         for i in ids:

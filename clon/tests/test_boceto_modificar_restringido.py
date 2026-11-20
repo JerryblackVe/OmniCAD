@@ -398,3 +398,13 @@ def test_b245_mover_anclado_al_origen_se_rechaza_sin_cambios():
     assert L(s, "get_sketch") == antes
     assert api.llamar(s, "transform_sketch", {"sketch": "B", "dx": 0})["ok"]          # nada pedido: no es un rechazo
     assert api.llamar(s, "transform_sketch", {"sketch": "B", "dx": 200, "copy": True})["ok"]
+
+
+def test_b512_escalar_con_esquina_en_el_origen_desde_otra_base():
+    from omnicad.restricciones.boceto import Boceto
+    b = Boceto()
+    p = [b.agregar_punto(x, y) for x, y in ((0, 0), (10, 0), (10, 10))]
+    c = [b.agregar_linea(p[0], p[1]), b.agregar_linea(p[1], p[2])]
+    b.anclar_al_origen(p)
+    b.escalar([c[0].id if hasattr(c[0], "id") else c[0]], (5, 5), 2)
+    assert b.coords(p[0]) == (-5, -5)
