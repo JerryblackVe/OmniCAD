@@ -34,6 +34,7 @@ class Sesion:
         self.doc = documento if documento is not None else Documento()
         self.avisos = []
         self._llamadas = 0       # llamadas en curso de registro.llamar (más de una: anidadas, p. ej. execute_code)
+        self.al_deshacer = None           # lo arma el puente en vivo: la ventana deshace/rehace con `_deshacer_doc` (B-766)
         self.al_cambiar_espacios = None   # lo arma el puente en vivo: la ventana vuelve a leer doc.espacios
         self.tolerar_errores = False      # ver `transaccion`
         # B-509: copia de recuperación como la ventana. La prenden el servidor MCP y el CLI; apagada en las sesiones

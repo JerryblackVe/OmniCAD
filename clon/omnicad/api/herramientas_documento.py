@@ -605,14 +605,23 @@ def _pila(sesion):
             "can_undo": doc.puede_deshacer(), "can_redo": doc.puede_rehacer()}
 
 
+def _aplicar_pila(sesion, accion):
+    """B-766: en vivo, la ventana deshace/rehace por su camino (`_deshacer_doc`: relee espacios y muestra u oculta los
+    bocetos consumidos); sin ventana, directo."""
+    if sesion.al_deshacer is not None:
+        sesion.al_deshacer(accion)
+        return
+    accion()
+    if sesion.al_cambiar_espacios is not None:
+        sesion.al_cambiar_espacios()
+
+
 @herramienta("undo", "documento", "Deshace el último cambio del documento (cada herramienta que modifica es un paso).",
              modifica=True, transaccion=False)
 def undo(sesion):
     if not sesion.doc.puede_deshacer():
         raise error("NOTHING_TO_UNDO", "No hay nada para deshacer.")
-    sesion.doc.deshacer()
-    if sesion.al_cambiar_espacios is not None:      # deshacer también revierte doc.espacios: la ventana relee
-        sesion.al_cambiar_espacios()
+    _aplicar_pila(sesion, sesion.doc.deshacer)
     return _pila(sesion)
 
 
@@ -620,9 +629,7 @@ def undo(sesion):
 def redo(sesion):
     if not sesion.doc.puede_rehacer():
         raise error("NOTHING_TO_REDO", "No hay nada para rehacer.")
-    sesion.doc.rehacer()
-    if sesion.al_cambiar_espacios is not None:
-        sesion.al_cambiar_espacios()
+    _aplicar_pila(sesion, sesion.doc.rehacer)
     return _pila(sesion)
 
 

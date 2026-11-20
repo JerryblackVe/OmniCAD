@@ -68,6 +68,7 @@ class PuenteAgentes(QObject):
         self.sesion.seleccionar_entidades = getattr(ventana, "seleccionar_entidades", None)
         self.sesion.seleccionar_objetos_vectoriales = self._seleccionar_objetos_vectoriales
         self.sesion.al_cambiar_espacios = getattr(ventana, "releer_espacios", None)
+        self.sesion.al_deshacer = getattr(ventana, "_deshacer_doc", None)
         self.sesion.configurar_registro = lambda activo: ventana.registro_uso.configurar(activo)
         self.sesion.aplicar_ajustes_registro = lambda opciones: ventana.registro_uso.aplicar_ajustes(opciones)
         self.sesion.registrar_marca = lambda label: ventana.registro_uso.marcar(label=label)
