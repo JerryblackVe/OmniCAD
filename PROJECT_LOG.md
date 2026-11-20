@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · Traspaso E4.** 1) B-767 cerrado e integrado en main (721f9bf6). 2) B-554 (P2) no tomada. 3) B-514 (P2) sigue en pausa en `~/OmniCAD-B-514`. 4) Siguiente: B-675 y B-676 (brief del maestro).
 - **2026-11-20 · B-607 (E1), sin reproducir.** Con eventos simulados sobre a5d84793 no abre con 2 perfiles (editar limpia la selección y carga `op.p`). Test de regresión `test_b607_editar_extruir_un_perfil.py` (de E5). Fila: pasa a E11 con mouse real; el mensaje «de un mismo boceto» ya no existe (B-637).
 - **2026-11-20 · B-674 (E1).** Extruir con arcos casi tangentes: OCC marcaba inválido el contorno (autointersección) y se rechazaba; ahora `geo.sanar_forma` (ShapeFix) rescata si queda válido y con el mismo volumen (`operaciones._exigir_cuerpo_con_volumen`). 8 de los 9 diseños de la fila ya andaban; `63328_85753146` ok vs Fusion. Test `test_b674_extruir_arcos_tangentes.py`; ruff limpio.
 - **2026-11-20 · Traspaso E6 (B-775 Parcial, sin commit en ~/OmniCAD-B-775).** 1) Rueda 1,10× suelta + aceleración en ráfaga (`muescas_rueda`). 2) Falta: E11 mide ráfagas en Fusion y se ajustan `RUEDA_ACEL*`. 3) Filas nuevas B-780, B-781 (rojos de main). 4) Informe en ~/coordinador/buzon/E6.md.
