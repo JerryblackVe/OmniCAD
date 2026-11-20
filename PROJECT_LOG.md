@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · Traspaso E1 (B-766 sin cerrar).** 1) Hecho en ~/OmniCAD-B-766 (sin commit): `sesion.al_deshacer` + test en test_b753_extruir_sobre_cara.py, ruff limpio, fila borrada. 2) Falta: correr `xvfb-run -a PYTHONPATH=$PWD ../scripts/tests_afectados.py --correr` desde clon/ del worktree (tarda >10 min, en segundo plano) y `ponytail-review`; luego informe de 10 líneas.
+- **2026-11-20 · B-766.** `undo`/`redo` de la API en vivo usan `sesion.al_deshacer` (el puente lo enchufa a `ventana._deshacer_doc`): el boceto de la extrusión vuelve a verse. Test en test_b753_extruir_sobre_cara.py.
 - **2026-11-20 · B-738 cerrado (E1) con el ajuste empírico.** `_caja_natural` (máx. de diagonal y 0,8042·suma de la caja de polos) queda: 4 puntos ≤1 %, 5 puntos ≤2,5 % en 10 giros de Fusion. Ninguna p-norma de caja (polos, curva, puntos; p 0,6–2) cierra las dos formas: la fórmula exacta pide otra forma medida por E11. Test `test_b738_manija_giro.py`.
 - **2026-11-20 · Traspaso E6 (P-207 listo sin commit).** 1) Worktree ~/OmniCAD-P-207 (rama item/P-207): incrementos por defecto 5 mm/5° (Fusion); ruff limpio, 664 tests OK, ponytail-review sin hallazgos. 2) P-192 no empezado: P-194/P-195 abiertos. 3) Informe en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · Traspaso E6 (B-763/B-764 listos en ~/OmniCAD-B-763, sin commit).** 1) Rueda 1,4×/muesca hacia el cursor; arrastre igual. 2) Rejilla finita (3× el modelo, ≥100 mm), desvanecida al borde y rasante. 3) Resto de B-764 (planos del origen) a E3 con B-762. 4) Falta: E11 compara la rueda con Fusion. 5) Informe al coordinador.

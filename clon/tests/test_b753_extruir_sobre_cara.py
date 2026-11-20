@@ -115,3 +115,19 @@ def test_deshacer_la_extrusion_vuelve_a_mostrar_el_boceto(panel):
     assert perfil not in (v.doc.propiedades.get("__navegador__") or {}).get("ocultos", [])
     v._rehacer()
     assert len(s.doc.operaciones) == pasos and perfil in v.ocultos
+
+
+def test_undo_redo_de_la_api_en_vivo_tambien_muestran_y_ocultan_el_boceto(panel):
+    """B-766: el puente enchufa `_deshacer_doc` en la sesión; `undo`/`redo` de la API hacen lo mismo que Ctrl+Z/Ctrl+Y."""
+    s, v, p, perfil = panel
+    s.al_deshacer = v._deshacer_doc           # lo que arma `ui/puente.py`
+    teclear(p, "5")
+    QTest.mouseClick(p.boton_ok, Qt.LeftButton)
+    fin = time.time() + 6
+    while v.panel is not None and time.time() < fin:
+        QApplication.processEvents()
+    assert perfil in v.ocultos
+    llamar(s, "undo")
+    assert perfil not in v.ocultos
+    llamar(s, "redo")
+    assert perfil in v.ocultos
