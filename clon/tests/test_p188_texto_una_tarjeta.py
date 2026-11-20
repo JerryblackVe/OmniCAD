@@ -64,3 +64,13 @@ def test_aceptar_desde_caracter_guarda_el_angulo(modo_texto):
     modo.caracter.aceptado.emit()
     assert lz.entrada is None
     assert lz.b.curvas[tid].angulo == pytest.approx(30.0)
+
+
+def test_texto_nuevo_tambien_una_tarjeta(modo_texto):
+    lz, _tid, modo = modo_texto
+    lz.set_herramienta("texto")
+    lz.clics.append((None, (0.0, 0.0)))
+    lz.clics.append((None, (0.0, 0.0)))                                   # mismo lugar = texto de 5 mm
+    lz._procesar_clics()
+    assert lz.entrada is not None and lz.entrada.isHidden()               # P-188: la barra no es una 2.ª tarjeta
+    assert modo.caracter.fila_aceptar.isVisibleTo(modo.caracter)
