@@ -10,12 +10,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Sonnet medio) | B-709 y B-715 | Familia Espiral (B-712 a B-719 integrados; brief `~/coordinador/briefs/E1_B-709_B-715.md`) |
+| E1 (Sonnet medio) | B-753, B-754, B-755 | Extruir sobre cara: arranca en Unir, sin aviso falso, oculta el boceto consumido (B-709/B-715 integrados; brief `~/coordinador/briefs/E1_B-753_B-755.md`) |
 | E4 (Sonnet medio) | B-697 | Texto de 400 letras congela 1,4 s (B-729 integrado; brief `~/coordinador/briefs/E4_B-697.md`) |
 | E7 (Sonnet medio) | En espera (cupo 5) | Prueba como usuario de lo integrado el 20/11 y PRUEBA-OPC-2 (brief `~/coordinador/briefs/E7_siguiente.md`) |
 | E8 (Sonnet medio) | B-619 | Proyectar cuerpo de revolución (P-193 integrado; brief `~/coordinador/briefs/E8_B-619.md`) |
-| E3 (Sonnet medio) | P-195 y P-194 | Paleta, Navegador y paneles de comando: una tarjeta por tarea (brief `~/coordinador/briefs/E3_P-195_P-194.md`) |
-| E6 (Opus alto) | P-202 | Desplazamiento incremental y Definir incrementos de la rejilla (P-197 integrado; brief `~/coordinador/briefs/E6_P-202.md`) |
+| E3 (Sonnet medio) | B-761 y B-762 | Origen oculto sin sólidos y elegir plano de boceto como Fusion (P-194/P-195 integrados; brief `~/coordinador/briefs/E3_B-761_B-762.md`) |
+| E6 (Opus alto) | B-763 y B-764 | Rueda con zoom al cursor < 1 s y grilla finita adaptativa (P-207 integrado; brief `~/coordinador/briefs/E6_B-763_B-764.md`) |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | Paró la noche del 20/11 (driver AMD de la PC en blanco; Gerardo reinicia a la mañana). Pendiente tras el reinicio: batería del punto 4, B-710; B-690 resuelto (Fusion no permite Perpendicular línea–spline). Tanda: `~/coordinador/casos/e11_noche_19-11.md`. Antes: Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
 
