@@ -76,3 +76,44 @@ def test_la_grilla_de_textos_ocupados_da_lo_mismo_que_mirar_todas():
     ocupadas.agregar(QRectF(1000, 1000, 5, 5))
     assert ocupadas.choca(QRectF(1003, 1003, 1, 1))
     assert not ocupadas.choca(QRectF(float("nan"), 0, 5, 5))      # no rompe el pintado
+
+
+def test_a_px_con_visor_da_lo_mismo_que_proyectar():
+    """P-182: `a_px` con la matriz plano × cámara en floats es `visor.proyectar` (planos girados y desplazados, puntos
+    detrás de la cámara) y se rehace al cambiar la cámara."""
+    import numpy as np
+
+    from omnicad.ui.editor_boceto_base import LienzoBaseMixin
+    from omnicad.ui.visor3d import Visor3D
+
+    class _Visor:
+        proyectar = Visor3D.proyectar
+
+        def width(self):
+            return 1500
+
+        def height(self):
+            return 950
+
+    class _Lienzo(LienzoBaseMixin):
+        pass
+
+    azar = np.random.default_rng(3)
+    detras = 0
+    for plano in (g.Plano("XY"), g.Plano("YZ", 12.5), g.Plano("XZ", -4)):
+        lz = _Lienzo()
+        lz.visor, lz.plano = _Visor(), plano
+        for _camara in range(3):                                   # cámara nueva: no se usa la matriz vieja
+            lz._mvp = azar.normal(size=(4, 4))
+            for x, y in azar.uniform(-200, 200, size=(40, 2)):
+                w = (lz._mvp @ np.append(plano.a_3d(x, y), 1.0))[3]
+                if abs(w) < 1e-6:
+                    continue
+                q, r = lz.visor.proyectar(plano.a_3d(x, y), lz._mvp), lz.a_px(x, y)
+                if q is None:
+                    detras += 1
+                    assert (r.x(), r.y()) == (-1e5, -1e5)
+                else:
+                    assert r.x() == pytest.approx(q.x(), rel=1e-9, abs=1e-6)
+                    assert r.y() == pytest.approx(q.y(), rel=1e-9, abs=1e-6)
+    assert detras > 0

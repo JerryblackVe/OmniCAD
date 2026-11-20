@@ -55,18 +55,23 @@ class _Ocupadas:
 
     def _claves(self, caja):
         c = self.CELDA
-        if not all(map(math.isfinite, (caja.left(), caja.right(), caja.top(), caja.bottom()))):
-            return                                     # NaN o infinito: no ocupa ni choca (como `intersects`)
-        for i in range(math.floor(caja.left() / c), math.floor(caja.right() / c) + 1):
-            for j in range(math.floor(caja.top() / c), math.floor(caja.bottom() / c) + 1):
-                yield i, j
+        x0, x1, y0, y1 = caja.left(), caja.right(), caja.top(), caja.bottom()
+        if not math.isfinite(x0 + x1 + y0 + y1):
+            return ()                                  # NaN o infinito: no ocupa ni choca (como `intersects`)
+        return [(i, j) for i in range(math.floor(x0 / c), math.floor(x1 / c) + 1)
+                for j in range(math.floor(y0 / c), math.floor(y1 / c) + 1)]
 
     def agregar(self, caja):
         for k in self._claves(caja):
             self.celdas.setdefault(k, []).append(caja)
 
     def choca(self, caja):
-        return any(caja.intersects(o) for k in self._claves(caja) for o in self.celdas.get(k, ()))
+        celdas = self.celdas
+        for k in self._claves(caja):
+            for o in celdas.get(k, ()):
+                if caja.intersects(o):
+                    return True
+        return False
 
 
 def icono(*args, **kwargs):
@@ -254,7 +259,7 @@ class LienzoDibujoMixin:
     def _dibujar_glifos(self, p):
         """Un símbolo por restricción junto a su geometría (Fusion: uno en cada curva de una relación entre dos).
         Devuelve {id: caja} con el principal; los de la segunda curva quedan en `_zonas_glifos_extra`."""
-        zonas, cuenta, grupos = {}, {}, set()
+        zonas, cuenta, grupos, pixmaps = {}, {}, set(), {}
         self._zonas_glifos_extra = extras = []
         en_conflicto = set(self.conflictos_sin_esperar()) if self.resultado is not None and not self.resultado.ok else set()
         p.setPen(QPen(QColor(150, 150, 150), 1))
@@ -298,9 +303,12 @@ class LienzoDibujoMixin:
                 if r.id in en_conflicto:                    # BOC-7: el glifo que choca, con borde rojo
                     p.setPen(QPen(CONFLICTO, 2))
                 p.drawRoundedRect(caja, 2, 2)
-                pm = icono(ICONO_RESTRICCION.get(r.tipo, "")).pixmap(lado - 4, lado - 4)    # al tamaño justo, sin achicar
-                if oscuro and r.tipo not in ("fijo", "punto_medio"):
-                    pm = _tenido(pm, QColor(225, 228, 235))     # sobre el fondo oscuro, glifo claro como Fusion
+                pm = pixmaps.get((r.tipo, oscuro))                 # P-182: teñir 200 íconos por cuadro costaba 4 ms
+                if pm is None:
+                    pm = icono(ICONO_RESTRICCION.get(r.tipo, "")).pixmap(lado - 4, lado - 4)    # al tamaño justo
+                    if oscuro and r.tipo not in ("fijo", "punto_medio"):
+                        pm = _tenido(pm, QColor(225, 228, 235))     # sobre el fondo oscuro, glifo claro como Fusion
+                    pixmaps[(r.tipo, oscuro)] = pm
                 p.drawPixmap(int(caja.x()) + 2, int(caja.y()) + 2, pm)
                 if j == 0:
                     zonas[r.id] = caja
