@@ -41,7 +41,7 @@ Todo lo que figura **no** entra en la cola: tests a OpenCode, prueba de ventana 
 
 | Grupo | Comando | Clave | Test automático | Probado como usuario | Fila abierta |
 |---|---|---|---|---|---|
-| CONFIGURAR | Configurar | `configurar` | sí (13) | sí (2) | B-591 |
+| CONFIGURAR | Configurar | `configurar` | sí (13) | sí (2) | — |
 | CONFIGURAR | Mostrar tabla de configuración | `mostrar_configuracion` | **no** | sí (1) | — |
 | CREAR | Cota de boceto | `sk_cota` | sí (12) | sí (5) | — |
 | CREAR | Curva cónica | `sk_conica` | sí (9) | sí (1) | — |
