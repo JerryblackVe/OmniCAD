@@ -5,8 +5,8 @@ import numpy as np
 
 from .boceto_entidades import ErrorBoceto, Linea, Spline
 from .boceto_geometria import (
-    dominio, evaluar_primitiva, _funciones_base, _insertar_nudo, mas_cercano, nudos_uniformes, parametros_cuerda,
-    _tramo,
+    dominio, escala_manija, evaluar_primitiva, _funciones_base, _insertar_nudo, mas_cercano, nudos_uniformes,
+    parametros_cuerda, _tramo,
 )
 
 
@@ -80,7 +80,7 @@ class _Splines:
     def activar_manija(self, sid, pid, angulo=None, largo=None, curvatura=None):
         """Activa la manija de tangente (y, con `curvatura`, la de curvatura) en el punto de ajuste `pid`: una
         línea de construcción con la tangente actual de la curva (o `angulo`, grados) y largo `largo` (por defecto
-        |C'| / tramos, que no cambia la forma). Devuelve el id de la línea."""
+        |C'| / `escala_manija`, que no cambia la forma). Devuelve el id de la línea."""
         c = self._spline(sid, "ajuste")
         if c.cerrada:
             raise ErrorBoceto("Las manijas piden una spline abierta: abrila.")
@@ -92,7 +92,8 @@ class _Splines:
         u = parametros_cuerda(Q, c.grado)[c.pts.index(pid)]
         d = evaluar_primitiva(self.primitivas(sid)[0], u, 1)[1]
         a = math.radians(angulo) if angulo is not None else math.atan2(d[1], d[0])
-        largo = math.hypot(*d) / (len(Q) - 1) if largo is None else largo       # la derivada de hoy: no cambia la forma
+        if largo is None:                                   # la derivada de hoy: no cambia la forma
+            largo = math.hypot(*d) / escala_manija(Q, c.pts.index(pid), (math.cos(a), math.sin(a)), c.grado)
         if not 1e-6 < largo < math.inf:
             raise ErrorBoceto("El largo de la manija tiene que ser positivo.")
         fx, fy = self.coords(pid)
