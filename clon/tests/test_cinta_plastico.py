@@ -2,6 +2,7 @@
 """PLA-6: la pestaña PLÁSTICO de la cinta con los grupos de Fusion (CONFIGURACIÓN, CREAR de SÓLIDO completo,
 «Duplicar con uniones» también en INSERTAR) y los nombres de Fusion en los comandos."""
 import os
+import time
 
 import pytest
 
@@ -86,14 +87,26 @@ def test_duplicar_con_uniones_tambien_en_insertar(cinta):
     assert textos.index("Fijacion") < textos.index("Duplicar con uniones") < textos.index("Insertar derivacion")
 
 
+def _esperar(cond, ms):
+    """Procesa eventos hasta que `cond()` sea verdadera (sin sleeps fijos)."""
+    from PySide6.QtWidgets import QApplication
+    t = time.monotonic() + ms / 1000
+    while not cond() and time.monotonic() < t:
+        QApplication.processEvents()
+        QTest.qWait(10)
+    return cond()
+
+
 def _abrir_y_clic(cinta, grupo, clave, abiertos):
     a = cinta.acciones[clave]
     menu = grupo.menu()
     assert a in [x for x in menu.actions() if not x.isSeparator()], f"{clave} no está en {grupo.text()}"
     a.triggered.connect(lambda _=False, c=clave: abiertos.append(c))
+    n = len(abiertos)
     QTest.mouseClick(grupo, Qt.LeftButton)
-    assert menu.isVisible()
+    assert _esperar(menu.isVisible, 3000)    # B-679: bajo carga el menú tarda en abrirse
     QTest.mouseClick(menu, Qt.LeftButton, Qt.NoModifier, menu.actionGeometry(a).center())
+    assert _esperar(lambda: len(abiertos) > n, 3000)
     return abiertos
 
 

@@ -24,7 +24,7 @@ def test_b579_la_operacion_elegida_a_mano_queda(abrir, elegida, queda, n):  # no
     llamar(s, "extrude", sketch=rectangulo(s, 0, 30, 100, 60), distance=10)
     rectangulo(s, -10, -30, 110, 70)          # tapa los dos cuerpos: con Cortar, el documento queda vacío
     p = abrir(s)
-    assert p.valores["perfiles"] and p.valores["operacion"] == "nuevo"
+    assert p.valores["perfiles"] and p.valores["operacion"] == "unir"    # B-753: el perfil apoyado en un sólido abre en Unir
     p.set_valor("distancia", "10")
     if elegida:
         elegir_en_lista(p.widgets["operacion"], elegida)    # antes de que llegue la previa
