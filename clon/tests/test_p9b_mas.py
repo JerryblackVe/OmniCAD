@@ -8,7 +8,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QPoint, QSettings, Qt  # noqa: E402
+from PySide6.QtCore import QEvent, QPoint, QPointF, QSettings, Qt  # noqa: E402
 from PySide6.QtGui import QKeySequence  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialogButtonBox, QMenu, QToolButton  # noqa: E402
@@ -74,8 +74,9 @@ def test_clic_en_el_mas_abre_el_menu_y_no_ejecuta_el_comando(v):
     assert menu.actionGeometry(accion).contains(zona) and zona.width() == 22
     QTest.mouseClick(menu, Qt.LeftButton, Qt.NoModifier, zona.center())
     mas = v._filtro_mas.menu_abierto
-    assert [a.text() for a in mas.actions() if a.text()] == ["Quitar de atajos", "Fijar en la barra",
-                                                           "Cambiar atajo de teclado…"]
+    assert [a.text() for a in mas.actions() if a.text()] == ["Quitar de los accesos directos",
+                                                           "Anclar en la barra de herramientas",
+                                                           "Cambiar las teclas de acceso rápido…"]
     assert v.panel is None                                        # no se abrió el diálogo de Extruir
     mas.hide()
     menu.hide()
@@ -183,3 +184,59 @@ def test_el_dialogo_avisa_del_conflicto_y_bloquea_aceptar(v):
     dlg.restablecer.click()
     assert dlg.secuencia() == ""
     dlg.deleteLater()
+
+
+def test_p187_las_herramientas_del_boceto_tienen_mas_y_la_cinta_muestra_las_de_fusion(v):
+    from omnicad.ui.cinta_boceto import GRUPOS_BOCETO
+    assert v._filtro_mas.clave(v.acciones["sk_linea"]) == "sk_linea"
+    assert v._filtro_mas.clave(v.acciones["sk_autorestringir"]) == "sk_autorestringir"
+    restr = next(g for g in GRUPOS_BOCETO if g[0] == "RESTRICCIONES")[1]
+    assert restr[0] == "sk_autorestringir" and len(restr) == 13 and "sk_r_poligono" not in restr
+    v._filtro_mas.cambiar_tecla("sk_linea", "Ctrl+Alt+L")
+    assert v.acciones["sk_linea"].shortcut().toString() == "Ctrl+Alt+L"
+
+
+def test_p187_soltar_una_herramienta_en_un_grupo_de_boceto_la_ancla_y_se_guarda(v):
+    from PySide6.QtCore import QMimeData
+    from PySide6.QtGui import QDropEvent
+
+    from omnicad.api import cinta_personal as cp
+    from omnicad.ui.cinta import MIME_COMANDO, _ZonaSoltar
+    zona = next(z for z in v.cinta.findChildren(_ZonaSoltar)
+                if any(b.defaultAction() is v.acciones["sk_empalme"] for b in z.findChildren(QToolButton)))
+    mime = QMimeData()
+    mime.setData(MIME_COMANDO, b"sk_chaflan")
+    zona.dropEvent(QDropEvent(QPointF(3, 3), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+    assert cp.leer(v.prefs["cinta/personal"])["BOCETO/MODIFICAR"][-1] == "sk_chaflan"
+    avisos = []
+    v.cinta.aviso.connect(avisos.append)
+    v.cinta.anclar("BOCETO", "MODIFICAR", "sk_chaflan")                 # ya está
+    assert avisos == ["Ya está en la barra."]
+
+
+def test_p187_arrastrar_la_fila_de_un_menu_arma_el_arrastre_con_su_comando(v, monkeypatch):
+    from PySide6.QtGui import QMouseEvent
+
+    from omnicad.ui import mas_comando
+    from omnicad.ui.cinta import MIME_COMANDO
+    vistos = []
+
+    class FalsoDrag:
+        def __init__(self, _):
+            pass
+
+        def setMimeData(self, m):
+            vistos.append(bytes(m.data(MIME_COMANDO)).decode())
+
+        def exec(self, _):
+            return 0
+    monkeypatch.setattr(mas_comando, "QDrag", FalsoDrag)
+    menu = _menu_de(v, "extruir")
+    menu.popup(QPoint(40, 40))
+    QTest.qWait(30)
+    fila = menu.actionGeometry(v.acciones["extruir"]).center()
+    f = v._filtro_mas
+    for tipo, p, botones in ((QEvent.MouseButtonPress, fila, Qt.LeftButton), (QEvent.MouseMove, fila + QPoint(30, 0), Qt.LeftButton)):
+        e = QMouseEvent(tipo, QPointF(p), QPointF(menu.mapToGlobal(p)), Qt.LeftButton, botones, Qt.NoModifier)
+        f.eventFilter(menu, e)
+    assert vistos == ["extruir"]

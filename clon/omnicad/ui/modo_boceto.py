@@ -1189,10 +1189,13 @@ class ModoBoceto(QObject):
         for clave, texto, herramienta, atajo, ico in ACCIONES_BOCETO:
             a = QAction(icono(ico), texto, ventana, checkable=herramienta != "proyectar_eje")
             a.setProperty("clave", clave)
+            a.setProperty("titulo", texto)
+            a.setProperty("atajo_defecto", atajo or "")          # P-187: el ⋮ de la cinta (anclar, cambiar teclas)
             ayuda = HERRAMIENTAS.get(herramienta, ("", DETALLE_RESTRICCION.get(herramienta)
                                                    or AYUDA_RESTRICCION.get(herramienta, "")))[1]
             visible = (atajo or "").replace("Shift", "Mayúsculas")
             a.setToolTip(f"<b>{texto}</b><br>{ayuda}" + (f"<br><span style='color:#bbbbbb'>{visible}</span>" if atajo else ""))
+            a.setProperty("ayuda", ayuda)
             if atajo:
                 a.setShortcut(QKeySequence(atajo))
                 a.setText(f"{texto}\t{visible}")
@@ -1236,7 +1239,10 @@ class ModoBoceto(QObject):
                  "Proyecciones que ya no coinciden con el modelo: re-vincular, romper vínculo o borrar.")):
             a = QAction(icono(ico), texto, ventana)
             a.setProperty("clave", clave)
+            a.setProperty("titulo", texto)
+            a.setProperty("atajo_defecto", atajo or "")
             a.setToolTip(f"<b>{texto}</b><br>{ayuda}")
+            a.setProperty("ayuda", ayuda)
             if atajo:
                 a.setShortcut(QKeySequence(atajo))
                 a.setText(f"{texto}\t{atajo}")

@@ -8,10 +8,16 @@ que no está ahí queda como de fábrica.
 """
 import json
 
-from .catalogo_atajos import CATALOGO as COMANDOS
-from .catalogo_cinta import SECCIONES
+from .catalogo_atajos import CATALOGO
+from .catalogo_cinta import SECCIONES, TITULOS_BOCETO
 
+COMANDOS = {**CATALOGO, **{c: (t, "") for c, t in TITULOS_BOCETO.items()}}      # + los del boceto (P-187)
 MAXIMO = 8          # botones grandes por sección: con más, la cinta no entra en una pantalla de 1024 px
+
+
+def maximo(seccion):
+    """Botones grandes que admite la sección: MAXIMO, o los de fábrica si son más (RESTRICCIONES del boceto, P-187)."""
+    return max(MAXIMO, len(SECCIONES.get(seccion, ())))
 
 
 def leer(texto):
@@ -27,7 +33,7 @@ def leer(texto):
     for seccion, claves in datos.items():
         if seccion in SECCIONES and isinstance(claves, list):
             limpias = list(dict.fromkeys(c for c in claves if isinstance(c, str) and c in COMANDOS))
-            salida[seccion] = limpias[:MAXIMO]
+            salida[seccion] = limpias[:maximo(seccion)]
     return salida
 
 
@@ -56,8 +62,8 @@ def validar(seccion, claves):
         return "No existe el comando «%s»." % malas[0]
     if len(set(claves)) != len(claves):
         return "Hay herramientas repetidas."
-    if len(claves) > MAXIMO:
-        return "Una sección lleva como mucho %d botones." % MAXIMO
+    if len(claves) > maximo(seccion):
+        return "Una sección lleva como mucho %d botones." % maximo(seccion)
     return None
 
 

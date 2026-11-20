@@ -43,7 +43,7 @@ GRUPOS_BOCETO = [
         _i("Partir", "sk_partir"), _i("Escala del boceto", "sk_escala"),
         _i("Mover/copiar", "sk_mover"), SEP,
         _i("Cambiar parámetros", "parametros")]),
-    ("RESTRICCIONES", [f"sk_{r}" for r in _RESTR],
+    ("RESTRICCIONES", ["sk_autorestringir"] + [f"sk_{r}" for r in _RESTR[:-1]],     # a la vista: Autorestringir + las 12 de Fusion (P-187)
      # las 12 de Fusion, y aparte (SEP) la propia de OmniCAD: el polígono regular que crean las herramientas de polígono
      [_i("", f"sk_{r}") for r in _RESTR[:-1]] + [SEP, _i("", "sk_r_poligono"), SEP, _i("", "sk_autorestringir"),
       _i("", "sk_autorestringir_referencia")]),

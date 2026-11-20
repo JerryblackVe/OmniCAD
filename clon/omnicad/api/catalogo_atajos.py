@@ -219,8 +219,6 @@ CATALOGO = {
     'seleccionar_todo': ('Seleccionar todo', 'Ctrl+A'),
     'separar_malla': ('Separar', ''),
     'simetria_3d': ('Simetría', ''),
-    'sk_curva_interseccion': ('Curva de intersección', ''),
-    'sk_proyectar_superficie': ('Proyectar a superficie', ''),
     'solevacion': ('Solevación', ''),
     'suavizar_malla': ('Suavizar', ''),
     'sup_barrido': ('Barrido de superficie', ''),
