@@ -1676,7 +1676,7 @@ class ModoBoceto(QObject):
                     self.lienzo.programar_previa_iso()       # la isoparamétrica se ve con el valor nuevo
                 elif clave.endswith("_estrella") or clave in ("redondeo_puntas", "redondeo_valles"):
                     self.lienzo.rehacer_figura()             # la previa o la estrella recién dibujada (P-154)
-                elif clave in ("filtro_proyectar", "vinculo_proyeccion"):
+                elif clave in ("filtro_proyectar", "vinculo_proyeccion", "eje_giro"):
                     self.lienzo.cambiar_opcion_proyeccion()  # la tarjeta revisa la selección y el resultado
             self.lienzo.refrescar_previa_texto()          # fuente, estilo y alineación se ven en vivo
 

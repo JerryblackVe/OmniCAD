@@ -175,7 +175,8 @@ PATRON = ("patron_rectangular", "patron_circular")     # los maneja `ControlPatr
 TRANSFORMAR = ("escala", "mover")                      # los maneja `ControlTransformar` (ui/transformar_boceto.py)
 SPLINES = ("spline_ajuste", "spline_control")
 PROYECCION = ("proyectar", "intersecar", "incluir_3d", "perfil_giratorio", "isoparametrica")
-COMANDO_PROYECCION = ("proyectar", "intersecar")        # con tarjeta: se elige, se revisa la vista previa y se acepta
+COMANDO_PROYECCION = PROYECCION                          # con tarjeta: se elige, se revisa y se acepta (P-193: una sola tarjeta)
+SIN_VISTA_PREVIA = ("incluir_3d", "perfil_giratorio", "isoparametrica")   # la tarjeta lista lo elegido; Aceptar lo agrega
 CAPA_PROYECCION = "proyeccion_elegida"                  # capa del visor con lo elegido en la tarjeta
 CURVA_TEXTO = ("camino_lado", "camino_colocacion", "camino_desfase", "camino_ajustar")      # opciones del texto sobre una curva
 MODIFICAN = tuple(PICKS) + SELECCION + PROYECCION       # no aplican el tipo de línea a lo que crean
@@ -749,6 +750,7 @@ __all__ = [
     "SPLINES",
     "PROYECCION",
     "COMANDO_PROYECCION",
+    "SIN_VISTA_PREVIA",
     "CAPA_PROYECCION",
     "CURVA_TEXTO",
     "MODIFICAN",

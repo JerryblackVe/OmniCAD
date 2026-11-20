@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · Traspaso E8 (P-193 listo sin commit).** 1) ~/OmniCAD-P-193: tarjeta única en Incluir 3D, Perfil giratorio e Isoparamétrica (`SIN_VISTA_PREVIA` en `editor_boceto_proyeccion.py`). 2) Sin probar: mouse real, capturas de tema y 150 %, Perfil giratorio sin test propio. 3) P-187 y P-189 ya integrados. 4) Sigue: lo que mande el coordinador.
+- **2026-11-20 · P-193 (E8): una sola tarjeta en Incluir 3D, Perfil giratorio e Isoparamétrica.** Como Proyectar/Intersecar: lista «Geometría» + Aceptar/Cancelar dentro de la tarjeta; los clics eligen y Aceptar agrega todo en un solo deshacer (`editor_boceto_proyeccion.py`, `SIN_VISTA_PREVIA`). Tests: `test_proyectar_tarjeta.py` (71 OK). Paleta intacta (E3).
 - **2026-11-20 · Traspaso E6 (P-185b listo sin commit).** 1) ~/OmniCAD-P-185b: P-185 cerrado (fila borrada), cambio de cota 0,8–2,2 s → 0,4–0,8 s. 2) Fila nueva P-201: hilos de OpenBLAS lentos con la VPS cargada. 3) Integra el coordinador. 4) Informe en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · P-185b (E6): desfase de spline larga 0,8–2,2 → 0,4–0,8 s.** Jacobiano con la derivada exacta de la quíntica (`sensibilidad_spline`, `_spline_movida`: 161 → 73 jacobianos) y `_libres` con QR (`_libres_qr`). Tests: `test_derivada_de_la_quintica_es_la_de_diferencias_finitas`, `test_resolver_con_la_derivada_de_la_spline_da_lo_mismo`.
 - **2026-11-20 · Traspaso E6 (contexto 30 %, P-185 listo sin commit).** 1) ~/OmniCAD-P-185: cota del desfase de spline larga 3–7 → 0,8–2,2 s, mismo resultado. 2) Queda (P-185 Parcial): SVD de `_libres` y reinterpolar la madre. 3) Banco: ~/coordinador/casos/p185/p185.py. 4) Tests del núcleo: 1265 OK.
