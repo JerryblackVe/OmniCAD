@@ -115,6 +115,7 @@ class LienzoCotasMixin:
             self._t_caret.stop()
             self.unsetCursor()
             self.update()
+            self.objetos.notificar()             # P-188: vuelve el panel de objetos si hay uno elegido
         if self._paleta_texto:
             self._paleta_texto = False
             self.herramienta_cambiada.emit(self.herramienta)     # la paleta vuelve a las opciones de la herramienta

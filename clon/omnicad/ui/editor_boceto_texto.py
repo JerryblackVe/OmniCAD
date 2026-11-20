@@ -114,6 +114,7 @@ class LienzoTextoMixin:
         self._texto_oculto = tid                 # mientras se escribe se ve la previa en vivo en su lugar
         self._conectar_previa_texto()
         self.texto_en_edicion.emit()
+        self.objetos.notificar()                 # P-188: el panel de objetos se esconde mientras se edita
         i = self._indice_en_texto(pos)           # el cursor queda donde se hizo doble clic
         if i is not None:
             self._previa_texto["cursor"] = i
@@ -125,6 +126,7 @@ class LienzoTextoMixin:
             campo.textChanged.connect(lambda _t: self.refrescar_previa_texto())
         self.entrada.hacer_movible()
         self.entrada.ocultar_primero()           # el texto se escribe en el cuadro, no en la barra
+        self.entrada.hide()                      # P-188: sus valores (altura, ángulo…) viven en la tarjeta Carácter; la barra queda como motor
         d, n = self._previa_texto, len(self._texto_real())
         d.setdefault("cursor", n)
         d.update(ancla=None, col=None, mapa=None, deshacer=[], rehacer=[])
@@ -135,8 +137,8 @@ class LienzoTextoMixin:
         self._t_caret.start()
         self.setFocus()
         self.mensaje.emit("Escribí el texto directamente en el cuadro. Flechas o clic = mover el cursor; Mayús = "
-                          "seleccionar; Enter = línea nueva; Ctrl+Enter o clic afuera = aceptar; Tab = altura y "
-                          "demás; Esc = cancelar.")
+                          "seleccionar; Enter = línea nueva; Ctrl+Enter o clic afuera = aceptar; Esc = cancelar. "
+                          "Fuente, altura y alineación, en la tarjeta Carácter.")
         self.refrescar_previa_texto()
 
     def confirmar_texto_pendiente(self):
