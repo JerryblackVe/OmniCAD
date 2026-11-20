@@ -117,3 +117,65 @@ def test_a_px_con_visor_da_lo_mismo_que_proyectar():
                     assert r.x() == pytest.approx(q.x(), rel=1e-9, abs=1e-6)
                     assert r.y() == pytest.approx(q.y(), rel=1e-9, abs=1e-6)
     assert detras > 0
+
+
+def _zonas_arrastrando(lz, pid, destinos):
+    """Arrastra `pid` por `destinos` pintando cada cuadro; devuelve las zonas de las cotas del último cuadro."""
+    lz._arrastre = pid
+    for cur in destinos:
+        lz._mover_punto(pid, cur)
+        lz.grab()
+    return {i: c.getRect() for i, c in lz._zonas_cotas.items()}
+
+
+def _zonas_normales(lz):
+    arrastre, lz._arrastre = lz._arrastre, None
+    lz.grab()
+    lz._arrastre = arrastre
+    return {i: c.getRect() for i, c in lz._zonas_cotas.items()}
+
+
+def _dos_piezas_acotadas():
+    b = Boceto()
+    a = b.agregar_rectangulo((0, 0), (20, 10))
+    otra = b.agregar_rectangulo((60, 0), (90, 15))
+    for lado, valor in ((a[0], "20"), (a[1], "10"), (otra[0], "30"), (otra[1], "15")):
+        b.agregar_cota("distancia", [lado], valor)
+    QApplication.instance() or QApplication([])
+    lz = Lienzo(b, TablaParametros().evaluar, plano=g.Plano("XY"))
+    lz.resolver()
+    lz.resize(900, 500)
+    return lz, a, otra
+
+
+def test_cotas_quietas_desde_la_imagen_mientras_se_arrastra():
+    """P-182: arrastrando, las cotas que no se mueven salen de la imagen guardada y las zonas son las del camino
+    normal; con el boceto ya modificado por un arrastre y una cota cambiada, la imagen vieja no se usa."""
+    lz, a, otra = _dos_piezas_acotadas()
+    pid = lz.b.curvas[a[1]].p2                                    # esquina de arriba a la derecha (libre en Y)
+    destinos = [(20.0, 10.0 + 0.3 * i) for i in range(1, 5)]
+    zonas = _zonas_arrastrando(lz, pid, destinos)
+    assert lz._cache_cotas is not None                           # el último cuadro copió la imagen
+    quietas = {c.id for c in lz.b.cotas.values() if c.entidades[0] in otra}
+    assert quietas <= lz._cache_cotas["ids"]
+    assert zonas == _zonas_normales(lz)
+    lz._arrastre = None                                          # soltar: sin imagen
+    lz.grab()
+    assert lz._cache_cotas is None
+    cid = next(c.id for c in lz.b.cotas.values() if c.entidades[0] == otra[0])
+    lz.b.cotas[cid].expresion = "40"                              # ya modificado: otra pieza, otro largo
+    lz.resolver()
+    zonas = _zonas_arrastrando(lz, pid, [(20.0, 12.0 + 0.3 * i) for i in range(1, 5)])
+    assert lz._cache_cotas["firmas"][cid] == lz._firma_cota(lz.b.cotas[cid])     # la imagen es de la cota nueva
+    assert zonas == _zonas_normales(lz)
+
+
+def test_cotas_arrastrando_si_la_via_rapida_falla_dibuja_todo(monkeypatch):
+    lz, a, _otra = _dos_piezas_acotadas()
+
+    def falla(*_a):
+        raise RuntimeError("caché rota")
+    monkeypatch.setattr(type(lz), "_plan_cotas_arrastre", falla)
+    pid = lz.b.curvas[a[1]].p2
+    zonas = _zonas_arrastrando(lz, pid, [(20.0, 10.0 + 0.3 * i) for i in range(1, 4)])
+    assert len(zonas) == 4 and zonas == _zonas_normales(lz)
