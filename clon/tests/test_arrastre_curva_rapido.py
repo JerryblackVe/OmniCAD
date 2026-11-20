@@ -160,6 +160,7 @@ def test_cotas_quietas_desde_la_imagen_mientras_se_arrastra():
     assert lz._cache_cotas is not None                           # el último cuadro copió la imagen
     quietas = {c.id for c in lz.b.cotas.values() if c.entidades[0] in otra}
     assert quietas <= lz._cache_cotas["ids"]
+    assert _igual_que_sin_arrastrar(lz)                          # B-741: con el texto (también el girado) igual
     assert zonas == _zonas_normales(lz)
     lz._arrastre = None                                          # soltar: sin imagen
     lz.grab()
@@ -169,6 +170,7 @@ def test_cotas_quietas_desde_la_imagen_mientras_se_arrastra():
     lz.resolver()
     zonas = _zonas_arrastrando(lz, pid, [(20.0, 12.0 + 0.3 * i) for i in range(1, 5)])
     assert lz._cache_cotas["firmas"][cid] == lz._firma_cota(lz.b.cotas[cid])     # la imagen es de la cota nueva
+    assert _igual_que_sin_arrastrar(lz)
     assert zonas == _zonas_normales(lz)
 
 
@@ -180,7 +182,7 @@ def test_cotas_arrastrando_si_la_via_rapida_falla_dibuja_todo(monkeypatch):
     monkeypatch.setattr(type(lz), "_plan_cotas_arrastre", falla)
     pid = lz.b.curvas[a[1]].p2
     zonas = _zonas_arrastrando(lz, pid, [(20.0, 10.0 + 0.3 * i) for i in range(1, 4)])
-    assert len(zonas) == 4 and zonas == _zonas_normales(lz)
+    assert len(zonas) == 4 and _igual_que_sin_arrastrar(lz) and zonas == _zonas_normales(lz)
 
 
 def _imagen(lz, arrastrando):
@@ -191,14 +193,13 @@ def _imagen(lz, arrastrando):
     return np.frombuffer(imagen.constBits(), np.uint8).reshape(imagen.height(), imagen.width(), 4).astype(int)
 
 
-def _igual_que_sin_arrastrar(lz, monkeypatch):
-    """El cuadro arrastrando es el del camino normal; hasta 2 niveles por el redondeo del fondo semitransparente de
-    los íconos al copiarlo de la imagen. Las cotas, por el camino normal: su imagen suaviza el texto distinto."""
-    monkeypatch.setattr(type(lz), "_plan_cotas_arrastre", lambda self, p, cotas, *_a: ([(p, c) for c in cotas], None))
+def _igual_que_sin_arrastrar(lz):
+    """El cuadro arrastrando es el del camino normal, cotas e íconos (B-741: también el texto de las cotas); hasta
+    2 niveles por el redondeo de lo semitransparente (bordes suavizados, fondo de los íconos) al copiarlo de la imagen."""
     return np.abs(_imagen(lz, True) - _imagen(lz, False)).max() <= 2
 
 
-def test_iconos_quietos_desde_la_imagen_mientras_se_arrastra(monkeypatch):
+def test_iconos_quietos_desde_la_imagen_mientras_se_arrastra():
     """P-182c: arrastrando, los íconos de restricción que no se mueven salen de una imagen y el cuadro queda igual al
     del camino normal; con el boceto ya modificado (arrastrado y con un ícono elegido), la imagen vieja no se usa."""
     lz, a, otra = _dos_piezas_acotadas()
@@ -206,7 +207,7 @@ def test_iconos_quietos_desde_la_imagen_mientras_se_arrastra(monkeypatch):
     _zonas_arrastrando(lz, pid, [(20.0, 10.0 + 0.3 * i) for i in range(1, 5)])
     quietos = {r.id for r in lz.b.restricciones.values() if r.entidades[0] in otra}
     assert quietos and quietos <= {rid for rid, _j in lz._cache_glifos["firmas"]}
-    assert _igual_que_sin_arrastrar(lz, monkeypatch)
+    assert _igual_que_sin_arrastrar(lz)
     lz._arrastre = None
     lz.grab()
     assert lz._cache_glifos is None
@@ -216,7 +217,7 @@ def test_iconos_quietos_desde_la_imagen_mientras_se_arrastra(monkeypatch):
     _zonas_arrastrando(lz, pid, [(20.0, 13.0 + 0.3 * i) for i in range(1, 4)])     # pasa a elegido
     firmas = lz._cache_glifos["firmas"]                           # el elegido va encima o en una imagen nueva
     assert (rid, 0) not in firmas or firmas[(rid, 0)][3] is True
-    assert _igual_que_sin_arrastrar(lz, monkeypatch)
+    assert _igual_que_sin_arrastrar(lz)
 
 
 def test_iconos_arrastrando_si_la_via_rapida_falla_dibuja_todo(monkeypatch):
@@ -227,4 +228,4 @@ def test_iconos_arrastrando_si_la_via_rapida_falla_dibuja_todo(monkeypatch):
     monkeypatch.setattr(type(lz), "_glifos_quietos_desde_imagen", falla)
     pid = lz.b.curvas[a[1]].p2
     _zonas_arrastrando(lz, pid, [(20.0, 10.0 + 0.3 * i) for i in range(1, 4)])
-    assert lz._cache_glifos is None and _igual_que_sin_arrastrar(lz, monkeypatch)
+    assert lz._cache_glifos is None and _igual_que_sin_arrastrar(lz)
