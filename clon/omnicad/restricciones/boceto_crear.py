@@ -5,7 +5,7 @@ import numpy as np
 
 from .boceto_entidades import (
     _antihorario_por, Arco, Circulo, circunferencia_3_puntos, Conica, distancia_punto_recta, Elipse, ErrorBoceto,
-    Linea, _numero, Punto, Spline, Texto, validar_texto_boceto, validar_valor_cota,
+    Linea, MEDIDA_MAXIMA, _numero, Punto, Spline, Texto, validar_texto_boceto, validar_valor_cota,
 )
 from .boceto_geometria import _barrido
 from .boceto_texto import _validar_opciones_texto
@@ -309,6 +309,8 @@ def puntos_espiral(centro, inicio, vueltas, paso):
         raise ErrorBoceto("La espiral necesita vueltas mayores que 0.")
     if vueltas > VUELTAS_MAX_ESPIRAL:
         raise ErrorBoceto(f"La espiral admite hasta {VUELTAS_MAX_ESPIRAL:g} vueltas.")
+    if abs(paso) > MEDIDA_MAXIMA:
+        raise ErrorBoceto(f"Paso: máximo {MEDIDA_MAXIMA:,.0f} mm.".replace(",", "."))
     n = max(4, int(math.ceil(8 * vueltas)))
     pts = []
     for i in range(n + 1):
