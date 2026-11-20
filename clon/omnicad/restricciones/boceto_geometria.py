@@ -336,14 +336,19 @@ def sensibilidad_spline(puntos, cerrada=False):
     return polos, nudos, p, dP
 
 
-_K_MANIJA = 4.8023      # B-463: medido contra Fusion (casos 7–15 de E11, ~/coordinador/casos/b463/)
+_K_MANIJA = 4.8023      # B-463: medido contra Fusion (casos 7–15 de E11, ~/coordinador/casos/b463/)
+_C_SUMA_CAJA = 0.8042     # B-738: cruce de la diagonal con la suma ancho+alto de la caja (aspecto ≈ 0,3)
 
 
 @functools.lru_cache(maxsize=8)
 def _caja_natural(Q):
-    """Diagonal de la caja de los polos de la quíntica sin manijas (una vez por spline, aunque tenga varias manijas)."""
+    """Tamaño (diagonal o suma ancho+alto, ver B-738) de la caja de los polos de la quíntica sin manijas (una vez por spline, aunque tenga varias manijas)."""
     P = np.array(_quintica_fusion(list(Q), False, None)[0])
-    return math.dist(P.min(0), P.max(0))
+    ancho, alto = P.max(0) - P.min(0)
+    # B-738: de 0° a 90° el largo de la manija de Fusion sube hasta ~12 % y vuelve (período 90°): la diagonal sola no lo
+    # hace; cuando la caja se acerca a un cuadrado manda la suma ancho+alto. shortcut: ajuste empírico de 9 giros medidos
+    # (caso 7 y 5 puntos a 15°–90°, ≤1 % en 4 puntos y ≤2,5 % en 5); cambiarlo si se mide otra forma.
+    return max(math.hypot(ancho, alto), _C_SUMA_CAJA * (ancho + alto))
 
 
 def escala_manija(Q, i, direccion, grado=5):
