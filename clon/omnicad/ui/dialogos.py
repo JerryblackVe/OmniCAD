@@ -9,7 +9,7 @@ al editar una feature del timeline.
 """
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox,
-                               QPushButton, QRadioButton, QSpinBox, QTableWidget, QTableWidgetItem,
+                               QPushButton, QRadioButton, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
 from .formulario import NumeroDecimal     # B-202: acepta «0.25» y «0,25»
 from ..io_archivos import proyecto
@@ -124,7 +124,7 @@ class DialogoRejilla(QDialog):
         self.adaptativa = QRadioButton("Adaptativa (cambia con el zoom)")
         self.fija = QRadioButton("Fija")
         self.espaciado = NumeroDecimal(decimals=3, minimum=0.001, maximum=100000.0, suffix=" mm")
-        self.subdivisiones = QSpinBox(minimum=1, maximum=1000)
+        self.subdivisiones = NumeroDecimal(decimals=0, minimum=1, maximum=1000)     # P-203: avisa el máximo como el espaciado
         mayor, sub = fija if fija else (10.0, 5)
         self.espaciado.setValue(mayor)
         self.subdivisiones.setValue(sub)
@@ -134,17 +134,31 @@ class DialogoRejilla(QDialog):
         form.addRow(self.fija)
         form.addRow("Espaciado de la rejilla mayor", self.espaciado)
         form.addRow("Subdivisiones de la rejilla menor", self.subdivisiones)
-        botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        botones.button(QDialogButtonBox.Ok).setText("Aceptar")
-        botones.button(QDialogButtonBox.Cancel).setText("Cancelar")
-        botones.accepted.connect(self.accept)
-        botones.rejected.connect(self.reject)
+        self.aviso = QLabel()           # P-203 (B-728): el campo rechaza el dígito de más; acá se dice por qué
+        self.aviso.hide()
+        form.addRow(self.aviso)
+        for campo, unidad in ((self.espaciado, " mm"), (self.subdivisiones, "")):
+            campo.excedido.connect(lambda m, u=unidad: (self.aviso.setText(f"⚠ Máximo {m:g}{u}"), self.aviso.show()))
+        self.fija.toggled.connect(self._activar)    # P-203: con Adaptativa el paso lo da el zoom: los campos no valen
+        self._activar(self.fija.isChecked())
+        aceptar, cancelar = QPushButton("Aceptar"), QPushButton("Cancelar")
+        aceptar.setDefault(True)
+        aceptar.clicked.connect(self.accept)
+        cancelar.clicked.connect(self.reject)
+        botones = QHBoxLayout()         # UX-6: Cancelar a la izquierda, Aceptar abajo a la derecha
+        botones.addStretch(1)
+        botones.addWidget(cancelar)
+        botones.addWidget(aceptar)
         lay = QVBoxLayout(self)
         lay.addLayout(form)
-        lay.addWidget(botones)
+        lay.addLayout(botones)
+
+    def _activar(self, fija):
+        self.espaciado.setEnabled(fija)
+        self.subdivisiones.setEnabled(fija)
 
     def valor(self):
-        return (self.espaciado.value(), self.subdivisiones.value()) if self.fija.isChecked() else None
+        return (self.espaciado.value(), int(self.subdivisiones.value())) if self.fija.isChecked() else None
 
 
 class DialogoIncrementos(QDialog):
