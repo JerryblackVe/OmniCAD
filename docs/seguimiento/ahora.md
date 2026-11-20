@@ -10,10 +10,10 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Opus alto) | B-743 | test_b423 Revolución rojo en main; después B-667 (B-742 y B-738 integrados el 20/11; brief `~/coordinador/briefs/E1_B-743.md`) |
-| E4 (Sonnet medio) | B-729 | Editar patrón arma la espera de clic (brief `~/coordinador/briefs/E4_B-729.md`) |
+| E1 (Sonnet medio) | B-709 y B-715 | Familia Espiral (B-712 a B-719 integrados; brief `~/coordinador/briefs/E1_B-709_B-715.md`) |
+| E4 (Sonnet medio) | B-697 | Texto de 400 letras congela 1,4 s (B-729 integrado; brief `~/coordinador/briefs/E4_B-697.md`) |
 | E7 (Sonnet medio) | En espera (cupo 5) | Prueba como usuario de lo integrado el 20/11 y PRUEBA-OPC-2 (brief `~/coordinador/briefs/E7_siguiente.md`) |
-| E8 (Sonnet medio) | P-193 | Proyectar y afines en una tarjeta (brief `~/coordinador/briefs/E8_P-193.md`) |
+| E8 (Sonnet medio) | B-619 | Proyectar cuerpo de revolución (P-193 integrado; brief `~/coordinador/briefs/E8_B-619.md`) |
 | E3 (Sonnet medio) | P-195 y P-194 | Paleta, Navegador y paneles de comando: una tarjeta por tarea (brief `~/coordinador/briefs/E3_P-195_P-194.md`) |
 | E6 (Opus alto) | P-202 | Desplazamiento incremental y Definir incrementos de la rejilla (P-197 integrado; brief `~/coordinador/briefs/E6_P-202.md`) |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
