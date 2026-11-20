@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · B-778.** El Navegador ya no se pliega al entrar a un boceto (solo Comentarios, P-195); `modo_boceto.py` y `test_b666_ventana_chica.py` (ventana grande: árbol visible). Ventana chica sigue plegando (B-666).
 - **2026-11-20 · Traspaso E6 (P-183 listo sin commit en ~/OmniCAD-P-183).** 1) Rust cambiado: hay que recompilar `_rs` en main al integrar (`maturin develop --release` desde clon/rust; sin eso anda, más lento) y en la PC. 2) clippy no está instalado en la VPS. 3) ⚠ 7 rojos de `test_proyectar_tarjeta` y 4 de B-619 también fallan en main. 4) Referencia y bancos: ~/coordinador/casos/p183/. 5) Informe en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · E11 tarde (mouse real).** B-730 no reproduce con mouse real (1 clic convierte): fila borrada. B-769/B-771 confirmados. B-763: OmniCAD 1,4×/muesca vs Fusion 1,10× → B-775. B-774 sin confirmar.
 - **2026-11-20 · B-763 medido en Windows (E11, mouse real, 10 muescas).** Fusion 17–49 ms (~25 ms de media); OmniCAD 30–37 ms (~33 ms): sin demora de más. Datos: `D:\PROGRAMA-noche\evidencias\reportes_pc\2026-11-20_e11_tarde\` (`fusion_rueda_ms.csv`, `omni_rueda_ms.csv`). Pendiente de esa tanda: B-730 y confirmar B-769/B-771/B-774.

@@ -1340,8 +1340,8 @@ class ModoBoceto(QObject):
         self.objetos, self._objetos_suspendido = None, False
         lz.objetos.armar_panel = self._armar_objetos         # B-411: armarlo al entrar costaba 35-75 ms
         area.set_capa_boceto(self.lienzo, self.paleta, self.tarjeta)
-        # P-195: dentro del boceto el Navegador y los Comentarios arrancan plegados (se abren con su botón)
-        self._plegados_fijos = [w for w in (getattr(self.v, "navegador", None), getattr(self.v, "comentarios", None))
+        # P-195/B-778: dentro del boceto solo los Comentarios arrancan plegados; el Navegador queda con su árbol, como Fusion
+        self._plegados_fijos = [w for w in (getattr(self.v, "comentarios", None),)
                                 if w is not None and w.plegar_por_ventana(True)]
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())

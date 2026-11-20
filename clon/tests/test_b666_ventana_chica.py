@@ -41,7 +41,7 @@ def test_b666_ventana_chica_pliega_navegador_y_opciones_y_al_agrandar_vuelven(ve
     v = ventana
     v.modo_boceto.iniciar(Boceto(), g.Plano("XY"), {"op": None, "plano": "XY"})
     QTest.qWait(1)
-    assert _plegados(v) == (True, False)                # ventana grande: P-195 deja el Navegador plegado dentro del boceto
+    assert _plegados(v) == (False, False)               # ventana grande: B-778, el Navegador sigue desplegado dentro del boceto
     v.resize(790, 510)                                  # el tamaño con que lo encontró E11
     QTest.qWait(1)
     paleta = v.modo_boceto.paleta
@@ -54,7 +54,7 @@ def test_b666_ventana_chica_pliega_navegador_y_opciones_y_al_agrandar_vuelven(ve
     assert not paleta.opciones.isHidden() and paleta.b_opciones.text() == "▾ Opciones"
     v.resize(1200, 800)
     QTest.qWait(1)
-    assert _plegados(v) == (True, False)                # el Navegador ya venía plegado (P-195): no se despliega solo
+    assert _plegados(v) == (False, False)               # lo que plegó la ventana chica se despliega solo
 
 
 def test_b666_ventana_ya_chica_al_entrar_al_boceto(ventana):
