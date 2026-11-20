@@ -557,6 +557,9 @@ class LienzoInteraccionMixin:
                     if q not in fijos and q != pid:
                         self.b.puntos[q].x += dx
                         self.b.puntos[q].y += dy
+                        ref = self._foto_arrastre[0]          # B-740: la referencia de B-732 los acompaña también,
+                        if q in ref:                          # si no, el solver los vuelve atrás y el radio crece
+                            ref[q] = (ref[q][0] + dx, ref[q][1] + dy)
         # Rápido: lo movido es un punto (y, si es centro de arcos, sus arcos: misma parte del boceto). Arrastrar una
         # curva entera mueve puntos que pueden estar en partes distintas: `_mover_curva` resuelve todo en ese caso.
         self.resolver(arrastrado=pid, rapido=True, referencia=self._foto_arrastre)

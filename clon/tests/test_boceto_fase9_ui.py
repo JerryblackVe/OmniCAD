@@ -262,9 +262,12 @@ def test_p186_ux_aceptar_a_la_derecha_y_cabe_con_letra_150(app):
 def _verificar_letra_grande(d):
     d.resize(1024, 700)
     d.show()
-    ok = d.aceptar
-    cancelar = next(b for b in d.findChildren(type(ok)) if b.text() == "Cancelar")
-    assert cancelar.geometry().right() < ok.geometry().left()          # Cancelar a su izquierda
-    assert d.rect().contains(ok.geometry())                            # Aceptar a la vista
-    assert ok.geometry().center().x() > d.width() / 2
-    assert d.lista.gridSize().width() > d.fontMetrics().horizontalAdvance("Cotas: 12 añadidas")   # el texto cabe
+    try:
+        ok = d.aceptar
+        cancelar = next(b for b in d.findChildren(type(ok)) if b.text() == "Cancelar")
+        assert cancelar.geometry().right() < ok.geometry().left()          # Cancelar a su izquierda
+        assert d.rect().contains(ok.geometry())                            # Aceptar a la vista
+        assert ok.geometry().center().x() > d.width() / 2
+        assert d.lista.gridSize().width() > d.fontMetrics().horizontalAdvance("Cotas: 12 añadidas")   # el texto cabe
+    finally:
+        d.close()      # B-740: abierto, se quedaba con el teclado de los tests siguientes (25 rojos en tanda)
