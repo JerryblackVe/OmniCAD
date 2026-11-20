@@ -291,3 +291,21 @@ def test_aplicar_un_preajuste_anda_aunque_el_archivo_no_se_pueda_escribir(monkey
     monkeypatch.setattr(pre, "_guardar", falla)
     assert pre.obtener("red", "Alfa") == {"espesor": "2 mm"}
     pre.guardar_orden("red", pre.NOMBRE)
+
+
+def test_estrella_usar_estos_valores_siempre_extruir(monkeypatch):
+    """P-191, prueba del novato: tecleo 1,4 mm, clic en ★, cierro y un diálogo nuevo abre con 1,4 mm."""
+    from omnicad.ui.comandos.crear import Nervio
+    panel = _panel(Nervio())
+    estrella = panel.boton_estrella
+    assert estrella.toolTip() == "Usar estos valores siempre" and estrella.parentWidget() is panel.boton_preajustes.parentWidget()
+    clave = "espesor"
+    panel.set_valor(clave, "1,4 mm")
+    estrella.click()
+    assert "siempre" in panel.mensaje.text() and panel.boton_preajustes.actual == "Mis valores"
+    panel.cancelar()
+    assert _panel(Nervio()).valores[clave] == "1,4 mm"
+    nuevo = _panel(Nervio())
+    nuevo.set_valor(clave, "2 mm")
+    nuevo.boton_estrella.click()                                   # un segundo clic pisa el anterior, sin avisar de nombre repetido
+    assert _panel(Nervio()).valores[clave] == "2 mm"
