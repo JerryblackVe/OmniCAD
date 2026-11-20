@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-19 · PREP-OPC (volteo vertical de SVG).** Test de la casilla del comando en boceto: espejo alrededor del centro de la caja como Fusion (círculo (10,15)→(10,5); borde: dibujo simétrico no se mueve). `test_prep_opc_svg_volteo_vertical.py` 2 OK, ruff limpio, fila de opciones_asas_boceto.md a «sí»; sin bug.
 - **2026-11-19 · B-704 (E1).** `test_rsx3_el_hover…` fallaba en tandas grandes: `QTest.mouseMove` reparte el evento por la ventana bajo el cursor y un Lienzo visible sin cerrar de una prueba anterior (que falló antes de `lz.close()`) se lo quedaba. Ahora el evento va directo al lienzo. `test_b704_hover_aislado.py` (falla con el test viejo, pasa con el nuevo).
 - **2026-11-19 · B-701 (E1).** Kerning de par con el cursor al inicio: el campo del panel Carácter queda en gris con «No disponible: ponete entre dos letras» (el signal `texto_valores` lleva si hay par). `test_texto_vectores.py::test_b701_…` (falla sin el arreglo).
 - **2026-11-19 · B-702 (E1).** Boceto 3D: coordenadas por encima de ±1 km (`MEDIDA_MAXIMA`) se rechazan en `boceto3d._xyz` (valida todos los puntos antes de crear ninguno) con «Máximo 1.000.000 mm…»; el panel pinta «Puntos» (o «Largo» con eje) en rojo. `test_b702_boceto3d_tope.py`.
