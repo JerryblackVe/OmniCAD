@@ -559,7 +559,6 @@ def test_proyectar_e_intersecar():
     assert foto(s) == antes
 
 
-@pytest.mark.xfail(strict=True, reason="B-512: Fusion proyecta una arista paralela a Z como un punto; OmniCAD dice «no deja nada»")
 def test_b512_proyectar_arista_vertical_da_un_punto(s):
     """B-512: una arista paralela a Z se proyecta sobre XY como un punto fijo (Fusion: 1 punto)."""
     llamar(s, "create_box", length=20, width=10, height=5)

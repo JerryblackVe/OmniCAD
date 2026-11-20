@@ -90,6 +90,15 @@ def test_partir_conserva_longitud_y_deshacer(s):
     comprobar_deshacer(s, antes, pila)
 
 
+def test_b512_partir_con_clic_justo_en_el_cruce_entre_dos_lineas(s):
+    """B-512: partir una línea haciendo clic exacto donde la cruza otra la parte ahí (antes: «no cruza nada»)."""
+    cid = linea(s, (0, 0), (10, 0))
+    linea(s, (5, -5), (5, 5))
+    r = llamar(s, "split_sketch_curve", sketch="Base", curve=cid, point=[5, 0])
+    partes = [e for e in llamar(s, "get_sketch")["entities"] if e["id"] in r["pieces"]]
+    assert sorted(e["length"] for e in partes) == pytest.approx([5, 5])
+
+
 @pytest.mark.parametrize("un_lado", [False, True])
 def test_restriccion_poligono_y_deshacer(s, un_lado):
     r = llamar(s, "draw_rectangle", x1=0, y1=0, x2=10, y2=10)

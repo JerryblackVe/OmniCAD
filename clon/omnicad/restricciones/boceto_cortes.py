@@ -240,8 +240,9 @@ class _Cortes:
         tc = mas_cercano(prim, punto)[0]
         cortes = self._cortes(cid)
         nuevos, viejos = [], []
-        antes = [k for k in cortes if k[0] < tc]
-        despues = [k for k in cortes if k[0] > tc]
+        # B-512: un clic justo sobre el cruce cuenta como «después» (parte ahí), no queda en ningún lado
+        antes = [k for k in cortes if k[0] < tc - 1e-9]
+        despues = [k for k in cortes if k[0] >= tc - 1e-9]
         if per:
             if len(cortes) < 2:
                 raise ErrorBoceto("Curva cerrada: hacen falta dos cortes.")

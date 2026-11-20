@@ -510,11 +510,11 @@ class Revolucion(Comando):
     CLASE_OP = OpRevolucion
     PERFIL_UNICO = True            # con un solo perfil a la vista, el comando lo toma solo (como Fusion)
 
-    def verificar(self, ctx):
-        return None if ctx.estado.bocetos or ctx.estado.cuerpos else "Primero creá un boceto con un contorno cerrado."
-
     def campos(self, ctx):
+        vacio = not ctx.estado.bocetos and not ctx.estado.cuerpos
         return [
+            # B-782: sin boceto el panel abre igual (como Fusion) y avisa acá, sin cuadro modal
+            Info("sin_boceto", "", lambda v, c: "Primero creá un boceto con un contorno cerrado.", visible_si=lambda v: vacio),
             Seleccion("perfiles", "Perfil", {"perfil", "cara_plana"}, maximo=None, desvio=_otro_plano_revolucion),
             Seleccion("eje", "Eje", {"eje"}),
             Opciones("extension", "Tipo de extensión", {"angulo": "Ángulo", "objeto": "A objeto", "completa": "Completo"}),
