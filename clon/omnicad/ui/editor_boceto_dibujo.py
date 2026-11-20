@@ -405,7 +405,23 @@ class LienzoDibujoMixin:
         pts = [self.b.coords(k) for k in self.b.puntos]
         centroide = (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)) if pts else (0.0, 0.0)
         viva = self._cota_viva()
-        for c in [*self.b.cotas.values(), *([viva] if viva is not None else [])]:
+        cotas = [*self.b.cotas.values(), *([viva] if viva is not None else [])]
+        pintor, plan, imagen = p, [(p, c) for c in cotas], None
+        if self._arrastre is not None:
+            try:
+                plan, imagen = self._plan_cotas_arrastre(p, cotas, ocupadas, zonas, trazos, fondos)
+            except Exception:                         # vía rápida: si falla, el camino normal (sin avisar)
+                self._cache_cotas, plan, imagen = None, [(p, c) for c in cotas], None
+        else:
+            self._cache_cotas = self._firmas_cotas = None
+        for p, c in plan:
+            if c is None:                              # fin de las quietas: su imagen va debajo de las que se mueven
+                p.end()
+                pintor.drawImage(QPointF(0, 0), imagen)
+                cache, ids = self._cache_cotas, self._cache_cotas["ids"]
+                cache.update(zonas={i: zonas[i] for i in ids if i in zonas}, cajas=[zonas[i] for i in ids if i in zonas],
+                             trazos={i: trazos[i] for i in ids if i in trazos}, fondos={i: fondos[i] for i in ids if i in fondos})
+                continue
             actual.clear()
             girar = None                             # ángulo del texto (grados) en las cotas lineales
             try:
@@ -554,8 +570,55 @@ class LienzoDibujoMixin:
                 p.setBrush(color)
                 p.drawText(QRectF(-w / 2, -h / 2, w, h) if girado else caja, Qt.AlignCenter, texto)
                 p.restore()
-        p.setBrush(Qt.NoBrush)
+        pintor.setBrush(Qt.NoBrush)
         return zonas
+
+    def _firma_cota(self, c):
+        """Lo que define cómo se ve una cota: sus puntos (y radios), su expresión y sus datos."""
+        f = []
+        for e in c.entidades:
+            if e in self.b.puntos:
+                f.append(self.b.coords(e))
+            elif e in self.b.curvas:
+                cu = self.b.curvas[e]
+                f.extend(self.b.coords(q) for q in cu.puntos())
+                f.append((getattr(cu, "radio", None), getattr(cu, "radio_menor", None)))
+        return tuple(f), c.tipo, c.expresion, c.referencia, repr(sorted(c.datos.items()))
+
+    def _plan_cotas_arrastre(self, p, cotas, ocupadas, zonas, trazos, fondos):
+        """P-182: mientras se arrastra, las cotas que no cambiaron desde el cuadro anterior se dibujan una vez en una
+        imagen y después se copian; cada cuadro rehace solo las que se mueven (el solver mueve una ventana alrededor del
+        punto). Devuelve (plan [(pintor, cota)], imagen nueva o None); (pintor, None) en el plan = copiar la imagen.
+        Las quietas se acomodan entre ellas y las que se mueven las esquivan (el orden cambia solo durante el arrastre)."""
+        from PySide6.QtGui import QImage
+        firmas = {c.id: self._firma_cota(c) for c in cotas if c.id >= 0}
+        clave = (self._firma_camara(), self.width(), self.height(), self.devicePixelRatioF(), self._oscuro(),
+                 frozenset(self.seleccion), self._zona_sobre, self._cita_sobre, self.entrada is None,
+                 self._cota_editada, frozenset(self.conflictos_sin_esperar()) if self.resultado is not None
+                 and not self.resultado.ok else None)
+        cache = getattr(self, "_cache_cotas", None)
+        if cache is not None and cache["clave"] == clave and all(firmas.get(i) == f for i, f in cache["firmas"].items()):
+            p.drawImage(QPointF(0, 0), cache["imagen"])
+            for caja in cache["cajas"]:
+                ocupadas.agregar(caja)
+            zonas.update(cache["zonas"])
+            trazos.update(cache["trazos"])
+            fondos.update(cache["fondos"])
+            return [(p, c) for c in cotas if c.id not in cache["firmas"]], None
+        previas, self._firmas_cotas, self._cache_cotas = getattr(self, "_firmas_cotas", None) or {}, firmas, None
+        quietas = [c for c in cotas if c.id >= 0 and previas.get(c.id) == firmas[c.id]]
+        if not quietas:
+            return [(p, c) for c in cotas], None
+        dpr = self.devicePixelRatioF()
+        imagen = QImage(round(self.width() * dpr), round(self.height() * dpr), QImage.Format_ARGB32_Premultiplied)
+        imagen.setDevicePixelRatio(dpr)
+        imagen.fill(Qt.transparent)
+        q = QPainter(imagen)
+        q.setRenderHints(p.renderHints())
+        q.setFont(p.font())
+        ids = {c.id for c in quietas}
+        self._cache_cotas = {"clave": clave, "firmas": {i: firmas[i] for i in ids}, "imagen": imagen, "ids": ids}
+        return [(q, c) for c in quietas] + [(q, None)] + [(p, c) for c in cotas if c.id not in ids], imagen
 
     def _dibujar_guias_conica(self, p, inicio, vertice, fin):
         """Las rectas extremo–vértice son las tangentes de la cónica en sus extremos."""
