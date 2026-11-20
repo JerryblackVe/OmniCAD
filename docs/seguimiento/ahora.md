@@ -6,14 +6,15 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 ## Ahora
 
-**Cupo AMARILLO (19/11 11 UTC, semanal 8 %): 3 sesiones de Claude a la vez, solo boceto.** (uno por sesión)
+**Cupo VERDE (20/11 ~10 UTC, semanal 32 %, ritmo ~11,5 %/día contra ~13 % del plan): hasta 5 sesiones de Claude a la vez, solo boceto.** (uno por sesión)
 
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 (Opus alto) | B-732 (BLOQUEANTE), luego B-463f | La gota colapsa al arrastrar el círculo (brief `~/coordinador/briefs/E1_B-732.md`; video de Gerardo); B-463f pausada |
 | E4 (Sonnet medio) | B-728, B-731 | Altura de texto recortada sin aviso; Enter tras Tab en el patrón circular (B-698 integrado) |
 | E7 (Sonnet medio) | REPRO-E11 | Reproducir con eventos simulados B-729, B-730, B-731 (brief `~/coordinador/briefs/E7_repro.md`); incluir Restricciones automáticas (mosaico, P-186) en su prueba |
-| E3, E8 | — | Vaciadas y quietas |
+| E8 (Sonnet medio) | P-187 | Cinta de BOCETO como Fusion y personalizable (brief `~/coordinador/briefs/E8_P-187.md`) |
+| E3 | — | Vaciada y quieta |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | Paró la noche del 20/11 (driver AMD de la PC en blanco; Gerardo reinicia a la mañana). Pendiente tras el reinicio: B-667, batería del punto 4, B-710; B-690 resuelto (Fusion no permite Perpendicular línea–spline). Tanda: `~/coordinador/casos/e11_noche_19-11.md`. Antes: Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
 
@@ -23,7 +24,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
-| 0 | P-187 (E8, Sonnet medio; entra cuando una de E1/E4/E7 quede libre: cupo amarillo, máx. 3) | Cinta de BOCETO como Fusion y personalizable (⋮, anclar, arrastrar) |
 | 0 | PRUEBA-OPC-2 (E7) | Probar como usuario las 11 opciones que quedan sin prueba en `preparado/opciones_asas_boceto.md`: Insertar DXF, Vectorizar, Perfil giratorio (tolerancia, invertir, solo contorno), Desfase (cadena, topología), Kerning de un par, Boceto 3D |
 | 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
 | 2 | PRUEBA-PROY (hecha por E7: B-684, B-685, B-686 a OpenCode) | Probar como usuario los 5 tipos de PROYECTAR del boceto (Proyectar, Intersecar, Incluir geometría 3D, Perfil giratorio, Curva isoparamétrica): mouse simulado y valores raros contra `docs/fusion_docs` (E7, Sonnet medio; cada falla = fila nueva de boceto; antes, OpenCode prepara los tests que falten) |
