@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Opus alto) | B-463e | Factor de la manija en el punto interior con los casos 13 y 14 de E11 (brief `~/coordinador/casos/b463/E1_BRIEF_B463e_manija.md`) |
+| E1 (Opus alto) | — | B-463e en pausa: C' = g·largo de la manija, g depende de la dirección; faltan datos de E11 (punto 1 en 3 direcciones, medio largo 20) |
 | E4 (Sonnet medio) | B-698, luego B-705 | Texto: marco desde la ventana (informe `~/coordinador/casos/texto/`), después Ctrl+Z |
 | E7 (Sonnet medio) | PRUEBA-OPC-2 | 11 opciones sin prueba como usuario; filas nuevas para la cola |
 | E3, E8 | — | Vaciadas y quietas |
