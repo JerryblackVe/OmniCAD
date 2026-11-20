@@ -130,7 +130,7 @@ def test_iconos_enteros_sin_superposicion_y_accesos_restaurados(ventana):
                     assert not b.geometry().intersects(otro.geometry()), (b.text(), otro.text())
         for b in botones:
             if not b.isVisible():
-                menus = b.parentWidget().findChildren(QMenu)
+                menus = b.parentWidget().parentWidget().findChildren(QMenu)   # B-743: desde P-187 el botón vive en la zona de soltar; el menú, en el grupo
                 assert any(b.defaultAction() in m.actions() for m in menus), b.text()
 
         # Medir la silueta pintada, no solo el iconSize declarado: el layout la recortaba.
