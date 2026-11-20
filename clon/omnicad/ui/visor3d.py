@@ -2987,10 +2987,14 @@ class Visor3D(QOpenGLWidget):
             return
         if e.key() == Qt.Key_Escape and self._arrastrando:
             self.cancelar_arrastre()
-        elif e.key() == Qt.Key_Escape and self.modo:
+        elif e.key() == Qt.Key_Escape and (self.modo or self._banda_inicio is not None):
+            if self._banda_inicio is not None:      # B-736: Esc a mitad del arrastre cancela la banda (soltar no hace nada)
+                self._banda.hide()
+                self._banda_inicio, self._banda_libre, self._presion = None, False, None
             if self.modo == "elegir_plano":
                 self.eleccion_cancelada.emit()
-            self.set_modo(None)
+            if self.modo:
+                self.set_modo(None)
         else:
             super().keyPressEvent(e)
 
