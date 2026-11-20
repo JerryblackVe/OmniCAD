@@ -42,8 +42,8 @@ def test_crear_conserva_todos_sus_iconos_y_ningun_rotulo_se_corta(ventana, ancho
     v.resize(ancho, 900)
     QTest.qWait(30)
     botones = _botones(v, pestana)
-    crear = next(b.parentWidget() for b in botones if b.parentWidget().findChild(QToolButton, "titulo_grupo")
-                 .text().startswith("CREAR"))
+    crear = next(b.parentWidget() for b in botones if b.parentWidget().parentWidget().findChild(QToolButton, "titulo_grupo")
+                 .text().startswith("CREAR"))      # el botón cuelga de la zona de botones del grupo (P-187); el título, del grupo
     hijos = crear.findChildren(QToolButton, "boton_cinta")
     assert hijos and all(b.isVisible() for b in hijos), (ancho, pestana)
     for b in botones:
