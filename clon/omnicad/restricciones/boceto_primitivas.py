@@ -5,7 +5,8 @@ from functools import lru_cache
 import numpy as np
 
 from .boceto_entidades import Arco, ArcoElipse, Circulo, Conica, Elipse, Linea, Spline, Texto
-from .boceto_geometria import interpolar_spline, nudos_uniformes, parametro_elipse, puntos_primitiva, _rot
+from .boceto_geometria import (
+    escala_manija, interpolar_spline, nudos_uniformes, parametro_elipse, puntos_primitiva, _rot)
 
 
 _CLAVES_TIPOGRAFIA = ("kerning", "inclinacion", "escala_h", "escala_v", "desfase_base", "capitalizacion", "subrayado",
@@ -146,19 +147,22 @@ def _medidas_marco(a, b, t):
 
 def _derivadas_manijas(c, pts, P):
     """{índice: (C', C'')} de las manijas de una spline de ajuste abierta (ver `Spline`): C' = (punta − punto) ×
-    tramos; con curvatura k, C'' = k·|C'|·(normal izquierda de C') (sin componente tangencial)."""
+    `escala_manija` (la de Fusion, B-463); con curvatura k, C'' = k·|C'|·(normal izquierda de C') (sin componente
+    tangencial)."""
     if c.cerrada or not c.manijas:
         return None
-    tramos, salida = len(pts) - 1, {}
+    salida = {}
     for a, b, k in c.manijas:
         if a not in c.pts:
             continue
         i = c.pts.index(a)
         (fx, fy), (ex, ey) = pts[i], P(b)
-        d1 = ((ex - fx) * tramos, (ey - fy) * tramos)
-        largo = math.hypot(*d1)
-        if largo < 1e-12:
+        h = math.hypot(ex - fx, ey - fy)
+        if h < 1e-12:
             continue
+        f = escala_manija(pts, i, ((ex - fx) / h, (ey - fy) / h), c.grado)
+        d1 = ((ex - fx) * f, (ey - fy) * f)
+        largo = h * f
         salida[i] = (d1, None if k is None else (-k * largo * d1[1], k * largo * d1[0]))
     return salida
 

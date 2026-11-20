@@ -98,3 +98,22 @@ def test_muchos_puntos_pasa_exacto():
     polos, nudos, p = interpolar_spline(puntos, 5)
     prim = ("spline", None, polos, nudos, p, None)
     assert np.allclose(polos[-1], puntos[-1], atol=1e-9) and _pasa_por(prim, puntos)
+
+
+MANIJAS = json.loads((Path(__file__).parent / "datos" / "b463_manijas_fusion.json").read_text())
+
+
+@pytest.mark.parametrize("caso", sorted(MANIJAS))
+def test_manija_igual_a_fusion(caso):
+    """B-463: la manija movida en Fusion (E11, casos 7–15: punto 0 e interior, 6 direcciones, ×2 y 5 puntos) da la
+    misma C' en el punto (≤0,5 %; da ≤0,3 %) y los mismos polos."""
+    c = MANIJAS[caso]
+    b = Boceto()
+    sid = b.agregar_spline([tuple(p) for p in c["puntos"]], "ajuste")
+    hx, hy = c["manija"]
+    b.activar_manija(sid, b.curvas[sid].pts[c["punto"]], math.degrees(math.atan2(hy, hx)), math.hypot(hx, hy))
+    polos, nudos, p = b.primitivas(sid)[0][2:5]
+    t = parametros_cuerda([tuple(q) for q in c["puntos"]], 5)[c["punto"]]
+    d1 = _base_derivada_curva(polos, nudos, p, t, 1)
+    assert np.linalg.norm(d1 - c["c_prima"]) <= 0.005 * np.linalg.norm(c["c_prima"])
+    assert np.max(np.abs(np.array(polos) - c["polos"])) < 0.1

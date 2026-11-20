@@ -271,6 +271,36 @@ def _quintica_fusion(Q, cerrar, derivadas):
     return [(float(x), float(y)) for x, y in P], nudos, p
 
 
+_K_MANIJA = 4.8023      # B-463: medido contra Fusion (casos 7–15 de E11, ~/coordinador/casos/b463/)
+
+
+@functools.lru_cache(maxsize=8)
+def _caja_natural(Q):
+    """Diagonal de la caja de los polos de la quíntica sin manijas (una vez por spline, aunque tenga varias manijas)."""
+    P = np.array(_quintica_fusion(list(Q), False, None)[0])
+    return math.dist(P.min(0), P.max(0))
+
+
+def escala_manija(Q, i, direccion, grado=5):
+    """|C'| por mm de manija (medio largo) en el punto de ajuste i, con la manija en `direccion` (unitaria).
+    Grado 5 (Fusion, B-463; ajustado con 10 manijas medidas, a ≤0,3 %): κ·(3·Σ|d| − Σd·dirección)/ΣΔt, con d las
+    cuerdas vecinas del punto, Δt sus tramos de parámetro y κ = 4,8023/diagonal de la caja de los polos de la curva
+    sin manijas (handleScale de Fusion). Grado 3: la cantidad de tramos (la cúbica vieja)."""
+    m = len(Q) - 1
+    if grado != 5:
+        return float(m)
+    t = parametros_cuerda(Q, 5)
+    largo, suma, dt = 0.0, np.zeros(2), 0.0
+    for a in (i - 1, i):
+        if 0 <= a < m:
+            d = np.subtract(Q[a + 1], Q[a])
+            largo, suma, dt = largo + 3 * math.hypot(*d), suma + d, dt + t[a + 1] - t[a]
+    caja = _caja_natural(tuple(map(tuple, Q)))
+    if caja < 1e-12:
+        return float(m)
+    return _K_MANIJA / caja * (largo - suma @ direccion) / dt
+
+
 def _insertar_nudo(ctrl, nudos, p, t):
     """Inserción de un nudo (Boehm) en coordenadas homogéneas."""
     n = len(ctrl) - 1
