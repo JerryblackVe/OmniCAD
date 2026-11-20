@@ -18,23 +18,21 @@ CENTRO = (20.0, 20.0)
 MAYOR = (50.0, 25.0)
 MENOR = (25.0, 35.0)
 
-XFAIL_VACIO = pytest.mark.xfail(reason="B-717: el campo vacío se acepta en silencio", strict=True)
-XFAIL_ANGULO = pytest.mark.xfail(reason="B-718: el ángulo no frena en 1.000.000°", strict=True)
 
 CASOS = [
-    pytest.param("radio_mayor", "", False, id="radio_mayor_vacio", marks=XFAIL_VACIO),
+    pytest.param("radio_mayor", "", False, id="radio_mayor_vacio"),
     pytest.param("radio_mayor", "0", False, id="radio_mayor_cero"),
     pytest.param("radio_mayor", "-5", False, id="radio_mayor_negativo"),
     pytest.param("radio_mayor", "2000000", False, id="radio_mayor_enorme"),
     pytest.param("radio_mayor", "20 mm", True, id="radio_mayor_unidad"),
     pytest.param("radio_mayor", "largo", True, id="radio_mayor_expresion"),
-    pytest.param("angulo", "", False, id="angulo_vacio", marks=XFAIL_VACIO),
+    pytest.param("angulo", "", False, id="angulo_vacio"),
     pytest.param("angulo", "0", True, id="angulo_cero"),
     pytest.param("angulo", "-30", True, id="angulo_negativo"),
-    pytest.param("angulo", "2000000", False, id="angulo_enorme", marks=XFAIL_ANGULO),
+    pytest.param("angulo", "2000000", False, id="angulo_enorme"),
     pytest.param("angulo", "30 deg", True, id="angulo_unidad"),
     pytest.param("angulo", "giro", True, id="angulo_expresion"),
-    pytest.param("radio_menor", "", False, id="radio_menor_vacio", marks=XFAIL_VACIO),
+    pytest.param("radio_menor", "", False, id="radio_menor_vacio"),
     pytest.param("radio_menor", "0", False, id="radio_menor_cero"),
     pytest.param("radio_menor", "-5", False, id="radio_menor_negativo"),
     pytest.param("radio_menor", "2000000", False, id="radio_menor_enorme"),

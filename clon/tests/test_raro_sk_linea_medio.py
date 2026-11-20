@@ -36,7 +36,7 @@ CASOS = [
     ("angulo", "", False),
     ("angulo", "0", False),
     ("angulo", "-5", False),
-    ("angulo", "1e9", False),
+    ("angulo", "1e9", True),            # B-719: pasa de ANGULO_MAXIMO
     ("angulo", "5 mm", True),
     ("angulo", "90 deg", False),
     ("angulo", "5*2", False),

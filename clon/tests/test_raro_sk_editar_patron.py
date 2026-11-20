@@ -115,8 +115,6 @@ def test_un_valor_raro_valido_se_puede_aplicar_sin_romper_el_boceto(lz, campo, v
     assert estado["valido"]
 
 
-@pytest.mark.xfail(strict=True, reason="B-712: la cantidad con unidad ajena ('30 mm') se cuenta como 30; "
-                                       "patron_boceto.py › _entero evalúa con ESCALAR y la dimensión se descarta")
 @pytest.mark.parametrize("campo", ("cantidad1", "cantidad2", "cantidad"))
 @pytest.mark.parametrize("valor", UNIDADES)
 def test_la_cantidad_debe_rechazar_unidades_ajenas(lz, campo, valor):
@@ -128,8 +126,6 @@ def test_la_cantidad_debe_rechazar_unidades_ajenas(lz, campo, valor):
     assert estado["error"] and "\n" not in estado["error"]
 
 
-@pytest.mark.xfail(strict=True, reason="B-713: Centro X/Y traga ErrorExpresion (_numero_o_none) y deja Aceptar "
-                                       "habilitado con el centro viejo, sin mensaje ni campo en rojo")
 @pytest.mark.parametrize("valor", ("ang", "2*", "90 deg"))
 def test_el_centro_con_valor_no_evaluable_debe_marcarse_y_no_aplicarse(lz, valor):
     """Un nombre desconocido, una expresión rota o una unidad de ángulo no pueden ignorarse en silencio."""

@@ -56,7 +56,6 @@ def _escribir(widget, texto):
     QTest.keyClick(widget, Qt.Key_Return)
 
 
-XFAIL_ANGULO = pytest.mark.xfail(reason="B-719: el campo Ángulo no frena en 1.000.000°", strict=True)
 
 CASOS = [
     ("largo", "", True),
@@ -68,7 +67,7 @@ CASOS = [
     ("angulo", "", True),
     ("angulo", "0", True),
     ("angulo", "-5", True),
-    pytest.param("angulo", "2000000", False, marks=XFAIL_ANGULO),
+    pytest.param("angulo", "2000000", False),
     ("angulo", "30 deg", True),
     ("angulo", "5*2", True),
 ]

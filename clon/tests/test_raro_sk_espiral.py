@@ -104,7 +104,6 @@ def test_paso_con_unidades_o_expresion_dibuja_una_espiral_valida(app_qt, paso, r
     assert lz.resultado.ok
 
 
-@pytest.mark.xfail(strict=True, reason="B-714: Vueltas usa float() y no evaluar(); «3+1» no se evalúa")
 def test_vueltas_con_expresion_dibuja_la_espiral(app_qt):
     lz, avisos = _abrir(app_qt, "3+1", "2")
     assert not avisos, avisos
@@ -113,7 +112,6 @@ def test_vueltas_con_expresion_dibuja_la_espiral(app_qt):
     assert lz.resultado.ok
 
 
-@pytest.mark.xfail(strict=True, reason="B-714: «3 mm» filtra el ValueError de Python en vez de avisar en español")
 def test_vueltas_con_unidad_avisa_en_un_renglon_en_espanol(app_qt):
     lz, avisos = _abrir(app_qt, "3 mm", "2")
     assert _curvas(lz) == []

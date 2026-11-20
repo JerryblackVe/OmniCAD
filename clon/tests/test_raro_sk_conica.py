@@ -82,7 +82,6 @@ def test_rho_fuera_de_rango_avisa_y_no_dibuja(app_qt, rho):
 B716 = "B-716: Rho usa _numero (float) en vez de evaluar: unidades y expresiones muestran el error crudo de Python"
 
 
-@pytest.mark.xfail(strict=True, reason=B716)
 @pytest.mark.parametrize("rho,esperado", [("0.5 mm", 0.5), ("50 %", 0.5)])
 def test_rho_con_unidad_acepta_o_rechaza_en_espanol(app_qt, rho, esperado):
     lz, avisos, fallos = _abrir(app_qt, rho)
@@ -96,7 +95,6 @@ def test_rho_con_unidad_acepta_o_rechaza_en_espanol(app_qt, rho, esperado):
         assert "rho" in texto.lower() and "could not convert" not in texto.lower()
 
 
-@pytest.mark.xfail(strict=True, reason=B716)
 @pytest.mark.parametrize("rho,esperado", [("1/2", 0.5), ("0.25*2", 0.5)])
 def test_rho_con_expresion_dibuja_la_conica(app_qt, rho, esperado):
     lz, avisos, fallos = _abrir(app_qt, rho)
