@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Sonnet medio) | B-753, B-754, B-755 | Extruir sobre cara: arranca en Unir, sin aviso falso, oculta el boceto consumido (B-709/B-715 integrados; brief `~/coordinador/briefs/E1_B-753_B-755.md`) |
+| E1 (Sonnet medio) | — libre | B-753/754/755 y B-738 integrados (B-738 cerrado con el ajuste empírico); sin ítem en Sigue (pasa B-766) |
 | E4 (Sonnet medio) | B-734 y B-730 | Texto: clic en vista 3D y Desagrupar (B-697 cerrado; brief `~/coordinador/briefs/E4_B-734_B-730.md`) |
 | E7 (Sonnet medio) | En espera (cupo 5) | Prueba como usuario de lo integrado el 20/11 y PRUEBA-OPC-2 (brief `~/coordinador/briefs/E7_siguiente.md`) |
 | E8 (Sonnet medio) | P-187 (B-619 en pausa hasta que E11 mida en Fusion) | Cinta de boceto como Fusion (brief `~/coordinador/briefs/E8_proximo.md`, lo entrega el maestro) |
