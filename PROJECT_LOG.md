@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · Valores raros de `sk_conica` (solo tests).** `tests/test_raro_sk_conica.py` cubre el campo Rho vacío, 0, negativo, enorme, con unidades y con expresión, sin cerrar la app ni romper el boceto. Unidades y expresiones son xfail de B-716 (`float` en vez de `evaluar` en `editor_boceto_crear.py:563`). ruff limpio; 7 OK + 4 xfail, 663 OK, 1 skip; 2 fallos preexistentes de B-683 en `test_setup.py`.
 - **2026-11-20 · Traspaso E1 (P-184 listo; próximo B-463 manija).** 1) P-184 en ~/OmniCAD-P-184 sin commit: `_desfase_atados` + coloreo cacheado (`solver.py`), Lagrange sin `bmat` (`_quintica_fusion`). 2) Primera cota tras crear ~2,0 s en la VPS (la brief medía 5,8 donde acá daba 12,3). 3) B-711: >0,01 mm al cambiar la cota (ya pasaba antes). 4) `test_seguimiento` rojo en main por la fila B-463 (barras sin escapar). 5) Sigue B-463: dato p1 en ~/coordinador/casos/b463/.
 - **2026-11-20 · B-711 (E1, sin commit).** Tras resolver, la copia de un desfase de spline que se aleja >0,01 mm se rehace con los puntos de la nueva distancia (`refinar_desfases`, puntas con su id); el lazo de B-710 pasa a 12 vueltas (a 4–5 mm no cerraba). 718 OK, ruff limpio. ⚠ 108→157–224 puntos: cota ~2× más lenta.
 - **2026-11-20 · Traspaso E1 (B-711 hecho; B-463 caso 12).** 1) B-711 en ~/OmniCAD-B-711 sin commit; decisión pendiente: precisión vs velocidad. 2) B-463: caso 12 refuta k fijo por punto (punto 1: 11,80 activada, 13,38 movida a (1,1)); pedir a E11 punto 1 movida sin girar (medio largo 20) y (1,1) con medio largo 5. Script: scratchpad k5.py (copiado a ~/coordinador/casos/b463/manija_k5.py).
@@ -733,6 +734,7 @@ Lo anterior al 2026-11-11 está en `docs/historial/` (`registro_2026-10.md`, `re
 
 - **2026-11-19 · Bocetos › Incluir 3D B-684/B-685.** Se habilitan caras y se evita repetir la misma arista (`sin_indice`, `incluir_3d_forma`). `test_faltantes_bocetos.py`: 7 OK; ruff limpio.
 ## Lecciones aprendidas
+- [2026-11-20] Los campos numéricos del boceto se evalúan con `evaluar`, no con `float`: si no, una expresión no dibuja y la unidad filtra el error crudo de Python. · Evidencia: `tests/test_raro_sk_conica.py` (B-716) y `ui/editor_boceto_crear.py:563`.
 - [2026-11-19] Una curva nueva del boceto se mide arrastrando (no solo resolviendo): el jacobiano por diferencias con paso 1e-7 sobre una curva que resuelve un sistema (quíntica B-463) es ruidoso y LM hace 15 iteraciones en vez de 4. · Evidencia: `test_solver_fusion_arrastre_de_quinticas_rapido_y_sin_rust_igual`.
 - [2026-11-19] Validar los tres modos de `trim_sketch_curve`: P-69 cubrió break y extend y trim siguió aceptando un clic a 999 mm. · Evidencia: `test_b512_recortar_con_clic_lejos_de_la_curva_no_recorta`.
 - [2026-11-19] El `BRepAlgoAPI_Splitter` deja una curva suelta dentro de una región como alambre de aristas INTERNAL en la cara: `es_valida(cara)` da True pero el sólido extruido no. · Evidencia: `tests/test_b699_curvas_sueltas.py`.
