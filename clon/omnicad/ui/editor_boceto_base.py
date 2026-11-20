@@ -198,9 +198,9 @@ class LienzoBaseMixin:
     def valores_cotas(self):
         return {c.id: self.evaluar(c.expresion, _tipo_valor(c.tipo)) for c in self.b.cotas.values()}
 
-    def resolver(self, arrastrado=None, rapido=False):
+    def resolver(self, arrastrado=None, rapido=False, referencia=None):
         """`rapido` (arrastrar un punto): solo se resuelve la parte de ese punto y sin recontar grados de libertad;
-        al soltar se resuelve todo."""
+        al soltar se resuelve todo. `referencia`: ver `solver.resolver` (B-732)."""
         try:
             self.b.evaluar_patrones(self.evaluar)
             valores = self.valores_cotas()
@@ -208,7 +208,7 @@ class LienzoBaseMixin:
             self.mensaje.emit(f"Hay una cota o patrón con expresión inválida: {e}")
             valores = {}
         previo = self.resultado if rapido and arrastrado is not None else None
-        self.resultado = resolver(self.b, valores, arrastrado, previo)
+        self.resultado = resolver(self.b, valores, arrastrado, previo, referencia=referencia)
         r_uso = _ru.activo
         if r_uso is not None and time.monotonic() - getattr(self, "_uso_solver", 0.0) >= 0.5:
             self._uso_solver = time.monotonic()

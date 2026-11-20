@@ -1170,7 +1170,12 @@ def _salir_del_paralelismo(b, fijos_p):
         b.puntos[mover].x, b.puntos[mover].y = qx - (my - qy), qy + (mx - qx)
 
 
-def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cambio=False):
+def foto(boceto):
+    """Coordenadas y radios de todo el boceto (`referencia` de `resolver` al empezar a arrastrar un punto, B-732)."""
+    return _foto(boceto, {"p": boceto.puntos, "r": boceto.curvas})
+
+
+def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cambio=False, referencia=None):
     """Resuelve el boceto en el lugar (modifica coordenadas y radios). Devuelve ResultadoSolver.
 
     valores_cotas: {id_cota: valor} en mm o grados (ya evaluados desde sus expresiones).
@@ -1180,6 +1185,9 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cam
         libertad y las entidades determinadas de `previo` (arrastrar no cambia las restricciones). Al soltar, el
         editor vuelve a resolver todo sin `previo`.
     menor_cambio: la primera corrida usa `_PESO_MENOR_CAMBIO` (B-466; solo `acomodar_tangente`).
+    referencia: `foto` del boceto al empezar a arrastrar un punto (con `previo`): el menor cambio se mide desde ahí y
+        no desde el evento anterior, como Fusion (B-732: un círculo que se achicó para dejar pasar el punto vuelve a
+        su tamaño cuando el punto sale; antes quedaba chico para siempre).
 
     Se resuelve cada parte independiente por separado (`_grupos`): la geometría sin restricciones no entra,
     así un dibujo importado de miles de curvas no arma un sistema gigante (antes, 30 000 incógnitas pedían
@@ -1188,7 +1196,7 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cam
     valores = valores_cotas or {}
     grupos = _grupos(boceto)
     if previo is not None and arrastrado is not None:
-        return _resolver_arrastre(boceto, valores, grupos, arrastrado, previo)
+        return _resolver_arrastre(boceto, valores, grupos, arrastrado, previo, referencia)
     fijos = _fijos(boceto)
     _salir_del_paralelismo(boceto, fijos[0])
     sueltos_p, sueltos_r = _sueltas(boceto, grupos, fijos)
@@ -1368,7 +1376,7 @@ def _volver(boceto, foto):
             c.radio_menor = menor
 
 
-def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
+def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo, referencia=None):
     """`resolver` para un evento de arrastre: solo la parte del punto arrastrado y sin el rango ni el núcleo del
     jacobiano (se conservan los de `previo`). Si esa parte es grande (`UMBRAL_VENTANA`), primero se resuelve solo una
     ventana alrededor del punto y el resto se congela. La ventana vale si cumple todo Y el punto queda donde lo puso el
@@ -1389,11 +1397,12 @@ def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
                 usada_parte_entera = sub is g and len(intentos) > 1
                 # B-707: como Fusion (sin pesos por tipo), la spline queda fija si así se cumple todo y el punto llega al
                 # cursor; si no (B-690: sin normal desde el punto; un punto pegado a la spline), se mueve como siempre
-                err = _resolver_sub(boceto, valores, _congelar(sub, quietos), arrastrado) if quietos else math.inf
+                err = (_resolver_sub(boceto, valores, _congelar(sub, quietos), arrastrado, referencia) if quietos
+                       else math.inf)
                 if (err >= TOLERANCIA_ACEPTA_ARRASTRE
                         or math.dist(boceto.coords(arrastrado), objetivo) >= 10 * TOLERANCIA_ACEPTA_ARRASTRE):   # LM deja ~6 µm
                     _volver(boceto, antes)
-                    err = _resolver_sub(boceto, valores, sub, arrastrado)
+                    err = _resolver_sub(boceto, valores, sub, arrastrado, referencia)
                 if sub is g or (err < TOLERANCIA_ACEPTA_ARRASTRE
                                 and (math.dist(boceto.coords(arrastrado), objetivo) < TOLERANCIA_ACEPTA_ARRASTRE
                                      or not _la_parte_entera_lo_acerca(boceto, valores, g, arrastrado, objetivo))):
@@ -1409,10 +1418,10 @@ def _resolver_arrastre(boceto, valores, grupos, arrastrado, previo):
     return r
 
 
-def _resolver_sub(boceto, valores, sub, arrastrado):
+def _resolver_sub(boceto, valores, sub, arrastrado, referencia=None):
     """Resuelve un evento de arrastre sobre `sub` (parte o ventana), escribe el resultado y devuelve el error máximo."""
     sis = _Sistema(boceto, valores, sub, fusionar=True, quieto=arrastrado, derivar=True)
-    x, err, _J, _rango = _resolver_grupo(sis, arrastrado, con_rango=False)
+    x, err, _J, _rango = _resolver_grupo(sis, arrastrado, con_rango=False, referencia=referencia)
     if x is not None:
         sis.escribir(x)
     return err
@@ -1480,7 +1489,7 @@ def _acomodar_cotas(sis, ancla):
             ancla[i], ancla[j] = ax + (bx - ax) * v / d, ay + (by - ay) * v / d
 
 
-def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
+def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False, referencia=None):
     """(x resuelto o None, error máximo, jacobiano, rango) de un grupo. Sin `con_rango`, el jacobiano y el rango
     quedan en None (un evento de arrastre no los usa)."""
     n = len(sis.x0)
@@ -1503,10 +1512,20 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
         ij = list(sis.idx_p[arrastrado])
         pesos[ij] = _PESO_ARRASTRE
         ancla[ij] = sis.b.coords(arrastrado)     # la incógnita arranca donde está el punto arrastrado
+    inicio = ancla.copy()
+    if referencia is not None:                   # B-732: menor cambio desde el comienzo del arrastre, como Fusion
+        propias = set(sis.idx_p.get(arrastrado, ()))     # fusionadas con el arrastrado: van al cursor
+        for pid, ij in sis.idx_p.items():
+            if pid in referencia[0] and not propias.intersection(ij):
+                ancla[list(ij)] = referencia[0][pid]
+        for cid, j in sis.idx_r.items():
+            v = next((r for r in referencia[1].get(cid, ()) if r is not None), None)      # radio (o el menor)
+            if v is not None:
+                ancla[j] = v
     if n == 0 or not sis.terminos:
         r = sis.residuos(sis.x0) if sis.terminos else np.zeros(0)
         err = float(np.max(np.abs(r))) if len(r) else 0.0
-        return (ancla if n else None), err, np.zeros((0, n)), 0    # ancla ya cumple lo fusionado: se escribe
+        return (inicio if n else None), err, np.zeros((0, n)), 0    # ya cumple lo fusionado: se escribe
 
     cumple = TOLERANCIA if con_rango else TOLERANCIA_ACEPTA_ARRASTRE
 
@@ -1544,7 +1563,7 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False):
                 return x
             costo = r.cost
 
-    x = corrida(ancla, ancla, pesos, 1e-14 if con_rango else TOLERANCIA_ARRASTRE, meseta=menor_cambio)
+    x = corrida(inicio, ancla, pesos, 1e-14 if con_rango else TOLERANCIA_ARRASTRE, meseta=menor_cambio)
     # Pulido: re-anclar en la solución elimina el sesgo de la regularización y rescata una primera corrida que se quedó
     # en una meseta. Un evento de arrastre (`con_rango=False`) lo hace solo si no cumple, y en un solo trozo.
     if con_rango or float(np.max(np.abs(sis.residuos(x)), initial=0.0)) >= cumple:
