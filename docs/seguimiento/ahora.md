@@ -11,7 +11,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 (Opus alto) | B-732 (BLOQUEANTE), luego B-463f | La gota colapsa al arrastrar el círculo (brief `~/coordinador/briefs/E1_B-732.md`; video de Gerardo); B-463f pausada |
-| E4 (Sonnet medio) | — | B-728 y B-731 integradas; libre |
+| E4 (Sonnet medio) | P-186 | Mosaico de Restricciones automáticas como Fusion (brief `~/coordinador/briefs/E4_P-186.md`) |
 | E7 (Sonnet medio) | REPRO-E11 | Reproducir con eventos simulados B-729, B-730, B-731 (brief `~/coordinador/briefs/E7_repro.md`); incluir Restricciones automáticas (mosaico, P-186) en su prueba |
 | E8 (Sonnet medio) | P-187 | Cinta de BOCETO como Fusion y personalizable (brief `~/coordinador/briefs/E8_P-187.md`) |
 | E3 | — | Vaciada y quieta |
