@@ -91,6 +91,8 @@ kernel: es cómo se lo llama.**
 
 Los tres primeros no dependen de lo rápido que sea OpenCascade. Son los que más se sienten.
 
+**Método para pasar un módulo a Rust (Gerardo, 2026-11-20; referencia: github.com/erkamyaman/rust-anything; se toma solo el método, no se instala ni se reescribe la app).** Por módulo (solver, teselado, etc.): 1) antes de escribir Rust, grabar el comportamiento del original en Python (entradas → salidas, con casos reales y raros) en un archivo de referencia; 2) escribir la versión Rust; 3) verificar que da lo mismo (con la tolerancia que se declare) contra lo grabado ANTES de integrarla; 4) integrar con el camino Python como respaldo y un test sobre un cuerpo ya modificado (regla de vías rápidas de CLAUDE.md). Lo ve E6.
+
 ## 4. Paquetes
 
 ### F0. Banco de fluidez y vigilante
