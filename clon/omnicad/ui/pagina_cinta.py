@@ -143,7 +143,7 @@ class PaginaCinta(QWidget):
 
     def _contar(self, aviso=""):
         n = len(self._efectivo[self._actual()])
-        self.cuenta.setText(f"{n} de {cp.MAXIMO} botones")
+        self.cuenta.setText(f"{n} de {cp.maximo(self._actual())} botones")
         self.aviso.setText(aviso or ("Arrastrá para cambiar el orden. Suprimir quita el elegido."
                                      if n else "Sin botones: soltá aquí una herramienta de la lista."))
         self.b_fabrica.setEnabled(self._efectivo[self._actual()] != cp.SECCIONES[self._actual()])
@@ -158,8 +158,8 @@ class PaginaCinta(QWidget):
         if clave in actual:
             self._contar("Esa herramienta ya está en la sección.")
             return
-        if len(actual) >= cp.MAXIMO:
-            self._contar(f"La sección ya tiene {cp.MAXIMO} botones: quitá uno antes.")
+        if len(actual) >= cp.maximo(self._actual()):
+            self._contar(f"La sección ya tiene {cp.maximo(self._actual())} botones: quitá uno antes.")
             return
         actual.insert(len(actual) if posicion is None else posicion, clave)
         self._mostrar()

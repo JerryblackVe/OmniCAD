@@ -346,6 +346,8 @@ class VentanaPrincipal(QMainWindow):
         self.panel_datos.abrir.connect(self._abrir_reciente)
         self.panel_datos.cerrar.connect(lambda: self.acciones["panel_datos"].trigger())   # trigger, no setChecked: solo trigger emite triggered (B-289)
         self.cinta = Cinta(self.acciones)
+        self.cinta.cambio_personal.connect(self._guardar_cinta)
+        self.cinta.aviso.connect(self.mensaje)
         self._espacios = {}                 # espacio de trabajo → su ventana (DIBUJO, RENDERIZAR, ANIMACIÓN)
         for nombre, clave in (("DIBUJO", "dibujo"), ("RENDERIZAR", "render"), ("ANIMACIÓN", "animacion")):
             a = self.cinta.acciones_espacio[nombre]
@@ -1114,6 +1116,10 @@ class VentanaPrincipal(QMainWindow):
     def _mostrar_elemento(self, clave, visible):
         {"ver_navegador": self.navegador, "ver_viewcube": self.area.viewcube, "ver_barra_nav": self.barra_nav,
          "ver_timeline": self.timeline}[clave].setVisible(visible)
+
+    def _guardar_cinta(self, personal):
+        """Guarda lo que se soltó en la cinta (P-187): solo las secciones que difieren de fábrica."""
+        self.prefs["cinta/personal"] = cinta_personal.a_texto(cinta_personal.diferencias(cinta_personal.efectivas(personal)))
 
     def mensaje(self, texto, ms=5000):
         """Aviso temporal en la barra del timeline (Fusion no tiene barra de estado)."""

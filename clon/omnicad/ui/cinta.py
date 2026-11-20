@@ -11,12 +11,13 @@ Regla de honestidad: un comando que OmniCAD no implementa aparece GRISADO (igual
 muestra los que no están disponibles); nunca un botón activo que no hace nada. Los comandos
 reales son QAction compartidas que crea la ventana y se buscan por clave.
 """
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QMenu, QSizePolicy, QStackedWidget, QStyle,
                                QStyleOptionToolButton, QToolButton, QVBoxLayout, QWidget)
 
 from .. import NOMBRE_APP, VERSION, deshabilitado
+from ..api import cinta_personal as cp
 from .cinta_boceto import GRUPOS_BOCETO
 from .cinta_items import SEP, _i, _sub
 from .iconos import icono
@@ -309,7 +310,31 @@ class _Pestana(QToolButton):
         self.ajustar()
 
 
+MIME_COMANDO = "application/x-omnicad-comando"      # lo que arrastra el ⋮ de los menús (mas_comando.FiltroMas)
+
+
+class _ZonaSoltar(QWidget):
+    """Los botones grandes de un grupo: acepta una herramienta arrastrada desde un menú de la cinta (P-187)."""
+    soltado = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.setAcceptDrops(True)
+        self.setMinimumWidth(24)      # con 0 botones igual hay dónde soltar
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasFormat(MIME_COMANDO):
+            e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        if e.mimeData().hasFormat(MIME_COMANDO):
+            self.soltado.emit(bytes(e.mimeData().data(MIME_COMANDO)).decode())
+            e.acceptProposedAction()
+
+
 class Cinta(QWidget):
+    cambio_personal = Signal(dict)      # {«PESTAÑA/GRUPO»: [claves]} tras soltar una herramienta (la ventana lo guarda)
+    aviso = Signal(str)
     """Barra de comandos con pestañas. `acciones`: dict clave → QAction de la ventana."""
 
     def __init__(self, acciones, parent=None):
@@ -361,7 +386,7 @@ class Cinta(QWidget):
             b.clicked.connect(lambda _=False, i=i: self.pila.setCurrentIndex(i))
             fila.addWidget(b, 1)
             self.pestanas.append(b)
-            self.pila.addWidget(self._fila_grupos(self._efectivos(nombre, grupos)))
+            self.pila.addWidget(self._fila_grupos(self._efectivos(nombre, grupos), nombre))
         self.pestanas[0].setChecked(True)
         self.pila.currentChanged.connect(lambda _i: self.ajustar_textos())
         self.contextuales = {}
@@ -371,7 +396,7 @@ class Cinta(QWidget):
             b.clicked.connect(lambda _=False, i=indice: self.pila.setCurrentIndex(i))
             b.hide()
             fila.addWidget(b, 1)
-            self.pila.addWidget(self._fila_grupos(self._efectivos(nombre, grupos)))
+            self.pila.addWidget(self._fila_grupos(self._efectivos(nombre, grupos), nombre))
             self.contextuales[nombre] = b
         fila.addStretch(1)
         derecha.addLayout(fila)
@@ -414,13 +439,13 @@ class Cinta(QWidget):
             if all(antes.get(k) == self._personal.get(k) for k in claves):
                 continue
             viejo = self.pila.widget(i)
-            self.pila.insertWidget(i, self._fila_grupos(self._efectivos(nombre, grupos)))
+            self.pila.insertWidget(i, self._fila_grupos(self._efectivos(nombre, grupos), nombre))
             self.pila.removeWidget(viejo)
             viejo.deleteLater()
         self.pila.setCurrentIndex(actual)
         self.ajustar_textos()
 
-    def _fila_grupos(self, grupos):
+    def _fila_grupos(self, grupos, pestana=None):
         w = QWidget()
         h = QHBoxLayout(w)
         # Un poco de aire alrededor de la fila de grupos (auditoría P9: toda la cinta iba pegada, con
@@ -430,7 +455,7 @@ class Cinta(QWidget):
         for n, (titulo, rapidos, items) in enumerate(grupos):
             if n:
                 self._separador(h)
-            h.addWidget(self._grupo(titulo, rapidos, items))
+            h.addWidget(self._grupo(titulo, rapidos, items, pestana))
             if titulo == "SELECCIONAR":
                 self._asistente(h)
         if not any(g[0] == "SELECCIONAR" for g in grupos):
@@ -450,12 +475,31 @@ class Cinta(QWidget):
         self._separador(h)
         h.addWidget(self._grupo(None, ["asistente"], []))
 
-    def _grupo(self, titulo, rapidos, items):
+    def anclar(self, pestana, titulo, clave):
+        """Suelta `clave` como botón grande del grupo (P-187, como «Pin to toolbar» de Fusion); lo guarda la ventana."""
+        seccion = f"{pestana}/{titulo}"
+        if seccion not in cp.SECCIONES or clave not in self.acciones:
+            return
+        actual = [c for c in self._personal.get(seccion, cp.SECCIONES[seccion]) if c in self.acciones]
+        if clave in actual:
+            self.aviso.emit("Ya está en la barra.")
+        elif len(actual) >= cp.maximo(seccion):
+            self.aviso.emit(f"La barra ya tiene {len(actual)} botones: quitá uno en Preferencias › Cinta.")
+        else:
+            nuevo = {**self._personal, seccion: [*actual, clave]}
+            self.personalizar(nuevo)
+            self.cambio_personal.emit(nuevo)
+
+    def _grupo(self, titulo, rapidos, items, pestana=None):
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(2, 2, 2, 0)
         v.setSpacing(0)
-        botones = QHBoxLayout()
+        zona = _ZonaSoltar()
+        if pestana and titulo:
+            zona.soltado.connect(lambda clave: self.anclar(pestana, titulo, clave))
+        botones = QHBoxLayout(zona)
+        botones.setContentsMargins(0, 0, 0, 0)
         botones.setSpacing(2)
         for ref in rapidos:
             a = self._accion(ref)
@@ -465,7 +509,7 @@ class Cinta(QWidget):
             b.setIconSize(QSize(28, 28))
             b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)     # el ancho lo pone ajustar_textos, ya con la fuente del tema
             botones.addWidget(b)
-        v.addLayout(botones)
+        v.addWidget(zona)
         t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾" if titulo else " ")
         if titulo:
             t.setToolTip(titulo)

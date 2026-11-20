@@ -11,12 +11,13 @@ separadas por comas) y `atajos/teclas` (JSON clave → combinación; solo los qu
 """
 import json
 
-from PySide6.QtCore import QEvent, QObject, QPointF, QRect, Qt
-from PySide6.QtGui import QKeySequence, QPainter
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHBoxLayout, QKeySequenceEdit, QLabel, QMenu, QPushButton,
+from PySide6.QtCore import QEvent, QMimeData, QObject, QPointF, QRect, Qt
+from PySide6.QtGui import QDrag, QKeySequence, QPainter
+from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QHBoxLayout, QKeySequenceEdit, QLabel, QMenu, QPushButton,
                                QVBoxLayout)
 
 from .caja_herramientas import guardar_fijados, leer_fijados
+from .cinta import MIME_COMANDO
 
 ANCHO_MAS = 22           # px de la zona del «⋮» contra el borde derecho de la fila
 
@@ -118,6 +119,7 @@ class FiltroMas(QObject):
         self.ventana = ventana
         self.menu_abierto = None           # el menú «Más» en pantalla (las pruebas lo leen)
         self._origen = None                # el menú de la cinta desde el que se abrió
+        self._arrastre = None              # (comando, punto) del clic en una fila: si se mueve, se arrastra a la cinta (P-187)
 
     def clave(self, accion):
         """La clave del comando de la ventana, o None (separadores, submenús, ítems grisados «no disponible»)."""
@@ -147,8 +149,19 @@ class FiltroMas(QObject):
                     p.drawEllipse(QPointF(centro.x(), centro.y() + dy), 1.7, 1.7)
                 p.end()
                 return True
+        elif tipo == QEvent.MouseMove and self._arrastre and e.buttons() & Qt.LeftButton:
+            clave, punto = self._arrastre
+            if (e.position().toPoint() - punto).manhattanLength() >= QApplication.startDragDistance():
+                self._arrastre = None
+                self.arrastrar(obj, clave)
+                return True
         elif tipo in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease) and e.button() == Qt.LeftButton:
             accion = obj.actionAt(e.position().toPoint())
+            if tipo == QEvent.MouseButtonPress:
+                clave = self.clave(accion) if accion is not None and accion.isEnabled() else None
+                if clave and self.zona(obj, accion).contains(e.position().toPoint()):
+                    clave = None                                   # el clic en el «⋮» abre el menú, no arrastra
+                self._arrastre = (clave, e.position().toPoint()) if clave else None
             if accion is not None and accion.isEnabled() and self.clave(accion) \
                     and self.zona(obj, accion).contains(e.position().toPoint()):
                 if tipo == QEvent.MouseButtonRelease:
@@ -161,6 +174,16 @@ class FiltroMas(QObject):
                 return True
         return False
 
+    def arrastrar(self, menu, clave):
+        """Arrastra el comando de la fila a un grupo de la cinta (la zona de sus botones lo ancla); el menú se cierra."""
+        self._origen = menu
+        self._cerrar_menus()
+        mime = QMimeData()
+        mime.setData(MIME_COMANDO, clave.encode())
+        arrastre = QDrag(self.ventana)
+        arrastre.setMimeData(mime)
+        arrastre.exec(Qt.CopyAction)
+
     # ------------------------------------------------------------ menú «Más»
     def construir_menu(self, accion):
         v, clave = self.ventana, self.clave(accion)
@@ -168,15 +191,15 @@ class FiltroMas(QObject):
         m = QMenu(v)
         m.setToolTipsVisible(True)
         fijado = clave in leer_fijados(v.prefs, contexto)
-        a = m.addAction("Quitar de atajos" if fijado else "Fijar en atajos")
+        a = m.addAction("Quitar de los accesos directos" if fijado else "Anclar en los accesos directos")
         a.setToolTip("Caja de herramientas (tecla S): " + ("saca" if fijado else "agrega") + " este comando.")
         a.triggered.connect(lambda: self.alternar_atajo(clave))
         en_barra = clave in leer_barra(v.prefs)
-        a = m.addAction("Quitar de la barra" if en_barra else "Fijar en la barra")
+        a = m.addAction("Quitar de la barra de herramientas" if en_barra else "Anclar en la barra de herramientas")
         a.setToolTip("Barra de arriba, junto a Rehacer: " + ("saca" if en_barra else "agrega") + " el botón del comando.")
         a.triggered.connect(lambda: self.alternar_barra(clave))
         m.addSeparator()
-        a = m.addAction("Cambiar atajo de teclado…")
+        a = m.addAction("Cambiar las teclas de acceso rápido…")
         a.triggered.connect(lambda: self.cambiar_tecla(clave))
         return m
 

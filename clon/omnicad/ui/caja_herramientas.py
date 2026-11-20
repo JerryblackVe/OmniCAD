@@ -75,7 +75,7 @@ class _FilaResultado(QWidget):
         self.chinche.setIcon(icono("chinche"))
         self.chinche.setIconSize(QSize(14, 14))
         self.chinche.setAutoRaise(True)
-        self.chinche.setToolTip("Quitar de atajos" if fijado else "Fijar en atajos")
+        self.chinche.setToolTip("Quitar de los accesos directos" if fijado else "Anclar en los accesos directos")
         self.chinche.toggled.connect(al_fijar)
         h.addWidget(self.chinche)
 
