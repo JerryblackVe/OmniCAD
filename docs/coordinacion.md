@@ -219,7 +219,8 @@ de OpenCode; las demás la enlazan.
 - **Reserva que se llena sola (Gerardo, 2026-11-19: «OpenCode nunca más quieto»)**: con la reserva baja, el vigía corre
   `scripts/llenar_cola_opencode.py` (sin modelo): 1) comandos del boceto sin test (`cobertura_boceto.py`) → `PREP-TEST-<clave>`;
   2) filas abiertas de boceto de `bugs.md` que no están en `ahora.md` → `FIX-<ID>` (fila corta) o `PREP-<ID>` (larga); 3) una
-  caza de boceto por día. No repite lo que ya está en la cola, `corriendo`, `hechos`, `descartadas` o `trabadas`; el modelo y
+  caza de boceto por día; 4) valores raros por comando (`RARO-<clave>`), bancos de velocidad (`BANCO-*`) y revisión de los
+  `test_prep_*` (`REV-*`; maestro, 20/11). No repite lo que ya está en la cola, `corriendo`, `hechos`, `descartadas` o `trabadas`; el modelo y
   el cupo de Go los decide el vigía como siempre. Test: `clon/tests/test_llenar_cola_opencode.py`.
 - **Tareas chicas (Gerardo, 2026-11-17: los gratis fallaron 24 de 53 corridas, 10 por tiempo)**: una tarea = un archivo y un
   solo cambio (un bug, o hasta 10 mensajes o 5 tests); lo más grande se parte antes de cargarlo. Lo que es solo leer y

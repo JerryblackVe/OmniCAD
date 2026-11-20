@@ -87,6 +87,23 @@ def candidatas():
     hoy = datetime.date.today().strftime("%Y%m%d")
     yield f"CAZA-boceto-{hoy}", ("Corré desde clon/: ../scripts/caza/cazar.py tema boceto (fecha %s). "
                                   "Cada falla nueva es una fila de boceto en docs/seguimiento/ con su repro; no arregles nada." % hoy)
+    # Fuentes fijas de boceto sin «test de cobertura» (maestro, 20/11): valores raros por comando, bancos de velocidad,
+    # revisión de los tests que escribió OpenCode.
+    tabla = Path(os.environ.get("TMPDIR", "/tmp")) / "cobertura_boceto_auto.md"
+    for g, k in re.findall(r"^\| ([^|]*?) \|[^|]*\| `([^`]+)` \|", tabla.read_text(encoding="utf-8"), re.M):
+        if g.split(" › ")[0] in BOCETO:
+            yield f"RARO-{k}", (f"Valores raros del comando de boceto «{k}»: escribí clon/tests/test_raro_{k}.py con cada campo de su diálogo en vacío, 0, "
+                                f"negativo, enorme, con unidades y con expresión (sin cerrar la app ni dejar el boceto roto; mensaje de 1 renglón). "
+                                f"Si falla, es un bug: fila nueva y xfail con el motivo. Solo escribís tests.")
+    for tema, que in (("arrastre", "arrastrar un punto de una línea con 50 y con 200 entidades restringidas"),
+                      ("solver", "resolver un boceto con 50 y con 200 entidades y cotas"),
+                      ("desfase", "desfasar cadenas de 10 y 100 curvas y una spline larga"),
+                      ("recorte", "recortar y extender sobre 50 y 200 curvas que se cruzan")):
+        yield f"BANCO-{tema}", (f"Banco de velocidad del boceto: medí {que} (scripts/bench_*.py como modelo; Python del venv, 3 corridas, mediana). "
+                                f"Guardá el script en scripts/bench_boceto_{tema}.py y cada medición lenta (> 0,5 s) como fila P- en docs/seguimiento/mejoras.md. No arregles nada.")
+    for t in sorted((REPO / "clon/tests").glob("test_prep_*.py")):
+        yield f"REV-{t.stem}", (f"Revisá clon/tests/{t.name}: ¿cada test mide algo (valor numérico, estado del boceto o mensaje) o solo corre sin comprobar? "
+                                f"Reforzá los asserts flojos sin cambiar la intención; no toques código de la app. Si un test oculta un bug, fila nueva y xfail.")
     for t in fuera:        # solo si no queda nada de boceto (Gerardo, 19/11: «solo boceto»); main() lo avisa
         yield t[0] + "@fuera", t[1]
 
