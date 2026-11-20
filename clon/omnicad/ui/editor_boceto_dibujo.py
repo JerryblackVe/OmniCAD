@@ -437,7 +437,11 @@ class LienzoDibujoMixin:
         base = self._color_cota()
         en_conflicto = set(self.conflictos_sin_esperar()) if self.resultado is not None and not self.resultado.ok else set()
         desfase = 22 / max(self.px_por_mm(), 1e-9)       # 22 px expresados en mm del boceto
-        p.setFont(temas.qfont_cotas(9))
+        fuente = temas.qfont_cotas(9)
+        # B-741: suavizado en gris, no por subpíxel: arrastrando, las cotas quietas salen de una imagen transparente,
+        # que no admite subpíxel, y el texto cambiaba de aspecto al empezar y al soltar el arrastre
+        fuente.setStyleStrategy(fuente.StyleStrategy.NoSubpixelAntialias)
+        p.setFont(fuente)
         fm = p.fontMetrics()
         pts = [self.b.coords(k) for k in self.b.puntos]
         centroide = (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)) if pts else (0.0, 0.0)
