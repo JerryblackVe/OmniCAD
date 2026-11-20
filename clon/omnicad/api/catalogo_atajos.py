@@ -253,6 +253,7 @@ CATALOGO = {
     'sk_isoparametrica': ('Curva isoparamétrica', ''),
     'sk_linea': ('Línea', 'L'),
     'sk_linea_medio': ('Línea de punto medio', ''),
+    'sk_manija': ('Manija de spline', ''),
     'sk_mover': ('Mover/copiar', 'M'),
     'sk_partir': ('Partir', ''),
     'sk_patron_circular': ('Patrón circular', ''),
