@@ -28,6 +28,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
   `tests_afectados.py --correr`, mensajes cortos, leer solo la sección necesaria (4); nada es «listo» sin ruff y tests
   verdes con salida real (5); copiar Fusion leyendo `docs/fusion_docs/` antes de arreglar (6); toda herramienta nueva
   con su versión MCP/CLI, test y doc (10).
+- **UI (regla 14)**: toda tarjeta, panel, diálogo, cinta o ayuda nueva o cambiada cumple [docs/protocolo_ux.md](docs/protocolo_ux.md): una tarjeta por tarea, máximo 5 campos visibles, el resto en «Más opciones», Aceptar abajo a la derecha, errores en el dibujo y en 1 renglón, tooltip con nombre en todo ícono, atajo y cinta editables. Al terminar, pegá su «Lista de control» con evidencia. Estilos solo desde `ui/temas.py` (nada de `#rrggbb` ni `border-radius` sueltos).
 - Errores del núcleo: `raise geo.ErrorGeometria("mensaje claro en español")`
   (`from . import geometria as geo` dentro de `nucleo`).
 - Funciones PURAS del núcleo: reciben formas OCC, arrays numpy, `geo.Plano` o números; devuelven formas
@@ -107,7 +108,7 @@ un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)
 **Definición de terminado** (de la sesión; la suite completa y la humo corren solas cada noche, aunque se toque la UI):
 ruff limpio y `tests_afectados.py --correr` verde,
 entrada nueva en `PROJECT_LOG.md`, `docs/seguimiento/` al día (lo resuelto, borrado; lo nuevo, agregado) y lección
-anotada si hubo un error verificable. Sin archivos sueltos: nada de informes, capturas o temporales en la raíz.
+anotada si hubo un error verificable. Sin archivos sueltos: nada de informes, capturas o temporales en la raíz. Si tocaste UI: lista de control de `docs/protocolo_ux.md` pegada con evidencia.
 
 ## Receta A: agregar una operación al timeline
 Modelo: `OpFijacion` en `clon/omnicad/timeline/ops_fijacion.py`; base `Operacion` en `timeline/operaciones.py`.
