@@ -123,6 +123,12 @@ LUCES_VISOR = {
 }
 COLOR_EJE = ((0.86, 0.26, 0.26), (0.32, 0.72, 0.32), (0.30, 0.45, 0.95))
 NARANJA_PLANO = (0.95, 0.66, 0.30)
+# B-763: aumento por muesca de la rueda. Fusion (video del 20/11, P5): 3–4 muescas cambian la escala 3–4×, ~1,4 por
+# muesca; antes 1/0,88 ≈ 1,14 (4 muescas apenas 1,7×).
+ZOOM_MUESCA = 1.4
+# B-764: la rejilla del diseño es finita como la de Fusion: medio lado mínimo en mm y cuántas veces el tamaño del modelo.
+REJILLA_MEDIO_LADO_MIN = 100.0
+REJILLA_POR_MODELO = 3.0
 AZUL_PERFIL = (0.55, 0.80, 1.0)       # celeste suave del perfil, como el de Fusion
 # Etiqueta del valor de una cota guía (Medir): va sobre la vista 3D, así que lleva fondo y texto propios (se lee
 # igual con cualquier tema y cualquier fondo del visor).
@@ -273,26 +279,41 @@ def nivel_lod(diametro_px, deflexion_px):
     return nivel
 
 
-def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40, cada=5):
-    """(vértices, colores RGBA) float32 para GL_LINES de la rejilla: 2n+1 líneas por eje alrededor de `centro_uv`,
-    más marcadas cada `cada` (las subdivisiones de la rejilla). Con numpy: punto por punto en Python costaba ~1,5 ms
-    por cuadro."""
+def tramos_desvanecidos(extremos, centro_uv, radio, k=16):
+    """Parte cada línea uv (Lx2x2: dos extremos) en `k` tramos para GL_LINES y da el factor de opacidad de cada vértice:
+    1 cerca de `centro_uv` y 0 a `radio`, para que la rejilla se apague antes del horizonte en vez de cortarse (B-764)."""
+    t = np.linspace(0.0, 1.0, k + 1)[None, :, None]
+    p = extremos[:, :1] + (extremos[:, 1:] - extremos[:, :1]) * t           # L x (k+1) x 2
+    pares = np.stack([p[:, :-1], p[:, 1:]], axis=2).reshape(-1, 2)        # (L·k·2) x 2
+    r = np.hypot(pares[:, 0] - centro_uv[0], pares[:, 1] - centro_uv[1]) / radio
+    return pares, np.clip((1.0 - r) / 0.4, 0.0, 1.0)
+
+
+def lineas_rejilla(plano, paso, centro_uv, rgb, oscuro, n=40, cada=5, limite=None):
+    """(vértices, colores RGBA) float32 para GL_LINES de la rejilla: hasta 2n+1 líneas por eje alrededor de `centro_uv`,
+    más marcadas cada `cada` (las subdivisiones de la rejilla), que se desvanecen hacia el borde. Con `limite` la rejilla
+    es finita como la de Fusion: solo |u|, |v| ≤ limite (medido desde el origen del plano)."""
     cu, cv = centro_uv
     ext = paso * n
     i = np.arange(-n, n + 1)
     u, v = cu + i * paso, cv + i * paso
-    uv = np.empty((len(i), 2, 2, 2))               # [i, línea de u fija / de v fija, extremo, (u, v)]
-    uv[:, 0, :, 0] = u[:, None]
-    uv[:, 0, 0, 1], uv[:, 0, 1, 1] = cv - ext, cv + ext
-    uv[:, 1, 0, 0], uv[:, 1, 1, 0] = cu - ext, cu + ext
-    uv[:, 1, :, 1] = v[:, None]
-    uv = uv.reshape(-1, 2)
-    vertices = plano.origen + np.outer(uv[:, 0], plano.u) + np.outer(uv[:, 1], plano.v)
-    mayor = np.stack([np.round(u / paso).astype(int) % cada == 0, np.round(v / paso).astype(int) % cada == 0], axis=1)
+    u0, u1, v0, v1 = cu - ext, cu + ext, cv - ext, cv + ext
+    if limite is not None:
+        tol = paso * 1e-6
+        u, v = u[np.abs(u) <= limite + tol], v[np.abs(v) <= limite + tol]
+        u0, u1, v0, v1 = max(u0, -limite), min(u1, limite), max(v0, -limite), min(v1, limite)
+    if not len(u) or not len(v) or u0 >= u1 or v0 >= v1:
+        return np.zeros((0, 3), np.float32), np.zeros((0, 4), np.float32)
+    extremos = np.concatenate([np.stack([np.stack([u, np.full_like(u, v0)], 1), np.stack([u, np.full_like(u, v1)], 1)], 1),
+                               np.stack([np.stack([np.full_like(v, u0), v], 1), np.stack([np.full_like(v, u1), v], 1)], 1)])
+    mayor = np.concatenate([np.round(u / paso).astype(int) % cada == 0, np.round(v / paso).astype(int) % cada == 0])
     alfa = np.where(mayor, 0.40, 0.16) if oscuro else np.where(mayor, 0.45, 0.22)
+    k = 16
+    uv, desvanecer = tramos_desvanecidos(extremos, centro_uv, ext, k)
+    vertices = plano.origen + np.outer(uv[:, 0], plano.u) + np.outer(uv[:, 1], plano.v)
     colores = np.empty((len(uv), 4))
     colores[:, :3] = rgb
-    colores[:, 3] = np.repeat(alfa.reshape(-1), 2)
+    colores[:, 3] = np.repeat(alfa, 2 * k) * desvanecer
     return vertices.astype(np.float32), colores.astype(np.float32)
 
 
@@ -1187,7 +1208,7 @@ class Visor3D(QOpenGLWidget):
         self._cancelar_animacion()
         if self.config.invertir_zoom:
             pasos = -pasos
-        factor = 0.88 ** pasos
+        factor = ZOOM_MUESCA ** -pasos
         nueva = max(0.5, min(1e6, self.distancia * factor))
         if pos is not None:   # zoom hacia el cursor, como Fusion
             p = self.punto_focal(pos)
@@ -2265,8 +2286,21 @@ class Visor3D(QOpenGLWidget):
                 return float(caja[0][2])
         return 0.0
 
-    def _rejilla(self, plano, paso, color_ejes=True):
-        """Rejilla sobre un plano, centrada en la zona que se está mirando (líneas mayores cada `subdivisiones_rejilla`)."""
+    def limite_rejilla(self, paso):
+        """B-764: medio lado de la rejilla finita del diseño (como Fusion): REJILLA_POR_MODELO veces el modelo, al menos
+        REJILLA_MEDIO_LADO_MIN, redondeado a una línea mayor para que el borde sea una línea marcada."""
+        caja = self._caja_escena()
+        modelo = float(max(np.abs(caja[0]).max(), np.abs(caja[1]).max())) if caja is not None else 0.0
+        mayor = paso * self.subdivisiones_rejilla()
+        return math.ceil(paso_lindo(max(REJILLA_MEDIO_LADO_MIN, REJILLA_POR_MODELO * modelo)) / mayor) * mayor
+
+    def opacidad_rasante(self, plano):
+        """B-764: mirada rasante, la rejilla es un moiré que se deforma al orbitar: se apaga bajo ~17° de elevación."""
+        return min(1.0, abs(float(self.R[2] @ plano.normal)) / 0.3)
+
+    def _rejilla(self, plano, paso, color_ejes=True, limite=None):
+        """Rejilla sobre un plano, centrada en la zona que se está mirando (líneas mayores cada `subdivisiones_rejilla`),
+        desvanecida hacia el borde y al mirarla rasante (B-764); con `limite`, finita."""
         oscuro = self.config.oscuro()
         if self.config.entorno == "tema":           # el color de la rejilla lo da el tema; los otros entornos, el suyo
             rojo, verde, azul = temas.rgb_f(temas.color("rejilla"))
@@ -2277,26 +2311,38 @@ class Visor3D(QOpenGLWidget):
         cu, cv = plano.a_uv(self.objetivo)
         cada = self.subdivisiones_rejilla()
         cu, cv = round(cu / (cada * paso)) * cada * paso, round(cv / (cada * paso)) * cada * paso
-        clave = (tuple(plano.origen), tuple(plano.u), tuple(plano.v), paso, cu, cv, rojo, verde, azul, oscuro, cada)
+        clave = (tuple(plano.origen), tuple(plano.u), tuple(plano.v), paso, cu, cv, rojo, verde, azul, oscuro, cada, limite)
         if self._rejilla_cache[0] != clave:     # cambia al desplazar o al cambiar el paso, no en cada cuadro
-            self._rejilla_cache = (clave, lineas_rejilla(plano, paso, (cu, cv), (rojo, verde, azul), oscuro, n, cada))
+            self._rejilla_cache = (clave, lineas_rejilla(plano, paso, (cu, cv), (rojo, verde, azul), oscuro, n, cada,
+                                                         limite))
         vertices, colores = self._rejilla_cache[1]
+        rasante = self.opacidad_rasante(plano)
+        if rasante < 1.0:
+            colores = colores * np.array([1, 1, 1, rasante], np.float32)
         GL.glDepthMask(GL.GL_FALSE)        # sin escribir profundidad: una cara pegada al plano del boceto tapa la rejilla
-        GL.glLineWidth(1.0)
         GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
         GL.glEnableClientState(GL.GL_COLOR_ARRAY)
-        GL.glColorPointer(4, GL.GL_FLOAT, 0, colores)
-        GL.glVertexPointer(3, GL.GL_FLOAT, 0, vertices)
-        GL.glDrawArrays(GL.GL_LINES, 0, len(vertices))
+        if len(vertices):
+            GL.glLineWidth(1.0)
+            GL.glColorPointer(4, GL.GL_FLOAT, 0, colores)
+            GL.glVertexPointer(3, GL.GL_FLOAT, 0, vertices)
+            GL.glDrawArrays(GL.GL_LINES, 0, len(vertices))
+        if color_ejes:   # ejes del plano (X rojo, Y verde, Z azul según hacia dónde apuntan), hasta donde llega la rejilla
+            a0, a1 = (-limite, limite) if limite is not None else (-np.inf, np.inf)
+            for eje, ext_uv in ((plano.u, ((max(cu - ext, a0), 0), (min(cu + ext, a1), 0))),
+                                (plano.v, ((0, max(cv - ext, a0)), (0, min(cv + ext, a1))))):
+                if sum(ext_uv[0]) >= sum(ext_uv[1]):     # la ventana quedó fuera de la rejilla finita
+                    continue
+                uv, desvanecer = tramos_desvanecidos(np.array([ext_uv], float), (cu, cv), ext)
+                col = np.empty((len(uv), 4), np.float32)
+                col[:, :3] = COLOR_EJE[int(np.argmax(np.abs(eje)))]
+                col[:, 3] = 0.85 * desvanecer * rasante
+                ver = (plano.origen + np.outer(uv[:, 0], plano.u) + np.outer(uv[:, 1], plano.v)).astype(np.float32)
+                GL.glLineWidth(1.5)
+                GL.glColorPointer(4, GL.GL_FLOAT, 0, col)
+                GL.glVertexPointer(3, GL.GL_FLOAT, 0, ver)
+                GL.glDrawArrays(GL.GL_LINES, 0, len(ver))
         GL.glDisableClientState(GL.GL_COLOR_ARRAY)
-        if color_ejes:   # ejes del plano (X rojo, Y verde, Z azul según hacia dónde apuntan)
-            GL.glLineWidth(1.5)
-            GL.glBegin(GL.GL_LINES)
-            for eje, (a, b) in ((plano.u, ((cu - ext, 0), (cu + ext, 0))), (plano.v, ((0, cv - ext), (0, cv + ext)))):
-                GL.glColor4f(*COLOR_EJE[int(np.argmax(np.abs(eje)))], 0.85)
-                GL.glVertex3f(*plano.a_3d(*a))
-                GL.glVertex3f(*plano.a_3d(*b))
-            GL.glEnd()
         GL.glDepthMask(GL.GL_TRUE)
 
     def _cuadro_plano(self, plano, rect, color, alfa, resaltado=False):
@@ -2581,7 +2627,8 @@ class Visor3D(QOpenGLWidget):
             if self.opciones_boceto.get("rejilla", True):
                 self._rejilla(self.plano_boceto, self.paso_boceto or self.paso_rejilla())
         elif cfg.rejilla:
-            self._rejilla(geo.Plano("XY"), self.paso_rejilla())
+            paso = self.paso_rejilla()
+            self._rejilla(geo.Plano("XY"), paso, limite=self.limite_rejilla(paso))
         self._origen_y_planos()
 
         for i, (n, o) in enumerate(self._planos_corte()):
@@ -2954,7 +3001,7 @@ class Visor3D(QOpenGLWidget):
         if self._accion == "orbita":
             self.orbitar(d.x(), d.y())
         elif self._accion == "zoom":
-            self.acercar(-d.y() / 30.0)
+            self.acercar(-d.y() / 79.0)    # misma velocidad de arrastre que con 0,88 cada 30 px (B-763 solo cambia la rueda)
         else:
             self.desplazar(d.x(), d.y())
 
