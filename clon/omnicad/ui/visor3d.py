@@ -123,9 +123,26 @@ LUCES_VISOR = {
 }
 COLOR_EJE = ((0.86, 0.26, 0.26), (0.32, 0.72, 0.32), (0.30, 0.45, 0.95))
 NARANJA_PLANO = (0.95, 0.66, 0.30)
-# B-763: aumento por muesca de la rueda. Fusion (video del 20/11, P5): 3–4 muescas cambian la escala 3–4×, ~1,4 por
-# muesca; antes 1/0,88 ≈ 1,14 (4 muescas apenas 1,7×).
-ZOOM_MUESCA = 1.4
+# B-775: Fusion acerca 1,10× por muesca suelta (E11, mouse real) y ~3–4× con una ráfaga de 3–4 muescas (video de
+# Gerardo, P5): la rueda acelera. Cada muesca vale 1 + RUEDA_ACEL × (muescas del mismo lado en los últimos
+# RUEDA_VENTANA s), con tope RUEDA_ACEL_MAX (1,10^4 ≈ 1,46×, el paso de B-763 para girar rápido).
+ZOOM_MUESCA = 1.10
+RUEDA_ACEL = 1.5
+RUEDA_ACEL_MAX = 4.0
+RUEDA_VENTANA = 0.5
+# El zoom arrastrando no cambia: 0,88 cada 30 px, expresado en muescas de ZOOM_MUESCA.
+PX_ZOOM_ARRASTRE = 30 * math.log(ZOOM_MUESCA) / math.log(1 / 0.88)
+
+
+def muescas_rueda(historial, muescas, ahora):
+    """Muescas efectivas de un giro de rueda con la aceleración de Fusion: suelta vale 1, en ráfaga vale más.
+    `historial` es una lista [(tiempo, muescas)] que se actualiza acá; un giro al revés la vacía."""
+    historial[:] = [(t, m) for t, m in historial if ahora - t < RUEDA_VENTANA and m * muescas > 0]
+    previas = sum(abs(m) for _, m in historial)
+    historial.append((ahora, muescas))
+    return muescas * min(RUEDA_ACEL_MAX, 1 + RUEDA_ACEL * previas)
+
+
 # B-764: la rejilla del diseño es finita como la de Fusion: medio lado mínimo en mm y cuántas veces el tamaño del modelo.
 REJILLA_MEDIO_LADO_MIN = 100.0
 REJILLA_POR_MODELO = 3.0
@@ -546,6 +563,7 @@ class Visor3D(QOpenGLWidget):
         self.config = config or ConfigVista()
         self.objetivo = np.zeros(3)
         self.distancia = 250.0
+        self._rueda = []         # giros recientes de la rueda (aceleración, B-775)
         self.R = np.identity(3)            # filas: derecha, arriba, atrás (hacia el ojo)
         self._orto_cara = False
         self.home = None                   # vista Inicio elegida: {"R", "objetivo", "distancia", "modo"}; None = la isométrica
@@ -3009,13 +3027,13 @@ class Visor3D(QOpenGLWidget):
         if self._accion == "orbita":
             self.orbitar(d.x(), d.y())
         elif self._accion == "zoom":
-            self.acercar(-d.y() / 79.0)    # misma velocidad de arrastre que con 0,88 cada 30 px (B-763 solo cambia la rueda)
+            self.acercar(-d.y() / PX_ZOOM_ARRASTRE)
         else:
             self.desplazar(d.x(), d.y())
 
     def wheelEvent(self, e):
         self._navegar()
-        self.acercar(e.angleDelta().y() / 120.0, e.position())
+        self.acercar(muescas_rueda(self._rueda, e.angleDelta().y() / 120.0, time.monotonic()), e.position())
 
     def _dibujar_lazo(self):
         """El lazo de la selección libre se dibuja en 3D sobre el plano focal (sigue al cursor)."""

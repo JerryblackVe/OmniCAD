@@ -1,5 +1,7 @@
 """LienzoInteraccionMixin: métodos del lienzo por tema."""
 
+import time
+
 from .editor_boceto_comun import (
     Arco,
     CONFLICTO,
@@ -51,6 +53,7 @@ from .editor_boceto_comun import (
     texto_valor,
 )
 from ..restricciones.solver import _grupos, foto
+from .visor3d import ZOOM_MUESCA, muescas_rueda
 
 
 class LienzoInteraccionMixin:
@@ -971,7 +974,7 @@ class LienzoInteraccionMixin:
             self.visor.wheelEvent(e)
             return
         antes = self.a_mm(e.position())
-        self.escala = max(0.05, min(500.0, self.escala * (1.4 ** (e.angleDelta().y() / 120.0))))
+        self.escala = max(0.05, min(500.0, self.escala * (ZOOM_MUESCA ** muescas_rueda(self._rueda, e.angleDelta().y() / 120.0, time.monotonic()))))
         despues = self.a_mm(e.position())
         self.centro[0] += antes[0] - despues[0]
         self.centro[1] += antes[1] - despues[1]

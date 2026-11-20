@@ -1,4 +1,4 @@
-"""B-763: la rueda acerca ~1,4× por muesca hacia el cursor, como Fusion (antes 1,14×). B-764: la rejilla del diseño es
+"""B-763/B-775: la rueda acerca hacia el cursor 1,10× por muesca suelta y ~3× con una ráfaga de 4, como Fusion. B-764: la rejilla del diseño es
 finita (crece con el modelo, también ya modificado) y se desvanece hacia el borde y al mirarla rasante."""
 import math
 
@@ -28,22 +28,39 @@ def _rueda(v, muescas, pos):
                                           Qt.NoButton, Qt.NoModifier, Qt.ScrollUpdate, False))
 
 
-def test_cuatro_muescas_acercan_casi_4x_hacia_el_cursor(visor):
+def _reloj(monkeypatch, tiempos):
+    it = iter(tiempos)
+    monkeypatch.setattr(vis.time, "monotonic", lambda: next(it))
+
+
+def test_muesca_suelta_acerca_1_10_y_rafaga_acelera_hacia_el_cursor(visor, monkeypatch):
     visor.config.invertir_zoom = False
-    d0 = visor.distancia
     cursor = QPoint(600, 150)
     antes = visor.punto_focal(QPointF(cursor))
-    for _ in range(4):
+    _reloj(monkeypatch, [0.0, 1.0, 1.12, 1.24, 1.36, 5.0])
+    d0 = visor.distancia
+    _rueda(visor, 1, cursor)                                         # suelta: el paso medido en Fusion (E11)
+    assert d0 / visor.distancia == pytest.approx(1.10, rel=1e-6)
+    d1 = visor.distancia
+    for _ in range(4):                                               # ráfaga de 4 en 0,36 s
         _rueda(visor, 1, cursor)
-    assert d0 / visor.distancia == pytest.approx(1.4 ** 4, rel=1e-6)      # 3,84×; antes 1,67×
+    assert d1 / visor.distancia == pytest.approx(1.10 ** 11.5, rel=1e-6)   # ~3×, como el video de Fusion
     assert np.allclose(visor.punto_focal(QPointF(cursor)), antes, atol=1e-6 * d0)   # lo de bajo el cursor queda ahí
+    d2 = visor.distancia
+    _rueda(visor, -1, cursor)                                        # tras la pausa vuelve al paso base
+    assert visor.distancia / d2 == pytest.approx(1.10, rel=1e-6)
+
+
+def test_cambiar_de_sentido_corta_la_aceleracion():
+    h = []
+    assert [vis.muescas_rueda(h, m, t) for m, t in ((1, 0.0), (1, 0.1), (-1, 0.2), (-1, 0.3))] == [1, 2.5, -1, -2.5]
 
 
 def test_arrastre_de_zoom_no_cambia_de_velocidad(visor):
     """Solo cambia la rueda: el zoom arrastrando sigue en 0,88 cada 30 px."""
     d0 = visor.distancia
-    visor.acercar(-300 / 79.0)
-    assert visor.distancia / d0 == pytest.approx(0.88 ** -10, rel=0.01)
+    visor.acercar(-300 / vis.PX_ZOOM_ARRASTRE)
+    assert visor.distancia / d0 == pytest.approx(0.88 ** -10, rel=1e-6)
 
 
 def test_rejilla_finita_corta_las_lineas_en_el_limite():
