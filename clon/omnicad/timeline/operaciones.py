@@ -1408,7 +1408,12 @@ def _exigir_cuerpo_con_volumen(estado, ids):
         if c is None or getattr(c, "tipo", "solido") != "solido":
             continue
         if not geo.es_valida(c.forma):
-            raise ErrorOperacion("La extrusión dejó un cuerpo inválido.")
+            # B-674: un perfil con arcos casi tangentes (contorno que OCC marca con autointersección) extruye bien
+            # y solo el chequeo lo rechaza; ShapeFix lo deja válido con el mismo volumen.
+            sana = geo.sanar_forma(c.forma)
+            if not geo.es_valida(sana) or abs(geo.volumen_exacto(sana) - geo.volumen_exacto(c.forma)) > 1e-4 * geo.volumen_exacto(sana):
+                raise ErrorOperacion("La extrusión dejó un cuerpo inválido.")
+            c.forma = sana
         if geo.volumen_exacto(c.forma) <= 0:
             raise ErrorOperacion("La extrusión dejó un cuerpo sin volumen.")
 
