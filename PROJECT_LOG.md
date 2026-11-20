@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · Traspaso E6 (contexto 30 %, P-197 listo sin commit).** 1) ~/OmniCAD-P-197: rejilla auditada; 2 arreglos y filas P-202 (incrementos), P-203, P-204 (UI). 2) Integra el coordinador. 3) Informe en ~/coordinador/buzon/E6.md. 4) Antes: P-185b y P-201 integrados (P-201 Parcial: falta Windows, E11). 5) Lista para vaciar.
+- **2026-11-20 · P-197 (E6): rejilla de la barra de navegación contra Fusion.** Arreglado: el bloqueo no se cumplía al reabrir (`paso_rejilla`) y la rejilla fija marcaba las mayores cada 5 pasos y no según sus subdivisiones (`subdivisiones_rejilla`). Test: `test_rejilla_boceto.py`. Filas P-202, P-203, P-204.
 - **2026-11-20 · B-739 (E1): comando «Manija de spline».** Herramienta `manija` (cinta MODIFICAR + fila del clic derecho en boceto + ícono): clic cerca de un punto de ajuste activa su manija, otro clic la quita. MCP/CLI ya estaban (`edit_sketch_spline`). Test: `test_manija_de_spline_se_activa_y_se_quita...`; ruff limpio.
 - **2026-11-20 · Traspaso E6 (P-201 listo sin commit).** 1) ~/OmniCAD-P-201: un hilo de OpenBLAS en `_libres` y `matrix_rank`; fila P-201 Parcial (falta Windows). 2) Integra el coordinador. 3) Informe en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · P-201 (E6): un hilo de OpenBLAS en las cuentas chicas del solver.** `hilos_blas.un_hilo()` (ctypes sobre el OpenBLAS de numpy y scipy, sin paquetes nuevos); con la máquina cargada, cota del desfase largo 1,05–1,28 → 0,47–0,49 s. Test: `test_hilos_blas.py`.

@@ -1218,7 +1218,7 @@ class LienzoInteraccionMixin:
 
     def _numeros_rejilla(self, p):
         """Números de referencia sobre los ejes del boceto (como la rejilla del boceto de Fusion)."""
-        mayor = self.paso_grilla() * 5
+        mayor = self.paso_grilla() * self.visor.subdivisiones_rejilla()      # P-197: cada línea mayor
         cu, cv = self.plano.a_uv(self.visor.objetivo)
         p.setFont(temas.qfont_cotas(8))
         p.setPen(QColor(140, 146, 158) if self._oscuro() else QColor(80, 85, 95))     # números tenues, como Fusion
