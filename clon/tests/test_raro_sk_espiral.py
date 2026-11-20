@@ -83,7 +83,6 @@ def test_vueltas_enormes_avisan_y_no_dibujan(app_qt):
     assert lz.resultado.ok
 
 
-@pytest.mark.xfail(strict=True, reason="B-715: el Paso no tiene tope y un valor enorme crea una spline de miles de km")
 @pytest.mark.parametrize("paso", ["1e9", "1000000000"])
 def test_paso_enorme_avisa_y_no_dibuja(app_qt, paso):
     lz, avisos = _abrir(app_qt, "3", paso)
