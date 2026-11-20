@@ -149,6 +149,15 @@ class _Texto:
         t.marco, t.ancho_caja = [der, arriba], float(ancho)
         return lados
 
+    def marco_texto_ajustado(self, tid, ancho=0.0, alto=0.0):
+        """Marco que rodea las letras del texto (Fusion: Text › marco); `ancho`/`alto` > 0 lo fijan a mano."""
+        t = self.curvas[tid]
+        pts = [q for p in self.primitivas(tid) for q in ((p[2], p[3]) if p[0] == "linea" else p[2])] or [(0, 0)]
+        w = max(q[0] for q in pts) - min(q[0] for q in pts)
+        h = max(q[1] for q in pts) - min(q[1] for q in pts)
+        ancho = ancho if ancho > 0 else t.ancho_caja or w or t.altura      # con caja de ancho, el marco la respeta
+        return self.agregar_marco_texto(tid, ancho, alto if alto > 0 else h or t.altura)
+
     def esquina_marco(self, tid, esquina):
         """(x, y) de una esquina del marco del texto (Fusion: el punto del marco elegido como pivote del giro):
         "bl" abajo a la izquierda (el ancla), "br", "tl", "tr" o "center". El texto tiene que tener marco."""

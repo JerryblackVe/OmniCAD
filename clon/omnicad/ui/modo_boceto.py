@@ -869,6 +869,11 @@ class PanelCaracter(QFrame):
                                           "MAYÚSCULAS, minúsculas, Título o Versalitas.")
         f = QFormLayout()
         f.setContentsMargins(10, 0, 0, 0)
+        self.con_marco = QCheckBox("Con marco")
+        self.con_marco.setToolTip("<b>Marco</b><br>Rodea el texto con un rectángulo que se puede acotar y girar "
+                                  "desde una esquina o el centro (Pivote de giro).")
+        self.con_marco.toggled.connect(lambda x: (self.cambio.emit("marco_texto", bool(x)), self._pivote_segun_marco()))
+        f.addRow("", self.con_marco)
         f.addRow("Pivote de giro", self.pivote)
         f.addRow("Línea base", self.base)
         f.addRow("Inclinación", self.inclinacion)
@@ -1070,11 +1075,19 @@ class PanelCaracter(QFrame):
             self._contenido = None
             self.valor_parametro_texto.setEnabled(self._con_parametro)
 
+    def _pivote_segun_marco(self):
+        con = self.con_marco.isChecked()
+        self.pivote.setEnabled(con)
+        self.pivote.setToolTip("Punto fijo al cambiar el ángulo del texto." if con
+                               else "No disponible: el texto no tiene marco (tildá «Con marco»).")
+        if not con:
+            self.pivote.setCurrentIndex(0)
+
     def _widgets(self):
         return (self.filtro, self.fuente, self.estilo, self.b_kerning, self.b_voltear_h, self.b_voltear_v, self.subrayado, self.tachado, self.grosor,
                 self.base, self.inclinacion, self.escala_h, self.escala_v, self.capitalizacion, self.sin_division,
                 self.alineacion, self.ancla_v, self.camino_colocacion, self.camino_lado, self.camino_desfase, self.camino_ajustar, self.altura,
-                self.interletraje, self.interlineado, self.par, self.pivote, self.valor_parametro_texto)
+                self.interletraje, self.interlineado, self.par, self.pivote, self.con_marco, self.valor_parametro_texto)
 
     def cargar(self, o):
         """Muestra las opciones `o` (las del Lienzo) sin emitir cambios."""
@@ -1083,7 +1096,9 @@ class PanelCaracter(QFrame):
             w.blockSignals(True)
         try:
             self.pivote.setCurrentIndex(max(0, self.pivote.findData(o.get("pivote_texto"))))
-            self.pivote.setEnabled(bool(o.get("marco_texto")))
+            self.con_marco.setChecked(bool(o.get("marco_texto")))
+            self.con_marco.setEnabled(not o.get("marco_fijo"))     # un marco ya hecho no se quita desde acá
+            self._pivote_segun_marco()
             self.parametro_texto.setText(o.get("parametro_texto") or "Sin parámetro ligado")
             self.valor_parametro_texto.setText(self._contenido.text() if self._contenido is not None
                                                else o.get("valor_parametro_texto", "").replace("\n", "\\n"))

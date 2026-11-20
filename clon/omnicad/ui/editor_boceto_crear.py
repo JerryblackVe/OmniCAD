@@ -59,7 +59,7 @@ class LienzoCrearMixin:
         self._iso_pos = self._iso_texto = None
         self._borrar_previa_iso()
         if h == "texto":
-            self.opciones.update(pivote_texto=None, marco_texto=False, parametro_texto=None, valor_parametro_texto="")
+            self.opciones.update(pivote_texto=None, marco_texto=False, marco_fijo=False, parametro_texto=None, valor_parametro_texto="")
         if self._ultima_figura is not None and self._ultima_figura["h"] != h:
             self._ultima_figura = None            # P-154: Lados rehace solo lo recién dibujado con esta herramienta
         self.herramienta = h
@@ -621,9 +621,13 @@ class LienzoCrearMixin:
                 if en_curva:
                     extra |= {k: o[k] for k in CURVA_TEXTO}
                 pos = xy if rect is None else (x0, {"arriba": y1, "medio": (y0 + y1) / 2}.get(o["ancla_v"], y0))
-                ok = self.aplicar_cambio(lambda: self.b.agregar_texto(
-                    pid if pid is not None else pos, v[0].replace("\\n", "\n"), altura, ang, o["fuente"],
-                    o["negrita"], o["cursiva"], espaciado=espaciado, interlineado=interlineado, **extra))
+                def crear():
+                    tid = self.b.agregar_texto(
+                        pid if pid is not None else pos, v[0].replace("\\n", "\n"), altura, ang, o["fuente"],
+                        o["negrita"], o["cursiva"], espaciado=espaciado, interlineado=interlineado, **extra)
+                    if o["marco_texto"]:
+                        self.b.marco_texto_ajustado(tid)
+                ok = self.aplicar_cambio(crear)
                 self.clics = []
                 self.opciones["ajustes_kerning"] = []          # el kerning a mano es de ESE texto
                 return ok
