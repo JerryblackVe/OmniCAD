@@ -147,6 +147,7 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
 ## Referencia: MitCad (Gerardo, 2026-11-20)
 - **Qué es:** CAD paramétrico de escritorio (C++17, Qt6, OpenCascade; Rust para el modelo, el solver y la importación), licencia MIT. Copia local, fuera del repo: `~/referencias/mitcad` (depth 1, commit 72c96ac).
 - **Cuándo mirarlo:** solver de bocetos, velocidad e importación con historial (`.f3d`), además de `docs/fusion_docs` y `analisis auto/`. Para el comportamiento de un comando, la fuente sigue siendo Fusion.
+- **Cuidado (Gerardo, 2026-11-20: «es un programa en desarrollo igual que el de nosotros, puede tener errores»):** Fusion manda siempre (`docs/fusion_docs`). MitCad sirve para ver cómo se hace algo, no qué hay que hacer. Todo lo que se tome de MitCad entra con su propio test en OmniCAD y se compara contra Fusion; si no coinciden, gana Fusion.
 - **Uso:** solo se lee, nunca se ejecuta nada de ahí. Por ser MIT, su código se puede copiar a OmniCAD citando el origen (archivo y commit) en el docstring.
 
 ## Cómo correr un plan por fases en loop, sin que el usuario apruebe nada
