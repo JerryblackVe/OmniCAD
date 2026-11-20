@@ -67,6 +67,7 @@ class ControlPatron:
         self.editando = None         # id del patrón que se edita, o None
         self.campo = "seleccion"     # qué llena el próximo clic: seleccion, centro, dir1 o dir2
         self.centro = None           # None, id de punto o (x, y)
+        self._centro_mal = None      # B-713: error de los campos Centro X/Y mientras no se evalúan
         self.lineas = {"dir1": None, "dir2": None}
         self.suprimidos = set()
         self.previa = True
@@ -152,9 +153,10 @@ class ControlPatron:
                     t["angulo_total"] if abs(self._numero_o_none("angulo_total", ANGULO) or 360.0) != 360.0
                     else signo + "180")
             if (t.get("centro_x"), t.get("centro_y")) != (antes.get("centro_x"), antes.get("centro_y")):
-                xy = [self._numero_o_none(k, LONGITUD) for k in ("centro_x", "centro_y")]
-                if None not in xy:
-                    self.centro = (xy[0], xy[1])
+                try:                            # B-713: un valor no evaluable se marca; no se aplica el centro anterior
+                    self.centro, self._centro_mal = tuple(self._numero(k, LONGITUD, True) for k in ("centro_x", "centro_y")), None
+                except _Mal as e:
+                    self._centro_mal = e
         self._emitir()
         self.l.update()
 
@@ -164,12 +166,12 @@ class ControlPatron:
         except (ErrorExpresion, ValueError, ZeroDivisionError):
             return None
 
-    def _numero(self, clave, tipo=LONGITUD):
+    def _numero(self, clave, tipo=LONGITUD, estricto=False):
         texto = str(self.textos.get(clave, "")).strip()
         if not texto:
             raise _Mal(clave, f"Falta el valor de «{ETIQUETAS[clave]}».")
         try:
-            v = float(self.l.evaluar(texto, tipo))
+            v = float(self.l.evaluar(texto, tipo, estricto))
         except (ErrorExpresion, ValueError, ZeroDivisionError) as e:
             raise _Mal(clave, f"«{ETIQUETAS[clave]}»: {e}") from e
         if not math.isfinite(v):
@@ -177,7 +179,7 @@ class ControlPatron:
         return v
 
     def _entero(self, clave):
-        v = self._numero(clave, ESCALAR)
+        v = self._numero(clave, ESCALAR, True)
         if abs(v - round(v)) > 1e-9:
             raise _Mal(clave, f"«{ETIQUETAS[clave]}» tiene que ser un número entero (escribiste {self.textos[clave]}).")
         return int(round(v))
@@ -214,6 +216,8 @@ class ControlPatron:
             total = -360.0 if total < 0 else 360.0
         if self.centro is None:
             raise _Mal("", "Elegí el centro del patrón: clic en un punto (o en el origen) del dibujo.")
+        if self._centro_mal is not None:
+            raise self._centro_mal
         centro = self.centro
         if isinstance(centro, int):
             if centro not in self.l.b.puntos:
@@ -256,6 +260,7 @@ class ControlPatron:
     # ------------------------------------------------------------ estado para el panel
     def _texto_centro(self):
         c, b = self.centro, self.l.b
+        self._centro_mal = None
         if c is None:
             self.textos["centro_x"] = self.textos["centro_y"] = ""
             return

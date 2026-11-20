@@ -6,6 +6,8 @@ from .editor_boceto_comun import (
     COMANDO_PROYECCION,
     CURVA_TEXTO,
     EJES_ORIGEN,
+    ESCALAR,
+    ErrorExpresion,
     ErrorBoceto,
     HERRAMIENTAS,
     NOMBRES_RESTRICCION,
@@ -407,6 +409,13 @@ class LienzoCrearMixin:
         ancho = 2 * self._ancho_ranura(h, c[:n], cur)
         self.aplicar_cambio(lambda: self.b.agregar_ranura(tipo, puntos, ancho, self.construccion))
 
+    def _escalar(self, nombre, texto):
+        """Campo sin unidad (Rho, Vueltas): admite expresiones; el error de 1 renglón lleva el nombre del campo."""
+        try:
+            return self.evaluar(texto, ESCALAR, True)
+        except ErrorExpresion as e:
+            raise ErrorBoceto(f"«{nombre}»: {e}") from e
+
     def _espiral(self, centro, inicio, vueltas, paso):
         pts = puntos_espiral(centro, inicio, vueltas, paso)
         return self.b.agregar_spline(pts, "ajuste", 3, False, construccion=self.construccion)
@@ -560,7 +569,7 @@ class LienzoCrearMixin:
                 c.pop()
         elif h == "conica" and len(c) == 3:
             def aceptar(v):
-                rho = _numero(v[0] or "0.5")
+                rho = self._escalar("Rho", v[0] or "0.5")
                 (p0, a), (p2, b), (pv, vx) = self.clics
                 ok = self.aplicar_cambio(lambda: self.b.agregar_conica(p0 if p0 is not None else a,
                                                                        pv if pv is not None else vx,
@@ -650,7 +659,7 @@ class LienzoCrearMixin:
             (_, ce), (_, ini) = c
 
             def aceptar(v):
-                vueltas, paso = _numero(v[0] or "3"), self.evaluar(v[1] or "2")
+                vueltas, paso = self._escalar("Vueltas", v[0] or "3"), self.evaluar(v[1] or "2")
                 ok = self.aplicar_cambio(lambda: self._espiral(ce, ini, vueltas, paso))
                 self.clics = []
                 return ok
