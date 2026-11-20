@@ -478,6 +478,7 @@ class LineaTiempoAnimacion(QWidget):
         area = QScrollArea()
         area.setWidget(self.pistas)
         area.setWidgetResizable(True)
+        area.setFocusPolicy(Qt.NoFocus)  # B-733: Tab desde el último campo no cae en el área (Enter no aceptaba)
         area.setFrameShape(QScrollArea.NoFrame)
         area.setMinimumHeight(150)
         lay.addWidget(area, 1)

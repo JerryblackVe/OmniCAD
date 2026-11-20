@@ -572,6 +572,7 @@ class PanelObjetos(QFrame):
         lay.addWidget(cab)
         self.desplazador = QScrollArea()
         self.desplazador.setWidgetResizable(True)
+        self.desplazador.setFocusPolicy(Qt.NoFocus)  # B-733: Tab desde el último campo no cae en el área (Enter no aceptaba)
         self.desplazador.setFrameShape(QFrame.NoFrame)
         self.desplazador.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         cuerpo = QWidget()
