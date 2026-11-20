@@ -1363,6 +1363,8 @@ def proyectar_forma(forma, plano):
         prim = arista_a_primitiva(e, a_uv, tuple(plano.normal))
         if prim is not None:
             prims.append(prim)
+    if not prims:       # B-512: una arista paralela a la normal se ve como un punto (Fusion: 1 punto)
+        return [], [a_uv(p) for p in _vertices(forma)]
     return prims, []
 
 

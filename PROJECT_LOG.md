@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · B-782 y parte de B-512 (E8).** Revolución sin boceto abre el panel con Info (sin modal; Barrido/Solevación ya no tenían); partir con clic en el cruce (boceto_cortes.py) y proyectar arista vertical como punto (perfiles.py). Tests test_b782_*, test_b512_*; ruff limpio. Sigue en B-512: mover/rotar en origen, curvatura arco–spline.
 - **2026-11-20 · Traspaso E6 (B-775 Parcial, sin commit en ~/OmniCAD-B-775).** 1) Rueda 1,10× suelta + aceleración en ráfaga (`muescas_rueda`). 2) Falta: E11 mide ráfagas en Fusion y se ajustan `RUEDA_ACEL*`. 3) Filas nuevas B-780, B-781 (rojos de main). 4) Informe en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · B-775 Parcial (rueda del visor).** `ZOOM_MUESCA` 1,10 (Fusion, E11) + aceleración en ráfaga (`muescas_rueda`: 4 muescas ≈ 3×, tope 1,46×); arrastre igual (`PX_ZOOM_ARRASTRE`). Falta: E11 mide ráfaga en Fusion. Test `test_b763_b764_rueda_rejilla.py`.
 - **2026-11-20 · Traspaso E6 (P-183 listo sin commit en ~/OmniCAD-P-183).** 1) Rust cambiado: hay que recompilar `_rs` en main al integrar (`maturin develop --release` desde clon/rust; sin eso anda, más lento) y en la PC. 2) clippy no está instalado en la VPS. 3) ⚠ 7 rojos de `test_proyectar_tarjeta` y 4 de B-619 también fallan en main. 4) Referencia y bancos: ~/coordinador/casos/p183/. 5) Informe en ~/coordinador/buzon/E6.md.
