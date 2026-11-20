@@ -1549,9 +1549,10 @@ class ModoBoceto(QObject):
             self.v.area.reubicar()
 
     def _mostrar_tarjeta(self, h):
-        """La tarjeta se ve solo si la herramienta tiene opciones propias."""
+        """La tarjeta se ve solo si la herramienta tiene opciones propias; el «Tipo» solo no alcanza (P-192: ya está en la
+        cinta, y una segunda tarjeta junto a la Paleta rompe «una tarjeta por tarea»)."""
         self.tarjeta.set_herramienta(h, self.lienzo.lados, self.lienzo.opcion_cota, self.lienzo.opciones)
-        self.tarjeta.setVisible(self.tarjeta.form_contexto.rowCount() > 0)
+        self.tarjeta.setVisible(self.tarjeta.form_contexto.rowCount() > (1 if _familia(h) else 0))
 
     def _mostrar_caracter(self, visible):
         """El panel «Carácter» se ve con la herramienta Texto (o al editar un texto) y arranca con sus opciones."""

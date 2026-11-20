@@ -738,8 +738,17 @@ def test_el_aviso_flotante_no_tapa_terminar_boceto(v):
     v.area.toast.hide()
 
 
-CON_TARJETA = ["rectangulo", "circulo", "arco", "poligono_inscrito", "ranura_centro", "spline_control", "chaflan", "cota",
-               "curva_fusion", "proyectar", "intersecar", "incluir_3d", "perfil_giratorio", "isoparametrica", "desfase"]
+CON_TARJETA = ["poligono_inscrito", "spline_control", "cota", "curva_fusion", "proyectar", "intersecar", "incluir_3d",
+               "perfil_giratorio", "isoparametrica", "desfase"]
+SOLO_TIPO = ["rectangulo", "circulo", "arco", "ranura_centro", "chaflan"]      # P-192: el «Tipo» solo no abre tarjeta
+
+
+@pytest.mark.parametrize("h", SOLO_TIPO)
+def test_p192_tipo_solo_no_abre_tarjeta(v, h):
+    modo = v.modo_boceto
+    modo.herramienta(h)
+    QApplication.processEvents()
+    assert not modo.tarjeta.isVisible() and modo.paleta.isVisible()
 
 
 @pytest.mark.parametrize("h", CON_TARJETA)
