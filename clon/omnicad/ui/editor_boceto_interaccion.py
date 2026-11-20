@@ -50,7 +50,7 @@ from .editor_boceto_comun import (
     temas,
     texto_valor,
 )
-from ..restricciones.solver import _grupos
+from ..restricciones.solver import _grupos, foto
 
 
 class LienzoInteraccionMixin:
@@ -450,6 +450,7 @@ class LienzoInteraccionMixin:
                 self.mensaje.emit("Ese punto está totalmente restringido: no se puede arrastrar.")
                 return
             self._arrastre = ent
+            self._foto_arrastre = None
         elif ent in self.b.curvas:
             c = self.b.curvas[ent]
             if isinstance(c, Texto) and c.camino in self.b.curvas:
@@ -544,6 +545,8 @@ class LienzoInteraccionMixin:
 
     def _mover_punto(self, pid, cur):
         """Arrastra un punto; si es el centro de arcos, el arco entero lo acompaña."""
+        if getattr(self, "_foto_arrastre", None) is None:
+            self._foto_arrastre = foto(self.b)         # B-732: el menor cambio se mide desde acá, como Fusion
         p = self.b.puntos[pid]
         dx, dy = cur[0] - p.x, cur[1] - p.y
         p.x, p.y = cur
@@ -556,7 +559,7 @@ class LienzoInteraccionMixin:
                         self.b.puntos[q].y += dy
         # Rápido: lo movido es un punto (y, si es centro de arcos, sus arcos: misma parte del boceto). Arrastrar una
         # curva entera mueve puntos que pueden estar en partes distintas: `_mover_curva` resuelve todo en ese caso.
-        self.resolver(arrastrado=pid, rapido=True)
+        self.resolver(arrastrado=pid, rapido=True, referencia=self._foto_arrastre)
 
     def _manija_en(self, pos):
         """Nombre de la manija del marco de control bajo `pos` (o None)."""
@@ -758,7 +761,7 @@ class LienzoInteraccionMixin:
             else:
                 self.pila_rehacer.clear()
                 self.resolver()
-            self._arrastre = None
+            self._arrastre = self._foto_arrastre = None
         if self._presion is not None and e.button() == Qt.LeftButton:
             if self.herramienta == "conica" and len(self.clics) == 3 and self.entrada is not None:
                 self._actualizar_rho_conica(pos)
