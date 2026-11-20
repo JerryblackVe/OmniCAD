@@ -55,8 +55,20 @@ class LienzoBaseMixin:
                            self.height() / 2 - (y - self.centro[1]) * self.escala)
         if self._mvp is None:
             self._camara()
-        q = self.visor.proyectar(self.plano.a_3d(x, y), self._mvp)
-        return q if q is not None else QPointF(-1e5, -1e5)
+        # P-182: el plano y la cámara en una matriz 4×3 de floats, una vez por cámara (con numpy por punto: ~1000 por
+        # cuadro en un boceto grande, la mitad del pintado de cotas e íconos). Mismo resultado que visor.proyectar.
+        m, pl = self._mvp, self.plano
+        cache = getattr(self, "_a_px_m", None)
+        if cache is None or cache[0] is not m or cache[1] is not pl:
+            k = m[:, :3] @ np.column_stack([pl.u, pl.v, pl.origen])
+            k[:, 2] += m[:, 3]
+            cache = self._a_px_m = (m, pl, tuple(map(float, k.ravel())))
+        a, b, c, d, e, f, _, _, _, g, h, i = cache[2]
+        w = g * x + h * y + i
+        if w <= 1e-9:
+            return QPointF(-1e5, -1e5)
+        return QPointF(((a * x + b * y + c) / w + 1) / 2 * self.visor.width(),
+                       (1 - (d * x + e * y + f) / w) / 2 * self.visor.height())
 
     def a_mm(self, p):
         if self.visor is None:
