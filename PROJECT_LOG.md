@@ -9,6 +9,8 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · Traspaso E6 (P-201 listo sin commit).** 1) ~/OmniCAD-P-201: un hilo de OpenBLAS en `_libres` y `matrix_rank`; fila P-201 Parcial (falta Windows). 2) Integra el coordinador. 3) Informe en ~/coordinador/buzon/E6.md.
+- **2026-11-20 · P-201 (E6): un hilo de OpenBLAS en las cuentas chicas del solver.** `hilos_blas.un_hilo()` (ctypes sobre el OpenBLAS de numpy y scipy, sin paquetes nuevos); con la máquina cargada, cota del desfase largo 1,05–1,28 → 0,47–0,49 s. Test: `test_hilos_blas.py`.
 - **2026-11-20 · Traspaso E6 (P-185b listo sin commit).** 1) ~/OmniCAD-P-185b: P-185 cerrado (fila borrada), cambio de cota 0,8–2,2 s → 0,4–0,8 s. 2) Fila nueva P-201: hilos de OpenBLAS lentos con la VPS cargada. 3) Integra el coordinador. 4) Informe en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · P-185b (E6): desfase de spline larga 0,8–2,2 → 0,4–0,8 s.** Jacobiano con la derivada exacta de la quíntica (`sensibilidad_spline`, `_spline_movida`: 161 → 73 jacobianos) y `_libres` con QR (`_libres_qr`). Tests: `test_derivada_de_la_quintica_es_la_de_diferencias_finitas`, `test_resolver_con_la_derivada_de_la_spline_da_lo_mismo`.
 - **2026-11-20 · Traspaso E6 (contexto 30 %, P-185 listo sin commit).** 1) ~/OmniCAD-P-185: cota del desfase de spline larga 3–7 → 0,8–2,2 s, mismo resultado. 2) Queda (P-185 Parcial): SVD de `_libres` y reinterpolar la madre. 3) Banco: ~/coordinador/casos/p185/p185.py. 4) Tests del núcleo: 1265 OK.
