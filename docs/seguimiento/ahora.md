@@ -10,12 +10,12 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Opus alto) | B-742 | Cinta a 1920 px (5 tests rojos); B-738 parado hasta las mediciones de E11 (brief `~/coordinador/briefs/E1_P-191_B-738.md`) |
+| E1 (Opus alto) | B-743 | test_b423 Revolución rojo en main; después B-667 (B-742 y B-738 integrados el 20/11; brief `~/coordinador/briefs/E1_B-743.md`) |
 | E4 (Sonnet medio) | B-729 | Editar patrón arma la espera de clic (brief `~/coordinador/briefs/E4_B-729.md`) |
 | E7 (Sonnet medio) | En espera (cupo 5) | Prueba como usuario de lo integrado el 20/11 y PRUEBA-OPC-2 (brief `~/coordinador/briefs/E7_siguiente.md`) |
 | E8 (Sonnet medio) | P-193 | Proyectar y afines en una tarjeta (brief `~/coordinador/briefs/E8_P-193.md`) |
 | E3 (Sonnet medio) | P-195 y P-194 | Paleta, Navegador y paneles de comando: una tarjeta por tarea (brief `~/coordinador/briefs/E3_P-195_P-194.md`) |
-| E6 (Opus alto) | P-197 | Rejilla del boceto: verificar contra Fusion y abrir filas |
+| E6 (Opus alto) | P-202 | Desplazamiento incremental y Definir incrementos de la rejilla (P-197 integrado; brief `~/coordinador/briefs/E6_P-202.md`) |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | Paró la noche del 20/11 (driver AMD de la PC en blanco; Gerardo reinicia a la mañana). Pendiente tras el reinicio: B-667, batería del punto 4, B-710; B-690 resuelto (Fusion no permite Perpendicular línea–spline). Tanda: `~/coordinador/casos/e11_noche_19-11.md`. Antes: Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
 
