@@ -227,7 +227,7 @@ def _energia_quintica(m):
             for orden in (1, 2, 3):
                 b = np.asarray(_base_derivada(nudos, p, u, p + s, orden))
                 H[s:s + p + 1, s:s + p + 1] += _PESOS_ENERGIA[orden] * jac * np.outer(b, b)
-    return nudos, sparse.csr_matrix(2 * H)                  # 2H (gradiente de la energía), disperso: de banda
+    return nudos, sparse.coo_matrix(2 * H)                  # 2H (gradiente de la energía), disperso: de banda
 
 
 def _quintica_fusion(Q, cerrar, derivadas):
@@ -258,7 +258,11 @@ def _quintica_fusion(Q, cerrar, derivadas):
         A, B = np.vstack([A, C]), np.vstack([B, np.zeros((4, 2))])
     escala = abs(H2).max() / np.abs(A).max(axis=1, keepdims=True)    # filas a la escala de H (h^-5): sin esto se pierde
     A, B = A * escala, B * escala                           # precisión en la punta con muchos puntos (1e-4 mm con 41)
-    K = sparse.bmat([[H2, sparse.csr_matrix(A.T)], [sparse.csr_matrix(A), None]], format="csc")   # Lagrange
+    # Lagrange [[2H, Aᵀ], [A, 0]], armada de una vez: con `sparse.bmat` el armado costaba más que factorizar (P-184)
+    fa, ca = np.nonzero(A)
+    va, nk = A[fa, ca], n + len(A)
+    K = sparse.csc_matrix((np.concatenate([H2.data, va, va]), (np.concatenate([H2.row, fa + n, ca]),
+                                                            np.concatenate([H2.col, ca, fa + n]))), shape=(nk, nk))
     D = np.vstack([np.zeros((n, 2)), B])
     try:                                                    # disperso: ~1 ms con 100 puntos (el denso, cientos)
         P = splu(K).solve(D)[:n]

@@ -642,25 +642,62 @@ class _Sistema:
         distancia es la incógnita de ese índice en vez de un número. Un punto con su t guardado (B-231) queda en ese
         lugar de la madre; uno sin él (el de un recorte) desliza con su parámetro t libre."""
         prim0 = self.prim(self.x0, madre)
+        atados = []     # (pid, t guardado, lado) de los puntos con su t (B-231): van todos en un término (P-184)
         for pid in self.b.curvas[copia].pts:
+            tg = (parametros or {}).get(str(pid))
+            if tg is not None and lado is not None:     # no hace falta su pie en la madre (~16 ms por punto)
+                atados.append((pid, tg, lado))
+                continue
             t, _, q = mas_cercano(prim0, self.P(self.x0, pid))
             if lado is None:
                 _, d = evaluar_primitiva(prim0, t, 1)
                 lado = _signo(_cruz(d, np.subtract(self.P(self.x0, pid), q)))
-            tg = (parametros or {}).get(str(pid))
-            j = None if tg is not None else self._parametro(t)
+            if tg is not None:
+                atados.append((pid, tg, lado))
+                continue
+            j = self._parametro(t)
 
-            def f(x, pid=pid, j=j, lado=lado, tg=tg):
+            def f(x, pid=pid, j=j, lado=lado):
                 prim = self.prim(x, madre)
                 t0, t1, cerrada = dominio(prim)
-                t = x[j] if tg is None else tg
-                t = t if cerrada else min(t1, max(t0, t))
+                t = x[j] if cerrada else min(t1, max(t0, x[j]))
                 q, d = evaluar_primitiva(prim, t, 1)
                 ux, uy = _unitario(d)
                 p = self.P(x, pid)
                 dist = distancia if jd is None else x[jd]
                 return [p[0] - q[0] + lado * dist * uy, p[1] - q[1] - lado * dist * ux]
             self.terminos.append(f)
+        if atados:
+            self._desfase_atados(madre, atados, distancia, jd)
+
+    def _desfase_atados(self, madre, atados, distancia, jd):
+        """P-184: los puntos atados a su t de la madre en UN término, con la madre evaluada de una vez en todos los t
+        (`_normales`, vectorizada). Con un término por punto, el jacobiano reevaluaba la madre punto por punto en
+        cada columna suya: la spline larga (108 puntos) tardaba ~12 s en cambiar la cota. Las columnas de las copias
+        no cambian la madre: `memo` guarda (C, N) por primitiva (la caché de `prim` devuelve el mismo objeto)."""
+        from .boceto_desfase import _normales
+        pids = [a[0] for a in atados]
+        ts = np.array([a[1] for a in atados], dtype=float)
+        lados = np.array([a[2] for a in atados], dtype=float)[:, None]
+        memo = {}
+        ix = [self.idx_p.get(p) for p in pids]
+        ix = np.array(ix) if all(i is not None for i in ix) else None   # todas incógnitas: se leen de una vez
+
+        def f(x):
+            prim = self.prim(x, madre)
+            hit = memo.get(id(prim))
+            if hit is None or hit[0] is not prim:
+                t0, t1, cerrada = dominio(prim)
+                if len(memo) > 8:
+                    memo.clear()
+                hit = memo[id(prim)] = (prim, *_normales(prim, ts if cerrada else np.clip(ts, t0, t1)))
+            dist = distancia if jd is None else x[jd]
+            if ix is not None and isinstance(x, np.ndarray):
+                P = x[ix]
+            else:   # `_patron` lee con su lector: índice por índice
+                P = np.array([self.P(x, p) for p in pids], dtype=float)
+            return (P - hit[1] - lados * dist * hit[2]).ravel()
+        self.terminos.append(f)
 
     def _contacto_punto(self, pid, cid):
         """Punto sobre una curva libre (spline o cónica): un parámetro auxiliar t y P(t) = punto."""
@@ -955,7 +992,10 @@ def _jacobiano(sis, x, h=1e-7):
     patron, inicio, lee = _patron(sis, x)
     f0 = sis.residuos(x)
     J = np.zeros(patron.shape)
-    for cols in _colorear(patron):
+    clave = (patron.shape, patron.tobytes())
+    if getattr(sis, "_coloreo", (None,))[0] != clave:     # P-184: el patrón casi nunca cambia entre iteraciones
+        sis._coloreo = (clave, _colorear(patron))
+    for cols in sis._coloreo[1]:
         xp = x.copy()
         xp[cols] += h
         f = f0.copy()
@@ -998,17 +1038,17 @@ def _patron(sis, x):
 
 def _colorear(patron):
     """Columnas agrupadas sin filas en común (coloreo voraz): cada grupo se perturba en una sola evaluación."""
-    colores, filas_de = [], []
+    colores = []
+    usadas = np.zeros((patron.shape[1], patron.shape[0]), dtype=bool)    # filas tomadas por cada color
     for j in range(patron.shape[1]):
-        col = patron[:, j]
-        for k, usadas in enumerate(filas_de):
-            if not (usadas & col).any():
-                colores[k].append(j)
-                usadas |= col
-                break
-        else:
-            colores.append([j])
-            filas_de.append(col.copy())
+        filas = np.flatnonzero(patron[:, j])
+        # P-184: el primer color libre, mirando solo las filas de la columna (antes, la columna entera por color)
+        libre = np.flatnonzero(~usadas[:len(colores)][:, filas].any(axis=1))
+        k = int(libre[0]) if len(libre) else len(colores)
+        if k == len(colores):
+            colores.append([])
+        colores[k].append(j)
+        usadas[k, filas] = True
     return colores
 
 

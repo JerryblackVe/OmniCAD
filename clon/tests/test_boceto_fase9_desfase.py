@@ -163,3 +163,31 @@ def test_desfase_de_spline_queda_dentro_de_la_tolerancia_de_fusion(puntos, canti
         return _normales(prim, np.linspace(t0, t1, n))[0]
     error = np.abs(cKDTree(densos(madre, 200000)).query(densos(copia, 3000))[0] - 3).max()
     assert error < 0.01
+
+
+
+def test_cambiar_la_cota_de_la_spline_larga_sigue_exacto_y_rapido():
+    """P-184: los puntos atados a su t van en un término vectorizado; cambiar la cota de la spline larga (108 puntos)
+    tardaba ~12 s. Dos cambios seguidos (el segundo sobre la copia ya movida) y con la madre deformada: cada punto de
+    la copia, a la distancia de la cota y en su t de la madre (B-231)."""
+    import time
+    b = Boceto()
+    madre = b.agregar_spline([(i * 30, 15 * (-1) ** i) for i in range(12)])
+    copia, = b.desfase(madre, 3)
+    cota = next(k for k, c in b.cotas.items() if c.tipo == "desfase")
+    ts = next(r for r in b.restricciones.values() if r.tipo == "desfase").datos["parametros"]
+
+    def exacto(d):
+        prim = b.primitivas(madre)[0]
+        for p in b.curvas[copia].pts:
+            t, dist, _q = mas_cercano(prim, b.coords(p))
+            assert abs(dist - d) < 1e-6 and abs(t - ts[str(p)]) < 1e-6
+    t = time.perf_counter()
+    for d in (4.0, 5.0):
+        assert resolver(b, {cota: d}).ok
+        exacto(d)
+    assert time.perf_counter() - t < 15       # antes ~21 s los dos; hoy ~3 s (holgado para una máquina lenta)
+    b.agregar_restriccion("fijo", [madre])
+    b.puntos[b.curvas[madre].pts[5]].y += 4
+    assert resolver(b, {cota: 5.0}).ok
+    exacto(5.0)
