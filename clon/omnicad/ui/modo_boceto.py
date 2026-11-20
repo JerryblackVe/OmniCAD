@@ -1340,6 +1340,9 @@ class ModoBoceto(QObject):
         self.objetos, self._objetos_suspendido = None, False
         lz.objetos.armar_panel = self._armar_objetos         # B-411: armarlo al entrar costaba 35-75 ms
         area.set_capa_boceto(self.lienzo, self.paleta, self.tarjeta)
+        # P-195: dentro del boceto el Navegador y los Comentarios arrancan plegados (se abren con su botón)
+        self._plegados_fijos = [w for w in (getattr(self.v, "navegador", None), getattr(self.v, "comentarios", None))
+                                if w is not None and w.plegar_por_ventana(True)]
         visor.paso_boceto = None
         visor.set_plano_boceto(plano, self._opciones_visor())
         if mirar:
@@ -1367,6 +1370,8 @@ class ModoBoceto(QObject):
             panel = self._paneles[nombre] = getattr(self, "_armar_" + nombre)(self.v.area)
             panel.hide()
             self.v.area.agregar_lateral(panel)
+            if nombre != "caracter":
+                self.v.area.de_comando.append(panel)       # P-194: con él abierto la paleta se compacta
         return panel
 
     def _armar_caracter(self, area):            # fuente, decoraciones y transformación del texto
@@ -1489,6 +1494,9 @@ class ModoBoceto(QObject):
     def _limpiar(self):
         self.lienzo._cerrar_entrada()
         self.v.area.set_capa_boceto(None, None)
+        for w in getattr(self, "_plegados_fijos", []):
+            w.plegar_por_ventana(False)
+        self._plegados_fijos = []
         for w in (self.lienzo, self.paleta, *self._paneles.values(), self.tarjeta, self.objetos):
             if w is None:
                 continue
