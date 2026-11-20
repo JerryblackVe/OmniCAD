@@ -48,7 +48,7 @@ def test_espiral_radio_paso_y_deshacer(s, construccion):
                pitch=3, construction=construccion)
     assert len(r["entities"]) == 1 and len(r["points"]) == 17
     e = llamar(s, "get_sketch")["entities"][0]
-    assert e["type"] == "spline" and e["degree"] == 3 and not e["closed"]
+    assert e["type"] == "spline" and e["degree"] == 5 and not e["closed"]   # B-463: la spline de ajuste es quíntica, como Fusion
     assert e["construction"] is construccion
     assert e["vertices"][0] == [7, 3]
     assert math.dist(e["vertices"][8], [2, 3]) == pytest.approx(8)
