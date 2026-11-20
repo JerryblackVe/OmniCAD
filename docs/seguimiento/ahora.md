@@ -12,9 +12,9 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 |---|---|---|
 | E1 (Opus alto) | B-732 (BLOQUEANTE), luego B-463f | La gota colapsa al arrastrar el círculo (brief `~/coordinador/briefs/E1_B-732.md`; video de Gerardo); B-463f pausada |
 | E4 (Sonnet medio) | P-186 | Mosaico de Restricciones automáticas como Fusion (brief `~/coordinador/briefs/E4_P-186.md`) |
-| E7 (Sonnet medio) | REPRO-E11 | Reproducir con eventos simulados B-729, B-730, B-731 (brief `~/coordinador/briefs/E7_repro.md`); incluir Restricciones automáticas (mosaico, P-186) en su prueba |
+| E7 (Sonnet medio) | REPRO-E11 + auditoría UX | Reproducir con eventos simulados B-729, B-730, B-731 (brief `~/coordinador/briefs/E7_repro.md`); incluir Restricciones automáticas (mosaico, P-186) en su prueba; B-734; después recorrer los comandos del boceto buscando tarjetas repetidas (una fila por caso) |
 | E8 (Sonnet medio) | P-187 | Cinta de BOCETO como Fusion y personalizable (brief `~/coordinador/briefs/E8_P-187.md`) |
-| E3 | — | Vaciada y quieta |
+| E3 (Sonnet medio) | P-188 | Texto: UNA tarjeta por tarea (brief `~/coordinador/briefs/E3_P-188.md`) |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | Paró la noche del 20/11 (driver AMD de la PC en blanco; Gerardo reinicia a la mañana). Pendiente tras el reinicio: B-667, batería del punto 4, B-710; B-690 resuelto (Fusion no permite Perpendicular línea–spline). Tanda: `~/coordinador/casos/e11_noche_19-11.md`. Antes: Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
 
