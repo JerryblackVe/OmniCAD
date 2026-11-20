@@ -306,8 +306,9 @@ def v(ventana):
     ventana.visor.encuadrar()
     QApplication.processEvents()
     ventana.crear_boceto()
+    # B-762: al pedir plano, el plano de origen apuntado gana a la cara; (-8, -8) queda fuera del cuadro XY (de 0 a 0,4 de la pieza)
     QTest.mouseClick(ventana.visor, Qt.LeftButton, Qt.NoModifier,
-                     ventana.visor.proyectar(np.array([5.0, 5.0, 47.0])).toPoint())
+                     ventana.visor.proyectar(np.array([-8.0, -8.0, 47.0])).toPoint())
     QApplication.processEvents()
     assert ventana.modo_boceto.activo
     yield ventana
