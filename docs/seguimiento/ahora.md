@@ -14,7 +14,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E4 (Sonnet medio) | B-734 y B-730 | Texto: clic en vista 3D y Desagrupar (B-697 cerrado; brief `~/coordinador/briefs/E4_B-734_B-730.md`) |
 | E7 (Sonnet medio) | En espera (cupo 5) | Prueba como usuario de lo integrado el 20/11 y PRUEBA-OPC-2 (brief `~/coordinador/briefs/E7_siguiente.md`) |
 | E8 (Sonnet medio) | B-512 (P-187 integrado; B-619 en pausa hasta que E11 mida en Fusion) | Mover/rotar/escalar con esquina en el origen (brief `~/coordinador/briefs/E8_B-512.md`) |
-| E3 (Sonnet medio) | B-764 (resto) | Planos del origen sin oclusión (P-192, B-733, B-761/B-762 integrados; brief `E3_proximo.md`) |
+| E3 (Sonnet medio) | B-778, después B-764 (resto) | Navegador visible en el boceto; planos del origen sin oclusión (brief `E3_proximo.md`) |
 | E6 (Opus alto) | — libre | P-183 integrado (recompilar `_rs` en la PC); B-763 integrado; B-764 Parcial. Sin ítem de velocidad en Sigue |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | Paró la noche del 20/11 (driver AMD de la PC en blanco; Gerardo reinicia a la mañana). Pendiente tras el reinicio: batería del punto 4, B-710; B-690 resuelto (Fusion no permite Perpendicular línea–spline). Tanda: `~/coordinador/casos/e11_noche_19-11.md`. Antes: Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
@@ -25,6 +25,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | # | Ítem | Qué |
 |---|---|---|
+| 00 | B-778 | Boceto: el Navegador se pliega y queda vacío al entrar a un boceto (video 18:07; prioridad 1; revierte parte de P-195) |
 | 0 | PRUEBA-OPC-2 (E7) | Probar como usuario las 11 opciones que quedan sin prueba en `preparado/opciones_asas_boceto.md`: Insertar DXF, Vectorizar, Perfil giratorio (tolerancia, invertir, solo contorno), Desfase (cadena, topología), Kerning de un par, Boceto 3D |
 | 1 | B-738 | Parcial con datos de Fusion de E11 (giros 0/30/60/90°, `~/coordinador/casos/b463/e11_b738_giros.md`): ajustar `escala_manija` a esa dependencia de período 90° (E6 o E1, Opus alto, tras su ítem actual) |
 | 2 | PRUEBA-PROY (hecha por E7: B-684, B-685, B-686 a OpenCode) | Probar como usuario los 5 tipos de PROYECTAR del boceto (Proyectar, Intersecar, Incluir geometría 3D, Perfil giratorio, Curva isoparamétrica): mouse simulado y valores raros contra `docs/fusion_docs` (E7, Sonnet medio; cada falla = fila nueva de boceto; antes, OpenCode prepara los tests que falten) |
