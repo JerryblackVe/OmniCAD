@@ -461,7 +461,8 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
                     if puntos is None:
                         puntos = apoyos() if apoyos else []
                     # B-281: el cuerpo de donde nace la herramienta siempre comparte esa cara; no es un cuerpo ajeno
-                    if not any(geo.punto_toca(c.forma, q) for q in puntos):
+                    # tolerancia de 1e-3: el punto sale de una malla float32 y a 100+ mm de origen cae ~1e-6 fuera de la cara
+                    if not any(geo.punto_toca(c.forma, q, 1e-3) for q in puntos):
                         ctx.aviso(f"{c.nombre} se unió a la herramienta compartiendo solo una cara (sin solape).")
             # Una unión no puede pesar menos que lo que ya había (B-52: unir una primitiva a un cuerpo
             # compuesto descartaba en silencio un sólido entero — la espiral, −3.194 mm³).

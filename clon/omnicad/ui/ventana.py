@@ -1237,6 +1237,7 @@ class VentanaPrincipal(QMainWindow):
         self._avisos_vistos = None
         ocultos = doc.propiedad("__navegador__", "ocultos", [])
         self.ocultos = set(ocultos) if isinstance(ocultos, list) and all(isinstance(i, str) for i in ocultos) else set()
+        self._consumidos = {}               # B-755: {id de la extrusión: bocetos que ocultó al aceptarla}
         self.patron_activo = None
         self.vis = dict(VISIBILIDAD_INICIAL)
         doc.suscribir(self._actualizar)
@@ -2866,13 +2867,28 @@ class VentanaPrincipal(QMainWindow):
             self.modo_boceto.lienzo.deshacer()
         elif not self.arrastre.deshacer():
             # deshacer también revierte doc.espacios (guiones de animación)
-            self._cambio_aparte(lambda: (self.doc.deshacer(), self.releer_espacios()))
+            self._cambio_aparte(lambda: self._deshacer_doc(self.doc.deshacer))
 
     def _rehacer(self):
         if self.modo_boceto.activo:
             self.modo_boceto.lienzo.rehacer()
             return
-        self._cambio_aparte(lambda: (self.doc.rehacer(), self.releer_espacios()))
+        self._cambio_aparte(lambda: self._deshacer_doc(self.doc.rehacer))
+
+    def _deshacer_doc(self, accion):
+        """Deshacer o rehacer en el documento (también revierte doc.espacios, los guiones de animación). B-755: la extrusión
+        que se va vuelve a mostrar el boceto que ocultó al aceptarla; la que vuelve lo oculta otra vez."""
+        antes = {o.id for o in self.doc.operaciones}
+        accion()
+        self.releer_espacios()
+        despues, ocultos = {o.id for o in self.doc.operaciones}, set(self.ocultos)
+        for op_id, usados in self._consumidos.items():
+            if op_id in antes - despues:
+                self.ocultos -= usados
+            elif op_id in despues - antes:
+                self.ocultos |= usados
+        if self.ocultos != ocultos:
+            self._refrescar_visibilidad()
 
     def _cambio_aparte(self, funcion, al_terminar=None, mallas_previa=None):
         """FL-3b: hace `funcion` (Aceptar, editar, deshacer, rehacer) como `_intentar`. Si su cálculo va al proceso aparte,
@@ -3079,6 +3095,13 @@ class VentanaPrincipal(QMainWindow):
                                     None if panel is None else lambda: panel.cerrando or panel.aceptar(), mallas)
         if not hecho:
             return hecho                # None: se calcula aparte y el panel vuelve a Aceptar al terminar (FL-3b)
+        if not edicion and op.TIPO == "extrusion":      # B-755: como Fusion, el boceto que la extrusión consumió se oculta
+            usados = {r["boceto"] for r in op.p.get("perfiles") or [] if r.get("boceto")} | {op.p.get("boceto")}
+            usados &= set(self.doc.estado_final.bocetos)
+            if usados:
+                self.ocultos |= usados
+                self._consumidos[op.id] = usados
+                self._refrescar_visibilidad()
         if not edicion and op.TIPO == "patron_plano":   # al crearlo, el patrón plano queda a la vista
             nuevo = [c.id for c in self.doc.estado_final.cuerpos.values()
                      if c.op_id == op.id and es_patron_plano(c)]

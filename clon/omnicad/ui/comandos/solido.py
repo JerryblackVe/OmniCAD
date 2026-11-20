@@ -335,11 +335,23 @@ class Extruir(Comando):
         self._hijo, self._op_hijo = None, None
         self._herramienta_previa = None
         self._t_hijo = None
+        self._unir_si_apoyado(panel)
 
     def al_cambiar(self, panel, clave):
         if clave == "operacion" and not self._ajustando:
             self._fija = True                    # la eligió la persona: queda hasta cerrar el panel
             self._cancelar_hijo()
+        elif clave == "perfiles":
+            self._unir_si_apoyado(panel)
+
+    def _unir_si_apoyado(self, panel):
+        """B-753: con la distancia en 0 no hay previa y nadie corre `previa_lista`: el perfil de un boceto dibujado sobre un
+        sólido ya abre en Unir (video de Gerardo 20/11), sin esperar a que se arrastre la flecha. Una cara del cuerpo elegida
+        como perfil sigue en «Cuerpo nuevo» con 0 mm (P-136/B-338b: así lo muestra Fusion) hasta que la previa decida."""
+        perfiles = panel.valores.get("perfiles") or []
+        if not self._fija and perfiles:
+            de_boceto = all(h["ref"].get("tipo") == "perfil" for h in perfiles)
+            self._ajustar(panel, "unir" if de_boceto and self._perfil_apoyado(panel.ctx, panel.valores) else None)
 
     def al_cerrar(self, ctx):
         self._cancelar_hijo()
