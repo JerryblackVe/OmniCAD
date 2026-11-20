@@ -10,8 +10,10 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Opus alto) | SOLVER-FUSION | Comparar el arrastre del solver (incluye B-707) con el método de Fusion (LM de Nielsen, mínimo movimiento) en comportamiento y velocidad; adoptar lo que mejore. Brief: `~/coordinador/casos/solver/E1_BRIEF_SOLVER-FUSION.md` |
-| E3, E4, E8 | — | Vaciadas y quietas; reciben lo que salga de OpenCode que no cierre (por el chat maestro) |
+| E1 (Opus alto) | B-710 | Desfase de spline/elipse como Fusion (informe `~/coordinador/casos/desfase/`); B-463 manija espera a Craft/E11 |
+| E4 (Sonnet medio) | B-698, luego B-705 | Texto: marco desde la ventana (informe `~/coordinador/casos/texto/`), después Ctrl+Z |
+| E7 (Sonnet medio) | PRUEBA-OPC-2 | 11 opciones sin prueba como usuario; filas nuevas para la cola |
+| E3, E8 | — | Vaciadas y quietas |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | En pausa (Gerardo en la PC). Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-591 (reprobar en Windows; sin traceback nuevo no hay nada que cazar), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
 
@@ -22,8 +24,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | # | Ítem | Qué |
 |---|---|---|
 | 0 | B-696 (E4; B-695 integrado dbd9e9ba) | B-696: el panel Carácter dice «Juli J» y el dibujo muestra «Ceci» |
-| 0 | PRUEBA-OPC-2 (E7) | Probar como usuario las 11 opciones que quedan sin prueba en `preparado/opciones_asas_boceto.md`: Insertar DXF, Vectorizar, Perfil giratorio (tolerancia, invertir, solo contorno), Desfase (cadena, topología), Kerning de un par, Boceto 3D |
-| 0 | B-698 (después de B-695/696, E4) | Texto: la ventana no tiene cómo agregar el marco; el pivote solo anda con marco |
 | 1 | B-667 | Parcial: el 2.º arrastre deforma la spline; E3 desde las 13:13 UTC en ~/OmniCAD-B-667b (Opus alto) |
 | 2 | PRUEBA-PROY (hecha por E7: B-684, B-685, B-686 a OpenCode) | Probar como usuario los 5 tipos de PROYECTAR del boceto (Proyectar, Intersecar, Incluir geometría 3D, Perfil giratorio, Curva isoparamétrica): mouse simulado y valores raros contra `docs/fusion_docs` (E7, Sonnet medio; cada falla = fila nueva de boceto; antes, OpenCode prepara los tests que falten) |
 | 3 | PRUEBA-CMDS | Probar en la ventana los 61 comandos de la cinta del boceto sin prueba como usuario (lista en `docs/plan_boceto_perfecto.md` › Cobertura; script `scripts/cobertura_boceto.py`): E7 en Linux con `prueba_ui`, E11 con mouse real lo que E7 no pueda; cada falla, fila nueva de boceto |
