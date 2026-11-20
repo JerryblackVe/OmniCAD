@@ -259,7 +259,7 @@ class LienzoDibujoMixin:
     def _dibujar_glifos(self, p):
         """Un símbolo por restricción junto a su geometría (Fusion: uno en cada curva de una relación entre dos).
         Devuelve {id: caja} con el principal; los de la segunda curva quedan en `_zonas_glifos_extra`."""
-        zonas, cuenta, grupos, pixmaps = {}, {}, set(), {}
+        zonas, cuenta, grupos, pixmaps, glifos, lado = {}, {}, set(), {}, {}, LADO_SIMBOLO
         self._zonas_glifos_extra = extras = []
         en_conflicto = set(self.conflictos_sin_esperar()) if self.resultado is not None and not self.resultado.ok else set()
         p.setPen(QPen(QColor(150, 150, 150), 1))
@@ -289,33 +289,70 @@ class LienzoDibujoMixin:
                     continue
                 k = cuenta.get(ent, 0)
                 cuenta[ent] = k + 1
-                oscuro = self._oscuro()
-                lado = LADO_SIMBOLO
                 q = self._ancla(ent) + QPointF(8 + (lado + 2) * k, -18)
                 caja = QRectF(round(q.x() - lado / 2), round(q.y() - lado / 2), lado, lado)    # en píxeles enteros: nítido
-                seleccionada = r.id in self.seleccion
+                glifos[(r.id, j)] = (caja.x(), caja.y(), r.tipo, r.id in self.seleccion, r.id in en_conflicto)
+                if j == 0:
+                    zonas[r.id] = caja
+                else:
+                    extras.append((r.id, caja))
+        oscuro = self._oscuro()
+
+        def pintar(p, claves):
+            for clave in claves:
+                x, y, tipo, seleccionada, choca = glifos[clave]
                 if oscuro:
                     p.setPen(QPen(QColor(110, 116, 128), 1))
                     p.setBrush(QColor(0, 180, 255) if seleccionada else QColor(58, 63, 75, 210))
                 else:
                     p.setPen(QPen(QColor(150, 150, 150), 1))
                     p.setBrush(QColor(0, 180, 255) if seleccionada else QColor(250, 250, 250, 230))
-                if r.id in en_conflicto:                    # BOC-7: el glifo que choca, con borde rojo
+                if choca:                                   # BOC-7: el glifo que choca, con borde rojo
                     p.setPen(QPen(CONFLICTO, 2))
-                p.drawRoundedRect(caja, 2, 2)
-                pm = pixmaps.get((r.tipo, oscuro))                 # P-182: teñir 200 íconos por cuadro costaba 4 ms
+                p.drawRoundedRect(QRectF(x, y, lado, lado), 2, 2)
+                pm = pixmaps.get(tipo)                      # P-182: teñir 200 íconos por cuadro costaba 4 ms
                 if pm is None:
-                    pm = icono(ICONO_RESTRICCION.get(r.tipo, "")).pixmap(lado - 4, lado - 4)    # al tamaño justo
-                    if oscuro and r.tipo not in ("fijo", "punto_medio"):
+                    pm = icono(ICONO_RESTRICCION.get(tipo, "")).pixmap(lado - 4, lado - 4)    # al tamaño justo
+                    if oscuro and tipo not in ("fijo", "punto_medio"):
                         pm = _tenido(pm, QColor(225, 228, 235))     # sobre el fondo oscuro, glifo claro como Fusion
-                    pixmaps[(r.tipo, oscuro)] = pm
-                p.drawPixmap(int(caja.x()) + 2, int(caja.y()) + 2, pm)
-                if j == 0:
-                    zonas[r.id] = caja
-                else:
-                    extras.append((r.id, caja))
+                    pixmaps[tipo] = pm
+                p.drawPixmap(int(x) + 2, int(y) + 2, pm)
+        resto = list(glifos)
+        if self._arrastre is not None:
+            try:
+                resto = self._glifos_quietos_desde_imagen(p, glifos, oscuro, pintar)
+            except Exception:                         # vía rápida: si falla, el camino normal (sin avisar)
+                self._cache_glifos, resto = None, list(glifos)
+        else:
+            self._cache_glifos = self._firmas_glifos = None
+        pintar(p, resto)
         p.setBrush(Qt.NoBrush)
         return zonas
+
+    def _glifos_quietos_desde_imagen(self, p, glifos, oscuro, pintar):
+        """P-182c: lo mismo que `_plan_cotas_arrastre` para los íconos de restricción. Arrastrando, los que no cambiaron
+        desde el cuadro anterior se pintan una vez en una imagen y después se copian. Devuelve las claves a pintar encima."""
+        from PySide6.QtGui import QImage
+        clave = (self.width(), self.height(), self.devicePixelRatioF(), oscuro)
+        cache = getattr(self, "_cache_glifos", None)
+        if cache is None or cache["clave"] != clave or any(glifos.get(g) != f for g, f in cache["firmas"].items()):
+            previas, cache = getattr(self, "_firmas_glifos", None) or {}, None
+            quietos = [g for g, f in glifos.items() if previas.get(g) == f]
+            if quietos:
+                dpr = self.devicePixelRatioF()
+                imagen = QImage(round(self.width() * dpr), round(self.height() * dpr), QImage.Format_ARGB32_Premultiplied)
+                imagen.setDevicePixelRatio(dpr)
+                imagen.fill(Qt.transparent)
+                q = QPainter(imagen)
+                q.setRenderHints(p.renderHints())
+                pintar(q, quietos)
+                q.end()
+                cache = {"clave": clave, "firmas": {g: glifos[g] for g in quietos}, "imagen": imagen}
+        self._cache_glifos, self._firmas_glifos = cache, glifos
+        if cache is None:
+            return list(glifos)
+        p.drawImage(QPointF(0, 0), cache["imagen"])
+        return [g for g in glifos if g not in cache["firmas"]]
 
     def _dibujar_previa_auto(self, p):
         if not self.previa_auto:
