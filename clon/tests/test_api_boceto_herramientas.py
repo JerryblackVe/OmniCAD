@@ -559,6 +559,16 @@ def test_proyectar_e_intersecar():
     assert foto(s) == antes
 
 
+@pytest.mark.xfail(strict=True, reason="B-512: Fusion proyecta una arista paralela a Z como un punto; OmniCAD dice «no deja nada»")
+def test_b512_proyectar_arista_vertical_da_un_punto(s):
+    """B-512: una arista paralela a Z se proyecta sobre XY como un punto fijo (Fusion: 1 punto)."""
+    llamar(s, "create_box", length=20, width=10, height=5)
+    vertical = llamar(s, "find_edges", selector="|Z")["edges"][0]["id"]
+    r = llamar(s, "project_to_sketch", edges=[vertical])
+    puntos = {p["id"]: p for p in boceto(s)["points"]}
+    assert len(r["points"]) == 1 and puntos[r["points"][0]]["fixed"]
+
+
 # ---------------------------------------------------------------- un paso de deshacer cada una
 def test_cada_herramienta_es_un_paso_de_deshacer(s):
     abajo, derecha, _arriba, _izq = rectangulo(s)
