@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · E1 B-709/B-715 (Espiral).** B-709: el test espera grado 5 (la spline de ajuste es quíntica desde B-463, como Fusion). B-715: `_espiral` rechaza radio > MEDIDA_MAXIMA con aviso de 1 renglón; test `test_paso_enorme_avisa_y_no_dibuja` sin xfail. Filas borradas.
 - **2026-11-20 · B-743 (cinta, ventana chica).** Era el test, no la app: desde P-187 el botón vive en `_ZonaSoltar` y el menú del título en el grupo; `test_b423` buscaba el menú en el padre equivocado. Ajustado `parentWidget().parentWidget()`. test_b423 11 OK, ruff limpio.
 - **2026-11-20 · Traspaso E6 (P-202, P-203, P-204 listos sin commit).** 1) Worktrees ~/OmniCAD-P-202, -P-203, -P-204; se fusionan limpios salvo PROJECT_LOG y mejoras.md (filas vecinas). 2) Capturas UX en evidencias/P-202_P-203_ux/. 3) Nueva P-205 (arrastre del boceto con incrementos: E11 mide en Fusion). 4) Próximo: lo manda el maestro.
 - **2026-11-20 · P-202 (E6): Desplazamiento incremental y Definir incrementos.** Las asas saltan de a 1 mm / 15° (editable); menú activo, `DialogoIncrementos`, `set_grid` con `incremental_move`. Tests: `test_p202_*` (manipuladores, p9_ui, api_visor). Boceto: P-205.

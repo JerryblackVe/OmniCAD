@@ -1,5 +1,6 @@
 """LienzoCrearMixin: métodos del lienzo por tema."""
 
+from ..restricciones.boceto import MEDIDA_MAXIMA
 from .editor_boceto_comun import (
     ANGULO,
     AYUDA_RESTRICCION,
@@ -417,6 +418,8 @@ class LienzoCrearMixin:
             raise ErrorBoceto(f"«{nombre}»: {e}") from e
 
     def _espiral(self, centro, inicio, vueltas, paso):
+        if math.dist(centro, inicio) + abs(paso * vueltas) > MEDIDA_MAXIMA:        # B-715
+            raise ErrorBoceto(f"«Paso»: la espiral pasa de {formato.numero(MEDIDA_MAXIMA)} mm.")
         pts = puntos_espiral(centro, inicio, vueltas, paso)
         return self.b.agregar_spline(pts, "ajuste", 3, False, construccion=self.construccion)
 
