@@ -11,7 +11,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | Sesión | Ítem | Qué |
 |---|---|---|
 | E1 (Sonnet medio) | P-188 (resto) | Texto en una tarjeta (B-674, B-766 integrados; B-607 pasa a E11; brief `E1_proximo.md`) |
-| E4 (Sonnet medio) | B-734 y B-730 | Texto: clic en vista 3D y Desagrupar (B-697 cerrado; brief `~/coordinador/briefs/E4_B-734_B-730.md`) |
+| E4 (Sonnet medio) | B-675 y B-676 | Extruir con conicidad y Unir (B-734, B-703, B-767 integrados; brief `E4_proximo.md`) |
 | E7 (Sonnet medio) | En espera (cupo 5) | Prueba como usuario de lo integrado el 20/11 y PRUEBA-OPC-2 (brief `~/coordinador/briefs/E7_siguiente.md`) |
 | E8 (Sonnet medio) | B-782, después B-512 (resto) | B-772 integrado; Revolución sin boceto y casos de B-512 (brief `E8_proximo.md`) |
 | E3 (Sonnet medio) | B-778 (B-764 integrado; arreglar test_b445 por B-762) | Navegador visible en el boceto (brief `E3_B-778.md`) |
