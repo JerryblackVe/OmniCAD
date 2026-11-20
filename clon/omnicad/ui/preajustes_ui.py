@@ -74,6 +74,31 @@ def recordar_ultimo(panel):
         pre.guardar_ultimo(panel.comando.CLAVE, valores_guardables(panel))
 
 
+NOMBRE_SIEMPRE = "Mis valores"
+
+
+class BotonEstrella(QToolButton):
+    """★ de la cabecera: un clic guarda los valores actuales como el predeterminado del comando (P-191)."""
+
+    def __init__(self, panel):
+        super().__init__(text="★", objectName="preajuste_estrella", toolTip="Usar estos valores siempre")
+        self.panel = panel
+        self.setFocusPolicy(Qt.NoFocus)
+        self.clicked.connect(self.usar_siempre)
+
+    def usar_siempre(self):
+        clave = self.panel.comando.CLAVE
+        try:
+            pre.guardar(clave, NOMBRE_SIEMPRE, valores_guardables(self.panel), True)
+            pre.definir_defecto(clave, NOMBRE_SIEMPRE)
+        except geo.ErrorGeometria as e:
+            self.panel._mostrar(str(e), aviso=True)
+            return
+        if self.panel.boton_preajustes is not None:
+            self.panel.boton_preajustes.recargar(NOMBRE_SIEMPRE)
+        self.panel._mostrar("Listo: este comando abrirá siempre con estos valores.", aviso=True)
+
+
 class BotonPreajustes(QToolButton):
     """Botón «⋯» de la cabecera del diálogo (el «Preset» de Fusion va arriba del diálogo): su menú lista Valores de fábrica
     y los preajustes guardados, y trae Guardar como nuevo, Guardar, Renombrar, Eliminar y Establecer como predeterminado."""
@@ -99,8 +124,8 @@ class BotonPreajustes(QToolButton):
     # ------------------------------------------------------------ datos
     def recargar(self, elegir=None):
         self.actual = elegir if elegir in pre.listar(self.clave)["presets"] else None
-        self.setToolTip(f"Preajustes: {self.actual or FABRICA}. Aplicar, guardar los valores actuales, renombrar, "
-                        "eliminar o elegir el predeterminado")
+        self.setToolTip(f"Más opciones de valores guardados (ahora: {self.actual or FABRICA}): elegir uno, guardar los "
+                        "actuales con un nombre, renombrar, eliminar o elegir con cuáles abre el comando")
 
     def _avisar(self, texto):
         self.panel._mostrar(texto, aviso=True)

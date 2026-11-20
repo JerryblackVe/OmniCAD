@@ -963,13 +963,14 @@ class PanelComando(QFrame):
         v.setSizeConstraint(QLayout.SetFixedSize)
         self.ancho_panel = ANCHOS[comando.ANCHO_PANEL or ("simple" if len(self.campos) <= 6 else "normal")]
         self._por_clave = {c.clave: c for c in self.campos}
-        self.boton_preajustes = None
+        self.boton_preajustes = self.boton_estrella = None
         if preajustes_ui.tiene_preajustes(self):      # UI-4: los preajustes van en la cabecera, no en una fila aparte
             self.boton_preajustes = preajustes_ui.BotonPreajustes(self)
+            self.boton_estrella = preajustes_ui.BotonEstrella(self)
         self.boton_ayuda = QToolButton(text="?", checkable=True, toolTip="Qué hace este comando")
         self.boton_ayuda.setFocusPolicy(Qt.NoFocus)  # Tab empieza en los campos, no en la cabecera (Esc ya cancela)
         cab, self.icono_titulo, self.titulo = armar_cabecera(
-            self, self.cancelar, [w for w in (self.boton_preajustes, self.boton_ayuda) if w is not None])
+            self, self.cancelar, [w for w in (self.boton_estrella, self.boton_preajustes, self.boton_ayuda) if w is not None])
         self.boton_ayuda.setVisible(bool(comando.AYUDA))      # con padre: suelto se mostraría como ventana (B-136)
         v.addWidget(cab)
         self._titulo_actual = None
