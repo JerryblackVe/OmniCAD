@@ -1006,6 +1006,8 @@ class LienzoInteraccionMixin:
                 self._admite_entrada(e) or e.key() in (Qt.Key_Delete, Qt.Key_Backspace, Qt.Key_Escape,
                                                        Qt.Key_Return, Qt.Key_Enter)
                 or e.matches(QKeySequence.SelectAll)
+                # Ctrl+Z / Ctrl+Y del boceto: los atiende el lienzo (B-705), no el atajo de la ventana (evita doble).
+                or (e.modifiers() & Qt.ControlModifier and e.key() in (Qt.Key_Z, Qt.Key_Y))
                 # Espacio (alternar ayudas) y Flecha arriba (bloquear) son del boceto mientras hay una ayuda activa:
                 # Espacio es también el atajo de «Boceto sobre la cara» de la ventana
                 or (e.key() in (Qt.Key_Space, Qt.Key_Up) and (self.inf_lista or self._inf_bloqueo is not None))):
@@ -1056,6 +1058,10 @@ class LienzoInteraccionMixin:
             self.cambio.emit()
             self._notificar_seleccion()
             self.update()
+        elif (e.modifiers() & Qt.ControlModifier) and k == Qt.Key_Z:
+            self.deshacer()
+        elif (e.modifiers() & Qt.ControlModifier) and k == Qt.Key_Y:
+            self.rehacer()
         elif k == Qt.Key_Space and self.inf_lista:
             self._inf_alt += 1                       # alterna entre las ayudas ambiguas bajo el cursor
             self._refrescar_cursor()
