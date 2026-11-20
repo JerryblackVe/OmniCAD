@@ -13,7 +13,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E1 (Sonnet medio) | — libre | B-753/754/755 y B-738 integrados (B-738 cerrado con el ajuste empírico); sin ítem en Sigue (pasa B-766) |
 | E4 (Sonnet medio) | B-734 y B-730 | Texto: clic en vista 3D y Desagrupar (B-697 cerrado; brief `~/coordinador/briefs/E4_B-734_B-730.md`) |
 | E7 (Sonnet medio) | En espera (cupo 5) | Prueba como usuario de lo integrado el 20/11 y PRUEBA-OPC-2 (brief `~/coordinador/briefs/E7_siguiente.md`) |
-| E8 (Sonnet medio) | B-772 | Extruir sin boceto abre el panel (B-512 parcial integrado: Escalar con esquina en el origen; brief `E8_B-772.md`) |
+| E8 (Sonnet medio) | B-782, después B-512 (resto) | B-772 integrado; Revolución sin boceto y casos de B-512 (brief `E8_proximo.md`) |
 | E3 (Sonnet medio) | B-778 (B-764 integrado; arreglar test_b445 por B-762) | Navegador visible en el boceto (brief `E3_B-778.md`) |
 | E6 (Sonnet medio) | B-781 y B-679 | Main verde: operación elegida a mano en Extruir y test intermitente del plástico (B-775 integrado; brief `E6_proximo.md`) |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
@@ -30,7 +30,6 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 1 | B-738 | Parcial con datos de Fusion de E11 (giros 0/30/60/90°, `~/coordinador/casos/b463/e11_b738_giros.md`): ajustar `escala_manija` a esa dependencia de período 90° (E6 o E1, Opus alto, tras su ítem actual) |
 | 2 | PRUEBA-PROY (hecha por E7: B-684, B-685, B-686 a OpenCode) | Probar como usuario los 5 tipos de PROYECTAR del boceto (Proyectar, Intersecar, Incluir geometría 3D, Perfil giratorio, Curva isoparamétrica): mouse simulado y valores raros contra `docs/fusion_docs` (E7, Sonnet medio; cada falla = fila nueva de boceto; antes, OpenCode prepara los tests que falten) |
 | 3 | PRUEBA-CMDS | Probar en la ventana los 61 comandos de la cinta del boceto sin prueba como usuario (lista en `docs/plan_boceto_perfecto.md` › Cobertura; script `scripts/cobertura_boceto.py`): E7 en Linux con `prueba_ui`, E11 con mouse real lo que E7 no pueda; cada falla, fila nueva de boceto |
-| 4 | B-772 | Sólido › Extruir sin boceto: abrir el panel de Extruir en vez del cuadro modal «Primero creá un boceto» (video de Gerardo 17:07; prioridad 1) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 
