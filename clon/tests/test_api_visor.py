@@ -118,7 +118,7 @@ def test_rejilla_agrega_pixeles_guarda_opciones_y_deshace(s):
 
 def test_p202_set_grid_guarda_el_desplazamiento_incremental_y_valida(s):
     estado = llamar(s, "set_grid")
-    assert (estado["incremental_move"], estado["linear_increment"], estado["angular_increment"]) == (False, 1.0, 15.0)
+    assert (estado["incremental_move"], estado["linear_increment"], estado["angular_increment"]) == (False, 5.0, 5.0)  # P-207: los de Fusion
     estado = llamar(s, "set_grid", incremental_move=True, linear_increment=2.5, angular_increment=45)
     assert (estado["incremental_move"], estado["linear_increment"], estado["angular_increment"]) == (True, 2.5, 45)
     assert s.doc.espacios["visor"]["rejilla"]["incremento_lineal"] == 2.5

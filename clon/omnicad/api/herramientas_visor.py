@@ -136,8 +136,8 @@ def set_grid(sesion, show: bool | None = None, snap: bool | None = None, four_vi
     snap: activa o desactiva forzar a la rejilla.
     four_views: activa o desactiva la opción de cuatro vistas.
     incremental_move: las asas de los comandos saltan de a un incremento fijo al arrastrarlas.
-    linear_increment: salto de las medidas en mm, de 0,001 a 10000 (por defecto 1).
-    angular_increment: salto de los ángulos en grados, de 0,01 a 360 (por defecto 15).
+    linear_increment: salto de las medidas en mm, de 0,001 a 10000 (por defecto 5, como Fusion).
+    angular_increment: salto de los ángulos en grados, de 0,01 a 360 (por defecto 5, como Fusion).
     """
     if linear_increment is not None and not 0.001 <= linear_increment <= 10000:
         raise error("INVALID_ARGUMENTS", "El incremento lineal va de 0,001 a 10000 mm.")
@@ -145,7 +145,7 @@ def set_grid(sesion, show: bool | None = None, snap: bool | None = None, four_vi
         raise error("INVALID_ARGUMENTS", "El incremento angular va de 0,01 a 360 grados.")
     datos = _datos(sesion)
     rejilla = {"mostrar": False, "forzar": False, "cuatro_vistas": False, "incremental": False,
-               "incremento_lineal": 1.0, "incremento_angular": 15.0, **datos.get("rejilla", {})}
+               "incremento_lineal": 5.0, "incremento_angular": 5.0, **datos.get("rejilla", {})}
     for clave, valor in (("mostrar", show), ("forzar", snap), ("cuatro_vistas", four_views),
                          ("incremental", incremental_move), ("incremento_lineal", linear_increment),
                          ("incremento_angular", angular_increment)):
