@@ -623,8 +623,10 @@ class Cinta(QWidget):
                 b.setVisible(not si)
 
         pendientes = sorted(grupos, key=lambda g: -g.sizeHint().width())
+        primero = pagina.layout().itemAt(0).widget().findChild(QToolButton, "boton_cinta")
+        primero = None if primero is None else primero.parentWidget()      # el primer grupo (Crear) se compacta el último
         while pendientes and not entra():
-            for grupo in reversed(pendientes):          # del más angosto al más ancho
+            for grupo in sorted(reversed(pendientes), key=lambda g: g is primero):      # del más angosto al más ancho
                 compactar(grupo, True)
                 if entra():
                     pendientes.remove(grupo)
@@ -650,6 +652,8 @@ class Cinta(QWidget):
     def _invalidar(pagina):
         for lay in pagina.findChildren(QLayout) + [pagina.layout()]:
             lay.invalidate()
+            if lay.parentWidget() is not None:
+                lay.parentWidget().updateGeometry()     # B-742: borra el tamaño en caché del grupo y de su zona de botones
 
     @staticmethod
     def _estilo_boton(b, con_texto):
