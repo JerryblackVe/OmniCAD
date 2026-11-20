@@ -7,7 +7,7 @@ una señal con los TEXTOS de los campos (el controlador los evalúa con las unid
 campos son `QLineEdit` a propósito: las asas de la vista (`GestorAsas2D`) escriben en ellos, y el panel y el dibujo
 quedan siempre sincronizados. Los botones no toman el foco: Enter y Esc siguen siendo del Lienzo salvo dentro de un
 campo, donde Enter acepta y Esc cancela."""
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
                                QPushButton, QScrollArea, QToolButton, QVBoxLayout, QWidget)
 
@@ -90,7 +90,21 @@ class PanelPatron(QFrame):
         v.addLayout(pie)
         for w in self.findChildren(QAbstractButton):
             w.setFocusPolicy(Qt.NoFocus)
+        for w in self.findChildren(QWidget):
+            if w.focusPolicy() != Qt.NoFocus:
+                w.installEventFilter(self)
         self.configurar(self.TIPO_INICIAL)
+
+    def eventFilter(self, obj, e):
+        """B-737: Tab desde el último campo vuelve al primero (y Mayús+Tab al revés): el foco no sale del panel."""
+        if e.type() == QEvent.KeyPress and e.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+            orden = [w for w in self.findChildren(QWidget) if w.focusPolicy() != Qt.NoFocus and w.isEnabled()
+                     and w.isVisibleTo(self) and not isinstance(w.parent(), QComboBox)]
+            atras = e.key() == Qt.Key_Backtab
+            if orden and obj is orden[0 if atras else -1]:
+                orden[-1 if atras else 0].setFocus(Qt.TabFocusReason)
+                return True
+        return super().eventFilter(obj, e)
 
     # ------------------------------------------------------------ armado
     def _fila(self, clave, texto, widget, ayuda, grupo):
