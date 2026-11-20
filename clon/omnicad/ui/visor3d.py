@@ -30,7 +30,7 @@ from OpenGL import GL
 from PySide6.QtCore import QBuffer, QByteArray, QEvent, QIODevice, QPointF, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QToolTip, QWidget
 
 from .. import nativo
 from ..nucleo import geometria as geo
@@ -1279,17 +1279,13 @@ class Visor3D(QOpenGLWidget):
         return bool(vis["planos_usuario"])
 
     def _rect_origen(self, plano, L):
-        """Rectángulo uv de un plano de origen: (0, 0, L, L); al pedir un plano, además cubre la caja del modelo (B-610:
-        si el cuerpo tapa el origen, el plano tiene que asomar por fuera para verse y elegirse)."""
+        """Rectángulo uv de un plano de origen: (0, 0, L, L); al pedir un plano de boceto es chico, un 40 % de la pieza,
+        pegado al origen (B-762: como Fusion; se dibuja encima del cuerpo, así que no hace falta que asome)."""
         caja = self._caja_escena() if self.eligiendo_planos() else None
         if caja is None:
             return (0.0, 0.0, L, L)
-        mn, mx = caja
-        uv = np.array([plano.a_uv(np.array([x, y, z])) for x in (mn[0], mx[0]) for y in (mn[1], mx[1]) for z in (mn[2], mx[2])])
-        u0, v0 = np.minimum(uv.min(0), 0.0)
-        u1, v1 = np.maximum(uv.max(0), 0.0)   # B-626: el tamaño sale de la pieza, no del zoom
-        m = 0.15 * max(u1 - u0, v1 - v0, 0.1 * L)   # el piso 0,1·L es solo por si la pieza es un punto
-        return (float(u0 - m) if u0 < 0 else 0.0, float(v0 - m) if v0 < 0 else 0.0, float(u1 + m), float(v1 + m))
+        lado = 0.4 * max(float(np.max(caja[1] - caja[0])), 1e-3)
+        return (0.0, 0.0, lado, lado)
 
     def planos_elegibles(self):
         """Planos que se pueden elegir: (ref, plano, rectángulo en uv)."""
@@ -1327,6 +1323,14 @@ class Visor3D(QOpenGLWidget):
             if self.plano_visible(ref) and vis.get("nombres_planos_origen" if origen else "nombres_planos_construccion"):
                 salida.append((ref if origen else nombres[ref], pl.a_3d(u1, v1)))
         return salida
+
+    def _tooltip_plano(self, hover, e):
+        """B-762: el plano bajo el cursor dice su nombre junto al cursor (Fusion); sobre una cara o fuera, sin cartel."""
+        if hover is None or hover[0] != "plano":
+            QToolTip.hideText()
+            return
+        nombres = {i: n for i, n, _pl in self.config.planos_usuario}
+        QToolTip.showText(e.globalPosition().toPoint(), nombres.get(hover[1], f"Plano {hover[1]}"), self)
 
     def _datos_pick(self, cid):
         forma = self._formas[cid]
@@ -1438,7 +1442,7 @@ class Visor3D(QOpenGLWidget):
                 u, v = pl.a_uv(o + d * t)
                 if u0 <= u <= u1 and v0 <= v <= v1 and t < mejor_t:
                     mejor_t, mejor = t, {"ref": ref, "plano": pl, "marco": None, "tris": None}
-        if caras:
+        if caras and not (mejor is not None and self.eligiendo_planos()):   # B-762: el plano apuntado gana a la cara de atrás
             cortes, tol = self._planos_corte(), max(self.distancia * 3e-3, 1e-3)
             for cid in self._formas:
                 choque = self._choque_dibujado(cid, o, d, mejor_t, cortes, tol)
@@ -1995,7 +1999,7 @@ class Visor3D(QOpenGLWidget):
         if "plano" in filtros:
             todos = self.eligiendo_planos()
             # B-445: con una cara de cuerpo bajo el cursor gana la cara; el plano solo con su borde o su etiqueta
-            cara_gana = cara_hit is not None and bool(filtros & {"cara", "cara_plana"}) and not a_traves
+            cara_gana = cara_hit is not None and bool(filtros & {"cara", "cara_plana"}) and not a_traves and not todos   # B-762: al pedir plano, el plano gana
             etiquetas = [p for _n, p in self.etiquetas_planos()] if cara_gana else []
             cerca_etiqueta = False
             for p in etiquetas:
@@ -2011,7 +2015,7 @@ class Visor3D(QOpenGLWidget):
                 u, v = pl.a_uv(o + d * t)
                 if cara_gana and not cerca_etiqueta and min(u - u0, u1 - u, v - v0, v1 - v) > self.distancia * 0.02:
                     continue
-                if u0 <= u <= u1 and v0 <= v <= v1 and 0 < t < t_cara - tol_t:
+                if u0 <= u <= u1 and v0 <= v <= v1 and 0 < t and (todos or t < t_cara - tol_t):   # B-762: se dibujan encima del cuerpo
                     esquinas = [pl.a_3d(u0, v0), pl.a_3d(u1, v0), pl.a_3d(u1, v1), pl.a_3d(u0, v1)]
                     tris = np.array([esquinas[0], esquinas[1], esquinas[2], esquinas[0], esquinas[2], esquinas[3]])
                     planos.append((t, _hit("plano", {"tipo": "plano", "id": ref}, [("tris", tris, None, 0.40)], t,
@@ -2303,12 +2307,12 @@ class Visor3D(QOpenGLWidget):
         u0, v0, u1, v1 = rect
         esquinas = [plano.a_3d(u0, v0), plano.a_3d(u1, v0), plano.a_3d(u1, v1), plano.a_3d(u0, v1)]
         GL.glDepthMask(GL.GL_FALSE)
-        GL.glColor4f(*((0.45, 0.70, 1.0) if resaltado else color), 0.40 if resaltado else alfa)
+        GL.glColor4f(*((0.45, 0.70, 1.0) if resaltado else color), 0.30 if resaltado else alfa)
         GL.glBegin(GL.GL_QUADS)
         for p in esquinas:
             GL.glVertex3f(*p)
         GL.glEnd()
-        GL.glColor4f(*((0.45, 0.70, 1.0) if resaltado else color), 0.9)
+        GL.glColor4f(*((0.45, 0.70, 1.0) if resaltado else color), 0.9 if resaltado else 0.5)
         GL.glLineWidth(1.2)
         GL.glBegin(GL.GL_LINE_LOOP)
         for p in esquinas:
@@ -2324,13 +2328,13 @@ class Visor3D(QOpenGLWidget):
                 if self.plano_visible(ref):
                     self._cuadro_plano(pl, rect, NARANJA_PLANO, 0.12, False)
         if vis["ejes_origen"]:
-            GL.glLineWidth(2.5)
+            GL.glLineWidth(1.0)      # B-761: finos, como Fusion
             GL.glBegin(GL.GL_LINES)
             for i, clave in enumerate("xyz"):
                 if cfg.origen.get(clave):
                     GL.glColor3f(*COLOR_EJE[i])
                     GL.glVertex3f(0, 0, 0)
-                    GL.glVertex3f(*(np.identity(3)[i] * L * 1.4))
+                    GL.glVertex3f(*(np.identity(3)[i] * L))
             GL.glEnd()
         if vis["punto_origen"] and (cfg.origen.get("o") or eligiendo):
             GL.glPointSize(7.0)
@@ -2345,7 +2349,7 @@ class Visor3D(QOpenGLWidget):
         hover = self._hover[1] if self._hover and self._hover[0] == "plano" else None
         GL.glDisable(GL.GL_DEPTH_TEST)
         for ref, pl, rect in self.planos_elegibles():
-            self._cuadro_plano(pl, rect, NARANJA_PLANO, 0.22, ref == hover)
+            self._cuadro_plano(pl, rect, NARANJA_PLANO, 0.10, ref == hover)
         GL.glEnable(GL.GL_DEPTH_TEST)
 
     def _dibujar_caras(self, alfa=1.0, transparentes=False):
@@ -2927,6 +2931,7 @@ class Visor3D(QOpenGLWidget):
                                                             (nuevo[0] != self._hover[0] or nuevo[1] is not self._hover[1])):
                 self._hover = nuevo
                 self.update()
+                self._tooltip_plano(nuevo, e)
             return
         if self.filtro and not e.buttons() and self.modo is None:
             hit = None if self._sin_capturar else self.elegir_entidad(pos)

@@ -33,19 +33,19 @@ def test_planos_cubren_la_caja_solo_al_pedir_un_plano(visor):
     grande = {r: rect for r, _p, rect in visor.planos_elegibles()}
     assert visor.eligiendo_planos()
     for r in ("XY", "XZ", "YZ"):
-        assert grande[r][2] >= 20 and grande[r][3] >= 20 and grande[r][0] <= -20 and grande[r][1] <= -20
+        assert grande[r][2] == grande[r][3] == pytest.approx(16.0)    # B-762: chicos, un 40 % de la pieza, pegados al origen
         assert chico[r][0] == 0.0       # sin pedir un plano, el tamaño de siempre
     visor.set_filtro(None)
     visor.modo = None
     assert {r: rect for r, _p, rect in visor.planos_elegibles()} == chico
 
 
-def test_clic_fuera_del_cuerpo_elige_el_plano_xy(visor):
+def test_clic_sobre_el_plano_elige_el_plano_aunque_haya_cuerpo_detras(visor):   # B-762
     visor.modo = "elegir_plano"
     visor.set_filtro({"plano"})
     try:
         visor.vista("arriba")
-        hit = visor.elegir_entidad(visor.proyectar((-23, 0, 0)), {"plano"})   # sobre el plano, asoma del cuerpo
+        hit = visor.elegir_entidad(visor.proyectar((8, 8, 0)), {"plano"})   # dentro del plano chico, sobre el cuerpo
         assert hit is not None and hit["ref"] == {"tipo": "plano", "id": "XY"}
     finally:
         visor.set_filtro(None)
@@ -53,7 +53,7 @@ def test_clic_fuera_del_cuerpo_elige_el_plano_xy(visor):
 
 
 def test_b626_tamano_del_plano_no_depende_del_zoom(visor):
-    """B-626: los planos al pedir un plano miden ~1,2× la pieza aunque la cámara esté lejos (como Fusion)."""
+    """B-626: los planos al pedir un plano miden ~0,4× la pieza aunque la cámara esté lejos (como Fusion)."""
     visor.modo = "elegir_plano"
     visor.set_filtro({"plano"})
     try:
@@ -65,7 +65,7 @@ def test_b626_tamano_del_plano_no_depende_del_zoom(visor):
         assert lejos == cerca
         for r in ("XY", "XZ", "YZ"):
             u0, v0, u1, v1 = cerca[r]
-            assert max(u1 - u0, v1 - v0) <= 1.4 * 40      # la pieza mide 40 mm
+            assert max(u1 - u0, v1 - v0) <= 0.5 * 40      # la pieza mide 40 mm
     finally:
         visor.set_filtro(None)
         visor.modo = None
