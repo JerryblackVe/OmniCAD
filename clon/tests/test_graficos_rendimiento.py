@@ -188,7 +188,13 @@ def test_lineas_rejilla_igual_que_punto_por_punto(plano):
     for paso, cu, cv, oscuro in ((10.0, 50.0, -100.0, True), (0.5, 2.5, 0.0, False)):
         v, c = visor3d.lineas_rejilla(plano, paso, (cu, cv), (0.6, 0.7, 0.8), oscuro)
         v0, c0 = _rejilla_punto_por_punto(plano, paso, cu, cv, (0.6, 0.7, 0.8), oscuro)
-        assert v.shape == v0.shape == (2 * 81 * 2, 3) and np.allclose(v, v0, atol=1e-4) and np.allclose(c, c0)
+        # B-764: cada línea va en 16 tramos (32 vértices) que se desvanecen hacia el borde; primero las de u fija.
+        ref = v0.reshape(81, 2, 2, 3).transpose(1, 0, 2, 3).reshape(162, 2, 3)
+        alfa_ref = c0.reshape(81, 2, 2, 4).transpose(1, 0, 2, 3).reshape(162, 2, 4)[:, 0, 3]
+        lineas, colores = v.reshape(162, 32, 3), c.reshape(162, 32, 4)
+        assert np.allclose(lineas[:, 0], ref[:, 0], atol=1e-4) and np.allclose(lineas[:, -1], ref[:, 1], atol=1e-4)
+        assert np.allclose(colores[:, :, :3], (0.6, 0.7, 0.8)) and np.all(colores[:, :, 3] <= alfa_ref[:, None] + 1e-6)
+        assert np.isclose(colores[40, 16, 3], alfa_ref[40]) and np.isclose(colores[121, 16, 3], alfa_ref[121])
 
 
 class _GLFalso:

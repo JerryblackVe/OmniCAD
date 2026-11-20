@@ -36,7 +36,8 @@ def test_rejilla_fija_marca_las_mayores_en_el_espaciado_elegido():
     v = _visor([3.0], rejilla_fija=(10.0, 4))
     paso, cada = v.paso_rejilla(), v.subdivisiones_rejilla()
     assert (paso, cada) == (2.5, 4)
-    vert, col = visor3d.lineas_rejilla(g.Plano("XY"), paso, (0.0, 0.0), (0.5, 0.5, 0.5), False, n=10, cada=cada)
-    u, alfa = vert[0::4, 0], col[0::4, 3]               # una línea de u fija cada 4 vértices
-    assert np.allclose(sorted({round(float(x), 6) for x, a in zip(u, alfa, strict=True) if a > 0.3}), [-20, -10, 0, 10, 20])
+    vert, col = visor3d.lineas_rejilla(g.Plano("XY"), paso, (0.0, 0.0), (0.5, 0.5, 0.5), False, n=40, cada=cada)
+    u, alfa = vert[16:81 * 32:32, 0], col[16:81 * 32:32, 3]   # las 81 líneas de u fija (16 tramos), en su punto medio
+    assert np.allclose(sorted({round(float(x), 6) for x, a in zip(u, alfa, strict=True) if a > 0.3 and abs(x) <= 20}),
+                       [-20, -10, 0, 10, 20])
     assert _visor([3.0]).subdivisiones_rejilla() == 5   # adaptativa: cada 5, como siempre

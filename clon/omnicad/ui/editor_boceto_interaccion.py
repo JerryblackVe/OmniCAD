@@ -971,7 +971,7 @@ class LienzoInteraccionMixin:
             self.visor.wheelEvent(e)
             return
         antes = self.a_mm(e.position())
-        self.escala = max(0.05, min(500.0, self.escala * (1.15 ** (e.angleDelta().y() / 120.0))))
+        self.escala = max(0.05, min(500.0, self.escala * (1.4 ** (e.angleDelta().y() / 120.0))))
         despues = self.a_mm(e.position())
         self.centro[0] += antes[0] - despues[0]
         self.centro[1] += antes[1] - despues[1]
