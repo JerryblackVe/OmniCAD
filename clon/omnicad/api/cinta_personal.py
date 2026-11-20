@@ -8,10 +8,9 @@ que no está ahí queda como de fábrica.
 """
 import json
 
-from .catalogo_atajos import CATALOGO
-from .catalogo_cinta import SECCIONES, TITULOS_BOCETO
+from .catalogo_atajos import CATALOGO as COMANDOS
+from .catalogo_cinta import SECCIONES
 
-COMANDOS = {**CATALOGO, **{c: (t, "") for c, t in TITULOS_BOCETO.items()}}      # + los del boceto (P-187)
 MAXIMO = 8          # botones grandes por sección: con más, la cinta no entra en una pantalla de 1024 px
 
 

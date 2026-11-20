@@ -24,8 +24,7 @@ def contenido():
     QApplication.instance() or QApplication([])
     v = VentanaPrincipal(prefs=Preferencias(QSettings(tempfile.mkdtemp() + "/p.ini", QSettings.IniFormat)))
     filas = sorted((c, a.property("titulo"), a.property("atajo_defecto")) for c, a in v.acciones.items()
-                   if a.property("atajo_defecto") is not None and a.property("titulo")
-                   and not c.startswith("sk_"))      # las del boceto van en catalogo_cinta (P-187)
+                   if a.property("atajo_defecto") is not None and a.property("titulo"))
     v.close()
     lineas = "".join(f"    {c!r}: ({t!r}, {d!r}),\n" for c, t, d in filas)
     return ('# -*- coding: utf-8 -*-\n"""Comandos de la ventana con su atajo de fábrica (GENERADO por scripts/claves_atajos.py; no se '
