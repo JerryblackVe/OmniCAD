@@ -277,3 +277,65 @@ def test_cambiar_la_cota_rehace_la_copia_dentro_de_la_tolerancia():
     medio = pts[len(pts) // 2]
     b.agregar_linea(medio, (0.0, 200.0))                             # otra cosa usa un punto del medio: no se rehace
     assert resolver(b, {cota: 4.0}).ok and b.curvas[copia].pts == pts
+
+
+def test_derivada_de_la_quintica_es_la_de_diferencias_finitas():
+    """P-185b: la derivada de los polos de la quíntica respecto de cada punto (abierta, cerrada y de 2 puntos) es la de
+    reinterpolar con diferencias centradas (paso 1e-3: con 1e-7 el ruido de la interpolación ya es de ~1e-4)."""
+    import numpy as np
+    from omnicad.restricciones.boceto_geometria import interpolar_spline, sensibilidad_spline
+    for cerrada, pts in ((False, [(i * 30, 15 * (-1) ** i) for i in range(12)]),
+                         (True, [(0, 0), (40, 5), (50, 40), (10, 45), (-5, 20)]), (False, [(0, 0), (10, 0)])):
+        polos, _nudos, _p, dP = sensibilidad_spline(pts, cerrada)
+        assert np.allclose(polos, interpolar_spline(pts, 5, cerrada)[0], atol=1e-12)
+        for k in range(len(pts)):
+            for c in (0, 1):
+                mas, menos = [list(v) for v in pts], [list(v) for v in pts]
+                mas[k][c] += 1e-3
+                menos[k][c] -= 1e-3
+                fd = (np.array(interpolar_spline(mas, 5, cerrada)[0]) - np.array(interpolar_spline(menos, 5, cerrada)[0]))
+                assert np.abs(fd / 2e-3 - dP[k, c]).max() < 1e-5
+
+
+def _cambiar_cota_dos_veces(monkeypatch, sensible, falla=False):
+    """La spline larga con la cota cambiada dos veces (la segunda sobre la copia ya rehecha): (madre, copia, puntos)."""
+    import numpy as np
+    from omnicad.restricciones import solver as S
+    monkeypatch.setattr(S, "SENSIBILIDAD_SPLINES", sensible)
+    if falla:
+        monkeypatch.setattr(S, "sensibilidad_spline", lambda *a: 1 / 0)
+    b = Boceto()
+    madre = b.agregar_spline([(i * 30, 15 * (-1) ** i) for i in range(12)])
+    copia, = b.desfase(madre, 3)
+    cota = next(k for k, c in b.cotas.items() if c.tipo == "desfase")
+    for d in (4.0, 5.0):
+        assert resolver(b, {cota: d}).ok
+    return [np.array([b.coords(p) for p in b.curvas[c].pts]) for c in (madre, copia)]
+
+
+def test_jacobiano_con_la_derivada_de_la_madre_da_la_misma_copia(monkeypatch):
+    """P-185b: el jacobiano mueve los polos de la madre con su derivada en vez de reinterpolarla en cada columna (de
+    ~1 s a ~0,1 s por cambio): la madre y la copia quedan donde quedaban (a ~1e-4 mm; la madre se mueve menos). Si la
+    derivada falla, se reinterpola (el camino normal) y da lo mismo que sin la vía rápida."""
+    import numpy as np
+    lento = _cambiar_cota_dos_veces(monkeypatch, False)
+    rapido = _cambiar_cota_dos_veces(monkeypatch, True)
+    fallado = _cambiar_cota_dos_veces(monkeypatch, True, falla=True)
+    for a, b, c in zip(lento, rapido, fallado, strict=True):
+        assert a.shape == b.shape and np.abs(a - b).max() < 1e-3
+        assert np.array_equal(a, c)
+
+
+def test_libres_con_qr_es_lo_de_la_svd():
+    """P-185b: `_libres` con QR con pivoteo (6 ms contra 150 ms en la spline larga) marca las mismas incógnitas que la
+    SVD; si el QR no confirma el rango, cae a la SVD."""
+    import numpy as np
+    from omnicad.restricciones import solver as S
+    sis = _spline_larga_ya_modificada()
+    J = S._jacobiano(sis, sis.x0)
+    rango = int(np.linalg.matrix_rank(J, tol=1e-6))
+    _, _, vt = np.linalg.svd(J, full_matrices=False)
+    svd = 1 - np.linalg.norm(vt[:rango].T, axis=1) ** 2 > 1e-12
+    qr = S._libres_qr(J, rango, 1e-6)
+    assert qr is not None and svd.any() and np.array_equal(qr, svd)
+    assert S._libres_qr(J, rango - 1, 1e-6) is None          # rango dudoso: la SVD

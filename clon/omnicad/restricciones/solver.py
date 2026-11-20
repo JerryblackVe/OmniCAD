@@ -31,6 +31,7 @@ from . import auto_candidatos
 from .boceto import (CIRCULARES, ELIPTICAS, Arco, ArcoElipse, Circulo, Elipse, ErrorBoceto, Linea, Spline,
                      _numero, distancia_con_circulo, dominio, evaluar_primitiva, mas_cercano, primitivas_entidad,
                      puntos_primitiva, signos_cuadrante)
+from .boceto_geometria import sensibilidad_spline
 
 TOLERANCIA = 1e-6
 TOLERANCIA_ACEPTA_ARRASTRE = 1e-3  # mm: un movimiento del ratón se da por bueno con este residuo (soltar vuelve a exigir TOLERANCIA)
@@ -59,6 +60,7 @@ UMBRAL_TRF = 200            # RS-S1: incógnitas desde las que una resolución c
                             # en vez del QR denso de «lm»: 120 splines de 2,7 s a 0,5 s. Con pocas incógnitas «trf» llega a
                             # otro punto de un boceto subdeterminado (40 mm con 5 splines); desde ~240, a menos de 1e-4 mm
 CACHE_SPLINES = True          # guardar la primitiva de cada spline por sus coordenadas (B-111); los tests lo apagan para comparar
+SENSIBILIDAD_SPLINES = True   # P-185b: el jacobiano mueve los polos de la quíntica con su derivada (`_spline_movida`); los tests lo apagan
 
 
 class ResultadoSolver:
@@ -136,6 +138,7 @@ class _Sistema:
         self.valores = valores_cotas
         self.quieto = quieto           # el punto arrastrado (B-667b: la línea perpendicular gira alrededor de él)
         self._cache = {}
+        self._movida = None            # P-185b: (x, xp, columnas) mientras `_jacobiano` evalúa una columna
         rs = nativo.disponible()
         self._rs = rs if hasattr(rs, "spline_extremos") else None      # un .pyd viejo no la trae: rige Python
         self._curvas = list(boceto.curvas.values()) if grupo is None else grupo["curvas"]
@@ -309,8 +312,50 @@ class _Sistema:
         clave = self._clave_spline(x, c)
         prim = self._cache.get(clave)
         if prim is None:
-            prim = self._guardar(clave, primitivas_entidad(c, lambda p: self.P(x, p))[0])
+            prim = self._guardar(clave, self._spline_movida(x, c) or primitivas_entidad(c, lambda p: self.P(x, p))[0])
         return prim
+
+    def _quinticas(self):
+        """{id: {índice de x: [(punto k, coordenada)]}} de las quínticas de ajuste sin manijas cuyos puntos lee `P` directo
+        de x (una copia de patrón depende de otras incógnitas: queda afuera)."""
+        if not hasattr(self, "_quinticas_memo"):
+            self._quinticas_memo = {}
+            for c in self.b.curvas.values():
+                if isinstance(c, Spline) and c.modo == "ajuste" and c.grado == 5 and not c.manijas \
+                        and not any(p in self.deriva for p in c.pts):
+                    mapa = {}
+                    for k, pid in enumerate(c.pts):
+                        for coord, i in enumerate(self.idx_p.get(pid, ())):
+                            mapa.setdefault(i, []).append((k, coord))
+                    if mapa:
+                        self._quinticas_memo[c.id] = mapa
+        return self._quinticas_memo
+
+    def _spline_movida(self, x, c):
+        """P-185b: primitiva de la quíntica `c` en el x perturbado de una columna del jacobiano (`_movida` = (x, xp, cols)),
+        con los polos movidos por su derivada (`sensibilidad_spline`) en vez de reinterpolarla: la madre de un desfase
+        largo se reinterpolaba en cada columna suya de cada jacobiano (~1 s por cambio de cota). None: el camino normal."""
+        mov = self._movida
+        if mov is None or x is not mov[1] or not SENSIBILIDAD_SPLINES:
+            return None
+        try:
+            mapa = self._quinticas().get(c.id)
+            tocadas = [i for i in mov[2] if i in mapa] if mapa else ()
+            if not tocadas:
+                return None
+            x0 = mov[0]
+            base_clave = ("sensibilidad", self._clave_spline(x0, c))
+            base = self._cache.get(base_clave)
+            if base is None:
+                polos, nudos, p, dP = sensibilidad_spline([self.P(x0, q) for q in c.pts], c.cerrada)
+                base = self._guardar(base_clave, (np.array(polos), tuple(nudos), p, dP))
+            polos = base[0].copy()
+            for i in tocadas:
+                for k, coord in mapa[i]:
+                    polos += (x[i] - x0[i]) * base[3][k, coord]
+            return ("spline", c.id, tuple(map(tuple, polos.tolist())), base[1], base[2], None)
+        except Exception:   # vía rápida: si falla, se reinterpola la spline (el camino normal)
+            return None
 
     def prim(self, x, cid):
         c = self.b.curvas[cid]
@@ -997,14 +1042,21 @@ def _jacobiano(sis, x, h=1e-7):
     clave = (patron.shape, patron.tobytes())
     if getattr(sis, "_coloreo", (None,))[0] != clave:     # P-184: el patrón casi nunca cambia entre iteraciones
         sis._coloreo = (clave, _colorear(patron))
-    for cols in sis._coloreo[1]:
-        xp = x.copy()
-        xp[cols] += h
-        f = f0.copy()
-        for t in np.flatnonzero(lee[:, cols].any(axis=1)):
-            r = sis.terminos[t](xp)
-            f[inicio[t]:inicio[t] + len(r)] = r
-        J[:, cols] = ((f - f0) / h)[:, None] * patron[:, cols]
+    movible = hasattr(sis, "_movida")
+    try:
+        for cols in sis._coloreo[1]:
+            xp = x.copy()
+            xp[cols] += h
+            if movible:
+                sis._movida = (x, xp, cols)
+            f = f0.copy()
+            for t in np.flatnonzero(lee[:, cols].any(axis=1)):
+                r = sis.terminos[t](xp)
+                f[inicio[t]:inicio[t] + len(r)] = r
+            J[:, cols] = ((f - f0) / h)[:, None] * patron[:, cols]
+    finally:
+        if movible:
+            sis._movida = None
     return J
 
 
@@ -1690,8 +1742,10 @@ def _libres(sis, J, rango, tol=1e-6):
     elif J.size:
         # RS-S1: SVD económica (sin la V entera de n × n, 0,9 s con 120 splines). La parte de cada incógnita en el núcleo
         # es lo que le falta a su parte en el espacio de filas: |núcleo|² = 1 − |filas|².
-        _, _, vt = np.linalg.svd(J, full_matrices=False)
-        libres = 1 - np.linalg.norm(vt[:rango].T, axis=1) ** 2 > tol ** 2
+        libres = _libres_qr(J, rango, tol)
+        if libres is None:
+            _, _, vt = np.linalg.svd(J, full_matrices=False)
+            libres = 1 - np.linalg.norm(vt[:rango].T, axis=1) ** 2 > tol ** 2
     else:
         libres = np.ones(n, bool)
     puntos = {pid for pid, (i, j) in sis.idx_p.items() if libres[i] or libres[j]}
@@ -1701,6 +1755,22 @@ def _libres(sis, J, rango, tol=1e-6):
         puntos |= nuevos
     radios = {cid for cid, i in sis.idx_r.items() if libres[i]}
     return puntos, radios
+
+
+def _libres_qr(J, rango, tol):
+    """P-185b: lo mismo que la SVD de `_libres` con QR con pivoteo de Jᵀ (las primeras `rango` columnas de Q generan el
+    espacio de filas): 6 ms contra 150 ms en el desfase de una spline larga (473 incógnitas). None si el QR no confirma
+    el rango con margen (cae a la SVD)."""
+    try:
+        from scipy.linalg import qr
+        Q, R, _piv = qr(J.T, mode="economic", pivoting=True)
+        d = np.abs(np.diag(R))
+        # la base de filas se aparta de la de la SVD ~ cola / menor diagonal: así queda muy debajo de tol²
+        if rango and d[rango - 1] < 1e3 * tol or rango < len(d) and d[rango] > tol ** 2:
+            return None
+        return 1 - np.linalg.norm(Q[:, :rango], axis=1) ** 2 > tol ** 2
+    except Exception:   # vía rápida: si falla, la SVD (el camino normal)
+        return None
 
 
 def _determinadas(b, libres_p, libres_r):

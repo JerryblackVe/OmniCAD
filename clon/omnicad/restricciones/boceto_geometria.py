@@ -237,7 +237,7 @@ def _energia_quintica(m):
     return nudos, sparse.coo_matrix(2 * H)                  # 2H (gradiente de la energía), disperso: de banda
 
 
-def _quintica_fusion(Q, cerrar, derivadas):
+def _quintica_fusion(Q, cerrar, derivadas, sensible=False):
     """B-463: la spline de ajuste de Fusion 360 (Fit Point Spline), con el método leído en BauhausCM10.dll
     (ingeniería inversa de Gerardo, ~/coordinador/casos/b463/INFORME_SPLINE_AJUSTE.md; código propio): B-spline
     quíntica con 5 tramos uniformes por segmento que pasa EXACTO por los puntos y minimiza
@@ -272,10 +272,68 @@ def _quintica_fusion(Q, cerrar, derivadas):
                                                             np.concatenate([H2.col, ca, fa + n]))), shape=(nk, nk))
     D = np.vstack([np.zeros((n, 2)), B])
     try:                                                    # disperso: ~1 ms con 100 puntos (el denso, cientos)
-        P = splu(K).solve(D)[:n]
+        lu = splu(K)
+        Z = lu.solve(D)
     except RuntimeError:                                    # singular (puntos repetidos): mínimos cuadrados
-        P = _resolver_lineal(K.toarray(), D)[:n]
-    return [(float(x), float(y)) for x, y in P], nudos, p
+        if sensible:
+            raise
+        Z = _resolver_lineal(K.toarray(), D)
+    polos = [(float(x), float(y)) for x, y in Z[:n]]
+    if not sensible:
+        return polos, nudos, p
+    return polos, nudos, p, _derivada_quintica(Q, ub, nudos, n, p, escala[:m + 1], Z, lu)
+
+
+def _derivada_quintica(Q, ub, nudos, n, p, escala, Z, lu):
+    """P-185b: dP[r, c] (n × 2), derivada de los polos de la quíntica sin manijas respecto de la coordenada c de la fila
+    r de Q. Derivada implícita del sistema de Lagrange K·z = D: K·dz = [−dAᵀλ; dB − dA·P], con dA = N'(u)·du (los
+    parámetros por cuerda se mueven con cada punto) y la misma factorización para todas las columnas."""
+    m = len(Q) - 1
+    Qa = np.asarray(Q, dtype=float)
+    dif = Qa[1:] - Qa[:-1]
+    d = np.hypot(dif[:, 0], dif[:, 1])
+    cu = np.sqrt(d / 10.0 + 1.1 / (5 * m))                 # las cuerdas de `parametros_cuerda` (grado 5)
+    e = np.divide(dif, d[:, None], out=np.zeros_like(dif), where=d[:, None] > 0)
+    dc = np.zeros((m, m + 1, 2))                            # d cuerda_i / d Q[r, c]
+    g = (e / (20.0 * cu[:, None]))
+    dc[np.arange(m), np.arange(1, m + 1)] = g
+    dc[np.arange(m), np.arange(m)] = -g
+    dS, T = np.cumsum(dc, axis=0), cu.sum()
+    u = np.asarray(ub[1:])[:, None, None]
+    du = np.zeros((m + 1, m + 1, 2))                        # d u_j / d Q[r, c]
+    du[1:] = (dS - u * dS[-1]) / T
+    du[m] = 0.0                                             # `parametros_cuerda` fija la última en 1
+    N1 = np.zeros((m + 1, n))
+    for j, uj in enumerate(ub):
+        k = _tramo(nudos, p, n - 1, uj)
+        N1[j, k - p:k + 1] = _base_derivada(nudos, p, uj, k, 1)
+    N1 *= escala
+    P, lam = Z[:n], Z[n:n + m + 1]
+    NP = N1 @ P
+    DU = du.reshape(m + 1, -1).T                            # (fila r · coordenada c) × u_j
+    rhs = np.zeros((len(Z), DU.shape[0], 2))
+    rhs[:n] = -np.einsum("jk,qj,jc->kqc", N1, DU, lam)
+    rhs[n:n + m + 1] = -np.einsum("qj,jc->jqc", DU, NP)
+    q = np.arange(DU.shape[0])
+    rhs[n + q // 2, q, q % 2] += escala[q // 2, 0]           # dB: el punto movido
+    dZ = lu.solve(rhs.reshape(len(Z), -1)).reshape(len(Z), -1, 2)
+    return dZ[:n].transpose(1, 0, 2).reshape(m + 1, 2, n, 2)
+
+
+def sensibilidad_spline(puntos, cerrada=False):
+    """P-185b: (polos, nudos, grado, dP) de la quíntica de ajuste SIN manijas que pasa por `puntos`; dP[k, c] (n × 2) es
+    la derivada de los polos respecto de la coordenada c del punto k. El jacobiano del solver mueve los polos con ella
+    en vez de reinterpolar la spline en cada columna suya. Falla (ErrorBoceto o de numpy) si el sistema es singular."""
+    Q = [(float(x), float(y)) for x, y in puntos]
+    cerrar = cerrada and len(Q) >= 3
+    if cerrar:
+        Q = Q + [Q[0]]
+    if len(Q) < 2:
+        raise ErrorBoceto("Una spline necesita al menos dos puntos.")
+    polos, nudos, p, dP = _quintica_fusion(Q, cerrar, None, sensible=True)
+    if cerrar:                                              # el último es el primero repetido
+        dP = np.concatenate([dP[:1] + dP[-1:], dP[1:-1]])
+    return polos, nudos, p, dP
 
 
 _K_MANIJA = 4.8023      # B-463: medido contra Fusion (casos 7–15 de E11, ~/coordinador/casos/b463/)
