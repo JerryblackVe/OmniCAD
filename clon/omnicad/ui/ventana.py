@@ -2366,6 +2366,8 @@ class VentanaPrincipal(QMainWindow):
             filas.append((clase.TITULO, lambda c=clase: self.ejecutar_comando(c()), getattr(clase, "ATAJO", "") or ""))
         if "apoyar" in CATALOGO and self.doc.estado_final.cuerpos:   # con lo elegido, o con todo si no hay nada
             filas.append((CATALOGO["apoyar"].TITULO, lambda c=CATALOGO["apoyar"]: self._apoyar_en_plano(c)))
+        if self.modo_boceto.activo:                     # B-739: la manija de una spline, a un clic del botón derecho
+            filas.append(("Manija de spline", lambda: self._herramienta_boceto("sk_manija")))
         if self.seleccion:
             filas.append(("Borrar la selección", lambda: self._seleccionar([])))
         if filas:

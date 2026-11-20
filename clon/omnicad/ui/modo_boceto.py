@@ -96,6 +96,7 @@ ACCIONES_BOCETO = [
     ("sk_recortar", "Recortar", "recortar", "T", "recortar"),
     ("sk_alargar", "Alargar", "alargar", "Shift+V", "alargar"),
     ("sk_partir", "Partir", "partir", None, "partir"),
+    ("sk_manija", "Manija de spline", "manija", None, "manija"),
     ("sk_escala", "Escala del boceto", "escala", None, "escala_boceto"),
     ("sk_mover", "Mover/copiar", "mover", "M", "mover"),
 ] + [(f"sk_{h}", NOMBRES_RESTRICCION[h], h, None, h) for h in RESTRICCIONES_HERRAMIENTA]

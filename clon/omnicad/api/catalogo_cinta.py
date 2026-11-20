@@ -99,6 +99,7 @@ TITULOS_BOCETO = {
     'sk_isoparametrica': 'Curva isoparamétrica',
     'sk_linea': 'Línea',
     'sk_linea_medio': 'Línea de punto medio',
+    'sk_manija': 'Manija de spline',
     'sk_mover': 'Mover/copiar',
     'sk_partir': 'Partir',
     'sk_patron_circular': 'Patrón circular',

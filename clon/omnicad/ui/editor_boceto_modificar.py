@@ -150,6 +150,10 @@ class LienzoModificarMixin:
             self.aplicar_cambio(lambda: self.b.alargar(cid, xy), operacion=True)
         elif h == "partir":
             self.aplicar_cambio(lambda: self.b.partir(cid, xy), operacion=True)
+        elif h == "manija":                         # B-739: la del punto de ajuste más cercano al clic; si ya la tiene, la quita
+            pid = min(self.b.curvas[cid].pts, key=lambda q: math.dist(self.b.coords(q), xy))
+            quitar = any(m[0] == pid for m in self.b.curvas[cid].manijas)
+            self.aplicar_cambio(lambda: (self.b.desactivar_manija if quitar else self.b.activar_manija)(cid, pid), operacion=True)
         elif h == "desglosar_texto":
             self.aplicar_cambio(lambda: self.b.desglosar_texto(cid), operacion=True)
         elif h == "circulo_3t":

@@ -9,6 +9,7 @@ viejas «Pendientes», «Hallazgos» y «Bugs pendientes» se pasaron allá el 2
 git (`git show dbef824:PROJECT_LOG.md`).
 
 ## Registro
+- **2026-11-20 · B-739 (E1): comando «Manija de spline».** Herramienta `manija` (cinta MODIFICAR + fila del clic derecho en boceto + ícono): clic cerca de un punto de ajuste activa su manija, otro clic la quita. MCP/CLI ya estaban (`edit_sketch_spline`). Test: `test_manija_de_spline_se_activa_y_se_quita...`; ruff limpio.
 - **2026-11-20 · Traspaso E6 (P-185b listo sin commit).** 1) ~/OmniCAD-P-185b: P-185 cerrado (fila borrada), cambio de cota 0,8–2,2 s → 0,4–0,8 s. 2) Fila nueva P-201: hilos de OpenBLAS lentos con la VPS cargada. 3) Integra el coordinador. 4) Informe en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · P-185b (E6): desfase de spline larga 0,8–2,2 → 0,4–0,8 s.** Jacobiano con la derivada exacta de la quíntica (`sensibilidad_spline`, `_spline_movida`: 161 → 73 jacobianos) y `_libres` con QR (`_libres_qr`). Tests: `test_derivada_de_la_quintica_es_la_de_diferencias_finitas`, `test_resolver_con_la_derivada_de_la_spline_da_lo_mismo`.
 - **2026-11-20 · Traspaso E6 (contexto 30 %, P-185 listo sin commit).** 1) ~/OmniCAD-P-185: cota del desfase de spline larga 3–7 → 0,8–2,2 s, mismo resultado. 2) Queda (P-185 Parcial): SVD de `_libres` y reinterpolar la madre. 3) Banco: ~/coordinador/casos/p185/p185.py. 4) Tests del núcleo: 1265 OK.

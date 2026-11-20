@@ -789,3 +789,20 @@ def test_p73_fusion_elige_arista_del_modelo_y_la_proyecta(app_qt):
     finally:
         lz.close()
         visor.close()
+
+
+def test_manija_de_spline_se_activa_y_se_quita_con_clics_cerca_del_punto(app_qt):
+    """B-739: la herramienta «Manija de spline» (cinta y menú del clic derecho) activa la manija del punto de ajuste
+    más cercano al clic y otro clic en el mismo punto la quita."""
+    from omnicad.ui.cinta_boceto import GRUPOS_BOCETO
+    from omnicad.ui.modo_boceto import ACCIONES_BOCETO
+    assert "sk_manija" in {a[0] for a in ACCIONES_BOCETO}
+    assert any(i[0] == "item" and i[2] == "sk_manija" for g in GRUPOS_BOCETO if g[0] == "MODIFICAR" for i in g[2])
+    lz = _lienzo(app_qt)
+    sid = lz.b.agregar_spline([(0, 0), (20, 10), (40, -5), (60, 5)], "ajuste")
+    p1 = lz.b.curvas[sid].pts[1]
+    lz.set_herramienta("manija")
+    lz.agregar_pick(sid, (21, 9))                                          # cerca del punto 1: no del 0 ni del 2
+    assert [m[0] for m in lz.b.curvas[sid].manijas] == [p1] and lz.resultado.ok
+    lz.agregar_pick(sid, (19, 11))                                         # otro clic en el mismo punto: la quita
+    assert lz.b.curvas[sid].manijas == []

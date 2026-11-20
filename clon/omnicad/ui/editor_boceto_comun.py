@@ -114,6 +114,8 @@ HERRAMIENTAS = {
     "recortar": ("Recortar", "Clic en el tramo a quitar (hasta las intersecciones más cercanas)."),
     "alargar": ("Alargar", "Clic cerca del extremo de una línea o un arco para llevarlo a la próxima intersección."),
     "partir": ("Partir", "Clic en una curva para partirla en las intersecciones más cercanas."),
+    "manija": ("Manija de spline", "Clic en una spline de ajuste, cerca de un punto: activa su manija de tangente "
+               "(con Seleccionar, arrastrá la punta para orientarla y alargarla). Otro clic en el mismo punto la quita."),
     "escala": ("Escala del boceto", "Elegí la geometría y el punto base; escribí el factor (o tirá del asa) y Aceptar."),
     "mover": ("Mover/copiar", "Elegí la geometría y el punto base; clic en el destino o escribí ΔX, ΔY y el ángulo, y "
               "Aceptar. «Crear copia» deja el original."),
@@ -169,7 +171,7 @@ NOMBRES_ENTIDAD = {"punto": "punto", "linea": "línea", "circulo": "círculo", "
 PICKS = {"circulo_2t": (2, ("linea",)), "circulo_3t": (3, ("linea",)), "empalme": (2, ("linea", "arco", "circulo")),
          "chaflan": (2, ("linea",)), "chaflan_dist_angulo": (2, ("linea",)), "chaflan_dos_dist": (2, ("linea",)),
          "curva_fusion": (2, None), "desfase": (1, None), "recortar": (1, None), "alargar": (1, None),
-         "partir": (1, None), "desglosar_texto": (1, ("texto",))}
+         "partir": (1, None), "desglosar_texto": (1, ("texto",)), "manija": (1, ("spline",))}
 SELECCION = ("simetria", "patron_rectangular", "patron_circular", "escala", "mover")
 PATRON = ("patron_rectangular", "patron_circular")     # los maneja `ControlPatron` (ui/patron_boceto.py)
 TRANSFORMAR = ("escala", "mover")                      # los maneja `ControlTransformar` (ui/transformar_boceto.py)
