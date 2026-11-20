@@ -62,12 +62,18 @@ def efectivos(teclas):
     return {c: normalizar(teclas.get(c, d)) or "" for c, (_t, d) in CATALOGO.items()}
 
 
+def contexto(clave):
+    """«boceto» para las herramientas del boceto (sk_*), «diseno» para el resto: dentro del boceto las suyas tapan a las
+    del mismo atajo de la ventana (`ModoBoceto._tapar_atajos`), así que solo chocan entre las del mismo contexto."""
+    return "boceto" if clave.startswith("sk_") else "diseno"
+
+
 def choques(efectivo):
-    """{clave: [claves que usan su misma combinación]} solo de los comandos en choque."""
+    """{clave: [claves que usan su misma combinación en su contexto]} solo de los comandos en choque."""
     por_tecla = {}
     for c, t in efectivo.items():
         if t:
-            por_tecla.setdefault(t, []).append(c)
+            por_tecla.setdefault((contexto(c), t), []).append(c)
     return {c: [o for o in cs if o != c] for cs in por_tecla.values() if len(cs) > 1 for c in cs}
 
 

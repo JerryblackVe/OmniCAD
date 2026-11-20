@@ -61,7 +61,7 @@ def set_shortcut(sesion, command: str, keys: str):
     ajustes = _ajustes()
     teclas = at.leer(ajustes.value(CLAVE, "{}", type=str))
     efectivo = at.efectivos(teclas)
-    otros = [c for c, t in efectivo.items() if nueva and t == nueva and c != command]
+    otros = [c for c, t in efectivo.items() if nueva and t == nueva and c != command and at.contexto(c) == at.contexto(command)]
     if otros:
         raise error("SHORTCUT_CONFLICT", f"{nueva} ya la usa «{at.titulo(otros[0])}» ({otros[0]}).",
                     "Quitale ese atajo antes con set_shortcut(command=…, keys='').")

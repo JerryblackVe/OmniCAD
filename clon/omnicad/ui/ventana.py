@@ -428,10 +428,10 @@ class VentanaPrincipal(QMainWindow):
             defectos["repetir"], defectos["boceto_cara"] = "Space", ""
         propias = {c: a for c, a in self.acciones.items() if a.property("atajo_defecto") is not None}
         efectivos = {c: teclas.get(c, defectos[c]) for c in propias}
-        usos = Counter(_normal(s) for s in efectivos.values() if _normal(s))
+        usos = Counter((c.startswith("sk_"), _normal(s)) for c, s in efectivos.items() if _normal(s))
         for clave, a in propias.items():
             efectivo = efectivos[clave]
-            if clave in teclas and _normal(efectivo) and usos[_normal(efectivo)] > 1:
+            if clave in teclas and _normal(efectivo) and usos[(clave.startswith("sk_"), _normal(efectivo))] > 1:
                 efectivo = a.property("atajo_defecto")
             if a.shortcut() != QKeySequence(efectivo):
                 self._poner_atajo(a, efectivo)

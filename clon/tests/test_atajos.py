@@ -113,3 +113,20 @@ def test_aplicar_cambia_el_atajo_de_la_ventana(qapp, tmp_path):
     finally:
         v.doc.modificado = False
         v.close()
+
+
+def test_p189_las_herramientas_del_boceto_estan_y_chocan_solo_entre_ellas():
+    from omnicad.api import atajos as at
+    assert "sk_linea" in at.CATALOGO and at.contexto("sk_linea") == "boceto" and at.contexto("extruir") == "diseno"
+    efectivo = at.efectivos({})
+    efectivo["sk_linea"] = efectivo["extruir"] = "Ctrl+Alt+9"            # boceto y diseño: no chocan (el boceto tapa al de la ventana)
+    assert at.choques(efectivo) == {}
+    efectivo["sk_circulo"] = "Ctrl+Alt+9"                                  # dos del boceto: sí
+    assert at.choques(efectivo) == {"sk_linea": ["sk_circulo"], "sk_circulo": ["sk_linea"]}
+
+
+def test_p189_set_shortcut_cambia_una_del_boceto_y_no_choca_con_una_de_diseno(ajustes):
+    r = _llamar("set_shortcut", command="sk_linea", keys="Ctrl+Alt+V")
+    assert r["ok"] and r["result"]["current"] == "Ctrl+Alt+V"
+    assert _llamar("set_shortcut", command="vaciado", keys="Ctrl+Alt+V")["ok"]       # otro contexto
+    assert not _llamar("set_shortcut", command="sk_circulo", keys="Ctrl+Alt+V")["ok"]

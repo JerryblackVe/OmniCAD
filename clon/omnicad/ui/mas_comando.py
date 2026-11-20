@@ -63,7 +63,8 @@ def conflicto(acciones, clave, secuencia):
         return None
     buscada = QKeySequence(secuencia)
     for otra, a in acciones.items():
-        if otra != clave and not a.shortcut().isEmpty() and a.shortcut() == buscada:
+        if otra != clave and clave.startswith("sk_") == otra.startswith("sk_") and not a.shortcut().isEmpty() \
+                and a.shortcut() == buscada:
             return a.property("titulo") or a.text().split("\t")[0]
     return None
 

@@ -240,3 +240,9 @@ def test_p187_arrastrar_la_fila_de_un_menu_arma_el_arrastre_con_su_comando(v, mo
         e = QMouseEvent(tipo, QPointF(p), QPointF(menu.mapToGlobal(p)), Qt.LeftButton, botones, Qt.NoModifier)
         f.eventFilter(menu, e)
     assert vistos == ["extruir"]
+
+
+def test_p189_la_misma_tecla_en_boceto_y_en_diseno_se_aplica_en_las_dos(v):
+    v.prefs["atajos/teclas"] = json.dumps({"vaciado": "Ctrl+Alt+7", "sk_linea": "Ctrl+Alt+7"})
+    v.aplicar_teclas()
+    assert v.acciones["vaciado"].shortcut().toString() == v.acciones["sk_linea"].shortcut().toString() == "Ctrl+Alt+7"
