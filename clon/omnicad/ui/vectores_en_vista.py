@@ -167,7 +167,7 @@ class VectoresEnVista(QObject):
             mostrar = self.disponible() and lz is self.activo
             lz.setGeometry(self.v.visor.geometry())
             lz.setVisible(mostrar)
-            lz.objetos.panel.setVisible(mostrar)
+            lz.objetos.panel.setVisible(mostrar and bool(lz.objetos.seleccion()))     # B-734: sin selección no queda un panel vacío
             if mostrar:
                 lz.raise_()
                 lz.objetos.notificar()
