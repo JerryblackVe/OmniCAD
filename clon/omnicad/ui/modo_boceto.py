@@ -11,11 +11,12 @@ Modo boceto dentro de la vista 3D (como el entorno de boceto de Fusion 360):
   - el sombreado azul de los perfiles cerrados, recalculado al cambiar el boceto.
 Al terminar se devuelve el boceto editado; la ventana lo guarda como paso del timeline.
 """
+import re
 import time
 
 import numpy as np
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QKeySequence, QPainter, QPen
+from PySide6.QtGui import QValidator, QAction, QActionGroup, QColor, QFont, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import (QAbstractButton, QCheckBox, QComboBox, QCompleter, QFormLayout, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLayout, QLineEdit, QMessageBox, QPushButton,
                                QScrollArea, QSpinBox, QToolButton, QToolTip, QVBoxLayout, QWidget)
@@ -32,6 +33,7 @@ from .campo_expresion import nombres_sugeridos
 from .editor_boceto import (AYUDA_RESTRICCION, DETALLE_RESTRICCION, CAPA_PROYECCION, COMANDO_PROYECCION, HERRAMIENTAS, NOMBRES_RESTRICCION,
                             RESTRICCIONES_HERRAMIENTA, Lienzo, ajustes_inferencia)
 from . import navegador_boceto
+from ..timeline.parametros import ESCALAR, LONGITUD, ErrorExpresion
 from .formulario import armar_cabecera, NumeroDecimal
 from .iconos import icono
 from .panel_patron import PanelPatron
@@ -202,6 +204,7 @@ class PaletaBoceto(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.lienzo = None      # lo pone la ventana: evalúa y avisa los campos con expresión (B-815)
         self.setAttribute(Qt.WA_NoMousePropagation)    # B-469: un clic en el panel (o en un campo deshabilitado) no llega al lienzo
         self.setObjectName("paleta_boceto")
         v = QVBoxLayout(self)
@@ -455,6 +458,41 @@ class _Referencia(QFrame):
         h.addWidget(b)
 
 
+class _NumeroExpresion(NumeroDecimal):
+    """Número de la tarjeta que además acepta una expresión («0,05*2», «5 mm»): B-815. Si no evalúa, `avisar` y no cambia."""
+
+    def __init__(self, evaluar, avisar, etiqueta, **kw):
+        super().__init__(**kw)
+        self._evaluar, self._avisar, self._etiqueta = evaluar, avisar, etiqueta
+
+    def _valor(self, texto):
+        limpio = texto.replace(self.suffix(), "").strip().replace(",", ".")
+        try:
+            return float(limpio)
+        except ValueError:
+            pass
+        try:
+            return float(self._evaluar(limpio))
+        except (ErrorExpresion, ValueError, TypeError):
+            return None
+
+    def valueFromText(self, texto):
+        v = self._valor(texto)
+        return self.value() if v is None else v
+
+    def validate(self, texto, pos):
+        estado, nuevo, pos = super().validate(texto, pos)
+        if estado == QValidator.Invalid and re.fullmatch(r"[\w\s.,+\-*/^()%]+", texto):
+            return (QValidator.Acceptable if self._valor(texto) is not None else QValidator.Intermediate), texto, pos
+        return estado, nuevo, pos
+
+    def fixup(self, texto):
+        if texto.replace(self.suffix(), "").strip() and self._valor(texto) is None:
+            self._avisar(f"{self._etiqueta}: «{texto.strip()}» no se puede evaluar; queda {self.value():g} mm.")
+        elif self._valor(texto) is not None:
+            super().fixup(texto)
+
+
 class TarjetaHerramienta(QFrame):
     """Tarjeta de la herramienta activa, al lado de la Paleta de boceto: sus opciones propias (las «Feature Options» de
     Fusion). En Proyectar e Intersecar suma la selección, el resultado provisional, Aceptar y Cancelar; las herramientas de
@@ -585,7 +623,9 @@ class TarjetaHerramienta(QFrame):
             combo.currentIndexChanged.connect(lambda _i, cb=combo, k=clave: self.ajuste.emit(k, cb.currentData()))
             self.form_contexto.addRow(etiqueta, combo)
         for clave, etiqueta, minimo, maximo, paso, sufijo in NUMEROS_HERRAMIENTA.get(h, []):
-            sp = NumeroDecimal(decimals=3, minimum=minimo, maximum=maximo, singleStep=paso, suffix=sufijo)
+            sp = _NumeroExpresion(lambda t, tp=LONGITUD if "mm" in sufijo else ESCALAR: self.lienzo.evaluar(t, tp, True),
+                                  lambda m: self.lienzo.mensaje.emit(m), etiqueta,
+                                  decimals=3, minimum=minimo, maximum=maximo, singleStep=paso, suffix=sufijo)
             sp.setValue(float(opciones.get(clave, minimo)))
             sp.valueChanged.connect(lambda x, k=clave: self.ajuste.emit(k, float(x)))
             self.form_contexto.addRow(etiqueta, sp)
@@ -1317,7 +1357,8 @@ class ModoBoceto(QObject):
         self.paleta.calcular.connect(self._calcular_boceto)
         self.paleta.resaltar.connect(lambda i: self.lienzo.resaltar([i]))
         self.paleta.borrar_sub.connect(self._borrar_subrestringida)
-        self.tarjeta = TarjetaHerramienta(area)     # opciones de la herramienta activa; en Proyectar, también su selección
+        self.tarjeta = TarjetaHerramienta(area)
+        self.tarjeta.lienzo = self.lienzo     # opciones de la herramienta activa; en Proyectar, también su selección
         self.tarjeta.herramienta.connect(self.herramienta)
         self.tarjeta.lados.connect(lambda n: self.lienzo.cambiar_lados(n))
         self.tarjeta.opcion_cota.connect(lambda o: setattr(self.lienzo, "opcion_cota", o))

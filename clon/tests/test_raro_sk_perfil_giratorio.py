@@ -24,7 +24,6 @@ from omnicad.timeline.parametros import TablaParametros  # noqa: E402
 from omnicad.ui import editor_boceto, modo_boceto  # noqa: E402
 
 B814 = "B-814: la tarjeta no avisa cuando Tolerancia queda fuera de 0,001–10 mm"
-B815 = "B-815: la tarjeta no evalúa una expresión en Tolerancia y deja otro valor en silencio"
 
 VALORES = {
     "axis": (("", "vacio"), (0, "cero"), (-5, "negativo"), (1e9, "enorme"), ("5 mm", "unidad"), ("5*2", "expresion")),
@@ -71,6 +70,7 @@ def tarjeta(app):
     lz.show()
     lz.set_herramienta("perfil_giratorio")
     t = modo_boceto.TarjetaHerramienta(lz)
+    t.lienzo = lz
     t.ajuste.connect(lambda clave, valor: lz.opciones.__setitem__(clave, valor))
     t.set_herramienta("perfil_giratorio", opciones=lz.opciones)
     yield lz, t
@@ -219,16 +219,32 @@ def test_tolerancia_con_unidad_conserva_la_medida(tarjeta):
     resolver(lz.b)
 
 
-@pytest.mark.xfail(reason=B815, strict=True)
-def test_tolerancia_con_expresion_evalua_la_medida(tarjeta):
+@pytest.mark.parametrize(("texto", "esperado"), [("0.05*2", 0.1), ("0,05*2", 0.1), ("5*2", 10.0)])
+def test_tolerancia_con_expresion_evalua_la_medida(tarjeta, texto, esperado):
     lz, t = tarjeta
     avisos = []
     lz.mensaje.connect(avisos.append)
     campo = _control(t, "Tolerancia")
 
-    _escribir(campo, "0.05*2")
+    _escribir(campo, texto)
 
-    assert campo.value() == pytest.approx(0.1)
-    assert lz.opciones["tolerancia_giro"] == pytest.approx(0.1)
+    assert campo.value() == pytest.approx(esperado)
+    assert lz.opciones["tolerancia_giro"] == pytest.approx(esperado)
     assert not _avisos(avisos, t)
     resolver(lz.b)
+
+
+def test_tolerancia_con_expresion_invalida_avisa_en_un_renglon(tarjeta):
+    lz, t = tarjeta
+    avisos = []
+    lz.mensaje.connect(avisos.append)
+    campo = _control(t, "Tolerancia")
+
+    _escribir(campo, "0,05*")
+
+    assert campo.value() == pytest.approx(0.05)         # queda el último valor válido tecleado (el campo actualiza al teclear)
+    assert lz.opciones["tolerancia_giro"] == pytest.approx(0.05)
+    mensajes = _avisos(avisos, t)
+    assert mensajes
+    assert all("\n" not in mensaje and "\r" not in mensaje for mensaje in mensajes), mensajes
+    assert any("Tolerancia" in mensaje for mensaje in mensajes), mensajes
