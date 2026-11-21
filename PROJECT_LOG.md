@@ -1,5 +1,7 @@
 ## Registro
 
+- **2026-11-21 · Traspaso E6 (CAZA-BOCETO, Parcial).** `cazar.py tema boceto`: 2 hallazgos, ambos `create_pipe` (B-791 SIGSEGV, B-792 autointersección); prueba_ui de boceto: 4 rojos de UI (B-793…B-796) y lento B-797. Sin arreglos de código; no hay dos corridas verdes. Evidencia: evidencias/caza_2026-11-21/.
+
 - **2026-11-21 · Traspaso E8 (B-619c en espera).** 1) B-619c sigue Parcial: falta que E11 mida el Perfil giratorio del barril en Fusion. 2) B-768…B-771 ya estaban hechos por PREP en ~/OmniCAD-P-187 (ruff y 471 tests verdes), sin integrar: OpenCode y E3 siguen ahí. 3) Sigue: PRUEBA-ASAS (asas y arrastres de boceto).
 
 - **2026-11-21 · B-690 cerrado.** E11 en Fusion: Perpendicular línea–spline no existe (error de API, gris en la ventana); Tangente solo con extremo común. OmniCAD ya la apaga igual (`test_b690_linea_spline_gris.py`); datos en `evidencias/reportes_pc/2026-11-20_boceto/b690_fusion_extremo_comun.json`.
