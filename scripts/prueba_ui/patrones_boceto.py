@@ -304,7 +304,31 @@ def circular_asas():
     A.foto(v, "patrones_c5_asas")
 
 
+def _arrastres_raros(nombres, campos, area):
+    """PRUEBA-ASAS: cada asa se lleva sobre el centro, a 5000 px, al otro lado y fuera de la ventana: los campos siguen siendo
+    números finitos (sin «nan»/«inf») y la herramienta sigue viva."""
+    for nombre in nombres:
+        for dx, dy in ((0, 0), (5000, 0), (-5000, -5000), (0, 90000)):
+            q = asa(nombre)
+            if q is None:
+                A.reg(AR + area, f"asa «{nombre}» presente antes del arrastre raro ({dx},{dy})", False, "")
+                return
+            arrastrar(q, QPointF(q.x() + dx, q.y() + dy))
+            txt = [panel.campos[c].text() for c in campos]
+            ok = all(t.strip() and "nan" not in t.lower() and "inf" not in t.lower() for t in txt) and lz.herramienta.startswith("patron")
+            A.reg(AR + area, f"asa «{nombre}» arrastrada a ({dx},{dy}) px: campos finitos y herramienta viva", ok, f"{txt}")
+
+
+def circular_asas_raras():
+    _arrastres_raros(("Ángulo total", "Cantidad"), ("angulo_total", "cantidad"), " · circular")
+    n = int(panel.campos["cantidad"].text())
+    A.reg(AR + " · circular", "la cantidad tras los arrastres raros queda entre 2 y 200", 2 <= n <= 200, f"{n}")
+    escribir("cantidad", "6")                    # deja los valores de antes para los pasos que siguen
+    escribir("angulo_total", "180")
+
+
 probar("circular_asas", circular_asas)
+probar("circular_asas_raras", circular_asas_raras)
 
 
 def circular_aceptar():
@@ -497,7 +521,14 @@ def rect_excluir_y_asas():
     A.foto(v, "patrones_r3_excluidas_asas")
 
 
+def rect_asas_raras():
+    _arrastres_raros(("Distancia", "Cantidad"), ("distancia1", "cantidad1"), " · rectangular")
+    escribir("distancia1", "20")
+    escribir("cantidad1", "4")
+
+
 probar("rect_excluir_y_asas", rect_excluir_y_asas)
+probar("rect_asas_raras", rect_asas_raras)
 
 
 def rect_aceptar():

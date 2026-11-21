@@ -1,6 +1,7 @@
 ## Registro
 - **2026-11-21 · Traspaso E8 (B-512 Parcial, sin commit).** 1) ~/OmniCAD-B-512: test_b512_mover_y_rotar_con_esquina_en_el_origen (ya andaba, B-538) y fila de bugs.md al día. 2) Queda solo la curvatura arco–spline con R ≤ 0,5 (solver, E1). 3) tests_afectados: 640 OK, ruff limpio. 4) Sigue: B-619.
 
+- **2026-11-21 · PRUEBA-ASAS (E8).** Asas de Escala, Mover, Texto, Empalme, Chaflán (3) y Desfase: `tests/test_asas_boceto_valores_raros.py` (86 OK, arrastres a 0, NaN, ∞, 1e12). Patrones: 16 comprobaciones en `prueba_ui/patrones_boceto.py` (123 OK). Sin fallas nuevas; el KeyError de boceto_herramientas es B-796.
 - **2026-11-21 · Traspaso E8 (B-619c en espera).** 1) B-619c sigue Parcial: falta que E11 mida el Perfil giratorio del barril en Fusion. 2) B-768…B-771 ya estaban hechos por PREP en ~/OmniCAD-P-187 (ruff y 471 tests verdes), sin integrar: OpenCode y E3 siguen ahí. 3) Sigue: PRUEBA-ASAS (asas y arrastres de boceto).
 
 - **2026-11-21 · B-690 cerrado.** E11 en Fusion: Perpendicular línea–spline no existe (error de API, gris en la ventana); Tangente solo con extremo común. OmniCAD ya la apaga igual (`test_b690_linea_spline_gris.py`); datos en `evidencias/reportes_pc/2026-11-20_boceto/b690_fusion_extremo_comun.json`.
