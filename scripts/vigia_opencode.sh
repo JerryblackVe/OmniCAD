@@ -21,7 +21,7 @@ CB=${VIGIA_CB:-$HOME/.local/cb/codebuddy}   # CodeBuddy (Node 22 propio); sus mo
 # Orden por la prueba de carga del 17/11: CodeBuddy contesta en ~8 s y aguanta 4 a la vez; MiniMax ~3; GLM y DeepSeek gratis de OpenCode no contestaron.
 # Hasta el 23/11 (promo de OpenCode Go: GLM 5.3 por USD 500 con la suscripción) glm-5.3 va primero; AG-21 lo devuelve a su lugar.
 # OpenCode Go (Gerardo, 19/11; sin Extra Usage ni créditos: si se acaba el cupo, rota): probados con una tarea de boceto; fuera: gpt-6-luna (tocó de más), qwen4-max y deepseek-v4-pro.
-MODELOS=(opencode-go/glm-5.3 cb:hy3 cb:deepseek-v4.1-flash opencode-go/beam-free opencode-go/hy4-flash-free opencode/nemotron-3.5-lightning-free opencode-go/kimi-k3.1-pro nvidia/minimaxai/minimax-m3.1-flash openai/gpt-6.2-sol openai/gpt-6.2-astra openai/gpt-6.1-terra opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode/big-pickle)
+MODELOS=(opencode-go/glm-5.3 cb:hy3 cb:deepseek-v4.1-flash opencode-go/beam-free opencode-go/hy4-flash-free opencode-go/kimi-k3.1-pro nvidia/minimaxai/minimax-m3.1-flash openai/gpt-6.2-sol openai/gpt-6.2-astra openai/gpt-6.1-terra opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode/big-pickle)
 # Cupo de OpenCode Go (Gerardo vía el chat maestro, 19/11): sirve para toda tarea; tope de corridas por hora (GO_HORA); si un modelo de Go da
 # 429/límite, no se reintenta Go 5 h; con el semanal al 80 % el coordinador apaga Go (touch $COLA/go_apagado).
 GO=" opencode-go/glm-5.3 opencode-go/kimi-k3.1-pro "; GO_HORA=${VIGIA_GO_HORA:-12}; GO_PAUSA=$COLA/go_pausa; TAREA=

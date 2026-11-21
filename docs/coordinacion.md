@@ -186,14 +186,15 @@ de OpenCode; las demás la enlazan.
   | 0 (hasta el 23/11) | `opencode-go/glm-5.3`: promo de OpenCode Go (Gerardo, 19/11), primero hasta el domingo 23/11; después vuelve al puesto 6 | Todo, mientras dure; Extra Usage apagado, sin comprar créditos |
   | 1–2 | CodeBuddy gratis: `cb:hy3`, `cb:deepseek-v4.1-flash` (`~/.local/cb/codebuddy -p -y --model <m>`, Node 22 propio) | Lo mecánico; ~8 s, 4 a la vez; corta con 429 al quedarse sin cupo |
   | 3–4 | OpenCode Go gratis (Gerardo, 19/11): `opencode-go/beam-free`, `opencode-go/hy4-flash-free` | Lo mecánico con herramientas; 10–13 s. `iceman-contributor-free` y `longcat-2.5-free` no andan hasta que Gerardo cambie la consola |
-  | 5 | `opencode/nemotron-3.5-lightning-free` | Lo mecánico; ~14 s |
-  | 6–7 | OpenCode Go con cupo pago (suscripción de Gerardo; Extra Usage apagado, nunca prenderlo ni comprar créditos): `opencode-go/glm-5.3` (~44 s), `opencode-go/kimi-k3.1-pro` (~4 min) | Tareas de varios archivos; si el cupo se acaba, el vigía rota. Descartados en la prueba del 19/11: `gpt-6-luna` (tocó de más), `qwen4-max` (no terminó en 5 min), `deepseek-v4-pro` (falló)
-  | 8 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Lo mecánico y varios archivos con herramientas |
-  | 9 | OpenAI (ChatGPT Plus de Gerardo, OK del 17/11): `openai/gpt-6.2-sol` | Lo difícil: arreglos de varios archivos y revisión (la tarea lo pide con `MODELO=`) |
-  | 10–11 | OpenAI: `openai/gpt-6.2-astra`, `openai/gpt-6.1-terra` | Respaldo |
-  | 12 | GLM: `opencode/glm-5.3-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
-  | 13 | DeepSeek: `opencode/deepseek-v4.1-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
-  | 14 | `opencode/big-pickle` | Último respaldo (anda, pero ~77 s) |
+  | 5–6 | OpenCode Go con cupo pago (suscripción de Gerardo; Extra Usage apagado, nunca prenderlo ni comprar créditos): `opencode-go/glm-5.3` (~44 s), `opencode-go/kimi-k3.1-pro` (~4 min) | Tareas de varios archivos; si el cupo se acaba, el vigía rota. Descartados en la prueba del 19/11: `gpt-6-luna` (tocó de más), `qwen4-max` (no terminó en 5 min), `deepseek-v4-pro` (falló)
+  | 7 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Lo mecánico y varios archivos con herramientas |
+  | 8 | OpenAI (ChatGPT Plus de Gerardo, OK del 17/11): `openai/gpt-6.2-sol` | Lo difícil: arreglos de varios archivos y revisión (la tarea lo pide con `MODELO=`) |
+  | 9–10 | OpenAI: `openai/gpt-6.2-astra`, `openai/gpt-6.1-terra` | Respaldo |
+  | 11 | GLM: `opencode/glm-5.3-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
+  | 12 | DeepSeek: `opencode/deepseek-v4.1-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
+  | 13 | `opencode/big-pickle` | Último respaldo (anda, pero ~77 s) |
+
+  **Prohibido: nemotron (Gerardo, 21/11).** Ninguna corrida lo usa; ni en `MODELOS` ni con `MODELO=`.
 
   **Cupo de OpenCode Go (Gerardo, 2026-11-19, vía el chat maestro; el 19/11 iba 26 % de la ventana de 5 h, 10 % del semanal y 5 % del mensual):**
   Actualización 19/11 (semanal al 29 %): Go sirve para TODA tarea de la cola (la suscripción ya está paga y Extra Usage está apagado: al tope corta solo).

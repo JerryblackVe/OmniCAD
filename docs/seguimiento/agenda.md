@@ -10,7 +10,7 @@ avisa lo que vence ese día o ya venció.
 | ID | Tarea | Para cuándo | Pedido | Estado |
 |---|---|---|---|---|
 | AG-18 | PRIMERO: actualizar Claude Code en la VPS a 2.1.327 o más nuevo (cortes de SSH por reuso de PID, fuga de cupo de subagentes); entre ítems, sin tests corriendo; rige en el reemplazo del coordinador | 2026-11-19 | 2026-11-18 | Programada |
-| AG-21 | Terminó la promo de GLM 5.3 (OpenCode Go): sacar `opencode-go/glm-5.3` del primer lugar de `MODELOS` en `scripts/vigia_opencode.sh` (vuelve después de `nemotron`, antes de kimi) y de la fila «0» de la tabla de docs/coordinacion.md | 2026-11-23 | Chat maestro (Gerardo), 19/11 | Programada |
+| AG-21 | Terminó la promo de GLM 5.3 (OpenCode Go): sacar `opencode-go/glm-5.3` del primer lugar de `MODELOS` en `scripts/vigia_opencode.sh` (vuelve después de `hy4-flash-free`, antes de kimi) y de la fila «0» de la tabla de docs/coordinacion.md | 2026-11-23 | Chat maestro (Gerardo), 19/11 | Programada |
 | AG-2 | [3.º] Auditoría y reparación de las herramientas 3D (Agujero a Volumen de fluido) contra Fusion 360; prompt en `docs/auditoria_herramientas_3d.md` (con el anexo de ROSCAS primero) | A definir | 2026-11-07 | Programada |
 | AG-3 | [7.º] Auditoría, reparación y mejora del espacio RENDERIZAR contra Fusion 360 (primero la interfaz corrupta); prompt en `docs/auditoria_renderizar.md` | A definir | 2026-11-07 | Programada |
 | AG-4 | [4.º] Auditoría, reparación y paridad de las 27 herramientas de MODIFICAR (Pulsar/tirar a Lista de materiales) en todos los espacios contra Fusion 360; prompt en `docs/auditoria_modificar.md` | A definir | 2026-11-07 | Programada |
