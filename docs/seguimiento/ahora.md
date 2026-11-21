@@ -10,7 +10,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 
 | Sesión | Ítem | Qué |
 |---|---|---|
-| E1 (Opus alto) | B-463, después B-690 | Spline de ajuste contra Fusion (brief `E1_proximo.md`, siguiente en `E1_siguiente.md`) |
+| E1 (Opus alto) | B-512 (curvatura arco–spline), después H-70 (B-463 cerrado: E11 OK) | Spline de ajuste contra Fusion (brief `E1_proximo.md`, siguiente en `E1_siguiente.md`) |
 | E4 (Sonnet medio) | P-11l, después P-205 | Bocetos de un .f3d con varios componentes; arrastre con incrementos (brief `E4_proximo.md`) |
 | E7 (Sonnet medio) | Caza y prueba_ui de boceto, opciones sin prueba | Puntos 3 y 1 del «Listo cuando» (brief `E7_proximo.md`) |
 | E8 (Sonnet medio) | B-512 (resto), después B-619 | Casos raros del boceto (brief `E8_proximo.md`) |
