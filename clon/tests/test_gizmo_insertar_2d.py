@@ -89,3 +89,14 @@ def test_lo_tecleado_mueve_el_gizmo(panel):
     g = panel.manipuladores
     m = asa(panel, mp.GiroCalcomania)
     assert math.degrees(m._theta(g)) == pytest.approx(45)
+
+
+def test_b703_escala_enorme_apaga_aceptar_y_lo_dice(panel):
+    """Escala 1e9: Aceptar apagado y el aviso dice el máximo (antes quedaba activo y no creaba nada)."""
+    panel.widgets["escala"].setText("1000000000")
+    panel._validar_expresiones()
+    assert not panel.boton_ok.isEnabled()
+    assert "1e+06" in panel.widgets["escala"].toolTip() or "1000000" in panel.widgets["escala"].toolTip()
+    panel.widgets["escala"].setText("2")
+    panel._validar_expresiones()
+    assert panel.boton_ok.isEnabled()

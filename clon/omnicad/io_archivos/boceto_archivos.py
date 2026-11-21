@@ -10,7 +10,7 @@ import math
 
 import numpy as np
 
-from ..restricciones.boceto import ArcoElipse, Boceto, puntos_primitiva
+from ..restricciones.boceto import MEDIDA_MAXIMA, ArcoElipse, Boceto, puntos_primitiva
 
 
 def _transformacion(escala, desplazamiento, angulo_grados, voltear=(False, False), centro=(0.0, 0.0)):
@@ -83,6 +83,11 @@ def boceto_desde_primitivas(primitivas, *, escala=1.0, desplazamiento=(0.0, 0.0)
     if not escala > 0:
         raise ValueError("La escala tiene que ser positiva.")
     centro = ((caja[0][0] + caja[1][0]) / 2, (caja[0][1] + caja[1][1]) / 2) if caja else (0.0, 0.0)
+    if caja:                                                # B-703: el mismo tope de 1 km que las cotas
+        radio = escala * math.hypot(caja[1][0] - caja[0][0], caja[1][1] - caja[0][1]) / 2 + math.hypot(*desplazamiento)
+        if not radio <= MEDIDA_MAXIMA:
+            raise ValueError(f"El dibujo pasaría de {MEDIDA_MAXIMA:,.0f} mm del origen".replace(",", ".") + ": elegí una escala o un "
+                             "desplazamiento menor.")
     b = destino if destino is not None else Boceto()
     antes = len(b.curvas)
     espejo = bool(voltear_h) != bool(voltear_v)             # un espejo invierte el sentido de los arcos

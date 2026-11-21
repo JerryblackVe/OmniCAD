@@ -26,7 +26,7 @@ class _InsertarArchivo2D(Comando):
 
     def campos(self, ctx):
         return [Seleccion("plano", "Plano o cara", {"plano", "cara_plana"}),
-                Texto("archivo", "Archivo", ""), Expresion("escala", "Escala", "1", ESCALAR),
+                Texto("archivo", "Archivo", ""), Expresion("escala", "Escala", "1", ESCALAR, rango=(0, 1e6)),
                 Expresion("dx", "Desplazamiento X", "0 mm"), Expresion("dy", "Desplazamiento Y", "0 mm"),
                 Expresion("angulo", "Ángulo", "0 deg", ANGULO),
                 Casilla("voltear_h", "Volteo horizontal", avanzado=True),

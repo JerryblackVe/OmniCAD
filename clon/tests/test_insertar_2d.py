@@ -85,3 +85,14 @@ def test_lienzo_con_imagen_y_ancho_real(tmp_path):
     esquinas = Visor3D.esquinas_lienzo(datos)
     assert [tuple(round(c, 6) for c in p[:2]) for p in esquinas] == [(-30, -20), (50, -20), (50, 20), (-30, 20)]
     assert Documento.desde_dict(doc.a_dict()).estado_final.lienzos[op.id]["ancho"] == pytest.approx(80)
+
+
+def test_b703_escala_enorme_se_rechaza_con_mensaje(tmp_path):
+    ruta = tmp_path / "dibujo.svg"
+    ruta.write_text(SVG, encoding="utf-8")
+    prims = leer_svg(ruta)
+    with pytest.raises(ValueError, match=r"1\.000\.000"):
+        boceto_desde_primitivas(prims, escala=1e9)
+    with pytest.raises(ValueError, match=r"1\.000\.000"):
+        boceto_desde_primitivas(prims, desplazamiento=(1e9, 0))
+    assert boceto_desde_primitivas(prims, escala=100).curvas       # 100× sigue entrando
