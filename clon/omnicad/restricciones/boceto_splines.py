@@ -77,6 +77,25 @@ class _Splines:
             raise ErrorBoceto(f"El punto {pid} no tiene manija activa.")
         return m
 
+    def _manija_natural(self, c, pid, angulo=None, largo=None):
+        """(ángulo en radianes, largo) de la manija que no cambia la forma de la spline en el punto `pid`."""
+        Q = [self.coords(p) for p in c.pts]
+        u = parametros_cuerda(Q, c.grado)[c.pts.index(pid)]
+        d = evaluar_primitiva(self.primitivas(c.id)[0], u, 1)[1]
+        a = math.radians(angulo) if angulo is not None else math.atan2(d[1], d[0])
+        if largo is None:                                   # la derivada de hoy: no cambia la forma
+            largo = math.hypot(*d) / escala_manija(Q, c.pts.index(pid), (math.cos(a), math.sin(a)), c.grado)
+        return a, largo
+
+    def punta_manija_natural(self, sid, pid):
+        """(x, y) de la punta que tendría la manija de `pid` al activarla, o None si ahí no se puede (B-784)."""
+        c = self.curvas.get(sid)
+        if not isinstance(c, Spline) or c.modo != "ajuste" or c.cerrada or pid not in c.pts or any(m[0] == pid for m in c.manijas):
+            return None
+        a, largo = self._manija_natural(c, pid)
+        fx, fy = self.coords(pid)
+        return fx + largo * math.cos(a), fy + largo * math.sin(a)
+
     def activar_manija(self, sid, pid, angulo=None, largo=None, curvatura=None):
         """Activa la manija de tangente (y, con `curvatura`, la de curvatura) en el punto de ajuste `pid`: una
         línea de construcción con la tangente actual de la curva (o `angulo`, grados) y largo `largo` (por defecto
@@ -88,12 +107,7 @@ class _Splines:
             raise ErrorBoceto(f"{pid} no es punto de ajuste de la spline.")
         if any(m[0] == pid for m in c.manijas):
             raise ErrorBoceto(f"El punto {pid} ya tiene manija: editala.")
-        Q = [self.coords(p) for p in c.pts]
-        u = parametros_cuerda(Q, c.grado)[c.pts.index(pid)]
-        d = evaluar_primitiva(self.primitivas(sid)[0], u, 1)[1]
-        a = math.radians(angulo) if angulo is not None else math.atan2(d[1], d[0])
-        if largo is None:                                   # la derivada de hoy: no cambia la forma
-            largo = math.hypot(*d) / escala_manija(Q, c.pts.index(pid), (math.cos(a), math.sin(a)), c.grado)
+        a, largo = self._manija_natural(c, pid, angulo, largo)
         if not 1e-6 < largo < math.inf:
             raise ErrorBoceto("El largo de la manija tiene que ser positivo.")
         fx, fy = self.coords(pid)

@@ -92,6 +92,10 @@ class LienzoInteraccionMixin:
             return
         if e.button() == Qt.LeftButton and self.herramienta == "seleccionar" and self._clic_casilla_patron(pos):
             return                                   # casilla de supresión de una copia del patrón
+        if e.button() == Qt.LeftButton and self.herramienta == "seleccionar":
+            f = self._manija_fantasma()                  # B-784: clic en la punta de la manija sugerida: se activa y se arrastra
+            if f and (self.a_px(*f[2]) - pos).manhattanLength() <= TOL_MANIJA:
+                self.aplicar_cambio(lambda: self.b.activar_manija(f[0], f[1]), operacion=True)
         if e.button() == Qt.LeftButton and self.herramienta in PATRON and self.patron.clic_casilla(pos):
             return                                   # casilla de una copia del patrón que se está armando
         if self.entrada is not None and e.button() == Qt.LeftButton and self._citar_cota(pos):

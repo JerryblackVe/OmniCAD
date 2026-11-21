@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-21 · B-784 (E3).** Al elegir UN punto de ajuste de una spline abierta se ve la manija sugerida (línea de puntos y círculo); clic en su punta la activa y se arrastra (`_manija_fantasma`, `Boceto.punta_manija_natural`). Test: `test_b784_*` en test_boceto_herramientas.py. Sin commit.
 
 - **2026-11-21 · Traspaso E8 (B-619c en espera).** 1) B-619c sigue Parcial: falta que E11 mida el Perfil giratorio del barril en Fusion. 2) B-768…B-771 ya estaban hechos por PREP en ~/OmniCAD-P-187 (ruff y 471 tests verdes), sin integrar: OpenCode y E3 siguen ahí. 3) Sigue: PRUEBA-ASAS (asas y arrastres de boceto).
 
