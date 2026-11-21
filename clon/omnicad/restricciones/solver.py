@@ -185,6 +185,7 @@ class _Sistema:
             self.idx_r[cid] = self.idx_r[raiz_r]
         self.n_base = len(x0)
         self.x0 = np.array(x0, dtype=float)
+        self.largos_angulo = []     # B-786: (línea, largo inicial) de las cotas de ángulo
         self._extra = []
         self.originales = set()      # curvas con una copia desfasada (`_resolver_grupo` no las mueve si puede evitarlo)
         self.quietas = set()         # B-667: incógnitas de una spline con Perpendicular a una línea: se mueve la línea
@@ -599,12 +600,18 @@ class _Sistema:
                         c.datos["lado"] = lado
                     T.append(lambda x, o=e[0], d=e[1], v=v, s=lado: [s * self.separacion(x, o, d) - v])
             elif t == "angulo":
-                def f(x, l1=e[0], l2=e[1], v=math.radians(v), s=signos_cuadrante(c.datos.get("cuadrante"))):
+                (a0, b0), (c0, d0) = self.L(x0, e[0]), self.L(x0, e[1])
+                # B-786: la escala se congela con la geometría inicial; si dependiera de x, el solver achicaba las
+                # líneas para bajar el residuo en vez de girarlas.
+                escala0 = (math.dist(a0, b0) + math.dist(c0, d0)) / 2 or 1.0
+                self.largos_angulo += [(e[0], math.dist(a0, b0)), (e[1], math.dist(c0, d0))]
+
+                def f(x, l1=e[0], l2=e[1], v=math.radians(v), s=signos_cuadrante(c.datos.get("cuadrante")),
+                      escala=escala0):
                     (a, bb), (cc, d) = self.L(x, l1), self.L(x, l2)
                     u = (s[0] * (bb[0] - a[0]), s[0] * (bb[1] - a[1]))
                     w = (s[1] * (d[0] - cc[0]), s[1] * (d[1] - cc[1]))
                     # Como paralela/perpendicular: residuo en mm, sin perder peso ni rango al crecer las líneas.
-                    escala = (math.hypot(*u) + math.hypot(*w)) / 2
                     return [(math.atan2(abs(u[0] * w[1] - u[1] * w[0]), u[0] * w[0] + u[1] * w[1]) - v) * escala]
                 T.append(f)
             elif t in ("distancia_h", "distancia_v"):
@@ -1641,6 +1648,8 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False, referen
         # spline degenerada que ninguna solución cumple: no se la persigue durante segundos).
         tope = 200 * (n + 1) if con_rango else max(10, TROZO_EVALUACIONES * 100 // max(n, 100))
         hechas, x, costo = 0, x_inicio, None
+        if arrastrado is None and sis.largos_angulo:
+            x = _acercar_conservando_largos(sis, x, w, ancla, paso)
         while True:
             if con_rango and n >= UMBRAL_TRF:     # un arrastre (tope chico de evaluaciones) sigue con «lm»: «trf» no
                                                   # llegaba a cumplir la cadena rígida de 300 líneas (test_b101)
@@ -1679,6 +1688,20 @@ def _resolver_grupo(sis, arrastrado, con_rango=True, menor_cambio=False, referen
     with un_hilo():     # P-201: con la máquina cargada, los hilos de OpenBLAS duplicaban el tiempo de estas cuentas
         rango = int(np.linalg.matrix_rank(J, tol=1e-6)) if J.size else 0
     return x, err, J, rango
+
+
+def _acercar_conservando_largos(sis, x, w, ancla, paso):
+    """B-786 (como Fusion): una cota de ángulo grande se resuelve girando las líneas, no achicándolas. Pasada previa
+    que suma «conservar el largo» a las cotas de ángulo; después la corrida normal la deja exacta (si el largo está
+    acotado a otro valor, esa pasada solo da el punto de partida)."""
+    ls = sis.largos_angulo
+    extra = lambda x: np.array([math.dist(*sis.L(x, l)) - v for l, v in ls], dtype=float)  # noqa: E731
+    fun = lambda x: np.concatenate([sis.residuos(x), w * (x - ancla), extra(x)])  # noqa: E731
+    from scipy.optimize import least_squares
+    try:
+        return least_squares(fun, x, method="lm", diff_step=paso, max_nfev=50 * (len(x) + 1)).x
+    except Exception:   # shortcut: la pasada previa es solo una ayuda; si falla, sigue la corrida normal
+        return x
 
 
 class _QuietasCopias:

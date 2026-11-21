@@ -214,3 +214,19 @@ def test_b413_linea_suelta_acotada_mueve_el_segundo_extremo():
     assert resolver(b, {k: 100}).ok
     assert b.coords(b.curvas[ln].p1) == pytest.approx((0, 0), abs=1e-6)
     assert b.coords(b.curvas[ln].p2) == pytest.approx((60, 80), abs=1e-5)
+
+
+def test_b786_cota_de_angulo_grande_conserva_el_largo():
+    """33,7° → 135° entre dos líneas con vértice común: giran, no colapsan (antes quedaban en ~11 mm)."""
+    b = Boceto()
+    r = math.radians(33.7)
+    l1 = b.agregar_linea((0, 0), (50, 0))
+    l2 = b.agregar_linea((0, 0), (50 * math.cos(r), 50 * math.sin(r)))
+    b.agregar_restriccion("coincidente", [b.curvas[l1].p1, b.curvas[l2].p1])
+    k = b.agregar_cota("angulo", [l1, l2], "33.7")
+    assert resolver(b, {k: 33.7}).ok
+    for v in (135, 170):
+        assert resolver(b, {k: v}).ok
+        assert b.medir_cota("angulo", [l1, l2]) == pytest.approx(v, abs=1e-4)
+        for ln in (l1, l2):
+            assert math.dist(b.coords(b.curvas[ln].p1), b.coords(b.curvas[ln].p2)) == pytest.approx(50, abs=0.5)
