@@ -1,5 +1,7 @@
 # OmniCAD
 
+> **OmniCAD is frozen (2026-11-21).** Work continues in SolidCraft (Rust, Apache-2.0): https://github.com/tangency-labs/solidcraft . OmniCAD features are being ported there as small PRs. This repo stays as an archive.
+
 **Free and open parametric 3D CAD, written in Python.** You design with a history of steps (timeline) that recomputes
 itself when you change a dimension, like professional CAD tools. And **AI agents** (Claude Code, OpenCode, Cursor,
 Codex…) can drive it through MCP or the command line.
