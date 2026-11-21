@@ -96,13 +96,13 @@ Criterio de cobertura (igual que `scripts/cobertura_boceto.py`): «test automát
 | Panel Transformar (boceto) | Factor de escala | sí | sí | — |
 | Panel Transformar (boceto) | ΔX / ΔY / Ángulo (mover) | sí | sí | — |
 | Panel Simetría (boceto) | Eje / línea de simetría | sí | sí (simetria_boceto) | — |
-| Desfase | Asa de distancia (1 o 2, sobre la normal) | **no** | sí (desfase_boceto) | — |
-| Escala del boceto | Asa de factor | **no** | sí (asas) | — |
-| Mover/copiar | Asa de traslación (ΔX y ΔY) | **no** | sí | — |
-| Mover/copiar | Asa de giro | **no** | sí | — |
-| Empalme | Asa de radio | **no** | sí (asas) | — |
-| Chaflán (3 variantes) | Asa de distancia / distancias / ángulo | **no** | sí (asas) | — |
-| Texto | Asa de giro del marco | **no** | sí (asas) | — |
+| Desfase | Asa de distancia (1 o 2, sobre la normal) | sí (test_asas_boceto_valores_raros) | sí (desfase_boceto) | — |
+| Escala del boceto | Asa de factor | sí (test_asas_boceto_valores_raros) | sí (asas) | — |
+| Mover/copiar | Asa de traslación (ΔX y ΔY) | sí (test_asas_boceto_valores_raros) | sí | — |
+| Mover/copiar | Asa de giro | sí (test_asas_boceto_valores_raros) | sí | — |
+| Empalme | Asa de radio | sí (test_asas_boceto_valores_raros) | sí (asas) | — |
+| Chaflán (3 variantes) | Asa de distancia / distancias / ángulo | sí (test_asas_boceto_valores_raros) | sí (asas) | — |
+| Texto | Asa de giro del marco | sí (test_asas_boceto_valores_raros) | sí (asas) | — |
 | Patrón rectangular | Asa de distancia y cantidad por dirección; giro sin línea | **no** | sí (patrones_boceto) | — |
 | Patrón circular | Asa de ángulo total / paso y cantidad | **no** | sí (patrones_boceto) | — |
 | Editor (curvas) | Arrastre de puntos y curvas (mover / cambiar radio) | sí | sí (boceto_opciones) | — |
