@@ -130,19 +130,16 @@ def test_valores_fuera_de_rango_avisan_y_no_dibujan(app_qt, campo, texto, aviso)
     lz.set_herramienta("seleccionar")
 
 
-B801 = ("B-801: Lados usa _numero (float) en vez de evaluar: con unidad o expresión sale el error crudo de Python "
-        "en vez de un aviso en español (mismo origen que B-800)")
-
-
-@pytest.mark.xfail(reason=B801, strict=True)
 @pytest.mark.parametrize("texto", ["6 mm", "2*3"])
 def test_lados_con_unidad_o_expresion_avisa_en_espanol(app_qt, texto):
-    """Quiere un aviso en español o que dibuje; hoy sale «could not convert string to float» (B-801)."""
+    """Con unidad o expresión avisa en español o acepta el valor (falta el clic de orientación); nunca error crudo."""
     lz, avisos, fallos = _abrir(app_qt, "lados", texto)
     _sin_rotura(lz, avisos, fallos)
     if _lineas(lz):
         assert lz.entrada is None and not avisos
         assert len(_lineas(lz)) == 6
+    elif not avisos:
+        assert lz.entrada is None
     else:
         assert lz.entrada is not None
         mensaje = _un_renglon(avisos)

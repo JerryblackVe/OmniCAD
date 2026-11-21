@@ -182,10 +182,12 @@ class LienzoCotasMixin:
         return self.b._salida_extremo(curvas[0], pid) if curvas else None
 
     def _evaluar_campo(self, clave, texto):
-        if clave == "lados":
-            return validar_lados_poligono(int(round(_numero(texto))))
-        if clave == "puntas":
-            return validar_puntas_estrella(int(round(_numero(texto))))
+        if clave in ("lados", "puntas"):
+            try:
+                n = int(round(self.evaluar(texto, ESCALAR, True)))
+            except ErrorExpresion as e:
+                raise ErrorBoceto(f"«{clave}»: {e}") from e
+            return validar_lados_poligono(n) if clave == "lados" else validar_puntas_estrella(n)
         valor = self.evaluar(texto, ANGULO if clave in ANGULARES else LONGITUD)
         if clave in ANGULARES:              # B-718/B-719: hasta ANGULO_MAXIMO, con un mensaje de 1 renglón
             acotar(valor, ANGULO)
