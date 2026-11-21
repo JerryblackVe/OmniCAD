@@ -506,8 +506,8 @@ class LienzoCotasMixin:
     def _fin_edicion_viva(self, texto, confirmar=False, paso=0):
         """Tab / Enter / clic sobre la caja que se escribe: bloquea el valor (y Enter crea la geometría)."""
         clave = self._editando
-        if clave is not None and not texto.strip() and confirmar and self.herramienta == "elipse":
-            self.mensaje.emit("Expresión vacía.")        # B-717: Enter con la caja vacía no crea con el valor del ratón
+        if clave is not None and not texto.strip() and confirmar and self.herramienta in ("elipse", "ranura_arco_centro"):
+            self.mensaje.emit("Expresión vacía.")        # B-717/B-818: Enter con la caja vacía no crea con el valor del ratón
             if self.entrada is not None:
                 self.entrada.marcar_error()
             return False

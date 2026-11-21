@@ -17,12 +17,9 @@ from omnicad.restricciones import Boceto, resolver  # noqa: E402
 from omnicad.timeline.parametros import TablaParametros  # noqa: E402
 from omnicad.ui import editor_boceto  # noqa: E402
 
-XFAIL_VACIO = pytest.mark.xfail(reason="B-818: el ancho vacío se acepta en silencio y crea la ranura con el ancho del "
-                                        "ratón", strict=True)
-
 # El ancho es una cota de distancia: > 0 y hasta 1 km (validar_valor_cota).
 CASOS = [
-    pytest.param("", False, None, id="ancho_vacio", marks=XFAIL_VACIO),
+    pytest.param("", False, None, id="ancho_vacio"),
     pytest.param("0", False, None, id="ancho_cero"),
     pytest.param("-5", False, None, id="ancho_negativo"),
     pytest.param("2000000", False, None, id="ancho_enorme"),
