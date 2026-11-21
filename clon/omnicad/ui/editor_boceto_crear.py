@@ -808,7 +808,8 @@ class LienzoCrearMixin:
             self.mensaje.emit(e["error"] or e["guia"])
 
     def _dibujar_previa_simetria(self, p, acento):
-        """La recta de simetría entera (trazo y raya, hasta el borde de la vista) y, con la casilla activa, la copia."""
+        """La línea de simetría (trazo y raya) y, con la casilla activa, la copia. Solo los ejes del origen se estiran hasta el
+        borde de la vista (son infinitos); una línea elegida se marca tal cual está, sin estirarla (B-830)."""
         eje = self._eje_simetria
         if eje in EJES_ORIGEN:
             extremos = EJES_ORIGEN[eje]
@@ -819,8 +820,7 @@ class LienzoCrearMixin:
         a, b = (self.a_px(*q) for q in extremos)
         n = math.hypot(b.x() - a.x(), b.y() - a.y())
         if n > 1e-6:
-            k = (self.width() + self.height()) / n
-            d = QPointF(b.x() - a.x(), b.y() - a.y()) * k
+            d = QPointF(b.x() - a.x(), b.y() - a.y()) * ((self.width() + self.height()) / n if eje in EJES_ORIGEN else 0)
             p.setPen(QPen(QColor(255, 140, 0), 1, Qt.DashDotLine))
             p.drawLine(a - d, b + d)
         if self.previa_simetria:

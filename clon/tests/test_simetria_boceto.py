@@ -477,3 +477,28 @@ def test_el_widget_pinta_el_estado_y_emite_sus_senales(app_qt):
     assert ("campo", "seleccion") in recibido and ("limpiar", "eje") in recibido and ("previa", True) in recibido
     assert "cancelado" in recibido and "aceptado" in recibido
     assert all(b.focusPolicy() == Qt.NoFocus for b in p.findChildren(QPushButton))       # Enter y Esc siguen siendo del lienzo
+
+
+def _naranjas(lz):
+    img = lz.grab().toImage()
+    return [(x, y) for y in range(img.height()) for x in range(img.width())
+            if (c := img.pixelColor(x, y)).red() - c.blue() > 60 and c.red() > c.green() > c.blue()]
+
+
+def test_b830_la_linea_elegida_como_eje_no_se_estira_pero_el_eje_del_origen_si(app_qt):
+    """Elegir una línea como eje la marca tal cual (Fusion no la estira); solo los ejes del origen llegan al borde."""
+    lz, (ab, bc, ca), _ = _lienzo(app_qt)
+    lz.show()
+    lz.set_herramienta("simetria")
+    lz.seleccion = [bc]
+    lz.previa_simetria = False
+    lz.elegir_campo_simetria("eje")
+    lz._eje_simetria = ab
+    a, b = (lz.a_px(*q) for q in lz.b._extremos_linea(ab))
+    largo = math.hypot(b.x() - a.x(), b.y() - a.y())
+    fuera = [q for q in _naranjas(lz) if not -4 <= ((q[0] - a.x()) * (b.x() - a.x()) + (q[1] - a.y()) * (b.y() - a.y())) / largo <= largo + 4]
+    assert len(_naranjas(lz)) > 20, "no se vio el eje"
+    assert not fuera, f"{len(fuera)} píxeles del eje fuera de la línea elegida"
+    lz.centro = [0.0, 0.0]
+    lz._eje_simetria = Boceto.EJE_X
+    assert len(_naranjas(lz)) > 200
