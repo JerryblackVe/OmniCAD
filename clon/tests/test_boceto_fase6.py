@@ -374,10 +374,10 @@ def test_boc18_errores():
 # ---------------------------------------------------------------- BOC-30: escala con expresión y con punto fijo
 def test_boc30_factor_como_expresion_y_base_en_punto_fijo(s):
     llamar(s, "create_parameter", name="ancho", expression="40 mm")
-    lados = rectangulo(s, 0, 0, 10, 10)
-    punto = next(p for p in boceto(s)["points"] if p["x"] == 0 and p["y"] == 0)
+    lados = rectangulo(s, 3, 3, 13, 13)     # fuera del origen: el anclaje del origen (B-512) se suelta al escalar, el fijo no
+    punto = next(p for p in boceto(s)["points"] if p["x"] == 3 and p["y"] == 3)
     llamar(s, "add_constraint", sketch="B", type="fix", entities=[punto["id"]])
-    llamar(s, "transform_sketch", entities=lados, scale="ancho / 20", center_x=0, center_y=0)   # ×2 desde el punto fijo
+    llamar(s, "transform_sketch", entities=lados, scale="ancho / 20", center_x=3, center_y=3)   # ×2 desde el punto fijo
     assert areas(s) == pytest.approx([400])
     assert falla(s, "transform_sketch", entities=lados, scale=2, center_x=5, center_y=5)["error_kind"] == "INVALID_GEOMETRY"
     assert falla(s, "transform_sketch", entities=lados, scale="nada")["error_kind"] == "INVALID_ARGUMENTS"
