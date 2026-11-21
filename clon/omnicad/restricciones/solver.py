@@ -1320,14 +1320,45 @@ def acomodar_tangente(boceto, entidades, valores_cotas=None):
     conservar = [(cid, "distancia" if c.tipo == "linea" else "radio") for cid, c in boceto.curvas.items()
                  if not c.proyectada and (c.tipo == "arco" or (cid in entidades and c.tipo in ("linea", "circulo")))]
     for quietas in (quieta, ()) if quieta else ():
-        prueba, valores = boceto.copia(), dict(valores_cotas or {})
-        for k in quietas:
-            prueba.agregar_restriccion("fijo", [k])
-        for cid, tipo in conservar:
-            valores[prueba.agregar_cota(tipo, [cid], "0")] = boceto.medir_cota(tipo, [cid])
-        if resolver(prueba, valores, menor_cambio=True).ok:
-            boceto.puntos, boceto.curvas = prueba.puntos, prueba.curvas
-            return
+        for escala in _ESCALAS_SEMILLA if quietas else (None,):
+            prueba, valores = boceto.copia(), dict(valores_cotas or {})
+            for k in quietas:
+                prueba.agregar_restriccion("fijo", [k])
+            for cid, tipo in conservar:
+                valores[prueba.agregar_cota(tipo, [cid], "0")] = boceto.medir_cota(tipo, [cid])
+            if escala is not None and not _semilla_curvatura(prueba, entidades, escala):
+                break
+            if resolver(prueba, valores, menor_cambio=True).ok:
+                boceto.puntos, boceto.curvas = prueba.puntos, prueba.curvas
+                return
+
+
+_ESCALAS_SEMILLA = (None, 1.0, 0.25, 0.05)
+
+
+def _semilla_curvatura(b, entidades, escala):
+    """B-512: arranque para la Curvatura arco–spline cuando el arranque tal cual no converge (la spline pide más
+    curvatura que la que tiene y, con un punto de ajuste del lado contrario al centro del arco, el solver no lo
+    cruza). Pasa del lado del centro los puntos de ajuste de la spline y la achica hacia el extremo común (`escala`;
+    la curvatura crece al achicar). Solo mueve puntos de la spline; False si no es una curvatura arco–spline."""
+    if len(entidades) != 2 or sorted(b.tipo_de(k) for k in entidades) != ["arco", "spline"]:
+        return False
+    union = b.extremo_comun(*entidades)
+    if union is None:
+        return False
+    sp, pj = next((k, u) for k, u in zip(entidades, union, strict=True) if b.tipo_de(k) == "spline")
+    ar = next(k for k in entidades if k != sp)
+    j, o = b.coords(pj), b.coords(b.curvas[ar].centro)
+    n = _unitario((o[0] - j[0], o[1] - j[1]))
+    t = (-n[1], n[0])
+    for pid in b.curvas[sp].pts:
+        if pid == pj:
+            continue
+        q = b.coords(pid)
+        a = ((q[0] - j[0]) * t[0] + (q[1] - j[1]) * t[1]) * escala
+        h = max(abs((q[0] - j[0]) * n[0] + (q[1] - j[1]) * n[1]), abs(a) / escala * 0.2) * escala   # colineal: curvatura 0, sin gradiente
+        b.puntos[pid].x, b.puntos[pid].y = j[0] + a * t[0] + h * n[0], j[1] + a * t[1] + h * n[1]
+    return True
 
 
 def acomodar_segunda(boceto, quieta, valores_cotas=None):

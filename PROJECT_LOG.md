@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-21 · Traspaso E8 (B-512 Parcial, sin commit).** 1) ~/OmniCAD-B-512: test_b512_mover_y_rotar_con_esquina_en_el_origen (ya andaba, B-538) y fila de bugs.md al día. 2) Queda solo la curvatura arco–spline con R ≤ 0,5 (solver, E1). 3) tests_afectados: 640 OK, ruff limpio. 4) Sigue: B-619.
 
 - **2026-11-21 · Traspaso E8 (B-619c en espera).** 1) B-619c sigue Parcial: falta que E11 mida el Perfil giratorio del barril en Fusion. 2) B-768…B-771 ya estaban hechos por PREP en ~/OmniCAD-P-187 (ruff y 471 tests verdes), sin integrar: OpenCode y E3 siguen ahí. 3) Sigue: PRUEBA-ASAS (asas y arrastres de boceto).
 
@@ -265,3 +266,6 @@
 - La conexión UI→API está mapeada en `test_cobertura_ui_api.py`: `ver_grupos_caras` → `get_viewport_image`.
 - Los tests de API (`test_api_malla.py`) siguen patrón: `api.llamar(s, "operacion", args)` con afirmaciones numéricas y un paso de deshacer.
 - No existe test dedicado a `ver_grupos_caras`; sería nuevo test siguiendo patrón `test_api_malla.py`.- **2026-11-20 · Traspaso E1 (B-463 Parcial, sin código).** 1) Curva ya igual a Fusion (largo 74,0428, desvío 0,0001 mm, grado 5); el −7,3 % era la cúbica vieja. 2) Falta E11 en Windows: barrido círculo/rect sobre la spline y manija. 3) `cmp463.py` mide la cúbica (sin `grado=5`). 4) Próximo: B-690.
+- No existe test dedicado a `ver_grupos_caras`; sería nuevo test siguiendo patrón `test_api_malla.py`.
+- **2026-11-21 · B-512 (curvatura arco–spline R ≤ 0,5, Parcial).** `solver.py`: `acomodar_tangente` reintenta con `_semilla_curvatura` (puntos de ajuste al lado del centro, achicados); el arco ya no se mueve. Test `test_b512_curvatura_con_radio_chico_no_mueve_el_arco`; ruff limpio, 2222 tests afectados OK. Queda `extrude` con cota inválida (sin repro).
+- **2026-11-21 · Traspaso E1 (B-512 Parcial; sin ítem).** 1) B-512 curvatura arco–spline R ≤ 0,5 arreglada en `~/OmniCAD-B-512` (solver.py `_semilla_curvatura`, sin commit; el worktree trae además cambios de E8 para separar). 2) Queda de B-512 solo `extrude` con cota inválida (sin repro). 3) Próximo: el ítem de boceto que mande el coordinador.

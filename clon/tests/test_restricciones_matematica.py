@@ -947,3 +947,22 @@ def test_punto_sobre_spline_en_su_prolongacion_no_deriva():
     for _ in range(20):
         assert resolver(b, {}).ok
     assert max(math.dist(antes[q], _p(b, q)) for q in b.puntos) < 1e-9
+
+
+@pytest.mark.parametrize("radio", [0.5, 0.1])
+@pytest.mark.parametrize("medio, inicio", [((-2, -1), (-5, 2)), ((-2, 0), (-5, 0)), ((-1, 2), (-4, 0))])
+def test_b512_curvatura_con_radio_chico_no_mueve_el_arco(radio, medio, inicio):
+    """Con R ≤ 0,5 la spline pide mucha curvatura: el arco queda quieto y se ajusta la spline (G2 en la unión)."""
+    from omnicad.restricciones.solver import acomodar_tangente
+    b = Boceto()
+    j = b.agregar_punto(0, 0)
+    sp = b.agregar_spline([inicio, medio, j])
+    ar = b.agregar_arco_centro((0, radio), j, (radio, radio))
+    antes = [b.coords(p) for p in (b.curvas[ar].inicio, b.curvas[ar].fin, b.curvas[ar].centro)]
+    b.agregar_restriccion("curvatura", [sp, ar])
+    acomodar_tangente(b, [sp, ar])
+    assert resolver(b, {}).ok
+    despues = [b.coords(p) for p in (b.curvas[ar].inicio, b.curvas[ar].fin, b.curvas[ar].centro)]
+    assert [v for p in despues for v in p] == pytest.approx([v for p in antes for v in p], abs=1e-6)
+    g1, ka, kb = g2_en_la_union(b, sp, ar, j)
+    assert g1 and abs(ka + kb) < 1e-5
