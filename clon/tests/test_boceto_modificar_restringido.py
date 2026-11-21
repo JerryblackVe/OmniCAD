@@ -408,3 +408,14 @@ def test_b512_escalar_con_esquina_en_el_origen_desde_otra_base():
     b.anclar_al_origen(p)
     b.escalar([c[0].id if hasattr(c[0], "id") else c[0]], (5, 5), 2)
     assert b.coords(p[0]) == (-5, -5)
+
+
+def test_b512_mover_y_rotar_con_esquina_en_el_origen():
+    from omnicad.restricciones.boceto import Boceto
+    for ang, dx, esperado in ((0, 5, (5, 0)), (90, 3, (3, 0))):
+        b = Boceto()
+        p = [b.agregar_punto(x, y) for x, y in ((0, 0), (10, 0))]
+        c = b.agregar_linea(p[0], p[1])
+        b.anclar_al_origen(p[:1])
+        b.transformar([getattr(c, "id", c)], dx=dx, angulo=ang)
+        assert tuple(round(v, 6) for v in b.coords(p[0])) == esperado
