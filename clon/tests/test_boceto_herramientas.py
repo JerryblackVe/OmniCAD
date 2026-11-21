@@ -806,3 +806,24 @@ def test_manija_de_spline_se_activa_y_se_quita_con_clics_cerca_del_punto(app_qt)
     assert [m[0] for m in lz.b.curvas[sid].manijas] == [p1] and lz.resultado.ok
     lz.agregar_pick(sid, (19, 11))                                         # otro clic en el mismo punto: la quita
     assert lz.b.curvas[sid].manijas == []
+
+
+def test_punta_de_la_manija_se_arrastra_con_el_mouse(app_qt):
+    """B-784: con la manija activa, arrastrar su punta en la ventana (eventos simulados) la mueve y el boceto resuelve."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    lz = _lienzo(app_qt)
+    lz.resize(800, 600)
+    sid = lz.b.agregar_spline([(0, 0), (20, 10), (40, -5), (60, 5)], "ajuste")
+    lz.b.activar_manija(sid, lz.b.curvas[sid].pts[1])
+    lz.resolver()
+    lz.encuadrar()
+    lz.set_herramienta("seleccionar")
+    punta = lz.b.curvas[sid].manijas[0][1]
+    y0 = lz.b.coords(punta)[1]
+    p0 = lz.a_px(*lz.b.coords(punta)).toPoint()
+    QTest.mousePress(lz, Qt.LeftButton, Qt.NoModifier, p0)
+    for i in range(1, 6):
+        QTest.mouseMove(lz, p0 + QPoint(0, -6 * i))
+    QTest.mouseRelease(lz, Qt.LeftButton, Qt.NoModifier, p0 + QPoint(0, -30))
+    assert lz.resultado.ok and lz.b.coords(punta)[1] > y0 + 1
