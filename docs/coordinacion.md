@@ -175,6 +175,11 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
   07:00 UTC. Borra solo worktrees sin cambios sin guardar, sin commits fuera de main, sin tarea en la cola de OpenCode
   y sin proceso adentro; registro en `~/coordinador/limpieza_worktrees.log`. Lo demás se borra a mano tras fusionar.
 
+## Trabajo continuo para todas las EX (Gerardo, 2026-11-21: «para todos los trabajos»)
+- Cada `EX_proximo.md` lleva **3 ítems o más, en orden** («después: X, Y, Z»), de cualquier carril; el foco del día primero.
+- Se repone cuando le queda 1 ítem, no cuando la EX queda quieta. Nunca el mismo ID a una EX y a OpenCode a la vez (antes de escribir, `grep` del ID en `briefs/` y en `opencode_cola/`).
+- La reserva de OpenCode tiene 8 tareas o más; al cerrar un ítem se repone en el mismo turno (`scripts/llenar_cola_opencode.py` desde la raíz del repo).
+
 ## Protocolo de OpenCode y CodeBuddy (Gerardo, 2026-11-16 y 17; regla 18 de CLAUDE.md)
 Meta: OpenCode trabaja **siempre**. Sus modelos son gratis y ahorran el cupo de Claude. Esta sección es la única regla
 de OpenCode; las demás la enlazan.
