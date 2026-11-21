@@ -807,6 +807,15 @@ class LienzoInteraccionMixin:
             return VENTANA_CRUCE, None          # de derecha a izquierda: amarillo, elige lo que toca
         return VENTANA_RELLENO, VENTANA_BORDE   # de izquierda a derecha: naranja, elige lo que queda adentro
 
+    def ids_seleccionables(self):
+        """B-793: toda la geometría elegible (curvas visibles y sus puntos, más los puntos sueltos), como la ventana."""
+        internos = self._ocultos()[1]
+        visibles = {q for c in self.b.curvas.values() if self._visible(c) for q in c.puntos()}
+        sueltos = {p for p in self.b.puntos if not any(p in c.puntos() for c in self.b.curvas.values())}
+        return [c.id for c in self.b.curvas.values() if self._visible(c)] + [
+            p.id for p in self.b.puntos.values()
+            if p.id > 0 and p.id not in internos and (p.id in visibles or p.id in sueltos)]
+
     def _seleccionar_ventana(self, a, b):
         if self.objetos.modo_perfiles:
             self.mensaje.emit("Perfiles CAD: usá Ctrl o Mayús + clic para seleccionar varias regiones.")
@@ -1058,11 +1067,7 @@ class LienzoInteraccionMixin:
         elif e.matches(QKeySequence.Paste) and PORTAPAPELES:
             self.pegar()
         elif e.matches(QKeySequence.SelectAll):
-            en_curvas = {p for c in self.b.curvas.values() for p in c.puntos()}
-            ocultos = self._ocultos()[1]
-            self.seleccion = [c.id for c in self.b.curvas.values() if self._visible(c)]
-            self.seleccion += [p.id for p in self.b.puntos.values()
-                               if p.id > 0 and p.id not in en_curvas and p.id not in ocultos]
+            self.seleccion = self.ids_seleccionables()
             self.cambio.emit()
             self._notificar_seleccion()
             self.update()

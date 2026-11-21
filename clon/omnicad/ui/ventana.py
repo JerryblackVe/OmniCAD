@@ -1963,11 +1963,7 @@ class VentanaPrincipal(QMainWindow):
     def _seleccionar_todo(self):
         if self.modo_boceto.activo:
             lienzo = self.modo_boceto.lienzo
-            en_curvas = {p for c in lienzo.b.curvas.values() for p in c.puntos()}
-            ocultos = lienzo._ocultos()[1]
-            lienzo.seleccion = [c.id for c in lienzo.b.curvas.values() if lienzo._visible(c)]
-            lienzo.seleccion += [p.id for p in lienzo.b.puntos.values()
-                               if p.id > 0 and p.id not in en_curvas and p.id not in ocultos]
+            lienzo.seleccion = lienzo.ids_seleccionables()
             lienzo.cambio.emit()
             lienzo._notificar_seleccion()
             lienzo.update()
@@ -1978,11 +1974,7 @@ class VentanaPrincipal(QMainWindow):
     def _invertir_seleccion(self):
         if self.modo_boceto.activo:
             lienzo = self.modo_boceto.lienzo
-            en_curvas = {p for c in lienzo.b.curvas.values() for p in c.puntos()}
-            ocultos = lienzo._ocultos()[1]
-            todos = [c.id for c in lienzo.b.curvas.values() if lienzo._visible(c)] + [
-                p.id for p in lienzo.b.puntos.values()
-                if p.id > 0 and p.id not in en_curvas and p.id not in ocultos]
+            todos = lienzo.ids_seleccionables()
             elegidos = set(lienzo.seleccion)
             lienzo.seleccion = [i for i in todos if i not in elegidos]
             lienzo.cambio.emit()
