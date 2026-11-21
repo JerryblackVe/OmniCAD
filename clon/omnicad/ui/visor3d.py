@@ -1851,6 +1851,8 @@ class Visor3D(QOpenGLWidget):
             if t < t_cara:
                 t_cara = t
                 cara_hit = (cid, lista[indice[i]] if lista else None, tris[indice == indice[i]].reshape(-1, 3))
+        # B-554: en «Estructura alámbrica» el cuerpo no tapa nada (Fusion: Select Through); las caras siguen eligiéndose
+        sin_tapar = self.config.estilo_visual == "alambrico"
         if a_traves:                        # "Seleccionar otro": también lo que está tapado por las caras
             t_cara = math.inf
         visible = lambda p: float((np.asarray(p) - o) @ d) <= t_cara + tol_t  # noqa: E731
@@ -2007,7 +2009,7 @@ class Visor3D(QOpenGLWidget):
                             hueco_t = min(hueco_t, t)
                         continue
                     # sobre un mismo plano gana el más chico: una letra se pisa con el disco que tiene debajo
-                    if t <= t_cara + tol_t and (t < mejor_t - tol_t or (t <= mejor_t + tol_t and perfil.area < mejor_area)):
+                    if (sin_tapar or t <= t_cara + tol_t) and (t < mejor_t - tol_t or (t <= mejor_t + tol_t and perfil.area < mejor_area)):
                         from ..timeline.operaciones import OpExtrusion
                         ref = ({"tipo": "perfil", "boceto": br.op_id, **OpExtrusion.referencia_perfil(perfil)}
                                if "perfil" in filtros else {"tipo": "boceto", "boceto": br.op_id})
