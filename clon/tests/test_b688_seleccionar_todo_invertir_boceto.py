@@ -35,9 +35,8 @@ def ventana(tmp_path):
 
 
 def _esperado(lienzo):
-    en_curvas = {p for c in lienzo.b.curvas.values() for p in c.puntos()}
-    return set(lienzo.b.curvas) | {p.id for p in lienzo.b.puntos.values()
-                                   if p.id > 0 and p.id not in en_curvas}
+    """B-793: curvas y también sus puntos (como la ventana de selección y Fusion)."""
+    return set(lienzo.b.curvas) | {p.id for p in lienzo.b.puntos.values() if p.id > 0}
 
 
 def test_b688_seleccionar_todo_en_boceto(ventana):
