@@ -15,9 +15,9 @@ def _a_hr(q, o, d, n):
     return rel[0] * d[0] + rel[1] * d[1], rel[0] * n[0] + rel[1] * n[1]
 
 
-def contorno_exterior(primitivas, eje):
+def contorno_exterior(primitivas, eje, tolerancia=0.1):
     """Líneas ("linea", None, a, b) del contorno exterior de los segmentos girados `primitivas` (las que no son líneas
-    se descartan). `eje` = ((u, v) de un punto del eje proyectado, (du, dv) su dirección), en coordenadas del boceto.
+    se descartan); los tramos curvos salen como arcos ("arco", None, c, r, a0, a1) a `tolerancia` mm, como Fusion (B-619c). `eje` = ((u, v) de un punto del eje proyectado, (du, dv) su dirección), en coordenadas del boceto.
     Todos los puntos girados quedan del mismo lado del eje: r es su distancia a él y h su posición a lo largo."""
     o, (du, dv) = eje
     largo = math.hypot(du, dv)
@@ -101,7 +101,7 @@ def contorno_exterior(primitivas, eje):
             a = (o[0] + h0 * d[0] + lado * r0 * n[0], o[1] + h0 * d[1] + lado * r0 * n[1])
             b = (o[0] + h1 * d[0] + lado * r1 * n[0], o[1] + h1 * d[1] + lado * r1 * n[1])
             salida.append(("linea", None, a, b))
-    return _fusionar_colineales(salida)
+    return _a_arcos(_fusionar_colineales(salida), tolerancia)
 
 
 def _fusionar_colineales(lineas):
@@ -116,4 +116,61 @@ def _fusionar_colineales(lineas):
                 salida[-1] = ("linea", None, a, c)
                 continue
         salida.append(prim)
+    return salida
+
+
+def _circulo_3(a, m, b):
+    """(centro, radio) del círculo por tres puntos; None si están casi alineados."""
+    d = 2 * (a[0] * (m[1] - b[1]) + m[0] * (b[1] - a[1]) + b[0] * (a[1] - m[1]))
+    if abs(d) < 1e-12:
+        return None
+    s = [x[0] ** 2 + x[1] ** 2 for x in (a, m, b)]
+    cx = (s[0] * (m[1] - b[1]) + s[1] * (b[1] - a[1]) + s[2] * (a[1] - m[1])) / d
+    cy = (s[0] * (b[0] - m[0]) + s[1] * (a[0] - b[0]) + s[2] * (m[0] - a[0])) / d
+    return (cx, cy), math.dist((cx, cy), a)
+
+
+def _arco_de(pts, tol):
+    """Arco ("arco", None, c, r, a0, a1) por los extremos de `pts` y su punto medio, si todos los puntos caen a `tol`
+    de él y giran siempre hacia el mismo lado con quiebres suaves; si no, None."""
+    giros = []
+    for p, q, s in zip(pts, pts[1:], pts[2:], strict=False):
+        u, v = (q[0] - p[0], q[1] - p[1]), (s[0] - q[0], s[1] - q[1])
+        giros.append(math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]))
+    if not all(0 < abs(g) <= math.radians(25) for g in giros) or min(giros) * max(giros) < 0:
+        return None
+    ajuste = _circulo_3(pts[0], pts[len(pts) // 2], pts[-1])
+    if ajuste is None or any(abs(math.dist(ajuste[0], q) - ajuste[1]) > tol for q in pts):
+        return None
+    c, r = ajuste
+    a0, a1 = (math.atan2(q[1] - c[1], q[0] - c[0]) for q in (pts[0], pts[-1]))
+    return ("arco", None, c, r, a0, a1) if giros[0] > 0 else ("arco", None, c, r, a1, a0)
+
+
+def _a_arcos(lineas, tol):
+    """Reemplaza los tramos de 3 o más segmentos seguidos que caen sobre un círculo (a `tol` mm) por un arco: la
+    envolvente de una curva llega como poligonal y Fusion devuelve arcos (B-619c). Greedy: el arco más largo desde
+    cada vértice. shortcut: un tramo de 2 segmentos queda en líneas; un arco de más de unos 180° no se arma."""
+    salida, i = [], 0
+    while i < len(lineas):
+        cadena = [lineas[i][2], lineas[i][3]]
+        j = i + 1
+        while j < len(lineas) and lineas[j][2] == cadena[-1]:
+            cadena.append(lineas[j][3])
+            j += 1
+        k = 0
+        while k < len(cadena) - 1:
+            mejor = None
+            for f in range(k + 3, len(cadena)):
+                arco = _arco_de(cadena[k:f + 1], tol)
+                if arco is None:
+                    break
+                mejor = (f, arco)
+            if mejor:
+                salida.append(mejor[1])
+                k = mejor[0]
+            else:
+                salida.append(("linea", None, cadena[k], cadena[k + 1]))
+                k += 1
+        i = j
     return salida
