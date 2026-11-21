@@ -213,6 +213,13 @@ class _Constructor:
         self.boceto.agregar_spline(ids, modo="control", grado=grado, pesos=pesos, nudos=completo)
 
 
+def puntos_3d(b):
+    """Los puntos del boceto `b` (de `leer_bocetos`) en las coordenadas de su componente (mm)."""
+    m = {k: np.asarray(v, float) for k, v in b["marco"].items()}
+    v = np.cross(m["normal"], m["u"])
+    return [m["origen"] + m["u"] * p.x + v * p.y for p in b["boceto"].puntos.values()]
+
+
 def sin_repetidos(bocetos):
     """Quita los perfiles que son el mismo dibujo: el que Fusion guarda con el boceto y el de sus copias (las tapas de una
     extrusión caen en otro plano paralelo con la misma forma). De cada grupo queda el más cercano al origen (los bocetos

@@ -182,3 +182,33 @@ def test_un_bloque_de_bocetos_que_falla_no_tumba_la_apertura(tmp_path, monkeypat
     doc, avisos = documento_desde_archivo(_f3d_con_bocetos(tmp_path))
     assert len(doc.estado_final.cuerpos) == 1 and [o.TIPO for o in doc.operaciones] == ["operacion_base"]
     assert any("bocetos de pieza no se pudieron leer" in a for a in avisos)
+
+
+_FLUJO = "FusionAssetName[Active]/FusionDesignSegmentType1/BulkStream.dat"
+
+
+def _con_flujo(tmp_path, orden):
+    """Dos cubos (aaaa de 1 cm, cccc de 6 cm) y el bloque de bocetos bbbb, más un flujo de diseño que nombra los archivos
+    en `orden`, con basura de por medio (como el de Fusion: cada componente junto a sus bocetos)."""
+    flujo = b"".join(b"\x01" * 4000 + f"BREP.{n}".encode("utf-16-le") for n in orden)
+    return _zip_f3d(tmp_path / "dos.f3d", [(_CARPETA + "BREP.aaaa.smbh", _sab(_sab_cubo().r)),
+                                           (_CARPETA + "BREP.cccc.smbh", _sab(_sab_cubo(lado=6.0).r)),
+                                           (_CARPETA + "BREP.bbbb.smb", _sab(_sab_perfiles().r)), (_FLUJO, flujo)])
+
+
+def test_con_varios_componentes_el_flujo_liga_los_bocetos_con_su_componente(tmp_path):
+    """P-11l: el flujo pone el bloque de bocetos junto al cubo grande y la caja lo confirma: entra."""
+    f3d = _con_flujo(tmp_path, ["aaaa.smbh", "cccc.smbh", "bbbb.smb"])
+    bocetos = []
+    f3d_nativo.leer_componentes(f3d, bocetos=bocetos)
+    assert len(bocetos) == 1
+    doc, _ = documento_desde_archivo(f3d)
+    assert [o.TIPO for o in doc.operaciones] == ["operacion_base", "boceto"]
+
+
+def test_con_varios_componentes_si_la_caja_no_confirma_el_boceto_no_entra(tmp_path):
+    """El flujo lo pone junto al cubo chico, que no contiene sus puntos: dos pruebas que no coinciden, no se importa."""
+    f3d = _con_flujo(tmp_path, ["cccc.smbh", "aaaa.smbh", "bbbb.smb"])
+    bocetos = []
+    _, avisos = f3d_nativo.leer_componentes(f3d, bocetos=bocetos)
+    assert bocetos == [] and any("1 bocetos" in a and "2 componentes" in a for a in avisos)

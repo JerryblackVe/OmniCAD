@@ -49,12 +49,13 @@ de la tabla del flujo. Límites conocidos:
 
 - solo salen las regiones CERRADAS: los trazos abiertos, la construcción, las cotas, las restricciones y los nombres no
   están en el `.smb` (P-11m);
-- con más de un componente no se importan (P-11l): el bloque `.smb` no dice de qué componente es y la caja de los cuerpos
-  no alcanza (415 de 418 perfiles de CARTERA GOTICA caen en más de un componente);
-  Probado en `prusa_core_one` (226 componentes, 11 perfiles): por geometría (puntos del boceto sobre el B-rep de cada
-  componente, a 0,01 mm) cada perfil cae en 11 a 16 componentes (piezas repetidas): no desambigua. En el flujo, cada
-  nombre `BREP.*.smb` aparece una vez, en una tabla contigua de blobs, con ids de objeto (`0x3247x`) que otros registros
-  citan lejos (−280 KB y −306 KB); el camino es seguir esa cadena de ids hasta el componente (sin resolver);
+- con más de un componente (P-11l): el flujo de diseño lista cada `BREP.*.smbh` pegado a su `BREP.*.smb` (CARTERA GOTICA:
+  el `.smb` va 900–3 400 bytes DESPUÉS de su `.smbh`; EXTRUSOR SHERPA: 186 bytes ANTES; BINCHA: después). `f3d_nativo`
+  liga cada `.smb` con el `.smbh` más cercano en el flujo y deja pasar solo los bocetos cuyos puntos caen dentro de la
+  caja de ese componente (±0,05 mm): dos pruebas que coinciden. Es una pista, no la cadena de ids real: medido, el `.smb`
+  vecino no siempre es el dueño (EXTRUSOR SHERPA: 2 de 7 bloques no coinciden con la geometría). Resultado: CARTERA GOTICA
+  108 de 177 bocetos, EXTRUSOR SHERPA 26 de 38; el resto se declara en un aviso. Falta la cadena de ids (registros que citan
+  el id de objeto `0x3247x` lejos de la tabla, −280 KB y −306 KB);
 - tope de 150 bocetos y 30 000 trazos por archivo.
 
 ## Historial: lo que se lee y lo que no (P-11h, FU-8)

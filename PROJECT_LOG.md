@@ -1,5 +1,9 @@
 ## Registro
 
+- **2026-11-21 · Traspaso E4 (Sonnet medio).** 1) P-11l Parcial en `~/OmniCAD-P-11l2` (rama item/P-11l2, sin commit): ligado por flujo + caja, CARTERA 108/177, SHERPA 26/38. 2) Falta la cadena de ids del flujo (`docs/f3d_formato.md`). 3) Carpeta vieja `~/OmniCAD-P-11l` no es worktree: borrar con OK. 4) Siguiente: P-205. 5) Lección: pruebas de distancia OCC contra cuerpos grandes tardan minutos; usar cajas primero.
+
+- **2026-11-21 · P-11l (Parcial).** Bocetos de .f3d con varios componentes: cada `.smb` se liga con el `.smbh` vecino del flujo y entra si la caja del componente lo confirma (`f3d_nativo._smb_de_cada_componente`). CARTERA 108/177, SHERPA 26/38. 155 tests OK, ruff limpio. Falta la cadena de ids.
+
 - **2026-11-21 · B-463 cerrado, B-779 integrado.** E11 con mouse real: barrido sobre spline 0,0001 % y arrastre de punto igual a Fusion (`evidencias/reportes_pc/2026-11-20_boceto/`); nuevas B-783 (texto altura ≤0) y B-784 (manija sin comando en ventana). B-779 en main (test_b779_paleta_cubo.py).- **2026-11-20 · Traspaso E3.** 1) B-779 cerrado en `~/OmniCAD-B-779` (rama item/B-779), sin commit; el coordinador integra. 2) Próximo: P-187. 3) Pendiente: lista UX punto por punto y barra de vista/Navegador en Windows (E11).
 - **2026-11-20 · B-779.** Paleta de boceto ya no tapa el ViewCube: si no cabe con Opciones, las pliega sola (`superposiciones.py` › `_paleta_sin_tapar_cubo`); test `tests/test_b779_paleta_cubo.py`.
 

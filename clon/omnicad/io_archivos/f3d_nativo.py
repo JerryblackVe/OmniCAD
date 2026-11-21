@@ -41,6 +41,7 @@ from . import acis_occ, f3d_escena, f3d_historial, sab, zstd_puro
 
 CARPETA_BREPS = "Breps.BlobParts/"
 CARAS_MAX_VERIFICAR = 5000        # cuerpos más grandes no se verifican (BRepCheck tarda segundos en ellos)
+TOL_CAJA_MM = 0.05                # un punto de boceto cuenta dentro de la caja de un componente con esta holgura (P-11l)
 # Tope de cada miembro del ZIP de un .f3d/.f3z (512 MB): un archivo hostil (zip bomb, con cualquier método de
 # compresión) falla con un error claro en vez de quedarse con la memoria al leerse.
 TOPE_MIEMBRO_F3D = 512 * 1024 * 1024
@@ -149,9 +150,11 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None, 
     if bocetos is not None:
         _etapa(progreso, "Leyendo los bocetos…")
         smb = [i for i in z.infolist() if CARPETA_BREPS in i.filename and i.filename.lower().endswith(".smb")]
-        bocetos += _bocetos_ubicados(datos, smb, partes, marcos, nombre, avisos)
+        flujo, nuevo = _flujo_de_diseno(datos)
+        bocetos += _bocetos_ubicados(datos, smb, partes, marcos, nombre, avisos, flujo, archivos)
+    else:
+        flujo, nuevo = _flujo_de_diseno(datos)
     uno = [np.eye(4)]
-    flujo, nuevo = _flujo_de_diseno(datos)
     nombres = _nombres_de_componentes(flujo if nuevo else None, archivos)       # los nombres: solo del formato nuevo
     if resumen is not None:
         resumen["historial"] = f3d_historial.operaciones(flujo) if flujo else []
@@ -160,13 +163,32 @@ def leer_componentes_bytes(datos, nombre="Fusion", resumen=None, progreso=None, 
             for k, ((forma, tipo, _, bloque), m) in enumerate(zip(partes, marcos, strict=True))], avisos
 
 
-def _bocetos_ubicados(datos, bloques_smb, partes, marcos, nombre, avisos):
-    """Bocetos de los bloques `.smb` puestos en el diseño. Están en las coordenadas de su componente y el archivo no dice
-    (fuera del flujo propietario) de cuál es cada bloque: con un solo componente son de ese y se mueven con su matriz; con
-    varios no se importan —ni por la caja de los cuerpos, que se pisa entre componentes (medido: 415 de 418 perfiles de
-    CARTERA GOTICA caen en más de un componente)— y se declara en un aviso."""
+def _smb_de_cada_componente(flujo, smb, smbh):
+    """{`BREP.*.smb`: `BREP.*.smbh` de su componente}. El flujo de diseño lista cada componente y sus bocetos uno junto al
+    otro (BINCHA, CARTERA GOTICA y EXTRUSOR SHERPA); se liga cada `.smb` con el `.smbh` más cercano en el flujo. Es una
+    pista, no una prueba: quien la usa la confirma con la geometría (`_bocetos_ubicados`)."""
+    if flujo is None:
+        return {}
+    def lugar(archivo):
+        return flujo.find(archivo.encode("utf-16-le"))
+    lugares = {h: lugar(h) for h in smbh}
+    lugares = {h: q for h, q in lugares.items() if q >= 0}
+    pares = {}
+    for s in smb:
+        q = lugar(s)
+        if q >= 0 and lugares:
+            pares[s] = min(lugares, key=lambda h: abs(lugares[h] - q))
+    return pares
+
+
+def _bocetos_ubicados(datos, bloques_smb, partes, marcos, nombre, avisos, flujo=None, archivos=()):
+    """Bocetos de los bloques `.smb` puestos en el diseño. Están en las coordenadas de su componente. Con un solo
+    componente son de ese y se mueven con su matriz. Con varios, el archivo no dice de cuál es cada bloque fuera del flujo
+    propietario, y ni la caja de los cuerpos alcanza (415 de 418 perfiles de CARTERA GOTICA caen en más de un componente):
+    se liga cada bloque con el componente que el flujo pone a su lado, y solo entran los bocetos que además caen dentro
+    de la caja de ese componente (dos pruebas que coinciden); el resto se declara en un aviso (P-11l)."""
     from . import f3d_bocetos
-    todos = []
+    por_bloque = {}
     for info in sorted(bloques_smb, key=lambda i: i.filename):
         try:
             crudo = miembro(datos, info)
@@ -178,23 +200,43 @@ def _bocetos_ubicados(datos, bloques_smb, partes, marcos, nombre, avisos):
         except Exception as e:                    # noqa: BLE001 - los bocetos son una mejora: un bloque raro no tumba la apertura
             avisos.append(f"Los bocetos de {nombre} no se pudieron leer: {e}")
             continue
-        todos += b
+        por_bloque[info.filename.rsplit("/", 1)[-1]] = b
         avisos += a
-    todos = f3d_bocetos.sin_repetidos(todos)
+    todos = f3d_bocetos.sin_repetidos([b for lista in por_bloque.values() for b in lista])
     componentes = {bloque for _, _, _, bloque in partes}
-    if len(componentes) != 1:
-        if todos:
-            avisos.append(f"{len(todos)} bocetos de {nombre} no se importaron: el archivo tiene {len(componentes)} "
-                          "componentes y no dice a cuál pertenece cada boceto.")
+    if len(componentes) == 1:
+        M = next((m[0] for m in marcos if m), np.eye(4))
+        salida = f3d_bocetos.limitar(todos, avisos, nombre)
+        return [_mover_boceto(b, M) for b in salida]
+    if not todos:
         return []
-    M = next((m[0] for m in marcos if m), np.eye(4))
+    pares = _smb_de_cada_componente(flujo, list(por_bloque), list(archivos))
+    elegidos, sin_ligar = [], 0
+    for smb, lista in por_bloque.items():
+        bloque = archivos.index(pares[smb]) if smb in pares and pares[smb] in archivos else None
+        cajas = [p[2] for p in partes if p[3] == bloque and len(p[2]) >= 8]
+        M = next((marcos[k][0] for k, p in enumerate(partes) if p[3] == bloque and marcos[k]), np.eye(4))
+        if cajas:
+            lo = np.min([np.array(c[2:5]) for c in cajas], axis=0) - TOL_CAJA_MM
+            hi = np.max([np.array(c[5:8]) for c in cajas], axis=0) + TOL_CAJA_MM
+        for b in f3d_bocetos.sin_repetidos(lista):
+            if cajas and all((q >= lo).all() and (q <= hi).all() for q in f3d_bocetos.puntos_3d(b)):
+                elegidos.append(_mover_boceto(b, M))
+            else:
+                sin_ligar += 1
+    if sin_ligar:
+        avisos.append(f"{sin_ligar} bocetos de {nombre} no se importaron: el archivo tiene {len(componentes)} "
+                      "componentes y no se pudo ligar cada boceto con el suyo.")
+    return f3d_bocetos.limitar(elegidos, avisos, nombre)
+
+
+def _mover_boceto(b, M):
+    """El boceto `b` con su marco llevado por la matriz 4×4 del componente."""
     R, o = M[:3, :3], M[:3, 3]
-    salida = f3d_bocetos.limitar(todos, avisos, nombre)
-    for b in salida:
-        m = {k: np.asarray(v, float) for k, v in b["marco"].items()}
-        b["marco"] = {"origen": [float(x) for x in R @ m["origen"] + o], "normal": [float(x) for x in R @ m["normal"]],
-                      "u": [float(x) for x in R @ m["u"]]}
-    return salida
+    m = {k: np.asarray(v, float) for k, v in b["marco"].items()}
+    b["marco"] = {"origen": [float(x) for x in R @ m["origen"] + o], "normal": [float(x) for x in R @ m["normal"]],
+                  "u": [float(x) for x in R @ m["u"]]}
+    return b
 
 
 _TEXTO = re.compile(rb"(?:[\x20-\x7e\xa0-\xff]\x00){1,200}")     # caracteres UTF-16; el largo va en los 4 bytes previos
