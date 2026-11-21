@@ -781,38 +781,47 @@ n_previa = 0 if capa is None else len(capa[0][1])
 A.reg(AR + " · isoparamétrica", "con el cursor sobre la cara aparece la vista previa de la curva (capa del visor) y no se crea nada",
       capa is not None and n_previa > 0 and not lz.b.geo3d.get("curvas"), f"{n_previa}")
 A.foto(v, "herr_isoparametrica_previa")
-clic(300 + 4, 300 + 3)                                              # un punto de la tapa del cilindro
-A.reg(AR + " · isoparamétrica", "el clic reemplaza la vista previa por las curvas creadas", "iso_previa" not in v.visor._capas, "")
+clic(300 + 4, 300 + 3)                                              # un punto de la tapa del cilindro: la tarjeta lo anota (P-193), Aceptar crea
+A.reg(AR + " · isoparamétrica", "el clic solo elige: la tarjeta lo lista y todavía no hay curvas", len(lz._elegidos_proy) == 1 and not lz.b.geo3d.get("curvas"), f"{len(lz._elegidos_proy)}")
+tecla(Qt.Key_Return)                                                # Aceptar
+A.reg(AR + " · isoparamétrica", "Aceptar reemplaza la vista previa por las curvas y sale de la herramienta", "iso_previa" not in v.visor._capas and lz.herramienta == "seleccionar", lz.herramienta)
 curvas = list(lz.b.geo3d.get("curvas", {}).values())
-A.reg(AR + " · isoparamétrica", "un clic en la cara crea una curva 3D (la línea por el punto, en dirección U) con su origen",
+A.reg(AR + " · isoparamétrica", "Aceptar crea una curva 3D (la línea por el punto, en dirección U) con su origen",
       len(curvas) == 1 and curvas[0]["tipo"] == "linea" and curvas[0].get("origen", {}).get("tool") == "isoparametric_curve",
       f"{[(c['tipo'], c.get('origen', {}).get('tool')) for c in curvas]} {lz.mensaje}")
 A.foto(v, "herr_isoparametrica_unica")
+herramienta("isoparametrica", True)
 for etiqueta, dato in (("Distribución", "cantidad"), ("Dirección", "v")):          # la paleta se rearma tras cada cambio: se vuelve a buscar el widget
     combo = fila(etiqueta)
     combo.setCurrentIndex(combo.findData(dato))
     A.esperar(80)
 fila("Cantidad").setValue(4)
 A.esperar(300)
+mover(300 + 4, 300 + 3)
+A.esperar(300)
 capa = v.visor._capas.get("iso_previa")
-A.reg(AR + " · isoparamétrica", "al cambiar la Distribución, la Dirección y la Cantidad la vista previa se rehace sin mover el mouse (más curvas)",
+A.reg(AR + " · isoparamétrica", "con Distribución, Dirección y Cantidad cambiadas la vista previa trae más curvas",
       capa is not None and len(capa[0][1]) > n_previa, f"{n_previa} → {0 if capa is None else len(capa[0][1])}")
 clic(300 + 4, 300 + 3)
+tecla(Qt.Key_Return)
 curvas = list(lz.b.geo3d.get("curvas", {}).values())
 A.reg(AR + " · isoparamétrica", "Distribuidas por cantidad = 4 en V: otras cuatro líneas, en total cinco",
       len(curvas) == 5 and all(c["tipo"] == "linea" for c in curvas), f"{len(curvas)}")
 A.foto(v, "herr_isoparametrica_distribuidas")
+herramienta("isoparametrica", True)
 fila("Vínculo de proyección").setChecked(False)
 A.esperar(80)
 clic(300 - 6, 300 - 5)
+tecla(Qt.Key_Return)
 sin_origen = [c for c in lz.b.geo3d["curvas"].values() if "origen" not in c]
 A.reg(AR + " · isoparamétrica", "con el vínculo apagado las curvas nuevas quedan libres (sin origen)", len(sin_origen) == 4, f"{len(sin_origen)}")
 tecla(Qt.Key_Z, Qt.ControlModifier)
-A.reg(AR + " · isoparamétrica", "Ctrl+Z quita de una vez las cuatro curvas del último clic", len(lz.b.geo3d.get("curvas", {})) == 5,
+A.reg(AR + " · isoparamétrica", "Ctrl+Z quita de una vez las cuatro curvas del último Aceptar", len(lz.b.geo3d.get("curvas", {})) == 5,
       f"{len(lz.b.geo3d.get('curvas', {}))}")
 tecla(Qt.Key_Z, Qt.ControlModifier)
 tecla(Qt.Key_Z, Qt.ControlModifier)
 A.reg(AR + " · isoparamétrica", "y con dos Ctrl+Z más no queda ninguna curva 3D", not lz.b.geo3d.get("curvas"), f"{len(lz.b.geo3d.get('curvas', {}))}")
+herramienta("isoparametrica", True)
 clic(300 + 30, 300 + 20)                                            # dentro de la vista pero fuera del cilindro
 A.reg(AR + " · isoparamétrica", "un clic fuera del modelo no crea nada y lo dice", not lz.b.geo3d.get("curvas"), "")
 tecla(Qt.Key_Escape)

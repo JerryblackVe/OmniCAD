@@ -191,3 +191,16 @@ def test_un_arco_que_no_se_puede_armar_no_deja_excepcion_en_la_vista_previa(con_
     monkeypatch.setattr(b3, "agregar_desde_mundo", malo)
     lz._previa_iso()                                                      # antes: excepción dentro del timer
     assert visor.capas["iso_previa"] is None
+
+
+def test_b796_el_clic_solo_elige_y_aceptar_crea_las_curvas_en_un_paso(lienzo, cara):
+    """P-193: con la tarjeta, el clic anota la cara; las curvas (4 por cantidad en V) salen con Aceptar, en UN paso."""
+    forma, ref = cara
+    lienzo.opciones.update(iso_direccion="v", iso_tipo="cantidad", iso_cantidad=4)
+    lienzo.set_herramienta("isoparametrica")
+    lienzo._elegir_proyeccion({"forma": forma, "ref": ref, "punto": [10, 0, 15], "tipo": "cara"})
+    assert not _curvas(lienzo)
+    assert lienzo.aceptar_proyeccion() is True
+    assert len(_curvas(lienzo)) == 4 and all(c["origen"]["tool"] == "isoparametric_curve" for c in _curvas(lienzo))
+    lienzo.deshacer()
+    assert not _curvas(lienzo)
