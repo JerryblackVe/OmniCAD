@@ -169,7 +169,6 @@ def test_valores_validos_siguen_proyectando_el_perfil(sesion):
     assert resultado["result"]["entities"], resultado
 
 
-@pytest.mark.xfail(reason=B814, strict=True)
 def test_tolerancia_fuera_de_rango_avisa_en_un_renglon(tarjeta):
     lz, t = tarjeta
     avisos = []

@@ -588,6 +588,9 @@ class TarjetaHerramienta(QFrame):
             sp = NumeroDecimal(decimals=3, minimum=minimo, maximum=maximo, singleStep=paso, suffix=sufijo)
             sp.setValue(float(opciones.get(clave, minimo)))
             sp.valueChanged.connect(lambda x, k=clave: self.ajuste.emit(k, float(x)))
+            aviso = lambda m, e=etiqueta: (self.mensaje.setText(f"⚠ {e} fuera de rango: {m:g} mm.".replace(",", ".")), self.mensaje.setVisible(True))
+            sp.excedido.connect(aviso)
+            sp.insuficiente.connect(aviso)
             self.form_contexto.addRow(etiqueta, sp)
         for clave, etiqueta, minimo, maximo in ENTEROS_HERRAMIENTA.get(h, []):
             sp = QSpinBox(minimum=minimo, maximum=maximo)
