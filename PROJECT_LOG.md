@@ -1,4 +1,6 @@
 ## Registro
+- **2026-11-20 · Traspaso E3.** 1) B-779 cerrado en `~/OmniCAD-B-779` (rama item/B-779), sin commit; el coordinador integra. 2) Próximo: P-187. 3) Pendiente: lista UX punto por punto y barra de vista/Navegador en Windows (E11).
+- **2026-11-20 · B-779.** Paleta de boceto ya no tapa el ViewCube: si no cabe con Opciones, las pliega sola (`superposiciones.py` › `_paleta_sin_tapar_cubo`); test `tests/test_b779_paleta_cubo.py`.
 
 - **2026-11-20 · Traspaso E6 (B-781, B-679 y B-775 integrados).** 1) Los tres ya están en main (8b7d90ca, 0f2dd4e1); sin pendientes de código. 2) ⚠ Rueda física sin medir (necesita OK de Gerardo). 3) Archivos con CRLF (editor_boceto*.py): editar con sed, no con Python en modo texto. 4) Libre: el brief nuevo llega por el chat maestro. 5) Informe al coordinador y en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · Traspaso E4.** 1) B-767 cerrado e integrado en main (721f9bf6). 2) B-554 (P2) no tomada. 3) B-514 (P2) sigue en pausa en `~/OmniCAD-B-514`. 4) Siguiente: B-675 y B-676 (brief del maestro).

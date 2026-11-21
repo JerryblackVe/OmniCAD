@@ -822,6 +822,7 @@ class AreaVisor(QWidget):
         self._plegados = []               # lo que se plegó por la ventana chica: se despliega al agrandarla
         self.de_comando = []              # P-194: laterales de comando (Patrón, Simetría, Escala/Mover): compactan la paleta
         self._paleta_plegada = False
+        self._paleta_plegada_cubo = False
         self.laterales = []               # paneles del boceto a la izquierda de la paleta: «Carácter» (texto) y SIMETRÍA
         self.panel = None                 # diálogo de comando abierto (a la derecha, debajo del ViewCube)
         self.barra_posicion = None        # panel «Posición»: componentes movidos sin capturar (arriba al centro)
@@ -866,6 +867,7 @@ class AreaVisor(QWidget):
         self.capa, self.paleta = capa, paleta
         self._chica = None                # la paleta nueva también se pliega si la ventana es chica
         self.laterales = [w for w in laterales if w is not None]
+        self._paleta_plegada_cubo = False
         self.de_comando, self._paleta_plegada = [], False        # P-194: los paneles del boceto anterior ya no existen
         for w in self.laterales:
             w.installEventFilter(self)
@@ -896,6 +898,25 @@ class AreaVisor(QWidget):
         elif self._paleta_plegada:
             self._paleta_plegada = False
             self.paleta.plegar_por_ventana(False)
+
+    def _paleta_sin_tapar_cubo(self, g, y):
+        """B-779: si la paleta con sus opciones no cabe bajo el ViewCube, las opciones se pliegan solas (quedan su cabecera,
+        el estado y Terminar boceto) en vez de subir y tapar el cubo; al haber lugar se despliegan. Lo que plegó la persona no se toca."""
+        p = self.paleta
+        if not hasattr(p, "plegar_por_ventana"):
+            return
+        if not p.opciones.isHidden():
+            alto = p.height()
+            no_cabe = y + alto > g.bottom() - 8
+            if no_cabe and not self._paleta_plegada_cubo and p.plegar_por_ventana(True):   # si la persona las abre a mano, quedan abiertas
+                self._alto_paleta_abierta, self._paleta_plegada_cubo = alto, True
+                p.ajustar(g.height() - 12)
+            elif not no_cabe:
+                self._paleta_plegada_cubo = False
+        elif self._paleta_plegada_cubo and y + self._alto_paleta_abierta <= g.bottom() - 8:
+            self._paleta_plegada_cubo = False
+            p.plegar_por_ventana(False)
+            p.ajustar(g.height() - 12)
 
     def _reacomodar(self):
         try:
@@ -1040,6 +1061,7 @@ class AreaVisor(QWidget):
             y += self.panel.height() + 8
         if self.paleta is not None:
             self.paleta.ajustar(g.height() - 12)
+            self._paleta_sin_tapar_cubo(g, y)
             # en una ventana baja sube y tapa el ViewCube: Terminar boceto siempre tiene que verse
             self.paleta.move(g.right() - self.paleta.width() - 10,
                              max(g.top() + 4, min(y, g.bottom() - self.paleta.height() - 8)))
