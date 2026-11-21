@@ -130,6 +130,33 @@ def tipos():
 run("qué tipo sale según lo elegido", tipos)
 
 
+def angulo_135():
+    """B-786: editar la cota de ángulo de 40° a 135° conserva el largo de las dos líneas (antes colapsaban a ~11 mm)."""
+    ids = [i for i, q in lz.b.puntos.items() if 99 < q.x < 126 and -1 < q.y < 19]
+    largos = lambda: sorted(round(((lz.b.puntos[a].x - lz.b.puntos[ids[0]].x) ** 2 + (lz.b.puntos[a].y - lz.b.puntos[ids[0]].y) ** 2) ** .5, 3) for a in ids)  # noqa: E731
+    c = acotar([(112.5, 0), (106, 9)], (118, 10), "40", "B-786: ángulo de 40°", deshacer=False)
+    lz.set_herramienta("seleccionar")
+    A.esperar(60)
+    zona = lz._zonas_cotas.get(c.id) if c is not None else None
+    if zona is None:
+        A.reg(AR, "B-786: la cota de ángulo tiene zona para clic", False, "")
+        return
+    antes = largos()
+    QTest.mouseDClick(lz, Qt.LeftButton, Qt.NoModifier, zona.center().toPoint())
+    A.esperar(150)
+    escribir("135")
+    despues = largos()
+    A.reg(AR, "B-786: ángulo de 40° a 135° conserva el largo de las líneas", min(d for d in despues if d > 0) > 0.8 * min(d for d in antes if d > 0) and c.id in lz.b.cotas,
+          f"largos antes={antes} después={despues}")
+    lz.deshacer()
+    A.esperar(100)
+    lz.deshacer()
+    A.esperar(100)
+
+
+run("B-786 ángulo a 135°", angulo_135)
+
+
 def valores():
     """Lo que se teclea en la caja de valor (la persona escribe y Enter). La tercera columna es lo esperado."""
     casos = [("25", True), ("12,5", True), ("1 in", True), ("2*12,5", True), ("25 mm", True), ("abc", False), ("", True), ("0", False),
