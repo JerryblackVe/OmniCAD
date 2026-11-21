@@ -171,6 +171,7 @@ class LienzoDibujoMixin:
             self._zonas_glifos_extra = []
         if self.herramienta == "seleccionar":
             self._dibujar_casillas_patron(p)
+            self._dibujar_manija_fantasma(p)
         self._trazos_cotas, self._fondos_cotas = {}, {}   # con las cotas ocultas no se agarra nada
         self._zonas_cotas = self._dibujar_cotas(p) if self.mostrar["cotas"] else {}
         self._dibujar_previa_auto(p)
@@ -238,6 +239,28 @@ class LienzoDibujoMixin:
         p.save()
         for _pid, _i, caja, suprimida in self._casillas_patron():
             dibujar_casilla(p, caja, suprimida, self._oscuro())
+        p.restore()
+
+    def _manija_fantasma(self):
+        """B-784: (id de la spline, id del punto, punta en mm) si lo elegido es UN punto de ajuste sin manija (Fusion la muestra)."""
+        if len(self.seleccion) != 1 or self.seleccion[0] not in self.b.puntos:
+            return None
+        pid = self.seleccion[0]
+        for c in self.b.curvas.values():
+            punta = self.b.punta_manija_natural(c.id, pid) if pid in c.puntos() else None
+            if punta is not None:
+                return c.id, pid, punta
+        return None
+
+    def _dibujar_manija_fantasma(self, p):
+        f = self._manija_fantasma()
+        if f is None:
+            return
+        a, b = self.a_px(*self.b.coords(f[1])), self.a_px(*f[2])
+        p.save()
+        p.setPen(QPen(QColor(0, 180, 255), 1, Qt.DashLine))
+        p.drawLine(a, b)
+        p.drawEllipse(b, 4, 4)
         p.restore()
 
     def _clic_casilla_patron(self, pos):

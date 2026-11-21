@@ -27,6 +27,7 @@
 
 - **2026-11-21 · PRUEBA-ASAS (E8).** Asas de Escala, Mover, Texto, Empalme, Chaflán (3) y Desfase: `tests/test_asas_boceto_valores_raros.py` (86 OK, arrastres a 0, NaN, ∞, 1e12). Patrones: 16 comprobaciones en `prueba_ui/patrones_boceto.py` (123 OK). Sin fallas nuevas; el KeyError de boceto_herramientas es B-796.
 - **2026-11-21 · Traspaso E6 (CAZA-BOCETO, Parcial).** `cazar.py tema boceto`: 2 hallazgos, ambos `create_pipe` (B-791 SIGSEGV, B-792 autointersección); prueba_ui de boceto: 4 rojos de UI (B-793…B-796) y lento B-797. Sin arreglos de código; no hay dos corridas verdes. Evidencia: evidencias/caza_2026-11-21/.
+- **2026-11-21 · B-784 (E3).** Al elegir UN punto de ajuste de una spline abierta se ve la manija sugerida (línea de puntos y círculo); clic en su punta la activa y se arrastra (`_manija_fantasma`, `Boceto.punta_manija_natural`). Test: `test_b784_*` en test_boceto_herramientas.py. Sin commit.
 
 - **2026-11-21 · Traspaso E8 (B-619c en espera).** 1) B-619c sigue Parcial: falta que E11 mida el Perfil giratorio del barril en Fusion. 2) B-768…B-771 ya estaban hechos por PREP en ~/OmniCAD-P-187 (ruff y 471 tests verdes), sin integrar: OpenCode y E3 siguen ahí. 3) Sigue: PRUEBA-ASAS (asas y arrastres de boceto).
 

@@ -827,3 +827,27 @@ def test_punta_de_la_manija_se_arrastra_con_el_mouse(app_qt):
         QTest.mouseMove(lz, p0 + QPoint(0, -6 * i))
     QTest.mouseRelease(lz, Qt.LeftButton, Qt.NoModifier, p0 + QPoint(0, -30))
     assert lz.resultado.ok and lz.b.coords(punta)[1] > y0 + 1
+
+
+def test_b784_al_elegir_un_punto_de_ajuste_aparece_la_manija_y_se_arrastra(app_qt):
+    """B-784: elegido UN punto de ajuste sin manija, el clic en su punta sugerida la activa y la arrastra; la curva no salta."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    lz = _lienzo(app_qt)
+    lz.resize(800, 600)
+    sid = lz.b.agregar_spline([(0, 0), (20, 10), (40, -5), (60, 5)], "ajuste")
+    pid = lz.b.curvas[sid].pts[1]
+    lz.resolver()
+    lz.encuadrar()
+    lz.set_herramienta("seleccionar")
+    assert lz._manija_fantasma() is None                       # sin elegir nada, no hay manija
+    lz.seleccion = [pid]
+    f = lz._manija_fantasma()
+    assert f and f[:2] == (sid, pid) and lz.b.curvas[sid].manijas == []     # solo se muestra: el boceto no cambió
+    p0 = lz.a_px(*f[2]).toPoint()
+    QTest.mousePress(lz, Qt.LeftButton, Qt.NoModifier, p0)
+    for i in range(1, 6):
+        QTest.mouseMove(lz, p0 + QPoint(0, -6 * i))
+    QTest.mouseRelease(lz, Qt.LeftButton, Qt.NoModifier, p0 + QPoint(0, -30))
+    assert [m[0] for m in lz.b.curvas[sid].manijas] == [pid] and lz.resultado.ok
+    assert lz.b.coords(lz.b.curvas[sid].manijas[0][1])[1] > f[2][1] + 1
