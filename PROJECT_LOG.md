@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-21 · Traspaso E6 (velocidad del boceto, VEL-BOCETO).** Banco `scripts/bench_boceto_ops.py` (recortar, partir, simetría, patrones, escalar, copia: todo < 0,5 s a 1500 piezas). Único > 0,5 s: resolver con ~500 grupos; `Solver.__init__` recorría todo el boceto por grupo (solver.py), ahora solo su grupo: 1,16→0,67 s (0,5 s era import de scipy). Pendiente: `_fijos(boceto)` por grupo. ⚠ `test_boc30_factor_como_expresion...` falla ya en main.
 - **2026-11-20 · Traspaso E3.** 1) B-779 cerrado en `~/OmniCAD-B-779` (rama item/B-779), sin commit; el coordinador integra. 2) Próximo: P-187. 3) Pendiente: lista UX punto por punto y barra de vista/Navegador en Windows (E11).
 - **2026-11-20 · B-779.** Paleta de boceto ya no tapa el ViewCube: si no cabe con Opciones, las pliega sola (`superposiciones.py` › `_paleta_sin_tapar_cubo`); test `tests/test_b779_paleta_cubo.py`.
 
