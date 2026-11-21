@@ -227,12 +227,16 @@ class ControlPatron:
         return {"centro": centro, "cantidad": self._entero("cantidad"), "angulo_total": total,
                 "simetrico": t.get("distribucion") == "simetrico" and not completo}
 
+    def _excluidas(self):
+        """B-785: con «Suprimir» desmarcada no se excluye ninguna copia (las elegidas se conservan en `suprimidos`)."""
+        return self.suprimidos if self.textos.get("suprimir", True) else set()
+
     def calcular(self):
         """{params, error, malos, polis, copias}: se rehace solo si cambió algo que importa (campos, elegido, boceto)."""
         l = self.l
         ids = self._ids()
         clave = (self.tipo, tuple(ids), tuple(sorted(self.textos.items())), self.centro, tuple(self.lineas.values()),
-                 tuple(sorted(self.suprimidos)), l._generacion)
+                 tuple(sorted(self._excluidas())), l._generacion)
         if self._cache is not None and self._cache[0] == clave:
             return self._cache[1]
         r = {"params": None, "error": "", "malos": set(), "polis": [], "copias": 0, "falta": False}
@@ -245,7 +249,7 @@ class ControlPatron:
             if not ids:
                 raise _Mal("", "Lo único elegido es el centro: elegí otra geometría para repetir.")
             polilineas = polilineas_de(l, ids)
-            r["polis"] = [poli for copia in l.b.previa_patron(self.tipo, params, polilineas, self.suprimidos, ids)
+            r["polis"] = [poli for copia in l.b.previa_patron(self.tipo, params, polilineas, self._excluidas(), ids)
                           for poli in copia]
             r["copias"] = (params["cantidad1"] * params["cantidad2"] if self.tipo == "rectangular"
                            else params["cantidad"]) - 1
@@ -393,7 +397,7 @@ class ControlPatron:
     def casillas(self):
         """[(índice de copia, QRectF en px, suprimida)]: una casilla junto a cada copia de la vista previa."""
         r = self.calcular()
-        if not self.previa or r["params"] is None or r["error"]:
+        if not self.previa or r["params"] is None or r["error"] or not self.textos.get("suprimir", True):
             return []
         l, p = self.l, r["params"]
         trans = l.b._trans_rectangular(p) if self.tipo == "rectangular" else l.b._trans_circular(p)[0]
@@ -427,7 +431,7 @@ class ControlPatron:
         if self.tipo == "rectangular" and self.textos.get("dos"):
             claves += ("distancia2", "angulo2")
         p["expresiones"] = {k: str(self.textos[k]).strip() for k in claves}
-        sup = sorted(i for i in self.suprimidos if i < r["copias"])          # las de una cantidad anterior ya no existen
+        sup = sorted(i for i in self._excluidas() if i < r["copias"])          # las de una cantidad anterior ya no existen
 
         def hacer():
             if pid is not None:

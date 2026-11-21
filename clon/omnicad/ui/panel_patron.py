@@ -204,6 +204,8 @@ class PanelPatron(QFrame):
                     "rectangular", "mm", invertir="distancia2")
         self._casilla("simetrico2", "Simétrico", "Reparte las copias de la dirección 2 a los dos lados del original.",
                       "rectangular")
+        self._casilla("suprimir", "Suprimir", "Marcada: una casilla en cada copia del dibujo para excluirla. Desmarcada: "
+                      "se quitan las casillas y entran todas las copias (las excluidas se recuerdan).", "ambos", True)
         self.casilla_previa = QCheckBox()
         self.casilla_previa.setChecked(True)
         self.casilla_previa.setToolTip("Muestra las copias antes de aceptar. Clic en una copia del dibujo para excluirla.")
