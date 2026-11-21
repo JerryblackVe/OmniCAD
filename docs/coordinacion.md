@@ -190,7 +190,7 @@ de OpenCode; las demás la enlazan.
   | 6–7 | OpenCode Go con cupo pago (suscripción de Gerardo; Extra Usage apagado, nunca prenderlo ni comprar créditos): `opencode-go/glm-5.3` (~44 s), `opencode-go/kimi-k3.1-pro` (~4 min) | Tareas de varios archivos; si el cupo se acaba, el vigía rota. Descartados en la prueba del 19/11: `gpt-6-luna` (tocó de más), `qwen4-max` (no terminó en 5 min), `deepseek-v4-pro` (falló)
   | 8 | MiniMax: `nvidia/minimaxai/minimax-m3.1-flash` (esa ruta, nunca el alias `nvidia/minimax-m3.1-flash`) | Lo mecánico y varios archivos con herramientas |
   | 9 | OpenAI (ChatGPT Plus de Gerardo, OK del 17/11): `openai/gpt-6.2-sol` | Lo difícil: arreglos de varios archivos y revisión (la tarea lo pide con `MODELO=`) |
-  | 10–11 | OpenAI: `openai/gpt-6.2-astra`, `openai/gpt-6.1-terra` | Respaldo |
+  | 10–11 | OpenAI: `openai/gpt-6.1-terra` (Gerardo, 21/11: Astra fuera) | Respaldo |
   | 12 | GLM: `opencode/glm-5.3-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
   | 13 | DeepSeek: `opencode/deepseek-v4.1-flash-free` | Respaldo (no contestó en la prueba de carga del 17/11) |
   | 14 | `opencode/big-pickle` | Último respaldo (anda, pero ~77 s) |
