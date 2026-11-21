@@ -66,10 +66,10 @@ def test_administrar_perdidas_sin_perdidas_emite_mensaje_de_un_renglon(lienzo_xy
 
 @pytest.mark.parametrize("ids", [
     [],
-    pytest.param([0], marks=pytest.mark.xfail(reason="B-804: DialogoPerdidas._registro asume id existente (StopIteration)", strict=False)),
-    pytest.param([-1], marks=pytest.mark.xfail(reason="B-804: DialogoPerdidas._registro asume id existente (StopIteration)", strict=False)),
-    pytest.param([10 ** 9], marks=pytest.mark.xfail(reason="B-804: DialogoPerdidas._registro asume id existente (StopIteration)", strict=False)),
-    pytest.param([999999], marks=pytest.mark.xfail(reason="B-804: DialogoPerdidas._registro asume id existente (StopIteration)", strict=False)),
+    [0],
+    [-1],
+    [10 ** 9],
+    [999999],
 ])
 def test_dialogo_con_ids_raros_no_rompe_la_app(lienzo_xy, ids):
     lz = lienzo_xy
@@ -119,7 +119,6 @@ def test_dialogo_borrar_todos_no_rompe(lienzo_xy):
     d.deleteLater()
 
 
-@pytest.mark.xfail(reason="B-804: revincular asume id existente (StopIteration)", strict=False)
 def test_revincular_con_id_raro_no_rompe(lienzo_xy):
     lz = lienzo_xy
     mensajes = []
