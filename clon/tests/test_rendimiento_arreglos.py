@@ -201,3 +201,14 @@ def test_es_cerrada_y_corregir_degenerados():
     plana = M.Malla(v, np.array([[0, 1, 2], [1, 0, 3], [0, 4, 1]]))   # la 1.ª es degenerada (alineada)
     corregida = M._corregir_degenerados(plana)
     assert len(corregida.caras) == 3 and np.all(corregida.areas_caras() > 0)
+
+
+def test_sistema_con_fijos_calculados_da_lo_mismo():
+    """VEL-BOCETO-3: pasar `_fijos(b)` ya calculado a `_Sistema` no cambia sus incógnitas (con un punto fijo)."""
+    b = Boceto()
+    l = b.agregar_linea(b.agregar_punto(0, 0), b.agregar_punto(10, 3))
+    b.agregar_restriccion("horizontal", [l])
+    b.agregar_restriccion("fijo", [b.curvas[l].p1])
+    g = S._grupos(b)[0]
+    a, c = S._Sistema(b, {}, g), S._Sistema(b, {}, g, fijos=S._fijos(b))
+    assert len(a.x0) == len(c.x0) == 2 and np.allclose(a.x0, c.x0) and a.fijos_p == c.fijos_p

@@ -131,10 +131,11 @@ def _contacto_exacto(pa, pb, ta, tb):
 class _Sistema:
     """Arma el vector de incógnitas y la función de residuos de un boceto."""
 
-    def __init__(self, boceto, valores_cotas, grupo=None, fusionar=False, quieto=None, derivar=False):
+    def __init__(self, boceto, valores_cotas, grupo=None, fusionar=False, quieto=None, derivar=False, fijos=None):
         """`grupo` (de `_grupos`) limita el sistema a una parte independiente del boceto: sus incógnitas y
         sus términos. Sin grupo, el boceto entero (como siempre). `fusionar` (SC4): ver `_fusionar`. `derivar`: las
-        copias de los patrones no son incógnitas (`_derivar`), salvo el punto `quieto` (el arrastrado)."""
+        copias de los patrones no son incógnitas (`_derivar`), salvo el punto `quieto` (el arrastrado). `fijos`: el
+        resultado de `_fijos(boceto)` ya calculado (con ~500 grupos, recorrer el boceto por cada uno costaba)."""
         self.b = boceto
         self.valores = valores_cotas
         self.quieto = quieto           # el punto arrastrado (B-667b: la línea perpendicular gira alrededor de él)
@@ -145,7 +146,7 @@ class _Sistema:
         self._curvas = list(boceto.curvas.values()) if grupo is None else grupo["curvas"]
         self._restricciones = list(boceto.restricciones.values()) if grupo is None else grupo["restricciones"]
         self._cotas = [c for c in (boceto.cotas.values() if grupo is None else grupo["cotas"]) if not c.referencia]
-        self.fijos_p, self.fijos_r = _fijos(boceto)
+        self.fijos_p, self.fijos_r = fijos or _fijos(boceto)
         if grupo is not None and "congelados" in grupo:      # ventana de un arrastre: lo que queda afuera es constante
             self.fijos_p = self.fijos_p | grupo["congelados"][0]
             self.fijos_r = self.fijos_r | grupo["congelados"][1]
@@ -1276,13 +1277,13 @@ def resolver(boceto, valores_cotas=None, arrastrado=None, previo=None, menor_cam
     libres_p, libres_r = set(sueltos_p), set(sueltos_r)
     gdl, err_max, inconsistente, invertidas = 2 * len(sueltos_p) + len(sueltos_r), 0.0, False, []
     for g in grupos:
-        sis = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True)
+        sis = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True, fijos=fijos)
         x, err, J, rango = _resolver_grupo(sis, arrastrado, menor_cambio=menor_cambio)
         for _ in range(3):      # B-658: un residuo apenas sobre TOLERANCIA (Curvatura, diferencias finitas) se afina desde ahí
             if x is None or not TOLERANCIA <= err < TOLERANCIA_ACEPTA_ARRASTRE:
                 break
             sis.escribir(x)
-            otro = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True)
+            otro = _Sistema(boceto, valores, g, fusionar=True, quieto=arrastrado, derivar=True, fijos=fijos)
             x2, err2, J2, rango2 = _resolver_grupo(otro, arrastrado, menor_cambio=menor_cambio)
             if x2 is None or err2 >= err:
                 break
@@ -1865,10 +1866,11 @@ def grados_de_libertad(boceto, valores_cotas=None):
     """GDL sin mover la geometría (para mostrar el estado)."""
     valores = valores_cotas or {}
     grupos = _grupos(boceto)
-    sueltos_p, sueltos_r = _sueltas(boceto, grupos, _fijos(boceto))
+    fijos = _fijos(boceto)
+    sueltos_p, sueltos_r = _sueltas(boceto, grupos, fijos)
     gdl = 2 * len(sueltos_p) + len(sueltos_r)
     for g in grupos:
-        sis = _Sistema(boceto, valores, g, derivar=True)
+        sis = _Sistema(boceto, valores, g, derivar=True, fijos=fijos)
         if len(sis.x0) == 0:
             continue
         if not sis.terminos:
