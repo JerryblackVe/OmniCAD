@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-21 · Traspaso E8 (B-512 Parcial, sin commit).** 1) ~/OmniCAD-B-512: test_b512_mover_y_rotar_con_esquina_en_el_origen (ya andaba, B-538) y fila de bugs.md al día. 2) Queda solo la curvatura arco–spline con R ≤ 0,5 (solver, E1). 3) tests_afectados: 640 OK, ruff limpio. 4) Sigue: B-619.
 
 - **2026-11-20 · Traspaso E6 (B-781, B-679 y B-775 integrados).** 1) Los tres ya están en main (8b7d90ca, 0f2dd4e1); sin pendientes de código. 2) ⚠ Rueda física sin medir (necesita OK de Gerardo). 3) Archivos con CRLF (editor_boceto*.py): editar con sed, no con Python en modo texto. 4) Libre: el brief nuevo llega por el chat maestro. 5) Informe al coordinador y en ~/coordinador/buzon/E6.md.
 - **2026-11-20 · Traspaso E4.** 1) B-767 cerrado e integrado en main (721f9bf6). 2) B-554 (P2) no tomada. 3) B-514 (P2) sigue en pausa en `~/OmniCAD-B-514`. 4) Siguiente: B-675 y B-676 (brief del maestro).
@@ -243,3 +244,5 @@
 - La conexión UI→API está mapeada en `test_cobertura_ui_api.py`: `ver_grupos_caras` → `get_viewport_image`.
 - Los tests de API (`test_api_malla.py`) siguen patrón: `api.llamar(s, "operacion", args)` con afirmaciones numéricas y un paso de deshacer.
 - No existe test dedicado a `ver_grupos_caras`; sería nuevo test siguiendo patrón `test_api_malla.py`.
+- **2026-11-21 · B-512 (curvatura arco–spline R ≤ 0,5, Parcial).** `solver.py`: `acomodar_tangente` reintenta con `_semilla_curvatura` (puntos de ajuste al lado del centro, achicados); el arco ya no se mueve. Test `test_b512_curvatura_con_radio_chico_no_mueve_el_arco`; ruff limpio, 2222 tests afectados OK. Queda `extrude` con cota inválida (sin repro).
+- **2026-11-21 · Traspaso E1 (B-512 Parcial; sin ítem).** 1) B-512 curvatura arco–spline R ≤ 0,5 arreglada en `~/OmniCAD-B-512` (solver.py `_semilla_curvatura`, sin commit; el worktree trae además cambios de E8 para separar). 2) Queda de B-512 solo `extrude` con cota inválida (sin repro). 3) Próximo: el ítem de boceto que mande el coordinador.
