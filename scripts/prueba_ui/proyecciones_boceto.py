@@ -114,6 +114,7 @@ A.esperar(200)
 A.reg(AR, "Romper vínculo deja la curva como geometría normal, en su lugar",
       len(lz.b.proyecciones) == n_proy - 1 and not lz.b.curvas[curva.id].proyectada and len(lz.historial) == hist + 1,
       (len(lz.b.proyecciones), lz.b.curvas[curva.id].proyectada))
+A.reg(AR, "Romper vínculo avisa el éxito en 1 renglón", "Vínculo roto" in (MENSAJES[-1] if MENSAJES else ""), MENSAJES[-1:])
 A.foto(v, "proy5_02_romper_vinculo")
 tecla(lz, Qt.Key_Z, Qt.ControlModifier)
 A.reg(AR, "Ctrl+Z restaura el vínculo", len(lz.b.proyecciones) == n_proy and lz.b.curvas[curva.id].proyectada,
@@ -125,8 +126,9 @@ v.modo_boceto.acciones["sk_incluir_3d"].trigger()
 A.esperar(200)
 A.reg(AR, "Incluir geometría 3D activa su herramienta", lz.herramienta == "incluir_3d", lz.herramienta)
 clic(lz, (-20.0, 0.0, 20.0))                    # la arista lateral izquierda de la tapa
+tecla(lz, Qt.Key_Return)                        # P-193: el clic solo elige; Enter (Aceptar) crea la curva
 nuevas = curvas3d(lz)
-A.reg(AR, "el clic en una arista deja una curva 3D con vínculo", len(nuevas) == 1 and nuevas[0]["origen"]["tool"] == "include_3d",
+A.reg(AR, "el clic y Enter en una arista dejan una curva 3D con vínculo", len(nuevas) == 1 and nuevas[0]["origen"]["tool"] == "include_3d",
       [c.get("origen") for c in nuevas])
 A.reg(AR, "no suma curvas planas del boceto", len(planas(lz)) == 2, len(planas(lz)))
 A.reg(AR, "un solo paso de deshacer", len(lz.historial) == hist + 1, len(lz.historial) - hist)
