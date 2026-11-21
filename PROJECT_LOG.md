@@ -1,4 +1,6 @@
 ## Registro
+- **2026-11-21 · Traspaso E8 (B-783 cerrado, sin commit).** 1) ~/OmniCAD-B-783: `NumeroDecimal.insuficiente` (formulario.py) avisa «Tamaño: mínimo» al teclear 0 o «-» en la altura del texto; test_b783_aviso_altura_minima.py. 2) Tests de los 6 archivos que importan formulario: 209 OK; ruff limpio. 3) tests_afectados (17 grupos, 3 fallidos sin identificar) cortado por regla 4.
+
 - **2026-11-21 · Traspaso E8 (B-512 Parcial, sin commit).** 1) ~/OmniCAD-B-512: test_b512_mover_y_rotar_con_esquina_en_el_origen (ya andaba, B-538) y fila de bugs.md al día. 2) Queda solo la curvatura arco–spline con R ≤ 0,5 (solver, E1). 3) tests_afectados: 640 OK, ruff limpio. 4) Sigue: B-619.
 
 - **2026-11-21 · PRUEBA-ASAS (E8).** Asas de Escala, Mover, Texto, Empalme, Chaflán (3) y Desfase: `tests/test_asas_boceto_valores_raros.py` (86 OK, arrastres a 0, NaN, ∞, 1e12). Patrones: 16 comprobaciones en `prueba_ui/patrones_boceto.py` (123 OK). Sin fallas nuevas; el KeyError de boceto_herramientas es B-796.

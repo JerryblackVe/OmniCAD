@@ -1381,6 +1381,7 @@ class ModoBoceto(QObject):
             [c.text().strip() for c in self.lienzo.entrada.campos]))
         panel.cancelado.connect(lambda: self.lienzo.entrada is not None and self.lienzo.cancelar())
         panel.altura.excedido.connect(lambda m: self.v.mensaje(f"Tamaño: máximo {m:,.0f} mm.".replace(",", "."), 5000))
+        panel.altura.insuficiente.connect(lambda m: self.v.mensaje(f"Tamaño: mínimo {m:g} mm.", 5000))
         return panel
 
     def _armar_simetria(self, area):            # Objetos, Eje de simetría, Vista previa, Aceptar y Cancelar
