@@ -22,6 +22,17 @@ from .editor_boceto_comun import (
 
 
 class LienzoProyeccionMixin:
+    @property
+    def perdidas(self):
+        return self._perdidas
+
+    @perdidas.setter
+    def perdidas(self, ids):
+        validas = {r["id"] for r in self.b.proyecciones}
+        self._perdidas = [pid for pid in ids if pid in validas]
+        if len(self._perdidas) != len(ids):
+            self.mensaje.emit("Algunas proyecciones perdidas ya no existen: se ignoraron.")
+
     def _tanda_proyeccion(self, forma, modo, ref, tipo=None):
         """Argumentos de `Boceto.agregar_proyeccion` para una forma OCC, con el tipo de línea y el vínculo actuales.
         Un cuerpo entero (`tipo` "cuerpo", filtro Cuerpos) se proyecta como su silueta cerrada (B-119)."""
@@ -524,8 +535,11 @@ class LienzoProyeccionMixin:
 
     def revincular(self, pid):
         """Re-vincular (Manage Lost Projections › Re-Link): el próximo clic en el modelo da la geometría nueva."""
-        modo = next(r["modo"] for r in self.b.proyecciones if r["id"] == pid)
-        self.set_herramienta("intersecar" if modo == "intersect" else "proyectar")
+        reg = next((r for r in self.b.proyecciones if r["id"] == pid), None)
+        if reg is None:
+            self.mensaje.emit(f"La proyección {pid} ya no existe: nada que re-vincular.")
+            return
+        self.set_herramienta("intersecar" if reg["modo"] == "intersect" else "proyectar")
         self._revincular = pid
         self.mensaje.emit("Re-vincular: clic en la geometría del modelo que reemplaza a la perdida (misma forma).")
 
