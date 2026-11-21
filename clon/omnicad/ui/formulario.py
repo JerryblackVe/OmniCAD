@@ -23,11 +23,19 @@ class NumeroDecimal(QDoubleSpinBox):
     """Campo de valor que acepta el punto y la coma decimal («45.5» y «45,5»), sea cual sea la configuración regional.
     `excedido(máximo)` avisa cuando se teclea un valor mayor que el máximo (el campo rechaza el dígito: B-728)."""
     excedido = Signal(float)
+    insuficiente = Signal(float)    # se tecleó un valor menor que el mínimo (0 o negativo): Qt lo revertía en silencio (B-783)
+
+    def fixup(self, texto):
+        if self.valueFromText(texto) < self.minimum():
+            self.insuficiente.emit(self.minimum())
+        super().fixup(texto)
 
     def validate(self, texto, pos):
         estado, nuevo, pos = super().validate(texto, pos)
         if estado == QValidator.Invalid and self.valueFromText(texto) > self.maximum():
             self.excedido.emit(self.maximum())
+        elif estado == QValidator.Invalid and "-" in texto and self.minimum() >= 0:      # el «-» se rechaza: avisar
+            self.insuficiente.emit(self.minimum())
         if estado == QValidator.Invalid:        # el separador de la otra convención
             otro = texto.replace(",", ".") if "," in texto else texto.replace(".", ",")
             estado2, nuevo2, pos2 = super().validate(otro, pos)
