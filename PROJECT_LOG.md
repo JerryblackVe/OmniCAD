@@ -1,5 +1,6 @@
 ## Registro
 
+- **2026-11-21 · Traspaso E1 (B-690 Parcial, sin código).** 1) Apagado como Fusion (B-690b); falta medir con extremo en común: lo hace E11 (pasos en `~/coordinador/casos/b690/pasos_fusion.md`, OK de Gerardo dado). 2) Ayuda de Fusion no trae el caso. 3) Próximo: resto de B-512 (curvatura arco–spline con R ≤ 0,5).
 - **2026-11-21 · B-463 cerrado, B-779 integrado.** E11 con mouse real: barrido sobre spline 0,0001 % y arrastre de punto igual a Fusion (`evidencias/reportes_pc/2026-11-20_boceto/`); nuevas B-783 (texto altura ≤0) y B-784 (manija sin comando en ventana). B-779 en main (test_b779_paleta_cubo.py).- **2026-11-20 · Traspaso E3.** 1) B-779 cerrado en `~/OmniCAD-B-779` (rama item/B-779), sin commit; el coordinador integra. 2) Próximo: P-187. 3) Pendiente: lista UX punto por punto y barra de vista/Navegador en Windows (E11).
 - **2026-11-20 · B-779.** Paleta de boceto ya no tapa el ViewCube: si no cabe con Opciones, las pliega sola (`superposiciones.py` › `_paleta_sin_tapar_cubo`); test `tests/test_b779_paleta_cubo.py`.
 
