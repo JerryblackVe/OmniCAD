@@ -178,3 +178,19 @@ def test_cm5_espiral_central_y_sketch_opcional(s):
     assert {e["id"]: e for e in llamar(s, "get_sketch")["entities"]}[c]["radius"] == pytest.approx(6)
     lados = [e for e in llamar(s, "create_polygon", radius=5, center_x=-30)["entities"] if e["type"] == "line"]
     assert len(lados) == 6                                              # 6 lados, como la interfaz
+
+
+@pytest.mark.parametrize("distancia", [0, "0", "", "nan", "10/0", "1e400", "abc", float("nan")])
+def test_b512_extrude_con_cota_invalida_falla_limpio_sin_paso(s, distancia):
+    for a, b in [((0, 0), (20, 0)), ((20, 0), (20, 10)), ((20, 10), (0, 10)), ((0, 10), (0, 0))]:
+        linea(s, a, b)
+    antes = s.doc.a_dict()
+    r = api.llamar(s, "extrude", {"sketch": "Base", "distance": distancia})
+    assert not r["ok"] and r["mensaje"], r
+    assert s.doc.a_dict() == antes
+
+
+def test_b512_extrude_con_cota_negativa_extruye_al_lado_contrario(s):
+    for a, b in [((0, 0), (20, 0)), ((20, 0), (20, 10)), ((20, 10), (0, 10)), ((0, 10), (0, 0))]:
+        linea(s, a, b)
+    assert llamar(s, "extrude", sketch="Base", distance=-5)["bodies_created"]

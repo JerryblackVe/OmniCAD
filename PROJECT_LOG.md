@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-21 · B-512 (resto) cerrado.** `extrude` con cota 0, negativa, NaN, vacía, 1e400, 10/0: API falla limpio sin paso y la ventana avisa en 1 renglón sin excepciones; negativa extruye al lado contrario. Sin repro. Tests: test_b512_extrude_con_cota_invalida_falla_limpio_sin_paso, test_b512_extrude_con_cota_negativa_extruye_al_lado_contrario.
 - **2026-11-21 · Traspaso E1 (B-786 Parcial, sin commit).** 1) solver.py: escala del ángulo congelada con x0 + pasada previa `_acercar_conservando_largos` (no al arrastrar); test_b786 en test_solver.py; 473 tests de boceto OK, ruff limpio. 2) tests_afectados: fallos de tiempo (test_b307), test_setup y visor_aviso_camara, sin comprobar si ya fallaban. 3) Falta: confirmar eso y ver 135° en la ventana; luego borrar la fila B-786.
 - **2026-11-21 · Traspaso E8 (B-783 cerrado, sin commit).** 1) ~/OmniCAD-B-783: `NumeroDecimal.insuficiente` (formulario.py) avisa «Tamaño: mínimo» al teclear 0 o «-» en la altura del texto; test_b783_aviso_altura_minima.py. 2) Tests de los 6 archivos que importan formulario: 209 OK; ruff limpio. 3) tests_afectados (17 grupos, 3 fallidos sin identificar) cortado por regla 4.
 
