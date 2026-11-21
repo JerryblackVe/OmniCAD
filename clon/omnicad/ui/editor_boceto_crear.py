@@ -24,9 +24,9 @@ from .editor_boceto_comun import (
     TRANSFORMAR,
     Texto,
     _barrido,
+    _escalar,
     _espaciado_mm,
     _espaciado_porcentaje,
-    _numero,
     _registro_uso,
     agregar_arco_tangente,
     agregar_circulo_puntos,
@@ -626,7 +626,7 @@ class LienzoCrearMixin:
             def aceptar(v):
                 v = (list(v) + [""] * 5)[:5]          # los campos de más (espaciado, interlineado) son opcionales
                 altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
-                espaciado, interlineado = _espaciado_mm(v[3], altura, self.opciones), _numero(v[4] or "1")
+                espaciado, interlineado = _espaciado_mm(v[3], altura, self.opciones, self.evaluar), _escalar(self.evaluar, v[4] or "1", "Interlineado")
                 o = self.opciones
                 extra = {"alineacion": o["alineacion"], "ancla_v": o["ancla_v"], "voltear_h": o["voltear_h"],
                          "voltear_v": o["voltear_v"]} | en_curva | caja | {k: o[k] for k in Texto.TIPOGRAFIA}

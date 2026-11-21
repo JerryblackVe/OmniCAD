@@ -364,12 +364,21 @@ def _espaciado_cien(altura, o):
     return fuentes.espaciado_cien(o["fuente"], altura, o["negrita"], o["cursiva"])
 
 
-def _espaciado_mm(porcentaje, altura, o):
+def _escalar(evaluar, texto, campo):
+    """B-820: número sin unidad (admite expresiones); el error lleva el nombre del campo."""
+    try:
+        return evaluar(texto, ESCALAR, True)
+    except ErrorExpresion as e:
+        raise ErrorBoceto(f"{campo}: {e}") from e
+
+
+def _espaciado_mm(porcentaje, altura, o, evaluar=None):
     """Lo escrito en «Espaciado (%)», como Character Spacing de Fusion (`espaciado_cien`). El boceto guarda mm; `o`: las
     opciones del texto. Un % sin tocar deja los mm como estaban: el campo los redondea."""
     if str(porcentaje) == _espaciado_porcentaje(o["espaciado"], altura, o):
         return o["espaciado"]
-    return _numero(str(porcentaje).replace("%", "") or "0") * _espaciado_cien(altura, o) / 100
+    texto = str(porcentaje).replace("%", "") or "0"
+    return (_escalar(evaluar, texto, "Espaciado") if evaluar else _numero(texto)) * _espaciado_cien(altura, o) / 100
 
 
 def _espaciado_porcentaje(mm, altura, o):

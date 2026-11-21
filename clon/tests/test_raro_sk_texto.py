@@ -175,11 +175,6 @@ def test_interlineado_cero_y_negativo_avisa_en_un_renglon(app_qt, interlineado):
     _cerrar(lz)
 
 
-B820 = ("B-820: Espaciado (%) e Interlineado usan _numero (float) en vez de evaluar: unidades y expresiones "
-        "muestran el error crudo de Python en inglés y no se evalúan")
-
-
-@pytest.mark.xfail(reason=B820, strict=True)
 @pytest.mark.parametrize("campo,indice,valor", [("Espaciado (%)", 3, "10+20"), ("Interlineado", 4, "2*3")])
 def test_campos_con_expresion_deben_evaluarla(app_qt, campo, indice, valor):
     lz, avisos, fallos, _antes = _abrir(app_qt, [*BASE[:indice], valor, *BASE[indice + 1:]])
@@ -190,7 +185,6 @@ def test_campos_con_expresion_deben_evaluarla(app_qt, campo, indice, valor):
         assert texto.interlineado == pytest.approx(6.0)
 
 
-@pytest.mark.xfail(reason=B820, strict=True)
 @pytest.mark.parametrize("campo,indice,valor", [("Espaciado (%)", 3, "10 mm"), ("Interlineado", 4, "2 mm")])
 def test_campos_con_unidad_deben_avisar_en_espanol(app_qt, campo, indice, valor):
     lz, avisos, fallos, antes = _abrir(app_qt, [*BASE[:indice], valor, *BASE[indice + 1:]])

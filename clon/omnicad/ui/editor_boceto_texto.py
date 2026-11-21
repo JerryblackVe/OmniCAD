@@ -8,11 +8,11 @@ from .editor_boceto_comun import (
     QApplication,
     Qt,
     Texto,
+    _escalar,
     _espaciado_mm,
     _espaciado_porcentaje,
     _fin_palabra,
     _inicio_palabra,
-    _numero,
     _palabra_en,
     _validar_opciones_texto,
     copy,
@@ -61,7 +61,7 @@ class LienzoTextoMixin:
             t = self.b.curvas[tid]
             v = (list(v) + [""] * 5)[:5]
             altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
-            espaciado, interlineado = _espaciado_mm(v[3], altura, self.opciones), _numero(v[4] or "1")
+            espaciado, interlineado = _espaciado_mm(v[3], altura, self.opciones, self.evaluar), _escalar(self.evaluar, v[4] or "1", "Interlineado")
             if not v[0].strip():
                 raise ErrorBoceto("El texto está vacío.")
             if interlineado <= 0:
@@ -496,7 +496,7 @@ class LienzoTextoMixin:
         try:
             texto = v[0].replace("\\n", "\n")
             altura, ang = self.evaluar(v[1] or "5"), self.evaluar(v[2] or "0", ANGULO)
-            esp, inter = _espaciado_mm(v[3], altura, self.opciones), _numero(v[4] or "1")
+            esp, inter = _espaciado_mm(v[3], altura, self.opciones, self.evaluar), _escalar(self.evaluar, v[4] or "1", "Interlineado")
             if altura > 0 and inter > 0:
                 d["angulo"] = ang                # el cuadro de trazos gira con el texto
                 t = self._texto_en_vivo(texto, altura, ang, esp, inter)
@@ -516,8 +516,8 @@ class LienzoTextoMixin:
         d["mapa"] = info
         self._previa_polis = polis
         try:                                  # lo de la barra pasa a las opciones (y de ahí al panel)
-            alt, inter = self.evaluar(v[1] or "5"), _numero(v[4] or "1")
-            esp = _espaciado_mm(v[3], alt, self.opciones)
+            alt, inter = self.evaluar(v[1] or "5"), _escalar(self.evaluar, v[4] or "1", "Interlineado")
+            esp = _espaciado_mm(v[3], alt, self.opciones, self.evaluar)
             if alt > 0 and inter > 0:
                 d["valores"] = (alt, esp, inter)
                 if not d.get("caja"):
