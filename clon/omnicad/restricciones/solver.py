@@ -155,8 +155,9 @@ class _Sistema:
         # idx_p[pid] = (índice de x, índice de y). Fusionadas, varias coordenadas comparten una incógnita, que
         # arranca en su promedio; `cuenta` dice cuántas coordenadas representa cada incógnita.
         self.idx_p, self.idx_r, x0, cuenta, var = {}, {}, [], [], {}
-        for pid, p in boceto.puntos.items():
-            if pid not in self.fijos_p and pid not in self.deriva and (grupo is None or pid in grupo["p"]):
+        for pid in (boceto.puntos if grupo is None else sorted(grupo["p"])):      # el grupo no recorre todo el boceto
+            p = boceto.puntos[pid]
+            if pid not in self.fijos_p and pid not in self.deriva:
                 ij = []
                 for k, v in ((0, p.x), (1, p.y)):
                     j = var.setdefault(raiz((pid, k)), len(x0))
@@ -168,9 +169,9 @@ class _Sistema:
                     ij.append(j)
                 self.idx_p[pid] = tuple(ij)
         x0 = [s / k for s, k in zip(x0, cuenta, strict=True)]
-        for cid, c in boceto.curvas.items():
-            if isinstance(c, (Circulo, Elipse, ArcoElipse)) and cid not in self.fijos_r and (
-                    grupo is None or cid in grupo["r"]) and cid not in mismo_radio:
+        for cid in (boceto.curvas if grupo is None else sorted(grupo["r"])):
+            c = boceto.curvas[cid]
+            if isinstance(c, (Circulo, Elipse, ArcoElipse)) and cid not in self.fijos_r and cid not in mismo_radio:
                 self.idx_r[cid] = len(x0)
                 x0.append(c.radio if isinstance(c, Circulo) else c.radio_menor)
         for cid in mismo_radio:              # la copia de un círculo usa el radio de su original (BOC-61)
