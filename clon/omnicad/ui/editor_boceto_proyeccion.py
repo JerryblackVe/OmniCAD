@@ -510,7 +510,10 @@ class LienzoProyeccionMixin:
         if not pids:
             self.mensaje.emit("Romper vínculo: seleccioná geometría proyectada con vínculo.")
             return False
-        return self.tratar_perdidas("break", pids)
+        ok = self.tratar_perdidas("break", pids)
+        if ok:
+            self.mensaje.emit("Vínculo roto: queda como geometría normal.")
+        return ok
 
     def tratar_perdidas(self, accion, pids):
         """Manage Lost Projections: "break" rompe el vínculo y "delete" borra la geometría de las proyecciones

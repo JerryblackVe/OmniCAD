@@ -200,7 +200,10 @@ def test_boc17_romper_vinculo_desde_la_seleccion(lienzo_xy):
     lz.seleccion = []
     assert not lz.romper_vinculo()
     lz.seleccion = [lz.b.proyecciones[0]["ids"][0]]
+    mensajes = []
+    lz.mensaje.connect(mensajes.append)
     assert lz.romper_vinculo()
+    assert mensajes[-1].startswith("Vínculo roto")                      # B-833: el éxito se avisa en 1 renglón
     assert lz.b.proyecciones == [] and not any(c.proyectada for c in lz.b.curvas.values())
 
 
