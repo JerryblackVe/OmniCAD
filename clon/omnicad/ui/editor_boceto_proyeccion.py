@@ -86,7 +86,7 @@ class LienzoProyeccionMixin:
         """Cambió el filtro o el vínculo. Lo que el filtro nuevo no admite sale de la selección y se dice cuánto: nunca se
         proyecta algo que la tarjeta no muestra."""
         admitidos = self._filtros_proyeccion()
-        quedan = [e for e in self._elegidos_proy if e.get("tipo") in admitidos]
+        quedan = [e for e in self._elegidos_proy if isinstance(e, dict) and e.get("tipo") in admitidos]   # B-799: un valor que no es referencia se descarta
         sacados = len(self._elegidos_proy) - len(quedan)
         self._elegidos_proy = quedan
         self._nota_proy = (f"El filtro sacó {sacados} {'referencia' if sacados == 1 else 'referencias'} de la selección."

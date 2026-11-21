@@ -23,9 +23,6 @@ VALORES = [pytest.param("", id="vacio"), pytest.param(0, id="cero"), pytest.para
            pytest.param(10**9, id="enorme"), pytest.param("20 mm", id="unidades"),
            pytest.param("1+1", id="expresion")]
 LIMITE = 120
-B799 = ("B-799: cambiar_opcion_proyeccion (`ui/editor_boceto_proyeccion.py:89`) hace `e.get(\"tipo\")` sobre cada "
-        "elemento de la selección y revienta con AttributeError si Geometría recibe un valor que no es un dict; "
-        "tiene que descartarlo y avisar en 1 renglón.")
 
 
 @pytest.fixture
@@ -91,8 +88,6 @@ def test_campo_raro_no_cierra_app_ni_deja_boceto_roto(lienzo, campo, valor):
         QApplication.processEvents()
     except Exception as exc:                # noqa: BLE001 — cualquier excepción aquí tumbaría la app
         fallos.append(f"{type(exc).__name__}: {exc}")
-    if campo == "geometria" and isinstance(valor, (int, str)):
-        pytest.xfail(B799)
     _sin_rotura(lz, mensajes, antes, fallos, acepto)
 
 
