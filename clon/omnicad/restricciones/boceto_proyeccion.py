@@ -163,7 +163,7 @@ class _Proyeccion:
           geometría propia del boceto (BOC-17); sin nada alrededor, ±LARGO_EJE_VACIO."""
         if datos.get("contorno"):
             from ..nucleo.contorno_giro import contorno_exterior
-            primitivas = contorno_exterior(primitivas, datos["contorno"])
+            primitivas = contorno_exterior(primitivas, datos["contorno"], datos.get("tolerancia") or 0.1)
         infinitas = datos.get("infinitas") or {}
         if infinitas:
             propios = [(p.x, p.y) for p in self.puntos.values() if p.id > 0 and not p.proyectado]
