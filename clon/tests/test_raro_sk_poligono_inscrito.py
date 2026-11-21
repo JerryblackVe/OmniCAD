@@ -4,7 +4,7 @@
 La ayuda de Fusion (`create polygons in sketches`) fija el orden Radio → Lados (Tab) y que ambos son valores
 escritos. Acá cada campo se prueba vacío, 0, negativo, enorme, con unidades y con expresión. Aceptar nunca
 cierra la app ni deja el boceto roto, y todo aviso cabe en un renglón. Con unidad o expresión en «lados»
-sale el error crudo de Python en vez de un aviso en español (B-800).
+se evalúa el campo y, si no se puede, avisa en español (B-800).
 """
 import os
 
@@ -25,8 +25,6 @@ _cerrar_lienzos = T._cerrar_lienzos
 CENTRO = (0, 0)
 VERTICE = (10, 0)
 INDICE = {"radio": 0, "lados": 1}
-B800 = ("B-800: Lados usa _numero (float) en vez de evaluar: unidades y expresiones sueltan "
-        "el error crudo de Python en vez de un aviso en español")
 
 
 def _abrir(app_qt, campo, texto):
@@ -121,10 +119,9 @@ def test_radio_con_unidad_o_expresion_crea_la_cota(app_qt, texto):
     assert lz.entrada is None and not lz.clics
 
 
-@pytest.mark.xfail(reason=B800)
 @pytest.mark.parametrize("texto", ["6 mm", "2*3"])
 def test_lados_con_unidad_o_expresion_avisa_en_espanol(app_qt, texto):
-    """Quiere un aviso en español o que dibuje; hoy sale «could not convert string to float» (B-800)."""
+    """Con unidad o expresión dibuja o avisa en español, nunca el error crudo de Python (B-800)."""
     lz, avisos, fallos = _abrir(app_qt, "lados", texto)
     _sin_rotura(lz, avisos, fallos)
     if _lineas(lz):

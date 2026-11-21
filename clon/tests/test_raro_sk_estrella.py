@@ -6,8 +6,8 @@ acá son los campos de la tarjeta y la barra de valores).
 Se prueban los cinco campos numéricos de la tarjeta (Interior, Redondeo de puntas, Redondeo de valles, Puntas y
 Salto) y los dos de la barra de valores (Radio y Puntas) en vacío, 0, negativo, enorme, con unidades y con
 expresión; la casilla de Círculos de construcción, por ser booleana, se prueba en sus dos estados. Escribir un
-valor raro nunca cierra la app, no deja el boceto roto y todo aviso es de un renglón. Hoy falla Puntas con
-unidad y expresión (B-798): esos dos casos quedan xfail.
+valor raro nunca cierra la app, no deja el boceto roto y todo aviso es de un renglón. Puntas admite expresiones
+y rechaza unidades ajenas con un aviso en español (B-798).
 """
 import os
 
@@ -203,10 +203,6 @@ def test_puntas_fuera_de_rango_avisa_y_no_dibuja(ventana, texto):
     assert "puntas" in _un_renglon(avisos).lower()
 
 
-B798 = "B-798: Puntas usa _numero (float) en vez de evaluar: la unidad y la expresión muestran el error crudo de Python"
-
-
-@pytest.mark.xfail(reason=B798, strict=True)
 def test_puntas_con_expresion_debe_dibujar_la_estrella(ventana):
     """Como Vueltas de Espiral: «3+2» evalúa a 5 puntas, sin error de Python."""
     lz, avisos, fallos = _barra(ventana, "puntas", "3+2")
@@ -215,7 +211,6 @@ def test_puntas_con_expresion_debe_dibujar_la_estrella(ventana):
     assert len(_lineas(lz)) == 10
 
 
-@pytest.mark.xfail(reason=B798, strict=True)
 def test_puntas_con_unidad_ajena_debe_rechazarla_en_espanol(ventana):
     """Como Cantidad de Patrón (B-712): «6 mm» no puede crear 6 puntas y el aviso no puede ser error de Python."""
     lz, avisos, fallos = _barra(ventana, "puntas", "6 mm")

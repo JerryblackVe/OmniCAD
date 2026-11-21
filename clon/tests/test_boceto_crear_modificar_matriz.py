@@ -611,7 +611,7 @@ def test_p70_poligono_ventana_y_api_dan_la_misma_geometria(lados, circunscrito, 
     cursor = giro + math.pi / lados if circunscrito else giro
     vertice = (centro[0] + radio * math.cos(cursor), centro[1] + radio * math.sin(cursor))
     ventana, por_api, nucleo = Boceto(), Boceto(), Boceto()
-    lienzo = SimpleNamespace(b=ventana, construccion=construccion)
+    lienzo = SimpleNamespace(b=ventana, construccion=construccion, evaluar=lambda t, *_: float(t))
     ls, cid = editor.Lienzo._poligono(lienzo, centro, vertice, lados, tipo)
     alias = herramientas._poligono(por_api, lados, radio, *centro, math.degrees(giro), circunscrito, construccion)
     assert agregar_poligono(nucleo, centro, radio, lados, giro, circunscrito, construccion) == (ls, cid)
