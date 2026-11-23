@@ -82,14 +82,9 @@ def _huella(receta):
     return hashlib.sha256(receta + VERSION.encode("utf-8")).hexdigest()
 
 
-def _escribir_cache(z, doc, receta):
-    """cache/cuerpos.brep (cuerpos finales + formas de los pasos lentos, en un solo compuesto: comparten caras y
-    no ocupan dos veces) y cache/pasos.json. Las mallas no son B-rep: viajan solo en la receta."""
-    if doc.motor == "omnikernel":
-        _escribir_cache_omnikernel(z, doc, receta)
-        return
-    formas = [c.forma for c in doc.estado_final.cuerpos.values() if getattr(c, "tipo", "solido") != "malla"]
-    finales = len(formas)
+def _indexar_pasos(doc, formas):
+    """Los pasos lentos de `doc` con sus formas indexadas en `formas` (que ya trae las finales, y crece con las propias de
+    cada paso, sin repetir las que comparten): [{datos del paso, "formas": [posiciones en `formas`]}]."""
     indice = {id(f): k for k, f in enumerate(formas)}
     pasos = []
     for datos, propias in doc.pasos_para_cache():
@@ -98,6 +93,47 @@ def _escribir_cache(z, doc, receta):
                 indice[id(f)] = len(formas)
                 formas.append(f)
         pasos.append(dict(datos, formas=[indice[id(f)] for f in propias]))
+    return pasos
+
+
+def cache_a_carpeta(doc, carpeta):
+    """La caché de pasos lentos de `doc` en `carpeta/cuerpos.brep`, para que otro proceso (el trabajador de previas) arme
+    la misma receta sin recalcularlos (`cache_de_carpeta`). Devuelve los pasos (JSON) o [] si no hay ninguno que valga."""
+    formas = []
+    pasos = _indexar_pasos(doc, formas) if doc.motor != "omnikernel" else []
+    if pasos:
+        intercambio.escribir_brep(geo.compuesto(formas), Path(carpeta) / "cuerpos.brep")
+    return pasos
+
+
+def _cache_de_partes(pasos, partes):
+    """{índice de paso: (datos, formas)} desde los pasos de `_indexar_pasos` y las formas ya leídas."""
+    cache = {}
+    for datos in pasos:
+        ks = datos["formas"]
+        if not all(isinstance(k, int) and 0 <= k < len(partes) for k in ks):
+            raise ValueError(f"forma fuera del BREP en el paso {datos.get('op')}")
+        cache[int(datos["indice"])] = (datos, [partes[k] for k in ks])
+    return cache
+
+
+def cache_de_carpeta(carpeta, pasos):
+    """Lo inverso de `cache_a_carpeta`, para `Documento.desde_dict`. None si algo no cuadra: se recalcula todo."""
+    try:
+        return _cache_de_partes(pasos, intercambio.partes_de_brep(Path(carpeta) / "cuerpos.brep")) if pasos else None
+    except (KeyError, IndexError, TypeError, ValueError, OSError, geo.ErrorGeometria):
+        return None
+
+
+def _escribir_cache(z, doc, receta):
+    """cache/cuerpos.brep (cuerpos finales + formas de los pasos lentos, en un solo compuesto: comparten caras y
+    no ocupan dos veces) y cache/pasos.json. Las mallas no son B-rep: viajan solo en la receta."""
+    if doc.motor == "omnikernel":
+        _escribir_cache_omnikernel(z, doc, receta)
+        return
+    formas = [c.forma for c in doc.estado_final.cuerpos.values() if getattr(c, "tipo", "solido") != "malla"]
+    finales = len(formas)
+    pasos = _indexar_pasos(doc, formas)
     if not formas:
         return
     fd, brep = tempfile.mkstemp(suffix=".brep")
@@ -132,13 +168,7 @@ def _leer_cache(z, receta):
             partes = intercambio.partes_de_brep(brep)
         finally:
             os.remove(brep)
-        cache = {}
-        for datos in meta["pasos"]:
-            ks = datos["formas"]
-            if not all(isinstance(k, int) and 0 <= k < len(partes) for k in ks):
-                raise ValueError(f"forma fuera del BREP en el paso {datos.get('op')}")
-            cache[int(datos["indice"])] = (datos, [partes[k] for k in ks])
-        return cache
+        return _cache_de_partes(meta["pasos"], partes)
     except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError, zipfile.BadZipFile, zlib.error,
             NotImplementedError, geo.ErrorGeometria, RecursionError) as e:
         log.warning("La caché del proyecto está dañada (%s): se recalcula todo.", e)

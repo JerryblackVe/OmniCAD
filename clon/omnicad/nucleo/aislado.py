@@ -23,6 +23,7 @@ import json
 import math
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -144,16 +145,17 @@ _TAREAS = {"autointersecciones": _autointersecciones, "proyeccion_exacta": _proy
            "silueta_exacta": _silueta_exacta}
 
 
-def _documento(receta):
+def _documento(receta, cache=None):
     """`receta` calculada. En el trabajador sale del documento vivo: se recalcula solo lo que cambió, y la memoria por
-    paso reusa el resto. Lo que un paso no memorizable lee de afuera se vuelve a leer, como en un documento recién hecho."""
+    paso reusa el resto. Lo que un paso no memorizable lee de afuera se vuelve a leer, como en un documento recién hecho.
+    `cache`: los pasos lentos que la ventana ya calculó (`Documento.desde_dict`); solo vale al armarlo de cero."""
     global documento_vivo
     from ..timeline.documento import Documento
 
     if formas_enviadas is None:
-        return Documento.desde_dict(receta)
+        return Documento.desde_dict(receta, cache)
     if documento_vivo is None:
-        documento_vivo = Documento.desde_dict(receta)
+        documento_vivo = Documento.desde_dict(receta, cache)
         return documento_vivo
     if documento_vivo.a_dict() != receta:
         documento_vivo._cargar(receta)
@@ -222,10 +224,17 @@ def _ensayar_lectura(ruta, formato):
     return {"ok": True}
 
 
-def _calentar(receta):
-    """FL-9: arma el documento en el trabajador antes de la primera previa (ver `precalentar`)."""
-    with _motor.fijar_motor("opencascade"):
-        _documento(receta)
+def _calentar(receta, cache=None):
+    """FL-9: arma el documento en el trabajador antes de la primera previa (ver `precalentar`). `cache`: {carpeta, pasos}
+    de `_cache_para_trabajador`; la carpeta se borra acá."""
+    try:
+        from ..io_archivos import proyecto
+        pasos = proyecto.cache_de_carpeta(cache["carpeta"], cache["pasos"]) if cache else None
+        with _motor.fijar_motor("opencascade"):
+            _documento(receta, pasos)
+    finally:
+        if cache:
+            shutil.rmtree(cache["carpeta"], ignore_errors=True)
     return {}
 
 
@@ -652,9 +661,29 @@ def cerrar_trabajador():
 atexit.register(cerrar_trabajador)
 
 
-def precalentar(receta=None):
+def _cache_para_trabajador(doc):
+    """Los pasos lentos de un documento pesado que la ventana ya calculó, en una carpeta temporal que el trabajador lee y
+    borra: así arma la receta sin rehacerlos (una extrusión de texto tarda segundos; el trabajador frío los repetía).
+    None si no hay nada que valga o algo falla: entonces arma todo, como antes.
+    shortcut: si el trabajador muere antes de leerla, la carpeta queda en el temporal del sistema."""
+    if doc is None or not doc._prevuelo_corresponde():
+        return None
+    carpeta = tempfile.mkdtemp(prefix="omnicad_cache_")
+    try:
+        from ..io_archivos import proyecto
+        pasos = proyecto.cache_a_carpeta(doc, carpeta)
+    except Exception:  # noqa: BLE001 — vía rápida: si falla, el trabajador arma todo sin mostrar el error
+        pasos = []
+    if not pasos:
+        shutil.rmtree(carpeta, ignore_errors=True)
+        return None
+    return {"carpeta": carpeta, "pasos": pasos}
+
+
+def precalentar(receta=None, doc=None):
     """FL-9: el trabajador arranca y arma `receta` ya, para que la primera previa no espere abrir el proceso, importar OCP
-    y rehacer el documento (2,3 s con un barrido sencillo). Sin `receta`, solo lo abre (en la portada). No espera nada: el
+    y rehacer el documento (2,3 s con un barrido sencillo). Sin `receta`, solo lo abre (en la portada). `doc`: el documento de
+    esa receta, ya calculado; si es pesado el trabajador recibe sus pasos lentos en vez de rehacerlos. No espera nada: el
     pedido que llegue atrás espera su turno, y si el trabajador está ocupado no se abre otro proceso para esto."""
     if (not TRABAJADOR or _motor.motor_activo() == "omnikernel" or _previa_en_curso is not None
             or not _ocupado.acquire(blocking=False)):
@@ -667,12 +696,16 @@ def precalentar(receta=None):
         _ocupado.release()
     if receta is None:
         return
+    cache = _cache_para_trabajador(doc)
     try:
-        calculo = CalculoPendiente("calentar", {"receta": receta})
+        calculo = CalculoPendiente("calentar", {"receta": receta, **({"cache": cache} if cache else {})})
     except TareaAislada:
-        return                          # la primera previa lo vuelve a intentar e informa
-    if calculo.trabajador is None:
-        calculo.cancelar()
+        calculo = None                  # la primera previa lo vuelve a intentar e informa
+    if calculo is None or calculo.trabajador is None:
+        if calculo is not None:
+            calculo.cancelar()
+        if cache:
+            shutil.rmtree(cache["carpeta"], ignore_errors=True)
         return
     # Cancelada de entrada: su respuesta se tira y el pedido que llegue espera su turno. El plazo es el de una previa, no
     # PACIENCIA_PREVIA: armar un documento grande tarda más de 10 s y sirve igual; uno que se cuelga se cierra a los 900 s.

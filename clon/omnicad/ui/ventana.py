@@ -1229,7 +1229,7 @@ class VentanaPrincipal(QMainWindow):
         self.doc = doc
         from . import comando
         if comando.PREVIA_APARTE:       # FL-9: las previas van al trabajador: que tenga el documento armado antes de la primera
-            aislado.precalentar(doc.a_dict())
+            aislado.precalentar(doc.a_dict(), doc)
         elif not doc._prevuelo_corresponde():        # un documento chico no necesita el trabajador: su memoria se libera
             aislado.cerrar_trabajador()
         doc.al_calcular = self._calculando

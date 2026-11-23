@@ -16,7 +16,7 @@ from omnicad.ui.ventana import VentanaPrincipal
 
 def test_la_ventana_precalienta_el_trabajador_si_la_previa_va_aparte(tmp_path, monkeypatch):
     llamadas = []
-    monkeypatch.setattr(aislado, "precalentar", lambda receta: llamadas.append(receta))
+    monkeypatch.setattr(aislado, "precalentar", lambda receta, doc=None: llamadas.append(receta))
     app = QApplication.instance() or QApplication([])
     for aparte in (False, True):
         monkeypatch.setattr(comando, "PREVIA_APARTE", aparte)

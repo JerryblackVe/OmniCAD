@@ -153,7 +153,7 @@ def test_la_segunda_previa_no_reconstruye_el_documento(placa, monkeypatch):
     doc, empalme, _ = placa
     armados, recalculos = [], []
     desde_dict, recalcular = Documento.desde_dict, Documento.recalcular
-    monkeypatch.setattr(Documento, "desde_dict", staticmethod(lambda d: armados.append(1) or desde_dict(d)))
+    monkeypatch.setattr(Documento, "desde_dict", staticmethod(lambda d, cache=None: armados.append(1) or desde_dict(d, cache)))
     monkeypatch.setattr(Documento, "recalcular", lambda self, *a: recalculos.append(1) or recalcular(self, *a))
     monkeypatch.setattr(aislado, "formas_enviadas", {})
     monkeypatch.setattr(aislado, "huellas_enviadas", {})
