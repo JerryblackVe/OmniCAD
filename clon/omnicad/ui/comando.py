@@ -950,6 +950,7 @@ class PanelComando(QFrame):
         self._seleccion_invalida = None
         self._previa_aislada = False    # la primera previa con éxito pasó el ensayo aislado (B-48): las siguientes van en vivo
         self._hijo_previa = self._op_hijo = self._pendiente_hijo = None
+        self._t_pedido = 0.0
         self._previa_cortada = False
         self._ms_previa = None          # FL-1: (firma, ms, magnitud B-438) de la última previa, en la ventana o aparte
         self.cerrando = False           # True desde `_cerrar`: la ventana no redibuja el estado viejo antes de cerrar
@@ -2013,6 +2014,7 @@ class PanelComando(QFrame):
         self._mostrar(" ".join(avisos), tipo="aviso")
         self._previa_vista(op)
         self._previa_lista(estado)
+        self._registrar_previa_lista(None, kernel_ms=(time.perf_counter() - inicio) * 1000)
         # FL-1b: también cuenta mallarla en el visor (un barrido: 20 ms de kernel y 0,4 s de malla)
         self._ms_previa = _firma_previa(op), (time.perf_counter() - inicio) * 1000, _magnitud_previa(self.ctx, op)
 
@@ -2040,6 +2042,24 @@ class PanelComando(QFrame):
         except Exception as e:  # noqa: BLE001 — el análisis que falla se informa, no tumba la vista previa
             self._mostrar(f"⚠ {e}", tipo="aviso")
         self._avisar_previa(estado)
+
+    def _registrar_previa_lista(self, etapas, t_recibida=None, kernel_ms=None):
+        """Evento «previa_lista» del registro de uso: de quién es cada milisegundo entre pedir la previa y verla. Aparte
+        (`etapas` del trabajador): `espera` = cola + receta enviada hasta que el trabajador la toma, `vuelta` = codificar +
+        traerla + leerla, `ventana` = dibujarla; en la ventana (`etapas` None) solo `kernel_ms`. B-840."""
+        if registro_uso.activo is None:
+            return
+        ahora = time.time()
+        if etapas is None:
+            datos = {"aparte": False, "kernel_ms": round(kernel_ms, 1)}
+        else:
+            datos = {"aparte": True, "total_ms": round((ahora - self._t_pedido) * 1000, 1),
+                     "espera_ms": round((etapas["t_ini"] - self._t_pedido) * 1000, 1),
+                     "recalculo_ms": round(etapas["recalculo_ms"], 1), "kernel_ms": round(etapas["kernel_ms"], 1),
+                     "malla_ms": round(etapas["malla_ms"], 1),
+                     "vuelta_ms": round((t_recibida - etapas["t_fin"]) * 1000, 1),
+                     "ventana_ms": round((ahora - t_recibida) * 1000, 1)}
+        registro_uso.activo.emitir("previa_lista", {"comando": self.comando.CLAVE, **datos})
 
     def _avisar_previa(self, estado):
         try:
@@ -2182,6 +2202,7 @@ class PanelComando(QFrame):
                 # resaltan caras (P-145) y Extruir mira si se mete en otro cuerpo
                 "formas": True})
             self._op_hijo = op
+            self._t_pedido = time.time()
             self._t_hijo.start()
             self._mostrar("Calculando vista previa en un proceso aparte…", tipo="calculando")
         except TareaAislada as e:
@@ -2200,6 +2221,7 @@ class PanelComando(QFrame):
         pendiente = self._pendiente_hijo
         vieja = pendiente is not None and pendiente.a_dict() != self._op_hijo.a_dict()
         rehacer = False
+        t_recibida = time.time()
         try:
             if isinstance(salida, Exception):
                 raise salida
@@ -2214,6 +2236,7 @@ class PanelComando(QFrame):
                     if self.manipuladores is not None:
                         self.manipuladores.previa_calculada(True)
                 self._previa_lista(estado)
+                self._registrar_previa_lista(estado._etapas, t_recibida)
         except FalloInterno:
             rehacer = not vieja     # B-455: un bug de la vía aparte no se muestra: la misma previa se rehace en la ventana
         except Exception as e:  # noqa: BLE001 — un hijo caído o vencido: la previa se apaga y el documento queda intacto

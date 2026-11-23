@@ -392,12 +392,20 @@ def poner_resultado(estado, ctx, op_id, c, nueva):
     return [c.id] + [estado.nuevo_cuerpo(op_id, s, c.tipo, **atributos_copia(c)) for s in partes[1:]]
 
 
-def _toca(c, herramienta, cara=None):
+def _toca(c, herramienta, cara=None, apoyos=()):
     """¿El cuerpo toca a la herramienta? B-403: la caja envolvente (cacheada) descarta a los lejanos sin pagar `se_tocan`.
     B-598: `cara`, la del cuerpo donde termina la herramienta («Hasta la cara»): tocarla basta y se mide en 0,1 s; el
-    cuerpo entero contra 15 letras B-spline tardaba 108 s. Si no la toca o falla, se mide el cuerpo como siempre."""
+    cuerpo entero contra 15 letras B-spline tardaba 108 s. Si no la toca o falla, se mide el cuerpo como siempre.
+    B-840: `apoyos`, puntos del perfil de partida (la herramienta los contiene): si uno está sobre el cuerpo, lo toca y
+    no hace falta `se_tocan` (0,73 s contra el logo de 451 caras; un punto cuesta 0,09 s)."""
     if not geo.cajas_se_tocan(geo.caja_envolvente(c.forma), geo.caja_envolvente(herramienta)):
         return False
+    try:
+        # shortcut: tolerancia de 1e-3 (la de B-281, el punto sale de una malla float32), no la de 1e-6 de se_tocan
+        if any(geo.punto_toca(c.forma, q, 1e-3) for q in apoyos):
+            return True
+    except Exception:  # noqa: BLE001 — vía rápida: si falla, el camino de siempre
+        pass
     if cara is not None:
         try:
             if geo.se_tocan(cara, herramienta):
@@ -423,13 +431,18 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
     if operacion not in OPERACIONES_COMBINAR:
         raise ErrorOperacion(f"Operación desconocida: {operacion}")
     lista = list(objetivo) if isinstance(objetivo, (list, tuple)) else [objetivo] if objetivo else []
+    puntos_apoyo = None
     if lista:
         objetivos = [estado.cuerpo(o) for o in lista]
     else:
         solidos = [c for c in estado.cuerpos.values() if getattr(c, "tipo", "solido") == "solido"]
         objetivos = [c for c in solidos if c.id not in ctx.ocultos and c.componente not in ctx.ocultos]
         if operacion == "unir":
-            objetivos = [c for c in objetivos if _toca(c, herramienta, (limites or {}).get(c.id))]
+            try:
+                puntos_apoyo = apoyos() if apoyos else None
+            except Exception:  # noqa: BLE001 — vía rápida de `_toca`: sin los puntos, mide `se_tocan` como siempre
+                puntos_apoyo = None
+            objetivos = [c for c in objetivos if _toca(c, herramienta, (limites or {}).get(c.id), puntos_apoyo or ())]
     if not objetivos:
         # B-549: si el cuerpo está pero oculto, el mensaje dice la causa (regla 14: un renglón, sin jerga)
         ocultos = [] if lista else [c for c in solidos if c.id in ctx.ocultos or c.componente in ctx.ocultos]
@@ -445,7 +458,7 @@ def aplicar_resultado(estado, ctx, op_id, herramienta, operacion, objetivo="", t
     if operacion == "unir":
         resultado = herramienta
         v_previa = None                # volumen de lo acumulado hasta acá (se mide una vez)
-        avisos, puntos = [], None
+        avisos, puntos = [], puntos_apoyo
         for c in objetivos:
             nueva = geo.booleano(resultado, c.forma, "unir", avisos)
             # Integración exacta: barata. `geo.volumen` malla el cuerpo entero si tiene caras libres (20 s en 500 B-spline)

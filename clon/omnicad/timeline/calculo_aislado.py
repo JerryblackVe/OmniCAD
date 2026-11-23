@@ -242,6 +242,7 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
     su B-Rep, para el comando que resalta caras sobre la previa (P-78 con P-145: las crestas de la rosca)."""
     from .operaciones import operacion_desde_dict
 
+    t_ini, t_perf = time.time(), time.perf_counter()
     doc = aislado._documento(receta)
     entrada = doc.estado_en(doc.marcador if indice is None else indice)
     op = operacion_desde_dict(operacion)
@@ -250,6 +251,7 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
         op._guardar_herramienta_previa = True
     inicio = time.perf_counter()
     estado, avisos = doc.previsualizar(op, indice, en_vivo=True)
+    ms_kernel = (time.perf_counter() - inicio) * 1000
     mallas, nuevos, enviar = {}, {}, {}
     for cid, c in estado.cuerpos.items():
         anterior = entrada.cuerpos.get(cid)
@@ -271,8 +273,11 @@ def previa_visual(receta, operacion, indice, deflexion, angular, formas=False):
             pass
     # FL-1: lo que costaría en la ventana (kernel y malla), sin rehacer el documento. FL-1b: mallar un barrido tarda 0,4 s
     ms = (time.perf_counter() - inicio) * 1000
+    # `etapas`: el padre las suma al evento «previa_lista» del registro de uso (de quién es cada parte de la espera)
+    etapas = {"t_ini": t_ini, "t_fin": time.time(), "recalculo_ms": (inicio - t_perf) * 1000,
+              "kernel_ms": ms_kernel, "malla_ms": ms - ms_kernel}
     return _codificar({"mallas": mallas, "nuevos": nuevos, "avisos": list(avisos), "cuerpos": list(estado.cuerpos),
-                       "formas": enviar, "ms": ms, "tris_corte": tris_corte}, transporte=False)
+                       "formas": enviar, "ms": ms, "tris_corte": tris_corte, "etapas": etapas}, transporte=False)
 
 
 def solape_herramienta(receta, operacion, indice, cuerpos):
@@ -304,6 +309,7 @@ def leer_previa_visual(salida, entrada):
     estado._origen_previa = entrada
     estado._ms_previa = datos.get("ms", math.inf)
     estado._tris_corte = datos.get("tris_corte")
+    estado._etapas = datos.get("etapas")
     return estado, datos["avisos"]
 
 
