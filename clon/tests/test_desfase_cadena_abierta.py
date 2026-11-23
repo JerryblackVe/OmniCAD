@@ -126,3 +126,18 @@ def test_agujero_no_se_achica_mas_que_su_radio():
     _ok(sesion, "offset_faces", {"faces": agujero, "distance": "20"})
     volumen = _ok(sesion, "get_physical_properties", {"bodies": ["Cuerpo1"]})["bodies"][0]["volume"]
     assert volumen == pytest.approx(3.141592653589793 * (50**2 - 10**2) * 30, rel=1e-4)
+
+
+def test_anillo_de_boceto_engorda_en_radio_y_no_en_altura():
+    """B-844 (video del anillo): el contorno exterior sale a otra altura y al revés; daba un cilindro flaco en el centro."""
+    sesion = api.Sesion()
+    _ok(sesion, "sketch_from_spec", {"plane": "XY", "name": "Anillo", "entities": [
+        {"type": "circle", "center": [0, 0], "radius": 50.721}, {"type": "circle", "center": [0, 0], "radius": 30.9243}]})
+    _ok(sesion, "extrude", {"sketch": "Anillo", "profile": 1, "distance": 34.9})      # el perfil 1 es el anillo
+    exterior = next(c for c in _ok(sesion, "find_faces", {"body": "Cuerpo1"})["faces"] if c.get("radius") == 50.721)["id"]
+    for distancia, radio in (("5", 55.721), ("27.5", 78.221), ("-8.22", 42.501)):
+        _ok(sesion, "offset_faces", {"faces": exterior, "distance": distancia})
+        cuerpo = _ok(sesion, "get_physical_properties", {})["bodies"][0]
+        assert cuerpo["bounding_box"]["size"][2] == pytest.approx(34.9, abs=1e-3), cuerpo
+        assert cuerpo["volume"] == pytest.approx(3.141592653589793 * (radio**2 - 30.9243**2) * 34.9, rel=1e-3)
+        _ok(sesion, "undo", {})

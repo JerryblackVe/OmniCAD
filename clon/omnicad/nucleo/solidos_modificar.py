@@ -1886,6 +1886,40 @@ def _bandas_de_cadena_abierta(alambre, caras, dist, esquinas):
         return None
 
 
+def _desfase_del_lazo(lazo, d, esquinas):
+    """B-844: caras del desfase 2D de `lazo` (d > 0 = encierra más área). OpenCascade suma dos veces la posición de las
+    aristas de un cuerpo (el contorno queda a otra altura) y desfasa al revés una cara que mira hacia -eje (un anillo
+    extruido hacia abajo daba un cilindro flaco en el centro): se vuelve al plano del lazo y, si el área cambia al
+    revés, se repite con el alambre dado vuelta. Sin salida buena, el resultado de la primera vuelta."""
+    from OCP.TopAbs import TopAbs_WIRE
+    from . import vectores
+    pos = BRepAdaptor_Surface(lazo).Plane().Position()
+    origen, normal = np.array(pos.Location().Coord()), np.array(pos.Direction().Coord())
+    area0 = geo.area(lazo)
+
+    def desfasar(cara):
+        caras = [c for s in vectores.desfase_caras([cara], d, esquinas)
+                 for c in (geo.caras(s) or [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()
+                                            for w in _unicos(s, TopAbs_WIRE)])]
+        for i, c in enumerate(caras):
+            punto = _np(BRep_Tool.Pnt_s(TopoDS.Vertex(_unicos(c, TopAbs_VERTEX)[0])))
+            salto = float((origen - punto) @ normal)
+            if abs(salto) > 1e-9:
+                mov = gp_Trsf()
+                mov.SetTranslation(gp_Vec(*map(float, normal * salto)))
+                caras[i] = TopoDS.Face(BRepBuilderAPI_Transform(c, mov, True).Shape())
+        return caras
+
+    primera = desfasar(lazo)
+    area = sum(geo.area(c) for c in primera)
+    if (area > area0) == (d > 0):
+        return primera
+    alambre = TopoDS.Wire(_unicos(lazo, TopAbs_WIRE)[0].Reversed())
+    segunda = desfasar(BRepBuilderAPI_MakeFace(alambre, True).Face())
+    area = sum(geo.area(c) for c in segunda)
+    return segunda if (area > area0) == (d > 0) else primera
+
+
 def _desfase_por_contorno(forma, caras, dist):
     """B-503: caras laterales de una extrusión entre dos planos (letras o un logo en relieve, un bolsillo): el contorno
     de cada lazo se desfasa en 2D, y la banda que cambia se extruye entre las mismas tapas y se suma o se resta. Como
@@ -1894,7 +1928,7 @@ def _desfase_por_contorno(forma, caras, dist):
     sigue el camino de siempre (regla de B-453)."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_NurbsConvert
     from OCP.BRepClass import BRepClass_FaceClassifier
-    from OCP.TopAbs import TopAbs_IN, TopAbs_WIRE
+    from OCP.TopAbs import TopAbs_IN
     from . import vectores
     try:
         mapa = IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher()
@@ -1964,9 +1998,7 @@ def _desfase_por_contorno(forma, caras, dist):
             nuevas = None
             for esquinas in orden_esquinas:          # vivas como Fusion; una letra B-spline a veces solo sale redondeada
                 try:
-                    nuevas = [c for s in vectores.desfase_caras([lazo], d, esquinas)     # caras: ya limpio (B-528)
-                              for c in (geo.caras(s) or [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()
-                                                         for w in _unicos(s, TopAbs_WIRE)])]
+                    nuevas = _desfase_del_lazo(lazo, d, esquinas)     # caras: ya limpio (B-528)
                     break
                 except geo.ErrorGeometria:
                     pass
