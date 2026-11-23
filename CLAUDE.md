@@ -190,6 +190,7 @@ coordinador, E1–E11 y el chat maestro.
    26 al 30/11, ~19 % (queda ~10 % para el 1 al 3/12).
    - **Verde** (en ritmo): hasta 5 sesiones de Claude trabajando a la vez.
    - **Amarillo** (3 puntos o más arriba del ritmo): 3 a la vez, solo prioridad 1.
+   - **Al 96 %** (Gerardo, 2026-11-23): solo OpenCode, también lo difícil, con los mejores modelos («Cupo semanal al 90 %» en [docs/coordinacion.md](docs/coordinacion.md)).
    - **Rojo** (90 %): se pausan E1–E11 y sigue OpenCode; el coordinador NO se pausa: con su ~5 % llena la cola de OpenCode, revisa lo que deja, integra una vez por día y atiende bloqueantes (Gerardo, 2026-11-17; «Cupo semanal al 90 %» en [docs/coordinacion.md](docs/coordinacion.md)).
 3. **Modelo por ítem, no por carril.** El coordinador lo elige en cada brief y lo cambia con `set_session_model` al
    vaciar la sesión. Opus alto: solver, geometría OCC, núcleo y velocidad (ahí no se baja el esfuerzo). Sonnet medio:

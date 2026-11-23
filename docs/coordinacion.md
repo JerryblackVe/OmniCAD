@@ -370,3 +370,4 @@ de OpenCode; las demás la enlazan.
 - Al 90 %: se pausan todas las sesiones de Claude (E1–E11) (el coordinador sigue activo). Hasta el reinicio semanal trabaja solo OpenCode, según el
   «Protocolo de OpenCode». Lo que deja en verde no se integra a main hasta la integración diaria.
 - El coordinador se guarda ~5 % del semanal: una integración por día de lo que OpenCode dejó en verde (revisando el diff), y los bloqueantes. Nada más.
+- **Al 96 % (Gerardo, 2026-11-23): solo OpenCode, sin excepción.** Desde ahí no se usa Claude para trabajar (ni el coordinador, salvo la integración diaria y los bloqueantes), y **no importa que el arreglo sea difícil: todo va a OpenCode con los mejores modelos** de la tabla del «Protocolo de OpenCode» (`opencode-go/glm-5.3`, `opencode-go/kimi-k3.1-pro`, `openai/gpt-6.2-sol`), sin gastar créditos de Extra Usage. Esto pisa «la geometría difícil no va a OpenCode» mientras dure el 96 %. Hasta el reinicio semanal.
