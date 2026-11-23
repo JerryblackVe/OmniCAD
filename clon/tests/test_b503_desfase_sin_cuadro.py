@@ -19,7 +19,7 @@ from omnicad.ui.ventana import VentanaPrincipal
 
 
 def test_la_letra_que_no_se_desfasa_no_nombra_la_rosca(monkeypatch):
-    """Con «@tienda» en el cuerpo el núcleo no desfasa las letras (estudio de E11); el mensaje hablaba de roscas."""
+    """Si el núcleo no logra desfasar las letras (estudio de E11), el mensaje no habla de roscas."""
     s = api.Sesion()
     for nombre, args in (("create_box", {"length": 40, "width": 20, "height": 3}),
                          ("create_sketch", {"plane": ">Z", "name": "T"}),
@@ -29,7 +29,10 @@ def test_la_letra_que_no_se_desfasa_no_nombra_la_rosca(monkeypatch):
     forma = next(iter(s.doc.estado_final.cuerpos.values())).forma
     letra = [c for c in geo.caras(forma) if refs.cara_libre(c)]
     assert letra
+    ok = sm.desfasar_caras(forma, letra[:1], 0.5)     # B-842: la «t» ahora sí se desfasa por el contorno
+    assert geo.es_valida(ok) and geo.volumen(ok) > geo.volumen(forma)
     monkeypatch.setattr(sm, "_desfase_kernel", lambda *a: (None, False))
+    monkeypatch.setattr(sm, "_desfase_por_contorno", lambda *a: None)
     with pytest.raises(geo.ErrorGeometria) as e:
         sm.desfasar_caras(forma, letra[:1], 0.5)
     assert str(e.value) == "⚠ No se pudo desfasar estas caras 0.5 mm"

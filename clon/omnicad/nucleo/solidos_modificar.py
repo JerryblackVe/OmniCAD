@@ -1812,6 +1812,80 @@ def _booleana_pegada(forma, prisma, operacion):
     return geo.booleano(forma, prisma, operacion)
 
 
+def _extremos_cadena(alambre):
+    """Los dos puntos libres (inicio, fin) de un alambre abierto."""
+    from OCP.BRepTools import BRepTools_WireExplorer
+
+    ex = BRepTools_WireExplorer(alambre)
+    primera = ultima = ex.Current()
+    while ex.More():
+        ultima = ex.Current()
+        ex.Next()
+    return (BRep_Tool.Pnt_s(TopExp.FirstVertex_s(primera, True)),
+            BRep_Tool.Pnt_s(TopExp.LastVertex_s(ultima, True)))
+
+
+def _bandas_de_cadena_abierta(alambre, caras, dist, esquinas):
+    """Caras de la banda entre una cadena plana abierta y su desfase hacia afuera; None si OCC no la calcula."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeOffset
+    from OCP.BRepTools import BRepTools_WireExplorer
+    from OCP.GeomAbs import GeomAbs_Arc, GeomAbs_Intersection
+    from OCP.TopAbs import TopAbs_REVERSED, TopAbs_WIRE
+    from . import vectores
+
+    extremos = _extremos_cadena
+    try:
+        ex = BRepTools_WireExplorer(alambre)
+        primera = ex.Current()
+        cara = next(c for c in caras if _contiene(_unicos(c, TopAbs_EDGE), primera))
+        curva = BRepAdaptor_Curve(TopoDS.Edge(primera))
+        t = curva.LastParameter() if primera.Orientation() == TopAbs_REVERSED else curva.FirstParameter()
+        saliente = _normal_en_arista(TopoDS.Edge(primera), cara, t)
+        p0, p1 = extremos(alambre)
+        for d in (dist, -dist):
+            mk = BRepOffsetAPI_MakeOffset(alambre, GeomAbs_Arc if esquinas == "redondas" else GeomAbs_Intersection,
+                                          True)
+            if vectores._curvas_libres(alambre) > 1:
+                mk.SetApprox(True)
+            mk.Perform(float(d))
+            if not mk.IsDone() or mk.Shape().IsNull():
+                continue
+            nuevas = list(geo._explorar(mk.Shape(), TopAbs_WIRE))
+            if not nuevas:
+                continue
+            q0, q1 = extremos(TopoDS.Wire(nuevas[0]))
+            al_reves = np.linalg.norm(_np(q1) - _np(p0)) < np.linalg.norm(_np(q0) - _np(p0))
+            if al_reves:                    # al cambiar de lado, OCC también puede invertir el recorrido
+                q0, q1 = q1, q0
+            if float((_np(q0) - _np(p0)) @ saliente) * dist < -1e-12:
+                continue                    # la banda quedó del lado contrario al pedido: probar el otro signo
+            bandas = []
+            for w in nuevas:
+                nuevo = TopoDS.Wire(w)
+                if nuevo.Closed():
+                    return None
+                q0, q1 = extremos(nuevo)
+                if al_reves:
+                    q0, q1 = q1, q0
+                aristas = list(geo._explorar(alambre, TopAbs_EDGE)) + list(geo._explorar(nuevo, TopAbs_EDGE))
+                for a, b in ((p0, q0), (p1, q1)):
+                    if np.linalg.norm(_np(a) - _np(b)) > 1e-7:
+                        aristas.append(BRepBuilderAPI_MakeEdge(a, b).Edge())
+                cerrado = BRepBuilderAPI_MakeWire()
+                cerrado.Add(_lista_occ(aristas))
+                if not cerrado.IsDone() or not cerrado.Wire().Closed():
+                    return None
+                banda = BRepBuilderAPI_MakeFace(cerrado.Wire(), True).Face()
+                if not geo.es_valida(banda) or geo.area(banda) < 1e-9:
+                    return None
+                bandas.append(banda)
+            return bandas or None
+        return None
+    except Exception:  # noqa: BLE001 — una vía rápida: el camino de siempre decide
+        return None
+
+
 def _desfase_por_contorno(forma, caras, dist):
     """B-503: caras laterales de una extrusión entre dos planos (letras o un logo en relieve, un bolsillo): el contorno
     de cada lazo se desfasa en 2D, y la banda que cambia se extruye entre las mismas tapas y se suma o se resta. Como
@@ -1833,27 +1907,53 @@ def _desfase_por_contorno(forma, caras, dist):
         grupos = [[caras[i] for i in g] for g in grupos]
         eje, bandas = None, {}
         for grupo in grupos:
-            borde = []                     # (altura de la tapa vecina, arista)
+            vecinas, normales = [], []
             for cara in grupo:
+                normales.append(np.asarray(_punto_normal(cara)[1], float))
                 for arista in _unicos(cara, TopAbs_EDGE):
                     for vecina in geo.lista_occ(mapa.FindFromKey(arista)):
-                        if _contiene(grupo, vecina):
-                            continue
-                        plano = _plano_de_cara(TopoDS.Face(vecina))
-                        if plano is None:
-                            return None
-                        n = np.asarray(plano.normal, float)
-                        eje = n if eje is None else eje
-                        if np.linalg.norm(np.cross(n, eje)) > 1e-9:
-                            return None
-                        borde.append((round(float(np.asarray(plano.origen, float) @ eje), 6), arista))
-                if abs(float(_punto_normal(cara)[1] @ eje)) > 1e-6:      # inclinada (conicidad): no es una extrusión recta
-                    return None
+                        if not _contiene(grupo, vecina):
+                            plano = _plano_de_cara(TopoDS.Face(vecina))
+                            if plano is not None:
+                                vecinas.append((plano, arista))
+            # Las tapas son perpendiculares a TODAS las paredes elegidas; una pared fija en la punta de una
+            # cadena abierta no lo es y, por lo tanto, ya no impide reconocer las dos tapas de la extrusión.
+            candidatas = [(p, a) for p, a in vecinas
+                          if all(abs(float(np.asarray(p.normal, float) @ n)) < 1e-6 for n in normales)]
+            paralelas = []
+            for plano, arista in candidatas:
+                n = np.asarray(plano.normal, float)
+                for normal, ejemplares in paralelas:
+                    if np.linalg.norm(np.cross(n, normal)) < 1e-9:
+                        ejemplares.append((plano, arista))
+                        break
+                else:
+                    paralelas.append((n, [(plano, arista)]))
+            if not paralelas:
+                return None
+            normal, ejemplares = max(paralelas, key=lambda par: len(par[1]))
+            eje = normal if eje is None else eje
+            if np.linalg.norm(np.cross(normal, eje)) > 1e-9:
+                return None
+            borde = [(round(float(np.asarray(p.origen, float) @ eje), 6), a) for p, a in ejemplares]
             alturas = sorted({h for h, _a in borde})
             if len(alturas) != 2:
                 return None
             alambre = BRepBuilderAPI_MakeWire()
             alambre.Add(_lista_occ([a for h, a in borde if h == alturas[0]]))
+            orden_esquinas = (("redondas", "vivas") if dist < 0 and vectores._curvas_libres(alambre.Wire()) > 1
+                              else ("vivas", "redondas"))
+            if not alambre.Wire().Closed():     # cadena abierta (B-842): banda propia; una cara suelta, el camino de siempre
+                if len(grupo) < 2:
+                    return None
+                for esquinas in orden_esquinas:
+                    banda = _bandas_de_cadena_abierta(alambre.Wire(), grupo, dist, esquinas)
+                    if banda is not None:
+                        bandas.setdefault(tuple(alturas), []).extend(banda)
+                        break
+                else:
+                    return None
+                continue
             lazo = BRepBuilderAPI_MakeFace(alambre.Wire(), True).Face()
             # el material, ¿queda adentro del lazo (letra) o afuera (agujero, bolsillo)?
             p, n = _punto_normal(grupo[0])
@@ -1862,7 +1962,7 @@ def _desfase_por_contorno(forma, caras, dist):
             adentro = BRepClass_FaceClassifier(lazo, gp_Pnt(*map(float, q)), 1e-7).State() == TopAbs_IN
             d = dist if adentro else -dist           # d > 0: el lazo encierra más área
             nuevas = None
-            for esquinas in ("vivas", "redondas"):   # vivas como Fusion; una letra B-spline a veces solo sale redondeada
+            for esquinas in orden_esquinas:          # vivas como Fusion; una letra B-spline a veces solo sale redondeada
                 try:
                     nuevas = [c for s in vectores.desfase_caras([lazo], d, esquinas)     # caras: ya limpio (B-528)
                               for c in (geo.caras(s) or [BRepBuilderAPI_MakeFace(TopoDS.Wire(w), True).Face()

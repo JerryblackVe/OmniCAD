@@ -107,14 +107,19 @@ def desfase_caras(caras, distancia, esquinas="redondas"):
     union = GeomAbs_Arc if esquinas == "redondas" else GeomAbs_Intersection
     salida = []
     for cara in caras:
-        mk = BRepOffsetAPI_MakeOffset(TopoDS.Face(cara), union)
         # B-517: hacia adentro, un lazo con varias curvas libres seguidas (letras, trazados de SVG) cerraba el
         # programa en OpenCascade; pasado a arcos y rectas (±0,15 % de área) da un error. Una spline o elipse sola
-        # queda exacta, y hacia afuera no se aproxima (ahí falla donde lo exacto anda).
-        # shortcut: el criterio salió de medir letras (d, a, @ cierran; e, o no); si otra figura cierra, ampliarlo.
-        if distancia < 0 and any(_curvas_libres(w) > 1 for w in geo._explorar(cara, TopAbs_WIRE)):
-            mk.SetApprox(True)
-        mk.Perform(float(distancia))
+        # queda exacta. Hacia afuera, lo exacto anda donde la aproximación falla (la «t»): se prueba primero exacto
+        # y, si no sale, se aproxima (B-842: un alambre nulo hacia afuera se resuelve así).
+        libre = any(_curvas_libres(w) > 1 for w in geo._explorar(cara, TopAbs_WIRE))
+        aproximaciones = ([True] if (distancia < 0 and libre) else [False, True] if libre else [False])
+        for aprox in aproximaciones:
+            mk = BRepOffsetAPI_MakeOffset(TopoDS.Face(cara), union)
+            if aprox:
+                mk.SetApprox(True)
+            mk.Perform(float(distancia))
+            if mk.IsDone() and not mk.Shape().IsNull() and next(geo._explorar(mk.Shape(), TopAbs_EDGE), None) is not None:
+                break
         if not mk.IsDone() or mk.Shape().IsNull() or next(geo._explorar(mk.Shape(), TopAbs_EDGE), None) is None:
             if distancia < 0 and esquinas == "redondas":    # B-503: un trazo que se parte (la cola de la «e», la «@»)
                 try:
