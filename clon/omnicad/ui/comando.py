@@ -46,6 +46,9 @@ TIPOS_PESADOS, CARAS_PESADAS = ("vaciado", "empalme", "chaflan", "primitiva", "p
 # tecleados) tardó menos de esto la última vez. Las pruebas (y quien quiera, como escape) la piden en la ventana con
 # OMNICAD_PREVIA_EN_VENTANA=1.
 PREVIA_EN_VENTANA_MS = 30
+# Planos, ejes y puntos de construcción: cuentas de geometría, sin booleanas ni mallas. Su previa siempre va en la ventana
+# (instantánea); el proceso aparte rehacía el documento entero para mostrar un plano (B-759: «Calculando…» eterno).
+TIPOS_LIVIANOS = ("plano", "eje", "punto")
 PREVIA_APARTE = os.environ.get("OMNICAD_PREVIA_EN_VENTANA") != "1"
 # Comandos cuya sección «Más opciones» quedó abierta (se recuerda mientras dure la sesión: no hace falta reabrirla cada vez).
 _SECCIONES_ABIERTAS = set()
@@ -1996,7 +1999,8 @@ class PanelComando(QFrame):
             inicio = time.perf_counter()
             try:
                 with geo.en_serie():         # B-293
-                    estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice, en_vivo=self._previa_aislada)
+                    estado, avisos = self.ctx.doc.previsualizar(op, self.ctx.indice,
+                                                             en_vivo=self._previa_aislada or op.TIPO in TIPOS_LIVIANOS)
             finally:
                 self._ms_previa = _firma_previa(op), (time.perf_counter() - inicio) * 1000, _magnitud_previa(self.ctx, op)
             self._previa_aislada = True
@@ -2131,7 +2135,7 @@ class PanelComando(QFrame):
         return True
 
     def _previa_pesada(self, op, tope_ms=None):
-        if self.ctx.doc.motor != "opencascade":
+        if self.ctx.doc.motor != "opencascade" or op.TIPO in TIPOS_LIVIANOS:
             return False
         if op.TIPO == "rosca" and op.p.get("modelada"):
             return True     # P-78: cortar la hélice tarda segundos aunque el cuerpo sea chico (M20×100: 25-50 s)
