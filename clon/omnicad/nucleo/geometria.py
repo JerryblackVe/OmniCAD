@@ -1634,7 +1634,9 @@ def se_tocan(a, b, tolerancia=1e-6):
     if ba is None or bb is None or not caras_a or not caras_b:       # un vértice o aristas sueltas: forma entera
         d = BRepExtrema_DistShapeShape(a, b)
         return d.IsDone() and d.Value() <= tolerancia
+    con_malla, cajas_tri = False, {}
     if len(caras_a) * len(caras_b) > PARES_MALLA_SE_TOCAN and (cand := _caras_cercanas_malla(a, b, tolerancia)):
+        con_malla = True
         caras_a, caras_b = cand                # 20 caras × 497 de texto: 1039 distancias exactas (98 s) → 2 (0,2 s)
         if not caras_a or not caras_b:
             return False
@@ -1650,14 +1652,52 @@ def se_tocan(a, b, tolerancia=1e-6):
             continue
         for fb, xb in cercanas_b:
             if not xa.IsOut(xb):
+                if con_malla and _mallas_lejanas(fa, fb, tolerancia + 4 * _DEFLEXION_MALLA_SE_TOCAN, cajas_tri):
+                    continue     # la malla gruesa ya las separa: dos tapas planas de un logo a 10 mm costaban 0,3 s exactas
                 d = BRepExtrema_DistShapeShape(fa, fb)
                 if d.IsDone() and d.Value() <= tolerancia:
                     return True
     return False
 
 
-PARES_MALLA_SE_TOCAN = 1000      # pares de caras desde los que `se_tocan` descarta primero por malla (por debajo, no vale la malla)
+PARES_MALLA_SE_TOCAN = 64        # pares de caras desde los que `se_tocan` descarta primero por malla (~15 ms; un par exacto con
+                                 # curvas cuesta 60-380 ms: 20 caras × 14 de un logo, 2,9 s → 0,2 s)
 _DEFLEXION_MALLA_SE_TOCAN = 0.05
+
+
+def _datos_malla(cara, cache):
+    """(mínimos Kx3, máximos Kx3, triángulos Kx3x3, normales Kx3, desfases K, válidos K) de la malla de `cara` en el mundo;
+    None si no tiene malla. Válido: el triángulo tiene área (su plano sirve para separar)."""
+    if id(cara) not in cache:
+        tri = BRep_Tool.Triangulation_s(cara, loc := TopLoc_Location())
+        datos = None
+        if tri is not None and not _cara_incompleta(tri) and len(t := _triangulos_cara(cara, tri, loc)):
+            n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+            largo = np.linalg.norm(n, axis=1)
+            validos = largo > 1e-12
+            n = n / np.where(validos, largo, 1.0)[:, None]
+            datos = (t.min(axis=1), t.max(axis=1), t, n, (n * t[:, 0]).sum(axis=1), validos)
+        cache[id(cara)] = (cara, datos)       # `cara` queda viva: su id no se reutiliza
+    return cache[id(cara)][1]
+
+
+def _mallas_lejanas(fa, fb, margen, cache):
+    """True solo si las mallas de `fa` y `fb` están a más de `margen` (con deflexión ≤ margen/4, las caras también): no hace
+    falta su distancia exacta (0,2-0,4 s entre dos tapas planas). Par de triángulos lejano: sus cajas se separan, o el plano
+    de uno deja los tres vértices del otro del mismo lado a más de `margen`. En la duda (sin malla, demasiados pares) False."""
+    try:
+        da, db = _datos_malla(fa, cache), _datos_malla(fb, cache)
+        if da is None or db is None or len(da[0]) * len(db[0]) > 1_000_000:
+            return False
+        lejos = (np.maximum(da[0][:, None, :] - db[1][None, :, :], db[0][None, :, :] - da[1][:, None, :]).max(axis=2)
+                 > margen)
+        for (_, _, _, n, d, ok), (_, _, t, _, _, _) in ((da, db), (db, da)):
+            dist = np.einsum("kj,mvj->kmv", n, t) - d[:, None, None]       # vértices de t contra el plano de cada triángulo
+            sep = ((dist > margen).all(axis=2) | (dist < -margen).all(axis=2)) & ok[:, None]
+            lejos |= sep if n is da[3] else sep.T
+        return bool(lejos.all())
+    except Exception:  # noqa: BLE001 — vía rápida: si falla, sigue la distancia exacta sin mostrar el error
+        return False
 
 
 def _caras_cercanas_malla(a, b, tolerancia):

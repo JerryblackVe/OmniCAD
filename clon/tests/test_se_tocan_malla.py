@@ -61,3 +61,39 @@ def test_si_la_malla_falla_cae_al_camino_exacto_sin_error(monkeypatch):
     monkeypatch.setattr(geo, "BRepMesh_IncrementalMesh", falla)
     assert geo._caras_cercanas_malla(a, b, 1e-6) is None
     assert geo.se_tocan(a, b) is True
+
+
+@pytest.mark.parametrize("hueco, tocan", [(1.0, False), (0.0, True)])
+def test_la_malla_tambien_decide_en_cuerpos_medianos(monkeypatch, usos, hueco, tocan):
+    """B-837: un logo de 20 × 14 caras (280 pares, bajo los 1000 de antes) tardaba 2,9 s en distancias exactas."""
+    a = _modificado(_peine(5, 0))
+    b = _peine(4, 2 + hueco, alto=1.0, extra=[geo.caja(2, 2, 1, (0, -8, 0))])
+    pares = len(geo.caras(a)) * len(geo.caras(b))
+    assert geo.PARES_MALLA_SE_TOCAN < pares <= 1000
+    assert geo.se_tocan(a, b) is tocan is _exacto(monkeypatch, a, b)
+    assert usos and usos[0] is not None
+
+
+def _mallada(forma):
+    geo.teselar(forma)
+    return forma
+
+
+@pytest.mark.parametrize("separacion, lejos", [(8.0, True), (0.1, False), (0.0, False)])
+def test_mallas_lejanas_nunca_separa_caras_que_se_acercan(separacion, lejos):
+    a = _mallada(geo.caja(2, 2, 2))
+    b = _mallada(geo.caja(2, 2, 2, (2 + separacion, 0, 0)))
+    cache = {}
+    veredictos = [geo._mallas_lejanas(fa, fb, 0.2, cache) for fa in geo.caras(a) for fb in geo.caras(b)]
+    assert all(veredictos) is lejos
+    if not lejos:   # una cara inclinada o con el hueco justo nunca se declara lejana si el exacto dice que se acercan
+        exactas = [geo.BRepExtrema_DistShapeShape(fa, fb).Value() for fa in geo.caras(a) for fb in geo.caras(b)]
+        assert all(not v or e > 0.2 for v, e in zip(veredictos, exactas, strict=True))
+
+
+def test_mallas_lejanas_sin_malla_o_con_error_no_descarta(monkeypatch):
+    sin_malla = geo.caras(geo.caja(2, 2, 2, (50, 0, 0)))[0]
+    assert geo._mallas_lejanas(geo.caras(_mallada(geo.caja(2, 2, 2)))[0], sin_malla, 0.2, {}) is False
+    cara = geo.caras(_mallada(geo.caja(2, 2, 2)))[0]
+    monkeypatch.setattr(geo.np, "einsum", lambda *x: 1 / 0)
+    assert geo._mallas_lejanas(cara, cara, 0.2, {}) is False
