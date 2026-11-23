@@ -33,6 +33,7 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication, QObject, Qt, Signal
 from PySide6.QtNetwork import QHostAddress, QTcpServer
 from PySide6.QtWidgets import QApplication, QLabel, QProgressDialog
+from shiboken6 import isValid
 
 from .. import VERSION, api
 from ..api import protocolo_puente as proto
@@ -192,9 +193,19 @@ class PuenteAgentes(QObject):
             socket.disconnected.connect(lambda s=socket: self._desconectado(s))
 
     def _desconectado(self, socket):
-        if self._conexiones.pop(socket, None) is not None:
+        if socket in self._conexiones:
+            self._descartar(socket)
+
+    def _descartar(self, socket):
+        """Saca la conexión de un socket y pide borrarlo si su objeto C++ todavía existe. B-839: nunca
+        tira — el objeto puede haber muerto antes (deleteLater procesado por el processEvents del
+        mallado en hilo o del latido de execute_code) y el wrapper Python seguir en `_conexiones`."""
+        self._conexiones.pop(socket, None)
+        self._actualizar_indicador()
+        try:
             socket.deleteLater()
-            self._actualizar_indicador()
+        except RuntimeError:              # el objeto de Qt ya no existe
+            pass
 
     def _cerrar(self, socket):
         datos = self._conexiones.get(socket)
@@ -207,6 +218,9 @@ class PuenteAgentes(QObject):
 
     def _leer(self, socket):
         datos = self._conexiones.get(socket)
+        if datos is not None and not isValid(socket):     # B-839: el objeto C++ ya se borró
+            self._descartar(socket)
+            return
         if datos is None or datos["cerrando"]:
             return
         datos["buffer"] += bytes(socket.readAll())
@@ -231,19 +245,27 @@ class PuenteAgentes(QObject):
                 datos = self._conexiones.get(socket)
                 if datos is None or datos["cerrando"]:
                     continue
+                if not isValid(socket):      # B-839: no atiende el pedido de un objeto ya borrado
+                    self._descartar(socket)
+                    continue
                 respuesta = self._atender(datos, linea)
-                self._responder(socket, respuesta)
+                if not self._responder(socket, respuesta):   # B-839: cierre limpio, sin dejar al cliente colgado
+                    self._descartar(socket)
+                    continue
                 if respuesta.get("error_kind") == "UNAUTHORIZED":
                     self._cerrar(socket)      # después de mandar la respuesta: disconnectFromHost la despacha
         finally:
             self._atendiendo = False
 
     def _responder(self, socket, respuesta):
+        """Manda la respuesta; False si el objeto C++ del socket ya no existe (B-839): el llamador
+        descarta la conexión y el cliente ve el corte, en vez de esperar a un socket muerto."""
         try:
             socket.write(proto.linea(proto.a_cable(respuesta)))
             socket.flush()
-        except RuntimeError:
-            pass
+            return True
+        except RuntimeError:              # el objeto de Qt ya no existe
+            return False
 
     # ------------------------------------------------------------ execute_code en vivo
     def _dialogo_codigo(self):

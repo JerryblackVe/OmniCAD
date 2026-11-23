@@ -315,6 +315,36 @@ def test_pedidos_mal_formados_no_tiran_la_app(puente):
         c.cerrar()
 
 
+def test_b839_socket_borrado_en_medio_no_tira_y_limpia(puente):
+    """B-839: el objeto C++ de un socket puede morir (el deleteLater de `_desconectado` procesado por el
+    processEvents del mallado en hilo o del latido de execute_code) con la entrada todavía en
+    `_conexiones`: la llamada que llega después no puede tirar RuntimeError crudo — el pedido se perdía
+    y el cliente MCP quedaba esperando 300 s (APP_NOT_RESPONDING). Limpia la conexión y sigue vivo."""
+    import shiboken6
+
+    c1 = _cliente(puente)
+    c1._esperar(lambda: len(puente._conexiones) == 1, "que el servidor acepte la conexión")
+    socket = next(iter(puente._conexiones))
+    socket.disconnected.disconnect()    # en la carrera real este evento ya fue despachado antes de morir
+    shiboken6.delete(socket)            # lo que deja la carrera: el C++ muerto, la entrada queda en el dict
+    assert socket in puente._conexiones
+    puente._leer(socket)                # llamada después de borrar: no tira, limpia
+    assert socket not in puente._conexiones
+    puente._desconectado(socket)       # doble despacho de la misma señal: tampoco tira
+    # un pedido encolado de un socket muerto se descarta: no corre la herramienta para nadie
+    pedido = {"id": 1, "token": puente.token, "tool": "ping", "args": {}}
+    puente._conexiones[socket] = {"buffer": bytearray(), "autenticado": True, "cerrando": False}
+    puente._cola.append((socket, json.dumps(pedido).encode()))
+    puente._atender_cola()
+    assert socket not in puente._conexiones and not puente._cola
+    c1.cerrar()
+    c2 = _cliente(puente)
+    try:
+        assert c2.pedir("ping")["result"]["pong"] is True               # el puente sigue sirviendo
+    finally:
+        c2.cerrar()
+
+
 def test_app_y_puentes_usan_la_misma_carpeta_de_datos(monkeypatch, tmp_path):
     """En Linux la app guardaba en ~/OmniCAD y el puente en ~/.local/share/OmniCAD: ahora es una sola regla."""
     from pathlib import Path
