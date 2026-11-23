@@ -59,6 +59,7 @@ Se aplican antes que cualquier otra regla, en el coordinador, E1–E11, OpenCode
   cierra) entra en el momento, o antes si Gerardo dice «mandá».
 
 ## Dónde se trabaja: main vive en la VPS de Google (Gerardo, 2026-11-11)
+> **Desde 2026-11-23 (Gerardo) la VPS ya no se usa en este proyecto: `main` vive en GitHub (`origin`) y se trabaja en la PC.** Lo de abajo sobre la VPS es historia; manda esta línea.
 - `main` vive en `omnicad-vps` (`/home/mosos/OmniCAD`; app de Claude › SSH `mosos@34.66.139.76`). La PC de Gerardo
   sigue `vps/main` (remoto `vps`) y sirve para abrir la app y probar a mano la ventana de Windows.
 - En Linux: `.venv/bin/python`; lo que abre ventanas va con `xvfb-run -a`. Un worktree por ítem (`~/OmniCAD-<ID>`,
