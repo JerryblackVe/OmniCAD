@@ -1634,6 +1634,10 @@ def se_tocan(a, b, tolerancia=1e-6):
     if ba is None or bb is None or not caras_a or not caras_b:       # un vértice o aristas sueltas: forma entera
         d = BRepExtrema_DistShapeShape(a, b)
         return d.IsDone() and d.Value() <= tolerancia
+    if len(caras_a) * len(caras_b) > PARES_MALLA_SE_TOCAN and (cand := _caras_cercanas_malla(a, b, tolerancia)):
+        caras_a, caras_b = cand                # 20 caras × 497 de texto: 1039 distancias exactas (98 s) → 2 (0,2 s)
+        if not caras_a or not caras_b:
+            return False
     cercanas_b = [(f, x) for f in caras_b
                   if (g := _caja_occ(f, tolerancia, holgada=True)) is not None and not g.IsOut(ba)
                   and (x := _caja_occ(f, tolerancia)) is not None and not x.IsOut(ba)]
@@ -1650,6 +1654,33 @@ def se_tocan(a, b, tolerancia=1e-6):
                 if d.IsDone() and d.Value() <= tolerancia:
                     return True
     return False
+
+
+PARES_MALLA_SE_TOCAN = 1000      # pares de caras desde los que `se_tocan` descarta primero por malla (por debajo, no vale la malla)
+_DEFLEXION_MALLA_SE_TOCAN = 0.05
+
+
+def _caras_cercanas_malla(a, b, tolerancia):
+    """([caras de a], [caras de b]) que pueden tocarse, o None si no se pudo decidir (el llamador sigue por el camino
+    exacto, sin avisar). Malla gruesa de COPIAS (no deja triangulación en las formas vivas) y BRepExtrema_ShapeProximity
+    con margen de 4 deflexiones: dos caras a distancia ≤ tolerancia tienen mallas a ≤ tolerancia + 2·deflexión, así
+    que solo se descartan las que de verdad están lejos. Una cara sin malla anula el descarte (se saltaría)."""
+    try:
+        from OCP.BRepExtrema import BRepExtrema_ShapeProximity
+        copias = []
+        for forma in (a, b):
+            copia = BRepBuilderAPI_Copy(forma).Shape()
+            BRepMesh_IncrementalMesh(copia, _DEFLEXION_MALLA_SE_TOCAN, False, 0.5, False)
+            if any(BRep_Tool.Triangulation_s(f, TopLoc_Location()) is None for f in caras(copia)):
+                return None
+            copias.append(copia)
+        prox = BRepExtrema_ShapeProximity(copias[0], copias[1], tolerancia + 4 * _DEFLEXION_MALLA_SE_TOCAN)
+        prox.Perform()           # IsDone() es False cuando ninguna malla se acerca: sin candidatas, no es un fallo
+        cerca1, cerca2 = prox.OverlapSubShapes1(), prox.OverlapSubShapes2()
+        return ([TopoDS.Face(prox.GetSubShape1(i)) for i in range(len(caras(copias[0]))) if cerca1.IsBound(i)],
+                [TopoDS.Face(prox.GetSubShape2(i)) for i in range(len(caras(copias[1]))) if cerca2.IsBound(i)])
+    except Exception:  # noqa: BLE001 — vía rápida: si falla, se calcula por el camino exacto sin mostrar el error
+        return None
 
 
 def _caja_occ(forma, holgura, holgada=False):

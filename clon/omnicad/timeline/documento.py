@@ -728,6 +728,7 @@ class Documento:
         calculo = self._prevuelo_cambio({"tipo": "eliminar", "indice": idx[0], "ids": ids})
         self._guardar_para_deshacer()
         self.operaciones[:] = quedan
+        self._duraciones[:] = [d for j, d in enumerate(self._duraciones) if j not in idx]   # alineadas con los pasos que quedan
         for g in self.grupos:
             g["pasos"] = [j for j in g["pasos"] if j not in elegidos]
         self.grupos = [g for g in self.grupos if g["pasos"]]
@@ -1052,16 +1053,20 @@ class Documento:
         self.modificado = True
         self._terminar_recalculo(desde, calculo)
 
-    def _prevuelo_corresponde(self, reactivados=0, aparte=False, desde=0):
+    def _prevuelo_corresponde(self, reactivados=0, aparte=False, desde=0, quitados=()):
         """True si un cambio del historial tiene que ensayarse antes en un proceso aparte (B-48). `aparte`: siempre.
         También si es un documento chico pero lo que hay que recalcular desde `desde` tarda (B-331): en el hilo de la
-        ventana congelaba 4-11 s; en el proceso aparte la ventana sigue repintando."""
+        ventana congelaba 4-11 s; en el proceso aparte la ventana sigue repintando. `quitados`: índices de pasos que el
+        cambio borra o suprime: su duración no se vuelve a pagar (borrar la última extrusión de 145 s no recalcula nada);
+        tampoco cuentan los pasos ya suprimidos, salvo el que se está reactivando (`desde`)."""
         from ..nucleo import aislado
 
         return (not aislado.EN_HIJO and motor.motor_activo() == "opencascade"
                 and (aparte or sum(not op.suprimida for op in self.operaciones[:self.marcador]) + reactivados
                      >= aislado.UMBRAL_PREVUELO_PARAMETROS
-                     or sum(self._duraciones[desde:]) >= aislado.UMBRAL_COSTO_AISLAR_S))
+                     or sum(d for j, d in enumerate(self._duraciones[:len(self.operaciones)])
+                            if j >= desde and j not in quitados and (j == desde or not self.operaciones[j].suprimida))
+                     >= aislado.UMBRAL_COSTO_AISLAR_S))
 
     def _solo_primitivas(self, desde):
         """FL-5: lo que `recalcular` calcularía desde `desde` son solo primitivas como cuerpo nuevo, o nada (deshacer lo
@@ -1122,7 +1127,9 @@ class Documento:
         # Se protege también el documento que alcanza el umbral al agregar o reactivar un paso.
         reactivada = (not suprimida if cambio["tipo"] == "agregar" else
                       i < self.marcador and self.operaciones[i].suprimida and not suprimida)
-        if not self._prevuelo_corresponde(int(reactivada), aparte, i):
+        quitados = ({self.indice(x) for x in cambio.get("ids") or [self.operaciones[i].id]} if cambio["tipo"] == "eliminar"
+                    else {i} if cambio["tipo"] == "suprimir" and suprimida else ())
+        if not self._prevuelo_corresponde(int(reactivada), aparte, i, quitados):
             return
         datos = {"receta": self.a_dict(), "cambio": cambio}
         firma = hashlib.sha256(json.dumps(datos, sort_keys=True).encode("utf-8")).digest()
