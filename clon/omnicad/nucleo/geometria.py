@@ -1634,29 +1634,32 @@ def se_tocan(a, b, tolerancia=1e-6):
     if ba is None or bb is None or not caras_a or not caras_b:       # un vértice o aristas sueltas: forma entera
         d = BRepExtrema_DistShapeShape(a, b)
         return d.IsDone() and d.Value() <= tolerancia
-    con_malla, cajas_tri = False, {}
+    con_malla, cajas_tri, pares = False, {}, None
     if len(caras_a) * len(caras_b) > PARES_MALLA_SE_TOCAN and (cand := _caras_cercanas_malla(a, b, tolerancia)):
         con_malla = True
-        caras_a, caras_b = cand                # 20 caras × 497 de texto: 1039 distancias exactas (98 s) → 2 (0,2 s)
-        if not caras_a or not caras_b:
+        caras_a, caras_b, pares = cand         # 20 caras × 497 de texto: 1039 distancias exactas (98 s) → 2 (0,2 s)
+        if not pares:
             return False
-    cercanas_b = [(f, x) for f in caras_b
+    cercanas_b = [(j, f, x) for j, f in enumerate(caras_b)
                   if (g := _caja_occ(f, tolerancia, holgada=True)) is not None and not g.IsOut(ba)
                   and (x := _caja_occ(f, tolerancia)) is not None and not x.IsOut(ba)]
-    for fa in caras_a:
+    pendientes = []
+    for i, fa in enumerate(caras_a):
         grosera = _caja_occ(fa, tolerancia, holgada=True)
         if grosera is None or grosera.IsOut(bb):
             continue
         xa = _caja_occ(fa, tolerancia)
         if xa is None or xa.IsOut(bb):
             continue
-        for fb, xb in cercanas_b:
+        for j, fb, xb in cercanas_b:
             if not xa.IsOut(xb):
-                if con_malla and _mallas_lejanas(fa, fb, tolerancia + 4 * _DEFLEXION_MALLA_SE_TOCAN, cajas_tri):
+                if con_malla and ((i, j) not in pares or _mallas_lejanas(fa, fb, tolerancia + 4 * _DEFLEXION_MALLA_SE_TOCAN, cajas_tri)):
                     continue     # la malla gruesa ya las separa: dos tapas planas de un logo a 10 mm costaban 0,3 s exactas
-                d = BRepExtrema_DistShapeShape(fa, fb)
-                if d.IsDone() and d.Value() <= tolerancia:
-                    return True
+                pendientes.append((cajas_tri.get(("dist", id(fa), id(fb)), 0.0), len(pendientes), fa, fb))
+    for _, _, fa, fb in sorted(pendientes, key=lambda p: p[:2]):     # primero las más cercanas: la que toca suele ser la primera
+        d = BRepExtrema_DistShapeShape(fa, fb)
+        if d.IsDone() and d.Value() <= tolerancia:
+            return True
     return False
 
 
@@ -1695,16 +1698,63 @@ def _mallas_lejanas(fa, fb, margen, cache):
             dist = np.einsum("kj,mvj->kmv", n, t) - d[:, None, None]       # vértices de t contra el plano de cada triángulo
             sep = ((dist > margen).all(axis=2) | (dist < -margen).all(axis=2)) & ok[:, None]
             lejos |= sep if n is da[3] else sep.T
-        return bool(lejos.all())
+        return bool(lejos.all()) or _puntos_lejanos(fa, fb, margen, da[2], db[2], cache)
     except Exception:  # noqa: BLE001 — vía rápida: si falla, sigue la distancia exacta sin mostrar el error
         return False
 
 
+PUNTOS_MALLA_SE_TOCAN = 200_000    # tope de puntos de muestra por cara en `_puntos_lejanos`
+_PASO_MUESTRA_SE_TOCAN = 0.1
+
+
+def _muestras_cara(cara, tri, cache):
+    """(cara, puntos Nx3, h, [árbol]): cada triángulo de `cara` subdividido en n×n según su lado más largo, y la cota `h` de
+    cuánto se aleja cualquier punto de la malla del punto de muestra más cercano (el lado más largo de un subtriángulo).
+    El paso arranca en _PASO_MUESTRA_SE_TOCAN y se duplica hasta entrar en PUNTOS_MALLA_SE_TOCAN puntos."""
+    clave = ("muestras", id(cara))
+    if clave not in cache:
+        largos = np.max([np.linalg.norm(tri[:, i] - tri[:, (i + 1) % 3], axis=1) for i in range(3)], axis=0)
+        paso = _PASO_MUESTRA_SE_TOCAN
+        while True:
+            n = np.maximum(1, np.ceil(largos / paso)).astype(int)
+            if ((n + 1) * (n + 2) // 2).sum() <= PUNTOS_MALLA_SE_TOCAN:
+                break
+            paso *= 2
+        pts = []
+        for m in np.unique(n):                      # un triángulo grande no obliga a subdividir los chicos
+            u, v = np.meshgrid(np.arange(m + 1), np.arange(m + 1))
+            sel = u + v <= m
+            w1, w2 = (u[sel] / m)[:, None], (v[sel] / m)[:, None]
+            t = tri[n == m]
+            pts.append((t[:, 0, None, :] * (1 - w1 - w2) + t[:, 1, None, :] * w1 + t[:, 2, None, :] * w2).reshape(-1, 3))
+        cache[clave] = (cara, np.concatenate(pts), float((largos / n).max()), [None])     # [None]: el árbol, si hace falta
+    return cache[clave]
+
+
+def _puntos_lejanos(fa, fb, margen, tri_a, tri_b, cache):
+    """True solo si las mallas de `fa` y `fb` están a más de `margen`, medido entre puntos de muestra: la distancia entre
+    muestras menos la cota `h` de cada lado es una cota inferior de la distancia entre mallas. Cubre lo que la caja y
+    el plano de `_mallas_lejanas` no separan (caras curvas a 0,5-9 mm: un par exacto costaba 0,1-0,8 s). Si no están
+    lejos, deja en `cache` la distancia entre muestras para medir primero los pares más cercanos."""
+    from scipy.spatial import cKDTree
+    _, pa, ha, _ = _muestras_cara(fa, tri_a, cache)
+    _, pb, hb, arbol = _muestras_cara(fb, tri_b, cache)
+    if arbol[0] is None:
+        arbol[0] = cKDTree(pb)
+    tope = margen + ha + hb
+    pa = pa[((pa >= pb.min(axis=0) - tope) & (pa <= pb.max(axis=0) + tope)).all(axis=1)]   # lo lejano sale sin consultar el árbol
+    cerca = arbol[0].query(pa, k=1, distance_upper_bound=tope)[0].min() if len(pa) else np.inf
+    cache[("dist", id(fa), id(fb))] = float(cerca)
+    return bool(np.isinf(cerca))
+
+
 def _caras_cercanas_malla(a, b, tolerancia):
-    """([caras de a], [caras de b]) que pueden tocarse, o None si no se pudo decidir (el llamador sigue por el camino
-    exacto, sin avisar). Malla gruesa de COPIAS (no deja triangulación en las formas vivas) y BRepExtrema_ShapeProximity
-    con margen de 4 deflexiones: dos caras a distancia ≤ tolerancia tienen mallas a ≤ tolerancia + 2·deflexión, así
-    que solo se descartan las que de verdad están lejos. Una cara sin malla anula el descarte (se saltaría)."""
+    """([caras de a], [caras de b], {(i, j)}) con las caras que pueden tocarse y qué pares (índices en esas listas) vale la
+    pena medir exacto, o None si no se pudo decidir (el llamador sigue por el camino exacto, sin avisar). Malla gruesa de
+    COPIAS (no deja triangulación en las formas vivas) y BRepExtrema_ShapeProximity con margen de 4 deflexiones: dos
+    caras a distancia ≤ tolerancia tienen mallas a ≤ tolerancia + 2·deflexión, así que solo se descartan las que de
+    verdad están lejos. Se pregunta cara por cara de `a` contra todo `b`: con solo las caras sueltas de cada lado, un
+    texto de 451 caras daba 43 pares exactos de 100 ms (4,2 s) y con los pares, 1-3. Una cara sin malla anula el descarte."""
     try:
         from OCP.BRepExtrema import BRepExtrema_ShapeProximity
         copias = []
@@ -1714,11 +1764,21 @@ def _caras_cercanas_malla(a, b, tolerancia):
             if any(BRep_Tool.Triangulation_s(f, TopLoc_Location()) is None for f in caras(copia)):
                 return None
             copias.append(copia)
-        prox = BRepExtrema_ShapeProximity(copias[0], copias[1], tolerancia + 4 * _DEFLEXION_MALLA_SE_TOCAN)
+        margen = tolerancia + 4 * _DEFLEXION_MALLA_SE_TOCAN
+        prox = BRepExtrema_ShapeProximity(copias[0], copias[1], margen)
         prox.Perform()           # IsDone() es False cuando ninguna malla se acerca: sin candidatas, no es un fallo
         cerca1, cerca2 = prox.OverlapSubShapes1(), prox.OverlapSubShapes2()
-        return ([TopoDS.Face(prox.GetSubShape1(i)) for i in range(len(caras(copias[0]))) if cerca1.IsBound(i)],
-                [TopoDS.Face(prox.GetSubShape2(i)) for i in range(len(caras(copias[1]))) if cerca2.IsBound(i)])
+        idx_a = [i for i in range(len(caras(copias[0]))) if cerca1.IsBound(i)]
+        idx_b = [j for j in range(len(caras(copias[1]))) if cerca2.IsBound(j)]
+        pos_b = {j: n for n, j in enumerate(idx_b)}
+        faces_a = [TopoDS.Face(prox.GetSubShape1(i)) for i in idx_a]
+        pares = set()
+        for n, fa in enumerate(faces_a):
+            p = BRepExtrema_ShapeProximity(fa, copias[1], margen)
+            p.Perform()
+            hit = p.OverlapSubShapes2()
+            pares.update((n, pos_b[j]) for j in idx_b if hit.IsBound(j))
+        return faces_a, [TopoDS.Face(prox.GetSubShape2(j)) for j in idx_b], pares
     except Exception:  # noqa: BLE001 — vía rápida: si falla, se calcula por el camino exacto sin mostrar el error
         return None
 

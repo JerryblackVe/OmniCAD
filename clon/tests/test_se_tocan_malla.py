@@ -49,7 +49,7 @@ def test_igual_que_el_camino_exacto_con_cuerpos_de_muchas_caras(monkeypatch, uso
 def test_la_malla_descarta_las_caras_lejanas(usos):
     a, b = _modificado(_peine(12, 0)), _fila_lejana(1.0)
     geo.se_tocan(a, b)
-    caras_a, caras_b = usos[0]
+    caras_a, caras_b, _ = usos[0]
     assert len(caras_a) < len(geo.caras(a)) and len(caras_b) < len(geo.caras(b))
 
 
@@ -97,3 +97,35 @@ def test_mallas_lejanas_sin_malla_o_con_error_no_descarta(monkeypatch):
     cara = geo.caras(_mallada(geo.caja(2, 2, 2)))[0]
     monkeypatch.setattr(geo.np, "einsum", lambda *x: 1 / 0)
     assert geo._mallas_lejanas(cara, cara, 0.2, {}) is False
+
+
+@pytest.mark.parametrize("separacion, lejos", [(8.0, True), (0.3, True), (0.1, False), (0.0, False)])
+def test_puntos_lejanos_nunca_separa_caras_curvas_que_se_acercan(separacion, lejos):
+    """B-838: la caja y el plano no separan caras curvas a 0,5-9 mm; las muestras sí, sin separar nunca las que se acercan."""
+    a = _mallada(geo.cilindro(2, 4))
+    b = _mallada(geo.cilindro(2, 4, (4 + separacion, 0, 0)))
+    cache = {}
+    veredictos = [geo._mallas_lejanas(fa, fb, 0.2, cache) for fa in geo.caras(a) for fb in geo.caras(b)]
+    assert all(veredictos) is lejos or not lejos
+    exactas = [geo.BRepExtrema_DistShapeShape(fa, fb).Value() for fa in geo.caras(a) for fb in geo.caras(b)]
+    assert all(not v or e > 0.2 for v, e in zip(veredictos, exactas, strict=True))
+
+
+def test_puntos_lejanos_falla_sin_error_y_no_descarta(monkeypatch):
+    a = _mallada(geo.cilindro(2, 4))
+    b = _mallada(geo.booleano(geo.cilindro(6, 4), geo.cilindro(2.6, 4, (0, 0, -1)), "cortar"))     # un cilindro dentro de un agujero a 0,6 mm
+    pares = [(fa, fb) for fa in geo.caras(a) for fb in geo.caras(b)]
+    antes = [geo._mallas_lejanas(fa, fb, 0.2, {}) for fa, fb in pares]
+    monkeypatch.setattr(geo.np, "isinf", lambda *x: 1 / 0)
+    despues = [geo._mallas_lejanas(fa, fb, 0.2, {}) for fa, fb in pares]
+    assert sum(antes) > sum(despues)       # las muestras separaban pares que la caja y el plano no; si fallan, no se descarta nada
+
+
+@pytest.mark.parametrize("hueco, tocan", [(0.4, False), (0.0, True)])
+def test_se_tocan_con_curvas_sobre_cuerpo_ya_modificado(monkeypatch, usos, hueco, tocan):
+    """Cuerpos con caras curvas (cilindros en fila) a `hueco` mm, `a` ya cortado por un paso anterior: igual que el exacto."""
+    fila = lambda y: geo.unir_todos([geo.cilindro(1, 2, (4 * i, y, 0)) for i in range(8)]
+                                    + [geo.caja(2, 2, 1, (0, y - 12, 0))])
+    a = _modificado(fila(0))
+    b = fila(2 + hueco)
+    assert geo.se_tocan(a, b) is tocan is _exacto(monkeypatch, a, b)
