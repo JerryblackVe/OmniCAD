@@ -1996,10 +1996,28 @@ def _desfase_por_contorno(forma, caras, dist):
         return None
 
 
+def _radio_tras_desfase(cara, distancia):
+    """Radio que tendría una cara cilíndrica desfasada `distancia` (+ = hacia afuera del material); inf si no es cilíndrica."""
+    sup = BRepAdaptor_Surface(cara)
+    if sup.GetType() != GeomAbs_Cylinder:
+        return float("inf")
+    cil = sup.Cylinder()
+    eje = cil.Axis()
+    d = np.array([eje.Direction().X(), eje.Direction().Y(), eje.Direction().Z()])
+    o = np.array([eje.Location().X(), eje.Location().Y(), eje.Location().Z()])
+    p, n = _punto_normal(cara)
+    radial = (np.asarray(p, float) - o) - d * float((np.asarray(p, float) - o) @ d)
+    convexa = float(radial @ np.asarray(n, float)) > 0
+    return cil.Radius() + distancia if convexa else cil.Radius() - distancia
+
+
 def exigir_distancia_desfase(forma, caras, distancia):
     """Offset Face / Press Pull: una cara plana no puede atravesar todo su sólido al entrar."""
     if abs(distancia) < 1e-9:
         raise geo.ErrorGeometria("⚠ Distancia: no puede ser cero")
+    for cara in caras:      # un agujero que se achica más que su radio no existe: el kernel lo rellena sin avisar
+        if _radio_tras_desfase(cara, distancia) <= 1e-6:
+            raise geo.ErrorGeometria(f"Distancia {distancia:g} mm: pasa del eje del cilindro.")
     if distancia >= 0 or not geo.solidos(forma):
         return
     # Una selección parcial puede atravesar su franja y dejar material en la vecina: lo decide el resultado.
