@@ -61,6 +61,9 @@ def test_estrella_guarda_con_un_limite_opcional_vacio(tmp_path, monkeypatch):
     panel.show()
     app.processEvents()
     try:
+        panel.valores["tipo"] = "deslizante"          # con movimiento se ven «Límite mínimo/máximo», vacíos
+        panel._actualizar_visibles()
+        assert panel._visible(panel._por_clave["minimo"])
         QTest.mouseClick(panel.boton_estrella, Qt.LeftButton)
         assert "No se guardó" not in panel.mensaje.text()
         assert "siempre" in panel.mensaje.text()
