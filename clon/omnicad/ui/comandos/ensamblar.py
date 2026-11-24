@@ -810,7 +810,12 @@ class AnclarComponente(Comando):
         comps = _componentes_de(v, ctx)
         if not comps:
             raise ErrorComando("Ese cuerpo no está en un componente.")
-        return self.crear_op(OpAnclar, v, ctx, componente=comps[0], anclado=bool(v.get("anclado")))
+        anclado = bool(v.get("anclado"))
+        op = self.crear_op(OpAnclar, v, ctx, componente=comps[0], anclado=anclado)
+        if ctx.op is None and not anclado:
+            from ...api.herramientas_boceto import nombre_nuevo
+            op.nombre = nombre_nuevo(ctx.doc, "Desanclar", OpAnclar)
+        return op
 
     def desde_op(self, op, ctx):
         return dict(op.p, cuerpos=_hits_de_componentes([op.p["componente"]], ctx))

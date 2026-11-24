@@ -75,6 +75,7 @@ def test_desanclar_via_comando_libera_el_componente_y_deja_otro_paso():
 
     op = _anclar(s, bloque, False)
     assert op.p["anclado"] is False
+    assert op.nombre == "Desanclar2"
     assert s.doc.estado_final.componentes[op.p["componente"]]["anclado"] is False
     assert [p["type"] for p in llamar(s, "get_timeline")["steps"]].count("anclar") == 2
 

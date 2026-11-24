@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-706 (sin verificar).** Desanclar nuevo usa nombre Desanclar<n> como la API; editar conserva el nombre. Test de regresión en test_prep_cmd_anclar_componente.py. Ruff, pytest y ventana no ejecutados (sin checkout local).
 - **2026-11-24 · B-693 (sin verificar).** Incluye cuerpo en FILTRO_SELECCION al arrancar; test de casillas en test_sol23_seleccion_ui.py. Ruff, pytest y ventana no ejecutados (sin checkout local).
 - **2026-11-24 · B-859 (ChatGPT + verificado).** Labio/Ranura: si el conteo previo no llega, no rechaza y avisa «Autointersecciones previas sin revisar.» (ops_solido.py). Test b859 falla sin el fix; test_b196 14 OK, ruff limpio. Corregido el assert del test (el aviso lleva prefijo).
 - **2026-11-24 · B-765/B-744 cerrados (hechos por ChatGPT, verificados acá).** La ★ valida como Aceptar y no guarda inválidos: avisa «No se guardó: Grosor no es válido». `test_b765_b744_estrella.py` falla sin el arreglo; 91 OK en comandos/preajustes, ruff limpio.
