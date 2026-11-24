@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QC
                                QWidget)
 
 from ..timeline.documento import ErrorDocumento
-from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, SIN_DIMENSION, ErrorExpresion, evaluar
+from ..timeline.parametros import ANGULO, ESCALAR, LONGITUD, SIN_DIMENSION, ErrorExpresion, acotar, evaluar
 from .. import deshabilitado, registro_uso
 from ..registro_uso.ganchos import aviso as registrar_aviso
 from ..registro_uso.ganchos import error as registrar_error
@@ -1549,7 +1549,7 @@ class PanelComando(QFrame):
             self.invalidos = set()
         for c in self.campos:
             numerico = isinstance(c, Expresion) or isinstance(c, Entero) and c.validar is not None
-            if solo_reglas and (not numerico or c.validar is None):
+            if solo_reglas and (not numerico or (c.validar is None and getattr(c, "rango", None) is None)):
                 continue
             if solo_reglas:
                 self.invalidos.discard(c.clave)
@@ -1557,7 +1557,7 @@ class PanelComando(QFrame):
                 w = self.widgets[c.clave]
                 tipo = c.tipo if isinstance(c, Expresion) else ESCALAR
                 try:
-                    val = self.ctx.evaluar(w.text(), tipo)
+                    val = acotar(self.ctx.evaluar(w.text(), tipo), tipo)
                     if c.validar is not None:
                         c.validar(val)
                     if isinstance(c, Expresion) and c.rango is not None and not c.rango[0] < val < c.rango[1]:

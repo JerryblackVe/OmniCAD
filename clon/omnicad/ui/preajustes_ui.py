@@ -87,6 +87,11 @@ class BotonEstrella(QToolButton):
         self.clicked.connect(self.usar_siempre)
 
     def usar_siempre(self):
+        campo = self.panel._validar_expresiones()
+        if campo is not None:
+            etiqueta = " ".join(campo.etiqueta.split())[:18]
+            self.panel._mostrar(f"No se guardó: {etiqueta} no es válido", aviso=True)
+            return
         clave = self.panel.comando.CLAVE
         try:
             pre.guardar(clave, NOMBRE_SIEMPRE, valores_guardables(self.panel), True)
@@ -96,7 +101,7 @@ class BotonEstrella(QToolButton):
             return
         if self.panel.boton_preajustes is not None:
             self.panel.boton_preajustes.recargar(NOMBRE_SIEMPRE)
-        self.panel._mostrar("Listo: este comando abrirá siempre con estos valores.", aviso=True)
+        self.panel._mostrar("Listo: usarás estos valores siempre.", aviso=True)
 
 
 class BotonPreajustes(QToolButton):

@@ -329,7 +329,7 @@ class _NervioRed(Comando):
                 Botones("direccion", "Dirección del espesor", {"simetrica": ("Simétrico", "esp_simetrico"),
                                                                "lado1": ("Un lado, desde abajo", "esp_lado1"),
                                                                "lado2": ("Un lado, desde arriba", "esp_lado2")}),
-                Expresion("espesor", "Grosor", espesor_plastico(ctx.estado, (), "2 mm")),
+                Expresion("espesor", "Grosor", espesor_plastico(ctx.estado, (), "2 mm"), rango=(0, float("inf"))),
                 Opciones("extension", "Tipo de extensión", {"hasta_siguiente": ("Al siguiente", "ext_siguiente"),
                                                             "profundidad": ("Distancia", "ext_distancia")}),
                 Expresion("profundidad", "Distancia", "10 mm",
