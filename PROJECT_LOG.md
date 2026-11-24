@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-859 (ChatGPT + verificado).** Labio/Ranura: si el conteo previo no llega, no rechaza y avisa «Autointersecciones previas sin revisar.» (ops_solido.py). Test b859 falla sin el fix; test_b196 14 OK, ruff limpio. Corregido el assert del test (el aviso lleva prefijo).
 - **2026-11-24 · B-765/B-744 cerrados (hechos por ChatGPT, verificados acá).** La ★ valida como Aceptar y no guarda inválidos: avisa «No se guardó: Grosor no es válido». `test_b765_b744_estrella.py` falla sin el arreglo; 91 OK en comandos/preajustes, ruff limpio.
 - **2026-11-24 · B-860 cerrado.** Vaciado: un positivo de malla en forma libre pasa al BOP (loft 0 cruces, 0,77 s); tina <5 s y cruce real intactos. `solidos_modificar.py`; 765 OK, ruff limpio.
 - **2026-11-24 · B-854 Parcial.** Desfase de cara, Vaciado plan B y Desfase de superficie no mutan: 1e-7→1e-7 mm, también con TShape compartida. `test_b_854_repro.py` 3 OK; batería 753 OK + B-850 rojo aislado; ruff limpio.

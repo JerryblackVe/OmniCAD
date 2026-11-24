@@ -261,7 +261,7 @@ def test_b859_labio_y_ranura_avisan_si_antes_no_llega():
         with patch.object(rev, "_autointersecciones_seguras", side_effect=cuentas) as analisis:
             r = _labio(s, tipo)
         assert r["ok"], r
-        assert "Autointersecciones previas sin revisar." in r["avisos"], r
+        assert any("Autointersecciones previas sin revisar." in a for a in r["avisos"]), r
         assert s.doc.resultado(r["result"]["feature"]["id"]).estado == "aviso"
         assert analisis.call_count == len(cuentas)
         forma = s.cuerpo("Base").forma
