@@ -2,6 +2,8 @@
 """`se_tocan` entre cuerpos de muchas caras (un texto de 497 caras contra un cuerpo de 20 tardaba 98 s: 1039 distancias
 exactas). Descarta primero por malla gruesa y mide exacto solo las caras cercanas; si la malla falla, sigue por el
 camino exacto sin mostrar el error."""
+import time
+
 import pytest
 
 from omnicad.nucleo import geometria as geo
@@ -129,3 +131,63 @@ def test_se_tocan_con_curvas_sobre_cuerpo_ya_modificado(monkeypatch, usos, hueco
     a = _modificado(fila(0))
     b = fila(2 + hueco)
     assert geo.se_tocan(a, b) is tocan is _exacto(monkeypatch, a, b)
+
+
+# --- B-837: el par del logo de planos cruzados (tapa con agujeros contra cara inclinada, ~10 mm) ---
+
+_N_BAJO = (-0.7227, 0.0, -0.6911)     # normal saliente de la cara inferior del prisma inclinado 46,31°
+
+
+def _logo_de_planos_cruzados(delta_z):
+    """(a, b) del par de B-837: placa con un agujero grande R=15 (la tapa queda de ~115 triángulos con agujeros, cuerpo
+    ya modificado por los cortes) y un prisma 30×8×2 inclinado 46,31° cuyo borde bajo cruza el plano de la tapa DENTRO
+    del agujero: los planos se cruzan, las cajas de los triángulos se solapan y la distancia real es ~10 mm (la fila
+    medía 10,45 mm y su par exacto costaba ~0,3 s). Con `delta_z` el prisma penetra la placa."""
+    a = geo.booleano(geo.caja(60, 50, 3), geo.cilindro(15, 5, (30, 25, -1)), "cortar")
+    a = geo.booleano(a, geo.cilindro(3, 5, (52, 12, -1)), "cortar")
+    a = geo.booleano(a, geo.cilindro(2, 8, (8, 40, -1)), "cortar")     # agujero de un paso anterior
+    prisma = geo.rotar(geo.caja(30, 8, 2, (0, 21, 3 - delta_z)), (30, 0, 3), (0, 1, 0), 46.31)
+    return a, prisma
+
+
+def _caras_del_par(a, b):
+    """(tapa de la placa, cara inferior del prisma)."""
+    fa = next(f for f in geo.caras(a) if (pl := geo.plano_de_cara(f)) is not None and pl.normal[2] > 0.999)
+    fb = max((f for f in geo.caras(b) if geo.plano_de_cara(f) is not None),
+             key=lambda f: geo.plano_de_cara(f).normal @ _N_BAJO)
+    return fa, fb
+
+
+@pytest.mark.parametrize("delta_z, lejos", [(0.0, True), (15.06, False)])
+def test_el_par_del_logo_de_planos_cruzados_se_descarta_sin_exacto(delta_z, lejos):
+    """B-837: `_mallas_lejanas` descarta el par en milisegundos (cajas → planos → muestras KD de B-838) sin pagar la
+    distancia exacta; si el prisma penetra la placa, no lo descarta (ante la duda, camino exacto)."""
+    a, b = _logo_de_planos_cruzados(delta_z)
+    _mallada(a)
+    _mallada(b)
+    fa, fb = _caras_del_par(a, b)
+    t0 = time.perf_counter()
+    assert geo._mallas_lejanas(fa, fb, 0.2, {}) is lejos
+    if lejos:                           # el par de la fila: el exacto costaba ~0,3 s
+        assert time.perf_counter() - t0 < 0.15
+    d = geo.BRepExtrema_DistShapeShape(fa, fb)
+    assert d.IsDone()
+    if lejos:
+        assert d.Value() > 5            # ~10 mm, como el par de 10,45 mm de la fila
+    else:
+        assert d.Value() <= 0.2         # se tocan: nunca se declara lejano lo que se acerca
+
+
+def test_se_tocan_del_logo_de_planos_cruzados_no_mide_ningun_par_exacto(monkeypatch, usos):
+    """B-837 (flujo entero): 108 pares de caras y ninguna distancia exacta — la malla gruesa no deja
+    candidatos y el par de ~10 mm se saltea; el resultado es el mismo que el del camino exacto."""
+    a, prisma = _logo_de_planos_cruzados(0.0)
+    b = geo.unir_todos([prisma, geo.caja(6, 6, 2, (100, 0, 0))])
+    assert len(geo.caras(a)) * len(geo.caras(b)) > geo.PARES_MALLA_SE_TOCAN
+    medidas = []
+    original = geo.BRepExtrema_DistShapeShape
+    monkeypatch.setattr(geo, "BRepExtrema_DistShapeShape", lambda *x: medidas.append(1) or original(*x))
+    assert geo.se_tocan(a, b) is False
+    assert not medidas                     # el par de la fila ya no se mide exacto
+    assert usos and usos[0] is not None    # la vía rápida decidió; no cayó al camino exacto
+    assert _exacto(monkeypatch, a, b) is False

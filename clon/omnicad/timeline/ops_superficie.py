@@ -368,7 +368,11 @@ class OpSupDesfase(_OpSuperficie):
             raise ErrorOperacion("Elegí caras o un cuerpo.")
         formas = _caras_de_la_cadena(ents, estado) if self.p["cadena"] else [e.forma for e in ents]
         base = geo.compuesto(formas) if len(formas) > 1 else formas[0]
-        self._nuevo(estado, ctx, _sf().desfasar_superficie(base, ctx.evaluar(self.p["distancia"]), tipo=self.p["tipo"]))
+        avisos = []                      # B-855: si el conteo no llegó, aviso de 1 renglón (la compuerta no rechaza)
+        forma = _sf().desfasar_superficie(base, ctx.evaluar(self.p["distancia"]), tipo=self.p["tipo"], avisos=avisos)
+        for texto in avisos:
+            ctx.aviso(texto)
+        self._nuevo(estado, ctx, forma)
 
 
 class OpRecortar(_OpSuperficie):

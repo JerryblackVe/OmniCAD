@@ -420,11 +420,20 @@ class Repujado(Comando):
             pass
         return dict(op.p, perfiles=hits(op.p["perfiles"], ctx.estado), caras=hits(caras, ctx.estado))
 
+    def preparar_panel(self, panel):
+        """B-848: abierta con una cara cilíndrica ya elegida (preselección o al editar), «Envolver en la cara»
+        queda tildado."""
+        self._tildar_envolver_si_hay_cilindro(panel)
+
     _prof_previa = 1.0
 
     def al_cambiar(self, panel, clave):
         """Fusion: al pasar la profundidad de positiva a negativa el panel cambia el «Tipo» a Grabado (y viceversa).
-        Solo al cruzar el cero: Grabado elegido con 1 mm sigue en Grabado si se escribe 2 mm."""
+        Solo al cruzar el cero: Grabado elegido con 1 mm sigue en Grabado si se escribe 2 mm.
+        B-848: al elegir una cara cilíndrica tilda «Envolver en la cara» (queda editable: se puede destildar)."""
+        if clave == "caras":
+            self._tildar_envolver_si_hay_cilindro(panel)
+            return
         if clave != "profundidad":
             return
         try:
@@ -436,6 +445,18 @@ class Repujado(Comando):
         nuevo = "grabado" if prof < 0 else "relieve"
         if cruzo and panel.valores.get("tipo") != nuevo:
             panel.set_valores({"tipo": nuevo})
+
+    def _tildar_envolver_si_hay_cilindro(self, panel):
+        """B-848: como Fusion [SLD-EMBOSS] («wrap text around a solid body», que envuelve sin pedirlo), tilda
+        «Envolver en la cara» si alguna cara elegida es un cilindro y el usuario no la tildó. Solo al entrar la
+        cara: después queda editable (destildada, la previa avisa «Marcá «Envolver en la cara»»)."""
+        if panel.valores.get("envolver"):
+            return
+        for h in panel.valores.get("caras") or []:
+            firma = (h.get("ref") or {}).get("firma")
+            if isinstance(firma, dict) and firma.get("geom") == "cilindro":
+                panel.set_valores({"envolver": True})
+                return
 
 
 # ---------------------------------------------------------------- roscas en los diálogos (Agujero y Rosca)

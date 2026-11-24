@@ -362,7 +362,11 @@ class OpEmpalme(Operacion):
                 por_cuerpo.setdefault(cid, []).append(dict(grupo(d), aristas=aristas))
         for cid, grupos in por_cuerpo.items():
             c = estado.cuerpo(cid)
-            c.forma = sm.empalme(c.forma, grupos, cadena_tangente=p["cadena_tangente"], peso_tangencia=peso)
+            avisos = []                  # B-855: si el conteo no llegó, aviso de 1 renglón (la compuerta no rechaza)
+            c.forma = sm.empalme(c.forma, grupos, cadena_tangente=p["cadena_tangente"], peso_tangencia=peso,
+                                 avisos=avisos)
+            for texto in avisos:
+                ctx.aviso(texto)
 
 
 class OpChaflan(Operacion):
@@ -384,8 +388,11 @@ class OpChaflan(Operacion):
                  "voltear": p["voltear"]}
         for cid, aristas in _por_cuerpo(p["aristas"], estado).items():
             c = estado.cuerpo(cid)
+            avisos = []                  # B-855: si el conteo no llegó, aviso de 1 renglón (la compuerta no rechaza)
             c.forma = sm.chaflan(c.forma, [dict(grupo, aristas=aristas)], cadena_tangente=p["cadena_tangente"],
-                                 esquina=p["esquina"])
+                                 esquina=p["esquina"], avisos=avisos)
+            for texto in avisos:
+                ctx.aviso(texto)
 
 
 class OpVaciado(Operacion):
@@ -412,9 +419,12 @@ class OpVaciado(Operacion):
             # Espesor vacío = el de la regla de plástico del componente (Fusion: la regla da Thickness y la usa Shell).
             interior = str(p["espesor_interior"] or "").strip() or espesor_plastico(estado, (cid,), "1 mm")
             exterior = str(p["espesor_exterior"] or "").strip() or espesor_plastico(estado, (cid,), "1 mm")
+            avisos = []
             c.forma = sm.vaciado(c.forma, caras, espesor_interior=ctx.evaluar(interior),
                                  espesor_exterior=ctx.evaluar(exterior), direccion=p["direccion"],
-                                 tangente=p["tangente"], tipo=p["tipo"])
+                                 tangente=p["tangente"], tipo=p["tipo"], avisos=avisos)
+            for texto in avisos:
+                ctx.aviso(texto)
 
 
 class OpDesmoldeo(Operacion):
@@ -531,8 +541,11 @@ class OpDesfaseCara(Operacion):
     def ejecutar(self, estado, ctx):
         for cid, caras in _por_cuerpo(self.p["caras"], estado, "caras").items():
             c = estado.cuerpo(cid)
+            avisos = []                  # B-855: si el conteo no llegó, aviso de 1 renglón (la compuerta no rechaza)
             c.forma = _sm().desfasar_caras(c.forma, caras, ctx.evaluar(self.p["distancia"]),
-                                           tangente=self.p["tangente"])
+                                           tangente=self.p["tangente"], avisos=avisos)
+            for texto in avisos:
+                ctx.aviso(texto)
 
 
 class OpDesfaseAristas(Operacion):

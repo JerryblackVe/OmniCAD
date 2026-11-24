@@ -7,7 +7,7 @@ from .solidos_crear_occ import _registrar_tema
 
 if TYPE_CHECKING:
     from .solidos_crear_occ import (
-        BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Surface, BRepBuilderAPI_MakeEdge,
+        BRepAdaptor_CompCurve, BRepAdaptor_Curve, BRepAdaptor_Surface, BRepBuilderAPI_Copy, BRepBuilderAPI_MakeEdge,
         BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeWire, BRepOffset_MakeOffset,
         BRepOffset_Skin, BRepTools_WireExplorer, BRep_Tool, GCPnts_AbscissaPoint, GeomAbs_Intersection, GeomAbs_Plane,
         IntCurvesFace_ShapeIntersector, ShapeUpgrade_UnifySameDomain, TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED,
@@ -314,7 +314,10 @@ def _engrosar_lamina(lamina, espesor):
     if _punta_de_cono(lamina):              # B-493: OpenCascade cerraba el programa en vez de fallar
         raise geo.ErrorGeometria("No se pudo dar espesor: " + _PUNTA_DE_CONO)
     mk = BRepOffset_MakeOffset()
-    mk.Initialize(lamina, float(espesor), 1e-6, BRepOffset_Skin, False, False, GeomAbs_Intersection, True)
+    # B-850: BRepOffset agranda IN PLACE las tolerancias de la entrada: la lámina puede compartir topología con
+    # los perfiles cacheados del boceto y envenenaría lo que se dibuje después. Copia, como ShapeFix (B-39).
+    mk.Initialize(BRepBuilderAPI_Copy(lamina).Shape(), float(espesor), 1e-6, BRepOffset_Skin, False, False,
+                  GeomAbs_Intersection, True)
     mk.MakeOffsetShape()
     if not mk.IsDone():
         raise geo.ErrorGeometria("No se pudo dar espesor a la superficie.")

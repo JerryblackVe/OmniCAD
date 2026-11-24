@@ -1,6 +1,4 @@
 """B-633/B-634: operaciones sobre una solevación de rectángulo a círculo."""
-import pytest
-
 from omnicad import api
 from omnicad.nucleo import geometria as geo
 
@@ -33,7 +31,8 @@ def test_engrosar_solevacion():
     assert len(geo.solidos(forma)) == 1 and geo.es_valida(forma) and geo.volumen_exacto(forma) > 0
 
 
-@pytest.mark.xfail(strict=True, reason="B-634", raises=pytest.RaisesExc(AssertionError, match="«Vaciado1»"))
+# B-634/B-850: fallaba solo si antes corría el engrosado en el mismo proceso (el xfail strict dio XPASS
+# con el arreglo: el offset de Engrosar envenenaba los perfiles cacheados).
 def test_vaciar_tapa_circular():
     s, cid = _pieza(superficie=False)
     antes = geo.volumen_exacto(s.cuerpo(cid).forma)

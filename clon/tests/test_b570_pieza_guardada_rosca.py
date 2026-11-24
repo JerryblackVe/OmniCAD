@@ -28,7 +28,8 @@ def _rearmar(monkeypatch):
     monkeypatch.setattr(aislado, "correr", lambda tarea, *a, **k: con_tope.append(tarea) or (_ for _ in ()).throw(
         aislado.TiempoAgotado("pasó de 5 s y se cortó")))                  # el análisis con tope, sin esperarlo
     doc = Documento.desde_dict(RECETA)
-    assert len(doc.estado_final.cuerpos) == 1 and all(r.estado == "ok" for r in doc.resultados)
+    # B-855: el conteo que no llega deja un aviso (no un error): «aviso» también cierra el recálculo bien.
+    assert len(doc.estado_final.cuerpos) == 1 and all(r.estado in ("ok", "aviso") for r in doc.resultados)
     return sin_tope, con_tope
 
 

@@ -23,8 +23,9 @@ from . import motor as _motor
 
 def _iniciar_opencascade():
     global Array1_gp_Pnt2d, BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
-    global BRepAlgoAPI_Defeaturing, BRepAlgoAPI_Section, BRepAlgoAPI_Splitter, BRepBuilderAPI_GTransform
-    global BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex
+    global BRepAlgoAPI_Defeaturing, BRepAlgoAPI_Section, BRepAlgoAPI_Splitter, BRepBuilderAPI_Copy
+    global BRepBuilderAPI_GTransform, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeSolid
+    global BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeWire
     global BRepBuilderAPI_Sewing
     global BRepBuilderAPI_Transform, BRepExtrema_DistShapeShape, BRepFeat_SplitShape, BRepFilletAPI_MakeChamfer
     global BRepFilletAPI_MakeFillet, BRepGProp_Face, BRepIntCurveSurface_Inter, BRepLib
@@ -41,9 +42,9 @@ def _iniciar_opencascade():
     from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Defeaturing, BRepAlgoAPI_Section, BRepAlgoAPI_Splitter
-    from OCP.BRepBuilderAPI import (BRepBuilderAPI_GTransform, BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace,
-                                    BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex, BRepBuilderAPI_Sewing,
-                                    BRepBuilderAPI_Transform)
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_Copy, BRepBuilderAPI_GTransform, BRepBuilderAPI_MakeEdge,
+                                    BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeSolid, BRepBuilderAPI_MakeVertex,
+                                    BRepBuilderAPI_MakeWire, BRepBuilderAPI_Sewing, BRepBuilderAPI_Transform)
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape
     from OCP.BRepFeat import BRepFeat_SplitShape
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer, BRepFilletAPI_MakeFillet
@@ -153,11 +154,14 @@ def _fusionar_costuras(forma):
     return u.Shape()
 
 
-def _cruza_mas_que(entrada, resultado):
+def _cruza_mas_que(entrada, resultado, avisos=None):
     """B-157: True si `resultado` tiene más autointersecciones que `entrada`. Un cuerpo que ya venía cruzado (p. ej. un
     compuesto de cajas superpuestas) no bloquea el empalme o el chaflán; la entrada se mide solo si el resultado cruza.
     B-571: se miden solo las caras cerca de las que cambiaron (un cruce nuevo toca una cara nueva); una rosca modelada
-    lejos esperaba el tope entero de 5 s en cada recálculo. Si la zona falla, se mide todo como antes."""
+    lejos esperaba el tope entero de 5 s en cada recálculo. Si la zona falla, se mide todo como antes.
+    B-855: si alguno de los conteos no llega (frío), NO se rechaza (principio de Gerardo: una operación que hoy anda
+    en una pieza real no puede fallar porque la compuerta no llegó a contar; medido 24/11: el desfase de la cara plana
+    de un cuerpo roscado sale en 0,13 s y su zona analiza en 19,5 s con n=0); con `avisos` queda el aviso de siempre."""
     from . import revision                  # local: revision carga medio núcleo
     try:
         resultado, entrada = _zona_cambiada(entrada, resultado)
@@ -165,8 +169,19 @@ def _cruza_mas_que(entrada, resultado):
         pass
     if resultado is None:
         return False
-    n = revision._autointersecciones_seguras(resultado, 1, 5.0)[0]
-    return bool(n) and n > (revision._autointersecciones_seguras(entrada, 1, 5.0)[0] or 0)
+    n, problemas, completo = revision._autointersecciones_seguras(resultado, 1, 5.0)
+    if not completo:
+        if avisos is not None and problemas:      # el abortado sin problemas no deja mensaje: pasa callado, como antes
+            avisos.append(problemas[0]["mensaje"])
+        return False
+    if not n:
+        return False
+    n_antes, problemas, completo = revision._autointersecciones_seguras(entrada, 1, 5.0)
+    if not completo:
+        if avisos is not None and problemas:
+            avisos.append(problemas[0]["mensaje"])
+        return False
+    return n > (n_antes or 0)
 
 
 def _zona_cambiada(entrada, resultado):
@@ -698,7 +713,7 @@ def _empalme_sin_puntas(forma, grupos, cadena_tangente, puntas):
     return resultado
 
 
-def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
+def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0, avisos=None):
     """Empalme (Fillet, tipo Fillet) por conjuntos de selección, cada uno con su tipo de radio.
 
     grupos: [{"aristas": [TopoDS_Edge], "tipo": "constante" | "variable" | "cuerda",
@@ -823,7 +838,7 @@ def empalme(forma, grupos, *, cadena_tangente=True, peso_tangencia=1.0):
     resultado = _validar(mf.Shape(), "Empalme")
     # BRepCheck puede dar válido y estanco aunque el empalme atraviese la pared de una cavidad.
     if ((geo.solidos(resultado) and geo.volumen_exacto(resultado) <= 0)
-            or _cruza_mas_que(forma, resultado) or _volumen_al_reves(forma, resultado, empalmadas, vecinas)):
+            or _cruza_mas_que(forma, resultado, avisos) or _volumen_al_reves(forma, resultado, empalmadas, vecinas)):
         raise geo.ErrorGeometria("Empalme: el radio no entra.")
     return resultado
 
@@ -1014,7 +1029,7 @@ def _sin_contorno(forma, aristas, que):
     return geo.ErrorGeometria("Las aristas elegidas no pertenecen al cuerpo.")
 
 
-def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
+def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan", avisos=None):
     """Chaflán (Chamfer) por conjuntos de selección.
 
     grupos: [{"aristas": [TopoDS_Edge], "tipo": "distancia_igual" | "dos_distancias" | "distancia_angulo",
@@ -1089,7 +1104,7 @@ def chaflan(forma, grupos, *, cadena_tangente=True, esquina="chaflan"):
             resultado = _mezclar(forma, resultado, alcance, min(float(g.get(k) or 0) for g in grupos
                                                                 for k in ("distancia", "distancia2") if g.get(k)))
     if ((geo.solidos(resultado) and geo.volumen_exacto(resultado) <= 0)
-            or _cruza_mas_que(forma, resultado) or _volumen_al_reves(forma, resultado, elegidas, arista_caras)):
+            or _cruza_mas_que(forma, resultado, avisos) or _volumen_al_reves(forma, resultado, elegidas, arista_caras)):
         raise geo.ErrorGeometria("Chaflán: la distancia no entra.")
     return resultado
 
@@ -1359,7 +1374,7 @@ def _desfase_una_vez(forma, distancia, union):
 
 
 def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, direccion="interior",
-            tangente=True, tipo="afilado"):
+            tangente=True, tipo="afilado", avisos=None):
     """Vaciado (Shell): quita `caras_quitar` y deja paredes de espesor constante.
 
     direccion: "interior" | "exterior" | "ambos" (usa espesor_interior / espesor_exterior).
@@ -1398,16 +1413,92 @@ def vaciado(forma, caras_quitar, *, espesor_interior, espesor_exterior=0.0, dire
         interior = _desfase_cuerpo(forma, -ti, union) if ti else forma
         resultado = geo.booleano(exterior, interior, "cortar")
     resultado = _validar(resultado, "Vaciado")
-    _exigir_pared_sin_cruces(forma, resultado)
+    _exigir_pared_sin_cruces(forma, resultado, avisos)
     return resultado
 
 
-def _exigir_pared_sin_cruces(forma, resultado):
-    """B-376: un espesor que no cabe (más que la pared de un cuerpo ya hueco) hacía que el kernel devolviera «ok» con la
-    pared cruzada sobre sí misma, un sólido que BRepCheck da por válido. Error claro en vez de un cuerpo roto."""
+def _triangulos_caras(caras):
+    """Triángulos de copias: la revisión no deja teselado en las caras vivas del documento."""
+    if not caras:
+        return np.empty((0, 3, 3))
+    copia = BRepBuilderAPI_Copy(geo.compuesto(caras)).Shape()
+    tri = [t for _, t in geo.teselar_por_cara(copia, deflexion=0.05, angular=0.3, rehacer=True) if len(t)]
+    return np.concatenate(tri) if tri else np.empty((0, 3, 3))
+
+
+def _cruces_triangulacion(origen, destino=None):
+    """Cruces interiores a las aristas de `origen` contra otra malla (o contra sí misma), con el BVH de rayos.
+    Los contactos en extremos no cuentan: son las aristas compartidas por caras vecinas de una pared sana."""
     from . import revision          # local: revision carga medio núcleo
-    n = revision._autointersecciones_seguras(resultado, 1, 5.0)[0]
-    if n and n > (revision._autointersecciones_seguras(forma, 1, 5.0)[0] or 0):
+    propia = destino is None
+    if propia:
+        destino = origen
+    if not len(origen) or not len(destino):
+        return 0
+    o = np.stack([origen[:, 0], origen[:, 1], origen[:, 2]], axis=1).reshape(-1, 3)
+    d = np.stack([origen[:, 1] - origen[:, 0], origen[:, 2] - origen[:, 1],
+                  origen[:, 0] - origen[:, 2]], axis=1).reshape(-1, 3)
+    duenio = np.repeat(np.arange(len(origen)), 3)
+    largo = np.linalg.norm(d, axis=1)
+    validas = largo > 1e-12
+    o, d, duenio, largo = o[validas], d[validas], duenio[validas], largo[validas]
+    t, idx = revision.primer_choque(o, d / largo[:, None], destino, 1e-7)
+    fraccion = t / largo
+    hit = (fraccion > 1e-6) & (fraccion < 1 - 1e-6) & (idx >= 0)
+    if propia:
+        hit &= idx != duenio
+    return int(np.count_nonzero(hit))
+
+
+def _cruces_pared_malla(forma, resultado):
+    """Cruces de las caras nuevas entre sí y contra las conservadas; los cruces viejos no bloquean el vaciado."""
+    from .. import nativo
+    if not hasattr(nativo.disponible(), "Bvh"):
+        raise RuntimeError("BVH nativo no disponible")     # NumPy tarda 27 s en la tina: mejor el BOP seguro anterior
+    previas = IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher()
+    TopExp.MapShapes_s(forma, TopAbs_FACE, previas)
+    nuevas = [c for c in geo.caras(resultado) if not previas.Contains(c)]
+    if not nuevas:
+        return 0
+    viejas = [c for c in geo.caras(resultado) if previas.Contains(c)]
+    tn = _triangulos_caras(nuevas)
+    n = _cruces_triangulacion(tn)
+    if viejas:
+        tv = _triangulos_caras(viejas)
+        n += _cruces_triangulacion(tn, tv) + _cruces_triangulacion(tv, tn)
+    return n
+
+
+def _exigir_pared_sin_cruces(forma, resultado, avisos=None):
+    """B-376: un espesor que no cabe puede devolver un sólido válido con la pared cruzada: es un error, no un cuerpo roto.
+    B-855: la tina lisa tardaba 14–20 s con BOPAlgo sobre todo el sólido. La malla de las caras nuevas y su BVH tardan
+    ~1,1 s y detectan cruces reales. Las analíticas limpias también pasan por BOP (cubre solapes coplanares). B-860:
+    un positivo de malla en una forma libre es ambiguo (puede ser teselado espurio) y lo decide el BOP; si el análisis
+    de respaldo no llega, no se rechaza."""
+    from . import revision          # local: revision carga medio núcleo
+    try:
+        n = _cruces_pared_malla(forma, resultado)
+    except Exception:  # noqa: BLE001 — una cara sin malla conserva la revisión exacta anterior
+        pass
+    else:
+        libre = geo.es_forma_libre(resultado)
+        if n and not libre:
+            raise geo.ErrorGeometria(f"Vaciado: el espesor no cabe ({n} cruces).")
+        if libre and not n:
+            return
+    n, _, completo = revision._autointersecciones_seguras(resultado, 1, 5.0)
+    if not completo:
+        if avisos is not None:
+            avisos.append("Vaciado: no se revisaron los cruces.")
+        return
+    if n:
+        antes, _, completo = revision._autointersecciones_seguras(forma, 1, 5.0)
+        if not completo:
+            if avisos is not None:
+                avisos.append("Vaciado: no se revisaron los cruces.")
+            return
+        n = max(0, n - (antes or 0))
+    if n:
         raise geo.ErrorGeometria(f"Vaciado: el espesor no cabe ({n} cruces).")
 
 
@@ -1825,6 +1916,90 @@ def _extremos_cadena(alambre):
             BRep_Tool.Pnt_s(TopExp.LastVertex_s(ultima, True)))
 
 
+def _unir_tramos_del_offset(alambre, offset, d):
+    """B-857: `SetApprox` del offset deja cada curva desfasada como CADENA de arcos (el logo de 11 caras B-spline
+    sale con 138–175 y el Desfase siguiente no reconoce la cadena y cae al kernel). Une los arcos de cada curva
+    original en UNA B-spline: concatenación exacta por tramo (CompCurveToBSplineCurve) y reajuste polinómico a
+    1e-7 — la racional integra mal el volumen con el Gauss fijo de `volumen_exacto`. None si algo no cierra:
+    el alambre original decide (regla de vía rápida)."""
+    from OCP.BRepTools import BRepTools_WireExplorer
+    from OCP.Geom import Geom_TrimmedCurve
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnCurve
+    from OCP.GeomAbs import GeomAbs_C0
+    from OCP.GeomConvert import GeomConvert_ApproxCurve, GeomConvert_CompCurveToBSplineCurve
+    from OCP.TopAbs import TopAbs_REVERSED
+
+    def curva_de(arista):
+        cur = BRepAdaptor_Curve(arista)
+        return BRep_Tool.Curve_s(arista, float(cur.FirstParameter()), float(cur.LastParameter()))
+
+    try:
+        aristas = []
+        ex = BRepTools_WireExplorer(TopoDS.Wire(offset))
+        while ex.More():
+            aristas.append(TopoDS.Edge(ex.Current()))
+            ex.Next()
+        if len(aristas) < 3:
+            return None
+        # cada arco del offset pertenece a la curva original más cercana: los tramos son sus ráfagas
+        curvas = [curva_de(TopoDS.Edge(a)) for a in _unicos(alambre, TopAbs_EDGE)]
+        padres = []
+        for a in aristas:
+            cur = BRepAdaptor_Curve(a)
+            p = cur.Value((cur.FirstParameter() + cur.LastParameter()) / 2)
+            mejor, distancia = None, 1e9
+            for i, curva in enumerate(curvas):
+                proy = GeomAPI_ProjectPointOnCurve(p, curva)
+                if proy.NbPoints() and proy.LowerDistance() < distancia:
+                    mejor, distancia = i, proy.LowerDistance()
+            if mejor is None or distancia > abs(d) + 1e-3:
+                return None            # no es el offset de estas curvas
+            padres.append(mejor)
+        tramos, actual = [], [0]
+        for k in range(1, len(aristas)):
+            if padres[k] == padres[actual[-1]]:
+                actual.append(k)
+            else:
+                tramos.append(actual)
+                actual = [k]
+        tramos.append(actual)
+        if max(map(len, tramos)) < 2:
+            return None
+        unidas = []
+        for t in tramos:
+            if len(t) == 1:             # esquina o tapa redonda: queda como está
+                unidas.append(aristas[t[0]])
+                continue
+            cc = GeomConvert_CompCurveToBSplineCurve()
+            for k in t:
+                cur = BRepAdaptor_Curve(aristas[k])
+                u0, u1 = sorted((cur.FirstParameter(), cur.LastParameter()))
+                tramo = Geom_TrimmedCurve(curva_de(aristas[k]), u0, u1)
+                if aristas[k].Orientation() == TopAbs_REVERSED:
+                    tramo = tramo.Reversed()
+                if not cc.Add(tramo, 1e-6):
+                    return None
+            ajuste = GeomConvert_ApproxCurve(cc.BSplineCurve(), 1e-7, GeomAbs_C0, 400, 3)
+            if not ajuste.IsDone():
+                return None
+            unica = ajuste.Curve()
+            v0 = TopExp.FirstVertex_s(aristas[t[0]], True)
+            v1 = TopExp.LastVertex_s(aristas[t[-1]], True)
+            unica.SetPole(1, BRep_Tool.Pnt_s(v0))          # los extremos, clavados al vértice del tramo
+            unica.SetPole(unica.NbPoles(), BRep_Tool.Pnt_s(v1))
+            if max(unica.Value(unica.FirstParameter()).Distance(BRep_Tool.Pnt_s(v0)),
+                   unica.Value(unica.LastParameter()).Distance(BRep_Tool.Pnt_s(v1))) > 1e-6:
+                return None
+            unidas.append(BRepBuilderAPI_MakeEdge(unica, v0, v1).Edge())
+        unido = BRepBuilderAPI_MakeWire()
+        unido.Add(_lista_occ(unidas))
+        if not unido.IsDone():
+            return None
+        return unido.Wire()
+    except Exception:  # noqa: BLE001 — una vía rápida: el alambre original decide
+        return None
+
+
 def _bandas_de_cadena_abierta(alambre, caras, dist, esquinas):
     """Caras de la banda entre una cadena plana abierta y su desfase hacia afuera; None si OCC no la calcula."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire
@@ -1865,6 +2040,9 @@ def _bandas_de_cadena_abierta(alambre, caras, dist, esquinas):
                 nuevo = TopoDS.Wire(w)
                 if nuevo.Closed():
                     return None
+                unido = _unir_tramos_del_offset(alambre, nuevo, d)     # B-857: una cara por curva desfasada
+                if unido is not None:
+                    nuevo = unido
                 q0, q1 = extremos(nuevo)
                 if al_reves:
                     q0, q1 = q1, q0
@@ -1928,6 +2106,7 @@ def _desfase_por_contorno(forma, caras, dist):
     sigue el camino de siempre (regla de B-453)."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire, BRepBuilderAPI_NurbsConvert
     from OCP.BRepClass import BRepClass_FaceClassifier
+    from OCP.GeomAbs import GeomAbs_BSplineSurface
     from OCP.TopAbs import TopAbs_IN
     from . import vectores
     try:
@@ -1940,6 +2119,10 @@ def _desfase_por_contorno(forma, caras, dist):
             grupos = [g for g in grupos if not any(g is j for j in juntos)] + [[i] + [k for g in juntos for k in g]]
         grupos = [[caras[i] for i in g] for g in grupos]
         eje, bandas = None, {}
+        # B-857: en una cadena abierta ya NURBS, reconvertir el prisma y probar la unión pegada agrega ~4 s y OCC la invalida.
+        tipos = [BRepAdaptor_Surface(c).GetType() for c in geo.caras(forma)]
+        abierta_ya_nurbs = (GeomAbs_BSplineSurface in tipos
+                            and all(t in (GeomAbs_Plane, GeomAbs_BSplineSurface) for t in tipos))
         for grupo in grupos:
             vecinas, normales = [], []
             for cara in grupo:
@@ -1988,6 +2171,7 @@ def _desfase_por_contorno(forma, caras, dist):
                 else:
                     return None
                 continue
+            abierta_ya_nurbs = False       # la conversión de los lazos cerrados sigue siendo necesaria
             lazo = BRepBuilderAPI_MakeFace(alambre.Wire(), True).Face()
             # el material, ¿queda adentro del lazo (letra) o afuera (agujero, bolsillo)?
             p, n = _punto_normal(grupo[0])
@@ -2003,9 +2187,9 @@ def _desfase_por_contorno(forma, caras, dist):
                 except geo.ErrorGeometria:
                     pass
             if nuevas is None:
-                # se va todo lo que encierra solo si la distancia pasa su radio inscrito (≤ 2·área/perímetro, o el
+                # se va todo lo que encierra solo si la distancia llega a su radio inscrito (≤ 2·área/perímetro, o el
                 # palo de la «i» que las franjas de sus aristas cubren); si no, el desfase 2D falló sin desaparecer
-                if d > 0 or (abs(d) < 2 * geo.area(lazo) / geo.longitud(alambre.Wire())
+                if d > 0 or (abs(d) < 2 * geo.area(lazo) / geo.longitud(alambre.Wire()) - 1e-6
                              and not vectores.se_borra_al_achicar(lazo, -d)):
                     return None
                 nuevas = []
@@ -2018,18 +2202,19 @@ def _desfase_por_contorno(forma, caras, dist):
             # las caras de la región no se pisan: un solo prisma (geo.extruir las une y su control de volumen
             # rechazaba la letra por 0,02 mm³)
             prisma = BRepPrimAPI_MakePrism(geo.compuesto(geo.caras(region)), gp_Vec(*map(float, eje * (z1 - z0)))).Shape()
-            if vectores._curvas_libres(region):      # letras: el prisma de curvas desfasadas daba una unión inválida
-                prisma = BRepBuilderAPI_NurbsConvert(prisma, True).Shape()
+            if vectores._curvas_libres(region) and not abierta_ya_nurbs:
+                prisma = BRepBuilderAPI_NurbsConvert(prisma, True).Shape()  # letras: sin esto la unión daba inválida
             if not geo.es_valida(prisma):    # el desfase 2D dejó un contorno que se cruza (la «@», el hueco de la «e»)
                 return None
-            resultado = _booleana_pegada(resultado, prisma, "unir" if dist > 0 else "cortar")
+            booleana = geo.booleano if abierta_ya_nurbs else _booleana_pegada
+            resultado = booleana(resultado, prisma, "unir" if dist > 0 else "cortar")
         return _validar(_unificar(resultado), "Desfase de caras")
     except Exception:  # noqa: BLE001 — un atajo: el camino de siempre decide
         return None
 
 
 def _radio_tras_desfase(cara, distancia):
-    """Radio que tendría una cara cilíndrica desfasada `distancia` (+ = hacia afuera del material); inf si no es cilíndrica."""
+    """Radio de una cara cilíndrica convexa tras desfasarla; inf en las cóncavas y no cilíndricas."""
     sup = BRepAdaptor_Surface(cara)
     if sup.GetType() != GeomAbs_Cylinder:
         return float("inf")
@@ -2040,16 +2225,16 @@ def _radio_tras_desfase(cara, distancia):
     p, n = _punto_normal(cara)
     radial = (np.asarray(p, float) - o) - d * float((np.asarray(p, float) - o) @ d)
     convexa = float(radial @ np.asarray(n, float)) > 0
-    return cil.Radius() + distancia if convexa else cil.Radius() - distancia
+    return cil.Radius() + distancia if convexa else float("inf")
 
 
 def exigir_distancia_desfase(forma, caras, distancia):
     """Offset Face / Press Pull: una cara plana no puede atravesar todo su sólido al entrar."""
     if abs(distancia) < 1e-9:
         raise geo.ErrorGeometria("⚠ Distancia: no puede ser cero")
-    for cara in caras:      # un agujero que se achica más que su radio no existe: el kernel lo rellena sin avisar
+    for cara in caras:      # un cilindro exterior se da vuelta; un agujero se tapa como Fusion (B-856)
         if _radio_tras_desfase(cara, distancia) <= 1e-6:
-            raise geo.ErrorGeometria(f"Distancia {distancia:g} mm: pasa del eje del cilindro.")
+            raise geo.ErrorGeometria(f"Distancia {distancia:g} mm: pasa su eje.")
     if distancia >= 0 or not geo.solidos(forma):
         return
     # Una selección parcial puede atravesar su franja y dejar material en la vecina: lo decide el resultado.
@@ -2066,7 +2251,7 @@ def exigir_distancia_desfase(forma, caras, distancia):
                 raise geo.ErrorGeometria(f"Distancia {distancia:g} mm: atraviesa el cuerpo.")
 
 
-def desfasar_caras(forma, caras, distancia, *, tangente=True):
+def desfasar_caras(forma, caras, distancia, *, tangente=True, avisos=None):
     """Offset Face / Press Pull sobre caras: mueve las caras a lo largo de su normal (positivo = hacia
     afuera, agrega material) y extiende las vecinas. tangente: arrastra las caras tangentes; una cara plana
     con empalmes en el borde se traslada con ellos, como Fusion (B-434)."""
@@ -2079,11 +2264,14 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
         return _trasladar_caras(forma, list(caras) + empalmes, n, dist)
     todas = (caras_en_cadena(forma, caras, coplanares=False) if tangente
              else [c for i, c in enumerate(caras) if not _contiene(caras[:i], c)])
-    if any(map(_es_filete, todas)):     # B-306: el kernel tardaba minutos (M8: 89 s con 1 mm, 150 s con 0,2 mm) y fallaba
+    # B-842: un solo pase de _es_filete por las caras del cuerpo (la cadena está adentro): antes se barría dos veces
+    # (0,04–0,08 s por desfase con caras B-spline, 800 muestras por cara).
+    filetes = [c for c in geo.caras(forma) if _es_filete(c)]     # B-306: el kernel tardaba minutos (M8: 89 s) y fallaba
+    if any(_contiene(filetes, c) for c in todas):
         raise geo.ErrorGeometria("Una rosca no se desfasa: editala › Holgura.")
     # B-306: con un filete en el cuerpo, el kernel tarda lo mismo con cualquier cara (cilindro vecino: 95 s y falla;
     # cara plana: 93 s y después sale por la extrusión): las planas van directo a la extrusión, las curvas fallan ya
-    con_filete = any(map(_es_filete, geo.caras(forma)))
+    con_filete = bool(filetes)
     if con_filete and any(_plano_de_cara(c) is None for c in todas):
         raise geo.ErrorGeometria("Una rosca no se desfasa: editala › Holgura.")
     if not con_filete and (rapido := _desfase_por_contorno(forma, todas, dist)) is not None:
@@ -2105,7 +2293,7 @@ def desfasar_caras(forma, caras, distancia, *, tangente=True):
         resultado = _reemplazar(forma, [(c, p.desplazado(dist)) for c, p in zip(todas, planos, strict=True)],
                                 operacion="Desfase de caras")
     resultado = _validar(resultado, "Desfase de caras")
-    if _cruza_mas_que(forma, resultado):    # B-525: el kernel daba «ok» con caras aplastadas que se cruzan
+    if _cruza_mas_que(forma, resultado, avisos):    # B-525: el kernel daba «ok» con caras aplastadas que se cruzan
         raise geo.ErrorGeometria("⚠ Las caras se chocan: probá menos distancia")
     return resultado
 

@@ -2,39 +2,34 @@
 
 Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13 por el plan de reorganización que aprobó Gerardo). `CLAUDE.md` deja la regla corta y enlaza acá.
 
-## Dónde se trabaja: main vive en la VPS de Google (Gerardo, 2026-11-11)
-- `main` vive en `omnicad-vps` (Google Cloud, Ubuntu 24.04, 8 núcleos AMD, 32 GB), en `/home/mosos/OmniCAD`. Las sesiones de
-  código se abren ahí: app de Claude › entorno SSH `mosos@34.66.139.76`, carpeta `/home/mosos/OmniCAD`. La PC de Gerardo
-  sigue `vps/main` (remoto `vps`) y sirve para abrir la app y probar a mano la ventana de Windows.
-- En Linux: `.venv/bin/python` en lugar de `.venv/Scripts/python.exe`; lo que abre ventanas va con `xvfb-run -a`. Los
-  worktrees quedan al lado (`~/OmniCAD-<ID>`, `scripts/worktree_item.sh`). Rust ya está instalado (`omnicad._rs`).
-- Gasto: tope de Gerardo USD 290/mes (presupuesto «OmniCAD VPS tope 290» con alertas). Cambiar la máquina o sumar algo
-  que suba el costo pide su OK. La VPS no suma cupo de Claude.
-- La regla de memoria de la PC (13 GB, `main.log`) no aplica en la VPS: ahí se mira `free -g`.
-- OpenCode 1.19.5 instalado en la VPS (`~/.opencode/bin/opencode`, pedido de Gerardo 2026-11-11); cuentas y los 276 modelos de la PC ya copiados (`~/.config/opencode/opencode.json`, `auth.json`; MCP: remotos + `omnicad`).
-- Ver videos (skill `watch`, modo local; **no está instalada en la VPS**, solo el plugin `watch:watch` de la PC):  ffmpeg, yt-dlp (`~/.local/bin`, con pipx) y Deno (`~/.deno/bin`) instalados en la VPS (2026-11-11).
-- Capacidad medida (2026-11-11): un pytest pesado ocupa 1,5 GB y ~3 núcleos; la humo, 1,1 GB. Con pytest pesados el
-  rendimiento tope llega con 3-4 a la vez (8 a la vez no rinde más y rompe B-222); las corridas de OpenCode casi no usan
-  CPU y tienen su tope en el «Protocolo de OpenCode». Cada sesión de Claude ocupa ~0,35 GB. La memoria
-  no limita: el límite es el CPU.
-- Tests con `scripts/turno.py` (cuántos a la vez: `CLAUDE.md` › «Dónde se trabaja»; en la PC, de a 1). Ese tope vale
+## Dónde se trabaja: en la PC (Gerardo, 2026-11-23)
+> **Historia: hasta 2026-11-23 existió una VPS** (`omnicad-vps`, Google Cloud, Ubuntu 24.04, 8 núcleos, 32 GB; ahí vivía `main` y corría `scripts/vigia_opencode.sh` en la crontab de la VPS, cada 20 min): ese día Gerardo ordenó no usarla más en este proyecto y todo el trabajo pasó a la PC.
+- `main` vive en GitHub (remoto `origin`); la copia de trabajo es la PC de Gerardo (Windows, `D:\PROGRAMA`), con el Python
+  del venv: `clon/.venv/Scripts/python.exe`. La app y las pruebas de ventana corren directo en la PC.
+- Un worktree por ítem: `bash scripts/worktree_item.sh crear <ID>` (rama `item/<ID>`, carpeta `<repo>-<ID>` al lado del
+  repo). Rust ya está instalado (`omnicad._rs`).
+- La regla de memoria de la PC (13 GB, `main.log`) aplica siempre (abajo, «Memoria de la PC»).
+- OpenCode 1.19.5 instalado en la PC (`~/.opencode/bin/opencode`, pedido de Gerardo 2026-11-11): cuentas y modelos en
+  `~/.config/opencode/opencode.json` y `auth.json`; MCP: remotos + `omnicad`.
+- Ver videos: skill `watch`, modo local (plugin `watch:watch` de la PC).
+- Tests con `scripts/turno.py` (cuántos a la vez: `CLAUDE.md` › «Dónde se trabaja»). Ese tope vale
   para las sesiones: la suite nocturna corre en 4 partes por su cuenta y la verificación de la cola (`scripts/verif_tarea.sh`)
   corre sin turno. El cupo lo maneja Gerardo. La tabla de sesiones vive solo en `CLAUDE.md`.
-- El `push` a GitHub sigue siendo solo con su pedido (remoto `origin` de la VPS; acceso con `gh` de la cuenta JerryblackVe desde el 2026-11-11, token en `~/.config/gh/hosts.yml`, nunca en el repo).
+- El `push` a GitHub sigue siendo solo con su pedido (remoto `origin`; acceso con `gh` de la cuenta JerryblackVe desde el 2026-11-11, token en `~/.config/gh/hosts.yml`, nunca en el repo).
 
 ## Dirección del chat maestro (Gerardo, 2026-11-16)
-- `~/chat_maestro.txt` en la VPS: 1.ª línea, el **nombre exacto** de la sesión del chat maestro actual tal como sale en
+- `~/chat_maestro.txt` en la PC: 1.ª línea, el **nombre exacto** de la sesión del chat maestro actual tal como sale en
   `ListAgents`; 2.ª, su id. Cada chat maestro nuevo lo reescribe al arrancar, con el título de la sesión idéntico a esa línea 1 (sin
   «nuevo» ni «(PC)» de más) y archivando o renombrando «(viejo)» la anterior: con dos sesiones de igual título el
   mensaje puede llegar a la equivocada.
 - **El coordinador se reemplaza igual que el maestro** (`clear_session` falla con Remote Control): nota de traspaso,
-  sesión nueva con el mismo título «Coordinador principal OmniCAD en VPS», **Remote Control prendido** (sin eso el
+  sesión nueva con el mismo título «Coordinador principal OmniCAD», **Remote Control prendido** (sin eso el
   maestro no la encuentra por nombre) y la vieja pasa a «(viejo)». Así el nombre no cambia y no necesita archivo.
 - **Lista para abrir el reemplazo (maestro o coordinador), todo en el mismo turno** (Gerardo, 2026-11-17, tras dejar
   sesiones colgadas dos veces):
   1. Antes de irse, la vieja hace `detach_session` de TODAS las sesiones que abrió (E1–E11, etc.) y las fija: si no, quedan
      colgadas de «(viejo)» y se archivan con ella.
-  2. Abre la nueva el chat maestro desde la PC (`start_session`; el coordinador con host «VPS OMNICAD»). Desde una sesión
+  2. Abre la nueva el chat maestro desde la PC (`start_session`; el coordinador, también en la PC). Desde una sesión
      con Remote Control `start_session` no anda; y si el pedido no lo escribió Gerardo en ese turno, la app lo frena:
      pedirle en 1 línea «escribí: abrí el coordinador nuevo» (es la excepción de `CLAUDE.md` › «Loop por fases»).
   3. Recién abierta: `detach_session` de la nueva (no queda colgada de quien la abrió), `set_pinned` true a la nueva y
@@ -49,8 +44,7 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
      (Gerardo, 2026-11-18).
 - Todo lo que es para Gerardo o el chat maestro (cierres, integraciones, bloqueos, pedidos de OK) va **siempre** por
   `SendMessage` a ese nombre, leído antes de cada envío. Escribirlo solo en el chat del coordinador no alcanza.
-- Desde la VPS, el id de una sesión de la PC no llega («not found»): llega solo por el nombre (Remote Control prendido).
-  Si el envío falla, avisarle a Gerardo en el chat del coordinador en 1 renglón.
+- Si un envío falla, avisarle a Gerardo en el chat del coordinador en 1 renglón.
 
 ## Página de seguimiento (Artifact de claude.ai)
 - Gerardo ve los pendientes en una página: <https://claude.ai/artifact/4oDQpqbDYfnnsmBREjDRbp> («Seguimiento
@@ -61,7 +55,7 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
   de `docs/seguimiento/README.md`, en el mismo turno. `tests/test_seguimiento.py` falla si queda afuera.
 - **Prompt hecho:** cuando el coordinador revisa y cierra el trabajo de un prompt, borra su sección `## Prompt para el agente`
   (o el documento entero si era solo el prompt) y su fila de «Prompts guardados»; la página lo recoge en el refresco de las 19 h y muestra solo prompts por hacer o por revisar.
-- **No se actualiza sola.** Se refresca una vez por día, a las 19 h y solo a esa hora (Protocolo de ahorro de `CLAUDE.md`):
+- **No se actualiza sola.** Se refresca al cerrar cada ítem o tanda (Gerardo, 2026-11-23: «nunca la dejes desactualizada») y siempre en el lote de las 19 h; nunca queda con más de un ítem de atraso:
   1. `python scripts/seguimiento_json.py <carpeta_temporal>` escribe `seguimiento.json`, `resueltos.json`,
      `prompts.json` y `agenda.json` (pendientes de `docs/seguimiento/`, las últimas 25 entradas del Registro de `PROJECT_LOG.md` y
      los prompts guardados).
@@ -105,12 +99,11 @@ Procedimientos completos que antes vivían en `CLAUDE.md` (movidos el 2026-11-13
   La lista de esas piezas vive solo en `PIEZAS_CON_FOCO_REAL` de `scripts/prueba_ui/todo.py`.
 
 ## Recurso indispensable: documentación oficial de Fusion 360 (con imágenes)
-- **Fusion de verdad, desde la VPS (2026-11-12).** Fusion solo corre en la PC de Gerardo y se abre solo para comparar. Su MCP
-  (`fusion360`, `http://127.0.0.1:27182/mcp`) ya está en `~/.claude.json` de la VPS y llega por un túnel que corre EN LA PC:
-  `ssh -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -R 127.0.0.1:27182:127.0.0.1:27182 mosos@34.66.139.76`
-  (nunca abrir el puerto en el firewall de Google). Prueba: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:27182/mcp`
-  (000 = túnel caído o Fusion cerrado). Fusion y el túnel los abre el chat maestro o E11 en la PC; la sesión de la VPS se lo pide al chat maestro (o a Gerardo); con la PC
-  apagada, la sesión anota el caso para comparar después y sigue. Para saber cómo funciona un comando alcanza la ayuda de abajo.
+- **Fusion de verdad (en la PC).** Fusion solo corre en la PC de Gerardo y se abre solo para comparar. Su MCP
+  (`fusion360`, `http://127.0.0.1:27182/mcp`) ya está en `~/.claude.json` de la PC y es local, sin túnel.
+  Prueba: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:27182/mcp` (000 = Fusion cerrado).
+  Fusion lo abre el chat maestro o E11 en la PC; cualquier sesión se lo pide al chat maestro (o a Gerardo); con Fusion
+  cerrado, la sesión anota el caso para comparar después y sigue. Para saber cómo funciona un comando alcanza la ayuda de abajo.
 - Está descargada completa en **`docs/fusion_docs/`** (3473 artículos distintos, 8659 imágenes; 4,4 GB; **no se sube
   a git**, está en `.gitignore`). Es la fuente de verdad de **cómo funciona Fusion**.
 - **Se consulta SIEMPRE antes de corregir un bug o agregar un faltante** que replique un comando de Fusion: qué
@@ -163,16 +156,16 @@ Para encadenar fases (p. ej. `docs/plan_boceto.md`) sin que Gerardo esté presen
 - **Implementar en OpenCode:** la sesión orquesta con `/orquestador-opencode` siguiendo el «Protocolo de OpenCode»
   (más abajo): modelo, cupo, corridas y vigilancia.
 - **Cierre de cada fase (lo hace el coordinador, no la sesión):** `ruff check .` limpio y `scripts/tests_afectados.py
-  --correr` verde sobre lo integrado, más `git merge-tree` sin conflicto; la suite completa y la humo corren solas cada
-  noche (`CLAUDE.md` › «pruebas pesadas de noche»). Fallos en tests lejanos son regresiones reales: devolverlos a la
+  --correr` verde sobre lo integrado, más `git merge-tree` sin conflicto; la suite completa y la humo corren cada
+  noche (`CLAUDE.md` › «pruebas pesadas de noche`). Fallos en tests lejanos son regresiones reales: devolverlos a la
   sesión. Recién con eso: `git add` explícito (sin `docs/fusion_docs/`, que está ignorada) y commit; el `push` solo si
   Gerardo lo pide. El brief siguiente nombra `docs/fusion_docs/` y exige `ponytail` y `ponytail-review`.
 - El estado de cada fase vive en `docs/seguimiento/`.
 - **Un ítem cerrado antes del siguiente** (regla en `CLAUDE.md`): cada ítem va en su worktree, `bash scripts/worktree_item.sh
   crear <ID>` crea la rama `item/<ID>` y la carpeta `<repo>-<ID>` (usa el `clon/.venv` del repo principal) y, ya fusionada
   la rama, `bash scripts/worktree_item.sh borrar <ID>` borra las dos. Los briefs siguen `docs/brief.md`.
-- **Limpieza semanal de worktrees (OK de Gerardo, 2026-11-17)**: la crontab corre `scripts/limpiar_worktrees.sh` los domingos
-  07:00 UTC. Borra solo worktrees sin cambios sin guardar, sin commits fuera de main, sin tarea en la cola de OpenCode
+- **Limpieza semanal de worktrees (OK de Gerardo, 2026-11-17)**: `scripts/limpiar_worktrees.sh` (hoy a mano / en la PC,
+  los domingos). Borra solo worktrees sin cambios sin guardar, sin commits fuera de main, sin tarea en la cola de OpenCode
   y sin proceso adentro; registro en `~/coordinador/limpieza_worktrees.log`. Lo demás se borra a mano tras fusionar.
 
 ## Trabajo continuo para todas las EX (Gerardo, 2026-11-21: «para todos los trabajos»)
@@ -222,9 +215,9 @@ de OpenCode; las demás la enlazan.
 - **Quién hace qué**: el vigía lanza las corridas; el coordinador llena la cola (con filas chicas de prioridad 1 de
   `docs/seguimiento/`), revisa el diff e integra. `ahora.md` tiene solo los ítems de las sesiones: su fila de OpenCode
   enlaza a la cola.
-- **Vigía sin modelo** (Gerardo, 2026-11-17): `scripts/vigia_opencode.sh` en la crontab de la VPS, cada 20 min: mata una corrida que no escribe hace 20 min (`MIN`) y lanza las `NN_nombre.tarea` de `~/coordinador/opencode_cola/` en orden alfabético hasta el tope de corridas (`WT=`, `BRIEF=`, `MODELO=` y `VARIANTE=` opcionales; cada corrida con `timeout 2700`; log en `vigia.log`). Una tarea trabada o en rojo se relanza con el modelo siguiente y un brief que sigue desde `git diff` + el log; si no queda modelo libre (cupo, 429, sin respuesta) vuelve a la cola para la vuelta siguiente (3 veces como mucho; a la 4.ª, `trabadas/` con aviso), y va a `trabadas/` solo si falló de verdad (error o rojo, sin cupo) con 2 modelos distintos (Gerardo, 2026-11-18). Al terminar bien la verifica `scripts/verif_tarea.sh` (ruff y los tests de los archivos tocados, sin turno, ignora los rojos de main de `~/coordinador/suite_noche/rojos.txt`): verde → `hechos/`.
+- **Vigía sin modelo** (Gerardo, 2026-11-17): `scripts/vigia_opencode.sh` (hoy a mano / en la PC): mata una corrida que no escribe hace 20 min (`MIN`) y lanza las `NN_nombre.tarea` de `~/coordinador/opencode_cola/` en orden alfabético hasta el tope de corridas (`WT=`, `BRIEF=`, `MODELO=` y `VARIANTE=` opcionales; cada corrida con `timeout 2700`; log en `vigia.log`). Una tarea trabada o en rojo se relanza con el modelo siguiente y un brief que sigue desde `git diff` + el log; si no queda modelo libre (cupo, 429, sin respuesta) vuelve a la cola para la vuelta siguiente (3 veces como mucho; a la 4.ª, `trabadas/` con aviso), y va a `trabadas/` solo si falló de verdad (error o rojo, sin cupo) con 2 modelos distintos (Gerardo, 2026-11-18). Al terminar bien la verifica `scripts/verif_tarea.sh` (ruff y los tests de los archivos tocados, sin turno, ignora los rojos de main de `~/coordinador/suite_noche/rojos.txt`): verde → `hechos/`.
 - **Cola sin sesiones (Gerardo, 2026-11-17: todo verde, sin depender de una sesión)**: el coordinador deja 20 tareas o
-  más en `~/coordinador/opencode_cola/reserva/`; el vigía de la crontab las pasa a la cola hasta tener 8 y anota «AVISO
+  más en `~/coordinador/opencode_cola/reserva/`; el vigía las pasa a la cola hasta tener 8 y anota «AVISO
   reserva con menos de 8» cuando hay que reponer. Las de prioridad 2 llevan el prefijo `z_` (corren al final) y las que
   esperan un archivo ocupado, `zz_`. Tareas que tocan una lista compartida (p. ej. los TOPES de un test):
   el brief dice «no toques esa lista»; el coordinador la actualiza una sola vez al integrar, así no hay choques.
@@ -241,15 +234,17 @@ de OpenCode; las demás la enlazan.
   (verifica), `scripts/limpiar_worktrees.sh` (limpieza semanal), `scripts/suite_noche.sh` (cierre nocturno). Los de
   `~/coordinador/` (`vigilar.sh`, `tanda.sh`, `integrar.sh`, `fusionar.sh`) son ayudas del coordinador, fuera del repo.
 - **Cada corrida**: una tarea, en su worktree, con respaldo antes (tgz del vigía). **Tope: hasta 6 corridas a la vez**
-  en la VPS (2 por modelo de CodeBuddy y 1 por modelo de OpenCode; Gerardo, 2026-11-17: exprimirlos; `MAX` del vigía);
-  en la PC, nunca. La verificación de la cola es `scripts/verif_tarea.sh` (rápida); `tests_afectados.py --correr` es
+  (`MAX` del vigía; 2 por modelo de CodeBuddy y 1 por modelo de OpenCode; Gerardo, 2026-11-17: exprimirlos) cuando el
+  vigía lanza; hoy a mano / en la PC, con la vigilancia de «Vigilancia en la PC» y el tope de «Memoria de la PC». La
+  verificación de la cola es `scripts/verif_tarea.sh` (rápida); `tests_afectados.py --correr` es
   la de las sesiones y la corre el coordinador al integrar. La revisión del diff (y `ponytail-review`) es solo del
   coordinador: a main entra solo lo que él revisó.
+- **Vigilancia en la PC (Gerardo, 2026-11-23: «debes siempre vigilar todo OpenCode, no importa qué modelo use»)**: toda corrida de OpenCode que lance una sesión de Claude (sin vigía de crontab) lleva SIEMPRE su vigía: `powershell -File scripts/vigia_opencode_local.ps1` (Monitor; avisa si una corrida pasa 8 min sin escribir o si termina). Corrida quieta → se corta y se relanza con otro modelo; se re-arma al vencer. **Cupo de Go (Gerardo, 2026-11-23):** Go se agota por ventanas de 5 h; si una corrida de `opencode-go/*` termina por «usage limit», el vigía la relanza solo con `nvidia/kimi-k3.1-pro` y anota «Go agotado 5 h» (vuelve a servir pasadas las 5 h); si Kimi también corta, avisa y decide el coordinador. Vale para cualquier modelo (Kimi, GLM, DeepSeek…).
 - **Vigilancia**: el coordinador y el chat maestro, cada 2 h, comprueban que haya corridas activas
   (`ls ~/coordinador/opencode_cola/corriendo`, que ve OpenCode y CodeBuddy) y que la reserva no baje de 8; si baja, la
   rellenan. El aviso «reserva con menos de 8» de `avisos.txt` se atiende en esa misma vuelta, llenando la reserva
   (Gerardo, 2026-11-18). Leen también `avisos.txt` de la cola (trabadas, cola o reserva vacías, ningún modelo responde, pytest
-  huérfano cortado) y la hora de `latido`: si tiene más de 1 vuelta, el vigía no corre (crontab o máquina) y se avisa a
+  huérfano cortado) y la hora de `latido`: si tiene más de 1 vuelta, el vigía no corre (falló el lanzamiento o la máquina) y se avisa a
   Gerardo. Lo que llega a `trabadas/` lo decide el coordinador (partirlo o pasarlo a una sesión de Claude).
 - **Próximo brief escrito de antemano (Gerardo, 2026-11-20)**: al entregar un brief a una sesión EX, el coordinador deja también `~/coordinador/briefs/EX_proximo.md` con su ítem siguiente de «Sigue» (sin ítem, no hay archivo). El chat maestro vigila cada 1 h: si EX está quieta y existe `EX_proximo.md`, la vacía, se lo entrega y lo renombra a `EX_<IDs>.md`. El coordinador integra aparte, sin frenar el reparto.
 - **Topes del vigía (nada queda quieto sin corte)**: corrida o verificación sin escribir ni usar CPU en `MIN` min → se
@@ -261,7 +256,7 @@ de OpenCode; las demás la enlazan.
 ## Protocolo de tests rápidos (Gerardo, 2026-11-18: tests rápidos = feedback rápido para los agentes)
 <a id="protocolo-de-tests-rapidos"></a>
 - **Tope de un test:** el de AGENTS.md › «Cómo verificar» (pruebas rápidas); no se repite acá.
-- **Cada noche** `scripts/suite_noche.sh` corre la suite con `--durations=20` y guarda los 20 tests más lentos de sus 4 partes
+- **Cada noche** `scripts/suite_noche.sh` (hoy a mano / en la PC) corre la suite con `--durations=20` y guarda los 20 tests más lentos de sus 4 partes
   en `~/coordinador/suite_noche/lentos.txt`.
 - **Al mirar la suite a la mañana**, el coordinador carga a la reserva de OpenCode una tarea por cada test de `lentos.txt`
   arriba del tope: acelerarlo sin perder lo que prueba (fixture compartida, menos geometría o malla más gruesa) y, si no
@@ -297,10 +292,11 @@ de OpenCode; las demás la enlazan.
 - Quien coordina carga las diferencias y errores en `docs/seguimiento/` **una fila por causa**, con los ids de diseño.
 
 ## Memoria de la PC (Gerardo, 2026-11-08)
-- La PC tiene 13 GB: ahí corren solo E11 y el chat maestro, **nada de pytest pesado ni de OpenCode** (una sola corrida
-  pesada a la vez, con `scripts/turno.py`). El 2026-11-07 la app se cayó por memoria con 4 sesiones, OpenCode y varios pytest.
-- Las sesiones terminadas o en pausa se archivan: cada proceso ocupa memoria aunque esté quieto. El trabajo pesado
-  corre en la VPS (`free -g`); cuántas sesiones a la vez: Protocolo de ahorro de `CLAUDE.md`.
+- La PC tiene 13 GB y hoy corre TODO (sesiones, OpenCode y pytest): una sola corrida pesada a la vez, con
+  `scripts/turno.py` (cuántos: `CLAUDE.md` › «Dónde se trabaja»). E11 y el chat maestro también corren ahí. El
+  2026-11-07 la app se cayó por memoria con 4 sesiones, OpenCode y varios pytest.
+- Las sesiones terminadas o en pausa se archivan: cada proceso ocupa memoria aunque esté quieto. Cuántas sesiones a la
+  vez: Protocolo de ahorro de `CLAUDE.md`.
 
 ## Contexto: traspaso (Gerardo, 2026-11-05; reglas y tope en `CLAUDE.md` › Protocolo de ahorro, punto 1)
 - El tope se mide sobre el contexto total (hook `.claude/hooks/ctx25.py`, que avisa en el turno siguiente); el número vive solo en `CLAUDE.md`. El coordinador mira el suyo y el de las sesiones con `get_usage`
@@ -342,12 +338,12 @@ de OpenCode; las demás la enlazan.
 - El coordinador decide: reasignar, subir modelo un escalón (regla de modelos), partir el ítem o dejarlo Parcial en docs/seguimiento/.
 
 ## Avisos de recursos: formato
-- Una línea al empezar el ítem: «Recurso: <Opus alto | ultracode | Fusion abierto | túnel 27182> — porque <qué de la tarea lo exige> — alternativa probada: <cuál y por qué no alcanzó>».
+- Una línea al empezar el ítem: «Recurso: <Opus alto | ultracode | Fusion abierto> — porque <qué de la tarea lo exige> — alternativa probada: <cuál y por qué no alcanzó>».
 - Ultracode (workflows multi-agente) solo en auditorías y jueces, como ya dice la memoria del coordinador; los arreglos siguen en Opus alto.
-- Fusion: primero `scripts/fusion_docs.py buscar/ver`. Fusion abierto solo para comparar comportamiento que la ayuda no aclara. Chequeo del túnel: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:27182/mcp` (000 = caído o Fusion cerrado). Fusion y el túnel los abre el chat maestro o E11 en la PC; las sesiones de la VPS se lo piden al chat maestro.
+- Fusion: primero `scripts/fusion_docs.py buscar/ver`. Fusion abierto solo para comparar comportamiento que la ayuda no aclara. Chequeo: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:27182/mcp` (000 = Fusion cerrado). Fusion lo abre el chat maestro o E11 en la PC; cualquier sesión se lo pide al chat maestro.
 
 ## E11 · Computer Use en la PC
-- Dónde: sesión de Claude en la PC de Gerardo, checkout D:/PROGRAMA-noche (o D:/PROGRAMA al día con vps/main). Herramientas: mcp__computer-use (request_access a OmniCAD y Fusion 360), MCP fusion360 local, capturas y grabación.
+- Dónde: sesión de Claude en la PC de Gerardo, checkout D:/PROGRAMA-noche (o D:/PROGRAMA al día con main). Herramientas: mcp__computer-use (request_access a OmniCAD y Fusion 360), MCP fusion360 local, capturas y grabación.
 - Cuándo: solo con el OK explícito de Gerardo en el momento (nunca porque la PC parezca quieta). Antes de arrancar, avisa al coordinador; al terminar, devuelve la PC (cierra Fusion si lo abrió, como pide la regla de Fusion).
 - Cómo prueba: sigue los 10 puntos de «toda prueba como usuario humano» y la sección 4b de la skill omnicad-test, pero con mouse y teclado reales. Modela una pieza real de principio a fin, cambia una cota, guarda y reabre. Hace lo mismo en Fusion y compara resultado, opciones y mensajes.
 - Evidencia por falla en evidencias/reportes_pc/AAAA-MM-DD_<tema>/: capturas (antes/después), video si la falla es de movimiento o tiempo, pasos numerados reproducibles, versión (git rev-parse --short HEAD), qué hace Fusion en el mismo caso. Respeta los límites de intentos (`CLAUDE.md` › «Límites de intentos»).

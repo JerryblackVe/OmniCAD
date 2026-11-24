@@ -61,7 +61,7 @@ Al agregar, mover o borrar un documento se actualiza este índice en el mismo co
 | Documento | Qué tiene |
 |---|---|
 | [plan_mcp_cli.md](plan_mcp_cli.md) | Plan de la capa para agentes (paquetes A–L) |
-| [coordinacion.md](coordinacion.md) | Procedimientos de coordinación movidos de `CLAUDE.md` (VPS, página de seguimiento, prueba como usuario, ayuda de Fusion, loop por fases, caza, contexto, modelos, memoria de la PC); `brief.md`: plantilla de brief |
+| [coordinacion.md](coordinacion.md) | Procedimientos de coordinación movidos de `CLAUDE.md` (dónde se trabaja, página de seguimiento, prueba como usuario, ayuda de Fusion, loop por fases, caza, contexto, modelos, memoria de la PC); `brief.md`: plantilla de brief |
 | [brief.md](brief.md) | Plantilla fija de brief a una sesión o a OpenCode (skills, Fusion, informe); el brief solo nombra ID, archivo y «seguí docs/brief.md» |
 | [seguimiento/ahora.md](seguimiento/ahora.md) | La única cola de trabajo: «Ahora» (uno por sesión) y «Sigue» (lo que viene, en orden) |
 | [plan_fluidez.md](plan_fluidez.md) | Plan de fluidez (2026-11-13): que la ventana nunca se congele; paquetes F0–F11 (filas FL-*) |
@@ -157,7 +157,7 @@ Brechas de programas que se usan solo de inspiración, hoy en `docs/referencia/`
 | [prompt_b271.md](prompt_b271.md) | Prompt para que un agente arregle B-271 (Parámetros toca un árbol ya borrado) y deje reporte en `evidencias/manual/`. |
 | [auditorias/porton_auditoria.md](auditorias/porton_auditoria.md) | Portón de cierre de toda auditoría: matriz de combinaciones, ventana, pieza real, juez independiente y cerrar la clase de cada bug |
 | [modelos_gratis.md](modelos_gratis.md) | Modelos gratis de Cline, OpenCode, Kiro, Qoder, Kilo y CodeBuddy: cuáles responden, cuáles sirven para OmniCAD y cómo repetir la prueba |
-| [modelos_opencode_vps.md](modelos_opencode_vps.md) | Prueba (2026-11-11) de 40 modelos de OpenCode en la VPS: cuáles responden, tiempos, código y para qué sirve cada uno |
+| [modelos_opencode_vps.md](modelos_opencode_vps.md) | Prueba (2026-11-11) de 40 modelos de OpenCode — histórica: la VPS dejó de usarse el 2026-11-23; cuáles responden, tiempos, código y para qué sirve cada uno |
 | [arreglos_qwen.md](arreglos_qwen.md) | Arreglos con Qwen3.8-Flash en OpenCode: por qué el prompt es así, tandas de dos bugs con gemelos y tests obligatorios, prompt e informes |
 | [corrida_nocturna_2026-11-05.md](corrida_nocturna_2026-11-05.md) | Corrida nocturna: Qwen (Qoder) en las tandas de `arreglos_qwen.md` y Sol (OpenCode, rama aparte) en la geometría difícil; plan, uso de tokens e informe de la mañana |
 | [auditorias/informe_tortura_2026-10-17.md](auditorias/informe_tortura_2026-10-17.md) | Prueba de tortura del reductor y bugs T-01 a T-18 |

@@ -71,7 +71,7 @@ Nota: se llamaba FusionClone hasta el 2026-10-09; los `.fclone` viejos se siguen
 | `docs/` | Índice de todo en `docs/README.md`. Estado (bugs, faltantes, mejoras) en `docs/seguimiento/`; especificación de faltantes en `brechas_*.md`; planes `plan_*.md`; `agentes/` (MCP y CLI) |
 | `ejemplos/agentes/` | Ejemplos ejecutables para agentes (batch, script, receta) |
 | `.claude/skills/omnicad/` | Skill `omnicad` para agentes (la instala `omnicad setup`). Al lado, `omnicad-test/`: probar el programa y anotar los hallazgos (no la instala `setup`) |
-| `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno); `fusion_docs.py` (buscar en la ayuda de Fusion); `prueba_ui/` (prueba de la ventana como usuario, ver CLAUDE.md); `bench_booleana.py` (tiempo de Nuevo / Unir / Cortar / Intersecar por etapa); `bench_empalme.py` (Empalme o Chaflán de una caja por etapa: kernel, ventana, proceso aparte); `bench_vaciado.py` (previa de un Vaciado de 2 cuerpos reglados por etapa); `vigia_opencode.sh` (crontab: destraba y encadena las corridas de OpenCode); `bench_nativo.py` (Zstandard del `.f3d` y BVH de rayos, con y sin Rust: `OMNICAD_SIN_RUST=1`); `generar_tablas_rosca.py` (rehace `nucleo/tablas_rosca.py` desde los XML de Fusion instalados); `caza/` (cazador automático de errores: `cazar.py rapida|noche|tema|repetir`); `probar_todo.py` (todas las pruebas automáticas de a una y un informe en `evidencias/probar_todo_<fecha>/`: `--rapido`, `--noche [--horas N]`, `--seguir`); `miniatura_windows.ps1` (pide a Windows la miniatura de un `.omnicad`); `diagnostico_b418.py` (dónde se traba el trabajador de previas en Windows, con informe) |
+| `scripts/` | Utilidades: capturas de pantalla de OmniCAD; `turno.py` (comandos pesados de a uno); `fusion_docs.py` (buscar en la ayuda de Fusion); `prueba_ui/` (prueba de la ventana como usuario, ver CLAUDE.md); `bench_booleana.py` (tiempo de Nuevo / Unir / Cortar / Intersecar por etapa); `bench_empalme.py` (Empalme o Chaflán de una caja por etapa: kernel, ventana, proceso aparte); `bench_vaciado.py` (previa de un Vaciado de 2 cuerpos reglados por etapa); `vigia_opencode.sh` (vigía de la cola de OpenCode: destraba y encadena las corridas; hoy a mano / en la PC, ver [docs/coordinacion.md](docs/coordinacion.md)); `bench_nativo.py` (Zstandard del `.f3d` y BVH de rayos, con y sin Rust: `OMNICAD_SIN_RUST=1`); `generar_tablas_rosca.py` (rehace `nucleo/tablas_rosca.py` desde los XML de Fusion instalados); `caza/` (cazador automático de errores: `cazar.py rapida|noche|tema|repetir`); `probar_todo.py` (todas las pruebas automáticas de a una y un informe en `evidencias/probar_todo_<fecha>/`: `--rapido`, `--noche [--horas N]`, `--seguir`); `miniatura_windows.ps1` (pide a Windows la miniatura de un `.omnicad`); `diagnostico_b418.py` (dónde se traba el trabajador de previas en Windows, con informe) |
 | `PROJECT_LOG.md` | Bitácora (Registro) y "Lecciones aprendidas" |
 
 **`nucleo/`, `timeline/`, `restricciones/` e `io_archivos/` NO importan Qt** (comprobado: cero
@@ -91,7 +91,7 @@ Desde `clon/` (shell Bash; en Linux, `.venv/bin/python` en lugar de `.venv/Scrip
 .venv/Scripts/python.exe -m ruff check .
 ../scripts/tests_afectados.py --correr
 ```
-La suite completa (`pytest -q`) y la humo (`OmniCAD.py --prueba-humo`) no las corre la sesión: corren solas cada
+La suite completa (`pytest -q`) y la humo (`OmniCAD.py --prueba-humo`) no las corre la sesión: corren cada
 noche (CLAUDE.md › «Pruebas pesadas de noche»).
 El criterio de ruff (F, B023, B905) vive en `clon/pyproject.toml` › `[tool.ruff.lint]`: `ruff check .` lo
 toma solo de ahí, sin `--select`.
@@ -105,7 +105,7 @@ comando pesado va con turno (cuántos a la vez: CLAUDE.md › «Dónde se trabaj
 Una prueba suelta: `pytest tests/<archivo>.py -q`. Cada función del núcleo lleva al menos una prueba con
 un resultado numérico (volumen, área, caja envolvente) y `geo.es_valida(forma)`; rápidas (< 3 s).
 
-**Definición de terminado** (de la sesión; la suite completa y la humo corren solas cada noche, aunque se toque la UI):
+**Definición de terminado** (de la sesión; la suite completa y la humo corren cada noche, aunque se toque la UI):
 ruff limpio y `tests_afectados.py --correr` verde,
 entrada nueva en `PROJECT_LOG.md`, `docs/seguimiento/` al día (lo resuelto, borrado; lo nuevo, agregado) y lección
 anotada si hubo un error verificable. Sin archivos sueltos: nada de informes, capturas o temporales en la raíz. Si tocaste UI: lista de control de `docs/protocolo_ux.md` pegada con evidencia.

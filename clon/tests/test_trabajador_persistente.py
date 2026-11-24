@@ -351,8 +351,10 @@ def test_el_trabajador_termina_cuando_muere_el_padre():
         "d.agregar(OpPrimitiva(d.nuevo_id(), forma='caja'))\n"
         "print(aislado._trabajador.proceso.pid, flush=True)\n"
         "os._exit(0)\n")
+    # B-835: sin esto el hijo hereda OMNICAD_PREVIA_EN_VENTANA=1 del conftest (B-759) y en Windows no tiene trabajador.
+    entorno = {k: v for k, v in os.environ.items() if k != "OMNICAD_PREVIA_EN_VENTANA"}
     salida = subprocess.run([sys.executable, "-c", codigo], cwd=aislado._RAIZ, capture_output=True, text=True, timeout=60,
-                            encoding="utf-8")
+                            encoding="utf-8", env=entorno)
     pid = int(salida.stdout.split()[-1])
     assert _espera_que_muera(pid)
 

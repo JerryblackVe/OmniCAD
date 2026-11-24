@@ -10,6 +10,10 @@ from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from omnicad import api  # noqa: E402
+from omnicad.nucleo import fuentes  # noqa: E402
+
+# B-851: «DejaVu Sans» es la predeterminada de Linux y en Windows no está: se prueba con la primera instalada.
+FUENTE = next((n for n in ("DejaVu Sans", "Arial") if fuentes.resolver_fuente(n)), fuentes.familias()[0])
 
 
 @pytest.fixture(scope="module")
@@ -31,7 +35,7 @@ def ventana(tmp_path_factory):
 def _doc():
     s = api.Sesion()
     r = api.llamar(s, "sketch_from_spec", {"name": "Letras", "entities": [
-        {"type": "text", "text": "ABCDE", "x": 0, "y": 0, "height": 10, "font": "DejaVu Sans"},
+        {"type": "text", "text": "ABCDE", "x": 0, "y": 0, "height": 10, "font": FUENTE},
         {"type": "rectangle", "corner1": [-5, -5], "corner2": [40, 20]}]})
     assert r["ok"], r
     return s

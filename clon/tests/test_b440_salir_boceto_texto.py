@@ -11,13 +11,15 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from omnicad import api  # noqa: E402
-from omnicad.nucleo import perfiles as perfiles_mod  # noqa: E402
+from omnicad.nucleo import fuentes, perfiles as perfiles_mod  # noqa: E402
 
 from PySide6.QtCore import QSettings  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-TEXTO = {"type": "text", "text": "HOLA BOB", "x": 0, "y": 0, "height": 10, "font": "DejaVu Sans"}
+# B-850: «DejaVu Sans» es la predeterminada de Linux y en Windows no está: se prueba con la primera instalada.
+FUENTE = next((n for n in ("DejaVu Sans", "Arial") if fuentes.resolver_fuente(n)), fuentes.familias()[0])
+TEXTO = {"type": "text", "text": "HOLA BOB", "x": 0, "y": 0, "height": 10, "font": FUENTE}
 
 
 def _boceto_con_texto(s):

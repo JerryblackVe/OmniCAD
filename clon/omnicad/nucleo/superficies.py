@@ -1390,8 +1390,9 @@ def solevar_superficie(secciones, *, cerrada=False, reglada=False, rieles=(), li
         from . import solidos_crear as sc
         # SUP-4: con secciones de distinto tipo (rectángulo + círculos) el ajuste de compatibilidad es imprescindible;
         # B-419: con la misma cantidad de aristas puede correr la costura y plegarla: _loft prueba sin el ajuste.
+        # B-243: con condiciones de borde no se suaviza (la lisa no reproduce el volumen de la seta).
         try:
-            forma = sc._loft(secs, False, bool(reglada), cerrada)
+            forma = sc._loft(secs, False, bool(reglada), cerrada, _suavizar=not condiciones)
         except geo.ErrorGeometria:
             raise geo.ErrorGeometria("No se pudo crear: revisá orden y forma.") from None
     forma = _simplificar(forma)
@@ -1682,11 +1683,11 @@ def reglada(aristas, distancia, angulo=0.0, *, tipo="normal", direccion=None, re
         raise geo.ErrorGeometria("Reglada inválida: cambiá distancia o ángulo.")
     if distancia < 0:
         from . import revision
-        cantidad, _, completo = revision._autointersecciones_seguras(resultado, 1, 5.0)
+        cantidad, problemas, completo = revision._autointersecciones_seguras(resultado, 1, 5.0)
         if cantidad:
             raise geo.ErrorGeometria("La reglada se cruza: reducí la distancia.")
-        if not completo:
-            raise geo.ErrorGeometria("No se pudo comprobar: menos aristas.")
+        if not completo and avisos is not None and problemas:
+            avisos.append(problemas[0]["mensaje"])
     return resultado
 
 
@@ -1744,7 +1745,7 @@ def _desfase_imposible(original, resultado, distancia, *, engrosado=False):
     return False
 
 
-def desfasar_superficie(forma, distancia, *, tipo="agudo"):
+def desfasar_superficie(forma, distancia, *, tipo="agudo", avisos=None):
     """Superficie desfasada [SFC-OFFSET] (BRepOffsetAPI_MakeOffsetShape). Distancia positiva = hacia
     la normal. `tipo`: "agudo" (Sharp Offset) o "redondeado" (Rounded Offset)."""
     if abs(distancia) < 1e-9:
@@ -1760,10 +1761,16 @@ def desfasar_superficie(forma, distancia, *, tipo="agudo"):
         raise geo.ErrorGeometria("Desfase: la distancia no entra.")
     resultado = None if off.Shape().IsNull() else _simplificar(off.Shape())
     from . import revision                  # local: revision carga medio núcleo
-    # B-171: un desfase enorme puede cruzarse consigo mismo sin que lo vea _desfase_imposible
-    if (resultado is None or _desfase_imposible(forma, resultado, distancia)
-            or revision._autointersecciones_seguras(resultado, 1, 5.0)[0]):
+    # B-171: un desfase enorme puede cruzarse consigo mismo sin que lo vea _desfase_imposible.
+    # B-855: si el análisis no llega (frío), no se rechaza (una operación que hoy anda no puede fallar porque la
+    # compuerta no llegó a contar): con `avisos` queda el aviso de 1 renglón, igual frío y caliente.
+    if resultado is None or _desfase_imposible(forma, resultado, distancia):
         raise geo.ErrorGeometria(f"Desfase de {abs(distancia):g} mm: se cruza sola.")
+    cantidad, problemas, completo = revision._autointersecciones_seguras(resultado, 1, 5.0)
+    if cantidad:
+        raise geo.ErrorGeometria(f"Desfase de {abs(distancia):g} mm: se cruza sola.")
+    if not completo and avisos is not None and problemas:   # el abortado sin problemas no deja mensaje
+        avisos.append(problemas[0]["mensaje"])
     return resultado
 
 
@@ -2381,19 +2388,27 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
         base = _coser_caras(geo.caras(base))
     if _punta_de_cono(base):
         raise geo.ErrorGeometria("No se pudo engrosar: " + _PUNTA_DE_CONO)
+    # B-850: BRepOffset agranda IN PLACE las tolerancias de lo que recibe; la superficie de un boceto comparte
+    # topología con los perfiles cacheados y lo que se dibuje después nace degenerado (el Vaciado del loft
+    # rectángulo → círculo fallaba tras Engrosar en el mismo proceso). Sobre una copia, como ShapeFix (B-39).
+    base = BRepBuilderAPI_Copy(base).Shape()
     if simetrica:
         base = desfasar_superficie(base, -abs(espesor) / 2, tipo=tipo)
         espesor = abs(espesor)
+    # B-853: el offset de abajo envenena IN PLACE la copia que recibe (B-850: los vértices de esta pieza pasan de 0 a
+    # ~1e76); la banda de repuesto se cose sobre OTRA copia, tomada antes de que la suya se envenene: sobre la
+    # envenenada BOPAlgo le cuenta 190 autointersecciones (medido 24/11, loft rectángulo → círculo).
+    banda = BRepBuilderAPI_Copy(base).Shape() if junta == GeomAbs_Intersection and base.ShapeType() == TopAbs_SHELL else None
     op = BRepOffset_MakeOffset()
     op.Initialize(base, float(espesor), 1e-6, BRepOffset_Skin, False, False, junta, True, False)
     op.MakeOffsetShape()
     resultado = _simplificar(op.Shape()) if op.IsDone() and not op.Shape().IsNull() else None
     if resultado is None or not geo.solidos(resultado):
         fallo = "El engrosado no produjo un sólido." if resultado is not None else "No se pudo engrosar con ese espesor."
-        if junta == GeomAbs_Intersection and base.ShapeType() == TopAbs_SHELL:
+        if banda is not None:
             try:
                 from .engrosar_reglada import engrosar_banda
-                resultado = engrosar_banda(base, espesor)
+                resultado = engrosar_banda(banda, espesor)
             except Exception:  # noqa: BLE001 — construcción opcional: conservar el diagnóstico del kernel
                 resultado = None
         if resultado is None or not geo.solidos(resultado):
@@ -2404,9 +2419,15 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
             or _desfase_imposible(base, resultado, espesor, engrosado=True)):
         raise geo.ErrorGeometria(f"Espesor {abs(espesor):g} mm: probá menos.")
     from . import revision                  # local: revision carga medio núcleo
-    # B-394: tres caras de una caja abierta (borde + dos paredes) daban «ok» con 6 autointersecciones en las esquinas
-    if revision._autointersecciones_seguras(resultado, 1, 5.0)[0]:
+    # B-394: tres caras de una caja abierta (borde + dos paredes) daban «ok» con 6 autointersecciones en las esquinas.
+    # B-853: con 5 s el análisis de la banda (B-633) no llegaba ni con el trabajador caliente (6–10 s): el veredicto
+    # dependía de si el trabajador venía frío o caliente y el que no llegaba aprobaba en silencio. Ahora espera como
+    # una vista previa (30 s) y, si no llega, no aprueba sin revisar.
+    cantidad, _, completo = revision._autointersecciones_seguras(resultado, 1, 30.0)
+    if cantidad:
         raise geo.ErrorGeometria("No se pudo engrosar: probá menos espesor.")
+    if not completo:
+        raise geo.ErrorGeometria("No se pudo comprobar: probá menos espesor.")
     return resultado
 
 

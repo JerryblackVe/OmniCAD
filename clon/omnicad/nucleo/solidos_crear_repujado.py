@@ -98,8 +98,8 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
         donde = f" (cara {k})" if len(caras) > 1 else ""
         cilindro = BRepAdaptor_Surface(cara).GetType() == GeomAbs_Cylinder
         if cilindro and not (envolver or cadena_tangente):
-            raise geo.ErrorGeometria("Sobre una cara cilíndrica el repujado se hace envolviendo (envolver=True)"
-                                     + donde + ".")
+            # B-848: 1 renglón en español simple (UX-9), sin hablar en código; la casilla la tilda el diálogo.
+            raise geo.ErrorGeometria("Marcá «Envolver en la cara»" + donde + ".")
         pl_perfil = geo.plano_de_cara(perfiles[0])
         alineados = _alinear_repujado(perfiles, pl_perfil, desfase_h, desfase_v, giro)
         prof, efecto = -profundidad if invertir else profundidad, "relieve" if es_relieve else "grabado"
@@ -460,10 +460,14 @@ def _envolver_en_cilindro(perfiles, cara, profundidad, tipo, *, recortar=False):
         c = np.array(geo.centro_masa(f, superficie=True))
         er = nf if float((c - o) @ nf) >= 0 else -nf
         et = np.cross(z, er)
-        # Evita que un perfil lejano dé otra vuelta al cilindro y repuje del otro lado.
-        minimo, maximo = np.asarray(geo.caja_envolvente(f))
-        alcance = abs(float(((minimo + maximo) / 2 - o) @ et)) + float((maximo - minimo) @ np.abs(et)) / 2
-        if alcance > math.pi / 2 * radio + 1e-6:
+        # B-849: hasta una vuelta completa (2π·r) el contorno se reparte sin dar dos vueltas; más ancho no entra.
+        s = np.asarray(geo.teselar(f)[0], float).reshape(-1, 3) @ et
+        if float(s.max() - s.min()) > 2 * math.pi * radio + 1e-6:
+            raise geo.ErrorGeometria(
+                f"Más ancho que el cilindro (máx. {2 * math.pi * radio:.1f} mm).")
+        # B-220: más lejos que media vuelta de cada lado, alcanzarlo daría la vuelta entera al cilindro y
+        # repujaría del otro lado: queda afuera, como un perfil fuera de las caras.
+        if float(s.max()) > math.pi * radio + 1e-6 or float(s.min()) < -math.pi * radio - 1e-6:
             continue
         u0 = math.atan2(float(er @ y), float(er @ x))
 

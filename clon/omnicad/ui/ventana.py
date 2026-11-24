@@ -2902,9 +2902,14 @@ class VentanaPrincipal(QMainWindow):
             doc.diferir_calculo = False
         resultado = {}
 
+        def cortar(_segundos=0):
+            # B-836: lo marcó el filtro con Esc o el «Cancelar» de la barra; el hilo corta en vez de esperar a otro trabajador
+            if self._espera.cancelado:
+                raise aislado.Cancelado("lo cancelaste")
+
         def trabajo():
             try:
-                calculo = doc.calcular_aparte(pendiente.tarea, pendiente.datos)
+                calculo = doc.calcular_aparte(pendiente.tarea, pendiente.datos, cortar)
                 # también en este hilo: reconocer los cuerpos que no cambiaron y mallar los demás (20 cubos: 140 ms)
                 if not calculo["parcial"]:
                     Documento._conservar_formas(doc._estados, calculo["estados"])
@@ -2959,8 +2964,8 @@ class VentanaPrincipal(QMainWindow):
             self.mensaje("Cálculo cancelado: el documento quedó como estaba.", 5000)
 
         reloj.timeout.connect(mirar)
+        self._espera.cancelado = False      # antes de arrancar: el hilo (cortar) lo mira apenas nace
         hilo.start()
-        self._espera.cancelado = False
         app.installEventFilter(self._espera)
         self.mensaje("Calculando en un proceso aparte… (Esc cancela)", 30000)
         self.timeline.espera.show()

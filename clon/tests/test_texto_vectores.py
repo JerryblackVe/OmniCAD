@@ -680,8 +680,9 @@ def test_texto_con_cuadro_del_ratón_y_cambios_en_vivo(app_qt):
     assert not b.curvas                                       # nada se crea hasta aceptar
     lz.entrada.aceptado.emit(["OJO", "10", "0", "0", "1"])
     t = next(c for c in b.curvas.values() if c.tipo == "texto")
-    assert t.ancho_caja == pytest.approx(100.0) and t.ancla_v == "arriba" and t.texto == "OJO"
-    assert t.punto is not None and lz._previa_polis == []
+    # B-700: el cuadro dibujado respeta el Anclaje del panel («base» apoya en el borde inferior, como Fusion)
+    assert t.ancho_caja == pytest.approx(100.0) and t.ancla_v == "base" and t.texto == "OJO"
+    assert b.coords(t.punto) == pytest.approx((10.0, 5.0)) and lz._previa_polis == []
 
 
 @hay_arial

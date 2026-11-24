@@ -121,7 +121,114 @@ def _canonizar(forma, tol=_TOL_CANONICA):
     return copia if geo.es_valida(copia) else forma
 
 
-def _loft(alambres, solido, reglada, cerrada, compatibilizar=True):
+def _tangentes_empalman(w, grados=1.0):
+    """True si el alambre cerrado `w` pasa de una arista a la siguiente sin quiebre (tangente continua)."""
+    from OCP.BRepTools import BRepTools_WireExplorer
+    from OCP.TopAbs import TopAbs_REVERSED
+    extremos = []
+    exp = BRepTools_WireExplorer(TopoDS.Wire(w))
+    while exp.More():
+        e = exp.Current()
+        c = BRepAdaptor_Curve(e)
+        pa, pz = c.FirstParameter(), c.LastParameter()
+        ta, tz = gp_Vec(), gp_Vec()
+        c.D1(pa, gp_Pnt(), ta)
+        c.D1(pz, gp_Pnt(), tz)
+        if e.Orientation() == TopAbs_REVERSED:
+            ta, tz = tz.Reversed(), ta.Reversed()
+        if ta.Magnitude() < 1e-12 or tz.Magnitude() < 1e-12:
+            return False
+        extremos.append((ta, tz))
+        exp.Next()
+    return all(extremos[i][1].Angle(extremos[(i + 1) % len(extremos)][0]) < math.radians(grados)
+               for i in range(len(extremos)))
+
+
+def _una_arista_lisa(w, tol=1e-3):
+    """El alambre cerrado `w` como UNA arista B-spline periódica interpolada por longitud de arco; None si se aparta
+    del original más que `tol` mm. Más muestras solo si hacen falta: los empalmes chicos necesitan mayor densidad."""
+    from OCP.BRepAdaptor import BRepAdaptor_CompCurve
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnCurve
+    cc = BRepAdaptor_CompCurve(TopoDS.Wire(w), True)       # parámetro = longitud de arco
+    a, z = cc.FirstParameter(), cc.LastParameter()
+    k = int(min(600, max(120, z - a)))
+    while True:
+        arreglo = HArray1_gp_Pnt(1, k)
+        for i in range(k):
+            arreglo.SetValue(i + 1, cc.Value(a + (z - a) * i / k))
+        ip = GeomAPI_Interpolate(arreglo, True, 1e-7)
+        ip.Perform()
+        bien = ip.IsDone()
+        if bien:
+            curva = ip.Curve()
+            for i in range(4 * k + 1):                     # el ajuste no puede cambiar el contorno
+                proyeccion = GeomAPI_ProjectPointOnCurve(cc.Value(a + (z - a) * i / (4 * k)), curva)
+                if not proyeccion.NbPoints() or proyeccion.LowerDistance() > tol:
+                    bien = False
+                    break
+        if bien:
+            return BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(curva).Edge()).Wire()
+        if k >= 1200:
+            return None
+        k = min(1200, 2 * k)
+
+
+def _secciones_lisas(alambres):
+    """B-845: círculo (1 arista) → ranura (4 aristas empalmadas). ThruSections parte el lateral en una cara por arista
+    y cada una se parametriza distinto: quedan pliegues de hasta 11° entre caras y OpenCascade no puede desfasar ese
+    cuerpo (Vaciado, Desfase y Engrosar fallaban). Si una sección es una sola arista y las demás son contornos
+    cerrados SIN quiebres, esas se pasan a una arista lisa: el lateral sale en una sola cara continua, como en Fusion."""
+    if any(t != "alambre" for t, _ in alambres):
+        return alambres
+    cuentas = [len(geo._aristas_unicas(w)) for _, w in alambres]
+    if min(cuentas) != 1 or max(cuentas) == 1 or not all(w.Closed() for _, w in alambres):
+        return alambres
+    try:
+        referencia = next(w for (_, w), n in zip(alambres, cuentas, strict=True) if n == 1)
+        normal = geo.plano_de_cara(BRepBuilderAPI_MakeFace(referencia, True).Face()).normal
+        nuevas = []
+        for (t, w), n in zip(alambres, cuentas, strict=True):
+            if n > 1:
+                otra = geo.plano_de_cara(BRepBuilderAPI_MakeFace(w, True).Face()).normal
+                if float(np.dot(normal, otra)) < 0:
+                    w = TopoDS.Wire(w.Reversed())         # una sola curva ya no deja que ThruSections corrija el sentido
+                lisa = _una_arista_lisa(w) if _tangentes_empalman(w) else None
+                if lisa is None:
+                    return alambres
+                w = lisa
+            nuevas.append((t, w))
+        return nuevas
+    except Exception:  # noqa: BLE001 — cualquier fallo de la conversión conserva la solevación anterior
+        return alambres
+
+
+def _loft(alambres, solido, reglada, cerrada, compatibilizar=True, _suavizar=True):
+    lisas = _secciones_lisas(alambres) if _suavizar else alambres
+    if lisas is not alambres:
+        anterior = None
+        for ajuste in (False, True):
+            try:
+                candidata = _loft(lisas, solido, reglada, cerrada, ajuste, _suavizar=False)
+                if geo.esta_vacia(candidata) or not geo.es_valida(candidata):
+                    continue
+                if solido:
+                    # B-243/B-845: la pared lisa solo si reproduce el volumen del loft anterior (±0,5 %) —
+                    # sin esto, la cerrada salía deformada (−22 %) y la seta con condición cambiaba −3,5 %.
+                    if anterior is None:
+                        anterior = _loft(alambres, solido, reglada, cerrada, compatibilizar, _suavizar=False)
+                    v0, v1 = geo.volumen_exacto(anterior), geo.volumen_exacto(candidata)
+                    if v1 <= 0 or abs(v1 - v0) > 0.005 * max(abs(v0), 1.0):
+                        continue                            # cara lisa sí, pero no a costa de deformar el perfil
+                return candidata
+            except Exception:  # noqa: BLE001 — se prueba la otra compatibilidad y, si tampoco sirve, la construcción anterior
+                pass
+        if anterior is not None:
+            return anterior
+    return _loft_directo(alambres, solido, reglada, cerrada, compatibilizar)
+
+
+def _loft_directo(alambres, solido, reglada, cerrada, compatibilizar=True):
     ts = BRepOffsetAPI_ThruSections(solido, reglada)
     ts.CheckCompatibility(compatibilizar)
     for tipo, forma in alambres:
@@ -139,19 +246,28 @@ def _loft(alambres, solido, reglada, cerrada, compatibilizar=True):
     # (3 splines de 86 puntos: 1,87 L en vez de 4 L, y el volumen cambia de signo según el orden). Sin el ajuste sale
     # bien si las costuras ya vienen alineadas. Solo si las dos versiones difieren se paga la revisión del pliegue.
     try:
-        otra = _loft(alambres, solido, reglada, cerrada, False)
+        otra = _loft_directo(alambres, solido, reglada, cerrada, False)
     except Exception:  # noqa: BLE001 — sin el ajuste el kernel puede fallar (Standard_Failure): queda la primera
         return forma
     medida = geo.volumen_exacto if solido else geo.area      # B-419: en la superficie se pliega igual
     v1, v2 = medida(forma), medida(otra)
     if abs(v1 - v2) <= 1e-6 * max(abs(v1), abs(v2), 1.0):
         return forma
-    return otra if _plegada(forma, solido) and not _plegada(otra, solido) else forma
+    p1, p2 = _plegada(forma, solido), _plegada(otra, solido)
+    # B-855: sin conteo (frío) no se rechaza (principio de Gerardo: una operación que hoy anda no puede fallar porque
+    # la compuerta no llegó a contar): None cuenta como «no plegada», como antes de B-855.
+    return otra if p1 and not p2 else forma
 
 
 def _plegada(forma, solido=True):
-    """True si la solevación se da vuelta (volumen ≤ 0) o se autointersecta (None, si la revisión no terminó, no cuenta)."""
-    return (solido and geo.volumen_exacto(forma) <= 0) or bool(rv._autointersecciones_seguras(forma, 0, 10)[0])
+    """True si la solevación se da vuelta (volumen ≤ 0) o se autointersecta; False si está sana; None si la revisión no
+    terminó (B-855): sin conteo no se sabe, y no se rechaza por eso (None cuenta como «no plegada», como antes)."""
+    if solido and geo.volumen_exacto(forma) <= 0:
+        return True
+    cantidad, _, completo = rv._autointersecciones_seguras(forma, 0, 10)
+    if not completo:
+        return None
+    return bool(cantidad)
 
 
 def _auxiliar_direccion(w, normal, delta, angulo, signo=1.0):
@@ -274,11 +390,12 @@ def _loft_liso(exteriores, solido, reglada, cerrada):
     """B-618: solevación lisa entre dos secciones en planos que se cruzan. La reglada se mete en la tapa (la superficie
     es tangente al plano de la tapa y la cruza); Fusion soleva liso. Se agregan dos secciones auxiliares perpendiculares
     a los perfiles; el sentido de la del final no lo fija la geometría (la normal es perpendicular a la cuerda), así que
-    se prueban los dos y queda el que no se cruza."""
+    se prueban los dos y queda el que no se cruza.
+    B-855: si un sentido no llegó a contar (frío), no se rechaza por eso: como antes, queda el otro o el de siempre."""
     for signo in (1.0, -1.0):
         try:
             forma = _loft(_con_condiciones(exteriores, _CONDICION_PERPENDICULAR, _CONDICION_PERPENDICULAR,
-                                           signo_fin=signo), solido, reglada, cerrada)
+                                           signo_fin=signo), solido, reglada, cerrada, _suavizar=False)
         except geo.ErrorGeometria:
             return None
         if _cruces_de_caras(forma) == 0:
@@ -439,7 +556,9 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
                   and all(t == "alambre" for t, _ in exteriores) and not _planos_paralelos(exteriores)):
                 forma = _loft_liso(exteriores, solido, reglada, cerrada)
             if forma is None:
-                forma = _loft(exteriores, solido, reglada, cerrada)
+                # B-243: con condición de borde no se suaviza: la variante lisa no reproduce el volumen de la seta
+                # (−1,5 % a +4,1 %) y la del peso alto dejaba de plegarse sin que la guarda de volumen lo viera.
+                forma = _loft(exteriores, solido, reglada, cerrada, _suavizar=not condiciones)
         huecos = [s[2] for s in secs if s[0] == "alambre"]
         if solido and huecos and all(huecos) and len({len(h) for h in huecos}) == 1:
             for k in range(len(huecos[0])):
@@ -456,6 +575,8 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
     # B-243: un peso alto en la condición de borde pliega la pared sobre sí misma; es_valida no lo ve y Fusion lo rechaza.
     # H-91: con carril o línea central la B-spline es densa y el análisis agota los 10 s sin contar nada; ahí revisa el
     # paso (`ops_solido._exigir_sin_autointersecciones`, B-462).
+    # B-855: si el conteo no llega (frío), no se rechaza (una operación que hoy anda no puede fallar porque la compuerta
+    # no llegó a contar): el paso deja su aviso de siempre en `ops_solido._exigir_sin_autointersecciones`.
     guiada = bool(carriles) or linea_central is not None
     if condiciones and solido and not guiada and rv._autointersecciones_seguras(forma, 0, 10)[0]:
         raise geo.ErrorGeometria("Solevado: el sólido se autointersecta.")

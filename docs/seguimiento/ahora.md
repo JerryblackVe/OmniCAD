@@ -30,6 +30,8 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | 2 | PRUEBA-PROY (hecha por E7: B-684, B-685, B-686 a OpenCode) | Probar como usuario los 5 tipos de PROYECTAR del boceto (Proyectar, Intersecar, Incluir geometría 3D, Perfil giratorio, Curva isoparamétrica): mouse simulado y valores raros contra `docs/fusion_docs` (E7, Sonnet medio; cada falla = fila nueva de boceto; antes, OpenCode prepara los tests que falten) |
 | 3 | PRUEBA-CMDS | Probar en la ventana los 61 comandos de la cinta del boceto sin prueba como usuario (lista en `docs/plan_boceto_perfecto.md` › Cobertura; script `scripts/cobertura_boceto.py`): E7 en Linux con `prueba_ui`, E11 con mouse real lo que E7 no pueda; cada falla, fila nueva de boceto |
 | 4 | B-791, B-792 | Sólido › create_pipe (caza de boceto): SIGSEGV con receta de 2 pasos y autointersecciones con 7; fuera del foco de boceto, después |
+| 6 | B-846 | B-842, B-854, B-855, B-856, B-857 y B-860 cerrados (24/11). B-846: Engrosar de la tina lisa, límite del kernel o tolerancia. Queda la prueba con mouse de B-842 (E11/Gerardo) |
+| 8 | B-840, B-841 | Previa de Extruir del logo ≤ 1 s: Kimi midió que el kernel (~1,6 s) es el cuello, no la malla; el atajo de caras reusadas no dio mejora y se revirtió. Falta idea nueva (kernel) |
 
 Esperan a E11 en Windows (sin código por ahora): B-48 (caída nativa con la previa en paralelo) y B-172 (sin la pieza original).
 

@@ -46,6 +46,12 @@ def test_e_e_i_se_achican_medio_milimetro_y_el_palo_de_la_i_se_va():
     """En main el atajo devolvía None (la «e» no se achicaba y el palo de la «i» no se daba por ido) y el kernel 3D
     fallaba: «No se pudo desfasar estas caras»."""
     forma = _texto("ei")
+    se_van = [c for c in _tapas(forma)
+              if vectores.se_borra_al_achicar(BRepBuilderAPI_MakeFace(TopoDS.Wire(sm._unicos(c, TopAbs_WIRE)[0]),
+                                                                      True).Face(), 0.5)]
+    if len(se_van) != 1:      # qué pieza se achica entera depende del grosor del trazo de la fuente instalada
+        pytest.skip(f"con la «Arial» de esta PC, −0,5 mm se lleva {len(se_van)} piezas enteras: el escenario "
+                    "«solo el palo de la «i» (0,85 mm) se va» es de la fuente de la máquina donde se cerró B-503")
     r = sm._desfase_por_contorno(forma, _paredes(forma), -0.5)
     assert r is not None and geo.es_valida(r)
     assert len(_tapas(r)) == len(_tapas(forma)) - 1                    # el palo de la «i» (0,85 mm) desaparece

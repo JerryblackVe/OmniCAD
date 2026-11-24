@@ -141,5 +141,5 @@ Seguí `CLAUDE.md` y `AGENTS.md` en la raíz del repo (si chocan, manda `CLAUDE.
   agentes (MCP y CLI a la vez): Receta C.
 - Todo en español; `nucleo`, `timeline`, `restricciones` e `io_archivos` no importan Qt.
 - No digas "listo" sin correr la verificación y pegar su salida real: ruff y `scripts/tests_afectados.py --correr`
-  (o `run_checks` con `pytest_args` = tus tests). La suite completa y la humo corren solas cada noche.
+  (o `run_checks` con `pytest_args` = tus tests). La suite completa y la humo se corren a mano antes de cerrar un tramo (hoy no hay crontab).
 - Anotá el trabajo en `PROJECT_LOG.md`. Git solo local: nada de `push` ni commits sin que te lo pidan.
