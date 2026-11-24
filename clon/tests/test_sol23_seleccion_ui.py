@@ -34,6 +34,12 @@ def ventana(tmp_path_factory):
     assert app
 
 
+def test_b693_filtros_iniciales_coinciden_con_las_casillas(ventana):
+    marcados = {g for g in ventana.FILTROS_GRUPO if ventana.acciones[f"filtro_{g}"].isChecked()}
+    assert "cuerpos" in marcados
+    assert ventana.filtro_actual() == set().union(*(ventana.FILTROS_GRUPO[g] for g in marcados))
+
+
 @pytest.fixture
 def v(ventana):
     doc = Documento()

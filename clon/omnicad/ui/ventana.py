@@ -82,7 +82,7 @@ NOMBRES_TECLAS = (("Ctrl", "Control"), ("Shift", "Mayúsculas"), ("Del", "Suprim
 
 
 # Lo que se puede elegir con un clic sin comando abierto (Fusion: caras, aristas, vértices, perfiles…).
-FILTRO_SELECCION = {"vertice", "arista", "cara", "perfil", "curva_boceto", "plano", "eje", "punto"}
+FILTRO_SELECCION = {"vertice", "arista", "cara", "cuerpo", "perfil", "curva_boceto", "plano", "eje", "punto"}
 
 
 def texto_atajo(secuencia):
