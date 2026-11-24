@@ -6,8 +6,6 @@ Las etiquetas duplicate/highly_similar/similar son las que muestra Fusion; sus u
 """
 import os
 
-import pytest
-
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from omnicad import api
@@ -45,7 +43,6 @@ def test_buscar_similares_muestra_dos_coincidencias_numericas_ordenadas():
     assert len(texto.splitlines()) == 2
 
 
-@pytest.mark.xfail(reason="B-708: se acepta un componente con hijos, que Fusion no admite", strict=True)
 def test_buscar_similares_rechaza_un_componente_con_hijos_como_fusion():
     """Caso borde explícito de la ayuda: el componente de origen no puede tener componentes hijos."""
     sesion = api.Sesion()
@@ -58,3 +55,4 @@ def test_buscar_similares_rechaza_un_componente_con_hijos_como_fusion():
     assert not resultado["ok"], resultado
     assert resultado["error_kind"] == "INVALID_ARGUMENTS"
     assert "hijos" in resultado["mensaje"]
+    assert len(resultado["mensaje"]) <= 45

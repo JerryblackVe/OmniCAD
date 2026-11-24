@@ -22,12 +22,15 @@ def _firmas(estado):
 def buscar_similares(estado, componente=None):
     """([{id, name, matches: [{id, name, status}]}], cantidad comparada) para el estado dado. `componente` (id o
     nombre) limita a ese; vacío = todos los que tengan coincidencias. Lanza ErrorAPI si no existe o no tiene sólidos."""
-    firmas = _firmas(estado)
     nombre = lambda k: estado.componentes[k].get("nombre") or k  # noqa: E731
     if componente is not None:
         elegido = next((k for k in estado.componentes if componente.casefold() in (k.casefold(), nombre(k).casefold())), None)
         if elegido is None:
             raise error("ENTITY_NOT_FOUND", f"No hay un componente «{componente}».", "get_assembly lista los componentes.")
+        if any(d.get("padre") == elegido for d in estado.componentes.values()):
+            raise error("INVALID_ARGUMENTS", "El componente no puede tener hijos.")
+    firmas = _firmas(estado)
+    if componente is not None:
         if elegido not in firmas:
             raise error("INVALID_ARGUMENTS", f"«{nombre(elegido)}» no tiene cuerpos sólidos: solo se comparan sólidos.")
         pedidos = [elegido]

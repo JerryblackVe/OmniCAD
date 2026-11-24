@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-708 (sin verificar).** Buscar similares rechaza el componente elegido si tiene hijos, antes de calcular firmas. Activado el test de regresión existente. Ruff y pytest no ejecutados (sin checkout local).
 - **2026-11-24 · B-706 (sin verificar).** Desanclar nuevo usa nombre Desanclar<n> como la API; editar conserva el nombre. Test de regresión en test_prep_cmd_anclar_componente.py. Ruff, pytest y ventana no ejecutados (sin checkout local).
 - **2026-11-24 · B-693 (sin verificar).** Incluye cuerpo en FILTRO_SELECCION al arrancar; test de casillas en test_sol23_seleccion_ui.py. Ruff, pytest y ventana no ejecutados (sin checkout local).
 - **2026-11-24 · B-859 (ChatGPT + verificado).** Labio/Ranura: si el conteo previo no llega, no rechaza y avisa «Autointersecciones previas sin revisar.» (ops_solido.py). Test b859 falla sin el fix; test_b196 14 OK, ruff limpio. Corregido el assert del test (el aviso lleva prefijo).
