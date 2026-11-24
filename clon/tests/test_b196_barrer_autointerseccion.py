@@ -248,3 +248,23 @@ def test_b358_labio_no_culpa_al_labio_de_lo_que_el_cuerpo_ya_traia():
         r = _r(s, "create_lip_groove", body="Base", edges="|X and <Z and <Y", lip_type="lip", width=1, height=1.5,
                direction="Z", reverse=True)
     assert not any("autointersec" in a for a in r["avisos"]), r["avisos"]
+
+def test_b859_labio_y_ranura_avisan_si_antes_no_llega():
+    """Sin conteo previo no se atribuyen los cruces del resultado al paso."""
+    cruce = {"mensaje": "Autointersección entre cara y cara."}
+    vencido = {"mensaje": "No se revisaron las autointersecciones: plazo agotado."}
+    for tipo in ("lip", "groove", "lip_and_groove"):
+        s = _preparar_labio(tipo == "lip_and_groove")
+        cuentas = [(1, [cruce], True), (None, [vencido], False)]
+        if tipo == "lip_and_groove":
+            cuentas += [(0, [], True)]       # la ranura del segundo cuerpo sigue revisándose
+        with patch.object(rev, "_autointersecciones_seguras", side_effect=cuentas) as analisis:
+            r = _labio(s, tipo)
+        assert r["ok"], r
+        assert "Autointersecciones previas sin revisar." in r["avisos"], r
+        assert s.doc.resultado(r["result"]["feature"]["id"]).estado == "aviso"
+        assert analisis.call_count == len(cuentas)
+        forma = s.cuerpo("Base").forma
+        esperado = 16000 - 40 * 1.1 * 1.6 if tipo == "groove" else 16000 + 40 * 1 * 1.5
+        assert geo.es_valida(forma)
+        assert math.isclose(geo.volumen(forma), esperado, rel_tol=1e-6)

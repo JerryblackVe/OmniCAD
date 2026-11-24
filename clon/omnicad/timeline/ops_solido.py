@@ -65,7 +65,11 @@ def _exigir_sin_autointersecciones(ctx, forma, que, causa, antes=None):
         ctx.aviso(problemas[0]["mensaje"])
         return
     if n and antes is not None:
-        n -= _cruces(antes)[0] or 0
+        n_antes, _ = _cruces(antes)
+        if n_antes is None:                # B-859: sin referencia no se pueden atribuir cruces al paso
+            ctx.aviso("Autointersecciones previas sin revisar.")
+            return
+        n -= n_antes
     if n > 0:
         raise ErrorOperacion(f"⚠ {que} se autointerseca ({n}): {causa}")
 
