@@ -535,6 +535,12 @@ def test_skill_md_cada_comando_omnicad_es_un_subcomando_real_con_opciones_reales
         {t.split()[1] for t in comandos}
 
 
+def test_b683_skill_da_un_ejemplo_de_verificacion_acotada():
+    cuerpo = _separar(SKILL.read_text(encoding="utf-8"))[1]
+    assert any(re.fullmatch(r'run_checks\(pytest_args="tests/[^"]+\.py"\)', s)
+               for s in _codigo_en_linea(cuerpo))
+
+
 def test_skill_md_cada_error_kind_existe_y_cada_herramienta_de_ejemplo_acepta_sus_argumentos():
     from omnicad.api import errores
     cuerpo = _separar(SKILL.read_text(encoding="utf-8"))[1]

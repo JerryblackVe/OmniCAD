@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-683 (sin verificar).** SKILL.md cita dev check --help real y usa pytest_args dentro de run_checks, no como herramienta. Test de ejemplo acotado en test_setup.py. Ruff, pytest y regeneración de claves no ejecutados (sin checkout).
 - **2026-11-24 · B-511 (parcial, sin verificar).** Extruir superficie y Reglada: selección sin geometría o perfil abierto da INVALID_ARGUMENTS con pista; test_api_superficie.py. Ruff y pytest no ejecutados. Resto de la fila pendiente.
 - **2026-11-24 · B-708 (sin verificar).** Buscar similares rechaza el componente elegido si tiene hijos, antes de calcular firmas. Activado el test de regresión existente. Ruff y pytest no ejecutados (sin checkout local).
 - **2026-11-24 · B-706 (sin verificar).** Desanclar nuevo usa nombre Desanclar<n> como la API; editar conserva el nombre. Test de regresión en test_prep_cmd_anclar_componente.py. Ruff, pytest y ventana no ejecutados (sin checkout local).
