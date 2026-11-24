@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-511 (parcial, sin verificar).** Extruir superficie y Reglada: selección sin geometría o perfil abierto da INVALID_ARGUMENTS con pista; test_api_superficie.py. Ruff y pytest no ejecutados. Resto de la fila pendiente.
 - **2026-11-24 · B-708 (sin verificar).** Buscar similares rechaza el componente elegido si tiene hijos, antes de calcular firmas. Activado el test de regresión existente. Ruff y pytest no ejecutados (sin checkout local).
 - **2026-11-24 · B-706 (sin verificar).** Desanclar nuevo usa nombre Desanclar<n> como la API; editar conserva el nombre. Test de regresión en test_prep_cmd_anclar_componente.py. Ruff, pytest y ventana no ejecutados (sin checkout local).
 - **2026-11-24 · B-693 (sin verificar).** Incluye cuerpo en FILTRO_SELECCION al arrancar; test de casillas en test_sol23_seleccion_ui.py. Ruff, pytest y ventana no ejecutados (sin checkout local).

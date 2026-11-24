@@ -5,7 +5,7 @@ from typing import Literal
 from ..timeline import entidades as ent
 from ..timeline import ops_superficie as ops
 from . import selectores as sl
-from .errores import error
+from .errores import ErrorAPI, error
 from .herramientas_avanzado import traducir_referencias
 from .herramientas_boceto import nombre_nuevo, texto_expr
 from .herramientas_construccion import _referencia
@@ -46,6 +46,20 @@ def _seleccion(sesion, clase, clave, valor, body=None, tipo="arista", curvas=Fal
     if not salida:
         raise error("INVALID_ARGUMENTS", f"La selección de {clave} está vacía.")
     return salida
+
+
+def _seleccion_curvas(sesion, clase, clave, valor, body):
+    """Extruir y Reglada requieren geometría, no el plano del boceto."""
+    pista = 'Usá {"sketch": "Boceto1", "curve": 1} o un perfil cerrado, arista, cara o cuerpo.'
+    try:
+        refs = _seleccion(sesion, clase, clave, valor, body, curvas=True)
+    except ErrorAPI as exc:
+        if exc.error_kind in ("PROFILE_NOT_CLOSED", "PROFILE_NOT_FOUND"):
+            raise error("INVALID_ARGUMENTS", "Elegí curvas o un perfil cerrado.", pista) from None
+        raise
+    if any(ref["tipo"] not in ("curva_boceto", "perfil", "arista", "cara") for ref in refs):
+        raise error("INVALID_ARGUMENTS", "Elegí curvas, aristas, caras o perfiles.", pista)
+    return refs
 
 
 def _una(sesion, clase, clave, valor, body=None):
@@ -121,7 +135,7 @@ def create_surface_extrude(sesion, profiles: Seleccion, distance: Expr = "10 mm"
                       hasta=_referencia(sesion, to, {"cara", "plano", "cuerpo"}, body))
     elif extent == "all":
         params["extension"] = "todo"
-    return _crear(sesion, clase, curvas=_seleccion(sesion, clase, "curvas", profiles, body, curvas=True),
+    return _crear(sesion, clase, curvas=_seleccion_curvas(sesion, clase, "curvas", profiles, body),
                   distancia=texto_expr(distance), direccion=_una(sesion, clase, "direccion", direction, body)
                   if direction is not None else None, conicidad=texto_expr(taper_angle), **params)
 
@@ -421,7 +435,7 @@ def create_ruled_surface(sesion, edges: Seleccion, distance: Expr = "10 mm",
     if surface_type == "direction" and direction is None:
         raise error("INVALID_ARGUMENTS", "Indicá direction para una superficie reglada por dirección.")
     clase = ops.OpReglada
-    return _crear(sesion, clase, aristas=_seleccion(sesion, clase, "aristas", edges, body, curvas=True),
+    return _crear(sesion, clase, aristas=_seleccion_curvas(sesion, clase, "aristas", edges, body),
                   distancia=texto_expr(distance), tipo={"normal": "normal", "tangent": "tangente", "direction": "direccion"}[surface_type],
                   direccion=_una(sesion, clase, "direccion", direction, body) if direction is not None else None,
                   angulo=texto_expr(angle), ingletear=mitered_corners, alternas=alternate_faces, cadena=chain)

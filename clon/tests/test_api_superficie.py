@@ -392,6 +392,21 @@ def test_invertir_normal_conserva_area_y_cambia_orientacion():
     assert geo.plano_de_cara(geo.caras(forma)[0]).normal == pytest.approx(-normal)
 
 
+@pytest.mark.parametrize("nombre,clave", [
+    ("create_surface_extrude", "profiles"),
+    ("create_ruled_surface", "edges"),
+])
+@pytest.mark.parametrize("seleccion", ["XY", {"sketch": "Perfil"}, {"sketch": "Perfil", "profile": 0}])
+def test_b511_seleccion_invalida_o_boceto_abierto(nombre, clave, seleccion):
+    s = api.Sesion()
+    linea(s)
+    antes = json.dumps(s.doc.a_dict(), sort_keys=True)
+    r = api.llamar(s, nombre, {clave: seleccion})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r
+    assert "Elegí" in r["mensaje"] and len(r["mensaje"]) <= 45
+    assert json.dumps(s.doc.a_dict(), sort_keys=True) == antes
+
+
 @pytest.mark.parametrize("nombre,args,kind", [
     ("create_surface_extrude", {"profiles": []}, "INVALID_ARGUMENTS"),
     ("create_surface_revolve", {"profiles": {"sketch": "Nada", "curve": 1}, "axis": "Z"}, "SKETCH_NOT_FOUND"),
