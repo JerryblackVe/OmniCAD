@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-765/B-744 cerrados (hechos por ChatGPT, verificados acá).** La ★ valida como Aceptar y no guarda inválidos: avisa «No se guardó: Grosor no es válido». `test_b765_b744_estrella.py` falla sin el arreglo; 91 OK en comandos/preajustes, ruff limpio.
 - **2026-11-24 · B-860 cerrado.** Vaciado: un positivo de malla en forma libre pasa al BOP (loft 0 cruces, 0,77 s); tina <5 s y cruce real intactos. `solidos_modificar.py`; 765 OK, ruff limpio.
 - **2026-11-24 · B-854 Parcial.** Desfase de cara, Vaciado plan B y Desfase de superficie no mutan: 1e-7→1e-7 mm, también con TShape compartida. `test_b_854_repro.py` 3 OK; batería 753 OK + B-850 rojo aislado; ruff limpio.
 - **2026-11-24 · B-857 cerrado.** Une los arcos del offset por curva con sus vértices; logo 16 caras y 4 volúmenes iguales. En el cuerpo ya NURBS evita reconversión/unión pegada: 2.º desfase 1,65 s. Repro B-857: 5 OK; ruff limpio.
