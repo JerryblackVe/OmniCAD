@@ -18,6 +18,7 @@ La columna «Prioridad» de las listas ya no ordena: ordena este archivo. Lo act
 | E6 (Opus alto) | P-76, después velocidad del boceto | Boceto y texto sobre caras curvas (brief `E6_proximo.md`) |
 | OpenCode | B-682, PREP-OPCIONES-BOCETO, B-684, B-686, P-178, B-670 corriendo; en cola B-687/688/689/691/692, B-671/672/681, PREP tests de cotas, PROYECTAR y comandos | Cola de boceto (vigía); GLM 5.3 primero hasta el 23/11 (AG-21) |
 | E11 | — | Paró la noche del 20/11 (driver AMD de la PC en blanco; Gerardo reinicia a la mañana). Pendiente tras el reinicio: batería del punto 4, B-710; B-690 resuelto (Fusion no permite Perpendicular línea–spline). Tanda: `~/coordinador/casos/e11_noche_19-11.md`. Antes: Tanda esperando su OK: B-619c, B-667 2.º arrastre, B-690 (pasos en `~/coordinador/casos/b690/`), B-463 (puntos y curva de la spline de ajuste en Fusion: `~/coordinador/casos/b463/pasos_fusion.md`) |
+| ChatGPT (rama `trabajo/*`) | B-693, B-706, B-708, B-511, B-683 | Arreglos chicos de lógica por orden de Gerardo (24/11), fuera del foco de boceto; de a uno, sin verificar (los verifica Claude) |
 
 **Foco del 19/11 (Gerardo: «que los agentes solo trabajen en boseto»): solo boceto en Ahora y Sigue; sin fecha de corte hasta cerrar el «Listo cuando» de `plan_boceto_perfecto.md`.** Plan: [plan_boceto_perfecto.md](../plan_boceto_perfecto.md).
 
