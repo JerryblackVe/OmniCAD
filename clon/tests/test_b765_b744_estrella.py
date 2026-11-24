@@ -47,3 +47,22 @@ def test_estrella_valida_antes_de_guardar(tmp_path, monkeypatch):
         assert pre.valores_iniciales("nervio")["espesor"] == "4 mm"
     finally:
         panel.cancelar()
+
+
+def test_estrella_guarda_con_un_limite_opcional_vacio(tmp_path, monkeypatch):
+    """Unión tiene «Límite mínimo/máximo» opcionales y vacíos: no bloquean la estrella."""
+    from omnicad.ui.comandos.ensamblar import Union
+    monkeypatch.setenv(pre.VAR_PREAJUSTES, str(tmp_path / "preajustes.json"))
+    app = QApplication.instance() or QApplication([])
+    doc = Documento()
+    visor = Visor3D()
+    visor.set_modelo(doc.estado_final)
+    panel = PanelComando(Union(), ContextoComando(doc), visor)
+    panel.show()
+    app.processEvents()
+    try:
+        QTest.mouseClick(panel.boton_estrella, Qt.LeftButton)
+        assert "No se guardó" not in panel.mensaje.text()
+        assert "siempre" in panel.mensaje.text()
+    finally:
+        panel.cancelar()

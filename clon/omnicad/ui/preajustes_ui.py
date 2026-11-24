@@ -87,7 +87,11 @@ class BotonEstrella(QToolButton):
         self.clicked.connect(self.usar_siempre)
 
     def usar_siempre(self):
-        campo = self.panel._validar_expresiones()
+        panel = self.panel
+        panel._validar_expresiones()
+        # un campo opcional vacío (sin valor por defecto, como «Límite mínimo») no es un error: se guarda vacío
+        campo = next((c for c in panel.campos if c.clave in panel.invalidos
+                      and (c.defecto or panel.widgets[c.clave].text().strip())), None)
         if campo is not None:
             etiqueta = " ".join(campo.etiqueta.split())[:18]
             self.panel._mostrar(f"No se guardó: {etiqueta} no es válido", aviso=True)
