@@ -739,12 +739,12 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
             return directa
 
     def cortar(extra):
-        def armar_tramo(za, la):
+        def armar_tramo(za, la, trozos=True):
             # a izquierdas en un eje el kernel falla (SOL-1): se barre a derechas y el surco se refleja en un plano del eje
             espejar = mano == "izquierda" and not info["interna"]
             surco, torno = _surco_rosca(o, z, datos["diametro"], datos["paso"], za, la, info["interna"],
                                         "derecha" if espejar else mano, radio, partes=True, extra=extra,
-                                        tramo_torno=(zmin, zmax) if tabla else None, trozos=not espejar, **perfil)
+                                        tramo_torno=(zmin, zmax) if tabla else None, trozos=trozos and not espejar, **perfil)
             if espejar:
                 t = gp_Trsf()
                 t.SetMirror(gp_Ax2(_pnt(o), _gdir(_perpendicular(z))))
@@ -780,7 +780,20 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
             # la mitad; el torno con el largo total conduce con sus caras a las puntas.
             surcos, torno = por_mitades()
             partido = True
-        resultado = tornear_y_cortar(surcos, torno)
+        resultado = None
+        if not partido and len(geo.solidos(surco)) > 1:
+            # Si falla el corte por tramos en su fase, probar entero antes de recurrir a girar el cuerpo.
+            cuerpo_torneado = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")
+            try:
+                resultado = _cortar_helicoidal(cuerpo_torneado, surco, o, z, fase_fija=True)
+            except geo.ErrorGeometria:
+                try:
+                    entero, _ = armar_tramo(z0, largo, trozos=False)
+                    resultado = _cortar_helicoidal(cuerpo_torneado, entero, o, z, fase_fija=True)
+                except geo.ErrorGeometria:
+                    pass
+        if resultado is None:
+            resultado = tornear_y_cortar(surcos, torno)
         if not partido and rv._topologia(resultado)["no_manifold"]:
             # Un barrido chico y corrido puede dejar la arista de contacto entre la cresta torneada y el surco
             # compartida por 3 caras (M5×0,8 con holgura): el corte por mitades reubica esa arista.
@@ -790,12 +803,12 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
     return _armar_surco(cortar)
 
 
-def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
+def _cortar_helicoidal(cuerpo, herramienta, origen, eje, *, fase_fija=False):
     """Corte con una herramienta helicoidal. El corte exacto a veces no hace nada sin avisar (las caras del
     surco rozan el cilindro del agujero: pasó con M10 y M20 interiores); con tolerancia difusa sale bien.
     Según el largo, las puntas del surco caen sobre la costura del cilindro y el corte falla, no saca nada o saca de
-    más (M8×1,25 de 15 mm, M12×1,75 de 12 mm): se gira el CUERPO sobre el eje (sin copiarlo) y el resultado vuelve a
-    su lugar, así la rosca conserva su fase (B-79). P-78: el difuso 1e-4 va en todos los giros antes que el exacto,
+    más (M8×1,25 de 15 mm, M12×1,75 de 12 mm): el último recurso gira solo el cuerpo y devuelve el resultado a su lugar,
+    lo cual cambia la fase del surco. `fase_fija=True` no permite ese respaldo. P-78: el difuso va antes que el exacto,
     que donde falla tarda más (M3×20: 7,4 s fallado contra 1,9 s bien); después de 0°, 229° acertó en los 21 casos
     medidos (M40x3×30 y M12×1,75×12 tiraban 3 y 4 cortes de ~0,4 s; ahora 2). 229° primero ahorraría otro corte,
     pero mueve la costura del eje y B-308 (cortar la tapa con ese eje y partirla) pierde la tapa.
@@ -804,7 +817,7 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje):
     eje_giro = gp_Ax1(_pnt(origen), _gdir(eje))
     caras_por_solido = [geo.caras(s) for s in geo.solidos(herramienta)]
     for difuso in (1e-4, 0.0, 1e-5):
-        for giro in (0.0, 229.0, 61.0, 137.0):
+        for giro in ((0.0,) if fase_fija else (0.0, 229.0, 61.0, 137.0)):
             t = gp_Trsf()
             t.SetRotation(eje_giro, math.radians(-giro))
             op = BRepAlgoAPI_Cut()
