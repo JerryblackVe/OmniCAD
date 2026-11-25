@@ -74,12 +74,30 @@ def test_clic_en_el_mas_abre_el_menu_y_no_ejecuta_el_comando(v):
     assert menu.actionGeometry(accion).contains(zona) and zona.width() == 22
     QTest.mouseClick(menu, Qt.LeftButton, Qt.NoModifier, zona.center())
     mas = v._filtro_mas.menu_abierto
-    assert [a.text() for a in mas.actions() if a.text()] == ["Quitar de los accesos directos",
+    assert [a.text() for a in mas.actions() if a.text()] == ["Anclar en los accesos directos",
                                                            "Anclar en la barra de herramientas",
                                                            "Cambiar las teclas de acceso rápido…"]
     assert v.panel is None                                        # no se abrió el diálogo de Extruir
+    acceso, barra = mas.actions()[:2]
+    assert acceso.isCheckable() and acceso.isChecked()
+    assert barra.isCheckable() and not barra.isChecked()
     mas.hide()
     menu.hide()
+
+
+def test_b768_las_casillas_conservan_el_texto_al_alternar(v):
+    filtro = v._filtro_mas
+    accion = v.acciones["extruir"]
+    textos = ["Anclar en los accesos directos", "Anclar en la barra de herramientas"]
+    for estado in ((True, False), (False, True), (True, False)):
+        menu = filtro.construir_menu(accion)
+        casillas = menu.actions()[:2]
+        assert [a.text() for a in casillas] == textos
+        assert all(a.isCheckable() for a in casillas)
+        assert tuple(a.isChecked() for a in casillas) == estado
+        for a in casillas:
+            a.trigger()
+        menu.deleteLater()
 
 
 def test_un_clic_fuera_del_mas_sigue_ejecutando_el_comando(v):

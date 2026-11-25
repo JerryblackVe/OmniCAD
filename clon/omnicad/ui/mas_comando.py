@@ -3,8 +3,8 @@
 
 Al pasar el ratón por una fila de un menú aparece un «⋮» a la derecha; al hacerle clic (o con clic derecho sobre
 la fila) se abre un menú con:
-  - «Fijar en atajos» / «Quitar de atajos»: la caja de herramientas (tecla S) del contexto actual.
-  - «Fijar en la barra» / «Quitar de la barra»: el comando queda como botón en la barra de arriba, junto a Rehacer.
+  - «Anclar en los accesos directos» (casilla): la caja de herramientas (tecla S) del contexto actual.
+  - «Anclar en la barra de herramientas» (casilla): el comando queda como botón en la barra de arriba, junto a Rehacer.
   - «Cambiar atajo de teclado…»: elige otra combinación (avisa si ya la usa otro comando) o vuelve a la de fábrica.
 Todo se guarda en las preferencias: `atajos/diseno`, `atajos/boceto` (los de la caja), `atajos/barra` (claves
 separadas por comas) y `atajos/teclas` (JSON clave → combinación; solo los que difieren de fábrica).
@@ -192,11 +192,15 @@ class FiltroMas(QObject):
         m = QMenu(v)
         m.setToolTipsVisible(True)
         fijado = clave in leer_fijados(v.prefs, contexto)
-        a = m.addAction("Quitar de los accesos directos" if fijado else "Anclar en los accesos directos")
+        a = m.addAction("Anclar en los accesos directos")
+        a.setCheckable(True)
+        a.setChecked(fijado)
         a.setToolTip("Caja de herramientas (tecla S): " + ("saca" if fijado else "agrega") + " este comando.")
         a.triggered.connect(lambda: self.alternar_atajo(clave))
         en_barra = clave in leer_barra(v.prefs)
-        a = m.addAction("Quitar de la barra de herramientas" if en_barra else "Anclar en la barra de herramientas")
+        a = m.addAction("Anclar en la barra de herramientas")
+        a.setCheckable(True)
+        a.setChecked(en_barra)
         a.setToolTip("Barra de arriba, junto a Rehacer: " + ("saca" if en_barra else "agrega") + " el botón del comando.")
         a.triggered.connect(lambda: self.alternar_barra(clave))
         m.addSeparator()
