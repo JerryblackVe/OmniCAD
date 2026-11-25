@@ -245,12 +245,28 @@ def _color(valor):
 
 def _estilo(nodo):
     """{propiedad: valor} del atributo style y de los atributos de presentación (style gana)."""
-    d = {k: nodo.get(k) for k in ("stroke", "fill", "fill-rule", "display", "visibility") if nodo.get(k) is not None}
+    d = {k: nodo.get(k) for k in ("stroke", "fill", "fill-rule", "display", "visibility",
+                                 "opacity", "fill-opacity", "stroke-opacity") if nodo.get(k) is not None}
     for par in (nodo.get("style") or "").split(";"):
         if ":" in par:
             k, _, v = par.partition(":")
             d[k.strip().lower()] = v.strip()
     return d
+
+
+# P-96: por debajo del 1 % el relleno apenas se ve, pero genera perfiles espurios.
+OPACIDAD_MINIMA = 0.01
+
+
+def _opacidad(valor, defecto=1.0):
+    if valor is None or valor.strip().lower() == "inherit":
+        return defecto
+    try:
+        texto = valor.strip()
+        n = float(texto[:-1]) / 100 if texto.endswith("%") else float(texto)
+        return max(0.0, min(1.0, n)) if math.isfinite(n) else defecto
+    except ValueError:
+        return defecto
 
 
 def _recorrer(ruta, con_formas=False):
@@ -307,7 +323,14 @@ def _recorrer(ruta, con_formas=False):
         stroke = _color(est.get("stroke")) or heredado[0]
         fill = _color(est.get("fill")) or heredado[1]
         regla = est.get("fill-rule", heredado[2])
-        heredado = (stroke, fill, regla)
+        opacidad = heredado[3] * _opacidad(est.get("opacity"))
+        op_relleno = _opacidad(est.get("fill-opacity"), heredado[4])
+        op_trazo = _opacidad(est.get("stroke-opacity"), heredado[5])
+        heredado = (stroke, fill, regla, opacidad, op_relleno, op_trazo)
+        if opacidad <= OPACIDAD_MINIMA:
+            return
+        relleno_transparente = opacidad * op_relleno <= OPACIDAD_MINIMA
+        trazo_visible = stroke not in (None, "none") and opacidad * op_trazo > OPACIDAD_MINIMA
         if t == "g":
             nombre = nodo.get("{http://www.inkscape.org/namespaces/inkscape}label") or nodo.get("id")
             if nombre:
@@ -323,7 +346,7 @@ def _recorrer(ruta, con_formas=False):
             raise ErrorSVG("El SVG contiene una transformación no finita.")
         numero_forma += 1
         forma = {"nombre": nodo.get("id") or f"Trazo {numero_forma}", "numero": numero_forma,
-                 "regla": regla, "relleno": fill != "none"}
+                 "regla": regla, "relleno": fill != "none" and not relleno_transparente}
 
         def sumar(p, sentido=1):
             salida.append((p, capa, color, dict(forma, sentido=sentido)) if con_formas else (p, capa, color))
@@ -354,6 +377,8 @@ def _recorrer(ruta, con_formas=False):
             ry = float(nodo.get("r", 0)) if t == "circle" else float(nodo.get("ry", 0))
             if rx > 0 and ry > 0:
                 prims = [("elipse", (cx, cy), rx, ry, 0.0)]
+        if relleno_transparente and not trazo_visible:
+            prims = []
         for p in prims:
             sentido = (p[7] if len(p) == 8 else 1) * (1 if np.linalg.det(m[:2, :2]) > 0 else -1) \
                 if p[0] == "arco_elipse" else 1
@@ -363,7 +388,7 @@ def _recorrer(ruta, con_formas=False):
                 visitar(hijo, m, capa, heredado, profundidad + 1)
 
     try:
-        visitar(raiz, base, (), (None, None, "nonzero"))
+        visitar(raiz, base, (), (None, None, "nonzero", 1.0, 1.0, 1.0))
     except (ValueError, IndexError, OverflowError, ZeroDivisionError) as e:
         raise ErrorSVG(f"El SVG contiene geometría o una transformación inválida: {e}") from e
     return salida

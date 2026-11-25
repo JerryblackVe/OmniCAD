@@ -189,7 +189,7 @@ Abierto 1. Especificación: [plan_texto_vectores.md](../plan_texto_vectores.md).
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| P-96 | SVG: rellenos casi transparentes de Affinity dejan pestañas | Abierto | Baja | Comparar Fusion y filtrar por opacidad con aviso y opción de importación. | `evidencias/svg_valientes_2026-11-08/` (`valientes.svg`, `repro.py`) | 2026-11-08 |
+| P-96 | SVG: rellenos casi transparentes de Affinity dejan pestañas | Parcial | Baja | Filtra opacidad efectiva ≤1 % de rellenos y grupos, conserva trazos visibles; test SVG. Sin verificar. Faltan aviso, opción de importación y comparación Fusion. | `evidencias/svg_valientes_2026-11-08/` (`valientes.svg`, `repro.py`) | 2026-11-08 |
 
 ## Fluidez (plan 2026-11-13)
 
