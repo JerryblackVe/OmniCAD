@@ -68,12 +68,14 @@ def test_al_aceptar_no_queda_la_flecha_ni_la_caja(ventana, comando, clave, como)
     QTest.keyClicks(caja, "4")
     QTest.qWait(600)
     assert "manipuladores" in v.visor._capas                     # la flecha azul está a la vista antes de Aceptar
+    gestor = panel.manipuladores
     if como == "boton":
         QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
     else:
         QTest.keyClick(caja, Qt.Key_Return)
     esperar_barra(v)
     assert v.panel is None and len(v.doc.operaciones) == 2
+    assert gestor._cerrado and not gestor.manips and not gestor.cajas
     assert _restos(v) == []
     _raton(v.visor, QEvent.MouseMove, (q.x(), q.y()), Qt.NoButton, Qt.NoButton)    # el cursor pasa por donde estaba
     QTest.qWait(800)                                             # los temporizadores de previa y refinado ya saltaron

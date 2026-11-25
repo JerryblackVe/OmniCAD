@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-473 (sin verificar).** Cierre de Chaflán ya borra selección, capas y gestor; redibujos tardíos protegidos. Test existente reforzado con estado del gestor. No cambio de producción sin repro; ruff, pytest y skills no ejecutados.
 - **2026-11-24 · B-773 (Parcial, sin verificar).** Menús de grupo anclados al botón con límite de pantalla; test de posición. Ayuda pública Autodesk comparada, falta cotejar orden exacto y Windows; ruff, pytest, skills y UX no ejecutados.
 - **2026-11-24 · SOL-39 (Parcial, sin verificar).** Mover/copiar agrega Componentes y transforma poses y cuerpos; copia por familia. Test de traslado. Falta MCP/doc, edición y copia verificadas. Ruff, pytest, skills y UX no ejecutados.
 - **2026-11-24 · B-757 (sin verificar).** Lectura del gestor: inicia sin hover; distancia visible, conicidad solo al activar anillo. Se agrega test de apertura, sin cambiar producción. Falta prueba en Windows; ruff, pytest y skills no ejecutados.
