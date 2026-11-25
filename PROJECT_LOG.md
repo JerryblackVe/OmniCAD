@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-25 ? B-862 cerrado.** Se fuerzan las fallas de malla y BOP local para probar el respaldo aislado: `test_b620_vaciado_reglado_sin_otro_proceso.py`, 2 OK; Ruff limpio.
 - **2026-11-25 · B-769 cerrado.** ⋮ de Archivo ancla en la barra superior, sin tocar la cinta. `test_p9b_mas.py::test_b769_mas_resuelve_el_grupo_del_boton_y_no_un_menu_ajeno`. Pytest: 787 OK; Ruff limpio.
 - **2026-11-25 · SOL-40 cerrado.** Alinear cambia Desde sin arrastrar el componente anterior y conserva extras explícitos. `test_comandos_modificar.py::test_sol40_editar_desde_cambia_de_componente`. Pytest: 787 OK; Ruff limpio.
 - **2026-11-25 · B-648 cerrado.** Triple clic selecciona valor y unidad: `test_b648_b553_triple_clic.py`, con Qt offscreen.
