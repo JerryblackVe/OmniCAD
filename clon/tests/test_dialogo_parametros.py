@@ -385,3 +385,15 @@ def test_borrar_el_dialogo_con_el_poblar_diferido_pendiente_no_escapa(s, app_qt,
     s.doc._notificar()                   # ni el aviso del documento ni el `_poblar` llegan al árbol muerto
     QTest.qWait(300)                     # procesa la llamada diferida y supera los 250 ms del reloj cancelado
     assert escapadas == [], [(tipo.__name__, str(error)) for tipo, error, _ in escapadas]
+
+
+def test_b555_tab_pasa_de_expresion_a_comentarios(dlg):
+    dlg.b_mas.click()
+    n = dlg.dlg_nuevo
+    n.expresion.setFocus()
+    QTest.keyClicks(n.expresion, "w")
+    QTest.qWait(20)
+    assert n._lista_expresion.popup().isVisible()
+    QTest.keyClick(n._lista_expresion.popup(), Qt.Key_Tab)
+    assert n.comentario.hasFocus()
+    assert n.expresion.text() == "w"

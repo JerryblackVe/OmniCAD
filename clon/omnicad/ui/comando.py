@@ -1659,6 +1659,10 @@ class PanelComando(QFrame):
             self._programar()
         self._pintar_filas()
         self.visor.set_filtro(self._filtros(campo) if campo is not None else None)
+        if self.comando.CLAVE == "revolucion" and campo is not None and campo.clave == "eje":
+            navegador = getattr(self.ctx.ventana, "navegador", None)
+            if navegador is not None:
+                navegador.revelar("__x__")  # los ejes ocultos se eligen desde el árbol, sin cambiar su visibilidad
         # H-72: en un campo de varias caras o cuerpos, arrastrar en la vista elige con una ventana (como Fusion)
         self.visor.ventana_en_comando = bool(campo is not None and campo.maximo != 1
                                              and set(campo.filtros) & {"cara", "cuerpo", "perfil"})   # B-268

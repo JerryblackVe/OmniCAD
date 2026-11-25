@@ -89,3 +89,16 @@ def test_un_boceto_que_ya_se_uso_no_se_toma_solo(tmp_path, cerrar):
     v.show()
     app.processEvents()
     assert v._perfil_unico() == []
+
+
+def test_b555_revolucion_revela_ejes_ocultos(tmp_path, cerrar):
+    app, v = _ventana(tmp_path, 1)
+    cerrar.append(v)
+    v.navegador.item("__origen__").setExpanded(False)
+    v.ocultos.add("__x__")
+    p = _abrir_revolucion(app, v)
+    assert p.activa.clave == "eje"
+    assert v.navegador.item("__origen__").isExpanded()
+    assert v._elegido_en_navegador("__x__")
+    assert p.valores["eje"][0]["ref"] == {"tipo": "eje", "id": "X"}
+    assert "__x__" in v.ocultos

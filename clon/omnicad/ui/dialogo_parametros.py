@@ -105,10 +105,24 @@ class DialogoNuevoParametro(QDialog):
         self.botones.accepted.connect(self.accept)
         self.botones.rejected.connect(self.reject)
         form.addRow(self.botones)
-        autocompletar(self.expresion, lambda: nombres_sugeridos(self.tabla))
+        self._lista_expresion = autocompletar(self.expresion, lambda: nombres_sugeridos(self.tabla))
+        campos = (self.nombre, self.unidad, self.expresion, self.comentario)
+        for anterior, siguiente in zip(campos, campos[1:], strict=False):
+            self.setTabOrder(anterior, siguiente)
+        self.expresion.installEventFilter(self)
+        self._lista_expresion.popup().installEventFilter(self)
         for senal in (self.nombre.textChanged, self.expresion.textChanged, self.unidad.currentTextChanged):
             senal.connect(self._recalcular)
         self._recalcular()
+
+    def eventFilter(self, objeto, evento):
+        if objeto in (self.expresion, self._lista_expresion.popup()) and evento.type() == QEvent.KeyPress:
+            if evento.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+                self._lista_expresion.popup().hide()
+                destino = self.unidad if evento.key() == Qt.Key_Backtab or evento.modifiers() & Qt.ShiftModifier else self.comentario
+                destino.setFocus()
+                return True
+        return super().eventFilter(objeto, evento)
 
     def datos(self):
         unidad = _a_unidad(self.unidad.currentText())
