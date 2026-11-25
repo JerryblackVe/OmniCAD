@@ -8,7 +8,7 @@ from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
 from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
 from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Pnt
 
-from omnicad.nucleo import aislado, intercambio, revision
+from omnicad.nucleo import aislado, intercambio, revision, solidos_modificar
 from omnicad.nucleo import geometria as geo
 from omnicad.nucleo import referencias as refs
 from omnicad.timeline.documento import Documento
@@ -55,11 +55,19 @@ def test_b620_vaciado_reglado_se_revisa_en_el_trabajador(doc_cortado, monkeypatc
 
 def test_b620_si_la_via_rapida_falla_va_al_proceso_aparte(doc_cortado, monkeypatch):
     llamadas = []
+    intentos_bop = []
 
-    def fallar(*a, **k):
-        raise RuntimeError("falla de prueba")
+    def fallar_malla(*a, **k):
+        raise RuntimeError("malla no disponible")
+
+    def fallar_bop(forma, limite):
+        intentos_bop.append(forma)
+        raise RuntimeError("BOP falló en el trabajador")
 
     monkeypatch.setattr(aislado, "EN_HIJO", True)
-    monkeypatch.setattr(revision, "_autointersecciones", fallar)
+    monkeypatch.setattr(solidos_modificar, "_cruces_pared_malla", fallar_malla)
+    monkeypatch.setattr(revision, "_autointersecciones", fallar_bop)
     monkeypatch.setattr(aislado, "_correr", lambda *a, **k: llamadas.append(a) or (0, [], True))
-    assert _vaciar(doc_cortado).estado == "ok" and llamadas
+    assert _vaciar(doc_cortado).estado == "ok"
+    assert intentos_bop
+    assert [a[0] for a in llamadas] == ["autointersecciones"]
