@@ -2794,7 +2794,10 @@ class VentanaPrincipal(QMainWindow):
         elif res.estado == "aviso":
             self.mensaje(f"Aviso en {op.nombre}: {res.mensaje}", 8000)
         else:
-            self.mensaje(f"{op.nombre}: listo.", 4000)
+            indice = self.doc.indice(op.id)
+            cuerpos = [c for c in self.doc.estado_en(indice + 1).cuerpos.values() if c.op_id == op.id]
+            nombre = self.nombre_cuerpo(cuerpos[0]) if len(cuerpos) == 1 else op.nombre
+            self.mensaje(f"{nombre}: listo.", 4000)
 
     def _renombrar_desde_navegador(self, tipo, clave, nombre):
         """Nombre nuevo escrito en el lugar en el navegador (doble clic o F2)."""
