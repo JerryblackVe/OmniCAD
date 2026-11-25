@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-803 (sin verificar).** Gemelo de B-819: DESHABILITADO ya vacío; restriccion.linea_spline ausente. Revisión estática sin cambios de código. Ruff, pytest y ponytail-review no ejecutados; fila pendiente.
 - **2026-11-24 · B-831 (sin verificar).** Cota reclama teclas de texto en ShortcutOverride; si hay caja, escribe en ella, si no, las consume. Regresión con QTest y QAction en test_b652_tecla_en_cota.py. Ruff, pytest, ponytail-review y lista UX no ejecutados; fila pendiente.
 - **2026-11-24 · B-768 (sin verificar).** FiltroMas en mas_comando.py: textos fijos y casillas según preferencias, sin cambiar alternancia. test_p9b_mas.py cubre ambos estados; ayuda oficial Fusion. Ruff, pytest, ponytail-review y lista UX no ejecutados; fila pendiente.
 - **2026-11-24 · B-819 (sin verificar).** Retirada la entrada restriccion.linea_spline, ligada al B-690 cerrado. Regresión existente: test_ningun_id_de_la_lista_esta_cerrado. Ruff, pytest y ponytail-review no ejecutados; fila pendiente.
