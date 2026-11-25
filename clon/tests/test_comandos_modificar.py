@@ -323,3 +323,24 @@ def test_alinear_reabierto_y_aceptado_sin_tocar_conserva_el_angulo(angulo):
     panel = PanelComando(cmd, ctx, visor, v)                    # el panel real: lo que se ve en el combo al hacer doble clic
     assert panel.widgets["angulo"].currentData() == v["angulo"] and panel.valores["angulo"] == v["angulo"]
     assert cmd.construir(panel.valores_visibles(), ctx).p["angulo"] == angulo
+
+
+def test_sol40_alinear_mueve_todos_los_cuerpos_del_componente():
+    from omnicad import api
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.modificar import Alinear
+    doc = _doc_caja()
+    sesion = api.Sesion(doc)
+    segundo = api.llamar(sesion, "create_box", {"length": 20, "width": 20, "height": 20, "x": 60})
+    assert segundo["ok"], segundo
+    cid = segundo["result"]["bodies_created"][0]["id"]
+    r = api.llamar(sesion, "create_component", {"name": "Pieza", "bodies": ["op1.c1", cid]})
+    assert r["ok"], r
+    campo = next(c for c in Alinear().campos(ContextoComando(doc)) if c.clave == "objeto")
+    assert "componentes" in campo.opciones
+    antes = g.caja_envolvente(_cuerpo(doc, cid).forma)
+    op = _ejecutar(doc, Alinear, objeto="componentes", origen=[_hit_sub(doc, "cara", (10, 10, 20))],
+                   destino=[_hit(doc, {"tipo": "plano", "id": "XY"})])
+    assert set(op.p["cuerpos"]) == {"op1.c1", cid}
+    assert g.es_valida(_cuerpo(doc, cid).forma)
+    assert g.caja_envolvente(_cuerpo(doc, cid).forma) != antes

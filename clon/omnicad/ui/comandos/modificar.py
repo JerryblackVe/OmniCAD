@@ -1072,7 +1072,8 @@ class Alinear(Comando):
         if ctx.op is not None:                  # un paso hecho por la API puede girar cualquier ángulo: no se pierde al reabrir
             actual = f"{float(ctx.op.p.get('angulo') or 0):g}"
             giros.setdefault(actual, f"{actual}°")
-        return [Opciones("objeto", "Objeto", {"cuerpos": ("Cuerpos", "cuerpo")}), Seleccion("origen", "Desde", geom),
+        return [Opciones("objeto", "Objeto", {"cuerpos": ("Cuerpos", "cuerpo"), "componentes": "Componentes"}),
+                Seleccion("origen", "Desde", geom),
                 Seleccion("destino", "A", geom), Casilla("voltear", "Voltear"),
                 Opciones("angulo", "Girar", giros), Casilla("copiar", "Crear copia"),
                 Seleccion("cuerpos", "Otros cuerpos", {"cuerpo"}, minimo=0, maximo=None,
@@ -1083,6 +1084,11 @@ class Alinear(Comando):
         exigir(v, "destino", "Seleccioná la geometría de destino.")
         duena = ref1(v, "origen").get("cuerpo")              # Fusion toma el objeto de lo elegido en «Desde»
         cuerpos = list(dict.fromkeys(([duena] if duena else []) + _cuerpos(v)))
+        if v.get("objeto") == "componentes":
+            comps = {ctx.estado.cuerpos[c].componente for c in cuerpos if c in ctx.estado.cuerpos}
+            if not comps or "" in comps:
+                raise ErrorComando("Elegí cuerpos de un componente.")
+            cuerpos = [c.id for c in ctx.estado.cuerpos.values() if c.componente in comps]
         if not cuerpos:
             raise ErrorComando("«Desde» no es un cuerpo: usá «Otros cuerpos».")
         return self.crear_op(OpAlinear, v, ctx, cuerpos=cuerpos, origen=ref1(v, "origen"),

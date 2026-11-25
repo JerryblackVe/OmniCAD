@@ -82,7 +82,7 @@ Abierto 2 · Parcial 3.
 | SOL-22 | Retícula volumétrica dentro de un cuerpo | Parcial | Alta | OctetoTruss, Panal, paneles, asas y Restablecer; mejorar aproximaciones (ficha). | omnicad/nucleo/reticula.py; tests/test_sol22_reticula.py | 2026-11-01 |
 | SOL-24 | Reconocer funciones en cuerpos importados | Parcial | Muy alta | Rehacer revoluciones, simetrías y patrones; ampliar reconocimiento (ficha). | omnicad/nucleo/reconocer_funciones.py; tests/test_sol24_reconocer_funciones.py | 2026-10-25 |
 | SOL-39 | Mover/copiar › Mover objeto «Componentes» (Fusion: Componentes, Cuerpos, Caras y Objetos del boceto; acá faltan los componentes) | Abierto | Media | Sumar la opción con `ops_ensamblar._mover_componentes`, su herramienta MCP y su test | B-559 (E3); `docs/fusion_docs/contenido/fusion-model/move-copy-reference-952166a90ef.md` | 2026-11-16 |
-| SOL-40 | Alinear › Objeto «Componentes» en el panel (Fusion: Cuerpos y Componentes; la API `align_bodies` ya acepta un componente en `bodies`) | Abierto | Baja | Sumar la opción al panel con los cuerpos del componente elegido y su test | B-560 (E3); `docs/fusion_docs/contenido/fusion-model/align-solids-6274b973a35.md` | 2026-11-16 |
+| SOL-40 | Alinear › Objeto «Componentes» en el panel (Fusion: Cuerpos y Componentes; la API `align_bodies` ya acepta un componente en `bodies`) | Sin verificar | Baja | Opción Componentes toma todos los cuerpos de los componentes elegidos por Desde/Otros cuerpos; regresión agregada. Falta prueba local. | B-560 (E3); `docs/fusion_docs/contenido/fusion-model/align-solids-6274b973a35.md` | 2026-11-16 |
 
 ## SUPERFICIE contra capturas de Fusion (2026-11-01)
 

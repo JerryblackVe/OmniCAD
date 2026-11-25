@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · SOL-40 (sin verificar).** Alinear ofrece Componentes y expande los cuerpos elegidos a sus componentes; conserva receta/API. Ayuda oficial Fusion consultada. Regresión de comando. Ruff, pytest, skills y UX no ejecutados.
 - **2026-11-24 · B-486 (Parcial, sin verificar).** Mover a distancia cero sin copia se rechaza antes de crear paso; eje con size=0 explícito se rechaza; point/origin son alias en escena. Regresiones API. Restan otras partes; ruff, pytest, ponytail-review y doc MCP no ejecutados.
 - **2026-11-24 · B-526 (sin verificar).** La malla ya usaba f64 pero Teselar se repetía al abrir. Caché de teselados con huella, arrays exactos y caída al recálculo; regresión en test_api_malla.py. Ruff, pytest y ponytail-review no ejecutados.
 - **2026-11-24 · B-555 (Parcial, sin verificar).** Revolución revela ejes del árbol sin hacerlos visibles en el visor; Tab recorre campos y sale de sugerencias. Dos regresiones. Restan círculo/perfil, SCU y z-fighting. Ruff, pytest y ponytail-review no ejecutados.
