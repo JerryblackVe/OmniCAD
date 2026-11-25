@@ -227,9 +227,8 @@ class Extruir(Comando):
         return self.crear_op(OpExtrusion, v, ctx, **params)
 
     def manipuladores(self, ctx, v):
-        """Como Fusion: la flecha de distancia sale del borde del perfil a lo largo de la normal (la del lado 2 en «Dos
-        lados»; la simétrica, del centro), con el anillo de la conicidad alrededor de su pie (P-139), la flecha del
-        desfase de inicio sobre el borde (solo con Inicio=Desfase) y la conicidad del lado 2 (solo en «Dos lados»)."""
+        """La flecha de distancia sale del centro del perfil a lo largo de la normal (B-472), con el anillo de la
+        conicidad alrededor de su pie (P-139), el desfase de inicio y la conicidad del lado 2 cuando corresponden."""
         from .. import manipuladores as mp
         if v.get("extension") not in ("distancia", "todo"):
             return []
@@ -238,29 +237,21 @@ class Extruir(Comando):
         if self._base_asas is None or self._base_asas[0]() is not ctx.estado or self._base_asas[1] != texto:
             # FL-1: resolver y teselar el texto «EMILIA» tardaba 350 ms en cada tecla de la distancia
             base = mp.base_perfiles(v.get("perfiles"), ctx.estado)
-            pie = None
-            if base is not None:
-                centro, plano, formas = base
-                bocetos = {r["boceto"] for r in referencias if isinstance(r, dict) and r.get("tipo") == "perfil" and r.get("boceto")}
-                # B-642: con varios bocetos no hay un borde común; con uno, conservar el borde de -u (P-139).
-                pie = centro if len(bocetos) > 1 else mp.punto_borde(
-                    formas, centro, -mp.unitario(plano.u) - 0.01 * mp.unitario(plano.v))
-            type(self)._base_asas = weakref.ref(ctx.estado), texto, base, pie  # B-546: en la clase, sirve al reabrir; débil: no retiene el documento viejo
-        _, _, base, borde = self._base_asas
+            type(self)._base_asas = weakref.ref(ctx.estado), texto, base  # B-546: en la clase, sirve al reabrir; débil: no retiene el documento viejo
+        _, _, base = self._base_asas
         if base is None:
             return []
         centro, plano, formas = base
         n = mp.unitario(plano.normal) * (-1.0 if v.get("invertir") else 1.0)
         lateral = -mp.unitario(plano.u)
-        antes = [mp.Flecha("desfase_inicio", borde, n)] if v.get("inicio") == "desfase" else []
+        antes = [mp.Flecha("desfase_inicio", centro, n)] if v.get("inicio") == "desfase" else []
         if v.get("inicio") == "desfase":
             centro = centro + n * _evaluar(ctx, v.get("desfase_inicio"))
-        borde = borde + n * float((centro - borde) @ n)          # a la altura del inicio (desfase)
         direccion = v.get("direccion")
         if v.get("extension") == "todo":     # P-160: la flecha muestra hacia dónde atraviesa; en rojo si no hay cuerpos
             if direccion not in (None, "un_lado"):
                 return antes
-            return antes + [_flecha_todo(ctx, borde, n * (-1.0 if _evaluar(ctx, v.get("distancia")) < 0 else 1.0))]
+            return antes + [_flecha_todo(ctx, centro, n * (-1.0 if _evaluar(ctx, v.get("distancia")) < 0 else 1.0))]
         if direccion == "simetrica":
             return antes + [mp.Flecha("distancia", centro, n, factor=1.0 if v.get("medida") != "total" else 0.5,
                                        minimo=0.0)]
@@ -270,10 +261,10 @@ class Extruir(Comando):
             t = n * (-1.0 if d < 0 else 1.0)
             dmax = _distancia_maxima(medir, _evaluar(ctx, v.get("conicidad"), ANGULO))
             menos = None if dmax is None else -dmax
-            # P-139: como Fusion, la flecha sale del borde del perfil y el anillo del ángulo rodea su pie
-            flecha = mp.Flecha("distancia", borde, n, minimo=menos, maximo=dmax, estricto=True)
+            # P-139: como Fusion, la flecha sale del centro del perfil y el anillo del ángulo rodea su pie
+            flecha = mp.Flecha("distancia", centro, n, minimo=menos, maximo=dmax, estricto=True)
             flecha.cede_a = "angulo:conicidad"
-            return antes + [flecha, _anillo_conicidad(mp.AnilloAngulo("conicidad", borde, np.cross(t, lateral), t,
+            return antes + [flecha, _anillo_conicidad(mp.AnilloAngulo("conicidad", centro, np.cross(t, lateral), t,
                                                                       sigue=("distancia", n, False), estricto=True), medir, d)]
 
         def lado(clave, valor, sentido, conicidad):
@@ -281,10 +272,10 @@ class Extruir(Comando):
             # y no cruza el cero (con un valor negativo, el eje se da vuelta y el tope pasa a ser el máximo)
             dmax = _distancia_maxima(medir, _evaluar(ctx, v.get(conicidad), ANGULO))
             if valor < 0:
-                flecha = mp.Flecha(clave, borde, -sentido, minimo=None if dmax is None else -dmax, maximo=0.0,
+                flecha = mp.Flecha(clave, centro, -sentido, minimo=None if dmax is None else -dmax, maximo=0.0,
                                    estricto=True)
             else:
-                flecha = mp.Flecha(clave, borde, sentido, minimo=0.0, maximo=dmax, estricto=True)
+                flecha = mp.Flecha(clave, centro, sentido, minimo=0.0, maximo=dmax, estricto=True)
             flecha.cede_a = f"angulo:{conicidad}"
             return flecha
         d2 = _evaluar(ctx, v.get("distancia2"))
@@ -292,7 +283,7 @@ class Extruir(Comando):
         if v.get("extension2", "distancia") == "distancia":
             flechas.append(lado("distancia2", d2, -n, "conicidad2"))
         return antes + flechas + [
-            _anillo_conicidad(mp.AnilloAngulo(clave, borde, np.cross(t, lateral), t, sigue=(lado_d, t, True),
+            _anillo_conicidad(mp.AnilloAngulo(clave, centro, np.cross(t, lateral), t, sigue=(lado_d, t, True),
                                               estricto=True), medir, dist)
             for clave, lado_d, t, dist in (("conicidad", "distancia", n, d), ("conicidad2", "distancia2", -n, d2))]
 

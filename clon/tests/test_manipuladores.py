@@ -146,6 +146,18 @@ def test_arrastrar_la_flecha_de_extruir_cambia_la_distancia_y_la_previa(app_qt):
     panel.cancelar()
 
 
+@pytest.mark.parametrize("direccion", ["un_lado", "dos_lados", "simetrica"])
+def test_b472_asa_extruir_en_centro_del_perfil(app_qt, direccion):
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, _visor, _estados = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)], "direccion": direccion,
+                                                      "distancia": "5 mm", "distancia2": "3 mm"})
+    assert _manip(panel, "flecha:distancia").origen == pytest.approx((10, 5, 0))
+    if direccion == "dos_lados":
+        assert _manip(panel, "flecha:distancia2").origen == pytest.approx((10, 5, 0))
+    panel.cancelar()
+
+
 def test_la_flecha_permite_extruir_hacia_el_otro_lado(app_qt):
     from omnicad.ui.comandos.solido import Extruir
     doc = _doc_rectangulo()
@@ -1357,7 +1369,7 @@ def test_b345_asas_de_los_demas_comandos_dejan_la_previa_sana(app_qt, clave, cam
 
 def test_p139_la_conicidad_de_extruir_es_un_anillo_en_el_pie_de_la_flecha(app_qt):
     """P-139: como Fusion, la conicidad de Extruir es un anillo de 360° centrado en el pie de la flecha de distancia
-    (sobre el borde del perfil), sin la V de radios. En reposo se ve un arco corto junto al asa; con el ratón encima, el
+    (sobre el centro del perfil, B-472), sin la V de radios. En reposo se ve un arco corto junto al asa; con el ratón encima, el
     anillo entero (atrás punteado) y la caja de valor. El anillo sigue a la flecha mientras se la arrastra, y arrastrar
     el asa por el anillo inclina el cuerpo."""
     from PySide6.QtCore import QEvent, Qt
@@ -1370,8 +1382,7 @@ def test_p139_la_conicidad_de_extruir_es_un_anillo_en_el_pie_de_la_flecha(app_qt
     gestor = panel.manipuladores
     anillo, flecha = _manip(panel, "angulo:conicidad"), _manip(panel, "flecha:distancia")
     assert isinstance(anillo, mp.AnilloAngulo)
-    x, y, z = flecha.origen
-    assert z == pytest.approx(0) and (min(abs(x), abs(x - 20)) < 1e-6 or min(abs(y), abs(y - 10)) < 1e-6)   # en el borde
+    assert flecha.origen == pytest.approx((10, 5, 0))   # B-472: centro exacto del perfil
     anillo.asa(gestor)
     assert anillo.centro == pytest.approx(flecha.puntos(gestor)[0])                # el pie de la flecha
     r = anillo._r(gestor)
