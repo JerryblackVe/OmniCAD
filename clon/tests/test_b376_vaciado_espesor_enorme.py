@@ -21,7 +21,9 @@ def test_espesor_mayor_que_la_pared_se_rechaza_con_un_mensaje():
     sesion, ultimo = _armar_hasta_el_ultimo_paso()
     antes = geo.volumen(next(iter(sesion.doc.estado_final.cuerpos.values())).forma)
     r = api.llamar(sesion, ultimo["tool"], ultimo["args"])
-    assert not r["ok"] and "el espesor no cabe" in r["mensaje"], r
+    assert not r["ok"] and r["error_kind"] == "OPERATION_FAILED", r
+    assert "el espesor (23 mm) es demasiado grande" in r["mensaje"], r
+    assert "su medida más chica es 20 mm" in r["mensaje"], r
     cuerpos = list(sesion.doc.estado_final.cuerpos.values())
     assert len(cuerpos) == 1 and geo.volumen(cuerpos[0].forma) == antes          # el documento quedó como estaba
     assert revision._autointersecciones_seguras(cuerpos[0].forma, 1, 5.0)[0] == 0
