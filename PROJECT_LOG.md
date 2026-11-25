@@ -1,4 +1,6 @@
 ## Registro
+- **2026-11-25 · B-769 cerrado.** ⋮ de Archivo ancla en la barra superior, sin tocar la cinta. `test_p9b_mas.py::test_b769_mas_resuelve_el_grupo_del_boton_y_no_un_menu_ajeno`. Pytest: 787 OK; Ruff limpio.
+- **2026-11-25 · SOL-40 cerrado.** Alinear cambia Desde sin arrastrar el componente anterior y conserva extras explícitos. `test_comandos_modificar.py::test_sol40_editar_desde_cambia_de_componente`. Pytest: 787 OK; Ruff limpio.
 - **2026-11-25 · B-648 cerrado.** Triple clic selecciona valor y unidad: `test_b648_b553_triple_clic.py`, con Qt offscreen.
 - **2026-11-25 · B-553 cerrado.** Triple clic reemplaza la expresión completa de Distancia: `test_b648_b553_triple_clic.py`, con Qt offscreen.
 - **2026-11-25 · B-552 cerrado.** La sección tangente avisa, conserva el cuerpo y no guarda un corte vacío: `test_b552_seccion.py`.
@@ -282,6 +284,7 @@
 - **2026-11-19 · Exploración ver_grupos_caras.** Explorado códigobase OmniCAD-PREP-TEST-ver-grupos-caras. Hallazgos: `ver_grupos_caras` es un atajo Shift+F que muestra grupos de caras en mallas mediante `get_viewport_image(mesh_face_groups=True)`. No existe `test_prep_cmd_ver_grupos_caras.py`. Operaciones timeline: `OpGruposCaras`, `OpCombinarGruposCaras`, `OpCrearGrupoCaras` en `ops_malla.py`. UI: `cinta.py`, `ventana.py`, `iconos_extra.py`. API: `herramientas_inspeccion.py`. Cobertura UI→API en `test_cobertura_ui_api.py` línea 109.
 
 ## Lecciones aprendidas
+- [2026-11-25] Para una acción compartida, usá el menú que la abrió para resolver dónde anclarla; buscá en la pestaña activa solo si no hay origen. · Evidencia: `test_p9b_mas.py::test_b769_mas_resuelve_el_grupo_del_boton_y_no_un_menu_ajeno` falló sin la guarda.
 - [2026-11-25] Al editar un comando, restaurá solo las selecciones adicionales explícitas, no la lista expandida de objetivos. · Evidencia: SOL-40, cambiar «Desde» de op3 a op4 reconstruyó ambos, `ui/comandos/modificar.py:1107–1124`.
 - [2026-11-24] Una compuerta que falla cerrado por no llegar a tiempo puede romper operaciones válidas: medir contra piezas reales antes de rechazar (rechazar solo si el conteo SÍ llegó y cruza). · Evidencia: medición 24/11 en `solidos_modificar.py › _cruza_mas_que` — el desfase de la cara plana de un cuerpo roscado sale en 0,13 s y su zona analiza en 19,51 s con n=0 — y `tests/test_b306_desfase_cara_libre_previa.py::test_en_un_cuerpo_con_rosca_la_cara_plana_sale_rapido_y_la_curva_falla_ya` rojo con la 1ª vuelta, verde con la 2ª; fila B-855.
 - [2026-11-24] Una fila de velocidad se re-mide por etapa ANTES de tocar código: la hipótesis anotada en la fila (MakeOffset/SetApprox) era el 10–15 % del tiempo; el 60–70 % era otra pieza (la booleana pegada del prisma). · Evidencia: banco del 24/11 sobre el logo de `tests/test_desfase_cadena_abierta.py`: `_bandas_de_cadena_abierta` 0,06–0,13 s contra `_booleana_pegada` 0,24–0,9 s; fila B-842 reescrita con lo medido.
