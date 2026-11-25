@@ -47,9 +47,8 @@ class _Delegado(QStyledItemDelegate):
         p.save()
         p.setRenderHint(QPainter.Antialiasing)
         p.setPen(Qt.NoPen)
-        c = temas.activo()
+        c = temas.colores_navegador(self.parent().entorno_oscuro())
         fila = QColor(c["nav_fila"])
-        fila.setAlpha(242)
         origen = index.data(ROL_ORIGEN)
         elegido = bool(option.state & QStyle.State_Selected)
         p.setBrush(QColor(c["seleccion"]) if elegido else          # lo elegido se ve elegido (con o sin marca)
@@ -78,7 +77,7 @@ class _Delegado(QStyledItemDelegate):
         elif origen:
             color_texto = QColor(temas.ORIGEN["texto"])
         else:
-            color_texto = QColor(c["texto"]) if index.data(ROL_OJO) is not False else QColor(c["texto_inactivo"])
+            color_texto = QColor(c["texto"]) if index.data(ROL_OJO) is not False else QColor(c["nav_oculto"])
         p.setPen(color_texto)
         p.drawText(QRectF(x, caja.top(), caja.right() - x, caja.height()), Qt.AlignVCenter | Qt.AlignLeft, texto)
         p.restore()
@@ -108,6 +107,7 @@ class _Arbol(QTreeWidget):
     moverla a ese grupo (un paso de deshacer del boceto) y recibe el foco del teclado para navegar con flechas
     y renombrar con F2 (H-71)."""
 
+    entorno_oscuro = staticmethod(lambda: None)  # la ventana consulta el entorno vigente del visor
     on_dejar_en_grupo = None   # callable(origen_clave, destino_clave) -> bool; lo pone modo_boceto al editar
 
     def __init__(self, *args, **kw):
@@ -179,7 +179,7 @@ class _Arbol(QTreeWidget):
             return
         p.save()
         p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(QPen(QColor(temas.color("nav_flecha")), 1.6))
+        p.setPen(QPen(QColor(temas.colores_navegador(self.entorno_oscuro())["nav_flecha"]), 1.6))
         cx, cy = rect.right() - 9, rect.center().y()
         if item.isExpanded():
             p.drawPolyline(QPolygonF([QPointF(cx - 4, cy - 2), QPointF(cx, cy + 2), QPointF(cx + 4, cy - 2)]))

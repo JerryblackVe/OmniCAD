@@ -346,3 +346,14 @@ def test_captura_rechaza_un_tema_que_no_existe(capsys):
     with pytest.raises(SystemExit) as e:
         main(["x.png", "--tema", "no_existe"])
     assert e.value.code == 2 and "oscuro_moderno" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("clave", ["claro_moderno", "oscuro_moderno"])
+@pytest.mark.parametrize("entorno", [None, False, True])
+def test_b756_navegador_contraste_en_tema_y_entorno(clave, entorno):
+    temas.activar(clave)
+    c = temas.colores_navegador(entorno)
+    if entorno is not None:
+        assert (temas.luminancia(c["nav_fila"]) < 0.18) == entorno
+    for texto, fondo in (("texto", "nav_fila"), ("nav_oculto", "nav_fila"), ("seleccion_texto", "seleccion")):
+        assert temas.razon_contraste(c[texto], c[fondo]) >= temas.MIN_CONTRASTE

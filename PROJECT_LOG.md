@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-756 (sin verificar).** Navegador toma paleta clara/oscura del tema según el entorno y conserva contraste en filas ocultas; test_temas.py. Ruff, pytest, ponytail-review y prueba UX/ventana no ejecutados.
 - **2026-11-24 · B-515 (Parcial, sin verificar).** Aviso en unión multieje sin motion, error del estudio y origen libre del SCU; 3 regresiones API. Ruff, pytest, skills y doc MCP no ejecutados. Falta align/flip y análisis lentos. Ayuda oficial Fusion consultada.
 - **2026-11-24 · B-550 (sin verificar).** La caja enfocada retenía la profundidad anterior; sincroniza con el diagrama salvo edición pendiente. Test B-550 en test_manipuladores.py; causa del vídeo no confirmada. Ruff, pytest, UX y ponytail-review no ejecutados; fila pendiente.
 - **2026-11-24 · B-552 (sin verificar).** El recorte sin contorno ocultaba el cuerpo. Sección conserva la vista, avisa y no guarda un corte vacío; test_b552_seccion.py. Ruff, pytest, UX y ponytail-review no ejecutados; fila pendiente.

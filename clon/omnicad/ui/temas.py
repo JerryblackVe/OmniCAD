@@ -667,6 +667,17 @@ def activo():
     return _activo["colores"]
 
 
+def colores_navegador(oscuro=None):
+    """Paleta legible sobre el lienzo; con otro entorno, conserva su claridad."""
+    c = activo()
+    if oscuro is not None and (luminancia(c["nav_fila"]) < 0.18) != oscuro:
+        c = INCLUIDOS["oscuro_moderno" if oscuro else "claro_moderno"]["colores"]
+    c = dict(c)
+    # Ocultar no desactiva la fila: el texto debe seguir siendo legible.
+    c["nav_oculto"] = c["texto_tenue"] if razon_contraste(c["texto_tenue"], c["nav_fila"]) >= MIN_CONTRASTE else c["texto"]
+    return c
+
+
 def color(clave):
     return _activo["colores"][clave]
 

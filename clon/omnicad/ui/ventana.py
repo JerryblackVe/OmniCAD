@@ -277,6 +277,8 @@ class VentanaPrincipal(QMainWindow):
         self.area.viewcube.al_elegir_camara = lambda clave: self.cambiar_vista("camara", clave)
         self.area.viewcube.al_guardar_vistas = self._guardar_vistas_viewcube
         self.navegador = Navegador()
+        self.navegador.arbol.entorno_oscuro = lambda: (None if self.visor.config.entorno == "tema"
+                                                       else self.visor.config.oscuro())
         from . import acciones_navegador
         self.navegador.menu_elemento = lambda item: acciones_navegador.menu(self, item)
         self.navegador.menu_boceto = lambda item: navegador_boceto.menu(self, item)
@@ -884,6 +886,7 @@ class VentanaPrincipal(QMainWindow):
             c.estilo_visual = p["vista/estilo_visual"] = valor
         elif clave == "entorno":
             c.entorno = p["vista/entorno"] = valor
+            self.navegador.arbol.viewport().update()
         elif clave == "preset":
             p["graficos/preset"] = valor
             self.aplicar_preferencias()
@@ -1657,6 +1660,7 @@ class VentanaPrincipal(QMainWindow):
                 c.estilo_visual = ESTILOS_API[estilo["estilo"]]
             if estilo.get("entorno") in ENTORNOS:
                 c.entorno = estilo["entorno"]
+            self.navegador.arbol.viewport().update()
             for clave_api, clave in (("sombras", "sombra_suelo"), ("reflejos", "reflejo"), ("suelo", "suelo")):
                 if clave_api in (estilo.get("efectos") or {}):
                     c.efectos[clave] = bool(estilo["efectos"][clave_api])
