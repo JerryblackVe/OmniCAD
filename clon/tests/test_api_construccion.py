@@ -635,3 +635,21 @@ def test_b515_scu_acepta_puntos_libres_sin_cuerpos():
         r = llamar(s, "create_ucs", origin=p)
         assert r["origin"] == p
         assert s.doc.estado_final.puntos[r["ucs"]["id"] + "_o"][0] == pytest.approx(p)
+
+
+@pytest.mark.parametrize("size", [0, "0 mm"])
+def test_b486_eje_tamano_cero_no_crea_paso(size):
+    s = api.Sesion()
+    falla(s, "create_construction_axis", "INVALID_ARGUMENTS", type="dos_planos", references=["XY", "XZ"], size=size)
+    assert not s.doc.operaciones
+    assert llamar(s, "create_construction_axis", type="dos_planos", references=["XY", "XZ"])["axis"]
+
+
+def test_b486_escena_construccion_point_y_origin_iguales():
+    s = api.Sesion()
+    llamar(s, "create_ucs", origin="O")
+    construccion = llamar(s, "get_scene_info")["construction"]
+    for tipo in ("planes", "axes", "points"):
+        assert construccion[tipo]
+        for entidad in construccion[tipo]:
+            assert entidad["point"] == entidad["origin"]

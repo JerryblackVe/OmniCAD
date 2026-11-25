@@ -1594,6 +1594,8 @@ def move_body(sesion, body: Cuerpos | None = None, translate: list[Expr] | None 
     if type == "translate":
         nuevos = dict(tipo="traslacion")
         if direction is not None:
+            if not copy and doc.parametros.evaluar(texto_expr(distance)) == 0:
+                raise error("INVALID_ARGUMENTS", "La distancia de Mover no puede ser cero.")
             nuevos.update(direccion=_referencia(sesion, direction, {"eje", "arista", "cara", "plano"}, ref_body,
                                                 "direccion"), distancia=texto_expr(distance))
     elif type == "rotate":

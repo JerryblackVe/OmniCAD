@@ -143,7 +143,7 @@ def referencia_lugar(sesion, ref, location):
 def create_construction_axis(sesion, type: Literal["cilindro", "perpendicular_cara", "dos_planos", "dos_puntos", "arista"],
                              references: list[Referencia], body: str | None = None, name: str | None = None,
                              location: list[float] | None = None, resize: Redimensionar = "default",
-                             size_type: TipoExtension = "distance", size: Expr = 0, size_object: Referencia | None = None):
+                             size_type: TipoExtension = "distance", size: Expr | None = None, size_object: Referencia | None = None):
     """
     type: variante de TIPOS_EJE: cilindro, perpendicular_cara, dos_planos, dos_puntos o arista.
     references: referencias en orden: cara de revolución; cara/plano y punto (el punto es opcional: ver location); dos planos;
@@ -154,9 +154,11 @@ def create_construction_axis(sesion, type: Literal["cilindro", "perpendicular_ca
     location: perpendicular_cara sin punto: [x, y, z] del lugar de la cara; vacío = su centro.
     resize: Redimensionar: default ajusta el dibujo a lo elegido, extended llena la vista. Solo cambia cómo se ve.
     size_type: Tipo de extensión: distance fija el largo con size; to_object lo lleva hasta size_object.
-    size: largo del eje en mm; 0 = el que sale de lo elegido.
+    size: largo del eje en mm, positivo; vacío = el que sale de lo elegido.
     size_object: objeto hasta donde llega el eje, con size_type=to_object.
     """
+    if size_type == "distance" and size is not None and sesion.doc.parametros.evaluar(texto_expr(size)) <= 0:
+        raise error("INVALID_ARGUMENTS", "El largo del eje debe ser mayor que cero.")
     filtros = {"cilindro": [({"cara"}, None)], "perpendicular_cara": [(_PLANO, None), (_PUNTO, None)],
                "dos_planos": [(_PLANO, "plano"), (_PLANO, "plano")],
                "dos_puntos": [(_PUNTO, None), (_PUNTO, None)], "arista": [(_EJE, "eje")]}[type]
@@ -165,7 +167,7 @@ def create_construction_axis(sesion, type: Literal["cilindro", "perpendicular_ca
     refs = _referencias(sesion, references, filtros, body)
     lugar = referencia_lugar(sesion, refs[0], location) if type == "perpendicular_cara" and len(refs) == 1 else None
     op = _crear(sesion, OpEje, name, tipo=type, refs=refs, lugar=lugar,
-                **parametros_tamano(sesion, resize, size_type, size, size_object, body))
+                **parametros_tamano(sesion, resize, size_type, 0 if size is None else size, size_object, body))
     agregar_construccion(sesion, op)
     estado = sesion.doc.estado_final
     punto, direccion, _ = estado.ejes[op.id]

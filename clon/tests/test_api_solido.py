@@ -854,3 +854,12 @@ def test_simetria_hereda_nombre(s):
     llamar(s, "create_sphere", radius=3, name="Bola")
     llamar(s, "mirror", bodies=["Bola"], plane="YZ")
     assert sorted(c["name"] for c in cuerpos(s).values()) == ["Bola", "Bola (copia)"]
+
+
+@pytest.mark.parametrize("distancia", [0, "0 mm"])
+def test_b486_mover_distancia_cero_no_crea_paso(s, distancia):
+    cid = llamar(s, "create_box", length=10, width=10, height=10)["bodies_created"][0]["id"]
+    antes = foto(s)
+    r = api.llamar(s, "move_body", {"body": cid, "type": "translate", "direction": "X", "distance": distancia})
+    assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r
+    assert foto(s) == antes

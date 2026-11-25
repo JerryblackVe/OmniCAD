@@ -98,11 +98,11 @@ def _info_uniones(estado):
 def _info_construccion(estado, nombres):
     """P-79: planos, ejes y puntos de construcción (también los de cada SCU) donde quedaron tras el último cálculo."""
     v = lambda x: [_r(c) for c in x]  # noqa: E731
-    return {"planes": [{"id": i, "name": nombres.get(i, p.nombre), "origin": v(p.origen), "normal": v(p.normal), "u_axis": v(p.u)}
+    return {"planes": [{"id": i, "name": nombres.get(i, p.nombre), "origin": v(p.origen), "point": v(p.origen), "normal": v(p.normal), "u_axis": v(p.u)}
                        for i, p in estado.planos.items()],
-            "axes": [{"id": i, "name": nombres.get(i, e[2] if len(e) > 2 else i), "point": v(e[0]), "direction": v(e[1])}
+            "axes": [{"id": i, "name": nombres.get(i, e[2] if len(e) > 2 else i), "point": v(e[0]), "origin": v(e[0]), "direction": v(e[1])}
                      for i, e in estado.ejes.items()],
-            "points": [{"id": i, "name": nombres.get(i, p[1] if len(p) > 1 else i), "point": v(p[0])}
+            "points": [{"id": i, "name": nombres.get(i, p[1] if len(p) > 1 else i), "point": v(p[0]), "origin": v(p[0])}
                        for i, p in estado.puntos.items()]}
 
 
