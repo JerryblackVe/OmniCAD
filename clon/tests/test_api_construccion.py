@@ -627,3 +627,11 @@ def test_b287_una_referencia_que_no_existe_lo_dice_y_nombra_el_argumento():
         llamar(s, "create_construction_axis", type="dos_planos", references=["XY", "XZ"], name=nombre)
     r = api.llamar(s, "create_ucs", {"origin": "O", "x_axis": "EJ"})
     assert not r["ok"] and r["error_kind"] == "AMBIGUOUS_REFERENCE" and "«x_axis»" in r["mensaje"], r
+
+
+def test_b515_scu_acepta_puntos_libres_sin_cuerpos():
+    s = api.Sesion()
+    for p in ([0, 0, 0], [1, 2, 3]):
+        r = llamar(s, "create_ucs", origin=p)
+        assert r["origin"] == p
+        assert s.doc.estado_final.puntos[r["ucs"]["id"] + "_o"][0] == pytest.approx(p)

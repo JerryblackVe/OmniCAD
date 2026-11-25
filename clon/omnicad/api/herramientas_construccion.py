@@ -18,7 +18,7 @@ from ..timeline.ops_construir import OpEje, OpPunto, OpSCU, lugar_en
 from ..timeline.ops_fijacion import OpFijacion
 from ..timeline.ops_insertar import OpLienzo
 from . import selectores as sl
-from .errores import desde_mensaje, error
+from .errores import ErrorAPI, desde_mensaje, error
 from .herramientas_avanzado import _una
 from .herramientas_boceto import nombre_nuevo, texto_expr
 from .herramientas_solido import Cuerpos, _agregar, _ids_cuerpos, _numero_positivo
@@ -262,7 +262,13 @@ def create_ucs(sesion, origin: Referencia, x_axis: Referencia | None = None, y_a
     name: nombre del sistema; vacío = automático.
     z_axis: alinea Z con un eje, arista recta o cara (su normal); X se ortogonaliza contra Z.
     """
-    op = _crear(sesion, OpSCU, name, origen=_referencia(sesion, origin, _PUNTO, body, campo="origin"),
+    try:
+        origen = _referencia(sesion, origin, _PUNTO, body, campo="origin")
+    except ErrorAPI as e:
+        if not sl.es_punto3(origin) or e.error_kind != "ELEMENT_NOT_FOUND":
+            raise
+        origen = {"tipo": "forzado", "modo": "libre", "base": {"tipo": "punto", "id": "O"}, "punto": list(origin)}
+    op = _crear(sesion, OpSCU, name, origen=origen,
                 eje_x=_referencia(sesion, x_axis, _EJE | _PLANO, body, "eje", "x_axis") if x_axis is not None else None,
                 eje_y=_referencia(sesion, y_axis, _EJE, body, "eje", "y_axis") if y_axis is not None else None,
                 eje_z=_referencia(sesion, z_axis, _EJE | _PLANO, body, "eje", "z_axis") if z_axis is not None else None,

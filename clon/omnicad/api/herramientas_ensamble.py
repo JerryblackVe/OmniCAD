@@ -1070,6 +1070,8 @@ def set_joint_limits(sesion, joint: str, minimum: Expr | None = None, maximum: E
     if not any(MOVIMIENTOS[tipo]):
         raise error("INVALID_ARGUMENTS", "Una unión rígida no tiene movimiento que limitar.")
     clave = _movimiento_de(tipo, motion) if motion else principal_de(tipo)
+    if motion is None and sum(map(len, MOVIMIENTOS[tipo])) > 1:
+        sesion.avisar(f"Sin motion: se usa {A_MOVIMIENTO[clave]}.")
     todos = dict(op.p.get("limites_dof") or {})
     if minimum is None and maximum is None and (rest is not None or flip is not None):     # solo ajusta reposo o invertir
         previo = todos.get(clave) or {}
@@ -1265,6 +1267,8 @@ def motion_study(sesion, joint: str, values: list[float] | None = None, start: f
     base = _matrices(sesion)
     for v in lista:
         estado, avisos, fallo = _simular(doc, op, {clave: repr(v)})
+        if fallo is not None:
+            raise error("OPERATION_FAILED", fallo)
         u = estado.uniones.get(op.id)
         paso = {"value": _r(v), "applied_value": _r(u["valores"].get(clave)) if u else None, "warnings": avisos,
                 "error": fallo}

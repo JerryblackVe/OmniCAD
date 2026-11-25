@@ -502,3 +502,19 @@ def test_b178_un_agujero_con_punto_absoluto_creado_despues_de_la_union_la_sigue(
         (cil,) = llamar(s, "find_faces", body=bloque, selector="%CYLINDER")["faces"]
         assert cil["center"][:2] == pytest.approx(_centro_xy(s, marca), abs=0.3), giro      # el testigo no es el centro exacto
         assert all(p["status"] == "ok" for p in llamar(s, "get_timeline", include_params=False)["steps"])
+
+
+def test_b515_limites_sin_motion_avisan_en_union_cilindrica():
+    s, base, bloque = dos_cajas()
+    llamar(s, "create_joint", origin1="<Z", body1=bloque, origin2=">Z", body2=base, joint_type="cylindrical")
+    r = api.llamar(s, "set_joint_limits", {"joint": "Unión1", "maximum": 45})
+    assert r["ok"], r
+    assert "Sin motion: se usa rotation." in r["avisos"]
+    assert r["result"]["joint"]["limits"]["maximum"] == "45.0"
+
+
+def test_b515_estudio_propaga_error_del_paso():
+    s, base, bloque = dos_cajas()
+    llamar(s, "create_joint", origin1="<Z", body1=bloque, origin2=">Z", body2=base, joint_type="revolute")
+    r = falla(s, "motion_study", "OPERATION_FAILED", joint="Unión1", start=0, end=1e9, steps=2)
+    assert "ángulo" in r["mensaje"].lower()

@@ -88,7 +88,11 @@ def _problema_forzado(ref):
     """Qué le falta a una referencia «forzado» según su modo; None si está bien."""
     modo = ref["modo"]
     es_numero = lambda x: isinstance(x, (int, float)) and not isinstance(x, bool)  # noqa: E731
-    if modo in ("lugar_cara", "lugar_plano"):
+    if modo == "libre":
+        p = ref.get("punto")
+        if not (_es_lista_de_numeros(p, 3) and np.isfinite(p).all()):
+            return "El punto libre requiere tres números finitos."
+    elif modo in ("lugar_cara", "lugar_plano"):
         uv = ref.get("uv")
         if not (isinstance(uv, (list, tuple)) and len(uv) == 2 and all(map(es_numero, uv))):
             return f"el modo «{modo}» necesita «uv»: dos números"
@@ -326,7 +330,10 @@ def resolver(ref, estado):
 
 def _punto_forzado(ref, estado):
     from ..nucleo import construccion as cs
-    base, modo = resolver(ref["base"], estado), ref["modo"]
+    modo = ref["modo"]
+    if modo == "libre":
+        return np.asarray(ref["punto"], float)
+    base = resolver(ref["base"], estado)
     if modo == "lugar_plano":
         if base.plano is None:
             raise ErrorReferencia("El punto de forzado se perdió: su plano ya no está.")
