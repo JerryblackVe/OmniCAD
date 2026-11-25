@@ -2806,6 +2806,8 @@ class VentanaPrincipal(QMainWindow):
             indice = self.doc.indice(op.id)
             cuerpos = [c for c in self.doc.estado_en(indice + 1).cuerpos.values() if c.op_id == op.id]
             nombre = self.nombre_cuerpo(cuerpos[0]) if len(cuerpos) == 1 else op.nombre
+            if len(nombre) > 37:
+                nombre = nombre[:36] + "…"
             self.mensaje(f"{nombre}: listo.", 4000)
 
     def _renombrar_desde_navegador(self, tipo, clave, nombre):
