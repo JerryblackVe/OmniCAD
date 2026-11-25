@@ -45,3 +45,4 @@ COORDINADOR» al principio de cada prompt).
 
 AG-1 («revisión solo del Boceto») se borró el 2026-11-08: la cubren la auditoría de restricciones (cerrada) y la de
 CREAR y MODIFICAR del boceto (en curso); el boceto no tiene otras pestañas.
+| AG-22 | Verificar los commits de ChatGPT sin verificar en la rama `trabajo/base-chatgpt-2026-11-24` (lote 3: e6c9d887 B-803, f76c9348 B-771, c899926a B-769, a3ee0a25 B-648/B-553, a2c4e03 B-552, 2d6b6077 B-550; sus filas siguen en bugs.md). Por ítem: tests fallan sin el arreglo y pasan con él, ruff, ponytail-review; después cerrar filas y refrescar la página. Sin gastar cupo antes. | 2026-11-26 | Gerardo, 24/11 (poco cupo semanal) | Pendiente |
