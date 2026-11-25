@@ -11,7 +11,7 @@ Regla de honestidad: un comando que OmniCAD no implementa aparece GRISADO (igual
 muestra los que no están disponibles); nunca un botón activo que no hace nada. Los comandos
 reales son QAction compartidas que crea la ventana y se buscan por clave.
 """
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QMenu, QSizePolicy, QStackedWidget, QStyle,
                                QStyleOptionToolButton, QToolButton, QVBoxLayout, QWidget)
@@ -239,6 +239,22 @@ def accion_secundaria(owner, acciones, no_disponibles, ref):
     return a
 
 
+class _MenuGrupo(QMenu):
+    """B-773: alinea el menú al borde izquierdo de su botón."""
+    def showEvent(self, evento):
+        super().showEvent(evento)
+        boton = self.parentWidget()
+        if boton is None:
+            return
+        origen = boton.mapToGlobal(QPoint(0, boton.height()))
+        area = boton.screen().availableGeometry()
+        x = max(area.left(), min(origen.x(), area.right() - self.width() + 1))
+        y = origen.y()
+        if y + self.height() > area.bottom() + 1:
+            y = boton.mapToGlobal(QPoint(0, 0)).y() - self.height()
+        self.move(x, max(area.top(), y))
+
+
 def grupo_secundario(owner, acciones, no_disponibles, titulo, rapidos, items):
     """Grupo de cinta secundaria (CintaDibujo y CintaEspacio): botones rápidos con ícono solo y menú «Título ▾»."""
     w = QWidget()
@@ -257,7 +273,7 @@ def grupo_secundario(owner, acciones, no_disponibles, titulo, rapidos, items):
     v.addLayout(botones)
     t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾")
     t.setPopupMode(QToolButton.InstantPopup)
-    m = QMenu(t)
+    m = _MenuGrupo(t)
     m.setToolTipsVisible(True)
     for it in items:
         if it == SEP:
@@ -522,7 +538,7 @@ class Cinta(QWidget):
         return w
 
     def _menu(self, items, padre):
-        m = QMenu(padre)
+        m = _MenuGrupo(padre)
         m.setToolTipsVisible(True)
         for it in items:
             if it == SEP:

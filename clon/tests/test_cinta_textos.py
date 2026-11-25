@@ -84,3 +84,17 @@ def test_derivar_del_solido_es_la_accion_real(cinta):
     assert menu.isVisible()
     QTest.mouseClick(menu, Qt.LeftButton, Qt.NoModifier, menu.actionGeometry(a).center())
     assert abiertos == [True]
+
+
+def test_b773_menu_crear_alineado_al_boton(cinta):
+    from PySide6.QtCore import QPoint
+    grupo = next(b for b in cinta.pila.currentWidget().findChildren(QToolButton, "titulo_grupo")
+                 if b.text().startswith("CREAR"))
+    menu = grupo.menu()
+    QTest.mouseClick(grupo, Qt.LeftButton)
+    assert menu.isVisible()
+    area = grupo.screen().availableGeometry()
+    x = grupo.mapToGlobal(QPoint(0, 0)).x()
+    esperado = max(area.left(), min(x, area.right() - menu.width() + 1))
+    assert menu.pos().x() == esperado
+    menu.close()
