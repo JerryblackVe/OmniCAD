@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-25 · B-867 cerrado.** Escena usa un espaciado vertical fijo de 4 px; conserva acceso al pie y a ambas pestanas. test_render_dialogos_comunes.py: 11 OK; Ruff limpio.
 - **2026-11-25 · B-423 cerrado.** La prueba separa el icono pintado del texto y borde de Qt; 11 OK offscreen y Ruff limpio. No se hizo la comprobacion visual en la ventana nativa.
 - **2026-11-25 · B-868 cerrado.** El cambio de camara se avisa sin OpenGL y antes del turno de dibujo, sin duplicados. test_visor_aviso_camara.py: 3 OK; Ruff limpio.
 - **2026-11-25 · B-865 cerrado.** El prefijo m de mm ya no dispara un aviso al teclear. Se prueba que 0.1 m completo sigue fuera de rango. test_raro_sk_perfil_giratorio.py: 90 OK en grupo; Ruff limpio.
