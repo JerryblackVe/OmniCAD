@@ -4,6 +4,9 @@ Con el surco en 0°, M40x3×30 y M12×1,75×12 hacían 3 y 4 cortes de ~0,4 s; a
 (acierta y la rosca conserva su fase): 2 cortes. La rosca larga corta sus dos mitades por separado en vez de unirlas
 (M20x2.5×100: la unión sola tardaba 5,7 s)."""
 import pytest
+from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+from OCP.gp import gp_Pnt
+from OCP.TopAbs import TopAbs_IN, TopAbs_OUT
 
 from omnicad.nucleo import geometria as geo
 from omnicad.nucleo import solidos_crear as sc
@@ -35,6 +38,15 @@ def test_p78_si_0_grados_falla_el_respaldo_acierta(cortes, designacion, diametro
     assert cortes["n"] == 2
     assert geo.es_valida(forma)
     assert geo.volumen_exacto(forma, 1e-6) == pytest.approx(volumen, rel=1e-5)
+
+
+def test_p78_mover_la_costura_del_cilindro_no_corre_la_fase(cortes):
+    forma = sc.rosca(geo.cilindro(20, 30), designacion="M40x3", clase="6g")
+    clasificador = BRepClass3d_SolidClassifier(forma)
+    # Sobre +Y, el surco exterior está centrado a medio paso y a paso entero queda el filete.
+    for altura, esperado in ((13.5, TopAbs_OUT), (15.0, TopAbs_IN)):
+        clasificador.Perform(gp_Pnt(0, 19, altura), 1e-7)
+        assert clasificador.State() == esperado
 
 
 def test_p78_la_rosca_larga_corta_las_mitades_sin_unirlas(cortes, monkeypatch):

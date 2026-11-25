@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-25 · ROJOS2 (P-78/B-249).** El respaldo del cilindro completo mueve solo su costura; en piezas asimétricas se conserva el respaldo en fase de B-461. Los 12 casos dirigidos y la comprobación nueva de fase pasan; Ruff limpio.
 - **2026-11-25 · B-461 (regresión 6g).** Si el corte por tramos falla, se prueba el surco entero en fase antes de girar. test_b461_rosca_tramos.py: 8 OK; Ruff limpio. Sigue pendiente el rendimiento general de B-461.
 - **2026-11-25 · OmniKernel sin OCC.** Engrosar reglada importa OCC solo al ejecutar. El visor usa TShape solo para formas OCC. Las dos regresiones de test_motor.py pasan; Ruff limpio. B-292 (memoria) no cambia.
 - **2026-11-25 · B-867 cerrado.** Escena usa un espaciado vertical fijo de 4 px; conserva acceso al pie y a ambas pestañas. test_render_dialogos_comunes.py: 11 OK; Ruff limpio.
@@ -303,6 +304,7 @@
 - **2026-11-19 · Exploración ver_grupos_caras.** Explorado códigobase OmniCAD-PREP-TEST-ver-grupos-caras. Hallazgos: `ver_grupos_caras` es un atajo Shift+F que muestra grupos de caras en mallas mediante `get_viewport_image(mesh_face_groups=True)`. No existe `test_prep_cmd_ver_grupos_caras.py`. Operaciones timeline: `OpGruposCaras`, `OpCombinarGruposCaras`, `OpCrearGrupoCaras` en `ops_malla.py`. UI: `cinta.py`, `ventana.py`, `iconos_extra.py`. API: `herramientas_inspeccion.py`. Cobertura UI→API en `test_cobertura_ui_api.py` línea 109.
 
 ## Lecciones aprendidas
+- [2026-11-25] Al reordenar respaldos de la rosca, probá fase y contá cortes y barridos: agotar tolerancias a 0° rompió P-78 (3 cortes) y B-249 (2 barridos). · Evidencia: `test_p78_rosca_un_corte.py`, `test_rosca_diametros_tabla.py` y `test_b461_rosca_tramos.py`.
 - [2026-11-25] No uses TShape/Location para reutilizar mallas del visor sin comprobar que la forma es OCC; el mismo flujo dibuja cuerpos OmniKernel. · Evidencia: test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado.
 - [2026-11-25] Para una acción compartida, usá el menú que la abrió para resolver dónde anclarla; buscá en la pestaña activa solo si no hay origen. · Evidencia: `test_p9b_mas.py::test_b769_mas_resuelve_el_grupo_del_boton_y_no_un_menu_ajeno` falló sin la guarda.
 - [2026-11-25] Al editar un comando, restaurá solo las selecciones adicionales explícitas, no la lista expandida de objetivos. · Evidencia: SOL-40, cambiar «Desde» de op3 a op4 reconstruyó ambos, `ui/comandos/modificar.py:1107–1124`.

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
         BRepAdaptor_Curve, BRepAdaptor_Surface, BRepAlgoAPI_Cut, BRepAlgoAPI_Splitter, BRepBuilderAPI_Copy,
         BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeWire, BRepBuilderAPI_Sewing, BRepLib,
         BRepOffsetAPI_MakePipeShell, BRep_Tool, Geom2d_Line, GeomAPI_Interpolate, GeomAbs_BSplineSurface,
-        GeomAbs_Cylinder, Geom_ConicalSurface, Geom_CylindricalSurface, HArray1_gp_Pnt, List_TopoDS_Shape,
+        GeomAbs_Cylinder, GeomAbs_Plane, Geom_ConicalSurface, Geom_CylindricalSurface, HArray1_gp_Pnt, List_TopoDS_Shape,
         TopAbs_EDGE, TopAbs_FACE, TopAbs_FORWARD, TopAbs_SHELL, TopAbs_VERTEX, TopExp, TopExp_Explorer,
         TopLoc_Location, TopoDS, gp_Ax1, gp_Ax2, gp_Ax3, gp_Circ, gp_Dir, gp_Dir2d, gp_Pln, gp_Pnt, gp_Pnt2d, gp_Trsf,
         gp_Vec,
@@ -681,6 +681,27 @@ def caras_sobre_cilindro(cuerpo, cara, tol=1e-6):
     return salida
 
 
+def _es_cilindro_completo(cuerpo, o, z):
+    """Un cilindro coaxial con dos tapas ortogonales: girarlo mueve la costura, no el material."""
+    caras = geo.caras(cuerpo)
+    if len(caras) != 3:
+        return False
+    cilindros = 0
+    for cara in caras:
+        sup = BRepAdaptor_Surface(TopoDS.Face(cara))
+        tipo = sup.GetType()
+        if tipo == GeomAbs_Cylinder:
+            eje = sup.Cylinder().Axis()
+            if (np.linalg.norm(np.cross(_xyz(eje.Direction()), z)) > 1e-9
+                    or np.linalg.norm(np.cross(_xyz(eje.Location()) - o, z)) > 1e-7
+                    or abs(sup.LastUParameter() - sup.FirstUParameter() - math.tau) > 1e-9):
+                return False
+            cilindros += 1
+        elif tipo != GeomAbs_Plane or np.linalg.norm(np.cross(_xyz(sup.Plane().Axis().Direction()), z)) > 1e-9:
+            return False
+    return cilindros == 1
+
+
 def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, modelada=True, mano="derecha",
           interna=None, invertir=False, familia=None, clase="", holgura=0.0, tabla=True):
     """Rosca (Thread) de Fusion [GUID-7BD8CD24…, GUID-C37E8172…] sobre una cara cilíndrica del cuerpo.
@@ -780,19 +801,22 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
             # la mitad; el torno con el largo total conduce con sus caras a las puntas.
             surcos, torno = por_mitades()
             partido = True
-        resultado = None
         if not partido and len(geo.solidos(surco)) > 1:
-            # Si falla el corte por tramos en su fase, probar entero antes de recurrir a girar el cuerpo.
             cuerpo_torneado = cuerpo if torno is None else geo.booleano(cuerpo, torno, "cortar")
+            simetrico = _es_cilindro_completo(cuerpo_torneado, o, z)
             try:
-                resultado = _cortar_helicoidal(cuerpo_torneado, surco, o, z, fase_fija=True)
+                # En un cilindro completo, P-78 mueve solo la costura antes de cambiar difuso o repetir el barrido.
+                giros = _GIROS_CORTE if simetrico else (0.0,)
+                resultado = _cortar_helicoidal(cuerpo_torneado, surco, o, z, giros=giros, costura_sola=simetrico)
             except geo.ErrorGeometria:
                 try:
                     entero, _ = armar_tramo(z0, largo, trozos=False)
-                    resultado = _cortar_helicoidal(cuerpo_torneado, entero, o, z, fase_fija=True)
+                    resultado = _cortar_helicoidal(cuerpo_torneado, entero, o, z, giros=(0.0,))
                 except geo.ErrorGeometria:
-                    pass
-        if resultado is None:
+                    if simetrico:
+                        raise
+                    resultado = _cortar_helicoidal(cuerpo_torneado, surco, o, z, giros=_GIROS_CORTE[1:])
+        else:
             resultado = tornear_y_cortar(surcos, torno)
         if not partido and rv._topologia(resultado)["no_manifold"]:
             # Un barrido chico y corrido puede dejar la arista de contacto entre la cresta torneada y el surco
@@ -803,12 +827,16 @@ def rosca(cuerpo, cara=None, *, designacion=None, longitud=None, desfase=0.0, mo
     return _armar_surco(cortar)
 
 
-def _cortar_helicoidal(cuerpo, herramienta, origen, eje, *, fase_fija=False):
+_GIROS_CORTE = (0.0, 229.0, 61.0, 137.0)
+
+
+def _cortar_helicoidal(cuerpo, herramienta, origen, eje, *, giros=_GIROS_CORTE, costura_sola=False):
     """Corte con una herramienta helicoidal. El corte exacto a veces no hace nada sin avisar (las caras del
     surco rozan el cilindro del agujero: pasó con M10 y M20 interiores); con tolerancia difusa sale bien.
     Según el largo, las puntas del surco caen sobre la costura del cilindro y el corte falla, no saca nada o saca de
-    más (M8×1,25 de 15 mm, M12×1,75 de 12 mm): el último recurso gira solo el cuerpo y devuelve el resultado a su lugar,
-    lo cual cambia la fase del surco. `fase_fija=True` no permite ese respaldo. P-78: el difuso va antes que el exacto,
+    más (M8×1,25 de 15 mm, M12×1,75 de 12 mm): se gira solo el cuerpo y se devuelve el resultado a su lugar,
+    lo cual cambia la fase del surco. Con `costura_sola` el cuerpo es simétrico y no hay que deshacer el giro.
+    P-78: el difuso va antes que el exacto,
     que donde falla tarda más (M3×20: 7,4 s fallado contra 1,9 s bien); después de 0°, 229° acertó en los 21 casos
     medidos (M40x3×30 y M12×1,75×12 tiraban 3 y 4 cortes de ~0,4 s; ahora 2). 229° primero ahorraría otro corte,
     pero mueve la costura del eje y B-308 (cortar la tapa con ese eje y partirla) pierde la tapa.
@@ -817,7 +845,7 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje, *, fase_fija=False):
     eje_giro = gp_Ax1(_pnt(origen), _gdir(eje))
     caras_por_solido = [geo.caras(s) for s in geo.solidos(herramienta)]
     for difuso in (1e-4, 0.0, 1e-5):
-        for giro in ((0.0,) if fase_fija else (0.0, 229.0, 61.0, 137.0)):
+        for giro in giros:
             t = gp_Trsf()
             t.SetRotation(eje_giro, math.radians(-giro))
             op = BRepAlgoAPI_Cut()
@@ -834,7 +862,7 @@ def _cortar_helicoidal(cuerpo, herramienta, origen, eje, *, fase_fija=False):
             # B-461: con varios sólidos (trozos, mitades) uno salteado igual sacaría más del 20 %: se exige cada uno
             if not op.IsDone() or any(all(op.IsDeleted(f) for f in caras) for caras in caras_por_solido):
                 continue
-            hecho = op.Shape().Moved(TopLoc_Location(t.Inverted())) if giro else op.Shape()
+            hecho = op.Shape().Moved(TopLoc_Location(t.Inverted())) if giro and not costura_sola else op.Shape()
             hecho = geo.unificar_caras(hecho)   # B-461: junta las caras que partió `_en_tramos`
             if geo.es_valida(hecho) and 0.2 * surco < base - geo.volumen_exacto(hecho, _EPS_ROSCA) <= 1.01 * surco:
                 return hecho
