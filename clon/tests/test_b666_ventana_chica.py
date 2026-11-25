@@ -13,6 +13,8 @@ from omnicad.nucleo import geometria as g  # noqa: E402
 from omnicad.restricciones import Boceto  # noqa: E402
 from omnicad.timeline.documento import Documento  # noqa: E402
 
+TAM_GRANDE = (1200, 1050)  # holgura bajo el ViewCube aun con las métricas de fuente de Windows (B-779)
+
 
 @pytest.fixture
 def ventana(tmp_path):
@@ -20,7 +22,7 @@ def ventana(tmp_path):
     from omnicad.ui.ventana import VentanaPrincipal
     app = QApplication.instance() or QApplication([])
     v = VentanaPrincipal(prefs=Preferencias(QSettings(str(tmp_path / "prefs.ini"), QSettings.IniFormat)))
-    v.resize(1200, 800)
+    v.resize(*TAM_GRANDE)
     v.show()
     QTest.qWait(1)
     v.set_documento(Documento())
@@ -52,7 +54,7 @@ def test_b666_ventana_chica_pliega_navegador_y_opciones_y_al_agrandar_vuelven(ve
     assert tapado < 0.3 * visor.width() * visor.height()                     # antes tapaban más de la mitad
     paleta.b_opciones.click()                           # la persona las vuelve a abrir con un clic
     assert not paleta.opciones.isHidden() and paleta.b_opciones.text() == "▾ Opciones"
-    v.resize(1200, 800)
+    v.resize(*TAM_GRANDE)
     QTest.qWait(1)
     assert _plegados(v) == (False, False)               # lo que plegó la ventana chica se despliega solo
 
