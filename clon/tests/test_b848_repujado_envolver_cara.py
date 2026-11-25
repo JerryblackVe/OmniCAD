@@ -68,9 +68,18 @@ def test_sin_envolver_el_aviso_es_de_1_renglon_y_sin_codigo():
     lateral = [c for c in g.caras(cil) if g.plano_de_cara(c) is None][0]
     perfil = _poligono([(0, -2, 12), (0, 2, 12), (0, 2, 18), (0, -2, 18)])   # plano YZ, paralelo al eje
     with pytest.raises(g.ErrorGeometria) as e:
-        sc.repujado(cil, [perfil], lateral, 1.0)
+        sc.repujado(cil, [perfil], lateral, 1.0, envolver=False)
     assert e.value.args[0] == "Marcá «Envolver en la cara»."
     assert len(e.value.args[0]) <= 60
+
+
+def test_h98_repujado_envuelve_cilindro_por_defecto():
+    cil = g.cilindro(10, 30)
+    lateral = next(c for c in g.caras(cil) if g.plano_de_cara(c) is None)
+    perfil = _poligono([(0, -2, 12), (0, 2, 12), (0, 2, 18), (0, -2, 18)])
+    forma = sc.repujado(cil, [perfil], lateral, 1.0)
+    assert g.es_valida(forma)
+    assert g.volumen(forma) == pytest.approx(math.pi * 100 * 30 + 25.2, rel=1e-6)
 
 
 def test_al_elegir_una_cara_cilindrica_se_tilda_envolver_y_la_previa_envuelve():

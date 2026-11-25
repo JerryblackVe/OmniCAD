@@ -236,7 +236,7 @@ def create_web(sesion, sketch: str, curves: list[int] | None = None, thickness: 
 
 @herramienta("create_emboss", "solido", "Repuja o graba perfiles en una o varias caras, con envoltura opcional.", modifica=True)
 def create_emboss(sesion, sketch: str, faces: Elementos, profile: Perfiles = 0, depth: Expr = 1,
-                  emboss_type: Literal["emboss", "deboss"] = "emboss", wrap: bool = False,
+                  emboss_type: Literal["emboss", "deboss"] = "emboss", wrap: bool = True,
                   tangent_chain: bool = False, horizontal_offset: Expr = 0, vertical_offset: Expr = 0,
                   rotation: Expr = 0, reverse: bool = False, body: str | None = None):
     """
@@ -245,7 +245,7 @@ def create_emboss(sesion, sketch: str, faces: Elementos, profile: Perfiles = 0, 
     profile: índice, lista, all, largest, text o text:<id>, como extrude.
     depth: profundidad firmada en mm; negativa SIEMPRE graba (Deboss), sin importar emboss_type.
     emboss_type: emboss (relieve) o deboss (grabado).
-    wrap: true envuelve sobre la cara.
+    wrap: true (por defecto) envuelve las caras cilíndricas.
     tangent_chain: true incluye las caras tangentes.
     horizontal_offset: desplazamiento horizontal en mm.
     vertical_offset: desplazamiento vertical en mm.

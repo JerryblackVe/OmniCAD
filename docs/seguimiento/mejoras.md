@@ -49,7 +49,7 @@ Abierto 5 · Parcial 7.
 
 | ID | Qué | Estado | Dificultad | Queda | Evidencia | Verificado |
 |---|---|---|---|---|---|---|
-| H-98 | Repujado cilíndrico exige marcar «Envolver en la cara» | Abierto | Baja | Envolver automáticamente sobre caras curvas, como Fusion. | nucleo/solidos_crear.py:1573 | 2026-11-05 |
+| H-98 | Repujado cilíndrico exige marcar «Envolver en la cara» | Sin verificar | Baja | Núcleo y API envuelven cilindros por defecto; panel ya lo hacía (B-848). Se mantiene false explícito. Falta prueba y regenerar doc MCP. | nucleo/solidos_crear.py:1573 | 2026-11-05 |
 | H-68 | Parámetros automáticos de cotas y operaciones, con preferencia | Abierto | Media | Estudiar los nombres de Fusion y crear los parámetros automáticamente. | timeline/parametros.py | 2026-11-03 |
 | H-5 | Insertar componente no distingue pieza de ensamble | Abierto | Media | Decidir si hace falta el modo «diseño de pieza» y deshabilitar Insertar componente ahí. | grep sin resultados: solo ui/navegador.py:220 pone la etiqueta «Diseño de piezas» (informativa) | 2026-10-20 |
 | H-37 | Cobertura de operaciones, interfaz, .fclone y .f3d | Parcial | Media | Cubrir los 59 tipos restantes y explicitar la razón pendiente por tipo. | tests/test_barrido_tipos.py; tests/test_f3d_nativo.py | 2026-11-03 |

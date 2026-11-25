@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 # ================================================================ 6. repujado
-def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve", envolver=False, adaptar=True,
+def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve", envolver=True, adaptar=True,
              cadena_tangente=False, desfase_h=0.0, desfase_v=0.0, giro=0.0, invertir=False):
     """Repujado (Emboss) de Fusion [SLD-EMBOSS] sobre un cuerpo (ver `repujado_en_cuerpos`): `cara_objetivo` es una
     cara o una LISTA de caras del cuerpo. Devuelve el cuerpo resultante."""
@@ -30,7 +30,7 @@ def repujado(cuerpo, caras_perfil, cara_objetivo, profundidad, *, tipo="relieve"
                                desfase_v=desfase_v, giro=giro, invertir=invertir)[0]
 
 
-def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve", envolver=False, adaptar=True,
+def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve", envolver=True, adaptar=True,
                         cadena_tangente=False, desfase_h=0.0, desfase_v=0.0, giro=0.0, invertir=False):
     """Repujado (Emboss) de Fusion [SLD-EMBOSS]: "relieve" agrega material, "grabado" lo quita. La profundidad
     negativa SIEMPRE graba (Deboss), sin importar el «tipo» elegido (Fusion: «Negative values create a Deboss
@@ -42,7 +42,7 @@ def repujado_en_cuerpos(objetivos, caras_perfil, profundidad, *, tipo="relieve",
     distinta altura); lo que cae fuera de ellas se pierde y una cara tapada por otra elegida más afuera no recibe lo
     que queda debajo. Si no cae sobre ninguna, error. Perfiles NO paralelos a la cara (p. ej. un costado): con
     `adaptar` (por defecto) se giran para mirar hacia afuera, se centran en la zona y se achican hasta entrar.
-    Cara cilíndrica con `envolver=True`: el boceto (en un plano paralelo al eje) se enrolla sobre el cilindro
+    Cara cilíndrica (envolver por defecto): el boceto (en un plano paralelo al eje) se enrolla sobre el cilindro
     conservando las longitudes (arco = distancia en el boceto) y se le da espesor radial.
     Otras caras curvas (esfera, cono, forma libre): el boceto se proyecta según su normal sobre la cara, del lado
     que lo mira, y se engrosa según la normal de la cara (`_proyectar_en_cara`).
