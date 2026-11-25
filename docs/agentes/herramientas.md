@@ -1588,7 +1588,7 @@ Crea un eje con cualquiera de las cinco variantes de CONSTRUIR.
   - `location` (lista de número o null; opcional, por defecto `null`): perpendicular_cara sin punto: [x, y, z] del lugar de la cara; vacío = su centro.
   - `resize` ("default" | "extended"; opcional, por defecto `"default"`): Redimensionar: default ajusta el dibujo a lo elegido, extended llena la vista. Solo cambia cómo se ve.
   - `size_type` ("distance" | "to_object"; opcional, por defecto `"distance"`): Tipo de extensión: distance fija el largo con size; to_object lo lleva hasta size_object.
-  - `size` (número o expresión; opcional, por defecto `null`): largo del eje en mm, positivo; vacío = el que sale de lo elegido.
+  - `size` (número o expresión; opcional, por defecto `null`): largo del eje en mm (>0); vacío = automático.
   - `size_object` (texto o objeto o lista de número o null; opcional, por defecto `null`): objeto hasta donde llega el eje, con size_type=to_object.
 - CLI: `omnicad call create_construction_axis --doc pieza.omnicad type=… references=…`
 
@@ -2663,7 +2663,7 @@ Extruye perfiles coplanares de uno (sketch y profile) o varios bocetos (profiles
   - `sketch` (texto; opcional, por defecto `null`): id o nombre del boceto de los perfiles; vacío si el perfil son solo caras (faces) o si usás profiles.
   - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): perfil(es): índice (get_sketch los lista), lista de índices, "all", "largest", "text" (las letras de los textos, sin sus huecos), "text:<id>" o "sketch" (todos los perfiles sin esos huecos). Se ignora con open_curves.
   - `distance` (número o expresión; opcional, por defecto `"10 mm"`): distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
-  - `operation` ("new_body" | "new_component" | "join" | "cut" | "intersect" | "auto"; opcional, por defecto `"new_body"`): "new_body", "new_component" (crea un componente con los cuerpos nuevos), "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; "join" si no se mete y el perfil es una cara (faces) de ese sólido; si no, "new_body"; apoyarse en una cara no cuenta).
+  - `operation` ("new_body" | "new_component" | "join" | "cut" | "intersect" | "auto"; opcional, por defecto `"new_body"`): new_body, new_component (en un componente), join, cut, intersect o auto ("cut" si la extrusión comparte volumen con un sólido visible o con target; "join" si no se mete y el perfil es una cara (faces) de ese sólido; si no, "new_body"; apoyarse en una cara no cuenta).
   - `direction` ("one_side" | "two_sides" | "symmetric"; opcional, por defecto `"one_side"`): "one_side", "two_sides" o "symmetric".
   - `taper_angle` (número o expresión; opcional, por defecto `0`): conicidad en grados (número o expresión): positivo ensancha hacia el final, negativo estrecha; 0 = recto.
   - `target` (texto o lista de texto o null; opcional, por defecto `null`): cuerpo(s) afectados por join, cut, intersect o auto (id o nombre); vacío = los sólidos visibles que toca.
@@ -3631,7 +3631,7 @@ Repuja o graba perfiles en una o varias caras, con envoltura opcional.
   - `profile` (entero o lista de entero o texto; opcional, por defecto `0`): índice, lista, all, largest, text o text:<id>, como extrude.
   - `depth` (número o expresión; opcional, por defecto `1`): profundidad firmada en mm; negativa SIEMPRE graba (Deboss), sin importar emboss_type.
   - `emboss_type` ("emboss" | "deboss"; opcional, por defecto `"emboss"`): emboss (relieve) o deboss (grabado).
-  - `wrap` (true/false; opcional, por defecto `true`): true (por defecto) envuelve las caras cilíndricas.
+  - `wrap` (true/false; opcional, por defecto `true`): envuelve cilindros.
   - `tangent_chain` (true/false; opcional, por defecto `false`): true incluye las caras tangentes.
   - `horizontal_offset` (número o expresión; opcional, por defecto `0`): desplazamiento horizontal en mm.
   - `vertical_offset` (número o expresión; opcional, por defecto `0`): desplazamiento vertical en mm.

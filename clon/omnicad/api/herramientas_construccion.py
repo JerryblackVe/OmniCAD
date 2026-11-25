@@ -154,7 +154,7 @@ def create_construction_axis(sesion, type: Literal["cilindro", "perpendicular_ca
     location: perpendicular_cara sin punto: [x, y, z] del lugar de la cara; vacío = su centro.
     resize: Redimensionar: default ajusta el dibujo a lo elegido, extended llena la vista. Solo cambia cómo se ve.
     size_type: Tipo de extensión: distance fija el largo con size; to_object lo lleva hasta size_object.
-    size: largo del eje en mm, positivo; vacío = el que sale de lo elegido.
+    size: largo del eje en mm (>0); vacío = automático.
     size_object: objeto hasta donde llega el eje, con size_type=to_object.
     """
     if size_type == "distance" and size is not None and sesion.doc.parametros.evaluar(texto_expr(size)) <= 0:

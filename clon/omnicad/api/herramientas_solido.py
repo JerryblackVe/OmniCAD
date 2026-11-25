@@ -199,7 +199,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     profiles: lista de perfiles coplanares, p. ej. [{"sketch": "A", "profile": 0}, {"sketch": "B", "profile": "all"}].
         sketch es id o nombre y profile usa las opciones de profile (0 por defecto). Sin sketch, profile ni open_curves externos.
     distance: distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
-    operation: "new_body", "new_component" (crea un componente con los cuerpos nuevos), "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; "join" si no se mete y el perfil es una cara (faces) de ese sólido; si no, "new_body"; apoyarse en una cara no cuenta).
+    operation: new_body, new_component (en un componente), join, cut, intersect o auto ("cut" si la extrusión comparte volumen con un sólido visible o con target; "join" si no se mete y el perfil es una cara (faces) de ese sólido; si no, "new_body"; apoyarse en una cara no cuenta).
     direction: "one_side", "two_sides" o "symmetric".
     taper_angle: conicidad en grados (número o expresión): positivo ensancha hacia el final, negativo estrecha; 0 = recto.
     target: cuerpo(s) afectados por join, cut, intersect o auto (id o nombre); vacío = los sólidos visibles que toca.

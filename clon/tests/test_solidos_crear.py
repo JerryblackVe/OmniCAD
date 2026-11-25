@@ -515,7 +515,7 @@ def test_repujado_envolviendo_un_cilindro():
     assert caja_de(s)[3] == pytest.approx(11)
     valido(sc.repujado(cil, [boceto], lateral, 1.0, tipo="grabado", envolver=True), base - sector * (100 - 81))
     with pytest.raises(g.ErrorGeometria):
-        sc.repujado(cil, [boceto], lateral, 1.0)
+        sc.repujado(cil, [boceto], lateral, 1.0, envolver=False)
 
 
 def test_h96_repujado_sobre_esfera_y_cono():

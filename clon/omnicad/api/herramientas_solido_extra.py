@@ -245,7 +245,7 @@ def create_emboss(sesion, sketch: str, faces: Elementos, profile: Perfiles = 0, 
     profile: índice, lista, all, largest, text o text:<id>, como extrude.
     depth: profundidad firmada en mm; negativa SIEMPRE graba (Deboss), sin importar emboss_type.
     emboss_type: emboss (relieve) o deboss (grabado).
-    wrap: true (por defecto) envuelve las caras cilíndricas.
+    wrap: envuelve cilindros.
     tangent_chain: true incluye las caras tangentes.
     horizontal_offset: desplazamiento horizontal en mm.
     vertical_offset: desplazamiento vertical en mm.
