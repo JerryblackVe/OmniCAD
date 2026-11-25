@@ -640,29 +640,28 @@ class Visor3D(QOpenGLWidget):
         self._t_fin_nav = QTimer(self, singleShot=True, interval=250)
         self._t_fin_nav.timeout.connect(self._fin_navegacion)
         self._t_limite = QTimer(self, singleShot=True)
-        self._t_limite.timeout.connect(self._redibujar)
+        self._t_limite.timeout.connect(super().update)
         self._etiquetas = {}               # nombre → [(punto 3D, QLabel)]: valores de las cotas guía de Medir
         self.camara_cambiada.connect(self._ubicar_etiquetas)
         self._fijar_direccion(*VISTAS["iso"])
+        self._firma_aviso = self._firma_camara()
 
     # ------------------------------------------------------------ rendimiento (Preferencias › Gráficos)
     def update(self, *args):
-        """Con «Límite de cuadros por segundo», junta los pedidos de redibujo para no pasar de ese ritmo."""
+        """Avisa el cambio de cámara ya (B-596), aunque el límite de cuadros demore el redibujo."""
+        self._avisar_camara()
         limite = self.config.limite_fps
         if args or not limite:
-            return self._redibujar(*args)
+            return super().update(*args)
         espera = self._t_cuadro + 1.0 / limite - time.perf_counter()
         if espera <= 0:
-            self._redibujar()
+            super().update()
         elif not self._t_limite.isActive():
             self._t_limite.start(int(espera * 1000) + 1)
 
-    def _redibujar(self, *args):
-        """Pide el cuadro y avisa YA si la cámara cambió (B-596): el boceto dibujado encima se repinta con el visor, no un
-        cuadro después. Avisando recién al terminar `paintGL`, durante un zoom se veía una copia del texto con la cámara vieja."""
-        if getattr(self, "_firma_aviso", None) is not None:      # antes del primer cuadro no hay nada que avisar
-            self._avisar_camara()
-        QOpenGLWidget.update(self, *args)
+    def resizeEvent(self, evento):
+        self._avisar_camara()
+        super().resizeEvent(evento)
 
     def _navegar(self):
         self._cancelar_animacion()
@@ -2688,11 +2687,15 @@ class Visor3D(QOpenGLWidget):
         GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
         self._avisar_camara()
 
+    def _firma_camara(self):
+        return self.matriz_mvp().tobytes(), self.width(), self.height()
+
     def _avisar_camara(self):
-        """Emite `camara_cambiada` al final de un cuadro solo si la proyección o el tamaño cambiaron desde el último
-        aviso: emitirla en cada cuadro repintaba el ViewCube, la capa del boceto y las notas aunque nada se moviera."""
-        firma = (self.matriz_mvp().tobytes(), self.width(), self.height())
-        if firma != getattr(self, "_firma_aviso", None):
+        """Deduplica avisos de cámara y tamaño entre actualizaciones y cuadros."""
+        if not hasattr(self, "_firma_aviso"):
+            return
+        firma = self._firma_camara()
+        if firma != self._firma_aviso:
             self._firma_aviso = firma
             self.camara_cambiada.emit()
 
