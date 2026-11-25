@@ -2796,12 +2796,15 @@ class VentanaPrincipal(QMainWindow):
         self._informar(op, res)
 
     def _informar(self, op, res):
-        if res.estado == "error":
-            QMessageBox.warning(self, "La operación tiene un error",
-                                f"{op.nombre}: {res.mensaje}\n\nQuedó en el timeline marcada en rojo: "
-                                "podés editarla o deshacer (Ctrl+Z).")
-        elif res.estado == "aviso":
-            self.mensaje(f"Aviso en {op.nombre}: {res.mensaje}", 8000)
+        if res.estado in ("error", "aviso"):
+            prefijo = "Aviso en " if res.estado == "aviso" else ""
+            texto = " ".join(f"{prefijo}{op.nombre}: {res.mensaje}".splitlines())
+            if len(texto) > 45:
+                texto = texto[:44] + "…"
+            if res.estado == "error":
+                QMessageBox.warning(self, "La operación tiene un error", texto)
+            else:
+                self.mensaje(texto, 8000)
         else:
             indice = self.doc.indice(op.id)
             cuerpos = [c for c in self.doc.estado_en(indice + 1).cuerpos.values() if c.op_id == op.id]

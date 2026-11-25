@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 import pytest
+from PySide6.QtWidgets import QMessageBox
 
 from omnicad.timeline.documento import Documento
 from omnicad.timeline.operaciones import OpPrimitiva
@@ -39,3 +40,15 @@ def test_b760_aviso_de_nombre_largo_no_pasa_de_45_caracteres(largo):
     assert len(mensajes[0]) <= 45
     assert VentanaPrincipal.nombre_cuerpo(ventana, cuerpo) == nombre
     assert op.nombre == "Caja1"
+
+
+@pytest.mark.parametrize(("estado", "prefijo"), [("aviso", "Aviso en "), ("error", "")])
+@pytest.mark.parametrize(("nombre", "detalle"), [("P" * 80, "Revisa la cara."), ("Caja1", "D" * 80), ("Caja1", "Revisa\nla cara.")])
+def test_b760_error_y_aviso_caben_en_45_caracteres(monkeypatch, estado, prefijo, nombre, detalle):
+    avisos, errores = [], []
+    ventana = SimpleNamespace(mensaje=lambda texto, ms: avisos.append(texto))
+    monkeypatch.setattr(QMessageBox, "warning", lambda padre, titulo, texto: errores.append(texto))
+    VentanaPrincipal._informar(ventana, SimpleNamespace(nombre=nombre), SimpleNamespace(estado=estado, mensaje=detalle))
+    texto = f"{prefijo}{nombre}: " + detalle.replace("\n", " ")
+    esperado = texto if len(texto) <= 45 else texto[:44] + "…"
+    assert (avisos, errores) == (([esperado], []) if estado == "aviso" else ([], [esperado]))
