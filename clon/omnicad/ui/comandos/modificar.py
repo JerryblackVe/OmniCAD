@@ -1105,19 +1105,21 @@ class Alinear(Comando):
         exigir(v, "destino", "Seleccioná la geometría de destino.")
         duena = ref1(v, "origen").get("cuerpo")              # Fusion toma el objeto de lo elegido en «Desde»
         cuerpos = list(dict.fromkeys(([duena] if duena else []) + _cuerpos(v)))
+        componentes = []
         if v.get("objeto") == "componentes":
-            comps = {ctx.estado.cuerpos[c].componente for c in cuerpos if c in ctx.estado.cuerpos}
-            if not comps or "" in comps:
+            componentes = list(dict.fromkeys(ctx.estado.cuerpos[c].componente for c in cuerpos if c in ctx.estado.cuerpos))
+            if not componentes or "" in componentes:
                 raise ErrorComando("Elegí cuerpos de un componente.")
-            cuerpos = [c.id for c in ctx.estado.cuerpos.values() if c.componente in comps]
+            cuerpos = [c.id for c in ctx.estado.cuerpos.values() if c.componente in componentes]
         if not cuerpos:
             raise ErrorComando("«Desde» no es un cuerpo: usá «Otros cuerpos».")
-        return self.crear_op(OpAlinear, v, ctx, cuerpos=cuerpos, origen=ref1(v, "origen"),
+        return self.crear_op(OpAlinear, v, ctx, cuerpos=cuerpos, componentes=componentes, origen=ref1(v, "origen"),
                              destino=ref1(v, "destino"), voltear=v["voltear"], copiar=v["copiar"],
                              angulo=a if (a := float(v["angulo"])) % 1 else int(a))
 
     def desde_op(self, op, ctx):
         return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado),
+                    objeto="componentes" if op.p.get("componentes") else "cuerpos",
                     origen=_hit1(op.p["origen"], ctx.estado), destino=_hit1(op.p["destino"], ctx.estado),
                     angulo=f"{float(op.p.get('angulo') or 0):g}")
 

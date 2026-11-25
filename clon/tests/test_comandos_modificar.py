@@ -342,8 +342,64 @@ def test_sol40_alinear_mueve_todos_los_cuerpos_del_componente():
     op = _ejecutar(doc, Alinear, objeto="componentes", origen=[_hit_sub(doc, "cara", (10, 10, 20))],
                    destino=[_hit(doc, {"tipo": "plano", "id": "XY"})])
     assert set(op.p["cuerpos"]) == {"op1.c1", cid}
+    comp = r["result"]["feature"]["id"]
+    assert op.p["componentes"] == [comp]
+    matriz = np.array([[-1, 0, 0, 10], [0, 1, 0, -10], [0, 0, -1, 20], [0, 0, 0, 1]])
+    assert np.asarray(doc.estado_final.componentes[comp]["matriz"]) == pytest.approx(matriz)
     assert g.es_valida(_cuerpo(doc, cid).forma)
     assert g.caja_envolvente(_cuerpo(doc, cid).forma) != antes
+    assert np.asarray(g.caja_envolvente(_cuerpo(doc, cid).forma)) == pytest.approx(np.array([[-60, -20, 0], [-40, 0, 20]]))
+    ctx, cmd = ContextoComando(doc, op=op), Alinear()
+    valores = cmd.desde_op(op, ctx)
+    assert valores["objeto"] == "componentes"
+    from omnicad.ui.comando import PanelComando
+    from omnicad.ui.visor3d import Visor3D
+    visor = Visor3D()
+    visor.set_modelo(ctx.estado)
+    panel = PanelComando(cmd, ctx, visor, valores)
+    try:
+        assert panel.widgets["objeto"].currentData() == "componentes"
+        nueva = cmd.construir(panel.valores_visibles(), ctx)
+        assert nueva.p["componentes"] == [comp]
+        assert doc.reemplazar(op.id, nueva).estado == "ok"
+        assert np.asarray(doc.estado_final.componentes[comp]["matriz"]) == pytest.approx(matriz)
+        assert g.volumen(_cuerpo(doc, cid).forma) == pytest.approx(8000)
+    finally:
+        panel.cancelar()
+
+
+@pytest.mark.parametrize("objeto", ["cuerpos", "componentes"])
+@pytest.mark.parametrize("copiar", [False, True])
+def test_sol40_pose_copia_y_modo_sobreviven_a_guardar(objeto, copiar):
+    from omnicad import api
+    from omnicad.timeline.ops_ensamblar import OpComponente
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.modificar import Alinear
+    doc = _doc_caja()
+    comp = OpComponente(doc.nuevo_id(), "Pieza", cuerpos=["op1.c1"])
+    doc.agregar(comp)
+    op = _ejecutar(doc, Alinear, objeto=objeto, copiar=copiar,
+                   origen=[_hit_sub(doc, "cara", (10, 10, 20))],
+                   destino=[_hit(doc, {"tipo": "plano", "id": "XY"})])
+    sesion = api.Sesion()
+    resultado = api.llamar(sesion, "apply_recipe", {"recipe": doc.a_dict(), "mode": "replace"})
+    assert resultado["ok"], resultado
+    estado = sesion.doc.estado_final
+    esperado = np.array([[-1, 0, 0, 10], [0, 1, 0, -10], [0, 0, -1, 20], [0, 0, 0, 1]])
+    assert np.asarray(estado.componentes[comp.id]["matriz"]) == pytest.approx(
+        esperado if objeto == "componentes" and not copiar else np.eye(4))
+    movido = next(c for c in estado.cuerpos.values() if c.op_id == op.id) if copiar else estado.cuerpo("op1.c1")
+    assert np.asarray(g.caja_envolvente(movido.forma)) == pytest.approx(np.array([[-10, -10, 0], [10, 10, 20]]))
+    assert g.es_valida(movido.forma) and g.volumen(movido.forma) == pytest.approx(8000)
+    if copiar:
+        assert np.asarray(g.caja_envolvente(estado.cuerpo("op1.c1").forma)) == pytest.approx(
+            np.array([[0, 0, 0], [20, 20, 20]]))
+        if objeto == "componentes":
+            assert movido.componente != comp.id
+            assert np.asarray(estado.componentes[movido.componente]["matriz"]) == pytest.approx(esperado)
+    guardada = sesion.doc.operaciones[-1]
+    cmd, ctx = Alinear(), ContextoComando(sesion.doc, op=guardada)
+    assert cmd.desde_op(guardada, ctx)["objeto"] == objeto
 
 
 def test_sol39_mover_componente_actualiza_cuerpos_y_pose():

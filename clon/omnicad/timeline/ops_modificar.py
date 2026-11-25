@@ -731,12 +731,13 @@ class OpAlinear(Operacion):
     """Alinear de Fusion [SLD-ALIGN-CMD]: lleva una referencia de los cuerpos (punto, plano o eje) sobre
     otra; planos enfrentados, ejes coincidentes; «Voltear» gira 180° y «Ángulo» gira de a 90° (o lo que se pida)."""
     TIPO, ETIQUETA, ICONO = "alinear", "Alinear", "⇶"
-    PARAMS = {"cuerpos": [], "origen": None, "destino": None, "voltear": False, "copiar": False, "angulo": 0,
+    PARAMS = {"cuerpos": [], "componentes": [], "origen": None, "destino": None, "voltear": False, "copiar": False, "angulo": 0,
               "version_centro": 2}
     migrar_receta = _migrador("version_centro")      # B-560: las recetas viejas toman la cara por el origen de su plano
 
     def dependencias(self):
-        return (_deps_objetivo(self.p["cuerpos"]) | _deps_refs(self.p["origen"], self.p["destino"])) - {self.id}
+        return (_deps_objetivo(self.p["cuerpos"]) | _deps_objetivo(self.p.get("componentes") or [])
+                | _deps_refs(self.p["origen"], self.p["destino"])) - {self.id}
 
     @staticmethod
     def _dato(e, centro=True):
@@ -763,6 +764,21 @@ class OpAlinear(Operacion):
         _, m = _sm().alinear(None, self._dato(_resolver(p["origen"], estado), centro),
                              self._dato(_resolver(p["destino"], estado), centro), voltear=p["voltear"],
                              angulo=float(p.get("angulo") or 0))
+        if p.get("componentes"):
+            from .ops_ensamblar import _comp_o_error, _mover_componentes, copiar_componente, familia
+            elegidos = list(dict.fromkeys(_comp_o_error(estado, c) for c in p["componentes"]))
+            comps = set().union(*(familia(estado, c) for c in elegidos))
+            if p["copiar"]:
+                raices = [c for c in elegidos if not any(c in familia(estado, otro) for otro in elegidos if otro != c)]
+                for i, c in enumerate(raices, 1):
+                    nuevo = f"{self.id}.s{i}"
+                    copiar_componente(estado, c, nuevo, self.id, lambda cuerpo: cuerpo.forma.copia()
+                                      if cuerpo.tipo == "malla" else geo.transformar(cuerpo.forma, np.identity(4)),
+                                      estado.componentes[c].get("padre") or "")
+                    _mover_componentes(estado, familia(estado, nuevo), m)
+            else:
+                _mover_componentes(estado, comps, m)
+            return
         for cid in p["cuerpos"]:
             c = estado.cuerpo(cid)
             nueva = geo.transformar(c.forma, m)
