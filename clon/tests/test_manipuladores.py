@@ -139,10 +139,10 @@ def test_arrastrar_la_flecha_de_extruir_cambia_la_distancia_y_la_previa(app_qt):
     assert g.volumen(forma) == pytest.approx(200 * nueva, rel=1e-6)
     (_, _, z0), (_, _, z1) = g.caja_envolvente(forma)
     assert (z0, z1) == pytest.approx((0, nueva))
-    # La flecha queda en la punta nueva (cola sobre la cara de arriba de la extrusión), en el borde del perfil (P-139).
+    # La flecha queda en la punta nueva, sobre el centro del perfil (B-472).
     flecha = _manip(panel, "flecha:distancia")
     cola, _ = flecha.puntos(panel.manipuladores)
-    assert cola == pytest.approx(flecha.origen + (0, 0, nueva)) and flecha.origen[:2] == pytest.approx((0, 0))
+    assert cola == pytest.approx(flecha.origen + (0, 0, nueva)) and flecha.origen[:2] == pytest.approx((10, 5))
     panel.cancelar()
 
 
