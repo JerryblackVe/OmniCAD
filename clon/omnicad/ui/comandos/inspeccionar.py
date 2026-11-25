@@ -1000,8 +1000,19 @@ class Seccion(_Analisis):
                 "color_modo": p.get("color_modo", "personalizado"), "rayado": bool(p.get("rayado"))}
 
     def mostrar(self, v, ctx):
-        if v.get("plano"):
-            super().mostrar(v, ctx)
+        if not v.get("plano") or ctx.ventana is None:
+            return
+        datos = analisis_vista.calcular(self.TIPO_ANALISIS, self.params(v, ctx), ctx.estado,
+                                        ctx.ventana.propiedades_analisis(ctx.estado))
+        if not any(len(capa[1]) for capa in datos["capas"]):
+            datos["cortes"].clear()
+            analisis_vista.aplicar(ctx.ventana.visor, datos)
+            raise ErrorComando("El plano no corta el cuerpo.")
+        analisis_vista.aplicar(ctx.ventana.visor, datos)
+
+    def aplicar(self, v, ctx):
+        self.mostrar(v, ctx)
+        super().aplicar(v, ctx)
 
 
 class Cebra(_Analisis):

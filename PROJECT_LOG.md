@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-552 (sin verificar).** El recorte sin contorno ocultaba el cuerpo. Sección conserva la vista, avisa y no guarda un corte vacío; test_b552_seccion.py. Ruff, pytest, UX y ponytail-review no ejecutados; fila pendiente.
 - **2026-11-24 · B-648/B-553 (sin verificar).** CampoExpresion reconoce el tercer clic rápido dentro del campo aun con desplazamiento; conserva doble clic y Ctrl+A. Test QTest en test_b648_b553_triple_clic.py. Causa en PC no confirmada; ruff, pytest, ponytail-review y UX no ejecutados.
 - **2026-11-24 · B-769 (sin verificar).** ⋮ sigue los botones del grupo de cinta y alterna su personalización, no la barra superior. Regresión offscreen en test_p9b_mas.py; expectativas B-768 ajustadas. Ruff, pytest, ponytail-review y UX no ejecutados; fila pendiente.
 - **2026-11-24 · B-771 (sin verificar).** B-768 ya añade casilla de accesos directos y estado desde leer_fijados; test_p9b_mas.py cubre alternancia. Revisión estática; ruff, pytest, ponytail-review y UX no ejecutados; fila pendiente.
