@@ -719,7 +719,7 @@ class Visor3D(QOpenGLWidget):
         mallas_de = {}       # B-425: (TShape, orientación) → (ubicación, datos) de un cuerpo ya teselado
         for i, c in enumerate(estado.cuerpos.values()):
             clave = id(c.forma)
-            geometria = None if es_malla(c.forma) else (c.forma.TShape(), c.forma.Orientation())
+            geometria = (c.forma.TShape(), c.forma.Orientation()) if hasattr(c.forma, "TShape") else None
             preparada = None if clave in self._cache else (getattr(estado, "_mallas_previa", {}).get(c.id)
                                                             or getattr(estado, "_mallas_hijo", {}).get(c.id))   # B-337
             if clave in self._cache:
@@ -728,7 +728,7 @@ class Visor3D(QOpenGLWidget):
                 ubicacion, base = mallas_de[geometria]
                 datos = _datos_movidos(c.forma, c.forma.Location().Transformation().Multiplied(
                     ubicacion.Transformation().Inverted()), base)
-            elif preparada is None and (datos := self._datos_de_copia(c.forma, cache)) is not None:
+            elif preparada is None and geometria is not None and (datos := self._datos_de_copia(c.forma, cache)) is not None:
                 pass                                              # copia rígida de un patrón: la malla del original
             else:
                 gruesa = preparada is None and arrastrando and not es_malla(c.forma) and len(geo.caras(c.forma)) >= 64
