@@ -1923,7 +1923,9 @@ class GestorManipuladores(QObject):
                     caja.setAlignment(Qt.AlignCenter)
             caja.punto = np.asarray(punto, float)
             caja.manipulador = manipulador
-            if not caja.hasFocus():
+            # B-550: el foco solo protege una edición pendiente, no una cota antigua.
+            profundidad_agujero = self.comando.CLAVE == "agujero" and clave == "profundidad"
+            if not caja.hasFocus() or (profundidad_agujero and (self.arrastrando or not caja.isModified())):
                 texto = self.texto_caja(caja)
                 if caja.text() != texto:
                     caja.setText(texto)
@@ -2050,6 +2052,8 @@ class GestorManipuladores(QObject):
             texto += " deg" if self.tipo(caja.clave) == ANGULO else " mm"      # B-405: «0» y el «0 mm» del campo se ven igual
         recordar_valor(self.tipo(caja.clave), texto)
         self.panel.set_valor(caja.clave, texto)
+        if self.comando.CLAVE == "agujero" and caja.clave == "profundidad":
+            caja.setText(self.texto_caja(caja))
         caja.selectAll()
         return True
 

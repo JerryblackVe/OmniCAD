@@ -506,6 +506,32 @@ def test_agujero_con_flecha_de_profundidad_y_previa_roja(app_qt):
     assert "previa_comando" not in visor._capas
 
 
+def test_b550_profundidad_escariado_sincronizada(app_qt, monkeypatch):
+    from PySide6.QtTest import QTest
+    from omnicad.ui.comandos.crear import Agujero
+
+    doc = _doc_caja()
+    cara = _cara_de_arriba(doc)
+    cara["punto"] = np.array([10.0, 10.0, 20.0])
+    panel, _, _ = _panel(Agujero(), doc, {"colocacion": [cara], "tipo": "abocardado",
+                                         "profundidad": "17.19 mm", "prof_abocardado": "4 mm"})
+    gestor = panel.manipuladores
+    caja = gestor.cajas["profundidad"]
+    diagrama = panel.widgets["profundidad"]
+    # En offscreen se simula el foco que conserva la caja durante el arrastre.
+    monkeypatch.setattr(caja, "hasFocus", lambda: True)
+    assert caja.text() == diagrama.text() == "17.19 mm"
+    gestor.escribir({"profundidad": 7.19})
+    assert caja.text() == diagrama.text() == "7.19 mm"
+    caja.selectAll()
+    QTest.keyClicks(caja, "12")
+    gestor.sincronizar_cajas()
+    assert caja.text() == "12" and diagrama.text() == "7.19 mm"
+    assert gestor.aplicar_caja(caja)
+    assert caja.text() == diagrama.text() == "12 mm"
+    panel.cancelar()
+
+
 def test_agujero_se_mueve_arrastrando_su_aro_por_la_cara(app_qt):
     """El agujero puesto con un clic sobre una cara se puede correr con el ratón (antes quedaba donde se hizo clic)."""
     from omnicad.ui.comandos.crear import Agujero
