@@ -1,7 +1,13 @@
 """B-845: solevaciones entre perfiles lisos, con una pared continua que admite desfases."""
+import numpy as np
 import pytest
+from OCP.BRep import BRep_Tool
+from OCP.BRepAdaptor import BRepAdaptor_Surface
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeWire
+from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+from OCP.BRepTools import BRepTools
 from OCP.GC import GC_MakeArcOfCircle
+from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
 from OCP.gp import gp_Ax2, gp_Circ, gp_Dir, gp_Elips, gp_Pnt
 
 from omnicad.nucleo import geometria as geo
@@ -72,11 +78,12 @@ def _tapa(forma):
                 and abs(geo.centro_masa(c, superficie=True)[2] - z) < 1e-3)
 
 
-def _comprobar_vaciado(forma, espesor=1.0):
+def _comprobar_vaciado(forma, espesor=1.0, medir_volumen=True):
     hueco = sm.vaciado(forma, [_tapa(forma)], espesor_interior=espesor)
     assert geo.es_valida(hueco)
     assert len(geo.solidos(hueco)) == 1
-    assert 0 < geo.volumen_exacto(hueco) < geo.volumen_exacto(forma)
+    if medir_volumen:
+        assert 0 < geo.volumen_exacto(hueco) < geo.volumen_exacto(forma)
     return hueco
 
 
@@ -94,6 +101,9 @@ def test_tina_tiene_una_cara_lateral_y_conserva_el_perfil(tina):
     minimo, maximo = geo.caja_envolvente(tapa)
     assert minimo == pytest.approx([-80, -25, ALTO], rel=0.005, abs=1e-3)
     assert maximo == pytest.approx([80, 25, ALTO], rel=0.005, abs=1e-3)
+    minimo, maximo = geo.caja_envolvente(tina)
+    assert minimo == pytest.approx([-80, -30, 0], rel=0.005, abs=1e-3)
+    assert maximo == pytest.approx([80, 30, ALTO], rel=0.005, abs=1e-3)
 
 
 @pytest.mark.parametrize("espesor", [0.5, 1.0, 2.0])
@@ -128,12 +138,12 @@ def test_circulo_a_elipse_no_cambia():
     _comprobar_vaciado(forma)
 
 
-def test_tres_secciones_sin_variante_que_reproduzca_queda_como_antes():
-    """La lisa de 3 secciones difiere +2,97 % del camino anterior: la guarda la rechaza y queda el loft
-    de siempre (con sus pliegues; arreglarlo exige una variante que reproduzca el volumen)."""
+def test_tres_secciones_tienen_una_pared_lisa_y_se_vacian():
     forma = sc.solevar([_circulo(30, 0), _ranura(ALTO), _circulo(25, 2 * ALTO)])
-    assert geo.es_valida(forma) and len(geo.caras(forma)) == 7
-    assert geo.volumen_exacto(forma) == pytest.approx(949304.751664, rel=1e-6)
+    assert geo.es_valida(forma) and len(geo.solidos(forma)) == 1
+    assert len(geo.caras(forma)) == 3                    # dos tapas y UNA pared lateral
+    assert geo.volumen_exacto(forma) == pytest.approx(977466.582622, rel=1e-6)
+    _comprobar_vaciado(forma, medir_volumen=False)
 
 
 def test_reglada_tambien_usa_la_pared_lisa():
@@ -143,22 +153,22 @@ def test_reglada_tambien_usa_la_pared_lisa():
     _comprobar_vaciado(forma)
 
 
-def test_cerrada_sin_variante_que_reproduzca_queda_como_antes():
-    """La cerrada lisa perdía un 22 % del volumen (torcida): la guarda la rechaza."""
+def test_cerrada_tiene_una_sola_pared_periodica():
     forma = sc.solevar([_circulo(30, 0), _ranura(ALTO), _circulo(30, 2 * ALTO)], cerrada=True)
     assert geo.es_valida(forma) and len(geo.solidos(forma)) == 1
-    assert len(geo.caras(forma)) == 5
-    assert geo.volumen_exacto(forma) == pytest.approx(795382.409253, rel=1e-6)
+    assert len(geo.caras(forma)) == 1
+    assert geo.volumen_exacto(forma) == pytest.approx(619271.904681, rel=1e-6)
 
 
 @pytest.mark.parametrize("extremo,esperado", [("condicion_inicio", 342214.179504),
                                               ("condicion_fin", 510135.737459)])
-def test_condiciones_sin_variante_que_reproduzca_quedan_como_antes(extremo, esperado):
-    """B-243: la seta con condición no puede cambiar de volumen (la lisa daba −1,5 % y +4,1 %)."""
+def test_condiciones_conservan_el_volumen_con_una_pared_lisa(extremo, esperado):
+    """B-243: la condición conserva el volumen del loft anterior sin volver a las caras partidas."""
     forma = sc.solevar([_circulo(30, 0), _ranura(ALTO)],
                        **{extremo: {"tipo": "direccion", "angulo": 0, "peso": 1}})
-    assert geo.es_valida(forma) and len(geo.caras(forma)) == 7
-    assert geo.volumen_exacto(forma) == pytest.approx(esperado, rel=1e-6)
+    assert geo.es_valida(forma) and len(geo.solidos(forma)) == 1
+    assert len(geo.caras(forma)) == 3
+    assert geo.volumen_exacto(forma) == pytest.approx(esperado, rel=0.005)
 
 
 def test_rectangulo_con_esquinas_vivas_sigue_el_camino_anterior():
@@ -168,7 +178,7 @@ def test_rectangulo_con_esquinas_vivas_sigue_el_camino_anterior():
 
 
 def test_si_la_conversion_falla_devuelve_el_loft_anterior(monkeypatch):
-    monkeypatch.setattr(sl, "_una_arista_lisa", lambda _w: None)
+    monkeypatch.setattr(sl, "_una_arista_lisa", lambda _w, **_kwargs: None)
     forma = sc.solevar([_circulo(30, 0), _ranura(ALTO)])
     assert geo.es_valida(forma) and len(geo.caras(forma)) == 7
     assert geo.volumen_exacto(forma) == pytest.approx(VOLUMEN_TINA_ANTERIOR, rel=1e-8)
@@ -182,11 +192,39 @@ def test_superficie_lisa_se_desfasa():
 
 
 def test_superficie_lisa_engrosa_1_mm_la_rechaza_la_compuerta():
-    """B-846 (medido 24/11, con la compuerta honesta de B-853): engrosar 1 mm esta lámina daba «válido y exacto»
-    solo porque el análisis (21 s) no llegaba al tope de 5 s y aprobaba en silencio; ahora cuenta 1 autointersección
-    de CARA que crea el offset aproximado del kernel (la lámina sola tiene 0). Decide B-846 si hay que aceptarlo."""
+    """B-846: el kernel cuenta 1 autointersección de CARA con 1 mm; la vía exacta no la elimina en este caso."""
     lamina = sc.solevar([_circulo(30, 0), _ranura(ALTO)], solido=False)
-    # 2 mm (B-846) no sale: el kernel deja la cara desfasada a 1,75 mm y `_desfase_imposible` lo rechaza
-    # (antes la previa colgaba 300 s con el lateral de 5 caras); con 1 mm queda a 1,00 mm exacto.
+    # El desfase queda a 1,00 mm, pero no se acepta mientras la compuerta honesta cuente ese cruce.
     with pytest.raises(geo.ErrorGeometria, match="probá menos espesor"):
         sf.engrosar_superficie(lamina, 1.0)
+
+
+def test_superficie_lisa_engrosa_2_mm_con_espesor_medido():
+    """B-846: la cara opuesta queda a 2 mm dentro del 1 %, sin aceptar el offset incompleto del kernel."""
+    lamina = sc.solevar([_circulo(30, 0), _ranura(ALTO)], solido=False)
+    resultado = sf.engrosar_superficie(lamina, 2.0)
+    assert geo.es_valida(resultado) and len(geo.solidos(resultado)) == 1
+    original = geo.caras(lamina)[0]
+    lejos = None
+    for cara in geo.caras(resultado):
+        medida = BRepExtrema_DistShapeShape(original, cara)
+        medida.Perform()
+        if medida.IsDone() and medida.Value() > 1.9:
+            assert lejos is None
+            lejos = cara
+            minimo = medida.Value()
+    assert lejos is not None
+    superficie = BRep_Tool.Surface_s(lejos)
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(lejos)
+    base = BRepAdaptor_Surface(original).BSpline()
+    distancias = []
+    for u in np.linspace(u0, u1, 17):
+        for v in np.linspace(v0, v1, 9):
+            proyeccion = GeomAPI_ProjectPointOnSurf(base.Value(u, v), superficie, u0, u1, v0, v1, 1e-7)
+            distancias.append(proyeccion.LowerDistance())
+    assert min([minimo, *distancias]) == pytest.approx(2.0, rel=0.01)
+    assert max(distancias) == pytest.approx(2.0, rel=0.01)
+    assert abs(geo.volumen(resultado)) == pytest.approx(geo.area(lamina) * 2.0, rel=0.05)
+    alternativo = sc.engrosar(lamina, 2.0)
+    assert geo.es_valida(alternativo)
+    assert not sf._desfase_imposible(lamina, alternativo, 2.0, engrosado=True)

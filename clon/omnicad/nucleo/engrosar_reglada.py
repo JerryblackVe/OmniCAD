@@ -6,6 +6,7 @@ from OCP.Approx import Approx_IsoParametric
 from OCP.collections import Array2_gp_Pnt
 from OCP.Geom import Geom_OffsetSurface
 from OCP.GeomAPI import GeomAPI_PointsToBSplineSurface
+from OCP.GeomConvert import GeomConvert_ApproxSurface
 
 from . import superficies as sf
 
@@ -31,6 +32,46 @@ def _costura(a, b, muestras):
         puntos.append(ajuste.x)
     uv = np.asarray(puntos)
     return uv[:, :2], (uv[::-1] if z1 < z0 else uv)[:, 2:]
+
+
+def _engrosar_cara_lisa(base, espesor):
+    """Una cara reglada: offset de OCC con error acotado al 0,1 % del espesor."""
+    caras = sf.geo.caras(base)
+    if len(caras) != 1:
+        return None
+    cara = caras[0]
+    sup = sf.BRepAdaptor_Surface(cara)
+    if sup.GetType() != sf.GeomAbs_BSplineSurface or sup.VDegree() != 1:
+        return None
+    b = sup.BSpline()
+    u0, u1, v0, v1 = sf.BRepTools.UVBounds_s(cara)
+    pared = Geom_OffsetSurface(b, -espesor if cara.Orientation() == sf.TopAbs_REVERSED else espesor)
+    conversion = GeomConvert_ApproxSurface(
+        pared, min(5e-4, abs(espesor) * 1e-3), sf.GeomAbs_C1, sf.GeomAbs_C1, 8, 8, 1000, 1)
+    if not conversion.IsDone() or conversion.MaxError() > abs(espesor) * 1e-3:
+        return None
+    exterior = conversion.Surface()
+    if not np.allclose(exterior.Bounds(), (u0, u1, v0, v1), rtol=1e-9, atol=1e-9):
+        return None
+    piezas = [cara, sf.BRepBuilderAPI_MakeFace(exterior, sf._TOL).Face()]
+    for v, z in ((v0, v0), (v1, v1)):
+        original = sf.BRepBuilderAPI_MakeEdge(b.VIso(v), u0, u1).Edge()
+        lejos = sf.BRepBuilderAPI_MakeEdge(exterior.VIso(z)).Edge()
+        piezas.append(sf.BRepFill.Face_s(original, lejos))
+    cosido = sf.coser(piezas, sf._TOL)
+    if not cosido["es_solido"] or len(sf.geo.solidos(cosido["forma"])) != 1:
+        return None
+    resultado = cosido["forma"]
+    if sf.geo.volumen_exacto(resultado) < 0:
+        resultado = resultado.Reversed()
+    if not sf.geo.es_valida(resultado) or sf._desfase_imposible(base, resultado, espesor, engrosado=True):
+        return None
+    esperado = sf.geo.area(base) * abs(espesor)
+    if abs(abs(sf.geo.volumen(resultado)) - esperado) > 0.05 * esperado:
+        return None
+    from . import revision
+    cantidad, _, completo = revision._autointersecciones_seguras(resultado, 1, 30.0)
+    return resultado if completo and not cantidad else None
 
 
 def engrosar_banda(base, espesor):

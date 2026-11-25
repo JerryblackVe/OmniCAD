@@ -2399,6 +2399,15 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     # ~1e76); la banda de repuesto se cose sobre OTRA copia, tomada antes de que la suya se envenene: sobre la
     # envenenada BOPAlgo le cuenta 190 autointersecciones (medido 24/11, loft rectángulo → círculo).
     banda = BRepBuilderAPI_Copy(base).Shape() if junta == GeomAbs_Intersection and base.ShapeType() == TopAbs_SHELL else None
+    # B-846: una cara lisa usa su offset exacto; cualquier fallo cae al kernel sin cambiar su diagnóstico.
+    if banda is not None and len(geo.caras(banda)) == 1:
+        try:
+            from .engrosar_reglada import _engrosar_cara_lisa
+            resultado = _engrosar_cara_lisa(banda, espesor)
+            if resultado is not None:
+                return resultado
+        except Exception:  # noqa: BLE001 — vía rápida: el camino de siempre conserva el error útil
+            pass
     op = BRepOffset_MakeOffset()
     op.Initialize(base, float(espesor), 1e-6, BRepOffset_Skin, False, False, junta, True, False)
     op.MakeOffsetShape()

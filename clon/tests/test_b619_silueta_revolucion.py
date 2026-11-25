@@ -5,10 +5,17 @@ import math
 
 import numpy as np
 import pytest
+from OCP.BRepAdaptor import BRepAdaptor_Curve
+from OCP.GeomAbs import GeomAbs_BSplineCurve
 
 from omnicad import api
 from omnicad.nucleo import geometria as geo
 from omnicad.nucleo import perfiles
+
+
+def _polos_meridianos(forma):
+    return max(BRepAdaptor_Curve(a).BSpline().NbPoles() for a in geo._aristas_unicas(forma)
+               if BRepAdaptor_Curve(a).GetType() == GeomAbs_BSplineCurve)
 
 
 @pytest.fixture(scope="module")
@@ -44,7 +51,7 @@ def test_silueta_del_barril_son_sus_meridianos_con_pocos_polos(barril, normal, u
     prims, sueltos = perfiles.silueta_forma(barril, plano)
     curvas = [p for p in prims if p[0] == "spline"]
     assert len(curvas) == 4 and not sueltos
-    assert max(len(p[2]) for p in curvas) <= 10          # los del perfil (5); antes 65 y 72 de un lado
+    assert max(len(p[2]) for p in curvas) <= _polos_meridianos(barril)  # sin más polos que el perfil real
     for p in curvas:                                      # cada punto de la silueta, sobre la superficie
         for q in perfiles.puntos_primitiva(p, 40):
             punto = plano.pnt(*q)
@@ -68,7 +75,7 @@ def test_b619a_intersecar_por_el_eje_da_el_perfil_exacto(barril):
     plano = geo.Plano.desde_marco((0, 0, 0), (0, 1, 0), (1, 0, 0))
     prims, sueltos = perfiles.intersecar_forma(barril, plano)
     curvas = [p for p in prims if p[0] == "spline"]
-    assert len(curvas) == 4 and not sueltos and max(len(p[2]) for p in curvas) <= 10
+    assert len(curvas) == 4 and not sueltos and max(len(p[2]) for p in curvas) <= _polos_meridianos(barril)
     for p in curvas:
         for q in perfiles.puntos_primitiva(p, 40):
             assert _distancia_a_la_superficie(barril, plano.pnt(*q).Coord()) < 1e-4

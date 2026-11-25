@@ -313,6 +313,13 @@ def _engrosar_lamina(lamina, espesor):
     from .superficies import _PUNTA_DE_CONO, _punta_de_cono
     if _punta_de_cono(lamina):              # B-493: OpenCascade cerraba el programa en vez de fallar
         raise geo.ErrorGeometria("No se pudo dar espesor: " + _PUNTA_DE_CONO)
+    try:
+        from .engrosar_reglada import _engrosar_cara_lisa
+        resultado = _engrosar_cara_lisa(BRepBuilderAPI_Copy(lamina).Shape(), espesor)
+        if resultado is not None:           # B-846: si no cumple, sigue el kernel sin mostrar este fallo
+            return resultado
+    except Exception:  # noqa: BLE001 — vía rápida: conservar el diagnóstico del camino de siempre
+        pass
     mk = BRepOffset_MakeOffset()
     # B-850: BRepOffset agranda IN PLACE las tolerancias de la entrada: la lámina puede compartir topología con
     # los perfiles cacheados del boceto y envenenaría lo que se dibuje después. Copia, como ShapeFix (B-39).

@@ -144,9 +144,9 @@ def _tangentes_empalman(w, grados=1.0):
                for i in range(len(extremos)))
 
 
-def _una_arista_lisa(w, tol=1e-3):
+def _una_arista_lisa(w, tol=1e-3, desplazamiento=0.0, _validar=True):
     """El alambre cerrado `w` como UNA arista B-spline periódica interpolada por longitud de arco; None si se aparta
-    del original más que `tol` mm. Más muestras solo si hacen falta: los empalmes chicos necesitan mayor densidad."""
+    del original más que `tol` mm. `desplazamiento` (0..1) mueve la costura sin cambiar el contorno."""
     from OCP.BRepAdaptor import BRepAdaptor_CompCurve
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeWire
     from OCP.GeomAPI import GeomAPI_ProjectPointOnCurve
@@ -156,17 +156,20 @@ def _una_arista_lisa(w, tol=1e-3):
     while True:
         arreglo = HArray1_gp_Pnt(1, k)
         for i in range(k):
-            arreglo.SetValue(i + 1, cc.Value(a + (z - a) * i / k))
+            u = (a + (z - a) * ((desplazamiento + i / k) % 1.0) if desplazamiento
+                 else a + (z - a) * i / k)               # igual que antes cuando no se mueve la costura
+            arreglo.SetValue(i + 1, cc.Value(u))
         ip = GeomAPI_Interpolate(arreglo, True, 1e-7)
         ip.Perform()
         bien = ip.IsDone()
         if bien:
             curva = ip.Curve()
-            for i in range(4 * k + 1):                     # el ajuste no puede cambiar el contorno
-                proyeccion = GeomAPI_ProjectPointOnCurve(cc.Value(a + (z - a) * i / (4 * k)), curva)
-                if not proyeccion.NbPoints() or proyeccion.LowerDistance() > tol:
-                    bien = False
-                    break
+            if _validar:
+                for i in range(4 * k + 1):                 # el ajuste no puede cambiar el contorno
+                    proyeccion = GeomAPI_ProjectPointOnCurve(cc.Value(a + (z - a) * i / (4 * k)), curva)
+                    if not proyeccion.NbPoints() or proyeccion.LowerDistance() > tol:
+                        bien = False
+                        break
         if bien:
             return BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(curva).Edge()).Wire()
         if k >= 1200:
@@ -174,7 +177,7 @@ def _una_arista_lisa(w, tol=1e-3):
         k = min(1200, 2 * k)
 
 
-def _secciones_lisas(alambres):
+def _secciones_lisas(alambres, desplazamiento=0.0, _validar=True):
     """B-845: círculo (1 arista) → ranura (4 aristas empalmadas). ThruSections parte el lateral en una cara por arista
     y cada una se parametriza distinto: quedan pliegues de hasta 11° entre caras y OpenCascade no puede desfasar ese
     cuerpo (Vaciado, Desfase y Engrosar fallaban). Si una sección es una sola arista y las demás son contornos
@@ -193,7 +196,8 @@ def _secciones_lisas(alambres):
                 otra = geo.plano_de_cara(BRepBuilderAPI_MakeFace(w, True).Face()).normal
                 if float(np.dot(normal, otra)) < 0:
                     w = TopoDS.Wire(w.Reversed())         # una sola curva ya no deja que ThruSections corrija el sentido
-                lisa = _una_arista_lisa(w) if _tangentes_empalman(w) else None
+                lisa = (_una_arista_lisa(w, desplazamiento=desplazamiento, _validar=_validar)
+                        if _tangentes_empalman(w) else None)
                 if lisa is None:
                     return alambres
                 w = lisa
@@ -203,28 +207,83 @@ def _secciones_lisas(alambres):
         return alambres
 
 
-def _loft(alambres, solido, reglada, cerrada, compatibilizar=True, _suavizar=True):
+def _loft(alambres, solido, reglada, cerrada, compatibilizar=True, _suavizar=True,
+          _tolerancia_volumen=None, _revisar_anterior=False):
     lisas = _secciones_lisas(alambres) if _suavizar else alambres
-    if lisas is not alambres:
-        anterior = None
-        for ajuste in (False, True):
-            try:
-                candidata = _loft(lisas, solido, reglada, cerrada, ajuste, _suavizar=False)
-                if geo.esta_vacia(candidata) or not geo.es_valida(candidata):
-                    continue
-                if solido:
-                    # B-243/B-845: la pared lisa solo si reproduce el volumen del loft anterior (±0,5 %) —
-                    # sin esto, la cerrada salía deformada (−22 %) y la seta con condición cambiaba −3,5 %.
-                    if anterior is None:
-                        anterior = _loft(alambres, solido, reglada, cerrada, compatibilizar, _suavizar=False)
-                    v0, v1 = geo.volumen_exacto(anterior), geo.volumen_exacto(candidata)
-                    if v1 <= 0 or abs(v1 - v0) > 0.005 * max(abs(v0), 1.0):
-                        continue                            # cara lisa sí, pero no a costa de deformar el perfil
+    if lisas is alambres:
+        return _loft_directo(alambres, solido, reglada, cerrada, compatibilizar)
+    tol = (0.005 if len(alambres) == 2 else 0.0) if _tolerancia_volumen is None else _tolerancia_volumen
+    anterior = None
+    medidas = {}
+    if solido and tol:
+        anterior = _loft(alambres, solido, reglada, cerrada, compatibilizar, _suavizar=False)
+        if _revisar_anterior and _plegada(anterior):
+            return anterior                         # B-243: una variante lisa no puede ocultar un loft ya plegado
+        v0 = geo.volumen_exacto(anterior)
+
+    def probar(desplazamiento, validar=False):
+        """Candidata con otra costura, y su desviación contra el loft anterior."""
+        try:
+            suaves = _secciones_lisas(alambres, desplazamiento, _validar=validar)
+            if suaves is alambres:
+                medidas[desplazamiento] = (None, float("inf"))
+                return None, None
+            candidata = _loft_directo(suaves, solido, reglada, cerrada, False)
+            if geo.esta_vacia(candidata) or not geo.es_valida(candidata):
+                return None, None
+            v1 = geo.volumen_exacto(candidata)
+            if v1 <= 0:
+                return None, None
+            delta = (v1 - v0) / max(abs(v0), 1.0)
+            medidas[desplazamiento] = (candidata, delta)
+            return candidata, delta
+        except Exception:  # noqa: BLE001 — otra costura o el loft anterior siguen disponibles
+            medidas[desplazamiento] = (None, float("inf"))
+            return None, None
+
+    def elegir(desplazamiento):
+        """Solo la ganadora paga la comprobación completa del contorno."""
+        candidata, delta = probar(desplazamiento)
+        if candidata is None or abs(delta) > tol:
+            return None
+        candidata, delta = probar(desplazamiento, validar=True)
+        return candidata if candidata is not None and abs(delta) <= tol else None
+
+    for ajuste in ((False, True) if len(alambres) == 2 else (False,)):
+        try:
+            candidata = _loft_directo(lisas, solido, reglada, cerrada, ajuste)
+            if geo.esta_vacia(candidata) or not geo.es_valida(candidata):
+                continue
+            if not solido or not tol:
                 return candidata
-            except Exception:  # noqa: BLE001 — se prueba la otra compatibilidad y, si tampoco sirve, la construcción anterior
-                pass
-        if anterior is not None:
-            return anterior
+            v1 = geo.volumen_exacto(candidata)
+            delta = (v1 - v0) / max(abs(v0), 1.0)
+            if not ajuste:
+                medidas[0.0] = (candidata, delta) if v1 > 0 else (None, float("inf"))
+            if v1 > 0 and abs(delta) <= tol:
+                return candidata
+        except Exception:  # noqa: BLE001 — se prueba la otra compatibilidad y, si tampoco sirve, la construcción anterior
+            pass
+    if solido and tol:
+        for j in range(1, 8):
+            candidata = elegir(j / 8)
+            if candidata is not None:
+                return candidata
+        # La mejor costura puede caer entre dos muestras (B-243 pide 0,1 %): refinar solo su entorno.
+        for _ in range(8):
+            if not medidas:
+                break
+            d = min(medidas, key=lambda x: abs(medidas[x][1]))
+            izquierda = max((x for x in medidas if x < d), default=d - 1 / 8)
+            derecha = min((x for x in medidas if x > d), default=d + 1 / 8)
+            for otra in ((d + izquierda) / 2, (d + derecha) / 2):
+                if otra in medidas:
+                    continue
+                candidata = elegir(otra)
+                if candidata is not None:
+                    return candidata
+    if anterior is not None:
+        return anterior
     return _loft_directo(alambres, solido, reglada, cerrada, compatibilizar)
 
 
@@ -556,9 +615,10 @@ def solevar(secciones, *, carriles=(), linea_central=None, cerrada=False, solido
                   and all(t == "alambre" for t, _ in exteriores) and not _planos_paralelos(exteriores)):
                 forma = _loft_liso(exteriores, solido, reglada, cerrada)
             if forma is None:
-                # B-243: con condición de borde no se suaviza: la variante lisa no reproduce el volumen de la seta
-                # (−1,5 % a +4,1 %) y la del peso alto dejaba de plegarse sin que la guarda de volumen lo viera.
-                forma = _loft(exteriores, solido, reglada, cerrada, _suavizar=not condiciones)
+                # B-243: la condición exige 0,1 %; si el loft anterior ya se pliega no se reemplaza por uno que lo oculte.
+                forma = _loft(exteriores, solido, reglada, cerrada,
+                              _tolerancia_volumen=0.001 if condiciones and len(secs) == 2 else None,
+                              _revisar_anterior=condiciones)
         huecos = [s[2] for s in secs if s[0] == "alambre"]
         if solido and huecos and all(huecos) and len({len(h) for h in huecos}) == 1:
             for k in range(len(huecos[0])):

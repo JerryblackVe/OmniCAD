@@ -46,7 +46,5 @@ def test_b653_ctrl_a_selecciona_toda_la_geometria_del_boceto(lienzo):
 
     QTest.keyClick(lienzo, Qt.Key_A, Qt.ControlModifier)
     QApplication.processEvents()
-    en_curvas = {p for c in lienzo.b.curvas.values() for p in c.puntos()}
-    esperado = set(lienzo.b.curvas) | {p.id for p in lienzo.b.puntos.values()
-                                       if p.id > 0 and p.id not in en_curvas}
+    esperado = set(lienzo.b.curvas) | {p.id for p in lienzo.b.puntos.values() if p.id > 0}   # B-793: curvas y todos sus puntos
     assert set(lienzo.seleccion) == esperado
