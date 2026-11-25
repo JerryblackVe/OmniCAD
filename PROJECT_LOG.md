@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-774 (sin verificar).** Arranque desactiva FadeMenu y AnimateMenu de Qt; tests de estado y llamadas. Falta confirmar parpadeo en Windows. Ruff, pytest, skills y UX no ejecutados.
 - **2026-11-24 · H-98 (sin verificar).** Núcleo y API envuelven cilindros por defecto; UI ya lo hacía (B-848). Se conserva el rechazo con false explícito y su test; nueva regresión de volumen. Ruff, pytest, skills y regeneración MCP no ejecutados.
 - **2026-11-24 · SOL-40 (sin verificar).** Alinear ofrece Componentes y expande los cuerpos elegidos a sus componentes; conserva receta/API. Ayuda oficial Fusion consultada. Regresión de comando. Ruff, pytest, skills y UX no ejecutados.
 - **2026-11-24 · B-486 (Parcial, sin verificar).** Mover a distancia cero sin copia se rechaza antes de crear paso; eje con size=0 explícito se rechaza; point/origin son alias en escena. Regresiones API. Restan otras partes; ruff, pytest, ponytail-review y doc MCP no ejecutados.

@@ -127,6 +127,7 @@ def main(argv=None):
     if traductor.load("qtbase_es", QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
         app.installTranslator(traductor)
     from omnicad.ui import arranque
+    arranque.desactivar_efectos_menu(app)
     arranque.poner_icono(app)
 
     if args.prueba_humo:

@@ -21,6 +21,12 @@ VERSION_X, VERSION_BASE, VERSION_ALTO_DIGITOS, VERSION_ANCHO_MAX = 269, 244, 28,
 VERSION_COLOR = QColor(165, 194, 232)
 
 
+def desactivar_efectos_menu(app):
+    """B-774: evita el desvanecimiento de los menús al cerrarlos."""
+    app.setEffectEnabled(Qt.UI_FadeMenu, False)
+    app.setEffectEnabled(Qt.UI_AnimateMenu, False)
+
+
 def poner_icono(app):
     """Ícono de todas las ventanas. En Windows además un AppUserModelID propio: sin él, la barra de tareas agrupa la
     ventana con python.exe y muestra el ícono de Python."""
