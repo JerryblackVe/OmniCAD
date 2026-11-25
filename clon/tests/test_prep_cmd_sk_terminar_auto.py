@@ -89,3 +89,27 @@ def test_terminar_auto_en_boceto_vacio_termina_igual_y_no_agrega_restricciones(v
     assert any("vacío" in m and "sin restringir" in m for m in mensajes), mensajes
     boceto = ventana.modo_boceto.boceto
     assert not boceto.restricciones and not boceto.cotas
+
+
+@pytest.mark.parametrize("existente", [False, True])
+def test_b795_un_deshacer_revierte_terminar_auto(ventana, existente):
+    from omnicad.timeline.operaciones import OpBoceto
+    b = Boceto()
+    b.agregar_linea((0, 0), (10, 0))
+    if existente:
+        op = OpBoceto(ventana.doc.nuevo_id(), "Boceto1", plano="XY", boceto=b)
+        ventana.doc.agregar(op)
+        ventana.editar_operacion(op.id)
+    else:
+        _iniciar(ventana, b)
+    antes = ventana.doc.a_dict()
+    termino, agregado = ventana.modo_boceto.terminar_con_autorestringir()
+    assert termino and agregado
+    assert not ventana.modo_boceto.activo
+    ventana._deshacer()
+    from _calculo_aparte import esperar_barra
+    esperar_barra(ventana)
+    assert ventana.doc.a_dict()["operaciones"] == antes["operaciones"]
+    if existente:
+        boceto = ventana.doc.operaciones[0].boceto
+        assert not boceto.restricciones and not boceto.cotas
