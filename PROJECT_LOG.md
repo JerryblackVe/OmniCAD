@@ -1,13 +1,14 @@
 ## Registro
+- **2026-11-25 · B-461 (regresión 6g).** Si el corte por tramos falla, se prueba el surco entero en fase antes de girar. test_b461_rosca_tramos.py: 8 OK; Ruff limpio. Sigue pendiente el rendimiento general de B-461.
 - **2026-11-25 · OmniKernel sin OCC.** Engrosar reglada importa OCC solo al ejecutar. El visor usa TShape solo para formas OCC. Las dos regresiones de test_motor.py pasan; Ruff limpio. B-292 (memoria) no cambia.
-- **2026-11-25 · B-867 cerrado.** Escena usa un espaciado vertical fijo de 4 px; conserva acceso al pie y a ambas pestanas. test_render_dialogos_comunes.py: 11 OK; Ruff limpio.
-- **2026-11-25 · B-423 cerrado.** La prueba separa el icono pintado del texto y borde de Qt; 11 OK offscreen y Ruff limpio. No se hizo la comprobacion visual en la ventana nativa.
-- **2026-11-25 · B-868 cerrado.** El cambio de camara se avisa sin OpenGL y antes del turno de dibujo, sin duplicados. test_visor_aviso_camara.py: 3 OK; Ruff limpio.
+- **2026-11-25 · B-867 cerrado.** Escena usa un espaciado vertical fijo de 4 px; conserva acceso al pie y a ambas pestañas. test_render_dialogos_comunes.py: 11 OK; Ruff limpio.
+- **2026-11-25 · B-423 cerrado.** La prueba separa el ícono pintado del texto y borde de Qt; 11 OK offscreen y Ruff limpio. No se hizo la comprobación visual en la ventana nativa.
+- **2026-11-25 · B-868 cerrado.** El cambio de cámara se avisa sin OpenGL y antes del turno de dibujo, sin duplicados. test_visor_aviso_camara.py: 3 OK; Ruff limpio.
 - **2026-11-25 · B-865 cerrado.** El prefijo m de mm ya no dispara un aviso al teclear. Se prueba que 0.1 m completo sigue fuera de rango. test_raro_sk_perfil_giratorio.py: 90 OK en grupo; Ruff limpio.
 - **2026-11-25 · B-863 cerrado.** El test mide el caso grande con holgura real bajo el ViewCube; B-779 conserva su cobertura. test_b666_ventana_chica.py, test_b779_paleta_cubo.py y Perfil giratorio: 90 OK; Ruff limpio.
-- **2026-11-25 · B-866 cerrado.** Se comprueba que 3+1 dibuja cuatro lados y que el rechazo de unidades cabe en un renglon. test_raro_sk_poligono_circunscrito.py y test_boceto_herramientas.py: 60 OK; Ruff limpio.
-- **2026-11-25 - B-861 cerrado.** El test verifica el espesor pedido, la medida de la pieza y que el rechazo deja el documento intacto: `test_b376_vaciado_espesor_enorme.py`, 4 OK; Ruff limpio.
-- **2026-11-25 ? B-862 cerrado.** Se fuerzan las fallas de malla y BOP local para probar el respaldo aislado: `test_b620_vaciado_reglado_sin_otro_proceso.py`, 2 OK; Ruff limpio.
+- **2026-11-25 · B-866 cerrado.** Se comprueba que 3+1 dibuja cuatro lados y que el rechazo de unidades cabe en un renglón. test_raro_sk_poligono_circunscrito.py y test_boceto_herramientas.py: 60 OK; Ruff limpio.
+- **2026-11-25 · B-861 cerrado.** El test verifica el espesor pedido, la medida de la pieza y que el rechazo deja el documento intacto: `test_b376_vaciado_espesor_enorme.py`, 4 OK; Ruff limpio.
+- **2026-11-25 · B-862 cerrado.** Se fuerzan las fallas de malla y BOP local para probar el respaldo aislado: `test_b620_vaciado_reglado_sin_otro_proceso.py`, 2 OK; Ruff limpio.
 - **2026-11-25 · B-769 cerrado.** ⋮ de Archivo ancla en la barra superior, sin tocar la cinta. `test_p9b_mas.py::test_b769_mas_resuelve_el_grupo_del_boton_y_no_un_menu_ajeno`. Pytest: 787 OK; Ruff limpio.
 - **2026-11-25 · SOL-40 cerrado.** Alinear cambia Desde sin arrastrar el componente anterior y conserva extras explícitos. `test_comandos_modificar.py::test_sol40_editar_desde_cambia_de_componente`. Pytest: 787 OK; Ruff limpio.
 - **2026-11-25 · B-648 cerrado.** Triple clic selecciona valor y unidad: `test_b648_b553_triple_clic.py`, con Qt offscreen.
