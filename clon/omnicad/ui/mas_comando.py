@@ -4,7 +4,7 @@
 Al pasar el ratón por una fila de un menú aparece un «⋮» a la derecha; al hacerle clic (o con clic derecho sobre
 la fila) se abre un menú con:
   - «Anclar en los accesos directos» (casilla): la caja de herramientas (tecla S) del contexto actual.
-  - «Anclar en la barra de herramientas» (casilla): el comando queda como botón en la barra de arriba, junto a Rehacer.
+  - «Anclar en la barra de herramientas» (casilla): el comando queda como botón del grupo de la cinta.
   - «Cambiar atajo de teclado…»: elige otra combinación (avisa si ya la usa otro comando) o vuelve a la de fábrica.
 Todo se guarda en las preferencias: `atajos/diseno`, `atajos/boceto` (los de la caja), `atajos/barra` (claves
 separadas por comas) y `atajos/teclas` (JSON clave → combinación; solo los que difieren de fábrica).
@@ -14,8 +14,9 @@ import json
 from PySide6.QtCore import QEvent, QMimeData, QObject, QPointF, QRect, Qt
 from PySide6.QtGui import QDrag, QKeySequence, QPainter
 from PySide6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QHBoxLayout, QKeySequenceEdit, QLabel, QMenu, QPushButton,
-                               QVBoxLayout)
+                               QToolButton, QVBoxLayout)
 
+from ..api import cinta_personal as cp
 from .caja_herramientas import guardar_fijados, leer_fijados
 from .cinta import MIME_COMANDO
 
@@ -186,7 +187,21 @@ class FiltroMas(QObject):
         arrastre.exec(Qt.CopyAction)
 
     # ------------------------------------------------------------ menú «Más»
-    def construir_menu(self, accion):
+    def _grupo_cinta(self, accion, origen):
+        """Grupo de la pestaña activa que contiene el menú de origen, incluso si es un submenú."""
+        while isinstance(origen, QMenu) and isinstance(origen.parentWidget(), QMenu):
+            origen = origen.parentWidget()
+        pagina = self.ventana.cinta.pila.currentWidget()
+        for titulo in pagina.findChildren(QToolButton, "titulo_grupo"):
+            menu = titulo.menu()
+            if menu is None:
+                continue
+            if origen is menu or (origen is None and (accion in menu.actions() or any(
+                    accion in sub.actions() for sub in menu.findChildren(QMenu)))):
+                return titulo
+        return None
+
+    def construir_menu(self, accion, origen=None):
         v, clave = self.ventana, self.clave(accion)
         contexto = v.contexto_atajos()
         m = QMenu(v)
@@ -197,12 +212,24 @@ class FiltroMas(QObject):
         a.setChecked(fijado)
         a.setToolTip("Caja de herramientas (tecla S): " + ("saca" if fijado else "agrega") + " este comando.")
         a.triggered.connect(lambda: self.alternar_atajo(clave))
-        en_barra = clave in leer_barra(v.prefs)
+        grupo = self._grupo_cinta(accion, origen)
+        if grupo is not None:
+            claves = [b.defaultAction().property("clave") for b in
+                      grupo.parentWidget().findChildren(QToolButton, "boton_cinta")]
+            claves = [c for c in claves if c is not None]
+            seccion = f"{v.cinta.pestana_actual()}/{grupo.toolTip()}"
+            en_barra = clave in claves
+        else:
+            en_barra = clave in leer_barra(v.prefs)
         a = m.addAction("Anclar en la barra de herramientas")
         a.setCheckable(True)
         a.setChecked(en_barra)
-        a.setToolTip("Barra de arriba, junto a Rehacer: " + ("saca" if en_barra else "agrega") + " el botón del comando.")
-        a.triggered.connect(lambda: self.alternar_barra(clave))
+        if grupo is not None:
+            a.setToolTip("Quita de la cinta" if en_barra else "Agrega a la cinta")
+            a.triggered.connect(lambda: self._alternar_cinta(seccion, claves, clave))
+        else:
+            a.setToolTip("Quita de la barra superior" if en_barra else "Agrega a la barra superior")
+            a.triggered.connect(lambda: self.alternar_barra(clave))
         m.addSeparator()
         a = m.addAction("Cambiar las teclas de acceso rápido…")
         a.triggered.connect(lambda: self.cambiar_tecla(clave))
@@ -213,7 +240,7 @@ class FiltroMas(QObject):
         self._origen = menu
         if self.menu_abierto is not None:                           # cada clic arma un menú hijo de la ventana: no se juntan
             self.menu_abierto.deleteLater()
-        self.menu_abierto = self.construir_menu(accion)
+        self.menu_abierto = self.construir_menu(accion, menu)
         self.menu_abierto.aboutToHide.connect(self._cerrar_menus)   # al elegir algo, el menú de la cinta también se va
         zona = self.zona(menu, accion)
         self.menu_abierto.popup(pos if pos is not None else menu.mapToGlobal(zona.bottomRight()))
@@ -230,6 +257,22 @@ class FiltroMas(QObject):
         contexto = v.contexto_atajos()
         guardar_fijados(v.prefs, contexto, alternar(leer_fijados(v.prefs, contexto), clave))
         return contexto
+
+    def _alternar_cinta(self, seccion, claves, clave):
+        v = self.ventana
+        if seccion not in cp.SECCIONES:
+            return
+        if clave not in claves and len(claves) >= cp.maximo(seccion):
+            v.mensaje("La barra está llena")
+            return
+        self._cerrar_menus()
+        self._origen = None
+        personal = {**v.cinta._personal, seccion: alternar(claves, clave)}
+        v.cinta.personalizar(personal)
+        v.cinta.cambio_personal.emit(personal)
+        for menu in v.cinta.findChildren(QMenu):
+            menu.installEventFilter(v._filtro_ayuda)
+            menu.installEventFilter(self)
 
     def alternar_barra(self, clave):
         v = self.ventana

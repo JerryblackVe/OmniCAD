@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-769 (sin verificar).** ⋮ sigue los botones del grupo de cinta y alterna su personalización, no la barra superior. Regresión offscreen en test_p9b_mas.py; expectativas B-768 ajustadas. Ruff, pytest, ponytail-review y UX no ejecutados; fila pendiente.
 - **2026-11-24 · B-771 (sin verificar).** B-768 ya añade casilla de accesos directos y estado desde leer_fijados; test_p9b_mas.py cubre alternancia. Revisión estática; ruff, pytest, ponytail-review y UX no ejecutados; fila pendiente.
 - **2026-11-24 · B-803 (sin verificar).** Gemelo de B-819: DESHABILITADO ya vacío; restriccion.linea_spline ausente. Revisión estática sin cambios de código. Ruff, pytest y ponytail-review no ejecutados; fila pendiente.
 - **2026-11-24 · B-831 (sin verificar).** Cota reclama teclas de texto en ShortcutOverride; si hay caja, escribe en ella, si no, las consume. Regresión con QTest y QAction en test_b652_tecla_en_cota.py. Ruff, pytest, ponytail-review y lista UX no ejecutados; fila pendiente.

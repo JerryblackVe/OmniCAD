@@ -80,7 +80,7 @@ def test_clic_en_el_mas_abre_el_menu_y_no_ejecuta_el_comando(v):
     assert v.panel is None                                        # no se abrió el diálogo de Extruir
     acceso, barra = mas.actions()[:2]
     assert acceso.isCheckable() and acceso.isChecked()
-    assert barra.isCheckable() and not barra.isChecked()
+    assert barra.isCheckable() and barra.isChecked()
     mas.hide()
     menu.hide()
 
@@ -89,7 +89,7 @@ def test_b768_las_casillas_conservan_el_texto_al_alternar(v):
     filtro = v._filtro_mas
     accion = v.acciones["extruir"]
     textos = ["Anclar en los accesos directos", "Anclar en la barra de herramientas"]
-    for estado in ((True, False), (False, True), (True, False)):
+    for estado in ((True, True), (False, False), (True, True)):
         menu = filtro.construir_menu(accion)
         casillas = menu.actions()[:2]
         assert [a.text() for a in casillas] == textos
@@ -98,6 +98,21 @@ def test_b768_las_casillas_conservan_el_texto_al_alternar(v):
         for a in casillas:
             a.trigger()
         menu.deleteLater()
+
+
+def test_b769_la_casilla_sigue_los_botones_de_la_cinta(v):
+    accion = v.acciones["extruir"]
+    def botones():
+        return [b.defaultAction() for b in v.cinta.pila.currentWidget().findChildren(QToolButton, "boton_cinta")]
+    assert accion in botones() and "extruir" not in leer_barra(v.prefs)
+    for esperado in (True, False, True):
+        menu = v._filtro_mas.construir_menu(accion)
+        casilla = menu.actions()[1]
+        assert casilla.isChecked() == esperado == (accion in botones())
+        casilla.trigger()
+        menu.deleteLater()
+        QTest.qWait(10)
+    assert accion not in botones() and "extruir" not in leer_barra(v.prefs)
 
 
 def test_un_clic_fuera_del_mas_sigue_ejecutando_el_comando(v):
