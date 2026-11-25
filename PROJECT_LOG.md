@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-770 (sin verificar).** Anclar usa sección y lista vigentes; filtros Más/ayuda se reinstalan al reconstruir la cinta, incluida reapertura. Test de clic, orden, quitar y persistencia. Ruff, pytest y skills no ejecutados.
 - **2026-11-24 · P-96 (Parcial, sin verificar).** SVG filtra rellenos y grupos con opacidad efectiva ≤1 %, conserva trazos visibles; test SVG de atributos, estilo y herencia. Faltan aviso, opción y comparación Fusion; ruff, pytest y skills no ejecutados.
 - **2026-11-24 · B-758 (sin verificar).** Ctrl+Z global cancela panel por B-429 sin tocar timeline. Se conserva decisión y se amplía regresión a Caja. Falta comparación Fusion y foco de edición; ruff, pytest y skills no ejecutados.
 - **2026-11-24 · B-556 (sin verificar).** Cinta compacta por ancho y títulos enteros o flecha (B-533); scroll de Agujero conserva botones (B-105). Test 1024×700. No se cambia sin medir; falta Windows. Ruff, pytest y skills no ejecutados.

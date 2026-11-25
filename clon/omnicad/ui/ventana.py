@@ -809,6 +809,7 @@ class VentanaPrincipal(QMainWindow):
         self.aplicar_teclas()
         if getattr(self, "cinta", None) is not None:
             self.cinta.personalizar(cinta_personal.leer(p["cinta/personal"]))
+            self._instalar_filtros_cinta()
         self.refrescar_barra_fijados()
         if self.asistente is not None:
             self.asistente.actualizar_cabecera()
@@ -1132,9 +1133,17 @@ class VentanaPrincipal(QMainWindow):
         {"ver_navegador": self.navegador, "ver_viewcube": self.area.viewcube, "ver_barra_nav": self.barra_nav,
          "ver_timeline": self.timeline}[clave].setVisible(visible)
 
+    def _instalar_filtros_cinta(self):
+        # B-770: al reconstruir una página, sus menús son nuevos.
+        if hasattr(self, "_filtro_mas"):
+            for menu in self.cinta.findChildren(QMenu):
+                menu.installEventFilter(self._filtro_ayuda)
+                menu.installEventFilter(self._filtro_mas)
+
     def _guardar_cinta(self, personal):
         """Guarda lo que se soltó en la cinta (P-187): solo las secciones que difieren de fábrica."""
         self.prefs["cinta/personal"] = cinta_personal.a_texto(cinta_personal.diferencias(cinta_personal.efectivas(personal)))
+        self._instalar_filtros_cinta()
 
     def mensaje(self, texto, ms=5000):
         """Aviso temporal en la barra del timeline (Fusion no tiene barra de estado)."""

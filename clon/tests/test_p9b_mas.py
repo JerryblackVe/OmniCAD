@@ -279,3 +279,42 @@ def test_p189_la_misma_tecla_en_boceto_y_en_diseno_se_aplica_en_las_dos(v):
     v.prefs["atajos/teclas"] = json.dumps({"vaciado": "Ctrl+Alt+7", "sk_linea": "Ctrl+Alt+7"})
     v.aplicar_teclas()
     assert v.acciones["vaciado"].shortcut().toString() == v.acciones["sk_linea"].shortcut().toString() == "Ctrl+Alt+7"
+
+
+def test_b770_anclar_al_final_quitar_y_persistir(ini):
+    from omnicad.api import cinta_personal as cp
+    seccion = "SÓLIDO/CREAR"
+    base = cp.SECCIONES[seccion]
+
+    def grupo(v):
+        return next(t for t in v.cinta.pila.currentWidget().findChildren(QToolButton, "titulo_grupo")
+                    if t.toolTip() == "CREAR")
+
+    def claves(v):
+        return [b.defaultAction().property("clave") for b in
+                grupo(v).parentWidget().findChildren(QToolButton, "boton_cinta")]
+
+    def alternar_caja(v):
+        menu = grupo(v).menu()
+        menu.popup(QPoint(40, 40))
+        QTest.qWait(30)
+        a = v.acciones["caja"]
+        QTest.mouseClick(menu, Qt.LeftButton, Qt.NoModifier, v._filtro_mas.zona(menu, a).center())
+        mas = v._filtro_mas.menu_abierto
+        QTest.mouseClick(mas, Qt.LeftButton, Qt.NoModifier, mas.actionGeometry(mas.actions()[1]).center())
+        QTest.qWait(30)
+
+    v = _ventana(ini)
+    alternar_caja(v)
+    assert claves(v) == [*base, "caja"]
+    _cerrar(v)
+    v = _ventana(ini)
+    assert claves(v) == [*base, "caja"]
+    # El menú reconstruido al cargar preferencias debe tener filtro «Más».
+    alternar_caja(v)
+    assert claves(v) == base
+    assert seccion not in cp.leer(v.prefs["cinta/personal"])
+    _cerrar(v)
+    v = _ventana(ini)
+    assert claves(v) == base
+    _cerrar(v)

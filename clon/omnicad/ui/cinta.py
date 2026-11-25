@@ -529,6 +529,7 @@ class Cinta(QWidget):
         t = QToolButton(objectName="titulo_grupo", text=f"{titulo} ▾" if titulo else " ")
         if titulo:
             t.setToolTip(titulo)
+            t.setProperty("seccion_cinta", f"{pestana}/{titulo}")
             t.setProperty("titulo_completo", t.text())      # B-533: `ajustar_textos` lo pone entero o solo «▾», nunca recortado
             t.setPopupMode(QToolButton.InstantPopup)
             t.setMenu(self._menu(items, t))

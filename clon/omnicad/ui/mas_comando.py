@@ -214,10 +214,8 @@ class FiltroMas(QObject):
         a.triggered.connect(lambda: self.alternar_atajo(clave))
         grupo = self._grupo_cinta(accion, origen)
         if grupo is not None:
-            claves = [b.defaultAction().property("clave") for b in
-                      grupo.parentWidget().findChildren(QToolButton, "boton_cinta")]
-            claves = [c for c in claves if c is not None]
-            seccion = f"{v.cinta.pestana_actual()}/{grupo.toolTip()}"
+            seccion = grupo.property("seccion_cinta")
+            claves = v.cinta._personal.get(seccion, cp.SECCIONES.get(seccion, []))
             en_barra = clave in claves
         else:
             en_barra = clave in leer_barra(v.prefs)
@@ -226,7 +224,7 @@ class FiltroMas(QObject):
         a.setChecked(en_barra)
         if grupo is not None:
             a.setToolTip("Quita de la cinta" if en_barra else "Agrega a la cinta")
-            a.triggered.connect(lambda: self._alternar_cinta(seccion, claves, clave))
+            a.triggered.connect(lambda: self._alternar_cinta(seccion, clave))
         else:
             a.setToolTip("Quita de la barra superior" if en_barra else "Agrega a la barra superior")
             a.triggered.connect(lambda: self.alternar_barra(clave))
@@ -258,10 +256,11 @@ class FiltroMas(QObject):
         guardar_fijados(v.prefs, contexto, alternar(leer_fijados(v.prefs, contexto), clave))
         return contexto
 
-    def _alternar_cinta(self, seccion, claves, clave):
+    def _alternar_cinta(self, seccion, clave):
         v = self.ventana
         if seccion not in cp.SECCIONES:
             return
+        claves = v.cinta._personal.get(seccion, cp.SECCIONES[seccion])
         if clave not in claves and len(claves) >= cp.maximo(seccion):
             v.mensaje("La barra está llena")
             return
@@ -270,10 +269,6 @@ class FiltroMas(QObject):
         personal = {**v.cinta._personal, seccion: alternar(claves, clave)}
         v.cinta.personalizar(personal)
         v.cinta.cambio_personal.emit(personal)
-        for menu in v.cinta.findChildren(QMenu):
-            menu.installEventFilter(v._filtro_ayuda)
-            menu.installEventFilter(self)
-
     def alternar_barra(self, clave):
         v = self.ventana
         guardar_barra(v.prefs, alternar(leer_barra(v.prefs), clave))
