@@ -397,3 +397,27 @@ def test_b555_tab_pasa_de_expresion_a_comentarios(dlg):
     QTest.keyClick(n._lista_expresion.popup(), Qt.Key_Tab)
     assert n.comentario.hasFocus()
     assert n.expresion.text() == "w"
+    QTest.qWait(30)
+    assert QApplication.focusWidget() is n.comentario
+    assert not n._lista_expresion.popup().isVisible()
+    QTest.keyClicks(n.comentario, "Nota")
+    assert n.comentario.text() == "Nota"
+
+
+@pytest.mark.parametrize("sugerencias", [False, True])
+@pytest.mark.parametrize("atras", [False, True])
+def test_b555_tab_y_shift_tab_con_y_sin_sugerencias(dlg, sugerencias, atras):
+    dlg.b_mas.click()
+    n = dlg.dlg_nuevo
+    n.expresion.setFocus()
+    QTest.keyClicks(n.expresion, "w" if sugerencias else "12")
+    QTest.qWait(20)
+    popup = n._lista_expresion.popup()
+    assert popup.isVisible() == sugerencias
+    QTest.keyClick(popup if sugerencias else n.expresion, Qt.Key_Tab,
+                   Qt.ShiftModifier if atras else Qt.NoModifier)
+    QTest.qWait(30)
+    destino = n.unidad if atras else n.comentario
+    assert QApplication.focusWidget() is destino
+    assert not popup.isVisible()
+    assert n.expresion.text() == ("w" if sugerencias else "12")

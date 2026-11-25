@@ -7,7 +7,7 @@ está abierto es un solo paso de deshacer.
 """
 from PySide6.QtCore import QEvent, QTimer, Qt, Signal
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QStyledItemDelegate,
                                QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout)
 
@@ -119,6 +119,7 @@ class DialogoNuevoParametro(QDialog):
         if objeto in (self.expresion, self._lista_expresion.popup()) and evento.type() == QEvent.KeyPress:
             if evento.key() in (Qt.Key_Tab, Qt.Key_Backtab):
                 self._lista_expresion.popup().hide()
+                QApplication.setActiveWindow(self)
                 destino = self.unidad if evento.key() == Qt.Key_Backtab or evento.modifiers() & Qt.ShiftModifier else self.comentario
                 destino.setFocus()
                 return True
