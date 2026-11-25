@@ -368,6 +368,40 @@ def test_sol40_alinear_mueve_todos_los_cuerpos_del_componente():
         panel.cancelar()
 
 
+@pytest.mark.parametrize("caso", ["sin_otros", "con_otros", "receta_anterior"])
+def test_sol40_editar_desde_cambia_de_componente(caso):
+    from omnicad.timeline.ops_ensamblar import OpComponente
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.modificar import Alinear
+    doc = _doc_caja()
+    for x in (30, 60, 90, 120):
+        doc.agregar(OpPrimitiva(doc.nuevo_id(), x=str(x)))
+    a, b, c = [OpComponente(doc.nuevo_id(), nombre, cuerpos=cuerpos) for nombre, cuerpos in (
+        ("Pieza A", ["op1.c1", "op2.c1"]), ("Pieza B", ["op3.c1"]), ("Pieza C", ["op4.c1", "op5.c1"]))]
+    for comp in (a, b, c):
+        assert doc.agregar(comp).estado == "ok"
+    desde_b = _hit_sub(doc, "cara", (70, 10, 20), "op3.c1")
+    extras = [] if caso == "sin_otros" else [_hit(doc, {"tipo": "cuerpo", "cuerpo": "op5.c1"})]
+    _ejecutar(doc, Alinear, objeto="componentes", cuerpos=extras, origen=[_hit_sub(doc, "cara", (10, 10, 20))],
+              destino=[_hit(doc, {"tipo": "plano", "id": "XY"})])
+    receta = doc.a_dict()
+    if caso == "receta_anterior":
+        receta["operaciones"][-1]["params"].pop("otros_cuerpos", None)
+    doc = Documento.desde_dict(receta)
+    op = doc.operaciones[-1]
+    ctx, cmd = ContextoComando(doc, op=op), Alinear()
+    valores = cmd.desde_op(op, ctx)
+    valores["origen"] = [desde_b]
+    nueva = cmd.construir(valores, ctx)
+    assert nueva.p["componentes"] == ([b.id, c.id] if extras else [b.id])
+    esperados = {"sin_otros": [], "con_otros": ["op5.c1"], "receta_anterior": ["op4.c1"]}
+    assert [h["ref"]["cuerpo"] for h in valores["cuerpos"]] == esperados[caso]
+    assert doc.reemplazar(op.id, nueva).estado == "ok"
+    assert np.asarray(doc.estado_final.componentes[a.id]["matriz"]) == pytest.approx(np.eye(4))
+    matriz = np.array([[-1, 0, 0, 70], [0, 1, 0, -10], [0, 0, -1, 20], [0, 0, 0, 1]])
+    assert np.asarray(doc.estado_final.componentes[b.id]["matriz"]) == pytest.approx(matriz)
+
+
 @pytest.mark.parametrize("objeto", ["cuerpos", "componentes"])
 @pytest.mark.parametrize("copiar", [False, True])
 def test_sol40_pose_copia_y_modo_sobreviven_a_guardar(objeto, copiar):

@@ -1103,8 +1103,9 @@ class Alinear(Comando):
     def construir(self, v, ctx):
         exigir(v, "origen", "Seleccioná la geometría de origen.")
         exigir(v, "destino", "Seleccioná la geometría de destino.")
-        duena = ref1(v, "origen").get("cuerpo")              # Fusion toma el objeto de lo elegido en «Desde»
-        cuerpos = list(dict.fromkeys(([duena] if duena else []) + _cuerpos(v)))
+        origen, otros = ref1(v, "origen"), _cuerpos(v)
+        duena = origen.get("cuerpo")              # Fusion toma el objeto de lo elegido en «Desde»
+        cuerpos = list(dict.fromkeys(([duena] if duena else []) + otros))
         componentes = []
         if v.get("objeto") == "componentes":
             componentes = list(dict.fromkeys(ctx.estado.cuerpos[c].componente for c in cuerpos if c in ctx.estado.cuerpos))
@@ -1113,14 +1114,27 @@ class Alinear(Comando):
             cuerpos = [c.id for c in ctx.estado.cuerpos.values() if c.componente in componentes]
         if not cuerpos:
             raise ErrorComando("«Desde» no es un cuerpo: usá «Otros cuerpos».")
-        return self.crear_op(OpAlinear, v, ctx, cuerpos=cuerpos, componentes=componentes, origen=ref1(v, "origen"),
-                             destino=ref1(v, "destino"), voltear=v["voltear"], copiar=v["copiar"],
-                             angulo=a if (a := float(v["angulo"])) % 1 else int(a))
+        return self.crear_op(OpAlinear, v, ctx, cuerpos=cuerpos, otros_cuerpos=otros, componentes=componentes,
+                             origen=origen, destino=ref1(v, "destino"), voltear=v["voltear"],
+                             copiar=v["copiar"], angulo=a if (a := float(v["angulo"])) % 1 else int(a))
 
     def desde_op(self, op, ctx):
-        return dict(op.p, cuerpos=_hits_cuerpos(op.p["cuerpos"], ctx.estado),
-                    objeto="componentes" if op.p.get("componentes") else "cuerpos",
-                    origen=_hit1(op.p["origen"], ctx.estado), destino=_hit1(op.p["destino"], ctx.estado),
+        origen, otros, componentes = op.p["origen"], op.p.get("otros_cuerpos"), op.p["componentes"]
+        if not isinstance(otros, (list, tuple)):   # la receta anterior solo guardaba los objetivos ya expandidos
+            duena = (origen or {}).get("cuerpo")
+            if componentes:
+                cuerpos = ctx.estado.cuerpos
+                comp_origen = cuerpos[duena].componente if duena in cuerpos else None
+                representantes = {}
+                for cuerpo in cuerpos.values():
+                    if cuerpo.componente != comp_origen:
+                        representantes.setdefault(cuerpo.componente, cuerpo.id)
+                otros = [representantes[c] for c in componentes if c in representantes]
+            else:
+                otros = [c for c in op.p["cuerpos"] if c != duena]
+        return dict(op.p, cuerpos=_hits_cuerpos(otros, ctx.estado),
+                    objeto="componentes" if componentes else "cuerpos",
+                    origen=_hit1(origen, ctx.estado), destino=_hit1(op.p["destino"], ctx.estado),
                     angulo=f"{float(op.p.get('angulo') or 0):g}")
 
 

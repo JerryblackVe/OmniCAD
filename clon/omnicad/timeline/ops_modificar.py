@@ -732,7 +732,7 @@ class OpAlinear(Operacion):
     otra; planos enfrentados, ejes coincidentes; «Voltear» gira 180° y «Ángulo» gira de a 90° (o lo que se pida)."""
     TIPO, ETIQUETA, ICONO = "alinear", "Alinear", "⇶"
     PARAMS = {"cuerpos": [], "componentes": [], "origen": None, "destino": None, "voltear": False, "copiar": False, "angulo": 0,
-              "version_centro": 2}
+              "version_centro": 2, "otros_cuerpos": None}  # selección explícita del panel; None en recetas anteriores y en la API
     migrar_receta = _migrador("version_centro")      # B-560: las recetas viejas toman la cara por el origen de su plano
 
     def dependencias(self):
@@ -767,7 +767,6 @@ class OpAlinear(Operacion):
         if p.get("componentes"):
             from .ops_ensamblar import _comp_o_error, _mover_componentes, copiar_componente, familia
             elegidos = list(dict.fromkeys(_comp_o_error(estado, c) for c in p["componentes"]))
-            comps = set().union(*(familia(estado, c) for c in elegidos))
             if p["copiar"]:
                 raices = [c for c in elegidos if not any(c in familia(estado, otro) for otro in elegidos if otro != c)]
                 for i, c in enumerate(raices, 1):
@@ -777,6 +776,7 @@ class OpAlinear(Operacion):
                                       estado.componentes[c].get("padre") or "")
                     _mover_componentes(estado, familia(estado, nuevo), m)
             else:
+                comps = set().union(*(familia(estado, c) for c in elegidos))
                 _mover_componentes(estado, comps, m)
             return
         for cid in p["cuerpos"]:
