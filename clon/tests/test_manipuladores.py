@@ -158,6 +158,17 @@ def test_b472_asa_extruir_en_centro_del_perfil(app_qt, direccion):
     panel.cancelar()
 
 
+def test_b757_al_abrir_extruir_solo_se_muestra_la_distancia(app_qt):
+    from omnicad.ui.comandos.solido import Extruir
+    doc = _doc_rectangulo()
+    panel, _visor, _estados = _panel(Extruir(), doc, {"perfiles": [_perfil(doc)]})
+    gestor = panel.manipuladores
+    assert gestor._hover is None and not gestor.arrastrando
+    assert set(gestor.cajas) == {"distancia"}
+    assert not _manip(panel, "angulo:conicidad").caja_siempre
+    panel.cancelar()
+
+
 def test_la_flecha_permite_extruir_hacia_el_otro_lado(app_qt):
     from omnicad.ui.comandos.solido import Extruir
     doc = _doc_rectangulo()
