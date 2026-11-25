@@ -2,12 +2,6 @@
 import numpy as np
 from scipy.optimize import least_squares
 
-from OCP.Approx import Approx_IsoParametric
-from OCP.collections import Array2_gp_Pnt
-from OCP.Geom import Geom_OffsetSurface
-from OCP.GeomAPI import GeomAPI_PointsToBSplineSurface
-from OCP.GeomConvert import GeomConvert_ApproxSurface
-
 from . import superficies as sf
 
 
@@ -36,6 +30,9 @@ def _costura(a, b, muestras):
 
 def _engrosar_cara_lisa(base, espesor):
     """Una cara reglada: offset de OCC con error acotado al 0,1 % del espesor."""
+    from OCP.Geom import Geom_OffsetSurface
+    from OCP.GeomConvert import GeomConvert_ApproxSurface
+
     caras = sf.geo.caras(base)
     if len(caras) != 1:
         return None
@@ -76,6 +73,11 @@ def _engrosar_cara_lisa(base, espesor):
 
 def engrosar_banda(base, espesor):
     """Solo una vuelta de parches UV enteros, sin recortes. None si no se pueden coser a la piel original."""
+    from OCP.Approx import Approx_IsoParametric
+    from OCP.collections import Array2_gp_Pnt
+    from OCP.Geom import Geom_OffsetSurface
+    from OCP.GeomAPI import GeomAPI_PointsToBSplineSurface
+
     caras = sf.geo.caras(base)
     mapa = sf._mapa_aristas(base)
     costuras, parches = {}, []
