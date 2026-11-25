@@ -357,3 +357,19 @@ def test_b756_navegador_contraste_en_tema_y_entorno(clave, entorno):
         assert (temas.luminancia(c["nav_fila"]) < 0.18) == entorno
     for texto, fondo in (("texto", "nav_fila"), ("nav_oculto", "nav_fila"), ("seleccion_texto", "seleccion")):
         assert temas.razon_contraste(c[texto], c[fondo]) >= temas.MIN_CONTRASTE
+
+
+def test_b756_la_ventana_cambia_la_paleta_del_navegador_sin_cambiar_tema(qapp, prefs):
+    from omnicad.ui.ventana import VentanaPrincipal
+
+    prefs["general/tema"] = "oscuro_moderno"
+    ventana = VentanaPrincipal(prefs=prefs)
+    try:
+        arbol = ventana.navegador.arbol
+        for entorno, paleta in (("tema", "oscuro_moderno"), ("fotomaton", "claro_moderno"), ("tema", "oscuro_moderno")):
+            ventana.cambiar_vista("entorno", entorno)
+            assert temas.clave_activa() == "oscuro_moderno"
+            assert temas.colores_navegador(arbol.entorno_oscuro())["nav_fila"] == temas.INCLUIDOS[paleta]["colores"]["nav_fila"]
+    finally:
+        ventana.close()
+        ventana.deleteLater()
