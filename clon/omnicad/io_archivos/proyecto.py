@@ -125,12 +125,34 @@ def cache_de_carpeta(carpeta, pasos):
         return None
 
 
+def _escribir_cache_teselados(z, doc, receta):
+    pasos = [dict(datos, mallas=[m.a_dict() for m in formas])
+             for datos, formas in doc.pasos_para_cache(solo_teselados=True)]
+    if pasos:
+        z.writestr("cache/teselados.json", _json_bytes({"huella": _huella(receta), "pasos": pasos}))
+
+
+def _leer_cache_teselados(z, receta):
+    from ..nucleo.malla import Malla
+    if "cache/teselados.json" not in z.namelist():
+        return {}
+    try:
+        meta = json.loads(_leer_miembro(z, "cache/teselados.json"))
+        if meta["huella"] != _huella(receta):
+            return {}
+        return {int(p["indice"]): (p, [Malla.desde_dict(m) for m in p["mallas"]]) for p in meta["pasos"]}
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError, zlib.error,
+            zipfile.BadZipFile, ErrorProyecto, geo.ErrorGeometria, RecursionError):
+        return {}
+
+
 def _escribir_cache(z, doc, receta):
     """cache/cuerpos.brep (cuerpos finales + formas de los pasos lentos, en un solo compuesto: comparten caras y
-    no ocupan dos veces) y cache/pasos.json. Las mallas no son B-rep: viajan solo en la receta."""
+    no ocupan dos veces) y cache/pasos.json. Los teselados se conservan aparte en precisión completa."""
     if doc.motor == "omnikernel":
         _escribir_cache_omnikernel(z, doc, receta)
         return
+    _escribir_cache_teselados(z, doc, receta)
     formas = [c.forma for c in doc.estado_final.cuerpos.values() if getattr(c, "tipo", "solido") != "malla"]
     finales = len(formas)
     pasos = _indexar_pasos(doc, formas)
@@ -153,14 +175,15 @@ def _leer_cache(z, receta):
     receta o versión (huella distinta) o está dañada: entonces se recalcula todo, como en los proyectos viejos."""
     if motor.motor_activo() == "omnikernel":
         return _leer_cache_omnikernel(z, receta)
+    teselados = _leer_cache_teselados(z, receta)
     if "cache/pasos.json" not in z.namelist():
-        return None
+        return teselados or None
     try:
         meta = json.loads(_leer_miembro(z, "cache/pasos.json"))
         if (meta.get("motor", "opencascade") != "opencascade" or meta.get("version") != VERSION_CACHE
                 or meta.get("huella") != _huella(receta)):
             log.info("La caché del proyecto no corresponde a esta receta o versión: se recalcula todo.")
-            return None
+            return teselados or None
         fd, brep = tempfile.mkstemp(suffix=".brep")
         try:
             with os.fdopen(fd, "wb") as f:
@@ -168,11 +191,11 @@ def _leer_cache(z, receta):
             partes = intercambio.partes_de_brep(brep)
         finally:
             os.remove(brep)
-        return _cache_de_partes(meta["pasos"], partes)
+        return _cache_de_partes(meta["pasos"], partes) | teselados
     except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError, zipfile.BadZipFile, zlib.error,
             NotImplementedError, geo.ErrorGeometria, RecursionError) as e:
         log.warning("La caché del proyecto está dañada (%s): se recalcula todo.", e)
-        return None
+        return teselados or None
 
 
 def _escribir_cache_omnikernel(z, doc, receta):

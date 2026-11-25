@@ -70,7 +70,7 @@ def _igual(a, b):
     return False
 
 
-def _cambios_de_cuerpos(antes, despues):
+def _cambios_de_cuerpos(antes, despues, solo_mallas=False):
     """Lo que hizo un paso (de `antes` a `despues`) si solo cambió cuerpos que la caché del proyecto puede guardar:
     ([[id, None si es el mismo de antes | sus datos]] en el orden del estado, formas de los cuerpos cambiados).
     None si cambió otra cosa (bocetos, planos, componentes…) o un cuerpo que no va en un BREP (malla, chapa). Las
@@ -92,7 +92,7 @@ def _cambios_de_cuerpos(antes, despues):
         except (TypeError, ValueError):
             se_guarda = False
         if (not se_guarda or type(c) is not Cuerpo or set(vars(c)) != {"id", "forma", "origen", *_CAMPOS_CUERPO}
-                or c.tipo == "malla" or not consultas.es_forma(c.forma)):
+                or (c.tipo != "malla" if solo_mallas else c.tipo == "malla" or not consultas.es_forma(c.forma))):
             return None
         lista.append([cid, datos])
         formas.append(c.forma)
@@ -1514,7 +1514,7 @@ class Documento:
         return nuevo
 
     # ------------------------------------------------------------ caché de pasos lentos (abrir sin recalcular)
-    def pasos_para_cache(self, minimo=None):
+    def pasos_para_cache(self, minimo=None, *, solo_teselados=False):
         """Lo que el proyecto guarda para abrir sin recalcular (`proyecto.guardar`): [(datos, formas)] de los pasos
         activos que tardaron al menos `minimo` segundos (por defecto `_SEGUNDOS_CACHE`), terminaron bien (ok o
         aviso) y solo cambiaron cuerpos sólidos o superficies. `datos` es JSON; `formas`, las formas de los cuerpos
@@ -1523,10 +1523,15 @@ class Documento:
         pasos = []
         for i in range(min(self.marcador, len(self._estados), len(self._duraciones))):
             op, resultado = self.operaciones[i], self.resultados[i]
-            if op.suprimida or resultado.estado not in ("ok", "aviso") or self._duraciones[i] < minimo:
+            if op.suprimida or resultado.estado not in ("ok", "aviso"):
+                continue
+            if solo_teselados:
+                if op.TIPO != "teselar":
+                    continue
+            elif self._duraciones[i] < minimo:
                 continue
             despues = self.estado_en(i + 1)
-            cambios = _cambios_de_cuerpos(self.estado_en(i), despues)
+            cambios = _cambios_de_cuerpos(self.estado_en(i), despues, solo_mallas=solo_teselados)
             if cambios is None:
                 continue
             cuerpos, formas = cambios

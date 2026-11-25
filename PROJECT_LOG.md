@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-526 (sin verificar).** La malla ya usaba f64 pero Teselar se repetía al abrir. Caché de teselados con huella, arrays exactos y caída al recálculo; regresión en test_api_malla.py. Ruff, pytest y ponytail-review no ejecutados.
 - **2026-11-24 · B-555 (Parcial, sin verificar).** Revolución revela ejes del árbol sin hacerlos visibles en el visor; Tab recorre campos y sale de sugerencias. Dos regresiones. Restan círculo/perfil, SCU y z-fighting. Ruff, pytest y ponytail-review no ejecutados.
 - **2026-11-24 · B-760 (sin verificar).** El aviso de éxito usa el nombre del único cuerpo creado, como el navegador; el timeline conserva Caja1. Regresión test_b760_nombre_estado.py. Ruff, pytest y ponytail-review no ejecutados.
 - **2026-11-24 · B-756 (sin verificar).** Navegador toma paleta clara/oscura del tema según el entorno y conserva contraste en filas ocultas; test_temas.py. Ruff, pytest, ponytail-review y prueba UX/ventana no ejecutados.

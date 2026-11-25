@@ -364,3 +364,22 @@ def test_borrar_y_rellenar(s, tmp_path):
     fallo(s, "erase_and_fill_mesh", "INVALID_ARGUMENTS", bodies=m, faces=tapa_arriba, density=0)
     caja = llamar(s, "create_box", length=5, width=5, height=5)["bodies_created"][0]["id"]
     fallo(s, "erase_and_fill_mesh", "UNSUPPORTED_BODY_TYPE", bodies=caja, faces=[0])
+
+
+def test_b526_teselado_guardado_sin_recalcular(s, tmp_path, monkeypatch):
+    from omnicad.io_archivos import proyecto
+    cid = llamar(s, "create_sphere", radius=31.234567)["bodies_created"][0]["id"]
+    mid = llamar(s, "tessellate", bodies=cid, keep_original=False)["bodies_created"][0]["id"]
+    antes = s.doc.estado_final.cuerpos[mid].forma
+    ruta = proyecto.guardar(s.doc, tmp_path / "malla.omnicad")
+
+    def no_teselar(*args, **kwargs):
+        pytest.fail("Se volvió a teselar una malla guardada")
+
+    monkeypatch.setattr(ml, "desde_brep", no_teselar)
+    despues = proyecto.abrir(ruta).estado_final.cuerpos[mid].forma
+    assert np.array_equal(antes.vertices, despues.vertices)
+    assert np.array_equal(antes.caras, despues.caras)
+    assert np.array_equal(antes.grupos, despues.grupos)
+    assert antes.volumen() == despues.volumen()
+    assert despues.es_cerrada()
