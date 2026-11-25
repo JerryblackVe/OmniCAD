@@ -1388,6 +1388,7 @@ class PanelEscena(PanelFlotante):
         conf = QWidget()
         f = QFormLayout(conf)
         f.setContentsMargins(4, 4, 4, 4)
+        f.setVerticalSpacing(4)           # el estilo nativo no fija el alto del formulario
         f.setLabelAlignment(Qt.AlignLeft)
         self.lb_entorno = QLabel()
         self.preset = QComboBox()
