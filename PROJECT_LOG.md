@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-25 · B-423 cerrado.** La prueba separa el icono pintado del texto y borde de Qt; 11 OK offscreen y Ruff limpio. No se hizo la comprobacion visual en la ventana nativa.
 - **2026-11-25 · B-868 cerrado.** El cambio de camara se avisa sin OpenGL y antes del turno de dibujo, sin duplicados. test_visor_aviso_camara.py: 3 OK; Ruff limpio.
 - **2026-11-25 · B-865 cerrado.** El prefijo m de mm ya no dispara un aviso al teclear. Se prueba que 0.1 m completo sigue fuera de rango. test_raro_sk_perfil_giratorio.py: 90 OK en grupo; Ruff limpio.
 - **2026-11-25 · B-863 cerrado.** El test mide el caso grande con holgura real bajo el ViewCube; B-779 conserva su cobertura. test_b666_ventana_chica.py, test_b779_paleta_cubo.py y Perfil giratorio: 90 OK; Ruff limpio.
