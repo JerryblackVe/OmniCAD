@@ -2,8 +2,8 @@
 """Campo donde se escribe una expresión (PAR-9): sugiere parámetros mientras se teclea y alterna expresión y valor."""
 import re
 
-from PySide6.QtCore import QStringListModel, Qt
-from PySide6.QtWidgets import QCompleter, QLineEdit
+from PySide6.QtCore import QElapsedTimer, QStringListModel, Qt
+from PySide6.QtWidgets import QApplication, QCompleter, QLineEdit
 
 from ..timeline.parametros import ErrorExpresion
 from . import formato
@@ -54,11 +54,34 @@ class CampoExpresion(QLineEdit):
         super().__init__(texto)
         self.ctx, self.tipo = ctx, tipo
         self._expresion = None
+        self._doble_clic = QElapsedTimer()
         self.accion_fx = self.addAction(icono("parametros"), QLineEdit.ActionPosition.TrailingPosition)
         self.accion_fx.setCheckable(True)
         self.accion_fx.setToolTip("Alternar entre la expresión y su valor")
         self.accion_fx.toggled.connect(self._alternar)
         self.lista = autocompletar(self, lambda: nombres_sugeridos(ctx.parametros))
+
+    def mouseDoubleClickEvent(self, evento):
+        super().mouseDoubleClickEvent(evento)
+        if evento.button() == Qt.LeftButton and not evento.modifiers():
+            self._doble_clic.start()
+
+    def mousePressEvent(self, evento):
+        # B-648/B-553: el tercer clic rápido selecciona el valor completo aunque se desplace dentro del campo.
+        triple = (evento.button() == Qt.LeftButton and not evento.modifiers()
+                  and self._doble_clic.isValid() and self._doble_clic.elapsed() <= QApplication.doubleClickInterval())
+        self._doble_clic.invalidate()
+        super().mousePressEvent(evento)
+        if triple:
+            self.selectAll()
+
+    def focusOutEvent(self, evento):
+        self._doble_clic.invalidate()
+        super().focusOutEvent(evento)
+
+    def keyPressEvent(self, evento):
+        self._doble_clic.invalidate()
+        super().keyPressEvent(evento)
 
     def text(self):
         return super().text() if self._expresion is None else self._expresion
