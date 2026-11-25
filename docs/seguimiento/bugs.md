@@ -113,7 +113,6 @@ Cada fila salió de comparar la pestaña SÓLIDO (y PLÁSTICO, CONSTRUIR, INSPEC
 | B-832 | Sólido › Unir (B-558): `tests/test_b558_union_libre_pierde_pieza.py::test_la_union_suma_el_prisma_o_da_error_nunca_lo_pierde_callada` falla en main (visto por E3, 21/11): una unión libre pierde la pieza sin avisar | Abierto | Media | Ver si es regresión de una vía rápida; la unión debe sumar el prisma o dar error. | `tests/test_b558_union_libre_pierde_pieza.py` | 2026-11-21 |
 | B-864 | Tests › `test_b_641_repro`: el banco de rosca modelada falla en offscreen (RuntimeError, sin contexto OpenGL) | Abierto | Baja | Saltarlo sin OpenGL o correrlo con la humo | Suite del 25/11 (`evidencias/suite_pc_20261125/clasificacion.md`): falla igual en main `56752566` | 2026-11-25 |
 | B-867 | Tests › `test_render_dialogos_comunes[900]`: el panel Escena desplaza 18 px (el test admite 16) | Abierto | Baja | Ajustar el panel o el margen del test | Suite del 25/11 (`evidencias/suite_pc_20261125/clasificacion.md`): falla igual en main `56752566` | 2026-11-25 |
-| B-868 | Tests › `test_visor_aviso_camara`: `acercar()` no emite `camara_cambiada` enseguida (0 avisos, esperado 1) | Abierto | Baja | Ver si el aviso debe salir antes de pintar y arreglar código o test | Suite del 25/11 (`evidencias/suite_pc_20261125/clasificacion.md`): falla igual en main `56752566` | 2026-11-25 |
 
 ## Ensamblar (auditoría contra Fusion, 2026-10-25)
 
