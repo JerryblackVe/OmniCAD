@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-25 · OmniKernel sin OCC.** Engrosar reglada importa OCC solo al ejecutar. El visor usa TShape solo para formas OCC. Las dos regresiones de test_motor.py pasan; Ruff limpio. B-292 (memoria) no cambia.
 - **2026-11-25 · B-867 cerrado.** Escena usa un espaciado vertical fijo de 4 px; conserva acceso al pie y a ambas pestanas. test_render_dialogos_comunes.py: 11 OK; Ruff limpio.
 - **2026-11-25 · B-423 cerrado.** La prueba separa el icono pintado del texto y borde de Qt; 11 OK offscreen y Ruff limpio. No se hizo la comprobacion visual en la ventana nativa.
 - **2026-11-25 · B-868 cerrado.** El cambio de camara se avisa sin OpenGL y antes del turno de dibujo, sin duplicados. test_visor_aviso_camara.py: 3 OK; Ruff limpio.
@@ -301,6 +302,7 @@
 - **2026-11-19 · Exploración ver_grupos_caras.** Explorado códigobase OmniCAD-PREP-TEST-ver-grupos-caras. Hallazgos: `ver_grupos_caras` es un atajo Shift+F que muestra grupos de caras en mallas mediante `get_viewport_image(mesh_face_groups=True)`. No existe `test_prep_cmd_ver_grupos_caras.py`. Operaciones timeline: `OpGruposCaras`, `OpCombinarGruposCaras`, `OpCrearGrupoCaras` en `ops_malla.py`. UI: `cinta.py`, `ventana.py`, `iconos_extra.py`. API: `herramientas_inspeccion.py`. Cobertura UI→API en `test_cobertura_ui_api.py` línea 109.
 
 ## Lecciones aprendidas
+- [2026-11-25] No uses TShape/Location para reutilizar mallas del visor sin comprobar que la forma es OCC; el mismo flujo dibuja cuerpos OmniKernel. · Evidencia: test_motor.py::test_prueba_humo_arranca_con_omnikernel_y_ocp_bloqueado.
 - [2026-11-25] Para una acción compartida, usá el menú que la abrió para resolver dónde anclarla; buscá en la pestaña activa solo si no hay origen. · Evidencia: `test_p9b_mas.py::test_b769_mas_resuelve_el_grupo_del_boton_y_no_un_menu_ajeno` falló sin la guarda.
 - [2026-11-25] Al editar un comando, restaurá solo las selecciones adicionales explícitas, no la lista expandida de objetivos. · Evidencia: SOL-40, cambiar «Desde» de op3 a op4 reconstruyó ambos, `ui/comandos/modificar.py:1107–1124`.
 - [2026-11-24] Una compuerta que falla cerrado por no llegar a tiempo puede romper operaciones válidas: medir contra piezas reales antes de rechazar (rechazar solo si el conteo SÍ llegó y cruza). · Evidencia: medición 24/11 en `solidos_modificar.py › _cruza_mas_que` — el desfase de la cara plana de un cuerpo roscado sale en 0,13 s y su zona analiza en 19,51 s con n=0 — y `tests/test_b306_desfase_cara_libre_previa.py::test_en_un_cuerpo_con_rosca_la_cara_plana_sale_rapido_y_la_curva_falla_ya` rojo con la 1ª vuelta, verde con la 2ª; fila B-855.
