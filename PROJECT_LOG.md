@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-819 (sin verificar).** Retirada la entrada restriccion.linea_spline, ligada al B-690 cerrado. Regresión existente: test_ningun_id_de_la_lista_esta_cerrado. Ruff, pytest y ponytail-review no ejecutados; fila pendiente.
 - **2026-11-24 · B-662 (sin verificar).** La firma B-612 ya no figura en scripts/caza/conocidos.json; B-327 y B-378 tienen filas. Se conserva test_conocidos_nombran_filas_abiertas. Ruff, pytest y ponytail-review no ejecutados; fila pendiente.
 - **2026-11-24 · B-693, B-706, B-708, B-683 cerrados; B-511 Parcial (ChatGPT + verificado).** Filtro «Cuerpos» inicial, nombre «Desanclar<n>», Buscar similares rechaza hijos, SKILL.md con ejemplo acotado; B-511: Extruir y Reglada dan INVALID_ARGUMENTS (≤45). Los 5 tests nuevos fallan sin el arreglo; 796 OK, ruff limpio.
 - **2026-11-24 · B-683 (sin verificar).** SKILL.md cita dev check --help real y usa pytest_args dentro de run_checks, no como herramienta. Test de ejemplo acotado en test_setup.py. Ruff, pytest y regeneración de claves no ejecutados (sin checkout).

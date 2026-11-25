@@ -16,8 +16,6 @@ El ID es el del bug abierto en `docs/seguimiento/`. La entrada se QUITA en el mi
 """
 
 DESHABILITADO: dict[str, tuple[str, str]] = {
-    # un par de restricción (no es comando ni campo): lo lee `Boceto._exigir_disponible`
-    "restriccion.linea_spline": ("una línea y una spline no admiten Perpendicular; sin punto en común tampoco Tangente", "B-690"),
 }
 
 # Ítems de la cinta y de los menús que nunca tuvieron comando (`_i("Texto")` sin clave): ya salen en gris y acá dicen por qué.
