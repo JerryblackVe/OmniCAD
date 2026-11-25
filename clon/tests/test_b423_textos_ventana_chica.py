@@ -3,7 +3,7 @@
 import warnings
 import pytest
 from PySide6.QtCore import QPoint, QSettings, QSize, Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QMenu, QStyle, QStyleOptionToolButton, QToolButton, QToolTip
 
@@ -136,17 +136,31 @@ def test_iconos_enteros_sin_superposicion_y_accesos_restaurados(ventana):
         # Medir la silueta pintada, no solo el iconSize declarado: el layout la recortaba.
         b = visibles[0]
         modo = QIcon.Normal if b.isEnabled() else QIcon.Disabled
-        original = b.icon().pixmap(b.iconSize(), modo).toImage()
+        icono = b.icon()
+        pixmap = icono.pixmap(b.iconSize(), modo)
+        original = pixmap.toImage()
         colores = {original.pixel(x, y) for x in range(original.width()) for y in range(original.height())
-                   if original.pixelColor(x, y).alpha() == 255}
+                    if original.pixelColor(x, y).alpha() == 255}
         pintado = b.grab().toImage()
-        def caja(imagen, colores):
+        # Algunos colores del ícono también aparecen en el rótulo o el marco nativos de Qt.
+        # Un ícono transparente del mismo tamaño conserva el diseño y permite descartarlos.
+        transparente = QPixmap(pixmap.size())
+        transparente.setDevicePixelRatio(pixmap.devicePixelRatio())
+        transparente.fill(Qt.transparent)
+        b.setIcon(QIcon(transparente))
+        try:
+            fondo = b.grab().toImage()
+        finally:
+            b.setIcon(icono)
+        assert pintado.size() == fondo.size()
+
+        def caja(imagen, colores, fondo=None):
             puntos = [(x, y) for x in range(imagen.width()) for y in range(imagen.height())
-                      if imagen.pixel(x, y) in colores]
+                      if imagen.pixel(x, y) in colores and (fondo is None or imagen.pixel(x, y) != fondo.pixel(x, y))]
             assert puntos
             xs, ys = zip(*puntos, strict=True)
             return max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
-        ancho, alto = caja(pintado, colores)
+        ancho, alto = caja(pintado, colores, fondo)
         ancho_original, alto_original = caja(original, colores)
         assert ancho / alto == pytest.approx(ancho_original / alto_original, rel=0.1), b.text()
 
