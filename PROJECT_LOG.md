@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-25 · B-866 cerrado.** Se comprueba que 3+1 dibuja cuatro lados y que el rechazo de unidades cabe en un renglon. test_raro_sk_poligono_circunscrito.py y test_boceto_herramientas.py: 60 OK; Ruff limpio.
 - **2026-11-25 - B-861 cerrado.** El test verifica el espesor pedido, la medida de la pieza y que el rechazo deja el documento intacto: `test_b376_vaciado_espesor_enorme.py`, 4 OK; Ruff limpio.
 - **2026-11-25 ? B-862 cerrado.** Se fuerzan las fallas de malla y BOP local para probar el respaldo aislado: `test_b620_vaciado_reglado_sin_otro_proceso.py`, 2 OK; Ruff limpio.
 - **2026-11-25 · B-769 cerrado.** ⋮ de Archivo ancla en la barra superior, sin tocar la cinta. `test_p9b_mas.py::test_b769_mas_resuelve_el_grupo_del_boton_y_no_un_menu_ajeno`. Pytest: 787 OK; Ruff limpio.
