@@ -176,7 +176,7 @@ def test_tolerancia_fuera_de_rango_avisa_en_un_renglon(tarjeta):
     campo = _control(t, "Tolerancia")
     assert isinstance(campo, QDoubleSpinBox)
 
-    for texto in ("0", "-0.1", "10000"):
+    for texto in ("0", "-0.1", "10000", "0.1 m"):
         avisos.clear()
         _escribir(campo, texto)
 

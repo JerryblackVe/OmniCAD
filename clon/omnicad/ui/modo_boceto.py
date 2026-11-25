@@ -466,7 +466,7 @@ class _NumeroExpresion(NumeroDecimal):
         self._evaluar, self._avisar, self._etiqueta = evaluar, avisar, etiqueta
 
     def _valor(self, texto):
-        limpio = texto.replace(self.suffix(), "").strip().replace(",", ".")
+        limpio = texto.removesuffix(self.suffix()).strip().replace(",", ".")
         try:
             return float(limpio)
         except ValueError:
@@ -481,16 +481,22 @@ class _NumeroExpresion(NumeroDecimal):
         return self.value() if v is None else v
 
     def validate(self, texto, pos):
-        estado, nuevo, pos = super().validate(texto, pos)
-        if estado == QValidator.Invalid and re.fullmatch(r"[\w\s.,+\-*/^()%]+", texto):
-            return (QValidator.Acceptable if self._valor(texto) is not None else QValidator.Intermediate), texto, pos
-        return estado, nuevo, pos
+        limpio = texto.removesuffix(self.suffix()).strip()
+        if re.fullmatch(r"[\w\s.,+\-*/^()%]+", limpio) and not re.fullmatch(r"[+-]?[\d.,]*", limpio):
+            valor = self._valor(texto)
+            entra = valor is not None and self.minimum() <= valor <= self.maximum()
+            return (QValidator.Acceptable if entra else QValidator.Intermediate), texto, pos
+        return super().validate(texto, pos)
 
     def fixup(self, texto):
-        if texto.replace(self.suffix(), "").strip() and self._valor(texto) is None:
-            self._avisar(f"{self._etiqueta}: «{texto.strip()}» no se puede evaluar; queda {self.value():g} mm.")
-        elif self._valor(texto) is not None:
-            super().fixup(texto)
+        valor = self._valor(texto)
+        if valor is None:
+            if texto.removesuffix(self.suffix()).strip():
+                self._avisar(f"{self._etiqueta}: expresión inválida.")
+        elif valor > self.maximum():
+            self.excedido.emit(self.maximum())
+        elif valor < self.minimum():
+            self.insuficiente.emit(self.minimum())
 
 
 class TarjetaHerramienta(QFrame):
