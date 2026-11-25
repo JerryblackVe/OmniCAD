@@ -47,7 +47,7 @@ def v(ini):
 
 
 def _menu_de(v, clave):
-    return next(m for m in v.findChildren(QMenu) if v.acciones[clave] in m.actions())
+    return next(m for m in v.cinta.pila.currentWidget().findChildren(QMenu) if v.acciones[clave] in m.actions())
 
 
 def test_alternar_agrega_al_final_o_quita():
@@ -113,6 +113,22 @@ def test_b769_la_casilla_sigue_los_botones_de_la_cinta(v):
         menu.deleteLater()
         QTest.qWait(10)
     assert accion not in botones() and "extruir" not in leer_barra(v.prefs)
+
+
+def test_b769_mas_resuelve_el_grupo_del_boton_y_no_un_menu_ajeno(v):
+    accion = v.acciones["extruir"]
+    origen = _menu_de(v, "extruir")
+    grupo = origen.parentWidget()
+    ajeno = QMenu(v)
+    ajeno.addAction(accion)
+    assert v._filtro_mas._grupo_cinta(accion, ajeno) is grupo
+    actual = v.cinta.pila.currentIndex()
+    v.cinta.pila.setCurrentIndex(actual + 1)
+    try:
+        assert v._filtro_mas._grupo_cinta(accion, origen) is grupo
+    finally:
+        v.cinta.pila.setCurrentIndex(actual)
+        ajeno.deleteLater()
 
 
 def test_un_clic_fuera_del_mas_sigue_ejecutando_el_comando(v):
@@ -305,6 +321,16 @@ def test_b770_anclar_al_final_quitar_y_persistir(ini):
         QTest.qWait(30)
 
     v = _ventana(ini)
+    # Un menú abierto debe alternar sobre la lista vigente, no la capturada al abrirlo.
+    retenido = v._filtro_mas.construir_menu(v.acciones["caja"], grupo(v).menu())
+    v.cinta.anclar("SÓLIDO", "CREAR", "cilindro")
+    retenido.actions()[1].trigger()
+    assert claves(v) == [*base, "cilindro", "caja"]
+    retenido.deleteLater()
+    alternar_caja(v)
+    assert claves(v) == [*base, "cilindro"]
+    v.cinta.personalizar({})
+    v.cinta.cambio_personal.emit({})
     alternar_caja(v)
     assert claves(v) == [*base, "caja"]
     _cerrar(v)

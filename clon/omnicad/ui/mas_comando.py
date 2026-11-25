@@ -191,13 +191,16 @@ class FiltroMas(QObject):
         """Grupo de la pestaña activa que contiene el menú de origen, incluso si es un submenú."""
         while isinstance(origen, QMenu) and isinstance(origen.parentWidget(), QMenu):
             origen = origen.parentWidget()
+        if isinstance(origen, QMenu):
+            boton = origen.parentWidget()
+            if isinstance(boton, QToolButton) and boton.property("seccion_cinta"):
+                return boton
         pagina = self.ventana.cinta.pila.currentWidget()
         for titulo in pagina.findChildren(QToolButton, "titulo_grupo"):
             menu = titulo.menu()
             if menu is None:
                 continue
-            if origen is menu or (origen is None and (accion in menu.actions() or any(
-                    accion in sub.actions() for sub in menu.findChildren(QMenu)))):
+            if accion in menu.actions() or any(accion in sub.actions() for sub in menu.findChildren(QMenu)):
                 return titulo
         return None
 
