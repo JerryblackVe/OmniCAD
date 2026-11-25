@@ -344,3 +344,18 @@ def test_sol40_alinear_mueve_todos_los_cuerpos_del_componente():
     assert set(op.p["cuerpos"]) == {"op1.c1", cid}
     assert g.es_valida(_cuerpo(doc, cid).forma)
     assert g.caja_envolvente(_cuerpo(doc, cid).forma) != antes
+
+
+def test_sol39_mover_componente_actualiza_cuerpos_y_pose():
+    from omnicad.timeline.ops_ensamblar import OpComponente
+    from omnicad.ui.comandos.modificar import MoverCopiar
+    doc = _doc_caja()
+    doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="caja", ancho="10", largo="10", alto="10"))
+    comp = OpComponente(doc.nuevo_id(), "Pieza", cuerpos=["op1.c1", "op2.c1"])
+    doc.agregar(comp)
+    op = _ejecutar(doc, MoverCopiar, objeto="componentes", tipo="traslacion", dx="30 mm",
+                   cuerpos=[_hit(doc, {"tipo": "cuerpo", "cuerpo": "op1.c1"})])
+    assert op.p["componentes"] == [comp.id]
+    assert doc.estado_final.componentes[comp.id]["matriz"][0][3] == pytest.approx(30)
+    for cid in ("op1.c1", "op2.c1"):
+        assert g.caja_envolvente(_cuerpo(doc, cid).forma)[0][0] == pytest.approx(30)

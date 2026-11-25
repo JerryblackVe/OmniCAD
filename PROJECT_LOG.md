@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · SOL-39 (Parcial, sin verificar).** Mover/copiar agrega Componentes y transforma poses y cuerpos; copia por familia. Test de traslado. Falta MCP/doc, edición y copia verificadas. Ruff, pytest, skills y UX no ejecutados.
 - **2026-11-24 · B-757 (sin verificar).** Lectura del gestor: inicia sin hover; distancia visible, conicidad solo al activar anillo. Se agrega test de apertura, sin cambiar producción. Falta prueba en Windows; ruff, pytest y skills no ejecutados.
 - **2026-11-24 · B-472 (sin verificar).** Extruir toma el centro del perfil para las flechas y anillos, en vez del vértice del borde. Test de tres direcciones y posición P-139 actualizada; conserva arrastres. Ruff, pytest, skills y UX no ejecutados.
 - **2026-11-24 · B-774 (sin verificar).** Arranque desactiva FadeMenu y AnimateMenu de Qt; tests de estado y llamadas. Falta confirmar parpadeo en Windows. Ruff, pytest, skills y UX no ejecutados.

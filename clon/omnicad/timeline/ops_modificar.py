@@ -118,7 +118,7 @@ class OpMover(Operacion):
     (Move Object › Sketch Objects: referencias a curvas sueltas) mueve solo esas curvas dentro de su boceto, sin salir
     de su plano."""
     TIPO, ETIQUETA, ICONO = "mover", "Mover", "✥"
-    PARAMS = {"cuerpos": [], "caras": [], "bocetos": [], "curvas_boceto": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
+    PARAMS = {"componentes": [], "cuerpos": [], "caras": [], "bocetos": [], "curvas_boceto": [], "tipo": "libre", "dx": "0 mm", "dy": "0 mm", "dz": "0 mm", "rx": "0 deg",
               "ry": "0 deg", "rz": "0 deg", "pivote": None, "direccion": None, "distancia": "10 mm", "eje": None,
               "angulo": "90 deg", "origen": None, "destino": None, "x": "0 mm", "y": "0 mm", "z": "0 mm",
               "copiar": False, "ligera": False, "pivote_xyz": None}
@@ -127,7 +127,7 @@ class OpMover(Operacion):
 
     def dependencias(self):
         p = self.p
-        return (_deps_objetivo(p["cuerpos"]) | set(p.get("bocetos") or []) | ent.dependencias_de(p.get("pivote"), p.get("direccion"),
+        return (_deps_objetivo(p["cuerpos"]) | _deps_objetivo(p.get("componentes") or []) | set(p.get("bocetos") or []) | ent.dependencias_de(p.get("pivote"), p.get("direccion"),
                                                                    p.get("eje"), p.get("origen"), p.get("destino"),
                                                                    p.get("caras"), p.get("curvas_boceto"))
                 ) - {self.id}
@@ -209,6 +209,25 @@ class OpMover(Operacion):
             estado.bocetos[bid] = BocetoResuelto(bid, br.nombre, boceto, pl, detectar_boceto(boceto, pl), br.solver)
 
     def ejecutar(self, estado, ctx):
+        if self.p.get("componentes"):
+            from .ops_ensamblar import _comp_o_error, _mover_componentes, copiar_componente, familia
+            elegidos = list(dict.fromkeys(_comp_o_error(estado, c) for c in self.p["componentes"]))
+            comps = set().union(*(familia(estado, c) for c in elegidos))
+            cuerpos = [c for c in estado.cuerpos.values() if c.componente in comps]
+            if not cuerpos:
+                raise ErrorOperacion("El componente no tiene cuerpos.")
+            m = self.matriz(estado, ctx, [c.forma for c in cuerpos])
+            if self.p.get("copiar"):
+                raices = [c for c in elegidos if not any(c in familia(estado, otro) for otro in elegidos if otro != c)]
+                for i, c in enumerate(raices, 1):
+                    nuevo = f"{self.id}.s{i}"
+                    copiar_componente(estado, c, nuevo, self.id, lambda cuerpo: cuerpo.forma.copia()
+                                      if cuerpo.tipo == "malla" else geo.transformar(cuerpo.forma, np.identity(4)),
+                                      estado.componentes[c].get("padre") or "")
+                    _mover_componentes(estado, familia(estado, nuevo), m)
+            else:
+                _mover_componentes(estado, comps, m)
+            return
         if self.p.get("caras"):
             return self._mover_caras(estado, ctx)
         if self.p.get("curvas_boceto"):

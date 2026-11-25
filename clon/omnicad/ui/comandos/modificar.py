@@ -911,7 +911,7 @@ class MoverCopiar(Comando):
         bocetos = lambda v: v.get("objeto") == "bocetos"  # noqa: E731
         return [
             Opciones("objeto", "Mover objeto", {"cuerpos": ("Cuerpos", "cuerpo"), "caras": ("Caras", "dividir_cara"),
-                                                "bocetos": ("Objetos del boceto", "boceto")}),
+                                                "bocetos": ("Objetos del boceto", "boceto"), "componentes": "Componentes"}),
             Seleccion("cuerpos", "Selección", {"cuerpo"}, maximo=None, visible_si=lambda v: not caras(v) and not bocetos(v)),
             Seleccion("bocetos", "Selección", {"curva_boceto"}, maximo=None, visible_si=bocetos,
                       ayuda="Las curvas elegidas se mueven dentro del plano de su boceto. Para mover un boceto entero, usá la "
@@ -947,7 +947,7 @@ class MoverCopiar(Comando):
             Expresion("z", "Posición Z", "0 mm", visible_si=t("punto_a_posicion"), grupo="Posición"),
             Casilla("copiar", "Crear copia"),
             Casilla("ligera", "Copia ligera", avanzado=True,
-                    visible_si=lambda v: bool(v.get("copiar")) and not caras(v),
+                    visible_si=lambda v: bool(v.get("copiar")) and not caras(v) and v.get("objeto") != "componentes",
                     ayuda="La copia es la MISMA geometría con otra ubicación: editar el original la cambia también."),
         ]
 
@@ -973,6 +973,11 @@ class MoverCopiar(Comando):
                  bocetos=enteros, curvas_boceto=refs(v, "bocetos") if por_bocetos and not enteros else [],
                  ligera=bool(v.get("ligera")) and not por_caras, pivote=ref1(v, "pivote"), direccion=ref1(v, "direccion"), eje=ref1(v, "eje"),
                  origen=ref1(v, "origen"), destino=ref1(v, "destino"))
+        if v.get("objeto") == "componentes":
+            comps = list(dict.fromkeys(ctx.estado.cuerpos[c].componente for c in _cuerpos(v)))
+            if not comps or any(c not in ctx.estado.componentes for c in comps):
+                raise ErrorComando("Elegí cuerpos de un componente.")
+            p.update(componentes=comps, cuerpos=[], ligera=False)
         return self.crear_op(OpMover, v, ctx, **p)
 
     def manipuladores(self, ctx, v):
@@ -984,6 +989,11 @@ class MoverCopiar(Comando):
         from ...timeline import entidades as ent
         from .. import manipuladores as mp
         ids = [c for c in _cuerpos(v) if c in ctx.estado.cuerpos]
+        if v.get("objeto") == "componentes":
+            from ...timeline.ops_ensamblar import familia
+            comps = set().union(*(familia(ctx.estado, ctx.estado.cuerpos[c].componente) for c in ids
+                                  if ctx.estado.cuerpos[c].componente in ctx.estado.componentes))
+            ids = [c.id for c in ctx.estado.cuerpos.values() if c.componente in comps]
         if not ids:
             return []
         L = lambda k: evaluar_o_cero(ctx, v.get(k))  # noqa: E731
@@ -1038,6 +1048,17 @@ class MoverCopiar(Comando):
                  objeto="caras" if op.p.get("caras") else "bocetos" if op.p.get("bocetos") or op.p.get("curvas_boceto") else "cuerpos",
                  bocetos=_hits_bocetos(op.p.get("bocetos"), ctx.estado) + hits(op.p.get("curvas_boceto") or [], ctx.estado),
                  definir_pivote=bool(op.p.get("pivote")))
+        if op.p.get("componentes"):
+            from ...timeline.ops_ensamblar import familia
+            v["objeto"] = "componentes"
+            ids = []
+            for comp in op.p["componentes"]:
+                cid = next((c.id for c in ctx.estado.cuerpos.values() if c.componente == comp), None)
+                if cid is None:
+                    cid = next((c.id for c in ctx.estado.cuerpos.values() if c.componente in familia(ctx.estado, comp)), None)
+                if cid is not None:
+                    ids.append(cid)
+            v["cuerpos"] = _hits_cuerpos(ids, ctx.estado)
         for k in ("pivote", "direccion", "eje", "origen", "destino"):
             v[k] = _hit1(op.p.get(k), ctx.estado)
         return v
