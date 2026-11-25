@@ -86,3 +86,22 @@ def test_en_anchos_intermedios_cada_boton_queda_dentro_de_su_grupo(ventana, anch
         for otro in visibles:
             if otro is not b and otro.parentWidget() is b.parentWidget():
                 assert not b.geometry().intersects(otro.geometry()), (ancho, pestana, b.text(), otro.text())
+
+
+def test_b556_cinta_a_1024x700_sin_rotulos_partidos(ventana):
+    v = ventana
+    v.resize(1024, 700)
+    QTest.qWait(30)
+    botones = _botones(v, "SÓLIDO")
+    assert any(b.isVisible() for b in botones)
+    for t in v.cinta.pila.currentWidget().findChildren(QToolButton, "titulo_grupo"):
+        completo = t.property("titulo_completo")
+        if completo and t.isVisible():
+            assert t.text() in (completo, "▾")
+            assert t.menu() is not None and t.menu().actions()
+            assert t.width() >= t.fontMetrics().horizontalAdvance(t.text())
+    from omnicad.ui.comandos.crear import Agujero
+    panel = v.ejecutar_comando(Agujero())
+    QTest.qWait(30)
+    assert panel.boton_ok.isVisible() and panel.boton_cancelar.isVisible()
+    panel.cancelar()
