@@ -863,3 +863,13 @@ def test_b486_mover_distancia_cero_no_crea_paso(s, distancia):
     r = api.llamar(s, "move_body", {"body": cid, "type": "translate", "direction": "X", "distance": distancia})
     assert not r["ok"] and r["error_kind"] == "INVALID_ARGUMENTS", r
     assert foto(s) == antes
+
+
+def test_h83_extrude_new_component(s):
+    llamar(s, "create_sketch", plane="XY", name="Base")
+    llamar(s, "draw_rectangle", x1=0, y1=0, x2=10, y2=5)
+    r = llamar(s, "extrude", sketch="Base", distance=4, operation="new_component")
+    cid = r["bodies_created"][0]["id"]
+    assert r["component"]["id"] == r["feature"]["id"]
+    assert s.doc.estado_final.cuerpos[cid].componente == r["component"]["id"]
+    assert volumen(s, cid) == pytest.approx(200)

@@ -180,7 +180,7 @@ def _avisar_curvas_sin_perfil(sesion, br, sop):
              "Con reverse vacío, cut entra hacia el material.",
              modifica=True)
 def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: Expr = "10 mm",
-            operation: Literal["new_body", "join", "cut", "intersect", "auto"] = "new_body",
+            operation: Literal["new_body", "new_component", "join", "cut", "intersect", "auto"] = "new_body",
             direction: Literal["one_side", "two_sides", "symmetric"] = "one_side", taper_angle: Expr = 0,
             target: Cuerpos | None = None, distance2: Expr | None = None, reverse: bool | None = None,
             faces: Cuerpos | None = None, thin: bool = False, wall_thickness: Expr | None = None,
@@ -199,7 +199,7 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     profiles: lista de perfiles coplanares, p. ej. [{"sketch": "A", "profile": 0}, {"sketch": "B", "profile": "all"}].
         sketch es id o nombre y profile usa las opciones de profile (0 por defecto). Sin sketch, profile ni open_curves externos.
     distance: distancia de extrusión: número en mm o expresión, p. ej. "espesor" o "2 * radio".
-    operation: "new_body", "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; "join" si no se mete y el perfil es una cara (faces) de ese sólido; si no, "new_body"; apoyarse en una cara no cuenta).
+    operation: "new_body", "new_component" (crea un componente con los cuerpos nuevos), "join", "cut", "intersect" o "auto" ("cut" si la extrusión comparte volumen con un sólido visible o con target; "join" si no se mete y el perfil es una cara (faces) de ese sólido; si no, "new_body"; apoyarse en una cara no cuenta).
     direction: "one_side", "two_sides" o "symmetric".
     taper_angle: conicidad en grados (número o expresión): positivo ensancha hacia el final, negativo estrecha; 0 = recto.
     target: cuerpo(s) afectados por join, cut, intersect o auto (id o nombre); vacío = los sólidos visibles que toca.
@@ -284,8 +284,10 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     p = {"boceto": sop.id if sop is not None else "",
          "perfiles": [(_ref_perfil(sop_i, x) if profiles is not None else OpExtrusion.referencia_perfil(x))
                       for sop_i, _br, elegidos in grupos for x in elegidos],
-         "distancia": texto_expr(distance), "operacion": OPERACIONES[operation],
-         "objetivos": _objetivos(sesion, "cut" if auto else operation, target), "invertir": reverse,
+         "distancia": texto_expr(distance),
+         "operacion": "componente_nuevo" if operation == "new_component" else OPERACIONES[operation],
+         "objetivos": _objetivos(sesion, "cut" if auto else "new_body" if operation == "new_component" else operation, target),
+         "invertir": reverse,
          "conicidad": texto_expr(taper_angle),
          "conicidad2": texto_expr(taper_angle if taper_angle2 is None else taper_angle2)}
     if faces:
@@ -339,7 +341,10 @@ def extrude(sesion, sketch: str | None = None, profile: Perfiles = 0, distance: 
     elif auto and {r["cuerpo"] for r in op.p.get("caras") or []} & {c.id for c in _solidos_auto(sesion, op)}:
         op.p["operacion"] = "unir"               # B-338: nace de una cara del sólido y sale (como Fusion)
         operation = "join"
-    resultado = _agregar(sesion, op, operation != "new_body")
+    resultado = _agregar(sesion, op, operation not in ("new_body", "new_component"))
+    if operation == "new_component":
+        from .herramientas_ensamble import info_componente
+        resultado["component"] = info_componente(sesion, op.id)
     resultado["profiles_used"] = [br_i.perfiles.index(x) for _sop, br_i, elegidos in grupos for x in elegidos]
     if auto:
         resultado["operation"] = operation

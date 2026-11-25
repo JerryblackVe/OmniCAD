@@ -173,7 +173,7 @@ class Extruir(Comando):
             Casilla("cadena", "Cadena tangente", True, visible_si=lambda v: v.get("tipo") == "delgada",
                     ayuda="Al elegir una curva abierta se eligen también las que siguen por tangencia, y al cambiar el "
                           "boceto la pared sigue a las curvas tangentes nuevas (un empalme)."),
-            campo_operacion(),
+            campo_operacion(componente=True),
             campo_objetivos(),
         ]
 
@@ -221,7 +221,8 @@ class Extruir(Comando):
                                          "distancia", "invertir", "conicidad", "distancia2", "conicidad2", "espesor",
                                          "ubicacion", "operacion", "hasta_modo", "desfase_hasta", "extension2")}
         params["cadena"] = bool(v.get("cadena", True))
-        params.update(boceto=boceto, perfiles=perfiles, caras=caras, curvas=curvas, objetivos=objetivos(v),
+        params.update(boceto=boceto, perfiles=perfiles, caras=caras, curvas=curvas,
+                      objetivos=[] if v.get("operacion") == "componente_nuevo" else objetivos(v),
                       objetivo="", inicio_objeto=ref1(v, "inicio_objeto"), hasta=ref1(v, "hasta"),
                       hasta2=ref1(v, "hasta2"), simetrica=False)
         return self.crear_op(OpExtrusion, v, ctx, **params)

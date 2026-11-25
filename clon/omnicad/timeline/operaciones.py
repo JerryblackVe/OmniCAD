@@ -1279,7 +1279,8 @@ class OpExtrusion(_OpConPerfiles):
     OPCIONES = {"tipo": ("solida", "delgada"), "inicio": ("plano", "desfase", "objeto"), "direccion": DIRECCIONES,
                 "medida": ("mitad", "total"), "extension": ("distancia", "objeto", "todo"),
                 "extension2": ("distancia", "objeto", "todo"), "hasta_modo": ("cara", "adyacentes", "cuerpo", "a_traves"),
-                "ubicacion": ("lado1", "lado2", "centro"), "operacion": OPERACIONES_CUERPO}
+                "ubicacion": ("lado1", "lado2", "centro"),
+                "operacion": {**OPERACIONES_CUERPO, "componente_nuevo": "Componente nuevo"}}
 
     def expresiones(self):
         return [self.p[k] for k in self.EXPRESIONES if k in self.p]
@@ -1297,10 +1298,19 @@ class OpExtrusion(_OpConPerfiles):
                     limites[limite.cuerpo] = limite.forma
             except Exception:  # noqa: BLE001 — vía rápida: sin el límite, `_toca` mide el cuerpo entero
                 pass
-        afectados = aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"], self._objetivo(), apoyos=apoyos,
-                                      limites=limites)
+        componente_nuevo = self.p["operacion"] == "componente_nuevo"
+        afectados = aplicar_resultado(estado, ctx, self.id, forma, "nuevo" if componente_nuevo else self.p["operacion"],
+                                      "" if componente_nuevo else self._objetivo(), apoyos=apoyos, limites=limites)
         self._registrar_usados(afectados)
         _exigir_cuerpo_con_volumen(estado, afectados)
+        if componente_nuevo:
+            # H-83: una sola operación de timeline, con componente propio.
+            padre = estado.componente_activo if estado.componente_activo in estado.componentes else ""
+            matriz = estado.componentes.get(padre, {}).get("matriz", np.identity(4).tolist())
+            estado.componentes[self.id] = {"nombre": self.nombre, "padre": padre, "fijo": False,
+                                           "matriz": copy.deepcopy(matriz), "base": copy.deepcopy(matriz)}
+            for cid in afectados:
+                estado.cuerpo(cid).componente = self.id
         if self._guardar_herramienta_previa:
             self._herramienta_previa = forma
 

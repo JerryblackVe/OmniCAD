@@ -127,8 +127,9 @@ def con_analisis(clase):
     return clase
 
 
-def campo_operacion(defecto="nuevo"):
-    return Opciones("operacion", "Operación", OPCIONES_OPERACION, defecto)
+def campo_operacion(defecto="nuevo", componente=False):
+    opciones = {**OPCIONES_OPERACION, "componente_nuevo": ("Componente nuevo", "op_nuevo")} if componente else OPCIONES_OPERACION
+    return Opciones("operacion", "Operación", opciones, defecto)
 
 
 def solidos_visibles(ctx):
@@ -271,7 +272,7 @@ def con_operacion_automatica(clase):
 def campo_objetivos():
     """«Objetos para cortar» de Fusion: vacío = automático (los cuerpos que toca)."""
     return Seleccion("objetivos", "Objetos", {"cuerpo"}, minimo=0, maximo=None,
-                     visible_si=lambda v: v.get("operacion") != "nuevo",
+                     visible_si=lambda v: v.get("operacion") not in ("nuevo", "componente_nuevo"),
                      ayuda="Cuerpos afectados. Sin selección: los que toca la herramienta.")
 
 

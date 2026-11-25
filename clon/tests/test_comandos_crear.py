@@ -681,3 +681,19 @@ def test_labio_y_acanalado_en_el_dialogo():
     assert campos["cuerpo_ranura"].visible_si({"tipo": "labio y acanalado"})
     assert not campos["cuerpo_ranura"].visible_si({"tipo": "labio"})
     assert campos["holgura"].visible_si({"tipo": "labio y acanalado"})
+
+
+def test_h83_extruir_crea_componente_en_un_paso():
+    from omnicad.ui.comando import ContextoComando
+    from omnicad.ui.comandos.solido import Extruir
+    doc = Documento()
+    bid, _ = _boceto(doc, rect=((0, 0), (10, 5)))
+    campo = next(c for c in Extruir().campos(ContextoComando(doc)) if c.clave == "operacion")
+    assert "componente_nuevo" in campo.opciones
+    op = _ejecutar(doc, Extruir, perfiles=[_perfil(doc, bid)], distancia="4 mm", operacion="componente_nuevo")
+    assert len(doc.operaciones) == 2
+    assert _ultimo(doc).componente == op.id and op.id in doc.estado_final.componentes
+    assert g.es_valida(_ultimo(doc).forma)
+    assert g.volumen(_ultimo(doc).forma) == pytest.approx(200)
+    doc.deshacer()
+    assert not doc.estado_final.componentes and not doc.estado_final.cuerpos
