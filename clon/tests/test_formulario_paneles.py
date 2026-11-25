@@ -36,7 +36,7 @@ def test_describir_ref_dice_tipo_rasgo_y_a_que_pertenece():
     cara = {"tipo": "cara", "cuerpo": "op1.c1", "firma": {"geom": "plano", "normal": [0, 0, 1]}}
     assert F.describir_ref(cara, c) == "Cara +Z · Caja1"
     inclinada = {"tipo": "cara", "cuerpo": "op1.c1", "firma": {"geom": "plano", "normal": [0.6, 0, 0.8]}}
-    assert F.describir_ref(inclinada, c) == "Cara plana · Caja1"
+    assert F.describir_ref(inclinada, c) == "Cara plana 36.9°Z/0.0°XY · Caja1"
     cil = {"tipo": "cara", "cuerpo": "op1.c1", "firma": {"geom": "cilindro", "radio": 5.0}}
     assert F.describir_ref(cil, c) == "Cara cilíndrica Ø10 · Caja1"
     linea = {"tipo": "arista", "cuerpo": "op1.c1", "firma": {"geom": "linea", "largo": 30.0}}
@@ -44,6 +44,16 @@ def test_describir_ref_dice_tipo_rasgo_y_a_que_pertenece():
     assert F.describir_ref({"tipo": "eje", "id": "Z"}, c) == "Eje Z"
     assert F.describir_ref({"tipo": "plano", "id": "op3"}, c) == "Plano PlanoMedio"
     assert F.describir_ref({"tipo": "cuerpo", "cuerpo": "op9.c1"}, c) == "op9.c1 (ya no existe)"
+
+
+def test_p132_caras_inclinadas_se_distinguen_y_no_exceden_45():
+    c = _ctx()
+    c.estado.cuerpos["op1.c1"].nombre = "Nombre de cuerpo " * 4
+    a = {"tipo": "cara", "cuerpo": "op1.c1", "firma": {"geom": "plano", "normal": [0.6, 0, 0.8]}}
+    b = {**a, "firma": {"geom": "plano", "normal": [0, 0.6, 0.8]}}
+    textos = [F.describir_ref(ref, c) for ref in (a, b)]
+    assert textos[0] != textos[1]
+    assert all(len(t) <= 45 and "36.9°Z" in t for t in textos)
 
 
 def test_describir_seleccion_resume_varios_y_marca_el_origen():

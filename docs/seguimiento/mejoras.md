@@ -156,7 +156,7 @@ Sin verificar 2.
 |---|---|---|---|---|---|---|
 | UI-2 | El escalado real de Windows (125 % y 150 %) y los monitores nuevos no se probaron | Sin verificar | Baja | Probar paneles al 125/150 % real de Windows y al cambiar de monitor. | scripts/prueba_ui/paneles_temas.py | 2026-10-31 |
 | UI-6 | Comparar las agrupaciones de opciones con la ayuda de Fusion | Sin verificar | Media | Crear una matriz por comando de opciones agrupadas y avanzadas en Fusion. | docs/auditorias/ui_paneles_2026-10-31.md | 2026-10-31 |
-| P-132 | Distinguir caras planas inclinadas al elegirlas | Abierto | Baja | Añadir ángulo o área en describir_ref sin desbordar el botón. | Informe Construir 2026-11-10 (B-282) | 2026-11-10 |
+| P-132 | Distinguir caras planas inclinadas al elegirlas | Sin verificar | Baja | describe_ref muestra inclinación y rumbo de normal; acorta nombre a 45 caracteres. Test de ángulos y nombre largo; falta comprobar ancho real. | Informe Construir 2026-11-10 (B-282) | 2026-11-10 |
 
 ## Menú del boceto (decisión del usuario)
 

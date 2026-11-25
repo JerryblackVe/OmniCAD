@@ -11,6 +11,8 @@ paneles de boceto (patrón, simetría…). Sin lógica geométrica: solo cómo s
   - `armar_cabecera` / `fila_mensaje` / `poner_mensaje` / `armar_estado`: la cabecera movible (ícono, título, botones y ✕) y la línea de
     estado con símbolo que usan TODOS los paneles de herramienta (comando, patrón, simetría, escala/mover y carácter).
 """
+import math
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QValidator
 from PySide6.QtWidgets import QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
@@ -104,6 +106,14 @@ def describir_ref(ref, ctx):
             eje = _eje_cartesiano(firma["normal"]) if geom == "plano" and "normal" in firma else ""
             if eje:     # B-282: el eje ya dice que es plana; corto, entra en el botón sin perder lo que la distingue
                 return f"Cara {eje} · {cuerpo}"
+            if geom == "plano" and "normal" in firma:
+                x, y, z = firma["normal"]
+                # P-132: ángulos de la normal respecto de +Z y en XY.
+                inclinacion = math.degrees(math.atan2(math.hypot(x, y), z))
+                rumbo = math.degrees(math.atan2(y, x))
+                rasgo = f"Cara plana {inclinacion:.1f}°Z/{rumbo:.1f}°XY · "
+                espacio = 45 - len(rasgo)
+                return rasgo + (cuerpo if len(cuerpo) <= espacio else cuerpo[:espacio - 1] + "…")
             extra = f"Ø{2 * firma['radio']:.4g}" if "radio" in firma else ""
             return f"Cara {_GEOM_CARA.get(geom, '')} {extra}".replace("  ", " ").strip() + f" · {cuerpo}"
         if t == "arista":
