@@ -993,6 +993,9 @@ class LienzoInteraccionMixin:
         self.update()
 
     def _admite_entrada(self, e):
+        # B-831: Cota admite expresiones; sin caja, ninguna tecla de texto es un atajo.
+        if self.herramienta == "cota":
+            return e.text().isprintable() and not e.modifiers() & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)
         if not (bool(e.text()) and e.text() in "0123456789.,-(" and not e.modifiers() & Qt.ControlModifier):
             return False
         h = self.herramienta
@@ -1051,6 +1054,15 @@ class LienzoInteraccionMixin:
         if k == Qt.Key_Control:
             self._modificadores_raton = e.modifiers()       # Ctrl apaga las ayudas mientras se mantiene
             self._refrescar_cursor()
+        if h == "cota" and self._admite_entrada(e):
+            if self.entrada is not None:
+                campo = self.entrada.campos[0]
+                campo.setFocus()
+                if campo.text() == self._texto_inicial:
+                    campo.selectAll()
+                campo.insert(e.text())
+            e.accept()                       # sin geometría elegida aún, no hay valor que editar
+            return
         # B-689: la caja de la espiral queda abierta tras los 2 clics y el foco puede quedar en el Lienzo;
         # lo tecleado entra en «Vueltas» y Enter la crea (con lo escrito o los valores por defecto, como Fusion).
         if h == "espiral" and self.entrada is not None:
