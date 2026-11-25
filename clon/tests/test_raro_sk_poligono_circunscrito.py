@@ -30,7 +30,7 @@ CASOS = [
     ("lados", "-5", False),
     ("lados", "100", False),
     ("lados", "6 mm", False),
-    ("lados", "3+1", False),
+    ("lados", "3+1", True),
 ]
 
 
@@ -96,4 +96,6 @@ def test_valores_raros_de_sk_poligono_circunscrito_no_rompen_el_boceto(lz, campo
     else:
         assert lz.entrada is None, (campo, texto)
         assert len(lz.b.curvas) >= 1, (campo, texto, len(lz.b.curvas))
+        if (campo, texto) == ("lados", "3+1"):
+            assert sum(lz.b.tipo_de(cid) == "linea" for cid in lz.b.curvas) == 4
         assert not [m for m in lz.mensajes if "mayor que 0" in m or "máximo" in m or "entre 3 y" in m], lz.mensajes

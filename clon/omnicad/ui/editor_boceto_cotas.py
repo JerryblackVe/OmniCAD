@@ -186,7 +186,7 @@ class LienzoCotasMixin:
             try:
                 n = int(round(self.evaluar(texto, ESCALAR, True)))
             except ErrorExpresion as e:
-                raise ErrorBoceto(f"«{clave}»: {e}") from e
+                raise ErrorBoceto(f"{clave.capitalize()}: ingresá un número sin unidad.") from e
             return validar_lados_poligono(n) if clave == "lados" else validar_puntas_estrella(n)
         valor = self.evaluar(texto, ANGULO if clave in ANGULARES else LONGITUD)
         if clave in ANGULARES:              # B-718/B-719: hasta ANGULO_MAXIMO, con un mensaje de 1 renglón
