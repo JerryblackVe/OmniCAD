@@ -188,13 +188,15 @@ class FiltroMas(QObject):
 
     # ------------------------------------------------------------ menú «Más»
     def _grupo_cinta(self, accion, origen):
-        """Grupo de la pestaña activa que contiene el menú de origen, incluso si es un submenú."""
+        """Grupo del menú de origen, incluso si es un submenú; sin origen, busca en la pestaña activa."""
         while isinstance(origen, QMenu) and isinstance(origen.parentWidget(), QMenu):
             origen = origen.parentWidget()
         if isinstance(origen, QMenu):
             boton = origen.parentWidget()
             if isinstance(boton, QToolButton) and boton.property("seccion_cinta"):
                 return boton
+        if origen is not None:
+            return None
         pagina = self.ventana.cinta.pila.currentWidget()
         for titulo in pagina.findChildren(QToolButton, "titulo_grupo"):
             menu = titulo.menu()

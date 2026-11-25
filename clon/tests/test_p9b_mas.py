@@ -116,19 +116,27 @@ def test_b769_la_casilla_sigue_los_botones_de_la_cinta(v):
 
 
 def test_b769_mas_resuelve_el_grupo_del_boton_y_no_un_menu_ajeno(v):
-    accion = v.acciones["extruir"]
-    origen = _menu_de(v, "extruir")
+    next(b for b in v.cinta.pestanas if b.accessibleName() == "UTILIDADES").click()
+    accion = v.acciones["impresion3d"]
+    origen = _menu_de(v, "impresion3d")
     grupo = origen.parentWidget()
-    ajeno = QMenu(v)
-    ajeno.addAction(accion)
-    assert v._filtro_mas._grupo_cinta(accion, ajeno) is grupo
-    actual = v.cinta.pila.currentIndex()
-    v.cinta.pila.setCurrentIndex(actual + 1)
-    try:
-        assert v._filtro_mas._grupo_cinta(accion, origen) is grupo
-    finally:
-        v.cinta.pila.setCurrentIndex(actual)
-        ajeno.deleteLater()
+    filtro = v._filtro_mas
+    assert filtro._grupo_cinta(accion, None) is grupo
+    personal = v.prefs["cinta/personal"]
+    archivo = v.menu_archivo
+    archivo.popup(QPoint(40, 40))
+    QTest.qWait(30)
+    QTest.mouseClick(archivo, Qt.LeftButton, Qt.NoModifier, filtro.zona(archivo, accion).center())
+    mas = filtro.menu_abierto
+    casilla = mas.actions()[1]
+    mas.hide()
+    assert casilla.toolTip() == "Agrega a la barra superior"
+    assert not casilla.isChecked()
+    casilla.trigger()
+    assert leer_barra(v.prefs) == ["impresion3d"]
+    assert v.prefs["cinta/personal"] == personal
+    v.cinta.pestanas[0].click()
+    assert filtro._grupo_cinta(accion, origen) is grupo
 
 
 def test_un_clic_fuera_del_mas_sigue_ejecutando_el_comando(v):
