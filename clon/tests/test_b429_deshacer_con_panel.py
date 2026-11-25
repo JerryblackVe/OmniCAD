@@ -31,9 +31,10 @@ def ventana(tmp_path):
     app.processEvents()
 
 
-def test_ctrl_z_con_un_panel_abierto_lo_cancela_sin_deshacer_el_paso(ventana):
+@pytest.mark.parametrize("clave", ["extruir", "caja"])
+def test_ctrl_z_con_un_panel_abierto_lo_cancela_sin_deshacer_el_paso(ventana, clave):
     receta = ventana.doc.a_dict()
-    panel = ventana.ejecutar_comando(CATALOGO["extruir"]())
+    panel = ventana.ejecutar_comando(CATALOGO[clave]())
     assert ventana.panel is panel
     ventana.visor.setFocus()
     QTest.keyClick(ventana.visor, Qt.Key_Z, Qt.ControlModifier)

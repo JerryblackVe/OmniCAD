@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-24 · B-758 (sin verificar).** Ctrl+Z global cancela panel por B-429 sin tocar timeline. Se conserva decisión y se amplía regresión a Caja. Falta comparación Fusion y foco de edición; ruff, pytest y skills no ejecutados.
 - **2026-11-24 · B-556 (sin verificar).** Cinta compacta por ancho y títulos enteros o flecha (B-533); scroll de Agujero conserva botones (B-105). Test 1024×700. No se cambia sin medir; falta Windows. Ruff, pytest y skills no ejecutados.
 - **2026-11-24 · B-473 (sin verificar).** Cierre de Chaflán ya borra selección, capas y gestor; redibujos tardíos protegidos. Test existente reforzado con estado del gestor. No cambio de producción sin repro; ruff, pytest y skills no ejecutados.
 - **2026-11-24 · B-773 (Parcial, sin verificar).** Menús de grupo anclados al botón con límite de pantalla; test de posición. Ayuda pública Autodesk comparada, falta cotejar orden exacto y Windows; ruff, pytest, skills y UX no ejecutados.
