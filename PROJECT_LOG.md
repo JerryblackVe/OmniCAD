@@ -1,4 +1,17 @@
 ## Registro
+- **2026-11-25 · B-648 cerrado.** Triple clic selecciona valor y unidad: `test_b648_b553_triple_clic.py`, con Qt offscreen.
+- **2026-11-25 · B-553 cerrado.** Triple clic reemplaza la expresión completa de Distancia: `test_b648_b553_triple_clic.py`, con Qt offscreen.
+- **2026-11-25 · B-552 cerrado.** La sección tangente avisa, conserva el cuerpo y no guarda un corte vacío: `test_b552_seccion.py`.
+- **2026-11-25 · B-756 cerrado.** Contraste de filas en `test_temas.py`; comprobado el cambio de paleta del árbol al pasar a Fotomatón con tema oscuro, offscreen.
+- **2026-11-25 · B-526 cerrado.** Guardar y reabrir conserva vértices, caras y volumen sin volver a teselar: `test_api_malla.py::test_b526_teselado_guardado_sin_recalcular`.
+- **2026-11-25 · B-472 cerrado.** Asa de Extruir centrada en tres direcciones y tras arrastrar: `test_manipuladores.py`.
+- **2026-11-25 · B-550 cerrado.** Profundidad de Agujero sincronizada entre caja y diagrama, incluso con foco: `test_manipuladores.py::test_b550_profundidad_escariado_sincronizada`.
+- **2026-11-25 · B-769 abierto.** Repro offscreen: ⋮ de Impresión en 3D desde Archivo ofrece quitar de la cinta si UTILIDADES está activa.
+- **2026-11-25 · B-770 cerrado.** El botón se ancla al final, se quita y conserva el estado al reabrir: `test_p9b_mas.py::test_b770_anclar_al_final_quitar_y_persistir`.
+- **2026-11-25 · B-760 cerrado.** Aviso de éxito usa el nombre del cuerpo y queda en 45 caracteres como máximo: `test_b760_nombre_estado.py`.
+- **2026-11-25 · B-555 parcial.** Tab y ejes verificados (`test_dialogo_parametros.py`, `test_b471_perfil_unico_revolucion.py`); restan círculo/perfil, SCU y parpadeo de la previa.
+- **2026-11-25 · SOL-40 abierto.** Repro offscreen: editar Desde de A a B conserva A como objetivo adicional implícito.
+- **2026-11-25 · B-515 parcial.** Fila intacta: siguen pendientes alinear/voltear y el rendimiento de los análisis.
 - **2026-11-24 · H-83 (Parcial, sin verificar).** Extruir sólido crea componente y cuerpos en un paso; API extrude admite new_component. Tests UI/API. Restan superficie, Revolución, Barrido y Solevación; doc MCP pendiente. Ruff, pytest y skills no ejecutados.
 - **2026-11-24 · P-132 (sin verificar).** describir_ref distingue planos inclinados por dos ángulos de la normal y limita nombre a 45 caracteres. Test de rumbo y largo; falta ancho real. Ruff, pytest y skills no ejecutados.
 - **2026-11-24 · B-795 (sin verificar).** AutoConstrain actúa en copia del editor; Terminar guarda un OpBoceto. Test de un deshacer para nuevo y existente. Sin cambio de producción sin reproducir E6; ruff, pytest y skills no ejecutados.
@@ -269,6 +282,7 @@
 - **2026-11-19 · Exploración ver_grupos_caras.** Explorado códigobase OmniCAD-PREP-TEST-ver-grupos-caras. Hallazgos: `ver_grupos_caras` es un atajo Shift+F que muestra grupos de caras en mallas mediante `get_viewport_image(mesh_face_groups=True)`. No existe `test_prep_cmd_ver_grupos_caras.py`. Operaciones timeline: `OpGruposCaras`, `OpCombinarGruposCaras`, `OpCrearGrupoCaras` en `ops_malla.py`. UI: `cinta.py`, `ventana.py`, `iconos_extra.py`. API: `herramientas_inspeccion.py`. Cobertura UI→API en `test_cobertura_ui_api.py` línea 109.
 
 ## Lecciones aprendidas
+- [2026-11-25] Al editar un comando, restaurá solo las selecciones adicionales explícitas, no la lista expandida de objetivos. · Evidencia: SOL-40, cambiar «Desde» de op3 a op4 reconstruyó ambos, `ui/comandos/modificar.py:1107–1124`.
 - [2026-11-24] Una compuerta que falla cerrado por no llegar a tiempo puede romper operaciones válidas: medir contra piezas reales antes de rechazar (rechazar solo si el conteo SÍ llegó y cruza). · Evidencia: medición 24/11 en `solidos_modificar.py › _cruza_mas_que` — el desfase de la cara plana de un cuerpo roscado sale en 0,13 s y su zona analiza en 19,51 s con n=0 — y `tests/test_b306_desfase_cara_libre_previa.py::test_en_un_cuerpo_con_rosca_la_cara_plana_sale_rapido_y_la_curva_falla_ya` rojo con la 1ª vuelta, verde con la 2ª; fila B-855.
 - [2026-11-24] Una fila de velocidad se re-mide por etapa ANTES de tocar código: la hipótesis anotada en la fila (MakeOffset/SetApprox) era el 10–15 % del tiempo; el 60–70 % era otra pieza (la booleana pegada del prisma). · Evidencia: banco del 24/11 sobre el logo de `tests/test_desfase_cadena_abierta.py`: `_bandas_de_cadena_abierta` 0,06–0,13 s contra `_booleana_pegada` 0,24–0,9 s; fila B-842 reescrita con lo medido.
 - [2026-11-24] Una fila Parcial de velocidad se re-mide después de cada vía rápida nueva antes de proponer más código: la que pedía un BVH ya estaba cubierta por la vía rápida que entró después. · Evidencia: fila B-837 escrita en c42b6f2b (solo cajas/planos) y las muestras KD de B-838 en 6e6c5c59; `test_se_tocan_malla.py::test_el_par_del_logo_de_planos_cruzados_se_descarta_sin_exacto`.
