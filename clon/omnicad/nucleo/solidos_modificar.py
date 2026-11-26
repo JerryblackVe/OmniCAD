@@ -1716,17 +1716,18 @@ def alinear(forma, origen, destino, *, voltear=False, angulo=0.0):
 
     origen/destino: {"tipo": "punto", "punto"} | {"tipo": "plano", "origen", "normal"} (o "plano": geo.Plano)
     | {"tipo": "eje", "punto", "direccion"}. Plano sobre plano queda ENFRENTADO (normales opuestas, como
-    al apoyar una cara contra otra en Fusion); eje sobre eje queda con la misma dirección. `voltear`
-    invierte el resultado 180° (Flip). `angulo` (grados; Fusion: botón Angle, de a 90°) gira el resultado
+    al apoyar una cara contra otra en Fusion); eje sobre eje queda con la misma dirección. Entre plano
+    y eje, la normal del plano hace de eje. `voltear` invierte el resultado 180° (Flip).
+    `angulo` (grados; Fusion: botón Angle, de a 90°) gira el resultado
     alrededor de la normal o del eje del destino. Un punto puede ir a cualquier destino (se usa su punto/origen).
     """
     t_o, p_o, d_o = _datos_alineacion(origen)
     t_d, p_d, d_d = _datos_alineacion(destino)
     r = np.eye(3)
     if t_o != "punto":
-        if t_o != t_d:
-            raise geo.ErrorGeometria("⚠ Alineá solo plano con plano o eje con eje")
-        objetivo = -d_d if t_o == "plano" else d_d
+        if t_d == "punto":
+            raise geo.ErrorGeometria("⚠ Un plano o un eje no se alinea con un punto")
+        objetivo = -d_d if t_o == t_d == "plano" else d_d
         r = _rotacion_entre(d_o, -objetivo if voltear else objetivo)
     m = np.eye(4)
     m[:3, :3] = r

@@ -659,7 +659,8 @@ def thicken(sesion, faces: Elementos, thickness: Expr = "", direction: Literal["
 
 
 @herramienta("align_bodies", "solido", "Alinea puntos, planos enfrentados o ejes de los cuerpos, con copia opcional "
-             "(Fusion: Alinear, con Flip y Angle). angle gira el resultado alrededor de la normal o del eje del destino "
+             "(Fusion: Alinear, con Flip y Angle). Entre plano y eje, la normal del plano hace de eje. "
+             "angle gira el resultado alrededor de la normal o del eje del destino "
              "(Fusion lo hace de a 90°; acá vale cualquier ángulo); con un punto de destino no hay eje y angle falla.",
              modifica=True)
 def align_bodies(sesion, bodies: Cuerpos, source: Referencia, destination: Referencia,

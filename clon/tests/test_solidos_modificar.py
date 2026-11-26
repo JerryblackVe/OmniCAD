@@ -276,6 +276,15 @@ def test_alinear():
     _, me = sm.alinear(None, {"tipo": "eje", "punto": (1, 1, 1), "direccion": (1, 0, 0)},
                        {"tipo": "eje", "punto": (0, 0, 5), "direccion": (0, 1, 0)})
     assert np.allclose(me[:3, :3] @ (1, 0, 0), (0, 1, 0)) and np.allclose(me @ (1, 1, 1, 1), (0, 0, 5, 1))
+    # plano contra eje (tapa plana contra un agujero cilíndrico): la normal del plano queda sobre el eje, el centro sobre él
+    tapa_y = {"tipo": "plano", "origen": (50, 7, 3), "normal": (0, 1, 0)}
+    agujero_z = {"tipo": "eje", "punto": (0, 0, 5), "direccion": (0, 0, 1)}
+    _, mpe = sm.alinear(None, tapa_y, agujero_z)
+    assert np.allclose(mpe[:3, :3] @ (0, 1, 0), (0, 0, 1)) and np.allclose(mpe @ (50, 7, 3, 1), (0, 0, 5, 1))
+    _, mep = sm.alinear(None, agujero_z, tapa_y)
+    assert np.allclose(mep[:3, :3] @ (0, 0, 1), (0, 1, 0))
+    with pytest.raises(g.ErrorGeometria, match="punto"):
+        sm.alinear(None, tapa_y, {"tipo": "punto", "punto": (0, 0, 0)})
     # punto sobre punto
     _, mp = sm.alinear(None, {"tipo": "punto", "punto": (1, 2, 3)}, {"tipo": "punto", "punto": (0, 0, 0)})
     assert np.allclose(mp, sm.matriz_traslacion((-1, -2, -3)))

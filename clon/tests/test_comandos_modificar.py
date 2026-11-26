@@ -300,6 +300,71 @@ def test_empalme_del_dialogo_conserva_lo_que_la_api_puso_en_el_conjunto():
     assert nueva.p["conjuntos"][0]["radio2"] == "2.0"                         # no vuelve a 1 mm
 
 
+@pytest.mark.parametrize(("voltear", "girar"), [(False, False), (True, False), (False, True)],
+                         ids=["normal", "voltear", "girar_90"])
+def test_alinear_tapa_con_agujero_en_ventana(app_qt, tmp_path, voltear, girar):
+    from PySide6.QtCore import QSettings, Qt
+    from PySide6.QtTest import QTest
+    from omnicad.ui.preferencias import Preferencias
+    from omnicad.ui.ventana import VentanaPrincipal
+
+    doc = Documento()
+    for params in (dict(radio="4", alto="12", x="40", y="7", z="-8", plano={"tipo": "plano", "id": "XZ"}),
+                   dict(radio="30", alto="16", x="6", y="-3", z="2"),
+                   dict(radio="25.35", alto="20", x="6", y="-3", z="2", operacion="cortar", objetivo="op2.c1")):
+        resultado = doc.agregar(OpPrimitiva(doc.nuevo_id(), forma="cilindro", **params))
+        assert resultado.estado == "ok", resultado.mensaje
+
+    tapa = _hit_sub(doc, "cara", (40, 8, 7))
+    assert refs.firma_cara(tapa["forma"])["normal"] == pytest.approx((0, 1, 0))
+    portador = _cuerpo(doc, "op2.c1").forma
+    agujero = next(c for c in refs.subformas(portador, "cara") if refs.firma_cara(c).get("radio") == 25.35)
+    destino = _hit(doc, refs.referencia("op2.c1", agujero, portador))
+    # La costura marca el giro de un cilindro, que por fuera se ve igual a 0° y a 90°.
+    [(x, _, z)] = [refs.punto_de_vertice(v) for v in refs.subformas(tapa["forma"], "vertice")]
+    dx, dz = x - 40, z - 7
+
+    ajustes = QSettings(str(tmp_path / "preferencias.ini"), QSettings.IniFormat)
+    ventana = VentanaPrincipal(prefs=Preferencias(ajustes))
+    try:
+        ventana.set_documento(doc)
+        ventana.resize(1280, 720)
+        ventana.show()
+        app_qt.processEvents()
+        ventana.acciones["alinear"].trigger()
+        panel = ventana.panel
+        assert panel.activa.clave == "origen"
+        ventana.visor.entidad_elegida.emit(tapa)
+        assert panel.activa.clave == "destino"
+        ventana.visor.entidad_elegida.emit(destino)
+        if voltear:
+            panel.widgets["voltear"].click()
+        if girar:
+            QTest.keyClick(panel.widgets["angulo"], Qt.Key_Down)
+        QTest.mouseClick(panel.boton_ok, Qt.LeftButton)
+        assert ventana.panel is None, panel.mensaje.text()
+        assert doc.operaciones[-1].TIPO == "alinear"
+        assert doc.operaciones[-1].p["voltear"] == voltear
+        assert doc.operaciones[-1].p["angulo"] == (90 if girar else 0)
+
+        cilindro = _cuerpo(doc).forma
+        assert g.es_valida(cilindro)
+        z_min, z_max = (2, 14) if voltear else (-10, 2)
+        assert np.asarray(g.caja_envolvente(cilindro)) == pytest.approx(np.array([[2, -7, z_min], [10, 1, z_max]]))
+        esperado_x, esperado_y = (dz, dx) if girar else (dx, dz if voltear else -dz)
+        vertices = [refs.punto_de_vertice(v) for v in refs.subformas(cilindro, "vertice")]
+        assert next(v for v in vertices if v[2] == pytest.approx(2)) == pytest.approx(
+            (6 + esperado_x, -3 + esperado_y, 2))
+        assert g.volumen(_cuerpo(doc, "op2.c1").forma) == pytest.approx(g.volumen(portador))
+    finally:
+        if ventana.panel is not None:
+            ventana.panel.cancelar()
+        doc.modificado = False
+        ventana.close()
+        ventana.deleteLater()
+        app_qt.processEvents()
+
+
 @pytest.mark.parametrize("angulo", [0, 90, 45, 22.5, -30])
 def test_alinear_reabierto_y_aceptado_sin_tocar_conserva_el_angulo(angulo):
     """Un Alinear hecho por la API con cualquier ángulo no se pisa al reabrirlo (Girar solo ofrecía 0/90/180/270)."""
