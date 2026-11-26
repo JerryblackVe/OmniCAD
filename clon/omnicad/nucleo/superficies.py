@@ -2368,11 +2368,16 @@ def _punta_de_cono(forma):
 _PUNTA_DE_CONO = "la superficie termina en punta. Dibujá el arco con el centro sobre el eje."
 
 
-def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
+PLAZO_AUTOINTERSECCIONES_ENGROSAR = 120.0   # s al aceptar: la cadena de una rosca M8 tarda 34 s (medido 26/11, 2 corridas)
+
+
+def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo", diferir_libres=False):
     """Engrosar [GUID-471827A2-EDAE-411B-A1F5-C87B54615D53]: sólido a partir de una superficie.
 
     Espesor positivo crece hacia la normal, negativo hacia el otro lado. `simetrica`: mitad del
-    espesor para cada lado. `tipo`: "agudo" (Sharp Thicken) o "redondeado" (Rounded Thicken)."""
+    espesor para cada lado. `tipo`: "agudo" (Sharp Thicken) o "redondeado" (Rounded Thicken).
+    `diferir_libres` (solo la vista previa): en una forma libre (B-spline) no espera el análisis de autointersecciones;
+    lo hace Aceptar, que no lo difiere."""
     if abs(espesor) < 1e-9:
         raise geo.ErrorGeometria("El espesor no puede ser cero.")
     junta = {"agudo": GeomAbs_Intersection, "redondeado": GeomAbs_Arc}.get(tipo)
@@ -2381,7 +2386,8 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     if simetrica and tipo == "redondeado":
         # Desfasar −t/2 con juntas en arco y engrosar t después invierte esos arcos y OCC no da un sólido: se
         # engrosa cada mitad por su lado (esquina de afuera redondeada con radio t/2) y se unen.
-        mitades = [engrosar_superficie(forma, s * abs(espesor) / 2, tipo=tipo) for s in (1, -1)]
+        mitades = [engrosar_superficie(forma, s * abs(espesor) / 2, tipo=tipo, diferir_libres=diferir_libres)
+                   for s in (1, -1)]
         return _simplificar(geo.booleano(mitades[0], mitades[1], "unir"))
     base = _simplificar(forma)
     if base.ShapeType() == TopAbs_COMPOUND:
@@ -2431,8 +2437,11 @@ def engrosar_superficie(forma, espesor, *, simetrica=False, tipo="agudo"):
     # B-394: tres caras de una caja abierta (borde + dos paredes) daban «ok» con 6 autointersecciones en las esquinas.
     # B-853: con 5 s el análisis de la banda (B-633) no llegaba ni con el trabajador caliente (6–10 s): el veredicto
     # dependía de si el trabajador venía frío o caliente y el que no llegaba aprobaba en silencio. Ahora espera como
-    # una vista previa (30 s) y, si no llega, no aprueba sin revisar.
-    cantidad, _, completo = revision._autointersecciones_seguras(resultado, 1, 30.0)
+    # un plazo largo y, si no llega, no aprueba sin revisar. La cadena de una rosca M8 termina en 34 s (no en «nunca»):
+    # Aceptar corre aparte con tope de 900 s; la previa (30 s) no la espera y lo deja para Aceptar (`diferir_libres`).
+    if diferir_libres and geo.es_forma_libre(resultado):
+        return resultado
+    cantidad, _, completo = revision._autointersecciones_seguras(resultado, 1, PLAZO_AUTOINTERSECCIONES_ENGROSAR)
     if cantidad:
         raise geo.ErrorGeometria("No se pudo engrosar: probá menos espesor.")
     if not completo:

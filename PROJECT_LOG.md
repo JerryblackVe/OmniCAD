@@ -1,7 +1,7 @@
 ## Registro
 - **2026-11-26 · ROJOS3 (B-864).** `test_b_641_repro` saca `offscreen` del entorno del hijo (sin OpenGL en Windows) y pone `OMNICAD_PRUEBA_VENTANA=minimizada`; B-641 ya no se reproduce: sin xfail. 1 passed (23 s), también con offscreen.
 - **2026-11-26 · ROJOS3 (B-272).** `suite_pc.py`: `test_motor.py` corre en lote propio (`SOLOS`, `armar_lotes` + `tests/test_suite_pc_lotes.py`). Causa: tope de memoria de `turno.py`. `test_motor.py` 14 passed. Fila nueva B-865 (tests_afectados).
-- **2026-11-26 · ROJOS3 (B-630).** El test de B-341 destilda la cadena; se deja el rechazo con cadena (Gerardo). Causa en `preparado/B-630.md`; fila Baja. 2 passed.
+- **2026-11-26 · B-630.** Engrosar: Aceptar espera 120 s el análisis (la cadena M8 tarda 34 s); la previa lo difiere en formas libres y avisa «Se comprueba al aceptar». `REVISA_AUTOINTERSECCIONES`. 5 passed. Fila nueva B-866 (unir con el eje).
 - **2026-11-25 · ALINEAR-SOL.** La normal del plano hace de eje al alinear una tapa con un agujero. `test_alinear_tapa_con_agujero_en_ventana`: normal, Voltear y Girar 90° (3 fallos sin el arreglo, 3 OK con él). Ayuda MCP/CLI regenerada.
 - **2026-11-25 · ROJOS2 (P-78/B-249).** El respaldo del cilindro completo mueve solo su costura; en piezas asimétricas se conserva el respaldo en fase de B-461. Los 12 casos dirigidos y la comprobación nueva de fase pasan; Ruff limpio.
 - **2026-11-25 · B-461 (regresión 6g).** Si el corte por tramos falla, se prueba el surco entero en fase antes de girar. test_b461_rosca_tramos.py: 8 OK; Ruff limpio. Sigue pendiente el rendimiento general de B-461.
@@ -308,6 +308,7 @@
 - **2026-11-19 · Exploración ver_grupos_caras.** Explorado códigobase OmniCAD-PREP-TEST-ver-grupos-caras. Hallazgos: `ver_grupos_caras` es un atajo Shift+F que muestra grupos de caras en mallas mediante `get_viewport_image(mesh_face_groups=True)`. No existe `test_prep_cmd_ver_grupos_caras.py`. Operaciones timeline: `OpGruposCaras`, `OpCombinarGruposCaras`, `OpCrearGrupoCaras` en `ops_malla.py`. UI: `cinta.py`, `ventana.py`, `iconos_extra.py`. API: `herramientas_inspeccion.py`. Cobertura UI→API en `test_cobertura_ui_api.py` línea 109.
 
 ## Lecciones aprendidas
+- [2026-11-26] Antes de escribir "no termina", medir con un tope largo: el análisis de la cadena de la rosca terminaba en 34 s contra un plazo de 30 s. · Evidencia: medición del 26/11, 2 corridas; `tests/test_b341_engrosar_filete.py` (lento).
 - [2026-11-26] En Windows `offscreen` no da OpenGL y un hijo hereda el `QT_QPA_PLATFORM` de `conftest.py`: sacalo del entorno del hijo. · Evidencia: `tests/test_b_641_repro.py` (1 passed con y sin offscreen).
 - [2026-11-26] El tope de memoria de `turno.py` lo comparten todos los procesos: un hijo que lanza la app entera muere en silencio dentro de un lote. · Evidencia: B-272, 10 archivos del lote 27: tope 3000 MB falla, tope 0 da 239 passed; `scripts/suite_pc.py` SOLOS.
 - [2026-11-26] Un test de panel hereda los valores por defecto del comando (cadena tildada): fijá lo que el test quiere medir. · Evidencia: `tests/test_b341_engrosar_filete.py` (B-630).

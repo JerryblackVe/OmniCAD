@@ -535,6 +535,7 @@ class OpEngrosar(_OpSuperficie):
     OPCIONES = {"direccion": ("un_lado", "simetrica"), "tipo": ("agudo", "redondeado"),
                 "operacion": OPERACIONES_CUERPO}
     REFS = ("caras",)
+    REVISA_AUTOINTERSECCIONES = True    # B-630: la previa difiere el análisis de las formas libres; Aceptar lo hace
 
     def ejecutar(self, estado, ctx):
         ents = _resolver_todas(self.p["caras"], estado)
@@ -549,7 +550,10 @@ class OpEngrosar(_OpSuperficie):
         espesor = str(self.p["espesor"] or "").strip() or espesor_plastico(
             estado, [e.cuerpo for e in ents if e.cuerpo], "2 mm")
         forma = _sf().engrosar_superficie(base, ctx.evaluar(espesor),
-                                          simetrica=self.p["direccion"] == "simetrica", tipo=self.p["tipo"])
+                                          simetrica=self.p["direccion"] == "simetrica", tipo=self.p["tipo"],
+                                          diferir_libres=not ctx.revisar_autointersecciones)
+        if not ctx.revisar_autointersecciones and geo.es_forma_libre(forma):
+            ctx.aviso("Se comprueba al aceptar.")
         self._registrar_usados(aplicar_resultado(estado, ctx, self.id, forma, self.p["operacion"],
                                                  self.p.get("objetivos") or ""))
 
