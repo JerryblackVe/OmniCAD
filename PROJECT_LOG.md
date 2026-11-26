@@ -1,4 +1,5 @@
 ## Registro
+- **2026-11-26 · AG-22 cerrada; main = eec62a87.** Lotes de ChatGPT verificados (Sol, suite con 3 rojos arreglados, prueba en ventana: ⋮, Alinear, Chaflán, 1024 px). Quedan B-774 y P-132 a ojo (AG-23). Rama pasada a main sin merge.
 - **2026-11-26 · ROJOS3 (B-864).** `test_b_641_repro` saca `offscreen` del entorno del hijo (sin OpenGL en Windows) y pone `OMNICAD_PRUEBA_VENTANA=minimizada`; B-641 ya no se reproduce: sin xfail. 1 passed (23 s), también con offscreen.
 - **2026-11-26 · ROJOS3 (B-272).** `suite_pc.py`: `test_motor.py` corre en lote propio (`SOLOS`, `armar_lotes` + `tests/test_suite_pc_lotes.py`). Causa: tope de memoria de `turno.py`. `test_motor.py` 14 passed. Fila nueva B-865 (tests_afectados).
 - **2026-11-26 · B-630.** Engrosar: Aceptar espera 120 s el análisis (la cadena M8 tarda 34 s); la previa lo difiere en formas libres y avisa «Se comprueba al aceptar». `REVISA_AUTOINTERSECCIONES`. 5 passed. Fila nueva B-866 (unir con el eje).
