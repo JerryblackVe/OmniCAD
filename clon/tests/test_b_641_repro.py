@@ -13,16 +13,15 @@ import pytest
     sys.platform.startswith("linux") and (os.environ.get("QT_QPA_PLATFORM") != "xcb" or not os.environ.get("DISPLAY")),
     reason="El banco necesita un visor OpenGL: QT_QPA_PLATFORM=xcb y xvfb-run -a",
 )
-@pytest.mark.xfail(strict=True, reason="B-641", raises=pytest.RaisesExc(
-    AssertionError, match=r"^RuntimeError: No está el asa tam_iso_metrica;",
-))
 def test_banco_de_rosca_modelada_completa_las_mediciones(tmp_path):
     clon = Path(__file__).resolve().parents[1]
     banco = clon.parent / "scripts" / "bench_fluidez.py"
     # El hijo del banco usa eventos Qt reales sobre el visor, aislado del Qt de pytest.
+    # conftest deja offscreen y en Windows no da OpenGL: el hijo elige su plataforma (arnes.py).
+    entorno = {k: v for k, v in os.environ.items() if not (k == "QT_QPA_PLATFORM" and v == "offscreen")}
     proceso = subprocess.run(
         [sys.executable, str(banco), "--hijo", "b"], cwd=clon, capture_output=True, text=True, timeout=300,
-        env=dict(os.environ, OMNICAD_CODIGO=str(clon), OMNICAD_FLUIDEZ="aviso",
+        env=dict(entorno, OMNICAD_PRUEBA_VENTANA="minimizada", OMNICAD_CODIGO=str(clon), OMNICAD_FLUIDEZ="aviso",
                  OMNICAD_ASISTENTE_DIR=str(tmp_path), OMNICAD_PREAJUSTES=str(tmp_path / "preajustes.json")),
     )
     assert proceso.returncode == 0, (proceso.stdout, proceso.stderr)

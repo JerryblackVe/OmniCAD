@@ -53,11 +53,12 @@ def test_engrosar_y_desfase_de_superficie_de_un_filete_van_aparte(ventana):
         assert not p._previa_pesada(clase("opX", caras=[{"cuerpo": caja.id}]))     # 6 caras planas: en la ventana
 
 
-def test_engrosar_el_filete_no_congela_la_ventana(ventana):
+def _previa_del_filete(ventana, cadena):
     eje = _cuerpo(ventana, "Eje")
     filete = next(c for c in geo.caras(eje.forma) if refs.cara_libre(c))
     p = ventana.ejecutar_comando(Engrosar())
     p._elegida(hit_desde_ref({"tipo": "cara", "cuerpo": eje.id, "firma": refs.firma_cara(filete)}, p.ctx.estado))
+    p.set_valor("cadena", cadena)    # el panel la trae tildada: engrosaría toda la cadena tangente de la rosca
     p.set_valor("espesor", "0,5 mm")
     p._t_previa.stop()
     inicio = time.perf_counter()
@@ -67,3 +68,8 @@ def test_engrosar_el_filete_no_congela_la_ventana(ventana):
     while p._hijo_previa is not None and time.perf_counter() < fin:
         QTest.qWait(50)
     assert p._hijo_previa is None and p._previa_ok, p.mensaje.text()
+
+
+def test_engrosar_el_filete_no_congela_la_ventana(ventana):
+    _previa_del_filete(ventana, False)
+

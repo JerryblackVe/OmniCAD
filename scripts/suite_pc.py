@@ -16,6 +16,16 @@ from pathlib import Path
 
 CLON = Path(__file__).resolve().parent.parent / "clon"
 SALIDA = CLON.parent / "evidencias" / f"suite_pc_{date.today():%Y%m%d}"
+# Lanzan la app entera como hijo: dentro de un lote el tope de memoria de turno.py (job object, suma a todos los
+# procesos) los mata en silencio (B-272). Cada uno corre en su propio pytest.
+SOLOS = ("test_motor.py",)
+
+
+def armar_lotes(archivos, n, solos=SOLOS):
+    """Lotes de `n` archivos; los de `solos` van cada uno en su propio lote. Cada archivo aparece una sola vez."""
+    comunes = [a for a in archivos if Path(a).name not in solos]
+    lotes = [comunes[i:i + n] for i in range(0, len(comunes), n)]
+    return lotes + [[a] for a in archivos if Path(a).name in solos]
 
 
 def main():
@@ -27,10 +37,10 @@ def main():
     SALIDA.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
     rojos = []
-    for i in range(0, len(archivos), n):
-        parte = SALIDA / f"parte{i // n:02d}.txt"
+    for i, lote in enumerate(armar_lotes(archivos, n)):
+        parte = SALIDA / f"parte{i:02d}.txt"
         cmd = [sys.executable, "../scripts/turno.py", "--", sys.executable, "-m", "pytest", "-q",
-               "-p", "no:cacheprovider", "--tb=short", *archivos[i:i + n]]
+               "-p", "no:cacheprovider", "--tb=short", *lote]
         with open(parte, "w", encoding="utf-8") as f:
             rc = subprocess.run(cmd, cwd=CLON, stdout=f, stderr=subprocess.STDOUT, env=env).returncode
         texto = parte.read_text(encoding="utf-8", errors="replace")
